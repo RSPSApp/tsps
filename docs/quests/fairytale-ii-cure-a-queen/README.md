@@ -2,125 +2,144 @@
 quest: Fairytale II - Cure a Queen
 key: fairytale_ii_cure_a_queen
 status: passed-with-issues
-tested: 2026-11-04
-tester: Codex headless MCP
-model:
+tested: 2026-11-16
+tester: agent
+model: claude-opus-5-5
 commit:
-cache: osrs-241-2026-10-20
-start: earlier run through stage 65; continuation at stage 65 in the Fairy Queen's Hideout
-travel: normal dialogue, fairy ring UI, inventory actions and combat after checkpoint setup
+cache: osrs-242_2026-11-03
+start: checkpoint
+travel: manual
 ---
 
 # Fairytale II - Cure a Queen
 
-An earlier headless MCP run covered the route through stage 65. A separate
-continuation played from stage 65 through the Gorak fight, potion and Queen's
-awakening, and completed the quest. The Queen's awakening does not reproduce
-every native chathead.
+Aligned with the user's whole-quest rsprox capture `FairyTale2` (revision 242.1, one account, from
+Martin's ready offer to the reward, SHA-256
+`bae003a3b96bad06b9ef93410871387ff9b16619a21ab7772ed7d6ab547c5d13`). Ticks are FairyTale2's. The
+plugin is `server/plugins/quests/quests/FairytaleIICureAQueen.Quest.js` with its journal and scenes
+in `server/plugins/quests/fairytaleii/`; the words come from the Wiki transcript as
+`osrsreboxed-db`'s capture sources correct it (entry "Fairytale II - Cure a Queen"). The capture
+starts at stage 10 (Martin's wait already over), so the first talk and the wait are the Wiki's.
 
-## Findings
+## Stages (varbit 2326, varp 810)
 
-- **open** The Queen's awakening uses a shared transcript with one chathead;
-  the native scene has dialogue from the Queen, Nuff and Very Wise.
+| Stage | When (tick) |
+| --- | --- |
+| 5 | Martin's first "Ask about the quest." (Wiki; not captured) |
+| 10 | the same option once his crops have had time (Wiki's 5 minutes; Ours 5.5) |
+| 20 | the start menu's Yes, with 1807 → 2, 2332 → 1, 2327 → 1 and "You've started a new quest" (77) |
+| 30 | the grotto's camera sweep ends, with 2339 → 1 (306) |
+| 40 | as the Godfather's "Eet does? Oh, sorry, must-a geeven yous da wrong-a scroll." shows, with 2328 → 1 and 2329 → 2 (511) |
+| 45 | "You see a fairy approaching ..." in Fairy Nuff's welcome: the 2970 multinpc shows Fairy Very Wise (976) |
+| 50 | as the player's "That's easy I'll just pickpocket them off of him" shows, with 1808 → 2 (1002) |
+| 60 | the successful pickpocket (1603) |
+| 65 | the secateurs box closes; 1808 → 1 (1882) |
+| 70 | the player continues past Nuff's recipe's last line (1915) |
+| 72 | the star flower into the vial of water (2391) |
+| 73 | the gorak claw powder into it (2398) |
+| 75 | a dose poured on the sleeping Queen (2415) |
+| 80 | four ticks later: the 2971 multinpc stands her up at 2354,4455 (2419) |
+| 90 | the Queen's lamp box, with 2335 → 1 (2532) |
 
-### Certificate and Rune temple sign documents
+Other varbits: 2336 on Study (365), 2338 = 4 with the sign read, 2329 = 1 with "No, I'll rescue her
+myself." (473), 2331 on arriving on the Gorak plane (2094), 2382 on a Gorak kill (2206). 2330 (the
+cosmic plane) did not change on arriving there (1962) or on picking a star flower (2076).
 
-RSProx recording [424](https://rsprox.net/download/424), revision 232, records
-certificate Read opening native group 423 (tick 16448), Study opening 424 (16453),
-and the Rune temple sign opening 425 (18355). Script 2524 precedes each mount:
-Read/sign use `[-1, -1]`; Study uses `[4269835, 100]` and the recorded turn-over
-message. Repeated Read/Study at 16589/16659 confirms the same mapping.
+## What the capture shows
 
-Active cache 241 retains those groups, their document models 16050/16051/16067,
-and the certificate/sign's fairy fonts 647/648. The plugin opens these cache
-documents without replacing their text. Native inventory, map-object and
-IF_CLOSE regressions cover opening, replacement, closing/reopening, retained
-certificate, study/sign flags and completed-account access. The client cache-VM
-check decodes the server script/mount packets and verifies models, text/fonts
-and modal arguments; it is not a GPU render or live playthrough.
+- **Martin** (30-89): the refusal ("I've done enough for you, sort it out yourself!") keeps 10 and
+  the offer comes back; the prompt is "Start the Fairytale II - Cure a Queen quest?".
+- **The grotto** (283-313): the player steps in at 2387,4471 and is held (a click at 288 does not
+  move them). Four ticks later the camera moves to 2386,4471 at height 300 (rates 4/10), then looks
+  at 2387,4474 (25), 2384,4474 (75), 2384,4472 (150), 2384,4471 (200), 2384,4470 (200), 2385,4470
+  (200), 2388,4470 (200) and 2389,4471 (75), every two ticks from 289 to 303. At 306 it resets, 2339
+  and stage 30 are set, and the player says "Wow! Somebody has trashed this cave! And what's
+  happened to Fairy Nuff and the Fairy Queen?" (chatscared2, 597).
+- **The certificate** (317-346): Take on the broken frame (loc 16315) gives it with the box "You pick
+  up Fairy Nuff's certificate, being careful not to cut yourself on its broken frame." (its picture
+  the certificate); every shelf searched then shows "You don't find anything useful, just some glass
+  from a broken vial." with broken glass (1469). Read opens 423, Study opens 424 with "You turn the
+  certificate over and look at the back...", the sign opens 425 (script 2524 first, as rsprox 424).
+- **The Godfather** (420-524): his menu is "Where is the Fairy Queen?|Where have all the fairies
+  gone?|Show the Godfather the Certificate!"; the third shows the certificate box and his "learning
+  to draw" answer. After "That's not very helpful." the other question plays without the menu
+  (455-457). After a refusal, "Oh, okay then." leads to the contract scroll (427, script 2524 [-1,
+  -1]) a tick after his line (494); the talk waits until the player closes it (506), then the
+  player's "I'm not signing this!" (507) and permission with his reply (511).
+- **The co-ordinator** (619-639): "What do you want to ask about?" with "Fairy Nuff's certificate."
+  (the box "You show the certificate to the co-ordinator.", then "maybe somebody else") and "The
+  fairy rings.".
+- **The ring sequence** (778-849): AIR, DLR, DJQ (no trip; "Wow, fairy magic sure is useful, I
+  hardly moved at all!") and AJS to the hideout ring at 2328,4426, still at stage 40.
+- **The hideout fairies**: at 40 they say one of "How could everything have gone so wrong, so
+  quickly?", "What is that evil fairy doing to our beautiful kingdom?", "The Queen is the true ruler
+  of Zanaris, not that wicked Godfather!", "I hope that the Queen wakes up soon, I want to go back
+  home." and "The Godfather's henchmen tried to pull off my wings!" (877-941); at 50 the Wiki's lines
+  (1016, 1020).
+- **The pickpocket**: each attempt says "You attempt to pickpocket the Fairy Godfather." with the
+  pickpocket animation (881) and synth 2581. A failure: "Rocco, teach-a thees thief a lesson!" over
+  the Godfather three ticks on, Fat Rocco steps over, "You're beaten unconscious." with the player's
+  block animation (415), synth 1842 and a fade out (overlay 174, script 948 [0, 255, 0, 0, 50]) at
+  +5, a move outside Zanaris at +11 and "You slowly wake up in an unknown place." with the fade back
+  ([0, 0, 0, 255, 50]) at +16 (1216-1234, 1363-1384, 1486-1504). Success: 60, the secateurs, the
+  box "You pick-pocket the Fairy Godfather and get the Queen's enchanted secateurs!", 47 Thieving
+  XP and the "pickpocket fairy godfather" jingle (204), all on one tick (1603).
+- **Fairy Nuff with the secateurs** (1875-1915): the box "You hand fairy Nuff the Queen's enchanted
+  secateurs." (their picture); as it closes she casts (seq 4328, spotanim 568 at height 40, synth
+  1097) and takes them, and the recipe follows.
+- **Nuff at 70** (2364-2370): the recipe again, then "Thanks for the lecture, I've seen a Gorak, but
+  where do I get one of these Star Flowers from?" and the short star flower answer, with the Gorak
+  plane visited and not the cosmic one. Items used on her: "Nothing interesting happens." (2381).
+- **The star flowers** (1966-2098): the first shoot (NPC 1856, seq 4312, area synth 2874 delay 255)
+  sprouts 46 ticks after arriving and blooms into 1857 58 ticks later; more sprout every few ticks.
+  Pick plays the pick-up animation (832) and synth 2581, the bloom withers (seq 4313, area synth
+  2873) and goes six ticks later; no message.
+- **The Goraks** (2125-2222): a kill drops the claws for the killer only ("Untradeable drop: Gorak
+  claws") with big bones and coins, and sets 2382.
+- **Brewing** (2390-2398): "You put the star flower into the vial of water.", "You grind the Gorak's
+  claw into dust." and "You mix the gorak claws into your potion." (spam messages; animations 363,
+  364, 363, each with synth 2608); Magic essence(3) and 130 Herblore XP.
+- **The Queen** (2415-2539): the dose on loc 16316 plays the player's kneel-and-pour (4316), the
+  loc's waking (4317) and the "fairyqueen awakens" jingle (205); 80 follows four ticks later. Fairy
+  Very Wise then thanks the player (2426); Nuff's Talk-to plays the awakening, the Queen speaking
+  first, with the Queen's (1161), Nuff's (1841) and Very Wise's (1847) heads. The lamp box "The Fairy
+  Queen gives you an XP lamp." (6543) comes with 90 and the XP; after it, the quest complete message
+  and the scroll, whose model is a four-dose magic essence (9021).
+- **The journal**: as captured at 215, 313, 531, 1236, 1654, 1921, 2105 and 2374; an ingredient is
+  struck through once held.
 
-The recording starts on an already-completed account. Study's existing immediate
-stage 30/study-flag commit and the existing sign prerequisites are preserved;
-this evidence does not establish their fresh-account packet timing. The Wiki's
-[Surprise! section](https://oldschool.runescape.wiki/w/Fairytale_II_-_Cure_a_Queen#Surprise!)
-independently describes Study revealing the back and reading the sign.
+## Recorded differences and Ours
 
-### Fairy Nuff's first room entry
-
-The [quest guide](https://oldschool.runescape.wiki/w/Fairytale_II_-_Cure_a_Queen)
-places the scene before taking the certificate. A [live OSRS playthrough](https://www.youtube.com/watch?v=hF-DnX6GvD8&t=38s)
-shows a low camera sweep past the wall lamp, broken shelves and spilled potions.
-The cache-242 object placements give the shot targets. The camera coordinates
-and duration are reconstructed from the footage.
-
-Walking into the grotto at stage 20 starts the pan. The scene restores control
-and saves varbit 2339's completion state when it finishes. Interrupted visits
-can retry. Existing saves that already took or studied the certificate skip it.
-
-## Start-to-finish audit findings
-
-The Wiki quick guide route was checked against the quest source and native
-event-entrypoint coverage: wait for Martin, enter Nuff's ransacked room, study
-the certificate, ask the Fairy Chef, read the Cosmic Altar sign, get permission,
-use the AIR/DLR/DJQ/AJS ring sequence, speak to Nuff and Very Wise, pickpocket
-the Godfather, hand the Queen's secateurs to Nuff, collect a star flower and
-Gorak claws, learn the potion recipe, brew it, use it on the Queen, and finish
-the reward dialogue.
-
-The audit also corrected progression issues beyond the issue comments:
-
-- Starflowers now require the late-quest stage and Nuff's certificate, persist
-  a growth timer, and cannot be harvested twice during the quest. The detailed
-  [Star flower page](https://oldschool.runescape.wiki/w/Star_flower) says they
-  start blooming within a minute; the quick guide says 2-5 minutes. This branch
-  uses the one-minute upper bound and does not model faster growth with more
-  players.
-- Cosmic and Gorak plane visits, and Gorak kills, count only after the Queen's
-  secateurs are handed to Nuff. The recipe stage now advances after the final
-  line of Nuff's recipe dialogue. Premature brewing is refused without consuming
-  the ingredients.
-- NPCs cannot attack a player standing on a fairy ring destination tile, as the
-  Wiki describes. A regression checks that the protection stops at adjacent
-  tiles.
-- The document Read/Study/sign UI remains native to cache groups 423, 424 and
-  425. Tests cover repeat open, close/reopen, item persistence, and the sign's
-  prerequisites.
-
-## Evidence gaps
-
-The Wiki gives no exact Tanglefoot Farming/Strength damage formula; that remains
-an open Fairytale I parity gap.
+- Only the second of the three recorded failures also says "You fail to pick the Fairy Godfather's
+  pocket." (1364); the plugin always sends it with a failed roll. The capture does not show what
+  makes the difference (the Wiki's tip about the henchmen watching suggests being seen).
+- The wake-up tile is one of the three recorded ones at random (3186,3211; 3139,3260; 3139,3228); the
+  Wiki only says outside Zanaris.
+- The first star flower: the Wiki says they "start to bloom within a minute of arriving", so the
+  first shoot sprouts at 42 ticks and blooms at 100; the capture's sprouted at 46 and bloomed at 104.
+  Ours: a new shoot every four ticks within six tiles, at most eight, and a bloom nobody picks
+  withers 100 ticks after blooming.
+- The post-quest Godfather said "I have-a my eye on-a yous, [name]. I donn-a know what-a yous is up
+  to, but if-a I find-a out that yous is causing trouble, yous hadda just better watch-a your back!"
+  both times (2623, 2632); the Wiki's "After Fairytale II" is kept.
+- The XP comes at the quest complete action, three ticks after the lamp box where live gives it.
+- Ours: what sets 2330; the plugin sets it on the Cosmic Being's star flower answer. Nuff's recap
+  with neither plane visited (the full "where can I find a Gorak?" answer) and with only the cosmic
+  one (the same).
+- Ours: the pickpocket chance, the Thieving/Herblore/Farming level messages, the full-bag
+  certificate message, the early-brew refusal, and the Wiki's "Yes, okay." route granting
+  permission with the Godfather's reply.
+- Gorak (1834) has no generated drop table, so the bones and coins are not dropped; only the quest's
+  claws are.
 
 ## Verification
 
-The continuation started at stage 65 with the account in the Fairy Queen's
-Hideout. It used the certificate and sign, fairy ring controls, dialogue and
-inventory actions to travel to the Cosmic and Gorak planes, kill Gorak, learn
-the recipe, gather a Starflower, brew Magic essence and use it on the sleeping
-Queen. The reward dialogue finished with varbit 2326=90, varbit 2335=1, and the
-Magic XP lamp message.
+`server/tests/fairytale-ii-capture.test.cjs` plays each step above with a real Player, the real
+plugins, cache and map; `server/tests/qh728-q037.test.cjs` checks the Quest Helper stage route.
 
-During combat setup the account died after its weapon changed, and its items
-were in the gravestone. The test was recovered with setup commands to reposition
-the account and restore the needed items; quest flags had persisted. The run
-then continued with normal quest actions. Targeted native event-entrypoint
-coverage checks the stage handlers and recipe flow.
+## Earlier notes
 
-## Runs
-
-### 2026-11-04 · Codex · headless MCP
-
-- **Start:** An earlier headless run covered the quest through stage 65. This
-  continuation used a test account set to stage 65 at the Fairy Queen's Hideout,
-  with Fairytale I complete and test equipment supplied during setup.
-- **Route:** Read the certificate and Rune temple sign; used CKP to visit the
-  Cosmic plane and collect a Starflower, DIR to visit the Gorak plane and kill
-  Gorak, returned to Nuff for the recipe, brewed Magic essence, then used the
-  four-code ring sequence and applied the potion to the Queen's bed. Completed
-  the awakening and reward dialogues.
-- **Result:** Quest completed at varbit 2326=90; varbit 2335=1 and the Magic XP
-  lamp reward message were observed.
-- **Not checked:** The first-entry Fairy Nuff room scene's camera choreography
-  and the Queen's full three-chathead awakening are still not reproduced. The
-  fight recovery used test setup commands after the account died and items went
-  to its gravestone.
+RSProx recording [424](https://rsprox.net/download/424), revision 232, records certificate Read
+opening native group 423 (tick 16448), Study opening 424 (16453), and the Rune temple sign opening
+425 (18355). Script 2524 precedes each mount: Read/sign use `[-1, -1]`; Study uses `[4269835, 100]`.
+NPCs cannot attack a player standing on a fairy ring destination tile, as the Wiki describes.

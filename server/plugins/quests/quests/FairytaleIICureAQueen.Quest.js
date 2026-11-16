@@ -1,76 +1,66 @@
 /**
  * Fairytale II - Cure a Queen (members).
  *
- * The words come from the "Fairytale II - Cure a Queen" transcript page; shared
- * NPC pages ("Fairy Nuff", "Fairy Godfather", "Fairy Queen", "Fairy Fixit") supply
- * the post-quest tails. This plugin supplies the variant selector, the prose
- * condition answers, the certificate/shelf puzzle, the Godfather permission,
- * the hideout, the Godfather pickpocket, the magic essence brewing and the
- * queen's awakening.
+ * The words come from the "Fairytale II - Cure a Queen" transcript page (aligned with the user's
+ * revision 242 capture in osrsreboxed-db); shared NPC pages ("Fairy Nuff", "Fairy Godfather",
+ * "Fairy Queen", "Fairy Fixit") supply the post-quest tails. This plugin picks the variants, answers
+ * the prose conditions and runs the quest's state and scenes, as the whole-quest rsprox capture
+ * FairyTale2 (rev 242.1) plays them; docs/quests/fairytale-ii-cure-a-queen/README.md has the ticks.
  *
- * Stage (varbit 2326 "fairy2_queencure_quest" bits 0-6, varp 810; confirmed with
- * scripts/lookup-gameval.ts and cross-checked against the cache NPC/loc
- * transforms that key on the same varbit):
+ * Stage (varbit 2326 "fairy2_queencure_quest" bits 0-6, varp 810), as the capture sets it:
  *    0 not started,
  *    5 Martin asked me to wait for his crops (2333 martinchat set),
- *   10 crops grown, Martin tells me to investigate,
- *   20 I agreed; Nuff's room is ransacked (2327 cert visible, 2332 Nuff hidden),
- *   30 I studied the certificate,
- *   40 the Godfather gave me permission to use the fairy rings (2328/2329),
- *   45 I reached the fairy resistance hideout,
- *   50 Fairy Nuff asked me to pickpocket the Godfather (1808 set to 2),
- *   60 I have the Queen's secateurs,
- *   65 I gave them to Nuff, who needs a potion of magic essence (recipe),
- *   70 I have visited the cosmic and gorak planes again,
- *   72 star flower added to a vial of water (magic essence unf),
- *   73 gorak claw powder added (magic essence),
- *   75 the potion was used on the Fairy Queen,
- *   90 complete (cache DB row 47 column 19 requires varbit 2326 >= 90;
- *      older durable saves at 80 are migrated to 90 on login).
+ *   10 crops grown, Martin's offer stands,
+ *   20 I agreed (77; 1807 -> 2, 2332 Nuff hidden, 2327 certificate on her wall),
+ *   30 the grotto's camera sweep ended (306, with 2339),
+ *   40 the Godfather let me use the fairy rings (511, with 2328/2329),
+ *   45 Fairy Very Wise arrived in the hideout ("You see a fairy approaching ...", 976),
+ *   50 I said I'd pickpocket the secateurs (1002; 1808 -> 2 shows the Godfather's Pick-pocket),
+ *   60 I have the Queen's secateurs (1603),
+ *   65 Nuff took them and cast her spell (1882; 1808 back to 1),
+ *   70 Nuff told me the magic essence recipe (1915),
+ *   72 star flower added to a vial of water (2391),
+ *   73 gorak claw powder added (2398),
+ *   75 the potion was poured on the Fairy Queen (2415),
+ *   80 the Queen is awake (2419; the 2971 multinpc stands her up),
+ *   90 complete (2532; cache DB row 47 column 19 requires >= 90).
  *
  * Sibling varbits written alongside the stage (all in varp 810 unless noted):
  * 2327 fairynuff_cert_taken, 2328 fairyring_use, 2329 fairyring_permission,
  * 2330 fairyring_cosmic_plane, 2331 fairyring_gorack_plane, 2332 fairy2_nuffvisible,
  * 2333 fairy2_martinchat, 2334 fairy2_universal_mystery, 2335 fairy2_rewardgiven,
  * 2336 fairy2_certificute_examined, 2337 fairy2_chefchat, 2338 fairy2_sign_read,
- * 2339 fairy2_trashed_camera_pan, 2382 fairy2_gorak_killed; 1808 is FT1's
- * fairy_godfather_check bit in varp 671 (Godfather becomes pickpocketable).
+ * 2339 fairy2_trashed_camera_pan, 2382 fairy2_gorak_killed; 1807/1808 are FT1's
+ * fairy_queen_check/fairy_godfather_check in varp 671.
  *
- * Source: OSRS Wiki (Fairytale II - Cure a Queen, its quick guide and transcript);
- * the stage values follow RuneLite QuestHelper's step map for the quest and the
- * 5.5 minute Martin wait the wiki's quick guide describes. Rewards per the wiki:
- * 2 Quest points, 3,500 Herblore / 2,500 Thieving XP, an antique lamp (2,500 XP,
- * any skill over 30) and the fairy ring network.
+ * Rewards per the Wiki: 2 Quest points, 3,500 Herblore / 2,500 Thieving XP, an antique lamp (2,500
+ * XP, any skill over 30) and the fairy ring network.
  *
- * Gaps/approximations:
- * - The star flower page says plants begin blooming within one minute, while the
- *   quick guide says 2-5 minutes; this plugin uses a one-minute timer and does not
- *   model the faster growth caused by more players being present.
- * - The queen's awakening scene has several speakers (Queen, Nuff, Very Wise)
- *   but the shared transcript replay renders one chathead; the qUAH/lamp/complete
- *   step ids are hooked instead of re-authoring the scene.
- * - Pickpocket success is a level-scaled roll (min 40 Thieving, not boostable);
- *   failing teleports to the Lumbridge Swamp shed as the wiki describes.
- * - Brewing is gated until Fairy Nuff finishes explaining the recipe; the Wiki's
- *   early-mix failure is represented as a refusal rather than a wasted potion.
- * - The multi-tile sleeping queen loc 16316 has no generated identifier, so it is
- *   a raw constant here (as FT1's grove wall).
- * - Fairy Nuff's Talk-to is claimed through onNpcInteraction: FT1's own variant
- *   selector answers for her after FT1 (its "after-fairytale-part-1") and would
- *   otherwise beat this quest's selector.
+ * Gaps (also in the docs' Not covered list):
+ * - Ours: the 5.5 minute Martin wait (the Wiki's quick guide "5 minutes"; not captured).
+ * - Ours: what sets 2330 (the cosmic plane). The capture arrives on the plane and picks a star
+ *   flower without it changing; this plugin sets it on the Cosmic Being's star flower answer.
+ * - Ours: the pickpocket success chance (min 40 Thieving, not boostable).
+ * - Brewing before Fairy Nuff's recipe is refused (Ours wording); the Wiki's early-mix loss is not
+ *   modelled.
+ * - The sleeping queen loc 16316 has no generated identifier, so it is a raw constant here.
  */
 module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const {
+    Animation,
+    ChatType,
+    DialogueChainBuilder,
     Item,
     ItemIdentifiers,
+    ItemStatementDialogue,
     Location,
     Misc,
     NpcIdentifiers,
     Skill,
-    Task,
-    TaskManager,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, questStartMessage } = require("../QuestRuntime");
+  const { buildLines } = require("../fairytaleii/Journal.FairytaleIICureAQueen");
+  const Scenes = require("../fairytaleii/Scenes.FairytaleIICureAQueen")(api);
 
   const PAGE = "Fairytale II - Cure a Queen";
 
@@ -94,9 +84,11 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     NpcIdentifiers.FAIRY_FIXIT, // 7332
     NpcIdentifiers.FAIRY_FIXIT_2, // 7333
   ]);
+  /** The hideout's fairies (1848-1851 and the fairy child 7748), all on the "Fairy" page's hideout variant. */
+  const HIDEOUT_FAIRY_NPC_IDS = new Set([1848, 1849, 1850, 1851, 7748]);
   const COSMIC_BEING_NPC_ID = NpcIdentifiers.COSMIC_BEING; // 1835
   const GORAK_NPC_ID = NpcIdentifiers.GORAK; // 1834 (the FT2 gorak plane; GWD goraks are 3141)
-  const STARFLOWER_NPC_ID = NpcIdentifiers.STARFLOWER_2; // 1857
+  const STARFLOWER_NPC_ID = NpcIdentifiers.STARFLOWER_2; // 1857, the bloom
   const ZANARIS_COW_NPC_ID = NpcIdentifiers.COW_5; // 5842
 
   const VARP_FAIRYTALE = 810;
@@ -115,35 +107,39 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const VARBIT_SIGN_READ = 2338; // "fairy2_sign_read", bits 21-23 (4 = read with the certificate)
   const VARBIT_TRASHED_PAN = 2339; // "fairy2_trashed_camera_pan", bit 24
   const VARBIT_GORAK_KILLED = 2382; // "fairy2_gorak_killed", bit 26
-  const VARBIT_FAIRY_GODFATHER_FT1 = 1808; // FT1's "fairy_godfather_check", varp 671 bits 24-25
+  const VARBIT_FAIRY_QUEEN_FT1 = 1807; // FT1's "fairy_queen_check": 2 once FT2 starts (77)
+  const VARBIT_FAIRY_GODFATHER_FT1 = 1808; // FT1's "fairy_godfather_check": 2 shows Pick-pocket
 
   const STAGE_WAITING = 5;
   const STAGE_READY = 10;
   const STAGE_INVESTIGATING = 20;
-  const STAGE_CERTIFICATE_STUDIED = 30;
+  const STAGE_GROTTO_SEEN = 30;
   const STAGE_PERMISSION = 40;
-  const STAGE_HIDEOUT = 45;
+  const STAGE_VERY_WISE = 45;
   const STAGE_PICKPOCKET = 50;
   const STAGE_HAS_SECATEURS = 60;
   const STAGE_HANDED_OVER = 65;
-  const STAGE_INGREDIENTS = 70;
+  const STAGE_RECIPE = 70;
   const STAGE_UNFINISHED_POTION = 72;
   const STAGE_FINISHED_POTION = 73;
   const STAGE_POTION_USED = 75;
+  const STAGE_QUEEN_AWAKE = 80;
   const STAGE_COMPLETE = 90;
-  const LEGACY_STAGE_COMPLETE = 80;
 
   const NUFFS_CERTIFICATE_ITEM_ID = ItemIdentifiers.NUFFS_CERTIFICATE; // 9025
+  const BROKEN_GLASS_ITEM_ID = ItemIdentifiers.BROKEN_GLASS_2; // 1469, the shelves' box (323)
   const CERTIFICATE_FRONT_INTERFACE = 423;
   const CERTIFICATE_BACK_INTERFACE = 424;
   const RUNE_TEMPLE_SIGN_INTERFACE = 425;
+  const GODFATHER_SCROLL_INTERFACE = 427; // scroll_godfather (494)
   const DOCUMENT_OPEN_SCRIPT = 2524;
   const QUEENS_SECATEURS_ITEM_ID = ItemIdentifiers.QUEENS_SECATEURS_2; // 9020
   const GORAK_CLAWS_ITEM_ID = ItemIdentifiers.GORAK_CLAWS; // 9016
   const GORAK_CLAW_POWDER_ITEM_ID = ItemIdentifiers.GORAK_CLAW_POWDER; // 9018
   const STAR_FLOWER_ITEM_ID = ItemIdentifiers.STAR_FLOWER; // 9017
   const MAGIC_ESSENCE_UNF_ITEM_ID = ItemIdentifiers.MAGIC_ESSENCE_UNF_; // 9019
-  const MAGIC_ESSENCE_XP = 130;
+  const MAGIC_ESSENCE_XP = 130; // 2398
+  const PICKPOCKET_XP = 47; // 1603; the Wiki's Fairy Godfather Thieving info
   const ESSENCE_DOSE_ITEM_IDS = [
     ItemIdentifiers.MAGIC_ESSENCE_4_, // 9021
     ItemIdentifiers.MAGIC_ESSENCE_3_, // 9022
@@ -153,33 +149,33 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const VIAL_OF_WATER_ITEM_ID = ItemIdentifiers.VIAL_OF_WATER; // 227
   const VIAL_ITEM_ID = ItemIdentifiers.VIAL; // 229
   const PESTLE_AND_MORTAR_ITEM_ID = ItemIdentifiers.PESTLE_AND_MORTAR; // 233
-  // Wiki (Antique lamp (A Tail of Two Cats)): the Fairy Queen's lamp is that quest's 2,500 XP lamp, rubbed there.
+  // Wiki (Antique lamp (A Tail of Two Cats)): the Fairy Queen's lamp is that quest's 2,500 XP lamp (2532).
   const ANTIQUE_LAMP_ITEM_ID = ItemIdentifiers.ANTIQUE_LAMP_2; // 6543
+  /** Brewing (2390-2398): the vial and grind animations, each with the grind synth. */
+  const HERBING_VIAL_SEQ = 363;
+  const HERBING_GRIND_SEQ = 364;
+  const SYNTH_GRIND = 2608;
 
-  // Placement ids: the certificate and the sleeping queen are varbit-transformed
-  // multi locs, so they have no generated identifier (as FT1's grove wall).
-  const QUEEN_BED_OBJECT_ID = 16316; // fairytale2_cert_large_broken_a_multi's sibling, "Fairy Queen"
-  const RIGHT_SHELF = { x: 2389, y: 4470 }; // the potion shelf the certificate fell from
+  // The sleeping queen is a varbit-transformed multi loc with no generated identifier.
+  const QUEEN_BED_OBJECT_ID = 16316; // fairy_queen_sleeping_multi2 (2415)
+  const RIGHT_SHELF = { x: 2389, y: 4470 }; // the potion shelf a lost certificate's copy hides in
   const NUFFS_ROOM = { minX: 2384, maxX: 2389, minY: 4470, maxY: 4474, levels: [0] };
   const ROOM_PAN_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:nuff-room-pan";
-  const ROOM_PAN_TICKS = 9;
 
   const START_HOOK = "quest:fairytale-ii-cure-a-queen:start";
   const MARTIN_QUEST_OPTION = "Ask about the quest.";
   const MARTIN_WAIT_MS = 5.5 * 60 * 1000;
-  // The quick guide says 2-5 minutes, while the Star flower page says they
-  // start blooming within a minute and grow faster with more players. Use the
-  // more specific page's one-minute upper bound; concurrent-player growth is
-  // not modeled in the owner-only plane.
-  const STARFLOWER_GROWTH_MS = 60 * 1000;
 
   // Transcript step ids.
   const CERT_BEFORE_STUDY_CONDITION_IDS = new Set(["HOEOez", "IznESa", "eOKuqb", "eQw7c6"]);
   const CERT_AFTER_STUDY_CONDITION_IDS = new Set(["hNZlpT", "ucI2OP", "pwsAFt", "2OgD4O"]);
-  const CERT_SHOW_TALK_CONDITION_ID = "dfIa3p";
   const SHELF_WRONG_CONDITION_ID = "1E1huy";
   const SHELF_RIGHT_CONDITION_ID = "RnasHV";
   const SHELF_FULL_CONDITION_ID = "uSZg_Z";
+  const SHELF_GLASS_MESSAGE_ID = "4X0HGi";
+  const SHELF_COPY_MESSAGE_IDS = new Set(["Scnlfm", "1hMiKZ"]);
+  const PICKPOCKET_SUCCESS_MESSAGE_ID = "LMiXR_";
+  const PICKPOCKET_ALREADY_MESSAGE_ID = "lC_3S_";
   const PICKPOCKET_FULL_CONDITION_ID = "5dBfKL";
   const PICKPOCKET_SUCCESS_CONDITION_ID = "bx036-";
   const PICKPOCKET_ALREADY_CONDITION_ID = "ntjs-9";
@@ -189,12 +185,18 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const POTION_READY_CONDITION_ID = "FJYR1J";
   const REWARD_NO_ROOM_CONDITION_ID = "-LSx7-";
   const REWARD_ROOM_CONDITION_ID = "e2I60y";
+  const SCROLL_ACTION_ID = "myHyVx"; // "(Contract scroll interface pops up.)"
   const NUFF_INTRO_CONTINUE_ACTION_ID = "YO3q33"; // "You see a fairy approaching ..." message
   const HAND_OVER_SECATEURS_MESSAGE_ID = "j-qUAH";
-  const PICKPOCKET_FAILED_MESSAGE_ID = "NBfLls";
   const REWARD_LAMP_MESSAGE_ID = "SuXalx";
-  const REWARD_GIVEN_ATTRIBUTE = "fairytale-ii-cure-a-queen:reward-given";
   const COMPLETE_ACTION_ID = "Vca-Ck";
+  /** Conditions the capture-aligned transcript adds; answered by their text. */
+  const CERT_OPTION_CONDITION = "With Fairy Nuff's certificate:";
+  const FAIRIES_BEFORE_NEWS_CONDITION = "Before Fairy Very Wise brings her news:";
+  const RECAP_GORAK_ONLY_CONDITION = "After visiting the Gorak Plane but not the Cosmic Plane:";
+  const RECAP_NO_GORAK_CONDITION = "Before visiting the Gorak Plane:";
+  const SHOW_GODFATHER_OPTION = "Show the Godfather the Certificate!";
+  const SHOW_COORDINATOR_OPTION = "Fairy Nuff's certificate.";
 
   // Variants (from the "Fairytale II - Cure a Queen" page unless noted).
   const MARTIN_FIRST_VARIANT = "starting-off-talking-to-martin";
@@ -208,6 +210,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const COORDINATOR_VARIANT = "starting-off-co-ordinator";
   const FIXIT_VARIANT = "starting-off-fairy-fixit";
   const SHELF_SEARCH_VARIANT = "locating-the-hideout-searching-for-fairy-nuff-s-certificate";
+  const HIDEOUT_FAIRIES_VARIANT = "in-the-hideout-talking-to-the-fairies";
   const NUFF_INTRO_VARIANT = "in-the-hideout-talking-to-fairy-nuff";
   const NUFF_AGAIN_VARIANT = "in-the-hideout-talking-to-fairy-nuff-again";
   const NUFF_RECAP_VARIANT =
@@ -236,6 +239,8 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     [NpcIdentifiers.FAIRY_NUFF, "locating-the-hideout-using-the-certificate-on-various-npcs-fairy-nuff"],
     [NpcIdentifiers.FAIRY_NUFF_2, "locating-the-hideout-using-the-certificate-on-various-npcs-fairy-nuff"],
   ]);
+  /** The certificate box names the NPC it is shown to; its picture is the certificate (433, 637). */
+  const CERTIFICATE_SHOWN = /^You show the certificate to /;
 
   const CERT_TAKEN_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:certificate-taken";
   const STUDIED_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:certificate-studied";
@@ -246,42 +251,30 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const MYSTERY_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:universal-mystery";
   const GORAK_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:gorak-killed";
   const MARTIN_TALK_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:martin-talk-at";
-  const RECIPE_TAUGHT_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:potion-recipe-taught";
-  const STARFLOWER_GROWTH_AT_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:starflower-growth-at";
-  const STARFLOWER_AVAILABLE_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:starflower-available";
+  /** Nuff's both-planes recap ended with "Yes, I'm on my way."; she then asks after the potion. */
+  const RECAP_DONE_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:recap-done";
+  const REWARD_GIVEN_ATTRIBUTE = "fairytale-ii-cure-a-queen:reward-given";
+  /** Set when the Queen wakes (80): an 80 without it is an older save's completion (see migrate). */
+  const QUEEN_WOKE_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:queen-woke";
   const PLANE_COSMIC = 1 << 0;
   const PLANE_GORAK = 1 << 1;
 
-  const HIDEOUT_ZONE = { minX: 2324, maxX: 2367, minY: 4420, maxY: 4468, levels: [0] };
-  const HIDEOUT_SEQUENCE = ["AIR", "DLR", "DJQ", "AJS"];
-  // Cache loc 29495 is 1x1 here; ordinary DB89 destinations likewise match its anchor.
-  const HIDEOUT_RING = new Location(2328, 4426, 0);
   const STAR_PLANE_ZONE = { minX: 2060, maxX: 2098, minY: 4806, maxY: 4862, levels: [0] };
   const GORAK_PLANE_ZONE = { minX: 3009, maxX: 3072, minY: 5312, maxY: 5380, levels: [0] };
-
-  // Star flower spawns on the cosmic entity's plane (wiki: they grow around the
-  // plane; the cosmic being stands at 2090,4829).
-  const STARFLOWER_SPAWNS = [
-    { x: 2070, y: 4841, z: 0 },
-    { x: 2077, y: 4836, z: 0 },
-  ];
-  const QUEEN_SPAWN = { x: 2354, y: 4455, z: 0 };
-  // Failed pickpocket: "You slowly wake up in an unknown place" - the wiki's
-  // "teleported outside Zanaris", by the Lumbridge Swamp shed.
-  const ZANARIS_EXIT = { x: 3202, y: 3167, z: 0 };
+  const HIDEOUT_SEQUENCE = ["AIR", "DLR", "DJQ", "AJS"];
+  // Cache loc 29495 is 1x1 here; ordinary DB89 destinations likewise match its anchor (846).
+  const HIDEOUT_RING = new Location(2328, 4426, 0);
 
   let quest;
   let groundItems;
   const shelfSearch = new WeakMap();
-  const roomPans = new WeakMap();
   const pickpocket = new WeakMap();
-  const starflowers = new Map(); // player -> spawned NPCs
-  const awakeQueen = new Map(); // player -> spawned NPC
   const hideoutSequence = new WeakMap();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const freeSlots = (player) => player.getInventory().getFreeSlots();
   const studied = (player) => Number(player.getAttribute(STUDIED_ATTRIBUTE)) > 0;
+  const flag = (player, attribute) => Number(player.getAttribute(attribute)) > 0;
 
   function answerFairyRingAccess(request) {
     request.allowed = quest.getStage(request.player) >= STAGE_PERMISSION;
@@ -290,11 +283,11 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   function resolveFairyRingDestination(request) {
     const { player, code } = request;
     if (quest.getStage(player) < STAGE_PERMISSION) return;
-    // DJQ is the sequence's no-trip step, not a new destination.
+    // DJQ is the sequence's no-trip step, not a new destination (827).
     if (code === "DJQ") request.destination = request.origin ?? player.getLocation().clone();
     if (code !== "AJS" || hideoutSequence.get(player) !== 3) return;
     if (quest.isComplete(player)
-      || (held(player, NUFFS_CERTIFICATE_ITEM_ID) && studied(player) && Number(player.getAttribute(SIGN_ATTRIBUTE)) > 0)) {
+      || (held(player, NUFFS_CERTIFICATE_ITEM_ID) && studied(player) && flag(player, SIGN_ATTRIBUTE))) {
       request.destination = HIDEOUT_RING;
     } else if (held(player, NUFFS_CERTIFICATE_ITEM_ID) && studied(player)) {
       // Wiki (Fairytale II, Regrouping): with the right sequence but the Cosmic Altar sign skipped,
@@ -325,9 +318,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     return Number(player.getAttribute(PLANES_ATTRIBUTE)) || 0;
   }
 
-  function planesVisited(player) {
-    return (planes(player) & PLANE_COSMIC) !== 0 && (planes(player) & PLANE_GORAK) !== 0;
-  }
+  const visited = (player, bit) => (planes(player) & bit) !== 0;
 
   function setPlane(player, bit) {
     player.setAttribute(PLANES_ATTRIBUTE, planes(player) | bit);
@@ -338,10 +329,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   }
 
   function potionRecipeTaught(player) {
-    // Stage 70 was committed before the recipe dialogue in older saves; preserve
-    // those players' progress while new saves commit it after the final line.
-    return quest.getStage(player) >= STAGE_INGREDIENTS
-      || Number(player.getAttribute(RECIPE_TAUGHT_ATTRIBUTE)) > 0;
+    return quest.getStage(player) >= STAGE_RECIPE;
   }
 
   function martinWaited(player) {
@@ -356,33 +344,35 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     }
   }
 
-  /** Re-sends every sibling varbit in varp 810 (the quest stage lives in 2326). */
+  function roomPanSeen(player) {
+    return player.getAttribute(ROOM_PAN_ATTRIBUTE) === true
+      || quest.getStage(player) >= STAGE_GROTTO_SEEN
+      || flag(player, CERT_TAKEN_ATTRIBUTE);
+  }
+
+  /** Re-sends every sibling varbit in varp 810 (the quest stage lives in 2326) and FT1's two. */
   function syncProgress(player) {
     const sender = player.getPacketSender();
     const stage = quest.getStage(player);
     const complete = stage >= STAGE_COMPLETE;
-    sender.sendVarbit(
-      VARBIT_CERT_TAKEN,
-      stage < STAGE_INVESTIGATING ? 0 : Number(player.getAttribute(CERT_TAKEN_ATTRIBUTE)) > 0 ? 2 : 1
-    );
+    sender.sendVarbit(VARBIT_CERT_TAKEN, stage < STAGE_INVESTIGATING ? 0 : flag(player, CERT_TAKEN_ATTRIBUTE) ? 2 : 1);
     sender.sendVarbit(VARBIT_RING_USE, stage >= STAGE_PERMISSION ? 1 : 0);
-    sender.sendVarbit(
-      VARBIT_RING_PERMISSION,
-      stage >= STAGE_PERMISSION ? 2 : Number(player.getAttribute(DENIED_ATTRIBUTE)) > 0 ? 1 : 0
-    );
-    sender.sendVarbit(VARBIT_COSMIC_PLANE, planes(player) & PLANE_COSMIC ? 1 : 0);
-    sender.sendVarbit(VARBIT_GORAK_PLANE, planes(player) & PLANE_GORAK ? 1 : 0);
+    sender.sendVarbit(VARBIT_RING_PERMISSION, stage >= STAGE_PERMISSION ? 2 : flag(player, DENIED_ATTRIBUTE) ? 1 : 0);
+    sender.sendVarbit(VARBIT_COSMIC_PLANE, visited(player, PLANE_COSMIC) ? 1 : 0);
+    sender.sendVarbit(VARBIT_GORAK_PLANE, visited(player, PLANE_GORAK) ? 1 : 0);
     sender.sendVarbit(VARBIT_NUFF_VISIBLE, stage >= STAGE_INVESTIGATING && !complete ? 1 : 0);
     sender.sendVarbit(VARBIT_MARTIN_CHAT, stage >= STAGE_WAITING ? 1 : 0);
-    sender.sendVarbit(VARBIT_UNIVERSAL_MYSTERY, Number(player.getAttribute(MYSTERY_ATTRIBUTE)) > 0 ? 1 : 0);
+    sender.sendVarbit(VARBIT_UNIVERSAL_MYSTERY, flag(player, MYSTERY_ATTRIBUTE) ? 1 : 0);
     sender.sendVarbit(VARBIT_REWARD_GIVEN, complete ? 1 : 0);
     sender.sendVarbit(VARBIT_CERT_EXAMINED, studied(player) ? 1 : 0);
-    sender.sendVarbit(VARBIT_CHEF_CHAT, Number(player.getAttribute(CHEF_ATTRIBUTE)) > 0 ? 1 : 0);
-    sender.sendVarbit(VARBIT_SIGN_READ, Number(player.getAttribute(SIGN_ATTRIBUTE)) > 0 ? 4 : 0);
+    sender.sendVarbit(VARBIT_CHEF_CHAT, flag(player, CHEF_ATTRIBUTE) ? 1 : 0);
+    sender.sendVarbit(VARBIT_SIGN_READ, flag(player, SIGN_ATTRIBUTE) ? 4 : 0);
     sender.sendVarbit(VARBIT_TRASHED_PAN, roomPanSeen(player) ? 1 : 0);
-    sender.sendVarbit(VARBIT_GORAK_KILLED, Number(player.getAttribute(GORAK_ATTRIBUTE)) > 0 ? 1 : 0);
-    // FT1's Godfather spawn (5850) only offers Pick-pocket when 1808 is 2.
-    if (stage >= STAGE_PICKPOCKET) sender.sendVarbit(VARBIT_FAIRY_GODFATHER_FT1, 2);
+    sender.sendVarbit(VARBIT_GORAK_KILLED, flag(player, GORAK_ATTRIBUTE) ? 1 : 0);
+    if (stage >= STAGE_INVESTIGATING) sender.sendVarbit(VARBIT_FAIRY_QUEEN_FT1, 2);
+    // The Godfather's spawn (5850) offers Pick-pocket only while 1808 is 2 (1002 -> 1882).
+    if (stage >= STAGE_PICKPOCKET && stage < STAGE_HANDED_OVER) sender.sendVarbit(VARBIT_FAIRY_GODFATHER_FT1, 2);
+    else if (stage >= STAGE_HANDED_OVER) sender.sendVarbit(VARBIT_FAIRY_GODFATHER_FT1, 1);
   }
 
   // ==========================================================================
@@ -393,32 +383,27 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     if (stage >= STAGE_COMPLETE) return "standard-dialogue-after-fairytale-ii";
     if (stage >= STAGE_PERMISSION) return GODFATHER_PERMISSION_VARIANT;
     if (stage >= STAGE_INVESTIGATING) {
-      return Number(player.getAttribute(DENIED_ATTRIBUTE)) > 0
-        ? GODFATHER_DENIED_VARIANT
-        : GODFATHER_START_VARIANT;
+      return flag(player, DENIED_ATTRIBUTE) ? GODFATHER_DENIED_VARIANT : GODFATHER_START_VARIANT;
     }
     return null;
   }
 
   function nuffVariant(player, stage) {
-    if (stage >= STAGE_COMPLETE) return "after-fairytale-part-2";
-    if (stage >= STAGE_HANDED_OVER) {
-      if (stage < STAGE_INGREDIENTS && planesVisited(player)) {
-        return NUFF_RECAP_VARIANT;
-      }
-      return NUFF_POTION_VARIANT;
-    }
+    if (stage >= STAGE_QUEEN_AWAKE) return WAKE_VARIANT;
+    if (stage >= STAGE_UNFINISHED_POTION) return NUFF_POTION_VARIANT;
+    // 70 (and 65 if her recipe was cut short): the recap until the both-planes answer is given (2364).
+    if (stage >= STAGE_HANDED_OVER) return flag(player, RECAP_DONE_ATTRIBUTE) ? NUFF_POTION_VARIANT : NUFF_RECAP_VARIANT;
     if (stage >= STAGE_HAS_SECATEURS) {
       return held(player, QUEENS_SECATEURS_ITEM_ID) ? NUFF_GIVE_SECATEURS_VARIANT : NUFF_LOST_SECATEURS_VARIANT;
     }
     if (stage >= STAGE_PICKPOCKET) return NUFF_AGAIN_VARIANT;
-    if (stage >= STAGE_INVESTIGATING) return NUFF_INTRO_VARIANT;
+    if (stage >= STAGE_PERMISSION) return NUFF_INTRO_VARIANT;
     return null;
   }
 
   function queenVariant(stage) {
     if (stage >= STAGE_COMPLETE) return "standard-dialogue-after-finishing-fairytale-ii-cure-a-queen";
-    if (stage >= STAGE_POTION_USED) return WAKE_VARIANT;
+    if (stage >= STAGE_QUEEN_AWAKE) return WAKE_VARIANT;
     return null;
   }
 
@@ -429,7 +414,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
       if (stage >= STAGE_COMPLETE) return "standard-dialogue";
       if (stage >= STAGE_INVESTIGATING) return MARTIN_AGAIN_VARIANT;
       // 10 is the ready-to-accept copy: a refused start stays here so the
-      // offer (and its quest:start hook) can be shown again.
+      // offer (and its quest:start hook) can be shown again (58-77).
       if (stage >= STAGE_READY) return MARTIN_READY_VARIANT;
       if (stage >= STAGE_WAITING) return martinWaited(player) ? MARTIN_READY_VARIANT : MARTIN_WAIT_VARIANT;
       return MARTIN_FIRST_VARIANT;
@@ -437,8 +422,9 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     if (FAIRY_GODFATHER_NPC_IDS.has(npcId)) return godfatherVariant(player, stage);
     if (FAIRY_QUEEN_NPC_IDS.has(npcId)) return queenVariant(stage);
     if (npcId === FAIRY_VERY_WISE_NPC_ID) {
-      if (stage >= STAGE_COMPLETE) return VERY_WISE_CURED_VARIANT;
-      if (stage >= STAGE_PERMISSION) return VERY_WISE_VARIANT;
+      // At 80 she already thanks the player (2424-2426).
+      if (stage >= STAGE_QUEEN_AWAKE) return VERY_WISE_CURED_VARIANT;
+      if (stage >= STAGE_VERY_WISE) return VERY_WISE_VARIANT;
       return null;
     }
     if (npcId === COORDINATOR_NPC_ID) {
@@ -451,6 +437,9 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     if (npcId === COSMIC_BEING_NPC_ID) {
       return stage >= STAGE_HANDED_OVER && stage < STAGE_COMPLETE ? COSMIC_BEING_VARIANT : null;
     }
+    if (HIDEOUT_FAIRY_NPC_IDS.has(npcId) && stage >= STAGE_PERMISSION && stage < STAGE_COMPLETE) {
+      return { page: PAGE, variant: HIDEOUT_FAIRIES_VARIANT };
+    }
     return null;
   }
 
@@ -458,11 +447,21 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   // Prose conditions
   // ==========================================================================
 
-  function answerCondition({ player, stepId }) {
+  function answerCondition({ player, stepId, text }) {
+    switch (text) {
+      case CERT_OPTION_CONDITION:
+        return held(player, NUFFS_CERTIFICATE_ITEM_ID);
+      case FAIRIES_BEFORE_NEWS_CONDITION:
+        // Stage 40 (877-941) has these five; from 50 the Wiki's seven (1016-1020).
+        return quest.getStage(player) < STAGE_VERY_WISE;
+      case RECAP_GORAK_ONLY_CONDITION:
+        return visited(player, PLANE_GORAK) && !visited(player, PLANE_COSMIC);
+      case RECAP_NO_GORAK_CONDITION:
+        return !visited(player, PLANE_GORAK);
+      default:
+        break;
+    }
     switch (stepId) {
-      // Showing the certificate is the item-on-NPC route, never the talk menu.
-      case CERT_SHOW_TALK_CONDITION_ID:
-        return false;
       case SHELF_WRONG_CONDITION_ID:
         return shelfSearch.get(player) === "wrong";
       case SHELF_RIGHT_CONDITION_ID:
@@ -500,22 +499,60 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
 
   function grantFairyRingPermission(player) {
     player.setAttribute(DENIED_ATTRIBUTE, 0);
-    if (quest.getStage(player) < STAGE_PERMISSION) advance(player, STAGE_PERMISSION);
+    advance(player, STAGE_PERMISSION);
     syncProgress(player);
   }
 
-  function handleNuffRecipeLine(event) {
-    if (!FAIRY_NUFF_NPC_IDS.has(event.npcId) || event.text !== "Yes, I'm on my way.") return;
-    if (!event.pages?.some(({ page, variants }) => page === PAGE && variants?.includes(NUFF_RECAP_VARIANT))) return;
-    event.after = () => {
-      event.player.setAttribute(RECIPE_TAUGHT_ATTRIBUTE, 1);
-      if (quest.getStage(event.player) < STAGE_INGREDIENTS && planesVisited(event.player)) {
-        advance(event.player, STAGE_INGREDIENTS);
+  const onPage = (event, variant) => event.pages?.some(({ page, variants }) => page === PAGE && variants?.includes(variant));
+
+  /**
+   * Line events come as the runtime lays out a run of lines, so a line's state change goes in
+   * `before` (as it shows) or `after` (once the player continues past it).
+   */
+  function handleLine(event) {
+    const { player, npcId } = event;
+    const text = String(event.step?.text ?? event.step?.player ?? event.text ?? "");
+    if (FAIRY_GODFATHER_NPC_IDS.has(npcId)) {
+      const stage = quest.getStage(player);
+      if (stage < STAGE_INVESTIGATING || stage >= STAGE_PERMISSION) return;
+      // The contract-scroll route: permission comes as his "wrong scroll" line shows (511).
+      if (text.startsWith("Eet does? Oh, sorry, must-a geeven yous da wrong-a scroll.")) {
+        event.before = () => grantFairyRingPermission(player);
+      } else if (text.startsWith("Good. Now-a yous talk-a to da co-ordinator.")) {
+        // The Wiki's "Yes, okay." route (not captured): permission once he says so. Ours: on the line.
+        event.before = () => grantFairyRingPermission(player);
       }
-    };
+      return;
+    }
+    if (!FAIRY_NUFF_NPC_IDS.has(npcId)) return;
+    if (text.startsWith("That's easy I'll just pickpocket them off of him")) {
+      // The player's promise is where the pickpocket task starts (1002).
+      event.before = () => {
+        if (quest.getStage(player) >= STAGE_PERMISSION) advance(player, STAGE_PICKPOCKET);
+      };
+      return;
+    }
+    if (text.startsWith("only way onto or off of their world is through the fairy rings.")) {
+      // The recipe's last line; the stage moves as the player continues past it (1915).
+      event.after = () => advance(player, STAGE_RECIPE);
+      return;
+    }
+    if (text === "Yes, I'm on my way." && onPage(event, NUFF_RECAP_VARIANT)) {
+      event.after = () => {
+        player.setAttribute(RECAP_DONE_ATTRIBUTE, 1);
+        advance(player, STAGE_RECIPE);
+      };
+      return;
+    }
+    if (text.startsWith("Star Flowers only grow on the higher planes") && onPage(event, NUFF_RECAP_VARIANT)
+      && !text.includes("Goraks also live")) {
+      // The Gorak-only recap ends on this line (2370).
+      event.after = () => advance(player, STAGE_RECIPE);
+    }
   }
 
-  function handleChoice({ player, npcId, option }) {
+  function handleChoice(choice) {
+    const { player, npcId, option } = choice;
     if (npcId === MARTIN_NPC_ID && option === MARTIN_QUEST_OPTION) {
       if (!ft1Complete(player)) return;
       const stage = quest.getStage(player);
@@ -528,60 +565,63 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
       return;
     }
     if (npcId === COSMIC_BEING_NPC_ID && option === "I'm looking for a Star Flower.") {
+      // Ours: the cosmic plane's varbit (see the header).
+      if (quest.getStage(player) >= STAGE_HANDED_OVER && !quest.isComplete(player)) setPlane(player, PLANE_COSMIC);
       player.setAttribute(MYSTERY_ATTRIBUTE, 1);
       syncProgress(player);
+      return;
+    }
+    if (FAIRY_GODFATHER_NPC_IDS.has(npcId) && option === SHOW_GODFATHER_OPTION) {
+      // The menu's third option shows the certificate (431-437); its "below" is that section.
+      choice.end = true;
+      showCertificate(player, npcId);
+      return;
+    }
+    if (npcId === COORDINATOR_NPC_ID && option === SHOW_COORDINATOR_OPTION) {
+      // Her "below" would run on into the fairy rings answer (636-639).
+      choice.end = true;
+      showCertificate(player, npcId);
       return;
     }
     if (!FAIRY_GODFATHER_NPC_IDS.has(npcId)) return;
     const stage = quest.getStage(player);
     if (stage < STAGE_INVESTIGATING || stage >= STAGE_PERMISSION) return;
-    if (option === "Yes, okay." || option === "Oh, okay then.") {
-      grantFairyRingPermission(player);
-    } else if (option === "No, I'll rescue her myself.") {
+    if (option === "No, I'll rescue her myself.") {
+      // 2329 goes to 1 with the refusal (473).
       player.setAttribute(DENIED_ATTRIBUTE, 1);
       syncProgress(player);
     }
   }
 
+  /**
+   * After "That's not very helpful." the Godfather's "other options" go straight into the one
+   * question not yet asked (455-457), as live plays it, rather than showing the menu again.
+   */
+  function handleMenu(notice) {
+    if (!FAIRY_GODFATHER_NPC_IDS.has(notice.npcId) || notice.via !== "other") return;
+    const remaining = (notice.options ?? []).filter((option) => option.text !== notice.chosen);
+    if (remaining.length !== 1 || !Array.isArray(remaining[0].steps)) return;
+    notice.handled = true;
+    startTranscript(api, notice.player, notice.npcId, PAGE, GODFATHER_START_VARIANT, () => remaining[0].steps);
+  }
+
+  function showCertificate(player, npcId) {
+    const variant = CERTIFICATE_VARIANTS.get(npcId);
+    if (!variant) return;
+    // The certificate's section plays the tick after the pick (431 -> 433, 636 -> 637).
+    api.core.TaskManager.submit(new api.core.CountdownTask({}, 1, () =>
+      startTranscript(api, player, npcId, PAGE, variant)));
+  }
+
   function handleStartHook({ player, npcId, hook }) {
     if (npcId !== MARTIN_NPC_ID || hook !== START_HOOK) return;
-    if (!ft1Complete(player)) return;
+    if (!ft1Complete(player) || quest.getStage(player) >= STAGE_INVESTIGATING) return;
     advance(player, STAGE_INVESTIGATING);
-    syncProgress(player);
+    player.sendMessage(questStartMessage(player, "Fairytale II - Cure a Queen")); // 77
   }
 
   function handleConditionEvent(event) {
     const { player, stepId } = event;
-    if (stepId === SHELF_RIGHT_CONDITION_ID) {
-      const context = shelfSearch.get(player);
-      shelfSearch.delete(player);
-      if (context !== "right" || held(player, NUFFS_CERTIFICATE_ITEM_ID)) return;
-      player.getInventory().adds(NUFFS_CERTIFICATE_ITEM_ID, 1);
-      player.setAttribute(CERT_TAKEN_ATTRIBUTE, 1);
-      syncProgress(player);
-      return;
-    }
-    if (stepId === PICKPOCKET_SUCCESS_CONDITION_ID) {
-      const context = pickpocket.get(player);
-      pickpocket.delete(player);
-      if (context !== "success") return;
-      if (!held(player, QUEENS_SECATEURS_ITEM_ID)) {
-        player.getInventory().adds(QUEENS_SECATEURS_ITEM_ID, 1);
-      }
-      advance(player, STAGE_HAS_SECATEURS);
-      syncProgress(player);
-      return;
-    }
-    if (stepId === PICKPOCKET_FULL_CONDITION_ID) {
-      // The imported branch now carries the real "You don't have space to
-      // carry the secateurs" message; only clear the attempt context.
-      pickpocket.delete(player);
-      return;
-    }
-    if (stepId === PICKPOCKET_ALREADY_CONDITION_ID || stepId === PICKPOCKET_FAIL_CONDITION_ID) {
-      pickpocket.delete(player);
-      return;
-    }
     if (stepId === "ucI2OP") {
       player.setAttribute(CHEF_ATTRIBUTE, 1);
       syncProgress(player);
@@ -590,74 +630,128 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
 
   function handleActionEvent(event) {
     const { player, npcId, stepId } = event;
-    if (stepId === NUFF_INTRO_CONTINUE_ACTION_ID) {
-      if (!FAIRY_NUFF_NPC_IDS.has(npcId)) return;
-      // The import now carries the real "You see a fairy approaching ..."
-      // message; leave it unhandled so it displays, and advance to the
-      // pickpocket task before her warning continues.
-      if (quest.getStage(player) >= STAGE_PERMISSION && quest.getStage(player) < STAGE_PICKPOCKET) {
-        advance(player, STAGE_PICKPOCKET);
-        syncProgress(player);
-      }
+    if (event.kind === "message") {
+      handleMessage(event);
       return;
     }
-    if (stepId === HAND_OVER_SECATEURS_MESSAGE_ID) {
-      if (!FAIRY_NUFF_NPC_IDS.has(npcId)) return;
-      if (held(player, QUEENS_SECATEURS_ITEM_ID)) {
-        player.getInventory().deleteNumber(QUEENS_SECATEURS_ITEM_ID, 1);
-      }
-      if (quest.getStage(player) < STAGE_HANDED_OVER) advance(player, STAGE_HANDED_OVER);
-      return;
-    }
-    if (stepId === PICKPOCKET_FAILED_MESSAGE_ID) {
-      if (!FAIRY_GODFATHER_NPC_IDS.has(npcId)) return;
-      player.moveTo(new Location(ZANARIS_EXIT.x, ZANARIS_EXIT.y, ZANARIS_EXIT.z));
-      return;
-    }
-    if (stepId === REWARD_LAMP_MESSAGE_ID) {
-      if (!FAIRY_QUEEN_NPC_IDS.has(npcId)) return;
-      if (Number(player.getAttribute(REWARD_GIVEN_ATTRIBUTE)) > 0) return;
-      const inventory = player.getInventory();
-      if (inventory.getFreeSlots() < 1) {
-        player.sendMessage("You need an empty inventory slot for the antique lamp.");
-        event.handled = true;
-        event.end = true;
-        return;
-      }
-      const before = inventory.getAmount(ANTIQUE_LAMP_ITEM_ID);
-      inventory.adds(ANTIQUE_LAMP_ITEM_ID, 1);
-      if (inventory.getAmount(ANTIQUE_LAMP_ITEM_ID) > before) {
-        player.setAttribute(REWARD_GIVEN_ATTRIBUTE, 1);
-      }
-      syncProgress(player);
+    if (stepId === SCROLL_ACTION_ID && FAIRY_GODFATHER_NPC_IDS.has(npcId)) {
+      // The contract scroll opens a tick after his line (493 -> 494) and holds the talk until it is
+      // closed; the player's refusal shows the tick after (506 -> 507).
+      event.wait = (resume) => {
+        api.core.TaskManager.submit(new api.core.CountdownTask({}, 1, () => {
+          player.getPacketSender().sendClientScript(DOCUMENT_OPEN_SCRIPT, -1, -1).sendInterface(GODFATHER_SCROLL_INTERFACE);
+          waitForScroll.set(player, resume);
+        }));
+      };
       return;
     }
     if (stepId !== COMPLETE_ACTION_ID) return;
-    if (!FAIRY_QUEEN_NPC_IDS.has(npcId)) return;
+    if (!FAIRY_QUEEN_NPC_IDS.has(npcId) && !FAIRY_NUFF_NPC_IDS.has(npcId)) return;
     event.handled = true;
     event.end = true;
-    if (quest.getStage(player) >= STAGE_POTION_USED && !quest.isComplete(player)) {
+    if (quest.getStage(player) >= STAGE_QUEEN_AWAKE && !quest.isComplete(player)) {
       quest.complete(player);
       syncProgress(player);
     }
   }
 
+  const waitForScroll = new WeakMap();
+
+  function handleInterfaceClosed({ player, interfaceId }) {
+    if (interfaceId !== GODFATHER_SCROLL_INTERFACE) return;
+    const resume = waitForScroll.get(player);
+    if (!resume) return;
+    waitForScroll.delete(player);
+    api.core.TaskManager.submit(new api.core.CountdownTask({}, 1, resume));
+  }
+
+  /** Message steps: the boxes' pictures, and the state each one carries. */
+  function handleMessage(event) {
+    const { player, npcId, stepId } = event;
+    const text = String(event.text ?? "");
+    if (CERTIFICATE_SHOWN.test(text)) {
+      event.box = { items: [NUFFS_CERTIFICATE_ITEM_ID] };
+      return;
+    }
+    if (stepId === PICKPOCKET_SUCCESS_MESSAGE_ID) {
+      event.box = { items: [QUEENS_SECATEURS_ITEM_ID] }; // 1603
+      return;
+    }
+    if (stepId === PICKPOCKET_ALREADY_MESSAGE_ID) {
+      event.box = { statement: true }; // the Wiki's tbox
+      return;
+    }
+    if (stepId === SHELF_GLASS_MESSAGE_ID) {
+      event.box = { items: [BROKEN_GLASS_ITEM_ID] };
+      shelfSearch.delete(player);
+      return;
+    }
+    if (SHELF_COPY_MESSAGE_IDS.has(stepId)) {
+      event.box = { items: [NUFFS_CERTIFICATE_ITEM_ID] };
+      const context = shelfSearch.get(player);
+      shelfSearch.delete(player);
+      if (context !== "right" || freeSlots(player) < 1 || held(player, NUFFS_CERTIFICATE_ITEM_ID)) return;
+      player.getInventory().adds(NUFFS_CERTIFICATE_ITEM_ID, 1);
+      player.setAttribute(CERT_TAKEN_ATTRIBUTE, 1);
+      syncProgress(player);
+      return;
+    }
+    if (stepId === NUFF_INTRO_CONTINUE_ACTION_ID && FAIRY_NUFF_NPC_IDS.has(npcId)) {
+      // "You see a fairy approaching ..." brings Fairy Very Wise (the 2970 multinpc) in (976).
+      if (quest.getStage(player) >= STAGE_PERMISSION) advance(player, STAGE_VERY_WISE);
+      return;
+    }
+    if (stepId === HAND_OVER_SECATEURS_MESSAGE_ID && FAIRY_NUFF_NPC_IDS.has(npcId)) {
+      // The box shows the secateurs (1880); as it closes Nuff casts and takes them (1882).
+      event.box = { items: [QUEENS_SECATEURS_ITEM_ID] };
+      event.after = () => {
+        if (held(player, QUEENS_SECATEURS_ITEM_ID)) player.getInventory().deleteNumber(QUEENS_SECATEURS_ITEM_ID, 1);
+        advance(player, STAGE_HANDED_OVER);
+        Scenes.nuffEnchant(player, event.npc);
+      };
+      return;
+    }
+    if (stepId === REWARD_LAMP_MESSAGE_ID && (FAIRY_QUEEN_NPC_IDS.has(npcId) || FAIRY_NUFF_NPC_IDS.has(npcId))) {
+      event.box = { items: [ANTIQUE_LAMP_ITEM_ID] };
+      // The room branch's box; a full bag (its own branch) never gets here, and a stale one cannot grant.
+      if (flag(player, REWARD_GIVEN_ATTRIBUTE) || freeSlots(player) < 1) return;
+      const inventory = player.getInventory();
+      const before = inventory.getAmount(ANTIQUE_LAMP_ITEM_ID);
+      inventory.adds(ANTIQUE_LAMP_ITEM_ID, 1);
+      if (inventory.getAmount(ANTIQUE_LAMP_ITEM_ID) > before) player.setAttribute(REWARD_GIVEN_ATTRIBUTE, 1);
+      syncProgress(player);
+    }
+  }
+
   // ==========================================================================
-  // The certificate, the sign and the pickpocket
+  // The grotto, the certificate and the sign
   // ==========================================================================
 
+  function startRoomPan({ player }) {
+    if (quest.getStage(player) !== STAGE_INVESTIGATING || roomPanSeen(player) || Scenes.isPanning(player)) return;
+    Scenes.startRoomPan(player, () => {
+      player.setAttribute(ROOM_PAN_ATTRIBUTE, true);
+      advance(player, STAGE_GROTTO_SEEN);
+    });
+  }
+
+  /** Take on the broken frame (317-318): the certificate and its box, 2327 to 2. */
   function handleTakeCertificate(event) {
     const { player } = event;
     const stage = quest.getStage(player);
     if (stage < STAGE_INVESTIGATING || quest.isComplete(player)) return false;
-    if (held(player, NUFFS_CERTIFICATE_ITEM_ID)) return true;
+    if (flag(player, CERT_TAKEN_ATTRIBUTE)) return true;
     if (freeSlots(player) < 1) {
+      // Ours: no recording or Wiki line for a full inventory here.
       player.sendMessage("You don't have enough inventory space to take the certificate.");
       return true;
     }
     player.getInventory().adds(NUFFS_CERTIFICATE_ITEM_ID, 1);
     player.setAttribute(CERT_TAKEN_ATTRIBUTE, 1);
     syncProgress(player);
+    player.sendMessage("You pick up Fairy Nuff's certificate, being careful not to cut yourself on its broken frame.");
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, NUFFS_CERTIFICATE_ITEM_ID,
+      "You pick up Fairy Nuff's certificate, being careful not to cut yourself on its broken frame.")));
     return true;
   }
 
@@ -665,7 +759,9 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     const { player, location } = event;
     const stage = quest.getStage(player);
     if (stage < STAGE_INVESTIGATING) return false;
+    // A lost certificate's copy hides in the right shelf (the Wiki); with it held every shelf is glass (321-346).
     const right = !quest.isComplete(player)
+      && flag(player, CERT_TAKEN_ATTRIBUTE)
       && !held(player, NUFFS_CERTIFICATE_ITEM_ID)
       && location?.x === RIGHT_SHELF.x
       && location?.y === RIGHT_SHELF.y;
@@ -679,6 +775,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     const stage = quest.getStage(player);
     if (stage < STAGE_INVESTIGATING) return false;
     if (!studied(player)) {
+      // Ours: the Wiki only says the sign must be read with the certificate studied.
       player.sendMessage("The strange markings on the sign mean nothing to you yet.");
       return true;
     }
@@ -699,7 +796,8 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
 
   function handleStudyCertificate({ player }) {
     player.setAttribute(STUDIED_ATTRIBUTE, 1);
-    advance(player, STAGE_CERTIFICATE_STUDIED);
+    // Older saves taken the certificate before the sweep existed are still at 20.
+    if (quest.getStage(player) === STAGE_INVESTIGATING && roomPanSeen(player)) advance(player, STAGE_GROTTO_SEEN);
     syncProgress(player);
     player.sendMessage("You turn the certificate over and look at the back...");
     // RSProx 424 supplies the back document's distinct mainmodal arguments.
@@ -715,26 +813,55 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     startTranscript(api, event.player, event.npcId, PAGE, variant);
   }
 
+  // ==========================================================================
+  // The Godfather's pocket
+  // ==========================================================================
+
   function handlePickpocket(event) {
-    const { player, npcId } = event;
+    const { player, npcId, npc } = event;
     if (!FAIRY_GODFATHER_NPC_IDS.has(npcId)) return false;
     const stage = quest.getStage(player);
     if (stage < STAGE_PICKPOCKET || stage >= STAGE_HANDED_OVER) return false;
     event.handled = true;
+    if (Scenes.isKnockedOut(player)) return true;
     if (held(player, QUEENS_SECATEURS_ITEM_ID)) {
       pickpocket.set(player, "already");
-    } else if (player.getSkillManager().getMaxLevel(Skill.THIEVING) < 40) {
+      startTranscript(api, player, npcId, PAGE, PICKPOCKET_VARIANT, (steps) => onlyBranch(steps, PICKPOCKET_ALREADY_CONDITION_ID));
+      return true;
+    }
+    if (player.getSkillManager().getMaxLevel(Skill.THIEVING) < 40) {
+      // Ours: the requirement message (the Wiki gives the level, not the line).
       player.sendMessage("You need a Thieving level of 40 to pickpocket the Fairy Godfather.");
       return true;
-    } else if (freeSlots(player) < 1) {
-      pickpocket.set(player, "full");
-    } else {
-      const level = player.getSkillManager().getMaxLevel(Skill.THIEVING);
-      const chance = Math.min(95, 45 + (level - 40) * 2);
-      pickpocket.set(player, Misc.randomInclusive(1, 100) <= chance ? "success" : "fail");
     }
-    startTranscript(api, player, npcId, PAGE, PICKPOCKET_VARIANT);
+    if (freeSlots(player) < 1) {
+      pickpocket.set(player, "full");
+      startTranscript(api, player, npcId, PAGE, PICKPOCKET_VARIANT, (steps) => onlyBranch(steps, PICKPOCKET_FULL_CONDITION_ID, true));
+      return true;
+    }
+    const level = player.getSkillManager().getMaxLevel(Skill.THIEVING);
+    const chance = Math.min(95, 45 + (level - 40) * 2); // Ours
+    Scenes.reach(player, npc);
+    if (Misc.randomInclusive(1, 100) > chance) {
+      pickpocket.set(player, "fail");
+      Scenes.knockOut(player, npc);
+      return true;
+    }
+    // Success (1603): the stage, the secateurs and their box, 47 XP and the jingle on one tick.
+    player.getInventory().adds(QUEENS_SECATEURS_ITEM_ID, 1);
+    player.getSkillManager().addExperiences(Skill.THIEVING, PICKPOCKET_XP);
+    advance(player, STAGE_HAS_SECATEURS);
+    Scenes.stealJingle(player);
+    pickpocket.set(player, "success");
+    startTranscript(api, player, npcId, PAGE, PICKPOCKET_VARIANT, (steps) => onlyBranch(steps, PICKPOCKET_SUCCESS_CONDITION_ID));
     return true;
+  }
+
+  /** One condition branch of the pickpocket page (the reach line is the plugin's, on the same tick). */
+  function onlyBranch(steps, id, keepAttempt = false) {
+    const branch = steps.find((step) => step.id === id);
+    if (!branch) return steps;
+    return [...(keepAttempt ? steps.filter((step) => step.type === "message").slice(0, 1) : []), ...(branch.steps ?? [])];
   }
 
   // ==========================================================================
@@ -746,6 +873,12 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     return ids.includes(a) && ids.includes(b);
   }
 
+  function brew(player, seqId, message) {
+    player.performAnimation(new Animation(seqId));
+    api.core.Sounds.sendSound(player, new api.core.Sound(SYNTH_GRIND, 1, 0, 1));
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, message);
+  }
+
   function handleItemOnItem(event) {
     const { player } = event;
     if (pair(event, PESTLE_AND_MORTAR_ITEM_ID, GORAK_CLAWS_ITEM_ID)) {
@@ -753,26 +886,26 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
       event.handled = true;
       player.getInventory().deleteNumber(GORAK_CLAWS_ITEM_ID, 1);
       player.getInventory().adds(GORAK_CLAW_POWDER_ITEM_ID, 1);
-      player.sendMessage("You grind the gorak claws into a powder.");
+      brew(player, HERBING_GRIND_SEQ, "You grind the Gorak's claw into dust."); // 2394
       return;
     }
     if (pair(event, STAR_FLOWER_ITEM_ID, VIAL_OF_WATER_ITEM_ID)) {
       event.handled = true;
       if (!potionRecipeTaught(player)) {
+        // Ours.
         player.sendMessage("I should learn how Fairy Nuff wants the potion prepared first.");
         return;
       }
       if (player.getSkillManager().getCurrentLevel(Skill.HERBLORE) < 57) {
+        // Ours: the Wiki gives the level, not the line.
         player.sendMessage("You need a Herblore level of 57 to mix this potion.");
         return;
       }
       player.getInventory().deleteNumber(STAR_FLOWER_ITEM_ID, 1);
       player.getInventory().deleteNumber(VIAL_OF_WATER_ITEM_ID, 1);
       player.getInventory().adds(MAGIC_ESSENCE_UNF_ITEM_ID, 1);
-      player.sendMessage("You mix the star flower into the vial of water.");
-      if (quest.getStage(player) >= STAGE_HANDED_OVER && quest.getStage(player) < STAGE_UNFINISHED_POTION) {
-        advance(player, STAGE_UNFINISHED_POTION);
-      }
+      brew(player, HERBING_VIAL_SEQ, "You put the star flower into the vial of water."); // 2390-2391
+      if (quest.getStage(player) >= STAGE_RECIPE) advance(player, STAGE_UNFINISHED_POTION);
       return;
     }
     if (pair(event, GORAK_CLAW_POWDER_ITEM_ID, MAGIC_ESSENCE_UNF_ITEM_ID)) {
@@ -787,13 +920,11 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
       }
       player.getInventory().deleteNumber(GORAK_CLAW_POWDER_ITEM_ID, 1);
       player.getInventory().deleteNumber(MAGIC_ESSENCE_UNF_ITEM_ID, 1);
-      // Wiki (Magic essence): the product is Magic essence(3), for 130 Herblore XP.
+      // Magic essence(3), for 130 Herblore XP (2398; the Wiki's Magic essence page).
       player.getInventory().adds(ItemIdentifiers.MAGIC_ESSENCE_3_, 1);
       player.getSkillManager().addExperiences(Skill.HERBLORE, MAGIC_ESSENCE_XP);
-      player.sendMessage("You add the gorak claw powder and finish the magic essence potion.");
-      if (quest.getStage(player) >= STAGE_HANDED_OVER && quest.getStage(player) < STAGE_FINISHED_POTION) {
-        advance(player, STAGE_FINISHED_POTION);
-      }
+      brew(player, HERBING_VIAL_SEQ, "You mix the gorak claws into your potion."); // 2397-2398
+      if (quest.getStage(player) >= STAGE_RECIPE) advance(player, STAGE_FINISHED_POTION);
     }
   }
 
@@ -803,13 +934,15 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     player.getInventory().adds(index < ESSENCE_DOSE_ITEM_IDS.length - 1 ? ESSENCE_DOSE_ITEM_IDS[index + 1] : VIAL_ITEM_ID, 1);
   }
 
+  /** A dose on the sleeping Queen (2415): 75, the pour, her waking; four ticks later 80 (2419). */
   function handlePotionOnQueen(event) {
-    const { player, itemId, objectId } = event;
+    const { player, itemId, objectId, object } = event;
     if (objectId !== QUEEN_BED_OBJECT_ID) return;
     if (ESSENCE_DOSE_ITEM_IDS.indexOf(itemId) === -1) return;
     event.handled = true;
     const stage = quest.getStage(player);
     if (stage < STAGE_HANDED_OVER) {
+      // Ours.
       player.sendMessage("Fairy Nuff should see this potion before you use it.");
       return;
     }
@@ -817,15 +950,13 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
       player.sendMessage("I should learn how Fairy Nuff wants the potion prepared first.");
       return;
     }
-    if (stage >= STAGE_POTION_USED) {
-      player.sendMessage("The Fairy Queen has already been cured.");
-      return;
-    }
+    if (stage >= STAGE_POTION_USED || Scenes.isPouring(player)) return;
     consumeEssenceDose(player, itemId);
     advance(player, STAGE_POTION_USED);
-    syncProgress(player);
-    ensureAwakeQueen(player);
-    startTranscript(api, player, NpcIdentifiers.FAIRY_QUEEN_2, PAGE, WAKE_VARIANT);
+    Scenes.pourPotion(player, object, () => {
+      player.setAttribute(QUEEN_WOKE_ATTRIBUTE, 1);
+      advance(player, STAGE_QUEEN_AWAKE);
+    });
   }
 
   // ==========================================================================
@@ -844,138 +975,58 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
    * tail reachable.
    */
   function handleNuffTalk(event) {
-    const { player, npcId } = event;
+    const { player, npcId, npc } = event;
     if (!FAIRY_NUFF_NPC_IDS.has(npcId)) return;
     if (actionOf(event) !== "talk-to") return;
     const stage = quest.getStage(player);
-    if (stage < STAGE_INVESTIGATING) return;
+    if (stage < STAGE_PERMISSION) return;
     event.handled = true;
     if (stage >= STAGE_COMPLETE) {
-      startTranscript(api, player, npcId, "Fairy Nuff", "after-fairytale-part-2");
+      startTranscript(api, player, npcId, "Fairy Nuff", "after-fairytale-part-2", undefined, npc);
       return;
     }
-    startTranscript(api, player, npcId, PAGE, nuffVariant(player, stage));
+    // The awakening plays from her Talk-to at 80, the Queen speaking first (2431-2432).
+    startTranscript(api, player, npcId, PAGE, nuffVariant(player, stage), undefined, npc);
   }
 
+  /** Pick on a bloom (2073-2076): no message; the star flower goes in the pack as the bloom withers. */
   function handleStarflowerPick(event) {
-    const { player, npcId } = event;
+    const { player, npcId, npc } = event;
     if (npcId !== STARFLOWER_NPC_ID) return;
     if (actionOf(event) !== "pick") return;
     event.handled = true;
     const stage = quest.getStage(player);
     const complete = stage >= STAGE_COMPLETE;
-    if (!complete && (stage < STAGE_HANDED_OVER || !held(player, NUFFS_CERTIFICATE_ITEM_ID))) {
-      player.sendMessage("You need Nuff's certificate and Fairy Nuff's instructions to find a star flower.");
-      return;
-    }
+    if (!Scenes.bloomOf(player, npc)) return;
     if (!complete && held(player, STAR_FLOWER_ITEM_ID)) {
+      // The Wiki (Star flower).
       player.sendMessage("You already have a Star flower, you don't need another one.");
       return;
     }
     if (player.getSkillManager().getCurrentLevel(Skill.FARMING) < 49) {
+      // Ours: the Wiki gives the level, not the line.
       player.sendMessage("You need a Farming level of 49 to pick the star flower.");
       return;
     }
     if (freeSlots(player) < 1) {
+      // Ours.
       player.sendMessage("You don't have enough inventory space to pick the star flower.");
       return;
     }
-    const spawned = starflowers.get(player);
-    const spawnIndex = STARFLOWER_SPAWNS.findIndex(({ x, y, z }) => {
-      const location = event.npc?.getLocation?.();
-      return location?.getX?.() === x && location?.getY?.() === y && location?.getZ?.() === z;
-    });
-    if (Array.isArray(spawned)) {
-      const index = spawned.indexOf(event.npc);
-      if (index >= 0) spawned.splice(index, 1);
-    }
-    api.removeNpc(event.npc);
-    if (spawnIndex >= 0) {
-      const remaining = (Number(player.getAttribute(STARFLOWER_AVAILABLE_ATTRIBUTE)) || 0) & ~(1 << spawnIndex);
-      player.setAttribute(STARFLOWER_AVAILABLE_ATTRIBUTE, remaining);
-      if (remaining === 0) player.setAttribute(STARFLOWER_GROWTH_AT_ATTRIBUTE, Date.now() + STARFLOWER_GROWTH_MS);
-    }
+    if (!Scenes.pickFlower(player, npc)) return;
     player.getInventory().adds(STAR_FLOWER_ITEM_ID, 1);
-    if (!quest.isComplete(player)) {
-      setPlane(player, PLANE_COSMIC);
-      syncProgress(player);
-    }
-    player.sendMessage("You pick the star flower.");
   }
 
   function handleGorakDeath({ killer, npc, npcId, location }) {
     if (npcId !== GORAK_NPC_ID) return;
     if (!killer || killer.isNpc?.()) return;
     if (quest.getStage(killer) < STAGE_HANDED_OVER) return;
+    // The killer's own claws, never public (2206, "Untradeable drop: Gorak claws"). Gorak has no
+    // generated drop table here, so its bones and coins are not dropped (see the docs).
     const spot = npc?.getLocation?.() ?? (location ? new Location(location.x, location.y, location.z) : null);
     if (spot && groundItems) groundItems.registerLocation(killer, new Item(GORAK_CLAWS_ITEM_ID, 1), spot);
     killer.setAttribute(GORAK_ATTRIBUTE, 1);
-    if (!quest.isComplete(killer)) setPlane(killer, PLANE_GORAK);
     syncProgress(killer);
-  }
-
-  function ensureStarflowers(player) {
-    const stage = quest.getStage(player);
-    const complete = stage >= STAGE_COMPLETE;
-    if (!complete && (stage < STAGE_HANDED_OVER || !held(player, NUFFS_CERTIFICATE_ITEM_ID))) return;
-    let available = Number(player.getAttribute(STARFLOWER_AVAILABLE_ATTRIBUTE)) || 0;
-    if (available === 0) {
-      let growthAt = Number(player.getAttribute(STARFLOWER_GROWTH_AT_ATTRIBUTE));
-      if (!Number.isFinite(growthAt) || growthAt <= 0) {
-        growthAt = Date.now() + STARFLOWER_GROWTH_MS;
-        player.setAttribute(STARFLOWER_GROWTH_AT_ATTRIBUTE, growthAt);
-      }
-      if (Date.now() < growthAt) return;
-      available = (1 << STARFLOWER_SPAWNS.length) - 1;
-      player.setAttribute(STARFLOWER_AVAILABLE_ATTRIBUTE, available);
-      player.setAttribute(STARFLOWER_GROWTH_AT_ATTRIBUTE, 0);
-    }
-    const alive = (starflowers.get(player) ?? []).filter((npc) => npc?.isRegistered?.() !== false);
-    const aliveSpots = new Set(alive.map((npc) => {
-      const location = npc?.getLocation?.();
-      return STARFLOWER_SPAWNS.findIndex(({ x, y, z }) =>
-        location?.getX?.() === x && location?.getY?.() === y && location?.getZ?.() === z);
-    }));
-    starflowers.set(player, alive);
-    for (const [index, spot] of STARFLOWER_SPAWNS.entries()) {
-      if (!(available & (1 << index)) || aliveSpots.has(index)) continue;
-      const npc = api.spawnNpc({
-        id: STARFLOWER_NPC_ID,
-        x: spot.x,
-        y: spot.y,
-        z: spot.z,
-        wanderRadius: 0,
-        owner: player,
-        ownerOnly: true,
-      });
-      if (npc) alive.push(npc);
-    }
-  }
-
-  function ensureAwakeQueen(player) {
-    const existing = awakeQueen.get(player);
-    if (existing && existing.isRegistered?.() !== false) {
-      existing.setPositionToFace?.(player.getLocation());
-      return;
-    }
-    const npc = api.spawnNpc({
-      id: NpcIdentifiers.FAIRY_QUEEN_2,
-      x: QUEEN_SPAWN.x,
-      y: QUEEN_SPAWN.y,
-      z: QUEEN_SPAWN.z,
-      wanderRadius: 0,
-      owner: player,
-      ownerOnly: true,
-    });
-    if (npc) awakeQueen.set(player, npc);
-  }
-
-  function removePlayerSpawns(player) {
-    for (const npc of starflowers.get(player) ?? []) api.removeNpc(npc);
-    starflowers.delete(player);
-    const queen = awakeQueen.get(player);
-    if (queen) api.removeNpc(queen);
-    awakeQueen.delete(player);
   }
 
   function insideZone(location, zone) {
@@ -988,71 +1039,21 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     );
   }
 
-  function roomPanSeen(player) {
-    return player.getAttribute(ROOM_PAN_ATTRIBUTE) === true
-      || quest.getStage(player) > STAGE_INVESTIGATING
-      || Number(player.getAttribute(CERT_TAKEN_ATTRIBUTE)) > 0;
+  /** The field grows for a player with Nuff's recipe and her certificate, or after the quest (1966-2098). */
+  function fieldOpen(player) {
+    const stage = quest.getStage(player);
+    if (stage >= STAGE_COMPLETE) return true;
+    return stage >= STAGE_HANDED_OVER && held(player, NUFFS_CERTIFICATE_ITEM_ID);
   }
 
-  function endRoomPan(player, completed, logout = false) {
-    const pan = roomPans.get(player);
-    if (!pan) return;
-    roomPans.delete(player);
-    pan.task.stop();
-    player.getMovementQueue().setBlockMovement(pan.wasBlocked);
-    if (logout) return;
-    const sender = player.getPacketSender().sendCameraReset();
-    if (completed) {
-      player.setAttribute(ROOM_PAN_ATTRIBUTE, true);
-      sender.sendVarbit(VARBIT_TRASHED_PAN, 1);
-    }
-  }
-
-  function startRoomPan({ player }) {
-    if (quest.getStage(player) !== STAGE_INVESTIGATING || roomPanSeen(player) || roomPans.has(player)) return;
-    const queue = player.getMovementQueue();
-    const task = new Task(1, player);
-    roomPans.set(player, { task, wasBlocked: queue.isMovementBlocked() });
-    queue.reset().setBlockMovement(true);
-    const sender = player.getPacketSender();
-    // The live guide shows a low sweep from the wall lamp and broken shelves to
-    // the spilled potion bench. The coordinates reproduce that framing in cache 242.
-    const snap = { rate: 232, rate2: 232 };
-    const pan = { rate: 5, rate2: 14 };
-    sender.sendCameraMoveTo(2386, 4472, 166, snap).sendCameraLookAt(2384, 4472, 120, snap);
-    let ticks = 0;
-    task.execute = () => {
-      if (++ticks === 2) {
-        sender.sendCameraMoveTo(2386, 4471, 144, pan).sendCameraLookAt(2386, 4474, 96, pan);
-      } else if (ticks === 5) {
-        sender.sendCameraMoveTo(2386, 4472, 164, pan).sendCameraLookAt(2389, 4471, 100, pan);
-      } else if (ticks === ROOM_PAN_TICKS) {
-        endRoomPan(player, true);
-      }
-    };
-    TaskManager.submit(task);
-  }
-
-  function cancelRoomPan({ player }) {
-    endRoomPan(player, false);
-  }
-
-  function handleHideoutZoneEnter({ player }) {
-    if (!questActive(player)) return;
-    if (quest.getStage(player) === STAGE_PERMISSION) advance(player, STAGE_HIDEOUT);
-    if (quest.getStage(player) >= STAGE_POTION_USED) ensureAwakeQueen(player);
-  }
-
-  function handleStarPlaneZoneEnter({ player }) {
-    if (!questActive(player) && !quest.isComplete(player)) return;
-    if (!quest.isComplete(player) && quest.getStage(player) < STAGE_HANDED_OVER) return;
-    setPlane(player, PLANE_COSMIC);
-    syncProgress(player);
-    ensureStarflowers(player);
+  function enterStarPlane(player) {
+    if (!fieldOpen(player) || Scenes.hasField(player)) return;
+    Scenes.enterField(player, (location) => insideZone(location, STAR_PLANE_ZONE));
   }
 
   function handleGorakPlaneZoneEnter({ player }) {
     if (!questActive(player)) return;
+    // 2331 goes to 1 on arrival (2094).
     if (quest.getStage(player) < STAGE_HANDED_OVER) return;
     setPlane(player, PLANE_GORAK);
     syncProgress(player);
@@ -1061,29 +1062,27 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   function handleAdvanceTime(event) {
     const { player, ms } = event;
     if (!player || !Number.isFinite(ms) || ms <= 0) return;
-    let moved = false;
-    for (const attribute of [MARTIN_TALK_ATTRIBUTE, STARFLOWER_GROWTH_AT_ATTRIBUTE]) {
-      const at = Number(player.getAttribute(attribute));
-      if (!Number.isFinite(at) || at <= 0) continue;
-      player.setAttribute(attribute, Math.max(1, at - ms));
-      moved = true;
-    }
-    if (moved) event.handledBy.push("FairytaleIICureAQueen");
+    const at = Number(player.getAttribute(MARTIN_TALK_ATTRIBUTE));
+    if (!Number.isFinite(at) || at <= 0) return;
+    player.setAttribute(MARTIN_TALK_ATTRIBUTE, Math.max(1, at - ms));
+    event.handledBy.push("FairytaleIICureAQueen");
   }
 
+  /**
+   * Saves from before the capture alignment finished the quest at 80; 80 is now the awake Queen
+   * before her reward (2419-2532). Only an 80 the pour did not mark is an older completion.
+   */
   function migrateLegacyCompletion(player) {
-    // 80 used to be this plugin's completion value; the cache requires 90.
-    if (quest.getStage(player) === LEGACY_STAGE_COMPLETE) quest.setStage(player, STAGE_COMPLETE);
+    if (quest.getStage(player) === STAGE_QUEEN_AWAKE && !flag(player, QUEEN_WOKE_ATTRIBUTE)) {
+      quest.setStage(player, STAGE_COMPLETE);
+    }
   }
 
   function handleLogin({ player }) {
     migrateLegacyCompletion(player);
     refreshQuestList(player);
     syncProgress(player);
-    const location = player.getLocation?.();
-    if (!location) return;
-    if ((questActive(player) || quest.isComplete(player)) && insideZone(location, STAR_PLANE_ZONE)) ensureStarflowers(player);
-    if (quest.getStage(player) >= STAGE_POTION_USED && insideZone(location, HIDEOUT_ZONE)) ensureAwakeQueen(player);
+    if (insideZone(player.getLocation?.(), STAR_PLANE_ZONE)) enterStarPlane(player);
   }
 
   function handleBootstrap({ player }) {
@@ -1092,14 +1091,13 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   }
 
   function handleLogout({ player }) {
-    endRoomPan(player, false, true);
+    Scenes.endAll(player, true);
     hideoutSequence.delete(player);
-    removePlayerSpawns(player);
+    waitForScroll.delete(player);
   }
 
   function handlePlayerDeath({ player }) {
-    endRoomPan(player, false);
-    removePlayerSpawns(player);
+    Scenes.endAll(player);
   }
 
   // ==========================================================================
@@ -1107,92 +1105,13 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   // ==========================================================================
 
   function buildJournal(player, questHandle) {
-    const stage = questHandle.getStage(player);
-    if (stage >= STAGE_COMPLETE) {
-      return [
-        "<str>The Fairy Godfather had taken control of Zanaris and hidden the Fairy</str>",
-        "<str>Queen in a resistance hideout while she slept.</str>",
-        "<str>I recovered the Queen's secateurs from the Godfather and used a magic</str>",
-        "<str>essence potion to wake her.</str>",
-        "",
-        "<str>I can now use the fairy rings and Fairy Fixit's shop.</str>",
-        "",
-        "<col=ff0000>QUEST COMPLETE!</col>",
-      ];
-    }
-    if (stage >= STAGE_POTION_USED) {
-      return [
-        "The <col=800000>Fairy Queen</col> is waking from her enchanted sleep.",
-        "",
-        "I should speak to her.",
-      ];
-    }
-    if (stage >= STAGE_HANDED_OVER) {
-      return [
-        "Fairy Nuff needs a potion of magic essence to wake the Fairy Queen:",
-        "a <col=800000>star flower</col> mixed into a vial of water, then",
-        "<col=800000>gorak claw powder</col> added as the catalyst.",
-        "",
-        held(player, STAR_FLOWER_ITEM_ID) ? "<str>A star flower</str>" : "A star flower",
-        held(player, MAGIC_ESSENCE_UNF_ITEM_ID)
-          ? "<str>Magic essence (unf)</str>"
-          : "Magic essence (unf)",
-        hasMagicEssence(player) ? "<str>A magic essence potion</str>" : "A magic essence potion",
-      ];
-    }
-    if (stage >= STAGE_HAS_SECATEURS) {
-      return [
-        "I recovered the <col=800000>Queen's secateurs</col> from the Fairy",
-        "Godfather. I should take them to <col=800000>Fairy Nuff</col> in the",
-        "fairy resistance hideout.",
-      ];
-    }
-    if (stage >= STAGE_PICKPOCKET) {
-      return [
-        "Fairy Nuff is hiding in the fairy resistance hideout with the Queen.",
-        "I must pickpocket the <col=800000>Queen's secateurs</col> from the",
-        "<col=800000>Fairy Godfather</col> in Zanaris. (Level 40 Thieving)",
-      ];
-    }
-    if (stage >= STAGE_HIDEOUT) {
-      return [
-        "I found the fairy resistance hideout. I should speak to",
-        "<col=800000>Fairy Nuff</col> and <col=800000>Fairy Very Wise</col>.",
-      ];
-    }
-    if (stage >= STAGE_PERMISSION) {
-      return [
-        "The Godfather let me use the fairy rings. Nuff's certificate says to",
-        "use the co-ordinates <col=800000>AIR</col>, <col=800000>DLR</col>,",
-        "<col=800000>DJQ</col> and <col=800000>AJS</col> to find the hideout.",
-      ];
-    }
-    if (stage >= STAGE_CERTIFICATE_STUDIED) {
-      return [
-        "I studied Nuff's certificate, which is covered in strange symbols.",
-        "The Fairy chef said she had seen similar marks by the mysterious",
-        "ruins. I should read the sign at the <col=800000>Cosmic Altar</col>.",
-      ];
-    }
-    if (stage >= STAGE_INVESTIGATING) {
-      return [
-        "Martin asked me to find out why the crops are still failing.",
-        "Fairy Nuff's room in Zanaris has been ransacked. I should search",
-        "the <col=800000>potion shelves</col> and take anything useful.",
-      ];
-    }
-    if (stage >= STAGE_WAITING) {
-      return [
-        "Martin the Master Gardener has planted new seeds and wants me to",
-        "come back once his crops have had time to grow.",
-      ];
-    }
-    return [
-      "I can start this quest by speaking to",
-      "<col=800000>Martin the Master Gardener</col> in Draynor Village.",
-      "",
-      "I must have completed <col=800000>Fairytale I - Growing Pains</col>.",
-    ];
+    const potion = held(player, MAGIC_ESSENCE_UNF_ITEM_ID) || hasMagicEssence(player);
+    return buildLines({
+      stage: questHandle.getStage(player),
+      signRead: flag(player, SIGN_ATTRIBUTE),
+      flower: held(player, STAR_FLOWER_ITEM_ID) || potion,
+      claw: held(player, GORAK_CLAWS_ITEM_ID) || held(player, GORAK_CLAW_POWDER_ITEM_ID) || hasMagicEssence(player),
+    });
   }
 
   function grantReward(player) {
@@ -1210,10 +1129,9 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   api.persistAttribute(MYSTERY_ATTRIBUTE);
   api.persistAttribute(GORAK_ATTRIBUTE);
   api.persistAttribute(MARTIN_TALK_ATTRIBUTE);
-  api.persistAttribute(RECIPE_TAUGHT_ATTRIBUTE, 0);
-  api.persistAttribute(STARFLOWER_GROWTH_AT_ATTRIBUTE, 0);
-  api.persistAttribute(STARFLOWER_AVAILABLE_ATTRIBUTE, 0);
+  api.persistAttribute(RECAP_DONE_ATTRIBUTE, 0);
   api.persistAttribute(REWARD_GIVEN_ATTRIBUTE, 0);
+  api.persistAttribute(QUEEN_WOKE_ATTRIBUTE, 0);
 
   groundItems = api.getItemOnGroundManager();
 
@@ -1231,7 +1149,8 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
       { skillId: Skill.THIEVING.getIndex(), amount: 2500, label: "Thieving" },
     ],
     rewardItemLabel: "Antique lamp",
-    scrollItemId: ANTIQUE_LAMP_ITEM_ID,
+    // The scroll's model is a four-dose magic essence (2535).
+    scrollItemId: ESSENCE_DOSE_ITEM_IDS[0],
     otherRewards: ["Access to the fairy ring network", "Access to Fairy Fixit's Fairy Enchantment shop"],
     buildJournal,
     onReward: grantReward,
@@ -1240,10 +1159,12 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("npc-dialogue:menu", handleMenu);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleConditionEvent);
   api.onCustomEvent("npc-dialogue:action", handleActionEvent);
-  api.onCustomEvent("npc-dialogue:line", handleNuffRecipeLine);
+  api.onCustomEvent("npc-dialogue:line", handleLine);
+  api.onCustomEvent("interface:closed", handleInterfaceClosed);
   api.onCustomEvent("fairy-rings:access", answerFairyRingAccess);
   api.onCustomEvent("fairy-rings:destination", resolveFairyRingDestination);
   api.onCustomEvent("fairy-rings:travelled", recordFairyRingTravel);
@@ -1263,7 +1184,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   class StarflowerPlaneArea extends api.core.Area {
     process(mobile) {
       if (!mobile.isPlayer()) return;
-      ensureStarflowers(mobile.getAsPlayer());
+      enterStarPlane(mobile.getAsPlayer());
     }
   }
   api.registerArea(new StarflowerPlaneArea([
@@ -1276,9 +1197,6 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     ),
   ]));
   api.onZoneEnter(NUFFS_ROOM, startRoomPan);
-  api.onZoneExit(NUFFS_ROOM, cancelRoomPan);
-  api.onZoneEnter(HIDEOUT_ZONE, handleHideoutZoneEnter);
-  api.onZoneEnter(STAR_PLANE_ZONE, handleStarPlaneZoneEnter);
   api.onZoneEnter(GORAK_PLANE_ZONE, handleGorakPlaneZoneEnter);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);

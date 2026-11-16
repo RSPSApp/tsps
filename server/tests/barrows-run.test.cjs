@@ -602,16 +602,20 @@ test("Barrows: condensed warnings put the tunnel line in the menu's title, with 
   assert.equal(subject.getDialogueManager().getCurrent?.() ?? null, null, "no message box first");
 });
 
-test("Barrows: a plugin can refuse a mound's dig before the spade starts it; off the mounds it can't", () => {
+test("Barrows: a plugin can refuse a mound's Spade dig before it starts; off the mounds, or another spade, it can't", () => {
   const subject = player();
   let asked = 0;
   const refuse = (request) => { if (request.player === subject) { asked++; request.blocked = true; } };
   diaryApi.onCustomEvent("barrows:dig", refuse);
-  const onMound = { player: subject, location: AHRIM_MOUND.clone(), refused: false };
+  const onMound = { player: subject, itemId: core.ItemIdentifiers.SPADE, location: AHRIM_MOUND.clone(), refused: false };
   Barrows._test.refuseMoundDig(onMound);
   assert.equal(onMound.refused, true);
-  const offMound = { player: subject, location: new Location(3548, 3290, 0), refused: false };
+  const offMound = { player: subject, itemId: core.ItemIdentifiers.SPADE, location: new Location(3548, 3290, 0), refused: false };
   Barrows._test.refuseMoundDig(offMound);
   assert.equal(offMound.refused, false);
+  // The mounds dig only with "Spade": another spade there is not refused in his name.
+  const eastfloor = { player: subject, itemId: core.ItemIdentifiers.EASTFLOOR_SPADE, location: AHRIM_MOUND.clone(), refused: false };
+  Barrows._test.refuseMoundDig(eastfloor);
+  assert.equal(eastfloor.refused, false);
   assert.equal(asked, 1, "asked only for a brother's mound");
 });

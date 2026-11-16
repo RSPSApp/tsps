@@ -404,6 +404,8 @@ function dig({ player }) {
  */
 function refuseMoundDig(request) {
   const { player, location } = request;
+  // Only the mounds' own spade digs them (dig is registered for "Spade").
+  if (request.itemId !== Items.SPADE) return;
   const brother = BROTHERS.find((entry) => entry.mound.inside(location));
   if (!brother || session(player).dig) return;
   const mound = { player, brother: brother.npcId, blocked: false };
@@ -1063,7 +1065,8 @@ module.exports = {
     api.persistAttribute(WARNINGS_ATTRIBUTE, 0);
     api.onItemAction("Strange old lockpick", { Inspect: inspectLockpick });
     api.onItemAction("Strange old lockpick (full)", { Inspect: inspectLockpick });
-    api.onItemOnObject(useLockpickOnDoor);
+    api.onItemOnObject("Strange old lockpick", "Door", useLockpickOnDoor);
+    api.onItemOnObject("Strange old lockpick (full)", "Door", useLockpickOnDoor);
     api.onCustomEvent("spade:before-dig", refuseMoundDig);
     api.onNpcDialogueCondition(answerWarningsCondition);
     api.onCustomEvent("npc-dialogue:action", answerWarningsDirection);

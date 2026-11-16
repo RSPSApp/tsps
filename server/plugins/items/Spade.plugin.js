@@ -32,7 +32,7 @@ function dig(event) {
   const { player } = event;
   // Content can refuse the dig before it starts (`refused`), with its own reply and no sequence or
   // sound: His Faithful Servants' Barrows mounds (user rsprox capture BarrowsMiniQuest.bin tick 16).
-  const request = { player, location: player.getLocation(), refused: false };
+  const request = { player, itemId: event.itemId, location: player.getLocation(), refused: false };
   pluginApi.emitCustomEvent("spade:before-dig", request);
   if (request.refused) return true;
   const sequence = core.CacheDefinitions.getSeqId("human_dig") ?? HUMAN_DIG;

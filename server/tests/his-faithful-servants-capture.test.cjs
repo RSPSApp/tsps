@@ -217,3 +217,20 @@ test("Barrows: the strange old lockpick used on a locked door across the room wa
   assert.equal(f.player.getInventory().getAmount(I.STRANGE_OLD_LOCKPICK), 1, "the full pick is now the used one");
   assert.ok(!f.messages.some((m) => m.text === "Nothing interesting happens." || m.text === "This door is locked."));
 });
+
+test("HFS: the icon needs a slot left once the loot is in; a stack already held takes none (Wiki: enough space)", async (t) => {
+  const f = actor(t, { stage: 2 });
+  const emit = (rewards) => { h.PM.emitCustomEvent?.("barrows:chest-rewards", { player: f.player, run: { killed: [0, 1, 2, 3, 4, 5] }, rewards });
+    return rewards.map((item) => item.getId()); };
+  const loot = () => [new h.core.Item(I.MIND_RUNE, 10), new h.core.Item(I.CHAOS_RUNE, 10)];
+  const fillTo = (free) => { while (f.player.getInventory().getFreeSlots() > free) f.player.getInventory().add(new h.core.Item(I.SHARK, 1), false); };
+  fillTo(2);
+  assert.deepEqual(emit(loot()), [I.MIND_RUNE, I.CHAOS_RUNE], "two free slots, two new stacks: none left for the icon");
+  assert.equal(hfs().getStage(f.player), 2);
+  f.player.getInventory().add(new h.core.Item(I.MIND_RUNE, 1), false);
+  fillTo(1);
+  f.player.getInventory().deleteNumber(I.SHARK, 1);
+  assert.equal(f.player.getInventory().getFreeSlots(), 2);
+  assert.deepEqual(emit(loot()), [I.STRANGE_ICON, I.MIND_RUNE, I.CHAOS_RUNE], "the mind runes stack onto those held");
+  assert.equal(hfs().getStage(f.player), 4);
+});

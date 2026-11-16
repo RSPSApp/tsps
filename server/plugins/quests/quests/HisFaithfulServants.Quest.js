@@ -268,17 +268,27 @@ module.exports = function registerHisFaithfulServantsQuest(api) {
     }
   }
 
+  /** Inventory slots the chest's loot takes: a stack already held takes none. */
+  function slotsForLoot(player, rewards) {
+    const inv = inventory(player);
+    return rewards.reduce((total, item) => {
+      if (item.getDefinition().isStackable()) return total + (inv.getAmount(item.getId()) > 0 ? 0 : 1);
+      return total + Math.max(1, item.getAmount());
+    }, 0);
+  }
+
   /**
    * The icon is the chest's first reward, in its window with the loot (tick 885), and the stage
-   * moves to 4 with it. Wiki: without a free slot it is not given (nor dropped), and the brothers
-   * have to be killed again.
+   * moves to 4 with it. Wiki: "You MUST have enough inventory space to receive the strange icon when
+   * looting the chest" (it is not dropped, and the brothers have to be killed again; it advises six free
+   * slots). Ours: the space is a slot left over once the loot itself is in.
    */
   function addIconToLoot({ player, run, rewards }) {
     if (!player || !Array.isArray(rewards)) return;
     if (!Array.isArray(run?.killed) || run.killed.length !== 6) return;
     const stage = quest.getStage(player);
     if (stage < STAGE_STARTED || stage >= STAGE_HANDED_IN || ownsIcon(player)) return;
-    if (player.getInventory().getFreeSlots() < 1) return;
+    if (inventory(player).getFreeSlots() < slotsForLoot(player, rewards) + 1) return;
     rewards.unshift(new api.core.Item(STRANGE_ICON, 1));
     quest.setStage(player, STAGE_ICON);
   }

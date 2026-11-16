@@ -71,8 +71,9 @@ strange old lockpick. Ticks are the recording's.
 
 ## Ours (no source)
 
-- With a full inventory the chest gives no icon and says nothing. The Wiki says only that it is
-  not given or dropped.
+- The icon's space: it is given only when a slot is left once the loot is in (a stack already held
+  takes none), with no chat line otherwise. The Wiki says only that it needs enough space, isn't
+  dropped, and that six free slots are advised.
 - The lockpick's last charge: the Wiki's "almost breaks" line, then the pick goes silently as
   the tunnels are left.
 - A picked hallway stays passable until the layout changes.

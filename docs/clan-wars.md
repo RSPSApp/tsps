@@ -1532,7 +1532,6 @@ Those results belong only to that tested revision; they do not establish a run
 of its later merge or transfer to later source. The controlled setup and retail,
 client, probability, acquisition and startup limits above still apply.
 
-
 ### Exact apprentice wand in Standard
 
 Standard additionally accepts **only Apprentice wand 6910**, with the existing

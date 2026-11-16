@@ -8,7 +8,7 @@
 | `npc-drop-subtables.json` | the shared tables (rare drop table, gems, herbs, seeds, talismans…) | generated |
 | `npc-drop-overrides.json` | hand edits on top of the two | by hand |
 
-Corrections that need logic (Zulrah's two rolls, the Mad Angel's supply batch, Skotizo's shard roll, Amoxliatl's two rolls with one frozen tear roll, the animated bronze armour, the brimstone and Larran's keys taken off every table because `Keys.Slayer.js` drops them) stay in code, in `applyWikiCorrections`.
+Corrections that need logic (Zulrah's two rolls, the Mad Angel's supply batch, Skotizo's shard roll, Amoxliatl's two rolls with one frozen tear roll, Araxxor's three halberd pieces as one 1/200 roll of the piece the player lacks, the animated bronze armour, the brimstone and Larran's keys taken off every table because `Keys.Slayer.js` drops them) stay in code, in `applyWikiCorrections`.
 
 Loot that depends on where or what the NPC was rather than its table is added by other plugins on `npc-drops:add` { player, npc, npcId, drops }, emitted straight after the roll and before `npc-drops:roll` (so the Collection Log and Ironman rules see it): the Catacombs of Kourend's totem pieces and shards, and Skotizo's totem table ([skotizo.md](skotizo.md)).
 

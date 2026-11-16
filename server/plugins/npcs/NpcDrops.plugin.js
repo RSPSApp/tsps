@@ -375,6 +375,7 @@ function applyWikiCorrections(tableById) {
   correctSkotizo(tableById.skotizo);
   correctAmoxliatl(tableById.amoxliatl);
   correctAlchemicalHydra(tableById.alchemical_hydra);
+  correctAraxxor(tableById.araxxor);
   const kalphiteQueen = tableById.kalphite_queen;
   if (!kalphiteQueen) {
     return;
@@ -455,6 +456,25 @@ function correctAlchemicalHydra(table) {
   table.rolls = 2;
   for (const entry of table.entries || []) {
     if (entry.pre_roll) entry.once_per_kill = true;
+  }
+}
+
+/** Noxious point, blade, pommel. */
+const ARAXXOR_HALBERD_PIECES = new Set([29790, 29792, 29794]);
+
+/**
+ * Araxxor (Wiki, Drops): "The rate to receive any halberd piece is 1/200. Players will not receive
+ * duplicate pieces until each full set is obtained." The export lists each of the three pieces as
+ * its own 1/200 separate roll, which makes any piece 3/200 and can hand out two or three in one
+ * kill. They are the rows of one 1/200 roll (the 3/4 piece side of the 1/150 unique table, beside
+ * the 1/600 araxyte fang); the corpse hands over the piece the player lacks.
+ */
+function correctAraxxor(table) {
+  if (!table) return;
+  for (const entry of table.entries || []) {
+    if (ARAXXOR_HALBERD_PIECES.has(entry.item_id)) {
+      Object.assign(entry, { separate_roll: true, roll_group: "araxxor_halberd_piece", weight: 1, out_of: 600 });
+    }
   }
 }
 
@@ -865,10 +885,10 @@ function resolveEntry(entry, player, context = null) {
  * The world's boss rare multiplier is applied by rollOnce, which rolls those entries on their
  * own instead of growing this pool.
  */
-function rollWeighted(entries, outOf, rules) {
+function rollWeighted(entries, outOf, rules, bonus = () => 1) {
   let total = Number.isInteger(outOf) && outOf > 0 ? outOf : entries.reduce((sum, entry) => sum + entry.weight, 0);
   const weights = entries.map((entry) => {
-    const weight = entry.weight * rulesMultiplier(entry, rules);
+    const weight = entry.weight * rulesMultiplier(entry, rules) * bonus(entry);
     total += weight - entry.weight;
     return weight;
   });
@@ -947,7 +967,14 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
   }
 
   for (const group of separateGroups.values()) {
-    const entry = rollWeighted(group, Number(group[0]?.out_of), rules);
+    // A group whose rows are all uniques is one rarity roll with alternative outcomes, so it still
+    // takes the boss rare multiplier row by row (Araxxor's halberd pieces). A quantity group like
+    // Skotizo's ancient shards always rolls and only varies the amount: boosting its rare rows
+    // would lift the quantity distribution, so it keeps the rates it had before grouping.
+    const bonus = group.every((entry) => isUniqueEntry(entry))
+      ? (candidate) => rareMultiplier(table, candidate)
+      : null;
+    const entry = rollWeighted(group, Number(group[0]?.out_of), rules, bonus ?? undefined);
     if (entry) drops.push(...resolveEntry(entry, player, context));
   }
 

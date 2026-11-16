@@ -4,6 +4,7 @@ const {
   curePoison,
   boostSkill,
   lowerSkillByCurrent,
+  lowerSkillByMax,
   restoreSkillToBaseWithFormula,
 } = require("./ConsumableEffects");
 const { TimerKey } = require("../../src/main/typescript/elvarg/util/timers/TimerKey");
@@ -1248,6 +1249,16 @@ registerDrink({ name: "Moonlight mead", chains: [[Items.MOONLIGHT_MEAD]], emptyI
   requiresFoodPermission: true, effect: (player) => heal(player, 4) });
 registerDrink({ name: "Moonlight mead(m)", chains: [[Items.MOONLIGHT_MEAD_M_]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => heal(player, 6) });
+// Blood pint (Wiki): Attack and Strength +(4% + 2), Magic and Prayer -(4% + 2), no heal. rsprox.net rec
+// 3056 (rev 231) tick 948 at 99s: human_eat, sound 2401, the two spam lines, a beer glass left, Attack and
+// Strength 104, Prayer and Magic 94. The drain is of the base level: rec 1864 (rev 227) tick 3825 takes
+// Magic 103 -> 98, where 4% of the current level would take 6.
+registerDrink({ name: "Blood pint", chains: [[Items.BLOOD_PINT]], emptyItemId: Items.BEER_GLASS,
+  drink: { messages: () => ["You drink the Blood Pint.", "It tastes unsurprisingly awful and makes you feel a bit sick."] },
+  requiresFoodPermission: true, shareable: false, effect: (player) => {
+    for (const skill of [Skill.ATTACK, Skill.STRENGTH]) boostSkill(player, skill, 2, 0.04);
+    for (const skill of [Skill.MAGIC, Skill.PRAYER]) lowerSkillByMax(player, skill, 2, 0.04);
+  } });
 // Wiki: Slayer's respite boosts Slayer by 2 (mature 4) and drains Attack and
 // Strength by floor(current * 0.02) + 2 (mature + 3); it heals 1 (mature 2).
 registerDrink({ name: "Slayer's respite", chains: [[Items.SLAYERS_RESPITE]], emptyItemId: Items.BEER_GLASS,

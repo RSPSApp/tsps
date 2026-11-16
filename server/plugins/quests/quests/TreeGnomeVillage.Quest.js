@@ -116,6 +116,8 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
    */
   const GUIDE_MOVE_TICKS = 3;
   const GUIDE_HOLD_TICKS = 4;
+  /** Going into the village his line comes a tick later (box t11055, line t11060; box t11537, line t11542 in local 912220). */
+  const GUIDE_INBOUND_HOLD_TICKS = 5;
   /** Follow on Elkoy plays this box, then his line from the Talk-to's guide answer (ticks 1639, 2168). */
   const ELKOY_FOLLOW_GUIDE_STEP = Object.freeze({ type: "message", text: "Elkoy guides you through the maze.", id: "ciSH8i" });
   const ELKOY_GUIDE_TEXT = /^Elkoy guides you /;
@@ -306,6 +308,10 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     return isInsideVillage(player) ? VILLAGE_ENTRANCE : INNER_MAZE_EXIT;
   }
 
+  function guideHoldTicks(destination) {
+    return destination === INNER_MAZE_EXIT ? GUIDE_INBOUND_HOLD_TICKS : GUIDE_HOLD_TICKS;
+  }
+
   /** Elkoy's walk through the maze: fade out, move the player while it is dark, fade back in. */
   function guideThroughMaze(player, destination) {
     pendingGuides.delete(player);
@@ -324,7 +330,7 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
 
   /** A guide message shows over the fade without a continue, then carries on once the player is there. */
   function guideWithMessage(message, player, destination) {
-    message.box = { statement: true, holdTicks: GUIDE_HOLD_TICKS, advance: true };
+    message.box = { statement: true, holdTicks: guideHoldTicks(destination), advance: true };
     guideThroughMaze(player, destination);
   }
 
@@ -334,7 +340,7 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     if (!pendingGuides.has(player) || step?.speaker !== "Elkoy") return;
     const destination = pendingGuides.get(player);
     pendingGuides.delete(player);
-    request.holdTicks = GUIDE_HOLD_TICKS;
+    request.holdTicks = guideHoldTicks(destination);
     const previous = request.before;
     request.before = () => {
       previous?.();

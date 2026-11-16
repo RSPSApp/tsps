@@ -157,7 +157,7 @@ test("Follow on Elkoy plays the guide box, the walk and his line for the stage (
   assert.ok(f.calls.some((c) => c.name === "sendString" && String(c.args[0]).startsWith("Elkoy guides you through the maze.")));
   h.ticks(f, 3);
   assert.deepEqual(at(f), [2515, 3159, 0]);
-  assert.equal(waitFor(f, "Here we are. Take the orb to King Bolren") - box, 4);
+  assert.equal(waitFor(f, "Here we are. Take the orb to King Bolren") - box, 5, "inbound the line comes 5 ticks after the box (t11055 -> t11060)");
 });
 
 test("Bolren takes the first orb as 'You are brave...' is continued; bolren_got_orbs stays 0 (t1736-1750)", async (t) => {
@@ -178,6 +178,8 @@ test("the ceremony: Bolren takes the orbs at the chant box, the gnomes chant, th
   const f = actor(t, { stage: 8, items: [[I.ORBS_OF_PROTECTION, 1]] });
   const bolren = h.spawn(f, N.KING_BOLREN, BOLREN);
   const chanters = CHANTERS.map(([x, y]) => h.spawn(f, N.LOCAL_GNOME_2, [x, y, 0]));
+  // They wander within a tile of their rows (242/912220); the ceremony binds them by spawn tile, so one tile off still chants.
+  for (const npc of chanters) npc.setLocation(new h.core.Location(npc.getLocation().getX() - 1, npc.getLocation().getY(), 0));
   const said = [];
   for (const npc of chanters) {
     const say = npc.forceChat.bind(npc);
@@ -205,6 +207,12 @@ test("the ceremony: Bolren takes the orbs at the chant box, the gnomes chant, th
   assert.equal(stage(f), 9);
   assert.equal(f.player.getInventory().getAmount(I.GNOME_AMULET), 1);
   assert.deepEqual(h.QuestRuntime.rewardLines(quest()).slice(1), ["2 Quest Points", "11,450 Attack XP", "Spirit Tree Access", "A Gnome Amulet"]);
+});
+
+test("the four chanter rows wander one tile, as the recordings show (242/912220, 237/03998)", () => {
+  const rows = require("../data/definitions/npc-spawns.json").filter((r) => r.id === N.LOCAL_GNOME_2 && r.x >= 2540 && r.x <= 2542 && r.y >= 3167 && r.y <= 3172);
+  assert.deepEqual(rows.map((r) => [r.x, r.y]).sort(), [...CHANTERS].sort());
+  for (const row of rows) assert.equal(row.wanderRadius, 1);
 });
 
 test("the warlord's death shows the orbs in an object box (t2068)", async (t) => {

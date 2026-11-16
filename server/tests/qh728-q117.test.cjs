@@ -568,7 +568,7 @@ test('Elkoy guide-in stops at the inner maze railing approach', () => {
   assert.equal(echoed.handled, false, "a message step's generic event on an older runner is left to the message event");
   assert.deepEqual(direction.steps, [{ type: 'message', text: 'Elkoy guides you through the maze.', id: 'DoDThh' }]);
   const message = action(h, p, ELKOY_OUTSIDE, 'DoDThh');
-  assert.equal(message.box.holdTicks, 4);
+  assert.equal(message.box.holdTicks, 5, 'inbound: the line comes 5 ticks after the box');
   assert.equal(p.getPacketSender().getVarbit(6719), 2, 'the minimap goes dark with the walk');
   tick(h, 2);
   assert.equal(p.getLocation().x, 2504, 'still dark');
@@ -597,7 +597,7 @@ test('Elkoy variants with no guide message walk the player as his next line show
   assert.equal(said.before, undefined, "the player's own line is not Elkoy's");
   const line = { player: p, npcId: ELKOY_OUTSIDE, step: { speaker: 'Elkoy' }, text: 'Here we are. Feel free to have a look around.' };
   emit(h, 'npc-dialogue:line', line);
-  assert.equal(line.holdTicks, 4);
+  assert.equal(line.holdTicks, 5);
   line.before();
   tick(h, 3);
   assert.deepEqual([p.getLocation().x, p.getLocation().y], [2515, 3159]);

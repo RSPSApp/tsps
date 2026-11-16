@@ -43,6 +43,8 @@ const LOOT_TRACKER_SCRIPT = 7192;
  * ground-item default). The recordings agree for tradeables (rsprox_transcripts/224/01463.txt tick 3491:
  * fiendish ashes and a bolt at reveal=100, despawn=200); they also show untradeable keys at 200, which the
  * Wiki overrides. Player drops keep 300 (232/00428.txt, 241/900032.txt: despawn=300).
+ * "Tradeable" is the Wiki's (between players), not the cache's Grand Exchange flag: burnt meat and rings of
+ * dueling below (8) trade but are not on the Exchange, and burnt meat drops at despawn=200 too (224/01463.txt tick 2092).
  */
 const TRADEABLE_DROP_DESPAWN_TICKS = 200;
 /** Each kill's loot key (script 7192), counting up as live's do. */
@@ -1286,7 +1288,7 @@ function placeDrops(player, drops, location, placement = {}) {
 function dropLifetime(player, itemId, options, area = player.getPrivateArea?.()) {
   if (options.despawnDelay != null) return options;
   if (area?.groundItemDespawnDelay?.() != null) return options;
-  if (ItemDefinition.forId(itemId)?.isTradeable?.() !== true) return options;
+  if (ItemDefinition.forId(itemId)?.isPlayerTradeable?.() !== true) return options;
   return { ...options, despawnDelay: TRADEABLE_DROP_DESPAWN_TICKS };
 }
 

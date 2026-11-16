@@ -87,10 +87,32 @@ rsprox captures:
 - The original all-plugin test fixture briefly opened an unrelated admin listener through its
   startup hook; shutdown completed with process exit, and a read-only port check found no
   remaining listener. The horn integration fixture now initializes only its required plugins.
-- Hidden check order is established by deterministic real-object tests, not visible hitsplat
-  observations. Independent review and rendered native client QA remain pending for this change.
-  Recording 3865 supports horn feedback, not the claw accuracy rule; the CoX recordings cited
-  above were not available for this validation.
+- Independent review passed four additional real scenarios with no findings in the inspected
+  paths: the real EquipPacketListener path preserves Entice through a ranged attack, and actual Vesta
+  immunity/CombatFactory/HitQueue impact rejects damage while a later roll remains unscaled.
+- Two rendered clients verified native horn equip/activation, 25% energy per eligible ally,
+  encouragement/fade feedback, dragon/burning claw equip, orb activation and NPC Attack.
+  The NPC hits resolved as `[7,0,0,0]` and `[4,3,0]`, capped to existing Man NPCs' seven HP;
+  inspected screenshots show the special animations and hitsplats. The burning sequence
+  consumed 25% for the horn plus 35% for the claws, leaving 40%.
+- A native two-player Wilderness fight passed the real attack-permission gate and used the
+  actual player Attack packet. The first run retained MCP's default developer protection:
+  visible/resolved damage did not reduce player HP. A focused repeat explicitly enabled
+  `::mortal` for both fixture accounts and acknowledged the client inventory update plus
+  server claw equipment before attacking. The claw hit `[14,7,3,4]` reduced target HP
+  `99→85→78→75→71` across its two impact ticks; applied-damage observers and the rendered
+  HP display agree. A separate ordinary follow-up in the protected run used the plain
+  13,310 attack roll. Controlled stats, items, energy and positions are fixture setup;
+  equipment, horn/special activation, targeting, walking and logout used native controls.
+- Both native claw runs landed their first check, so the second-check guarantee/PvP multiplier
+  was configured but unused. Deterministic real-object tests establish those hidden check
+  semantics; screenshots do not establish accuracy probabilities. Audible playback was not
+  checked. Recording 3865 supports horn feedback, not the claw accuracy rule; the CoX recordings
+  cited above were unavailable for this validation.
+- Native logouts saved both anonymous fixture inventories. The final `gameUpdate 5` countdown
+  completed persistence and exited normally; owned server/client/browser processes stopped
+  and all five assigned ports were clear. An earlier interrupted wrapper stop had no graceful
+  receipt and is not used as evidence of graceful shutdown.
 
 ## Ours
 

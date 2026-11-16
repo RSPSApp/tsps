@@ -33,7 +33,7 @@ in `server/plugins/quests/fairytalei/`; the words come from the Wiki transcripts
 | 50 | "So I guess I need to go and kill this Tanglefoot..." continued; the list goes (1748) |
 | 60 | "Yes, I have it right here." (or, holding the skull at the first ask, "Excellent, hand it over then.", 1001455 tick 1940) continued; the skull goes and the items are rolled (2404) |
 | 70 | six ticks into the blessing; the magic pair takes the secateurs' slot (3271) |
-| 80 | the Queen's secateurs picked up (3997), not the kill |
+| 80 | the Queen's secateurs taken (3997), by hand or Telekinetic Grab, not the kill |
 | 90 | the Godfather's "Grazie infinite!" continued (4181) |
 
 Siblings in varp 671: 1804-1806 are the three nature items as 0-based rows of the Wiki's ordered list
@@ -59,7 +59,8 @@ meeting, set after her "What do you do around here?" talk (1602).
   continue; two ticks later spotanim 78 on the player's tile, loc mushroom_inactive (9572, shape 10,
   rotation 1) there, the player as desert_treasure_invisible_npc (716), synth 907, a held "MMMmmph!";
   twelve ticks later spotanim 78 again, the loc goes, synth 908, the chat closes. After the quest: his
-  three-option menu with no greeting (4455).
+  three-option menu with no greeting (4455), until Swan Song reaches him (its stage 110). The blessing and
+  the mushroom keep their own time, so a click during either cannot leave the player blocked.
 - **Blessing (3265-3271):** on the continue past "Then let us begin...": human_fairy_kneel_and_offer
   (3256), the spirit's human_fairy_take_and_hold_up (3257) and spotanim fairy_flower_enchant (568) at
   height 100, cam_moveto 6 east/4 south of the spirit and cam_lookat the spirit (height 375, rates

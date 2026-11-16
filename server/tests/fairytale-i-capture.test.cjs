@@ -415,7 +415,10 @@ test("the grove at 70: the Gate Keeper, the box, the sidestep and synth 1107, th
   assert.equal(hit(I.MAGIC_SECATEURS), 7);
   assert.equal(f.messages.length, from + 1, "no message with the secateurs");
   // The kill's drop is taken: 80 (3997).
-  h.PM.emitGroundItemPickup({ player: f.player, groundItem: {}, groundItemId: I.QUEENS_SECATEURS, clickType: 1, location: { x: 0, y: 0, z: 0 }, handled: false });
+  // Taken by hand or by Telekinetic Grab: both credit the item through ground-items:taken.
+  h.PM.emitCustomEvent("ground-items:taken", { player: f.player, groundItem: null, source: "telegrab", itemId: I.QUEENS_SECATEURS, amount: 0, discarded: 0 });
+  assert.equal(h.stage(f), 70, "nothing credited, no stage");
+  h.PM.emitCustomEvent("ground-items:taken", { player: f.player, groundItem: null, source: "telegrab", itemId: I.QUEENS_SECATEURS, amount: 1, discarded: 0 });
   assert.equal(h.stage(f), 80);
   await h.dispatch(f, { type: "object_option", id: h.core.ObjectIdentifiers.A_GAP_THROUGH_THE_WALL, x: copyTile.getX() + 1, y: copyTile.getY(), clickType: 1 });
   for (let i = 0; i < 15 && !h.shown(f); i++) h.tick(f);
@@ -484,4 +487,48 @@ test("the dig says 'I can't believe I'm about to do this!' as it starts (2216)",
   assert.deepEqual(said.map(([, text]) => text), ["I can't believe I'm about to do this!"]);
   h.ticks(f, 4);
   assert.equal(f.player.getInventory().getAmount(I.DRAYNOR_SKULL), 1);
+});
+
+/** An inventory Examine: a click that resets the dialogue manager (the review's probe). */
+async function examine(f, itemId) {
+  const slot = f.player.getInventory().getSlotForItemId(itemId);
+  await f.connection.dispatch([{ type: "inventory_action", widgetId: 3214, itemId, slot, option: "Examine", optionIndex: 10 }]);
+  h.tick(f);
+}
+
+test("a click during the blessing or the mushroom cannot strand the player: each scene keeps its own time", async (t) => {
+  const f = h.actor(t, { stage: 60, at: BY_SPIRIT, amulet: true, items: [I.SECATEURS, I.RAW_CAVE_EEL, I.EDIBLE_SEAWEED, I.OYSTER, I.SPADE], attributes: { [ITEMS]: "18,19,20" } });
+  const spirit = h.spawn(f, N.NATURE_SPIRIT, SPIRIT);
+  await h.talk(f, spirit);
+  await until(f, "Then let us begin...");
+  const continued = f.tick + 1;
+  await h.continueLine(f);
+  await examine(f, I.SPADE);
+  h.ticks(f, continued + 6 - f.tick);
+  assert.equal(h.stage(f), 70, "the blessing finishes");
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(h.shown(f)?.text, "It is done!");
+  await finish(f);
+
+  const g = h.actor(t, { stage: 50, at: BY_MALIGNIUS, items: [I.SPADE] });
+  const malignius = h.spawn(g, N.MALIGNIUS_MORTIFER, MALIGNIUS);
+  await h.talk(g, malignius);
+  await h.choose(g, "Where can I get clothes like those?");
+  await until(g, "How about if I turn you into a mushroom");
+  await h.continueLine(g);
+  await examine(g, I.SPADE);
+  h.ticks(g, 2);
+  assert.equal(g.player.getNpcTransformationId(), h.core.CacheDefinitions.getNpcId("desert_treasure_invisible_npc"), "the mushroom still comes");
+  h.ticks(g, 13);
+  assert.equal(g.player.getNpcTransformationId(), -1);
+  assert.equal(g.player.getMovementQueue().isMovementBlocked(), false, "and lets go");
+});
+
+test("after Fairytale I, Swan Song's Malignius steps are still Swan Song's (stage 110)", async (t) => {
+  const f = h.actor(t, { stage: 90, at: BY_MALIGNIUS });
+  h.quest("swan_song").setStage(f.player, 110);
+  const malignius = h.spawn(f, N.MALIGNIUS_MORTIFER, MALIGNIUS);
+  await h.talk(f, malignius);
+  assert.notEqual(h.shown(f)?.text, "Who are you and what are you doing here?|About those enchanted secateurs again...|Where can I get clothes like those?");
+  assert.ok(h.shown(f), "Swan Song's conversation plays");
 });

@@ -68,6 +68,7 @@ module.exports = function createFairytaleIScenes(api, { onGroveEnd } = {}) {
   const MUSHROOM_LOC = () => CacheDefinitions.getLocId("mushroom_inactive") ?? 9572;
   const CHAT_RIGHT_CONTINUE = (217 << 16) | 5;
   const MUSHROOM_TICKS = 12;
+  const MUSHROOM_CAST_TICKS = 2;
   const ZANDAR_DROP = [3217, 3176, 0];
   const BLESSING_CAMERA_OFFSET = [6, -4];
   const BLESSING_CAMERA_HEIGHT = 375;
@@ -80,16 +81,25 @@ module.exports = function createFairytaleIScenes(api, { onGroveEnd } = {}) {
   // Malignius's mushroom
   // ==========================================================================
 
-  /** The continue past his threat: he casts, and the flame lands two ticks later (1951-1954). */
+  /**
+   * The continue past his threat: he casts, and the flame lands two ticks later (1951-1954). The
+   * scene runs on its own timer, so nothing the player clicks meanwhile can leave it half done.
+   */
   function castMushroom(player, malignius) {
+    endMushroom(player);
     malignius?.performAnimation?.(new Animation(HUMAN_CASTING()));
     synth(player, SYNTH_ZAMORAK_FLAME);
     player.getMovementQueue().reset().setBlockMovement(true);
+    const state = { casting: true };
+    mushrooms.set(player, state);
+    TaskManager.submit(new CountdownTask(state, MUSHROOM_CAST_TICKS, () => {
+      if (mushrooms.get(player) === state) becomeMushroom(player);
+    }));
   }
 
   /** The player is a mushroom for twelve ticks, saying a held "MMMmmph!" (1954-1966). */
   function becomeMushroom(player) {
-    endMushroom(player);
+    endMushroom(player, false, true);
     const tile = player.getLocation().clone();
     const flame = new Graphic(ZAMORAK_FLAME());
     player.getPacketSender().sendGraphic(flame, tile);
@@ -108,11 +118,15 @@ module.exports = function createFairytaleIScenes(api, { onGroveEnd } = {}) {
     TaskManager.submit(new CountdownTask(state, MUSHROOM_TICKS, () => endMushroom(player, true)));
   }
 
-  function endMushroom(player, natural = false) {
+  function endMushroom(player, natural = false, keepBlocked = false) {
     const state = mushrooms.get(player);
     if (!state) return;
     mushrooms.delete(player);
     TaskManager.cancelTasks(state);
+    if (state.casting) {
+      if (!keepBlocked) player.getMovementQueue().setBlockMovement(false);
+      return;
+    }
     if (natural) player.getPacketSender().sendGraphic(new Graphic(ZAMORAK_FLAME()), state.tile);
     ObjectManager.deregister(state.object, true);
     player.setNpcTransformationId(-1);
@@ -141,7 +155,11 @@ module.exports = function createFairytaleIScenes(api, { onGroveEnd } = {}) {
 
   const blessings = new Map();
 
-  function startBlessing(player, spirit) {
+  /**
+   * `onDone` runs six ticks on (the secateurs, then "It is done!"); the scene keeps its own time, so
+   * a click during it cannot strand the player blocked or the camera moved.
+   */
+  function startBlessing(player, spirit, onDone) {
     endBlessing(player);
     player.getMovementQueue().reset().setBlockMovement(true);
     player.performAnimation(new Animation(seq("human_fairy_kneel_and_offer", 3256)));
@@ -156,11 +174,20 @@ module.exports = function createFairytaleIScenes(api, { onGroveEnd } = {}) {
       BLESSING_CAMERA_HEIGHT, BLESSING_CAMERA_RATES);
     sender.sendCameraLookAt(at.getX(), at.getY(), BLESSING_CAMERA_HEIGHT, BLESSING_CAMERA_RATES);
     synth(player, SYNTH_ENCHANT_FLOWER);
-    blessings.set(player, { start: player.getLocation().clone() });
+    const state = { start: player.getLocation().clone() };
+    blessings.set(player, state);
+    TaskManager.submit(new CountdownTask(state, BLESSING_TICKS, () => {
+      if (blessings.get(player) !== state) return;
+      endBlessing(player);
+      onDone?.();
+    }));
   }
 
   function endBlessing(player) {
-    if (!blessings.delete(player)) return false;
+    const state = blessings.get(player);
+    if (!state) return false;
+    blessings.delete(player);
+    TaskManager.cancelTasks(state);
     player.getMovementQueue().setBlockMovement(false);
     player.getPacketSender().sendCameraReset();
     return true;

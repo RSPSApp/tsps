@@ -141,6 +141,9 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   const FT2_KEY = "fairytale_ii_cure_a_queen";
   /** Fairytale II's stage from which it sets 1808 to 2 (its Pick-pocket Godfather). */
   const FT2_PICKPOCKET_STAGE = 50;
+  const SWAN_SONG_KEY = "swan_song";
+  /** Swan Song sends the player to Malignius from this stage (SwanSong.Quest.js STAGE_MALIGNIUS). */
+  const SWAN_SONG_MALIGNIUS_STAGE = 110;
 
   const GARDENERS_ATTRIBUTE = "quest.fairytale-i-growing-pains:gardeners";
   const MALIGNIUS_ASKED_ATTRIBUTE = "quest.fairytale-i-growing-pains:malignius-asked";
@@ -246,7 +249,6 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   const MALIGNIUS_SKULL_LINES = new Set(["Yes, I have it right here.", "Excellent, hand it over then."]);
   const MALIGNIUS_MUSHROOM_LINE = "How about if I turn you into a mushroom to make you stop bothering me?";
   const MALIGNIUS_MUSHROOM_ACTION = "The player is transformed into a mushroom.";
-  const MALIGNIUS_MUSHROOM_CAST_TICKS = 2;
   const MALIGNIUS_NECROMANCY_LAST = "Thanks, I'll be off now.";
   const BLESSING_LINE = "Then let us begin...";
   const ZANDAR_TELEPORT_PAUSE_TICKS = 1;
@@ -347,9 +349,10 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     player.setAttribute(NATURE_ITEMS_ATTRIBUTE, [first, first + 1, first + 2].join(","));
   }
 
-  function ft2Stage(player) {
-    return QuestRuntime.getRegisteredQuests().findLast((entry) => entry.key === FT2_KEY)?.getStage(player) ?? 0;
+  function questStage(player, key) {
+    return QuestRuntime.getRegisteredQuests().findLast((entry) => entry.key === key)?.getStage(player) ?? 0;
   }
+  const ft2Stage = (player) => questStage(player, FT2_KEY);
 
   /** Every sibling varbit of varp 671 this quest owns, from the saved state. */
   function sendProgressVarbits(player) {
@@ -560,8 +563,8 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     }
     if (NATURE_SPIRIT_NPC_IDS.has(npcId) && text === BLESSING_LINE && stage < STAGE_COMPLETE) {
       const spirit = event.npc;
-      event.after = () => Scenes.startBlessing(player, spirit);
-      event.pauseTicks = Scenes.BLESSING_TICKS;
+      const spiritId = npcId;
+      event.after = () => Scenes.startBlessing(player, spirit, () => finishBlessing(player, spiritId, spirit));
     }
   }
 
@@ -584,7 +587,6 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     if (npcId === MALIGNIUS_NPC_ID && text === MALIGNIUS_MUSHROOM_LINE) {
       const malignius = event.npc;
       event.after = () => Scenes.castMushroom(player, malignius);
-      event.pauseTicks = MALIGNIUS_MUSHROOM_CAST_TICKS;
     }
   }
 
@@ -701,24 +703,33 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     advance(player, STAGE_HAS_MAGIC_SECATEURS);
   }
 
-  /** Six ticks into the blessing (3271): the secateurs, the camera back, then "It is done!". */
-  function finishBlessing(event) {
-    const { player } = event;
-    const scene = Scenes.blessing(player);
-    Scenes.endBlessing(player);
-    if (!scene) {
-      event.end = true;
-      return;
+  /** The steps after the enchant action: "It is done!" and his farewell. */
+  function stepsAfterBlessing(steps) {
+    for (let index = 0; index < steps.length; index++) {
+      const step = steps[index];
+      if (step?.type === "action" && step.id === ENCHANT_ACTION_ID) return steps.slice(index + 1);
+      for (const nested of [step?.steps, ...(step?.options ?? []).map((option) => option.steps)]) {
+        const rest = Array.isArray(nested) ? stepsAfterBlessing(nested) : null;
+        if (rest) return rest;
+      }
     }
+    return null;
+  }
+
+  /** Six ticks into the blessing (3271): the secateurs (the camera is back), then "It is done!". */
+  function finishBlessing(player, spiritId, spirit) {
+    if (player.isRegistered?.() === false) return;
     if (quest.getStage(player) < STAGE_HAS_MAGIC_SECATEURS || !hasMagicSecateurs(player)) {
       // Inventory actions can remove recipe items while the scene plays.
       if (!hasEnchantingItems(player)) {
         player.sendMessage("You no longer have all the materials needed to bless the secateurs.");
-        event.end = true;
         return;
       }
       enchantSecateurs(player);
     }
+    // The lost-pair variant jumps into this same branch, so the normal variant holds the closing lines.
+    startTranscript(api, player, spiritId ?? NATURE_SPIRIT_NPC_ID, PAGE, "in-the-nature-grotto-talking-to-the-nature-spirit",
+      (steps) => stepsAfterBlessing(steps) ?? [], spirit ?? null);
   }
 
   function handleActionEvent(event) {
@@ -745,8 +756,9 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
       return;
     }
     if (stepId === ENCHANT_ACTION_ID && NATURE_SPIRIT_NPC_IDS.has(npcId)) {
+      // The scene, started by "Then let us begin...", finishes the conversation itself.
       event.handled = true;
-      finishBlessing(event);
+      event.end = true;
       return;
     }
     if (npcId === ZANDAR_NPC_ID && text === ZANDAR_TELEPORT_ACTION) {
@@ -754,9 +766,9 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
       return;
     }
     if (npcId === MALIGNIUS_NPC_ID && text === MALIGNIUS_MUSHROOM_ACTION) {
+      // The chat closes as he casts (1952); his scene holds "MMMmmph!" itself.
       event.handled = true;
       event.end = true;
-      Scenes.becomeMushroom(player);
       return;
     }
     if (npcId === MALIGNIUS_NPC_ID && event.action === "receive" && /^magic secateurs$/i.test(String(text ?? ""))) {
@@ -847,7 +859,10 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
       player.sendMessage(GODFATHER_IGNORING);
       return;
     }
-    if (npcId === MALIGNIUS_NPC_ID && stage >= STAGE_COMPLETE) talkToMaligniusAfter(event);
+    // Swan Song's Malignius steps (and the Wiki page after them) are Swan Song's, from its stage 110.
+    if (npcId === MALIGNIUS_NPC_ID && stage >= STAGE_COMPLETE && questStage(player, SWAN_SONG_KEY) < SWAN_SONG_MALIGNIUS_STAGE) {
+      talkToMaligniusAfter(event);
+    }
   }
 
   function handleObjectInteraction(event) {
@@ -874,11 +889,10 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     startTranscript(api, player, GATEKEEPER_NPC_ID, PAGE, variant);
   }
 
-  /** The Queen's secateurs are the kill's proof: stage 80 as they are picked up (3997). */
-  function handleGroundItemPickup({ player, groundItemId }) {
-    if (groundItemId !== QUEENS_SECATEURS_ITEM_ID) return;
+  /** The Queen's secateurs are the kill's proof: stage 80 once they are taken (3997), by hand or Telekinetic Grab. */
+  function handleItemTaken({ player, itemId, amount }) {
+    if (itemId !== QUEENS_SECATEURS_ITEM_ID || !(amount > 0)) return;
     if (quest.getStage(player) !== STAGE_HAS_MAGIC_SECATEURS) return;
-    if (player.getInventory().getFreeSlots() === 0) return;
     advance(player, STAGE_TANGLEFOOT_DEFEATED);
   }
 
@@ -1092,7 +1106,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   api.onCustomEvent("combat:hit-queued", handleHitQueued);
   api.onNpcInteraction(handleNpcInteraction);
   api.onObjectInteraction(handleObjectInteraction);
-  api.onGroundItemPickup(handleGroundItemPickup);
+  api.onCustomEvent("ground-items:taken", handleItemTaken);
   api.onItemOnObject(handleSpadeOnGrave, { noted: false });
   api.onItemAction("Spade", { Dig: handleSpadeDig });
   api.onNpcHitModify(handleNpcHitModify);

@@ -1851,12 +1851,14 @@ test('Fairytale I Tanglefoot lair gate and Nature Spirit treat wielded magic sec
     const line = { player, npc: spirit, npcId: core.NpcIdentifiers.NATURE_SPIRIT, pages: [{ page: 'Fairytale I - Growing Pains' }],
       step: { speaker: 'Nature Spirit' }, text: 'Then let us begin...' };
     PM.emitCustomEvent('npc-dialogue:line', line);
-    assert.equal(line.pauseTicks, 6, 'the chat closes for the six-tick scene');
     line.after();
     const action = { player, npcId: core.NpcIdentifiers.NATURE_SPIRIT, stepId: 'JQyqMZ', handled: false };
     PM.emitCustomEvent('npc-dialogue:action', action);
     assert.equal(action.handled, true);
+    assert.equal(action.end, true, 'the chat closes for the six-tick scene');
+    for (let n = 0; n < 6; n++) core.TaskManager.process();
     assert.equal(player.getMovementQueue().isMovementBlocked(), false, 'the scene releases the player');
+    player.closeInterruptibleInterfaces();
   };
   enchant();
   assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0, 'a wielded pair is not duplicated by the Nature Spirit');

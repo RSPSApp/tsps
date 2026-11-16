@@ -121,19 +121,21 @@ test("the ore hand-in boxes fill from each player's own tier, and [man/woman] fr
   // Mining 1 first: before the fix its fill was written into the shared transcript step, so the next player saw it.
   const tin = handIn(t, { mining: 1, ore: core.ItemIdentifiers.TIN_ORE });
   assert.ok(tin.sent.includes("Thorkel Silkbeard takes eight lumps of tin."), JSON.stringify(tin.sent));
-  assert.ok(tin.sent.includes("Thorkel Silkbeard hands you 2000 coins."));
+  // Wiki (The Fremennik Isles): "The king's reward for the ores is 5,000 coins.", whatever the ore.
+  assert.ok(tin.sent.includes("Thorkel Silkbeard hands you 5000 coins."));
+  assert.equal(tin.p.getInventory().getAmount(core.ItemIdentifiers.COINS), 5000);
   assert.ok(tin.sent.includes("This man has gathered the remaining ore needed by Keldagrim's merchants."));
   assert.ok(tin.sent.includes("Please reward this man for his efforts."));
 
   const mithril = handIn(t, { mining: 55, ore: core.ItemIdentifiers.MITHRIL_ORE, female: true });
   assert.ok(mithril.sent.includes("Thorkel Silkbeard takes six lumps of mithril."), JSON.stringify(mithril.sent));
-  assert.ok(mithril.sent.includes("Thorkel Silkbeard hands you 6000 coins."));
-  assert.ok(!mithril.sent.some((text) => text.includes("eight lumps of tin") || text.includes("2000 coins")),
+  assert.ok(mithril.sent.includes("Thorkel Silkbeard hands you 5000 coins."));
+  assert.ok(!mithril.sent.some((text) => text.includes("eight lumps of tin")),
     "the first player's tier does not leak into the transcript");
   assert.ok(mithril.sent.includes("This woman has gathered the remaining ore needed by Keldagrim's merchants."));
   assert.ok(mithril.sent.includes("Please reward this woman for her efforts."));
   assert.equal(mithril.p.getInventory().getAmount(core.ItemIdentifiers.MITHRIL_ORE), 2, "six lumps taken");
-  assert.equal(mithril.p.getInventory().getAmount(core.ItemIdentifiers.COINS), 6000);
+  assert.equal(mithril.p.getInventory().getAmount(core.ItemIdentifiers.COINS), 5000);
   assert.ok(!mithril.sent.some((text) => /\[[^\]]*\/[^\]]*\]|\[amount\]/.test(text)), "no blank left unfilled");
 });
 

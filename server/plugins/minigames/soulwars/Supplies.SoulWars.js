@@ -52,7 +52,9 @@ function take(player, table, amount) {
   const game = Match.gameOf(player);
   if (!game) return false;
   const name = Common.core.CacheDefinitions.getObject(table.getId())?.name ?? "";
-  const id = name.startsWith("Potion") ? Common.data.items.potions[0] : Common.data.items.bandages;
+  let id = Common.data.items.bandages;
+  if (name.startsWith("Potion")) id = Common.data.items.potions[0];
+  else if (name.startsWith("Barricade")) id = Common.data.barricades.items[game.teamOf(player)];
   const inventory = player.getInventory();
   const count = Math.min(amount, inventory.getFreeSlots());
   if (count <= 0) {
@@ -222,7 +224,7 @@ function attachSupplies(api) {
   Common.every(() => {
     clock++;
   });
-  for (const table of ["Bandage table", "Potion of power table"]) {
+  for (const table of ["Bandage table", "Potion of power table", "Barricade table"]) {
     api.onObjectInteraction(table, { "Take-from": takeX, "Take-1": takeN(1), "Take-5": takeN(5), "Take-10": takeN(10) });
   }
   for (let dose = 1; dose <= 4; dose++) api.onItemAction(`Potion of power(${dose})`, { Drink: drink });

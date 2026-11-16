@@ -623,6 +623,25 @@ test("the vault's lock editor opens as the bank's does and Done's count answer 0
     assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 1 << 3, "a closed editor's click does nothing");
 });
 
+test("a Search click with the lock editor open closes the editor, as the clamp's click does", async (t) => {
+    const f = actor(t);
+    f.open();
+    const editor = core.CacheDefinitions.getInterfaceId("bank_side_locks");
+    const sender = f.p.getPacketSender();
+    await click(f, "seed_vault:lock_menu");
+    assert.equal(sender.isSubInterfaceOpen(editor), true, "PRE: editor open");
+    await click(f, "seed_vault:search");
+    assert.equal(sender.isSubInterfaceOpen(editor), false, "Search does not strand the editor");
+    assert.equal(f.p.getEnteredAmountAction(), null);
+    await click(f, "bank_side_locks:slots", 1, 2);
+    assert.equal(f.p.getAttribute("bank-settings:deposit-locks") ?? 0, 0, "the closed editor's click does nothing");
+    // It opens again and Done still closes it.
+    await click(f, "seed_vault:lock_menu");
+    assert.equal(sender.isSubInterfaceOpen(editor), true);
+    await amount(f, 0);
+    assert.equal(sender.isSubInterfaceOpen(editor), false);
+});
+
 test("lock checkboxes, side Lock-slot and saved lock settings work with stale-popup guards", async (t) => {
     const f = actor(t);
     f.p.getInventory().add(new core.Item(seed(), 12), false);

@@ -148,11 +148,21 @@ function login({ player }) {
   for (const [varbit, value] of Object.entries(settings(player))) Shared.setVarbit(player, varbit, Number(value) || 0);
 }
 
+/**
+ * The collection log's "Guardians of the Rift" counts come from these records. Cache script 2735
+ * shows "Rifts closed" from varp 2048 and "Rifts searches" from varp 2941 for this category.
+ */
+function collectionLogCount(request) {
+  if (request?.category !== "Guardians of the Rift" || !request.player) return;
+  request.count = riftsClosed(request.player);
+  request.extraCounts = [searches(request.player)];
+}
+
 module.exports = {
   RIFTS_CLOSED_ATTRIBUTE, ELEMENTAL_POINTS_ATTRIBUTE, CATALYTIC_POINTS_ATTRIBUTE, SEARCHES_ATTRIBUTE,
   SETTINGS_ATTRIBUTE, PEARLS_ATTRIBUTE,
   riftsClosed, addRiftClosed, points, setPoints, pearls, addPearls, spendPearls,
-  restoreSavedPearls, login,
+  restoreSavedPearls, login, collectionLogCount,
   searches, addSearches, setting, setSetting,
   attach(api) {
     api.persistAttribute(RIFTS_CLOSED_ATTRIBUTE, 0);
@@ -162,5 +172,6 @@ module.exports = {
     api.persistAttribute(PEARLS_ATTRIBUTE, 0);
     api.persistAttribute(SETTINGS_ATTRIBUTE, {});
     api.onPlayerLogin(login);
+    api.onCustomEvent("collection-log:category-count", collectionLogCount);
   },
 };

@@ -842015,13 +842015,8 @@
               "steps": [
                 {
                   "type": "message",
-                  "text": "Mosol leads you into the village.",
-                  "id": "SfsaEg"
-                },
-                {
-                  "type": "message",
-                  "text": "Mosol leaves you by the gate and walks back out into the jungle.",
-                  "id": "uAQHgJ"
+                  "text": "Mosol leads you into the village and walks back out into the jungle.",
+                  "id": "3dy5jG"
                 }
               ]
             },
@@ -1113034,7 +1113029,219 @@
           ]
         }
       ],
+      "starting-out-look-at-broken-cart": [
+        {
+          "type": "message",
+          "text": "You see a broken cart has been placed here. You suspect it's intended to keep people out.",
+          "id": "JIn4zH"
+        }
+      ],
+      "starting-out-search-broken-cart": [
+        {
+          "type": "message",
+          "text": "You think you could climb over the cart, but you see undead creatures gathered by the gates. A note attached to the cart reads: Danger: Deadly green mist! DO NOT ENTER IF YOU VALUE YOUR LIFE!",
+          "id": "ZMPmeW"
+        },
+        {
+          "type": "random",
+          "options": [
+            {
+              "text": "Dialogue 1",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Mosol Rei",
+                  "text": "Hey, move away from the cart please! It's unsafe to go in there.",
+                  "speaker_ids": [
+                    5340,
+                    8696
+                  ]
+                },
+                {
+                  "type": "jump",
+                  "reference": "continues",
+                  "id": "BO4VXE"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 2",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Mosol Rei",
+                  "text": "You must be a maniac to go in there! The whole place is swarming with zombies!",
+                  "speaker_ids": [
+                    5340,
+                    8696
+                  ]
+                },
+                {
+                  "type": "jump",
+                  "reference": "continues",
+                  "id": "PU6_cR"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "I'm climbing over the cart anyway!",
+              "steps": [
+                {
+                  "player": "I'm climbing over the cart anyway!"
+                }
+              ]
+            },
+            {
+              "text": "I'm climbing in anyway. Don't warn me again.",
+              "steps": [
+                {
+                  "player": "I'm climbing in anyway. Don't warn me again."
+                }
+              ]
+            },
+            {
+              "text": "Actually, I'll stay out here.",
+              "steps": [
+                {
+                  "player": "Actually, I'll stay out here. I'd probably have just scraped my knees up."
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "starting-out-open-metal-gate": [
+        {
+          "type": "message",
+          "text": "The gate feels very cold to your touch! Are you sure you want to go through?",
+          "id": "6Bv6vW"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Yes, I am fearless!",
+              "steps": []
+            },
+            {
+              "text": "No, actually, I have a bad feeling about this!",
+              "steps": []
+            }
+          ]
+        }
+      ],
       "starting-out-talking-to-mosol-rei-after-getting-the-wampum-belt": [
+        {
+          "type": "line",
+          "speaker": "Mosol Rei",
+          "text": "Hey there Bwana, have you delivered that Wampum Belt to Trufitus yet?",
+          "speaker_ids": [
+            5340,
+            8696
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Yes, of course!",
+              "steps": [
+                {
+                  "player": "Yes, of course!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mosol Rei",
+                  "text": "Well hopefully Trufitus will come up with some good ideas on how to resolve this problem with Rashiliyia. You should talk to him if you really want to help.",
+                  "speaker_ids": [
+                    5340,
+                    8696
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Ok. Thanks for your help.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "OlU0j-"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Why are the undead here?",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "6BHmI0",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-44feaa0ebb67d237"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Not yet, I've been busy.",
+              "steps": [
+                {
+                  "player": "Not yet, I've been busy."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mosol Rei",
+                  "text": "If you can take it to him quickly, it would help me out a lot. If not, please can you give it back to me so that I can send a scout to deliver it.",
+                  "speaker_ids": [
+                    5340,
+                    8696
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Ok. Thanks for your help.",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "OlU0j-"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Why are the undead here?",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "lN4t13",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-44feaa0ebb67d237"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
         {
           "player": "Why are the undead here?"
         },
@@ -1113073,7 +1113280,7 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "id": "dnTzg6",
+                          "id": "TEq3AD",
                           "steps": [
                             {
                               "type": "call",
@@ -1113088,7 +1113295,7 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "id": "xokNrq",
+                          "id": "JKnwXL",
                           "steps": [
                             {
                               "type": "call",
@@ -1113130,7 +1113337,7 @@
                               "steps": [
                                 {
                                   "type": "jump",
-                                  "id": "8GzyPR",
+                                  "id": "khPhXt",
                                   "steps": [
                                     {
                                       "type": "call",
@@ -1113163,7 +1113370,7 @@
                                       "steps": [
                                         {
                                           "type": "jump",
-                                          "id": "NGUv0j",
+                                          "id": "-D-EZF",
                                           "steps": [
                                             {
                                               "type": "call",
@@ -1113195,7 +1113402,7 @@
                                       "steps": [
                                         {
                                           "type": "jump",
-                                          "id": "OW6SQt",
+                                          "id": "zudfz1",
                                           "steps": [
                                             {
                                               "type": "call",
@@ -1113214,11 +1113421,11 @@
                               "steps": [
                                 {
                                   "type": "jump",
-                                  "id": "HjQKlY",
+                                  "id": "HJybNq",
                                   "steps": [
                                     {
                                       "type": "call",
-                                      "branch": "UKtCF2"
+                                      "branch": "jump-e15fbbd96105c45e"
                                     }
                                   ]
                                 }
@@ -1113233,11 +1113440,11 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "id": "ek7h60",
+                          "id": "H593Xg",
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "UKtCF2"
+                              "branch": "jump-e15fbbd96105c45e"
                             }
                           ]
                         }
@@ -1113252,7 +1113459,7 @@
               "steps": [
                 {
                   "type": "jump",
-                  "id": "_wncBJ",
+                  "id": "eXNgM5",
                   "steps": [
                     {
                       "type": "call",
@@ -1113267,11 +1113474,11 @@
               "steps": [
                 {
                   "type": "jump",
-                  "id": "5v-n1i",
+                  "id": "qHvETI",
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "UKtCF2"
+                      "branch": "jump-e15fbbd96105c45e"
                     }
                   ]
                 }
@@ -1113653,6 +1113860,11 @@
                                                                                   "speaker_ids": [
                                                                                     4625
                                                                                   ]
+                                                                                },
+                                                                                {
+                                                                                  "type": "message",
+                                                                                  "text": "Trufitus goes back to his studies.",
+                                                                                  "id": "ZUlg82"
                                                                                 }
                                                                               ]
                                                                             }
@@ -1113719,7 +1113931,7 @@
                                                                   "steps": [
                                                                     {
                                                                       "type": "call",
-                                                                      "branch": "jump-6281f84a22c11b9f"
+                                                                      "branch": "jump-d604a64cb61acdb9"
                                                                     }
                                                                   ]
                                                                 }
@@ -1113768,7 +1113980,7 @@
                                                           "steps": [
                                                             {
                                                               "type": "call",
-                                                              "branch": "jump-6281f84a22c11b9f"
+                                                              "branch": "jump-d604a64cb61acdb9"
                                                             }
                                                           ]
                                                         }
@@ -1113865,6 +1114077,14 @@
                                                           "type": "line",
                                                           "speaker": "Trufitus",
                                                           "text": "Minions are the fiendish undead creatures that she controls. She has very few living worshippers, but they need to be dealt with at some point.",
+                                                          "speaker_ids": [
+                                                            4625
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "line",
+                                                          "speaker": "Trufitus",
+                                                          "text": "Usually a strong creature of some sort will be guarding her remains. And of course, she is a very powerful spell caster herself. Not to be tackled lightly.",
                                                           "speaker_ids": [
                                                             4625
                                                           ]
@@ -1114118,6 +1114338,219 @@
           ]
         }
       ],
+      "starting-out-talking-to-trufitus-with-the-wampum-belt": [
+        {
+          "player": "Greetings."
+        },
+        {
+          "type": "line",
+          "speaker": "Trufitus",
+          "text": "Greetings Bwana! You look like you have some serious news.",
+          "speaker_ids": [
+            4625
+          ]
+        },
+        {
+          "player": "Well, I think I may have. I have just spoken to Mosol Rei and he says that Rashiliyia has returned..."
+        },
+        {
+          "type": "line",
+          "speaker": "Trufitus",
+          "text": "Oh dear, it is more serious than I have imagined.",
+          "speaker_ids": [
+            4625
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "What do you know about Rashiliyia?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "f78iPn",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-d95f29f30c8781bc"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "What do you know about Mosol Rei?",
+              "steps": [
+                {
+                  "player": "What do you know about Mosol Rei?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Trufitus",
+                  "text": "I know he is a brave warrior, he lives in a village south of here. Your journeys have taken you far!",
+                  "speaker_ids": [
+                    4625
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "What do you know about Rashiliyia?",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "U_wxn7",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-d95f29f30c8781bc"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Do you trust him?",
+                      "steps": [
+                        {
+                          "player": "Do you trust him?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Trufitus",
+                          "text": "He is a little headstrong, but for the right reasons. I think he is generally to be trusted.",
+                          "speaker_ids": [
+                            4625
+                          ]
+                        },
+                        {
+                          "type": "choice",
+                          "options": [
+                            {
+                              "text": "What do you know about Rashiliyia?",
+                              "steps": [
+                                {
+                                  "type": "jump",
+                                  "id": "YmI5NS",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "jump-d95f29f30c8781bc"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "text": "Mosol Rei said something about a legend?",
+                              "steps": [
+                                {
+                                  "type": "jump",
+                                  "id": "_NuPpU",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "jump-0cc38b045bdbdd9e"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Mosol gave me something to show you.",
+              "steps": [
+                {
+                  "player": "Mosol gave me something to show you."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Trufitus",
+                  "text": "Oh yes, let me see it then.",
+                  "speaker_ids": [
+                    4625
+                  ]
+                },
+                {
+                  "type": "message",
+                  "text": "You show Trufitus the Wampum belt, he studies it for a long time.",
+                  "id": "vGsN0H"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Trufitus",
+                  "text": "Yes, things do look very bad indeed.",
+                  "speaker_ids": [
+                    4625
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "What do you know about Rashiliyia?",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "tqJvgw",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-d95f29f30c8781bc"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Mosol Rei said something about a legend?",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "yHr5sn",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-0cc38b045bdbdd9e"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "starting-out-talking-to-trufitus-without-the-wampum-belt": [
+        {
+          "type": "line",
+          "speaker": "Trufitus",
+          "text": "Greetings once again Bwana,",
+          "speaker_ids": [
+            4625
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Trufitus",
+          "text": "I have no more news since we last spoke.",
+          "speaker_ids": [
+            4625
+          ]
+        }
+      ],
       "starting-out-talking-to-trufitus-again": [
         {
           "type": "line",
@@ -1114283,6 +1114716,7 @@
         },
         {
           "type": "choice",
+          "prompt": "Climb into the fissure?",
           "options": [
             {
               "text": "Yes, I'll give it a go!",
@@ -1114290,7 +1114724,7 @@
                 {
                   "type": "message",
                   "text": "It looks like there is a steep drop just after the fissure. It may be dangerous to try to climb down without any sort of support.",
-                  "id": "DmaRtT"
+                  "id": "UvOylw"
                 }
               ]
             },
@@ -1114300,7 +1114734,7 @@
                 {
                   "type": "message",
                   "text": "You think better of attempting to squeeze into the fissure.",
-                  "id": "NopUB9"
+                  "id": "bis8ix"
                 },
                 {
                   "player": "It looks very dangerous, and dark... Scary!",
@@ -1114355,6 +1114789,38 @@
                   "type": "message",
                   "text": "The lit black candle burns out.",
                   "id": "vWOu7Z"
+                }
+              ]
+            },
+            {
+              "text": "No",
+              "steps": []
+            }
+          ]
+        }
+      ],
+      "visiting-ah-za-rhoon-use-lit-torch-on-fissure": [
+        {
+          "type": "choice",
+          "prompt": "Are you sure? You won't get that item back.",
+          "options": [
+            {
+              "text": "Yes",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "You drop the torch into the fissure and see that there is quite a large drop after you get through the hole. There is a good anchor point nearby onto which you could tie a rope.",
+                  "id": "-TPp0s"
+                },
+                {
+                  "type": "message",
+                  "text": "The torch burns out.",
+                  "id": "nBtzrp"
+                },
+                {
+                  "type": "message",
+                  "text": "Some rope might help here.",
+                  "id": "31_5D9"
                 }
               ]
             },
@@ -1114501,6 +1114967,13 @@
           ]
         }
       ],
+      "visiting-ah-za-rhoon-search-loose-rocks-after-taking-the-scroll": [
+        {
+          "type": "message",
+          "text": "You see nothing here but an empty bookcase behind some rocks.",
+          "id": "5a3vLS"
+        }
+      ],
       "visiting-ah-za-rhoon-read-tattered-scroll": [
         {
           "type": "message",
@@ -1114641,6 +1115114,18 @@
               ]
             }
           ]
+        }
+      ],
+      "visiting-ah-za-rhoon-search-ancient-gallows-after-taking-the-corpse": [
+        {
+          "type": "message",
+          "text": "You search the gallows...",
+          "id": "mMnKe7"
+        },
+        {
+          "type": "message",
+          "text": "The gallows look pretty eerie. You search but find nothing.",
+          "id": "mQMjuE"
         }
       ],
       "visiting-ah-za-rhoon-look-at-strange-looking-stone": [
@@ -1114972,7 +1115457,7 @@
                 {
                   "type": "line",
                   "speaker": "Trufitus",
-                  "text": "We need to identify that the place you have found is indeed Ah Za Rhoon.",
+                  "text": "Look for something that can identify the place. Leave no stone unturned.",
                   "speaker_ids": [
                     4625
                   ]
@@ -1115081,7 +1115566,7 @@
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "jump-b65c0437db159a37"
+                              "branch": "jump-97352fa4bee5e494"
                             }
                           ]
                         }
@@ -1115138,7 +1115623,7 @@
                 {
                   "type": "line",
                   "speaker": "Trufitus",
-                  "text": "We need to identify that the place you have found is indeed Ah Za Rhoon.",
+                  "text": "Look for something that can identify the place. Leave no stone unturned.",
                   "speaker_ids": [
                     4625
                   ]
@@ -1115636,23 +1116121,8 @@
                               "text": "The spirit said something about keys and kin?",
                               "steps": [
                                 {
-                                  "player": "The spirit said something about keys and kin?"
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Trufitus",
-                                  "text": "Hmmm, maybe it's a clue of some kind?",
-                                  "speaker_ids": [
-                                    4625
-                                  ]
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Trufitus",
-                                  "text": "If you found anything at Ah Za Rhoon that you're not sure of, why not investigate it or show it to me and I'll see what I can make of it.",
-                                  "speaker_ids": [
-                                    4625
-                                  ]
+                                  "type": "call",
+                                  "branch": "cqKwZz"
                                 }
                               ]
                             },
@@ -1115810,31 +1116280,8 @@
                       "text": "The spirit said something about keys and kin?",
                       "steps": [
                         {
-                          "player": "The spirit said something about keys and kin?"
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Trufitus",
-                          "text": "Hmmm, maybe it's a clue of some kind?",
-                          "speaker_ids": [
-                            4625
-                          ]
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Trufitus",
-                          "text": "Rashiliyia's only kin was a son, 'Bervirius'. His remains were entombed on a small island which lies to the South West. I will do some research into this to see if I can find any other details.",
-                          "speaker_ids": [
-                            4625
-                          ]
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Trufitus",
-                          "text": "But I think we must take Zadimus' clue literally and get some item that belonged to Bervirius as it may be the only way to approach Rashiliyia. Perhaps something like this exists in his tomb?",
-                          "speaker_ids": [
-                            4625
-                          ]
+                          "type": "call",
+                          "branch": "cqKwZz"
                         }
                       ]
                     },
@@ -1115875,7 +1116322,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-1f28c51473029ea8"
+                      "branch": "jump-ccd30a63f5467769"
                     }
                   ]
                 }
@@ -1115890,7 +1116337,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-b65c0437db159a37"
+                      "branch": "jump-97352fa4bee5e494"
                     }
                   ]
                 }
@@ -1116130,7 +1116577,7 @@
                 {
                   "type": "line",
                   "speaker": "Trufitus",
-                  "text": "Congratulations Bwana, show me any items you have found though. I may be able to help.",
+                  "text": "Congratulations Bwana. Show me any items you have found though. I may be able to help.",
                   "speaker_ids": [
                     4625
                   ]
@@ -1116194,7 +1116641,7 @@
                                   "steps": [
                                     {
                                       "type": "call",
-                                      "branch": "jump-1f28c51473029ea8"
+                                      "branch": "jump-ccd30a63f5467769"
                                     }
                                   ]
                                 }
@@ -1116274,21 +1116721,6 @@
                           ]
                         }
                       ]
-                    },
-                    {
-                      "text": "I have some items that I need help with.",
-                      "steps": [
-                        {
-                          "type": "jump",
-                          "id": "rcDm7M",
-                          "steps": [
-                            {
-                              "type": "call",
-                              "branch": "jump-1f28c51473029ea8"
-                            }
-                          ]
-                        }
-                      ]
                     }
                   ]
                 }
@@ -1116303,7 +1116735,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-b65c0437db159a37"
+                      "branch": "jump-97352fa4bee5e494"
                     }
                   ]
                 }
@@ -1116770,6 +1117202,13 @@
           "id": "wpxRfN"
         }
       ],
+      "visiting-the-tomb-of-rashiliyia-search-palm-tree-after-revealing-the-doors": [
+        {
+          "type": "message",
+          "text": "The trees are already pulled apart revealing some doors.",
+          "id": "S80XPm"
+        }
+      ],
       "visiting-the-tomb-of-rashiliyia-open-carved-doors": [
         {
           "type": "message",
@@ -1116919,6 +1117358,18 @@
           "id": "Yq_UYp"
         }
       ],
+      "visiting-the-tomb-of-rashiliyia-climb-rocks-back-up": [
+        {
+          "type": "message",
+          "text": "You carefully pick your way through the rocks.",
+          "id": "Ht3xLJ"
+        },
+        {
+          "type": "message",
+          "text": "You manage to carefully clamber up.",
+          "id": "ksPeKy"
+        }
+      ],
       "visiting-the-tomb-of-rashiliyia-open-tomb-doors-before-placing-bones": [
         {
           "type": "message",
@@ -1117010,13 +1117461,13 @@
             },
             {
               "type": "message",
-              "text": "You fit the last bone into the recess.",
-              "id": "Qjxn58"
+              "text": "You place the bone into the last recess on the skeletal door and it fits. All the recesses are filled...",
+              "id": "FWtJB0"
             },
             {
               "type": "message",
-              "text": "You place the bone into the last recess on the skeletal door and it fits. All the recesses are filled...",
-              "id": "FWtJB0"
+              "text": "You fit the last bone into the recess.",
+              "id": "Qjxn58"
             },
             {
               "type": "message",
@@ -1117037,6 +1117488,17 @@
           "type": "action",
           "text": "Nazastarool spawns.",
           "id": "KPnwZH"
+        },
+        {
+          "type": "line",
+          "speaker": "Nazastarool",
+          "text": "Who dares disturb Rashiliyia's rest?",
+          "presentation": "overhead",
+          "speaker_ids": [
+            5353,
+            5354,
+            5355
+          ]
         },
         {
           "type": "line",
@@ -1117130,11 +1117592,6 @@
         },
         {
           "type": "message",
-          "text": "You hear a disembodied voice fading away into the distance, 'May you perish in the fires of Zamorak's furnace! Rashiliyia's curse is upon you!'",
-          "id": "1uC0er"
-        },
-        {
-          "type": "message",
           "text": "You see something appear on the dolmen.",
           "id": "dBR0dC"
         },
@@ -1117147,6 +1117604,23 @@
           "type": "message",
           "text": "Nazastarool: curse is upon you!",
           "id": "olIIJD"
+        },
+        {
+          "type": "message",
+          "text": "You hear a disembodied voice fading away into the distance, 'May you perish in the fires of Zamorak's furnace! Rashiliyia's curse is upon you!'",
+          "id": "1uC0er"
+        },
+        {
+          "type": "message",
+          "text": "You see something appear on the dolmen.",
+          "id": "WVfIey"
+        }
+      ],
+      "visiting-the-tomb-of-rashiliyia-look-at-or-search-tomb-dolmen-after-taking-rashiliyia-s-remains": [
+        {
+          "type": "message",
+          "text": "You find nothing new on the dolmen.",
+          "id": "VHXHvP"
         }
       ],
       "visiting-the-tomb-of-rashiliyia-take-rashiliyia-corpse": [
@@ -1117168,18 +1117642,6 @@
             }
           ],
           "id": "4mx_R_"
-        },
-        {
-          "type": "condition",
-          "text": "If the player is wearing the Beads of the Dead:",
-          "steps": [
-            {
-              "type": "message",
-              "text": "The Beads of the Dead start to glow...",
-              "id": "bBhicv"
-            }
-          ],
-          "id": "Qyze_y"
         },
         {
           "type": "message",
@@ -1117551,8 +1118013,8 @@
       "visiting-the-tomb-of-rashiliyia-using-rashiliyias-remains-on-the-dolmen": [
         {
           "type": "message",
-          "text": "You carefully place Rashiliyias remains on the dolmen. You feel a strange vibration in the air.",
-          "id": "TEcd-6"
+          "text": "You carefully place Rashiliyia's remains on the dolmen. You feel a strange vibration in the air.",
+          "id": "llhAok"
         },
         {
           "type": "line",
@@ -1117569,6 +1118031,11 @@
           "speaker_ids": [
             5352
           ]
+        },
+        {
+          "type": "message",
+          "text": "Without warning the spirit of Rashiliyia disappears.",
+          "id": "HTufPX"
         },
         {
           "type": "action",
@@ -1118391,6 +1118858,255 @@
           "type": "end"
         }
       ],
+      "jump-44feaa0ebb67d237": [
+        {
+          "player": "Why are the undead here?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mosol Rei",
+          "text": "Rashiliyia! The Queen of the undead has risen! She is the mother of the undead creatures that roam this land. But alas I know nothing of the legend that surrounds her.",
+          "speaker_ids": [
+            5340,
+            8696
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Legend you say?",
+              "steps": [
+                {
+                  "player": "Legend you say?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mosol Rei",
+                  "text": "Yes.... I said it is a legend that I know nothing about.",
+                  "speaker_ids": [
+                    5340,
+                    8696
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Oh, ok, sorry for bothering you.",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "TEq3AD",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-a33156e221ae2977"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Oh come on, you must know something.",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "JKnwXL",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-5ddd785dff51bf2f"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Maybe you know someone who does know something?",
+                      "steps": [
+                        {
+                          "player": "Maybe you know someone who does know something?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mosol Rei",
+                          "text": "My guess is that this has something to do with the legend of Rashiliyia. But you need to speak to the Shaman in 'Tai Bwo Wannai' village to get more details about that.",
+                          "speaker_ids": [
+                            5340,
+                            8696
+                          ]
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mosol Rei",
+                          "text": "I really have to fight these undead now Bwana, before they take over the world!",
+                          "speaker_ids": [
+                            5340,
+                            8696
+                          ]
+                        },
+                        {
+                          "type": "choice",
+                          "options": [
+                            {
+                              "text": "Oh, ok, sorry for bothering you.",
+                              "steps": [
+                                {
+                                  "type": "jump",
+                                  "id": "khPhXt",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "jump-a33156e221ae2977"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "text": "I'll go to see the Shaman.",
+                              "steps": [
+                                {
+                                  "player": "I'll go to see the Shaman."
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Mosol Rei",
+                                  "text": "Well, if you go to see the Shaman, please give him that Wampum belt I gave to you, it will give him more details about our situation down here.",
+                                  "speaker_ids": [
+                                    5340,
+                                    8696
+                                  ]
+                                },
+                                {
+                                  "type": "choice",
+                                  "options": [
+                                    {
+                                      "text": "Errr, I'm having second thoughts now.",
+                                      "steps": [
+                                        {
+                                          "type": "jump",
+                                          "id": "-D-EZF",
+                                          "steps": [
+                                            {
+                                              "type": "call",
+                                              "branch": "jump-d40d103aeaed560c"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "text": "Yes, I'm sure and I'll take the Wampum belt to Trufitus.",
+                                      "steps": [
+                                        {
+                                          "player": "Yes, I'm sure and I'll take the Wampum belt to Trufitus."
+                                        },
+                                        {
+                                          "type": "line",
+                                          "speaker": "Mosol Rei",
+                                          "text": "That's great Bwana, if you give Trufitus the Wampum belt I gave you, it will give him more details of our current situation.",
+                                          "speaker_ids": [
+                                            5340,
+                                            8696
+                                          ]
+                                        },
+                                        {
+                                          "type": "end"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "text": "Ok. Thanks for your help.",
+                                      "steps": [
+                                        {
+                                          "type": "jump",
+                                          "id": "zudfz1",
+                                          "steps": [
+                                            {
+                                              "type": "call",
+                                              "branch": "jump-9e9e93ced2b0643b"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "text": "Ok. Thanks for your help.",
+                              "steps": [
+                                {
+                                  "type": "jump",
+                                  "id": "HJybNq",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "jump-e15fbbd96105c45e"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Ok. Thanks for your help.",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "H593Xg",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-e15fbbd96105c45e"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "I don't think this is something I can help with at the moment.",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "eXNgM5",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-7aa7c0a431050f84"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Ok. Thanks for your help.",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "qHvETI",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-e15fbbd96105c45e"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
       "jump-5ddd785dff51bf2f": [
         {
           "player": "Oh come on, you must know something?"
@@ -1118654,6 +1119370,23 @@
           "type": "end"
         }
       ],
+      "jump-e15fbbd96105c45e": [
+        {
+          "player": "Ok. Thanks for your help."
+        },
+        {
+          "type": "line",
+          "speaker": "Mosol Rei",
+          "text": "You're welcome Bwana, good luck.",
+          "speaker_ids": [
+            5340,
+            8696
+          ]
+        },
+        {
+          "type": "end"
+        }
+      ],
       "jump-7aa7c0a431050f84": [
         {
           "player": "Sorry, but I don't think this is something that I can help with at the moment!"
@@ -1118895,6 +1119628,11 @@
                                   ]
                                 },
                                 {
+                                  "type": "message",
+                                  "text": "Trufitus goes back to his studies.",
+                                  "id": "ZUlg82"
+                                },
+                                {
                                   "type": "end"
                                 }
                               ]
@@ -1118965,7 +1119703,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-6281f84a22c11b9f"
+                      "branch": "jump-d604a64cb61acdb9"
                     }
                   ]
                 }
@@ -1119165,6 +1119903,11 @@
                           ]
                         },
                         {
+                          "type": "message",
+                          "text": "Trufitus goes back to his studies.",
+                          "id": "ZUlg82"
+                        },
+                        {
                           "type": "end"
                         }
                       ]
@@ -1119305,7 +1120048,7 @@
           ]
         }
       ],
-      "jump-6281f84a22c11b9f": [
+      "jump-d604a64cb61acdb9": [
         {
           "player": "It's a pity that I can't search for Ah Za Rhoon now."
         },
@@ -1119316,6 +1120059,11 @@
           "speaker_ids": [
             4625
           ]
+        },
+        {
+          "type": "message",
+          "text": "Trufitus goes back to his studies.",
+          "id": "ZUlg82"
         },
         {
           "type": "end"
@@ -1119570,6 +1120318,11 @@
                                           ]
                                         },
                                         {
+                                          "type": "message",
+                                          "text": "Trufitus goes back to his studies.",
+                                          "id": "ZUlg82"
+                                        },
+                                        {
                                           "type": "end"
                                         }
                                       ]
@@ -1119640,7 +1120393,7 @@
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "jump-6281f84a22c11b9f"
+                              "branch": "jump-d604a64cb61acdb9"
                             }
                           ]
                         }
@@ -1119689,7 +1120442,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-6281f84a22c11b9f"
+                      "branch": "jump-d604a64cb61acdb9"
                     }
                   ]
                 }
@@ -1119747,6 +1120500,14 @@
                   "type": "line",
                   "speaker": "Trufitus",
                   "text": "Minions are the fiendish undead creatures that she controls. She has very few living worshippers, but they need to be dealt with at some point.",
+                  "speaker_ids": [
+                    4625
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Trufitus",
+                  "text": "Usually a strong creature of some sort will be guarding her remains. And of course, she is a very powerful spell caster herself. Not to be tackled lightly.",
                   "speaker_ids": [
                     4625
                   ]
@@ -1120269,6 +1121030,11 @@
                                                           ]
                                                         },
                                                         {
+                                                          "type": "message",
+                                                          "text": "Trufitus goes back to his studies.",
+                                                          "id": "ZUlg82"
+                                                        },
+                                                        {
                                                           "type": "end"
                                                         }
                                                       ]
@@ -1120339,7 +1121105,7 @@
                                           "steps": [
                                             {
                                               "type": "call",
-                                              "branch": "jump-6281f84a22c11b9f"
+                                              "branch": "jump-d604a64cb61acdb9"
                                             }
                                           ]
                                         }
@@ -1120388,7 +1121154,7 @@
                                   "steps": [
                                     {
                                       "type": "call",
-                                      "branch": "jump-6281f84a22c11b9f"
+                                      "branch": "jump-d604a64cb61acdb9"
                                     }
                                   ]
                                 }
@@ -1120485,6 +1121251,14 @@
                                   "type": "line",
                                   "speaker": "Trufitus",
                                   "text": "Minions are the fiendish undead creatures that she controls. She has very few living worshippers, but they need to be dealt with at some point.",
+                                  "speaker_ids": [
+                                    4625
+                                  ]
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Trufitus",
+                                  "text": "Usually a strong creature of some sort will be guarding her remains. And of course, she is a very powerful spell caster herself. Not to be tackled lightly.",
                                   "speaker_ids": [
                                     4625
                                   ]
@@ -1120955,6 +1121729,11 @@
                                                   ]
                                                 },
                                                 {
+                                                  "type": "message",
+                                                  "text": "Trufitus goes back to his studies.",
+                                                  "id": "ZUlg82"
+                                                },
+                                                {
                                                   "type": "end"
                                                 }
                                               ]
@@ -1121025,7 +1121804,7 @@
                                   "steps": [
                                     {
                                       "type": "call",
-                                      "branch": "jump-6281f84a22c11b9f"
+                                      "branch": "jump-d604a64cb61acdb9"
                                     }
                                   ]
                                 }
@@ -1121074,7 +1121853,7 @@
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "jump-6281f84a22c11b9f"
+                              "branch": "jump-d604a64cb61acdb9"
                             }
                           ]
                         }
@@ -1121094,6 +1121873,834 @@
                     {
                       "type": "call",
                       "branch": "jump-fe4477d4659c5aec"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "jump-d95f29f30c8781bc": [
+        {
+          "player": "What do you know about Rashiliyia?"
+        },
+        {
+          "type": "line",
+          "speaker": "Trufitus",
+          "text": "Hmmm, it's been a long time since I heard that name. Rashiliyia is the Queen of the Undead. And a more fearsome enemy you will be unlikely to find.",
+          "speaker_ids": [
+            4625
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Trufitus",
+          "text": "I fear that you bring me news that she has returned to plague us once again? Alas I know of no weakness that she has.",
+          "speaker_ids": [
+            4625
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "So there is nothing we can do?",
+              "steps": [
+                {
+                  "player": "So there is nothing we can do?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Trufitus",
+                  "text": "Not that I can think of.",
+                  "speaker_ids": [
+                    4625
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Oh, ok!",
+                      "steps": [
+                        {
+                          "player": "Oh, ok!"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Trufitus",
+                          "text": "Yes, it's a bit sad really, I liked that village.",
+                          "speaker_ids": [
+                            4625
+                          ]
+                        },
+                        {
+                          "type": "message",
+                          "text": "Trufitus seems deeply touched...",
+                          "id": "Baesjz"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Trufitus",
+                          "text": "Well, I hope you will excuse me, but I need to get back to my studies.",
+                          "speaker_ids": [
+                            4625
+                          ]
+                        },
+                        {
+                          "type": "end"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Should I start to evacuate the Island?",
+                      "steps": [
+                        {
+                          "player": "Should I start to evacuate the island?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Trufitus",
+                          "text": "Yes, that may be a good idea. Many people could die! If only there was a way to defeat her!",
+                          "speaker_ids": [
+                            4625
+                          ]
+                        },
+                        {
+                          "type": "choice",
+                          "options": [
+                            {
+                              "text": "Mosol Rei said something about a legend?",
+                              "steps": [
+                                {
+                                  "player": "Mosol Rei said something about a legend?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Trufitus",
+                                  "text": "Ah, yes, there is a legend, but it is lost in the midst of antiquity...",
+                                  "speaker_ids": [
+                                    4625
+                                  ]
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Trufitus",
+                                  "text": "The last place to hold any details regarding this mystery was in the temple of Ah Za Rhoon....and that has long since vanished... it crumbled into dust...",
+                                  "speaker_ids": [
+                                    4625
+                                  ]
+                                },
+                                {
+                                  "type": "choice",
+                                  "options": [
+                                    {
+                                      "text": "Why was it called Ah Za Rhoon?",
+                                      "steps": [
+                                        {
+                                          "player": "Why was it called Ah Za Rhoon?"
+                                        },
+                                        {
+                                          "type": "line",
+                                          "speaker": "Trufitus",
+                                          "text": "It is from an ancient language. The direct translation is... 'Magnificence floating on water'. But my research makes me believe that the temple was built on land.",
+                                          "speaker_ids": [
+                                            4625
+                                          ]
+                                        },
+                                        {
+                                          "type": "line",
+                                          "speaker": "Trufitus",
+                                          "text": "And most likely between large bodies of water, for example large lakes. However, many people have searched for the temple, and have failed. I would hate to see you waste your time on a pointless search like that.",
+                                          "speaker_ids": [
+                                            4625
+                                          ]
+                                        },
+                                        {
+                                          "type": "choice",
+                                          "options": [
+                                            {
+                                              "text": "Thanks for the information!",
+                                              "steps": [
+                                                {
+                                                  "player": "Thanks for the information!"
+                                                },
+                                                {
+                                                  "type": "line",
+                                                  "speaker": "Trufitus",
+                                                  "text": "What information?",
+                                                  "speaker_ids": [
+                                                    4625
+                                                  ]
+                                                },
+                                                {
+                                                  "player": "About Ah Za Rhoon and where it is."
+                                                },
+                                                {
+                                                  "type": "message",
+                                                  "text": "Trufitus looks at you blankly...",
+                                                  "id": "D9RjOb"
+                                                },
+                                                {
+                                                  "type": "line",
+                                                  "speaker": "Trufitus",
+                                                  "text": "Hmmm, well, you are welcome bwana.",
+                                                  "speaker_ids": [
+                                                    4625
+                                                  ]
+                                                },
+                                                {
+                                                  "type": "choice",
+                                                  "options": [
+                                                    {
+                                                      "text": "Do you know anything more about the temple?",
+                                                      "steps": [
+                                                        {
+                                                          "player": "Do you know anything more about the temple?"
+                                                        },
+                                                        {
+                                                          "type": "line",
+                                                          "speaker": "Trufitus",
+                                                          "text": "Not much... I would say that is about it...",
+                                                          "speaker_ids": [
+                                                            4625
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "line",
+                                                          "speaker": "Trufitus",
+                                                          "text": "Even the great priest Zadimus who built the temple did not survive. Some say that Rashiliyia caused the temple to collapse.",
+                                                          "speaker_ids": [
+                                                            4625
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "line",
+                                                          "speaker": "Trufitus",
+                                                          "text": "She was angry at Zadimus for not returning her affections. She was a great sorceress even before they met.",
+                                                          "speaker_ids": [
+                                                            4625
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "choice",
+                                                          "options": [
+                                                            {
+                                                              "text": "Tell me more.",
+                                                              "steps": [
+                                                                {
+                                                                  "player": "Tell me more."
+                                                                },
+                                                                {
+                                                                  "type": "line",
+                                                                  "speaker": "Trufitus",
+                                                                  "text": "I don't know anymore. You're very demanding aren't you!",
+                                                                  "speaker_ids": [
+                                                                    4625
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "type": "choice",
+                                                                  "options": [
+                                                                    {
+                                                                      "text": "Thanks for the information!",
+                                                                      "steps": [
+                                                                        {
+                                                                          "type": "jump",
+                                                                          "id": "C4OV3P",
+                                                                          "steps": [
+                                                                            {
+                                                                              "type": "call",
+                                                                              "branch": "jump-12d9261300d5d2a9"
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "text": "Do you know anything more about the temple?",
+                                                                      "steps": [
+                                                                        {
+                                                                          "type": "jump",
+                                                                          "id": "jBl34V",
+                                                                          "steps": [
+                                                                            {
+                                                                              "type": "call",
+                                                                              "branch": "jump-fe4477d4659c5aec"
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "text": "I am going to search for Ah Za Rhoon!",
+                                                                      "steps": [
+                                                                        {
+                                                                          "player": "I am going to search for Ah Za Rhoon!"
+                                                                        },
+                                                                        {
+                                                                          "type": "line",
+                                                                          "speaker": "Trufitus",
+                                                                          "text": "What?! You must be crazy! That place has passed into myth and legend, it has been buried under rubble for years. It's most likely buried 20 men deep, and that's if you can actually find it.",
+                                                                          "speaker_ids": [
+                                                                            4625
+                                                                          ]
+                                                                        },
+                                                                        {
+                                                                          "type": "line",
+                                                                          "speaker": "Trufitus",
+                                                                          "text": "Are you sure you're going to go and look for it? I may be able to do some research into this if you agree. Only I don't want to waste my time if you're not serious about this!",
+                                                                          "speaker_ids": [
+                                                                            4625
+                                                                          ]
+                                                                        },
+                                                                        {
+                                                                          "type": "condition",
+                                                                          "text": "If the player does not have all the requirements and has a combat level below 45:",
+                                                                          "steps": [
+                                                                            {
+                                                                              "type": "message",
+                                                                              "text": "Before starting this quest, be aware that one or more of your skill levels are lower than what is required to fully complete it. Your combat level is also lower than the recommended level of 45.",
+                                                                              "id": "gCzqi2"
+                                                                            }
+                                                                          ],
+                                                                          "id": "P7DztW"
+                                                                        },
+                                                                        {
+                                                                          "type": "choice",
+                                                                          "prompt": "Start the Shilo Village quest?",
+                                                                          "options": [
+                                                                            {
+                                                                              "text": "Yes.",
+                                                                              "steps": [
+                                                                                {
+                                                                                  "player": "Yes, I will seriously look for Ah Za Rhoon and I'd appreciate your help."
+                                                                                },
+                                                                                {
+                                                                                  "type": "line",
+                                                                                  "speaker": "Trufitus",
+                                                                                  "text": "Ok then Bwana, good luck with your quest, and remember to stock up well with adventuring supplies before setting off. You never know how useful some fairly ordinary things might be when you're",
+                                                                                  "speaker_ids": [
+                                                                                    4625
+                                                                                  ]
+                                                                                },
+                                                                                {
+                                                                                  "type": "line",
+                                                                                  "speaker": "Trufitus",
+                                                                                  "text": "adventuring.",
+                                                                                  "speaker_ids": [
+                                                                                    4625
+                                                                                  ]
+                                                                                },
+                                                                                {
+                                                                                  "type": "line",
+                                                                                  "speaker": "Trufitus",
+                                                                                  "text": "I'll hold on to this Wampum belt for you for the time being. I'll give it back to you when we have completed this quest.",
+                                                                                  "speaker_ids": [
+                                                                                    4625
+                                                                                  ]
+                                                                                },
+                                                                                {
+                                                                                  "type": "end"
+                                                                                }
+                                                                              ],
+                                                                              "hook": "quest:shilo-village:start",
+                                                                              "quest": "Shilo Village"
+                                                                            },
+                                                                            {
+                                                                              "text": "No.",
+                                                                              "steps": [
+                                                                                {
+                                                                                  "player": "Actually, now it comes to it, I'm having second thoughts."
+                                                                                },
+                                                                                {
+                                                                                  "type": "line",
+                                                                                  "speaker": "Trufitus",
+                                                                                  "text": "Well, I understand. Perhaps you can search for it another time? Come back when you think you're ready. Excuse me now won't you while I return to my studies.",
+                                                                                  "speaker_ids": [
+                                                                                    4625
+                                                                                  ]
+                                                                                },
+                                                                                {
+                                                                                  "type": "end"
+                                                                                }
+                                                                              ]
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "text": "It's a pity that I can't search for Ah Za Rhoon now.",
+                                                                      "steps": [
+                                                                        {
+                                                                          "player": "It's a pity that I can't search for Ah Za Rhoon now."
+                                                                        },
+                                                                        {
+                                                                          "type": "line",
+                                                                          "speaker": "Trufitus",
+                                                                          "text": "Well, I understand. Perhaps you can search for it another time? Come back when you think you're ready. Excuse me now won't you while I return to my studies.",
+                                                                          "speaker_ids": [
+                                                                            4625
+                                                                          ]
+                                                                        },
+                                                                        {
+                                                                          "type": "message",
+                                                                          "text": "Trufitus goes back to his studies.",
+                                                                          "id": "ZUlg82"
+                                                                        },
+                                                                        {
+                                                                          "type": "end"
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "text": "Are there any traps there?",
+                                                              "steps": [
+                                                                {
+                                                                  "player": "Are there any traps there?"
+                                                                },
+                                                                {
+                                                                  "type": "line",
+                                                                  "speaker": "Trufitus",
+                                                                  "text": "How am I supposed to know? A lot of what I know is most probably wrong but some of it seems right to me. Excuse me but I must get back to my studies.",
+                                                                  "speaker_ids": [
+                                                                    4625
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "type": "end"
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "text": "Thanks for the information!",
+                                                              "steps": [
+                                                                {
+                                                                  "type": "jump",
+                                                                  "id": "6Tjd-L",
+                                                                  "steps": [
+                                                                    {
+                                                                      "type": "call",
+                                                                      "branch": "jump-12d9261300d5d2a9"
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "text": "I am going to search for Ah Za Rhoon!",
+                                                      "steps": [
+                                                        {
+                                                          "type": "jump",
+                                                          "id": "_KIkdf",
+                                                          "steps": [
+                                                            {
+                                                              "type": "call",
+                                                              "branch": "jump-995bb01d449968f9"
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "text": "It's a pity that I can't search for Ah Za Rhoon now.",
+                                                      "steps": [
+                                                        {
+                                                          "type": "jump",
+                                                          "id": "-oDfDz",
+                                                          "steps": [
+                                                            {
+                                                              "type": "call",
+                                                              "branch": "jump-d604a64cb61acdb9"
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "text": "Do you know anything more about the temple?",
+                                              "steps": [
+                                                {
+                                                  "type": "jump",
+                                                  "id": "axCRFR",
+                                                  "steps": [
+                                                    {
+                                                      "type": "call",
+                                                      "branch": "jump-fe4477d4659c5aec"
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "text": "I am going to search for Ah Za Rhoon!",
+                                              "steps": [
+                                                {
+                                                  "type": "jump",
+                                                  "id": "0WI7Ke",
+                                                  "steps": [
+                                                    {
+                                                      "type": "call",
+                                                      "branch": "jump-995bb01d449968f9"
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "text": "It's a pity that I can't search for Ah Za Rhoon now.",
+                                              "steps": [
+                                                {
+                                                  "type": "jump",
+                                                  "id": "ATz5B2",
+                                                  "steps": [
+                                                    {
+                                                      "type": "call",
+                                                      "branch": "jump-d604a64cb61acdb9"
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "text": "Do you know anything more about the temple?",
+                                      "steps": [
+                                        {
+                                          "type": "jump",
+                                          "id": "murWWI",
+                                          "steps": [
+                                            {
+                                              "type": "call",
+                                              "branch": "jump-fe4477d4659c5aec"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "text": "Will you pack your things now?",
+                              "steps": [
+                                {
+                                  "player": "Will you pack your things now?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Trufitus",
+                                  "text": "I will wait and see what will happen. Maybe Rashiliyia does not have the power to strike too far from her resting place? But there are many things that I need to do now.",
+                                  "speaker_ids": [
+                                    4625
+                                  ]
+                                },
+                                {
+                                  "type": "choice",
+                                  "options": [
+                                    {
+                                      "text": "Is her resting place important?",
+                                      "steps": [
+                                        {
+                                          "player": "Is her resting place important?"
+                                        },
+                                        {
+                                          "type": "line",
+                                          "speaker": "Trufitus",
+                                          "text": "I believe it is! It might be that her physical remains are the focal point of her supernatural powers. It is said that many years ago, a group of adventurers once infiltrated her tomb to try to rid the world of Rashiliyia.",
+                                          "speaker_ids": [
+                                            4625
+                                          ]
+                                        },
+                                        {
+                                          "type": "line",
+                                          "speaker": "Trufitus",
+                                          "text": "These adventurers reported seeing a wraith- like creature.",
+                                          "speaker_ids": [
+                                            4625
+                                          ]
+                                        },
+                                        {
+                                          "type": "line",
+                                          "speaker": "Trufitus",
+                                          "text": "Although the adventurers disturbed Rashiliyia's bones, they were not able to properly sanctify them. And this is the most likely reason why she still plagues us today.",
+                                          "speaker_ids": [
+                                            4625
+                                          ]
+                                        },
+                                        {
+                                          "type": "line",
+                                          "speaker": "Trufitus",
+                                          "text": "Of course, she only has to order one of her minions to move her bones and she can quite quickly and easily set up a new headquarters anywhere and continue to launch her plague of undead.",
+                                          "speaker_ids": [
+                                            4625
+                                          ]
+                                        },
+                                        {
+                                          "type": "choice",
+                                          "options": [
+                                            {
+                                              "text": "What are minions?",
+                                              "steps": [
+                                                {
+                                                  "player": "What are minions?"
+                                                },
+                                                {
+                                                  "type": "line",
+                                                  "speaker": "Trufitus",
+                                                  "text": "Minions are the fiendish undead creatures that she controls. She has very few living worshippers, but they need to be dealt with at some point.",
+                                                  "speaker_ids": [
+                                                    4625
+                                                  ]
+                                                },
+                                                {
+                                                  "type": "line",
+                                                  "speaker": "Trufitus",
+                                                  "text": "Usually a strong creature of some sort will be guarding her remains. And of course, she is a very powerful spell caster herself. Not to be tackled lightly.",
+                                                  "speaker_ids": [
+                                                    4625
+                                                  ]
+                                                },
+                                                {
+                                                  "type": "choice",
+                                                  "options": [
+                                                    {
+                                                      "text": "Thanks for the information!",
+                                                      "steps": [
+                                                        {
+                                                          "type": "jump",
+                                                          "id": "fjREq1",
+                                                          "steps": [
+                                                            {
+                                                              "type": "call",
+                                                              "branch": "jump-12d9261300d5d2a9"
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "text": "Does she have any weaknesses?",
+                                                      "steps": [
+                                                        {
+                                                          "player": "Does she have any weaknesses?"
+                                                        },
+                                                        {
+                                                          "type": "line",
+                                                          "speaker": "Trufitus",
+                                                          "text": "I am not sure, but the legend about her certainly is long. It's a pity that the temple of Ah Za Rhoon has crumbled as there may be some clues that could help us to defeat her.",
+                                                          "speaker_ids": [
+                                                            4625
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "line",
+                                                          "speaker": "Trufitus",
+                                                          "text": "I think the largest problem will be in locating her resting place.",
+                                                          "speaker_ids": [
+                                                            4625
+                                                          ]
+                                                        },
+                                                        {
+                                                          "type": "choice",
+                                                          "options": [
+                                                            {
+                                                              "text": "Why was it called Ah Za Rhoon?",
+                                                              "steps": [
+                                                                {
+                                                                  "type": "jump",
+                                                                  "id": "lFfgJC",
+                                                                  "steps": [
+                                                                    {
+                                                                      "type": "call",
+                                                                      "branch": "jump-de2471568982c905"
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "text": "Is her resting place important?",
+                                                              "steps": [
+                                                                {
+                                                                  "type": "jump",
+                                                                  "id": "0QURqS",
+                                                                  "steps": [
+                                                                    {
+                                                                      "type": "call",
+                                                                      "branch": "jump-1df553624bbdf207"
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "text": "What are onions?",
+                                              "steps": [
+                                                {
+                                                  "player": "What are onions?"
+                                                },
+                                                {
+                                                  "type": "line",
+                                                  "speaker": "Trufitus",
+                                                  "text": "Surely you mean Minions?",
+                                                  "speaker_ids": [
+                                                    4625
+                                                  ]
+                                                },
+                                                {
+                                                  "player": "Yes of course, I mean Minions, what made you think I said Onions?"
+                                                },
+                                                {
+                                                  "type": "message",
+                                                  "text": "Trufitus frowns at you but continues about...minions...",
+                                                  "id": "jjdN90"
+                                                },
+                                                {
+                                                  "type": "line",
+                                                  "speaker": "Trufitus",
+                                                  "text": "Minions are the fiendish undead creatures that Rashiliyia controls. She has very few living worshippers, but they need to be dealt with at some point.",
+                                                  "speaker_ids": [
+                                                    4625
+                                                  ]
+                                                },
+                                                {
+                                                  "type": "line",
+                                                  "speaker": "Trufitus",
+                                                  "text": "Usually a strong creature of some sort will be guarding the bones and it is not to be tackled lightly.",
+                                                  "speaker_ids": [
+                                                    4625
+                                                  ]
+                                                },
+                                                {
+                                                  "type": "choice",
+                                                  "options": [
+                                                    {
+                                                      "text": "Thanks for the information!",
+                                                      "steps": [
+                                                        {
+                                                          "type": "jump",
+                                                          "id": "cF15rm",
+                                                          "steps": [
+                                                            {
+                                                              "type": "call",
+                                                              "branch": "jump-12d9261300d5d2a9"
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "text": "Does she have any weaknesses?",
+                                                      "steps": [
+                                                        {
+                                                          "type": "jump",
+                                                          "id": "cyT0nr",
+                                                          "steps": [
+                                                            {
+                                                              "type": "call",
+                                                              "branch": "jump-819d67fce3e45ba5"
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "text": "Does she have any weaknesses?",
+                                              "steps": [
+                                                {
+                                                  "type": "jump",
+                                                  "id": "IhnLBN",
+                                                  "steps": [
+                                                    {
+                                                      "type": "call",
+                                                      "branch": "jump-819d67fce3e45ba5"
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "text": "Oh, ok!",
+                                      "steps": [
+                                        {
+                                          "type": "jump",
+                                          "reference": "above",
+                                          "id": "ZJl2rS"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Should I start to evacuate the island?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "sI4fir",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-a8e69b537f4f00b8"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Mosol Rei said something about a legend?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "1VzvAJ",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-0cc38b045bdbdd9e"
                     }
                   ]
                 }
@@ -1121133,7 +1122740,7 @@
           "type": "end"
         }
       ],
-      "jump-b65c0437db159a37": [
+      "jump-97352fa4bee5e494": [
         {
           "player": "I need some help with the Temple of Ah Za Rhoon."
         },
@@ -1121148,7 +1122755,7 @@
         {
           "type": "line",
           "speaker": "Trufitus",
-          "text": "We need to identify that the place you have found is indeed Ah Za Rhoon.",
+          "text": "Look for something that can identify the place. Leave no stone unturned.",
           "speaker_ids": [
             4625
           ]
@@ -1121240,7 +1122847,15 @@
                         {
                           "type": "line",
                           "speaker": "Trufitus",
-                          "text": "If you found anything at Ah Za Rhoon that you're not sure of, why not investigate it or show it to me and I'll see what I can make of it.",
+                          "text": "Rashiliyia's only kin was a son, 'Bervirius'. His remains were entombed on a small island which lies to the South West. I will do some research into this to see if I can find any other details.",
+                          "speaker_ids": [
+                            4625
+                          ]
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Trufitus",
+                          "text": "But I think we must take Zadimus' clue literally and get some item that belonged to Bervirius as it may be the only way to approach Rashiliyia. Perhaps something like this exists in his tomb?",
                           "speaker_ids": [
                             4625
                           ]
@@ -1121295,7 +1122910,7 @@
           ]
         }
       ],
-      "jump-1f28c51473029ea8": [
+      "jump-ccd30a63f5467769": [
         {
           "player": "I have some items that I need help with."
         },
@@ -1121310,7 +1122925,7 @@
         {
           "type": "line",
           "speaker": "Trufitus",
-          "text": "We need to identify that the place you have found is indeed Ah Za Rhoon.",
+          "text": "Look for something that can identify the place. Leave no stone unturned.",
           "speaker_ids": [
             4625
           ]
@@ -1121444,7 +1123059,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-b65c0437db159a37"
+                      "branch": "jump-97352fa4bee5e494"
                     }
                   ]
                 }
@@ -1121526,7 +1123141,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-1f28c51473029ea8"
+                      "branch": "jump-ccd30a63f5467769"
                     }
                   ]
                 }
@@ -1121873,6 +1123488,23 @@
           "branch": "jump-9e9e93ced2b0643b"
         }
       ],
+      "OlU0j-": [
+        {
+          "player": "Ok. Thanks for your help."
+        },
+        {
+          "type": "line",
+          "speaker": "Mosol Rei",
+          "text": "You're welcome Bwana, good luck.",
+          "speaker_ids": [
+            5340,
+            8696
+          ]
+        },
+        {
+          "type": "end"
+        }
+      ],
       "q75SMA": [
         {
           "player": "Is there any sacred ground around here?"
@@ -1121894,6 +1123526,35 @@
           "type": "line",
           "speaker": "Trufitus",
           "text": "You're quite welcome Bwana.",
+          "speaker_ids": [
+            4625
+          ]
+        }
+      ],
+      "cqKwZz": [
+        {
+          "player": "The spirit said something about keys and kin?"
+        },
+        {
+          "type": "line",
+          "speaker": "Trufitus",
+          "text": "Hmmm, maybe it's a clue of some kind?",
+          "speaker_ids": [
+            4625
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Trufitus",
+          "text": "Rashiliyia's only kin was a son, 'Bervirius'. His remains were entombed on a small island which lies to the South West. I will do some research into this to see if I can find any other details.",
+          "speaker_ids": [
+            4625
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Trufitus",
+          "text": "But I think we must take Zadimus' clue literally and get some item that belonged to Bervirius as it may be the only way to approach Rashiliyia. Perhaps something like this exists in his tomb?",
           "speaker_ids": [
             4625
           ]
@@ -1516814,6 +1518475,18 @@
                   "steps": [
                     {
                       "type": "message",
+                      "text": "You hop into the cart and the driver urges the horses on. You take a taxing journey through the jungle to Brimhaven.",
+                      "id": "yFq9A-"
+                    },
+                    {
+                      "type": "action",
+                      "text": "The player is transported to Brimhaven",
+                      "action": "teleport",
+                      "action_source": "text",
+                      "id": "jWiBCa"
+                    },
+                    {
+                      "type": "message",
                       "text": "You hop into the cart and the driver urges the horses on. You take a taxing journey through the jungle to Brimhaven. You feel tired from the journey, but at least you didn't have to walk all that distance.",
                       "id": "Wm9q59"
                     },
@@ -1591250,10 +1592923,10 @@
                   "player": "Tell me about this antiques business."
                 },
                 {
-                  "npc": "I buy antiques and other interesting items. If you have any interesting items that you might want to sell me, please let me see them and I'll offer you a fair price."
+                  "npc": "I buy antiques and other interesting items. If you have any interesting items that you might want to sell me, please let me see them and I'll offer you a fair price. Would you like me to have a look at your items and"
                 },
                 {
-                  "npc": "Would you like me to have a look at your items and give you a quote?"
+                  "npc": "give you a quote?"
                 },
                 {
                   "type": "choice",
@@ -1591263,6 +1592936,11 @@
                       "steps": [
                         {
                           "player": "Yes please!"
+                        },
+                        {
+                          "type": "message",
+                          "text": "Yanni looks through your items...",
+                          "id": "MvXNEn"
                         },
                         {
                           "type": "condition",
@@ -1591369,6 +1593047,36 @@
                           "npc": "Sure thing. Have a nice day Bwana."
                         }
                       ]
+                    },
+                    {
+                      "text": "Do you have any interesting items for sale?",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "7FiT6E",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-335f4c14a55532c0"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Hmm, sorry, not interested.",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "ZBsS_V",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-97b971b36ecf4ccb"
+                            }
+                          ]
+                        }
+                      ]
                     }
                   ]
                 }
@@ -1591384,6 +1593092,11 @@
                   "type": "condition",
                   "text": "If the player already has the Beads of the Dead in their inventory or bank:",
                   "steps": [
+                    {
+                      "type": "message",
+                      "text": "Yanni won't sell you items that you've already got stored elsewhere.",
+                      "id": "xBApfy"
+                    },
                     {
                       "npc": "Sorry, [Sir/Madam], I have nothing that you need."
                     },
@@ -1591489,6 +1593202,53 @@
               ]
             }
           ]
+        }
+      ]
+    },
+    "branches": {
+      "jump-335f4c14a55532c0": [
+        {
+          "player": "Do you have any interesting items for sale?"
+        },
+        {
+          "type": "condition",
+          "text": "If the player already has the Beads of the Dead in their inventory or bank:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "Yanni won't sell you items that you've already got stored elsewhere.",
+              "id": "xBApfy"
+            },
+            {
+              "npc": "Sorry, [Sir/Madam], I have nothing that you need."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "kSiXKD"
+        },
+        {
+          "type": "condition",
+          "text": "If the player does not have the Beads of the Dead:",
+          "steps": [
+            {
+              "type": "missing",
+              "id": "Mamylg"
+            }
+          ],
+          "id": "3vmwZH"
+        }
+      ],
+      "jump-97b971b36ecf4ccb": [
+        {
+          "player": "Hmm, sorry, not interested."
+        },
+        {
+          "npc": "Fair enough, come back if you change your mind."
+        },
+        {
+          "type": "end"
         }
       ]
     }

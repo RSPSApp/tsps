@@ -24,9 +24,8 @@
 //    OURS: the failure line, the landing, and the move-since-the-last-roll rule (standing still would be an AFK farm).
 //  - Cairn Isle's rock slide (Wiki Rock slide (Cairn Isle): level 15, 1 XP, chart low 170 high 253, two hitsplats of
 //    floor(Hitpoints * 5%) + 1, "You fall and hurt yourself."; object 2231 in agility-shortcuts.json).
-// Not built, with the missing fact: the palm trees that stay (no capture of the search; cache palm 2237 has no multiloc), the
-// curse on Nazastarool's death (the transcript marks that line as a plain message, not overhead, like the others, so chat may
-// be right), Yanni's sell-back.
+// The rest of the quest's capture parity (rev 242, RSProx capture ShiloVillage) is in tests/shilo-village-<unit>.test.cjs;
+// the cases left here are the ones those don't repeat.
 // Real packets through ClientConnection.dispatch, the real map for the cart, the gate and the rocks, the bots off.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
@@ -210,13 +209,6 @@ test("#2643 broken cart: Climb over from the road side plays the captured sequen
   assert.equal(f.messages.some((message) => /climb up onto the cart/.test(message)), false, "and no other server's lines");
 });
 
-test("#2643 broken cart: Climb over from the village side is the same sequence back to the road (inferred)", async (t) => {
-  const f = actor(t, AT_THE_GATE);
-  const seen = await ticksAfter(f, cartPacket());
-  assert.deepEqual(seen.at(-1), ROAD_SIDE);
-  assert.ok(f.messages.includes(CART_LINE));
-});
-
 // ------------------------------------------------------------------ 1102's gate
 
 test("#2643 village gate: through it after the quest is the captured walk, line and sound 71, ending inside at 2874,2952", async (t) => {
@@ -226,20 +218,6 @@ test("#2643 village gate: through it after the quest is the captured walk, line 
   assert.ok(seen.some((tile) => tile[0] === GATE_TILE[0] && tile[1] === GATE_TILE[1]), `through the gate tile: ${JSON.stringify(seen)}`);
   assert.ok(f.messages.includes(GATE_LINE));
   assert.ok(f.sounds.includes(71));
-});
-
-test("#2643 village gate: out again is the same walk back (inferred), without the line", async (t) => {
-  const f = actor(t, INSIDE_THE_GATE);
-  const seen = await ticksAfter(f, gatePacket());
-  assert.deepEqual(seen.at(-1), AT_THE_GATE);
-  assert.equal(f.messages.includes(GATE_LINE), false);
-});
-
-test("#2643 village gate: from further inside the way out is the same walk, and the player is not mistaken for being at the road", async (t) => {
-  const f = actor(t, [2871, 2952]);
-  const seen = await ticksAfter(f, gatePacket(), 14);
-  assert.deepEqual(seen.at(-1), AT_THE_GATE, f.trace.join(" | "));
-  assert.equal(f.messages.includes(GATE_LINE), false, "no 'through into the village' line on the way out");
 });
 
 test("#2643 the route in: the road side, over the cart, through the gate, and the player is inside the village", async (t) => {
@@ -265,31 +243,6 @@ function mosol(f) {
   return { npc, actions };
 }
 
-test("#2643 Mosol Rei: after the quest the cache offers Follow, and Follow leaves the player inside the village", async (t) => {
-  const f = actor(t, [ROAD_SIDE[0] + 2, ROAD_SIDE[1]]);
-  const { npc, actions } = mosol(f);
-  const follow = actions.findIndex((action) => action === "Follow");
-  assert.ok(follow >= 0, `Follow is offered: ${JSON.stringify(actions)}`);
-  await send(f, { type: "npc_option", index: npc.getIndex(), clickType: follow + 1 });
-  assert.deepEqual(at(f), INSIDE_THE_GATE);
-  assert.ok(f.messages.includes("Mosol leads you into the village."));
-});
-
-test("#2643 Mosol Rei: the dialogue's 'Yes, Ok, I'll go into the village!' leaves the player inside, 'some other time' does not", async (t) => {
-  const yes = actor(t, [ROAD_SIDE[0] + 2, ROAD_SIDE[1]]);
-  const { npc, actions } = mosol(yes);
-  const talk = actions.findIndex((action) => action === "Talk-to");
-  assert.ok(talk >= 0, `Talk-to is offered: ${JSON.stringify(actions)}`);
-  await send(yes, { type: "npc_option", index: npc.getIndex(), clickType: talk + 1 });
-  await playThrough(yes, /Yes, Ok/);
-  assert.deepEqual(at(yes), INSIDE_THE_GATE);
-
-  const no = actor(t, [ROAD_SIDE[0] + 2, ROAD_SIDE[1]]);
-  await send(no, { type: "npc_option", index: npc.getIndex(), clickType: talk + 1 });
-  await playThrough(no, /some other time/);
-  assert.deepEqual(at(no), [ROAD_SIDE[0] + 2, ROAD_SIDE[1]]);
-});
-
 // ------------------------------------------------------------------ 8: Yanni Salika
 
 function yanni(f) {
@@ -298,9 +251,11 @@ function yanni(f) {
   return npc;
 }
 
-function show(f, npc, itemId) {
+/** Shows Yanni the item and continues his line: he pays on its continue (t5598-5646). */
+async function show(f, npc, itemId) {
   const slot = f.inv.getSlotForItemId(itemId);
-  return send(f, { type: "item_on_npc", targetIndex: npc.getIndex(), itemId, slot, widgetId: 3214 });
+  await send(f, { type: "item_on_npc", targetIndex: npc.getIndex(), itemId, slot, widgetId: 3214 });
+  await playThrough(f);
 }
 
 const SALES = [
@@ -448,26 +403,6 @@ test("#2643 Yanni Salika quotes nothing, and says so, for what he would not buy:
 
 // ------------------------------------------------------------------ 3: Nazastarool's drops
 
-test("#2643 Nazastarool: through a real death only the ghost form's rolled drops hold Rashiliyia's corpse", (t) => {
-  const f = actor(t, [2929, 9525]);
-  const generated = [];
-  const original = PM.emitCustomEvent.bind(PM);
-  t.mock.method(PM, "emitCustomEvent", (name, payload) => {
-    const result = original(name, payload);
-    if (name === "npc-drops:generated") generated.push({ npcId: payload.npcId, items: payload.drops.map((drop) => drop.itemId) });
-    return result;
-  });
-  for (const npcId of NAZASTAROOL) {
-    const npc = core.NPC.create(npcId, new core.Location(2930, 9525, 0));
-    PM.emitNpcDeath({ npc, killer: f.p, npcId, damagers: [f.p] });
-  }
-  const held = (npcId) => generated.find((entry) => entry.npcId === npcId)?.items.includes(RASHILIYIA_CORPSE);
-  assert.equal(generated.length, 3, `three rolls: ${JSON.stringify(generated)}`);
-  assert.equal(held(NAZASTAROOL[0]), false, "the zombie");
-  assert.equal(held(NAZASTAROOL[1]), false, "the skeleton");
-  assert.equal(held(NAZASTAROOL[2]), true, "the ghost keeps it");
-});
-
 // ------------------------------------------------------------------ 2: the rocks
 
 async function walkRocks(f, rock) {
@@ -516,75 +451,7 @@ function t_random(value) {
 }
 afterEach(() => { restoreRandom?.(); restoreRandom = null; });
 
-test("#2643 Cairn Isle bridge: a success keeps the captured line and pays 10 Agility XP", (t) => {
-  const f = actor(t, ON_THE_BRIDGE);
-  const before = agility(f);
-  crossBridge(f, 0);
-  assert.ok(f.messages.includes(BRIDGE_KEEP_BALANCE), JSON.stringify(f.messages));
-  assert.equal(agility(f) - before, 10);
-  assert.deepEqual(at(f), ON_THE_BRIDGE);
-});
-
-test("#2643 Cairn Isle bridge: the chart at Agility 1 is 76/256, so 0.29 holds and 0.31 falls into the river and ashore", (t) => {
-  const holds = actor(t, ON_THE_BRIDGE);
-  crossBridge(holds, 0.29);
-  assert.ok(holds.messages.includes(BRIDGE_KEEP_BALANCE));
-  const falls = actor(t, ON_THE_BRIDGE);
-  const before = agility(falls);
-  crossBridge(falls, 0.31);
-  assert.equal(falls.messages.includes(BRIDGE_KEEP_BALANCE), false);
-  assert.deepEqual(at(falls), BRIDGE_LANDING, "ashore (the landing is ours)");
-  assert.equal(agility(falls), before, "no XP for a fall");
-});
-
 const at_ = (f, [x, y]) => f.p.setLocation(new core.Location(x, y, 0));
-
-test("#2643 Cairn Isle bridge: a roll every 20 ticks on it (20 rolls, 19 does not), none for off-and-on inside 20", (t) => {
-  const f = actor(t, ON_THE_BRIDGE);
-  const balanced = () => f.messages.filter((message) => message === BRIDGE_KEEP_BALANCE).length;
-  t_random(0);
-  core.World.processCycle = 1000;
-  AreaManager.process(f.p);
-  assert.equal(balanced(), 1, "the first step on it rolls");
-  assert.equal(agility(f), 10);
-  at_(f, [2779, 2979]);
-  core.World.processCycle = 1019;
-  AreaManager.process(f.p);
-  assert.equal(balanced(), 1, "19 ticks on: no roll");
-  core.World.processCycle = 1020;
-  AreaManager.process(f.p);
-  assert.equal(balanced(), 2, "20 ticks on: a roll");
-  assert.equal(agility(f), 20);
-  // Off the bridge and back on within 20 ticks of the last roll pays nothing.
-  for (let i = 0; i < 10; i++) {
-    at_(f, [2782, 2979]);
-    core.World.processCycle = 1021 + i;
-    AreaManager.process(f.p);
-    at_(f, [2781, 2979]);
-    AreaManager.process(f.p);
-  }
-  assert.equal(balanced(), 2, "off and on inside 20 ticks");
-  assert.equal(agility(f), 20);
-  const off = actor(t, OFF_THE_BRIDGE);
-  AreaManager.process(off.p);
-  assert.equal(off.messages.length, 0, "none off the bridge");
-});
-
-test("#2643 Cairn Isle bridge: standing still on it never rolls again, however long (ours: no AFK farm)", (t) => {
-  const f = actor(t, ON_THE_BRIDGE);
-  t_random(0);
-  core.World.processCycle = 2000;
-  AreaManager.process(f.p);
-  for (const tick of [2020, 2100, 2500, 9000]) {
-    core.World.processCycle = tick;
-    AreaManager.process(f.p);
-  }
-  assert.equal(agility(f), 10, "one roll, paid once");
-  at_(f, [2779, 2979]);
-  core.World.processCycle = 9020;
-  AreaManager.process(f.p);
-  assert.equal(agility(f), 20, "moving on it, 20 ticks later, rolls");
-});
 
 test("#2643 Cairn Isle bridge: the bridge is one tile wide, y 2979: the rows beside it across x 2776-2781 are water", (t) => {
   const walkable = [];

@@ -39,7 +39,7 @@ the tests are `server/tests/grand-tree-capture.test.cjs`. Ticks below are the ca
 | 90 -> 100 | Charlie's "Hmm... you could be in luck!" | 11723 |
 | 100 -> 110 | a tick after the reach into the chest | 11989 |
 | 110 -> 120 | the King's twigs box (the invasion plans are taken then; slots O, Z, T, U) | 12117 |
-| 120 -> 130 | a tick after the fourth twig | 12203 |
+| 120 -> 130 | a tick after the fourth twig (ours: on the fourth twig's tick, so a logout in between cannot strand all four pillars filled at 120; the box and sound still come a tick later) | 12203 |
 | 130 -> 140 | the black demon's death | 12394 |
 | 140 -> 150 | the King's "A reward will have to wait though..." | 12553 |
 | 150 -> 160 | the last line, "You too, your highness!" (the Daconia rock is taken then) | 12894 |

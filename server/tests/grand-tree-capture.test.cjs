@@ -331,6 +331,16 @@ test("the pillars: each twig goes on with a reach and no chat line; the trapdoor
   assert.ok(!f.messages.slice(m0).some((m) => m.text === "You place the twig on the pillar."));
   assert.equal(stage(f), 130);
   assert.equal(h.shown(f)?.text, "With a grinding of machinery, a trapdoor snaps open!");
+  // A logout right after the fourth twig keeps the stage: nothing is left for a cancelled task.
+  const g = actor(t, { stage: 120, items: [[I.TWIGS_4, 1], [I.TWIGS_3, 1], [I.TWIGS, 1], [I.TWIGS_2, 1]], tile: [2486, 3466, 2] });
+  for (const [pillar, x, twig] of [[2440, 2485, I.TWIGS], [2441, 2486, I.TWIGS_2], [2442, 2487, I.TWIGS_3], [2443, 2488, I.TWIGS_4]]) {
+    await h.dispatch(g, { type: "item_on_object", objectId: pillar, x, y: 3467, itemId: twig,
+      slot: g.player.getInventory().getSlotForItemId(twig), widgetId: 149 << 16 });
+    if (pillar !== 2443) h.ticks(g, 3);
+  }
+  h.core.TaskManager.cancelTasks(g.player);
+  h.ticks(g, 3);
+  assert.equal(stage(g), 130, "the stage is not lost to a logout on the next tick");
   assert.equal(group(f), MESSAGEBOX);
 });
 
@@ -355,9 +365,17 @@ test("Glough's pet: the copy of the cave, his overheads, the demon and the real-
   demon.appendDeath();
   h.tick(f);
   assert.equal(stage(f), 140, "varp 150 130 -> 140 as the death animation starts (t12394), not at its removal");
-  // His "Mummy!" a tick later is a transcript overhead; the harness player is not registered for actor checks,
-  // so that line is checked in game (agent MCP observe), not here.
+  const [glough] = npcsNear(f, N.GLOUGH, 20);
+  const sender = f.player.getPacketSender();
+  const sent = [];
+  for (const name of ["sendInterfaceRemoval", "mountSubInterface"]) {
+    const original = sender[name].bind(sender);
+    sender[name] = (...args) => { sent.push(name); return original(...args); };
+  }
+  h.tick(f);
+  assert.equal(glough.getForcedChat(), "Mummy!", "a tick after the death animation (t12395)");
   h.ticks(f, 5);
+  assert.deepEqual(sent, [], "no fade or closed interfaces when the scene ends after the fight");
   assert.equal(npcsNear(f, N.GLOUGH, 20).length, 0, "Glough is gone 5 ticks later (t12399)");
 });
 

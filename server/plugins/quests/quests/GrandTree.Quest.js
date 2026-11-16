@@ -1003,8 +1003,10 @@ module.exports = function registerGrandTreeQuest(api) {
     sound(player, PUT_DOWN_SOUND);
     if (next === ALL_PILLARS_PLACED) {
       sound(player, MACHINERY_SOUND);
+      // Live sends varp 150 with the box a tick later; it is set on this tick so a logout in between cannot
+      // save all four pillars filled at stage 120 (no twig could then go on again).
+      quest.setStage(player, STAGE_TRAPDOOR);
       after(player, 1, () => {
-        quest.setStage(player, STAGE_TRAPDOOR);
         sound(player, TRAPDOOR_OPEN_SOUND);
         showBox(api, player, "With a grinding of machinery, a trapdoor snaps open!");
       });

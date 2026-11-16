@@ -410,9 +410,7 @@ test('fresh stage 0 completes the mandatory route through registered handlers an
     for (const [pillar, twig] of TWIG_PILLARS) {
       plugin.itemOnObject(player, twig, pillar, 'Pillar');
     }
-    assert.equal(quest.getStage(player), 120, 'the trapdoor snaps open a tick after the last twig');
-    ticks(1);
-    assert.equal(quest.getStage(player), 130);
+    assert.equal(quest.getStage(player), 130, 'the fourth twig moves the stage on (its box follows a tick later)');
 
     plugin.npcDeath(player, N.BLACK_DEMON_2, {});
     assert.equal(quest.getStage(player), 130, 'an unrelated demon cannot advance the quest');

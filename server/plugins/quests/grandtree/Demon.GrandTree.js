@@ -26,7 +26,7 @@ const { startTranscript } = require("../QuestRuntime");
 const PAGE = "The Grand Tree";
 const INTRO = "treachery-revealed-glough-s-pet";
 const INTERRUPTED = "treachery-revealed-glough-s-pet-when-clicking-out-of-the-cutscene";
-const DEFEATED = "treachery-revealed-when-you-defeat-the-black-demon";
+const MUMMY = "Mummy!";
 const DISMISS_ACTION = "2XcfN8";
 const REVEAL_ACTION = "TMpqrL";
 /** The intro's first chat line: the overheads before it are timed by the scene, as captured. */
@@ -68,7 +68,7 @@ module.exports = function createDemonEncounter(api, { onDefeated } = {}) {
   const descending = new WeakSet();
 
   function onEnd(player, scene, logout) {
-    if (logout || scene.phase === "fight" || scene.phase === "handover") return;
+    if (logout || ["fight", "handover", "won"].includes(scene.phase)) return;
     player.getDialogueManager().reset();
     player.getPacketSender().sendInterfaceRemoval();
     scenes.restoreTabs(player);
@@ -205,8 +205,10 @@ module.exports = function createDemonEncounter(api, { onDefeated } = {}) {
     scene.actors.splice(scene.actors.indexOf(scene.demon), 1);
     scene.phase = "won";
     onDefeated?.(player);
+    // The transcript's overhead ("treachery-revealed-when-you-defeat-the-black-demon"), said over his head
+    // without opening a conversation: live sends only the [say] (t12395), so a level-up box stays open.
     scenes.later(scene, MUMMY_TICKS, () => {
-      if (scene.glough?.isRegistered()) startTranscript(api, player, GLOUGH, PAGE, DEFEATED, undefined, scene.glough);
+      if (scene.glough?.isRegistered()) scene.glough.forceChat(MUMMY);
     });
     scenes.later(scene, MUMMY_TICKS + GLOUGH_LEAVES_TICKS, () => scenes.end(player, false));
   }

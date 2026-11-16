@@ -209,6 +209,30 @@ test("raid categories send each cache mode counter before drawing and clear unus
   }
 });
 
+test("Guardians of the Rift shows its rifts closed (varp 2048) and searches (varp 2941) from the minigame's records", () => {
+  const Records = require("../plugins/minigames/guardiansoftherift/Records.GuardiansOfTheRift");
+  customEvents.set("collection-log:category-count", [Records.collectionLogCount]);
+  try {
+    const player = createPlayer();
+    const counts = () => player.log.filter((line) => /^varp (2048|2941|2942)=/.test(line));
+    Interface.open(player, "Guardians of the Rift");
+    assert.deepEqual(counts(), ["varp 2048=0", "varp 2941=0", "varp 2942=0"]);
+    player.setAttribute(Records.RIFTS_CLOSED_ATTRIBUTE, 12);
+    player.setAttribute(Records.SEARCHES_ATTRIBUTE, 40);
+    player.log.length = 0;
+    Interface.open(player, "Guardians of the Rift");
+    assert.deepEqual(counts(), ["varp 2048=12", "varp 2941=40", "varp 2942=0"]);
+    assert.ok(player.log.indexOf("varp 2942=0") < player.log.findIndex((line) => line.startsWith("script 7797")),
+      "both counts reach the cache before it draws");
+    const query = { player, category: "Guardians of the Rift" };
+    Clog._test.onCount({ player, category: "Guardians of the Rift" });
+    fakeApi.emitCustomEvent("collection-log:kill-count", query);
+    assert.equal(query.count, 12, "the kept count wins over the log's own tally");
+  } finally {
+    customEvents.delete("collection-log:category-count");
+  }
+});
+
 test("empty latest items are -1 (the overview's script skips them; 0 would be Dwarf remains)", () => {
   const player = createPlayer();
   Progress.restore({ player });

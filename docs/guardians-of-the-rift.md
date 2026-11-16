@@ -483,8 +483,10 @@ amulets are not confirmed by a capture.
 - **End of game:** see the Power-up section above for the captured lines. The points and the XP
   both need 300 energy in the game (Wiki). Below that, live says only "The Great Guardian
   successfully closed the rift!" and "You did not contribute enough to attune any elemental or
-  catalytic energy.", and doesn't count the rift (capture). Each counted rift counts in the
-  collection log's Guardians of the Rift category.
+  catalytic energy.", and doesn't count the rift (capture). The collection log's Guardians of
+  the Rift category shows these records (issue 5995): cache script 2735 prints "Rifts closed"
+  from varp 2048 and "Rifts searches" from varp 2941, and `Records.collectionLogCount` answers
+  `collection-log:category-count` with the rifts closed and the Rewards Guardian searches.
 - **Atlax's diary:** Read plays `human_readbook` and opens `indexed_book` (680), the 24 pages
   captured from live in `server/plugins/minigames/data/atlax-diary.js`. The first page lists the
   entries (Bennath 15th-23rd) in the index components, and a click opens that entry's spread; the

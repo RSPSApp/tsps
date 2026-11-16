@@ -109,6 +109,7 @@ arrive as the group ends.
 | `grouping:storage` | handled | `{ player, group, member, handled }`: opens the storage or says why not |
 | `grouping:get` | asked | who may still use it, at every click and Save |
 | `grouping:can-end` | answered | refuses while the storage holds items |
+| `group-storage:amount` | answered | `{ player, itemId, amount }`: adds how many of `itemId` the saved storage of the player's Group Ironman group holds (Araxxor's halberd piece seed) |
 | `group-storage:limit` | emitted at opening | `{ player, groupId, remaining }`: coins' worth the player may still take out (null: no limit) |
 | `group-storage:can-withdraw` | emitted at Save | `{ player, groupId, items, allowed, reason }` with what the Save takes out; `allowed: false` keeps the Save from happening |
 | `group-storage:withdrawn` | emitted after Save | `{ player, groupId, items }` |

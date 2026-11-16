@@ -789,3 +789,68 @@ test("the mirrorback recoils melee only from melee distance", () => {
   strike(playerAt(102, 100), 1);
   assert.equal(recoiled.length, 0, "ranged never recoils");
 });
+
+// The one-time seed counts what the player keeps anywhere: a looting bag's contents (LootingBag's
+// "storage:contents") and their Group Ironman group storage (GroupStorage's "group-storage:amount").
+test("the halberd seed counts pieces in a looting bag and in group storage", async () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  require("../dist/Server").Server.installProductionPathResolver();
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  const core = PluginManager.getCoreApi();
+  const GroupStorage = require("../plugins/interface/GroupStorage.plugin");
+  const { Store } = GroupStorage._test;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "araxxor-seed-"));
+  const previousFile = process.env[Store.FILE_ENV];
+  process.env[Store.FILE_ENV] = path.join(dir, "group-storage.json");
+  Store.reset();
+  const handlers = new Map();
+  let groupOf = () => null;
+  const emit = (name, payload) => {
+    if (name === "grouping:get") payload.group = groupOf(payload.player);
+    for (const handler of handlers.get(name) ?? []) handler(payload);
+    return payload;
+  };
+  const api = new Proxy({
+    core,
+    onCustomEvent: (name, handler) => handlers.set(name, [...(handlers.get(name) ?? []), handler]),
+    emitCustomEvent: emit,
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) });
+  require("../plugins/items/LootingBag.plugin").register(api);
+  GroupStorage.register(api);
+  const Corpse = require("../plugins/bosses/araxxor/Corpse.Araxxor");
+  Corpse.attach(api);
+  const [POINT, BLADE, POMMEL] = Shared.HALBERD_PIECES;
+  const originalRandom = Math.random;
+  Math.random = () => 0; // the first of those still missing
+  try {
+    // The point in a looting bag in the pack, the blade in the bank: the pommel comes next.
+    const bagged = new Player(null);
+    bagged.setUsername("araxxor-bag");
+    const bag = new core.Item(core.ItemIdentifiers.LOOTING_BAG, 1);
+    bag.setMetaValue("lootingBag", [{ id: POINT, amount: 1 }]);
+    bagged.getInventory().add(bag);
+    bagged.getBank(0).add(new core.Item(BLADE, 1));
+    assert.equal(Corpse.nextHalberdPiece(bagged), POMMEL, "the bagged point and banked blade count");
+
+    // The point and blade in the group's storage: the pommel again; outside a group, the point.
+    const grouped = new Player(null);
+    grouped.setUsername("araxxor-group");
+    Store.commit(7, [{ id: POINT, amount: 1 }, null, { id: BLADE, amount: 1 }]);
+    groupOf = (player) => (player === grouped ? { id: 7, ironman: true } : null);
+    assert.equal(Corpse.nextHalberdPiece(grouped), POMMEL, "group storage counts");
+    const loner = new Player(null);
+    loner.setUsername("araxxor-loner");
+    assert.equal(Corpse.nextHalberdPiece(loner), POINT, "nothing held anywhere: the first piece");
+  } finally {
+    Math.random = originalRandom;
+    Store.reset();
+    if (previousFile === undefined) delete process.env[Store.FILE_ENV];
+    else process.env[Store.FILE_ENV] = previousFile;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

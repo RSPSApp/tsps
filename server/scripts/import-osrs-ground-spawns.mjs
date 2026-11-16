@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 
 const SOURCE_PIN = Object.freeze({
   repository: "autismoyah-hub/osrsreboxed-db",
-  revision: "71f934bafd7225ae759dde8cedf821afda9a3c3f",
+  revision: "2bca5ed3a01c4d7c43c981aa9160981ed64edcfc",
   exportSha256: "db79758a92e8f26b402258d13b65bbbbe8632d8802f4e2c26db6521761cb012e",
   inputSha256: "00d8bcd0ed7d8d0340f69953fb73aa2e51813f03dbbc964b70d9872fe4ad048a",
 });

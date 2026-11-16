@@ -4,17 +4,22 @@ import com.google.gson.JsonParser
 
 /**
  * The cache JS5 serves the official client: tsps's, with every world's patches
- * ([ClientCachePatches]) and the content data tsps sends its world's league characters
- * ([ContentPatches]), which [source] reads from tsps's /api/league-content: the body, "" when tsps
- * serves none (no LeagueMode), null when tsps can't be reached. [refresh] reads it again and
- * rebuilds when it changed; a JS5 session opens with the master index, so each client start
- * refreshes, and a tsps restart into another league needs no gateway restart. A body the gateway
- * can't read is reported once and leaves the cache as it was: refresh runs on the master index
- * request, and a throw there would close every client that starts loading.
+ * ([ClientCachePatches]), tsps's own sprites ([additions], from [CustomSprites]) and the content
+ * data tsps sends its world's league characters ([ContentPatches]), which [source] reads from
+ * tsps's /api/league-content: the body, "" when tsps serves none (no LeagueMode), null when tsps
+ * can't be reached. [refresh] reads it again and rebuilds when it changed; a JS5 session opens with
+ * the master index, so each client start refreshes, and a tsps restart into another league needs no
+ * gateway restart. A body the gateway can't read is reported once and leaves the cache as it was:
+ * refresh runs on the master index request, and a throw there would close every client that starts
+ * loading.
  */
-class ServedCache(private val cache: Cache, private val source: () -> String?) {
+class ServedCache(
+    private val cache: Cache,
+    private val additions: List<NewGroup> = emptyList(),
+    private val source: () -> String?,
+) {
     @Volatile
-    var current: ClientCache = ClientCache(cache)
+    var current: ClientCache = ClientCache(cache, additions = additions)
         private set
 
     private var body: String = ""
@@ -35,7 +40,7 @@ class ServedCache(private val cache: Cache, private val source: () -> String?) {
     private fun build(body: String): ClientCache {
         val (league, content) = parse(body)
         val result = ContentPatches.of(cache, content)
-        val built = ClientCache(cache, ClientCachePatches.ALL + result.patches)
+        val built = ClientCache(cache, ClientCachePatches.ALL + result.patches, additions)
         if (league == null) {
             println("JS5: tsps runs no league; the cache is served with every world's patches")
         } else {

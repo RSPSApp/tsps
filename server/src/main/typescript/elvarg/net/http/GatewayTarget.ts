@@ -62,8 +62,13 @@ export class GatewayTarget {
 
     /**
      * The official client's jav_config keys (as of revision 241), with the codebase and world list pointed
-     * here and param 25 naming the active cache's revision. Live 242 adds params 30 and 31 (display-name
-     * changes); they are not sent.
+     * here and param 25 naming the active cache's revision.
+     *
+     * Param 30 (revision 242) says whether a username and password may still log in. The client shows
+     * "The move is almost here" (Jagex Accounts) with a Login button whenever Existing User is clicked
+     * and it's true, which is also its default; false replaces that with "You now need to play via the
+     * Jagex Launcher", which has no way to log in. The notice itself is the client's own, so no param
+     * hides it. Param 31, the display name service's address, is not sent.
      */
     private static javConfig(websocketPort: number): string {
         const host = GatewayTarget.host();
@@ -109,6 +114,7 @@ export class GatewayTarget {
             `param=25=${GatewayTarget.revision()}`,
             "param=28=",
             "param=29=1",
+            "param=30=true",
             "",
         ].join("\n");
     }

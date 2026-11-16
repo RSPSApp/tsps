@@ -1,6 +1,7 @@
 package gateway
 
 import gateway.cache.Cache
+import gateway.cache.CustomSprites
 import gateway.cache.ServedCache
 import gateway.config.GatewayConfig
 import gateway.crypto.RsaKeys
@@ -21,7 +22,7 @@ class Gateway private constructor(
     val config: GatewayConfig,
     val rsa: RsaKeyPair,
     val revision: Int,
-    /** The cache JS5 serves, with the content data tsps's league sends. */
+    /** The cache JS5 serves, with tsps's own sprites and the content data tsps's league sends. */
     val servedCache: ServedCache,
     private val network: NetworkService<*>,
     private val context: GatewayContext,
@@ -43,9 +44,11 @@ class Gateway private constructor(
             // Cache directories are named osrs-<revision>_<date>.
             val revision = config.cacheDirectory.fileName.toString().substringAfter("osrs-").substringBefore('_').toInt()
             val context = GatewayContext(config, cache, huffman, revision)
-            val servedCache = ServedCache(cache, TspsContent(config.leagueContentUrl))
             var network: NetworkService<*>? = null
             try {
+                val sprites = CustomSprites.load(config.root.resolve(CustomSprites.DIRECTORY), cache)
+                if (sprites.isNotEmpty()) println("custom sprites: ${sprites.joinToString { it.group.toString() }}")
+                val servedCache = ServedCache(cache, sprites, TspsContent(config.leagueContentUrl))
                 network = GatewayNetwork(config.bindHost, config.gatewayPort, rsa, huffman, CacheJs5Provider(servedCache), GatewayConnections(context)).build()
                 UpdatePlayerModel.install(network)
                 network.start()

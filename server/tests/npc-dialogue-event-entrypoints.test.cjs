@@ -5597,11 +5597,11 @@ function ikovHouseDoorScenario(t) {
     assert.equal(attempts.length, n + 1, 'exactly one reached native object producer');
     const operation = attempts.at(-1);
     assert.equal(operation.player, f.player); assert.equal(operation.object, closed);
-    assert.equal(operation.objectId, 102); assert.equal(operation.option, 'Open');
+    assert.equal(operation.objectId, 102); assert.equal(operation.option, 'open');
     console.log(JSON.stringify({ event:'ikov-house-open-attempt', id:102, x:3122, y:3488, shape:0, face:3,
       currentObjectReached:true, option:operation.option, handled:operation.result, private:area !== null }));
     const leaf = loc(11403, 3122, 3487, area);
-    assert.ok(leaf && !loc(102, 3122, 3488, area), 'decoded Open replaces the actual house door with its cache open leaf');
+    assert.equal(Boolean(leaf && !loc(102, 3122, 3488, area)), true, 'decoded Open replaces the actual house door with its cache open leaf');
     assert.equal(operation.result, true);
     assert.deepEqual(geometry(leaf), [11403, 3122, 3487, 0, 0, 0]);
     assert.equal(core.RegionManager.canMove(3122, 3488, 3122, 3487, 0, 1, 1, area), true);

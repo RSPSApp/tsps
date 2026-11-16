@@ -9207,7 +9207,8 @@
             "The 'Elemental Workshop II' page in npc-dialogues.json carries 37 variants ('starting-out-searching-the-bookcase'); source ids/slugs from npc-dialogues.json + npc-dialogue-index.json / osrsreboxed.",
             "Prefer onObjectInteraction name hooks (Bookcase/Furnace/Anvil) over raw ids, per AGENTS.md.",
             "Main 3b61a15a8 (6 November 2026): #2477 Credit supported Kandarin Diary gameplay tasks. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4355 Interaction parity with Jordan's testing scenarios. #3788 Craft mind shields after Elemental Workshop II."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4355 Interaction parity with Jordan's testing scenarios. #3788 Craft mind shields after Elemental Workshop II.",
+            "2026-11-16: added post-quest elemental helmet smithing from one elemental metal with hammer, beaten book and boostable Smithing 20, taking four ticks for 20 base Smithing XP. Direct workbench use and the existing helmet choice share guarded selected-slot ownership; no repeated quest rewards. Real native packet, Bank/removal/retry and PlayerSave regressions are in server/tests/elemental-helmet-smithing-native.test.cjs; sources, consumer baseline fixture failures and remaining animation/audio/rendering evidence limits are in docs/quests/elemental-workshop-ii/README.md. No broader quest completion reassessment."
           ],
           "taskDetails": [
             {

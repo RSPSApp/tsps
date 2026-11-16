@@ -187,6 +187,7 @@ function player() {
       addExperiences: (skill, amount) => xp.push([skill.getIndex(), amount]),
     }),
     getLocation: () => location,
+    getTeleportSerial: () => 0,
     moveTo: to => { location = to; },
     isRegistered: () => true,
     isPlayer: () => true, isNpc: () => false, isPlayerBot: () => false,

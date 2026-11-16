@@ -200,3 +200,17 @@ test("Mosol Rei gives the Wampum belt with its box, played through his talk (t14
   const dropped = h.core.ItemOnGroundManager.getGroundItem(full.player.getUsername(), 625, here, null);
   assert.ok(dropped, "on the floor under the player");
 });
+
+test("Trufitus before the start: until Jungle Potion's news is told, the belt doesn't take his Talk-to, nor mark him greeted", async (t) => {
+  for (const junglePotion of [0, 3, 12]) {
+    const f = h.actor(t, { at: [2809, 3085], done: [], items: [625] });
+    h.quest("jungle_potion").setStage(f.player, junglePotion);
+    const said = await h.converse(f, () => h.talk(f, trufitus(f)), []);
+    assert.ok(!said.some((line) => line.includes("You look like you have some serious news")), `JP ${junglePotion}: ${said.join(" | ")}`);
+    assert.equal(Number(f.player.getAttribute("shilo-village:trufitus-greeted")) || 0, 0, `JP ${junglePotion}: not greeted`);
+  }
+  const greeted = h.actor(t, { at: [2809, 3085], done: [], attributes: { "shilo-village:trufitus-greeted": 1 } });
+  h.quest("jungle_potion").setStage(greeted.player, 3);
+  const said = await h.converse(greeted, () => h.talk(greeted, trufitus(greeted)), []);
+  assert.ok(!said.some((line) => line.includes("I have no more news since we last spoke")), said.join(" | "));
+});

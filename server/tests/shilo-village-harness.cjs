@@ -59,7 +59,8 @@ h.actor = function actor(t, { stage = 0, items = [], at, beads = false, attribut
   });
   for (const key of done) {
     const q = h.quest(key);
-    q.setStage(player, q.completionValue);
+    // Jungle Potion is finished once Trufitus has told his news after it (varp 175 13), as Shilo Village needs.
+    q.setStage(player, key === "jungle_potion" ? 13 : q.completionValue);
   }
   for (const [skill, level] of Object.entries({ CRAFTING: 20, AGILITY: 32, PRAYER: 10, ...levels })) {
     player.getSkillManager().setMaxLevels(core.Skill[skill], level);

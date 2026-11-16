@@ -100,6 +100,15 @@ module.exports = function attachNpcs(api, sv) {
   }
 
   // --- Trufitus ---------------------------------------------------------------------------------
+  /** Jungle Potion's stage once Trufitus has told the player his news after it (its STAGE_NEWS_TOLD). */
+  const JUNGLE_POTION_NEWS_TOLD = 13;
+
+  function junglePotionStage(player) {
+    const request = { player, key: "jungle_potion", stage: 0 };
+    api.emitCustomEvent("quest:get-stage", request);
+    return Number(request.stage) || 0;
+  }
+
   function trufitusVariant(player) {
     const stage = sv.stage(player);
     if (stage >= STAGE.UNLOCKED_TOMB) return "visiting-the-tomb-of-rashiliyia-talking-to-trufitus-after-visiting-the-tomb-of-rashiliyia";
@@ -110,6 +119,8 @@ module.exports = function attachNpcs(api, sv) {
     }
     if (stage >= STAGE.ENTERED_TEMPLE) return "visiting-ah-za-rhoon-talking-to-trufitus-after-visiting-ah-za-rhoon";
     if (stage >= STAGE.STARTED) return "starting-out-talking-to-trufitus-again";
+    // Before the start, Jungle Potion has him first, up to its post-quest news (varp 175 12 -> 13, #5956).
+    if (junglePotionStage(player) < JUNGLE_POTION_NEWS_TOLD) return null;
     if (sv.held(player, ITEM.WAMPUM_BELT)) return "starting-out-talking-to-trufitus-with-the-wampum-belt";
     if (Number(player.getAttribute(GREETED_ATTRIBUTE)) === 1) return "starting-out-talking-to-trufitus-without-the-wampum-belt";
     return null;

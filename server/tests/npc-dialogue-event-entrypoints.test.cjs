@@ -5026,3 +5026,30 @@ test('Ikov real teleport serial invalidates an earned Guardian permission instea
   assert.deepEqual(ikovGuardianItems(f.player), before); assert.equal(f.quest.getStage(f.player), 50);
   assert.equal(f.stock.isPendingRemoval(), false, 'stale permission cannot redeem a new stock transfer');
 });
+
+test('Ikov shared Guardian fighting another World actor refuses an ordinary staff Take without retargeting or credit', async t => {
+  const f = ikovStaffFixture(t, { shared: true });
+  const other = ikovGuardianFixture(t, { world: true });
+  other.player.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 99);
+  other.player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 99, false);
+  other.player.setHitpoints(99);
+  assert.equal(f.npc.getOwner() == null, true, 'this is the shared Guardian, not two owner-only fights');
+  assert.equal(core.World.getPlayers().get(other.player.getIndex()), other.player);
+  assert.equal(f.npc.getPrivateArea(), other.player.getPrivateArea());
+  assert.equal(f.npc.getLocation().getZ(), other.player.getLocation().getZ());
+  f.npc.getCombat().attack(other.player); // Supplied foreign fight through the actual native combat producer.
+  assert.equal(f.npc.getCombat().getTarget(), other.player, 'native engine must actually accept the foreign target');
+  const ownerBefore = ikovGuardianItems(f.player), otherBefore = ikovGuardianItems(other.player);
+  const stage = f.quest.getStage(f.player), side = f.player.getAttribute('quest.temple_of_ikov.side');
+  await f.take(); // Existing real decoded Take helper asserts the same stack was actually reached.
+  assert.equal(f.npc.getCombat().getTarget(), other.player, 'pickup cannot steal the shared Guardian fight');
+  assert.deepEqual(ikovGuardianItems(f.player), ownerBefore);
+  assert.deepEqual(ikovGuardianItems(other.player), otherBefore);
+  assert.equal(f.quest.getStage(f.player), stage);
+  assert.equal(f.player.getAttribute('quest.temple_of_ikov.side'), side);
+  assert.equal(other.quest.getStage(other.player), 50);
+  assert.equal(f.stock.getItem().getAmount(), 1);
+  assert.equal(f.stock.isPendingRemoval(), false);
+  assert.ok(core.World.getItems().includes(f.stock));
+  assert.equal(other.npc.getCombat().getTarget(), null, 'the separate owned bystander Guardian stays idle');
+});

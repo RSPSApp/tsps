@@ -83,17 +83,43 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
         }
 
         if (!e.isRegistered()) {
-            let index = this.slotQueue.shift();
+            const index = this.slotQueue.shift();
             if (index !== undefined) {
-              e.setRegistered(true);
-              e.setIndex(index);
-              this.characters[index] = e;
-              e.onAdd();
-              this.size++;
-              this.onAdded?.(e);
-              return true;
+                const previousIndex = e.getIndex();
+                let counted = false;
+                e.setRegistered(true);
+                e.setIndex(index);
+                this.characters[index] = e;
+                try {
+                    e.onAdd();
+                    this.size++;
+                    counted = true;
+                    this.onAdded?.(e);
+                    return true;
+                } catch (registrationError) {
+                    // onAdd can fail before size++ and onAdded can fail after it.
+                    // Roll back only this allocation, never a replacement in its slot.
+                    const rollbackErrors: unknown[] = [];
+                    if (this.characters[index] === e) {
+                        this.characters[index] = null as any;
+                        this.slotQueue.push(index);
+                        if (counted) this.size--;
+                        e.setRegistered(false);
+                        // Try both hooks: a failed position-index cleanup must not
+                        // skip the mobile's cancellation/logout cleanup (or vice versa).
+                        try { this.onRemoved?.(e); } catch (error) { rollbackErrors.push(error); }
+                        try { e.onRemove(); } catch (error) { rollbackErrors.push(error); }
+                        e.setIndex(previousIndex);
+                    }
+                    if (rollbackErrors.length) {
+                        throw Object.assign(new Error("Mobile registration and rollback hooks failed"), {
+                            cause: registrationError, errors: [registrationError, ...rollbackErrors],
+                        });
+                    }
+                    throw registrationError;
+                }
             }
-          }
+        }
         return false;
     }
 

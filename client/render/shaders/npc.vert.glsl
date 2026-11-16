@@ -158,7 +158,13 @@ void main() {
 
     applyPriorityDepthBias(viewPos, vertex.priority);
 
-    vec4 floorViewPos = actorFloorViewPos(viewPos, groundedPos, npcInfo.plane, -u_modelYOffset,
+    // This program draws spot animations too. One drawn on the floor itself (no offset: a
+    // graphic attached to a player, such as the Fishing cape's pool) has faces lying exactly in
+    // the terrain; they and anything under them take the depth of a plane just above it, the
+    // clearance NPCs stand at (actor.wgsl.ts gfxGroundOffset is the WebGPU side of this).
+    const float GFX_FLOOR_CLEARANCE = 10.0;
+    float floorOffset = u_modelYOffset == 0.0 ? -GFX_FLOOR_CLEARANCE : -u_modelYOffset;
+    vec4 floorViewPos = actorFloorViewPos(viewPos, groundedPos, npcInfo.plane, floorOffset,
         u_worldEntityTransform * u_viewMatrix, u_projectionMatrix);
     vec4 floorClipPos = u_projectionMatrix * floorViewPos;
     gl_Position = u_projectionMatrix * viewPos;

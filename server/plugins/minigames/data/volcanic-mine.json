@@ -72,8 +72,8 @@
     "secondAt": 10,
     "thirdAt": 20,
     "extraChannels": {
-      "west": { "_source": "Wiki (Boulder (Volcanic Mine)) map pins minus the central pin-to-origin offset recorded in 1858 (3,3; 3,3; 2,1; 1,6; 0,10): pins x=3791 at y=10127, 10136, 10149, 10172, 10196.", "stageTiles": [[3788, 10124, 1], [3788, 10133, 1], [3789, 10148, 1], [3790, 10166, 1], [3791, 10186, 1]] },
-      "east": { "_source": "Wiki (Boulder (Volcanic Mine)) map pins minus the central pin-to-origin offset recorded in 1858 (3,3; 3,3; 2,1; 1,6; 0,10): pins x=3823 at y=10127, 10136, 10149, 10172, 10198.", "stageTiles": [[3820, 10124, 1], [3820, 10133, 1], [3821, 10148, 1], [3822, 10166, 1], [3823, 10188, 1]] }
+      "west": { "_source": "Wiki (Boulder (Volcanic Mine)) map pins minus the central pin-to-origin offset: the first three offsets are recorded in 1858 (3,3; 3,3; 2,1), the medium and small are calibrated (1,6; 0,14). Pins x=3791 at y=10127, 10136, 10149, 10172, 10196.", "stageTiles": [[3788, 10124, 1], [3788, 10133, 1], [3789, 10148, 1], [3790, 10166, 1], [3791, 10182, 1]] },
+      "east": { "_source": "Wiki (Boulder (Volcanic Mine)) map pins minus the central pin-to-origin offset: the first three offsets are recorded in 1858 (3,3; 3,3; 2,1), the medium and small are calibrated (1,6; 0,14). Pins x=3823 at y=10127, 10136, 10149, 10172, 10198.", "stageTiles": [[3820, 10124, 1], [3820, 10133, 1], [3821, 10148, 1], [3822, 10166, 1], [3823, 10184, 1]] }
     },
     "stages": [
       { "loc": 31034, "tile": [3804, 10124, 1], "face": 1, "hp": 40, "fragment": 20, "breaking": 7807, "breakSeq": "vmi_mining_boulder_giant_breakoff" },

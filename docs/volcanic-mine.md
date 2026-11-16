@@ -52,7 +52,8 @@ The shop is Petrified Pete's Ore Shop (1457, generated data, opened by Shopkeepe
     channel, and 20+ a third in the eastern (Volcanic Mine#Boulder). The Boulder (Volcanic Mine)
     page instead says 10+ spawns one in both the east and west channels; this follows the first
     page. The extra channels' origins are that page's map pins minus the central pin-to-origin
-    offset recorded in 1858 (3,3; 3,3; 2,1; 1,6; 0,10; e.g. west stage 1 at 3788,10124). The
+    offset: the first three are recorded in 1858 (3,3; 3,3; 2,1), the medium and small are
+    calibrated (1,6; 0,14; e.g. west stage 1 at 3788,10124 and the west small at 3791,10182). The
     attached-stage lava spread and the tiny boulder's vortex float are recorded for the central
     channel only, so the extra channels pay the vortex points when their Small is mined out.
   - Five stages of 40 HP a player (the small one 60).

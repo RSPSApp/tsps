@@ -83,6 +83,7 @@ function makePlayer() {
 
   const sender = new Proxy({
     getVarbit: id => varbits.get(id) ?? 0, getVarp: id => configs.get(id) ?? 0,
+    getChatboxGroupId: () => -1,
     sendVarbit(id, value) {
       const {baseVar,startBit,endBit}=CacheDefinitions.getVarbit(id);
       const mask=(2**(endBit-startBit+1)-1)<<startBit;
@@ -100,6 +101,7 @@ function makePlayer() {
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
     getInventory: () => inventory,
+    getEquipment: () => ({ getItems: () => [] }),
     getPacketSender: () => sender,
     getSkillManager: () => ({
       addExperiences(skill, amount) { experience.push({ skill, amount }); },
@@ -227,10 +229,20 @@ function condition(h, player, npcId, stepId, text) {
 }
 
 /** A transcript step's event; message steps carry `kind: "message"`, as NpcDialogues sends them. */
-function action(h, player, npcId, stepId, kind = 'message') {
-  const event = { player, npcId, stepId, kind, step: { type: kind === 'message' ? 'message' : 'action' }, text: '', handled: false, end: false };
+const GUIDE_STEP_IDS = new Set(['ciSH8i', 'BeeQDX', 'DoDThh', 'VDxtPz', '62M3zx', 'SNdZj5', 'Pt8oyf', 'Cm8dee', 'JLPzK4']);
+function action(h, player, npcId, stepId, kind = 'message', text = GUIDE_STEP_IDS.has(stepId) ? 'Elkoy guides you through the maze.' : '') {
+  const event = { player, npcId, stepId, kind, step: { type: kind === 'message' ? 'message' : 'action' }, text, handled: false, end: false };
   emit(h, 'npc-dialogue:action', event);
   return event;
+}
+
+/** A transcript line as NpcDialogues lays it out: its `before` as it shows, its `after` as it is continued. */
+function line(h, player, npcId, text, extra = {}) {
+  const request = { player, npcId, text, step: { type: 'line' }, skip: false, ...extra };
+  emit(h, 'npc-dialogue:line', request);
+  request.before?.();
+  request.after?.();
+  return request;
 }
 
 function object(h, player, objectId, option) {
@@ -269,7 +281,10 @@ test('fresh stage 0 to completion follows the helper stage order and canonical w
   assert.deepEqual(variant(h, p, N.KING_BOLREN), { page: PAGE, variant: 'tree-gnome-king' });
 
   emit(h, 'npc-dialogue:hook', { player: p, npcId: N.KING_BOLREN, hook: 'quest:tree-gnome-village:start' });
-  assert.equal(h.quest.getStage(p), 1);
+  assert.equal(h.quest.getStage(p), 0, 'picking "Yes." does not start it yet');
+  line(h, p, N.KING_BOLREN, 'I would be glad to help.');
+  assert.equal(h.quest.getStage(p), 1, 'it starts as the acceptance line is continued');
+  assert.ok(p.messages.some((text) => text.startsWith("You've started a new quest")));
   assert.equal(p.configs.get(VARP), 1, 'stage 1 is transmitted on varp 111');
   assert.equal(p.varbits.get(VARBIT_ORBS), 0);
   assert.equal(p.varbits.get(VARBIT_TRACKER_H), 0);
@@ -278,22 +293,30 @@ test('fresh stage 0 to completion follows the helper stage order and canonical w
   assert.deepEqual(guideOut.box, { statement: true, holdTicks: 4, advance: true }, 'the guide message holds over the fade');
   assert.equal(p.getLocation().x, 2541, 'the screen fades out before the player is moved');
   tick(h, 2);
+  assert.equal(p.getLocation().x, 2541, 'still dark two ticks on');
+  tick(h, 1);
   assert.equal(p.getLocation().x, 2504, 'the final guide-out message moves the player');
 
   assert.equal(variant(h, p, N.COMMANDER_MONTAI).variant, 'battlefield-commander-montai');
   choose(h, p, N.COMMANDER_MONTAI, "Ok, I'll gather some wood.");
+  assert.equal(h.quest.getStage(p), 1, 'the pick alone does not move it');
+  line(h, p, N.COMMANDER_MONTAI, "Ok, I'll gather some wood.");
   assert.equal(h.quest.getStage(p), 2);
   assert.equal(p.configs.get(VARP), 2);
 
   assert.equal(variant(h, p, N.KING_BOLREN).variant,
     'tree-gnome-king-talking-to-king-bolren-again-after-agreeing-to-bring-logs-to-montai');
   p.getInventory().adds(I.LOGS, 6);
-  condition(h, p, N.COMMANDER_MONTAI, 'cu5-py', 'If the player has 6 logs in their inventory:');
+  assert.equal(condition(h, p, N.COMMANDER_MONTAI, 'cu5-py', 'If the player has 6 logs in their inventory:'), true);
+  assert.equal(h.quest.getStage(p), 2, 'the logs go as the player says they have some');
+  line(h, p, N.COMMANDER_MONTAI, 'I have some here. (You give six loads of logs to the commander.)');
   assert.equal(h.quest.getStage(p), 3);
   assert.equal(p.getInventory().getAmount(I.LOGS), 0);
+  assert.ok(!p.messages.some((text) => text.startsWith('You give six loads')), 'no game message: the line says it');
 
   assert.equal(variant(h, p, N.COMMANDER_MONTAI).variant, 'battlefield-talking-to-commander-montai-afterwards');
   choose(h, p, N.COMMANDER_MONTAI, "I'll try my best.");
+  line(h, p, N.COMMANDER_MONTAI, "Thank you, you're braver than most.");
   assert.equal(h.quest.getStage(p), 4);
   const coordinate = p.getAttribute('tree-gnome-village:ballista-coordinate');
   assert.ok(coordinate >= 0 && coordinate <= 3);
@@ -318,6 +341,10 @@ test('fresh stage 0 to completion follows the helper stage order and canonical w
   assert.equal(h.quest.getStage(p), 4, 'a wrong coordinate does not advance');
   choose(h, p, N.COMMANDER_MONTAI, `000${coordinate + 1}`);
   assert.equal(condition(h, p, N.COMMANDER_MONTAI, '1G3SE7', 'If the player chooses the correct coordinate:'), true);
+  const hit = action(h, p, N.COMMANDER_MONTAI, '8Wc7CR');
+  assert.deepEqual(hit.box, { statement: true, delayTicks: 2 }, 'the hit box opens two ticks after the launch');
+  assert.equal(h.quest.getStage(p), 4, 'the stronghold is breached once the box is continued');
+  hit.after();
   assert.equal(h.quest.getStage(p), 5);
   assert.equal(p.configs.get(VARP), 5);
 
@@ -333,19 +360,22 @@ test('fresh stage 0 to completion follows the helper stage order and canonical w
     npcId: N.KHAZARD_COMMANDER, page: PAGE,
     variant: 'into-the-stronghold-upon-opening-the-chest-containing-the-orb-of-protection',
   });
-  action(h, p, N.KHAZARD_COMMANDER, 'PatYnA');
+  action(h, p, N.KHAZARD_COMMANDER, 'JOh59P');
   assert.equal(p.getInventory().getAmount(I.ORB_OF_PROTECTION), 1);
   assert.equal(h.quest.getStage(p), 6);
 
   assert.equal(variant(h, p, N.KING_BOLREN).variant, 'bringing-bolren-the-orb');
   choose(h, p, N.KING_BOLREN, 'I will find the warlord and bring back the orbs.');
+  assert.equal(p.getInventory().getAmount(I.ORB_OF_PROTECTION), 1, 'he takes it a line later');
+  line(h, p, N.KING_BOLREN, 'You are brave, but this task will be tough even for you. I wish you the best of luck. Once again you are our only hope.');
   assert.equal(p.getInventory().getAmount(I.ORB_OF_PROTECTION), 0);
   assert.equal(h.quest.getStage(p), 7);
+  assert.equal(p.varbits.get(VARBIT_ORBS), 0, 'the first orb does not change bolren_got_orbs');
   assert.equal(variant(h, p, N.KING_BOLREN).variant,
     'into-the-stronghold-talking-to-bolren-without-the-orb-after-finding-it');
   p.setLocation(2541, 3170, 0);
   action(h, p, N.KING_BOLREN, 'dJzhSl');
-  tick(h, 2);
+  tick(h, 3);
   assert.deepEqual([p.getLocation().x, p.getLocation().y], [2504, 3191], 'Elkoy guides the player out after the first orb too');
 
   const kill = death(h, p, WARLORD_SPAWN);
@@ -395,7 +425,7 @@ test('early and out-of-order actions do not advance or duplicate quest items', (
 
   h.quest.setStage(p, 4);
   object(h, p, 2183, 'Open');
-  action(h, p, N.KHAZARD_COMMANDER, 'PatYnA');
+  action(h, p, N.KHAZARD_COMMANDER, 'JOh59P');
   assert.equal(p.getInventory().getAmount(I.ORB_OF_PROTECTION), 0, 'the chest needs the ballista stage');
 
   h.quest.setStage(p, 8);
@@ -414,13 +444,13 @@ test('lost first orb is recoverable from the chest and a full bag drops it on th
   const p = makePlayer();
   h.quest.setStage(p, 6);
   object(h, p, 2182, 'Search');
-  action(h, p, N.KHAZARD_COMMANDER, 'PatYnA');
+  action(h, p, N.KHAZARD_COMMANDER, 'JOh59P');
   assert.equal(p.getInventory().getAmount(I.ORB_OF_PROTECTION), 1, 'the lost orb comes back from the chest');
 
   const full = makePlayer();
   h.quest.setStage(full, 5);
   full.setFull(true);
-  action(h, full, N.KHAZARD_COMMANDER, 'PatYnA');
+  action(h, full, N.KHAZARD_COMMANDER, 'JOh59P');
   assert.equal(full.getInventory().getAmount(I.ORB_OF_PROTECTION), 0);
   assert.equal(h.groundItems.length, 1);
   assert.equal(h.groundItems[0].itemId, I.ORB_OF_PROTECTION);
@@ -540,7 +570,7 @@ test('Elkoy guide-in stops at the inner maze railing approach', () => {
   const message = action(h, p, ELKOY_OUTSIDE, 'DoDThh');
   assert.equal(message.box.holdTicks, 4);
   assert.equal(p.getPacketSender().getVarbit(6719), 2, 'the minimap goes dark with the walk');
-  tick(h, 1);
+  tick(h, 2);
   assert.equal(p.getLocation().x, 2504, 'still dark');
   tick(h, 1);
   assert.equal(p.getLocation().x, 2515);
@@ -548,7 +578,7 @@ test('Elkoy guide-in stops at the inner maze railing approach', () => {
   assert.equal(p.getMovementQueue().blocked, false);
   choose(h, p, ELKOY_OUTSIDE, 'Can you show me out of the village?');
   action(h, p, ELKOY_OUTSIDE, 'VDxtPz');
-  tick(h, 2);
+  tick(h, 3);
   assert.equal(p.getLocation().x, 2504);
   assert.equal(p.getLocation().y, 3191);
 });
@@ -569,7 +599,7 @@ test('Elkoy variants with no guide message walk the player as his next line show
   emit(h, 'npc-dialogue:line', line);
   assert.equal(line.holdTicks, 4);
   line.before();
-  tick(h, 2);
+  tick(h, 3);
   assert.deepEqual([p.getLocation().x, p.getLocation().y], [2515, 3159]);
   const later = { player: p, npcId: ELKOY_OUTSIDE, step: { speaker: 'Elkoy' }, text: 'Ok then, take care.' };
   emit(h, 'npc-dialogue:line', later);
@@ -651,7 +681,9 @@ test('canonical warlord threat creates an owned full-health attack form and real
     assert.deepEqual(h.groundItems.map(e=>[e.player,e.itemId,e.at.getX(),e.at.getY()]),
       [[p,I.ORBS_OF_PROTECTION,fighter.getLocation().getX(),fighter.getLocation().getY()]],'the orbs lie among his remains');
     assert.equal(h.quest.getStage(other),7);
-    assert.equal(p.varbits.get(3460),0);
+    assert.equal(p.varbits.get(3460),1,'the talking warlord stays hidden a while after he falls');
+    tick(h,29);assert.equal(p.varbits.get(3460),1);
+    tick(h,1);assert.equal(p.varbits.get(3460),0,'and is back 30 ticks after the orbs drop');
     assert.equal(source.getCurrentDefinition(p).getId(),7621);
   } finally { hooks.length=depth; }
 });
@@ -676,7 +708,8 @@ test('the warlord gives up past his follow distance, walks home beside the talki
   const e={player:p,npc:source,npcId:7621,text:"Ha, you really think you stand a chance? I'll crush you."};
   emit(h,'npc-dialogue:line',e);e.after();
   const fighter=h.spawned.at(-1),home=new core.Location(2458,3302,0);
-  assert.ok(fighter.getLocation().equals(home),'he starts beside the talking warlord, whose tile stays taken');
+  assert.ok(fighter.getLocation().equals(source.getLocation()),'he appears where the talking warlord stood, as live');
+  assert.equal(p.varbits.get(14192),7,'current_hint_arrow points at him');
   assert.ok(fighter.getSpawnPosition().equals(home),'and goes home there, a tile he can reach');
   assert.equal(h.tasks.some(task=>task.constructor.name==='WarlordLeashTask'),false);
   const follow=fighter.getCurrentDefinition().getCombatFollowDistance();
@@ -694,32 +727,50 @@ test('the warlord gives up past his follow distance, walks home beside the talki
   assert.equal(fighter.getCombat().getTarget(),p,'his challenger back in range, he attacks again');
 });
 
-test('the ballista launches its spear at the stronghold entrance, or wide of it on a wrong coordinate', () => {
+test('the ballista fires as the coordinate box is continued, as captured, or wide of the stronghold on a wrong coordinate', () => {
+  // The user's rsprox capture, local 1001802 ticks 1460-1478 (revision 242).
   const h=harness(),p=makePlayer();h.quest.setStage(p,4);
   p.setAttribute('tree-gnome-village:trackers',7);p.setAttribute('tree-gnome-village:ballista-coordinate',1);
   const sent=recordSends(p);
-  const ballista=new core.GameObject(2181,new core.Location(2507,3209,0),10,0,null);
+  const sender=p.getPacketSender();
+  const projectiles=[];
+  sender.sendProjectile=(...args)=>{projectiles.push(args);return sender;};
+  const sounds=[];sender.sendSound=(id)=>{sounds.push(id);return sender;};
+  const ballista=new core.GameObject(2181,new core.Location(2508,3210,0),10,0,null);
   const fire=()=>{
     const event={player:p,object:ballista,objectId:2181,option:'fire',handled:false};
     for(const handler of h.objectHooks)handler(event);
     assert.equal(event.handled,true);
   };
   fire();choose(h,p,N.COMMANDER_MONTAI,'0004');
-  assert.equal(condition(h,p,N.COMMANDER_MONTAI,'wwt4fB','If the player chooses the wrong coordinate:'),true);
-  action(h,p,N.COMMANDER_MONTAI,'B_5n9I');
-  const [launch,spear,impact]=sent.splice(0);
+  const entered=action(h,p,N.COMMANDER_MONTAI,'f-0NYt');
+  assert.deepEqual(entered.box,{statement:true},'"You enter the height and y coordinates..." is a message box');
+  assert.equal(sent.length,0,'nothing fires until it is continued');
+  entered.after();
+  const [launch]=sent.splice(0);
   assert.deepEqual([launch.kind,launch.object,launch.id],['locanim',ballista,730]);
-  assert.deepEqual([spear.kind,spear.id,spear.from.getX(),spear.from.getY()],['projectile',182,2508,3210]);
-  assert.deepEqual([spear.to.getX(),spear.to.getY()],[2502+2*3,3250],'two coordinates out, six tiles east');
-  assert.deepEqual([impact.kind,impact.id,impact.delay],['graphic',183,spear.speed]);
+  const [from,to,,end,id,startHeight,endHeight,,delay,slope,progress]=projectiles.shift();
+  assert.deepEqual([id,from.getX(),from.getY(),end,delay,slope,progress,startHeight*4,endHeight],[182,2509,3213,375,110,7,0,95,0]);
+  assert.deepEqual([to.getX(),to.getY()],[2509+2*3,3254],'two coordinates out, six tiles east of the target');
+  assert.deepEqual(sounds,[3488],'the launch sound; no hit sound on a miss');
+  assert.equal(condition(h,p,N.COMMANDER_MONTAI,'wwt4fB','If the player chooses the wrong coordinate:'),true);
+  const missed=action(h,p,N.COMMANDER_MONTAI,'B_5n9I');
+  assert.deepEqual(missed.box,{statement:true,delayTicks:2});
   assert.equal(h.quest.getStage(p),4);
+  sounds.length=0;
   fire();choose(h,p,N.COMMANDER_MONTAI,'0002');
+  action(h,p,N.COMMANDER_MONTAI,'f-0NYt').after();
+  const [,hitTo]=projectiles.shift();
+  assert.deepEqual([hitTo.getX(),hitTo.getY()],[2509,3254],'into the stronghold, inside the crumbled wall');
+  assert.equal(sent.some(entry=>entry.kind==='graphic'),false,'no graphic where it lands');
+  assert.deepEqual(sounds,[3488]);
+  tick(h,2);
+  assert.deepEqual(sounds,[3488,3487],'the hit sound two ticks later, with the hit box');
   assert.equal(condition(h,p,N.COMMANDER_MONTAI,'1G3SE7','If the player chooses the correct coordinate:'),true);
-  action(h,p,N.COMMANDER_MONTAI,'8Wc7CR');
-  const hit=sent.find(entry=>entry.kind==='projectile');
-  assert.deepEqual([hit.to.getX(),hit.to.getY()],[2502,3250],'onto the front entrance');
-  assert.ok(core.Location.isSameTile(sent.find(entry=>entry.kind==='graphic').at,hit.to));
-  assert.equal(h.quest.getStage(p),5);
+  const hit=action(h,p,N.COMMANDER_MONTAI,'8Wc7CR');
+  assert.equal(h.quest.getStage(p),4);
+  hit.after();
+  assert.equal(h.quest.getStage(p),5,'breached as the hit box is continued');
 });
 
 test('warlord fighting visibility replays actual encounter and clears orphan state without touching siblings', () => {
@@ -756,6 +807,7 @@ function ceremonyFixture({missingNorth=false}={}) {
     const n=new NPC(N.LOCAL_GNOME_2,new core.Location(x,y,0));
     n.isRegistered=()=>true;n.setVisible(true);
     const say=n.forceChat.bind(n);n.forceChat=text=>{speeches.push({homeY:y,text});say(text);};
+    const animate=n.performAnimation.bind(n);n.performAnimation=a=>{speeches.push({homeY:y,anim:a.getId()});return animate(a);};
     npcs.push(n);
   }
   // A northern cohort member wandered south: role follows its real spawn, not current drift.
@@ -769,41 +821,55 @@ function ceremonyFixture({missingNorth=false}={}) {
 
 test('real ceremony runner binds both real gnome cohorts and reaches canonical completion action', () => {
   const f=ceremonyFixture();f.finish();
-  assert.deepEqual(f.speeches.map(s=>s.text),['Su tana.','Su tana.','En tania.','En tania.','Su tana.','Su tana.','En tania.','En tania.']);
-  for(const s of f.speeches)assert.equal(s.text==='Su tana.',s.homeY>3169);
+  const said=f.speeches.filter(s=>s.text);
+  assert.deepEqual(said.map(s=>s.text),['Su tana.','Su tana.','En tania.','En tania.','Su tana.','Su tana.','En tania.','En tania.']);
+  for(const s of said)assert.equal(s.text==='Su tana.',s.homeY>3169);
+  assert.equal(f.speeches.filter(s=>s.anim===12049).length,8,'each chanter plays gnome_chanting with his words');
   assert.equal(f.h.quest.getStage(f.p),9);assert.equal(f.p.getInventory().getAmount(I.ORBS_OF_PROTECTION),0);
   assert.equal(f.p.getInventory().getAmount(I.GNOME_AMULET),1);
   assert.equal(f.p.experience.length,1);
 });
 
-test('missing ceremony cohort or cancelled overhead cannot consume orbs or complete', () => {
+test('a ceremony cut off after Bolren takes the orbs cannot complete, and plays again from Bolren', () => {
+  // Live takes the orbs as "The gnomes begin to chant..." opens (local 1001802 tick 2258).
   const missing=ceremonyFixture({missingNorth:true});missing.finish();
-  assert.equal(missing.h.quest.getStage(missing.p),8);assert.equal(missing.p.getInventory().getAmount(I.ORBS_OF_PROTECTION),1);
+  assert.equal(missing.h.quest.getStage(missing.p),8);
+  assert.equal(missing.p.getInventory().getAmount(I.ORBS_OF_PROTECTION),0,'he has them');
+  assert.equal(missing.p.getAttribute('tree-gnome-village:orbs-given'),true);
+  assert.equal(missing.p.varbits.get(VARBIT_ORBS),1);
+  assert.equal(variant(missing.h,missing.p,N.KING_BOLREN).variant,'return-of-the-orb','Bolren still holds the ceremony');
   const cancelled=ceremonyFixture();let limit=30;
   while(cancelled.h.tasks.length===0&&limit-->0)cancelled.manager.advance();
   assert.ok(limit>0);cancelled.manager.reset();
   for(let i=0;i<12;i++)cancelled.tick();
-  assert.equal(cancelled.h.quest.getStage(cancelled.p),8);assert.equal(cancelled.p.getInventory().getAmount(I.ORBS_OF_PROTECTION),1);
+  assert.equal(cancelled.h.quest.getStage(cancelled.p),8);
   assert.equal(cancelled.p.getInventory().getAmount(I.GNOME_AMULET),0);
+  // Talking to him again finishes it.
+  const king=cancelled.npcs[0];
+  runtime.startTranscript(cancelled.h.api,cancelled.p,N.KING_BOLREN,PAGE,'return-of-the-orb',undefined,king);
+  cancelled.finish();
+  assert.equal(cancelled.h.quest.getStage(cancelled.p),9);
+  assert.equal(cancelled.p.getInventory().getAmount(I.GNOME_AMULET),1);
+  assert.equal(cancelled.p.getAttribute('tree-gnome-village:orbs-given'),false);
 });
 
 test('guide-out action waits for its canonical message and ignores other actors/stages', () => {
   const h = harness(), p = makePlayer();
-  emit(h, 'npc-dialogue:hook', {player:p,npcId:N.KING_BOLREN,hook:'quest:tree-gnome-village:start'});
+  line(h, p, N.KING_BOLREN, 'I would be glad to help.');
   assert.deepEqual([p.getLocation().x,p.getLocation().y],[2541,3170]);
-  action(h,p,N.ELKOY,'GnZ1Sn');tick(h,2);
+  action(h,p,N.ELKOY,'GnZ1Sn');tick(h,3);
   assert.equal(p.getLocation().x,2541);
   h.quest.setStage(p,2);
-  action(h,p,N.KING_BOLREN,'GnZ1Sn');tick(h,2);
+  action(h,p,N.KING_BOLREN,'GnZ1Sn');tick(h,3);
   assert.equal(p.getLocation().x,2541);
   h.quest.setStage(p,1);
-  action(h,p,N.KING_BOLREN,'GnZ1Sn',null);tick(h,2);
+  action(h,p,N.KING_BOLREN,'GnZ1Sn',null);tick(h,3);
   assert.equal(p.getLocation().x,2541,'only the message step guides');
   // Bolren stands at the east edge of the village box; the guide no longer depends on it.
   p.setLocation(2543,3169,0);
-  action(h,p,N.KING_BOLREN,'GnZ1Sn');tick(h,2);
+  action(h,p,N.KING_BOLREN,'GnZ1Sn');tick(h,3);
   assert.deepEqual([p.getLocation().x,p.getLocation().y],[2504,3191]);
-  action(h,p,N.KING_BOLREN,'GnZ1Sn');tick(h,2);
+  action(h,p,N.KING_BOLREN,'GnZ1Sn');tick(h,3);
   assert.equal(h.quest.getStage(p),1);
 });
 
@@ -817,14 +883,20 @@ test('cached Elkoy Follow uses the dialogue shortcut in both directions after st
   h.quest.setStage(p,1);
   follow({player:p,npcId:N.KING_BOLREN});
   assert.equal(p.getLocation().x,2541,'unrelated NPC cannot guide');
+  // Follow plays the guide answer of Elkoy's Talk-to for the stage and side (the box, then his line).
   follow({player:p,npcId:N.ELKOY_2});
-  follow({player:p,npcId:N.ELKOY_2});
-  assert.equal(h.tasks.length,1,'a second click during the walk starts no second walk');
-  tick(h,2);
+  assert.deepEqual(h.transcripts.at(-1),{npcId:N.ELKOY_2,page:PAGE,
+    variant:'tree-gnome-king-talking-to-elkoy-after-starting-the-quest-inside-the-maze'});
+  const inside=action(h,p,N.ELKOY_2,'BeeQDX');
+  assert.equal(inside.box.holdTicks,4,'the guide box holds over the fade');
+  follow({player:p,npcId:N.ELKOY_2});action(h,p,N.ELKOY_2,'BeeQDX');
+  assert.equal(h.tasks.filter(t=>t.isRunning()).length,1,'a second click during the walk starts no second walk');
+  tick(h,3);
   assert.deepEqual([p.getLocation().x,p.getLocation().y],[2504,3191]);
   follow({player:p,npcId:ELKOY_OUTSIDE});
+  action(h,p,ELKOY_OUTSIDE,'DoDThh');
   assert.deepEqual([p.getLocation().x,p.getLocation().y],[2504,3191],'the follow fades out first');
-  tick(h,2);
+  tick(h,3);
   assert.deepEqual([p.getLocation().x,p.getLocation().y],[2515,3159]);
   assert.equal(h.quest.getStage(p),1);
 });
@@ -839,7 +911,7 @@ test('closed chest opening falls through without an orb; only open Search starts
   assert.equal(p.getInventory().getAmount(I.ORB_OF_PROTECTION),0);
   assert.equal(object(h,p,2182,'Search').handled,true);
   assert.equal(h.transcripts.length,1);
-  action(h,p,N.KHAZARD_COMMANDER,'PatYnA');
+  action(h,p,N.KHAZARD_COMMANDER,'JOh59P');
   object(h,p,2182,'Search');
   assert.equal(h.transcripts.length,1,'a second search cannot repeat the reward');
   assert.equal(p.messages.at(-1),'The chest is empty.');
@@ -876,16 +948,20 @@ test('the closed stronghold door keeps the canonical outside lock at every quest
   assert.equal(h.transcripts.length,count);
 });
 
-test('stronghold door uses the existing shared swing, passage both ways and close collision', () => {
+test('the stronghold door lets the player out as live: inviswall, the open leaf north, a step out, shut two ticks later', () => {
+  // The user's rsprox capture, local 1001802 ticks 1587-1592 (revision 242).
   const {RegionManager}=require('../dist/game/collision/RegionManager');
   const {ObjectManager}=require('../dist/game/entity/impl/object/ObjectManager');
   const {MapObjects}=require('../dist/game/entity/impl/object/MapObjects');
   if(RegionManager.regions.size===0)RegionManager.init();
   RegionManager.loadMapFiles(2502,3250);
-  const h=harness(),p=makePlayer(),tasks=[],names=new Map();
+  const h=harness(),p=makePlayer(),tasks=[],names=new Map(),sounds=[];
   h.quest.setStage(p,6);
+  const steps=[];
+  const movement={reset(){steps.length=0;return movement;},setBlockMovement(){return movement;},addSteps(at){steps.push(at);},size:()=>steps.length};
+  p.getMovementQueue=()=>movement;
   require('../plugins/objects/Doors.plugin').register({
-    core:{...core,ObjectManager,MapObjects,Sounds:{sendSound(){}},TaskManager:{
+    core:{...core,ObjectManager,MapObjects,Sounds:{sendSound(player,id){sounds.push(id);}},TaskManager:{
       submit(task){task.setRunning(true);tasks.push(task);},
       cancelTasks(key){for(const task of tasks)if(task.key===key)task.stop();},
     }},
@@ -893,33 +969,24 @@ test('stronghold door uses the existing shared swing, passage both ways and clos
     onRegionLoaded(){},onServerStartup(){},onObjectRoute(){},
     onCustomEvent:h.api.onCustomEvent,emitCustomEvent:h.api.emitCustomEvent,
   });
-  const canCross=()=>[
-    RegionManager.canMove(2502,3250,2502,3251,0,1,1,null),
-    RegionManager.canMove(2502,3251,2502,3250,0,1,1,null),
-  ];
   const click=object=>names.get('Door').Open({player:p,object,objectId:object.getId(),
     definition:core.ObjectDefinition.forId(object.getId()),location:{
       x:object.getLocation().getX(),y:object.getLocation().getY(),z:0},clickType:1});
   const closed=MapObjects.get(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3250,0),null);
   assert.ok(closed,'active-cache physical door exists');
   assert.equal(closed.getFace(),1);
-  assert.deepEqual(canCross(),[false,false]);
   p.setLocation(2502,3251);
-  assert.equal(click(closed),true,'inside Open uses shared door handler');
-  const opened=MapObjects.get(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3251,0),null);
-  assert.ok(opened,'ordinary shared swing retains the same loc ID');
-  assert.equal(opened.getFace(),2);
-  assert.deepEqual(canCross(),[true,true],'ordinary exit and return are walkable');
-  assert.deepEqual([p.getLocation().x,p.getLocation().y],[2502,3251],'Open never teleports the player');
-  assert.equal(tasks.length,1,'uses the existing shared close lifecycle');
+  assert.equal(click(closed),true,'Open from inside');
+  assert.ok(MapObjects.get(38848,new core.Location(2502,3250,0),null),'inviswall on the doorway');
+  assert.equal(MapObjects.get(1539,new core.Location(2502,3251,0),null)?.getFace(),2,'inactivepoordoor on the tile north');
+  assert.deepEqual(steps.map(at=>[at.getX(),at.getY()]),[[2502,3250]],'the player steps out onto the doorway tile');
+  for(let i=0;i<2;i++)for(const task of [...tasks])if(task.isRunning())task.tick();
+  assert.equal(MapObjects.get(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3250,0),null)?.getFace(),1,'shut two ticks later');
+  assert.equal(MapObjects.get(1539,new core.Location(2502,3251,0),null),null);
   p.setLocation(2502,3250);
-  assert.equal(click(opened),true,'outside can close the already-open ordinary leaf');
-  assert.deepEqual(canCross(),[false,false]);
-  assert.equal(MapObjects.get(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3250,0),null)?.getFace(),1);
   const count=h.transcripts.length;
-  click(closed);
-  assert.equal(h.transcripts.length,count+1,'restored closed door is locked from outside again');
-  assert.deepEqual(canCross(),[false,false]);
+  click(MapObjects.get(core.ObjectIdentifiers.DOOR_67,new core.Location(2502,3250,0),null));
+  assert.equal(h.transcripts.length,count+1,'from outside it is locked');
   assert.equal(h.quest.getStage(p),6);
 });
 

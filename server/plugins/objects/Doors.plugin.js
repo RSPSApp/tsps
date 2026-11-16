@@ -109,7 +109,6 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // GATE_52 (Gnome Ball pitch and Tree Gnome Village): its same-model open variants (193, 2395)
   // are nameless with no actions and are never placed, so the pairing below cannot find them.
   SELF_OPENING_DOOR_IDS = new Set([O.DOOR_223, O.DOOR_225, O.DOOR_226, O.DOOR_227, O.DOOR_228, O.DOOR_229, O.DOOR_230, O.DOOR_231,
-    O.DOOR_67, // Khazard stronghold: Open-only door 2184 has no paired open loc.
     O.DOOR_283, // Ardougne Castle's lockpick door has no separate open loc in the cache.
     // The magic axe hut's and Pirates' Hideout's lockpick doors (toollock2/3, #5744) have no open loc either: their
     // same-model Close locs belong to other doors, so the leaf swings in place (LockedDoors.Thieving.js unlocks them).
@@ -151,8 +150,6 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // whistle-room door (22, whistledoor) are Open-only; their id+1 are a clock spindle and the
     // sacks, and their same-model Close locs (1536, none for 22) belong to other doors.
     O.DOOR_3, O.DOOR_4,
-    // Khazard stronghold: Open-only ordinary door models, no distinct open loc.
-    O.DOOR_67,
     // Ross's house in East Ardougne (40178 at 2610,3316), a Mahogany Homes client: Open/Pick-lock with
     // the models of Ardougne's picklock doors (11719/11720); its id neighbours are a hotspot and a mirror.
     O.DOOR_624]);
@@ -557,6 +554,18 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       closeTicks: 2,
       openSoundId: 81,
     })),
+    // Tree Gnome Village's Khazard stronghold front door (khazard_stronghold_door 2184), crossed from inside in the
+    // user's rsprox captures (local 1001802 ticks 1587-1592; revision 242): Open puts inviswall 38848 on the doorway
+    // and inactivepoordoor (1539) on the tile north, sound 46 (bigdoor_open), the player steps out onto the doorway
+    // tile and the door is back two ticks later. From outside it stays locked: TreeGnomeVillage's door:toggle.
+    Object.freeze({
+      closed: [[O.DOOR_67, 2502, 3250, 0, 1]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2502, 3250, 0, 1], [NAMELESS_DOOR_LEAF_IDS.MELZAR_DOOR_OPEN, 2502, 3251, 0, 2]],
+      crossY: 3251,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 46,
+    }),
     // Temple of Ikov's trap-lever door (ikov_trapleverdoor 92), rsprox_transcripts/242/912156.txt ticks 1764-1768,
     // 1885-1893 and 2014-2019: Open puts inviswall 38848 on the doorway and inactiveposhdoor (1542) on the tile
     // north, sound 62, the player steps across (either way) and the door is back two ticks later. TempleOfIkov

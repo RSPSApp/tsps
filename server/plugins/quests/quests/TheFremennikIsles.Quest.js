@@ -1483,7 +1483,8 @@ module.exports = function registerTheFremennikIslesQuest(api) {
   }
 
   /** The NPCs whose lines carry this quest's blanks; "[amount]" is common to other pages. */
-  const BLANK_SPEAKERS = new Set(["King Sorvott IV", "Thorkel Silkbeard", "Mawnis Burowgar"]);
+  // The cache names King Sorvott (npc 1897) "King Gjuki Sorvott IV"; the event's definition is the NPC talked to.
+  const BLANK_SPEAKERS = new Set(["King Sorvott IV", "King Gjuki Sorvott IV", "Thorkel Silkbeard", "Mawnis Burowgar"]);
 
   function handleLine(event) {
     const { text } = event;

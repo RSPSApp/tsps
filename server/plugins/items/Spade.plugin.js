@@ -26,9 +26,15 @@ const NOTHING_FOUND = "Nothing interesting happens.";
 const LARGE_SPADE_REFUSAL = "Due to its sheer size, you just cannot angle it right to dig with it.";
 
 let core;
+let pluginApi;
 
 function dig(event) {
   const { player } = event;
+  // Content can refuse the dig before it starts (`refused`), with its own reply and no sequence or
+  // sound: His Faithful Servants' Barrows mounds (user rsprox capture BarrowsMiniQuest.bin tick 16).
+  const request = { player, itemId: event.itemId, location: player.getLocation(), refused: false };
+  pluginApi.emitCustomEvent("spade:before-dig", request);
+  if (request.refused) return true;
   const sequence = core.CacheDefinitions.getSeqId("human_dig") ?? HUMAN_DIG;
   player.performAnimation(new core.Animation(sequence));
   core.Sounds.sendSound(player, new core.Sound(DIG_SOUND, 1, 0, 0));
@@ -45,9 +51,10 @@ function largeSpadeDig({ player }) {
 
 module.exports = {
   name: "Spade",
-  description: "Plays the digging animation and sound for the Dig option on spades (the Large spade only says it cannot dig), leaves the click open for treasure trails and quest digs, and says nothing was found when none of them claims it.",
+  description: "Plays the digging animation and sound for the Dig option on spades (the Large spade only says it cannot dig), lets content refuse a dig before it starts, leaves the click open for treasure trails and quest digs, and says nothing was found when none of them claims it.",
   register(api) {
     core = api.core;
+    pluginApi = api;
     for (const name of SPADES) api.onItemAction(name, { Dig: dig });
     for (const name of SPADES) api.onItemAction(name, { Dig: digFoundNothing }, { fallback: true });
     api.onItemAction("Large spade", { Dig: largeSpadeDig }, { fallback: true });

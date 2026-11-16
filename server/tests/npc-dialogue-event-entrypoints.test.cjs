@@ -1,14 +1,6 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, after, beforeEach, afterEach, test } = require('node:test');
-// Diagnostic case boundaries only: the failed full-file run emitted no TAP case
-// names before its fixed 85-second deadline. These hooks do not report success.
-function reportEntrypointBoundary(phase, t) {
-  require('node:fs').writeSync(2, JSON.stringify({ event: 'entrypoint-case-boundary',
-    phase, name: t.name, monotonicNs: process.hrtime.bigint().toString() }) + '\n');
-}
-beforeEach(t => reportEntrypointBoundary('beforeEach', t));
-afterEach(t => reportEntrypointBoundary('afterEach', t));
+const { before, after, test } = require('node:test');
 process.env.DISABLE_PLAYER_BOTS = '1';
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();

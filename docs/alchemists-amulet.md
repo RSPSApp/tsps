@@ -71,9 +71,8 @@ existing consumer files include mocked fixtures; they supplement the new real-ob
 Variable-dose/dressing/Guthix eligibility checks call the shared dose helper directly.
 
 The initial new tests failed on missing brewing/charging/uncharge behavior; the death test
-separately failed on absent PvP grave routing before the shared change. Rendering-client
-screenshots, actual login/relogin walkthrough and independent review remain pending; unit
-tests and decoded native packets alone do not verify client rendering or retail prompt text.
+separately failed on absent PvP grave routing before the shared change. Unit tests and
+decoded native packets alone do not verify client rendering or retail prompt text.
 
 Independent review then reproduced two defects: Friendly Forager's fourth dose still spent
 the upgraded amulet's charge, and the transformed PvP amulet's old layout ID prevented
@@ -83,4 +82,32 @@ paths, with ordinary chemistry, normal potion XP at the League multiplier, clear
 tokens, and uncharged-PvP/charged-PvM auto-equip controls. The scoped follow-up run passed
 62 tests across the independent harness, 14 maintained amulet tests, gravestones and the
 relevant relic/fragment production consumers. No full suite or unchanged 142-test repeat
-was required. Scoped independent re-review and rendered client QA remain pending.
+was required. Independent re-review on `fceca72f5` passed nine scenarios with no new findings
+in the inspected paths, including the unchanged failing reproductions and normal controls.
+
+## Rendered native QA
+
+On an isolated worktree server and its own compiled development client, actual Chromium
+mouse/keyboard actions opened Charge, entered two chemistry amulets, checked 20 charges,
+cancelled Uncharge with 20 retained, then confirmed it for the empty amulet and two noted
+chemistry. Item, recipe, level, quest and resin setup used disclosed disposable fixtures;
+shop opening was seeded through the production shop event. Native shop selection and Buy-1
+then paid 6,900/5,650/7,400 resin, leaving all three balances zero and inventory slot 0 holding
+charged item 29990 with 50 charges. Native Check reported 50; native Wear moved it to the
+neck slot. Actual client Logout made the account offline, and Play Now reconnected over the
+network with the worn item and all 50 charges retained. Equipment Check reported 50 again.
+
+For native brewing, a one-charge amulet and 12 ingredient pairs were seeded, then worn and
+mixed through the actual ingredient Use and Make-All controls. Natural RNG produced one
+four-dose and eleven three-dose prayer potions. XP increased from the fixture's 250 to
+1,300: exactly 12 × 87.5. The amulet became uncharged and the batch continued. This single
+batch verifies the observed transition, not a statistical measurement of the 15% chance.
+
+The initial Uncharge title visibly clipped. Its warning now sits in the confirmation option
+under a shorter title. Before/after screenshots were inspected; reopening on the corrected
+server displayed the entire title and warning, Cancel worked, and a fresh confirmation
+returned five noted amulets from the purchased 50 charges. This changed only two display
+strings after the independent gameplay review. No mirror test or unchanged suite rerun was
+needed. Screenshots and readbacks contain only an anonymous disposable account. Both owned
+servers saved and shut down, the client and browser closed, and all five assigned ports
+were verified clear. Retail wording and the source limitations above remain unverified.

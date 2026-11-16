@@ -144,8 +144,8 @@ function uncharge({ player, item }) {
     player.sendMessage("Preset items cannot be used for this.");
     return true;
   }
-  api.sendMultiChatboxPrompt(player, "Uncharge your alchemist's amulet? Any remaining partial charges will be lost.",
-    "Uncharge the amulet.", who => returnCharges(who, snapshot),
+  api.sendMultiChatboxPrompt(player, "Uncharge your alchemist's amulet?",
+    "Uncharge (remaining partial charges will be lost).", who => returnCharges(who, snapshot),
     "Cancel.", who => who.getPacketSender().sendInterfaceRemoval());
   return true;
 }

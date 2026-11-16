@@ -44494,6 +44494,8 @@
       "page": "Transcript:Shilo Village",
       "variants": [
         "starting-out-using-the-wampum-belt-on-trufitus",
+        "starting-out-talking-to-trufitus-with-the-wampum-belt",
+        "starting-out-talking-to-trufitus-without-the-wampum-belt",
         "starting-out-talking-to-trufitus-again",
         "starting-out-use-any-unrelated-item-on-trufitus",
         "visiting-ah-za-rhoon-talking-to-trufitus-after-visiting-ah-za-rhoon",
@@ -53473,6 +53475,7 @@
       "page": "Transcript:Shilo Village",
       "variants": [
         "starting-out-talking-to-mosol-rei",
+        "starting-out-search-broken-cart",
         "starting-out-talking-to-mosol-rei-after-getting-the-wampum-belt"
       ]
     }
@@ -78623,6 +78626,7 @@
       "page": "Transcript:Shilo Village",
       "variants": [
         "starting-out-talking-to-mosol-rei",
+        "starting-out-search-broken-cart",
         "starting-out-talking-to-mosol-rei-after-getting-the-wampum-belt"
       ]
     }

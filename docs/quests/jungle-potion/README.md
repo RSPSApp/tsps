@@ -28,11 +28,14 @@ From the user's rev 242 Jungle Potion run (local JunglePotion.bin, rsprox index 
   to 1849). The palm, rock and fungus wall were never seen growing back; ours use the same 99 ticks.
 - Marshy jungle vine: seq 2094 (human_openingchest_mid) and sound 1957 on each attempt, the roll 10 ticks
   later. A miss plays sound 1957 again and the next attempt starts one tick after, so a find lands at 10 or
-  21 ticks. 27 finds took 30 rolls across the three recordings; the Wiki gives no chance, so ours is 0.9.
+  21 ticks. 27 finds took 30 rolls across the three recordings, so ours is 0.9 (fitted). The Wiki's
+  Jungle Potion/Quick guide says "Your character may spend several minutes finding a herb"; every recorded search found the
+  herb in 10 or 21 ticks, so the code follows the recordings and the Wiki's figure is a noted difference.
 - Palm tree, scorched earth and rock: the line and the find on the same tick, with no animation.
 - Not done: the fungus covered wall plays pick_wall start/middle/end (2096/2097/2098) and finds the herb 5 to 17
   ticks after the search in the local run, with a moss giant attacking; no clean cadence fits, so it still finds
-  the herb at once.
+  the herb at once. The Wiki's Quick guide says the wall "may take up to a minute"; ours differs from
+  both the recording and the Wiki here.
 
 ## Findings
 

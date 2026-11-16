@@ -70,12 +70,22 @@ function search(p, id, [x, y, z]) {
   return event;
 }
 
+// Only the Jungle Potion plugin's rolls are fixed: global tasks (CalcifiedWater's cycle and the like)
+// also call Math.random while these tests tick, and must not use up the vine's queued rolls.
+function mockVineRolls(t, rolls) {
+  const real = Math.random;
+  t.mock.method(Math, 'random', () => {
+    if (!String(new Error().stack).includes('JunglePotion.Quest.js')) return real();
+    return Array.isArray(rolls) ? (rolls.shift() ?? 0) : rolls;
+  });
+}
+
 const tick = (n) => { for (let i = 0; i < n; i++) core.TaskManager.process(); };
 const locAt = (id, [x, y, z]) => MapObjects.get(id, new Location(x, y, z), null);
 const grimy = (p, id) => p.getInventory().getAmount(id);
 
 test('vine: search line, seq 2094 + sound 1957, the herb 10 ticks later in an objectbox; the vine empties and grows back after 99 ticks', (t) => {
-  t.mock.method(Math, 'random', () => 0);
+  mockVineRolls(t, 0);
   const { p, seen } = searcher(t, 1, VINE);
   assert.equal(search(p, 2575, VINE).handled, true);
   assert.deepEqual(seen.spam, ['You search the vine...']);
@@ -99,7 +109,7 @@ test('vine: search line, seq 2094 + sound 1957, the herb 10 ticks later in an ob
 
 test('vine: a missed roll replays the sound, retries a tick later and finds it at 21 ticks', (t) => {
   const rolls = [0.95, 0];
-  t.mock.method(Math, 'random', () => rolls.shift() ?? 0);
+  mockVineRolls(t, rolls);
   const { p, seen } = searcher(t, 1, VINE);
   search(p, 2575, VINE);
   tick(10);
@@ -117,7 +127,7 @@ test('vine: a missed roll replays the sound, retries a tick later and finds it a
 });
 
 test('vine: walking away ends the search; nothing is found and the vine stays full', (t) => {
-  t.mock.method(Math, 'random', () => 0);
+  mockVineRolls(t, 0);
   const { p } = searcher(t, 1, VINE);
   search(p, 2575, VINE);
   tick(3);
@@ -128,7 +138,7 @@ test('vine: walking away ends the search; nothing is found and the vine stays fu
 });
 
 test('vine: teleporting away mid-search ends it; no herb, and the vine stays full', (t) => {
-  t.mock.method(Math, 'random', () => 0);
+  mockVineRolls(t, 0);
   const { p, seen } = searcher(t, 1, VINE);
   search(p, 2575, VINE);
   tick(3);
@@ -141,7 +151,7 @@ test('vine: teleporting away mid-search ends it; no herb, and the vine stays ful
 });
 
 test('vine: an item action or Attack click (interaction cleared) ends the search', (t) => {
-  t.mock.method(Math, 'random', () => 0);
+  mockVineRolls(t, 0);
   for (const reason of ['item', 'attack']) {
     const { p } = searcher(t, 1, VINE);
     search(p, 2575, VINE);

@@ -271,6 +271,26 @@ test("Bervirius' notes: the yellow papyrus opens on the handwriting scroll (222)
   assert.equal(strings.get(CacheDefinitions.getComponentId("messagescroll_handwriting:messagescroll1_hw")), "");
 });
 
+for (const [option, line, text] of [
+  ["Decayed White papyrus.", 5, "...Rashiliyia did so love objects of beauty. Her"],
+  ["Crusty Orange papyrus.", 5, "...the sphere is activated when power of a spiritual"],
+]) {
+  test(`Bervirius' notes: the ${option.slice(0, -1).toLowerCase()} opens on 222 with its own lines, four blank first`, async (t) => {
+    const f = h.actor(t, { at: [2766, 9366], stage: STAGE.ENTERED_BERVIRIUS, items: [I().BERVIRIUS_NOTES] });
+    itemAction(f, I().BERVIRIUS_NOTES, "Read");
+    h.tick(f);
+    await h.continueLine(f);
+    await h.choose(f, option);
+    h.ticks(f, 2);
+    const { CacheDefinitions } = h.core;
+    const strings = new Map(f.calls.filter((c) => c.name === "sendString").map((c) => [c.args[1], c.args[0]]));
+    const at = (n) => strings.get(CacheDefinitions.getComponentId(`messagescroll_handwriting:messagescroll${n}_hw`));
+    assert.equal(at(line), text);
+    for (let n = 1; n < line; n++) assert.equal(at(n), "", `line ${n} blank`);
+    assert.equal([...strings.values()].some((value) => /rest like your mother/.test(value)), false, "not the yellow one");
+  });
+}
+
 // ------------------------------------------------------------------ the ending
 
 test("the remains on the dolmen: the object box, the mist, Rashiliyia for her lines, then gone, the mist again and the quest complete (t5245-5257)", async (t) => {

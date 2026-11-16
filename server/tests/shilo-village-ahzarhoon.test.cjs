@@ -303,3 +303,69 @@ test("Zadimus laid to rest, the chat closed at his line, twice: one spirit at mo
   h.ticks(f, 101);
   assert.equal(spirits().length, 0, "gone after the wait");
 });
+
+test("the rope before the light: 'It's too dark to clearly see where to fix that.', and the rope is kept", async (t) => {
+  const f = h.actor(t, { at: BY_THE_MOUND, stage: 4, items: [ROPE] });
+  unit().placeFissure(f.player, FISSURE);
+  await use(f, ROPE, [FISSURE, ...MOUND_TILE]);
+  h.ticks(f, 3);
+  assert.ok(h.lines(f).includes("It's too dark to clearly see where to fix that."));
+  assert.ok(slot(f, ROPE) >= 0, "the rope stays");
+  assert.equal(h.stage(f), 4);
+  assert.equal(fissure(f), FISSURE);
+});
+
+test("the light prompt: No keeps the torch and stage 4; shut unanswered, a later menu's Yes doesn't take it either", async (t) => {
+  const f = h.actor(t, { at: BY_THE_MOUND, stage: 4, items: [TORCH] });
+  unit().placeFissure(f.player, FISSURE);
+  await use(f, TORCH, [FISSURE, ...MOUND_TILE]);
+  await untilShown(f);
+  await h.choose(f, "No");
+  h.ticks(f, 4);
+  assert.ok(slot(f, TORCH) >= 0, "No keeps the torch");
+  assert.equal(h.stage(f), 4);
+
+  await use(f, TORCH, [FISSURE, ...MOUND_TILE]);
+  await untilShown(f);
+  assert.equal(h.shown(f).title, "Are you sure? You won't get that item back.");
+  f.player.getDialogueManager().reset();
+  h.ticks(f, 2);
+  // Another of the quest's menus, with a Yes of its own: the climb's prompt on the fissure.
+  await h.clickObject(f, FISSURE, MOUND_TILE, 2);
+  await h.continueLine(f);
+  await h.choose(f, "No thanks, I'm having second thoughts.");
+  h.ticks(f, 6);
+  assert.ok(slot(f, TORCH) >= 0, "the shut prompt took nothing");
+  assert.equal(h.stage(f), 4);
+});
+
+test("the fissure is this player's: logout removes it, and login brings back the roped one (only that one)", async (t) => {
+  const roped = h.actor(t, { at: BY_THE_MOUND, stage: 6 });
+  unit().placeFissure(roped.player, ROPE_FISSURE);
+  h.PM.emitPlayerLogout({ player: roped.player, username: roped.player.getUsername() });
+  assert.equal(fissure(roped), null, "gone with the logout");
+  h.PM.emitPlayerLogin({ player: roped.player, username: roped.player.getUsername() });
+  assert.equal(fissure(roped), ROPE_FISSURE, "the roped fissure is back");
+
+  const dug = h.actor(t, { at: BY_THE_MOUND, stage: 5 });
+  unit().placeFissure(dug.player, FISSURE);
+  h.PM.emitPlayerLogout({ player: dug.player, username: dug.player.getUsername() });
+  h.PM.emitPlayerLogin({ player: dug.player, username: dug.player.getUsername() });
+  assert.equal(fissure(dug), null, "the dug one would have turned back by then");
+});
+
+for (const [name, itemId] of [["tattered scroll", TATTERED], ["crumpled scroll", CRUMPLED]]) {
+  test(`the ${name}: 'No thanks.' opens nothing and isn't reading it`, async (t) => {
+    const f = h.actor(t, { at: IN_AH_ZA_RHOON, stage: 8, items: [itemId] });
+    await h.dispatch(f, { type: "inventory_action", slot: slot(f, itemId), itemId, widgetId: 3214, option: "Read" });
+    await untilShown(f);
+    await h.continueLine(f);
+    await h.choose(f, "No thanks.");
+    h.ticks(f, 3);
+    const strings = f.calls.filter((c) => c.name === "sendString").map((c) => String(c.args[0]));
+    assert.equal(strings.some((text) => /^(Bervirius, son of King Danthalas|Rashiliyia's rage went unchecked)/.test(text)), false, "no scroll text");
+    assert.equal(f.calls.some((c) => /Interface/.test(c.name) && (c.args.includes(220) || c.args.includes(222))), false, "no scroll opened");
+    const state = h.quest().state;
+    assert.equal(state.mechTest(f.player, state.MECH.READ_TATTERED) || state.mechTest(f.player, state.MECH.READ_CRUMPLED), false);
+  });
+}

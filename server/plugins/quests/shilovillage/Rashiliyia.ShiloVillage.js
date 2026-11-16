@@ -78,7 +78,7 @@ module.exports = function attachRashiliyia(api, sv) {
   const DOOR_CROSS_X = 2892;
   const PLACE_SEQ = 832; // human_pickuptable
   const LAST_BONE_BOX = "MhsAsF";
-  const PENDING_BONE_ATTRIBUTE = "quest.shilo_village.pending_bone";
+  const PENDING_BONE_ATTRIBUTE = "shilo-village:pending-bone";
 
   // --- Nazastarool ------------------------------------------------------------------------------
   const FORMS = NPC.NAZASTAROOL;

@@ -220,3 +220,15 @@ test("Mosol Rei before the quest: 'What danger...' closes the chat, he shouts, a
   assert.equal(undead.length, 3, "three at the top roll");
   assert.equal(f.graphics.filter((g) => g.id === 86).length, 3, "a puff of smoke each");
 });
+
+test("Mosol Rei after the quest: 'I think I'll see it some other time.' leaves the player where they stand, with no box or fade", async (t) => {
+  const f = h.actor(t, { at: [2880, 2954], stage: COMPLETE });
+  const mosol = h.spawn(f, 8695, [2880, 2953]);
+  const talk = mosol.getCurrentDefinition(f.player).getActions().indexOf("Talk-to");
+  const said = await h.converse(f, () => h.talk(f, mosol, talk + 1), ["I think I'll see it some other time."]);
+  assert.ok(said.some((line) => line.includes("You can now enter Shilo Village.")), said.join("\n"));
+  h.ticks(f, 5);
+  assert.deepEqual(h.at(f), [2880, 2954]);
+  assert.equal(f.said.some((s) => s.text === "Mosol leads you into the village and walks back out into the jungle."), false);
+  assert.equal(f.calls.some((c) => c.name === "sendSubInterface" && c.args[1] === 174), false, "no fade");
+});

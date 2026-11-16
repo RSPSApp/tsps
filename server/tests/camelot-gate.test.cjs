@@ -96,13 +96,16 @@ for (const [label, id, x] of [["left", LEFT, 2757], ["right", RIGHT, 2758]]) {
     const { player, sounds } = actor(t, x, GATE_Y);
     click(player, id, x);
     assert.ok(until(isOpen, 4), "both leaves swing open onto the tiles north");
+    // Live steps across on the swap's own tick (local 1001994 tick 17417); every walkOver gate here
+    // (walkOverGate in Doors.plugin.js) steps a tick later, still before the gate shuts.
     assert.equal(locAt(LEFT_OPEN, 2757, NORTH_Y).getFace(), 0);
     assert.equal(locAt(RIGHT_OPEN, 2758, NORTH_Y).getFace(), 2);
     assert.ok(locAt(INVISWALL, 2757, GATE_Y) && locAt(INVISWALL, 2758, GATE_Y), "inviswall on both gate tiles");
     assert.ok(sounds.some(([id]) => id === 69), "grate_open (69)");
-    assert.ok(until(() => at(player)[1] === NORTH_Y, 4), `the player steps through: ${at(player)}`);
-    assert.deepEqual(at(player), [x, NORTH_Y]);
-    assert.ok(until(isShut, 3), "the gate is back two ticks later, with no nameless leaf left standing");
+    tick();
+    assert.deepEqual(at(player), [x, NORTH_Y], "the player is through a tick after the click");
+    tick();
+    assert.ok(isShut(), "the gate is back by the second tick, with no nameless leaf left standing");
   });
 }
 

@@ -26,6 +26,7 @@ const RIDGE = Object.freeze({
   endIn: "You skillfully balance across the ridge...",
   endOut: "You skillfully balance along the ridge...",
   closeTicks: 2,
+  openSound: 62, // synth_sound on each opening (449 ticks 16 and 30, 451 ticks 45 and 49)
 });
 
 function ridgeLocation(core, [x, y, z]) {
@@ -47,7 +48,8 @@ function ridgeObject(core, context, id, tile) {
 }
 
 /**
- * Swaps the closed locs for their open pair, then puts the closed locs back two ticks later.
+ * Swaps the closed locs for their open pair with the opening sound, then puts the closed locs back
+ * two ticks later, silently.
  * Every closed loc is found before anything changes, so a missing loc leaves the map untouched.
  */
 function ridgeSwap(context, closedTiles, openTiles) {
@@ -59,6 +61,7 @@ function ridgeSwap(context, closedTiles, openTiles) {
     new core.GameObject(id, ridgeLocation(core, tile), 0, face, area));
   for (const object of closed) core.ObjectManager.deregister(object, true);
   for (const object of opened) core.ObjectManager.register(object, true);
+  core.Sounds.sendSound(context.player, new core.Sound(RIDGE.openSound, 1, 0, 0));
   const task = new core.Task(RIDGE.closeTicks, { task: "wilderness:ridge-gate" });
   task.execute = () => {
     task.stop();

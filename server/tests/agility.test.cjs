@@ -2687,15 +2687,17 @@ test("Wilderness ridge door: opening the south door and the north gates swaps th
     },
     Task: class { constructor(delay, key) { this.delay = delay; this.key = key; } stop() { this.stopped = true; } },
     TaskManager: { submit: (task) => events.push(["task", task]) },
+    Sound: class { constructor(id) { this.id = id; } },
+    Sounds: { sendSound: (player, sound) => events.push(["sound", sound.id]) },
   };
   const context = { core, player: { getPrivateArea: () => null } };
 
   assert.equal(openRidgeDoor(context), true);
-  assert.deepEqual(events.slice(0, 3), [
-    ["deregister", RIDGE.door], ["register", RIDGE.invisWall], ["register", RIDGE.prisonDoorOpen],
+  assert.deepEqual(events.slice(0, 4), [
+    ["deregister", RIDGE.door], ["register", RIDGE.invisWall], ["register", RIDGE.prisonDoorOpen], ["sound", 62],
   ]);
-  assert.equal(events[3][0], "task");
-  const doorTask = events[3][1];
+  assert.equal(events[4][0], "task");
+  const doorTask = events[4][1];
   assert.equal(doorTask.delay, 2);
   events.length = 0;
   doorTask.execute();
@@ -2708,7 +2710,7 @@ test("Wilderness ridge door: opening the south door and the north gates swaps th
   assert.deepEqual(events.filter(([kind]) => kind !== "task"), [
     ["deregister", RIDGE.gateLeft], ["deregister", RIDGE.gateRight],
     ["register", RIDGE.invisWall], ["register", RIDGE.invisWall],
-    ["register", RIDGE.gateOpenLeft], ["register", RIDGE.gateOpenRight],
+    ["register", RIDGE.gateOpenLeft], ["register", RIDGE.gateOpenRight], ["sound", 62],
   ]);
 
   // A missing gate leaf leaves every closed loc in place: no partial swap.

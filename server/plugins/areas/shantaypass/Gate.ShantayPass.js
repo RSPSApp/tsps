@@ -6,7 +6,8 @@
  *   lets a player through without a pass (Wiki).
  * - Until it is turned off, the desert warning (565, cws_warning_10) opens first, a tick after
  *   arriving. Each showing counts up varbit 3860 to 6; from then on it offers "Don't ask me
- *   this again", which sets 7: no more warnings.
+ *   this again", which sets 7: no more warnings. The WarningScreens plugin shows it, and the
+ *   Doomsayer turns it back on.
  * - A tick after arriving (or after "Proceed regardless") the player steps onto the gate's row,
  *   the next tick through it, and a tick later faces the way they went. Going north is free.
  * - The guard's "Pass" does the same from wherever the player stands north of the gate.
@@ -19,20 +20,8 @@ const GATE_WIDTH = 4;
 const GATE_Y = 3116;
 const GATE_GUARD = 4648;
 
-const WARNING = 565;
-const WARNING_PROCEED = 17;
-const WARNING_STAY_OUT = 18;
-const WARNING_DONT_ASK = 20;
-const WARNING_DONT_ASK_LAYER = (WARNING << 16) | 21;
-const WARNING_VARBIT = 3860; // cws_warning_10
-/** The showings after which the warning offers "Don't ask me this again". */
-const WARNING_OFFER_TOGGLE = 6;
-const WARNING_OFF = 7;
-const SCRIPT_MAINMODAL_OPEN = 2524;
-const WARNINGS_ATTRIBUTE = "shantay-pass:warnings";
-const PENDING_ATTRIBUTE = "shantay-pass:pending-crossing";
-
-const TOGGLED_OFF_MESSAGE = "You have toggled this warning screen off. You will not see this warning screen unless you speak to the Doomsayer in Lumbridge to turn it on again.";
+/** cws_warning_10: the desert warning (565). */
+const DESERT_WARNING = 10;
 const PASS_TAKEN_MESSAGE = "The guard takes your Shantay Pass as you go through the gate.";
 const NO_PASS_LINE = "You need a Shantay pass to get through this gate. See Shantay, he will sell you one for a very reasonable price.";
 
@@ -104,18 +93,11 @@ function walkThrough(player, crossing) {
   });
 }
 
-function showWarning(player, crossing) {
-  const sender = player.getPacketSender();
-  const shown = Number(player.getAttribute(WARNINGS_ATTRIBUTE)) || 0;
-  player.setAttribute(PENDING_ATTRIBUTE, crossing);
-  if (shown >= WARNING_OFFER_TOGGLE) {
-    sender.sendInterfaceDisplayState(WARNING_DONT_ASK_LAYER, false);
-  } else {
-    player.setAttribute(WARNINGS_ATTRIBUTE, shown + 1);
-    sender.sendVarbit(WARNING_VARBIT, shown + 1);
-  }
-  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
-  sender.sendInterface(WARNING);
+/** Into the desert once the warning has been answered, if the player is still at the gate. */
+function enterDesert(player, crossing) {
+  const now = crossingFor(sourceOf(player));
+  if (!now || now.desert !== crossing.desert || !mayEnterDesert(player)) return;
+  walkThrough(player, now);
 }
 
 /** A tick after arriving: the guard, the warning or straight through. */
@@ -124,12 +106,13 @@ function cross(player, crossing) {
     Common.npcLine(player, GATE_GUARD, NO_PASS_LINE);
     return;
   }
-  const warned = (Number(player.getAttribute(WARNINGS_ATTRIBUTE)) || 0) >= WARNING_OFF;
-  if (crossing.desert && !warned) {
-    showWarning(player, crossing);
+  if (!crossing.desert) {
+    walkThrough(player, crossing);
     return;
   }
-  walkThrough(player, crossing);
+  const warning = { player, warning: DESERT_WARNING, proceed: () => enterDesert(player, crossing) };
+  Common.getApi().emitCustomEvent("warning-screen:show", warning);
+  if (!warning.handled) walkThrough(player, crossing);
 }
 
 function goThrough(event) {
@@ -166,30 +149,6 @@ function walkThen(player, target, action) {
   });
 }
 
-function warningClick(event) {
-  const buttonId = Number(event.buttonId ?? 0);
-  if ((event.groupId ?? (buttonId >>> 16)) !== WARNING) return;
-  const child = event.childId ?? (buttonId & 0xffff);
-  const { player } = event;
-  if (child === WARNING_DONT_ASK) {
-    event.handled = true;
-    player.setAttribute(WARNINGS_ATTRIBUTE, WARNING_OFF);
-    player.getPacketSender().sendVarbit(WARNING_VARBIT, WARNING_OFF);
-    player.sendMessage(TOGGLED_OFF_MESSAGE);
-    return;
-  }
-  if (child !== WARNING_PROCEED && child !== WARNING_STAY_OUT) return;
-  event.handled = true;
-  const crossing = player.getAttribute(PENDING_ATTRIBUTE);
-  player.setAttribute(PENDING_ATTRIBUTE, null);
-  player.getPacketSender().sendInterfaceRemoval();
-  if (child !== WARNING_PROCEED || !crossing) return;
-  // The player may have walked off while the warning was up.
-  const now = crossingFor(sourceOf(player));
-  if (!now || now.desert !== crossing.desert || !mayEnterDesert(player)) return;
-  walkThrough(player, now);
-}
-
 function lookAt({ player }) {
   const { DialogueChainBuilder, StatementDialogue, EndDialogue } = Common.getCore();
   const chain = new DialogueChainBuilder();
@@ -199,17 +158,9 @@ function lookAt({ player }) {
   return true;
 }
 
-function restoreWarningVarbit({ player }) {
-  const shown = Number(player.getAttribute(WARNINGS_ATTRIBUTE)) || 0;
-  if (shown > 0) player.getPacketSender().sendVarbit(WARNING_VARBIT, shown);
-}
-
 function attach(api) {
-  api.persistAttribute(WARNINGS_ATTRIBUTE, 0);
   api.onObjectInteraction("Shantay pass", { "Go-through": goThrough, "Look-at": lookAt });
   api.onNpcInteraction("Shantay Guard", { Pass: passGuard });
-  api.onInterfaceActionClick(warningClick);
-  api.onPlayerLogin(restoreWarningVarbit);
 }
 
 module.exports = attach;

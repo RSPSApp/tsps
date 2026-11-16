@@ -28,7 +28,7 @@ The gate is loc 4031 "Shantay pass", 4×1 at 3302–3305, 3116.
 - **Going north is free**, with no message.
 - **The guard's "Pass" option** does the same crossing from wherever the player stands north of the gate. The plugin walks them to the gate first.
 
-**The desert warning.** Interface 565, `cws_warning_10`, opens at +1 (script 2524 `[-1, -1]`, then the modal) until the player turns it off. Each showing counts varbit 3860 up to 6. From then on, the "Don't ask me this again" layer (565:21) is shown. Clicking it sets 3860 to 7 with "You have toggled this warning screen off. You will not see this warning screen unless you speak to the Doomsayer in Lumbridge to turn it on again.", and the warning doesn't open again. "Proceed regardless" (17) crosses; "Stay out" (18) closes it.
+**The desert warning.** Interface 565, `cws_warning_10`, opens at +1 (script 2524 `[-1, -1]`, then the modal) until the player turns it off. Each showing counts varbit 3860 up to 6. From then on, the "Don't ask me this again" layer (565:21) is shown. Clicking it sets 3860 to 7 with "You have toggled this warning screen off. You will not see this warning screen unless you speak to the Doomsayer in Lumbridge to turn it on again.", and the warning doesn't open again. "Proceed regardless" (17) crosses; "Stay out" (18) closes it. The WarningScreens plugin (`server/plugins/world/WarningScreens.plugin.js`) shows it, as it does every warning screen, and the Doomsayer in Lumbridge turns it back on.
 
 **Desert robes.** Crossing south wearing a desert shirt, robe and boots completes the easy Desert Diary task "Enter the Desert with a set of Desert robes equipped." Live credits it on the second step.
 

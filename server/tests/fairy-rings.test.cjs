@@ -18,6 +18,8 @@ const realTeleportCheck = TeleportHandler.checkReqs;
 const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 const { StatementDialogue } = require("../dist/game/model/dialogues/entries/impl/StatementDialogue");
 const FairyRings = require("../plugins/world/FairyRings.plugin");
+// AJQ's dark warning is the WarningScreens plugin's (cws_warning_15, 578).
+const WarningScreens = require("../plugins/world/warningscreens/Screens.WarningScreens");
 
 const T = FairyRings._test;
 const DRAMEN_STAFF = 772;
@@ -46,6 +48,7 @@ before(async () => {
       if (name === "quest:get-stage") event.stage = questStages.get(event.key) ?? 1000;
       if (name.startsWith("fairy-rings:")) emitted.push({ name, code: event.code });
       if (name === "diary:is-complete") event.complete = event.diary === "lumbridge" && event.tier === "elite" && eliteLumbridge.has(event.player);
+      if (name === "warning-screen:show") WarningScreens.show(event);
     },
     onPlayerLogin() {}, onCanAttack: handler => { canAttackHook = handler; }, log() {},
   });
@@ -89,6 +92,8 @@ function player({ weapon = DRAMEN_STAFF, inventory = [], at = new Location(3129,
     closeSubInterface: () => sender,
     sendInterfaceRemoval: () => ((open = -1), log("close"), sender),
     sendClientScript: (id, ...args) => (log(`script ${id} [${args}]`), sender),
+    sendInterfaceScript: (id, args) => (log(`script ${id} [${args}]`), sender),
+    sendInterfaceDisplayState: () => sender,
     sendSoundEffect: (id) => (log(`sound ${id}`), sender),
     sendTypedMessage: (type, text) => (log(`mesbox ${text}`), sender),
   };
@@ -137,7 +142,11 @@ function runTicks({ ticks, nextTick }, count) {
 
 /** The ring in the capture (ring-walk.txt), configured from the tile north of it. */
 const RING = { x: 3129, y: 3496, z: 0 };
-const click = (p, groupId, childId, option, action) => T.interfaceAction({ player: p, groupId, childId, option, action, handled: false });
+const click = (p, groupId, childId, option, action) => {
+  const event = { player: p, groupId, childId, option, action, handled: false };
+  WarningScreens.click(event);
+  if (!event.handled) T.interfaceAction(event);
+};
 
 test("the cache's fairy ring table: 64 combinations, as captured for AJR and AJQ", () => {
   const rings = T.rings();

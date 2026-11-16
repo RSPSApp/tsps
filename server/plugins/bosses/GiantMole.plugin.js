@@ -29,7 +29,11 @@
  * light source such as a lit candle or lantern"). With a light, the dig (anim 830, synth sound
  * 1470) starts and the dark-area warning (cws_warning_3, "Falador Mole Lair", shown by
  * WarningScreens) opens on the same tick until it is turned off, its lines rewritten to the mole
- * hill's (rsprox_transcripts/227/910326.txt tick 1288); Yes finishes the dig.
+ * hill's (rsprox_transcripts/227/910326.txt tick 1288). Yes asks "What kind of tunnels would you
+ * like to enter?" (Public./Private.); either choice digs again (830, 1470) and drops the player a
+ * tick later with the spam line, Private into a rented instance as Fight-privately rents one
+ * (227/910326.txt ticks 1292-1295, 227/910356.txt ticks 13201-13207). With the screen turned off
+ * the dig goes straight into the public lair, as before (no recording of that since instances).
  *
  * For her combat achievements (GiantMole.CombatAchievements.js) each life keeps, on the NPC
  * (a respawn is a new clone, so it starts clean): how often she burrowed, the tick she last
@@ -50,7 +54,8 @@
  * its player leaves; logging out in it logs back in by the spade, and a death there leaves its
  * grave by the spade, outside the entrance (Wiki, Instance). Ours: the
  * payment and short-of-coins lines are Sarachnis' instance wording (no Giant Mole payment was
- * recorded), and no "dropped down" line is sent for it (only the mole hill dig was recorded). Her
+ * recorded; 227/910356.txt shows no payment line for Private on a hill, the Wiki's fee is still taken),
+ * and Fight-privately sends no "dropped down" line (only the mole hill's choice was recorded). Her
  * next life comes 16 ticks after a kill, while the instance has a player.
  *
  * Skipped: the public lair's baby moles in instances, her dirt putting out open light sources when she burrows
@@ -92,6 +97,12 @@ const SPADE_STAND = { x: 2983, y: 3387 };
 const SPADES = ["Spade", "Eastfloor spade"];
 /** Captured: the dig animates a tick after the click and lands 2 ticks after it (226/01638 ticks 272-274). */
 const DIG_IN_TICKS = 2;
+/** After Yes on the warning (rsprox_transcripts/227/910326.txt tick 1292, 227/910356.txt tick 13201). */
+const TUNNELS_PROMPT = "What kind of tunnels would you like to enter?";
+const PUBLIC_TUNNELS = "Public.";
+const PRIVATE_TUNNELS = "Private.";
+/** The choice digs again and drops a tick later (910326 ticks 1294-1295, 910356 ticks 13206-13207). */
+const TUNNELS_DIG_IN_TICKS = 1;
 /** mole_burrow_down runs 97 client cycles (3.2 ticks): hidden after 3, before she would stand back up. */
 const DIG_TICKS = 3;
 const BURROW_TICKS = 4; // ponytail: eyeballed; tune against live if she reads fast/slow
@@ -137,26 +148,61 @@ function setRespawn({ NpcDefinition, NpcIdentifiers }) {
 /** Players digging their way in, so a second click mid-dig does not queue another move. */
 const diggingIn = new WeakSet();
 
-function digIntoLair(core, player) {
-  const { Animation, Location } = core;
+function digIntoLair(api, player) {
+  const { core } = api;
+  const { Location } = core;
   if (diggingIn.has(player)) return;
   if (!Darkness.canSeeAt(player, new Location(MOLE_LAIR_ENTRANCE.x, MOLE_LAIR_ENTRANCE.y, 0))) {
     player.sendMessage(NEED_LIGHT_MESSAGE);
     return;
   }
-  player.performAnimation(new Animation(DIG_ANIMATION_ID));
-  player.getPacketSender().sendSound(DIG_SOUND, 1, 0);
-  const warning = { player, warning: MOLE_LAIR_WARNING, texts: MOLE_LAIR_WARNING_TEXTS, proceed: () => digIn(core, player) };
+  playDig(core, player);
+  const warning = { player, warning: MOLE_LAIR_WARNING, texts: MOLE_LAIR_WARNING_TEXTS, proceed: () => chooseTunnels(api, player) };
   core.PluginManager.emitCustomEvent("warning-screen:show", warning);
-  if (!warning.handled) digIn(core, player);
+  if (!warning.handled) digIn(core, player, DIG_IN_TICKS);
 }
 
-/** Through the hill: in 2 ticks with a spam line, as captured. */
-function digIn(core, player) {
+function playDig({ Animation }, player) {
+  player.performAnimation(new Animation(DIG_ANIMATION_ID));
+  player.getPacketSender().sendSound(DIG_SOUND, 1, 0);
+}
+
+/**
+ * Yes on the warning: "What kind of tunnels would you like to enter?" (Public./Private.), then the dig
+ * again and the drop a tick later (rsprox_transcripts/227/910326.txt ticks 1292-1295 Public,
+ * 227/910356.txt ticks 13201-13207 Private).
+ */
+function chooseTunnels(api, player) {
+  api.sendMultiChatboxPrompt(player, TUNNELS_PROMPT,
+    PUBLIC_TUNNELS, () => enterTunnels(api, player, false),
+    PRIVATE_TUNNELS, () => enterTunnels(api, player, true));
+}
+
+function enterTunnels(api, player, rented) {
+  const { core } = api;
+  if (diggingIn.has(player) || inInstance(player)) return;
+  playDig(core, player);
+  if (!rented) {
+    digIn(core, player, TUNNELS_DIG_IN_TICKS);
+    return;
+  }
+  diggingIn.add(player);
+  const task = new core.Task(TUNNELS_DIG_IN_TICKS, player, false);
+  task.execute = () => {
+    task.stop();
+    diggingIn.delete(player);
+    if (player.isRegistered?.() === false) return;
+    if (rentInstance(api, player)) player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, DROPPED_IN_MESSAGE);
+  };
+  core.TaskManager.submit(task);
+}
+
+/** Through the hill: in `ticks` with a spam line, as captured. */
+function digIn(core, player, ticks) {
   const { Location, Task, TaskManager } = core;
   if (diggingIn.has(player)) return;
   diggingIn.add(player);
-  const task = new Task(DIG_IN_TICKS, player, false);
+  const task = new Task(ticks, player, false);
   task.execute = () => {
     task.stop();
     diggingIn.delete(player);
@@ -167,8 +213,8 @@ function digIn(core, player) {
   TaskManager.submit(task);
 }
 
-function digMoleHill(core, { player }) {
-  digIntoLair(core, player);
+function digMoleHill(api, { player }) {
+  digIntoLair(api, player);
   return true;
 }
 
@@ -178,9 +224,9 @@ function onMoleHill({ MapObjects }, player) {
 }
 
 /** A spade's Dig on top of a mole hill; anywhere else the click stays open for other digs. */
-function digOnMoleHill(core, { player }) {
-  if (!onMoleHill(core, player)) return false;
-  digIntoLair(core, player);
+function digOnMoleHill(api, { player }) {
+  if (!onMoleHill(api.core, player)) return false;
+  digIntoLair(api, player);
   return true;
 }
 
@@ -289,16 +335,23 @@ function fightPrivately(api, { player, objectId }) {
   const { core } = api;
   if (objectId !== core.ObjectIdentifiers.SPADE_5) return false;
   if (inInstance(player)) return true;
+  rentInstance(api, player);
+  return true;
+}
+
+/** The light check, then the fee from the bank, then into a new instance; true once in. */
+function rentInstance(api, player) {
+  const { core } = api;
   const entrance = new core.Location(MOLE_LAIR_ENTRANCE.x, MOLE_LAIR_ENTRANCE.y, 0);
   if (!Darkness.canSeeAt(player, entrance)) {
     player.sendMessage(NEED_LIGHT_MESSAGE);
-    return true;
+    return false;
   }
   const fee = instanceFee(api, player);
   const amount = fee.toLocaleString("en-US");
   if (!takeBankFee(core, player, fee)) {
     player.sendMessage(`You need ${amount} coins in your bank to rent a private instance.`);
-    return true;
+    return false;
   }
   player.sendMessage(`<col=ef1020>${amount} coins is taken from your bank to rent a private instance.</col>`);
   player.getMovementQueue().reset();
@@ -457,8 +510,8 @@ module.exports = {
   description: "The Giant Mole in the Falador Mole Hole: melee only, burrowing to fixed resurface spots between 5% and 50% hitpoints.",
   members: true,
   register(api) {
-    api.onItemOnObject("Spade", "Mole hill", digMoleHill.bind(null, api.core));
-    for (const spade of SPADES) api.onItemAction(spade, { Dig: digOnMoleHill.bind(null, api.core) });
+    api.onItemOnObject("Spade", "Mole hill", digMoleHill.bind(null, api));
+    for (const spade of SPADES) api.onItemAction(spade, { Dig: digOnMoleHill.bind(null, api) });
     api.onObjectInteraction("Mole hill", { "Look-inside": lookInsideMoleHill.bind(null, api.core) });
     api.onObjectFirstClick(api.core.ObjectIdentifiers.ROPE_17, climbMoleHoleExit.bind(null, api.core));
     api.onObjectInteraction("Spade", { "Fight-privately": fightPrivately.bind(null, api) });

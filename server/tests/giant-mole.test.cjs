@@ -417,10 +417,12 @@ test('with the Fire of Eternal Light built (my2arm_fire_mole) no light source is
 });
 
 function instanceScene(t, { coins = 30000, hard = 0, iron = false, light = true } = {}) {
-  const named = {}, hooks = {}, tasks = [], spawned = [];
+  const named = {}, hooks = {}, tasks = [], spawned = [], prompts = [];
   const api = new Proxy({
     core,
     onObjectInteraction: (name, actions) => { named[name] = actions; },
+    onItemOnObject: (item, object, handler) => { hooks.itemOnObject = handler; },
+    sendMultiChatboxPrompt: (player, title, ...pairs) => { prompts.push({ title, pairs }); return true; },
     onPlayerLogin: handler => { hooks.login = handler; },
     onNpcDeath: handler => { hooks.death = handler; },
     onCustomEvent: (name, handler) => { hooks[name] = handler; },
@@ -445,8 +447,78 @@ function instanceScene(t, { coins = 30000, hard = 0, iron = false, light = true 
   if (light) p.getInventory().add(new core.Item(core.ItemIdentifiers.LIT_CANDLE, 1));
   if (coins > 0) p.getBank(0).add(new core.Item(core.ItemIdentifiers.COINS, coins));
   const fight = () => named.Spade['Fight-privately']({ player: p, objectId: core.ObjectIdentifiers.SPADE_5 });
-  return { p, named, hooks, tasks, spawned, messages, spade, fight };
+  return { p, named, hooks, tasks, spawned, messages, spade, fight, prompts };
 }
+
+/** Digs on a mole hill with the warning screen on, presses Yes, and returns the tunnels prompt. */
+function digWithWarning(t, s) {
+  let warning = null;
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+    if (name === 'warning-screen:show') { event.handled = true; warning = event; }
+  });
+  const typed = [];
+  const sender = s.p.getPacketSender();
+  const send = new Proxy({ sendTypedMessage: (type, text) => { typed.push([type, text]); return send; } },
+    { get: (obj, key) => obj[key] ?? sender[key] });
+  s.p.getPacketSender = () => send;
+  s.p.isRegistered = () => true;
+  const hill = new core.Location(2996, 3377, 0);
+  s.p.setLocation(hill);
+  assert.equal(s.hooks.itemOnObject({ player: s.p }), true);
+  assert.ok(warning, 'the warning screen opens');
+  assert.equal(s.prompts.length, 0, 'no choice before Yes');
+  s.p.performAnimation(new core.Animation(-1));
+  warning.proceed();
+  assert.equal(s.prompts.length, 1);
+  const prompt = s.prompts[0];
+  assert.equal(prompt.title, 'What kind of tunnels would you like to enter?');
+  assert.deepEqual(prompt.pairs.filter((value) => typeof value === 'string'), ['Public.', 'Private.']);
+  assert.ok(s.p.getLocation().equals(hill), 'still on the hill while choosing');
+  const choose = (label) => prompt.pairs[prompt.pairs.indexOf(label) + 1]();
+  const tick = () => { for (const task of [...s.tasks]) if (task.isRunning()) task.tick(); };
+  return { hill, typed, choose, tick };
+}
+
+// rsprox_transcripts/227/910326.txt ticks 1292-1295: Yes, the prompt, Public. digs again and drops a tick later.
+test('Yes on the mole hill warning asks which tunnels; Public. digs again and drops into the lair a tick later', t => {
+  const s = instanceScene(t, { coins: 30000 });
+  const dig = digWithWarning(t, s);
+  dig.choose('Public.');
+  assert.equal(s.p.getAnimation()?.getId(), 830, 'the dig plays again on the choice');
+  assert.ok(s.p.getLocation().equals(dig.hill));
+  dig.tick();
+  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5237, 0)), 'the public lair a tick after the choice');
+  assert.equal(s.p.getPrivateArea(), null);
+  assert.deepEqual(dig.typed, [[core.ChatType.SPAM, 'You seem to have dropped down into a network of mole tunnels.']]);
+  assert.equal(s.p.getBank(0).getAmount(core.ItemIdentifiers.COINS), 30000, 'public tunnels are free');
+});
+
+// rsprox_transcripts/227/910356.txt ticks 13201-13207: Private. digs again and drops into an instance a tick later;
+// the Wiki's fee is taken from the bank as Fight-privately takes it.
+test('Private. on the mole hill rents the instance a tick after the choice; short of coins it stays outside', t => {
+  const s = instanceScene(t, { coins: 25000 });
+  const dig = digWithWarning(t, s);
+  dig.choose('Private.');
+  assert.equal(s.p.getAnimation()?.getId(), 830);
+  assert.equal(s.p.getBank(0).getAmount(core.ItemIdentifiers.COINS), 25000, 'nothing taken before the drop');
+  dig.choose('Private.');
+  dig.tick();
+  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5237, 0)));
+  assert.ok(s.p.getPrivateArea() instanceof core.PrivateArea, 'a private lair');
+  assert.equal(s.spawned.length, 1, 'one instance, one Mole, despite a second click');
+  assert.equal(s.p.getBank(0).getAmount(core.ItemIdentifiers.COINS), 0, 'the fee once');
+  assert.deepEqual(s.messages, ['<col=ef1020>25,000 coins is taken from your bank to rent a private instance.</col>']);
+  assert.deepEqual(dig.typed, [[core.ChatType.SPAM, 'You seem to have dropped down into a network of mole tunnels.']]);
+
+  const short = instanceScene(t, { coins: 24999 });
+  const outside = digWithWarning(t, short);
+  outside.choose('Private.');
+  outside.tick();
+  assert.ok(short.p.getLocation().equals(outside.hill), 'short of coins: still on the hill');
+  assert.equal(short.p.getPrivateArea(), null);
+  assert.deepEqual(short.messages, ['You need 25,000 coins in your bank to rent a private instance.']);
+  assert.deepEqual(outside.typed, [], 'no drop line');
+});
 
 test('Fight-privately on the north-west spade without a light source is refused first (rsprox 240/911352 tick 45)', t => {
   const s = instanceScene(t, { light: false });

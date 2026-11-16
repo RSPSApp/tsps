@@ -20,6 +20,7 @@ const { WeaponInterfaceManager } = require("../dist/game/content/combat/WeaponIn
 const { Equipment } = require("../dist/game/model/container/impl/Equipment");
 const { World } = require("../dist/game/World");
 const { TaskManager } = require("../dist/game/task/TaskManager");
+const { EquipPacketListener } = require("../dist/net/packet/impl/EquipPacketListener");
 
 let core;
 let cycle = 5000;
@@ -264,3 +265,52 @@ test("a newer grant survives the old expiry task and is consumed by the claw att
   const { hit } = branchHit(t, attacker, npc(), core.ItemIdentifiers.DRAGON_CLAWS);
   assert.equal(hit.getFirstSuccessfulRangeIndex(), 1, "the newer grant outlives the earlier timer");
 });
+
+// Wiki (Burning claws): Burning barrage uses slash or stab defence according to the selected style.
+// Real inventory equip and combat-tab style buttons feed the real special and accuracy formulas.
+for (const bonusIndex of [0, 1]) {
+  for (const effect of ["unempowered", "Entice NPC", "Entice PvP"]) {
+    test(`burning claws selected ${bonusIndex === 0 ? "stab" : "slash"} defence: ${effect}`, (t) => {
+      cycle += 100;
+      const attacker = player("styleproof", 3222), ally = player("styleally", 3223);
+      const target = effect === "Entice PvP" ? ally : npc();
+      if (effect !== "unempowered") enticed(attacker, ally);
+      const itemId = core.ItemIdentifiers.BURNING_CLAWS;
+      attacker.getInventory().setItem(0, new core.Item(itemId, 1));
+      EquipPacketListener.equip(attacker, itemId, 0, core.Inventory.INTERFACE_ID);
+      assert.equal(attacker.getEquipment().get(Equipment.WEAPON_SLOT).getId(), itemId);
+      const style = Object.values(attacker.getWeapon().getFightType()).find((type) => type.getBonusType() === bonusIndex);
+      assert.ok(style, "the cache-backed weapon category exposes the requested style");
+      assert.equal(WeaponInterfaceManager.handleStyleButton(attacker, 593, [6, 10, 14, 18][style.getChildId()]), true);
+      assert.equal(attacker.getFightType().getBonusType(), bonusIndex);
+      attacker.setSpecialPercentage(100);
+      CombatSpecial.activate(attacker);
+      assert.equal(attacker.isSpecialActivated(), true);
+      AccuracyFormulasDpsCalc.clearRollCache(attacker);
+      const plain = AccuracyFormulasDpsCalc.specialRolls(attacker, target, core.CombatType.MELEE).attack;
+      const defenceIndices = [], attackRolls = [];
+      const defenceRoll = AccuracyFormulasDpsCalc.defenseMeleeRoll.bind(AccuracyFormulasDpsCalc);
+      const specialRolls = AccuracyFormulasDpsCalc.specialRolls.bind(AccuracyFormulasDpsCalc);
+      t.mock.method(AccuracyFormulasDpsCalc, "defenseMeleeRoll", (victim, index) => {
+        defenceIndices.push(index);
+        return defenceRoll(victim, index);
+      });
+      t.mock.method(AccuracyFormulasDpsCalc, "specialRolls", (...args) => {
+        const result = specialRolls(...args); attackRolls.push(result.attack); return result;
+      });
+      // Deterministic misses expose all natural trials; the NPC's empowered second trial skips RNG.
+      let draw = 0;
+      t.mock.method(AccuracyFormulasDpsCalc, "randomInclusive", (maximum) => draw++ % 2 === 0 ? 0 : maximum);
+      t.mock.method(Math, "random", () => 0.5);
+      const method = attacker.getCombatSpecial().getCombatMethod();
+      method.start(attacker, target);
+      const [hit] = method.hits(attacker, target);
+      const guaranteedSecond = effect === "Entice NPC";
+      assert.deepEqual(defenceIndices, Array(guaranteedSecond ? 1 : 3).fill(bonusIndex));
+      assert.equal(hit.getFirstSuccessfulRangeIndex(), guaranteedSecond ? 1 : -1);
+      assert.deepEqual(attackRolls, effect === "Entice PvP"
+        ? [plain, Math.floor(plain * 1.5), plain] : Array(guaranteedSecond ? 1 : 3).fill(plain));
+      assert.equal(attacker.getSpecialPercentage(), 65, "the actual special start drains 35%");
+    });
+  }
+}

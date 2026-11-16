@@ -52,7 +52,7 @@ finish. Ticks are 1001802's; the other two agree wherever they cover the same st
 - **Warlord.** The fighter (7622) appears on the talking warlord's tile, with current_hint_arrow 7 and an arrow on
   him (t1885); live never clears that varbit. Varbit 3460 goes back to 0 30 ticks after the orbs drop, in all
   three captures (t2068 -> t2098).
-- **Ceremony.** On the chant box's continue the four chanters (Local Gnome 4979, who never walk) play 12049 and
+- **Ceremony.** On the chant box's continue the four chanters (Local Gnome 4979, who wander within one tile of their spawn: recordings 242/912220 and 237/03998) play 12049 and
   say "Su tana." (the northern pair) and "En tania." (the southern pair), twice each, every 2 ticks (t2263-2269).
   Two ticks after the last, Bolren plays spotanim 79 and seq 199 (both delay 20, t2271); 3 ticks later 598 goes to
   2 and the tree at 2543,3168 plays 333 (t2274); the box "The orbs of protection come to rest..." 4 ticks after

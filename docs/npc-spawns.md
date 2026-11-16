@@ -236,8 +236,10 @@ appear at; the in-game check on RSPSApp/tsps#5958 saw both on these tiles.
 
 The four Local Gnomes (4979, `chantergnome`) round King Bolren chant at the end of Tree Gnome Village. In
 the user's three whole-quest rsprox captures (local 1001800, 1001802, 1002235; revision 242) they are
-added on their rows' tiles, (2541, 3168), (2541, 3171), (2542, 3167) and (2542, 3172), and never walk,
-so the rows have `wanderRadius` 0. The northern pair says "Su tana." and the southern pair "En tania."
+added on their rows' tiles, (2541, 3168), (2541, 3171), (2542, 3167) and (2542, 3172), and stay within one
+tile of them: chanter 14480 walks 33 times between x 2540-2542, y 3170-3172 around (2541, 3171) over ticks
+10209-11600 of rsprox transcript 242/912220, and chanter 14399 between x 2540-2541, y 3167-3168 around
+(2541, 3168) over ticks 6958-6966 of 237/03998. So the rows have `wanderRadius` 1. The northern pair says "Su tana." and the southern pair "En tania."
 (TreeGnomeVillage.Quest.js binds them by their spawn tile).
 
 ## Emir's Arena guides (PvP Arena)

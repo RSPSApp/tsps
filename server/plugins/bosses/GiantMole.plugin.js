@@ -33,7 +33,9 @@
  * like to enter?" (Public./Private.); either choice digs again (830, 1470) and drops the player a
  * tick later with the spam line, Private into a rented instance as Fight-privately rents one
  * (227/910326.txt ticks 1292-1295, 227/910356.txt ticks 13201-13207). With the screen turned off
- * the dig goes straight into the public lair, as before (no recording of that since instances).
+ * (state 7) WarningScreens proceeds at once, so the same prompt opens on the dig and Private. stays
+ * reachable (no recording shows the screen off). Only without a WarningScreens entry at all does the
+ * dig go straight into the public lair 2 ticks later.
  *
  * For her combat achievements (GiantMole.CombatAchievements.js) each life keeps, on the NPC
  * (a respawn is a new clone, so it starts clean): how often she burrowed, the tick she last
@@ -159,6 +161,7 @@ function digIntoLair(api, player) {
   playDig(core, player);
   const warning = { player, warning: MOLE_LAIR_WARNING, texts: MOLE_LAIR_WARNING_TEXTS, proceed: () => chooseTunnels(api, player) };
   core.PluginManager.emitCustomEvent("warning-screen:show", warning);
+  // Handled covers the screen turned off too: proceed() has already opened the tunnels prompt.
   if (!warning.handled) digIn(core, player, DIG_IN_TICKS);
 }
 

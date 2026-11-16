@@ -520,6 +520,40 @@ test('Private. on the mole hill rents the instance a tick after the choice; shor
   assert.deepEqual(outside.typed, [], 'no drop line');
 });
 
+// With the warning screen turned off (cws_warning_3 at 7) the real Screens handler proceeds at once,
+// so the tunnels prompt still opens and Private. stays reachable; nothing digs in before a choice.
+test('with the mole hill warning turned off, the dig still asks which tunnels and Private. rents the instance', t => {
+  const s = instanceScene(t, { coins: 25000 });
+  const Shared = require('../plugins/world/warningscreens/Shared.WarningScreens');
+  const screens = {};
+  require('../plugins/world/warningscreens/Screens.WarningScreens')(new Proxy({
+    core,
+    onCustomEvent: (name, handler) => { screens[name] = handler; },
+  }, { get: (obj, key) => obj[key] ?? (() => {}) }));
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+    if (screens[name]) screens[name](event);
+  });
+  Shared.setState(s.p, 3, Shared.OFF);
+  const typed = [];
+  const sender = s.p.getPacketSender();
+  const send = new Proxy({ sendTypedMessage: (type, text) => { typed.push([type, text]); return send; } },
+    { get: (obj, key) => obj[key] ?? sender[key] });
+  s.p.getPacketSender = () => send;
+  s.p.isRegistered = () => true;
+  const hill = new core.Location(2996, 3377, 0);
+  s.p.setLocation(hill);
+  assert.equal(s.hooks.itemOnObject({ player: s.p }), true);
+  assert.equal(s.prompts.length, 1, 'the prompt opens straight away');
+  assert.equal(s.prompts[0].title, 'What kind of tunnels would you like to enter?');
+  assert.equal(s.tasks.length, 0, 'no dig-in queued before a choice');
+  const prompt = s.prompts[0];
+  prompt.pairs[prompt.pairs.indexOf('Private.') + 1]();
+  for (const task of [...s.tasks]) if (task.isRunning()) task.tick();
+  assert.ok(s.p.getLocation().equals(new core.Location(1752, 5237, 0)));
+  assert.ok(s.p.getPrivateArea() instanceof core.PrivateArea, 'a private lair');
+  assert.deepEqual(typed, [[core.ChatType.SPAM, 'You seem to have dropped down into a network of mole tunnels.']]);
+});
+
 test('Fight-privately on the north-west spade without a light source is refused first (rsprox 240/911352 tick 45)', t => {
   const s = instanceScene(t, { light: false });
   assert.equal(core.ObjectIdentifiers.SPADE_5, 29460, 'mole_hill_spade');

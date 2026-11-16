@@ -5877,7 +5877,7 @@ for(const name of['BIND','SNARE','ENTANGLE','CONFUSE','IBAN_BLAST','MAGIC_DART',
 });
 
 for(const name of['DRAGON_DAGGER','ANCIENT_STAFF','SLAYERS_STAFF_E_','STAFF_OF_THE_DEAD','TOXIC_STAFF_OF_THE_DEAD','KODAI_WAND','TWINFLAME_STAFF'])mTest('unsupported casting weapon '+name+' cannot pay an ordinary spell',async t=>{
-  const f=await mGame(t);await mEquip(f.a,core.ItemIdentifiers[name]);const before=resources(f.a);
+  const f=await mGame(t);if(name==='SLAYERS_STAFF_E_')sLevels(f.a);await mEquip(f.a,core.ItemIdentifiers[name]);const before=resources(f.a);
   await mSpell(f.a,f.b,'WIND_STRIKE');tick(10);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
 });
 
@@ -7670,7 +7670,8 @@ for(const row of S_ROWS)for(const element of ['fire','water','earth'])mTest('S '
 });
 for(const row of S_ROWS)mTest('S '+row.key+' actual Death pouch pays once and sacks do not fund it',async t=>{
   const f=await sGame(t,row),I=core.ItemIdentifiers,Pouch=require('../plugins/items/runepouch/Common.RunePouch');give(f.a,I.RUNE_POUCH,'S-pouch');Pouch.setSlots(f.a,[{id:560,amount:2},null,null,null]);f.a.getInventory().deleteNumber(560,f.a.getInventory().getAmount(560));f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));
-  const hit=await sFire(f,row);assert.equal(Pouch.slots(f.a)[0].amount,1);assert.equal(f.a.getInventory().getAmount(I.BLIGHTED_ENTANGLE_SACK),2);mLand(f,hit);tick(10);
+  const other=row.key==='IBAN_BLAST'?554:558,otherCost=row.key==='IBAN_BLAST'?5:4,otherBefore=f.a.getInventory().getAmount(other);
+  const hit=await sFire(f,row,false);assert.equal(Pouch.slots(f.a)[0].amount,1);assert.equal(f.a.getInventory().getAmount(560),0);assert.equal(f.a.getInventory().getAmount(other),otherBefore-otherCost);assert.equal(f.a.getInventory().getAmount(I.BLIGHTED_ENTANGLE_SACK),2);mLand(f,hit);tick(10);
   Pouch.setSlots(f.a,[null,null,null,null]);const before=resources(f.a),hp=f.b.getHitpoints(),n=f.trace.commits.length;await mSpell(f.a,f.b,row.key);tick(12);bStop(f);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,n);assert.equal(f.b.getHitpoints(),hp);
 });
 for(const row of S_ROWS)mTest('S '+row.key+' native remembered spell refuses incompatible admitted staff then compatible resumption',async t=>{

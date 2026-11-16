@@ -232,6 +232,14 @@ rows were set from it with `wanderRadius` 0 (the rows keep no facing):
 The hideout's other fairies keep their rows. `fairytale-ii-capture.test.cjs` covers the stages they
 appear at; the in-game check on RSPSApp/tsps#5958 saw both on these tiles.
 
+## Tree Gnome Village chanters
+
+The four Local Gnomes (4979, `chantergnome`) round King Bolren chant at the end of Tree Gnome Village. In
+the user's three whole-quest rsprox captures (local 1001800, 1001802, 1002235; revision 242) they are
+added on their rows' tiles, (2541, 3168), (2541, 3171), (2542, 3167) and (2542, 3172), and never walk,
+so the rows have `wanderRadius` 0. The northern pair says "Su tana." and the southern pair "En tania."
+(TreeGnomeVillage.Quest.js binds them by their spawn tile).
+
 ## Emir's Arena guides (PvP Arena)
 
 The Wiki put the 1v1 Tournament Guide (11672) and the Duel Guide (11673) on one tile, (3367, 3268), and they wandered. Live has them stand still on their own tiles. In every rsprox recording of the arena (20261106T111454, 20261107T115923, 20261107T121755) they only appear (`add`) and never walk:

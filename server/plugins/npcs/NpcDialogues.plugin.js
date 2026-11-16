@@ -15,7 +15,8 @@
  * `box: { items }` (one or two item ids) to show it as an item box, as OSRS shows
  * hand-outs, instead of a chat message, and `after` to run once the player continues past
  * that box. A statement box can also hold its continue for `box.holdTicks` while a scene
- * plays, then continue normally or, with `box.advance`, move on by itself. A line's `pauseTicks`
+ * plays, then continue normally or, with `box.advance`, move on by itself; `box.delayTicks` closes
+ * the chatbox and opens the box that many ticks later instead. A line's `pauseTicks`
  * closes the chatbox after it and waits that many ticks before the conversation carries on (a
  * scene between two lines). "npc-dialogue:start" plays a named variant on demand
  * and returns an optional request.cancel handle scoped to that playback's chain/chatbox.
@@ -1318,6 +1319,23 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
               message.after?.();
               run(rest, currentRecord);
             } }));
+            // `box.delayTicks`: the chatbox closes and the box opens that many ticks later, while a scene
+            // the handler started plays out (an idle entry holds the conversation, as `pauseTicks` does).
+            const delayTicks = Number.isInteger(message.box?.delayTicks) && message.box.delayTicks > 0 ? message.box.delayTicks : 0;
+            if (delayTicks) {
+              const waiting = new ActionDialogue(0, { execute: () => {} }, true);
+              const idle = new DialogueChainBuilder();
+              idle.add(waiting);
+              const packets = player.getPacketSender();
+              const open = packets.getChatboxGroupId?.() ?? -1;
+              if (open >= 0) packets.closeInterface(open);
+              startChain(idle);
+              api.core.TaskManager.submit(new api.core.CountdownTask(player, delayTicks, () => {
+                if (cancelled || manager.getCurrent?.() !== waiting) return;
+                startChain(box);
+              }));
+              return;
+            }
             startChain(box);
             return;
           }

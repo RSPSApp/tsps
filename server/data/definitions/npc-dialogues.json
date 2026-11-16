@@ -1477969,7 +1477969,7 @@
                         {
                           "type": "line",
                           "speaker": "King Bolren",
-                          "text": "My assistant shall guide you out. Good luck friend, try your best to return the orb",
+                          "text": "My assistant shall guide you out. Good luck friend, try your best to return the orb.",
                           "speaker_ids": [
                             4963
                           ]
@@ -1478272,22 +1478272,6 @@
           "type": "choice",
           "options": [
             {
-              "text": "Sorry, I no longer want to be involved.",
-              "steps": [
-                {
-                  "player": "Sorry I no longer want to be involved."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Commander Montai",
-                  "text": "That's a shame, we could have done with your help.",
-                  "speaker_ids": [
-                    4964
-                  ]
-                }
-              ]
-            },
-            {
               "text": "Ok, I'll gather some wood.",
               "steps": [
                 {
@@ -1478297,6 +1478281,22 @@
                   "type": "line",
                   "speaker": "Commander Montai",
                   "text": "Please be as quick as you can, I don't know how much longer we can hold out.",
+                  "speaker_ids": [
+                    4964
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Sorry, I no longer want to be involved.",
+              "steps": [
+                {
+                  "player": "Sorry I no longer want to be involved."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Commander Montai",
+                  "text": "That's a shame, we could have done with your help.",
                   "speaker_ids": [
                     4964
                   ]
@@ -1479027,8 +1479027,8 @@
         },
         {
           "type": "message",
-          "text": "You search the chest. Inside you find gnomes' stolen orb of protection.",
-          "id": "PatYnA"
+          "text": "You search the chest. Inside you find the gnomes' stolen orb of protection.",
+          "id": "JOh59P"
         }
       ],
       "into-the-stronghold-opening-the-stronghold-door-from-the-outside": [

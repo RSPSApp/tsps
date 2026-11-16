@@ -58,8 +58,42 @@ options child1. The newer runtime cache remains authoritative.
 
 No local capture showed elemental-helmet workbench crafting or its success message. Four
 ticks and costs/rewards are Wiki evidence. Exact animation, sound and success/quest-refusal
-copy remain unverified and are not invented. Rendered browser QA and independent review are
-pending; the existing full-quest playthrough status above is unchanged.
+copy remain unverified and are not invented. The existing full-quest playthrough status above
+is unchanged.
+
+Independent review of the implementation verified the source/build fingerprints and traced
+the actual dispatch, prompt, inventory/Bank, task/movement and save owners. Two extra native
+checks passed: real inventory drag invalidation with a fresh retry, and real Bank book
+switches between pending mind-shield and helmet work in both directions with valid retries.
+No findings were reported in the inspected paths; no exhaustive correctness claim.
+
+### Native recipe walkthrough
+
+A rendering browser used native inventory Use and the actual workbench 3402. Quest completion,
+Smithing 20, tools, three bars, a full bag and nearby placement were controlled fixtures;
+no timers or crafting outcomes were forced. The first recipe remained pending at world ticks
+568–571 and exchanged the bar at tick 572, adding 20 Smithing XP. The client showed the
+helmet icon in the selected slot, with the tools and full bag retained. Current level 19
+refused another native use without changing the bar or XP; no refusal text appeared.
+
+Escape with no modal open emitted no Close packet and that attempt completed a second
+helmet. It is not cancellation evidence. The subsequent native floor click did cancel pending
+work: task active at tick 933, stopped at 934, bar and XP retained. A fresh native use from the
+walked-to position then crafted the third helmet. Final state: no bars, three helmets,
+Smithing XP 4470 to 4530, quest stage 12 and quest points unchanged at zero.
+
+An actual network disconnect/save followed by a new native login restored the first two
+helmets and XP 4510. Later, native logout reached title state 10 and removed the player;
+after persistence flush, the committed SQLite row contained three helmets and XP 4530.
+The final fresh-context relog helper failed with a closed target page, so a post-logout native
+relog displaying all three helmets is not claimed. These are distinct persistence checks.
+The native login gates used actual title/form state, welcome 378 and Play to root 161; the
+anonymous account had been warmed with onboarding skipped.
+
+The owned game stopped through the real five-second GameUpdate countdown, with persistence
+completed and saved=1/failed=0. Owned client/browser/helpers stopped and all five assigned
+ports were clear. Packet evidence excluded authentication responses; retained logs were
+sanitized. No audible playback, retail animation/copy parity or natural quest run was verified.
 
 ## Runs
 

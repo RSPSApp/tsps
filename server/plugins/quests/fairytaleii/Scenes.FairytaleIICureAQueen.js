@@ -163,13 +163,20 @@ module.exports = function createFairytaleIIScenes(api) {
       [16, () => {
         fade(player, false);
         player.getMovementQueue().setBlockMovement(false);
+        state.wake = new StatementDialogue(0, "You slowly wake up in an unknown place.");
         player.getDialogueManager().startDialogues(new DialogueChainBuilder()
-          .add(new StatementDialogue(0, "You slowly wake up in an unknown place."))
+          .add(state.wake)
           .add(new api.core.ActionDialogue(1, { execute: () => {
             player.getPacketSender().closeSubInterface?.(OVERLAY_ATMOSPHERE_UID);
             player.getDialogueManager().reset?.();
             player.getPacketSender().sendInterfaceRemoval();
           } })));
+      }],
+      // Walking off the box skips its close; the overlay goes once the box is gone (Ours).
+      [18, () => {
+        if (player.getDialogueManager().getCurrent?.() !== state.wake) {
+          player.getPacketSender().closeSubInterface?.(OVERLAY_ATMOSPHERE_UID);
+        }
       }],
     ], () => knockouts.delete(player));
   }

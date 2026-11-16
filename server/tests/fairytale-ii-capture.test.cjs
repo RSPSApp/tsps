@@ -324,8 +324,33 @@ test("a failed pickpocket: Rocco's lesson, the fade, a wake-up tile outside Zana
   assert.ok([[3186, 3211, 0], [3139, 3260, 0], [3139, 3228, 0]].some((tile) => tile.join() === at(f).join()), at(f).join());
   assert.equal(h.shown(f)?.text, "You slowly wake up in an unknown place.");
   assert.equal(messages(f).includes("You fail to pick the Fairy Godfather's pocket."), false, "1216, 1486; the Wiki");
+  // The fade closes with the box (1234), or once it is gone if the player walks off.
+  const sender = f.player.getPacketSender();
+  const closed = [];
+  const close = sender.closeSubInterface.bind(sender);
+  sender.closeSubInterface = (uid, ...rest) => { closed.push(uid); return close(uid, ...rest); };
+  await h.continueLine(f);
+  assert.ok(closed.includes((161 << 16) | 1), JSON.stringify(closed));
   assert.equal(h.stage(f), 50);
   assert.equal(f.player.getInventory().getAmount(I.QUEENS_SECATEURS_2), 0);
+});
+
+test("walking off the wake-up box still closes the fade (Ours)", async (t) => {
+  const f = actor(t, { stage: 50, at: BY_GODFATHER });
+  f.player.getSkillManager().setMaxLevels(h.core.Skill.THIEVING, 53);
+  f.player.getSkillManager().setCurrentLevel(h.core.Skill.THIEVING, 53, false);
+  const godfather = h.spawn(f, N.FAIRY_GODFATHER, GODFATHER);
+  await pickpocket(f, godfather, false);
+  h.ticks(f, 16);
+  assert.equal(h.shown(f)?.text, "You slowly wake up in an unknown place.");
+  const sender = f.player.getPacketSender();
+  const closed = [];
+  const close = sender.closeSubInterface.bind(sender);
+  sender.closeSubInterface = (uid, ...rest) => { closed.push(uid); return close(uid, ...rest); };
+  f.player.getPacketSender().sendInterfaceRemoval();
+  f.player.getDialogueManager().reset();
+  h.ticks(f, 4);
+  assert.ok(closed.includes((161 << 16) | 1), JSON.stringify(closed));
 });
 
 test("a successful pickpocket: 60, the secateurs and their box, 47 Thieving XP and the jingle (1603)", async (t) => {

@@ -130,3 +130,22 @@ test('disconnect before reward stops the feed without consuming the bone', t => 
   assert.deepEqual(p.xp, []);
   assert.equal(p.getSkill(), null);
 });
+
+test("the full Zealot's set does not save enriched bones at this machine (Wiki)", t => {
+  const p = setup(t);
+  const names = ['shades_prayer_helm', 'shades_prayer_top', 'shades_prayer_bottom', 'shades_prayer_boots'];
+  const slots = [core.Equipment.HEAD_SLOT, core.Equipment.BODY_SLOT, core.Equipment.LEG_SLOT, core.Equipment.FEET_SLOT];
+  for (let i = 0; i < names.length; i++) {
+    const itemId = core.CacheDefinitions.getObjId(names[i]);
+    assert.ok(itemId > 0);
+    p.getEquipment().setItem(slots[i], new core.Item(itemId, 1));
+  }
+  t.mock.method(Math, 'random', () => 0);
+  give(p, 'small');
+  use(p, 'small');
+  TaskManager.process();
+  TaskManager.process();
+  assert.equal(p.getInventory().getAmount(id('small')), 0);
+  assert.deepEqual(p.xp.map(x => x[1]), [500]);
+  assert.equal(p.getSkill(), null);
+});

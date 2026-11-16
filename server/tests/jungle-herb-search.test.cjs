@@ -127,6 +127,32 @@ test('vine: walking away ends the search; nothing is found and the vine stays fu
   assert.ok(locAt(2575, VINE));
 });
 
+test('vine: teleporting away mid-search ends it; no herb, and the vine stays full', (t) => {
+  t.mock.method(Math, 'random', () => 0);
+  const { p, seen } = searcher(t, 1, VINE);
+  search(p, 2575, VINE);
+  tick(3);
+  p.moveTo(new Location(3222, 3218, 0));
+  tick(10);
+  assert.equal(grimy(p, core.ItemIdentifiers.GRIMY_SNAKE_WEED), 0);
+  assert.equal(quest.getStage(p), 1);
+  assert.equal(seen.boxes.length, 0);
+  assert.ok(locAt(2575, VINE));
+});
+
+test('vine: an item action or Attack click (interaction cleared) ends the search', (t) => {
+  t.mock.method(Math, 'random', () => 0);
+  for (const reason of ['item', 'attack']) {
+    const { p } = searcher(t, 1, VINE);
+    search(p, 2575, VINE);
+    tick(3);
+    p.interactionCleared(reason);
+    tick(10);
+    assert.equal(grimy(p, core.ItemIdentifiers.GRIMY_SNAKE_WEED), 0, reason);
+    assert.ok(locAt(2575, VINE), reason);
+  }
+});
+
 test('palm tree: the search line and the herb at once, the palm empties for 99 ticks', (t) => {
   const { p, seen } = searcher(t, 3, PALM);
   search(p, 2577, PALM);

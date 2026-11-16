@@ -319,10 +319,11 @@ module.exports = function registerJunglePotionQuest(api) {
   /**
    * The vine search loop: seq 2094 + sound 1957 on each attempt, a roll 10 ticks later; a miss replays the
    * sound then and the next attempt starts a tick after (rsprox captures: finds at 10 ticks in 24 of 27
-   * searches, 21 ticks in the other 3). Moving, logging out or the vine going away ends it.
+   * searches, 21 ticks in the other 3). Moving or teleporting off the tile, an item action or Attack click
+   * (player:interaction-cleared), logging out or the vine going away ends it.
    */
   function startVineSearch(player, herb, object) {
-    const session = { herb, object, task: null };
+    const session = { herb, object, task: null, from: player.getLocation().clone() };
     const attempt = () => {
       player.performAnimation(new api.core.Animation(VINE_SEARCH_ANIMATION));
       player.getPacketSender().sendSound(VINE_SEARCH_SOUND, 1, 0);
@@ -369,6 +370,8 @@ module.exports = function registerJunglePotionQuest(api) {
   function stillSearching(player, session) {
     if (!player.isRegistered?.()) return false;
     if (player.getMovementQueue?.()?.size?.() > 0) return false;
+    // A teleport leaves the walk queue empty: the search needs the tile it started on, as DairyCow's does.
+    if (!player.getLocation().equals(session.from)) return false;
     return herbLocStands(session.object);
   }
 
@@ -486,6 +489,11 @@ module.exports = function registerJunglePotionQuest(api) {
     if (player) stopSearching(player);
   }
 
+  /** An inventory/equipment action or an Attack click replaces the search, as it does every repeating action. */
+  function handleInteractionCleared({ player }) {
+    if (player) stopSearching(player);
+  }
+
   quest = registerQuest(api, {
     key: "jungle_potion",
     name: "Jungle Potion",
@@ -508,4 +516,5 @@ module.exports = function registerJunglePotionQuest(api) {
   api.onItemAction(handleItemAction);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
+  api.onCustomEvent("player:interaction-cleared", handleInteractionCleared);
 };

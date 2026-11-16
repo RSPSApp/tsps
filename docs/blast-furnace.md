@@ -157,11 +157,12 @@ Seventeen local Blast Furnace recordings (rsprox 1001645, 1001650, 1001651, 1001
   1001653, 1001957, 1001962).
 - With two metals waiting the menu title is “What would you like to take?” (1001645 tick 168).
 - For the ice-gloves wearer varbit 936 goes 0→1 at the pour, then 1→2→3 within one tick two
-  ticks later (1001943 ticks 75-77, 127-130, 221-223) or straight 1→3 a tick earlier
-  (1001645 ticks 168, 265-266). The server keeps the two-tick pour.
+  ticks later (1001943 ticks 75-77, 221-223), 2 then 3 a tick apart (1001943 ticks 127-130), or
+  straight 1→3 a tick earlier (1001645 ticks 168, 265-266). The server keeps the two-tick pour
+  and goes straight to 3.
 - The player clicks the dispenser before the ore lands (1001645 tick 164, 1001943 tick 72) and
   the menu opens on the tick the state reaches 3, with no empty-dispenser box. That click is op1
-  on the empty dispenser, whose cache label is "Check" (loc 9093); across 894 op1 clicks live
+  on the empty dispenser, whose cache label is "Check" (loc 9093); across 894 op1 clicks (`oploc1` in rev 241, `oploc1_v3` in rev 242) live
   answers it as Take, and with nothing coming it says “The dispenser doesn't contain any bars.”
   (33 times). op2 Check on a full dispenser shows the bar counts (1001957, 1002029).
 - After the last bars are taken the state stays 3 for a few ticks and drops to 0 when the take

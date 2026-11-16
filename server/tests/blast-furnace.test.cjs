@@ -470,6 +470,24 @@ test("walking off cancels an early Take", () => {
   assert.equal(p.menu, null);
 });
 
+// Review r2: emptying the pot drops the wait, so the next load's pour doesn't open the menu unasked.
+test("emptying the pot cancels an early Take", () => {
+  const p = player({ items: { [ItemIds.IRON_ORE]: 6 }, hands: ItemIds.ICE_GLOVES });
+  stateOf(p).coffer = 1000;
+  p.inventory.set(ItemIds.IRON_ORE, 3);
+  putOre(p);
+  takeBars({ player: p });
+  BlastFurnace._test.checkPot({ player: p });
+  prompts.at(-1).choices[3]();
+  prompts.at(-1).choices[1]();
+  assert.deepEqual(stateOf(p).conveyor, [], "the first load is destroyed");
+  p.inventory.set(ItemIds.IRON_ORE, 3);
+  putOre(p);
+  ticks(6);
+  assert.equal(p.varbits.get(DISPENSER), 3, "the second load poured");
+  assert.equal(p.menu, null, "no menu without a new click");
+});
+
 test("water cools other hot bars within five tiles", () => {
   const p = player({ items: { [ItemIds.BUCKET_OF_WATER]: 1 } }), nearby = player(), distant = player();
   distant.location = new Location(1955, 4975, 0);

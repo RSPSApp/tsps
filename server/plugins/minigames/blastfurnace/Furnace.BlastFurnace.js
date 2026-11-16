@@ -455,6 +455,8 @@ function checkPot({ player }) {
 }
 
 function emptyPot(player) {
+  // An early Take waits for the ore that was just thrown away.
+  waitingToTake.delete(player);
   stateOf(player).ores = {};
   stateOf(player).conveyor = [];
   for (const ore of [...belt]) {
@@ -658,7 +660,11 @@ function tickBelt() {
     state.conveyor.splice(state.conveyor.indexOf(ore.load), 1);
     state.ores[ore.load.item] = (state.ores[ore.load.item] ?? 0) + ore.load.count;
     syncContents(ore.player);
-    if (!belt.some((other) => other.player === ore.player)) smelt(ore.player);
+    if (belt.some((other) => other.player === ore.player)) continue;
+    smelt(ore.player);
+    // The load landed without pouring (a full dispenser, a stalled furnace): an early Take has
+    // nothing left to wait for, so a later pour doesn't open the menu unasked.
+    if (!pouring.has(ore.player)) waitingToTake.delete(ore.player);
   }
 }
 
@@ -672,8 +678,8 @@ function tickDispensers() {
 
 /**
  * The bars land hot. rsprox rev 241/242 (17 recordings, all with ice gloves worn): varbit 936 goes
- * 1, 2, 3 in one tick for the wearer, so cold gloves see them cooled at once, and a Take clicked
- * early opens its menu on that tick.
+ * 1, 2, 3 for the wearer, 2 and 3 in the same tick or one tick apart, so cold gloves see them
+ * cooled at once, and a Take clicked early opens its menu when they are.
  */
 function pourFinished(player) {
   setDispenser(player, DISPENSER_HOT);

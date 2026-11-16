@@ -988,7 +988,20 @@ function cleanupPlayer({ player }) {
   if (run?.looted && !inTunnels(player)) player.setAttribute(ATTRIBUTE, freshRun(run.chests));
 }
 
+/**
+ * A death in the tunnels leaves them too, with the last charge unused: a warned pick the death drops
+ * (to a grave or the floor) crumbles rather than going with the rest. One it keeps goes in playerDeath.
+ */
+function crumbleWarnedLockpickOnDeath(event) {
+  const { player, item } = event;
+  if (event.kept || event.shouldDropItems === false || !item || !LOCKPICKS.has(item.getId())) return;
+  if (item.getMetaValue(LOCKPICK_WARNED_KEY) !== true || !inTunnels(player)) return;
+  event.handled = true;
+}
+
 function playerDeath(event) {
+  // Still on the death tile (the respawn move comes after), with the kept items back.
+  if (inTunnels(event.player)) crumbleWarnedLockpicks(event.player);
   cleanupPlayer(event);
   const run = event.player.getAttribute(ATTRIBUTE);
   if (run?.looted) event.player.setAttribute(ATTRIBUTE, freshRun(run.chests));
@@ -1100,10 +1113,11 @@ module.exports = {
     api.onCombatHitResolved(trackBrotherHit);
     api.onPlayerProcess(processPlayer);
     api.onPlayerDeath(playerDeath);
+    api.onPlayerDeathItemDrop(crumbleWarnedLockpickOnDeath);
     api.onPlayerDisconnect(cleanupPlayer);
     api.onPlayerLogout(cleanupPlayer);
     api.registerNpcCombatMethodProvider(Npcs.AHRIM_THE_BLIGHTED, AhrimCombat);
   },
   _test: { rollRewards, searchChest, searchCrypt, chestCount, phaseOf, syncMinimap, processPlayer, dig, useDoor, doorSides, getTunnelMap, getRun, IGNORE_CLIPPING_FLAG,
-    useLockpickOnDoor, inspectLockpick, refuseMoundDig, WARNINGS_ATTRIBUTE },
+    useLockpickOnDoor, inspectLockpick, refuseMoundDig, WARNINGS_ATTRIBUTE, playerDeath, crumbleWarnedLockpickOnDeath },
 };

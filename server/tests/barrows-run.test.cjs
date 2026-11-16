@@ -611,6 +611,47 @@ test("Barrows: after the warning the last charge opens the next locked hallway, 
   assert.equal(subject.sent.messages.at(-1), "This door is locked.");
 });
 
+test("Barrows: a death in the tunnels leaves them too: a warned pick crumbles, kept or dropped; an unwarned one, or a death outside, keeps it", () => {
+  const { playerDeath, crumbleWarnedLockpickOnDeath } = Barrows._test;
+  const PICK = core.ItemIdentifiers.STRANGE_OLD_LOCKPICK;
+  const warnedPick = (subject, first) => {
+    subject.getInventory().add(lockpick(1), false);
+    useOn(subject, first, subject.getInventory().get(0));
+    assert.equal(subject.sent.messages.at(-1), "The Strange old lockpick almost breaks, but seems in good enough shape for one more use.");
+    return subject.getInventory().get(0);
+  };
+  // Kept (Protect Item): back in the inventory on the death tile as the death hook runs.
+  const kept = player();
+  warnedPick(kept, lockedHallway(kept).first);
+  playerDeath({ player: kept, killer: null, itemsLost: true, handled: false });
+  assert.equal(kept.getInventory().getAmount(PICK), 0, "a kept warned pick crumbles");
+  // Dropped: it goes to neither the grave nor the floor.
+  const dropped = player();
+  const item = warnedPick(dropped, lockedHallway(dropped).first);
+  const drop = (subject, entry, extra = {}) => {
+    const event = { player: subject, killer: null, item: entry, kept: false, shouldDropItems: true, dropEligible: false,
+      suppressDefaultDrop: false, handled: false, extraDrops: [], ...extra };
+    crumbleWarnedLockpickOnDeath(event);
+    return event.handled;
+  };
+  assert.equal(drop(dropped, item), true, "a dropped warned pick crumbles");
+  assert.equal(drop(dropped, item, { kept: true }), false, "a kept one is left to the death hook");
+  assert.equal(drop(dropped, item, { shouldDropItems: false }), false, "a death that keeps everything keeps it");
+  // Not warned, or the death is not in the tunnels: untouched.
+  const fresh = player();
+  lockedHallway(fresh);
+  fresh.getInventory().add(lockpick(5), false);
+  assert.equal(drop(fresh, fresh.getInventory().get(0)), false);
+  playerDeath({ player: fresh, killer: null, itemsLost: true, handled: false });
+  assert.equal(fresh.getInventory().getAmount(PICK), 1, "an unwarned pick survives");
+  const outside = player();
+  const warned = warnedPick(outside, lockedHallway(outside).first);
+  outside.setLocation(SURFACE.clone());
+  assert.equal(drop(outside, warned), false);
+  playerDeath({ player: outside, killer: null, itemsLost: true, handled: false });
+  assert.equal(outside.getInventory().getAmount(PICK), 1, "a death out of the tunnels is not ours");
+});
+
 test("Barrows: the lockpick on a door outside the tunnels, or another item on a door, is not ours", () => {
   const subject = player();
   const { first } = lockedHallway(subject);

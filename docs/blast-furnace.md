@@ -23,7 +23,9 @@ The dwarven furnace under Keldagrim (`server/plugins/minigames/BlastFurnace.plug
   - The pot's ore and the dispenser's bars are sent as varbits 941-959 (RuneLite `BLAST_FURNACE_*`). Melting Pot and Bar dispenser "Check" list them.
 - **The bar dispenser** is loc 9092, a multiloc on varbit 936: 0 empty, 1 pouring, 2 hot, 3 cooled. It pours for 2 ticks, then the bars stay molten for 16 ticks before they cool **(RSPS: timings)**.
   - Molten bars need ice gloves or smiths gloves (i), or a bucket of water thrown on them (animation 2450).
-  - Take opens the skillmulti "How many would you like to take?" menu, using take mode 17 and an available-quantity limit, and gives as many as fit in the free inventory slots, with a message box "You take 23 mithril bars from the dispenser."
+  - Take opens the skillmulti "How many would you like to take?" menu ("What would you like to take?" when more than one metal is waiting), using take mode 17 and an available-quantity limit, and gives as many as fit in the free inventory slots, with a message box "You take 23 mithril bars from the dispenser." (a single bar: "You take one iron bar from the dispenser.").
+  - Ice gloves or smiths gloves (i) see the bars cooled (state 3) the tick the pour ends.
+  - Take clicked while the player's own ore is still on the belt or pouring waits, and the menu opens the tick the bars can be taken. Walking off cancels the wait (ours); without cold gloves that tick gives the molten-bars box (ours, no capture without gloves).
 - **Also:**
   - The sink fills a bucket of water (`human_pickuptable`, sound 2609, "You fill the bucket from the sink.").
   - The temperature gauge opens interface 30.
@@ -117,7 +119,7 @@ Rsprox captures establish the following additional facts:
   Empty-dispenser responses say “The dispenser doesn't contain any bars.” Recording **3278**
   shows the take itself: “You take 23 mithril bars from the dispenser.” in a message box (the Wiki
   changelog: “A message displaying the numbers of bars withdrawn now appears”).
-- “All your ore goes onto the conveyor belt.”, “You throw the water over the bars.” and
+- “You throw the water over the bars.” and
   “You fill the bucket from the sink.” are spam-channel lines (recordings 96, 1757, 3278); the
   sink also plays `human_pickuptable` and sound 2609. The coffer's menu is titled
   “Select an option” (recordings 96, 3278).
@@ -142,3 +144,28 @@ are carried than coal bars are made, the server applies them in its existing rec
 allocation order and the precise retail inventory/belt reservation lifecycle are not established
 by the source. Non-coal bars do not consume catalysts. See the [Smithing catalyst](https://oldschool.runescape.wiki/w/Smithing_catalyst)
 and [Giants' Foundry update](https://oldschool.runescape.wiki/w/Update:Giants%27_Foundry).
+
+## Rev 241/242 normal-world recordings
+
+Seventeen local Blast Furnace recordings (rsprox 1001645, 1001650, 1001651, 1001653, 1001702,
+1001707, 1001709, 1001768, 1001943, 1001957, 1001962, 1002015, 1002029, 1002134, 1002179,
+1002185, 1002220; rev 241 and 242, normal worlds, every player wearing ice gloves) establish:
+
+- The belt line is “Your ore goes onto the conveyor belt.” (spam, every load). The Leagues and
+  Grid Master recordings above (rev 227-234) said “All your ore goes onto the conveyor belt.”
+- A single bar is taken as “You take one iron bar from the dispenser.” (1001645 tick 170,
+  1001653, 1001957, 1001962).
+- With two metals waiting the menu title is “What would you like to take?” (1001645 tick 168).
+- For the ice-gloves wearer varbit 936 goes 0→1 at the pour, then 1→2→3 within one tick two
+  ticks later (1001943 ticks 75-77, 127-130, 221-223) or straight 1→3 a tick earlier
+  (1001645 ticks 168, 265-266). The server keeps the two-tick pour.
+- The player clicks the dispenser before the ore lands (1001645 tick 164, 1001943 tick 72) and
+  the menu opens on the tick the state reaches 3, with no empty-dispenser box. That click is op1
+  on the empty dispenser, whose cache label is "Check" (loc 9093); across 894 op1 clicks live
+  answers it as Take, and with nothing coming it says “The dispenser doesn't contain any bars.”
+  (33 times). op2 Check on a full dispenser shows the bar counts (1001957, 1002029).
+- After the last bars are taken the state stays 3 for a few ticks and drops to 0 when the take
+  message box closes (1001645 ticks 175-178); the server clears it at once. Not modelled.
+- None of these recordings has a player without cold gloves, so the 16-tick molten timer stays
+  unverified.
+

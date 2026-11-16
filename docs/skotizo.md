@@ -90,5 +90,8 @@ The altar is `cata_altar` (28900) in the centre of the Catacombs.
 
 ## Not built
 
-- **Shard teleports:** the altar's Teleport option ("Where do you want to go? (1 shard)": Demons' Run, Dragons' Den, Reeking Cove, The Shallows). The menu and the "You need at least 1 ancient shard..." message are captured, but the destinations aren't.
+- **Shard teleports:** the altar's Teleport option opens "Where do you want to go? (1 shard)" with
+  Demons' Run, Dragons' Den, Reeking Cove and The Shallows (menu recorded, rsprox 3329); choosing one
+  spends a shard and teleports to the Wiki's destination tile. The refusal uses our completion of the
+  captured opening words ("You need at least 1 ancient shard...").
 - **Darklight to Arclight, fewer than three shards:** the altar asks and combines as captured (rsprox 3333), and shards used on Darklight away from it are refused in the captured box. What it says at the altar with fewer than three shards isn't captured; `plugins/items/Arclight.plugin.js` keeps its own wording. The mesbox chat line uses type 115, as other plugins do; the capture only says `mesbox`.

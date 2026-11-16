@@ -19,6 +19,17 @@
     "planes": 2
   },
   "arena": { "minX": 2257, "maxX": 2287, "minY": 5650, "maxY": 5677 },
+  "ancientShardTeleports": {
+    "_source": "Menu title and option labels: rsprox 3329 (\"Where do you want to go? (1 shard)\" and \"Demons' Run|Dragons' Den|Reeking Cove|The Shallows\"). Destinations: Wiki (Ancient shard#Destinations). The refusal line is our completion of the captured opening words.",
+    "title": "Where do you want to go? (1 shard)",
+    "noShard": "You need at least 1 ancient shard to teleport.",
+    "destinations": [
+      { "label": "Demons' Run", "tile": [1719, 10069, 0] },
+      { "label": "Dragons' Den", "tile": [1627, 10087, 0] },
+      { "label": "Reeking Cove", "tile": [1603, 10008, 0] },
+      { "label": "The Shallows", "tile": [1697, 9997, 0] }
+    ]
+  },
   "altars": {
     "$comment": "In the HUD script's order (west, east, south, north). Captured (rev 235) one tile further out; the rev 241 arena is smaller, so each sits just outside its wall's walkable edge (estimate).",
     "w": { "tile": [2256, 5664], "rotation": 1, "open": 7294, "closed": 7295 },

@@ -71,6 +71,13 @@ function ironmanKeeps(request) {
   request.keep.push(...request.drops.map((drop) => drop.itemId));
 }
 
+/** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+function lootOptions(player, itemId, area) {
+  const request = { player, itemId, area, options: {} };
+  Common.api.emitCustomEvent("npc-drops:ground-options", request);
+  return request.options;
+}
+
 function reward(fight, players) {
   const contribution = fight.contribution ?? new Map();
   const eligible = players.filter((player) => {
@@ -130,9 +137,9 @@ function reward(fight, players) {
       const noteId = ItemDefinition.forId(drop.itemId).getNoteId();
       const itemId = drop.noted && noteId >= 0 && ItemDefinition.forId(noteId).isNoted() ? noteId : drop.itemId;
       if (ItemDefinition.forId(itemId).isStackable()) {
-        manager.registerLocation(player, new Item(itemId, drop.amount), where, fight.dream.area);
+        manager.registerLocation(player, new Item(itemId, drop.amount), where, fight.dream.area, lootOptions(player, itemId, fight.dream.area));
       } else {
-        for (let i = 0; i < drop.amount; i++) manager.registerLocation(player, new Item(itemId, 1), where, fight.dream.area);
+        for (let i = 0; i < drop.amount; i++) manager.registerLocation(player, new Item(itemId, 1), where, fight.dream.area, lootOptions(player, itemId, fight.dream.area));
       }
     }
   }

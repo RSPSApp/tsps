@@ -300,3 +300,56 @@ for (const [label, replace] of [
   replace(h.item); await use(f); ticks(4); noOutput(f.p, before);
   assert.equal(f.p.getInventory().getItems()[h.slot], h.item);
 });
+
+// Regressions: every working Imcando tool substitutes for an ordinary hammer (Wiki).
+function equipHammer(p, id) {
+  const { EquipPacketListener } = require('../dist/net/packet/impl/EquipPacketListener');
+  const h = held(p, id);
+  EquipPacketListener.equip(p, id, h.slot, 3214);
+  assert.equal(p.getEquipment().getAmount(id), 1, 'real equipment owner holds the hammer');
+}
+
+for (const [label, identifier, equip] of [
+  ['carried Imcando hammer', 'IMCANDO_HAMMER', false],
+  ['wielded Imcando hammer', 'IMCANDO_HAMMER', true],
+  ['wielded off-hand Imcando hammer', 'IMCANDO_HAMMER_OFF_HAND_', true],
+]) test(`native helmet smithing accepts a ${label}`, async t => {
+  const f = actor(t, { hammer: false }), p = f.p, id = I[identifier], before = xp(p);
+  p.getInventory().adds(id, 1);
+  if (equip) equipHammer(p, id);
+  const selected = await use(f);
+  ticks(3); noOutput(p, before); ticks(1);
+  assert.equal(p.getInventory().getItems()[selected.slot].getId(), I.ELEMENTAL_HELMET);
+  assert.equal(p.getInventory().getAmount(I.ELEMENTAL_METAL), 0);
+  assert.equal(xp(p) - before, expectedXp(p));
+  assert.equal((equip ? p.getEquipment() : p.getInventory()).getAmount(id), 1);
+});
+
+test('losing the wielded hammer during native smithing preserves metal, and real withdrawal permits retry', async t => {
+  const { EquipPacketListener } = require('../dist/net/packet/impl/EquipPacketListener');
+  const f = actor(t, { hammer: false }), p = f.p, id = I.IMCANDO_HAMMER, before = xp(p);
+  p.getInventory().adds(id, 1); equipHammer(p, id);
+  await use(f); ticks(1);
+  EquipPacketListener.unequip(p, core.Equipment.WEAPON_SLOT);
+  const h = held(p, id);
+  Bank.deposit(p, id, h.slot, 1, true);
+  assert.equal(p.getEquipment().getAmount(id) + p.getInventory().getAmount(id), 0);
+  ticks(4); noOutput(p, before);
+  assert.equal(p.getInventory().getAmount(I.ELEMENTAL_METAL), 1);
+  p.getBank(0).open();
+  const tab = Bank.getTabForItem(p, id), slot = p.getBank(tab).getSlotForItemId(id);
+  Bank.withdraw(p, id, slot, 1, tab); p.getPacketSender().sendInterfaceRemoval();
+  equipHammer(p, id);
+  await use(f); ticks(4);
+  assert.equal(p.getInventory().getAmount(I.ELEMENTAL_HELMET), 1);
+  assert.equal(xp(p) - before, expectedXp(p));
+});
+
+test('ordinary hammer Bank roundtrip cancels pending native work and a fresh use succeeds', async t => {
+  const f = actor(t), p = f.p, before = xp(p);
+  await use(f); ticks(1); bankReturn(p, I.HAMMER); ticks(4);
+  noOutput(p, before);
+  await use(f); ticks(4);
+  assert.equal(p.getInventory().getAmount(I.ELEMENTAL_HELMET), 1);
+  assert.equal(xp(p) - before, expectedXp(p));
+});

@@ -57,6 +57,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     ObjectIdentifiers, Skill, Sound, Sounds, TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { holdsHammer } = require("../../items/Hammers");
 
   const PAGE = "Elemental Workshop II";
   const START_HOOK = "quest:elemental-workshop-ii:start";
@@ -968,7 +969,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
       && player.getTeleportSerial() === teleportSerial && player.getLocation().equals(start)
       && player.getMovementQueue().size() === 0 && player.getForceMovement() == null
       && !player.busy() && !player.getPacketSender().hasInterruptibleInterface()
-      && quest.isComplete(player) && has(player, BEATEN_BOOK) && has(player, HAMMER)
+      && quest.isComplete(player) && has(player, BEATEN_BOOK) && holdsHammer(api.core, player)
       && player.getSkillManager().getCurrentLevel(Skill.SMITHING) >= ELEMENTAL_HELMET_SMITHING_LEVEL
       && Number.isInteger(itemSlot) && inventory.getItems()[itemSlot] === item
       && item?.getId() === ELEMENTAL_METAL && item.getAmount() === 1 && item.getMeta() == null

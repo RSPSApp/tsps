@@ -333,13 +333,20 @@ test("the pillars: each twig goes on with a reach and no chat line; the trapdoor
   assert.equal(h.shown(f)?.text, "With a grinding of machinery, a trapdoor snaps open!");
   // A logout right after the fourth twig keeps the stage: nothing is left for a cancelled task.
   const g = actor(t, { stage: 120, items: [[I.TWIGS_4, 1], [I.TWIGS_3, 1], [I.TWIGS, 1], [I.TWIGS_2, 1]], tile: [2486, 3466, 2] });
-  for (const [pillar, x, twig] of [[2440, 2485, I.TWIGS], [2441, 2486, I.TWIGS_2], [2442, 2487, I.TWIGS_3], [2443, 2488, I.TWIGS_4]]) {
-    await h.dispatch(g, { type: "item_on_object", objectId: pillar, x, y: 3467, itemId: twig,
-      slot: g.player.getInventory().getSlotForItemId(twig), widgetId: 149 << 16 });
-    if (pillar !== 2443) h.ticks(g, 3);
+  const { TaskManager } = h.core;
+  const submit = TaskManager.submit;
+  try {
+    for (const [pillar, x, twig] of [[2440, 2485, I.TWIGS], [2441, 2486, I.TWIGS_2], [2442, 2487, I.TWIGS_3], [2443, 2488, I.TWIGS_4]]) {
+      // The fourth twig as the player logs out: every task keyed to them is dropped before it can run.
+      if (pillar === 2443) TaskManager.submit = (task) => (task.key === g.player ? undefined : submit.call(TaskManager, task));
+      await h.dispatch(g, { type: "item_on_object", objectId: pillar, x, y: 3467, itemId: twig,
+        slot: g.player.getInventory().getSlotForItemId(twig), widgetId: 149 << 16 });
+      h.ticks(g, 3);
+    }
+  } finally {
+    TaskManager.submit = submit;
   }
-  h.core.TaskManager.cancelTasks(g.player);
-  h.ticks(g, 3);
+  assert.equal(has(g, I.TWIGS_4), 0, "the fourth twig went on");
   assert.equal(stage(g), 130, "the stage is not lost to a logout on the next tick");
   assert.equal(group(f), MESSAGEBOX);
 });

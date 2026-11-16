@@ -99,3 +99,16 @@ test("a charge is only spent when spend runs", () => {
   hooks.events["mining:ore-yield"]({ player, rock: "Clay rocks", oreId: I.CLAY, amount: 1, spend: null });
   assert.equal(plugin._test.chargesLeft(player), 28);
 });
+
+test("Mining's ore-yield request now also names the rock object: the bracelet's swap and soft clay's extra clay are unchanged with it", () => {
+  const hooks = register();
+  const player = wearer();
+  const rockObject = new core.GameObject(11371, new core.Location(2732, 9680, 0), 10, 0, null);
+  const clay = { player, rock: "Clay rocks", rockObject, oreId: I.CLAY, amount: 1, spend: null };
+  hooks.events["mining:ore-yield"](clay);
+  assert.deepEqual([clay.oreId, clay.amount], [I.SOFT_CLAY, 1]);
+  const soft = { player, rock: "Soft clay rocks", rockObject, oreId: I.SOFT_CLAY, amount: 1, spend: null };
+  hooks.events["mining:ore-yield"](soft);
+  assert.deepEqual([soft.oreId, soft.amount], [I.SOFT_CLAY, 2]);
+  assert.equal(typeof clay.spend, "function");
+});

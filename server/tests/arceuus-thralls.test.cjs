@@ -17,19 +17,21 @@ const {PluginManager} = require('../dist/plugins/PluginManager');
 const Rewards = require('../plugins/achievements/combatachievements/Rewards.CombatAchievements');
 const Progress = require('../plugins/achievements/combatachievements/Progress.CombatAchievements');
 const Slayer = require('../plugins/skills/slayer/Equipment.Slayer');
+const {CacheDefinitions} = require('../dist/game/cache/CacheDefinitions');
+const CHATBOX_TRANSPARENCY = 4608;
 
-function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin',attackHook=null}={}) {
+function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin',id=-1,attackHook=null}={}) {
   const tasks=[],actors=[],shown=[],attributes=new Map(),runes=new Map([[558,100],[556,100],[560,100],[557,100],[565,100],[554,100],[564,100]]);
-  const p={magic,prayer:100,registered:true,animations:[],graphics:[],isNpc:()=>false,isPlayer:()=>true,isRegistered:()=>p.registered,
+  const p={magic,prayer:100,registered:true,messages:[],transparent:0,animations:[],graphics:[],isNpc:()=>false,isPlayer:()=>true,isRegistered:()=>p.registered,
     performAnimation:animation=>p.animations.push(animation.getId()),performGraphic:graphic=>p.graphics.push(graphic.getId()),
     getLocation:()=>new Location(3200,3200,0),getAttribute:k=>attributes.get(k),setAttribute:(k,v)=>attributes.set(k,v),
-    getPacketSender:()=>({sendVarbit(){}}),sendMessage(){},getSpellbook:()=>MagicSpellbook.ARCEUUS,
+    getPacketSender:()=>({sendVarbit(){},getVarbit:id=>(id===CHATBOX_TRANSPARENCY?p.transparent:0)}),sendMessage:m=>p.messages.push(m),getSpellbook:()=>MagicSpellbook.ARCEUUS,
     getEquipment:()=>({contains:id=>id===25818,containsAllItem:()=>true}),
     getInventory:()=>({getAmount:id=>runes.get(id)??0,deletes:item=>runes.set(item.getId(),runes.get(item.getId())-item.getAmount())}),
     getSkillManager:()=>({getCurrentLevel:s=>s===Skill.PRAYER?p.prayer:p.magic,
       decreaseCurrentLevel:(_s,n)=>{p.prayer-=n;},addExperiences(){}}),
     getCombat:()=>({getTarget:()=>target,getAttacker:()=>null,reset(){},setCastSpell(){}})};
-  const target={hp,registered:true,getDefinition:()=>({getName:()=>name}),isNpc:()=>true,isPlayer:()=>false,isRegistered:()=>target.registered,isUntargetable:()=>false,
+  const target={hp,registered:true,getId:()=>id,getDefinition:()=>({getName:()=>name}),isNpc:()=>true,isPlayer:()=>false,isRegistered:()=>target.registered,isUntargetable:()=>false,
     getHitpoints:()=>target.hp,getSize:()=>1,getLocation:()=>new Location(3203,3200,0),
     // Match Mobile's pre-healing applied-damage bookkeeping.
     decrementHealth:hit=>{hit.setDamage(Math.min(hit.getDamage(),Math.max(0,target.hp)));hit.setHealthLost(hit.getDamage());target.hp-=hit.getDamage();return hit;},
@@ -45,6 +47,7 @@ function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin',attackHook=null}
       getMovementQueue:()=>movement,calculateDistance:()=>3,getAttackAnim:()=>1,performAnimation:()=>thrallAnimations.push(World.getProcessCycle())};
     actors.push(a);return a;
   });
+  t.mock.method(CacheDefinitions,'getVarbitId',name=>(name==='chatbox_transparency'?CHATBOX_TRANSPARENCY:null));
   t.mock.method(TaskManager,'submit',task=>{task.setRunning(true);tasks.push(task);});
   const hooks=new Map();
   Rewards({core:{},onBeforeNpcInteraction(){},onPlayerLogout(){},onNpcDialogueVariant(){},onNpcDialogueCondition(){},onItemAction(){},onCustomEvent:(name,fn)=>hooks.set(name,fn)});
@@ -70,17 +73,32 @@ test('all three thrall tiers roll inclusive zero, intermediate and maximum hits 
 });
 
 // Wiki (Thrall): "Thralls will no longer deal damage to kurasks and turoths"; Vyrewatch Sentinels are immune too.
-test('a thrall deals no damage to a kurask, a turoth or a Vyrewatch Sentinel',t=>{
-  for(const name of ['Kurask','Turoth','Vyrewatch Sentinel']){
+// Cave kraken: its infobox lists Thralls as immune; the Kraken boss's says not immune.
+test('a thrall deals no damage to a kurask, a turoth, a Vyrewatch Sentinel or a cave kraken',t=>{
+  for(const name of ['Kurask','Turoth','Vyrewatch Sentinel','Cave kraken']){
     const f=fixture(t,{name});t.mock.method(Math,'random',()=>0.999999);
     ArceuusThralls.summon(f.p,10880,0,3,6);f.step(8);
     assert.deepEqual(f.shown,[],name);assert.equal(f.target.hp,100,name);
   }
 });
 
+// Wiki (Vyrewatch infobox, immunethrall): Yes for the level 87, 110, 120 and 125 forms, No for level 105.
+test('a thrall deals no damage to the level 87, 110, 120 and 125 Vyrewatch, and still hits the level 105',t=>{
+  for(const id of [8252,3710,3711,3712,3763]){
+    const f=fixture(t,{name:'Vyrewatch',id});t.mock.method(Math,'random',()=>0.999999);
+    ArceuusThralls.summon(f.p,10880,0,3,6);f.step(8);
+    assert.deepEqual(f.shown,[],String(id));assert.equal(f.target.hp,100,String(id));
+  }
+  for(const id of [3709,8300,9735]){
+    const f=fixture(t,{name:'Vyrewatch',id});t.mock.method(Math,'random',()=>0.999999);
+    ArceuusThralls.summon(f.p,10880,0,3,6);f.step(4);
+    assert.ok(f.shown.length>0&&f.shown[0]>0,String(id));assert.ok(f.target.hp<100,String(id));
+  }
+});
+
 // The superiors share the kurask's and turoth's weapon rule, but the Wiki lists no thrall immunity for them.
-test('a thrall still hits a King kurask and a Spiked Turoth',t=>{
-  for(const name of ['King kurask','Spiked Turoth']){
+test('a thrall still hits a King kurask, a Spiked Turoth and the Kraken boss',t=>{
+  for(const name of ['King kurask','Spiked Turoth','Kraken']){
     const f=fixture(t,{name});t.mock.method(Math,'random',()=>0.999999);
     ArceuusThralls.summon(f.p,10880,0,3,6);f.step(4);
     assert.ok(f.shown.length>0&&f.shown[0]>0,name);assert.ok(f.target.hp<100,name);
@@ -169,4 +187,96 @@ test('the duration query has a current-Magic default when the reward plugin is a
   ArceuusThralls.summon(f.p,10880,0,3,6);
   f.step(11);assert.ok(f.attributes.get('arceuus:thrall'));
   f.step();assert.equal(f.attributes.get('arceuus:thrall'),null);
+});
+
+// rsprox captures 227/1000586.txt tick 845: a second click in the tick of a cast is refused with this line.
+test('a resurrection cast during the cooldown is refused with live\'s message',t=>{
+  const f=fixture(t);World.processCycle=100;t.mock.method(Date,'now',()=>100000);
+  ArceuusSpells.handleSpell(f.p,'Resurrect greater ghost');
+  assert.deepEqual(f.p.messages,[]);
+  ArceuusSpells.handleSpell(f.p,'Resurrect lesser skeleton');
+  assert.deepEqual(f.p.messages,['You can only cast resurrection spells every 10 seconds.']);
+  assert.equal(f.actors.length,1);
+});
+
+// rsprox captures 227/1000586.txt, 1000487.txt, 1000456.txt: the resurrect line five ticks after every cast,
+// the grave line when the thrall runs out; ef0083 opaque, ff289d transparent (227/01756.txt, 232/03153.txt).
+test('a thrall announces itself five ticks after the cast and its return to the grave when it runs out',t=>{
+  for(const [spell,name] of [['greater ghost','greater ghostly'],['superior skeleton','superior skeletal'],['lesser zombie','lesser zombified']]){
+    const f=fixture(t);f.p.getCombat=()=>({getTarget:()=>null,getAttacker:()=>null,reset(){},setCastSpell(){}});World.processCycle=100;t.mock.method(Date,'now',()=>100000);
+    ArceuusSpells.handleSpell(f.p,`Resurrect ${spell}`);
+    f.step(4);assert.deepEqual(f.p.messages,[],spell);
+    f.step();assert.deepEqual(f.p.messages,[`<col=ef0083>You resurrect a ${name} thrall.</col>`],spell);
+    f.step(93);assert.equal(f.p.messages.length,1,spell);assert.ok(f.attributes.get('arceuus:thrall'));
+    f.step();assert.equal(f.attributes.get('arceuus:thrall'),null);assert.ok(World.getRemoveNPCQueue().includes(f.actors[0]));
+    assert.equal(f.p.messages.length,1,'the grave line comes the tick after the removal');
+    f.step();assert.deepEqual(f.p.messages.slice(1),[`<col=ef0083>Your ${name} thrall returns to the grave.</col>`],spell);
+    f.step(5);assert.equal(f.p.messages.length,2,spell);
+  }
+  const transparent=fixture(t);transparent.p.transparent=1;World.processCycle=100;
+  ArceuusSpells.handleSpell(transparent.p,'Resurrect greater ghost');transparent.step(100);
+  assert.deepEqual(transparent.p.messages,['<col=ff289d>You resurrect a greater ghostly thrall.</col>','<col=ff289d>Your greater ghostly thrall returns to the grave.</col>']);
+});
+
+// rsprox captures 235/03414.txt t2831, 227/1000586.txt t4941: a recast over a live thrall says the old one
+// returned to the grave in the cast tick.
+test('a recast over a live thrall sends its grave line at once; a logout sends none',t=>{
+  const f=fixture(t,{magic:20});
+  f.p.getCombat=()=>({getTarget:()=>null,getAttacker:()=>null,reset(){},setCastSpell(){}});
+  ArceuusThralls.summon(f.p,10880,6,3,6,{rise:1,impact:1,kind:'ghostly'});
+  f.step(10);f.p.messages.length=0;
+  ArceuusThralls.summon(f.p,10883,4,3,6,{rise:1,impact:1,kind:'skeletal'});
+  assert.deepEqual(f.p.messages,['<col=ef0083>Your greater ghostly thrall returns to the grave.</col>']);
+  f.step(30);
+  assert.deepEqual(f.p.messages.filter(m=>m.includes('grave')),['<col=ef0083>Your greater ghostly thrall returns to the grave.</col>',
+    '<col=ef0083>Your superior skeletal thrall returns to the grave.</col>'],'the replacement runs out on its own later');
+  const g=fixture(t,{magic:20});
+  ArceuusThralls.summon(g.p,10880,6,3,6,{rise:1,impact:1,kind:'ghostly'});
+  g.p.registered=false;g.step(25);
+  assert.deepEqual(g.p.messages.filter(m=>m.includes('grave')),[]);
+});
+
+// rsprox 227/910489.txt: a greater ghostly thrall raised at t6505 is deleted with the owner's respawn at t6508
+// and no grave line follows for the rest of the recording.
+test('a death dismisses the thrall at once and no grave line follows, then or at its old expiry',t=>{
+  const f=fixture(t,{magic:20});
+  f.p.getCombat=()=>({getTarget:()=>null,getAttacker:()=>null,reset(){},setCastSpell(){}});
+  ArceuusThralls.summon(f.p,10880,6,3,6,{rise:1,impact:1,kind:'ghostly'});
+  f.step(10);
+  const removals=()=>World.getRemoveNPCQueue().filter(npc=>npc===f.actors[0]).length;
+  const before=removals();
+  ArceuusThralls.dismiss(f.p);
+  assert.equal(f.attributes.get('arceuus:thrall'),null);
+  assert.equal(removals(),before+1);
+  f.step(30);
+  assert.equal(removals(),before+1,'the thrall task does not queue it a second time');
+  assert.deepEqual(f.p.messages.filter(m=>m.includes('grave')),[]);
+  assert.equal(f.tasks[0].isRunning(),false);
+  ArceuusThralls.dismiss(f.p);
+  assert.equal(removals(),before+1,'a second death with no thrall does nothing');
+});
+
+test('a real player death dismisses the thrall in the respawn tick, with no grave line',async t=>{
+  const path=require('node:path');
+  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(path.resolve(__dirname,'..'));
+  const {Player}=require('../dist/game/entity/impl/player/Player');
+  const {PlayerDeathTask}=require('../dist/game/task/impl/PlayerDeath');
+  const {GameConstants}=require('../dist/game/GameConstants');
+  const p=new Player(null);
+  const sender=new Proxy({},{get:()=>()=>sender});
+  const messages=[];
+  t.mock.method(p,'getPacketSender',()=>sender);
+  t.mock.method(p,'sendMessage',m=>messages.push(m));
+  p.setUsername('thrall-death');
+  t.mock.method(PluginManager,'emitShouldDropItemsOnDeath',()=>false);
+  t.mock.method(GameConstants.PLAYER_PERSISTENCE,'requestSave',()=>{});
+  const thrall={registered:true,isRegistered:()=>thrall.registered};
+  p.setAttribute('arceuus:thrall',thrall);
+  const task=new PlayerDeathTask(p);
+  for(let tick=0;tick<4;tick++)task.execute();
+  assert.equal(p.getAttribute('arceuus:thrall'),thrall,'the thrall stays through the death animation');
+  task.execute();
+  assert.equal(p.getAttribute('arceuus:thrall'),null);
+  assert.ok(World.getRemoveNPCQueue().includes(thrall));
+  assert.deepEqual(messages.filter(m=>m.includes('grave')),[]);
 });

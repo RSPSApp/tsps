@@ -30,7 +30,9 @@ function fixture(t,tier=1,noted=true,count=2){
  t.after(()=>{PM.emitPlayerLogout({player:p,username:p.getUsername()});core.TaskManager.cancelTasks(p);p.setRegistered(false);});
  return {p,inv,input,output,tier,connection};
 }
-async function fill(f,reverse=false,slot=1){await f.connection.dispatch([{type:'inventory_use_on',slot:reverse?0:slot,itemId:reverse?f.inv.forSlot(0).getId():f.input,target:{kind:'inventory',slot:reverse?slot:0}}]);f.connection.processTurnPackets();}
+async function fill(f,reverse=false,slot=1){await f.connection.dispatch([{type:'inventory_use_on',slot:reverse?0:slot,itemId:reverse?f.inv.forSlot(0).getId():f.input,target:{kind:'inventory',slot:reverse?slot:0}}]);f.connection.processTurnPackets();answer(f.p);}
+/** Answers the fill: the most it will take, then Yes on the empty-bucket warning (captures). */
+function answer(p){const action=p.getEnteredAmountAction?.();if(!action)return;p.setEnteredAmountAction(null);action.execute(1e9);const d=p.getDialogueManager();if(!/untradeable/.test(d.getCurrent()?.getText?.()??''))return;d.advance();d.handleResume(core.OptionDialogue.OPTIONS_WIDGET_ID,1);}
 test('all three noted compost types fill the selected bucket in either orientation and return notes',async t=>{
  for(const tier of [1,2,3])for(const reverse of [false,true]){const f=fixture(t,tier);await fill(f,reverse);assert.equal(f.inv.forSlot(0).getMetaValue('farming:charges'),4);assert.equal(f.inv.forSlot(0).getMetaValue('farming:tier'),tier);assert.equal(f.inv.getAmount(f.input),0);assert.equal(f.inv.getAmount(f.output),2);}
 });

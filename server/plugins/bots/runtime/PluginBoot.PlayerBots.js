@@ -6,7 +6,7 @@ const {
   createSpawnOffsets,
   spawnLocationForIndex,
 } = require("../behaviours/spawn/SpawnLayout.PlayerBots");
-const { createBotPlayer } = require("../behaviours/spawn/PlayerFactory.PlayerBots");
+const { botActivityAllowed, createBotPlayer } = require("../behaviours/spawn/PlayerFactory.PlayerBots");
 const {
   clearFollowState,
   createInitialState,
@@ -135,7 +135,13 @@ function bootPlayerBotsRuntime(options = {}) {
   // loudly rather than leave the whole population standing still.
   const brainRegistry = createBotActivityRegistry({ api: botApi, world: brainWorld });
 
+  const { readActivities } = require("../brain/Editor.PlayerBots");
+  const editorObjectIds = readActivities().flatMap(activity => [
+    ...activity.actions.flatMap(action => action.objectIds ?? []),
+    ...(activity.graph?.nodes ?? []).flatMap(node => node.action?.objectIds ?? []),
+  ]);
   traversalAssist.trackObjectIds([
+    ...editorObjectIds,
     config.wildernessDitchObjectId,
     ...listCatalogObjectIds(),
     ...BANK_BOOTH_IDS,
@@ -278,7 +284,8 @@ function bootPlayerBotsRuntime(options = {}) {
     peekMovementRequest,
   });
 
-  runtime.scheduleInitialSpawn();
+  // A world whose "PlayerBots:allowedActivities" leaves out "world" has no population of its own.
+  if (botActivityAllowed("world")) runtime.scheduleInitialSpawn();
 
   return {
     runtime,

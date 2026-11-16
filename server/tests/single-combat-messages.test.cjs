@@ -131,3 +131,138 @@ test("a melee player walks in on an NPC someone else is fighting; ranged and mag
     "a player target is still turned away on the spot");
   assert.equal(combat.walksInOnFoughtNpc(CanAttackResponse.ALREADY_UNDER_ATTACK, cow, melee), false);
 });
+
+// A plugin's onCanAttack refusal (PluginCanAttackEvent.response / .message) is said by the core, and
+// only on the player's own attack: the same check run passively (Retribution, cannons, relic and bot
+// scans) prints nothing. Nechryael's death spawn uses the core's "I'm already under attack.".
+function withCanAttackHook(t, handler) {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  PluginManager.createApi("CanAttackResponseTest").onCanAttack(handler);
+  const hooks = PluginManager.canAttackHooks;
+  const added = hooks[hooks.length - 1];
+  t.after(() => hooks.splice(hooks.indexOf(added), 1));
+}
+
+test("a plugin refusal naming a core response gets that response's message, once, and only on the attack", (t) => {
+  const you = mobile("player", "You");
+  const spawn = mobile("npc", "Death spawn");
+  withCanAttackHook(t, (event) => {
+    if (event.target !== spawn) return;
+    event.allow = false;
+    event.response = "ALREADY_UNDER_ATTACK";
+  });
+  assert.equal(permission(you, spawn), CanAttackResponse.ALREADY_UNDER_ATTACK);
+  assert.equal(CombatFactory.canAttackByPolicy(you, spawn), CanAttackResponse.ALREADY_UNDER_ATTACK);
+  assert.deepEqual(you.messages, [], "a passive check says nothing");
+  assert.equal(deny(you, spawn, CanAttackResponse.ALREADY_UNDER_ATTACK), true, "the attack waits");
+  deny(you, spawn, CanAttackResponse.ALREADY_UNDER_ATTACK);
+  assert.deepEqual(you.messages, ["spam:I'm already under attack."]);
+});
+
+test("a plugin refusal's own message is sent once with the attack it refuses, never by a passive check", (t) => {
+  const you = mobile("player", "You");
+  const vorkath = mobile("npc", "Vorkath");
+  const cow = mobile("npc", "Cow");
+  withCanAttackHook(t, (event) => {
+    if (event.target === vorkath) {
+      event.allow = false;
+      event.message = "You need to poke Vorkath awake first.";
+    } else if (event.target === cow) {
+      event.allow = false;
+    }
+  });
+  assert.equal(CombatFactory.canAttackByPolicy(you, vorkath), CanAttackResponse.CANT_ATTACK_IN_AREA);
+  assert.deepEqual(you.messages, [], "a passive check says nothing");
+  // A later refusal without a message does not pick up the passive check's line.
+  assert.equal(permission(you, cow), CanAttackResponse.CANT_ATTACK_IN_AREA);
+  assert.equal(deny(you, cow, CanAttackResponse.CANT_ATTACK_IN_AREA), false);
+  assert.deepEqual(you.messages, []);
+
+  assert.equal(permission(you, vorkath), CanAttackResponse.CANT_ATTACK_IN_AREA);
+  assert.deepEqual(you.messages, [], "the check itself says nothing");
+  assert.equal(deny(you, vorkath, CanAttackResponse.CANT_ATTACK_IN_AREA), false, "the attack ends");
+  assert.deepEqual(you.messages, ["You need to poke Vorkath awake first."]);
+});
+
+// Review (#5721): a barrage or chinchompa splash checks each bystander through canAttackSecondaryTarget ->
+// canAttackByPolicy. The Nightmare's charged totem refuses with its line; a splash onto it says nothing,
+// clicking it says it once.
+test("a splash onto a charged Nightmare totem says nothing; attacking it says the line once", (t) => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { AreaManager } = require("../dist/game/model/areas/AreaManager");
+  const Common = require("../plugins/bosses/nightmare/Common.Nightmare");
+  const Fight = require("../plugins/bosses/nightmare/Fight.Nightmare");
+  const api = PluginManager.createApi("NightmareSplashTest");
+  Common.init(api);
+  const hooks = PluginManager.canAttackHooks;
+  const before = hooks.length;
+  Fight.attachFight(api);
+  const added = hooks.slice(before);
+  t.after(() => { for (const hook of added) hooks.splice(hooks.indexOf(hook), 1); });
+
+  const you = mobile("player", "You");
+  you.getDueling = () => ({ inDuel: () => false });
+  const nightmare = mobile("npc", "The Nightmare");
+  const totem = mobile("npc", "Totem");
+  totem.__nightmareTotem = 0;
+  totem.__nightmareFight = { stage: "totems", totems: [{ charged: true }] };
+  totem.getCurrentDefinition = () => ({ isAttackable: () => true });
+  totem.getTimers = () => ({ has: () => false });
+  t.mock.method(CombatFactory, "validTarget", () => true);
+  t.mock.method(AreaManager, "inMulti", () => true);
+
+  assert.equal(CombatFactory.canAttackSecondaryTarget(you, nightmare, totem), false, "the splash skips it");
+  assert.deepEqual(you.messages, [], "and says nothing");
+  assert.equal(permission(you, totem), CanAttackResponse.CANT_ATTACK_IN_AREA);
+  assert.equal(deny(you, totem, CanAttackResponse.CANT_ATTACK_IN_AREA), false);
+  assert.deepEqual(you.messages, [Common.data.fight.messages.totemCharged]);
+});
+
+test("NPC attacker expiry preserves the last-hit timestamp; only another hit refreshes it", (t) => {
+  const { World } = require("../dist/game/World");
+  let cycle = 20000;
+  t.mock.method(World, "getProcessCycle", () => cycle);
+  const npc = mobile("npc", "Goblin");
+  npc.isScriptedMovement = () => true;
+  const first = mobile("player", "First");
+  const second = mobile("player", "Second");
+  const combat = npc.getCombat();
+  combat.setUnderAttack(first);
+  cycle += 7;
+  combat.preMovementProcess();
+  assert.equal(combat.getAttacker(), first, "PJ protection still holds before eight ticks");
+  cycle++;
+  combat.preMovementProcess();
+  assert.equal(combat.getAttacker(), null, "PJ protection expires at eight ticks");
+  assert.equal(combat.getLastAttack().elapsed(), 4800, "expiry does not impersonate a hit");
+  cycle = 20034;
+  assert.equal(combat.getLastAttack().hasElapsed(20000), true, "regen keeps the original last-hit clock");
+  combat.setUnderAttack(second);
+  assert.equal(combat.getAttacker(), second);
+  assert.equal(combat.getLastAttack().elapsed(), 0, "a new incoming hit restarts the delay");
+});
+
+test("explicit combat clears retain their timer reset for both players and NPCs", (t) => {
+  const { World } = require("../dist/game/World");
+  let cycle = 30000;
+  t.mock.method(World, "getProcessCycle", () => cycle);
+  for (const kind of ["player", "npc"]) {
+    const victim = mobile(kind, "Victim");
+    const attacker = mobile("npc", "Attacker");
+    const other = mobile("npc", "Other");
+    const combat = victim.getCombat();
+    combat.setUnderAttack(attacker);
+    cycle += 3;
+    combat.clearAttackerIf(other);
+    assert.equal(combat.getAttacker(), attacker, "an unrelated death cannot release this fight");
+    assert.equal(combat.getLastAttack().elapsed(), 1800);
+    combat.clearAttackerIf(attacker);
+    assert.equal(combat.getAttacker(), null);
+    assert.equal(combat.getLastAttack().elapsed(), 0, "the existing explicit death-release reset is preserved");
+    combat.setUnderAttack(attacker);
+    assert.equal(combat.getLastAttack().elapsed(), 0);
+    cycle += 2;
+    combat.setUnderAttack(null);
+    assert.equal(combat.getLastAttack().elapsed(), 0, "explicit clearing still restarts its timer");
+  }
+});

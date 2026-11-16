@@ -15,6 +15,23 @@
 const Shared = require("./Shared.Kraken");
 const Instance = require("./Instance.Kraken");
 const PRIVATE_FEE = 25000;
+/**
+ * The spam line after the fee (rsprox_transcripts/237/01150.txt t11116, t11119: "Payment has been
+ * taken from your inventory: 25,000 x Coins"). Nobody recorded a bank payment here; the bank
+ * wording is live's for other bank-paid fees (Vorkath's and Theatre of Blood's retrieval).
+ */
+const PAYMENT_SOURCE_TEXT = { inventory: "your inventory", bank: "your bank" };
+/**
+ * The recorded prompt and warning (rsprox_transcripts/237/01150.txt): Private opens chatbox_multi_init
+ * "Pay 25,000 x Coins?" / "Yes, pay 25,000 x Coins.|No, don't pay." (t11116). On Yes (t11119) the payment
+ * line, then the red mesbox below with no continue while the room loads, shown again with "Click here to
+ * continue" two ticks later (t11121).
+ */
+const PROMPT_TITLE = "Pay 25,000 x Coins?";
+const PROMPT_YES = "Yes, pay 25,000 x Coins.";
+const PROMPT_NO = "No, don't pay.";
+const WARNING = "<col=7f0000>Any items you leave in here will be lost.</col>";
+const WARNING_CONTINUE_TICKS = 2;
 
 const CREVICE_IN_TILE = [2280, 10017, 0];
 const BOSS_SIDE_TILE = [2280, 10022, 0];
@@ -53,8 +70,12 @@ function use({ player, object }) {
   return go(player, COVE_SIDE_TILE);
 }
 
-// Server-authored prompt/transaction. Source priority and exact prompt
-// wording are TSPS choices, not a claim about the live interface.
+// Wiki (Kraken): the fee "can be deducted directly from the bank". The recording pays from the
+// inventory; which source goes first is ours: the inventory when it holds the fee, else the bank.
+function feeSource(player) {
+  return player.getInventory().getAmount(Shared.core().ItemIdentifiers.COINS) >= PRIVATE_FEE ? "inventory" : "bank";
+}
+
 function containers(player, source) {
   if (source === "inventory") return [player.getInventory()];
   const { Bank } = Shared.core();
@@ -108,10 +129,8 @@ function confirmPrivate(event, position, area, source) {
   if (!sameContext(event, position, area)) return;
   if (source === "bank" && !bankUnlocked(event, position, area)) return;
   const selected = containers(player, source), id = Shared.core().ItemIdentifiers.COINS;
-  if (coins(selected, id) < PRIVATE_FEE) {
-    player.sendMessage("You need 25,000 coins in the selected source.");
-    return;
-  }
+  // No source gives live's line for too few coins, so none is sent.
+  if (coins(selected, id) < PRIVATE_FEE) return;
   const before = snapshot(selected), total = coins(selected, id);
   const room = Instance.create(player);
   if (!room) { player.sendMessage("The private room could not be opened."); return; }
@@ -127,6 +146,8 @@ function confirmPrivate(event, position, area, source) {
     if (left || coins(selected, id) !== total - PRIVATE_FEE) throw new Error("Kraken fee debit did not complete");
     Instance.enter(room, player);
     go(player, BOSS_SIDE_TILE);
+    player.getPacketSender().sendTypedMessage(Shared.core().ChatType.SPAM,
+      `Payment has been taken from ${PAYMENT_SOURCE_TEXT[source]}: ${PRIVATE_FEE.toLocaleString("en-GB")} x Coins`);
   } catch (error) {
     try { Instance.leave(player); }
     finally {
@@ -134,15 +155,44 @@ function confirmPrivate(event, position, area, source) {
       finally { restore(before); player.moveTo(position); }
     }
     player.sendMessage("The private room could not be opened.");
+    return;
   }
+  // Outside the debit's rollback: the room is paid for and entered.
+  warn(player, room);
+}
+
+/** The lost-items warning: first without a continue, then the box the player clicks on. */
+function warn(player, room) {
+  const { StatementDialogue, DialogueChainBuilder } = Shared.core();
+  StatementDialogue.send(player, WARNING, false);
+  later(WARNING_CONTINUE_TICKS, () => {
+    if (player.getPrivateArea?.() !== room || !Shared.alive(player) || player.getDialogueManager().getCurrent()) return;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, WARNING)));
+  });
+}
+
+function later(ticks, action) {
+  const { Task, TaskManager } = Shared.core();
+  TaskManager.submit(new (class extends Task {
+    constructor() {
+      super(Math.max(1, ticks), null, false);
+    }
+    execute() {
+      this.stop();
+      action();
+    }
+  })());
+}
+
+function payPrivate(event, position, area) {
+  confirmPrivate(event, position, area, feeSource(event.player));
 }
 
 function promptPrivate(event, position, area) {
   if (!sameContext(event, position, area)) return;
-  Shared.api().sendMultiChatboxPrompt(event.player, "Open a private room for 25,000 coins?",
-    "Pay from inventory", () => confirmPrivate(event, position, area, "inventory"),
-    "Pay from bank", () => confirmPrivate(event, position, area, "bank"),
-    "Cancel", () => {});
+  Shared.api().sendMultiChatboxPrompt(event.player, PROMPT_TITLE,
+    PROMPT_YES, () => payPrivate(event, position, area),
+    PROMPT_NO, () => {});
 }
 
 function privateEntry(event) {

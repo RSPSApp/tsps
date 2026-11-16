@@ -1,5 +1,6 @@
 /** Dragon Slayer II: the transcript supplies the conversations; this plugin owns the quest state and world actions. */
 const NPC_TRANSCRIPTS = require("../../../data/definitions/npc-dialogues.json");
+const Saws = require("../../items/Saws");
 const ONEIROMANCER_IDS = new Set([3835, 8049]);
 // Static NPC spawns in the Ancient Cavern orb room; their cache variants use varbits 6109–6111.
 const FORGE_HEADS = new Map([[7506, { bit: 1, varbit: 6109 }], [7507, { bit: 2, varbit: 6110 }], [7508, { bit: 4, varbit: 6111 }]]);
@@ -868,7 +869,7 @@ module.exports = function registerDragonSlayerII(api) {
       return true;
     }
     if (p.getSkillManager().getMaxLevel(Skill.CONSTRUCTION) < 50) return p.sendMessage("You need at least 50 Construction to build the rowboat.");
-    if (!has(p, I.HAMMER) || !has(p, I.SAW)) return p.sendMessage("You need a hammer and a saw to build the rowboat.");
+    if (!has(p, I.HAMMER) || !Saws.holdsSaw(api.core, p)) return p.sendMessage("You need a hammer and a saw to build the rowboat.");
     if (!has(p, I.OAK_PLANK, 8) || !has(p, I.SWAMP_PASTE, 10)) return p.sendMessage("You need 8 oak planks and 10 swamp paste to build the rowboat.");
     const nails = [I.BRONZE_NAILS, I.IRON_NAILS, I.STEEL_NAILS, I.BLACK_NAILS, I.MITHRIL_NAILS, I.ADAMANTITE_NAILS, I.RUNE_NAILS];
     if (nails.reduce((total, id) => total + p.getInventory().getAmount(id), 0) < 12) return p.sendMessage("You need at least 12 nails of any kind.");
@@ -2464,6 +2465,7 @@ module.exports = function registerDragonSlayerII(api) {
     return false;
   }
   function onLogin({ player: p }) {
+    clearVeosTravel({ player: p });
     syncUngaelExit(p);
     syncForgeHeadVarbits(p);
     if (stage(p) >= S.KEYS && (p.getAttribute(ATTR_CRYPT_ORDER) || p.getAttribute(ATTR_CRYPT_PLACED)
@@ -2525,6 +2527,7 @@ module.exports = function registerDragonSlayerII(api) {
     p.setAttribute(ATTR_ASSAULT_DEFENSE_ACTIVE, false);
   }
   function onPlayerLogout({ player: p }) {
+    clearVeosTravel({ player: p });
     if (p.getAttribute(ATTR_AREA) instanceof QuestArea) {
       leaveArea(p);
       p.setAttribute(ATTR_ASSAULT_DEFENSE_ACTIVE, false);
@@ -2577,8 +2580,20 @@ module.exports = function registerDragonSlayerII(api) {
       ? "The locator orb pulses strongly. The key piece must be buried very close by."
       : `The locator orb glows and pulls you ${direction}. It shocks you as you use it.`);
   }
+  function clearVeosTravel({ player }) {
+    if (player.getAttribute(ATTR_VEOS_TRAVEL_DESTINATION) != null) {
+      player.setAttribute(ATTR_VEOS_TRAVEL_DESTINATION, null);
+    }
+  }
+  function closeVeosTravel(event) {
+    // Switching between player/NPC lines also closes the previous group, but
+    // mounts its replacement first. Only an actual close ends this intent.
+    if (event.player.getPacketSender?.()?.getChatboxGroupId?.() < 0) clearVeosTravel(event);
+  }
   function rememberVeosTravelDestination(event) {
-    if (!VEOS_NPC_IDS.has(event.npcId) || stage(event.player) < S.KEYS || stage(event.player) >= S.FORGE) return;
+    if (!VEOS_NPC_IDS.has(event.npcId)) return;
+    clearVeosTravel(event);
+    if (stage(event.player) < S.KEYS || stage(event.player) >= S.FORGE) return;
     const destination = VEOS_DESTINATIONS[event.option];
     if (destination) event.player.setAttribute(ATTR_VEOS_TRAVEL_DESTINATION, [destination.getX(), destination.getY(), destination.getZ()]);
   }
@@ -2595,12 +2610,21 @@ module.exports = function registerDragonSlayerII(api) {
     return true;
   }
   function finishVeosTravel(event) {
-    const { player: p, npcId, text } = event;
+    const { player: p, npc, npcId, text } = event;
     if (!VEOS_NPC_IDS.has(npcId) || !/^As you wish, I hope you don't get seasick, it is a\s+long voyage\.$/.test(text ?? "")) return;
     const destination = p.getAttribute(ATTR_VEOS_TRAVEL_DESTINATION);
     if (!Array.isArray(destination) || destination.length !== 3) return;
+    // Client of Kourend already owns ordinary travel and validates the live
+    // Veos form. Keep that callback, rather than replacing its destination/guard.
+    if (event.after) {
+      clearVeosTravel(event);
+      return;
+    }
     event.after = () => {
-      p.setAttribute(ATTR_VEOS_TRAVEL_DESTINATION, null);
+      if (p.getAttribute(ATTR_VEOS_TRAVEL_DESTINATION) !== destination) return;
+      clearVeosTravel(event);
+      if (stage(p) < S.KEYS || stage(p) >= S.FORGE) return;
+      if (npc && npc.getCurrentDefinition(p)?.getId() !== npcId) return;
       p.moveTo(new Location(destination[0], destination[1], destination[2]));
     };
   }
@@ -2660,7 +2684,6 @@ module.exports = function registerDragonSlayerII(api) {
   api.persistAttribute(ATTR_ASSAULT_INDEX); api.persistAttribute(ATTR_ASSAULT_CHECKPOINT);
   api.persistAttribute(ATTR_ASSAULT_DEFENSE_ACTIVE); api.persistAttribute(ATTR_ASSAULT_DEFENDED);
   api.persistAttribute(ATTR_MORYTANIA); api.persistAttribute(ATTR_ORB_TARGET);
-  api.persistAttribute(ATTR_VEOS_TRAVEL_DESTINATION);
   api.persistAttribute(ATTR_MURAL_READ); api.persistAttribute(ATTR_NOTES_READ); api.persistAttribute(ATTR_KARAMJA_JOURNAL);
   api.persistAttribute(ATTR_CRANDOR_BLOCKAGE_PROGRESS);
   api.persistAttribute(ATTR_MURAL_GUARDIAN_DEFEATED);
@@ -2739,6 +2762,8 @@ module.exports = function registerDragonSlayerII(api) {
   api.onCustomEvent("npc-dialogue:action", handleEllenTrainingAction);
   api.onCustomEvent("npc-dialogue:choice", rememberVeosTravelDestination);
   api.onCustomEvent("npc-dialogue:line", finishVeosTravel);
+  api.onBeforeNpcInteraction(clearVeosTravel);
+  api.onCustomEvent("interface:closed", closeVeosTravel);
   api.onObjectFirstClick(O.CAVE_63, enterKaramjaMaze);
   api.onObjectInteraction("Cave", {
     Enter(event) {

@@ -26,6 +26,15 @@ No native playthrough recorded; natural completion pending.
   Monastery. Test: `server/tests/kings-ransom-grail-boxes.test.cjs`. No rsprox capture of the interface
   was found (searches for the interface's text returned nothing on 2026-11-11), so that the server runs
   script 171 when Show riddle is clicked, and which side the client starts on, are inference.
+- **fixed (issue #6003)** The Camelot castle grounds gate (`kr_camelot_metalgateclosedl/r` 26081/26082
+  at 2757-2758,3482) is a pass-through gate, from the user's rsprox captures (local 1001994 ticks
+  16536-16541, 17415-17419, 17539-17543; local 1001800 ticks 23184, 23277; rev 242). Open puts inviswall
+  38848 (rotation 1) on both gate tiles and the nameless open leaves on the tiles north (26083 rotation 0 at
+  2757,3483, 26084 rotation 2 at 2758,3483) with sound 69 (`grate_open`), the player steps across that
+  tick, and the closed leaves are back two ticks later, from either side. It used to open like a plain
+  double gate and stay open on those nameless leaves, which a client shows no menu for ("Close null" with
+  debug ids on). Morgan's hold still sends a held player back to the cell first (`door:toggle`). Test:
+  `server/tests/camelot-gate.test.cjs`.
 - **open** The lock-picking interface 588 is still not driven: the cell door plays the success message
   directly. Its feedback widgets have no cache script and no capture was found.
 

@@ -1,6 +1,6 @@
 /**
  * Shared by the Ironman units: the data, a player's mode, and setting it (the attribute, the
- * `ironman` varbit and the chat icon together).
+ * `ironman` varbit and the chat icon together), and whether two Group Ironmen share a group.
  */
 const fs = require("fs");
 const path = require("path");
@@ -24,9 +24,27 @@ function modeOf(player) {
   return data.modes[mode] ? mode : "none";
 }
 
-/** Any Ironman (standard, Ultimate or Hardcore). */
+/** Any Ironman (standard, Ultimate, Hardcore or Group). */
 function isIron(player) {
   return modeOf(player) !== "none";
+}
+
+/** Any of the three Group Ironman modes (Group, Hardcore Group, Unranked Group). */
+function isGroup(player) {
+  return data.groupModes.includes(modeOf(player));
+}
+
+/**
+ * A Group Ironman and `other` (a player, or a login name such as a ground item's owner) in the same
+ * Group Ironman group, by the Grouping plugin ("grouping:same-group"). Members in their leaving
+ * period still count (Wiki: they can still trade with the group).
+ */
+function groupMate(player, other) {
+  if (!isGroup(player) || other == null || other === player) return false;
+  if (typeof other !== "string" && !isGroup(other)) return false;
+  const query = { player, other, same: false, ironman: false };
+  api.emitCustomEvent("grouping:same-group", query);
+  return query.same === true && query.ironman === true;
 }
 
 function message(key, values = {}) {
@@ -37,6 +55,7 @@ function message(key, values = {}) {
 function sendVarbits(player) {
   const sender = player.getPacketSender();
   sender.sendVarbit(data.varbits.mode, data.modes[modeOf(player)].varbit);
+  sender.sendVarbit(data.varbits.bankChestAccess, data.modes[modeOf(player)].chests ?? 0);
   if (player.getAttribute(HARDCORE_DEAD_ATTRIBUTE)) {
     sender.sendVarbit(data.varbits.hardcoreDead, 1);
     sender.sendVarbit(data.varbits.downgradePermitted, 1);
@@ -52,7 +71,7 @@ function setMode(player, mode) {
 }
 
 module.exports = {
-  init, modeOf, isIron, message, sendVarbits, setMode, MODE_ATTRIBUTE, HARDCORE_DEAD_ATTRIBUTE,
+  init, modeOf, isIron, isGroup, groupMate, message, sendVarbits, setMode, MODE_ATTRIBUTE, HARDCORE_DEAD_ATTRIBUTE,
   get data() { return data; },
   get api() { return api; },
   get core() { return core; },

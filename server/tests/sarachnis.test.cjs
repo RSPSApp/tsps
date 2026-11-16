@@ -28,8 +28,10 @@ const areas = [];
 const combatProviders = [];
 const objectHooks = {};
 const prompts = [];
+const customHooks = {};
 const api = new Proxy({
   core,
+  onCustomEvent: (name, handler) => { (customHooks[name] ??= []).push(handler); },
   persistAttribute: () => {},
   registerArea: (area) => areas.push(area),
   registerNpcCombatMethodProvider: (ids, method) => combatProviders.push({ ids, method }),
@@ -89,6 +91,7 @@ test("the ids are the cache's sarachnis gamevals", () => {
   assert.equal(seq.get(Common.ANIM.ranged), "hosdun_spider_boss_attack_ranged");
   assert.equal(seq.get(Common.ANIM.death), "hosdun_spider_boss_death");
   assert.equal(seq.get(Common.ANIM.wade), "human_aranea_boots_wade");
+  assert.equal(seq.get(Common.ANIM.enterCrypt), "human_machette_chop");
   const spotanim = gamevals.namesOf(GamevalKind.SPOTANIM);
   assert.equal(spotanim.get(Common.PROJECTILE_ID.ranged), "sarachnis_rangeproj");
   assert.equal(spotanim.get(Common.PROJECTILE_ID.web), "sarachnis_web_proj");
@@ -99,6 +102,52 @@ test("the ids are the cache's sarachnis gamevals", () => {
   assert.equal(loc.get(Common.PEEK_WEB_ID), "sarachnis_web_peek");
   assert.equal(loc.get(Common.WEB_ID), "sarachnis_web");
   assert.equal(Sarachnis.members, true);
+});
+
+// Runs before the fight tests, whose fake NPCs leave throwing tasks on the shared TaskManager.
+test("Quick-enter crawls through the thick web over two ticks, as captured", () => {
+  const log = [];
+  let blocked = false;
+  const outside = {
+    getLocation: () => new Location(1842, 9912, 0),
+    getPacketSender: () => ({
+      sendInterfaceRemoval: () => {},
+      getVarbit: () => 0,
+      sendTypedMessage: (type, text) => log.push(["message", type, text]),
+      sendVarbit: (id, value) => log.push(["varbit", id, value]),
+    }),
+    getMovementQueue: () => ({ reset: () => {}, setBlockMovement: (on) => { blocked = on; } }),
+    setPositionToFace: (at) => log.push(["face", at.getX(), at.getY()]),
+    performAnimation: (anim) => log.push(["anim", anim.getId()]),
+    moveTo: (to) => log.push(["move", to.getX(), to.getY()]),
+    isRegistered: () => true,
+  };
+  assert.equal(Entrance._test.quickEnter({ player: outside, objectId: Common.ENTRANCE_ID }), true);
+  assert.deepEqual(log, [
+    ["message", core.ChatType.SPAM, "You enter deeper into the ancient burial crypt."],
+    ["varbit", 12393, 1],
+    ["face", 1842, 9911],
+    ["anim", Common.ANIM.enterCrypt],
+  ]);
+  assert.equal(blocked, true);
+  // A second click mid-crawl starts nothing new.
+  Entrance._test.quickEnter({ player: outside, objectId: Common.ENTRANCE_ID });
+  assert.equal(log.length, 4);
+  runTicks(1);
+  assert.equal(log.length, 4);
+  runTicks(1);
+  assert.deepEqual(log.slice(4), [["varbit", 12393, 0], ["move", 1842, 9911]]);
+  assert.equal(blocked, false);
+
+  // Enter-crypt's public choice is the same crawl.
+  prompts.length = 0;
+  log.length = 0;
+  assert.equal(Entrance._test.enterCrypt({ player: outside, objectId: Common.ENTRANCE_ID }), true);
+  const prompt = prompts.at(-1);
+  prompt.pairs[prompt.pairs.indexOf("Enter the crypt.") + 1]();
+  assert.equal(log[0][2], "You enter deeper into the ancient burial crypt.");
+  runTicks(2);
+  assert.deepEqual(log.at(-1), ["move", 1842, 9911]);
 });
 
 test("her stats and combat definitions match the captures", () => {
@@ -379,15 +428,26 @@ test("the plugin registers its combat method, lair area and web handlers", () =>
 
 // ------------------------------------------------------------------ entrance
 
-test("Peek counts the room, captured for empty", () => {
+test("Peek counts the room in a game message, captured for none and one", (t) => {
   assert.equal(Entrance._test.peekText(0), "You listen and hear no adventurers inside the crypt");
-  assert.equal(Entrance._test.peekText(1), "You listen and hear 1 adventurer inside the crypt");
-  assert.equal(Entrance._test.peekText(3), "You listen and hear 3 adventurers inside the crypt");
+  assert.equal(Entrance._test.peekText(1), "You listen and hear one adventurer inside the crypt.");
+  assert.equal(Entrance._test.peekText(3), "You listen and hear 3 adventurers inside the crypt.");
+  const inside = { getLocation: () => new Location(...Common.TELEPORT_TILE) };
+  const outside = { getLocation: () => new Location(...Common.PEEK_WEB_TILE) };
+  t.mock.method(Lair.lair, "getPlayers", () => [inside, outside]);
+  const messages = [];
+  const player = {
+    sendMessage: (text) => messages.push(text),
+    getDialogueManager: () => assert.fail("Peek is a game message, not a mesbox"),
+  };
+  assert.equal(Entrance._test.peek({ player, objectId: Common.PEEK_WEB_ID }), true);
+  assert.deepEqual(messages, ["You listen and hear one adventurer inside the crypt."]);
 });
 
 test("the boots wade through; a tool slashes; otherwise refused", () => {
   const moves = [];
   const booted = {
+    getLocation: () => new Location(1846, 9919, 0),
     getEquipment: () => ({ get: () => ({ getId: () => 29806 }), getItems: () => [] }),
     getFightType: () => ({ getBonusType: () => 0 }),
     getInventory: () => ({ getItems: () => [] }),
@@ -412,6 +472,17 @@ test("the boots wade through; a tool slashes; otherwise refused", () => {
   };
   assert.equal(Entrance._test.slashWeb({ player: bare, objectId: Common.PEEK_WEB_ID, location: { x: 1847, y: 9919, z: 0 } }), true);
   assert.match(bare.message, /slash weapon or a knife/);
+});
+
+test("a wall web is crossed over its face, never sideways into the sealed pocket", () => {
+  const web = { x: 1841, y: 9933, z: 0 };
+  const wall = { getType: () => 0, getFace: () => 1 };
+  const playerAt = (x, y) => ({ getLocation: () => new Location(x, y, 0) });
+  // From beside it, the recorded one-tile wade lands on the web's own tile.
+  assert.deepEqual(Entrance._test.wadeDestination({ player: playerAt(1842, 9933), location: web, object: wall }), web);
+  // Standing on it, the step follows the wall face (face 1 is north), as the Wilderness wade does.
+  assert.deepEqual(Entrance._test.wadeDestination({ player: playerAt(1841, 9933), location: web, object: wall }),
+    { x: 1841, y: 9934, z: 0 });
 });
 
 test("the instance fee is 25k, 12.5k with the hard tier done", () => {
@@ -485,7 +556,7 @@ test("the thick web lets out from the boss side, and the web passes both ways", 
   assert.equal(Entrance._test.enterCrypt({ player: inside, objectId: Common.ENTRANCE_ID }), true);
   assert.deepEqual(moved, [[1842, 9913], [1842, 9913]]);
 
-  // South of the tomb web, Slash wades north onto it too.
+  // The captured wade is the one-tile step onto the web's own tile, from either side.
   const wades = [];
   const southerner = {
     getEquipment: () => ({ get: () => ({ getId: () => 29806 }), getItems: () => [] }),
@@ -501,6 +572,18 @@ test("the thick web lets out from the boss side, and the web passes both ways", 
   assert.equal(Entrance._test.slashWeb(fromSouth), true);
   runTicks(1);
   assert.deepEqual(wades, [[1847, 9919]]);
+  // From inside the tomb the same Slash steps back onto the web's tile.
+  southerner.getLocation = () => new Location(1847, 9920, 0);
+  assert.equal(Entrance._test.slashWeb(fromSouth), true);
+  runTicks(1);
+  assert.deepEqual(wades, [[1847, 9919], [1847, 9919]]);
+  // Already standing on the web, Slash crosses the wall's face (face 1 is north), so the
+  // second Slash gets through instead of moving to the tile the player already stands on.
+  southerner.getLocation = () => new Location(1847, 9919, 0);
+  const onWeb = { ...fromSouth, object: { getType: () => 0, getFace: () => 1 } };
+  assert.equal(Entrance._test.slashWeb(onWeb), true);
+  runTicks(1);
+  assert.deepEqual(wades, [[1847, 9919], [1847, 9919], [1847, 9920]]);
 });
 
 test("a rented instance is entered on the other side of the web", () => {
@@ -535,4 +618,20 @@ test("a rented instance is entered on the other side of the web", () => {
   assert.ok(messages.some((text) => text.includes("25,000")));
   // Atomic: the instance exists in the same tick as the payment, then the step in.
   assert.ok(renter.getPrivateArea() instanceof Lair._test.instanceClass());
+});
+
+test("a death in a rented instance leaves its grave outside the thick web (Wiki, Instance)", () => {
+  const Instance = Lair._test.instanceClass();
+  const owner = { getPrivateArea: () => null };
+  const instance = Object.create(Instance.prototype);
+  const ask = (privateArea) => {
+    const request = { player: { getPrivateArea: () => privateArea }, location: null, tile: null, feeMultiplier: 1 };
+    for (const handler of customHooks["gravestones:grave-location"] ?? []) handler(request);
+    return request;
+  };
+  const rented = ask(instance);
+  assert.deepEqual(rented.tile, { x: Common.OUTSIDE_TILE[0], y: Common.OUTSIDE_TILE[1], z: 0 });
+  assert.equal(rented.feeMultiplier, 1, "normal death fees apply");
+  assert.equal(ask(null).tile, null, "the public lair: the grave stays where the player died");
+  assert.equal(ask({ owner }).tile, null, "another plugin's instance is not hers");
 });

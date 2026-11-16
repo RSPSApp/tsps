@@ -60,3 +60,11 @@ test("each knock-out sends the player back to Mort'ton", (t) => {
     assert.deepEqual([at.getX(), at.getY(), at.getZ()], [3522, 3285, 0], step.id);
   }
 });
+
+// The plugin binds the ids of the imported record (osrsreboxed-db c971f8ee2): a stale id after a re-export fails here.
+test('the ids the plugin binds exist in the dialogue file', () => {
+  const [pass] = steps(conversation(), (n) => n.type === 'condition' && n.text === 'If the player answered three out of three questions correctly:');
+  assert.equal(pass?.id, 'p493oV');
+  const knockouts = steps(conversation(), (n) => n.type === 'message' && n.text === "Curpile knocks you out and takes you back to Mort'ton.").map((n) => n.id);
+  assert.deepEqual(knockouts, ['HQfMkY', 'XmM1Px', 'k1iShr']);
+});

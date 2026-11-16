@@ -120,8 +120,8 @@ export function dispatchClientMessages(player: Player, messages: ClientMessages)
 }
 
 /** Temporarily routes one client's input/output to an existing headless character. */
-export function controlPlayer(owner: Player, target: Player, released: () => void): boolean {
-  return CONNECTIONS.get(owner)?.controlPlayer(target, released) ?? false;
+export function controlPlayer(owner: Player, target: Player, released: () => void, options: { readOnly?: boolean } = {}): boolean {
+  return CONNECTIONS.get(owner)?.controlPlayer(target, released, options) ?? false;
 }
 
 export function releasePlayerControl(player: Player): boolean {
@@ -460,15 +460,19 @@ export class ClientConnection {
   /** The pendingNames keys this connection holds: its account and the character it will enter. */
   private reservedNames: string[] = [];
   private player?: Player;
-  private control?: { owner: Player; target: Player; targetSession: PlayerSession; targetConnection?: ClientConnection; released: () => void };
+  private control?: { owner: Player; target: Player; targetSession: PlayerSession; targetConnection?: ClientConnection; released: () => void; readOnly: boolean };
 
-  public controlPlayer(target: Player, released: () => void): boolean {
+  public controlPlayer(target: Player, released: () => void, options: { readOnly?: boolean } = {}): boolean {
     const owner = this.player;
     if (this.closed || this.control || !owner || owner === target || !owner.isRegistered() || !target.isRegistered() ||
         !(target.getSession() instanceof BotPlayerSession || target.getSession().getChannel() instanceof HeadlessBinaryChannel) ||
         World.getRemovePlayerQueue().includes(target) || World.getRemovePlayerQueue().includes(owner) ||
         owner.busy() || target.busy()) return false;
-    this.control = { owner, target, targetSession: target.getSession(), targetConnection: CONNECTIONS.get(target), released };
+    this.control = { owner, target, targetSession: target.getSession(), targetConnection: CONNECTIONS.get(target), released, readOnly: options.readOnly === true };
+    if (this.control.readOnly) {
+      this.turnPackets = [];
+      this.stalledInput = null;
+    }
     owner.getTrading().closeTrade();
     owner.getSession().flushPackets();
     owner.getMovementQueue().reset();
@@ -666,6 +670,7 @@ export class ClientConnection {
     const dispatchedPlayer = this.player;
     for (const packet of packets) {
       if ((dispatchedPlayer && this.player !== dispatchedPlayer) || (this.closed && !turn)) return;
+      if (this.control?.readOnly && !["ping", "hello", "logout"].includes(packet.type)) continue;
       if (!turn && this.player && !IMMEDIATE_PACKETS.has(packet.type)) {
         if (this.turnPackets.length >= NetworkConstants.PACKET_QUEUE_LIMIT) {
           console.warn("[network] client turn packet limit exceeded", { queued: this.turnPackets.length });
@@ -992,7 +997,10 @@ export class ClientConnection {
               this.player.getPacketSender().closeWorldMap();
             } else if (equipmentSlot >= 0) {
               const item = this.player.getEquipment().getItems()[equipmentSlot];
-              const itemActionHandled = !!item?.getId &&
+              // A teleport ignores worn options (Remove, Revert, Check...) until it lands, as it does the
+              // inventory's (ItemActionPacketListener.handleAction); Examine (op10) still answers.
+              const stalled = this.player.isTeleportingReturn() && actionPacket.buttonNum !== 10;
+              const itemActionHandled = stalled || !!item?.getId &&
                 PluginManager.emitItemAction({
                   player: this.player,
                   interfaceId: 1688,
@@ -1100,7 +1108,9 @@ export class ClientConnection {
                 }
                 continue;
               }
-              if (actionPacket.subOpId && PluginManager.emitItemAction({
+              // Mid-teleport a submenu entry (Rub > Edgeville, a basket's Empty) falls through to handleAction's
+              // silent refusal, as the item's other options do.
+              if (actionPacket.subOpId && !this.player.isTeleportingReturn() && PluginManager.emitItemAction({
                 player: this.player,
                 interfaceId: actionPacket.widgetId,
                 item: this.player.getInventory().getItems()[actionPacket.slot],

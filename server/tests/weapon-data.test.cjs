@@ -245,6 +245,21 @@ test("gem machetes swing at the cache's 4 ticks, and the twisted bow at its 6", 
   assert.equal(WeaponProfiles.attackSpeed(wielding(20997, WeaponInterfaces.SHORTBOW), 4), 6);
 });
 
+test("the mjolnirs attack at the Wiki's 6 ticks, the one approved per-item override of the cache's 5", () => {
+  // Wiki (Guthix, Saradomin and Zamorak mjolnir, Combat Styles): 6 ticks. The cache's param 14 says 5.
+  for (const id of [6760, 6762, 6764]) {
+    assert.equal(ItemDefinition.forId(id).getAttackSpeed(), 5, `${id}: the cache's speed`);
+    assert.equal(WeaponProfiles.attackSpeed(wielding(id, WeaponInterfaces.POLESTAFF), 4), 6, `${id}`);
+  }
+  // A real Player's combat speed (Player.getBaseAttackSpeed, what melee waits between swings).
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { Item } = require("../dist/game/model/Item");
+  const player = new Player(null);
+  player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(6760, 1));
+  player.setWeapon(WeaponInterfaces.POLESTAFF);
+  assert.equal(player.getBaseAttackSpeed(), 6);
+});
+
 test("the reported weapon families use their primary/cache-sourced holding stances for every wearable variant", () => {
   const nightmareReady = CacheDefinitions.getSeqId("human_nightmare_staff_ready");
   const kistenReady = CacheDefinitions.getSeqId("human_weapons_crimson_kisten_ready01");
@@ -282,4 +297,26 @@ test('recorded scimitar Lunge and Dharok Smash keep their own synth through cach
     {cwd:path.resolve(__dirname,'..'),encoding:'utf8',env:{...process.env,TS_NODE_COMPILER_OPTIONS:JSON.stringify({target:'es2020'})}});
   assert.equal(check.status,0,check.stdout+check.stderr);
   assert.deepEqual(fs.readFileSync(path.join(DEFINITIONS,'item-combat-styles.json')),original,'check mode preserves canonical metadata without rewriting the file');
+});
+
+test('dragon and burning claws and partisans swing with their recorded attack sounds', () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { Item } = require('../dist/game/model/Item');
+  const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
+  const sounds = (itemId, weaponInterface) => {
+    const player = new Player(null);
+    player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(itemId, 1));
+    player.setWeapon(weaponInterface);
+    return weaponInterface.getFightType().map((fightType) => {
+      player.setFightType(fightType);
+      return player.getAttackSound()?.getId();
+    });
+  };
+  // Wiki "Sound effects": dragonclaws_normal 4139 (rsprox_transcripts/235/03327.txt, 237/04008.txt).
+  for (const id of [ItemIdentifiers.DRAGON_CLAWS, ItemIdentifiers.DRAGON_CLAWS_OR_, ItemIdentifiers.DRAGON_CLAWS_CR_, ItemIdentifiers.BURNING_CLAWS]) {
+    assert.deepEqual(sounds(id, WeaponInterfaces.CLAWS), [4139, 4139, 4139, 4139], `${id}`);
+  }
+  assert.deepEqual(sounds(ItemIdentifiers.RUNE_CLAWS, WeaponInterfaces.CLAWS), [2500, 2500, 2501, 2500], 'other claws keep the style sounds');
+  // staff_stab 2562 on Stab, Lunge and Block; newstaff 2555 on Pound (227/01788.txt, 227/01864.txt).
+  assert.deepEqual(sounds(ItemIdentifiers.KERIS_PARTISAN, WeaponInterfaces.PARTISAN), [2562, 2562, 2555, 2562]);
 });

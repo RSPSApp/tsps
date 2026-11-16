@@ -23,40 +23,42 @@ const VARP_STAGE = 175;
 const START_HOOK = 'quest:jungle-potion:start';
 const COMPLETE_ACTION = 'WiofTb';
 const ENTER_CAVE_MESSAGE = 'LP0T9g';
+// Live starts the quest as the player continues past this acceptance line (rsprox captures, JunglePotion ticks 158-160).
+const ACCEPT_LINE = "It sounds like just the challenge for me. And it would make a nice break from killing things!";
 
 const HERBS = [
   {
     name: 'Snake weed',
     grimy: I.GRIMY_SNAKE_WEED, clean: I.SNAKE_WEED, locId: O.MARSHY_JUNGLE_VINE,
-    search: 'snake-weed-searching-the-marshy-jungle-vine',
+    search: 'You search the vine...',
     talk: 'snake-weed-talking-to-trufitus',
     handIn: 'Z2U1Sk', requested: 1, found: 2, next: 3,
   },
   {
     name: 'Ardrigal',
     grimy: I.GRIMY_ARDRIGAL, clean: I.ARDRIGAL, locId: O.PALM_TREE_2,
-    search: 'ardrigal-search-palm-tree',
+    search: 'You search the palm...',
     talk: 'ardrigal-talking-to-trufitus',
     handIn: '1TUBY2', requested: 3, found: 4, next: 5,
   },
   {
     name: 'Sito foil',
     grimy: I.GRIMY_SITO_FOIL, clean: I.SITO_FOIL, locId: O.SCORCHED_EARTH,
-    search: 'sito-foil-searching-the-scorched-earth',
+    search: 'You search the scorched earth...',
     talk: 'sito-foil-talking-to-trufitus',
     handIn: '4Qi9K-', requested: 5, found: 6, next: 7,
   },
   {
     name: 'Volencia moss',
     grimy: I.GRIMY_VOLENCIA_MOSS, clean: I.VOLENCIA_MOSS, locId: O.ROCK_3,
-    search: 'volencia-moss-searching-the-rock',
+    search: 'You search the rock...',
     talk: 'volencia-moss-talking-to-trufitus',
     handIn: 'l4gnZZ', requested: 7, found: 8, next: 9,
   },
   {
     name: "Rogue's purse",
     grimy: I.GRIMY_ROGUES_PURSE, clean: I.ROGUES_PURSE, locId: O.FUNGUS_COVERED_CAVERN_WALL,
-    search: 'rogue-s-purse-search-fungus-covered-cavern-wall',
+    search: 'You search the wall...',
     talk: 'rogue-s-purse-talking-to-trufitus',
     handIn: '3UOzJ-', requested: 9, found: 10, next: 11,
   },
@@ -85,8 +87,10 @@ function harness() {
   const logins = [];
 
   const actions = (name) => custom.get(name) ?? [];
+  const tasks = [];
   const api = new Proxy({
     core: questCore,
+    getTaskManager: () => ({ submit(task) { task.setRunning(true); tasks.push(task); } }),
     persistAttribute() {},
     onNpcDialogueCondition(handler) { conditions.push(handler); },
     onNpcDialogueVariant(handler) { variants.push(handler); },
@@ -134,7 +138,10 @@ function harness() {
     }
   }
 
+  const spam = [];
+  const boxes = [];
   const sender = new Proxy({
+    sendTypedMessage(_type, message) { spam.push(message); return sender; },
     sendVarbit(id, value) { varbits.set(id, value); return sender; },
     sendConfig(id, value) { configs.set(id, value); return sender; },
   }, { get(target, key) { return key in target ? target[key] : () => sender; } });
@@ -163,7 +170,9 @@ function harness() {
     getInventory: () => inventory,
     getEquipment: () => ({ get: () => null }),
     getPacketSender: () => sender,
-    getDialogueManager: () => ({ isActive: () => false, getCurrent: () => null, startDialogues() {}, reset() {}, handleResume() {} }),
+    getDialogueManager: () => ({ isActive: () => false, getCurrent: () => null, startDialogues(chain) { boxes.push(chain); }, reset() {}, handleResume() {} }),
+    performAnimation() {},
+    getMovementQueue: () => ({ size: () => 0 }),
     getSkillManager: () => ({
       getCurrentLevel: () => 99,
       getMaxLevel: () => 99,
@@ -179,6 +188,13 @@ function harness() {
   };
 
   return {
+    spam, boxes,
+    /** Run the submitted tasks for `ticks` ticks, as TaskManager does (Task.tick). */
+    tick(ticks = 1) {
+      for (let i = 0; i < ticks; i++) {
+        for (const task of [...tasks]) if (task.isRunning()) task.tick();
+      }
+    },
     quest, player, attributes, amounts, messages, moves, varbits, configs, xp,
     give: addItem,
     has: (id) => (amounts.get(id) ?? 0) > 0,
@@ -212,6 +228,24 @@ function harness() {
       const event = { player, npcId, stepId, handled: false };
       for (const handler of actions('npc-dialogue:action')) handler(event);
       return event;
+    },
+    /** A message step as the dialogue runtime emits it; `after` runs as its box is continued. */
+    message(stepId, text = '', npcId = TRUFITUS) {
+      const event = { player, npcId, stepId, text, kind: 'message', handled: false };
+      for (const handler of actions('npc-dialogue:action')) handler(event);
+      event.after?.();
+      return event;
+    },
+    /** A speech line as the dialogue runtime emits it; `after` runs as it is continued. */
+    line(text, npcId = TRUFITUS) {
+      const event = { player, npcId, text, skip: false };
+      for (const handler of actions('npc-dialogue:line')) handler(event);
+      event.after?.();
+      return event;
+    },
+    /** Continue the last chain started (a message box), running its actions. */
+    continueBox() {
+      for (const entry of boxes.at(-1).getDialogues().values()) if (entry instanceof core.ActionDialogue) entry.send(player);
     },
     objectSearch(objectId) {
       const event = {
@@ -267,13 +301,18 @@ test('fresh stage 0 starts at stage 1; searching before the request yields nothi
   assert.match(h.messages.at(-1), /nothing of interest/i);
 
   h.hook(START_HOOK);
+  assert.equal(h.quest.getStage(h.player), 0, '"Yes." alone does not start it');
+  h.line(ACCEPT_LINE);
   assert.equal(h.quest.getStage(h.player), 1);
   assert.equal(h.configs.get(VARP_STAGE), 1);
+  assert.match(h.messages.at(-1), /^You've started a new quest: /);
 });
 
-test('mandatory route: search, clean and hand in all five herbs, enter and leave the cave, then complete', () => {
+test('mandatory route: search, clean and hand in all five herbs, enter and leave the cave, then complete', (t) => {
+  t.mock.method(Math, 'random', () => 0);
   const h = harness();
   h.hook(START_HOOK);
+  h.line(ACCEPT_LINE);
   assert.equal(h.quest.getStage(h.player), 1);
 
   for (const [index, herb] of HERBS.entries()) {
@@ -281,13 +320,18 @@ test('mandatory route: search, clean and hand in all five herbs, enter and leave
       const entrance = h.objectSearch(O.ROCKS_4);
       assert.equal(entrance.handled, true);
       assert.equal(TRANSCRIPTS.at(-1).variant, 'rogue-s-purse-search-rocks');
-      h.action(ENTER_CAVE_MESSAGE);
-      assert.deepEqual(h.moves.at(-1), [2830, 9520, 0], 'the cave message moves the player inside');
+      const enter = h.message(ENTER_CAVE_MESSAGE);
+      assert.deepEqual(enter.box, { statement: true }, 'the cave message is a message box');
+      assert.deepEqual(h.moves.at(-1), [2830, 9520, 0], 'continuing the cave message moves the player inside');
     }
 
     const search = h.objectSearch(herb.locId);
     assert.equal(search.handled, true);
-    assert.equal(TRANSCRIPTS.at(-1).variant, herb.search);
+    assert.equal(h.spam.at(-1), herb.search);
+    // The vine rolls 10 ticks after the search (rsprox captures); the others find it at once.
+    if (herb.locId === O.MARSHY_JUNGLE_VINE) h.tick(10);
+    // The fungus wall rolls every 6 ticks (fitted to the rsprox captures).
+    if (herb.locId === O.FUNGUS_COVERED_CAVERN_WALL) h.tick(6);
     assert.equal(h.has(herb.grimy), true, `${herb.name} grimy herb is added`);
     assert.equal(h.quest.getStage(h.player), herb.found);
     assert.equal(h.configs.get(VARP_STAGE), herb.found);
@@ -305,7 +349,11 @@ test('mandatory route: search, clean and hand in all five herbs, enter and leave
     if (index === HERBS.length - 1) {
       const climb = h.objectClimb(O.HAND_HOLDS);
       assert.equal(climb.handled, true);
-      assert.deepEqual(h.moves.at(-1), [2823, 3120, 0], 'climbing the hand holds leaves the cave');
+      assert.deepEqual(h.moves.at(-1), [2830, 9520, 0], 'the climb waits for its message box');
+      h.continueBox();
+      assert.deepEqual(h.moves.at(-1), [2830, 9520, 0], 'still inside the tick the box is continued');
+      h.tick(1);
+      assert.deepEqual(h.moves.at(-1), [2823, 3120, 0], 'out of the cave the tick after');
     }
 
     h.handIn(herb.handIn);

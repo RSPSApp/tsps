@@ -236,6 +236,9 @@ function refreshSpectator(player, match) {
   drawBoard(player, match, true);
   if (match.finished) showResult(player, match);
   else {
+    // Drawn edges live in the boardgames_runesquares_{h,v}{a,b} varps; a
+    // viewer is never the turn player, so show_ops keeps every edge inert.
+    if (match.game === "runesquares") RuneSquares.refresh(player, match);
     text(player, `${prefix}:status1`, "");
     text(player, `${prefix}:status2`, "");
   }

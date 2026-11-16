@@ -7,6 +7,10 @@
  * Not captured: the Wiki gives 8 ticks for the first batch and 10 between, the bone-burying
  * animation (human_pickupfloor), and the experience; the messages are the game's long-standing ones, not
  * checked against a capture (docs/smithing.md).
+ *
+ * The Ancient Furnace (Grimstone) casts them "at twice the rate of 5 ticks per action instead of 10" (Wiki: Cannonball,
+ * Ancient Furnace). The Wiki gives no first-batch figure there; TSPS pours 4 ticks in (half of 8), inside the 5-tick action.
+ * Not captured: no recording smelts at the Ancient Furnace.
  */
 const Core = require("./Core.Smithing");
 const Data = require("./Data.Smithing");
@@ -16,8 +20,15 @@ const { animation } = require("./Common.Smithing");
 
 const FIRST_TICKS = 8;
 const INTERVAL_TICKS = 10;
+const ANCIENT_FURNACE = "grimstone_furnace";
+const ANCIENT_FIRST_TICKS = 4;
+const ANCIENT_INTERVAL_TICKS = 5;
 const BALLS_PER_BAR = 4;
 const QUEST = "dwarf_cannon";
+
+function ancientFurnace(furnaceId) {
+  return Number.isInteger(furnaceId) && furnaceId >= 0 && furnaceId === Core.CacheDefinitions.getLocId(ANCIENT_FURNACE);
+}
 
 function mouldOf(player) {
   const inventory = player.getInventory();
@@ -59,7 +70,7 @@ function begin(player, cannonball) {
   return true;
 }
 
-function start(player, cannonball, amount) {
+function start(player, cannonball, amount, furnaceId = -1) {
   if (!Core.WorldDefinition.isMembersWorld()) return false;
   if (!Core.questComplete(player, QUEST)) {
     player.sendMessage(`You need to complete ${Data.questName(QUEST)} to make cannonballs.`);
@@ -75,8 +86,8 @@ function start(player, cannonball, amount) {
   Sessions.start(player, {
     type: "cannonballs",
     remaining: Math.min(amount, most),
-    interval: INTERVAL_TICKS,
-    finishDelay: FIRST_TICKS,
+    interval: ancientFurnace(furnaceId) ? ANCIENT_INTERVAL_TICKS : INTERVAL_TICKS,
+    finishDelay: ancientFurnace(furnaceId) ? ANCIENT_FIRST_TICKS : FIRST_TICKS,
     begin: (smith) => begin(smith, cannonball),
     step: (smith) => pour(smith, cannonball),
   });
@@ -84,7 +95,7 @@ function start(player, cannonball, amount) {
 }
 
 /** The Smelt menu's cannonball entries: one per bar carried, with a mould. */
-function menuEntries(player) {
+function menuEntries(player, furnaceId = -1) {
   const mould = mouldOf(player);
   if (!mould || !Core.WorldDefinition.isMembersWorld()) return [];
   const inventory = player.getInventory();
@@ -93,7 +104,7 @@ function menuEntries(player) {
     .map((cannonball) => ({
       itemId: cannonball.ballId,
       most: Math.ceil(inventory.getAmount(cannonball.barId) / mould.bars),
-      start: (smith, amount) => start(smith, cannonball, amount),
+      start: (smith, amount) => start(smith, cannonball, amount, furnaceId),
     }));
 }
 
@@ -102,7 +113,8 @@ function useOnFurnace(event) {
   const cannonball = cannonballFor(event.itemId);
   if (!cannonball || !mouldOf(event.player)) return false;
   event.handled = true;
-  Smelting.openMenu(event.player, menuEntries(event.player).filter((entry) => entry.itemId === cannonball.ballId));
+  const furnaceId = event.objectId ?? event.object?.getId?.() ?? -1;
+  Smelting.openMenu(event.player, menuEntries(event.player, furnaceId).filter((entry) => entry.itemId === cannonball.ballId));
   return true;
 }
 

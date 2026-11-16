@@ -97,3 +97,18 @@ test('completed diary cannot cast without required runes', async t=>{
   assert.equal(inv.getAmount(ids.ASTRAL_RUNE),0); assert.equal(inv.getAmount(ids.NATURE_RUNE),1); assert.equal(inv.getAmount(ids.FIRE_RUNE),5);
   assert.equal(p.getSkillManager().getExperience(core.Skill.MAGIC),magic); assert.equal(p.getSkillManager().getExperience(core.Skill.CRAFTING),craft);
 });
+
+// Decision approved 2026-11-15: the rune check first, then a silent refusal without the diary (no Wiki or
+// recording gives a message for the diary).
+test('without the diary the rune check answers first, and with the runes the cast refuses silently', async t => {
+  for (const [index, runes] of [[1705, false], [1706, true]]) {
+    const {p,c,inv,ids}=actor(t,index,false,false);
+    if (!runes) inv.deleteNumber(ids.ASTRAL_RUNE,2);
+    const messages=[]; const send=p.sendMessage.bind(p); p.sendMessage=(m,...rest)=>{ messages.push(String(m)); return send(m,...rest); };
+    await cast(c);
+    assert.equal(inv.getAmount(ids.COWHIDE),1); assert.equal(inv.getAmount(ids.LEATHER),0);
+    assert.equal(messages.some(m=>/Fremennik Diary/i.test(m)),false,'no diary message');
+    if (runes) assert.deepEqual(messages,[],'silent refusal');
+    else assert.ok(messages.some(m=>/Astral/i.test(m)),'the rune message: '+JSON.stringify(messages));
+  }
+});

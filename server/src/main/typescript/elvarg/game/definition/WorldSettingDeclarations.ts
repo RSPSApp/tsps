@@ -1,4 +1,4 @@
-import { WORLD_GAMEFRAMES } from "./WorldDefinition";
+import { DEFAULT_NPC_VIEW_DISTANCE, MAX_NPC_VIEW_DISTANCE, WORLD_GAMEFRAMES } from "./WorldDefinition";
 
 export type ConfigOptionType = "boolean" | "number" | "string" | "enum" | "date" | "json";
 
@@ -175,6 +175,11 @@ export const WORLD_SETTING_DECLARATIONS: Record<string, ConfigOptionDeclaration>
     experienceMultiplier: {
         type: "number", label: "Experience rate", default: 1, min: 0, exclusiveMin: true,
         help: "Global experience rate for all skills. 1 is the normal rate; 5 gives five times the experience.",
+    },
+    npcViewDistance: {
+        type: "number", label: "NPC view distance", default: DEFAULT_NPC_VIEW_DISTANCE,
+        min: 1, max: MAX_NPC_VIEW_DISTANCE, integer: true,
+        help: "How many tiles away players see NPCs and their projectiles. 15 is the OSRS distance. Content that sets its own distance for a fight still does, and goes back to this one after.",
     },
     spawn: {
         type: "json", label: "Spawn point", defaultText: "Required: set in world.json",

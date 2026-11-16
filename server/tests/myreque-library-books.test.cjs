@@ -2,7 +2,8 @@
 //
 // In Aid of the Myreque: the Paterdomus library books. Read opens each in book 392 with the text live
 // sent (rsprox.net recording 365), and the two bookcases hand out their books with "You search the
-// bookcase..." and one objectbox per book, as recording 365 ticks 2918-2928 and 3876-3886 show. Real
+// bookcase..." and one objectbox per book, as recording 365 ticks 2918-2928 and 3876-3886 show (the
+// history bookcase's first box a tick after the search line). Real
 // plugins, a real Player and Inventory; the clicks go through PluginManager.emitItemAction /
 // emitObjectInteraction with the cache's own options. No client ran.
 process.env.DISABLE_PLAYER_BOTS = "1";
@@ -138,6 +139,9 @@ test("the history bookcase gives both books, an objectbox each; the one that doe
   const floor = World.getItems().filter((item) => item.getItem().getId() === I.MODERN_DAY_MORYTANIA);
   assert.equal(floor.length, 1, "Modern day Morytania on the floor");
   assert.deepEqual([floor[0].getPosition().getX(), floor[0].getPosition().getY()], [LIBRARY.x, LIBRARY.y], "under the player");
+  // Live (recording 365) gives the books on the search tick (t3878) and opens the first box a tick later (t3879).
+  assert.deepEqual(seen.chatbox, [], "no box on the search tick");
+  core.TaskManager.process();
   assert.deepEqual(seen.chatbox, [193]);
   assert.equal(seen.texts.get((193 << 16) | 2), "You find a book called Histories of the Hallowland.");
   assert.deepEqual(seen.items, [I.HISTORIES_OF_THE_HALLOWLAND]);

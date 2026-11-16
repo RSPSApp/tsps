@@ -16,6 +16,18 @@
   the dog. Normal bones complete the existing Varrock diary task. Cache NPCs 2902 and 2922
   have Pet and Shoo-away; the A Ruff Situation actors have different actions and are excluded.
   The Wiki documents pet/shoo sounds 652/911.
+- Varlamore's dogs (Molossus, Xolo, Chiribaya, Techichi) share the stray dog's Pet, Shoo-away and
+  feeding (`StrayDogs.plugin.js`), but not its Varrock diary bone. From rsprox captures (rsprox.net
+  recording 1098, revision 237): Pet plays `human_pickupfloor` on arrival and the dog's "Woof!"
+  with sound 652 two ticks later (Chiribaya ticks 9807/9825, Molossus 10602, Xolo 14820).
+  Feeding bones to a Chiribaya (tick 10200) plays `human_pickupfloor` and "Woof woof!" on
+  arrival; a tick later the bones leave the slot, synth 2393 plays and the two lines arrive as
+  one message joined by `<br>`. The Varrock stray dog feeds the same way (rsprox.net recording 1723,
+  revision 227, ticks 11458-11459, its diary task after the message), and so does every dog here; meat uses the stray dog's
+  meat lines in the same message (Ours). Techichi was never captured being petted or fed and
+  takes the Chiribaya's responses; the cat-ears line for Chiribaya and Techichi is Molossus' (Ours).
+  The option-less forms (the cabbage and corn dogs, the Aldarin villa and Kastori Techichis) stay
+  examine-only.
 
 ## Verification
 

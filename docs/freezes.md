@@ -19,11 +19,15 @@ and read by `NpcDefinitionLoader.applyStatusImmunities` (`NpcDefinition.getFreez
 
 - `CombatFactory.freezeTicks` refuses a 100% NPC outright (no timer, no `combat:frozen`), and shortens
   any other freeze to `ticks * (100 - resistance) / 100`, at least one tick.
-- The existing rule that NPCs larger than 2x2 shrug freezes off stays for NPCs with no resistance
-  data; a partial resistance (1-99%) says the Wiki treats the NPC as freezable, so it is frozen for the
-  shortened time (Scurrius, Dreadnoth the Jellied, the Scarred greater demon). The Wiki gives no size rule;
-  an explicit 0% is indistinguishable from a page without the field, so large 0% NPCs (K'ril, Dusk,
-  Dawn) are unchanged.
+- Size alone resists nothing: the Wiki's Freeze page has no size rule, and large bosses can be frozen
+  (General Graardor's "Ourg Freezer": "Kill General Graardor whilst he is immobilized"). A large NPC with
+  no resistance (K'ril, Dusk, Dawn) is frozen for the whole duration; a partial resistance (Scurrius,
+  Dreadnoth the Jellied, the Scarred greater demon) shortens it.
+- An NPC whose own page makes it immune although its infobox gives no resistance carries the NPC flag
+  `"combat:unfreezable"`, set where its plugin spawns it, and is never frozen or bound: Tekton ("He is
+  also immune to binding effects, should the spell somehow land on him."), Desert Treasure II's Ancient
+  Guardian ("the guardian is immune to freezes from the spells themselves"). The ice sceptre's accuracy
+  bonus (`AncientSceptre.canBeFrozenNow`) follows the same rules.
 - A `combat:freeze-duration` listener that already applies the NPC's resistance exactly sets
   `event.resisted = true` and the generic rule leaves it alone: the Phantom Muspah's page states "33% freeze
   resistance, meaning it will only stay frozen for 66% of the base freeze duration", which its hook keeps.
@@ -69,8 +73,9 @@ and 2238 (revisions 228 and 233).
   `<col=ef1020>The holding effect is beginning to fade.</col>` before they end (the Freeze and
   [Bind](https://oldschool.runescape.wiki/w/Bind) pages; the text in Leagues recordings 1102 and
   1858). It uses the same three-tick point; no non-Leagues capture times it.
-- Casting a curse bind on a target that is still immune: "Your target is currently immune to that
-  spell." (Leagues recordings 95 and 2174).
+- Casting a bind on a target that is still immune: "The target is currently immune to that spell."
+  ([Snare](https://oldschool.runescape.wiki/w/Snare), Trivia). Recorded difference: Leagues V's
+  Entangle says "Your target is currently immune to that spell." (Leagues recording 95).
 
 ## Acting while frozen
 

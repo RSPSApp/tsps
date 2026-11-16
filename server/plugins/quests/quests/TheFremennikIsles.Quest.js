@@ -501,11 +501,16 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     setFlag(player, BORK_ATTRIBUTE, bit);
   }
 
+  // Wiki (The Fremennik Isles walkthrough): "The king's reward for the ores is 5,000 coins.", whichever ores were
+  // asked for; the page's "Around 14,000 coins" of rewards adds up with it (5,000 + 1,000 + 1,500 + 1,500 + 2,500 +
+  // 2,500). The transcript leaves Thorkel's "[amount]" blank.
+  const ORE_REWARD_COINS = 5000;
+
   function miningTier(player) {
     const mining = player.getSkillManager().getMaxLevel(Skill.MINING);
-    if (mining >= 55) return { itemId: MITHRIL_ORE, amount: 6, word: "six", ore: "mithril", coins: 6000 };
-    if (mining >= 2) return { itemId: COAL, amount: 7, word: "seven", ore: "coal", coins: 4000 };
-    return { itemId: TIN_ORE, amount: 8, word: "eight", ore: "tin", coins: 2000 };
+    if (mining >= 55) return { itemId: MITHRIL_ORE, amount: 6, word: "six", ore: "mithril" };
+    if (mining >= 2) return { itemId: COAL, amount: 7, word: "seven", ore: "coal" };
+    return { itemId: TIN_ORE, amount: 8, word: "eight", ore: "tin" };
   }
 
   function hasTaskOres(player) {
@@ -523,7 +528,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     return String(text ?? "")
       .replace(/\[six\/seven\/eight\]/g, tier.word)
       .replace(/\[tin\/coal\/mithril\]/g, tier.ore)
-      .replace(/\[amount\]/g, String(tier.coins))
+      .replace(/\[amount\]/g, String(ORE_REWARD_COINS))
       .replace(/\[X\]/g, String(Math.max(0, 10 - trollKills(player))))
       .replace(/\[number\]/g, "1");
   }
@@ -1352,14 +1357,19 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         setStage(player, STAGE_ORE_TASK);
         return;
       // Ores.
+      // Wiki Transcript:The Fremennik Isles: both are {{tbox}} message boxes, the coins one with the
+      // coins picture. The blanks fill the event's own text: the step is the shared transcript, so
+      // writing it would show the first player's tier to everyone after.
       case "-UQEZy":
         if (hasTaskOres(player)) takeTaskOres(player);
-        event.step && (event.step.text = fillText(player, event.step.text));
+        event.text = fillText(player, event.text);
+        event.box = { statement: true };
         setStage(player, STAGE_ORES_DELIVERED);
         return;
       case "02jNR_":
-        addCoins(player, miningTier(player).coins);
-        event.step && (event.step.text = fillText(player, event.step.text));
+        addCoins(player, ORE_REWARD_COINS);
+        event.text = fillText(player, event.text);
+        event.box = { items: [COINS] };
         return;
       // Jester and spies.
       case "U8RN0U":
@@ -1464,9 +1474,11 @@ module.exports = function registerTheFremennikIslesQuest(api) {
           setStage(player, STAGE_TEN_TROLLS);
         }
         return;
+      // {{mes}} game messages; the transcript writes the count as a bare "X".
       case "3CHUQU":
       case "m4TmXs":
-        event.step && (event.step.text = fillText(player, event.step.text));
+        event.handled = true;
+        player.sendMessage(fillText(player, event.text).replace(/\bX\b/, String(Math.max(0, 10 - trollKills(player)))));
         return;
       // Head and completion.
       case "xq4Jp-":
@@ -1483,7 +1495,8 @@ module.exports = function registerTheFremennikIslesQuest(api) {
   }
 
   /** The NPCs whose lines carry this quest's blanks; "[amount]" is common to other pages. */
-  const BLANK_SPEAKERS = new Set(["King Sorvott IV", "Thorkel Silkbeard", "Mawnis Burowgar"]);
+  // The cache names King Sorvott (npc 1897) "King Gjuki Sorvott IV"; the event's definition is the NPC talked to.
+  const BLANK_SPEAKERS = new Set(["King Sorvott IV", "King Gjuki Sorvott IV", "Thorkel Silkbeard", "Mawnis Burowgar"]);
 
   function handleLine(event) {
     const { text } = event;

@@ -280,6 +280,13 @@ export class WeaponProfiles {
         });
         this.add(WeaponInterfaces.HALBERD, { attackDistance: 2 });
         this.add(WeaponInterfaces.WHIP, { attackAnimation: 1658, attackSpeed: 4, attackSound: Sound.WEAPON_WHIP });
+        // Wiki "Sound effects": dragon and burning claws attack with dragonclaws_normal in every
+        // style (rsprox_transcripts/235/03327.txt, 237/04008.txt); the other claws keep the
+        // style's sound.
+        this.register({
+            itemIds: [ItemIdentifiers.DRAGON_CLAWS, ItemIdentifiers.DRAGON_CLAWS_OR_, ItemIdentifiers.DRAGON_CLAWS_CR_, ItemIdentifiers.BURNING_CLAWS],
+            attackSound: Sound.DRAGON_CLAWS_ATTACK,
+        });
         this.add(WeaponInterfaces.BALLISTA, {
             rangedDefenceType: "heavy",
             attackSpeed: 7,
@@ -449,6 +456,13 @@ export class WeaponProfiles {
                 ItemIdentifiers.MAPLE_BLACKJACK, ItemIdentifiers.MAPLE_BLACKJACK_O_, ItemIdentifiers.MAPLE_BLACKJACK_D_,
             ],
             attackSpeed: 4,
+        });
+        // The one documented exception to AGENTS rule 13 (and docs/audits/weapons.md section 4's "cache speeds"),
+        // approved 2026-11-15: the cache gives the three mjolnirs 5 ticks (param 14), the Wiki 6 (Guthix,
+        // Saradomin and Zamorak mjolnir, Combat Styles: "6 ticks (3.6s)"). The Wiki is followed.
+        this.register({
+            itemIds: [ItemIdentifiers.GUTHIX_MJOLNIR, ItemIdentifiers.SARADOMIN_MJOLNIR, ItemIdentifiers.ZAMORAK_MJOLNIR],
+            attackSpeed: 6,
         });
         return true;
     })();

@@ -6,9 +6,11 @@ module.exports = function registerDragonHastaSpecialAttack(api) {
   const IMPACT_GRAPHIC = new Graphic(2823);
 
   // Unleash consumes every available special-attack point (minimum 5%). Every 5% spent adds 5%
-  // accuracy and 2.5% damage (Wiki: Dragon_hasta), so the rolls read the energy this swing spent.
-  const ACCURACY_PER_PERCENT = 0.01;
-  const DAMAGE_PER_PERCENT = 0.005;
+  // accuracy and 2.5% damage (Wiki: Dragon_hasta), so the rolls read the energy this swing spent and
+  // count whole 5% steps: 63% spent boosts like 60%.
+  const STEP_PERCENT = 5;
+  const ACCURACY_PER_STEP = 0.05;
+  const DAMAGE_PER_STEP = 0.025;
   /** Energy each wielder's current Unleash spent: the bar is already drained when the hit rolls. */
   const spent = new WeakMap();
   const SPECIAL_ANIMATION = new Animation(11171); // SPECIALATTACK_UNLEASH
@@ -26,14 +28,14 @@ module.exports = function registerDragonHastaSpecialAttack(api) {
   // An NPC's protection prayer still blocks it (Wiki, Demonic gorilla: its prayers "cannot be bypassed with
   // special attacks"); only the ancient mace and dragon sword pierce those.
   function traitsFor(player) {
-    const energy = spentEnergy(player);
+    const steps = Math.floor(spentEnergy(player) / STEP_PERCENT);
     const target = player.getCombat?.()?.getTarget?.();
     return {
       hitCount: 1,
       meleeAttackBonusIndex: 0,
       ignoreProtectionPrayer: target?.isPlayer?.() === true,
-      accuracyMultiplier: 1 + energy * ACCURACY_PER_PERCENT,
-      damageMultiplier: 1 + energy * DAMAGE_PER_PERCENT,
+      accuracyMultiplier: 1 + steps * ACCURACY_PER_STEP,
+      damageMultiplier: 1 + steps * DAMAGE_PER_STEP,
     };
   }
 

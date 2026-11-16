@@ -54,6 +54,8 @@ const DOOR_NAMES = new Set([
  * for these; each is the actionless, same-model leaf of a named closed door.
  */
 const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
+  IKOV_LUCIEN_DOOR_OPEN: 11403, // ikov_luciendoor_open: same-model, actionless open leaf of O.DOOR_13
+
   DOOR_47_OPEN: 2001, // closed O.DOOR_47 (2000); same models, cache-derived
   DOOR_48_OPEN: 2003, // closed O.DOOR_48 (2002); same models, cache-derived
   PLAGUE_HOUSE_DOOR: 37321, // plagueelenadoorshut, a multi (varbit 9016) with no name of its own
@@ -78,7 +80,7 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   PIP_CELL_GATE_OPEN: 3464,
   CRANDOR_SECRET_DOOR_OPEN: 25039, // dragonsecretdoor_open; capture 2951
   INVISWALL: 38848, // actionless collision blocker; captures 2951 and 740
-  HAROLD_DOOR_OPEN: 1542, // inactiveposhdoor: Harold's door (3747) open, 233/03247.txt:4726
+  HAROLD_DOOR_OPEN: 1542, // inactiveposhdoor: Harold's door (3747) open, 233/03247.txt:4726; Temple of Ikov's trap-lever door (92), 242/912156.txt:26149
   CASTLE_DOOR_OPEN: 3744, // castledoor_inactive: the Death Plateau equipment room door (3743) open, 233/03252.txt:36063
   MOURNER_CAGE_GATE_LEFT_OPEN: 2059, // mournerquaters_gatelopen; Biohazard capture tick 557
   MOURNER_CAGE_GATE_RIGHT_OPEN: 2061, // mournerquaters_gateropen
@@ -93,6 +95,10 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   // tick 940, 239 tick 1649); nameless in the cache, so ObjectIdentifiers has no property for them.
   FARMING_GUILD_DOOR_LEFT_OPEN: 34465,
   FARMING_GUILD_DOOR_RIGHT_OPEN: 34466,
+  // kr_camelot_metalgateopenl/r: the Camelot castle gate's leaves while it lets the player through
+  // (local 1001994 ticks 16539, 17417, 17541); nameless in the cache, so ObjectIdentifiers has none.
+  CAMELOT_GATE_LEFT_OPEN: 26083,
+  CAMELOT_GATE_RIGHT_OPEN: 26084,
 });
 
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
@@ -109,8 +115,12 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // GATE_52 (Gnome Ball pitch and Tree Gnome Village): its same-model open variants (193, 2395)
   // are nameless with no actions and are never placed, so the pairing below cannot find them.
   SELF_OPENING_DOOR_IDS = new Set([O.DOOR_223, O.DOOR_225, O.DOOR_226, O.DOOR_227, O.DOOR_228, O.DOOR_229, O.DOOR_230, O.DOOR_231,
-    O.DOOR_67, // Khazard stronghold: Open-only door 2184 has no paired open loc.
     O.DOOR_283, // Ardougne Castle's lockpick door has no separate open loc in the cache.
+    // The magic axe hut's and Pirates' Hideout's lockpick doors (toollock2/3, #5744) have no open loc either: their
+    // same-model Close locs belong to other doors, so the leaf swings in place (LockedDoors.Thieving.js unlocks them).
+    O.DOOR_285, O.DOOR_286,
+    // The Chaos Druid Tower's lockpick door (11723) likewise swings in place.
+    O.DOOR_282,
     // The Ranging Guild's entrance (11665) is Open only; 11666 is a ladder, so there is no
     // open leaf to pair with and the leaf swings in place.
     O.GUILD_DOOR,
@@ -146,8 +156,6 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // whistle-room door (22, whistledoor) are Open-only; their id+1 are a clock spindle and the
     // sacks, and their same-model Close locs (1536, none for 22) belong to other doors.
     O.DOOR_3, O.DOOR_4,
-    // Khazard stronghold: Open-only ordinary door models, no distinct open loc.
-    O.DOOR_67,
     // Ross's house in East Ardougne (40178 at 2610,3316), a Mahogany Homes client: Open/Pick-lock with
     // the models of Ardougne's picklock doors (11719/11720); its id neighbours are a hotspot and a mirror.
     O.DOOR_624]);
@@ -260,9 +268,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     woodenGate(O.GATE_322, O.GATE_319, O.GATE_320, O.GATE_321),
     // Tutorial Island survival gate: swings open into 8810/8811's open panels (Zenyte Gate.java).
     woodenGate(O.GATE_90, O.GATE_91, O.GATE_85, O.GATE_86),
-    // Shilo Village's inner gate: its nameless open panels (2263/2264) are not placed
-    // on the cache map, so the generic same-model pairing cannot find them.
-    woodenGate(O.WOODEN_GATE, O.WOODEN_GATE_2, 2263, 2264),
+    // Shilo Village's inner gate (2261/2262) is the quest's: shut before it, a step through after it
+    // (quests/shilovillage/Village.ShiloVillage.js).
   ]);
 
   WOODEN_GATE_BY_ID = new Map();
@@ -423,8 +430,32 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // centrepiece); crossX/crossY is the boundary the player crosses. crossDiagonal { outside, inside }
   // is a diagonal door crossed corner to corner (eastwardFrom says which side is outside). crossBetween [low, high] with
   // crossRows is a gate more than one tile thick whose tiles the map blocks: the player is carried
-  // across, from the low side to the high side or back, along their own row.
+  // across, from the low side to the high side or back, along their own row. crossDelay holds the
+  // opener that many ticks after the opening sound before the gate opens and they cross.
   PASS_THROUGH_GATES = Object.freeze([
+    // Lucien's house: the maintainer's review5926064464 cites 242/912207 ticks13005–13007
+    // and 232/03233 ticks944–946: a blocker stays at the entrance while the opener walks
+    // across, and the closed door returns two ticks later (not an ordinary shared opening).
+    Object.freeze({
+      closed: [[O.DOOR_13, 3122, 3488, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3122, 3488, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.IKOV_LUCIEN_DOOR_OPEN, 3122, 3487, 0, 0],
+      ],
+      crossY: 3488,
+      walkOver: true,
+      closeTicks: 2,
+    }),
+    // Authored Ikov passage: a shared blocker preserves unqualified players' clipping.
+    // The authorized opener is explicitly carried one tile; this is not ordinary clipped walking.
+    Object.freeze({
+      closed: [[O.DOOR_11, 2646, 9870, 0, 1]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2646, 9870, 0, 1], [O.DOOR_11, 2646, 9871, 0, 2]],
+      crossY: 9871,
+      carry: true,
+      guardCarry: true,
+      closeTicks: 2,
+    }),
     // Death Plateau: Harold's door (233/03247.txt:4726-4744, and leaving at :5755-5783). The doorway gets inviswall
     // 38848 and the open door the tile south; the player walks over, and the door is back two ticks later. Entering,
     // the quest knocks first ("You knock on the door.", "Harold: Come in!") and opens it through door:open.
@@ -529,6 +560,25 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       closeTicks: 2,
       openSoundId: 71,
     }),
+    // Camelot castle's grounds gate (kr_camelot_metalgateclosedl/r), crossed both ways in the user's rsprox captures
+    // (local 1001994 ticks 16536-16541, 17415-17419 and 17539-17543, local 1001800 ticks 23184 and 23277; rev 242):
+    // Open puts inviswall 38848 on both gate tiles and the nameless open leaves on the tiles north, sound 69
+    // (grate_open), the player steps across in the same tick and the gate is back two ticks later. It never stays
+    // open: its open leaves have no name, so a client shows them no menu. King's Ransom sends a player Morgan holds
+    // back to the cell first (door:toggle).
+    Object.freeze({
+      closed: [[O.GATE_175, 2757, 3482, 0, 1], [O.GATE_176, 2758, 3482, 0, 1]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2757, 3482, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.CAMELOT_GATE_LEFT_OPEN, 2757, 3483, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2758, 3482, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.CAMELOT_GATE_RIGHT_OPEN, 2758, 3483, 0, 2],
+      ],
+      crossY: 3483,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 69,
+    }),
     // Mining Guild doors (mguild_door, mguild_door_inner1/2), rsprox_transcripts/233/03241.txt tick 12674 and
     // 233/03239.txt ticks 581 and 2234: Open puts inviswall 38848 on the doorway and inactivepoordoor (1539) on the
     // tile north, sound 81, the player steps across and the door is back two ticks later. A distant observer gets
@@ -542,6 +592,30 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       closeTicks: 2,
       openSoundId: 81,
     })),
+    // Tree Gnome Village's Khazard stronghold front door (khazard_stronghold_door 2184), crossed from inside in the
+    // user's rsprox captures (local 1001802 ticks 1587-1592; revision 242): Open puts inviswall 38848 on the doorway
+    // and inactivepoordoor (1539) on the tile north, sound 46 (bigdoor_open), the player steps out onto the doorway
+    // tile and the door is back two ticks later. From outside it stays locked: TreeGnomeVillage's door:toggle.
+    Object.freeze({
+      closed: [[O.DOOR_67, 2502, 3250, 0, 1]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2502, 3250, 0, 1], [NAMELESS_DOOR_LEAF_IDS.MELZAR_DOOR_OPEN, 2502, 3251, 0, 2]],
+      crossY: 3251,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 46,
+    }),
+    // Temple of Ikov's trap-lever door (ikov_trapleverdoor 92), rsprox_transcripts/242/912156.txt ticks 1764-1768,
+    // 1885-1893 and 2014-2019: Open puts inviswall 38848 on the doorway and inactiveposhdoor (1542) on the tile
+    // north, sound 62, the player steps across (either way) and the door is back two ticks later. TempleOfIkov
+    // keeps it shut until the trapped lever is pulled safely (door:toggle).
+    Object.freeze({
+      closed: [[O.DOOR_10, 2648, 9857, 0, 1]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2648, 9857, 0, 1], [NAMELESS_DOOR_LEAF_IDS.HAROLD_DOOR_OPEN, 2648, 9858, 0, 2]],
+      crossY: 9858,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
     // Waterfall guide xWBSnGkQTi4 3:53.2-3:54.4: Golrie's panel opens, the player walks
     // through, then it closes (~1.2s). Cache 1991 is Open-only model609, with no open loc.
     Object.freeze({
@@ -833,7 +907,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // swaps for an inviswall plus inactivepoordoor (1539, no action) at 2658,3439 the opener moves
     // the two tiles across the diagonal to 2659,3437; the door is back two ticks later. Only entering
     // was captured; leaving is the same crossing in reverse. RangingGuild.plugin's 40 Ranged check
-    // runs before this (door:toggle). The inviswall keeps anyone else from following.
+    // runs before this (door:toggle). The inviswall keeps anyone else from following. In all three the
+    // sound is on the opener's arrival tick and the door swaps and they cross two ticks later
+    // (229/02601 sound 65, cross 67, shut 69; 230/02966 sound 1563, cross 1565, shut 1567).
     Object.freeze({
       closed: [[O.GUILD_DOOR, 2658, 3438, 0, 0, 9]],
       opened: [
@@ -845,6 +921,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       // tile) shares the leaf's x but is outside.
       eastwardFrom: (here) => here.getX() - here.getY() <= 2658 - 3438,
       closeTicks: 2,
+      crossDelay: 2,
       openSoundId: 67, // gate_open, as captured
     }),
     Object.freeze({
@@ -938,6 +1015,8 @@ const CATALOG_DOUBLE_DOOR_IDS = new Set();
 const OPEN_OBJECT_STATES = new Map();
 /** Pass-through gates swung open right now, by anchor key. */
 const OPEN_PASS_THROUGH_GATES = new Set();
+// Pass-through gates whose opener is held through their crossDelay; other clicks wait for it.
+const PENDING_PASS_THROUGH_GATES = new Set();
 const RUNTIME_DOUBLE_DOOR_RECORDS = [];
 const PRIVATE_AREA_IDS = new WeakMap();
 let nextPrivateAreaId = 0;
@@ -1913,9 +1992,22 @@ function carryOneTile(player, gate, x, y, z) {
   const delta = (position < cross ? cross : cross - 1) - position;
   if (Math.abs(delta) !== 1) return;
   const direction = acrossX ? (delta > 0 ? 1 : 3) : (delta > 0 ? 0 : 2);
-  core.TaskManager.submit(new core.ForceMovementTask(player, 1,
+  const task = new core.ForceMovementTask(player, 1,
     new core.ForceMovement(cloneLocation(here.getX(), here.getY(), z),
-      new core.Location(acrossX ? delta : 0, acrossX ? 0 : delta, 0), 0, 30, direction, GATE_WALK_ANIMATION)));
+      new core.Location(acrossX ? delta : 0, acrossX ? 0 : delta, 0), 0, 30, direction, GATE_WALK_ANIMATION));
+  if (gate.guardCarry) {
+    const start = here.clone(), area = player.getArea(), privateArea = player.getPrivateArea();
+    const teleportSerial = player.getTeleportSerial();
+    const execute = task.execute.bind(task);
+    task.execute = () => {
+      if (!player.isRegistered() || player.getHitpoints() <= 0 || player.getArea() !== area
+        || player.getPrivateArea() !== privateArea || player.getTeleportSerial() !== teleportSerial
+        || !player.getLocation().equals(start)) { task.stop(); return; }
+      execute();
+    };
+  }
+  // The anchor's separate close task still owns shared restoration if this actor cancels.
+  core.TaskManager.submit(task);
 }
 
 /** Players walking over a walkOver gate's blocker, with whether they had the flag before. */
@@ -1959,16 +2051,24 @@ function walkOverGate(player, destination) {
  * tile on their side, is set on that tile and moved the two tiles across in one tick, as captured.
  */
 function carryAcrossDiagonal(player, gate, z) {
-  const here = player.getLocation();
-  const entering = gate.eastwardFrom(here);
-  const [fromX, fromY] = entering ? gate.crossDiagonal.outside : gate.crossDiagonal.inside;
+  const from = standAtDiagonal(player, gate, z);
+  if (!from) return;
+  const entering = gate.eastwardFrom(from);
   const [toX, toY] = entering ? gate.crossDiagonal.inside : gate.crossDiagonal.outside;
-  if (Math.abs(here.getX() - fromX) > 1 || Math.abs(here.getY() - fromY) > 1) return;
-  const from = cloneLocation(fromX, fromY, z);
-  if (!here.equals(from)) player.moveTo(from.clone());
+  const [fromX, fromY] = [from.getX(), from.getY()];
   core.TaskManager.submit(new core.ForceMovementTask(player, 1,
     new core.ForceMovement(from.clone(), new core.Location(toX - fromX, toY - fromY, 0), 0, 30,
       entering ? 1 : 3, GATE_WALK_ANIMATION)));
+}
+
+/** Sets the opener on the diagonal's corner tile on their side; null when they are not beside it. */
+function standAtDiagonal(player, gate, z) {
+  const here = player.getLocation();
+  const [fromX, fromY] = gate.eastwardFrom(here) ? gate.crossDiagonal.outside : gate.crossDiagonal.inside;
+  if (Math.abs(here.getX() - fromX) > 1 || Math.abs(here.getY() - fromY) > 1) return null;
+  const from = cloneLocation(fromX, fromY, z);
+  if (!here.equals(from)) player.moveTo(from.clone());
+  return from;
 }
 
 /** The player crosses on the clicked row or column, from whichever side they stand on. */
@@ -2011,11 +2111,43 @@ function handlePassThroughGate(player, objectId, location, object = null) {
     stepThroughGate(player, gate, x, y, z);
     return true;
   }
+  if (PENDING_PASS_THROUGH_GATES.has(anchorKey)) return true;
 
-  swapLocs(gate.closed, gate.opened, privateArea);
-  OPEN_PASS_THROUGH_GATES.add(anchorKey);
   // Captured: the opening sound only; the gate shuts silently (1636, 1663, 3220).
   core.Sounds.sendSound(player, gate.openSoundId == null ? core.Sound.GATE_OPEN : new core.Sound(gate.openSoundId, 1, 0, 0));
+  if (gate.crossDelay) {
+    holdForPassThroughGate(player, gate, z, anchorKey, () => openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey));
+    return true;
+  }
+  openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey);
+  return true;
+}
+
+/** Holds the opener still (on the diagonal's corner tile) for the gate's crossDelay, then runs `open`. */
+function holdForPassThroughGate(player, gate, z, anchorKey, open) {
+  PENDING_PASS_THROUGH_GATES.add(anchorKey);
+  if (gate.crossDiagonal) standAtDiagonal(player, gate, z);
+  const queue = player.getMovementQueue();
+  const wasBlocked = queue.isMovementBlocked() === true;
+  queue.reset();
+  queue.setBlockMovement(true);
+  // Released only while the hold is still ours (MovementQueue.getBlockMovementGeneration).
+  const generation = queue.getBlockMovementGeneration();
+  const hold = new core.Task(gate.crossDelay, false);
+  hold.execute = () => {
+    hold.stop();
+    PENDING_PASS_THROUGH_GATES.delete(anchorKey);
+    if (!wasBlocked && queue.getBlockMovementGeneration() === generation) queue.setBlockMovement(false);
+    // An opener who logged out (or died) while held leaves the door shut.
+    if (player.isRegistered?.() !== false && player.getHitpoints?.() !== 0) open();
+  };
+  core.TaskManager.submit(hold);
+}
+
+/** Swaps the gate open, steps the player across and shuts it `closeTicks` later. */
+function openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey) {
+  swapLocs(gate.closed, gate.opened, privateArea);
+  OPEN_PASS_THROUGH_GATES.add(anchorKey);
   stepThroughGate(player, gate, x, y, z);
 
   const task = new core.Task(gate.closeTicks, anchorKey);
@@ -2025,7 +2157,6 @@ function handlePassThroughGate(player, objectId, location, object = null) {
     swapLocs(gate.opened, gate.closed, privateArea);
   };
   core.TaskManager.submit(task);
-  return true;
 }
 
 function toggleDoor({ player, object, objectId, definition, location, clickType }) {

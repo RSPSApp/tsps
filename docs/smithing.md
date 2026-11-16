@@ -19,7 +19,9 @@ Smelting at furnaces and smithing at anvils (`server/plugins/skills/Smithing.plu
   - Iron fails half the time: "The ore is too impure and you fail to refine it." The ore is lost, no experience (recs 69, 73, 83, 1102, 3315).
   - Running out mid-loop: "You need at least one iron ore and two coal to smelt a steel bar." (rec 1102); the other bars follow that pattern **(unverified)**.
 - **Ore used on a furnace** opens the Smelt menu. Sand or soda ash opens molten glass (Crafting). The empty bucket return is captured in recording 4283. 'perfect' gold ore opens its own bar; the Gold bar choice also uses it when the player has no normal gold ore.
+- **Furnaces under other names** work as any furnace: the Clay forge (Neitiznot), Volcanic Furnace (Mount Karuulm), Lava forge (Mor Ul Rek) and Ancient Furnace (Grimstone Dungeon) smelt, take ore, sand and cannonball bars, and open the gold and silver jewellery menus, like a Furnace **(Wiki: Furnace, Clay forge "functionally identical to normal furnaces", Volcanic Furnace, Lava forge, Ancient Furnace)**. The names are in `server/plugins/skills/data/furnaces.json`, shared by Smithing, Crafting and the Desert Treasure II rings. The Ancient Furnace casts cannonballs at 5 ticks an action instead of 10 (Wiki: Ancient Furnace, Cannonball); see Cannonballs.
 - **Blurite** needs The Knight's Sword **(Wiki)**. **Lovakite** is smelted only at the Lovakite furnace in Lovakengj (45 Smithing, 1 ore + 2 coal, 20 XP) **(Wiki)**.
+- **Lunar bar:** one lunar ore at a furnace makes one lunar bar at level 1 for 6.2 XP **(Wiki)**; Superheat Item picks the recipe up at 43 Magic. "You smelt the magic ore in the furnace." then "You retrieve a lunar bar." (rec 227/01768, duplicated in 227/910302). The missing-ore line follows the pattern **(unverified)**.
 - **Coal bag:** a carried coal bag's coal is used after the inventory's (docs/storage-items.md).
 
 ### Molten glass
@@ -48,7 +50,7 @@ Smelting at furnaces and smithing at anvils (`server/plugins/skills/Smithing.plu
 
 - A bar and an ammo mould at any furnace make 4 cannonballs; a double ammo mould takes two bars a time for 8 at the same speed. Bronze 5, iron 20, steel 35, mithril 55, adamant 75, rune 90 Smithing; 8.8 / 17.2 / 25.6 / 34 / 42.4 / 50.8 XP a bar. Needs Dwarf Cannon.
 - The Smelt menu offers a cannonball for each bar carried with a mould; a bar used on a furnace opens its own.
-- 8 ticks, then 10 between (the Wiki's recipe; its Ancient Furnace page disagrees). The bone-burying animation (827). Messages **(unverified)**: "You heat the steel bar into a liquid state.", "You pour the molten metal into your cannonball mould.", "The molten metal cools slowly to form 4 cannonballs."
+- 8 ticks, then 10 between (the Wiki's recipe). At the Ancient Furnace, 5 ticks an action (Wiki); with no figure for its first batch, TSPS pours 4 ticks in, inside the 5-tick action. The bone-burying animation (827). Messages **(unverified)**: "You heat the steel bar into a liquid state.", "You pour the molten metal into your cannonball mould.", "The molten metal cools slowly to form 4 cannonballs."
 
 ## Gear (Wiki, no captures)
 
@@ -64,13 +66,29 @@ Smelting at furnaces and smithing at anvils (`server/plugins/skills/Smithing.plu
 - **Dragonfire shield and ward** (rec 579, Leagues): Smith (or the visage or shield used on an anvil) with an anti-dragon shield and a draconic or skeletal visage shows the visage and the first message; the hammering starts on continue, again 4 ticks later, and 8 ticks in the uncharged shield is given and shown. 90 Smithing, 2,000 XP **(Wiki)**. The ward's messages follow the shield's **(unverified)**.
 - **Dragon forge** (Ancient Cavern, loc `ds2_ac_forge_anvil`), after Dragon Slayer II **(Wiki)**: dragon sq shield + slice + shard → dragon kiteshield (75, 1,000 XP); dragon chainbody + lump + shard → dragon platebody (90, 2,000 XP).
 - **Ancient wyvern shield** (Fossil Island, loc `fossil_lab_shield_maker`) **(Wiki)**: wyvern visage + elemental shield, 66 Smithing and Magic, 2,000 XP in each, draining Magic to 0.
-- **Barbarian spears and hastas** **(Wiki)**: at a barbarian anvil only, a bar and its log (logs, oak, willow, maple, yew, magic): 5/20/35/55/75/90 Smithing, 25-150 XP, 4 ticks. Smith says "You should select a suitable metal bar from your inventory and use it on the anvil."; no hammer: "You need a hammer in order to smith here." (recs 1530, 1533). Barbarian Training isn't on this server yet, so as with the Fishing plugin's quest fish it only locks once it is (or for a player with `barbarian-training:smithing`).
+- **Barbarian spears and hastas** **(Wiki)**: at a barbarian anvil only, one bar and its matching log (logs, oak, willow, maple, yew, magic): 5/20/35/55/75/90 Smithing, 25-150 XP. Selection opens the barbarian hammering animation; the first output comes three ticks later, then outputs are four ticks apart (capture 224/01530: selection/animation1777, output1780/1784/1788). Smith says "You should select a suitable metal bar from your inventory and use it on the anvil."; no hammer: "You need a hammer in order to smith here." (recs 1530, 1533). Production repeats the cache's barbarian smithing animation (`brut_human_smithing`, 6712), with its Imcando variant when applicable.
+
+### Otto's smithing lessons
+
+[Barbarian Training](https://oldschool.runescape.wiki/w/Barbarian_Training#Smithing) requires Barbarian Fishing, Tai Bwo Wannai Trio, Tamayu's post-quest combat training and a nonboostable base Smithing level of 5. The lesson owner enforces that base level; higher-tier recipe levels continue to accept ordinary current-level boosts. This implementation interprets completed Barbarian Fishing as both existing rod and barehanded-fishing reports. Tai Bwo Wannai Trio completion alone does not substitute for claiming Tamayu's reward. No firemaking requirement is added from the conflicting comment in the local Quest Helper reference.
+
+Otto's spear topic plays the existing Wiki transcript's appropriate quest-condition branch. After the instruction, manufacture a spear on a barbarian anvil and report to Otto; he then offers the hasta instruction. Manufacture a hasta and report again. Reports do not consume the weapons. Each section saves its own 0/1/2/3 stage (untaught/instructed/manufactured/reported) in the existing `barbarian-training` object and synchronizes `brut_smith_spear` (3762) or `brut_smith_hasta` (3763) at login. A carried, bought or withdrawn weapon cannot advance manufacture progress.
+
+`Spears.Smithing` asks `smithing:unlocked` separately for `barbarian_spear` and `barbarian_hasta`. An unanswered request denies crafting; discovery of a registered whole miniquest is not a permission. The obsolete unwritten `barbarian-training:smithing` boolean does not fabricate either lesson. Permission is checked again when selecting a product and on every production tick. The existing two-entry menu remains; choosing an untaught hasta refuses without spending materials.
+
+The action keeps its original anvil, player tile, area and teleport serial through selection and production. Moving, teleporting away and back, losing permission/materials/hammer, or disconnecting cannot spend a later pair of inputs. It consumes unrestricted current bar/log slots, checks capacity after consumption and then grants the product, XP and compatible `smithing:success` event with `source: "barbarian-anvil"` and station provenance. Kandarin diary listeners keep their existing item event.
+
+Evidence limits: capture 237/01149 ticks 9533-9536 shows the Tai Bwo Wannai refusal. Capture 227/910394 shows the successful instruction but is Leagues V. No normal-world capture establishes the precise fishing conjunction or smithing lesson/report stage boundary. Recording progress when the required final NPC reply starts is an explicit choice consistent with the established rod lesson; missing or truncated instructions fail closed. This slice does not add Zamorakian conversion, equipment requirements or whole-miniquest completion aggregation.
+
+`server/tests/barbarian-smithing-native.test.cjs` exercises actual Player, Inventory, map anvil, NPC dialogue packets, CreationMenu, Smithing task, Tamayu reward transcript and PlayerSave codec/apply/login. Controlled quest/fishing prerequisite setup is distinguished from the reward and manufacturing paths actually exercised. Existing training, rod, smithing and Kandarin diary tests cover affected consumers; the full suite is not required for these plugin-local changes.
+
+A rendered native walkthrough verified both complete instruction/craft/report paths, separate untaught-hasta refusal, selection animation and first output at +3 ticks, actual walking before the delayed output with no material or XP cost, and completed stages/weapons/XP after native Logout, a committed SQLite read and fresh browser login. Fishing/quest/Tamayu prerequisites, base level and starting materials were controlled setup. Native early close covered the initial player question; intermediate instruction-close behavior has focused real-packet coverage. One initial cancellation helper never issued a walk and produced a valid spear; it is retained as a helper limit, with the subsequent native hasta walk supplying cancellation evidence.
 - **Gold helmet** stays with Between a Rock (3 gold bars, 50 Smithing); it now gives its 30 XP.
 
 ## Not done
 
 - Smiths' Uniform speed-up, the smithing catalyst, and the Ancient Furnace (Grimstone, Sailing 87).
 - Chainshot and incendiary cannonballs, large keel parts, dragon keel parts and dragon nails, granite cannonballs.
-- Lunar bars (Lunar Diplomacy / The Fremennik Exiles) and elemental metal outside Elemental Workshop.
+- Elemental metal outside Elemental Workshop.
 - The level-up "You have unlocked: ..." messages.
 - Superheat Item still treats blurite as a 13 Smithing bar (the Wiki says 10 by spell).

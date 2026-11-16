@@ -4,6 +4,7 @@
 // then one slot of the free-to-play, members or Entrana table. The members tables are 15 slots:
 // 12 items, 2 of the clue table (easy/medium/hard 10:6:4; nothing when that tier can't be taken)
 // and 1 of the rare drop table, rolled by NpcDrops from the server's shared drop data.
+const { onEntrana } = require("../../areas/entrana/Bounds.Entrana");
 const ids = { LAMP: 2528, CABBAGE: 1965, DIAMOND: 1601, BUCKET: 1925, FLYER: 956,
   STEEL_PLATEBODY: 1119, OLD_BOOT: 685, BODY_RUNE: 559, ONION: 1957, MITHRIL_SCIMITAR: 1329,
   CASKET: 405, NATURE_RUNE: 561, STALE_BAGUETTE: 20590, NOTED_MITHRIL_BAR: 2360, NOTED_STEEL_BAR: 2354 };
@@ -15,12 +16,6 @@ const COMMON_MEMBERS_SLOTS = [...SHARED_SLOTS, [ids.OLD_BOOT, 1], [ids.BODY_RUNE
   [ids.CASKET, 1], [ids.NATURE_RUNE, 20]];
 const MEMBERS_TABLE = [...COMMON_MEMBERS_SLOTS, [ids.MITHRIL_SCIMITAR, 1], [ids.STEEL_PLATEBODY, 1]];
 const ENTRANA_TABLE = [...COMMON_MEMBERS_SLOTS, [ids.NOTED_MITHRIL_BAR, 5], [ids.NOTED_STEEL_BAR, 5]];
-
-function onEntrana(player) {
-  const location = player?.getLocation?.();
-  return location != null && location.getZ() === 0 && location.getX() >= 2800 && location.getX() <= 2879 &&
-    location.getY() >= 3320 && location.getY() <= 3391;
-}
 
 function rollClue(api, player) {
   let roll = Math.floor(Math.random() * CLUE_WEIGHTS.reduce((sum, [, weight]) => sum + weight, 0));

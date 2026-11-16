@@ -187,3 +187,39 @@ test('plugins report world.json and world.local.json switches so the page can se
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("in the running server, loaded is what the loader registered: not the bots under --disablePlayerBots, not a plugin whose register() threw", () => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const dir = fixture({
+    'skills/Good.plugin.js': plugin('Good'),
+    'skills/Thrower.plugin.js': plugin('Thrower').replace('register() {}', "register() { throw new Error('boom'); }"),
+    'bots/PlayerBots.plugin.js': plugin('PlayerBots'),
+  });
+  const saved = { initialized: PluginManager.initialized, loadedPlugins: PluginManager.loadedPlugins, bots: process.env.DISABLE_PLAYER_BOTS };
+  const quiet = { warn: console.warn, info: console.info, error: console.error };
+  try {
+    const before = Object.fromEntries(WorldConfigCatalog.build(dir, layers({}, {}, 'rule')).plugins.map((p) => [p.name, p.loaded]));
+    assert.deepEqual(before, { PlayerBots: true, Good: true, Thrower: true }, 'without a loader run the catalog applies the loader rule');
+
+    PluginManager.initialized = false;
+    PluginManager.loadedPlugins = [];
+    process.env.DISABLE_PLAYER_BOTS = '1';
+    console.warn = console.info = console.error = () => {};
+    PluginManager.loadFromDirectory(dir);
+    Object.assign(console, quiet);
+    const data = WorldConfigCatalog.build(dir, layers({}, {}, 'rule'));
+    const byName = Object.fromEntries(data.plugins.map((p) => [p.name, p]));
+    assert.equal(byName.Good.loaded, true);
+    assert.equal(byName.Thrower.enabled, true);
+    assert.equal(byName.Thrower.loaded, false, "register() threw, so it is not running");
+    assert.equal(byName.PlayerBots.loaded, false, 'left out by --disablePlayerBots');
+    assert.equal(data.options.find((o) => o.key === 'Thrower:opt').ownerEnabled, false);
+    assert.equal(data.options.find((o) => o.key === 'Good:opt').ownerEnabled, true);
+  } finally {
+    Object.assign(console, quiet);
+    PluginManager.initialized = saved.initialized;
+    PluginManager.loadedPlugins = saved.loadedPlugins;
+    if (saved.bots === undefined) delete process.env.DISABLE_PLAYER_BOTS; else process.env.DISABLE_PLAYER_BOTS = saved.bots;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

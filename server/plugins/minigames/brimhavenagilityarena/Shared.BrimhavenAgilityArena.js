@@ -326,6 +326,9 @@ function rewardTag(player) {
   api.emitCustomEvent("diary:task", { player, ...DIARY_TASK });
   player.getInventory().forceAdd(player, new core.Item(Items.AGILITY_ARENA_TICKET_3, award.points));
   player.getInventory().forceAdd(player, new core.Item(Items.BRIMHAVEN_VOUCHER, award.points));
+  // The cache's collection log still uses the original ticket ID for this slot.
+  api.emitCustomEvent("collection-log:obtain", { player, itemId: Items.AGILITY_ARENA_TICKET, amount: award.points });
+  api.emitCustomEvent("collection-log:obtain", { player, itemId: Items.BRIMHAVEN_VOUCHER, amount: award.points });
   addXp(player, tagXp(agilityLevel(player)));
   // ponytail: the main game's wording for more than one is not recorded; the Leagues one is
   // "You have received 1 Agility Arena Tickets and 8 Brimhaven Vouchers!" (rsprox 75).

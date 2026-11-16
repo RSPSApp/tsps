@@ -1,5 +1,5 @@
 {
-  "_source": "Each book's title and its 15 + 15 text lines per spread as live sends them in book 392; a { item, zoom } line is the item picture live shows on that line.",
+  "_source": "Each book's title and its 15 + 15 text lines per spread as live sends them in book 392 (Rotten diary: rsprox recording 4288 tick 19991); a { item, zoom } line is the item picture live shows on that line.",
   "Construction guide": {
     "title": "GUIDE TO CONSTRUCTION",
     "spreads": [
@@ -398,6 +398,43 @@
       ]
     ]
   },
+  "Tattered journal": {
+    "title": "A journal",
+    "spreads": [
+      [
+        [
+          "My skin hurts. The sunlight",
+          "stings. Cooked flesh is too",
+          "dry. What changed? How",
+          "long has it been since I",
+          "dined as a member of my",
+          "House? How long since I",
+          "was left behind?",
+          "",
+          "I no longer dine. I hunt. I",
+          "kill. I survive. But within",
+          "these moments of scarcity",
+          "and hunger my senses come",
+          "alive. Ancient instincts boil to",
+          "the surface and command",
+          "my body to action. A part of"
+        ],
+        [
+          "me rejects this savagery. The",
+          "part that insists in writing",
+          "this journal. But another",
+          "revels in it. It matters not",
+          "which I wish to follow, only",
+          "one will allow me to endure.",
+          "",
+          "The portal is closed. These",
+          "will be the last words of",
+          "House Shadum written on",
+          "Vampyrium."
+        ]
+      ]
+    ]
+  },
   "Archaeologist's diary": {
     "title": "Charles' Diary",
     "spreads": [
@@ -470,6 +507,543 @@
           "",
           "Where's Skely?"
         ]
+      ]
+    ]
+  },
+  "Lithkren vault notes": {
+    "title": "Lithkren Lab Notes",
+    "spreads": [
+      [
+        [
+          "She came to Lithkren.",
+          "Restricting her island wasn't",
+          "enough apparently. She now",
+          "wants us to leave this one as",
+          "well. She is naive. We may",
+          "be safe from the humans",
+          "now, but they will find us",
+          "eventually. Once they do,",
+          "they will not hesitate to",
+          "destroy her. My way is the",
+          "only way.",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "Another setback. Once again",
+          "the humans are responsible.",
+          "They found the island and",
+          "launched an attack. As",
+          "planned, the emergency",
+          "protocol was enacted and the",
+          "vault was sealed.",
+          "Unfortunately, I was still",
+          "inside it when this happened.",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      [
+        [
+          "Although I may be trapped",
+          "here, this could still work to",
+          "my advantage. There are",
+          "more than enough samples",
+          "and materials in storage here.",
+          "If all goes well, I should still",
+          "have everything I need to",
+          "finish our work.",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "As my work continues, I've",
+          "decided to explore a couple of",
+          "side projects. Inspired by the",
+          "fool, Forcae, I've decided to",
+          "try and infuse dragon eggs",
+          "with metal. With his metal",
+          "dragons, Forcae was hoping",
+          "to find a solution to our",
+          "infertility. I on the other",
+          "hand, will use them for a",
+          "different purpose. War.",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      [
+        [
+          "I've lost track of how long",
+          "I've been here. It's clear to",
+          "me now that the humans",
+          "must have bested the others.",
+          "This isn't overly surprising,",
+          "our kind was immune to",
+          "their weapons for so long that",
+          "we allowed ourselves to",
+          "become reckless. A foolish",
+          "mistake. We'd heard of the",
+          "Necrosyrtes who had fallen",
+          "on Kethsi. We should have",
+          "known the humans would",
+          "find those weapons, but we",
+          "were arrogant. By the time"
+        ],
+        [
+          "we realised, it was too late.",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      [
+        [
+          "I am making good progress.",
+          "So much so that I've started",
+          "thinking about how to leave",
+          "the vault once the weapon is",
+          "complete. The seals on this",
+          "place, both physical and",
+          "magical, are not insignificant.",
+          "Teleporting isn't an option,",
+          "we made sure of that. The",
+          "walls are reinforced by",
+          "numerous enchantments, as",
+          "are the doors themselves.",
+          "Much of it is tied to the key.",
+          "If it is placed in the doors,",
+          "most of the protections will be"
+        ],
+        [
+          "disabled. Without it though,",
+          "this could be a difficult",
+          "process.",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      [
+        [
+          "I rarely bother myself with",
+          "the costs of our trials.",
+          "However, at times, even I",
+          "must admit that the price we",
+          "are paying is steep. We have",
+          "experimented on so many,",
+          "even our own kind, all for",
+          "what has so far amounted to",
+          "very little. Still, I know our",
+          "cause is right. Once",
+          "humanity is destroyed, we",
+          "will be free of the disease that",
+          "has nearly destroyed us.",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ]
+    ]
+  },
+  "Rotten diary": {
+    "title": "Mouldy Diary",
+    "spreads": [
+      [
+        [
+          "<col=600000>*A lot of the diary is too",
+          "<col=600000>caked in mould to be ledgible,",
+          "<col=600000>but the last entry can still be",
+          "<col=600000>made out.*</col>"
+        ],
+        [
+          "I found an unusual creature",
+          "in the forest by the name of",
+          "Crabidor Rank. He seemed",
+          "tasty enough at first, but",
+          "we've all fallen sick since",
+          "eating him. To make matters",
+          "worse, all of our blood stores",
+          "have begun to rot into a",
+          "sickly mush.",
+          "",
+          "Perhaps this is another of",
+          "House Drakan's plots. They",
+          "call us savages, but wage",
+          "biological warfare on us from",
+          "afar. Lowerniel proved his"
+        ]
+      ],
+      [
+        [
+          "might once before, but has",
+          "retired to a life of cowardice.",
+          "",
+          "It will not last. The glint in",
+          "his eyes as he slaughtered his",
+          "fellows cannot be left behind.",
+          "House Drakan is built on the",
+          "back of a slumbering, rabid,",
+          "venator. One day that",
+          "venator will wake with",
+          "centuries of hunger",
+          "repressed and the so called",
+          "civilised Houses of",
+          "Vampyrium will tremble. He",
+          "would always have made a"
+        ],
+        [
+          "better Ghrazi."
+        ]
+      ]
+    ]
+  },
+  "Journal page": {
+    "title": "Journal Page",
+    "spreads": [
+      [
+        [
+          "From the stadium to",
+          "Everlight, crowds lined the",
+          "streets. I'd never seen",
+          "anything like it. It seems that",
+          "the royal family have spared",
+          "no expense. It makes sense",
+          "though. This is the first time",
+          "that the Dominion Games",
+          "have taken place here. The",
+          "queen clearly wants to make",
+          "everything as close as possible",
+          "to the ones held back home.",
+          "It seems to be working so",
+          "far, but only time will tell for",
+          "sure..."
+        ],
+        []
+      ]
+    ]
+  },
+  "The Turncloak": {
+    "title": "The Turncloak",
+    "spreads": [
+      [
+        [
+          "Where's our god now? The",
+          "king has been taken and so",
+          "the queen has no choice.",
+          "She'll surrender the capital",
+          "causing the fighting to stop,",
+          "and the killing to begin.",
+          "Those who resist will be",
+          "enslaved, especially the pious -",
+          "they taste the best, or so I've",
+          "heard. I'll ask you again,",
+          "where's our god now?",
+          "",
+          "My word is law, very few",
+          "question a justiciar - for we",
+          "speak with the voice of"
+        ],
+        [
+          "Saradomin. I'll inform my",
+          "squadron that he's abandoned",
+          "us. We've blued our armour,",
+          "but there'll be no need to",
+          "dye our fabrics, for the war",
+          "has stained them a dark",
+          "crimson already.",
+          "",
+          "At dusk we'll march on",
+          "Drakans' host and bend the",
+          "knee - my squadron will pay",
+          "the price and I'll become a",
+          "general to a god who",
+          "provides."
+        ]
+      ],
+      [
+        [
+          "I sense that some do not",
+          "believe in this cause, some",
+          "say the enemy won't take us",
+          "in. I've but two loyal sisters",
+          "left. Insela, our ballistics",
+          "expert and Otrava, our",
+          "squadrons healer. They'll",
+          "stick with me until the end.",
+          "",
+          "Woe to those who've yet to",
+          "lose their faith, I've heard",
+          "that the Lord of Vampyrium",
+          "impales dissenters. I'll show",
+          "him such devotion and",
+          "obedience, he'll have no choice"
+        ],
+        [
+          "but to take us in. The dark",
+          "times have only just begun,",
+          "I'll make Saradomin rue the",
+          "day he turned his back on",
+          "us.",
+          "",
+          "His-Dark-Self accepted our",
+          "offering! My sisters and I",
+          "have been tasked with",
+          "clearing out the hamlets and",
+          "leading the cattle right into",
+          "the heart of his vampyre host.",
+          "Our armour is black and our",
+          "cloth crimson, but they still",
+          "know a Justiciar when they"
+        ]
+      ],
+      [
+        [
+          "see one and they know it",
+          "would be heresy to defy me.",
+          "",
+          "A small hermitage to the",
+          "north east of the capital is",
+          "our next target, while our",
+          "master moves further south.",
+          "As a trio, we move quickly.",
+          "Soon Hallowvale will be a",
+          "name forgotten in time,",
+          "covered by the grand shadow",
+          "of our new god."
+        ],
+        []
+      ]
+    ]
+  },
+  "Explosive Discovery": {
+    "title": "Explosive Discovery",
+    "spreads": [
+      [
+        [
+          "During today's march I",
+          "noticed a tree I'd never seen",
+          "before. It had large gourd-",
+          "like fruit growing from it, but",
+          "the cursed rot had bloodied",
+          "the flesh.",
+          "",
+          "I collected an armful of the",
+          "foul fruits and carefully",
+          "checked them over to find the",
+          "rot had done something quite",
+          "extraordinary. The fruits",
+          "outer skin had become brittle",
+          "while the inner flesh digests",
+          "and absorbs anything placed"
+        ],
+        [
+          "inside. The perfect vessel for",
+          "a deadly concoction.",
+          "",
+          "After numerous experiments,",
+          "I've found the perfect",
+          "ingredient! It seems so",
+          "obvious now, but if blood is",
+          "poured into the rotting",
+          "gourd, it fills the flesh with a",
+          "highly volatile gas. Once the",
+          "blood has been entirely",
+          "absorbed, smashing the brittle",
+          "skin causes a mighty",
+          "explosion, powerful enough to",
+          "eject whatever is stored"
+        ]
+      ],
+      [
+        [
+          "within.",
+          "",
+          "This weapon would truly",
+          "turn the tide of the coming",
+          "battles, but the blood required",
+          "for such an arsenal will",
+          "certainly drain the troops",
+          "morale, amongst other",
+          "things... There must be",
+          "another way, perhaps Phosani",
+          "has the answers."
+        ],
+        []
+      ]
+    ]
+  },
+  "Bloody grimoire": {
+    "title": "Bloody Grimoire",
+    "spreads": [
+      [
+        [
+          "An evil has swept into our",
+          "lands and we have been",
+          "called to protect the weak,",
+          "but we are vastly",
+          "outnumbered. The healing",
+          "came easy when my belief",
+          "wasn't waning, when our",
+          "lands were not beset by the",
+          "beautiful rot of chaos.",
+          "",
+          "The horde have magics and",
+          "morals well beyond ours.",
+          "They drain the life from",
+          "their victims and embrace the",
+          "darkness that heals them of"
+        ],
+        [
+          "their wounds, while the light",
+          "of Saradomin forbids us of",
+          "such heinous acts.",
+          "",
+          "We stand beaten, bloody and",
+          "bruised from another conflict",
+          "with the enemy. Their",
+          "ferocity knowing no bounds",
+          "as we pile the dead by the",
+          "dozen onto the carts.",
+          "Amongst the dead I found a",
+          "version of the Senntisten",
+          "Scriptures, mostly damaged",
+          "beyond recognition, but I got",
+          "enough to understand the"
+        ]
+      ],
+      [
+        [
+          "basics of blood magic.",
+          "",
+          "I have found it! By using",
+          "blood with various potions,",
+          "I've managed to bind",
+          "together the offensive and",
+          "defensive properties. Early",
+          "prototypes were harmful to",
+          "ingest, but that no longer",
+          "seems to be an issue."
+        ],
+        [
+          "<col=40ff00>Bastion Potion</col>",
+          "",
+          "A strong mix of ranged and",
+          "defence, perfect for an",
+          "archer in a rough situation.",
+          "",
+          "- 1 pint of boiled blood",
+          "- 1 cadantine sprig",
+          "- 2 pints of Zamorakian wine",
+          "",
+          "Note: Recent victories have",
+          "provided us with copious",
+          "crates of this unholy liquor.",
+          "The sweet taste has been...",
+          "difficult to resist."
+        ]
+      ],
+      [
+        [
+          "<col=800080>Battlemage Potion</col>",
+          "",
+          "A bright mix of magic and",
+          "defence, perfect for a wizard",
+          "in a tough situation.",
+          "",
+          "- 1 pint of boiled blood",
+          "- 1 cadantine sprig",
+          "- 1 potato cactus",
+          "",
+          "Note: Potato cactus stock",
+          "alarmingly low, shipments",
+          "from the Kharidian desert",
+          "have been lacking as of late."
+        ],
+        [
+          "<str>Totality Potion",
+          "",
+          "<str>An overload of everything,",
+          "<str>but not too much to cause",
+          "<str>harm to one's innards.",
+          "",
+          "<str>- 1 super combat potion",
+          "<str>- 1 ranging potion",
+          "<str>- 1 magic potion",
+          "<str>- 1 pint of boiled blood",
+          "<str>- 1 torstol sprig</str>",
+          "",
+          "Note: Unstable, currently too",
+          "dangerous to make, let alone",
+          "drink."
+        ]
+      ],
+      [
+        [
+          "<str>Vigour Potion",
+          "",
+          "<str>A faithful combination of piety",
+          "<str>and stamina.",
+          "",
+          "<str>- 1 pint of boiled blood",
+          "<str>- 1 ranarr sprig",
+          "<str>- 1 amylase crystal",
+          "",
+          "</str>Note: Ingredients ran out",
+          "before results were",
+          "satisfactory, something is",
+          "missing."
+        ],
+        []
       ]
     ]
   }

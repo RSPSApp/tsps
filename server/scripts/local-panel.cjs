@@ -5,7 +5,9 @@ const fs = require("node:fs");
 const { fork } = require("node:child_process");
 const { resolveAccess, originAllowed } = require("../plugins/tools/worldadmin/Access.WorldAdmin");
 const { createRequestHandler, HttpError, send } = require("../plugins/tools/worldadmin/Http.WorldAdmin");
+const { botEditorRoutes } = require("../plugins/tools/worldadmin/BotEditor.WorldAdmin");
 const { playerRoutes } = require("../plugins/tools/worldadmin/Players.WorldAdmin");
+const { createPageServer, watchCertificate } = require("../plugins/tools/worldadmin/Tls.WorldAdmin");
 
 if (process.argv[2] === "--runner") {
   const nodemon = require("nodemon")({ script: "./src/main/typescript/elvarg/Server.ts", args: ["0"], ext: "ts,json,js", stdin: false });
@@ -119,6 +121,12 @@ if (process.argv[2] === "--runner") {
   }
 
   async function dispatch(request, response, url) {
+    if (url.pathname === "/bot-editor" || url.pathname === "/bot-graph") {
+      if (request.method !== "GET") throw new HttpError(405, "Method not allowed");
+      send(response, 302, "", { Location: "/?view=bots&edit=1" });
+      return true;
+    }
+    if (await botEditorRoutes(request, response, url)) return true;
     if (url.pathname === "/api/catalog") return false;
     if (!url.pathname.startsWith("/api/")) return false;
     if (url.pathname === "/api/server/shutdown") throw new HttpError(404, "Not found");
@@ -161,13 +169,21 @@ if (process.argv[2] === "--runner") {
     return true;
   }
 
-  const server = http.createServer(createRequestHandler({
+  // WORLD_ADMIN_TLS_CERT and _KEY make this listener https; the game behind the pipe stays http.
+  const page = createPageServer(access.tls, createRequestHandler({
     token: access.token, loopback: access.loopback, port: () => server.address().port,
   }, { catalog: catalogue, dispatch }, []));
+  if (page.error) {
+    console.error(`[local-panel] ${page.error}`);
+    process.exit(1);
+  }
+  const { server } = page;
   server.listen(access.port, access.host, () => {
     for (const note of access.notes) console.warn("[local-panel]", note);
+    if (page.secure) watchCertificate(server, access.tls);
     const tokenSource = access.tokenSource === "env" ? "WORLD_ADMIN_TOKEN" : path.relative(process.cwd(), tokenFile);
-    console.info(`[local-panel] http://localhost:${server.address().port}/?token=<token from ${tokenSource}>`);
+    const origin = page.secure ? `https://${access.loopback ? "localhost" : page.host}` : "http://localhost";
+    console.info(`[local-panel] ${origin}:${server.address().port}/?token=<token from ${tokenSource}>`);
     start();
   });
   process.on("exit", () => fs.rmSync(temporary, { recursive: true, force: true }));

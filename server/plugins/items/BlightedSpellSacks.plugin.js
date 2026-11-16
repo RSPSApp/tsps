@@ -36,7 +36,8 @@ function onBootstrap(core, event) {
 
 function supplySack(core, event) {
   const { player, spell } = event;
-  if (!event.items.length || !allowsBlightedItems(core, player)) return;
+  // The standard book's item spells (alchemy, Telekinetic Grab) pass no spell: no sack supplies them.
+  if (!spell || !event.items.length || !allowsBlightedItems(core, player)) return;
   const id = spell.spellId();
   const match = SPELL_SACKS.find(([book, , names]) => spell.getSpellbook() === core.MagicSpellbook[book] &&
     names.some(name => (book === "LUNAR" ? core.EffectSpells : core.CombatSpells)[name].spellId() === id));

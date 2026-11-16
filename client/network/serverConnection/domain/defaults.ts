@@ -26,6 +26,7 @@ export function cloneShopState(shopState: ShopWindowState): ShopWindowState {
         buyMode: shopState.buyMode | 0,
         sellMode: shopState.sellMode | 0,
         stock: shopState.stock.map((entry) => ({ ...entry })),
+        inventoryId: typeof shopState.inventoryId === "number" ? shopState.inventoryId | 0 : undefined,
     };
 }
 

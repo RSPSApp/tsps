@@ -45,7 +45,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
     Skill,
     TaskManager,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts, questStartMessage } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
   const { crossingFor } = require("../../objects/WallDoor.Doors");
   const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
@@ -627,7 +627,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
     quest.setStage(player, STAGE_STARTED);
     // Starting the quest also ends the first trip's welcome (vmq2_first_travel 3 -> 4, capture tick 1117).
     api.emitCustomEvent("quetzal:first-trip-welcomed", { player });
-    player.sendMessage("You've started a new quest: <col=081190>Twilight's Promise</col>");
+    player.sendMessage(questStartMessage(player, "Twilight's Promise"));
   }
 
   function handleChoice({ player, npcId, option }) {
@@ -1250,6 +1250,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
       return;
     }
     if (stepId === STEP.VELAM_KILLED) {
+      if (scene.ennius && scene.velam) Scenes.face(scene.ennius, scene.velam.getLocation());
       scene.ennius?.performAnimation(new Animation(ENNIUS_STRIKE_ANIMATION, 5));
       Scenes.later(scene, 1, () => {
         scene.velam?.performAnimation(new Animation(VELAM_FALL_ANIMATION, 20));

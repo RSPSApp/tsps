@@ -238,16 +238,16 @@ function routeToOrb(h) {
   const N = core.NpcIdentifiers;
   const I = core.ItemIdentifiers;
   h.completeQuest('x_marks_the_spot');
-  assert.equal(h.variant(N.VEOS_5)?.variant, 'starting-off');
-  h.hook(N.VEOS_5, 'quest:client-of-kourend:start');
+  assert.equal(h.variant(N.VEOS_7)?.variant, 'starting-off');
+  h.hook(N.VEOS_7, 'quest:client-of-kourend:start');
   assert.equal(h.quest.getStage(h.player), 1);
   assert.equal(h.varbits.get(5619), 1, 'durable stage 1 keeps wire 1');
-  h.message(N.VEOS_5, 'qcqaI2');
+  h.message(N.VEOS_7, 'qcqaI2');
   assert.equal(h.items.get(I.ENCHANTED_SCROLL), 1);
   h.items.set(I.FEATHER, 1);
   assert.equal(h.useFeather(I.ENCHANTED_SCROLL, I.FEATHER).handled, true);
   assert.equal(transcripts.at(-1).variant, 'starting-off-using-a-feather-on-enchanted-scroll');
-  h.receive(N.VEOS_5, 'BB5wZw');
+  h.receive(N.VEOS_7, 'BB5wZw');
   assert.equal(h.items.get(I.ENCHANTED_QUILL), 1);
   assert.equal(h.items.get(I.FEATHER) ?? 0, 0);
 
@@ -274,10 +274,10 @@ function routeToOrb(h) {
   assert.equal(h.varbits.get(5619), 2, 'durable stage 2 keeps wire 2');
   assert.equal(h.varbits.get(5625), 1, 'reveal varbit is set with the fifth owner');
 
-  h.message(N.VEOS_5, '4hbSAK');
+  h.message(N.VEOS_7, '4hbSAK');
   assert.equal(h.items.get(I.ENCHANTED_SCROLL) ?? 0, 0);
   assert.equal(h.items.get(I.ENCHANTED_QUILL) ?? 0, 0);
-  h.receive(N.VEOS_5, 'YtCvIQ');
+  h.receive(N.VEOS_7, 'YtCvIQ');
   assert.equal(h.items.get(I.MYSTERIOUS_ORB), 1);
   assert.equal(h.quest.getStage(h.player), 3);
   assert.equal(h.varbits.get(5619), 4, 'holding the orb sends Quest Helper wire 4');
@@ -288,7 +288,7 @@ test('Client of Kourend runs the mandatory Quest Helper route from stage 0 to co
   const N = core.NpcIdentifiers;
   const I = core.ItemIdentifiers;
 
-  assert.equal(h.variant(N.VEOS_5), null, 'X Marks the Spot gates the start variant');
+  assert.equal(h.variant(N.VEOS_7), null, 'X Marks the Spot gates the start variant');
   assert.equal(h.quest.getStage(h.player), 0);
 
   routeToOrb(h);
@@ -296,11 +296,11 @@ test('Client of Kourend runs the mandatory Quest Helper route from stage 0 to co
   // Lost-orb recovery branch at stage 3.
   h.items.set(I.MYSTERIOUS_ORB, 0);
   h.setFull(true);
-  assert.equal(h.condition(N.VEOS_5, '5IoSGv'), true, 'full backpack refuses the lost-orb reclaim');
+  assert.equal(h.condition(N.VEOS_7, '5IoSGv'), true, 'full backpack refuses the lost-orb reclaim');
   h.setFull(false);
-  assert.equal(h.condition(N.VEOS_5, 'mJAvYg'), false);
-  assert.equal(h.condition(N.VEOS_5, 'LIGbQM'), true);
-  h.message(N.VEOS_5, 'xa0SlA');
+  assert.equal(h.condition(N.VEOS_7, 'mJAvYg'), false);
+  assert.equal(h.condition(N.VEOS_7, 'LIGbQM'), true);
+  h.message(N.VEOS_7, 'xa0SlA');
   assert.equal(h.items.get(I.MYSTERIOUS_ORB), 1, 'lost orb is replaced');
 
   // Off-altar activation plays the refusal variant and changes nothing.
@@ -314,13 +314,13 @@ test('Client of Kourend runs the mandatory Quest Helper route from stage 0 to co
   h.setLocation(1715, 3882);
   h.itemAction('Mysterious orb', 'Activate', { itemId: I.MYSTERIOUS_ORB });
   assert.equal(transcripts.at(-1).variant, 'activating-the-orb-using-the-activate-option-on-the-mysterious-orb-by-the-dark-altar');
-  h.message(N.VEOS_5, 'vy1GZz');
+  h.message(N.VEOS_7, 'vy1GZz');
   assert.equal(h.items.get(I.MYSTERIOUS_ORB) ?? 0, 0);
   assert.equal(h.items.get(I.BROKEN_GLASS), 1);
   assert.equal(h.quest.getStage(h.player), 4);
   assert.equal(h.varbits.get(5619), 5, 'activated orb sends Quest Helper wire 5');
 
-  h.action(N.VEOS_5, 'M9w-_K');
+  h.action(N.VEOS_7, 'M9w-_K');
   assert.equal(h.quest.getStage(h.player), 5);
   assert.equal(h.quest.isComplete(h.player), true);
   assert.equal(h.attributes.get('quest.points'), 1);
@@ -331,7 +331,7 @@ test('Client of Kourend runs the mandatory Quest Helper route from stage 0 to co
 
   const lampCount = h.items.get(I.ANTIQUE_LAMP_17);
   const forceAddCount = h.forceAdds.length;
-  h.action(N.VEOS_5, 'M9w-_K');
+  h.action(N.VEOS_7, 'M9w-_K');
   assert.equal(h.quest.getStage(h.player), 5);
   assert.equal(h.items.get(I.ANTIQUE_LAMP_17), lampCount, 'repeat completion grants no extra lamps');
   assert.equal(h.forceAdds.length, forceAddCount, 'repeat completion grants no extra items');
@@ -345,7 +345,7 @@ test('Client of Kourend completion drops both antique lamps from a naturally ful
   routeToOrb(h);
   h.setLocation(1715, 3882);
   h.itemAction('Mysterious orb', 'Activate', { itemId: I.MYSTERIOUS_ORB });
-  h.message(N.VEOS_5, 'vy1GZz');
+  h.message(N.VEOS_7, 'vy1GZz');
   assert.equal(h.quest.getStage(h.player), 4);
 
   const inventory = new Inventory(h.player);
@@ -356,7 +356,7 @@ test('Client of Kourend completion drops both antique lamps from a naturally ful
   const previous = ItemOnGroundManager.registers;
   ItemOnGroundManager.registers = (_player, item) => { drops.push(item); return item; };
   try {
-    h.action(N.VEOS_5, 'M9w-_K');
+    h.action(N.VEOS_7, 'M9w-_K');
   } finally {
     ItemOnGroundManager.registers = previous;
   }
@@ -378,14 +378,14 @@ test('Client of Kourend normal orb handover refuses a full backpack without adva
   h.quest.setStage(h.player, 2);
   h.setFull(true);
 
-  const refused = h.receive(N.VEOS_5, 'YtCvIQ');
+  const refused = h.receive(N.VEOS_7, 'YtCvIQ');
   assert.equal(refused.end, true, 'the hand-over closes instead of claiming receipt');
   assert.equal(h.quest.getStage(h.player), 2, 'durable stage stays at return-to-Veos');
   assert.equal(h.items.get(I.MYSTERIOUS_ORB) ?? 0, 0);
   assert.ok(h.messages.includes('You need a free inventory space.'));
 
   h.setFull(false);
-  h.receive(N.VEOS_5, 'YtCvIQ');
+  h.receive(N.VEOS_7, 'YtCvIQ');
   assert.equal(h.quest.getStage(h.player), 3);
   assert.equal(h.items.get(I.MYSTERIOUS_ORB), 1);
 });
@@ -398,32 +398,32 @@ test('Client of Kourend post-quest Piscarilius Veos returns lost memoirs exactly
   routeToOrb(h);
   h.setLocation(1715, 3882);
   h.itemAction('Mysterious orb', 'Activate', { itemId: I.MYSTERIOUS_ORB });
-  h.message(N.VEOS_5, 'vy1GZz');
-  h.action(N.VEOS_5, 'M9w-_K');
+  h.message(N.VEOS_7, 'vy1GZz');
+  h.action(N.VEOS_7, 'M9w-_K');
 
-  assert.equal(h.variant(N.VEOS_5)?.variant, 'standard-dialogue-at-port-piscarilius');
+  assert.equal(h.variant(N.VEOS_7)?.variant, 'standard-dialogue-at-port-piscarilius');
   h.items.set(I.KHAREDSTS_MEMOIRS, 0);
-  assert.equal(h.condition(N.VEOS_5, 'K8j5Z5'), false);
-  assert.equal(h.condition(N.VEOS_5, 'drsnpy'), true);
+  assert.equal(h.condition(N.VEOS_7, 'K8j5Z5'), false);
+  assert.equal(h.condition(N.VEOS_7, 'drsnpy'), true);
 
   h.setFull(true);
-  h.conditionChosen(N.VEOS_5, 'drsnpy');
+  h.conditionChosen(N.VEOS_7, 'drsnpy');
   assert.equal(h.items.get(I.KHAREDSTS_MEMOIRS) ?? 0, 0, 'full bag adds no memoir');
-  const refused = h.line(N.VEOS_5, 'I do have some things for you. Enjoy!');
+  const refused = h.line(N.VEOS_7, 'I do have some things for you. Enjoy!');
   assert.equal(refused.skip, true, 'the false receipt line is skipped');
   assert.ok(h.messages.includes('You need a free inventory space.'));
-  assert.equal(h.condition(N.VEOS_5, 'drsnpy'), true, 'the missing condition remains retryable');
+  assert.equal(h.condition(N.VEOS_7, 'drsnpy'), true, 'the missing condition remains retryable');
 
   h.setFull(false);
-  h.conditionChosen(N.VEOS_5, 'drsnpy');
+  h.conditionChosen(N.VEOS_7, 'drsnpy');
   assert.equal(h.items.get(I.KHAREDSTS_MEMOIRS), 1);
-  const receipt = h.line(N.VEOS_5, 'I do have some things for you. Enjoy!');
+  const receipt = h.line(N.VEOS_7, 'I do have some things for you. Enjoy!');
   assert.equal(receipt.skip, undefined, 'the canonical line plays after a successful retry');
-  assert.equal(h.condition(N.VEOS_5, 'K8j5Z5'), true);
-  assert.equal(h.condition(N.VEOS_5, 'drsnpy'), false);
+  assert.equal(h.condition(N.VEOS_7, 'K8j5Z5'), true);
+  assert.equal(h.condition(N.VEOS_7, 'drsnpy'), false);
 
   const count = h.items.get(I.KHAREDSTS_MEMOIRS);
-  h.conditionChosen(N.VEOS_5, 'drsnpy');
+  h.conditionChosen(N.VEOS_7, 'drsnpy');
   assert.equal(h.items.get(I.KHAREDSTS_MEMOIRS), count, 'a repeat condition does not duplicate the book');
 });
 
@@ -432,7 +432,7 @@ test('Client of Kourend leaves Port Sarim Veos to X Marks and sails to Piscarili
   const N = core.NpcIdentifiers;
 
   h.completeQuest('x_marks_the_spot');
-  assert.equal(h.variant(N.VEOS_5)?.variant, 'starting-off', 'Piscarilius Veos offers the start');
+  assert.equal(h.variant(N.VEOS_7)?.variant, 'starting-off', 'Piscarilius Veos offers the start');
   assert.equal(h.variant(N.VEOS), null, 'Port Sarim Veos stays with X Marks');
   assert.equal(h.variant(N.VEOS_4), null, 'the completed Port Sarim transform stays with X Marks');
 
@@ -480,8 +480,8 @@ test('post-quest Piscarilius Veos travel reaches Port Sarim and Land\'s End afte
   const origin = [1825, 3691, 0];
   h.setLocation(...origin);
 
-  h.choice(N.VEOS_5, 'Travel to Port Sarim.');
-  const portSarim = h.line(N.VEOS_5, "As you wish, I hope you don't get seasick, it is a long voyage.");
+  h.choice(N.VEOS_7, 'Travel to Port Sarim.');
+  const portSarim = h.line(N.VEOS_7, "As you wish, I hope you don't get seasick, it is a long voyage.");
   assert.equal(typeof portSarim.after, 'function');
   assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()], origin);
   portSarim.after();
@@ -489,8 +489,8 @@ test('post-quest Piscarilius Veos travel reaches Port Sarim and Land\'s End afte
     landing('kourend-sarim'));
 
   h.setLocation(...origin);
-  h.choice(N.VEOS_5, "Travel to Land's End.");
-  const landEnd = h.line(N.VEOS_5, 'As you wish.');
+  h.choice(N.VEOS_7, "Travel to Land's End.");
+  const landEnd = h.line(N.VEOS_7, 'As you wish.');
   assert.equal(typeof landEnd.after, 'function', 'the referenced transcript branch keeps its canonical short line');
   landEnd.after();
   assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()],
@@ -504,15 +504,15 @@ test('Client of Kourend start-scroll handover with a full backpack is recoverabl
 
   h.completeQuest('x_marks_the_spot');
   h.setFull(true);
-  h.hook(N.VEOS_5, 'quest:client-of-kourend:start');
+  h.hook(N.VEOS_7, 'quest:client-of-kourend:start');
   assert.equal(h.quest.getStage(h.player), 1);
-  h.message(N.VEOS_5, 'qcqaI2');
+  h.message(N.VEOS_7, 'qcqaI2');
   assert.equal(h.items.get(I.ENCHANTED_SCROLL) ?? 0, 0, 'full bag gets no scroll');
-  assert.equal(h.condition(N.VEOS_5, 'T3xEGO'), true, 'lost-scroll full branch is reachable');
-  assert.equal(h.condition(N.VEOS_5, 'kKFnIP'), true);
+  assert.equal(h.condition(N.VEOS_7, 'T3xEGO'), true, 'lost-scroll full branch is reachable');
+  assert.equal(h.condition(N.VEOS_7, 'kKFnIP'), true);
 
   h.setFull(false);
-  h.message(N.VEOS_5, 'y6wsrd');
+  h.message(N.VEOS_7, 'y6wsrd');
   assert.equal(h.items.get(I.ENCHANTED_SCROLL), 1, 'the lost-scroll branch returns the scroll');
 });
 
@@ -574,8 +574,8 @@ test('Client of Kourend antique lamp rub spends one lamp for 500 XP', () => {
   routeToOrb(h);
   h.setLocation(1715, 3882);
   h.itemAction('Mysterious orb', 'Activate', { itemId: I.MYSTERIOUS_ORB });
-  h.message(N.VEOS_5, 'vy1GZz');
-  h.action(N.VEOS_5, 'M9w-_K');
+  h.message(N.VEOS_7, 'vy1GZz');
+  h.action(N.VEOS_7, 'M9w-_K');
   assert.equal(h.items.get(I.ANTIQUE_LAMP_17), 2);
 
   const lamp = { getId: () => I.ANTIQUE_LAMP_17 };

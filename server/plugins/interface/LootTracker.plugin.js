@@ -16,11 +16,24 @@
 // Loot taken from an NPC without a kill (a pickpocket) is "loot-tracker:add-npc":
 //   { player, npcId, items: [[itemId, amount], ...] }
 // sent as cache script 7192 (loottracker_add_loot: npc, key, item, amount) per item, all under the
-// player's next key from the same count.
+// player's next key from the same count. Loot that arrives over more than one tick under one key (a
+// Forestry gift: the nest, then the bark and leaves the tick after, 237/01104.txt ticks 6386-6387)
+// takes a key first with "loot-tracker:next-key" { player } (filled with `key`) and passes it as `key`.
+//
+// Loot taken from a loc (a stall) is "loot-tracker:add-loc":
+//   { player, locId, category, items: [[itemId, amount], ...] }
+// sent as cache script 7193 (loottracker_sourceadd with the loc's name: loc, key, category, -1), then
+// 7194 per item (loottracker_lootadd: loc, key, item, amount), under the player's next key from the
+// same count. rsprox captures (rev 241/242, local 1001550 and 58 more): every Ardougne baker's stall
+// theft sends 7193 [cakethiefstall, key, 6, -1] and 7194 [cakethiefstall, key, cake, 1] the tick the
+// cake arrives; mining (category 8), woodcutting (10) and runecrafting (4) use the same pair. The key
+// is the one 7197 counts with (1001517: a herb patch's 7197 takes 9363, the next tin rock's 7193 9364).
 const NEXT_KEY_ATTRIBUTE = "loot-tracker:next-key";
 const SOURCE_ADD_SCRIPT = 7197;
 const LOOT_ADD_SCRIPT = 7198;
 const NPC_LOOT_SCRIPT = 7192;
+const LOC_SOURCE_ADD_SCRIPT = 7193;
+const LOC_LOOT_ADD_SCRIPT = 7194;
 /** The fourth argument of 7197, always -1 in the captures. */
 const SOURCE_ADD_UNUSED = -1;
 
@@ -40,13 +53,27 @@ function addEntry({ player, source, category, items = [] }) {
   }
 }
 
-function addNpcEntry({ player, npcId, items = [] }) {
+function addNpcEntry({ player, npcId, items = [], key: given }) {
   if (!player || !Number.isInteger(npcId)) return;
+  const found = items.filter(([itemId, amount]) => Number.isInteger(itemId) && itemId >= 0 && amount > 0);
+  if (found.length === 0) return;
+  const key = Number.isInteger(given) ? given : nextKey(player);
+  const sender = player.getPacketSender();
+  for (const [itemId, amount] of found) sender.sendClientScript(NPC_LOOT_SCRIPT, npcId, key, itemId, amount);
+}
+
+function addLocEntry({ player, locId, category, items = [] }) {
+  if (!player || !Number.isInteger(locId) || locId < 0 || !Number.isInteger(category)) return;
   const found = items.filter(([itemId, amount]) => Number.isInteger(itemId) && itemId >= 0 && amount > 0);
   if (found.length === 0) return;
   const key = nextKey(player);
   const sender = player.getPacketSender();
-  for (const [itemId, amount] of found) sender.sendClientScript(NPC_LOOT_SCRIPT, npcId, key, itemId, amount);
+  sender.sendClientScript(LOC_SOURCE_ADD_SCRIPT, locId, key, category, SOURCE_ADD_UNUSED);
+  for (const [itemId, amount] of found) sender.sendClientScript(LOC_LOOT_ADD_SCRIPT, locId, key, itemId, amount);
+}
+
+function reserveKey(request) {
+  if (request?.player) request.key = nextKey(request.player);
 }
 
 module.exports = {
@@ -55,5 +82,7 @@ module.exports = {
     api.persistAttribute(NEXT_KEY_ATTRIBUTE, 1);
     api.onCustomEvent("loot-tracker:add", addEntry);
     api.onCustomEvent("loot-tracker:add-npc", addNpcEntry);
+    api.onCustomEvent("loot-tracker:add-loc", addLocEntry);
+    api.onCustomEvent("loot-tracker:next-key", reserveKey);
   },
 };

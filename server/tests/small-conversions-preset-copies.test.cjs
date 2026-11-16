@@ -822,3 +822,93 @@ test('still ignores a repellent moved while the player walks to it', (t) => {
   assert.equal(f.inv.getAmount(I.BONES), 1);
   assert.notEqual(f.p.getAttribute('oil-lights:distilled-oil'), '2937,3210,0:repellent');
 });
+
+test("Animal Magnetism: the cached undead tree Chop advances the magnet hand-in stage", (t) => {
+  const f = actor(t);
+  questStage(f, "animal_magnetism", 150);
+  f.inv.adds(I.MITHRIL_AXE, 1);
+  const definition = core.NpcDefinition.forId(core.NpcIdentifiers.COL_00FFFF_UNDEAD_TREE_COL);
+  assert.equal(definition.getName(), "<col=00ffff>Undead tree</col>");
+  assert.equal(definition.getActions()[0], "Chop");
+  const npc = new NPC(4418, new core.Location(3103, 3355, 0));
+  const event = { player: f.p, npc, npcId: 4418, clickType: 1, definition, handled: false };
+  PM.emitNpcInteraction(event);
+  assert.equal(event.handled, true, "the real cached NPC name must match the quest handler");
+  const quest = QuestRuntime.getRegisteredQuests().find((entry) => entry.key === "animal_magnetism");
+  assert.equal(quest.getStage(f.p), 160);
+  assert.equal(f.inv.getAmount(I.UNDEAD_TWIGS), 0, "the first chop fails and directs the player back to Ava");
+});
+
+// Wiki Undead twigs: they come from chopping the undead trees with a blessed axe "during or after" the quest.
+test("Animal Magnetism: Chop on the undead tree still works after the quest", (t) => {
+  const f = actor(t);
+  questStage(f, "animal_magnetism", 240);
+  f.inv.adds(I.BLESSED_AXE, 1);
+  t.mock.method(Math, "random", () => 0);
+  const definition = core.NpcDefinition.forId(core.NpcIdentifiers.COL_00FFFF_UNDEAD_TREE_COL);
+  const npc = new NPC(4418, new core.Location(3103, 3355, 0));
+  const event = { player: f.p, npc, npcId: 4418, clickType: 1, definition, handled: false };
+  PM.emitNpcInteraction(event);
+  assert.equal(event.handled, true);
+  assert.equal(f.inv.getAmount(I.UNDEAD_TWIGS), 1, "a blessed axe still cuts twigs after completion");
+  const quest = QuestRuntime.getRegisteredQuests().find((entry) => entry.key === "animal_magnetism");
+  assert.equal(quest.getStage(f.p), 240, "the stage is untouched");
+});
+
+// Wiki Undead twigs: "Each twig procured gives 5 Woodcutting experience."; none when no twig is cut.
+test("Animal Magnetism: each undead twig cut gives 5 Woodcutting XP, a held twig none", (t) => {
+  const f = actor(t);
+  questStage(f, "animal_magnetism", 240);
+  f.inv.adds(I.BLESSED_AXE, 1);
+  t.mock.method(Math, "random", () => 0);
+  const xp = [];
+  const skills = f.p.getSkillManager();
+  const add = skills.addExperiences.bind(skills);
+  t.mock.method(skills, "addExperiences", (skill, amount, ...rest) => { xp.push([skill, amount]); return add(skill, amount, ...rest); });
+  const definition = core.NpcDefinition.forId(core.NpcIdentifiers.COL_00FFFF_UNDEAD_TREE_COL);
+  const chop = () => PM.emitNpcInteraction({ player: f.p, npc: new NPC(4418, new core.Location(3103, 3355, 0)), npcId: 4418, clickType: 1, definition, handled: false });
+  chop();
+  assert.equal(f.inv.getAmount(I.UNDEAD_TWIGS), 1);
+  assert.equal(xp.length, 1);
+  assert.equal(xp[0][0], core.Skill.WOODCUTTING);
+  assert.equal(xp[0][1], 5);
+  chop();
+  assert.equal(f.inv.getAmount(I.UNDEAD_TWIGS), 1, "a held twig is not cut again");
+  assert.equal(xp.length, 1, "no XP without a twig");
+});
+
+// The Wiki's "Successfully chopping an undead tree" line says a twig was cut; with a twig held or no room, none is.
+test("Animal Magnetism: 'You cut some undead twigs.' plays only when a twig is given", (t) => {
+  const CUT = "You cut some undead twigs.";
+  const shown = (f) => {
+    const box = f.p.getDialogueManager().getCurrent();
+    return [...f.messages, typeof box?.getText === "function" ? box.getText() : undefined].includes(CUT);
+  };
+  const definition = core.NpcDefinition.forId(core.NpcIdentifiers.COL_00FFFF_UNDEAD_TREE_COL);
+  const chop = (f) => PM.emitNpcInteraction({ player: f.p, npc: new NPC(4418, new core.Location(3103, 3355, 0)), npcId: 4418, clickType: 1, definition, handled: false });
+  t.mock.method(Math, "random", () => 0);
+
+  const cut = actor(t);
+  questStage(cut, "animal_magnetism", 240);
+  cut.inv.adds(I.BLESSED_AXE, 1);
+  chop(cut);
+  assert.equal(cut.inv.getAmount(I.UNDEAD_TWIGS), 1);
+  assert.equal(shown(cut), true, "a cut twig is announced");
+
+  const held = actor(t);
+  questStage(held, "animal_magnetism", 240);
+  held.inv.adds(I.BLESSED_AXE, 1);
+  held.inv.adds(I.UNDEAD_TWIGS, 1);
+  chop(held);
+  assert.equal(held.inv.getAmount(I.UNDEAD_TWIGS), 1);
+  assert.equal(shown(held), false, "no twig is cut while one is held");
+
+  const full = actor(t);
+  questStage(full, "animal_magnetism", 240);
+  full.inv.adds(I.BLESSED_AXE, 1);
+  for (let slot = 1; slot < 28; slot++) full.inv.setItem(slot, new core.Item(I.LOGS, 1));
+  assert.equal(full.inv.getFreeSlots(), 0);
+  chop(full);
+  assert.equal(full.inv.getAmount(I.UNDEAD_TWIGS), 0);
+  assert.equal(shown(full), false, "a full inventory cuts nothing");
+});

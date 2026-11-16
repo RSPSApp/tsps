@@ -287,6 +287,14 @@ class ClansTest {
     }
 
     @Test
+    fun `a Group Ironman group's line goes on clan type 1 with its bar, for the Group tab`() {
+        val social = Social { sent += it }
+        assertTrue(social.chat(TspsChatMessage("|hello group", 41, "Ann", "Iron Pals", 1)))
+        val line = sent.single() as MessageClanChannel
+        assertEquals(listOf<Any>(1, "Ann", "|hello group"), listOf(line.clanType, line.name, line.message))
+    }
+
+    @Test
     fun `clan channel notices stay game messages, as the recording has them`() {
         for (type in listOf(43, 46)) {
             val notice = TspsChatMessage("Attempting to join...", type, "", "", -1)

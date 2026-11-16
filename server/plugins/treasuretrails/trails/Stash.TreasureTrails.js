@@ -5,10 +5,18 @@
 const Catalogue = require("./Catalogue.TreasureTrails");
 const Runtime = require("./Runtime.TreasureTrails");
 const { TIERS } = require("./Tiers.TreasureTrails");
+const Saws = require("../../items/Saws");
+const Hammers = require("../../items/Hammers");
 const BUILT_ATTRIBUTE = "treasure-trails:stash-built";
 const STORED_ATTRIBUTE = "treasure-trails:stash-stored";
 const NAILS_PER_UNIT = 10;
 const PLANKS_PER_UNIT = 2;
+// rsprox_transcripts/227/01768.txt ticks 10836-10837, 227/01858.txt ticks 10728-10729: on reaching the
+// unit, busy, human_poh_build and synth 938; a tick later the materials go, the XP and spam line come,
+// the unit's varbit is set and busy clears.
+const BUILD_SOUND = 938; // synth "poh_build_wood"
+const BUILD_TICKS = 1;
+const building = new WeakSet();
 let api;
 let core;
 let units;
@@ -49,29 +57,59 @@ function count(inventory, id) {
   return inventory.getItems().reduce((sum, item) => sum + (item && item.getId() === id ? item.getAmount() : 0), 0);
 }
 
-function build(player, unit) {
+/** The level, tools and materials a build needs; the first missing one's line, unless quiet. */
+function canBuild(player, unit, quiet = false) {
   const { stash } = unit.tier;
   const inventory = player.getInventory();
   const I = core.ItemIdentifiers;
+  const refuse = message => { if (!quiet) player.sendMessage(message); return false; };
   if (player.getSkillManager().getCurrentLevel(core.Skill.CONSTRUCTION) < stash.level) {
-    player.sendMessage(`You need a Construction level of ${stash.level} to build this STASH unit.`);
-    return;
+    // rsprox_transcripts/227/910209.txt, 910443.txt.
+    return refuse("You do not have the required construction level in order to build a STASH unit here.");
   }
   const nail = nails(inventory);
-  const hasSaw = [I.SAW, I.CRYSTAL_SAW, I.AMYS_SAW].some(id => count(inventory, id) > 0);
+  // Wiki (STASH): "any hammer and saw", carried or wielded (items/Hammers.js, items/Saws.js).
+  if (!Hammers.holdsHammer(core, player) || !Saws.holdsSaw(core, player)) {
+    // rsprox_transcripts/242/912100.txt; rev 227 (01768.txt ticks 10208, 14258) read "a saw and hammer".
+    return refuse("You need a saw and a hammer in order to build a STASH unit here.");
+  }
   // Master units also take a gold leaf (Wiki "STASH").
   const extra = (stash.extra ?? []).map(([name, amount]) => [I[name], amount]);
-  const extraText = extra.map(([id, amount]) => `, ${amount} ${core.ItemDefinition.forId(id).getName().toLowerCase()}`).join("");
-  if (count(inventory, I.HAMMER) < 1 || !hasSaw || count(inventory, I[stash.plank]) < PLANKS_PER_UNIT || nail == null ||
-      extra.some(([id, amount]) => count(inventory, id) < amount)) {
-    player.sendMessage(`You need a hammer, a saw, ${PLANKS_PER_UNIT} ${core.ItemDefinition.forId(I[stash.plank]).getName().toLowerCase()}s${extraText} and ${NAILS_PER_UNIT} nails of one metal to build this STASH unit.`);
-    return;
+  if (count(inventory, I[stash.plank]) < PLANKS_PER_UNIT || nail == null || extra.some(([id, amount]) => count(inventory, id) < amount)) {
+    // rsprox_transcripts/227/910308.txt, 910597.txt.
+    return refuse("You do not have the required materials to build a STASH unit here.");
   }
+  return true;
+}
+
+function build(player, unit) {
+  if (building.has(player) || !canBuild(player, unit)) return;
+  building.add(player);
+  const busy = core.CacheDefinitions.getVarbitId("busy");
+  if (busy != null) player.getPacketSender().sendVarbit(busy, 1);
+  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("human_poh_build")));
+  player.getPacketSender().sendSound(BUILD_SOUND, 1, 0);
+  core.TaskManager.submit(new core.CountdownTask(player, BUILD_TICKS, () => {
+    building.delete(player);
+    if (busy != null) player.getPacketSender().sendVarbit(busy, 0);
+    // Not recorded: the materials or tools gone by the next tick; nothing is built then.
+    if (player.isRegistered?.() === false || built(player).includes(unit.step.stash.locId) || !canBuild(player, unit, true)) return;
+    finishBuild(player, unit);
+  }));
+}
+
+function finishBuild(player, unit) {
+  const { stash } = unit.tier;
+  const inventory = player.getInventory();
+  const I = core.ItemIdentifiers;
+  const extra = (stash.extra ?? []).map(([name, amount]) => [I[name], amount]);
+  const nail = nails(inventory);
   inventory.delete(I[stash.plank], PLANKS_PER_UNIT);
   for (const [id, amount] of extra) inventory.delete(id, amount);
   inventory.delete(nail, NAILS_PER_UNIT);
   player.getSkillManager().addExperiences(core.Skill.CONSTRUCTION, stash.xp);
-  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("human_poh_build")));
+  // rsprox_transcripts/227/01768.txt: a spam line as it is built.
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You build a STASH unit.");
   player.setAttribute(BUILT_ATTRIBUTE, [...built(player), unit.step.stash.locId]);
   if (unit.varbit >= 0) player.getPacketSender().sendVarbit(unit.varbit, 1);
 }
@@ -127,7 +165,7 @@ function deposit(player, unit) {
     api.emitCustomEvent("equipment:changed", { player });
   }
   player.setAttribute(STORED_ATTRIBUTE, { ...stored(player), [unit.step.stash.locId]: taken.map(entry => entry.id) });
-  player.sendMessage("You store the items in the STASH unit.");
+  player.sendMessage("You deposit your items into the STASH unit.");
   // A STASH filled, by its tier ("fill a Medium STASH unit"): content that credits the deed.
   api.emitCustomEvent("stash:filled", { player, tier: unit.tier.name });
 }
@@ -135,18 +173,20 @@ function deposit(player, unit) {
 function withdraw(player, unit, items) {
   const inventory = player.getInventory();
   if (inventory.getFreeSlots() < items.length) {
-    player.sendMessage("You need more inventory space to take the items out of the STASH unit.");
+    // rsprox_transcripts/227/910403.txt tick 24413: two items stored, "you need at least 2 free slots".
+    player.sendMessage(`You do not have enough free space to withdraw your items from the STASH unit; you need at least ${items.length} free slots.`);
     return;
   }
   for (const id of items) inventory.adds(id, 1);
   const remaining = { ...stored(player) };
   delete remaining[unit.step.stash.locId];
   player.setAttribute(STORED_ATTRIBUTE, remaining);
-  player.sendMessage("You take the items out of the STASH unit.");
+  player.sendMessage("You withdraw your items from the STASH unit.");
 }
 
 function interact(event) {
   if (event.handled) return;
+  if (noticeboard(event)) return;
   const unit = stashes().get(event.objectId);
   if (!unit) return;
   event.handled = true;
@@ -159,6 +199,62 @@ function interact(event) {
   const items = stored(player)[event.objectId];
   if (Array.isArray(items) && items.length) withdraw(player, unit, items);
   else deposit(player, unit);
+}
+
+/**
+ * The STASH noticeboard in Watson's house (hidey_hole_noticeboard, Read) charts every unit, built
+ * and filled (rsprox.net rec 2804, rev 229, tick 5140). The cache's hidey_build script reads the
+ * built bits from the units' own varbits (hh_constructed_*, sent at login and on building) and the
+ * filled state two ways: enum 1525's units from hh_inv (576), the stored items in that unit's
+ * slot range, and enum 1440's units from the three bitmask arguments (coord x = word, z = bit).
+ * Live sends hh_inv in full, runs toplevel_mainmodal_open, opens hidey_holes (493) in the main
+ * modal and runs hidey_build; hh_inv stops transmitting when the board closes.
+ */
+const HIDEY_BUILD_SCRIPT = 1475;
+const MAINMODAL_OPEN_SCRIPT = 2524;
+const INV_SLOTS_ENUM = 1525;
+const FILLED_BITS_ENUM = 1440;
+
+/** A packed cache coord as [x, z]: here the hh_inv slot range or the bitmask word and bit. */
+function coordXZ(coord) {
+  return [(coord >> 14) & 0x3fff, coord & 0x3fff];
+}
+
+function readNoticeboard(player) {
+  const C = core.CacheDefinitions;
+  const filled = stored(player);
+  const isFilled = locId => Array.isArray(filled[locId]) && filled[locId].length > 0;
+  const slots = [];
+  let capacity = 0;
+  const slotUnits = C.getEnumValues(INV_SLOTS_ENUM);
+  for (const [locId, coord] of slotUnits) {
+    const [first, last] = coordXZ(Number(coord));
+    capacity = Math.max(capacity, last + 1);
+    if (!isFilled(locId)) continue;
+    filled[locId].slice(0, last - first + 1).forEach((id, index) => { slots[first + index] = { id, amount: 1 }; });
+  }
+  const words = [0, 0, 0];
+  for (const [locId, coord] of C.getEnumValues(FILLED_BITS_ENUM)) {
+    // hh_get_status reads an enum 1525 unit from hh_inv only, never its 1440 bit; and two of those
+    // bits (50739's word 2 bit 31, 34953's word 3 bit 12) are what it reads for 29032 and 29057.
+    if (slotUnits.has(locId)) continue;
+    const [word, bit] = coordXZ(Number(coord));
+    if (isFilled(locId) && word >= 1 && word <= words.length) words[word - 1] |= 1 << bit;
+  }
+  const board = C.getInterfaceId("hidey_holes");
+  const sender = player.getPacketSender();
+  sender.sendInventory(C.getInventoryId("hh_inv"), capacity, slots, board);
+  sender.sendInterfaceScript(MAINMODAL_OPEN_SCRIPT, [-1, -1]);
+  sender.sendInterface(board);
+  sender.sendInterfaceScript(HIDEY_BUILD_SCRIPT, words);
+}
+
+/** The noticeboard's Read; true when it was the board. */
+function noticeboard(event) {
+  if (event.objectId !== core.CacheDefinitions.getLocId("hidey_hole_noticeboard")) return false;
+  event.handled = true;
+  readNoticeboard(event.player);
+  return true;
 }
 
 function restore({ player }) {
@@ -183,4 +279,4 @@ module.exports = function attachStash(pluginApi) {
   });
 };
 
-Object.assign(module.exports, { BUILT_ATTRIBUTE, STORED_ATTRIBUTE, stashes, interact, restore });
+Object.assign(module.exports, { BUILT_ATTRIBUTE, STORED_ATTRIBUTE, stashes, interact, restore, noticeboard, readNoticeboard });

@@ -16,11 +16,31 @@ function methodClass() {
   const config = data();
   const magic = config.magic;
 
+  // RSProx 2966 sends the impact (or splash) and its sound at the cast, delayed to the projectile's end cycle.
+  function sendImpact(hit, delay) {
+    const target = hit.getTarget();
+    if (!hit.isAccurate()) {
+      const splash = MagicCombatMethod.SPLASH_GRAPHIC;
+      target.performGraphic(new Graphic(splash.getId(), delay, splash.getHeight()));
+      return;
+    }
+    target.performGraphic(new Graphic(magic.impactGraphic, delay, GraphicHeight.SURGE_IMPACT));
+    Sounds.sendSound(target, new Sound(magic.impactSound, 1, delay, 0));
+  }
+
+  // RSProx 1702 (rev 226, ~60 casts) and 2966: the splat lands 2/3/3/3/4 ticks after a cast at 1-5 tiles,
+  // one tick later than the player magic hit delay 1 + floor((1 + distance) / 3), and a tick earlier than
+  // Projectile.ticksToLand(endCycle) at 3-4 tiles.
+  function magicHitDelay(distance) {
+    return 2 + Math.floor((1 + distance) / 3);
+  }
+
   DruidCombat = class UndeadDruidCombat extends CombatMethod {
     constructor() {
       super();
       this.style = null;
       this.endCycle = 0;
+      this.distance = 0;
     }
 
     // A hybrid has magic reach until the attack starts; choose melee only when it is truly reachable.
@@ -50,6 +70,7 @@ function methodClass() {
       npc.performGraphic(cast);
 
       const distance = CombatPosition.projectileDistance(npc, target);
+      this.distance = distance;
       this.endCycle = magic.startCycle + distance * 10;
       Projectile.createProjectile(
         npc, target, magic.projectile, magic.startCycle, this.endCycle, magic.startHeight, magic.endHeight,
@@ -63,19 +84,11 @@ function methodClass() {
 
     hits(npc, target) {
       const melee = this.style === CombatType.MELEE;
-      const delay = melee ? 1 : Projectile.ticksToLand(this.endCycle);
+      const delay = melee ? 1 : magicHitDelay(this.distance);
       const hit = new PendingHit(npc, target, this, delay);
       CombatFactory.applyStyleDamage(hit, melee ? config.melee.maxHit : magic.maxHit);
+      if (!melee) sendImpact(hit, this.endCycle);
       return [hit];
-    }
-
-    handleAfterHitEffects(hit) {
-      if (hit.getCombatType() !== CombatType.MAGIC) return;
-      const target = hit.getTarget();
-      target.performGraphic(hit.isAccurate()
-        ? new Graphic(magic.impactGraphic, GraphicHeight.SURGE_IMPACT)
-        : MagicCombatMethod.SPLASH_GRAPHIC);
-      if (hit.isAccurate()) Sounds.sendSound(target, new Sound(magic.impactSound, 1, 0, 0));
     }
   };
   return DruidCombat;

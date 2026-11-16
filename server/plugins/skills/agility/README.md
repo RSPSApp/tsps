@@ -19,9 +19,12 @@ Each entry in `agility-shortcuts.json`'s `shortcuts`:
 | `object` | Cache loc id, or a list of ids (`yarn dump:loc <id\|name>` lists where they are placed) |
 | `at` | Optional: the loc's tile, or a list of tiles, when one id is several shortcuts |
 | `level`, `xp` | Agility level and experience (Wiki) |
-| `levelMessage` | Optional: what a player below `level` gets instead of the generic "You need an Agility level of at least ..." game message; a message, `{ "spam": text }`, `{ "mesbox": text }` or `{ "itembox": { "item": id, "text": text } }` |
+| `levelMessage` | Optional: what a player below `level` gets instead of the generic "You need an Agility level of at least ..." game message; a message, `{ "spam": text }`, `{ "mesbox": text }` or `{ "itembox": { "item": id, "text": text } }`, or a list of them sent in turn |
+| `refusalTiming` | Optional `"click"`: a player below `level` is refused from where they are as soon as the loc is in reach (within 10 tiles with a clear line), an approach op, instead of on arrival; captured for the Fremennik Slayer Dungeon and Taverley Dungeon strange floors and the Shilo Village stepping stone. `"arrival"` (the default) refuses at the obstacle |
+| `busy` | Optional `true`: the client's BUSY varbit (12393) is 1 while the crossing plays, as captured, and 0 as it ends |
 | `keepAnimation` | Optional `true`: the last animation plays out after a successful crossing instead of being reset on landing |
 | `start`, `end` | Optional messages at the start and on success |
+| `confirm` | Optional `{ "mesbox": text }`: a message box shown first; the crossing starts (and its requirements are checked again) when the player continues it |
 | `render` | Optional walk animation for the whole crossing (`"BALANCE_WALK"`) |
 | `route` | Optional tile the player walks to before starting |
 | `requires` | Optional: alternatives, any one of which lets the player use it (below). Without it, `level` is the Agility needed |
@@ -61,7 +64,7 @@ With `low` and `high`, success is the OSRS skilling roll the Wiki's success char
 ### Steps
 
 The runner's steps (see the top of `ObstacleRunner.Agility.js`): `anim`, `render`, `walk`, `move`, `tele`,
-`wait`, `face`, `faceDir`, `hit`, `msg`, `sound`, `areaSound`, `gfx`, `objAnim`, `varbit`, `complete`. A `msg`,
+`wait`, `face`, `faceDir`, `hit`, `msg`, `sound`, `areaSound`, `gfx`, `objAnim`, `varbit`, `fade` (`"out"` or `"in"`: the screen fade, closed as the crossing ends), `complete`. A `msg`,
 and an obstacle's `start` and `end`, is a game message, or `{ "spam": text }` or `{ "mesbox": text }`. In the data:
 
 - **Animations by name**, from `Constants.Agility.js` (`Anim`) and `shortcuts/Builders.Agility.js` (`ShortcutAnim`):

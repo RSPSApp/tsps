@@ -137,7 +137,7 @@ function createGorillaCombat() {
         sound(target, MAGIC.castSound);
         sound(target, MAGIC.impactSound, end);
       } else {
-        target.performGraphic(new Graphic(RANGED.impact, end));
+        target.performGraphic(Graphic.delayed(RANGED.impact, end));
         sound(target, RANGED.impactSound, end);
       }
     }

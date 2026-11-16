@@ -28,6 +28,8 @@ import { Animation } from "../../model/Animation";
 import { EffectTimer } from "../../model/EffectTimer"
 import { Flag } from "../../model/Flag";
 import { Graphic } from "../../model/Graphic";
+import { Sound } from "../../Sound";
+import { Sounds } from "../../Sounds";
 import { GraphicHeight } from "../../model/GraphicHeight";
 import { Item } from "../../model/Item";
 import { Location } from "../../model/Location";
@@ -53,6 +55,7 @@ import { PoisonType } from "../../task/impl/CombatPoisonEffect";
 import { CombatConstants } from "./CombatConstants";
 import { Wilderness } from "../wilderness/Wilderness";
 import { PluginManager } from "../../../plugins/PluginManager";
+import type { PluginCanAttackDecision } from "../../../plugins/PluginTypes";
 import { applyIncomingDamageModifiers } from "./EquipmentEffects";
 import { ServerPerf } from "../../../util/ServerPerf";
 import { World } from "../../World";
@@ -271,12 +274,7 @@ export class CombatFactory {
             // Check if victim is is using correct protection prayer
             if (PrayerHandler.isActivated(victim, PrayerHandler.getProtectingPrayer(prayerType))) {
 
-                // Apply the damage reduction mod
-                if (entity.isNpc()) {
-                    hitDamage.multiplyDamage(CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_NPCS);
-                } else {
-                    hitDamage.multiplyDamage(CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_PLAYERS);
-                }
+                hitDamage.multiplyDamage(CombatFactory.protectionPrayerFactor(entity, victim));
             }
         }
         return hitDamage;
@@ -308,6 +306,17 @@ export class CombatFactory {
     }
 
     /**
+     * What a protection prayer leaves of a hit it protects against. Wiki (Protection prayers): they "block all
+     * damage in most circumstances against NPCs", and an NPC praying (PrayerHandler.activatePrayerPrayerId on the
+     * NPC, which also draws its overhead) blocks a player's hit the same way; only player against player keeps 60%.
+     */
+    public static protectionPrayerFactor(attacker: Mobile, victim: Mobile): number {
+        return attacker?.isNpc?.() || victim?.isNpc?.()
+            ? CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_NPCS
+            : CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_PLAYERS;
+    }
+
+    /**
      * The victim's protection prayer against this hit, once. Wiki (Prayer flicking): it must be on "the tick your enemy
      * attacks", so addPendingHit reads it when the attack is queued (after the method and plugins have finalized the
      * hit, and before its XP), except an NPC's hit on a player whose turn this tick is still to come: HitQueue.process
@@ -329,9 +338,7 @@ export class CombatFactory {
         if (!bypassProtection && protectionType !== undefined) {
             const prayer = PrayerHandler.getProtectingPrayer(protectionType);
             if (PrayerHandler.isActivated(victim, prayer)) {
-                const reduction = attacker.isNpc()
-                    ? CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_NPCS
-                    : CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_PLAYERS;
+                const reduction = CombatFactory.protectionPrayerFactor(attacker, victim);
                 for (const damage of hits) damage.multiplyDamage(reduction);
             }
         }
@@ -701,6 +708,34 @@ export class CombatFactory {
         return alwaysMulti(attacker) || alwaysMulti(target) || AreaManager.inMulti(target);
     }
 
+    /**
+     * Pure predicate: the target is an NPC owned by this player, the slayer plugin says it is a superior, and the
+     * area is single-way (not multi). Fail-closed: with no listener the answer is false (old behaviour).
+     */
+    public static isOwnSuperiorInSingleWay(attacker: Mobile, target: Mobile): boolean {
+        if (!attacker.isPlayer() || !target.isNpc()) return false;
+        if (target.getAsNpc().getOwner() !== attacker.getAsPlayer()) return false;
+        if (AreaManager.inMulti(attacker) || AreaManager.inMulti(target)) return false;
+        const request = { npc: target, superior: false };
+        PluginManager.emitCustomEvent("slayer:is-superior", request);
+        return request.superior === true;
+    }
+
+    /**
+     * The first real swing at an own superior in single-way combat: the monster that was attacking this player stops
+     * (its combat is reset with the existing Combat.reset) and the player is no longer marked as attacked by it, so
+     * auto-retaliation answers the superior. Hits it already has in flight still land. Idempotent (a second call finds
+     * no attacker), only for the own-superior single-way case, and only when that monster targets this player.
+     */
+    public static releaseStandardAttackers(attacker: Mobile, target: Mobile): void {
+        if (!CombatFactory.isOwnSuperiorInSingleWay(attacker, target)) return;
+        const standard = attacker.getCombat().getAttacker();
+        // Only a monster is released: another player attacking this player is never reset or dropped.
+        if (!standard || !standard.isNpc() || standard === target || standard.getCombat().getTarget() !== attacker) return;
+        standard.getCombat().reset();
+        attacker.getCombat().setUnderAttack(null);
+    }
+
     /** Target/area ownership checks safe to run before pursuit; no ammo or runes are consumed. */
     public static canAttackPermission(
         attacker: Mobile,
@@ -708,6 +743,7 @@ export class CombatFactory {
         skipTargetValidation: boolean = false,
         method?: CombatMethod
     ): CanAttackResponse {
+        CombatFactory.pluginDenialMessages.delete(attacker);
         if (!skipTargetValidation && !ServerPerf.measurePhase(
             "combat.process.can_attack.valid_target",
             () => CombatFactory.validTarget(attacker, target)
@@ -751,23 +787,41 @@ export class CombatFactory {
             const hitQueueFree = (mobile: Mobile, except: Mobile) => mobile.isNpc() && except.isPlayer()
                 ? mobile.getCombat().getHitQueue().isEmptyButFreeNpcs(except)
                 : mobile.getCombat().getHitQueue().isEmpty(except);
+            // A player may attack their own superior slayer monster while another monster attacks them, in
+            // single-way combat (Wiki: Superior slayer monster). Only the busy-with-another-attacker clause is
+            // lifted; the hit queue and the target checks below still apply.
+            const ownSuperior = CombatFactory.isOwnSuperiorInSingleWay(attacker, target);
             if (
                 ServerPerf.measurePhase("combat.process.can_attack.attacker_busy", () =>
                     (
+                        !(ownSuperior && attacker.getCombat().getAttacker()?.isNpc() === true) &&
                         CombatFactory.isBeingAttacked(attacker) &&
                         attacker.getCombat().getAttacker() != target &&
                         attacker.getCombat().getAttacker().getHitpoints() > 0 &&
                         lockedBy(attacker)
-                    ) || !attacker.getCombat().getHitQueue().isEmpty(target)
+                    ) || !(ownSuperior
+                        // Hits already in flight from unowned monsters (the standard monster) do not hold the own
+                        // superior's attack; hits from players and owned monsters still do.
+                        ? attacker.getCombat().getHitQueue().isEmptyButFreeNpcs(target)
+                        : attacker.getCombat().getHitQueue().isEmpty(target))
                 )
             ) {
                 return CanAttackResponse.ALREADY_UNDER_ATTACK;
             }
 
+            // The superior attacking back at its owner: a standard monster the owner's own superior released still tags
+            // the owner (its hit was in flight and landed after the release), but it no longer targets the owner, so it
+            // does not hold the owner. Only this case; the owner's other busy checks are unchanged.
+            const releasedStandardTag = (mobile: Mobile) => {
+                const by = mobile.getCombat().getAttacker();
+                return by != null && by.isNpc() && by.getAsNpc().getOwner() == null && by.getCombat().getTarget() !== mobile;
+            };
+            const superiorOfTarget = attacker.isNpc() && target.isPlayer() && CombatFactory.isOwnSuperiorInSingleWay(target, attacker);
             // Here we check if we are already in combat with another entity.
             if (
                 ServerPerf.measurePhase("combat.process.can_attack.target_busy", () =>
-                    (CombatFactory.isBeingAttacked(target) && target.getCombat().getAttacker() != attacker && lockedBy(target)) ||
+                    (CombatFactory.isBeingAttacked(target) && target.getCombat().getAttacker() != attacker && lockedBy(target) &&
+                        !(superiorOfTarget && releasedStandardTag(target))) ||
                     !hitQueueFree(target, attacker)
                 )
             ) {
@@ -776,9 +830,10 @@ export class CombatFactory {
         }
 
         // Check plugin and area attack policy.
-        const areaResponse = duelActive
-            ? (PluginManager.emitCanAttack(attacker, target, method) === false
-                ? CanAttackResponse.CANT_ATTACK_IN_AREA : CanAttackResponse.CAN_ATTACK)
+        const duelDecision = duelActive ? PluginManager.emitCanAttackDecision(attacker, target, method) : null;
+        const areaResponse = duelDecision
+            ? (duelDecision.allow === false
+                ? CombatFactory.pluginDenial(attacker, duelDecision) : CanAttackResponse.CAN_ATTACK)
             : ServerPerf.measurePhase(
                 "combat.process.can_attack.policy",
                 () => CombatFactory.canAttackByPolicy(attacker, target, method)
@@ -834,14 +889,39 @@ export class CombatFactory {
         return CanAttackResponse.CAN_ATTACK;
     }
 
+    /** A plugin refusal's `message`, by attacker, for Combat to send on the player's own attack. */
+    private static readonly pluginDenialMessages = new WeakMap<Mobile, string>();
+
+    /** The response a refusing onCanAttack handler named (PluginCanAttackEvent.response), else CANT_ATTACK_IN_AREA. */
+    private static pluginDenial(attacker: Mobile, decision: PluginCanAttackDecision): CanAttackResponse {
+        const named = decision.response != null
+            ? CanAttackResponse[decision.response as keyof typeof CanAttackResponse] : undefined;
+        if (typeof named === "number" && named !== CanAttackResponse.CAN_ATTACK) return named;
+        if (decision.message) CombatFactory.pluginDenialMessages.set(attacker, decision.message);
+        return CanAttackResponse.CANT_ATTACK_IN_AREA;
+    }
+
+    /**
+     * The message the refusing plugin gave the attacker's last permission check, once (Combat sends
+     * it with CANT_ATTACK_IN_AREA). Every check clears it first, so a passive one never leaves it behind.
+     */
+    public static takePluginDenialMessage(attacker: Mobile): string | null {
+        const message = CombatFactory.pluginDenialMessages.get(attacker) ?? null;
+        CombatFactory.pluginDenialMessages.delete(attacker);
+        return message;
+    }
+
     public static canAttackByPolicy(attacker: Mobile, target: Mobile, method?: CombatMethod): CanAttackResponse {
+        CombatFactory.pluginDenialMessages.delete(attacker);
         if (CombatPosition.area(attacker, target) !== CombatPosition.area(target, attacker)) {
             return CanAttackResponse.CANT_ATTACK_IN_AREA;
         }
         // Across a boat's deck only content decides (sailing allows ranged and magic at sea
         // creatures): with no plugin saying yes, a deck and the shore can't fight.
         if (CombatPosition.acrossDeck(attacker, target)) {
-            return PluginManager.emitCanAttack(attacker, target, method) === true
+            const decision = PluginManager.emitCanAttackDecision(attacker, target, method);
+            if (decision.allow === false) return CombatFactory.pluginDenial(attacker, decision);
+            return decision.allow === true
                 ? CanAttackResponse.CAN_ATTACK
                 : CanAttackResponse.CANT_ATTACK_IN_AREA;
         }
@@ -857,8 +937,9 @@ export class CombatFactory {
             ? PluginManager.callArea(targetArea, "canAttack", attacker, target, method) : null;
         if (targetCanAttack === false) return CanAttackResponse.CANT_ATTACK_IN_AREA;
         const areaCanAttack = attackerCanAttack ?? targetCanAttack;
-        const globalCanAttack = PluginManager.emitCanAttack(attacker, target, method);
-        if (globalCanAttack === false) return CanAttackResponse.CANT_ATTACK_IN_AREA;
+        const decision = PluginManager.emitCanAttackDecision(attacker, target, method);
+        if (decision.allow === false) return CombatFactory.pluginDenial(attacker, decision);
+        const globalCanAttack = decision.allow;
         const pluginCanAttack = areaCanAttack ?? globalCanAttack;
         if (pluginCanAttack === true) {
             return CanAttackResponse.CAN_ATTACK;
@@ -898,7 +979,7 @@ export class CombatFactory {
         if (candidate.getHitpoints() <= 0) {
             return false;
         }
-        if (spellRadius !== undefined && !candidate.getLocation().isWithinDistance(primaryTarget.getLocation(), spellRadius)) {
+        if (spellRadius !== undefined && !CombatFactory.footprintWithin(primaryTarget.getLocation(), candidate, spellRadius)) {
             return false;
         }
         if (!AreaManager.inMulti(candidate)) {
@@ -914,6 +995,18 @@ export class CombatFactory {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Wiki (Ancient Magicks): around a target's south-west tile, a large monster is caught when any of its
+     * tiles is inside the area, not only its own south-west tile.
+     */
+    private static footprintWithin(origin: Location, candidate: Mobile, radius: number): boolean {
+        const at = candidate.getLocation();
+        if (at.getZ() !== origin.getZ()) return false;
+        const size = Math.max(1, candidate.getSize());
+        const gap = (value: number, from: number) => Math.max(0, from - value, value - (from + size - 1));
+        return gap(origin.getX(), at.getX()) <= radius && gap(origin.getY(), at.getY()) <= radius;
     }
 
     public static addPendingHit(qHit: PendingHit) {
@@ -945,6 +1038,10 @@ export class CombatFactory {
         qHit.capDamageToBudget();
 
         if (attacker.isPlayer()) {
+            // "combat:hit-queued" { player, target, hit }: a player's hit, final damage, on the attack's
+            // tick (before the target's hit delay). Effects that live shows with the swing use it.
+            PluginManager.emitCustomEvent("combat:hit-queued", { player: attacker.getAsPlayer(), target, hit: qHit });
+
             // Reward the player experience after plugins have finalized this hit.
             if (qHit.rewardsExperience()) CombatFactory.rewardExp(attacker.getAsPlayer(), qHit);
 
@@ -1154,8 +1251,12 @@ export class CombatFactory {
         // Mark under-attack before retaliation scheduling so retaliatory attacks
         // can correctly detect "already attacked by this target" and avoid
         // incorrectly applying skulls to the defender.
-        target.getCombat().setUnderAttack(attacker);
-        CombatFactory.handleRetaliation(attacker, target);
+        // A bystander (an always-multi minion such as a nechryael's death spawn) hurts without
+        // engaging: no auto-retaliate against it and no logout hold (Wiki: Death spawn).
+        if (attacker.hasFlag?.(CombatFactory.BYSTANDER_FLAG) !== true) {
+            target.getCombat().setUnderAttack(attacker);
+            CombatFactory.handleRetaliation(attacker, target);
+        }
         target.getCombat().addDamage(attacker, damage);
 
         if (target.isPlayerBot()) {
@@ -1470,6 +1571,8 @@ export class CombatFactory {
         return typeof at === "number" && World.getProcessCycle() - at < CombatFactory.ATTACKED_BY_TICKS;
     }
 
+    /** Entity flag: hits from this attacker neither start the target's retaliation nor hold its logout. */
+    public static readonly BYSTANDER_FLAG = "combat:bystander";
     public static readonly PVP_SKULL_SECONDS = 30 * 60;
     /** Wiki: an amulet of avarice skull lasts 20 minutes after it comes off; a cape of skulls 20 from putting it on. */
     public static readonly ITEM_SKULL_SECONDS = 20 * 60;
@@ -1635,9 +1738,19 @@ export class CombatFactory {
             return;
         }
 
-        // Large NPCs shrug freezes off, unless one opts in (Callisto and Artio can be frozen) or the
-        // Wiki gives them a partial resistance, which says they can be frozen.
-        if (character.getSize() > 2 && !character.hasFlag("combat:freezable") && resistance <= 0) {
+        // Size alone does not resist a freeze: the Wiki's Freeze page has no such rule, and large
+        // bosses can be frozen (General Graardor's "Ourg Freezer" task: "Kill General Graardor whilst
+        // he is immobilized"). An NPC whose own page makes it immune carries "combat:unfreezable"
+        // (Tekton, "immune to binding effects"; DT2's Ancient Guardian).
+        if (character.hasFlag?.("combat:unfreezable")) {
+            return;
+        }
+
+        // The target area owns movement restrictions here. A veto precedes all new freeze
+        // side effects; a neutral/absent policy keeps the existing duration and aftermath path.
+        const area = character.getArea();
+        if (typeof area?.canFreeze === "function"
+            && PluginManager.callArea(area, "canFreeze", character, source) === false) {
             return;
         }
 
@@ -1682,10 +1795,16 @@ export class CombatFactory {
             return;
         }
         player.performGraphic(new Graphic(436));
+        // The heal's own sound (synth 2681, redemption_heal), with the graphic and the heal.
+        // The graphic's animation (seq 2596) carries no sound, so nothing played here before.
+        Sounds.sendSound(player, Sound.PRAYER_REDEMPTION_HEAL);
         skills.setCurrentLevels(Skill.PRAYER, 0);
         skills.setCurrentLevels(Skill.HITPOINTS, hitpoints + Math.floor(skills.getMaxLevel(Skill.PRAYER) / 4));
         player.sendMessage("You have run out of Prayer points!");
-        PrayerHandler.deactivatePrayers(player);
+        // One switch-off sound, as before with Redemption alone, and not one more on the
+        // same tick for every other prayer that was on.
+        PrayerHandler.deactivatePrayers(player, false);
+        Sounds.sendSound(player, Sound.PRAYER_TURN_OFF);
     }
 
     /** Smite drains a quarter of the damage dealt from the target's Prayer, rounded down (Wiki: Smite). */
@@ -1729,7 +1848,18 @@ export class CombatFactory {
 
         // rsprox_transcripts/229/02760.txt:7555 (and 227/00096:101707): a bow with nothing in the ammo slot.
         const NO_AMMO = "There is no ammo left in your quiver.";
+        // rsprox 230/00356.txt:8615 "You can't use that ammo with your crossbow.", 227/00550.txt:395792 "...your bow.".
+        const wrongAmmo = () => {
+            const weaponName = String(player.getEquipment().getItems()[Equipment.WEAPON_SLOT].getDefinition().getName() ?? "");
+            return reject(`You can't use that ammo with your ${/crossbow|ballista/i.test(weaponName) ? "crossbow" : "bow"}.`);
+        };
         if (ammoData == null) {
+            // Something in the ammo slot that no launcher fires (a blessing, an unlit fire arrow, a grapple) is the
+            // wrong ammo, not none: rsprox 237/01156.txt:729513, a crossbow with an Honourable blessing.
+            const slotItem = player.getEquipment().getItems()[Equipment.AMMUNITION_SLOT];
+            if (!CombatFactory.usesWeaponSlotAmmo(rangedWeapon) && slotItem != null && slotItem.getId() !== -1 && slotItem.getAmount() > 0) {
+                return wrongAmmo();
+            }
             return reject(NO_AMMO);
         }
 
@@ -1762,10 +1892,8 @@ export class CombatFactory {
             }
         }
 
-        // rsprox 230/00356.txt:8615 "You can't use that ammo with your crossbow.", 227/00550.txt:395792 "...your bow.".
         if (!properReq) {
-            const weaponName = String(player.getEquipment().getItems()[Equipment.WEAPON_SLOT].getDefinition().getName() ?? "");
-            return reject(`You can't use that ammo with your ${/crossbow|ballista/i.test(weaponName) ? "crossbow" : "bow"}.`);
+            return wrongAmmo();
         }
 
         return true;
@@ -1823,8 +1951,9 @@ export class CombatFactory {
                 : player.getAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE) === weaponId
                     ? Number(player.getAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE) ?? 0)
                     : 0;
-            player.setAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE, null);
-            player.setAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE, null);
+            // Cleared, not nulled: a null is still saved.
+            player.setAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE, undefined);
+            player.setAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE, undefined);
             let currentWeaponId = weaponId;
             for (let shot = 0; shot < amount; shot++) {
                 // Content may spare the charge (a league relic): the question every charged weapon asks.
@@ -1848,7 +1977,8 @@ export class CombatFactory {
                 weaponItem.setId(nextWeaponId);
             }
 
-            weaponItem.setMetaValue(CombatFactory.CRYSTAL_BOW_SHOTS_META, shotsInStage);
+            // A stage's start carries no count, so a bow there (a reverted one too) stacks with plain ones.
+            weaponItem.setMetaValue(CombatFactory.CRYSTAL_BOW_SHOTS_META, shotsInStage > 0 ? shotsInStage : undefined);
             player.getEquipment().refreshItems();
             BonusManager.update(player);
             player.getUpdateFlag().flag(Flag.APPEARANCE);

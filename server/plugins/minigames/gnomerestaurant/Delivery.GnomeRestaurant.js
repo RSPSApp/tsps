@@ -8,6 +8,8 @@
  *
  * Hard tip rates come from the wiki's drop-rate table. Rates the wiki leaves as
  * "Common/Uncommon/Rare" (runes, bolts, pure essence) are approximations, marked in the data.
+ * Content may make the `unique` rows (the goggles and the scarf) commoner ("minigame:chance"
+ * kind "unique"); the other rows then share what is left, so a tip is still one row.
  */
 
 const Orders = require("./Orders.GnomeRestaurant");
@@ -37,13 +39,26 @@ function eligibleRewards(npcName) {
   return DATA.rewards.filter((entry) => !entry.only || entry.only.includes(npcName));
 }
 
-function rollHardReward(npcName, rng = Math.random) {
+/** Each row's weight (its rate), the `unique` rows `uniqueMultiplier` times theirs at the others' expense. */
+function tipWeights(entries, uniqueMultiplier) {
+  const rates = entries.map((entry) => entry.rate[0] / entry.rate[1]);
+  if (!(uniqueMultiplier > 1)) return rates;
+  const total = rates.reduce((sum, rate) => sum + rate, 0);
+  const unique = rates.reduce((sum, rate, index) => sum + (entries[index].unique ? rate : 0), 0);
+  if (unique <= 0 || unique >= total) return rates;
+  const raised = Math.min(total, unique * uniqueMultiplier);
+  const common = (total - raised) / (total - unique);
+  return rates.map((rate, index) => rate * (entries[index].unique ? raised / unique : common));
+}
+
+function rollHardReward(npcName, rng = Math.random, uniqueMultiplier = 1) {
   const entries = eligibleRewards(npcName);
-  const total = entries.reduce((sum, entry) => sum + entry.rate[0] / entry.rate[1], 0);
+  const weights = tipWeights(entries, uniqueMultiplier);
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
   let roll = rng() * total;
   let chosen = entries[entries.length - 1];
-  for (const entry of entries) {
-    roll -= entry.rate[0] / entry.rate[1];
+  for (const [index, entry] of entries.entries()) {
+    roll -= weights[index];
     if (roll < 0) {
       chosen = entry;
       break;
@@ -66,7 +81,9 @@ function giveTip(player, session) {
     player.sendMessage(`You are given ${coins} coins as a tip.`);
     return;
   }
-  const reward = rollHardReward(session.npcName);
+  const unique = { player, minigame: "gnome-restaurant", kind: "unique", multiplier: 1 };
+  api.emitCustomEvent("minigame:chance", unique);
+  const reward = rollHardReward(session.npcName, Math.random, Math.max(1, Number(unique.multiplier) || 1));
   for (const item of reward.items) {
     // Several rows are unnoted and many (pure essence is 51-97): what has no slot lands under the player.
     inventory.forceAdd(player, new core.Item(item.id, item.amount));

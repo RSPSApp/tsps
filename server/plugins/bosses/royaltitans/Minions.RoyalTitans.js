@@ -8,11 +8,24 @@
  * mage set effect x1.45; Wind Strike always hits. A failed roll leaves the engine's own roll
  * to decide (there is no forced miss). Row tiles clear to any opposite-element spell;
  * anything else (or the wrong element) shows the hint message and does nothing.
+ *
+ * Custom pacing: a spell that clears a row tile delays the caster's next attack by 1 tick
+ * instead of its usual 5, and ends the attack on that tile (an autocaster moves on rather than
+ * casting at it again while the first spell flies). Each elemental the cast will kill takes 1 tick off the caster's
+ * attack delay as it is cast (all three of a trio: 5 - 3 = 2 ticks).
+ *
+ * Splash (Wiki: Royal Titans/Strategies): water and fire spells "uniquely attack in a 3x3 area
+ * around its primary target during this fight". Each other elemental there takes the spell with
+ * its own roll, under the same accuracy and weakness rules as the primary target.
  */
 const Shared = require("./Shared.RoyalTitans");
 const CombatAchievements = require("./CombatAchievements.RoyalTitans");
 
 const VOID_MAGE_SET_MULTIPLIER = 1.45;
+/** Attack delay after a spell that clears a row tile (custom: a normal cast is 5). */
+const ROW_CLEAR_ATTACK_SPEED = 1;
+/** Elementals within this many tiles of a water or fire spell's target take the spell too (Wiki: 3x3). */
+const SPLASH_RADIUS = 1;
 /** A cast spell is remembered this long, for the hit that lands after the selection cleared. */
 const RECENT_CAST_TICKS = 6;
 
@@ -121,6 +134,20 @@ function selectedSpell(player) {
   return combat.getSelectedSpell() ?? combat.getPreviousCast();
 }
 
+/**
+ * The spell a cast at `target` actually used: the one on its hit still in flight. The selection
+ * has moved on by then (a hand cast clears to the autocast spell, or the player picks another),
+ * so it must not decide what the cast was.
+ */
+function castSpellOf(player, target) {
+  const hits = target?.getCombat?.()?.getHitQueue?.()?.getPendingHitsFrom?.(player) ?? [];
+  for (let i = hits.length - 1; i >= 0; i--) {
+    const spell = hits[i].getSpell?.();
+    if (spell) return spell;
+  }
+  return selectedSpell(player);
+}
+
 /** The spell rolled within the last few ticks, if the cast is still in flight. */
 function recentSpell(player) {
   const cast = recentCasts.get(player);
@@ -153,13 +180,13 @@ function spellTier(spell) {
 }
 
 /**
- * Whether the player's current spell clears a row of `kind` (Wiki + captured hints):
+ * Whether `spell` (the player's current spell unless given) clears a row of `kind` (Wiki +
+ * captured hints):
  * the opposite element and strong enough — blast tier or greater for water and fire
  * (Wiki "Blast or greater"); every ice spell qualifies (Wiki "ice spells are also
  * effective", weakest is Ice Rush at 82).
  */
-function clearsRow(player, kind) {
-  const spell = selectedSpell(player) ?? recentSpell(player);
+function clearsRow(player, kind, spell = selectedSpell(player) ?? recentSpell(player)) {
   if (kind === "fire") {
     if (spellElement(spell) !== "water") return false;
     if (/^ICE_/.test(spellName(spell) ?? "")) return true;
@@ -222,7 +249,9 @@ function rowClearingHit({ npc, hit }) {
   if (!attacker?.isPlayer()) return;
   const session = sessionOfNpc(npc);
   const kind = npc.getId() === Shared.FIRE_ROW_ID ? "fire" : "ice";
-  const opposite = clearsRow(attacker, kind);
+  // The spell this hit carries, not whatever is selected as it lands.
+  const spell = hit.getSpell?.() ?? selectedSpell(attacker) ?? recentSpell(attacker);
+  const opposite = clearsRow(attacker, kind, spell);
   for (const part of hit.getHits()) part.setDamage(opposite ? 1 : 0);
   hit.updateTotalDamage();
   if (!opposite) {
@@ -234,6 +263,98 @@ function rowClearingHit({ npc, hit }) {
   if (session?.rows.has(npc)) {
     require("./Specials.RoyalTitans").clearRowTile(session, npc, true);
   }
+}
+
+/** A spell that clears a row tile delays the caster's next attack by 1 tick, not its usual 5. */
+function rowClearAttackSpeed(event) {
+  const { attacker, target } = event;
+  if (!attacker?.isPlayer?.() || !target?.isNpc?.() || event.combatType !== core.CombatType.MAGIC) return;
+  if (!Shared.isRowHitbox(target.getId()) || !sessionOfNpc(target)) return;
+  const kind = target.getId() === Shared.FIRE_ROW_ID ? "fire" : "ice";
+  if (clearsRow(attacker.getAsPlayer(), kind)) event.speed = ROW_CLEAR_ATTACK_SPEED;
+}
+
+/**
+ * A spell that will clear a row tile ends the attack on it, as a hand cast does: the tile and its
+ * neighbours go when the spell lands, and an autocaster would otherwise keep casting at them.
+ */
+function rowCastFinished({ attacker, target, method }) {
+  if (!attacker?.isPlayer?.() || !target?.isNpc?.() || method?.type?.() !== core.CombatType.MAGIC) return;
+  if (!Shared.isRowHitbox(target.getId())) return;
+  const session = sessionOfNpc(target);
+  if (!session?.rows.has(target)) return;
+  const player = attacker.getAsPlayer();
+  const kind = target.getId() === Shared.FIRE_ROW_ID ? "fire" : "ice";
+  if (!clearsRow(player, kind, castSpellOf(player, target))) return;
+  require("./Specials.RoyalTitans").markRowClearing(session, target);
+  player.getCombat().reset(false);
+  player.setPositionToFace(target.getLocation());
+}
+
+/** The fight's other live elementals on the 3x3 around `target`. */
+function splashTargets(session, target) {
+  const at = tileOf(target);
+  return [...session.minions].filter((minion) => {
+    if (minion === target || !alive(minion)) return false;
+    const pos = tileOf(minion);
+    return Math.max(Math.abs(pos.x - at.x), Math.abs(pos.y - at.y)) <= SPLASH_RADIUS;
+  });
+}
+
+/** Elementals already counted toward a caster's attack delay. */
+const creditedKills = new WeakSet();
+
+/** Whether `attacker`'s spells already on their way to `minion` will kill it (damage is rolled at the cast). */
+function spellsWillKill(attacker, minion) {
+  if (creditedKills.has(minion)) return false;
+  const damage = minion.getCombat().getHitQueue().getPendingHitsFrom(attacker)
+    .filter((hit) => hit.getCombatType?.() === core.CombatType.MAGIC && hit.isAccurate?.())
+    .reduce((total, hit) => total + hit.getTotalDamage(), 0);
+  return damage > 0 && damage >= minion.getHitpoints();
+}
+
+/** Water and fire spells splash onto the 3x3 (Wiki); wind, earth and the Ancient ice spells don't. */
+function splashes(spell) {
+  return /^(WATER|FIRE)_/.test(spellName(spell) ?? "");
+}
+
+/**
+ * A water or fire spell on an elemental also strikes the elementals around it, each with its own roll, as the
+ * engine's area specials strike their extra targets (bursts and barrages already spread on their
+ * own and are left to do so). Every elemental the cast will kill then takes 1 tick off the
+ * caster's attack delay at once, so the next cast can follow 5 - kills ticks later however far
+ * the spell has to travel.
+ */
+function spellOnElemental({ attacker, target, method }) {
+  if (!attacker?.isPlayer?.() || !target?.isNpc?.() || method?.type?.() !== core.CombatType.MAGIC) return;
+  if (!Shared.isMinion(target.getId())) return;
+  const session = sessionOfNpc(target);
+  if (!session?.minions.has(target)) return;
+  const player = attacker.getAsPlayer();
+  const combat = player.getCombat();
+  const spell = castSpellOf(player, target);
+  if (!spell) return;
+  const others = splashes(spell) ? splashTargets(session, target) : [];
+  if (others.length > 0 && !(typeof spell.spellRadius === "function" && spell.spellRadius() > 0)) {
+    // The cast has already been torn down (a hand cast's spell is now its previous cast): put it
+    // back in hand for the extra hits, then tear it down again.
+    const held = combat.getCastSpell();
+    combat.setCastSpell(spell);
+    try {
+      for (const other of others) {
+        for (const hit of method.hits(player, other) ?? []) core.CombatFactory.addPendingHit(hit);
+      }
+    } finally {
+      combat.setCastSpell(held);
+    }
+  }
+  let kills = 0;
+  for (const minion of [target, ...others]) {
+    if (!spellsWillKill(player, minion)) continue;
+    creditedKills.add(minion);
+    kills += 1;
+  }
+  if (kills > 0) combat.setAttackDelay(Math.max(1, combat.getAttackDelay() - kills));
 }
 
 /** Player-killed elementals burst into their death graphic; expiry is silent. */
@@ -312,6 +433,9 @@ function attach(api) {
   api.onNpcHitModify(rowClearingHit);
   api.onNpcDeath(minionDied);
   api.onCombatHitResolved(hitResolved);
+  api.onAttackSpeed(rowClearAttackSpeed);
+  api.onCustomEvent("combat:attack-finished", spellOnElemental);
+  api.onCustomEvent("combat:attack-finished", rowCastFinished);
 
 
   api.registerNpcCombatMethodProvider(
@@ -323,5 +447,5 @@ function attach(api) {
 
 module.exports = {
   attach, spawnTrio, tickSession, explodeTrio, spellElementOf, clearsRow,
-  _test: { spellTier, spellElement, elementalAccuracy, rowClearingHit, clearsRow },
+  _test: { spellTier, spellElement, elementalAccuracy, rowClearingHit, clearsRow, rowClearAttackSpeed, rowCastFinished, splashTargets, spellOnElemental, castSpellOf },
 };

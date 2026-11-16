@@ -1,8 +1,11 @@
 "use strict";
 
-const { api, World, Animation, ChatType, CountdownTask, EffectSpells, Equipment, Flag, Location, Skill, ItemIdentifiers,
+const { api, World, Animation, ChatType, CountdownTask, EffectSpells, Flag, Location, Skill, ItemIdentifiers,
   ItemDefinition, PlayerRights, Task, TaskManager, DialogueChainBuilder, OptionDialogue } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
+const ConstructionCore = require("./Core.Construction");
+const Saws = require("../../items/Saws");
+const Hammers = require("../../items/Hammers");
 const EstateAgent = require("./EstateAgent.Construction");
 const Servants = require("./Servants.Construction");
 const Estate = require("./Estate.Construction");
@@ -45,7 +48,6 @@ const ClockworkToys = require("./ClockworkToys.Construction");
 const HAMMER_ID = ItemIdentifiers.HAMMER;
 const HAMMERS = [HAMMER_ID, ItemIdentifiers.IMCANDO_HAMMER, ItemIdentifiers.IMCANDO_HAMMER_OFF_HAND_];
 const SAW_ID = ItemIdentifiers.SAW;
-const SAWS = [ItemIdentifiers.SAW, ItemIdentifiers.CRYSTAL_SAW, ItemIdentifiers.AMYS_SAW, ItemIdentifiers.AMYS_SAW_OFF_HAND_];
 const TINDERBOX_ID = ItemIdentifiers.TINDERBOX;
 // Wiki (Nails): with several kinds carried, the higher tier goes first.
 const NAIL_IDS = [ItemIdentifiers.DRAGON_NAILS, ItemIdentifiers.RUNE_NAILS, ItemIdentifiers.ADAMANTITE_NAILS,
@@ -87,10 +89,21 @@ const HOUSE_BOARD_HOURGLASS = Ids.component("poh_board:hourglass");
 const HOUSE_BOARD_ADD_REMOVE = Ids.component("poh_board:addremove") & 0xffff;
 const HOUSE_BOARD_REFRESH = Ids.component("poh_board:refresh_button") & 0xffff;
 const HOURGLASS_ANIMATION = Ids.seq("sandtimer_30secs");
+// The open board reloads its rows every 50 ticks, the hourglass restarted (-1, then the 30-second timer), counted
+// from opening; a Refresh click between does not move it (rsprox_transcripts/229/00247.txt: opened 13, reloads at
+// 63, 113, ...; refresh clicked at 2740, next reload 2786).
+const HOUSE_BOARD_RELOAD_TICKS = 50;
+const NO_ANIMATION = -1;
 const ADVERT_LEVEL = 50;
 const ADVERT_MINUTES = 30;
 const MINUTE_MS = 60_000;
 const ADVERT_TICKS = ADVERT_MINUTES * 100;
+// Wiki (House Advertisement): "The ad checks every 15 minutes if the house is active", with warnings at 3, 2 and 1
+// minutes before the removal; only the moment of the check counts. Recorded (rsprox_transcripts/229/00247.txt,
+// 229/911038.txt): the 3-minute warning 1500 ticks after placing, the others 100 ticks apart, the removal at 1800.
+const ADVERT_CHECK_TICKS = 15 * 100;
+const ADVERT_WARNING_MINUTES = [3, 2, 1];
+const ADVERT_WARNING_TICKS = 100;
 
 // Expand the named furniture groups used by parlour hotspot menus.
 const FURNITURE_GROUPS = {
@@ -139,7 +152,8 @@ const NAME_INPUT_SCRIPT = 109; // meslayer_mode8, answered by resume_p_namedialo
 const VISIT_PROMPT = "Enter name:";
 const VISIT_OFFLINE = "That player is offline, or has privacy mode enabled.";
 const IRONMAN_VISIT = "Ironmen do not visit their friends.<br>Ironmen stand alone.";
-const IRON_MODES = ["ironman", "ultimate", "hardcore"];
+const IRON_MODES = ["ironman", "ultimate", "hardcore", "group", "group-hardcore", "group-unranked"];
+const GROUP_IRON_MODES = ["group", "group-hardcore", "group-unranked"];
 const kickOptionVisible = new WeakSet();
 
 const activeHouses = new WeakMap();
@@ -148,6 +162,8 @@ const activeHouses = new WeakMap();
 const adverts = new Map();
 const lastAdvertised = new Map();
 const lastVisited = new WeakMap();
+/** A teleport on its way to a group mate's house (Teleport to House's Group options): player -> owner. */
+const groupVisits = new WeakMap();
 const pendingFurnitureMenus = new WeakMap();
 
 function defaultHouse() {
@@ -390,10 +406,22 @@ function hasFollower(player) {
   return !!request.pet;
 }
 
-function isIronman(player) {
+function ironModeOf(player) {
   const mode = { player, mode: "none" };
   api.emitCustomEvent("ironman:mode", mode);
-  return IRON_MODES.includes(mode.mode);
+  return mode.mode;
+}
+
+function isIronman(player) {
+  return IRON_MODES.includes(ironModeOf(player));
+}
+
+/** Wiki (Player-owned house): a Group Ironman may enter a group member's house. */
+function groupMateHouse(player, owner) {
+  if (!GROUP_IRON_MODES.includes(ironModeOf(player))) return false;
+  const query = { player, other: owner, same: false, ironman: false };
+  api.emitCustomEvent("grouping:same-group", query);
+  return query.same === true && query.ironman === true;
 }
 
 /**
@@ -402,7 +430,7 @@ function isIronman(player) {
  */
 function visitRefusal(player, owner, house, location) {
   if (!owner || !owner.getRelations().canReceivePrivateMessageFrom(player)) return VISIT_OFFLINE;
-  if (owner !== player && isIronman(player)) return Menu.messageBox(IRONMAN_VISIT);
+  if (owner !== player && isIronman(player) && !groupMateHouse(player, owner)) return Menu.messageBox(IRONMAN_VISIT);
   if (!house || house.isDestroyed() || (location != null && Estate.houseLocation(house.save).id !== location)) {
     return "That house is unavailable or its owner is not accepting guests.";
   }
@@ -454,10 +482,10 @@ function arriveAsGuest(player, owner, house) {
   player.getPacketSender().sendVarbit(HOUSE_LOCKED_VARBIT, house.save.locked ? 1 : 0);
 }
 
-/** Friend's house: Ironmen are refused at once; anyone else names the host. */
+/** Friend's house: Ironmen are refused at once (a Group Ironman may still name a group member); anyone else names the host. */
 function promptVisit({ player, objectId, location: portalLocation, sourceLocation, object }) {
   portalClickTiles.delete(player);
-  if (isIronman(player)) {
+  if (isIronman(player) && !GROUP_IRON_MODES.includes(ironModeOf(player))) {
     Menu.refuse(player, Menu.messageBox(IRONMAN_VISIT));
     return true;
   }
@@ -498,6 +526,32 @@ function endAdvert(owner) {
   return true;
 }
 
+/** At an inactivity check: someone is inside `owner`'s house and it is not locked. */
+function advertActive(owner) {
+  const house = activeHouses.get(owner);
+  if (!house || house.isDestroyed() || house.save.locked) return false;
+  return house.getPlayers().length > 0;
+}
+
+function advertWarning(minutes) {
+  return `<col=ff0000>Your house advertisement will be removed from the board in ${minutes} minute${minutes === 1 ? "" : "s"} if your house remains inactive or locked.</col>`;
+}
+
+/** The 15-minute check: an inactive or locked house is warned each minute, then taken off if still so at the next check. */
+function checkAdvertActivity(owner, advert) {
+  if (adverts.get(owner) !== advert || advertActive(owner)) return;
+  const warn = (index) => {
+    if (adverts.get(owner) !== advert) return;
+    if (index >= ADVERT_WARNING_MINUTES.length) {
+      if (!advertActive(owner) && endAdvert(owner)) owner.sendMessage("Your house is no longer being advertised.");
+      return;
+    }
+    owner.sendMessage(advertWarning(ADVERT_WARNING_MINUTES[index]));
+    TaskManager.submit(new CountdownTask(advert, ADVERT_WARNING_TICKS, () => warn(index + 1)));
+  };
+  warn(0);
+}
+
 /** A Yes/No question in the chatbox; `onYes` runs on Yes. */
 function askYesNo(player, question, onYes) {
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new OptionDialogue(0, {
@@ -534,6 +588,7 @@ function placeAdvert(player) {
   adverts.set(player, advert);
   lastAdvertised.set(player.getUsername().toLowerCase(), now);
   TaskManager.submit(new CountdownTask(advert, ADVERT_TICKS, () => { if (adverts.get(player) === advert) endAdvert(player); }));
+  TaskManager.submit(new CountdownTask(advert, ADVERT_CHECK_TICKS, () => checkAdvertActivity(player, advert)));
   player.getPacketSender().sendVarbit(HOUSE_BOARD_ADVERTISING_VARBIT, 1);
   player.sendMessage("Your house is now being advertised on the noticeboard.");
   Menu.refuse(player, Menu.messageBox(`Your house is now being advertised on the noticeboard for the next ${ADVERT_MINUTES} minutes. If your house is closed or you log off, your advert will be removed.`));
@@ -581,6 +636,8 @@ function listedOwners(viewer) {
 }
 
 const boardLocations = new WeakMap();
+// The current board opening's reload task, per viewer; a reopened board starts its own count.
+const boardReloads = new WeakMap();
 
 /** Fills rows 1-200; the empty rows clear what an earlier list left. */
 function sendAdvertRows(player, location) {
@@ -594,6 +651,30 @@ function sendAdvertRows(player, location) {
   sender.sendInterfaceFlagsRange(HOUSE_BOARD_ROWS, 1, HOUSE_BOARD_LAST_ROW, 1 << 1);
 }
 
+/** While this opening of the board stays open, reloads its rows every 50 ticks. */
+function startBoardReloads(player) {
+  boardReloads.get(player)?.stop();
+  const task = new (class extends Task {
+    constructor() { super(HOUSE_BOARD_RELOAD_TICKS, player, false); }
+
+    execute() {
+      if (boardReloads.get(player) !== this || player.getInterfaceId() !== HOUSE_BOARD_INTERFACE || !player.isRegistered?.()) {
+        this.stop();
+        return;
+      }
+      player.getPacketSender().sendInterfaceAnimation(HOUSE_BOARD_HOURGLASS, NO_ANIMATION);
+      sendAdvertRows(player, boardLocations.get(player));
+    }
+
+    stop() {
+      if (boardReloads.get(player) === this) boardReloads.delete(player);
+      super.stop();
+    }
+  })();
+  boardReloads.set(player, task);
+  TaskManager.submit(task);
+}
+
 function viewAdvertisements(player, location = boardLocations.get(player) ?? nearbyHouseLocation(player)) {
   boardLocations.set(player, location);
   const sender = player.getPacketSender();
@@ -601,6 +682,7 @@ function viewAdvertisements(player, location = boardLocations.get(player) ?? nea
   sender.sendVarbit(HOUSE_BOARD_LOCATION_VARBIT, location);
   sender.sendInterface(HOUSE_BOARD_INTERFACE);
   sendAdvertRows(player, location);
+  startBoardReloads(player);
   // Enter House: native scripts 3111/3125 submit the row's name through RESUME_NAMEDIALOG.
   player.setEnteredSyntaxAction({ execute: (name) => enterAdvertisedHouse(player, name, location) });
 }
@@ -639,6 +721,20 @@ function handleAdvertisementInterface(event) {
 
 function constructionLevel(player) {
   return player.getSkillManager().getCurrentLevel(Skill.CONSTRUCTION);
+}
+
+/**
+ * The level a piece of furniture is built at: the Construction level, plus an invisible boost
+ * carried items give ("construction:level-boost" `{ player, buildable, boost }`, the crystal saw's +3)
+ * to builds that take a saw and a hammer. Wiki (Crystal saw): not rooms, nor garden plants (the
+ * bagged plants and the watering-can builds).
+ */
+function furnitureLevel(player, buildable) {
+  const level = constructionLevel(player);
+  if (buildable?.tool === "watering-can" || (buildable && GardenPlants.isGardenPlant(buildable))) return level;
+  const request = { player, buildable, boost: 0 };
+  api.emitCustomEvent("construction:level-boost", request);
+  return level + Math.max(0, Number(request.boost) || 0);
 }
 
 /** Saves the owner's house after furniture changed in place (no rebuild). */
@@ -1013,9 +1109,40 @@ function handleHouseOptions(event) {
 /** Cast follows the house's teleport setting; the spell's "Outside" option (`option`) always stays outside. */
 function houseTeleportArrival({ player, name, option }) {
   if (name !== "teleport to house") return;
+  if (option === "group") return groupHouseArrival(player);
   const saved = houseStateFor(player);
   if (option === "outside" || saved.teleportOutside) player.moveTo(Estate.houseExit(saved));
   else teleportIntoHouse(player, saved.defaultBuildingMode);
+}
+
+/**
+ * "construction:group-house" { player, owner, destination, onArrival, refused }: Teleport to House's
+ * Group options take a Group Ironman to a group mate's house (Update:Group Ironman Improvements:
+ * the owner on the same world, not in building mode, and the house open to them as at its portal).
+ * `destination` is the owner's house portal; arriving (`onArrival`, or the spell's arrival with
+ * option "group") takes them in as a guest. Refused, the reason is shown and `refused` set.
+ */
+function groupHouse(request) {
+  const { player, owner } = request;
+  const refusal = owner === player ? "That's your own house." : visitRefusal(player, owner, owner && activeHouses.get(owner), null);
+  if (refusal) {
+    request.refused = true;
+    Menu.refuse(player, refusal);
+    return;
+  }
+  groupVisits.set(player, owner);
+  request.destination = Estate.houseExit(houseStateFor(owner));
+  request.onArrival = () => groupHouseArrival(player);
+}
+
+/** The group teleport has landed: in as a guest, if the house is still open to them. */
+function groupHouseArrival(player) {
+  const owner = groupVisits.get(player);
+  groupVisits.delete(player);
+  const house = owner && activeHouses.get(owner);
+  const late = visitRefusal(player, owner, house, null);
+  if (late) Menu.refuse(player, late);
+  else arriveAsGuest(player, owner, house);
 }
 
 /**
@@ -1256,7 +1383,7 @@ function formatBuildable(buildable) {
  */
 function getBuildMaterials(player, house, target, buildable) {
   if (buildable.invalidLevels) return "This build has an unsupported skill requirement.";
-  if (constructionLevel(player) < buildable.level) return `You need Construction level ${buildable.level} to build that.`;
+  if (furnitureLevel(player, buildable) < buildable.level) return `You need Construction level ${buildable.level} to build that.`;
   for (const requirement of buildable.secondaryLevels ?? []) {
     const skill = Skill.values().find(candidate => candidate.getClientId() === requirement.statId);
     if (!skill || !Number.isInteger(requirement.level) || requirement.level < 1) return "This build has an unsupported skill requirement.";
@@ -1310,18 +1437,14 @@ function getBuildMaterials(player, house, target, buildable) {
   return requiredItems;
 }
 
-/** Wiki (Imcando hammer): either repaired variant works carried or wielded. */
+/** Wiki (Imcando hammer): either repaired variant works carried or wielded (items/Hammers.js). */
 function hasHammer(player) {
-  const equipment = player.getEquipment();
-  const wielded = [Equipment.WEAPON_SLOT, Equipment.SHIELD_SLOT].map(slot => equipment.get(slot)?.getId());
-  return HAMMERS.some(id => player.getInventory().contains(id) || wielded.includes(id));
+  return Hammers.holdsHammer(ConstructionCore, player);
 }
 
 /** A saw, the crystal saw or Amy's saw, carried or wielded (Amy's saw in the weapon slot, its off-hand copy in the shield slot). */
 function hasSaw(player) {
-  const equipment = player.getEquipment();
-  const wielded = [Equipment.WEAPON_SLOT, Equipment.SHIELD_SLOT].map(slot => equipment.get(slot)?.getId());
-  return SAWS.some(id => player.getInventory().contains(id) || wielded.includes(id));
+  return Saws.holdsSaw(ConstructionCore, player);
 }
 
 /** What a carried container (the plank sack) holds of a material ("storage:amount"). */
@@ -1344,6 +1467,8 @@ function useMaterial(player, itemId, amount) {
  * fragment's planks kept; `buildable` is null for a Mahogany Homes job): a listener may lower an amount, never raise it.
  */
 function useMaterials(player, buildable, materials) {
+  // Wiki (Crystal saw): a charge goes only on a piece the boost was needed for.
+  if (buildable && constructionLevel(player) < buildable.level) api.emitCustomEvent("construction:level-boost-used", { player, buildable });
   const request = { player, buildable, materials: [...materials].map(([itemId, amount]) => [itemId, amount]) };
   api.emitCustomEvent("construction:materials", request);
   for (const [itemId, amount] of request.materials) {
@@ -1957,6 +2082,7 @@ function attach(api) {
   api.registerCommand("deletehouse", Commands.deleteHouse, PlayerRights.DEVELOPER, "Delete your house, so you have to buy a new one");
   api.registerCommand("maxhouse", MaxHouse.maxHouse, PlayerRights.DEVELOPER, "Replace your house with one of every room, fully furnished (::restorehouse undoes it)");
   api.registerCommand("restorehouse", MaxHouse.restoreHouse, PlayerRights.DEVELOPER, "Bring back the house ::maxhouse replaced");
+  api.onCustomEvent("construction:random-house", MaxHouse.randomHouse);
   api.persistAttribute(MaxHouse.BACKUP_ATTRIBUTE, null);
   api.onObjectFirstClick(ROOM_DOOR_HOTSPOT_IDS, openRoomDoor);
   api.onObjectFifthClick(ROOM_DOOR_HOTSPOT_IDS, openRoomDoor);
@@ -1977,6 +2103,7 @@ function attach(api) {
   api.onCustomEvent("interface:closed", closeFurnitureMenu);
   api.onCustomEvent("spell:teleport-arrival", houseTeleportArrival);
   api.onCustomEvent("construction:house-tablet", houseTablet);
+  api.onCustomEvent("construction:group-house", groupHouse);
   api.onCustomEvent("construction:owns-house", ownsHouse);
   api.onCustomEvent("construction:grant-house", grantHouse);
   api.onCustomEvent("construction:spirit-tree", spiritTreeHouse);
@@ -1990,4 +2117,4 @@ function attach(api) {
   api.onPlayerLogout(logoutHouse);
 }
 
-Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, hasHammer, hasSaw, getBuildMaterials, useMaterial, useMaterials, hammer, hammerNails, nailsOf, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });
+Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, furnitureLevel, hasHammer, hasSaw, getBuildMaterials, useMaterial, useMaterials, hammer, hammerNails, nailsOf, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });

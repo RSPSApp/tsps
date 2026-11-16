@@ -19,6 +19,7 @@ const ATTRIBUTES = {
   failures: "bank-pin:failures",
   lockedUntil: "bank-pin:locked-until",
   logoutAt: "bank-pin:logout-at",
+  logoutHost: "bank-pin:logout-host",
 };
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -71,6 +72,58 @@ function hash(player, pin) {
   return crypto.createHash("sha256").update(`bank-pin:${salt}:${pin}`).digest("hex");
 }
 
+/**
+ * The server's secret for host keys: 32 random bytes made once and kept in data/saves/bank-pin-host.key
+ * (gitignored, never in a player save), so a save file alone can't be tried against every address.
+ * If the file can't be read or written, a secret for this run only (keys then stop matching after a
+ * restart, which only asks for the PIN once more).
+ */
+const HOST_SECRET_PATTERN = /^[0-9a-f]{64}$/;
+let hostSecretFile = path.join(process.cwd(), "data", "saves", "bank-pin-host.key");
+let hostSecret = null;
+
+function loadHostSecret() {
+  try {
+    const saved = fs.readFileSync(hostSecretFile, "utf8").trim();
+    if (HOST_SECRET_PATTERN.test(saved)) return saved;
+  } catch (err) {
+    if (err?.code !== "ENOENT") console.warn(`[BankPin] could not read the host key secret (${err.message}); using one for this run`);
+  }
+  const secret = crypto.randomBytes(32).toString("hex");
+  // The secret goes into a new owner-only file that is then renamed over the old one: writing the old
+  // file in place would keep its old (maybe looser) mode, as writeFileSync's mode only applies to a new file.
+  const temp = `${hostSecretFile}.${process.pid}.tmp`;
+  try {
+    fs.mkdirSync(path.dirname(hostSecretFile), { recursive: true });
+    fs.rmSync(temp, { force: true });
+    fs.writeFileSync(temp, `${secret}\n`, { mode: 0o600, flag: "wx" });
+    fs.renameSync(temp, hostSecretFile);
+  } catch (err) {
+    try {
+      fs.rmSync(temp, { force: true });
+    } catch {}
+    console.warn(`[BankPin] could not save the host key secret (${err.message}); using one for this run`);
+  }
+  return secret;
+}
+
+/** Tests point the secret at their own file. */
+function setHostSecretFile(file) {
+  hostSecretFile = file;
+  hostSecret = null;
+}
+
+/**
+ * Where the player connects from, as an HMAC-SHA256 of the name and host address under the server's
+ * secret, so the offline window can tell a login from somewhere else without saving the address or
+ * anything it could be recovered from.
+ */
+function hostKey(player) {
+  hostSecret ??= loadHostSecret();
+  const name = String(player.getUsername?.() ?? "").toLowerCase();
+  return crypto.createHmac("sha256", hostSecret).update(`bank-pin-host:${name}:${player.getHostAddress?.() ?? ""}`).digest("hex");
+}
+
 function delayDays(player) {
   const days = Number(get(player, "delay"));
   return data.delays.includes(days) ? days : data.defaultDelay;
@@ -120,7 +173,7 @@ function later(player, ticks, action) {
 }
 
 module.exports = {
-  init, setClock, now, get, set, hash, delayDays, settle, hasPin, pendingPin, pendingDelete, isUnlocked, unlock, lock, fill, later,
+  init, setClock, setHostSecretFile, now, get, set, hash, hostKey, delayDays, settle, hasPin, pendingPin, pendingDelete, isUnlocked, unlock, lock, fill, later,
   ATTRIBUTES, MS_PER_DAY,
   get api() { return api; },
   get core() { return core; },

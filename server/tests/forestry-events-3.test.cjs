@@ -17,12 +17,18 @@ const { Location } = require('../dist/game/model/Location');
 let Spawns, Flowering, Entlings, Beehive, Common, hooks, core;
 /** Area sounds the units played, as [id, x, y, radius, delay]. */
 const areaSounds = [];
+/** Owner-only ground drops, as [player, id, amount]. */
+const drops = [];
+let realDrop;
 
 before(() => {
   CachePipeline.initialize();
   RegionManager.init();
   core = PluginManager.getCoreApi();
   hooks = { npcs: new Map(), prompts: [] };
+  // The real loot tracker answers the loot-tracker events; nothing else is dispatched.
+  const lootTracker = new Map();
+  require('../plugins/interface/LootTracker.plugin').register({ persistAttribute() {}, onCustomEvent: (name, fn) => lootTracker.set(name, fn) });
   const api = {
     core,
     persistAttribute() {},
@@ -36,8 +42,11 @@ before(() => {
     },
     onCustomEvent() {},
     onPlayerLogout: (fn) => { (hooks.logout ??= []).push(fn); },
+    onItemAction: (name, actions) => {
+      if (typeof name === 'string') for (const [op, fn] of Object.entries(actions)) (hooks.items ??= new Map()).set(`${name}:${op}`, fn);
+    },
     onPlayerLogin() {},
-    emitCustomEvent() {},
+    emitCustomEvent: (name, payload) => lootTracker.get(name)?.(payload),
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ title, args }),
   };
   const Woodcutting = require('../plugins/skills/Woodcutting.plugin');
@@ -52,6 +61,9 @@ before(() => {
   Common = require('../plugins/minigames/forestry/Common.Forestry');
   // The fake players aren't in the world, so record area sounds where they're sent.
   Common.areaSound = (location, id, radius = 10, delay = 0) => areaSounds.push([id, location.getX(), location.getY(), radius, delay]);
+  realDrop = Common.drop;
+  // Nor are their ground items: record the owner-only drops.
+  Common.drop = (player, id, amount = 1, despawn) => drops.push([player, id, amount, despawn]);
 });
 
 beforeEach(() => {
@@ -81,7 +93,7 @@ function fakePlayer({ at = new Location(3085, 3233, 0), level = 70 } = {}) {
   const id = ++index;
   const timers = new Map();
   const p = {
-    location: at, messages: [], spam: [], anims: [], xp: {}, chats: [], graphics: [], sounds: [], menus: [], inventory: container(),
+    location: at, messages: [], spam: [], anims: [], xp: {}, chats: [], graphics: [], sounds: [], menus: [], scripts: [], inventory: container(),
     getIndex: () => id, getUsername: () => `Tester${id}`, isPlayer: () => true, isRegistered: () => true,
     getLocation: () => p.location,
     getAttribute: () => null, setAttribute() {},
@@ -104,6 +116,7 @@ function fakePlayer({ at = new Location(3085, 3233, 0), level = 70 } = {}) {
         sendTypedMessage: (type, text) => { p.spam.push(text); return sender; },
         sendSoundEffect: (sound) => { p.sounds.push(sound); return sender; },
         sendCreationMenu: (menu) => { p.menus.push(menu); return sender; },
+        sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
         sendAreaSound: () => sender, sendGraphic: () => sender, sendObjectAnimation: () => sender,
       };
       return sender;
@@ -280,6 +293,34 @@ test('logging out with pollen drops it', () => {
   assert.equal(p.inventory.getAmount(POLLEN), 0);
 });
 
+const destroyPollen = (player) => hooks.items.get('Strange pollen:Destroy')({ player, itemId: POLLEN, slot: 0 });
+
+test('Destroy on the pollen asks nothing: synth 2381 and the scatter line as spam, the pollen gone (227/01850 tick 9297)', () => {
+  const p = fakePlayer();
+  const event = startEvent('flowering', [p]);
+  tend(p, event.pair.bushes[0]);
+  assert.equal(p.inventory.getAmount(POLLEN), 1);
+  p.sounds.length = 0;
+  assert.equal(destroyPollen(p), true, 'the Destroy click is handled here, so no confirmation opens');
+  assert.equal(p.inventory.getAmount(POLLEN), 0);
+  assert.deepEqual(p.sounds, [2381]);
+  assert.deepEqual(p.spam, ['You scatter the pollen.']);
+  assert.equal(Flowering.pollen.has(p), false, 'nothing left to apply on a bush');
+  ticks(5);
+  tend(p, event.pair.bushes[1]);
+  assert.equal(p.inventory.getAmount(POLLEN), 1, 'the next Tend-to collects again, not pollinates');
+  assert.ok(p.messages.at(-1).includes('pollen-rich flowers'));
+});
+
+test('Destroy on pollen with no active event discards it with the Wiki line', () => {
+  const p = fakePlayer();
+  p.inventory.add(new core.Item(POLLEN, 1));
+  assert.equal(destroyPollen(p), true);
+  assert.equal(p.inventory.getAmount(POLLEN), 0);
+  assert.deepEqual(p.sounds, [2381]);
+  assert.deepEqual(p.spam, ['You discard the leftover pollen.']);
+});
+
 // ------------------------------------------------------------------ entlings
 
 function prune(player, entling, op) {
@@ -368,6 +409,90 @@ test("Prune's menu, then the end at 199: haircuts three ticks on, the gift the t
   assert.ok(p.messages.includes("You've been awarded <col=3366ff>50 Anima-infused bark</col>."));
   assert.equal(p.inventory.getAmount(6030), 8, '4 magic leaves an entling');
   assert.equal(p.inventory.getAmount(6024), 0, "not the tree's willow leaves");
+});
+
+test("entling rewards go in the loot tracker (script 7192 with the entling): each prune's bark on its own key; the nest, bark and leaves on one (237/01098, 237/01104 6386-6387)", () => {
+  const p = fakePlayer({ level: 50 });
+  const attributes = new Map([['loot-tracker:next-key', 2035]]);
+  p.getAttribute = (key) => attributes.get(key);
+  p.setAttribute = (key, value) => attributes.set(key, value);
+  const event = startEvent('entlings', [p]);
+  const [first] = event.entlings;
+  first.needs = { top: 1 };
+  ticks(2);
+  prune(p, first, 'Prune-top');
+  assert.deepEqual(p.scripts, [], 'the bark comes the tick after');
+  ticks(1);
+  const barked = bark(p);
+  assert.ok(barked > 0);
+  assert.deepEqual(p.scripts, [[7192, 12543, 2035, 28134, barked]], 'gathering_event_entlings_npc_01, forestry_currency');
+  p.scripts.length = 0;
+  ticks(199 - 3 + 2);
+  const real = Math.random;
+  Math.random = () => 0; // the nest (20% a haircut) and the first leaves tier
+  try {
+    ticks(1);
+    assert.equal(p.scripts.length, 1, 'the nest with the haircuts line');
+    const [nestRow] = p.scripts;
+    assert.deepEqual(nestRow.slice(0, 3), [7192, 12543, 2036]);
+    assert.ok([5070, 5071, 5072].includes(nestRow[3]));
+    assert.equal(nestRow[4], 1);
+    ticks(1);
+  } finally { Math.random = real; }
+  const leaves = Object.values(Common.data.leaves)[0];
+  assert.deepEqual(p.scripts.slice(1), [[7192, 12543, 2036, 28134, 25], [7192, 12543, 2036, leaves, 4]], 'bark and leaves the tick after, the same key');
+  assert.equal(attributes.get('loot-tracker:next-key'), 2037);
+});
+
+/** Prunes the first `count` entlings fully (one cut each) and runs the event to the haircuts line. */
+function haircutsWith(count, random) {
+  const p = fakePlayer({ level: 50 });
+  const event = startEvent('entlings', [p]);
+  for (const entling of event.entlings.slice(0, count)) {
+    entling.needs = { top: 1 };
+    ticks(2);
+    prune(p, entling, 'Prune-top');
+  }
+  drops.length = 0;
+  ticks(199 - 2 * count + 2);
+  const real = Math.random;
+  Math.random = () => random;
+  try { ticks(1); } finally { Math.random = real; }
+  assert.ok(p.messages.includes(`<col=3366ff>Well done, you've given ${count} entlings haircuts! The entlings have left you a gift...</col>`));
+  return { p, nests: drops.filter(([owner]) => owner === p) };
+}
+
+test('an egg nest with the haircuts line: 20% for each fully pruned entling, certain for all five (Wiki; recorded 237/01104)', () => {
+  const all = haircutsWith(5, 0.999);
+  assert.equal(all.nests.length, 1, 'all five: always one nest');
+  assert.ok([5070, 5071, 5072].includes(all.nests[0][1]), 'an egg nest');
+  assert.equal(all.nests[0][2], 1);
+  assert.equal(all.nests[0][3], 200, 'recorded despawn=200 on every nest obj_add');
+  assert.equal(haircutsWith(2, 0.41).nests.length, 0, 'two entlings: 40%, missed');
+  const two = haircutsWith(2, 0.39);
+  assert.deepEqual(two.nests.map(([, id]) => id), [5071], 'two entlings: 40%, hit');
+});
+
+test("the nest lands on a real player's tile, owner-only and never turning public (neverturnpublic, as recorded)", () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { World } = require('../dist/game/World');
+  const player = new Player(null);
+  player.setUsername?.('nest-owner');
+  player.setLocation(new Location(3085, 3233, 0));
+  const before = World.getItems().length;
+  realDrop(player, 5070, 1, 200);
+  const nest = World.getItems().at(-1);
+  try {
+    assert.equal(World.getItems().length, before + 1);
+    assert.equal(nest.getItem().getId(), 5070);
+    assert.equal(nest.getPosition().getX(), 3085);
+    assert.equal(nest.getPosition().getY(), 3233);
+    assert.equal(nest.getOwner(), player.getUsername());
+    assert.equal(nest.getgoesGlobal(), false);
+    assert.equal(nest.getDespawnDelay(), 200, 'the given despawn');
+  } finally {
+    World.getItems().splice(World.getItems().indexOf(nest), 1);
+  }
 });
 
 // ------------------------------------------------------------------ beehive

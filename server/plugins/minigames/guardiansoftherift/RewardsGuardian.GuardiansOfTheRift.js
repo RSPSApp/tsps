@@ -101,10 +101,28 @@ function talisman(player) {
   return { item: entry.item, amount: 1 };
 }
 
-function rareReward(player) {
+/** The source the Rewards Guardian's search names on "drops:chance". */
+const CHANCE_SOURCE = "Guardians of the Rift";
+
+/**
+ * "drops:chance" { player, source: "Guardians of the Rift", rules } (a league's boosted drops):
+ * an item's multiplier by its name, the matching rules' product; 1 without any.
+ */
+function dropBoost(player) {
+  const rules = [];
+  Shared.api()?.emitCustomEvent?.("drops:chance", { player, source: CHANCE_SOURCE, rules });
+  if (rules.length === 0) return () => 1;
+  return (item) => {
+    const name = itemName(Shared.obj(item));
+    return rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
+  };
+}
+
+/** The rare table, each row on its own chance; `boost` makes a row that many times as likely. */
+function rareReward(player, boost = dropBoost(player)) {
   for (const entry of DATA.search.rare) {
     if (entry.once && hadOnce(player, entry.item)) continue;
-    if (Math.random() * entry.chance < 1) return { item: entry.item, amount: 1, once: entry.once };
+    if (Math.random() * entry.chance < boost(entry.item)) return { item: entry.item, amount: 1, once: entry.once };
   }
   return null;
 }
@@ -138,11 +156,13 @@ function give(player, reward) {
     Shared.api().emitCustomEvent("npc-drops:roll", event);
     if (event.drops.length === 0) return true;
   }
+  // The loot line goes out before the inventory update: RuneLite's loot tracker snapshots the
+  // inventory on it and records what the next update adds.
+  Shared.spam(player, `You found some loot: ${reward.amount} x ${itemName(itemId)}`);
   player.getInventory().adds(itemId, reward.amount);
   player.getInventory().refreshItems();
   if (reward.once && ONCE_VARBITS[reward.item]) Records.setSetting(player, ONCE_VARBITS[reward.item], 1);
   Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId, amount: reward.amount });
-  Shared.spam(player, `You found some loot: ${reward.amount} x ${itemName(itemId)}`);
   return true;
 }
 
@@ -325,7 +345,7 @@ function readDiary({ player }) {
 }
 
 module.exports = {
-  DATA, rollSearch, rollIntricate, missingPouch, searchesLeft, canSearch, PEARL_SEARCH_COST,
+  DATA, dropBoost, rareReward, rollSearch, rollIntricate, missingPouch, searchesLeft, canSearch, PEARL_SEARCH_COST,
   attach(api) {
     api.onObjectInteraction("<col=ffff00>Rewards Guardian</col>", { Search: search, Check: check, "Big-search": bigSearch });
     api.onItemOnObject("Needle", "<col=ffff00>Rewards Guardian</col>", needleOnRift);

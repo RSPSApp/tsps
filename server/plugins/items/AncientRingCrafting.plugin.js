@@ -23,6 +23,8 @@ const PEER_LEARN_TEXT = "Peer the Seer shows you how to combine ring icons with 
 const RING_ICON_VARIANT = "standard-dialogue-with-a-ring-icon";
 const NOT_LEARNED = "You're not quite sure how to combine those. Perhaps a Fremennik could help.";
 const BLOOD_RUNES = 500;
+/** Every loc that works as a furnace (skills/data/furnaces.json), where the ring is crafted. */
+const FURNACE_NAMES = require("../skills/data/furnaces.json").names;
 const CHROMIUM_INGOTS = 3;
 const CRAFTING_LEVEL = 80;
 const MAGIC_LEVEL = 90;
@@ -284,8 +286,7 @@ module.exports = {
     for (const ring of RING_NAMES) api.onItemOnItem("Chisel", ring, useChisel, { noted: false });
     for (const [icon, vestige] of ICON_VESTIGE_PAIRS) api.onItemOnItem(icon, vestige, useIconOnVestige, { noted: false });
     for (const name of INSPECT_TEXT.keys()) api.onItemAction(name, { Inspect: inspectIcon });
-    api.onObjectInteraction("Furnace", { Smelt: craft, Use: craft });
-    api.onObjectInteraction("Small furnace", { Smelt: craft });
+    for (const name of FURNACE_NAMES) api.onObjectInteraction(name, { Smelt: craft, Use: craft });
     api.onNpcDialogueVariant(peerVariant);
     api.onCustomEvent("npc-dialogue:action", peerAction);
   },

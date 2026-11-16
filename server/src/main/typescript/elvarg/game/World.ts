@@ -51,8 +51,10 @@ export class World {
     private static playerBots: Map<string, any> = new Map<string, any>();
     private static npcs: MobileList<NPC> = new MobileList<NPC>(
         World.MAX_NPCS,
-        (npc) => World.registerNpcPosition(npc),
-        (npc) => World.unregisterNpcPosition(npc)
+        // The owner index follows the list itself, so every way in and out (the queues,
+        // PluginManager.removeNpc's direct removal, a rolled-back add) keeps it exact.
+        (npc) => { World.registerNpcPosition(npc); NPC.indexOwner(npc); },
+        (npc) => { World.unregisterNpcPosition(npc); NPC.forgetOwner(npc); }
     );
     private static items: ItemOnGround[] = [];
     private static playerArray: Player[] = []
@@ -1131,6 +1133,11 @@ export class World {
 
     public static getRemoveNPCQueue(): NPC[] {
         return this.removeNPCQueue;
+    }
+
+    /** The registered NPCs `owner` owns (an index, not a scan of every NPC). */
+    public static getNpcsOwnedBy(owner: Player | null | undefined): NPC[] {
+        return NPC.ownedBy(owner);
     }
 
     public findSpawnedObject(id: number, loc: Location): GameObject | undefined {

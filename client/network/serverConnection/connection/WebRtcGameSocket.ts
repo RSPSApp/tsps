@@ -66,6 +66,7 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
     private remoteDescriptionSet = false;
     private sessionReady = false;
     private readonly timeout: ReturnType<typeof setTimeout>;
+    private readonly startup: Promise<void>;
 
     constructor(private readonly config: WebRtcConnectionConfig) {
         super();
@@ -74,7 +75,9 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
             () => this.state === CONNECTING && this.fail(`WebRTC connection to world ${config.worldId} timed out`, 4001),
             CONNECT_TIMEOUT_MS,
         );
-        void this.start();
+        this.startup = this.start().catch((error: unknown) => {
+            this.fail(error instanceof Error ? error.message : "WebRTC setup failed", 4001);
+        });
     }
 
     /**
@@ -138,6 +141,7 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
         if (path.length > 2048 || !/^\/api\/[a-z0-9-]+(?:\/[a-z0-9-]+)*(?:\?[^#]*)?$/i.test(path)) {
             throw new Error("Invalid content path");
         }
+        await this.startup;
         if (!this.contentChannel) throw new Error("Content channel unavailable");
         if (this.contentChannel.readyState === "connecting") {
             await new Promise<void>((resolve, reject) => {

@@ -129,3 +129,48 @@ test('after the free claim, "more whistles" sells a blueprint for 500 coins, and
   assert.equal(poor.player.getInventory().getAmount(blueprint), 0, 'refused');
   assert.equal(poor.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 499);
 });
+
+// The Perfected quetzal whistle(i) through the same real transcript (Imbue.Quetzals.js).
+async function chooseAnyPage(f, option) {
+  for (let page = 0; page < 3; page++) {
+    const options = await f.menu();
+    if (options?.includes(option)) return f.choose(option);
+    if (!options?.includes('More options...')) break;
+    await f.choose('More options...');
+  }
+  assert.fail(`${option} offered`);
+}
+
+test('the imbued whistle: refused without a perfected whistle, then 10,000 charges of noted meat upgrade it, then 50,000 coins buy another', async (t) => {
+  const ASK = 'Can I get a whistle with unlimited charges?';
+  const AGAIN = 'Can I get a Perfected quetzal whistle with unlimited charges?';
+  const perfected = obj('hg_quetzalwhistle_perfected'), imbued = obj('hg_quetzalwhistle_perfected_infinite');
+  const notedMoon = core.ItemDefinition.forId(obj('hunting_antelopemoon_meat')).getNoteId();
+
+  const without = harness(t, { completed: 0 });
+  without.player.getInventory().add(new core.Item(notedMoon, 3400), false);
+  await without.talk();
+  await chooseAnyPage(without, ASK);
+  await without.finish();
+  assert.equal(without.player.getInventory().getAmount(notedMoon), 3400, 'nothing taken without the whistle');
+  assert.equal(without.player.getAttribute('quetzals:imbue-charges-fed') ?? 0, 0);
+
+  const f = harness(t, { completed: 0 });
+  f.player.getInventory().add(new core.Item(perfected, 1), false);
+  f.player.getInventory().add(new core.Item(notedMoon, 3400), false);
+  await f.talk();
+  await chooseAnyPage(f, ASK);
+  await f.choose('Yes.');
+  await f.finish();
+  assert.equal(f.player.getInventory().getAmount(imbued), 1, 'upgraded');
+  assert.equal(f.player.getInventory().getAmount(perfected), 0);
+  assert.equal(f.player.getInventory().getAmount(notedMoon), 66, 'lowest-charge meat only as far as 10,000');
+
+  f.player.getInventory().add(new core.Item(core.ItemIdentifiers.COINS, 60000), false);
+  await f.talk();
+  await chooseAnyPage(f, AGAIN);
+  await f.choose('Yes.');
+  await f.finish();
+  assert.equal(f.player.getInventory().getAmount(imbued), 2, 'another one bought');
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 10000, '50,000 coins taken, once');
+});

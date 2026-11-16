@@ -4,6 +4,10 @@ import { CacheDefinitions } from "../cache/CacheDefinitions";
 import { Player } from "../entity/impl/player/Player";
 import { Skill } from "../model/Skill";
 import type { PrayerData } from "./PrayerHandler";
+import { lazyRequire } from "../../util/LazyRequire";
+
+// Loaded lazily: Player -> QuickPrayers -> PrayerHandler -> Player is a load-time cycle.
+const getPrayerHandlerModule = lazyRequire(() => require("./PrayerHandler") as typeof import("./PrayerHandler"));
 
 export class QuickPrayers {
     private static prayerValues: PrayerData[] | null = null;
@@ -11,11 +15,10 @@ export class QuickPrayers {
         return this.prayerValues ??= Array.from(this.PRAYER_DATA.values());
     }
     private static get PRAYER_HANDLER(): typeof import("./PrayerHandler").PrayerHandler {
-        // Loaded lazily: Player -> QuickPrayers -> PrayerHandler -> Player is a load-time cycle.
-        return require("./PrayerHandler").PrayerHandler;
+        return getPrayerHandlerModule().PrayerHandler;
     }
     private static get PRAYER_DATA(): typeof import("./PrayerHandler").PrayerData {
-        return require("./PrayerHandler").PrayerData;
+        return getPrayerHandlerModule().PrayerData;
     }
     public static get THICK_SKIN() {
         return QuickPrayers.PRAYER_HANDLER.THICK_SKIN;

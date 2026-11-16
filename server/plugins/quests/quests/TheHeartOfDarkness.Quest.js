@@ -33,7 +33,7 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
   const {
     Animation, DialogueChainBuilder, ActionDialogue, ItemIdentifiers, Location, NpcIdentifiers, Skill, StatementDialogue,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts, questStartMessage } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
 
   const PAGE = "The Heart of Darkness";
@@ -467,7 +467,7 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
     units.ruins.reset(player);
     quest.setStage(player, S.STARTED);
     syncSideVarbits(player);
-    player.sendMessage("You've started a new quest: <col=081190>The Heart of Darkness</col>");
+    player.sendMessage(questStartMessage(player, "The Heart of Darkness"));
   }
 
   function handleLine(event) {

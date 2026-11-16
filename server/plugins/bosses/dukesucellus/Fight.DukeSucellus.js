@@ -141,7 +141,7 @@ class Fight {
     this.boss.performAnimation(new Common.core.Animation(animations.magic));
     const destination = this.player.getLocation().clone();
     this.player.getPacketSender().sendProjectile(this.session.tile(Common.data.site.mouth), destination, 0, magic.endCycle, graphics.magicProjectile, magic.startHeight, magic.endHeight, this.player, magic.startCycle, magic.slope, magic.distanceOffset, null);
-    this.player.performGraphicInSlot(magic.impactSlot, new Common.core.Graphic(graphics.magicImpact, magic.endCycle));
+    this.player.performGraphicInSlot(magic.impactSlot, Common.core.Graphic.delayed(graphics.magicImpact, magic.endCycle));
     this.at(timing.magic, () => {
       const maximum = Common.protectedFrom(this.player, "PROTECT_FROM_MAGIC")
         ? normal.protectedMagic : normal.magic;

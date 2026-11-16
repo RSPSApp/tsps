@@ -92,9 +92,7 @@ function denySleepingAttack(event) {
   const target = event.target;
   if (!target?.isNpc?.() || target.getId() !== Shared.SLEEPING_ID) return;
   event.allow = false;
-  if (event.attacker?.isPlayer?.()) {
-    event.attacker.sendMessage(POKE_FIRST_MESSAGE);
-  }
+  event.message = POKE_FIRST_MESSAGE;
 }
 
 function denyWakeAttack(event) {

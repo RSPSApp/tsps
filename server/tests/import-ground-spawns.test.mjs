@@ -45,8 +45,12 @@ test("untyped overrides, missing or variable data and member rows remain visible
 });
 test("known owners/instances deferred without banning every quest region",()=>{
  const result=importSpawns(source([row({id:560,x:2500,y:2967,page:"Death rune"}),
-  row({location:"[[Hallowed Sepulchre]] - floor1"}),row({location:"Town beside a quest start"})]),[]);
+  row({location:"[[Hallowed Sepulchre]] - floor1"}),row({x:3305,location:"Town beside a quest start"})]),[]);
  assert.equal(result.report.counts["area-owned-or-instance-integration"],2);assert.equal(result.report.counts.added,1);
+ const contradictory=importSpawns(source([row({location:"[[Hallowed Sepulchre]] - floor1"}),
+  row({location:"Town beside a quest start"})]),[]);
+ assert.equal(contradictory.definitions.length,0);
+ assert.equal(contradictory.report.counts["conflicting-source-alias-state"],2);
 });
 test("unaudited pages are classified rather than silently imported",()=>{
  const result=importSpawns(source([row({page:"Coins",id:995})]),[]);
@@ -93,7 +97,7 @@ test("audited member tools report conflicting world policy instead of silently g
  const member=row({page:"Shears",id:1735,members:true,quantity:1});
  const conflicting=importSpawns(source([member,{...member,members:false}]),[]);
  assert.equal(conflicting.definitions.length,0);
- assert.equal(conflicting.report.counts["conflicting-source-quantity-timer-or-membership"],2);
+ assert.equal(conflicting.report.counts["conflicting-source-alias-state"],2);
  const old={id:1735,location:{x:3304,y:3311,z:0},amt:1,respawn:100};
  const result=importSpawns(source([member]),[old]);
  assert.deepEqual(result.definitions,[old]);
@@ -153,7 +157,7 @@ test("audited member Fire rune rows retain exact quantities, floor, timer and wo
  assert.deepEqual(importSpawns(source(memberFire),result.definitions).definitions,result.definitions);
  const conflicting=importSpawns(source([memberFire[0],{...memberFire[0],members:false}]),[]);
  assert.equal(conflicting.definitions.length,0);
- assert.equal(conflicting.report.counts["conflicting-source-quantity-timer-or-membership"],2);
+ assert.equal(conflicting.report.counts["conflicting-source-alias-state"],2);
 });
 
 test("committed member Fire rune data matches the five audited source rows only",()=>{
@@ -299,14 +303,20 @@ test("Fortis items and Corsair Cove coins keep their source floor, membership an
     { ...coin, members: true }, { ...coin, quantity: 3 }, { ...coin, location: "[[King Black Dragon Lair]]" },
   ]), []);
   assert.deepEqual(result.definitions.map((d) => [d.id, d.location.z, d.amt, d.respawn, d.members === true]), [
+    [1919, 1, 1, 100, true],
+  ]);
+  assert.equal(result.report.counts["conflicting-source-alias-state"],4,
+    "contradictory states at the coin's same physical tile hold all four candidates");
+  const positive = importSpawns(source([glass, coin]), []);
+  assert.deepEqual(positive.definitions.map((d) => [d.id, d.location.z, d.amt, d.respawn, d.members === true]), [
     [1919, 1, 1, 100, true], [995, 0, 1, 100, false],
   ]);
   const installed = JSON.parse(readFileSync(new URL("../data/definitions/ground-items.json", import.meta.url), "utf8"));
-  for (const expected of result.definitions) assert.equal(installed.filter((d) =>
+  for (const expected of positive.definitions) assert.equal(installed.filter((d) =>
     d.id === expected.id && d.location.x === expected.location.x && d.location.y === expected.location.y
     && d.location.z === expected.location.z && d.amt === expected.amt && d.respawn === expected.respawn
     && d.members === expected.members).length, 1);
-  assert.deepEqual(importSpawns(source([glass, coin]), result.definitions).definitions, result.definitions);
+  assert.deepEqual(importSpawns(source([glass, coin]), positive.definitions).definitions, positive.definitions);
 });
 
 test("a source-proven reward projection leaves only the display spawn at that tile", () => {
@@ -326,4 +336,78 @@ test("a source-proven reward projection leaves only the display spawn at that ti
  assert.equal(first.report.counts["pickup-reward-projection"],1);
  assert.deepEqual(importSpawns(pinned, first.definitions).definitions, first.definitions);
  assert.deepEqual(importSpawns(source([reward, {...display, location:"Different source"}]), legacy).definitions, legacy);
+});
+
+const staffRow = (extra={}) => row({page:"Staff of Armadyl",name:"Staff of Armadyl",id:84,
+ x:2638,y:9906,plane:0,members:true,quantity:1,infobox_respawn_ticks:100,
+ location:"[[Temple of Ikov (dungeon)|Temple of Ikov]]",...extra});
+
+test("audited quest stock reconciles only its exact legacy state from source and preserves neighbors",()=>{
+ const legacy={id:84,location:{x:2638,y:9906,z:0},amt:1,respawn:0,description:"UNDIFINED"};
+ const neighbor={id:995,location:{x:2638,y:9905,z:0},amt:7,respawn:45,extra:"untouched"};
+ const input=[neighbor,legacy], before=structuredClone(input);
+ const result=importSpawns(source([staffRow()]),input);
+ assert.deepEqual(input,before);
+ assert.equal(result.definitions.length,2);assert.deepEqual(result.definitions[0],neighbor);
+ assert.deepEqual(result.definitions[1],{...legacy,respawn:100,members:true});
+ assert.equal(result.report.counts["existing-audited-source-state-reconciled"],1);
+ assert.deepEqual(importSpawns(source([staffRow()]),result.definitions).definitions,result.definitions);
+ assert.equal(JSON.stringify(importSpawns(source([staffRow()]),input)),JSON.stringify(result));
+});
+
+test("quest stock aliases never create a second stack and conflicting alias state stays held",()=>{
+ const aliases=[staffRow(),staffRow({page:"Staff of armadyl",name:"Staff of armadyl"})];
+ const added=importSpawns(source(aliases),[]);
+ assert.equal(added.definitions.length,1);assert.equal(added.definitions[0].respawn,100);
+ assert.equal(added.report.counts.added,1);assert.equal(added.report.counts["duplicate-source-exact"],1);
+ const legacy={id:84,location:{x:2638,y:9906,z:0},amt:1,respawn:0};
+ const conflict=importSpawns(source([aliases[0],staffRow({page:"Staff of armadyl",infobox_respawn_ticks:50})]),[legacy]);
+ assert.deepEqual(conflict.definitions,[legacy]);
+ assert.equal(conflict.report.counts["conflicting-source-alias-state"],2);
+ const unresolved=importSpawns(source([staffRow({unresolved_reasons:["conflicting-source-alias-state"]})]),[legacy]);
+ assert.deepEqual(unresolved.definitions,[legacy]);assert.equal(unresolved.report.counts["unresolved-source"],1);
+});
+
+test("quest stock audit refuses untyped timers, other tiles and unaudited legacy discrepancies",()=>{
+ const legacy={id:84,location:{x:2638,y:9906,z:0},amt:1,respawn:20};
+ const result=importSpawns(source([staffRow()]),[legacy]);
+ assert.deepEqual(result.definitions,[legacy]);assert.equal(result.report.counts["existing-exact-state-discrepancy"],1);
+ const duplicate=importSpawns(source([staffRow()]),[legacy,{...legacy,respawn:0}]);
+ assert.equal(duplicate.definitions.length,2);assert.deepEqual(duplicate.definitions,[legacy,{...legacy,respawn:0}]);
+ const differentTile=importSpawns(source([staffRow({x:2639})]),[]);
+ assert.equal(differentTile.definitions.length,0);assert.equal(differentTile.report.counts["members-world-scope-deferred"],1);
+ assert.throws(()=>importSpawns(source([staffRow({tile_respawn_raw:"100"})]),[]),/Invalid source-complete row/);
+});
+
+test("valid quest alias cannot escape an unresolved or member-conflicting sibling before eligibility",()=>{
+ const legacy={id:84,location:{x:2638,y:9906,z:0},amt:1,respawn:0};
+ const alternatives=[
+  staffRow({page:"Staff of armadyl",unresolved_reasons:["untyped-tile-respawn"],tile_respawn_raw:"100"}),
+  staffRow({page:"Staff of armadyl",members:false}),
+  staffRow({page:"Staff of armadyl",id:null,candidate_ids:[84,85],unresolved_reasons:["ambiguous-item-version"]}),
+ ];
+ for (const sibling of alternatives) for (const existing of [[],[legacy]]) {
+  const before=structuredClone(existing), result=importSpawns(source([staffRow(),sibling]),existing);
+  assert.deepEqual(existing,before);assert.deepEqual(result.definitions,before);
+  assert.equal(result.report.counts["conflicting-source-alias-state"],2);
+  assert.ok(result.report.rows.every(row=>row.reasons.includes("conflicting-source-alias-state")));
+ }
+ const distinct=importSpawns(source([staffRow(),staffRow({page:"Staff of armadyl",x:2639,members:false})]),[]);
+ assert.equal(distinct.definitions.length,1);assert.equal(distinct.definitions[0].location.x,2638);
+});
+
+test("audited legacy reconciliation rejects unknown field representations and accepts only audited defaults",()=>{
+ const canonical={id:84,location:{x:2638,y:9906,z:0},amt:1,respawn:0};
+ for (const extra of [{amt:null},{amt:"1"},{amt:0},{amt:true},{members:"true"},{members:null},{members:0},{members:1}]) {
+  const legacy={...canonical,...extra}, result=importSpawns(source([staffRow()]),[legacy]);
+  assert.deepEqual(result.definitions,[legacy]);
+  assert.equal(result.report.counts["existing-exact-state-discrepancy"],1);
+ }
+ for (const legacy of [canonical,{...canonical,members:false},
+  {id:84,location:{x:2638,y:9906,z:0},respawn:0}]) {
+  const result=importSpawns(source([staffRow()]),[legacy]);
+  assert.equal(result.report.counts["existing-audited-source-state-reconciled"],1);
+  assert.equal(result.definitions[0].respawn,100);assert.equal(result.definitions[0].amt,1);
+  assert.equal(result.definitions[0].members,true);
+ }
 });

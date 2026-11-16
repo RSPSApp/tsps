@@ -33,10 +33,35 @@ whenever the timer starts, which shows where the server restarts it:
   recordings can't show the "keeps running when 25 or fewer are left" case; that rule comes
   from the Wiki alone.
 
+## The orb's restore ring
+
+`spec_regen_timer` (4721) `[period, start tick]` stores the start tick (the `map_clock` value,
+varp 3079) in varc 474 and the period in varc 987, then draws a ring on the special attack orb
+that fills over the period (scripts 4723/4724). The ring is hidden at full energy and when
+`orbs_disabled` (varbit 4084) is set; script 6060 redraws it from varc 474 and `map_clock`
+whenever energy changes. `RestoreSpecialAttackTask` sends it each time a period begins:
+
+| When | Sent | rsprox captures (the user's) |
+| --- | --- | --- |
+| Energy spent from full | `[period, <this tick>]` (50, or 25 with the Lightbearer as in doom-wave1-5): the timer starts now | doom-wave1-5 ticks 62 and 400 |
+| Energy spent below full | nothing: the running period carries on | doom-wave1-5 ticks 99 and 176 |
+| A restore, the one that fills the bar included | `[period, <this tick>]` (25 in doom-wave1-5) | doom-wave1-5 ticks 87, 112, 338 |
+| The respawn tick | `[50, <this tick>]`: the timer starts over, energy is not restored | yama-first-time-fighting-and-second-time tick 317 |
+
+`PlayerDeathTask` restarts the restore timer on the respawn tick for that reason. A period
+carried over (a timer restarted with fewer ticks than the period) is dated back by the
+ticks already run, so the redraw lines up.
+
 ## Not implemented
 
-- The orb's regeneration indicator. Live sends `spec_regen_timer` at login and again every
-  50 ticks, even at full energy (recording 4258); at login it comes with `health_regen_timer`
-  and `spec_regen_orbs_synch`. Its start tick is the server's `map_clock` value (varp 3079),
-  which this server doesn't send. That belongs to the orb display for hitpoints and special
-  energy, not to the restore timer.
+- Live sends `spec_regen_timer` every period even at full energy (recording 4258; yama ticks
+  50-300 above), so its timer runs from login. This server's timer only runs below full energy.
+  The ring is hidden at full energy and spending from full restarts the timer live too, so no
+  restore or ring timing differs. At login live also sends `health_regen_timer` (4716,
+  `[100, tick]` every 100 ticks: the Hitpoints orb's ring) and `spec_regen_orbs_synch` (4722);
+  neither is sent here.
+- A timer carried into a new restore task (fewer ticks left than the period) is dated back in
+  varc 474, but script 4721 itself draws the ring from empty; live's login `spec_regen_orbs_synch`
+  (4722) would redraw it from the stored tick. Not sent, so such a ring starts empty.
+- Doom of Mokhaiotl restarts the timer between delve levels (doom-wave1-5: a period starts at
+  ticks 143 and 288, after the descent, with no restore). Not modelled.

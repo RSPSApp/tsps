@@ -67,8 +67,9 @@ sessions, so the browser wire format doesn't change.
 | 154 TRADE_REQUEST | — | dropped | 9 | the type-101 game message carries it |
 | 155 / 156 / 157 TRADE_OPEN / UPDATE / CLOSE | UPDATE_INV_FULL (90, 90 \| 0x8000), MESSAGE_GAME | mapped | 9 | tsps opens 335/334/336 and writes their text itself; only the offers needed translating |
 | 190 COLLECTION_LOG_SNAPSHOT | UPDATE_INV_FULL (620) | mapped | 5 | |
-| 210 GAMEMODE_DATA | — | dropped | 4 | custom items/models, league overrides; custom items fall back to `baseItemId` |
+| 210 GAMEMODE_DATA | — | dropped | 4 | custom items/models, league overrides; custom items fall back to `baseItemId`. A league world's struct, enum and DB row overrides (tasks, relics, areas, ranks, tutorial) are served over JS5 instead, read from tsps's `/api/league-content` (`ServedCache`, `ContentPatches`); other senders' overrides (custom items, the Easter lock on a plain world) aren't |
 | 220 SYSTEM_UPDATE | UPDATE_REBOOT_TIMER_V2 | mapped | 7 | centiseconds → ticks |
+| 221 URL_OPEN | URL_OPEN | mapped | — | the page opens in the player's browser (the welcome screen's banner) |
 | (equipment) | UPDATE_INV_FULL (94) | mapped | 5 | native bit: tsps sends inventory 94 on WIDGET_RUN_SCRIPT at login and on every change, with quantities; otherwise built from the local appearance |
 | (GE varps 7900–7955) | UPDATE_STOCKMARKET_SLOT_V2 | mapped | 5 | 8 slots × 7 fields; selling states are buying + 8 |
 

@@ -379,6 +379,13 @@ function joinFriend(player, name) {
     player.sendMessage(FULL_MESSAGE);
     return;
   }
+  // "group-pvm:can-start": content may refuse (a Hardcore Group Ironman with an outsider).
+  const check = { players: [player, ...session.players], entrant: player, activity: "the Royal Titans", allowed: true, reason: null };
+  api.emitCustomEvent("group-pvm:can-start", check);
+  if (check.allowed === false) {
+    if (check.reason) player.sendMessage(check.reason);
+    return;
+  }
   if (!joinable(session)) {
     player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
       new core.StatementDialogue(0, Shared.CRITICAL_MESSAGE),

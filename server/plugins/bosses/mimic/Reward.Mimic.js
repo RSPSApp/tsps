@@ -7,6 +7,8 @@
  * or death costs one roll on the drop table (simultaneous death with the Mimic
  * does not); failing every attempt means no loot. One bonus outcome uses the
  * exact tier/attempt quantity list; original clue rolls are paid separately.
+ * The tertiary Mimic scroll case rides along until the player has opened one
+ * (treasure-trails:mimic-case, owned by Capacity.ClueCapacity).
  * Player-supplied transcript (verbatim from the game):
  * - Opening it before the kill: "Visit the Strange Casket, upstairs in Watson's
  *   house in Hosidius, to attempt the Mimic's challenge."
@@ -28,6 +30,7 @@ const Lair = require("./Lair.Mimic");
 const State = require("./State.Mimic");
 const Pool = require("./Pool.Mimic");
 const { OPTED_IN_ATTRIBUTE } = require("./Dialogue.Mimic");
+const { MIMIC_ATTRIBUTE: SCROLL_CASE_ATTRIBUTE } = require("../../treasuretrails/Capacity.ClueCapacity");
 const BONUS_TABLES = require("../data/reward-tables.json").tables;
 const opening = new WeakSet();
 
@@ -65,6 +68,11 @@ function validateDrops(drops) {
     if (!creditDefinition || creditDefinition === ItemDefinition.DEFAULT || creditDefinition.getId() !== creditId) throw new Error(`Missing Mimic reward definition ${creditId}`);
     return { ...drop, creditId, stackable: creditDefinition.isStackable() };
   });
+}
+
+/** Wiki (Mimic): the tertiary scroll case is paid only until one has been opened. */
+function scrollCaseEligible(player) {
+  return player?.getAttribute?.(SCROLL_CASE_ATTRIBUTE) !== true;
 }
 
 /** Queue the same clue reward screen contract; log acquisition on opening. */
@@ -124,7 +132,7 @@ function openMimic(event) {
       const request = { player, tier: casket.tier, rolls: casket.normalRolls, drops: null, handled: false, error: null };
       pluginApi.emitCustomEvent("treasure-trails:roll-casket", request);
       if (!request.handled || !Array.isArray(request.drops) || request.error) throw request.error ?? new Error("Casket reward service unavailable");
-      const bonus = Pool.roll(BONUS_TABLES, casket.tier, casket.attemptsLeft);
+      const bonus = Pool.roll(BONUS_TABLES, casket.tier, casket.attemptsLeft, { includeScrollCase: scrollCaseEligible(player) });
       drops = validateDrops([...request.drops, ...bonus]);
       const first = bonus.find(drop => drop.itemId !== Shared.ids().PLANK);
       const name = Shared.core().ItemDefinition.forId(first.itemId).getName();
@@ -188,4 +196,4 @@ function attach(api) {
   api.onCustomEvent("npc-drops:generated", onDropsGenerated);
 }
 
-module.exports = { attach, openMimic, onDropsGenerated, fromCasket, DEFEATED_ATTRIBUTE, ENCOUNTERED_ATTRIBUTE, GUARANTEED_CASKET };
+module.exports = { attach, openMimic, onDropsGenerated, fromCasket, scrollCaseEligible, DEFEATED_ATTRIBUTE, ENCOUNTERED_ATTRIBUTE, GUARANTEED_CASKET };

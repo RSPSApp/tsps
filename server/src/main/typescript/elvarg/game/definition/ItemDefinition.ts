@@ -57,7 +57,7 @@ export class ItemDefinition {
         definition.bonuses = [...(base.bonuses ?? new Array(14).fill(0))];
         definition.requirements = [...(base.requirements ?? new Array(23).fill(0))];
         for (const key of ["equipmentType", "weaponInterface", "doubleHanded", "stackable",
-            "tradeable", "dropable", "sellable", "value", "grandExchangeValue", "grandExchangeSellValue",
+            "tradeable", "dropable", "sellable", "value", "grandExchangeValue", "grandExchangeSellValue", "guidePrice",
             "highAlch", "lowAlch", "dropValue",
             "bloodMoneyValue", "blockAnim", "standAnim", "walkAnim", "runAnim", "standTurnAnim",
             "turn180Anim", "turn90CWAnim", "turn90CCWAnim", "attackAnim", "equipSound", "bonuses",
@@ -67,6 +67,7 @@ export class ItemDefinition {
                 (definition as any)[key] = Array.isArray(value) ? [...value] : value;
             }
         }
+        if (typeof raw.tradeable === "boolean") definition.untradeable = !raw.tradeable;
         this.definitions.set(id, definition);
         return definition;
     }
@@ -79,12 +80,15 @@ export class ItemDefinition {
     private doubleHanded: boolean;
     private stackable: boolean;
     private tradeable: boolean;
+    /** The cache's explicit `tradeable=no`: see {@link isPlayerTradeable}. Unknown items count as untradeable. */
+    private untradeable: boolean = true;
     private dropable: boolean;
     private sellable: boolean;
     private noted: boolean;
     private value: number;
     private grandExchangeValue: number;
     private grandExchangeSellValue: number;
+    private guidePrice: number;
     private bloodMoneyValue: number;
     private highAlch: number;
     private lowAlch: number;
@@ -145,6 +149,7 @@ export class ItemDefinition {
         this.examine = cached.examine ?? this.examine;
         this.stackable = cached.stackability === ObjStackability.ALWAYS;
         this.tradeable = cached.isTradable || id === ItemIdentifiers.COINS;
+        this.untradeable = cached.isUntradable === true && !this.tradeable;
         this.dropable = cached.inventoryActions[4]?.toLowerCase() === "drop";
         this.noted = cached.noteTemplate !== -1;
         this.noteId = cached.note;
@@ -196,6 +201,20 @@ export class ItemDefinition {
         return this.grandExchangeValue > 0;
     }
 
+    /**
+     * The official Grand Exchange guide price (data/definitions/item-guide-prices.json, yarn fetch:prices),
+     * what examine and trade values show; falls back to the Grand Exchange quote. Grand Exchange offers
+     * keep their own buy/sell quotes.
+     */
+    public getGuidePrice(): number {
+        return this.guidePrice > 0 ? this.guidePrice : this.getGrandExchangeValue();
+    }
+
+    /** Whether the item has a guide price or a Grand Exchange quote to stand in for one. */
+    public hasGuidePrice(): boolean {
+        return this.guidePrice > 0 || this.hasGrandExchangeValue();
+    }
+
     /** The guide sell quote, falling back to the buy quote when there is none. */
     public getGrandExchangeSellValue(): number {
         return this.grandExchangeSellValue > 0 ? this.grandExchangeSellValue : this.getGrandExchangeValue();
@@ -223,6 +242,15 @@ export class ItemDefinition {
 
     public isTradeable(): boolean {
         return this.tradeable;
+    }
+
+    /**
+     * Tradeable between players, as the Wiki's infobox "tradeable" means it: the Grand Exchange flag
+     * ({@link isTradeable}) or neither cache flag. Rings of dueling below (8), burnt meat and the like
+     * trade but are not on the Exchange ("exchange: No"), so they have no `tradeable=yes`.
+     */
+    public isPlayerTradeable(): boolean {
+        return this.tradeable === true || !this.untradeable;
     }
 
     public isSellable(): boolean {

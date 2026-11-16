@@ -31,13 +31,15 @@ function mixer(t, level) {
   const c = new ClientConnection(channel); c.player = p;
   const messages = [];
   t.mock.method(p.getPacketSender(), 'sendMessage', (m) => { messages.push(m); return p.getPacketSender(); });
+  const typed = [];
+  t.mock.method(p.getPacketSender(), 'sendTypedMessage', (type, m) => { typed.push([type, m]); return p.getPacketSender(); });
   t.after(() => { PM.emitPlayerLogout({ player: p, username: p.getUsername() }); p.setRegistered(false); });
   const I = core.ItemIdentifiers, inv = p.getInventory();
   inv.setItem(0, new core.Item(I.BLAMISH_SNAIL_SLIME, 1));
   inv.setItem(1, new core.Item(I.HARRALANDER_POTION_UNF_, 1));
   const raw = () => p.getSkillManager().skills.experience[core.Skill.HERBLORE.getIndex()];
   const use = async () => { await c.dispatch([{ type: 'inventory_use_on', itemId: I.BLAMISH_SNAIL_SLIME, slot: 0, target: { kind: 'inventory', slot: 1 } }]); c.processTurnPackets(); };
-  return { p, inv, messages, raw, use };
+  return { p, inv, messages, typed, raw, use };
 }
 test('at 25 Herblore the oil is made for 80 XP', async (t) => {
   const f = mixer(t, 25);
@@ -53,5 +55,9 @@ test('at 24 Herblore nothing is used up', async (t) => {
   assert.equal(f.inv.getAmount(I.BLAMISH_OIL), 0);
   assert.equal(f.inv.getAmount(I.BLAMISH_SNAIL_SLIME), 1);
   assert.equal(f.inv.getAmount(I.HARRALANDER_POTION_UNF_), 1);
-  assert.ok(f.messages.includes('You need a Herblore level of 25 to combine those.'), f.messages.join(' | '));
+  // A messagebox with its type=mesbox chat line, as the Herblore skill's (rsprox_transcripts/227/910269.txt tick 22640).
+  const line = 'You need a Herblore level of 25 to combine those.';
+  assert.ok(!f.messages.includes(line), 'not a plain game message');
+  assert.deepEqual(f.typed, [[core.ChatType.MESBOX, line]]);
+  assert.equal(f.p.getDialogueManager().isActive(), true, 'the refusal opens a messagebox');
 });

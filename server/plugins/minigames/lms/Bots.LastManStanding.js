@@ -50,7 +50,7 @@ function stateOf(player) {
 function spawnBot(at) {
   const { runtime, behaviorMode } = getActiveBotRuntime();
   if (!runtime) return null;
-  const bot = runtime.spawnPvpBot(at, { username: `LmsBot${++serial}`, mode: behaviorMode.PVP });
+  const bot = runtime.spawnPvpBot(at, { username: `LmsBot${++serial}`, activity: "last-man-standing", mode: behaviorMode.PVP });
   if (!bot) return null;
   bot.setAttribute(BOT_ATTRIBUTE, true);
   Lobby.follow({ player: bot, location: at });

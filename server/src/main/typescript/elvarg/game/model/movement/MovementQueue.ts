@@ -10,6 +10,7 @@ import type { Player } from "../../entity/impl/player/Player";
 import { Direction, Directions } from "../Direction";
 import { Location } from "../Location";
 import { Skill } from "../Skill";
+import { isNoclip } from "./Noclip";
 import { PathFinder } from "./path/PathFinder";
 import { Task } from "../../task/Task";
 import { TaskManager } from "../../task/TaskManager";
@@ -161,6 +162,8 @@ export class MovementQueue {
         if (this.character.getLocation().getZ() == -1) {
             return true;
         }
+        // Owner noclip (#5630): a flagged player's own step ignores collision; everyone else is checked below.
+        if (isNoclip(this.character)) return true;
         return RegionManager.canMovestart(this.character.getLocation(), this.character.getLocation().transform(deltaX, deltaY), this.character.getSize(), this.character.getSize(), this.character.getPrivateArea());
     }
 
@@ -670,13 +673,15 @@ export class MovementQueue {
     public canWalkTo(next: Location, source: Location = this.character.getLocation()) {
         if (
             next.getZ() !== source.getZ() ||
-            !RegionManager.canMovestart(
-                source,
-                next,
-                this.character.getSize(),
-                this.character.getSize(),
-                this.character.getPrivateArea()
-            )
+            // Owner noclip (#5630): a flagged player's own step ignores collision; everyone else is checked.
+            (!isNoclip(this.character) &&
+                !RegionManager.canMovestart(
+                    source,
+                    next,
+                    this.character.getSize(),
+                    this.character.getSize(),
+                    this.character.getPrivateArea()
+                ))
         ) {
             return false;
         }
@@ -1294,9 +1299,11 @@ export class MovementQueue {
 
         TaskManager.submit(new MovementTask(this.player.getIndex(), (task: MovementTask) => {
             if (reachedDestination) {
-                action?.();
-                this.player.getMovementQueue().reset();
+                // Stop first, then act, as walkToObject does: an action that moves the player on
+                // (a Barrows door's walk through its doorway) keeps its step.
                 task.stop();
+                this.player.getMovementQueue().reset();
+                action?.();
                 return;
             }
 
@@ -1415,6 +1422,20 @@ export class MovementQueue {
             routeSpec.objectY + (length - 1) / 2,
             this.player.getLocation().getZ()
         ));
+    }
+
+    /** Within `range` tiles of the loc's rotated footprint, on its plane, with a clear line to it. */
+    private withinApproachRange(routeSpec: ReturnType<MovementQueue["buildObjectRouteSpec"]>, range: number): boolean {
+        const at = this.player.getLocation();
+        const z = at.getZ();
+        const rotated = (routeSpec.reachAngle & 1) === 1;
+        const width = Math.max(1, rotated ? routeSpec.reachLength : routeSpec.reachWidth);
+        const length = Math.max(1, rotated ? routeSpec.reachWidth : routeSpec.reachLength);
+        const dx = Math.max(routeSpec.objectX - at.getX(), 0, at.getX() - (routeSpec.objectX + width - 1));
+        const dy = Math.max(routeSpec.objectY - at.getY(), 0, at.getY() - (routeSpec.objectY + length - 1));
+        if (Math.max(dx, dy) > range) return false;
+        return RegionManager.canProjectileAttackBounds(at, new Location(routeSpec.objectX, routeSpec.objectY, z),
+            1, 1, width, length, this.player.getPrivateArea?.() ?? null);
     }
 
     /** The reach check respects shape, rotation and access flags, from the player's own tile. */
@@ -1759,6 +1780,7 @@ export class MovementQueue {
         }
 
         const routeSpec = this.buildObjectRouteSpec(object, routeEvent.blockAccessFlags);
+        const approachRange = Math.max(0, routeEvent.approachRange ?? 0);
         // A frozen player still operates what they reach from where they stand (a ladder, a
         // cave entrance: Wiki, Freeze); anything further is "I can't reach that!" as live.
         // Another lock (a stun) still stops a frozen player.
@@ -1826,6 +1848,17 @@ export class MovementQueue {
             if (this.player.getPrivateArea() !== interactionArea || !this.isInteractionObjectValid(object, id, type, stoodAtClick)) {
                 this.reset();
                 task.stop();
+                return;
+            }
+            // An approach op runs on the step that brings the player within range (rsprox
+            // 223/01318: a signpost read opens on the walk's tick at five tiles, and they stop).
+            if (approachRange > 0 && this.withinApproachRange(routeSpec, approachRange)) {
+                this.reset();
+                this.pathX = this.player.getLocation().getX();
+                this.pathY = this.player.getLocation().getY();
+                task.stop();
+                TaskManager.cancelTasks(this.player.getIndex());
+                action.execute();
                 return;
             }
             // The reach check already respects shape, rotation and access flags.

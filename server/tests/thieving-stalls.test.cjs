@@ -29,6 +29,7 @@ const testApi = {
             [O.FISH_STALL, 'viking_fish_market'], [O.FISH_STALL_2, 'misc_fish_market'], [O.FISH_STALL_3, 'etc_fish_market'],
             [O.FISH_STALL_4, 'fish_stall_warrens'], [O.VEG_STALL, 'misc_veg_market'], [O.VEG_STALL_2, 'etc_veg_market'],
             [O.SHOP_COUNTER_4, 'tzhaar_shopcounter_ore'], [O.SHOP_COUNTER_5, 'tzhaar_shopcounter_gem'],
+            [O.BAKERS_STALL, 'cakethiefstall'], [O.TEA_STALL, 'tea_stall'],
         ]), getVarbitId: (name) => bits[name.replace("marketthief_", "")], getSeqId: (name) => { assert.equal(name, "human_pickuptable"); return 832; } },
         World: { getProcessCycle: () => tick, getNpcsNear: (at, radius, area) => npcs.filter((npc) => npc.getLocation().getDistance(at) <= radius && npc.area === area) },
         RegionManager: { canProjectileAttackBounds: (at) => npcs.find((npc) => npc.getLocation() === at).visible },
@@ -40,8 +41,11 @@ const testApi = {
     },
     onCustomEvent() {}, onNpcInteraction() {}, onItemAction() {}, log() {}, persistAttribute() {},
     onNpcsInteraction: (names, actions) => { for (const name of names) npcHooks.set(name, actions); },
-    onPlayerLogin: (handler) => lifecycle.login = handler,
-    onPlayerLogout: (handler) => lifecycle.logout = handler,
+    // Every Thieving unit with a login or logout hook gets it: the stalls' own and the house robbery's.
+    onPlayerLogin: (handler) => { const before = lifecycle.login; lifecycle.login = before ? (event) => { before(event); handler(event); } : handler; },
+    onServerStartup() {},
+    onNpcDialogueVariant() {}, onNpcDialogueCondition() {}, onItemOnNpc() {},
+    onPlayerLogout: (handler) => { const before = lifecycle.logout; lifecycle.logout = before ? (event) => { before(event); handler(event); } : handler; },
     onObjectInteraction: (name, actions) => hooks.set(name, actions),
     onBeforeObjectInteraction() {},
     emitCustomEvent: (name, request) => events.push([name, request]),
@@ -167,7 +171,8 @@ test('visible guards catch and attack thieves, preventing loot, XP, pets and dep
     assert.ok(!who.messages.includes("You've been caught stealing!"));
     assert.equal(who.items.length, 0);
     assert.equal(who.xp.length, 0);
-    assert.deepEqual(events.map(([name]) => name), ['thieving:stall-watch'], 'only the watch asked');
+    // A quest's access check (thieving:stall-access), then the watch; nothing past the catch.
+    assert.deepEqual(events.map(([name]) => name), ['thieving:stall-access', 'thieving:stall-watch'], 'only the checks asked');
     assert.ok(!depleted.has(stall));
 });
 
@@ -735,4 +740,31 @@ test('the tea stall gives the noteable cup of tea', () => {
     advance();
     assert.deepEqual(who.items.map((reward) => reward.getId()), [I.CUP_OF_TEA_2]);
     assert.equal(I.CUP_OF_TEA_2, 1978);
+});
+
+test("the Ardougne baker's stall puts each theft in the loot tracker (category 6) after the item, before the XP; other stalls don't", () => {
+    const who = player(), stallObject = object(O.BAKERS_STALL);
+    const added = [];
+    who.getInventory = () => ({ isFull: () => false, full() {}, addItem: (item) => { who.items.push(item); added.push('item'); } });
+    who.getSkillManager = () => ({ getCurrentLevel: () => 99, addExperiences: (_skill, amount) => { who.xp.push(amount); added.push('xp'); } });
+    const emit = testApi.emitCustomEvent;
+    click(who, stallObject, "Baker's stall");
+    assert.equal(events.some(([name]) => name === 'loot-tracker:add-loc'), false, 'nothing on the click tick');
+    testApi.emitCustomEvent = (name, request) => { if (name === 'loot-tracker:add-loc') added.push('tracker'); emit(name, request); };
+    try { advance(); } finally { testApi.emitCustomEvent = emit; }
+    const entries = events.filter(([name]) => name === 'loot-tracker:add-loc');
+    assert.equal(entries.length, 1);
+    const [, entry] = entries[0];
+    assert.equal(entry.player, who);
+    assert.equal(entry.locId, O.BAKERS_STALL);
+    assert.equal(entry.category, 6);
+    assert.deepEqual(entry.items, [[who.items[0].getId(), who.items[0].getAmount()]]);
+    assert.deepEqual(added, ['item', 'tracker', 'xp']);
+
+    events = [];
+    const tea = player();
+    click(tea, object(O.TEA_STALL), 'Tea stall');
+    advance();
+    assert.equal(tea.items.length, 1);
+    assert.equal(events.some(([name]) => name === 'loot-tracker:add-loc'), false, 'the tea stall is not tracked (rec 1001438)');
 });

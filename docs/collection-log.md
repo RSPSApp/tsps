@@ -13,7 +13,7 @@ The collection log lives in `server/plugins/achievements/collectionlog/`. What i
     - the Inferno and the Fight Caves: their capes.
 
     ToA, Wintertodt, the Colosseum and the Inferno roll only their pets through `npc-drops:roll` (Pets takes them from there), so no loot is counted twice.
-- **Kills tally the category of the same name,** e.g. killing Zulrah adds to "Zulrah". Plugins that keep their own count answer for it instead (Zulrah, the Kalphite Queen).
+- **Kills tally the category of the same name,** e.g. killing Zulrah adds to "Zulrah". Plugins that keep their own count answer for it instead (Zulrah, the Kalphite Queen; Guardians of the Rift's rifts closed and searches, varps 2048 and 2941).
 - **Pets** report through the log (owned pets are synced silently on login).
 - **Barrows:** each chest's rolled loot is logged once, even when it overflows onto the ground. The category's chest count comes from Barrows' existing saved tally.
 - **Reward shops:** successful purchases of original stock in the shops listed in `plugins/achievements/collectionlog/data/reward-shops.json` log their trackable items through `shop:purchase`. General-store resale and unrelated shops do not grant collection credit. The event reports the quantity actually paid for and delivered.
@@ -94,11 +94,15 @@ The client reads the log straight from its cache too. It used to override these 
 | 5 ticks later | The total, highscore and tab counts, and the recent items shifted down |
 | 13 ticks after the popup opened | The popup is closed |
 
+**The Collection log book** (item 22711), as captured (rsprox local 1001237, rev 231): "Read" opens the log as above on the **next** tick (ticks 2185 and 2245, both one tick late); "Collections overview" opens the overview on the click's tick (tick 2197), sending `current_runeday` first. From the book there is no log to close, so no `if_closesub` or script 2158 comes before it; with the log already open it is closed first, as from the burger.
+
 A boss category's **Combat Achievements button** (621:21) closes the log and opens that boss's Combat Achievements page (`combat-achievements:open`; [combat-achievements.md](combat-achievements.md)).
 
 ## Not modelled
 
 - **The log's own "View Log" entry** (621:73 slot 10, the view already open): no capture shows it, so it does nothing.
+- **The book's return to a POH bookcase** (captured in local 1001237 at tick 2251: `poh_larder_examine`, sound 1412, "You return the book to the bookcase."): left to Construction.
+- **The worn book's options** ("Collection Log", "Collections Overview" on the equipment tab): no recording, so unhandled. Whether a later click cancels the book's one-tick Read is not captured either; ours doesn't.
 - **`current_runeday` from the side journal's summary tab**, which live also sends; that tab is not part of the log.
 - **The per-item varbits** OSRS sends at login for a few items (`collection_item_*`, e.g. Zulrah's scales) and the `collection_other_*_completed` flags.
 - **Loot that doesn't go through `npc-drops:roll` yet:** additional reward sources, raids chests and clue caskets. Each needs a `collection-log:obtain` in a follow-up; unimplemented content has no acquisition route yet.

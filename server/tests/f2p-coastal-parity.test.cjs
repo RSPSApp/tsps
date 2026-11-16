@@ -192,6 +192,15 @@ test("Pirate's Treasure crate packing uses the captured message boxes and Luthas
   assert.equal(p.attributes.get('pirates-treasure.bananas'), 0);
   assert.deepEqual(p.messages, ['The crate is completely empty.', 'Why would I want to do that?', 'Luthas hands you 30 coins.']);
   assert.equal(p.items.get(995), 30);
+
+  // The other variant has the transcript's own message step (A0JWWz) before the coins (76-Dox): the line is sent once.
+  p.attributes.set('pirates-treasure.bananas', 10);
+  const message = { player: p, npcId: core.NpcIdentifiers.LUTHAS, stepId: 'A0JWWz', kind: 'message', handled: false };
+  q.emit('npc-dialogue:action', message);
+  assert.equal(message.handled, true, 'NpcDialogues sends an unhandled message step itself, so this one is handled');
+  q.emit('npc-dialogue:action', { player: p, npcId: core.NpcIdentifiers.LUTHAS, stepId: '76-Dox' });
+  assert.equal(p.messages.filter((m) => m === 'Luthas hands you 30 coins.').length, 2, 'one line per payment');
+  assert.equal(p.items.get(995), 60);
 });
 
 const furnace = { getName: () => 'Furnace' };
@@ -215,10 +224,16 @@ test('as captured: Smelt on a furnace makes the Prince Ali key with no prompt, a
     assert.equal(smeltAt(q, p).handled, undefined, `stage ${stage}: Smelt opens the normal menu`);
     q.tick(1);
     assert.equal(p.items.get(2423), 1); assert.equal(p.items.get(2349), 1); assert.equal(p.items.get(2418), 1, 'no second key');
+    // The print used on the furnace makes no key either: the use falls through to the default.
+    const use = { player: p, itemId: 2423, objectId: 24009, object: { getDefinition: () => furnace } };
+    q.call('onItemOnObject', use);
+    assert.equal(use.handled, undefined, `stage ${stage}: key print on furnace is not the quest's`);
+    q.tick(1);
+    assert.equal(p.items.get(2423), 1); assert.equal(p.items.get(2349), 1); assert.equal(p.items.get(2418), 1, 'no second key from the print');
   }
 });
 
-test('Prince Ali key can be made at a furnace without Osman and Leela accepts the prepared player at state20', () => {
+test('Prince Ali key can be made at a furnace without Osman and Leela accepts the prepared player on a return visit at state20', () => {
   const q = register('PrinceAliRescue', 'prince_ali_rescue'), p = player(); q.quest.setStage(p, 20);
   p.items.set(2423, 1);
   q.call('onItemOnObject', { player: p, itemId: 2423, objectId: 24009, object: { getDefinition: () => furnace } });
@@ -228,13 +243,12 @@ test('Prince Ali key can be made at a furnace without Osman and Leela accepts th
   assert.equal(q.prompts.length, 0); q.tick(1);
   assert.equal(p.items.get(2418), 1); assert.equal(q.quest.getStage(p), 20); assert.deepEqual(p.xp, [[core.Skill.CRAFTING.getIndex(), 2]]);
   for (const id of [2419, 1013, 2424, 954]) p.items.set(id, 1);
-  const variant = q.hooks.get('onNpcDialogueVariant')[0]({ player: p, npcId: core.NpcIdentifiers.LEELA });
-  assert.equal(variant.variant, 'starting-out-talking-to-leela', 'as captured: the first visit takes its prepared branch');
-  const prepared = require('../data/definitions/npc-dialogues.json')['Prince Ali Rescue'].variants[variant.variant][2];
-  const condition = (text) => q.hooks.get('onNpcDialogueCondition')[0]({ player: p, npcId: core.NpcIdentifiers.LEELA, text });
-  assert.equal(condition(prepared.text), true);
-  assert.equal(prepared.steps[0].player, 'Yes. In fact, I already have everything we need.');
-  p.items.delete(954); assert.equal(condition(prepared.text), false, 'without the rope Leela explains the plan'); p.items.set(954, 1);
+  const leela = () => q.hooks.get('onNpcDialogueVariant')[0]({ player: p, npcId: core.NpcIdentifiers.LEELA }).variant;
+  assert.equal(leela(), 'starting-out-talking-to-leela', 'Wiki: the first visit explains the plan');
+  const told = { player: p, npcId: core.NpcIdentifiers.LEELA, text: "I'd say that's a good summary. Now, do you have any questions for me about any part of the plan?" };
+  q.emit('npc-dialogue:line', told); assert.equal(leela(), 'starting-out-talking-to-leela', 'not met until the summary line is reached'); told.before();
+  assert.equal(leela(), 'preparations-for-rescue-talking-to-leela-after-having-all-the-required-items', 'the return visit with everything');
+  p.items.delete(954); assert.equal(leela(), 'starting-out-talking-to-leela-talking-to-leela-again', 'without the rope Leela asks again'); p.items.set(954, 1);
   const ready = { player: p, npcId: core.NpcIdentifiers.LEELA, text: "Good work. Now, before breaking the Prince out, you'll need to find a way to deal with his personal guard." };
   q.emit('npc-dialogue:line', ready); assert.equal(q.quest.getStage(p), 20); ready.before(); assert.equal(q.quest.getStage(p), 30);
 });

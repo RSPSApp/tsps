@@ -530,9 +530,16 @@ function decrementAmmo(player, pos, amount, delayTicks = 0) {
   const stack = player.getAttribute(ATTRIBUTE);
   const ammoId = stored(player).id;
   const dropChance = 80 - PluginManager.rangedAmmoRecovery(player);
+  // Content may keep some shots out of the roll altogether (a league relic), as the core asks for
+  // worn ammunition. `extra`: shots given back on top (Demonic Pacts' Regenerate above 100%),
+  // added to the same stack.
+  const saving = { player, itemId: ammoId, amount, saved: 0, extra: 0 };
+  pluginApi.emitCustomEvent("ranged:ammo-saving", saving);
+  const rolled = amount - Math.min(amount, Math.max(0, saving.saved | 0));
+  const extra = Math.max(0, saving.extra | 0);
   let used = 0;
   let dropped = 0;
-  for (let shot = 0; shot < amount; shot++) {
+  for (let shot = 0; shot < rolled; shot++) {
     const roll = Misc.getRandom(99);
     if (roll < BREAK_CHANCE) used++;
     else if (roll < BREAK_CHANCE + dropChance) dropped++;
@@ -542,7 +549,7 @@ function decrementAmmo(player, pos, amount, delayTicks = 0) {
     // Swapped or emptied mid-flight: leave the new contents alone.
     if (!ammo || ammo.id !== ammoId || player.getAttribute(ATTRIBUTE) !== stack) return;
     if (dropped > 0 && pos) ItemOnGroundManager.registerLocation(player, new Item(ammoId, dropped), pos);
-    const left = ammo.amount - used - dropped;
+    const left = ammo.amount - used - dropped + extra;
     // Emptied without a line, as worn ammo is (rsprox 227/00096:101682); the next attempt says so.
     store(player, { id: ammoId, amount: left }, true);
   };

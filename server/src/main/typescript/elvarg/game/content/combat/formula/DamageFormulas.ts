@@ -13,6 +13,7 @@ import { SpecialAttackMaximumHitSource, WeaponSpecialTraits } from "../WeaponSpe
 import { PluginManager } from "../../../../plugins/PluginManager";
 import { Spell } from "../magic/Spell";
 import { WeaponProfiles } from "../WeaponProfile";
+import { lazyRequire } from "../../../../util/LazyRequire";
 
 const getPlayerCombatSpecial = (player: Player): any | null => {
     const accessor = (player as any)?.getCombatSpecial;
@@ -24,6 +25,11 @@ const getPlayerCombatSpecial = (player: Player): any | null => {
     }
     return (player as any)?.combatSpecial ?? null;
 };
+
+// Loaded lazily (CombatSpells reaches back into the formulas); resolved once.
+const getCombatSpells = lazyRequire(() => (require("../magic/CombatSpells") as typeof import("../magic/CombatSpells")).CombatSpells);
+const getItemIdentifiers = lazyRequire(() =>
+    (require("../../../../util/ItemIdentifiers") as typeof import("../../../../util/ItemIdentifiers")).ItemIdentifiers);
 
 export class DamageFormulas {
     public static sourceHitBounds(entity: Mobile, attackType: CombatType, target?: Mobile): { minimum: number; maximum: number } {
@@ -223,7 +229,7 @@ export class DamageFormulas {
         const baseRequest = { attacker: c, target, spell, context, originalMaxHit: maxHit, maxHit };
         PluginManager.emitCustomEvent("combat:magic-base-max-hit", baseRequest);
         if (Number.isFinite(baseRequest.maxHit) && baseRequest.maxHit >= 0) maxHit = Math.floor(baseRequest.maxHit);
-        const { CombatSpells } = require("../magic/CombatSpells") as typeof import("../magic/CombatSpells");
+        const CombatSpells = getCombatSpells();
         maxHit = CombatSpells.applyChargeMaxHit(c, maxHit, spell);
         const baseMaxHit = maxHit;
 
@@ -282,7 +288,7 @@ export class DamageFormulas {
             }
             const special = getPlayerCombatSpecial(player);
             const weaponId = player.getEquipment().getWeapon().getId();
-            const { ItemIdentifiers } = require("../../../../util/ItemIdentifiers") as typeof import("../../../../util/ItemIdentifiers");
+            const ItemIdentifiers = getItemIdentifiers();
             if (
                 (includeSpecial ?? player.isSpecialActivated()) &&
                 special?.getCombatMethod().type() === CombatType.MAGIC &&

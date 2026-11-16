@@ -225,6 +225,21 @@ function line(h, player, text) {
   return event;
 }
 
+/** The player's "Okay..." in the intro: the miniquest starts as it shows (BarrowsMiniQuest.bin tick 79). */
+function acceptLine(h, player, variantName = INTRO) {
+  const event = { player, npcId: N.STRANGE_OLD_MAN, text: 'Okay...', step: { player: 'Okay...' },
+    pages: [{ page: PAGE, variants: [variantName] }], skip: false };
+  emit(h, 'npc-dialogue:line', event);
+  return event;
+}
+
+/** The Barrows chest's loot as it is rolled (barrows:chest-rewards), with the run's slain brothers. */
+function chestLoot(h, player, killed) {
+  const rewards = [new core.Item(I.MIND_RUNE, 1)];
+  emit(h, 'barrows:chest-rewards', { player, run: { killed }, rewards });
+  return rewards.map((item) => item.getId());
+}
+
 function itemAction(h, name, option, event) {
   for (const registration of h.itemRegistrations) {
     if (registration.name !== name) continue;
@@ -287,8 +302,11 @@ test('fresh stage 0 selects the canonical intro, starts, and replays varbit 1497
   assert.equal(npcTalk(h, p), true);
   assert.deepEqual(h.transcripts.at(-1), { npcId: N.STRANGE_OLD_MAN, page: PAGE, variant: INTRO });
 
-  const first = line(h, p, "It's time.");
-  first.before();
+  const time = line(h, p, "It's time.");
+  time.before?.();
+  assert.equal(h.quest.getStage(p), 0, "his first line doesn't start it");
+  const okay = acceptLine(h, p);
+  okay.before();
   assert.equal(h.quest.getStage(p), 2);
   assert.equal(p.varbits.get(14973), 2);
   assert.equal(p.configs.has(3894), false, 'the shared parent varp is never overwritten');
@@ -303,47 +321,38 @@ test('Priest in Peril gates the intro without stealing the standard NPC dialogue
   const p = makePlayer();
   assert.equal(variant(h, p), null);
   assert.equal(npcTalk(h, p), false);
-  const first = line(h, p, "It's time.");
+  const first = acceptLine(h, p);
   first.before?.();
   assert.equal(h.quest.getStage(p), 0);
 });
 
-test('a six-brother Barrows chest grants the strange icon once and a fifth brother does not', () => {
+test('a six-brother Barrows chest puts the strange icon first in its loot, once; a fifth brother does not', () => {
   const h = harness();
   const p = makePlayer();
   h.quest.setStage(p, 2);
-  p.setAttribute('barrows', { looted: true, killed: [0, 1, 2, 3, 4, 5], chests: 1 });
-  emit(h, 'collection-log:obtain', { player: p, itemId: I.MIND_RUNE, amount: 1 });
-  assert.equal(p.getInventory().getAmount(I.STRANGE_ICON), 1);
+  assert.deepEqual(chestLoot(h, p, [0, 1, 2, 3, 4, 5]), [I.STRANGE_ICON, I.MIND_RUNE], 'slot 0 of the loot (tick 885)');
   assert.equal(h.quest.getStage(p), 4);
   assert.equal(p.varbits.get(14973), 4);
-  emit(h, 'collection-log:obtain', { player: p, itemId: I.CHAOS_RUNE, amount: 1 });
-  assert.equal(p.getInventory().getAmount(I.STRANGE_ICON), 1, 'one icon per chest');
+  p.getInventory().adds(I.STRANGE_ICON, 1);
+  assert.deepEqual(chestLoot(h, p, [0, 1, 2, 3, 4, 5]), [I.MIND_RUNE], 'none while one is owned');
 
   const short = makePlayer();
   h.quest.setStage(short, 2);
-  short.setAttribute('barrows', { looted: true, killed: [0, 1, 2, 3, 4], chests: 1 });
-  emit(h, 'collection-log:obtain', { player: short, itemId: I.MIND_RUNE, amount: 1 });
-  assert.equal(short.getInventory().getAmount(I.STRANGE_ICON), 0);
+  assert.deepEqual(chestLoot(h, short, [0, 1, 2, 3, 4]), [I.MIND_RUNE]);
   assert.equal(h.quest.getStage(short), 2);
 
   const lost = makePlayer();
   h.quest.setStage(lost, 4);
-  lost.setAttribute('barrows', { looted: true, killed: [0, 1, 2, 3, 4, 5], chests: 2 });
-  emit(h, 'collection-log:obtain', { player: lost, itemId: I.MIND_RUNE, amount: 1 });
-  assert.equal(lost.getInventory().getAmount(I.STRANGE_ICON), 1, 'a lost icon can be earned again');
+  assert.deepEqual(chestLoot(h, lost, [0, 1, 2, 3, 4, 5]), [I.STRANGE_ICON, I.MIND_RUNE], 'a lost icon can be earned again');
 });
 
-test('a full bag at the icon loot keeps the run incomplete and gives the standard full message', () => {
+test('a full bag at the chest gets no icon and keeps the stage (Wiki: it is not dropped either)', () => {
   const h = harness();
   const p = makePlayer();
   h.quest.setStage(p, 2);
   p.setFull(true);
-  p.setAttribute('barrows', { looted: true, killed: [0, 1, 2, 3, 4, 5], chests: 1 });
-  emit(h, 'collection-log:obtain', { player: p, itemId: I.MIND_RUNE, amount: 1 });
-  assert.equal(p.getInventory().getAmount(I.STRANGE_ICON), 0);
+  assert.deepEqual(chestLoot(h, p, [0, 1, 2, 3, 4, 5]), [I.MIND_RUNE]);
   assert.equal(h.quest.getStage(p), 2);
-  assert.deepEqual(p.messages, ['Not enough space in your inventory.']);
 });
 
 test('the hand-in keeps the canonical story order and can resume at stages 6 and 8', () => {

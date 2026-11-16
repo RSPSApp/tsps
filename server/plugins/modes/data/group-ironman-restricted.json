@@ -1,0 +1,53 @@
+{
+  "$comment": "Items a Group Ironman without Individual Prestige can't equip in their first 5 weeks until they have killed the source once (Wiki, Group Ironman Mode: Prestige, quoting Mod Ash's code-derived list; its variants, ornament, corrupted, imbued, count too, matched here by the item's name containing the listed name). `categories` are collection log categories (their kill count is asked), `npcs` monsters whose kills Group Ironman records itself. Sources are ours from the drop tables where the list gives none; unsure ones are marked. Echo boots are made with an echo crystal, a Fortis Colosseum drop (Wiki, Echo boots), as Tonalztics of ralos in the same row of the list.",
+  "except": {
+    "$comment": "Names containing these are never restricted: the Gauntlet's own crystal equipment, worn inside it to earn the kill.",
+    "names": ["(basic)", "(attuned)", "(perfected)"]
+  },
+  "entries": [
+    { "items": ["Granite hammer", "Granite ring", "Granite gloves", "Guardian boots"], "categories": ["Grotesque Guardians"] },
+    { "items": ["Trident of the seas"], "categories": ["Kraken"], "npcs": ["Cave kraken"] },
+    { "items": ["Abyssal whip"], "categories": ["Abyssal Sire"], "npcs": ["Abyssal demon"] },
+    { "items": ["Abyssal bludgeon"], "categories": ["Abyssal Sire"] },
+    { "items": ["Primordial boots", "Pegasian boots", "Eternal boots"], "categories": ["Cerberus"] },
+    { "items": ["Ferocious gloves", "Dragon hunter lance", "Brimstone ring", "Bonecrusher necklace"], "categories": ["Alchemical Hydra"], "unsure": "Bonecrusher necklace: its hydra tail" },
+    { "items": ["Mystic smoke staff"], "categories": ["Thermonuclear Smoke Devil"], "npcs": ["Smoke devil"] },
+    { "items": ["Occult necklace"], "categories": ["Thermonuclear Smoke Devil"], "npcs": ["Smoke devil"] },
+    { "items": ["Ring of the gods"], "categories": ["Vet'ion and Calvar'ion"] },
+    { "items": ["Treasonous ring"], "categories": ["Venenatis and Spindel"] },
+    { "items": ["Tyrannical ring"], "categories": ["Callisto and Artio"] },
+    { "items": ["Elder maul", "Kodai insignia", "Kodai wand", "Twisted bow", "Dragon claws", "Ancestral hat", "Ancestral robe top", "Ancestral robe bottom", "Dinh's bulwark", "Dragon hunter crossbow", "Twisted buckler"], "categories": ["Chambers of Xeric"] },
+    { "items": ["Avernic defender", "Scythe of vitur", "Ghrazi rapier", "Sanguinesti staff", "Justiciar faceguard", "Justiciar chestguard", "Justiciar legguards"], "categories": ["Theatre of Blood"] },
+    { "items": ["Blade of saeldor", "Bow of faerdhinen", "Crystal helm", "Crystal body", "Crystal legs"], "categories": ["The Gauntlet"] },
+    { "items": ["Archers ring"], "categories": ["Dagannoth Kings"] },
+    { "items": ["Berserker ring"], "categories": ["Dagannoth Kings"] },
+    { "items": ["Seers ring"], "categories": ["Dagannoth Kings"] },
+    { "items": ["Sarachnis cudgel"], "categories": ["Sarachnis"] },
+    { "items": ["Armadyl chestplate", "Armadyl chainskirt", "Armadyl helmet", "Armadyl godsword"], "categories": ["Kree'arra"] },
+    { "items": ["Armadyl crossbow", "Saradomin sword", "Saradomin godsword"], "categories": ["Commander Zilyana"] },
+    { "items": ["Bandos tassets", "Bandos boots", "Bandos chestplate", "Bandos godsword"], "categories": ["General Graardor"] },
+    { "items": ["Zamorakian spear", "Zamorakian hasta", "Staff of the dead", "Zamorak godsword"], "categories": ["K'ril Tsutsaroth"] },
+    { "items": ["Trident of the swamp", "Serpentine helm", "Toxic blowpipe"], "categories": ["Zulrah"] },
+    { "items": ["Dragonfire ward"], "categories": ["Vorkath"], "unsure": "its skeletal visage" },
+    { "items": ["Arcane spirit shield", "Spectral spirit shield", "Elysian spirit shield"], "categories": ["Corporeal Beast"] },
+    { "items": ["Inquisitor's great helm", "Inquisitor's hauberk", "Inquisitor's plateskirt", "Inquisitor's mace", "Nightmare staff"], "categories": ["The Nightmare"] },
+    { "items": ["Neitiznot faceguard"], "npcs": ["Basilisk Knight"] },
+    { "items": ["Devout boots", "Boots of brimstone"], "npcs": ["Drake"] },
+    { "items": ["Dark bow"], "npcs": ["Dark beast"] },
+    { "items": ["Amulet of torture", "Zenyte bracelet", "Zenyte necklace", "Zenyte ring"], "npcs": ["Demonic gorilla", "Tortured gorilla"] },
+    { "items": ["Dragon boots"], "npcs": ["Spiritual mage"] },
+    { "items": ["Torva full helm", "Torva platebody", "Torva platelegs", "Zaryte crossbow", "Zaryte vambraces", "Ancient godsword"], "categories": ["Nex"] },
+    { "items": ["Tumeken's shadow", "Elidinis' ward", "Osmumten's fang", "Masori mask", "Masori body", "Masori chaps", "Lightbearer"], "categories": ["Tombs of Amascut"] },
+    { "items": ["Venator bow"], "categories": ["Phantom Muspah"] },
+    { "items": ["Virtus mask", "Virtus robe top", "Virtus robe bottom", "Soulreaper axe"], "categories": ["Duke Sucellus", "The Leviathan", "The Whisperer", "Vardorvis"] },
+    { "items": ["Ultor ring"], "categories": ["Vardorvis"], "unsure": "ring by boss" },
+    { "items": ["Venator ring"], "categories": ["The Leviathan"], "unsure": "ring by boss" },
+    { "items": ["Bellator ring"], "categories": ["The Whisperer"], "unsure": "ring by boss" },
+    { "items": ["Magus ring"], "categories": ["Duke Sucellus"], "unsure": "ring by boss" },
+    { "items": ["Tonalztics of ralos", "Echo boots"], "categories": ["Fortis Colosseum"] }
+  ],
+  "prestigeBosses": {
+    "$comment": "Wiki (Group Ironman Mode, Prestige): PvM with players outside the group costs Group Prestige. Bosses whose kills carry the damagers: matched by name. The raids (Chambers of Xeric, Theatre of Blood, Tombs of Amascut, The Fractured Archive) aren't covered: their parties aren't seen here.",
+    "npcs": ["The Nightmare", "Phosani's Nightmare", "Nex", "Branda the Fire Queen", "Eldric the Ice King", "Yama"]
+  }
+}

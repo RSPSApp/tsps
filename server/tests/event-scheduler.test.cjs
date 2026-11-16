@@ -13,7 +13,7 @@ const pluginPath = path.resolve(__dirname,'../plugins/world/EventScheduler.plugi
 const dataPath = path.resolve(__dirname,'../plugins/world/data/events.json');
 const configured = fs.existsSync(dataPath) ? require(dataPath) : [];
 const shipped = JSON.stringify(configured);
-let core, api, events = [], consumer = null, enableConsumer = false;
+let core, api, events = [], payloads = [], consumer = null, enableConsumer = false;
 const START = Date.parse('2026-12-24T00:00:00.000Z');
 const END = Date.parse('2027-01-04T00:00:00.000Z');
 const definition = (key='fixture') => ({key,enabled:true,windows:[{start:new Date(START).toISOString(),end:new Date(END).toISOString()}]});
@@ -27,6 +27,7 @@ function command(text,rights) {
 }
 function transition(e) {
   events.push({key:e.key,active:e.active,query:status(e.key)});
+  payloads.push(e);
   if(enableConsumer && e.key==='fixture') {
     if(e.active) consumer=api.spawnNpc({id:core.NpcIdentifiers.MAN,x:3222,y:3218,z:0,wanderRadius:0});
     else if(consumer) {api.removeNpc(consumer);consumer=null;}
@@ -43,6 +44,15 @@ before(async()=>{
 });
 beforeEach(()=>{stop();configured.splice(0,configured.length,definition());events=[];enableConsumer=false;});
 afterEach(()=>{stop();configured.splice(0,configured.length,...JSON.parse(shipped));});
+test('a close sent by the server shutting down says so; a window close does not',(t)=>{
+  t.mock.method(Date,'now',()=>START);start();assert.equal(status(),true);
+  command('forceevent fixture off');
+  assert.deepEqual(payloads.at(-1),{key:'fixture',active:false},'a window close is not a shutdown');
+  command('forceevent fixture on');payloads.length=0;
+  stop();
+  assert.deepEqual(payloads,[{key:'fixture',active:false,shutdown:true}],'consumers need not run after the scheduler to know');
+  assert.ok(Object.isFrozen(payloads[0]));
+});
 test('loads through the supported register lifecycle without initialize',()=>{
   start();assert.equal(typeof status(),'boolean');assert.equal(tasks().length,1);
 });

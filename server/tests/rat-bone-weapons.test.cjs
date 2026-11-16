@@ -95,7 +95,8 @@ test("they only attack rats, with 10 more maximum hit", () => {
   const goblin = { attacker: player, target: npcNamed("Goblin"), allow: null };
   Combat._test.onlyRats(goblin);
   assert.equal(goblin.allow, false);
-  assert.ok(player.log.includes("message You can only use this weapon against rats."));
+  assert.equal(goblin.message, "You can only use this weapon against rats.", "the core says it on the player's attack");
+  assert.ok(!player.log.includes("message You can only use this weapon against rats."), "not the check itself");
   const rat = { attacker: player, target: npcNamed("Giant rat"), allow: null };
   Combat._test.onlyRats(rat);
   assert.equal(rat.allow, null);

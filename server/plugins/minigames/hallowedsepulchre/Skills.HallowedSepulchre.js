@@ -207,9 +207,13 @@ function enchantment(player) {
   const magic = Common.level(player, "MAGIC");
   for (const [level, runes] of Common.data.enchants) {
     if (magic < level) continue;
-    const costs = runes
+    const paid = runes
       .filter(([id]) => PluginManager.emitSpellRuneBypass(player, MagicSpellbook.NORMAL, -1, id) !== true)
       .map(([id, amount]) => new Item(id, amount));
+    // As a cast pays (magic:spell-cost, no Spell object): combination runes first.
+    const cost = { player, spell: null, spellId: -1, items: paid, covered: [] };
+    if (paid.length) PluginManager.emitCustomEvent("magic:spell-cost", cost);
+    const costs = Array.isArray(cost.items) ? cost.items : paid;
     const missing = Spell.inventoryShortfall(player, costs);
     if (missing.length === 0 || PluginManager.checkSpellRuneSource(player, missing)) return costs;
   }
@@ -332,4 +336,4 @@ function attachSkills(api) {
   api.onObjectClick(data.brazier, 1, brazier);
 }
 
-module.exports = { attachSkills, stateOf };
+module.exports = { attachSkills, stateOf, _test: { enchantment, takeRunes } };

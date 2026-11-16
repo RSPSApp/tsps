@@ -2,6 +2,7 @@ import { Item } from "../Item";
 import type { Player } from "../../entity/impl/player/Player";
 
 import { StackType, MAX_STACK_AMOUNT } from "./StackType";
+import { lazyRequire } from "../../../util/LazyRequire";
 // Avoid eager imports here to prevent circular dependency when containers extend ItemContainer.
 // Use dynamic requires in methods where needed.
 const placeholder = (name: string) => {
@@ -33,8 +34,8 @@ const ensureContainersLoaded = () => {
   }
 };
 // Lazy requires to dodge circular deps during bootstrap.
-const getItemDefinition = () => require("../../definition/ItemDefinition").ItemDefinition as typeof import("../../definition/ItemDefinition").ItemDefinition;
-const getItemOnGroundManager = () => require("../../entity/impl/grounditem/ItemOnGroundManager").ItemOnGroundManager as typeof import("../../entity/impl/grounditem/ItemOnGroundManager").ItemOnGroundManager;
+const getItemDefinition = lazyRequire(() => require("../../definition/ItemDefinition").ItemDefinition as typeof import("../../definition/ItemDefinition").ItemDefinition);
+const getItemOnGroundManager = lazyRequire(() => require("../../entity/impl/grounditem/ItemOnGroundManager").ItemOnGroundManager as typeof import("../../entity/impl/grounditem/ItemOnGroundManager").ItemOnGroundManager);
 
 export abstract class ItemContainer {
   public player: Player;

@@ -19,6 +19,7 @@
  * when, where and how each shows.
  */
 const DATA = require("../data/between-a-rock.json");
+const CameraShake = require("../../interface/CameraShake.plugin");
 
 const CANNONBALLS_LOC = "dwarf_cannon_balls_flight_multi";
 const GOLD_CANNONBALL_LOC = "dwarf_cannon_balls_flight_gold";
@@ -371,7 +372,7 @@ function firstThoughts(player, done) {
   later(player, 23, () => heldPlayerLine(player, text(think), EXPRESSIONS.chatcon1));
   later(player, 28, () => heldPlayerLine(player, text(inside), EXPRESSIONS.chatshock1));
   later(player, 33, () => {
-    out.sendCameraShake(...SHAKE);
+    CameraShake.send(out, "atmospheric", ...SHAKE);
     out.sendSound(SOUNDS.shakeRoom, 0, 0);
     heldNpcLine(player, beingId, "Arzinian Being of Bordanzan", text(being), EXPRESSIONS.chatang2);
   });
@@ -403,7 +404,7 @@ function warningBox(player, text, done) {
 
 /** The Being's shake: cam_shake and demon_shakeroom with its line, the camera reset as the line goes. */
 function shake(player) {
-  player.getPacketSender().sendCameraShake(...SHAKE).sendSound(SOUNDS.shakeRoom, 0, 0);
+  CameraShake.send(player.getPacketSender(), "atmospheric", ...SHAKE).sendSound(SOUNDS.shakeRoom, 0, 0);
 }
 
 function attach(pluginApi, context) {

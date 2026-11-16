@@ -2,6 +2,7 @@
  * Her loot (Wiki), on the ground where it landed in the capture, nine ticks after her death:
  * everyone who hurt both her shield and the totems gets a roll of her table; big bones go to whoever
  * did the most, and plain bones only come with a unique. Phosani's always drops big bones.
+ * Phosani's 1/25 Slepey tablet comes from her table; the guarantee is added here (see owedSlepeyTablet).
  */
 const Common = require("./Common.Nightmare");
 
@@ -24,6 +25,31 @@ const PET_ITEM_ID = 24491; // Little nightmare
 const PET_SHARE_MAX_PARTY = 5;
 const SECOND_ROLL_MAX_PERCENT = 75;
 
+/**
+ * Wiki (Slepey tablet): "The tablet is guaranteed to drop on the 25th kill", and a player past 25 who has no tablet
+ * and hasn't used one on Drakan's medallion "will receive it on their next kill".
+ */
+const SLEPEY_GUARANTEE_KILL = 25;
+/** DrakansMedallion.plugin.js's flag for a tablet used on the medallion. */
+const SLEPE_UNLOCKED_ATTRIBUTE = "drakans-medallion:slepe-unlocked";
+
+/** Holding a Slepey tablet, or keeping one in a bank tab (the search tab only mirrors the others). */
+function hasSlepeyTablet(player, tabletId) {
+  if (player.getInventory().contains(tabletId)) return true;
+  const searchTab = Common.core.Bank?.BANK_SEARCH_TAB_INDEX;
+  return (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.contains?.(tabletId));
+}
+
+/** A Phosani's kill owes the tablet on top of her table's roll: this kill (counted after the loot) is the 25th or later. */
+function owedSlepeyTablet(player, drops) {
+  const tabletId = Common.core.ItemIdentifiers.SLEPEY_TABLET;
+  if (drops.some((drop) => drop.itemId === tabletId)) return false;
+  const kill = Common.count(player, Common.PHOSANI_KILLS_ATTRIBUTE) + 1;
+  if (kill < SLEPEY_GUARANTEE_KILL) return false;
+  if (kill === SLEPEY_GUARANTEE_KILL) return true;
+  return player.getAttribute(SLEPE_UNLOCKED_ATTRIBUTE) !== true && !hasSlepeyTablet(player, tabletId);
+}
+
 /** Damage a player has done to her shield and to the totems, for loot. */
 function credit(fight, player, kind, amount) {
   if (!player || amount <= 0) return;
@@ -43,6 +69,13 @@ const rewarding = new WeakMap();
 function ironmanKeeps(request) {
   if (!rewarding.get(request?.npc)?.has(request.player)) return;
   request.keep.push(...request.drops.map((drop) => drop.itemId));
+}
+
+/** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+function lootOptions(player, itemId, area) {
+  const request = { player, itemId, area, options: {} };
+  Common.api.emitCustomEvent("npc-drops:ground-options", request);
+  return request.options;
 }
 
 function reward(fight, players) {
@@ -82,6 +115,7 @@ function reward(fight, players) {
   }
   for (const player of eligible) {
     let drops = rollTable(player);
+    if (fight.phosani && owedSlepeyTablet(player, drops)) drops.push({ itemId: ItemIdentifiers.SLEPEY_TABLET, amount: 1 });
     if (!fight.phosani) {
       const won = awarded.get(player) ?? [];
       const petShare = Math.min(PET_SHARE_MAX_PARTY, partySize);
@@ -103,13 +137,13 @@ function reward(fight, players) {
       const noteId = ItemDefinition.forId(drop.itemId).getNoteId();
       const itemId = drop.noted && noteId >= 0 && ItemDefinition.forId(noteId).isNoted() ? noteId : drop.itemId;
       if (ItemDefinition.forId(itemId).isStackable()) {
-        manager.registerLocation(player, new Item(itemId, drop.amount), where, fight.dream.area);
+        manager.registerLocation(player, new Item(itemId, drop.amount), where, fight.dream.area, lootOptions(player, itemId, fight.dream.area));
       } else {
-        for (let i = 0; i < drop.amount; i++) manager.registerLocation(player, new Item(itemId, 1), where, fight.dream.area);
+        for (let i = 0; i < drop.amount; i++) manager.registerLocation(player, new Item(itemId, 1), where, fight.dream.area, lootOptions(player, itemId, fight.dream.area));
       }
     }
   }
   fight.contribution = new Map();
 }
 
-module.exports = { reward, credit, ironmanKeeps };
+module.exports = { reward, credit, ironmanKeeps, owedSlepeyTablet };

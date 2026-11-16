@@ -149,9 +149,30 @@ function buyXp({ player, slot }) {
 
 // ---------------------------------------------------------------- imbues
 
+/**
+ * The cache's own test for the halved imbue price it shows (proc script6931(3), Wiki: Combat
+ * Achievements, Hard: "Imbuing costs at Nightmare Zone and Soul Wars halved"): the Hard rewards
+ * claimed (ca_tier_status_hard 2) with Easy and Medium reached.
+ */
+function hardRewardsClaimed(player) {
+  const tier = (name) => {
+    const request = { player, tier: name, unlocked: false, claimed: false };
+    Common.api.emitCustomEvent("combat-achievements:tier", request);
+    return request;
+  };
+  return tier("Hard").claimed === true && tier("Easy").unlocked === true && tier("Medium").unlocked === true;
+}
+
+/** An imbue's token cost (enum 3543), halved as script 843 shows it with the Hard rewards claimed. */
+function imbueCost(player, slot) {
+  const cost = enumOf("imbueCost").get(slot);
+  if (cost == null) return null;
+  return hardRewardsClaimed(player) ? Math.floor(cost / 2) : cost;
+}
+
 function imbue({ player, slot }) {
   const imbued = enumOf("imbueItem").get(slot);
-  const cost = enumOf("imbueCost").get(slot);
+  const cost = imbueCost(player, slot);
   const base = imbued == null ? null : enumOf("imbueBase").get(imbued);
   if (base == null || cost == null) return true;
   const inventory = player.getInventory();
@@ -167,6 +188,20 @@ function imbue({ player, slot }) {
   player.sendMessage(message("imbued", { name: Common.core.CacheDefinitions.getItem(base)?.name ?? "item" }));
   synth(player, "imbued");
   return true;
+}
+
+/**
+ * "soul-wars:refund-imbue" { player, imbuedItemId, refunded }: an item imbued here and lost to a PvP death gets its
+ * Zeal Tokens back (Wiki, Black mask (i): the player is reimbursed the "Zeal Tokens"), the price the shop shows now
+ * (halved with the Hard rewards, as the Nightmare Zone's refund). `refunded` is the tokens paid, left null when the
+ * shop doesn't imbue that item.
+ */
+function refundImbue(request) {
+  const slot = enumOf("imbueIndex").get(Number(request?.imbuedItemId));
+  const cost = slot == null ? null : imbueCost(request.player, slot);
+  if (cost == null) return;
+  Common.addVarp(request.player, "zeal_tokens", cost);
+  request.refunded = cost;
 }
 
 // ---------------------------------------------------------------- other rewards
@@ -252,9 +287,10 @@ function attachRewards(api) {
   api.onInterfaceActionButton(uid("xp_rewards"), whileOpen(xpList));
   api.onInterfaceActionButton(uid("confirm_xp"), whileOpen(buyXp));
   api.onInterfaceActionButton(uid("confirm_imbue"), whileOpen(imbue));
+  api.onCustomEvent("soul-wars:refund-imbue", refundImbue);
   api.onInterfaceActionButton(uid("other_rewards"), whileOpen(otherList));
   api.onInterfaceActionButton(uid("confirm_other"), whileOpen(buyOther));
   Common.every(findNomad);
 }
 
-module.exports = { attachRewards, open, canShop, xpList, buyXp, imbue, otherList, buyOther, xpPerToken, findNomad, SHOP_ID };
+module.exports = { attachRewards, open, canShop, xpList, buyXp, imbue, refundImbue, otherList, buyOther, xpPerToken, findNomad, SHOP_ID };

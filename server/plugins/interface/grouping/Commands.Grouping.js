@@ -3,8 +3,9 @@
 /**
  * ::group on its own opens the panel; with a word it does what the panel's buttons do, by name:
  * ::group invite <name>, accept [name], decline [name], withdraw <name>, promote <name>,
- * kick <name>, leave, disband, create, info (the group as a chat line) and chat (into the group's
- * own chat-channel).
+ * kick <name>, leave, stay, disband, create, info (the group as a chat line) and chat (into the group's
+ * own chat-channel). A Group Ironman group's leader also has cancel (stay the leader) and unkick
+ * <name> (take back a removal).
  */
 
 const Store = require("./Store.Grouping");
@@ -13,8 +14,11 @@ const Actions = require("./Actions.Grouping");
 const Activities = require("./Activities.Grouping");
 const Channels = require("./Channels.Grouping");
 const Panel = require("./Panel.Grouping");
+const Leaving = require("./Leaving.Grouping");
+const Leadership = require("./Leadership.Grouping");
+const Names = require("./Names.Grouping");
 
-const USAGE = "Use ::group, or ::group invite/accept/decline/withdraw/promote/kick <name>, leave, disband, info or chat.";
+const USAGE = "Use ::group, or ::group invite/accept/decline/withdraw/promote/kick/unkick <name>, name <group name>, leave, stay, cancel, disband, info or chat.";
 
 /** The group whose invitation the player means: the one led or joined by `name`, else the newest. */
 function invitationFrom(player, name) {
@@ -32,10 +36,11 @@ function describe(player) {
   const group = me && Store.groupOf(me.profile, me.account);
   if (!group) return Actions.tell(player, Actions.MESSAGE.NOT_IN_GROUP);
   const snapshot = Members.snapshot(group);
-  const members = snapshot.members.map(({ name, role, online }) =>
-    `${name}${role === Members.ROLE.LEADER ? " (leader)" : ""}${online ? "" : " (offline)"}`);
+  const members = snapshot.members.map(({ name, role, online, leaving }) =>
+    `${name}${role === Members.ROLE.LEADER ? " (leader)" : ""}${leaving ? " (leaving)" : ""}${online ? "" : " (offline)"}`);
   const invited = snapshot.invites.map(({ name }) => name);
-  Actions.tell(player, `Group (${group.members.size}/${snapshot.cap}): ${members.join(", ")}.`
+  const kind = `${group.ironman ? "Group Ironman group" : "Group"}${group.name ? ` ${group.name}` : ""}`;
+  Actions.tell(player, `${kind} (${group.members.size}/${snapshot.cap}): ${members.join(", ")}.`
     + (invited.length ? ` Invited: ${invited.join(", ")}.` : ""));
   const tooBig = Activities.tooBigFor(group);
   if (tooBig.length) Actions.tell(player, `Too many players for: ${tooBig.join(", ")}.`);
@@ -52,10 +57,14 @@ function run({ player, parts = [] }) {
     case "accept": Actions.accept(player, invitationFrom(player, name)); break;
     case "decline": Actions.decline(player, invitationFrom(player, name)); break;
     case "withdraw": Actions.withdraw(player, Members.typed(name)); break;
-    case "promote": Actions.promote(player, Members.typed(name)); break;
-    case "kick": Actions.kick(player, Members.typed(name)); break;
-    case "leave": Actions.leave(player); break;
-    case "disband": Actions.disband(player); break;
+    case "promote": Leadership.promote(player, Members.typed(name)); break;
+    case "kick": Leaving.kick(player, Members.typed(name)); break;
+    case "leave": Leaving.leave(player); break;
+    case "stay": Leaving.stay(player); break;
+    case "cancel": Leadership.cancel(player); break;
+    case "unkick": Leadership.unkick(player, Members.typed(name)); break;
+    case "name": Names.rename(player, rest.join(" ")); break;
+    case "disband": Leadership.disband(player); break;
     case "info": describe(player); break;
     case "chat": Channels.switchToGroupChannel(player); break;
     default: Actions.tell(player, USAGE);

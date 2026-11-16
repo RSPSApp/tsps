@@ -70,3 +70,23 @@ test('an NPC barrage on an NPC draws its splash victims from the NPCs near the t
   assert.equal(near.mock.calls[0].arguments[0], target.getLocation());
   assert.equal(near.mock.calls[0].arguments[1], core.CombatSpells.ICE_BARRAGE.spellRadius());
 });
+
+test('a large monster is caught when any of its tiles is in the area, not only its south-west tile (Wiki: Ancient Magicks)', t => {
+  const caster = barrageCaster(t);
+  const target = npc(t, 3200);
+  const large = (x, y) => {
+    const value = npc(t, x);
+    value.setLocation(new core.Location(x, y, 0));
+    t.mock.method(value, 'getSize', () => 3);
+    return value;
+  };
+  const radius = core.CombatSpells.ICE_BARRAGE.spellRadius();
+  assert.equal(radius, 1);
+  // South-west tile 3 away, but its north-east tile (3199, 3199) touches the target's.
+  assert.equal(CombatFactory.canAttackSecondaryTarget(caster, target, large(3197, 3197), radius), true);
+  // Its nearest tile (its south-west, 3202, 3202) is 2 away: outside.
+  assert.equal(CombatFactory.canAttackSecondaryTarget(caster, target, large(3202, 3202), radius), false);
+  // A 1x1 target is measured as before.
+  assert.equal(CombatFactory.canAttackSecondaryTarget(caster, target, npc(t, 3202), radius), false);
+  assert.equal(CombatFactory.canAttackSecondaryTarget(caster, target, npc(t, 3201), radius), true);
+});

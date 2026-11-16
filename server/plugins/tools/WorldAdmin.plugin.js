@@ -1,13 +1,16 @@
 const crypto = require("crypto");
-const http = require("http");
 const path = require("path");
 const { resolveAccess } = require("./worldadmin/Access.WorldAdmin");
+const { createPageServer, reloadCertificate, watchCertificate } = require("./worldadmin/Tls.WorldAdmin");
 const { createRequestHandler, HttpError, send } = require("./worldadmin/Http.WorldAdmin");
 const { playerRoutes } = require("./worldadmin/Players.WorldAdmin");
+const { botRoutes } = require("./worldadmin/Bots.WorldAdmin");
+const { botEditorRoutes } = require("./worldadmin/BotEditor.WorldAdmin");
 const { readPluginZip, downloadPluginRelease, savePluginZip, deletePluginZip } = require("./worldadmin/PluginZip.WorldAdmin");
 
 // The world config page's own HTTP listener (spec "Saving", "Restart", "Access").
 //   WORLD_ADMIN_PORT (default 49600), WORLD_ADMIN_TOKEN (fixed token), WORLD_ADMIN_BIND (only with a 24+ character token)
+//   WORLD_ADMIN_TLS_CERT and WORLD_ADMIN_TLS_KEY (PEM files: https instead of http, reloaded when renewed)
 // Without WORLD_ADMIN_TOKEN the generated token is kept in data/definitions/world-admin.token
 // (gitignored) so the page stays signed in across the restarts it triggers.
 // The startup log prints the page URL and where the token is (never the token itself); open
@@ -33,6 +36,7 @@ let pluginApi = null;
 let httpServer = null;
 let access = null;
 let boundPort = null;
+let stopCertificateWatch = null;
 // The accepted Apply waiting for its restart: { id, kind: "countdown" | "now", seconds? }.
 let pendingApply = null;
 // Why the last accepted Apply did not happen: { at, message }. Cleared when a new one is accepted.
@@ -311,6 +315,13 @@ const actions = {
       send(response, 202, { stopping: true });
       return true;
     }
+    if (url.pathname === "/bot-editor" || url.pathname === "/bot-graph") {
+      if (request.method !== "GET") throw new HttpError(405, "Method not allowed");
+      send(response, 302, "", { Location: "/?view=bots&edit=1" });
+      return true;
+    }
+    if (await botEditorRoutes(request, response, url)) return true;
+    if (await botRoutes(request, response, url, pluginApi)) return true;
     return playerRoutes(request, response, url, pluginApi);
   },
   importPlugin: (body) => installRelease(readPluginZip(body)),
@@ -330,12 +341,15 @@ async function startWorldAdmin() {
   const tokenFile = path.join(DEFINITIONS_DIRECTORY(), TOKEN_FILE_NAME);
   access = resolveAccess(process.env, { tokenFile });
   for (const note of access.notes) console.warn(`[world-admin] ${note}`);
-  const server = http.createServer(createRequestHandler(
+  // Behind the local panel (TSPS_WORLD_ADMIN_SOCKET) the panel serves https; its pipe stays http.
+  const socket = process.env.TSPS_WORLD_ADMIN_SOCKET;
+  const page = createPageServer(socket ? null : access.tls, createRequestHandler(
     { token: access.token, loopback: access.loopback, port: () => boundPort },
     actions,
     pluginApi.core.WorldConfigStore.worldSettingKeys(),
   ));
-  const socket = process.env.TSPS_WORLD_ADMIN_SOCKET;
+  if (page.error) return console.error(`[world-admin] ${page.error}`);
+  const { server } = page;
   if (socket && process.platform !== "win32") require("fs").rmSync(socket, { force: true });
   const listening = await new Promise((resolve) => {
     server.on("error", (error) => {
@@ -349,14 +363,16 @@ async function startWorldAdmin() {
   server.unref();
   httpServer = server;
   boundPort = socket ? 0 : server.address().port;
+  if (page.secure) stopCertificateWatch = watchCertificate(server, access.tls);
   if (socket) return;
-  console.info(`[world-admin] listening on ${access.host}:${boundPort}`);
-  console.info(`[world-admin] world config page: ${startupLinkMessage(boundPort, access.tokenSource, tokenFile)}`);
+  console.info(`[world-admin] listening on ${access.host}:${boundPort}${page.secure ? " (https)" : ""}`);
+  // Loopback mode only answers to localhost; beyond it, the link names the certificate's host.
+  const origin = page.secure ? `https://${access.loopback ? "localhost" : page.host}` : "http://localhost";
+  console.info(`[world-admin] world config page: ${startupLinkMessage(`${origin}:${boundPort}/`, access.tokenSource, tokenFile)}`);
 }
 
 /** The startup line. It never contains the token: logs end up in server.log and journald. */
-function startupLinkMessage(port, tokenSource, tokenFile) {
-  const url = `http://localhost:${port}/`;
+function startupLinkMessage(url, tokenSource, tokenFile) {
   if (tokenSource === "env") return `${url}?token=<WORLD_ADMIN_TOKEN> (the configured WORLD_ADMIN_TOKEN)`;
   if (tokenSource === "file") {
     const shown = path.relative(process.cwd(), tokenFile).split(path.sep).join("/");
@@ -371,6 +387,8 @@ function stopWorldAdmin() {
   httpServer = null;
   pendingApply = null;
   lastFailure = null;
+  stopCertificateWatch?.();
+  stopCertificateWatch = null;
   if (!server) return Promise.resolve();
   return new Promise((resolve) => {
     server.close(() => resolve());
@@ -385,5 +403,5 @@ module.exports = {
     pluginApi = api;
     api.onServerStartup(startWorldAdmin);
   },
-  _test: { stop: stopWorldAdmin },
+  _test: { stop: stopWorldAdmin, reloadCertificate: () => reloadCertificate(httpServer, access.tls) },
 };

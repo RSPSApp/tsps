@@ -67,9 +67,14 @@ test("guard 3272's selected combat method fires the bronze-arrow projectile", ()
   assert.equal(guard.getGraphic().getHeight(), 96, "captured draw height");
 
   assert.equal(sent.length, 1);
-  const [, , , end, projectileId, , , , delay] = sent[0];
+  const [, , , end, projectileId, startHeight, endHeight, , delay, angle, progress] = sent[0];
   assert.equal(projectileId, 10, "bronze arrow travel spotanim");
+  // Every NPC-sourced arrow flies 163 -> 146 on the wire (sent as height * 4): rsprox_transcripts/234/00801.txt,
+  // 241/900144.txt and others, 152 shots in revs 227, 234 and 241.
+  assert.deepEqual([startHeight * 4, endHeight * 4], [163, 146], "the recorded arrow flight heights");
   assert.equal(delay, 41, "bow launch");
+  // The same recorded NPC arrows all carry angle=15, progress=11 (e.g. rsprox_transcripts/234/00801.txt).
+  assert.deepEqual([angle, progress], [15, 11], "the recorded arrow arc");
   assert.equal(end, 46 + 5 * 2, "two tiles of arrow flight");
 });
 
@@ -125,4 +130,34 @@ test("an archer's shot plays its draw spotanim and sends its projectile", () => 
   }
   assert.equal(archer.getGraphic().getId(), 18, "iron arrow drawn on the bow");
   assert.equal(sent[0][4], 9, "iron arrow flight");
+});
+
+// Recorded NPCs whose own shot flies differently: the Desert Treasure II Forsaken Assassin (12328) fires
+// mithril_arrow_travel at 43 -> 36, angle 12, progress 32 (rsprox_transcripts/226/01703.txt, 10 shots), not the shared
+// 163 -> 146 at 15 / 11. npc-combat-defs.json `projectileArc` carries it; every other NPC keeps the shared flight.
+test("an NPC recorded with its own flight fires with it on the shared ranged path", () => {
+  const assassin = NPC.create(12328, new Location(3202, 3200, 0));
+  assert.deepEqual({ ...NpcDefinition.forId(12328).getProjectileArc() }, { startHeight: 43, endHeight: 36, angle: 12, progress: 32 });
+  assert.equal(NpcDefinition.forId(3272).getProjectileArc(), null, "the shared flight");
+  const sent = [];
+  const target = {
+    getIndex: () => 7, isPlayer: () => true, isNpc: () => false,
+    getLocation: () => new Location(3200, 3200, 0), getSize: () => 1, getPrivateArea: () => null,
+  };
+  const recipient = {
+    getPrivateArea: () => null, getLocation: () => new Location(3200, 3200, 0), getNpcViewDistance: () => 15,
+    getPacketSender: () => ({ sendProjectile: (...args) => sent.push(args) }),
+  };
+  const original = World.forEachNetworkPlayer;
+  World.forEachNetworkPlayer = (visit) => visit(recipient);
+  try {
+    CombatFactory.RANGED_COMBAT.start(assassin, target);
+  } finally {
+    World.forEachNetworkPlayer = original;
+  }
+  assert.equal(sent.length, 1);
+  const [, , , , projectileId, startHeight, endHeight, , delay, angle, progress] = sent[0];
+  assert.equal(projectileId, 12, "mithril_arrow_travel");
+  assert.deepEqual([startHeight, endHeight, angle, progress], [43, 36, 12, 32]);
+  assert.equal(delay, 41, "the recorded start, as every NPC arrow");
 });

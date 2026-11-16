@@ -19,8 +19,7 @@ function heldRelics(player, type) {
 
 /** Carried, worn or banked; a bank placeholder (amount 0) isn't owning it. */
 function owns(player, itemId) {
-  return player.getInventory().contains(itemId) || player.getEquipment().contains(itemId)
-    || player.getBanks().some((bank, tab) => tab !== Common.core.Bank.BANK_SEARCH_TAB_INDEX && bank?.getAmount?.(itemId) > 0);
+  return Common.core.Bank.owns(player, itemId);
 }
 
 /** The relic items the character owns none of, each once. */

@@ -54,12 +54,14 @@ export class PlayerSave {
         AggressionTolerance.ATTRIBUTE,
         CREATION_MENU_LAST_ITEM_ATTRIBUTE,
         LOGIN_TOKENS_ATTRIBUTE,
+        Player.STAT_RESTORE_LEFT_ATTRIBUTE,
     ]);
 
     /** JSON of each attribute's default: a value equal to it isn't saved, and a save without the key loads it. */
     private static readonly attributeDefaults = new Map<string, string>([
         ["ring-of-recoil:damage", "0"],
         [LOGIN_TOKENS_ATTRIBUTE, "[]"],
+        [Player.STAT_RESTORE_LEFT_ATTRIBUTE, String(Player.STAT_RESTORE_TICKS)],
     ]);
 
     public static persistAttribute(key: string, defaultValue?: unknown): void {

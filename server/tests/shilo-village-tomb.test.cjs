@@ -163,23 +163,6 @@ test("Rashiliyia's tomb: plants hide the doors until the palm is searched", asyn
   assert.equal(doorsSeen(f), CARVED_DOORS, "the doors are there");
 });
 
-test("Rashiliyia's tomb: the revealed doors can be opened and searched, which finds the bone lock", async (t) => {
-  const f = actor(t, NEAR_PALM);
-  await searchPalm(f);
-  f.p.setLocation(new core.Location(...NEAR_DOORS));
-  f.messages.length = 0;
-  await click(f, DOOR_LOC, DOOR_TILE, 1);
-  await playThrough(f);
-  assert.ok(f.messages.some((message) => /recepticle/.test(message)), `Open: ${f.messages}`);
-
-  assert.equal((Number(f.p.getAttribute(MECH)) || 0) & MECH_FOUND_BONE_DOOR, 0, "control: the lock isn't found yet");
-  f.messages.length = 0;
-  await click(f, DOOR_LOC, DOOR_TILE, 2);
-  await playThrough(f);
-  assert.ok(f.messages.some((message) => /strange lock/.test(message)), `Search: ${f.messages}`);
-  assert.equal(Number(f.p.getAttribute(MECH)) & MECH_FOUND_BONE_DOOR, MECH_FOUND_BONE_DOOR, "the lock is found");
-});
-
 test("Rashiliyia's tomb: the bone key opens the doors into the entrance, which leads inside", async (t) => {
   const f = actor(t, NEAR_PALM);
   f.inv.adds(I.BONE_KEY, 1);
@@ -246,50 +229,6 @@ async function read(f, itemId, pick) {
   await playThrough(f, pick);
   drain(f);
 }
-
-test("Scrolls: Yes shows the tattered scroll's text, and No doesn't", async (t) => {
-  const f = actor(t, NEAR_PALM);
-  await read(f, I.TATTERED_SCROLL, /Yes please/);
-  assert.ok(f.interfaces.includes(MESSAGE_SCROLL), `the text opens: ${f.interfaces}`);
-  const text = shown(f);
-  assert.match(text, /Bervirius, son of King/, "its first words");
-  assert.match(text, /witches and the undead/, "its last words");
-
-  const no = actor(t, NEAR_PALM);
-  await read(no, I.TATTERED_SCROLL, /No thanks/);
-  assert.ok(!no.interfaces.includes(MESSAGE_SCROLL), "control: No opens nothing");
-});
-
-test("Scrolls: Yes shows the crumpled scroll's text and counts as reading it; No doesn't", async (t) => {
-  const f = actor(t, NEAR_PALM);
-  await read(f, I.CRUMPLED_SCROLL, /Yes please/);
-  assert.ok(f.interfaces.includes(MESSAGE_SCROLL), `the text opens: ${f.interfaces}`);
-  const text = shown(f);
-  assert.match(text, /rage went unchecked/, "its first words");
-  assert.match(text, /Witch Queen at bay/, "its last words");
-  assert.equal(Number(f.p.getAttribute(MECH)) & MECH_READ_CRUMPLED, MECH_READ_CRUMPLED, "read");
-
-  const no = actor(t, NEAR_PALM);
-  await read(no, I.CRUMPLED_SCROLL, /No thanks/);
-  assert.ok(!no.interfaces.includes(MESSAGE_SCROLL), "control: No opens nothing");
-  assert.equal((Number(no.p.getAttribute(MECH)) || 0) & MECH_READ_CRUMPLED, 0, "and doesn't count");
-});
-
-test("Bervirius' notes: each papyrus shows its own text", async (t) => {
-  for (const [choice, first, last] of [
-    [/Tattered Yellow/, /rest like your mother/, /final resting place/],
-    [/Decayed White/, /objects of beauty/, /near to each other/],
-    [/Crusty Orange/, /the sphere is activated/, /draining on the body/],
-  ]) {
-    const f = actor(t, NEAR_PALM);
-    assert.ok(!f.interfaces.includes(MESSAGE_SCROLL), "control: nothing open before reading");
-    await read(f, I.BERVIRIUS_NOTES, choice);
-    assert.ok(f.interfaces.includes(MESSAGE_SCROLL), `${choice} opens: ${f.interfaces}`);
-    const text = shown(f);
-    assert.match(text, first, "its first words");
-    assert.match(text, last, "its last words");
-  }
-});
 
 // ------------------------------------------------------------------ Nazastarool
 

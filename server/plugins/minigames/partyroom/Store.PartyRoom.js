@@ -125,6 +125,15 @@ function commit(next) {
  * two deposits can't both pass the capacity check. { ok } or { ok: false, reason: "full"|"unavailable"|"write" }.
  */
 function deposit(account, confirmId, items) {
+  return put(items, { [account]: confirmId });
+}
+
+/** Items into the chest with no offer behind them (the Rotten potato's hats): deposit's checks and write. */
+function add(items) {
+  return put(items, {});
+}
+
+function put(items, confirmations) {
   const now = current();
   if (now.status !== "ok") return { ok: false, reason: "unavailable" };
   const next = now.chest.map(({ id, amount }) => ({ id, amount }));
@@ -139,7 +148,7 @@ function deposit(account, confirmId, items) {
   }
   if (used(next) > CAPACITY) return { ok: false, reason: "full" };
   try {
-    commit({ chest: next, confirmed: { ...now.confirmed, [account]: confirmId } });
+    commit({ chest: next, confirmed: { ...now.confirmed, ...confirmations } });
   } catch (cause) {
     return { ok: false, reason: "write", cause };
   }
@@ -194,4 +203,4 @@ function reset() {
   file = null;
 }
 
-module.exports = { CAPACITY, MAX_STACK, available, chest, configure, confirmedId, deposit, error, forget, reset, take, used };
+module.exports = { CAPACITY, MAX_STACK, add, available, chest, configure, confirmedId, deposit, error, forget, reset, take, used };

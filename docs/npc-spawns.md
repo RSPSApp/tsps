@@ -4,6 +4,28 @@
 
 The client cache has no spawns: OSRS keeps them on the server. The file came from a one-time import, then captures and plugins added to it by hand. Areas released since then had none, until this script.
 
+**Veos at Port Piscarilius** uses parent `2147` at `(1825,3691,0)`, rather than the fixed Port Sarim form `10724`.
+The pinned revision 241 dump and active revision 242 cache resolve `veos_pisc_vis` (12146): `2` is Veos without
+his amulet (10726), `1` wears it (10727), and `0` hides him. Both visible forms offer Port Sarim and Land's End.
+X Marks the Spot publishes the value per player on login and relevant quest-stage changes: the
+[Wiki's Veos page](https://oldschool.runescape.wiki/w/Veos) places the amulet after X Marks completion and
+departure at A Kingdom Divided's earthquake. The [AKD walkthrough](https://oldschool.runescape.wiki/w/A_Kingdom_Divided)
+places that earthquake during Fuggy's ship conversation, stage 12 here; existing Herbert parent 11125 takes
+over from 12. This boundary combines Wiki sequence and Herbert's cache table, without a midquest Piscarilius
+transition recording. Initial values 2 and 1 appear in captures 225/01556 (Wintertodt beta) and 236/03915
+(Deadman), respectively; those establish recorded values, not normal-world departure timing. The existing
+dock and ship Herbert rows stay in place and resolve through their own quest transforms. A retained Veos
+departure line rechecks his current form before sailing, so a quest change that hides him cancels that trip.
+
+Native verification on revision 242 used two anonymous rendering clients: Fuggy's actual conversation
+advanced one viewer from AKD 11 to 12, hiding Veos and showing Herbert, while the other viewer at 11
+still rendered Veos with the correct onward menu. Plain Veos and Herbert's native direct options reached
+the shared Port Sarim and Land's End ship decks. A cancelled Veos dialogue followed by a different
+destination sailed to the newly selected port. Native logout, a flushed SQLite save and a fresh browser
+login retained completed-stage visibility. Quest/location setup was controlled; this was not a full quest
+playthrough or a recorded OSRS departure-timing comparison. Independent review also found and verified
+the fix for Dragon Slayer II retaining a cancelled destination and replacing the guarded travel callback.
+
 ## Adding an area from the Wiki
 
 `yarn sync:npc-spawns` (`server/scripts/sync-npc-spawns.ts`) adds the spawns an area is missing, from the OSRS Wiki:
@@ -151,6 +173,8 @@ yarn sync:npc-spawns --box 1216,9344,1727,9855 --tag Neypotzli --write
 - **Left out:** the Perilous Moons bosses (Blood, Blue and Eclipse Moon) and Amoxliatl, since no plugin gives them their fights yet. Araxxor is in the same decision ahead of the dungeon batch.
 - **Not yet:** the Frost Nagua have no stats until the monster database update.
 
+- **Colosseum lobby Mezan (13396):** the stationary spawn uses the post-fight tile (1804, 9520), facing southeast as in RSProx recording `rsprox_transcripts/226/01695.txt` (tick 1698). Recording `242/900261.txt` uses the same tile with south facing, and `241/911577.txt` places Mezan at (1803, 9522). All three return the player to (1803, 9521).
+
 ## Open monster dungeons
 
 1,163 spawns in 80 map squares of open monster dungeons, from an allowlist of areas in the gap report rather than everything below ground: the Black Knight Catacombs, Underground Pass, Morytania Spider Cave (araxytes), Charred Dungeon, the Sophanem and Scabaras dungeons, Tarn's Lair, Zemouregal's Base and Fort, the God Wars Dungeon's spirituals and blood reavers, the Gryphons' cave, Ynysdail Cavern, Deepfin Mine, the Buccaneers' Laboratory, Grimstone Dungeon (frost dragons), Waterbirth, Pandemonium Cave, Brimhaven Dungeon, the Ancient Guthixian Temple (tormented demons), the Stronghold of Security's minotaurs, the Vampyrium and its realm, and smaller slayer caves.
@@ -172,6 +196,7 @@ The fix to the version pairing above, on the 60 spawns it affected (32 Wiki page
 - **Auburnvale's Renu:** normal-game RSProx recording 3127 (revision 232, 13 August 2025) adds parent 14690 twice at 1410,3362,0. Cache 241 transforms her on `quetzal_auburnvalley` (17756): 0 hides her, 1–5 show Renu's colours. The transport table's player landing at 1411,3361 and the Wiki map marker are not NPC spawn coordinates. The stationary row uses the cache's default south facing, matching the capture; login restores missing automatic-site visibility for existing Renu owners without changing their colour, built sites or Fortis feeding state.
 - **The other sites' Renus (#2449):** each landing site's quetzal is its own parent NPC on the site's varbit (`quetzal_sunsetcoast` 13357 … `quetzal_kastori` 14691), and nine had no spawn, so a built or automatic site showed no Renu. Each stands still on its landing-site loc's tile (`quetzal_landing_site_built`, or the site's `quetzal_landing_site_<site>` multiloc). RSProx recordings (revisions 226 and 237) add Sunset Coast, Aldarin, Quetzacalli Gorge, Cam Torum and Tal Teklan there, facing the way the loc does: rotation 0 south, 1 west, 2 north. Colossal Wyrm Remains, Outer Fortis, the Colosseum, Salvager Overlook and Kastori have no recording; they take their loc's tile and rotation by the same rule (3 is east). Tal Teklan's existing row gained its captured north facing. `quetzals.test.cjs` checks every site.
 - **Varlamore's dogs and caiques (#2449):** their Wiki pages place every spawn with a LocLine, which carries no version, so the sync gave each page one id: Xolo got the cabbage dog (13000, no options) everywhere, Molossus the light-brown 12993 everywhere, and every Caique the unreachable Tal Teklan one (14574). RSProx recordings (revisions 224-238) add an id on each tile, and the rows now use it: Xolo 12996 (12997 indoors at Aldarin, 13000 only by the cabbage patch at 1749,3049); Molossus dark brown 12992 in Civitas, Aldarin and Kastori (12994 indoors), light brown 12993 at Sunset Coast, Outer Fortis and Auburnvale, the cabbage 12999 at 1748,3050; Caique 14568 flying, the sitting `varlamore_parrot_caique_rock_west` (14572) by the statue of Ates and `_rock_south` (14570) in the north of the Tlati Rainforest, standing still, and 14574 stays at 1224,3134. Three Tlati caiques (1258,3008; 1260,2999; 1275,2985) have no recording and take the Wiki's regular 14568. The sync's per-page choice can't express per-tile variants, so these were set from the captures; a rerun adds nothing (it matches by name). `caique.test.cjs` checks them.
+- **Chiribaya and Techichi:** the same LocLine problem gave every Techichi the Aldarin villa's examine-only 14536 and every Chiribaya 13961. RSProx recordings (revisions 226-238) show each tile's id, and the rows use it: Techichi 13958 at Aldarin (1353,2962 and 1388,2936), Tal Teklan (1235,3092) and Kastori (1381,3068, recording 1104, added); the villa's 14536 at 1388,2955 and Kastori's 14537 at 1353,3039 stand still facing east (revisions 230 and earlier showed a pettable 13960 on the villa tile). Chiribaya 13962 at Sunset Coast (1496,3231), Aldarin (1376,2938), Auburnvale (1368,3309), 1356,3023 and 1401,3353 (both recording 1098, added); 13961 at Civitas (1597,3111), Aldarin (1421,2973) and 1206,3109 (recording 1098, added); 13964 indoors at 1587,3127; the corn dog 14538 at 1371,3062, still, facing east. `stray-dogs.test.cjs` checks them.
 - **Decisions:** the quest-stage ids are in `npc-spawn-sync.json` under `ids` (`Quest stage`, skipped), so a rerun doesn't add them back.
 
 ## Shipwrights
@@ -193,6 +218,15 @@ The sync read a map line only when it began with `{{Map}}`, and only its first m
 The fix was applied to the data: those NPCs' Wiki spawns in the 7 affected map squares (126) were removed and synced again with the fixed script, which added back only 5 bloodvelds, where the God Wars Dungeon really lacks them; the 9 same-tile copies elsewhere were removed. The three bards at each camp stay: three different NPCs on one Wiki pin.
 
 
+## Fight Arena
+
+Live spawns the arena's quest NPCs as multinpc parents on `arenaquest` (varp 17), which the client and `NPC.getContentId` resolve per player, and RSProx recordings `rsprox_transcripts/241/911665.txt` (ticks 7427-7433, 7627) and `242/912123.txt` add each on one tile with one angle. The rows were set from those captures (the sync's per-page choice can't express per-stage parents; a dry run over 2590,3140,2620,3175,0 with `--repair-identities` adds and repairs none of them):
+- **The pens:** `arena_ogre_cage` (12039) at 2608,3165, `arena_bouncer_cage` (12036) at 2608,3162 and `arena_scorpion_cage` (12042) at 2608,3159, facing west, standing still; shown until each beast has been fought (stages 0-7, 0-10, 0-9). They replace the attackable 1225, 1224 and 1226.
+- **Sammy in his cell:** `sammy_servil` (1204) at 2615,3168, facing south (stages 0-5, Talk-to).
+- **Justin in the arena:** `justin_servil` (1206) at 2603,3168, facing north (stages 0-8).
+- **The stand**, facing the arena (north), standing still: `general_khazard_arena` (1200) at 2600,3153 (stages 9-12), `justin_servil_khazard` (1212) at 2602,3153 (9-11) and `sammy_servil_arena` (12033) at 2603,3153 (6-11).
+`fight-arena-live-npcs.test.cjs` checks them.
+
 ## Audits
 
 - [NPC wander and aggression audit (2026-11-01)](audits/npc-wander-and-aggression.md) - every
@@ -205,6 +239,32 @@ Lady Keli, Prince Ali and Joe were spawned as their visible ids (11578, 11579, 1
 - **Lady Keli** `lady_keli` (11643): shows as 11578 at varp 273 values 0-40, then nothing, so she's gone from stage 50, when she's tied up and put in a cupboard.
 - **Prince Ali** `prince_ali_prison` (11644): 11579 at 0-90, then gone once he's freed (100).
 - **Joe** (11642): 11577 at 0-101.
+
+## Fairy Resistance Hideout (Fairytale II)
+
+Fairy Very Wise and the awake Fairy Queen are nameless multinpc parents on Fairytale II's stage
+(varbit 2326), which the client and `NPC.getContentId` resolve per player. The user's whole-quest
+rsprox capture `FairyTale2` (revision 242.1) adds each on one tile and neither ever walks, so both
+rows were set from it with `wanderRadius` 0 (the rows keep no facing):
+- **Fairy Very Wise** `fairyliquid_multi` (2970) at 2353,4458: shows as 1847 from stage
+  45 (her arrival in Fairy Nuff's welcome) through 90. Added at tick 976 facing east, and on the
+  same tile at 1102, 1865 (facing west) and 2352. It was at 2353,4446.
+- **Fairy Queen** `fairy_queen_multi2` (2971) at 2354,4455: shows as 1842 at stages 80
+  and 90 (awake after the magic essence). Added at tick 2419 facing south, four ticks after the
+  pour. It was at 2352,4457.
+
+The hideout's other fairies keep their rows. `fairytale-ii-capture.test.cjs` covers the stages they
+appear at; the in-game check on RSPSApp/tsps#5958 saw both on these tiles.
+
+## Tree Gnome Village chanters
+
+The four Local Gnomes (4979, `chantergnome`) round King Bolren chant at the end of Tree Gnome Village. In
+the user's three whole-quest rsprox captures (local 1001800, 1001802, 1002235; revision 242) they are
+added on their rows' tiles, (2541, 3168), (2541, 3171), (2542, 3167) and (2542, 3172), and stay within one
+tile of them: chanter 14480 walks 33 times between x 2540-2542, y 3170-3172 around (2541, 3171) over ticks
+10209-11600 of rsprox transcript 242/912220, and chanter 14399 between x 2540-2541, y 3167-3168 around
+(2541, 3168) over ticks 6958-6966 of 237/03998. So the rows have `wanderRadius` 1. The northern pair says "Su tana." and the southern pair "En tania."
+(TreeGnomeVillage.Quest.js binds them by their spawn tile).
 
 ## Emir's Arena guides (PvP Arena)
 

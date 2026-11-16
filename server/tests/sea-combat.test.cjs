@@ -814,7 +814,7 @@ test("from a deck: ranged and magic at sea creatures are allowed, melee isn't, n
     const melee = { attacker: player, target: osprey, method: method(CombatType.MELEE), allow: null };
     DeckCombat.canAttack(melee);
     assert.equal(melee.allow, false);
-    assert.equal(player.messages().at(-1), "I can't reach that!");
+    assert.equal(melee.message, "I can't reach that!", "the core says it on the player's attack");
     const land = { attacker: player, target: goblin, method: method(CombatType.RANGED), allow: null };
     DeckCombat.canAttack(land);
     assert.equal(land.allow, null, "left to core, which refuses a fight across a deck");

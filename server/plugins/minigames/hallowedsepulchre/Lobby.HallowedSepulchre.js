@@ -40,7 +40,7 @@ function climbDown({ player }) {
     return true;
   }
   const { agility } = Common.data.floors[0];
-  if (Common.level(player, "AGILITY") < agility) {
+  if (Common.agilityRequired() && Common.level(player, "AGILITY") < agility) {
     player.sendMessage(Common.message("agilityLevelEnter", { level: agility }));
     return true;
   }

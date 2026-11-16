@@ -23,6 +23,7 @@ import { CombatSpell } from "./CombatSpell";
 import { Spell } from "./Spell";
 import { World } from "../../../World";
 import { PluginManager } from "../../../../plugins/PluginManager";
+import { lazyRequire } from "../../../../util/LazyRequire";
 
 class ChargeSpell extends Spell {
     spellId(): number { return 0; }
@@ -105,7 +106,7 @@ class CombatArceuusSpell extends CombatNormalSpell {
         const target = hit.getTarget();
         const marked = caster.isPlayer() && hasArceuusMark(caster);
         const binds = Math.random() * 100 < (marked ? grasp.chance * 2 : grasp.chance);
-        target.performGraphic(new Graphic(binds ? grasp.bound : grasp.unbound, GRASP_IMPACT_DELAY));
+        target.performGraphic(Graphic.delayed(binds ? grasp.bound : grasp.unbound, GRASP_IMPACT_DELAY));
         const queue = pendingBinds.get(target) ?? [];
         queue.push(binds);
         pendingBinds.set(target, queue);
@@ -230,8 +231,8 @@ const DEMONBANE_ANIMATION = 8977;
 /** Capture (Undead Grasp): the target's graphic is sent with the cast, 30 cycles on. */
 const GRASP_IMPACT_DELAY = 30;
 
-const getCombatFactory = () =>
-    require("../CombatFactory").CombatFactory as typeof import("../CombatFactory").CombatFactory;
+const getCombatFactory = lazyRequire(() =>
+    require("../CombatFactory").CombatFactory as typeof import("../CombatFactory").CombatFactory);
 
 export class CombatAncientSpellExtend extends CombatSpell {
     constructor(private readonly castAnimationFunction: Function, private readonly startGraphicFunction: Function, private readonly spellEffectOnHitCalcFunction: Function, private readonly spellRadiusFunction: Function, private readonly castProjectileFunction: Function, private readonly endGraphicFunction: Function, private readonly maximumHitFunction: Function, private readonly baseExperienceFunction: Function, private readonly itemsRequiredFunction: Function, private readonly levelRequiredFunction: Function, private readonly spellIdFunction: Function, private readonly impactSoundFunction?: Function) {
@@ -1388,7 +1389,7 @@ export class CombatSpells {
         },
 
         endGraphic() {
-            return new Graphic(157, GraphicHeight.HIGH);
+            return new Graphic(157, GraphicHeight.SPELL_IMPACT);
         },
 
         maximumHit() {

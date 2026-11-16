@@ -428,6 +428,18 @@ fn actorFloorY(xz: vec2<f32>, plane: u32, groundOffset: f32) -> f32 {
     return -getHeightInterp(xz, plane) + groundOffset;
 }
 
+// The floor a spot animation sinks under, as an offset from the terrain (y is down, so
+// negative is up). A graphic drawn on the floor itself (offset 0: one attached to a player) has
+// faces lying exactly in the terrain; they and anything under them take the depth of a plane
+// this far above it, the clearance NPCs stand at. A graphic lowered on purpose keeps its floor.
+const GFX_FLOOR_CLEARANCE: f32 = 10.0;
+fn gfxGroundOffset(modelYOffset: f32) -> f32 {
+    if (modelYOffset < 0.0) {
+        return -modelYOffset;
+    }
+    return -max(modelYOffset, GFX_FLOOR_CLEARANCE);
+}
+
 const ACTOR_FLOOR_MARCH_STEP: f32 = 8.0;
 const ACTOR_FLOOR_MARCH_STEPS: i32 = 128;
 const ACTOR_FLOOR_BISECTIONS: i32 = 6;
@@ -551,9 +563,18 @@ function placement(kind: ActorKind): string {
     // npc/player.vert.glsl: parts sunk below the floor take the floor's depth where they show
     // (actorFloorViewPos), and the player's equipment face layer biases projected depth only;
     // both keep the original screen position and perspective.
-    const sinks = player || kind === "npc";
+    // Spot animations sink too. OSRS paints a graphic over the floor whatever lies under
+    // it (the Fishing cape's pool is drawn on the floor and below it), so a graphic's parts on
+    // or under the floor take the depth of a plane just above it (gfxGroundOffset).
+    const gfx = kind === "gfx";
+    const sinks = player || kind === "npc" || gfx;
+    const groundOffset = player
+        ? "actorU.u_modelYOffset"
+        : gfx
+        ? "gfxGroundOffset(actorU.u_modelYOffset)"
+        : "-actorU.u_modelYOffset";
     const floorView = (pos: string) =>
-        `actorFloorViewPos(${pos}, groundedPos, info.plane, ${player ? "" : "-"}actorU.u_modelYOffset,
+        `actorFloorViewPos(${pos}, groundedPos, info.plane, ${groundOffset},
         actorU.u_worldEntityTransform * scene.u_viewMatrix, scene.u_projectionMatrix)`;
     const clip = player
         ? `

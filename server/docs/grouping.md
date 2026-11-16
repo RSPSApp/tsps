@@ -35,6 +35,42 @@ groups: a leader and members who form, join and leave them, kept across logins a
 | Leader logs out | their invitations lapse at once; after a 100-tick (one minute) grace, if still away, the lead passes to the longest-serving member online (with none, the leader keeps it) and a group of one ends | ours |
 | Member logs out | keeps their place, shown offline | ours |
 
+## Group Ironman groups
+
+A Group Ironman group needs no command: the Group Ironman plugin runs it from the cache's own
+interfaces (`server/docs/group-ironman.md`), and its members are told how there, not with
+`::group` (an invitation is live's chat line, not "Type ::group to answer").
+
+A group formed by a Group Ironman (the Ironman plugin's `ironman:mode` is `group`,
+`group-hardcore` or `group-unranked`) is a Group Ironman group for good (`ironman` in the
+store). These rules follow the Wiki's Group Ironman Mode page; `grouping/Kinds.Grouping.js`,
+`Leaving.Grouping.js`, `Leadership.Grouping.js` and `Names.Grouping.js` hold them. The Group
+Ironman plugin adds its own on top (`server/docs/group-ironman.md`).
+
+The leaving, step-down and no-disband rules start once the group is **formed**: until then
+`grouping:leaving-period` answers `period: false` and the group works like any other (members
+leave and are removed at once, the lead passes at once, the leader may disband it).
+
+| Rule | Value | Source |
+| --- | --- | --- |
+| Who can be in one | only Group Ironmen, and a Group Ironman only in one: "Only Group Ironmen can join a Group Ironman group." / "A Group Ironman can only join a Group Ironman group." *(ours)*, checked at the invitation and again at the accept. The Find tab lists only players of the group's kind | Wiki (only fresh Group Ironman accounts join one) |
+| Changing mode | refused into or out of Group Ironman while in any group: "Leave your group first." *(ours)* | ours |
+| Leaving, or being removed | the member stays listed as leaving for 7 days, saved. They can still trade with the group and deposit into its storage, but can't withdraw, join another group or lead. Then they are out | Wiki |
+| Changing their mind | `::group stay`, or the panel's Stay button, during the 7 days; a removed member can't | Wiki ("7-day grace period to change their mind"; removed members get 7 days "to settle their affairs") |
+| A leaving leader | hands the lead at once to the longest-serving member who isn't leaving | ours, after the Wiki's succession |
+| The last member not leaving | leaving ends the group, leavers too | Wiki (a group with no members left ends) |
+| A group of one | doesn't end when its leader stays logged out; it keeps its storage | ours |
+| Stepping down | `::group promote <name>` names a successor who isn't leaving; they lead after 7 days, `::group cancel` (or the panel's Keep lead) calls it off | Wiki (against hijacking) |
+| An inactive leader | after 30 days away the lead goes to the longest-serving member who isn't leaving | Wiki |
+| A leader's logout | hands nothing on (the 100-tick grace is for other groups) | Wiki (the 30-day rule) |
+| Taking back a removal | `::group unkick <name>`, or the panel's Keep them, during the 7 days | ours, after the Wiki's grace |
+| Disbanding | refused: "A Group Ironman group can't be disbanded. It ends when its last member leaves." *(ours)* | Wiki |
+| The group's name | `::group name <name>`, the leader, or through Tony: at most 12 characters, letters, numbers and spaces *(ours)*, not another group's or a clan's ("That name is taken.", asked with `clans:name-taken`) | Wiki |
+| Ending a group | any group (disband, last leave, a solo member accepting another invitation) first asks `grouping:can-end`; group storage refuses while it holds items: "Empty the group storage first." | ours (the user's choice) |
+
+Leaving periods that have run out are settled every 100 ticks from server start, and at every
+login. A member settled while away is told "You are no longer in a group." when they next log in.
+
 - **Cap:** checked when an invitation is sent and again, as one step with the add, when it is
   accepted, so invitations can outnumber the places left and the last accept is refused with
   "That group is full."
@@ -112,7 +148,8 @@ nobody is moved out of a channel they chose. A leader's return to an activity ch
 rejoin of their last channel) brings nobody, as members may have chosen another channel meanwhile.
 In the group's channel the leader holds the Owner rank and members Recruit (a system channel's
 `rankOf`), which is what Chambers of Xeric reads: a group in its channel can make a CoX party at
-the recruiting board, its leader leading it, with no CoX change.
+the recruiting board, its leader leading it, with no CoX change. A Group Ironman group has no such channel *(ours)*: it
+talks in its own group chat (`////`, the Group Ironman tab's), and `::group chat` says so.
 
 ## Activities and group size
 
@@ -143,29 +180,43 @@ it takes) gets "Your group has N players; <activity> takes at most M." and fills
 ## Group storage
 
 The chests are transforms of bank locs (the Grand Exchange's is 31483), picked by varbit 13677
-`bank_chest_access`: 0 a stool, 1 the Deadman chest, 2 Group storage. Nothing on this server sets
-it to 2 yet, so nobody sees one until Group Ironman does. Opening one checks the store at that click: an invitation or a saved
-attribute is not membership. A member's click is sent as `grouping:storage`; the storage itself
-(Group Ironman's shared bank) is not on this server, so with no handler the player is told
-"Group storage isn't available on this world."
+`bank_chest_access`: 0 a stool, 1 the Deadman chest, 2 Group storage. The Ironman plugin sets it to
+2 for Group Ironman accounts, so only they see the chests. Opening one checks the store at that
+click: an invitation or a saved attribute is not membership. A member's click is sent as
+`grouping:storage` with their own snapshot entry (`member`, whose `leaving` says whether they can
+only deposit). The storage itself is `GroupStorage.plugin.js` (`server/docs/group-storage.md`).
+With no handler, the player is told "Group storage isn't available on this world."
 
 ## Events
 
 | Event | Direction | Payload |
 | --- | --- | --- |
-| `grouping:changed` | emitted after every change | `{ type, profile, groupId, group, actor, target, players }`: `type` is `created`, `invited`, `joined`, `declined`, `invite-withdrawn`, `promoted`, `kicked`, `left`, `disbanded`, `online` or `offline`; `group` the snapshot after it (before it, for `disbanded`); `actor`/`target` account names; `players` every logged-in player whose view changed |
-| `grouping:get` | request | `{ player }` → `group` (snapshot or null), `role` |
+| `grouping:changed` | emitted after every change | `{ type, profile, groupId, group, actor, target, players }`: `type` is `created`, `invited`, `joined`, `declined`, `invite-withdrawn`, `promoted`, `kicked`, `left`, `leaving`, `stayed`, `disbanded`, `online` or `offline`; `group` the snapshot after it (before it, for `disbanded`); `actor`/`target` account names; `players` every logged-in player whose view changed |
+| `grouping:get` | request | `{ player }` → `group` (snapshot or null), `role`, `member` (their own entry, or null), `account` (their key, or null) |
+| `grouping:same-group` | request | `{ player, other }` (other: a player or a login name) → `same`, `ironman`; a leaving member still counts |
+| `grouping:can-end` | emitted before a group ends | `{ groupId, group, player, allowed, reason }`: `allowed: false` keeps it, and `reason` is said |
+| `ironman:change-mode` | answered | refuses a change into or out of Group Ironman while in a group |
 | `grouping:invite` | request | `{ player, target }` (a player or a typed name) → `invited` |
+| `grouping:create` | request | `{ player }` → `created` (a group led by them, if they are in none) |
+| `grouping:leave` | request | `{ player }` → `left` (as `::group leave`) |
+| `grouping:stay` | request | `{ player }` → `stayed` (as `::group stay`) |
+| `grouping:promote`, `grouping:cancel-step-down`, `grouping:unkick` | request | `{ player, target }` (cancel: `{ player }`) → `promoted` / `cancelled` / `kept`, as `::group promote`, `cancel`, `unkick` (the Group Ironman settings' rows) |
+| `grouping:of-account` | request | `{ name }` → `groups`: snapshots of the groups the account is in, for an account that may be offline |
+| `grouping:kick` | request | `{ player, target }` (a player or a typed name) → `kicked` (as `::group kick`) |
+| `grouping:disband` | request | `{ player }` → `disbanded` (as `::group disband`) |
+| `grouping:rename` | request | `{ player, name }` → `renamed` (the leader) |
+| `grouping:can-join` | emitted before an invitation or a join | `{ player, inviter, groupId, group, stage, allowed, reason }`: `allowed: false` refuses with `reason` |
+| `grouping:leaving-period` | emitted | `{ groupId, group, period }`: `period: false` means a Group Ironman group's members leave at once (not yet formed) |
 | `grouping:open` | request | `{ player }` opens the panel |
-| `grouping:storage` | emitted | `{ player, group, handled }` when a member opens group storage |
+| `grouping:storage` | emitted | `{ player, group, member, handled }` when a member opens group storage |
 | `grouping:activity` | announce | `{ name, maxSize }`: how many players a minigame takes |
 | `grouping:members` | request | `{ player, activity?, maxSize? }` → `groupId` (0 for none), `leader` (online, else null), `isLeader`, `members` (online, leader first; `[player]` without a group), `size` (every member), `max`, `fits`, `message` |
-| `grouping:same-group` | request | `{ player, other }` → `same` |
 | `friends-chat:system-channel` | request (FriendsList) | `{ key, channel }`: runs a channel no player owns, `channel` `{ ownerName, channelName, entryRank?, talkRank?, kickRank?, admits?(player), rankOf?(player) }`, or ends it with `null` |
 | `friends-chat:joined` | emitted (FriendsList) | `{ player, channelKey, rejoin }` when a player joins a chat-channel; `rejoin` is true for the return to their last channel at login |
 
-A snapshot is `{ id, profile, cap, leader, members: [{ account, name, role, online, joined }],
-invites: [{ account, name, expires }] }`.
+A snapshot is `{ id, profile, cap, ironman, name, leader, members: [{ account, name, role, online, joined,
+leaving, kicked }], invites: [{ account, name, expires }] }`. `leaving` is when a leaving member's
+seven days end (ms), and 0 otherwise.
 
 ## Commands and panel
 
@@ -176,8 +227,9 @@ clicked. The rows are sent over the game socket per viewer, not through a public
 `registerContentEndpoint` resource, because the Find list depends on who is asking.
 
 `::group create | invite <name> | accept [name] | decline [name] | withdraw <name> |
-promote <name> | kick <name> | leave | disband | info` do the same by name, and `::group chat`
-switches to the group's own chat-channel.
+promote <name> | kick <name> | leave | stay | disband | info` do the same by name, `::group chat`
+switches to the group's own chat-channel, and a Group Ironman group's leader also has `cancel`,
+`unkick <name>` and `name <group name>`.
 
 RuneLite through the gateway can't show the panel: the gateway drops every server-defined
 interface (group 30000 and up, `runelite-gateway/src/main/kotlin/gateway/down/Interfaces.kt`), as

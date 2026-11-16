@@ -49,3 +49,43 @@ test("an Ultimate Ironman's runes stay in the backpack at the Deposit Pool; anyo
   assert.equal(main.p.getBank(0).getAmount(core.ItemIdentifiers.NATURE_RUNE), 40);
   assert.ok(main.messages.includes("You deposit all of your runes into the pool."));
 });
+
+const ALL = "You deposit all of your runes into the pool.";
+function withRunes(t, capacity, runes) {
+  const { p, messages } = runecrafter(t, null);
+  for (const id of runes) p.getInventory().add(new core.Item(id, 10), false);
+  t.mock.method(core.Bank, "getCapacity", () => capacity);
+  return { p, messages };
+}
+// The bank's full line; a bank-space plugin may reword it ("Set a Bank PIN to unlock more bank space.").
+function fullOnce(messages) {
+  assert.equal(messages.length, 1, "one full-bank line: " + JSON.stringify(messages));
+  assert.notEqual(messages[0], ALL);
+}
+
+test("a full bank keeps every rune type and says so once, not once per rune type", (t) => {
+  const runes = [core.ItemIdentifiers.LAW_RUNE, core.ItemIdentifiers.COSMIC_RUNE, core.ItemIdentifiers.DEATH_RUNE];
+  const { p, messages } = withRunes(t, 0, runes);
+  Pool._test.depositRunes({ player: p, objectId: pool });
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.NATURE_RUNE), 40, "kept");
+  for (const id of runes) assert.equal(p.getInventory().getAmount(id), 10, "kept");
+  fullOnce(messages);
+});
+
+test("runes that stay behind for lack of space mean the pool doesn't claim all of them", (t) => {
+  const { p, messages } = withRunes(t, 1, [core.ItemIdentifiers.LAW_RUNE, core.ItemIdentifiers.COSMIC_RUNE]);
+  Pool._test.depositRunes({ player: p, objectId: pool });
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.NATURE_RUNE), 0, "the first type fits");
+  assert.equal(p.getBank(0).getAmount(core.ItemIdentifiers.NATURE_RUNE), 40);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.LAW_RUNE), 10, "kept");
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.COSMIC_RUNE), 10, "kept");
+  fullOnce(messages);
+});
+
+test("runes joining stacks already in a full bank still go, and then the pool claims them all", (t) => {
+  const { p, messages } = withRunes(t, 1, []);
+  p.getBank(0).add(new core.Item(core.ItemIdentifiers.NATURE_RUNE, 1), false);
+  Pool._test.depositRunes({ player: p, objectId: pool });
+  assert.equal(p.getBank(0).getAmount(core.ItemIdentifiers.NATURE_RUNE), 41);
+  assert.deepEqual(messages, [ALL]);
+});

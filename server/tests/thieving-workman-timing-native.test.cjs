@@ -67,7 +67,11 @@ test('workman outcome follows the captured delay, while an ordinary pickpocket r
   // During task processing 0.5 succeeds at level 99 without guaranteeing rare rewards.
   const underlevel = actor(t, 1, 'under');
   const refused = admitted(t, underlevel, core.NpcIdentifiers.DIGSITE_WORKMAN_2, 'Digsite workman', 'Steal-from');
-  assert.ok(refused.messages.includes('You need a Thieving level of at least 25 to do this.'));
+  // Pickpocket.Thieving.js levelRefusal: a message box, not a chat line.
+  const box = underlevel.getDialogueManager().getCurrent();
+  assert.ok(box instanceof core.StatementDialogue, `the refusal is a message box: ${box?.constructor?.name}`);
+  assert.equal(box.getText(), "You need level 25 thieving to pick the workman's pocket.");
+  assert.ok(!refused.messages.includes('You need a Thieving level of at least 25 to do this.'), 'not the old chat line');
   assert.equal(refused.tasksAdded, 0, 'refusal schedules no outcome');
   assert.equal(underlevel.getInventory().getItems().filter(i => i?.getId() > 0).length, 0);
   const workman = actor(t, 99, 'workman');

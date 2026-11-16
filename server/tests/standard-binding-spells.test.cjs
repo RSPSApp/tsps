@@ -102,13 +102,12 @@ test('player targets keep the full hold and grace durations with Protect from Ma
   assert.equal(f.target.getTimers().getTicks(core.TimerKey.FREEZE_IMMUNITY),ticks+5,name);
  }
 });
-test('splashes never bind, and unrelated curses and existing large-NPC immunity remain intact',t=>{
+test('splashes never bind, unrelated curses do not, and a large NPC is bound like any other',t=>{
  const splash=fixture(t);splash.p.setAttribute(PROBE,false);t.mock.method(AccuracyFormulasDpsCalc,'rollAccuracy',()=>false);
  assert.equal(splash.commit(),true);const missed=splash.hit();assert.equal(missed.isAccurate(),false);splash.impact(missed);
  assert.equal(splash.target.getTimers().has(core.TimerKey.FREEZE),false);
  const curse=fixture(t,'CONFUSE');assert.equal(curse.commit(),true);curse.impact(curse.hit());assert.equal(curse.target.getTimers().has(core.TimerKey.FREEZE),false);
- const large=fixture(t,'ENTANGLE');t.mock.method(large.target,'getSize',()=>3);assert.equal(large.commit(),true);large.impact(large.hit());assert.equal(large.target.getTimers().has(core.TimerKey.FREEZE),false);
- large.target.setFlag('combat:freezable',true);large.impact(large.hit());assert.equal(large.target.getTimers().getTicks(core.TimerKey.FREEZE),24);
+ const large=fixture(t,'ENTANGLE');t.mock.method(large.target,'getSize',()=>3);assert.equal(large.commit(),true);large.impact(large.hit());assert.equal(large.target.getTimers().getTicks(core.TimerKey.FREEZE),24);
 });
 test('blighted entangle sacks fund ordinary Bind, Snare and Entangle casts',async t=>{
  const SACK=24613,PLACEHOLDER=24614,RUNES=[555,557,561];

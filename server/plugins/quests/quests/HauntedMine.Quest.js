@@ -30,10 +30,10 @@ const { hasKey } = require("../../items/KeyAvailability");
  * Treus spawn at 2788,4458 (sequence 1437) and the ghost at 2802,4516 walking to the valve.
  *
  * Gaps:
- * - "Transcript:Zealot" (the pickpocket lines and the post-quest scene where he takes
- *   the key back) is not in npc-dialogues.json, so pickpocketing gives the key with
- *   no words and a completed player replays "after-killing-treus-dayth", the closest
- *   variant in the dump.
+ * - "Transcript:Zealot" (the post-quest scene where he takes the key back) is not in
+ *   npc-dialogues.json, so a completed player replays "after-killing-treus-dayth", the
+ *   closest variant in the dump. The pickpocket's own lines are game messages, taken from
+ *   rsprox captures (pickpocketZealot).
  * - The flooded chamber is walked across normally (captured route). Cache 241 clips
  *   the one crossing tile; installFloodedChannelFix clears only that BLOCKED_TILE
  *   after each region load, leaving every other terrain flag and object unchanged.
@@ -73,6 +73,9 @@ module.exports = function registerHauntedMineQuest(api) {
   const MINE_CART_NPC_ID = 3610; // the capture's moving mine-cart actor
 
   const ZEALOTS_KEY_ITEM_ID = ItemIdentifiers.ZEALOTS_KEY; // 4078
+  const PICKPOCKET_ANIMATION = 881; // human_pickpocket
+  const ZEALOT_PICKPOCKET_MESSAGE = "You pick the zealot's pocket and retrieve a small silvery key.";
+  const ZEALOT_ALREADY_PICKED_MESSAGE = "I've already picked his pockets.";
   const GLOWING_FUNGUS_ITEM_ID = ItemIdentifiers.GLOWING_FUNGUS; // 4075
   const CRYSTAL_MINE_KEY_ITEM_ID = ItemIdentifiers.CRYSTAL_MINE_KEY; // 4077
   const SALVE_SHARD_ITEM_ID = ItemIdentifiers.SALVE_SHARD; // 4082
@@ -451,6 +454,44 @@ module.exports = function registerHauntedMineQuest(api) {
     return V_START;
   }
 
+  /** The repeat question in the talk-again menus, answered {{tact|above}} on the Wiki transcript. */
+  const HISTORY_AGAIN_OPTION = "Can you explain the history of these mines again?";
+  /** The first line of the history the Zealot tells in the starting-out conversation. */
+  const HISTORY_FIRST_LINE = "Well, below the very ground you stand upon";
+
+  /** The starting-out history, from its first line to the menu after it, or null if the page lost it. */
+  function historySteps(steps) {
+    for (const step of steps ?? []) {
+      const nested = [step.steps, ...(step.options ?? []).map((option) => option.steps)];
+      for (const list of nested) {
+        if (!Array.isArray(list)) continue;
+        const at = list.findIndex((entry) => entry?.type === "line" && String(entry.text ?? "").startsWith(HISTORY_FIRST_LINE));
+        if (at >= 0) return list.slice(at);
+        const found = historySteps(list);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * "Can you explain the history of these mines again?" is "(same as above)" on the Wiki: the Zealot tells the
+   * starting-out history again, then its menu. The dump keeps only an unresolvable jump (lZ-7gL), so the chat
+   * ended after the player's line; play the question and the starting-out history instead.
+   */
+  function handleZealotChoice(event) {
+    const { player, npc, npcId, option } = event;
+    if (npcId !== ZEALOT_NPC_ID || option !== HISTORY_AGAIN_OPTION) return;
+    event.end = true;
+    api.emitCustomEvent("npc-dialogue:start", {
+      player, npc, npcId, variant: V_START, handled: false,
+      select: (steps) => {
+        const history = historySteps(steps);
+        return history ? [{ player: HISTORY_AGAIN_OPTION }, ...history] : [];
+      },
+    });
+  }
+
   /** Answers the page's gameplay conditions; other pages get null. */
   function answerCondition({ player, stepId }) {
     if (!MY_CONDITION_IDS.has(stepId)) return null;
@@ -622,14 +663,35 @@ module.exports = function registerHauntedMineQuest(api) {
   // NPC interactions
   // ==========================================================================
 
-  /** Steals the Zealot's key once the quest has been started. */
+  /**
+   * Steals the Zealot's key once the quest has been started. rsprox captures (rec 3063 ticks
+   * 6202/6206, Leagues rec 1768 tick 5020): the steal plays human_pickpocket and sound 2581 with
+   * the key message and the key on the tick the player reaches him, and no Thieving XP; with the
+   * key already held he only gets the "already picked" line (no animation or sound).
+   */
   function pickpocketZealot(event) {
     const { player, npcId } = event;
     if (npcId !== ZEALOT_NPC_ID) return false;
     if (!quest.isStarted(player) || quest.isComplete(player)) return false;
-    if (hasBit(player, BIT_VALVE_KEY_USED) || held(player, ZEALOTS_KEY_ITEM_ID)) return false;
+    if (hasBit(player, BIT_VALVE_KEY_USED)) return false;
+    if (held(player, ZEALOTS_KEY_ITEM_ID) || keyOnGround(player)) {
+      player.sendMessage(ZEALOT_ALREADY_PICKED_MESSAGE);
+      return;
+    }
+    player.performAnimation(new Animation(PICKPOCKET_ANIMATION));
+    Sounds.sendSound(player, Sound.THIEVING_PICKPOCKET);
+    player.sendMessage(ZEALOT_PICKPOCKET_MESSAGE);
     giveItem(player, ZEALOTS_KEY_ITEM_ID);
     player.getPacketSender().sendVarbit(VARBIT_HEARD_ABOUT_KEY, 1);
+  }
+
+  /**
+   * Ours: a key that dropped to the ground (full inventory) counts as picked until it despawns, so
+   * the steal is not repeated with its animation, sound and message; no source covers this case.
+   */
+  function keyOnGround(player) {
+    return api.getItemOnGroundManager().ownedBy(player.getUsername())
+      .some((groundItem) => groundItem.getItem().getId() === ZEALOTS_KEY_ITEM_ID);
   }
 
   /** Take on the innocent-looking key: first take wakes Treus; later takes claim it. */
@@ -1208,6 +1270,7 @@ module.exports = function registerHauntedMineQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
+  api.onCustomEvent("npc-dialogue:choice", handleZealotChoice);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("door:toggle", handleDoorToggle);
   api.onCustomEvent("ladders:climb", claimHauntedLadder);

@@ -8,8 +8,11 @@
 const C = require("./Common.ClanWars");
 const Layout = require("./Layout.ClanWars");
 const Rules = require("./Rules.ClanWars");
+const Magic = require("./Magic.ClanWars");
 const Viewing = require("./Viewing.ClanWars");
 const Restrictions = require("./Restrictions.ClanWars");
+const Oddskull = require("./Oddskull.ClanWars");
+const Ranged = require("./Ranged.ClanWars");
 const Ghasts = require("./Ghasts.ClanWars");
 const PREPARATION_TICKS = 200;
 // Wiki15379109 and rev242 enum2339: 60 seconds; engine cycle is 600ms.
@@ -41,21 +44,32 @@ function arenaClass() {
       if (!attacker.isPlayer() || !target.isPlayer()) return Ghasts.canAttack(this.game, attacker, target, method);
       if (this.game.phase !== "combat" || this.game.expired()
         || attacker.getArea() !== this || target.getArea() !== this) return false;
+      if (!Oddskull.canAttack(this.game, attacker)) return false;
       if (this.game.rules.specialattacks === 2 && attacker.isSpecialActivated()) return false;
       const a = this.game.fighters.get(attacker), b = this.game.fighters.get(target);
       if (a == null || b == null || a === b) return false;
-      // Ordinary starts pass the actual method. Secondary/reflected hits have already passed
-      // their primary attack policy; absent method is not permission to start a ranged spell.
-      return method == null || method.type() === C.core.CombatType.MELEE;
+      if (method?.type() === C.core.CombatType.MELEE && this.game.rules.melee !== 0) return false;
+      if (method?.type() === C.core.CombatType.MAGIC) return Magic.canAttack(attacker, method, this.game.rules);
+      return Ranged.canAttack(attacker, this.game.rules, method);
+    }
+    canFreeze(target) {
+      const game = this.game;
+      if (game.rules.freezing !== 1 || game.phase !== "combat" || game.expired()
+        || game.area !== this || this.isDestroyed() || !target.isPlayer() || !C.live(target)
+        || target.getArea() !== this || target.getPrivateArea() !== this
+        || C.matches.get(target) !== game || game.jailed.has(target) || game.viewers.has(target)) return null;
+      const side = game.members.get(target);
+      // Target-owned TSPS policy: source metadata does not grant or remove protection.
+      return (side === 0 || side === 1) && game.fighters.get(target) === side ? false : null;
     }
     npcAggression(player, npc) { return Ghasts.aggression(this.game, player, npc); }
     npcAggressionTolerance(player, npc) { return Ghasts.aggression(this.game, player, npc); }
-    process(mobile) { if (mobile.isNpc()) Ghasts.registered(this.game, mobile.getAsNpc()); }
+    process(mobile) { if (mobile.isNpc()) { Ghasts.registered(this.game, mobile.getAsNpc()); Oddskull.registered(this.game, mobile.getAsNpc()); } }
     canTeleport() { return false; }
     canTrade() { return false; }
     postLeave(mobile, logout) {
       if (mobile.isPlayer()) this.game.remove(mobile.getAsPlayer(), logout);
-      else if (mobile.isNpc()) Ghasts.left(this.game, mobile.getAsNpc());
+      else if (mobile.isNpc()) { Ghasts.left(this.game, mobile.getAsNpc()); Oddskull.left(this.game, mobile.getAsNpc()); }
       this.detach(mobile);
       mobile.setArea(null);
       // Match lifetime is owned by Game, including empty staging and pending safe deaths.
@@ -64,11 +78,19 @@ function arenaClass() {
   return Arena;
 }
 
+function changedBit(player, name, value) {
+  const id = C.core.CacheDefinitions.getVarbitId(name);
+  if (id != null && player.getPacketSender().getVarbit(id) === value) return;
+  C.bit(player, name, value);
+}
+
 function hud(game, player) {
   C.bit(player, "clanwars_useclansystem", 0);
   C.bit(player, "clanwars_wincondition", game.rules.wincondition);
   C.bit(player, "clanwars_kills_1", Math.min(MAX_HUD_KILLS, game.kills[0]));
   C.bit(player, "clanwars_kills_2", Math.min(MAX_HUD_KILLS, game.kills[1]));
+  C.bit(player, "clanwars_points_1", game.points[0]);
+  C.bit(player, "clanwars_points_2", game.points[1]);
   C.bit(player, "clanwars_timeremaining", game.timeRemaining());
   C.bit(player, "clanwars_myteam", game.members.get(player) + 1);
   C.bit(player, "clanwars_players_1", [...game.fighters.values()].filter((side) => side === 0).length);
@@ -90,6 +112,7 @@ class Game {
     this.returnAt = new Map();
     this.viewers = new Set();
     this.kills = [0, 0];
+    this.points = [0, 0];
     this.phase = "staging";
     this.starts = C.now() + PREPARATION_TICKS;
     this.ends = null;
@@ -126,6 +149,7 @@ class Game {
       player.sendMessage("Your team has reached the agreed fighter cap.");
       return false;
     }
+    Magic.discardQueuedHits(player, this.rules);
     this.members.set(player, side);
     this.fighters.set(player, side);
     C.matches.set(player, this);
@@ -190,6 +214,7 @@ class Game {
       return false;
     }
     const side = this.members.get(player);
+    Magic.discardQueuedHits(player, this.rules);
     this.jailed.delete(player);
     this.fighters.set(player, side);
     player.getCombat().reset();
@@ -226,6 +251,7 @@ class Game {
       this.ends = duration ? C.now() + duration : null;
       for (const wall of this.walls) C.core.ObjectManager.deregister(wall, true);
       this.walls = [];
+      if (!Oddskull.prepare(this)) return;
       for (const player of this.members.keys()) player.sendMessage("The Clan Wars battle has begun.");
     }
     if (this.phase === "combat") {
@@ -249,16 +275,30 @@ class Game {
         if (lost[0] || lost[1]) return this.finish(lost[0] ? lost[1] ? null : 1 : 0);
       }
     }
+    if (this.phase === "combat") Oddskull.tick(this);
+    if (this.phase === "over") return;
+    const fighters = [0, 0];
+    for (const team of this.fighters.values()) fighters[team]++;
+    const values = {
+      clanwars_points_1: this.points[0],
+      clanwars_points_2: this.points[1],
+      clanwars_countdown: this.phase === "staging" ? Math.max(0, this.starts - C.now()) : 0,
+      clanwars_kills_1: Math.min(MAX_HUD_KILLS, this.kills[0]),
+      clanwars_kills_2: Math.min(MAX_HUD_KILLS, this.kills[1]),
+      clanwars_timeremaining: this.timeRemaining(),
+      clanwars_players_1: fighters[0],
+      clanwars_players_2: fighters[1],
+    };
+    // hud() sends every value on entry and respawn; per tick only the changed ones go.
     for (const player of this.members.keys()) {
-      C.bit(player, "clanwars_countdown", this.phase === "staging" ? Math.max(0, this.starts - C.now()) : 0);
-      C.bit(player, "clanwars_kills_1", Math.min(MAX_HUD_KILLS, this.kills[0]));
-      C.bit(player, "clanwars_kills_2", Math.min(MAX_HUD_KILLS, this.kills[1]));
-      C.bit(player, "clanwars_timeremaining", this.timeRemaining());
-      C.bit(player, "clanwars_players_1", [...this.fighters.values()].filter((team) => team === 0).length);
-      C.bit(player, "clanwars_players_2", [...this.fighters.values()].filter((team) => team === 1).length);
+      for (const [name, value] of Object.entries(values)) changedBit(player, name, value);
     }
   }
-  eliminate(player) { Viewing.stop(player); this.fighters.delete(player); Ghasts.playerLeft(this, player); player.getCombat().reset(); }
+  eliminate(player) {
+    Oddskull.release(this, player);
+    Magic.discardQueuedHits(player, this.rules);
+    Viewing.stop(player); this.fighters.delete(player); Ghasts.playerLeft(this, player); player.getCombat().reset();
+  }
   remove(player, logout) {
     if (!this.members.has(player)) return;
     // A lethal hit queues its task before player:dying. Preserve safe-death
@@ -276,15 +316,21 @@ class Game {
     player.getPacketSender().closeSubInterface(C.uid("toplevel_osrs_stretch:overlay_hud"));
     player.getPacketSender().sendPlayerOption(1, "", true);
     C.bit(player, "clanwars_accept", 0);
-    for (const name of ["clanwars_myteam", "clanwars_wincondition", "clanwars_countdown", "clanwars_timeremaining", "clanwars_players_1", "clanwars_players_2", "clanwars_kills_1", "clanwars_kills_2"]) C.bit(player, name, 0);
+    for (const name of ["clanwars_myteam", "clanwars_wincondition", "clanwars_countdown", "clanwars_timeremaining", "clanwars_players_1", "clanwars_players_2", "clanwars_kills_1", "clanwars_kills_2", "clanwars_points_1", "clanwars_points_2"]) C.bit(player, name, 0);
     // Remove ownership before moving so Area.leave can safely re-enter without recursion.
     this.area.leave(player, logout);
     if (logout) player.setLocation(C.location(C.RETURN));
-    else player.moveTo(C.location(C.RETURN));
+    else {
+      player.moveTo(C.location(C.RETURN));
+      // Back at Ferox restored, as the free-for-all portal does (approved TSPS policy; the Wiki is silent).
+      // A queued death keeps its own reset; restoring Hitpoints under it would race the death task.
+      if (!player.isDyingReturn()) C.api.emitCustomEvent("ferox:restore", { player });
+    }
   }
   finish(winner) {
     if (this.phase === "over") return;
     this.phase = "over";
+    Oddskull.stop(this);
     Ghasts.stop(this);
     this.returnAt.clear();
     this.task.stop();
@@ -410,7 +456,19 @@ function exit(event) {
   return leave(event);
 }
 function channelLeft({ player }) { C.matches.get(player)?.channelLeft(player); }
-function gone({ player }) { joining.delete(player); C.matches.get(player)?.remove(player, true); }
+function gone({ player }) {
+  joining.delete(player);
+  const game = C.matches.get(player);
+  // World's removal runs this before the logout hook that leaves the chat-channel: a fighter whose lethal hit
+  // already landed keeps the kill for the other side, scored when the queued death reaches player:dying.
+  if (game?.fighters.has(player) && player.isDyingReturn()) game.holdDeath(player, false);
+  // A live fighter leaves the chat-channel by going, but channelLeft would then find no membership:
+  // where leaving counts as a death, the other side scores here, after the removal (a finish moves members).
+  const scores = game?.fighters.has(player) && !player.isDyingReturn() && game.rules.leavingcc === 0;
+  const side = game?.members.get(player);
+  game?.remove(player, true);
+  if (scores) game.score(1 - side);
+}
 function recover({ player }) {
   if (player.getAttribute(C.IN_MATCH_ATTRIBUTE) !== true) return;
   player.setAttribute(C.IN_MATCH_ATTRIBUTE, false);
@@ -423,6 +481,7 @@ function noPvpRewards(event) {
 function shutdown() { for (const game of [...active]) game.finish(null); }
 function attach(api) {
   Ghasts.attach(api);
+  Oddskull.attach(api);
   api.onInterfaceActionClick(joinClicked);
   api.onCustomEvent("interface:closed", joinClosed);
   api.onCustomEvent("player:dying", dyingStarts);

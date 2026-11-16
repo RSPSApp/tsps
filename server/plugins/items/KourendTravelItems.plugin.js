@@ -52,7 +52,6 @@ const XERIC_MAX_CHARGES = 1000;
 const WILDERNESS_LEVEL = 20;
 const PROMPT = "Where would you like to teleport to?";
 const WORN_OPTION_PARAM = 451;
-const READ_BOOK_SEQUENCE = "human_readbook";
 const BOOK_TITLES = new Map([[BOOK_OF_THE_DEAD_ID, "The Book of the Dead"], [MEMOIRS_ID, "Kharedst's Memoirs"]]);
 const BOOK_LINES = 15;
 const LEFT_TEXT = 44;
@@ -227,6 +226,98 @@ function checkMemoirs(player, item) {
 
 function readMemoirs(player, item) {
   openBook(player, BOOK_TITLES.get(item.getId()), bookSpreads(player, item));
+}
+
+/** rsprox 231/00363: Continue after the inscription, recharge, then quantity menu.
+ * Wiki: one law/body/mind/soul rune and 10 Magic XP per charge; carried pouch runes work.
+ * Successful charging text/animation is not captured: do not invent an extra response.
+ */
+function heldMemorialBook(player) {
+  const items = [...player.getInventory().getValidItems(), ...player.getEquipment().getValidItems()];
+  return items.find((item) => item.getId() === BOOK_OF_THE_DEAD_ID)
+    ?? items.find((item) => item.getId() === MEMOIRS_ID && maxCharges(item, player) > 0);
+}
+
+function memorialRunes() {
+  return [core.ItemIdentifiers.LAW_RUNE, core.ItemIdentifiers.BODY_RUNE,
+    core.ItemIdentifiers.MIND_RUNE, core.ItemIdentifiers.SOUL_RUNE];
+}
+
+function validMemorialSession(session) {
+  const { player, item, location } = session;
+  return player.isRegistered() && !player.isDyingReturn() && player.getHitpoints() > 0
+    && player.getLocation().equals(location) && heldMemorialBook(player) === item;
+}
+
+function memorialSupply(player) {
+  const request = { player, runeIds: memorialRunes(), available: {} };
+  api.emitCustomEvent("rune-pouch:supply", request);
+  return request;
+}
+
+function missingMemorialRunes(player, item) {
+  const name = item.getId() === BOOK_OF_THE_DEAD_ID ? "the Book of the Dead" : "Kharedst's Memoirs";
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
+    new core.StatementDialogue(0, `To charge ${name} you need Law Runes, Body<br>Runes, Mind Runes and Soul Runes.`),
+  ));
+}
+
+function rechargeMemorial(session, requested) {
+  if (!validMemorialSession(session)) return;
+  const { player, item } = session;
+  const current = memoirCharges(player, item);
+  const remaining = maxCharges(item, player) - current;
+  const supply = memorialSupply(player);
+  const inventory = player.getInventory();
+  const affordable = Math.min(...memorialRunes().map((id) => inventory.getAmount(id) + (supply.available[id] ?? 0)));
+  const amount = Math.min(requested, remaining, affordable);
+  if (amount <= 0) {
+    if (remaining > 0) missingMemorialRunes(player, item);
+    return;
+  }
+  const costs = memorialRunes().map((id) => ({ id, amount: Math.max(0, amount - inventory.getAmount(id)) }));
+  if (costs.some((cost) => cost.amount > 0)) {
+    const request = { player, costs };
+    api.emitCustomEvent("rune-pouch:supply", request);
+    if (!request.consumed) return;
+  }
+  // Both containers have been checked. No asynchronous work occurs between validation and spend.
+  for (const { id, amount: pouchAmount } of costs) inventory.deleteNumber(id, amount - pouchAmount);
+  setMemoirCharges(player, item, current + amount);
+  player.getSkillManager().addExperiences(core.Skill.MAGIC, amount * 10);
+}
+
+function chooseMemorialQuantity(session) {
+  if (!validMemorialSession(session)) return;
+  const { player, item } = session;
+  const current = memoirCharges(player, item);
+  const capacity = maxCharges(item, player);
+  if (current >= capacity) return;
+  const supply = memorialSupply(player);
+  if (memorialRunes().some((id) => player.getInventory().getAmount(id) + (supply.available[id] ?? 0) <= 0)) {
+    missingMemorialRunes(player, item);
+    return;
+  }
+  const remaining = capacity - current;
+  api.sendMultiChatboxPrompt(player, `${BOOK_TITLES.get(item.getId())} currently has ${current}/${capacity} charges.`,
+    "Add 1 charge.", () => rechargeMemorial(session, 1),
+    "Add 5 charges.", () => rechargeMemorial(session, 5),
+    "Add 10 charges.", () => rechargeMemorial(session, 10),
+    `Add ${remaining} charges.`, () => rechargeMemorial(session, remaining),
+    "Do nothing.", cancelMemorialRecharge);
+}
+
+function cancelMemorialRecharge() {}
+
+function inspectMemorialForRecharge({ player, object }) {
+  const item = heldMemorialBook(player);
+  const location = player.getLocation().clone();
+  if (!item || !object || !location.isWithinDistance(object.getLocation(), 2)) return;
+  const session = { player, item, location };
+  if (!validMemorialSession(session)) return;
+  const name = item.getId() === BOOK_OF_THE_DEAD_ID ? "the Book of the Dead" : "Kharedst's Memoirs";
+  api.sendMultiChatboxPrompt(player, "Select an Option", `Recharge ${name}.`,
+    () => chooseMemorialQuantity(session), "Do nothing.", cancelMemorialRecharge);
 }
 
 /** The book's pages run on: the dedication, then each entry in full when attached or as its one missing page. */
@@ -514,6 +605,7 @@ module.exports = {
     api.onPlayerLogin(syncPages);
     api.onCustomEvent("xerics-talisman:honour-unlocked", answerHonourUnlocked);
     api.onCustomEvent("xerics-talisman:unlock-honour", answerUnlockHonour);
+    api.onCustomEvent("kharedst:memorial-inspected", inspectMemorialForRecharge);
   },
   _test: {
     MEMOIRS_PAGES, XERIC_DESTINATIONS, MEMOIRS_ID, BOOK_OF_THE_DEAD_ID, XERIC_TALISMAN_ID, XERIC_TALISMAN_INERT_ID,

@@ -10,7 +10,8 @@ const Prizes = require("./Prizes.Construction");
 // blue, earth green and air cyan; fire opposes water and earth opposes air, and the orb shows the
 // stronger pair's colour at one of six brightnesses (the poh_elemental_balance_<tier>_<colour><1-6>
 // NPCs). Strike, bolt, blast, wave and surge spells move it 1 to 5 shades towards their element;
-// the runes must be in the inventory (no staves, no rune pouch). Whoever turns it white wins.
+// the runes must be in the inventory (no staves, no rune pouch; combination runes count, as in any
+// cast: Wiki, Combination runes). Whoever turns it white wins.
 // How unbalanced it starts, the casting range and the win message are this server's.
 const ACTIVATE_SOUND = 227;
 /** A balance's NPC forms: poh_elemental_balance_<tier> when white, _<tier>_<colour><1-6> otherwise. */
@@ -74,6 +75,20 @@ function start(player, house, furniture, location) {
   for (const occupant of house.getPlayers()) occupant.getPacketSender().sendAreaSound(ACTIVATE_SOUND, location.x, location.y, location.z, 1, 0, 5);
 }
 
+/**
+ * The runes the cast takes from the inventory, or null when it is short. As a cast pays
+ * (magic:spell-cost, no Spell object, so no staff and no rune-saving): combination runes first,
+ * unless they would come from the rune pouch; then the plain runes.
+ */
+function inventoryRunes(player, plain) {
+  const inInventory = (items) => items.every(item => player.getInventory().getAmount(item.getId()) >= item.getAmount());
+  const cost = { player, spell: null, spellId: -1, items: plain, covered: [] };
+  if (plain.length) PluginManager.emitCustomEvent("magic:spell-cost", cost);
+  const combined = Array.isArray(cost.items) ? cost.items : plain;
+  if (inInventory(combined)) return combined;
+  return inInventory(plain) ? plain : null;
+}
+
 /** Instance.canCastOnNpc: spells on the orb shift it here instead of hitting it. */
 function castOnBalance(player, npc, spell) {
   const house = House.houseFor(player);
@@ -89,8 +104,8 @@ function castOnBalance(player, npc, spell) {
     player.sendMessage(`You need a Magic level of ${spell.levelRequired()} to cast this spell.`);
     return false;
   }
-  const runes = spell.itemsRequired(player) ?? [];
-  if (!runes.every(item => player.getInventory().getAmount(item.getId()) >= item.getAmount())) {
+  const runes = inventoryRunes(player, spell.itemsRequired(player) ?? []);
+  if (!runes) {
     player.sendMessage("You do not have enough runes in your inventory to cast this spell.");
     return false;
   }
@@ -148,4 +163,4 @@ function attachElementalBalance(api) {
   api.onNpcInteraction("Elemental balance", { Banish: banish });
 }
 
-Object.assign(module.exports, { attachElementalBalance, castOnBalance, resetBalance });
+Object.assign(module.exports, { attachElementalBalance, castOnBalance, resetBalance, _test: { inventoryRunes } });

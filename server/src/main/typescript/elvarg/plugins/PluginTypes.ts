@@ -156,6 +156,11 @@ export interface PluginObjectRouteEvent {
   destination: { x: number; y: number; z: number } | null;
   /** Additional blocked approach sides, in the object's unrotated local frame. */
   blockAccessFlags?: number;
+  /**
+   * An approach op: the walk stops and the op runs on the tick the player comes within this many
+   * tiles of the loc's footprint with a clear line to it, instead of walking right up to it.
+   */
+  approachRange?: number;
 }
 
 export interface PluginWalkRouteEvent {
@@ -249,6 +254,10 @@ export interface PluginNpcDeathEvent {
   killer: any;
   /** Every player who damaged the npc recently, the killer among them. */
   damagers?: any[];
+  /** The player who landed the killing hit (Combat.getLastDamager), which can differ from the top damager `killer`. */
+  lastDamager?: any;
+  /** The weapon `lastDamager` held as the NPC began dying (-1 for none), not whatever they swapped to since. */
+  lastDamagerWeaponId?: number;
   npc: any;
   npcId: number;
   location: { x: number; y: number; z: number };
@@ -318,6 +327,24 @@ export interface PluginCanAttackEvent {
   /** The attacking combat method, so handlers can allow/deny per style. */
   method?: any;
   allow: boolean | null;
+  /**
+   * With `allow = false`, what the attacking player is told. The core says it, and only on the
+   * player's own attack (Combat), never when the same check runs passively (Retribution, cannons,
+   * relic scanners, bots), so a handler never messages from inside this predicate.
+   * `response` picks one of the core's refusals, a `CanAttackResponse` name such as
+   * "ALREADY_UNDER_ATTACK", with its own message and handling (that one once per interaction,
+   * and pursuit keeps going); without it the refusal is CANT_ATTACK_IN_AREA, which ends the
+   * attack and sends `message` (a plain game message) once.
+   */
+  response?: string;
+  message?: string;
+}
+
+/** The first refusal `PluginManager.emitCanAttackDecision` met, or `allow` true/null. */
+export interface PluginCanAttackDecision {
+  allow: boolean | null;
+  response?: string;
+  message?: string;
 }
 
 export interface PluginCanTeleportEvent {
@@ -466,6 +493,13 @@ export interface PluginCanBankItemEvent {
   allow: boolean | null;
   /** A policy query (e.g. the crew's Bank-cargo): refuse without telling the player why. */
   quiet?: boolean;
+  /** Where the item is banked from, when a container deposit asks: its container and slot. */
+  container?: any;
+  slot?: number;
+  /** Part of a whole-container deposit (Deposit inventory, Deposit worn items), not a one-slot deposit. */
+  bulk?: boolean;
+  /** A scripted deposit that must empty the container (Peer the Seer's spell): the deposit locks don't apply. */
+  emptyAll?: boolean;
 }
 
 export interface PluginCanShopEvent {
@@ -710,6 +744,8 @@ export interface PluginItemActionOptions {
 export interface PluginItemOnObjectEvent {
   player: any;
   object: any;
+  /** The loc as this player sees it: a multiloc's variant (an island amenity once built). */
+  definition?: ObjectDefinition;
   objectId: number;
   item: any;
   itemId: number;
@@ -1395,7 +1431,7 @@ export interface PluginApi {
   emitCanEat(player: any, itemId: number): boolean | null;
   emitCanDrink(player: any, itemId: number): boolean | null;
   emitCanBank(player: any, source?: string): boolean | null;
-  emitCanBankItem(player: any, item: any, options?: { quiet?: boolean }): boolean | null;
+  emitCanBankItem(player: any, item: any, options?: { quiet?: boolean; container?: any; slot?: number; bulk?: boolean; emptyAll?: boolean }): boolean | null;
   emitShouldKeepItemOnDeath(player: any, item: any): boolean | null;
   emitFiremakingBlocked(event: PluginFiremakingBlockedEvent): boolean;
   emitObjectInteraction(event: PluginObjectInteractionEvent): boolean;
@@ -1583,6 +1619,7 @@ export interface PluginCoreApi {
   DamageFormulas: any;
   AccuracyFormulasDpsCalc: any;
   PendingHit: any;
+  HitQueue: any;
   HitDamage: any;
   HitMask: any;
   RangedWeapon: any;
@@ -1722,6 +1759,7 @@ export interface PluginCoreApi {
   GameConstants: any;
   Music: any;
   WorldDefinition: any;
+  ExaminePrice: typeof import("../game/content/ExaminePrice");
   TeleportHandler: any;
   TeleportType: any;
   DialogueChainBuilder: any;
@@ -1731,6 +1769,7 @@ export interface PluginCoreApi {
   StatementDialogue: any;
   ItemStatementDialogue: any;
   DoubleItemStatementDialogue: any;
+  GraphicStatementDialogue: any;
   ActionDialogue: any;
   EndDialogue: any;
   CreationMenu: any;
@@ -1744,7 +1783,7 @@ export interface PluginCoreApi {
   /** Public chat as a client sends it (filter, mute, broadcast): bots speak through it too. */
   ChatPacketListener: any;
   TradeState: any;
-  controlPlayer: (owner: any, target: any, released: () => void) => boolean;
+  controlPlayer: (owner: any, target: any, released: () => void, options?: { readOnly?: boolean }) => boolean;
   releasePlayerControl: (player: any) => boolean;
   /** The parked owner left the world: release the controlled player and close the owner's connection. */
   endPlayerControl: (controlled: any) => boolean;

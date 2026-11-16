@@ -85,8 +85,8 @@
     { "name": "Wingstone", "tier": "hard", "x": 3381, "y": 2891, "plane": 0, "hint": "Wingstone the explorer is surveying the Southern half of the Kharidian Desert." }
   ],
   "rewards": [
-    { "items": [{ "id": 9472, "name": "Gnome goggles", "min": 1, "max": 1 }], "rate": [23, 384], "only": ["Captain Ninto", "Captain Daerkin"] },
-    { "items": [{ "id": 9470, "name": "Gnome scarf", "min": 1, "max": 1 }], "rate": [23, 384], "only": ["Captain Ninto", "Captain Daerkin"] },
+    { "items": [{ "id": 9472, "name": "Gnome goggles", "min": 1, "max": 1 }], "rate": [23, 384], "only": ["Captain Ninto", "Captain Daerkin"], "unique": true },
+    { "items": [{ "id": 9470, "name": "Gnome scarf", "min": 1, "max": 1 }], "rate": [23, 384], "only": ["Captain Ninto", "Captain Daerkin"], "unique": true },
     { "items": [{ "id": 751, "name": "Gnomeball", "min": 1, "max": 1 }], "rate": [10, 128] },
     { "items": [{ "id": 9469, "name": "Grand seed pod", "min": 5, "max": 5 }], "rate": [23, 512], "only": ["Wingstone", "Penwie", "Brambickle", "Professor Manglethorp"] },
     { "items": [{ "id": 9475, "name": "Mint cake", "min": 1, "max": 1 }], "rate": [23, 512], "only": ["Wingstone", "Penwie", "Brambickle"] },

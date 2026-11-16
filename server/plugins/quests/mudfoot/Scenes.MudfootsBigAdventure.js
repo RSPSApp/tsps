@@ -439,8 +439,8 @@ module.exports = function createMudfootScenes(api, common, deps) {
 
   /**
    * The Wiki (Mudfoot's Big Adventure): very low-level players may "run around the graveyard until he becomes
-   * aggressive towards Mudfoot". Ours: an outlaw kept out of reach of the player (melee 1 tile, the others 7) for
-   * five ticks turns on Mudfoot, and the player's next hit turns it back. Mudfoot takes no damage
+   * aggressive towards Mudfoot". Ours: an outlaw the player keeps away from (more than 3 tiles for the warrior, so
+   * Mudfoot standing between them is not enough; 7 for the others) for five ticks turns on Mudfoot, and the player's next hit turns it back. Mudfoot takes no damage
    * ("me never get hit", as he says at Harlan's post).
    */
   const OUT_OF_REACH_TICKS = 5;
@@ -448,7 +448,7 @@ module.exports = function createMudfootScenes(api, common, deps) {
     const outlaw = state.outlaw;
     const combat = outlaw.getCombat?.();
     if (combat?.getTarget?.() === state.mudfoot) return;
-    const reach = state.kind === "warrior" ? 1 : 7;
+    const reach = state.kind === "warrior" ? 3 : 7;
     const far = outlaw.getLocation().getDistance(player.getLocation()) > reach;
     state.outOfReach = far ? (state.outOfReach ?? 0) + 1 : 0;
     if (state.outOfReach < OUT_OF_REACH_TICKS) return;

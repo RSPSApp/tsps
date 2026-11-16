@@ -19,8 +19,8 @@ below are that recording's. The Wiki ([Mudfoot's Big Adventure](https://oldschoo
 [Transcript:Mudfoot's Big Adventure](https://oldschool.runescape.wiki/w/Transcript:Mudfoot%27s_Big_Adventure),
 [Transcript:Captain Harlan](https://oldschool.runescape.wiki/w/Transcript:Captain_Harlan),
 [Outlaw (Mudfoot's Big Adventure)](https://oldschool.runescape.wiki/w/Outlaw_(Mudfoot%27s_Big_Adventure)))
-covers what the capture does not, and wins where the two disagree (recorded differences below). No
-rsprox.net index recording has this quest.
+covers what the capture does not, and wins where the two disagree (recorded differences below). The
+local rsprox.net transcript rsprox_transcripts/242/900167.txt covers stages 0-12 again (another session).
 
 The whole quest was played in-game over the agent MCP (stage moves between the steps with `::tele`, so it is
 not a recorded natural run and the status stays untested).
@@ -116,10 +116,15 @@ lamps, saves) and `server/plugins/quests/mudfoot/`: `Common` (ids, stages, state
   go this way. Me meet you back ..." and he goes to his spot. The townsfolk lines while he follows apply anywhere.
 - The warrior turns to Protect from Missiles when the player hits him with ranged (the Wiki says he uses both
   prayers, not when).
+- The Wiki says very low-level players may "run around the graveyard until he becomes aggressive towards
+  Mudfoot". An outlaw the player keeps away from for five ticks (more than 3 tiles for the warrior, 7 for the
+  others) turns on Mudfoot, and the player's next hit turns it back. Mudfoot takes no damage ("me never get
+  hit"); the capture only shows fights where he is never attacked.
 - Mudfoot's wrong-style hint comes once per line per fight. He walks round the player to reach the outlaw when the
   player stands between them (NPC pursuit here steps straight at its target).
 - A fight is left by a teleport or logout with the stage at its fight value and Mudfoot at his waiting spot.
-- Chathead animations of lines the capture does not show are chatneu1; the journal paragraphs for stages 2-4,
+- Chathead animations of lines the capture does not show are chatneu1 ("Look, that him right there. We kill
+  now." is chatangry1 from rsprox_transcripts/242/900167.txt tick 1241, a second recording of stages 0-12); the journal paragraphs for stages 2-4,
   8-12, 20 and later, the struck form of the stage-14 paragraph and the start text.
 
 ## Not covered

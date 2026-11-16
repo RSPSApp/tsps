@@ -24,6 +24,7 @@ const Resupply = require("../plugins/bosses/maggotking/Resupply.MaggotKing");
 
 const core = PluginManager.getCoreApi();
 const handlers = new Map();
+const beforeObjectHandlers = [];
 const loginHandlers = [];
 const deathHandlers = [];
 const shutdownHandlers = [];
@@ -35,6 +36,7 @@ const api = {
   core,
   persistAttribute: (...args) => persisted.push(args),
   onObjectInteraction: (name, actions) => handlers.set(name, actions),
+  onBeforeObjectInteraction: handler => beforeObjectHandlers.push(handler),
   onPlayerLogin: handler => loginHandlers.push(handler),
   onNpcDeath: handler => deathHandlers.push(handler),
   onPlayerLogout() {}, onPlayerDisconnect() {}, onPlayerBeforeDeath() {},
@@ -133,6 +135,8 @@ test("the entrance, exit and exact options match the live cache", () => {
 
 test("Blood Moon access opens a private solo lair and cleans it up on escape and logout", () => {
   assert.deepEqual(persisted, [["maggot-king:kills", 0], [Instance._test.INSTANCE_ATTRIBUTE, false], [Resupply.BUILT_ATTRIBUTE, 0]]);
+  assert.deepEqual(beforeObjectHandlers.map(handler => handler.name), ["refuseStaleBuild"],
+    "the hybrid API retains the required production before-object registration");
   const enter = handlers.get("Darkwood trees").Enter;
   const locked = player(1, false);
   assert.equal(enter({ player: locked, objectId: core.ObjectIdentifiers.DARKWOOD_TREES_4 }), true);

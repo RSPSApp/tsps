@@ -569,7 +569,7 @@ test("Barrows: a carried lockpick still opens a locked door's Open, once per hal
   assert.equal(inspect(subject, subject.getInventory().get(0)), "Your Strange old lockpick has 9 charges remaining.");
 });
 
-test("Barrows: the lockpick's last charge warns, lasts through its hallway and crumbles as the tunnels are left", () => {
+test("Barrows: the lockpick's last charge warns, keeps the charge through its hallway and crumbles as the tunnels are left unused", () => {
   const subject = player();
   const { first, second } = lockedHallway(subject);
   subject.getInventory().add(lockpick(1), false);
@@ -580,7 +580,35 @@ test("Barrows: the lockpick's last charge warns, lasts through its hallway and c
   useOn(subject, second, subject.getInventory().get(0));
   assert.ok(!subject.sent.messages.includes("This door is locked."), "the hallway's other door is free");
   arrive(subject, SURFACE);
-  assert.equal(subject.getInventory().getAmount(core.ItemIdentifiers.STRANGE_OLD_LOCKPICK), 0, "gone once out of the tunnels");
+  assert.equal(subject.getInventory().getAmount(core.ItemIdentifiers.STRANGE_OLD_LOCKPICK), 0, "teleporting out with the last charge unused, it still crumbles");
+});
+
+test("Barrows: after the warning the last charge opens the next locked hallway, and the pick crumbles (Wiki Trivia)", () => {
+  const subject = player();
+  const { getTunnelMap, doorSides, processPlayer } = Barrows._test;
+  const { run, varbit, first } = lockedHallway(subject);
+  subject.getInventory().add(lockpick(1), false);
+  useOn(subject, first, subject.getInventory().get(0));
+  assert.equal(subject.sent.messages.at(-1), "The Strange old lockpick almost breaks, but seems in good enough shape for one more use.");
+  assert.equal(inspect(subject, subject.getInventory().get(0)), "Your Strange old lockpick has 1 charges remaining.", "the warning keeps the charge");
+  for (let i = 0; i < 4; i++) processPlayer({ player: subject });
+  // A second hallway nobody has opened.
+  const other = getTunnelMap().doors.find((entry) => entry.varbit !== varbit && !run.openDoors.includes(entry.varbit));
+  assert.ok(other, "another locked hallway");
+  subject.setLocation(doorSides(other)[0].clone());
+  processPlayer({ player: subject });
+  const messages = subject.sent.messages.length;
+  assert.equal(useOn(subject, other, subject.getInventory().get(0)), true);
+  assert.deepEqual(subject.sent.messages.slice(messages), [], "neither locked nor warned again");
+  assert.ok(run.pickedDoors.includes(other.varbit), "it opens");
+  assert.equal(subject.getInventory().getAmount(core.ItemIdentifiers.STRANGE_OLD_LOCKPICK), 0, "the last charge used: it crumbles");
+  // With no pick left, a third locked hallway stays shut.
+  const third = getTunnelMap().doors.find((entry) => ![varbit, other.varbit].includes(entry.varbit) && !run.openDoors.includes(entry.varbit));
+  for (let i = 0; i < 4; i++) processPlayer({ player: subject });
+  subject.setLocation(doorSides(third)[0].clone());
+  processPlayer({ player: subject });
+  Barrows._test.useDoor(subject, third);
+  assert.equal(subject.sent.messages.at(-1), "This door is locked.");
 });
 
 test("Barrows: the lockpick on a door outside the tunnels, or another item on a door, is not ours", () => {

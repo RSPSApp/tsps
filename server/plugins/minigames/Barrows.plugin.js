@@ -75,8 +75,8 @@ const WARNINGS_CONDENSED = /^if the (?:barrows catacomb warning is condensed|war
 /** "Your Strange old lockpick has 48 charges remaining." (user capture StrangeOldLockpickBarrows.bin tick 52). */
 const LOCKPICK_CHARGES = 50;
 const LOCKPICK_CHARGES_KEY = "barrows:lockpick-charges";
-/** A pick on its last charge that has opened its last hallway: it goes once the tunnels are left. */
-const LOCKPICK_SPENT_KEY = "barrows:lockpick-spent";
+/** A pick on its last charge that has given the Wiki's warning: its next hallway takes that charge. */
+const LOCKPICK_WARNED_KEY = "barrows:lockpick-warned";
 const LOCKPICKS = new Set([Items.STRANGE_OLD_LOCKPICK, Items.STRANGE_OLD_LOCKPICK_FULL_]);
 /** Wiki (Strange old lockpick, Trivia): the last charge's hallway. */
 const LOCKPICK_LAST_USE = "The Strange old lockpick almost breaks, but seems in good enough shape for one more use.";
@@ -480,7 +480,7 @@ function lockpickCharges(item) {
 }
 
 function usableLockpick(item) {
-  if (!item || !LOCKPICKS.has(item.getId()) || item.getMetaValue(LOCKPICK_SPENT_KEY) === true) return false;
+  if (!item || !LOCKPICKS.has(item.getId())) return false;
   const charges = lockpickCharges(item);
   return Number.isInteger(charges) && charges >= 1 && charges <= LOCKPICK_CHARGES;
 }
@@ -491,17 +491,24 @@ function usableLockpick(item) {
  * doors. A charge is consumed when you use the lockpick to open a door which was previously impassable
  * to you": Jagex, Darkmeyer news). One charge per hallway: its other door is free (user captures
  * StrangeOldLockpickBarrows.bin ticks 56/63, 48 -> 47 -> 47; BarrowsMiniQuest.bin ticks 543/553). A
- * full pick becomes the used one in its slot (BarrowsMiniQuest.bin tick 543). Its last charge gives the
- * Wiki's warning and lasts until the tunnels are left (crumbleSpentLockpicks).
+ * full pick becomes the used one in its slot (BarrowsMiniQuest.bin tick 543).
+ *
+ * Its last charge (Wiki, Strange old lockpick, Trivia): the first hallway opened with one charge left
+ * gives the warning and keeps that charge ("presumably to prevent players from getting stuck"); the next
+ * impassable hallway uses it and the pick crumbles. "If teleporting out without using the last charge,
+ * the strange old lockpick still crumbles to dust" (crumbleWarnedLockpicks). Ours: no chat line as it
+ * crumbles (none is recorded or quoted).
  */
 function pickLock(player, run, door, used = null) {
   const inventory = player.getInventory();
   const item = usableLockpick(used) ? used : inventory.getItems().find(usableLockpick);
   if (!item) return false;
   const charges = lockpickCharges(item);
-  if (charges === 1) {
-    item.setMetaValue(LOCKPICK_SPENT_KEY, true);
+  if (charges === 1 && item.getMetaValue(LOCKPICK_WARNED_KEY) !== true) {
+    item.setMetaValue(LOCKPICK_WARNED_KEY, true);
     player.sendMessage(LOCKPICK_LAST_USE);
+  } else if (charges === 1) {
+    inventory.deleteItem(item, inventory.getItems().indexOf(item));
   } else {
     item.setId(Items.STRANGE_OLD_LOCKPICK);
     item.setMetaValue(LOCKPICK_CHARGES_KEY, charges - 1);
@@ -513,12 +520,12 @@ function pickLock(player, run, door, used = null) {
 
 /**
  * Wiki: "If teleporting out without using the last charge, the strange old lockpick still crumbles to dust."
- * Ours: it goes without a chat line (none is recorded or quoted) as its holder leaves the tunnels.
+ * A warned pick leaving the tunnels with its last charge unused goes, without a chat line (Ours).
  */
-function crumbleSpentLockpicks(player) {
+function crumbleWarnedLockpicks(player) {
   const inventory = player.getInventory();
   inventory.getItems().forEach((item, slot) => {
-    if (item && LOCKPICKS.has(item.getId()) && item.getMetaValue(LOCKPICK_SPENT_KEY) === true) inventory.deleteItem(item, slot);
+    if (item && LOCKPICKS.has(item.getId()) && item.getMetaValue(LOCKPICK_WARNED_KEY) === true) inventory.deleteItem(item, slot);
   });
 }
 
@@ -929,7 +936,7 @@ function processPlayer({ player }) {
     // teleport out and back into the chest room (league Evil eye) finds it empty (237/04057).
     if (state.phase === "tunnels" && phase !== "tunnels") {
       cleanupNpcs(player, true);
-      crumbleSpentLockpicks(player);
+      crumbleWarnedLockpicks(player);
     }
     state.puzzle = null;
     // Each entry into a crypt restarts the drain's 30 ticks (rsprox_transcripts/226/01694.txt: in at ticks 8801, 8868,

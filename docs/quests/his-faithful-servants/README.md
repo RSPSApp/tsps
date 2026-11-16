@@ -74,8 +74,10 @@ strange old lockpick. Ticks are the recording's.
 - The icon's space: it is given only when a slot is left once the loot is in (a stack already held
   takes none), with no chat line otherwise. The Wiki says only that it needs enough space, isn't
   dropped, and that six free slots are advised.
-- The lockpick's last charge: the Wiki's "almost breaks" line, then the pick goes silently as
-  the tunnels are left.
+- The lockpick's last charge, after the Wiki's Trivia: the first hallway opened with one charge
+  left gives the "almost breaks" line and keeps the charge; the next locked hallway uses it and
+  the pick crumbles; leaving the tunnels with it unused crumbles it too. Ours: no chat line as it
+  crumbles.
 - A picked hallway stays passable until the layout changes.
 - The lockpick on the puzzle door skips the puzzle for a charge, as Open with it carried did.
 

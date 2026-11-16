@@ -197,3 +197,40 @@ test("the cycle a stack is added in counts as its first tick, whichever phase ad
   const dropped = World.getProcessCycle();
   assert.deepEqual(lifetime(drop), {publicAt: dropped + 99, goneAt: dropped + 299});
 }));
+
+// Wiki (Drops): a tradeable drop lasts 200 ticks, an untradeable one 300. A stack carried out of a closing
+// instance (Phantom Muspah's lair on a death, the Fight Cave) is the same stack: the move keeps its timer.
+test("a relocated stack keeps its owner, lifetime and the time it has already lain there", () => withWorld(() => {
+  const area = {}, exit = new Location(3229, 3218);
+  let drop, kept, moved, keptMoved;
+  cycle({players: () => {
+    drop = ItemOnGroundManager.registerLocation(player, new Item(1351), new Location(3222, 3218), area, {despawnDelay: 200});
+    kept = ItemOnGroundManager.registerLocation(player, new Item(6654), new Location(3223, 3218), area, {goesGlobal: false});
+  }});
+  const timing = drop.getTiming(), keptTiming = kept.getTiming();
+  for (let i = 0; i < 150; i++) cycle();
+  assert.equal(drop.getState(), State.SEEN_BY_EVERYONE);
+  cycle({players: () => {
+    moved = ItemOnGroundManager.relocate(drop, exit, null);
+    keptMoved = ItemOnGroundManager.relocate(kept, exit, null);
+  }});
+  assert.ok(drop.isPendingRemoval() && kept.isPendingRemoval());
+  assert.deepEqual([moved.getPosition(), moved.getPrivateArea(), moved.getOwner(), moved.getState()],
+    [exit, null, player.getUsername(), State.SEEN_BY_EVERYONE]);
+  assert.deepEqual(moved.getTiming(), {...timing, privateUntilTick: 0}, "the move does not restart the 200-tick timer");
+  assert.deepEqual(keptMoved.getTiming(), keptTiming);
+  assert.equal(keptMoved.getgoesGlobal(), false);
+  assert.equal(lifetime(moved).goneAt, timing.expiresTick);
+  assert.ok(World.getItems().includes(keptMoved), "the untradeable lasts 300");
+  assert.equal(lifetime(keptMoved).goneAt, keptTiming.expiresTick);
+}));
+
+test("an owner-only stack relocated before it goes public still goes public on time", () => withWorld(() => {
+  let drop, moved;
+  cycle({players: () => { drop = ItemOnGroundManager.registerLocation(player, new Item(1351), new Location(3222, 3218), {}); }});
+  const timing = drop.getTiming();
+  for (let i = 0; i < 40; i++) cycle();
+  cycle({players: () => { moved = ItemOnGroundManager.relocate(drop, new Location(3229, 3218), null); }});
+  assert.deepEqual(moved.getTiming(), timing);
+  assert.deepEqual(lifetime(moved), {publicAt: timing.privateUntilTick, goneAt: timing.expiresTick});
+}));

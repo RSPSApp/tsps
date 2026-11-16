@@ -257,7 +257,7 @@ function tend({ player, npc }) {
 /**
  * Destroy, with no confirmation (recorded). The scatter line is for pollen from an event still on the
  * map; any other (the Wiki's inactive event) is discarded with the Wiki's line. Ours: that line's
- * chat type, as spam like the recorded one.
+ * chat type (spam like the recorded one) and the destroy sound on it (only the scatter was recorded).
  */
 function destroy({ player }) {
   const flowering = F();

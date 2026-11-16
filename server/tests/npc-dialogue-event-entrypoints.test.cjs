@@ -5529,8 +5529,9 @@ function ikovHouseDoorScenario(t) {
   const closedDef = core.CacheDefinitions.getObject(102), openDef = core.CacheDefinitions.getObject(11403);
   assert.equal(core.CacheDefinitions.getLocNames().get(102), 'ikov_luciendoor');
   assert.equal(core.CacheDefinitions.getLocNames().get(11403), 'ikov_luciendoor_open');
-  assert.deepEqual(closedDef.actions, ['Open', null, null, null, null]);
-  assert.deepEqual(openDef.actions, [null, null, null, null, null], 'no invented Close menu');
+  // LocType leaves absent/hidden menu slots sparse; compare their menu meaning.
+  assert.deepEqual(Array.from(closedDef.actions, action => action ?? null), ['Open', null, null, null, null]);
+  assert.deepEqual(Array.from(openDef.actions, action => action ?? null), [null, null, null, null, null], 'no invented Close menu');
   for (const key of ['models', 'types', 'recolorFrom', 'recolorTo']) assert.deepEqual(openDef[key], closedDef[key], key);
   assert.equal(closedDef.transformVarbit, -1); assert.equal(closedDef.transformVarp, -1);
   assert.equal(closedDef.transforms, undefined); assert.equal(openDef.transforms, undefined);

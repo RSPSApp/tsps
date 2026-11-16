@@ -38,7 +38,11 @@
  * the Uncharge does, points for a Nightmare Zone imbue, else a scroll of imbuing (Wiki, Black mask
  * (i): "If lost on death in PvP situations, the mask will lose its imbued status, but the player
  * will be reimbursed"). The Items Kept on Death preview shows it lost (`items:lost-to-pvp-killer`).
- * The Slayer helmet (i)'s PvP death isn't built.
+ * A Slayer helmet or Slayer helmet (i), any colour, lost the same way drops for the killer as the plain
+ * black mask, the other parts (and a recolour's head) are lost, and an imbued one's imbue is given back
+ * as the mask's is (Wiki, Items Kept on Death: "Dropped to the PKer as a black mask. The imbue cost is
+ * refunded to the victim. The other parts are lost."). The Soul Wars and Emir's Arena helmets keep
+ * today's handling: neither shop's imbue is modelled, so there is nothing to refund.
  */
 const CRAFTING_LEVEL = 55;
 const MELEE_NUMERATOR = 7;
@@ -500,7 +504,37 @@ function isPvpDeath(player, killer) {
 /** An imbued black mask a PvP death would take, imbue and all; preset copies were never paid for and stay as they are. */
 function losesImbueToKiller(item) {
   if (!item || item.isPresetItem?.() === true || item.isUntradeable?.() === true) return false;
-  return NMZ_IMBUED_MASKS.has(Number(item.getId?.()));
+  return NMZ_IMBUED_MASKS.has(Number(item.getId?.())) || helmetLostToKiller(item) != null;
+}
+
+/** The helmet forms a PvP death turns into a black mask: the plain and the scroll / Nightmare Zone imbued ones. */
+const PVP_DROPPED_HELM_FORMS = new Set(["slayer_helm", "slayer_helm_i"]);
+
+/**
+ * A Slayer helmet a PvP death drops as a black mask: { imbued, base } (base: the plain helmet of its colour, the id a
+ * Nightmare Zone refund is priced by), or null. Preset copies stay as they are, as the masks.
+ */
+function helmetLostToKiller(item) {
+  if (!item || item.isPresetItem?.() === true || item.isUntradeable?.() === true) return null;
+  const entry = helmetTable().byId.get(Number(item.getId?.()));
+  if (!entry || !PVP_DROPPED_HELM_FORMS.has(entry.form.helm)) return null;
+  const base = objId(entry.recolour ? entry.recolour.item("slayer_helm") : "slayer_helm");
+  return { imbued: entry.form.helm === "slayer_helm_i", base };
+}
+
+/**
+ * A Slayer helmet lost to a PvP death: the killer gets a plain black mask in its place (extraDrops, so core drops it
+ * for them), the helmet and its other parts are gone, and an imbued one's imbue is owed to the victim.
+ */
+function loseHelmetOnPvpDeath(event, helm) {
+  if (!Array.isArray(event.extraDrops)) return;
+  const { player, item } = event;
+  event.extraDrops.push(new pluginApi.core.Item(ItemIdentifiers.BLACK_MASK, 1));
+  event.handled = true;
+  if (!helm.imbued) return;
+  const owed = pendingDeathRefunds.get(player) ?? [];
+  owed.push({ base: helm.base, nmz: item.getMetaValue?.(IMBUED_BY_NMZ_META) === true });
+  pendingDeathRefunds.set(player, owed);
 }
 
 /**
@@ -510,6 +544,11 @@ function losesImbueToKiller(item) {
 function loseImbueOnPvpDeath(event) {
   const { player, killer, item } = event;
   if (event.kept || event.shouldDropItems === false || !isPvpDeath(player, killer) || !losesImbueToKiller(item)) return;
+  const helm = helmetLostToKiller(item);
+  if (helm) {
+    loseHelmetOnPvpDeath(event, helm);
+    return;
+  }
   const nmz = item.getMetaValue?.(IMBUED_BY_NMZ_META) === true;
   if (nmz) {
     const meta = { ...(item.getMeta?.() ?? {}) };

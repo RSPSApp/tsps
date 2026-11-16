@@ -18,7 +18,8 @@ test("the admin saves and resets both images served by the world", async t => {
   const sprites = require("../plugins/world/CustomSprites.plugin");
   sprites.register({ registerContentEndpoint: (name, handler) => resources.set(name, handler), log() {} });
   const sprite = () => resources.get("sprites")(null, ["30000"]);
-  const title = () => resources.get("client-background")(null, []);
+  assert.equal(resources.has("client-background"), false);
+  const title = () => resources.get("login-screen")(null, []);
   assert.equal(sprite(), undefined);
   assert.equal(title(), undefined);
 

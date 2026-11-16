@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { fetchContent, fetchInterfaceDefinition, getContentApiBase } from "../network/serverConnection/contentApi";
+import { fetchClientBackground, fetchContent, fetchInterfaceDefinition, getContentApiBase } from "../network/serverConnection/contentApi";
 import { state } from "../network/serverConnection/state";
 
 const contentApiTest = (async () => {
@@ -29,6 +29,14 @@ const contentApiTest = (async () => {
         assert.equal((await fetchContent("/api/world/shops")).rows[0].id, 4151);
         assert.deepEqual(requested.slice(1), ["/api/interfaces/30002", "/api/world/shops"]);
         assert.match(requested[0], /^\/browser-host\/interfaces\/30003\.json\?v=\d+$/);
+
+        state.webRtcConfig = undefined;
+        state.lastUrl = "wss://worlds.rsps.app/game";
+        globalThis.fetch = async url => {
+            assert.equal(String(url), "https://worlds.rsps.app/api/login-screen");
+            return Response.json({ jpg: "fixture" });
+        };
+        assert.equal(await fetchClientBackground(new AbortController().signal), "fixture");
     } finally {
         globalThis.fetch = originalFetch;
         state.lastUrl = originalUrl;

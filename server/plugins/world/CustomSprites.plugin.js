@@ -47,7 +47,7 @@ module.exports = {
   register(api) {
     sprites = loadSprites();
     api.registerContentEndpoint("sprites", spritesResource);
-    api.registerContentEndpoint("client-background", backgroundResource);
+    api.registerContentEndpoint("login-screen", backgroundResource);
     api.log("registered", { sprites: [...sprites.keys()] });
   },
 };

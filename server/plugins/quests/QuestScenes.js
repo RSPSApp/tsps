@@ -159,9 +159,13 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
     player.moveTo(tileFor(player, target));
   }
 
-  /** Walks a mobile to a source tile, inside its scene's instance when it has one. */
+  /**
+   * Walks a mobile to a source tile, inside its scene's instance when it has one. Like a live walk,
+   * it heads for the tile each step (diagonal, then x, then y), so it goes round what blocks the
+   * straight line: a size-4 NPC slides along a cave wall rather than stopping at the first rock.
+   */
   function walk(mobile, target) {
-    mobile?.getMovementQueue().addSteps(tileFor(mobile, target));
+    mobile?.getMovementQueue().addCheckpoint(tileFor(mobile, target));
   }
 
   /** Runs `callback` after `ticks`; keyed tasks die with their scene (or their player). */
@@ -252,10 +256,10 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
     mobile.setPositionToFace(tileFor(mobile, [x, y, mobile.getLocation().getZ()]));
   }
 
-  /** Camera packets take scene tiles; heights stay as given. */
-  function camera(player, [mx, my, mh], [lx, ly, lh], rates = CAMERA_RATES) {
+  /** Camera packets take scene tiles; heights stay as given. `lookRates` default to the move's. */
+  function camera(player, [mx, my, mh], [lx, ly, lh], rates = CAMERA_RATES, lookRates = rates) {
     const move = tileFor(player, [mx, my, 0]), look = tileFor(player, [lx, ly, 0]);
-    player.getPacketSender().sendCameraMoveTo(move.getX(), move.getY(), mh, rates).sendCameraLookAt(look.getX(), look.getY(), lh, rates);
+    player.getPacketSender().sendCameraMoveTo(move.getX(), move.getY(), mh, rates).sendCameraLookAt(look.getX(), look.getY(), lh, lookRates);
   }
 
   function open(player, name, bounds, rules = {}, { instance, at, exit } = {}) {

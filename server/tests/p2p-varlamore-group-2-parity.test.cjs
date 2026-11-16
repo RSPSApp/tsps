@@ -71,6 +71,8 @@ function harness(name) {
           return queue;
         },
         addFirstStep(to) { queue.reset(); return queue.addSteps(to); },
+        // Open map: a walk to a checkpoint takes the same tiles as the straight line.
+        addCheckpoint(to) { return queue.addSteps(to); },
         hasPendingWork: () => queue.points.length > 0,
         size: () => queue.points.length,
         isMovings: () => queue.points.length > 0,

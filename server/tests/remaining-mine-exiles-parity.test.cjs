@@ -620,6 +620,37 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.hooks.logouts[0]({ player: h.player });
 });
 
+// rsprox_transcripts/227/01862.txt tick 9626: Haskell's opnpc3 ("Island of Stone" on haskell_travel 9271) is followed
+// by the boat's fade trip (busy, fade out, then the arrival message and move two ticks later).
+test('Fremennik Exiles: Haskell\'s Island of Stone option sails like the boat, and his Rellekka option returns', () => {
+  const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
+  const N = NPCS(h);
+  const haskell = h.hooks.namedNpcs.get('Haskell');
+  assert.ok(haskell?.['Island of Stone'] && haskell?.Rellekka, 'both cache travel options are handled');
+  const busyVarbit = h.core.CacheDefinitions.getVarbitId('busy');
+  const dock = h.player.getLocation();
+
+  h.quest.setStage(h.player, 80);
+  assert.equal(haskell['Island of Stone']({ player: h.player, npcId: N.HASKELL_2 }), false, 'not before the boat stage');
+  assert.equal(h.varbits.get(busyVarbit), undefined);
+
+  h.quest.setStage(h.player, 85);
+  assert.notEqual(haskell['Island of Stone']({ player: h.player, npcId: N.HASKELL_2 }), false);
+  assert.equal(h.varbits.get(busyVarbit), 1, 'busy on the click, as the boat');
+  assert.equal(h.player.getLocation(), dock, 'still at the dock while the screen fades');
+  haskell['Island of Stone']({ player: h.player, npcId: N.HASKELL_2 });
+  h.tick(2);
+  assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY()], [2472, 3994]);
+  assert.equal(h.messages.filter((m) => m === 'You board the boat and travel to the Island of Stone.').length, 1,
+    'a second click during the trip does not sail twice');
+  h.tick(4);
+  assert.equal(h.varbits.get(busyVarbit), 0);
+
+  assert.notEqual(haskell.Rellekka({ player: h.player, npcId: N.HASKELL_3 }), false);
+  assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY()], [2625, 3692],
+    'back to the Rellekka port, as his "Yes please."');
+});
+
 // rsprox_transcripts/227/01768.txt: a rejected guess sends no chat line; the ninth failure says "You fail to open the
 // doors and the lock resets." and only closes the lock, whose board clears when it is next opened. Wiki: the solution changes.
 test('Fremennik Exiles lock: the ninth failed guess rerolls the puzzle', () => {

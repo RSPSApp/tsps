@@ -129,15 +129,21 @@ function getDeathItems(player, toKeep, settings, cosmetic = []) {
       continue;
     }
 
+    let makesGrave = grave.makesGrave;
+    if (settings.playerKill && !protectedItems.has(item)) {
+      const itemGrave = { player, item, playerKill: true, makesGrave: false };
+      pluginApi.emitCustomEvent("gravestones:makes-grave", itemGrave);
+      makesGrave = itemGrave.makesGrave;
+    }
     const tradeable = item.isTradeable();
     const lostOnDeath = !protectedItems.has(item)
-      && (tradeable || item.isLostOnDeath() || grave.makesGrave || lostToPvpKiller(item, settings));
+      && (tradeable || item.isLostOnDeath() || makesGrave || lostToPvpKiller(item, settings));
     items.push({
       slot: items.length,
       itemId: item.getId(),
       quantity: item.getAmount(),
     });
-    const state = itemState(player, item, lostOnDeath, grave.makesGrave);
+    const state = itemState(player, item, lostOnDeath, makesGrave);
     states.push({ slot: states.length, ...state });
 
     const broken = breakCost(item, settings);

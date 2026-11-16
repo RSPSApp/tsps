@@ -184,9 +184,17 @@ function purchase(event) {
   api.emitCustomEvent("collection-log:obtain", { player: event.player, itemId: chargedId, amount: 1 });
 }
 
+function isWornAmulet(player, item) {
+  return isAmulet(item) && player.getEquipment().get(core.Equipment.AMULET_SLOT) === item;
+}
+
+function queryPvpGraveItem(request) {
+  if (isWornAmulet(request.player, request.item)) request.makesGrave = true;
+}
+
 function pvpGraveItems(request) {
   const worn = request.player.getEquipment().get(core.Equipment.AMULET_SLOT);
-  if (!isAmulet(worn) || !request.eligible.includes(worn)) return;
+  if (!isWornAmulet(request.player, worn) || !request.eligible.includes(worn)) return;
   setCharges(worn, 0);
   request.items.push(worn);
 }
@@ -206,6 +214,7 @@ module.exports = function attach(pluginApi) {
   pluginApi.onCustomEvent("herblore:mix", onMix);
   pluginApi.onCustomEvent("herblore:made", onMade);
   pluginApi.onCustomEvent("omnishop:purchase", purchase);
+  pluginApi.onCustomEvent("gravestones:pvp-item", queryPvpGraveItem);
   pluginApi.onCustomEvent("gravestones:pvp-items", pvpGraveItems);
 };
 module.exports.initialize = initialize;

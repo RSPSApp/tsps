@@ -34,8 +34,18 @@ function makesGrave(player, killer) {
   return Common.ironmanMode(player) !== "ultimate";
 }
 
+/** Optional item scopes the preview to an unprotected copy; the owner gates PvP exceptions.
+ * `gravestones:pvp-item` { player, item, makesGrave }: read-only content decision, no item mutation.
+ */
 function queryMakesGrave(query) {
   query.makesGrave = !query.playerKill && makesGrave(query.player, null);
+  if (!query.playerKill || !query.item || !makesGrave(query.player, null)) return;
+  const { player, item } = query;
+  if (item.isTradeable() || item.isLostOnDeath() || !player.getEquipment().getItems().includes(item)) return;
+  // Read-only preview of an unprotected item. The mutating death nomination is never emitted here.
+  const policy = { player, item, makesGrave: false };
+  Common.api().emitCustomEvent("gravestones:pvp-item", policy);
+  query.makesGrave = policy.makesGrave === true;
 }
 
 /** Content may nominate victim-owned exceptions to the usual PvP routing.

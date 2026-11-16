@@ -268,3 +268,56 @@ test('real grave retrieval auto-equips transformed PvP amulet and preserves norm
     PM.emitCustomEvent('gravestones:forfeit',{player:f.p});
   }
 });
+
+test('native death preview matches the worn PvP grave exception without spending charges',async t=>{
+  const {PlayerDeathTask}=require('../dist/game/task/impl/PlayerDeath');
+  for(const mode of ['worn-pvp','empty-pvp','carried-pvp','protected-pvp','worn-pvm','disabled-pvp','ultimate-pvp']){
+    const f=actor(t),killer=actor(t).p;
+    const pvp=mode!=='worn-pvm',protectedItem=mode==='protected-pvp';
+    if(!protectedItem)f.p.setSkullTimer(100);
+    if(mode==='ultimate-pvp')f.p.setAttribute('ironman:mode','ultimate');
+    f.p.setAttribute('gravestones:met-death',true);
+    const amulet=mode==='carried-pvp'?put(f,0,charged(),1,{[KEY]:37}):wear(f,37,mode==='empty-pvp'?empty():charged());
+    put(f,1,core.ItemIdentifiers.COINS,1);
+    const originalMeta=JSON.stringify(amulet.getMeta()),originalId=amulet.getId();
+    const config=PM.pluginConfigCache;
+    if(mode==='disabled-pvp')PM.pluginConfigCache={...config,'Gravestones:enabled':false};
+    try{
+      const scripts=[];
+      t.mock.method(f.p.getPacketSender(),'sendInterfaceScript',function(...args){scripts.push(args);return this;});
+      const click=(groupId,childId,buttonNum)=>send(f,{type:'widget_action',widgetId:(groupId<<16)|childId,groupId,childId,buttonNum,slot:-1,itemId:-1});
+      await click(387,5,1);
+      if(pvp)await click(4,12,2);
+      const preview=scripts.filter(args=>args[0]===972).at(-1);
+      assert.ok(preview,mode);
+      assert.equal(preview[1][3],pvp?1:0,'actual native PvP toggle');
+      const itemSlot=preview[4][584].slots.findIndex(item=>item.itemId===originalId);
+      const makesGrave=['worn-pvp','empty-pvp','worn-pvm'].includes(mode);
+      if(protectedItem){
+        assert.equal(itemSlot,-1,'protected amulet belongs to the kept list');
+        assert.ok(preview[1].slice(6).includes(originalId));
+      }else{
+        assert.equal(preview[4][468].slots[itemSlot].itemId,makesGrave?367:323,mode);
+        if(pvp){
+          const coinSlot=preview[4][584].slots.findIndex(item=>item.itemId===core.ItemIdentifiers.COINS);
+          assert.equal(preview[4][468].slots[coinSlot].itemId,1991,'ordinary PvP loot is still lost');
+        }
+      }
+      assert.equal(amulet.getId(),originalId,'preview does not transform the item');
+      assert.equal(JSON.stringify(amulet.getMeta()),originalMeta,'preview does not change charges or metadata');
+      const kept=PlayerDeathTask.dropItems(f.p,pvp?killer:null,f.p.getLocation());
+      const state={player:f.p};PM.emitCustomEvent('gravestones:state',state);
+      if(makesGrave){
+        const graveItem=state.grave.items.find(item=>item.id===(pvp?empty():charged()));
+        assert.ok(graveItem,mode);
+        assert.equal(graveItem.meta?.[KEY],pvp?undefined:37,mode);
+      }else{
+        assert.equal(state.grave,null,mode);
+        assert.ok(kept.some(item=>item.getId()===originalId&&JSON.stringify(item.getMeta())===originalMeta),mode);
+      }
+      PM.emitCustomEvent('gravestones:forfeit',{player:f.p});
+    }finally{
+      PM.pluginConfigCache=config;
+    }
+  }
+});

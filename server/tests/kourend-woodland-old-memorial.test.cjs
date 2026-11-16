@@ -57,7 +57,7 @@ function actor(t, at) {
   const dialogues = p.getDialogueManager();
   const start = dialogues.startDialogues.bind(dialogues);
   t.mock.method(dialogues, "startDialogues", (chain) => {
-    for (const box of chain.dialogues.values()) boxes.push({ type: box.constructor.name, text: String(box.text) });
+    for (const box of chain.dialogues.values()) if (box.text != null) boxes.push({ type: box.constructor.name, text: String(box.text) });
     return start(chain);
   });
   t.after(() => {

@@ -856,6 +856,8 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
 
   /** Players whose warlord fell within the last 30 ticks: the talking warlord stays hidden until then. */
   const warlordFallen = new WeakSet();
+  /** Each fall's own token, so only the latest fall's timer shows him again. */
+  const warlordFallTokens = new WeakMap();
 
   function syncWarlord(player) {
     const npc = warlordsByPlayer.get(player);
@@ -929,7 +931,10 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
    * commanders that will attack you"). Ours: only while the orb is still to be taken back to Bolren.
    */
   function commanderMeetsClimb({ player, objectId, success }) {
-    if (objectId !== CRUMBLED_WALL_OBJECT_ID || !success) return;
+    if (objectId !== CRUMBLED_WALL_OBJECT_ID) return;
+    // A climb cut short leaves its commander waiting; any new climb replaces him.
+    climbingCommanders.delete(player);
+    if (!success) return;
     const stage = quest.getStage(player);
     if (stage < STAGE_BALLISTA_FIRED || stage >= STAGE_RETURNED_FIRST_ORB) return;
     if (player.getLocation().getY() >= BALLISTA_SPEAR_TARGET.getY()) return;
@@ -1056,7 +1061,8 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
 
   /** "You spot the orbs of protection among his remains": they land on his tile, for his challenger. */
   function dropOrbs(player, location) {
-    if (has(player, ORBS_OF_PROTECTION_ITEM_ID)) return false;
+    // Bolren may already hold them, from a ceremony that was cut off: no second set.
+    if (orbsHandedOver(player)) return false;
     const groundItems = api.getItemOnGroundManager();
     if (groundItems.getGroundItem(player.getUsername(), ORBS_OF_PROTECTION_ITEM_ID, location, player.getPrivateArea())) return false;
     groundItems.registerLocation(player, new api.core.Item(ORBS_OF_PROTECTION_ITEM_ID, 1), location.clone());
@@ -1069,8 +1075,10 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
     if (!player || !npc || npc !== warlordsByPlayer.get(player)) return;
     warlordsByPlayer.delete(player);
     warlordFallen.add(player);
+    const token = {};
+    warlordFallTokens.set(player, token);
     Scenes.later(player, WARLORD_HIDDEN_AFTER_DEATH_TICKS, () => {
-      if (!warlordFallen.has(player)) return;
+      if (!warlordFallen.has(player) || warlordFallTokens.get(player) !== token) return;
       warlordFallen.delete(player);
       if (player.isRegistered?.() !== false) syncWarlord(player);
     });

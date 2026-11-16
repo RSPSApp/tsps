@@ -36,8 +36,8 @@ finish. Ticks are 1001802's; the other two agree wherever they cover the same st
   where it lands (t1469). Two ticks later sound 3487 (`treevillage_catabow_hit`) and the hit box; stage 5 as that
   box is continued (t1471-1478).
 - **Crumbled wall.** On the climb's continue (t1524) the ground-floor commander attacks the next tick and shouts
-  "Don't even think of taking the orb!" the tick after (t1526). Ours: the attack starts as the player lands, two
-  ticks after the continue, since combat refuses a target still crossing.
+  "Don't even think of taking the orb!" the tick after (t1526). Ours: the shout is on time; the attack starts
+  the tick after the player lands, 3 ticks after the continue, since combat drops a target that is being placed.
 - **Chest.** Open (536, sound 52), then Search: the orb, stage 6 and the box as it opens (t1567). The Wiki's
   "Oi! You! Get out of there." comes from a commander in view; the capture's had been killed, and nothing is said.
 - **Front door from inside** (t1587-1592): inviswall 38848 on the doorway, inactivepoordoor (1539) on the tile
@@ -77,6 +77,12 @@ handlers.
 - **fixed** Elkoy's guide landing, maze railing and the owned warlord encounter were corrected. [#1182](https://github.com/RSPSApp/tsps/pull/1182)
 
 ## Runs
+
+### 2026-11-16 · agent · claude-opus-5.5
+
+- **Start:** fresh, varp 111 = 0, on PR #5967 (cache osrs-242). Placed with `::tele` for setup, and again for the chest and the ceremony once each step had been checked.
+- **Route and result:** start, Montai and logs, the three trackers, ballista (0002), wall (the commander's shout and seq 428 attack), chest box, front door out, Elkoy Follow (box, move at +3, line at +4), first orb (598 still 0), warlord (14192 = 7, object box), ceremony (chanters animate, 598 = 2 at +11, box at +15), completion and scroll. A relog kept 111 = 9 and 598 = 2.
+- **Not checked:** a wrong coordinate, a full bag, Follow from inside after the first orb.
 
 ### 2026-10-29 · agent · grok-4.7
 

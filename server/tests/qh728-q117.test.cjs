@@ -1028,3 +1028,18 @@ test('an object click that carries only its click index still fires the ballista
   assert.equal(h.transcripts.at(-1).variant, 'using-the-ballista');
   assert.equal(click(2181, fireSlot === 1 ? 2 : 1), false, 'another slot of the same loc is not Fire');
 });
+
+test('after a cut-off ceremony, killing the warlord again drops no second set of orbs', () => {
+  const h=harness(),p=makePlayer();h.quest.setStage(p,8);p.setAttribute('tree-gnome-village:orbs-given',true);
+  death(h,p,WARLORD_SPAWN);
+  assert.equal(h.groundItems.length,0,'Bolren already holds them');
+  assert.equal(h.transcripts.some(t=>t.variant==='the-khazard-warlord-when-defeated'),false);
+});
+
+test('two kills within 30 ticks keep the talking warlord hidden 30 ticks after the second', () => {
+  const h=harness(),p=makePlayer();h.quest.setStage(p,7);
+  death(h,p,WARLORD_SPAWN);tick(h,10);
+  death(h,p,WARLORD_SPAWN);
+  tick(h,25);assert.equal(p.varbits.get(3460),1,'the first fall\'s timer does not show him early');
+  tick(h,5);assert.equal(p.varbits.get(3460),0);
+});

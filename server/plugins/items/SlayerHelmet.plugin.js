@@ -39,9 +39,11 @@
  * (i): "If lost on death in PvP situations, the mask will lose its imbued status, but the player
  * will be reimbursed"). The Items Kept on Death preview shows it lost (`items:lost-to-pvp-killer`).
  * A Slayer helmet or Slayer helmet (i), any colour, lost the same way drops for the killer as the plain
- * black mask, the other parts (and a recolour's head) are lost, and an imbued one's imbue is given back
- * as the mask's is (Wiki, Items Kept on Death: "Dropped to the PKer as a black mask. The imbue cost is
- * refunded to the victim. The other parts are lost."). The Soul Wars and Emir's Arena helmets keep
+ * black mask, the other parts are lost, and an imbued one's imbue is given back as the mask's is (Wiki,
+ * Items Kept on Death: "Dropped to the PKer as a black mask. The imbue cost is refunded to the victim.
+ * The other parts are lost."). A recolour's head goes back to the victim with the death's other
+ * untradeables ("The recolour item goes to the victim's gravestone"), except the Hooded and Oathplate
+ * heads, which that page's "Hooded, Radiant or Oathplate" row loses with the other parts. The Soul Wars and Emir's Arena helmets keep
  * today's handling: neither shop's imbue is modelled, so there is nothing to refund.
  */
 const CRAFTING_LEVEL = 55;
@@ -70,6 +72,10 @@ const IMBUED_BY_NMZ_META = "slayer-helmet:nmz-imbued";
 
 /** Victim -> the imbues a PvP death took from their black masks, given back once the death returns kept items. */
 const pendingDeathRefunds = new WeakMap();
+/** Victim -> the recolour heads of the helmets a PvP death took, handed to the death's untradeables. */
+const pendingDeathHeads = new WeakMap();
+/** Recolours whose head a PvP death loses with the helmet's other parts (Wiki, Items Kept on Death). */
+const PVP_HEAD_LOST = new Set(["Hooded", "Oathplate", "Radiant"]);
 
 const COMBINE_SOUND = 2241;
 const UNCHARGE_SOUND = 2672;
@@ -511,26 +517,33 @@ function losesImbueToKiller(item) {
 const PVP_DROPPED_HELM_FORMS = new Set(["slayer_helm", "slayer_helm_i"]);
 
 /**
- * A Slayer helmet a PvP death drops as a black mask: { imbued, base } (base: the plain helmet of its colour, the id a
- * Nightmare Zone refund is priced by), or null. Preset copies stay as they are, as the masks.
+ * A Slayer helmet a PvP death drops as a black mask: { imbued, base, head } (base: the plain helmet of its colour, the
+ * id a Nightmare Zone refund is priced by; head: the recolour item the victim gets back, or null), or null. Preset copies stay as they are, as the masks.
  */
 function helmetLostToKiller(item) {
   if (!item || item.isPresetItem?.() === true || item.isUntradeable?.() === true) return null;
   const entry = helmetTable().byId.get(Number(item.getId?.()));
   if (!entry || !PVP_DROPPED_HELM_FORMS.has(entry.form.helm)) return null;
   const base = objId(entry.recolour ? entry.recolour.item("slayer_helm") : "slayer_helm");
-  return { imbued: entry.form.helm === "slayer_helm_i", base };
+  const head = entry.recolour && !PVP_HEAD_LOST.has(entry.recolour.name) ? entry.recolour.headId ?? null : null;
+  return { imbued: entry.form.helm === "slayer_helm_i", base, head };
 }
 
 /**
  * A Slayer helmet lost to a PvP death: the killer gets a plain black mask in its place (extraDrops, so core drops it
- * for them), the helmet and its other parts are gone, and an imbued one's imbue is owed to the victim.
+ * for them), the helmet and its other parts are gone, its recolour head is owed back, and an imbued one's imbue is owed
+ * to the victim.
  */
 function loseHelmetOnPvpDeath(event, helm) {
   if (!Array.isArray(event.extraDrops)) return;
   const { player, item } = event;
   event.extraDrops.push(new pluginApi.core.Item(ItemIdentifiers.BLACK_MASK, 1));
   event.handled = true;
+  if (helm.head != null) {
+    const heads = pendingDeathHeads.get(player) ?? [];
+    heads.push(helm.head);
+    pendingDeathHeads.set(player, heads);
+  }
   if (!helm.imbued) return;
   const owed = pendingDeathRefunds.get(player) ?? [];
   owed.push({ base: helm.base, nmz: item.getMetaValue?.(IMBUED_BY_NMZ_META) === true });
@@ -566,6 +579,18 @@ function loseImbueOnPvpDeath(event) {
   const owed = pendingDeathRefunds.get(player) ?? [];
   owed.push({ base, nmz });
   pendingDeathRefunds.set(player, owed);
+}
+
+/**
+ * `onPlayerDeathDrops`: the recolour heads the PvP death took off its helmets join its untradeables, which go where the
+ * death's other untradeables do (back to the victim, as a death with a killer makes no grave).
+ */
+function returnRecolourHeads({ player, untradeables }) {
+  const heads = pendingDeathHeads.get(player);
+  if (!heads) return;
+  pendingDeathHeads.delete(player);
+  if (!Array.isArray(untradeables)) return;
+  for (const head of heads) untradeables.push(new pluginApi.core.Item(head, 1));
 }
 
 /**
@@ -677,6 +702,7 @@ module.exports = {
     for (const name of CHARGED_MASK_NAMES) api.onItemAction(name, { Uncharge: uncharge });
     for (const name of IMBUED_MASK_NAMES) api.onItemAction(name, { Uncharge: unimbue });
     api.onPlayerDeathItemDrop(loseImbueOnPvpDeath);
+    api.onPlayerDeathDrops(returnRecolourHeads);
     api.onCustomEvent("player:died", refundPvpDeathImbues);
     api.onCustomEvent("items:lost-to-pvp-killer", answerLostToPvpKiller);
   },

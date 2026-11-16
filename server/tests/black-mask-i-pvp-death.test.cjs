@@ -167,7 +167,7 @@ test("a scroll-imbued Slayer helmet (i) lost to a PKer drops as a black mask and
   assert.equal(victim.getInventory().getAmount(I.SCROLL_OF_IMBUING), 1, "the scroll comes back");
 });
 
-test("a Nightmare Zone imbued recoloured helmet refunds the points, and its head is lost", (t) => {
+test("a Nightmare Zone imbued recoloured helmet refunds the points, and its head goes back to the victim", (t) => {
   const victim = player(t);
   const killer = player(t);
   const hydra = core.CacheDefinitions.getObjId("slayer_helm_i_hydra");
@@ -175,7 +175,8 @@ test("a Nightmare Zone imbued recoloured helmet refunds the points, and its head
   const drops = die(t, victim, killer);
   assert.deepEqual(drops.filter(([, id]) => id !== I.BONES), [[killer, I.BLACK_MASK, 1]]);
   assert.equal(victim.getInventory().getAmount(hydra), 0);
-  assert.equal(victim.getInventory().getAmount(core.CacheDefinitions.getObjId("poh_alchemical_hydra_head")), 0);
+  assert.equal(victim.getInventory().getAmount(core.CacheDefinitions.getObjId("poh_alchemical_hydra_head")), 1,
+    "the recolour item goes to the victim");
   assert.equal(NmzCommon.points(victim), 1_250_000, "the helmet's imbue price back");
   assert.equal(victim.getInventory().getAmount(I.SCROLL_OF_IMBUING), 0, "no scroll as well");
 });
@@ -213,4 +214,21 @@ test("Items Kept on Death shows a Slayer helmet (i) or plain helmet lost on a Pv
     PM.emitCustomEvent("items:lost-to-pvp-killer", query);
     assert.equal(query.lost, expected, String(id));
   }
+});
+
+test("a plain recoloured helmet gives its head back; a Hooded one loses its hood with the other parts", (t) => {
+  const victim = player(t);
+  const killer = player(t);
+  const black = core.CacheDefinitions.getObjId("slayer_helm_black");
+  const kbd = core.CacheDefinitions.getObjId("poh_trophydrop_kbd");
+  const hooded = core.CacheDefinitions.getObjId("slayer_helm_hooded");
+  const hood = core.CacheDefinitions.getObjId("skillcape_slayer_hood");
+  victim.getInventory().setItem(0, new core.Item(black, 1));
+  victim.getInventory().setItem(1, new core.Item(hooded, 1));
+  const drops = die(t, victim, killer);
+  assert.deepEqual(drops.filter(([, id]) => id !== I.BONES), [[killer, I.BLACK_MASK, 1], [killer, I.BLACK_MASK, 1]]);
+  assert.equal(victim.getInventory().getAmount(black) + victim.getInventory().getAmount(hooded), 0);
+  assert.equal(victim.getInventory().getAmount(kbd), 1, "the KBD heads come back");
+  assert.equal(victim.getInventory().getAmount(hood), 0, "the hood is lost");
+  assert.equal(victim.getInventory().getAmount(I.SCROLL_OF_IMBUING), 0, "nothing was imbued");
 });

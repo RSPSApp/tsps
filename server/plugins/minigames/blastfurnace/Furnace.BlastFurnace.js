@@ -77,6 +77,12 @@ const inRoom = new Set();
 const belt = [];
 /** Ticks since each player's bars started pouring. */
 const pouring = new Map();
+/**
+ * Players who clicked Take while their own ore was still on the belt or pouring, with the tile they
+ * clicked from. rsprox (rev 241/242, e.g. 1001645 ticks 164-168, 1001943 ticks 72-77): the menu
+ * opens the tick the bars can be taken, with no "doesn't contain any bars" box in between.
+ */
+const waitingToTake = new Map();
 
 function init(api) {
   pluginApi = api;
@@ -223,6 +229,7 @@ function enterRoom({ player }) {
 
 function leaveRoom({ player }) {
   inRoom.delete(player);
+  waitingToTake.delete(player);
   Machinery.leave(player);
   player.getPacketSender().closeSubInterface(OVERLAY_HUD_UID);
 }
@@ -231,6 +238,7 @@ function logout({ player }) {
   inRoom.delete(player);
   Machinery.leave(player);
   pouring.delete(player);
+  waitingToTake.delete(player);
   const state = player.getAttribute(STATE_ATTRIBUTE);
   // Wiki: coal alone on the belt is lost on logout; mixed loads remain on the belt.
   if (state?.conveyor?.every((load) => load.item === core.ItemIdentifiers.COAL)) state.conveyor = [];
@@ -410,7 +418,8 @@ function putOre(player, onlyItemId = null) {
   if (overflow) {
     statement(player, "You should make sure all your ore smelts before adding any more.");
   } else if (moved) {
-    spam(player, "All your ore goes onto the conveyor belt.");
+    // rsprox rev 241/242 (17 recordings, e.g. 1001645 tick 126); Leagues rev 227-234 said "All your ore ...".
+    spam(player, "Your ore goes onto the conveyor belt.");
   }
   if (moved) syncContents(player);
 }
@@ -446,6 +455,8 @@ function checkPot({ player }) {
 }
 
 function emptyPot(player) {
+  // An early Take waits for the ore that was just thrown away.
+  waitingToTake.delete(player);
   stateOf(player).ores = {};
   stateOf(player).conveyor = [];
   for (const ore of [...belt]) {
@@ -506,9 +517,29 @@ function cool(player) {
   setDispenser(player, DISPENSER_COOL);
 }
 
-function takeBars({ player }) {
-  if (dispenserState(player) === DISPENSER_POURING) return;
+/**
+ * Whether the player's belt load will pour bars once it lands: the belt runs, the coffer pays, and
+ * the pot plus the belt hold a whole recipe (as `smelt` would make it). Coal or tin alone, a
+ * stopped belt or an empty coffer pour nothing, so Take answers at once.
+ */
+function barsComing(player) {
   const state = stateOf(player);
+  if (!state.conveyor.length || !Machinery.beltRunning() || !Machinery.canSmelt()) return false;
+  if (Machinery.automated() && state.coffer === 0) return false;
+  const ores = { ...state.ores };
+  for (const load of state.conveyor) ores[load.item] = (ores[load.item] ?? 0) + load.count;
+  return BARS.some((bar) => (state.bars[bar.barId] ?? 0) < BAR_LIMIT &&
+    bar.ingredients.every(([id, amount]) => (ores[id] ?? 0) >= amount));
+}
+
+function takeBars({ player }) {
+  const state = stateOf(player);
+  const coming = !Object.values(state.bars).some((count) => count > 0) && barsComing(player);
+  if (dispenserState(player) === DISPENSER_POURING || coming) {
+    waitingToTake.set(player, player.getLocation());
+    return;
+  }
+  waitingToTake.delete(player);
   if (dispenserState(player) === DISPENSER_HOT) {
     if (!wearsColdGloves(player)) {
       statement(player, "The bars are still molten! You need to cool them down.");
@@ -527,7 +558,9 @@ function takeBars({ player }) {
     return;
   }
   const maxAmount = Math.min(player.getInventory().getFreeSlots(), Math.max(...bars.map((id) => state.bars[id])));
-  player.getPacketSender().sendCreationMenu(new core.CreationMenu("How many would you like to take?", bars, {
+  // rsprox rev 241/242: "What would you like to take?" when several metals wait (1001645 tick 168).
+  const title = bars.length > 1 ? "What would you like to take?" : "How many would you like to take?";
+  player.getPacketSender().sendCreationMenu(new core.CreationMenu(title, bars, {
     execute: (barId, amount) => take(player, barId, amount),
   }, { mode: 17, maxAmount }));
 }
@@ -545,13 +578,18 @@ function take(player, barId, amount) {
   player.getInventory().addItem(new core.Item(barId, count));
   syncContents(player);
   const name = itemName(barId).toLowerCase();
-  statement(player, `You take ${count} ${count === 1 ? name : `${name}s`} from the dispenser.`);
+  // rsprox 1001645 tick 170, 1001957, 1001962: a single bar is "one".
+  statement(player, count === 1 ? `You take one ${name} from the dispenser.` : `You take ${count} ${name}s from the dispenser.`);
   if (!Object.values(state.bars).some((left) => left > 0)) setDispenser(player, DISPENSER_EMPTY);
   // Ore held back by a full dispenser smelts now there's room.
   smelt(player);
 }
 
-function checkDispenser({ player }) {
+function checkDispenser({ player, clickType }) {
+  // The empty dispenser (loc 9093) labels op1 "Check", but live answers op1 as Take in every state:
+  // rsprox rev 241/242, 894 op1 clicks in 17 recordings open the take menu when the bars arrive or
+  // say "The dispenser doesn't contain any bars." (e.g. 1001645 tick 164, 1001943 tick 72).
+  if (clickType === 1) return takeBars({ player });
   const { bars } = stateOf(player);
   listPages(player, BARS.map((bar) => `${bar.name}: ${bars[bar.barId] ?? 0}`));
 }
@@ -622,16 +660,38 @@ function tickBelt() {
     state.conveyor.splice(state.conveyor.indexOf(ore.load), 1);
     state.ores[ore.load.item] = (state.ores[ore.load.item] ?? 0) + ore.load.count;
     syncContents(ore.player);
-    if (!belt.some((other) => other.player === ore.player)) smelt(ore.player);
+    if (belt.some((other) => other.player === ore.player)) continue;
+    smelt(ore.player);
+    // The load landed without pouring (a full dispenser, a stalled furnace): an early Take has
+    // nothing left to wait for, so a later pour doesn't open the menu unasked.
+    if (!pouring.has(ore.player)) waitingToTake.delete(ore.player);
   }
 }
 
 function tickDispensers() {
   for (const [player, ticks] of pouring) {
     pouring.set(player, ticks + 1);
-    if (ticks + 1 === POUR_TICKS) setDispenser(player, DISPENSER_HOT);
+    if (ticks + 1 === POUR_TICKS) pourFinished(player);
     if (ticks + 1 === POUR_TICKS + COOL_TICKS) cool(player);
   }
+}
+
+/**
+ * The bars land hot. rsprox rev 241/242 (17 recordings, all with ice gloves worn): varbit 936 goes
+ * 1, 2, 3 for the wearer, 2 and 3 in the same tick or one tick apart, so cold gloves see them
+ * cooled at once, and a Take clicked early opens its menu when they are.
+ */
+function pourFinished(player) {
+  setDispenser(player, DISPENSER_HOT);
+  if (wearsColdGloves(player)) cool(player);
+  const from = waitingToTake.get(player);
+  if (!from) return;
+  waitingToTake.delete(player);
+  // Ours: walking off cancels the wait; without gloves the early Take gets the molten box.
+  if (!player.getLocation().equals(from) || player.getMovementQueue().size() > 0) return;
+  // Ours: a dialogue or interface opened meanwhile is left alone.
+  if (player.getDialogueManager().isActive?.() || (player.getInterfaceId?.() ?? -1) >= 0) return;
+  takeBars({ player });
 }
 
 function tickCoffers() {
@@ -707,4 +767,4 @@ function attachFurnace(api) {
 }
 
 module.exports = attachFurnace;
-module.exports._test = { init, tick, stateOf, putOre, smelt, takeBars, take, fillBucket, foremanCondition, foremanPaid, enterRoom, leaveRoom, logout, coolWithWater, stairs, checkPot, useOreOnBelt };
+module.exports._test = { init, tick, stateOf, putOre, smelt, takeBars, take, fillBucket, foremanCondition, foremanPaid, enterRoom, leaveRoom, logout, coolWithWater, stairs, checkPot, useOreOnBelt, checkDispenser };

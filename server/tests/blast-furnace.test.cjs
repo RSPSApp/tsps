@@ -19,7 +19,7 @@ let dwarfOperated = true;
 let playerIndex = 0;
 let nativeRun = false, mockApi;
 const prompts = [];
-const { init, tick, stateOf, putOre, takeBars, take, fillBucket, foremanCondition, foremanPaid, coolWithWater, stairs } = BlastFurnace._test;
+const { init, tick, stateOf, putOre, takeBars, take, fillBucket, foremanCondition, foremanPaid, coolWithWater, stairs, checkDispenser } = BlastFurnace._test;
 before(async () => {
  await require("../dist/game/cache/CachePipeline").CachePipeline.initialize(process.cwd());
  PluginManager.getCoreApi().RegionManager.init();
@@ -354,13 +354,14 @@ test("pouring bars and a stale hot-bar menu cannot bypass cooling", () => {
   assert.equal(stateOf(p).bars[ItemIds.IRON_BAR], 5);
 });
 
-// Captured (rsprox, recs 96, 1757, 3278): the belt and sink lines are spam; taking bars names the
-// count in a message box (Wiki changelog: "A message displaying the numbers of bars withdrawn").
+// Captured (rsprox, recs 96, 1757, 3278): the sink line is spam; taking bars names the count in a
+// message box (Wiki changelog: "A message displaying the numbers of bars withdrawn"). The belt line
+// is the rev 241/242 wording (17 normal-world recordings, e.g. 1001645 tick 126).
 test("the belt, sink and dispenser give the recorded feedback", () => {
   const p = player({ items: { [ItemIds.MITHRIL_ORE]: 3, [ItemIds.BUCKET]: 1 } });
   stateOf(p).coffer = 1000;
   putOre(p);
-  assert.equal(p.spam.at(-1), "All your ore goes onto the conveyor belt.");
+  assert.equal(p.spam.at(-1), "Your ore goes onto the conveyor belt.");
   fillBucket({ player: p });
   assert.equal(p.spam.at(-1), "You fill the bucket from the sink.");
   assert.deepEqual(p.sounds, [2609]);
@@ -370,6 +371,121 @@ test("the belt, sink and dispenser give the recorded feedback", () => {
   take(p, ItemIds.MITHRIL_BAR, 23);
   assert.equal(p.statement, "You take 23 mithril bars from the dispenser.");
   assert.equal(p.messages.length, 0);
+});
+
+// rsprox 1001645 tick 170 (also 1001653, 1001957, 1001962): one bar is "one", not "1".
+test("taking a single bar names it as one", () => {
+  const p = player();
+  stateOf(p).bars[ItemIds.IRON_BAR] = 1;
+  p.varbits.set(DISPENSER, 3);
+  take(p, ItemIds.IRON_BAR, 1);
+  assert.equal(p.statement, "You take one iron bar from the dispenser.");
+});
+
+// rsprox rev 241/242 (e.g. 1001943 ticks 75-77): for an ice-gloves wearer varbit 936 goes 1, 2, 3
+// in the tick the pour ends.
+test("cold gloves see the bars cooled as soon as they finish pouring", () => {
+  for (const hands of [ItemIds.ICE_GLOVES, ItemIds.SMITHS_GLOVES_I_]) {
+    const p = player({ items: { [ItemIds.IRON_ORE]: 3 }, hands });
+    stateOf(p).coffer = 1000;
+    putOre(p);
+    ticks(4 + 1);
+    assert.equal(p.varbits.get(DISPENSER), 1, "pouring");
+    ticks(1);
+    assert.equal(p.varbits.get(DISPENSER), 3, "cooled for the wearer");
+  }
+});
+
+// rsprox 1001645 ticks 164-168, 1001943 ticks 72-77: Take clicked while the ore is still on the belt
+// opens the menu the tick the bars can be taken.
+test("an early Take waits for the player's bars and opens the menu when they are ready", () => {
+  const p = player({ items: { [ItemIds.IRON_ORE]: 3 }, hands: ItemIds.ICE_GLOVES });
+  stateOf(p).coffer = 1000;
+  putOre(p);
+  takeBars({ player: p });
+  assert.equal(p.statement, null, "no empty-dispenser box while the ore is coming");
+  assert.equal(p.menu, null);
+  ticks(4 + 1);
+  assert.equal(p.menu, null, "still pouring");
+  ticks(1);
+  assert.equal(p.varbits.get(DISPENSER), 3);
+  assert.deepEqual(p.menu.getItems(), [ItemIds.IRON_BAR]);
+  ticks(5);
+  assert.equal(p.statement, null, "opened once");
+});
+
+// The empty dispenser's op1 is labelled "Check" (loc 9093); rsprox rev 241/242 answers it as Take.
+test("op1 on the empty dispenser waits for coming bars, or says it has none", () => {
+  const empty = player();
+  checkDispenser({ player: empty, clickType: 1 });
+  assert.equal(empty.statement, "The dispenser doesn't contain any bars.");
+  const p = player({ items: { [ItemIds.IRON_ORE]: 3 }, hands: ItemIds.ICE_GLOVES });
+  stateOf(p).coffer = 1000;
+  putOre(p);
+  checkDispenser({ player: p, clickType: 1 });
+  assert.equal(p.statement, null);
+  ticks(6);
+  assert.deepEqual(p.menu.getItems(), [ItemIds.IRON_BAR]);
+});
+
+// Review r1: only a load that will pour bars holds the click; otherwise main's empty-dispenser box.
+test("an early Take on a load that pours nothing still says the dispenser is empty", () => {
+  const coal = player({ items: { [ItemIds.COAL]: 3 }, hands: ItemIds.ICE_GLOVES });
+  stateOf(coal).coffer = 1000;
+  putOre(coal);
+  takeBars({ player: coal });
+  assert.equal(coal.statement, "The dispenser doesn't contain any bars.", "coal alone");
+  const unpaid = player({ items: { [ItemIds.IRON_ORE]: 3 }, hands: ItemIds.ICE_GLOVES });
+  stateOf(unpaid).coffer = 1000;
+  putOre(unpaid);
+  stateOf(unpaid).coffer = 0;
+  takeBars({ player: unpaid });
+  assert.equal(unpaid.statement, "The dispenser doesn't contain any bars.", "empty coffer stalls the belt");
+  dwarfOperated = false;
+  const stopped = player({ items: { [ItemIds.IRON_ORE]: 3 }, hands: ItemIds.ICE_GLOVES });
+  stateOf(stopped).conveyor.push({ item: ItemIds.IRON_ORE, count: 3, tiles: 0 });
+  takeBars({ player: stopped });
+  assert.equal(stopped.statement, "The dispenser doesn't contain any bars.", "nobody pedalling");
+});
+
+test("an early Take leaves an interface opened meanwhile alone", () => {
+  const p = player({ items: { [ItemIds.IRON_ORE]: 3 }, hands: ItemIds.ICE_GLOVES });
+  p.getInterfaceId = () => 12;
+  stateOf(p).coffer = 1000;
+  putOre(p);
+  takeBars({ player: p });
+  ticks(6);
+  assert.equal(p.varbits.get(DISPENSER), 3);
+  assert.equal(p.menu, null);
+});
+
+test("walking off cancels an early Take", () => {
+  const p = player({ items: { [ItemIds.IRON_ORE]: 3 }, hands: ItemIds.ICE_GLOVES });
+  stateOf(p).coffer = 1000;
+  putOre(p);
+  takeBars({ player: p });
+  p.location = new Location(1945, 4960, 0);
+  ticks(6);
+  assert.equal(p.varbits.get(DISPENSER), 3);
+  assert.equal(p.menu, null);
+});
+
+// Review r2: emptying the pot drops the wait, so the next load's pour doesn't open the menu unasked.
+test("emptying the pot cancels an early Take", () => {
+  const p = player({ items: { [ItemIds.IRON_ORE]: 6 }, hands: ItemIds.ICE_GLOVES });
+  stateOf(p).coffer = 1000;
+  p.inventory.set(ItemIds.IRON_ORE, 3);
+  putOre(p);
+  takeBars({ player: p });
+  BlastFurnace._test.checkPot({ player: p });
+  prompts.at(-1).choices[3]();
+  prompts.at(-1).choices[1]();
+  assert.deepEqual(stateOf(p).conveyor, [], "the first load is destroyed");
+  p.inventory.set(ItemIds.IRON_ORE, 3);
+  putOre(p);
+  ticks(6);
+  assert.equal(p.varbits.get(DISPENSER), 3, "the second load poured");
+  assert.equal(p.menu, null, "no menu without a new click");
 });
 
 test("water cools other hot bars within five tiles", () => {
@@ -621,6 +737,8 @@ test("the dispenser quantity menu uses the recorded take mode and available amou
   assert.equal(p.menu.getOptions().maxAmount, 5);
   stateOf(p).bars[ItemIds.IRON_BAR] = 20;
   takeBars({ player: p });
+  // rsprox 1001645 tick 168: with two metals waiting the title asks which.
+  assert.equal(p.menu.getTitle(), "What would you like to take?");
   assert.equal(p.menu.getOptions().maxAmount, 20, "a smaller stack cannot cap the other metal");
 });
 

@@ -11,6 +11,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { ShopDefinition } = require("../dist/game/definition/ShopDefinition");
 const { ShopManager } = require("../dist/game/model/container/shop/ShopManager");
+const { decodeShopOpen } = require("./helpers/shop-open-packet.cjs");
 
 const Common = require("../plugins/skills/shootingstars/Common.ShootingStars");
 const Star = require("../plugins/skills/shootingstars/Star.ShootingStars");
@@ -448,14 +449,15 @@ test("Dusuri: displayed refunds, value messages and actual sales pay 80% for all
   p.getSession = () => ({ sendClientPacket: (packet) => packets.push(packet) });
   p.getInventory().adds(core.ItemIdentifiers.STARDUST, 10000);
   ShopManager.open(p, data.id);
-  const stockPacket = packets.at(-1).subarray(-20 * data.originalStock.length);
+  const { stock: shown } = decodeShopOpen(packets.at(-1));
+  assert.equal(shown.length, data.originalStock.length);
   const refunds = [1600, 2400, 240, 120];
   for (let index = 0; index < data.originalStock.length; index++) {
     const { id } = data.originalStock[index];
     const price = data.prices[id];
     const refund = refunds[index];
-    assert.equal(stockPacket.readInt32BE(index * 20 + 12), price);
-    assert.equal(stockPacket.readInt32BE(index * 20 + 16), refund);
+    assert.equal(shown[index].priceEach, price);
+    assert.equal(shown[index].sellPrice, refund);
     const before = p.getInventory().getAmount(core.ItemIdentifiers.STARDUST);
     ShopManager.handleWidgetAction(p, {
       groupId: ShopManager.MAIN_INTERFACE_ID, childId: 16, buttonNum: 0, option: "Buy 1", slot: index + 1, itemId: id,

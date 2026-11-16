@@ -17,6 +17,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { ShopDefinition } = require("../dist/game/definition/ShopDefinition");
 const { ShopDefinitionLoader } = require("../dist/game/definition/loader/impl/ShopDefinitionLoader");
 const { ShopManager } = require("../dist/game/model/container/shop/ShopManager");
+const { decodeShopOpen } = require("./helpers/shop-open-packet.cjs");
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -40,7 +41,7 @@ function open(name) {
   p.getSession = () => ({ sendClientPacket: (packet) => (packets.push(Buffer.from(packet)), true) });
   assert.equal(ShopManager.open(p, shopId(name)), true, `${name} opens`);
   const init = scripts.find(([id]) => id === 1074);
-  return { player: p, args: init[1], scriptInventory: init[1][0], packetInventory: packets.at(-1).readUInt16BE(packets.at(-1).length - 2) };
+  return { player: p, args: init[1], scriptInventory: init[1][0], packetInventory: decodeShopOpen(packets.at(-1)).inventoryId };
 }
 
 test("the cache marks farmer_supplies as infinite stock: its items draw with no counts", () => {

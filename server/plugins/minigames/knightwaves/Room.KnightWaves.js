@@ -191,9 +191,53 @@ function playerLoggedOut({ player }) {
   if (player) endSession(player);
 }
 
+function trainingDoorY(objectId, location) {
+  const x = location?.getX?.() ?? location?.x;
+  const y = location?.getY?.() ?? location?.y;
+  const z = location?.getZ?.() ?? location?.z;
+  const doors = Common.core.ObjectIdentifiers;
+  return z === Common.ROOM.z && x === 2751
+    && ((objectId === doors.LARGE_DOOR_73 && y === 3507) || (objectId === doors.LARGE_DOOR_74 && y === 3508))
+    ? y : null;
+}
+
+function routeTrainingDoor(event) {
+  const y = trainingDoorY(event.objectId, event.object?.getLocation?.());
+  if (y !== null && Common.inRoom(event.player)) event.destination = { x: 2753, y, z: Common.ROOM.z };
+}
+
+function handleTrainingDoorToggle(request) {
+  const { player, objectId } = request;
+  const y = trainingDoorY(objectId, request.location);
+  if (!player || y === null) return;
+  request.handled = true;
+
+  const inside = Common.inRoom(player);
+  if (!inside && !Common.kingsRansomComplete(player)) {
+    send(player, Common.MESSAGES.needKingsRansom);
+    return;
+  }
+  if (!inside && Common.completed(player) >= Common.COMPLETE) {
+    send(player, Common.MESSAGES.complete);
+    return;
+  }
+
+  const start = player.getLocation();
+  const from = [start.getX(), start.getY(), start.getZ()];
+  Common.later(1, () => {
+    if (player.isRegistered?.() === false) return;
+    const here = player.getLocation();
+    // Do not carry a player who moved or left the room after clicking.
+    if (here.getX() !== from[0] || here.getY() !== from[1] || here.getZ() !== from[2] || Common.inRoom(player) !== inside) return;
+    player.moveTo(Common.roomLocation(inside ? 2751 : 2753, y));
+  });
+}
+
 function attachRoom(api) {
   area = areaClass();
   api.registerArea(area);
+  api.onObjectRoute(routeTrainingDoor);
+  api.onCustomEvent("door:toggle", handleTrainingDoorToggle);
   api.onNpcDeath(knightDied);
   api.onPlayerDeath(playerDied);
   api.onShouldDropItemsOnDeath(keepItems);

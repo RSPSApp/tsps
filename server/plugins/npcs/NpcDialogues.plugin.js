@@ -29,6 +29,8 @@
 const fs = require("fs");
 const path = require("path");
 const { isDeepStrictEqual } = require("node:util");
+/** A paged menu's back option ("~ previous ~"), as the wiki labels it. */
+const PREVIOUS_PAGE_OPTION = /^~\s*previous\s*~$/i;
 /** successor id -> the retired id whose transcript it plays until it has its own (data/retired-npcs.json). */
 const PREDECESSOR = new Map(Object.entries(require("./data/retired-npcs.json").successors)
   .map(([retired, successor]) => [successor.id, Number(retired)]));
@@ -984,6 +986,16 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         api.emitCustomEvent("npc-dialogue:choice", choice);
         if (choice.end) return;
         const own = ownMenu(option);
+        // A paged menu's "~ previous ~" goes back a page. The wiki writes it as a bare option with no action
+        // (Transcript:Observatory Quest's sign menu), so the dump leaves it without steps.
+        if (!option.steps?.length && PREVIOUS_PAGE_OPTION.test(String(option.text ?? "").trim())) {
+          // The page shown before is the menu with an option that opens this one (steps are rebuilt per run,
+          // so this matches on the option texts).
+          const texts = (menuStep) => (menuStep?.options || []).map((entry) => String(entry?.text ?? "")).join("|");
+          const page = [...context.menuHistory].reverse().find((shown) => (shown.step?.options || []).some((entry) =>
+            (entry?.steps || []).some((inner) => inner?.type === "choice" && texts(inner) === texts(own.step))));
+          if (page) return presentMenu(page);
+        }
         context.currentMenu = own;
         context.lastChoice = option.text;
         run([...(option.steps || []), ...(own === menu ? rest : own.rest || []), ...tail], recordOption(option));

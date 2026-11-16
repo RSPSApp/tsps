@@ -126,3 +126,36 @@ test('Observatory professor: the right page-2 sign still plays its own branch', 
   assert.ok(f.said.includes("That's exactly it!"), JSON.stringify(f.said));
   assert.equal(f.count(WRONG_SIGN_REPLY), 0);
 });
+
+// Transcript:Observatory Quest, after viewing the telescope: the sign menu has four pages (Aquarius-Scorpio, Libra-Leo,
+// Cancer-Taurus, Aries-Pisces); "~ next ~" opens the next page (rsprox_transcripts/242/900266.txt ticks 1626-1631) and
+// pages 2-4 open with a bare "~ previous ~". It went nowhere: the dump option has no steps, so the chat ended.
+const PAGES = [
+  ['Aquarius', 'Capricorn', 'Sagittarius', 'Scorpio', '~ next ~'],
+  ['~ previous ~', 'Libra', 'Virgo', 'Leo', '~ next ~'],
+  ['~ previous ~', 'Cancer', 'Gemini', 'Taurus', '~ next ~'],
+  ['~ previous ~', 'Aries', 'Pisces'],
+];
+test('Observatory professor: "~ previous ~" goes back a page, all the way to the first, and a sign still answers', async (t) => {
+  const f = harness(t);
+  f.player.setAttribute('quest.observatory_quest.constellation', 'Taurus');
+  f.play(core.NpcIdentifiers.OBSERVATORY_PROFESSOR, 'Observatory Quest', 'after-viewing-the-telescope');
+  await f.choose('Talk about the Observatory quest.');
+  for (let page = 1; page < 4; page++) {
+    await f.choose('~ next ~');
+    assert.deepEqual(await f.menu(), PAGES[page]);
+  }
+  for (let page = 2; page >= 0; page--) {
+    await f.choose('~ previous ~');
+    assert.deepEqual(await f.menu(), PAGES[page], `back to page ${page + 1}`);
+  }
+  await f.choose('~ next ~');
+  await f.choose('~ next ~');
+  assert.deepEqual(await f.menu(), PAGES[2]);
+  await f.choose('~ previous ~');
+  assert.deepEqual(await f.menu(), PAGES[1], 'back again after paging forward a second time');
+  await f.choose('~ next ~');
+  await f.choose('Taurus');
+  await f.menu();
+  assert.ok(f.said.includes("That's exactly it!"), JSON.stringify(f.said));
+});

@@ -648,8 +648,8 @@ function readGauge({ player }) {
 function tickBelt() {
   for (const ore of [...belt]) {
     if (!Machinery.beltRunning() || Machinery.automated() && stateOf(ore.player).coffer === 0) {
-      // Ours: a stalled load drops an early Take, so the pour after a restart doesn't open the menu unasked.
-      waitingToTake.delete(ore.player);
+      // Ours: drop a wait for the stalled load, but preserve a wait for bars already pouring.
+      if (!pouring.has(ore.player)) waitingToTake.delete(ore.player);
       continue;
     }
     ore.load.tiles++;

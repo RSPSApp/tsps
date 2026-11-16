@@ -227,8 +227,7 @@ rows were set from it with `wanderRadius` 0 (the rows keep no facing):
   same tile at 1102, 1865 (facing west) and 2352. It was at 2353,4446.
 - **Fairy Queen** `fairy_queen_multi2` (2971) at 2354,4455: shows as 1842 at stages 80
   and 90 (awake after the magic essence). Added at tick 2419 facing south, four ticks after the
-  pour. It was at
-  2352,4457.
+  pour. It was at 2352,4457.
 
 The hideout's other fairies keep their rows. `fairytale-ii-capture.test.cjs` covers the stages they
 appear at; the in-game check on RSPSApp/tsps#5958 saw both on these tiles.

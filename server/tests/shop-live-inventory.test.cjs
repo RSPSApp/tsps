@@ -64,6 +64,22 @@ test("a shop without a live inventory keeps the shared 516", () => {
   assert.equal(general.packetInventory, 516);
 });
 
+// The inns and Efaritay's Supplies (enum 5412's pub_* and 4824's efaritay_weapon_shop): each live
+// inventory is an infinite-stock one (its size equals the shop's item count), and the shop opens under it.
+test("every mapped live inventory is infinite stock and named on open", () => {
+  const { inventories } = require("../data/definitions/shop-inventories.json");
+  const shops = require("../data/definitions/shops.json");
+  assert.ok(Object.keys(inventories).length >= 16);
+  for (const [id, name] of Object.entries(inventories)) {
+    const inventory = CacheDefinitions.getInventoryId(name);
+    assert.ok([4824, 5412].some((e) => CacheDefinitions.getEnumValues(e).get(inventory) === 1), `${name} is infinite stock`);
+    const shop = shops.find((entry) => entry.id === Number(id));
+    assert.equal(ShopManager.inventoryId(shop.id), inventory, shop.name);
+  }
+  assert.equal(open("Deepfin Inn").scriptInventory, CacheDefinitions.getInventoryId("pub_deepfin"));
+  assert.equal(open("The Pandemonium (pub)").packetInventory, CacheDefinitions.getInventoryId("pub_pandemonium_2"));
+});
+
 test("every live inventory in shop-inventories.json names a real shop and a cache inventory", () => {
   const { inventories } = require("../data/definitions/shop-inventories.json");
   for (const [id, name] of Object.entries(inventories)) {

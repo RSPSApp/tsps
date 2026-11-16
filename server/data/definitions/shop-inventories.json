@@ -1,6 +1,21 @@
 {
-  "$comment": "Shops opened under their live inventory (gameval) instead of the shared shop wire inventory 516. The cache's shop scripts are given this id: script 5022 looks it up in enums 4824 and 5412, and an inventory marked there has infinite stock, drawn with no counts (script 1076: cc_setobject obj 1). Keyed by shop id in shops.json. Farming Supplies (the tool leprechauns, the Fossil Island squirrels and other farmers) is farmer_supplies, in enum 4824; the Wiki (Squirrel (Fossil Island)) lists all seven items at stock inf.",
+  "$comment": "Shops opened under their live inventory (gameval) instead of the shared shop wire inventory 516. The cache's shop scripts are given this id: script 5022 looks it up in enums 4824 and 5412, and an inventory marked there has infinite stock, drawn with no counts (script 1076: cc_setobject obj 1). Keyed by shop id in shops.json. Farming Supplies (the tool leprechauns, the Fossil Island squirrels and other farmers) is farmer_supplies, in enum 4824; the Wiki (Squirrel (Fossil Island)) lists all seven items at stock inf. Efaritay's Supplies is efaritay_weapon_shop (enum 4824). The pubs are enum 5412's pub_* inventories, each matched by its bartender's NPC gameval or the pub's town (Wiki) and its size, which equals the shop's item count: fortis_bartender_1/2 -> pub_fortis_1/2, auburn_bartender -> pub_auburnvale, nemus_retreat_bartender -> pub_nemus, pub_mistrock, aldarin_bartender -> pub_aldarin, cam_torum_bartender -> pub_cam_torum, quetzacalli_bartender -> pub_quetzacalli, port_roberts_bartender -> pub_port_roberts, deepfin_dwarf_brikka -> pub_deepfin, The King's Inn (Tal Teklan) -> pub_tal_teklan, The Sheared Ram (Lumbridge) -> pub_lumbridge, Myreque's Rest (Burgh de Rott) -> pub_burgh_de_rott, and The Pandemonium's 14 items -> pub_pandemonium_2 (the stock with Whirlpool surprise; pub_pandemonium is the 13 without it). Recorded shop_main_init calls name pub_fortis_1, pub_auburnvale, pub_cam_torum, pub_deepfin, pub_pandemonium(_2) and efaritay_weapon_shop for these shops (e.g. rsprox_transcripts/237/01098.txt, 232/03127.txt, 235/00935.txt, 235/00910.txt, 239/04273.txt).",
   "inventories": {
-    "1113": "farmer_supplies"
+    "1025": "pub_fortis_2",
+    "1026": "pub_auburnvale",
+    "1113": "farmer_supplies",
+    "1253": "pub_nemus",
+    "1316": "pub_lumbridge",
+    "1329": "pub_mistrock",
+    "1332": "pub_aldarin",
+    "1338": "pub_fortis_1",
+    "1339": "pub_tal_teklan",
+    "1341": "pub_cam_torum",
+    "1343": "pub_quetzacalli",
+    "1412": "pub_port_roberts",
+    "1413": "pub_deepfin",
+    "1415": "pub_pandemonium_2",
+    "1416": "efaritay_weapon_shop",
+    "1420": "pub_burgh_de_rott"
   }
 }

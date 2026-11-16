@@ -650,3 +650,142 @@ test("the enrage raises Defence by 35, Magic by 28 and Ranged by 31 on the real 
     core.TaskManager.cancelTasks(npc);
   }
 });
+
+// Wiki (Araxxor, Drops): "The rate to receive any halberd piece is 1/200. Players will not receive
+// duplicate pieces until each full set is obtained." The export listed each piece as its own 1/200
+// roll, so any piece was 3/200 and one kill could hand out two or three (issue #5927).
+test("Araxxor's halberd pieces are one 1/200 roll, so a kill can hand over at most one", () => {
+  const path = require("node:path");
+  require("../dist/Server").Server.installProductionPathResolver();
+  const Drops = require("../plugins/npcs/NpcDrops.plugin");
+  Drops._test.loadDrops();
+  const table = Drops._test.tablesByNpc.get(Shared.BOSS_ID)[0];
+  const pieces = table.entries.filter((entry) => Shared.HALBERD_PIECES.includes(entry.item_id));
+  assert.equal(pieces.length, 3, "point, blade and pommel");
+  for (const piece of pieces) {
+    assert.equal(piece.separate_roll, true);
+    assert.equal(piece.roll_group, "araxxor_halberd_piece", "one roll chooses the piece, not three");
+    assert.equal(piece.weight, 1);
+    assert.equal(piece.out_of, 600);
+  }
+  const anyPiece = pieces.reduce((sum, piece) => sum + piece.weight, 0) / pieces[0].out_of;
+  assert.equal(anyPiece, 1 / 200, "any piece, once per kill");
+
+  const player = { getEquipment: () => ({ get: () => null, getItems: () => [] }), getAttribute: () => undefined };
+  const npc = {
+    getId: () => Shared.BOSS_ID,
+    getLocation: () => new (require("../dist/game/model/Location").Location)(3631, 9814, 0),
+    getCurrentDefinition: () => ({ getName: () => "Araxxor", getCombatLevel: () => 890 }),
+  };
+  const originalRandom = Math.random;
+  try {
+    Math.random = () => 0; // every separate roll hits
+    const hit = Drops.__internals.rollTable(table, player, npc);
+    assert.equal(hit.filter((drop) => Shared.HALBERD_PIECES.includes(drop.itemId)).length, 1, "one piece at most");
+    Math.random = () => 0.999999; // none does
+    const miss = Drops.__internals.rollTable(table, player, npc);
+    assert.equal(miss.filter((drop) => Shared.HALBERD_PIECES.includes(drop.itemId)).length, 0, "no piece");
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test("each halberd piece drop is the next piece the player lacks; a new set starts after all three", () => {
+  const Corpse = require("../plugins/bosses/araxxor/Corpse.Araxxor");
+  Corpse.attach({
+    core: {
+      Bank: { TOTAL_BANK_TABS: 11, BANK_SEARCH_TAB_INDEX: 10 },
+      Animation: class {},
+      Item: class {},
+      ItemDefinition: { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => false }) },
+      World: { getRemoveNPCQueue: () => ({ push() {} }), getProcessCycle: () => 0 },
+      Task: class { stop() {} },
+      TaskManager: { submit: (task) => task.execute() },
+    },
+    persistAttribute() {}, onNpcDeath() {}, onCustomEvent() {}, onNpcInteraction() {},
+    emitCustomEvent() {}, getItemOnGroundManager: () => ({ registerLocation() {} }),
+  });
+  const attrs = new Map();
+  const player = {
+    performAnimation() {},
+    getAttribute: (key) => attrs.get(key),
+    setAttribute: (key, value) => attrs.set(key, value),
+    getInventory: () => ({ getAmount: () => 0 }),
+    getBank: () => ({ getAmount: () => 0 }),
+  };
+  const originalRandom = Math.random;
+  Math.random = () => 0; // the first of those still missing
+  try {
+    const set = [1, 2, 3].map(() => Corpse.nextHalberdPiece(player));
+    assert.deepEqual(set, Shared.HALBERD_PIECES, "each of the three once, in order");
+    assert.equal(Corpse.nextHalberdPiece(player), Shared.HALBERD_PIECES[0], "the fourth starts a new set");
+
+    const drops = Corpse.resolveHalberdPieces(player, [{ itemId: 29790, amount: 1 }, { itemId: 1434, amount: 2 }]);
+    assert.deepEqual(drops.map((drop) => drop.itemId), [Shared.HALBERD_PIECES[1], 1434], "the rolled piece becomes the next one lacked");
+    assert.deepEqual(drops.map((drop) => drop.amount), [1, 2], "the rest of the loot is untouched");
+
+    // An account that looted before the counter existed starts from what it holds.
+    const holder = {
+      getAttribute: () => undefined,
+      setAttribute() {},
+      getInventory: () => ({ getAmount: (id) => (id === Shared.HALBERD_PIECES[0] ? 2 : 0) }),
+      getBank: () => ({ getAmount: () => 0 }),
+    };
+    assert.equal(Corpse.nextHalberdPiece(holder), Shared.HALBERD_PIECES[1], "already-held point is not handed out again");
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test("the mirrorback recoils melee only from melee distance", () => {
+  const recoiled = [];
+  const fakeCore = {
+    CombatType: { MELEE: 0, RANGED: 1, MAGIC: 2 },
+    HitDamage: class { constructor(damage, mask) { this.damage = damage; this.mask = mask; } },
+    HitMask: { RED: 1 },
+    NpcIdentifiers: { EGG_10: 1, EGG_11: 2, EGG_12: 3, MIRRORBACK_ARAXYTE: 4, RUPTURA_ARAXYTE: 5, ACIDIC_ARAXYTE: 6 },
+    CombatMethod: class {},
+  };
+  Minions.attach({
+    core: fakeCore,
+    onNpcHitModify: () => {},
+    registerNpcCombatMethodProvider: () => {},
+    getBonusManager: () => null,
+  });
+
+  const at = (x, y) => ({ getX: () => x, getY: () => y, getZ: () => 0 });
+  const mirrorback = { getId: () => Shared.MINION_ID.mirrorback, getLocation: () => at(100, 100), getSize: () => 2 };
+  const playerAt = (x, y) => {
+    const player = {
+      isPlayer: () => true,
+      getAsPlayer: () => player,
+      getLocation: () => at(x, y),
+      getEquipment: () => ({ getWeapon: () => ({ getId: () => 1, getDefinition: () => ({ getName: () => "Scythe of vitur" }) }) }),
+      getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => recoiled.push(...hits) }) }),
+      getBonusManager: () => null,
+    };
+    return player;
+  };
+  const strike = (player, type = 0) => Minions.modifyHit({
+    npc: mirrorback,
+    hit: {
+      getAttacker: () => player,
+      getCombatType: () => type,
+      getHits: () => [{ getDamage: () => 20 }],
+      updateTotalDamage: () => {},
+    },
+  });
+
+  // The 2x2 body covers 100,100-101,101: 102,100 is edge-adjacent, 103,100 has a tile between.
+  strike(playerAt(102, 100));
+  assert.equal(recoiled.length, 1, "adjacent melee recoils");
+  assert.equal(recoiled[0].damage, 10, "half of the damage");
+  recoiled.length = 0;
+
+  strike(playerAt(103, 100));
+  assert.equal(recoiled.length, 0, "a tile between negates the recoil (Wiki)");
+  recoiled.length = 0;
+
+  strike(playerAt(102, 100), 1);
+  assert.equal(recoiled.length, 0, "ranged never recoils");
+});

@@ -56709,6 +56709,12 @@
       "variants": [
         "standard-dialogue"
       ]
+    },
+    {
+      "page": "Transcript:Fairytale I - Growing Pains",
+      "variants": [
+        "entering-zanaris-trying-to-talk-to-the-fairy-godfather-again"
+      ]
     }
   ],
   "5839": [
@@ -56716,12 +56722,6 @@
       "page": "Transcript:Fat Rocco",
       "variants": [
         "standard-dialogue"
-      ]
-    },
-    {
-      "page": "Transcript:Fairytale I - Growing Pains",
-      "variants": [
-        "entering-zanaris-trying-to-talk-to-the-fairy-godfather-again"
       ]
     }
   ],

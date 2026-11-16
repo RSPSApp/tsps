@@ -19,8 +19,9 @@
  * minigame, a game mode) took the respawn first. A members point on a free-to-play world is
  * Lumbridge.
  *
- * Not here: Merlin's Camelot point (it needs the Knight Waves Training Grounds, which are not
- * built) and the Respawn Teleport spell.
+ * Camelot is granted by the Knight Waves Training Ground ("respawn-point:grant" { player, key,
+ * set }, which also unlocks it); Merlin's change-back dialogue is not built yet. The Respawn
+ * Teleport spell is separate.
  */
 const fs = require("fs");
 const path = require("path");
@@ -103,6 +104,15 @@ function payToUnlock(player, key) {
   inventory.refreshItems?.();
   const value = player.getAttribute(UNLOCKED_ATTRIBUTE);
   player.setAttribute(UNLOCKED_ATTRIBUTE, [...(Array.isArray(value) ? value : []), key]);
+  return true;
+}
+
+/** A plugin grants a point the player earned (Knight Waves' Camelot), unlocking and optionally setting it. */
+function grantPoint({ player, key, set } = {}) {
+  if (!player || !load().points[key]) return false;
+  const value = player.getAttribute(UNLOCKED_ATTRIBUTE);
+  player.setAttribute(UNLOCKED_ATTRIBUTE, [...new Set([...(Array.isArray(value) ? value : []), key])]);
+  if (set === true) player.setAttribute(POINT_ATTRIBUTE, key);
   return true;
 }
 
@@ -190,8 +200,8 @@ function respawn(event) {
 
 module.exports = {
   name: "RespawnPoints",
-  description: "Respawn points: Lumbridge, or Falador, Edgeville, Prifddinas, Ferox Enclave, Kourend Castle or Civitas illa Fortis as their NPCs set them, for deaths and the items that send players to their respawn point.",
-  _test: { pointOf, locationOf, setPoint, allowed, payToUnlock, answerCondition, dialogueLine, dialogueChoice, dialogueAction, dialogueVariant, respawn, location, POINT_ATTRIBUTE, UNLOCKED_ATTRIBUTE },
+  description: "Respawn points: Lumbridge, or Falador, Edgeville, Prifddinas, Ferox Enclave, Kourend Castle, Civitas illa Fortis or Camelot as their NPCs or the Knight Waves set them, for deaths and the items that send players to their respawn point.",
+  _test: { pointOf, locationOf, setPoint, allowed, payToUnlock, grantPoint, answerCondition, dialogueLine, dialogueChoice, dialogueAction, dialogueVariant, respawn, location, POINT_ATTRIBUTE, UNLOCKED_ATTRIBUTE },
   register(pluginApi) {
     init(pluginApi);
     pluginApi.persistAttribute(POINT_ATTRIBUTE, null);
@@ -201,6 +211,7 @@ module.exports = {
     pluginApi.onCustomEvent("npc-dialogue:line", dialogueLine);
     pluginApi.onCustomEvent("npc-dialogue:action", dialogueAction);
     pluginApi.onCustomEvent("npc-dialogue:choice", dialogueChoice);
+    pluginApi.onCustomEvent("respawn-point:grant", grantPoint);
     pluginApi.onCustomEvent("respawn-point:location", location);
     pluginApi.onCustomEvent("player:respawn", respawn);
   },

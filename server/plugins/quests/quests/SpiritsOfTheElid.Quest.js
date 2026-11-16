@@ -151,6 +151,15 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   const BALLAD_ITEM_ID = ItemIdentifiers.BALLAD; // 6793
 
   const ROOT_OBJECT_ID = ObjectIdentifiers.ROOT_3; // 6382, above the waterfall
+  /**
+   * The rope goes on the root from the river's east bank. The waterfall's tiles leave no
+   * standable tile beside the 3x1 root on that bank (Wiki, Spirits of the Elid: follow the
+   * river "until you come to a waterfall ... use your rope on the root above the waterfall"),
+   * and the Shortest Path plugin's "Use Rope -> Root" transport starts at 3371,3129, three
+   * tiles from the root. Walk-to-object can only reach the bank's dead-end pocket, so a click
+   * from there is answered on the player's own tile; further off the ordinary walk runs first.
+   */
+  const ROOT_ROPE_USE_RANGE = 3;
   const CREVICE_OBJECT_ID = ObjectIdentifiers.CREVICE_9; // 10416, west of Nardah
   const CREVICE_ROPE_OBJECT_ID = ObjectIdentifiers.ROPE_10; // 10434, inside the crevice
   const CAVE_EXIT_OBJECT_ID = ObjectIdentifiers.CAVE_EXIT_18; // 10417
@@ -756,7 +765,8 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
         player.sendMessage("You need a rope to climb down here.");
         return;
       }
-      player.getInventory().deleteNumber(ROPE_ITEM_ID, 1);
+      // Live keeps the rope: no inventory update follows the descent, and rsprox 231/03019
+      // uses the same rope on the root three times with no packet in between.
       ensureDungeonExit();
       playRopeDescent(player);
       player.sendMessage("You tie the rope to the root and climb down into the cave.");
@@ -891,6 +901,17 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     );
   }
 
+  /** Tiles from `tile` to the loc's footprint, Chebyshev (0 on it). */
+  function distanceToFootprint(tile, object, definition) {
+    const x = object.getLocation().getX();
+    const y = object.getLocation().getY();
+    const width = Math.max(1, definition.getSizeX());
+    const length = Math.max(1, definition.getSizeY());
+    const dx = Math.max(x - tile.x, 0, tile.x - (x + width - 1));
+    const dy = Math.max(y - tile.y, 0, tile.y - (y + length - 1));
+    return Math.max(dx, dy);
+  }
+
   /**
    * None of the black golem door's four neighbours is reachable on the cache
    * collision map ((3371,9556) and (3373,9556) are standable but walled off,
@@ -900,7 +921,15 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
    * for door:toggle (which runs after the walk).
    */
   function handleObjectRoute(event) {
-    const { player, objectId, sourceLocation } = event;
+    const { player, objectId, sourceLocation, object, definition } = event;
+    // The east bank is two to three tiles from the root and cannot step closer.
+    if (objectId === ROOT_OBJECT_ID && sourceLocation && object && definition) {
+      const distance = distanceToFootprint(sourceLocation, object, definition);
+      if (distance >= 2 && distance <= ROOT_ROPE_USE_RANGE) {
+        event.destination = { ...sourceLocation };
+        return;
+      }
+    }
     if (!isQuestDoor(objectId)) return;
     if (sourceLocation) {
       doorClickSource.set(player, {

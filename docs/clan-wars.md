@@ -1442,7 +1442,7 @@ Primary behavior: [Vulnerability14968444](https://oldschool.runescape.wiki/w/Vul
 
 Participation-boundary disposal still clears queued incoming and still-queued outgoing hits without refund and preserves self/null-source damage. A caster leaving does not reverse a drain on a victim who remains in battle. Canonical alive departure/winner Ferox restoration may restore departing stats/HP/Prayer/energy/status; logout skips that restoration. No departed-victim drain-preservation guarantee. The explicit native fixture does not register full production CombinationRunes composition. Captured F2P spell-gate checks exercise the actual handler and ordinary dispatch/payment refusal with a lower free-spell positive; they do not load a complete F2P world.
 
-The source and fixture extension is initially unrun. Prospective native tests cover three cache objects, paid commits/context/impact, controlled accurate/splash and Ignore branches, relevant-stat recovery/race/new targets, charged/empty/other tomes and real roll observations, resources/no-Soul/sacks, book/mode/phase/actor/loadout refusals, hand-cast/paid elemental resumption, and representative safe lifecycle disposal/rejoin. No callback, build, native runtime or provider outcome is inferred from their registration. Earlier #5821's own1,073 belongs only to its exact source/job; later source requires its own reviewed admission and actual evidence.
+The implemented native fixtures cover three cache objects, paid commits/context/impact, controlled accurate/splash and Ignore branches, relevant-stat recovery/race/new targets, charged/empty/other tomes and real roll observations, resources/no-Soul/sacks, book/mode/phase/actor/loadout refusals, hand-cast/paid elemental resumption, and representative safe lifecycle disposal/rejoin. No callback, build, native runtime or provider outcome is inferred from their registration. Earlier #5821's own1,073 belongs only to its exact source/job; later source requires its own reviewed admission and actual evidence.
 
 
 ### Manual god-family extension (native Standard1)
@@ -1459,7 +1459,7 @@ Primary revisions: [Saradomin Strike15366110](https://oldschool.runescape.wiki/w
 
 A bounded revision235.1 recording3344 shows Claws unlock feedback after NPC casting, the exact Saradomin/StaffOfLight refusal and a native Charge button followed by red charged feedback/sound1651. It does not show Clan Wars god casting or prove normal costs, damage,100casts, cooldown or duration. Its boosted/scaled account state is not fixture setup; current242 widgets differ from that recording. Numeric mechanics above come from primary/canonical sources.
 
-The new source fixtures are unrun at this stage. They extend the existing native game/rules fixture with actual scoped MageArena/Statues/ChargeFade registration, real packet/payment/pending-context/resolver paths, outside-NPC and battle positive controls, skill/recovery/race/floor/boost cases, Charge/tomes/pouch/refusals, remembered-autocast/manual controls and safe lifecycle/rejoin. Positions, counters/cape progress, ticks, accuracy/max-hit and zero-damage branches are disclosed controlled setup. Captured F2P gate checks are not a full F2P world/loader proof; departed outsider refusal is not co-location/range or sole-causal area-guard proof. Source registration inventory is not a runtime result. The paired merged-production baseline must classify the actual first failure and downstream reach before a fixed selection. Prior #5874's own1164 belongs only to its tested head/job and is not transferred here. No rendered client, natural probability, exhaustive spellbook or full startup claim is made.
+The implemented native fixtures extend the existing native game/rules fixture with actual scoped MageArena/Statues/ChargeFade registration, real packet/payment/pending-context/resolver paths, outside-NPC and battle positive controls, skill/recovery/race/floor/boost cases, Charge/tomes/pouch/refusals, remembered-autocast/manual controls and safe lifecycle/rejoin. Positions, counters/cape progress, ticks, accuracy/max-hit and zero-damage branches are disclosed controlled setup. Captured F2P gate checks are not a full F2P world/loader proof; departed outsider refusal is not co-location/range or sole-causal area-guard proof. Source registration inventory is not a runtime result. For later fixture changes, the paired baseline must classify the actual first failure and downstream reach before a fixed selection. Prior #5874's own1164 belongs only to its tested head/job and is not transferred here. No rendered client, natural probability, exhaustive spellbook or full startup claim is made.
 
 
 ### Standard staff spells: Iban Blast and Magic Dart
@@ -1471,3 +1471,97 @@ Iban Blast retains Magic50, members, five Fire and one Death rune, base30Magic X
 Magic Dart retains members/Magic50/currentSlayer55, four Mind and one Death, base30Magic XP and the actual current-Magic maximum10+floor(Magic/10). Plain Slayer's staff has no enchanted-task charge/bonus route. Its native equip requirement uses base Magic50/Slayer55, independently of the current Slayer cast gate. Existing selectors are Iban47 and Dart18 in current cache enum1986 (17 is Crumble Undead). The plain Slayer list permits Dart/Crumble/Wave/Surge, so its support does not imply every elemental autocast.
 
 Canonical inventory/pouch and elemental tome supply/payment remain authoritative. Fire tome can supply Iban's Fire runes without an elemental damage boost or tome charge consumption; neither spell gains an elemental tome bonus. UI equipment icons are not consumed runes. Unsupported spell/weapon/mode/book, missing resources, actual skill/charge gates and participation restrictions still refuse before payment. Participation changes discard queued hits without restoring spent runes or Iban charges. Supplied positions, ticks, accuracy/max and damage branches are controlled fixture proof, not natural-probability, rendered-client, full-F2P-world, full-quest or global-startup proof. No direct retail Iban/Dart cast or final-one-charge PvP recording was established by the bounded qualification search.
+
+### Exact master wand in Standard
+
+Standard additionally accepts **only Master wand 6914**, with the existing
+empty-offhand or elemental-tome boundary. The supported spell set remains34.
+The wand may manually cast the existing20 elemental and9 curse/binding spells
+and use its existing normal elemental autocast selection. Canonical matching-staff
+gates still prevent its use for the three gods, Iban Blast and Magic Dart; gods
+remain manual-only. This is a finite TSPS equipment-support addition, not a retail
+ban or permission for every wand. LMS20560, note6915, placeholder18598, other
+wands/staves, Kodai, other books/modes, utilities and magical specials remain
+outside this addition. Existing Ancient/Arceuus wand capability outside this
+battle policy is unchanged. Acquisition, MTA reward spending and upgrades are
+not implemented or proved here.
+
+[Master wand revision15403014](https://oldschool.runescape.wiki/w/Master_wand?oldid=15403014)
+and [Autocast revision15379930](https://oldschool.runescape.wiki/w/Autocast?oldid=15379930)
+support members/one-handed/no quest, Magic60, +20 magic attack/defence and +10%
+magic damage. The actual cache242 object is `magictraining_wand_master`6914;
+param299=100 hydrates a10% bonus through ItemDefinition. The definition loader
+preserves cache bonuses instead of replacing them with the generated fallback
+zero. BonusManager and the canonical damage formula remain unchanged. No
+item-data repair, bonus override or generated JSON edit is part of this work.
+
+The current native equipment gate reads the loaded requirement array against
+base/max Magic60, independently of current spell-level requirements. Raw cache
+metadata434/436 also contains Magic/55; that literal is retained and disclosed,
+but the inspected equipment gate does not read it. This addition preserves the
+current60 gate and does not certify retail55 or repair requirements. With no
+other gear/prayer modifiers, the real10% gives player-target Fire Wave maximum22
+versus20 with a plain staff. The wand supplies no elemental runes. Inventory,
+pouch, tome supply/charge, member, book, mode and participation gates remain
+canonical; paid resources are not refunded by queue disposal.
+
+The implemented native fixture extension covers exact cache
+stats/loaded gate, native Wield and manual/selector/ordinary Attack, outside paid
+controls and battle plain-staff positive before the missing-admission target,
+real payment/context/hit/resolution/rune/XP/HP, max/current levels, excluded
+aliases/unwearable objects, source-aware pouch/tome audits, gear bonus removal
+and restoration, lifecycle disposal and safe rejoin. Forfeit uses the existing
+mapped object dispatcher with an explicitly held impact window and restoration
+in finally; this is not an encoded object-click or natural flight-time proof.
+The captured F2P equip hook is not a full F2P loader, and the departed outsider
+is not a co-location/range or sole-cause test. Positions, actors/levels, ticks
+and accuracy/max are controlled. No runtime, rendered client, natural
+probability, full quest/acquisition or global-startup result follows from source
+registration alone. Prior5938's1457 passes belong only to its own tested head/job.
+
+
+### Execution evidence for the completed fixture extensions
+
+The higher-curse, god-family and exact Master-wand fixtures above were exercised
+in the whole selected game/rules files on tested head
+`e490d2358b0d216896be50711158d5e5d1eeede6` (tree
+`231374edc7233ba4d98e2a318827426be2802caf`). [PR #5946](https://github.com/RSPSApp/tsps/pull/5946)
+records the runnable setup, literal output and independent review of that run:
+1,570/1,570 tests across eleven files, including all 81 Master-wand cases.
+Those results belong only to that tested revision; they do not establish a run
+of its later merge or transfer to later source. The controlled setup and retail,
+client, probability, acquisition and startup limits above still apply.
+
+
+### Exact apprentice wand in Standard
+
+Standard additionally accepts **only Apprentice wand 6910**, with the existing
+empty-offhand or elemental-tome boundary. The finite34-spell set,29 generic manual
+spells and20 eligible Normal elemental autocasts are unchanged. Canonical five
+matching-staff gates and manual-only god policy remain authoritative. This adds
+one exact identity, not the whole wand family: LMS20556, note6911,
+placeholder18596, Teacher6912, Beginner6908 and other wands/books/modes/selectors,
+utilities and magical specials remain outside this addition. MTA acquisition,
+point spending, upgrades and any equipment/data repair are out of scope.
+
+[Apprentice wand revision15182775](https://oldschool.runescape.wiki/w/Apprentice_wand?oldid=15182775)
+identifies a members, one-handed staff with no quest requirement, Magic50,
++10 Magic attack/defence and no Magic damage bonus. The actual cache242 object
+`magictraining_wand_appr`6910 has params3=10/8=10 and no299. ItemDefinition cache
+hydration and the existing loader preserve these stats; BonusManager and the
+canonical damage formula remain the producers. Loaded max/base Magic50 agrees
+with the primary source, independently of current spell-level requirements.
+Without other gear/prayer modifiers, player-target Fire Wave remains maximum20,
+the same as a plain staff. The wand supplies no elemental runes. Actual offhand
+bonuses and inventory/pouch/tome supply/charges remain canonical.
+
+The native fixtures cover cache/loaded/worn identity, native Wield/manual/Normal
+selector/ordinary Attack repeats, outside paid controls and a plain-staff battle
+positive, real payment/context/PendingHit/resolution/runes/HP/XP, max49/50 equip
+versus current cast levels, exclusions/refusals/gear restoration and safe
+lifecycle disposal/rejoin. Forfeit uses the actual mapped dispatcher with a held
+impact window and observed-flag restoration in finally. These are controlled
+positions/levels/ticks/accuracy/max-hit checkpoints, not natural probability,
+encoded object-click, full F2P loader, acquisition, client or global-startup proof.
+Source registration alone establishes no runtime outcome. Earlier revision/run
+results retain their original attribution; no passes transfer to this source.

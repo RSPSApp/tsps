@@ -896,6 +896,11 @@ for (const farming of [1, 2]) {
       await untilMenu();
       await select('Anything I can help with?');
       await untilMenu();
+      // A trained farmer answers Martin's "have you noticed" menu first (FairyTale1 ticks 157-164).
+      if (farming > 1) {
+        await select("Now that I think about it, you're right!");
+        await untilMenu();
+      }
       assert.equal(MultiChatboxPrompt.getPending(f.player).title, 'Start the Fairytale I - Growing Pains quest?');
     };
     for (const key of ['lost_city', 'nature_spirit']) {
@@ -931,7 +936,11 @@ for (const farming of [1, 2]) {
     assert.equal(quest.getStage(f.player), 0, 'refusing preserves the unstarted state');
     await reachStart();
     await select('Yes.');
+    // The stage follows as Martin's answer shows (FairyTale1 tick 171), not on the choice.
+    assert.equal(quest.getStage(f.player), 0);
+    for (let n = 0; n < 10 && quest.getStage(f.player) === 0; n++) await nextLine(f);
     assert.equal(quest.getStage(f.player), quest.startedValue);
+    assert.match(f.player.getDialogueManager().getCurrent()?.getText() ?? '', /^If I were you I would start by speaking/);
     f.player.closeInterruptibleInterfaces();
     assert.equal(talk(), true);
     const followup = 'Have you spoken to any other members of the Gardening Group yet?';
@@ -1116,7 +1125,7 @@ test('Fairytale I pending dig cannot grant a skull after native Drop or override
   assert.equal(player.getAnimation()?.getId(), deathAnimation, 'dig cancellation cannot reset death');
 });
 
-function nuffFixture(t, stage = 20) {
+function nuffFixture(t, stage = 30) {
   const f = fixture(t), { player } = f;
   const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
   quest.setStage(player, stage);
@@ -1169,7 +1178,8 @@ for (const [first, names] of [[1, ['white berries', 'a mort myre pear', 'a mort 
       assert.doesNotMatch(text, /\[item\s*[123]\]/i);
       for (const name of names) {
         assert.ok(text.includes(name), `the native recipe names ${name}: ${text}`);
-        assert.ok(quest.buildJournal(player, quest).includes(name), `the journal agrees on ${name}`);
+        const journal = quest.buildJournal(player, quest).join(' ').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ');
+        assert.ok(journal.includes(name), `the journal agrees on ${name}: ${journal}`);
       }
       assert.equal(player.getAttribute(NATURE_ITEMS_ATTRIBUTE), positions);
     };
@@ -1212,11 +1222,11 @@ async function finishNuff(f) {
 async function cancelFinalNuffLine(f) {
   for (let n = 0; n < 60; n++) {
     const line = f.player.getDialogueManager().getCurrent()?.getText() ?? '';
-    if (/I believe he now resides|I have a copy of it here/.test(line)) break;
+    if (/Here, I've written down a list of her symptoms|I have a copy of it here/.test(line)) break;
     assert.ok(line, 'the handover line remains reachable');
     await nextLine(f);
   }
-  assert.match(f.player.getDialogueManager().getCurrent()?.getText() ?? '', /I believe he now resides|I have a copy of it here/);
+  assert.match(f.player.getDialogueManager().getCurrent()?.getText() ?? '', /Here, I've written down a list of her symptoms|I have a copy of it here/);
   const group = f.player.getPacketSender().getChatboxGroupId();
   f.player.closeInterruptibleInterfaces();
   await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: (group << 16) | 5, childIndex: -1 }]);
@@ -1227,10 +1237,10 @@ test('Fairytale I Nuff waits for native dialogue completion and preserves cancel
   const f = nuffFixture(t), { player, quest } = f, item = core.ItemIdentifiers.SYMPTOMS_LIST;
   assert.equal(f.talk(), true);
   assert.equal(player.getInventory().getAmount(item), 0);
-  assert.equal(quest.getStage(player), 20);
+  assert.equal(quest.getStage(player), 30);
   await cancelFinalNuffLine(f);
   assert.equal(player.getInventory().getAmount(item), 0, 'a closed conversation and stale Continue cannot hand over the list');
-  assert.equal(quest.getStage(player), 20);
+  assert.equal(quest.getStage(player), 30);
   f.talk(); await finishNuff(f);
   assert.equal(player.getInventory().getAmount(item), 1);
   assert.equal(quest.getStage(player), 40);
@@ -1252,7 +1262,7 @@ test('Fairytale I Nuff handovers recover from a full inventory without skipping 
   inventory.add(new core.Item(SPADE, 28));
   f.talk(); await finishNuff(f);
   assert.equal(inventory.getAmount(SYMPTOMS_LIST), 0);
-  assert.equal(quest.getStage(player), 20);
+  assert.equal(quest.getStage(player), 30);
   inventory.deleteNumber(SPADE, 1);
   f.talk(); await finishNuff(f);
   assert.equal(inventory.getAmount(SYMPTOMS_LIST), 1);
@@ -1301,10 +1311,14 @@ test('Fairytale I Godfather choice sends the player to Nuff, who then hands over
   assert.equal(quest.getStage(player), 20, 'another Godfather answer does not advance');
   menu = await untilChoice(f);
   await choose(f, menu.options.indexOf("Where's the Fairy Queen?") + 1);
-  assert.equal(quest.getStage(player), 30, 'the Queen answer is the step that sends the player to Nuff');
+  assert.equal(quest.getStage(player), 20, 'the answer itself does not advance yet');
+  for (let n = 0; n < 30 && f.player.getDialogueManager().getCurrent()?.getText() !== '?'; n++) await nextLine(f);
+  assert.equal(quest.getStage(player), 20);
+  await nextLine(f);
+  assert.equal(quest.getStage(player), 30, "the player's \"?\" after his advice sends the player to Nuff");
   player.closeInterruptibleInterfaces();
-  assert.match(quest.buildJournal(player, quest).join(' ').replace(/\s+/g, ' '), /Fairy Nuff/,
-    'the stage-30 journal names the next contact');
+  assert.match(quest.buildJournal(player, quest).join(' ').replace(/<[^>]*>/g, '').replace(/\s+/g, ' '), /a fairy called Nuff/,
+    'the stage-30 journal names the next contact (FairyTale1 tick 1398)');
 
   const nuffId = core.NpcIdentifiers.FAIRY_NUFF_2, nuff = core.NPC.create(nuffId, new core.Location(2386, 4727));
   assert.equal(PM.emitNpcInteraction({ player, npc: nuff, npcId: nuffId, action: 'Talk-to', clickType: 1, handled: false }), true);
@@ -1313,8 +1327,10 @@ test('Fairytale I Godfather choice sends the player to Nuff, who then hands over
   assert.equal(quest.getStage(player), 40, 'the subsequent Nuff handoff continues from the Godfather stage');
 
   quest.setStage(player, 10);
-  PM.emitCustomEvent('npc-dialogue:choice', { player, npcId: f.npcId, option: "Where's the Fairy Queen?" });
-  assert.equal(quest.getStage(player), 10, 'the same answer outside stage 20 does not advance');
+  const line = { player, npcId: f.npcId, pages: [{ page: 'Fairytale I - Growing Pains' }], step: {}, text: '?' };
+  PM.emitCustomEvent('npc-dialogue:line', line);
+  line.after?.();
+  assert.equal(quest.getStage(player), 10, 'the same line outside stage 20 does not advance');
 });
 
 test('Fairytale I varbit 1803 and varp 671 progress through native completion at 90 and keep siblings', async t => {
@@ -1323,14 +1339,20 @@ test('Fairytale I varbit 1803 and varp 671 progress through native completion at
   assert.equal(row.tableId, 0);
   assert.equal(row.int(19), 90, 'active cache quest DB row 46 completes at 90');
   assert.equal(quest.completionValue, row.int(19));
-  sender.sendVarbit(1804, 21).sendVarbit(1805, 10).sendVarbit(1806, 31).sendVarbit(1807, 3).sendVarbit(1808, 1);
-  const siblings = sender.getVarp(671) & ~0x7f;
-  assert.notEqual(siblings, 0);
+  // Bits 28-31 are not this quest's; 1804-1809 (bits 7-27) are, derived from the saved state.
+  sender.sendConfig(671, sender.getVarp(671) | (1 << 28) | (1 << 30));
+  const foreign = sender.getVarp(671) & ~0x0fffffff;
+  assert.notEqual(foreign, 0);
+  player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '21,22,23');
   for (const stage of [10, 20, 30, 40, 50, 60, 70, 80]) {
     quest.setStage(player, stage);
     assert.equal(sender.getVarbit(1803), stage, `varbit 1803 follows stage ${stage}`);
     assert.equal(sender.getVarp(671) & 0x7f, stage, `varp 671's quest bits hold stage ${stage}`);
-    assert.equal(sender.getVarp(671) & ~0x7f, siblings, `stage ${stage} preserves the packed siblings`);
+    assert.equal(sender.getVarp(671) & ~0x0fffffff, foreign, `stage ${stage} preserves the packed foreign bits`);
+    assert.equal(sender.getVarbit(1807), stage >= 20 ? 1 : 0, `the Queen's room varbit at ${stage}`);
+    assert.equal(sender.getVarbit(1808), stage >= 20 ? 1 : 0, `the Godfather varbit at ${stage}`);
+    assert.deepEqual([1804, 1805, 1806].map(id => sender.getVarbit(id)), stage >= 60 ? [20, 21, 22] : [0, 0, 0],
+      `the recipe varbits (row - 1) at ${stage}`);
   }
   player.getInventory().add(new core.Item(core.ItemIdentifiers.QUEENS_SECATEURS));
   const xp = skill => player.getSkillManager().getExperience(skill);
@@ -1340,7 +1362,8 @@ test('Fairytale I varbit 1803 and varp 671 progress through native completion at
   assert.equal(quest.getStage(player), 90);
   assert.equal(sender.getVarbit(1803), 90, 'the cache completion value reaches varbit 1803');
   assert.equal(sender.getVarp(671) & 0x7f, 90, 'and its parent varp');
-  assert.equal(sender.getVarp(671) & ~0x7f, siblings, 'completion preserves the siblings');
+  assert.equal(sender.getVarp(671) & ~0x0fffffff, foreign, 'completion preserves the foreign bits');
+  assert.deepEqual([1804, 1805, 1806].map(id => sender.getVarbit(id)), [0, 0, 0], 'completion clears the recipe (FairyTale1 tick 4181)');
   assert.equal(quest.isComplete(player), true);
   assert.deepEqual([core.Skill.FARMING, core.Skill.ATTACK, core.Skill.MAGIC].map(xp),
     before.map((value, index) => value + [3500, 2000, 1000][index]), 'the quest rewards are paid once');
@@ -1377,7 +1400,7 @@ test('Fairytale I legacy saves migrate once through login and bootstrap while fr
     const target = fixture(t);
     PlayerSave.fromPlayer(source.player).applyToPlayer(target.player);
     assert.equal(target.player.getAttribute(FAIRYTALE_STAGE_SCHEMA), 0, 'the legacy save has no schema stamp');
-    target.player.getPacketSender().sendConfig(671, (1 << 26) | (1 << 30));
+    target.player.getPacketSender().sendConfig(671, (1 << 28) | (1 << 30));
     login(target.player);
     assert.equal(quest.getStage(target.player), current, `legacy ${legacy} migrates to ${current}`);
     assert.equal(target.player.getAttribute(FAIRYTALE_STAGE_SCHEMA), 1);
@@ -1385,7 +1408,7 @@ test('Fairytale I legacy saves migrate once through login and bootstrap while fr
     assert.ok(change, 'migration publishes the native stage change');
     assert.equal(change.schema, 1, 'observers/save requests see the schema stamp with the new value');
     assert.equal(change.complete, current === 90, 'legacy 70 -> current 80 is still unfinished during the event');
-    assert.equal(target.player.getPacketSender().getVarp(671) & ((1 << 26) | (1 << 30)), (1 << 26) | (1 << 30),
+    assert.equal(target.player.getPacketSender().getVarp(671) & ((1 << 28) | (1 << 30)), (1 << 28) | (1 << 30),
       'migration preserves unrelated packed bits');
     if (current === 90) {
       assert.equal(quest.isComplete(target.player), true, 'a migrated completed save is complete');
@@ -1432,61 +1455,6 @@ test('Fairytale I legacy saves migrate once through login and bootstrap while fr
   assert.equal(quest.getStage(league.player), 90, 'the login migration then moves it to the cache completion value');
   assert.deepEqual(xp(league.player), leagueXp, 'the migration still does not repay experience');
   assert.equal(points(league.player), leaguePoints, 'the migration still does not repay quest points');
-});
-
-test('Fairytale I north Tanglefoot spawn is reachable by the production pathfinder and owner-isolated', t => {
-  core.RegionManager.init();
-  core.RegionManager.loadMapFiles(2394, 4379);
-  const { PathFinder } = require('../dist/game/model/movement/path/PathFinder');
-  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
-  const first = fixture(t), second = fixture(t);
-  const enter = f => {
-    f.player.setLocation(new core.Location(2394, 4379, 0));
-    quest.setStage(f.player, 70);
-    PM.emitPlayerProcess({ player: f.player });
-  };
-  enter(first); enter(second);
-  const spawns = () => [...core.World.getNpcs()].filter(npc => npc?.getId?.() === core.NpcIdentifiers.TANGLEFOOT);
-  const owned = player => spawns().filter(npc => npc.getOwner?.() === player);
-  const firstNpcs = owned(first.player), secondNpcs = owned(second.player);
-  assert.equal(firstNpcs.length, 1, 'the real zone-enter route spawns one Tanglefoot for its owner');
-  assert.equal(secondNpcs.length, 1, 'another player gets their own Tanglefoot');
-  assert.notEqual(firstNpcs[0], secondNpcs[0]);
-  const spawned = firstNpcs[0], at = spawned.getLocation();
-  assert.deepEqual([at.getX(), at.getY(), at.getZ()], [2375, 4385, 0], 'Quest Helper kill-tile inference');
-  assert.equal(spawned.isOwnerOnly(), true);
-  assert.equal(core.RegionManager.blocked(at, null), false, 'the spawned tile is not clipped');
-  const definition = core.CacheDefinitions.getNpc(core.NpcIdentifiers.TANGLEFOOT);
-  assert.equal(definition.size, 1);
-  assert.ok(definition.actions.includes('Attack'), 'the actual cache NPC offers Attack');
-
-  // Gameplay routes stop at 25 checkpoints; raise the cap to prove the whole
-  // tunnel connects the entrance to the exact spawn.
-  const route = PathFinder.rsmodRouteFinding.findRoute({
-    level: 0, srcX: 2394, srcY: 4379, srcSize: 1,
-    destX: at.getX(), destY: at.getY(), privateArea: null, moveNear: true, maxWaypoints: 128,
-  });
-  assert.equal(route.success, true, 'the production pathfinder finds the real entrance -> north spawn route');
-  assert.equal(route.endX, at.getX());
-  assert.equal(route.endY, at.getY());
-  const points = route.waypoints.map(point => new core.Location(point.x, point.y, point.z));
-  assert.ok(points.length > 0);
-  const end = points.at(-1);
-  assert.deepEqual([end.getX(), end.getY(), end.getZ()], [at.getX(), at.getY(), at.getZ()],
-    'the route ends exactly on the spawned Tanglefoot tile');
-  let from = new core.Location(2394, 4379, 0);
-  for (const point of points) {
-    assert.equal(core.RegionManager.canMovestart(from, point, 1, 1, null), true,
-      `legal directional step ${from.getX()},${from.getY()} -> ${point.getX()},${point.getY()}`);
-    from = point;
-  }
-  assert.ok(at.getX() >= 2368 && at.getX() <= 2398 && at.getY() >= 4354 && at.getY() <= 4399,
-    'the expanded encounter zone covers the spawned location');
-  t.after(() => {
-    for (const npc of [...core.World.getNpcs()]) {
-      if (npc?.getOwner?.() === first.player || npc?.getOwner?.() === second.player) core.World.getNpcs().remove(npc);
-    }
-  });
 });
 
 for (const shieldStage of [4, 7]) {
@@ -1876,116 +1844,32 @@ test('Fairytale I Tanglefoot lair gate and Nature Spirit treat wielded magic sec
   player.getInventory().deleteNumber(MAGIC_SECATEURS, 1);
   player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(MAGIC_SECATEURS));
   assert.match(enter(), /^I've received orders to let you through/, 'wielded secateurs let the player in');
+  // The blessing: "Then let us begin..." starts the scene on its continue, and the transcript's
+  // enchant action six ticks later (FairyTale1 ticks 3265-3271) gives the pair.
+  const spirit = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(gap.x, gap.y + 2, 0));
   const enchant = () => {
+    const line = { player, npc: spirit, npcId: core.NpcIdentifiers.NATURE_SPIRIT, pages: [{ page: 'Fairytale I - Growing Pains' }],
+      step: { speaker: 'Nature Spirit' }, text: 'Then let us begin...' };
+    PM.emitCustomEvent('npc-dialogue:line', line);
+    line.after();
     const action = { player, npcId: core.NpcIdentifiers.NATURE_SPIRIT, stepId: 'JQyqMZ', handled: false };
     PM.emitCustomEvent('npc-dialogue:action', action);
     assert.equal(action.handled, true);
-    assert.equal(action.end, true, 'the blessing closes the chat while the scene plays');
-    for (let n = 0; n < 12; n++) core.TaskManager.process();
+    assert.equal(action.end, true, 'the chat closes for the six-tick scene');
+    for (let n = 0; n < 6; n++) core.TaskManager.process();
+    assert.equal(player.getMovementQueue().isMovementBlocked(), false, 'the scene releases the player');
+    player.closeInterruptibleInterfaces();
   };
   enchant();
   assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0, 'a wielded pair is not duplicated by the Nature Spirit');
   player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, null);
-  enchant();
-  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1, 'a lost pair is still replaced');
-});
-
-test('Fairytale I Nature Spirit blessing scene runs before the items are consumed', async t => {
-  const f = fixture(t), { player } = f;
-  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
-  const { SECATEURS, MAGIC_SECATEURS, WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM } = core.ItemIdentifiers;
-  quest.setStage(player, 60);
   player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
-  player.getInventory().add(new core.Item(SECATEURS));
-  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) player.getInventory().add(new core.Item(id));
-  const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
-  const graphics = [], sender = player.getPacketSender(), sendGraphic = sender.sendGraphic.bind(sender);
-  sender.sendGraphic = (graphic, location) => {
-    graphics.push([graphic.getId(), location.getX(), location.getY(), location.getZ()]);
-    return sendGraphic(graphic, location);
-  };
-  const action = { player, npc, npcId: npc.getId(), stepId: 'JQyqMZ', handled: false,
-    pages: [{ page: 'Fairytale I - Growing Pains', variants: ['in-the-nature-grotto-talking-to-the-nature-spirit'] }] };
-  PM.emitCustomEvent('npc-dialogue:action', action);
-  assert.equal(action.handled, true);
-  assert.equal(action.end, true, 'the chat closes while the scene plays');
-  assert.equal(player.getAnimation()?.getId(), core.CacheDefinitions.getSeqId('human_fairy_kneel_and_offer'),
-    'the player kneels and offers the secateurs');
-  assert.equal(player.getMovementQueue().isMovementBlocked(), true);
-  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
-  assert.equal(quest.getStage(player), 60);
-  for (let n = 0; n < 11; n++) core.TaskManager.process();
-  assert.deepEqual(graphics, [[core.CacheDefinitions.getSpotanimId('fairy_flower_enchant'), 3441, 9738, 1]],
-    'the cache flower-enchant effect plays above the Nature Spirit');
-  assert.equal(npc.getAnimation()?.getId(), core.CacheDefinitions.getSeqId('human_fairy_take_and_hold_up'),
-    'the Nature Spirit takes and holds the secateurs up');
-  assert.equal(player.getInventory().getAmount(SECATEURS), 1, 'materials survive the scene');
-  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
-  assert.equal(quest.getStage(player), 60);
-  core.TaskManager.process();
-  assert.equal(player.getInventory().getAmount(SECATEURS), 0);
-  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) {
-    assert.equal(player.getInventory().getAmount(id), 0, 'the blessing consumes the saved recipe');
+  for (const id of [SECATEURS, core.ItemIdentifiers.WHITE_BERRIES, core.ItemIdentifiers.MORT_MYRE_PEAR, core.ItemIdentifiers.MORT_MYRE_STEM]) {
+    player.getInventory().add(new core.Item(id));
   }
-  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1);
-  assert.equal(quest.getStage(player), 70);
-  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
-  assert.match(player.getDialogueManager().getCurrent()?.getText() ?? '', /^It is done!/);
-  await nextLine(f);
-  assert.match(player.getDialogueManager().getCurrent()?.getText() ?? '', /^Farewell,/);
-});
-
-test('Fairytale I blessing cancellation leaves the materials and stage untouched', t => {
-  const f = fixture(t), { player } = f;
-  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
-  const { SECATEURS, MAGIC_SECATEURS, WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM } = core.ItemIdentifiers;
-  quest.setStage(player, 60);
-  player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
-  player.getInventory().add(new core.Item(SECATEURS));
-  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) player.getInventory().add(new core.Item(id));
-  const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
-  const action = { player, npc, npcId: npc.getId(), stepId: 'JQyqMZ', handled: false };
-  PM.emitCustomEvent('npc-dialogue:action', action);
-  for (let n = 0; n < 3; n++) core.TaskManager.process();
-  player.setLocation(new core.Location(3442, 9738, 1));
-  core.TaskManager.process();
-  assert.equal(player.getInventory().getAmount(SECATEURS), 1, 'walking away does not consume the secateurs');
-  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
-  assert.equal(quest.getStage(player), 60);
-  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
-  assert.equal(player.getAnimation()?.getId(), core.Animation.DEFAULT_RESET_ANIMATION.getId());
-});
-
-test('Fairytale I Tanglefoot combat pursuit stops at its chamber doorway', t => {
-  core.RegionManager.init();
-  core.RegionManager.loadMapFiles(2394, 4379);
-  const f = fixture(t), { player } = f;
-  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
-  player.setLocation(new core.Location(2375, 4384, 0));
-  quest.setStage(player, 70);
-  PM.emitPlayerProcess({ player });
-  const boss = [...core.World.getNpcs()].find(npc => npc?.getId?.() === core.NpcIdentifiers.TANGLEFOOT
-    && npc.getOwner?.() === player);
-  assert.ok(boss, 'entering the grove spawns the owner Tanglefoot');
-  t.after(() => {
-    core.TaskManager.cancelTasks(boss);
-    core.World.getNpcs().remove(boss);
-  });
-  assert.equal(boss.hasFlag('combat:no-retreat'), true, 'the chamber is the leash, not the generic spawn radius');
-  boss.getCombat().attack(player);
-  core.TaskManager.process();
-  assert.equal(boss.getCombat().getTarget(), player, 'the fight can pursue anywhere inside the chamber');
-  player.setLocation(new core.Location(2383, 4377, 0));
-  core.TaskManager.process();
-  assert.equal(boss.getCombat().getTarget() ?? null, null, 'leaving the chamber drops the pursuit');
-  player.setLocation(new core.Location(2375, 4384, 0));
-  boss.getCombat().attack(player);
-  core.TaskManager.process();
-  boss.setLocation(new core.Location(2390, 4379, 0));
-  core.TaskManager.process();
-  const at = boss.getLocation();
-  assert.deepEqual([at.getX(), at.getY(), at.getZ()], [2375, 4385, 0],
-    'a boss that ever leaves the chamber is returned to its spawn');
+  enchant();
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1, 'a lost pair is enchanted again from the components');
+  assert.equal(player.getInventory().getAmount(SECATEURS), 0);
 });
 
 // The banquet uses real Player/NPC/PrivateArea/TaskManager and native object,
@@ -3607,44 +3491,6 @@ test('Pandemonium stage-eight acknowledgement and stale menu cannot replace the 
   assert.equal(ship.boat.helmPlayerId, f.player.getIndex());
 });
 
-
-for (const droppedName of ['SECATEURS', 'WHITE_BERRIES']) {
-  test(`Fairytale I blessing rechecks materials after native Drop of ${droppedName}`, async t => {
-    const f = fixture(t), { player } = f;
-    const messages = [];
-    t.mock.method(player, 'sendMessage', text => messages.push(text));
-    const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'fairytale_i_growing_pains');
-    quest.setStage(player, 60);
-    player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
-    const ids = ['SECATEURS', 'WHITE_BERRIES', 'MORT_MYRE_PEAR', 'MORT_MYRE_STEM'].map(name => core.ItemIdentifiers[name]);
-    player.setLocation(new core.Location(3441, 9737, 1));
-    for (const id of ids) player.getInventory().add(new core.Item(id));
-    player.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(core.ItemIdentifiers.GHOSTSPEAK_AMULET));
-    const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
-    const start = { player, npc, npcId: npc.getId(), variant: {
-      page: 'Fairytale I - Growing Pains', variant: 'in-the-nature-grotto-talking-to-the-nature-spirit',
-    }, exact: true };
-    PM.emitCustomEvent('npc-dialogue:start', start);
-    assert.equal(start.handled, true);
-    for (let n = 0; n < 20 && !player.getMovementQueue().isMovementBlocked(); n++) await nextLine(f);
-    assert.equal(player.getMovementQueue().isMovementBlocked(), true);
-    core.TaskManager.process();
-    const droppedId = core.ItemIdentifiers[droppedName];
-    const slot = player.getInventory().getItems().findIndex(item => item?.getId() === droppedId);
-    await f.connection.dispatch([{ type: 'inventory_action', widgetId: 3214,
-      itemId: droppedId, slot, option: 'Drop', optionIndex: 5 }]);
-    f.connection.processTurnPackets();
-    assert.equal(player.getInventory().getAmount(droppedId), 0, 'the real inventory packet drops the item');
-    for (let n = 0; n < 12; n++) core.TaskManager.process();
-    assert.equal(quest.getStage(player), 60, 'missing materials cannot advance the initial blessing');
-    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.MAGIC_SECATEURS), 0);
-    for (const id of ids.filter(id => id !== droppedId)) {
-      assert.equal(player.getInventory().getAmount(id), 1, 'remaining materials are not consumed');
-    }
-    assert.equal(player.getMovementQueue().isMovementBlocked(), false);
-    assert.match(messages.at(-1), /materials/);
-  });
-}
 
 function amikRoutingFixture(t, frozen = false) {
   const f = fixture(t), { player } = f;

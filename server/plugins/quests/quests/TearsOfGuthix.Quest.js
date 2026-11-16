@@ -29,7 +29,8 @@
  * The minigame plugin supplies the cave, eligibility, timer, bowl and tear streams.
  * Gaps: the surface Dark hole's rope entry belongs to shared world travel. The
  * recordings pin the message, 2046/2047, the landings and the timing (float-up
- * seven ticks after the answer, float-down 28 ticks later). Temple of Ikov does
+ * six or seven ticks after the answer, float-down max(|dx|,|dy|) + 5 ticks
+ * later). Temple of Ikov does
  * not track the Lucien choice, so both Lucien story conditions answer false.
  *
  * Chasm of Tears (cache region 12948, plane 2), from the cache and the shared
@@ -47,10 +48,10 @@
  *   Attract, so both that option and using the lit lantern on them use the
  *   quest-scoped eight-tile reach and projectile-clip exception to route to a
  *   valid shore tile without entering the pool. The handler sends the recorded
- *   attract line, waits seven ticks for the creature, floats the player up
- *   (2046), glides them over the chasm (2048) and lands on the far side
- *   (3224,9504 from the north; 3224,9530 from the south) with float-down (2047)
- *   28 ticks after the float-up.
+ *   attract line, waits six or seven ticks for the creature, floats the player
+ *   up (2046), glides them across with a straight-line force movement and lands
+ *   on the far side (3224,9504 from the north; 3224,9530 from the south) with
+ *   float-down (2047) max(|dx|,|dy|) + 5 ticks after the float-up.
  * - The chasm's rocks (6672 on the south shelf, 6673 by the north ledge) move
  *   the player to the tile beyond the rock (rock x ± 1), not a teleport between
  *   the ledges.

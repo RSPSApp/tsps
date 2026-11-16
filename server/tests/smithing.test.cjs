@@ -27,6 +27,7 @@ function registerSmithing() {
       if (name === "smithing:success") successEvents.push(request);
       if (name === "smithing:anvil-access") request.denied = denyAnvil;
       if (name === "quest:is-complete") request.complete = request.player.quests?.has(request.key) ?? false;
+      if (name === "smithing:unlocked" && request.player.barbarianTrained === true) request.allowed = true;
       for (const handler of events.get(name) ?? []) handler(request);
     },
     persistAttribute() {},
@@ -799,15 +800,35 @@ test("dragon sq shield halves are repaired at an anvil after the message boxes",
 
 test("a barbarian anvil makes spears and hastas from a bar and a log", () => {
   const player = playerWith(I.STEEL_BAR, 2);
-  player.items.set(I.WILLOW_LOGS, 2);
-  const barbarian = { getDefinition: () => ({ getName: () => "Barbarian anvil" }) };
+  player.barbarianTrained = true; // This recipe fixture explicitly answers the lesson service.
+  const core = PluginManager.getCoreApi();
+  Object.assign(player, { getLocation: () => new core.Location(2503, 3485, 0),
+    getTeleportSerial: () => 0, getArea: () => null, getPrivateArea: () => null });
+  const inventory = new core.Inventory(player);
+  player.getInventory = () => inventory;
+  for (const id of [I.HAMMER, I.STEEL_BAR, I.WILLOW_LOGS]) inventory.adds(id, 2);
+  core.RegionManager.init();
+  const barbarian = core.MapObjects.getObjectsAt(new core.Location(2502, 3485, 0), null)
+    .find(object => object.getId() === core.CacheDefinitions.getLocId("brut_anvil"));
+  assert.ok(barbarian);
   for (const handler of extraItemOnObject) handler({ player, itemId: I.STEEL_BAR, object: barbarian });
   assert.deepEqual(lastMenu(player).getItems(), [I.STEEL_SPEAR, I.STEEL_HASTA]);
   lastMenu(player).execute(I.STEEL_HASTA, 2);
   ticks(10);
-  assert.equal(player.items.get(I.STEEL_HASTA), 2);
-  assert.equal(player.items.get(I.WILLOW_LOGS), 0);
+  assert.equal(inventory.getAmount(I.STEEL_HASTA), 2);
+  assert.equal(inventory.getAmount(I.WILLOW_LOGS), 0);
   assert.equal(player.xp, 150);
+});
+
+test("barbarian smithing refuses an unanswered lesson service", () => {
+  const player = playerWith(I.STEEL_BAR, 2);
+  player.items.set(I.WILLOW_LOGS, 2);
+  const barbarian = { getDefinition: () => ({ getName: () => "Barbarian anvil" }) };
+  for (const handler of extraItemOnObject) handler({ player, itemId: I.STEEL_BAR, object: barbarian });
+  assert.equal(lastMenu(player), undefined);
+  ticks(5);
+  assert.equal(player.items.get(I.STEEL_BAR), 2);
+  assert.equal(player.xp, 0);
 });
 
 test("Smith with a draconic visage and anti-dragon shield makes an uncharged dragonfire shield", () => {
@@ -970,7 +991,18 @@ test("native furnace smelting admission and one-step cancellation", async t => {
   const core = PluginManager.getCoreApi();
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(3222, 3218);
-  PluginManager.emitServerStartup({});
+  // WorldAdmin must not bind the default gateway while this file exercises scoped native smithing.
+  const previousBrowserHost = process.env.BROWSER_HOST, originalError = console.error, startupErrors = [];
+  try {
+    process.env.BROWSER_HOST = "1";
+    console.error = (...args) => { startupErrors.push(args.map(String).join(" ")); originalError(...args); };
+    PluginManager.emitServerStartup({});
+  } finally {
+    console.error = originalError;
+    if (previousBrowserHost === undefined) delete process.env.BROWSER_HOST;
+    else process.env.BROWSER_HOST = previousBrowserHost;
+  }
+  assert.deepEqual(startupErrors, [], "native startup hooks must initialize without errors");
   t.after(() => PluginManager.emitServerShutdown({}));
   let index = 1710;
   for (const mode of ["stationary", "approach", "interrupt", "ore-approach"]) await t.test(mode, async t => {

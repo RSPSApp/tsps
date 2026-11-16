@@ -2115,7 +2115,8 @@
             "Smelting and anvil smithing are fully implemented: SMELTING_RECIPES (8 bars) and SMITHABLE_EQUIPMENT_DATA (all metal tiers) drive interfaces 270 (smelt) and 312 (anvil) with varbit 3216 and enum 1253 via SMITHING_BAR_TYPE_BY_ITEM_ID.",
             "Furnace/anvil ids are in FURNACE_OBJECT_IDS, with a hammer requirement, cannonball interval and bot helpers (startBotSmelting/isSmeltingActive); interface flags and quantity modes are documented in comments.",
             "Gaps: no blast furnace, gold-smithing gauntlets/ore bonuses, dragon/godsword blade assembly, or item-on-object for non-bar metals.",
-            "Client feedback connected by PR #209 (be801847): native level-up display with per-skill model, level-up clears the interrupted animation, cache frame sounds replace duplicate explicit sends, and movement cancels pending actions; see server/docs/skill-client-feedback.md."
+            "Client feedback connected by PR #209 (be801847): native level-up display with per-skill model, level-up clears the interrupted animation, cache frame sounds replace duplicate explicit sends, and movement cancels pending actions; see server/docs/skill-client-feedback.md.",
+            "2026-11-16, feat/barbarian-smithing-lessons: Otto teaches separate spear and hasta manufacture/report stages after Barbarian Fishing, Tai Bwo Wannai Trio and Tamayu's combat reward. The barbarian anvil now denies missing teaching permissions and rechecks them through production. Real native-packet, Inventory, Tamayu reward and PlayerSave checks are in server/tests/barbarian-smithing-native.test.cjs; docs/smithing.md records source limits. Exact fishing conjunction and final-reply timing are qualified interpretations; Zamorakian conversion, equipment gates and whole-miniquest aggregation remain outside this slice."
           ],
           "taskDetails": [
             {

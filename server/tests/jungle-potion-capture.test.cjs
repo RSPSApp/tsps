@@ -18,6 +18,8 @@ const CAVE_EXIT = [2830, 9522];
 const BY_EXIT = [2830, 9521, 0];
 const WALL = [2831, 9500];
 const BY_WALL = [2832, 9500, 0];
+const SECOND_WALL = [2829, 9493];
+const BY_SECOND_WALL = [2829, 9494, 0];
 const KEY = "jungle_potion";
 const MESSAGEBOX = 229;
 const OBJECTBOX = 193;
@@ -222,8 +224,9 @@ test("the hand holds out: a message box, then out of the cave as it is continued
   assert.equal(at(f)[1] > 9000, true, "still inside while the box shows");
   assert.ok(!messages(f).includes("You climb the rocks back out of the cave."));
   await h.continueLine(f);
-  h.ticks(f, 2);
-  assert.deepEqual(at(f), CAVE_OUTSIDE);
+  assert.equal(at(f)[1] > 9000, true, "the tick it is continued, still inside (tick 1049)");
+  h.tick(f);
+  assert.deepEqual(at(f), CAVE_OUTSIDE, "out the tick after (tick 1050)");
 });
 
 // Only the Jungle Potion plugin's rolls are fixed: other tasks call Math.random while these tests tick.
@@ -235,23 +238,41 @@ function mockRolls(t, rolls) {
   });
 }
 
-test("fungus wall: pick_wall start + search_vine, a roll every 6 ticks; a miss plays middle + the sound, the find the end and no sound (ticks 989-1002)", async (t) => {
+test("fungus wall: a fresh search resets the animation with search_vine twice, a roll every 6 ticks; a miss plays middle + the sound, the find the end and no sound (ticks 989-1002)", async (t) => {
   const f = actor(t, { stage: 9, at: BY_WALL });
   mockRolls(t, [0.9, 0.1]);
   const sounds = () => f.calls.filter((c) => c.name === "sendSoundEffect").map((c) => [c.tick, c.args[0]]);
   await h.dispatch(f, { type: "object_option", id: O.FUNGUS_COVERED_CAVERN_WALL, x: WALL[0], y: WALL[1], clickType: 2 });
   for (let i = 0; i < 5 && !f.messages.some((m) => m.text === "You search the wall..."); i++) h.tick(f);
   const start = f.messages.find((m) => m.text === "You search the wall...").tick;
-  assert.deepEqual(f.animations.map((a) => a.id), [2096]);
-  assert.deepEqual(sounds().map(([, id]) => id), [1957]);
+  assert.deepEqual(f.animations.map((a) => a.id), [-1]);
+  assert.deepEqual(sounds().map(([, id]) => id), [1957, 1957]);
   for (let i = 0; i < 14 && !h.shown(f); i++) h.tick(f);
   const anims = f.animations.map((a) => [a.tick - start, a.id]);
-  assert.deepEqual(anims, [[0, 2096], [6, 2097], [12, 2098]]);
-  assert.deepEqual(sounds().map(([tick, id]) => [tick - start, id]), [[0, 1957], [6, 1957]]);
+  assert.deepEqual(anims, [[0, -1], [6, 2097], [12, 2098]]);
+  assert.deepEqual(sounds().map(([tick, id]) => [tick - start, id]), [[0, 1957], [0, 1957], [6, 1957]]);
   assert.equal(h.shown(f).text, "You find a herb.");
   assert.equal(group(f), OBJECTBOX);
   assert.equal(f.player.getInventory().getAmount(I.GRIMY_ROGUES_PURSE), 1);
   assert.equal(stage(f), 10);
   const { MapObjects, Location } = h.core;
   assert.ok(MapObjects.get(O.FUNGUS_PATTERN, new Location(WALL[0], WALL[1], 0), null), "the wall empties");
+});
+
+test("fungus wall: a re-click mid-search restarts it with pick_wall start and one search_vine (ticks 973-982)", async (t) => {
+  const f = actor(t, { stage: 9, at: BY_SECOND_WALL });
+  mockRolls(t, [0.1]);
+  const click = () => h.dispatch(f, { type: "object_option", id: O.FUNGUS_COVERED_CAVERN_WALL, x: SECOND_WALL[0], y: SECOND_WALL[1], clickType: 2 });
+  await click();
+  for (let i = 0; i < 5 && !f.messages.some((m) => m.text === "You search the wall..."); i++) h.tick(f);
+  h.ticks(f, 2);
+  const animations = f.animations.length;
+  const soundCount = f.calls.filter((c) => c.name === "sendSoundEffect").length;
+  await click();
+  for (let i = 0; i < 5 && f.messages.filter((m) => m.text === "You search the wall...").length < 2; i++) h.tick(f);
+  assert.deepEqual(f.animations.slice(animations).map((a) => a.id), [2096]);
+  assert.equal(f.calls.filter((c) => c.name === "sendSoundEffect").length - soundCount, 1);
+  for (let i = 0; i < 8 && !h.shown(f); i++) h.tick(f);
+  assert.equal(h.shown(f)?.text, "You find a herb.");
+  assert.equal(f.animations.at(-1).id, 2098);
 });

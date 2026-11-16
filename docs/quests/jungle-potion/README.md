@@ -39,9 +39,9 @@ From the user's rev 242 Jungle Potion runs (rsprox index local 1002225, and Jung
   throughout), and 4 of them found the herb. Ours (fitted): a roll every 6 ticks (the length of
   human_pick_wall_middle) at 0.5, which finds the herb 12 ticks in on average, as the recorded finds did (5, 13, 14
   and 17 ticks after the last click). The Wiki's Quick guide says the wall "may take up to a minute".
-- Ours: a fresh wall search in all four recordings shows sequence -1 and two search_vine sounds on
-  its first tick (a re-click mid-search shows the start animation and one sound); this plays the start animation
-  and one sound each time.
+- A fresh wall search (none running) shows sequence -1 and search_vine twice on its first tick, in all four
+  recordings (ticks 973, 989, 1006; 1002225 tick 7347); a re-click mid-search shows human_pick_wall_start and one
+  sound (977, 1012). Ours does the same.
 
 ## The quest from start to finish (rsprox captures)
 
@@ -68,7 +68,7 @@ five herbs, Pothole Cave and the post-quest talk). Tick numbers are that recordi
   stay where you are!"; "Yes" is the messagebox "You decide to enter the caves. You climb down several steep rock
   faces into the cavern below." and the move to 2830,9520 comes as it is continued.
 - **Climbing out (ticks 1046-1050):** Climb on the hand holds shows "You attempt to climb the rocks back out." in a
-  messagebox; continuing it moves the player to 2823,3120.
+  messagebox; it is continued at 1049 and the player is at 2823,3120 the tick after (1050).
 - The dump turns every Wiki `{{tbox}}` into the same plain message step as `{{mes}}`, so the quest plugin names the
   boxes itself.
 
@@ -81,7 +81,8 @@ five herbs, Pothole Cave and the post-quest talk). Tick numbers are that recordi
   offers "Trufitus sent me." in the first menu at any Jungle Potion stage and has no "You again!" talk. That
   belongs to the Trio quest's own plugin and transcript.
 - The villagers' "thanks for helping out Trufitus" greetings after the quest (ticks 1133-1407) are the Tai Bwo
-  Wannai Cleanup villagers'; not compared here.
+  Wannai Cleanup villagers'; not compared here. Live also sets their chat varbits (892-901) and chat_control (902)
+  at tick 1122, beside villagers_visible; nothing here sets those.
 
 ## Findings
 

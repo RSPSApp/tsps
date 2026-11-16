@@ -351,7 +351,9 @@ test('mandatory route: search, clean and hand in all five herbs, enter and leave
       assert.equal(climb.handled, true);
       assert.deepEqual(h.moves.at(-1), [2830, 9520, 0], 'the climb waits for its message box');
       h.continueBox();
-      assert.deepEqual(h.moves.at(-1), [2823, 3120, 0], 'continuing the box leaves the cave');
+      assert.deepEqual(h.moves.at(-1), [2830, 9520, 0], 'still inside the tick the box is continued');
+      h.tick(1);
+      assert.deepEqual(h.moves.at(-1), [2823, 3120, 0], 'out of the cave the tick after');
     }
 
     h.handIn(herb.handIn);

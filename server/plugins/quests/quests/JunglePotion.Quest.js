@@ -79,7 +79,7 @@ module.exports = function registerJunglePotionQuest(api) {
    */
   const VINE_SEARCH = {
     startAnimation: 2094, rollTicks: 10, chance: 0.9, missSound: true, findSound: true, missAnimation: null,
-    findAnimation: null, retryTicks: 1,
+    findAnimation: null, retryTicks: 1, freshStart: null,
   };
   /**
    * The fungus covered cavern wall (rsprox captures: JunglePotion ticks 970-1029, three finds, and 1002225 ticks
@@ -92,6 +92,9 @@ module.exports = function registerJunglePotionQuest(api) {
   const WALL_SEARCH = {
     startAnimation: 2096, rollTicks: 6, chance: 0.5, missSound: true, findSound: false, missAnimation: 2097,
     findAnimation: 2098, retryTicks: 0,
+    // A search started with none running: the animation reset (-1) and search_vine twice, in all four recordings
+    // (JunglePotion ticks 973, 989, 1006; 1002225 tick 7347). A re-click mid-search plays 2096 and one (977, 1012).
+    freshStart: { animation: -1, sounds: 2 },
   };
 
   const HERBS = [
@@ -328,13 +331,14 @@ module.exports = function registerJunglePotionQuest(api) {
         event.player.sendMessage("You find a herb, but you have no room to store it.");
         return;
       }
+      const restarted = searchSessions.has(event.player);
       stopSearching(event.player);
       event.player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, herb.searchMessage);
       if (!herb.search) {
         findHerb(event.player, herb, event.object);
         return;
       }
-      startSlowSearch(event.player, herb, event.object);
+      startSlowSearch(event.player, herb, event.object, restarted);
       return;
     }
 
@@ -358,15 +362,27 @@ module.exports = function registerJunglePotionQuest(api) {
     }
   }
 
-  /** The hand holds: the message box, then out of the cave as it is continued (JunglePotion ticks 1046-1050). */
+  /**
+   * The hand holds: the message box, then out of the cave the tick after it is continued (JunglePotion: continued
+   * at 1049, moved at 1050).
+   */
   function climbOut(player) {
-    const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = api.core;
+    const { DialogueChainBuilder, StatementDialogue, ActionDialogue, Task } = api.core;
     player.getDialogueManager().startDialogues(
       new DialogueChainBuilder()
         .add(new StatementDialogue(0, CLIMB_OUT_MESSAGE))
         .add(new ActionDialogue(1, { execute: () => {
           player.getPacketSender().sendInterfaceRemoval();
-          player.moveTo(new Location(POTHOLE_EXTERIOR.x, POTHOLE_EXTERIOR.y, POTHOLE_EXTERIOR.z));
+          api.getTaskManager().submit(new (class extends Task {
+            constructor() {
+              super(1, player);
+            }
+            execute() {
+              this.stop();
+              if (player.isRegistered?.() === false) return;
+              player.moveTo(new Location(POTHOLE_EXTERIOR.x, POTHOLE_EXTERIOR.y, POTHOLE_EXTERIOR.z));
+            }
+          })());
         } }))
     );
   }
@@ -378,7 +394,7 @@ module.exports = function registerJunglePotionQuest(api) {
    * `rollTicks` on. Moving or teleporting off the tile, an item action or Attack click (player:interaction-cleared),
    * logging out or the loc going away ends it.
    */
-  function startSlowSearch(player, herb, object) {
+  function startSlowSearch(player, herb, object, restarted = false) {
     const { search } = herb;
     const session = { herb, object, task: null, from: player.getLocation().clone() };
     const play = (animation, sound) => {
@@ -426,7 +442,12 @@ module.exports = function registerJunglePotionQuest(api) {
       }
     })();
     searchSessions.set(player, session);
-    play(search.startAnimation, true);
+    if (search.freshStart && !restarted) {
+      play(search.freshStart.animation, true);
+      for (let i = 1; i < search.freshStart.sounds; i++) play(null, true);
+    } else {
+      play(search.startAnimation, true);
+    }
     api.getTaskManager().submit(session.task);
   }
 

@@ -4,6 +4,28 @@
 
 The client cache has no spawns: OSRS keeps them on the server. The file came from a one-time import, then captures and plugins added to it by hand. Areas released since then had none, until this script.
 
+**Veos at Port Piscarilius** uses parent `2147` at `(1825,3691,0)`, rather than the fixed Port Sarim form `10724`.
+The pinned revision 241 dump and active revision 242 cache resolve `veos_pisc_vis` (12146): `2` is Veos without
+his amulet (10726), `1` wears it (10727), and `0` hides him. Both visible forms offer Port Sarim and Land's End.
+X Marks the Spot publishes the value per player on login and relevant quest-stage changes: the
+[Wiki's Veos page](https://oldschool.runescape.wiki/w/Veos) places the amulet after X Marks completion and
+departure at A Kingdom Divided's earthquake. The [AKD walkthrough](https://oldschool.runescape.wiki/w/A_Kingdom_Divided)
+places that earthquake during Fuggy's ship conversation, stage 12 here; existing Herbert parent 11125 takes
+over from 12. This boundary combines Wiki sequence and Herbert's cache table, without a midquest Piscarilius
+transition recording. Initial values 2 and 1 appear in captures 225/01556 (Wintertodt beta) and 236/03915
+(Deadman), respectively; those establish recorded values, not normal-world departure timing. The existing
+dock and ship Herbert rows stay in place and resolve through their own quest transforms. A retained Veos
+departure line rechecks his current form before sailing, so a quest change that hides him cancels that trip.
+
+Native verification on revision 242 used two anonymous rendering clients: Fuggy's actual conversation
+advanced one viewer from AKD 11 to 12, hiding Veos and showing Herbert, while the other viewer at 11
+still rendered Veos with the correct onward menu. Plain Veos and Herbert's native direct options reached
+the shared Port Sarim and Land's End ship decks. A cancelled Veos dialogue followed by a different
+destination sailed to the newly selected port. Native logout, a flushed SQLite save and a fresh browser
+login retained completed-stage visibility. Quest/location setup was controlled; this was not a full quest
+playthrough or a recorded OSRS departure-timing comparison. Independent review also found and verified
+the fix for Dragon Slayer II retaining a cancelled destination and replacing the guarded travel callback.
+
 ## Adding an area from the Wiki
 
 `yarn sync:npc-spawns` (`server/scripts/sync-npc-spawns.ts`) adds the spawns an area is missing, from the OSRS Wiki:

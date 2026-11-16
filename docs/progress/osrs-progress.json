@@ -41191,7 +41191,10 @@
             "server/plugins/combat/effects/SalveAmulet.EquipmentEffects.js",
             "server/plugins/combat/effects/GearChecks.EquipmentEffects.js",
             "server/plugins/combat/effects/ObsidianArmour.EquipmentEffects.js",
-            "server/tests/gear-passives.test.cjs"
+            "server/tests/gear-passives.test.cjs",
+            "server/plugins/items/alchemistsamulet/Alchemist.AmuletOfChemistry.js",
+            "server/tests/alchemists-amulet.test.cjs",
+            "docs/alchemists-amulet.md"
           ],
           "devNotes": [
             "Main 8166111fa: #1403 the blood fury's charging and melee effect.",
@@ -41202,6 +41205,7 @@
             "PR #751 (f9354e6b): remaining definitions, effects, feedback and edge cases completed.",
             "Known gap: Emir's Arena, Nightmare Zone, Soul Wars and Shades of Mort'ton shops are not modelled, so some reward-shop sources remain unavailable.",
             "Main 82657e165: #1606 the Giantsoul amulet.",
+            "2026-11-16: Alchemist's amulet support adds 50-charge purchase, ten charges per chemistry amulet up to 5000, a 15% eligible extra-dose chance with ordinary XP, noted refunds, persisted item charges and the lost worn PvP gravestone exception. See docs/alchemists-amulet.md and server/tests/alchemists-amulet.test.cjs for 14 real-object/native-path tests and focused consumer coverage. Independent review found a League dose-ownership charge loss and transformed-grave auto-equip mismatch; both reproductions pass after fixes and nine independent scenarios found no new findings in inspected paths. Rendered native controls, natural-RNG brewing, paid purchase and network logout/relog were verified; a clipped confirmation title was shortened and visually rechecked. Exact uncaptured prompt wording and inferred item charge ownership are disclosed. Existing task statuses are unchanged.",
             "Main 3b61a15a8 (6 November 2026): #2486 Credit supported Varrock Diary gameplay and Plank Make batches. Existing completion credit and documented limitations are retained unless explicitly updated below."
           ],
           "taskDetails": [

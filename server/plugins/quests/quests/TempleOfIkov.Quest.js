@@ -43,6 +43,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const INN_LUCIEN_NPC_ID = NpcIdentifiers.LUCIEN_5;
   const HOUSE_LUCIEN_NPC_ID = NpcIdentifiers.LUCIEN_4;
   const WINELDA_NPC_ID = NpcIdentifiers.WINELDA;
+  const WINELDA_MET_ATTRIBUTE = "temple-of-ikov:met-winelda";
   const GUARDIAN_NPC_IDS = new Set([
     NpcIdentifiers.GUARDIAN_OF_ARMADYL,
     NpcIdentifiers.GUARDIAN_OF_ARMADYL_2,
@@ -136,6 +137,11 @@ module.exports = function registerTempleOfIkovQuest(api) {
   /** Winelda's root hand-in (UB9hSI) and her repeat teleport (7xhwuW). */
   const WINELDA_ROOT_TELEPORT_STEP_ID = "UB9hSI";
   const WINELDA_REPEAT_TELEPORT_STEP_ID = "7xhwuW";
+  const WINELDA_INTRO_VARIANT = "inside-the-dungeon-talking-to-winelda";
+  const WINELDA_INTRO_END_LINES = new Set([
+    "Then we shows them some magic!",
+    "Hehe! Ye'll come back! They always come back!",
+  ]);
   /** The Fire Warrior's fire bolt knocks the player back from the door. */
   const FIRE_WARRIOR_KNOCKBACK_STEP_ID = "i4DijU";
   /** The guardian attacks when Lucien's follower takes the staff. */
@@ -269,9 +275,13 @@ module.exports = function registerTempleOfIkovQuest(api) {
       return "finishing-up-talking-to-lucien-near-varrock";
     }
     if (npcId === WINELDA_NPC_ID) {
-      if (stage < STAGE_STARTED) return "inside-the-dungeon-talking-to-winelda";
-      if (stage < STAGE_CROSSED_LAVA) return "inside-the-dungeon-talking-to-winelda-again";
-      return "inside-the-dungeon-talking-to-winelda-after-giving-the-limpwurts";
+      // Existing paid saves keep the free repeat. Starting the quest alone is
+      // not a meeting; the documented full-root first-talk shortcut still applies.
+      if (stage >= STAGE_CROSSED_LAVA) return "inside-the-dungeon-talking-to-winelda-after-giving-the-limpwurts";
+      if (player.getAttribute(WINELDA_MET_ATTRIBUTE) === 1
+        || (stage >= STAGE_STARTED && limpwurtCount(player) >= LIMPWURT_REQUIRED))
+        return "inside-the-dungeon-talking-to-winelda-again";
+      return "inside-the-dungeon-talking-to-winelda";
     }
     if (GUARDIAN_NPC_IDS.has(npcId)) {
       if (stage >= STAGE_HAS_STAFF) {
@@ -454,6 +464,13 @@ module.exports = function registerTempleOfIkovQuest(api) {
 
   /** Agreeing to help the Guardians hands over the Armadyl pendant (9p_LQ7). */
   function handleDialogueLine(event) {
+    if (event.npcId === WINELDA_NPC_ID && WINELDA_INTRO_END_LINES.has(event.text)
+      && event.pages?.some(page => page.page === PAGE && page.variants?.includes(WINELDA_INTRO_VARIANT))) {
+      // Lines are compiled ahead of time. Mark only when this final line is
+      // actually reached, so interrupting or double-clicking cannot skip the introduction.
+      event.before = () => event.player.setAttribute(WINELDA_MET_ATTRIBUTE, 1);
+      return;
+    }
     if (event.npcId === FIRE_WARRIOR_NPC_ID && event.step?.presentation === "overhead"
       && event.pages?.some(page => page.page === PAGE
         && page.variants?.includes("inside-the-dungeon-opening-door-in-the-fire-warrior-room"))) {
@@ -645,6 +662,15 @@ module.exports = function registerTempleOfIkovQuest(api) {
   function handleNpcInteraction(event) {
     const { player, npcId } = event;
     const action = npcAction(event);
+    if (npcId === WINELDA_NPC_ID) {
+      if (action !== "talk-to" || !player.isRegistered() || !event.npc?.isRegistered()
+        || api.core.World.getNpcs().get(event.npc.getIndex()) !== event.npc) return;
+      const variant = selectVariant({ npcId, player });
+      if (startTranscript(api, player, npcId, PAGE, variant, undefined, event.npc)) {
+        event.handled = true;
+      }
+      return;
+    }
     if (npcId === INN_LUCIEN_NPC_ID) {
       if (action !== "talk-to") return;
       event.handled = true;
@@ -1362,6 +1388,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   });
 
   api.registerArea(new TempleOfIkovIceChests([new api.core.Boundary(2624, 2753, 9758, 9916, 0)]));
+  api.persistAttribute(WINELDA_MET_ATTRIBUTE, 0);
   api.persistAttribute(BRIDGE_ORIGIN_ATTRIBUTE, 0);
   api.persistAttribute(SIDE_ATTRIBUTE);
   api.persistAttribute(ICE_GATE_UNLOCKED_ATTRIBUTE, 0);

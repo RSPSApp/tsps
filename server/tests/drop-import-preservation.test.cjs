@@ -6,7 +6,9 @@ const subtables = require('../data/definitions/npc-drop-subtables.json');
 test('the conditional-quantity import preserves upstream table identities and NPC variants', () => {
     // Exclude audited obsolete Wiki titles: five nonattackable cultists and the
     // old manta variant lose stale mappings; current encounters remain intact.
-    assert.equal(Object.keys(dump.tables).length, 1112);
+    // 1115: Multi Infobox pages split on their unnumbered dropversions (RSPSApp/osrsreboxed-db#118:
+    // the Mudfoot's Big Adventure outlaws' one table became three, Jelly's became two).
+    assert.equal(Object.keys(dump.tables).length, 1115);
     assert.equal(Object.keys(dump.npcs).length, 3226);
     for (const id of [8058, 8060, 13686]) assert.ok(dump.npcs[id], `upstream variant ${id}`);
     for (const id of [8058, 8060, 13686]) assert.deepEqual(dump.npcs[id].tables, [], `quest variant ${id} has no normal boss loot`);

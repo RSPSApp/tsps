@@ -375,3 +375,140 @@ test("a save from the first version moves to live's stages at login", (t) => {
   H.PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername() });
   assert.equal(quest().getStage(f.player), 18, "moved once");
 });
+
+test("a logout takes Mudfoot and the outlaw with it; a relog brings back one of each [the spawns are the player's own]", async (t) => {
+  const f = at(t, [3219, 3244, 0], { stage: 6, vis: 2 });
+  const before = [one(f, NPC.FOLLOWER), one(f, NPC.STORE)];
+  H.PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  assert.ok(before.every((npc) => !npc.isRegistered()), "both go at logout");
+  H.PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername() });
+  one(f, NPC.FOLLOWER);
+  one(f, NPC.STORE);
+});
+
+test("the reward waits at 30 without room for four lamps and the coins (Wiki)", async (t) => {
+  const f = at(t, [3218, 3239, 0], { stage: 30 });
+  for (let i = 0; i < 25; i++) f.player.getInventory().add(new core.Item(core.ItemIdentifiers.BRONZE_SHORTSWORD, 1), false);
+  const harlan = harlanAt(f);
+  await talkTo(f, harlan);
+  await next(f);
+  await choose(f, "All of those thieves have been dealt with.");
+  await until(f, "Right then... Let's get you sorted with your half of the bounty.");
+  await until(f, "Okay, I'll be back shortly.");
+  await next(f);
+  assert.equal(quest().getStage(f.player), 30);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.ANTIQUE_LAMP_44), 0);
+  f.player.getInventory().resetItems();
+  await talkTo(f, harlan);
+  await next(f);
+  await choose(f, "All of those thieves have been dealt with.");
+  await until(f, "Right then... Thanks for all of your help");
+  await next(f);
+  assert.equal(quest().getStage(f.player), 32);
+});
+
+test("reporting without Mudfoot sends the player to fetch him (Wiki)", async (t) => {
+  const f = at(t, [3218, 3239, 0], { stage: 28, vis: 5 });
+  await talkTo(f, harlanAt(f));
+  await next(f);
+  await choose(f, "All of those thieves have been dealt with.");
+  await until(f, "Excellent! Why don't you go and fetch your goblin friend, and then we can discuss your reward.");
+  assert.equal(quest().getStage(f.player), 28);
+});
+
+test("Harlan's thieves talk at the mage and warrior stages, with their kit menus (Wiki)", async (t) => {
+  const f = at(t, [3218, 3239, 0], { stage: 16, vis: 2 });
+  const harlan = harlanAt(f);
+  await talkTo(f, harlan);
+  await next(f);
+  await choose(f, "So, about those thieves...");
+  await until(f, "The first one has been dealt with. We're now moving on to the second. Apparently, this one is a mage.");
+  await until(f, "Select an option");
+  assert.deepEqual(shown(f).options, ["Could you run me through combat basics again?", "Do you have a spare ranged weapon?"]);
+  await choose(f, "Do you have a spare ranged weapon?");
+  await until(f, "I do indeed!");
+  await until(f, "Captain Harlan gives you a shortbow and 40 bronze arrows.");
+  await finish(f);
+  quest().setStage(f.player, 22);
+  await talkTo(f, harlan);
+  await next(f);
+  await choose(f, "So, about those thieves...");
+  await until(f, "Yes, Mudfoot's going to use melee while I use magic.");
+  await until(f, "Select an option");
+  assert.deepEqual(shown(f).options, ["Could you run me through combat basics again?", "Do you have a spare magic weapon?", "I'd best get going."]);
+});
+
+async function finish(f) {
+  for (let i = 0; i < 20 && shown(f); i++) {
+    if (shown(f).who === "menu") return;
+    await next(f);
+  }
+}
+
+test("kit texts: no room, a staff already carried, both sword and shield carried; the Claim-weapons menu (Wiki)", async (t) => {
+  const f = at(t, [3218, 3239, 0], { stage: 32, items: [core.ItemIdentifiers.STAFF, core.ItemIdentifiers.BRONZE_SHORTSWORD, core.ItemIdentifiers.WOODEN_SHIELD] });
+  const harlan = harlanAt(f);
+  await talkTo(f, harlan, 3);
+  assert.deepEqual(shown(f).options, ["Claim a shortsword and a shield.", "Claim a shortbow and some arrows.", "Claim a staff and some runes.", "Cancel."]);
+  await choose(f, "Claim a staff and some runes.");
+  await until(f, "You already have a staff, but Captain Harlan gives you 40 mind runes and 40 air runes to go with it.");
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.MIND_RUNE), 40);
+  await until(f, "Select an option");
+  await choose(f, "Could I have a shortsword and a shield?");
+  await until(f, "You already have a shortsword and a shield. Save some for the other adventurers.");
+  await finish(f);
+  await choose(f, "Let's talk about something else.");
+  await finish(f);
+  await choose(f, "I'd better be off.");
+  await finish(f);
+  for (let i = 0; i < 30; i++) f.player.getInventory().add(new core.Item(core.ItemIdentifiers.BRONZE_SHORTSWORD, 1), false);
+  await talkTo(f, harlan, 3);
+  await choose(f, "Claim a shortbow and some arrows.");
+  await until(f, "You don't have enough space for me to give you a shortbow, nor any arrows.");
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.SHORTBOW), 0);
+});
+
+test("with 99 Defence the cape menu hands the sale and the hood to the skillcape sellers (Wiki)", async (t) => {
+  const f = at(t, [3218, 3239, 0]);
+  f.player.getSkillManager().addExperience(core.Skill.DEFENCE, 13034431, true);
+  const emitted = [];
+  const emit = H.PM.emitCustomEvent;
+  H.PM.emitCustomEvent = function (name, payload, ...rest) {
+    if (String(name).startsWith("skillcapes:")) emitted.push(name);
+    return emit.call(this, name, payload, ...rest);
+  };
+  t.after(() => { H.PM.emitCustomEvent = emit; });
+  const harlan = harlanAt(f);
+  await talkTo(f, harlan);
+  await next(f);
+  await choose(f, "About that cape you're wearing...");
+  await until(f, "Ah, yes. What about it?");
+  await next(f);
+  await choose(f, "Could I have another hood for mine?");
+  assert.deepEqual(emitted, ["skillcapes:hood"]);
+});
+
+test("while Mudfoot follows, Hans has the Wiki's goblin talk", async (t) => {
+  const f = at(t, [3221, 3218, 0], { stage: 6, vis: 2 });
+  const hans = H.spawn(f, 3105, [3222, 3218, 0]);
+  assert.equal(hans.getCurrentDefinition(f.player).getName(), "Hans");
+  await talkTo(f, hans);
+  await until(f, "Oh, a goblin... Hello there, goblin.");
+  await until(f, "Hello. You walk a lot.");
+});
+
+test("an outlaw kept out of reach turns on Mudfoot, who takes no damage (Wiki: the graveyard)", async (t) => {
+  const f = at(t, [3239, 3200, 0], { stage: 22, vis: 2 });
+  await talkTo(f, one(f, NPC.WARRIOR_GRAVEYARD));
+  H.ticks(f, 8);
+  assert.equal(quest().getStage(f.player), 24);
+  const warrior = one(f, NPC.WARRIOR_COMBAT);
+  const mudfoot = one(f, NPC.SPEAR_COMBAT);
+  const at0 = f.player.getLocation();
+  f.player.moveTo(new core.Location(at0.getX() + 6, at0.getY(), 0));
+  H.ticks(f, 6);
+  assert.equal(warrior.getCombat().getTarget(), mudfoot);
+  const parts = [new core.HitDamage(2, core.HitMask.RED)];
+  H.PM.emitNpcHitModify(mudfoot, { getAttacker: () => warrior, getCombatType: () => core.CombatType.MELEE, getHits: () => parts, updateTotalDamage() {} });
+  assert.equal(parts[0].getDamage(), 0);
+});

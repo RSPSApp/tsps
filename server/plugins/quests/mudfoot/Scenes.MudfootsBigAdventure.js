@@ -361,6 +361,8 @@ module.exports = function createMudfootScenes(api, common, deps) {
         if (!state?.outlaw) return null;
         if (attacker === player && target === state.outlaw) return true;
         if (attacker === state.outlaw && target === player) return true;
+        // Wiki: a player who runs about the graveyard leaves the warrior turning on Mudfoot.
+        if (attacker === state.outlaw && target === state.mudfoot) return true;
         if (attacker === state.mudfoot && target === state.outlaw) return true;
         return false;
       },
@@ -409,6 +411,7 @@ module.exports = function createMudfootScenes(api, common, deps) {
     const mudfoot = state.mudfoot;
     const combat = mudfoot.getCombat?.();
     if (combat?.getTarget?.() !== state.outlaw) combat?.attack(state.outlaw);
+    turnOnMudfoot(player, state);
     if (state.kind === "mage") return; // he throws rocks from where he stands
     const at = mudfoot.getLocation();
     const outlaw = state.outlaw.getLocation();
@@ -434,6 +437,25 @@ module.exports = function createMudfootScenes(api, common, deps) {
     queue.addSteps(to);
   }
 
+  /**
+   * The Wiki (Mudfoot's Big Adventure): very low-level players may "run around the graveyard until he becomes
+   * aggressive towards Mudfoot". Ours: an outlaw kept out of reach of the player (melee 1 tile, the others 7) for
+   * five ticks turns on Mudfoot, and the player's next hit turns it back. Mudfoot takes no damage
+   * ("me never get hit", as he says at Harlan's post).
+   */
+  const OUT_OF_REACH_TICKS = 5;
+  function turnOnMudfoot(player, state) {
+    const outlaw = state.outlaw;
+    const combat = outlaw.getCombat?.();
+    if (combat?.getTarget?.() === state.mudfoot) return;
+    const reach = state.kind === "warrior" ? 1 : 7;
+    const far = outlaw.getLocation().getDistance(player.getLocation()) > reach;
+    state.outOfReach = far ? (state.outOfReach ?? 0) + 1 : 0;
+    if (state.outOfReach < OUT_OF_REACH_TICKS) return;
+    state.outOfReach = 0;
+    combat?.attack(state.mudfoot);
+  }
+
   function sceneStateOf(npc) {
     const player = npc?.__questSceneOwner;
     const state = player ? plays.get(player) : null;
@@ -453,6 +475,7 @@ module.exports = function createMudfootScenes(api, common, deps) {
     const state = plays.get(player);
     if (!state?.outlaw || target !== state.outlaw || !Scenes.get(player)) return;
     const fight = FIGHTS[state.kind];
+    if (state.outlaw.getCombat?.().getTarget?.() !== player) state.outlaw.getCombat?.().attack(player);
     if (fight?.hitShout && !state.hitShouted) {
       state.hitShouted = true;
       state.outlaw.forceChat(fight.hitShout);
@@ -469,7 +492,11 @@ module.exports = function createMudfootScenes(api, common, deps) {
     const found = sceneStateOf(npc);
     if (!found) return;
     const { player, state } = found;
-    if (npc === state.mudfoot) return;
+    if (npc === state.mudfoot) {
+      for (const part of hit.getHits?.() ?? []) part.setDamage(0);
+      hit.updateTotalDamage?.();
+      return;
+    }
     if (npc !== state.outlaw) return;
     const attacker = hit?.getAttacker?.();
     if (!FIGHTS[state.kind]?.prays) return;

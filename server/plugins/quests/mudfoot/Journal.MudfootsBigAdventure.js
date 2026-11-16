@@ -117,13 +117,14 @@ const COMPLETE = 32;
 /** The journal for a stage: the start text at 0, the paragraphs reached so far, then QUEST COMPLETE! at the end. */
 function buildLines(stage) {
   if (stage <= 0) {
-    // Ours: the Wiki's start (Talk to Captain Harlan just outside the Lumbridge general store).
+    // Ours: the Wiki's start (Talk to Captain Harlan just outside the Lumbridge general store). The first line
+    // starts plainly: QuestRuntime.startSentence reads "I can start this quest by" from it for the quest overview.
     return [
-      `I can start this quest by speaking to ${RED}Captain Harlan${BLUE}`,
-      `just outside the ${RED}Lumbridge General Store${BLUE}.`,
+      "I can start this quest by speaking to <col=800000>Captain Harlan</col>",
+      "just outside the <col=800000>Lumbridge General Store</col>.",
       "",
       "There are no requirements for this quest.",
-    ].map((line) => (line ? BLUE + line : line));
+    ];
   }
   const reached = PARAGRAPHS.filter((paragraph) => stage >= paragraph.from);
   const lines = [];

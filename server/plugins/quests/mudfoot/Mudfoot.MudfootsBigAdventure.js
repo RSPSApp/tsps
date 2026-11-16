@@ -31,7 +31,7 @@ module.exports = function createMudfoot(api, common, deps) {
   /** The outlaw the stage shows: [first stage, last stage, spawn, Mudfoot's overhead, its range]. */
   const OUTLAWS = [
     { from: STAGE.RECRUITED, to: STAGE.RECRUITED, id: NPC.RANGER_STORE, x: 3220, y: 3246, face: FACE.N, wander: 1,
-      look: "Look, that him there!", near: "Look, that him right there. We kill now.", range: 2 },
+      look: "Look, that him there!", near: "Look, that him right there. We kill now.", nearAnim: CHAT.ANGRY1, range: 2 },
     { from: STAGE.WINDMILL, to: STAGE.RANGER_FIGHT, id: NPC.RANGER_WINDMILL, x: 3165, y: 3289, face: FACE.N },
     { from: STAGE.RANGER_DEAD, to: STAGE.MAGE_FIGHT, id: NPC.MAGE_WOODS, x: 3170, y: 3242, face: FACE.N,
       look: "Look! There she is!", near: "Look! There she is! Time for kill!", range: 12 },
@@ -343,11 +343,13 @@ module.exports = function createMudfoot(api, common, deps) {
     const head = npc.getId();
     const report = stage >= STAGE.WARRIOR_DEAD;
     const ask = report ? "What now, Mudfoot?" : "Where to, Mudfoot?";
-    const near = nearOutlaw(player) && state(player).spotted ? outlawRow(player)?.near : null;
+    const row = nearOutlaw(player) && state(player).spotted ? outlawRow(player) : null;
+    const near = row?.near ?? null;
     const answer = report
       ? M(head, "We should go tell guard man that nasty thieves have gone dead.", CHAT.NEUTRAL2)
       : near
-        ? M(head, near)
+        // chatang1 for the store outlaw (rsprox_transcripts/242/900167.txt tick 1241); Ours: chatneu1 for the others.
+        ? M(head, near, row.nearAnim)
         : stage >= STAGE.MAGE_DEAD
           ? M(head, "Other goblins say they see last thief in graveyard. He big warrior, but he also like to pray to stupid god.", CHAT.NEUTRAL2)
           : stage >= STAGE.RANGER_DEAD

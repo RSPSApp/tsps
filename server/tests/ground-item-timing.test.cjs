@@ -234,3 +234,27 @@ test("an owner-only stack relocated before it goes public still goes public on t
   assert.deepEqual(moved.getTiming(), timing);
   assert.deepEqual(lifetime(moved), {publicAt: timing.privateUntilTick, goneAt: timing.expiresTick});
 }));
+
+test("two stacks of one stackable relocated to one tile stay apart, each with its own timer and visibility", () => withWorld(() => {
+  const area = {}, exit = new Location(3229, 3218);
+  let older, newer;
+  cycle({players: () => { older = ItemOnGroundManager.registerLocation(player, new Item(995, 100), new Location(3222, 3218), area); }});
+  for (let i = 0; i < 150; i++) cycle();
+  cycle({players: () => { newer = ItemOnGroundManager.registerLocation(player, new Item(995, 50), new Location(3223, 3218), area); }});
+  const olderTiming = older.getTiming(), newerTiming = newer.getTiming();
+  assert.equal(older.getState(), State.SEEN_BY_EVERYONE);
+  let a, b;
+  cycle({players: () => {
+    a = ItemOnGroundManager.relocate(older, exit, null);
+    b = ItemOnGroundManager.relocate(newer, exit, null);
+  }});
+  assert.ok(World.getItems().includes(a) && World.getItems().includes(b), "no merge");
+  assert.deepEqual([a.getItem().getAmount(), b.getItem().getAmount()], [100, 50]);
+  assert.deepEqual(a.getTiming(), {...olderTiming, privateUntilTick: 0});
+  assert.deepEqual(b.getTiming(), newerTiming);
+  assert.deepEqual([a.getState(), b.getState()], [State.SEEN_BY_EVERYONE, State.SEEN_BY_PLAYER]);
+  // The owner-only stack goes public at its own first tick, not 100 after the move (it then joins the public
+  // stack on the tile, as any stack going public does).
+  while (b.getState() === State.SEEN_BY_PLAYER && !b.isPendingRemoval()) cycle();
+  assert.equal(World.getProcessCycle(), newerTiming.privateUntilTick);
+}));

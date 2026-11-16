@@ -127,8 +127,9 @@ export class ItemOnGroundManager {
     public static register(item: ItemOnGround, keepLifetime = false) {
         const areaDelay = item.getPrivateArea()?.groundItemDespawnDelay?.();
         if (item.despawnDelay == null && areaDelay != null) item.setDespawnDelay(areaDelay);
-        // Check for merge with existing stackables..
-        if (item.getItem().getDefinition().isStackable()) {
+        // Check for merge with existing stackables.. A moved stack stays its own: a merge would restart the
+        // other stack's timer and could make an owner-only stack public.
+        if (!keepLifetime && item.getItem().getDefinition().isStackable()) {
             if (this.merge(item)) {
                 return;
             }

@@ -791,8 +791,9 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     if (!FAIRY_GODFATHER_NPC_IDS.has(npcId)) return;
     event.handled = true;
     event.end = true;
-    if (quest.getStage(player) >= STAGE_TANGLEFOOT_DEFEATED && !quest.isComplete(player)) {
-      if (held(player, QUEENS_SECATEURS_ITEM_ID)) player.getInventory().deleteNumber(QUEENS_SECATEURS_ITEM_ID, 1);
+    // The Queen's secateurs are what he takes: a pair dropped during the chat leaves the quest open.
+    if (quest.getStage(player) >= STAGE_TANGLEFOOT_DEFEATED && !quest.isComplete(player) && held(player, QUEENS_SECATEURS_ITEM_ID)) {
+      player.getInventory().deleteNumber(QUEENS_SECATEURS_ITEM_ID, 1);
       quest.complete(player);
     }
   }
@@ -859,6 +860,13 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     const stage = quest.getStage(player);
     if (GARDENER_NPC_IDS.has(npcId) || INVALID_GARDENER_NPC_IDS.has(npcId)) {
       if (stage === STAGE_STARTED) talkToGardener(event);
+      return;
+    }
+    if (FAIRY_GODFATHER_NPC_IDS.has(npcId) && stage >= STAGE_TANGLEFOOT_DEFEATED && !quest.isComplete(player)
+      && !held(player, QUEENS_SECATEURS_ITEM_ID)) {
+      // His only transcript at 80 hands the Queen's secateurs over. Without them neither the Wiki nor a
+      // recording gives a line, so he stays silent; the Gate Keeper's grove gives a lost pair back.
+      event.handled = true;
       return;
     }
     if (FAIRY_GODFATHER_NPC_IDS.has(npcId) && stage >= STAGE_COMPLETE && ft2Stage(player) === 0) {

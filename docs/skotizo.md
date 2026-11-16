@@ -6,6 +6,7 @@ Skotizo beneath the Catacombs of Kourend, built from the [OSRS Wiki](https://old
 | --- | --- |
 | `Common.Skotizo.js` | The data, tick timing, the fade, the lair's track, saved attributes. |
 | `Totems.Skotizo.js` | Joining the totem, totem pieces and shards from the Catacombs, Skotizo's totem table. |
+| `Teleports.Skotizo.js` | The Catacombs altar's ancient-shard teleports. |
 | `Lair.Skotizo.js` | The per-player instance, entering from the altar, the exit portals, login recovery. |
 | `Fight.Skotizo.js` | His attacks, the awakened altars and the HUD, the spawns and the dark ankou. |
 | `Kills.Skotizo.js` | The death: kill count, the altars and HUD, his helpers. |
@@ -37,6 +38,16 @@ The altar is `cata_altar` (28900) in the centre of the Catacombs.
 - **Spawn tiles:** the player and Skotizo land on random tiles: five different player tiles and five boss tiles across the captures. Here both are random open tiles of the arena.
 - **Other spawns:** the four sleeping altars spawn as NPCs (`cata_boss_altar_closed_*`), each in a loc 28924 (`cata_boss_altar_closed`, shape 10).
 - **Leaving:** the four corner portals (28925, `cata_boss_exit_portal`, "Use") lead back to the Catacombs (Wiki). This wasn't captured, so the fade and the tile beside the altar (1662, 10049) are ours. Teleporting, dying or logging out also ends the lair. A player saved inside comes back beside the altar.
+
+## Ancient-shard teleports
+
+The same altar's Teleport option opens "Where do you want to go? (1 shard)" on the recorded menu
+(rsprox 3329): Demons' Run, Dragons' Den, Reeking Cove and The Shallows. It has four lines and
+closes when the player walks away. A choice passes the usual teleport checks, spends one ancient
+shard and teleports to the Wiki's [Ancient shard#Destinations](https://oldschool.runescape.wiki/w/Ancient_shard#Destinations)
+tile. With no shard the click is refused at once, without a menu, in the recorded line (rsprox
+3314, 227/910489): "You need at least 1 ancient shard to use the altar's teleportation powers." No
+capture shows a destination chosen, so the teleport uses the normal animation.
 
 ## The fight
 
@@ -90,8 +101,4 @@ The altar is `cata_altar` (28900) in the centre of the Catacombs.
 
 ## Not built
 
-- **Shard teleports:** the altar's Teleport option opens "Where do you want to go? (1 shard)" with
-  Demons' Run, Dragons' Den, Reeking Cove and The Shallows (menu recorded, rsprox 3329); choosing one
-  spends a shard and teleports to the Wiki's destination tile. The refusal uses our completion of the
-  captured opening words ("You need at least 1 ancient shard...").
 - **Darklight to Arclight, fewer than three shards:** the altar asks and combines as captured (rsprox 3333), and shards used on Darklight away from it are refused in the captured box. What it says at the altar with fewer than three shards isn't captured; `plugins/items/Arclight.plugin.js` keeps its own wording. The mesbox chat line uses type 115, as other plugins do; the capture only says `mesbox`.

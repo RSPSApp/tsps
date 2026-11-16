@@ -1768,6 +1768,7 @@ export interface PluginCoreApi {
   StatementDialogue: any;
   ItemStatementDialogue: any;
   DoubleItemStatementDialogue: any;
+  GraphicStatementDialogue: any;
   ActionDialogue: any;
   EndDialogue: any;
   CreationMenu: any;

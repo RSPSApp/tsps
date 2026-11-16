@@ -2811,6 +2811,7 @@ export class PluginManager {
       StatementDialogue: require(`${model}/dialogues/entries/impl/StatementDialogue`).StatementDialogue,
       ItemStatementDialogue: require(`${model}/dialogues/entries/impl/ItemStatementDialogue`).ItemStatementDialogue,
       DoubleItemStatementDialogue: require(`${model}/dialogues/entries/impl/DoubleItemStatementDialogue`).DoubleItemStatementDialogue,
+      GraphicStatementDialogue: require(`${model}/dialogues/entries/impl/GraphicStatementDialogue`).GraphicStatementDialogue,
       ActionDialogue: require(`${model}/dialogues/entries/impl/ActionDialogue`).ActionDialogue,
       EndDialogue: require(`${model}/dialogues/entries/impl/EndDialogue`).EndDialogue,
       CreationMenu: require(`${model}/menu/CreationMenu`).CreationMenu,

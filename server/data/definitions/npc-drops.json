@@ -5,7 +5,7 @@
     "license": "CC BY-NC-SA 3.0 \u2014 content from the Old School RuneScape Wiki",
     "id_space": "osrs cache ids (item and npc ids from the osrsreboxed databases)",
     "npc_count": 3226,
-    "table_count": 1112,
+    "table_count": 1115,
     "table_refs": 3239,
     "wiki_pages_scanned": 1663,
     "shared_tables": [
@@ -108856,10 +108856,10 @@
         }
       ]
     },
-    "jelly": {
-      "table_id": "jelly",
-      "label": "Drops",
-      "table_name": "Jelly Drops",
+    "jelly_drop_table_regular": {
+      "table_id": "jelly_drop_table_regular",
+      "label": "Regular",
+      "table_name": "Jelly Regular",
       "wiki_page": "Jelly",
       "main_max_roll": 128,
       "entries": [
@@ -109049,162 +109049,6 @@
           "out_of": 128,
           "rarity": 0.03125,
           "section": "Gem drop table"
-        },
-        {
-          "item_id": 1371,
-          "name": "Adamant battleaxe",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 11,
-          "out_of": 64,
-          "rarity": 0.171875,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1313,
-          "name": "Black 2h sword",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 5,
-          "out_of": 64,
-          "rarity": 0.078125,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1357,
-          "name": "Adamant axe",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 3,
-          "out_of": 64,
-          "rarity": 0.046875,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1317,
-          "name": "Adamant 2h sword",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 2,
-          "out_of": 64,
-          "rarity": 0.03125,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 4127,
-          "name": "Mithril boots",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 2,
-          "out_of": 64,
-          "rarity": 0.03125,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1201,
-          "name": "Rune kiteshield",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 2,
-          "out_of": 64,
-          "rarity": 0.03125,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 1163,
-          "name": "Rune full helm",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 1,
-          "out_of": 64,
-          "rarity": 0.015625,
-          "section": "Weapons and armour"
-        },
-        {
-          "item_id": 562,
-          "name": "Chaos rune",
-          "quantity": [
-            45,
-            45
-          ],
-          "separate_roll": true,
-          "weight": 5,
-          "out_of": 64,
-          "rarity": 0.078125,
-          "section": "Runes"
-        },
-        {
-          "item_id": 560,
-          "name": "Death rune",
-          "quantity": [
-            15,
-            15
-          ],
-          "separate_roll": true,
-          "weight": 3,
-          "out_of": 64,
-          "rarity": 0.046875,
-          "section": "Runes"
-        },
-        {
-          "item_id": 995,
-          "name": "Coins",
-          "quantity": [
-            1000,
-            1000
-          ],
-          "separate_roll": true,
-          "weight": 21,
-          "out_of": 64,
-          "rarity": 0.328125,
-          "section": "Other"
-        },
-        {
-          "item_id": 2357,
-          "name": "Gold bar",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 2,
-          "out_of": 64,
-          "rarity": 0.03125,
-          "section": "Other"
-        },
-        {
-          "item_id": 1734,
-          "name": "Thread",
-          "quantity": [
-            10,
-            10
-          ],
-          "separate_roll": true,
-          "weight": 1,
-          "out_of": 64,
-          "rarity": 0.015625,
-          "section": "Other"
         }
       ],
       "tertiary": [
@@ -109224,7 +109068,171 @@
             "The hard clue scroll drop rate increases to 1/121 after unlocking the hard Combat Achievements rewards tier.",
             "Clue scrolls will drop as scroll boxes after the completion of X Marks the Spot."
           ]
+        }
+      ],
+      "brimstone_key_roll": true,
+      "brimstone_konar_bonus": true
+    },
+    "jelly_drop_table_wilderness": {
+      "table_id": "jelly_drop_table_wilderness",
+      "label": "Wilderness Slayer Cave drops",
+      "table_name": "Jelly Wilderness Slayer Cave drops",
+      "wiki_page": "Jelly",
+      "main_max_roll": 64,
+      "entries": [
+        {
+          "item_id": 1371,
+          "name": "Adamant battleaxe",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 11,
+          "out_of": 64,
+          "rarity": 0.171875,
+          "section": "Weapons and armour"
         },
+        {
+          "item_id": 1313,
+          "name": "Black 2h sword",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 5,
+          "out_of": 64,
+          "rarity": 0.078125,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1357,
+          "name": "Adamant axe",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 3,
+          "out_of": 64,
+          "rarity": 0.046875,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1317,
+          "name": "Adamant 2h sword",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 64,
+          "rarity": 0.03125,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 4127,
+          "name": "Mithril boots",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 64,
+          "rarity": 0.03125,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1201,
+          "name": "Rune kiteshield",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 64,
+          "rarity": 0.03125,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 1163,
+          "name": "Rune full helm",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 64,
+          "rarity": 0.015625,
+          "section": "Weapons and armour"
+        },
+        {
+          "item_id": 562,
+          "name": "Chaos rune",
+          "quantity": [
+            45,
+            45
+          ],
+          "weight": 5,
+          "out_of": 64,
+          "rarity": 0.078125,
+          "section": "Runes"
+        },
+        {
+          "item_id": 560,
+          "name": "Death rune",
+          "quantity": [
+            15,
+            15
+          ],
+          "weight": 3,
+          "out_of": 64,
+          "rarity": 0.046875,
+          "section": "Runes"
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            1000,
+            1000
+          ],
+          "weight": 21,
+          "out_of": 64,
+          "rarity": 0.328125,
+          "section": "Other"
+        },
+        {
+          "item_id": 2357,
+          "name": "Gold bar",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 64,
+          "rarity": 0.03125,
+          "section": "Other"
+        },
+        {
+          "item_id": 1734,
+          "name": "Thread",
+          "quantity": [
+            10,
+            10
+          ],
+          "weight": 1,
+          "out_of": 64,
+          "rarity": 0.015625,
+          "section": "Other"
+        },
+        {
+          "shared_table": "gem",
+          "weight": 5,
+          "out_of": 64,
+          "rarity": 0.078125,
+          "section": "Gem drop table"
+        }
+      ],
+      "tertiary": [
         {
           "item_id": 11941,
           "name": "Looting bag",
@@ -109255,9 +109263,7 @@
             "Clue scrolls will drop as scroll boxes after the completion of X Marks the Spot."
           ]
         }
-      ],
-      "brimstone_key_roll": true,
-      "brimstone_konar_bonus": true
+      ]
     },
     "jennella": {
       "table_id": "jennella",
@@ -141071,10 +141077,10 @@
       ],
       "tertiary": []
     },
-    "outlaw_mudfoots_big_adventure": {
-      "table_id": "outlaw_mudfoots_big_adventure",
-      "label": "Drops",
-      "table_name": "Outlaw (Mudfoot's Big Adventure) Drops",
+    "outlaw_mudfoots_big_adventure_drop_table_the_mage": {
+      "table_id": "outlaw_mudfoots_big_adventure_drop_table_the_mage",
+      "label": "The mage",
+      "table_name": "Outlaw (Mudfoot's Big Adventure) The mage",
       "wiki_page": "Outlaw (Mudfoot's Big Adventure)",
       "entries": [
         {
@@ -141085,41 +141091,7 @@
             1
           ],
           "always": true,
-          "rarity_raw": "Always",
-          "section": "The ranger"
-        },
-        {
-          "item_id": 841,
-          "name": "Shortbow",
-          "quantity": [
-            1,
-            1
-          ],
-          "always": true,
-          "rarity_raw": "Always",
-          "section": "The ranger"
-        },
-        {
-          "item_id": 882,
-          "name": "Bronze arrow",
-          "quantity": [
-            80,
-            80
-          ],
-          "always": true,
-          "rarity_raw": "Always",
-          "section": "The ranger"
-        },
-        {
-          "item_id": 526,
-          "name": "Bones",
-          "quantity": [
-            1,
-            1
-          ],
-          "always": true,
-          "rarity_raw": "Always",
-          "section": "The mage"
+          "rarity_raw": "Always"
         },
         {
           "item_id": 1379,
@@ -141129,8 +141101,7 @@
             1
           ],
           "always": true,
-          "rarity_raw": "Always",
-          "section": "The mage"
+          "rarity_raw": "Always"
         },
         {
           "item_id": 556,
@@ -141140,8 +141111,7 @@
             80
           ],
           "always": true,
-          "rarity_raw": "Always",
-          "section": "The mage"
+          "rarity_raw": "Always"
         },
         {
           "item_id": 558,
@@ -141151,9 +141121,17 @@
             80
           ],
           "always": true,
-          "rarity_raw": "Always",
-          "section": "The mage"
-        },
+          "rarity_raw": "Always"
+        }
+      ],
+      "tertiary": []
+    },
+    "outlaw_mudfoots_big_adventure_drop_table_the_ranger": {
+      "table_id": "outlaw_mudfoots_big_adventure_drop_table_the_ranger",
+      "label": "The ranger",
+      "table_name": "Outlaw (Mudfoot's Big Adventure) The ranger",
+      "wiki_page": "Outlaw (Mudfoot's Big Adventure)",
+      "entries": [
         {
           "item_id": 526,
           "name": "Bones",
@@ -141162,8 +141140,46 @@
             1
           ],
           "always": true,
-          "rarity_raw": "Always",
-          "section": "The warrior"
+          "rarity_raw": "Always"
+        },
+        {
+          "item_id": 841,
+          "name": "Shortbow",
+          "quantity": [
+            1,
+            1
+          ],
+          "always": true,
+          "rarity_raw": "Always"
+        },
+        {
+          "item_id": 882,
+          "name": "Bronze arrow",
+          "quantity": [
+            80,
+            80
+          ],
+          "always": true,
+          "rarity_raw": "Always"
+        }
+      ],
+      "tertiary": []
+    },
+    "outlaw_mudfoots_big_adventure_drop_table_the_warrior": {
+      "table_id": "outlaw_mudfoots_big_adventure_drop_table_the_warrior",
+      "label": "The warrior",
+      "table_name": "Outlaw (Mudfoot's Big Adventure) The warrior",
+      "wiki_page": "Outlaw (Mudfoot's Big Adventure)",
+      "entries": [
+        {
+          "item_id": 526,
+          "name": "Bones",
+          "quantity": [
+            1,
+            1
+          ],
+          "always": true,
+          "rarity_raw": "Always"
         },
         {
           "item_id": 1191,
@@ -141173,8 +141189,7 @@
             1
           ],
           "always": true,
-          "rarity_raw": "Always",
-          "section": "The warrior"
+          "rarity_raw": "Always"
         },
         {
           "item_id": 1323,
@@ -141184,8 +141199,7 @@
             1
           ],
           "always": true,
-          "rarity_raw": "Always",
-          "section": "The warrior"
+          "rarity_raw": "Always"
         }
       ],
       "tertiary": []
@@ -212212,7 +212226,7 @@
       "cache_name": "Jelly",
       "wiki_page": "Jelly",
       "tables": [
-        "jelly"
+        "jelly_drop_table_regular"
       ]
     },
     "438": {
@@ -212221,7 +212235,7 @@
       "cache_name": "Jelly",
       "wiki_page": "Jelly",
       "tables": [
-        "jelly"
+        "jelly_drop_table_regular"
       ]
     },
     "439": {
@@ -212230,7 +212244,7 @@
       "cache_name": "Jelly",
       "wiki_page": "Jelly",
       "tables": [
-        "jelly"
+        "jelly_drop_table_regular"
       ]
     },
     "440": {
@@ -212239,7 +212253,7 @@
       "cache_name": "Jelly",
       "wiki_page": "Jelly",
       "tables": [
-        "jelly"
+        "jelly_drop_table_regular"
       ]
     },
     "441": {
@@ -212248,7 +212262,7 @@
       "cache_name": "Jelly",
       "wiki_page": "Jelly",
       "tables": [
-        "jelly"
+        "jelly_drop_table_regular"
       ]
     },
     "442": {
@@ -212257,7 +212271,7 @@
       "cache_name": "Jelly",
       "wiki_page": "Jelly",
       "tables": [
-        "jelly"
+        "jelly_drop_table_regular"
       ]
     },
     "443": {
@@ -233665,7 +233679,7 @@
       "cache_name": "Jelly",
       "wiki_page": "Jelly",
       "tables": [
-        "jelly"
+        "jelly_drop_table_wilderness"
       ]
     },
     "11242": {
@@ -233674,7 +233688,7 @@
       "cache_name": "Jelly",
       "wiki_page": "Jelly",
       "tables": [
-        "jelly"
+        "jelly_drop_table_wilderness"
       ]
     },
     "11243": {
@@ -233683,7 +233697,7 @@
       "cache_name": "Jelly",
       "wiki_page": "Jelly",
       "tables": [
-        "jelly"
+        "jelly_drop_table_wilderness"
       ]
     },
     "11244": {
@@ -233692,7 +233706,7 @@
       "cache_name": "Jelly",
       "wiki_page": "Jelly",
       "tables": [
-        "jelly"
+        "jelly_drop_table_wilderness"
       ]
     },
     "11245": {
@@ -233701,7 +233715,7 @@
       "cache_name": "Jelly",
       "wiki_page": "Jelly",
       "tables": [
-        "jelly"
+        "jelly_drop_table_wilderness"
       ]
     },
     "11269": {
@@ -239253,7 +239267,7 @@
       "name": "Outlaw (Mudfoot's Big Adventure)",
       "wiki_page": "Outlaw (Mudfoot's Big Adventure)",
       "tables": [
-        "outlaw_mudfoots_big_adventure"
+        "outlaw_mudfoots_big_adventure_drop_table_the_ranger"
       ]
     },
     "16836": {
@@ -239261,7 +239275,7 @@
       "name": "Outlaw (Mudfoot's Big Adventure)",
       "wiki_page": "Outlaw (Mudfoot's Big Adventure)",
       "tables": [
-        "outlaw_mudfoots_big_adventure"
+        "outlaw_mudfoots_big_adventure_drop_table_the_ranger"
       ]
     },
     "16837": {
@@ -239270,7 +239284,7 @@
       "cache_name": "Outlaw",
       "wiki_page": "Outlaw (Mudfoot's Big Adventure)",
       "tables": [
-        "outlaw_mudfoots_big_adventure"
+        "outlaw_mudfoots_big_adventure_drop_table_the_ranger"
       ]
     },
     "16839": {
@@ -239278,7 +239292,7 @@
       "name": "Outlaw (Mudfoot's Big Adventure)",
       "wiki_page": "Outlaw (Mudfoot's Big Adventure)",
       "tables": [
-        "outlaw_mudfoots_big_adventure"
+        "outlaw_mudfoots_big_adventure_drop_table_the_mage"
       ]
     },
     "16840": {
@@ -239287,7 +239301,7 @@
       "cache_name": "Outlaw",
       "wiki_page": "Outlaw (Mudfoot's Big Adventure)",
       "tables": [
-        "outlaw_mudfoots_big_adventure"
+        "outlaw_mudfoots_big_adventure_drop_table_the_mage"
       ]
     },
     "16842": {
@@ -239295,7 +239309,7 @@
       "name": "Outlaw (Mudfoot's Big Adventure)",
       "wiki_page": "Outlaw (Mudfoot's Big Adventure)",
       "tables": [
-        "outlaw_mudfoots_big_adventure"
+        "outlaw_mudfoots_big_adventure_drop_table_the_warrior"
       ]
     },
     "16843": {
@@ -239304,7 +239318,7 @@
       "cache_name": "Outlaw",
       "wiki_page": "Outlaw (Mudfoot's Big Adventure)",
       "tables": [
-        "outlaw_mudfoots_big_adventure"
+        "outlaw_mudfoots_big_adventure_drop_table_the_warrior"
       ]
     }
   }

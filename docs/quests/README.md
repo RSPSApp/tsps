@@ -109,7 +109,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Mountain Daughter | untested |  |  |  |  |
 | [Mourning's End Part I](mournings-end-part-i/README.md) | untested |  |  |  |  |
 | Mourning's End Part II | untested |  |  |  |  |
-| [Mudfoot's Big Adventure](mudfoots-big-adventure/README.md) | untested |  | agent | claude-sonnet-5-5 | 10 |
+| [Mudfoot's Big Adventure](mudfoots-big-adventure/README.md) | untested |  |  |  |  |
 | [Murder Mystery](murder-mystery/README.md) | ✅ passed | 2026-10-25 | agent |  |  |
 | My Arm's Big Adventure | untested |  |  |  |  |
 | [Nature Spirit](nature-spirit/README.md) | untested |  |  |  |  |

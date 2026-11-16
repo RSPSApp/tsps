@@ -990,7 +990,8 @@ function cleanupPlayer({ player }) {
 
 /**
  * A death in the tunnels leaves them too, with the last charge unused: a warned pick the death drops
- * (to a grave or the floor) crumbles rather than going with the rest. One it keeps goes in playerDeath.
+ * (to a grave or the floor) crumbles rather than going with the rest. One it keeps goes in
+ * crumbleKeptLockpicksOnDeath.
  */
 function crumbleWarnedLockpickOnDeath(event) {
   const { player, item } = event;
@@ -999,9 +1000,17 @@ function crumbleWarnedLockpickOnDeath(event) {
   event.handled = true;
 }
 
+/**
+ * A warned pick the death keeps (Protect Item, a keep-everything death) crumbles too, as a teleport
+ * out does. Every death emits this, after the kept items are back and before the respawn move, so
+ * the player is still on the death tile. onPlayerDeath stops at the first handler that takes the
+ * death (the Death's Office tutorial on a first grave), so it is not used for this.
+ */
+function crumbleKeptLockpicksOnDeath({ victim: player }) {
+  if (player?.isPlayer?.() && inTunnels(player)) crumbleWarnedLockpicks(player);
+}
+
 function playerDeath(event) {
-  // Still on the death tile (the respawn move comes after), with the kept items back.
-  if (inTunnels(event.player)) crumbleWarnedLockpicks(event.player);
   cleanupPlayer(event);
   const run = event.player.getAttribute(ATTRIBUTE);
   if (run?.looted) event.player.setAttribute(ATTRIBUTE, freshRun(run.chests));
@@ -1114,10 +1123,11 @@ module.exports = {
     api.onPlayerProcess(processPlayer);
     api.onPlayerDeath(playerDeath);
     api.onPlayerDeathItemDrop(crumbleWarnedLockpickOnDeath);
+    api.onPlayerDefeated(crumbleKeptLockpicksOnDeath);
     api.onPlayerDisconnect(cleanupPlayer);
     api.onPlayerLogout(cleanupPlayer);
     api.registerNpcCombatMethodProvider(Npcs.AHRIM_THE_BLIGHTED, AhrimCombat);
   },
   _test: { rollRewards, searchChest, searchCrypt, chestCount, phaseOf, syncMinimap, processPlayer, dig, useDoor, doorSides, getTunnelMap, getRun, IGNORE_CLIPPING_FLAG,
-    useLockpickOnDoor, inspectLockpick, refuseMoundDig, WARNINGS_ATTRIBUTE, playerDeath, crumbleWarnedLockpickOnDeath },
+    useLockpickOnDoor, inspectLockpick, refuseMoundDig, WARNINGS_ATTRIBUTE, playerDeath, crumbleWarnedLockpickOnDeath, crumbleKeptLockpicksOnDeath },
 };

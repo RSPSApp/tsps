@@ -1778,8 +1778,10 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
 - **The map** is ours, since the cache has no map-square to area table: each area lists 64 x 64
   map squares (`rects` and `squares`, map coordinates = tile >> 6) drawn from the Wiki's
   descriptions, over the cache's own map list (`CacheMaps.getRegionIds`). The lowest-numbered area
-  naming a square owns it. `tilePolygons` refine named mixed squares using sourced outlines;
-  the northeast Lumbridge squares use the Wiki's mainland Misthalin outline, leaving Al Kharid's
+  naming a square owns it. `tilePolygons` refine named mixed squares using sourced tile-grid outlines,
+  sampling each tile at its centre (`x + 0.5`, `y + 0.5`) with the crossing rule; outline edges
+  are not included separately.
+  The northeast Lumbridge squares use the Wiki's mainland Misthalin outline, leaving Al Kharid's
   mine outside it. Explicit underground squares include the Chasm of Tears and the Dorgesh-Kaan
   mine; they do not inherit the Desert from the unrelated surface square. A league's `overrides` reassign squares (the Stranglewood: Kourend in
   Trailblazer Reloaded, Varlamore in Raging Echoes), an unnamed underground square (map y >= 100)

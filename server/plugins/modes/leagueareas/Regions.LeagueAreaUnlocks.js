@@ -78,14 +78,13 @@ function indexFor(type) {
   return byLeague.get(type) ?? build(type);
 }
 
-/** Integer tile points on the Wiki outline belong to it; otherwise use the crossing rule. */
+/** Wiki vertices are tile grid lines; classify each tile by its centre with the crossing rule. */
 function contains(outline, x, y) {
+  x += 0.5;
+  y += 0.5;
   let inside = false;
   for (let i = 0, j = outline.length - 1; i < outline.length; j = i++) {
     const [ax, ay] = outline[j], [bx, by] = outline[i];
-    if ((x - ax) * (by - ay) === (y - ay) * (bx - ax)
-      && x >= Math.min(ax, bx) && x <= Math.max(ax, bx)
-      && y >= Math.min(ay, by) && y <= Math.max(ay, by)) return true;
     if ((ay > y) !== (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax) inside = !inside;
   }
   return inside;

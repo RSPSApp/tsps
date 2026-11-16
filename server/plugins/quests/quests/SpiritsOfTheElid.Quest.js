@@ -168,6 +168,18 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   const ROOT_LASSO_TILE = new Location(3371, 3129, 0);
   const ROOT_STEP_DELAY_TICKS = 1;
   const ROOT_LASSO_DELAY_TICKS = 2;
+  /**
+   * The lasso (with synth 1258, both 30 cycles in) and, four ticks on, the climb down the rope; the fade
+   * starts three ticks after the climb and the move into the cave comes four after that
+   * (227/01788 ticks 5029, 5033, 5036, 5040; 231/03019 ticks 55, 59, 62, 66 and 573, 577, 580, 584).
+   */
+  const ROPE_LASSO_SEQ = "elid_rope_lasso"; // 2910
+  const ROPE_CLIMB_SEQ = "elid_climb_rope"; // 2909
+  const ROPE_LASSO_SYNTH = 1258;
+  const ROPE_LASSO_DELAY_CYCLES = 30;
+  const ROPE_CLIMB_DELAY_TICKS = 4;
+  const ROPE_FADE_DELAY_TICKS = 3;
+  const ROPE_CAVE_DELAY_TICKS = 4;
   const CREVICE_OBJECT_ID = ObjectIdentifiers.CREVICE_9; // 10416, west of Nardah
   const CREVICE_ROPE_OBJECT_ID = ObjectIdentifiers.ROPE_10; // 10434, inside the crevice
   const CAVE_EXIT_OBJECT_ID = ObjectIdentifiers.CAVE_EXIT_18; // 10417
@@ -834,24 +846,36 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     player.getMovementQueue().setBlockMovement(false);
   }
 
-  /** Capture 1788: descent camera, fade, teleport to (3349,9536), reset and theme. */
+  /** Capture 1788: lasso, descent camera, climb, fade, teleport to (3349,9536), reset and theme. */
   function playRopeDescent(player, descent) {
     player.getMovementQueue().reset().setBlockMovement(true);
+    player.performAnimation(new Animation(api.core.CacheDefinitions.getSeqId(ROPE_LASSO_SEQ), ROPE_LASSO_DELAY_CYCLES));
     Scenes.camera(player, [3368, 3134, 1175], [3372, 3130, 25], { rate: 1, rate2: 200 });
-    Scenes.fade(player, true);
-    Scenes.later(player, 2, () => {
-      if (ropeDescents.get(player) !== descent) return;
+    player.getPacketSender().sendSound(ROPE_LASSO_SYNTH, 1, ROPE_LASSO_DELAY_CYCLES);
+    // Still there: a teleport during the descent leaves the player where they went, nothing half-open.
+    const stillAtRoot = () => {
+      if (ropeDescents.get(player) !== descent) return false;
+      if (player.getLocation().equals(ROOT_LASSO_TILE)) return true;
       endRopeDescent(player, descent);
-      if (!player.getLocation().equals(ROOT_LASSO_TILE)) {
-        // Teleported away during the fade: no pull into the cave, and nothing left half-open.
-        Scenes.closeFade(player);
-        player.getPacketSender().sendCameraReset();
-        return;
-      }
-      player.moveTo(DUNGEON_ENTRY_TILE);
-      player.getPacketSender().sendCameraReset().sendSong(462);
-      Scenes.fade(player, false);
-      Scenes.later(player, 2, () => Scenes.closeFade(player));
+      Scenes.closeFade(player);
+      player.getPacketSender().sendCameraReset();
+      return false;
+    };
+    Scenes.later(player, ROPE_CLIMB_DELAY_TICKS, () => {
+      if (!stillAtRoot()) return;
+      player.performAnimation(new Animation(api.core.CacheDefinitions.getSeqId(ROPE_CLIMB_SEQ)));
+      Scenes.later(player, ROPE_FADE_DELAY_TICKS, () => {
+        if (!stillAtRoot()) return;
+        Scenes.fade(player, true);
+        Scenes.later(player, ROPE_CAVE_DELAY_TICKS, () => {
+          if (!stillAtRoot()) return;
+          endRopeDescent(player, descent);
+          player.moveTo(DUNGEON_ENTRY_TILE);
+          player.getPacketSender().sendCameraReset().sendSong(462);
+          Scenes.fade(player, false);
+          Scenes.later(player, 2, () => Scenes.closeFade(player));
+        });
+      });
     });
   }
 

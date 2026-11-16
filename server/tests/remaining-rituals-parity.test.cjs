@@ -754,13 +754,18 @@ test('Spirits of the Elid rope descent plays the captured camera, fade, tile and
   h.give(I.ROPE, 1);
   // On the lasso tile (3371,3129) there is no step; the lasso's camera and fade come two ticks on (03019 571-573).
   h.setLocation(3371, 3129);
+  const anims = [];
+  h.player.performAnimation = (animation) => anims.push(animation.getId());
   h.itemOnObject(I.ROPE, O.ROOT_3);
   assert.equal(h.cameras.length, 0, 'not yet');
   h.runTasks(2);
   assert.deepEqual(h.cameras[0], ['move', 3368, 3134, 1175, { rate: 1, rate2: 200 }]);
   assert.deepEqual(h.cameras[1], ['look', 3372, 3130, 25, { rate: 1, rate2: 200 }]);
+  assert.deepEqual(anims, [2910], 'the lasso with the camera (elid_rope_lasso)');
+  assert.equal(h.subInterfaces.some(([kind, , id]) => kind === 'open' && id === 174), false, 'the fade waits for the climb');
+  h.runTasks(4);
+  assert.deepEqual(anims, [2910, 2909], 'then the climb (elid_climb_rope)');
   assert.ok(h.subInterfaces.some(([kind, uid, id]) => kind === 'open' && uid === (161 << 16) | 1 && id === 174));
-  h.runTasks(2);
   assert.equal(h.player.getLocation().getX(), 3349);
   assert.equal(h.player.getLocation().getY(), 9536);
   assert.ok(h.songs.includes(462), 'Spirits of the Elid theme plays');

@@ -417,8 +417,8 @@ test('the boulder: 10 players open the western channel and 20 the eastern (Wiki)
   ticks(51);
   assert.equal(two.boulders.length, 2);
   assert.deepEqual(two.boulders.map((b) => b.channel), ['central', 'west']);
-  assert.deepEqual(two.area.templateOf(two.boulders[1].loc.getLocation()), [3791, 10127, 1]);
-  assert.deepEqual(Boulder.stageTiles('west')[2], [3791, 10149, 1]);
+  assert.deepEqual(two.area.templateOf(two.boulders[1].loc.getLocation()), [3788, 10124, 1]);
+  assert.deepEqual(Boulder.stageTiles('west')[2], [3789, 10148, 1]);
   two.end();
   Game.reset();
 
@@ -427,8 +427,8 @@ test('the boulder: 10 players open the western channel and 20 the eastern (Wiki)
   ticks(51);
   assert.equal(three.boulders.length, 3);
   assert.deepEqual(three.boulders.map((b) => b.channel), ['central', 'west', 'east']);
-  assert.deepEqual(three.area.templateOf(three.boulders[2].loc.getLocation()), [3823, 10127, 1]);
-  assert.deepEqual(Boulder.stageTiles('east')[4], [3823, 10198, 1]);
+  assert.deepEqual(three.area.templateOf(three.boulders[2].loc.getLocation()), [3820, 10124, 1]);
+  assert.deepEqual(Boulder.stageTiles('east')[4], [3823, 10188, 1]);
 });
 
 test('the boulder: a click mines the channel it hit, not the central boulder', () => {

@@ -213,6 +213,10 @@ export class OverheadTextOverlay implements Overlay {
 
         // First pass: project anchors, claim the per-actor element offset, and
         // collect layout metrics for the overlap pass.
+        // Textures are drawn at `scale` (device pixel ratio), so every pixel offset that
+        // relates to the texture has to use the same scale.
+        const scale = Number.isFinite(this.scale) && this.scale > 0 ? this.scale : 1.0;
+
         const layouts = this.layoutScratch;
         layouts.length = 0;
         for (const entry of entries) {
@@ -250,8 +254,8 @@ export class OverheadTextOverlay implements Overlay {
                 alpha,
                 centerX,
                 baseline,
-                halfWidth: Math.floor(Math.max(0, tex.w - H_PADDING * 2) / 2),
-                ascent: fontAscent,
+                halfWidth: Math.floor((Math.max(0, tex.w - H_PADDING * 2) * scale) / 2),
+                ascent: Math.round(fontAscent * scale),
             });
         }
 
@@ -285,24 +289,25 @@ export class OverheadTextOverlay implements Overlay {
             const tex = layout.tex;
             const alpha = layout.alpha;
             const centerX = layout.centerX;
-            const width = Math.max(1, Math.round(tex.w * this.scale));
-            const heightPx = Math.max(1, Math.round(tex.h * this.scale));
+            const width = Math.max(1, Math.round(tex.w * scale));
+            const heightPx = Math.max(1, Math.round(tex.h * scale));
             const cyclesRemaining = this.toCyclesRemaining150(entry);
             const progress = 150 - cyclesRemaining;
-            const offsetY = Math.round(this.computeEffectOffset(entry.effect, progress));
+            const offsetY = Math.round(this.computeEffectOffset(entry.effect, progress) * scale);
 
             let left = centerX - Math.round(width / 2);
             // The texture's internal baseline sits at V_PADDING + ascent from its top.
-            const top = layout.baseline - V_PADDING - layout.ascent + offsetY;
+            const top = layout.baseline - Math.round(V_PADDING * scale) - layout.ascent + offsetY;
 
             if ((entry.effect | 0) === 4) {
-                const textWidth = Math.max(0, tex.w - H_PADDING * 2);
-                const scroll = (progress * (textWidth + 100)) / 150;
-                const drawX = centerX + 50 - scroll;
-                left = Math.round(drawX - H_PADDING);
-                const scLeft = Math.round(centerX - 50);
+                const textWidth = Math.max(0, tex.w - H_PADDING * 2) * scale;
+                const scrollHalf = 50 * scale;
+                const scroll = (progress * (textWidth + scrollHalf * 2)) / 150;
+                const drawX = centerX + scrollHalf - scroll;
+                left = Math.round(drawX - H_PADDING * scale);
+                const scLeft = Math.round(centerX - scrollHalf);
                 const scTop = top;
-                const scWidth = Math.round(100);
+                const scWidth = Math.round(scrollHalf * 2);
                 const scHeight = heightPx;
                 const scBottom = Math.round(this.app.height - (scTop + scHeight));
                 if (scWidth > 0 && scHeight > 0) {

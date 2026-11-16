@@ -23,8 +23,10 @@ before(() => {
 });
 
 const id = (name) => core.CacheDefinitions.getObjId(`fossil_enriched_bone_${name}`);
+let nextIndex = 900;
 function setup(t) {
   const p = new Player(null);
+  p.setIndex(++nextIndex);
   p.setRegistered(true);
   p.messages = []; p.xp = []; p.anims = []; p.locs = []; p.sounds = [];
   t.mock.method(p, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
@@ -98,4 +100,33 @@ test('moving or replacing the selected slot stops the action without consuming a
   TaskManager.process();
   assert.equal(p.getInventory().getAmount(id('rare')), 1);
   assert.deepEqual(p.xp, []);
+});
+
+for (const autoRetaliation of [false, true]) {
+  test(`${autoRetaliation ? 'auto-retaliation' : 'attacking'} cancels the pending feed and clears the skill`, t => {
+    const p = setup(t);
+    const target = new Player(null);
+    target.setIndex(++nextIndex);
+    give(p, 'small');
+    use(p, 'small');
+    TaskManager.process();
+    p.getCombat().attack(target, autoRetaliation);
+    TaskManager.process();
+    assert.equal(p.getInventory().getAmount(id('small')), 1);
+    assert.deepEqual(p.xp, []);
+    assert.equal(p.getSkill(), null);
+    assert.equal(p.locs.at(-1), core.CacheDefinitions.getSeqId('fi_dkl_bone_machine_inactive'));
+  });
+}
+
+test('disconnect before reward stops the feed without consuming the bone', t => {
+  const p = setup(t);
+  give(p, 'small');
+  use(p, 'small');
+  TaskManager.process();
+  p.setRegistered(false);
+  TaskManager.process();
+  assert.equal(p.getInventory().getAmount(id('small')), 1);
+  assert.deepEqual(p.xp, []);
+  assert.equal(p.getSkill(), null);
 });

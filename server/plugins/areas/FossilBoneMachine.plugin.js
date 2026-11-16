@@ -35,7 +35,7 @@ function useBone(event) {
     player.getSkill() === action && player.getLocation().equals(start) &&
     player.getPrivateArea() === area && player.getMovementQueue().size() === 0;
   const task = new (class extends core.Task {
-    constructor() { super(1, player, false); }
+    constructor() { super(1, player.getIndex(), false); }
     execute() {
       if (!valid() || inventory.get(slot)?.getId() !== pendingId) return this.stop();
       if (phase === 0) {

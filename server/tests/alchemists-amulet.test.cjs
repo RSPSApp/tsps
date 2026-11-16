@@ -225,4 +225,46 @@ test('grave owner refuses nominated third-party, protected or tradeable PvP loot
   assert.ok(!kept.includes(worn));
   PM.emitCustomEvent('gravestones:forfeit',{player:f.p});
 });
-
+test('native Friendly Forager supplies fourth dose without spending either amulet kind charge',async t=>{
+  for(const ordinary of [false,true]){
+    const f=actor(t);f.p.setProfile('league');f.p.setAttribute('league:type',5);f.p.setAttribute('league:relics',{'1':2});
+    assert.equal(require('../plugins/modes/leaguerelics/Common.LeagueRelics').hasRelic(f.p,'friendly-forager'),true);
+    const amulet=wear(f,2,ordinary?chemistry():charged());
+    const observed=[];
+    PM.createApi('AmuletCancellationTest').onCustomEvent('herblore:made',e=>{if(e.player===f.p)observed.push(e.mix);});
+    f.p.setAttribute('amulet-of-chemistry:charges',4);
+    put(f,0,obj('ranarrvial'));put(f,1,obj('snape_grass'));
+    const before=f.p.getSkillManager().skills.experience[core.Skill.HERBLORE.getIndex()];
+    const messagesBefore=f.messages.length;
+    t.mock.method(Math,'random',()=>.01);
+    await use(f,0,1);
+    assert.equal(f.inv.getAmount(obj('4doseprayerrestore')),1);
+    assert.equal(f.inv.getAmount(obj('snape_grass')),1);
+    assert.equal(f.p.getSkillManager().skills.experience[core.Skill.HERBLORE.getIndex()]-before,87.5*8, 'ordinary recipe XP with actual League multiplier');
+    assert.equal(amulet.getMetaValue(KEY),2);
+    assert.equal(f.p.getAttribute('amulet-of-chemistry:charges'),4);
+    assert.ok(!f.messages.slice(messagesBefore).some(m=>/amulet.*helps you/.test(m)));
+    assert.equal(observed.length,1);
+    assert.equal(observed[0].alchemistExtraDose,undefined,'pending amulet token cleared even on cancellation');
+  }
+});
+test('real grave retrieval auto-equips transformed PvP amulet and preserves normal controls',t=>{
+  const {PlayerDeathTask}=require('../dist/game/task/impl/PlayerDeath');
+  const Common=require('../plugins/world/gravestones/Common.Gravestones');
+  const Grave=require('../plugins/world/gravestones/Grave.Gravestones');
+  for(const kind of ['charged-pvp','uncharged-pvp','charged-pvm']){
+    const f=actor(t),killer=actor(t);f.p.setSkullTimer(100);f.p.setAttribute('gravestones:met-death',true);
+    const pvp=kind!=='charged-pvm';const original=wear(f,17,kind==='uncharged-pvp'?empty():charged());
+    Common.setVarbit(f.p,'autoEquip',1);
+    const kept=PlayerDeathTask.dropItems(f.p,pvp?killer.p:null,f.p.getLocation());
+    assert.ok(!kept.includes(original));
+    const state={player:f.p};PM.emitCustomEvent('gravestones:state',state);
+    const expected=pvp?empty():charged();
+    assert.deepEqual(state.grave.items.filter(Boolean).map(i=>i.id),[expected]);
+    Grave.takeFree(f.p);
+    assert.equal(f.eq.get(core.Equipment.AMULET_SLOT).getId(),expected,kind);
+    assert.equal(f.inv.getAmount(expected),0,kind);
+    if(!pvp)assert.equal(f.eq.get(core.Equipment.AMULET_SLOT).getMetaValue(KEY),17);
+    PM.emitCustomEvent('gravestones:forfeit',{player:f.p});
+  }
+});

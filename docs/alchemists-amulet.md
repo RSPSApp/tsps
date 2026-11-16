@@ -34,7 +34,9 @@ invalidates the request. Inventory transformations are planned on copied slots b
 
 The native Herblore ingredient action reaches `Mixing.Herblore.mix/offer/start/makeOne`, whose
 existing `herblore:mix` request selects the extra-dose product using `potions:dose-family`.
-Only the matching `herblore:made` consumes a charge after actual ingredients/output/XP. The
+Only the matching `herblore:made` consumes a charge after actual ingredients/output/XP and
+only while the shared `extraDose` flag remains owned by the amulet. League effects that
+supply the fourth dose clear that flag; the pending amulet token is cleared even on cancellation. The
 ordinary chemistry roll and five-charge player state are preserved. Prescription goggles
 still save secondaries independently. Omnishop validates payment/capacity before its existing
 `omnishop:purchase` listener grants the actual 50-charge item and collection-log event.
@@ -43,7 +45,9 @@ The Wiki states: "If killed by a player while wearing this amulet unprotected, i
 at your gravestone with 0 charges." `Death.Gravestones.js` therefore adds
 `gravestones:pvp-items`: the grave owner derives eligible exact references from this death's
 lost worn untradeables and filters nominated references against that original set. The amulet
-nominates only the lost worn copy, converts it to uncharged and clears charges. Other PvP
+nominates only the lost worn copy, converts it to uncharged and clears charges. The grave
+owner snapshots the original worn slot and ID before the query, then updates a copied layout
+only for accepted transformed items so auto-equip retrieval restores the correct slot. Other PvP
 loot, protected/carried amulets and third-party items retain the existing routing. Disabled
 graves and Ultimate Ironmen retain the shared no-grave policy. PvM and protected items retain
 their charges. Existing grave persistence stores item metadata; PlayerSave restores it too.
@@ -56,7 +60,7 @@ Own server TypeScript build passed. Focused command:
 node --test tests/alchemists-amulet.test.cjs tests/herblore.test.cjs tests/mastering-mixology.test.cjs tests/gravestones.test.cjs
 ```
 
-142 tests passed, including 12 new tests on real Player, Inventory, Equipment, Bank and
+The initial focused run passed 142 tests, including 12 new tests on real Player, Inventory, Equipment, Bank and
 serialized persistence with only the network captured. Native decoded packets exercise
 charge/uncharge menus, ordinary potion ingredient use through actual Herblore `makeOne`,
 make-all final depletion and unchanged recipe XP, the 15% boundary, ordinary chemistry,
@@ -70,3 +74,13 @@ The initial new tests failed on missing brewing/charging/uncharge behavior; the 
 separately failed on absent PvP grave routing before the shared change. Rendering-client
 screenshots, actual login/relogin walkthrough and independent review remain pending; unit
 tests and decoded native packets alone do not verify client rendering or retail prompt text.
+
+Independent review then reproduced two defects: Friendly Forager's fourth dose still spent
+the upgraded amulet's charge, and the transformed PvP amulet's old layout ID prevented
+grave auto-equip. Both failing reviewer assertions were retained unchanged and passed after
+fixes. Two maintained native regressions now exercise the actual relic and death/retrieval
+paths, with ordinary chemistry, normal potion XP at the League multiplier, cleared pending
+tokens, and uncharged-PvP/charged-PvM auto-equip controls. The scoped follow-up run passed
+62 tests across the independent harness, 14 maintained amulet tests, gravestones and the
+relevant relic/fragment production consumers. No full suite or unchanged 142-test repeat
+was required. Scoped independent re-review and rendered client QA remain pending.

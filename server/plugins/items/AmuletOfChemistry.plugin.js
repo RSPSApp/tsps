@@ -117,7 +117,8 @@ function onMix(request) {
  * potion with 4 doses anyway clears `extraDose` (Wiki: no benefit for potions that always come with 4 doses).
  */
 function onMade(made) {
-  if (made.mix?.extraDose === true) spendCharge(made);
+  // The upgraded amulet uses the same cancellable dose flag, but owns its own item charge.
+  if (made.mix?.extraDose === true && !made.mix.alchemistExtraDose) spendCharge(made);
 }
 
 function options({ player }) {
@@ -179,7 +180,7 @@ function initialize(pluginApi) {
 
 module.exports = {
   name: "AmuletOfChemistry",
-  description: "Amulet of chemistry: 5% chance of an extra potion dose when mixing in Herblore, five charges per amulet, with Options and Break.",
+  description: "Amulet of chemistry: 5% extra-dose chance with five charges. Alchemist's amulet: 15% chance, charging, noted refunds and persistent item charges.",
   members: true,
   _test: { initialize, onMix, onMade, withExtraDose, breakClicked, CHARGES_ATTRIBUTE, STOP_ON_BREAK_ATTRIBUTE, MAX_CHARGES },
   register(api) {

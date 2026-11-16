@@ -156,12 +156,19 @@ function onMix(mix) {
   const productId = extraDose(mix.productId);
   if (productId == null || Math.random() >= EXTRA_DOSE_CHANCE) return;
   mix.productId = productId;
-  mix.alchemistExtraDose = locate(mix.player, item);
+  mix.extraDose = true;
+  mix.alchemistExtraDose = { ...locate(mix.player, item), productId };
 }
 
-function onMade({ player, mix }) {
+function onMade({ player, itemId, mix }) {
   const snapshot = mix?.alchemistExtraDose;
-  if (!snapshot || !current(snapshot)) return;
+  if (!snapshot) return;
+  // League effects may supply the same product themselves and cancel the amulet's dose.
+  // Consume the pending token even on cancellation so it cannot be spent a second time.
+  delete mix.alchemistExtraDose;
+  const suppliedDose = mix.extraDose === true;
+  mix.extraDose = false;
+  if (!suppliedDose || itemId !== snapshot.productId || mix.productId !== snapshot.productId || !current(snapshot)) return;
   const left = charges(snapshot.item) - 1;
   setCharges(snapshot.item, left);
   player.sendMessage(`Your alchemist's amulet helps you create an extra dose.${left === 0 ? " It has run out of charges." : ""}`);

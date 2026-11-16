@@ -50,15 +50,25 @@ function takePvpExceptions(event) {
   const worn = player.getEquipment().getItems();
   const eligible = new Set(event.untradeables.filter(item => !item.isTradeable() && worn.includes(item)));
   if (eligible.size === 0) return;
+  const originalSlots = new Map([...eligible].map(item => [item, { slot: worn.indexOf(item), id: item.getId() }]));
+  const layout = event.layout ? {
+    ...event.layout, inventory: event.layout.inventory?.slice(), equipment: event.layout.equipment?.slice(),
+  } : undefined;
   const request = { player, killer, eligible: [...eligible], items: [] };
   Common.api().emitCustomEvent("gravestones:pvp-items", request);
   const selected = event.untradeables.filter(item => eligible.has(item) && request.items.includes(item) && !item.isTradeable());
   if (selected.length === 0) return;
   const taken = new Set(selected);
+  // A nominee may change form. Preserve its original worn slot using our private
+  // pre-query snapshot, without accepting layout or slot assignments from content.
+  for (const item of selected) {
+    const { slot, id } = originalSlots.get(item);
+    if (layout?.equipment?.[slot] === id) layout.equipment[slot] = item.getId();
+  }
   for (let i = event.untradeables.length - 1; i >= 0; i--) {
     if (taken.has(event.untradeables[i])) event.untradeables.splice(i, 1);
   }
-  Grave.store(player, location, selected.map(Common.record), event.layout, Common.core().Wilderness.isIn(player));
+  Grave.store(player, location, selected.map(Common.record), layout, Common.core().Wilderness.isIn(player));
   Timer.track(player);
 }
 

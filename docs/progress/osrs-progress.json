@@ -39927,6 +39927,7 @@
             "server/plugins/items/TonalzticsOfRalos.plugin.js"
           ],
           "devNotes": [
+            "2026-11-16: Soulflame horn Entice now spends its grant on dragon/burning claws and affects their second accuracy check; early first-check success still spends it. Source: Soulflame horn Wiki; docs/soulflame-horn.md records the PvP second-check inference and verification limits. Real Player/NPC/PendingHit integration checks pass 17/17, with focused horn/melee-special/Vesta/dragon-dagger consumers checked; independent review and native client QA pending. Existing wider Special attacks task assessments are unchanged.",
             "Main 8166111fa: #1405 the Soulreaper axe's soul stacks and Behead; two-handed weapons (166 were wrong) now come from the cache.",
             "Main b7fa4f6b9: #1382 Liquify only works underwater and keeps stronger boosts; #1383 Soulshot uses the Wiki's ammunition-only damage and Magic drain.",
             "Main fdf193b28: #1292 Backstab/Snipe, #1299 Favour, #1313 Lumber Up variants, #1330 Hammer Blow, #1331 Fishstabber variants, #1336 Powershot, #1342 Abyssal Puncture variants, #1343 Rock Knocker variants and #1306 Excalibur's Sanctuary match the Wiki.",

@@ -42,6 +42,9 @@ before(() => {
     },
     onCustomEvent() {},
     onPlayerLogout: (fn) => { (hooks.logout ??= []).push(fn); },
+    onItemAction: (name, actions) => {
+      if (typeof name === 'string') for (const [op, fn] of Object.entries(actions)) (hooks.items ??= new Map()).set(`${name}:${op}`, fn);
+    },
     onPlayerLogin() {},
     emitCustomEvent: (name, payload) => lootTracker.get(name)?.(payload),
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ title, args }),
@@ -288,6 +291,34 @@ test('logging out with pollen drops it', () => {
   tend(p, event.pair.bushes[0]);
   for (const fn of hooks.logout) fn({ player: p });
   assert.equal(p.inventory.getAmount(POLLEN), 0);
+});
+
+const destroyPollen = (player) => hooks.items.get('Strange pollen:Destroy')({ player, itemId: POLLEN, slot: 0 });
+
+test('Destroy on the pollen asks nothing: synth 2381 and the scatter line as spam, the pollen gone (227/01850 tick 9297)', () => {
+  const p = fakePlayer();
+  const event = startEvent('flowering', [p]);
+  tend(p, event.pair.bushes[0]);
+  assert.equal(p.inventory.getAmount(POLLEN), 1);
+  p.sounds.length = 0;
+  assert.equal(destroyPollen(p), true, 'the Destroy click is handled here, so no confirmation opens');
+  assert.equal(p.inventory.getAmount(POLLEN), 0);
+  assert.deepEqual(p.sounds, [2381]);
+  assert.deepEqual(p.spam, ['You scatter the pollen.']);
+  assert.equal(Flowering.pollen.has(p), false, 'nothing left to apply on a bush');
+  ticks(5);
+  tend(p, event.pair.bushes[1]);
+  assert.equal(p.inventory.getAmount(POLLEN), 1, 'the next Tend-to collects again, not pollinates');
+  assert.ok(p.messages.at(-1).includes('pollen-rich flowers'));
+});
+
+test('Destroy on pollen with no active event discards it with the Wiki line', () => {
+  const p = fakePlayer();
+  p.inventory.add(new core.Item(POLLEN, 1));
+  assert.equal(destroyPollen(p), true);
+  assert.equal(p.inventory.getAmount(POLLEN), 0);
+  assert.deepEqual(p.sounds, [2381]);
+  assert.deepEqual(p.spam, ['You discard the leftover pollen.']);
 });
 
 // ------------------------------------------------------------------ entlings

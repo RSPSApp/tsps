@@ -123,6 +123,10 @@ cosmic plane) did not change on arriving there (1962) or on picking a star flowe
   to, but if-a I find-a out that yous is causing trouble, yous hadda just better watch-a your back!"
   both times (2623, 2632); the Wiki's "After Fairytale II" is kept.
 - The XP comes at the quest complete action, three ticks after the lamp box where live gives it.
+- Ours: a pour cut short (logout, death) still wakes the Queen, and a saved 75 logs in at 80 (the
+  dose is spent and 75 lasts four ticks live); a saved 80 without the pour's mark is an older save's
+  completion and logs in at 90. Walking off while the contract scroll is open ends the talk (live
+  only closes it in place, 506-507).
 - Ours: what sets 2330; the plugin sets it on the Cosmic Being's star flower answer. Nuff's recap
   with neither plane visited (the full "where can I find a Gorak?" answer) and with only the cosmic
   one (the same).

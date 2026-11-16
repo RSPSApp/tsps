@@ -493,8 +493,11 @@ test("the star flowers: a shoot 42 ticks after arriving, its bloom 58 later, Pic
   assert.equal(first.npc.getId(), 1856);
   h.ticks(f, 58);
   assert.equal(first.npc.getNpcTransformationId(), 1857, "bloomed");
+  // Stand on a free tile next to the bloom (its own tile is random).
   const tile = first.npc.getLocation();
-  f.player.moveTo(new h.core.Location(tile.getX(), tile.getY() - 1, 0));
+  const next = [[0, -1], [0, 1], [-1, 0], [1, 0]].map(([dx, dy]) => new h.core.Location(tile.getX() + dx, tile.getY() + dy, 0))
+    .find((spot) => !h.core.RegionManager.blocked(spot, null));
+  f.player.moveTo(next);
   h.tick(f);
   await h.dispatch(f, { type: "npc_option", index: first.npc.getIndex(), clickType: 1 });
   for (let i = 0; i < 6 && !f.player.getInventory().getAmount(I.STAR_FLOWER); i++) h.tick(f);
@@ -515,4 +518,33 @@ test("the Gorak plane: 2331 on arrival; a kill leaves the claws for the killer a
   assert.equal(varbit(f, 2382), 1);
   const claws = h.core.ItemOnGroundManager.getGroundItem(f.player.getUsername(), I.GORAK_CLAWS, new h.core.Location(3045, 5333, 0), null);
   assert.ok(claws, "the killer's claws on the Gorak's tile");
+});
+
+test("a pour cut short by logout still wakes the Queen, and a saved 75 logs in at 80 (2415-2419)", async (t) => {
+  const f = actor(t, { stage: 73, at: BY_BED, items: [I.MAGIC_ESSENCE_3_] });
+  await useOn(f, I.MAGIC_ESSENCE_3_, 16316, QUEEN_BED);
+  for (let i = 0; i < 5 && h.stage(f) !== 75; i++) h.tick(f);
+  assert.equal(h.stage(f), 75);
+  h.PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  assert.equal(h.stage(f), 80);
+  assert.equal(f.player.getAttribute("quest.fairytale-ii-cure-a-queen:queen-woke"), 1);
+  const saved = actor(t, { stage: 75, at: BY_BED });
+  assert.equal(h.stage(saved), 80, "a 75 with no pour running is the awake Queen");
+});
+
+test("walking off while the contract scroll is open ends the Godfather's talk (493-507 closes it in place)", async (t) => {
+  const f = actor(t, { stage: 30, at: BY_GODFATHER, items: [9025],
+    attributes: { [STUDIED]: 1, [TAKEN]: 1, "quest.fairytale-ii-cure-a-queen:godfather-denied": 1 } });
+  const godfather = h.spawn(f, N.FAIRY_GODFATHER_2, GODFATHER);
+  await h.talk(f, godfather);
+  await until(f, "Oh, okay then.");
+  await h.choose(f, "Oh, okay then.");
+  await until(f, "Good, I knew-a you would change-a your mind.");
+  await h.continueLine(f);
+  h.ticks(f, 3);
+  f.player.getPacketSender().sendInterfaceRemoval();
+  f.player.moveTo(new h.core.Location(2443, 4431, 0));
+  h.ticks(f, 4);
+  assert.equal(h.shown(f), null);
+  assert.equal(h.stage(f), 30);
 });

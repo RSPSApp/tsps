@@ -640,7 +640,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
       event.wait = (resume) => {
         api.core.TaskManager.submit(new api.core.CountdownTask({}, 1, () => {
           player.getPacketSender().sendClientScript(DOCUMENT_OPEN_SCRIPT, -1, -1).sendInterface(GODFATHER_SCROLL_INTERFACE);
-          waitForScroll.set(player, resume);
+          waitForScroll.set(player, { resume, at: player.getLocation().clone() });
         }));
       };
       return;
@@ -659,10 +659,13 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
 
   function handleInterfaceClosed({ player, interfaceId }) {
     if (interfaceId !== GODFATHER_SCROLL_INTERFACE) return;
-    const resume = waitForScroll.get(player);
-    if (!resume) return;
+    const waiting = waitForScroll.get(player);
+    if (!waiting) return;
     waitForScroll.delete(player);
-    api.core.TaskManager.submit(new api.core.CountdownTask({}, 1, resume));
+    // Closed in place, the talk carries on (506-507); walking off (which closes it too) ends it.
+    api.core.TaskManager.submit(new api.core.CountdownTask({}, 1, () => {
+      if (player.getLocation().equals(waiting.at)) waiting.resume();
+    }));
   }
 
   /** Message steps: the boxes' pictures, and the state each one carries. */
@@ -953,10 +956,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     if (stage >= STAGE_POTION_USED || Scenes.isPouring(player)) return;
     consumeEssenceDose(player, itemId);
     advance(player, STAGE_POTION_USED);
-    Scenes.pourPotion(player, object, () => {
-      player.setAttribute(QUEEN_WOKE_ATTRIBUTE, 1);
-      advance(player, STAGE_QUEEN_AWAKE);
-    });
+    Scenes.pourPotion(player, object, () => wakeQueen(player));
   }
 
   // ==========================================================================
@@ -1068,6 +1068,11 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     event.handledBy.push("FairytaleIICureAQueen");
   }
 
+  function wakeQueen(player) {
+    player.setAttribute(QUEEN_WOKE_ATTRIBUTE, 1);
+    advance(player, STAGE_QUEEN_AWAKE);
+  }
+
   /**
    * Saves from before the capture alignment finished the quest at 80; 80 is now the awake Queen
    * before her reward (2419-2532). Only an 80 the pour did not mark is an older completion.
@@ -1076,6 +1081,9 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     if (quest.getStage(player) === STAGE_QUEEN_AWAKE && !flag(player, QUEEN_WOKE_ATTRIBUTE)) {
       quest.setStage(player, STAGE_COMPLETE);
     }
+    // 75 lasts only the pour's four ticks; a save left there (cut short, or from before the
+    // capture alignment, where 75 played the awakening) has used its dose, so the Queen is awake.
+    if (quest.getStage(player) === STAGE_POTION_USED && !Scenes.isPouring(player)) wakeQueen(player);
   }
 
   function handleLogin({ player }) {

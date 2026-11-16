@@ -198,7 +198,7 @@ module.exports = function createFairytaleIIScenes(api) {
   /** The player kneels and pours; the sleeping Queen's loc plays her waking (2415), then `onAwake`. */
   function pourPotion(player, bed, onAwake) {
     if (pours.has(player)) return;
-    const state = {};
+    const state = { onAwake };
     pours.set(player, state);
     player.performAnimation(new Animation(POUR_SEQ()));
     if (bed) {
@@ -212,11 +212,13 @@ module.exports = function createFairytaleIIScenes(api) {
     }]]);
   }
 
+  /** A pour cut short (logout, death) still wakes the Queen: the dose is already spent. */
   function endPour(player) {
     const state = pours.get(player);
     if (!state) return;
     pours.delete(player);
     TaskManager.cancelTasks(state);
+    state.onAwake(player);
   }
 
   // ==========================================================================

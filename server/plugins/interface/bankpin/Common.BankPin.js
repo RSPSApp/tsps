@@ -93,6 +93,8 @@ function loadHostSecret() {
   try {
     fs.mkdirSync(path.dirname(hostSecretFile), { recursive: true });
     fs.writeFileSync(hostSecretFile, `${secret}\n`, { mode: 0o600 });
+    // The mode only applies when the file is made: an invalid one rewritten here would keep its old mode.
+    fs.chmodSync(hostSecretFile, 0o600);
   } catch (err) {
     console.warn(`[BankPin] could not save the host key secret (${err.message}); using one for this run`);
   }

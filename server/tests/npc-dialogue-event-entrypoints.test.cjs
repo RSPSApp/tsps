@@ -5458,7 +5458,7 @@ test('Ikov earned Armadyl pendant reaches the produced Lucien native attack and 
 // closed102 at3122,3488,0/type0/face3. Supplied branch/position checkpoints, not
 // an authenticated login, a natural journey, a private house or retail door timing.
 function ikovHouseDoorScenario(t) {
-  const actors = [], areas = [], timers = [], attempts = [];
+  const actors = [], ownedPlayers = [], areas = [], timers = [], attempts = [];
   const doors = require('../plugins/objects/Doors.plugin').__internals.OPEN_OBJECT_STATES;
   const anchor = '3122,3488,0';
   const ownedKey = key => key === anchor || (typeof key === 'string' && key.startsWith(anchor + ':area:'));
@@ -5488,18 +5488,38 @@ function ikovHouseDoorScenario(t) {
   // opened leaves; never clear global door state, task queues or map arrays.
   t.after(() => {
     const errors = [], clean = fn => { try { fn(); } catch (e) { errors.push(e); } };
-    for (const f of actors) clean(() => f.player.getMovementQueue().reset());
+    for (const { player } of ownedPlayers) clean(() => player.getMovementQueue().reset());
     clean(() => { for (let n = 0; n < 501 && timers.some(task => task.isRunning()); n++) tick(); });
     for (const task of timers) clean(() => {
       assert.equal(task.isRunning(), false, 'owned native door timer completed');
       assert.equal(doors.has(task.key), false, 'owned door state restored by its native timer');
     });
     for (const area of areas) {
-      for (const f of actors) if (f.player.getPrivateArea() === area) clean(() => f.player.setArea(null));
+      for (const { player } of ownedPlayers) if (player.getPrivateArea() === area) clean(() => player.setArea(null));
       clean(() => area.destroy());
     }
     clean(() => { assert.equal(core.TaskManager.submit, observeSubmit); core.TaskManager.submit = submit; });
     clean(() => { assert.equal(PM.emitObjectInteraction, observeOperation); PM.emitObjectInteraction = emit; });
+    // One earliest owning hook attempts EVERY player even if a timer, area or
+    // wrapper cleanup above failed. Later t.after hooks are not a cleanup guarantee.
+    for (const record of ownedPlayers) {
+      const player = record.player, list = core.World.getPlayers(), slots = [];
+      clean(() => { for (let i = 1; i < list.capacityReturn(); i++) if (list.get(i) === player) slots.push(i); });
+      clean(() => assert.ok(slots.length <= 1, 'one exact owned World slot'));
+      clean(() => player.closeInterruptibleInterfaces());
+      clean(() => core.TaskManager.cancelTasks(player));
+      clean(() => core.TaskManager.cancelTasks(player.getIndex()));
+      if (slots.length === 1) {
+        clean(() => {
+          assert.equal(player.getIndex(), slots[0]); assert.equal(list.get(slots[0]), player);
+          assert.equal(player.isRegistered(), true, 'normal committed removal before flag teardown');
+          list.remove(player);
+        });
+        clean(() => assert.notEqual(list.get(slots[0]), player));
+      } else if (record.attempted) clean(() => assert.equal(player.isRegistered(), false, 'supported add rollback/no foreign removal'));
+      else clean(() => player.setRegistered(false)); // Unattempted, owned model fixture only.
+      clean(() => core.World.unregisterPlayerPosition(player));
+    }
     if (errors.length) throw new AggregateError(errors, 'Ikov house door cleanup failed');
   });
   core.TaskManager.submit = observeSubmit;
@@ -5541,31 +5561,13 @@ function ikovHouseDoorScenario(t) {
     stage:f.quest.getStage(f.player), side:f.player.getAttribute('quest.temple_of_ikov.side'),
     points:f.player.getAttribute('quest.points') ?? 0, xp:f.player.getSkillManager().getSkills().getExperiences().slice() });
   const actor = (side, area = null) => {
-    let owned;
-    // Registered before fixture() installs its flag-only teardown: only our
-    // committed exact World slot can be removed, including partial setup failure.
-    t.after(() => {
-      if (!owned) return;
-      const errors = [], clean = fn => { try { fn(); } catch (e) { errors.push(e); } };
-      const list = core.World.getPlayers(), slots = [];
-      for (let i = 1; i < list.capacityReturn(); i++) if (list.get(i) === owned) slots.push(i);
-      clean(() => assert.ok(slots.length <= 1));
-      clean(() => owned.closeInterruptibleInterfaces());
-      clean(() => core.TaskManager.cancelTasks(owned));
-      clean(() => core.TaskManager.cancelTasks(owned.getIndex()));
-      if (slots.length === 1) clean(() => {
-        assert.equal(owned.getIndex(), slots[0]); assert.equal(list.get(slots[0]), owned);
-        list.remove(owned); assert.notEqual(list.get(slots[0]), owned);
-      });
-      else clean(() => assert.equal(owned.isRegistered(), false));
-      clean(() => core.World.unregisterPlayerPosition(owned));
-      if (errors.length) throw new AggregateError(errors, 'Ikov house owned World-player cleanup failed');
-    });
     const f = fixture(t), player = f.player;
+    const record = { player, attempted:false };
+    ownedPlayers.push(record); // Own before any fallible setup/native World.add.
     player.setAttribute('bot-skip-persistence', true);
     player.setUsername(`ikovhousedoor${nextIndex}`); player.setLongUsername(core.Misc.stringToLongBigInt(player.getUsername()));
     player.getSession().setPlayer(player);
-    player.setRegistered(false); owned = player;
+    player.setRegistered(false); record.attempted = true;
     assert.equal(core.World.getPlayers().add(player), true);
     assert.equal(core.World.getPlayers().get(player.getIndex()), player);
     player.getSession().setTurnPacketProcessor(() => f.connection.processTurnPackets());

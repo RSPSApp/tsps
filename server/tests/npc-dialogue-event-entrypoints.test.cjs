@@ -4662,13 +4662,23 @@ test('Winelda introduces herself on the first unpaid talk and remembers it throu
     definition: f.npc.getCurrentDefinition(f.player), pages: [] });
   assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0, 'a variant query alone is not a meeting');
   assert.equal(await f.talk(), WINELDA_INTRO, 'quest-start stage alone must not select the repeat root request');
-  assert.equal(f.player.getAttribute(WINELDA_MET), 1);
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0, 'opening is not a completed introduction');
+  assert.equal(PM.emitNpcInteraction({ player: f.player, npc: f.npc,
+    npcId: core.NpcIdentifiers.WINELDA, definition: f.npc.getCurrentDefinition(f.player),
+    clickType: f.npc.getCurrentDefinition(f.player).getActions().indexOf('Talk-to') + 1, handled: false }), true);
+  assert.equal(f.text(), WINELDA_INTRO, 'an immediate second producer call cannot replace the introduction with again');
+  assert.equal(await f.talk(), WINELDA_INTRO, 'a repeated ordinary NPC packet still opens the introduction');
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0);
   await nextLine(f); await nextLine(f);
   const options = MultiChatboxPrompt.getPending(f.player)?.options;
   assert.ok(options?.includes('Yes I do!'));
   await choose(f, options.indexOf('Yes I do!') + 1);
+  assert.equal(f.text(), 'Yes I do!', 'the selected branch is still on its first preterminal line');
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0, 'compiling the accepting branch cannot mark its unreached final line');
   const introduced = await wineldaFinish(f);
   assert.ok(introduced.includes('Get Winelda 20 limpwurt roots for my pot.'), 'ordinary introduction reaches the first root request');
+  assert.ok(introduced.includes('Then we shows them some magic!'));
+  assert.equal(f.player.getAttribute(WINELDA_MET), 1, 'the actual final introduction line records the meeting');
   assert.deepEqual(wineldaItems(f.player), before); assert.equal(f.quest.getStage(f.player), 10);
   const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
   const { JsonPlayerPersistence } = require('../plugins/persistence/JsonPlayerPersistence.plugin');
@@ -4683,12 +4693,29 @@ test('Winelda introduces herself on the first unpaid talk and remembers it throu
   assert.deepEqual(wineldaItems(restored.player), before); assert.equal(restored.quest.getStage(restored.player), 10);
   const other = wineldaFixture(t);
   assert.equal(await other.talk(), WINELDA_INTRO, 'another actor has not inherited the first meeting');
+  await nextLine(other); await nextLine(other);
+  const declined = MultiChatboxPrompt.getPending(other.player)?.options;
+  assert.ok(declined?.includes('Nah, not bothered!'));
+  await choose(other, declined.indexOf('Nah, not bothered!') + 1);
+  assert.equal(other.text(), 'Nah, not bothered!', 'the decline branch is still on its first preterminal line');
+  assert.equal(other.player.getAttribute(WINELDA_MET) ?? 0, 0, 'compiling the decline branch cannot mark its unreached final line');
+  const farewell = await wineldaFinish(other);
+  assert.ok(farewell.includes("Hehe! Ye'll come back! They always come back!"));
+  assert.equal(other.player.getAttribute(WINELDA_MET), 1, 'the completed decline branch also records its own meeting');
 });
 
 test('Winelda introduces an unpaid partial-root visitor before the later shortage dialogue', async t => {
   const f = wineldaFixture(t, { roots: 19 }), before = wineldaItems(f.player);
   assert.equal(await f.talk(), WINELDA_INTRO);
   f.player.closeInterruptibleInterfaces();
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0, 'cancellation before the final line leaves the introduction available');
+  assert.equal(await f.talk(), WINELDA_INTRO);
+  await nextLine(f); await nextLine(f);
+  const options = MultiChatboxPrompt.getPending(f.player)?.options;
+  assert.ok(options?.includes('Yes I do!'));
+  await choose(f, options.indexOf('Yes I do!') + 1);
+  await wineldaFinish(f);
+  assert.equal(f.player.getAttribute(WINELDA_MET), 1);
   assert.equal(await f.talk(), WINELDA_AGAIN);
   await wineldaFinish(f);
   assert.deepEqual(wineldaItems(f.player), before);

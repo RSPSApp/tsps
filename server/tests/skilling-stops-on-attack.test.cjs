@@ -142,3 +142,46 @@ test('repeating skill actions held outside the task keys stop on a cleared inter
     assert.ok(listeners.has(plugin), `${plugin} listens to player:interaction-cleared`);
   }
 });
+
+/** Uses inventory slot `from` on slot `to` through the real use-on packet. */
+async function useOn(s, from, to) {
+  const items = s.p.getInventory().getItems();
+  await s.c.dispatch([{type:'inventory_use_on', slot:from, itemId:items[from].getId(),
+    target:{kind:'inventory', slot:to, itemId:items[to].getId()}}]);
+}
+
+// rsprox captures 83, 86, 89, 1098: a knife on logs mid-chop fletches and no log follows.
+test('using one item on another mid-chop ends the chop; the fletching it starts runs', async t => {
+  certainCut(t);
+  const a = scene(t, 3222), ids = core.ItemIdentifiers, inventory = a.p.getInventory();
+  inventory.add(new core.Item(ids.HEADLESS_ARROW, 15), true);
+  inventory.add(new core.Item(ids.BRONZE_ARROWTIPS, 15), true);
+  await clickTree(a);
+  for (let i = 0; i < 8 && a.p.getAnimation()?.getId() !== 879; i++) turn(a);
+  assert.equal(a.p.getAnimation()?.getId(), 879, 'chopping');
+  const cleared = observe(t, 'player:interaction-cleared', a.p);
+
+  await useOn(a, inventory.getSlotForItemId(ids.BRONZE_ARROWTIPS), inventory.getSlotForItemId(ids.HEADLESS_ARROW));
+  turn(a);
+  assert.deepEqual(cleared.map(e => e.reason), ['item']);
+  for (let i = 0; i < 10; i++) turn(a);
+  assert.deepEqual(a.attempts, [], 'no chop roll after the use');
+  assert.deepEqual(a.gains, []); assert.equal(a.logs(), 0);
+  assert.equal(inventory.getAmount(ids.BRONZE_ARROW), 15, 'the arrows were still made');
+});
+
+// Live drops a use of an item on its own slot: no message, and the chop goes on (local 1000464, tick 474).
+test('an item used on its own slot leaves the chop running', async t => {
+  certainCut(t);
+  const a = scene(t, 3222), ids = core.ItemIdentifiers, inventory = a.p.getInventory();
+  inventory.add(new core.Item(ids.LOGS), true);
+  await clickTree(a);
+  for (let i = 0; i < 8 && a.p.getAnimation()?.getId() !== 879; i++) turn(a);
+  const cleared = observe(t, 'player:interaction-cleared', a.p);
+  const slot = inventory.getSlotForItemId(ids.LOGS);
+  await useOn(a, slot, slot);
+  turn(a);
+  assert.deepEqual(cleared, []);
+  for (let i = 0; i < 8 && a.attempts.length === 0; i++) turn(a);
+  assert.equal(a.attempts.length, 1, 'the chop keeps rolling');
+});

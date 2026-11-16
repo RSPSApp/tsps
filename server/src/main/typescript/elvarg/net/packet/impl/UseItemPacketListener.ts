@@ -26,6 +26,13 @@ export class UseItemPacketListener {
       return;
     }
 
+    // Using one inventory item on another is an inventory item interaction, so it is a hard
+    // interruption like the item options (osrs-docs: Entity Interactions - Interruptions): a chop,
+    // a fishing spot or a queued walk-to ends before the use starts its own action (rsprox
+    // captures 83, 86, 89, 1098: a knife on logs mid-chop fletches and no log follows). An item
+    // used on its own slot is dropped by live, chop and all (local 1000464, tick 474).
+    if (usedItemSlot !== usedWithSlot) player.clearPendingAction?.();
+
     PluginManager.emitItemOnItem({
       player,
       usedItem,

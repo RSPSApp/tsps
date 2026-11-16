@@ -29,7 +29,7 @@ partial stall to one.
 | Food, potions, equipment | No | Left alone |
 | Alchemy, drop item | No | Left alone |
 | Bury bones, scatter ashes | No — animation only | Left alone |
-| Using an item on another item/NPC | No | Left alone |
+| Using an item on another item/NPC | No | The walk is left alone. Item on item still clears the interaction like any inventory action (`clearPendingAction`), so a chop or other repeating skill action ends; an item used on its own slot does nothing (rsprox captures 83, 86, 89, 1098; local 1000464 tick 474) |
 | Emotes / full-stall items | Yes (full stall) | `AnimationStalls.plugin.js` (unchanged) |
 
 Two earlier assumptions were wrong and are recorded here so they do not come back:

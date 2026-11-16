@@ -59,9 +59,11 @@ varbit synchronization. The untaught refusal wording is implementation text, not
 `server/tests/barbarian-rod-native.test.cjs` exercises real players, containers, spots, native
 NPC/dialogue packets and the fishing task: interrupted instruction, the exact final-reply
 boundary, catch resources and XP, movement cancellation, queued-catch permission recheck,
-missing transcript/distance refusal and real save-codec/apply/login round trips. It seeds gear
-and levels, controls catch RNG, and distinguishes these checks from a rendered client or an
-actual disk-backed logout/relogin session.
+missing transcript/distance refusal and real save-codec/apply/login round trips. A separate
+disk regression uses native lesson/catch progression, real player logout cleanup, SQLite
+save/worker flush, closed and reopened stores, and loaded players' login hooks for stages
+0/1/2/3. It seeds gear and levels and controls catch RNG; these checks do not claim a rendered
+client or a full network login handshake.
 
 ## Karambwanji and karambwan
 

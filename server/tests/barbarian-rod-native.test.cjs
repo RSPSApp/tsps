@@ -198,3 +198,90 @@ test('an empty transcript and Otto moving away before the last reply cannot teac
   assert.equal(Training._test.state(p).fishingRod, 0, 'distance is checked again on final reply boundary');
   assert.equal(p.getDialogueManager().isActive(), false);
 });
+
+test('disk SQLite save, worker flush and fresh-store load retain native rod progress across logout', async (t) => {
+  const fs = require('node:fs'), os = require('node:os');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'barbarian-rod-disk-'));
+  const Plugin = require('../plugins/persistence/SqlitePlayerPersistence.plugin');
+  const Store = Plugin.SqlitePlayerPersistence;
+  const previousPath = Store.DATABASE_PATH, previousImport = Store.IMPORT_LEGACY_JSON;
+  Store.DATABASE_PATH = path.join(directory, 'players.sqlite');
+  Store.IMPORT_LEGACY_JSON = false;
+  let persistence;
+  async function closeStore() {
+    if (!persistence) return;
+    await persistence.flush();
+    const writer = persistence.writer;
+    persistence.writer = null;
+    if (writer) await writer.terminate();
+    persistence.database.close();
+    persistence = null;
+  }
+  t.after(async () => {
+    try { await closeStore(); }
+    finally {
+      Store.DATABASE_PATH = previousPath;
+      Store.IMPORT_LEGACY_JSON = previousImport;
+      assert.equal(path.dirname(directory), path.resolve(os.tmpdir()));
+      assert.ok(path.basename(directory).startsWith('barbarian-rod-disk-'));
+      fs.rmSync(directory, {recursive: true, force: true});
+    }
+  });
+  Plugin.register({getSkillManager: () => SkillManager,
+    setPlayerPersistence(value) { persistence = value; }, log() {}});
+
+  async function relog(f, expected) {
+    const p = f.player;
+    p.getPacketSender().sendInterfaceRemoval();
+    PM.emitPlayerDisconnect({player: p});
+    core.World.getPlayers().removes(p); // Real onRemove/onLogout cancels the old session.
+    persistence.save(p, 'rod-lesson-disk-regression');
+    await persistence.flush();
+    assert.equal(persistence.unwritten.size, 0, 'worker has committed every queued row');
+    assert.equal(persistence.inFlight.size, 0);
+    assert.ok(fs.statSync(Store.DATABASE_PATH).size > 0);
+    await closeStore();
+    persistence = new Store(); // No in-memory pending-save fallback from the writer instance.
+    assert.equal(persistence.unwritten.size, 0);
+    const loaded = persistence.load(p.getUsername());
+    assert.ok(loaded, 'fresh store reads a committed save from the actual database');
+    const restored = fixture(t);
+    loaded.applyToPlayer(restored.player);
+    restored.player.needsPlacement = false;
+    PM.emitPlayerLogin({player: restored.player, username: restored.player.getUsername()});
+    assert.equal(Training._test.state(restored.player).fishingRod, expected);
+    assert.equal(restored.player.getPacketSender().getVarbit(Training._test.VARBITS.fishingRod), expected);
+    assert.equal(Boolean(Fishing.hasToolRequirements(restored.player, Fishing.TOOLS.BARBARIAN_ROD)), expected >= 1);
+    return restored;
+  }
+
+  let f = fixture(t);
+  await f.lesson();
+  assert.equal(Training._test.state(f.player).fishingRod, 0);
+  f = await relog(f, 0); // Interrupted instruction must stay locked on disk too.
+  await f.option(spot, 'Use-rod');
+  assert.equal(Fishing.isFishingActive(f.player), false);
+  await f.lesson();
+  for (let i = 0; i < 30 && f.current()?.getText?.() !== FINAL_REPLY; i++) await f.resume();
+  assert.equal(f.current()?.getText?.(), FINAL_REPLY);
+  f = await relog(f, 1);
+  const priorRandom = Math.random;
+  Math.random = () => 0.02;
+  try {
+    await f.option(spot, 'Use-rod');
+    for (let i = 0; i < 2; i++) f.tick();
+  } finally { Math.random = priorRandom; }
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.LEAPING_TROUT), 1);
+  f = await relog(f, 2);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.LEAPING_TROUT), 1);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.FEATHER), 4);
+  await f.option(otto, 'Talk-to');
+  for (let i = 0; i < 15 && !f.current()?.getOptions; i++) await f.resume();
+  const options = f.current().getOptions();
+  await f.send({type: 'dialogue_continue', widgetId: (219 << 16) | 1,
+    childIndex: options.indexOf(Training._test.TOPIC.rodDone) + 1});
+  assert.equal(Training._test.state(f.player).fishingRod, 3);
+  f = await relog(f, 3);
+  await f.option(spot, 'Use-rod');
+  assert.equal(Fishing.isFishingActive(f.player), true, 'acknowledged training remains usable after disk reload');
+});

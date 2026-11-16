@@ -401,7 +401,7 @@ module.exports = function registerContactQuest(api) {
     trackedNpcs.delete(player);
     const world = api.getWorld();
     if (!world?.getNpcs) return;
-    for (const npc of world.getNpcs()) {
+    for (const npc of (world.getNpcsOwnedBy?.(player) ?? world.getNpcs())) {
       if (npc?.getOwner?.() === player && OWNED_NPC_IDS.has(npc.getId?.())) api.removeNpc(npc);
     }
   }

@@ -455,7 +455,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `KalphiteCave` | KalphiteCave | areas | yes | Makes the Kalphite Cave multi-combat and lets only players on a kalphite Slayer task attack its kalphites, with Buggie warning the rest off. (members only) |
 | `Karamja` | Karamja | areas | yes | Karamja volcano access: the rocks, cave entrance and climbing rope between the surface and the TzHaar city. |
 | `Keldagrim` | Keldagrim | areas | yes | Keldagrim access: the cave exit to Rellekka, the cave-to-city passage, the house stairs and the ferrymen across the river. (members only) |
-| `KourendWoodland` | KourendWoodland | areas | yes | The Old Memorial in the Kourend Woodland: Inspect shows King Kharedst IV's inscription. (members only) |
+| `KourendWoodland` | KourendWoodland | areas | yes | The Old Memorial in the Kourend Woodland: Inspect shows King Kharedst IV's inscription, then offers book recharging. (members only) |
 | `McGruborsWood` | McGruborsWood | areas | yes | Keeps McGrubor's Wood's main gate locked, so the wood is entered by the loose railing or a fairy ring. |
 | `MiningGuild` | MiningGuild | areas | yes | Mining Guild entry needs 60 Mining; its members' area gives an invisible +7 Mining level, halves rock respawn times and rolls unidentified minerals. |
 | `Misthalin` | Misthalin | areas | yes | Misthalin area interactions: the Edgeville dungeon ladder and trapdoor, Varrock's manhole to the sewers, the Wizards' Tower basement, and the Lumbridge Swamp Caves dark hole and wall markers. |
@@ -635,7 +635,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `AbyssalTentacle` | AbyssalTentacle | items | yes | Abyssal tentacle: 25% chance to poison on hit, 10,000 charges, one used per attack, plus Check, Dissolve and whip-plus-tentacle combining. (members only) |
 | `AccursedSceptre` | AccursedSceptre | items | yes | Accursed sceptre and Thammaron's sceptre: powered-staff casting on revenant ether charges, Wilderness NPC bonus, Check, Swap and Uncharge. (members only) |
 | `AmuletOfBloodFury` | AmuletOfBloodFury | items | yes | Amulet of blood fury: made from a Blood shard and amulet of fury, 30,000 charges, heals from damage dealt with its proc graphic, counts down every 500 hits, with Check and Revert. (members only) |
-| `AmuletOfChemistry` | AmuletOfChemistry | items | yes | Amulet of chemistry: 5% chance of an extra potion dose when mixing in Herblore, five charges per amulet, with Options and Break. (members only) |
+| `AmuletOfChemistry` | AmuletOfChemistry | items | yes | Amulet of chemistry: 5% extra-dose chance with five charges. Alchemist's amulet: 15% chance, charging, noted refunds and persistent item charges. (members only) |
 | `AncientRingCrafting` | AncientRingCrafting | items | yes | Desert Treasure II ancient rings: break Fremennik rings with a chisel, combine icons with vestiges and craft the finished rings at a furnace. (members only) |
 | `AncientRings` | AncientRings | items | yes | Stops the Ultor, Bellator, Magus and Venator rings being worn until the player has killed the matching Desert Treasure II boss. (members only) |
 | `AncientSceptre` | AncientSceptre | items | yes | Ancient sceptre passive: boosts the Ancient magic smoke, shadow, blood and ice spell effects by 10%, for the quartz sceptres too; the blood ancient sceptre's Blood spells overheal by 10%; the ice ancient sceptre's Ice spells are 10% more accurate against targets that can be frozen. (members only) |

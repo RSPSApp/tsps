@@ -5454,6 +5454,255 @@ test('Ikov earned Armadyl pendant reaches the produced Lucien native attack and 
   assert.equal(rewards.length,2);
 });
 
+// Original4834 item14. Geometry from the active242 cache:
+// closed102 at3122,3488,0/type0/face3. Supplied branch/position checkpoints, not
+// an authenticated login, a natural journey or a retail private house. The two-tick
+// pass-through expectation follows maintainer review5926064464 and its cited captures.
+function ikovHouseDoorScenario(t) {
+  const actors = [], ownedPlayers = [], areas = [], timers = [], attempts = [], timerAreas = new Map();
+  const anchors = ['3122,3488,0', 'pass-through:3122,3488,0,3'];
+  const ownedKey = key => anchors.some(anchor => key === anchor
+    || (typeof key === 'string' && key.startsWith(anchor + ':area:')));
+  const submit = core.TaskManager.submit, emit = PM.emitObjectInteraction;
+  function observeSubmit(task) {
+    const result = submit.call(core.TaskManager, task);
+    if (ownedKey(task.key)) timers.push(task);
+    return result;
+  }
+  function observeOperation(event) {
+    const result = emit.call(PM, event);
+    if (actors.some(f => f.player === event.player)) attempts.push({ ...event, result });
+    return result;
+  }
+  const tick = (count = 1) => {
+    for (let n = 0; n < count; n++) {
+      ++core.World.processCycle;
+      for (const f of actors) {
+        f.player.getMovementQueue().process();
+        core.TaskManager.processWalkTo(f.player.getIndex());
+      }
+      core.TaskManager.process();
+      for (const f of actors) { f.player.resetUpdating(); f.player.setNeedsPlacement(false); }
+    }
+  };
+  // Early cleanup also handles a setup throw. Let only the real engine restore
+  // opened leaves; never clear global door state, task queues or map arrays.
+  t.after(() => {
+    const errors = [], clean = fn => { try { fn(); } catch (e) { errors.push(e); } };
+    for (const { player } of ownedPlayers) clean(() => player.getMovementQueue().reset());
+    clean(() => { for (let n = 0; n < 501 && (n < 2 || timers.some(task => task.isRunning())); n++) tick(); });
+    for (const task of timers) clean(() => {
+      assert.equal(task.isRunning(), false, 'owned native door timer completed');
+      if (timerAreas.has(task)) restored(task, timerAreas.get(task));
+    });
+    for (const { player } of ownedPlayers) clean(() => assert.equal(player.hasFlag('movement:ignore-clipping'), false,
+      'owned walk-over clipping exemption ended through normal tasks'));
+    for (const area of areas) {
+      for (const { player } of ownedPlayers) if (player.getPrivateArea() === area) clean(() => player.setArea(null));
+      clean(() => area.destroy());
+    }
+    clean(() => { assert.equal(core.TaskManager.submit, observeSubmit); core.TaskManager.submit = submit; });
+    clean(() => { assert.equal(PM.emitObjectInteraction, observeOperation); PM.emitObjectInteraction = emit; });
+    // One earliest owning hook attempts EVERY player even if a timer, area or
+    // wrapper cleanup above failed. Later t.after hooks are not a cleanup guarantee.
+    for (const record of ownedPlayers) {
+      const player = record.player, list = core.World.getPlayers(), slots = [];
+      clean(() => { for (let i = 1; i < list.capacityReturn(); i++) if (list.get(i) === player) slots.push(i); });
+      clean(() => assert.ok(slots.length <= 1, 'one exact owned World slot'));
+      clean(() => player.closeInterruptibleInterfaces());
+      clean(() => core.TaskManager.cancelTasks(player));
+      clean(() => core.TaskManager.cancelTasks(player.getIndex()));
+      if (slots.length === 1) {
+        clean(() => {
+          assert.equal(player.getIndex(), slots[0]); assert.equal(list.get(slots[0]), player);
+          assert.equal(player.isRegistered(), true, 'normal committed removal before flag teardown');
+          list.remove(player);
+        });
+        clean(() => assert.notEqual(list.get(slots[0]), player));
+      } else if (record.attempted) clean(() => assert.equal(player.isRegistered(), false, 'supported add rollback/no foreign removal'));
+      else clean(() => player.setRegistered(false)); // Unattempted, owned model fixture only.
+      clean(() => core.World.unregisterPlayerPosition(player));
+    }
+    if (errors.length) throw new AggregateError(errors, 'Ikov house door cleanup failed');
+  });
+  core.TaskManager.submit = observeSubmit;
+  PM.emitObjectInteraction = observeOperation;
+  if (core.RegionManager.regions.size === 0) core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3122, 3488, false);
+  const closedDef = core.CacheDefinitions.getObject(102), openDef = core.CacheDefinitions.getObject(11403);
+  assert.equal(core.CacheDefinitions.getLocNames().get(38848), 'inviswall');
+  assert.equal(core.CacheDefinitions.getObject(38848).clipType > 0, true, 'actual blocker has collision');
+  assert.equal(core.CacheDefinitions.getLocNames().get(102), 'ikov_luciendoor');
+  assert.equal(core.CacheDefinitions.getLocNames().get(11403), 'ikov_luciendoor_open');
+  // LocType leaves absent/hidden menu slots sparse; compare their menu meaning.
+  assert.deepEqual(Array.from(closedDef.actions, action => action ?? null), ['Open', null, null, null, null]);
+  assert.deepEqual(Array.from(openDef.actions, action => action ?? null), [null, null, null, null, null], 'no invented Close menu');
+  for (const key of ['models', 'types', 'recolorFrom', 'recolorTo']) assert.deepEqual(openDef[key], closedDef[key], key);
+  assert.equal(closedDef.transformVarbit, -1); assert.equal(closedDef.transformVarp, -1);
+  assert.equal(closedDef.transforms, undefined); assert.equal(openDef.transforms, undefined);
+  assert.equal(core.CacheDefinitions.getObject(103).name, 'Closed chest');
+  const at = player => [player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()];
+  const loc = (id, x, y, area = null) => (area ? area.getObjects()
+    : core.MapObjects.mapObjects.get(core.MapObjects.getHash(x, y, 0)) ?? [])
+    .find(object => object.getId() === id && object.getLocation().getX() === x && object.getLocation().getY() === y
+      && object.getLocation().getZ() === 0 && object.getPrivateArea() === area) ?? null;
+  const geometry = object => [object.getId(), object.getLocation().getX(), object.getLocation().getY(),
+    object.getLocation().getZ(), object.getType(), object.getFace()];
+  assert.deepEqual(geometry(loc(102, 3122, 3488)), [102, 3122, 3488, 0, 0, 3]);
+  const neighbours = [...core.MapObjects.mapObjects.values()].flat().filter(object => {
+    const p = object.getLocation();
+    return p.getZ() === 0 && Math.abs(p.getX() - 3122) <= 12 && Math.abs(p.getY() - 3483) <= 12
+      && object !== loc(102, 3122, 3488);
+  });
+  const unchangedNeighbours = () => {
+    for (const object of neighbours) {
+      const p = object.getLocation();
+      assert.ok(core.MapObjects.mapObjects.get(core.MapObjects.getHash(p.getX(), p.getY(), p.getZ()))?.includes(object),
+        'unrelated actual map object retains its exact pointer');
+    }
+  };
+  const snapshot = f => ({ items: ikovGuardianItems(f.player), banks: Array.from({ length: f.player.getBanks().length }, (_, i) =>
+      f.player.getBank(i).getItems().map(item => item && item.getId() >= 0
+        ? { id:item.getId(), amount:item.getAmount(), meta:structuredClone(item.getMeta()) } : null)),
+    stage:f.quest.getStage(f.player), side:f.player.getAttribute('quest.temple_of_ikov.side'),
+    points:f.player.getAttribute('quest.points') ?? 0, xp:f.player.getSkillManager().getSkills().getExperiences().slice() });
+  const actor = (side, area = null) => {
+    const f = fixture(t), player = f.player;
+    const record = { player, attempted:false };
+    ownedPlayers.push(record); // Own before any fallible setup/native World.add.
+    player.setAttribute('bot-skip-persistence', true);
+    player.setUsername(`ikovhousedoor${nextIndex}`); player.setLongUsername(core.Misc.stringToLongBigInt(player.getUsername()));
+    player.getSession().setPlayer(player);
+    player.setRegistered(false); record.attempted = true;
+    assert.equal(core.World.getPlayers().add(player), true);
+    assert.equal(core.World.getPlayers().get(player.getIndex()), player);
+    player.getSession().setTurnPacketProcessor(() => f.connection.processTurnPackets());
+    f.quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'temple_of_ikov');
+    f.quest.setStage(player, 70); player.setAttribute('quest.temple_of_ikov.side', side);
+    if (area) area.add(player);
+    // Supplied outside doorway checkpoint only; every crossing below is native movement.
+    player.setLocation(new core.Location(3122, 3488, 0)); player.setNeedsPlacement(false);
+    player.setRunning(false);
+    actors.push(f); f.before = snapshot(f);
+    return f;
+  };
+  const click = async f => {
+    const { ClientPacketId } = require('../dist/net/protocol/NativeClientPackets');
+    const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
+    const frame = Buffer.alloc(8), x = 3122, y = 3488, id = 102;
+    frame[0] = ClientPacketId.OPLOC1; frame[1] = (x + 128) & 255; frame[2] = x >>> 8;
+    frame.writeUInt16LE(y, 3); frame[6] = id >>> 8; frame[7] = (id + 128) & 255;
+    const decoded = decodeClientPackets(frame);
+    assert.deepEqual(decoded, [{ type:'object_option', id, x, y, clickType:1 }]);
+    await f.connection.dispatch(decoded); f.connection.processTurnPackets();
+  };
+  const open = async f => {
+    const area = f.player.getPrivateArea(), closed = loc(102, 3122, 3488, area), n = attempts.length;
+    assert.ok(closed, 'exact current canonical closed door before real Open');
+    assert.deepEqual(geometry(closed), [102, 3122, 3488, 0, 0, 3]);
+    assert.equal(core.RegionManager.canMove(3122, 3488, 3122, 3487, 0, 1, 1, area), false, 'actual closed south edge blocks entry');
+    await click(f);
+    // Resolve the real queued interaction at the supplied adjacent checkpoint without
+    // consuming a world tick: both subsequent timer ticks are checked explicitly.
+    core.TaskManager.processWalkTo(f.player.getIndex());
+    assert.equal(attempts.length, n + 1, 'exactly one reached native object producer');
+    const operation = attempts.at(-1);
+    assert.equal(operation.player, f.player); assert.equal(operation.object, closed);
+    assert.equal(operation.objectId, 102); assert.equal(operation.option, 'open');
+    console.log(JSON.stringify({ event:'ikov-house-open-attempt', id:102, x:3122, y:3488, shape:0, face:3,
+      currentObjectReached:true, option:operation.option, handled:operation.result, private:area !== null }));
+    const leaf = loc(11403, 3122, 3487, area);
+    assert.equal(Boolean(leaf && !loc(102, 3122, 3488, area)), true, 'decoded Open replaces the actual house door with its cache open leaf');
+    assert.equal(operation.result, true);
+    assert.deepEqual(geometry(leaf), [11403, 3122, 3487, 0, 0, 0]);
+    const blocker = loc(38848, 3122, 3488, area), timer = timers.at(-1);
+    assert.ok(timer && timer.isRunning(), 'an actual native door close task was submitted');
+    timerAreas.set(timer, area);
+    console.log(JSON.stringify({ event:'ikov-house-pass-through-deadline', id:102, x:3122, y:3488,
+      currentObjectReached:true, option:operation.option, handled:operation.result, private:area !== null,
+      openLeaf:leaf.getId(), blocker:blocker?.getId() ?? null, closeTicks:timer.getDelay() }));
+    assert.equal(timer.getDelay(), 2, 'the entrance closes two ticks after Open');
+    assert.ok(blocker, 'the open entrance retains its collision blocker');
+    assert.deepEqual(geometry(blocker), [38848, 3122, 3488, 0, 0, 3]);
+    assertBlocked(area);
+    assert.equal(f.player.hasFlag('movement:ignore-clipping'), true, 'only the opener gets a walk-over step');
+    assert.equal(timer.getRemainingTicks(), 2, 'no deadline tick consumed by the observation');
+    return { leaf, blocker, timer };
+  };
+  const assertBlocked = (area = null) => {
+    assert.equal(core.RegionManager.canMove(3122, 3488, 3122, 3487, 0, 1, 1, area), false, 'south edge remains blocked');
+    assert.equal(core.RegionManager.canMove(3122, 3487, 3122, 3488, 0, 1, 1, area), false, 'north edge remains blocked');
+  };
+  const restored = (timer, area = null) => {
+    assert.equal(timer.isRunning(), false, 'native close task has stopped');
+    assert.deepEqual(geometry(loc(102, 3122, 3488, area)), [102, 3122, 3488, 0, 0, 3]);
+    assert.equal(loc(11403, 3122, 3487, area), null);
+    assert.equal(loc(38848, 3122, 3488, area), null);
+    assertBlocked(area);
+  };
+  const crossed = (f, y) => {
+    assert.deepEqual(at(f.player), [3122, y, 0], 'the opener crosses using native movement, without relocation');
+    assert.equal(f.player.hasFlag('movement:ignore-clipping'), false, 'clipping exemption ends on arrival');
+  };
+  const conserve = f => assert.deepEqual(snapshot(f), f.before, 'door use preserves full items/banks/raw XP/QP/stage/side');
+  const privateCopy = () => {
+    const area = new core.PrivateArea(); areas.push(area);
+    // Supplied private copy of the exact observed cache object, never claimed as a retail private house.
+    const copy = new core.GameObject(102, new core.Location(3122, 3488, 0), 0, 3, area);
+    core.ObjectManager.register(copy, true); assert.equal(loc(102, 3122, 3488, area), copy);
+    return area;
+  };
+  return { actor, open, click, tick, loc, geometry, restored, crossed, assertBlocked, conserve, privateCopy,
+    attempts, unchangedNeighbours, timers };
+}
+
+test('Ikov house real Open walks each supplied branch over the blocker and restores after two ticks', async t => {
+  const s = ikovHouseDoorScenario(t), lucien = s.actor(2), armadyl = s.actor(1);
+  const { leaf, timer } = await s.open(lucien);
+  // A second actor tries an ordinary clipped step while the opener's exemption is active.
+  armadyl.player.getMovementQueue().addSteps(new core.Location(3122, 3487, 0));
+  assert.equal(armadyl.player.hasFlag('movement:ignore-clipping'), false);
+  s.tick();
+  s.crossed(lucien, 3487); s.crossed(armadyl, 3488);
+  assert.equal(s.loc(11403, 3122, 3487), leaf);
+  assert.equal(timer.isRunning(), true); assert.equal(timer.getRemainingTicks(), 1);
+  s.assertBlocked();
+  const n = s.attempts.length;
+  await s.click(armadyl); core.TaskManager.processWalkTo(armadyl.player.getIndex());
+  assert.equal(s.attempts.length, n, 'stale closed-id packet cannot operate the blocker or leaf');
+  s.tick(); s.restored(timer);
+  // Both quest-side fixtures must Open for each crossing; there is no free shared gap.
+  for (const [f, destination] of [[lucien, 3488], [armadyl, 3487], [armadyl, 3488]]) {
+    const next = await s.open(f);
+    assert.notEqual(next.timer, timer);
+    s.tick(); s.crossed(f, destination);
+    assert.equal(next.timer.isRunning(), true); assert.equal(next.timer.getRemainingTicks(), 1);
+    s.tick(); s.restored(next.timer);
+  }
+  assert.equal(s.attempts.length, 4);
+  s.unchangedNeighbours(); s.conserve(lucien); s.conserve(armadyl);
+});
+
+test('Ikov house public and supplied private pass-through anchors have independent two-tick deadlines', async t => {
+  const s = ikovHouseDoorScenario(t), publicActor = s.actor(2), area = s.privateCopy(), privateActor = s.actor(1, area);
+  const shared = await s.open(publicActor);
+  s.tick(); s.crossed(publicActor, 3487);
+  assert.equal(shared.timer.getRemainingTicks(), 1);
+  const privateDoor = await s.open(privateActor);
+  assert.notEqual(shared.timer.key, privateDoor.timer.key);
+  assert.equal(s.loc(11403, 3122, 3487), shared.leaf);
+  s.tick(); s.restored(shared.timer); s.crossed(privateActor, 3487);
+  assert.equal(s.loc(11403, 3122, 3487, area), privateDoor.leaf);
+  assert.equal(s.loc(38848, 3122, 3488, area), privateDoor.blocker);
+  assert.equal(privateDoor.timer.isRunning(), true); assert.equal(privateDoor.timer.getRemainingTicks(), 1);
+  s.assertBlocked(area);
+  s.tick(); s.restored(privateDoor.timer, area);
+  const reverse = await s.open(privateActor);
+  s.tick(); s.crossed(privateActor, 3488);
+  s.tick(); s.restored(reverse.timer, area);
+  s.unchangedNeighbours(); s.conserve(publicActor); s.conserve(privateActor);
+});
+
 function scopedCombatDefinitionLoader(t) {
   const definitions = core.NpcDefinition.definitions, saved = new Map(definitions);
   t.after(() => {

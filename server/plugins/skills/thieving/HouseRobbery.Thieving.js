@@ -135,8 +135,20 @@ function findOwners() {
   return found;
 }
 
+/**
+ * Owners are found by scanning every NPC in the world. An owner whose region is not loaded is
+ * missing, and asking for it every tick (as chooseNext does) cost a full scan per house per
+ * tick, so a failed lookup is reused for a few ticks before scanning again.
+ */
+const OWNER_RESCAN_TICKS = 25;
+let ownerScan = null;
 function ownerOf(house) {
-  if (!house.npc?.isRegistered?.()) house.npc = findOwners().get(house.key) ?? null;
+  if (house.npc?.isRegistered?.()) return house.npc;
+  if (!ownerScan || cycle.tick < ownerScan.tick || cycle.tick - ownerScan.tick >= OWNER_RESCAN_TICKS) {
+    ownerScan = { tick: cycle.tick, found: findOwners() };
+  }
+  const npc = ownerScan.found.get(house.key);
+  house.npc = npc?.isRegistered?.() ? npc : null;
   return house.npc;
 }
 
@@ -595,6 +607,7 @@ function processWorld() {
 function start() {
   houses.length = 0;
   for (const house of DATA.houses) houses.push({ ...house, npc: null });
+  ownerScan = null;
   cycle.tick = 0;
   // Ours: vacancies count on from the start-up time, so a lookup saved before a restart never
   // matches one of this run's vacancies.

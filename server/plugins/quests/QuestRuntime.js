@@ -518,9 +518,22 @@ function answerGetStage(request) {
 const QUEST_SHOP_VERSION = /\((?:(After|During|Before) )?([^()]+)\)$/;
 
 /** Case, a leading "The" and punctuation don't count: "Another Slice of H.A.M" is "Another Slice of H.A.M.". */
+const plainQuestName = (text) => String(text).toLowerCase().replace(/^the\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
+// Quests by plain name, rebuilt when one registers (quests are only ever added). Every
+// "quest:is-complete" question used to normalise every quest's name: about 5 s per minute of
+// logins with hundreds of players online. The first registered quest keeps a shared name.
+let questsByPlainName = new Map();
+let questsIndexed = 0;
 function questNamed(name) {
-  const plain = (text) => String(text).toLowerCase().replace(/^the\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
-  return quests.find((quest) => plain(quest.name) === plain(name));
+  if (questsIndexed !== quests.length) {
+    questsByPlainName = new Map();
+    for (const quest of quests) {
+      const key = plainQuestName(quest.name);
+      if (!questsByPlainName.has(key)) questsByPlainName.set(key, quest);
+    }
+    questsIndexed = quests.length;
+  }
+  return questsByPlainName.get(plainQuestName(name));
 }
 
 function questShopVersionApplies(name, player) {

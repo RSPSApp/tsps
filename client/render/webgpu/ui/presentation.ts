@@ -260,6 +260,7 @@ export class WebgpuUiPresentation {
         loginState: LoginState,
     ): void {
         if (
+            !loginRenderer.showLoginFlames ||
             this.renderer.osrsClient.gameState < GameState.LOGIN_SCREEN ||
             loginState.serverListOpen ||
             loginState.worldSelectOpen

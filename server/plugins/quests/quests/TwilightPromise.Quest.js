@@ -1250,6 +1250,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
       return;
     }
     if (stepId === STEP.VELAM_KILLED) {
+      if (scene.ennius && scene.velam) Scenes.face(scene.ennius, scene.velam.getLocation());
       scene.ennius?.performAnimation(new Animation(ENNIUS_STRIKE_ANIMATION, 5));
       Scenes.later(scene, 1, () => {
         scene.velam?.performAnimation(new Animation(VELAM_FALL_ANIMATION, 20));

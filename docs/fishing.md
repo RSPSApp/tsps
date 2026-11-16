@@ -41,6 +41,38 @@ their own rows by id.
   bonus scales both ends. Several fish on one spot roll highest first, and the first success is
   the catch (a big net rolls each on its own).
 
+## Barbarian rod instruction
+
+The [Barbarian Training](https://oldschool.runescape.wiki/w/Barbarian_Training) rod instruction
+unlocks leaping-fish catches before the fishing task or the whole miniquest is complete.
+`TOOLS.BARBARIAN_ROD` declares `unlock: "barbarian_rod"`; the shared requirements check asks
+`fishing:unlocked`, and BarbarianTraining answers from its existing saved `fishingRod` stage.
+No answer means locked. Other tools' quest requirements and the independent barehand lesson
+remain separate.
+
+Recording **237/01149, tick 8766** sets `brut_fishing_r` to 1 as Otto starts his final instruction
+reply. Selecting the topic or closing an earlier line grants nothing. The final reply requires
+an actual transcript and Otto still nearby. The first leaping catch advances 1 to 2; telling
+Otto advances it to 3. Each stage retains rod permission through the existing save and login
+varbit synchronization. The untaught refusal wording is implementation text, not captured text.
+
+`server/tests/barbarian-rod-native.test.cjs` exercises real players, containers, spots, native
+NPC/dialogue packets and the fishing task: interrupted instruction, the exact final-reply
+boundary, catch resources and XP, movement cancellation, queued-catch permission recheck,
+missing transcript/distance refusal and real save-codec/apply/login round trips. A separate
+disk regression uses native lesson/catch progression, real player logout cleanup, SQLite
+save/worker flush, closed and reopened stores, and loaded players' login hooks for stages
+0/1/2/3. It seeds gear and levels and controls catch RNG; these checks do not claim a rendered
+client or a full network login handshake.
+
+A separate slot26 live walkthrough on the shipped cache verified the rendered refusal,
+Otto's actual menu and Continue controls, early Escape interruption, stage1 while the final
+instruction reply was displayed, real rod animation/catches and stage2 retained after native
+logout and a real client login. Levels, rod, bait and starting location were seeded; NPC
+operations used the agent's decoded native packets while dialogue and logout/login controls
+used actual canvas pointer/keyboard input. This does not claim complete miniquest or
+free-world visual coverage.
+
 ## Karambwanji and karambwan
 
 - **Karambwanji (Holy Lake, small net, 5 Fishing):** chart 100/250, then shrimps 48/256 when the

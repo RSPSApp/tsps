@@ -151,6 +151,8 @@ yarn sync:npc-spawns --box 1216,9344,1727,9855 --tag Neypotzli --write
 - **Left out:** the Perilous Moons bosses (Blood, Blue and Eclipse Moon) and Amoxliatl, since no plugin gives them their fights yet. Araxxor is in the same decision ahead of the dungeon batch.
 - **Not yet:** the Frost Nagua have no stats until the monster database update.
 
+- **Colosseum lobby Mezan (13396):** the stationary spawn uses the post-fight tile (1804, 9520), facing southeast as in RSProx recording `rsprox_transcripts/226/01695.txt` (tick 1698). Recording `242/900261.txt` uses the same tile with south facing, and `241/911577.txt` places Mezan at (1803, 9522). All three return the player to (1803, 9521).
+
 ## Open monster dungeons
 
 1,163 spawns in 80 map squares of open monster dungeons, from an allowlist of areas in the gap report rather than everything below ground: the Black Knight Catacombs, Underground Pass, Morytania Spider Cave (araxytes), Charred Dungeon, the Sophanem and Scabaras dungeons, Tarn's Lair, Zemouregal's Base and Fort, the God Wars Dungeon's spirituals and blood reavers, the Gryphons' cave, Ynysdail Cavern, Deepfin Mine, the Buccaneers' Laboratory, Grimstone Dungeon (frost dragons), Waterbirth, Pandemonium Cave, Brimhaven Dungeon, the Ancient Guthixian Temple (tormented demons), the Stronghold of Security's minotaurs, the Vampyrium and its realm, and smaller slayer caves.

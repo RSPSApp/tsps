@@ -10,8 +10,9 @@ const { hasKey, ownsStoredKey } = require("../../items/KeyAvailability");
  * water channels), the genie's crevice and the statuette hand-in.
  *
  * Stages (varbit 1444 "elidquest", varp 616; rev-227 capture 1788):
- * 10 mayor's plea accepted, 20 Ghaslor's ballad/key on table, 25 key
- * telegrabbed, 27 ancestral door opened, 30 lake door opened after the three
+ * 10 mayor's plea accepted, 20 Ghaslor's ballad, torn robes and key on the
+ * table (the telegrab does not change it), 25 the rope descent's fade (227/01788
+ * tick 5036), 27 ancestral door opened, 30 lake door opened after the three
  * channels, 35 spirits told of the statuette, 40 mayor named the crevice,
  * 50 genie deal accepted, 55 sole traded for the statuette, 60 complete.
  * Lost key/shoes are re-placed on login and lost torn robes can be searched
@@ -180,6 +181,21 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   const ROPE_CLIMB_DELAY_TICKS = 4;
   const ROPE_FADE_DELAY_TICKS = 3;
   const ROPE_CAVE_DELAY_TICKS = 4;
+  /**
+   * The climb itself (227/01788 tick 5033, 231/03019 ticks 59 and 577): the player is moved to 3371,3132 with an
+   * exactmove from the lasso tile to two tiles north of it (15 and 120 cycles in, facing north), the rope loc
+   * elid_climbing_rope_up_3x3 (10392) is added at 3371,3130 (shape 10, rotation 2) and deleted five ticks on
+   * (01788 5038, 03019 64), and synth 2482 plays twice.
+   */
+  const ROPE_CLIMB_TILE = new Location(3371, 3132, 0);
+  const ROPE_CLIMB_EXACTMOVE = { dy: 2, startCycles: 15, endCycles: 120, direction: 0 }; // direction 0 is angle 1024
+  const ROPE_CLIMB_LOC = "elid_climbing_rope_up_3x3"; // 10392
+  const ROPE_CLIMB_LOC_TILE = new Location(3371, 3130, 0);
+  const ROPE_CLIMB_LOC_ROTATION = 2;
+  const ROPE_CLIMB_LOC_TICKS = 5;
+  const ROPE_CLIMB_SYNTH = 2482;
+  /** Live sets busy (12393) on the step tick, the one after the use, and clears it at the move into the cave (01788 5028, 5040). */
+  const BUSY_VARBIT = "busy";
   const CREVICE_OBJECT_ID = ObjectIdentifiers.CREVICE_9; // 10416, west of Nardah
   const CREVICE_ROPE_OBJECT_ID = ObjectIdentifiers.ROPE_10; // 10434, inside the crevice
   const CAVE_EXIT_OBJECT_ID = ObjectIdentifiers.CAVE_EXIT_18; // 10417
@@ -791,22 +807,22 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
       // the movement queue on arrival, so a step already under way is put back.
       const pending = ropeDescents.get(player);
       if (pending) {
-        if (pending.stepping && !player.getLocation().equals(ROOT_LASSO_TILE)) Scenes.walk(player, ROOT_LASSO_TILE);
+        if (pending.stepping && !pending.tile && !player.getLocation().equals(ROOT_LASSO_TILE)) Scenes.walk(player, ROOT_LASSO_TILE);
         return;
       }
       ensureDungeonExit();
       const descent = { from: player.getLocation().clone() };
       ropeDescents.set(player, descent);
       player.getMovementQueue().reset();
-      if (!descent.from.equals(ROOT_LASSO_TILE)) {
-        Scenes.later(player, ROOT_STEP_DELAY_TICKS, () => {
-          if (ropeDescents.get(player) !== descent) return;
-          // Moved off (a teleport, a walk) before the step: no descent.
-          if (!player.getLocation().equals(descent.from)) return endRopeDescent(player, descent);
-          descent.stepping = true;
-          Scenes.walk(player, ROOT_LASSO_TILE);
-        });
-      }
+      Scenes.later(player, ROOT_STEP_DELAY_TICKS, () => {
+        if (ropeDescents.get(player) !== descent) return;
+        // Moved off (a teleport, a walk) before the step: no descent.
+        if (!player.getLocation().equals(descent.from)) return endRopeDescent(player, descent);
+        setBusy(player, descent, true);
+        if (descent.from.equals(ROOT_LASSO_TILE)) return;
+        descent.stepping = true;
+        Scenes.walk(player, ROOT_LASSO_TILE);
+      });
       Scenes.later(player, ROOT_LASSO_DELAY_TICKS, () => {
         if (ropeDescents.get(player) !== descent) return;
         if (!player.getLocation().equals(ROOT_LASSO_TILE)) return endRopeDescent(player, descent);
@@ -836,14 +852,47 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
 
   /**
    * The rope descents under way: from the use until the move into the cave. Live holds the player
-   * from the step on (busy 12393 set at 227/01788 tick 5028); here the lasso holds them in place.
+   * from the step on (busy 12393 set at 227/01788 tick 5028, sent here too); the lasso holds them in place.
    */
   const ropeDescents = new WeakMap();
+
+  function setBusy(player, descent, busy) {
+    if (Boolean(descent.busy) === busy) return;
+    descent.busy = busy;
+    player.getPacketSender().sendVarbit(api.core.CacheDefinitions.getVarbitId(BUSY_VARBIT), busy ? 1 : 0);
+  }
+
+  /** Clears the climb's exactmove, which stays set from the climb until the descent ends. */
+  function clearClimb(player, descent) {
+    if (!descent.climb) return;
+    if (player.getForceMovement?.() === descent.climb) player.setForceMovement(null);
+    descent.climb = null;
+  }
 
   function endRopeDescent(player, descent) {
     if (ropeDescents.get(player) !== descent) return;
     ropeDescents.delete(player);
+    setBusy(player, descent, false);
+    clearClimb(player, descent);
     player.getMovementQueue().setBlockMovement(false);
+  }
+
+  /**
+   * The climb's rope loc: there five ticks after each climb, whatever becomes of the descent. One loc stands on the
+   * tile, so a climb within another's five ticks keeps it up until the later climb's five are over.
+   */
+  const climbRope = { object: null, holders: 0 };
+  function showClimbRope() {
+    const rope = new GameObject(api.core.CacheDefinitions.getLocId(ROPE_CLIMB_LOC), ROPE_CLIMB_LOC_TILE.clone(), 10,
+      ROPE_CLIMB_LOC_ROTATION, null);
+    ObjectManager.register(rope, true);
+    climbRope.object = rope;
+    climbRope.holders++;
+    api.core.TaskManager.submit(new api.core.CountdownTask(rope, ROPE_CLIMB_LOC_TICKS, () => {
+      if (--climbRope.holders > 0) return;
+      ObjectManager.deregister(climbRope.object, true);
+      climbRope.object = null;
+    }));
   }
 
   /** Capture 1788: lasso, descent camera, climb, fade, teleport to (3349,9536), reset and theme. */
@@ -852,36 +901,73 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     player.performAnimation(new Animation(api.core.CacheDefinitions.getSeqId(ROPE_LASSO_SEQ), ROPE_LASSO_DELAY_CYCLES));
     Scenes.camera(player, [3368, 3134, 1175], [3372, 3130, 25], { rate: 1, rate2: 200 });
     player.getPacketSender().sendSound(ROPE_LASSO_SYNTH, 1, ROPE_LASSO_DELAY_CYCLES);
+    descent.tile = ROOT_LASSO_TILE;
     // Still there: a teleport during the descent leaves the player where they went, nothing half-open.
     const stillAtRoot = () => {
       if (ropeDescents.get(player) !== descent) return false;
-      if (player.getLocation().equals(ROOT_LASSO_TILE)) return true;
+      if (player.getLocation().equals(descent.tile)) return true;
+      const climbed = Boolean(descent.climb);
       endRopeDescent(player, descent);
+      if (climbed) player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
       Scenes.closeFade(player);
       player.getPacketSender().sendCameraReset();
       return false;
     };
-    Scenes.later(player, ROPE_CLIMB_DELAY_TICKS, () => {
+    const climbAt = ROPE_CLIMB_DELAY_TICKS;
+    const fadeAt = climbAt + ROPE_FADE_DELAY_TICKS;
+    const caveAt = fadeAt + ROPE_CAVE_DELAY_TICKS;
+    // Checked every tick, so a teleport mid-descent closes the fade and the camera at once, not at the next step.
+    let ticks = 0;
+    const step = () => {
+      ticks++;
       if (!stillAtRoot()) return;
-      player.performAnimation(new Animation(api.core.CacheDefinitions.getSeqId(ROPE_CLIMB_SEQ)));
-      Scenes.later(player, ROPE_FADE_DELAY_TICKS, () => {
-        if (!stillAtRoot()) return;
+      if (ticks === climbAt) climb(player, descent);
+      else if (ticks === fadeAt) {
+        // Live advances the quest here, the key already grabbed, just before the fade (227/01788 tick 5036: elidquest
+        // 20 to 25). Only from 20: a descent before the ballad, or after 25, leaves the stage alone.
+        if (quest.getStage(player) === STAGE_BALLAD) quest.setStage(player, STAGE_KEY);
         Scenes.fade(player, true);
-        Scenes.later(player, ROPE_CAVE_DELAY_TICKS, () => {
-          if (!stillAtRoot()) return;
-          endRopeDescent(player, descent);
-          player.moveTo(DUNGEON_ENTRY_TILE);
-          player.getPacketSender().sendCameraReset().sendSong(462);
-          Scenes.fade(player, false);
-          Scenes.later(player, 2, () => Scenes.closeFade(player));
-        });
-      });
-    });
+      }
+      else if (ticks === caveAt) {
+        endRopeDescent(player, descent);
+        player.moveTo(DUNGEON_ENTRY_TILE);
+        player.getPacketSender().sendCameraReset().sendSong(462);
+        Scenes.fade(player, false);
+        Scenes.later(player, 2, () => Scenes.closeFade(player));
+        return;
+      }
+      Scenes.later(player, 1, step);
+    };
+    Scenes.later(player, 1, step);
+  }
+
+  /**
+   * The climb (01788 5033): moved to 3371,3132 with the exactmove up the rope. The exactmove stays set until the
+   * descent ends, so the client is not walked from its end (3371,3131) to the tile under the player.
+   */
+  function climb(player, descent) {
+    const { dy, startCycles, endCycles, direction } = ROPE_CLIMB_EXACTMOVE;
+    const climbSeq = api.core.CacheDefinitions.getSeqId(ROPE_CLIMB_SEQ);
+    descent.climb = new api.core.ForceMovement(ROOT_LASSO_TILE.clone(), new Location(0, dy, 0), startCycles, endCycles,
+      direction, climbSeq);
+    descent.tile = ROPE_CLIMB_TILE;
+    player.moveTo(ROPE_CLIMB_TILE.clone());
+    player.setForceMovement(descent.climb);
+    player.performAnimation(new Animation(climbSeq));
+    showClimbRope();
+    const sender = player.getPacketSender();
+    sender.sendSound(ROPE_CLIMB_SYNTH, 1, 0);
+    sender.sendSound(ROPE_CLIMB_SYNTH, 1, 0);
   }
 
   /** Logout/death during the rope fade: cancel pending ticks and leave no half-open transition. */
   function handleTransitionInterrupted({ player } = {}) {
     if (!player) return;
+    const descent = ropeDescents.get(player);
+    if (descent) {
+      setBusy(player, descent, false);
+      clearClimb(player, descent);
+    }
     ropeDescents.delete(player);
     Scenes.cancel(player);
     Scenes.closeFade(player);
@@ -1366,12 +1452,6 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     );
   }
 
-  /** The table is out of reach: OSRS requires Telekinetic Grab for the key. */
-  function handleTelekineticGrab({ player, itemId }) {
-    if (itemId !== ANCESTRAL_KEY_ITEM_ID) return;
-    if (quest.getStage(player) < STAGE_KEY) quest.setStage(player, STAGE_KEY);
-  }
-
   function ensureShoes(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_MAYOR || quest.isComplete(player)) return;
@@ -1464,7 +1544,6 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("door:toggle", handleDoorToggle);
-  api.onCustomEvent("magic:telekinetic-grab", handleTelekineticGrab);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnObject(handleItemOnObject, { noted: false });

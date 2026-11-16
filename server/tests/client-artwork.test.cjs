@@ -18,9 +18,10 @@ test("the admin saves and resets both images served by the world", async t => {
   const sprites = require("../plugins/world/CustomSprites.plugin");
   sprites.register({ registerContentEndpoint: (name, handler) => resources.set(name, handler), log() {} });
   const sprite = () => resources.get("sprites")(null, ["30000"]);
-  const title = () => resources.get("client-background")(null, []);
+  assert.equal(resources.has("client-background"), false);
+  const title = () => resources.get("login-screen")(null, []);
   assert.equal(sprite(), undefined);
-  assert.equal(title(), undefined);
+  assert.deepEqual(title(), { showFlames: true, showLogo: true });
 
   const token = "client-artwork-test-token";
   const access = { token, loopback: true, port: () => server.address().port };
@@ -39,9 +40,11 @@ test("the admin saves and resets both images served by the world", async t => {
   assert.equal((await save("background", background)).status, 200);
   assert.deepEqual(await (await fetch(base + "banner", { headers })).json(), { data: banner });
   assert.deepEqual(sprite(), { id: 30000, png: banner });
-  assert.deepEqual(title(), { jpg: background });
+  assert.deepEqual(title(), { showFlames: true, showLogo: true, jpg: background });
+  fs.writeFileSync("data/client-artwork/login-screen.json", JSON.stringify({ showFlames: false, showLogo: false }));
+  assert.deepEqual(title(), { showFlames: false, showLogo: false, jpg: background });
   assert.equal((await save("banner", null)).status, 200);
   assert.equal((await save("background", null)).status, 200);
   assert.equal(sprite(), undefined);
-  assert.equal(title(), undefined);
+  assert.deepEqual(title(), { showFlames: false, showLogo: false });
 });

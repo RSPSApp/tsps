@@ -10,8 +10,9 @@ const { hasKey, ownsStoredKey } = require("../../items/KeyAvailability");
  * water channels), the genie's crevice and the statuette hand-in.
  *
  * Stages (varbit 1444 "elidquest", varp 616; rev-227 capture 1788):
- * 10 mayor's plea accepted, 20 Ghaslor's ballad/key on table, 25 key
- * telegrabbed, 27 ancestral door opened, 30 lake door opened after the three
+ * 10 mayor's plea accepted, 20 Ghaslor's ballad, torn robes and key on the
+ * table (the telegrab does not change it), 25 the rope descent's fade (227/01788
+ * tick 5036), 27 ancestral door opened, 30 lake door opened after the three
  * channels, 35 spirits told of the statuette, 40 mayor named the crevice,
  * 50 genie deal accepted, 55 sole traded for the statuette, 60 complete.
  * Lost key/shoes are re-placed on login and lost torn robes can be searched

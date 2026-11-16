@@ -220,13 +220,14 @@ Lady Keli, Prince Ali and Joe were spawned as their visible ids (11578, 11579, 1
 
 Fairy Very Wise and the awake Fairy Queen are nameless multinpc parents on Fairytale II's stage
 (varbit 2326), which the client and `NPC.getContentId` resolve per player. The user's whole-quest
-rsprox capture `FairyTale2` (revision 242.1) adds each on one tile, facing one way, and neither ever
-walks, so both rows were set from it with `wanderRadius` 0:
-- **Fairy Very Wise** `fairyliquid_multi` (2970) at 2353,4458, facing east: shows as 1847 from stage
-  45 (her arrival in Fairy Nuff's welcome) through 90. Added at tick 976, and on the same tile at
-  1102, 1865 and 2352. It was at 2353,4446.
-- **Fairy Queen** `fairy_queen_multi2` (2971) at 2354,4455, facing south: shows as 1842 at stages 80
-  and 90 (awake after the magic essence). Added at tick 2419, four ticks after the pour. It was at
+rsprox capture `FairyTale2` (revision 242.1) adds each on one tile and neither ever walks, so both
+rows were set from it with `wanderRadius` 0 (the rows keep no facing):
+- **Fairy Very Wise** `fairyliquid_multi` (2970) at 2353,4458: shows as 1847 from stage
+  45 (her arrival in Fairy Nuff's welcome) through 90. Added at tick 976 facing east, and on the
+  same tile at 1102, 1865 (facing west) and 2352. It was at 2353,4446.
+- **Fairy Queen** `fairy_queen_multi2` (2971) at 2354,4455: shows as 1842 at stages 80
+  and 90 (awake after the magic essence). Added at tick 2419 facing south, four ticks after the
+  pour. It was at
   2352,4457.
 
 The hideout's other fairies keep their rows. `fairytale-ii-capture.test.cjs` covers the stages they

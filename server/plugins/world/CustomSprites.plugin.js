@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { readArtwork } = require("./ClientArtwork");
 
 /**
  * Sprites the cache doesn't have, `data/sprites/<id>[-name].png`, from id 30000 like custom
@@ -8,6 +9,7 @@ const path = require("path");
  */
 const SPRITES_DIRECTORY = path.resolve(process.cwd(), "data/sprites");
 const FILE_NAME = /^(\d+)(?:-[a-z0-9-]+)?\.png$/;
+const WELCOME_BANNER_SPRITE = 30000;
 let sprites = new Map();
 
 function loadSprites(directory = SPRITES_DIRECTORY) {
@@ -22,10 +24,20 @@ function loadSprites(directory = SPRITES_DIRECTORY) {
 
 /** GET /api/sprites lists the ids; /api/sprites/<id> is { id, png } with the PNG in base64. */
 function spritesResource(_query, segments) {
-  if (!segments.length) return [...sprites.keys()];
+  if (!segments.length) {
+    const ids = [...sprites.keys()];
+    if (!sprites.has(WELCOME_BANNER_SPRITE) && readArtwork("banner")) ids.push(WELCOME_BANNER_SPRITE);
+    return ids;
+  }
+  if (segments.length !== 1) return undefined;
   const id = Number(segments[0]);
-  const png = sprites.get(id);
+  const png = (id === WELCOME_BANNER_SPRITE ? readArtwork("banner") : null) ?? sprites.get(id);
   return png === undefined ? undefined : { id, png };
+}
+
+function backgroundResource(_query, segments) {
+  const jpg = segments.length === 0 ? readArtwork("background") : null;
+  return jpg ? { jpg } : undefined;
 }
 
 module.exports = {
@@ -35,6 +47,7 @@ module.exports = {
   register(api) {
     sprites = loadSprites();
     api.registerContentEndpoint("sprites", spritesResource);
+    api.registerContentEndpoint("client-background", backgroundResource);
     api.log("registered", { sprites: [...sprites.keys()] });
   },
 };

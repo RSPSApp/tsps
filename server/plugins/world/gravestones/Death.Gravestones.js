@@ -38,9 +38,36 @@ function queryMakesGrave(query) {
   query.makesGrave = !query.playerKill && makesGrave(query.player, null);
 }
 
+/** Content may nominate victim-owned exceptions to the usual PvP routing.
+ * `gravestones:pvp-items` { player, killer, eligible, items }: eligible is only
+ * this death's lost, originally worn untradeables; items receives exact references.
+ * The grave owner rechecks against its own set, never accepting other PvP loot.
+ */
+function takePvpExceptions(event) {
+  const { player, killer, location } = event;
+  if (!killer || killer === player || player.isPlayerBot?.()) return;
+  if (!Common.api().getPluginConfig(ENABLED_CONFIG, true) || Common.ironmanMode(player) === "ultimate") return;
+  const worn = player.getEquipment().getItems();
+  const eligible = new Set(event.untradeables.filter(item => !item.isTradeable() && worn.includes(item)));
+  if (eligible.size === 0) return;
+  const request = { player, killer, eligible: [...eligible], items: [] };
+  Common.api().emitCustomEvent("gravestones:pvp-items", request);
+  const selected = event.untradeables.filter(item => eligible.has(item) && request.items.includes(item) && !item.isTradeable());
+  if (selected.length === 0) return;
+  const taken = new Set(selected);
+  for (let i = event.untradeables.length - 1; i >= 0; i--) {
+    if (taken.has(event.untradeables[i])) event.untradeables.splice(i, 1);
+  }
+  Grave.store(player, location, selected.map(Common.record), event.layout, Common.core().Wilderness.isIn(player));
+  Timer.track(player);
+}
+
 function takeDeathDrops(event) {
   const { player, killer, location } = event;
-  if (!makesGrave(player, killer)) return;
+  if (!makesGrave(player, killer)) {
+    takePvpExceptions(event);
+    return;
+  }
   const wilderness = Common.core().Wilderness.isIn(player);
   const piles = !wilderness && !player.getPrivateArea?.() && Common.getVarbit(player, "supplyPilesDisabled") !== 1;
   const lost = [...event.items, ...event.untradeables];

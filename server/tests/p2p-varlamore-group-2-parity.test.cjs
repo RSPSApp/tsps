@@ -889,9 +889,24 @@ test('TP Mezan prays against a style used four times, falls without dying and an
   const blocked = hit(core.CombatType.MELEE); h.hooks.onNpcHitModify.forEach(fn => fn({ npc: mezan, hit: blocked })); assert.equal(blocked.parts[0].damage, 0);
   const event = { npc: mezan, preventDeath: false }; h.hooks.onNpcBeforeDeath.forEach(fn => fn(event)); assert.equal(event.preventDeath, true);
   h.tick(2); assert.equal(p.varbits.get(9832), 2);
-  h.tick(6); assert.deepEqual(src(p, p.getLocation()), [1804, 9521], 'the player returns beside Mezan instead of overlapping him');
+  h.tick(6); assert.deepEqual(src(p, p.getLocation()), [1803, 9521], 'the player returns to the captured lobby tile');
+  const lobbyMezan = require('../data/definitions/npc-spawns.json').find(row => row.id === 13396 && row.name === 'Knight of Varlamore');
+  assert.deepEqual([lobbyMezan.x, lobbyMezan.y, lobbyMezan.direction], [1804, 9520, 2], 'the stationary lobby Mezan anchor matches his captured post-fight tile and facing');
   assert.match(p.text, /^You fought well in there/);
   h.continueUntil(p, () => p.text === 'Perfect! Thanks.'); assert.equal(p.varbits.get(9832), 3); assert.equal(h.quest.getStage(p), 16);
+});
+
+test('TP Mezan Quick-exit returns to the captured lobby tile beside the stationary NPC spawn', () => {
+  const { h, p } = tp(); h.quest.setStage(p, 14); p.attrs.set('quest.twilights_promise.recruits', 1 << 6);
+  tpTalk(h, p, N.KNIGHT_OF_VARLAMORE_21); continueToMenu(h, p); h.choose(p, "I'm ready. Let's do this.");
+  h.continueUntil(p, () => p.text === 'Kuani!'); p.manager.advance(); h.tick(2);
+  assertCopy(p, [222, 381]);
+  const event = { player: p };
+  h.namedObjects.get('Gate')['Quick-exit'](event);
+  assert.equal(event.handled, true);
+  assert.deepEqual(src(p, p.getLocation()), [1803, 9521], 'Quick-exit uses the same captured return tile as the fight result');
+  const lobbyMezan = require('../data/definitions/npc-spawns.json').find(row => row.id === 13396 && row.name === 'Knight of Varlamore');
+  assert.deepEqual([lobbyMezan.x, lobbyMezan.y, lobbyMezan.direction], [1804, 9520, 2], 'the lobby NPC stays on his recorded post-fight tile and facing');
 });
 
 test('TP judgement: the crest goes back (24), the letter (26) and its paper (28), then the verdict (30, 32) and Regulus (34)', () => {

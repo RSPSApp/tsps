@@ -13,7 +13,7 @@
  * - the Hydra only takes damage from a player on a hydra Slayer task.
  */
 const Common = require("./Common.AlchemicalHydra");
-const { Fight } = require("./Fight.AlchemicalHydra");
+const { Fight, logHitpointsChange } = require("./Fight.AlchemicalHydra");
 
 const LAIR_ATTRIBUTE = "alchemical-hydra:lair";
 
@@ -256,6 +256,7 @@ function attach(api) {
   api.onCanSpawnNpc(blockWorldSpawn);
   api.onNpcHitModify(hydraHit);
   api.onCustomEvent("combat:damage-apply", directHydraHit);
+  api.onCustomEvent("skills:current-level-changed", logHitpointsChange);
   api.onCanLogout(holdLogout);
   api.onPlayerLogout(leaveWorld);
   api.onPlayerDisconnect(leaveWorld);

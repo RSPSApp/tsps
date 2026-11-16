@@ -4534,6 +4534,194 @@ test('Tourist Trap driver: exactly 100 coins reaches the bribe acceptance branch
   assert.equal(f.stage(), 27);
 });
 
+// Temple of Ikov issue4834 original10: retained Wiki transcript distinguishes
+// the introduction from "again"; guide permits the first-talk 20-root shortcut.
+// Supplied stage/resources/local registered NPC, not a natural quest/account run.
+const WINELDA_MET = 'temple-of-ikov:met-winelda';
+const WINELDA_INTRO = "Hehe! We see you're in a pickle!";
+const WINELDA_AGAIN = 'Have you got roots for poor Winelda?';
+function wineldaFixture(t, { stage = 10, roots = 0 } = {}) {
+  const f = fixture(t), { player } = f;
+  let npcIndex;
+  t.after(() => {
+    const errors = [], clean = fn => { try { fn(); } catch (error) { errors.push(error); } };
+    clean(() => PM.emitPlayerLogout({ player, username: player.getUsername() }));
+    clean(() => {
+      const local = player.getLocalNpcs();
+      while (f.npc && local.includes(f.npc)) local.splice(local.indexOf(f.npc), 1);
+    });
+    clean(() => core.TaskManager.cancelTasks(player));
+    clean(() => core.TaskManager.cancelTasks(player.getIndex()));
+    clean(() => core.World.unregisterPlayerPosition(player));
+    if (f.npc) {
+      clean(() => core.TaskManager.cancelTasks(f.npc));
+      clean(() => {
+        if (f.npc.isRegistered()) assert.equal(core.World.getNpcs().get(npcIndex), f.npc,
+          'only the exact owned NPC may be removed from its original slot');
+        PM.removeNpc(f.npc);
+      });
+      clean(() => assert.notEqual(core.World.getNpcs().get(npcIndex), f.npc));
+      clean(() => assert.ok(!core.World.getAddNPCQueue().includes(f.npc)));
+    }
+    if (errors.length) throw new AggregateError(errors, 'Winelda fixture cleanup failed');
+  });
+  const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests()
+    .filter(entry => entry.key === 'temple_of_ikov');
+  assert.equal(quests.length, 1, 'one production quest registration');
+  f.quest = quests[0]; f.quest.setStage(player, stage);
+  player.setAttribute('bot-skip-persistence', true);
+  player.setIndex(player.getIndex() % 2000);
+  assert.ok(player.getIndex() > 0 && player.getIndex() < core.World.MAX_PLAYERS);
+  player.getSession().setPlayer(player);
+  if (core.RegionManager.regions.size === 0) core.RegionManager.init();
+  core.RegionManager.loadMapFiles(2655, 9876);
+  player.setLocation(new core.Location(2654, 9876, 0)); player.setNeedsPlacement(false);
+  assert.equal(core.RegionManager.canMovestart(player.getLocation(), new core.Location(2655, 9876, 0),
+    1, 1, null), true, 'supplied adjacent stand really reaches the NPC tile');
+  f.npc = PM.spawnNpc({ id: core.NpcIdentifiers.WINELDA, x: 2655, y: 9876, z: 0,
+    wanderRadius: 0, owner: player, ownerOnly: true }, 'WineldaMeetingFixture');
+  npcIndex = f.npc?.getIndex();
+  assert.ok(f.npc?.isRegistered()); assert.equal(core.World.getNpcs().get(f.npc.getIndex()), f.npc);
+  f.npc.setNeedsPlacement(false); player.getLocalNpcs().push(f.npc);
+  assert.equal(f.npc.getCurrentDefinition(player).getName(), 'Winelda');
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.COINS, 123));
+  if (roots) player.getInventory().add(new core.Item(core.ItemIdentifiers.LIMPWURT_ROOT, roots));
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.LIMPWURT_ROOT), roots);
+  f.operated = [];
+  const emitInteraction = PM.emitNpcInteraction;
+  t.mock.method(PM, 'emitNpcInteraction', function(event) {
+    const result = Reflect.apply(emitInteraction, this, [event]);
+    if (event.player === player) f.operated.push({ npc: event.npc, npcId: event.npcId, result });
+    return result;
+  });
+  f.text = () => player.getDialogueManager().getCurrent()?.getText?.()?.replace(/\s+/g, ' ');
+  f.tick = () => {
+    core.TaskManager.processWalkTo(player.getIndex());
+    player.getMovementQueue().beginCycle(); player.getMovementQueue().process();
+    core.TaskManager.process(); f.connection.processTurnPackets();
+  };
+  f.talk = async () => {
+    player.closeInterruptibleInterfaces();
+    const actions = f.npc.getCurrentDefinition(player).getActions(), clickType = actions.indexOf('Talk-to') + 1;
+    assert.ok(clickType > 0); assert.equal(core.World.getNpcs().get(f.npc.getIndex()), f.npc);
+    const before = f.operated.length;
+    await f.connection.dispatch([{ type: 'npc_option', index: f.npc.getIndex(), clickType }]);
+    f.connection.processTurnPackets();
+    for (let turn = 0; turn < 4 && !player.getDialogueManager().getCurrent(); turn++) f.tick();
+    assert.equal(f.operated.length, before + 1, 'one actual ordinary operation reaches the registered NPC producer');
+    assert.equal(f.operated.at(-1).npc, f.npc); assert.equal(f.operated.at(-1).npcId, core.NpcIdentifiers.WINELDA);
+    assert.equal(f.operated.at(-1).result, true);
+    assert.ok(player.getDialogueManager().getCurrent(), 'ordinary NPC packet opens a real dialogue');
+    return f.text();
+  };
+  return f;
+}
+async function wineldaFinish(f) {
+  const lines = [];
+  for (let turn = 0; turn < 24 && f.player.getDialogueManager().getCurrent(); turn++) {
+    assert.equal(MultiChatboxPrompt.getPending(f.player), null, 'this root/payment branch needs no authored menu choice');
+    lines.push(f.text()); await nextLine(f);
+  }
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
+  return lines;
+}
+const wineldaItems = player => [player.getInventory(), player.getEquipment()].map(container =>
+  container.getItems().map(item => item && item.getId() >= 0 ? { id: item.getId(), amount: item.getAmount(), meta: structuredClone(item.getMeta()) } : null));
+
+test('Winelda keeps the first-talk twenty-root shortcut and debits only the actual payment', async t => {
+  const f = wineldaFixture(t, { roots: 20 }), points = f.player.getAttribute('quest.points') ?? 0;
+  const before = wineldaItems(f.player);
+  assert.equal(await f.talk(), "I've got you the limpwurt roots!");
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.LIMPWURT_ROOT), 20);
+  assert.equal(f.quest.getStage(f.player), 10, 'opening the conversation does not grant the teleport');
+  await wineldaFinish(f);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.LIMPWURT_ROOT), 0);
+  const expected = structuredClone(before);
+  for (let slot = 0; slot < expected[0].length; slot++)
+    if (expected[0][slot]?.id === core.ItemIdentifiers.LIMPWURT_ROOT) expected[0][slot] = null;
+  assert.deepEqual(wineldaItems(f.player), expected);
+  assert.equal(f.quest.getStage(f.player), 50); assert.equal(f.quest.isComplete(f.player), false);
+  assert.equal(f.player.getAttribute('quest.points') ?? 0, points);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()],
+    [2644, 9890, 0], 'existing destination before the optional key route, not a new teleport');
+});
+
+test('Winelda preserves an already-paid legacy stage without charging another twenty roots', async t => {
+  const f = wineldaFixture(t, { stage: 50 }), before = wineldaItems(f.player);
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0, 'legacy paid save has no meeting marker');
+  assert.equal(await f.talk(), 'Hi again. Could you do the honours again please?');
+  await wineldaFinish(f);
+  assert.deepEqual(wineldaItems(f.player), before); assert.equal(f.quest.getStage(f.player), 50);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [2644, 9890]);
+});
+
+test('Winelda introduces herself on the first unpaid talk and remembers it through PlayerSave', async t => {
+  const f = wineldaFixture(t), before = wineldaItems(f.player);
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0);
+  PM.emitNpcDialogueVariant({ player: f.player, npc: f.npc, npcId: core.NpcIdentifiers.WINELDA,
+    definition: f.npc.getCurrentDefinition(f.player), pages: [] });
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0, 'a variant query alone is not a meeting');
+  assert.equal(await f.talk(), WINELDA_INTRO, 'quest-start stage alone must not select the repeat root request');
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0, 'opening is not a completed introduction');
+  assert.equal(PM.emitNpcInteraction({ player: f.player, npc: f.npc,
+    npcId: core.NpcIdentifiers.WINELDA, definition: f.npc.getCurrentDefinition(f.player),
+    clickType: f.npc.getCurrentDefinition(f.player).getActions().indexOf('Talk-to') + 1, handled: false }), true);
+  assert.equal(f.text(), WINELDA_INTRO, 'an immediate second producer call cannot replace the introduction with again');
+  assert.equal(await f.talk(), WINELDA_INTRO, 'a repeated ordinary NPC packet still opens the introduction');
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0);
+  await nextLine(f); await nextLine(f);
+  const options = MultiChatboxPrompt.getPending(f.player)?.options;
+  assert.ok(options?.includes('Yes I do!'));
+  await choose(f, options.indexOf('Yes I do!') + 1);
+  assert.equal(f.text(), 'Yes I do!', 'the selected branch is still on its first preterminal line');
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0, 'compiling the accepting branch cannot mark its unreached final line');
+  const introduced = await wineldaFinish(f);
+  assert.ok(introduced.includes('Get Winelda 20 limpwurt roots for my pot.'), 'ordinary introduction reaches the first root request');
+  assert.ok(introduced.includes('Then we shows them some magic!'));
+  assert.equal(f.player.getAttribute(WINELDA_MET), 1, 'the actual final introduction line records the meeting');
+  assert.deepEqual(wineldaItems(f.player), before); assert.equal(f.quest.getStage(f.player), 10);
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const { JsonPlayerPersistence } = require('../plugins/persistence/JsonPlayerPersistence.plugin');
+  const codec = new JsonPlayerPersistence(), saved = PlayerSave.fromPlayer(f.player);
+  const restoredSave = codec.hydratePlayerSave(JSON.parse(
+    JSON.stringify(saved, codec.replacer.bind(codec)), codec.reviver.bind(codec)));
+  assert.equal(restoredSave.attributes[WINELDA_MET], 1);
+  const restored = wineldaFixture(t); restoredSave.applyToPlayer(restored.player);
+  restored.player.setAttribute('bot-skip-persistence', true);
+  assert.equal(await restored.talk(), WINELDA_AGAIN);
+  await wineldaFinish(restored);
+  assert.deepEqual(wineldaItems(restored.player), before); assert.equal(restored.quest.getStage(restored.player), 10);
+  const other = wineldaFixture(t);
+  assert.equal(await other.talk(), WINELDA_INTRO, 'another actor has not inherited the first meeting');
+  await nextLine(other); await nextLine(other);
+  const declined = MultiChatboxPrompt.getPending(other.player)?.options;
+  assert.ok(declined?.includes('Nah, not bothered!'));
+  await choose(other, declined.indexOf('Nah, not bothered!') + 1);
+  assert.equal(other.text(), 'Nah, not bothered!', 'the decline branch is still on its first preterminal line');
+  assert.equal(other.player.getAttribute(WINELDA_MET) ?? 0, 0, 'compiling the decline branch cannot mark its unreached final line');
+  const farewell = await wineldaFinish(other);
+  assert.ok(farewell.includes("Hehe! Ye'll come back! They always come back!"));
+  assert.equal(other.player.getAttribute(WINELDA_MET), 1, 'the completed decline branch also records its own meeting');
+});
+
+test('Winelda introduces an unpaid partial-root visitor before the later shortage dialogue', async t => {
+  const f = wineldaFixture(t, { roots: 19 }), before = wineldaItems(f.player);
+  assert.equal(await f.talk(), WINELDA_INTRO);
+  f.player.closeInterruptibleInterfaces();
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0, 'cancellation before the final line leaves the introduction available');
+  assert.equal(await f.talk(), WINELDA_INTRO);
+  await nextLine(f); await nextLine(f);
+  const options = MultiChatboxPrompt.getPending(f.player)?.options;
+  assert.ok(options?.includes('Yes I do!'));
+  await choose(f, options.indexOf('Yes I do!') + 1);
+  await wineldaFinish(f);
+  assert.equal(f.player.getAttribute(WINELDA_MET), 1);
+  assert.equal(await f.talk(), WINELDA_AGAIN);
+  await wineldaFinish(f);
+  assert.deepEqual(wineldaItems(f.player), before);
+  assert.equal(f.quest.getStage(f.player), 10, 'a shortage cannot charge or advance the quest');
+});
+
 // Temple of Ikov #4834 original12: actual Guardian Talk-to and imported choices.
 // Supplied stage/position/NPC; no staff-pickup, earned combat, washing FX or account claim.
 function ikovGuardianFixture(t, { side = 0, worn = false, shared = false, world = false } = {}) {

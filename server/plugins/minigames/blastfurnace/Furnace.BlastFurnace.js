@@ -647,7 +647,11 @@ function readGauge({ player }) {
 
 function tickBelt() {
   for (const ore of [...belt]) {
-    if (!Machinery.beltRunning() || Machinery.automated() && stateOf(ore.player).coffer === 0) continue;
+    if (!Machinery.beltRunning() || Machinery.automated() && stateOf(ore.player).coffer === 0) {
+      // Ours: drop a wait for the stalled load, but preserve a wait for bars already pouring.
+      if (!pouring.has(ore.player)) waitingToTake.delete(ore.player);
+      continue;
+    }
     ore.load.tiles++;
     if (ore.load.tiles <= BELT_TILES) {
       ore.npc?.moveTo(new core.Location(BELT_START[0], BELT_START[1] - ore.load.tiles, 0));

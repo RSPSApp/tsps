@@ -39,6 +39,8 @@ function actor(t) {
   p.needsPlacement = false;
   const messages = [];
   t.mock.method(p.getPacketSender(), "sendMessage", (message) => { messages.push(message); return p.getPacketSender(); });
+  // Message and item boxes put their line in the chat too (Dialogue.sendBoxChatLine).
+  t.mock.method(p.getPacketSender(), "sendTypedMessage", (_type, message) => { messages.push(message); return p.getPacketSender(); });
   const c = new ClientConnection(channel);
   c.player = p;
   t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p); });
@@ -99,6 +101,8 @@ test("with both held the well takes only plain blood runes, and Empty returns on
   f.inv.setItem(1, preset(new core.Item(I.BLOOD_RUNE, 300)));
   f.inv.setItem(2, new core.Item(I.BLOOD_RUNE, 200));
   well.Fill({ player: f.p });
+  assert.match(f.messages.at(-1), /^Mixing 1 vial of blood/);
+  f.p.getDialogueManager().advance();
   f.p.getEnteredAmountAction().execute(5);
   assert.equal(f.messages.at(-1), "You fill the well with one charge.");
   assert.equal(amount(f.inv, I.BLOOD_RUNE, true), 300, "the preset stack is left alone");

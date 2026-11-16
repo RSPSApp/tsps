@@ -19,8 +19,8 @@
  *
  * Gaps: the grid-tile maze, Iban's bolt pattern and the soulless bite damage
  * are not simulated; the unicorn boulder is folded into the smashed cage; the
- * rope swing never fails and the ledge/bridge falls do not drop the player into
- * the pits below. Source: LostCity quest_upass (pinned in issue #196).
+ * ledge/bridge falls do not drop the player into the pits below. Source: LostCity
+ * quest_upass (pinned in issue #196).
  *
  * Travel through the pass follows data/underground-pass-route.json (the live
  * Shortest Path transport table): the Well of Iban, the cell gates and loose
@@ -277,6 +277,17 @@ module.exports = function registerUndergroundPassQuest(api) {
   // The placed rock above the pit (cache loc 23125 "Rock", no ops, at 2460,9699): a rope is used on
   // it, and ROPE_SWING ("Rope swing", op Swing-on) is the loc the route link is keyed on.
   const ROPE_SWING_ROCK = 23125;
+  // Wiki (Rope swing (Underground Pass, north)): a failed swing drops the player into the north-east
+  // corner of the rocky subcavern below (map pin 2485,9649) for up to 14 damage. The path out
+  // climbs the rockslides to the Pile of rocks (3265) at 2443,9651, which returns the player to the
+  // very beginning of the pass. Success is the Wiki's skilling chart, low 100 / high 300 (about 39%
+  // at Agility 1, certain from 78).
+  const ROPE_SWING_FALL_TILE = { x: 2485, y: 9649, z: 0 };
+  const ROPE_SWING_FALL_MAX_DAMAGE = 14;
+  const ROPE_SWING_SUCCESS_LOW = 100;
+  const ROPE_SWING_SUCCESS_HIGH = 300;
+  const SUBCAVERN_PILE_OF_ROCKS = 3265;
+  const SUBCAVERN_PILE_TILE = { x: 2443, y: 9651 };
   const PIPE_CRAWL_MESSAGE_ID = "2FlXvw"; // "You crawl through the pipe." (the grilled pipe, "Yes")
   const PORTCULLIS_PASS_ACTION_ID = "bqNjX5"; // "The player passes through."
   const ROUTED_PLATFORM_IDS = new Set([ObjectIdentifiers.STONE_BRIDGE, ObjectIdentifiers.LEDGE_4, 3254, 3255]);
@@ -487,23 +498,63 @@ module.exports = function registerUndergroundPassQuest(api) {
     moveTo(player, x >= BRIDGE_EAST_X ? BRIDGE_WEST : BRIDGE_EAST);
   }
 
+  function isAt(event, tile) {
+    const at = event.location ?? {};
+    const x = at.x ?? at.getX?.();
+    const y = at.y ?? at.getY?.();
+    return x === tile.x && y === tile.y;
+  }
+
+  /** Players whose last swing tied a rope: the transcript's "Tying the rope" branch. */
+  const tiedRope = new WeakSet();
+
+  /** The Wiki's rope swing chance: (1 + floor(low * (99 - L) / 98 + high * (L - 1) / 98 + 0.5)) / 256. */
+  function ropeSwingSucceeds(player) {
+    const level = Math.max(1, Math.min(99, player.getSkillManager().getCurrentLevel(Skill.AGILITY) || 1));
+    const successes = 1 + Math.floor(
+      (ROPE_SWING_SUCCESS_LOW * (99 - level)) / 98 + (ROPE_SWING_SUCCESS_HIGH * (level - 1)) / 98 + 0.5,
+    );
+    return Math.random() * 256 < successes;
+  }
+
   /**
-   * Climb a rockslide the way OSRS moves the player: over the object, onto the walkable
-   * tile beyond it, away from the side the player approached from.
+   * The rope swing over the pit: a rope is tied on the way over and is lost whether the swing
+   * makes it or not (Wiki); coming back needs none and never fails.
    */
-  /** The rope swing over the pit: a rope is tied on the way over; coming back needs none. */
   function swingAcross(player) {
     const landing = routeLanding(player, ROPE_SWING);
     if (!landing) return;
     const westward = landing[0] < player.getLocation().getX();
-    if (!westward && !hasItem(player, ROPE)) {
+    if (westward) {
+      tiedRope.delete(player);
+      playVariant(player, UP + "rope-swinging-across");
+      travel(player, ROPE_SWING);
+      return;
+    }
+    if (!hasItem(player, ROPE)) {
       player.sendMessage("You need a rope to swing across the pit.");
       return;
     }
-    playVariant(player, UP + "rope-swinging-across");
-    travel(player, ROPE_SWING);
+    if (ropeSwingSucceeds(player)) {
+      // The "Tying the rope" branch is chosen by this swing, not by the rope it has just used up.
+      tiedRope.add(player);
+      take(player, ROPE, 1);
+      playVariant(player, UP + "rope-swinging-across");
+      travel(player, ROPE_SWING);
+      return;
+    }
+    // No source gives the fall's own line, so after the tie the fall is silent.
+    take(player, ROPE, 1);
+    player.sendMessage("You tie the rope to the rock...");
+    moveTo(player, ROPE_SWING_FALL_TILE);
+    const damage = 1 + Math.floor(Math.random() * ROPE_SWING_FALL_MAX_DAMAGE);
+    player.getCombat().getHitQueue().addPendingDamage([new api.core.HitDamage(damage, api.core.HitMask.RED)]);
   }
 
+  /**
+   * Climb a rockslide the way OSRS moves the player: over the object, onto the walkable
+   * tile beyond it, away from the side the player approached from.
+   */
   function climbOverRockslide(player, event) {
     const at = event.location ?? {};
     const here = player.getLocation();
@@ -806,7 +857,7 @@ module.exports = function registerUndergroundPassQuest(api) {
     // Pipes and rope swing.
     if (value.includes("from the wrong side")) return false;
     if (value.includes("from the right side")) return true;
-    if (value.includes("tying the rope")) return hasItem(player, ROPE);
+    if (value.includes("tying the rope")) return tiedRope.has(player);
     if (value.includes("swinging back the other way")) return true;
 
     // Trap disarms.
@@ -1820,6 +1871,14 @@ module.exports = function registerUndergroundPassQuest(api) {
     if (objectId === ROPE_SWING) {
       event.handled = true;
       swingAcross(player);
+      return;
+    }
+
+    // The subcavern's way out after a failed rope swing (the other cache pile, at 2470,9620, is the
+    // Song of the Elves one the Wiki says is unreachable, so it is left alone).
+    if (objectId === SUBCAVERN_PILE_OF_ROCKS && isAt(event, SUBCAVERN_PILE_TILE)) {
+      event.handled = true;
+      moveTo(player, CAVE_INTERIOR);
       return;
     }
 

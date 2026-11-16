@@ -62,6 +62,14 @@ export class MagicOnItemPacketListener {
    */
   private static readonly TELEKINETIC_GRAB_START_CYCLES = 48;
   private static readonly TELEKINETIC_GRAB_LANDS_CYCLES = 90;
+  /**
+   * Its heights, in the quarter units sendProjectile takes (it sends them x4): leaves at 140 and ends at 0 on the floor,
+   * 80 on a table (every map_projanim_v2 of 143: 71 floor casts 140 to 0, 74 table casts 140 to 80, e.g. 233/00458
+   * on the inactive table, 234/03270 at 2930,3515, 237/01108 at 1736,3168; map_projanim_v1 in 227/00075 sends 35 to 0).
+   */
+  private static readonly TELEKINETIC_GRAB_START_HEIGHT = 35;
+  private static readonly TELEKINETIC_GRAB_END_HEIGHT = 0;
+  private static readonly TELEKINETIC_GRAB_RAISED_END_HEIGHT = 20;
   /** telegrab_impact (144) as recorded (rsprox 227/00075 and others): delay 90, height 20. */
   private static readonly TELEKINETIC_GRAB_IMPACT = { delay: 90, height: 20 };
   /**
@@ -223,6 +231,7 @@ export class MagicOnItemPacketListener {
     player.setPositionToFace(position);
     player.performAnimation(new Animation(MagicOnItemPacketListener.HUMAN_CASTTELEGRAB));
     player.performGraphic(new Graphic(142, GraphicHeight.HIGH));
+    const raised = MagicOnItemPacketListener.holdsItemsUp(position, player.getPrivateArea());
     // OSRS has used one travel time whatever the distance since May 2024.
     new Projectile(
       player.getLocation().clone(),
@@ -231,11 +240,11 @@ export class MagicOnItemPacketListener {
       143,
       MagicOnItemPacketListener.TELEKINETIC_GRAB_START_CYCLES,
       MagicOnItemPacketListener.TELEKINETIC_GRAB_LANDS_CYCLES,
-      43,
-      31,
+      MagicOnItemPacketListener.TELEKINETIC_GRAB_START_HEIGHT,
+      raised ? MagicOnItemPacketListener.TELEKINETIC_GRAB_RAISED_END_HEIGHT : MagicOnItemPacketListener.TELEKINETIC_GRAB_END_HEIGHT,
       player.getPrivateArea()
     ).sendProjectile();
-    const impactHeight = MagicOnItemPacketListener.holdsItemsUp(position, player.getPrivateArea())
+    const impactHeight = raised
       ? MagicOnItemPacketListener.TELEKINETIC_GRAB_RAISED_IMPACT_HEIGHT
       : MagicOnItemPacketListener.TELEKINETIC_GRAB_IMPACT.height;
     player.getPacketSender().sendGlobalGraphic(

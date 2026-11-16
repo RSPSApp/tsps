@@ -92,3 +92,61 @@ test("a line that is not the Fremennik blank is left alone", t => {
   const text = "Keldagrim has no need of you today.";
   assert.equal(speak(p, KING_SORVOTT, text, "King Sorvott IV"), text);
 });
+
+/**
+ * The King's ore hand-in through the real transcript runtime (QuestRuntime.startTranscript, the dialogue manager's own
+ * Continue), recording what the client is sent: dialogue text, item boxes and game messages.
+ */
+function handIn(t, { mining, ore, female = false }) {
+  const p = actor(t, { stage: STAGE_ORE_TASK, mining });
+  if (female) p.getAppearance().setPronouns(1);
+  p.getInventory().adds(ore, 8);
+  const sent = [];
+  const sender = p.getPacketSender();
+  for (const name of ["sendString", "sendMessage"]) {
+    const original = sender[name].bind(sender);
+    t.mock.method(sender, name, (...args) => {
+      for (const arg of args) if (typeof arg === "string") sent.push(arg);
+      return name === "sendMessage" ? sender : original(...args);
+    });
+  }
+  const api = { core, emitCustomEvent: (name, event) => PM.emitCustomEvent(name, event) };
+  assert.equal(QuestRuntime.startTranscript(api, p, KING_SORVOTT, "The Fremennik Isles",
+    "starting-off-ore-delivery-talking-to-king-sorvott-iv"), true);
+  for (let i = 0; i < 12; i++) p.getDialogueManager().advance();
+  return { p, sent };
+}
+
+test("the ore hand-in boxes fill from each player's own tier, and [man/woman] from their gender", (t) => {
+  // Mining 1 first: before the fix its fill was written into the shared transcript step, so the next player saw it.
+  const tin = handIn(t, { mining: 1, ore: core.ItemIdentifiers.TIN_ORE });
+  assert.ok(tin.sent.includes("Thorkel Silkbeard takes eight lumps of tin."), JSON.stringify(tin.sent));
+  assert.ok(tin.sent.includes("Thorkel Silkbeard hands you 2000 coins."));
+  assert.ok(tin.sent.includes("This man has gathered the remaining ore needed by Keldagrim's merchants."));
+  assert.ok(tin.sent.includes("Please reward this man for his efforts."));
+
+  const mithril = handIn(t, { mining: 55, ore: core.ItemIdentifiers.MITHRIL_ORE, female: true });
+  assert.ok(mithril.sent.includes("Thorkel Silkbeard takes six lumps of mithril."), JSON.stringify(mithril.sent));
+  assert.ok(mithril.sent.includes("Thorkel Silkbeard hands you 6000 coins."));
+  assert.ok(!mithril.sent.some((text) => text.includes("eight lumps of tin") || text.includes("2000 coins")),
+    "the first player's tier does not leak into the transcript");
+  assert.ok(mithril.sent.includes("This woman has gathered the remaining ore needed by Keldagrim's merchants."));
+  assert.ok(mithril.sent.includes("Please reward this woman for her efforts."));
+  assert.equal(mithril.p.getInventory().getAmount(core.ItemIdentifiers.MITHRIL_ORE), 2, "six lumps taken");
+  assert.equal(mithril.p.getInventory().getAmount(core.ItemIdentifiers.COINS), 6000);
+  assert.ok(!mithril.sent.some((text) => /\[[^\]]*\/[^\]]*\]|\[amount\]/.test(text)), "no blank left unfilled");
+});
+
+test("the Troll King bridge message fills its bare X with the trolls still to kill", (t) => {
+  const p = actor(t, { stage: 19, mining: 1 });
+  p.setAttribute("quest.the_fremennik_isles.troll-kills", 3);
+  const sent = [];
+  t.mock.method(p.getPacketSender(), "sendMessage", (text) => { sent.push(text); return p.getPacketSender(); });
+  const text = "You have X more trolls to kill before you can kill the Troll King.";
+  const event = { player: p, npcId: THORKEL, step: { type: "message", text, id: "3CHUQU" }, text, stepId: "3CHUQU",
+    kind: "message", handled: false };
+  PM.emitCustomEvent("npc-dialogue:action", event);
+  assert.equal(event.handled, true);
+  assert.deepEqual(sent, ["You have 7 more trolls to kill before you can kill the Troll King."]);
+  assert.equal(event.step.text, text, "the shared transcript step is left as it was");
+});

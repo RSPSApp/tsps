@@ -127,8 +127,11 @@ function harness() {
   const objectInteraction = [];
   const npcRoutes = [];
   const login = [];
+  // The chasm crossing is a chain of tasks (tears-of-guthix-chasm.test.cjs plays it tick by tick); here
+  // they are only recorded, so a crossing shows as its attract line and a submitted task.
+  const tasks = [];
   const api = new Proxy({
-    core: { ...core, CountdownTask: undefined, TaskManager: undefined },
+    core: { ...core, CountdownTask: undefined, TaskManager: { submit: (task) => tasks.push(task), cancelTasks() {} } },
     persistAttribute() {},
     onNpcDialogueVariant: (handler) => variants.push(handler),
     onNpcDialogueCondition: (handler) => conditions.push(handler),
@@ -142,7 +145,7 @@ function harness() {
   }, { get: (target, key) => target[key] ?? (() => {}) });
   TearsOfGuthix(api);
   return {
-    api, events, variants, conditions, itemOnItem, itemOnNpc, objectInteraction, npcRoutes, login,
+    api, events, variants, conditions, itemOnItem, itemOnNpc, objectInteraction, npcRoutes, login, tasks,
     quest: runtime.getRegisteredQuests().findLast((entry) => entry.key === 'tears_of_guthix'),
     emit(name, event) { (events[name] ?? []).forEach((handler) => handler(event)); },
     routeNpc(event) { npcRoutes.forEach((handler) => handler(event)); },
@@ -222,7 +225,7 @@ function dispatchObject(player, objectId, option) {
     objectId,
     clickType: 1,
     option,
-    location: { x: 3239, y: 9498, z: CHASM_PLANE },
+    location: SOUTH_ROCK,
     handled: false,
   };
   return { handled: PluginManager.emitObjectInteraction(event), event };
@@ -234,12 +237,14 @@ const mine = (h, player, objectId = O.MAGICAL_ROCKS) => {
   entry.actions.Mine(event);
   return event;
 };
+/** The south chasm rock (6672) is at 3239,9499 on the magical-rock shelf. */
+const SOUTH_ROCK = { x: 3239, y: 9499, z: CHASM_PLANE };
 const climb = (h, player, objectId = O.ROCKS_27) => {
-  const event = { player, objectId, option: 'Climb', handled: false };
+  const event = { player, objectId, option: 'Climb', location: SOUTH_ROCK, handled: false };
   h.objectInteraction.forEach((entry) => typeof entry.name === 'function' && entry.name(event));
   return event;
 };
-const lantern = (h, player, npcId = N.LIGHT_CREATURE_3, itemId = I.SAPPHIRE_LANTERN_3) => {
+const lantern = (h, player, npcId = N.LIGHT_CREATURE_4, itemId = I.SAPPHIRE_LANTERN_3) => {
   const target = { getLocation: () => new core.Location(3226, 9518, CHASM_PLANE) };
   const event = { player, target, npcId, itemId, handled: false };
   h.itemOnNpc.forEach((handler) => handler(event));
@@ -427,17 +432,22 @@ test('chiselling needs stage 1 and 20 Crafting before the stone is consumed', ()
   assert.equal(crafty.inventory.getAmount(I.CHISEL), 1, 'the chisel is kept');
 });
 
-test('light creature crossing, south-rock return and stone-on-Juna use the registered handlers', () => {
+test('light creature crossing, south-rock climb and stone-on-Juna use the registered handlers', () => {
   const h = harness();
   const player = playerFixture({ items: [[I.SAPPHIRE_LANTERN_3, 1], [I.MAGIC_STONE, 1]] });
   h.quest.setStage(player, 1);
 
-  lantern(h, player);
-  assert.deepEqual(player.moves.at(-1), [3229, 9505, 2]);
-  assert.ok(player.messages.some((text) => text.includes('carries you across')));
+  // #5875: the chasm spawn is 5435 (LIGHT_CREATURE_4); the crossing waits for the creature's approach
+  // and then floats the player over, so the use itself only starts it.
+  assert.equal(lantern(h, player).handled, true);
+  assert.ok(player.messages.includes('The light creature is attracted to your beam and comes towards you...'));
+  assert.equal(h.tasks.length, 1, 'the crossing is under way');
+  assert.equal(player.moves.length, 0, 'nobody is moved on the click');
 
-  climb(h, player);
-  assert.deepEqual(player.moves.at(-1), [3241, 9525, 2]);
+  // #5875: the rock is climbed one tile over, not teleported to the north ledge.
+  const climber = playerFixture({ location: new core.Location(3238, 9499, CHASM_PLANE) });
+  assert.equal(climb(h, climber).handled, true);
+  assert.deepEqual(climber.moves.at(-1), [3240, 9499, 2]);
 
   transcripts = [];
   const stoneEvent = { player, npcId: JUNA, itemId: I.MAGIC_STONE, handled: false };
@@ -446,20 +456,20 @@ test('light creature crossing, south-rock return and stone-on-Juna use the regis
   assert.deepEqual(transcripts.at(-1), { page: PAGE, variant: 'starting-off-using-the-magic-stone-on-juna' });
 });
 
-test('the Climb option from the real dispatch path returns the player to Juna', () => {
+test('the Climb option from the real dispatch path climbs the player over the south rock', () => {
   const h = realHarness();
   try {
-    const player = playerFixture();
+    const player = playerFixture({ location: new core.Location(3238, 9499, CHASM_PLANE) });
     h.quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'tears_of_guthix');
     h.quest.setStage(player, 1);
 
     const climb = dispatchObject(player, O.ROCKS_27, 'climb');
     assert.equal(climb.handled, true, 'the dispatcher reports the climb as handled');
-    assert.deepEqual(player.moves.at(-1), [3241, 9525, 2], 'the player climbs back to Juna\'s ledge');
+    assert.deepEqual(player.moves.at(-1), [3240, 9499, 2], 'the player climbs one tile over the rock (#5875)');
 
-    const other = dispatchObject(player, O.ROCKS_27 + 1, 'climb');
-    assert.equal(other.handled, false, 'another rock does not claim the climb');
-    assert.deepEqual(player.moves.at(-1), [3241, 9525, 2], 'the player did not move again');
+    const other = dispatchObject(player, O.ROCKS_29, 'climb');
+    assert.equal(other.handled, false, 'a rock outside the chasm does not claim the climb');
+    assert.deepEqual(player.moves.at(-1), [3240, 9499, 2], 'the player did not move again');
 
     const wrongOption = dispatchObject(player, O.ROCKS_27, 'mine');
     assert.equal(wrongOption.handled, false, 'another option on the rocks is not the climb');
@@ -580,7 +590,7 @@ test('the lantern route ends at a collision-valid ledge tile within item-use rea
 
   const player = playerFixture({ items: [[I.SAPPHIRE_LANTERN_3, 1]] });
   h.quest.setStage(player, 1);
-  const route = { player, npc: {}, npcId: N.LIGHT_CREATURE_3, clickType: 0,
+  const route = { player, npc: {}, npcId: N.LIGHT_CREATURE_4, clickType: 0,
     itemId: I.SAPPHIRE_LANTERN_3, range: 1, ignoreProjectileClip: false,
     location: { x: 3226, y: 9518, z: CHASM_PLANE } };
   h.routeNpc(route);
@@ -590,7 +600,7 @@ test('the lantern route ends at a collision-valid ledge tile within item-use rea
   h.routeNpc(unrelatedItem);
   assert.equal(unrelatedItem.range, 1, 'other item-on-creature routes retain normal reach');
   assert.equal(unrelatedItem.ignoreProjectileClip, false);
-  const unrelatedCreature = { ...route, npcId: N.LIGHT_CREATURE_3, location: { x: 3000, y: 4000, z: 0 },
+  const unrelatedCreature = { ...route, npcId: N.LIGHT_CREATURE_4, location: { x: 3000, y: 4000, z: 0 },
     range: 1, ignoreProjectileClip: false };
   h.routeNpc(unrelatedCreature);
   assert.equal(unrelatedCreature.range, 1, 'other spawns of this NPC id keep the normal route');
@@ -615,12 +625,13 @@ test('the real item-on-NPC packet carries quest route policy into MovementQueue'
   const targetIndex = 18;
   const target = {
     getCurrentDefinition: () => null,
-    getContentId: () => N.LIGHT_CREATURE_3,
+    getContentId: () => N.LIGHT_CREATURE_4,
     getLocation: () => new core.Location(3226, 9518, CHASM_PLANE),
   };
   const movement = [];
   const inventoryItems = [new core.Item(I.SAPPHIRE_LANTERN_3, 1)];
-  player.getInventory = () => ({ capacity: () => 28, getItems: () => inventoryItems });
+  player.getInventory = () => ({ capacity: () => 28, getItems: () => inventoryItems,
+    getAmount: (id) => inventoryItems.filter((item) => item.getId() === id).reduce((n, item) => n + item.getAmount(), 0) });
   player.getMovementQueue = () => ({
     walkToEntity(entity, callback, range, ignoreProjectileClip, allowOverlappingTiles) {
       movement.push({ entity, callback, range, ignoreProjectileClip, allowOverlappingTiles });
@@ -649,7 +660,9 @@ test('the real item-on-NPC packet carries quest route policy into MovementQueue'
     PluginManager.emitItemOnNpc = oldEmitItemOnNpc;
   }
 
-  assert.deepEqual(player.moves.at(-1), [3229, 9505, 2], 'the lantern transition runs once the route arrives');
+  assert.ok(player.messages.includes('The light creature is attracted to your beam and comes towards you...'),
+    'the lantern crossing starts once the route arrives');
+  assert.equal(h.tasks.length, 1);
 });
 
 test('the lantern crossing and the rock climb only fire on their own target and option', () => {
@@ -661,23 +674,23 @@ test('the lantern crossing and the rock climb only fire on their own target and 
   assert.equal(wrongNpc.handled, false);
   assert.equal(player.moves.length, 0);
 
-  const wrongLocation = { player, npcId: N.LIGHT_CREATURE_3, itemId: I.SAPPHIRE_LANTERN_3,
+  const wrongLocation = { player, npcId: N.LIGHT_CREATURE_4, itemId: I.SAPPHIRE_LANTERN_3,
     target: { getLocation: () => new core.Location(3000, 4000, 0) }, handled: false };
   h.itemOnNpc.forEach((handler) => handler(wrongLocation));
   assert.equal(wrongLocation.handled, false, 'another creature with the same cache id cannot trigger this crossing');
   assert.equal(player.moves.length, 0);
 
-  const wrongItem = lantern(h, player, N.LIGHT_CREATURE_3, I.MAGIC_STONE);
+  const wrongItem = lantern(h, player, N.LIGHT_CREATURE_4, I.MAGIC_STONE);
   assert.equal(wrongItem.handled, false);
   assert.equal(player.moves.length, 0);
 
   const crossing = lantern(h, player);
   assert.equal(crossing.handled, true);
-  assert.deepEqual(player.moves.at(-1), [3229, 9505, 2]);
+  assert.equal(h.tasks.length, 1, 'only the real use starts a crossing');
 
-  const wrongRock = climb(h, player, O.ROCKS_27 + 1);
+  const wrongRock = climb(h, player, O.ROCKS_29);
   assert.equal(wrongRock.handled, false);
-  assert.deepEqual(player.moves.at(-1), [3229, 9505, 2], 'the climb did not move the player');
+  assert.equal(player.moves.length, 0, 'the climb did not move the player');
 });
 
 test('the completion scroll lists the real rewards and no consumed bowl', () => {

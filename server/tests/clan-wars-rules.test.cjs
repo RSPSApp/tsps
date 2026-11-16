@@ -459,20 +459,28 @@ test('Sixteen finite magic style combinations have truthful summaries and explic
 });
 
  test('Standard nine manual effects extend finite support without changing independent modes',()=>{
-  for(const melee of[0,1])for(const ranged of[0,1])for(const magic of[1,2,3,4]){const rules={...Rules.create(),melee,ranged,magic};assert.equal(Rules.validate(rules),true);const text=Rules.summary(rules);if(magic===1){assert.match(text,/32 finite combat spells/);assert.match(text,/manual Confuse, Weaken, Curse, Bind, Snare, Entangle, Vulnerability, Enfeeble and Stun/);assert.match(text,/not the complete Standard spellbook/);}if(magic===2)assert.match(text,/12 elemental strike, bolt and blast/);if(magic===3)assert.match(text,/Bind, Snare and Entangle/);}
+  for(const melee of[0,1])for(const ranged of[0,1])for(const magic of[1,2,3,4]){const rules={...Rules.create(),melee,ranged,magic};assert.equal(Rules.validate(rules),true);const text=Rules.summary(rules);if(magic===1){assert.match(text,/34 finite combat spells/);assert.match(text,/manual Confuse, Weaken, Curse, Bind, Snare, Entangle, Vulnerability, Enfeeble and Stun/);assert.match(text,/not the complete Standard spellbook/);}if(magic===2)assert.match(text,/12 elemental strike, bolt and blast/);if(magic===3)assert.match(text,/Bind, Snare and Entangle/);}
 });
 
 
-test('G Standard32 discloses manual god spells and basic god staves without extending other modes',()=>{
+test('G Standard34 discloses manual god spells and basic god staves without extending other modes',()=>{
   for(const magic of [1,2,3,4])for(const specialattacks of [0,1,2]){
     const rules={...Rules.create(2,1),magic,specialattacks};assert.equal(Rules.validate(rules),true);
     const text=Rules.summary(rules);
     if(magic===1){
-      assert.match(text,/32 finite combat spells/);
+      assert.match(text,/34 finite combat spells/);
       assert.match(text,/manual Saradomin Strike, Claws of Guthix and Flames of Zamorak/);
       assert.match(text,/matching basic god staff and manual targeting/);
       assert.match(text,/not the complete Standard spellbook/);assert.match(text,/not restored/);
-    }else assert.doesNotMatch(text,/32 finite combat spells|manual Saradomin Strike|basic god staves/);
+    }else assert.doesNotMatch(text,/34 finite combat spells|manual Saradomin Strike|basic god staves/);
   }
   assert.equal(Rules.validate({...Rules.create(),magic:0}),false);
+});
+
+test('S Standard34 discloses exact staff-spell manual and existing autocast scope',()=>{
+  for(const magic of [1,2,3,4])for(const specialattacks of [0,1,2]){
+    const rules={...Rules.create(2,1),magic,specialattacks},text=Rules.summary(rules);assert.equal(Rules.validate(rules),true);
+    if(magic===1){assert.match(text,/34 finite combat spells/);assert.match(text,/Iban Blast and Magic Dart/);assert.match(text,/existing manual\/autocast routes/);assert.match(text,/four Iban staff variants or plain Slayer's staff/);assert.match(text,/matching basic god staff and manual targeting/);}
+    else assert.doesNotMatch(text,/Iban Blast|Magic Dart|Iban staff variants|Slayer's staff/);
+  }
 });

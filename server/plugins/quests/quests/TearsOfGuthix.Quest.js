@@ -110,6 +110,28 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   const TOG_FLOAT_UP_ANIMATION = 2046;
   const TOG_FLOAT_DOWN_ANIMATION = 2047;
   const TOG_FLOAT_POSE_TICKS = 5;
+  /**
+   * The creature carries the player (242/911949 and 242/912056 agree): on the float-up tick it
+   * jumps to the tile south-west of the player, plays light_creature_grow and becomes
+   * tog_light_creature_transition, with synth light_creature_up; the next tick it becomes
+   * tog_light_creature_carrying. From the fourth tick it moves one tile a tick to the tile
+   * south-west of the landing: four tiles straight south, then diagonally until it is in line,
+   * then straight on (911949: 3230,9526 to 9522, 3223,9515, 3223,9503; 912056: 3230,9528 to 9524,
+   * 3223,9517, then south). On the float-down tick it plays light_creature_shrink with synth
+   * light_creature_down. The next tick it is the plain creature again and hops two tiles
+   * north-east (3223,9503 to 3225,9505), then walks one tile a tick, straight north until it is in
+   * line with its spawn and diagonally after (911949: 3225,9505 to 9517, then 3224,9518 and
+   * 3223,9519; 912056: 3225,9505 to 9514).
+   */
+  const LIGHT_CREATURE_GROW_ANIMATION = "light_creature_grow";
+  const LIGHT_CREATURE_SHRINK_ANIMATION = "light_creature_shrink";
+  const LIGHT_CREATURE_TRANSITION_NPC = "tog_light_creature_transition";
+  const LIGHT_CREATURE_CARRYING_NPC = "tog_light_creature_carrying";
+  const LIGHT_CREATURE_UP_SOUND = 1799; // light_creature_up
+  const LIGHT_CREATURE_DOWN_SOUND = 1792; // light_creature_down
+  const LIGHT_CREATURE_FIRST_STEP_TICK = 4;
+  const LIGHT_CREATURE_STRAIGHT_STEPS = 4;
+  const LIGHT_CREATURE_RELEASE_HOP = 2;
   const ATTRACT_MESSAGE = "The light creature is attracted to your beam and comes towards you...";
   const NO_LANTERN_MESSAGE = "You don't have anything to attract the light creature with.";
 
@@ -128,6 +150,8 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   let quest;
   /** Players with a crossing already waiting or in flight, so a second click does not chain one. */
   const crossings = new WeakSet();
+  /** Light creatures carrying a player now; a second player crosses without one. */
+  const carriers = new WeakSet();
 
   const has = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
 
@@ -359,7 +383,7 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   }
 
   /** The lit sapphire lantern attracts a Chasm light creature across to the far side. */
-  function crossChasm(player, npcLocation) {
+  function crossChasm(player, npcLocation, creature = null) {
     if (quest.getStage(player) !== STAGE_STONE_BOWL || !isChasmLightCreature(npcLocation)) return false;
     if (!has(player, LIT_SAPPHIRE_LANTERN_ITEM_ID)) {
       player.sendMessage(NO_LANTERN_MESSAGE);
@@ -386,6 +410,7 @@ module.exports = function registerTearsOfGuthixQuest(api) {
         const dx = destination[0] - from.getX();
         const dy = destination[1] - from.getY();
         const floatTicks = Math.max(Math.abs(dx), Math.abs(dy)) + TOG_FLOAT_POSE_TICKS;
+        const carrier = startCarrying(creature, player, from, destination, floatTicks);
         const direction = Math.abs(dx) > Math.abs(dy) ? dx > 0 ? 1 : 3 : dy > 0 ? 0 : 2;
         TaskManager.submit(new ForceMovementTask(player, floatTicks,
           new ForceMovement(from, new Location(dx, dy), 0, floatTicks * 30, direction, 0)));
@@ -395,6 +420,7 @@ module.exports = function registerTearsOfGuthixQuest(api) {
             this.stop();
             player.performAnimation(new Animation(TOG_FLOAT_DOWN_ANIMATION));
             crossings.delete(player);
+            if (carrier) carrier.land();
           }
         })());
       }
@@ -402,11 +428,87 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     return true;
   }
 
+  /**
+   * The light creature's side of the crossing (see LIGHT_CREATURE_GROW_ANIMATION). Only a live
+   * NPC that is not already carrying someone takes part; returns its landing hook, or null.
+   */
+  function startCarrying(creature, player, from, destination, floatTicks) {
+    if (!creature || typeof creature.setNpcTransformationId !== "function" || carriers.has(creature)) return null;
+    const cache = api.core.CacheDefinitions;
+    carriers.add(creature);
+    creature.setScriptedMovement?.(true);
+    creature.getMovementQueue?.().reset();
+    const z = from.getZ();
+    creature.moveTo(new Location(from.getX() - 1, from.getY() - 1, z));
+    creature.performAnimation(new Animation(cache.getSeqId(LIGHT_CREATURE_GROW_ANIMATION)));
+    creature.setNpcTransformationId(cache.getNpcId(LIGHT_CREATURE_TRANSITION_NPC));
+    player.getPacketSender().sendSound(LIGHT_CREATURE_UP_SOUND, 1, 0);
+    const target = [destination[0] - 1, destination[1] - 1];
+    const key = {};
+    // Back to the plain creature, which returns one tile a tick to its spawn by the north ledge.
+    // After a landing it first hops two tiles north-east (911949: 3223,9503 to 3225,9505).
+    const release = (hop) => {
+      creature.setNpcTransformationId(-1);
+      if (hop) {
+        const at = creature.getLocation();
+        creature.moveTo(new Location(at.getX() + LIGHT_CREATURE_RELEASE_HOP, at.getY() + LIGHT_CREATURE_RELEASE_HOP, z));
+      }
+      const home = creature.getSpawnPosition?.();
+      let steps = 0;
+      TaskManager.submit(new (class extends Task {
+        constructor() { super(1, key, false); }
+        execute() {
+          const at = creature.getLocation();
+          const dx = home ? home.getX() - at.getX() : 0;
+          const dy = home ? home.getY() - at.getY() : 0;
+          // Straight on y until it is in line with its spawn, then diagonally (911949).
+          const stepX = Math.abs(dy) > Math.abs(dx) ? 0 : Math.sign(dx);
+          const stepY = Math.sign(dy);
+          if ((!stepX && !stepY) || ++steps > 64) {
+            this.stop();
+            creature.setScriptedMovement?.(false);
+            carriers.delete(creature);
+            return;
+          }
+          creature.moveTo(new Location(at.getX() + stepX, at.getY() + stepY, z));
+        }
+      })());
+    };
+    let tick = 0;
+    // The player's own tasks (the landing) end with a logout; this one then lets the creature go.
+    TaskManager.submit(new (class extends Task {
+      constructor() { super(1, key, false); }
+      execute() {
+        tick++;
+        if (player.isRegistered?.() === false || tick > floatTicks + 1) { this.stop(); release(false); return; }
+        if (tick === 1) creature.setNpcTransformationId(cache.getNpcId(LIGHT_CREATURE_CARRYING_NPC));
+        if (tick < LIGHT_CREATURE_FIRST_STEP_TICK) return;
+        const at = creature.getLocation();
+        const stepY = Math.sign(target[1] - at.getY());
+        // Four tiles straight on y first, as both recordings do, then the diagonal leg.
+        const straight = tick - LIGHT_CREATURE_FIRST_STEP_TICK < LIGHT_CREATURE_STRAIGHT_STEPS && stepY !== 0;
+        const stepX = straight ? 0 : Math.sign(target[0] - at.getX());
+        if (stepX || stepY) creature.moveTo(new Location(at.getX() + stepX, at.getY() + stepY, z));
+      }
+    })());
+    return {
+      land() {
+        TaskManager.cancelTasks(key);
+        creature.performAnimation(new Animation(cache.getSeqId(LIGHT_CREATURE_SHRINK_ANIMATION)));
+        player.getPacketSender().sendSound(LIGHT_CREATURE_DOWN_SOUND, 1, 0);
+        TaskManager.submit(new (class extends Task {
+          constructor() { super(1, key, false); }
+          execute() { this.stop(); release(true); }
+        })());
+      },
+    };
+  }
+
   /** The cache's only light-creature option is Attract; it does what the lantern use does. */
   function attractLightCreature(event) {
     const { player, npc } = event;
     if ((event.npcId ?? npc?.getId?.()) !== LIGHT_CREATURE_NPC_ID) return false;
-    const handled = crossChasm(player, npc?.getLocation?.() ?? event.location);
+    const handled = crossChasm(player, npc?.getLocation?.() ?? event.location, npc);
     if (handled) event.handled = true;
     return handled;
   }
@@ -416,7 +518,7 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     if (event.itemId !== LIT_SAPPHIRE_LANTERN_ITEM_ID) return;
     const npcId = event.npcId ?? event.target?.getId?.();
     if (npcId !== LIGHT_CREATURE_NPC_ID) return;
-    event.handled = crossChasm(event.player, event.target?.getLocation?.() ?? event.location);
+    event.handled = crossChasm(event.player, event.target?.getLocation?.() ?? event.location, event.target);
   }
 
   function isChasmLightCreature(location) {

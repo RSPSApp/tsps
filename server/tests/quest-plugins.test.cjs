@@ -8707,7 +8707,9 @@ test('Desert Treasure II final wights expose their distinct smoke, clone, vial a
     assert.equal(core.PrayerHandler.getProtectingPrayer(rangedFollowup.style), core.PrayerHandler.PROTECT_FROM_MISSILES,
       'Protect from Missiles applies through the ordinary ranged hit pipeline');
     assert.equal(current.__dt2FinalWightNextRanged, false, 'starting the follow-up consumes its one-shot marker');
-    assert.equal(current.animation?.id, 7617, 'the ranged follow-up uses the animation captured for NPC 12328');
+    assert.equal(current.animation?.id, 426, 'the ranged follow-up draws a bow (human_bow), as every recorded 12328 shot');
+    assert.deepEqual([current.graphic?.id, current.graphic?.height], [21, 102],
+      'the shot launches mithril_arrow_launch at height 102 (rsprox_transcripts/226/01703.txt:370902)');
     assassinCombat.start(current, p);
     const nextAssassinHit = assassinCombat.hits(current, p)[0];
     assert.equal(nextAssassinHit.style, core.CombatType.MELEE, 'later Assassin attacks return to ordinary melee');

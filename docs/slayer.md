@@ -16,7 +16,8 @@ The plugin is `server/plugins/skills/Slayer.plugin.js`; its units are in
 | `Choice.Slayer.js` | Mortimer's task choice |
 | `Offer.Slayer.js` | A choice of tasks with a typed kill count, where content offers one (`slayer:task-offer`) |
 | `Combat.Slayer.js` | The Slayer level needed to attack |
-| `Checks.Slayer.js` | The enchanted gem's and slayer ring's Check |
+| `Checks.Slayer.js` | The enchanted (and eternal) gem's and slayer ring's Check |
+| `Helper.Slayer.js` | The Slayer helper overlay: opened by the gem's Check, an assignment or a task kill |
 | `Rewards.Slayer.js` | The Slayer Rewards interface |
 | `Equipment.Slayer.js` | Protective gear; kurask and turoth weaknesses |
 | `CaveHorror.Slayer.js` | Cave horrors' scream and magical melee |
@@ -74,6 +75,8 @@ The plugin is `server/plugins/skills/Slayer.plugin.js`; its units are in
   unlock's bit. The unlock varbits (`slayer_helm_unlocked`, ...) sit on those bits.
 - **Blocks:** varbits `slayer_blocked_<master>_1..6` and `_diary`.
 - **Combat checks:** varbit `combat_level_reqs_disabled`.
+- **Slayer helper:** varbit `current_helper` (3 while it shows; not saved) and the Settings toggle
+  `slayer_helper_disabled`.
 - **Mortimer:** varbits `slayer_modifier_id`, `_value` and `_negative` (the task's modifier),
   `slayer_choose_task_1..3` with `_boss_id`, `_modifier_id`, `_modifier_value` and
   `_modifier_negative`, `slayer_choose_rolled_master`, `mortimer_introduction`; varp
@@ -335,6 +338,20 @@ its task-kill path now calls.
 - **Turael and Aya** offer to replace a task they wouldn't give, which resets the streak (Wiki).
 - **Slayer level:** a monster with a Slayer level can't be attacked below it.
 
+### Slayer helper
+
+rsprox captures, rev 242 (recordings 1002084 t127, 1002067 t185-t2842, 1001683, 1001788):
+
+- **Opens** when the enchanted gem's Check is clicked (after its two task lines), when a master
+  assigns a task (the same tick as the assignment line), and on a task kill, each time only if
+  it isn't showing already. The gem's Activate doesn't open it.
+- **Opening:** `current_helper` 3, `helper_generic` (711) as an overlay on
+  `toplevel_osrs_stretch:helper_content`, then scripts `helper_setup` [that component, 3, 148,
+  308] and `helper_slayer_init`. The cache scripts draw the task from the task varps.
+- **Closes** 501 ticks after it opened, however many kills came in between: `current_helper` 0,
+  then the overlay closes. Completing the task doesn't close it; the next task kill after it
+  closed opens it again (on the closing tick too, recording 1001788 t2702).
+
 ## Captured messages (rsprox captures)
 
 - **Assigning:** "Your new task is to kill # X."
@@ -425,7 +442,13 @@ Konar's lines are the Wiki's.
 - **Slayer helmet:** the full-inventory line for Disassemble.
 - **Drains:** where the Wiki only says "greatly reduced", unprotected drains take 10% of the level
   per hit.
-- **Gem:** its Activate gives the same answer as Check.
+- **Gem:** its Activate gives the same answer as Check (live opens the master's chat, recording
+  1002084 t121).
+- **Slayer helper:** the eternal gem's Check opens it as the enchanted gem's does (same gem; its
+  only captures are rev 227, before the helper). The Settings toggle keeps it shut for every trigger; an off-task kill (no task)
+  doesn't open it; a kill whose count the bracelet of slaughter keeps still does.
+  A kill on the closing tick that is processed before the close finds it showing, so it stays
+  shut until the next kill (live closes and reopens it on that tick).
 - **Mortimer:**
   - which modifier a choice gets: any of the unlocked ones, equally likely; every choice has one;
   - the completion line for a task without a points modifier ("You've completed # Mortimer tasks;
@@ -455,5 +478,6 @@ Konar's lines are the Wiki's.
 - **Slayer helmet:** reinforced goggles in the helmet (assembling leaves them in the inventory, so
   Disassemble gives none back); the Tztok, Vampyric and Tzkal recolours (Ghommal, Laidee Gnonock);
   making, reverting and disassembling the Radiant helmet.
+- **Slayer helper:** the slayer ring's and helmet's Check (no rev 242 capture of them) don't open it.
 - **Equipment and monsters:** the gem's and helmet's Partner and Log, killerwatts, fever spiders,
   harpie bug swarms and mogres. Zygomites don't regenerate.

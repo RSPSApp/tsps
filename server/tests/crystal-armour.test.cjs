@@ -187,6 +187,7 @@ test("the slayer helmet (i) multiplies the body+legs damage bonus to about 29.37
     onItemOnItem() {},
     onItemAction() {},
     onPlayerDeathItemDrop() {},
+    onPlayerDeathDrops() {},
   });
 
   const player = createPlayer({

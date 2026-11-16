@@ -19,13 +19,17 @@
  * is kept here per Hydra (lifeOf): whether it was ever empowered, how many fire specials it
  * breathed, and per player the acid, lightning and fire hits they took (a hit of 0 is still a
  * hit), the special damage they took, whether its acid poisoned them (the poison's own ticks are
- * damage too, even after a 0 splash), and their hitpoints as they changed, tick by tick. It
- * outlives stop(), so the death's task rules still read it.
+ * damage too, even after a 0 splash), and their hitpoints as they changed: on the Hydra's ticks
+ * and on every change between them (`skills:current-level-changed`), so a heal above 10 that a hit
+ * takes back down within the same tick is still seen (No Pressure). It outlives stop(), so the
+ * death's task rules still read it.
  */
 const Common = require("./Common.AlchemicalHydra");
 
 /** Hydra npc -> its fight's record for Combat Achievements (see the header). */
 const lives = new WeakMap();
+/** Player -> the fight that last logged their hitpoints, for the changes between its ticks. */
+const fightsByPlayer = new WeakMap();
 
 function lifeOf(npc) {
   return lives.get(npc) ?? null;
@@ -61,6 +65,17 @@ function peakHitpointsSince(life, player, fromTick) {
     peak = Math.max(peak ?? -Infinity, log[i].hp);
   }
   return peak;
+}
+
+/**
+ * "skills:current-level-changed": a hitpoints change of a player in a live Hydra fight is logged at once, not only at
+ * the Hydra's next tick, so a heal and a hit landing between two of its ticks both show in the log.
+ */
+function logHitpointsChange({ player, skill }) {
+  if (!player || skill !== Common.core?.Skill?.HITPOINTS) return;
+  const fight = fightsByPlayer.get(player);
+  if (!fight || fight.stopped || !fight.lair.players().includes(player)) return;
+  fight.logHitpoints([player]);
 }
 
 const PHASES = () => Common.data.phases;
@@ -224,6 +239,7 @@ class Fight {
       const log = this.life.hitpoints.get(player) ?? [];
       if (log.at(-1)?.hp !== hp) log.push({ tick, hp });
       this.life.hitpoints.set(player, log);
+      fightsByPlayer.set(player, this);
     }
   }
 
@@ -408,4 +424,4 @@ function bind(player, ticks) {
   });
 }
 
-module.exports = { Fight, chebyshev, bind, lifeOf, peakHitpointsSince };
+module.exports = { Fight, chebyshev, bind, lifeOf, peakHitpointsSince, logHitpointsChange };

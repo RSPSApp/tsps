@@ -98,6 +98,11 @@ export class ShopManager {
     private static readonly SHOP_WIRE_INVENTORY = 516;
     /** Shop id -> its live inventory's gameval, from data/definitions/shop-inventories.json (loaded once). */
     private static liveInventories: Map<number, string> | null = null;
+    /**
+     * Enums script 5022 (shop_hide_quantity) reads: an inventory marked in either has infinite
+     * stock, drawn with no counts. Such a shop also has no "Buy 50" (script 1074's boolean).
+     */
+    private static readonly INFINITE_STOCK_INVENTORY_ENUMS = [4824, 5412];
     private static readonly QUANTITY_BY_MODE = [0, 1, 5, 10, 50];
     private static readonly QUANTITY_MODE_ATTRIBUTE = "shop:quantity-mode";
     private static readonly POINTS_ATTRIBUTE = "shop:points";
@@ -371,6 +376,9 @@ export class ShopManager {
         if (!this.isOpen(player)) return false;
         const mode = this.QUANTITY_MODE_BY_BUTTON.get(packet.childId);
         if (packet.groupId === this.MAIN_INTERFACE_ID && mode !== undefined) {
+            // Script 2231 (shop_quantity_op) ignores the Buy-50 button in a shop without it.
+            const shop = this.currentShop(player);
+            if (mode === 4 && shop && !this.offersBuyFifty(shop.definition.getId())) return true;
             this.setQuantityMode(player, mode);
             return true;
         }
@@ -560,7 +568,10 @@ export class ShopManager {
         sender.sendVarbit(this.QUANTITY_VARBIT, this.quantityMode(player));
         sender.sendSubInterface(targetUid, this.MAIN_INTERFACE_ID, 0)
             .sendSubInterface((161 << 16) | 79, this.SIDE_INTERFACE_ID, 1)
-            .sendInterfaceScript(1074, [inventoryId, this.title(shop.definition.getName()), this.currencyItemId(shop.definition.getCurrency()), 0, 1])
+            // shop_main_init(inv, title, obj, int, boolean): every recorded call passes obj -1 and
+            // int 0 (no highlighted item, no extra "Buy N"); the boolean adds "Buy 50", which
+            // only the infinite-stock shops leave out (Farming Supplies, The Pandemonium).
+            .sendInterfaceScript(1074, [inventoryId, this.title(shop.definition.getName()), -1, 0, this.offersBuyFifty(shop.definition.getId()) ? 1 : 0])
             .sendInterfaceFlagsRange((this.MAIN_INTERFACE_ID << 16) | 16, 0, 299, 1662)
             .sendInterfaceScript(149, [this.SIDE_INTERFACE_ID << 16, 93, 4, 7, 0, -1, "Value", "Sell 1", "Sell 5", "Sell 10", "Sell 50"])
             .sendInterfaceFlagsRange(this.SIDE_INTERFACE_ID << 16, 0, 27, 1086)
@@ -586,6 +597,16 @@ export class ShopManager {
         }
         const name = this.liveInventories.get(shopId);
         return (name ? CacheDefinitions.getInventoryId(name) : null) ?? this.SHOP_WIRE_INVENTORY;
+    }
+
+    /**
+     * Whether a shop's items offer "Buy 50": not when its inventory is an infinite-stock one
+     * (script 5022's enums), as in the recorded Farming Supplies and The Pandemonium calls.
+     */
+    public static offersBuyFifty(shopId: number): boolean {
+        const inventoryId = this.inventoryId(shopId);
+        if (inventoryId === this.SHOP_WIRE_INVENTORY) return true;
+        return !this.INFINITE_STOCK_INVENTORY_ENUMS.some((id) => CacheDefinitions.getEnumValues(id).get(inventoryId) === 1);
     }
 
     /**

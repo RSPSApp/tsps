@@ -5,8 +5,9 @@
  * hit's max is half the one before, rounded down (47 -> 23 -> 11).
  *
  * Charging (Wiki): the vyre well stores sets of 100 charges, each bought with one
- * vial of blood and 200 blood runes. Charge-at moves them into a scythe, up to
- * 20,000; using a charged scythe on the well deposits them back in whole sets.
+ * vial of blood and 200 blood runes. Charge-at, or using a scythe on the well, moves
+ * them into the scythe, up to 20,000; a charged scythe can instead be uncharged into
+ * the well, in whole sets. The chatbox follows live (rsprox 20261115T211134).
  * One charge is spent per attack as long as at least one of the swing's hits deals
  * damage; at zero it reverts to the uncharged scythe, which still attacks with its
  * weaker uncharged stats. Uncharging away from the well clears the charges without
@@ -244,14 +245,59 @@ function syncWell({ player }) {
   player.getPacketSender?.().sendVarbit?.(WELL_VARBIT, Math.floor(wellCharges(player) / CHARGES_PER_VIAL));
 }
 
-/** Charge-at and item-on-well work on a scythe in either hand or inventory. */
+/**
+ * The well's chatbox, as live draws it (rsprox 20261115T211134): its statements are message boxes
+ * (229), the scythe's are item boxes (193) showing the scythe, both with their line in the chat too.
+ * Tests swap these out to record what the player is shown.
+ */
+const dialogues = {
+  /** A message box, then `next` on Continue. */
+  mesbox(player, text, next) {
+    const { DialogueChainBuilder, StatementDialogue, ActionDialogue, EndDialogue } = core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+      new StatementDialogue(0, text),
+      next ? new ActionDialogue(1, { execute: next }) : new EndDialogue(1),
+    ));
+  },
+  /** An item box beside `itemId`, then `next` on Continue. */
+  itemBox(player, itemId, text, next) {
+    const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue, EndDialogue } = core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+      new ItemStatementDialogue(0, itemId, text),
+      next ? new ActionDialogue(1, { execute: next }) : new EndDialogue(1),
+    ));
+  },
+  /** "Select an option" over [text, callback] pairs. */
+  options(player, ...pairs) {
+    pluginApi.sendMultiChatboxPrompt(player, "Select an option", ...pairs.flat());
+  },
+  /** The count dialog (script 108); `execute` gets the whole number typed. */
+  count(player, title, execute) {
+    const input = {
+      execute(value) {
+        if (player.getEnteredAmountAction?.() === input) player.setEnteredAmountAction(null);
+        execute(Math.floor(Number(value) || 0));
+      },
+    };
+    player.setEnteredAmountAction(input);
+    player.getPacketSender().sendEnterAmountPrompt(title);
+  },
+};
+
+const format = (amount) => amount.toLocaleString("en-US");
+const wellSets = (player) => Math.floor(wellCharges(player) / CHARGES_PER_VIAL);
+
+/** Charge-at looks in the inventory only: live answers "nothing that can be charged" for a wielded scythe. */
 function findScythe(player) {
-  const equipped = player.getEquipment().get(core.Equipment.WEAPON_SLOT);
-  if (isScytheId(equipped?.getId?.())) return equipped;
   for (const item of player.getInventory().getItems()) {
     if (item && isScytheId(item.getId())) return item;
   }
   return null;
+}
+
+/** The scythe is still in the inventory, as it was when the dialogue opened. */
+function stillHeld(player, item) {
+  return player.getInventory().getItems().includes(item) && isScytheId(item.getId());
 }
 
 function addScytheCharges(player, item, amount) {
@@ -263,84 +309,151 @@ function addScytheCharges(player, item, amount) {
   return added;
 }
 
-/** Fill asks for sets (100 charges each); the transcript's "charges" are those sets. */
-function fillWellSets(player, requested) {
-  if (requested < 1) return;
+const NEED_MATERIALS = `You need at least ${BLOOD_RUNES_PER_VIAL} blood runes and 1 vial of blood to start filling the well.`;
+
+/** Sets the inventory pays for (a vial and 200 blood runes each), up to the well's room. */
+function affordableSets(player) {
   const inventory = player.getInventory();
-  const sets = Math.min(
-    requested,
+  return Math.min(
     Math.floor((WELL_MAX_CHARGES - wellCharges(player)) / CHARGES_PER_VIAL),
     vialCount(inventory),
     Math.floor(bloodRunes(inventory) / BLOOD_RUNES_PER_VIAL)
   );
+}
+
+/** Fill asks for sets (100 charges each); live's "charges" in the reply are those sets. */
+function fillWellSets(player, requested) {
+  if (requested < 1) return;
+  const sets = Math.min(requested, affordableSets(player));
   if (sets < 1) {
     if (onlyPresets(player)) return;
-    player.sendMessage(`You need at least ${BLOOD_RUNES_PER_VIAL} blood runes and 1 vial of blood to start filling the well.`);
+    player.sendMessage(NEED_MATERIALS);
     return;
   }
+  const inventory = player.getInventory();
   takeVials(inventory, sets);
   takePlain(inventory, bloodRuneId, sets * BLOOD_RUNES_PER_VIAL);
   inventory.refreshItems();
   publishWell(player, wellCharges(player) + sets * CHARGES_PER_VIAL);
-  // Transcript: "You fill the well with one charge" / "with [number] charges" (each is a set).
-  player.sendMessage(`You fill the well with ${sets === 1 ? "one" : sets.toLocaleString("en-US")} charge${sets === 1 ? "" : "s"}.`);
+  // Live: "You fill the well with 160 charges."; the transcript has "one charge" for a single set.
+  dialogues.mesbox(player, `You fill the well with ${sets === 1 ? "one" : format(sets)} charge${sets === 1 ? "" : "s"}.`);
 }
 
+/**
+ * Fill (live): the cost in a message box, then "How many sets of 100 charges do you wish to add? (Up to N)".
+ * Without the materials it is a plain game message, no box.
+ */
 function fillWell({ player }) {
   if (WELL_MAX_CHARGES - wellCharges(player) < CHARGES_PER_VIAL) {
-    player.sendMessage("The well is full.");
+    dialogues.mesbox(player, "The well is full.");
     return true;
   }
   if (vialCount(player.getInventory()) < 1 || bloodRunes(player.getInventory()) < BLOOD_RUNES_PER_VIAL) {
     if (onlyPresets(player)) return true;
-    player.sendMessage(`You need at least ${BLOOD_RUNES_PER_VIAL} blood runes and 1 vial of blood to start filling the well.`);
+    player.sendMessage(NEED_MATERIALS);
     return true;
   }
-  player.sendMessage(
-    `Mixing 1 vial of blood with the power of ${BLOOD_RUNES_PER_VIAL} blood runes into this well will add ${CHARGES_PER_VIAL} charges per set.`
-  );
-  player.setEnteredAmountAction({
-    execute: (value) => fillWellSets(player, Math.floor(Number(value) || 0)),
-  });
-  player.getPacketSender().sendEnterAmountPrompt("Enter amount:");
+  dialogues.mesbox(player,
+    `Mixing 1 vial of blood with the power of ${BLOOD_RUNES_PER_VIAL} blood runes into this well will add ${CHARGES_PER_VIAL} charges per set.`,
+    () => {
+      const most = affordableSets(player);
+      if (most < 1) return;
+      dialogues.count(player, `How many sets of ${CHARGES_PER_VIAL} charges do you wish to add? (Up to ${format(most)})`,
+        (sets) => fillWellSets(player, sets));
+    });
   return true;
 }
 
-function chargeScytheFromWell(player, requested) {
-  if (requested < 1) return;
-  const scythe = findScythe(player);
-  if (!scythe) {
-    player.sendMessage("You have nothing that can be charged here.");
-    return;
-  }
-  const amount = Math.min(requested, wellCharges(player), MAX_CHARGES - charges(scythe));
-  if (amount < 1) {
-    player.sendMessage(MAX_CHARGES - charges(scythe) < 1 ? "Your scythe cannot hold any more charges." : "The well is empty.");
-    return;
-  }
-  if (addScytheCharges(player, scythe, amount) < 1) return;
-  publishWell(player, wellCharges(player) - amount);
-  player.sendMessage(`You add ${amount.toLocaleString("en-US")} charges to your scythe.`);
+/** The sets the scythe can take from the well now: the well's sets, up to the scythe's room. */
+function applicableSets(player, scythe) {
+  return Math.min(wellSets(player), Math.floor((MAX_CHARGES - charges(scythe)) / CHARGES_PER_VIAL));
 }
 
+function applySets(player, scythe, requested) {
+  if (requested < 1 || !stillHeld(player, scythe)) return;
+  const sets = Math.min(requested, applicableSets(player, scythe));
+  if (sets < 1) return;
+  const added = addScytheCharges(player, scythe, sets * CHARGES_PER_VIAL);
+  if (added < 1) return;
+  publishWell(player, wellCharges(player) - added);
+  const name = core.ItemDefinition.forId(scythe.getId())?.getName?.() || "Scythe of Vitur";
+  dialogues.itemBox(player, scythe.getId(), `You apply ${format(added)} charges to your ${name}.`);
+}
+
+/**
+ * Charging (live): "You lower your scythe into the well..." beside the scythe, then
+ * "How many sets of 100 charges do you wish to apply? (Up to N)", N the well's sets up to the scythe's room.
+ */
+function lowerScythe(player, scythe) {
+  if (charges(scythe) > MAX_CHARGES - CHARGES_PER_VIAL) {
+    dialogues.itemBox(player, scythe.getId(), "Your scythe cannot hold any more charges.");
+    return;
+  }
+  if (wellSets(player) < 1) {
+    dialogues.mesbox(player, "The well is empty.");
+    return;
+  }
+  dialogues.itemBox(player, scythe.getId(), "You lower your scythe into the well...", () => {
+    if (!stillHeld(player, scythe)) return;
+    const most = applicableSets(player, scythe);
+    if (most < 1) return;
+    dialogues.count(player, `How many sets of ${CHARGES_PER_VIAL} charges do you wish to apply? (Up to ${format(most)})`,
+      (sets) => applySets(player, scythe, sets));
+  });
+}
+
+/** The scythe's charges in whole sets: 1,235 deposit 1,200 (Wiki). */
+const depositable = (scythe) => Math.floor(charges(scythe) / CHARGES_PER_VIAL) * CHARGES_PER_VIAL;
+
+function unchargeIntoWell(player, scythe) {
+  if (!stillHeld(player, scythe) || !chargedIds.has(scythe.getId())) return;
+  const deposit = depositable(scythe);
+  if (deposit < CHARGES_PER_VIAL || deposit > WELL_MAX_CHARGES - wellCharges(player)) return;
+  // Draining empties the scythe; the charges below the last whole set are not deposited.
+  swapToUncharged(player, scythe);
+  publishWell(player, wellCharges(player) + deposit);
+  dialogues.itemBox(player, scythe.getId(),
+    `You uncharge your scythe into the well. It now contains ${format(wellSets(player))} sets of ${CHARGES_PER_VIAL} charges.`);
+}
+
+/**
+ * Uncharging (live): what goes in, beside the charged scythe, then "Proceed" / "Cancel"; Proceed
+ * drains it and says what the well now holds, beside the uncharged scythe.
+ */
+function offerUncharge(player, scythe) {
+  const deposit = depositable(scythe);
+  if (deposit < CHARGES_PER_VIAL) {
+    dialogues.itemBox(player, scythe.getId(), "Your scythe does not have enough charges to deposit.");
+    return;
+  }
+  if (deposit > WELL_MAX_CHARGES - wellCharges(player)) {
+    dialogues.mesbox(player, "The well cannot hold any more charges.");
+    return;
+  }
+  dialogues.itemBox(player, scythe.getId(),
+    `If you uncharge your scythe into the well, ${format(deposit)} charges will be added to the well.`,
+    () => dialogues.options(player, ["Proceed", () => unchargeIntoWell(player, scythe)], ["Cancel", () => {}]));
+}
+
+/** A charged scythe asks "Charge the scythe" / "Uncharge the scythe"; an uncharged one is lowered straight in. */
+function scytheAtWell(player, scythe) {
+  if (!chargedIds.has(scythe.getId())) {
+    lowerScythe(player, scythe);
+    return;
+  }
+  dialogues.options(player,
+    ["Charge the scythe", () => stillHeld(player, scythe) && lowerScythe(player, scythe)],
+    ["Uncharge the scythe", () => stillHeld(player, scythe) && offerUncharge(player, scythe)]);
+}
+
+/** Charge-at: the inventory's scythe, as if used on the well (live, tick 96). */
 function chargeAtWell({ player }) {
   const scythe = findScythe(player);
   if (!scythe) {
-    player.sendMessage("You have nothing that can be charged here.");
+    dialogues.mesbox(player, "You have nothing that can be charged here.");
     return true;
   }
-  if (charges(scythe) >= MAX_CHARGES) {
-    player.sendMessage("Your scythe cannot hold any more charges.");
-    return true;
-  }
-  if (wellCharges(player) < 1) {
-    player.sendMessage("The well is empty.");
-    return true;
-  }
-  player.setEnteredAmountAction({
-    execute: (value) => chargeScytheFromWell(player, Math.floor(Number(value) || 0)),
-  });
-  player.getPacketSender().sendEnterAmountPrompt("Enter amount:");
+  scytheAtWell(player, scythe);
   return true;
 }
 
@@ -357,9 +470,9 @@ function refundsFit(inventory, refunds) {
 
 function emptyWell({ player }) {
   const inventory = player.getInventory();
-  const sets = Math.floor(wellCharges(player) / CHARGES_PER_VIAL);
+  const sets = wellSets(player);
   if (sets < 1) {
-    player.sendMessage("The well is empty.");
+    dialogues.mesbox(player, "The well is empty.");
     return true;
   }
   const runes = new core.Item(bloodRuneId, sets * BLOOD_RUNES_PER_VIAL);
@@ -372,43 +485,28 @@ function emptyWell({ player }) {
   inventory.add(vials, false);
   inventory.refreshItems();
   publishWell(player, 0);
-  player.sendMessage(
-    `You take ${runes.getAmount().toLocaleString("en-US")} blood runes and ${sets.toLocaleString("en-US")} vial${sets === 1 ? "" : "s"} of blood out of the well - which are magically converted to noted form.`
-  );
+  dialogues.mesbox(player,
+    `You take ${format(runes.getAmount())} blood runes and ${format(sets)} vial${sets === 1 ? "" : "s"} of blood out of the well - which are magically converted to noted form.`);
   return true;
 }
 
+/** Check (live): a message box, "The well is empty." or the sets it holds. */
 function checkWell({ player }) {
-  const sets = Math.floor(wellCharges(player) / CHARGES_PER_VIAL);
-  player.sendMessage(sets < 1
+  const sets = wellSets(player);
+  dialogues.mesbox(player, sets < 1
     ? "The well is empty."
-    : `The well contains ${sets.toLocaleString("en-US")} set${sets === 1 ? "" : "s"} of ${CHARGES_PER_VIAL} charges.`);
+    : `The well contains ${format(sets)} set${sets === 1 ? "" : "s"} of ${CHARGES_PER_VIAL} charges.`);
   return true;
 }
 
-/** Using a scythe on the well drains it in whole sets, as the Wiki describes. */
-function depositScythe(event) {
+/** Using a scythe on the well: the same as Charge-at with that scythe (live). */
+function scytheOnWell(event) {
   const { player, itemId, item } = event;
   if (!isScytheId(itemId)) return false;
   if (core.ObjectDefinition.forPlayer(event.objectId, player)?.getName?.() !== WELL_OBJECT) return false;
   // Generic item-on-object hooks must mark the event themselves (the named overload does it).
   event.handled = true;
-  const held = charges(item);
-  const deposit = Math.floor(held / CHARGES_PER_VIAL) * CHARGES_PER_VIAL;
-  if (deposit < CHARGES_PER_VIAL) {
-    player.sendMessage("Your scythe does not have enough charges to deposit.");
-    return true;
-  }
-  const room = WELL_MAX_CHARGES - wellCharges(player);
-  if (deposit > room) {
-    player.sendMessage("The well cannot hold any more charges.");
-    return true;
-  }
-  // Draining empties the scythe; the charges below the last whole set are not deposited.
-  swapToUncharged(player, item);
-  publishWell(player, wellCharges(player) + deposit);
-  refresh(player);
-  player.sendMessage(`You deposit ${deposit.toLocaleString("en-US")} charges into the well.`);
+  scytheAtWell(player, item);
   return true;
 }
 
@@ -500,7 +598,7 @@ module.exports = {
     api.onItemAction("Sanguine Scythe of Vitur", { Check: checkCharges, Uncharge: uncharge });
     api.onItemOnItem(chargeScythe, { noted: false });
     api.onCustomEvent("item:fill-charges", fillCharges);
-    api.onItemOnObject(depositScythe);
+    api.onItemOnObject(scytheOnWell);
     api.onObjectInteraction(WELL_OBJECT, {
       "Charge-at": chargeAtWell,
       Fill: fillWell,
@@ -523,11 +621,11 @@ module.exports = {
     fillWell,
     fillWellWithSets: fillWellSets,
     chargeAtWell,
-    chargeScytheFromWell,
     emptyWell,
     checkWell,
-    depositScythe,
+    scytheOnWell,
     findScythe,
+    dialogues,
     MAX_CHARGES,
     CHARGES_PER_VIAL,
     BLOOD_RUNES_PER_VIAL,

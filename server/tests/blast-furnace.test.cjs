@@ -488,6 +488,35 @@ test("emptying the pot cancels an early Take", () => {
   assert.equal(p.menu, null, "no menu without a new click");
 });
 
+// Self-review r1: a load stalled by an empty coffer drops the wait; refilling later opens nothing.
+test("a stalled belt cancels an early Take", () => {
+  const p = player({ items: { [ItemIds.IRON_ORE]: 3 }, hands: ItemIds.ICE_GLOVES });
+  stateOf(p).coffer = 1000;
+  putOre(p);
+  takeBars({ player: p });
+  stateOf(p).coffer = 0;
+  ticks(20);
+  stateOf(p).coffer = 1000;
+  ticks(8);
+  assert.equal(p.varbits.get(DISPENSER), 3, "the load poured after the refill");
+  assert.equal(p.menu, null, "no menu without a new click");
+});
+
+test("a stalled later load does not cancel Take during a pour", () => {
+  const p = player({ items: { [ItemIds.IRON_ORE]: 3 }, hands: ItemIds.ICE_GLOVES });
+  stateOf(p).coffer = 1000;
+  putOre(p);
+  ticks(4);
+  assert.equal(p.varbits.get(DISPENSER), 1, "the first load is pouring");
+  p.inventory.set(ItemIds.IRON_ORE, 3);
+  putOre(p);
+  stateOf(p).coffer = 0;
+  takeBars({ player: p });
+  ticks(8);
+  assert.equal(p.varbits.get(DISPENSER), 3);
+  assert.deepEqual(p.menu.getItems(), [ItemIds.IRON_BAR]);
+});
+
 test("water cools other hot bars within five tiles", () => {
   const p = player({ items: { [ItemIds.BUCKET_OF_WATER]: 1 } }), nearby = player(), distant = player();
   distant.location = new Location(1955, 4975, 0);

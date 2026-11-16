@@ -7,7 +7,8 @@
     "prifddinas": { "name": "Prifddinas", "tile": [3263, 6066, 0], "members": true, "requires": { "quest": "song_of_the_elves" } },
     "ferox": { "name": "Ferox Enclave", "tile": [3151, 3635, 0], "members": false, "requires": { "unlock": "ferox" } },
     "kourend": { "name": "Kourend Castle", "tile": [1640, 3673, 0], "members": true, "requires": { "quest": "a_kingdom_divided" } },
-    "fortis": { "name": "Civitas illa Fortis", "tile": [1681, 3133, 0], "members": true, "requires": { "rank": "Challenger" } }
+    "fortis": { "name": "Civitas illa Fortis", "tile": [1681, 3133, 0], "members": true, "requires": { "rank": "Challenger" } },
+    "camelot": { "name": "Camelot", "tile": [2757, 3478, 0], "members": true, "requires": { "unlock": "camelot" } }
   },
   "_places": "the place names in the NPCs' 'If the player's respawn point is (not) ...:' conditions",
   "places": {
@@ -18,7 +19,8 @@
     "Ferox Enclave": "ferox",
     "the Ferox Enclave": "ferox",
     "Kourend Castle": "kourend",
-    "Civitas illa Fortis": "fortis"
+    "Civitas illa Fortis": "fortis",
+    "Camelot": "camelot"
   },
   "unlockFee": 5000000,
   "_setters": "per NPC: a line ('line', set as it shows), an action step ('action') or a menu option ('choice' under 'prompt', set as it is picked) that sets `point`; `pay` takes the unlock fee from the inventory and unlocks it; `from` limits the line to a player whose point is that one",

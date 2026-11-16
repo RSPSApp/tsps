@@ -30,6 +30,7 @@ module.exports = {
     View.init(api);
     api.onCustomEvent("grouping:storage", Access.open);
     api.onCustomEvent("grouping:can-end", Access.canEnd);
+    api.onCustomEvent("group-storage:amount", Access.answerAmount);
     api.onCustomEvent("group-storage:popup-closed", Access.popupClosed);
     api.onCustomEvent("grouping:changed", Access.groupChanged);
     api.onCustomEvent("interface:closed", Access.interfaceClosed);

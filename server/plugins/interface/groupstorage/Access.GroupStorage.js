@@ -18,6 +18,7 @@
  *   "group-storage:limit" { player, groupId, remaining } is shown as %if1 (coins' worth, null for
  *   none), "group-storage:can-withdraw" { player, groupId, items, allowed, reason } is asked at Save
  *   with what the Save takes out, and "group-storage:withdrawn" { player, groupId, items } follows it.
+ * - Content may count what a player's group keeps there: "group-storage:amount" { player, itemId, amount }.
  * - Content may give a group more spaces: "group-storage:capacity" { player, groupId, capacity }
  *   is asked at each opening (Group Ironman's storage unlocks), from Store.CAPACITY up to
  *   Store.MAX_CAPACITY.
@@ -77,6 +78,21 @@ function accessOf(player, groupId) {
   if (!query.group || query.group.id !== groupId || !query.group.ironman || !isGroupIronman(player)) return ACCESS.NONE;
   if (allLeaving(query.group)) return ACCESS.NONE;
   return query.member?.leaving ? ACCESS.DEPOSIT_ONLY : ACCESS.FULL;
+}
+
+/**
+ * "group-storage:amount" { player, itemId, amount }: adds how many of `itemId` the saved storage of
+ * the player's Group Ironman group holds (what a Save last wrote, not an open session's copies).
+ */
+function answerAmount(request) {
+  const { player, itemId } = request ?? {};
+  if (!player || !Number.isInteger(itemId)) return;
+  const query = { player };
+  api.emitCustomEvent("grouping:get", query);
+  if (!query.group?.ironman) return;
+  const held = Store.slotsOf(query.group.id)
+    .reduce((sum, item) => sum + (item && item.id === itemId ? Number(item.amount) || 0 : 0), 0);
+  request.amount = (Number(request.amount) || 0) + held;
 }
 
 /** "grouping:storage" { player, group, member, handled, fromBank? }: opens the storage, or says why not. */
@@ -242,5 +258,5 @@ function logout({ player }) {
 
 module.exports = {
   MESSAGE, init, isGroupIronman, membersWorld, accessOf, open, openFromBank, backToBank, live, discard, save, popupClosed, canEnd, groupChanged,
-  interfaceClosed, logout,
+  interfaceClosed, logout, answerAmount,
 };

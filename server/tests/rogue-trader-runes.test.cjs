@@ -76,6 +76,28 @@ test('3170 t258-285: Force box succeeds -> 913 = 3, the offer for the whole cask
   assert.ok(stock.every((s) => s.amount > 0));
 });
 
+// The Force box experience is paid in the line's action, and Ali's offer menu follows at once (3170 t281). The menu resets
+// the dialogue chain, so a level-up from that experience must still wait for the menu: it is part of the conversation.
+test('a level gained from forcing the box waits for the casket offer menu to be answered', async (t) => {
+  const f = H.actor(t); levels(f, 99, 1); randoms(t, 0.0);
+  f.p.getSkillManager().setExperiences(core.Skill.AGILITY, 82, false);
+  H.setState(f, { clothes: 1, blackjacks: 1, runes: 2, stallvar: 1 });
+  const from = f.messages.length; // the quest setup's own level-ups come before
+  await H.talk(f); await H.read(f);
+  await H.choose(f, 1); await H.read(f); await H.choose(f, 1); await H.read(f); await H.choose(f, 1);
+  await H.nextLine(f);
+  const levelUp = (m) => String(m) === "Congratulations, you've just advanced your Agility level. You are now level 2.";
+  const { pending } = await H.read(f);
+  assert.match(pending?.options[0] ?? '', /^Buy all the runes for \d+$/, 'the offer menu shows');
+  assert.ok(f.p.getSkillManager().getMaxLevel(core.Skill.AGILITY) > 1, 'the experience is paid');
+  await H.drain(f);
+  assert.ok(!f.messages.slice(from).some(levelUp), 'no level-up while the menu is open');
+  assert.ok(H.MultiChatboxPrompt.getPending(f.p), 'the menu is still open');
+  await H.choose(f, 1);
+  await H.drain(f);
+  assert.ok(f.messages.slice(from).some(levelUp), 'the level-up follows once the menu is answered');
+});
+
 test('a failed strength roll shows the arms-tire line before the failure (3170 t532, Strength then the chest line)', async (t) => {
   const f = H.actor(t); levels(f, 99, 1); randoms(t, 0.99);
   H.setState(f, { clothes: 1, blackjacks: 1, runes: 2, stallvar: 1 });

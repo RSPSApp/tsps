@@ -73,7 +73,6 @@ function rollLoot(contribution, present, random = Math.random) {
   });
 }
 
-/** The kill's loot under her, for each player who is owed some. */
 /** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
 function lootOptions(player, itemId, area) {
   const request = { player, itemId, area, options: {} };
@@ -81,6 +80,7 @@ function lootOptions(player, itemId, area) {
   return request.options;
 }
 
+/** The kill's loot under her, for each player who is owed some. */
 function reward(fight, players, where) {
   const { Item, ItemDefinition } = Common.core;
   const manager = Common.api.getItemOnGroundManager();

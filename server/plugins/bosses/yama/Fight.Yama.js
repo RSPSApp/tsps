@@ -335,7 +335,6 @@ class Fight {
   }
 }
 
-/** A fight's length as Yama's messages print it: m:ss. */
 /** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
 function lootOptions(player, itemId, area) {
   const request = { player, itemId, area, options: {} };
@@ -343,6 +342,7 @@ function lootOptions(player, itemId, area) {
   return request.options;
 }
 
+/** A fight's length as Yama's messages print it: m:ss. */
 function formatTicks(ticks) {
   const seconds = Math.round(ticks * 0.6);
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;

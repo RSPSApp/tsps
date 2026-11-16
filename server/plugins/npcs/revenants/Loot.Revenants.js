@@ -28,7 +28,6 @@ function ownsLootingBag(player) {
   return request.owned === true;
 }
 
-/** Drops land under the revenant for the killer; an amulet of avarice notes them (Wiki). */
 /** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
 function lootOptions(player, itemId, area) {
   const request = { player, itemId, area, options: {} };
@@ -36,6 +35,7 @@ function lootOptions(player, itemId, area) {
   return request.options;
 }
 
+/** Drops land under the revenant for the killer; an amulet of avarice notes them (Wiki). */
 function dropLoot({ killer, npc, npcId }) {
   if (!killer?.isPlayer?.() || !isRevenant(npcId)) return;
   resetHeals(npc);

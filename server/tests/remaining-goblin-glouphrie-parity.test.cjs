@@ -9,6 +9,8 @@ Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+const { ObjectDefinition } = require('../dist/game/definition/ObjectDefinition');
+const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
 const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
 const runtime = require('../plugins/quests/QuestRuntime');
 const { createQuestScenes } = require('../plugins/quests/QuestScenes');
@@ -258,6 +260,8 @@ function player(overrides = {}) {
     getPacketSender: () => {
       const packet = new Proxy({
         sendVarbit: (id, value) => { varbits.set(id, value); return packet; },
+        getVarbit: (id) => varbits.get(id) ?? 0,
+        getVarp: (id) => varbits.get(id) ?? 0,
         sendConfig: (id, value) => { varbits.set(id, value); return packet; },
         sendSubInterface: (...args) => { log.push(['sendSubInterface', ...args]); return packet; },
         mountSubInterface: (...args) => { log.push(['sendSubInterface', ...args]); return {}; },
@@ -1438,6 +1442,60 @@ test('EOG Brimstail counts a banked crystal saw or seed: no second seed to hand 
   assert.equal(condition({ player: none, npcId: brimstail, text }), true, 'none owned: Brimstail offers one');
 });
 
+test('Eyes machine map locs keep their stage transform and login varbit in step', () => {
+  const h = harness('EyesOfGlouphrie');
+  const p = player();
+  const machine = MapObjects.get(17282, new core.Location(2390, 9826, 0), null);
+  const exchanger = MapObjects.get(17283, new core.Location(2391, 9826, 0), null);
+  assert.equal(machine?.getId(), 17282);
+  assert.equal(exchanger?.getId(), 17283);
+
+  h.quest.setStage(p, 3);
+  assert.equal(p.varbits.get(2502), 0);
+  assert.equal(ObjectDefinition.forPlayer(machine.getId(), p).id, 17247, 'before sabotage, the map machine offers Unlock');
+  h.quest.setStage(p, 4);
+  assert.equal(p.varbits.get(2502), 1);
+  assert.equal(ObjectDefinition.forPlayer(machine.getId(), p).id, 17246, 'sabotage changes the map machine to Repair');
+  assert.equal(ObjectDefinition.forPlayer(exchanger.getId(), p).id, 17249, 'the exchanger follows the broken state');
+  h.quest.setStage(p, 7);
+  assert.equal(p.varbits.get(2502), 2);
+  assert.equal(ObjectDefinition.forPlayer(machine.getId(), p).id, 17245, 'repair changes the map machine to Operate');
+  assert.equal(ObjectDefinition.forPlayer(exchanger.getId(), p).id, 17248, 'repair restores the exchanger');
+
+  p.varbits.delete(2502);
+  h.login(p);
+  assert.equal(p.varbits.get(2502), 2, 'login restores the state from saved quest progress');
+  h.quest.setStage(p, 12);
+  assert.equal(p.varbits.get(2502), 0, 'completed-login recordings omit 2502; completion zero is the documented interim inference');
+  assert.equal(ObjectDefinition.forPlayer(machine.getId(), p).id, 17247);
+});
+
+test('Eyes Machine panel Inspect still records the cave inspection', () => {
+  const h = harness('EyesOfGlouphrie');
+  const p = player();
+  const inspect = h.hooks.onObjectInteraction.find((fn) => fn.name === 'inspectPanel');
+  assert.doesNotThrow(() => inspect({
+    player: p,
+    objectId: core.ObjectIdentifiers.MACHINE_PANEL,
+    location: { x: 2391, y: 9826, z: 0 },
+  }));
+  assert.equal(p.varbits.get(2516), 1);
+  assert.equal((p.attrs.get('quest.the_eyes_of_glouphrie.bits') & (1 << 1)) !== 0, true);
+});
+
+test('Eyes item-on-map routing recognizes exchanger loc 17283', () => {
+  const h = harness('EyesOfGlouphrie');
+  const p = player();
+  p.items.set(I.RED_SQUARE, 1);
+  h.quest.setStage(p, 7);
+  const event = { player: p, itemId: I.RED_SQUARE, objectId: 17283, handled: false };
+  h.hooks.onItemOnObject[0](event);
+  assert.equal(event.handled, true);
+  assert.equal(p.items.get(I.RED_SQUARE), 0);
+  assert.equal(p.items.get(I.RED_CIRCLE), 1);
+  assert.equal(p.items.get(I.RED_TRIANGLE), 1);
+});
+
 test('Eyes machine object opens native panel and validates disc slots through cancel and activation', () => {
   const h = harness('EyesOfGlouphrie');
   const ids = [I.RED_SQUARE, I.YELLOW_TRIANGLE, I.GREEN_SQUARE, I.BLUE_TRIANGLE, I.YELLOW_PENTAGON, I.VIOLET_PENTAGON];
@@ -1459,38 +1517,43 @@ test('Eyes machine object opens native panel and validates disc slots through ca
   const p = player({ getInventory: () => inventory, getPacketSender: () => sender, getInterfaceId: () => opened });
   h.quest.setStage(p, 8);
   const objectAction = (name, id) => h.hooks.onObjectInteraction.find((fn) => fn.name === name)({ player: p, objectId: id });
+  const itemOnObject = (objectId, itemId) => {
+    const event = { player: p, objectId, itemId, handled: false };
+    h.hooks.onItemOnObject[0](event);
+    return event;
+  };
   const button = (uid, slot, itemId) => {
     const event = { player: p, buttonId: uid, action: 1, slot, itemId, handled: false };
     h.hooks.onInterfaceActionButton.find((fn) => fn.name === 'machineButton')(event);
     return event;
   };
   const select = (slot) => button(185 << 16, slot, ids[slot]);
-  objectAction('unlockMachine', 17247);
+  assert.equal(itemOnObject(17282, I.RED_SQUARE).handled, true, 'red square use on the cache map machine opens the lock panel');
   assert.equal(opened, 145);
   assert.ok(packets.some((p) => p[0] === 'sub' && p[2] === 185));
   assert.ok(packets.some((p) => p[0] === 'inventory' && p[1] === 440));
   assert.ok(packets.some((p) => p[0] === 'script' && p[1] === 149));
   button((145 << 16) | 13);
   assert.equal(opened, -1, 'explicit lock close removes the interface');
-  objectAction('unlockMachine', 17247);
+  objectAction('unlockMachine', 17282);
   h.emit('interface:closed', { player: p, interfaceId: 185 });
   select(0); button((145 << 16) | 8); button((145 << 16) | 12);
   assert.equal(h.quest.getStage(p), 8, 'closing the side invalidates subsequent actions');
-  objectAction('unlockMachine', 17247);
+  objectAction('unlockMachine', 17282);
   button(185 << 16, 27, undefined); // malformed empty slot must not throw
   button(185 << 16, 0, I.BLUE_TRIANGLE); // stale packet must not select the red square
   button((145 << 16) | 8);
   button((145 << 16) | 12);
   assert.equal(h.quest.getStage(p), 8);
-  objectAction('unlockMachine', 17247);
+  objectAction('unlockMachine', 17282);
   select(0); button((145 << 16) | 8); button((145 << 16) | 12);
   assert.equal(h.quest.getStage(p), 9);
   assert.equal(inventory.getAmount(I.RED_SQUARE), 2, 'unlock retains the existing quest approximation');
-  objectAction('operateMachine', 17245);
+  objectAction('operateMachine', 17282);
   assert.equal(opened, 189);
   button((189 << 16) | 42);
   assert.equal(opened, -1, 'explicit machine close removes the interface');
-  objectAction('operateMachine', 17245);
+  objectAction('operateMachine', 17282);
   select(2); button((189 << 16) | 24);
   button((189 << 16) | 38);
   assert.equal(inventory.getAmount(I.GREEN_SQUARE), 1, 'cancel leaves inventory intact');
@@ -1499,7 +1562,7 @@ test('Eyes machine object opens native panel and validates disc slots through ca
   button((189 << 16) | 27);
   assert.equal(h.quest.getStage(p), 9);
   assert.equal(inventory.getAmount(I.GREEN_SQUARE), 1, 'incomplete row activation consumes nothing');
-  objectAction('operateMachine', 17245);
+  objectAction('operateMachine', 17282);
   h.hooks.onPlayerLogout[0]({ player: p });
   button((189 << 16) | 39);
   assert.equal(h.quest.getStage(p), 9, 'a stale click after logout cannot activate');
@@ -1508,21 +1571,21 @@ test('Eyes machine object opens native panel and validates disc slots through ca
       select(slot); button((189 << 16) | child);
     }
   };
-  objectAction('operateMachine', 17245);
+  objectAction('operateMachine', 17282);
   fillPanel();
   h.quest.setStage(p, 8);
   button((189 << 16) | 39);
   assert.equal(opened, -1, 'stage regression closes the stale panel');
   for (const id of ids) assert.equal(inventory.getAmount(id), id === I.RED_SQUARE ? 2 : 1, 'stage regression consumes nothing');
   h.quest.setStage(p, 9);
-  objectAction('operateMachine', 17245);
+  objectAction('operateMachine', 17282);
   fillPanel();
   h.quest.setStage(p, 10);
   button((189 << 16) | 39);
   assert.equal(opened, -1, 'completed stage closes the stale panel');
   for (const id of ids) assert.equal(inventory.getAmount(id), id === I.RED_SQUARE ? 2 : 1, 'completed stage consumes nothing');
   h.quest.setStage(p, 9);
-  objectAction('operateMachine', 17245);
+  objectAction('operateMachine', 17282);
   fillPanel();
   const setStage = h.quest.setStage;
   h.quest.setStage = () => { throw new Error('stage failure'); };
@@ -1536,7 +1599,7 @@ test('Eyes machine object opens native panel and validates disc slots through ca
   assert.equal(inventory.getAmount(I.RED_SQUARE), 1, 'a repeated activation cannot consume another disc');
   slots = Array.from({ length: 28 }, (_, i) => new core.Item(ids[i] ?? -1, i < ids.length ? 1 : 0));
   h.quest.setStage(p, 9);
-  objectAction('operateMachine', 17245);
+  objectAction('operateMachine', 17282);
   fillPanel();
   button((189 << 16) | 39);
   assert.equal(h.quest.getStage(p), 10, 'final activation control also advances the quest');

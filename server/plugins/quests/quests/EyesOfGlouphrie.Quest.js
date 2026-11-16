@@ -654,6 +654,10 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   // ==========================================================================
 
   function machineStateForStage(stage) {
+    // Completed-login recordings include the quest varbits but omit 2502. Treat its
+    // completed value as the zero/default state until a capture shows a transition;
+    // this is an inference from the login snapshot, not a recorded completion action.
+    if (stage >= STAGE_COMPLETE) return 0;
     if (stage >= STAGE_REPAIRED) return 2;
     if (stage >= STAGE_SABOTAGED) return 1;
     return 0;
@@ -665,6 +669,16 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
 
   function handleQuestStageChanged({ player, key, stage }) {
     if (key === "the_eyes_of_glouphrie") syncMachineState(player, stage);
+  }
+
+  function inCave(location) {
+    return (
+      location &&
+      location.x >= CAVE_BOX.minX &&
+      location.x <= CAVE_BOX.maxX &&
+      location.y >= CAVE_BOX.minY &&
+      location.y <= CAVE_BOX.maxY
+    );
   }
 
   function repairMachine(event) {

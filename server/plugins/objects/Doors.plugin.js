@@ -93,6 +93,10 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   // tick 940, 239 tick 1649); nameless in the cache, so ObjectIdentifiers has no property for them.
   FARMING_GUILD_DOOR_LEFT_OPEN: 34465,
   FARMING_GUILD_DOOR_RIGHT_OPEN: 34466,
+  // kr_camelot_metalgateopenl/r: the Camelot castle gate's leaves while it lets the player through
+  // (local 1001994 ticks 16539, 17417, 17541); nameless in the cache, so ObjectIdentifiers has none.
+  CAMELOT_GATE_LEFT_OPEN: 26083,
+  CAMELOT_GATE_RIGHT_OPEN: 26084,
 });
 
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
@@ -540,6 +544,25 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       walkOver: true,
       closeTicks: 2,
       openSoundId: 71,
+    }),
+    // Camelot castle's grounds gate (kr_camelot_metalgateclosedl/r), crossed both ways in the user's rsprox captures
+    // (local 1001994 ticks 16536-16541, 17415-17419 and 17539-17543, local 1001800 ticks 23184 and 23277; rev 242):
+    // Open puts inviswall 38848 on both gate tiles and the nameless open leaves on the tiles north, sound 69
+    // (grate_open), the player steps across in the same tick and the gate is back two ticks later. It never stays
+    // open: its open leaves have no name, so a client shows them no menu. King's Ransom sends a player Morgan holds
+    // back to the cell first (door:toggle).
+    Object.freeze({
+      closed: [[O.GATE_175, 2757, 3482, 0, 1], [O.GATE_176, 2758, 3482, 0, 1]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2757, 3482, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.CAMELOT_GATE_LEFT_OPEN, 2757, 3483, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2758, 3482, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.CAMELOT_GATE_RIGHT_OPEN, 2758, 3483, 0, 2],
+      ],
+      crossY: 3483,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 69,
     }),
     // Mining Guild doors (mguild_door, mguild_door_inner1/2), rsprox_transcripts/233/03241.txt tick 12674 and
     // 233/03239.txt ticks 581 and 2234: Open puts inviswall 38848 on the doorway and inactivepoordoor (1539) on the

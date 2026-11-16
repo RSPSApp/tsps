@@ -584,7 +584,8 @@ function flatten(steps, opts = {}) {
     while (steps[position + 1]?.type === "condition") position++;
     const run = steps.slice(runStart, position + 1);
     if (opts.lazyConditions) {
-      out.push({ type: "condition_run", run });
+      // The step before the run, for a branch that opens with a same-as jump (resolveJump's `previous`).
+      out.push({ type: "condition_run", run, ...(runStart > 0 ? { before: steps[runStart - 1] } : {}) });
       continue;
     }
     const chosen = chooseCondition(run, resolveCondition);
@@ -753,6 +754,10 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
   // defined just before this one. Wiki jump ids lost their targets in the dump.
   const resolveJump = (step, previous, nextStep) => {
     const reference = String(step.reference ?? "");
+    // A jump that opens a condition branch follows the line before the condition run: the Old Crone's "Do you have
+    // such a thing as a ghostspeak amulet?" then "If the player doesn't have the ghostspeak amulet: (same as above)".
+    const viaCondition = previous?.type === "condition_chosen" && previous.before;
+    if (viaCondition) previous = previous.before;
     if (/^(other|previous\d*|initial)/i.test(reference)) return resolveMenuJump(reference);
     // The player asks one of the page's questions again (Percy's "Is there anything else I can
     // unlock here?" after a purchase): carry on as that question does, without saying it twice.
@@ -768,8 +773,11 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     }
     // After an NPC line, "same as above" carries on as that line does where the page first has
     // it (Bryn's first-time "What is this place?" continues as his full explanation).
-    if (/^(above|below)/i.test(reference) && typeof previous?.npc === "string") {
-      const after = context.pageLines?.get(normText(previous.npc))?.slice(1);
+    // A speaker "line" counts here only before a condition run (the Old Crone's line is one).
+    const npcLine = typeof previous?.npc === "string" ? previous.npc
+      : viaCondition && previous?.type === "line" && typeof previous.text === "string" ? previous.text : undefined;
+    if (/^(above|below)/i.test(reference) && npcLine !== undefined) {
+      const after = context.pageLines?.get(normText(npcLine))?.slice(1);
       if (after?.length && after[0] !== step && !jumpOnly(after)) return after;
     }
     // Prefer the queued continuation to guessing another historical option.
@@ -843,7 +851,18 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     // lineThenSameAs) is no answer either: its jump is skipped in turn and resolves here again, forever.
     // A body that plays this same jump again resolves here again (the Wise Old Man's "Okay, 99,000 coins is
     // fine.": the page's copy of the option differs from the menu's, so sameBranch does not see it).
-    const replaysJump = (steps) => steps.some((entry) => entry === step || (step.id && entry?.type === "jump" && entry.id === step.id));
+    // It also looks through condition branches, inline jump bodies and called branches (not other menus' options):
+    // Timfraku's "I've been doing some work around the village." lands on the page's copy, whose called branch is only
+    // the jump being resolved, so the option replayed itself until the jump limit.
+    const replaysJump = (steps, seen = new Set()) => (steps ?? []).some((entry) => {
+      if (!entry || typeof entry !== "object") return false;
+      if (entry === step || (step.id && entry.type === "jump" && entry.id === step.id)) return true;
+      if (entry.type === "call" && typeof entry.branch === "string" && !seen.has(entry.branch)) {
+        seen.add(entry.branch);
+        return replaysJump(branches?.[entry.branch], seen);
+      }
+      return entry.type !== "choice" && Array.isArray(entry.steps) && replaysJump(entry.steps, seen);
+    });
     const answers = (candidate) => candidate && !sameBranch(candidate) && !lineThenSameAs(candidate) && !replaysJump(candidate);
     // The player has just said their line: the pick carries on with the answer, not its own question (the same
     // line twice for the Entrance Guardian's "Can you explain the different portals?", or another option's
@@ -1047,7 +1066,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
               ? step.run.slice(chosen.index + 1).map((condition) => ({ ...condition, afterTrue: true }))
               : [];
           run([
-            { type: "condition_chosen", id: chosen.condition.id, text: chosen.condition.text },
+            { type: "condition_chosen", id: chosen.condition.id, text: chosen.condition.text, ...(step.before ? { before: step.before } : {}) },
             ...(chosen.condition.steps || []),
             ...tail,
             ...after,

@@ -1722,6 +1722,8 @@ for (const studied of [false, true]) {
       await nextLine(f);
     }
     assert.deepEqual(lines, studied ? [
+      // The certificate's own box first (FairyTale2 tick 433).
+      'You show the certificate to the Godfather.',
       'Do you know what these strange marks mean?',
       'For why you show-a me dat? Eez very nice to see yous learning to draw! Bravo!',
     ] : ['For why you show-a me dat? I-a busy fairy! I donn-a have time for nonsense!']);
@@ -1779,7 +1781,8 @@ for (const stage of [20, 90]) {
     await doc.certificate('Study');
     assert.equal(player.getInterfaceId(), 424); assert.equal(doc.mounted(), 424);
     assert.deepEqual(doc.calls.slice(-2), [['script', 2524, 4269835, 100], ['open', 424]]);
-    assert.equal(quest.getStage(player), Math.max(30, stage));
+    // Study sets 2336 only; 30 is the grotto sweep's (FairyTale2 306, 365).
+    assert.equal(quest.getStage(player), stage);
     assert.equal(player.getPacketSender().getVarbit(2336), 1);
     assert.equal(inventory.getAmount(certificate), 1);
     await doc.close(); await doc.close(); await doc.certificate('Read');
@@ -1788,7 +1791,7 @@ for (const stage of [20, 90]) {
     await doc.close(); inventory.deleteNumber(certificate, 1);
     const count = doc.calls.length; await doc.certificate('Study');
     assert.equal(doc.calls.length, count, 'a stale item action cannot reopen a document');
-    assert.equal(quest.getStage(player), Math.max(30, stage));
+    assert.equal(quest.getStage(player), stage);
   });
 }
 
@@ -1817,7 +1820,8 @@ test('Fairytale II native Rune temple sign opens its document only after studyin
   await read();
   assert.equal(player.getInterfaceId(), 425); assert.equal(doc.mounted(), 425);
   assert.deepEqual(doc.calls.slice(-2), [['script', 2524, -1, -1], ['open', 425]]);
-  assert.equal(player.getPacketSender().getVarbit(2338), 4); assert.equal(quest.getStage(player), 30);
+  // Neither the sign nor Study moves the stage (FairyTale2 365, 739).
+  assert.equal(player.getPacketSender().getVarbit(2338), 4); assert.equal(quest.getStage(player), 20);
   await doc.close(); assert.equal(doc.mounted(), undefined);
   await read(); assert.equal(doc.mounted(), 425);
   assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.NUFFS_CERTIFICATE), 1);
@@ -2787,7 +2791,9 @@ test('Nature Spirit retains its canonical Drezel prerequisite refusal', async t 
 });
 
 const REJECTED_START_ROUTES = [
-  { page: 'Jungle Potion', key: 'jungle_potion', npc: 'TRUFITUS', quests: ['druidic_ritual'],
+  // Live starts Jungle Potion as the player continues past their acceptance line, not on "Yes."
+  // (rsprox captures, the user's JunglePotion run ticks 158-160; docs/quests/jungle-potion/README.md).
+  { page: 'Jungle Potion', key: 'jungle_potion', npc: 'TRUFITUS', quests: ['druidic_ritual'], startsAfterLines: 1,
     route: ['What does Bwana mean?', 'Yes, of course I do.', 'A proposition eh? Sounds interesting!', 'Me? How can I help?', 'Yes.'] },
   { page: 'Haunted Mine', key: 'haunted_mine', npc: 'ZEALOT', skills: true, quests: ['priest_in_peril'],
     route: ['I follow the path of Saradomin.', 'I come seeking challenges and quests.', 'Yes.'] },
@@ -2846,6 +2852,7 @@ for (const definition of REJECTED_START_ROUTES) test(`${definition.page} normal 
   if (definition.skills) await refuse();
   completePrerequisites(f.player, definition.quests);
   await followNativeStartRoute(f, definition);
+  for (let n = 0; n < (definition.startsAfterLines ?? 0); n++) await nextLine(f);
   assert.ok(registeredQuest(definition.key).getStage(f.player) > 0);
   assert.ok(f.player.getDialogueManager().getCurrent(), 'eligible acceptance still plays its source branch');
 });

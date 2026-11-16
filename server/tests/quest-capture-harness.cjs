@@ -1,4 +1,5 @@
-// Shared harness for the Fairytale I capture tests (fairytale-i-capture.test.cjs).
+// Shared harness for the quest capture tests (fairytale-i-capture.test.cjs, fairytale-ii-capture.test.cjs,
+// jungle-potion-capture.test.cjs).
 // Real Player, PlayerSession and ClientConnection, the real plugins, cache and map: talks and
 // clicks are packets and each tick runs as World.process does.
 const assert = require("node:assert/strict");
@@ -14,7 +15,8 @@ const { AreaManager } = require("../dist/game/model/areas/AreaManager");
 const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
 const QuestRuntime = require("../plugins/quests/QuestRuntime");
 
-const h = { core: null, PM, MultiChatboxPrompt, QuestRuntime };
+// `key`: the quest the actor's `stage` and h.stage() refer to (Fairytale II's tests set it).
+const h = { core: null, PM, MultiChatboxPrompt, QuestRuntime, key: "fairytale_i_growing_pains" };
 let next = 9100;
 
 h.setup = async function setup(regions) {
@@ -28,7 +30,7 @@ h.setup = async function setup(regions) {
 };
 h.teardown = () => PM.emitServerShutdown({});
 
-h.quest = (key = "fairytale_i_growing_pains") => QuestRuntime.getRegisteredQuests().findLast((entry) => entry.key === key);
+h.quest = (key = h.key) => QuestRuntime.getRegisteredQuests().findLast((entry) => entry.key === key);
 h.stage = (f) => h.quest().getStage(f.player);
 
 h.actor = function actor(t, { stage = 0, items = [], at, amulet = false, attributes = {}, done = ["lost_city", "nature_spirit"], farming = 30 } = {}) {
@@ -116,6 +118,7 @@ h.tick = function tick(f) {
   AreaManager.process(f.player);
   core.TaskManager.processWalkTo(f.player.getIndex());
   f.player.getMovementQueue().process();
+  PM.updatePlayerZones(f.player);
   f.player.getSession().flushClient(core.World.processCycle);
   f.player.resetUpdating();
   const line = h.shown(f);

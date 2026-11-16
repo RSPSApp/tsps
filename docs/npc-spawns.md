@@ -216,6 +216,22 @@ Lady Keli, Prince Ali and Joe were spawned as their visible ids (11578, 11579, 1
 - **Prince Ali** `prince_ali_prison` (11644): 11579 at 0-90, then gone once he's freed (100).
 - **Joe** (11642): 11577 at 0-101.
 
+## Fairy Resistance Hideout (Fairytale II)
+
+Fairy Very Wise and the awake Fairy Queen are nameless multinpc parents on Fairytale II's stage
+(varbit 2326), which the client and `NPC.getContentId` resolve per player. The user's whole-quest
+rsprox capture `FairyTale2` (revision 242.1) adds each on one tile and neither ever walks, so both
+rows were set from it with `wanderRadius` 0 (the rows keep no facing):
+- **Fairy Very Wise** `fairyliquid_multi` (2970) at 2353,4458: shows as 1847 from stage
+  45 (her arrival in Fairy Nuff's welcome) through 90. Added at tick 976 facing east, and on the
+  same tile at 1102, 1865 (facing west) and 2352. It was at 2353,4446.
+- **Fairy Queen** `fairy_queen_multi2` (2971) at 2354,4455: shows as 1842 at stages 80
+  and 90 (awake after the magic essence). Added at tick 2419 facing south, four ticks after the
+  pour. It was at 2352,4457.
+
+The hideout's other fairies keep their rows. `fairytale-ii-capture.test.cjs` covers the stages they
+appear at; the in-game check on RSPSApp/tsps#5958 saw both on these tiles.
+
 ## Emir's Arena guides (PvP Arena)
 
 The Wiki put the 1v1 Tournament Guide (11672) and the Duel Guide (11673) on one tile, (3367, 3268), and they wandered. Live has them stand still on their own tiles. In every rsprox recording of the arena (20261106T111454, 20261107T115923, 20261107T121755) they only appear (`add`) and never walk:

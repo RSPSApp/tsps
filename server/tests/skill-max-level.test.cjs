@@ -130,7 +130,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
   H.core = { ...core,
     ObjectManager: { register(o) { objects.add(o); }, deregister(o) { objects.delete(o); } },
     MapObjects: { exists: o => objects.has(o), getType: () => null },
-    RegionManager: { blocked: () => false },
+    RegionManager: { blocked: () => false, canMove: () => true },
     ItemOnGroundManager: {
       registerLocation(...args) {
         drops.push(args);

@@ -7682,8 +7682,8 @@ for(const row of S_ROWS)mTest('S '+row.key+' native remembered spell refuses inc
 });
 for(const row of S_ROWS)for(const boundary of ['victim-leave','caster-leave','finish'])mTest('S '+row.key+' native paid queue discarded at '+boundary+' without refund',async t=>{
   const f=await sGame(t,row),hit=await sFire(f,row),paid=resources(f.a),hp=f.b.getHitpoints();
-  if(boundary==='finish')require('../plugins/minigames/clanwars/Match.ClanWars').finish(f.game,null,'S supplied finish');else f.game.area.leave(boundary==='victim-leave'?f.b:f.a,false);
-  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);tick(12);assert.deepEqual(mInventory(f.a),paid.inventory);assert.deepEqual(contents(f.a.getEquipment()),paid.equipment);if(boundary==='caster-leave')assert.equal(f.b.getHitpoints(),hp);
+  if(boundary==='finish'){f.game.finish(null);assert.equal(f.game.phase,'over');}else f.game.area.leave(boundary==='victim-leave'?f.b:f.a,false);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);tick(12);assert.equal(f.trace.resolved.includes(hit),false);assert.deepEqual(mInventory(f.a),paid.inventory);assert.deepEqual(contents(f.a.getEquipment()),paid.equipment);if(boundary==='caster-leave')assert.equal(f.b.getHitpoints(),hp);
 });
 for(const row of S_ROWS)mTest('S '+row.key+' real lethal cast safe jail rejoin and fresh paid native cast',async t=>{
   const f=await sGame(t,row),kept=carriedItems(f.b);f.b.setHitpoints(1);const hit=await sFire(f,row),paid=resources(f.a);mLand(f,hit);
@@ -7708,9 +7708,11 @@ for(const row of S_ROWS)mTest('S '+row.key+' actual captured membership gate kee
   const before=resources(f.a),hp=f.b.getHitpoints(),lines=messagesOf(f.a);await mSpell(f.a,f.b,row.key);tick(12);bStop(f);assert.ok(seen.some(e=>e.spell===core.CombatSpells[row.key]&&e.disabled));assert.ok(lines.includes("You need to be on a members' world to cast this spell."));assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,1);assert.equal(f.b.getHitpoints(),hp);
 });
 for(const row of S_ROWS)mTest('S '+row.key+' canonical paid mapped Forfeit discards queued hit without refund',async t=>{
-  const f=await sGame(t,row);for(const[p,tile]of[[f.a,[3319,4932,0]],[f.b,[3321,4932,0]]]){p.moveTo(f.game.area.at(tile));p.setNeedsPlacement(false);AreaManager.process(p);}
-  const hit=await sFire(f,row),paid=resources(f.a);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);await mappedExit(f.a,f.game);
-  assert.equal(C.matches.has(f.a),false);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);assert.deepEqual(mInventory(f.a),paid.inventory);assert.deepEqual(contents(f.a.getEquipment()),paid.equipment);
+  const f=await sGame(t,row),hit=await sFire(f,row),paid=resources(f.a),hp=f.b.getHitpoints();assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);
+  // Existing G/M precedent: hold impact turns while the actual mapped movement
+  // and object dispatcher reach Forfeit; this is not a natural flight-time claim.
+  magicTurns=false;try{await nmForfeit(f.a,f.game);}finally{magicTurns=true;}
+  assert.equal(C.matches.has(f.a),false);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);tick(15);assert.equal(f.trace.resolved.includes(hit),false);assert.equal(f.b.getHitpoints(),hp);assert.deepEqual(mInventory(f.a),paid.inventory);assert.deepEqual(contents(f.a.getEquipment()),paid.equipment);
 });
 for(const row of S_ROWS)for(const specialattacks of [1,2])mTest('S '+row.key+' NoStaff or NoSpecial'+specialattacks+' permits ordinary canonical spell',async t=>{
   const f=await sGame(t,row,{rules:{specialattacks,melee:1,ranged:1}}),hit=await sFire(f,row);mLand(f,hit);assert.equal(hit.getTotalDamage(),row.max);assert.equal(f.trace.commits.length,1);

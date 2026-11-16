@@ -150,7 +150,7 @@ async function useOn(s, from, to) {
     target:{kind:'inventory', slot:to, itemId:items[to].getId()}}]);
 }
 
-// rsprox captures 83, 86, 89, 1098: a knife on logs mid-chop fletches and no log follows.
+// rsprox captures: local 1000464 ticks 1057, 1278, 7250 (logs on a banker's note mid-chop, no log follows); 83, 86, 89.
 test('using one item on another mid-chop ends the chop; the fletching it starts runs', async t => {
   certainCut(t);
   const a = scene(t, 3222), ids = core.ItemIdentifiers, inventory = a.p.getInventory();

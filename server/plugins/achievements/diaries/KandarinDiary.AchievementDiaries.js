@@ -142,6 +142,12 @@ function talkToSherlock({ player }) {
   return false; // Let the normal conversation continue after diary credit.
 }
 
+/** `treasure-trails:npc-talked-to`: a Talk-to the clue hook took (a Sherlock clue) still speaks to him. */
+function clueTalk({ player, npc, npcId }) {
+  const name = npc?.getCurrentDefinition?.(player)?.getName?.() ?? api.core.CacheDefinitions.getNpc(npcId)?.name;
+  if (player && name === SHERLOCK) talkToSherlock({ player });
+}
+
 module.exports = {
   register(pluginApi) {
     api = pluginApi;
@@ -161,9 +167,10 @@ module.exports = {
     api.onNpcDeath(npcDeath);
     api.onObjectInteraction("Church organ", { Play: playOrgan });
     api.onNpcInteraction(SHERLOCK, { "Talk-to": talkToSherlock });
+    api.onCustomEvent("treasure-trails:npc-talked-to", clueTalk);
   },
   _test: {
-    inBox, playOrgan, talkToSherlock, fishingSuccess, farmingPlanted, farmingHarvested, miningSuccess,
+    inBox, playOrgan, talkToSherlock, clueTalk, fishingSuccess, farmingPlanted, farmingHarvested, miningSuccess,
     smithingSuccess, craftingMade, picked, barbarianAssaultWave, agilityObstacle,
     fairyRingTravelled, teleportArrival, npcDeath, credit,
     CATHERBY_FISHING, OTTO_GROTTO, SEERS_ORGAN, SEERS_FLAX_FIELD, COAL_TRUCKS, JUTE_PATCH,

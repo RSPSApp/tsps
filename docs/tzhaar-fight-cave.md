@@ -52,7 +52,8 @@ diary (rev 235), which are Wiki only.
 
 ## Not covered
 
-- The fire cape exchange's extra 1/200 pet roll at TzHaar-Mej-Jal.
+- Nothing else here: TzHaar-Mej-Jal's fire cape exchange (8,000 TokKul, or the cape for a 1/200 TzRek-Jad roll) is in
+  `tzhaar/FireCapeExchange.TzhaarFightCaves.js`, from the Wiki's TzHaar-Mej-Jal page and transcript.
 - Leaving the cave by a teleport or command does not clear a Jad task (only the exit, a death and
   finishing do).
 - The diary journal does not show whether the day's resurrection is used (the Wiki mentions it).

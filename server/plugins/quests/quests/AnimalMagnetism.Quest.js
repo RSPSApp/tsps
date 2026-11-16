@@ -59,6 +59,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   const {
     Direction,
     Equipment,
+    Item,
     ItemIdentifiers,
     NPC,
     NpcDefinition,
@@ -1401,16 +1402,26 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     }
   }
 
-  /** Chopping progress is independent of the tree's ordinary attacks. */
+  /**
+   * Chopping progress is independent of the tree's ordinary attacks. Wiki Undead twigs: a blessed
+   * axe cuts twigs "during or after" the quest, so Chop stays live once the notes stage is reached.
+   */
   function handleChopUndeadTree(event) {
     const { player } = event;
     const stage = quest.getStage(player);
-    if (stage < STAGE_TREE || stage >= STAGE_NOTES) return;
+    if (stage < STAGE_TREE) return false;
     event.handled = true;
     if (stage >= STAGE_TWIGS && has(player, BLESSED_AXE_ITEM_ID)) {
       if (Math.random() < 0.5) {
-        if (!has(player, UNDEAD_TWIGS_ITEM_ID)) player.getInventory().adds(UNDEAD_TWIGS_ITEM_ID, 1);
-        startTranscript(api, player, UNDEAD_TREE_NPC_ID, PAGE, TREE_SUCCESS_VARIANT);
+        const inventory = player.getInventory();
+        // The success line says a twig was cut, so it plays only when one is given. With a twig held or no
+        // room nothing is cut; neither the Wiki nor a recording gives a line for that, so none is sent.
+        if (!has(player, UNDEAD_TWIGS_ITEM_ID) && inventory.getAddableAmount(new Item(UNDEAD_TWIGS_ITEM_ID, 1)) > 0) {
+          inventory.adds(UNDEAD_TWIGS_ITEM_ID, 1);
+          // Wiki Undead_twigs: "Each twig procured gives 5 Woodcutting experience."
+          player.getSkillManager().addExperiences(Skill.WOODCUTTING, 5);
+          startTranscript(api, player, UNDEAD_TREE_NPC_ID, PAGE, TREE_SUCCESS_VARIANT);
+        }
       } else {
         startTranscript(api, player, UNDEAD_TREE_NPC_ID, PAGE, TREE_FAIL_VARIANT);
       }
@@ -1564,7 +1575,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onNpcInteraction(handleNpcInteraction);
-  api.onNpcInteraction("Undead tree", { Chop: handleChopUndeadTree });
+  api.onNpcInteraction("<col=00ffff>Undead tree</col>", { Chop: handleChopUndeadTree });
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:condition", handleConditionChosen);
   api.onCustomEvent("npc-dialogue:action", handleAction);

@@ -237,6 +237,13 @@ const ATTR_DESTROY_NO_PROMPT = "araxxor:destroy-no-prompt";
 /** Player attribute keys: the kill count and best fight time (ticks), persisted. */
 const ATTR_KILLS = "araxxor:kills";
 const ATTR_BEST_TICKS = "araxxor:best-ticks";
+/**
+ * The noxious halberd's pieces (point, blade, pommel). The Wiki's unique table gives any one of
+ * them at 1/200 and "Players will not receive duplicate pieces until each full set is obtained".
+ */
+const HALBERD_PIECES = Object.freeze([29790, 29792, 29794]);
+/** Player attribute: the pieces received since the last full set, a bitmask in HALBERD_PIECES order. */
+const ATTR_HALBERD_PIECES = "araxxor:halberd-pieces";
 
 const Attack = { MELEE: "melee", RANGED: "ranged", MAGIC: "magic", CLEAVE: "cleave" };
 
@@ -428,6 +435,8 @@ module.exports = {
   ATTR_DESTROY_NO_PROMPT,
   ATTR_KILLS,
   ATTR_BEST_TICKS,
+  HALBERD_PIECES,
+  ATTR_HALBERD_PIECES,
   ENRAGE_MODELS,
   playSound,
   playCaptured,

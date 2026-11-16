@@ -19,7 +19,6 @@ const { CacheDefinitions } = require("../../../src/main/typescript/elvarg/game/c
 const { DialogueChainBuilder } = require("../../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
 const { StatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/StatementDialogue");
 const { ItemStatementDialogue } = require("../../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/ItemStatementDialogue");
-const { ChatType } = require("../../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 const { content, boatType, dockAtGangplank, dockAtBuoy, fade, playSound, spam } = require("./SailingContent.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 const { MODE, openBoatSelection } = require("./BoatSelection.Sailing");
@@ -112,7 +111,6 @@ function playerCapacity(owned) {
 
 /** A message box, with its line in the chat as live sends it (a mesbox message); with `itemId`, the object box. */
 function messageBox(player, text, itemId) {
-  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
   const box = itemId === undefined ? new StatementDialogue(0, text) : new ItemStatementDialogue(0, itemId, text);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(box));
 }

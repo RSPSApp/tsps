@@ -28,6 +28,7 @@ before(async () => {
   handlers = {};
   Obelisks.register({
     core,
+    getTaskManager: () => core.TaskManager,
     persistAttribute() {},
     onObjectInteraction: (name, options) => { handlers[name] = options; },
     onInterfaceActionClick() {},
@@ -166,7 +167,6 @@ test("Set and Teleport to Destination need the hard Wilderness Diary, and a dest
   handlers.Obelisk["Teleport to Destination"]({ player, objectId: LEVEL_13 });
   assert.ok(player.log.includes("message You haven't set a destination yet."));
   assert.equal(T.active.size, 0);
-  assert.equal(handlers.Obelisk.Activate({ player, objectId: 31554 }), false, "the house's obelisk isn't one of these");
   const stray = { getLocation: () => new core.Location(4091, 4312, 0) };
   assert.equal(handlers.Obelisk.Activate({ player, objectId: 14826, object: stray }), false, "the map's stray copy of level 44's stones");
 });

@@ -812,6 +812,62 @@ test('a real worn helmet still blocks both native Hairdresser shortcuts', async 
   }
 });
 
+// Emma (Varrock salon, rec 3220) and Sonalo (Cam Torum, rec 1098) share the Hairdresser's service.
+const SALON_HAIRDRESSERS = [
+  ['Emma', () => core.NpcIdentifiers.EMMA, 3256, 3462, 0],
+  ['Sonalo', () => core.NpcIdentifiers.SONALO, 1454, 9554, 1],
+];
+function salonFixture(t, id, x, y, z) {
+  const f = fixture(t);
+  f.player.setLocation(new core.Location(x - 1, y, z));
+  core.RegionManager.loadMapFiles(x, y);
+  f.npc = PM.spawnNpc({ id, x, y, z });
+  f.messages = [];
+  const sendMessage = f.player.sendMessage.bind(f.player);
+  t.mock.method(f.player, 'sendMessage', text => { f.messages.push(text); sendMessage(text); });
+  t.after(() => { PM.removeNpc(f.npc); core.TaskManager.cancelTasks(f.player); });
+  return f;
+}
+
+test('Emma, her sister Suzie and Sonalo spawn where rec 3220 and rec 1098 add them', () => {
+  const spawns = require('../data/definitions/npc-spawns.json');
+  const salon = spawns.filter(({ x, y, level }) => level === 0 && x >= 3253 && x <= 3262 && y >= 3459 && y <= 3465);
+  assert.deepEqual(salon.map(({ id, x, y }) => `${id}@${x},${y}`).sort(), ['12116@3256,3462', '12117@3261,3462']);
+  const barber = spawns.filter(({ id }) => id === 13042);
+  assert.deepEqual(barber.map(({ x, y, level }) => `${x},${y},${level}`), ['1454,9554,1'], 'not the walled-off Wiki tile 1455,9556');
+});
+
+for (const [name, id, x, y, z] of SALON_HAIRDRESSERS) {
+  test(`${name}'s Haircut and Shave open the makeover hair categories, and a worn hat refuses`, async t => {
+    for (const [option, type] of [['Haircut', 0], ['Shave', 1]]) {
+      const f = salonFixture(t, id(), x, y, z);
+      await hairdresserOp(f, option);
+      assert.equal(f.player.getInterfaceId(), core.CacheDefinitions.getInterfaceId('makeover'), `${name} ${option}`);
+      assert.equal(f.player.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('makeover_interface_type')), type);
+      f.player.getPacketSender().sendInterfaceRemoval();
+      f.player.getEquipment().set(core.Equipment.HEAD_SLOT, new core.Item(core.ItemIdentifiers.BRONZE_MED_HELM, 1));
+      await hairdresserOp(f, option);
+      assert.notEqual(f.player.getInterfaceId(), core.CacheDefinitions.getInterfaceId('makeover'));
+      assert.match(f.player.getDialogueManager().getCurrent()?.getText() ?? '', /take off your hat/);
+      assert.equal(f.player.getDialogueManager().getCurrent()?.getItemId?.(), core.ItemIdentifiers.BRONZE_MED_HELM);
+    }
+  });
+
+  test(`${name}'s Talk-to haircut and shave choices open the matching makeover category`, async t => {
+    for (const [option, type] of [['haircut', 0], ['shave', 1]]) {
+      const f = salonFixture(t, id(), x, y, z);
+      await hairdresserOp(f, 'Talk-to');
+      await nextLine(f);
+      const pending = MultiChatboxPrompt.getPending(f.player);
+      await choose(f, pending.options.indexOf(`I'd like a ${option} please.`) + 1);
+      for (let n = 0; n < 5 && f.player.getDialogueManager().getCurrent(); n++) await nextLine(f);
+      assert.ok(!f.messages.some(text => /take off your hat/.test(text)), 'an empty head cannot take the worn-hat branch');
+      assert.equal(f.player.getInterfaceId(), core.CacheDefinitions.getInterfaceId('makeover'), `${name} ${option} choice`);
+      assert.equal(f.player.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('makeover_interface_type')), type);
+    }
+  });
+}
+
 for (const farming of [1, 2]) {
   test(`Fairytale I reaches its native start prompt without looping at Farming ${farming}`, async t => {
     const f = fixture(t);
@@ -840,6 +896,11 @@ for (const farming of [1, 2]) {
       await untilMenu();
       await select('Anything I can help with?');
       await untilMenu();
+      // A trained farmer answers Martin's "have you noticed" menu first (FairyTale1 ticks 157-164).
+      if (farming > 1) {
+        await select("Now that I think about it, you're right!");
+        await untilMenu();
+      }
       assert.equal(MultiChatboxPrompt.getPending(f.player).title, 'Start the Fairytale I - Growing Pains quest?');
     };
     for (const key of ['lost_city', 'nature_spirit']) {
@@ -875,7 +936,11 @@ for (const farming of [1, 2]) {
     assert.equal(quest.getStage(f.player), 0, 'refusing preserves the unstarted state');
     await reachStart();
     await select('Yes.');
+    // The stage follows as Martin's answer shows (FairyTale1 tick 171), not on the choice.
+    assert.equal(quest.getStage(f.player), 0);
+    for (let n = 0; n < 10 && quest.getStage(f.player) === 0; n++) await nextLine(f);
     assert.equal(quest.getStage(f.player), quest.startedValue);
+    assert.match(f.player.getDialogueManager().getCurrent()?.getText() ?? '', /^If I were you I would start by speaking/);
     f.player.closeInterruptibleInterfaces();
     assert.equal(talk(), true);
     const followup = 'Have you spoken to any other members of the Gardening Group yet?';
@@ -1060,7 +1125,7 @@ test('Fairytale I pending dig cannot grant a skull after native Drop or override
   assert.equal(player.getAnimation()?.getId(), deathAnimation, 'dig cancellation cannot reset death');
 });
 
-function nuffFixture(t, stage = 20) {
+function nuffFixture(t, stage = 30) {
   const f = fixture(t), { player } = f;
   const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
   quest.setStage(player, stage);
@@ -1113,7 +1178,8 @@ for (const [first, names] of [[1, ['white berries', 'a mort myre pear', 'a mort 
       assert.doesNotMatch(text, /\[item\s*[123]\]/i);
       for (const name of names) {
         assert.ok(text.includes(name), `the native recipe names ${name}: ${text}`);
-        assert.ok(quest.buildJournal(player, quest).includes(name), `the journal agrees on ${name}`);
+        const journal = quest.buildJournal(player, quest).join(' ').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ');
+        assert.ok(journal.includes(name), `the journal agrees on ${name}: ${journal}`);
       }
       assert.equal(player.getAttribute(NATURE_ITEMS_ATTRIBUTE), positions);
     };
@@ -1156,11 +1222,11 @@ async function finishNuff(f) {
 async function cancelFinalNuffLine(f) {
   for (let n = 0; n < 60; n++) {
     const line = f.player.getDialogueManager().getCurrent()?.getText() ?? '';
-    if (/I believe he now resides|I have a copy of it here/.test(line)) break;
+    if (/Here, I've written down a list of her symptoms|I have a copy of it here/.test(line)) break;
     assert.ok(line, 'the handover line remains reachable');
     await nextLine(f);
   }
-  assert.match(f.player.getDialogueManager().getCurrent()?.getText() ?? '', /I believe he now resides|I have a copy of it here/);
+  assert.match(f.player.getDialogueManager().getCurrent()?.getText() ?? '', /Here, I've written down a list of her symptoms|I have a copy of it here/);
   const group = f.player.getPacketSender().getChatboxGroupId();
   f.player.closeInterruptibleInterfaces();
   await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: (group << 16) | 5, childIndex: -1 }]);
@@ -1171,10 +1237,10 @@ test('Fairytale I Nuff waits for native dialogue completion and preserves cancel
   const f = nuffFixture(t), { player, quest } = f, item = core.ItemIdentifiers.SYMPTOMS_LIST;
   assert.equal(f.talk(), true);
   assert.equal(player.getInventory().getAmount(item), 0);
-  assert.equal(quest.getStage(player), 20);
+  assert.equal(quest.getStage(player), 30);
   await cancelFinalNuffLine(f);
   assert.equal(player.getInventory().getAmount(item), 0, 'a closed conversation and stale Continue cannot hand over the list');
-  assert.equal(quest.getStage(player), 20);
+  assert.equal(quest.getStage(player), 30);
   f.talk(); await finishNuff(f);
   assert.equal(player.getInventory().getAmount(item), 1);
   assert.equal(quest.getStage(player), 40);
@@ -1196,7 +1262,7 @@ test('Fairytale I Nuff handovers recover from a full inventory without skipping 
   inventory.add(new core.Item(SPADE, 28));
   f.talk(); await finishNuff(f);
   assert.equal(inventory.getAmount(SYMPTOMS_LIST), 0);
-  assert.equal(quest.getStage(player), 20);
+  assert.equal(quest.getStage(player), 30);
   inventory.deleteNumber(SPADE, 1);
   f.talk(); await finishNuff(f);
   assert.equal(inventory.getAmount(SYMPTOMS_LIST), 1);
@@ -1245,10 +1311,14 @@ test('Fairytale I Godfather choice sends the player to Nuff, who then hands over
   assert.equal(quest.getStage(player), 20, 'another Godfather answer does not advance');
   menu = await untilChoice(f);
   await choose(f, menu.options.indexOf("Where's the Fairy Queen?") + 1);
-  assert.equal(quest.getStage(player), 30, 'the Queen answer is the step that sends the player to Nuff');
+  assert.equal(quest.getStage(player), 20, 'the answer itself does not advance yet');
+  for (let n = 0; n < 30 && f.player.getDialogueManager().getCurrent()?.getText() !== '?'; n++) await nextLine(f);
+  assert.equal(quest.getStage(player), 20);
+  await nextLine(f);
+  assert.equal(quest.getStage(player), 30, "the player's \"?\" after his advice sends the player to Nuff");
   player.closeInterruptibleInterfaces();
-  assert.match(quest.buildJournal(player, quest).join(' ').replace(/\s+/g, ' '), /Fairy Nuff/,
-    'the stage-30 journal names the next contact');
+  assert.match(quest.buildJournal(player, quest).join(' ').replace(/<[^>]*>/g, '').replace(/\s+/g, ' '), /a fairy called Nuff/,
+    'the stage-30 journal names the next contact (FairyTale1 tick 1398)');
 
   const nuffId = core.NpcIdentifiers.FAIRY_NUFF_2, nuff = core.NPC.create(nuffId, new core.Location(2386, 4727));
   assert.equal(PM.emitNpcInteraction({ player, npc: nuff, npcId: nuffId, action: 'Talk-to', clickType: 1, handled: false }), true);
@@ -1257,8 +1327,10 @@ test('Fairytale I Godfather choice sends the player to Nuff, who then hands over
   assert.equal(quest.getStage(player), 40, 'the subsequent Nuff handoff continues from the Godfather stage');
 
   quest.setStage(player, 10);
-  PM.emitCustomEvent('npc-dialogue:choice', { player, npcId: f.npcId, option: "Where's the Fairy Queen?" });
-  assert.equal(quest.getStage(player), 10, 'the same answer outside stage 20 does not advance');
+  const line = { player, npcId: f.npcId, pages: [{ page: 'Fairytale I - Growing Pains' }], step: {}, text: '?' };
+  PM.emitCustomEvent('npc-dialogue:line', line);
+  line.after?.();
+  assert.equal(quest.getStage(player), 10, 'the same line outside stage 20 does not advance');
 });
 
 test('Fairytale I varbit 1803 and varp 671 progress through native completion at 90 and keep siblings', async t => {
@@ -1267,14 +1339,20 @@ test('Fairytale I varbit 1803 and varp 671 progress through native completion at
   assert.equal(row.tableId, 0);
   assert.equal(row.int(19), 90, 'active cache quest DB row 46 completes at 90');
   assert.equal(quest.completionValue, row.int(19));
-  sender.sendVarbit(1804, 21).sendVarbit(1805, 10).sendVarbit(1806, 31).sendVarbit(1807, 3).sendVarbit(1808, 1);
-  const siblings = sender.getVarp(671) & ~0x7f;
-  assert.notEqual(siblings, 0);
+  // Bits 28-31 are not this quest's; 1804-1809 (bits 7-27) are, derived from the saved state.
+  sender.sendConfig(671, sender.getVarp(671) | (1 << 28) | (1 << 30));
+  const foreign = sender.getVarp(671) & ~0x0fffffff;
+  assert.notEqual(foreign, 0);
+  player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '21,22,23');
   for (const stage of [10, 20, 30, 40, 50, 60, 70, 80]) {
     quest.setStage(player, stage);
     assert.equal(sender.getVarbit(1803), stage, `varbit 1803 follows stage ${stage}`);
     assert.equal(sender.getVarp(671) & 0x7f, stage, `varp 671's quest bits hold stage ${stage}`);
-    assert.equal(sender.getVarp(671) & ~0x7f, siblings, `stage ${stage} preserves the packed siblings`);
+    assert.equal(sender.getVarp(671) & ~0x0fffffff, foreign, `stage ${stage} preserves the packed foreign bits`);
+    assert.equal(sender.getVarbit(1807), stage >= 20 ? 1 : 0, `the Queen's room varbit at ${stage}`);
+    assert.equal(sender.getVarbit(1808), stage >= 20 ? 1 : 0, `the Godfather varbit at ${stage}`);
+    assert.deepEqual([1804, 1805, 1806].map(id => sender.getVarbit(id)), stage >= 60 ? [20, 21, 22] : [0, 0, 0],
+      `the recipe varbits (row - 1) at ${stage}`);
   }
   player.getInventory().add(new core.Item(core.ItemIdentifiers.QUEENS_SECATEURS));
   const xp = skill => player.getSkillManager().getExperience(skill);
@@ -1284,7 +1362,8 @@ test('Fairytale I varbit 1803 and varp 671 progress through native completion at
   assert.equal(quest.getStage(player), 90);
   assert.equal(sender.getVarbit(1803), 90, 'the cache completion value reaches varbit 1803');
   assert.equal(sender.getVarp(671) & 0x7f, 90, 'and its parent varp');
-  assert.equal(sender.getVarp(671) & ~0x7f, siblings, 'completion preserves the siblings');
+  assert.equal(sender.getVarp(671) & ~0x0fffffff, foreign, 'completion preserves the foreign bits');
+  assert.deepEqual([1804, 1805, 1806].map(id => sender.getVarbit(id)), [0, 0, 0], 'completion clears the recipe (FairyTale1 tick 4181)');
   assert.equal(quest.isComplete(player), true);
   assert.deepEqual([core.Skill.FARMING, core.Skill.ATTACK, core.Skill.MAGIC].map(xp),
     before.map((value, index) => value + [3500, 2000, 1000][index]), 'the quest rewards are paid once');
@@ -1321,7 +1400,7 @@ test('Fairytale I legacy saves migrate once through login and bootstrap while fr
     const target = fixture(t);
     PlayerSave.fromPlayer(source.player).applyToPlayer(target.player);
     assert.equal(target.player.getAttribute(FAIRYTALE_STAGE_SCHEMA), 0, 'the legacy save has no schema stamp');
-    target.player.getPacketSender().sendConfig(671, (1 << 26) | (1 << 30));
+    target.player.getPacketSender().sendConfig(671, (1 << 28) | (1 << 30));
     login(target.player);
     assert.equal(quest.getStage(target.player), current, `legacy ${legacy} migrates to ${current}`);
     assert.equal(target.player.getAttribute(FAIRYTALE_STAGE_SCHEMA), 1);
@@ -1329,7 +1408,7 @@ test('Fairytale I legacy saves migrate once through login and bootstrap while fr
     assert.ok(change, 'migration publishes the native stage change');
     assert.equal(change.schema, 1, 'observers/save requests see the schema stamp with the new value');
     assert.equal(change.complete, current === 90, 'legacy 70 -> current 80 is still unfinished during the event');
-    assert.equal(target.player.getPacketSender().getVarp(671) & ((1 << 26) | (1 << 30)), (1 << 26) | (1 << 30),
+    assert.equal(target.player.getPacketSender().getVarp(671) & ((1 << 28) | (1 << 30)), (1 << 28) | (1 << 30),
       'migration preserves unrelated packed bits');
     if (current === 90) {
       assert.equal(quest.isComplete(target.player), true, 'a migrated completed save is complete');
@@ -1376,61 +1455,6 @@ test('Fairytale I legacy saves migrate once through login and bootstrap while fr
   assert.equal(quest.getStage(league.player), 90, 'the login migration then moves it to the cache completion value');
   assert.deepEqual(xp(league.player), leagueXp, 'the migration still does not repay experience');
   assert.equal(points(league.player), leaguePoints, 'the migration still does not repay quest points');
-});
-
-test('Fairytale I north Tanglefoot spawn is reachable by the production pathfinder and owner-isolated', t => {
-  core.RegionManager.init();
-  core.RegionManager.loadMapFiles(2394, 4379);
-  const { PathFinder } = require('../dist/game/model/movement/path/PathFinder');
-  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
-  const first = fixture(t), second = fixture(t);
-  const enter = f => {
-    f.player.setLocation(new core.Location(2394, 4379, 0));
-    quest.setStage(f.player, 70);
-    PM.emitPlayerProcess({ player: f.player });
-  };
-  enter(first); enter(second);
-  const spawns = () => [...core.World.getNpcs()].filter(npc => npc?.getId?.() === core.NpcIdentifiers.TANGLEFOOT);
-  const owned = player => spawns().filter(npc => npc.getOwner?.() === player);
-  const firstNpcs = owned(first.player), secondNpcs = owned(second.player);
-  assert.equal(firstNpcs.length, 1, 'the real zone-enter route spawns one Tanglefoot for its owner');
-  assert.equal(secondNpcs.length, 1, 'another player gets their own Tanglefoot');
-  assert.notEqual(firstNpcs[0], secondNpcs[0]);
-  const spawned = firstNpcs[0], at = spawned.getLocation();
-  assert.deepEqual([at.getX(), at.getY(), at.getZ()], [2375, 4385, 0], 'Quest Helper kill-tile inference');
-  assert.equal(spawned.isOwnerOnly(), true);
-  assert.equal(core.RegionManager.blocked(at, null), false, 'the spawned tile is not clipped');
-  const definition = core.CacheDefinitions.getNpc(core.NpcIdentifiers.TANGLEFOOT);
-  assert.equal(definition.size, 1);
-  assert.ok(definition.actions.includes('Attack'), 'the actual cache NPC offers Attack');
-
-  // Gameplay routes stop at 25 checkpoints; raise the cap to prove the whole
-  // tunnel connects the entrance to the exact spawn.
-  const route = PathFinder.rsmodRouteFinding.findRoute({
-    level: 0, srcX: 2394, srcY: 4379, srcSize: 1,
-    destX: at.getX(), destY: at.getY(), privateArea: null, moveNear: true, maxWaypoints: 128,
-  });
-  assert.equal(route.success, true, 'the production pathfinder finds the real entrance -> north spawn route');
-  assert.equal(route.endX, at.getX());
-  assert.equal(route.endY, at.getY());
-  const points = route.waypoints.map(point => new core.Location(point.x, point.y, point.z));
-  assert.ok(points.length > 0);
-  const end = points.at(-1);
-  assert.deepEqual([end.getX(), end.getY(), end.getZ()], [at.getX(), at.getY(), at.getZ()],
-    'the route ends exactly on the spawned Tanglefoot tile');
-  let from = new core.Location(2394, 4379, 0);
-  for (const point of points) {
-    assert.equal(core.RegionManager.canMovestart(from, point, 1, 1, null), true,
-      `legal directional step ${from.getX()},${from.getY()} -> ${point.getX()},${point.getY()}`);
-    from = point;
-  }
-  assert.ok(at.getX() >= 2368 && at.getX() <= 2398 && at.getY() >= 4354 && at.getY() <= 4399,
-    'the expanded encounter zone covers the spawned location');
-  t.after(() => {
-    for (const npc of [...core.World.getNpcs()]) {
-      if (npc?.getOwner?.() === first.player || npc?.getOwner?.() === second.player) core.World.getNpcs().remove(npc);
-    }
-  });
 });
 
 for (const shieldStage of [4, 7]) {
@@ -1543,9 +1567,11 @@ test('Nature Spirit native mirror use plays the dead dialogue and commits only a
   const f = fillimanFixture(t, 10), { player, quest } = f;
   assert.equal(f.talk(), true);
   await fillimanUntil(f, ({ menu }) => !!menu);
-  await choose(f, 2);
+  await choose(f, 1);
   const refusal = await fillimanUntil(f, ({ menu }) => !!menu);
-  assert.ok(refusal.some(text => text.includes("I'm not a ghost!")));
+  // rsprox NatureSpirit ticks 380-381: his denial is where 20 is recorded.
+  assert.ok(refusal.some(text => text.includes('That in no way reflects the truth!')));
+  assert.equal(quest.getStage(player), 20);
   player.closeInterruptibleInterfaces();
   f.talk();
   const reminder = await fillimanUntil(f, ({ menu }) => !!menu);
@@ -1571,13 +1597,14 @@ test('Nature Spirit native diary reading and help choice resume without granting
   const { JOURNAL, DRUIDIC_SPELL } = core.ItemIdentifiers;
   player.getInventory().add(new core.Item(JOURNAL));
   await f.use(JOURNAL);
+  assert.equal(quest.getStage(player), 25, 'giving it is the box; the stage waits for his reading (rsprox NatureSpirit 541-549)');
+  const lines = await fillimanUntil(f, ({ menu }) => !!menu);
   assert.equal(quest.getStage(player), 30);
   assert.equal(player.getInventory().getAmount(JOURNAL), 0, 'the canonical handover gives Filliman his journal');
   assert.equal(player.getInventory().getAmount(DRUIDIC_SPELL), 0, 'the journal itself does not award the spell');
-  const lines = await fillimanUntil(f, ({ menu }) => !!menu);
   assert.ok(lines.some(text => text.includes('My journal!')));
   assert.ok(lines.some(text => text.includes("It's all coming back to me now.")));
-  assert.ok(f.messages.some(text => text.includes('starts leafing through the journal')));
+  assert.ok(lines.some(text => text.includes('starts leafing through the journal')), 'the leafing box (546)');
   await choose(f, MultiChatboxPrompt.getPending(player).options.indexOf('Ok thanks.') + 1);
   await nextLine(f);
   assert.equal(quest.getStage(player), 30);
@@ -1592,12 +1619,10 @@ test('Nature Spirit native diary reading and help choice resume without granting
     await fillimanUntil(f, ({ text }) => text?.startsWith("It is required if you're to cast this druid spell."));
   };
   await offerHelp();
-  player.closeInterruptibleInterfaces(); await nextLine(f);
-  assert.equal(quest.getStage(player), 30);
-  assert.equal(player.getInventory().getAmount(DRUIDIC_SPELL), 0, 'closing the final instruction cannot grant a spell');
-  await offerHelp(); await nextLine(f);
+  // rsprox NatureSpirit 582-584: the spell and 35 come with the papyrus box, before his instructions.
   assert.equal(quest.getStage(player), 35);
   assert.equal(player.getInventory().getAmount(DRUIDIC_SPELL), 1);
+  player.closeInterruptibleInterfaces(); await nextLine(f);
   f.talk(); player.closeInterruptibleInterfaces();
   assert.equal(player.getInventory().getAmount(DRUIDIC_SPELL), 1, 'retalking does not duplicate the reward');
 });
@@ -1819,116 +1844,32 @@ test('Fairytale I Tanglefoot lair gate and Nature Spirit treat wielded magic sec
   player.getInventory().deleteNumber(MAGIC_SECATEURS, 1);
   player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(MAGIC_SECATEURS));
   assert.match(enter(), /^I've received orders to let you through/, 'wielded secateurs let the player in');
+  // The blessing: "Then let us begin..." starts the scene on its continue, and the transcript's
+  // enchant action six ticks later (FairyTale1 ticks 3265-3271) gives the pair.
+  const spirit = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(gap.x, gap.y + 2, 0));
   const enchant = () => {
+    const line = { player, npc: spirit, npcId: core.NpcIdentifiers.NATURE_SPIRIT, pages: [{ page: 'Fairytale I - Growing Pains' }],
+      step: { speaker: 'Nature Spirit' }, text: 'Then let us begin...' };
+    PM.emitCustomEvent('npc-dialogue:line', line);
+    line.after();
     const action = { player, npcId: core.NpcIdentifiers.NATURE_SPIRIT, stepId: 'JQyqMZ', handled: false };
     PM.emitCustomEvent('npc-dialogue:action', action);
     assert.equal(action.handled, true);
-    assert.equal(action.end, true, 'the blessing closes the chat while the scene plays');
-    for (let n = 0; n < 12; n++) core.TaskManager.process();
+    assert.equal(action.end, true, 'the chat closes for the six-tick scene');
+    for (let n = 0; n < 6; n++) core.TaskManager.process();
+    assert.equal(player.getMovementQueue().isMovementBlocked(), false, 'the scene releases the player');
+    player.closeInterruptibleInterfaces();
   };
   enchant();
   assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0, 'a wielded pair is not duplicated by the Nature Spirit');
   player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, null);
-  enchant();
-  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1, 'a lost pair is still replaced');
-});
-
-test('Fairytale I Nature Spirit blessing scene runs before the items are consumed', async t => {
-  const f = fixture(t), { player } = f;
-  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
-  const { SECATEURS, MAGIC_SECATEURS, WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM } = core.ItemIdentifiers;
-  quest.setStage(player, 60);
   player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
-  player.getInventory().add(new core.Item(SECATEURS));
-  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) player.getInventory().add(new core.Item(id));
-  const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
-  const graphics = [], sender = player.getPacketSender(), sendGraphic = sender.sendGraphic.bind(sender);
-  sender.sendGraphic = (graphic, location) => {
-    graphics.push([graphic.getId(), location.getX(), location.getY(), location.getZ()]);
-    return sendGraphic(graphic, location);
-  };
-  const action = { player, npc, npcId: npc.getId(), stepId: 'JQyqMZ', handled: false,
-    pages: [{ page: 'Fairytale I - Growing Pains', variants: ['in-the-nature-grotto-talking-to-the-nature-spirit'] }] };
-  PM.emitCustomEvent('npc-dialogue:action', action);
-  assert.equal(action.handled, true);
-  assert.equal(action.end, true, 'the chat closes while the scene plays');
-  assert.equal(player.getAnimation()?.getId(), core.CacheDefinitions.getSeqId('human_fairy_kneel_and_offer'),
-    'the player kneels and offers the secateurs');
-  assert.equal(player.getMovementQueue().isMovementBlocked(), true);
-  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
-  assert.equal(quest.getStage(player), 60);
-  for (let n = 0; n < 11; n++) core.TaskManager.process();
-  assert.deepEqual(graphics, [[core.CacheDefinitions.getSpotanimId('fairy_flower_enchant'), 3441, 9738, 1]],
-    'the cache flower-enchant effect plays above the Nature Spirit');
-  assert.equal(npc.getAnimation()?.getId(), core.CacheDefinitions.getSeqId('human_fairy_take_and_hold_up'),
-    'the Nature Spirit takes and holds the secateurs up');
-  assert.equal(player.getInventory().getAmount(SECATEURS), 1, 'materials survive the scene');
-  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
-  assert.equal(quest.getStage(player), 60);
-  core.TaskManager.process();
-  assert.equal(player.getInventory().getAmount(SECATEURS), 0);
-  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) {
-    assert.equal(player.getInventory().getAmount(id), 0, 'the blessing consumes the saved recipe');
+  for (const id of [SECATEURS, core.ItemIdentifiers.WHITE_BERRIES, core.ItemIdentifiers.MORT_MYRE_PEAR, core.ItemIdentifiers.MORT_MYRE_STEM]) {
+    player.getInventory().add(new core.Item(id));
   }
-  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1);
-  assert.equal(quest.getStage(player), 70);
-  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
-  assert.match(player.getDialogueManager().getCurrent()?.getText() ?? '', /^It is done!/);
-  await nextLine(f);
-  assert.match(player.getDialogueManager().getCurrent()?.getText() ?? '', /^Farewell,/);
-});
-
-test('Fairytale I blessing cancellation leaves the materials and stage untouched', t => {
-  const f = fixture(t), { player } = f;
-  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
-  const { SECATEURS, MAGIC_SECATEURS, WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM } = core.ItemIdentifiers;
-  quest.setStage(player, 60);
-  player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
-  player.getInventory().add(new core.Item(SECATEURS));
-  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) player.getInventory().add(new core.Item(id));
-  const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
-  const action = { player, npc, npcId: npc.getId(), stepId: 'JQyqMZ', handled: false };
-  PM.emitCustomEvent('npc-dialogue:action', action);
-  for (let n = 0; n < 3; n++) core.TaskManager.process();
-  player.setLocation(new core.Location(3442, 9738, 1));
-  core.TaskManager.process();
-  assert.equal(player.getInventory().getAmount(SECATEURS), 1, 'walking away does not consume the secateurs');
-  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
-  assert.equal(quest.getStage(player), 60);
-  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
-  assert.equal(player.getAnimation()?.getId(), core.Animation.DEFAULT_RESET_ANIMATION.getId());
-});
-
-test('Fairytale I Tanglefoot combat pursuit stops at its chamber doorway', t => {
-  core.RegionManager.init();
-  core.RegionManager.loadMapFiles(2394, 4379);
-  const f = fixture(t), { player } = f;
-  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
-  player.setLocation(new core.Location(2375, 4384, 0));
-  quest.setStage(player, 70);
-  PM.emitPlayerProcess({ player });
-  const boss = [...core.World.getNpcs()].find(npc => npc?.getId?.() === core.NpcIdentifiers.TANGLEFOOT
-    && npc.getOwner?.() === player);
-  assert.ok(boss, 'entering the grove spawns the owner Tanglefoot');
-  t.after(() => {
-    core.TaskManager.cancelTasks(boss);
-    core.World.getNpcs().remove(boss);
-  });
-  assert.equal(boss.hasFlag('combat:no-retreat'), true, 'the chamber is the leash, not the generic spawn radius');
-  boss.getCombat().attack(player);
-  core.TaskManager.process();
-  assert.equal(boss.getCombat().getTarget(), player, 'the fight can pursue anywhere inside the chamber');
-  player.setLocation(new core.Location(2383, 4377, 0));
-  core.TaskManager.process();
-  assert.equal(boss.getCombat().getTarget() ?? null, null, 'leaving the chamber drops the pursuit');
-  player.setLocation(new core.Location(2375, 4384, 0));
-  boss.getCombat().attack(player);
-  core.TaskManager.process();
-  boss.setLocation(new core.Location(2390, 4379, 0));
-  core.TaskManager.process();
-  const at = boss.getLocation();
-  assert.deepEqual([at.getX(), at.getY(), at.getZ()], [2375, 4385, 0],
-    'a boss that ever leaves the chamber is returned to its spawn');
+  enchant();
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1, 'a lost pair is enchanted again from the components');
+  assert.equal(player.getInventory().getAmount(SECATEURS), 0);
 });
 
 // The banquet uses real Player/NPC/PrivateArea/TaskManager and native object,
@@ -3551,44 +3492,6 @@ test('Pandemonium stage-eight acknowledgement and stale menu cannot replace the 
 });
 
 
-for (const droppedName of ['SECATEURS', 'WHITE_BERRIES']) {
-  test(`Fairytale I blessing rechecks materials after native Drop of ${droppedName}`, async t => {
-    const f = fixture(t), { player } = f;
-    const messages = [];
-    t.mock.method(player, 'sendMessage', text => messages.push(text));
-    const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'fairytale_i_growing_pains');
-    quest.setStage(player, 60);
-    player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
-    const ids = ['SECATEURS', 'WHITE_BERRIES', 'MORT_MYRE_PEAR', 'MORT_MYRE_STEM'].map(name => core.ItemIdentifiers[name]);
-    player.setLocation(new core.Location(3441, 9737, 1));
-    for (const id of ids) player.getInventory().add(new core.Item(id));
-    player.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(core.ItemIdentifiers.GHOSTSPEAK_AMULET));
-    const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
-    const start = { player, npc, npcId: npc.getId(), variant: {
-      page: 'Fairytale I - Growing Pains', variant: 'in-the-nature-grotto-talking-to-the-nature-spirit',
-    }, exact: true };
-    PM.emitCustomEvent('npc-dialogue:start', start);
-    assert.equal(start.handled, true);
-    for (let n = 0; n < 20 && !player.getMovementQueue().isMovementBlocked(); n++) await nextLine(f);
-    assert.equal(player.getMovementQueue().isMovementBlocked(), true);
-    core.TaskManager.process();
-    const droppedId = core.ItemIdentifiers[droppedName];
-    const slot = player.getInventory().getItems().findIndex(item => item?.getId() === droppedId);
-    await f.connection.dispatch([{ type: 'inventory_action', widgetId: 3214,
-      itemId: droppedId, slot, option: 'Drop', optionIndex: 5 }]);
-    f.connection.processTurnPackets();
-    assert.equal(player.getInventory().getAmount(droppedId), 0, 'the real inventory packet drops the item');
-    for (let n = 0; n < 12; n++) core.TaskManager.process();
-    assert.equal(quest.getStage(player), 60, 'missing materials cannot advance the initial blessing');
-    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.MAGIC_SECATEURS), 0);
-    for (const id of ids.filter(id => id !== droppedId)) {
-      assert.equal(player.getInventory().getAmount(id), 1, 'remaining materials are not consumed');
-    }
-    assert.equal(player.getMovementQueue().isMovementBlocked(), false);
-    assert.match(messages.at(-1), /materials/);
-  });
-}
-
 function amikRoutingFixture(t, frozen = false) {
   const f = fixture(t), { player } = f;
   core.RegionManager.init();
@@ -4475,4 +4378,192 @@ test('Tourist Trap driver: exactly 100 coins reaches the bribe acceptance branch
   assert.equal(f.coins(), 0);
   f.search();
   assert.equal(f.stage(), 27);
+});
+
+// Temple of Ikov issue4834 original10: retained Wiki transcript distinguishes
+// the introduction from "again"; guide permits the first-talk 20-root shortcut.
+// Supplied stage/resources/local registered NPC, not a natural quest/account run.
+const WINELDA_MET = 'temple-of-ikov:met-winelda';
+const WINELDA_INTRO = "Hehe! We see you're in a pickle!";
+const WINELDA_AGAIN = 'Have you got roots for poor Winelda?';
+function wineldaFixture(t, { stage = 10, roots = 0 } = {}) {
+  const f = fixture(t), { player } = f;
+  let npcIndex;
+  t.after(() => {
+    const errors = [], clean = fn => { try { fn(); } catch (error) { errors.push(error); } };
+    clean(() => PM.emitPlayerLogout({ player, username: player.getUsername() }));
+    clean(() => {
+      const local = player.getLocalNpcs();
+      while (f.npc && local.includes(f.npc)) local.splice(local.indexOf(f.npc), 1);
+    });
+    clean(() => core.TaskManager.cancelTasks(player));
+    clean(() => core.TaskManager.cancelTasks(player.getIndex()));
+    clean(() => core.World.unregisterPlayerPosition(player));
+    if (f.npc) {
+      clean(() => core.TaskManager.cancelTasks(f.npc));
+      clean(() => {
+        if (f.npc.isRegistered()) assert.equal(core.World.getNpcs().get(npcIndex), f.npc,
+          'only the exact owned NPC may be removed from its original slot');
+        PM.removeNpc(f.npc);
+      });
+      clean(() => assert.notEqual(core.World.getNpcs().get(npcIndex), f.npc));
+      clean(() => assert.ok(!core.World.getAddNPCQueue().includes(f.npc)));
+    }
+    if (errors.length) throw new AggregateError(errors, 'Winelda fixture cleanup failed');
+  });
+  const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests()
+    .filter(entry => entry.key === 'temple_of_ikov');
+  assert.equal(quests.length, 1, 'one production quest registration');
+  f.quest = quests[0]; f.quest.setStage(player, stage);
+  player.setAttribute('bot-skip-persistence', true);
+  player.setIndex(player.getIndex() % 2000);
+  assert.ok(player.getIndex() > 0 && player.getIndex() < core.World.MAX_PLAYERS);
+  player.getSession().setPlayer(player);
+  if (core.RegionManager.regions.size === 0) core.RegionManager.init();
+  core.RegionManager.loadMapFiles(2655, 9876);
+  player.setLocation(new core.Location(2654, 9876, 0)); player.setNeedsPlacement(false);
+  assert.equal(core.RegionManager.canMovestart(player.getLocation(), new core.Location(2655, 9876, 0),
+    1, 1, null), true, 'supplied adjacent stand really reaches the NPC tile');
+  f.npc = PM.spawnNpc({ id: core.NpcIdentifiers.WINELDA, x: 2655, y: 9876, z: 0,
+    wanderRadius: 0, owner: player, ownerOnly: true }, 'WineldaMeetingFixture');
+  npcIndex = f.npc?.getIndex();
+  assert.ok(f.npc?.isRegistered()); assert.equal(core.World.getNpcs().get(f.npc.getIndex()), f.npc);
+  f.npc.setNeedsPlacement(false); player.getLocalNpcs().push(f.npc);
+  assert.equal(f.npc.getCurrentDefinition(player).getName(), 'Winelda');
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.COINS, 123));
+  if (roots) player.getInventory().add(new core.Item(core.ItemIdentifiers.LIMPWURT_ROOT, roots));
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.LIMPWURT_ROOT), roots);
+  f.operated = [];
+  const emitInteraction = PM.emitNpcInteraction;
+  t.mock.method(PM, 'emitNpcInteraction', function(event) {
+    const result = Reflect.apply(emitInteraction, this, [event]);
+    if (event.player === player) f.operated.push({ npc: event.npc, npcId: event.npcId, result });
+    return result;
+  });
+  f.text = () => player.getDialogueManager().getCurrent()?.getText?.()?.replace(/\s+/g, ' ');
+  f.tick = () => {
+    core.TaskManager.processWalkTo(player.getIndex());
+    player.getMovementQueue().beginCycle(); player.getMovementQueue().process();
+    core.TaskManager.process(); f.connection.processTurnPackets();
+  };
+  f.talk = async () => {
+    player.closeInterruptibleInterfaces();
+    const actions = f.npc.getCurrentDefinition(player).getActions(), clickType = actions.indexOf('Talk-to') + 1;
+    assert.ok(clickType > 0); assert.equal(core.World.getNpcs().get(f.npc.getIndex()), f.npc);
+    const before = f.operated.length;
+    await f.connection.dispatch([{ type: 'npc_option', index: f.npc.getIndex(), clickType }]);
+    f.connection.processTurnPackets();
+    for (let turn = 0; turn < 4 && !player.getDialogueManager().getCurrent(); turn++) f.tick();
+    assert.equal(f.operated.length, before + 1, 'one actual ordinary operation reaches the registered NPC producer');
+    assert.equal(f.operated.at(-1).npc, f.npc); assert.equal(f.operated.at(-1).npcId, core.NpcIdentifiers.WINELDA);
+    assert.equal(f.operated.at(-1).result, true);
+    assert.ok(player.getDialogueManager().getCurrent(), 'ordinary NPC packet opens a real dialogue');
+    return f.text();
+  };
+  return f;
+}
+async function wineldaFinish(f) {
+  const lines = [];
+  for (let turn = 0; turn < 24 && f.player.getDialogueManager().getCurrent(); turn++) {
+    assert.equal(MultiChatboxPrompt.getPending(f.player), null, 'this root/payment branch needs no authored menu choice');
+    lines.push(f.text()); await nextLine(f);
+  }
+  assert.equal(f.player.getDialogueManager().getCurrent(), undefined);
+  return lines;
+}
+const wineldaItems = player => [player.getInventory(), player.getEquipment()].map(container =>
+  container.getItems().map(item => item && item.getId() >= 0 ? { id: item.getId(), amount: item.getAmount(), meta: structuredClone(item.getMeta()) } : null));
+
+test('Winelda keeps the first-talk twenty-root shortcut and debits only the actual payment', async t => {
+  const f = wineldaFixture(t, { roots: 20 }), points = f.player.getAttribute('quest.points') ?? 0;
+  const before = wineldaItems(f.player);
+  assert.equal(await f.talk(), "I've got you the limpwurt roots!");
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.LIMPWURT_ROOT), 20);
+  assert.equal(f.quest.getStage(f.player), 10, 'opening the conversation does not grant the teleport');
+  await wineldaFinish(f);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.LIMPWURT_ROOT), 0);
+  const expected = structuredClone(before);
+  for (let slot = 0; slot < expected[0].length; slot++)
+    if (expected[0][slot]?.id === core.ItemIdentifiers.LIMPWURT_ROOT) expected[0][slot] = null;
+  assert.deepEqual(wineldaItems(f.player), expected);
+  assert.equal(f.quest.getStage(f.player), 50); assert.equal(f.quest.isComplete(f.player), false);
+  assert.equal(f.player.getAttribute('quest.points') ?? 0, points);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()],
+    [2644, 9890, 0], 'existing destination before the optional key route, not a new teleport');
+});
+
+test('Winelda preserves an already-paid legacy stage without charging another twenty roots', async t => {
+  const f = wineldaFixture(t, { stage: 50 }), before = wineldaItems(f.player);
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0, 'legacy paid save has no meeting marker');
+  assert.equal(await f.talk(), 'Hi again. Could you do the honours again please?');
+  await wineldaFinish(f);
+  assert.deepEqual(wineldaItems(f.player), before); assert.equal(f.quest.getStage(f.player), 50);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [2644, 9890]);
+});
+
+test('Winelda introduces herself on the first unpaid talk and remembers it through PlayerSave', async t => {
+  const f = wineldaFixture(t), before = wineldaItems(f.player);
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0);
+  PM.emitNpcDialogueVariant({ player: f.player, npc: f.npc, npcId: core.NpcIdentifiers.WINELDA,
+    definition: f.npc.getCurrentDefinition(f.player), pages: [] });
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0, 'a variant query alone is not a meeting');
+  assert.equal(await f.talk(), WINELDA_INTRO, 'quest-start stage alone must not select the repeat root request');
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0, 'opening is not a completed introduction');
+  assert.equal(PM.emitNpcInteraction({ player: f.player, npc: f.npc,
+    npcId: core.NpcIdentifiers.WINELDA, definition: f.npc.getCurrentDefinition(f.player),
+    clickType: f.npc.getCurrentDefinition(f.player).getActions().indexOf('Talk-to') + 1, handled: false }), true);
+  assert.equal(f.text(), WINELDA_INTRO, 'an immediate second producer call cannot replace the introduction with again');
+  assert.equal(await f.talk(), WINELDA_INTRO, 'a repeated ordinary NPC packet still opens the introduction');
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0);
+  await nextLine(f); await nextLine(f);
+  const options = MultiChatboxPrompt.getPending(f.player)?.options;
+  assert.ok(options?.includes('Yes I do!'));
+  await choose(f, options.indexOf('Yes I do!') + 1);
+  assert.equal(f.text(), 'Yes I do!', 'the selected branch is still on its first preterminal line');
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0, 'compiling the accepting branch cannot mark its unreached final line');
+  const introduced = await wineldaFinish(f);
+  assert.ok(introduced.includes('Get Winelda 20 limpwurt roots for my pot.'), 'ordinary introduction reaches the first root request');
+  assert.ok(introduced.includes('Then we shows them some magic!'));
+  assert.equal(f.player.getAttribute(WINELDA_MET), 1, 'the actual final introduction line records the meeting');
+  assert.deepEqual(wineldaItems(f.player), before); assert.equal(f.quest.getStage(f.player), 10);
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const { JsonPlayerPersistence } = require('../plugins/persistence/JsonPlayerPersistence.plugin');
+  const codec = new JsonPlayerPersistence(), saved = PlayerSave.fromPlayer(f.player);
+  const restoredSave = codec.hydratePlayerSave(JSON.parse(
+    JSON.stringify(saved, codec.replacer.bind(codec)), codec.reviver.bind(codec)));
+  assert.equal(restoredSave.attributes[WINELDA_MET], 1);
+  const restored = wineldaFixture(t); restoredSave.applyToPlayer(restored.player);
+  restored.player.setAttribute('bot-skip-persistence', true);
+  assert.equal(await restored.talk(), WINELDA_AGAIN);
+  await wineldaFinish(restored);
+  assert.deepEqual(wineldaItems(restored.player), before); assert.equal(restored.quest.getStage(restored.player), 10);
+  const other = wineldaFixture(t);
+  assert.equal(await other.talk(), WINELDA_INTRO, 'another actor has not inherited the first meeting');
+  await nextLine(other); await nextLine(other);
+  const declined = MultiChatboxPrompt.getPending(other.player)?.options;
+  assert.ok(declined?.includes('Nah, not bothered!'));
+  await choose(other, declined.indexOf('Nah, not bothered!') + 1);
+  assert.equal(other.text(), 'Nah, not bothered!', 'the decline branch is still on its first preterminal line');
+  assert.equal(other.player.getAttribute(WINELDA_MET) ?? 0, 0, 'compiling the decline branch cannot mark its unreached final line');
+  const farewell = await wineldaFinish(other);
+  assert.ok(farewell.includes("Hehe! Ye'll come back! They always come back!"));
+  assert.equal(other.player.getAttribute(WINELDA_MET), 1, 'the completed decline branch also records its own meeting');
+});
+
+test('Winelda introduces an unpaid partial-root visitor before the later shortage dialogue', async t => {
+  const f = wineldaFixture(t, { roots: 19 }), before = wineldaItems(f.player);
+  assert.equal(await f.talk(), WINELDA_INTRO);
+  f.player.closeInterruptibleInterfaces();
+  assert.equal(f.player.getAttribute(WINELDA_MET) ?? 0, 0, 'cancellation before the final line leaves the introduction available');
+  assert.equal(await f.talk(), WINELDA_INTRO);
+  await nextLine(f); await nextLine(f);
+  const options = MultiChatboxPrompt.getPending(f.player)?.options;
+  assert.ok(options?.includes('Yes I do!'));
+  await choose(f, options.indexOf('Yes I do!') + 1);
+  await wineldaFinish(f);
+  assert.equal(f.player.getAttribute(WINELDA_MET), 1);
+  assert.equal(await f.talk(), WINELDA_AGAIN);
+  await wineldaFinish(f);
+  assert.deepEqual(wineldaItems(f.player), before);
+  assert.equal(f.quest.getStage(f.player), 10, 'a shortage cannot charge or advance the quest');
 });

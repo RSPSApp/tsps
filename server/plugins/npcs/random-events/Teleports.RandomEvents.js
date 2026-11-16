@@ -156,7 +156,12 @@ function replaceObject(object, newId) {
   return replacement;
 }
 
-/** Items the player owns, counting inventory, equipment and bank like OSRS event checks. */
+/**
+ * Items the player owns, counting inventory, equipment, bank and the house's costume room like
+ * OSRS event checks. Wiki (Camouflage outfit): the camo top comes first "If players do not have
+ * any pieces stored in a bank, in their player-owned house, or inventory"; Wiki (Drill Demon):
+ * an Ultimate Ironman carries the pieces or stores them "inside their fancy dress box".
+ */
 function owns(player, itemId) {
   if (player.getInventory().containsNumber(itemId)) return true;
   const equipment = player.getEquipment?.();
@@ -165,7 +170,10 @@ function owns(player, itemId) {
     const bank = player.getBank?.(tab);
     if (bank?.containsNumber?.(itemId)) return true;
   }
-  return false;
+  // "construction:costume-retrieve" in inspect mode counts what the house's costume furniture holds.
+  const stored = { player, itemIds: [itemId], mode: "inspect", count: 0 };
+  api?.emitCustomEvent?.("construction:costume-retrieve", stored);
+  return stored.count > 0;
 }
 
 /** Closes the side tabs live closes for a stay in an event room (rsprox 1855, 1104, 1764, 1846, 1098). */

@@ -7,6 +7,7 @@ Server.installProductionPathResolver();
 
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager } = require('../dist/plugins/PluginManager');
+const { Dialogue } = require('../dist/game/model/dialogues/entries/Dialogue');
 const Shared = require('../plugins/minigames/mixology/Shared.Mixology');
 const Orders = require('../plugins/minigames/mixology/Orders.Mixology');
 const Stations = require('../plugins/minigames/mixology/Stations.Mixology');
@@ -166,9 +167,10 @@ test('conveyor: an unordered hand-in plays only the deposit sound', t => {
 test('every lab message box also writes its text to chat, line breaks as spaces', () => {
   const { ChatType } = PluginManager.getCoreApi();
   const chat = [];
+  // Each box logs its own chat line as it opens, as the real one does.
   const player = {
     getPacketSender: () => ({ sendTypedMessage: (type, text) => chat.push([type, text]) }),
-    getDialogueManager: () => ({ startDialogues() {} }),
+    getDialogueManager: () => ({ startDialogues(chain) { for (const d of chain.getDialogues().values()) if (d.getText) Dialogue.sendBoxChatLine(player, d.getText()); } }),
   };
   Shared.statement(player, "You don't currently have enough reagents to mix that potion. You<br>are missing the following:<br>30 Aga");
   Shared.itemStatement(player, Shared.ITEM.LAB_NOTES, 'You take a set of lab notes from the bookshelf.');

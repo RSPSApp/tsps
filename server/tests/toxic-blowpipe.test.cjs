@@ -266,12 +266,15 @@ test("only the pipe's cache options are hooked, so right-click Wield cannot unlo
   assert.deepEqual([...hooks.actionsByItem.keys()].sort(), [
     "Blazing blowpipe",
     "Blazing blowpipe (empty)",
+    "Drygore blowpipe",
     "Toxic blowpipe",
     "Toxic blowpipe (empty)",
   ]);
   for (const [name, actions] of hooks.actionsByItem) {
     // The empty toxic pipe's cache options are Dismantle and Drop; the Blazing one's Dismantle is the kit's.
-    const expected = name === "Toxic blowpipe (empty)" ? ["Check", "Dismantle", "Uncharge", "Unload"] : ["Check", "Uncharge", "Unload"];
+    // The Drygore blowpipe holds no scales: its cache options are Check and Unload.
+    const expected = name === "Toxic blowpipe (empty)" ? ["Check", "Dismantle", "Uncharge", "Unload"]
+      : name === "Drygore blowpipe" ? ["Check", "Unload"] : ["Check", "Uncharge", "Unload"];
     assert.deepEqual(Object.keys(actions).sort(), expected);
   }
   assert.equal(hooks.buttonId, 584 << 16);

@@ -16,10 +16,12 @@ The plugin is `server/plugins/skills/Slayer.plugin.js`; its units are in
 | `Choice.Slayer.js` | Mortimer's task choice |
 | `Offer.Slayer.js` | A choice of tasks with a typed kill count, where content offers one (`slayer:task-offer`) |
 | `Combat.Slayer.js` | The Slayer level needed to attack |
-| `Checks.Slayer.js` | The enchanted gem's and slayer ring's Check |
+| `Checks.Slayer.js` | The enchanted (and eternal) gem's and slayer ring's Check |
+| `Helper.Slayer.js` | The Slayer helper overlay: opened by the gem's Check, an assignment or a task kill |
 | `Rewards.Slayer.js` | The Slayer Rewards interface |
 | `Equipment.Slayer.js` | Protective gear; kurask and turoth weaknesses |
 | `CaveHorror.Slayer.js` | Cave horrors' scream and magical melee |
+| `WallBeast.Slayer.js` | Wall beasts' grab, the helmet repelling it, and the beast going back into the wall |
 | `SlaughterBracelet.Slayer.js` | Bracelet of slaughter effects, shared charges, Check and Break |
 | `ExpeditiousBracelet.Slayer.js` | Expeditious bracelet: double kill credit, shared charges, Check and Break |
 | `Finishers.Slayer.js` | Rock hammer, bag of salt, ice cooler, fungicide spray |
@@ -54,6 +56,10 @@ The plugin is `server/plugins/skills/Slayer.plugin.js`; its units are in
   Master), the streak multipliers, the NPCs of the Boss task's bosses, and the sub-tasks whose
   monsters carry their parent's task id (fever spiders, metal dragons, araxytes), and the quests
   each task needs (Wiki, Slayer task).
+- **Diary points:** a master's `diaryPoints` replace its points per task once that diary tier is
+  complete (asked with `diary:is-complete`): Nieve and Steve give 15 with the elite Western
+  Provinces Diary, Konar 20 with the elite Kourend & Kebos Diary. The streak milestones multiply
+  the raised points (Wiki, Slayer reward point).
 - **`slayer-areas.json`:** boxes around Konar's areas. A test checks that every Konar task has
   spawns inside each of its areas.
 - **`slayer-gear.json`, `slayer-finishers.json`, `slayer-superiors.json`:** protective gear,
@@ -69,6 +75,8 @@ The plugin is `server/plugins/skills/Slayer.plugin.js`; its units are in
   unlock's bit. The unlock varbits (`slayer_helm_unlocked`, ...) sit on those bits.
 - **Blocks:** varbits `slayer_blocked_<master>_1..6` and `_diary`.
 - **Combat checks:** varbit `combat_level_reqs_disabled`.
+- **Slayer helper:** varbit `current_helper` (3 while it shows; not saved) and the Settings toggle
+  `slayer_helper_disabled`.
 - **Mortimer:** varbits `slayer_modifier_id`, `_value` and `_negative` (the task's modifier),
   `slayer_choose_task_1..3` with `_boss_id`, `_modifier_id`, `_modifier_value` and
   `_modifier_negative`, `slayer_choose_rolled_master`, `mortimer_introduction`; varp
@@ -179,6 +187,45 @@ Sources: Wiki [Cave horror](https://oldschool.runescape.wiki/w/Cave_horror),
   Protect from Melee blocks them (Wiki: Magical melee).
 - **Not built:** the Wiki says the scream also hits players standing beside the horror who are not
   already in combat with it; no capture shows it. Cave abominations are not covered.
+
+### Wall beasts
+
+Sources: Wiki [Wall beast](https://oldschool.runescape.wiki/w/Wall_beast); rsprox captures 1000134
+(an unprotected grab at tick 813, then a repel at 840), 1000140 (a repel at tick 410 and the fight),
+1001671 (a repel at 6670) and 1001932 (a repel at 2391 while running). `WallBeast.Slayer.js`.
+
+The seven holes in the Lumbridge Swamp Caves (`swamp_wallbeast`, from the spawns) face south (the
+captures show `spawnangle=south` at five of them), so the tile below each is its front.
+
+- **Stopping in front:** a player who ends a tick on a hole's front tile is held and faces the hole
+  on the next tick, and the hand comes out the tick after that (recordings 1000134 and 1000140:
+  `face_angle 1024` one tick, the grab or repel the next; 1001932: the `busy` varbit for that
+  tick). Running over the tile without ending a tick on it is the Wiki's run trick and does nothing.
+- **No spiny helmet or Slayer helmet** (`slayer-gear.json`'s `grab` row; any Slayer helmet
+  recolour counts): the game message "A giant hand appears and grabs your head!", an in-place
+  exact move (delay2 5, facing north), the player's `human_wall_beast_specialattack_start` (1809)
+  and the hole's `wall_beast_specialattack_start` (1806) with sound 893; the next tick the
+  `_ready` pair (1810, 1807); 9 ticks after the grab the `_end` pair (1811, 1808), the hit and the
+  player is let go (recording 1000134: 813 to 822, a 15). The Wiki gives the grab a max hit of 18;
+  the roll between 0 and 18 is ours. The hole never becomes attackable.
+- **With the helmet:** the spam message "Your helmet repels the wall beast!", the same exact move,
+  `wall_beast_specialattack_fail` (1805), sound `wall_beast_foiled` (895), and the hole turns into
+  `swamp_wallbeast_combat` (Wall beast, level 49), which attacks the player. The player is not held
+  any longer: in recording 1001932 the run carries on the next tick.
+- **Back into the wall:** a beast that no player is attacking (from its front tile or from range;
+  recording 1000140's fight is a crossbow one) for 18 ticks plays
+  `wall_beast_specialattack_disappear` (1801) and is a hole again, healed (recordings 1001932:
+  2391 to 2409; 1000134: 840 to 858 and 865 to 883). It never leaves its wall. Anyone still
+  targeting it then stops: a hole has no Attack option.
+- **Leaving mid-grab:** a held player who dies or is moved off the tile (a logout, a respawn) is
+  let go without the hit, and the hole rests as after a grab. Ours: no capture shows it.
+- **Its normal attacks** are ordinary: a player who took the helmet off mid-fight is not punished
+  (Wiki: "Once it has started attacking normally, it can no longer grab the player's head,
+  allowing a black mask to be used").
+- **Not built:** the `level_change` (combat level 49) update the transformation sends; the Wiki's
+  "killing one wall beast will respawn the others"; the 5-tick wait before the second grab in
+  recording 1000134 (the player stood in front from tick 835, repelled at 840), which no source
+  explains.
 
 ### Protective gear
 
@@ -291,6 +338,20 @@ its task-kill path now calls.
 - **Turael and Aya** offer to replace a task they wouldn't give, which resets the streak (Wiki).
 - **Slayer level:** a monster with a Slayer level can't be attacked below it.
 
+### Slayer helper
+
+rsprox captures, rev 242 (recordings 1002084 t127, 1002067 t185-t2842, 1001683, 1001788):
+
+- **Opens** when the enchanted gem's Check is clicked (after its two task lines), when a master
+  assigns a task (the same tick as the assignment line), and on a task kill, each time only if
+  it isn't showing already. The gem's Activate doesn't open it.
+- **Opening:** `current_helper` 3, `helper_generic` (711) as an overlay on
+  `toplevel_osrs_stretch:helper_content`, then scripts `helper_setup` [that component, 3, 148,
+  308] and `helper_slayer_init`. The cache scripts draw the task from the task varps.
+- **Closes** 501 ticks after it opened, however many kills came in between: `current_helper` 0,
+  then the overlay closes. Completing the task doesn't close it; the next task kill after it
+  closed opens it again (on the closing tick too, recording 1001788 t2702).
+
 ## Captured messages (rsprox captures)
 
 - **Assigning:** "Your new task is to kill # X."
@@ -324,6 +385,19 @@ its task-kill path now calls.
     the head;
   - the Soul Wars imbued mask makes the Soul Wars imbued helmet, and its recolours stay Soul Wars
     copies.
+- **Black mask Uncharge** (recording 2767, ticks 37-39): on Black mask (10) the chatbox asks
+  "Remove the charges from this item?" with "Yes." / "No."; Yes turns that slot into the plain
+  Black mask, plays sound 2672 and opens the objectbox "You remove the charges from the item." with
+  the plain mask (its text in chat too). The other charge counts, (1) to (9), share the option and
+  are handled the same. The imbued masks' Uncharge removes the imbue (Wiki, Black mask (i)). On
+  Black mask (i) and (1) (i) to (10) (i) (the ids both the scroll and the Nightmare Zone make), it
+  gives back the same plain mask, charges kept, and what the imbue cost. A mask the Nightmare Zone
+  imbued carries the item meta `slayer-helmet:nmz-imbued` (kept through a Slayer helmet and back)
+  and refunds the whole imbue price in points (1,250,000, or 625,000 with the Hard Combat
+  Achievement rewards), refused when the points would pass the cap. Any other mask, a scroll imbue
+  or one imbued before the mark, gives a scroll of imbuing back, refused with no room for it. No
+  recording shows it, so it asks with the plain masks' prompt, plays sound 2672 and sends no line.
+  The Soul Wars ids (zeal) aren't built.
 - **Finishing items:** the gargoyle's "The gargoyle cracks apart." and the zygomite's "The Zygomite
   is covered in fungicide. It bubbles away to nothing!"
 - **Finishing thresholds** (Wiki pages Rockslug and Desert Lizard): a bag of salt finishes a
@@ -346,7 +420,19 @@ its task-kill path now calls.
   - opening it: `slayer_master_in_focus`, varps `if1`-`if3` (the task's count, id and boss), and
     the `if_setevents` ranges;
   - the task list popup (script 8059);
-  - the block confirmation popup (script 4212).
+  - the block confirmation popup (script 4212);
+  - a task list row (recordings 3421 and 3422, Krystilia): the row's slot is the master's
+    `slayer_master_task` row in cache order. A task blocked with the master: "This task is currently
+    blocked."; one the master can't assign: "This master cannot currently assign you this task.";
+    otherwise the rewards close and a "Select an option" menu offers "Block Black Demons (100
+    points)" and "Don't Block". Block fills the first free `slayer_blocked_<master>_*` slot and says
+    "<col=ef1020>Black Demons</col> has been blocked." (or "You do not have any available slots in
+    which to block this task."); either answer opens the rewards again.
+- **Task storage** (Wiki: Slayer Rewards; cache scripts 9736 and 423): unlocked by
+  `slayer_unlock_storage` (500 points). The Tasks tab's button is Store with a current task and
+  nothing stored (slot 76), Swap with both (slot 76), Unstore with only a stored task (slot 77); all
+  free. The tab shows the stored task from varps `if4`-`if6`. The stored master, boss and modifier
+  sit in `slayer_master_stored`, `slayer_target_bossid_stored` and `slayer_modifier_*_stored`.
 
 Konar's lines are the Wiki's.
 
@@ -356,13 +442,23 @@ Konar's lines are the Wiki's.
 - **Slayer helmet:** the full-inventory line for Disassemble.
 - **Drains:** where the Wiki only says "greatly reduced", unprotected drains take 10% of the level
   per hit.
-- **Gem:** its Activate gives the same answer as Check.
+- **Gem:** its Activate gives the same answer as Check (live opens the master's chat, recording
+  1002084 t121).
+- **Slayer helper:** the eternal gem's Check opens it as the enchanted gem's does (same gem; its
+  only captures are rev 227, before the helper). The Settings toggle keeps it shut for every trigger; an off-task kill (no task)
+  doesn't open it; a kill whose count the bracelet of slaughter keeps still does.
+  A kill on the closing tick that is processed before the close finds it showing, so it stays
+  shut until the next kill (live closes and reopens it on that tick).
 - **Mortimer:**
   - which modifier a choice gets: any of the unlocked ones, equally likely; every choice has one;
   - the completion line for a task without a points modifier ("You've completed # Mortimer tasks;
     return to a Slayer master.");
   - the line for the Slayer XP modifier (the Wiki has none);
   - cancelling from his menu works like the Rewards interface's cancel (the Wiki has no text).
+- **Task storage:** the stored task's count, area and Slayer XP so far (no varp holds them) are kept
+  in the `slayer:stored-task` attribute.
+- **Task list:** blocking the current task from the list also ends it, as the Tasks tab's Block
+  does. The Tasks tab's Block uses the list's "no available slots" line.
 
 ## Developer commands
 
@@ -379,9 +475,9 @@ Konar's lines are the Wiki's.
 
 - **Mortimer:** Partner Slayer's rules for his tasks; showing modifiers on the gem. His tips are
   the generic line, as for the other masters.
-- **Rewards:** task storage (Store/Unstore), including a stored task's modifier. Picking tasks to block from the task list.
 - **Slayer helmet:** reinforced goggles in the helmet (assembling leaves them in the inventory, so
   Disassemble gives none back); the Tztok, Vampyric and Tzkal recolours (Ghommal, Laidee Gnonock);
   making, reverting and disassembling the Radiant helmet.
+- **Slayer helper:** the slayer ring's and helmet's Check (no rev 242 capture of them) don't open it.
 - **Equipment and monsters:** the gem's and helmet's Partner and Log, killerwatts, fever spiders,
   harpie bug swarms and mogres. Zygomites don't regenerate.

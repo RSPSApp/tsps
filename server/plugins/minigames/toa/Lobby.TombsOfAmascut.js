@@ -10,6 +10,7 @@
 
 const Shared = require("./Shared.TombsOfAmascut");
 const Parties = require("./Parties.TombsOfAmascut");
+const Groups = require("./Groups.TombsOfAmascut");
 const Invocations = require("./Invocations.TombsOfAmascut");
 const Raid = require("./RaidState.TombsOfAmascut");
 const Rewards = require("./Loot.TombsOfAmascut");
@@ -249,11 +250,18 @@ function readScoreboard(event) {
   const { player } = event;
   if (event.objectId !== SCOREBOARD.LOC || !Shared.inLobby(player.getLocation())) return false;
   const sender = player.getPacketSender();
+  // The board sets busy while it is open (rsprox_transcripts/227/00554.txt, 01753, 01852).
+  sender.sendVarbit(Shared.core().CacheDefinitions.getVarbitId("busy"), 1);
   sender.sendInterface(SCOREBOARD.INTERFACE);
   for (const tab of SCOREBOARD.TABS) sender.sendInterfaceFlags(uid(SCOREBOARD.INTERFACE, tab.component), EVENT.OP1);
   const tab = sender.getVarbit?.(SCOREBOARD.TAB_VARBIT) ?? 0;
   sendScoreboard(player, SCOREBOARD.TABS[tab] ?? SCOREBOARD.TABS[0]);
   return true;
+}
+
+/** Closed by any route: busy goes back to 0 with it. */
+function closeScoreboard({ player, interfaceId }) {
+  if (interfaceId === SCOREBOARD.INTERFACE) player.getPacketSender().sendVarbit(Shared.core().CacheDefinitions.getVarbitId("busy"), 0);
 }
 
 function clickScoreboardTab(event) {
@@ -429,11 +437,42 @@ function makeOrViewParty(player) {
     if (applied && applied.withdraw(player) && applied.leader) refreshIfViewing(applied.leader);
     state.viewing = Parties.createParty(player);
     state.tab = 1;
+    takeInGroup(player, state.viewing);
   } else {
     state.viewing = state.current;
     state.tab = 0;
   }
   openManagement(player);
+}
+
+/**
+ * A group leader's new party takes the rest of the group in as members: each one online who is
+ * in the lobby, as applying needs, and in no party already, while there's room. The others are
+ * told; applying lets them in at once (letsGroupIn).
+ */
+function takeInGroup(leader, party) {
+  const group = Groups.membersOf(leader);
+  if (!group.isLeader) return;
+  if (!group.fits) leader.sendMessage(group.message);
+  for (const member of group.members) {
+    if (member === leader) continue;
+    if (canTakeIn(party, member)) takeIn(party, member);
+    else member.sendMessage(`${party.leaderName} has made a Tombs of Amascut party for your group. Apply at the Grouping Obelisk and you'll be let straight in.`);
+  }
+  refreshPartyViewers(party);
+}
+
+function canTakeIn(party, member) {
+  return Shared.inLobby(member.getLocation()) && !Parties.currentParty(member)
+    && party.players.length < Shared.MAX_PARTY_SIZE;
+}
+
+/** Joins as an accepted applicant does (LobbyParty.answer): out of any application first. */
+function takeIn(party, member) {
+  const applied = Parties.stateOf(member).applied;
+  if (applied && applied.withdraw(member) && applied.leader) refreshIfViewing(applied.leader);
+  party.addPlayer(member);
+  member.sendMessage(`You have joined the party of ${party.leaderName}.`);
 }
 
 function selectParty(event) {
@@ -662,7 +701,8 @@ function applyToParty(player, party) {
     }
     player.sendMessage(`You have applied to join the party of ${party.leaderName}.`);
     state.tab = 1;
-    refreshPartyViewers(party);
+    if (letsGroupIn(party, player)) answerApplicant(party.leader, party, player, true);
+    else refreshPartyViewers(party);
     refreshManagement(player);
   };
   if (state.current) {
@@ -677,6 +717,15 @@ function applyToParty(player, party) {
   } else {
     apply();
   }
+}
+
+/**
+ * An applicant from the leader's group is accepted at once, as the leader's Accept does, unless
+ * the leader declined them before or the party is full: then they wait like any applicant.
+ */
+function letsGroupIn(party, applicant) {
+  return party.players.length < Shared.MAX_PARTY_SIZE && !party.blocked.includes(applicant)
+    && Groups.sameGroup(applicant, party.leader);
 }
 
 function kick(player, party, target) {
@@ -812,6 +861,7 @@ function sendPresetsOnLogin({ player }) {
 
 module.exports = function registerTombsLobby(api) {
   Shared.bind(api);
+  api.onServerStartup(Groups.announce);
   Shared.onObject(api, "Entry", enterPyramid);
   Shared.onObject(api, "Entry", enterTombs);
   Shared.onObject(api, "Exit", leavePyramid);
@@ -821,6 +871,7 @@ module.exports = function registerTombsLobby(api) {
   api.onObjectClick(SHROUD_CHEST, 1, searchShroudChest);
   api.onObjectClick(SCOREBOARD.LOC, 1, readScoreboard);
   for (const tab of SCOREBOARD.TABS) api.onInterfaceActionButton(uid(SCOREBOARD.INTERFACE, tab.component), clickScoreboardTab);
+  api.onCustomEvent("interface:closed", closeScoreboard);
   api.persistAttribute(Raid.ATTR_STATS);
   api.onZoneEnter(Shared.LOBBY, enterLobby);
   api.onZoneExit(Shared.LOBBY, leaveLobby);

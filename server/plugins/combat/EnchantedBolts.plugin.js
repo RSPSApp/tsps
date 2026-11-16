@@ -246,6 +246,8 @@ function landBoltEffect({ hit }) {
   const effects = landing.get(hit);
   if (!effects) return;
   landing.delete(hit);
+  // A hit whose after-hit effects are off (Spear Wall's immunity) lands no bolt effect either.
+  if (hit.getHandleAfterHitEffects?.() === false) return;
   for (const { effect, shot, damage } of effects) {
     effect.land(shot, damage.getDamage());
   }

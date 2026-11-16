@@ -154,6 +154,8 @@
     "names": ["Lilac", "Pink", "Red", "Orange", "Yellow", "White", "Green", "Blue"],
     "bees": 12168,
     "pollen": 28192,
+    "_destroyRecorded": "rsprox 227/01850 tick 9297: Destroy on the pollen asks nothing; the same tick synth 2381 (the destroy sound), 'You scatter the pollen.' as spam and the pollen gone.",
+    "destroySound": 2381,
     "fruit": 464,
     "pickup": 832,
     "spawnGraphic": 2369,
@@ -193,7 +195,11 @@
     "bark": [4, 5],
     "xp": { "woodcutting": 0.5, "fletching": 0.2, "bonusPerLevel": 3 },
     "barkPerEntling": 25,
-    "leavesPerEntling": 4
+    "leavesPerEntling": 4,
+    "_nests": "Wiki (Forestry): each fully pruned entling gives an additive 20% chance of an egg nest, 100% for all five, on the ground. Recorded (227/01723.txt:124757, 227/910209.txt, 227/910393.txt, 237/01104.txt:100079): the nest lands with the haircuts line, near the player, owner-only (neverturnpublic), despawn 200, red 5070 or green 5071. Ours: the three egg nests at 1/3 each, on the player's tile.",
+    "eggNests": [5070, 5071, 5072],
+    "nestDespawnTicks": 200,
+    "nestChancePerEntling": 0.2
   },
 
   "beehive": {
@@ -310,6 +316,8 @@
     "fruitSome": "<col=229628>Some bushes have started producing fruit, well done!</col>",
     "dormant": "<col=229628>The bushes become dormant and the bees move on. You've helped make the forest a more diverse and beautiful place!</col>",
     "discardPollen": "You discard your left over pollen.",
+    "scatterPollen": "You scatter the pollen.",
+    "discardLeftoverPollen": "You discard the leftover pollen.",
     "pruneMenu": "Which area of the entling would you like to prune?",
     "prune": "You prune the entling.",
     "wrongCut": "Woah, that's not the cut I asked for!",

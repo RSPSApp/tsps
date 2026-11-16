@@ -19,6 +19,8 @@ const JAR_MESSAGE = "You manage to catch the impling and squeeze it into a jar."
 const LOOT_MESSAGE = "You manage to catch the impling and acquire some loot.";
 const NO_JAR_MESSAGE = "You don't have an empty impling jar in which to keep an impling.";
 // Wiki (Falconry): "Your falcon has left its prey. You see it heading back toward the falconer."
+// Matthias's transcript (npc-dialogues.json): the line that shows the falcon landing on the lent glove.
+const GLOVE_HAND_OUT = "The falconer gives you a large leather glove";
 const LOST_PREY_MESSAGE = "Your falcon has left its prey. You see it heading back toward the falconer.";
 const NO_SPACE_MESSAGE = "You'll need to clear some space in your pack to catch this impling without a jar.";
 // A barehanded butterfly or moth (rsprox captures 95, 1634, 3279, 4051): the grab, the creature's
@@ -43,18 +45,39 @@ function hasFalcon(player) {
 }
 
 function hire({ player }) {
-  const I = H.core.ItemIdentifiers, E = H.core.Equipment;
   if (hasFalcon(player)) { cleanup({ player }); player.sendMessage("You return the falcon to Matthias."); return true; }
-  if (!requireLevel(player, 43)) return true;
+  lend(player);
+  return true;
+}
+
+/** Puts the glove and falcon on, taking the 500-coin fee unless invested; false (with the reason) when refused. */
+function lend(player) {
+  const I = H.core.ItemIdentifiers, E = H.core.Equipment;
+  if (!requireLevel(player, Matthias.FALCONRY_LEVEL)) return false;
   if ([E.WEAPON_SLOT, E.SHIELD_SLOT, E.HANDS_SLOT].some(slot => player.getEquipment().get(slot).getId() > 0)) {
-    player.sendMessage("Remove your weapon, shield and gloves before borrowing a falcon."); return true;
+    player.sendMessage("Remove your weapon, shield and gloves before borrowing a falcon."); return false;
   }
   // Wiki (Falconry): an investor borrows falcons without the 500-coin fee.
-  if (!Matthias.invested(player) && !exchange(player, [[I.COINS, 500]], [])) { player.sendMessage("It costs 500 coins to borrow a falcon."); return true; }
+  if (!Matthias.invested(player) && !exchange(player, [[I.COINS, Matthias.FEE]], [])) { player.sendMessage("It costs 500 coins to borrow a falcon."); return false; }
   gloves(player, I.FALCONERS_GLOVE_2);
   H.players.add(player);
   player.sendMessage("Matthias lends you a falcon. Catch a kebbit, then retrieve the falcon and its prey.");
   return true;
+}
+
+/**
+ * Talk-to "could I have a go?": the payer's transcript lends on its receive-glove step, an investor's
+ * (no receive step) on the glove hand-out line. A refusal ends the conversation before that line.
+ */
+function dialogueLend(event) {
+  if (event.definition?.getName?.() !== "Matthias") return;
+  const receive = event.action === "receive" && (event.target ?? event.text) === "Falconer's glove";
+  const handOut = event.kind === "message" && String(event.text ?? "").startsWith(GLOVE_HAND_OUT) && !hasFalcon(event.player);
+  if (!receive && !handOut) return;
+  if (receive) event.handled = true;
+  if (hasFalcon(event.player) || lend(event.player)) return;
+  event.handled = true;
+  event.end = true;
 }
 
 function catchFalcon(player, npc, def) {
@@ -282,12 +305,45 @@ function boost(event) {
   if (!nearby(player, target) || target.getAttribute("accept-aid") === false || target.getHitpoints() <= 0
     || !exchange(player, [[def.jar, 1]], [[H.core.ItemIdentifiers.BUTTERFLY_JAR, 1]])) return;
   bonus(target, def);
-  if (H.api.getAreaManager().inMulti(target)) {
-    const others = H.core.World.getNearbyPlayersForUpdate(target).filter(p => p !== target && p !== player
-      && nearby(target, p, 2) && p.getAttribute("accept-aid") !== false && p.getHitpoints() > 0);
-    for (let i = 0; i < 3 && others.length; i++) bonus(others.splice(roll(0, others.length - 1), 1)[0], def);
-  }
+  share(target, def, player);
   target.sendMessage("A butterfly restores your vigour.");
+}
+
+/** In a multicombat area up to three other players within two tiles of `centre` who accept aid get the same bonus. */
+function share(centre, def, user = null) {
+  if (!H.api.getAreaManager().inMulti(centre)) return;
+  const others = H.core.World.getNearbyPlayersForUpdate(centre).filter(p => p !== centre && p !== user
+    && nearby(centre, p, 2) && p.getAttribute("accept-aid") !== false && p.getHitpoints() > 0);
+  for (let i = 0; i < 3 && others.length; i++) bonus(others.splice(roll(0, others.length - 1), 1)[0], def);
+}
+
+// Wiki (Hunter's mix and each mix's page): a jarred butterfly or moth mixed with raw hunter meat, two
+// doses, each giving the jar's own bonus (Attack, Defence or Strength 4 + 15%; 8 Hitpoints; the
+// sunlight moth's restore and 8 Hitpoints; 22 Prayer) to the drinker and, in a multicombat area, to
+// up to three players within two tiles of them who have Accept Aid on. They share the potions' 3-tick
+// delay but add no eating or attack delay (`eatingDelay: false`); the chugging barrel can't store
+// them (Wiki: Chugging barrel, `chuggable: false`). Ours: what the last dose leaves
+// (the Wiki doesn't say); the butterfly jar the mix was made in.
+const MIXES = [
+  ["Ruby harvest mix", "RUBY_HARVEST_MIX", "RUBY_HARVEST"],
+  ["Sapphire glacialis mix", "SAPPHIRE_GLACIALIS_MIX", "SAPPHIRE_GLACIALIS"],
+  ["Snowy knight mix", "SNOWY_KNIGHT_MIX", "SNOWY_KNIGHT"],
+  ["Black warlock mix", "BLACK_WARLOCK_MIX", "BLACK_WARLOCK"],
+  ["Sunlight moth mix", "SUNLIGHT_MOTH_MIX", "SUNLIGHT_MOTH_2"],
+  ["Moonlight moth mix", "MOONLIGHT_MOTH_MIX", "MOONLIGHT_MOTH_2"],
+];
+
+/** Drink on the hunter's mixes, through the potions plugin's doses and delay ("potions:register"). */
+function registerMixes() {
+  const I = H.core.ItemIdentifiers;
+  for (const [name, key, jar] of MIXES) {
+    const def = H.data.butterflies.find(c => c.jar === I[jar]);
+    if (!def) continue;
+    H.api.emitCustomEvent("potions:register", {
+      name, chains: [[I[`${key}_2_`], I[`${key}_1_`]]], emptyItemId: I.BUTTERFLY_JAR, eatingDelay: false, chuggable: false,
+      effect: (player) => { bonus(player, def); share(player, def); },
+    });
+  }
 }
 
 function rewards(player, def) {
@@ -378,4 +434,4 @@ function cleanup({ player }) {
   if (hasFalcon(player)) gloves(player, -1);
 }
 
-module.exports = { catchNpc, hire, retrieve, release, boost, loot, rewards, equipment, login, process, cleanup };
+module.exports = { catchNpc, hire, dialogueLend, retrieve, release, boost, registerMixes, loot, rewards, equipment, login, process, cleanup };

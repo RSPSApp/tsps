@@ -34,8 +34,6 @@ const EMOTE_UNLOCKS = new Map([
   ["emote_lean", "Lean"], ["emote_glasswall", "Glass Wall"],
 ]);
 const NEEDED = 4;
-// Live chat type of a line also shown in a message box (MessageGame type 115 in the captures).
-const MESBOX_CHAT = 115;
 // Every capture lands on (2008,4764), then moves the player onto the spotlight at (2008,4762)
 // the tick the chat is continued; the mime stands at (2011,4762).
 const ARRIVAL = { x: 2008, y: 4764, z: 0 };
@@ -237,7 +235,6 @@ module.exports = function attach(api, Events) {
       return;
     }
     const line = `You can now use the ${EMOTE_UNLOCKS.get(emote)} emote!`;
-    sender.sendTypedMessage(MESBOX_CHAT, line);
     Teleports.finish(session);
     sender.sendSound(TELEPORT_SOUND, 1, 0);
     Flow.statement(api, player, line);

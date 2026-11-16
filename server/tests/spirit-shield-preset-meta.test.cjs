@@ -93,3 +93,42 @@ test("a holy elixir on a preset spirit shield gives a preset blessed shield", (t
   assert.equal(amount(f.inv, Shields.ITEM.BLESSED_SPIRIT_SHIELD, false), 0, "no plain blessed shield");
   assert.equal(amount(f.inv, Shields.ITEM.BLESSED_SPIRIT_SHIELD, true), 1);
 });
+
+// Recorded (rsprox_transcripts/224/01517.txt ticks 97-98): the blessing is the item box alone, no chat line or sound.
+// Through the real item-on-item dispatch, either way round, the Corporeal Beast unit is the one handler that runs.
+for (const elixirFirst of [true, false]) {
+  test(`a holy elixir ${elixirFirst ? "used on" : "used with"} a spirit shield: the item box alone, no chat line or sound`, (t) => {
+    const f = skilled(actor(t));
+    const sounds = [];
+    t.mock.method(f.p.getPacketSender(), "sendSoundEffect", (id) => { sounds.push(id); return f.p.getPacketSender(); });
+    f.inv.setItem(0, new core.Item(Shields.ITEM.SPIRIT_SHIELD, 1));
+    f.inv.setItem(1, new core.Item(Shields.ITEM.HOLY_ELIXIR, 1));
+    const items = f.inv.getItems();
+    const [used, usedSlot, other, otherSlot] = elixirFirst ? [items[1], 1, items[0], 0] : [items[0], 0, items[1], 1];
+    const handled = PM.emitItemOnItem({
+      player: f.p, usedItem: used, usedItemId: used.getId(), usedItemSlot: usedSlot,
+      usedWithItem: other, usedWithItemId: other.getId(), usedWithItemSlot: otherSlot, handled: false,
+    });
+    assert.equal(handled, true);
+    assert.equal(f.inv.getAmount(Shields.ITEM.HOLY_ELIXIR), 0);
+    assert.equal(f.inv.getAmount(Shields.ITEM.BLESSED_SPIRIT_SHIELD), 1);
+    assert.equal(f.p.getDialogueManager().getCurrent()?.getText?.(), "The spirit shield glows an eerie holy glow.");
+    assert.deepEqual(f.messages, [], "no chat line");
+    assert.deepEqual(sounds, [], "no sound");
+  });
+}
+
+test("a boosted Prayer does not bless the shield: 85 is the base level (Wiki: it cannot be boosted)", (t) => {
+  const f = actor(t);
+  f.p.getSkillManager().setMaxLevels(core.Skill.PRAYER, 84, false).setCurrentLevels(core.Skill.PRAYER, 90, false);
+  f.inv.setItem(0, new core.Item(Shields.ITEM.SPIRIT_SHIELD, 1));
+  f.inv.setItem(1, new core.Item(Shields.ITEM.HOLY_ELIXIR, 1));
+  const items = f.inv.getItems();
+  assert.equal(PM.emitItemOnItem({
+    player: f.p, usedItem: items[1], usedItemId: items[1].getId(), usedItemSlot: 1,
+    usedWithItem: items[0], usedWithItemId: items[0].getId(), usedWithItemSlot: 0, handled: false,
+  }), true);
+  assert.equal(f.inv.getAmount(Shields.ITEM.SPIRIT_SHIELD), 1);
+  assert.equal(f.inv.getAmount(Shields.ITEM.HOLY_ELIXIR), 1);
+  assert.match(f.messages.at(-1), /Prayer level of 85/);
+});

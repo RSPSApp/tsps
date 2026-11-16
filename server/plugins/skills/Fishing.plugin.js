@@ -29,6 +29,10 @@ const NET_CAGE_FIRST_ROLL_TICKS = 3;
 const HARPOON_ROD_FIRST_ROLL_TICKS = 4;
 // Tools without animateOnRoll restart their animation this often instead.
 const FISHING_ANIMATION_INTERVAL_TICKS = 5;
+// rsprox 231/00381 t11716-11764 (barehand shark): after the start sequence the ready loop is sent on
+// every tick but a roll's; a roll plays only its result, the fish's finish on a catch or this one on a
+// miss, and the loop is back the tick after.
+const BAREHAND_MISS_SEQ = "brut_player_hand_fishing_end_blank";
 let fishingTick = 0;
 
 // Rods cast once (human_fishing_casting), then wait on the spot (human_fish_onspot) on every
@@ -460,6 +464,10 @@ const TOOLS = Object.freeze({
 // "Small Net/Bait" spot but pike on a river "Lure/Bait" spot.
 const SPOT_TOOLS_BY_OPTIONS = new Map([
   ["Small Net/Bait", { "Small Net": TOOLS.NET, Bait: TOOLS.FISHING_ROD }],
+  // Lumbridge Swamp's and the Isle of Souls' small net/bait spots label the net "Net" (Wiki:
+  // Fishing spot (small net, bait), options "Small net/Net, Bait"). The cave "Net/Bait" spots
+  // (frog spawn and eels) go by id below.
+  ["Net/Bait", { Net: TOOLS.NET, Bait: TOOLS.FISHING_ROD }],
   ["Lure/Bait", { Lure: TOOLS.FLY_FISHING_ROD, Bait: TOOLS.PIKE_ROD }],
   ["Cage/Harpoon", { Cage: TOOLS.LOBSTER_POT, Harpoon: TOOLS.HARPOON }],
   ["Big Net/Harpoon", { "Big Net": TOOLS.BIG_NET, Harpoon: TOOLS.SHARK_HARPOON }],
@@ -480,8 +488,6 @@ const SPOT_TOOLS_BY_NPC = new Map([
   ...CAMDOZAAL_FISHING_SPOTS.map(id => [id, CAMDOZAAL_TOOLS]),
   // Tutorial Island's shrimp pond only offers "Net".
   [NpcIds.FISHING_SPOT_43, { Net: TOOLS.NET }],
-  // Lumbridge Swamp's small net/bait spot labels its net "Net".
-  [NpcIds.FISHING_SPOT_30, { Net: TOOLS.NET, Bait: TOOLS.FISHING_ROD }],
   // Piscatoris: small net for monkfish, harpoon for tuna/swordfish.
   [NpcIds.FISHING_SPOT_55, { Net: TOOLS.MONKFISH_NET, Harpoon: TOOLS.HARPOON }],
   // Frog spawn and eels, underground around Lumbridge and Dorgesh-Kaan.
@@ -1001,8 +1007,10 @@ class FishingTask extends Task {
       }
 
       // rsprox captures: the animation restarts on every roll, caught or not.
-      const { animateOnRoll } = session.tool;
-      if (!animateOnRoll && this.cycle >= session.nextAnimationTick) {
+      const { animateOnRoll, barehand } = session.tool;
+      if (barehand) {
+        if (this.cycle < session.nextCatchTick) player.performAnimation(new Animation(session.tool.loopAnimationId));
+      } else if (!animateOnRoll && this.cycle >= session.nextAnimationTick) {
         player.performAnimation(new Animation(session.tool.loopAnimationId));
         session.nextAnimationTick = this.cycle + FISHING_ANIMATION_INTERVAL_TICKS;
       }
@@ -1011,7 +1019,7 @@ class FishingTask extends Task {
         continue;
       }
       session.nextCatchTick = this.cycle + catchInterval(player, session.tool);
-      if (animateOnRoll) player.performAnimation(new Animation(session.tool.loopAnimationId));
+      if (animateOnRoll && !barehand) player.performAnimation(new Animation(session.tool.loopAnimationId));
 
       let caught = rollCatch(player, session.tool, Math.random, variant.bonus);
       // Content may turn a miss into a catch ("fishing:attempt", a league relic's second chance): the best fish the player can land.
@@ -1021,6 +1029,7 @@ class FishingTask extends Task {
       // A vessel's bait goes with every attempt, caught or not (Wiki: Raw karambwan).
       session.tool.vessel?.useBait(player);
       if (caught.length === 0) {
+        if (barehand) player.performAnimation(new Animation(pluginApi.core.CacheDefinitions.getSeqId(BAREHAND_MISS_SEQ)));
         if (session.tool.missMessage) spam(player, session.tool.missMessage);
         continue;
       }

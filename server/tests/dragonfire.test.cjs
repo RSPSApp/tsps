@@ -294,6 +294,27 @@ test("the expiry notice is sent once, even when dragonfire resolves on the expir
   }
 });
 
+// Approved decision (2026-11-15): reading the tier is a pure read, so a death handler or a Combat Achievement check
+// asking on the expiry tick sends nothing; the player's own tick still sends the notice once.
+test("reading the tier sends no expiry notice and leaves it to the player's tick", () => {
+  let now = 1_000_000;
+  Date.now = () => now;
+  const expired = "<col=7f007f>Your antifire potion has expired.</col>";
+  try {
+    const target = player({ potion: Tier.ANTIFIRE });
+    assert.equal(Dragonfire.getDragonfireProtectionTier(target), Tier.ANTIFIRE);
+    now += 360_000;
+    assert.equal(Dragonfire.getDragonfireProtectionTier(target), Tier.NONE, "expired reads as no protection");
+    assert.equal(Dragonfire.getDragonfirePotionTier(target), Tier.NONE);
+    assert.deepEqual(target.messages.map((m) => m.text), [], "no message from a read");
+    Dragonfire.processDragonfireProtection(target);
+    Dragonfire.processDragonfireProtection(target);
+    assert.deepEqual(target.messages.map((m) => m.text), [expired], "the tick sends it once");
+  } finally {
+    Date.now = original.now;
+  }
+});
+
 test("every breath on a player, super antifire included, lets a worn shield add its lines", () => {
   const seen = [];
   const emitCustomEvent = (name, event) => {

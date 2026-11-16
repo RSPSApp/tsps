@@ -110,6 +110,7 @@ test('Slayer below 40 does not prevent starting',async t=>{const f=actor(t,39,20
 test('Defence below 20 does not prevent starting',async t=>{const f=actor(t,40,19);await talk(f);assertStarted(f);});
 test('both skills below their later requirements do not prevent starting',async t=>{const f=actor(t,39,19);await talk(f);assertStarted(f);});
 test('missing Rag I remains a start blocker',async t=>{const f=actor(t,40,20,{rag:false});await talk(f);assert.equal(f.ii.getStage(f.player),0);assert.notEqual(f.player.getDialogueManager().getCurrent()?.getText?.(),'So how is the sorting going?');});
-test('missing Horror from the Deep retains the existing start gate',async t=>{const f=actor(t,40,20,{horror:false});await talk(f);assert.equal(f.ii.getStage(f.player),0);assert.notEqual(f.player.getDialogueManager().getCurrent()?.getText?.(),'So how is the sorting going?');});
+// Wiki (Rag and Bone Man II): Horror from the Deep is not a requirement; it only opens the dagannoths for the ribs.
+test('missing Horror from the Deep does not prevent starting',async t=>{const f=actor(t,40,20,{horror:false});await talk(f);assertStarted(f);});
 test('already-started quest remains started with low skills and missing Horror',async t=>{const f=actor(t,39,19,{horror:false,started:true});await talk(f);assertStarted(f);});
 test('completed quest remains complete with low skills and missing Horror',async t=>{const f=actor(t,39,19,{horror:false,completed:true});await talk(f);assert.equal(f.ii.getStage(f.player),f.ii.completionValue);assert.equal(f.ii.isComplete(f.player),true);});

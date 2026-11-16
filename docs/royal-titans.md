@@ -230,11 +230,26 @@ Either titan casts either special. Told apart by anim + slot-2 spotanim (fire su
 - Explode damage is small and avoidable by distance (player-hits +1 tick after explodes: 1-12, often nothing when the player moved off) [LOG]. Exact max — see Assumptions. It is the CA "explosion" damage [WIKI].
 - Player-killed elementals instead play `..._death01` (fire 11957, ice 11951) + death spotanim (fire 3205, ice 3203), all three on one tick when AoE'd [LOG]. Wiki: one Wave one-shots with the accuracy rules above.
 
+## Player spells: splash, wall clears, kill credit
+
+- **Splash** [WIKI: Royal Titans/Strategies]: water and fire spells "uniquely attack in a 3x3 area around its primary target during this fight". Each other live elemental on the 3x3 takes the spell with its own roll, under the same accuracy and weakness rules as the primary target (`Minions.spellOnElemental`). Wind, earth and Ancient ice spells hit only their target; bursts and barrages keep their own spread.
+- **Walls judged by the cast spell**: a wall tile is cleared by the spell its hit carries, not whatever is selected when it lands. Icicle walls take fire spells; fire walls take water or ice spells.
+- **Wall-clear pacing** [custom]: a spell that clears a wall tile delays the caster's next attack by 1 tick instead of 5, and ends the attack on that tile. The tile and the two the spell takes with it refuse more casts until it lands (10 ticks at most).
+- **Kill credit** [custom]: each elemental a cast will kill (counted at the cast, when damage is rolled) takes 1 tick off the caster's attack delay, so a whole trio leaves 2.
+
+## Twinflame staff (`server/plugins/items/TwinflameStaff.plugin.js`) [WIKI: Twinflame staff]
+
+- Speed 6; 10% standard-spellbook accuracy and damage (`SmokeStaves.EquipmentEffects.js`).
+- Autocasting a standard elemental spell at an NPC weak to another element casts that element's spell of the same tier, given the level and runes. At the walls (named through `twinflame:weakness`), a Wave autocast with death runes in the inventory casts the wall's Blast spell instead (Water Blast at fire walls, Fire Blast at icicle walls), saving blood runes.
+- Bolt, Blast and Wave spells fire a second spell a tick later for floor(40%) of the first's damage, with no XP, runes or tome charges (`SecondSpell.ElementalSpells.js`, shared with the Shadowflame quadrant). Strike and Surge don't.
+- **Creation** [WIKI ticks; LOG 235/03398]: a battlestaff and both element staff crowns, any two used on each other with the third carried, make the staff in the battlestaff's slot after 4 ticks, with `human_castsuperheatitem` (725), `vfx_human_twin_flame_craft01` (3227), sound 10107 and the captured objectbox message; a missing part gives the captured game message. The capture made it 1 tick after the use; the Wiki's 4 ticks are kept.
+
 ## Enrage at 35% [LOG] [WIKI]
 
 When either titan first reaches ~210 HP:
 
 - **Teleport** [LOG]: Branda anim 11984 → `vfx_branda_queen_loc01_spawn02` (3219) grid over x=2909-2913, y=9571-9573 + 29733 markers → 3 ticks later telejump to (2910, 9571), spawn anim 11966 + slot-2 3217, floors 55993/55994, blocking 26209 tiles. Eldric mirrors (teleport 11983, spawn02 vfx 3222 over y=9561-9563, telejump (2910, 9561), spawn 11963, floors 55997/55998).
+- **Landing knockback** [WIKI: Royal Titans/Strategies]: a player "standing on the position a Titan will occupy" (its 3x3 from the static tile, not the wider 5x3 grid graphic) is knocked back for 15-30 damage as it lands, a jump attack (avoidable damage for Perfect). Thrown to the arena centre (2911, 9567) [EST]: neither the Wiki nor a capture gives the destination. The landing clears any wall on the titan's 3x3, no wall forms there again, and the titan's movement is blocked.
 - **Static** for the rest of the fight: no rows; stomps and elementals 2:1 between blasts [LOG]. When one titan dies before the teleport, the survivor teleports on the next tick and fights on alone from its static tile [LOG 03398].
 - **Elemental Blast, periodic** [LOG]: every 22, 29 or 36 ticks (one to three other attacks between; 5/11/6 captured), the first 10 ticks after the teleport.
   - **Charge (`..._aoe01`: Branda 11981, Eldric 11979):** slot-2 charge spotanims (fire 3214); the safe tile 56003 appears the same tick (never on a live wall tile, nor on one still forming: 0 overlaps in 58 captured blasts, at charge and at fire), with `royal_titans_area_attack_timer_handler` (NPC 14154) on it carrying the progress bar: headbar 78 filling 0 → 30 over 210 client cycles, the NPC gone 7 ticks later [LOG, 58 of 58 blasts]. Ranged x6 holds through charge and attack [WIKI].
@@ -250,7 +265,7 @@ When either titan first reaches ~210 HP:
   - **Loot:** two primary rolls on that titan's table (`branda_the_fire_queen` / `eldric_the_ice_king` already in `data/definitions/npc-drops.json`).
   - **Sacrifice:** no loot, double pet rate; miss message "You don't feel lucky during your sacrifice" [WIKI changelog].
   - **Take pages:** 10-19 desiccated pages + tertiary (clues, pet) [WIKI].
-- **Contribution** [WIKI]: quantities and unique rates scale linearly with whole-percent damage share (recoil counts; elemental damage does not; poison/burn/thralls do not since Aug 2025). 100% solo = full table (280-320 coal over two rolls, 1/75 staff crown). <1% (1-11 damage) still rolls twice but yields 1 of each. One page needs ~72+ damage, guaranteed at 120. Pet/clue rates ignore contribution.
+- **Contribution** [WIKI]: quantities and unique rates scale linearly with whole-percent damage share (recoil counts; elemental damage does not; poison/burn/thralls do not since Aug 2025). 100% solo = full table (280-320 coal over two rolls, 1/75 staff crown). <1% (1-11 damage) still rolls twice but yields 1 of each. One page needs ~72+ damage, guaranteed at 120. Pet/clue rates ignore contribution. One rule on every option (Loot, Sacrifice, Take pages): a claimant who dealt no damage gets no loot and no clue (the Wiki is silent on zero damage; approved 2026-11-15 decision), and any damage, 1-11 included, keeps the clue rolls and Loot's 1 of each. The whole-percent share is 0 below 1%, so the code tells that case by the damage dealt.
 - **Uniques** [WIKI]: Branda — fire element staff crown (1/75), mystic vigour scroll (1/75, once); Eldric — ice element staff crown, deadeye scroll; both — giantsoul amulet (1/16), Bran pet (1/3000, 1/1500 sacrificed), hard clue (1/25, 1/23 with hard CA tier) / elite clue (1/100, 1/95 with elite CA tier).
 - **Cleanup and respawn are claim-anchored** [LOG 02283 + 03402]: the countdown starts at the corpse click (any option), not the kill. Captured offsets from the claim: reinvigorate message +3/+5, loot drops +5, corpse death anims + floors +23/+26, corpse dels +5 later (+28/+31), fresh live spawns +2/+3 after that (+31/+34). 02283: claim 1825 → msg/drops 1830 → anims 1851 → dels 1856 → spawn 1859. 03402: claim 908 → msg 911 → anims 931 → dels 936 → spawn 938. A reinvigorate with no kill (03402:1205, after the player left mid-fight) restarts the same way — leaving resets the fight and the timer. Unclaimed-corpses timing unwitnessed [EST: same schedule from kill+19, the only observed claim delay].
 
@@ -264,8 +279,8 @@ Kill-count tasks read varp 4648 `total_royal_titan_kills` [LOG numeric id]; `ca_
 
 | Task | How it is decided |
 | --- | --- |
-| One by one (Easy) | One titan dies with zero damage dealt to the other. |
-| Let them fight (Easy) | The titans' own damage (rows/blast — exact source, see Assumptions) kills 10+ elementals in the fight. |
+| One by one (Easy) | Kill one titan at a time: attacking a titan (a miss included) while the other, already attacked, still fights fails it; once that one is dead the other is fair game. |
+| Let them fight (Easy) | The titans destroy 10+ elementals in the fight. An elemental is destroyed outright by a forming wall of the other element under it, or by a blast pulse of the other element's grid on its tile; its own element leaves it be [WIKI: Royal Titans/Strategies]. |
 | Elemental Company (Easy) | No attacks on any elemental all fight. |
 | Royal Titan Champion (Medium) | 10 kills. |
 | Royal Titan Adept (Medium) | 25 kills. |
@@ -292,7 +307,7 @@ Kill-count tasks read varp 4648 `total_royal_titan_kills` [LOG numeric id]; `ca_
 
 ## Out of scope (separate content)
 
-Twinflame staff assembly, desiccated-page conversion at plinths, Deadeye/Mystic Vigour prayer unlocks, the giantsoul amulet item, Tears of Guthix (message only, no mechanic), hiscores. Duo fights are IN scope (entrance Join flow + contribution exist); only their scaling is estimated (Assumption 12).
+Desiccated-page conversion at plinths, Deadeye/Mystic Vigour prayer unlocks, the giantsoul amulet item, Tears of Guthix (message only, no mechanic), hiscores. Duo fights are IN scope (entrance Join flow + contribution exist); only their scaling is estimated (Assumption 12).
 
 ## Testing
 

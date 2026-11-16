@@ -1,8 +1,8 @@
 // Run after `yarn build`: node --test tests/myths-guild-barrier.test.cjs
 //
-// The Myths' Guild Magical Barriers (bridge and basement) against the Wiki (Dragon Slayer II) and
+// The Myths' Guild Magical Barriers (bridge and basement) and the Lithkren Vault Barriers against the Wiki (Dragon Slayer II) and
 // rsprox 224/01437 / 230/00350 (a tick facing the barrier, then "You pass through the barrier."
-// and the tile beyond it), on a real Player, the real quest runtime and the real Leagues
+// and the tile beyond it; Lithkren: 231/00722 ticks 433 and 499), on a real Player, the real quest runtime and the real Leagues
 // auto-completion (#3692).
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -135,4 +135,52 @@ test('other Magical Barriers are left to their own handlers', (t) => {
   const p = realPlayer(t, 2458, 2860, 0);
   const other = core.ObjectIdentifiers.MAGICAL_BARRIER_3;
   assert.equal(objects['Magical Barrier'].Pass({ player: p, object: bridge(), objectId: other, handled: false }), false);
+});
+
+const vault = (x, y) => barrierAt('ds2_lithkren_vault_barrier', x, y, 0);
+function passVault(p, object) {
+  const at = object.getLocation();
+  return objects.Barrier.Pass({ player: p, object, objectId: object.getId(), location: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false });
+}
+
+test('the Lithkren Vault barriers are in the cache where rsprox 231/00722 crosses them', () => {
+  assert.ok(vault(1561, 5074), 'adamant wing column at x=1561');
+  assert.ok(vault(1587, 5088), 'rune wing row at y=5088');
+});
+
+test('after Dragon Slayer II, a Lithkren Vault barrier is crossed like the guild ones (rsprox 231/00722 tick 433)', (t) => {
+  const p = realPlayer(t, 1562, 5074, 0);
+  ds2().complete(p, { experience: false, scroll: false });
+  p.messages.length = 0;
+  assert.equal(passVault(p, vault(1561, 5074)), true);
+  assert.deepEqual(tile(p), [1562, 5074, 0], 'facing the barrier for a tick');
+  assert.deepEqual(p.spam, []);
+  ticks(1);
+  assert.deepEqual(tile(p), [1560, 5074, 0], 'then two tiles west, into the adamant dragon wing');
+  assert.deepEqual(p.spam, [Barrier.PASS_MESSAGE]);
+  assert.deepEqual(p.messages, []);
+});
+
+test('the rune wing row is crossed southwards (rsprox 231/00722 tick 499)', (t) => {
+  const p = realPlayer(t, 1587, 5089, 0);
+  ds2().complete(p, { experience: false, scroll: false });
+  passVault(p, vault(1587, 5088));
+  ticks(3);
+  assert.deepEqual(tile(p), [1587, 5087, 0]);
+  assert.deepEqual(p.spam, [Barrier.PASS_MESSAGE]);
+});
+
+test('without Dragon Slayer II a Lithkren Vault barrier refuses (Wiki: Lithkren Vault)', (t) => {
+  const p = realPlayer(t, 1562, 5074, 0);
+  assert.equal(passVault(p, vault(1561, 5074)), true);
+  ticks(3);
+  assert.deepEqual(tile(p), [1562, 5074, 0]);
+  assert.deepEqual(p.messages, [Barrier.REFUSED]);
+});
+
+test("Zalcano's prison Barrier is left to its own handler", (t) => {
+  const p = realPlayer(t, 1562, 5074, 0);
+  const zalcano = core.CacheDefinitions.getLocId('zalcano_barrier');
+  assert.ok(zalcano > 0);
+  assert.equal(objects.Barrier.Pass({ player: p, object: vault(1561, 5074), objectId: zalcano, handled: false }), false);
 });

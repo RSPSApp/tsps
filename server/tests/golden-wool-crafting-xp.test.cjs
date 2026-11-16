@@ -34,8 +34,12 @@ test("spinning the golden fleece gives golden wool and 2.5 Crafting XP", (t) => 
   const raw = () => p.getSkillManager().skills.experience[core.Skill.CRAFTING.getIndex()];
   const before = raw();
   // The event UseItemPacketListener emits: the used slot is `itemSlot`.
-  const spin = (item = p.getInventory().forSlot(0)) => PM.emitItemOnObject({ player: p, object: wheel, objectId: wheel.getId(),
-    itemId: core.ItemIdentifiers.GOLDEN_FLEECE, itemSlot: 0, item, location: { x: 2710, y: 3471, z: 1 }, handled: false });
+  // Live swaps the fleece for wool 3 ticks after the spin starts (rsprox 1002236 t4412 -> t4415).
+  const spin = (item = p.getInventory().forSlot(0)) => {
+    PM.emitItemOnObject({ player: p, object: wheel, objectId: wheel.getId(),
+      itemId: core.ItemIdentifiers.GOLDEN_FLEECE, itemSlot: 0, item, location: { x: 2710, y: 3471, z: 1 }, handled: false });
+    for (let i = 0; i < 3; i++) core.TaskManager.process();
+  };
   const fleece = p.getInventory().forSlot(0);
   spin();
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.GOLDEN_WOOL), 1);

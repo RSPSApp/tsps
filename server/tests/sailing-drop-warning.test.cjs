@@ -18,6 +18,7 @@ const { Sounds } = require('../dist/game/Sounds');
 const { StatementDialogue } = require('../dist/game/model/dialogues/entries/impl/StatementDialogue');
 const { ItemStatementDialogue } = require('../dist/game/model/dialogues/entries/impl/ItemStatementDialogue');
 const { OptionDialogue } = require('../dist/game/model/dialogues/entries/impl/OptionDialogue');
+const { Dialogue } = require('../dist/game/model/dialogues/entries/Dialogue');
 const BoatDrop = require('../plugins/skills/sailing/DropWarning.Sailing');
 const Warnings = require('../plugins/interface/ValueWarnings.plugin');
 
@@ -57,19 +58,21 @@ function player(vars = {}, items = []) {
     getItems: () => slots,
     setItem(slot, item) { slots[slot] = item?.getId() === -1 ? null : item; return { refreshItems() {} }; },
   };
-  return {
+  const self = {
     log, vars, slots,
     getPacketSender: () => sender,
     getInventory: () => inventory,
     getAttribute: (k) => attributes.get(k),
     setAttribute: (k, v) => attributes.set(k, v),
     sendMessage: (m) => log.messages.push(m),
-    getDialogueManager: () => ({ startDialogues: (chain) => log.dialogues.push([...chain.getDialogues().values()]) }),
+    // The box logs its own chat line as it opens, as the real one does.
+    getDialogueManager: () => ({ startDialogues: (chain) => { log.dialogues.push([...chain.getDialogues().values()]); Dialogue.sendBoxChatLine(self, chain.getDialogues().get(0).getText()); } }),
     getHitpoints: () => 99,
     busy: () => false,
     getRights: () => null,
     getSkillManager: () => ({ stopSkillable() {} }),
   };
+  return self;
 }
 
 /** Drops go through both warnings, as the plugins hear "item:drop-warning" in game. */

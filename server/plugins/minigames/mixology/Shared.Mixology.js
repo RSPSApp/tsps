@@ -377,14 +377,8 @@ function tileGraphic(player, name, x, y, delay = 0) {
   player.getPacketSender().sendGraphic(graphic, new Location(x, y, LAB.z));
 }
 
-/** Every lab message box also writes its text to chat, line breaks as spaces. */
-function mesboxChat(player, text) {
-  player.getPacketSender().sendTypedMessage(core().ChatType.MESBOX, text.replace(/<br>/g, " "));
-}
-
 function statement(player, text) {
   const { DialogueChainBuilder, StatementDialogue, EndDialogue } = core();
-  mesboxChat(player, text);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new StatementDialogue(0, text),
     new EndDialogue(1),
@@ -393,7 +387,6 @@ function statement(player, text) {
 
 function itemStatement(player, itemId, text) {
   const { DialogueChainBuilder, ItemStatementDialogue, EndDialogue } = core();
-  mesboxChat(player, text);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new ItemStatementDialogue(0, itemId, text),
     new EndDialogue(1),
@@ -448,9 +441,7 @@ function formatNumber(value) {
 
 /** In the inventory, worn, or in any bank tab. */
 function owns(player, itemId) {
-  const { Bank } = core();
-  return player.getInventory().contains(itemId) || player.getEquipment().contains(itemId)
-    || player.getBanks().some((bank, tab) => tab !== Bank.BANK_SEARCH_TAB_INDEX && bank?.contains?.(itemId));
+  return core().Bank.owns(player, itemId);
 }
 
 /** The player has spoken to Supervisor Lalo; before that he stops them using the machines. */

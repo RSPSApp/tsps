@@ -1,4 +1,4 @@
-// Unexecuted test-only candidate: place in client/tests at the reviewed pin.
+// Search result ownership stays scoped to the current query and definition type.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";

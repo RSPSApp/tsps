@@ -13,7 +13,10 @@
  * - Darkmeyer (3592,3337) is added by Sins of the Father, Castle Drakan by The Blood Moon Rises,
  *   through the "drakan-medallion:destinations" event;
  * - Slepe (3166,7711, the Sisterhood Sanctuary) is unlocked by using a Slepey tablet on the
- *   medallion, which uses the tablet up (Wiki: Slepey tablet).
+ *   medallion, which uses the tablet up (Wiki: Slepey tablet); a second tablet picked up while one is
+ *   held crumbles to dust (Wiki: Slepey tablet). The use sets varbit `slepe_teleport_unlocked`, plays
+ *   synth sounds 581 and 3146 (delay 10) and shows both items in objectbox_double; the tablet's
+ *   Inspect shows two objectbox pages (rsprox 3389 ticks 1830-1832 and 1888; 3346). docs/drakans-medallion.md.
  */
 const SLEPE_UNLOCKED_ATTRIBUTE = "drakans-medallion:slepe-unlocked";
 const DESTINATIONS_EVENT = "drakan-medallion:destinations";
@@ -22,6 +25,15 @@ const WORN_OPTION_PARAM = 451;
 const FIRST_WORN_OPTION_CLICK = 2;
 const PROMPT = "Where would you like to teleport?";
 const LOCKED_MESSAGE = "You haven't unlocked that teleport yet.";
+const SPARE_TABLET_MESSAGE = "The tablet crumbles to dust as you touch it.";
+const SLEPE_UNLOCKED_VARBIT = "slepe_teleport_unlocked";
+const TABLET_USED_MESSAGE = "As the medallion and tablet are held together, a surge of power connects the two. "
+  + "After a brief moment, the tablet crumbles, and the medallion feels somehow different.";
+const INSPECT_MESSAGES = [
+  "You inspect the tablet, and sense a magical power, running your fingers over the inscriptions, they tingle as you get a feel for Drakan's power.",
+  "He must have stored one of his best spells in this tablet, perhaps he has some sort of device which could utilise it?",
+];
+const TABLET_USED_SOUNDS = [[581, 0], [3146, 10]];
 
 const VER_SINHAZA = { label: "Ver Sinhaza", tile: { x: 3649, y: 3230, z: 0 } };
 const SLEPE = { label: "Slepe", tile: { x: 3166, y: 7711, z: 0 } };
@@ -98,6 +110,39 @@ function useSlepeyTablet(event) {
   if (player.getAttribute(SLEPE_UNLOCKED_ATTRIBUTE) === true) return;
   player.getInventory().deleteAtSlot(tabletSlot, 1);
   player.setAttribute(SLEPE_UNLOCKED_ATTRIBUTE, true);
+  syncSlepeVarbit({ player });
+  for (const [sound, delay] of TABLET_USED_SOUNDS) player.getPacketSender().sendSoundEffect(sound, 1, delay, 0);
+  const chain = new core.DialogueChainBuilder();
+  chain.add(new core.DoubleItemStatementDialogue(0, core.ItemIdentifiers.DRAKANS_MEDALLION, core.ItemIdentifiers.SLEPEY_TABLET,
+    TABLET_USED_MESSAGE));
+  player.getDialogueManager().startDialogues(chain);
+}
+
+/** The cache's own copy of the unlock, sent on the use and again at login. */
+function syncSlepeVarbit({ player }) {
+  const id = core.CacheDefinitions.getVarbitId(SLEPE_UNLOCKED_VARBIT);
+  if (id == null) return;
+  const value = player.getAttribute(SLEPE_UNLOCKED_ATTRIBUTE) === true ? 1 : 0;
+  const sender = player.getPacketSender();
+  if (sender.getVarbit(id) !== value) sender.sendVarbit(id, value);
+}
+
+/** Inventory Inspect: two objectbox pages, whether or not Slepe is unlocked (rsprox 3389 tick 1830, 3346). */
+function inspectTablet(event) {
+  const chain = new core.DialogueChainBuilder();
+  INSPECT_MESSAGES.forEach((message, index) => chain.add(new core.ItemStatementDialogue(index, core.ItemIdentifiers.SLEPEY_TABLET, message)));
+  event.player.getDialogueManager().startDialogues(chain);
+  return true;
+}
+
+/** Wiki (Slepey tablet): picking up a second tablet while holding one, it "crumbles to dust as you touch it". */
+function crumbleSpareTablet(event) {
+  const { player, groundItem } = event;
+  const tabletId = core.ItemIdentifiers.SLEPEY_TABLET;
+  if (groundItem.getItem?.()?.getId?.() !== tabletId || !player.getInventory().contains(tabletId)) return;
+  event.handled = true;
+  api.getItemOnGroundManager().deregister(groundItem);
+  player.sendMessage(SPARE_TABLET_MESSAGE);
 }
 
 module.exports = {
@@ -116,5 +161,9 @@ module.exports = {
       "Castle Drakan": teleportWorn,
     });
     api.onItemOnItem("Slepey tablet", "Drakan's medallion", useSlepeyTablet, { noted: false });
+    api.onItemAction("Slepey tablet", { Inspect: inspectTablet });
+    api.onCustomEvent("player:bootstrap-complete", syncSlepeVarbit);
+    api.onGroundItemPickup(crumbleSpareTablet);
   },
+  _test: { crumbleSpareTablet, SPARE_TABLET_MESSAGE, useSlepeyTablet, inspectTablet, syncSlepeVarbit, TABLET_USED_MESSAGE, INSPECT_MESSAGES },
 };

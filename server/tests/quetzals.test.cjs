@@ -65,6 +65,9 @@ const api = {
     Animation: class { constructor(id) { this.id = id; } },
     Graphic: class { constructor(id) { this.id = id; } },
     DialogueChainBuilder, StatementDialogue, EndDialogue: class {},
+    ItemDefinition: require("../dist/game/definition/ItemDefinition").ItemDefinition,
+    PlayerDialogue: class { constructor(index, text) { this.text = text; } },
+    NpcDialogue: class { constructor(index, npcId, text) { this.npcId = npcId; this.text = text; } },
   },
   persistAttribute: (key, value) => hooks.persisted.set(key, value),
   onPlayerLogin: () => {},
@@ -849,4 +852,165 @@ test("Varrock's Regulus: Talk-to plays the first trip, 'Sounds good.' moves it t
   const at = (x, y) => spawns.filter((spawn) => spawn.x === x && spawn.y === y && spawn.level === 0).map((spawn) => spawn.id);
   assert.deepEqual(at(3281, 3413), [13370], "Regulus stands outside the east gate as his multi-NPC (rev 242 capture tick 410)");
   assert.deepEqual(at(3277, 3411), [13371], "and Primio as hers, without Travel before the trip is agreed");
+});
+
+// --- Pitri's Perfected quetzal whistle(i) (Imbue.Quetzals.js) ----------------------------------
+const { Imbue } = Quetzals._test;
+const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
+function realPlayer(items = []) {
+  const player = new Player(null);
+  player.getSession = () => ({ sendClientPacket: () => true, write() {}, isConnected: () => true });
+  const sent = { messages: [], chains: [] };
+  player.sendMessage = (text) => sent.messages.push(text);
+  player.getDialogueManager = () => ({ startDialogues: (chain) => sent.chains.push(chain.entries.map((entry) => entry.text)) });
+  for (const [id, amount = 1] of items) player.getInventory().add(new Item(id, amount), false);
+  player.sent = sent;
+  return player;
+}
+const pitriDef = { getName: () => "Soar Leader Pitri", getId: () => 13135 };
+const ask = (player, text) => hooks.conditions.map((handler) => handler({ player, definition: pitriDef, text })).find((value) => value != null);
+const pitriLine = (player, text) => {
+  const request = { player, definition: pitriDef, text, skip: false };
+  for (const handler of hooks.events.get("npc-dialogue:line")) handler(request);
+  return request;
+};
+const pitriChoice = (player, option) => {
+  const choice = { player, definition: pitriDef, npcId: 13135, option };
+  for (const handler of hooks.events.get("npc-dialogue:choice") ?? []) handler(choice);
+  return choice;
+};
+const pitriOptions = () => JSON.parse(require("node:fs").readFileSync(path.join(__dirname, "..", "data", "definitions", "npc-dialogues.json"), "utf8"))["Soar Leader Pitri"]
+  .variants["standard-dialogue"].find((step) => step.type === "choice").options;
+const logs = (count) => Array.from({ length: count }, () => [obj("logs")]);
+
+test("Pitri's imbued whistle: her recorded refusal without a perfected whistle, then 10,000 charges of meat, lowest charges first, banknotes too", () => {
+  const options = pitriOptions();
+  const first = options.find((o) => o.text === "Can I get a whistle with unlimited charges?");
+  const more = options.find((o) => o.text === "I have some more food for the birds.");
+  const again = options.find((o) => o.text === "Can I get a Perfected quetzal whistle with unlimited charges?");
+  assert.deepEqual([first.condition, more.condition, again.condition],
+    ["First time:", "Subsequent times:", "If the player has received the perfected quetzal whistle(i):"]);
+  const [less] = first.steps.find((s) => s.type === "choice").options[0].steps;
+  const perfected = obj("hg_quetzalwhistle_perfected"), imbued = obj("hg_quetzalwhistle_perfected_infinite");
+  const seeds = obj("hg_seedsack"), kyatt = obj("hunting_kyatt_meat"), moon = obj("hunting_antelopemoon_meat");
+  const notedKyatt = ItemDefinition.forId(kyatt).getNoteId(), notedMoon = ItemDefinition.forId(moon).getNoteId();
+  assert.ok(notedKyatt > 0 && notedMoon > 0, "the meats have banknotes");
+
+  const empty = realPlayer();
+  assert.equal(ask(empty, first.condition), true);
+  assert.equal(ask(empty, more.condition), false);
+  assert.equal(ask(empty, again.condition), false);
+  assert.equal(pitriChoice(empty, first.text).end, true, "no perfected whistle: the transcript does not go on");
+  assert.deepEqual(empty.sent.chains.at(-1), [first.text, Imbue.NO_WHISTLE_LINE]);
+
+  // 3 seed sacks (1) + 5 kyatt (2) + 1,000 noted kyatt (2) + 2,000 noted moon meat (3) = 8,013 charges.
+  const player = realPlayer([[perfected], [seeds], [seeds], [seeds], ...Array.from({ length: 5 }, () => [kyatt]), [notedMoon, 2000], [notedKyatt, 1000]]);
+  assert.notEqual(pitriChoice(player, first.text).end, true, "with the whistle her transcript plays");
+  assert.equal(ask(player, less.text), true);
+  assert.equal(player.getInventory().getAmount(seeds), 0);
+  assert.equal(player.getInventory().getAmount(kyatt), 0);
+  assert.equal(player.getInventory().getAmount(notedKyatt), 0, "banknotes count");
+  assert.equal(player.getInventory().getAmount(notedMoon), 0);
+  assert.equal(player.getAttribute(Imbue.FED_ATTRIBUTE), 8013);
+  assert.equal(pitriLine(player, less.steps[0].npc).text, "Thanks for the feed, you still need to give me another 1,987 charges worth of food for the birds.");
+  assert.equal(ask(player, first.condition), false, "now the subsequent option");
+  assert.equal(ask(player, more.condition), true);
+
+  player.getInventory().add(new Item(seeds, 1), false);
+  player.getInventory().add(new Item(notedMoon, 700), false);
+  const yes = more.steps.find((s) => s.type === "choice").options[0].steps[0].npc;
+  const finished = pitriLine(player, yes);
+  assert.equal(player.getInventory().getAmount(seeds), 0, "the seed sack goes first");
+  assert.equal(player.getInventory().getAmount(notedMoon), 38, "662 moon meat make up the other 1,986; the last one goes over");
+  assert.equal(player.getAttribute(Imbue.FED_ATTRIBUTE), 10000);
+  assert.equal(player.getInventory().getAmount(perfected), 1, "not until the line shows");
+  const slot = player.getInventory().getItems().findIndex((item) => item?.getId() === perfected);
+  finished.before();
+  assert.equal(player.getInventory().getItems()[slot].getId(), imbued, "upgraded in its slot, free");
+  assert.equal(player.getInventory().getAmount(perfected), 0);
+  assert.equal(player.getAttribute(Imbue.RECEIVED_ATTRIBUTE), true);
+  assert.equal(ask(player, more.condition), false);
+  assert.equal(ask(player, again.condition), true);
+  assert.equal(hooks.persisted.get(Imbue.FED_ATTRIBUTE), 0);
+  assert.equal(hooks.persisted.get(Imbue.RECEIVED_ATTRIBUTE), false);
+});
+
+test("the first-time Yes with all the meat at once upgrades once; a later look at the line takes nothing", () => {
+  const first = pitriOptions().find((o) => o.text === "Can I get a whistle with unlimited charges?");
+  const [less, done] = first.steps.find((s) => s.type === "choice").options[0].steps;
+  const perfected = obj("hg_quetzalwhistle_perfected"), imbued = obj("hg_quetzalwhistle_perfected_infinite");
+  const moon = obj("hunting_antelopemoon_meat");
+  const notedMoon = ItemDefinition.forId(moon).getNoteId();
+  const player = realPlayer([[perfected], [notedMoon, 3400]]);
+  assert.equal(ask(player, less.text), false);
+  assert.equal(ask(player, done.text), true);
+  assert.equal(player.getInventory().getAmount(notedMoon), 66, "3,334 taken; the rest kept");
+  const line = pitriLine(player, done.steps[0].npc);
+  assert.equal(player.getInventory().getAmount(notedMoon), 66);
+  line.before();
+  line.before();
+  const receive = { player, definition: pitriDef, action: "receive", text: "a Perfected quetzal whistle(i)", handled: false };
+  for (const handler of hooks.events.get("npc-dialogue:action")) handler(receive);
+  assert.equal(receive.handled, true);
+  assert.equal(player.getInventory().getAmount(imbued), 1, "exactly one");
+  const none = realPlayer([[perfected]]);
+  assert.equal(ask(none, less.text), true, "no meat: nothing taken");
+  assert.equal(none.getAttribute(Imbue.FED_ATTRIBUTE) ?? 0, 0);
+});
+
+test("another imbued whistle costs 50,000 coins, needs room, and is only for a player who had the first", () => {
+  const again = pitriOptions().find((o) => o.text === "Can I get a Perfected quetzal whistle with unlimited charges?");
+  const [poor, rich] = again.steps.filter((s) => s.type === "condition");
+  const bought = rich.steps[0].options[0].steps[0].npc;
+  const imbued = obj("hg_quetzalwhistle_perfected_infinite");
+  const { COINS } = ItemIdentifiers;
+  const stranger = realPlayer([[COINS, 60000]]);
+  assert.equal(pitriLine(stranger, bought).skip, true, "a forged line sells nothing before the first");
+  const player = realPlayer([[COINS, 49999]]);
+  player.setAttribute(Imbue.RECEIVED_ATTRIBUTE, true);
+  assert.equal(ask(player, poor.text), true);
+  assert.equal(ask(player, rich.text), false);
+  player.getInventory().add(new Item(COINS, 50001), false);
+  assert.equal(ask(player, rich.text), true);
+  const request = pitriLine(player, bought);
+  assert.equal(player.getInventory().getAmount(COINS), 100000, "not paid until the line shows");
+  request.before();
+  assert.equal(player.getInventory().getAmount(COINS), 50000);
+  assert.equal(player.getInventory().getAmount(imbued), 1);
+  const full = realPlayer([[COINS, 60000], ...logs(27)]);
+  full.setAttribute(Imbue.RECEIVED_ATTRIBUTE, true);
+  assert.equal(pitriLine(full, bought).skip, true, "no room: no sale");
+  assert.equal(full.getInventory().getAmount(COINS), 60000);
+  const exact = realPlayer([[COINS, 50000], ...logs(27)]);
+  exact.setAttribute(Imbue.RECEIVED_ATTRIBUTE, true);
+  pitriLine(exact, bought).before();
+  assert.equal(exact.getInventory().getAmount(imbued), 1, "paying the whole stack frees its slot");
+});
+
+test("recharging a whistle at Pitri counts toward the imbued whistle (Wiki, 1 April 2026), the lost charges don't", () => {
+  const definition = { getName: () => "Soar Leader Pitri", getId: () => 13135 };
+  const answer = (player, text) => hooks.conditions.map((handler) => handler({ player, definition, text })).find((value) => value != null);
+  const whistle = obj("hg_quetzalwhistle_basic");
+  const basic = Whistle.whistleOf(whistle);
+  const player = createPlayer({ items: [[whistle], [obj("hunting_graahk_meat"), 1], [obj("hunting_graahk_meat"), 1], [obj("hunting_graahk_meat"), 1]] });
+  Whistle.setCharges(player, basic, 0);
+  assert.equal(answer(player, "If the player has at least one raw hunter meat or Quetzal feed to recharge their whistle:"), true);
+  assert.equal(Whistle.chargesOf(player, basic), 5);
+  // Three graahk are 6 charges' worth; the whistle took 5 and the sixth was lost.
+  assert.equal(player.getAttribute(Imbue.FED_ATTRIBUTE), 5);
+  assert.equal(answer(player, "First time:"), false, "no longer the first time");
+  assert.equal(answer(player, "Subsequent times:"), true);
+
+  const done = createPlayer({ items: [[whistle], [obj("hunting_graahk_meat"), 1]] });
+  Whistle.setCharges(done, basic, 0);
+  done.setAttribute(Imbue.RECEIVED_ATTRIBUTE, true);
+  answer(done, "If the player has at least one raw hunter meat or Quetzal feed to recharge their whistle:");
+  assert.equal(Whistle.chargesOf(done, basic), 2);
+  assert.equal(done.getAttribute(Imbue.FED_ATTRIBUTE) ?? 0, 0, "nothing more is counted once the imbued whistle is had");
+
+  const nearly = createPlayer({ items: [[whistle], [obj("hunting_graahk_meat"), 1]] });
+  Whistle.setCharges(nearly, basic, 0);
+  nearly.setAttribute(Imbue.FED_ATTRIBUTE, 9999);
+  answer(nearly, "If the player has at least one raw hunter meat or Quetzal feed to recharge their whistle:");
+  assert.equal(nearly.getAttribute(Imbue.FED_ATTRIBUTE), 10000, "the count stops at 10,000");
 });

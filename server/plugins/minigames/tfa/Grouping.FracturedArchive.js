@@ -9,6 +9,10 @@
  * (docs/fractured-archive.md): both screens count their rows from their onload script, so every
  * redraw opens the interface again, as live does; the details screen asks for a refresh (sub 1)
  * every ~17 ticks by itself. Not captured (our wording): the prompts and refusals.
+ *
+ * Player groups (the Grouping plugin, docs/grouping.md; not an OSRS feature, and unrelated to this
+ * board's name): a group's leader making a party brings the group members waiting in the lobby,
+ * and a member applying to it is accepted at once. Without a group (or that plugin) nothing changes.
  */
 
 const Shared = require("./Shared.FracturedArchive");
@@ -29,6 +33,8 @@ const DETAILS_BUTTON_LAST = 47;
 /** The details screen's panels (10060's last argument): new parties open on the applicants. */
 const TAB = { MEMBERS: 0, APPLICANTS: 1 };
 const PAUSEBUTTON = 1 << 0;
+/** The name the Grouping plugin knows the raid by (its activities drop "The", as Royal Titans). */
+const GROUPING_ACTIVITY = "Fractured Archive";
 
 const ATTR = {
   /** The party whose details the player has open (not saved). */
@@ -125,6 +131,7 @@ function clickList(player, slot) {
       party = Parties.create(player);
       player.setAttribute(ATTR.TAB, TAB.APPLICANTS);
       refreshOverlay(player);
+      bringGroup(player, party);
     }
     openDetails(player, party);
   } else if (slot === LIST_BUTTON.FILTER) {
@@ -226,15 +233,30 @@ function primaryAction(player, party) {
 
 function apply(player, party) {
   if (party.raid || !Parties.byId(party.id)) return;
-  const before = Parties.applicationOf(player);
-  if (!party.apply(player)) {
+  if (!enlist(party, player)) {
     player.sendMessage("You can't apply to this party right now.");
     openDetails(player, party);
     return;
   }
-  if (before && before !== party) refreshParty(before);
+  if (letsStraightIn(party, player)) {
+    acceptAsLeader(party, player);
+    return;
+  }
   refreshParty(party);
   openDetails(player, party);
+}
+
+/** An application to this party, withdrawing any other (whose screens follow). False if refused. */
+function enlist(party, player) {
+  const before = Parties.applicationOf(player);
+  if (!party.apply(player)) return false;
+  if (before && before !== party) refreshParty(before);
+  return true;
+}
+
+/** The leader's Accept for one of the party's applicants. */
+function acceptAsLeader(party, applicant) {
+  answerApplicant(party.leader, party, party.applicants.indexOf(applicant), true);
 }
 
 function answerApplicant(player, party, index, accept) {
@@ -325,6 +347,55 @@ function resumeButton(event) {
   event.handled = true;
 }
 
+// ---------------------------------------------------------------- player groups (the Grouping plugin)
+
+/** At startup: the most players the raid takes, for the groups' size checks. */
+function announceActivity() {
+  Shared.api().emitCustomEvent("grouping:activity", { name: GROUPING_ACTIVITY, maxSize: Shared.MAX_PARTY_SIZE });
+}
+
+/** The player's group as the Grouping plugin answers it (nothing set without that plugin). */
+function groupOf(player) {
+  const request = { player, activity: GROUPING_ACTIVITY, maxSize: Shared.MAX_PARTY_SIZE };
+  Shared.api().emitCustomEvent("grouping:members", request);
+  return request;
+}
+
+function inLeadersGroup(player, party) {
+  const request = { player, other: party.leader, same: false };
+  Shared.api().emitCustomEvent("grouping:same-group", request);
+  return request.same === true;
+}
+
+/** A member of the leader's group is accepted at once, unless rejected before or the party is full. */
+function letsStraightIn(party, player) {
+  return !party.isFull() && !party.blocked.has(player.getUsername()) && inLeadersGroup(player, party);
+}
+
+/** A group member joins a new party only from where they could apply, and from no other party. */
+function canBring(party, member) {
+  return !party.isFull() && Shared.inLobby(member.getLocation()) && !Parties.partyOf(member);
+}
+
+/**
+ * A group's leader making a party: each member online who could join is accepted in the group's
+ * order while there's room; the others are told how to follow, and a leader whose group is too
+ * big for the raid is told so.
+ */
+function bringGroup(leader, party) {
+  const group = groupOf(leader);
+  if (!group.isLeader) return;
+  if (group.fits === false && group.message) leader.sendMessage(group.message);
+  for (const member of group.members ?? []) {
+    if (member === leader) continue;
+    if (canBring(party, member) && enlist(party, member)) {
+      acceptAsLeader(party, member);
+    } else {
+      member.sendMessage(`${Shared.displayName(leader)} has made a Fractured Archive party for your group. Apply at the Grouping Board and you'll be let straight in.`);
+    }
+  }
+}
+
 function sendFilter({ player }) {
   player.getPacketSender().sendVarbit(Shared.id("varbit", "FRIENDS_FILTER"), player.getAttribute(ATTR.FRIENDS_FILTER) === true ? 1 : 0);
 }
@@ -339,11 +410,12 @@ module.exports = function registerGrouping(api) {
   api.persistAttribute(ATTR.COMPLETIONS, 0);
   api.persistAttribute(ATTR.FRIENDS_FILTER, false);
   api.onPlayerLogin(sendFilter);
+  api.onServerStartup(announceActivity);
   api.onObjectInteraction("Grouping Board", { Inspect: inspectBoard });
   api.onInterfaceActionClick(resumeButton);
 };
 
 Object.assign(module.exports, {
-  ATTR, LIST_BUTTON, DETAILS_BUTTON, TAB, refreshOverlay, refreshParty, leaveParty, leaveLobby,
-  openList, openDetails, rowText, memberLine, clickList, clickDetails, resumeButton,
+  ATTR, LIST_BUTTON, DETAILS_BUTTON, TAB, GROUPING_ACTIVITY, refreshOverlay, refreshParty, leaveParty, leaveLobby,
+  openList, openDetails, rowText, memberLine, clickList, clickDetails, resumeButton, announceActivity,
 });

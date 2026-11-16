@@ -236,7 +236,7 @@ renderer.handleInput = () => inputs++;
 renderer.mapManager.visibleMaps = [{ canRender: () => true, hasSunkenLocs: () => false, updateAnimatedLocs: noop,
     drawOpaque: (_pass: unknown, plane: number) => { assert.equal(plane, 1); worldDraws++; }, drawAlpha: noop }];
 renderer.interactionHost.getRoofPlaneLimit = () => 1;
-renderer.overlays = { update: noop, drawWorld: () => overlayDraws++, drawScreen: () => overlayDraws++ };
+renderer.overlays = { update: noop, drawGroundItems: noop, drawWorld: () => overlayDraws++, drawScreen: () => overlayDraws++ };
 render();
 assert.equal(streamed, 1, "editor streams map squares while logged out");
 assert.equal(inputs, 1, "free-camera input runs during the editor preview");

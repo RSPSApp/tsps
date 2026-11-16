@@ -277,8 +277,7 @@ function isUltimate(player) {
 }
 
 function owns(player, itemId) {
-  return player.getInventory().contains(itemId) || player.getEquipment().contains(itemId)
-    || player.getBanks().some((bank, tab) => tab !== core.Bank.BANK_SEARCH_TAB_INDEX && bank?.contains?.(itemId));
+  return core.Bank.owns(player, itemId);
 }
 
 function redraw(player, shop) {

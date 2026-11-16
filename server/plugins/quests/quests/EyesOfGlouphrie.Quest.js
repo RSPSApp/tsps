@@ -48,6 +48,8 @@
  * - the singing bowl's crystal-saw conversion is implemented; crystal saw charges
  *   (varbit 2514) are not tracked, and extracting sap from the pine tree is not.
  */
+const Saws = require("../../items/Saws");
+
 module.exports = function registerEyesOfGlouphrieQuest(api) {
   const {
     GameObject,
@@ -286,7 +288,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
       held(player, OAK_LOGS_ITEM_ID) &&
       held(player, MAPLE_LOGS_ITEM_ID) &&
       held(player, MAGIC_GLUE_ITEM_ID) &&
-      held(player, SAW_ITEM_ID) &&
+      Saws.holdsSaw(api.core, player) &&
       held(player, HAMMER_ITEM_ID)
     );
   }
@@ -520,8 +522,8 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
         return !held(player, OAK_LOGS_ITEM_ID);
       case "d9P2K-": // doesn't have maple logs
         return !held(player, MAPLE_LOGS_ITEM_ID);
-      case "Ip4VzN": // doesn't have a saw
-        return !held(player, SAW_ITEM_ID);
+      case "Ip4VzN": // doesn't have a saw (the same rule as hasRepairItems)
+        return !Saws.holdsSaw(api.core, player);
       case "2DnRda": // doesn't have a hammer
         return !held(player, HAMMER_ITEM_ID);
       case "Rb59-2": // doesn't have a bucket of sap
@@ -755,12 +757,20 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_EXCHANGER_NO_DISC);
   }
 
+  const SINGING_BOWL_INSPECT_TEXT = "This is a beautiful and elegant looking crystal bowl. It is clearly of<br>"
+    + "elvish origin, and reminds you of a large crystal drinking glass.<br>"
+    + "Every now and again you're sure you can hear the bowl resonate<br>"
+    + "with sounds echoing around the cave, giving off a keening noise that<br>"
+    + "makes you think for a moment that it's calling home.";
+
   function inspectBowl(event) {
     const { player, objectId } = event;
     if (objectId !== SINGING_BOWL_OBJECT_ID) return false;
     setBit(player, BIT_BOWL_SEEN);
     player.getPacketSender().sendVarbit(VARBIT_BOWL_SEEN, 1);
-    player.sendMessage("You look into the singing bowl. A faint crystal hum fills the air.");
+    // RSProx rev 230 recording 310 t1460 and t1765: a mesbox, with live's line breaks.
+    const { DialogueChainBuilder, StatementDialogue } = api.core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, SINGING_BOWL_INSPECT_TEXT)));
   }
 
   function routeBowlInspect(event) {

@@ -17,6 +17,7 @@ ItemAliases.register(ItemIds.BLAZING_BLOWPIPE, ItemIds.TOXIC_BLOWPIPE);
 const poisoned = [];
 let cycle = 100;
 let hitResolved;
+let protectionQuery;
 const weaponNames = new Map([
   [1001, "Rune scimitar"],
   [1002, "Rune dagger(p++)"],
@@ -48,14 +49,17 @@ SerpentineHelm.register({
   onItemAction() {},
   onItemOnItem() {},
   onCombatHitResolved(handler) { hitResolved = handler; },
+  onCustomEvent(name, handler) { if (name === "serpentine-helm:protection") protectionQuery = handler; },
   onPlayerProcess() {},
 });
 
 function item(id, meta = {}) {
   return {
     id,
+    amount: 1,
     meta: { ...meta },
     getId() { return this.id; },
+    getAmount() { return this.amount; },
     setId(next) { this.id = next; },
     getMetaValue(key) { return this.meta[key]; },
     setMetaValue(key, next) {
@@ -292,4 +296,27 @@ test("charging reports total scales and percentage as in recording 1074", () => 
   assert.equal(removed, 11000);
   assert.equal(SerpentineHelm._test.charges(helm), 11000);
   assert.equal(player.messages.at(-1), "Scales: <col=007f00>11,000 (100.0%)</col>");
+});
+
+test('the registered protection query observes positive worn charges without upkeep or a timer refresh', () => {
+  assert.equal(typeof protectionQuery, 'function');
+  for (const id of [ItemIds.SERPENTINE_HELM, ItemIds.TANZANITE_HELM, ItemIds.MAGMA_HELM]) {
+    const helm = item(id, { 'serpentine-helm': 100 });
+    const player = { getEquipment: () => ({ get: slot => slot === Equipment.HEAD_SLOT ? helm : null }),
+      getCombat() { throw new Error('a read-only query must not refresh immunity or run upkeep'); },
+      setAttribute() { throw new Error('a read-only query must not change the upkeep phase'); } };
+    for (let i = 0; i < 3; i++) {
+      const query = { player, active: false }; protectionQuery(query);
+      assert.equal(query.active, true);
+      assert.equal(SerpentineHelm._test.charges(helm), 100, 'no extra scales are spent');
+    }
+    helm.setMetaValue('serpentine-helm', 0);
+    const empty = { player, active: true }; protectionQuery(empty); assert.equal(empty.active, false);
+    helm.setMetaValue('serpentine-helm', 100); helm.amount = 0;
+    const ghost = { player, active: true }; protectionQuery(ghost); assert.equal(ghost.active, false);
+  }
+  for (const helm of [null, item(ItemIds.SERPENTINE_HELM_UNCHARGED_), item(ItemIds.RUNE_SCIMITAR, { 'serpentine-helm': 100 })]) {
+    const query = { player: { getEquipment: () => ({ get: () => helm }) }, active: true };
+    protectionQuery(query); assert.equal(query.active, false);
+  }
 });

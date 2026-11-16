@@ -185,7 +185,7 @@ function unlockDialogue(index, items, text) {
  * a message-box line. False when those levels unlock nothing.
  */
 function showUnlockBox(player, state, skill, fromLevel, toLevel) {
-  const { DialogueChainBuilder, EndDialogue, ChatType } = pluginApi.core;
+  const { DialogueChainBuilder, EndDialogue } = pluginApi.core;
   const chain = new DialogueChainBuilder();
   const texts = [];
   for (let level = fromLevel + 1; level <= toLevel; level++) {
@@ -198,7 +198,6 @@ function showUnlockBox(player, state, skill, fromLevel, toLevel) {
   if (texts.length === 0) return false;
   chain.add(new EndDialogue(texts.length));
   const sender = player.getPacketSender();
-  for (const text of texts) sender.sendTypedMessage(ChatType.MESBOX, text.replace(/<br>/g, " "));
   // The box takes the pop-up's place in the chatbox; that is no reason to stop the level-up.
   if (state) state.replacing = true;
   try {
@@ -291,7 +290,40 @@ function trackCombatLevel({ player }) {
   player.setAttribute(COMBAT_LEVEL_ATTRIBUTE, player.getSkillManager().getCombatLevel());
 }
 
-function showLevelUp({ player, skill, oldLevel, newLevel }) {
+/**
+ * rsprox captures (Mahogany Homes, the user's rev 241/242 runs: 20261111T012755 t897-903,
+ * 20261029T203602 t7336-7346): experience paid mid-conversation lands at once, but its level-up
+ * (message, jingle, pop-up) waits until the conversation has closed, the tick after.
+ */
+function showLevelUp(event) {
+  if (inConversation(event.player)) return awaitDialogueEnd(event);
+  announceLevelUp(event);
+}
+
+/**
+ * A plugin's option menu (sendMultiChatboxPrompt) resets the dialogue chain that showed it, but the
+ * conversation is still open until the player picks an option (rsprox 3170 t281, rev 232: Ali's casket
+ * offer menu straight after the Force box line).
+ */
+function inConversation(player) {
+  return !!(player.getDialogueManager?.()?.isActive?.() || pluginApi.core.MultiChatboxPrompt?.getPending?.(player));
+}
+
+function awaitDialogueEnd(event) {
+  const { Task, TaskManager } = pluginApi.core;
+  const player = event.player;
+  TaskManager.submit(new (class extends Task {
+    constructor() { super(1, player); }
+    execute() {
+      if (!player.isRegistered()) return this.stop();
+      if (inConversation(player)) return;
+      this.stop();
+      announceLevelUp(event);
+    }
+  })());
+}
+
+function announceLevelUp({ player, skill, oldLevel, newLevel }) {
   const skills = player.getSkillManager();
   const name = skill.getName();
   if (newLevel >= MAX_LEVEL) {

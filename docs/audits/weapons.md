@@ -209,12 +209,13 @@ the CSV keeps them so the numbers are traceable.
 
 ### 4. Attack speed, range and two-handedness
 
-These are the remaining non-bonus differences. Every weapon's speed now equals the cache's, so
-all twelve are cache-versus-Wiki.
+These are the remaining non-bonus differences. Every weapon's speed equals the cache's except the
+mjolnirs, so the rest are cache-versus-Wiki. The mjolnirs now take the Wiki's 6 through one
+`WeaponProfile.ts` entry, an exception to AGENTS rule 13 approved on 2026-11-15.
 
 | Id | Weapon | Server (cache) | Wiki |
 | ---: | --- | ---: | ---: |
-| 6760, 6762, 6764 | Guthix / Saradomin / Zamorak mjolnir | 5 | 6 |
+| 6760, 6762, 6764 | Guthix / Saradomin / Zamorak mjolnir | 6 (cache 5) | 6 |
 | 10858 | Shadow sword | 7 | 6 |
 | 13142 | Western banner 2 | 6 | 5 |
 | 22335 | Starter staff | 5 | 4 |

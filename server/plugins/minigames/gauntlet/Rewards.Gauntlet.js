@@ -146,15 +146,18 @@ function openChest(player, random = Math.random) {
   const items = rollReward(reward, ownsItem(player, ID.GAUNTLET_CAPE), random);
   setReward(player, null, null);
   player.sendMessage("You open the chest.");
-  // Pets turns a rolled Youngllef into a follower/backpack item and removes it here.
-  Shared.api().emitCustomEvent("npc-drops:roll", { player, drops: items });
+  // Pets turns a rolled Youngllef into a follower/backpack item and removes it here; a completed
+  // Corrupted Gauntlet names its boss as the source (league echo orbs).
+  const source = reward.kind === "completed" && reward.mode === "corrupted" ? "Corrupted Hunllef" : undefined;
+  Shared.api().emitCustomEvent("npc-drops:roll", { player, drops: items, source });
   for (const reward of items) {
     const noteId = reward.noted ? ItemDefinition.forId(reward.id)?.getNoteId?.() ?? -1 : -1;
     const id = noteId >= 0 ? noteId : reward.id;
     const room = inventory.getAddableAmount(new Item(id, reward.amount));
     if (room > 0) inventory.adds(id, room);
     if (room < reward.amount) {
-      Shared.api().getItemOnGroundManager().registerLocation(player, new Item(id, reward.amount - room), player.getLocation().clone());
+      // A reward that brings its own ground options (a league echo orb's) keeps them on the floor.
+      Shared.api().getItemOnGroundManager().registerLocation(player, new Item(id, reward.amount - room), player.getLocation().clone(), undefined, reward.ground ?? {});
     }
   }
   inventory.refreshItems();

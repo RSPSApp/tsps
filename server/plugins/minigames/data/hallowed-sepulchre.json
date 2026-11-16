@@ -9,6 +9,19 @@
     "song": 669
   },
 
+  "_mausoleum": "rsprox.net 3050 (rev 231): the Mausoleum Door in Darkmeyer (Enter) and the lobby's stairs up (Climb-up). Both fade out 2 ticks after arriving and move the player 2 ticks later; the door fades back in 1 tick after the move, the stairs 2. The fade closes 2 ticks after it fades in.",
+  "mausoleum": {
+    "door": 38574,
+    "stairs": 38601,
+    "lobbyTile": [2400, 5969, 0],
+    "darkmeyerTile": [3654, 3384, 0],
+    "fadeOutAt": 2,
+    "moveAt": 4,
+    "doorFadeInAt": 5,
+    "stairsFadeInAt": 6,
+    "fadeCloseAfter": 2
+  },
+
   "_floors": "source: the SW corner of the 96x96 area each floor copies (12x12 chunks, planes 0-3); centre: the first teleport. Variants: the start tile and the varbits set at the floor's start, as recorded. agility: Wiki main page (52/62/72/77/87). xp: recorded completion XP / 15 (the Wiki's two tables disagree; see _xp).",
   "floors": [
     { "floor": 1, "source": [2224, 5936], "centre": [2272, 5984, 2], "agility": 52, "xp": 500,

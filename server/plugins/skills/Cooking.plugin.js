@@ -9,7 +9,7 @@ const Wine = require("./cooking/Wine.Cooking");
 
 module.exports = {
   name: "Cooking",
-  description: "Cooking on fires, ranges and ovens, plus doughs, pies, pizzas, wine, sacred eels, leaping fish and gnome cooking.",
+  description: "Cooking on fires, ranges and ovens, plus doughs, pies, pizzas, wine, sacred eels, leaping fish, gnome cooking and dairy churns.",
   register(api) {
     require("./cooking/Cookers.Cooking")(api);
     require("./cooking/Recipes.Cooking")(api);
@@ -17,6 +17,7 @@ module.exports = {
     require("./cooking/SacredEel.Cooking")(api);
     require("./cooking/LeapingFish.Cooking")(api);
     require("./cooking/Gnome.Cooking")(api);
+    require("./cooking/Churn.Cooking")(api);
   },
   isCookingActive: Cookers.isCookingActive,
   /** True for a fire, range or oven the game lets you cook on (name and Cook action). */
@@ -31,6 +32,7 @@ module.exports = {
     ...Cookers._test,
     wearsCookingCape: Common.wearsCookingCape,
     wine: Wine._test,
+    churn: require("./cooking/Churn.Cooking")._test,
     get COOKABLE_BY_RAW() { return Common.cookables(); },
     setApi: (value) => Common.init(value),
   },

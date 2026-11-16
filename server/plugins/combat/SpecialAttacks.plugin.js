@@ -54,10 +54,13 @@ module.exports = {
     require("./specials/Emberlight.SpecialAttack")(api);
     require("./specials/Excalibur.SpecialAttack")(api);
     require("./specials/EyeOfAyak.SpecialAttack")(api);
+    require("./specials/FangOfTheHound.SpecialAttack")(api);
     require("./specials/GraniteHammer.SpecialAttack")(api);
     require("./specials/GraniteMaul.SpecialAttack")(api);
+    require("./specials/InfernalTecpatl.SpecialAttack")(api);
     require("./specials/KerisPartisanOfCorruption.SpecialAttack")(api);
     require("./specials/KerisPartisanOfTheSun.SpecialAttack")(api);
+    require("./specials/LithicSceptre.SpecialAttack")(api);
     require("./specials/MagicLongbow.SpecialAttack")(api);
     require("./specials/MagicShortbow.SpecialAttack")(api);
     require("./specials/MorrigansJavelin.SpecialAttack")(api);

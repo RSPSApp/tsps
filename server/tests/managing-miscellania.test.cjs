@@ -43,10 +43,10 @@ function install(completed = ['throne_of_miscellania']) {
 
 function player({ at = MISCELLANIA, favour = 127, coins = 0, bankFree = 800 } = {}) {
   const attributes = new Map(), varbits = new Map(), configs = new Map(), strings = new Map(), shown = new Map();
-  const bank = new Map(), messages = [];
+  const bank = new Map(), messages = [], sent = [];
   let inventoryCoins = coins, amountAction = null, interfaceId = -1;
   return {
-    favourValue: favour, messages, bank, varbits, configs, strings, shown,
+    favourValue: favour, messages, sent, bank, varbits, configs, strings, shown,
     getAttribute: (k) => attributes.get(k),
     setAttribute: (k, v) => attributes.set(k, v),
     getLocation: () => ({ getX: () => at.x, getY: () => at.y, getZ: () => 0 }),
@@ -76,7 +76,8 @@ function player({ at = MISCELLANIA, favour = 127, coins = 0, bankFree = 800 } = 
       getVarp: (id) => configs.get(id) ?? 0,
       sendString: (text, uid) => strings.set(uid, text),
       sendInterfaceDisplayState: (uid, hidden) => shown.set(uid, !hidden),
-      sendInterface: (id) => { interfaceId = id; },
+      sendInterface: (id) => { interfaceId = id; sent.push(`open ${id}`); },
+      sendInterfaceRemoval: () => { interfaceId = -1; sent.push('close'); },
       sendEnterAmountPrompt: () => {},
     }),
   };
@@ -201,6 +202,26 @@ test('buttons are found by component, and only while the interface is open', () 
   assert.equal(Interface.onButton({ player: p, buttonId: (390 << 16) | 11 }), false);
 });
 
+test("the interface replaces Ghrim's chat: the chatbox closes as it opens", () => {
+  install();
+  const p = player();
+  Common.kingdomOf(p);
+  Interface.open(p);
+  assert.deepEqual(p.sent, ['close', `open ${Interface.GROUP}`]);
+});
+
+test('with nothing to collect, Ghrim describes the effort before the interface opens', () => {
+  install();
+  const p = player();
+  const request = { player: p, npcId: core.NpcIdentifiers.ADVISOR_GHRIM, stepId: Ghrim.ACTION.nothingCollectedManage, handled: false };
+  Ghrim.onDialogueAction(request);
+  assert.equal(request.handled, true);
+  assert.deepEqual(request.steps.map((step) => step.npc ?? step.target), [
+    'This is how your subjects are distributing their effort.', 'Managing Miscellania',
+  ]);
+  assert.equal(p.getInterfaceId(), -1, 'the interface waits for the line');
+});
+
 test('deposits stop at the coffer cap and withdrawals return coins', () => {
   install();
   const p = player({ coins: 6_000_000 });
@@ -314,6 +335,26 @@ test('approval rises from coal, maples and big fish on the islands only', () => 
   const away = player({ at: LUMBRIDGE, favour: 50 });
   Approval.onMined({ player: away, itemId: i.COAL });
   assert.equal(away.favourValue, 50);
+});
+
+test('a gem found mining on the islands raises approval by 2, up to the cap (Wiki: +2 per gem)', () => {
+  install();
+  const today = Common.today();
+  const sapphire = core.CacheDefinitions.getObjId('uncut_sapphire');
+  const p = player({ favour: 100 });
+  p.setAttribute(Common.KINGDOM_ATTRIBUTE, kingdom({ lastDay: today, lastVisitDay: today }));
+  for (const fn of events['mining:gem']) fn({ player: p, itemId: sapphire });
+  assert.equal(p.favourValue, 102);
+  Approval.onGem({ player: p, itemId: null });
+  assert.equal(p.favourValue, 102, 'an empty gem roll finds nothing');
+  const nearlyFull = player({ favour: 126 });
+  nearlyFull.setAttribute(Common.KINGDOM_ATTRIBUTE, kingdom({ lastDay: today, lastVisitDay: today }));
+  Approval.onGem({ player: nearlyFull, itemId: sapphire });
+  assert.equal(nearlyFull.favourValue, 127);
+  const away = player({ at: LUMBRIDGE, favour: 50 });
+  away.setAttribute(Common.KINGDOM_ATTRIBUTE, kingdom({ lastDay: today, lastVisitDay: today }));
+  Approval.onGem({ player: away, itemId: sapphire });
+  assert.equal(away.favourValue, 50, 'gems mined off the islands do nothing');
 });
 
 test('a regent\'s coal goes to Miner Magnus, who thanks them (rsprox capture 1757)', () => {

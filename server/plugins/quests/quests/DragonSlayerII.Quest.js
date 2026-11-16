@@ -1,5 +1,6 @@
 /** Dragon Slayer II: the transcript supplies the conversations; this plugin owns the quest state and world actions. */
 const NPC_TRANSCRIPTS = require("../../../data/definitions/npc-dialogues.json");
+const Saws = require("../../items/Saws");
 const ONEIROMANCER_IDS = new Set([3835, 8049]);
 // Static NPC spawns in the Ancient Cavern orb room; their cache variants use varbits 6109–6111.
 const FORGE_HEADS = new Map([[7506, { bit: 1, varbit: 6109 }], [7507, { bit: 2, varbit: 6110 }], [7508, { bit: 4, varbit: 6111 }]]);
@@ -868,7 +869,7 @@ module.exports = function registerDragonSlayerII(api) {
       return true;
     }
     if (p.getSkillManager().getMaxLevel(Skill.CONSTRUCTION) < 50) return p.sendMessage("You need at least 50 Construction to build the rowboat.");
-    if (!has(p, I.HAMMER) || !has(p, I.SAW)) return p.sendMessage("You need a hammer and a saw to build the rowboat.");
+    if (!has(p, I.HAMMER) || !Saws.holdsSaw(api.core, p)) return p.sendMessage("You need a hammer and a saw to build the rowboat.");
     if (!has(p, I.OAK_PLANK, 8) || !has(p, I.SWAMP_PASTE, 10)) return p.sendMessage("You need 8 oak planks and 10 swamp paste to build the rowboat.");
     const nails = [I.BRONZE_NAILS, I.IRON_NAILS, I.STEEL_NAILS, I.BLACK_NAILS, I.MITHRIL_NAILS, I.ADAMANTITE_NAILS, I.RUNE_NAILS];
     if (nails.reduce((total, id) => total + p.getInventory().getAmount(id), 0) < 12) return p.sendMessage("You need at least 12 nails of any kind.");

@@ -16,6 +16,7 @@ const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { Item } = require("../dist/game/model/Item");
 const { MagicSpellbook } = require("../dist/game/model/MagicSpellbook");
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 
 const areaSounds = [];
 const prompts = [];
@@ -90,13 +91,14 @@ function createPlayer(x, y, boats) {
       return sender;
     },
   });
-  return {
+  const player = {
     items,
     log,
     xp,
     dialogues,
     getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill, amount]) }),
-    getDialogueManager: () => ({ startDialogues: (chain) => dialogues.push(chain) }),
+    // The box logs its own chat line as it opens, as the real one does.
+    getDialogueManager: () => ({ startDialogues: (chain) => { dialogues.push(chain); Dialogue.sendBoxChatLine(player, chain.entries[0].text); } }),
     getLocation: () => new Location(x, y, 0),
     getSailing: () => ({ boats, activeBoatSlot: null }),
     getArea: () => null,
@@ -115,6 +117,7 @@ function createPlayer(x, y, boats) {
     performGraphic: (graphic) => log.push(`spot ${graphic.id}`),
     sendMessage: (message) => log.push(`message ${message}`),
   };
+  return player;
 }
 
 const tablet = { itemId: ItemIdentifiers.SUMMON_BOAT };
@@ -239,7 +242,7 @@ test("a hold with cargo a summon loses warns, then asks; only Yes summons it, wi
   const player = createPlayer(3059, 2974, [summoned]);
   plugin._test.summon(player, plugin._test.spellCast(), plugin._test.nearbyDock(player), 1);
   assert.equal(summoned.location.dock, "port_sarim", "nothing happens before the answer");
-  assert.ok(player.log.includes(`mesbox ${plugin._test.CARGO_WARNING}`));
+  assert.ok(player.log.includes(`115 ${plugin._test.CARGO_WARNING}`), "the box's own mesbox line (115)");
   assert.ok(player.log.includes("sendVarbit 12393=0"));
   const [chain] = player.dialogues;
   assert.equal(chain.entries[0].text, plugin._test.CARGO_WARNING_BOX);

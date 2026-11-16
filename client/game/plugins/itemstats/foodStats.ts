@@ -48,7 +48,6 @@ export interface FoodStats {
     followUp?: Record<string, unknown>;
     special?: string;
     area?: string;
-    wildernessOnly?: boolean;
     requiresContext: boolean;
 }
 
@@ -91,7 +90,6 @@ export function readFoodStats(definition: FoodDefinition | undefined): FoodStats
         ...(definition.then ? { followUp: { ...definition.then } } : {}),
         ...(definition.special ? { special: definition.special } : {}),
         ...(typeof definition.area === "string" ? { area: definition.area } : {}),
-        ...(typeof definition.wildernessOnly === "boolean" ? { wildernessOnly: definition.wildernessOnly } : {}),
         requiresContext: !knownEffects || typeof definition.heal === "object" || Boolean(definition.then || definition.special),
     };
 }

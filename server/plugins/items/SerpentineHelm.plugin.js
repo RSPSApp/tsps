@@ -36,6 +36,12 @@ function wornHelm(player) {
   return item && chargedIds.has(item.getId()) ? item : null;
 }
 
+/** Observes the existing charged-item owner without upkeep, timer refresh or scale payment. */
+function protectionQuery(request) {
+  const helm = wornHelm(request.player);
+  request.active = !!helm && helm.getAmount() > 0 && charges(helm) > 0;
+}
+
 function refresh(player) {
   player.getInventory().refreshItems();
   player.getEquipment().refreshItems();
@@ -193,6 +199,7 @@ function attach(api) {
     api.onItemOnItem("Zulrah's scales", `${name} (uncharged)`, chargeHelm, { noted: false });
   }
   api.onCombatHitResolved(onHitResolved);
+  api.onCustomEvent("serpentine-helm:protection", protectionQuery);
   api.onPlayerProcess(processPlayer);
 }
 

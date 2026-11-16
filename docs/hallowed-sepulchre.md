@@ -11,21 +11,29 @@ It covers the lobby, the entry, the five floors with their obstacles and traps, 
 | `HallowedSepulchre.plugin.js` | Registers the parts and the saved attributes. |
 | `hallowedsepulchre/Common.HallowedSepulchre.js` | The data, the recorded fades (174 with scripts 948/951), the timer HUD (668), chat helpers, spam lines and weighted rolls. |
 | `hallowedsepulchre/Run.HallowedSepulchre.js` | The run: one `TemplatedInstanceArea` per floor and its layout, the timer, crediting a floor, leaving, logout and login recovery, and the floor 5 barriers. |
-| `hallowedsepulchre/Lobby.HallowedSepulchre.js` | The lobby stairs, the warning box and "don't ask again", the Mysterious Stranger's tutorial and shards, the crystal shard, the Hallowed token, and the obelisks and return stairs. |
+| `hallowedsepulchre/Lobby.HallowedSepulchre.js` | The Mausoleum Door in and the lobby's stairs out, the lobby stairs, the warning box and "don't ask again", the Mysterious Stranger's tutorial and shards, the crystal shard, the Hallowed token, and the obelisks and return stairs. |
 | `hallowedsepulchre/Obstacles.HallowedSepulchre.js` | Drops, middle stairs, platforms, the F4 gate, the F5 stepping stones, the F2 stones and the floor stairs. Also the route hook that walks to each obstacle's start tile. |
 | `hallowedsepulchre/Skills.HallowedSepulchre.js` | The grapple pillars, the bridge, the portal and the brazier. |
 | `hallowedsepulchre/Coffins.HallowedSepulchre.js` | The coffins and the Grand Hallowed Coffin, with the Wiki loot. |
+| `hallowedsepulchre/Tools.HallowedSepulchre.js` | The Mysterious Stranger's tool storage (Exchange). |
 | `hallowedsepulchre/Traps.HallowedSepulchre.js` | The traps: fire, crossbow, sword and lightning statues, the strange tiles, hits and respawns. |
 | `data/hallowed-sepulchre.json` | Floors and layouts, tiles, varbits, messages, XP and loot. Each value is noted as recorded, derived or Wiki. |
 
 The shop ("Mysterious Hallowed Goods", 1455) is generated data, and `Shopkeepers.plugin.js` already opens it from the Stranger's Trade.
+
+## Getting there (recorded)
+
+- **The Mausoleum Door (38574) in Darkmeyer, Enter** (rsprox.net 3050, rev 231): +2 the fade out, +4 the player is in the lobby at (2400, 5969) facing north, +5 the fade in with the lobby music, +7 the fade closes.
+- **The lobby's stairs up (38601), Climb-up** (rsprox.net 3050): +2 the fade out, +4 the player is back by the door at (3654, 3384) facing south, +6 the fade in with the Darkmeyer music, +8 the fade closes.
+- Neither checks Sins of the Father; the lobby stairs down do. Darkmeyer can be reached during the quest, so a player there hasn't necessarily finished it. No recording shows the door refusing anyone.
+- One task keyed to the player owns each passage, so logging out cancels it. Movement is held until the move. Ours: dying or being moved away before the move abandons it, and the lock is left to whatever moved or killed the player. A fade or overlay opened over the passage's own fade is neither overwritten nor closed.
 
 ## How a run goes (recorded)
 
 - **The lobby stairs (38452).**
   - Before the Stranger's tutorial (varbit 10408), he stops you.
   - After it, the warning box shows, then "Are you sure you wish to enter?" with "Yes." / "Yes, and don't ask again." / "No.". The second option saves varbit 10409.
-  - 52 Agility is needed.
+  - 52 Agility is needed. `pluginConfig` `"HallowedSepulchre:agilityRequirements": false` drops this check and the floor stairs' (default `true`).
 - **Each floor.**
   - The fade. +1: the minimap goes off. +3: the player is in a new instance of the floor's 96x96 source area (12x12 chunks, planes 0-3), on one of the recorded layouts. A layout is a start tile plus the `*_state` varbits that show which skill obstacles are out.
   - +4: "You venture (further) down into the Hallowed Sepulchre.", music 674, and the fade in.
@@ -82,16 +90,21 @@ Each floor finds its traps among the cache map's locs in its own instance. Every
   - On floor 3's layout B, the level-1 corridor uses the west drop's landing, as live (varbit 10395).
   - An equipped Hallowed ring prevents environmental-trap damage and skips the ordinary death/fade recovery, returning to the existing modeled checkpoint. This faster return is a TSPS interpretation of the [ring's effect](https://oldschool.runescape.wiki/w/Hallowed_ring); exact ring timing and every ring-specific return tile have not been captured. A separate lightning stun still holds movement.
 
+## Tool storage
+
+Exchange on the Mysterious Stranger opens Hallowed Sepulchre Equipment Storage. Rev 227 recording 1862 opens `hallowed_tools` (666) as the main modal and `hallowed_tool_side` (632) as the side modal, after script 917 [-1, -1], with OP1 on the four quantity buttons. The client draws both screens from the `hallowed_storage_*` varbits and the inventory. Store, Remove, Store-all and Withdraw-all follow the ops that `[proc,hallowed_tools_main_update]` and `_side_update` set for the selected quantity (`farming_tools_selectedquantity`, shared with the leprechaun through enum 342). The caps come from enum 342, as the Wiki gives them: 1 of each tool and 1000 Hallowed tokens, which don't stack. The stored amounts are saved in `hallowed:stored-tools`. No message is recorded, so moving tools sends none.
+
 ## Not yet
 
-- The tool storage interface (666).
 - Death handling beyond the run ending (no recording has a death inside).
 - The ambient NPCs.
 - The clue and Mysterious page tertiaries.
+- The `hallowed_pb_reset_1`-`7` varbits live sets to 1 as the Mausoleum Door fades (rsprox.net 3050); what they gate isn't known.
 
 ## Tests
 
 `server/tests/hallowed-sepulchre.test.cjs` builds real floor instances from the cache. It covers:
+- the Mausoleum Door in and the lobby stairs out, tick by tick, and the passage given up on a death, a teleport, a newer fade or a logout;
 - the entry and its menu; the layouts and the timer;
 - every obstacle kind;
 - the recorded pillar, bridge and portal crossings, and the drop face rule;

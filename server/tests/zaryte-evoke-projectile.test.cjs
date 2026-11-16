@@ -1,6 +1,6 @@
 // Run after `yarn build`: node --test tests/zaryte-evoke-projectile.test.cjs
 // The Zaryte crossbow's Evoke flies its own zcb_specialattack spotanim (1995) on a flat 41 -> 75 path at heights
-// 44 -> 36, whatever the distance (rsprox_transcripts/227/01752.txt), as Armadyl Eye does. It sent the equipped bolt
+// 44 -> 36 with progress 72, whatever the distance (rsprox_transcripts/227/01752.txt), as Armadyl Eye does. It sent the equipped bolt
 // (27) on the normal trajectory instead: 41 -> 66 at 4 tiles, 41 -> 86 at 8.
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -45,8 +45,8 @@ test("Evoke sends 1995 on the flat 41 -> 75 path at 4 and 8 tiles", (t) => {
     const shot = sent.at(-1);
     assert.ok(shot, `a projectile at ${tiles} tiles`);
     assert.deepEqual(
-      { id: shot.projectileId, start: shot.delay, end: shot.speed, startHeight: shot.startHeight * 4, endHeight: shot.endHeight * 4, angle: shot.angle },
-      { id: 1995, start: 41, end: 75, startHeight: 176, endHeight: 146, angle: 5 },
+      { id: shot.projectileId, start: shot.delay, end: shot.speed, startHeight: shot.startHeight * 4, endHeight: shot.endHeight * 4, angle: shot.angle, progress: shot.progress },
+      { id: 1995, start: 41, end: 75, startHeight: 176, endHeight: 146, angle: 5, progress: 72 },
       `${tiles} tiles`,
     );
   }

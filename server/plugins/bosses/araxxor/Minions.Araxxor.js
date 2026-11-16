@@ -7,7 +7,7 @@
  * 6) into a fresh minion at the egg's tile (hatch mark 2927/2928/2929 + 11503, the loc
  * swapped for the non-blocking 29733), which goes for the player 3 ticks later. Acidic spits
  * (11498, projectile 1560, sound 9378), Mirrorback melees (11500) and reflects half of every
- * non-halberd, non-ranged, non-magic hit back at its attacker, Ruptura never attacks: it
+ * non-halberd, non-ranged, non-magic hit from melee distance back at its attacker, Ruptura never attacks: it
  * runs at its target and explodes (11504 + graphic 2925), hurting Araxxor 80/64/48/33 by
  * distance two ticks later and going two ticks after that.
  *
@@ -307,7 +307,7 @@ function maxHitVsAraxyte(player, hit) {
   return core.DamageFormulas.calculateMaxMeleeHit(player);
 }
 
-/** Max-hit setups, then the Mirrorback's reflection: half back at melee attackers. */
+/** Max-hit setups, then the Mirrorback's reflection: half back at melee attackers in reach. */
 function modifyHit(event) {
   const { npc, hit } = event;
   const id = npc?.getId?.();
@@ -332,6 +332,9 @@ function modifyHit(event) {
   if (instantKillWeapon(player)) return;
   const type = hit.getCombatType?.();
   if (type === core.CombatType.MAGIC || type === core.CombatType.RANGED) return;
+  // Wiki: only melee "within melee distance" recoils. A tile between the player and the
+  // mirrorback (a two-tile melee weapon such as a scythe) negates the effect.
+  if (edgeDistance(npc, player) > 1) return;
   const damage = hits.reduce((total, part) => total + (part.getDamage?.() ?? 0), 0);
   if (damage <= 1) return;
   player.getCombat().getHitQueue().addPendingDamage([

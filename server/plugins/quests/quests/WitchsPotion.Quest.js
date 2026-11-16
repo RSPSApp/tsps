@@ -1,7 +1,7 @@
 /** Witch's Potion. Capture evidence: docs/f2p-coastal-parity.md. */
 module.exports = function registerWitchsPotionQuest(api) {
   const { Skill, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, startDialogue, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, startDialogue, startTranscript, questStartMessage } = require("../QuestRuntime");
 
   const VARP_WITCHS_POTION = 67;
   const STAGE_STARTED = 1;
@@ -194,7 +194,7 @@ module.exports = function registerWitchsPotionQuest(api) {
       if (!accepted.has(event.player) || quest.getStage(event.player) !== 0) return;
       accepted.delete(event.player);
       quest.setStage(event.player, STAGE_STARTED);
-      event.player.sendMessage("You've started a new quest: <col=081190>Witch's Potion</col>");
+      event.player.sendMessage(questStartMessage(event.player, "Witch's Potion"));
     };
     if (event.text === "Ok, now drink from the cauldron.") event.before = () => {
       if (quest.getStage(event.player) !== STAGE_STARTED || !hasAllIngredients(event.player)) return;

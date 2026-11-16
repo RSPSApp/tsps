@@ -198,7 +198,10 @@ function fakeApi() {
     onNpcDialogueVariant: (handler) => hooks.variants.push(handler),
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),
     getBonusManager: () => ({ update() {} }),
-    getItemOnGroundManager: () => ({ registerLocation: (player, item) => (hooks.ground ??= []).push(item.getId()) }),
+    getItemOnGroundManager: () => ({ registerLocation: (player, item, at, area, options) => {
+      (hooks.ground ??= []).push(item.getId());
+      (hooks.groundOptions ??= []).push({ id: item.getId(), options });
+    } }),
     spawnNpc: ({ id, x, y, z }) => { const npc = fakeNpc(id, x, y, z); spawnedNpcs.push(npc); return npc; },
     removeNpc: (npc) => { npc.removed = true; },
     emitCustomEvent: (name, event) => PluginManager.emitCustomEvent(name, event),
@@ -212,8 +215,8 @@ function bindHooks() {
   return api;
 }
 
-// Shards and dust stack; everything else takes a slot each.
-const STACKABLE = new Set([23866, 23867, 23824, 23830, 23904, 23858]);
+// Shards, dust, ore, bark and linum stack (as in the cache); everything else takes a slot each.
+const STACKABLE = new Set([23866, 23867, 23824, 23830, 23904, 23858, 23877, 23878, 23876, 23837, 23838, 23836]);
 
 /** A container of { id, amount } slots. */
 function container(size) {
@@ -629,27 +632,202 @@ test('lit rooms are stocked by the walls, clear of the doorways, and their nodes
   assert.ok(stocked > 50, `rooms hold resources (${stocked})`);
 });
 
-test('gathering a deposit gives 3 ore, one every 2 ticks, then leaves it depleted', () => {
+/** A resource node placed in the start room, for gathering tests. */
+function placeNode(run, id, x = 5, y = 9) {
+  const room = run.map.room(run.map.start.x, run.map.start.y);
+  const node = new (PluginManager.getCoreApi().GameObject)(id, run.map.roomTile(room, x, y), 10, 0, run.map);
+  PluginManager.getCoreApi().ObjectManager.register(node, true);
+  return node;
+}
+
+const nodeAt = (run, node) => run.map.getObjects().find((o) => o.getLocation().equals(node.getLocation()));
+const noShards = () => 0.99;
+
+test('a deposit gives its 3 ore a tick after the swing and every 3 ticks after, with 10 XP each (rsprox, Wiki)', () => {
   bindPrep();
   const { player, run } = startedRun('Miner', { random: seeded(21) });
   try {
-    const room = run.map.room(run.map.start.x, run.map.start.y);
-    const deposit = new (PluginManager.getCoreApi().GameObject)(36064, run.map.roomTile(room, 5, 9), 10, 0, run.map);
-    PluginManager.getCoreApi().ObjectManager.register(deposit, true);
+    const deposit = placeNode(run, 36064);
     player.inventory.delete(I.CRYSTAL_PICKAXE_3, 1);
+    player.statements.length = 0;
     interact('Crystal Deposit', 'Mine', player, deposit);
     assert.equal(player.inventory.getAmount(23877), 0, 'no pickaxe, no ore');
+    assert.equal(player.messages.at(-1), 'You need a pickaxe to mine this rock.', 'a chat message (local 1000628)');
+    assert.equal(player.statements.length, 0, 'not a message box');
     player.inventory.adds(I.CRYSTAL_PICKAXE_3);
-    interact('Crystal Deposit', 'Mine', player, deposit);
-    ticks(1);
-    assert.equal(player.inventory.getAmount(23877), 0);
-    ticks(1);
-    assert.equal(player.inventory.getAmount(23877), 1, 'the first after 2 ticks');
+    Resources.gather(run, player, deposit, noShards);
+    assert.equal(player.messages.at(-1), 'You swing your pick at the rock.');
+    player.sounds = [];
+    const yields = [];
+    for (let tick = 1; tick <= 8; tick++) {
+      ticks(1);
+      yields.push(player.inventory.getAmount(23877));
+    }
+    assert.deepEqual(yields, [1, 1, 1, 2, 2, 2, 3, 3], 'ticks 1, 4 and 7');
+    assert.deepEqual(player.sounds, [3600, 3600, 3600], 'synth 3600 with each ore');
+    assert.equal(player.messages.at(-1), 'You mine the last of the salvageable ore from the rock.');
+    assert.equal(nodeAt(run, deposit)?.getId(), 36065, 'the depleted deposit');
+    assert.equal(player.xp.Mining ?? player.xp.MINING ?? Object.values(player.xp)[0], 30, '10 XP an ore');
+    assert.equal(player.animations.at(-1), -1, 'the last yield stops the animation');
+  } finally {
+    run.end('exit', { fade: false });
+  }
+});
+
+test('phren roots: the area chop sound each bark, and the captured last-bark line and sound', () => {
+  bindPrep();
+  const { player, run } = startedRun('Chopper', { random: seeded(22) });
+  try {
+    const roots = placeNode(run, 36066);
+    const areaSounds = [];
+    const Sounds = PluginManager.getCoreApi().Sounds;
+    const original = Sounds.playAreaSound;
+    Sounds.playAreaSound = (options) => areaSounds.push(options);
+    try {
+      player.sounds = [];
+      Resources.gather(run, player, roots, noShards);
+      ticks(7);
+    } finally {
+      Sounds.playAreaSound = original;
+    }
+    assert.equal(player.inventory.getAmount(23878), 3);
+    const at = player.getLocation();
+    assert.deepEqual(areaSounds.map((sound) => [sound.soundId, sound.x, sound.y, sound.radius]),
+      new Array(3).fill([2735, at.getX(), at.getY(), 1]), 'sound_area 2735 on the chopper\'s tile, range 1');
+    assert.deepEqual(player.sounds, [2734], 'synth 2734 as the last bark comes off');
+    assert.equal(player.messages.at(-1), 'You chop the last of the salvageable bark from the roots.');
+    assert.equal(nodeAt(run, roots)?.getId(), 36067);
+  } finally {
+    run.end('exit', { fade: false });
+  }
+});
+
+test('a fishing spot: four fish, "You catch the last of the fish.", and a full inventory stops it in a message box', () => {
+  bindPrep();
+  const { player, run } = startedRun('Fisher', { random: seeded(23) });
+  try {
+    const spot = placeNode(run, 36068);
+    Resources.gather(run, player, spot, noShards);
     ticks(10);
-    assert.equal(player.inventory.getAmount(23877), 3, 'three from a deposit');
-    const depleted = run.map.getObjects().find((o) => o.getLocation().equals(deposit.getLocation()));
-    assert.equal(depleted?.getId(), 36065, 'the depleted deposit');
-    assert.equal(player.xp.Mining ?? player.xp.MINING ?? Object.values(player.xp)[0], 3);
+    assert.equal(player.inventory.getAmount(23872), 4);
+    assert.equal(player.messages.at(-1), 'You catch the last of the fish.');
+    assert.equal(nodeAt(run, spot)?.getId(), 36069);
+    assert.equal(player.xp.Fishing ?? player.xp.FISHING ?? Object.values(player.xp)[0], 40, '10 XP a fish');
+    // Room for one fish: it is caught, and the next tick the full inventory ends it (rsprox 3276).
+    const second = placeNode(run, 36068, 9, 9);
+    ticks(3); // the last fish's cycle runs out before the next spot
+    while (player.inventory.getFreeSlots() > 1) player.inventory.adds(23872);
+    player.statements.length = 0;
+    player.sounds = [];
+    Resources.gather(run, player, second, noShards);
+    ticks(1);
+    assert.equal(player.inventory.getFreeSlots(), 0, 'the last slot filled');
+    assert.equal(player.statements.length, 0);
+    ticks(1);
+    assert.equal(player.statements.length, 1, '"You can\'t carry any more fish." in a message box');
+    assert.deepEqual(player.sounds, [2277]);
+    assert.equal(player.animations.at(-1), -1);
+    assert.equal(nodeAt(run, second)?.getId(), 36068, 'the spot keeps its other fish');
+  } finally {
+    run.end('exit', { fade: false });
+  }
+});
+
+test('linum: no last-fibre line, and a full inventory that already holds linum keeps picking (it stacks)', () => {
+  bindPrep();
+  const { player, run } = startedRun('Picker', { random: seeded(24) });
+  try {
+    const plant = placeNode(run, 36072);
+    player.inventory.adds(23876);
+    while (player.inventory.getFreeSlots() > 0) player.inventory.adds(23872);
+    player.sounds = [];
+    Resources.gather(run, player, plant, noShards);
+    ticks(7);
+    assert.equal(player.inventory.getAmount(23876), 4, 'three more onto the stack');
+    assert.equal(player.messages.at(-1), 'You pick some fibre from the plant.', 'no message as it runs out (rsprox 3276)');
+    assert.deepEqual(player.sounds, [2581, 2581, 2581]);
+    assert.equal(nodeAt(run, plant)?.getId(), 36073);
+    assert.equal(player.xp.Farming ?? player.xp.FARMING ?? Object.values(player.xp)[0], 3, '1 Farming XP a fibre');
+  } finally {
+    run.end('exit', { fade: false });
+  }
+});
+
+test('re-clicking, or switching node, never yields sooner than the running 3-tick cycle', () => {
+  bindPrep();
+  const { player, run } = startedRun('Clicker', { random: seeded(26) });
+  try {
+    const deposit = placeNode(run, 36064);
+    const other = placeNode(run, 36064, 9, 9);
+    const ore = [];
+    for (let tick = 1; tick <= 7; tick++) {
+      Resources.gather(run, player, tick % 2 ? deposit : other, noShards);
+      ticks(1);
+      ore.push(player.inventory.getAmount(23877));
+    }
+    assert.deepEqual(ore, [1, 1, 1, 2, 2, 2, 3], 'one ore every 3 ticks however often it is clicked');
+    // Stopped mid-cycle (moved away), the cycle keeps counting: a click 1 tick later waits for it.
+    Resources.stopGathering(player);
+    ticks(1);
+    Resources.gather(run, player, other, noShards);
+    ticks(1);
+    assert.equal(player.inventory.getAmount(23877), 3, 'not on tick 9, a tick after the click');
+    ticks(1);
+    assert.equal(player.inventory.getAmount(23877), 4, 'due on tick 10, as without the stop');
+  } finally {
+    run.end('exit', { fade: false });
+  }
+});
+
+test('a move the gathering task notices itself keeps the cycle on time', () => {
+  bindPrep();
+  const { player, run } = startedRun('Mover', { random: seeded(27) });
+  try {
+    const deposit = placeNode(run, 36064);
+    const other = placeNode(run, 36064, 9, 9);
+    const start = player.getLocation();
+    Resources.gather(run, player, deposit, noShards);
+    ticks(2); // ore on tick 1
+    player.moveTo(start.transform(1, 0, 0));
+    ticks(1); // tick 3: the task sees the move and stops
+    Resources.gather(run, player, other, noShards);
+    ticks(1);
+    assert.equal(player.inventory.getAmount(23877), 2, 'the next ore on tick 4, as without the stop');
+  } finally {
+    run.end('exit', { fade: false });
+  }
+});
+
+test('no shard find when a full inventory has nowhere to put them', () => {
+  bindPrep();
+  const { player, run } = startedRun('Crammed', { random: seeded(28) });
+  try {
+    const roots = placeNode(run, 36066);
+    player.inventory.adds(23878);
+    while (player.inventory.getFreeSlots() > 0) player.inventory.adds(23872);
+    Resources.gather(run, player, roots, () => 0);
+    ticks(1);
+    assert.equal(player.inventory.getAmount(23878), 2, 'the bark stacks');
+    assert.equal(player.inventory.getAmount(23866), 0);
+    assert.ok(!player.messages.some((message) => /crystal shards/.test(message)));
+  } finally {
+    run.end('exit', { fade: false });
+  }
+});
+
+test('a yield finds 10-30 shards one time in three (Wiki)', () => {
+  assert.equal(Resources.SHARD_CHANCE, 3);
+  assert.deepEqual(Resources.SHARDS, { min: 10, max: 30 });
+  bindPrep();
+  const { player, run } = startedRun('Lucky', { random: seeded(25) });
+  try {
+    const roots = placeNode(run, 36066);
+    // 0 rolls the find; 0.999... the top amount.
+    const rolls = [0, 0.9999];
+    Resources.gather(run, player, roots, () => rolls.shift() ?? 0.99);
+    ticks(1);
+    assert.equal(player.inventory.getAmount(23866), 30);
+    assert.ok(player.messages.includes('You find 30 crystal shards.'));
   } finally {
     run.end('exit', { fade: false });
   }
@@ -886,10 +1064,10 @@ function bossRun(name, options = {}) {
 }
 
 /** A player hit of a style, as the NpcHitModify hook sees it. */
-function playerHit(style, amount = 10) {
+function playerHit(style, amount = 10, bypass = false) {
   const parts = [{ damage: amount, setDamage(value) { this.damage = value; }, getDamage() { return this.damage; } }];
   const type = { melee: CombatType.MELEE, ranged: CombatType.RANGED, magic: CombatType.MAGIC }[style];
-  return { parts, getCombatType: () => type, getHits: () => parts, updateTotalDamage() {} };
+  return { parts, getCombatType: () => type, getHits: () => parts, updateTotalDamage() {}, bypassesProtectionPrayer: () => bypass };
 }
 
 test('the Hunllef waits in its room and fights once the boss phase starts', () => {
@@ -964,6 +1142,21 @@ test('hits it protects against do nothing; the 6th off-prayer hit changes its pr
     assert.equal(fight.protecting, 'ranged', 'the sixth (even a zero) decides');
     assert.equal(fight.npc.transform, 9022, 'it takes its protect-from-ranged form');
     assert.equal(fight.npc.headIcon, Hunllef.HEAD_ICON.ranged, 'and shows Protect from Missiles overhead');
+  } finally {
+    run.end('exit', { fade: false });
+  }
+});
+
+test('a hit that bypasses protection prayers goes through its prayer (issue 5037)', () => {
+  const { run, fight } = bossRun('Piercer');
+  try {
+    fight.protecting = 'ranged';
+    const pierced = playerHit('ranged', 12, true);
+    fight.onHit(pierced);
+    assert.equal(pierced.parts[0].damage, 12, 'prayer penetration keeps the damage');
+    assert.equal(fight.wrongStyleHits, 1, 'it is still a hit on its prayer');
+    for (let i = 0; i < 6; i++) fight.onHit(playerHit('ranged', 5, true));
+    assert.equal(fight.protecting, 'ranged', 'hits on its prayer never switch it');
   } finally {
     run.end('exit', { fade: false });
   }
@@ -1189,4 +1382,29 @@ test('a login in another copied instance is not taken for a Gauntlet run: only t
   for (const hook of hooks.login) hook({ player });
   assert.equal(player.location.getX(), 8400, 'left where the other instance put them');
   assert.ok(!player.messages.some((message) => message.includes('no longer available')));
+});
+
+test("a chest reward that overflows to the floor keeps its own ground options; other overflow keeps the defaults", () => {
+  bindPrep();
+  const ORB = PluginManager.getCoreApi().ItemIdentifiers.TIRANNWN_ECHO_ORB;
+  const ground = { goesGlobal: false, despawnDelay: 18000 };
+  let addOrb = true;
+  nativeApi.onCustomEvent('npc-drops:roll', (event) => {
+    if (addOrb && event.source === 'Corrupted Hunllef') event.drops.push({ itemId: ORB, id: ORB, amount: 1, ground });
+  });
+  const player = fakePlayer('Overflow');
+  try {
+    Rewards.setReward(player, 'corrupted', 'completed');
+    while (player.inventory.getFreeSlots() > 1) player.inventory.adds(1);
+    hooks.groundOptions = [];
+    Rewards.openChest(player, seeded(3));
+    const orb = hooks.groundOptions.find((entry) => entry.id === ORB);
+    assert.ok(orb, 'the orb overflowed to the floor');
+    assert.deepEqual(orb.options, ground);
+    const others = hooks.groundOptions.filter((entry) => entry.id !== ORB);
+    assert.ok(others.length > 0, 'other rewards overflowed too');
+    for (const entry of others) assert.deepEqual(entry.options, {}, 'the usual floor lifetime');
+  } finally {
+    addOrb = false;
+  }
 });

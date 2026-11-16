@@ -19,6 +19,9 @@ const MINIGAMES_INTERFACE = 951;
 const GROUPING_INTERFACE = 76;
 const GROUPING_TELEPORT_CHILD = 32;
 const GROUPING_ACTIVITY_ENUM = 848;
+/** The Teleport button's slot with no activity chosen (client varc 64 is 0). */
+const NO_ACTIVITY_SLOT = 0;
+const NO_TELEPORT = "That activity doesn't have a teleport.";
 const COMPONENT_BY_POSITION_ENUM = 5924;
 const ROW_BY_POSITION_ENUM = 5923;
 const NAME_COLUMN = 1;
@@ -64,17 +67,17 @@ function minigameAt(childId) {
   return undefined;
 }
 
-function groupingMinigame(slot) {
+/** The Grouping tab's activity at a slot (enum 848), or undefined for none. */
+function groupingActivity(slot) {
   if (!Number.isInteger(slot) || slot <= 0) return;
   const name = core.CacheDefinitions.getEnumValues(GROUPING_ACTIVITY_ENUM).get(slot);
-  if (typeof name !== "string") return;
-  return Object.entries(minigames).find(([label, entry]) => label === name || entry.groupingName === name)?.[1];
+  return typeof name === "string" ? name : undefined;
 }
 
-function enableGroupingTeleport({ player, groupId }) {
-  if (groupId !== GROUPING_INTERFACE) return;
-  const lastSlot = Math.max(...core.CacheDefinitions.getEnumValues(GROUPING_ACTIVITY_ENUM).keys());
-  player.getPacketSender().sendInterfaceFlagsRange((GROUPING_INTERFACE << 16) | GROUPING_TELEPORT_CHILD, 1, lastSlot, 1 << 1);
+function groupingMinigame(slot) {
+  const name = groupingActivity(slot);
+  if (!name) return;
+  return Object.entries(minigames).find(([label, entry]) => label === name || entry.groupingName === name)?.[1];
 }
 
 function minutesLeft(lastMinute, now = dateMinutes()) {
@@ -167,7 +170,15 @@ function chooseMinigame(event) {
   if (event.groupId !== MINIGAMES_INTERFACE && !grouping) return;
   if (grouping && (event.opId ?? event.action) !== 1) return;
   const minigame = grouping ? groupingMinigame(event.slot) : minigames[minigameAt(event.childId)];
-  if (!minigame) return;
+  if (!minigame) {
+    // Live (rev 242), for Tombs of Amascut, Shooting Stars and with no activity chosen (slot 0); the
+    // Wiki lists which have none. A slot past the activities can't be clicked and gets nothing.
+    if (grouping && (event.slot === NO_ACTIVITY_SLOT || groupingActivity(event.slot))) {
+      event.handled = true;
+      event.player.sendMessage(NO_TELEPORT);
+    }
+    return;
+  }
   event.handled = true;
   const { player } = event;
   if (grouping && !canStartTeleport(player)) return;
@@ -220,7 +231,6 @@ module.exports = {
     api.persistAttribute(LAST_MINIGAME_TELEPORT_ATTRIBUTE);
     api.onInterfaceActionClick(castMinigameTeleport);
     api.onInterfaceActionClick(chooseMinigame);
-    api.onCustomEvent("interface:opened", enableGroupingTeleport);
     api.onCustomEvent("interface:closed", minigamesClosed);
     api.onPlayerLogin(sendLastMinigameTeleport);
   },

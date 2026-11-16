@@ -4,6 +4,12 @@ const data = require("./Data.BarbarianAssault");
 const Match = require("./Match.BarbarianAssault");
 
 const START_TASK_KEY = "barbarian-assault:start";
+/** This minigame's name to the Grouping plugin ("grouping:activity"). */
+const GROUPING_ACTIVITY = "Barbarian Assault";
+/**
+ * The team being formed, in joining order. canAdd keeps it to one team, so the team that starts is
+ * this whole queue: queued group-mates always play together and there is no choice of who goes.
+ */
 const queue = [];
 let api = null;
 let core = null;
@@ -181,9 +187,15 @@ function logout({ player }) {
   removeFromQueue(player);
 }
 
+/** Tells the Grouping plugin how many players a team takes. */
+function announceToGrouping() {
+  api.emitCustomEvent("grouping:activity", { name: GROUPING_ACTIVITY, maxSize: data.TEAM_SIZE });
+}
+
 function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
+  pluginApi.onServerStartup?.(announceToGrouping);
   pluginApi.onPlayerLogout?.(logout);
   pluginApi.onPlayerDisconnect?.(logout);
 }

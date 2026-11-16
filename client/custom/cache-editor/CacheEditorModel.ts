@@ -60,8 +60,8 @@ export type CacheDefinition = {
     note?: string;
 };
 
-/** One overlay row: a base definition from the cache plus the fields this project overrides. */
-export type OverlayRow = { kind: string; id: number; baseId: number; fields: Record<string, unknown> };
+/** One overlay row, optionally based on a cache definition, plus the fields this project overrides. */
+export type OverlayRow = { kind: string; id: number; baseId: number | null; fields: Record<string, unknown> };
 
 const query = (entries: Record<string, string | number | undefined>) => {
     const parts = new URLSearchParams();
@@ -107,6 +107,64 @@ export function withPickedId(row: OverlayRow, field: CacheField, id: number): Ov
     return withField(row, field.name, list.includes(id) ? list : [...list, id]);
 }
 export const searchPath = (text: string, kind?: string | null, limit = 20) => `/api/cache-search?${query({ text, kind: kind ?? undefined, limit })}`;
+
+/** Item, loc and NPC cache definitions expose model recolor pairs. */
+export const supportsModelRecolor = (kind: string) => kind === "item" || kind === "loc" || kind === "npc";
+
+/** Render packed OSRS HSL (H:6 bits, S:3 bits, L:7 bits) as an approximate CSS color. */
+export function packedHslToHex(color: number): string {
+    const hue = ((color >>> 10) & 63) / 64;
+    const saturation = ((color >>> 7) & 7) / 7;
+    const lightness = (color & 127) / 127;
+    const hueToRgb = (p: number, q: number, t: number) => {
+        let value = t;
+        if (value < 0) value += 1;
+        if (value > 1) value -= 1;
+        if (value < 1 / 6) return p + (q - p) * 6 * value;
+        if (value < 1 / 2) return q;
+        if (value < 2 / 3) return p + (q - p) * (2 / 3 - value) * 6;
+        return p;
+    };
+    let red: number;
+    let green: number;
+    let blue: number;
+    if (saturation === 0) red = green = blue = lightness;
+    else {
+        const q = lightness < 0.5 ? lightness * (1 + saturation) : lightness + saturation - lightness * saturation;
+        const p = 2 * lightness - q;
+        red = hueToRgb(p, q, hue + 1 / 3);
+        green = hueToRgb(p, q, hue);
+        blue = hueToRgb(p, q, hue - 1 / 3);
+    }
+    return `#${[red, green, blue].map((channel) => Math.round(channel * 255).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** Convert a browser color-picker value to the nearest packed OSRS HSL value. */
+export function hexToPackedHsl(hex: string): number {
+    const match = /^#?([\da-f]{6})$/i.exec(hex);
+    if (!match) throw new Error("Expected a six-digit hex color");
+    const value = Number.parseInt(match[1], 16);
+    const red = ((value >> 16) & 255) / 255;
+    const green = ((value >> 8) & 255) / 255;
+    const blue = (value & 255) / 255;
+    const max = Math.max(red, green, blue);
+    const min = Math.min(red, green, blue);
+    const lightness = (max + min) / 2;
+    let hue = 0;
+    let saturation = 0;
+    if (max !== min) {
+        const delta = max - min;
+        saturation = lightness > 0.5 ? delta / (2 - max - min) : delta / (max + min);
+        if (max === red) hue = (green - blue) / delta + (green < blue ? 6 : 0);
+        else if (max === green) hue = (blue - red) / delta + 2;
+        else hue = (red - green) / delta + 4;
+        hue /= 6;
+    }
+    const packedHue = Math.round(hue * 64) & 63;
+    const packedSaturation = Math.min(7, Math.max(0, Math.round(saturation * 7)));
+    const packedLightness = Math.min(127, Math.max(0, Math.round(lightness * 127)));
+    return ((packedHue << 10) | (packedSaturation << 7) | packedLightness);
+}
 export const inspectPath = (kind: string, id: number) => `/api/cache-inspect?${query({ kind, id })}`;
 export const usedByPath = (kind: string, id: number, limit = 50) => `/api/cache-used-by?${query({ kind, id, limit })}`;
 
@@ -129,7 +187,7 @@ export function authoringBase(contentBase: string | undefined): string | undefin
 }
 
 /** A new overlay row from an inspected base definition: only the fields this project owns. */
-export function draftRow(definition: CacheDefinition, baseId: number, id: number): OverlayRow {
+export function draftRow(definition: CacheDefinition, baseId: number | null, id: number): OverlayRow {
     return {
         kind: definition.kind,
         id,
@@ -150,10 +208,10 @@ export function withField(row: OverlayRow, field: string, value: unknown | undef
  * Problems the page can see before asking the server, so an obvious mistake never becomes a 400.
  * The authoritative checks (cache existence, transport budget) live in the server's document audit.
  */
-export function draftProblems(row: OverlayRow, base: CacheDefinition, overlayIdStart: number): string[] {
+export function draftProblems(row: OverlayRow, base: CacheDefinition | null, overlayIdStart: number): string[] {
     const problems: string[] = [];
     if (!Number.isInteger(row.id) || row.id < overlayIdStart) problems.push(`id must be ${overlayIdStart} or above (above the cache's own count)`);
-    if (!Number.isInteger(row.baseId) || !base.exists) problems.push("base must be a definition that exists in the cache");
+    if (row.baseId !== null && (!Number.isInteger(row.baseId) || !base?.exists)) problems.push("base must be a definition that exists in the cache");
     if (Object.keys(row.fields).length === 0) problems.push("nothing is overridden yet");
     return problems;
 }
@@ -174,7 +232,7 @@ export function formatFieldValue(value: unknown): string {
 export function parseFieldValue(field: CacheField, raw: string): unknown {
     const text = raw.trim();
     const parse = (type: string, value: unknown): boolean => {
-        if (type.endsWith("[]")) return Array.isArray(value) && value.every(entry => entry === null && field.name === "actions" || parse(type.slice(0, -2), entry));
+        if (type.endsWith("[]")) return Array.isArray(value) && value.every(entry => (entry === null && field.name === "actions") || parse(type.slice(0, -2), entry));
         if (type === "int") return typeof value === "number" && Number.isInteger(value);
         if (type === "number") return typeof value === "number" && Number.isFinite(value);
         if (type === "map") return value !== null && typeof value === "object" && !Array.isArray(value);

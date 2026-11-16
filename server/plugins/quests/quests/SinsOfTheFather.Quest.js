@@ -1403,7 +1403,9 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     } else {
       clearPersonalObject(player, BARREL_TILE);
     }
-    if (stage >= STAGE_ESCORT_DONE) {
+    // Once the quest is complete the cache's own boats (the ig_boat and myq5_slepe_boat multilocs,
+    // shown from this varbit) are the Morytania boats' docks (world/ferries/Morytania.Ferries.js).
+    if (stage >= STAGE_ESCORT_DONE && stage < STAGE_COMPLETE) {
       syncPersonalObject(player, BURGH_DOCKS, BOAT_OBJECT_ID);
       syncPersonalObject(player, ICYENE_DOCK, BOAT_OBJECT_ID);
     } else {
@@ -3042,19 +3044,6 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     return true;
   }
 
-  function openBoatMenu(player) {
-    api.sendMultiChatboxPrompt(
-      player,
-      "Where would you like to sail?",
-      "Burgh de Rott.",
-      () => teleport(player, BURGH_LANDING),
-      "Slepe.",
-      () => teleport(player, SLEPE_DOCK),
-      "Icyene Graveyard.",
-      () => teleport(player, ICYENE_LANDING)
-    );
-  }
-
   function handleBoat(event) {
     const { player, objectId } = event;
     const location = event.location ?? event.object?.getLocation?.();
@@ -3063,12 +3052,10 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     const z = location?.getZ?.() ?? location?.z;
     if (objectId === SLEPE_ROWBOAT_OBJECT_ID && (x !== SLEPE_DOCK.x - 4 || y !== SLEPE_DOCK.y || z !== SLEPE_DOCK.z)) return false;
     if (objectId !== BOAT_OBJECT_ID && objectId !== SLEPE_ROWBOAT_OBJECT_ID) return false;
+    // After the quest the Morytania boats (world/ferries) and Andras's row boat take the docks.
+    if (quest.isComplete(player)) return false;
     event.handled = true;
     const stage = quest.getStage(player);
-    if (quest.isComplete(player)) {
-      openBoatMenu(player);
-      return true;
-    }
     // The player stands on the shore beside the water-anchored boat object.
     if (near(player, BURGH_LANDING, 8) && stage >= STAGE_ESCORT_DONE) {
       teleport(player, ICYENE_LANDING);

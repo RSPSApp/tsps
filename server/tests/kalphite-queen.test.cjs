@@ -14,6 +14,8 @@ let Method, spectralDrain;
 const namedHooks = new Map();
 const itemOnObject = [];
 const firstClicks = new Map();
+let echoEntry = null;
+let loginHook = null;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   core.RegionManager.init();
@@ -24,6 +26,8 @@ before(async () => {
     onObjectInteraction: (name, actions) => namedHooks.set(name, actions),
     onItemOnObject: (handler) => itemOnObject.push(handler),
     onObjectFirstClick: (id, handler) => firstClicks.set(id, handler),
+    onPlayerLogin: (handler) => { loginHook = handler; },
+    emitCustomEvent: (name, payload) => echoEntry?.(name, payload),
   }, { get: (obj, key) => obj[key] ?? (() => {}) }));
 });
 function scene(t, { protect = true, roll = 31, prayer = 50, spectral = false, form = core.NpcIdentifiers.KALPHITE_QUEEN_2 } = {}) {
@@ -200,10 +204,131 @@ test('climbing down the roped Queen\'s tunnel lands where live does', () => {
   assert.deepEqual(moves, [[3508, 9493, 0]]);
 });
 
+test("Look-inside on the Queen's tunnel counts her chamber only, rope or not (rsprox 1864: one)", t => {
+  // Rsprox 1864 ticks 1162/1166: the clicker at (3511, 9497, 2) and a knife thrower at
+  // (3504, 9525, 2) are both on the hive level, and live still says "one adventurer".
+  const at = (x, y, z) => ({ getLocation: () => new core.Location(x, y, z) });
+  const crowd = [at(3511, 9497, 2), at(3504, 9525, 2), at(3508, 9493, 0), at(3227, 3108, 0)];
+  t.mock.method(core.World, 'getPlayers', () => crowd);
+  const messages = [];
+  const player = { sendMessage: text => messages.push(text) };
+  const look = namedHooks.get('Tunnel entrance')['Look-inside'];
+  for (const id of [23609, 19053, 10230]) look({ player, object: { getId: () => id } });
+  assert.deepEqual(messages, Array(3).fill('You peek down and see one adventurer inside the lair.'));
+  crowd.push(at(3470, 9500, 0));
+  look({ player, object: { getId: () => 23609 } });
+  assert.equal(messages.at(-1), 'You peek down and see 2 adventurers inside the lair.');
+  crowd.length = 0;
+  look({ player, object: { getId: () => 23609 } });
+  assert.equal(messages.at(-1), 'You peek down and see no adventurers inside the lair.');
+  assert.equal(look({ player, object: { getId: () => 3828 } }), false, 'the surface tunnel has no Look-inside');
+});
+
 test('the lair is multi-combat on both levels (rsprox: the multi icon on climbing down)', () => {
   const { Wilderness } = require('../dist/game/content/wilderness/Wilderness');
   for (const [x, y, z] of [[3483, 9510, 2], [3508, 9497, 2], [3508, 9493, 0]]) {
     assert.equal(Wilderness.isMulti(x, y, z), true, `${x},${y},${z}`);
   }
   assert.equal(Wilderness.isMulti(3227, 3108, 0), false, 'the surface tunnel');
+});
+
+test("the echo orb menu's later No climbs down only while the rope is still tied", (t) => {
+  const moves = [];
+  const player = { moveTo: tile => moves.push([tile.getX(), tile.getY(), tile.getZ()]) };
+  const at = new core.Location(3510, 9498, 2);
+  let held = null;
+  echoEntry = (name, payload) => { if (name === 'echo-boss:entry') { payload.handled = true; held = payload; } };
+  let roped = true;
+  t.mock.method(core.ObjectManager, 'objectsAt', () => (roped ? [{ getId: () => 10230 }] : [{ getId: () => 23609 }]));
+  try {
+    firstClicks.get(10230)({ player, object: { getLocation: () => at } });
+    assert.equal(held?.boss, 'kalphite-queen');
+    assert.equal(moves.length, 0);
+    roped = false; // the rope comes undone while the menu waits
+    held.enter();
+    assert.equal(moves.length, 0, 'No: nothing to climb');
+    roped = true;
+    held.enter();
+    assert.deepEqual(moves, [[3508, 9493, 0]]);
+  } finally {
+    echoEntry = null;
+  }
+});
+
+// Wiki (Kalphite Lair): after the Hard Desert Diary both ropes are placed once and then stay. The cache
+// draws them per player (kalphite_burrow_entrance on kalphite_rope_1, kalphite_chamber_entrance_update
+// on kalphite_chamber_entrance); diary accounts log in with them at 1 (rsprox 224/1510).
+function diaryScene(t, { diary = true } = {}) {
+  const channel = { isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel), new core.Location(3227, 3109, 0));
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.ROPE, 2), false);
+  const submitted = [];
+  t.mock.method(core.TaskManager, 'submit', task => submitted.push(task));
+  echoEntry = (name, payload) => {
+    if (name === 'diary:is-complete' && payload.diary === 'desert' && payload.tier === 'hard') payload.complete = diary;
+  };
+  t.after(() => { echoEntry = null; });
+  const varbit = (name) => player.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId(name));
+  const ropes = () => player.getInventory().getAmount(core.ItemIdentifiers.ROPE);
+  const use = (objectId) => {
+    const tile = objectId === 3827 ? new core.Location(3227, 3108, 0) : new core.Location(3509, 9497, 2);
+    const event = { player, object: new core.GameObject(objectId, tile, 10, objectId === 3827 ? 0 : 3, null), item: new core.Item(core.ItemIdentifiers.ROPE) };
+    for (const handler of itemOnObject) handler(event);
+    return event;
+  };
+  const climbDown = (objectId) => namedHooks.get('Tunnel entrance')['Climb-down']({ player, object: { getId: () => objectId, getLocation: () => new core.Location(3509, 9497, 2) } });
+  const at = () => [player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()];
+  return { player, submitted, varbit, ropes, use, climbDown, at };
+}
+
+test('after the Hard Desert Diary the surface rope stays tied on, for that player', t => {
+  const f = diaryScene(t);
+  assert.equal(f.use(3827).handled, true);
+  assert.equal(f.ropes(), 1, 'one rope is used up');
+  assert.deepEqual(f.submitted, [], 'no shared, timed loc swap');
+  assert.equal(f.varbit('kalphite_rope_1'), 1);
+  assert.deepEqual(f.at(), [3483, 9510, 2], 'the rope takes the player down, as without the diary');
+  f.player.moveTo(new core.Location(3227, 3109, 0));
+  assert.notEqual(f.use(3827).handled, true, 'a second rope has nothing to go on');
+  assert.equal(f.ropes(), 1, 'and is kept');
+  assert.notEqual(f.climbDown(3827), false, 'Climb-down on the roped tunnel');
+  assert.deepEqual(f.at(), [3483, 9510, 2]);
+});
+
+test("after the Hard Desert Diary the Queen's rope stays tied on, for that player", t => {
+  const f = diaryScene(t);
+  f.player.moveTo(new core.Location(3511, 9497, 2));
+  assert.equal(f.climbDown(23609), false, 'no rope yet');
+  assert.equal(f.use(23609).handled, true);
+  assert.equal(f.ropes(), 1);
+  assert.deepEqual(f.submitted, []);
+  assert.equal(f.varbit('kalphite_chamber_entrance'), 1, 'the map loc shows kalphite_chamber_entrance_withrope_normal');
+  assert.equal(f.varbit('kalphite_rope_2'), 1);
+  assert.deepEqual(f.at(), [3511, 9497, 2], 'tying the rope on moves nobody');
+  assert.notEqual(f.climbDown(23609), false);
+  assert.deepEqual(f.at(), [3508, 9493, 0]);
+  assert.notEqual(f.use(23609).handled, true);
+  assert.equal(f.ropes(), 1);
+});
+
+test('the diary ropes are sent again at login', t => {
+  const g = diaryScene(t);
+  g.player.setAttribute('kalphite-queen:surface-rope-placed', true);
+  g.player.setAttribute('kalphite-queen:chamber-rope-placed', true);
+  assert.equal(g.varbit('kalphite_rope_1'), 0);
+  loginHook({ player: g.player });
+  assert.equal(g.varbit('kalphite_rope_1'), 1);
+  assert.equal(g.varbit('kalphite_chamber_entrance'), 1);
+});
+
+test('without the diary a rope is still the shared, timed loc swap and the map loc stays unroped', t => {
+  const f = diaryScene(t, { diary: false });
+  f.use(3827);
+  assert.equal(f.submitted.length, 1);
+  assert.equal(f.submitted[0].temp.getId(), 3828);
+  assert.equal(f.varbit('kalphite_rope_1'), 0);
+  assert.equal(f.climbDown(3827), false, 'the map loc itself is not climbable');
+  f.use(23609);
+  assert.equal(f.submitted[1].temp.getId(), 10230);
+  assert.equal(f.varbit('kalphite_chamber_entrance'), 0);
 });

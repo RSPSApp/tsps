@@ -147,7 +147,11 @@ const api = {
   },
   onCustomEvent() {},
   emitCustomEvent() {},
+  onServerStartup(handler) {
+    startupHooks.push(handler);
+  },
 };
+const startupHooks = [];
 
 function createMatch(roles) {
   const team = roles.map((role, index) => [createPlayer(`player${index}`), role]);
@@ -173,6 +177,33 @@ before(async () => {
     registeredAmmoHandler.checkAmmo(player, amountRequired, silent);
   PluginManager.decrementRangedAmmo = (player, pos, amount, delayTicks) =>
     registeredAmmoHandler.decrementAmmo(player, pos, amount, delayTicks);
+});
+
+test("at startup Barbarian Assault tells the Grouping plugin a team takes 5 players", (t) => {
+  const announced = [];
+  const original = api.emitCustomEvent;
+  api.emitCustomEvent = (name, payload) => announced.push([name, payload]);
+  t.after(() => { api.emitCustomEvent = original; });
+  assert.equal(startupHooks.length, 1);
+  startupHooks[0]({ timestamp: Date.now() });
+  assert.deepEqual(announced, [["grouping:activity", { name: "Barbarian Assault", maxSize: data.TEAM_SIZE }]]);
+});
+
+test("the lobby forms one team at a time: queued group-mates start together, in joining order", (t) => {
+  const { Lobby } = BarbarianAssault._test;
+  const { ATTACKER, COLLECTOR, DEFENDER, HEALER } = data.ROLE;
+  const roles = [ATTACKER, COLLECTOR, DEFENDER, HEALER, ATTACKER];
+  const team = roles.map((_role, index) => createPlayer(`lobby${index}`));
+  t.after(() => {
+    Lobby.cancelCountdown();
+    for (const player of team) Lobby.leave(player);
+  });
+  team.forEach((player, index) => assert.equal(Lobby.join(player, roles[index]), true));
+  assert.ok(Lobby.queue.length === data.TEAM_SIZE && team.every((player, index) => Lobby.queue[index].player === player));
+  assert.ok(data.ROLES.every((role) => !Lobby.canAdd(role)), "a full team takes nobody else");
+  const groupMate = createPlayer("lobby-mate");
+  assert.equal(Lobby.join(groupMate, HEALER), false, "a sixth player waits for the next team");
+  assert.ok(!Lobby.inQueue(groupMate), "so the starting team is the whole queue: no pick can split a group");
 });
 
 test("the reward shop stock comes from the plugin source, not shops.json", () => {
@@ -452,7 +483,7 @@ test("every supplied arrow resolves as bow ammunition and the shot consumes it",
 
   CombatFactory.decrementAmmo(attacker, null, 4);
   assert.equal(attacker.getEquipment().get(Equipment.AMMUNITION_SLOT).getId(), -1, "the quiver empties");
-  assert.ok(attacker.messages.includes("You have run out of ammunition!"));
+  assert.equal(attacker.messages.includes("You have run out of ammunition!"), false, "the last arrow goes silently");
   ItemOnGroundManager.registerLocation = registerLocation;
   match.finish(false);
 });
@@ -483,13 +514,13 @@ test("the active combat method, not leftover arrows, decides an attacker's style
   assert.equal(attacker.getEquipment().get(Equipment.AMMUNITION_SLOT).getId(), data.ITEM.BULLET_ARROW);
   assert.equal(CombatFactory.getMethod(attacker), CombatFactory.MELEE_COMBAT, "the native method is melee");
   assert.equal(Items.attackStyle(attacker), data.CALL.ACCURATE, "the sword's Accurate style wins over the arrow");
-  assert.equal(match.handleCanAttack(attacker, fighter), true, "the called Accurate melee attack is allowed");
+  assert.equal(match.handleCanAttack(attacker, fighter, CombatFactory.MELEE_COMBAT), true, "the called Accurate melee attack is allowed");
   assert.equal(match.players.get(attacker).stats.wrongAttacks, 0);
 
   // The reverse hole: the leftover bullet arrow says Controlled, but a Controlled melee swing is still wrong.
   attacker.getFightType = () => ({ getStyle: () => core.FightStyle.CONTROLLED });
   assert.equal(Items.attackStyle(attacker), data.CALL.CONTROLLED);
-  assert.equal(match.handleCanAttack(attacker, fighter), false, "a wrong melee style is refused even with a matching arrow");
+  assert.equal(match.handleCanAttack(attacker, fighter, CombatFactory.MELEE_COMBAT), false, "a wrong melee style is refused even with a matching arrow");
   assert.equal(match.players.get(attacker).stats.wrongAttacks, 1);
 
   // A selected spell owns the style the same way, even with the arrows still worn.
@@ -498,6 +529,34 @@ test("the active combat method, not leftover arrows, decides an attacker's style
   attacker.getCombat().getSelectedSpell = () => water;
   assert.equal(CombatFactory.getMethod(attacker), CombatFactory.MAGIC_COMBAT);
   assert.equal(Items.attackStyle(attacker), data.CALL.ACCURATE, "the water spell wins over the bullet arrow");
+  match.finish(false);
+});
+
+test("a check with no combat method refuses a wrong-style attacker quietly, with no penalty", () => {
+  const { match, players } = createMatch([data.ROLE.ATTACKER, data.ROLE.COLLECTOR]);
+  const [attacker] = players;
+  const fighter = { __baType: "fighter", hitpoints: 5, getHitpoints() { return this.hitpoints; }, setHitpoints(hp) { this.hitpoints = hp; } };
+  match.npcs.add(fighter);
+  match.npcMeta.set(fighter, { type: "fighter", hp: 5 });
+  match.phase = Match.PHASE.WAVE;
+  match.calls[data.ROLE.ATTACKER] = { heard: data.CALL.ACCURATE };
+  assert.equal(equipFromInventory(attacker, BRONZE_SWORD), true);
+  attacker.getFightType = () => ({ getStyle: () => core.FightStyle.CONTROLLED });
+  const hits = [];
+  attacker.getCombat().getHitQueue = () => ({ addPendingDamage(list) { hits.push(...list); } });
+  const before = attacker.messages.length;
+
+  // Retribution's isEnemy and a splash's secondary target ask with no method.
+  assert.equal(match.handleCanAttack(attacker, fighter), false, "still refused");
+  assert.equal(match.players.get(attacker).stats.wrongAttacks, 0, "no wrong attack is counted");
+  assert.equal(hits.length, 0, "no penalty hit is queued");
+  assert.equal(attacker.messages.length, before, "and nothing is said");
+
+  // The player's own wrong-style swing still takes the penalty.
+  assert.equal(match.handleCanAttack(attacker, fighter, CombatFactory.MELEE_COMBAT), false);
+  assert.equal(match.players.get(attacker).stats.wrongAttacks, 1);
+  assert.equal(hits.length, 1);
+  assert.ok(attacker.messages.some((line) => line.startsWith("You used the wrong attack style.")));
   match.finish(false);
 });
 
@@ -540,6 +599,48 @@ test("equipped arena arrows are cleaned up on finish and reconnect", () => {
 
 // Wiki Imcando_hammer and Barbarian_Assault/Strategies: the Defender can use either
 // Imcando hammer variant, carried or equipped, to repair runner traps.
+test("the north wall supplies the hammer and two logs for trap repairs", (t) => {
+  const { match } = createMatch([data.ROLE.DEFENDER]);
+  t.after(() => match.finish(false));
+  match.arena = data.ARENA.normal;
+  match.spawnRepairSupplies();
+  const logs = [...match.groundItems].filter((item) => item.getItem().getId() === data.ITEM.LOGS);
+  assert.equal(logs.length, 2);
+  // Wiki tile markers: both logs share the one log tile on the normal arena's north wall.
+  assert.ok(logs.every((log) => log.getPosition().getX() === 1885 && log.getPosition().getY() === 5486));
+  const supplied = [...match.groundItems].map((item) => item.getItem().getId());
+  assert.equal(supplied.filter((id) => id === data.ITEM.HAMMER).length, 1);
+  assert.equal(supplied.filter((id) => id === data.ITEM.LOGS).length, 2);
+  assert.ok([...match.groundItems].every((item) => item.getDespawnDelay() > ItemOnGroundManager.DESPAWN_DELAY),
+    "the supplies last longer than the world's 300-tick ground despawn");
+});
+
+test("a picked-up repair supply comes back after ten ticks", (t) => {
+  const { match, players } = createMatch([data.ROLE.DEFENDER]);
+  t.after(() => match.finish(false));
+  match.arena = data.ARENA.normal;
+  match.phase = Match.PHASE.WAVE;
+  match.spawnRepairSupplies();
+  const player = players[0];
+  const logsOnGround = () =>
+    [...match.groundItems].filter((item) => item.getItem().getId() === data.ITEM.LOGS).length;
+  assert.equal(logsOnGround(), 2);
+
+  const log = [...match.groundItems].find((item) => item.getItem().getId() === data.ITEM.LOGS);
+  const held = player.getInventory().getAmount(data.ITEM.LOGS);
+  assert.equal(match.handleGroundItem({ player, groundItem: log, groundItemId: data.ITEM.LOGS, handled: false }), true);
+  assert.equal(player.getInventory().getAmount(data.ITEM.LOGS), held + 1);
+  assert.equal(Items.isTracked(player, data.ITEM.LOGS), true, "the arena tracks the copy it gave");
+  assert.equal(logsOnGround(), 1, "the picked-up log leaves the ground");
+
+  for (let tick = 1; tick < 10; tick++) core.TaskManager.process();
+  assert.equal(logsOnGround(), 1, "it does not return early");
+  core.TaskManager.process();
+  assert.equal(logsOnGround(), 2, "the tenth tick puts a fresh log back");
+  assert.ok([...match.groundItems].every((item) => item.getDespawnDelay() > ItemOnGroundManager.DESPAWN_DELAY),
+    "the returned log also outlives the world despawn");
+});
+
 test("runner trap repairs accept carried and equipped Imcando hammers", async (t) => {
   const I = core.ItemIdentifiers;
   const variants = [
@@ -571,6 +672,7 @@ test("runner trap repairs accept carried and equipped Imcando hammers", async (t
     assert.equal(trap.charges, 2);
     assert.equal(trap.object.getId(), data.OBJECT.RUNNER_TRAP_2);
     assert.equal(inventory.getAmount(I.LOGS), 0);
+    assert.equal(inventory.getAmount(I.HAMMER), 1, "the hammer is a reusable tool, not a repair ingredient");
   }));
 
   await t.test("a hammer without logs leaves the broken trap unchanged", () => scenario(({ match, player, trap, inventory }) => {

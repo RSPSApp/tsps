@@ -202,11 +202,27 @@ test("Trobert with a full bag hands over nothing and the stage stays put", (t) =
   const fill = (p) => { while (p.getInventory().getFreeSlots() > 0) p.getInventory().add(new core.Item(core.ItemIdentifiers.SWORDFISH, 1)); };
   const p = player(t, BLACK_ARM, 8);
   fill(p);
+  const lines = [], messages = [];
+  const emit = PM.emitCustomEvent;
+  PM.emitCustomEvent = function (name, payload) {
+    const result = emit.call(this, name, payload);
+    if (name === "npc-dialogue:line" && payload?.player === p) lines.push(payload);
+    return result;
+  };
+  t.after(() => { PM.emitCustomEvent = emit; });
+  const sendMessage = p.sendMessage.bind(p);
+  p.sendMessage = (text, ...rest) => { messages.push(String(text)); return sendMessage(text, ...rest); };
+  const papersLine = () => lines.filter((line) => String(line.text).startsWith("Good good. Here's the I.D. papers."));
   talk(p, "TROBERT", volunteer);
   assert.equal(papers(p), 0);
   assert.equal(stage(p), 8, "no papers went in, so 8 stays 8");
+  // The recorded generic line (rsprox 241/242), and Trobert's hand-over line is dropped.
+  assert.ok(messages.includes("You don't have enough inventory space."), messages.join(" | "));
+  assert.deepEqual(papersLine().map((line) => line.skip), [true], "no \"Here's the I.D. papers\" with nothing handed over");
   p.getInventory().deleteNumber(core.ItemIdentifiers.SWORDFISH, 1);
+  lines.length = 0;
   talk(p, "TROBERT", volunteer);
+  assert.deepEqual(papersLine().map((line) => line.skip), [false], "with room the line plays");
   assert.equal(papers(p), 1);
   assert.equal(stage(p), 9);
   const q = player(t, BLACK_ARM, 10);

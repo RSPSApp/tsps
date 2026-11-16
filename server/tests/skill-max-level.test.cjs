@@ -65,13 +65,13 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
   const Catching = require("../plugins/skills/hunter/Catching.Hunter");
   const Runtime = require("../plugins/skills/hunter/Runtime.Hunter");
   const originalChoose = C.choose;
-  let startup;
+  const startups = [];
   const hooks = [];
-  const api = new Proxy({ core, emitCustomEvent() {}, spawnNpc() { return null; }, onServerStartup(handler) { startup = handler; } }, {
+  const api = new Proxy({ core, emitCustomEvent() {}, spawnNpc() { return null; }, onServerStartup(handler) { startups.push(handler); } }, {
     get(target, name) { return target[name] ?? ((...args) => hooks.push([name, ...args])); },
   });
   require("../plugins/skills/Hunter.plugin").register(api);
-  startup();
+  for (const startup of startups) startup();
   assert.equal(H.data.creatures.length, 27);
   assert.equal(H.data.implings.length, 12);
   assert.equal(Houses.bases.size, 4);
@@ -130,7 +130,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
   H.core = { ...core,
     ObjectManager: { register(o) { objects.add(o); }, deregister(o) { objects.delete(o); } },
     MapObjects: { exists: o => objects.has(o), getType: () => null },
-    RegionManager: { blocked: () => false },
+    RegionManager: { blocked: () => false, canMove: () => true },
     ItemOnGroundManager: {
       registerLocation(...args) {
         drops.push(args);
@@ -773,7 +773,8 @@ function feedbackPlayer(core) {
     getAttribute: k => attrs.get(k), setAttribute: (k, v) => attrs.set(k, v),
     getSkillManager: () => p.skills, getCombat: () => ({ getTarget: () => p.target ?? null, getAttacker: () => null }),
     statements: [],
-    getDialogueManager() { const statements = this.statements; return { startDialogues(chain) { statements.push(chain); } }; },
+    // Shows the first entry, as the real manager does (a box logs its own chat line).
+    getDialogueManager() { const statements = this.statements; return { startDialogues(chain) { statements.push(chain); chain.getDialogues().get(0).send(p); } }; },
   };
   p.skills = new SkillManager(p);
   return p;
@@ -1215,6 +1216,9 @@ test("as captured: a Sailing unlock box shows the level's pictures beside its te
     hLamp.onInterfaceActionButton({ player: pLamp });
     assert.deepEqual(boxes(pLamp).map((box) => box.getItemId()),
       [objId("sailing_skillguide_cargo_crate"), objId("sailing_skillguide_ports_musa_point")]);
+    // Each box logs its own line as it opens: the first now, the next once the first is continued.
+    assert.deepEqual(mesboxes(pLamp), [[core.ChatType.MESBOX, boxes(pLamp)[0].getText().replace(/<br>/g, " ")]]);
+    boxes(pLamp)[1].send(pLamp);
     assert.equal(mesboxes(pLamp).length, 2);
 
     // The box follows its own skill's pop-up, before a combat level's; opening it in the pop-up's
@@ -1741,9 +1745,14 @@ test("sound lookup excludes Lost City IDs, altar switches use OSRS audio, and re
   });
   const change = core.MagicSpellbook.changeSpellbook;
   core.MagicSpellbook.changeSpellbook = (p, spellbook) => { p.spellbook = spellbook; return true; }; // the real one returns true
-  // The books' locks (core SpellbookLocks) ask the quests through PluginManager itself.
+  // The books' locks (core SpellbookLocks) ask the quests through PluginManager itself. Tyss unlocks the Arceuus book
+  // (plugins/npcs/Tyss.plugin.js, not loaded here), so the Dark Altar's Arceuus switch is answered as unlocked too.
   const emit = PluginManager.emitCustomEvent;
-  PluginManager.emitCustomEvent = (name, query) => { if (name === "quest:is-complete") query.complete = true; else return emit.call(PluginManager, name, query); };
+  PluginManager.emitCustomEvent = (name, query) => {
+    if (name === "quest:is-complete") query.complete = true;
+    else if (name === core.SpellbookLocks.ARCEUUS_UNLOCK_QUERY_EVENT) query.unlocked = true;
+    else return emit.call(PluginManager, name, query);
+  };
   try {
     // The Altar of the Occult plays its own recorded switch sound, 1097 (b5c0de7f8; occult-altar-switch.test.cjs).
     const cases = [["Ancient Altar", "Venerate", core.MagicSpellbook.ANCIENT],

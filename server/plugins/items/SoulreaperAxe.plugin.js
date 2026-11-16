@@ -2,10 +2,11 @@
  * The Soulreaper axe's four Desert Treasure II components (docs/soulreaper-axe.md): each one's
  * Inspect, and any of them used on another assembling the axe.
  *
- * Sources: rsprox capture 1754 (rev 227) - the four Inspect boxes (ticks 3734-3739), the blood-rune
- * refusal with all four components and no runes (tick 3741), and the assembly with 2,000 blood runes
- * (ticks 4090-4096); the Wiki's Transcript:Executioner's axe head for the missing-components box,
- * and Soulreaper axe (Creation) for 75 Magic (not boostable) and 400 Magic XP.
+ * Sources: rsprox capture 1754 (rev 227) - the four Inspect boxes (clicks at ticks 3727-3738), the
+ * blood-rune refusal with all four components and no runes (tick 3741), and the assembly with 2,000
+ * blood runes (use at tick 4090, Yes at tick 4092); the Wiki's Transcript:Executioner's axe head for
+ * the missing-components box, and Soulreaper axe (Creation) for 75 Magic (not boostable) and 400
+ * Magic XP.
  *
  * Ours: the Magic-level refusal's wording and its place in the order of checks (neither is recorded
  * or on the Wiki).
@@ -55,8 +56,7 @@ function component(itemId) {
 
 /** A message box, logged in the chatbox as live does (type=mesbox), with the item when there is one. */
 function box(player, text, itemId = null) {
-  const { ChatType, DialogueChainBuilder, StatementDialogue, ItemStatementDialogue, EndDialogue } = api.core;
-  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
+  const { DialogueChainBuilder, StatementDialogue, ItemStatementDialogue, EndDialogue } = api.core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     itemId == null ? new StatementDialogue(0, text) : new ItemStatementDialogue(0, itemId, text),
     new EndDialogue(1),

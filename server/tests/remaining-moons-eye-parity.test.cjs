@@ -42,6 +42,7 @@ function harness(name) {
   const itemOnObjectNamed = new Map();
   const hooks = {}, events = {}, tasks = [], areas = [], npcs = [], removed = [], objects = [], ground = [], clicks = new Map(), buttons = new Map(), namedNpcs = new Map(), namedObjects = new Map(), persisted = new Map();
   const objectManager = { register: object => objects.push(object), deregister: object => { const i = objects.indexOf(object); if (i >= 0) objects.splice(i, 1); } };
+  objectManager.replaceInPlace = (outgoing, incoming) => { objectManager.deregister(outgoing); objectManager.register(incoming); };
   const api = new Proxy({ core: { ...core, PathFinder: { calculateWalkRoute: noop }, ObjectManager: objectManager, World: { ...core.World, getNpcsNear: () => npcs }, TaskManager: {
     submit(task) { task.setRunning(true); tasks.push(task); },
     cancelTasks(key) { tasks.filter(task => task.key === key).forEach(task => task.stop()); },
@@ -172,6 +173,7 @@ function player() {
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement(value) { p.blocked = value; return this; }, addSteps(to) { location = to; return this; }, requestWalk(to) { location = to; return this; }, isBlockMovement: () => Boolean(p.blocked) }),
     setUntargetable: value => { p.untargetable = value; }, setForceMovement: movement => { p.forceMovement = movement; }, getLocation: () => location, moveTo: to => { location = to; },
     getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; }, getIndex: () => p.index, getInterfaceId: () => -1,
+    setRunEnergy: value => { p.runEnergy = value; },
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: damage => { p.damage = damage; } }) }),
     getUsername: () => 'Parity', getDisplayName: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
@@ -867,8 +869,15 @@ test('Perilous Moons completes naturally from Attala to the Moons on the real st
   h.object(p, O.BUILDING_SUPPLIES_3, { x: 1436, y: 9637, z: 1 }, 1, ['Take-from']);
   finish();
   assert.ok(p.items.get(I.BUILDING_SUPPLIES) >= 3);
-  for (const [x, y] of [[1349, 9580], [1374, 9710], [1510, 9693]]) {
-    h.itemOnObject(p, I.BUILDING_SUPPLIES, O.COOKING_STOVE, { x, y, z: 0 });
+  // Rec 1693: each cavern is the player's own copy in the camp phase, its camp a camp spot to Build.
+  for (const [entrance, spot] of [[[1421, 9613, 1], [1348, 9580]], [[1421, 9650, 1], [1373, 9710]], [[1458, 9650, 1], [1509, 9693]]]) {
+    h.object(p, O.ENTRANCE_16, { x: entrance[0], y: entrance[1], z: entrance[2] }, 1, ['Pass-through']);
+    h.tick(6);
+    const copy = p.getPrivateArea();
+    assert.ok(copy instanceof core.TemplatedInstanceArea, `the cavern behind ${entrance} is a copy`);
+    const at = copy.sourceTile(spot[0], spot[1], 0);
+    h.namedObjects.get('Camp spot').Build({ player: p, objectId: O.CAMP_SPOT, location: at, clickType: 1 });
+    h.tick(6);
   }
   assert.equal(stage(), 12);
 
@@ -1519,5 +1528,40 @@ test('cache placements prove Perilous tunnel gates are real Pass-through objects
     assert.equal(object.getDefinition().getInteractions()[0], 'Pass-through');
     assert.ok(object.getFace() >= 0);
     assert.equal(RegionManager.blocked(new core.Location(lx, ly, lz), null), false, `landing ${lx},${ly},${lz}`);
+  }
+});
+
+// River spot 62193 also stands at Vampyrium's leechfin spots (plugins/bosses/data/moons-of-peril.json river.spots with a `method`).
+// Perilous Moons' quest bream is for Neypotzli's own two spots only: a click anywhere else is left to the river fishing plugin.
+const RIVER_SPOTS = require('../plugins/bosses/data/moons-of-peril.json').river.spots;
+const NEYPOTZLI_SPOTS = RIVER_SPOTS.filter(spot => !spot.method).map(spot => spot.tile);
+const VAMPYRIUM_SPOTS = RIVER_SPOTS.filter(spot => spot.method).map(spot => spot.tile);
+
+test('Perilous Moons river fishing acts only at Neypotzli: a Fish click at a Vampyrium spot gives no bream, no transcript and stays unhandled', () => {
+  assert.equal(NEYPOTZLI_SPOTS.length, 2);
+  assert.ok(VAMPYRIUM_SPOTS.some(([x, y]) => x === 2710 && y === 7819), 'the Vampyrium spot of the maintainer repro');
+  for (const stage of [5, 10]) {
+    for (const [x, y] of VAMPYRIUM_SPOTS) {
+      const h = harness('PerilousMoons'), p = player();
+      h.quest.setStage(p, stage);
+      p.items.set(I.BIG_FISHING_NET, 1);
+      const event = h.object(p, 62193, { x, y, z: 0 }, 1, ['Fish']);
+      assert.ok(!event.handled, `stage ${stage} at ${x},${y}: the click is left to the river fishing plugin`);
+      assert.deepEqual(p.messages, [], `stage ${stage} at ${x},${y}: no message (not 'You catch a raw bream.')`);
+      assert.equal(p.items.get(I.RAW_BREAM) ?? 0, 0, `stage ${stage} at ${x},${y}: no raw bream`);
+      assert.ok(!p.manager.getCurrent(), `stage ${stage} at ${x},${y}: no Jessamine guard transcript`);
+    }
+  }
+});
+
+test('Perilous Moons river fishing still gives the quest bream at each Neypotzli spot at stage 10', () => {
+  for (const [x, y] of NEYPOTZLI_SPOTS) {
+    const h = harness('PerilousMoons'), p = player();
+    h.quest.setStage(p, 10);
+    p.items.set(I.BIG_FISHING_NET, 1);
+    const event = h.object(p, 62193, { x, y, z: 0 }, 1, ['Fish']);
+    assert.ok(event.handled, `${x},${y} is handled by the quest`);
+    assert.ok(p.messages.includes('You catch a raw bream.'), p.messages.join('|'));
+    assert.equal(p.items.get(I.RAW_BREAM), 1);
   }
 });

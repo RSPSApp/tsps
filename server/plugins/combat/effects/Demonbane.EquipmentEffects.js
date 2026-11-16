@@ -3,6 +3,8 @@
  * order and rounding from the Wiki DPS calculator): accuracy and damage each gain
  * a percentage of themselves, rounded down.
  * - Arclight and Emberlight 70%, Silverlight and Darklight 60%, bone and burning claws 5%.
+ * - The infernal tecpatl 10% (Wiki: Infernal tecpatl), a Demonic Pacts echo weapon: for a Demonic
+ *   Pacts character only (items/EchoItems.js).
  * - Scorching bow 30% (ranged). Its damage bonus is additive with an imbued slayer helmet's on
  *   task (Wiki: 45% in total): the helmet's 23/20 becomes 29/20, through "slayer:imbued-ranged-bonus".
  * Some demons are more or less vulnerable (Wiki): the weapon's percentage is scaled by the vulnerability
@@ -10,6 +12,7 @@
  * his void flares 2), as demonbane spells are. Not modelled yet: Duke Sucellus's 70%.
  */
 const { asPlayer, weaponName, targetNpc, targetHasAttribute, addPercent } = require("./GearChecks.EquipmentEffects");
+const { inDemonicPacts } = require("../../items/EchoItems");
 
 const MELEE_PERCENT = new Map([
   ["arclight", 70],
@@ -19,7 +22,10 @@ const MELEE_PERCENT = new Map([
   ["darklight", 60],
   ["bone claws", 5],
   ["burning claws", 5],
+  ["infernal tecpatl", 10],
 ]);
+/** Weapons whose demonbane is a Demonic Pacts effect. */
+const DEMONIC_PACTS_ONLY = new Set(["infernal tecpatl"]);
 const RANGED_PERCENT = new Map([["scorching bow", 30]]);
 
 const VULNERABILITY_ATTRIBUTE = "combat:demonbane-vulnerability";
@@ -28,8 +34,10 @@ let pluginApi;
 function percentFor(entity, table) {
   const player = asPlayer(entity);
   if (!player) return 0;
-  const percent = table.get(weaponName(player)) ?? 0;
+  const weapon = weaponName(player);
+  const percent = table.get(weapon) ?? 0;
   if (percent <= 0 || !targetHasAttribute(entity, "demon")) return 0;
+  if (DEMONIC_PACTS_ONLY.has(weapon) && !(pluginApi && inDemonicPacts(pluginApi, player))) return 0;
   const vulnerability = Number(targetNpc(entity)?.getAttribute?.(VULNERABILITY_ATTRIBUTE));
   return Math.floor(percent * (vulnerability > 0 ? vulnerability : 1));
 }
@@ -56,6 +64,7 @@ function imbuedSlayerActive(entity) {
  */
 function isDemonbaneAttack(player) {
   const weapon = weaponName(player);
+  if (DEMONIC_PACTS_ONLY.has(weapon)) return !!pluginApi && inDemonicPacts(pluginApi, player);
   if (MELEE_PERCENT.has(weapon) || RANGED_PERCENT.has(weapon)) return true;
   const spell = player?.getCombat?.()?.getSelectedSpell?.();
   return spell?.demonbane === true;

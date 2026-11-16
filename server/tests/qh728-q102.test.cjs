@@ -685,6 +685,23 @@ test("Holgart's Travel rows the leg the stage and dock give, from the boat repai
   assert.equal(h.quest.getStage(p), 5);
 });
 
+test("Holgart's Travel yields once The Slug Menace has his boat (its capture, ticks 1441, 5164)", () => {
+  const h = harness();
+  const p = makePlayer('sea-slug-boat-lost');
+  const travel = h.npcInteractions.find(entry => entry.name === 'Holgart').actions.Travel;
+  h.quest.setStage(p, 12);
+  p.setLocation(2721, 3305, 0);
+  let lost = false;
+  (h.events['sea-slug:holgart-boat'] ??= []).push((request) => { if (request.player === p && lost) request.lost = true; });
+  const before = h.trips.length;
+  lost = true;
+  assert.equal(travel({ player: p }), false, 'left to The Slug Menace');
+  assert.equal(h.trips.length, before, 'no crossing');
+  lost = false;
+  assert.notEqual(travel({ player: p }), false);
+  assert.equal(h.trips.at(-1), 'sea-slug-platform');
+});
+
 test('a completed player gets the canonical Holgart page, not the Sea Slug lines', () => {
   const h = harness();
   const p = makePlayer('sea-slug-post');

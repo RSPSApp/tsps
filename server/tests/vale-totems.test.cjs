@@ -501,3 +501,24 @@ test("Wiki: a clean takes at most 50, and the arrowhead band follows the boosted
     Math.random = random;
   }
 });
+
+test("claimed offerings are asked as minigame:points: an answer is what is collected", (t) => {
+  const api = Shared.api();
+  const emit = api.emitCustomEvent;
+  const asked = [];
+  t.mock.method(api, "emitCustomEvent", function (name, payload) {
+    if (name === "minigame:points") {
+      asked.push({ ...payload });
+      payload.points *= 3;
+    }
+    return emit.call(this, name, payload);
+  });
+  const player = createPlayer();
+  State.set(player, SITE, { points: 10 });
+  click(player, "Offerings", "Claim", SITE_OFFERINGS);
+  ticks(1);
+  assert.deepEqual(asked, [{ player, minigame: "vale-totems", points: 10 }]);
+  assert.deepEqual(player.messages, ["You collect 30 offerings."]);
+  assert.equal(player.getInventory().getAmount(obj("ent_totems_loot")), 30);
+  assert.equal(site(player, "points"), 0);
+});

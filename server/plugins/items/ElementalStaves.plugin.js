@@ -1,5 +1,6 @@
 const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
+const { inDemonicPacts } = require("./EchoItems");
 
 const STAFF_GROUPS = [
   [[ItemIdentifiers.STAFF_OF_AIR, ItemIdentifiers.AIR_BATTLESTAFF, ItemIdentifiers.MYSTIC_AIR_STAFF], [ItemIdentifiers.AIR_RUNE]],
@@ -18,9 +19,27 @@ const STAFF_GROUPS = [
   [[ItemIdentifiers.SHADOWFLAME_QUADRANT], [ItemIdentifiers.AIR_RUNE, ItemIdentifiers.WATER_RUNE, ItemIdentifiers.EARTH_RUNE, ItemIdentifiers.FIRE_RUNE]],
 ];
 
+/**
+ * Shield-slot items that supply runes the same way, for a Demonic Pacts character (EchoItems.js).
+ * Wiki (Devil's element): unlimited air, water, earth and fire runes.
+ */
+const OFFHAND_GROUPS = [
+  [[ItemIdentifiers.DEVILS_ELEMENT], [ItemIdentifiers.AIR_RUNE, ItemIdentifiers.WATER_RUNE, ItemIdentifiers.EARTH_RUNE, ItemIdentifiers.FIRE_RUNE]],
+];
+
+let pluginApi = null;
+
+function wornId(player, slot) {
+  return player?.getEquipment?.()?.get?.(slot)?.getId?.() ?? -1;
+}
+
 function suppliedRunes(player) {
-  const weaponId = player?.getEquipment?.()?.get?.(Equipment.WEAPON_SLOT)?.getId?.() ?? -1;
-  return STAFF_GROUPS.find(([staffIds]) => staffIds.includes(weaponId))?.[1] ?? [];
+  const weaponId = wornId(player, Equipment.WEAPON_SLOT);
+  const weapon = STAFF_GROUPS.find(([staffIds]) => staffIds.includes(weaponId))?.[1] ?? [];
+  const shieldId = wornId(player, Equipment.SHIELD_SLOT);
+  const offhand = OFFHAND_GROUPS.find(([ids]) => ids.includes(shieldId))?.[1] ?? [];
+  if (!offhand.length || !pluginApi || !inDemonicPacts(pluginApi, player)) return weapon;
+  return [...new Set([...weapon, ...offhand])];
 }
 
 function bypassSuppliedRune(event) {
@@ -29,15 +48,16 @@ function bypassSuppliedRune(event) {
   }
 }
 
-/** `elemental-staves:runes` { player } -> `runes`: the rune ids the wielded staff supplies. */
+/** `elemental-staves:runes` { player } -> `runes`: the rune ids the wielded staff (and offhand) supply. */
 function reportSuppliedRunes(request) {
   request.runes = suppliedRunes(request.player);
 }
 
 module.exports = {
   name: "ElementalStaves",
-  description: "Elemental staves, battlestaves, the Kodai wand, the twinflame staff and the Shadowflame quadrant supply their element's runes to spells automatically.",
+  description: "Elemental staves, battlestaves, the Kodai wand, the twinflame staff, the Shadowflame quadrant and the Devil's element supply their element's runes to spells automatically.",
   register(api) {
+    pluginApi = api;
     api.onSpellRuneBypass(bypassSuppliedRune);
     api.onCustomEvent("elemental-staves:runes", reportSuppliedRunes);
   },

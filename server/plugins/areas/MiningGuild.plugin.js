@@ -68,9 +68,8 @@ function halveRespawn(request) {
  */
 function canEnter(player) {
   if (player.getSkillManager().getCurrentLevel(core.Skill.MINING) >= REQUIRED_LEVEL) return true;
-  const { DialogueChainBuilder, StatementDialogue, ChatType } = core;
+  const { DialogueChainBuilder, StatementDialogue } = core;
   const text = `You need a Mining level of ${REQUIRED_LEVEL} to access the Mining Guild.`;
-  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
   return false;
 }

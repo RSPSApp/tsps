@@ -58,6 +58,8 @@ const WILDERNESS_TIP = "You've got to do the task in the Wilderness.";
 /** The menu's cancel option, played by action() (not a transcript action). */
 const CANCEL_ACTION = "slayer_cancel_task";
 const { MORTIMER, MODIFIER } = Data;
+/** Konar's master id (slayer-masters.json). */
+const KONAR = 8;
 
 let api = null;
 let core = null;
@@ -142,6 +144,7 @@ function assignmentClick(event) {
   const master = masterFor(event.definition);
   if (!master) return;
   event.handled = true;
+  spokeTo(event.player, master);
   if (master.id === MORTIMER && !Tasks.current(event.player)) {
     offerChoice(event.player, master, event.definition, event.definition.getId());
     return;
@@ -519,8 +522,14 @@ function replaceTask(player, master) {
   return result.line ?? result.refused;
 }
 
+/** Ours (no capture sets it): having spoken to Konar unlocks her NPC Contact entry (cs2 9733 reads konar_spoken). */
+function spokeTo(player, master) {
+  if (master?.id === KONAR && State.varbit(player, "konar_spoken") === 0) State.setVarbit(player, "konar_spoken", 1);
+}
+
 function choice(event) {
   const master = masterFor(event.definition);
+  spokeTo(event.player, master);
   if (master?.id === MORTIMER) {
     // His introduction ends at the first menu; the next talk is the short greeting.
     if (State.varbit(event.player, "mortimer_introduction") === 0) State.setVarbit(event.player, "mortimer_introduction", 1);

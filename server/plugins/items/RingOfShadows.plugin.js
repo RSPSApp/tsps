@@ -174,7 +174,6 @@ function check({ player, item }) {
 }
 
 function showChargeInstructions({ player }) {
-  player.sendMessage(CHARGE_INSTRUCTIONS);
   const { DialogueChainBuilder, StatementDialogue } = core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, CHARGE_INSTRUCTIONS)));
 }

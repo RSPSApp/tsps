@@ -19,6 +19,10 @@ const { data, isShattered } = require("./Shattered.LeagueMode");
 const { nearSage } = require("./Sage.LeagueMode");
 const { nearBank } = require("./NearBank.LeagueMode");
 
+/** if_setevents bits: a component that can be dragged itself, and one a drag can be dropped on. */
+const DEPTH1 = 1 << 17;
+const DRAG_TARGET = 1 << 20;
+
 /** Fragment id -> fragment XP (absent = not owned). */
 const FRAGMENTS_ATTRIBUTE = "league:fragments";
 /** The seven slots' fragment ids (0 = empty). */
@@ -251,12 +255,19 @@ function levelQuery(request) {
 
 function open({ player }) {
   if (!isShattered(player)) return;
-  const { group, list, listChildren, loadout, loadoutChildren } = config();
+  const { group, list, listChildren, listDragChild, loadout, loadoutChildren, loadoutBackground, loadoutBackgroundChildren } = config();
   sendFragments(player);
   const sender = player.getPacketSender();
   sender.sendInterface(group);
   sender.sendInterfaceFlagsRange(uid(group, list), 0, Math.max(...ids()) * listChildren - 1, FLAG_OP1 | FLAG_OP2);
-  sender.sendInterfaceFlagsRange(uid(group, loadout), 0, config().slotVarbits.length * loadoutChildren - 1, FLAG_OP1 | FLAG_OP2);
+  // A listed fragment's icon, the child its script gives a drag deadzone, can be dragged onto a slot
+  // (data `fragments._drag`).
+  for (const id of ids()) {
+    const child = (id - 1) * listChildren + listDragChild;
+    sender.sendInterfaceFlagsRange(uid(group, list), child, child, FLAG_OP1 | FLAG_OP2 | DEPTH1);
+  }
+  sender.sendInterfaceFlagsRange(uid(group, loadout), 0, config().slotVarbits.length * loadoutChildren - 1, FLAG_OP1 | FLAG_OP2 | DRAG_TARGET);
+  sender.sendInterfaceFlagsRange(uid(group, loadoutBackground), 0, config().slotVarbits.length * loadoutBackgroundChildren - 1, DRAG_TARGET);
 }
 
 function isOpen(player) {
@@ -270,6 +281,17 @@ function canSwap(player) {
   return false;
 }
 
+/** Whether `id` is an owned fragment not already in a slot. */
+function equippable(player, id, current) {
+  return ids().has(id) && Number(owned(player)[id]) > 0 && !current.includes(id);
+}
+
+function saveSlots(player, current) {
+  player.setAttribute(SLOTS_ATTRIBUTE, current);
+  sendSlots(player);
+  Common.api.emitCustomEvent("league:fragments-changed", { player });
+}
+
 /** Equip (735:18 op2): an owned fragment into the first empty open slot; never twice. */
 function equip(event) {
   const { player } = event;
@@ -278,15 +300,41 @@ function equip(event) {
   if (Number(event.opId ?? event.action) !== config().equipOp || slot % config().listChildren !== 0) return true;
   const id = slot / config().listChildren + 1;
   const current = slots(player);
-  if (!ids().has(id) || !(Number(owned(player)[id]) > 0) || current.includes(id)) return true;
+  if (!equippable(player, id, current)) return true;
   if (!canSwap(player)) return true;
   const free = current.findIndex((entry, index) => entry === 0 && index < openSlots(player));
   if (free < 0) return true;
   current[free] = id;
-  player.setAttribute(SLOTS_ATTRIBUTE, current);
-  sendSlots(player);
-  Common.api.emitCustomEvent("league:fragments-changed", { player });
+  saveSlots(player, current);
   return true;
+}
+
+/** The loadout slot a drop on 735:36 (a slot's fragment) or 735:35 (its frame) names, or -1. */
+function dropSlot(widget, sub) {
+  const { group, loadout, loadoutChildren, loadoutBackground, loadoutBackgroundChildren } = config();
+  const per = widget === uid(group, loadout) ? loadoutChildren : widget === uid(group, loadoutBackground) ? loadoutBackgroundChildren : 0;
+  const slot = per > 0 && Number.isInteger(sub) && sub >= 0 ? Math.floor(sub / per) : -1;
+  return slot < config().slotVarbits.length ? slot : -1;
+}
+
+/**
+ * A listed fragment dragged onto a slot (data `fragments._drag`): it goes into that open slot, and
+ * a fragment already there comes off (an inference: nothing records a drop on a full slot).
+ */
+function drag(event) {
+  const { player, packet } = event;
+  const { group, list, listChildren } = config();
+  if (packet?.type !== "widget_drag" || packet.sourceWidgetId !== uid(group, list) || !isShattered(player)) return;
+  event.handled = true;
+  if (!isOpen(player)) return;
+  const source = Number(packet.sourceSlot);
+  const slot = dropSlot(packet.targetWidgetId, Number(packet.targetSlot));
+  if (!Number.isInteger(source) || source < 0 || slot < 0 || slot >= openSlots(player)) return;
+  const id = Math.floor(source / listChildren) + 1;
+  const current = slots(player);
+  if (!equippable(player, id, current) || !canSwap(player)) return;
+  current[slot] = id;
+  saveSlots(player, current);
 }
 
 /** Unequip (735:36 op2): that slot's fragment comes off. */
@@ -299,9 +347,7 @@ function unequip(event) {
   const current = slots(player);
   if (slot >= current.length || current[slot] === 0 || !canSwap(player)) return true;
   current[slot] = 0;
-  player.setAttribute(SLOTS_ATTRIBUTE, current);
-  sendSlots(player);
-  Common.api.emitCustomEvent("league:fragments-changed", { player });
+  saveSlots(player, current);
   return true;
 }
 
@@ -342,6 +388,7 @@ module.exports = function attach(api) {
   api.onInterfaceActionButton(buttonIds.loadout, unequip);
   api.onInterfaceActionButton(buttonIds.all, unequipAll);
   api.onInterfaceActionButton(buttonIds.close, close);
+  api.onCustomEvent("player:widget-action", drag);
 };
 
 module.exports.equippedLevel = equippedLevel;
@@ -353,4 +400,4 @@ module.exports.setTier = setTier;
 module.exports.setItem = setItem;
 module.exports.award = award;
 module.exports.findable = findable;
-module.exports._test = { openSlots, slots, owned, ids, levelOf, FRAGMENTS_ATTRIBUTE, SLOTS_ATTRIBUTE };
+module.exports._test = { openSlots, slots, owned, ids, levelOf, drag, FRAGMENTS_ATTRIBUTE, SLOTS_ATTRIBUTE };

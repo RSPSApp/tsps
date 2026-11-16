@@ -25,10 +25,16 @@ function isBossCrevice(event) {
   return dx * dx + dy * dy <= 30 * 30;
 }
 
+/** Use: through the crevice. Going in, a league character carrying the echo orb is asked first ("echo-boss:entry"). */
 function through({ player, location, objectId }) {
   if (!isBossCrevice({ location, objectId })) return false;
-  const inside = Common.inLair(player.getLocation());
-  player.moveTo(Common.location(inside ? Common.OUTSIDE_TILE : Common.INSIDE_TILE));
+  if (Common.inLair(player.getLocation())) {
+    player.moveTo(Common.location(Common.OUTSIDE_TILE));
+    return true;
+  }
+  const entry = { player, boss: "thermonuclear-smoke-devil", enter: () => player.moveTo(Common.location(Common.INSIDE_TILE)), handled: false };
+  Common.api.emitCustomEvent("echo-boss:entry", entry);
+  if (!entry.handled) entry.enter();
   return true;
 }
 

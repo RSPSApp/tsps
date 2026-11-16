@@ -633,7 +633,8 @@ function sailor(sailing = emptySailingState()) {
     setSailing: (next) => { sailing = next; },
     // Message boxes (dialogue chains) land in `boxes`.
     boxes: [],
-    getDialogueManager: () => ({ startDialogues: (chain) => player.boxes.push(chain) }),
+    // Shows the first entry, as the real manager does (a box logs its own chat line).
+    getDialogueManager: () => ({ startDialogues: (chain) => { player.boxes.push(chain); chain.getDialogues().get(0).send(player); } }),
     // Spam lines (sendTypedMessage) land in `messages` too, after `spam: `.
     getPacketSender: () => new Proxy({}, {
       get: (_t, key, proxy) => key === "sendTypedMessage" ? (_type, text) => { messages.push(`spam: ${text}`); return proxy; } : () => proxy,
@@ -882,6 +883,28 @@ test("boarding at the dock puts the player on the deck of their boat, at sea", (
   assert.deepEqual(player.getSailing().returnPoint, DOCK.landing);
   assert.equal(Sailing.board(player, DOCK.id), "You're already on a boat.");
   Sailing.disembark(player, DOCK.id);
+});
+
+test("leaving a deck runs its leave as the deck's plugin, and a throwing leave does not stop the disembark", (t) => {
+  const { PluginContext } = require("../dist/plugins/PluginContext");
+  const owner = sailor(), guest = sailor();
+  Sailing.giveBoat(owner, "raft", DOCK.id);
+  Sailing.board(owner, DOCK.id);
+  const instance = Sailing.instanceAboard(owner);
+  assert.equal(Sailing.boardAsGuest(guest, owner, DOCK.id, 2), null);
+  const deck = BoatManager.getDeck(instance);
+  deck.pluginName = "deck-test-plugin";
+  const leave = deck.leave.bind(deck), seen = [];
+  deck.leave = (who, logout) => { seen.push([who === owner ? "owner" : "guest", PluginContext.current()]); return leave(who, logout); };
+  assert.equal(Sailing.disembarkGuest(guest, DOCK.id), null);
+  assert.deepEqual(seen, [["guest", "deck-test-plugin"]], "a guest's leave runs inside the deck's plugin context");
+  deck.leave = (who) => { seen.push(["owner", PluginContext.current()]); throw new Error("a plugin's postLeave failed"); };
+  const errors = t.mock.method(console, "error", () => {});
+  assert.equal(Sailing.disembark(owner, DOCK.id), null, "the throw is logged by callArea, not raised");
+  assert.deepEqual(seen.at(-1), ["owner", "deck-test-plugin"]);
+  assert.equal(errors.mock.callCount(), 1);
+  assert.equal(BoatManager.getBoat(instance.entityIndex), undefined, "and the boat is still taken off the sea");
+  assert.equal(PluginContext.current(), null, "the context is restored afterwards");
 });
 
 test("boarding is refused with no boat here", () => {
@@ -3739,7 +3762,8 @@ test("Board-friend asks for a name and boards that player's boat, or says why no
       isRegistered: () => true,
       getRelations: () => ({ isVisibleTo: () => player.visible }),
       setEnteredSyntaxAction: (action) => { player.answer = action; },
-      getDialogueManager: () => ({ startDialogues: (chain) => player.boxes.push(chain) }),
+      // Shows the first entry, as the real manager does (a box logs its own chat line).
+      getDialogueManager: () => ({ startDialogues: (chain) => { player.boxes.push(chain); chain.getDialogues().get(0).send(player); } }),
     });
     const sender = new Proxy({}, {
       get: (_t, key) => (...args) => {

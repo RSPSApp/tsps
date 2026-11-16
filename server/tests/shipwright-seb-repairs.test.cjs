@@ -334,7 +334,12 @@ test('native courier delivery uses its originating boat after destruction and sa
     assert.equal(cargo.countIn(original, task.crate), 0, destroy ? 'removed origin stays empty' : 'ordinary delivery deducts the original hold');
     if (replacement) assert.equal(cargo.countIn(replacement, task.crate), 2, 'same-slot replacement cargo belongs to the new boat');
     assert.equal(ports.crewCargo(f.p)[0], null);
-    assert.equal(ports.slots(f.p)[0], null, 'existing physically carried delivery still completes');
+    if (destroy) {
+      assert.deepEqual(ports.slots(f.p)[0], { id: task.id, taken: 1, delivered: 1 },
+        'the crate in hand counts; the two lost with the hold are collected again at the source');
+    } else {
+      assert.equal(ports.slots(f.p)[0], null, 'all three crates complete the ordinary delivery');
+    }
   }
 });
 test('Seb Repair-boat quotes and atomically charges/heals the actual visited boat', t => {

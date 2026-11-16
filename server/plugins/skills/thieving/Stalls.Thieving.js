@@ -20,6 +20,15 @@ const depleted = new WeakMap();
 // Mainland stalls allow a theft every two ticks; Port Roberts' every five (below).
 const STEAL_DELAY_MS = 1000;
 const PORT_ROBERTS_STEAL_DELAY_MS = 3000;
+/**
+ * Stalls whose thefts go in the client's loot tracker ("loot-tracker:add-loc"), by cache loc name,
+ * with the category live sends. rsprox captures (rev 241/242): all 12,498 Ardougne baker's stall
+ * thefts in 59 recordings (local 1001550 ...) send it with category 6. Other stalls didn't, in
+ * revisions that send it elsewhere: the tea stall (83 thefts, local 1001438, rev 241), the Draynor
+ * seed stall (local 1002184, rev 242, the same session as baker's stall entries) and Civitas's silk
+ * and baker's stalls (rev 237). Stalls with no capture since the tracker are left out.
+ */
+const LOOT_TRACKED_STALLS = new Map([["cakethiefstall", 6]]);
 
 const STALLS = new Map([
   [
@@ -407,6 +416,11 @@ function finishTheft(event, stall) {
   const request = { player, itemId: reward.getId(), amount: reward.getAmount(), stored: 0 };
   pluginApi.emitCustomEvent("storage:gather", request);
   if (reward.getAmount() > request.stored) player.getInventory().addItem(new core.Item(reward.getId(), reward.getAmount() - request.stored));
+  // Live: the tracker entry follows the inventory update, before the XP (1001550 tick 3905).
+  const lootCategory = LOOT_TRACKED_STALLS.get(core.CacheDefinitions.getLocNames().get(object.getId()));
+  if (lootCategory !== undefined) {
+    pluginApi.emitCustomEvent("loot-tracker:add-loc", { player, locId: object.getId(), category: lootCategory, items: [[reward.getId(), reward.getAmount()]] });
+  }
   player.getSkillManager().addExperiences(core.Skill.THIEVING, stall.xp);
   spam(player, message ?? stealLine(reward));
   if (stall.marksMerchant !== false) rememberTheft(player, stall, theftVarbitKey(object, stall));
@@ -438,6 +452,10 @@ function handleStealFromStall(event) {
   if (depleted.has(event.object)) return;
 
   const player = event.player;
+  // A quest can keep a stall's trader distrustful ({ refused: true } after showing its own line).
+  const access = { player, object: event.object, name: event.definition.getName(), refused: false };
+  pluginApi.emitCustomEvent("thieving:stall-access", access);
+  if (access.refused) return;
   if (stall.humanOnly && inMonkeyForm(player)) {
     player.sendMessage(MONKEY_FORM_MESSAGE);
     return;

@@ -5,6 +5,8 @@ const RewardScreen = require("../CasketRewardScreen.plugin");
 // This is an imported exporter artifact, not a hand-maintained reward approximation.
 const TABLE = require("../../../data/definitions/reward-caskets.json").beginner;
 const Runtime = require("./Runtime.BeginnerTreasureTrails");
+const Caskets = require("../trails/Caskets.TreasureTrails");
+const { onEntrana } = require("../../areas/entrana/Bounds.Entrana");
 const OPENING_ATTRIBUTE = "treasure-trails:opening-beginner";
 let api;
 let core;
@@ -34,17 +36,7 @@ function roll(random = Math.random, eligibleForUniques = true, rolls = null) {
   return drops;
 }
 
-function onEntrana(player) {
-  const pos = player.getLocation();
-  return pos.getZ() === 0 && pos.getX() >= 2800 && pos.getX() <= 2879 && pos.getY() >= 3320 && pos.getY() <= 3391;
-}
-
 /** Resolve every credited definition before consumption, including milestone rewards. */
-/** The rewards' Grand Exchange worth, as the casket's last message gives it. */
-function worth(drops) {
-  return drops.reduce((sum, drop) => sum + drop.amount * (core.ItemDefinition.forId(drop.itemId)?.getGrandExchangeValue?.() ?? 0), 0);
-}
-
 function prepareDrops(drops) {
   if (!Array.isArray(drops) || !drops.length) throw new Error("Missing beginner rewards");
   return drops.map(drop => {
@@ -123,7 +115,7 @@ function open(event) {
     sender.sendInterfaceScript(1065, [(group << 16) | 3], undefined, undefined, {
       [Runtime.data().rewardInventory]: { capacity: Math.max(3, slots.length), slots },
     });
-    player.sendMessage(`<col=ef1020>Your treasure is worth around ${worth(drops).toLocaleString("en-US")} coins!</col>`);
+    player.sendMessage(`<col=ef1020>Your treasure is worth around ${Caskets.worth(drops, core.ItemDefinition).toLocaleString("en-US")} coins!</col>`);
     api?.emitCustomEvent?.("treasure-trails:casket-opened", { player, tier: "beginner" });
   } finally {
     player.setAttribute(OPENING_ATTRIBUTE, false);

@@ -4,7 +4,8 @@
     "npcs": {
       "armoured": "zalcano",
       "weakened": "zalcano_weak",
-      "golem": "zalcano_golem"
+      "golem": "zalcano_golem",
+      "rhiannon": "zalcano_instructor"
     },
     "locs": {
       "entrance": "zalcano_entrance",
@@ -31,6 +32,9 @@
     },
     "varps": {
       "kills": "total_zalcano_kills"
+    },
+    "varbits": {
+      "lootFocus": "zalcano_loot_customization"
     },
     "seqs": {
       "fallDown": "zalcano_fall_down",
@@ -122,7 +126,9 @@
     "onyxWeight": 1,
     "shardChance": [1500, 750],
     "petChance": 2250,
-    "mvpBonus": 0.1
+    "mvpBonus": 0.1,
+    "_xpFocus": "Wiki (Zalcano, Drops): Mining XP of about main points + 5 x tertiary points in place of the main table, with the Prospector bonus; shards, ashes and the unique, shard and pet rolls are unchanged",
+    "xpFocusTertiaryFactor": 5
   },
   "messages": {
     "_recorded": "rsprox 4056/4057 and 1073-1075 (rev 237, Leagues VI): entryWarning, entryQuestion and entryOptions (Pass, entering), the peek box's empty, full-health sentence, swingRock / mined / full / shard, refined, imbued / noRefined, empowered / lastOne, burning, swingZalcano / chipped, fallen, stands, rises, killCount. Message boxes: entryWarning, peek, full; spam: swing*, mined, refined, imbued, empowered, burning, chipped; the rest game messages.",

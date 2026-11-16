@@ -1,9 +1,7 @@
 {
-  "$comment": "Relic tiers and relics per league (docs/leagues.md), used by plugins/modes/LeagueRelics.plugin.js. Costs, names, effects and granted items are the Wiki's (Trailblazer_Reloaded_League/Relics, Raging_Echoes_League/Relics), and `requiresBank` is set only where the Wiki says the relic must be unlocked in a bank (every Trailblazer Reloaded item relic; Raging Echoes' Clue Compass, Bank Heist and Fairy's Flight, while its tier-1 tools are handed out anywhere, as the Leagues V tutorial's Animal Wrangler unlock in osrs-captures 227/00196 shows); the descriptions condense the Wiki's bullets in the cache's own style. `grants` names ItemIdentifiers; a relic whose item is no longer in this cache (Trailblazer Reloaded's Sage's greaves, Trailblazer tools, crystal of memories and guardian horn; Raging Echoes' Sage's greaves and guardian horn) grants nothing and says so in `_missing`. The client draws the catalog from structs and enums the server sends (structOverrides/enumOverrides, GamemodeContentStore): `virtualIdBase` + leagueType x 1000 is where this league's ids start, and `iconStructs` are the rev 241 cache's own relic structs (enums 5703-5710, the current league's), whose icon params (881-884, 1853, 1854) are reused per tier and slot since older leagues' icons are not in the cache. Params: 870 tier enum on the league struct, 877 cost, 878 relic enum and 2045 passive struct on a tier struct, 1020 passive text, 879 name, 880 description, 885 tier index, 1855 has-item on a relic struct.",
+  "$comment": "Relic tiers and relics per league (docs/leagues.md), used by plugins/modes/LeagueRelics.plugin.js. Costs, names, effects and granted items are the Wiki's (Trailblazer_Reloaded_League/Relics, Raging_Echoes_League/Relics), and `requiresBank` is set only where the Wiki says the relic must be unlocked in a bank (every Trailblazer Reloaded item relic; Raging Echoes' Clue Compass, Bank Heist and Fairy's Flight, while its tier-1 tools are handed out anywhere, as the Leagues V tutorial's Animal Wrangler unlock in osrs-captures 227/00196 shows); the descriptions condense the Wiki's bullets in the cache's own style. `grants` names ItemIdentifiers; a relic whose item is no longer in this cache (Trailblazer Reloaded's Sage's greaves, Trailblazer tools, crystal of memories and guardian horn; Raging Echoes' Sage's greaves and guardian horn) grants nothing and says so in `_missing`. The client draws the catalog from structs and enums the server sends (structOverrides/enumOverrides, GamemodeContentStore): `virtualIdBase` + leagueType x 1000 is where this league's ids start. A relic's six icons (params 881-884, 1853, 1854) are its own league's sprites, which this cache still carries by gameval name: the league's `iconSprite` (league_4_relics, league_5_relics) with each param's suffix in `params.icons` (881 the icon, 882 _tli, 883 _off, 884 _large, 1853 _medium, 1854 _medium_off), at the relic's `icon` index. That index is the one the relic's struct gives all six params in its league's own cache (OpenRS2 1642 for Trailblazer Reloaded, 2023 for Raging Echoes, the caches scripts/league-era-cache.ts reads the task lists from), matched by tier and name; it is not the Wiki's order (Raging Echoes' Animal Wrangler is 1, Lumberjack 2). A preview filler takes the index of the relic it previews; Crystal of Memories, which has no relic struct there, takes 26, the league's generic relic sprite (its league struct's params 1022 and 1023, the next-relic icon script 3182 draws). Params: 870 tier enum on the league struct, 877 cost, 878 relic enum and 2045 passive struct on a tier struct, 1020 passive text, 879 name, 880 description, 885 tier index, 1855 has-item on a relic struct.",
   "virtualIdBase": 200000,
-  "params": { "tiersEnum": 870, "tierCost": 877, "tierRelics": 878, "tierPassive": 2045, "passiveText": 1020, "relicName": 879, "relicDescription": 880, "relicTier": 885, "relicHasItem": 1855, "iconParams": [881, 882, 883, 884, 1853, 1854] },
-  "_iconStructs": "The cache's tier 7 enum (5709) holds only two relics, so its third slot borrows the first's icon.",
-  "iconStructs": [[1722, 6441, 6445], [6443, 1124, 6440], [1121, 6439, 6450], [6446, 6452, 6448], [6437, 6444, 6447], [1132, 6449, 6451], [6453, 1127, 6453], [4726, 6438, 6454]],
+  "params": { "tiersEnum": 870, "tierCost": 877, "tierRelics": 878, "tierPassive": 2045, "passiveText": 1020, "relicName": 879, "relicDescription": 880, "relicTier": 885, "relicHasItem": 1855, "icons": { "881": "", "882": "_tli", "883": "_off", "884": "_large", "1853": "_medium", "1854": "_medium_off" } },
   "selectionVarbits": [10049, 10050, 10051, 10052, 10053, 11696, 17301, 17302],
   "_selectionOtherVarbits": "league_relic_selection_other_0-7 (rev 241 gamevals): Reloaded's extra pick, the slot in its tier, as client script 3697 reads it beside the tier's own selection (rec 1135: Eternal Sustenance as the extra tier 6 pick sets selection_other_5 to 2). league_relic_repick_0-7: 1 for each tier the unused extra pick may come from (rec 1135: repick_0-5 go to 1 when Reloaded is chosen and back to 0 on the extra pick).",
   "selectionOtherVarbits": [17554, 17555, 17556, 17557, 17558, 17559, 17560, 17561],
@@ -254,7 +252,7 @@
     "bankersNote": { "league": [4, 5], "key": "bankers-note", "toolName": "Banker's note" },
     "clueCompass": { "league": 5, "key": "clue-compass", "toolName": "Clue compass" },
     "totalRecall": { "league": 5, "key": "total-recall", "toolName": "Crystal of Echoes" },
-    "grimoire": { "league": [5, 6], "key": "grimoire", "_prayersLeagues": "Demonic Pacts' Grimoire also unlocks every prayer (Wiki, cache text): `prayer:unlocks-bypass`.", "prayersLeagues": [6] },
+    "grimoire": { "league": [5, 6], "key": "grimoire", "_prayersLeagues": "Demonic Pacts' Grimoire also unlocks every prayer (Wiki, cache text): `prayer:unlocks-bypass`.", "prayersLeagues": [6], "_arceuusLeagues": "Demonic Pacts' Grimoire (struct 1132) also opens the Arceuus book without Tyss: the cache proc arceuus_spellbook_unlocked checks league_relic_active for it.", "arceuusLeagues": [6] },
     "bankHeist": { "league": [5, 6], "key": "bank-heist", "toolName": "Banker's briefcase" },
     "reloaded": { "league": [5, 6], "key": "reloaded", "tiers": [0, 1, 2], "_leagueTiers": "Demonic Pacts' Reloaded is tier 7: any relic of tiers 1-6 (cache, Wiki).", "leagueTiers": { "6": [0, 1, 2, 3, 4, 5] } },
     "_demonicPactsComment": "Demonic Pacts (league 6) relics (docs/leagues.md): the catalog is the cache's (struct 6436), so each relic's key is its cache name slugged; its item is the relic struct's param 2049 and is handed out in a bank or near the Leagues Tutor (237/01102). Numbers are the Wiki's and the cache's relic text unless marked ours.",
@@ -425,153 +423,166 @@
   "leagues": {
     "6": { "_comment": "Leagues VI - Demonic Pacts is the league this cache (rev 241) carries: its tiers, costs, passives and relics are read from the league struct (6436, enum 2670) and sent as nothing; a relic's item is its struct's param 2049, and one with an item (param 1855) unlocks only in a bank or near the Leagues Tutor, as recorded (237/01102).", "fromCache": true },
     "4": {
+      "iconSprite": "league_4_relics",
       "tiers": [
         {
           "cost": 0,
           "passive": "- Items from eligible sources will be 2x as common.<br><br>- Run energy is never drained whilst running.<br><br>- All clue scrolls will drop as stackable scroll boxes, limited to steps in unlocked regions.",
           "relics": [
-            { "key": "endless-harvest", "name": "Endless Harvest", "description": "- Fishing, Woodcutting and Mining resources are doubled, with bonus XP.<br><br>- Gathered resources go to your bank, or your inventory when the bank is full.", "grants": [] },
-            { "key": "production-prodigy", "name": "Production Prodigy", "description": "- Crafting, Smithing, Herblore, Fletching and Cooking are boosted by +12.<br><br>- Processing actions handle all items at once with full XP.<br><br>- 25% chance of an extra product, sent to your bank.", "grants": [] },
-            { "key": "trickster", "name": "Trickster", "description": "- Thieving, Agility, Hunter and Firemaking always succeed.<br><br>- Your coin pouch holds three times as much and you pickpocket again automatically, for doubled, noted loot.<br><br>- Box traps lure faster with double loot and XP, impling jars never break, and you can burn up to nine logs at once.<br><br>- Grants Sage's greaves, which give Agility XP while you run.", "grants": [], "_missing": "Sage's greaves are not in this cache." }
+            { "key": "endless-harvest", "name": "Endless Harvest", "icon": 0, "description": "- Fishing, Woodcutting and Mining resources are doubled, with bonus XP.<br><br>- Gathered resources go to your bank, or your inventory when the bank is full.", "grants": [] },
+            { "key": "production-prodigy", "name": "Production Prodigy", "icon": 1, "description": "- Crafting, Smithing, Herblore, Fletching and Cooking are boosted by +12.<br><br>- Processing actions handle all items at once with full XP.<br><br>- 25% chance of an extra product, sent to your bank.", "grants": [] },
+            { "key": "trickster", "name": "Trickster", "icon": 2, "description": "- Thieving, Agility, Hunter and Firemaking always succeed.<br><br>- Your coin pouch holds three times as much and you pickpocket again automatically, for doubled, noted loot.<br><br>- Box traps lure faster with double loot and XP, impling jars never break, and you can burn up to nine logs at once.<br><br>- Grants Sage's greaves, which give Agility XP while you run.", "grants": [], "_missing": "Sage's greaves are not in this cache." }
           ]
         },
         {
           "cost": 500,
           "passive": "- League XP multiplier increased from 5x to 8x.<br><br>- Minigame points received are boosted by 3x.",
           "relics": [
-            { "key": "fairys-flight", "name": "Fairy's Flight", "description": "- Grants a fairy mushroom that teleports you to any fairy ring, spirit tree or tool leprechaun in your unlocked regions.", "grants": ["FAIRY_MUSHROOM"], "requiresBank": true },
-            { "key": "globetrotter", "name": "Globetrotter", "description": "- Grants a globetrotter pendant that teleports you to every ornate jewellery box destination and nearly every spellbook teleport in your unlocked regions.", "grants": ["GLOBETROTTER_PENDANT"], "requiresBank": true },
-            { "key": "crystal-of-memories", "name": "Crystal of Memories", "description": "- Grants a crystal of memories that returns you to where you last teleported from.<br><br>- Its cooldown of 6 minutes falls by 1 minute per 300 total levels.", "grants": [], "_missing": "The crystal of memories is not in this cache.", "_note": "The Wiki lists the crystal as the tier 3 passive; the tier's two relics are Banker's Note and Fire Sale, so this third slot is left for it to keep three choices a tier." }
+            { "key": "fairys-flight", "name": "Fairy's Flight", "icon": 3, "description": "- Grants a fairy mushroom that teleports you to any fairy ring, spirit tree or tool leprechaun in your unlocked regions.", "grants": ["FAIRY_MUSHROOM"], "requiresBank": true },
+            { "key": "globetrotter", "name": "Globetrotter", "icon": 4, "description": "- Grants a globetrotter pendant that teleports you to every ornate jewellery box destination and nearly every spellbook teleport in your unlocked regions.", "grants": ["GLOBETROTTER_PENDANT"], "requiresBank": true },
+            { "key": "crystal-of-memories", "name": "Crystal of Memories", "icon": 26, "description": "- Grants a crystal of memories that returns you to where you last teleported from.<br><br>- Its cooldown of 6 minutes falls by 1 minute per 300 total levels.", "grants": [], "_missing": "The crystal of memories is not in this cache.", "_note": "The Wiki lists the crystal as the tier 3 passive; the tier's two relics are Banker's Note and Fire Sale, so this third slot is left for it to keep three choices a tier." }
           ]
         },
         {
           "cost": 1200,
           "passive": "- Grants a crystal of memories, which teleports you back to the last place you teleported from.",
           "relics": [
-            { "key": "bankers-note", "name": "Banker's Note", "description": "- Grants a banker's note: use an item on it to note or unnote it, or Activate it to convert a chosen quantity at once.", "grants": ["BANKERS_NOTE"], "requiresBank": true },
-            { "key": "fire-sale", "name": "Fire Sale", "description": "- Every coin shop with a standard interface sells for free, and can note what you buy.<br><br>- Shops no longer buy items for gold.", "grants": [] },
-            { "key": "treasure-seeker-preview", "name": "Treasure Seeker", "description": "- NPCs that drop clues have a 1 in 15 chance to drop one, including impling jars.<br><br>- Clue scrolls have the fewest steps and reward caskets roll the most rewards.", "grants": [], "_note": "Tier 5's Treasure Seeker, shown here as the third choice to keep three a tier; the Wiki lists only two tier 3 relics." }
+            { "key": "bankers-note", "name": "Banker's Note", "icon": 13, "description": "- Grants a banker's note: use an item on it to note or unnote it, or Activate it to convert a chosen quantity at once.", "grants": ["BANKERS_NOTE"], "requiresBank": true },
+            { "key": "fire-sale", "name": "Fire Sale", "icon": 5, "description": "- Every coin shop with a standard interface sells for free, and can note what you buy.<br><br>- Shops no longer buy items for gold.", "grants": [] },
+            { "key": "treasure-seeker-preview", "name": "Treasure Seeker", "icon": 9, "description": "- NPCs that drop clues have a 1 in 15 chance to drop one, including impling jars.<br><br>- Clue scrolls have the fewest steps and reward caskets roll the most rewards.", "grants": [], "_note": "Tier 5's Treasure Seeker, shown here as the third choice to keep three a tier; the Wiki lists only two tier 3 relics." }
           ]
         },
         {
           "cost": 2000,
           "passive": "- Items from eligible sources will be 3x as common.<br><br>- Bigger and Badder is unlocked, and superior slayer monsters spawn 1 in 50.<br><br>- Slayer point rewards are 5x, with no minimum task streak.",
           "relics": [
-            { "key": "archers-embrace", "name": "Archer's Embrace", "description": "- Ranged weapons attack twice as fast.<br><br>- Ranged accuracy is doubled, with a 10% chance of an extra projectile.<br><br>- 90% of ammunition is saved (98% with Ava's devices) and enchanted bolts proc twice as often.", "grants": [] },
-            { "key": "brawlers-resolve", "name": "Brawler's Resolve", "description": "- Melee weapons attack twice as fast.<br><br>- Melee accuracy and all defences are increased by 50%, with a 10% chance to deal double damage.<br><br>- 90% of weapon charges are saved and you are immune to status effects from NPCs and players.", "grants": [] },
-            { "key": "superior-sorcerer", "name": "Superior Sorcerer", "description": "- Magic weapons attack at speed 2 (1.2 seconds).<br><br>- Magic accuracy is increased by 175% and magic damage by 20%.<br><br>- 90% of runes and powered staff charges are saved.<br><br>- In multicombat, magic attacks hit up to 5 surrounding targets for up to 25% of the damage dealt.<br><br>- Binding spells always hit unless the target is immune or already bound.<br><br>- Grants an arcane grimoire and a rune pouch.", "grants": ["ARCANE_GRIMOIRE", "RUNE_POUCH"], "requiresBank": true }
+            { "key": "archers-embrace", "name": "Archer's Embrace", "icon": 7, "description": "- Ranged weapons attack twice as fast.<br><br>- Ranged accuracy is doubled, with a 10% chance of an extra projectile.<br><br>- 90% of ammunition is saved (98% with Ava's devices) and enchanted bolts proc twice as often.", "grants": [] },
+            { "key": "brawlers-resolve", "name": "Brawler's Resolve", "icon": 6, "description": "- Melee weapons attack twice as fast.<br><br>- Melee accuracy and all defences are increased by 50%, with a 10% chance to deal double damage.<br><br>- 90% of weapon charges are saved and you are immune to status effects from NPCs and players.", "grants": [] },
+            { "key": "superior-sorcerer", "name": "Superior Sorcerer", "icon": 8, "description": "- Magic weapons attack at speed 2 (1.2 seconds).<br><br>- Magic accuracy is increased by 175% and magic damage by 20%.<br><br>- 90% of runes and powered staff charges are saved.<br><br>- In multicombat, magic attacks hit up to 5 surrounding targets for up to 25% of the damage dealt.<br><br>- Binding spells always hit unless the target is immune or already bound.<br><br>- Grants an arcane grimoire and a rune pouch.", "grants": ["ARCANE_GRIMOIRE", "RUNE_POUCH"], "requiresBank": true }
           ]
         },
         {
           "cost": 4000,
           "passive": "- League XP multiplier increased from 8x to 12x.<br><br>- Minigame points received are boosted by 5x.",
           "relics": [
-            { "key": "treasure-seeker", "name": "Treasure Seeker", "description": "- NPCs that drop clues have a 1 in 15 chance to drop one, including impling jars, and clue vessels are 10x as common.<br><br>- Clue scrolls have the fewest steps and reward caskets roll the most rewards, with a chance of another casket.", "grants": [] },
-            { "key": "bloodthirsty", "name": "Bloodthirsty", "description": "- Slayer tasks can be taken and cancelled remotely.<br><br>- Expeditious bracelets and bracelets of slaughter proc 35% of the time without using charges.<br><br>- Superior slayer monsters spawn 1 in 25 with extra drops, and may spawn as bloodthirsty variants.", "grants": [] },
-            { "key": "infernal-gathering", "name": "Infernal Gathering", "description": "- Grants the Trailblazer axe, pickaxe and harpoon, which burn, smelt and cook what you gather for XP and work a tick faster.", "grants": [], "_missing": "The Trailblazer tools are not in this cache." }
+            { "key": "treasure-seeker", "name": "Treasure Seeker", "icon": 9, "description": "- NPCs that drop clues have a 1 in 15 chance to drop one, including impling jars, and clue vessels are 10x as common.<br><br>- Clue scrolls have the fewest steps and reward caskets roll the most rewards, with a chance of another casket.", "grants": [] },
+            { "key": "bloodthirsty", "name": "Bloodthirsty", "icon": 10, "description": "- Slayer tasks can be taken and cancelled remotely.<br><br>- Expeditious bracelets and bracelets of slaughter proc 35% of the time without using charges.<br><br>- Superior slayer monsters spawn 1 in 25 with extra drops, and may spawn as bloodthirsty variants.", "grants": [] },
+            { "key": "infernal-gathering", "name": "Infernal Gathering", "icon": 11, "description": "- Grants the Trailblazer axe, pickaxe and harpoon, which burn, smelt and cook what you gather for XP and work a tick faster.", "grants": [], "_missing": "The Trailblazer tools are not in this cache." }
           ]
         },
         {
           "cost": 7500,
           "passive": "- Items from eligible sources will be 4x as common.",
           "relics": [
-            { "key": "equilibrium", "name": "Equilibrium", "description": "- Every XP gain also gives XP equal to 10% of your total level (20% for your lowest skill), not multiplied by the league rate.", "grants": [] },
-            { "key": "farmers-fortune", "name": "Farmer's Fortune", "description": "- 20% chance to keep a planted seed or sapling.<br><br>- Patches grow instantly and never get diseased.<br><br>- Harvesting is 25x faster, with triple, noted yield.", "grants": [] },
-            { "key": "ruinous-powers", "name": "Ruinous Powers", "description": "- Grants the Ruinous Powers book, which switches between the standard and Ruinous Powers prayer books.", "grants": ["RUINOUS_POWERS"], "requiresBank": true }
+            { "key": "equilibrium", "name": "Equilibrium", "icon": 12, "description": "- Every XP gain also gives XP equal to 10% of your total level (20% for your lowest skill), not multiplied by the league rate.", "grants": [] },
+            { "key": "farmers-fortune", "name": "Farmer's Fortune", "icon": 14, "description": "- 20% chance to keep a planted seed or sapling.<br><br>- Patches grow instantly and never get diseased.<br><br>- Harvesting is 25x faster, with triple, noted yield.", "grants": [] },
+            { "key": "ruinous-powers", "name": "Ruinous Powers", "icon": 21, "description": "- Grants the Ruinous Powers book, which switches between the standard and Ruinous Powers prayer books.", "grants": ["RUINOUS_POWERS"], "requiresBank": true }
           ]
         },
         {
           "cost": 15000,
           "passive": "- League XP multiplier increased from 12x to 16x.<br><br>- Minigame points received are boosted by 8x.",
           "relics": [
-            { "key": "berserker", "name": "Berserker", "description": "- Damage dealt is increased by 0.4% for each hitpoint you are missing.<br><br>- You always hit your max hit on an NPC with full health.", "grants": [] },
-            { "key": "soul-stealer", "name": "Soul Stealer", "description": "- Your minimum hit is raised by 10% of your max hit.<br><br>- A successful hit has a 50% chance to restore hitpoints and prayer by 10% of the damage dealt.", "grants": [] },
-            { "key": "weapon-master", "name": "Weapon Master", "description": "- Special attacks always hit NPCs, for at least 20% of your max hit.<br><br>- 30% special attack energy is restored every 30 seconds.<br><br>- Short of energy, you can sacrifice 25 hitpoints for a special attack.", "grants": [] }
+            { "key": "berserker", "name": "Berserker", "icon": 16, "description": "- Damage dealt is increased by 0.4% for each hitpoint you are missing.<br><br>- You always hit your max hit on an NPC with full health.", "grants": [] },
+            { "key": "soul-stealer", "name": "Soul Stealer", "icon": 17, "description": "- Your minimum hit is raised by 10% of your max hit.<br><br>- A successful hit has a 50% chance to restore hitpoints and prayer by 10% of the damage dealt.", "grants": [] },
+            { "key": "weapon-master", "name": "Weapon Master", "icon": 15, "description": "- Special attacks always hit NPCs, for at least 20% of your max hit.<br><br>- 30% special attack energy is restored every 30 seconds.<br><br>- Short of energy, you can sacrifice 25 hitpoints for a special attack.", "grants": [] }
           ]
         },
         {
           "cost": 24000,
           "passive": "- Items from eligible sources will be 5x as common.",
           "relics": [
-            { "key": "executioner", "name": "Executioner", "description": "- Grants Sage's axe, a thrown weapon that executes targets below 20% of their hitpoints.", "grants": ["SAGES_AXE"], "requiresBank": true },
-            { "key": "undying-retribution", "name": "Undying Retribution", "description": "- Upon death your hitpoints and prayer are fully restored, and every enemy within three tiles takes up to 200% of your Prayer level in damage (50% for other players).<br><br>- Works wherever Retribution does, once every three minutes.", "grants": [] },
-            { "key": "guardian", "name": "Guardian", "description": "- Grants the guardian horn, which summons a guardian thrall for 30 minutes that attacks with the style its target is weakest to.", "grants": [], "_missing": "The guardian horn is not in this cache." }
+            { "key": "executioner", "name": "Executioner", "icon": 19, "description": "- Grants Sage's axe, a thrown weapon that executes targets below 20% of their hitpoints.", "grants": ["SAGES_AXE"], "requiresBank": true },
+            { "key": "undying-retribution", "name": "Undying Retribution", "icon": 18, "description": "- Upon death your hitpoints and prayer are fully restored, and every enemy within three tiles takes up to 200% of your Prayer level in damage (50% for other players).<br><br>- Works wherever Retribution does, once every three minutes.", "grants": [] },
+            { "key": "guardian", "name": "Guardian", "icon": 20, "description": "- Grants the guardian horn, which summons a guardian thrall for 30 minutes that attacks with the style its target is weakest to.", "grants": [], "_missing": "The guardian horn is not in this cache." }
           ]
         }
       ]
     },
     "5": {
+      "iconSprite": "league_5_relics",
+      "sage": {
+        "_comment": "Raging Echoes' tutor, the Sage (Wiki 'The Sage (Raging Echoes League)': 'the tutor for the Raging Echoes League', in the Lumbridge Castle courtyard on League worlds, map pin 3223,3214; options Talk-to, Check-pets, Collect-items, Rewards, and it 'provided items unlocked from relics'). The cache's NPC 14144 (league_sage) carries only Talk-to, as the Sage was removed on 22 January 2025, so Collect-items is offered as a Talk-to choice instead. The lines are ours (no Raging Echoes recording).",
+        "npc": 14144,
+        "spawn": [3223, 3214, 0],
+        "messages": {
+          "ask": "Do I have any League items to collect?",
+          "received": "You receive some League items from the Sage.",
+          "nothing": "You have no League items to collect.",
+          "full": "You don't have enough inventory space for the rest of your League items."
+        }
+      },
       "tiers": [
         {
           "cost": 0,
           "passive": "- League XP multiplier is 5x.<br><br>- Items from eligible sources will be 2x as common.<br><br>- Farming ticks will occur every minute instead of every five minutes.<br><br>- Minigame points received are boosted by 4x.<br><br>- Run energy is never drained whilst running.<br><br>- All clue scrolls will drop as stackable scroll boxes, and clue-step progress is saved between clues.",
           "relics": [
-            { "key": "power-miner", "name": "Power Miner", "description": "- Grants the Echo pickaxe.<br><br>- Failed mining swings get a second 50% chance, ore goes to your bank, and rocks last for four ores.<br><br>- Ore can be smelted and gems cut as you mine.", "grants": ["ECHO_PICKAXE"], "requiresBank": false },
-            { "key": "lumberjack", "name": "Lumberjack", "description": "- Grants the Echo axe.<br><br>- Failed chops get a second 50% chance and logs go to your bank.<br><br>- Logs can be burnt or fletched into arrow shafts as you chop.", "grants": ["ECHO_AXE"], "requiresBank": false },
-            { "key": "animal-wrangler", "name": "Animal Wrangler", "description": "- Grants the Echo harpoon, which fishes a tick faster and acts as every fishing tool.<br><br>- Failed catches get a second 50% chance, fish go to your bank and half are cooked on the spot.<br><br>- Traps never fail, box traps catch double and impling jars never break. You never burn food.", "grants": ["ECHO_HARPOON"], "requiresBank": false }
+            { "key": "power-miner", "name": "Power Miner", "icon": 0, "description": "- Grants the Echo pickaxe.<br><br>- Failed mining swings get a second 50% chance, ore goes to your bank, and rocks last for four ores.<br><br>- Ore can be smelted and gems cut as you mine.", "grants": ["ECHO_PICKAXE"], "requiresBank": false },
+            { "key": "lumberjack", "name": "Lumberjack", "icon": 2, "description": "- Grants the Echo axe.<br><br>- Failed chops get a second 50% chance and logs go to your bank.<br><br>- Logs can be burnt or fletched into arrow shafts as you chop.", "grants": ["ECHO_AXE"], "requiresBank": false },
+            { "key": "animal-wrangler", "name": "Animal Wrangler", "icon": 1, "description": "- Grants the Echo harpoon, which fishes a tick faster and acts as every fishing tool.<br><br>- Failed catches get a second 50% chance, fish go to your bank and half are cooked on the spot.<br><br>- Traps never fail, box traps catch double and impling jars never break. You never burn food.", "grants": ["ECHO_HARPOON"], "requiresBank": false }
           ]
         },
         {
           "cost": 750,
           "passive": "- League XP multiplier increased from 5x to 8x.",
           "relics": [
-            { "key": "corner-cutter", "name": "Corner Cutter", "description": "- Agility actions always succeed, courses count twice with 25% bonus XP, and marks of grace come with 10,000 coins.<br><br>- Grants Sage's greaves, which give Agility XP while you run.", "grants": [], "_missing": "Sage's greaves are not in this cache." },
-            { "key": "friendly-forager", "name": "Friendly Forager", "description": "- Grants the forager's pouch: gathering may find a grimy herb within your Herblore level + 25.<br><br>- Secondary ingredients have a 90% chance not to be used, and potions are made with 4 doses.", "grants": ["FORAGERS_POUCH"], "requiresBank": false },
-            { "key": "dodgy-deals", "name": "Dodgy Deals", "description": "- Pickpocketing hits every matching NPC within 5 tiles, always succeeds, repeats itself and notes the loot.<br><br>- Your coin pouch holds three times as much and stalls never run out.", "grants": [] }
+            { "key": "corner-cutter", "name": "Corner Cutter", "icon": 6, "description": "- Agility actions always succeed, courses count twice with 25% bonus XP, and marks of grace come with 10,000 coins.<br><br>- Grants Sage's greaves, which give Agility XP while you run.", "grants": [], "_missing": "Sage's greaves are not in this cache." },
+            { "key": "friendly-forager", "name": "Friendly Forager", "icon": 7, "description": "- Grants the forager's pouch: gathering may find a grimy herb within your Herblore level + 25.<br><br>- Secondary ingredients have a 90% chance not to be used, and potions are made with 4 doses.", "grants": ["FORAGERS_POUCH"], "requiresBank": false },
+            { "key": "dodgy-deals", "name": "Dodgy Deals", "icon": 8, "description": "- Pickpocketing hits every matching NPC within 5 tiles, always succeeds, repeats itself and notes the loot.<br><br>- Your coin pouch holds three times as much and stalls never run out.", "grants": [] }
           ]
         },
         {
           "cost": 1500,
           "passive": "- Combat skills (Including Hitpoints & Prayer) have a 2x Multiplier (Multiplicative with other modifiers).<br>- The \"Bigger and badder\" slayer unlock is unlocked for free.<br>- Slayer points are x5 from tasks and you aren't required to complete 5 tasks before earning points.<br>- Slayer Superior rates are increased to a 1/50 chance to appear.",
           "relics": [
-            { "key": "clue-compass", "name": "Clue Compass", "description": "- Grants the clue compass, which teleports you to any STASH unit, Falo the Bard, or your current clue step.", "grants": ["CLUE_COMPASS"], "requiresBank": true },
-            { "key": "bank-heist", "name": "Bank Heist", "description": "- Grants the banker's briefcase, which teleports you to any bank, deposit box or bank chest in your unlocked regions.", "grants": ["BANKERS_BRIEFCASE"], "requiresBank": true },
-            { "key": "fairys-flight", "name": "Fairy's Flight", "description": "- Grants the fairy mushroom, which teleports you to any fairy ring, spirit tree or tool leprechaun in your unlocked regions, and completes Tree Gnome Village.", "grants": ["FAIRY_MUSHROOM"], "requiresBank": true }
+            { "key": "clue-compass", "name": "Clue Compass", "icon": 5, "description": "- Grants the clue compass, which teleports you to any STASH unit, Falo the Bard, or your current clue step.", "grants": ["CLUE_COMPASS"], "requiresBank": true },
+            { "key": "bank-heist", "name": "Bank Heist", "icon": 4, "description": "- Grants the banker's briefcase, which teleports you to any bank, deposit box or bank chest in your unlocked regions.", "grants": ["BANKERS_BRIEFCASE"], "requiresBank": true },
+            { "key": "fairys-flight", "name": "Fairy's Flight", "icon": 3, "description": "- Grants the fairy mushroom, which teleports you to any fairy ring, spirit tree or tool leprechaun in your unlocked regions, and completes Tree Gnome Village.", "grants": ["FAIRY_MUSHROOM"], "requiresBank": true }
           ]
         },
         {
           "cost": 2500,
           "passive": "- Items from eligible sources will be 5x as common.<br>- Minigame points received are boosted by 8x.",
           "relics": [
-            { "key": "golden-god", "name": "Golden God", "description": "- High and Low Alchemy need no runes or level, give 15% more gold, have a 65% chance to keep the item and recast themselves on a stack.<br><br>- 20,000 coins can be offered at an altar for a dragon bone's Prayer XP, and some shops can note what you buy.", "grants": [] },
-            { "key": "reloaded", "name": "Reloaded", "description": "Choose another Relic from any tier below this one.", "grants": [] },
-            { "key": "equilibrium", "name": "Equilibrium", "description": "- Every XP gain also gives XP equal to 10% of your total level (20% for your lowest skill), not multiplied by the league rate.", "grants": [] }
+            { "key": "golden-god", "name": "Golden God", "icon": 17, "description": "- High and Low Alchemy need no runes or level, give 15% more gold, have a 65% chance to keep the item and recast themselves on a stack.<br><br>- 20,000 coins can be offered at an altar for a dragon bone's Prayer XP, and some shops can note what you buy.", "grants": [] },
+            { "key": "reloaded", "name": "Reloaded", "icon": 10, "description": "Choose another Relic from any tier below this one.", "grants": [] },
+            { "key": "equilibrium", "name": "Equilibrium", "icon": 11, "description": "- Every XP gain also gives XP equal to 10% of your total level (20% for your lowest skill), not multiplied by the league rate.", "grants": [] }
           ]
         },
         {
           "cost": 5000,
           "passive": "- League XP multiplier increased from 8x to 12x.",
           "relics": [
-            { "key": "treasure-arbiter", "name": "Treasure Arbiter", "description": "- NPCs that drop clues have a 1 in 15 chance to drop one, and clue vessels are 10x as common.<br><br>- Clue scrolls have the fewest steps, caskets roll the most rewards, and emote, Falo and Charlie steps need no items.", "grants": [] },
-            { "key": "production-master", "name": "Production Master", "description": "- Smelting, smithing, fletching, herb cleaning, potion making, cooking and crafting process every item at once.", "grants": [] },
-            { "key": "slayer-master", "name": "Slayer Master", "description": "- You are always on task for every eligible slayer monster, with every task perk, skip and block free.<br><br>- The 100th kill of each slayer monster pays 1,000 to 15,000 bonus Slayer XP.", "grants": [] }
+            { "key": "treasure-arbiter", "name": "Treasure Arbiter", "icon": 12, "description": "- NPCs that drop clues have a 1 in 15 chance to drop one, and clue vessels are 10x as common.<br><br>- Clue scrolls have the fewest steps, caskets roll the most rewards, and emote, Falo and Charlie steps need no items.", "grants": [] },
+            { "key": "production-master", "name": "Production Master", "icon": 13, "description": "- Smelting, smithing, fletching, herb cleaning, potion making, cooking and crafting process every item at once.", "grants": [] },
+            { "key": "slayer-master", "name": "Slayer Master", "icon": 14, "description": "- You are always on task for every eligible slayer monster, with every task perk, skip and block free.<br><br>- The 100th kill of each slayer monster pays 1,000 to 15,000 bonus Slayer XP.", "grants": [] }
           ]
         },
         {
           "cost": 8000,
           "passive": "There are no passive unlocks for this tier.",
           "relics": [
-            { "key": "total-recall", "name": "Total Recall", "description": "- Grants the Crystal of Echoes: store a place with your hitpoints, prayer and special attack energy, and return to it later with them restored.", "grants": ["CRYSTAL_OF_ECHOES"], "requiresBank": false },
-            { "key": "bankers-note", "name": "Banker's Note", "description": "- Grants a banker's note: use an item on it to note or unnote it, in the quantity you choose.", "grants": ["BANKERS_NOTE"], "requiresBank": false },
-            { "key": "last-stand-preview", "name": "Last Stand", "description": "- Damage that would reduce you to 0 hitpoints leaves you at 1 instead, boosts your combat stats to 255 and shields you for 16 ticks, once every three minutes or death.", "grants": [], "_note": "Tier 8's Last Stand, shown here as the third choice to keep three a tier; the Wiki lists only two tier 6 relics." }
+            { "key": "total-recall", "name": "Total Recall", "icon": 15, "description": "- Grants the Crystal of Echoes: store a place with your hitpoints, prayer and special attack energy, and return to it later with them restored.", "grants": ["CRYSTAL_OF_ECHOES"], "requiresBank": false },
+            { "key": "bankers-note", "name": "Banker's Note", "icon": 16, "description": "- Grants a banker's note: use an item on it to note or unnote it, in the quantity you choose.", "grants": ["BANKERS_NOTE"], "requiresBank": false },
+            { "key": "last-stand-preview", "name": "Last Stand", "icon": 22, "description": "- Damage that would reduce you to 0 hitpoints leaves you at 1 instead, boosts your combat stats to 255 and shields you for 16 ticks, once every three minutes or death.", "grants": [], "_note": "Tier 8's Last Stand, shown here as the third choice to keep three a tier; the Wiki lists only two tier 6 relics." }
           ]
         },
         {
           "cost": 16000,
           "passive": "- League XP multiplier increased from 12x to 16x.",
           "relics": [
-            { "key": "pocket-kingdom", "name": "Pocket Kingdom", "description": "- Grants the Pocket kingdom: Managing Miscellania anywhere, with cheaper, fully approved workers producing twice as much every hour.", "grants": ["POCKET_KINGDOM"], "requiresBank": false },
-            { "key": "grimoire", "name": "Grimoire", "description": "- Grants the Arcane grimoire: swap spellbooks freely, with every prayer and spell unlocked.", "grants": ["ARCANE_GRIMOIRE"], "requiresBank": false },
-            { "key": "overgrown", "name": "Overgrown", "description": "- Grants the Leprechaun's vault: Seed Vault access anywhere.<br><br>- Crops never die, seeds have a 75% chance to be kept, and grown patches harvest and replant themselves.", "grants": ["LEPRECHAUNS_VAULT"], "requiresBank": false }
+            { "key": "pocket-kingdom", "name": "Pocket Kingdom", "icon": 9, "description": "- Grants the Pocket kingdom: Managing Miscellania anywhere, with cheaper, fully approved workers producing twice as much every hour.", "grants": ["POCKET_KINGDOM"], "requiresBank": false },
+            { "key": "grimoire", "name": "Grimoire", "icon": 18, "description": "- Grants the Arcane grimoire: swap spellbooks freely, with every prayer and spell unlocked.", "grants": ["ARCANE_GRIMOIRE"], "requiresBank": false },
+            { "key": "overgrown", "name": "Overgrown", "icon": 19, "description": "- Grants the Leprechaun's vault: Seed Vault access anywhere.<br><br>- Crops never die, seeds have a 75% chance to be kept, and grown patches harvest and replant themselves.", "grants": ["LEPRECHAUNS_VAULT"], "requiresBank": false }
           ]
         },
         {
           "cost": 25000,
           "passive": "There are no passive unlocks for this tier.",
           "relics": [
-            { "key": "specialist", "name": "Specialist", "description": "- Special attacks cost 20% and have double accuracy.<br><br>- A missed special returns 10% energy, and killing an NPC restores 15%.", "grants": [] },
-            { "key": "guardian", "name": "Guardian", "description": "- Grants the guardian horn, which summons a guardian thrall for 30 minutes that attacks with the style its target is weakest to.", "grants": [], "_missing": "The guardian horn is not in this cache." },
-            { "key": "last-stand", "name": "Last Stand", "description": "- Damage that would reduce you to 0 hitpoints leaves you at 1 instead, boosts your combat stats to 255 and shields you for 16 ticks, once every three minutes or death.", "grants": [] }
+            { "key": "specialist", "name": "Specialist", "icon": 20, "description": "- Special attacks cost 20% and have double accuracy.<br><br>- A missed special returns 10% energy, and killing an NPC restores 15%.", "grants": [] },
+            { "key": "guardian", "name": "Guardian", "icon": 21, "description": "- Grants the guardian horn, which summons a guardian thrall for 30 minutes that attacks with the style its target is weakest to.", "grants": [], "_missing": "The guardian horn is not in this cache." },
+            { "key": "last-stand", "name": "Last Stand", "icon": 22, "description": "- Damage that would reduce you to 0 hitpoints leaves you at 1 instead, boosts your combat stats to 255 and shields you for 16 ticks, once every three minutes or death.", "grants": [] }
           ]
         }
       ]

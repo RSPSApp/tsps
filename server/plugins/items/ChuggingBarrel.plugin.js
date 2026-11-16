@@ -110,7 +110,7 @@ function isBarrelAtSlot(player, item, slot) {
 
 function canStore(dose) {
   const name = dose.potion.name;
-  if (dose.potion.area || name === "Hunting mix" || NON_POTION_DRINKS.has(name)) return false;
+  if (dose.potion.area || dose.potion.chuggable === false || name === "Hunting mix" || NON_POTION_DRINKS.has(name)) return false;
   return !dose.potion.requiresFoodPermission || name.endsWith("mix") || FOOD_PERMISSION_POTIONS.has(name);
 }
 
@@ -135,7 +135,6 @@ function setItem(player, item, id) {
  */
 function itemBox(player, items, text, then = null) {
   const { DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue, ActionDialogue, EndDialogue } = core;
-  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text.replace(/<br>/g, " "));
   const chain = new DialogueChainBuilder().add(items.length > 1
     ? new DoubleItemStatementDialogue(0, items[0], items[1], text)
     : new ItemStatementDialogue(0, items[0], text));
@@ -249,7 +248,15 @@ function drink({ player }) {
     // potion's own recorded drink line ("restore prayer potion", "divine combat potion": 238/04242.txt:42626).
     // It comes before the effect's own lines, as drinking from the inventory does (234/00799.txt:54610:
     // "You drink some of your antivenom potion.", then "It grants you immunity from poison.").
+    // Ours: a potion's lead lines (the Sanfew serum's immunity lines) come first, as from the
+    // inventory; the barrel's Sanfew serum is not captured.
+    for (const lead of dose.potion.leadLines ?? []) {
+      if (lead?.game === true) player.sendMessage(lead.text);
+      else player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, lead);
+    }
     player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, Potions.drinkLine(store.itemId) ?? MESSAGE.DRINK(store.name));
+    // Each dose counts as a sip, right after its line (rsprox 238/04242.txt:42626-42643).
+    Potions.countSip(player, store.itemId);
     dose.potion.effect(player);
     api.emitCustomEvent("potions:drunk", {
       player,

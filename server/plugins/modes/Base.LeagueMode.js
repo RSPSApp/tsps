@@ -27,6 +27,7 @@ module.exports = {
     require("./league/Rewards.LeagueMode")(api);
     require("./league/Passives.LeagueMode")(api);
     require("./league/BoostedDrops.LeagueMode")(api);
+    require("./league/EchoOrbs.LeagueMode")(api);
     require("./league/ShopStock.LeagueMode")(api);
     require("./league/Shattered.LeagueMode")(api);
     require("./league/Fragments.LeagueMode")(api);

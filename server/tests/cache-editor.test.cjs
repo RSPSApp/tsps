@@ -263,7 +263,9 @@ test("an overlay row is rejected when its links do not resolve", () => {
   assert.match(Document.audit(core, { ...ok, fields: { notAField: 1 } }).join(" "), /no field "notAField"/);
   assert.match(Document.audit(core, { ...ok, fields: { seqId: [1, 2] } }).join(" "), /should be int/);
   assert.match(Document.audit(core, { ...ok, id: 5 }).join(" "), /overlay ids start at/);
-  assert.match(Document.audit(core, { ...ok, baseId: 999999 }).join(" "), /baseId must be a cache id below/);
+  assert.match(Document.audit(core, { ...ok, baseId: 999999 }).join(" "), /baseId must be null or a cache id below/);
+  assert.deepEqual(Document.audit(core, { kind: "loc", id: start + 1, baseId: null, fields: { name: "Blank loc" } }), [], "null explicitly means no cache base");
+  assert.match(Document.audit(core, { kind: "loc", id: start + 1, fields: { name: "Missing base" } }).join(" "), /baseId must be null or a cache id below/);
 });
 
 test("saving writes the document atomically, checks the budget, and refuses stale revisions", () => {
@@ -281,6 +283,12 @@ test("saving writes the document atomically, checks the budget, and refuses stal
   assert.throws(() => Document.save(core, root, { row: { ...row, id: start + 1 }, revision: "deadbeef" }), /changed since it was loaded/);
   const second = Document.save(core, root, { row: { ...row, id: start + 1 }, revision: first.revision });
   assert.deepEqual(second.rows.map((entry) => entry.id), [start, start + 1]);
+  const blank = Document.save(core, root, {
+    row: { kind: "loc", id: start + 2, baseId: null, fields: { name: "Blank loc" } },
+    revision: second.revision,
+  });
+  assert.equal(blank.rows[2].baseId, null, "an unbased row survives save validation and persistence");
+  assert.deepEqual(Document.check(core, Document.read(root)), { ok: true, problems: [] });
   assert.equal(fs.readdirSync(path.join(root, "data/definitions")).filter((name) => name.endsWith(".tmp")).length, 0, "no temp file is left behind");
 
   // A document that cannot fit the client transport is refused before it is written.
@@ -350,6 +358,58 @@ test("an overlay row is applied at load, so an authored loc is a real definition
   assert.equal(CacheDefinitions.getObject(start).seqId, -1, "and the id is a cache default again");
 });
 
+test("a blank-based row saves, validates, and becomes a real definition with type defaults", (t) => {
+  const root = scratchRoot();
+  t.after(() => {
+    CacheDefinitions.registerCustomDefinitions([]);
+    core.ObjectDefinition.init();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const counts = CacheDefinitions.getBaseCounts();
+  const firstLocId = Math.max(Document.OVERLAY_ID_START, counts.objects);
+  const rows = [
+    { kind: "loc", id: firstLocId, baseId: null, fields: { name: "Model-only loc", models: [[1]], types: [10], actions: [] } },
+    { kind: "loc", id: firstLocId + 1, baseId: null, fields: { name: "Actionable loc", actions: ["Open"] } },
+    { kind: "loc", id: firstLocId + 2, baseId: null, fields: { name: "Explicit flags", models: [[1]], types: [10], isInteractive: 0, supportItems: 0 } },
+    { kind: "loc", id: firstLocId + 3, baseId: null, fields: { name: "Non-solid loc", clipType: 0 } },
+    { kind: "npc", id: Math.max(Document.OVERLAY_ID_START, counts.npcs), baseId: null, fields: { name: "Blank npc" } },
+    { kind: "item", id: Math.max(Document.OVERLAY_ID_START, counts.items), baseId: null, fields: { name: "Blank item" } },
+  ];
+  for (const row of rows) assert.deepEqual(Document.audit(core, row), []);
+  assert.deepEqual(Document.check(core, { version: 1, rows }), { ok: true, problems: [] });
+  let saved;
+  for (const row of rows) saved = Document.save(core, root, { row, revision: saved?.revision });
+  assert.deepEqual(saved.rows.map((row) => row.baseId), Array(6).fill(null));
+  assert.deepEqual(Document.check(core, Document.read(root)), { ok: true, problems: [] });
+  assert.equal(Document.apply(core, root), 6);
+  core.ObjectDefinition.init();
+
+  const [locRow, actionableRow, explicitRow, nonSolidRow, npcRow, itemRow] = rows;
+  const blankLoc = CacheDefinitions.getObject(locRow.id);
+  const blankNpc = CacheDefinitions.getNpc(npcRow.id);
+  const blankItem = CacheDefinitions.getItem(itemRow.id);
+  assert.equal(blankLoc.id, locRow.id);
+  assert.equal(blankLoc.name, "Model-only loc");
+  assert.equal(blankLoc.seqId, -1, "the loc constructor provides its own defaults");
+  assert.equal(blankLoc.isInteractive, 1, "models alone finalize a loc as interactive");
+  assert.equal(blankLoc.supportItems, 1, "the default clip type finalizes supportItems");
+  assert.equal(core.ObjectDefinition.forId(locRow.id).hasActions(), true, "the server exposes model-only locs as interactive");
+  assert.equal(CacheDefinitions.getObject(actionableRow.id).isInteractive, 1, "actions finalize a loc as interactive");
+  assert.equal(core.ObjectDefinition.forId(actionableRow.id).hasActions(), true);
+  assert.equal(CacheDefinitions.getObject(explicitRow.id).isInteractive, 0, "explicit interactivity survives finalization");
+  assert.equal(CacheDefinitions.getObject(explicitRow.id).supportItems, 0, "explicit support settings survive finalization");
+  assert.equal(CacheDefinitions.getObject(nonSolidRow.id).supportItems, 0, "non-clipping locs default to no item support");
+  assert.equal(blankNpc.id, npcRow.id);
+  assert.equal(blankNpc.name, "Blank npc");
+  assert.equal(blankNpc.size, 1, "the NPC constructor provides its own defaults");
+  assert.equal(blankItem.id, itemRow.id);
+  assert.equal(blankItem.name, "Blank item");
+  assert.deepEqual(CacheDefinitions.getCustomDefinitions().map((row) => row.baseId), Array(6).fill(null));
+  const clientDataset = CacheDefinitions.getCustomDefinitionDatasets().find((dataset) => dataset.key === "customDefinitions");
+  assert.deepEqual(clientDataset.rows.map((row) => row.baseId), Array(6).fill(null), "the client receives the explicit no-base marker");
+  for (const row of rows) assert.equal(inspect({ kind: row.kind, id: row.id }).exists, true, "the inspector sees the new definition");
+});
+
 test("custom definition sources merge, reject overlapping ids, and clear independently", (t) => {
   const source = "test-plugin";
   t.after(() => {
@@ -402,6 +462,34 @@ test("the editor refuses a plugin's id on save and skips only the conflicting ro
   CacheDefinitions.registerCustomDefinitions([], source);
   assert.doesNotThrow(() => Document.save(core, root, { row: loc }), "the editor can update its own row");
   assert.equal(Document.apply(core, root), 2, "both saved rows load once the plugin releases the id");
+});
+
+test("one overlay row that fails its checks is skipped on startup, the rest still load", (t) => {
+  const root = scratchRoot();
+  t.after(() => {
+    CacheDefinitions.registerCustomDefinitions([]);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const warning = t.mock.method(console, "warn", () => {});
+  const { npcs, objects, items } = CacheDefinitions.getBaseCounts();
+  const npc = { kind: "npc", id: Math.max(50000, npcs), baseId: 1, fields: { name: "Good NPC" } };
+  const loc = { kind: "loc", id: Math.max(50000, objects), baseId: 1, fields: { name: "Good loc" } };
+  const bad = { kind: "item", id: Math.max(50000, items), baseId: 1, fields: { name: "Bad item", recolorFrom: [1, 2], recolorTo: [3] } };
+  const badId = { kind: "loc", id: 5, baseId: 1, fields: { name: "Below the overlay range" } };
+  // Points only at the bad row, so it no longer resolves once that row is skipped.
+  const dependent = { kind: "item", id: bad.id + 1, baseId: 1, fields: { name: "Placeholder of the bad item", placeholder: bad.id } };
+  Document.write(root, { version: 1, rows: [npc, bad, dependent, loc, badId] });
+
+  assert.equal(Document.apply(core, root), 2);
+  assert.equal(CacheDefinitions.getNpc(npc.id).name, "Good NPC");
+  assert.equal(CacheDefinitions.getObject(loc.id).name, "Good loc");
+  assert.equal(CacheDefinitions.hasCustomDefinition("item", bad.id), false);
+  assert.equal(CacheDefinitions.hasCustomDefinition("loc", badId.id), false);
+  assert.equal(CacheDefinitions.hasCustomDefinition("item", dependent.id), false, "a row pointing at a skipped row is skipped too");
+  assert.equal(warning.mock.callCount(), 3);
+  assert.match(warning.mock.calls[0].arguments[0], new RegExp(`item ${bad.id}: recolorFrom and recolorTo must have matching lengths`));
+  assert.match(warning.mock.calls[2].arguments[0], new RegExp(`item ${dependent.id}: placeholder points at missing item ${bad.id}`));
+  assert.deepEqual(Document.read(root).rows, [npc, bad, dependent, loc, badId], "the document on disk is left as authored");
 });
 
 test("the field table is served so a picker can search a target kind by name", () => {
@@ -537,9 +625,28 @@ test("manager NPC recolours and damage stay on the new ID, leaving its cache bas
     const baseCombat = NpcDefinition.forId(base.id);
     const originalMaxHit = baseCombat.getMaxHit(), originalStyle = baseCombat.getAttackType();
     const customCombat = NpcDefinition.forId(50000);
-    NpcDefinitionLoader.applyCustomCombat(50000, customCombat, { maxHit: 37, attackType: "fire" });
+    const warnings = [];
+    const warn = console.warn;
+    console.warn = (line) => warnings.push(String(line));
+    try {
+      NpcDefinitionLoader.applyCustomCombat(50000, customCombat, { maxHit: 37, attackType: "fire" });
+    } finally {
+      console.warn = warn;
+    }
     assert.equal(customCombat.getMaxHit(), 37);
     assert.equal(customCombat.getAttackType(), CombatType.MELEE);
+    // An element is no combat style: accepted, but the load says it attacks in melee.
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /custom npc 50000: attackType "fire" .*attacks in melee/);
+    for (const style of ["crush", "magic", "ranged"]) {
+      console.warn = (line) => warnings.push(String(line));
+      try {
+        NpcDefinitionLoader.applyCustomCombat(50000, customCombat, { attackType: style });
+      } finally {
+        console.warn = warn;
+      }
+    }
+    assert.equal(warnings.length, 1, "a real combat style loads quietly");
     assert.equal(baseCombat.getMaxHit(), originalMaxHit);
     assert.equal(baseCombat.getAttackType(), originalStyle);
   } finally {

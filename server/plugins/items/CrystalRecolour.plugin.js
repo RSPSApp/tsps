@@ -91,7 +91,6 @@ function recolour(player, { crystal, target, clan }, name = nameOf(target.getId(
   if (graphic != null) player.performGraphic(new core.Graphic(graphic));
   player.getPacketSender().sendSound(RECOLOUR_SOUND, 1, 0);
   const text = `You use the crystal to colour your ${name}.`;
-  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text);
   const { DialogueChainBuilder, DoubleItemStatementDialogue } = core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new DoubleItemStatementDialogue(0, nextId, crystalId, text)));
   return true;

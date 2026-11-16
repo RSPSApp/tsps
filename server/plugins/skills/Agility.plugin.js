@@ -2,6 +2,8 @@ const ObstacleRunner = require("./agility/ObstacleRunner.Agility");
 const { COURSES } = require("./agility/courses/Courses.Agility");
 const Pyramid = require("./agility/courses/AgilityPyramid.Agility");
 const { SHORTCUTS } = require("./agility/shortcuts/Shortcuts.Agility");
+const { LAPS_ATTRIBUTE: ARENA_LAPS_ATTRIBUTE } = require("../minigames/brimhavenagilityarena/Shared.BrimhavenAgilityArena");
+const KaruulmPipe = require("./agility/shortcuts/KaruulmPipe.Agility");
 
 /** Attribute holding { course, index } for the lap in progress. */
 const PROGRESS_ATTRIBUTE = "agility.progress";
@@ -34,8 +36,8 @@ const MARK_SHORT_COOLDOWN_MINUTES = 2;
 const MARK_DESPAWN_TICKS = 1000;
 const MINUTE_MS = 60_000;
 const YANILLE_GRAPPLE_CROSSINGS = [
-  { object: [2556, 3074, 0], start: [2556, 3075, 0], landing: [2556, 3074, 1] },
-  { object: [2556, 3073, 0], start: [2556, 3072, 0], landing: [2556, 3073, 1] },
+  { object: [2556, 3074, 0], start: [2556, 3075, 0], landing: [2556, 3073, 1] }, // rsprox 358, 4001
+  { object: [2556, 3073, 0], start: [2556, 3072, 0], landing: [2556, 3074, 1] }, // rsprox 358
 ];
 
 /**
@@ -64,6 +66,15 @@ const OBSTACLES_BY_TILE = new Map();
 /** player -> the tile key they last stepped onto inside a tile obstacle's area. */
 const lastTileStepped = new WeakMap();
 const logoutObstacleCompletions = new WeakSet();
+/**
+ * A shortcut that refuses at the click (`refusalTiming: "click"`): live answers a player below its level
+ * from where they are once the loc is in reach, an approach op (rsprox_transcripts/227/910250.txt tick 12768:
+ * the Fremennik Slayer Dungeon strange floor from 6 tiles, the player idle). The click's route sets the
+ * approach range and remembers the entry here, so that op only ever refuses: a player who meanwhile has
+ * the level is not sent across from tiles away.
+ */
+const CLICK_REFUSAL_RANGE = 10;
+const clickRefusals = new WeakMap();
 
 let pluginApi;
 let core;
@@ -361,6 +372,65 @@ function toggleLapCounter({ player, npc }) {
 }
 
 /**
+ * Grace's View Laps: the player's lap count on every course, in a longscroll (625) titled
+ * "Agility Course Lap Counts", set up by longscroll_setup (418). Rows, order and wording are
+ * rsprox 233/03247.txt:22108-22109 (tick 1985), opened on arrival like Toggle Counter's
+ * dialogue: "N Laps" even for 1, and no space before the dash on Brimhaven's row. A string key is
+ * the course's entry in the `agility.laps` map; Brimhaven Agility Arena's row reads the arena's
+ * own tag count (`brimhaven-agility-arena:laps`, "Your Agility Arena lap count is: N"). A `null`
+ * key is a course this server doesn't count laps on (Dorgesh-Kaan, Penguin, Skullball), so its
+ * row reads 0. Ours: those rows never count up.
+ */
+const LONGSCROLL = 625;
+const LONGSCROLL_SETUP = 418;
+const LAP_COUNTS_TITLE = "Agility Course Lap Counts";
+const ROOFTOP_LAP_ROWS = [
+  ["Draynor Village - ", "draynor"], ["Al Kharid - ", "alkharid"], ["Varrock - ", "varrock"],
+  ["Canifis - ", "canifis"], ["Falador - ", "falador"], ["Seers' Village - ", "seers"],
+  ["Pollnivneach - ", "pollnivneach"], ["Rellekka - ", "rellekka"], ["Ardougne - ", "ardougne"],
+];
+const OTHER_LAP_ROWS = [
+  ["Agility Pyramid - ", "pyramid"], ["Barbarian Outpost Agility - ", "barbarian"],
+  ["Brimhaven Agility Arena- ", (player) => player.getAttribute(ARENA_LAPS_ATTRIBUTE)], ["Dorgesh-Kaan Agility - ", null],
+  ["Gnome Stronghold Agility - ", "gnome"], ["Penguin Agility - ", null], ["Werewolf Agility - ", "werewolf"],
+  ["Skullball - ", null], ["Wilderness Agility - ", "wilderness"], ["Shayzien Basic - ", "shayzien-basic"],
+  ["Shayzien Advanced - ", "shayzien-advanced"], ["Ape Atoll Agility - ", "ape-atoll"],
+  ["Prifddinas Agility - ", "prifddinas"], ["Colossal Wyrm Basic - ", "wyrm-basic"],
+  ["Colossal Wyrm Advanced - ", "wyrm-advanced"],
+];
+
+function lapCountsText(player) {
+  const laps = getLaps(player);
+  const count = (key) => (typeof key === "function" ? Number(key(player)) : key && laps[key]) | 0;
+  const row = ([label, key]) => `${label}${count(key)} Laps<br>`;
+  return `Rooftop Agility Laps<br><br>${ROOFTOP_LAP_ROWS.map(row).join("")}`
+    + `<br>Miscellaneous Course:<br><br>${OTHER_LAP_ROWS.map(row).join("")}`;
+}
+
+function viewLaps({ player }) {
+  const sender = player.getPacketSender();
+  // toplevel_mainmodal_open [-1, -1] comes first in both captures (rec 3247 tick 1985, rec 3248 tick 728).
+  sender.sendInterfaceScript(2524, [-1, -1]);
+  sender.sendInterface(LONGSCROLL);
+  sender.sendClientScript(LONGSCROLL_SETUP, LAP_COUNTS_TITLE, lapCountsText(player));
+}
+
+/**
+ * Talk-to's "Can I see how many laps I've completed?" ends in open_interface "Agility course
+ * counter" (npc-dialogues.json). Live opens the same scroll as View Laps on the tick the player
+ * continues past their line, closing the chatbox with it (rec 3248 tick 699). Resetting the
+ * dialogue makes NpcDialogues stop there, so its own close doesn't shut the scroll.
+ */
+const LAP_COUNTER_TARGET = "Agility course counter";
+function openLapCounterFromDialogue(event) {
+  if (event.handled || event.action !== "open_interface" || event.target !== LAP_COUNTER_TARGET) return;
+  event.handled = true;
+  event.player.getDialogueManager().reset();
+  event.player.getPacketSender().sendInterfaceRemoval();
+  viewLaps(event);
+}
+
+/**
  * Tracks lap order: obstacle 1 always starts a lap; any other obstacle only
  * continues it when it directly follows the last one (alternates share an index).
  */
@@ -577,11 +647,16 @@ function skillMessage(skillName, level) {
   return `You need ${article} ${name} level of at least ${level} to attempt this.`;
 }
 
-/** Why `requirement` isn't met, or null. Quests and diaries this server doesn't know are no bar. */
-function unmet(player, requirement) {
+/**
+ * Why `requirement` isn't met, or null. Quests and diaries this server doesn't know are no bar.
+ * An Agility level short of it gets the obstacle's own `levelMessage` when it has one.
+ */
+function unmet(player, requirement, levelMessage) {
   for (const [skillName, level] of Object.entries(requirement.skills ?? {})) {
     const skill = core.Skill[skillName.toUpperCase()];
-    if (player.getSkillManager().getCurrentLevel(skill) < level) return skillMessage(skillName, level);
+    if (player.getSkillManager().getCurrentLevel(skill) < level) {
+      return (skillName === "agility" && levelMessage) || skillMessage(skillName, level);
+    }
   }
   const worn = player.getEquipment().getItems();
   for (const item of requirement.equipped ?? []) {
@@ -627,7 +702,7 @@ function usable(player, obstacle, level) {
   }
   let refusal = null;
   for (const alternative of obstacle.requires) {
-    const reason = unmet(player, alternative);
+    const reason = unmet(player, alternative, obstacle.levelMessage);
     if (!reason) {
       const { steps, start, end } = alternative;
       return { obstacle: { ...obstacle, ...(alternative.method ? { method: alternative.method } : {}), ...(steps ? { steps } : {}), ...(start ? { start } : {}), ...(end ? { end } : {}) } };
@@ -650,6 +725,10 @@ function attemptObstacle(player, context, entry) {
     player.sendMessage(blocked);
     return;
   }
+  if (obstacle.confirm && !context.confirmed) {
+    confirmObstacle(player, context, entry, obstacle.confirm);
+    return;
+  }
   // `forceFail` gives the failure the player gets whatever they roll (Ape Atoll without a greegree).
   const forced = obstacle.forceFail?.(context) ?? null;
   const fail = forced ?? obstacle.fail;
@@ -670,10 +749,13 @@ function attemptObstacle(player, context, entry) {
   }
   ObstacleRunner.run(context, steps, {
     render: success ? obstacle.render : fail?.render ?? obstacle.render,
-    busyVarbit: obstacle.course != null,
+    // Course obstacles, and shortcuts whose entry says `busy` (captured with BUSY on).
+    busyVarbit: obstacle.course != null || obstacle.busy === true,
     agility: true,
     keepAnimation: success && obstacle.keepAnimation,
     onFinish: (completed) => {
+      // A scripted shortcut's undo for a crossing cut short (a death mid-way): what its steps set up.
+      if (!completed) obstacle.onCancel?.(player);
       finishObstacle(player, obstacle, success, completed, fail, lapStart);
       if (completed && success) {
         // A shortcut's own name (agility-shortcuts.json's, "Stepping stone (Shilo Village)"); a course obstacle has none.
@@ -706,10 +788,52 @@ function attemptObstacle(player, context, entry) {
   });
 }
 
+/**
+ * A shortcut whose message box comes first (`confirm`): the crossing starts when the player continues
+ * it, from where they then stand, and is checked again then. Closing the box (walking off) drops it.
+ */
+function confirmObstacle(player, context, entry, { mesbox }) {
+  const chain = new core.DialogueChainBuilder();
+  chain.add(new core.StatementDialogue(0, mesbox));
+  chain.add(new core.ActionDialogue(1, { execute: () => {
+    player.getDialogueManager().reset();
+    player.getPacketSender().sendInterfaceRemoval();
+    if (ObstacleRunner.isBusy(player)) return;
+    const fresh = context.object ? objectContext(player, context.object) : tileContext(player, entry);
+    attemptObstacle(player, { ...fresh, confirmed: true }, entry);
+  } }));
+  player.getDialogueManager().startDialogues(chain);
+}
+
+/** Within CLICK_REFUSAL_RANGE of the loc's footprint with a clear line to it, as the engine's approach op checks. */
+function inClickRefusalReach(player, obj) {
+  const at = player.getLocation();
+  if (at.getZ() !== obj.z) return false;
+  const dx = Math.max(obj.x - at.getX(), 0, at.getX() - (obj.x + obj.sizeX - 1));
+  const dy = Math.max(obj.y - at.getY(), 0, at.getY() - (obj.y + obj.sizeY - 1));
+  if (Math.max(dx, dy) > CLICK_REFUSAL_RANGE) return false;
+  return core.RegionManager.canProjectileAttackBounds(at, new core.Location(obj.x, obj.y, obj.z), 1, 1, obj.sizeX, obj.sizeY,
+    player.getPrivateArea?.() ?? null);
+}
+
 function routeToObstacle(event) {
   const location = event.object.getLocation();
   const obstacle = findObstacle(event.objectId, { x: location.getX(), y: location.getY(), z: location.getZ() }, event.player);
-  if (!obstacle?.route || interactionClickType(obstacle, event.definition ?? event.object.getDefinition?.()) !== event.clickType) return;
+  clickRefusals.delete(event.player);
+  if (!obstacle || interactionClickType(obstacle, event.definition ?? event.object.getDefinition?.()) !== event.clickType) return;
+  if (obstacle.refusalTiming === "click" && !ObstacleRunner.isBusy(event.player)) {
+    const context = objectContext(event.player, event.object);
+    if (usable(event.player, obstacle, resolve(obstacle.level, context)).refusal) {
+      clickRefusals.set(event.player, obstacle);
+      // Already in reach: answered where the player stands (rsprox_transcripts/227/910392.txt tick 14761, the Shilo
+      // stepping stone from 5 tiles, idle); otherwise on the step that brings them in reach (227/910356.txt
+      // tick 8699, the Taverley Dungeon floor mid-run).
+      if (inClickRefusalReach(event.player, context.obj)) event.destination = { ...context.pos };
+      else event.approachRange = CLICK_REFUSAL_RANGE;
+      return;
+    }
+  }
+  if (!obstacle.route) return;
   const tile = resolve(obstacle.route, objectContext(event.player, event.object));
   if (tile) {
     event.destination = { x: tile[0], y: tile[1], z: tile[2] ?? location.getZ() };
@@ -720,7 +844,15 @@ function operateObstacle(event) {
   const obstacle = findObstacle(event.objectId, event.location, event.player);
   if (!obstacle || interactionClickType(obstacle, event.definition ?? event.object.getDefinition?.()) !== event.clickType) return false;
   if (ObstacleRunner.isBusy(event.player)) return true;
-  attemptObstacle(event.player, objectContext(event.player, event.object), obstacle);
+  const context = objectContext(event.player, event.object);
+  const refusingAtClick = clickRefusals.get(event.player) === obstacle;
+  clickRefusals.delete(event.player);
+  if (refusingAtClick) {
+    const { refusal } = usable(event.player, obstacle, resolve(obstacle.level, context));
+    if (refusal) ObstacleRunner.sendMessage(event.player, refusal);
+    return true;
+  }
+  attemptObstacle(event.player, context, obstacle);
   return true;
 }
 
@@ -809,20 +941,22 @@ buildIndex();
 
 module.exports = {
   name: "Agility",
-  description: "The Agility skill: rooftop and other obstacle courses, lap counting, marks of grace and Grace's lap-counter toggle.",
+  description: "The Agility skill: rooftop and other obstacle courses, lap counting, marks of grace and Grace's lap counts and lap-counter toggle.",
   members: true,
   register(api) {
     pluginApi = api;
     core = api.core;
     ItemOnGroundManager = api.getItemOnGroundManager();
     ObstacleRunner.init(api);
+    KaruulmPipe.init(api);
 
     api.persistAttribute(PROGRESS_ATTRIBUTE);
     api.persistAttribute(LAPS_ATTRIBUTE);
     api.persistAttribute(LAP_COUNTER_OFF_ATTRIBUTE);
     api.persistAttribute(MARK_COOLDOWN_ATTRIBUTE, 0);
     api.persistAttribute(Pyramid.PYRAMID_TOP_ATTRIBUTE, false);
-    api.onNpcInteraction("Grace", { "Toggle Counter": toggleLapCounter });
+    api.onNpcInteraction("Grace", { "View Laps": viewLaps, "Toggle Counter": toggleLapCounter });
+    api.onCustomEvent("npc-dialogue:action", openLapCounterFromDialogue);
     api.onObjectRoute(routeToObstacle);
     api.onObjectFirstClick([...OBSTACLES_BY_OBJECT.keys()], operateObstacle);
     registerOptionInteractions(api);
@@ -840,6 +974,7 @@ module.exports = {
     api.onPlayerProcess(({ player }) => Pyramid.clearPyramidTop(player));
     api.onCustomEvent("ground-items:taken", creditMarkTaken);
     api.onCustomEvent("agility:course-find-taken", courseFindTaken);
+    api.onCustomEvent("interface:closed", KaruulmPipe.boxClosed);
 
     api.log("registered", {
       courses: COURSES.length,

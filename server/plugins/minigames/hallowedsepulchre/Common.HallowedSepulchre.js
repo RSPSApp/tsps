@@ -9,6 +9,7 @@ const path = require("path");
 const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
 const OVERLAY_HUD_UID = (161 << 16) | 8;
 const FADE_CYCLES = 50;
+const AGILITY_REQUIREMENTS_CONFIG = "HallowedSepulchre:agilityRequirements";
 
 let api = null;
 let core = null;
@@ -20,6 +21,14 @@ function init(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
   data = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "hallowed-sepulchre.json"), "utf8"));
+}
+
+/**
+ * Whether entering and each floor's stairs need the floor's Agility level (the Wiki's); world.json
+ * pluginConfig `HallowedSepulchre:agilityRequirements` false lets any level through.
+ */
+function agilityRequired() {
+  return api.getPluginConfig(AGILITY_REQUIREMENTS_CONFIG, true) !== false;
 }
 
 /** Runs `action` `ticks` ticks from now (at least one). */
@@ -59,9 +68,10 @@ function graphic(player, name, height = 0, delay = 0) {
 }
 
 /** Fade to black (`out`) or back in, as live: fade_overlay with script 948. */
+/** Returns the mount, so a delayed close can take down only this fade and never a replacement. */
 function fade(player, out) {
   const args = out ? [0, 255, 0, 0, FADE_CYCLES] : [0, 0, 0, 255, FADE_CYCLES];
-  player.getPacketSender().sendSubInterface(OVERLAY_ATMOSPHERE_UID, data.interfaces.fade, 1, {
+  return player.getPacketSender().mountSubInterface(OVERLAY_ATMOSPHERE_UID, data.interfaces.fade, 1, {
     postScripts: [{ scriptId: data.scripts.fade, args }],
   });
 }
@@ -179,6 +189,7 @@ function record(player, name) {
 
 module.exports = {
   init,
+  agilityRequired,
   later,
   toLocation,
   key,

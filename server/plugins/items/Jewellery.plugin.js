@@ -6,7 +6,7 @@ const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cach
 const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { Flag } = require("../../src/main/typescript/elvarg/game/model/Flag");
-const { JEWELLERY, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE, visitedKourend } = require("./Teleports.Jewellery");
+const { JEWELLERY, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE, DIGSITE_PENDANT_UNLOCKS, visitedKourend, destinationUnlockDone } = require("./Teleports.Jewellery");
 const { castRechargeDragonstone } = require("./RechargeDragonstone.Jewellery");
 
 /** Item param holding a worn item's first equipment option (RuneLite: OC_ITEM_OP1). */
@@ -125,7 +125,8 @@ function teleport(player, item, destination) {
     return;
   }
   // The refusal for a Kourend destination before Veos's trip is ours: the Wiki gives none.
-  if ((destination.quest && !questComplete(player, destination.quest.key)) || (destination.kourend && !visitedKourend(player))) {
+  if ((destination.quest && !questComplete(player, destination.quest.key)) || (destination.kourend && !visitedKourend(player))
+      || !destinationUnlockDone(player, destination)) {
     statement(player, LOCKED_DESTINATION_MESSAGE);
     return;
   }
@@ -180,9 +181,11 @@ function confirmAndTeleport(player, item, destination) {
 
 /** Shows the destination list, paging with "More..." when it does not fit. */
 function promptDestinations(player, item, destinations, includeNowhere) {
-  const options = destinations.map((destination) => [destination.label, () => confirmAndTeleport(player, item, destination)]);
+  const piece = JEWELLERY_BY_ITEM.get(item.getId())?.piece;
+  // `menu` / `nowhereMenu`: the Rub menu's own text where the game words it differently from the label.
+  const options = destinations.map((destination) => [destination.menu ?? destination.label, () => confirmAndTeleport(player, item, destination)]);
   if (includeNowhere) {
-    options.push(["Nowhere", () => {}]);
+    options.push([piece?.nowhereMenu ?? "Nowhere", () => {}]);
   }
   let page = options;
   if (options.length > PROMPT_PAGE_SIZE) {
@@ -311,6 +314,47 @@ function handleJewelleryAction(event) {
   }
 }
 
+/** Wiki (Transcript:Strange Machine): the line, in an item box with the pendant, for a Digsite pendant used on it. */
+const MACHINE_BIND_LINE = "The necklace glows brightly. It seems to bind its magic to this place.";
+
+/**
+ * The Lithkren bind's varbit: rsprox_transcripts/227/910484.txt:406913 and 227/910630.txt:48595 send it 0 -> 1 with
+ * the line; the Fossil Island binds (227/01843.txt:169569, 227/910263.txt:88218) send no varbit.
+ */
+const LITHKREN_REDIRECT_VARBIT = "lithkren_ruby_necklace_redirect";
+
+function sendLithkrenRedirect(player) {
+  const id = CacheDefinitions.getVarbitId(LITHKREN_REDIRECT_VARBIT);
+  if (id == null || id < 0) return;
+  player.getPacketSender().sendVarbit(id, player.getAttribute(DIGSITE_PENDANT_UNLOCKS.lithkren_necklace_enchanter) === true ? 1 : 0);
+}
+
+/**
+ * A Digsite pendant (any charge) used on the House on the Hill's or the Lithkren Vault's Strange Machine binds that
+ * destination for the player, and (Wiki: Digsite pendant) "Each teleport option can be unbound by using a pendant on
+ * the machine again". All four recorded binds show the (5) pendant in the item box whichever pendant was used
+ * (227/01843.txt:169542 with a (4), 227/910484.txt with a (3)). Ours: no charge is used, the Lithkren teleport still
+ * needs Dragon Slayer II, and the unbind shows the same line: no unbind wording is recorded or on the Wiki.
+ */
+function pendantOnMachine(event) {
+  if (event.handled || JEWELLERY_BY_ITEM.get(event.itemId)?.piece.key !== "digsite") return;
+  const name = Object.keys(DIGSITE_PENDANT_UNLOCKS).find((gameval) => CacheDefinitions.getLocId(gameval) === event.objectId);
+  if (!name) return;
+  event.handled = true;
+  const { player } = event;
+  const key = DIGSITE_PENDANT_UNLOCKS[name];
+  player.setAttribute(key, player.getAttribute(key) !== true);
+  if (name === "lithkren_necklace_enchanter") sendLithkrenRedirect(player);
+  const { DialogueChainBuilder, ItemStatementDialogue, ItemIdentifiers } = pluginApi.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+    .add(new ItemStatementDialogue(0, ItemIdentifiers.DIGSITE_PENDANT_5_, MACHINE_BIND_LINE)));
+}
+
+/** Login resends a bound Lithkren's varbit (a fresh client starts at 0). */
+function resendLithkrenRedirect({ player }) {
+  if (player?.getAttribute(DIGSITE_PENDANT_UNLOCKS.lithkren_necklace_enchanter) === true) sendLithkrenRedirect(player);
+}
+
 module.exports = {
   name: "Jewellery",
   description: "Runs charged and eternal jewellery such as dueling rings, games necklaces and glories: Rub and worn-option teleports, charge counts and Check messages.",
@@ -319,8 +363,11 @@ module.exports = {
     pluginApi = api;
     BonusManager = api.getBonusManager();
     api.onItemAction(handleJewelleryAction);
+    for (const key of Object.values(DIGSITE_PENDANT_UNLOCKS)) api.persistAttribute(key, false);
+    api.onItemOnObject(pendantOnMachine);
+    api.onPlayerLogin(resendLithkrenRedirect);
     require("./Recharge.Jewellery")(api);
     api.onSpellCast(castRechargeDragonstone.bind(null, api));
   },
-  _test: { JEWELLERY_BY_ITEM, chargeMessage, nextItemId, useCharge },
+  _test: { JEWELLERY_BY_ITEM, chargeMessage, nextItemId, useCharge, MACHINE_BIND_LINE },
 };

@@ -1,0 +1,69 @@
+"use strict";
+
+const Common = require("./Common.MaggotKing");
+const Instance = require("./Instance.MaggotKing");
+const KILLS_ATTRIBUTE = "maggot-king:kills";
+const MONSTER = "Maggot King";
+
+function answerKillCount({ player, counts }) {
+  const value = player.getAttribute(KILLS_ATTRIBUTE);
+  if (typeof value !== "number" && typeof value !== "string") return;
+  const kills = Number(value);
+  if (Number.isSafeInteger(kills) && kills > 0) counts[MONSTER] = kills;
+}
+
+function grave(request) {
+  if (!Instance.sessionOf(request.player)) return;
+  const [x, y, z] = Common.data.outside;
+  request.tile = { x, y, z };
+  if (Number(request.player.getAttribute(KILLS_ATTRIBUTE) ?? 0) < 5) request.feeMultiplier = 0.25;
+}
+function death(event) {
+  const session = Instance.sessionOf(event.player);
+  if (!session) return;
+  // The dangerous-death item/grave pass already ran. Only its respawn destination changes.
+  event.handled = true;
+  event.player.moveTo(Common.loc(Common.data.respawn));
+  session.area.leave(event.player, false);
+}
+/** Combat Achievements' count for the King (it counts the death itself), or 0 when it doesn't answer. */
+function countedKills(player) {
+  const request = { player, monster: MONSTER };
+  Common.api()?.emitCustomEvent("combat-achievements:count", request);
+  return Number.isSafeInteger(request.total) && request.total > 0 ? request.total : 0;
+}
+function kill({ npc, killer }) {
+  const session = npc?.__maggotKingSession;
+  if (!session || session.player !== killer || session.ended) return;
+  const count = Math.max(0, Number(killer.getAttribute(KILLS_ATTRIBUTE) ?? 0)) + 1;
+  killer.setAttribute(KILLS_ATTRIBUTE, count);
+  // One number: the shared count (what the boss page shows) when it is ahead of the saved one.
+  const kills = Math.max(count, countedKills(killer));
+  require("../../interface/BossKillCount.plugin").sendBossKillCount(killer, `Your Maggot King kill count is: <col=ff0000>${kills}</col>.`);
+}
+function teleported({ player }) {
+  const session = Instance.sessionOf(player);
+  if (session && player.getPrivateArea() !== session.area) {
+    // A teleport may already have attached the player to a different private scene.
+    session.area.detach(player);
+    session.close();
+    session.area.destroy();
+  }
+}
+function shutdown() {
+  for (const session of [...Instance.sessions.values()]) {
+    session.player.moveTo(Common.loc(Common.data.outside));
+    session.area.leave(session.player, false);
+  }
+}
+function attach(api) {
+  api.persistAttribute(KILLS_ATTRIBUTE, 0);
+  api.onCustomEvent("combat-achievements:kill-count", answerKillCount);
+  api.onCustomEvent("gravestones:grave-location", grave);
+  api.onCustomEvent("teleport:landed", teleported);
+  api.onPlayerDeath(death);
+  api.onNpcDeath(kill);
+  api.onServerShutdown(shutdown);
+}
+
+module.exports = { attach, KILLS_ATTRIBUTE };

@@ -189,9 +189,15 @@ function keepInOffice(player) {
   return true;
 }
 
-/** After the tutorial the portal leads to the respawn point. */
+/**
+ * After the tutorial the portal leads to the respawn point: the player's own (Wiki Spawning, "the place
+ * where a player that has been killed" reappears), Lumbridge unless an NPC changed it.
+ */
 function exitAfterTutorial(player) {
-  return inTutorial(player) ? Common.core().GameConstants.DEFAULT_LOCATION : null;
+  if (!inTutorial(player)) return null;
+  const request = { player, location: null };
+  Common.api().emitCustomEvent("respawn-point:location", request);
+  return request.location ?? Common.core().GameConstants.DEFAULT_LOCATION.clone();
 }
 
 /** Leaving the office (the portal, or a teleport) ends the tutorial: the grave's timer starts. */

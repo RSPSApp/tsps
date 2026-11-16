@@ -98,6 +98,7 @@ module.exports = function registerAKingdomDividedQuest(api) {
     ObjectIdentifiers,
     GameObject,
     ObjectManager,
+    PrayerHandler,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
@@ -248,6 +249,13 @@ module.exports = function registerAKingdomDividedQuest(api) {
   const ASSASSIN_SHAYZIEN_ID = 10941;
   const XAMPHUR_ID = 10955;
   const BARBARIAN_WARLORD_ID = 10989;
+  // Wiki (Protection prayers; Xamphur; Judge of Yama (A Kingdom Divided)): Xamphur uses Protect from
+  // Magic and the Judge Protect from Missiles and Magic "simultaneously", with no switch. The cache agrees:
+  // their combat ids carry those overheads (headicons_prayer 2 and 6), which the client draws itself.
+  const BOSS_PROTECTION_PRAYERS = new Map([
+    [XAMPHUR_ID, ["PROTECT_FROM_MAGIC"]],
+    [JUDGE_OF_YAMA_NPC_ID, ["PROTECT_FROM_MISSILES", "PROTECT_FROM_MAGIC"]],
+  ]);
   const LIZARDMAN_BRUTE_QUEST_ID = 10947;
   const ICE_CHUNKS_IDS = new Set([11028, 11029, 11030, 11031, 11142]);
 
@@ -1601,8 +1609,16 @@ module.exports = function registerAKingdomDividedQuest(api) {
     const existing = map.get(key);
     if (existing && existing.isDead?.() !== true) return existing;
     const npc = api.spawnNpc({ ...definition, owner: player, ownerOnly: true });
-    if (npc) map.set(key, npc);
+    if (npc) {
+      map.set(key, npc);
+      prayBossProtections(npc);
+    }
     return npc;
+  }
+
+  /** A boss's protection prayers block a player's hits of those styles (CombatFactory.protectionPrayerFactor). */
+  function prayBossProtections(npc) {
+    for (const prayer of BOSS_PROTECTION_PRAYERS.get(npc.getId()) ?? []) npc.setPrayerActive(PrayerHandler[prayer], true);
   }
 
   function removeNpc(player, key) {

@@ -512,7 +512,7 @@ export abstract class Mobile extends Entity {
     /** The animation for an attack, on `target` where it matters (players animate some attacks on NPCs differently). */
     public abstract getAttackAnim(target?: Mobile): number;
 
-    public abstract getAttackSound(): Sound;
+    public abstract getAttackSound(): Sound | null;
 
     public abstract getBlockAnim(): number;
 
@@ -756,14 +756,15 @@ export abstract class Mobile extends Entity {
             outcome = 0;
         hit.setHealthLost(this.getHitpoints() - outcome);
         const source = hit.getSource();
+        if (this.isNpc() && hit.getHealthLost() > 0 && source && source !== this) this.getCombat().getLastDamage().reset();
         // Reflections land separately from the attack, sometimes after their source died.
         if (hit.isReflected() && source && source !== this && hit.getHealthLost() > 0) {
             if (this.isNpc()) {
                 // Such a hit pauses regeneration, but it never takes a single-way NPC from
                 // the player fighting it, and a dead or logged-out source tags nobody. While
-                // another attacker is held its own clock is left alone: restarting it would keep
-                // an absent fighter's tag alive, and regeneration (20s) can't start before that
-                // tag expires (6s), which resets the clock anyway.
+                // another attacker is held its PJ clock is left alone: restarting it would
+                // keep an absent fighter's tag alive. The independent damage clock above
+                // delays regeneration even when this reflection cannot renew that tag.
                 const combat = this.getCombat();
                 const attacker = combat.getAttacker();
                 const sourceLive = source.isRegistered() && source.getHitpoints() > 0;

@@ -457,6 +457,11 @@ module.exports = function registerSeaSlugQuest(api) {
   function handleHolgartTravel({ player }) {
     const stage = quest.getStage(player);
     if (stage < STAGE_BOAT_REPAIRED) return false;
+    // The Slug Menace takes his boat once he has told the player about it (its capture, ticks 1441
+    // and 5164); that quest answers his Travel then.
+    const boat = { player, lost: false };
+    api.emitCustomEvent("sea-slug:holgart-boat", boat);
+    if (boat.lost) return false;
     const position = player.getLocation();
     if (within(position, ISLAND_TILE, 16)) return row(player, ROUTE_ISLAND_RETURN, PLATFORM_TILE);
     if (within(position, PLATFORM_TILE, 16)) {
@@ -478,7 +483,7 @@ module.exports = function registerSeaSlugQuest(api) {
     inventory.deleteNumber(ItemIdentifiers.DAMP_STICKS, 1);
     inventory.adds(DRY_STICKS_ITEM_ID, 1);
     player.performAnimation?.(new Animation(DRYING_SEQ, DRYING_DELAY));
-    player.performGraphic?.(new Graphic(DRYING_GRAPHIC, DRYING_DELAY));
+    player.performGraphic?.(Graphic.delayed(DRYING_GRAPHIC, DRYING_DELAY));
     player.getPacketSender().sendSound(DRYING_SOUND, 1, DRYING_DELAY);
     event.handled = true;
   }

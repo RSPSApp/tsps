@@ -17,6 +17,18 @@ mentions the extended potion, so the numbers below are the Wiki's.
 - The Herblore recipe (stamina potion plus marlin scales, level 85) already lives in
   `plugins/skills/data/herblore.json`.
 
+## Expiry lines (rsprox captures)
+
+Every stamina effect (stamina potion, mix, extended potion, Egniol potion) ends with the same two
+game messages, recorded in 173 recordings (224/01440, 231/00391, 237/01087 among them):
+
+- 20 ticks before the end, on the tick `stamina_duration` (varbit 24) goes from 3 to 2:
+  `<col=8f4808>Your stamina enhancement is about to expire.</col>` and sound 3120, three loops.
+- On the tick it reaches 0 and `stamina_active` (varbit 25) clears:
+  `<col=8f4808>Your stamina enhancement has expired.</col>` and sound 3424.
+
+A new dose re-arms the warning. Test: `server/tests/stamina-expiry.test.cjs`.
+
 ## How it is wired
 
 `Potions.plugin.js` registers the potion and sends the shared `potions:stamina-effect`

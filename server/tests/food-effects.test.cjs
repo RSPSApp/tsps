@@ -48,6 +48,8 @@ const NOT_FOOD = {
   "Sliced before eating (Wiki)": ["Watermelon"],
 };
 
+const customHandlers = new Map();
+
 before(async () => {
   await CachePipeline.initialize();
   core = { ...PluginManager.getCoreApi(), TaskManager: { submit: (task) => tasks.push(task) } };
@@ -56,6 +58,7 @@ before(async () => {
     persistAttribute() {},
     onPlayerLogin() {},
     onItemAction: (handler) => { eat = handler; },
+    onCustomEvent: (name, handler) => { customHandlers.set(name, handler); },
     emitCanEat: () => canEat,
     emitCustomEvent(name, request) {
       customEvents.push({ name, request });
@@ -226,7 +229,7 @@ test("eating a shark: animation, the messages, the food-eaten varp, 3 ticks on b
   assert.equal(eaten.heal, 20);
   assert.equal(eaten.restores, 20, "league observers retain the food restoration amount");
   assert.equal(player.slots[0], null);
-  assert.deepEqual(player.messages, ["You eat the shark.", "It heals some health."]);
+  assert.deepEqual(player.messages, ["spam: You eat the shark.", "spam: It heals some health."]);
   assert.equal(player.varps.get(4518), 1, "tracking_food_eaten");
   assert.deepEqual(player.attackDelays(), [3]);
   player.give(1, id("SHARK"));
@@ -236,7 +239,7 @@ test("eating a shark: animation, the messages, the food-eaten varp, 3 ticks on b
   const full = createPlayer({ hp: 99 });
   full.give(0, id("SHARK"));
   full.eat(0);
-  assert.deepEqual(full.messages, ["You eat the shark."], "no heal line at full Hitpoints");
+  assert.deepEqual(full.messages, ["spam: You eat the shark."], "no heal line at full Hitpoints");
   const fullEaten = customEvents.findLast(event => event.name === "food:eaten").request;
   assert.equal(fullEaten.hitpointsBefore, 99);
   assert.equal(fullEaten.heal, 0);
@@ -251,14 +254,14 @@ test("a karambwan follows food in the same tick; a fast pie's 1-tick delay ends 
   player.eat(1);
   assert.equal(player.hp, 48);
   assert.deepEqual(player.attackDelays(), [3, 2]);
-  assert.deepEqual(player.messages.filter((m) => m.startsWith("You eat")), ["You eat the shark.", "You eat the Karambwan."]);
+  assert.deepEqual(player.messages.filter((m) => m.startsWith("spam: You eat")), ["spam: You eat the shark.", "spam: You eat the Karambwan."]);
 
   const pie = createPlayer({ hp: 10 });
   pie.give(0, id("MEAT_PIE"));
   pie.eat(0);
   assert.equal(pie.slots[0].getId(), id("HALF_A_MEAT_PIE"));
   assert.equal(pie.getTimers().left(core.TimerKey.FOOD), 1);
-  assert.deepEqual(pie.messages, ["You eat half the meat pie.", "It heals some health."]);
+  assert.deepEqual(pie.messages, ["spam: You eat half the meat pie.", "spam: It heals some health."]);
 });
 
 test("boosts and effects: wild pie, summer pie, jangerberries", () => {
@@ -268,7 +271,7 @@ test("boosts and effects: wild pie, summer pie, jangerberries", () => {
   assert.equal(player.level(core.Skill.SLAYER), 65);
   assert.equal(player.level(core.Skill.RANGED), 64);
   assert.equal(player.slots[0].getId(), id("HALF_A_WILD_PIE"));
-  assert.equal(player.messages[0], "You eat half the Wild pie.");
+  assert.equal(player.messages[0], "spam: You eat half the Wild pie.");
 
   const summer = createPlayer();
   summer.give(0, id("SUMMER_PIE"));
@@ -410,7 +413,7 @@ test("yellowfin heals 19 and restores 20% run energy (Wiki: Yellowfin)", () => {
   player.eat(0);
   assert.equal(player.hp, 69);
   assert.equal(player.energy, 70, "from 50% to 70%");
-  assert.deepEqual(player.messages.slice(0, 1), ["You eat the yellowfin."]);
+  assert.deepEqual(player.messages.slice(0, 1), ["spam: You eat the yellowfin."]);
 });
 
 test("white tree fruit heals 3 and restores 5-10% run energy (Wiki: White tree fruit)", (t) => {
@@ -431,7 +434,7 @@ test("strange fruit restores energy and cures poison, without healing", () => {
   player.eat(0);
   assert.equal(player.hp, 40);
   assert.equal(player.energy, 80);
-  assert.deepEqual(player.messages, ["You eat the fruit. It tastes great, some of your energy is restored!"]);
+  assert.deepEqual(player.messages, ["spam: You eat the fruit. It tastes great, some of your energy is restored!"]);
 });
 
 test('quest supplies restore bounded Prayer and share stamina, with their real cache actions and scene gates', () => {
@@ -467,6 +470,49 @@ test("eating a Mackerel names the Mackerel, not the cod (issue #2455)", () => {
   assert.equal(mackerel.message, "You eat the mackerel.");
 });
 
+test("pizza and baked potato eat lines are the recorded ones, sent as spam (rsprox)", () => {
+  // rsprox.net index: "You eat half of the pineapple pizza." (recs 1751, 1827, 1000276-1000352) and
+  // "You eat half of the meat pizza." (rec 1000195), then "You eat the remaining ... pizza."; the tuna,
+  // chilli and mushroom potato lines (recs 1001406, 1000402, 1000241). Every eat and heal line is type=spam.
+  const pizza = createPlayer({ hp: 10 });
+  pizza.give(0, id("PINEAPPLE_PIZZA"));
+  pizza.eat(0);
+  assert.equal(pizza.slots[0].getId(), id("_1_2_PINEAPPLE_PIZZA"));
+  assert.deepEqual(pizza.messages, ["spam: You eat half of the pineapple pizza.", "spam: It heals some health."]);
+  const second = createPlayer({ hp: 10 });
+  second.give(0, id("_1_2_PINEAPPLE_PIZZA"));
+  second.eat(0);
+  assert.deepEqual(second.messages, ["spam: You eat the remaining pineapple pizza.", "spam: It heals some health."]);
+
+  const meat = createPlayer({ hp: 99 });
+  meat.give(0, id("MEAT_PIZZA"));
+  meat.eat(0);
+  assert.deepEqual(meat.messages, ["spam: You eat half of the meat pizza."]);
+
+  for (const [name, line] of [
+    ["TUNA_POTATO", "You eat a baked potato with tuna and sweetcorn."],
+    ["CHILLI_POTATO", "You eat a baked potato with chilli con carne."],
+    ["MUSHROOM_POTATO", "You eat a baked potato with mushroom and onion."],
+  ]) {
+    const player = createPlayer({ hp: 10 });
+    player.give(0, id(name));
+    player.eat(0);
+    assert.deepEqual(player.messages, [`spam: ${line}`, "spam: It heals some health."], name);
+  }
+
+  // The Araxyte venom sac's line is the one captured eat line sent as a game message (865 sends, all gamemessage).
+  const sac = createPlayer({ hp: 50 });
+  const combat = sac.getCombat();
+  sac.getCombat = () => ({
+    ...combat,
+    getPoisonImmunityTimer: () => ({ secondsRemaining: () => 0, start() {} }),
+    getHitQueue: () => ({ addPendingDamage() {} }),
+  });
+  sac.give(0, id("ARAXYTE_VENOM_SAC"));
+  sac.eat(0);
+  assert.equal(sac.messages[0], "You eat the Araxyte venom sack, It grants you immunity from venom.");
+});
+
 test("drinks eaten as food: wine, tea and two cocktails heal, apply their Wiki effects and leave the vessel", () => {
   const drink = (name, setup = () => {}) => {
     const player = createPlayer({ hp: 40 });
@@ -480,7 +526,7 @@ test("drinks eaten as food: wine, tea and two cocktails heal, apply their Wiki e
   assert.equal(wine.hp, 51, "Jug of wine heals 11 (Wiki: Jug of wine)");
   assert.equal(wine.level(core.Skill.ATTACK), 58, "and lowers Attack by 2");
   assert.equal(wine.slots[0].getId(), id("JUG"));
-  assert.equal(wine.messages[0], "You drink the wine.");
+  assert.equal(wine.messages[0], "spam: You drink the wine.");
 
   const half = drink("HALF_FULL_WINE_JUG");
   assert.equal(half.hp, 47, "Half full wine jug heals 7 (Wiki: Half full wine jug)");
@@ -502,6 +548,18 @@ test("drinks eaten as food: wine, tea and two cocktails heal, apply their Wiki e
     const cocktail = drink(name);
     assert.equal(cocktail.hp, 40 + heal, `${name} heals ${heal} (Wiki)`);
     assert.equal(cocktail.slots[0].getId(), id("COCKTAIL_GLASS"));
-    assert.deepEqual(cocktail.messages, ["You drink the cocktail. It tastes great."]);
+    assert.deepEqual(cocktail.messages, ["spam: You drink the cocktail. It tastes great."]);
   }
+});
+
+test("food:container answers a food's leftover dish, and nothing for food that leaves none", () => {
+  const answer = (itemId) => {
+    const request = { itemId, container: null };
+    customHandlers.get("food:container")(request);
+    return request.container;
+  };
+  // Nature Spirit's ghasts rot a whole pie to its dish (rsprox NatureSpirit ticks 285, 632).
+  assert.equal(answer(id("MEAT_PIE")), id("PIE_DISH"));
+  assert.equal(answer(id("APPLE_PIE")), id("PIE_DISH"));
+  assert.equal(answer(id("TUNA")), null);
 });

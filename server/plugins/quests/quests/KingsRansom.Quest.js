@@ -879,8 +879,13 @@ module.exports = function registerKingsRansomQuest(api) {
     return false;
   }
 
-  function talkSquire(player, npcId, stage) {
+  function talkSquire(player, npcId, stage, npc = null) {
     if (stage < STAGE_COMPLETE) return false;
+    // The Knight Waves own the squire once the quest is done; play their rules/refusal
+    // conversation when that plugin is loaded, otherwise keep the quest's own line.
+    const request = { player, npcId, npc, handled: false };
+    api.emitCustomEvent("knight-waves:squire", request);
+    if (request.handled) return true;
     return play(player, npcId, "post-quest-dialogue-talking-to-squire") || true;
   }
 
@@ -930,7 +935,7 @@ module.exports = function registerKingsRansomQuest(api) {
       return;
     }
     if (npcId === SQUIRE_ID) {
-      if (talkSquire(player, npcId, stage)) event.handled = true;
+      if (talkSquire(player, npcId, stage, event.npc)) event.handled = true;
       return;
     }
     const fragment = SERVANT_FRAGMENTS.get(npcId);

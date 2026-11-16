@@ -3,6 +3,7 @@ const path = require("node:path");
 const { test } = require("node:test");
 
 const { Server } = require("../dist/Server");
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 Server.installProductionPathResolver();
 
 const { PluginManager } = require("../dist/plugins/PluginManager");
@@ -74,7 +75,8 @@ function fakePlayer({ x = 3300, y = 3000, name = "desert-test" } = {}) {
     getDialogueManager: () => ({
       isActive: () => false,
       getCurrent: () => null,
-      startDialogues: (chain) => dialogues.push(chain),
+      // The box logs its own chat line as it opens, as the real one does.
+      startDialogues: (chain) => { dialogues.push(chain); Dialogue.sendBoxChatLine(player, chain.getDialogues().get(0)?.getText?.()); },
     }),
   };
   return player;

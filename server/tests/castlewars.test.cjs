@@ -92,7 +92,7 @@ function mapObject(id) {
 before(() => {
   CachePipeline.initialize();
   // The entry check asks the Food plugin, which reads item names from the cache.
-  require('../plugins/items/Food.plugin').register({ core, persistAttribute() {}, onPlayerLogin() {}, onItemAction() {} });
+  require('../plugins/items/Food.plugin').register({ core, persistAttribute() {}, onPlayerLogin() {}, onItemAction() {}, onCustomEvent() {} });
   RegionManager.init();
   RegionManager.loadMapFiles(2436, 3089);
   RegionManager.loadMapFiles(2381, 9489);
@@ -172,7 +172,8 @@ test('capes block entry before the teleport', () => {
   assert.equal(player.moves.length, 0);
   // rsprox 3233 (rev 232): the reason in chat, then the message box.
   assert.deepEqual(player.messages, ["You can't wear capes in the arena."]);
-  assert.deepEqual(player.typed, [[115, 'Some items are stopping you from entering the Castle Wars waiting area. See the chat for details.']]);
+  // The box logs its own mesbox chat line as it opens; nothing is sent by hand.
+  assert.deepEqual(player.typed, []);
   assert.equal(player.statements.length, 1);
 });
 
@@ -190,7 +191,26 @@ test('food carried in the inventory blocks entry', () => {
   enterPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
   assert.equal(game.getTeamId(player), null);
   assert.equal(player.moves.length, 0);
-  assert.deepEqual(player.messages, ['You may not bring your own consumables inside Castle Wars.']);
+  assert.deepEqual(player.messages, ["You can't take non-combat items into the arena."]);
+});
+
+// Wiki (Castle Wars): only tickets, potions, runes and combat items, no Dwarf multicannon. Recorded
+// (rsprox_transcripts/232/03233.txt): a hammer, rope, specimen brush and jar and a hard scroll box were carried.
+test('recorded non-combat tools, a cannon part and noted ones block entry; potions, runes and gear do not', () => {
+  const I = core.ItemIdentifiers;
+  const noted = (id) => core.ItemDefinition.forId(id).getNoteId();
+  for (const id of [I.HAMMER, I.ROPE, I.SPECIMEN_BRUSH, I.SPECIMEN_JAR, I.SCROLL_BOX_HARD_, I.CANNON_BASE, noted(I.HAMMER), noted(I.SHARK)]) {
+    const player = fakePlayer({ inventory: [id] });
+    enterPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
+    assert.equal(game.getTeamId(player), null, `item ${id} blocks entry`);
+    assert.deepEqual(player.messages, ["You can't take non-combat items into the arena."], `item ${id}`);
+  }
+  const player = fakePlayer({ inventory: [I.SUPER_RESTORE_4_, I.DEATH_RUNE, I.RUNE_SCIMITAR, I.TINDERBOX] });
+  enterPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
+  assert.deepEqual(player.messages, [], 'nothing refused');
+  assert.ok(prompt);
+  prompt.options[3].pick();
+  assert.notEqual(game.getTeamId(player), null);
 });
 
 test('the bot seeding gate is off unless the world config turns it on', () => {
@@ -608,6 +628,80 @@ test('only Castle Wars bots in the waiting rooms shorten the start countdown to 
     for (const area of Object.values(game.waitingAreas)) area.players.length = 0;
     game.checkStartCountdown();
     assert.equal(game.getPhase(), game.PHASE.IDLE);
+  }
+});
+
+test('a bot logging out of a waiting room neither shortens the start countdown nor is moved into the game', (t) => {
+  const unrelatedWorldBot = fakePlayer({ bot: true });
+  t.mock.method(World, 'getPlayers', () => [unrelatedWorldBot]);
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const real = (bot) => {
+    const player = new Player(null, new core.Location(2440, 3089));
+    const sender = new Proxy({}, { get: () => () => sender });
+    t.mock.method(player, 'getPacketSender', () => sender);
+    player.moves = [];
+    t.mock.method(player, 'smartMove', (location) => player.moves.push(location));
+    if (bot) player.setAttribute(game.BOT_KEY, true);
+    return player;
+  };
+  const humans = [real(false), real(false)];
+  const departing = real(true);
+  game.waitingAreas[TEAM.SARADOMIN].players.push(humans[0]);
+  game.waitingAreas[TEAM.ZAMORAK].players.push(humans[1], departing);
+  World.getRemovePlayerQueue().push(departing);
+  registry.emitCustomEvent = () => {};
+  try {
+    game.beginStartCountdown();
+    assert.equal(game.startSecondsLeft(), 120, 'the departing bot does not make it a bot game');
+    submittedTasks.at(-1).execute();
+    assert.equal(game.getPhase(), game.PHASE.ACTIVE);
+    assert.equal(departing.moves.length, 0, 'the departing bot stays out of the start room');
+    assert.ok(humans.every((human) => human.moves.length === 1), 'the humans are moved in');
+  } finally {
+    World.getRemovePlayerQueue().splice(World.getRemovePlayerQueue().indexOf(departing), 1);
+    for (const area of Object.values(game.waitingAreas)) area.players.length = 0;
+    if (game.getPhase() === game.PHASE.ACTIVE) game.endGame();
+    delete registry.emitCustomEvent;
+  }
+});
+
+test('a team bot logging out in the lobby is not moved into the start room at the start (PR #5384 review)', (t) => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const real = (bot) => {
+    const player = new Player(null, new core.Location(2440, 3089));
+    const sender = new Proxy({}, { get: () => () => sender });
+    t.mock.method(player, 'getPacketSender', () => sender);
+    player.moves = [];
+    t.mock.method(player, 'smartMove', (location) => player.moves.push(location));
+    t.mock.method(player, 'moveTo', (location) => player.moves.push(location));
+    if (bot) player.setAttribute(game.BOT_KEY, true);
+    return player;
+  };
+  const humans = [real(false), real(false)];
+  const departing = real(true);
+  const staying = real(true);
+  game.waitingAreas[TEAM.SARADOMIN].players.push(humans[0]);
+  game.waitingAreas[TEAM.ZAMORAK].players.push(humans[1]);
+  // Two bots that missed the waiting room: one logging out this tick, one not.
+  game.setTeamId(departing, TEAM.ZAMORAK);
+  game.setTeamId(staying, TEAM.SARADOMIN);
+  game.lobbyArea.players.push(departing, staying);
+  World.getRemovePlayerQueue().push(departing);
+  registry.emitCustomEvent = () => {};
+  try {
+    game.beginStartCountdown();
+    submittedTasks.at(-1).execute();
+    assert.equal(game.getPhase(), game.PHASE.ACTIVE);
+    assert.equal(departing.moves.length, 0, 'the departing lobby bot stays out of the start room');
+    assert.equal(staying.moves.length, 1, 'a lobby bot still in the world is moved in');
+  } finally {
+    World.getRemovePlayerQueue().splice(World.getRemovePlayerQueue().indexOf(departing), 1);
+    game.lobbyArea.players.length = 0;
+    for (const area of Object.values(game.waitingAreas)) area.players.length = 0;
+    if (game.getPhase() === game.PHASE.ACTIVE) game.endGame();
+    game.setTeamId(departing, null);
+    game.setTeamId(staying, null);
+    delete registry.emitCustomEvent;
   }
 });
 

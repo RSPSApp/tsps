@@ -57,7 +57,6 @@ const VARBITS = {
   obtRunes: 917, urchinGlove: 919, toldAli: 920, stallvar: 922,
 };
 const JUNK_PRICE = 10;
-const MESBOX_CHAT = 115;
 const MAIN_MODAL = (161 << 16) | 16;
 /** Wiki (Ali's Discount Wares., Junk): one of these, 1/5 each; rsprox 3169 t8287 gave a raw chicken for 10 coins. */
 const JUNK_ITEMS = [1265, 1925, 946, 2138, 590]; // bronze pickaxe, bucket, knife, raw chicken, tinderbox
@@ -112,12 +111,9 @@ function play(player, items, then = null) {
   say(player, items.slice(0, marker), after);
 }
 
-/** A message box (interface 229) that also reaches the chat as a mesbox message, as in the captures (3170 t247). */
+/** A message box (interface 229); its text reaches the chat as a mesbox message too. */
 function messageBox(index, text) {
-  const box = new (core().StatementDialogue)(index, text);
-  const send = box.send.bind(box);
-  box.send = (player) => { player.getPacketSender().sendTypedMessage(MESBOX_CHAT, text); send(player); };
-  return box;
+  return new (core().StatementDialogue)(index, text);
 }
 
 function say(player, lines, then) {

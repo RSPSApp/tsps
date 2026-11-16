@@ -19,7 +19,9 @@ Smelting at furnaces and smithing at anvils (`server/plugins/skills/Smithing.plu
   - Iron fails half the time: "The ore is too impure and you fail to refine it." The ore is lost, no experience (recs 69, 73, 83, 1102, 3315).
   - Running out mid-loop: "You need at least one iron ore and two coal to smelt a steel bar." (rec 1102); the other bars follow that pattern **(unverified)**.
 - **Ore used on a furnace** opens the Smelt menu. Sand or soda ash opens molten glass (Crafting). The empty bucket return is captured in recording 4283. 'perfect' gold ore opens its own bar; the Gold bar choice also uses it when the player has no normal gold ore.
+- **Furnaces under other names** work as any furnace: the Clay forge (Neitiznot), Volcanic Furnace (Mount Karuulm), Lava forge (Mor Ul Rek) and Ancient Furnace (Grimstone Dungeon) smelt, take ore, sand and cannonball bars, and open the gold and silver jewellery menus, like a Furnace **(Wiki: Furnace, Clay forge "functionally identical to normal furnaces", Volcanic Furnace, Lava forge, Ancient Furnace)**. The names are in `server/plugins/skills/data/furnaces.json`, shared by Smithing, Crafting and the Desert Treasure II rings. The Ancient Furnace casts cannonballs at 5 ticks an action instead of 10 (Wiki: Ancient Furnace, Cannonball); see Cannonballs.
 - **Blurite** needs The Knight's Sword **(Wiki)**. **Lovakite** is smelted only at the Lovakite furnace in Lovakengj (45 Smithing, 1 ore + 2 coal, 20 XP) **(Wiki)**.
+- **Lunar bar:** one lunar ore at a furnace makes one lunar bar at level 1 for 6.2 XP **(Wiki)**; Superheat Item picks the recipe up at 43 Magic. "You smelt the magic ore in the furnace." then "You retrieve a lunar bar." (rec 227/01768, duplicated in 227/910302). The missing-ore line follows the pattern **(unverified)**.
 - **Coal bag:** a carried coal bag's coal is used after the inventory's (docs/storage-items.md).
 
 ### Molten glass
@@ -40,6 +42,7 @@ Smelting at furnaces and smithing at anvils (`server/plugins/skills/Smithing.plu
 - **Experience** is the bar's rate times the bars used (Wiki: 12.5 bronze ... 75 runite, 60 lovakite). Keel parts take 5 bars (187.5 XP for steel); Shayzien armour (1)-(5) comes from lovakite.
 - **Quest and members gates** follow script 430: claws (Death Plateau), dart tips (The Tourist Trap), keel parts (Pandemonium), members-only slots on free worlds.
 - **Hammers:** a hammer, or an Imcando hammer carried or wielded in either hand **(Wiki)**.
+- **Calcified deposits** (Wiki): a deposit used on an anvil with a hammer is crushed one at a time, three ticks apart, for 1 Smithing XP each. Three in four give 5-15 blessed bone shards, the rest one calcified moth. The Wiki gives the time and the loot; the loop's first-crush timing and `human_smithing` follow the Barronite Crusher and the anvil loop **(unverified)**.
 - **The rusted anvil** in Lumbridge only works bronze. **Doric's anvil** asks Doric's Quest through `smithing:anvil-access`.
 - **Blurite** isn't on interface 312: a blurite bar used on an anvil (or Smith with only blurite) opens a menu of blurite bolts (unf) (8 Smithing, 10 a bar) and limbs (13), 17.5 XP each, after The Knight's Sword **(Wiki)**.
 
@@ -47,7 +50,7 @@ Smelting at furnaces and smithing at anvils (`server/plugins/skills/Smithing.plu
 
 - A bar and an ammo mould at any furnace make 4 cannonballs; a double ammo mould takes two bars a time for 8 at the same speed. Bronze 5, iron 20, steel 35, mithril 55, adamant 75, rune 90 Smithing; 8.8 / 17.2 / 25.6 / 34 / 42.4 / 50.8 XP a bar. Needs Dwarf Cannon.
 - The Smelt menu offers a cannonball for each bar carried with a mould; a bar used on a furnace opens its own.
-- 8 ticks, then 10 between (the Wiki's recipe; its Ancient Furnace page disagrees). The bone-burying animation (827). Messages **(unverified)**: "You heat the steel bar into a liquid state.", "You pour the molten metal into your cannonball mould.", "The molten metal cools slowly to form 4 cannonballs."
+- 8 ticks, then 10 between (the Wiki's recipe). At the Ancient Furnace, 5 ticks an action (Wiki); with no figure for its first batch, TSPS pours 4 ticks in, inside the 5-tick action. The bone-burying animation (827). Messages **(unverified)**: "You heat the steel bar into a liquid state.", "You pour the molten metal into your cannonball mould.", "The molten metal cools slowly to form 4 cannonballs."
 
 ## Gear (Wiki, no captures)
 
@@ -70,6 +73,6 @@ Smelting at furnaces and smithing at anvils (`server/plugins/skills/Smithing.plu
 
 - Smiths' Uniform speed-up, the smithing catalyst, and the Ancient Furnace (Grimstone, Sailing 87).
 - Chainshot and incendiary cannonballs, large keel parts, dragon keel parts and dragon nails, granite cannonballs.
-- Lunar bars (Lunar Diplomacy / The Fremennik Exiles) and elemental metal outside Elemental Workshop.
+- Elemental metal outside Elemental Workshop.
 - The level-up "You have unlocked: ..." messages.
 - Superheat Item still treats blurite as a 13 Smithing bar (the Wiki says 10 by spell).

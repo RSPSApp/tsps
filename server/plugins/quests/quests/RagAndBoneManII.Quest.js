@@ -310,19 +310,9 @@ module.exports = function registerRagAndBoneManIIQuest(api) {
     return PAGE_VARIANT_START;
   }
 
-  function horrorFromTheDeepComplete(player) {
-    const request = { player, key: "horror_from_the_deep", complete: undefined };
-    api.emitCustomEvent("quest:is-complete", request);
-    return request.complete === true;
-  }
-
   function selectVariant({ npcId, player }) {
     if (npcId !== ODD_OLD_MAN_NPC_ID) return null;
     if (!ragAndBoneManIComplete(player)) return null;
-    if (quest.getStage(player) === 0 && !horrorFromTheDeepComplete(player)) {
-      player.sendMessage("You must complete Horror from the Deep to start this quest.");
-      return null;
-    }
     return wishListVariant(player);
   }
 
@@ -335,10 +325,6 @@ module.exports = function registerRagAndBoneManIIQuest(api) {
     const { player } = event;
     if (!ragAndBoneManIComplete(player)) return false;
     if (boneVoyageNeedsOddOldMan(player)) return false;
-    if (quest.getStage(player) === 0 && !horrorFromTheDeepComplete(player)) {
-      player.sendMessage("You must complete Horror from the Deep to start this quest.");
-      return true;
-    }
     const variant = wishListVariant(player);
     const page = variant === POST_QUEST_VARIANT ? ODD_OLD_MAN_PAGE : PAGE;
     return startTranscript(api, player, ODD_OLD_MAN_NPC_ID, page, variant);

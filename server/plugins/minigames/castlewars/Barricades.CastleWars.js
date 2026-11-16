@@ -20,7 +20,11 @@ let data;
 let RegionManager;
 let World;
 
-function setupBarricade({ player }) {
+function setupBarricade({ player, itemId }) {
+  // Other games' barricades share the item name; only Castle Wars' own item is this handler's.
+  const clicked = itemId ?? (player.getInventory().contains(core.ItemIdentifiers.BARRICADE)
+    ? core.ItemIdentifiers.BARRICADE : undefined);
+  if (clicked !== core.ItemIdentifiers.BARRICADE) return false;
   const location = player.getLocation();
   const teamId = game.getTeamId(player);
   if (!game.isPlaying(player) || !game.inGameBounds(location)) {

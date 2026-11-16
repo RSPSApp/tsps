@@ -141,8 +141,15 @@ function setup(options = {}) {
     sendSubInterface(target, id, type) { interfaces.push({ target, id, type }); return sender; },
     sendJingle(id, delay) { jingles.push(id); return sender; },
     sendInterfaceRemoval() { currentDialogue = null; interfaceId = -1; return sender; },
+    sendInterfaceSet(id, side) { interfaceId = id; interfaces.push({ id, side }); return sender; },
+    sendSound(id) { sounds.push(id); return sender; },
   }, { get(target, key) { return target[key] ?? (() => sender); } });
   const interfaces = [];
+  const sounds = [];
+  const animations = [];
+  const graphics = [];
+  const hits = [];
+  const levels = new Map();
 
   const player = {
     getAttribute: (key) => attrs.get(key),
@@ -173,9 +180,15 @@ function setup(options = {}) {
     }),
     getSkillManager: () => ({
       getMaxLevel: () => 99,
-      getCurrentLevel: () => 99,
+      getCurrentLevel: (skill) => levels.get(skill) ?? 99,
+      setCurrentLevel(skill, value) { levels.set(skill, value); },
       addExperiences(skill, amount) { xp.push({ skill, amount }); },
     }),
+    performAnimation(animation) { animations.push(animation.getId?.() ?? animation.id); },
+    performGraphic(graphic) { graphics.push(graphic.id); },
+    getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() {} }),
+    setUntargetable() {},
+    isPlayer: () => true,
     getDialogueManager: () => ({
       startDialogues(chain) { currentDialogue = chain; },
       getCurrent: () => currentDialogue,
@@ -183,21 +196,36 @@ function setup(options = {}) {
       isActive: () => Boolean(currentDialogue),
       advance() {},
     }),
-    getCombat: () => null,
+    getCombat: () => ({ getTarget: () => null, getHitQueue: () => ({ addPendingDamage(list) { hits.push(...list.map((hit) => hit.getDamage())); } }) }),
     getEquipment: () => ({ get: () => null }),
   };
 
   const emit = (name, event) => api.emitCustomEvent(name, { player, ...event });
   const action = (npcId, stepId) => { const event = { player, npcId, stepId }; api.emitCustomEvent('npc-dialogue:action', event); return event; };
-  const line = (npcId, text) => { const event = { player, npcId, text }; api.emitCustomEvent('npc-dialogue:line', event); return event; };
+  /** A line as NpcDialogues plays it: `before` as it shows, `after` once continued. */
+  const line = (npcId, text, step = {}) => {
+    const event = { player, npcId, text, step };
+    api.emitCustomEvent('npc-dialogue:line', event);
+    event.before?.();
+    event.after?.();
+    return event;
+  };
   const variant = (npcId) => hooks.variants[0]({ player, npcId });
   const condition = (stepId) => hooks.conditions[0]({ player, stepId });
 
   return {
     api, core, hooks, quest, attrs, inventory, varbits, configs, messages, xp, jingles,
-    player, tasks, emit, action, line, variant, condition, interfaces,
-    click(buttonChild) {
-      const event = { player, buttonId: (462 << 16) | buttonChild, action: 1, handled: false };
+    player, tasks, emit, action, line, variant, condition, interfaces, sounds, animations, graphics, hits, levels,
+    /** Runs every queued task (and those they queue) up to `rounds` deep. */
+    runTasks(rounds = 30) {
+      for (let round = 0; round < rounds && tasks.length; round++) {
+        const due = tasks.splice(0);
+        for (const task of due) task.run();
+      }
+    },
+    setLocation(x, y, z = 0) { location = new core.Location(x, y, z); },
+    click(buttonChild, slot) {
+      const event = { player, buttonId: (462 << 16) | buttonChild, action: 1, slot, handled: false };
       PluginManager.emitInterfaceActionClick(event);
       return event;
     },
@@ -283,43 +311,46 @@ function pickup(h, itemId) {
   h.tasks.slice(firstTask).forEach(task => task.run());
 }
 
-test('start from stage 0 converts the Commorb and advances to stage 1', () => {
+const FORMAT_KEY = 'the-slug-menace:stage-format';
+const FLAGS_KEY = 'the-slug-menace:flags';
+
+/** A player on the native stage numbers (as every save after the conversion). */
+function at(stage, options) {
+  const h = setup(options);
+  h.attrs.set(STAGE_KEY, stage);
+  h.attrs.set(FORMAT_KEY, 1);
+  return h;
+}
+
+test('Sir Tiffy starts the quest as his last line shows, with the Commorb v2 (capture tick 238)', () => {
   const h = setup();
   h.inventory.set(I.COMMORB, 1);
-  assert.equal(h.variant(N.SIR_TIFFY_CASHIEN),
-    'starting-off-talking-to-sir-tiffy-cashien-to-start-the-quest');
+  assert.equal(h.variant(N.SIR_TIFFY_CASHIEN), 'starting-off-talking-to-sir-tiffy-cashien-to-start-the-quest');
+  // "Yes." alone starts nothing: closing before the last line leaves the quest unstarted.
   h.emit('npc-dialogue:hook', { npcId: N.SIR_TIFFY_CASHIEN, hook: 'quest:the-slug-menace:start' });
+  assert.equal(h.attrs.get(STAGE_KEY) ?? 0, 0);
+  h.line(N.SIR_TIFFY_CASHIEN, 'Now, is there anything else I can do for you?');
   assert.equal(h.attrs.get(STAGE_KEY), 1);
+  assert.equal(h.varbits.get(2610), 1);
   assert.equal(h.inventory.get(I.COMMORB) ?? 0, 0);
   assert.equal(h.inventory.get(I.COMMORB_V2), 1);
-  h.emit('npc-dialogue:condition', { npcId: N.SIR_TIFFY_CASHIEN, stepId: 'Z3OYJz' });
-  assert.equal(h.inventory.get(I.COMMORB_V2), 1);
+  assert.equal(h.variant(N.SIR_TIFFY_CASHIEN), 'starting-off-talking-to-sir-tiffy-cashien-after-starting-the-quest');
+});
+
+test('the start menu goes on to Sir Tiffy\'s own options, not the start prompt again (issue #4211 point 1)', () => {
+  const steps = DIALOGUES[SLUG_PAGE].variants['starting-off-talking-to-sir-tiffy-cashien-to-start-the-quest'];
+  const yes = steps.find((step) => step.type === 'choice').options[0].steps.find((step) => step.type === 'choice')
+    .options.find((option) => option.text === 'Yes.');
+  const menu = yes.steps.find((step) => step.type === 'choice');
+  assert.deepEqual(menu.options.map((option) => option.text),
+    ['Can you explain the Gaze of Saradomin to me?', 'Can I buy some armour?', 'Can I switch respawns, please?', 'Goodbye.']);
 });
 
 test('a stage-0 lost Commorb is reclaimed from Sir Tiffy', () => {
   const h = setup();
-  assert.equal(h.variant(N.SIR_TIFFY_CASHIEN),
-    'starting-off-talking-to-sir-tiffy-cashien-after-losing-the-commorb');
-  h.line(N.SIR_TIFFY_CASHIEN, 'Very careless of you, what? Here, take another, but be careful of this one!');
-  assert.equal(h.inventory.get(I.COMMORB), 1);
-  assert.equal(h.inventory.get(I.COMMORB_V2) ?? 0, 0);
-});
-
-test('the lost-Commorb condition grants the original Commorb before the mission', () => {
-  const h = setup();
-  // The real transcript selection: the sibling run qD7fRj (no space) / M3YJU2 (space)
-  // is resolved through the real PluginManager condition dispatch.
-  const chosen = selectLostOrbCondition(h);
-  assert.equal(chosen.condition, 'M3YJU2');
-
-  // The engine chooses the condition before its guarded line runs.
+  assert.equal(h.variant(N.SIR_TIFFY_CASHIEN), V_TIFFY_LOST_ORB);
   const events = playVariant(h, V_TIFFY_LOST_ORB);
-  assert.deepEqual(events, [
-    { type: 'condition', stepId: 'M3YJU2' },
-    { type: 'line', text: 'Very careless of you, what? Here, take another, but be careful of this one!' },
-  ]);
-
-  // The recovery branch hands back the original Commorb, not the Commorb v2.
+  assert.equal(events[0].stepId, 'M3YJU2');
   assert.equal(h.inventory.get(I.COMMORB), 1);
   assert.equal(h.inventory.get(I.COMMORB_V2) ?? 0, 0);
 });
@@ -327,20 +358,14 @@ test('the lost-Commorb condition grants the original Commorb before the mission'
 test('a full inventory selects the no-space branch and grants nothing', () => {
   const h = setup();
   h.setFreeSlots(0);
-  const chosen = selectLostOrbCondition(h);
-  assert.equal(chosen.condition, 'qD7fRj');
-  const events = playVariant(h, V_TIFFY_LOST_ORB);
-  assert.deepEqual(events, [
-    { type: 'condition', stepId: 'qD7fRj' },
-    { type: 'line', text: 'Free up some inventory space first, what?' },
-  ]);
+  assert.equal(selectLostOrbCondition(h).condition, 'qD7fRj');
+  playVariant(h, V_TIFFY_LOST_ORB);
   assert.equal(h.inventory.get(I.COMMORB) ?? 0, 0);
   assert.equal(h.inventory.get(I.COMMORB_V2) ?? 0, 0);
 });
 
 test('an in-quest lost Commorb is replaced with the Commorb v2', () => {
-  const h = setup();
-  h.attrs.set(STAGE_KEY, 4);
+  const h = at(4);
   const chosen = selectLostOrbCondition(h);
   assert.equal(chosen.condition, 'M3YJU2');
   h.emit('npc-dialogue:condition', { npcId: N.SIR_TIFFY_CASHIEN, stepId: chosen.condition });
@@ -349,405 +374,451 @@ test('an in-quest lost Commorb is replaced with the Commorb v2', () => {
 });
 
 test('post-quest Sir Tiffy returns a lost Commorb v2 and skips the WGS line', () => {
-  const h = setup();
-  h.attrs.set(STAGE_KEY, 14);
+  const h = at(14);
   assert.equal(h.condition('fOsyy-'), true);
   assert.equal(h.condition('upb-U5'), false);
   h.action(N.SIR_TIFFY_CASHIEN, 'usNZAT');
   assert.equal(h.inventory.get(I.COMMORB_V2), 1);
-
-  const full = setup();
-  full.attrs.set(STAGE_KEY, 14);
-  full.setFreeSlots(0);
-  full.action(N.SIR_TIFFY_CASHIEN, 'usNZAT');
-  assert.equal(full.inventory.get(I.COMMORB_V2) ?? 0, 0);
-
   const wgs = setup();
   wgs.setWgsComplete(true);
   assert.equal(wgs.condition('upb-U5'), true);
 });
 
-test('the ruin climb lands in the hobgoblin dungeon and the false wall leads onward', () => {
-  const h = setup();
-  h.attrs.set(STAGE_KEY, 4);
+test('O\'Niall: control varbit with his menu, stage 2 after the three names, stage 3 at the report', () => {
+  const h = at(1);
+  h.inventory.set(I.COMMORB_V2, 1);
+  assert.equal(h.variant(N.COL_ONIALL), 'witchaven-talking-to-col-o-niall');
+  h.line(N.COL_ONIALL, 'Now what do you want to know.');
+  assert.equal(h.varbits.get(2630), 1);
+  h.line(N.COL_ONIALL, "Will do Col. O'Niall. Thanks for the advice.");
+  assert.equal(h.attrs.get(STAGE_KEY), 2);
+  assert.equal(h.variant(N.COL_ONIALL), 'witchaven-talking-to-col-o-niall-before-getting-all-the-information');
+
+  // The three talks set their tracks and alltrack 4, 6, 7 (ticks 1089, 1231, 1433).
+  assert.equal(h.variant(N.BROTHER_MALEDICT), 'witchaven-talking-to-brother-maledict-2');
+  h.line(N.BROTHER_MALEDICT, 'Well, that would make sense. Hmm, one more thing.');
+  assert.deepEqual([h.varbits.get(2616), h.varbits.get(2617)], [1, 4]);
+  assert.equal(h.variant(N.MAYOR_HOBB), 'witchaven-talking-to-mayor-hobb-2');
+  h.line(N.MAYOR_HOBB, 'Is there anything else you need to know?');
+  assert.deepEqual([h.varbits.get(2615), h.varbits.get(2617)], [1, 6]);
+  const holgart = h.hooks.namedNpcs.get('Holgart')['Talk-to']({ player: h.player, npcId: N.HOLGART });
+  assert.notEqual(holgart, false, 'the quest claims Holgart for his talk');
+  h.line(N.HOLGART, 'Aye. Fare thee well.');
+  assert.deepEqual([h.varbits.get(2614), h.varbits.get(2617)], [1, 7]);
+
+  assert.equal(h.variant(N.COL_ONIALL), 'witchaven-talking-to-col-o-niall-after-talking-to-mayor-hobb');
+  h.line(N.COL_ONIALL, 'Anything else I can do for you?');
+  assert.equal(h.attrs.get(STAGE_KEY), 3);
+  assert.equal(h.varbits.get(2610), 3);
+});
+
+test('Savant breaks in on the Mayor and the scan near him reads two life forms (ticks 1318-1345)', () => {
+  const h = at(2);
+  h.inventory.set(I.COMMORB_V2, 1);
+  h.attrs.set('quest.the_slug_menace.tracks', 2);
+  const talk = h.hooks.namedNpcs.get('Mayor Hobb')['Talk-to']({ player: h.player, npcId: N.MAYOR_HOBB });
+  assert.notEqual(talk, false);
+  h.line(N.SAVANT, 'Sure thing, one moment.');
+  assert.equal(h.varbits.get(2621), 1);
+  h.setLocation(2711, 3293);
+  h.hooks.itemAction[0]({ player: h.player, itemId: I.COMMORB_V2, option: 'Scan' });
+  assert.equal(h.animations.at(-1), 4839);
+  h.runTasks();
+  assert.equal(h.varbits.get(2621), 2);
+  // Done: Talk-to is the Mayor's own again.
+  assert.equal(h.hooks.namedNpcs.get('Mayor Hobb')['Talk-to']({ player: h.player, npcId: N.MAYOR_HOBB }), false);
+});
+
+test('a scan with nothing to read says so two ticks later (tick 1369)', () => {
+  const h = at(6);
+  h.inventory.set(I.COMMORB_V2, 1);
+  h.hooks.itemAction[0]({ player: h.player, itemId: I.COMMORB_V2, option: 'Scan' });
+  assert.equal(h.animations.at(-1), 2721);
+  assert.deepEqual(h.messages, []);
+  h.runTasks();
+  assert.deepEqual(h.messages, ['You have nothing to scan for...']);
+});
+
+test('the false wall opens with the box and the passage back lands west of it (issue #4211 point 4)', () => {
+  const h = at(3);
   h.inventory.set(I.COMMORB_V2, 1);
   const climbs = [];
   h.api.onCustomEvent('ladders:climbDown', (event) => climbs.push(event));
-  h.api.onCustomEvent('ladders:climbUp', (event) => climbs.push(event));
-
   const ruin = { getLocation: () => new h.core.Location(2696, 3283, 0) };
   h.hooks.custom.get('ladders:climb')[0]({ player: h.player, objectId: 18270, object: ruin });
-  assert.equal(climbs.at(-1).destination.getX(), 2696);
-  assert.equal(climbs.at(-1).destination.getY(), 9684); // rsprox 236/03965.txt:6304
-
-  const exit = { getLocation: () => new h.core.Location(2696, 9682, 0) };
-  h.hooks.custom.get('ladders:climb')[0]({ player: h.player, objectId: 18354, object: exit });
-  assert.equal(climbs.at(-1).destination.getX(), 2697);
-  assert.equal(climbs.at(-1).destination.getY(), 3283);
+  assert.deepEqual([climbs.at(-1).destination.getX(), climbs.at(-1).destination.getY()], [2696, 9684]);
 
   const push = { player: h.player, objectId: 19124, option: 'push', location: { x: 2701, y: 9688, z: 0 } };
   h.hooks.objects[0](push);
   assert.equal(push.handled, true);
-  assert.equal(h.attrs.get('quest.the_slug_menace.wall-open'), 1);
+  assert.equal(h.animations.at(-1), 4834);
+  h.runTasks();
   assert.equal(h.varbits.get(2618), 1);
+  assert.equal(h.attrs.get(FLAGS_KEY) & 2, 2, 'slug2_doorbit is saved');
 
   h.hooks.objects[0]({ player: h.player, objectId: 19124, option: 'enter', location: { x: 2701, y: 9688, z: 0 } });
-  assert.equal(h.getLocation().getX(), 2324); // rsprox 236/03965.txt:6490
-  assert.equal(h.getLocation().getY(), 5104);
+  assert.equal(h.animations.at(-1), 752);
+  h.runTasks();
+  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY()], [2324, 5104]);
 
   h.hooks.objects[0]({ player: h.player, objectId: 18412, option: 'enter', location: { x: 2322, y: 5104, z: 0 } });
-  assert.equal(h.getLocation().getX(), 2701);
-  assert.equal(h.getLocation().getY(), 9688);
+  h.runTasks();
+  assert.deepEqual([h.getLocation().getX(), h.getLocation().getY()], [2700, 9689], 'not the wall\'s own tile 2701,9688');
 });
 
-test('scanning near the door grants the transcription and advances to stage 5', () => {
-  const h = setup();
-  h.attrs.set(STAGE_KEY, 4);
-  h.line(N.COL_ONIALL, 'I have added a transcript of the runes into your pack.');
+test('the door burns for 5 the tick after its flash (ticks 1862-1864)', () => {
+  const h = at(3);
+  h.hooks.objects[0]({ player: h.player, objectId: 18413, option: 'open', location: { x: 2348, y: 5093, z: 0 } });
+  assert.deepEqual(h.messages, ['A flash of light springs from the door, burning your hand.']);
+  assert.deepEqual(h.hits, []);
+  h.runTasks();
+  assert.deepEqual(h.hits, [5]);
+});
+
+test('the door scan: doorscan at once, the transcript with Savant\'s line, stage 4 at the end', () => {
+  const h = at(3);
+  h.inventory.set(I.COMMORB_V2, 1);
+  h.setLocation(2351, 5095);
+  h.hooks.itemAction[0]({ player: h.player, itemId: I.COMMORB_V2, option: 'Scan' });
+  assert.equal(h.varbits.get(2620), 1);
+  h.line(N.SAVANT, 'I have added a transcript of the runes into your pack.');
   assert.equal(h.inventory.get(I.DOOR_TRANSCRIPTION), 1);
-  assert.equal(h.attrs.get(STAGE_KEY), 5);
-  assert.equal(h.varbits.get(2610), 4);
-  assert.equal(h.varbits.get(2613), 1);
+  h.line(N.SAVANT, "Fantastic - I'll get right on it.");
+  assert.equal(h.attrs.get(STAGE_KEY), 4);
 });
 
-test('the dead sea slug pickup advances varbit 2631 from the registered dispatch', () => {
-  const h = setup();
-  h.attrs.set(STAGE_KEY, 4);
-  // The real pickup dispatch: the registered event carries the item id as
-  // `groundItemId` (PluginGroundItemInteractionEvent), not `itemId`.
+test('the dead sea slug lies at 2352,5096 and its pickup sets slug2_haveslug once', () => {
+  const h = at(2);
+  h.quest.setStage(h.player, 3);
+  h.emit('quest:stage-changed', { key: 'the_slug_menace' });
   pickup(h, I.DEAD_SEA_SLUG);
   assert.equal(h.varbits.get(2631), 1);
-});
-
-test('pickups of other items do not advance the slug varbit', () => {
-  const h = setup();
-  h.attrs.set(STAGE_KEY, 4);
-  pickup(h, I.DOOR_TRANSCRIPTION);
-  assert.equal(h.varbits.get(2631), undefined);
-
-  // A finished quest never re-opens the slug step.
-  const done = setup();
-  done.attrs.set(STAGE_KEY, 14);
+  const other = at(3);
+  pickup(other, I.DOOR_TRANSCRIPTION);
+  assert.equal(other.varbits.get(2631), undefined);
+  const done = at(14);
   pickup(done, I.DEAD_SEA_SLUG);
   assert.equal(done.varbits.get(2631), undefined);
 });
 
-test('the cache page-reassembly widget controls solve and preserve the fragment puzzle', () => {
-  const h = setup();
-  h.attrs.set(STAGE_KEY, 9);
-  h.inventory.set(I.FRAGMENT_1, 1);
-  h.inventory.set(I.FRAGMENT_2, 1);
-  h.inventory.set(I.FRAGMENT_3, 1);
+test('Jorral takes the transcript, stage 5, and Savant calls with stage 6 (ticks 2137-2157)', () => {
+  const h = at(4);
+  h.inventory.set(I.DOOR_TRANSCRIPTION, 1);
+  assert.equal(h.variant(N.JORRAL), 'the-pages-talking-to-jorral');
+  h.line(N.JORRAL, 'Hmm. Interesting, very interesting.');
+  assert.equal(h.inventory.get(I.DOOR_TRANSCRIPTION), 0);
+  h.line(N.JORRAL, 'Uh, right. Goodbye.');
+  assert.equal(h.attrs.get(STAGE_KEY), 5);
+  assert.equal(h.variant(N.JORRAL), null, 'Jorral\'s own lines after');
+  h.runTasks();
+  assert.equal(h.attrs.get(STAGE_KEY), 6);
+  assert.equal(h.varbits.get(2612), 1);
+});
+
+test('O\'Niall\'s warning, Maledict\'s pages, the fragments and the paste (stages 7, 9, 10)', () => {
+  const h = at(6);
+  h.inventory.set(I.COMMORB_V2, 1);
+  assert.equal(h.variant(N.COL_ONIALL), 'the-pages-talking-to-col-o-niall-after-learning-abotu-mother-mallum');
+  h.line(N.COL_ONIALL, "Of course! The temple of Saradomin has had a shrine here for centuries. I'll get right on it.");
+  assert.equal(h.attrs.get(STAGE_KEY), 7);
+  h.quest.setStage(h.player, 8);
+  assert.equal(h.variant(N.BROTHER_MALEDICT), 'the-pages-talking-to-maledict-after-learning-about-mother-mallum');
+  h.line(N.BROTHER_MALEDICT, 'It is imperative that you find them.');
+  assert.equal(h.attrs.get(STAGE_KEY), 9);
+  assert.equal(h.variant(N.COL_ONIALL), 'the-pages-talking-to-col-o-niall-again', 'the last page waits for the two stolen ones');
+  h.inventory.set(I.PAGE_1, 1);
+  h.inventory.set(I.PAGE_2, 1);
+  assert.equal(h.variant(N.COL_ONIALL), 'the-pages-talking-to-col-o-niall-while-looking-for-the-final-page');
+  h.line(N.COL_ONIALL, "Don't mention it.");
+  assert.deepEqual([I.FRAGMENT_1, I.FRAGMENT_2, I.FRAGMENT_3].map((id) => h.inventory.get(id)), [1, 1, 1]);
+  assert.equal(h.varbits.get(2619), 1);
   h.inventory.set(I.SWAMP_PASTE, 1);
-  const paste = { player: h.player, usedItemId: I.SWAMP_PASTE, usedWithItemId: I.FRAGMENT_1 };
+  const paste = { player: h.player, usedItemId: I.SWAMP_PASTE, usedWithItemId: I.FRAGMENT_3 };
   h.hooks.itemOnItem[0](paste);
   assert.equal(paste.handled, true);
+  h.line(N.SAVANT, "No problem Savant. I'll snap to it right away.");
   assert.equal(h.attrs.get(STAGE_KEY), 10);
+});
 
-  pickup(h, I.DEAD_SEA_SLUG);
-  assert.equal(h.varbits.get(2631), 1);
-  h.line(N.BAILEY, 'That should do the trick.');
-  assert.equal(h.inventory.get(I.DEAD_SEA_SLUG) ?? 0, 0);
+test('the desk: locked before the pages, the page with a 3-tick delay, empty after', () => {
+  const locked = at(2);
+  locked.hooks.objects[0]({ player: locked.player, objectId: 18224, location: { x: 2708, y: 3294, z: 0 } });
+  assert.deepEqual(locked.messages, ['The desk appears to be locked.']);
+  const h = at(9);
+  h.hooks.objects[0]({ player: h.player, objectId: 18224, location: { x: 2708, y: 3294, z: 0 } });
+  assert.equal(h.animations.at(-1), 4834);
+  assert.equal(h.inventory.get(I.PAGE_1) ?? 0, 0);
+  h.runTasks();
+  assert.equal(h.inventory.get(I.PAGE_1), 1);
+  h.hooks.objects[0]({ player: h.player, objectId: 18224, location: { x: 2708, y: 3294, z: 0 } });
+  assert.equal(h.messages.at(-1), 'The desk is empty.');
+  assert.equal(h.inventory.get(I.PAGE_1), 1);
+});
+
+test('Bailey cooks the glue as "Right, I\'ll get cooking." shows: stage 11', () => {
+  const h = at(10);
+  h.inventory.set(I.DEAD_SEA_SLUG, 1);
+  h.line(N.BAILEY, "Right, I'll get cooking.");
+  assert.equal(h.inventory.get(I.DEAD_SEA_SLUG), 0);
   assert.equal(h.inventory.get(I.SEA_SLUG_GLUE), 1);
   assert.equal(h.attrs.get(STAGE_KEY), 11);
-  assert.equal(h.varbits.get(2631), 0);
+});
 
+test('the torn page starts where live starts it and mends within one step of its place (ticks 3188-3293)', () => {
+  const h = at(11);
+  for (const id of [I.FRAGMENT_1, I.FRAGMENT_2, I.FRAGMENT_3, I.SEA_SLUG_GLUE]) h.inventory.set(id, 1);
   const glue = { player: h.player, usedItemId: I.SEA_SLUG_GLUE, usedWithItemId: I.FRAGMENT_2 };
   h.hooks.itemOnItem[0](glue);
   assert.equal(glue.handled, true);
-  assert.equal(h.quest.getStage(h.player), 11, 'using glue opens the puzzle without completing it');
   assert.equal(h.player.getInterfaceId(), 460);
-  assert.deepEqual(h.interfaces.at(-1), { target: (460 << 16) | 8, id: 462, type: 0 });
-  assert.equal(h.inventory.get(I.FRAGMENT_1), 1);
-  assert.equal(h.inventory.get(I.FRAGMENT_2), 1);
-  assert.equal(h.inventory.get(I.FRAGMENT_3), 1);
-  assert.equal(h.inventory.get(I.SEA_SLUG_GLUE), 1);
-  assert.deepEqual([876, 877, 880, 881, 884, 885].map((varp) => h.configs.get(varp)), [40, 33, 40, 32, 40, 35]);
+  assert.deepEqual(h.interfaces.at(-1), { target: (161 << 16) | 74, id: 462, type: 3 });
+  assert.deepEqual([876, 877, 879, 878, 880, 881, 883, 882, 884, 885, 887, 886].map((varp) => h.configs.get(varp)),
+    [20, 36, 3, 1, -130, -108, 1, 2, -5, 39, 4, 2]);
+  assert.deepEqual([12155, 12156, 12157, 12158, 12159, 12160].map((id) => h.varbits.get(id)), [1, 1, 0, 1, 0, 1]);
 
-  h.click(8); // Flip piece 1.
-  h.click(3); // Rotate piece 1.
-  assert.equal(h.configs.get(878), 1);
+  h.click(3); h.click(3); // piece 1: 3 -> 4 -> 1
   assert.equal(h.configs.get(879), 1);
-  assert.equal(h.quest.getStage(h.player), 11);
-  h.api.emitCustomEvent('interface:closed', { player: h.player, interfaceId: 460 });
-  h.click(8);
-  assert.equal(h.configs.get(878), 1, 'closing the display ignores stale button clicks');
-  h.hooks.itemOnItem[0]({ player: h.player, usedItemId: I.SEA_SLUG_GLUE, usedWithItemId: I.FRAGMENT_1 });
-  for (const fn of h.hooks.logout) fn({ player: h.player });
-  for (let varp = 876; varp <= 887; varp++) h.configs.delete(varp);
-  for (const fn of h.hooks.login) fn({ player: h.player });
-  assert.deepEqual([878, 879].map((varp) => h.configs.get(varp)), [1, 1],
-    'login reconstructs the saved puzzle state into the new client varps');
-  h.click(8);
-  assert.equal(h.configs.get(878), 1, 'a logged-out puzzle ignores stale button clicks');
-  assert.equal(h.quest.getStage(h.player), 11, 'logout does not complete the puzzle');
-  h.hooks.itemOnItem[0]({ player: h.player, usedItemId: I.SEA_SLUG_GLUE, usedWithItemId: I.FRAGMENT_1 });
-
-  h.click(13); h.click(14); // Deselect piece 1, select piece 2 (QH route).
-  for (let step = 0; step < 4; step++) h.click(5);
-  h.click(8); h.click(3); // Piece 2, deliberately outside the helper's ±2 range.
-  assert.equal(h.configs.get(880), 44);
-  assert.equal(h.quest.getStage(h.player), 11, 'a correctly oriented but misplaced piece does not finish the puzzle');
-  for (let step = 0; step < 4; step++) h.click(6);
-  h.click(14); h.click(15); h.click(8); h.click(3); // Deselect piece 2, select piece 3.
-  assert.equal(h.inventory.get(I.FRAGMENT_1) ?? 0, 0);
-  assert.equal(h.inventory.get(I.FRAGMENT_2) ?? 0, 0);
-  assert.equal(h.inventory.get(I.FRAGMENT_3) ?? 0, 0);
-  assert.equal(h.inventory.get(I.SEA_SLUG_GLUE) ?? 0, 0);
-  assert.equal(h.inventory.get(I.PAGE_3), 1);
-  assert.equal(h.attrs.get(STAGE_KEY), 12);
-  assert.equal(h.configs.get(875), 1, 'the solved widget sets native slug2_fragment_complete');
+  h.click(13, 2); h.click(14, 2); // piece 1 off, piece 2 on (sub 2 selects)
+  h.click(8); // piece 2 flips 2 -> 1
+  for (let step = 0; step < 30; step++) h.click(5); // x -130 -> 20
+  for (let step = 0; step < 29; step++) h.click(7); // y -108 -> 37
+  assert.deepEqual([h.configs.get(880), h.configs.get(881)], [20, 37]);
+  assert.equal(h.inventory.get(I.PAGE_3) ?? 0, 0, 'piece 3 is still out of place');
+  h.click(14, 2); h.click(15, 2);
+  h.click(8); h.click(3); // piece 3: flip 2 -> 1, rotation 4 -> 1
+  h.click(5); h.click(5);
+  assert.equal(h.configs.get(884), 5);
+  assert.equal(h.inventory.get(I.PAGE_3) ?? 0, 0, 'ten to the left does not count');
+  h.click(5);
+  assert.equal(h.configs.get(884), 10, 'ten to the left of its place, the capture\'s last miss');
+  h.click(5);
+  assert.equal(h.inventory.get(I.PAGE_3), 1, 'five to the left counts, as at tick 3293');
+  assert.deepEqual([I.FRAGMENT_1, I.FRAGMENT_2, I.FRAGMENT_3, I.SEA_SLUG_GLUE].map((id) => h.inventory.get(id)), [0, 0, 0, 0]);
+  assert.equal(h.configs.get(875), 1);
   assert.equal(h.varbits.get(2611), 1);
-  assert.equal(h.varbits.get(2619), 0);
+  assert.deepEqual(h.jingles, [87]);
+  h.click(5);
+  assert.equal(h.configs.get(884), 15, 'the solved page ignores further clicks');
 });
 
-test('shaping a page uses essence and yields the matching blank rune', () => {
-  const h = setup();
+test('a select button\'s sub 0 shows or hides its piece', () => {
+  const h = at(11);
+  for (const id of [I.FRAGMENT_1, I.FRAGMENT_2, I.FRAGMENT_3, I.SEA_SLUG_GLUE]) h.inventory.set(id, 1);
+  h.hooks.itemOnItem[0]({ player: h.player, usedItemId: I.SEA_SLUG_GLUE, usedWithItemId: I.FRAGMENT_1 });
+  h.click(13, 0);
+  assert.equal(h.varbits.get(12156), 0);
+  assert.equal(h.varbits.get(12155), 1, 'showing does not select');
+  h.click(13, 0);
+  assert.equal(h.varbits.get(12156), 1);
+});
+
+test('shaping and empowering: the blank in the essence\'s place with 2 Crafting, the rune with 2 Runecraft', () => {
+  const h = at(11);
+  h.attrs.set(FLAGS_KEY, 1 << 6); // the mended page
   const original = Math.random;
   try {
     Math.random = () => 0;
-    h.attrs.set(STAGE_KEY, 12);
     h.inventory.set(I.PAGE_1, 1);
     h.inventory.set(I.CHISEL, 1);
     h.inventory.set(I.RUNE_ESSENCE, 1);
     const shape = { player: h.player, itemId: I.PAGE_1, option: 'Shape-Air', handled: false };
     h.hooks.itemAction[0](shape);
     assert.equal(shape.handled, true);
-    h.action(N.SAVANT, '0thYWr');
-    assert.equal(h.inventory.get(I.RUNE_ESSENCE) ?? 0, 0);
+    assert.equal(h.inventory.get(I.RUNE_ESSENCE), 0);
     assert.equal(h.inventory.get(I.BLANK_AIR_RUNE), 1);
+    assert.deepEqual(h.messages, ['You manage to shape the rune essence into the desired shape.']);
+    assert.deepEqual(h.xp, [{ skill: h.core.Skill.CRAFTING, amount: 2 }]);
+
+    h.hooks.itemOnObject[0]({ player: h.player, itemId: I.BLANK_AIR_RUNE, objectId: h.core.ObjectIdentifiers.ALTAR_33 });
+    assert.equal(h.animations.at(-1), 791);
+    assert.equal(h.inventory.get(I.BLANK_AIR_RUNE), 0);
+    assert.equal(h.inventory.get(I.AIR_RUNE_6) ?? 0, 0, 'the rune lands the next tick');
+    h.runTasks();
+    assert.equal(h.inventory.get(I.AIR_RUNE_6), 1);
+    assert.deepEqual(h.xp.at(-1), { skill: h.core.Skill.RUNECRAFTING, amount: 2 });
   } finally {
     Math.random = original;
   }
 });
 
-test('using all five runes on the door opens it', () => {
-  const h = setup();
-  h.attrs.set(STAGE_KEY, 12);
+test('the five runes go in with slug2_used_runes 2, 3, 19, 27, 31 (ticks 4566-4589)', () => {
+  const h = at(11);
+  h.attrs.set(FLAGS_KEY, 1 << 6);
   h.inventory.set(I.COMMORB_V2, 1);
-  const runes = [I.AIR_RUNE_6, I.WATER_RUNE_6, I.EARTH_RUNE_4, I.FIRE_RUNE_6, I.MIND_RUNE_4];
-  for (const rune of runes) h.inventory.set(rune, 1);
-  for (const rune of runes) {
+  const order = [I.AIR_RUNE_6, I.EARTH_RUNE_4, I.MIND_RUNE_4, I.WATER_RUNE_6, I.FIRE_RUNE_6];
+  const seen = [];
+  for (const rune of order) {
+    h.inventory.set(rune, 1);
     h.hooks.itemOnObject[0]({ player: h.player, itemId: rune, objectId: 18413 });
-    assert.equal(h.inventory.get(rune) ?? 0, 0);
+    assert.equal(h.inventory.get(rune), 0);
+    seen.push(h.varbits.get(2627));
   }
-  assert.equal(h.attrs.get('quest.the_slug_menace.used-runes'), 31);
-  assert.equal(h.attrs.get('quest.the_slug_menace.door-revealed'), 1);
-  assert.equal(h.varbits.get(2620), 1);
+  assert.deepEqual(seen, [2, 3, 19, 27, 31]);
+  assert.deepEqual([2622, 2623, 2624, 2625, 2626].map((id) => h.varbits.get(id)), [1, 1, 1, 1, 1]);
 });
 
-test('the final hand-in completes on varbit 2610 = 14 exactly once', () => {
-  const h = setup();
-  h.attrs.set(STAGE_KEY, 13);
+test('the Prince drains Prayer by the damage it deals', () => {
+  const h = at(11);
+  const prince = { getId: () => h.core.NpcIdentifiers.SLUG_PRINCE };
+  h.levels.set(h.core.Skill.PRAYER, 44);
+  h.api.emitCustomEvent('combat:damage-apply', { target: h.player, hit: { getSource: () => prince, getDamage: () => 4 } });
+  assert.equal(h.levels.get(h.core.Skill.PRAYER), 40);
+});
+
+test('the hand-in completes at 14 once, clears varp 875 and plays jingle 154', () => {
+  const h = at(12);
   h.action(N.SIR_TIFFY_CASHIEN, 'YMQ0V4');
   assert.equal(h.attrs.get(STAGE_KEY), 14);
   assert.equal(h.varbits.get(2610), 14);
+  assert.equal(h.configs.get(875), 0);
   assert.equal(h.attrs.get('quest.points'), 1);
   assert.equal(h.xp.reduce((sum, entry) => sum + entry.amount, 0), 10500);
-  assert.deepEqual(h.jingles, [238]);
-
+  assert.deepEqual(h.jingles, [154]);
   h.action(N.SIR_TIFFY_CASHIEN, 'YMQ0V4');
-  assert.equal(h.attrs.get(STAGE_KEY), 14);
-  assert.equal(h.attrs.get('quest.points'), 1);
   assert.equal(h.xp.reduce((sum, entry) => sum + entry.amount, 0), 10500);
 });
 
-test('login replays the durable stage and sub-varbits', () => {
-  const h = setup();
-  h.attrs.set(STAGE_KEY, 12);
-  runtime.sendQuestVarps({ player: h.player });
-  assert.equal(h.varbits.get(2610), 11);
-  h.hooks.login[0]({ player: h.player });
-  assert.equal(h.varbits.get(2611), 1);
-  assert.equal(h.varbits.get(2612), 1);
-  assert.equal(h.varbits.get(2613), 1);
-
-  // The slug varbit replays from the held item.
-  h.attrs.set(STAGE_KEY, 4);
-  h.inventory.set(I.DEAD_SEA_SLUG, 1);
-  h.hooks.login[0]({ player: h.player });
-  assert.equal(h.varbits.get(2631), 1);
-  h.inventory.delete(I.DEAD_SEA_SLUG, 1);
-  h.hooks.login[0]({ player: h.player });
-  assert.equal(h.varbits.get(2631), 0);
-
-  h.attrs.set(STAGE_KEY, 14);
-  runtime.sendQuestVarps({ player: h.player });
-  assert.equal(h.varbits.get(2610), 14);
-});
-
-test('the stage graph advances from the briefing to the page search', () => {
-  const h = setup();
-  h.inventory.set(I.COMMORB_V2, 1);
-  h.attrs.set(STAGE_KEY, 1);
-  assert.equal(h.variant(N.COL_ONIALL), 'witchaven-talking-to-col-o-niall');
-  assert.equal(h.attrs.get(STAGE_KEY), 2);
-
-  assert.equal(h.variant(N.MAYOR_HOBB), 'witchaven-talking-to-mayor-hobb-2');
-  assert.equal(h.variant(N.BROTHER_MALEDICT), 'witchaven-talking-to-brother-maledict-2');
-  h.hooks.namedNpcs.get('Holgart')['Talk-to']({ player: h.player, npcId: N.HOLGART });
-  assert.equal(h.attrs.get(STAGE_KEY), 3);
-  assert.equal(h.varbits.get(2614), 1);
-  assert.equal(h.varbits.get(2615), 1);
-  assert.equal(h.varbits.get(2616), 1);
-
-  assert.equal(h.variant(N.COL_ONIALL), 'witchaven-talking-to-col-o-niall-after-talking-to-mayor-hobb');
-  assert.equal(h.attrs.get(STAGE_KEY), 4);
-
-  h.attrs.set(STAGE_KEY, 5);
-  assert.equal(h.variant(N.JORRAL), 'the-pages-talking-to-jorral');
-  assert.equal(h.attrs.get(STAGE_KEY), 6);
-
-  h.player.getDialogueManager().reset();
-  h.line(N.JORRAL, 'Uh, right. Goodbye.');
-  h.tasks.at(-1).run();
-  assert.equal(h.attrs.get(STAGE_KEY), 7);
-  assert.equal(h.varbits.get(2612), 1);
-
-  assert.equal(h.variant(N.COL_ONIALL), 'the-pages-talking-to-col-o-niall-after-learning-abotu-mother-mallum');
-  assert.equal(h.attrs.get(STAGE_KEY), 8);
-  assert.equal(h.variant(N.BROTHER_MALEDICT), 'the-pages-talking-to-maledict-after-learning-about-mother-mallum');
-  assert.equal(h.attrs.get('quest.the_slug_menace.maledict-asked'), 1);
-  // The request moves the wire on to the page leg (native 9).
-  assert.equal(h.attrs.get(STAGE_KEY), 9);
-  assert.equal(h.varbits.get(2610), 9);
-});
-
-test('the durable stage is written as the native SLUG2_MAIN value', () => {
-  // Quest Helper keys its steps on the native value and the cache's NPC
-  // transforms are indexed by it, so the plugin's own stage numbers are
-  // translated on the wire (varbit 2610).
-  const native = {
-    0: 0, 1: 1, 2: 2, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6,
-    8: 8, 9: 9, 10: 10, 11: 11, 12: 11, 13: 12, 14: 14,
-  };
-  for (const [stage, value] of Object.entries(native)) {
-    const h = setup();
-    h.attrs.set(STAGE_KEY, Number(stage));
-    runtime.sendQuestVarps({ player: h.player });
-    assert.equal(h.varbits.get(2610), value, `durable stage ${stage}`);
+test('the stage on the wire is the native slug2_main value', () => {
+  const h = at(0);
+  for (const stage of [1, 2, 3, 7, 8, 9, 11, 12, 14]) {
+    h.quest.setStage(h.player, stage);
+    assert.equal(h.varbits.get(2610), stage);
   }
+});
+
+test('an older save is converted to the native stages once at login', () => {
+  const h = setup();
+  h.attrs.set(STAGE_KEY, 13); // old "the Slug Prince is dead"
+  h.attrs.set('quest.the_slug_menace.used-runes', 31);
+  for (const fn of h.hooks.login) fn({ player: h.player });
+  assert.equal(h.attrs.get(STAGE_KEY), 12);
+  assert.equal(h.attrs.get(FORMAT_KEY), 1);
+  for (const fn of h.hooks.login) fn({ player: h.player });
+  assert.equal(h.attrs.get(STAGE_KEY), 12, 'only once');
+
+  const old = setup();
+  old.attrs.set(STAGE_KEY, 12); // old "the page is reassembled"
+  old.attrs.set('quest.the_slug_menace.used-runes', 1 | 8); // old air and fire bits
+  for (const fn of old.hooks.login) fn({ player: old.player });
+  assert.equal(old.attrs.get(STAGE_KEY), 11);
+  assert.equal(old.varbits.get(2611), 1, 'the mended page survives');
+  assert.equal(old.attrs.get('quest.the_slug_menace.used-runes'), 2 | 4, 'air 2 and fire 4 on the native bits');
+});
+
+test('Holgart keeps his boat until he says he lost it, then Sea Slug\'s Travel yields', () => {
+  const h = at(1);
+  const ask = () => { const request = { player: h.player, lost: false }; h.api.emitCustomEvent('sea-slug:holgart-boat', request); return request.lost; };
+  assert.equal(ask(), false);
+  assert.equal(h.hooks.namedNpcs.get('Holgart').Travel({ player: h.player, npcId: N.HOLGART }), false);
+  h.quest.setStage(h.player, 2);
+  h.attrs.set('quest.the_slug_menace.tracks', 1);
+  assert.equal(ask(), true);
+  assert.notEqual(h.hooks.namedNpcs.get('Holgart').Travel({ player: h.player, npcId: N.HOLGART }), false);
+  h.quest.setStage(h.player, 14);
+  assert.equal(ask(), true, 'after the quest too (tick 5164)');
+});
+
+test('villagers: possessed forms stare, the others chat', () => {
+  const h = at(1);
+  assert.equal(h.variant(4791), 'post-quest-dialogue');
+  assert.equal(h.variant(4792), 'pre-quest-dialogue');
+});
+
+test('the journal matches live at tick 1177 (Maledict struck, the others not)', () => {
+  const h = at(2);
+  h.attrs.set('quest.the_slug_menace.tracks', 4);
+  const lines = h.quest.buildJournal(h.player, h.quest);
+  const expected = [
+    '<str>Sir Tiffy Cashien has given me a new task for the Temple',
+    '<str>Knights.',
+    "<str>I am to report to Col. O'Niall in Witchaven, East of Ardougne.",
+    "<col=000080>Col. O'Niall has explained that some of the people in",
+    '<col=000080>Witchaven are acting very strangely. The mayor has been',
+    "<col=000080>buying large quantities of items that Witchaven shouldn't",
+    '<col=000080>need. He recommends I speak to the following people:',
+    '<col=800000>Holgart.',
+    '<col=800000>Mayor Eustace Hobb.',
+    '<str>Brother Maledict.',
+  ];
+  assert.deepEqual(lines, expected);
 });
 
 test('Sir Tiffy is yielded to Devious Minds while its hand-in is due', () => {
-  const h = setup({ deviousMinds: true });
-  h.attrs.set(STAGE_KEY, 5);
+  const h = at(5, { deviousMinds: true });
   h.inventory.set(I.COMMORB_V2, 1);
   h.attrs.set('quest.devious_minds.stage', 9);
-
-  // The real dispatch: Devious Minds is registered first (as Quests.plugin.js
-  // loads it) and answers for Sir Tiffy while its hand-in is due.
-  assert.equal(
-    PluginManager.emitNpcDialogueVariant({ player: h.player, npcId: N.SIR_TIFFY_CASHIEN }),
-    'wrapping-up-reporting-to-sir-tiffy',
-  );
-  // The Slug Menace yields him for that window.
+  assert.equal(PluginManager.emitNpcDialogueVariant({ player: h.player, npcId: N.SIR_TIFFY_CASHIEN }), 'wrapping-up-reporting-to-sir-tiffy');
   assert.equal(h.variant(N.SIR_TIFFY_CASHIEN), null);
-
-  // Once Devious Minds is complete the Slug Menace takes Sir Tiffy back.
   h.attrs.set('quest.devious_minds.stage', 10);
-  assert.equal(
-    PluginManager.emitNpcDialogueVariant({ player: h.player, npcId: N.SIR_TIFFY_CASHIEN }),
-    'starting-off-talking-to-sir-tiffy-cashien-after-starting-the-quest',
-  );
   assert.equal(h.variant(N.SIR_TIFFY_CASHIEN), 'starting-off-talking-to-sir-tiffy-cashien-after-starting-the-quest');
 });
 
-test('a full bag refuses the O\'Niall Commorb hand-back instead of promising one', () => {
-  const h = setup();
-  h.attrs.set(STAGE_KEY, 5);
-  h.setFreeSlots(0);
-  assert.equal(h.variant(N.COL_ONIALL), null);
-  assert.equal(h.inventory.get(I.COMMORB_V2) ?? 0, 0);
-  assert.ok(h.messages.includes('Free up some inventory space first, what?'));
-
-  // With room the hand-back happens.
-  const room = setup();
-  room.attrs.set(STAGE_KEY, 5);
-  room.variant(N.COL_ONIALL);
-  room.line(N.COL_ONIALL, 'Very careless of you, what? Here, take another, but be careful with this one!');
-  assert.equal(room.inventory.get(I.COMMORB_V2), 1);
+test('the Prince\'s death plays in the capture\'s six parts, each line once (ticks 4761-4891)', () => {
+  const h = at(11);
+  const scenes = require('../plugins/quests/slugmenace/Scenes.SlugMenace')(h.api, {});
+  const parts = scenes.deathParts().map((part) => part.map((step) => step.text ?? step.player));
+  assert.deepEqual(parts.map((part) => [part[0], part.at(-1)]), [
+    ['No! Do you realise what you have done?', 'By your command, my queen.'],
+    ['So then, [player name], it is just us. What shall we do with you?', "By the gods! I'll get you out of there immediately! Initiating emergency teleport."],
+    ['Come with us, [player name]. Come and be with us for all eternity.', 'Come with us, [player name]. Come and be with us for all eternity.'],
+    ['Savant!', "She's blocking my magic! One second, I'll try something else."],
+    ['Ahh, [player name], it is useless to resist. Now we shall become as one.', "Right, I think I've got it this time. Just one more second."],
+    ['[player name], are you there?', "Indeed. I'll just get my breath back first."],
+  ]);
+  assert.equal(parts.flat().length, 31, 'every line of the variant, none twice');
 });
 
-test('the desk page is granted once and its space condition only refuses when nothing was granted', () => {
-  const h = setup();
-  h.attrs.set(STAGE_KEY, 8);
-  h.setFreeSlots(1);
-  h.action(N.MAYOR_HOBB, '4vSdlY');
-  assert.equal(h.inventory.get(I.PAGE_1), 1);
-  // The page is held, so the transcript's no-space line must not play.
-  assert.equal(h.condition('dEd0U2'), false);
-
-  const full = setup();
-  full.attrs.set(STAGE_KEY, 8);
-  full.setFreeSlots(0);
-  full.action(N.MAYOR_HOBB, '4vSdlY');
-  assert.equal(full.inventory.get(I.PAGE_1) ?? 0, 0);
-  assert.equal(full.condition('dEd0U2'), true);
+test('the villagers\' stare and the wall line show in the message box, not in chat (ticks 534, 1725)', () => {
+  const h = at(1);
+  for (const stepId of ['qu7kOj', 'BlbTdL']) {
+    const event = { player: h.player, npcId: 4791, stepId, kind: 'message' };
+    h.api.emitCustomEvent('npc-dialogue:action', event);
+    assert.deepEqual(event.box, { statement: true });
+  }
+  const other = { player: h.player, npcId: 4791, stepId: 'IE1248', kind: 'message' };
+  h.api.emitCustomEvent('npc-dialogue:action', other);
+  assert.equal(other.box, undefined);
 });
 
-test('the last page needs the two stolen pages first', () => {
-  const h = setup();
-  h.attrs.set(STAGE_KEY, 9);
+test('a logout before Savant\'s call after Jorral gets the call again at login (stage 5 is never a dead end)', () => {
+  const h = at(5);
+  for (const fn of h.hooks.login) fn({ player: h.player });
+  h.runTasks();
+  assert.equal(h.attrs.get(STAGE_KEY), 6);
+  const old = setup();
+  old.attrs.set(STAGE_KEY, 6); // old "Jorral translated"
+  for (const fn of old.hooks.login) fn({ player: old.player });
+  old.runTasks();
+  assert.equal(old.attrs.get(STAGE_KEY), 6);
+});
+
+test('the fifth rune saves the open door at once, so a logout before the scene can still go in', () => {
+  const h = at(11);
+  h.attrs.set(FLAGS_KEY, 1 << 6);
+  h.attrs.set('quest.the_slug_menace.used-runes', 31 & ~4);
   h.inventory.set(I.COMMORB_V2, 1);
-  // Without the stolen pages O'Niall has nothing to give.
-  assert.equal(h.variant(N.COL_ONIALL), 'the-pages-talking-to-col-o-niall-again');
-  h.line(N.COL_ONIALL, 'It has been torn into three pieces. You will need to stick them back together before you can use them.');
-  assert.equal(h.inventory.get(I.FRAGMENT_1) ?? 0, 0);
+  h.inventory.set(I.FIRE_RUNE_6, 1);
+  h.hooks.itemOnObject[0]({ player: h.player, itemId: I.FIRE_RUNE_6, objectId: 18413 });
+  assert.equal(h.attrs.get(FLAGS_KEY) & (1 << 7), 1 << 7, 'slug2_queen_door saved with the rune');
+  h.tasks.length = 0; // the logout drops the scene's timers
+  h.hooks.objects[0]({ player: h.player, objectId: 18413, option: 'open', location: { x: 2348, y: 5093, z: 0 } });
+  assert.deepEqual(h.messages, [], 'the door takes them back in instead of burning');
+});
 
-  h.inventory.set(I.PAGE_1, 1);
+test('lost pages, fragments, slug and glue come back while the page search runs (Ours)', () => {
+  const h = at(10);
+  h.hooks.objects[0]({ player: h.player, objectId: 18224, location: { x: 2708, y: 3294, z: 0 } });
+  h.runTasks();
+  assert.equal(h.inventory.get(I.PAGE_1), 1, 'the desk gives Page 1 again');
+  assert.equal(h.variant(N.EZEKIAL_LOVECRAFT), 'the-pages-talking-to-ezekial-lovecraft-after-brother-maledict-asks-about-the-pages');
   h.inventory.set(I.PAGE_2, 1);
+  h.attrs.set(FLAGS_KEY, 1 << 5); // the fragments were given once
+  h.inventory.set(I.COMMORB_V2, 1);
   assert.equal(h.variant(N.COL_ONIALL), 'the-pages-talking-to-col-o-niall-while-looking-for-the-final-page');
-  h.line(N.COL_ONIALL, 'It has been torn into three pieces. You will need to stick them back together before you can use them.');
-  assert.equal(h.inventory.get(I.FRAGMENT_1), 1);
-  assert.equal(h.inventory.get(I.FRAGMENT_2), 1);
-  assert.equal(h.inventory.get(I.FRAGMENT_3), 1);
-  assert.equal(h.varbits.get(2619), 1);
-});
-
-
-test('fragment selectors toggle independently and every selected piece follows controls', () => {
-  const h = setup();
-  h.attrs.set(STAGE_KEY, 11);
-  for (const id of [I.FRAGMENT_1, I.FRAGMENT_2, I.FRAGMENT_3, I.SEA_SLUG_GLUE]) h.inventory.set(id, 1);
-  h.hooks.itemOnItem[0]({ player: h.player, usedItemId: I.SEA_SLUG_GLUE, usedWithItemId: I.FRAGMENT_1 });
-  const selection = () => [12155, 12157, 12159].map(id => h.varbits.get(id));
-  assert.deepEqual(selection(), [1, 0, 0]);
-  h.click(14);
-  assert.deepEqual(selection(), [1, 1, 0], 'selecting piece 2 preserves piece 1');
-  h.click(5); h.click(4); h.click(3); h.click(8);
-  assert.deepEqual([876, 877, 878, 879].map(id => h.configs.get(id)), [41, 32, 1, 1]);
-  assert.deepEqual([880, 881, 882, 883].map(id => h.configs.get(id)), [41, 31, 1, 1]);
-  assert.deepEqual([884, 885, 886, 887].map(id => h.configs.get(id)), [40, 35, 0, 0], 'unselected piece stays unchanged');
-  h.click(13);
-  assert.deepEqual(selection(), [0, 1, 0], 'clicking a selected piece deselects only it');
-  h.click(6); h.click(7);
-  assert.deepEqual([876, 877].map(id => h.configs.get(id)), [41, 32]);
-  assert.deepEqual([880, 881].map(id => h.configs.get(id)), [40, 32]);
-  h.click(14);
-  assert.deepEqual(selection(), [0, 0, 0]);
-  const before = structuredClone(h.attrs.get('the-slug-menace:fragment-puzzle'));
-  for (const button of [3, 4, 5, 6, 7, 8]) h.click(button);
-  assert.deepEqual(h.attrs.get('the-slug-menace:fragment-puzzle'), before, 'no selection means no movement or orientation change');
-  assert.equal(h.quest.getStage(h.player), 11);
-  assert.equal(h.inventory.get(I.PAGE_3) ?? 0, 0);
-});
-
-
-test('the slug pickup varbit follows the actual inventory result after pre-pickup dispatch', () => {
-  const accepted = setup();
-  accepted.attrs.set(STAGE_KEY, 4);
-  const firstTask = accepted.tasks.length;
-  PluginManager.emitGroundItemPickup(groundPickup(accepted.player, I.DEAD_SEA_SLUG));
-  assert.equal(accepted.varbits.get(2631), undefined, 'pre-pickup event cannot claim an item yet');
-  accepted.player.getInventory().adds(I.DEAD_SEA_SLUG, 1);
-  accepted.tasks.slice(firstTask).forEach(task => task.run());
-  assert.equal(accepted.varbits.get(2631), 1);
-
-  const full = setup();
-  full.attrs.set(STAGE_KEY, 4);
-  full.setFreeSlots(0);
-  pickup(full, I.DEAD_SEA_SLUG);
-  assert.equal(full.inventory.get(I.DEAD_SEA_SLUG) ?? 0, 0);
-  assert.equal(full.varbits.get(2631), 0, 'failed full-bag pickup cannot set have-slug');
+  h.line(N.COL_ONIALL, "Don't mention it.");
+  assert.deepEqual([I.FRAGMENT_1, I.FRAGMENT_2, I.FRAGMENT_3].map((id) => h.inventory.get(id)), [1, 1, 1]);
+  h.quest.setStage(h.player, 11);
+  h.inventory.set(I.DEAD_SEA_SLUG, 1);
+  h.line(N.BAILEY, "Right, I'll get cooking.");
+  assert.equal(h.inventory.get(I.SEA_SLUG_GLUE), 1, 'Bailey cooks a lost glue again');
 });

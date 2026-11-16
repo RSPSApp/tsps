@@ -217,7 +217,7 @@ export function processWidgetReleaseInput(
                 // A script-draggable item with no op of its own runs the op of the widget beneath it.
                 const actionWidget = widgetInteraction.dragPassThroughWidget ?? widgetInteraction.clickedWidget;
                 widgetInteraction.dragPassThroughWidget = null;
-                const { option, target, slot, itemId, opIndex } = getPrimaryWidgetAction(actionWidget);
+                const { option, target, slot, itemId, opIndex, opSubIndex } = getPrimaryWidgetAction(actionWidget);
                 deps.handleWidgetAction({
                     widget: actionWidget,
                     option,
@@ -228,6 +228,7 @@ export function processWidgetReleaseInput(
                     slot,
                     itemId,
                     opIndex,
+                    opSubIndex,
                 });
             }
 

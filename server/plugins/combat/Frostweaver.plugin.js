@@ -11,6 +11,8 @@
  * it in the combat options menu"). The button is shared by the Moons sets in the client; only Frostweaver reads it here.
  */
 const CHANCE = { standard: 0.2, grasp: 0.5 };
+/** "Frostweaver Effect Set", the full armour with the spear, in the equipment effects panel (enum 3047). */
+const SET_TEXT = 42;
 const ENABLED = "frostweaver:enabled";
 const TOGGLE_VARBIT = 9870;
 const TOGGLE_BUTTON = (593 << 16) | 37;
@@ -40,6 +42,11 @@ function wearsSet(player) {
   const items = player.getEquipment().getItems();
   if (!spears.has(items[core.Equipment.WEAPON_SLOT]?.getId())) return false;
   return pieces.every(([slot, ids]) => ids.includes(items[slot]?.getId()));
+}
+
+function addSetText(request) {
+  const player = request?.player;
+  if (pieces && player?.getEquipment && wearsSet(player)) request.setTexts?.push(SET_TEXT);
 }
 
 /** Within melee reach: the footprints touch (diagonals count) on the same floor. */
@@ -91,5 +98,7 @@ module.exports = {
     api.onInterfaceActionButton(TOGGLE_BUTTON, toggle);
     api.onPlayerLogin(login);
     api.onCustomEvent("magic:cast-committed", committed);
+    api.onCustomEvent("equipment:effects", addSetText);
   },
+  _test: { addSetText },
 };

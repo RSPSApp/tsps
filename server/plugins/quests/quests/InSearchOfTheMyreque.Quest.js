@@ -18,16 +18,16 @@
  *
  * Gaps: the quest NPCs themselves are not spawned by this file (central
  * registration/world spawns own them); only the Skeleton Hellhound is spawned
- * owner-only. The Curpile quiz dump lists all six questions as one menu, so the
- * runtime only ever plays one question - a single correct answer passes
- * (ponytail: wiki dump flattens the three-random-question quiz, split it when
- * the runtime can replay sub-menus). Curpile's 3-damage punch is not applied.
+ * owner-only. Curpile's quiz is a counted random in the regenerated Myreque record (RSPSApp/osrsreboxed-db#108: three of six
+ * questions, no repeats, then the four count conditions): the plugin resets a per-attempt counter on draw 1, scores each
+ * answer against the drawn question's text and answers the count conditions by their ids. Curpile's 3-damage punch (the
+ * refusal option) is applied by its action step.
  * Per-player bridge rungs live in a persisted attribute mirrored to varbits
  * 176-178/3928; the world clipping is not edited.
  */
 module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, loadTranscripts } = require("../QuestRuntime");
 
   const VARP_IN_SEARCH_OF_THE_MYREQUE = 387;
 
@@ -131,9 +131,35 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     26247, // broken rope bridge rung, varbit 178
   ]);
   const BRIDGE_RUNG_VARBITS = { 26245: 176, 26246: 177, 26247: 178 };
+  const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
+  /**
+   * How long the rung step ignores clipping: tasks run before movement in a tick, so 1 would end it before the
+   * step is taken (Brimhaven's vines use 2 for the same reason).
+   */
+  const RUNG_STEP_TICKS = 2;
+  const rungSteps = new WeakMap();
   const BRIDGE_TREE_IDS = new Set([ObjectIdentifiers.TREE_117, ObjectIdentifiers.TREE_118]); // 26248, 26249
   const STALAGMITE_ID = ObjectIdentifiers.STALAGMITE_3; // 5050
   const FAKE_WALL_ID = ObjectIdentifiers.WALL_17; // 5052
+  /**
+   * The hidden wall at the end of the tunnel: loc 5052 "Wall" (op Search) at (3480,9837), type 0, rotation 3, a straight
+   * wall on that tile's SOUTH edge (rotation 0 west, 1 north, 2 east, 3 south), so it separates (3480,9837) on the north
+   * from (3480,9836) on the south. Cache-derived (the #5488 probe, main 73e6d6b51), no capture.
+   */
+  const WALL_NORTH_SIDE = { x: 3480, y: 9837 };
+  const WALL_SOUTH_SIDE = { x: 3480, y: 9836 };
+  const WALK_ANIMATION = 819; // the walk the repo's other door passes use (CooksGuild.plugin.js)
+  /**
+   * The two bridge trees (loc 5003, shown as 50787 "Tree", op Climb; cache-derived, probe) and the bridge's tiles, all
+   * Wiki/void-based with no capture (void SearchMyreque.kt: NORTH_TREE 3431 :410, BRIDGE_LANDING 3427 :412, BRIDGE_TOP
+   * 3430 :414, NORTH_BANK (3503,3431) and SOUTH_BANK (3502,3425) :416-417).
+   */
+  const SOUTH_TREE_Y = 3426;
+  const NORTH_TREE_Y = 3431;
+  const BRIDGE_LANDING_Y = 3427;
+  const BRIDGE_TOP_Y = 3430;
+  const NORTH_BANK = { x: 3503, y: 3431 };
+  const SOUTH_BANK = { x: 3502, y: 3425 };
   const TAVERN_LADDER_ID = ObjectIdentifiers.LADDER_54; // 5054
   const TAVERN_TRAPDOOR_ID = ObjectIdentifiers.TRAPDOOR_23; // 5055
   const HIDEOUT_DOOR_IDS = new Set([
@@ -145,15 +171,24 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const HOLLOWS_SIGN_ID = ObjectIdentifiers.SIGN_35; // 26255
 
   const START_HOOK = "quest:in-search-of-the-myreque:start";
-  const QUIZ_START_ACTION_ID = "sXzRb_";
-  const QUIZ_PASS_CONDITION_ID = "P7_hRO"; // "If the player answered three out of three questions correctly:"
+  // Ids of the record imported from RSPSApp/osrsreboxed-db c971f8ee2 (#108 there, docs/npc-dialogues.json): Curpile's quiz is a counted
+  // random (three of six questions, no repeats) followed by the "After the third question is answered:" block whose four
+  // count conditions and knock-out messages carry these ids. Node ids of the export: a re-export that renames them is
+  // caught by tests/myreque-quiz-counting.test.cjs and myreque-curpile-step-ids.test.cjs, which read the imported file.
+  const QUIZ_COUNT_CONDITION_IDS = new Map([
+    ["A6wXnN", 0], // "If the player answered zero out of three questions correctly:"
+    ["arNFa2", 1], // "... one out of three ..."
+    ["K8_P_w", 2], // "... two out of three ..."
+    ["p493oV", 3], // "... three out of three ..."
+  ]);
+  const QUIZ_PASS_CONDITION_ID = "p493oV";
   const SHOW_POUCH_MESSAGE_ID = "BKpf08";
   const PLANKS_MESSAGE_ID = "DsO5TF";
   const GIVE_WEAPONS_CONDITION_ID = "VLPyT3";
   const CUTSCENE_START_ACTION_ID = "bLWS_j";
   const SUMMON_HOUND_ACTION_ID = "OFmcmp";
   // "Curpile knocks you out and takes you back to Mort'ton." after one, two or three wrong answers.
-  const KNOCKOUT_MESSAGE_IDS = new Set(["OGn3Rx", "Dssih6", "SGfUg5"]);
+  const KNOCKOUT_MESSAGE_IDS = new Set(["HQfMkY", "XmM1Px", "k1iShr"]); // zero, one, two correct (RSPSApp/osrsreboxed-db#108 record)
   const FIRST_SPEAKING_STEP_FLAGS = new Map([
     ["k_vzYt", "met_harold"],
     ["_g5SY-", "met_radigad"],
@@ -162,19 +197,31 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     ["KI2Pb0", "met_ivan"],
     ["a8YEIJ", "veliaf_after"],
   ]);
-  /** The one quiz question the runtime plays -> its correct option text. */
+  /** The six quiz questions (the sentence after "Okay, [first/second/third and final] question.") -> the correct answer. */
   const QUIZ_ANSWERS = new Map([
-    [1, "Sani Piliu."],
-    [2, "Ivan Strom."],
-    [3, "Veliaf Hurtz."],
-    [4, "Polmafi Ferdygris."],
-    [5, "Cyreg Paddlehorn."],
-    [6, "Drakan."],
+    ["Name the only female member of the Myreque.", "Sani Piliu."],
+    ["Who is the youngest member of the Myreque?", "Ivan Strom."],
+    ["Who is the leader of the Myreque in Mort Myre?", "Veliaf Hurtz."],
+    ["Which member of the Myreque was originally a scholar?", "Polmafi Ferdygris."],
+    ["What is the name of the boatman who helps the Myreque?", "Cyreg Paddlehorn."],
+    ["What vampyre family rules over Morytania?", "Drakan."],
   ]);
+  const QUIZ_QUESTION_PREFIX = "Okay, [first/second/third and final] question. ";
 
+  /**
+   * The Hair of the Dog's stranger is one spawn (cache NPC 6269) that shows Vanstrom Klause (5056) while varbit 396 is 0 and
+   * the plain Stranger (5055) when it is 1. Wiki/void-based, no capture: void sets `thsfm_vanstrom_hide` (varbit 396,
+   * persist, boolean; in_search_of_the_myreque.varbits.toml) when the weapons are handed over (VeliafHurtz.kt:177-180). It
+   * stays 1 once set (ours: no source shows it going back). Like the bridge varbits it is re-sent at login, here derived
+   * from the persisted stage.
+   */
+  const VANSTROM_HIDE_VARBIT = 396;
+  /** Flags of the members whose first-time branch has already played in the conversation in progress. */
+  const metThisConversation = new WeakMap();
   const BRIDGE_ATTRIBUTE = "quest.in_search_of_the_myreque.bridge";
   const QUIZ_CORRECT_ATTRIBUTE = "quest.in_search_of_the_myreque.quiz.correct";
-  const QUIZ_QUESTION_ATTRIBUTE = "quest.in_search_of_the_myreque.quiz.question";
+  /** The question each player is being asked right now (set by the draw event, cleared by the answer). */
+  const askedQuestion = new WeakMap();
   const HELLHOUND_SPOT = { x: 3507, y: 9838, z: 0 };
 
   let quest;
@@ -322,6 +369,67 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
 
   // ---- Dialogue ----
 
+  const CURPILE_PAGE = "In Search of the Myreque";
+  const CURPILE_FIRST_VARIANT = "convincing-curpile-fyod-talking-to-curpile-fyod";
+  const CURPILE_RETRY_VARIANT = "convincing-curpile-fyod-talking-to-curpile-fyod-again-before-convincing-him";
+
+  /**
+   * The quiz as the first-time page plays it: the counted random and the sibling steps after it (the after-question blocks and
+   * the four count conditions), from the random node to the end of the "I've come to help the Myreque" answer. Null when the
+   * record has no such node (an older export), so the plain behaviour is kept.
+   */
+  function quizTail() {
+    const steps = loadTranscripts(api)?.[CURPILE_PAGE]?.variants?.[CURPILE_FIRST_VARIANT];
+    if (!Array.isArray(steps)) return null;
+    for (const step of steps) {
+      for (const option of Array.isArray(step?.options) ? step.options : []) {
+        const body = Array.isArray(option?.steps) ? option.steps : [];
+        const start = body.findIndex((entry) => entry?.type === "random" && entry.count > 1);
+        if (start >= 0) return body.slice(start);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * After a knock-out the player stays at stage 52, and the retry variant ("Back again? ..." / "Well let's hear them then." /
+   * "Okay, first question...") ends in a jump above (id 8xSPeu) that has no target, so the dialogue closed with no quiz. The
+   * retry plays its first two lines and then the quiz tail; its third line ("Okay, first question...") is dropped because the
+   * first drawn question already opens with that ordinal.
+   */
+  function spliceQuizRetry(tail) {
+    return (steps) => {
+      const jump = steps.findIndex((step) => step?.type === "jump" && step.reference === "above");
+      if (jump < 0) return steps;
+      const lines = steps.slice(0, jump).filter((step) => !String(step?.text ?? "").startsWith("Okay, first question..."));
+      return [...lines, ...tail];
+    };
+  }
+
+  /** Talk-to Curpile at stage 52-54: the retry plays the quiz again from draw 1. */
+  function talkToCurpile(event) {
+    const { player } = event;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_QUESTIONED_BY_CURPILE || stage >= STAGE_ANSWERED_QUESTIONS) return false;
+    const tail = quizTail();
+    if (!tail) {
+      console.warn("[InSearchOfTheMyreque] Curpile's quiz tail is missing or unreadable in the dialogue record; the retry plays the plain variant");
+      return false;
+    }
+    askedQuestion.delete(player);
+    player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, 0);
+    event.handled = true;
+    api.emitCustomEvent("npc-dialogue:start", {
+      player,
+      npc: event.npc,
+      npcId: event.npcId,
+      variant: CURPILE_RETRY_VARIANT,
+      exact: true,
+      select: spliceQuizRetry(tail),
+    });
+    return true;
+  }
+
   /** Which transcript variant each speaker plays, by quest stage. */
   function selectVariant({ npcId, player }) {
     const stage = quest.getStage(player);
@@ -376,19 +484,37 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   }
 
   /** Answer the page's prose conditions. */
-  function answerCondition({ npcId, player, text }) {
+  function answerCondition({ npcId, player, text, stepId }) {
     const value = String(text).toLowerCase();
+    // The four count conditions after the quiz, by their ids in the RSPSApp/osrsreboxed-db#108 record (counter = correct answers this attempt).
+    if (QUIZ_COUNT_CONDITION_IDS.has(stepId)) return quizCorrect(player) === QUIZ_COUNT_CONDITION_IDS.get(stepId);
     if (value.includes("does not have a druid pouch")) return !hasDruidPouch(player);
     if (value.includes("has a druid pouch")) return hasDruidPouch(player);
     if (value.includes("does not have the correct weapons")) return !hasAllWeapons(player);
-    if (value.includes("answered zero out of three questions correctly")) return quizCorrect(player) === 0;
-    // ponytail: the dump flattens the 3-question quiz into one menu, so a single
-    // correct answer stands in for all three; split when the runtime replays menus.
-    if (value.includes("answered one out of three questions correctly")) return false;
-    if (value.includes("answered two out of three questions correctly")) return false;
-    if (value.includes("answered three out of three questions correctly")) return quizCorrect(player) >= 1;
-    if (value.includes("if first time speaking")) return !metFlag(player, conditionFlag(npcId));
-    if (value.includes("if speaking again")) return metFlag(player, conditionFlag(npcId));
+    // The wiki's "If first time speaking:" and "If speaking again:" are alternatives, but the runtime judges the sibling
+    // after a chosen branch that ends in "continue" when it reaches it, by which time the first-time branch has set the
+    // flag: so a conversation must not observe its own flag. The note holds the flags set by the first-time branch of the
+    // conversation in progress: the first-time question clears it, and the one "speaking again" judgement that follows the
+    // first-time branch consumes it (false once), so a later conversation, from any page, sees the flag as persisted.
+    // Residual: an intro abandoned between the first-time branch and that tail judgement leaves the note until the next
+    // first-time or "speaking again" judgement for the flag, a stage change of this quest, or a login.
+    // These two conditions are the Myreque members' and Veliaf's: for any other NPC (Solztun's "If speaking again:" among
+    // them) this plugin has no flag, and answering with Veliaf's "after the hellhound" flag leaked it into other pages.
+    if ((value.includes("if first time speaking") || value.includes("if speaking again")) && !member(npcId) && !VELIAF_NPC_IDS.has(npcId)) return null;
+    if (value.includes("if first time speaking")) {
+      const flag = conditionFlag(npcId);
+      metThisConversation.get(player)?.delete(flag);
+      return !metFlag(player, flag);
+    }
+    if (value.includes("if speaking again")) {
+      const flag = conditionFlag(npcId);
+      const note = metThisConversation.get(player);
+      if (note?.has(flag)) {
+        note.delete(flag);
+        return false;
+      }
+      return metFlag(player, flag);
+    }
     if (value.includes("does not have the weapons")) return !hasAllWeapons(player);
     if (value.includes("does have the weapons")) return hasAllWeapons(player);
     return null;
@@ -447,6 +573,23 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     quest.setStage(player, STAGE_DELIVERED_WEAPONS);
   }
 
+  /**
+   * Shows the plain Stranger instead of Vanstrom in the pub from the weapons hand-over (stage 70) on. Derived from the
+   * persisted stage at every stage change (the runtime's quest:stage-changed) and at login, so a jump or a reset leaves
+   * the pub consistent; void sets the varbit at the hand-over and clears it only on a quest reset (VeliafHurtz.kt:179).
+   * The stage is persisted by the player save, so no attribute of its own is needed (the bridge varbits use an
+   * attribute because they are not derivable from the stage).
+   */
+  function sendStrangerSwap(player) {
+    player.getPacketSender().sendVarbit(VANSTROM_HIDE_VARBIT, quest.getStage(player) >= STAGE_DELIVERED_WEAPONS ? 1 : 0);
+  }
+
+  function handleStageChanged({ player, key }) {
+    if (key !== "in_search_of_the_myreque") return;
+    metThisConversation.delete(player);
+    sendStrangerSwap(player);
+  }
+
   function handleCondition(event) {
     const { player, stepId } = event;
     if (!player || !stepId) return;
@@ -467,28 +610,26 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (flag === "veliaf_after") {
       // The first-time page already describes the wall and ladder; release the exit leg.
       if (quest.getStage(player) === STAGE_KILLED_HELLHOUND) quest.setStage(player, STAGE_SHOWN_WAY_OUT);
-      return;
-    }
-    if (allMembersMet(player)) {
+    } else if (allMembersMet(player)) {
       const stage = quest.getStage(player);
       if (stage >= STAGE_MET_VELIAF && stage < STAGE_WEAPONS_ACCEPTED) {
         quest.setStage(player, STAGE_WEAPONS_ACCEPTED);
       }
     }
+    // After the stage moves above: a stage change drops the note, and this conversation's tail judgement still needs it.
+    if (!metThisConversation.has(player)) metThisConversation.set(player, new Set());
+    metThisConversation.get(player).add(flag);
   }
 
   function handleChoice(event) {
     const { player, npcId, option } = event;
     if (!player) return;
     const text = String(option ?? "");
-    const dialogue = /^Dialogue (\d)$/.exec(text);
-    if (dialogue) {
-      player.setAttribute(QUIZ_QUESTION_ATTRIBUTE, Number(dialogue[1]));
-      return;
-    }
-    const question = Number(player.getAttribute(QUIZ_QUESTION_ATTRIBUTE)) || 0;
-    if (QUIZ_ANSWERS.get(question) === text) {
-      player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, quizCorrect(player) + 1);
+    // An answer to the question the last draw asked: the first choice after it. QUIZ_ANSWERS is keyed by the question text.
+    const asked = askedQuestion.get(player);
+    if (asked !== undefined && npcId === CURPILE_NPC_ID) {
+      askedQuestion.delete(player);
+      if (QUIZ_ANSWERS.get(asked) === text) player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, quizCorrect(player) + 1);
       return;
     }
     const stage = quest.getStage(player);
@@ -507,9 +648,38 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     }
   }
 
+  /**
+   * The counted random's draw event (NpcDialogues, PR 5582): draw 1 starts a quiz attempt (the counter resets), and every
+   * draw says which question is asked so the next choice can be scored against its answer.
+   */
+  function handleDraw(event) {
+    const { player, npcId } = event;
+    if (!player || npcId !== CURPILE_NPC_ID) return;
+    if (event.draw === 1) player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, 0);
+    const line = String(event.question ?? "");
+    const question = line.startsWith(QUIZ_QUESTION_PREFIX) ? line.slice(QUIZ_QUESTION_PREFIX.length) : line;
+    if (!QUIZ_ANSWERS.has(question)) console.warn(`[InSearchOfTheMyreque] Curpile drew a question with no known answer, it will score as wrong: ${JSON.stringify(question)}`);
+    askedQuestion.set(player, question);
+  }
+
+  /**
+   * "I don't have to answer to you!": the transcript's action step says "Curpile hits the player for 3 damage." (void
+   * CurpileFyod.kt sendPunch: curpile_punch, one tick, damage). Matched by the step's text so a re-export that renames the
+   * step id does not drop it; the amount is the text's number (3, as the Wiki). void stores Constitution in tenths (Levels.kt:
+   * 154, 157), so sendPunch's damage(30) is 3 hit points. The punch animation and its one-tick delay are not reproduced, and
+   * the hit has no death protection (void has none either).
+   */
+  const CURPILE_PUNCH_TEXT = /^Curpile hits the player for (\d+) damage\.$/;
+
   function handleAction(event) {
     const { player, stepId } = event;
-    if (!player || !stepId) return;
+    if (!player) return;
+    const punch = event.npcId === CURPILE_NPC_ID ? CURPILE_PUNCH_TEXT.exec(String(event.text ?? "")) : null;
+    if (punch) {
+      player.getCombat().getHitQueue().addPendingDamage([new api.core.HitDamage(Number(punch[1]), api.core.HitMask.RED)]);
+      return;
+    }
+    if (!stepId) return;
     if (stepId === SHOW_POUCH_MESSAGE_ID) {
       const stage = quest.getStage(player);
       if (stage >= STAGE_REFUSED_DELIVERY && stage < STAGE_PERSUADED_BOATMAN) {
@@ -525,11 +695,6 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       }
       player.getInventory().deleteNumber(PLANK_ITEM_ID, 3);
       if (quest.getStage(player) === STAGE_PERSUADED_BOATMAN) quest.setStage(player, STAGE_GAVE_PLANKS);
-      return;
-    }
-    if (stepId === QUIZ_START_ACTION_ID) {
-      player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, 0);
-      player.setAttribute(QUIZ_QUESTION_ATTRIBUTE, 0);
       return;
     }
     if (KNOCKOUT_MESSAGE_IDS.has(stepId)) {
@@ -589,6 +754,38 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
 
   // ---- Object interactions ----
 
+  /**
+   * Wiki "Mending the bridge": "Climb up to see a damaged rope bridge. Mend the bridge as you walk along ... and then
+   * climb down the other side of the bridge." Wiki/void-based, no capture (void SearchMyreque.kt:186-203 climbTree): the
+   * north tree needs the top rung repaired, else "This bridge run looks broken; you would have nowhere to stand. The
+   * southern side of the rope bridge looks much less damaged."; "You climb the tree."; from the bank side the climb goes
+   * up onto the bridge, from the bridge it goes down to the bank. DEVIATION (ours): void gates on the top rung alone
+   * because walking onto an unrepaired rung breaks it (SearchMyreque.kt:55-71) and we do not implement that, so a player
+   * could repair only the top rung and descend; until the break exists we require all three rungs, with void's statement.
+   * The no-reason gate below is ours (the existing one).
+   */
+  function climbTree(event) {
+    const { player, location } = event;
+    event.handled = true;
+    if (quest.getStage(player) < STAGE_REACHED_HOLLOWS) {
+      player.sendMessage("You have no reason to cross here.");
+      return;
+    }
+    const tree = location ?? player.getLocation();
+    const north = tree.y === NORTH_TREE_Y;
+    if (north && !bridgeRepaired(player)) {
+      player.sendMessage("This bridge run looks broken; you would have nowhere to stand. The southern side of the rope bridge looks much less damaged.");
+      return;
+    }
+    const y = player.getLocation().getY();
+    const up = north ? y >= tree.y : y <= tree.y;
+    let landing;
+    if (north) landing = up ? { x: tree.x, y: BRIDGE_TOP_Y } : NORTH_BANK;
+    else landing = up ? { x: tree.x, y: BRIDGE_LANDING_Y } : SOUTH_BANK;
+    player.sendMessage("You climb the tree.");
+    player.moveTo(new api.core.Location(landing.x, landing.y, tree.z ?? 0));
+  }
+
   function crossBridge(event) {
     const { player, location } = event;
     const stage = quest.getStage(player);
@@ -603,6 +800,26 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     }
     const north = player.getLocation().getY() >= 3430;
     player.moveTo(new api.core.Location(north ? 3502 : 3503, north ? 3425 : 3431, location?.z ?? 0));
+  }
+
+  /**
+   * One walk step onto an adjacent rung; a rung that is not next to the player is left alone. The rung keeps its
+   * broken loc's clipping on the server (the repaired look is the client's varbit multiloc), so the step ignores
+   * clipping for the one tick it takes, as Brimhaven's vines do.
+   */
+  function stepOnto(player, location) {
+    const here = player.getLocation();
+    const dx = location.x - here.getX(), dy = location.y - here.getY();
+    if ((location.z ?? 0) !== here.getZ() || Math.abs(dx) > 1 || Math.abs(dy) > 1 || (dx === 0 && dy === 0)) return;
+    const pass = {};
+    rungSteps.set(player, pass);
+    player.setFlag(IGNORE_CLIPPING_FLAG, true);
+    player.getMovementQueue().walkStep(dx, dy);
+    api.core.TaskManager.submit(new api.core.CountdownTask(pass, RUNG_STEP_TICKS, () => {
+      if (rungSteps.get(player) !== pass) return;
+      rungSteps.delete(player);
+      player.removeFlag(IGNORE_CLIPPING_FLAG);
+    }));
   }
 
   function repairBridgeRung(event) {
@@ -627,6 +844,10 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       player.getPacketSender().sendVarbit(3928, 7);
       player.sendMessage("The rope bridge is now fully repaired.");
     }
+    // The player then walks onto the repaired rung, which puts the next rung within reach ("Mend the bridge as you
+    // walk along", Wiki). rsprox_transcripts/231/00366.txt tick 6822: the rung's op and a one-tile walk step (not a
+    // teleport) on the same tick.
+    if (event.location) stepOnto(player, event.location);
   }
 
   function useStalagmite(event) {
@@ -666,6 +887,33 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     player.sendMessage("You squeeze through the hidden entrance into the Myreque hideout.");
   }
 
+  /**
+   * Passes through the hidden wall to the side the player is NOT on, from either side. Wiki/void-based, no capture: void
+   * SearchMyreque.kt:135-145 ends the Search with enterDoor(target) and "You walk through."; the two sides are the
+   * cache-derived tiles above. Like the repo's other door passes (CooksGuild.plugin.js walkThrough): movement is blocked,
+   * the player is put on the near tile if needed, and a one-tile forced walk crosses the edge. No door-open sound or
+   * graphic (ours: void's enterDoor internals were not read).
+   */
+  function passThroughWall(player) {
+    const { Location, ForceMovement, ForceMovementTask, TaskManager, Task } = api.core;
+    const here = player.getLocation();
+    const goingNorth = here.getY() <= WALL_SOUTH_SIDE.y;
+    const from = goingNorth ? WALL_SOUTH_SIDE : WALL_NORTH_SIDE;
+    const start = new Location(from.x, from.y, here.getZ());
+    player.getMovementQueue().setBlockMovement(true).reset();
+    if (!here.equals(start)) player.moveTo(start.clone());
+    TaskManager.submit(new ForceMovementTask(player, 1,
+      new ForceMovement(start.clone(), new Location(0, goingNorth ? 1 : -1), 0, 30, goingNorth ? 0 : 2, WALK_ANIMATION)));
+    TaskManager.submit(new (class extends Task {
+      constructor() { super(3, player, false); }
+      execute() {
+        this.stop();
+        player.getMovementQueue().setBlockMovement(false);
+        player.sendMessage("You walk through.");
+      }
+    })());
+  }
+
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
     if (!player) return;
@@ -678,7 +926,11 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       enterHiddenCave(event);
       return;
     }
-    if (objectId === ROPE_BRIDGE_ID || objectId === BRIDGE_TREE_PARENT_ID || BRIDGE_TREE_IDS.has(objectId)) {
+    if (objectId === BRIDGE_TREE_PARENT_ID || BRIDGE_TREE_IDS.has(objectId)) {
+      climbTree(event);
+      return;
+    }
+    if (objectId === ROPE_BRIDGE_ID) {
       crossBridge(event);
       return;
     }
@@ -698,8 +950,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       }
       player.sendMessage("You search the wall and find the door which Veliaf told you about.");
       if (stage === STAGE_SHOWN_WAY_OUT) quest.setStage(player, STAGE_IN_INN_BASEMENT);
-      player.moveTo(new api.core.Location(3477, 9845, 0));
-      player.sendMessage("You walk through.");
+      passThroughWall(player);
       return;
     }
     if (objectId === TAVERN_LADDER_ID) {
@@ -766,6 +1017,8 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   }
 
   function handleLogin({ player }) {
+    metThisConversation.delete(player);
+    sendStrangerSwap(player);
     refreshQuestList(player);
     if (bridgeRepaired(player)) {
       for (const varbit of [176, 177, 178]) player.getPacketSender().sendVarbit(varbit, 1);
@@ -784,7 +1037,6 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
 
   api.persistAttribute(BRIDGE_ATTRIBUTE);
   api.persistAttribute(QUIZ_CORRECT_ATTRIBUTE);
-  api.persistAttribute(QUIZ_QUESTION_ATTRIBUTE);
   for (const flag of ["met_sani", "met_harold", "met_radigad", "met_polmafi", "met_ivan", "veliaf_after"]) {
     api.persistAttribute(`quest.in_search_of_the_myreque.${flag}`);
   }
@@ -809,10 +1061,13 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   });
 
   api.onNpcDialogueVariant(selectVariant);
+  api.onNpcInteraction("Curpile Fyod", { "Talk-to": talkToCurpile });
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("npc-dialogue:draw", handleDraw);
+  api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onNpcDeath(handleNpcDeath);

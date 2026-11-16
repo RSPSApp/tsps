@@ -2,7 +2,7 @@
 
 const { Location, Animation, Graphic, Priority, TeleportHandler, TeleportType, Task, TaskManager } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
-const { JEWELLERY, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE } = require("../../items/Teleports.Jewellery");
+const { JEWELLERY, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE, destinationUnlockDone } = require("../../items/Teleports.Jewellery");
 const House = require("./House.Construction");
 const Menu = require("./Menu.Construction");
 
@@ -16,6 +16,8 @@ const entryOf = (key, label) => destinationsOf(key).find(entry => entry.label ==
 const tileOf = (key, label) => entryOf(key, label).tile;
 /** Wiki (Digsite pendant): the mounted one has "the same locations as the normal unmounted version", quests included. */
 const questOf = (key, label) => entryOf(key, label).quest ?? null;
+/** And the same Strange Machine unlocks (Wiki: Strange Machine), as the worn pendant checks them. */
+const unlockOf = (key, label) => entryOf(key, label).unlock ?? null;
 
 /**
  * Mounted amulets in the portal nexus room. Each left-click setting is its own loc, so configuring
@@ -45,8 +47,8 @@ const AMULETS = {
     teleportType: TeleportType.NORMAL,
     destinations: [
       { label: "Digsite", option: "Digsite", loc: Ids.loc("poh_amulet_dig_digsite"), tile: tileOf("digsite", "Digsite") },
-      { label: "Fossil Island", option: "Fossil Island", loc: Ids.loc("poh_amulet_dig_fossil"), tile: tileOf("digsite", "Fossil Island"), quest: questOf("digsite", "Fossil Island") },
-      { label: "Lithkren", option: "Lithkren", loc: Ids.loc("poh_amulet_dig_lithkren"), tile: tileOf("digsite", "Lithkren"), quest: questOf("digsite", "Lithkren") },
+      { label: "Fossil Island", option: "Fossil Island", loc: Ids.loc("poh_amulet_dig_fossil"), tile: tileOf("digsite", "Fossil Island"), quest: questOf("digsite", "Fossil Island"), unlock: unlockOf("digsite", "Fossil Island") },
+      { label: "Lithkren", option: "Lithkren", loc: Ids.loc("poh_amulet_dig_lithkren"), tile: tileOf("digsite", "Lithkren"), quest: questOf("digsite", "Lithkren"), unlock: unlockOf("digsite", "Lithkren") },
     ],
   },
 };
@@ -104,7 +106,7 @@ function destinationUnlocked(player, destination) {
     const query = { player, unlocked: false };
     pluginApi.emitCustomEvent("xerics-talisman:honour-unlocked", query);
     if (query.unlocked === true) return true;
-  } else {
+  } else if (destinationUnlockDone(player, destination)) {
     if (!destination.quest) return true;
     const query = { player, key: destination.quest.key, complete: false };
     pluginApi.emitCustomEvent("quest:is-complete", query);

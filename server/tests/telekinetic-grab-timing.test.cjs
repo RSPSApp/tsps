@@ -67,7 +67,7 @@ test('Telekinetic Grab takes the item when its projectile lands, not on the cast
     assert.equal(casts[0].itemId, 995);
     assert.ok(casts[0].position.equals(targetLocation));
     assert.equal(onGround, true);
-    assert.equal(tasks[0].delay, 3, 'lands 80 cycles later, on the third tick');
+    assert.equal(tasks[0].delay, 3, 'lands 90 cycles later, on the third tick');
     currentLocation = new Location(3216, 3200, 0);
     run();
     assert.equal(added.length, 1, 'taken once the projectile lands');
@@ -156,4 +156,94 @@ test('Telekinetic Grab takes the stack from its captured floor when another floo
     tasks[0].execute();
 
     assert.deepEqual(taken, [lowerPile], 'a matching stack on the intermediate floor is not substituted');
+});
+
+// new Graphic(144, 80, GraphicHeight.LOW) read LOW (0) as a Priority, so the landing splash went out with
+// delay 0 and height 80: it showed at the cast instead of when the projectile lands. Recorded (rsprox
+// 227/00075, 226/01698): map_anim telegrab_impact (144), delay=90, height=20.
+test("the Telekinetic Grab projectile and landing graphic go out as recorded: 48-90 cycles, then delay 90, height 20", (t) => {
+    const listener = new MagicOnItemPacketListener();
+    const target = new Location(3205, 3200, 0);
+    const item = { getId: () => 995, clone: () => ({ id: 995 }) };
+    const groundItem = { getItem: () => item, getPickupItem: () => item, getPosition: () => target };
+    t.mock.method(TaskManager, 'submit', () => {});
+    const projectiles = [];
+    t.mock.method(Projectile.prototype, 'sendProjectile', function () { projectiles.push(this); });
+    t.mock.method(Sounds, 'sendSound', () => {});
+    t.mock.method(CombatRange, 'withinApproachDistance', () => true);
+    for (const name of ['hasRunes', 'canReceiveGroundItem']) t.mock.method(listener, name, () => true);
+    t.mock.method(listener, 'runeCosts', () => []);
+    t.mock.method(listener, 'consumeRunes', () => {});
+    t.mock.method(listener, 'findVisibleGroundItem', () => groundItem);
+    const graphics = [];
+    const sender = new Proxy({}, { get: (_, name) => (name === 'then' ? undefined
+        : name === 'sendGlobalGraphic' ? (graphic, at) => { graphics.push({ graphic, at }); return sender; } : () => sender) });
+    const player = {
+        getHitpoints: () => 10, isRegistered: () => true, getLocation: () => new Location(3200, 3200, 0), getSpellbook: () => MagicSpellbook.NORMAL,
+        getClickDelay: () => ({ elapsedTime: () => true, reset() {} }),
+        getSkillManager: () => ({ getCurrentLevel: () => 99, stopSkillable() {}, addExperiences() {} }),
+        getInventory: () => ({ addItem() {}, full() {} }),
+        getPacketSender: () => sender, getPrivateArea: () => null,
+        setPositionToFace() {}, performAnimation() {}, performGraphic() {}, sendMessage() {},
+    };
+    listener.castGroundItem(player, 995, 3205, 3200, 1168);
+    assert.equal(graphics.length, 1);
+    const { graphic, at } = graphics[0];
+    assert.deepEqual([graphic.getId(), graphic.getDelay(), graphic.getHeight()], [144, 90, 20]);
+    assert.ok(at.equals(target));
+    // telegrab_travel (143): starttime=48, endtime=90 (rsprox 227/00075, 227/00093, 242/912233).
+    assert.equal(projectiles.length, 1);
+    const { startCycleOffset, endCycleOffset } = projectiles[0].getTiming();
+    assert.deepEqual([startCycleOffset, endCycleOffset], [48, 90], "the projectile flies 48 to 90 cycles, landing with the splash");
+    // Heights go out x4: 140 to 0 on the floor (map_projanim_v2 of 143, e.g. 233/00458; v1 35 to 0 in 227/00075).
+    assert.deepEqual([projectiles[0].startHeight * 4, projectiles[0].endHeight * 4], [140, 0], "leaves at 140, ends on the floor");
+});
+
+// Items on tables were recorded landing higher: rsprox 234/03270 (the table at 2930,3515) and 237/01108
+// (1736,3168) send telegrab_impact (144) at delay=90, height=100; floor items stay at 20 (227/00075, 2124,9301).
+test("the landing graphic stands on a table at height 100, and on the floor at 20; the projectile ends at 80 and 0", async (t) => {
+    const path = require('node:path');
+    const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+    const { RegionManager } = require('../dist/game/collision/RegionManager');
+    await CachePipeline.initialize(path.resolve(__dirname, '..'));
+    RegionManager.init();
+    t.mock.method(TaskManager, 'submit', () => {});
+    let projectile = null;
+    t.mock.method(Projectile.prototype, 'sendProjectile', function () { projectile = this; });
+    t.mock.method(Sounds, 'sendSound', () => {});
+    t.mock.method(CombatRange, 'withinApproachDistance', () => true);
+    const land = (x, y) => {
+        const listener = new MagicOnItemPacketListener();
+        const target = new Location(x, y, 0);
+        const item = { getId: () => 245, clone: () => ({ id: 245 }) };
+        const groundItem = { getItem: () => item, getPickupItem: () => item, getPosition: () => target };
+        for (const name of ['hasRunes', 'canReceiveGroundItem']) t.mock.method(listener, name, () => true);
+        t.mock.method(listener, 'runeCosts', () => []);
+        t.mock.method(listener, 'consumeRunes', () => {});
+        t.mock.method(listener, 'findVisibleGroundItem', () => groundItem);
+        const graphics = [];
+        const sender = new Proxy({}, { get: (_, name) => (name === 'then' ? undefined
+            : name === 'sendGlobalGraphic' ? (graphic) => { graphics.push(graphic); return sender; } : () => sender) });
+        const player = {
+            getHitpoints: () => 10, isRegistered: () => true, getLocation: () => new Location(x + 3, y, 0), getSpellbook: () => MagicSpellbook.NORMAL,
+            getClickDelay: () => ({ elapsedTime: () => true, reset() {} }),
+            getSkillManager: () => ({ getCurrentLevel: () => 99, stopSkillable() {}, addExperiences() {} }),
+            getInventory: () => ({ addItem() {}, full() {} }),
+            getPacketSender: () => sender, getPrivateArea: () => null,
+            setPositionToFace() {}, performAnimation() {}, performGraphic() {}, sendMessage() {},
+        };
+        listener.castGroundItem(player, 245, x, y, 1168);
+        assert.equal(graphics.length, 1);
+        // The projectile ends where the item stands: 80 on a table, 0 on the floor (x4 on the wire; 234/03270, 237/01108, 233/00458).
+        assert.equal(projectile.startHeight * 4, 140);
+        assert.equal(projectile.endHeight * 4, graphics[0].getHeight() === 100 ? 80 : 0, `projectile end height at ${x},${y}`);
+        return [graphics[0].getId(), graphics[0].getDelay(), graphics[0].getHeight()];
+    };
+    assert.deepEqual(land(2930, 3515), [144, 90, 100], "the Zamorak temple table (its south-west tile)");
+    assert.deepEqual(land(2930, 3516), [144, 90, 100], "the same 2x1 table's other tile (turned north-south on face 1)");
+    assert.deepEqual(land(1736, 3168), [144, 90, 100], "a 2x2 table");
+    assert.deepEqual(land(2124, 9301), [144, 90, 20], "floor");
+    // wild_table_inactive (30171, inactive) under the fake wine of Zamorak: recorded at 20 (rsprox 233/00458.txt, 233/00459.txt).
+    assert.deepEqual(land(3018, 10353), [144, 90, 20], "an inactive table");
+    assert.deepEqual(land(2931, 3515), [144, 90, 20], "the floor beside the turned table");
 });

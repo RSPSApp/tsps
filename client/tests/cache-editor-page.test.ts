@@ -23,6 +23,7 @@ assert.deepEqual(row, { kind: "loc", id: 63307, baseId: 1, fields: {} });
 assert.deepEqual(draftProblems(row, base, 63307), ["nothing is overridden yet"], "an empty overlay is not a save");
 assert.deepEqual(draftProblems({ ...row, id: 12 }, base, 63307), ["id must be 63307 or above (above the cache's own count)", "nothing is overridden yet"]);
 assert.deepEqual(draftProblems({ ...row, fields: { seqId: 1 } }, { ...base, exists: false }, 63307), ["base must be a definition that exists in the cache"]);
+assert.deepEqual(draftProblems({ ...row, baseId: null, fields: { name: "Blank loc" } }, null, 63307), [], "an unbased definition is valid");
 
 let edited = withField(row, "seqId", 3206);
 assert.deepEqual(edited.fields, { seqId: 3206 });
@@ -74,7 +75,7 @@ assert.deepEqual(withPickedId(withPickedId(overlay, seqField, 3206), seqField, 3
 console.log("cache-editor page model ok");
 
 // Preview specs: which models a definition draws, and which sequence plays.
-import { previewModels, previewSpec, sequenceFrameCount } from "../custom/cache-editor/CacheEditorPreview";
+import { buildModelRecolorPairs, previewModels, previewSpec, scanModelColors, sequenceFrameCount } from "../custom/cache-editor/CacheEditorPreview";
 
 const loc = {
     kind: "loc", id: 1, exists: true, name: "Crate", label: "Loc (object)",
@@ -94,9 +95,35 @@ assert.equal(previewSpec({ ...loc, kind: "loc", values: { seqId: 1 } }), null, "
 assert.deepEqual(previewModels({ ...loc, kind: "varbit", values: {} }), [], "a kind with no models previews nothing");
 assert.equal(sequenceFrameCount(undefined as any, 3206), 1, "without a client a sequence is a still");
 
-console.log("cache-editor preview specs ok");
+const scanned = scanModelColors({
+    getModel: (id: number) => id === 10
+        ? { faceCount: 4, faceColors: new Uint16Array([20, 10, 20, 0]) } as any
+        : undefined,
+    missCount: 0,
+} as any, [10, 10, 11]);
+assert.deepEqual(scanned, { colors: [0, 10, 20], unavailableModelIds: [11], waiting: false }, "model colors are unique, sorted and missing models are reported");
+let modelMisses = 0;
+const waitingScan = scanModelColors({
+    getModel: () => { modelMisses++; return undefined; },
+    get missCount() { return modelMisses; },
+} as any, [12]);
+assert.deepEqual(waitingScan, { colors: [], unavailableModelIds: [12], waiting: true }, "sparse cache misses are retried while model data downloads");
+assert.deepEqual(buildModelRecolorPairs([20, 10, 20], [10, 7], [15, 8]), [
+    { from: 10, to: 15, isModelColor: true },
+    { from: 7, to: 8, isModelColor: false },
+    { from: 20, to: 20, isModelColor: true },
+], "existing mapping order is preserved before identity rows for unmapped model colors");
+assert.deepEqual(buildModelRecolorPairs([123, 321], [321, 123], [456, 321]), [
+    { from: 321, to: 456, isModelColor: true },
+    { from: 123, to: 321, isModelColor: true },
+], "overlapping destinations must retain the stored sequential recolor order");
+
+console.log("cache-editor preview specs and model colors ok");
 
 import { CustomDefinitionLoader, replaceCustomDefinitions, getCustomDefinitions } from "../custom/definitions/CustomDefinitionStore";
+import { NpcType } from "../rs/config/npctype/NpcType";
+import { LocType } from "../rs/config/loctype/LocType";
+import { buildLocAabb } from "../game/math/Aabb";
 const canonical = { id: 1, name: "Goblin", modelIds: [3], params: new Map([[1, "base"]]), isInteractive: 1 };
 const loader = new CustomDefinitionLoader<any>({ load: () => canonical, getCount: () => 10, clearCache() {} }, "npc");
 replaceCustomDefinitions([{ kind: "npc", id: 50000, baseId: 1, fields: { name: "Demo goblin", actions: [null], params: { "2": "custom" } } }]);
@@ -111,13 +138,52 @@ assert.deepEqual(canonical.modelIds, [3]);
 const exported = getCustomDefinitions(); exported[0].fields.name = "mutated";
 assert.equal(getCustomDefinitions()[0].fields.name, "Demo goblin");
 assert.throws(() => replaceCustomDefinitions([{ kind: "npc", id: 1, baseId: 1, fields: {} }]), /Invalid/);
+assert.throws(() => replaceCustomDefinitions([{ kind: "npc", id: 50001, baseId: -1, fields: {} }]), /Invalid/);
+assert.throws(() => replaceCustomDefinitions([{ kind: "npc", id: 50001, fields: {} }]), /Invalid/, "missing baseId is not confused with explicit null");
 assert.equal(loader.load(50000), custom);
 replaceCustomDefinitions([]);
 assert.equal(loader.getCount(), 10);
 assert.equal(loader.load(1), canonical);
-console.log("custom definition client identity, isolation and reset ok");
+const cacheInfo = { name: "test", game: "oldschool", environment: "live", revision: 1, timestamp: "", size: 0 } as any;
+const stockNpc = new NpcType(1, cacheInfo);
+stockNpc.name = "Stock npc";
+stockNpc.modelIds = [3];
+const blankLoader = new CustomDefinitionLoader<NpcType>({ load: () => stockNpc, getCount: () => 10, clearCache() {} }, "npc");
+replaceCustomDefinitions([{ kind: "npc", id: 50000, baseId: null, fields: { name: "Blank npc" } }]);
+const blankNpc = blankLoader.load(50000);
+assert.equal(blankNpc.id, 50000);
+assert.equal(blankNpc.name, "Blank npc");
+assert.equal(blankNpc.size, 1, "the type constructor supplies valid defaults");
+assert.equal(blankNpc.modelIds, undefined, "a blank definition does not inherit the stock model");
+const stockLoc = new LocType(1, cacheInfo);
+const locLoader = new CustomDefinitionLoader<LocType>({ load: () => stockLoc, getCount: () => 10, clearCache() {} }, "loc");
+replaceCustomDefinitions([
+    { kind: "loc", id: 50001, baseId: null, fields: { name: "Model-only loc", models: [[1]], types: [10], actions: [] } },
+    { kind: "loc", id: 50002, baseId: null, fields: { name: "Actionable loc", actions: ["Open"] } },
+    { kind: "loc", id: 50003, baseId: null, fields: { name: "Explicit flags", models: [[1]], types: [10], isInteractive: 0, supportItems: 0 } },
+    { kind: "loc", id: 50004, baseId: null, fields: { name: "Non-solid loc", clipType: 0 } },
+]);
+const modelOnlyLoc = locLoader.load(50001);
+const actionableLoc = locLoader.load(50002);
+const explicitLoc = locLoader.load(50003);
+const nonSolidLoc = locLoader.load(50004);
+assert.equal(modelOnlyLoc.id, 50001, "finalization preserves the custom definition identity");
+assert.equal(modelOnlyLoc.isInteractive, 1, "model-only locs derive interactivity after authored models are applied");
+assert.equal(modelOnlyLoc.supportItems, 1, "the default clipped loc supports items");
+assert.equal(actionableLoc.isInteractive, 1, "actionable locs derive interactivity");
+assert.equal(actionableLoc.supportItems, 1);
+assert.equal(explicitLoc.isInteractive, 0, "explicit authored flags survive finalization");
+assert.equal(explicitLoc.supportItems, 0);
+assert.equal(nonSolidLoc.supportItems, 0, "supportItems derives from an authored non-clipping clipType");
+const bounds = buildLocAabb({
+    locId: 50001, tileX: 10, tileY: 20, level: 0,
+    mapManager: { getMapForWorldTile: () => undefined }, locTypeLoader: locLoader, varManager: {},
+});
+assert.ok(bounds, "a finalized model-only loc has selectable client bounds");
+replaceCustomDefinitions([]);
+console.log("custom definition client identity, blank defaults, loc finalization, isolation and reset ok");
 
-import { formatFieldValue, parseFieldValue, initialOverrides } from "../custom/cache-editor/CacheEditorModel";
+import { formatFieldValue, parseFieldValue, initialOverrides, supportsModelRecolor, packedHslToHex, hexToPackedHsl } from "../custom/cache-editor/CacheEditorModel";
 for (const [field, value] of [
     [{ name: "actions", type: "string[]" }, ["Talk-to", null, "Trade"]],
     [{ name: "models", type: "int[][]" }, [[1, 2], [3]]],
@@ -128,7 +194,20 @@ assert.throws(() => parseFieldValue({ name: "models", type: "int[]" }, "1,broken
 assert.throws(() => parseFieldValue({ name: "size", type: "int" }, "1.5"), /expected int/);
 assert.deepEqual(initialOverrides([{ name: "name", type: "string" }], "My goblin"), { name: "My goblin" });
 assert.deepEqual(initialOverrides([], "Sequence"), {});
-console.log("cache-editor structured fields and new names ok");
+assert.equal(supportsModelRecolor("item"), true);
+assert.equal(supportsModelRecolor("loc"), true);
+assert.equal(supportsModelRecolor("npc"), true);
+assert.equal(supportsModelRecolor("spotanim"), false);
+assert.equal(packedHslToHex(0), "#000000");
+assert.equal(packedHslToHex(127), "#ffffff");
+assert.equal(hexToPackedHsl("#000000"), 0);
+assert.equal(hexToPackedHsl("#ffffff"), 127);
+const packedRed = hexToPackedHsl("#ff0000");
+assert.equal((packedRed >>> 10) & 63, 0);
+assert.equal((packedRed >>> 7) & 7, 7);
+assert.match(packedHslToHex(packedRed), /^#ff[0-9a-f]{4}$/);
+assert.throws(() => hexToPackedHsl("red"), /six-digit hex/);
+console.log("cache-editor structured fields, recolors and new names ok");
 
 assert.deepEqual(previewModels({ ...loc, values: { models: [[15402, 15403], [15404]] } }), [15402, 15403, 15404]);
 assert.ok(previewSpec({ ...loc, values: { models: [[15402]], seqId: 3206 } }));

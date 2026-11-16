@@ -229,7 +229,7 @@ function canAttack(event) {
   if (event.attacker !== fight.player || !fight.alive()) { event.allow = false; return; }
   if (event.method?.type?.() === Common.core.CombatType.MELEE) {
     event.allow = false;
-    fight.player.sendMessage("Your melee attacks can't reach the lure!");
+    event.message = "Your melee attacks can't reach the lure!";
   }
 }
 function eligibility(request) { if (own(request.npc)?.awakened) request.eligible = false; }

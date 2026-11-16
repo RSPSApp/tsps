@@ -10,10 +10,10 @@ import type { OsrsClient } from "../../OsrsClient";
 import type { ClientPlugin, WidgetOverlay, WidgetOverlayDrawContext } from "../ClientPluginManager";
 import { compareAttackSpeed, compareItemWeight, compareWornGear, itemAttackSpeed, readItemStats, type ItemStats, type WornItem } from "./itemStats";
 import { ItemStatsConfig } from "./ItemStatsConfig";
-import { buildCombatStatGroups, formatItemStatsRow, shouldShowSpeedRow, shouldShowWeightRow, type ItemStatsGroup, type ItemStatsRow } from "./itemStatsPresentation";
+import { buildCombatStatGroups, formatItemStatsRow, itemStatsRowText, shouldShowSpeedRow, shouldShowWeightRow, type ItemStatsGroup, type ItemStatsRow } from "./itemStatsPresentation";
 import { canonicalItemId } from "../inventorytags/inventoryTags";
 import { collectWidgetsAtPointAcrossRoots } from "../../../widgets/menu/utils";
-import { foodStatsForName, potionStatsForName, runeStatsForName } from "./consumableStats";
+import { blightedPlacesForItem, foodStatsForName, potionStatsForName, runeStatsForName } from "./consumableStats";
 import { formatPoisonImmunity, formatRestore } from "./foodStats";
 import {
     fallbackInteractionBounds,
@@ -187,7 +187,6 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
             if (food.cureVenom) rows.push({ label: "Venom", value: "Cured" });
             if (food.special) rows.push({ label: "Special effect", value: food.special });
             if (food.area) rows.push({ label: "Area restriction", value: food.area });
-            if (food.wildernessOnly) rows.push({ label: "Availability", value: "Wilderness only" });
             if (rows.length) groups.push({ title: "Food effects", rows });
             if (food.requiresContext) groups.push({ title: "Limits", rows: [{ label: "Some effects depend on player state", value: "See item use" }] });
         }
@@ -214,6 +213,8 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
         } else if (potion?.unsupportedReason) {
             groups.push({ title: "Potion effects", rows: [{ label: "Not shown", value: "Effects unsupported" }] });
         }
+        const blightedPlaces = blightedPlacesForItem(title, item.inventoryActions ?? []);
+        if (blightedPlaces) groups.push({ title: "Usable only in", rows: blightedPlaces.map((place) => ({ label: place, value: "" })) });
 
         const rune = runeStatsForName(title);
         if (rune) groups.push({ title: "Rune", rows: [
@@ -243,11 +244,8 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
         const canvasH = context.renderer.canvas.height;
         const horizontalPadding = 4 * scaleX;
         const minimumWidth = Math.min(64 * scaleX, Math.max(1, canvasW - 4));
-        const rowText = (row: ItemStatsRow) => `${row.label}: ${row.baseValue !== undefined
-            ? row.changeValue !== undefined ? `${row.baseValue} (${row.changeValue})` : row.baseValue
-            : row.value}`;
         const desiredWidth = Math.max(minimumWidth, ...groups.map(({ title: heading }) => measureHeading(heading) * textScaleX),
-            ...groups.flatMap((group) => group.rows.map((row) => measure(rowText(row)) * textScaleX))) + horizontalPadding * 2;
+            ...groups.flatMap((group) => group.rows.map((row) => measure(itemStatsRowText(row)) * textScaleX))) + horizontalPadding * 2;
         const width = Math.max(1, Math.min(desiredWidth, canvasW - 4));
         const lineHeight = 14 * textScaleY;
         const sectionGap = 2 * scaleY;

@@ -6,10 +6,12 @@
  * - the Portcullis inside leads back to the winch, and the hall's cave back to Taverley Dungeon;
  * - Cerberus sits, unattackable, while her arena is empty, stands when a player is in it, and
  *   when the last one leaves she sits again at full health with her summons gone;
- * - the arena is single combat; her fight lives in Fight.Cerberus.js.
+ * - the arena is single combat; her fight lives in Fight.Cerberus.js, the fire wall that closes
+ *   the arena while she stands in FireWall.Cerberus.js.
  */
 const Common = require("./Common.Cerberus");
 const Fight = require("./Fight.Cerberus");
+const FireWall = require("./FireWall.Cerberus");
 
 /** Every arena, in the data's order. */
 const arenas = [];
@@ -43,6 +45,7 @@ class Arena {
     const { ids } = Common;
     npc.setNpcTransformationId(ids.npcs.attacking);
     npc.performAnimation(new Common.core.Animation(ids.seqs.stand));
+    FireWall.place(this);
     this.fight = Fight.begin(this, npc);
   }
 
@@ -51,6 +54,7 @@ class Arena {
     const fight = this.fight;
     this.fight = null;
     fight?.stop();
+    FireWall.clear(this);
     const npc = this.cerberus;
     if (!npc || npc.isDyingFunction?.() || npc.getHitpoints() <= 0) return;
     npc.getCombat().reset();
@@ -97,6 +101,7 @@ function createArea(arena) {
         arena.fight?.stop();
         arena.fight = null;
         arena.cerberus = null;
+        FireWall.clear(arena);
         return;
       }
       if (!mobile.isPlayer?.()) return;
@@ -127,16 +132,26 @@ function createArea(arena) {
 
 // --- The hall
 
-/** Turn: into the arena, for a player on task. */
+/**
+ * Turn: into the arena, for a player on task. A league character carrying the echo orb is asked
+ * first ("echo-boss:entry", plugins/modes/league/EchoOrbs.LeagueMode.js); the task rule stays.
+ */
 function turnWinch({ player, location }) {
   const arena = arenaOfWinch(location);
   if (!arena) return false;
-  if (!arena.cerberus || !Common.onTask(player, arena.cerberus)) {
-    player.sendMessage(Common.message("noTask"));
-    return true;
-  }
-  player.moveTo(Common.toLocation(arena.def.entry));
+  if (!mayEnter(player, arena)) return true;
+  // The menu's No comes later, so it asks for the task again.
+  const entry = { player, boss: "cerberus", enter: () => mayEnter(player, arena) && player.moveTo(Common.toLocation(arena.def.entry)), handled: false };
+  Common.api.emitCustomEvent("echo-boss:entry", entry);
+  if (!entry.handled) entry.enter();
   return true;
+}
+
+/** Whether the arena lets this player in now: Cerberus there and the player on task, else the refusal. */
+function mayEnter(player, arena) {
+  if (arena.cerberus && Common.onTask(player, arena.cerberus)) return true;
+  player.sendMessage(Common.message("noTask"));
+  return false;
 }
 
 function peekWinch({ player, location }) {

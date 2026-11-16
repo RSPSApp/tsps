@@ -12,6 +12,9 @@
  * each at interpolate(level, low, high) / 256. Materials come noted. A fourth pair of warm
  * gloves becomes a magic seed and a fourth bruma torch 2-3 torstol seeds; the pyromancer piece
  * is the one owned least (ties: garb, hood, robe, boots).
+ *
+ * A league's boosted drops ("drops:chance" { player, source: "Wintertodt", rules }) make a
+ * unique that many times as likely: 1/150 at 5x is 5/150 (the Wiki's 1/30).
  */
 
 const Shared = require("./Shared.Wintertodt");
@@ -79,8 +82,25 @@ function between(random, min, max) {
   return min + Math.floor(random() * (max - min + 1));
 }
 
-function oneIn(random, n) {
-  return Math.floor(random() * n) === 0;
+function oneIn(random, n, multiplier = 1) {
+  if (multiplier === 1) return Math.floor(random() * n) === 0;
+  return random() * n < multiplier;
+}
+
+/** The source the cart and crates name on "drops:chance". */
+const CHANCE_SOURCE = "Wintertodt";
+
+/** "drops:chance" for one search: an item name's multiplier, the matching rules' product. */
+function dropBoost(player) {
+  const rules = [];
+  Shared.api()?.emitCustomEvent?.("drops:chance", { player, source: CHANCE_SOURCE, rules });
+  if (rules.length === 0) return () => 1;
+  return (name) => rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
+}
+
+/** A unique's name for its boost (the pyromancer pieces share one row). */
+function boostOf(boost, id) {
+  return boost(Shared.core().ItemDefinition.forId(id)?.getName?.() ?? "");
 }
 
 /** How many of an item a player holds anywhere: backpack, worn or banked. */
@@ -131,22 +151,22 @@ function pyromancerPiece(player) {
   return best.id;
 }
 
-/** One search's reward: `{ id, amount, pet? }`. */
-function roll(player, random = Math.random) {
+/** One search's reward: `{ id, amount, pet? }`. `boost(name)` is dropBoost's. */
+function roll(player, random = Math.random, boost = dropBoost(player)) {
   const I = ids();
   if (oneIn(random, UNIQUE_CHANCE.PHOENIX)) return { id: I.PHOENIX, amount: 1, pet: true };
-  if (oneIn(random, UNIQUE_CHANCE.DRAGON_AXE)) return { id: I.DRAGON_AXE, amount: 1 };
-  if (oneIn(random, UNIQUE_CHANCE.TOME)) return { id: I.TOME_OF_FIRE_EMPTY_, amount: 1 };
-  if (oneIn(random, UNIQUE_CHANCE.WARM_GLOVES)) {
+  if (oneIn(random, UNIQUE_CHANCE.DRAGON_AXE, boostOf(boost, I.DRAGON_AXE))) return { id: I.DRAGON_AXE, amount: 1 };
+  if (oneIn(random, UNIQUE_CHANCE.TOME, boostOf(boost, I.TOME_OF_FIRE_EMPTY_))) return { id: I.TOME_OF_FIRE_EMPTY_, amount: 1 };
+  if (oneIn(random, UNIQUE_CHANCE.WARM_GLOVES, boostOf(boost, I.WARM_GLOVES))) {
     return owned(player, I.WARM_GLOVES) >= EXTRA_COPIES ? { id: I.MAGIC_SEED, amount: 1 } : { id: I.WARM_GLOVES, amount: 1 };
   }
-  if (oneIn(random, UNIQUE_CHANCE.BRUMA_TORCH)) {
+  if (oneIn(random, UNIQUE_CHANCE.BRUMA_TORCH, boostOf(boost, I.BRUMA_TORCH))) {
     return owned(player, I.BRUMA_TORCH) >= EXTRA_COPIES
       ? { id: I.TORSTOL_SEED, amount: between(random, 2, 3) }
       : { id: I.BRUMA_TORCH, amount: 1 };
   }
-  if (oneIn(random, UNIQUE_CHANCE.PYROMANCER)) return { id: pyromancerPiece(player), amount: 1 };
-  if (oneIn(random, UNIQUE_CHANCE.BURNT_PAGE)) return { id: I.BURNT_PAGE, amount: between(random, 7, 29) };
+  if (oneIn(random, UNIQUE_CHANCE.PYROMANCER, boostOf(boost, I.PYROMANCER_GARB))) return { id: pyromancerPiece(player), amount: 1 };
+  if (oneIn(random, UNIQUE_CHANCE.BURNT_PAGE, boostOf(boost, I.BURNT_PAGE))) return { id: I.BURNT_PAGE, amount: between(random, 7, 29) };
   return rollMain(player, random);
 }
 
@@ -154,9 +174,9 @@ function roll(player, random = Math.random) {
  * One roll from an extra supply crate (Wiki "Extra supply crate"): the dragon axe is the only
  * unique it can give; there are no pages, phoenix, tome, gloves, torch or outfit pieces.
  */
-function rollCrate(player, random = Math.random) {
-  if (oneIn(random, UNIQUE_CHANCE.DRAGON_AXE)) return { id: ids().DRAGON_AXE, amount: 1 };
+function rollCrate(player, random = Math.random, boost = dropBoost(player)) {
+  if (oneIn(random, UNIQUE_CHANCE.DRAGON_AXE, boostOf(boost, ids().DRAGON_AXE))) return { id: ids().DRAGON_AXE, amount: 1 };
   return rollMain(player, random);
 }
 
-module.exports = { SKILL_TABLES, interpolate, roll, rollCrate, owned, pyromancerPiece, rollSkillTable };
+module.exports = { SKILL_TABLES, interpolate, dropBoost, roll, rollCrate, owned, pyromancerPiece, rollSkillTable };

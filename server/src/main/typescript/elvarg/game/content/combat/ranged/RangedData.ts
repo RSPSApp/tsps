@@ -268,14 +268,16 @@ export class Ammunition {
     // comes from the worn item (CombatPoisonData), so only the (p), (p+), (p++) ids and lit fire
     // arrow ids are listed here. Amethyst broad bolts are broad bolts with a higher Slayer requirement.
     static {
+        // Seeking arrows (Wiki, Seeking arrows) fire from the same bows as their normal counterparts, at their
+        // ranged strength; their +20 accuracy is the item's own bonus and SeekingArrows.plugin.js their minimum hit.
         const variants: [Ammunition, number[]][] = [
-            [Ammunition.BRONZE_ARROW, [883, 5616, 5622, 942]],
-            [Ammunition.IRON_ARROW, [885, 5617, 5623, 2533]],
-            [Ammunition.STEEL_ARROW, [887, 5618, 5624, 2535]],
-            [Ammunition.MITHRIL_ARROW, [889, 5619, 5625, 2537]],
-            [Ammunition.ADAMANT_ARROW, [891, 5620, 5626, 2539]],
-            [Ammunition.RUNE_ARROW, [893, 5621, 5627, 2541]],
-            [Ammunition.AMETHYST_ARROW, [21332, 21334, 21336, 21330]],
+            [Ammunition.BRONZE_ARROW, [883, 5616, 5622, 942, ItemIdentifiers.SEEKING_BRONZE_ARROW]],
+            [Ammunition.IRON_ARROW, [885, 5617, 5623, 2533, ItemIdentifiers.SEEKING_IRON_ARROW]],
+            [Ammunition.STEEL_ARROW, [887, 5618, 5624, 2535, ItemIdentifiers.SEEKING_STEEL_ARROW]],
+            [Ammunition.MITHRIL_ARROW, [889, 5619, 5625, 2537, ItemIdentifiers.SEEKING_MITHRIL_ARROW]],
+            [Ammunition.ADAMANT_ARROW, [891, 5620, 5626, 2539, ItemIdentifiers.SEEKING_ADAMANT_ARROW]],
+            [Ammunition.RUNE_ARROW, [893, 5621, 5627, 2541, ItemIdentifiers.SEEKING_RUNE_ARROW]],
+            [Ammunition.AMETHYST_ARROW, [21332, 21334, 21336, 21330, ItemIdentifiers.SEEKING_AMETHYST_ARROW]],
             [Ammunition.DRAGON_ARROW, [11227, 11228, 11229, 11222]],
             [Ammunition.BRONZE_BOLT, [878, 6061, 6062]],
             [Ammunition.BLURITE_BOLT, [9286, 9293, 9300]],
@@ -287,6 +289,7 @@ export class Ammunition {
             [Ammunition.RUNITE_BOLT, [9291, 9298, 9305]],
             [Ammunition.DRAGON_BOLTS, [21924, 21926, 21928]],
             [Ammunition.BROAD_BOLT, [ItemIdentifiers.AMETHYST_BROAD_BOLTS]],
+            [Ammunition.BROAD_ARROW, [ItemIdentifiers.SEEKING_BROAD_ARROWS]],
         ];
         for (const [ammunition, itemIds] of variants) {
             for (const itemId of itemIds) Ammunition.rangedAmmunition.set(itemId, ammunition);
@@ -473,6 +476,8 @@ export class RangedWeapon {
 
     /** Wiki: fires arrows up to dragon arrows. */
     public static readonly SCORCHING_BOW = new RangedWeapon([ItemIdentifiers.SCORCHING_BOW], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.ICE_ARROW, Ammunition.BROAD_ARROW, Ammunition.AMETHYST_ARROW, Ammunition.DRAGON_ARROW, Ammunition.SEEKING_DRAGON_ARROW], RangedWeaponType.SCORCHING_BOW)
+    /** Leagues VI echo item. Wiki (Nature's recurve): fires up to dragon arrows. */
+    public static readonly NATURES_RECURVE = new RangedWeapon([ItemIdentifiers.NATURES_RECURVE], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.ICE_ARROW, Ammunition.BROAD_ARROW, Ammunition.AMETHYST_ARROW, Ammunition.DRAGON_ARROW, Ammunition.SEEKING_DRAGON_ARROW], RangedWeaponType.SHORTBOW)
     public static readonly DARK_BOW = new RangedWeapon([ItemIdentifiers.DARK_BOW, ItemIdentifiers.DARK_BOW_3, ItemIdentifiers.DARK_BOW_4, ItemIdentifiers.DARK_BOW_5, ItemIdentifiers.DARK_BOW_6, ItemIdentifiers.DARK_BOW_7, ItemIdentifiers.DARK_BOW_BH_, ItemIdentifiers.CORRUPTED_DARK_BOW, ItemIdentifiers.DARK_BOW_DEADMAN_], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.ICE_ARROW, Ammunition.AMETHYST_ARROW, Ammunition.DRAGON_ARROW, Ammunition.SEEKING_DRAGON_ARROW], RangedWeaponType.LONGBOW)
 
     // Wiki: the crossbow and the Phoenix crossbow fire only bronze bolts; the blurite crossbow bronze or blurite.
@@ -498,6 +503,8 @@ export class RangedWeapon {
     public static readonly ASCENSION_CROSSBOWS = new RangedWeapon([ItemIdentifiers.ASCENSION_CROSSBOWS], [Ammunition.ASCENSION_BOLT, Ammunition.DIAMOND_ASCENSION_BOLT, Ammunition.ENCHANTED_DIAMOND_ASCENSION_BOLT, Ammunition.ONYX_ASCENSION_BOLT, Ammunition.ENCHANTED_ONYX_ASCENSION_BOLT], RangedWeaponType.ASCENSION_CROSSBOWS)
     public static readonly ARMADYL_CROSSBOW = new RangedWeapon([ItemIdentifiers.ARMADYL_CROSSBOW], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.ADAMANT_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT, Ammunition.RUNITE_BOLT, Ammunition.BROAD_BOLT, Ammunition.DIAMOND_BOLT, Ammunition.ENCHANTED_DIAMOND_BOLT, Ammunition.ONYX_BOLT, Ammunition.ENCHANTED_ONYX_BOLT, Ammunition.DRAGON_BOLT, Ammunition.ENCHANTED_DRAGON_BOLT, Ammunition.ENCHANTED_DRAGONSTONE_DRAGON_BOLT, ...Ammunition.ALL_DRAGON_BOLTS], RangedWeaponType.CROSSBOW)
     public static readonly ZARYTE_CROSSBOW = new RangedWeapon([ItemIdentifiers.ZARYTE_CROSSBOW], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.ADAMANT_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT, Ammunition.RUNITE_BOLT, Ammunition.BROAD_BOLT, Ammunition.DIAMOND_BOLT, Ammunition.ENCHANTED_DIAMOND_BOLT, Ammunition.ONYX_BOLT, Ammunition.ENCHANTED_ONYX_BOLT, Ammunition.DRAGON_BOLT, Ammunition.ENCHANTED_DRAGON_BOLT, Ammunition.ENCHANTED_DRAGONSTONE_DRAGON_BOLT, ...Ammunition.ALL_DRAGON_BOLTS], RangedWeaponType.CROSSBOW)
+    /** Leagues VI echo item. Wiki (King's barrage): fires bolts up to dragon (the Armadyl crossbow's list, enchanted bolts included). */
+    public static readonly KINGS_BARRAGE = new RangedWeapon([ItemIdentifiers.KINGS_BARRAGE], [...RangedWeapon.ARMADYL_CROSSBOW.getAmmunitionData()], RangedWeaponType.CROSSBOW)
 
     public static readonly BRONZE_DART = new RangedWeapon([806, 812, 5628, 5635], [Ammunition.BRONZE_DART], RangedWeaponType.DART)
     public static readonly IRON_DART = new RangedWeapon([807, 813, 5629, 5636], [Ammunition.IRON_DART], RangedWeaponType.DART)
@@ -534,6 +541,8 @@ export class RangedWeapon {
 
     public static readonly TOXIC_BLOWPIPE = new RangedWeapon([12926], [Ammunition.BRONZE_DART, Ammunition.IRON_DART, Ammunition.STEEL_DART, Ammunition.BLACK_DART, Ammunition.MITHRIL_DART, Ammunition.ADAMANT_DART, Ammunition.RUNE_DART, Ammunition.AMETHYST_DART, Ammunition.DRAGON_DART], RangedWeaponType.BLOWPIPE)
     public static readonly ROSEWOOD_BLOWPIPE = new RangedWeapon([ItemIdentifiers.ROSEWOOD_BLOWPIPE, ItemIdentifiers.ROSEWOOD_BLOWPIPE_2], [Ammunition.BRONZE_DART, Ammunition.IRON_DART, Ammunition.STEEL_DART, Ammunition.BLACK_DART, Ammunition.MITHRIL_DART, Ammunition.ADAMANT_DART, Ammunition.RUNE_DART, Ammunition.AMETHYST_DART, Ammunition.DRAGON_DART], RangedWeaponType.BLOWPIPE)
+    /** Wiki: loaded with darts (no scales), never poisoned ones; the ToxicBlowpipe plugin loads and fires it. */
+    public static readonly DRYGORE_BLOWPIPE = new RangedWeapon([ItemIdentifiers.DRYGORE_BLOWPIPE], [Ammunition.BRONZE_DART, Ammunition.IRON_DART, Ammunition.STEEL_DART, Ammunition.BLACK_DART, Ammunition.MITHRIL_DART, Ammunition.ADAMANT_DART, Ammunition.RUNE_DART, Ammunition.AMETHYST_DART, Ammunition.DRAGON_DART], RangedWeaponType.BLOWPIPE)
     public static readonly RUNE_THROWNAXE = new RangedWeapon([ItemIdentifiers.RUNE_THROWNAXE, ItemIdentifiers.RUNE_THROWNAXE_2], [Ammunition.RUNE_THROWNAXE], RangedWeaponType.THROWNAXE)
     public static readonly BRONZE_THROWNAXE = new RangedWeapon([ItemIdentifiers.BRONZE_THROWNAXE], [Ammunition.BRONZE_THROWNAXE], RangedWeaponType.THROWNAXE)
     public static readonly IRON_THROWNAXE = new RangedWeapon([ItemIdentifiers.IRON_THROWNAXE], [Ammunition.IRON_THROWNAXE], RangedWeaponType.THROWNAXE)

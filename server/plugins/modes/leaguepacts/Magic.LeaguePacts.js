@@ -23,8 +23,9 @@
  * - talent_regen_magic_level_boost (same, any rune): Magic +1 a Regenerate proc (a cast's runes come
  *   one event per rune id; the boost counts the cast's `first`) for 30 ticks, at most N, retrigger resets.
  * - talent_regen_stave_charges_water/_fire/_air/_earth (`league:pact-regenerated`, charge from a
- *   POWERED_STAFF weapon): one rune of that element into the inventory (skipped when it has no room:
- *   no plugin event adds to the rune pouch). These runes do not chain into the rune pacts above.
+ *   powered staff or wand, including the autocast sceptres): one rune of that element, to the rune
+ *   pouch slot already holding it, else the inventory, else the floor (Common.giveRune). These
+ *   runes do not chain into the rune pacts above.
  * - talent_percentage_magic_damage (registerMagicDamageBonusModifier): +N% magic damage, x3 with
  *   Tumeken's shadow wielded (its passive; x4 in the Tombs is not modelled); and (Wiki, 23 April 2026)
  *   each such node +10% accuracy in all styles, which General.LeaguePacts.js sums with the rest.
@@ -54,6 +55,7 @@
  */
 const Common = require("./Common.LeaguePacts");
 const ElementalSpells = require("../../combat/elementalspells/Common.ElementalSpells");
+const PoweredStaff = require("../../items/PoweredStaff");
 
 const BOOST_TICKS = 30;
 const EARTH_BOOST_CAP_FRACTION = 0.2;
@@ -132,9 +134,27 @@ function isPlayer(entity) {
 /** The element a player's spell counts as for the pacts, or null. */
 function elementOf(player, spell) {
   loadSpells();
-  const entry = spellElements.get(spell);
+  // A weapon's own spell names its element (`pactElement`: the Fang of the hound's Flames of Cerberus, fire).
+  const entry = spellElements.get(spell) ?? (typeof spell?.pactElement === "string" ? { element: spell.pactElement } : null);
   if (!entry || (entry.needs && !Common.effect(player, entry.needs))) return null;
   return entry.element;
+}
+
+/** Element names in `elemental-spells:element`'s numeric form (1 air .. 4 fire). */
+const ELEMENT_NUMBERS = { air: 1, water: 2, earth: 3, fire: 4 };
+
+/**
+ * `elemental-spells:element` { attacker, spell, element }: a pact's Ancient family counts as its
+ * element for every elemental effect (weakness, tomes, amulets, fragments), not only for the pacts
+ * above. Standard spells already map themselves, and a weapon's own spell (the Fang of the hound's
+ * Flames of Cerberus) is no family: its own handler gives it what the Wiki names.
+ */
+function elementOverride(request) {
+  if (!isPlayer(request?.attacker)) return;
+  loadSpells();
+  const entry = spellElements.get(request.spell);
+  if (!entry?.needs || !Common.effect(request.attacker, entry.needs)) return;
+  request.element = ELEMENT_NUMBERS[entry.element];
 }
 
 function selectedSpell(player) {
@@ -145,14 +165,26 @@ function weaponOf(player) {
   return player.getEquipment().get(core.Equipment.WEAPON_SLOT) ?? null;
 }
 
-function isPoweredStaffItem(item) {
-  return item != null && item.getId() > 0 && item.getDefinition()?.getWeaponInterface?.() === core.WeaponInterfaces.POWERED_STAFF;
+/**
+ * A worn weapon the cache calls a powered staff by its interface (Zorya's tome and the Gauntlet's
+ * staffs build their own spells).
+ */
+function hasPoweredStaffInterface(player) {
+  const weapon = weaponOf(player);
+  return weapon != null && weapon.getId() > 0
+    && weapon.getDefinition()?.getWeaponInterface?.() === core.WeaponInterfaces.POWERED_STAFF;
 }
 
-/** A powered staff's own spell: the weapon is one and the spell is no spellbook's. */
+/**
+ * A powered staff's own spell: the spell a configured staff built (`isPoweredStaffSpell`), or a
+ * spellbook-less spell cast with a POWERED_STAFF weapon. A special attack selects no spell, so it
+ * is not one either.
+ */
 function castsPoweredStaff(player, spell) {
+  if (spell == null) return false;
   loadSpells();
-  return isPoweredStaffItem(weaponOf(player)) && !spellbookSpells.has(spell);
+  return PoweredStaff.isPoweredStaffSpell(spell)
+    || (hasPoweredStaffInterface(player) && !spellbookSpells.has(spell));
 }
 
 function activePrayers(player) {
@@ -174,7 +206,9 @@ function magicDamageBonus(entity, permille) {
   if (!isPlayer(entity)) return permille;
   const percent = Common.effect(entity, "talent_percentage_magic_damage");
   if (!percent) return permille;
-  const shadow = weaponOf(entity)?.getId?.() === core.ItemIdentifiers.TUMEKENS_SHADOW ? SHADOW_DAMAGE_MULTIPLIER : 1;
+  const weaponId = weaponOf(entity)?.getId?.();
+  const shadow = weaponId === core.ItemIdentifiers.TUMEKENS_SHADOW
+    || weaponId === core.ItemIdentifiers.CORRUPTED_TUMEKENS_SHADOW ? SHADOW_DAMAGE_MULTIPLIER : 1;
   return permille + percent * 10 * shadow;
 }
 
@@ -207,8 +241,9 @@ function rolled(event) {
   if (!perPrayer || elementOf(event.attacker, spell) !== "air") return;
   const prayer = event.attacker.getBonusManager().getOtherBonus()[core.BonusManager.PRAYER] ?? 0;
   // The shared weakness, so an effect that makes the spell count as the target's weakness (the
-  // Shadowflame quadrant's) counts here too (Wiki: it lets these pacts proc).
-  const weak = ElementalSpells.targetWeakness(event.attacker, event.target, spell, AIR_WEAKNESS)?.type === AIR_WEAKNESS;
+  // Shadowflame quadrant's) counts here too (Wiki: it lets these pacts proc), as does a weakness
+  // added to every element (the Devil's element's).
+  const weak = ElementalSpells.elementWeakness(event.attacker, event.target, spell, AIR_WEAKNESS) > 0;
   const chance = perPrayer * prayer * (weak ? 2 : 1);
   if (chance > 0 && Math.random() * 100 < chance) event.damage = event.maximum;
 }
@@ -384,12 +419,11 @@ function runesRegenerated(player, itemId, amount, first) {
 
 /** A powered staff's regenerated charge: one rune of each charge pact's element. */
 function chargeRegenerated(player, itemId) {
-  if (!isPoweredStaffItem(new core.Item(itemId, 1))) return;
-  const inventory = player.getInventory();
+  if (!PoweredStaff.isPoweredStaffItem(itemId)) return;
   for (const [effect, rune] of Object.entries(CHARGE_RUNES)) {
     if (!Common.effect(player, effect)) continue;
-    const item = new core.Item(core.ItemIdentifiers[rune], 1);
-    if (inventory.canTake(item)) inventory.add(item, true);
+    // The rune pouch slot already holding it, else the inventory, else the floor (Common.giveRune).
+    Common.giveRune(player, core.ItemIdentifiers[rune], 1);
   }
 }
 
@@ -409,6 +443,7 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("combat:hit-rolled", rolled);
   api.onCustomEvent("magic:cast-committed", castCommitted);
   api.onCustomEvent("league:pact-regenerated", regenerated);
+  api.onCustomEvent("elemental-spells:element", elementOverride);
   api.onCombatHitDamage(hitDamage);
   api.onCombatHitResolved(hitResolved);
   api.onAttackSpeed(attackSpeed);

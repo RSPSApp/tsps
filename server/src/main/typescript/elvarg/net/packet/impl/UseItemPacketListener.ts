@@ -1,3 +1,4 @@
+import { ObjectDefinition } from "../../../game/definition/ObjectDefinition";
 import { MapObjects } from "../../../game/entity/impl/object/MapObjects";
 import { World } from "../../../game/World";
 import { Location } from "../../../game/model/Location";
@@ -63,6 +64,8 @@ export class UseItemPacketListener {
 
     const useItem = () => {
       if (!MapObjects.stillStands(player, objectId, objectLocation, object)) return;
+      // The item was checked at the click; dropped, banked or moved during the walk, the use is gone.
+      if (player.getInventory().getItems()[itemSlot]?.getId() !== itemId) return;
       player.getMovementQueue().reset();
       player.getMovementQueue().walkToReset();
       player.setPositionToFace(object.getLocation());
@@ -70,6 +73,7 @@ export class UseItemPacketListener {
       const handled = PluginManager.emitItemOnObject({
         player,
         object,
+        definition: ObjectDefinition.forPlayer(object.getId(), player) ?? undefined,
         objectId: object.getId(),
         item,
         itemId,

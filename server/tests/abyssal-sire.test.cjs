@@ -32,7 +32,10 @@ before(() => {
       ItemIdentifiers: { ABYSSAL_ORPHAN: ORPHAN },
       ItemDefinition: { forId: (id) => ({ getName: () => ({ [SPINE]: "Bludgeon spine", [CLAW]: "Bludgeon claw", [AXON]: "Bludgeon axon" })[id] }) },
       Animation: class { constructor(id) { this.id = id; } },
-      Graphic: class { constructor(id, delay) { this.id = id; this.delay = delay; } },
+      Graphic: class {
+        constructor(id, delay) { this.id = id; this.delay = delay; }
+        static delayed(id, delay) { return new this(id, delay); }
+      },
       HitDamage: class { constructor(damage, mask) { this.damage = damage; this.mask = mask; } },
       HitMask: { BLUE: 0, RED: 1, GREEN: 2 },
       CombatFactory: { poisonEntity: (entity, severity) => events.push({ name: "poison", severity }) },

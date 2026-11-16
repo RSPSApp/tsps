@@ -314,6 +314,33 @@ test("accuracy: a powered staff uses whichever of Ranged and melee is higher; ot
   }
 });
 
+test("accuracy: an uncharged powered staff counts as any other staff, a charged one as powered", () => {
+  require("../plugins/items/Trident.plugin").register(PluginManager.createApi("TridentCannonTest"));
+  const p = gunner();
+  built(p);
+  const bat = spawnNpc(core.NpcIdentifiers.GIANT_BAT, 3260, 3262);
+  const { specialRolls, rollAccuracy } = core.AccuracyFormulasDpsCalc;
+  let used = null;
+  core.AccuracyFormulasDpsCalc.specialRolls = (_a, _t, style) => ({ attack: style === core.CombatType.RANGED ? 9000 : 100, defence: 1 });
+  core.AccuracyFormulasDpsCalc.rollAccuracy = (_a, _t, style) => ((used = style), true);
+  const styleWearing = (staff) => {
+    p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, staff);
+    assert.equal(core.CombatFactory.getMethod(p).poweredStaff, true, "the trident's own method");
+    used = null;
+    Firing.shoot(Cannon.cannonOf(p), p, bat);
+    return used;
+  };
+  try {
+    assert.equal(styleWearing(new core.Item(Items.TRIDENT_OF_THE_SEAS, 1, { "trident-charges": 100 })), core.CombatType.RANGED,
+      "charged: the higher Ranged roll");
+    assert.equal(styleWearing(new core.Item(Items.UNCHARGED_TRIDENT, 1)), core.CombatType.MELEE, "uncharged: melee, as any staff");
+  } finally {
+    core.AccuracyFormulasDpsCalc.specialRolls = specialRolls;
+    core.AccuracyFormulasDpsCalc.rollAccuracy = rollAccuracy;
+    p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(-1, 0));
+  }
+});
+
 test("the captured shots fall in their directions' zones (at the NPC's south-west tile)", () => {
   assert.equal(Data.inZone(Data.DIRECTIONS.indexOf("n"), 0, 2), true, "an ent 2 north (shot 1)");
   assert.equal(Data.inZone(Data.DIRECTIONS.indexOf("sw"), -3, -3), true, "an ent 3 south-west (shot 2)");
@@ -434,13 +461,18 @@ test("the ornament kit on each part, Dismantle back; an ornament cannon uses its
 
 test("restrictions: every Wiki area has its message; outlines are polygons; instances refuse", () => {
   const data = Restrictions.load();
-  assert.equal(data.restrictions.length, 72);
+  assert.equal(data.restrictions.length, 74);
   for (const r of data.restrictions) {
     assert.ok(r.name && r.message, r.name);
     for (const area of r.areas ?? []) assert.ok(area.points.length >= 3 && r.source, r.name);
   }
   assert.equal(Restrictions.restrictionAt(new core.Location(3165, 3490, 0)), "The Grand Exchange staff prefer not to have heavy artillery operated around their premises.");
   assert.equal(Restrictions.restrictionAt(new core.Location(3200, 10100, 0)), "You can't set up a cannon here.", "the Revenant Caves");
+  // Wiki (Ynysdail Cavern): the whole cavern, from beside its exit to its far end; not the island above.
+  for (const [x, y] of [[2292, 9914], [2243, 9832], [2298, 9918]]) {
+    assert.equal(Restrictions.restrictionAt(new core.Location(x, y, 0)), "The ground is too damp to set up a cannon here.", `${x},${y}`);
+  }
+  assert.equal(Restrictions.restrictionAt(new core.Location(2219, 3477, 0)), null, "Ynysdail's surface");
   assert.equal(Restrictions.restrictionAt(CENTRE), null);
   assert.equal(Restrictions.restrictionAt(CENTRE, {}), data.default, "an instance");
 });
@@ -630,6 +662,7 @@ test("Tower of Magic restriction applies only during Ascent of Arceuus, through 
 
 test("cache-derived room restrictions match closed walkable components and cannot include another valid cannon room", () => {
   const rooms = [
+    ['Elven rabbit cave', 3295, 12581, 0, 95, [3291, 12574, 3300, 12583]],
     ['Fight Arena interior', 2603, 3156, 0, 382, [2583, 3152, 2606, 3170]],
     ['Karuulm Slayer Dungeon', 1259, 10154, 0, 299, [1251, 10147, 1276, 10170]],
     ['Karuulm Slayer Dungeon', 1268, 10191, 0, 603, [1256, 10175, 1301, 10206]],

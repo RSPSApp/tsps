@@ -264,9 +264,8 @@ function brewma(event) {
   const words = ["", "a", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen"];
   const text = made === 1 ? "Brew'ma quickly mixes a Rejuvenation potion."
     : `Brew'ma quickly mixes ${words[made] ?? made} Rejuvenation potions.`;
-  const { ChatType, DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue } = Shared.core();
+  const { DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue } = Shared.core();
   const potion = Shared.ITEM.REJUVENATION_4;
-  event.player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
   event.player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(made === 1
     ? new ItemStatementDialogue(0, potion, text) : new DoubleItemStatementDialogue(0, potion, potion, text)));
 }
@@ -287,6 +286,8 @@ function drink(event) {
   Shared.sound(player, Shared.SOUND.DRINK);
   Warmth.restore(player, Warmth.POTION_RESTORE);
   Shared.spam(player, "You drink some of your potion.");
+  // A sip for tracking_potions_sipped, between the two lines (rsprox 233/03262.txt:4957-4960).
+  Shared.api().emitCustomEvent("potions:sip", { player });
   Shared.spam(player, dosesLeftLine(next));
   return true;
 }

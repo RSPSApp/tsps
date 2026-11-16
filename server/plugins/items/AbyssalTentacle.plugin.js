@@ -43,8 +43,6 @@ function combine({ player, usedItem, usedWithItem, usedItemSlot, usedWithItemSlo
   // chat line. Live also holds busy (12393) while the menu is up; it is left out because the menu has no
   // close hook to clear it on a walk-away, teleport or logout.
   const { DialogueChainBuilder, StatementDialogue, ActionDialogue, Animation } = core;
-  const sender = player.getPacketSender();
-  sender.sendTypedMessage(core.ChatType.MESBOX, COMBINE_WARNING.replace(/<br>/g, " "));
   const chain = new DialogueChainBuilder();
   chain.add(new StatementDialogue(0, COMBINE_WARNING));
   chain.add(new ActionDialogue(1, {
@@ -107,10 +105,14 @@ function degrade(player, tentacle) {
 
 function useCharge(player, tentacle) {
   // Content may spare the charge (a league relic): the question every charged weapon asks.
-  const consume = { player, itemId: tentacle.getId(), skip: false };
+  const consume = { player, itemId: tentacle.getId(), skip: false, extra: 0 };
   api.emitCustomEvent("combat:melee-charge", consume);
   api.emitCustomEvent("combat:consume-charge", consume);
-  if (consume.skip) return;
+  if (consume.skip) {
+    // Charges given back on top (Demonic Pacts' Regenerate above 100%), up to the tentacle's most.
+    if (consume.extra > 0) tentacle.setMetaValue(CHARGES_META_KEY, Math.min(MAX_CHARGES, charges(tentacle) + consume.extra));
+    return;
+  }
   const left = Math.max(0, charges(tentacle) - 1);
   tentacle.setMetaValue(CHARGES_META_KEY, left);
   if (left === 0) {

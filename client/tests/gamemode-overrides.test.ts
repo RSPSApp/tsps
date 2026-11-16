@@ -169,3 +169,16 @@ test("a payload without the datasets keeps them; an empty dataset clears them", 
     assert.equal(getEnumOverride(5950), undefined);
     assert.equal(getDbRowOverride(340001), undefined);
 });
+
+test("enum overrides are kept per sender: one sender's payload never clears another's", () => {
+    // A league's enums and Grouping's enum 850 (no suggested world for any activity) side by side.
+    loadFromPayload({ gamemodeId: "server", datasets: [{ key: "enumOverrides", rows: [{ enumId: 5950, valueType: "J", defaultValue: -1, entries: [[0, 340000]] }] }] });
+    loadFromPayload({ gamemodeId: "grouping", datasets: [{ key: "enumOverrides", rows: [{ enumId: 850, valueType: "I", defaultValue: -1, entries: [[1, -1], [5, -1]] }] }] });
+    assert.equal(getEnumOverride(5950)?.intValues?.[0], 340000);
+    assert.deepEqual(getEnumOverride(850)?.intValues, [-1, -1]);
+    loadFromPayload({ gamemodeId: "server", datasets: [{ key: "enumOverrides", rows: [] }] });
+    assert.equal(getEnumOverride(5950), undefined, "a sender's new payload replaces its own set");
+    assert.deepEqual(getEnumOverride(850)?.intValues, [-1, -1], "and only its own");
+    loadFromPayload({ gamemodeId: "grouping", datasets: [{ key: "enumOverrides", rows: [] }] });
+    assert.equal(getEnumOverride(850), undefined);
+});

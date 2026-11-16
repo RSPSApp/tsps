@@ -48,6 +48,7 @@ before(async () => {
     registerMeleeAttackAccuracyModifier: EquipmentEffects.registerMeleeAttackAccuracyModifier,
     registerRangedAttackAccuracyModifier: EquipmentEffects.registerRangedAttackAccuracyModifier,
     registerMagicAttackAccuracyModifier: EquipmentEffects.registerMagicAttackAccuracyModifier,
+    registerMagicAccuracyPercentModifier: EquipmentEffects.registerMagicAccuracyPercentModifier,
     registerRestingLevelModifier: (modifier) => SkillManager.registerRestingLevelModifier(modifier),
   };
   const api = new Proxy({
@@ -76,7 +77,7 @@ before(async () => {
     registerMagicDamageBonusModifier: () => {}, onCustomEvent: () => {}, onPlayerLogin: () => {} });
   require("../plugins/items/SlayerHelmet.plugin").register({ ...forward, core,
     emitCustomEvent: (name, request) => { if (name === "slayer:on-task") request.onTask = true; },
-    onItemOnItem() {}, onItemAction() {}, onCustomEvent() {} });
+    onItemOnItem() {}, onItemAction() {}, onPlayerDeathItemDrop() {}, onPlayerDeathDrops() {}, onCustomEvent() {} });
   const { CombatSpecial } = require("../dist/game/content/combat/CombatSpecial");
   require("../plugins/combat/specials/DragonDagger.SpecialAttack")({ core, registerCombatSpecial: CombatSpecial.register, emitCustomEvent: () => {} });
   Common = require("../plugins/modes/leaguepacts/Common.LeaguePacts");

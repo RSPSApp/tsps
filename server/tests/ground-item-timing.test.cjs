@@ -52,11 +52,12 @@ function lifetime(pile) {
 test("a dropped item reports the cycles it was created, turns public and despawns", () => withWorld(() => {
   let pile;
   cycle({players: () => { pile = ItemOnGroundManager.registers(player, new Item(1351)); }});
-  const created = World.getProcessCycle();
+  // Live counts the drop's own cycle as its first tick (see "the cycle a stack is added in counts" below).
+  const added = World.getProcessCycle(), created = added - 1;
   assert.deepEqual(pile.getTiming(), {createdTick: created, privateUntilTick: created + 100, expiresTick: created + 300});
   cycle(); cycle();
   assert.deepEqual(pile.getTiming(), {createdTick: created, privateUntilTick: created + 100, expiresTick: created + 300});
-  assert.deepEqual(lifetime(pile), {publicAt: created + 100, goneAt: created + 300});
+  assert.deepEqual(lifetime(pile), {publicAt: added + 99, goneAt: added + 299});
 }));
 
 test("a public unowned untradeable world item keeps its 200-tick lifetime", () => withWorld(() => {
@@ -66,11 +67,12 @@ test("a public unowned untradeable world item keeps its 200-tick lifetime", () =
     pile.setDespawnDelay(200);
     ItemOnGroundManager.register(pile);
   }});
-  const created = World.getProcessCycle();
+  const added = World.getProcessCycle(), created = added - 1;
   assert.equal(ItemOnGroundManager.canSee(player, pile), true);
   assert.equal(pile.isStaticSpawn(), false);
   assert.deepEqual(pile.getTiming(), {createdTick: created, privateUntilTick: 0, expiresTick: created + 200});
-  assert.equal(lifetime(pile).goneAt, created + 200);
+  // Live sends unowned sawdust as despawn=199 (rsprox_transcripts/242/900174.txt): gone 199 cycles after its add.
+  assert.equal(lifetime(pile).goneAt, added + 199);
 }));
 
 test("an NPC drop made during the task phase counts the cycle it was made in", () => withWorld(() => {
@@ -128,10 +130,11 @@ test("public, owner-only, merged and permanent stacks follow the server's rules"
 
   const coins = ItemOnGroundManager.registers(player, new Item(995, 10));
   for (let i = 0; i < 40; i++) cycle();
-  assert.equal(coins.getTiming().createdTick, now() - 40);
+  assert.equal(coins.getTiming().createdTick, now() - 41);
   ItemOnGroundManager.registers(player, new Item(995, 5));
   assert.equal(coins.getItem().getAmount(), 15);
-  assert.deepEqual(coins.getTiming(), {createdTick: now(), privateUntilTick: now() + 100, expiresTick: now() + 300});
+  // The top-up restarts the timer with this cycle as its first tick, as a new drop's does.
+  assert.deepEqual(coins.getTiming(), {createdTick: now() - 1, privateUntilTick: now() + 99, expiresTick: now() + 299});
 }));
 
 test("ground item views sent to the client carry the timing", () => withWorld(() => {
@@ -150,7 +153,7 @@ test("a stack registered with its own lifetime keeps it, and stays owner-only wh
     untradeable = ItemOnGroundManager.registerLocation(player, new Item(6654), new Location(3223, 3218), undefined,
       {goesGlobal: false, despawnDelay: 18000});
   }});
-  const created = World.getProcessCycle();
+  const created = World.getProcessCycle() - 1;
   assert.deepEqual(reward.getTiming(), {createdTick: created, privateUntilTick: created + 100, expiresTick: created + 18000});
   assert.deepEqual(untradeable.getTiming(), {createdTick: created, privateUntilTick: 0, expiresTick: created + 18000});
   let publicAt = -1, untradeableGone = -1;
@@ -171,4 +174,26 @@ test("a long-lived stack does not merge into an ordinary one on the same tile", 
   assert.equal(coins.getItem().getAmount(), 10);
   assert.ok(World.getItems().includes(reward));
   assert.equal(reward.clone().getDespawnDelay(), 18000);
+}));
+
+// rsprox_transcripts/232/03202.txt: the Draynor tree guard's bowl (reveal=100, despawn=75, ownership=self) is
+// added at ticks 7780, 7842 and 8190 and deleted at 7854, 7916 and 8264, 74 ticks later each time. Across
+// revs 239-242, 49,339 self-owned despawn=200 and 26,619 despawn=300 stacks go 199 and 299 ticks after their add.
+test("the cycle a stack is added in counts as its first tick, whichever phase adds it", () => withWorld(() => {
+  const tile = new Location(3084, 3245);
+  for (const phase of ["players", "tasks"]) {
+    let bowl;
+    cycle({[phase]: () => {
+      bowl = ItemOnGroundManager.registerLocation(player, new Item(1923), tile, undefined, {despawnDelay: 75});
+    }});
+    const added = World.getProcessCycle();
+    assert.equal(bowl.getTiming().expiresTick, added + 74, phase);
+    assert.equal(lifetime(bowl).goneAt, added + 74, phase);
+  }
+  // A dropped stack that goes public does so 99 cycles after its add: other players then see it with 200
+  // ticks left (despawn=200, ownership=other), and it goes 299 cycles after the drop.
+  let drop;
+  cycle({players: () => { drop = ItemOnGroundManager.registers(player, new Item(1351)); }});
+  const dropped = World.getProcessCycle();
+  assert.deepEqual(lifetime(drop), {publicAt: dropped + 99, goneAt: dropped + 299});
 }));

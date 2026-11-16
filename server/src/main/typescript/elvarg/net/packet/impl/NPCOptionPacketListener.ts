@@ -105,7 +105,7 @@ export class NPCOptionPacketListener {
   }
 
   /**
-   * An NPC's menu option done (not Attack): its handler, else the bank, else a plugin. One that
+   * An NPC's menu option done (not Attack): its handler, else a plugin, else the bank. One that
    * something answered is `npc:operated` { player, npc, npcId, option } (the option lower-cased: a
    * Talk-to that started a dialogue, a Pet), for whatever counts the deed itself.
    */
@@ -129,11 +129,6 @@ export class NPCOptionPacketListener {
       return true;
     }
 
-    if (option === "bank") {
-      player.getBank(player.getCurrentBankTab()).open();
-      return true;
-    }
-
     const handled = PluginManager.emitNpcInteraction({
       player,
       npc,
@@ -149,10 +144,18 @@ export class NPCOptionPacketListener {
       handled: false,
     });
 
-    if (!handled) {
-      player.sendMessage("Nothing interesting happens.");
+    if (handled) {
+      return true;
     }
-    return handled;
+
+    // Plugins answer a "Bank" option first (a banker who needs something first), as objects do.
+    if (option === "bank") {
+      player.getBank(player.getCurrentBankTab()).open();
+      return true;
+    }
+
+    player.sendMessage("Nothing interesting happens.");
+    return false;
   }
 
   public static castSpell(player: any, index: number, spellId: number, selection?: { name: string; widgetId: number }): boolean {

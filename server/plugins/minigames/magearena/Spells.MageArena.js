@@ -24,9 +24,9 @@ const FLAMES_OF_ZAMORAK = 1192;
 const BATTLE_MAGE_IDS = new Set([1610, 1611, 1612]);
 
 const GODS = Object.freeze([
-  Object.freeze({ name: "Saradomin Strike", spellId: SARADOMIN_STRIKE, counter: "mage-arena:charge:saradomin" }),
-  Object.freeze({ name: "Claws of Guthix", spellId: CLAWS_OF_GUTHIX, counter: "mage-arena:charge:guthix" }),
-  Object.freeze({ name: "Flames of Zamorak", spellId: FLAMES_OF_ZAMORAK, counter: "mage-arena:charge:zamorak" }),
+  Object.freeze({ name: "Saradomin Strike", summoned: "a Saradomin Strike", spellId: SARADOMIN_STRIKE, counter: "mage-arena:charge:saradomin" }),
+  Object.freeze({ name: "Claws of Guthix", summoned: "the Claws of Guthix", spellId: CLAWS_OF_GUTHIX, counter: "mage-arena:charge:guthix" }),
+  Object.freeze({ name: "Flames of Zamorak", summoned: "the Flames of Zamorak", spellId: FLAMES_OF_ZAMORAK, counter: "mage-arena:charge:zamorak" }),
 ]);
 const GOD_BY_SPELL = new Map(GODS.map((god) => [god.spellId, god]));
 
@@ -53,6 +53,21 @@ function spellOf(player) {
   return combat?.getSelectedSpell?.() ?? combat?.getPreviousCast?.() ?? null;
 }
 
+/**
+ * The message box that follows the unlock line on the same tick, its text logged to the chat as a
+ * mesbox line first (RSProx 235/3344 ticks 4457 and on: messagebox 229, for all three gods).
+ */
+function chargedBoxText(god) {
+  return `Congratulations. Your ability to summon ${god.summoned} has<br>improved. You may now use this spell outside of the Arena.`;
+}
+
+function showChargedBox(player, god) {
+  if (!api) return;
+  player.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder().add(
+    new api.core.StatementDialogue(0, chargedBoxText(god)),
+  ));
+}
+
 /** One resolved cast on a battle mage. Returns true when it counted. */
 function awardCast(player, god) {
   const current = chargeOf(player, god);
@@ -60,7 +75,9 @@ function awardCast(player, god) {
   const next = current + 1;
   player.setAttribute(god.counter, next);
   if (next === CASTS_REQUIRED) {
-    player.sendMessage(`You are now able to cast ${god.name} outside of the Mage Arena.`);
+    // RSProx 235/3344: "You can now cast Claws of Guthix outside the Arena." (also Saradomin Strike, Flames of Zamorak).
+    player.sendMessage(`You can now cast ${god.name} outside the Arena.`);
+    showChargedBox(player, god);
   }
   return true;
 }
@@ -122,6 +139,7 @@ Object.assign(module.exports, {
     isUnlocked,
     spellOf,
     awardCast,
+    chargedBoxText,
     hitResolved,
     spellDisabled,
   },

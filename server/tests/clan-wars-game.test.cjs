@@ -4,7 +4,7 @@
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, afterEach, test } = require('node:test');
+const { before, beforeEach, afterEach, test } = require('node:test');
 require('../dist/Server').Server.installProductionPathResolver();
 const { PluginManager: PM } = require('../dist/plugins/PluginManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
@@ -27,11 +27,23 @@ let serial = 0;
 // Only Q's explicitly selected engine tests take real NPC/player combat turns.
 // Existing controls keep their original ordering and helper behavior.
 let ghastTurns = false, ghastObserve = null, ghastRollControl = null;
+// M's explicitly selected turns exercise the canonical player combat and rune producers.
+let magicTurns = false, magicObserve = null, magicRollControl = null, magicDamageControl = null, magicCase = null;
+let bowTurns = false, bowRollControl = null;
 const fixtureNpcs = new Set(), npcQueueFailures = [];
 function npcQueues() {
   const add=core.World.getAddNPCQueue(), remove=core.World.getRemoveNPCQueue();
   while(add.length){const npc=add.shift();if(!core.World.getNpcs().add(npc))npcQueueFailures.push(npc);}
   while(remove.length){const npc=remove.shift();if(npc.isRegistered())core.World.getNpcs().remove(npc);}
+}
+function bowPlayerTurn(p) {
+  const combat=p.getCombat(),movement=p.getMovementQueue();
+  combat.getHitQueue().process(C.now());
+  if(p.getHitpoints()<=0||p.isDyingReturn())return;
+  p.getTimers().process();movement.beginCycle();
+  if(combat.hasPendingWork())combat.preMovementProcess();
+  if(movement.hasPendingWork())movement.process();
+  if(combat.hasPendingWork())combat.postMovementProcess();
 }
 function ghastPlayerTurn(p) {
   const combat=p.getCombat(),movement=p.getMovementQueue();
@@ -53,6 +65,7 @@ before(async () => {
   require('../plugins/combat/PvpStatistics.plugin').register(PM.createApi('ClanWarsPvpStatsTest'));
   require('../plugins/combat/KillStreaks.plugin').register(PM.createApi('ClanWarsKillStreaksTest'));
   require('../plugins/minigames/ClanWars.plugin').register(PM.createApi('ClanWarsTest'));
+  require('../plugins/areas/FeroxEnclave.plugin').register(PM.createApi('ClanWarsFeroxTest'));
   Presets.register(PM.createApi('ClanWarsPresetsTest'));
   require('../plugins/items/Food.plugin').register(PM.createApi('ClanWarsFoodTest'));
   require('../plugins/items/Potions.plugin').register(PM.createApi('ClanWarsPotionsTest'));
@@ -71,17 +84,25 @@ before(async () => {
   require('../plugins/quests/quests/NatureSpirit.Quest')(PM.createApi('ClanWarsGhastQuestTest'));
   const proofApi=PM.createApi('ClanWarsGhastObserver');
   proofApi.onCombatHitPrepare(event=>{if(ghastObserve)ghastObserve('prepare',event);});
-  proofApi.onCombatHitRoll(event=>{if(ghastRollControl)ghastRollControl(event);});
+  proofApi.onCombatHitRoll(event=>{if(ghastRollControl)ghastRollControl(event);if(bowRollControl)bowRollControl(event);});
   proofApi.onCombatHitResolved(event=>{if(ghastObserve)ghastObserve('resolved',event);});
+  proofApi.onCombatHitPrepare(event=>{if(magicObserve)magicObserve('prepare',event);});
+  proofApi.onCombatHitRoll(event=>{if(magicRollControl)magicRollControl(event);});
+  proofApi.onCombatHitDamage(event=>{if(magicDamageControl)magicDamageControl(event);});
+  proofApi.onCombatHitResolved(event=>{if(magicObserve)magicObserve('resolved',event);});
+  proofApi.onCustomEvent('magic:cast-committed',event=>{if(magicObserve)magicObserve('committed',event);});
   proofApi.onCustomEvent('npc-drops:claim',event=>{if(ghastObserve)ghastObserve('claim',event);});
   proofApi.onCustomEvent('npc-drops:generated',event=>{if(ghastObserve)ghastObserve('generated',event);});
   proofApi.onNpcDeath(event=>{if(ghastObserve)ghastObserve('death',event);});
   console.error = (...args) => { errors.push(args.map(String).join(' ')); originalError(...args); };
 });
-afterEach(() => {
+afterEach(context => {
+  if(magicCase)console.log('MAGIC_FIXTURE '+JSON.stringify({phase:'teardown-start',name:magicCase,clock:C.now(),actors:actors.length,...process.memoryUsage()}));
+  if(context.name.startsWith('standard-bow'))bowDiagnostic(context,'teardown-start');
   Negotiation.shutdown();
   Match.shutdown();
-  ghastTurns=false;ghastObserve=null;ghastRollControl=null;
+  ghastTurns=false;ghastObserve=null;ghastRollControl=null;bowTurns=false;bowRollControl=null;
+  magicTurns=false;magicObserve=null;magicRollControl=null;magicDamageControl=null;
   for(const npc of fixtureNpcs){C.api.removeNpc(npc);if(npc.getArea())npc.getArea().leave(npc,false);}fixtureNpcs.clear();npcQueues();
   for (const p of actors.splice(0)) {
     PM.emitPlayerLogout({ player: p, username: p.getUsername() });
@@ -90,6 +111,9 @@ afterEach(() => {
   }
   assert.equal(npcQueueFailures.splice(0).length,0,'only the explicit refused-add fixture may consume a failed queue registration');
   assert.deepEqual(errors.splice(0), [], 'production hooks must not swallow errors');
+  if(magicCase)console.log('MAGIC_FIXTURE '+JSON.stringify({phase:'teardown-complete',name:magicCase,clock:C.now(),actors:actors.length,...process.memoryUsage()}));
+  magicCase=null;
+  if(context.name.startsWith('standard-bow'))bowDiagnostic(context,'teardown-complete');
 });
 
 function actor(nativeProof = false) {
@@ -128,7 +152,8 @@ function tick(count = 1) {
       for (const p of actors) {
         p.connection.processTurnPackets(); AreaManager.process(p);
         core.TaskManager.processWalkTo(p.getIndex());
-        if(ghastTurns)ghastPlayerTurn(p);else p.getMovementQueue().process();
+        if(ghastTurns||magicTurns)ghastPlayerTurn(p);else if(bowTurns)bowPlayerTurn(p);else p.getMovementQueue().process();
+        if(magicTurns)PM.emitPlayerProcess({player:p});
       }
       core.World.rebuildUpdateBuckets();
       for (const p of actors) {
@@ -195,7 +220,9 @@ async function negotiate(a, b, cap = null, mode = 0, restrictions = null, arena 
     tick(9);
   }
   for (const [key,value] of Object.entries(restrictions ?? {})) {
-    await click(a, key==='stragglers'?'clanwars_setup:stragglers':`clanwars_setup:dropdown_${key}`,
+    if(key==='freezing') {
+      if(C.negotiations.get(a).rules.freezing!==value)await click(a,'clanwars_setup:other',0);
+    } else await click(a, key==='stragglers'?'clanwars_setup:stragglers':`clanwars_setup:dropdown_${key}`,
       key==='stragglers'?value*3:value+1);
     assert.equal(C.negotiations.get(a).rules[key],value,'native restriction selection must reach the server offer');
     tick(9);
@@ -282,6 +309,25 @@ test('native cap choice limits real channel members, closes late entry and enfor
   assert.equal(C.matches.has(extra), false, 'LTS entry is closed after preparation');
   const preset = { player: a, allow: true }; PM.emitCustomEvent('presets:can-use', preset);
   assert.equal(preset.allow, false);
+});
+
+test('match tick resends only the HUD varbits whose values changed', async () => {
+  const a = actor(), b = actor(); channel(a); channel(b);
+  const game = await negotiate(a, b, 1);
+  await join(a); await join(b);
+  const hudIds = new Map(['clanwars_points_1','clanwars_points_2','clanwars_countdown','clanwars_kills_1',
+    'clanwars_kills_2','clanwars_timeremaining','clanwars_players_1','clanwars_players_2']
+    .map(name => [core.CacheDefinitions.getVarbitId(name), name]));
+  const writes = varbitCalls(a);
+  const hud = () => writes.splice(0).filter(([id]) => hudIds.has(id)).map(([id, value]) => [hudIds.get(id), value]);
+  tick(); hud();
+  tick();
+  assert.equal(game.phase, 'staging');
+  assert.deepEqual(hud(), [['clanwars_countdown', game.starts - C.now()]], 'only the countdown changes in staging');
+  game.kills[0] = 1;
+  tick();
+  assert.deepEqual(hud().map(([name]) => name).sort(), ['clanwars_countdown', 'clanwars_kills_1']);
+  assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_kills_1')), 1);
 });
 
 test('native opponent cap revision invalidates prior acceptance and unsupported controls cannot change fixed terms', async () => {
@@ -545,7 +591,7 @@ test('native kill-target negotiation preserves cap, invalidates acceptance and r
   assert.equal(session.accepted.size, 0);
   await click(a, 'clanwars_setup:accept'); assert.equal(session.accepted.has(a), false);
   tick(9);
-  for (const forged of [1, 2, 27, 45, 63, 69, 65535]) {
+  for (const forged of [1, 2, 27, 45, 42, 72, 65535]) {
     await click(a, 'clanwars_setup:wincondition', forged);
     assert.equal(session.rules.wincondition, 1, 'non-row and deferred mode selections cannot alter the offer');
   }
@@ -628,6 +674,24 @@ test('kill-target late join and channel-leave death credit use real channel even
 });
 
 
+for (const departure of ['disconnect hook', 'world removal']) {
+  test(`kill-target: a live fighter's ${departure} counts as a death for the other side, once (PR #5416 review)`, async () => {
+    const a=actor(), extra=actor(), b=actor(); channel(a,[extra]); channel(b);
+    const game=await negotiate(a,b,2,1); await join(a); await join(b);
+    core.World.processCycle=game.starts; game.tick();
+    await join(extra);
+    assert.equal(game.fighters.has(extra),true);
+    assert.equal(game.rules.leavingcc,0,'the default terms count leaving as a death');
+    const otherSide = 1 - game.channelKeys.indexOf(C.channel(extra).key);
+    const expected = [0,0]; expected[otherSide] = 1;
+    PM.emitPlayerDisconnect({ player: extra, username: extra.getUsername(), source: 'native-test' });
+    if (departure === 'world removal') PM.emitPlayerLogout({ player: extra, username: extra.getUsername() });
+    assert.deepEqual(game.kills,expected,'the departure credits the other team');
+    tick(2); assert.deepEqual(game.kills,expected,'later hooks and polling cannot double count');
+    assert.equal(C.matches.has(extra),false); assert.equal(game.phase,'combat');
+  });
+}
+
 test('kill-target finish protects two queued production death tasks before the second dying event', async () => {
   const a=actor(), b=actor(); channel(a); channel(b);
   const game=await negotiate(a,b,1,1); await join(a); await join(b);
@@ -663,7 +727,7 @@ test('kill-target finish protects two queued production death tasks before the s
 // A supplied lethal HP update queues the real death task, but no task runs until tick().
 // Each departure leaves two other fighters in combat, isolating remove from finish.
 for (const mode of [0, 1]) {
-  for (const departure of ['channel leave', 'disconnect hook', 'logout hook', 'forfeit handler']) {
+  for (const departure of ['channel leave', 'disconnect hook', 'logout hook', 'world removal', 'forfeit handler']) {
     test(`queued safe death survives ${departure} before its first callback in mode ${mode}`, async () => {
       const a = actor(), extra = actor(), b = actor(); channel(a, [extra]); channel(b);
       const game = await negotiate(a, b, 2, mode);
@@ -690,6 +754,11 @@ for (const mode of [0, 1]) {
       if (departure === 'channel leave') FC.leave(extra, false);
       else if (departure === 'disconnect hook') PM.emitPlayerDisconnect({ player: extra, username: extra.getUsername(), source: 'native-test' });
       else if (departure === 'logout hook') PM.emitPlayerLogout({ player: extra, username: extra.getUsername() });
+      // World's queue_remove_players order: the disconnect hook, then players.remove's logout hook.
+      else if (departure === 'world removal') {
+        PM.emitPlayerDisconnect({ player: extra, username: extra.getUsername(), source: 'native-test' });
+        PM.emitPlayerLogout({ player: extra, username: extra.getUsername() });
+      }
       else assert.equal(Match.leave({ player: extra }), true, 'registered Forfeit handler removes the fighter');
       assert.equal(C.matches.has(extra), false);
       assert.equal(game.members.has(extra), false);
@@ -710,7 +779,8 @@ for (const mode of [0, 1]) {
       assert.equal(guards.pvp.allow, false, 'queued owner vetoes PvP rewards immediately after departure');
       assert.equal(Match.dying.has(extra), false, 'final callback releases independent ownership');
       const expected = [0, 0];
-      if (mode && ['channel leave', 'logout hook'].includes(departure)) expected[1 - side] = 1;
+      // The lethal hit landed before the departure, so its kill counts once (the Forfeit portal refuses a dying player).
+      if (mode && departure !== 'forfeit handler') expected[1 - side] = 1;
       assert.deepEqual(game.kills, expected, 'departure is not credited again by the delayed death task');
       assert.equal(game.phase, 'combat');
     });
@@ -1313,8 +1383,8 @@ for (const [key,values] of Object.entries(NEGOTIATED_RULE_CHOICES)) {
     const revision=session.revision;
     await click(b,'clanwars_setup:accept'); await click(a,`clanwars_setup:dropdown_${key}`,values.at(-1)+1);
     assert.equal(session.revision,revision); assert.equal(session.accepted.has(b),true,'same selection is a no-op');
-    await click(a,'clanwars_setup:dropdown_specialattacks',2);
-    assert.equal(session.rules.specialattacks,key==='specialattacks'||membership?2:0,'deferred Staff-only choice cannot change terms');
+    await click(a,'clanwars_setup:dropdown_specialattacks',4);
+    assert.equal(session.rules.specialattacks,key==='specialattacks'||membership?2:0,'unsupported special-attack choice cannot change terms');
     assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_specialattacks')),session.rules.specialattacks);
     await click(a,'clanwars_setup:accept'); assert.equal(session.stage,'confirm');
     const agreed={...session.rules}; await click(a,`clanwars_setup:dropdown_${key}`,1);
@@ -1338,7 +1408,8 @@ test('native No Food refuses before inventory, healing and timers change and end
   await nativeItem(a,I.APPLE_PIE,'Eat'); assert.deepEqual(resources(a),before); assert.ok(lines.some(line=>line.includes('cannot eat')));
   const outside=actor(true); ruleStats(outside); give(outside,I.APPLE_PIE,'outside-pie');
   await nativeItem(outside,I.APPLE_PIE,'Eat'); assert.equal(outside.getInventory().contains(I.HALF_AN_APPLE_PIE),true,'unrelated player still eats normally');
-  await endRuleGame(game,a,b); await nativeItem(a,I.APPLE_PIE,'Eat');
+  await endRuleGame(game,a,b); assert.equal(a.getHitpoints(),99,'leaving restores Hitpoints at Ferox');
+  a.setHitpoints(50); await nativeItem(a,I.APPLE_PIE,'Eat');
   assert.equal(a.getHitpoints(),57); const half=a.getInventory().getValidItems().find(item=>item.getId()===I.HALF_AN_APPLE_PIE);
   assert.ok(half); assert.deepEqual(half.getMeta(),{qa:'no-food-pie'});
 });
@@ -4150,7 +4221,7 @@ test('native Ghastly genuine NPC death claims drops before Prayer consumers and 
   // Remove the later ordinary world respawn after observing it, without changing the shared definition.
   tick(settle);const worldClones=[...core.World.getNpcs()].filter(n=>n?.getId()===5626&&n!==survivor&&n.getPrivateArea()==null&&n.getSpawnPosition().equals(world.getSpawnPosition()));assert.equal(worldClones.length,1,'world5626 default respawn remains canonical');for(const n of worldClones){fixtureNpcs.add(n);C.api.removeNpc(n);}
   // Supplied quest checkpoint and canonical pouch producer, no fake visibleGhasts map.
-  worldPlayer.setAttribute('quest.nature_spirit.stage',90);const source=C.api.spawnNpc({id:945,x:3223,y:3218,z:0,wanderRadius:0});fixtureNpcs.add(source);const pouch=new core.Item(I.DRUID_POUCH_2,1);worldPlayer.getInventory().setItem(5,pouch);const existing=new Set([...core.World.getNpcs()]);const request={player:worldPlayer,target:source,npcId:945,targetIndex:source.getIndex(),item:pouch,itemId:I.DRUID_POUCH_2,slot:5,handled:false};assert.equal(PM.emitItemOnNpc(request),true);
+  worldPlayer.setAttribute('quest.nature_spirit.stage',90);const source=C.api.spawnNpc({id:945,x:3223,y:3218,z:0,wanderRadius:0});fixtureNpcs.add(source);const pouch=new core.Item(I.DRUID_POUCH_2,1);worldPlayer.getInventory().setItem(5,pouch);const existing=new Set([...core.World.getNpcs()]);const request={player:worldPlayer,target:source,npcId:945,targetIndex:source.getIndex(),item:pouch,itemId:I.DRUID_POUCH_2,slot:5,handled:false};assert.equal(PM.emitItemOnNpc(request),true);tick(3); // rsprox NatureSpirit 1310-1312: the form two ticks on
   const revealed=[...core.World.getNpcs()].find(n=>n&&!existing.has(n)&&n.getId()===946&&n.getOwner()===worldPlayer);assert.ok(revealed,'actual quest reveal owns visible identity');fixtureNpcs.add(revealed);assert.equal(revealed.isOwnerOnly(),true);await ghastKill(worldPlayer,revealed);assert.equal(worldPlayer.getAttribute('quest.nature_spirit.stage'),95,'canonical quest death advances its own visible identity');
   for(const drop of core.World.getItems().slice())if(!ground.includes(drop))core.ItemOnGroundManager.deregister(drop);
   console.log('GHASTLY_NPC_DEATH '+JSON.stringify({ownedClaim:true,noOwnedPrayer:true,noReplacement:true,settle,worldBonecrusher:true,worldRespawn:true,questVisiblePositive:true}));
@@ -4350,4 +4421,3650 @@ for(const kind of['staging-cancel','combat-cancel','logout','live-leave','expiry
 test('native Gridlock actual16x16 reuse preserves live Gridlock and natural Ghastly engine with world identity',async()=>{
   const{a,b,game}=await gridGame(),other=await gridGame(),Q=await ghastGame();completePreparation(Q.game);assert.equal(game.phase,'combat');assert.equal(other.game.phase,'combat');ghastReady(Q.game);for(const p of[Q.a,Q.b]){ghastFighter(p);ghastFood(p);}const qPlayer=gridSide(Q.game,[Q.a,Q.b],0),qNpc=Q.game.ghasts.npcs[0];await ghastAttack(qPlayer,qNpc);qPlayer.getCombat().reset();const attempts=[];ghastObserve=(kind,e)=>{if(kind==='prepare'&&Q.game.ghasts.npcs.includes(e.attacker))attempts.push(C.now());};
   const old=gridObject(game,'clanwars_viewing_start_darkrock',[3519,4859]),live=gridObject(other.game,'clanwars_viewing_start_darkrock',[3519,4859]),baseline=gridPlane(game.area),settings=gridPlane(game.area,0,true),liveBefore=gridPlane(other.game.area),qBefore=ghastPlane(Q.game.area,0),base=[game.area.getBaseX(),game.area.getBaseY()];core.RegionManager.loadMapFiles(3222,3218);const world=C.api.spawnNpc({id:5626,x:3222,y:3218,z:0,wanderRadius:0});assert.ok(world);fixtureNpcs.add(world);const worldDefinition=world.getDefinition(),worldAt=world.getSpawnPosition().clone(),worldClip=core.RegionManager.getClipping(3222,3218,0,null);assert.equal(world.isRegistered(),true);assert.equal(Boolean(world.__skipDefaultRespawn),false);game.finish(null);finishedMatch(game,[a,b]);const replacement=gridTemplate();try{assert.deepEqual([replacement.getBaseX(),replacement.getBaseY()],base);const fresh=gridObject({area:replacement},'clanwars_viewing_start_darkrock',[3519,4859]);assert.equal(fresh===old,false);ghastIdentity(fresh.getPrivateArea(),replacement,'replacement exact owner');ghastIdentity(replacement.resolveObject(fresh.getId(),fresh.getLocation()),fresh,'replacement native lookup');assert.deepEqual(gridPlane(replacement),baseline);assert.deepEqual(gridPlane(replacement,0,true),settings);ghastTurns=true;tick(120);assert.ok(attempts.length>=10,'other match really continued native ghast turns');assert.deepEqual(gridPlane(replacement),baseline);assert.deepEqual(gridPlane(other.game.area),liveBefore);assert.deepEqual(ghastPlane(Q.game.area,0),qBefore);ghastIdentity(core.MapObjects.getPrivateArea(other.a,live.getId(),live.getLocation()),live,'live Gridlock object preserved');assert.equal(Match.exit({player:other.a,object:old}),false);assert.equal(viewingUnit().use({player:other.a,object:old}),false);for(const p of[other.a,other.b])ghastIdentity(C.matches.get(p),other.game,'live Gridlock membership');ghastReady(Q.game);assert.equal(world.isRegistered(),true);ghastIdentity(world.getDefinition(),worldDefinition,'world shared definition unchanged');assert.equal(world.getSpawnPosition().equals(worldAt),true);assert.equal(core.RegionManager.getClipping(3222,3218,0,null),worldClip);assert.equal(Boolean(world.__skipDefaultRespawn),false);console.log('GRIDLOCK_REUSE '+JSON.stringify({base,settle:120,otherGhastNativeAttempts:attempts.length,worldIdentityPreserved:true}));}finally{replacement.destroy();}
+});
+
+// T: actual native utility producers. Loaded lazily so the inherited 288 cases
+// retain their original registration set. Checkpoint locations and fixed damage
+// below are supplied controls; they do not claim natural timing/RNG/render parity.
+const T_POWER_ATTRIBUTE='power-of-death:until';
+const T_STAVES=[
+  ['StaffOfTheDead',11791,'staff_of_the_dead',7083,1228],
+  ['ToxicStaffOfTheDead',12904,'toxic_staff_of_the_dead',1720,1228],
+  ['StaffOfLight',22296,'staff_of_light',7967,1516],
+  ['StaffOfBalance',24144,'staff_of_balance',3652,1733],
+];
+const T_WEAPON_BUTTONS=[(593<<16)|41,(593<<16)|57,'orbs:specbutton','orbs_nomap:specbutton','orbs_osm:specbutton','orbs_osm_nomap:specbutton'];
+let tInstalled=false;
+const tRegenerations=new WeakMap(),tEnergyMarks=new WeakMap();
+function tRecordRegeneration(event){
+  const rows=tRegenerations.get(event.player)??[];
+  rows.push({cycle:C.now(),amount:Math.max(0,event.amount|0)});tRegenerations.set(event.player,rows);
+}
+function tExpectedEnergy(player){
+  const mark=tEnergyMarks.get(player);assert.ok(mark,'native world cast bound energy checkpoint');
+  return Math.min(100,mark.energy+(tRegenerations.get(player)??[]).slice(mark.index).reduce((n,row)=>n+row.amount,0));
+}
+function tInstall(){
+  if(tInstalled)return;
+  const api=PM.createApi('ClanWarsTActualSpecialProducers');
+  api.onCustomEvent('combat-special:regenerate',tRecordRegeneration);
+  for(const[name]of T_STAVES)require(`../plugins/combat/specials/${name}.SpecialAttack`)(api);
+  require('../plugins/combat/effects/Rondache.EquipmentEffects')(api);
+  require('../plugins/combat/specials/Rondache.SpecialAttack')(api);
+  require('../plugins/objects/RejuvenationPool.plugin').register(api);
+  require('../plugins/minigames/lms/Common.LastManStanding').init(api);
+  require('../plugins/minigames/lms/Items.LastManStanding').registerAliases();
+  require('../plugins/minigames/championschallenge/Common.ChampionsChallenge').init(api);
+  require('../plugins/minigames/championschallenge/Rules.ChampionsChallenge').attachRules(api);
+  tInstalled=true;
+}
+async function tEquip(player,itemId,slot=core.Equipment.WEAPON_SLOT){
+  give(player,itemId,`T-${itemId}`);
+  const actions=core.CacheDefinitions.getItem(itemId).inventoryActions;
+  const action=actions.includes('Wield')?'Wield':'Wear';
+  assert.ok(actions.includes(action),'cache declares a real native equip action');
+  await nativeItem(player,itemId,action);
+  assert.equal(player.getEquipment().get(slot).getId(),itemId,'native equip reached intended slot');
+}
+function tEffectTrace(t,p){
+  const animations=[],graphics=[],events=[];
+  const animation=p.performAnimation.bind(p),graphic=p.performGraphic.bind(p),emit=PM.emitSpecialAttackDisabled.bind(PM);
+  t.mock.method(p,'performAnimation',value=>{animations.push([C.now(),value.getId()]);return animation(value);});
+  t.mock.method(p,'performGraphic',value=>{graphics.push([C.now(),value.getId()]);return graphic(value);});
+  t.mock.method(PM,'emitSpecialAttackDisabled',(player,id)=>{const result=emit(player,id);events.push({player,id,result});return result;});
+  return{animations,graphics,events};
+}
+function tCheckpoint(game,a,b){
+  for(const[p,xy]of[[a,[3293,4955,0]],[b,[3294,4955,0]]]){
+    p.moveTo(game.area.at(xy));p.setNeedsPlacement(false);p.resetUpdating();AreaManager.process(p);
+  }
+  assert.equal(CombatFactory.canAttackByPolicy(a,b,CombatFactory.MELEE_COMBAT),CanAttackResponse.CAN_ATTACK);
+}
+async function tTarget(a,b){
+  const frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(b.getIndex(),2);
+  await wire(a,frame);assert.equal(a.getCombat().getTarget(),b,'actual native opposing Attack selected');
+}
+function tIncoming(a,b,raw,type=core.CombatType.MELEE){
+  const hit=new core.HitDamage(raw,core.HitMask.RED).setSource(a);
+  CombatFactory.applyIncomingHitDamage(a,b,type,hit);
+  return hit.getDamage();
+}
+function tQueue(a,b,raw,delay=1){
+  const hit=new core.PendingHit(a,b,CombatFactory.MELEE_COMBAT,{damage:raw,rollAccuracy:false,handleAfterHitEffects:false,experience:false,delay});
+  CombatFactory.addPendingHit(hit);return hit;
+}
+function tImpacts(n=1){for(let i=0;i<n;i++){tick();require('../dist/game/content/combat/hit/HitQueue').HitQueue.processAll(C.now());}}
+async function tWorldPower(p,staff=T_STAVES[0]){
+  assert.equal(C.matches.has(p),false,'world-earned means outside actual membership');
+  ruleStats(p,99);await tEquip(p,staff[1]);
+  const before=C.now();await nativeButton(p,'orbs:specbutton');
+  const until=p.getAttribute(T_POWER_ATTRIBUTE);
+  assert.equal(p.getSpecialPercentage(),0,'actual world utility drains full energy');
+  assert.equal(p.isSpecialActivated(),false,'instant utility is not naturally prearmed');
+  assert.equal(until,before+100,'actual dispatch starts canonical 100tick deadline');
+  tEnergyMarks.set(p,{energy:p.getSpecialPercentage(),index:(tRegenerations.get(p)??[]).length});
+  return until;
+}
+
+for(const mode of[0,1,16])test(`native T option1 offer invalidation resync confirmation mode${mode}`,async()=>{
+  tInstall();const a=actor(true),b=actor(true);channel(a);channel(b);const calls=scriptCalls(a);
+  await challenge(a,b);await challenge(b,a);
+  if(mode){await click(a,'clanwars_setup:wincondition',mode*3);tick(9);}
+  const session=C.negotiations.get(a),original={...session.rules};
+  await click(b,'clanwars_setup:accept');assert.equal(session.accepted.has(b),true);
+  await click(a,'clanwars_setup:dropdown_specialattacks',2);
+  assert.equal(session.rules.specialattacks,1,'new authoritative No Staff offer');
+  assert.equal(session.accepted.size,0,'real opponent acceptance invalidated');
+  for(const[key,value]of Object.entries(original))if(key!=='specialattacks')assert.equal(session.rules[key],value);
+  for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_specialattacks')),1);
+  await click(b,'clanwars_setup:accept');assert.equal(session.accepted.has(b),false);tick(9);
+  const revision=session.revision;
+  for(const slot of[0,4,65534]){
+    await click(a,'clanwars_setup:dropdown_specialattacks',slot);
+    assert.equal(session.revision,revision);assert.equal(session.rules.specialattacks,1);
+  }
+  // 0xffff is the native no-slot sentinel, not an unsupported dropdown row.
+  // The preserved legacy event.action=op1 fallback selects Allowed (slot1).
+  const sentinel=clickFrame('clanwars_setup:dropdown_specialattacks',65535),decoded=decodeClientPackets(sentinel);
+  assert.equal(decoded.length,1);assert.equal(decoded[0].slot,undefined);assert.equal(decoded[0].buttonNum,1);
+  await wire(a,sentinel);assert.equal(session.rules.specialattacks,0);assert.equal(session.revision,revision+1);
+  await click(a,'clanwars_setup:dropdown_specialattacks',2);assert.equal(session.rules.specialattacks,1);tick(9);
+  await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');
+  assert.equal(session.stage,'confirm');tick(5);
+  await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');
+  const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(game.rules.specialattacks,1);assert.equal(game.rules.magic,4);
+  await join(a);await join(b);
+  const text=calls.filter(([id])=>id===554).at(-1)[2];
+  assert.match(text,/No Staff of the Dead; other permitted specials are allowed/);
+  assert.match(text,/Power of Death is already unavailable while Magic is disabled/);
+});
+
+for(const staff of T_STAVES)for(const term of[0,1,2])test(`native T ${staff[0]} MagicDisabled veto special${term} all weapon inputs`,async t=>{
+  tInstall();const{a,b,game}=await ruleGame({specialattacks:term});
+  await tEquip(a,staff[1]);assert.equal(a.getCombatSpecial().getId(),staff[2]);
+  const trace=tEffectTrace(t,a),messages=messagesOf(a);
+  for(const button of T_WEAPON_BUTTONS){
+    const before=resources(a),target=a.getCombat().getTarget(),effect=a.getAttribute(T_POWER_ATTRIBUTE),an=trace.animations.length,gfx=trace.graphics.length;
+    await nativeButton(a,button);
+    assert.equal(a.getSpecialPercentage(),100,'forbidden actual producer must not drain');
+    assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),effect,'no protection starts');
+    assert.deepEqual(resources(a),before);assert.equal(a.getCombat().getTarget(),target);
+    assert.equal(trace.animations.length,an);assert.equal(trace.graphics.length,gfx);assert.equal(a.isSpecialActivated(),false);
+    assert.equal(trace.events.at(-1).player,a);assert.equal(trace.events.at(-1).id,staff[2],'canonical native selection carried through generic event');
+    assert.match(messages.at(-1),term===2?/Special attacks are disabled/:/Power of Death is unavailable while Magic is disabled/);
+  }
+  assert.equal(messages.some(s=>s.includes('Spirits of deceased')),false);
+  tCheckpoint(game,a,b);assert.equal(CombatFactory.canAttackByPolicy(a,b,CombatFactory.MELEE_COMBAT),CanAttackResponse.CAN_ATTACK,'ordinary staff melee remains legal');
+  assert.notEqual(CombatFactory.canAttackByPolicy(a,b,CombatFactory.MAGIC_COMBAT),CanAttackResponse.CAN_ATTACK,'ordinary magical combat stays refused');
+});
+
+for(const staff of T_STAVES)test(`native T world ${staff[0]} effect duration refresh and unstacked damage`,async t=>{
+  tInstall();const p=actor(true),attacker=actor(true);const trace=tEffectTrace(t,p),until=await tWorldPower(p,staff);
+  assert.deepEqual(trace.animations.at(-1),[until-100,staff[3]]);assert.deepEqual(trace.graphics.at(-1),[until-100,staff[4]]);
+  assert.equal(tIncoming(attacker,p,21),10);assert.equal(tIncoming(attacker,p,20,core.CombatType.RANGED),20);assert.equal(tIncoming(attacker,p,20,core.CombatType.MAGIC),20);
+  tick(10);p.setSpecialPercentage(100);const cast=C.now();await nativeButton(p,'orbs:specbutton');
+  const refreshed=p.getAttribute(T_POWER_ATTRIBUTE);assert.equal(refreshed,cast+100);assert.ok(refreshed>until);assert.equal(tIncoming(attacker,p,40),20);
+  tick(refreshed-C.now()-1);assert.equal(tIncoming(attacker,p,21),10);tick();assert.equal(tIncoming(attacker,p,21),21,'exact original producer expiry');
+  assert.equal(p.getAttribute(T_POWER_ATTRIBUTE),refreshed,'expiry does not invent a restoration');
+});
+
+for(const term of[0,1,2])test(`native T same staff player selects actual Rondache offhand special${term}`,async t=>{
+  tInstall();const{a,b,game}=await ruleGame({specialattacks:term});await tEquip(a,11791);await tEquip(a,core.ItemIdentifiers.RONDACHE,core.Equipment.SHIELD_SLOT);
+  tCheckpoint(game,a,b);await tTarget(a,b);const Effects=require('../plugins/combat/effects/Rondache.EquipmentEffects'),trace=tEffectTrace(t,a);
+  const inputs=[[(593<<16)|67,1],['orbs:specbutton',2],['orbs_nomap:specbutton',2],['orbs_osm:specbutton',2],['orbs_osm_nomap:specbutton',2]];
+  for(const[button,op]of inputs){
+    Effects.setCharges(a,20);a.setSpecialPercentage(100);b.setHitpoints(99);const before=trace.animations.length;
+    await nativeButton(a,button,op);
+    assert.equal(Effects.charges(a),term===2?20:0,'real shield producer spends charges only when allowed');
+    assert.equal(a.getSpecialPercentage(),100,'shield spends no weapon special energy');
+    assert.equal(trace.events.at(-1).id,'rondache');
+    assert.equal(trace.animations.length>before,term!==2);
+    assert.equal(a.getAttribute(T_POWER_ATTRIBUTE)==null,true,'offhand never starts weapon protection');
+    tImpacts(2);
+  }
+  Effects.setCharges(a,20);await nativeButton(a,'orbs:specbutton',1);
+  assert.equal(a.getSpecialPercentage(),100);assert.equal(Effects.charges(a),20);assert.equal(trace.events.at(-1).id,'staff_of_the_dead');
+});
+
+for(const term of[0,1,2])test(`native T DragonBattleaxe and actual DDS toggle retain special${term} semantics`,async()=>{
+  tInstall();const{a,b,game}=await ruleGame({specialattacks:term});await tEquip(a,core.ItemIdentifiers.DRAGON_BATTLEAXE);
+  await nativeButton(a,'orbs:specbutton');assert.equal(a.getSpecialPercentage(),term===2?100:0);
+  assert.equal(a.getSkillManager().getCurrentLevel(core.Skill.ATTACK),term===2?99:90);
+  assert.equal(a.getSkillManager().getCurrentLevel(core.Skill.STRENGTH),term===2?99:118);
+  ruleStats(a);await tEquip(a,core.ItemIdentifiers.DRAGON_DAGGER);tCheckpoint(game,a,b);await tTarget(a,b);
+  await nativeButton(a,'orbs:specbutton');assert.equal(a.isSpecialActivated(),term!==2);
+  assert.equal(a.getSpecialPercentage(),100,'arming ordinary DDS is not a paid attack');
+  if(term!==2){
+    // The existing engine-turn switch runs the actual registered DDS method.
+    // Accuracy is unforced; drain/animation/target prove the ordinary swing.
+    const prepared=[];ghastObserve=(kind,e)=>{if(kind==='prepare'&&e.attacker===a&&e.target===b)prepared.push(e);};
+    ghastTurns=true;try{for(let n=0;n<20&&a.getSpecialPercentage()===100;n++)tick();}finally{ghastTurns=false;ghastObserve=null;}
+    assert.equal(a.getSpecialPercentage(),75,'native armed DDS actually swung and paid once');
+    assert.ok(prepared.length>0,'actual combat preparation reached');assert.equal(a.isSpecialActivated(),false);
+  }
+});
+
+for(const term of[0,1,2])test(`native T registered LMS alias and nonproducer selections special${term}`,async t=>{
+  tInstall();const{a}=await ruleGame({specialattacks:term}),alias=core.CacheDefinitions.getObjId('br_sotd');
+  assert.equal(alias,23613);assert.equal(core.ItemAliases.baseOf(alias),11791,'actual LMS signature registration, not a supplied alias');
+  assert.equal(core.CombatSpecial.getForWeaponId(alias).getId(),'staff_of_the_dead');
+  await tEquip(a,alias);const trace=tEffectTrace(t,a);await nativeButton(a,'orbs:specbutton');
+  assert.equal(a.getSpecialPercentage(),100);assert.equal(a.getAttribute(T_POWER_ATTRIBUTE)==null,true);assert.equal(trace.events.at(-1).id,'staff_of_the_dead');
+  // Actual uncharged items may be worn; they must not be promoted to POD.
+  for(const name of['toxic_sotd','toxic_sotd_deadman']){
+    const id=core.CacheDefinitions.getObjId(name);assert.ok(id>0);assert.equal(core.CombatSpecial.getForWeaponId(id)==null,true);
+    await tEquip(a,id);assert.equal(a.getCombatSpecial()==null,true);const n=trace.events.length;
+    await nativeButton(a,'orbs:specbutton');assert.equal(trace.events.length,n);assert.equal(a.getSpecialPercentage(),100);
+  }
+  for(const name of['cert_sotd','placeholder_sotd']){const id=core.CacheDefinitions.getObjId(name);assert.ok(id>0);assert.equal(core.CombatSpecial.getForWeaponId(id)==null,true,`${name} has no invented producer`);}
+});
+
+test('native T legacy optional context default messages first answer Champions and toggle off',async t=>{
+  tInstall();const{a,b,game}=await ruleGame({specialattacks:0});await tEquip(a,11791);
+  assert.equal(PM.emitSpecialAttackDisabled(a),null,'contextless legacy query invents no selected identity');
+  const other=await ruleGame({specialattacks:2});
+  assert.match(PM.emitSpecialAttackDisabled(other.a),/Special attacks are disabled/,'legacy all-special veto still answers');
+  const p=actor(true),Gallery=require('../plugins/minigames/championschallenge/Gallery.ChampionsChallenge');
+  ruleStats(p);await tEquip(p,11791);
+  const sessionOf=Gallery.sessionOf.bind(Gallery),session={challenge:{rule:{special:true}},inArena:()=>true};
+  // Supplied Champions session tests its actual unchanged hook consumer only;
+  // it does not claim native admission to a Champions basement.
+  const observer=t.mock.method(Gallery,'sessionOf',player=>player===p?session:sessionOf(player));
+  assert.match(PM.emitSpecialAttackDisabled(p,'staff_of_the_dead'),/not allowed to use Special Attacks/);
+  assert.match(PM.emitSpecialAttackDisabled(p),/not allowed to use Special Attacks/);
+  p.getPacketSender().sendInterfaceRemoval();await nativeButton(p,'orbs:specbutton');assert.equal(p.getSpecialPercentage(),100,'actual activation obeys unchanged Champions hook with supplied session');assert.equal(p.getAttribute(T_POWER_ATTRIBUTE)==null,true);
+  p.getPacketSender().sendInterfaceRemoval();observer.mock.restore();
+  const api=PM.createApi('ClanWarsTLegacyOrdering');let enabled=true,later=0;
+  api.onSpecialAttackDisabled(event=>{if(enabled&&event.player===p)event.disabled=true;});
+  api.onSpecialAttackDisabled(event=>{if(enabled&&event.player===p){later++;event.message='must not replace first answer';event.disabled=true;}});
+  try{assert.equal(PM.emitSpecialAttackDisabled(p),"You can't use special attacks here.");assert.equal(later,0);}finally{enabled=false;}
+  // Arm a real DDS outside, then enter rule2: existing preparation disarms it.
+  await tEquip(a,core.ItemIdentifiers.DRAGON_DAGGER);await nativeButton(a,'orbs:specbutton');assert.equal(a.isSpecialActivated(),true);
+  // Preserve the existing toggle-off exception, using the actual rule2 hook:
+  // this supplied rules view is a hook control, not a naturally armed rule2 route.
+  const old=game.rules;try{game.rules={...old,specialattacks:2};await nativeButton(a,'orbs:specbutton');assert.equal(a.isSpecialActivated(),false);}finally{game.rules=old;}
+  assert.equal(a.getSpecialPercentage(),100);assert.equal(C.matches.get(b),game);
+});
+
+async function tLateGame(term){
+  tInstall();const a=actor(true),b=actor(true),late=actor(true);for(const p of[a,b,late])ruleStats(p,99);
+  channel(a,[late]);channel(b);const game=await negotiate(a,b,2,1,{specialattacks:term});await join(a);await join(b);completePreparation(game);
+  const until=await tWorldPower(late);await join(late);
+  assert.equal(C.matches.get(late),game);assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);assert.ok(until>C.now(),'genuine late entry has positive remaining world-earned duration');
+  assert.equal(late.getSpecialPercentage(),0,'entry did not refund utility energy');
+  return{a,b,late,game,until};
+}
+
+for(const term of[0,1,2])test(`native T first entry 200tick preparation expires world protection special${term}`,async()=>{
+  tInstall();const a=actor(true),b=actor(true);channel(a);channel(b);ruleStats(b,99);
+  // Earn before negotiation, then preserve exactly that timestamp through entry.
+  const until=await tWorldPower(a),game=await negotiate(a,b,2,1,{specialattacks:term});await join(a);await join(b);
+  assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(game.phase,'staging');
+  const lines=messagesOf(a);await nativeButton(a,'orbs:specbutton');assert.equal(a.getSpecialPercentage(),tExpectedEnergy(a),'staging veto allows only actual natural regeneration');assert.match(lines.at(-1),term===2?/Special attacks are disabled/:/Power of Death is unavailable/);assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);
+  completePreparation(game);assert.ok(C.now()>=until);assert.equal(tIncoming(b,a,20),20,'normal preparation outlasts world buff');
+  assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(a.getSpecialPercentage(),tExpectedEnergy(a),'preparation allows only canonical regeneration');game.finish(null);tick(2);assert.equal(a.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(a.getSpecialPercentage(),tExpectedEnergy(a),'finish did not reset energy');
+});
+
+for(const term of[0,1,2])test(`native T positive late carry safe death jail viewing return and finish special${term}`,async()=>{
+  const{a,b,late,game,until}=await tLateGame(term);tCheckpoint(game,b,late);
+  const originalInventory=contents(late.getInventory()),originalEquipment=contents(late.getEquipment());
+  const hp=late.getHitpoints();tQueue(b,late,20);tImpacts(1);assert.equal(late.getHitpoints(),hp-10,'actual pending incoming melee applies carried mitigation');
+  assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);
+  late.setHitpoints(99);
+  // Three simultaneously prepared capped99 hits each reduce to49. A single
+  // capped lethal hit cannot kill through 50% protection. Damage is controlled.
+  for(let n=0;n<3;n++)tQueue(b,late,99);tImpacts(1);assert.equal(late.getHitpoints(),0);
+  tick(8);assert.equal(game.jailed.has(late),true);assert.equal(late.isSpecialActivated(),false);
+  assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);assert.deepEqual(contents(late.getInventory()),originalInventory);assert.deepEqual(contents(late.getEquipment()),originalEquipment);
+  assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late),'safe death changed no energy beyond actual regeneration');
+  const lines=messagesOf(late);await nativeButton(late,'orbs:specbutton');assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late));assert.match(lines.at(-1),term===2?/Special attacks are disabled/:/Power of Death is unavailable/);assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);
+  await openView(late,game);assert.equal(viewingUnit().active.has(late),true);assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);
+  await click(late,'clanwars_view:ne');await wire(late,Buffer.from([VIEW_CLOSE_PACKET]));assert.equal(viewingUnit().active.has(late),false);
+  await jailExit(late,game);assert.equal(game.fighters.has(late),true);assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late));
+  game.finish(null);tick(2);for(const p of[a,b,late])lobby(p);
+  assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late),'finish/exit allows only actual natural regeneration, no refund/restore');
+  console.log('T_CARRY '+JSON.stringify({term,deadline:until,after:C.now(),remaining:until-C.now(),safeDeath:true,originalEquipment:true}));
+});
+
+for(const term of[0,1,2])test(`native T real DDS prearm entry late entry swap and safe return special${term}`,async()=>{
+  tInstall();const a=actor(true),b=actor(true),late=actor(true);for(const p of[a,b,late])ruleStats(p,99);channel(a,[late]);channel(b);
+  const game=await negotiate(a,b,2,1,{specialattacks:term});
+  for(const p of[a,late]){await tEquip(p,core.ItemIdentifiers.DRAGON_DAGGER);await nativeButton(p,'orbs:specbutton');assert.equal(p.isSpecialActivated(),true,'genuine world DDS prearm');}
+  await join(a);await join(b);assert.equal(a.isSpecialActivated(),term!==2);assert.equal(a.getSpecialPercentage(),100);
+  completePreparation(game);await join(late);assert.equal(late.isSpecialActivated(),term!==2);assert.equal(late.getSpecialPercentage(),100);
+  await tEquip(late,11791);assert.equal(late.isSpecialActivated(),false,'native weapon swap clears real prearm');
+  await tEquip(late,core.ItemIdentifiers.DRAGON_DAGGER);await nativeButton(late,'orbs:specbutton');assert.equal(late.isSpecialActivated(),term!==2);
+  await lethalMelee(b,late,game);tick(8);assert.equal(game.jailed.has(late),true);assert.equal(late.isSpecialActivated(),false);
+  await jailExit(late,game);assert.equal(game.fighters.has(late),true);assert.equal(late.isSpecialActivated(),false);
+});
+
+test('native T carried deadline follows actual variant swaps zero damage no staff hit and native pool',async()=>{
+  tInstall();const p=actor(true),other=actor(true);const until=await tWorldPower(p);
+  for(const staff of T_STAVES){await tEquip(p,staff[1]);assert.equal(p.getAttribute(T_POWER_ATTRIBUTE),until);assert.equal(tIncoming(other,p,21),10);}
+  await tEquip(p,core.ItemIdentifiers.DRAGON_DAGGER);assert.equal(p.getAttribute(T_POWER_ATTRIBUTE),until,'unequip alone does not clear');
+  assert.equal(tIncoming(other,p,0),0);assert.equal(p.getAttribute(T_POWER_ATTRIBUTE),until,'zero damage does not clear');
+  assert.equal(tIncoming(other,p,8),8);assert.equal(p.getAttribute(T_POWER_ATTRIBUTE)==null,true,'positive hit without staff clears');
+  await tEquip(p,11791);assert.equal(tIncoming(other,p,20),20,'re-equipping cannot resurrect');
+  p.setSpecialPercentage(100);await nativeButton(p,'orbs:specbutton');assert.ok(p.getAttribute(T_POWER_ATTRIBUTE)>C.now());
+  // Disclosed seeded world pool; actual cache action and native object dispatcher.
+  const id=core.CacheDefinitions.getLocId('poh_pool_regeneration');assert.equal(id,29241);
+  core.RegionManager.loadMapFiles(3222,3218);p.moveTo(new core.Location(3222,3218,0));p.getCombat().reset();other.getCombat().reset();tick(2);
+  const pool=new core.GameObject(id,new core.Location(3223,3218,0),10,0,null);core.ObjectManager.register(pool,true);tick();
+  try{
+    assert.equal(pool.getDefinition().getName(),'Ornate pool of Rejuvenation');const op=pool.getDefinition().getInteractions().indexOf('Drink')+1;assert.ok(op>0);
+    const at=pool.getLocation();new(require('../dist/net/packet/impl/ObjectActionPacketListener').ObjectActionPacketListener)().executeAction(p,id,at.getX(),at.getY(),op);tick(8);
+    assert.equal(p.getAttribute(T_POWER_ATTRIBUTE)==null,true,'real pool producer clears protection');assert.equal(p.getSpecialPercentage(),100);
+  }finally{core.ObjectManager.deregister(pool,true);}
+});
+
+for(const boundary of['expiry','swap','finish','leave'])test(`native T queued final impact uses canonical current ${boundary} state`,async()=>{
+  const{b,late,game,until}=await tLateGame(0);tCheckpoint(game,b,late);late.setHitpoints(99);
+  if(boundary==='expiry')tick(until-C.now()-1);
+  const queued=tQueue(b,late,20,1);assert.equal(queued.getHits()[0].getDamage(),20,'unmitigated controlled roll queued before defensive reaction');
+  if(boundary==='swap')await tEquip(late,core.ItemIdentifiers.DRAGON_DAGGER);
+  else if(boundary==='finish')game.finish(null);
+  else if(boundary==='leave')Match.leave({player:late});
+  // Explicit pre-placement checkpoint: process a due hit while exit's actual
+  // moveTo placement flag is still set. This proves that finite ordering only;
+  // it does not assert global cancellation of every post-exit queued impact.
+  if(boundary==='finish'||boundary==='leave'){assert.equal(late.isNeedsPlacement(),true);core.World.processCycle++;require('../dist/game/content/combat/hit/HitQueue').HitQueue.processAll(C.now());}
+  else tImpacts(1);
+  if(boundary==='expiry'||boundary==='swap')assert.equal(late.getHitpoints(),79,'impact sees expiry/current nonstaff rather than queue-time protection');
+  else assert.equal(late.getHitpoints(),99,'actual pending-placement guard drops this due impact');
+  assert.equal(late.getAttribute(T_POWER_ATTRIBUTE),boundary==='swap'?null:until);
+  assert.equal(late.getSpecialPercentage(),tExpectedEnergy(late),'only actual natural regeneration, no match lifecycle refund');
+});
+
+for(const term of[0,1,2])test(`native T weapon fallback shield and invalid nonutility offhand special${term}`,async t=>{
+  tInstall();const{a,b,game}=await ruleGame({specialattacks:term});
+  await tEquip(a,core.ItemIdentifiers.RONDACHE,core.Equipment.SHIELD_SLOT);await tEquip(a,12902);
+  assert.equal(core.CombatSpecial.getForWeaponId(12902),null);assert.equal(a.getCombatSpecial().getId(),'rondache','real assign falls back to worn shield');
+  tCheckpoint(game,a,b);await tTarget(a,b);const trace=tEffectTrace(t,a),Effects=require('../plugins/combat/effects/Rondache.EquipmentEffects');
+  Effects.setCharges(a,20);await nativeButton(a,(593<<16)|57);
+  assert.equal(Effects.charges(a),term===2?20:0);assert.equal(a.getSpecialPercentage(),100);assert.equal(trace.events.at(-1).id,'rondache');tImpacts(2);
+  await tEquip(a,11791);await tEquip(a,core.ItemIdentifiers.BRONZE_KITESHIELD,core.Equipment.SHIELD_SLOT);
+  const n=trace.events.length;await nativeButton(a,'orbs:specbutton',2);
+  assert.equal(trace.events.length,n,'real shield with no utility is rejected before hook');assert.equal(a.getSpecialPercentage(),100);assert.equal(a.getAttribute(T_POWER_ATTRIBUTE)==null,true);
+  const Listener=require('../dist/net/packet/impl/EquipPacketListener').EquipPacketListener;
+  const children=Array.from({length:14},(_,n)=>15+n).filter(child=>Listener.resolveEquipmentSlot(387,child)===core.Equipment.WEAPON_SLOT);
+  assert.equal(children.length,1);const before=resources(a),events=trace.events.length;
+  await nativeButton(a,(387<<16)|children[0],2);
+  assert.deepEqual(resources(a),before);assert.equal(trace.events.length,events,'worn item operation has no invented staff activation');
+});
+
+test('native T world affordability is unchanged and context IDs distinguish real weapon from shield',async t=>{
+  tInstall();const p=actor(true);ruleStats(p);await tEquip(p,11791);const trace=tEffectTrace(t,p),lines=messagesOf(p);p.setSpecialPercentage(99);
+  const before=resources(p);await nativeButton(p,'orbs:specbutton');assert.deepEqual(resources(p),before);assert.equal(p.getAttribute(T_POWER_ATTRIBUTE)==null,true);assert.equal(trace.animations.length,0);assert.equal(trace.graphics.length,0);assert.match(lines.at(-1),/not enough power|enough power left/);
+  assert.equal(trace.events.at(-1).id,'staff_of_the_dead');assert.equal(trace.events.at(-1).result,null);
+  p.setSpecialPercentage(100);await nativeButton(p,'orbs:specbutton');assert.equal(p.getSpecialPercentage(),0);assert.ok(p.getAttribute(T_POWER_ATTRIBUTE)>C.now());
+});
+
+// U: native Oddskull objective. Scene checkpoints, controlled damage and save-copy
+// inspection are named separately from the ordinary decoded walk/Take/equip inputs.
+const U_HOME=[3293,4959,0],U_TOKEN='clan-wars:oddskull-token';
+const uSkull=p=>p.getEquipment().get(core.Equipment.WEAPON_SLOT);
+const uIssued=p=>[...p.getInventory().getItems(),...p.getEquipment().getItems()].filter(i=>typeof i?.getMetaValue(U_TOKEN)==='string');
+function uNpc(game){
+  assert.equal(game.phase,'combat','objective start must survive exact middle geometry/definitions');
+  const state=game.oddskull;assert.ok(state,'real match owns an objective');assert.equal(state.kind,'ground');
+  const npc=state.npc;assert.ok(npc);assert.equal(npc.isRegistered(),true);assert.equal(core.World.getNpcs().get(npc.getIndex()),npc);
+  assert.equal(npc.getArea(),game.area);assert.equal(npc.getPrivateArea(),game.area);assert.equal(npc.__skipDefaultRespawn,true);
+  assert.equal(npc.getId(),4187);assert.equal(npc.getCurrentDefinition().getName(),'<col=ff9040>Oddskull</col>');
+  assert.equal(npc.getCurrentDefinition().getActions()[0],'Take');assert.equal(game.area.getNpcs().filter(n=>n.getId()===4187).length,1);
+  return npc;
+}
+async function uGame(mode=21,terms=null,late=false){
+  const a=actor(true),b=actor(true),ally=late?actor(true):null;for(const p of[a,b,ally].filter(Boolean))ruleStats(p,99);
+  channel(a,ally?[ally]:[]);channel(b);const game=await negotiate(a,b,null,mode,terms);await join(a);await join(b);
+  assert.equal(game.oddskull,undefined,'objective absent throughout preparation');completePreparation(game);uNpc(game);
+  return{a,b,ally,game};
+}
+function uCheckpoint(p,game,source){p.moveTo(game.area.at(source));p.setNeedsPlacement(false);p.resetUpdating();AreaManager.process(p);}
+function uTakeFrame(npc){
+  // Client NPC_OPTION_1=76: modifier byte, then Reader.shortAddLE HIGH/LOW-128.
+  const frame=Buffer.from([76,0,(npc.getIndex()>>8)&255,(npc.getIndex()+128)&255]);
+  const decoded=decodeClientPackets(frame);assert.equal(decoded.length,1);assert.equal(decoded[0].type,'npc_option');
+  assert.equal(decoded[0].index,npc.getIndex());assert.equal(decoded[0].clickType,1);return frame;
+}
+async function uTake(p,npc){
+  const at=C.now();await dispatchFrameNow(p,uTakeFrame(npc));core.TaskManager.processWalkTo(p.getIndex());
+  assert.equal(C.now(),at,'native dispatch/reach callback does not advance the cadence clock');
+}
+async function uRemove(p){
+  const Listener=require('../dist/net/packet/impl/EquipPacketListener').EquipPacketListener;
+  const children=Array.from({length:14},(_,n)=>15+n).filter(n=>Listener.resolveEquipmentSlot(387,n)===core.Equipment.WEAPON_SLOT);
+  assert.equal(children.length,1);await nativeButton(p,(387<<16)|children[0]);
+}
+function uHeld(p,game){
+  assert.equal(game.oddskull.kind,'held');assert.equal(game.oddskull.holder,p);assert.equal(uSkull(p).getId(),13195);
+  assert.equal(uSkull(p).getAmount(),1);assert.equal(uSkull(p).getDefinition().isDoubleHanded(),true);
+  assert.equal(uSkull(p).getMetaValue(U_TOKEN),game.oddskull.token);assert.equal(uSkull(p).isUnbankable(),true);
+  assert.equal(uSkull(p).isUntradeable(),true);assert.equal(uIssued(p).length,1);assert.equal(game.oddskull.npc,null);
+  assert.equal(p.getEquipment().get(core.Equipment.SHIELD_SLOT).getId(),-1);
+}
+function uNoExport(game,players){
+  finishedMatch(game,players);assert.equal(game.oddskull.kind,'retired');assert.equal(game.oddskull.npc,null);
+  assert.equal(core.World.getAddNPCQueue().some(n=>n.getArea()===game.area),false);
+  assert.equal([...core.World.getNpcs()].some(n=>n?.getArea()===game.area),false);
+  for(const p of players){assert.equal(uIssued(p).length,0);for(const name of['clanwars_points_1','clanwars_points_2'])assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId(name)),0);}
+}
+for(const mode of[21,22,23])test(`native U mode${mode} offer resync crossproduct confirmation and valid0-4 controls`,async()=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const calls=scriptCalls(a);await challenge(a,b);await challenge(b,a);
+  const session=C.negotiations.get(a);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
+  await click(b,'clanwars_setup:wincondition',mode*3);assert.equal(session.rules.wincondition,mode,'native Oddskull selection reaches authoritative offer');
+  assert.equal(session.accepted.size,0);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),false);tick(9);
+  const rev=session.revision;for(const slot of[0,6,9,12,15,18,21,24,27,33,36,39]){await click(a,'clanwars_setup:arena',slot);assert.equal(session.rules.arena,1);assert.equal(session.revision,rev);}
+  for(const slot of[1,2,27,42,45,72,65534]){await click(a,'clanwars_setup:wincondition',slot);assert.equal(session.rules.wincondition,mode);assert.equal(session.revision,rev);}
+  await click(a,'clanwars_setup:stragglers',3);assert.equal(session.rules.stragglers,0);assert.equal(session.revision,rev);
+  for(const m of[0,4]){await click(a,'clanwars_setup:wincondition',m*3);assert.equal(session.rules.wincondition,m,'existing mode is not an invalid special-choice slot');}
+  await click(a,'clanwars_setup:arena',6);assert.equal(session.rules.arena,2);const r=session.revision;
+  await click(a,'clanwars_setup:wincondition',mode*3);assert.equal(session.rules.wincondition,4);assert.equal(session.revision,r);
+  await click(a,'clanwars_setup:arena',3);await click(a,'clanwars_setup:wincondition',mode*3);tick(9);
+  for(const p of[a,b]){assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_wincondition')),mode);assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_arena')),1);}
+  await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');
+  assert.ok(calls.some(([id,...args])=>id===554&&args.some(v=>typeof v==='string'&&v.includes('Skull points')&&v.includes('60 seconds'))));
+  tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');const game=C.channelGames.get(C.channel(a).key);assert.ok(game);await join(a);await join(b);assert.equal(game.rules.wincondition,mode);
+});
+for(const [mode,target]of[[21,100],[22,300],[23,500]])test(`native U mode${mode} exact firstaward cadence independent kills and complete target${target}`,async()=>{
+  const{a,b,game}=await uGame(mode);const npc=uNpc(game);assert.deepEqual(position(npc),positionAt(game,U_HOME));
+  assert.deepEqual(game.points,[0,0]);assert.deepEqual(game.kills,[0,0]);
+  // Actual walk from genuine assigned landing; Take's ordinary route reaches the native NPC.
+  await ghastWalk(a,game,[3293,4958]);const took=C.now();await uTake(a,npc);uHeld(a,game);
+  assert.equal(game.oddskull.nextAward,took+4);assert.equal(npc.isRegistered(),false);tick(3);assert.deepEqual(game.points,[0,0]);tick();
+  const side=game.members.get(a);assert.equal(game.points[side],3);assert.deepEqual(game.kills,[0,0]);
+  for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId(`clanwars_points_${side+1}`)),3);
+  game.score(1-side);assert.equal(game.kills[1-side],1);assert.equal(game.points[1-side],0,'real death statistic never becomes Skull points');
+  const awards=Math.ceil(target/3);for(let n=1;n<awards;n++){assert.equal(game.phase,'combat');tick(4);}
+  assert.equal(game.points[side],Math.ceil(target/3)*3);uNoExport(game,[a,b]);
+  console.log('U_TARGET '+JSON.stringify({mode,target,actual:game.points[side],first:took+4,awards,ordinaryWalkTake:true}));
+});
+for(const side of[0,1])test(`native U side${side} Take approach both-hands refusal full inventory and incoming combat`,async()=>{
+  const{a,b,game}=await uGame();const p=[a,b].find(p=>game.members.get(p)===side),other=p===a?b:a,npc=uNpc(game),lines=messagesOf(p);
+  assert.deepEqual(position(p),positionAt(game,game.layout.landings[side]));await ghastWalk(p,game,side?[3293,4960]:[3293,4958]);
+  await tEquip(p,core.ItemIdentifiers.BRONZE_SCIMITAR);const before=resources(p);await uTake(p,npc);assert.deepEqual(resources(p),before);assert.equal(game.oddskull.npc,npc);assert.match(lines.at(-1),/both hands free/);
+  await uRemove(p);assert.equal(p.getEquipment().get(core.Equipment.WEAPON_SLOT).getId(),-1);
+  await tEquip(p,core.ItemIdentifiers.BRONZE_KITESHIELD,core.Equipment.SHIELD_SLOT);await uTake(p,npc);assert.equal(game.oddskull.npc,npc);
+  const Listener=require('../dist/net/packet/impl/EquipPacketListener').EquipPacketListener;
+  const child=Array.from({length:14},(_,n)=>15+n).find(n=>Listener.resolveEquipmentSlot(387,n)===core.Equipment.SHIELD_SLOT);assert.ok(child);await nativeButton(p,(387<<16)|child);
+  p.getInventory().resetItems();for(let slot=0;slot<28;slot++)p.getInventory().setItem(slot,new core.Item(core.ItemIdentifiers.COINS,slot+1,{slot}));
+  const inventory=contents(p.getInventory());p.setSpecialActivated(true);p.setFollowing(other);await uTake(p,npc);uHeld(p,game);assert.equal(p.isSpecialActivated(),false);assert.equal(p.getFollowing(),null);assert.deepEqual(contents(p.getInventory()),inventory);
+  uCheckpoint(other,game,side?[3294,4960,0]:[3294,4958,0]);assert.equal(game.area.canAttack(other,p,CombatFactory.MELEE_COMBAT),true);assert.equal(game.area.canAttack(p,other,CombatFactory.MELEE_COMBAT),false);assert.match(lines.at(-1),/hands full of skull/);
+  assert.equal(game.area.canAttack(other,p,{type:()=>core.CombatType.MAGIC}),false);assert.equal(game.area.canAttack(other,p,{type:()=>core.CombatType.RANGED}),false);
+  const hit=tQueue(other,p,10);tImpacts(2);assert.equal(hit.getHits()[0].getDamage(),10);assert.equal(p.getHitpoints(),89,'controlled real incoming queued melee settles while carrying');uHeld(p,game);
+  await uRemove(p);uNpc(game);assert.equal(uIssued(p).length,0);assert.deepEqual(contents(p.getInventory()),inventory,'manual release requires no free inventory slot');
+});
+
+test('native U manual release reset ground deadline home return and stale Take identity',async t=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);let npc=uNpc(game);await uTake(a,npc);uHeld(a,game);tick(3);
+  const firstRelease=C.now();await uRemove(a);npc=uNpc(game);const first=game.oddskull.returnAt;assert.equal(first,firstRelease+100,'return anchors to release dispatch, before wire advances three ticks');const points=game.points.slice();
+  await ghastWalk(a,game,[3294,4958]);assert.equal(Math.abs(a.getLocation().getX()-npc.getLocation().getX())+Math.abs(a.getLocation().getY()-npc.getLocation().getY()),1,'ordinary walk reaches a cardinal edge after overlapping release');
+  await uTake(a,npc);uHeld(a,game);assert.equal(game.oddskull.returnAt,null);const start=C.now();assert.equal(game.oddskull.nextAward,start+4);tick(3);assert.deepEqual(game.points,points);tick();assert.equal(game.points[game.members.get(a)],points[game.members.get(a)]+3);
+  const released=C.now();await uRemove(a);npc=uNpc(game);const deadline=game.oddskull.returnAt;assert.equal(deadline,released+100);assert.ok(deadline>first);await ghastWalk(a,game,[3293,4958]);await tEquip(a,core.ItemIdentifiers.BRONZE_SCIMITAR);const lines=messagesOf(a);await uTake(a,npc);assert.match(lines.at(-1),/both hands free/);assert.equal(game.oddskull.returnAt,deadline,'failed occupied-hand Take cannot reset ground timer');
+  await uRemove(a);assert.equal(a.getEquipment().get(core.Equipment.WEAPON_SLOT).getId(),-1,'due Take has free hands and would otherwise acquire the dropped actor');assert.equal(game.oddskull.returnAt,deadline);
+  while(C.now()<released+99)tick();assert.equal(C.now(),released+99);assert.equal(game.oddskull.npc,npc,'no return at release+99');
+  const movement=a.getMovementQueue(),walk=movement.walkToEntity;let oldCallback;
+  const capture=t.mock.method(movement,'walkToEntity',function(target,runnable,...args){if(target===npc)oldCallback=runnable;return walk.call(this,target,runnable,...args);});
+  // Advance only the clock: the real decoded Take runs before the ordinary due-tick service.
+  core.World.processCycle++;assert.equal(C.now(),released+100);assert.equal(game.oddskull.npc,npc);await uTake(a,npc);
+  capture.mock.restore();assert.equal(typeof oldCallback,'function','capture forwards the real due Take route without replacing its callback');
+  const home=uNpc(game);assert.notEqual(home,npc);assert.equal(npc.isRegistered(),false);assert.deepEqual(position(home),positionAt(game,U_HOME));assert.equal(game.oddskull.returnAt,null);assert.equal(uIssued(a).length,0,'due return wins before Take on the old dropped actor');
+  // Explicit delayed invocation of the captured old-actor closure, not a NEW wire click
+  // that legitimately identifies the current actor if World reuses the numeric index.
+  oldCallback();assert.equal(game.oddskull.npc,home,'captured retired actor callback cannot issue a skull');assert.equal(uIssued(a).length,0);
+  tick(105);assert.equal(game.oddskull.npc,home,'home has no return deadline');assert.ok(start<deadline);
+});
+
+test('native U both contenders resolve one actor; enemy retake earns no partial interval',async()=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);uCheckpoint(b,game,[3294,4959,0]);const npc=uNpc(game);
+  await dispatchFrameNow(a,uTakeFrame(npc));await dispatchFrameNow(b,uTakeFrame(npc));core.TaskManager.processWalkTo(a.getIndex());core.TaskManager.processWalkTo(b.getIndex());
+  assert.equal(uIssued(a).length+uIssued(b).length,1);const holder=game.oddskull.holder,other=holder===a?b:a;uHeld(holder,game);tick(3);assert.deepEqual(game.points,[0,0]);
+  await uRemove(holder);const dropped=uNpc(game);await ghastWalk(other,game,[3294,4958]);assert.equal(Math.abs(other.getLocation().getX()-dropped.getLocation().getX())+Math.abs(other.getLocation().getY()-dropped.getLocation().getY()),1,'enemy reaches a cardinal edge before retake');await uTake(other,dropped);uHeld(other,game);assert.equal(game.oddskull.nextAward,C.now()+4);const score=game.points.slice();tick(3);assert.deepEqual(game.points,score);tick();assert.equal(game.points[game.members.get(other)],score[game.members.get(other)]+3);
+});
+
+for(const slot of[core.Equipment.WEAPON_SLOT,core.Equipment.SHIELD_SLOT])test(`native U hand swap slot${slot} releases one NPC and preserves actual incoming gear`,async()=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);await uTake(a,uNpc(game));uHeld(a,game);
+  const id=slot===core.Equipment.WEAPON_SLOT?core.ItemIdentifiers.BRONZE_SCIMITAR:core.ItemIdentifiers.BRONZE_KITESHIELD;
+  await tEquip(a,id,slot);assert.equal(a.getEquipment().get(slot).getId(),id);assert.deepEqual(a.getEquipment().get(slot).getMeta(),{qa:`T-${id}`});uNpc(game);assert.equal(uIssued(a).length,0);
+});
+
+test('native U unexpected inventory token Drop traverses actual widget canUse and canonical drop policy',async t=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);await uTake(a,uNpc(game));uHeld(a,game);
+  const item=uSkull(a).clone();a.getEquipment().setItem(core.Equipment.WEAPON_SLOT,new core.Item(-1,0));a.getInventory().setItem(7,item);
+  give(a,core.ItemIdentifiers.COINS,'U-drop-preserves-property');const inventory=contents(a.getInventory());
+  const ground=core.World.getItems().slice(),calls=[],emit=PM.emitItemDropPolicy.bind(PM);t.mock.method(PM,'emitItemDropPolicy',e=>{calls.push(e);return emit(e);});
+  const {MAIN_INVENTORY_WIDGET_UID}=require('../dist/net/protocol/ClientProtocol');const actions=core.CacheDefinitions.getItem(13195).inventoryActions,index=actions.indexOf('Drop');assert.ok(index>=0);
+  const {ClientPacketId}=require('../dist/net/protocol/NativeClientPackets');const op=[2,3,4,6,7][index],frame=Buffer.alloc(9);frame[0]=ClientPacketId[`IF_BUTTON${op}`];frame.writeInt32BE(MAIN_INVENTORY_WIDGET_UID,1);frame.writeUInt16BE(7,5);frame.writeUInt16BE(13195,7);
+  // Matches outgoing/widgets.ts writeInt/writeShort/writeShort and ClientProtocol's IF_BUTTON reader.
+  const decoded=decodeClientPackets(frame);assert.equal(decoded.length,1);assert.equal(decoded[0].type,'widget_action');assert.equal(decoded[0].widgetId,MAIN_INVENTORY_WIDGET_UID);assert.equal(decoded[0].slot,7);assert.equal(decoded[0].itemId,13195);assert.equal(decoded[0].buttonNum,op);
+  const {ItemActionPacketListener}=require('../dist/net/packet/impl/ItemActionPacketListener');
+  assert.deepEqual(ItemActionPacketListener.resolveInventoryWidgetAction(13195,op),{optionIndex:index+1,option:'Drop'});
+  await wire(a,frame);assert.equal(calls.length,1,'native Drop reached canonical policy instead of early canUse consumption');assert.equal(calls[0].handled,true);assert.equal(calls[0].slot,7);assert.equal(calls[0].itemId,13195);assert.equal(uIssued(a).length,0);const npc=uNpc(game);assert.deepEqual(core.World.getItems(),ground,'no ordinary floor item accompanies owned NPC');
+  inventory[7]={id:-1,n:0,meta:null};assert.deepEqual(contents(a.getInventory()),inventory,'only issued property is consumed');
+  await wire(a,frame);assert.equal(calls.length,1,'stale click has no carried item to drop');assert.equal(uNpc(game),npc);assert.deepEqual(core.World.getItems(),ground);
+});
+
+for(const term of[0,1,2])test(`native U safe death jail delayed return late join and no export special${term}`,async()=>{
+  const{a,b,ally,game}=await uGame(21,{specialattacks:term,rejoiningdelay:1},true);uCheckpoint(a,game,[3293,4958,0]);await uTake(a,uNpc(game));uHeld(a,game);
+  give(a,core.ItemIdentifiers.COINS,'U-user-property');const inventory=contents(a.getInventory()),eq=contents(a.getEquipment()).map((i,n)=>n===core.Equipment.WEAPON_SLOT?{id:-1,n:0,meta:null}:i);
+  await lethalMelee(b,a,game,false,[[3294,4958,0],[3293,4958,0]],null,true);const before=game.points.slice();game.tick();assert.deepEqual(game.points,before,'pre-dying zero HP invalidates scoring');uNpc(game);tick(6);
+  assert.equal(game.jailed.has(a),true);assert.equal(uIssued(a).length,0);assert.deepEqual(contents(a.getInventory()),inventory);assert.deepEqual(contents(a.getEquipment()),eq);assert.equal(game.kills[game.members.get(b)],1);
+  const until=game.returnAt.get(a.getLongUsername());assert.equal(until>C.now(),true);assert.equal(game.rejoin(a),false);await join(ally);assert.equal(game.fighters.has(ally),true,'normal late admission shares existing roster');
+  while(C.now()<until)tick();await jailExit(a,game);assert.equal(game.fighters.has(a),true);assert.equal(game.jailed.has(a),false);assert.equal(uIssued(a).length,0);
+  game.finish(null);uNoExport(game,[a,b,ally]);assert.deepEqual(contents(a.getInventory()),inventory);
+});
+
+for(const route of['leave','logout','channel','finish'])test(`native U held objective ${route} retires or drops before ownership removal`,async()=>{
+  const{a,b,ally,game}=await uGame(21,null,true);await join(ally);uCheckpoint(a,game,[3293,4958,0]);await uTake(a,uNpc(game));uHeld(a,game);const at=position(a);
+  if(route==='leave')Match.leave({player:a});
+  else if(route==='logout')PM.emitPlayerLogout({player:a,username:a.getUsername()});
+  else if(route==='channel'){FC.leave(a,false);assert.equal(C.channel(a),null);game.tick();}
+  else game.finish(null);
+  assert.equal(uIssued(a).length,0);assert.equal(C.matches.has(a),false);
+  if(route==='finish'){uNoExport(game,[a,b,ally]);return;}
+  const npc=uNpc(game);assert.deepEqual(position(npc),at);assert.equal(game.oddskull.holder,null);assert.deepEqual(game.points,[0,0]);
+  game.finish(null);uNoExport(game,[b,ally]);
+});
+
+test('native U copied save omits issued token without live mutation and login removes only stale issued property',async()=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);await uTake(a,uNpc(game));uHeld(a,game);
+  give(a,core.ItemIdentifiers.COINS,'U-keep-property');const before=resources(a),save=PlayerSave.fromPlayer(a);
+  assert.equal(save.getEquipment()[core.Equipment.WEAPON_SLOT].getId(),-1);assert.equal(save.getInventory().some(i=>i?.getMetaValue(U_TOKEN)),false);assert.deepEqual(resources(a),before,'snapshot mutates save only');
+  const stale=uSkull(a).clone();game.finish(null);a.getInventory().setItem(4,stale);const inventory=contents(a.getInventory());PM.emitPlayerLogin({player:a,username:a.getUsername()});assert.equal(uIssued(a).length,0);
+  inventory[4]={id:-1,n:0,meta:null};assert.deepEqual(contents(a.getInventory()),inventory);assert.equal(C.matches.has(a),false);
+});
+
+test('native U duplicate owned token cancels without point award and leaves unrelated gear exact',async()=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);await uTake(a,uNpc(game));uHeld(a,game);give(b,core.ItemIdentifiers.COINS,'U-unrelated');const inventory=contents(b.getInventory());
+  a.getInventory().setItem(0,uSkull(a).clone());tick(4);assert.deepEqual(game.points,[0,0]);uNoExport(game,[a,b]);assert.deepEqual(contents(b.getInventory()),inventory);
+});
+
+test('native U foreign actor cannot issue match skull and finish leaves world actor untouched',async()=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);const owned=uNpc(game),world=C.api.spawnNpc({id:4187,x:3129,y:3627,z:0,wanderRadius:0});assert.ok(world);fixtureNpcs.add(world);
+  assert.equal(world.isRegistered(),true);await uTake(a,world);assert.equal(game.oddskull.npc,owned);assert.equal(uIssued(a).length,0);const loc=position(world);game.finish(null);uNoExport(game,[a,b]);assert.equal(world.isRegistered(),true);assert.deepEqual(position(world),loc);
+});
+
+async function uStaging(){
+  const a=actor(true),b=actor(true);ruleStats(a);ruleStats(b);channel(a);channel(b);const game=await negotiate(a,b,null,21);await join(a);await join(b);return{a,b,game};
+}
+test('native U exact middle admission cancels on blocked candidate without nearest-tile fallback',async t=>{
+  const{a,b,game}=await uStaging(),blocked=core.RegionManager.blocked.bind(core.RegionManager),home=game.area.at(U_HOME);
+  const messages=[messagesOf(a),messagesOf(b)];
+  t.mock.method(core.RegionManager,'blocked',(at,area)=>area===game.area&&at.equals(home)?true:blocked(at,area));
+  completePreparation(game);assert.equal(game.oddskull,undefined,'failed geometry never creates objective state');for(const lines of messages)assert.ok(lines.includes('This Oddskull battle could not continue. Please try a new challenge.'),'actual preparation refusal reaches both players');assert.equal(game.phase,'over');finishedMatch(game,[a,b]);
+  assert.equal([...core.World.getNpcs()].some(n=>n?.getArea()===game.area),false);assert.equal(core.World.getAddNPCQueue().some(n=>n.getArea()===game.area),false);
+});
+test('native U queued actor registers as one indexed member and never duplicates on repeated tick',async t=>{
+  const{a,b,game}=await uStaging(),list=core.World.getNpcs(),add=list.add.bind(list);let refusals=0;
+  const inject=t.mock.method(list,'add',function(n,...args){if(n.getId()===4187&&refusals++===0)return false;return add(n,...args);});
+  tick(game.starts-C.now()-1);core.World.processCycle++;game.tick();assert.equal(game.phase,'combat');const npc=game.oddskull.npc;assert.ok(npc);assert.notEqual(npc.isRegistered(),true);assert.notEqual(core.World.getNpcs().get(npc.getIndex()),npc);assert.equal(core.World.getAddNPCQueue().includes(npc),true);assert.equal(npc.getArea(),game.area);assert.equal(game.area.getNpcs().includes(npc),false);
+  inject.mock.restore();npcQueues();game.tick();assert.equal(uNpc(game),npc);game.tick();game.tick();assert.equal(uNpc(game),npc);assert.equal(core.World.getAddNPCQueue().includes(npc),false);
+});
+for(const route of['finish','shutdown'])test(`native U queued actor ${route} retires before registration without late recreation`,async t=>{
+  const{a,b,game}=await uStaging(),list=core.World.getNpcs(),add=list.add.bind(list);const inject=t.mock.method(list,'add',function(n,...args){return n.getId()===4187?false:add(n,...args);});
+  tick(game.starts-C.now()-1);core.World.processCycle++;game.tick();const npc=game.oddskull.npc;assert.ok(npc);assert.equal(core.World.getAddNPCQueue().includes(npc),true);
+  if(route==='finish')game.finish(null);else Match.shutdown();inject.mock.restore();tick(120);uNoExport(game,[a,b]);assert.notEqual(npc.isRegistered(),true);assert.notEqual(core.World.getNpcs().get(npc.getIndex()),npc);assert.equal(game.area.getNpcs().includes(npc),false);assert.equal(core.World.getAddNPCQueue().includes(npc),false);assert.equal(npc.__skipDefaultRespawn,true);
+});
+test('native U consumed queued-registration refusal cancels without blind retry',async t=>{
+  const{a,b,game}=await uStaging(),list=core.World.getNpcs(),add=list.add.bind(list);let refusals=0;
+  const inject=t.mock.method(list,'add',function(n,...args){if(n.getId()===4187){refusals++;return false;}return add(n,...args);});
+  tick(game.starts-C.now());const npc=game.oddskull.npc;assert.ok(npc);assert.notEqual(npc.isRegistered(),true);assert.notEqual(core.World.getNpcs().get(npc.getIndex()),npc);assert.equal(npc.getArea(),game.area);assert.equal(game.area.getNpcs().includes(npc),false);assert.deepEqual(npcQueueFailures.splice(0),[npc]);assert.equal(refusals,2);
+  inject.mock.restore();tick();assert.match(game.oddskull.failure,/registration refused/);uNoExport(game,[a,b]);tick(120);assert.equal(refusals,2);assert.notEqual(npc.isRegistered(),true);assert.notEqual(core.World.getNpcs().get(npc.getIndex()),npc);assert.equal(core.World.getAddNPCQueue().includes(npc),false);
+});
+test('native U spawn refusal terminates safely without score or issued property',async t=>{
+  const{a,b,game}=await uStaging(),spawn=C.api.spawnNpc;let attempts=0;t.mock.method(C.api,'spawnNpc',function(d){if(d.id===4187){attempts++;return null;}return spawn(d);});
+  completePreparation(game);assert.equal(attempts,1);assert.deepEqual(game.points,[0,0]);assert.match(game.oddskull.failure,/spawn refused/);uNoExport(game,[a,b]);tick(120);assert.equal(attempts,1);
+});
+test('native U unexpected actor loss cancels; same-ID world actor and live second game survive',async()=>{
+  const first=await uGame(),second=await uGame(22),old=uNpc(first.game),live=uNpc(second.game),at=position(live);C.api.removeNpc(old);tick();uNoExport(first.game,[first.a,first.b]);assert.equal(uNpc(second.game),live);assert.deepEqual(position(live),at);
+});
+test('native U finish stale Take cannot cross real instance-slot reuse or stale issued-token recovery',async()=>{
+  const{a,b,game}=await uGame(),npc=uNpc(game),base=[game.area.getBaseX(),game.area.getBaseY()];uCheckpoint(a,game,[3293,4958,0]);const frame=uTakeFrame(npc);game.finish(null);uNoExport(game,[a,b]);
+  for(const p of[a,b]){await wire(p,Buffer.from([VIEW_CLOSE_PACKET]));lobby(p);assert.equal(p.isNeedsPlacement(),false);assert.equal(p.getInterfaceId(),-1);assert.equal(p.busy(),false,'genuine gameover close and lobby placement precede the next challenge');}
+  const next=await negotiate(a,b,null,22);await join(a);await join(b);completePreparation(next);const current=uNpc(next);assert.deepEqual([next.area.getBaseX(),next.area.getBaseY()],base,'native allocator reuses destroyed template slot');
+  uCheckpoint(a,next,[3293,4958,0]);await dispatchFrameNow(a,frame);core.TaskManager.processWalkTo(a.getIndex());
+  // If World reuses the NPC index, a NEW input names the new actor; that is not an old callback.
+  if(current.getIndex()===npc.getIndex()){uHeld(a,next);assert.notEqual(next.oddskull.token,game.oddskull.token);}else{assert.equal(uIssued(a).length,0);assert.equal(next.oddskull.npc,current);}
+  next.finish(null);uNoExport(next,[a,b]);
+});
+test('native U delayed servicing awards once without catch-up and at zero HP gives no deadline bonus',async()=>{
+  const{a,b,game}=await uGame();uCheckpoint(a,game,[3293,4958,0]);await uTake(a,uNpc(game));uHeld(a,game);const side=game.members.get(a);
+  core.World.processCycle+=20;game.tick();assert.equal(game.points[side],3);assert.equal(game.oddskull.nextAward,C.now()+4);game.tick();assert.equal(game.points[side],3);
+  a.setHitpoints(0);core.World.processCycle+=4;game.tick();assert.equal(game.points[side],3);uNpc(game);assert.equal(uIssued(a).length,0);
+  // Supplied zero HP is an eligibility probe, not a completed death; restore for ordinary teardown.
+  a.setHitpoints(99);
+});
+
+// Native Melee Allowed/Disabled. All scene/stat/clock/roll controls are supplied;
+// transport is inert. No queued hit or damage cancellation is added or simulated.
+let nmInstalled=false,nmObserve=null,nmRoll=null;
+function nmPrepared(e){if(nmObserve)nmObserve('prepare',e);}
+function nmResolved(e){if(nmObserve)nmObserve('resolved',e);}
+function nmStarted(e){if(nmObserve)nmObserve('started',e);}
+function nmRolled(e){if(nmRoll)nmRoll(e);}
+function nmInstall(){
+  if(nmInstalled)return;
+  assert.equal(actors.length,0,'canonical definitions load only after inherited actor teardown');
+  const api=PM.createApi('ClanWarsNativeMeleeTest');
+  // Production loader supplies canonical weapon interfaces; do not inject metadata.
+  require('../plugins/items/ItemDefinitionLoader.plugin').register(api);
+  require('../plugins/combat/specials/DragonClaw.SpecialAttack')(api);
+  api.onCombatHitPrepare(nmPrepared);api.onCombatHitResolved(nmResolved);
+  api.onCustomEvent('combat:attack-started',nmStarted);api.onCombatHitRoll(nmRolled);
+  nmInstalled=true;
+}
+function nmTest(name,body){test('native Melee '+name,async t=>{
+  nmInstall();try{await body(t);}finally{nmObserve=null;nmRoll=null;ghastTurns=false;}
+});}
+function nmPlace(game,a,b){
+  a.moveTo(game.area.at([3293,4955,0]));b.moveTo(game.area.at([3294,4955,0]));
+  for(const p of[a,b]){p.setNeedsPlacement(false);p.resetUpdating();AreaManager.process(p);p.setAutoRetaliate(false);}
+  assert.equal(core.RegionManager.canMovestart(a.getLocation(),b.getLocation(),1,1,game.area),true,'supplied adjacent scene has a real traversable edge');
+}
+async function nmGame(melee=0,{mode=1,terms={},arena=1,prepare=true}={}){
+  const a=actor(true),b=actor(true);for(const p of[a,b]){ruleStats(p,99);p.setAutoRetaliate(false);}channel(a);channel(b);
+  const game=await negotiate(a,b,2,mode,{...terms,melee},arena);await join(a);await join(b);
+  if(prepare)completePreparation(game);assert.equal(game.phase,prepare?'combat':'staging');assert.equal(game.rules.melee,melee);
+  if(arena===1)nmPlace(game,a,b);return{a,b,game};
+}
+function nmTrace(t,a,b,{force=true}={}){
+  const trace={prepared:[],started:[],resolved:[],queued:[],methods:[],permissions:[],applied:[],attacks:[]};
+  nmObserve=(kind,e)=>{if(e.attacker!==a||e.target!==b)return;
+    if(kind==='prepare')trace.prepared.push(e);
+    if(kind==='started')trace.started.push(e);
+    if(kind==='resolved')trace.resolved.push(e.hit);
+  };
+  nmRoll=e=>{if(force&&e.attacker===a&&e.target===b){e.forceAccurate=true;e.forceMaxHit=true;}};
+  const add=CombatFactory.addPendingHit.bind(CombatFactory),get=CombatFactory.getMethod.bind(CombatFactory);
+  t.mock.method(CombatFactory,'addPendingHit',hit=>{
+    if(hit.getAttacker()===a&&hit.getTarget()===b){trace.queued.push(hit);for(const h of hit.getHits())h.onApplied(n=>trace.applied.push(n));}
+    return add(hit);
+  });
+  t.mock.method(CombatFactory,'getMethod',p=>{const method=get(p);if(p===a)trace.methods.push(method);return method;});
+  const attack=a.getCombat().attack.bind(a.getCombat()),area=a.getArea(),permission=area.canAttack.bind(area);
+  t.mock.method(a.getCombat(),'attack',(...args)=>{trace.attacks.push(args[0]);return attack(...args);});
+  t.mock.method(area,'canAttack',(...args)=>{const result=permission(...args);if(args[0]===a&&args[1]===b)trace.permissions.push({method:args[2],result});return result;});
+  return trace;
+}
+async function nmAttack(a,b){
+  const frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(b.getIndex(),2);
+  const [decoded]=decodeClientPackets(frame);assert.equal(decoded.type,'player_option');assert.equal(decoded.option,1);assert.equal(decoded.index,b.getIndex());
+  await wire(a,frame);
+}
+function nmEngineUntil(predicate,bound=24){ghastTurns=true;for(let n=0;n<bound&&!predicate();n++)tick();}
+function nmSender(t,p){
+  const sender=p.getPacketSender(),calls={strings:[],display:[],flags:[]};
+  for(const[method,key]of[['sendString','strings'],['sendInterfaceDisplayState','display'],['sendInterfaceFlagsRange','flags']]){
+    const original=sender[method].bind(sender);t.mock.method(sender,method,(...args)=>{calls[key].push(args);return original(...args);});
+  }return calls;
+}
+
+nmTest('both offers, setup warning, confirmations and joined frozen rules retain the actual decoded choice',async t=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const sent=[nmSender(t,a),nmSender(t,b)],scripts=[scriptCalls(a),scriptCalls(b)];
+  const events=[],emit=PM.emitInterfaceActionClick.bind(PM);
+  t.mock.method(PM,'emitInterfaceActionClick',event=>{events.push({...event});return emit(event);});
+  await challenge(a,b);await challenge(b,a);const session=C.negotiations.get(a),original={...session.rules};
+  assert.ok(sent.every(x=>x.display.some(([uid,hidden])=>uid===C.uid('clanwars_setup:melee')&&hidden===false)));
+  assert.ok(sent.every(x=>x.flags.some(([uid,first,last,flags])=>uid===C.uid('clanwars_setup:dropdown_melee')&&first===1&&last===2&&flags===2)));
+  await click(b,'clanwars_setup:accept');assert.equal(session.accepted.has(b),true);
+  const frame=clickFrame('clanwars_setup:dropdown_melee',2),[decoded]=decodeClientPackets(frame);
+  assert.equal(decoded.type,'widget_action');assert.equal(decoded.buttonNum,1);assert.equal(decoded.slot,2);
+  await wire(a,frame);assert.equal(session.rules.melee,1);assert.equal(session.accepted.size,0);
+  assert.ok(events.some(e=>e.player===a&&e.buttonId===C.uid('clanwars_setup:dropdown_melee')&&e.slot===2&&(e.opId??e.action)===1),'actual native caller supplied the operation and choice separately');
+  for(const[key,value]of Object.entries(original))if(key!=='melee')assert.equal(session.rules[key],value,key);
+  for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_melee')),1);
+  assert.ok(sent.every(x=>x.strings.some(([text,uid])=>uid===C.uid('clanwars_setup:title')&&/attacks underway may still land/.test(text))));
+  await click(b,'clanwars_setup:accept');assert.equal(session.accepted.has(b),false);tick(9);
+  await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');
+  for(const list of scripts)assert.ok(list.some(([id,...args])=>id===554&&args.some(x=>typeof x==='string'&&/No new player combat/.test(x)&&/Attacks already underway may still land/.test(x))));
+  tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');
+  const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(Object.isFrozen(game.rules),true);assert.equal(game.rules.melee,1);
+  await join(a,false);assert.ok(scripts[0].some(([id,...args])=>id===554&&args[0]===1&&args.some(x=>typeof x==='string'&&/Attacks already underway may still land/.test(x))));
+  await click(a,'clanwars_confirm:button');assert.equal(C.matches.get(a),game);
+});
+
+nmTest('wrong decoded operations and invalid slots resync without changing acceptance or current offer',async t=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);await challenge(a,b);await challenge(b,a);
+  const session=C.negotiations.get(a);await click(a,'clanwars_setup:dropdown_melee',2);tick(9);await click(b,'clanwars_setup:accept');
+  const revision=session.revision;
+  for(const op of[2,3,10]){await nativeButton(a,'clanwars_setup:dropdown_melee',op,1);assert.equal(session.rules.melee,1);assert.equal(session.revision,revision);assert.equal(session.accepted.has(b),true);}
+  for(const slot of[0,3,65535]){await click(a,'clanwars_setup:dropdown_melee',slot);assert.equal(session.rules.melee,1);assert.equal(session.revision,revision);assert.equal(session.accepted.has(b),true);}
+  assert.equal(a.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_melee')),1);
+  await click(a,'clanwars_setup:dropdown_melee',1);assert.equal(session.rules.melee,0);assert.equal(session.revision,revision+1);assert.equal(session.accepted.size,0);
+});
+
+for(const melee of[0,1])for(const weapon of['unarmed','dagger'])nmTest(`${weapon} actual native Attack resolves MELEE and obeys rule${melee} before launch`,async t=>{
+  const f=await nmGame(melee);if(weapon==='dagger')await wield(f.a,core.ItemIdentifiers.DRAGON_DAGGER,'melee-native');
+  nmPlace(f.game,f.a,f.b);const trace=nmTrace(t,f.a,f.b),before=resources(f.a),hp=f.b.getHitpoints();
+  ghastTurns=true;await nmAttack(f.a,f.b);nmEngineUntil(()=>melee?trace.permissions.length>0:trace.resolved.length>0);
+  f.a.getCombat().reset();assert.ok(trace.attacks.includes(f.b),'actual Attack caller reached the decoded target');assert.ok(trace.methods.some(m=>m.type()===core.CombatType.MELEE));assert.ok(trace.permissions.some(x=>x.method?.type()===core.CombatType.MELEE&&x.result===(melee===0)));
+  if(melee===0){assert.ok(trace.prepared.length>0);assert.ok(trace.started.length>0);assert.ok(trace.queued.length>0);assert.ok(trace.resolved.length>0);assert.ok(f.b.getHitpoints()<hp);}
+  else{assert.equal(trace.prepared.length,0);assert.equal(trace.started.length,0);assert.equal(trace.queued.length,0);assert.equal(trace.resolved.length,0);assert.equal(f.b.getHitpoints(),hp);assert.deepEqual(resources(f.a),before);}
+});
+
+for(const melee of[0,1])nmTest(`DDS actual damaging special keeps canonical payment at rule${melee}`,async t=>{
+  const f=await nmGame(melee);await wield(f.a,core.ItemIdentifiers.DRAGON_DAGGER,'melee-dds');nmPlace(f.game,f.a,f.b);
+  await nativeButton(f.a,'orbs:specbutton');assert.equal(f.a.isSpecialActivated(),true);assert.equal(f.a.getCombatSpecial().getId(),'dragon_dagger');
+  const selected=f.a.getCombatSpecial().getCombatMethod();assert.equal(selected.type(),core.CombatType.MELEE);assert.equal(CombatFactory.getMethod(f.a),selected);
+  const trace=nmTrace(t,f.a,f.b),before=resources(f.a);ghastTurns=true;await nmAttack(f.a,f.b);nmEngineUntil(()=>trace.queued.length>0);f.a.getCombat().reset();
+  assert.ok(trace.attacks.includes(f.b));assert.ok(trace.methods.includes(selected));
+  if(melee===0){assert.ok(trace.started.some(x=>x.method===selected));assert.ok(trace.queued.length>0);assert.equal(f.a.getSpecialPercentage(),75);assert.ok(trace.queued.every(x=>x.getCombatMethod()===selected));}
+  else{assert.equal(trace.started.length,0);assert.equal(trace.queued.length,0);assert.deepEqual(resources(f.a),before);}
+});
+
+for(const term of[0,2])nmTest(`Disabled does not classify actual DragonBattleaxe utility by weapon name, special${term}`,async()=>{
+  const f=await nmGame(1,{terms:{specialattacks:term}});await wield(f.a,core.ItemIdentifiers.DRAGON_BATTLEAXE,'melee-utility');
+  const before=resources(f.a);await nativeButton(f.a,'orbs:specbutton');
+  if(term===0){assert.equal(f.a.getSpecialPercentage(),0);assert.ok(f.a.getSkillManager().getCurrentLevel(core.Skill.STRENGTH)>before.levels[1]);}
+  else assert.deepEqual(resources(f.a),before);
+});
+
+nmTest('Disabled and NoSpecials preserve team, jail, secondary protocol and foreign-instance guards',async()=>{
+  const f=await nmGame(1,{terms:{specialattacks:2}}),other=await nmGame(0);
+  assert.equal(f.game.area.canAttack(f.a,f.b,CombatFactory.MELEE_COMBAT),false);
+  assert.equal(other.game.area.canAttack(other.a,other.b,CombatFactory.MELEE_COMBAT),true);
+  assert.equal(f.game.area.canAttack(f.a,f.b),true,'existing methodless secondary protocol is preserved; not an actual start');
+  assert.equal(f.game.area.canAttack(f.a,other.b,CombatFactory.MELEE_COMBAT),false);
+  const team=f.game.fighters.get(f.b);f.game.fighters.set(f.b,f.game.fighters.get(f.a));assert.equal(f.game.area.canAttack(f.a,f.b),false);f.game.fighters.set(f.b,team);
+  f.game.eliminate(f.b);assert.equal(f.game.area.canAttack(f.a,f.b),false);
+  for(const method of[CombatFactory.RANGED_COMBAT,CombatFactory.MAGIC_COMBAT])assert.equal(other.game.area.canAttack(other.a,other.b,method),false);
+});
+
+for(const melee of[0,1])nmTest(`actual preparation stays closed before combat at rule${melee}`,async()=>{
+  const f=await nmGame(melee,{prepare:false});assert.equal(f.game.phase,'staging');
+  assert.equal(f.game.area.canAttack(f.a,f.b,CombatFactory.MELEE_COMBAT),false);
+  completePreparation(f.game);assert.equal(f.game.area.canAttack(f.a,f.b,CombatFactory.MELEE_COMBAT),melee===0);
+});
+
+for(const melee of[0,1])nmTest(`owned Ghast player direction rule${melee} retains actual independent NPC hazard`,async t=>{
+  const f=await nmGame(melee,{arena:7});for(const p of[f.a,f.b]){ghastFighter(p);ghastFood(p);}ghastReady(f.game);
+  const npc=f.game.ghasts.npcs[f.game.members.get(f.a)],playerPrepared=[],npcResolved=[],trace=nmTrace(t,f.a,npc,{force:false});
+  ghastObserve=(kind,e)=>{if(kind==='prepare'&&e.attacker===f.a&&e.target===npc)playerPrepared.push(e);if(kind==='resolved'&&e.attacker===npc&&e.target===f.a)npcResolved.push(e.hit);};
+  assert.equal(f.game.area.canAttack(f.a,npc,CombatFactory.MELEE_COMBAT),melee===0);assert.equal(f.game.area.canAttack(npc,f.a,CombatFactory.MELEE_COMBAT),true);
+  ghastTurns=true;await ghastAttack(f.a,npc);for(let n=0;n<32&&(melee===1||playerPrepared.length===0);n++)tick();f.a.getCombat().reset();
+  assert.ok(trace.attacks.includes(npc));assert.ok(trace.permissions.some(x=>x.method?.type()===core.CombatType.MELEE&&x.result===(melee===0)));
+  if(melee===0)assert.ok(playerPrepared.length>0);else assert.equal(playerPrepared.length,0);
+  for(let n=0;n<180&&!f.a.getInventory().getAmount(core.ItemIdentifiers.ROTTEN_FOOD);n++)tick();
+  assert.ok(npcResolved.length>0);assert.ok(f.a.getInventory().getAmount(core.ItemIdentifiers.ROTTEN_FOOD)>0,'actual ordinary NPC impacts still spoil food');
+  assert.equal(f.game.area.npcAggression(f.a,npc),true);assert.equal(npc.isRegistered(),true);
+});
+
+nmTest('allstylesoff timed battle retains existing clock and ordinary tie outcome',async()=>{
+  const f=await nmGame(1,{mode:16});assert.equal(f.game.rules.ranged,1);assert.equal(f.game.rules.magic,4);
+  const calls=scriptCalls(f.a);core.World.processCycle=f.game.ends-1;tick();
+  assert.equal(f.game.phase,'over');assert.equal(C.matches.has(f.a),false);assert.equal(C.matches.has(f.b),false);
+  assert.ok(calls.some(([id,...args])=>args.some(x=>typeof x==='string'&&/without a winner/.test(x))),'actual gameover script reports tie after supplied final clock checkpoint');
+});
+
+async function nmForfeit(p,game){
+  const name=game.layout.exits[game.members.get(p)],object=mappedLayoutObjects(game,name)[0];assert.ok(object);
+  assert.equal(object.getPrivateArea(),game.area);assert.equal(p.getPrivateArea(),game.area);
+  const at=object.getLocation(),definition=object.getDefinition(),turned=(object.getFace()&1)===1;
+  const width=turned?definition.getSizeY():definition.getSizeX(),height=turned?definition.getSizeX():definition.getSizeY();
+  const origin=game.layout.origin,toSource=loc=>[loc.getX()-game.area.getBaseX()+origin[0],loc.getY()-game.area.getBaseY()+origin[1]];
+  const from=toSource(p.getLocation());let approach=null;
+  // Explicit checkpoint on the actual rotated footprint perimeter, not just its anchor.
+  // A clear tile alone can be an isolated component; require a real clipped route too.
+  for(let dx=-1;dx<=width&&!approach;dx++)for(let dy=-1;dy<=height&&!approach;dy++){
+    if(!((dx===-1||dx===width)&&dy>=0&&dy<height||(dy===-1||dy===height)&&dx>=0&&dx<width))continue;
+    const loc=new core.Location(at.getX()+dx,at.getY()+dy,at.getZ());
+    if(!core.RegionManager.blocked(loc,game.area)&&layoutReachable(game,from,toSource(loc),origin))approach=loc;
+  }
+  assert.ok(approach,'supplied Forfeit checkpoint is clear and connected to the fighter on the actual footprint perimeter');
+  assert.equal(object.footprintDistance(approach),1);p.moveTo(approach);p.setNeedsPlacement(false);p.resetUpdating();
+  const op=object.getDefinition().getInteractions().findIndex(x=>x?.toLowerCase()==='forfeit')+1;assert.ok(op>0);
+  new(require('../dist/net/packet/impl/ObjectActionPacketListener').ObjectActionPacketListener)().executeAction(p,object.getId(),at.getX(),at.getY(),op);
+  tick(20);assert.equal(C.matches.has(p),false,'actual mapped object dispatcher owns Forfeit; not wire traversal');
+}
+
+nmTest('allstylesoff Last Team Standing retains actual mapped Forfeit and existing winner',async()=>{
+  const f=await nmGame(1,{mode:0}),calls=scriptCalls(f.a);
+  await nmForfeit(f.b,f.game);assert.equal(f.game.phase,'over');
+  assert.ok(calls.some(([id,...args])=>id===592&&args.some(x=>typeof x==='string'&&/Your team won/.test(x))));
+  lobby(f.a);lobby(f.b);
+});
+
+async function nmQueued(t,{claws=false}={}){
+  const f=await nmGame(0);if(claws)await wield(f.a,core.ItemIdentifiers.DRAGON_CLAWS,'melee-split');
+  nmPlace(f.game,f.a,f.b);if(claws){await nativeButton(f.a,'orbs:specbutton');assert.equal(f.a.getCombatSpecial().getId(),'dragon_claws');assert.equal(f.a.isSpecialActivated(),true);}
+  const trace=nmTrace(t,f.a,f.b),queue=f.b.getCombat().getHitQueue(),process=queue.process.bind(queue);let holding=true;
+  t.mock.method(queue,'process',(...args)=>{if(!holding)return process(...args);});
+  ghastTurns=true;await nmAttack(f.a,f.b);nmEngineUntil(()=>trace.queued.length>0);f.a.getCombat().reset();
+  assert.ok(trace.queued.length>0,'real native paid launch occurred before held impact processing');assert.ok(trace.queued[0].getTotalDamage()>0);assert.equal(queue.hasPendingHit(trace.queued[0]),true);
+  return{...f,trace,queue,release(){holding=false;queue.process(C.now());},process(){process(C.now());}};
+}
+
+for(const transition of['eliminate','rejoin','departure','finish','fresh-entry'])nmTest(`already-produced actual melee hit is preserved across ${transition} with supplied impact-processing hold`,async t=>{
+  const f=await nmQueued(t),before=f.b.getHitpoints(),hit=f.trace.queued[0];
+  if(transition==='eliminate'||transition==='rejoin'){
+    // Supplied post-elimination jail checkpoint, not a naturally completed death.
+    f.game.eliminate(f.b);f.game.jailed.add(f.b);const side=f.game.members.get(f.b);f.b.moveTo(f.game.area.at(f.game.layout.jails[side]));f.b.setNeedsPlacement(false);
+    assert.equal(f.game.fighters.has(f.b),false);
+    if(transition==='rejoin'){await jailExit(f.b,f.game);assert.equal(f.game.jailed.has(f.b),false);assert.equal(f.game.fighters.has(f.b),true);}
+  }else if(transition==='departure')await nmForfeit(f.b,f.game);
+  else f.game.finish(null);
+  if(transition==='fresh-entry'){
+    for(const p of[f.a,f.b]){lobby(p);await wire(p,Buffer.from([VIEW_CLOSE_PACKET]));}
+    const next=await negotiate(f.a,f.b,2,1,{melee:1});await join(f.a);await join(f.b);completePreparation(next);
+    assert.equal(next.rules.melee,1);assert.notEqual(next,f.game);assert.equal(next.area.canAttack(f.a,f.b,CombatFactory.MELEE_COMBAT),false);
+  }
+  assert.equal(f.queue.hasPendingHit(hit),true,'transition itself did not cancel already-produced hit');f.b.setNeedsPlacement(false);f.release();
+  assert.ok(f.trace.resolved.includes(hit));assert.ok(f.b.getHitpoints()<before);assert.equal(f.trace.queued.length,1,'no new posttransition melee launch was supplied');
+  console.log('MELEE_PREVENTION_LIMIT '+JSON.stringify({transition,suppliedImpactProcessingHold:true,damage:before-f.b.getHitpoints(),oldRule:0,newRule:transition==='fresh-entry'?1:null}));
+});
+
+for(const transition of['departure','finish'])nmTest(`already-split canonical claw splats survive ${transition} without cancellation or refund`,async t=>{
+  const f=await nmQueued(t,{claws:true}),hit=f.trace.queued[0];assert.deepEqual(hit.getHitDelays(),[0,0,1,1]);assert.equal(f.a.getSpecialPercentage(),50);
+  f.process();assert.ok(f.trace.resolved.includes(hit));assert.equal(f.trace.applied.length,2,'first two canonical splats applied before supplied transition');
+  assert.ok(hit.getHits().slice(2).some(x=>x.getDamage()>0));
+  if(transition==='departure')await nmForfeit(f.b,f.game);else{f.game.finish(null);tick(3);}
+  // Leaving restores Hitpoints at Ferox; the remaining splats then land on the restored total.
+  const before=f.b.getHitpoints();assert.equal(before,f.b.getSkillManager().getMaxLevel(core.Skill.HITPOINTS));
+  f.b.setNeedsPlacement(false);f.release();assert.equal(f.trace.applied.length,4);assert.ok(f.b.getHitpoints()<before);assert.equal(f.a.getSpecialPercentage(),50,'already paid energy is not refunded');
+  console.log('MELEE_SPLIT_LIMIT '+JSON.stringify({transition,suppliedImpactProcessingHold:true,hitDelays:hit.getHitDelays(),splats:f.trace.applied,paid:50}));
+});
+
+nmTest('Oddskull remains playable with all new player combat disabled while an opposing native melee start refuses',async t=>{
+  const f=await nmGame(1,{mode:21});uCheckpoint(f.a,f.game,[3293,4958,0]);await uTake(f.a,uNpc(f.game));uHeld(f.a,f.game);
+  const side=f.game.members.get(f.a);assert.deepEqual(f.game.points,[0,0]);tick(4);assert.equal(f.game.points[side],3);
+  nmPlace(f.game,f.a,f.b);const trace=nmTrace(t,f.b,f.a),hp=f.a.getHitpoints();
+  await nmAttack(f.b,f.a);nmEngineUntil(()=>trace.permissions.length>0);
+  assert.ok(trace.attacks.includes(f.a),'ordinary decoded Attack reaches the current opposing holder');
+  assert.ok(trace.permissions.some(x=>x.method===CombatFactory.MELEE_COMBAT&&x.result===false));
+  assert.equal(trace.queued.length,0);assert.equal(f.a.getHitpoints(),hp);uHeld(f.a,f.game);
+});
+
+// Standard-bow contract: supplied scene/engine turns and controlled rolls, real native
+// negotiation, equipment, Attack, combat/fire, private floor items, Take and safe death.
+// No transcript replay, rendered-client, retail probability or full persistence claim.
+function bowDiagnostic(context,phase){
+  // Bounded scalar snapshots identify reached case/teardown, never a PASS or peak/census claim.
+  console.log('STANDARD_BOW_DIAGNOSTIC '+JSON.stringify({name:context.name,phase,clock:C.now(),actors:actors.length,memory:process.memoryUsage()}));
+}
+beforeEach(context=>{if(context.name.startsWith('standard-bow'))bowDiagnostic(context,'start');});
+const BOW_PROFILES = [
+  ['SHORTBOW','SHORTBOW'],['LONGBOW','LONGBOW'],['OAK_SHORTBOW','OAK_SHORTBOW'],['OAK_LONGBOW','OAK_LONGBOW'],
+  ['WILLOW_SHORTBOW','WILLOW_SHORTBOW'],['WILLOW_LONGBOW','WILLOW_LONGBOW'],
+  ['MAPLE_SHORTBOW','MAPLE_SHORTBOW'],['MAPLE_LONGBOW','MAPLE_LONGBOW'],
+  ['YEW_SHORTBOW','YEW_SHORTBOW'],['YEW_LONGBOW','YEW_LONGBOW'],['MAGIC_SHORTBOW','MAGIC_SHORTBOW'],['MAGIC_LONGBOW','MAGIC_LONGBOW'],
+];
+function bowItem(name){const id=core.ItemIdentifiers[name];assert.ok(Number.isInteger(id)&&id>0,`canonical item ${name}`);return id;}
+async function bowGame(extra={},mode=1){
+  const a=actor(true),b=actor(true);for(const p of[a,b]){ruleStats(p,99);p.setAutoRetaliate(false);channel(p);}
+  // Old production must fail here at the real decoded Allowed request, not at an absent new helper import.
+  const game=await negotiate(a,b,null,mode,{ranged:0,...extra});
+  bowInstall();
+  await join(a);await join(b);completePreparation(game);bowPlace(a,b,game);
+  return{a,b,game};
+}
+function bowPlace(a,b,game,offset=2){
+  for(const[p,xy]of[[a,[3293,4955,0]],[b,[3293+offset,4955,0]]]){
+    p.moveTo(game.area.at(xy));p.setNeedsPlacement(false);p.resetUpdating();AreaManager.process(p);
+  }
+  tick(2); // actual session visibility and scene placement before native target input
+}
+async function bowEquip(p,weapon='SHORTBOW',ammo='IRON_ARROW',amount=4){
+  await tEquip(p,bowItem(weapon));
+  if(ammo!==null){const id=bowItem(ammo);p.getInventory().add(new core.Item(id,amount,{qa:'bow-ammunition'}),false);
+    const actions=core.CacheDefinitions.getItem(id).inventoryActions;
+    await nativeItem(p,id,actions.includes('Wield')?'Wield':'Wear');
+    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount(),amount);
+  }
+}
+function bowAmount(p){const item=p.getEquipment().get(core.Equipment.AMMUNITION_SLOT);return item.getId()<0?0:item.getAmount();}
+function bowFloor(game,id){return core.World.getItems().filter(i=>i.getPrivateArea()===game.area&&i.getItem().getId()===id&&!i.isPendingRemoval());}
+async function bowAttackInput(a,b){
+  const frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(b.getIndex(),2);
+  const packets=decodeClientPackets(frame);assert.equal(packets.length,1);assert.equal(packets[0].option,1);assert.equal(packets[0].index,b.getIndex());
+  await a.connection.dispatch(packets);a.connection.processTurnPackets();
+}
+async function bowFire(t,a,b,roll=0.5){
+  const paid=[],original=CombatFactory.decrementAmmo.bind(CombatFactory);
+  const random=t.mock.method(Math,'random',()=>roll);
+  const observer=t.mock.method(CombatFactory,'decrementAmmo',function(p,pos,amount,delay){
+    const before=bowAmount(p);const result=original(p,pos,amount,delay);
+    if(p===a)paid.push({tick:C.now(),before,after:bowAmount(p),pos:pos.clone(),amount,delay});return result;
+  });
+  bowRollControl=e=>{if(e.attacker===a&&e.target===b)e.forceAccurate=true;};
+  try{
+    bowTurns=true;await bowAttackInput(a,b);
+    for(let n=0;n<24&&!paid.length;n++)tick();
+    assert.equal(paid.length,1,'one actual native attack reached canonical ammunition payment');
+    assert.equal(CombatFactory.getMethod(a),CombatFactory.RANGED_COMBAT,'ordinary actual method');
+    a.getCombat().reset();return paid[0];
+  }finally{bowTurns=false;bowRollControl=null;observer.mock.restore();random.mock.restore();}
+}
+function bowImpacts(n=1){bowTurns=true;try{tick(n);}finally{bowTurns=false;}}
+async function bowTake(p,item){
+  const id=item.getItem().getId(),at=item.getPosition(),frame=Buffer.from([103,id&255,id>>>8,(at.getX()+128)&255,at.getX()>>>8,at.getY()>>>8,(at.getY()+128)&255,128]);
+  const decoded=decodeClientPackets(frame);assert.equal(decoded.length,1);assert.equal(decoded[0].type,'ground_item_action');assert.equal(decoded[0].itemId,id);assert.equal(decoded[0].x,at.getX());assert.equal(decoded[0].y,at.getY());
+  await wire(p,frame);tick(12);
+}
+
+test('standard-bow native Allowed change invalidates accepts and binds resynced confirmation and join warnings',async t=>{
+  const a=actor(true),b=actor(true);channel(a);channel(b);const messages=[messagesOf(a),messagesOf(b)],calls=[scriptCalls(a),scriptCalls(b)];
+  const display=[],flags=[];const sender=a.getPacketSender(),show=sender.sendInterfaceDisplayState.bind(sender),events=sender.sendInterfaceFlagsRange.bind(sender);
+  t.mock.method(sender,'sendInterfaceDisplayState',function(...args){display.push(args);return show(...args);});
+  t.mock.method(sender,'sendInterfaceFlagsRange',function(...args){flags.push(args);return events(...args);});
+  await challenge(a,b);await challenge(b,a);const session=C.negotiations.get(a);
+  assert.ok(display.some(([id,hidden])=>id===C.uid('clanwars_setup:ranged')&&hidden===false),'actual native ranged row is exposed');
+  assert.ok(flags.some(([id,first,last,bits])=>id===C.uid('clanwars_setup:dropdown_ranged')&&first===1&&last===2&&bits===2),'both native selectable children receive op1');
+  assert.equal(session.rules.ranged,1);await click(b,'clanwars_setup:accept');assert.equal(session.accepted.has(b),true);
+  await click(a,'clanwars_setup:dropdown_ranged',1);assert.equal(session.rules.ranged,0,'real native Allowed reaches authoritative offer');
+  assert.equal(session.accepted.size,0);assert.equal(session.revision,1);
+  for(const p of[a,b])assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_ranged')),0);
+  await click(b,'clanwars_setup:accept');assert.equal(session.accepted.has(b),false);tick(9);
+  const revision=session.revision;
+  for(const slot of[0,3,65535]){await click(a,'clanwars_setup:dropdown_ranged',slot);assert.equal(session.rules.ranged,0);assert.equal(session.revision,revision);}
+  await nativeButton(a,'clanwars_setup:dropdown_ranged',2,2);assert.equal(session.rules.ranged,0);assert.equal(session.revision,revision,'wrong widget operation cannot change offer');
+  await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');
+  for(const list of calls){const summary=list.filter(row=>row[0]===554).at(-1).at(-1);assert.match(summary,/equipped arrows/);assert.match(summary,/floor arrows disappear/);}
+  tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');
+  const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(game.rules.ranged,0);
+  await join(a);assert.match(calls[0].filter(row=>row[0]===554).at(-1).at(-1),/Safe death does not restore spent arrows/);
+  for(const list of messages){assert.ok(list.some(m=>m.includes('normal, oak, willow, maple, yew and magic')));assert.ok(list.some(m=>m.includes('floor arrows disappear')));}
+});
+
+for(const[profile,weapon]of BOW_PROFILES)test(`standard-bow native ordinary shot uses canonical ${profile} profile`,async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a,weapon);bowPlace(a,b,game);
+  assert.equal(core.RangedWeapon.getFor(a),core.RangedWeapon[profile]);
+  const shot=await bowFire(t,a,b);assert.equal(shot.before,4);assert.equal(shot.after,3);assert.equal(shot.amount,1);assert.ok(shot.delay>0);
+  assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,0,'recoverable floor is delayed beyond firing');
+  const hp=b.getHitpoints();bowImpacts(shot.delay+2);assert.ok(b.getHitpoints()<hp,'real accurate arrow hit landed');
+  const floor=bowFloor(game,bowItem('IRON_ARROW'));assert.equal(floor.length,1);assert.equal(floor[0].getItem().getAmount(),1);assert.equal(floor[0].getOwner(),a.getUsername());
+  assert.equal(floor[0].getPrivateArea()===game.area,true,'floor retains exact firing-area identity');assert.equal(core.ItemOnGroundManager.canSee(b,floor[0]),false,'opponent cannot see initially private arrow');
+});
+
+for(const[weapon,ammo]of[['SHORTBOW','IRON_ARROW'],['LONGBOW','BRONZE_ARROW']])test(`standard-bow ${weapon} actual native Take conserves paid and recovered arrow`,async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a,weapon,ammo,3);bowPlace(a,b,game);
+  const id=bowItem(ammo),before=a.getInventory().getAmount(id),shot=await bowFire(t,a,b);bowImpacts(shot.delay+1);
+  const floor=bowFloor(game,id)[0];assert.ok(floor);assert.equal(floor.getItem().getMeta().qa,'bow-ammunition');
+  await bowTake(a,floor);assert.equal(a.getInventory().getAmount(id),before+1);assert.equal(bowAmount(a),2);assert.equal(bowFloor(game,id).length,0);
+  assert.equal(bowAmount(a)+a.getInventory().getAmount(id)-before,3,'one paid shot recovered once, no reconstruction');
+  await bowTake(a,floor);assert.equal(a.getInventory().getAmount(id),before+1,'same retired floor reference cannot duplicate through a new packet');
+});
+
+let bowInstalled=false;
+function bowInstall(){
+  if(bowInstalled)return;
+  const api=PM.createApi('ClanWarsStandardBowActualProducers');
+  require('../plugins/items/AvasAccumulator.plugin').register(api);
+  require('../plugins/items/DizanasQuiver.plugin').register(api);
+  require('../plugins/combat/specials/MagicShortbow.SpecialAttack')(api);
+  require('../plugins/combat/specials/MagicLongbow.SpecialAttack')(api);
+  bowInstalled=true;
+}
+async function bowRefused(a,b){
+  const before={inventory:contents(a.getInventory()),equipment:contents(a.getEquipment()),energy:a.getSpecialPercentage(),hp:b.getHitpoints()};
+  bowTurns=true;try{await bowAttackInput(a,b);tick(8);}finally{bowTurns=false;a.getCombat().reset();}
+  assert.deepEqual(contents(a.getInventory()),before.inventory);assert.deepEqual(contents(a.getEquipment()),before.equipment);
+  assert.equal(a.getSpecialPercentage(),before.energy);assert.equal(b.getHitpoints(),before.hp,'refused attack does not land damage');
+}
+
+for(const[branch,roll,cape]of[['broken',0.01,null],['recovered',0.95,'AVAS_ACCUMULATOR']])test(`standard-bow actual ${branch} outcome conserves carried floor and spent units`,async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a);if(cape)await tEquip(a,bowItem(cape),core.Equipment.CAPE_SLOT);bowPlace(a,b,game);
+  const shot=await bowFire(t,a,b,roll);assert.equal(shot.before-shot.after,branch==='broken'?1:0);bowImpacts(shot.delay+2);
+  assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,0);assert.equal(bowAmount(a),branch==='broken'?3:4);
+  const carried=contents(a.getEquipment());game.finish(null);tick(4);assert.deepEqual(contents(a.getEquipment()),carried,'finish does not recreate broken or recovered arrows');
+});
+
+test('standard-bow registry aliases retain ordinary support through actual native equipment',async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a,'MAGIC_SHORTBOW_I_');bowPlace(a,b,game);
+  assert.equal(core.RangedWeapon.getFor(a),core.RangedWeapon.MAGIC_SHORTBOW);
+  const shot=await bowFire(t,a,b);assert.equal(shot.after,3);bowImpacts(shot.delay+1);assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,1);
+});
+
+for(const[weapon,ammo]of[['CRYSTAL_BOW_FULL',null],['BRONZE_KNIFE',null],['DARK_BOW','IRON_ARROW'],['RUNE_CROSSBOW','BRONZE_BOLTS'],['TOXIC_BLOWPIPE',null],['CRAWS_BOW',null]])test(`standard-bow unsupported ${weapon} native Attack refuses before spending`,async()=>{
+  const{a,b,game}=await bowGame();
+  if(weapon==='CRYSTAL_BOW_FULL'){
+    // Supplied eligibility checkpoint, not forced equipment: the shared canonical
+    // loader also installs this historical bow's noncombat Agility requirement.
+    const {EquipmentRequirements}=require('../dist/game/model/equipment/EquipmentRequirements');
+    const definition=core.ItemDefinition.forId(bowItem(weapon)),skills=a.getSkillManager();
+    const unmet=EquipmentRequirements.getUnmet(a,definition);
+    assert.deepEqual(unmet,{label:'Agility',level:50},'real equip prerequisite before the native Wield request');
+    assert.equal(definition.getRequirements()[core.Skill.AGILITY.getIndex()],50);
+    assert.equal(skills.getMaxLevel(core.Skill.AGILITY),1);
+    skills.setMaxLevels(core.Skill.AGILITY,50,false);skills.setCurrentLevel(core.Skill.AGILITY,50,false);
+    assert.equal(EquipmentRequirements.getUnmet(a,definition),null,'eligible supplied actor still uses native equip');
+    console.log('STANDARD_BOW_EQUIP_PREREQUISITE '+JSON.stringify({weapon,unmet,baseAgility:skills.getMaxLevel(core.Skill.AGILITY)}));
+  }
+  await bowEquip(a,weapon,ammo);bowPlace(a,b,game);const messages=messagesOf(a);
+  await bowRefused(a,b);assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,0);
+  assert.ok(messages.some(m=>m.includes('TSPS Ranging supports')),'actionable supported-family refusal');
+});
+
+test('standard-bow loaded quiver resolver cannot bypass actual equipped-ammunition boundary',async()=>{
+  const{a,b,game}=await bowGame();await bowEquip(a,'SHORTBOW',null);await tEquip(a,bowItem('DIZANAS_QUIVER'),core.Equipment.CAPE_SLOT);
+  // Supplied player-owned loaded state, resolved and spent only by the real quiver plugin.
+  a.setAttribute('dizanas-quiver',{id:bowItem('IRON_ARROW'),amount:7});bowPlace(a,b,game);
+  assert.equal(core.Ammunition.firesFromAmmoSlot(a),false);const before=structuredClone(a.getAttribute('dizanas-quiver'));
+  await bowRefused(a,b);assert.deepEqual(a.getAttribute('dizanas-quiver'),before);assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,0);
+});
+
+for(const ammo of[null,'RUNE_ARROW'])test(`standard-bow missing or incompatible ${ammo} ammunition refuses without expenditure`,async()=>{
+  const{a,b,game}=await bowGame();await bowEquip(a,'SHORTBOW',ammo);bowPlace(a,b,game);const messages=messagesOf(a);
+  await bowRefused(a,b);assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,0);
+  assert.ok(messages.some(m=>/no ammo|can't use that ammo/i.test(m)),'canonical quiver compatibility refusal');
+});
+
+test('standard-bow ranged special button and injected prearmed swing both refuse without energy or arrows',async()=>{
+  const{a,b,game}=await bowGame({specialattacks:0});await bowEquip(a,'MAGIC_SHORTBOW');bowPlace(a,b,game);
+  const messages=messagesOf(a),before=resources(a);await nativeButton(a,'orbs:specbutton');
+  assert.equal(a.isSpecialActivated(),false);assert.equal(a.getSpecialPercentage(),100);assert.deepEqual(contents(a.getEquipment()),before.equipment);
+  assert.ok(messages.some(m=>m.includes('Ranged special attacks are unavailable')));
+  a.setSpecialActivated(true);await bowRefused(a,b);assert.equal(a.getSpecialPercentage(),100);assert.equal(bowAmount(a),4);
+  a.setSpecialActivated(false);assert.equal(CombatFactory.canAttackByPolicy(a,b,CombatFactory.RANGED_COMBAT),CanAttackResponse.CAN_ATTACK);
+});
+
+test('standard-bow inherited Disabled option melee and magic controls retain negotiated policy',async()=>{
+  const{a,b,game}=await bowGame({ranged:1});await bowEquip(a);bowPlace(a,b,game);await bowRefused(a,b);
+  assert.equal(CombatFactory.canAttackByPolicy(a,b,CombatFactory.MELEE_COMBAT),CanAttackResponse.CAN_ATTACK);
+  assert.equal(CombatFactory.canAttackByPolicy(a,b,CombatFactory.MAGIC_COMBAT),CanAttackResponse.CANT_ATTACK_IN_AREA);
+  assert.equal(bowAmount(a),4);assert.equal(game.rules.ranged,1);
+});
+
+test('standard-bow last arrow is paid once and next actual Attack reports empty quiver',async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a,'SHORTBOW','IRON_ARROW',1);bowPlace(a,b,game);
+  const shot=await bowFire(t,a,b);assert.equal(shot.after,0);bowImpacts(shot.delay+2);assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,1);
+  const messages=messagesOf(a);await bowRefused(a,b);assert.ok(messages.some(m=>m.includes('There is no ammo left in your quiver')));
+  assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,1,'next failed attempt cannot create another floor arrow');
+});
+
+test('standard-bow actual approach from outside range precedes first payment',async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a);bowPlace(a,b,game,16);
+  const before=position(a);const shot=await bowFire(t,a,b);assert.notDeepEqual(position(a),before,'ordinary target pursuit moved the archer before firing');
+  assert.equal(shot.after,3);assert.ok(Math.abs(a.getLocation().getX()-b.getLocation().getX())<=core.WeaponProfiles.attackDistance(a,7));
+});
+
+test('standard-bow projectile obstruction prevents payment while movement is blocked',async()=>{
+  const{a,b,game}=await bowGame();await bowEquip(a);bowPlace(a,b,game);
+  // Supplied short-lived scene obstruction: actual collision/ray checks, no CombatRange stub.
+  const at=game.area.at([3294,4955,0]),old=game.area.getClip(at);game.area.setClip(at,old|0x20100);
+  a.getMovementQueue().setBlockMovement(true);
+  try{assert.equal(core.RegionManager.canProjectileAttackReturn(a.getLocation(),b.getLocation(),1,game.area),false);await bowRefused(a,b);assert.equal(bowAmount(a),4);}
+  finally{a.getMovementQueue().setBlockMovement(false);game.area.setClip(at,old);}
+});
+
+for(const phase of['before-landing','after-landing'])test(`standard-bow finish ${phase} preserves payment and cleans instance floor exactly once`,async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a);bowPlace(a,b,game);const shot=await bowFire(t,a,b),id=bowItem('IRON_ARROW');
+  if(phase==='after-landing'){bowImpacts(shot.delay+1);assert.equal(bowFloor(game,id).length,1);}
+  else assert.equal(bowFloor(game,id).length,0);
+  const paid=contents(a.getEquipment());game.finish(null);assert.equal(game.area.isDestroyed(),true);bowImpacts(shot.delay+4);
+  assert.equal(bowFloor(game,id).length,0);assert.deepEqual(contents(a.getEquipment()),paid);assert.equal(bowAmount(a),3);
+  assert.equal(core.World.getItems().some(i=>i.getPrivateArea()===null&&i.getOwner()===a.getUsername()&&i.getItem().getId()===id&&!i.isPendingRemoval()),false,'no late lobby arrow');
+});
+
+test('standard-bow gear change during flight cannot refund or retarget already-paid arrow',async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a);bowPlace(a,b,game);const shot=await bowFire(t,a,b),id=bowItem('IRON_ARROW');
+  assert.equal(bowAmount(a),3);const paid=a.getEquipment().get(core.Equipment.AMMUNITION_SLOT);
+  // Supplied same-player container relocation after actual firing; native Take remains separately covered.
+  a.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT,new core.Item(-1,0));a.getInventory().add(paid,false);
+  const targetAt=shot.pos.clone();b.moveTo(game.area.at([3298,4955,0]));b.setNeedsPlacement(false);AreaManager.process(b);
+  bowImpacts(shot.delay+2);const floor=bowFloor(game,id);assert.equal(floor.length,1);assert.ok(floor[0].getPosition().equals(targetAt));
+  assert.equal(a.getInventory().getAmount(id),3);assert.equal(bowAmount(a),0);assert.equal(floor[0].getItem().getAmount(),1);
+});
+
+test('standard-bow native wrong-scene Take isolates actual instances and same-coordinate area guard',async t=>{
+  const first=await bowGame();await bowEquip(first.a);bowPlace(first.a,first.b,first.game);const shot=await bowFire(t,first.a,first.b);bowImpacts(shot.delay+1);
+  const second=await bowGame(),id=bowItem('IRON_ARROW'),floor=bowFloor(first.game,id)[0];assert.ok(floor);
+  const at=floor.getPosition(),source=[at.getX()-first.game.area.getBaseX()+first.game.layout.origin[0],at.getY()-first.game.area.getBaseY()+first.game.layout.origin[1],at.getZ()];
+  const ownTile=second.game.area.at(source);
+  assert.equal(ownTile.equals(at),false,'template instances allocate distinct absolute coordinates');
+  second.a.moveTo(ownTile);second.a.setNeedsPlacement(false);AreaManager.process(second.a);tick(2);
+  assert.equal(second.a.getPrivateArea()===second.game.area,true,'actual participant remains in its own mapped scene');
+  assert.equal(core.ItemOnGroundManager.canSee(second.a,floor),false);
+  // Supplied read-only guard probe: same absolute position and owner name, varying ONLY area identity.
+  // This is not a real player placed outside its instance or a naturally overlapping-scene claim.
+  const sameCoordinateOwner={getLocation:()=>at.clone(),getUsername:()=>first.a.getUsername(),getPrivateArea:()=>second.game.area};
+  assert.equal(core.ItemOnGroundManager.canSee(sameCoordinateOwner,floor),false,'foreign private identity alone refuses visibility');
+  sameCoordinateOwner.getPrivateArea=()=>first.game.area;
+  assert.equal(core.ItemOnGroundManager.canSee(sameCoordinateOwner,floor),true,'same-position same-owner positive control sees owned floor');
+  const before=second.a.getInventory().getAmount(id);await bowTake(second.a,floor);
+  assert.equal(second.a.getInventory().getAmount(id),before);assert.equal(bowFloor(first.game,id).length,1);
+  assert.equal(second.a.getPrivateArea()===second.game.area,true,'wrong-scene packet cannot move instance ownership');
+  const ownerBefore=first.a.getInventory().getAmount(id);await bowTake(first.a,floor);
+  assert.equal(first.a.getInventory().getAmount(id),ownerBefore+1,'real owner native Take remains a connected positive control');
+  assert.equal(bowFloor(first.game,id).length,0);
+});
+
+test('standard-bow actual lethal ranged impact preserves victim supplies through safe jail return and exit',async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a);await bowEquip(b,'LONGBOW','BRONZE_ARROW',5);bowPlace(a,b,game);
+  give(b,bowItem('SHARK'),'safe-ranged-victim');const kept=carriedItems(b);b.setHitpoints(1);
+  const shot=await bowFire(t,a,b);assert.equal(shot.after,3);bowImpacts(shot.delay+10);
+  assert.equal(game.jailed.has(b),true,'actual native fired arrow caused real player death and safe jail callback');
+  assert.deepEqual(carriedItems(b),kept);assert.equal(bowAmount(a),3);assert.equal(bowAmount(b),5);
+  assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,1);
+  await bowRefused(a,b);assert.equal(bowAmount(a),3,'jailed opponent cannot be shot again');
+  await jailExit(b,game);assert.equal(game.fighters.has(b),true);assert.equal(game.jailed.has(b),false);assert.deepEqual(carriedItems(b),kept);
+  game.finish(null);tick(3);assert.deepEqual(carriedItems(b),kept);assert.equal(bowAmount(a),3);assert.equal(bowFloor(game,bowItem('IRON_ARROW')).length,0);
+});
+
+async function bowAlly(a,game){
+  const ally=actor(true);ruleStats(ally,99);ally.setAutoRetaliate(false);
+  a.getRelations().addFriend(ally.getLongUsername());a.getRelations().setFriendRank(ally.getLongUsername(),5);
+  assert.equal(FC.join(ally,a.getUsername(),false),true);await join(ally);assert.equal(game.fighters.has(ally),true);return ally;
+}
+for(const departure of['leave','logout'])test(`standard-bow owner ${departure} during flight leaves paid arrow in firing instance`,async t=>{
+  const{a,b,game}=await bowGame();const ally=await bowAlly(a,game);await bowEquip(a);bowPlace(a,b,game);
+  const shot=await bowFire(t,a,b),id=bowItem('IRON_ARROW'),before=contents(a.getEquipment());
+  assert.equal(bowFloor(game,id).length,0);
+  if(departure==='logout')PM.emitPlayerLogout({player:a,username:a.getUsername()});
+  else assert.equal(Match.leave({player:a}),true); // registered leave producer, explicit lifecycle probe
+  assert.equal(C.matches.has(a),false);bowImpacts(shot.delay+2);
+  assert.equal(game.phase,'combat');assert.equal(game.fighters.has(ally),true);const floor=bowFloor(game,id);assert.equal(floor.length,1);
+  assert.equal(floor[0].getOwner(),a.getUsername());assert.equal(floor[0].getPrivateArea()===game.area,true,'floor retains exact firing-area identity');assert.deepEqual(contents(a.getEquipment()),before);assert.equal(bowAmount(a),3);
+  assert.equal(core.ItemOnGroundManager.canSee(a,floor[0]),false,'owner in lobby cannot reach its former private scene');
+  await bowTake(a,floor[0]);assert.equal(bowFloor(game,id).length,1);assert.equal(a.getInventory().getAmount(id),0);
+  game.finish(null);assert.equal(bowFloor(game,id).length,0);assert.equal(bowAmount(a),3);
+});
+
+test('standard-bow owner death during flight retains paid stack and suppresses reconstructed refund on jail return',async t=>{
+  const{a,b,game}=await bowGame();await bowEquip(a);await bowEquip(b,'LONGBOW','BRONZE_ARROW');bowPlace(a,b,game);
+  const shot=await bowFire(t,a,b),id=bowItem('IRON_ARROW'),remaining=carriedItems(a);
+  // Explicit supplied lethal incoming hit, separate from the naturally fired arrow's latency.
+  const hit=new core.PendingHit(b,a,CombatFactory.RANGED_COMBAT,{damage:a.getHitpoints(),rollAccuracy:false,handleAfterHitEffects:false,experience:false,delay:0});
+  CombatFactory.addPendingHit(hit);core.World.processCycle++;require('../dist/game/content/combat/hit/HitQueue').HitQueue.processAll(C.now());
+  assert.equal(a.getHitpoints(),0);bowImpacts(shot.delay+10);assert.equal(game.jailed.has(a),true);assert.deepEqual(carriedItems(a),remaining);
+  assert.equal(bowAmount(a),3);assert.equal(bowFloor(game,id).length,1);await jailExit(a,game);assert.equal(game.fighters.has(a),true);
+  assert.deepEqual(carriedItems(a),remaining);assert.equal(bowAmount(a),3);
+});
+
+test('standard-bow native owned Forfeit keeps actual remaining equipment without ammo reconstruction',async t=>{
+  const{a,b,game}=await bowGame();await bowAlly(a,game);await bowEquip(a);bowPlace(a,b,game);
+  const shot=await bowFire(t,a,b);bowImpacts(shot.delay+1);const remaining=carriedItems(a),id=bowItem('IRON_ARROW');
+  const name=game.layout.exits[game.members.get(a)],portal=mappedLayoutObjects(game,name)[0];assert.ok(portal);
+  // Supplied footprint-perimeter placement, followed by the real owned object's native action.
+  const def=portal.getDefinition(),rot=portal.getFace()%2,w=rot?def.sizeY:def.sizeX,h=rot?def.sizeX:def.sizeY;
+  const candidates=[];for(let x=-1;x<=w;x++)for(let y=-1;y<=h;y++){
+    if(x>=0&&x<w&&y>=0&&y<h)continue;const at=new core.Location(portal.getLocation().getX()+x,portal.getLocation().getY()+y,0);
+    if(game.area.getClip(at)===0)candidates.push(at);
+  }
+  assert.ok(candidates.length);a.moveTo(candidates[0]);a.setNeedsPlacement(false);AreaManager.process(a);tick(2);
+  const sourceXY=[portal.getLocation().getX()-game.area.getBaseX()+game.layout.origin[0],portal.getLocation().getY()-game.area.getBaseY()+game.layout.origin[1]];
+  await layoutObjectInput(a,game,name,sourceXY,'Forfeit');assert.equal(C.matches.has(a),false);lobby(a);
+  assert.deepEqual(carriedItems(a),remaining);assert.equal(bowAmount(a),3);assert.equal(bowFloor(game,id).length,1);
+  game.finish(null);assert.equal(bowFloor(game,id).length,0);assert.deepEqual(carriedItems(a),remaining);
+});
+
+
+test('standard-bow native staging and same-team targets refuse arrows while ordinary opposing combat still works',async t=>{
+  const a=actor(true),ally=actor(true),b=actor(true);for(const p of[a,ally,b]){ruleStats(p,99);p.setAutoRetaliate(false);}
+  channel(a,[ally]);channel(b);const game=await negotiate(a,b,null,1,{ranged:0});bowInstall();
+  for(const p of[a,ally,b])await join(p);await bowEquip(a);bowPlace(a,b,game);
+  assert.equal(game.phase,'staging');await bowRefused(a,b);assert.equal(bowAmount(a),4);
+  completePreparation(game);bowPlace(a,b,game);
+  ally.moveTo(game.area.at([3294,4955,0]));ally.setNeedsPlacement(false);AreaManager.process(ally);tick(2);
+  await bowRefused(a,ally);assert.equal(bowAmount(a),4);
+  const shot=await bowFire(t,a,b);assert.equal(shot.after,3);bowImpacts(shot.delay+2);
+});
+
+test('standard-bow Oddskull integration preserves holder attack refusal and permits incoming ordinary arrows',async t=>{
+  const{a,b,game}=await uGame(21,{ranged:0});
+  uCheckpoint(b,game,[3293,4958,0]);await uTake(b,uNpc(game));uHeld(b,game);
+  await bowEquip(a);bowPlace(a,b,game);
+  await bowRefused(b,a);uHeld(b,game);
+  const hp=b.getHitpoints(),shot=await bowFire(t,a,b);bowImpacts(shot.delay+2);
+  assert.ok(b.getHitpoints()<hp,'actual canonical arrow damages the current skull holder');
+  assert.equal(shot.before-shot.after,1);uHeld(b,game);
+});
+
+// New connected-main composition: independent style permissions, canonical arrow
+// payment/impact, and an actual subsequent native melee start refused before launch.
+test('standard-bow merged MeleeDisabled permits paid arrow impact but refuses actual dagger start',async t=>{
+  nmInstall();const{a,b,game}=await bowGame({melee:1});
+  assert.equal(game.rules.melee,1);assert.equal(game.rules.ranged,0);assert.equal(game.rules.magic,4);
+  await bowEquip(a);bowPlace(a,b,game);const hp=b.getHitpoints(),shot=await bowFire(t,a,b);
+  assert.equal(shot.before-shot.after,1);bowImpacts(shot.delay+2);
+  assert.ok(b.getHitpoints()<hp,'permitted canonical ranged hit lands despite new melee starts being disabled');
+  await tEquip(a,core.ItemIdentifiers.DRAGON_DAGGER);nmPlace(game,a,b);
+  const before=resources(a),afterArrowHP=b.getHitpoints(),trace=nmTrace(t,a,b);
+  try{
+    ghastTurns=true;await nmAttack(a,b);nmEngineUntil(()=>trace.permissions.length>0);
+    a.getCombat().reset();assert.ok(trace.attacks.includes(b),'decoded native Attack reached actual target');
+    assert.ok(trace.methods.some(m=>m.type()===core.CombatType.MELEE));
+    assert.ok(trace.permissions.some(x=>x.method?.type()===core.CombatType.MELEE&&x.result===false));
+    assert.equal(trace.prepared.length,0);assert.equal(trace.started.length,0);assert.equal(trace.queued.length,0);assert.equal(trace.resolved.length,0);
+    assert.equal(b.getHitpoints(),afterArrowHP);assert.deepEqual(resources(a),before,'refused new melee attempt pays nothing');
+  }finally{nmObserve=null;nmRoll=null;ghastTurns=false;}
+});
+
+// M: actual-main optional elemental Magic. Supplied placement, engine clock,
+// accuracy/damage branches and item metadata are explicit; transport stays inert.
+// These helpers observe/forward canonical payment and hit production, never pay a
+// spell by calling canCast(true) as a substitute for the native combat route.
+let mInstalled=false;
+const M_ELEMENTS=['WIND','WATER','EARTH','FIRE'],M_FAMILIES=['STRIKE','BOLT','BLAST','WAVE','SURGE'];
+function mStaffNames(){
+  const names=['STAFF','MAGIC_STAFF','BATTLESTAFF'];
+  for(const e of['AIR','WATER','EARTH','FIRE'])names.push('STAFF_OF_'+e,e+'_BATTLESTAFF','MYSTIC_'+e+'_STAFF');
+  for(const e of['LAVA','MUD','STEAM','SMOKE','MIST','DUST'])names.push(e+'_BATTLESTAFF','MYSTIC_'+e+'_STAFF');
+  for(const e of['LAVA','STEAM'])names.push(e+'_BATTLESTAFF_3','MYSTIC_'+e+'_STAFF_3');
+  return names;
+}
+function mTest(name,body){test('native M '+name,async t=>{
+  magicCase=name;console.log('MAGIC_FIXTURE '+JSON.stringify({phase:'start',name,clock:C.now(),actors:actors.length,...process.memoryUsage()}));
+  await body(t);
+});}
+function mInstall(){
+  if(mInstalled)return;
+  // The canonical loader clears ItemDefinition.definitions and hydrates real
+  // weapon interfaces. Run it once after inherited teardown, before M actors or
+  // their native equipment exist; do not replay global server startup.
+  assert.equal(actors.length,0,'canonical item definitions load before M actors');
+  const api=PM.createApi('ClanWarsMCanonicalSpellResources');
+  require('../plugins/items/ItemDefinitionLoader.plugin').register(api);
+  tInstall();
+  for(const name of['combat/ElementalSpells.plugin','items/ElementalStaves.plugin','items/ElementalTomes.plugin',
+    'items/RunePouch.plugin','items/SlayersStaff.plugin','items/StorageItems.plugin','items/SpellRuneSaving.plugin','items/ToxicStaffOfTheDead.plugin','items/Trident.plugin']){
+    require('../plugins/'+name).register(api);
+  }
+  // Capture and invoke only Iban's actual registered startup lifecycle; unrelated
+  // server startup hooks must not be replayed by this isolated fixture.
+  const startup=[];
+  const ibanApi={...api,onServerStartup(handler){api.onServerStartup(handler);startup.push(handler);}};
+  require('../plugins/items/IbansStaff.plugin').register(ibanApi);
+  assert.equal(startup.length,1);startup[0]({timestamp:Date.now()});
+  mInstalled=true;
+}
+function mPosition(game,a,b,distance=2){
+  for(const[p,tile]of[[a,[3293,4955,0]],[b,[3293+distance,4955,0]]]){
+    p.moveTo(game.area.at(tile));p.setNeedsPlacement(false);p.resetUpdating();AreaManager.process(p);
+    assert.equal(p.getArea()===game.area,true,'supplied local placement stays in its real instance');
+    p.setAutoRetaliate(false);
+  }
+}
+function mFund(p,amount=200){
+  for(const name of['AIR_RUNE','WATER_RUNE','EARTH_RUNE','FIRE_RUNE','MIND_RUNE','CHAOS_RUNE','DEATH_RUNE','BLOOD_RUNE','WRATH_RUNE','NATURE_RUNE','BODY_RUNE','SOUL_RUNE']){
+    p.getInventory().add(new core.Item(core.ItemIdentifiers[name],amount),false);
+  }
+}
+function mInventory(p){return contents(p.getInventory());}
+function mCost(p,spell){return spell.itemsToConsume(p).map(i=>[i.getId(),i.getAmount()]);}
+function mAmounts(p,cost){return cost.map(([id])=>p.getInventory().getAmount(id));}
+function mPaid(p,cost,before){for(let n=0;n<cost.length;n++)assert.equal(p.getInventory().getAmount(cost[n][0]),before[n]-cost[n][1],'canonical inventory cost paid exactly once');}
+function mTrace(t,a,b){
+  const trace={commits:[],hits:[],resolved:[]};
+  const add=CombatFactory.addPendingHit.bind(CombatFactory);
+  t.mock.method(CombatFactory,'addPendingHit',hit=>{
+    if(hit.getAttacker()===a&&hit.getTarget()===b)trace.hits.push(hit);
+    return add(hit);
+  });
+  magicObserve=(kind,e)=>{
+    if(kind==='committed'&&e.player===a)trace.commits.push(e);
+    if(kind==='resolved'&&e.attacker===a&&e.target===b)trace.resolved.push(e.hit);
+  };
+  magicRollControl=e=>{if(e.attacker===a&&e.target===b){e.forceAccurate=true;e.forceMaxHit=true;}};
+  return trace;
+}
+async function mGame(t,{rules={},beforeEntry=null,mode=1,prepare=true}={}){
+  mInstall();const a=actor(true),b=actor(true);ruleStats(a,99);ruleStats(b,99);channel(a);channel(b);
+  const game=await negotiate(a,b,2,mode,{magic:1,...rules});
+  if(beforeEntry)await beforeEntry(a,b,game);
+  await join(a);await join(b);if(prepare)completePreparation(game);mPosition(game,a,b);
+  for(const p of[a,b]){p.setSpellbook(core.MagicSpellbook.NORMAL);mFund(p);}
+  t.mock.method(Date,'now',()=>C.now()*600);
+  magicTurns=true;return{a,b,game,trace:mTrace(t,a,b)};
+}
+async function mSpell(a,b,name,label=null){
+  const pretty=label??name.toLowerCase().split('_').map(s=>s[0].toUpperCase()+s.slice(1)).join(' ');
+  const meta=core.CacheDefinitions.getSpellByName(pretty);assert.ok(meta,'actual active-cache spell widget/item exists: '+pretty);
+  const{ClientPacketId}=require('../dist/net/protocol/NativeClientPackets');
+  const frame=Buffer.alloc(12);frame[0]=ClientPacketId.OPPLAYER_T;
+  frame[1]=0;frame.writeUInt16LE(meta.itemId,2);frame.writeUInt16LE(65535,4);
+  const uid=meta.widgetId;frame[6]=(uid>>>16)&255;frame[7]=(uid>>>24)&255;frame[8]=uid&255;frame[9]=(uid>>>8)&255;
+  frame.writeUInt16LE(b.getIndex(),10);
+  const decoded=decodeClientPackets(frame);assert.equal(decoded.length,1);assert.equal(decoded[0].type,'spell_on_player');
+  assert.equal(decoded[0].targetIndex,b.getIndex());assert.equal(decoded[0].spellWidget,uid);assert.equal(decoded[0].spellItemId,meta.itemId);
+  await a.connection.dispatch(decoded);a.connection.processTurnPackets();
+  // No implicit tick here: the next controlled turn witnesses the actual paid cast
+  // before advancing its delayed hit. This is not a natural queue-latency claim.
+}
+async function mFire(f,name='WIND_STRIKE'){
+  const{a,b,trace}=f;const n=trace.commits.length,h=trace.hits.length;
+  await mSpell(a,b,name);
+  assert.equal(a.getCombat().getCastSpell()===core.CombatSpells[name],true,'native spell metadata resolves the canonical object');
+  assert.equal(a.getCombat().getTarget()===b,true,'real spell-on-player owns the opposing target');
+  for(let turn=0;turn<30&&trace.commits.length===n;turn++)tick();
+  assert.equal(trace.commits.length,n+1,'actual engine reaches exactly one canonical paid cast');
+  assert.equal(trace.hits.length,h+1,'canonical method produces one actual pending hit');
+  const hit=trace.hits[h];assert.equal(hit.getCombatMethod()===CombatFactory.MAGIC_COMBAT,true);
+  assert.equal(hit.getSpell()===core.CombatSpells[name],true);assert.equal(hit.getSpellContext()===trace.commits[n].context,true);
+  return hit;
+}
+function mLand(f,hit){
+  for(let turn=0;turn<12&&!f.trace.resolved.includes(hit);turn++)tick();
+  assert.equal(f.trace.resolved.includes(hit),true,'actual delayed hit reaches the canonical resolver');
+}
+async function mEquip(p,id,slot=core.Equipment.WEAPON_SLOT){await tEquip(p,id,slot);}
+function mTome(p,element,charges=2,special=false){
+  const Common=require('../plugins/items/elementaltomes/Common.ElementalTomes');
+  const item=p.getEquipment().get(core.Equipment.SHIELD_SLOT),definition=Common.getDefinition(item.getId());
+  assert.equal(definition.element,element);Common.set(item,definition,charges,special?definition.specialPageId:definition.pageId);
+  return{item,definition,Common};
+}
+
+mTest('five-choice native writer, Standard/Disabled reader, operation, offer revision and confirmation terms',async t=>{
+  mInstall();const a=actor(true),b=actor(true);channel(a);channel(b);const lines=messagesOf(a),scripts=scriptCalls(a),sender=a.getPacketSender();
+  const display=[],flags=[],sendDisplay=sender.sendInterfaceDisplayState.bind(sender),sendFlags=sender.sendInterfaceFlagsRange.bind(sender);
+  t.mock.method(sender,'sendInterfaceDisplayState',(uid,hide)=>{display.push([uid,hide]);return sendDisplay(uid,hide);});
+  t.mock.method(sender,'sendInterfaceFlagsRange',(uid,first,last,mask)=>{flags.push([uid,first,last,mask]);return sendFlags(uid,first,last,mask);});
+  await challenge(a,b);await challenge(b,a);const session=C.negotiations.get(a);
+  assert.ok(display.some(x=>x[0]===C.uid('clanwars_setup:magic')&&x[1]===false),'actual native Magic row is visible before selecting');
+  assert.ok(flags.some(x=>x[0]===C.uid('clanwars_setup:dropdown_magic')&&x[1]===1&&x[2]===5&&x[3]===2));
+  assert.equal(session.rules.magic,4);await click(a,'clanwars_setup:accept');assert.equal(session.accepted.has(a),true);
+  const revision=session.revision;await nativeButton(a,'clanwars_setup:dropdown_magic',1,2);
+  assert.equal(session.rules.magic,1);assert.equal(session.revision,revision+1);assert.equal(session.accepted.size,0);
+  assert.equal(sender.getVarbit(core.CacheDefinitions.getVarbitId('clanwars_magic')),1);
+  for(const slot of[1,0,6,65535]){
+    await nativeButton(a,'clanwars_setup:dropdown_magic',1,slot);assert.equal(session.rules.magic,1);assert.equal(session.revision,revision+1);
+    assert.equal(sender.getVarbit(core.CacheDefinitions.getVarbitId('clanwars_magic')),1);
+  }
+  await nativeButton(a,'clanwars_setup:dropdown_magic',2,5);assert.equal(session.rules.magic,1,'native OP2 cannot change Standard to Disabled');
+  assert.equal(PM.emitInterfaceActionClick({player:a,buttonId:C.uid('clanwars_setup:dropdown_magic'),groupId:C.group('clanwars_setup'),childId:C.uid('clanwars_setup:dropdown_magic')&65535,slot:5,handled:false}),false,'actual dispatcher refuses a missing action before the feature reader');
+  assert.equal(session.rules.magic,1,'missing actual operation is failclosed');
+  await nativeButton(a,'clanwars_setup:dropdown_magic',1,5);assert.equal(session.rules.magic,4);
+  await nativeButton(a,'clanwars_setup:dropdown_magic',1,2);assert.equal(session.rules.magic,1);tick(9);
+  await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');assert.equal(session.confirmRevision,session.revision);
+  const terms=scripts.findLast(row=>row[0]===554)?.[2];assert.match(terms,/20 strike/);assert.match(terms,/empty offhand or an elemental tome/);assert.match(terms,/not restored/);assert.match(terms,/queued battle hits without refund/);
+  tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');const game=C.channelGames.get(C.channel(a).key);assert.ok(game);await join(a);await join(b);
+  assert.ok(scripts.some(row=>row[0]===554&&row[1]===1&&/20 strike/.test(row[2])),'actual native joining repeats the same bounded terms');
+  assert.ok(lines.some(s=>s.includes('Other combat spells')));assert.ok(lines.some(s=>s.includes('not restored')));
+});
+
+for(const element of M_ELEMENTS)for(const family of M_FAMILIES)mTest('ordinary '+element+' '+family+' native cast pays once, queues canonical context and lands',async t=>{
+  const f=await mGame(t),spell=core.CombatSpells[element+'_'+family],cost=mCost(f.a,spell),amounts=mAmounts(f.a,cost),hp=f.b.getHitpoints(),xp=f.a.getSkillManager().getExperience(core.Skill.MAGIC);
+  const hit=await mFire(f,element+'_'+family);mPaid(f.a,cost,amounts);assert.ok(f.b.getCombat().getHitQueue().hasPendingHit(hit),'paid cast is genuinely delayed');
+  mLand(f,hit);assert.ok(f.b.getHitpoints()<hp);assert.ok(f.a.getSkillManager().getExperience(core.Skill.MAGIC)>xp);assert.equal(f.trace.commits.length,1);
+});
+
+for(const name of mStaffNames())mTest('basic/elemental staff family '+name+' equips natively and casts ordinary Wind Strike',async t=>{
+  const f=await mGame(t),I=core.ItemIdentifiers;await mEquip(f.a,I[name]);
+  const air=f.a.getInventory().getAmount(I.AIR_RUNE),mind=f.a.getInventory().getAmount(I.MIND_RUNE);
+  const hit=await mFire(f);const suppliesAir=name==='STAFF_OF_AIR'||name==='AIR_BATTLESTAFF'||name==='MYSTIC_AIR_STAFF'||/^(MYSTIC_)?(SMOKE|MIST|DUST)_/.test(name);
+  assert.equal(f.a.getInventory().getAmount(I.AIR_RUNE),air-(suppliesAir?0:1));assert.equal(f.a.getInventory().getAmount(I.MIND_RUNE),mind-1);mLand(f,hit);
+});
+
+mTest('actual registered staff aliases retain their unsupported canonical-family refusal',async t=>{
+  const f=await mGame(t),bases=new Set(mStaffNames().map(n=>core.ItemIdentifiers[n]));
+  // Read the already-registered canonical LMS mapping. Do not register a supplied alias.
+  const canonicalRow=id=>{
+    const type=core.CacheDefinitions.getItem(id);
+    return{id,name:type?.name,model:type?.model,wearPos:type?.wearPos,category:type?.category,inventoryActions:type?.inventoryActions};
+  };
+  const registered=[...core.CacheDefinitions.getObjNames()].map(([id,gameval])=>({id,gameval,base:core.ItemAliases.baseOf(id)})).filter(row=>row.base!=null);
+  const candidates=registered.filter(row=>bases.has(row.base));
+  const staffLike=registered.filter(row=>/staff|wand/i.test(core.CacheDefinitions.getItem(row.base)?.name??''));
+  console.log('MAGIC_ALIAS_DISCOVERY '+JSON.stringify({registeredCount:registered.length,
+    supportedCanonicalStaves:[...bases].map(canonicalRow),
+    supportedBaseCandidates:candidates.map(row=>({...row,item:canonicalRow(row.id),canonicalBase:canonicalRow(row.base)})),
+    registeredStaffLike:staffLike.map(row=>({...row,item:canonicalRow(row.id),canonicalBase:canonicalRow(row.base)}))}));
+  // Diagnostic job6af830ec returned no supported-base alias before action
+  // filtering. The real ten staff/wand copies have no admitted generic base. The
+  // Standard exact-id additions do not admit their LMS aliases. Test those real
+  // native refusals; never manufacture a supported alias witness.
+  assert.equal(candidates.length,0,'this active cache has no registered alias of the admitted staff family');
+  const expected=[['br_ancient_staff','ANCIENT_STAFF'],['br_beginner_wand','BEGINNER_WAND'],
+    ['br_apprentice_wand','APPRENTICE_WAND'],['br_master_wand','MASTER_WAND'],['br_sotd','STAFF_OF_THE_DEAD'],
+    ['br_zuriels_staff','ZURIELS_STAFF'],['br_kodai_wand','KODAI_WAND'],['br_barrows_ahrim_weapon','AHRIMS_STAFF'],
+    ['br_nightmare_staff_volatile','VOLATILE_NIGHTMARE_STAFF'],['br_purging_staff','PURGING_STAFF']];
+  assert.deepEqual(staffLike.map(row=>[row.gameval,row.base]),expected.map(([name,base])=>[name,core.ItemIdentifiers[base]]),
+    'actual canonical registration matches the observed current-cache unsupported staff copies');
+  for(const row of staffLike){
+    assert.equal(row.id,core.CacheDefinitions.getObjId(row.gameval));assert.equal(bases.has(row.base),false);
+    assert.ok(core.CacheDefinitions.getItem(row.id).inventoryActions.includes('Wield'));
+    await mEquip(f.a,row.id);const before=resources(f.a),hp=f.b.getHitpoints();
+    await mSpell(f.a,f.b,'WIND_STRIKE');tick(10);
+    assert.deepEqual(resources(f.a),before,'unsupported alias cannot spend runes, charges or equipment');
+    assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);assert.equal(f.b.getHitpoints(),hp);
+  }
+});
+
+mTest('native autocast selector and Attack genuinely repeat ordinary paid spells without direct canCast',async t=>{
+  const f=await mGame(t),messages=messagesOf(f.a),combat=f.a.getCombat();
+  const observations={attackCalls:[],methods:[],areaPermission:[],spellDisabled:[],turns:[]};
+  const originalAttack=combat.attack.bind(combat),originalMethod=CombatFactory.getMethod.bind(CombatFactory);
+  const originalPermission=f.game.area.canAttack.bind(f.game.area),originalDisabled=PM.emitSpellDisabled.bind(PM);
+  const spellId=spell=>spell?.spellId?.()??null;
+  const state=()=>({cycle:C.now(),target:combat.getTarget()?.getIndex()??null,expectedTarget:f.b.getIndex(),
+    activeAutocast:core.Autocasting.isActive(f.a),autocast:spellId(combat.getAutocastSpell()),cast:spellId(combat.getCastSpell()),
+    hasStaff:f.a.getEquipment().hasStaffEquipped(),busy:f.a.busy(),interfaceId:f.a.getInterfaceId(),placement:f.a.isNeedsPlacement(),
+    phase:f.game.phase,own:f.game.fighters.get(f.a),opponent:f.game.fighters.get(f.b),
+    attackerInArea:f.a.getArea()===f.game.area,targetInArea:f.b.getArea()===f.game.area,
+    hp:[f.a.getHitpoints(),f.b.getHitpoints()],commits:f.trace.commits.length,hits:f.trace.hits.length,
+    mindRunes:f.a.getInventory().getAmount(core.ItemIdentifiers.MIND_RUNE),delay:combat.getAttackDelay()});
+  // Each observer forwards the exact real call/arguments/result; no permission, method,
+  // resource producer or native route is substituted and no extra canCast is invoked.
+  t.mock.method(combat,'attack',(...args)=>{observations.attackCalls.push({target:args[0]?.getIndex()??null,before:state()});return originalAttack(...args);});
+  t.mock.method(CombatFactory,'getMethod',(...args)=>{
+    const result=originalMethod(...args);
+    if(args[0]===f.a)observations.methods.push({cycle:C.now(),ordinaryMagic:result===CombatFactory.MAGIC_COMBAT,type:result?.type?.()});
+    return result;
+  });
+  t.mock.method(f.game.area,'canAttack',(...args)=>{
+    const result=originalPermission(...args);
+    if(args[0]===f.a)observations.areaPermission.push({cycle:C.now(),target:args[1]?.getIndex()??null,ordinaryMagic:args[2]===CombatFactory.MAGIC_COMBAT,result});
+    return result;
+  });
+  t.mock.method(PM,'emitSpellDisabled',(...args)=>{
+    const result=originalDisabled(...args);
+    if(args[0]===f.a)observations.spellDisabled.push({cycle:C.now(),spellbook:args[1],spellId:args[2],canonicalWindStrike:args[3]===core.CombatSpells.WIND_STRIKE,result});
+    return result;
+  });
+  await mEquip(f.a,core.ItemIdentifiers.STAFF_OF_AIR);
+  assert.equal(f.a.getEquipment().hasStaffEquipped(),true,'real canonical item metadata identifies the natively equipped staff');
+  await nativeButton(f.a,(593<<16)|23);await nativeButton(f.a,(201<<16)|1,1,1);
+  assert.equal(combat.getAutocastSpell()===core.CombatSpells.WIND_STRIKE,true);
+  assert.equal(core.Autocasting.isActive(f.a),true,'native selection is active autocast, not only a remembered spell');
+  const before=f.a.getInventory().getAmount(core.ItemIdentifiers.MIND_RUNE);
+  const frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(f.b.getIndex(),2);
+  const packets=decodeClientPackets(frame);
+  console.log('MAGIC_AUTOCAST_ROUTE '+JSON.stringify({phase:'before-attack',decoded:packets,state:state()}));
+  assert.equal(packets.length,1);assert.equal(packets[0].type,'player_option');assert.equal(packets[0].option,1);assert.equal(packets[0].index,f.b.getIndex());
+  // Same dispatch/process/three turns as wire(), retaining an observation before
+  // those turns so a refused/absent target is not hidden by later combat changes.
+  await f.a.connection.dispatch(packets);f.a.connection.processTurnPackets();
+  observations.afterDispatch=state();tick(3);observations.afterWireTurns=state();
+  for(let n=0;n<20&&f.trace.commits.length<2;n++){tick();observations.turns.push(state());}
+  observations.beforeReset=state();combat.reset();
+  console.log('MAGIC_AUTOCAST_ROUTE '+JSON.stringify({phase:'after-controlled-turns',observations,messages,afterReset:state()}));
+  assert.ok(f.trace.commits.length>=2);assert.equal(f.a.getInventory().getAmount(core.ItemIdentifiers.MIND_RUNE),before-f.trace.commits.length);
+  assert.ok(f.trace.hits.every(hit=>hit.getCombatMethod()===CombatFactory.MAGIC_COMBAT&&hit.getSpell()===core.CombatSpells.WIND_STRIKE));
+});
+
+for(const element of['fire','water','earth'])mTest('canonical '+element+' tome final charge supplies runes and retains its paid context',async t=>{
+  const f=await mGame(t),I=core.ItemIdentifiers;await mEquip(f.a,I['TOME_OF_'+element.toUpperCase()+'_EMPTY_'],core.Equipment.SHIELD_SLOT);const book=mTome(f.a,element,1);
+  const rune=I[element.toUpperCase()+'_RUNE'];f.a.getInventory().deleteNumber(rune,f.a.getInventory().getAmount(rune));
+  const hit=await mFire(f,element.toUpperCase()+'_WAVE');assert.equal(book.Common.read(book.item).charges,0);assert.equal(f.a.getInventory().getAmount(rune),0);
+  const state=hit.getSpellContext().data.get(require('../plugins/items/elementaltomes/Combat.ElementalTomes').CAST_DATA_KEY);assert.equal(state.element,element);
+  // Explicit supplied post-shot gear relocation, not a native packet or natural ordering claim.
+  f.a.getEquipment().getItems()[core.Equipment.SHIELD_SLOT]=new core.Item(-1);
+  mLand(f,hit);assert.equal(book.Common.read(book.item).charges,0);assert.equal(f.trace.commits.length,1);
+});
+
+mTest('pouch and inventory split the canonical rune cost with no activity resource override',async t=>{
+  const f=await mGame(t),Pouch=require('../plugins/items/runepouch/Common.RunePouch'),I=core.ItemIdentifiers;
+  give(f.a,I.RUNE_POUCH,'M-pouch');Pouch.setSlots(f.a,[{id:I.AIR_RUNE,amount:5},{id:I.MIND_RUNE,amount:5},null,null]);
+  f.a.getInventory().deleteNumber(I.AIR_RUNE,f.a.getInventory().getAmount(I.AIR_RUNE));const mind=f.a.getInventory().getAmount(I.MIND_RUNE);
+  const hit=await mFire(f);assert.equal(Pouch.amountOf(f.a,I.AIR_RUNE),4);assert.equal(Pouch.amountOf(f.a,I.MIND_RUNE),5);assert.equal(f.a.getInventory().getAmount(I.MIND_RUNE),mind-1);mLand(f,hit);
+});
+
+mTest('successful controlled splash still spends its cast and awards base Magic XP without target damage',async t=>{
+  const f=await mGame(t),cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),before=mAmounts(f.a,cost),hp=f.b.getHitpoints(),xp=f.a.getSkillManager().getExperience(core.Skill.MAGIC);
+  magicDamageControl=e=>{if(e.attacker===f.a&&e.target===f.b){e.accurate=false;e.damage.setDamage(0);}};
+  const hit=await mFire(f);mPaid(f.a,cost,before);mLand(f,hit);assert.equal(hit.isAccurate(),false);assert.equal(f.b.getHitpoints(),hp);assert.ok(f.a.getSkillManager().getExperience(core.Skill.MAGIC)>xp);
+});
+
+for(const refusal of['missing-runes','pouch-shortfall','low-level','wrong-book','self-target','dead-target'])mTest('actual '+refusal+' refuses before any rune or tome payment',async t=>{
+  const f=await mGame(t),I=core.ItemIdentifiers;await mEquip(f.a,I.TOME_OF_FIRE_EMPTY_,core.Equipment.SHIELD_SLOT);const book=mTome(f.a,'fire',3);
+  if(refusal==='missing-runes')f.a.getInventory().resetItems();
+  if(refusal==='pouch-shortfall'){
+    const Pouch=require('../plugins/items/runepouch/Common.RunePouch');give(f.a,I.RUNE_POUCH,'M-short-pouch');Pouch.setSlots(f.a,[{id:I.AIR_RUNE,amount:1},null,null,null]);
+    f.a.getInventory().deleteNumber(I.AIR_RUNE,f.a.getInventory().getAmount(I.AIR_RUNE));
+  }
+  if(refusal==='low-level')f.a.getSkillManager().setCurrentLevel(core.Skill.MAGIC,1,false);
+  if(refusal==='wrong-book')f.a.setSpellbook(core.MagicSpellbook.ANCIENT);
+  if(refusal==='dead-target')f.b.setHitpoints(0);
+  const Pouch=require('../plugins/items/runepouch/Common.RunePouch'),pouch=structuredClone(Pouch.slots(f.a));
+  const before=mInventory(f.a),charges=book.Common.read(book.item).charges;
+  await mSpell(f.a,refusal==='self-target'?f.a:f.b,'FIRE_WAVE');tick(12);
+  assert.deepEqual(mInventory(f.a),before);assert.equal(book.Common.read(book.item).charges,charges);assert.deepEqual(Pouch.slots(f.a),pouch);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
+});
+
+for(const name of['BIND','SNARE','ENTANGLE','CONFUSE','IBAN_BLAST','MAGIC_DART','TELE_BLOCK','ICE_BARRAGE','UNDEAD_GRASP'])mTest('canonical combat spell '+name+' preserves its current Standard support boundary',async t=>{
+  const added=['BIND','SNARE','ENTANGLE','CONFUSE'].includes(name);if(added)cInstall();const f=await mGame(t),before=resources(f.a);
+  if(!added){await mSpell(f.a,f.b,name);tick(10);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);return;}
+  const stats=cStats(f.b),trace=fTrace(t,f.b),cost=mCost(f.a,core.CombatSpells[name]),amounts=mAmounts(f.a,cost),hit=await mFire(f,name);bStop(f);mPaid(f.a,cost,amounts);mLand(f,hit);
+  cAssertStats(f.b,stats,C_CURSES[name],5);if(name==='CONFUSE')fNoNewEffects(trace);else bTimerOracle(trace,B_ROWS.find(row=>row[0]===name)[6]);
+});
+
+for(const name of['DRAGON_DAGGER','ANCIENT_STAFF','SLAYERS_STAFF_E_','STAFF_OF_THE_DEAD','TOXIC_STAFF_OF_THE_DEAD','KODAI_WAND','TWINFLAME_STAFF'])mTest('unsupported casting weapon '+name+' cannot pay an ordinary spell',async t=>{
+  const f=await mGame(t);if(name==='SLAYERS_STAFF_E_')sLevels(f.a);await mEquip(f.a,core.ItemIdentifiers[name]);const before=resources(f.a);
+  await mSpell(f.a,f.b,'WIND_STRIKE');tick(10);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
+});
+
+mTest('ordinary unsupported shield refuses casting but its melee equipment remains intact',async t=>{
+  const f=await mGame(t);await mEquip(f.a,core.ItemIdentifiers.BRONZE_KITESHIELD,core.Equipment.SHIELD_SLOT);const before=resources(f.a);
+  await mSpell(f.a,f.b,'WIND_STRIKE');tick(10);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,0);
+  assert.equal(f.game.area.canAttack(f.a,f.b,CombatFactory.MELEE_COMBAT),true);
+});
+
+mTest('powered trident native Attack refuses the actual resolver before spending a charge',async t=>{
+  const f=await mGame(t);await mEquip(f.a,core.ItemIdentifiers.TRIDENT_OF_THE_SEAS);
+  const item=f.a.getEquipment().get(core.Equipment.WEAPON_SLOT);item.setMetaValue('trident-charges',20);
+  assert.equal(CombatFactory.getMethod(f.a)===CombatFactory.MAGIC_COMBAT,false,'real charged staff resolves its own method');
+  const before=resources(f.a),frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(f.b.getIndex(),2);
+  await wire(f.a,frame);tick(10);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
+});
+
+for(const term of[0,1,2])mTest('actual four Power of Death activation producers remain deferred at special term '+term,async t=>{
+  const f=await mGame(t,{rules:{specialattacks:term}}),power='power-of-death:until';
+  for(const name of['STAFF_OF_THE_DEAD','TOXIC_STAFF_OF_THE_DEAD','STAFF_OF_LIGHT','STAFF_OF_BALANCE']){
+    await mEquip(f.a,core.ItemIdentifiers[name]);const before=resources(f.a);await nativeButton(f.a,'orbs:specbutton');
+    assert.deepEqual(resources(f.a),before);assert.equal(f.a.isSpecialActivated(),false);assert.equal(f.a.getAttribute(power)==null,true);assert.equal(f.trace.commits.length,0);
+  }
+});
+
+mTest('magical damaging-special activation and prearmed entry refuse without consuming energy',async t=>{
+  const api=PM.createApi('ClanWarsMMagicalSpecialProducer');require('../plugins/combat/specials/VolatileNightmareStaff.SpecialAttack')(api);
+  const f=await mGame(t,{beforeEntry:async a=>{await mEquip(a,core.ItemIdentifiers.VOLATILE_NIGHTMARE_STAFF);a.setSpecialActivated(true);}});
+  assert.equal(f.a.isSpecialActivated(),false,'actual entry disarms the supplied prearmed magical toggle');
+  const before=resources(f.a),events=tEffectTrace(t,f.a);await nativeButton(f.a,'orbs:specbutton');
+  assert.deepEqual(resources(f.a),before);assert.equal(f.a.isSpecialActivated(),false);assert.ok(events.events.some(e=>e.result&&/magical specials/i.test(e.result)));
+  assert.equal(events.animations.length,0);assert.equal(events.graphics.length,0);
+});
+
+mTest('Standard preserves the actual native melee special path',async t=>{
+  const f=await mGame(t);await mEquip(f.a,core.ItemIdentifiers.DRAGON_DAGGER);await nativeButton(f.a,'orbs:specbutton');
+  assert.equal(f.a.isSpecialActivated(),true);const before=f.a.getSpecialPercentage(),frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(f.b.getIndex(),2);
+  await wire(f.a,frame);for(let n=0;n<12&&f.a.getSpecialPercentage()===before;n++)tick();
+  assert.ok(f.a.getSpecialPercentage()<before);assert.equal(f.trace.commits.length,0);assert.ok(f.trace.hits.some(h=>h.getCombatType()===core.CombatType.MELEE));
+});
+
+mTest('a remembered autocast without a staff is not permission to replace a melee Attack',async t=>{
+  const f=await mGame(t);await nativeButton(f.a,(201<<16)|1,1,1);
+  assert.equal(f.a.getCombat().getAutocastSpell()===core.CombatSpells.WIND_STRIKE,true);
+  assert.equal(core.Autocasting.isActive(f.a),false);assert.equal(CombatFactory.getMethod(f.a)===CombatFactory.MELEE_COMBAT,true);
+  const before=mInventory(f.a),frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(f.b.getIndex(),2);await wire(f.a,frame);tick(8);
+  assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);assert.ok(f.trace.hits.every(h=>h.getCombatType()===core.CombatType.MELEE));
+});
+
+mTest('last rune pays one manual cast and a second native spell has no payment or hit',async t=>{
+  const f=await mGame(t),I=core.ItemIdentifiers;f.a.getInventory().resetItems();f.a.getInventory().add(new core.Item(I.AIR_RUNE,1));f.a.getInventory().add(new core.Item(I.MIND_RUNE,1));
+  const hit=await mFire(f);mLand(f,hit);assert.equal(f.a.getInventory().getAmount(I.AIR_RUNE),0);assert.equal(f.a.getInventory().getAmount(I.MIND_RUNE),0);
+  const hp=f.b.getHitpoints();await mSpell(f.a,f.b,'WIND_STRIKE');tick(15);assert.equal(f.trace.commits.length,1);assert.equal(f.trace.hits.length,1);assert.equal(f.b.getHitpoints(),hp);
+});
+
+for(const element of['fire','water','earth'])mTest('empty '+element+' tome and matching missing elemental runes cannot create free casts',async t=>{
+  const f=await mGame(t),I=core.ItemIdentifiers;await mEquip(f.a,I['TOME_OF_'+element.toUpperCase()+'_EMPTY_'],core.Equipment.SHIELD_SLOT);const book=mTome(f.a,element,0),rune=I[element.toUpperCase()+'_RUNE'];
+  f.a.getInventory().deleteNumber(rune,f.a.getInventory().getAmount(rune));const before=resources(f.a);await mSpell(f.a,f.b,element.toUpperCase()+'_WAVE');tick(12);
+  assert.deepEqual(resources(f.a),before);assert.equal(book.Common.read(book.item).charges,0);assert.equal(f.trace.commits.length,0);
+});
+
+mTest('nonmatching tome keeps its charge while ordinary inventory runes pay the cast',async t=>{
+  const f=await mGame(t),I=core.ItemIdentifiers;await mEquip(f.a,I.TOME_OF_FIRE_EMPTY_,core.Equipment.SHIELD_SLOT);const book=mTome(f.a,'fire',2),cost=mCost(f.a,core.CombatSpells.WATER_WAVE),before=mAmounts(f.a,cost);
+  const hit=await mFire(f,'WATER_WAVE');mPaid(f.a,cost,before);assert.equal(book.Common.read(book.item).charges,2);mLand(f,hit);
+});
+
+mTest('searing last-charge context survives the paid cast without a second charge decision',async t=>{
+  const f=await mGame(t),I=core.ItemIdentifiers;await mEquip(f.a,I.TOME_OF_FIRE_EMPTY_,core.Equipment.SHIELD_SLOT);const book=mTome(f.a,'fire',1,true);
+  const hit=await mFire(f,'FIRE_SURGE'),snapshot=hit.getSpellContext().data.get(require('../plugins/items/elementaltomes/Combat.ElementalTomes').CAST_DATA_KEY);
+  assert.equal(snapshot.element,'fire');assert.equal(snapshot.searing,true);assert.equal(book.Common.read(book.item).charges,0);mLand(f,hit);assert.equal(book.Common.read(book.item).charges,0);
+});
+
+for(const boundary of['victim-leave','caster-leave','victim-logout','caster-logout','channel','finish','caster-death'])mTest('paid pending spell is discarded at Standard '+boundary+' with no refund',async t=>{
+  const f=await mGame(t),cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),before=mAmounts(f.a,cost);const hit=await mFire(f);mPaid(f.a,cost,before);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);const paid=mInventory(f.a),xp=f.a.getSkillManager().getExperience(core.Skill.MAGIC),hp=f.b.getHitpoints();
+  if(boundary==='victim-leave')f.game.area.leave(f.b,false);
+  else if(boundary==='caster-leave')f.game.area.leave(f.a,false);
+  else if(boundary==='victim-logout')PM.emitPlayerLogout({player:f.b,username:f.b.getUsername()});
+  else if(boundary==='caster-logout')PM.emitPlayerLogout({player:f.a,username:f.a.getUsername()});
+  else if(boundary==='channel')FC.leave(f.a,true);
+  else if(boundary==='finish')f.game.finish(null);
+  else{f.a.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(f.a.getHitpoints(),core.HitMask.RED).setSource(f.b)]);tick();}
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);
+  for(const p of[f.a,f.b])p.setNeedsPlacement(false);tick(35);
+  assert.deepEqual(mInventory(f.a),paid);assert.equal(f.a.getSkillManager().getExperience(core.Skill.MAGIC),xp);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.trace.resolved.includes(hit),false);
+});
+
+mTest('actual fired lethal spell protects remaining carried items and returns the victim to jail then rejoin',async t=>{
+  const f=await mGame(t),I=core.ItemIdentifiers;give(f.b,I.RUNE_POUCH,'M-safe-pouch');
+  const Pouch=require('../plugins/items/runepouch/Common.RunePouch');Pouch.setSlots(f.b,[{id:I.MIND_RUNE,amount:12},null,null,null]);
+  const inventory=mInventory(f.b);f.b.setHitpoints(1);const hit=await mFire(f);mLand(f,hit);
+  for(let n=0;n<60&&!f.game.jailed.has(f.b);n++)tick();assert.equal(f.game.jailed.has(f.b),true,'real cast and death task reach jail');
+  assert.deepEqual(mInventory(f.b),inventory);assert.equal(Pouch.amountOf(f.b,I.MIND_RUNE),12);assert.equal(f.game.fighters.has(f.b),false);const score=[0,0];score[f.game.members.get(f.a)]=1;assert.deepEqual(f.game.kills,score);
+  await jailExit(f.b,f.game);
+  assert.equal(f.game.fighters.has(f.b),true);assert.deepEqual(mInventory(f.b),inventory);assert.equal(Pouch.amountOf(f.b,I.MIND_RUNE),12);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);
+});
+
+mTest('entry and rejoin clear foreign incoming generation while preserving owner self pending damage',async t=>{
+  mInstall();const a=actor(true),b=actor(true);ruleStats(a,99);ruleStats(b,99);channel(a);channel(b);const game=await negotiate(a,b,2,1,{magic:1});
+  const queue=a.getCombat().getHitQueue(),generation=queue.getIncomingGeneration();
+  const foreign=new core.PendingHit(b,a,CombatFactory.MELEE_COMBAT,{damage:3,rollAccuracy:false,experience:false,delay:500});CombatFactory.addPendingHit(foreign);
+  queue.addPendingDamage([new core.HitDamage(1,core.HitMask.RED).setSource(a)]);await join(a);await join(b);
+  assert.ok(queue.getIncomingGeneration()>generation);assert.equal(queue.hasPendingHit(foreign),false);assert.equal(queue.getQueuedDamage(),1,'owner self pending damage survives the entry cancellation');magicTurns=true;tick();assert.equal(a.getHitpoints(),98,'the retained self damage is then processed rather than refunded');
+  completePreparation(game);mPosition(game,a,b);game.eliminate(a);game.jailed.add(a);const before=queue.getIncomingGeneration();
+  const next=new core.PendingHit(b,a,CombatFactory.MELEE_COMBAT,{damage:3,rollAccuracy:false,experience:false,delay:500});CombatFactory.addPendingHit(next);
+  assert.equal(game.rejoin(a),true,'explicit existing jail-state setup exercises the actual rejoin owner');assert.ok(queue.getIncomingGeneration()>before);assert.equal(queue.hasPendingHit(next),false);
+});
+
+mTest('native MagicDisabled control refuses ordinary casts and preserves default entry queue behavior',async t=>{
+  mInstall();const a=actor(true),b=actor(true);ruleStats(a,99);ruleStats(b,99);channel(a);channel(b);const game=await negotiate(a,b,2,1,{magic:4});
+  const queue=a.getCombat().getHitQueue(),generation=queue.getIncomingGeneration();const hit=new core.PendingHit(b,a,CombatFactory.MELEE_COMBAT,{damage:1,rollAccuracy:false,experience:false,delay:500});CombatFactory.addPendingHit(hit);
+  await join(a);await join(b);assert.equal(queue.getIncomingGeneration(),generation);assert.equal(queue.hasPendingHit(hit),true,'defaultDisabled does not adopt Standard boundary cancellation');
+  queue.clear();completePreparation(game);mPosition(game,a,b);mFund(a);magicTurns=true;const trace=mTrace(t,a,b),before=mInventory(a);await mSpell(a,b,'WIND_STRIKE');tick(12);
+  assert.deepEqual(mInventory(a),before);assert.equal(trace.commits.length,0);assert.equal(trace.hits.length,0);
+});
+
+mTest('close supplied staging positions still refuse spells until the real preparation boundary',async t=>{
+  const f=await mGame(t,{prepare:false}),before=mInventory(f.a);assert.equal(f.game.phase,'staging');await mSpell(f.a,f.b,'WIND_STRIKE');tick(5);
+  assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
+  completePreparation(f.game);mPosition(f.game,f.a,f.b);const hit=await mFire(f);mLand(f,hit);
+});
+
+mTest('same-team and real separate-instance targets cannot spend ordinary spell resources',async t=>{
+  const f=await mGame(t),ally=actor(true);ruleStats(ally,99);assert.equal(FC.join(ally,f.a.getUsername(),false),true);await join(ally);ally.setAutoRetaliate(false);
+  ally.moveTo(f.game.area.at([3294,4955,0]));ally.setNeedsPlacement(false);AreaManager.process(ally);
+  assert.equal(f.game.members.get(ally),f.game.members.get(f.a));let before=mInventory(f.a);await mSpell(f.a,ally,'WIND_STRIKE');tick(6);assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);
+  const other=await mGame(t);assert.equal(other.game.area===f.game.area,false);assert.equal(other.b.getArea()===other.game.area,true);
+  assert.notEqual(other.b.getLocation().getX(),f.b.getLocation().getX(),'actual allocated instances have distinct absolute slots');before=mInventory(f.a);await mSpell(f.a,other.b,'WIND_STRIKE');tick(6);assert.deepEqual(mInventory(f.a),before);assert.equal(f.a.getCombat().getTarget()==null,true);
+  // Both actual participants remained at their own mapped local tile, never at
+  // another instance's absolute coordinate. The positive controls use their own scenes.
+  const hit=await mFire(other);mLand(other,hit);
+});
+
+mTest('ordinary out-of-range spell pursues through the engine and pays only on a reachable cast',async t=>{
+  const f=await mGame(t),Range=require('../dist/game/content/combat/CombatRange').CombatRange;mPosition(f.game,f.a,f.b,12);
+  const start=f.a.getLocation().clone(),cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),before=mAmounts(f.a,cost);
+  await mSpell(f.a,f.b,'WIND_STRIKE');assert.equal(Range.canReach(f.a,CombatFactory.MAGIC_COMBAT,f.b),false);assert.deepEqual(mAmounts(f.a,cost),before);
+  const observe=magicObserve;magicObserve=(kind,e)=>{if(kind==='committed'&&e.player===f.a)assert.equal(Range.canReach(f.a,CombatFactory.MAGIC_COMBAT,f.b),true,'payment occurs at actual reach');observe(kind,e);};
+  for(let n=0;n<40&&!f.trace.commits.length;n++)tick();assert.equal(f.trace.commits.length,1);assert.equal(f.a.getLocation().equals(start),false,'actual pursuit moved the caster');mPaid(f.a,cost,before);mLand(f,f.trace.hits[0]);
+});
+
+mTest('explicit supplied ray obstruction prevents payment and restoring the real ray permits the positive cast',async t=>{
+  const f=await mGame(t),before=mInventory(f.a),ray=t.mock.method(core.RegionManager,'canProjectileAttackBounds',()=>false);
+  await mSpell(f.a,f.b,'WIND_STRIKE');tick(6);assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);
+  ray.mock.restore();mPosition(f.game,f.a,f.b);const hit=await mFire(f);mLand(f,hit);
+});
+
+mTest('current supplied gear and later native selection are rechecked before a queued cast pays',async t=>{
+  const f=await mGame(t);f.a.getCombat().setAttackDelay(8);await mSpell(f.a,f.b,'WIND_STRIKE');tick();assert.equal(f.trace.commits.length,0);
+  const before=mInventory(f.a);f.a.getEquipment().getItems()[core.Equipment.WEAPON_SLOT]=new core.Item(core.ItemIdentifiers.ANCIENT_STAFF);
+  tick(12);assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);
+  f.a.getEquipment().getItems()[core.Equipment.WEAPON_SLOT]=new core.Item(-1);f.a.getCombat().setAttackDelay(8);
+  await mSpell(f.a,f.b,'WIND_STRIKE');await mSpell(f.a,f.b,'TELEBLOCK','Tele Block');tick(12);assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);
+  const hit=await mFire(f);mLand(f,hit);
+});
+
+mTest('paid context retains its original target and spell after explicit same-scene target/currentspell changes',async t=>{
+  const f=await mGame(t),hit=await mFire(f),context=hit.getSpellContext(),hp=f.b.getHitpoints();
+  f.b.moveTo(f.game.area.at([3297,4955,0]));f.b.setNeedsPlacement(false);AreaManager.process(f.b);
+  f.a.getCombat().setCastSpell(core.CombatSpells.FIRE_WAVE);mLand(f,hit);
+  assert.equal(hit.getTarget()===f.b,true);assert.equal(hit.getSpell()===core.CombatSpells.WIND_STRIKE,true);assert.equal(hit.getSpellContext()===context,true);assert.ok(f.b.getHitpoints()<hp);assert.equal(f.trace.commits.length,1);
+});
+
+mTest('mapped Forfeit owner discards a paid queued hit during an explicit impact-processing hold',async t=>{
+  const f=await mGame(t),hit=await mFire(f),paid=mInventory(f.a),hp=f.b.getHitpoints();
+  // This finite dispatcher composition deliberately holds player impact turns
+  // while the actual movement/object route completes. It proves queue ownership,
+  // not that natural flight stays airborne for this entire walking interval.
+  magicTurns=false;const portal=mappedLayoutObjects(f.game,f.game.layout.exits[f.game.members.get(f.a)])[0];assert.ok(portal);
+  const at=portal.getLocation(),ops=portal.getDefinition().getInteractions(),op=ops.findIndex(x=>x?.toLowerCase()==='forfeit')+1;assert.ok(op>0);
+  const{ObjectActionPacketListener}=require('../dist/net/packet/impl/ObjectActionPacketListener');new ObjectActionPacketListener().executeAction(f.a,portal.getId(),at.getX(),at.getY(),op);
+  for(let n=0;n<120&&C.matches.has(f.a);n++)tick();assert.equal(C.matches.has(f.a),false,'actual mapped object dispatch reaches the registered Forfeit owner');
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);magicTurns=true;f.a.setNeedsPlacement(false);f.b.setNeedsPlacement(false);tick(15);
+  assert.deepEqual(mInventory(f.a),paid);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.trace.resolved.includes(hit),false);
+});
+
+mTest('a new battle with the same real Players cannot resurrect an old paid spell',async t=>{
+  const f=await mGame(t),hit=await mFire(f),paid=mInventory(f.a),old=f.game.area;f.game.finish(null);tick(2);lobby(f.a);lobby(f.b);
+  await wire(f.a,Buffer.from([VIEW_CLOSE_PACKET]));await wire(f.b,Buffer.from([VIEW_CLOSE_PACKET]));
+  const game=await negotiate(f.a,f.b,2,1,{magic:1});await join(f.a);await join(f.b);completePreparation(game);mPosition(game,f.a,f.b);
+  const hp=f.b.getHitpoints();tick(12);assert.equal(game.area===old,false);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);assert.equal(f.trace.resolved.includes(hit),false);assert.deepEqual(mInventory(f.a),paid);assert.equal(f.b.getHitpoints(),hp);
+});
+
+for(const boundary of['leave','finish','safe-caster-death'])mTest('paid pouch runes and tome charges stay spent through '+boundary,async t=>{
+  const f=await mGame(t),I=core.ItemIdentifiers,Pouch=require('../plugins/items/runepouch/Common.RunePouch');await mEquip(f.a,I.TOME_OF_FIRE_EMPTY_,core.Equipment.SHIELD_SLOT);const book=mTome(f.a,'fire',2);
+  give(f.a,I.RUNE_POUCH,'M-paid-pouch');Pouch.setSlots(f.a,[{id:I.AIR_RUNE,amount:10},null,null,null]);f.a.getInventory().deleteNumber(I.AIR_RUNE,f.a.getInventory().getAmount(I.AIR_RUNE));
+  const hit=await mFire(f,'FIRE_WAVE');assert.equal(Pouch.amountOf(f.a,I.AIR_RUNE),5);assert.equal(book.Common.read(book.item).charges,1);const paid=mInventory(f.a),hp=f.b.getHitpoints();
+  if(boundary==='leave')f.game.area.leave(f.a,false);else if(boundary==='finish')f.game.finish(null);else{f.a.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(f.a.getHitpoints(),core.HitMask.RED).setSource(f.b)]);tick();}
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);tick(35);assert.deepEqual(mInventory(f.a),paid);assert.equal(Pouch.amountOf(f.a,I.AIR_RUNE),5);assert.equal(book.Common.read(f.a.getEquipment().get(core.Equipment.SHIELD_SLOT)).charges,1);assert.equal(f.b.getHitpoints(),hp);
+});
+
+for(const magic of[1,4])mTest('existing NORMAL utility remains native and nonNORMAL self magic refused at Magic'+magic,async t=>{
+  const f=await mGame(t,{rules:{magic}}),I=core.ItemIdentifiers;give(f.a,I.BONES,'M-utility');const meta=core.CacheDefinitions.getSpellByName('Bones to Bananas');assert.ok(meta);
+  const{EffectSpells}=require('../dist/game/content/combat/magic/EffectSpells'),utility=EffectSpells.BONES_TO_BANANAS;
+  const cost=mCost(f.a,utility),amounts=mAmounts(f.a,cost),before=f.a.getInventory().getAmount(I.BANANA);
+  await nativeButton(f.a,meta.widgetId,1,65535,meta.itemId);assert.ok(f.a.getInventory().getAmount(I.BANANA)>before);mPaid(f.a,cost,amounts);
+  assert.equal(f.trace.commits.length,1,'successful ordinary utility legitimately commits its paid cast');
+  assert.equal(f.trace.commits[0].spell===utility,true);assert.equal(f.trace.commits[0].context.spell===utility,true);assert.equal(f.trace.commits[0].context.data instanceof Map,true);
+  assert.equal(f.trace.hits.length,0,'the paid utility creates no ordinary combat pending hit');assert.equal(f.trace.resolved.length,0);
+  f.a.setSpellbook(core.MagicSpellbook.LUNAR);f.a.getInventory().add(new core.Item(I.ASTRAL_RUNE,20));const inventory=mInventory(f.a);
+  assert.equal(EffectSpells.handleSpell(f.a,EffectSpells.VENGEANCE.spellId()),true);
+  assert.deepEqual(mInventory(f.a),inventory);assert.equal(f.a.hasVengeanceReturn(),false);
+});
+
+mTest('Oddskull integration keeps holder cast refusal and permits an incoming paid elemental hit',async t=>{
+  const f=await mGame(t,{mode:21});uCheckpoint(f.b,f.game,[3293,4958,0]);await uTake(f.b,uNpc(f.game));uHeld(f.b,f.game);
+  mPosition(f.game,f.a,f.b);const heldInventory=mInventory(f.b),attackerHp=f.a.getHitpoints();
+  await mSpell(f.b,f.a,'WIND_STRIKE');tick(8);f.b.getCombat().reset();
+  assert.deepEqual(mInventory(f.b),heldInventory);assert.equal(f.a.getHitpoints(),attackerHp);uHeld(f.b,f.game);
+  const cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),before=mAmounts(f.a,cost),hp=f.b.getHitpoints();
+  const hit=await mFire(f);mPaid(f.a,cost,before);mLand(f,hit);
+  assert.ok(f.b.getHitpoints()<hp);uHeld(f.b,f.game);
+});
+
+mTest('Oddskull elimination releases its token before Standard queued-hit disposal without rune refund',async t=>{
+  const f=await mGame(t,{mode:21});uCheckpoint(f.b,f.game,[3293,4958,0]);await uTake(f.b,uNpc(f.game));uHeld(f.b,f.game);
+  mPosition(f.game,f.a,f.b);const cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),before=mAmounts(f.a,cost);
+  const hit=await mFire(f);mPaid(f.a,cost,before);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);
+  const paid=mInventory(f.a),hp=f.b.getHitpoints();f.game.eliminate(f.b);
+  assert.equal(uIssued(f.b).length,0);assert.equal(f.game.oddskull.kind,'ground');
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);tick(12);uNpc(f.game);
+  assert.deepEqual(mInventory(f.a),paid);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.trace.resolved.includes(hit),false);
+});
+
+mTest('merged styles pay for elemental spell and ordinary bow while MeleeDisabled refuses native dagger start',async t=>{
+  const f=await mGame(t,{rules:{melee:1,ranged:0}}),{a,b,game}=f;
+  assert.deepEqual([game.rules.melee,game.rules.ranged,game.rules.magic],[1,0,1]);
+  const spell=core.CombatSpells.WIND_STRIKE,cost=mCost(a,spell),before=mAmounts(a,cost),hp=b.getHitpoints();
+  const hit=await mFire(f);mPaid(a,cost,before);a.getCombat().reset();mLand(f,hit);
+  assert.ok(b.getHitpoints()<hp,'actual canonical paid elemental hit lands with Melee disabled');
+  magicTurns=false;magicObserve=null;magicRollControl=null;
+  await bowEquip(a);bowPlace(a,b,game);const spellPaid=mAmounts(a,cost),afterSpellHP=b.getHitpoints();
+  const shot=await bowFire(t,a,b);assert.equal(shot.before-shot.after,1);bowImpacts(shot.delay+2);
+  assert.ok(b.getHitpoints()<afterSpellHP,'independently allowed ordinary arrow actually lands');
+  assert.deepEqual(mAmounts(a,cost),spellPaid,'the bow creates no further spell cost or refund');
+  await tEquip(a,core.ItemIdentifiers.DRAGON_DAGGER);nmPlace(game,a,b);
+  assert.equal(CombatFactory.getMethod(a).type(),core.CombatType.MELEE,'real equipment change selects melee');
+  const refused=nmTrace(t,a,b),paid=resources(a),afterRangedHP=b.getHitpoints();
+  try{
+    ghastTurns=true;await nmAttack(a,b);nmEngineUntil(()=>refused.permissions.length>0);a.getCombat().reset();
+    assert.ok(refused.attacks.includes(b));assert.ok(refused.methods.some(m=>m.type()===core.CombatType.MELEE));
+    assert.ok(refused.permissions.some(x=>x.method?.type()===core.CombatType.MELEE&&x.result===false));
+    assert.equal(refused.prepared.length,0);assert.equal(refused.started.length,0);assert.equal(refused.queued.length,0);assert.equal(refused.resolved.length,0);
+    assert.deepEqual(resources(a),paid);assert.equal(b.getHitpoints(),afterRangedHP);
+  }finally{nmObserve=null;nmRoll=null;ghastTurns=false;}
+});
+
+mTest('Standard boundary cancels actual paid incoming bow hit on mapped Forfeit without refund or removing owned floor',async t=>{
+  let ally;
+  const f=await mGame(t,{rules:{melee:1,ranged:0},beforeEntry:async(a,b,game)=>{
+    ally=actor(true);ruleStats(ally,99);assert.equal(FC.join(ally,b.getUsername(),false),true);
+    await join(ally);assert.equal(game.members.get(ally),game.channelKeys.indexOf(C.channel(b).key));
+  }}),{a,b,game}=f;
+  assert.equal(game.rules.magic,1);assert.equal(game.members.size,3);
+  magicTurns=false;magicRollControl=null;await bowEquip(a);bowPlace(a,b,game);
+  const queue=b.getCombat().getHitQueue(),realProcess=queue.process.bind(queue),hp=b.getHitpoints(),runes=mInventory(a);
+  // Explicit impact-processing hold, as in existing queue lifecycle fixtures. This
+  // reaches the real native paid producer and mapped departure before resolution;
+  // it is not a claim about natural arrow flight or traversal duration.
+  const hold=t.mock.method(queue,'process',()=>{});
+  const shot=await bowFire(t,a,b);assert.equal(shot.before-shot.after,1);
+  const pending=f.trace.hits.find(h=>h.getCombatMethod()===CombatFactory.RANGED_COMBAT);
+  assert.ok(pending,'actual canonical native arrow produced a PendingHit');assert.equal(queue.hasPendingHit(pending),true);
+  const generation=queue.getIncomingGeneration();
+  await nmForfeit(b,game);assert.equal(game.phase,'combat','real opposite teammate keeps firing instance alive');
+  assert.equal(C.matches.has(b),false);assert.equal(game.members.has(ally),true);
+  assert.ok(queue.getIncomingGeneration()>generation);assert.equal(queue.hasPendingHit(pending),false,'Standard participation owner removes actual foreign queued arrow');
+  hold.mock.restore();b.setNeedsPlacement(false);realProcess(C.now());bowImpacts(shot.delay+3);
+  assert.equal(f.trace.resolved.includes(pending),false);assert.equal(b.getHitpoints(),hp);
+  assert.equal(bowAmount(a),shot.after,'paid ammunition is never refunded');assert.deepEqual(mInventory(a),runes,'no rune accounting change without a spell');
+  const floor=bowFloor(game,bowItem('IRON_ARROW'));assert.equal(floor.length,1);
+  assert.equal(floor[0].getItem().getAmount(),1);assert.equal(floor[0].getOwner(),a.getUsername());assert.equal(floor[0].getPrivateArea(),game.area);
+});
+
+// F: native Ignore freezing checkbox and actual canonical weapon producers.
+// Actor positions, accuracy and poison draws below are explicit supplied controls.
+// Inert transport and deterministic ticks do not establish rendered/retail parity.
+let fInstalled=false;
+function fInstall(){
+  if(fInstalled)return;
+  const api=PM.createApi('ClanWarsFActualProducers');
+  require('../plugins/items/ItemDefinitionLoader.plugin').register(api);
+  require('../plugins/combat/specials/AbyssalTentacle.SpecialAttack')(api);
+  require('../plugins/combat/specials/ZamorakGodsword.SpecialAttack')(api);
+  require('../plugins/combat/Freezes.plugin').register(api);
+  const startup=[],itemApi=PM.createApi('ClanWarsFTentacleCharges');
+  // Capture only this module's genuine attach callback; never replay global startup.
+  require('../plugins/items/AbyssalTentacle.plugin').register({...itemApi,onServerStartup:fn=>startup.push(fn)});
+  assert.equal(startup.length,1);startup[0]();fInstalled=true;
+}
+async function fGame(freezing=1,prepare=true,withAlly=false,rules={}){
+  fInstall();const a=actor(true),b=actor(true),ally=withAlly?actor(true):null;
+  for(const p of[a,b,...(ally?[ally]:[])])ruleStats(p,99);channel(a);channel(b,ally?[ally]:[]);
+  const game=await negotiate(a,b,null,1,{...rules,freezing});await join(a);await join(b);if(ally)await join(ally);
+  if(prepare)completePreparation(game);
+  return{a,b,game,ally};
+}
+function fTrace(t,target){
+  const rows={attempts:[],timers:[],resets:0,effectTimers:[],messages:[],events:[],watches:[],poison:[]};
+  const forward=(object,key,record)=>{const real=object[key].bind(object);t.mock.method(object,key,function(...args){record(...args);return real(...args);});};
+  forward(CombatFactory,'freezeTicks',(...args)=>{if(args[0]===target)rows.attempts.push(args);});
+  forward(target.getTimers(),'registers',(key,ticks)=>{if(key===core.TimerKey.FREEZE||key===core.TimerKey.FREEZE_IMMUNITY)rows.timers.push([key,ticks]);});
+  forward(target.getMovementQueue(),'reset',()=>rows.resets++);
+  forward(target.getPacketSender(),'sendEffectTimer',(...args)=>rows.effectTimers.push(args));
+  forward(target,'sendMessage',m=>rows.messages.push(m));
+  forward(PM,'emitCustomEvent',(name,e)=>{if(e?.target===target&&['combat:freeze-duration','combat:frozen'].includes(name))rows.events.push(name);});
+  forward(core.TaskManager,'submit',task=>{if(task.constructor.name==='FreezeWatch')rows.watches.push(task);});
+  forward(CombatFactory,'poisonEntity',(p,...args)=>{if(p===target)rows.poison.push(args);});
+  return rows;
+}
+function fNoNewEffects(trace){
+  assert.deepEqual(trace.timers,[]);assert.deepEqual(trace.events,[]);
+  assert.deepEqual(trace.effectTimers,[]);assert.deepEqual(trace.watches,[]);
+  assert.equal(trace.messages.some(m=>/You have been frozen/.test(m)),false);
+}
+
+for(const offerer of[0,1])test(`native F checkbox captain${offerer} decoded bit17, refusal resync and frozen confirm/join`,async()=>{
+  const a=actor(true),b=actor(true),players=[a,b];channel(a);channel(b);
+  const scripts=players.map(scriptCalls);await challenge(a,b);await challenge(b,a);
+  const session=C.negotiations.get(a),chosen=players[offerer],other=players[1-offerer];
+  const bitId=core.CacheDefinitions.getVarbitId('clanwars_freezing'),def=core.CacheDefinitions.getVarbit(bitId);
+  assert.equal(bitId,4279);assert.equal(def.startBit,17);assert.equal(def.endBit,17);
+  // Bit29 belongs to playercap (bits28..30). Establish its nonzero state through
+  // the real cap dropdown, rather than injecting a contradictory packed value.
+  const capId=core.CacheDefinitions.getVarbitId('clanwars_playercap'),capDef=core.CacheDefinitions.getVarbit(capId);
+  assert.equal(capId,8379);assert.equal(capDef.baseVar,def.baseVar);assert.equal(capDef.startBit,28);assert.equal(capDef.endBit,30);
+  await click(chosen,'clanwars_setup:dropdown_playercap',3);assert.equal(session.rules.playercap,2);
+  for(const p of players)assert.equal(p.getPacketSender().getVarbit(capId),2,'native 5v5 offer reaches both authoritative cap fields');
+  tick(9); // Complete this cap change's ordinary opponent acceptance delay.
+  const before={...session.rules};
+  await click(other,'clanwars_setup:accept');assert.equal(session.accepted.has(other),true);
+  const packed=players.map(p=>p.getPacketSender().getVarp(def.baseVar));
+  for(const value of packed)assert.notEqual(value&(1<<29),0,'snapshot contains the legitimately negotiated cap bit');
+  const frame=clickFrame('clanwars_setup:other',0),decoded=decodeClientPackets(frame);
+  assert.equal(decoded.length,1);assert.equal(decoded[0].slot,0);assert.equal(decoded[0].buttonNum,1);
+  await wire(chosen,frame);assert.equal(session.rules.freezing,1);assert.equal(session.accepted.size,0);
+  for(const[key,value]of Object.entries(before))if(key!=='freezing')assert.equal(session.rules[key],value,key);
+  players.forEach((p,i)=>{assert.equal(p.getPacketSender().getVarbit(bitId),1);assert.equal(p.getPacketSender().getVarp(def.baseVar),packed[i]|(1<<17));});
+  await click(other,'clanwars_setup:accept');assert.equal(session.accepted.has(other),false,'nine-tick opponent delay remains');
+  tick(9);await click(other,'clanwars_setup:accept');assert.equal(session.accepted.has(other),true);
+  const revision=session.revision;
+  for(const[op,slot]of [[2,0],[1,65535],[1,1],[1,2],[1,3],[1,6],[1,9],[1,12],[1,14]]){
+    // Model the client optimistic packed-bit change; authoritative resend must undo it.
+    C.bit(chosen,'clanwars_freezing',0);
+    await nativeButton(chosen,'clanwars_setup:other',op,slot);
+    assert.equal(session.rules.freezing,1);assert.equal(session.revision,revision);
+    assert.equal(session.accepted.has(other),true);assert.equal(chosen.getPacketSender().getVarbit(bitId),1);
+    assert.equal(other.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_accept')),1);
+  }
+  // Explicitly toggle off and back on through the same native row, rather than setting rules.
+  await click(chosen,'clanwars_setup:other',0);assert.equal(session.rules.freezing,0);
+  await click(chosen,'clanwars_setup:other',0);assert.equal(session.rules.freezing,1);
+  tick(9);await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');
+  for(const calls of scripts)assert.match(calls.filter(([id])=>id===554).at(-1)[2],/TSPS policy.*active fighters ignore new freezes/);
+  tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');
+  const game=C.channelGames.get(C.channel(a).key);assert.equal(game.rules.freezing,1);assert.equal(Object.isFrozen(game.rules),true);
+  for(const p of players)await join(p);
+  for(const calls of scripts)assert.match(calls.filter(([id])=>id===554).at(-1)[2],/Existing freezes.*not removed.*Damage, poison and special-attack costs still apply/);
+  assert.equal(game.rules.freezing,1);
+});
+
+for(const weapon of['tentacle','zgs'])for(const accurate of[true,false])for(const freezing of[0,1])test(`native F ${weapon} accurate${accurate} Ignore${freezing} actual paid producer`,async t=>{
+  const{a,b,game}=await fGame(freezing);
+  const id=weapon==='tentacle'?core.ItemIdentifiers.ABYSSAL_TENTACLE:core.ItemIdentifiers.ZAMORAK_GODSWORD;
+  await tEquip(a,id);assert.equal(a.getCombatSpecial().getId(),weapon==='tentacle'?'abyssal_tentacle':'zamorak_godsword');
+  tCheckpoint(game,a,b);await tTarget(a,b);await nativeButton(a,'orbs:specbutton');assert.equal(a.isSpecialActivated(),true);
+  const trace=fTrace(t,b),resolved=[];
+  ghastObserve=(kind,e)=>{if(kind==='resolved'&&e.attacker===a&&e.target===b)resolved.push(e.hit);};
+  ghastRollControl=e=>{if(e.attacker===a&&e.target===b){e.forceAccurate=accurate;e.forceMaxHit=true;}};
+  const accuracy=require('../dist/game/content/combat/formula/AccuracyFormulasDpsCalc').AccuracyFormulasDpsCalc;
+  // A supplied zero successful accuracy roll tests the producer's genuine miss branch.
+  if(!accurate)t.mock.method(accuracy,'rollAccuracyCount',()=>0);
+  const random=t.mock.method(Math,'random',()=>0.01); // selects canonical special poison branch, not a probability measurement
+  const hp=b.getHitpoints(),charges=weapon==='tentacle'?require('../plugins/items/AbyssalTentacle.plugin')._test.charges(a.getEquipment().get(core.Equipment.WEAPON_SLOT)):null;
+  ghastTurns=true;
+  try{
+    for(let i=0;i<20&&a.getSpecialPercentage()===100;i++)tick();
+    assert.equal(a.getSpecialPercentage(),50,'actual canonical special paid exactly once');a.getCombat().reset();
+    for(let i=0;i<8&&resolved.length===0;i++)tick();
+  }finally{ghastTurns=false;ghastObserve=null;ghastRollControl=null;random.mock.restore();}
+  assert.equal(resolved.length,1);assert.equal(resolved[0].isAccurate(),accurate);
+  if(accurate){assert.ok(resolved[0].getTotalDamage()>0);assert.ok(b.getHitpoints()<hp,'actual damage lands independently of Ignore');}
+  else assert.equal(resolved[0].getTotalDamage(),0);
+  const attempted=weapon==='tentacle'||accurate,applied=attempted&&!freezing,duration=weapon==='tentacle'?8:32;
+  assert.equal(trace.attempts.length,attempted?1:0,'actual producer preserves activation versus accurate-impact condition');
+  if(attempted){assert.equal(trace.attempts[0][1],duration);assert.equal(trace.attempts[0][3],a);}
+  if(applied){
+    assert.deepEqual(trace.timers,[[core.TimerKey.FREEZE,duration],[core.TimerKey.FREEZE_IMMUNITY,duration+5]]);
+    assert.deepEqual(trace.events,['combat:freeze-duration','combat:frozen']);assert.equal(trace.effectTimers.length,1);assert.equal(trace.watches.length,1);
+    assert.equal(b.getTimers().has(core.TimerKey.FREEZE),true);
+  }else{fNoNewEffects(trace);assert.equal(b.getTimers().has(core.TimerKey.FREEZE),false);assert.equal(b.getTimers().has(core.TimerKey.FREEZE_IMMUNITY),false);}
+  if(weapon==='tentacle'){
+    assert.equal(require('../plugins/items/AbyssalTentacle.plugin')._test.charges(a.getEquipment().get(core.Equipment.WEAPON_SLOT)),charges-1);
+    assert.ok(trace.poison.some(([severity,orb])=>severity===20&&orb===1),'independent canonical activation poison still runs');
+  }
+  assert.equal(a.getSpecialPercentage(),50,'Ignore creates no refund');
+  // Actual decoded walking while the applied bind is still live; no timer clearing/repair.
+  const from=position(b),to=game.area.at([3295,4955,0]);
+  assert.equal(core.RegionManager.canMovestart(b.getLocation(),to,1,1,game.area),true);
+  await dispatchFrameNow(b,walkClickFrame(to));b.getMovementQueue().beginCycle();b.getMovementQueue().process();
+  assert.equal(JSON.stringify(position(b))!==JSON.stringify(from),!applied,'new freeze alone governs ordinary movement');
+  console.log('FREEZING_ACTUAL_PRODUCER '+JSON.stringify({weapon,accurate,freezing,attempted,applied,durationTicks:duration,energy:a.getSpecialPercentage(),rawDamage:resolved[0].getTotalDamage(),poisonAttempts:trace.poison.length}));
+});
+
+// These supplied factory inputs prove source metadata cannot change target protection;
+// they do not claim native attack permission or native attacks from every source category.
+for(const origin of['opponent','teammate','self','null','npc','foreign','departed'])test(`F supplied ${origin} source actual factory protects current target before side effects`,async t=>{
+  const{a,b,game,ally}=await fGame(1,true,origin==='teammate');let source=a;
+  if(origin==='teammate'){source=ally;assert.equal(game.fighters.get(ally),game.fighters.get(b));}
+  if(origin==='self')source=b;
+  if(origin==='null')source=null;
+  if(origin==='npc')source={isPlayer:()=>false,isNpc:()=>true};
+  if(origin==='foreign')source=actor(true);
+  if(origin==='departed'){game.remove(a,false);source=a;}
+  assert.equal(game.area.canFreeze(b),false);const trace=fTrace(t,b);
+  CombatFactory.freezeTicks(b,8,undefined,source);assert.equal(trace.attempts.length,1);fNoNewEffects(trace);assert.equal(trace.resets,0);
+  assert.equal(b.getTimers().has(core.TimerKey.FREEZE),false);assert.equal(b.getTimers().has(core.TimerKey.FREEZE_IMMUNITY),false);
+});
+
+test('F actual staging freeze and immunity carry unchanged into active Ignore; no retroactive thaw',async t=>{
+  const{a,b,game}=await fGame(1,false);assert.equal(game.area.canFreeze(b),null);
+  b.moveTo(a.getLocation().clone().add(1,0));b.setNeedsPlacement(false);AreaManager.process(b);
+  CombatFactory.freezeTicks(b,32,undefined,a);
+  const timers=b.getTimers(),freeze=timers.timers().get(core.TimerKey.FREEZE),immune=timers.timers().get(core.TimerKey.FREEZE_IMMUNITY);
+  assert.ok(freeze);assert.ok(immune);const before=[freeze.ticks(),immune.ticks()];
+  completePreparation(game);assert.equal(game.area.canFreeze(b),false);
+  assert.equal(timers.timers().get(core.TimerKey.FREEZE),freeze);assert.equal(timers.timers().get(core.TimerKey.FREEZE_IMMUNITY),immune);
+  assert.deepEqual([freeze.ticks(),immune.ticks()],before);
+  const trace=fTrace(t,b);CombatFactory.freezeTicks(b,8,undefined,a);fNoNewEffects(trace);assert.equal(trace.resets,0);
+  assert.deepEqual([freeze.ticks(),immune.ticks()],before,'existing state returns before the new policy');
+});
+
+for(const boundary of['member-side','fighter-side','match-identity','viewer','jailed','private-area','current-area','world-identity','expired','over'])test(`F supplied target ${boundary} boundary is neutral`,async t=>{
+  const{a,b,game}=await fGame();assert.equal(game.area.canFreeze(b),false);
+  const side=game.members.get(b),ends=game.ends;
+  try{
+    // Change one actual ownership/state predicate at a time; no freeze application is
+    // manufactured here. Production lifecycle controls above cover real join/start/remove.
+    if(boundary==='member-side')game.members.set(b,2);
+    if(boundary==='fighter-side')game.fighters.set(b,1-game.members.get(b));
+    if(boundary==='match-identity')C.matches.delete(b);
+    if(boundary==='viewer')game.viewers.add(b);
+    if(boundary==='jailed')game.jailed.add(b);
+    if(boundary==='private-area')t.mock.method(b,'getPrivateArea',()=>null);
+    if(boundary==='current-area')t.mock.method(b,'getArea',()=>null);
+    if(boundary==='world-identity'){const list=core.World.getPlayers(),real=list.search.bind(list);t.mock.method(list,'search',predicate=>real(p=>p!==b&&predicate(p)));}
+    if(boundary==='expired')game.ends=C.now();
+    if(boundary==='over')game.phase='over';
+    assert.equal(game.area.canFreeze(b),null);
+  }finally{
+    t.mock.restoreAll();game.members.set(b,side);game.fighters.set(b,side);C.matches.set(b,game);game.viewers.delete(b);game.jailed.delete(b);game.ends=ends;game.phase='combat';
+  }
+});
+
+
+test('native F Ignore freezing retains paid permitted bow and independently refused melee start',async t=>{
+  const{a,b,game}=await fGame(1,true,false,{melee:1,ranged:0});
+  assert.deepEqual([game.rules.melee,game.rules.ranged,game.rules.freezing],[1,0,1]);
+  assert.equal(game.area.canFreeze(b),false,'active target owns Ignore, independently of attack style');
+  await bowEquip(a);bowPlace(a,b,game);const hp=b.getHitpoints(),freeze=fTrace(t,b);
+  const shot=await bowFire(t,a,b);assert.equal(shot.before-shot.after,1);bowImpacts(shot.delay+2);
+  assert.ok(b.getHitpoints()<hp,'Ignore grants no damage immunity to the real paid arrow');
+  assert.equal(bowAmount(a),shot.after);fNoNewEffects(freeze);
+  await tEquip(a,core.ItemIdentifiers.DRAGON_DAGGER);nmPlace(game,a,b);
+  assert.equal(CombatFactory.getMethod(a).type(),core.CombatType.MELEE);
+  const refused=nmTrace(t,a,b),paid=resources(a),afterArrow=b.getHitpoints();
+  try{
+    ghastTurns=true;await nmAttack(a,b);nmEngineUntil(()=>refused.permissions.length>0);a.getCombat().reset();
+    assert.ok(refused.attacks.includes(b));assert.ok(refused.methods.some(m=>m.type()===core.CombatType.MELEE));
+    assert.ok(refused.permissions.some(x=>x.method?.type()===core.CombatType.MELEE&&x.result===false));
+    assert.equal(refused.prepared.length,0);assert.equal(refused.started.length,0);assert.equal(refused.queued.length,0);assert.equal(refused.resolved.length,0);
+    assert.deepEqual(resources(a),paid);assert.equal(b.getHitpoints(),afterArrow);assert.equal(game.area.canFreeze(b),false);
+  }finally{nmObserve=null;nmRoll=null;ghastTurns=false;}
+});
+
+mTest('Ignore freezing retains finite Standard payment and vetoes a newly permitted binding hold',async t=>{
+  cInstall();const f=await mGame(t,{rules:{freezing:1,melee:1,ranged:0}}),{a,b,game}=f;
+  assert.deepEqual([game.rules.freezing,game.rules.melee,game.rules.ranged,game.rules.magic],[1,1,0,1]);assert.equal(game.area.canFreeze(b),false);
+  const trace=fTrace(t,b),hp=b.getHitpoints(),cost=mCost(a,core.CombatSpells.BIND),before=mAmounts(a,cost),bound=await mFire(f,'BIND');bStop(f);mPaid(a,cost,before);mLand(f,bound);
+  assert.equal(b.getHitpoints(),hp);assert.equal(trace.attempts.length,1);fNoNewEffects(trace);tick(10);
+  const elemental=mCost(a,core.CombatSpells.WIND_STRIKE),amounts=mAmounts(a,elemental),hit=await mFire(f);bStop(f);mPaid(a,elemental,amounts);mLand(f,hit);
+  assert.ok(b.getHitpoints()<hp);assert.equal(f.trace.commits.length,2);assert.equal(trace.attempts.length,1);fNoNewEffects(trace);assert.equal(game.area.canFreeze(b),false);
+  assert.match(require('../plugins/minigames/clanwars/Rules.ClanWars').summary(game.rules),/discard queued battle hits without refund/);
+});
+
+// B: finite Binding-only native casts. Cache declarations come from immutable
+// rev242 dump.obj + magic_spellbook.if3, commit853150e3; no effect-ID substitution.
+const B_ROWS=[['BIND','Bind',3283,23,20,0,8],['SNARE','Snare',3300,42,50,2,16],['ENTANGLE','Entangle',3322,69,79,5,24]];
+let bInstalled=false;
+function bInstall(){
+  if(bInstalled)return;
+  assert.equal(actors.length,0,'canonical loaders run before binding actors exist');
+  mInstall();fInstall(); // Their one-time guards prevent replay over live actors.
+  const api=PM.createApi('ClanWarsBCanonicalBindings');
+  require('../plugins/combat/StandardBindings.plugin').register(api);
+  require('../plugins/items/BlightedSpellSacks.plugin').register(api);
+  require('../plugins/combat/LunarCures.plugin').register(api);
+  require('../plugins/combat/SpellTeleports.plugin').register(api);
+  bInstalled=true;
+}
+function bMetadata(row){
+  const[name,label,itemId,child,level]=row,meta=core.CacheDefinitions.getSpellByName(label);
+  assert.deepEqual(meta,{itemId,widgetId:(218<<16)|child},'actual cache equals pinned native declaration');
+  assert.equal(core.CacheDefinitions.getSpellName(meta.widgetId,meta.itemId),label);
+  const requirements=core.CacheDefinitions.getSpellRequirements(label),spell=core.CombatSpells[name];
+  assert.equal(requirements.level,level);assert.equal(spell.levelRequired(),level);assert.equal(spell.getSpellbook(),core.MagicSpellbook.NORMAL);
+  const nativeCosts={BIND:[2,3,3],SNARE:[3,4,4],ENTANGLE:[4,5,5]}[name];
+  assert.deepEqual(requirements.runes,[{id:core.ItemIdentifiers.NATURE_RUNE,amount:nativeCosts[0]},{id:core.ItemIdentifiers.WATER_RUNE,amount:nativeCosts[1]},{id:core.ItemIdentifiers.EARTH_RUNE,amount:nativeCosts[2]}],"actual cache preserves source param rune order");
+  assert.deepEqual(requirements.runes.map(x=>[x.id,x.amount]).sort((a,b)=>a[0]-b[0]),spell.itemsRequired(null).map(x=>[x.getId(),x.getAmount()]).sort((a,b)=>a[0]-b[0]));
+  return meta;
+}
+// These declarations share group218; their canonical spellbook is checked at the actual hook, not inferred from the group.
+const B_UTILITY={
+  'Bones to Bananas':[3280,20,15], 'High Level Alchemy':[3303,47,55],
+  'Cure Other':[9110,114,68], 'Cure Me':[9113,118,71], 'Varrock Teleport':[3286,26,25],
+};
+function bUtilityMetadata(name){
+  const[id,child,level]=B_UTILITY[name],meta=core.CacheDefinitions.getSpellByName(name);
+  assert.deepEqual(meta,{itemId:id,widgetId:(218<<16)|child});assert.equal(core.CacheDefinitions.getSpellName(meta.widgetId,meta.itemId),name);
+  assert.equal(core.CacheDefinitions.getSpellRequirements(name).level,level);return meta;
+}
+async function bGame(t,options={}){
+  bInstall();return mGame(t,{...options,rules:{magic:3,...options.rules}});
+}
+function bArmour(p,count){
+  for(const[index,[slot,name]]of [[core.Equipment.HEAD_SLOT,'SWAMPBARK_HELM'],[core.Equipment.BODY_SLOT,'SWAMPBARK_BODY'],[core.Equipment.LEG_SLOT,'SWAMPBARK_LEGS']].entries())
+    p.getEquipment().getItems()[slot]=new core.Item(index<count?core.ItemIdentifiers[name]:-1);
+  core.BonusManager.update(p);
+}
+function bStop(f){f.a.getCombat().reset();}
+function bTimerOracle(trace,ticks){
+  assert.deepEqual(trace.timers,[[core.TimerKey.FREEZE,ticks],[core.TimerKey.FREEZE_IMMUNITY,ticks+5]]);
+  assert.equal(trace.events.filter(x=>x==='combat:frozen').length,1);
+}
+for(const offerer of[0,1])mTest('B native3 captain'+offerer+' full offer acceptance confirmation and join',async t=>{
+  bInstall();const a=actor(true),b=actor(true);channel(a);channel(b);await challenge(a,b);await challenge(b,a);
+  const session=C.negotiations.get(a),players=[a,b],p=players[offerer],scripts=scriptCalls(p),lines=messagesOf(p);
+  await click(a,'clanwars_setup:accept');const revision=session.revision;
+  await nativeButton(p,'clanwars_setup:dropdown_magic',1,4);
+  assert.equal(session.rules.magic,3);assert.equal(session.revision,revision+1);assert.equal(session.accepted.size,0);
+  assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_magic')),3);
+  for(const slot of[1,0,6,65535]){await nativeButton(p,'clanwars_setup:dropdown_magic',1,slot);assert.equal(session.rules.magic,3);assert.equal(session.revision,revision+1);}
+  await nativeButton(p,'clanwars_setup:dropdown_magic',2,5);assert.equal(session.rules.magic,3);
+  tick(9);await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');
+  assert.equal(session.confirmRevision,session.revision);const terms=scripts.findLast(x=>x[0]===554)[2];
+  assert.match(terms,/Bind, Snare and Entangle/);assert.match(terms,/utility spells/);assert.match(terms,/queued incoming and still-queued outgoing/);assert.match(terms,/pre-entry hits/);
+  tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(game.rules.magic,3);
+  await join(a);await join(b);assert.ok(scripts.some(x=>x[0]===554&&x[1]===1&&x[2]===terms));assert.ok(lines.some(x=>/including utility spells/.test(x)));
+});
+for(const melee of[0,1])for(const ranged of[0,1])for(const magic of[1,3,4])mTest(`B native style copy ${melee}/${ranged}/${magic}`,async t=>{
+  bInstall();const a=actor(true),b=actor(true);channel(a);channel(b);const scripts=scriptCalls(a),lines=messagesOf(a),titles=[];
+  const sender=a.getPacketSender(),real=sender.sendString.bind(sender);t.mock.method(sender,'sendString',(text,uid)=>{if(uid===C.uid('clanwars_setup:title'))titles.push(text);return real(text,uid);});
+  const game=await negotiate(a,b,2,1,{magic,melee,ranged});await join(a);await join(b);
+  const terms=scripts.filter(x=>x[0]===554).map(x=>x[2]);assert.ok(terms.length>=2);for(const text of terms){
+    if(melee===1&&ranged===1&&magic===4)assert.match(text,/No new player combat/);else assert.doesNotMatch(text,/No new player combat/);
+    if(magic===3){assert.match(text,/Binding.only/);assert.match(text,/utility spells/);assert.match(text,/still-queued outgoing/);}
+  }
+  if(melee===1&&magic===3){assert.ok(titles.some(x=>/binding spells/.test(x)));assert.equal(lines.some(x=>/No new player combat is enabled/.test(x)),false);}
+  assert.equal(game.rules.magic,magic);
+});
+for(const row of B_ROWS)for(const accurate of[true,false])for(const freezing of[0,1])mTest(`B ${row[0]} native accurate${accurate} Ignore${freezing}`,async t=>{
+  const f=await bGame(t,{rules:{freezing}});bMetadata(row);magicRollControl=e=>{if(e.attacker===f.a&&e.target===f.b){e.forceAccurate=accurate;e.forceMaxHit=true;}};
+  // Supplied hit-damage branch, not a measurement of natural splash probability.
+  const controlledSplashes=[];
+  if(!accurate)magicDamageControl=e=>{if(e.attacker===f.a&&e.target===f.b){e.accurate=false;e.damage.setDamage(0);controlledSplashes.push(e);}};
+  const trace=fTrace(t,f.b),cost=mCost(f.a,core.CombatSpells[row[0]]),before=mAmounts(f.a,cost),hp=f.b.getHitpoints();
+  const hit=await mFire(f,row[0]);bStop(f);mPaid(f.a,cost,before);
+  if(!accurate){assert.equal(controlledSplashes.length,1);const event=controlledSplashes[0];assert.equal(event.hit,hit);assert.equal(event.combatType,core.CombatType.MAGIC);assert.equal(event.damage,hit.getHits()[0]);assert.equal(event.accurate,false);assert.equal(event.damage.getDamage(),0);}
+  assert.equal(hit.isAccurate(),accurate);assert.equal(hit.getTotalDamage(),accurate?row[5]:0);mLand(f,hit);
+  assert.equal(f.b.getHitpoints(),hp-(accurate?row[5]:0));
+  if(accurate&&!freezing)bTimerOracle(trace,row[6]);else fNoNewEffects(trace);
+  assert.equal(trace.attempts.length,accurate?1:0,'splash does not call the binding effect');
+});
+for(const row of B_ROWS)for(const pieces of[0,1,2,3])mTest(`B ${row[0]} Swampbark commit${pieces} survives impact gear swap`,async t=>{
+  const f=await bGame(t);bMetadata(row);bArmour(f.a,pieces);const trace=fTrace(t,f.b),hit=await mFire(f,row[0]);bStop(f);
+  const context=hit.getSpellContext();assert.equal(context.data.get('standard-bindings:hold-ticks'),row[6]+pieces*2);
+  bArmour(f.a,3-pieces);mLand(f,hit);assert.equal(hit.getSpellContext(),context);bTimerOracle(trace,row[6]+pieces*2);
+});
+for(const row of B_ROWS)for(const tome of[false,true])mTest(`B ${row[0]} Clan Wars one entangle sack${tome?' plus Water tome':''}`,async t=>{
+  const f=await bGame(t),I=core.ItemIdentifiers;bMetadata(row);
+  assert.equal(f.a.getArea().getName(),'Clan Wars');
+  let book;if(tome){await mEquip(f.a,I.TOME_OF_WATER_EMPTY_,core.Equipment.SHIELD_SLOT);book=mTome(f.a,'water',2);}
+  f.a.getInventory().resetItems();f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));
+  const hit=await mFire(f,row[0]);bStop(f);assert.equal(f.a.getInventory().getAmount(I.BLIGHTED_ENTANGLE_SACK),1);
+  for(const rune of[I.WATER_RUNE,I.EARTH_RUNE,I.NATURE_RUNE])assert.equal(f.a.getInventory().getAmount(rune),0);
+  if(book)assert.equal(book.Common.read(book.item).charges,1);mLand(f,hit);assert.equal(f.a.getInventory().getAmount(I.BLIGHTED_ENTANGLE_SACK),1);
+});
+for(const row of B_ROWS)for(const element of['water','earth'])mTest(`B ${row[0]} actual ${element} tome final-charge context and real roll`,async t=>{
+  const f=await bGame(t),I=core.ItemIdentifiers;bMetadata(row);await mEquip(f.a,I['TOME_OF_'+element.toUpperCase()+'_EMPTY_'],core.Equipment.SHIELD_SLOT);const book=mTome(f.a,element,1);
+  const rune=I[element.toUpperCase()+'_RUNE'];f.a.getInventory().deleteNumber(rune,f.a.getInventory().getAmount(rune));
+  const rolls=[],emit=PM.emitCustomEvent.bind(PM);magicRollControl=null;
+  t.mock.method(PM,'emitCustomEvent',(name,event)=>{
+    const own=name==='combat:magic-attack-roll-modify'&&event.attacker===f.a&&event.target===f.b,before=own?event.attackRoll:null;
+    const result=emit(name,event);if(own)rolls.push({before,after:event.attackRoll,context:event.context});return result;
+  });
+  const hit=await mFire(f,row[0]);bStop(f);assert.ok(rolls.length>0,'native hit actually computes the canonical attack roll without forceAccuracy');
+  for(const roll of rolls){assert.equal(roll.after,element==='water'?Math.floor(roll.before*1.2):roll.before);assert.equal(roll.context,hit.getSpellContext());}
+  assert.equal(book.Common.read(book.item).charges,element==='water'?0:1);
+  assert.equal(hit.getSpellContext().data.get(require('../plugins/items/elementaltomes/Combat.ElementalTomes').CAST_DATA_KEY).element,element);
+  f.a.getEquipment().getItems()[core.Equipment.SHIELD_SLOT]=new core.Item(-1);mLand(f,hit);assert.equal(book.Common.read(book.item).charges,element==='water'?0:1);
+});
+for(const row of B_ROWS)mTest(`B ${row[0]} inventory pouch and staff canonical payment`,async t=>{
+  const f=await bGame(t),I=core.ItemIdentifiers,Pouch=require('../plugins/items/runepouch/Common.RunePouch');bMetadata(row);
+  await mEquip(f.a,I.STAFF_OF_WATER);give(f.a,I.RUNE_POUCH,'B-pouch');Pouch.setSlots(f.a,[{id:I.NATURE_RUNE,amount:10},null,null,null]);
+  f.a.getInventory().deleteNumber(I.NATURE_RUNE,f.a.getInventory().getAmount(I.NATURE_RUNE));const water=f.a.getInventory().getAmount(I.WATER_RUNE),earth=f.a.getInventory().getAmount(I.EARTH_RUNE);
+  const costs=core.CombatSpells[row[0]].itemsRequired(f.a),natureCost=costs.find(x=>x.getId()===I.NATURE_RUNE).getAmount(),earthCost=costs.find(x=>x.getId()===I.EARTH_RUNE).getAmount();
+  const hit=await mFire(f,row[0]);bStop(f);assert.equal(Pouch.amountOf(f.a,I.NATURE_RUNE),10-natureCost);assert.equal(f.a.getInventory().getAmount(I.WATER_RUNE),water);assert.equal(f.a.getInventory().getAmount(I.EARTH_RUNE),earth-earthCost);mLand(f,hit);
+});
+for(const row of B_ROWS)for(const key of[core.TimerKey.FREEZE,core.TimerKey.FREEZE_IMMUNITY])mTest(`B ${row[0]} preexisting ${key} refuses sacks and Water tome before spend`,async t=>{
+  const f=await bGame(t,{rules:{freezing:1}}),I=core.ItemIdentifiers;bMetadata(row);await mEquip(f.a,I.TOME_OF_WATER_EMPTY_,core.Equipment.SHIELD_SLOT);const book=mTome(f.a,'water',2);
+  f.a.getInventory().resetItems();f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));f.b.getTimers().registers(key,40);
+  const before=mInventory(f.a);await mSpell(f.a,f.b,row[0]);tick(8);assert.deepEqual(mInventory(f.a),before);assert.equal(book.Common.read(book.item).charges,2);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
+});
+for(const refusal of['low-level','wrong-book','missing-resources','unsupported-spell','unsupported-loadout','staging','same-team'])mTest('B actual '+refusal+' refuses before payment',async t=>{
+  const f=await bGame(t,{prepare:refusal!=='staging'}),I=core.ItemIdentifiers;
+  if(refusal==='low-level')f.a.getSkillManager().setCurrentLevel(core.Skill.MAGIC,19,false);
+  if(refusal==='wrong-book')f.a.setSpellbook(core.MagicSpellbook.ANCIENT);
+  if(refusal==='missing-resources')f.a.getInventory().resetItems();
+  if(refusal==='unsupported-loadout')await mEquip(f.a,I.IBANS_STAFF);
+  if(refusal==='same-team')f.game.fighters.set(f.b,f.game.fighters.get(f.a));
+  const before=mInventory(f.a),hp=f.b.getHitpoints();await mSpell(f.a,f.b,refusal==='unsupported-spell'?'WIND_STRIKE':'BIND');tick(8);
+  assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.b.getTimers().has(core.TimerKey.FREEZE),false);
+});
+for(const boundary of['victim-leave','caster-leave','victim-logout','caster-logout','channel','finish','caster-death'])mTest('B paid native binding discarded at '+boundary+' without refund or new hold',async t=>{
+  const f=await bGame(t),cost=mCost(f.a,core.CombatSpells.ENTANGLE),before=mAmounts(f.a,cost),hit=await mFire(f,'ENTANGLE');bStop(f);mPaid(f.a,cost,before);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);const paid=mInventory(f.a),hp=f.b.getHitpoints();
+  if(boundary==='victim-leave')f.game.area.leave(f.b,false);else if(boundary==='caster-leave')f.game.area.leave(f.a,false);
+  else if(boundary==='victim-logout')PM.emitPlayerLogout({player:f.b,username:f.b.getUsername()});else if(boundary==='caster-logout')PM.emitPlayerLogout({player:f.a,username:f.a.getUsername()});
+  else if(boundary==='channel')FC.leave(f.a,true);else if(boundary==='finish')f.game.finish(null);
+  else{f.a.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(f.a.getHitpoints(),core.HitMask.RED).setSource(f.b)]);tick();}
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);for(const p of[f.a,f.b])p.setNeedsPlacement(false);tick(35);
+  assert.deepEqual(mInventory(f.a),paid);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.b.getTimers().has(core.TimerKey.FREEZE),false);assert.equal(f.trace.resolved.includes(hit),false);
+});
+mTest('B actual paid mapped Forfeit cancels the exact native pending hit',async t=>{
+  const f=await bGame(t),hit=await mFire(f,'SNARE');bStop(f);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);const paid=mInventory(f.a),hp=f.b.getHitpoints();
+  magicTurns=false;await nmForfeit(f.a,f.game);magicTurns=true;for(const p of[f.a,f.b])p.setNeedsPlacement(false);tick(12);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);assert.equal(f.trace.resolved.includes(hit),false);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.b.getTimers().has(core.TimerKey.FREEZE),false);assert.deepEqual(mInventory(f.a),paid);
+});
+mTest('B actual lethal paid Snare reaches safe jail rejoin and a fresh valid cast',async t=>{
+  const f=await bGame(t);f.b.setHitpoints(1);const hit=await mFire(f,'SNARE');bStop(f);mLand(f,hit);
+  for(let n=0;n<60&&!f.game.jailed.has(f.b);n++)tick();assert.equal(f.game.jailed.has(f.b),true);await jailExit(f.b,f.game);assert.equal(f.game.fighters.has(f.b),true);
+  tick(40);mPosition(f.game,f.a,f.b);const trace=fTrace(t,f.b),fresh=await mFire(f,'BIND');bStop(f);assert.notEqual(fresh,hit);mLand(f,fresh);bTimerOracle(trace,8);
+});
+mTest('B NORMAL utility refuses real bones and alchemy dispatch while Default/Standard controls remain separate',async t=>{
+  const f=await bGame(t),I=core.ItemIdentifiers;give(f.a,I.BONES,'B-bones');give(f.a,I.BRONZE_DAGGER,'B-alch');
+  const before=mInventory(f.a),xp=f.a.getSkillManager().getExperience(core.Skill.MAGIC),bones=bUtilityMetadata('Bones to Bananas');assert.equal(core.EffectSpells.BONES_TO_BANANAS.getSpellbook(),core.MagicSpellbook.NORMAL);
+  const calls=[],messages=messagesOf(f.a),disable=PM.emitSpellDisabled.bind(PM);let phase='bones';
+  // Observe and forward the actual canonical permission call; neither dispatch nor refusal is substituted.
+  t.mock.method(PM,'emitSpellDisabled',(...args)=>{const result=disable(...args);calls.push({phase,args,result});return result;});
+  const refused='Binding only supports Bind, Snare and Entangle; other casts, including utility spells, are unavailable in this battle.';
+  function assertRefusal(which,spell,messageStart){
+    const reached=calls.filter(call=>call.phase===which);assert.ok(reached.length>0,which+' dispatch reaches canonical permission before payment');
+    for(const call of reached){assert.equal(call.args[0],f.a);assert.equal(call.args[1],core.MagicSpellbook.NORMAL);assert.equal(call.args[2],spell.spellId());assert.equal(call.args[3],spell);assert.equal(call.result,true,which+' real permission refuses this exact cast');}
+    assert.ok(messages.slice(messageStart).includes(refused),which+' reports the specific Binding-only refusal');
+  }
+  const bonesMessageStart=messages.length;await nativeButton(f.a,bones.widgetId,1,65535,bones.itemId);
+  assertRefusal('bones',core.EffectSpells.BONES_TO_BANANAS,bonesMessageStart);assert.deepEqual(mInventory(f.a),before);
+  const alch=bUtilityMetadata('High Level Alchemy');const slot=f.a.getInventory().getSlotForItemId(I.BRONZE_DAGGER);phase='alchemy';const alchemyMessageStart=messages.length;
+  await f.a.connection.dispatch([{type:'widget_target',sourceWidgetId:alch.widgetId,sourceItemId:alch.itemId,sourceSlot:-1,targetWidgetId:core.CacheDefinitions.getComponentId('inventory:items'),targetSlot:slot,targetItemId:I.BRONZE_DAGGER}]);f.a.connection.processTurnPackets();tick(8);
+  assertRefusal('alchemy',core.EffectSpells.HIGH_ALCHEMY,alchemyMessageStart);
+  assert.deepEqual(mInventory(f.a),before);assert.equal(f.a.getSkillManager().getExperience(core.Skill.MAGIC),xp);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
+});
+for(const name of['Cure Me','Cure Other'])mTest('B actual Lunar '+name+' dispatch refuses before cure or payment',async t=>{
+  const f=await bGame(t),I=core.ItemIdentifiers;f.a.setSpellbook(core.MagicSpellbook.LUNAR);f.a.getInventory().add(new core.Item(I.ASTRAL_RUNE,20));f.a.getInventory().add(new core.Item(I.COSMIC_RUNE,20));f.a.getInventory().add(new core.Item(I.LAW_RUNE,20));f.a.setPoisonDamage(8);f.b.setPoisonDamage(8);f.b.setAttribute('accept-aid',true);
+  const meta=bUtilityMetadata(name),seenBooks=[],disable=PM.emitSpellDisabled.bind(PM);t.mock.method(PM,'emitSpellDisabled',(...args)=>{if(args[0]===f.a)seenBooks.push(args[1]);return disable(...args);});const before=mInventory(f.a),xp=f.a.getSkillManager().getExperience(core.Skill.MAGIC);
+  const packet=name==='Cure Other'?{type:'spell_on_player',targetIndex:f.b.getIndex(),spellWidget:meta.widgetId,spellChild:meta.widgetId&65535,spellItemId:meta.itemId}:{type:'widget_action',widgetId:meta.widgetId,groupId:meta.widgetId>>>16,childId:meta.widgetId&65535,buttonNum:1,itemId:meta.itemId};
+  await f.a.connection.dispatch([packet]);f.a.connection.processTurnPackets();assert.deepEqual(mInventory(f.a),before);assert.equal(f.a.getSkillManager().getExperience(core.Skill.MAGIC),xp);assert.equal(f.a.getPoisonDamage(),8);assert.equal(f.b.getPoisonDamage(),8);assert.equal(f.trace.commits.length,0);assert.ok(seenBooks.length>0);assert.ok(seenBooks.every(book=>book===core.MagicSpellbook.LUNAR),'shared218 metadata does not change canonical Lunar book');
+});
+
+for(const style of['bow','melee'])for(const direction of['incoming','outgoing'])mTest(`B ${style} ${direction} native queued hit is disposed at mapped Forfeit`,async t=>{
+  let ally;const f=await bGame(t,{rules:{ranged:0},beforeEntry:async(a,b)=>{
+    ally=actor(true);ruleStats(ally,99);assert.equal(FC.join(ally,(direction==='incoming'?b:a).getUsername(),false),true);await join(ally);
+  }}),{a,b,game}=f,queue=b.getCombat().getHitQueue();
+  magicTurns=false;magicRollControl=null;const process=queue.process.bind(queue),hold=t.mock.method(queue,'process',()=>{}),hp=b.getHitpoints();
+  let hit,paid;
+  if(style==='bow'){
+    await bowEquip(a);bowPlace(a,b,game);const shot=await bowFire(t,a,b);assert.equal(shot.before-shot.after,1);paid=bowAmount(a);
+    hit=f.trace.hits.find(h=>h.getCombatMethod()===CombatFactory.RANGED_COMBAT);assert.ok(hit);
+  }else{
+    await tEquip(a,core.ItemIdentifiers.DRAGON_DAGGER);nmPlace(game,a,b);const trace=nmTrace(t,a,b);
+    ghastTurns=true;await nmAttack(a,b);nmEngineUntil(()=>trace.queued.length>0);a.getCombat().reset();ghastTurns=false;
+    hit=trace.queued[0];assert.ok(hit);assert.equal(hit.getCombatMethod().type(),core.CombatType.MELEE);assert.ok(hit.getTotalDamage()>0);
+  }
+  assert.equal(queue.hasPendingHit(hit),true,'actual native producer created this exact queued hit before departure');
+  const leaving=direction==='incoming'?b:a,generation=queue.getIncomingGeneration();await nmForfeit(leaving,game);
+  assert.equal(C.matches.has(leaving),false);assert.equal(game.phase,'combat','same-side actual ally retains the instance');assert.equal(queue.hasPendingHit(hit),false);
+  if(direction==='incoming')assert.ok(queue.getIncomingGeneration()>generation);
+  hold.mock.restore();for(const p of[a,b])p.setNeedsPlacement(false);process(C.now());tick(15);
+  assert.equal(b.getHitpoints(),hp);assert.equal(f.trace.resolved.includes(hit),false);if(style==='bow')assert.equal(bowAmount(a),paid);
+});
+mTest('B native entry and supplied rejoin preserve self and null-source damage while clearing pre-entry incoming work',async t=>{
+  bInstall();const a=actor(true),b=actor(true);ruleStats(a,99);ruleStats(b,99);channel(a);channel(b);const game=await negotiate(a,b,2,1,{magic:3});
+  const queue=a.getCombat().getHitQueue(),generation=queue.getIncomingGeneration(),foreign=new core.PendingHit(b,a,CombatFactory.MELEE_COMBAT,{damage:7,rollAccuracy:false,experience:false,delay:500});
+  CombatFactory.addPendingHit(foreign);queue.addPendingDamage([new core.HitDamage(1,core.HitMask.RED).setSource(a),new core.HitDamage(2,core.HitMask.RED)]);
+  assert.equal(queue.hasPendingHit(foreign),true);await join(a);await join(b);assert.equal(queue.hasPendingHit(foreign),false);assert.ok(queue.getIncomingGeneration()>generation);assert.equal(queue.getQueuedDamage(),3);
+  magicTurns=true;tick();assert.equal(a.getHitpoints(),96);completePreparation(game);mPosition(game,a,b);game.eliminate(a);game.jailed.add(a);
+  const next=new core.PendingHit(b,a,CombatFactory.MELEE_COMBAT,{damage:7,rollAccuracy:false,experience:false,delay:500});CombatFactory.addPendingHit(next);
+  const at=game.area.at(game.layout.jails[game.members.get(a)]);a.moveTo(at);a.setNeedsPlacement(false);const again=queue.getIncomingGeneration();
+  assert.equal(game.rejoin(a),true,'explicit jail checkpoint exercises existing real rejoin owner, not natural death');assert.equal(queue.hasPendingHit(next),false);assert.ok(queue.getIncomingGeneration()>again);
+});
+mTest('B read-only preview and shared cooldown keep real binding payment single',async t=>{
+  const f=await bGame(t),spell=core.CombatSpells.BIND,before=mInventory(f.a);await mSpell(f.a,f.b,'BIND');
+  assert.equal(spell.canCast(f.a,false),true);assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);
+  const hit=await mFire(f,'BIND');bStop(f);const paid=mInventory(f.a),commits=f.trace.commits.length;
+  assert.equal(core.CombatSpells.SNARE.canCast(f.a,true),false,'same-tick shared delay refuses before a second cost');assert.deepEqual(mInventory(f.a),paid);assert.equal(f.trace.commits.length,commits);mLand(f,hit);
+});
+mTest('B joined staging utility is refused and actual departure restores ordinary NORMAL utility scope',async t=>{
+  const f=await bGame(t,{prepare:false}),I=core.ItemIdentifiers;give(f.a,I.BONES,'B-staging-bones');const meta=core.CacheDefinitions.getSpellByName('Bones to Bananas');assert.ok(meta);
+  const before=mInventory(f.a),bananas=f.a.getInventory().getAmount(I.BANANA);await nativeButton(f.a,meta.widgetId,1,65535,meta.itemId);assert.deepEqual(mInventory(f.a),before);
+  f.game.area.leave(f.a,false);assert.equal(C.matches.has(f.a),false);await nativeButton(f.a,meta.widgetId,1,65535,meta.itemId);
+  assert.ok(f.a.getInventory().getAmount(I.BANANA)>bananas);assert.equal(f.trace.commits.length,1,'ordinary utility outside the restriction owner remains a real paid cast');
+});
+mTest('B canonical non-cast Configure is not classified as a spell by the mode3 refusal',async t=>{
+  const f=await bGame(t),meta=bUtilityMetadata('Varrock Teleport');
+  const before=mInventory(f.a),messages=messagesOf(f.a),disabled=[],real=PM.emitSpellDisabled.bind(PM);
+  t.mock.method(PM,'emitSpellDisabled',(...args)=>{disabled.push(args);return real(...args);});
+  await nativeButton(f.a,meta.widgetId,10,65535,meta.itemId);
+  assert.equal(disabled.length,0,'Configure reaches canonical non-cast branch, not the permission hook');
+  assert.ok(messages.some(m=>/diary/i.test(m)),'canonical diary prerequisite retains its own refusal rather than a mode3 cast refusal');
+  assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
+});
+
+// C: finite manual Classic F2P; declarations are literal static cache242 source, not effect IDs.
+const C_CLASSIC_ROWS=[{"key":"WIND_STRIKE","label":"Wind Strike","itemId":3273,"widgetId":14286859,"level":1,"runes":[{"id":558,"amount":1},{"id":556,"amount":1}],"baseXP":5.5,"splashXP":5.5},{"key":"WATER_STRIKE","label":"Water Strike","itemId":3275,"widgetId":14286862,"level":5,"runes":[{"id":558,"amount":1},{"id":555,"amount":1},{"id":556,"amount":1}],"baseXP":7.5,"splashXP":7.5},{"key":"EARTH_STRIKE","label":"Earth Strike","itemId":3277,"widgetId":14286865,"level":9,"runes":[{"id":558,"amount":1},{"id":557,"amount":2},{"id":556,"amount":1}],"baseXP":9.5,"splashXP":9.5},{"key":"FIRE_STRIKE","label":"Fire Strike","itemId":3279,"widgetId":14286867,"level":13,"runes":[{"id":558,"amount":1},{"id":554,"amount":3},{"id":556,"amount":2}],"baseXP":11.5,"splashXP":11.5},{"key":"WIND_BOLT","label":"Wind Bolt","itemId":3281,"widgetId":14286869,"level":17,"runes":[{"id":562,"amount":1},{"id":556,"amount":2}],"baseXP":13.5,"splashXP":13.5},{"key":"WATER_BOLT","label":"Water Bolt","itemId":3285,"widgetId":14286873,"level":23,"runes":[{"id":562,"amount":1},{"id":555,"amount":2},{"id":556,"amount":2}],"baseXP":16.5,"splashXP":16.5},{"key":"EARTH_BOLT","label":"Earth Bolt","itemId":3288,"widgetId":14286876,"level":29,"runes":[{"id":562,"amount":1},{"id":557,"amount":3},{"id":556,"amount":2}],"baseXP":19.5,"splashXP":19.5},{"key":"FIRE_BOLT","label":"Fire Bolt","itemId":3291,"widgetId":14286879,"level":35,"runes":[{"id":562,"amount":1},{"id":554,"amount":4},{"id":556,"amount":3}],"baseXP":22.5,"splashXP":22.5},{"key":"WIND_BLAST","label":"Wind Blast","itemId":3294,"widgetId":14286883,"level":41,"runes":[{"id":560,"amount":1},{"id":556,"amount":3}],"baseXP":25.5,"splashXP":25.5},{"key":"WATER_BLAST","label":"Water Blast","itemId":3297,"widgetId":14286886,"level":47,"runes":[{"id":560,"amount":1},{"id":555,"amount":3},{"id":556,"amount":3}],"baseXP":28.5,"splashXP":28.5},{"key":"EARTH_BLAST","label":"Earth Blast","itemId":3302,"widgetId":14286893,"level":53,"runes":[{"id":560,"amount":1},{"id":557,"amount":4},{"id":556,"amount":3}],"baseXP":31.5,"splashXP":31.5},{"key":"FIRE_BLAST","label":"Fire Blast","itemId":3307,"widgetId":14286899,"level":59,"runes":[{"id":560,"amount":1},{"id":554,"amount":5},{"id":556,"amount":4}],"baseXP":34.5,"splashXP":34.5},{"key":"CONFUSE","label":"Confuse","itemId":3274,"widgetId":14286860,"level":3,"runes":[{"id":559,"amount":1},{"id":555,"amount":3},{"id":557,"amount":2}],"baseXP":13,"splashXP":13},{"key":"WEAKEN","label":"Weaken","itemId":3278,"widgetId":14286866,"level":11,"runes":[{"id":559,"amount":1},{"id":555,"amount":3},{"id":557,"amount":2}],"baseXP":21,"splashXP":21},{"key":"CURSE","label":"Curse","itemId":3282,"widgetId":14286870,"level":19,"runes":[{"id":559,"amount":1},{"id":555,"amount":2},{"id":557,"amount":3}],"baseXP":29,"splashXP":29},{"key":"BIND","label":"Bind","itemId":3283,"widgetId":14286871,"level":20,"runes":[{"id":561,"amount":2},{"id":555,"amount":3},{"id":557,"amount":3}],"baseXP":31,"splashXP":30}];
+
+const C_CURSES={CONFUSE:'ATTACK',WEAKEN:'STRENGTH',CURSE:'DEFENCE'};
+let cInstalled=false;
+function cInstall(){
+  if(cInstalled)return;
+  bInstall();assert.equal(actors.length,0,'stat-curse composition runs once before actors');
+  require('../plugins/combat/StandardCurses.plugin').register(PM.createApi('ClanWarsCCanonicalCurses'));
+  cInstalled=true;
+}
+async function cGame(t,options={}){cInstall();return mGame(t,{...options,rules:{magic:2,...options.rules}});}
+function cMetadata(row){
+  const spell=core.CombatSpells[row.key],meta=core.CacheDefinitions.getSpellByName(row.label),requirements=core.CacheDefinitions.getSpellRequirements(row.label);
+  assert.deepEqual(meta,{itemId:row.itemId,widgetId:row.widgetId});assert.equal(core.CacheDefinitions.getSpellName(meta.widgetId,meta.itemId),row.label);
+  assert.equal(requirements.level,row.level);assert.equal(spell.levelRequired(),row.level);assert.deepEqual(requirements.runes,row.runes);
+  assert.equal(spell.getSpellbook(),core.MagicSpellbook.NORMAL,'book is canonical spell identity, not group218');
+  assert.deepEqual(spell.itemsRequired(null).map(x=>[x.getId(),x.getAmount()]).sort((a,b)=>a[0]-b[0]),row.runes.map(x=>[x.id,x.amount]).sort((a,b)=>a[0]-b[0]));
+  assert.equal(spell.baseExperience(),row.baseXP);assert.equal(spell.splashExperience(),row.splashXP);return meta;
+}
+function cStats(p){return Object.fromEntries(['ATTACK','STRENGTH','DEFENCE'].map(k=>[k,p.getSkillManager().getCurrentLevel(core.Skill[k])]));}
+function cAssertStats(p,before,key,percent){
+  const expected={...before};if(key)expected[key]-=Math.floor(before[key]*percent/100);assert.deepEqual(cStats(p),expected);
+}
+async function cNativeAttack(a,b){
+  const frame=Buffer.alloc(4);frame[0]=44;frame[1]=128;frame.writeUInt16BE(b.getIndex(),2);
+  const decoded=decodeClientPackets(frame);assert.equal(decoded.length,1);assert.equal(decoded[0].type,'player_option');assert.equal(decoded[0].option,1);assert.equal(decoded[0].index,b.getIndex());
+  await a.connection.dispatch(decoded);a.connection.processTurnPackets();
+}
+async function cAutocast(a){
+  await mEquip(a,core.ItemIdentifiers.STAFF_OF_AIR);assert.equal(a.getEquipment().hasStaffEquipped(),true);
+  await nativeButton(a,(593<<16)|23);await nativeButton(a,(201<<16)|1,1,1);
+  assert.equal(a.getCombat().getAutocastSpell(),core.CombatSpells.WIND_STRIKE);assert.equal(core.Autocasting.isActive(a),true);
+}
+mTest('C initial reciprocal challenge discloses Classic support and accounting before any selection',async t=>{
+  cInstall();const a=actor(true),b=actor(true);channel(a);channel(b);
+  const lines=[messagesOf(a),messagesOf(b)],Magic=require('../plugins/minigames/clanwars/Magic.ClanWars');
+  await challenge(a,b);await challenge(b,a);
+  const session=C.negotiations.get(a);assert.equal(session,C.negotiations.get(b));assert.equal(session.stage,'setup');assert.equal(session.rules.magic,4);assert.equal(session.revision,0);assert.equal(session.accepted.size,0);
+  for(const messages of lines){
+    assert.ok(messages.some(line=>line.includes('Standard combat spells, manual Classic F2P combat and Binding-only casts remain independent of the melee choice.')),'initial supported-choice introduction includes manual Classic');
+    for(const disclosure of[Magic.SUPPORT,Magic.ACCOUNTING,Magic.CLASSIC_SUPPORT,Magic.CLASSIC_ACCOUNTING,Magic.BINDING_SUPPORT,Magic.BINDING_ACCOUNTING])assert.ok(messages.includes(disclosure),'initial mode support/accounting is sent before any selection');
+  }
+});
+for(const offerer of[0,1])mTest('C native2 captain'+offerer+' full offer acceptance confirmation and join',async t=>{
+  cInstall();const a=actor(true),b=actor(true);channel(a);channel(b);await challenge(a,b);await challenge(b,a);
+  const session=C.negotiations.get(a),p=[a,b][offerer],scripts=scriptCalls(p),lines=messagesOf(p);await click(a,'clanwars_setup:accept');const revision=session.revision;
+  await nativeButton(p,'clanwars_setup:dropdown_magic',1,3);
+  assert.equal(session.rules.magic,2);assert.equal(session.revision,revision+1);assert.equal(session.accepted.size,0);
+  assert.equal(p.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId('clanwars_magic')),2);
+  for(const slot of[1,0,6,65535]){await nativeButton(p,'clanwars_setup:dropdown_magic',1,slot);assert.equal(session.rules.magic,2);assert.equal(session.revision,revision+1);}
+  await nativeButton(p,'clanwars_setup:dropdown_magic',2,5);assert.equal(session.rules.magic,2);
+  tick(9);await click(a,'clanwars_setup:accept');await click(b,'clanwars_setup:accept');assert.equal(session.stage,'confirm');assert.equal(session.confirmRevision,session.revision);
+  const terms=scripts.findLast(x=>x[0]===554)[2];assert.match(terms,/Classic F2P/);assert.match(terms,/12 elemental strike, bolt and blast/);assert.match(terms,/Confuse, Weaken, Curse and Bind/);assert.match(terms,/partial support/);assert.match(terms,/utilities, autocasts/);assert.match(terms,/queued incoming and still-queued outgoing/);
+  tick(5);await click(a,'clanwars_confirm:button');await click(b,'clanwars_confirm:button');const game=C.channelGames.get(C.channel(a).key);assert.ok(game);assert.equal(game.rules.magic,2);await join(a);await join(b);
+  assert.ok(scripts.some(x=>x[0]===554&&x[1]===1&&x[2]===terms));assert.ok(lines.some(x=>/cast manually/.test(x)));
+});
+for(const row of C_CLASSIC_ROWS)for(const accurate of[true,false])for(const freezing of[0,1])mTest(`C ${row.key} native accurate${accurate} Ignore${freezing}`,async t=>{
+  const f=await cGame(t,{rules:{freezing}});cMetadata(row);const stats=cStats(f.b),hp=f.b.getHitpoints(),calls=[],splashes=[];
+  magicRollControl=e=>{if(e.attacker===f.a&&e.target===f.b){e.forceAccurate=accurate;e.forceMaxHit=true;}};
+  // Supplied branch at the real PendingHit's damage event, never a natural probability claim.
+  if(!accurate)magicDamageControl=e=>{if(e.attacker===f.a&&e.target===f.b){e.accurate=false;e.damage.setDamage(0);splashes.push(e);}};
+  const sm=f.a.getSkillManager(),add=sm.addExperience.bind(sm);t.mock.method(sm,'addExperience',(...args)=>{calls.push(args);return add(...args);});
+  const trace=fTrace(t,f.b),cost=mCost(f.a,core.CombatSpells[row.key]),before=mAmounts(f.a,cost),hit=await mFire(f,row.key);bStop(f);mPaid(f.a,cost,before);
+  if(!accurate){assert.equal(splashes.length,1);assert.equal(splashes[0].hit,hit);assert.equal(splashes[0].damage,hit.getHits()[0]);assert.equal(splashes[0].combatType,core.CombatType.MAGIC);assert.equal(splashes[0].accurate,false);assert.equal(splashes[0].damage.getDamage(),0);}
+  assert.equal(hit.isAccurate(),accurate);const damage=hit.getTotalDamage();if(C_CURSES[row.key]||row.key==='BIND'||!accurate)assert.equal(damage,0);else assert.ok(damage>0);
+  assert.deepEqual(cStats(f.b),stats,'queued effects are not applied early');mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-damage);
+  cAssertStats(f.b,stats,accurate?C_CURSES[row.key]:null,5);
+  assert.ok(calls.some(x=>x[0]===core.Skill.MAGIC&&x[1]===(accurate?row.baseXP:row.splashXP)),'canonical base XP producer is forwarded with independent pinned amount');
+  if(row.key==='BIND'&&accurate&&!freezing)bTimerOracle(trace,8);else fNoNewEffects(trace);
+  assert.equal(trace.attempts.length,row.key==='BIND'&&accurate?1:0);
+});
+mTest('C valid native autocast selector plus Attack refuses before promotion payment or PendingHit',async t=>{
+  const f=await cGame(t),combat=f.a.getCombat(),lines=messagesOf(f.a),observed=[],permission=f.game.area.canAttack.bind(f.game.area);await cAutocast(f.a);
+  const row=C_CLASSIC_ROWS.find(x=>x.key==='WIND_STRIKE');cMetadata(row);assert.equal(combat.getCastSpell(),null);assert.ok(mCost(f.a,core.CombatSpells.WIND_STRIKE).every(([id,amount])=>f.a.getInventory().getAmount(id)>=amount));
+  t.mock.method(f.game.area,'canAttack',(...args)=>{const before=combat.getCastSpell(),result=permission(...args);if(args[0]===f.a)observed.push({before,method:args[2],result,target:args[1]});return result;});
+  const inventory=mInventory(f.a),hp=f.b.getHitpoints();await cNativeAttack(f.a,f.b);tick(25);combat.reset();
+  assert.ok(observed.some(x=>x.method===CombatFactory.MAGIC_COMBAT&&x.target===f.b&&x.before==null&&x.result===false),'actual area refusal precedes canonical autocast promotion');
+  assert.ok(lines.includes('Classic F2P combat supports manual casts only; select a spell and cast it at an opposing fighter.'));
+  assert.deepEqual(mInventory(f.a),inventory);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);assert.equal(f.b.getHitpoints(),hp);
+});
+mTest('C real manual OPPLAYER_T overrides configured autocast once and prevents automatic paid repeats',async t=>{
+  const f=await cGame(t);await cAutocast(f.a);const spell=core.CombatSpells.WIND_STRIKE,cost=mCost(f.a,spell),before=mAmounts(f.a,cost),hit=await mFire(f,'WIND_STRIKE');
+  assert.equal(core.Autocasting.isActive(f.a),true);mPaid(f.a,cost,before);mLand(f,hit);tick(25);f.a.getCombat().reset();
+  assert.equal(f.trace.commits.length,1);assert.equal(f.trace.hits.length,1);mPaid(f.a,cost,before);assert.equal(f.trace.resolved.includes(hit),true);
+});
+mTest('C inactive remembered autocast with a native dagger Attack remains melee',async t=>{
+  const f=await cGame(t);await cAutocast(f.a);await tEquip(f.a,core.ItemIdentifiers.DRAGON_DAGGER);assert.equal(f.a.getCombat().getAutocastSpell(),core.CombatSpells.WIND_STRIKE);assert.equal(core.Autocasting.isActive(f.a),false);
+  const before=mInventory(f.a),trace=nmTrace(t,f.a,f.b);nmPlace(f.game,f.a,f.b);ghastTurns=true;await cNativeAttack(f.a,f.b);nmEngineUntil(()=>trace.queued.length>0);f.a.getCombat().reset();ghastTurns=false;
+  assert.ok(trace.queued.some(h=>h.getCombatMethod().type()===core.CombatType.MELEE));assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);
+});
+for(const key of Object.keys(C_CURSES))mTest('C '+key+' native lowered partial full recovery and impact race remain canonical',async t=>{
+  const f=await cGame(t),skill=core.Skill[C_CURSES[key]],sm=f.b.getSkillManager(),first=await mFire(f,key);bStop(f);mLand(f,first);assert.equal(sm.getCurrentLevel(skill),95);
+  tick(10);const paid=mInventory(f.a),xp=f.a.getSkillManager().getExperience(core.Skill.MAGIC),n=f.trace.commits.length,lines=messagesOf(f.a);
+  await mSpell(f.a,f.b,key);tick(8);bStop(f);assert.deepEqual(mInventory(f.a),paid);assert.equal(f.trace.commits.length,n);assert.equal(f.a.getSkillManager().getExperience(core.Skill.MAGIC),xp);assert.ok(lines.some(x=>/weakened/.test(x)));
+  sm.setCurrentLevel(skill,98,false);await mSpell(f.a,f.b,key);tick(8);bStop(f);assert.deepEqual(mInventory(f.a),paid);assert.equal(f.trace.commits.length,n);
+  sm.setCurrentLevel(skill,99,false);tick(10);const second=await mFire(f,key);bStop(f);assert.notEqual(second,first);sm.setCurrentLevel(skill,98,false);mLand(f,second);assert.equal(sm.getCurrentLevel(skill),98,'intervening drain prevents stacking at impact');
+  const other=key==='CONFUSE'?'WEAKEN':'CONFUSE',otherSkill=core.Skill[C_CURSES[other]];sm.setCurrentLevel(otherSkill,99,false);tick(10);const independent=await mFire(f,other);bStop(f);mLand(f,independent);assert.equal(sm.getCurrentLevel(otherSkill),95);
+});
+for(const key of Object.keys(C_CURSES))for(const tome of[false,true])mTest(`C ${key} committed effect floor99 ${tome?'water final-charge swap':'base'} and independent resources`,async t=>{
+  const f=await cGame(t),I=core.ItemIdentifiers;let book;
+  if(tome){await mEquip(f.a,I.TOME_OF_WATER_EMPTY_,core.Equipment.SHIELD_SLOT);book=mTome(f.a,'water',1);f.a.getInventory().deleteNumber(I.WATER_RUNE,f.a.getInventory().getAmount(I.WATER_RUNE));}
+  const cost=mCost(f.a,core.CombatSpells[key]),amounts=mAmounts(f.a,cost),stats=cStats(f.b),hp=f.b.getHitpoints(),hit=await mFire(f,key);bStop(f);mPaid(f.a,cost,amounts);assert.equal(hit.isAccurate(),true);assert.equal(hit.getTotalDamage(),0);assert.deepEqual(cStats(f.b),stats);
+  const context=hit.getSpellContext();if(tome){assert.equal(book.Common.read(book.item).charges,0);assert.equal(context.data.get(require('../plugins/items/elementaltomes/Combat.ElementalTomes').CAST_DATA_KEY).element,'water');f.a.getEquipment().getItems()[core.Equipment.SHIELD_SLOT]=new core.Item(-1);}
+  mLand(f,hit);assert.equal(hit.getSpellContext(),context);cAssertStats(f.b,stats,C_CURSES[key],tome?7:5);assert.equal(f.b.getHitpoints(),hp);if(tome)assert.equal(book.Common.read(book.item).charges,0);
+});
+for(const key of Object.keys(C_CURSES))mTest('C '+key+' unforced real forwarded Water tome attack roll uses committed final charge',async t=>{
+  const f=await cGame(t),I=core.ItemIdentifiers;await mEquip(f.a,I.TOME_OF_WATER_EMPTY_,core.Equipment.SHIELD_SLOT);const book=mTome(f.a,'water',1),rolls=[],emit=PM.emitCustomEvent.bind(PM);magicRollControl=null;
+  t.mock.method(PM,'emitCustomEvent',(name,event)=>{const own=name==='combat:magic-attack-roll-modify'&&event.attacker===f.a&&event.target===f.b,before=own?event.attackRoll:null;const result=emit(name,event);if(own)rolls.push({before,after:event.attackRoll,context:event.context});return result;});
+  const hit=await mFire(f,key);bStop(f);assert.ok(rolls.length>0);for(const roll of rolls){assert.equal(roll.after,Math.floor(roll.before*1.2));assert.equal(roll.context,hit.getSpellContext());}assert.equal(book.Common.read(book.item).charges,0);mLand(f,hit);
+  // This separate real-roll observation does not assert a random effect outcome.
+});
+for(const key of['CONFUSE','WEAKEN','CURSE','BIND'])mTest('C '+key+' pouch staff and sack funding stay canonical and independent',async t=>{
+  const f=await cGame(t),I=core.ItemIdentifiers,Pouch=require('../plugins/items/runepouch/Common.RunePouch');await mEquip(f.a,I.STAFF_OF_WATER);give(f.a,I.RUNE_POUCH,'C-pouch');
+  const rune=key==='BIND'?I.NATURE_RUNE:I.BODY_RUNE;Pouch.setSlots(f.a,[{id:rune,amount:10},null,null,null]);f.a.getInventory().deleteNumber(rune,f.a.getInventory().getAmount(rune));f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));
+  const water=f.a.getInventory().getAmount(I.WATER_RUNE),earth=f.a.getInventory().getAmount(I.EARTH_RUNE),cost=core.CombatSpells[key].itemsRequired(f.a),runeCost=cost.find(x=>x.getId()===rune).getAmount(),earthCost=cost.find(x=>x.getId()===I.EARTH_RUNE).getAmount(),hit=await mFire(f,key);bStop(f);
+  if(key==='BIND'){assert.equal(f.a.getInventory().getAmount(I.BLIGHTED_ENTANGLE_SACK),1);assert.equal(Pouch.amountOf(f.a,rune),10);assert.equal(f.a.getInventory().getAmount(I.EARTH_RUNE),earth);}
+  else{assert.equal(f.a.getInventory().getAmount(I.BLIGHTED_ENTANGLE_SACK),2);assert.equal(Pouch.amountOf(f.a,rune),10-runeCost);assert.equal(f.a.getInventory().getAmount(I.EARTH_RUNE),earth-earthCost);}
+  assert.equal(f.a.getInventory().getAmount(I.WATER_RUNE),water);mLand(f,hit);
+});
+for(const key of['SNARE','ENTANGLE','WIND_WAVE','FIRE_SURGE','VULNERABILITY','ENFEEBLE','STUN','TELEBLOCK','CRUMBLE_UNDEAD'])mTest('C actual '+key+' remains outside the finite spell set before payment',async t=>{
+  const f=await cGame(t);const before=mInventory(f.a),stats=cStats(f.b),hp=f.b.getHitpoints(),lines=messagesOf(f.a);await mSpell(f.a,f.b,key,key==='TELEBLOCK'?'Tele Block':null);tick(10);bStop(f);assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);assert.deepEqual(cStats(f.b),stats);assert.equal(f.b.getHitpoints(),hp);assert.ok(lines.length>0);
+});
+for(const spell of['CURSE','BIND'])for(const boundary of['victim-leave','caster-leave','victim-logout','caster-logout','channel','finish','caster-death'])mTest('C paid native '+spell+' discarded at '+boundary+' without refund or new hold',async t=>{
+  const f=await cGame(t),cost=mCost(f.a,core.CombatSpells[spell]),before=mAmounts(f.a,cost),hit=await mFire(f,spell);bStop(f);mPaid(f.a,cost,before);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);const paid=mInventory(f.a),hp=f.b.getHitpoints(),stats=cStats(f.b);
+  if(boundary==='victim-leave')f.game.area.leave(f.b,false);else if(boundary==='caster-leave')f.game.area.leave(f.a,false);
+  else if(boundary==='victim-logout')PM.emitPlayerLogout({player:f.b,username:f.b.getUsername()});else if(boundary==='caster-logout')PM.emitPlayerLogout({player:f.a,username:f.a.getUsername()});
+  else if(boundary==='channel')FC.leave(f.a,true);else if(boundary==='finish')f.game.finish(null);
+  else{f.a.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(f.a.getHitpoints(),core.HitMask.RED).setSource(f.b)]);tick();}
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);for(const p of[f.a,f.b])p.setNeedsPlacement(false);tick(35);
+  assert.deepEqual(mInventory(f.a),paid);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.b.getTimers().has(core.TimerKey.FREEZE),false);assert.equal(f.trace.resolved.includes(hit),false);assert.deepEqual(cStats(f.b),stats);
+});
+mTest('C actual paid mapped Forfeit cancels the exact native pending hit',async t=>{
+  const f=await cGame(t),hit=await mFire(f,'BIND');bStop(f);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);const paid=mInventory(f.a),hp=f.b.getHitpoints(),stats=cStats(f.b);
+  magicTurns=false;await nmForfeit(f.a,f.game);magicTurns=true;for(const p of[f.a,f.b])p.setNeedsPlacement(false);tick(12);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);assert.equal(f.trace.resolved.includes(hit),false);assert.deepEqual(cStats(f.b),stats);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.b.getTimers().has(core.TimerKey.FREEZE),false);assert.deepEqual(mInventory(f.a),paid);
+});
+mTest('C NORMAL utility refuses real bones and alchemy dispatch while Default/Standard controls remain separate',async t=>{
+  const f=await cGame(t),I=core.ItemIdentifiers;give(f.a,I.BONES,'B-bones');give(f.a,I.BRONZE_DAGGER,'B-alch');
+  const before=mInventory(f.a),xp=f.a.getSkillManager().getExperience(core.Skill.MAGIC),bones=bUtilityMetadata('Bones to Bananas');assert.equal(core.EffectSpells.BONES_TO_BANANAS.getSpellbook(),core.MagicSpellbook.NORMAL);
+  const calls=[],messages=messagesOf(f.a),disable=PM.emitSpellDisabled.bind(PM),allResources=resources(f.a),targetState=resources(f.b),timerWrites=cObserveTimerWrites(t,f.a);let phase='bones';
+  // Observe and forward the actual canonical permission call; neither dispatch nor refusal is substituted.
+  t.mock.method(PM,'emitSpellDisabled',(...args)=>{const result=disable(...args);calls.push({phase,args,result});return result;});
+  const refused='Classic F2P combat supports the 12 elemental strike, bolt and blast spells, Confuse, Weaken, Curse and Bind; other casts, including utilities, are unavailable in this battle.';
+  function assertRefusal(which,spell,messageStart){
+    const reached=calls.filter(call=>call.phase===which);assert.ok(reached.length>0,which+' dispatch reaches canonical permission before payment');
+    for(const call of reached){assert.equal(call.args[0],f.a);assert.equal(call.args[1],core.MagicSpellbook.NORMAL);assert.equal(call.args[2],spell.spellId());assert.equal(call.args[3],spell);assert.equal(call.result,true,which+' real permission refuses this exact cast');}
+    assert.ok(messages.slice(messageStart).includes(refused),which+' reports the specific Classic F2P refusal');
+  }
+  const bonesMessageStart=messages.length;await nativeButton(f.a,bones.widgetId,1,65535,bones.itemId);
+  assertRefusal('bones',core.EffectSpells.BONES_TO_BANANAS,bonesMessageStart);assert.deepEqual(mInventory(f.a),before);
+  const alch=bUtilityMetadata('High Level Alchemy');const slot=f.a.getInventory().getSlotForItemId(I.BRONZE_DAGGER);phase='alchemy';const alchemyMessageStart=messages.length;
+  await f.a.connection.dispatch([{type:'widget_target',sourceWidgetId:alch.widgetId,sourceItemId:alch.itemId,sourceSlot:-1,targetWidgetId:core.CacheDefinitions.getComponentId('inventory:items'),targetSlot:slot,targetItemId:I.BRONZE_DAGGER}]);f.a.connection.processTurnPackets();tick(8);
+  assertRefusal('alchemy',core.EffectSpells.HIGH_ALCHEMY,alchemyMessageStart);assert.deepEqual(resources(f.a),allResources);assert.deepEqual(resources(f.b),targetState);assert.equal(timerWrites.length,0);
+  assert.deepEqual(mInventory(f.a),before);assert.equal(f.a.getSkillManager().getExperience(core.Skill.MAGIC),xp);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
+});
+for(const name of['Cure Me','Cure Other'])mTest('C actual Lunar '+name+' dispatch refuses before cure or payment',async t=>{
+  const f=await cGame(t),I=core.ItemIdentifiers;f.a.setSpellbook(core.MagicSpellbook.LUNAR);f.a.getInventory().add(new core.Item(I.ASTRAL_RUNE,20));f.a.getInventory().add(new core.Item(I.COSMIC_RUNE,20));f.a.getInventory().add(new core.Item(I.LAW_RUNE,20));f.a.setPoisonDamage(8);f.b.setPoisonDamage(8);f.b.setAttribute('accept-aid',true);
+  const meta=bUtilityMetadata(name),seen=[],disable=PM.emitSpellDisabled.bind(PM),lines=messagesOf(f.a),timerWrites=cObserveTimerWrites(t,f.a);t.mock.method(PM,'emitSpellDisabled',(...args)=>{const result=disable(...args);if(args[0]===f.a)seen.push({args,result});return result;});const before=mInventory(f.a),xp=f.a.getSkillManager().getExperience(core.Skill.MAGIC);
+  const packet=name==='Cure Other'?{type:'spell_on_player',targetIndex:f.b.getIndex(),spellWidget:meta.widgetId,spellChild:meta.widgetId&65535,spellItemId:meta.itemId}:{type:'widget_action',widgetId:meta.widgetId,groupId:meta.widgetId>>>16,childId:meta.widgetId&65535,buttonNum:1,itemId:meta.itemId};
+  await f.a.connection.dispatch([packet]);f.a.connection.processTurnPackets();assert.deepEqual(mInventory(f.a),before);assert.equal(f.a.getSkillManager().getExperience(core.Skill.MAGIC),xp);assert.equal(f.a.getPoisonDamage(),8);assert.equal(f.b.getPoisonDamage(),8);assert.equal(f.trace.commits.length,0);assert.ok(seen.length>0);for(const call of seen){assert.equal(call.args[0],f.a);assert.equal(call.args[1],core.MagicSpellbook.LUNAR);assert.equal(call.args[2],meta.widgetId);assert.ok(call.args[3] instanceof core.Spell);assert.equal(call.args[3].spellId(),meta.widgetId);assert.equal(call.args[3].getSpellbook(),core.MagicSpellbook.LUNAR);assert.equal(call.result,true);}assert.ok(lines.includes(C_CLASSIC_UTILITY_REFUSAL));assert.equal(timerWrites.length,0);assert.equal(f.trace.hits.length,0);
+});
+
+for(const style of['bow','melee'])for(const direction of['incoming','outgoing'])mTest(`C ${style} ${direction} native queued hit is disposed at mapped Forfeit`,async t=>{
+  let ally;const f=await cGame(t,{rules:{ranged:0},beforeEntry:async(a,b)=>{
+    ally=actor(true);ruleStats(ally,99);assert.equal(FC.join(ally,(direction==='incoming'?b:a).getUsername(),false),true);await join(ally);
+  }}),{a,b,game}=f,queue=b.getCombat().getHitQueue();
+  magicTurns=false;magicRollControl=null;const process=queue.process.bind(queue),hold=t.mock.method(queue,'process',()=>{}),hp=b.getHitpoints();
+  let hit,paid;
+  if(style==='bow'){
+    await bowEquip(a);bowPlace(a,b,game);const shot=await bowFire(t,a,b);assert.equal(shot.before-shot.after,1);paid=bowAmount(a);
+    hit=f.trace.hits.find(h=>h.getCombatMethod()===CombatFactory.RANGED_COMBAT);assert.ok(hit);
+  }else{
+    await tEquip(a,core.ItemIdentifiers.DRAGON_DAGGER);nmPlace(game,a,b);const trace=nmTrace(t,a,b);
+    ghastTurns=true;await nmAttack(a,b);nmEngineUntil(()=>trace.queued.length>0);a.getCombat().reset();ghastTurns=false;
+    hit=trace.queued[0];assert.ok(hit);assert.equal(hit.getCombatMethod().type(),core.CombatType.MELEE);assert.ok(hit.getTotalDamage()>0);
+  }
+  assert.equal(queue.hasPendingHit(hit),true,'actual native producer created this exact queued hit before departure');
+  const leaving=direction==='incoming'?b:a,generation=queue.getIncomingGeneration();await nmForfeit(leaving,game);
+  assert.equal(C.matches.has(leaving),false);assert.equal(game.phase,'combat','same-side actual ally retains the instance');assert.equal(queue.hasPendingHit(hit),false);
+  if(direction==='incoming')assert.ok(queue.getIncomingGeneration()>generation);
+  hold.mock.restore();for(const p of[a,b])p.setNeedsPlacement(false);process(C.now());tick(15);
+  assert.equal(b.getHitpoints(),hp);assert.equal(f.trace.resolved.includes(hit),false);if(style==='bow')assert.equal(bowAmount(a),paid);
+});
+mTest('C native entry and supplied rejoin preserve self and null-source damage while clearing pre-entry incoming work',async t=>{
+  cInstall();const a=actor(true),b=actor(true);ruleStats(a,99);ruleStats(b,99);channel(a);channel(b);const game=await negotiate(a,b,2,1,{magic:2});
+  const queue=a.getCombat().getHitQueue(),generation=queue.getIncomingGeneration(),foreign=new core.PendingHit(b,a,CombatFactory.MELEE_COMBAT,{damage:7,rollAccuracy:false,experience:false,delay:500});
+  CombatFactory.addPendingHit(foreign);queue.addPendingDamage([new core.HitDamage(1,core.HitMask.RED).setSource(a),new core.HitDamage(2,core.HitMask.RED)]);
+  assert.equal(queue.hasPendingHit(foreign),true);await join(a);await join(b);assert.equal(queue.hasPendingHit(foreign),false);assert.ok(queue.getIncomingGeneration()>generation);assert.equal(queue.getQueuedDamage(),3);
+  magicTurns=true;tick();assert.equal(a.getHitpoints(),96);completePreparation(game);mPosition(game,a,b);game.eliminate(a);game.jailed.add(a);
+  const next=new core.PendingHit(b,a,CombatFactory.MELEE_COMBAT,{damage:7,rollAccuracy:false,experience:false,delay:500});CombatFactory.addPendingHit(next);
+  const at=game.area.at(game.layout.jails[game.members.get(a)]);a.moveTo(at);a.setNeedsPlacement(false);const again=queue.getIncomingGeneration();
+  assert.equal(game.rejoin(a),true,'explicit jail checkpoint exercises existing real rejoin owner, not natural death');assert.equal(queue.hasPendingHit(next),false);assert.ok(queue.getIncomingGeneration()>again);
+});
+mTest('C joined staging utility is refused and actual departure restores ordinary NORMAL utility scope',async t=>{
+  const f=await cGame(t,{prepare:false}),I=core.ItemIdentifiers;give(f.a,I.BONES,'B-staging-bones');const meta=core.CacheDefinitions.getSpellByName('Bones to Bananas');assert.ok(meta);
+  const before=mInventory(f.a),bananas=f.a.getInventory().getAmount(I.BANANA);await nativeButton(f.a,meta.widgetId,1,65535,meta.itemId);assert.deepEqual(mInventory(f.a),before);
+  f.game.area.leave(f.a,false);assert.equal(C.matches.has(f.a),false);await nativeButton(f.a,meta.widgetId,1,65535,meta.itemId);
+  assert.ok(f.a.getInventory().getAmount(I.BANANA)>bananas);assert.equal(f.trace.commits.length,1,'ordinary utility outside the restriction owner remains a real paid cast');
+});
+mTest('C canonical non-cast Configure is not classified as a spell by the mode2 refusal',async t=>{
+  const f=await cGame(t),meta=bUtilityMetadata('Varrock Teleport');
+  const before=mInventory(f.a),messages=messagesOf(f.a),disabled=[],real=PM.emitSpellDisabled.bind(PM);
+  t.mock.method(PM,'emitSpellDisabled',(...args)=>{disabled.push(args);return real(...args);});
+  await nativeButton(f.a,meta.widgetId,10,65535,meta.itemId);
+  assert.equal(disabled.length,0,'Configure reaches canonical non-cast branch, not the permission hook');
+  assert.ok(messages.some(m=>/diary/i.test(m)),'canonical diary prerequisite retains its own refusal rather than a mode2 cast refusal');
+  assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
+});
+for(const melee of[0,1])for(const ranged of[0,1])for(const magic of[1,2,3,4])mTest(`C native style copy ${melee}/${ranged}/${magic}`,async t=>{
+  cInstall();const a=actor(true),b=actor(true);channel(a);channel(b);const scripts=scriptCalls(a),lines=messagesOf(a),titles=[];
+  const sender=a.getPacketSender(),real=sender.sendString.bind(sender);t.mock.method(sender,'sendString',(text,uid)=>{if(uid===C.uid('clanwars_setup:title'))titles.push(text);return real(text,uid);});
+  const game=await negotiate(a,b,2,1,{magic,melee,ranged});await join(a);await join(b);
+  const terms=scripts.filter(x=>x[0]===554).map(x=>x[2]);assert.ok(terms.length>=2);for(const text of terms){
+    if(melee===1&&ranged===1&&magic===4)assert.match(text,/No new player combat/);else assert.doesNotMatch(text,/No new player combat/);
+    if(magic===1){assert.match(text,/34 finite combat spells/);assert.match(text,/manual Confuse, Weaken, Curse, Bind, Snare, Entangle, Vulnerability, Enfeeble and Stun/);}
+    if(magic===2){assert.match(text,/Classic F2P/);assert.match(text,/cast manually/);assert.match(text,/utilities, autocasts/);assert.match(text,/still-queued outgoing/);}
+    if(magic===3){assert.match(text,/Binding.only/);assert.match(text,/utility spells/);assert.match(text,/still-queued outgoing/);}
+  }
+  if(melee===1&&magic===2){assert.ok(titles.some(x=>/manual Classic F2P/.test(x)));assert.equal(lines.some(x=>/No new player combat is enabled/.test(x)),false);}
+  if(melee===1&&magic===3){assert.ok(titles.some(x=>/binding spells/.test(x)));assert.equal(lines.some(x=>/No new player combat is enabled/.test(x)),false);}
+  assert.equal(game.rules.magic,magic);
+});
+
+const C_CLASSIC_UTILITY_REFUSAL='Classic F2P combat supports the 12 elemental strike, bolt and blast spells, Confuse, Weaken, Curse and Bind; other casts, including utilities, are unavailable in this battle.';
+function cObserveTimerWrites(t,p){
+  const calls=[],timers=p.getTimers();
+  for(const method of['register','registerTimerKey','registers','extendOrRegister','addOrSet','cancel']){
+    const real=timers[method].bind(timers);t.mock.method(timers,method,(...args)=>{calls.push({method,args});return real(...args);});
+  }
+  return calls;
+}
+for(const key of Object.keys(C_CURSES))mTest('C '+key+' new healthy opposing target is independent of a drained first target',async t=>{
+  let other;const f=await cGame(t,{beforeEntry:async(a,b)=>{other=actor(true);ruleStats(other,99);assert.equal(FC.join(other,b.getUsername(),false),true);await join(other);}});
+  const first=await mFire(f,key);bStop(f);mLand(f,first);const before=cStats(f.b);assert.equal(before[C_CURSES[key]],95);
+  mPosition(f.game,f.a,other);tick(10);const next={...f,b:other,trace:mTrace(t,f.a,other)},hit=await mFire(next,key);bStop(next);mLand(next,hit);
+  assert.equal(other.getSkillManager().getCurrentLevel(core.Skill[C_CURSES[key]]),95);assert.deepEqual(cStats(f.b),before);
+});
+for(const key of Object.keys(C_CURSES))mTest('C '+key+' applied stat drain is not reversed by departure queue disposal',async t=>{
+  const f=await cGame(t),hit=await mFire(f,key);bStop(f);mLand(f,hit);const stats=cStats(f.b);assert.equal(stats[C_CURSES[key]],95);
+  f.game.area.leave(f.a,false);assert.deepEqual(cStats(f.b),stats,'queue helper does not roll back an already-applied stat effect');
+});
+for(const key of[core.TimerKey.FREEZE,core.TimerKey.FREEZE_IMMUNITY])mTest('C Bind preexisting '+key+' refuses sack and tome before payment',async t=>{
+  const f=await cGame(t,{rules:{freezing:1}}),I=core.ItemIdentifiers;await mEquip(f.a,I.TOME_OF_WATER_EMPTY_,core.Equipment.SHIELD_SLOT);const book=mTome(f.a,'water',2);
+  f.a.getInventory().resetItems();f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));f.b.getTimers().registers(key,40);
+  const before=mInventory(f.a);await mSpell(f.a,f.b,'BIND');tick(8);assert.deepEqual(mInventory(f.a),before);assert.equal(book.Common.read(book.item).charges,2);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
+});
+for(const refusal of['low-level','wrong-book','missing-resources','unsupported-loadout','staging','same-team'])mTest('C actual '+refusal+' refuses canonical curse before spend',async t=>{
+  const f=await cGame(t,{prepare:refusal!=='staging'}),I=core.ItemIdentifiers;
+  if(refusal==='low-level')f.a.getSkillManager().setCurrentLevel(core.Skill.MAGIC,2,false);
+  if(refusal==='wrong-book')f.a.setSpellbook(core.MagicSpellbook.ANCIENT);
+  if(refusal==='missing-resources')f.a.getInventory().resetItems();
+  if(refusal==='unsupported-loadout')await mEquip(f.a,I.IBANS_STAFF);
+  if(refusal==='same-team')f.game.fighters.set(f.b,f.game.fighters.get(f.a));
+  const before=resources(f.a),stats=cStats(f.b),hp=f.b.getHitpoints();await mSpell(f.a,f.b,'CONFUSE');tick(8);assert.deepEqual(resources(f.a),before);assert.deepEqual(cStats(f.b),stats);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);assert.equal(f.b.getHitpoints(),hp);
+});
+mTest('C real lethal paid Fire Blast reaches canonical safe jail rejoin and a fresh Bind',async t=>{
+  const f=await cGame(t);f.b.setHitpoints(1);const hit=await mFire(f,'FIRE_BLAST');bStop(f);mLand(f,hit);
+  for(let n=0;n<60&&!f.game.jailed.has(f.b);n++)tick();assert.equal(f.game.jailed.has(f.b),true);await jailExit(f.b,f.game);assert.equal(f.game.fighters.has(f.b),true);
+  tick(40);mPosition(f.game,f.a,f.b);const trace=fTrace(t,f.b),fresh=await mFire(f,'BIND');bStop(f);assert.notEqual(fresh,hit);mLand(f,fresh);bTimerOracle(trace,8);
+});
+
+for(const row of B_ROWS.filter(row=>row[0]==='BIND'))for(const pieces of[0,1,2,3])mTest(`C ${row[0]} Swampbark commit${pieces} survives impact gear swap`,async t=>{
+  const f=await cGame(t);bMetadata(row);bArmour(f.a,pieces);const trace=fTrace(t,f.b),hit=await mFire(f,row[0]);bStop(f);
+  const context=hit.getSpellContext();assert.equal(context.data.get('standard-bindings:hold-ticks'),row[6]+pieces*2);
+  bArmour(f.a,3-pieces);mLand(f,hit);assert.equal(hit.getSpellContext(),context);bTimerOracle(trace,row[6]+pieces*2);
+});
+for(const row of B_ROWS.filter(row=>row[0]==='BIND'))for(const element of['water','earth'])mTest(`C ${row[0]} actual ${element} tome final-charge context and real roll`,async t=>{
+  const f=await cGame(t),I=core.ItemIdentifiers;bMetadata(row);await mEquip(f.a,I['TOME_OF_'+element.toUpperCase()+'_EMPTY_'],core.Equipment.SHIELD_SLOT);const book=mTome(f.a,element,1);
+  const rune=I[element.toUpperCase()+'_RUNE'];f.a.getInventory().deleteNumber(rune,f.a.getInventory().getAmount(rune));
+  const rolls=[],emit=PM.emitCustomEvent.bind(PM);magicRollControl=null;
+  t.mock.method(PM,'emitCustomEvent',(name,event)=>{
+    const own=name==='combat:magic-attack-roll-modify'&&event.attacker===f.a&&event.target===f.b,before=own?event.attackRoll:null;
+    const result=emit(name,event);if(own)rolls.push({before,after:event.attackRoll,context:event.context});return result;
+  });
+  const hit=await mFire(f,row[0]);bStop(f);assert.ok(rolls.length>0,'native hit actually computes the canonical attack roll without forceAccuracy');
+  for(const roll of rolls){assert.equal(roll.after,element==='water'?Math.floor(roll.before*1.2):roll.before);assert.equal(roll.context,hit.getSpellContext());}
+  assert.equal(book.Common.read(book.item).charges,element==='water'?0:1);
+  assert.equal(hit.getSpellContext().data.get(require('../plugins/items/elementaltomes/Combat.ElementalTomes').CAST_DATA_KEY).element,element);
+  f.a.getEquipment().getItems()[core.Equipment.SHIELD_SLOT]=new core.Item(-1);mLand(f,hit);assert.equal(book.Common.read(book.item).charges,element==='water'?0:1);
+});
+
+mTest('C preview and shared cooldown preserve one actual paid native curse',async t=>{
+  const f=await cGame(t),spell=core.CombatSpells.CONFUSE,before=mInventory(f.a);await mSpell(f.a,f.b,'CONFUSE');
+  assert.equal(spell.canCast(f.a,false),true);assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);
+  const hit=await mFire(f,'CONFUSE');bStop(f);const paid=mInventory(f.a);await mSpell(f.a,f.b,'WEAKEN');
+  assert.equal(f.a.getCombat().getCastSpell(),core.CombatSpells.WEAKEN,'real manual selection precedes negative payment check');
+  assert.equal(core.CombatSpells.WEAKEN.canCast(f.a,true),false,'shared same-tick delay refuses a second cost');assert.deepEqual(mInventory(f.a),paid);assert.equal(f.trace.commits.length,1);bStop(f);mLand(f,hit);assert.equal(f.trace.commits.length,1);
+});
+for(const name of['WIND_STRIKE','FIRE_BLAST'])mTest('C elemental '+name+' spends ordinary runes and cannot use an entangle sack',async t=>{
+  const f=await cGame(t),I=core.ItemIdentifiers;f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));const cost=mCost(f.a,core.CombatSpells[name]),before=mAmounts(f.a,cost),hit=await mFire(f,name);bStop(f);mPaid(f.a,cost,before);assert.equal(f.a.getInventory().getAmount(I.BLIGHTED_ENTANGLE_SACK),2);mLand(f,hit);
+});
+
+// E: native Standard six-effect extension. Same guarded cInstall; no loader/listener replay.
+const E_ROWS=[{"key":"CONFUSE","label":"Confuse","itemId":3274,"widgetId":14286860,"level":3,"runes":[{"id":559,"amount":1},{"id":555,"amount":3},{"id":557,"amount":2}],"baseXP":13,"splashXP":13},{"key":"WEAKEN","label":"Weaken","itemId":3278,"widgetId":14286866,"level":11,"runes":[{"id":559,"amount":1},{"id":555,"amount":3},{"id":557,"amount":2}],"baseXP":21,"splashXP":21},{"key":"CURSE","label":"Curse","itemId":3282,"widgetId":14286870,"level":19,"runes":[{"id":559,"amount":1},{"id":555,"amount":2},{"id":557,"amount":3}],"baseXP":29,"splashXP":29},{"key":"BIND","label":"Bind","itemId":3283,"widgetId":14286871,"level":20,"runes":[{"id":561,"amount":2},{"id":555,"amount":3},{"id":557,"amount":3}],"baseXP":31,"splashXP":30},{"key":"SNARE","label":"Snare","itemId":3300,"widgetId":14286890,"level":50,"runes":[{"id":561,"amount":3},{"id":555,"amount":4},{"id":557,"amount":4}],"baseXP":61,"splashXP":60},{"key":"ENTANGLE","label":"Entangle","itemId":3322,"widgetId":14286917,"level":79,"runes":[{"id":561,"amount":4},{"id":555,"amount":5},{"id":557,"amount":5}],"baseXP":89,"splashXP":70}];
+const E_BINDINGS={BIND:8,SNARE:16,ENTANGLE:24};
+async function eGame(t,options={}){cInstall();return mGame(t,{...options,rules:{magic:1,...options.rules}});}
+mTest('E Standard native Confuse commits pays queues and applies the canonical effect',async t=>{
+  const f=await eGame(t),row=E_ROWS.find(x=>x.key==='CONFUSE');cMetadata(row);assert.equal(f.game.rules.magic,1);assert.equal(f.game.phase,'combat');assert.equal(f.game.fighters.get(f.a)===f.game.fighters.get(f.b),false);
+  const stats=cStats(f.b),hp=f.b.getHitpoints(),cost=mCost(f.a,core.CombatSpells.CONFUSE),amounts=mAmounts(f.a,cost);assert.equal(stats.ATTACK,99);assert.ok(cost.every(([id,n])=>f.a.getInventory().getAmount(id)>=n));
+  const hit=await mFire(f,'CONFUSE');bStop(f);mPaid(f.a,cost,amounts);assert.equal(hit.getTotalDamage(),0);assert.deepEqual(cStats(f.b),stats);mLand(f,hit);cAssertStats(f.b,stats,'ATTACK',5);assert.equal(f.b.getHitpoints(),hp);
+});
+for(const row of E_ROWS)for(const accurate of[true,false])for(const freezing of[0,1])mTest(`E ${row.key} native accurate${accurate} Ignore${freezing}`,async t=>{
+  const f=await eGame(t,{rules:{freezing}});cMetadata(row);const stats=cStats(f.b),hp=f.b.getHitpoints(),calls=[],splashes=[];
+  magicRollControl=e=>{if(e.attacker===f.a&&e.target===f.b){e.forceAccurate=accurate;e.forceMaxHit=true;}};
+  // Supplied branch at the real PendingHit's damage event, never a natural probability claim.
+  if(!accurate)magicDamageControl=e=>{if(e.attacker===f.a&&e.target===f.b){e.accurate=false;e.damage.setDamage(0);splashes.push(e);}};
+  const sm=f.a.getSkillManager(),add=sm.addExperience.bind(sm);t.mock.method(sm,'addExperience',(...args)=>{calls.push(args);return add(...args);});
+  const trace=fTrace(t,f.b),cost=mCost(f.a,core.CombatSpells[row.key]),before=mAmounts(f.a,cost),hit=await mFire(f,row.key);bStop(f);mPaid(f.a,cost,before);
+  if(!accurate){assert.equal(splashes.length,1);assert.equal(splashes[0].hit,hit);assert.equal(splashes[0].damage,hit.getHits()[0]);assert.equal(splashes[0].combatType,core.CombatType.MAGIC);assert.equal(splashes[0].accurate,false);assert.equal(splashes[0].damage.getDamage(),0);}
+  assert.equal(hit.isAccurate(),accurate);const damage=hit.getTotalDamage();if(C_CURSES[row.key]||row.key==='BIND'||!accurate)assert.equal(damage,0);else assert.ok(damage>0);
+  assert.deepEqual(cStats(f.b),stats,'queued effects are not applied early');mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-damage);
+  cAssertStats(f.b,stats,accurate?C_CURSES[row.key]:null,5);
+  assert.ok(calls.some(x=>x[0]===core.Skill.MAGIC&&x[1]===(accurate?row.baseXP:row.splashXP)),'canonical base XP producer is forwarded with independent pinned amount');
+  if(E_BINDINGS[row.key]&&accurate&&!freezing)bTimerOracle(trace,E_BINDINGS[row.key]);else fNoNewEffects(trace);
+  assert.equal(trace.attempts.length,E_BINDINGS[row.key]&&accurate?1:0);
+});
+for(const key of Object.keys(C_CURSES))mTest('E '+key+' native lowered partial full recovery and impact race remain canonical',async t=>{
+  const f=await eGame(t),skill=core.Skill[C_CURSES[key]],sm=f.b.getSkillManager(),first=await mFire(f,key);bStop(f);mLand(f,first);assert.equal(sm.getCurrentLevel(skill),95);
+  tick(10);const paid=mInventory(f.a),xp=f.a.getSkillManager().getExperience(core.Skill.MAGIC),n=f.trace.commits.length,lines=messagesOf(f.a);
+  await mSpell(f.a,f.b,key);tick(8);bStop(f);assert.deepEqual(mInventory(f.a),paid);assert.equal(f.trace.commits.length,n);assert.equal(f.a.getSkillManager().getExperience(core.Skill.MAGIC),xp);assert.ok(lines.some(x=>/weakened/.test(x)));
+  sm.setCurrentLevel(skill,98,false);await mSpell(f.a,f.b,key);tick(8);bStop(f);assert.deepEqual(mInventory(f.a),paid);assert.equal(f.trace.commits.length,n);
+  sm.setCurrentLevel(skill,99,false);tick(10);const second=await mFire(f,key);bStop(f);assert.notEqual(second,first);sm.setCurrentLevel(skill,98,false);mLand(f,second);assert.equal(sm.getCurrentLevel(skill),98,'intervening drain prevents stacking at impact');
+  const other=key==='CONFUSE'?'WEAKEN':'CONFUSE',otherSkill=core.Skill[C_CURSES[other]];sm.setCurrentLevel(otherSkill,99,false);tick(10);const independent=await mFire(f,other);bStop(f);mLand(f,independent);assert.equal(sm.getCurrentLevel(otherSkill),95);
+});
+for(const key of Object.keys(C_CURSES))for(const tome of[false,true])mTest(`E ${key} committed effect floor99 ${tome?'water final-charge swap':'base'} and independent resources`,async t=>{
+  const f=await eGame(t),I=core.ItemIdentifiers;let book;
+  if(tome){await mEquip(f.a,I.TOME_OF_WATER_EMPTY_,core.Equipment.SHIELD_SLOT);book=mTome(f.a,'water',1);f.a.getInventory().deleteNumber(I.WATER_RUNE,f.a.getInventory().getAmount(I.WATER_RUNE));}
+  const cost=mCost(f.a,core.CombatSpells[key]),amounts=mAmounts(f.a,cost),stats=cStats(f.b),hp=f.b.getHitpoints(),hit=await mFire(f,key);bStop(f);mPaid(f.a,cost,amounts);assert.equal(hit.isAccurate(),true);assert.equal(hit.getTotalDamage(),0);assert.deepEqual(cStats(f.b),stats);
+  const context=hit.getSpellContext();if(tome){assert.equal(book.Common.read(book.item).charges,0);assert.equal(context.data.get(require('../plugins/items/elementaltomes/Combat.ElementalTomes').CAST_DATA_KEY).element,'water');f.a.getEquipment().getItems()[core.Equipment.SHIELD_SLOT]=new core.Item(-1);}
+  mLand(f,hit);assert.equal(hit.getSpellContext(),context);cAssertStats(f.b,stats,C_CURSES[key],tome?7:5);assert.equal(f.b.getHitpoints(),hp);if(tome)assert.equal(book.Common.read(book.item).charges,0);
+});
+for(const key of Object.keys(C_CURSES))mTest('E '+key+' unforced real forwarded Water tome attack roll uses committed final charge',async t=>{
+  const f=await eGame(t),I=core.ItemIdentifiers;await mEquip(f.a,I.TOME_OF_WATER_EMPTY_,core.Equipment.SHIELD_SLOT);const book=mTome(f.a,'water',1),rolls=[],emit=PM.emitCustomEvent.bind(PM);magicRollControl=null;
+  t.mock.method(PM,'emitCustomEvent',(name,event)=>{const own=name==='combat:magic-attack-roll-modify'&&event.attacker===f.a&&event.target===f.b,before=own?event.attackRoll:null;const result=emit(name,event);if(own)rolls.push({before,after:event.attackRoll,context:event.context});return result;});
+  const hit=await mFire(f,key);bStop(f);assert.ok(rolls.length>0);for(const roll of rolls){assert.equal(roll.after,Math.floor(roll.before*1.2));assert.equal(roll.context,hit.getSpellContext());}assert.equal(book.Common.read(book.item).charges,0);mLand(f,hit);
+  // This separate real-roll observation does not assert a random effect outcome.
+});
+for(const key of['CONFUSE','WEAKEN','CURSE','BIND','SNARE','ENTANGLE'])mTest('E '+key+' pouch staff and sack funding stay canonical and independent',async t=>{
+  const f=await eGame(t),I=core.ItemIdentifiers,Pouch=require('../plugins/items/runepouch/Common.RunePouch');await mEquip(f.a,I.STAFF_OF_WATER);give(f.a,I.RUNE_POUCH,'C-pouch');
+  const rune=E_BINDINGS[key]!=null?I.NATURE_RUNE:I.BODY_RUNE;Pouch.setSlots(f.a,[{id:rune,amount:10},null,null,null]);f.a.getInventory().deleteNumber(rune,f.a.getInventory().getAmount(rune));f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));
+  const water=f.a.getInventory().getAmount(I.WATER_RUNE),earth=f.a.getInventory().getAmount(I.EARTH_RUNE),cost=core.CombatSpells[key].itemsRequired(f.a),runeCost=cost.find(x=>x.getId()===rune).getAmount(),earthCost=cost.find(x=>x.getId()===I.EARTH_RUNE).getAmount(),hit=await mFire(f,key);bStop(f);
+  if(E_BINDINGS[key]!=null){assert.equal(f.a.getInventory().getAmount(I.BLIGHTED_ENTANGLE_SACK),1);assert.equal(Pouch.amountOf(f.a,rune),10);assert.equal(f.a.getInventory().getAmount(I.EARTH_RUNE),earth);}
+  else{assert.equal(f.a.getInventory().getAmount(I.BLIGHTED_ENTANGLE_SACK),2);assert.equal(Pouch.amountOf(f.a,rune),10-runeCost);assert.equal(f.a.getInventory().getAmount(I.EARTH_RUNE),earth-earthCost);}
+  assert.equal(f.a.getInventory().getAmount(I.WATER_RUNE),water);mLand(f,hit);
+});
+for(const row of B_ROWS)for(const pieces of[0,1,2,3])mTest(`E ${row[0]} Swampbark commit${pieces} survives impact gear swap`,async t=>{
+  const f=await eGame(t);bMetadata(row);bArmour(f.a,pieces);const trace=fTrace(t,f.b),hit=await mFire(f,row[0]);bStop(f);
+  const context=hit.getSpellContext();assert.equal(context.data.get('standard-bindings:hold-ticks'),row[6]+pieces*2);
+  bArmour(f.a,3-pieces);mLand(f,hit);assert.equal(hit.getSpellContext(),context);bTimerOracle(trace,row[6]+pieces*2);
+});
+for(const row of B_ROWS)for(const tome of[false,true])mTest(`E ${row[0]} Clan Wars one entangle sack${tome?' plus Water tome':''}`,async t=>{
+  const f=await eGame(t),I=core.ItemIdentifiers;bMetadata(row);
+  assert.equal(f.a.getArea().getName(),'Clan Wars');
+  let book;if(tome){await mEquip(f.a,I.TOME_OF_WATER_EMPTY_,core.Equipment.SHIELD_SLOT);book=mTome(f.a,'water',2);}
+  f.a.getInventory().resetItems();f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));
+  const hit=await mFire(f,row[0]);bStop(f);assert.equal(f.a.getInventory().getAmount(I.BLIGHTED_ENTANGLE_SACK),1);
+  for(const rune of[I.WATER_RUNE,I.EARTH_RUNE,I.NATURE_RUNE])assert.equal(f.a.getInventory().getAmount(rune),0);
+  if(book)assert.equal(book.Common.read(book.item).charges,1);mLand(f,hit);assert.equal(f.a.getInventory().getAmount(I.BLIGHTED_ENTANGLE_SACK),1);
+});
+for(const row of B_ROWS)for(const element of['water','earth'])mTest(`E ${row[0]} actual ${element} tome final-charge context and real roll`,async t=>{
+  const f=await eGame(t),I=core.ItemIdentifiers;bMetadata(row);await mEquip(f.a,I['TOME_OF_'+element.toUpperCase()+'_EMPTY_'],core.Equipment.SHIELD_SLOT);const book=mTome(f.a,element,1);
+  const rune=I[element.toUpperCase()+'_RUNE'];f.a.getInventory().deleteNumber(rune,f.a.getInventory().getAmount(rune));
+  const rolls=[],emit=PM.emitCustomEvent.bind(PM);magicRollControl=null;
+  t.mock.method(PM,'emitCustomEvent',(name,event)=>{
+    const own=name==='combat:magic-attack-roll-modify'&&event.attacker===f.a&&event.target===f.b,before=own?event.attackRoll:null;
+    const result=emit(name,event);if(own)rolls.push({before,after:event.attackRoll,context:event.context});return result;
+  });
+  const hit=await mFire(f,row[0]);bStop(f);assert.ok(rolls.length>0,'native hit actually computes the canonical attack roll without forceAccuracy');
+  for(const roll of rolls){assert.equal(roll.after,element==='water'?Math.floor(roll.before*1.2):roll.before);assert.equal(roll.context,hit.getSpellContext());}
+  assert.equal(book.Common.read(book.item).charges,element==='water'?0:1);
+  assert.equal(hit.getSpellContext().data.get(require('../plugins/items/elementaltomes/Combat.ElementalTomes').CAST_DATA_KEY).element,element);
+  f.a.getEquipment().getItems()[core.Equipment.SHIELD_SLOT]=new core.Item(-1);mLand(f,hit);assert.equal(book.Common.read(book.item).charges,element==='water'?0:1);
+});
+for(const row of B_ROWS)mTest(`E ${row[0]} inventory pouch and staff canonical payment`,async t=>{
+  const f=await eGame(t),I=core.ItemIdentifiers,Pouch=require('../plugins/items/runepouch/Common.RunePouch');bMetadata(row);
+  await mEquip(f.a,I.STAFF_OF_WATER);give(f.a,I.RUNE_POUCH,'B-pouch');Pouch.setSlots(f.a,[{id:I.NATURE_RUNE,amount:10},null,null,null]);
+  f.a.getInventory().deleteNumber(I.NATURE_RUNE,f.a.getInventory().getAmount(I.NATURE_RUNE));const water=f.a.getInventory().getAmount(I.WATER_RUNE),earth=f.a.getInventory().getAmount(I.EARTH_RUNE);
+  const costs=core.CombatSpells[row[0]].itemsRequired(f.a),natureCost=costs.find(x=>x.getId()===I.NATURE_RUNE).getAmount(),earthCost=costs.find(x=>x.getId()===I.EARTH_RUNE).getAmount();
+  const hit=await mFire(f,row[0]);bStop(f);assert.equal(Pouch.amountOf(f.a,I.NATURE_RUNE),10-natureCost);assert.equal(f.a.getInventory().getAmount(I.WATER_RUNE),water);assert.equal(f.a.getInventory().getAmount(I.EARTH_RUNE),earth-earthCost);mLand(f,hit);
+});
+for(const row of B_ROWS)for(const key of[core.TimerKey.FREEZE,core.TimerKey.FREEZE_IMMUNITY])mTest(`E ${row[0]} preexisting ${key} refuses sacks and Water tome before spend`,async t=>{
+  const f=await eGame(t,{rules:{freezing:1}}),I=core.ItemIdentifiers;bMetadata(row);await mEquip(f.a,I.TOME_OF_WATER_EMPTY_,core.Equipment.SHIELD_SLOT);const book=mTome(f.a,'water',2);
+  f.a.getInventory().resetItems();f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));f.b.getTimers().registers(key,40);
+  const before=mInventory(f.a);await mSpell(f.a,f.b,row[0]);tick(8);assert.deepEqual(mInventory(f.a),before);assert.equal(book.Common.read(book.item).charges,2);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
+});
+for(const spell of['CURSE','BIND'])for(const boundary of['victim-leave','caster-leave','victim-logout','caster-logout','channel','finish','caster-death'])mTest('E paid native '+spell+' discarded at '+boundary+' without refund or new hold',async t=>{
+  const f=await eGame(t),cost=mCost(f.a,core.CombatSpells[spell]),before=mAmounts(f.a,cost),hit=await mFire(f,spell);bStop(f);mPaid(f.a,cost,before);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);const paid=mInventory(f.a),hp=f.b.getHitpoints(),stats=cStats(f.b);
+  if(boundary==='victim-leave')f.game.area.leave(f.b,false);else if(boundary==='caster-leave')f.game.area.leave(f.a,false);
+  else if(boundary==='victim-logout')PM.emitPlayerLogout({player:f.b,username:f.b.getUsername()});else if(boundary==='caster-logout')PM.emitPlayerLogout({player:f.a,username:f.a.getUsername()});
+  else if(boundary==='channel')FC.leave(f.a,true);else if(boundary==='finish')f.game.finish(null);
+  else{f.a.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(f.a.getHitpoints(),core.HitMask.RED).setSource(f.b)]);tick();}
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);for(const p of[f.a,f.b])p.setNeedsPlacement(false);tick(35);
+  assert.deepEqual(mInventory(f.a),paid);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.b.getTimers().has(core.TimerKey.FREEZE),false);assert.equal(f.trace.resolved.includes(hit),false);assert.deepEqual(cStats(f.b),stats);
+});
+mTest('E actual paid mapped Forfeit cancels the exact native pending hit',async t=>{
+  const f=await eGame(t),hit=await mFire(f,'BIND');bStop(f);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);const paid=mInventory(f.a),hp=f.b.getHitpoints(),stats=cStats(f.b);
+  magicTurns=false;await nmForfeit(f.a,f.game);magicTurns=true;for(const p of[f.a,f.b])p.setNeedsPlacement(false);tick(12);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);assert.equal(f.trace.resolved.includes(hit),false);assert.deepEqual(cStats(f.b),stats);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.b.getTimers().has(core.TimerKey.FREEZE),false);assert.deepEqual(mInventory(f.a),paid);
+});
+for(const style of['bow','melee'])for(const direction of['incoming','outgoing'])mTest(`E ${style} ${direction} native queued hit is disposed at mapped Forfeit`,async t=>{
+  let ally;const f=await eGame(t,{rules:{ranged:0},beforeEntry:async(a,b)=>{
+    ally=actor(true);ruleStats(ally,99);assert.equal(FC.join(ally,(direction==='incoming'?b:a).getUsername(),false),true);await join(ally);
+  }}),{a,b,game}=f,queue=b.getCombat().getHitQueue();
+  magicTurns=false;magicRollControl=null;const process=queue.process.bind(queue),hold=t.mock.method(queue,'process',()=>{}),hp=b.getHitpoints();
+  let hit,paid;
+  if(style==='bow'){
+    await bowEquip(a);bowPlace(a,b,game);const shot=await bowFire(t,a,b);assert.equal(shot.before-shot.after,1);paid=bowAmount(a);
+    hit=f.trace.hits.find(h=>h.getCombatMethod()===CombatFactory.RANGED_COMBAT);assert.ok(hit);
+  }else{
+    await tEquip(a,core.ItemIdentifiers.DRAGON_DAGGER);nmPlace(game,a,b);const trace=nmTrace(t,a,b);
+    ghastTurns=true;await nmAttack(a,b);nmEngineUntil(()=>trace.queued.length>0);a.getCombat().reset();ghastTurns=false;
+    hit=trace.queued[0];assert.ok(hit);assert.equal(hit.getCombatMethod().type(),core.CombatType.MELEE);assert.ok(hit.getTotalDamage()>0);
+  }
+  assert.equal(queue.hasPendingHit(hit),true,'actual native producer created this exact queued hit before departure');
+  const leaving=direction==='incoming'?b:a,generation=queue.getIncomingGeneration();await nmForfeit(leaving,game);
+  assert.equal(C.matches.has(leaving),false);assert.equal(game.phase,'combat','same-side actual ally retains the instance');assert.equal(queue.hasPendingHit(hit),false);
+  if(direction==='incoming')assert.ok(queue.getIncomingGeneration()>generation);
+  hold.mock.restore();for(const p of[a,b])p.setNeedsPlacement(false);process(C.now());tick(15);
+  assert.equal(b.getHitpoints(),hp);assert.equal(f.trace.resolved.includes(hit),false);if(style==='bow')assert.equal(bowAmount(a),paid);
+});
+mTest('E native entry and supplied rejoin preserve self and null-source damage while clearing pre-entry incoming work',async t=>{
+  cInstall();const a=actor(true),b=actor(true);ruleStats(a,99);ruleStats(b,99);channel(a);channel(b);const game=await negotiate(a,b,2,1,{magic:1});
+  const queue=a.getCombat().getHitQueue(),generation=queue.getIncomingGeneration(),foreign=new core.PendingHit(b,a,CombatFactory.MELEE_COMBAT,{damage:7,rollAccuracy:false,experience:false,delay:500});
+  CombatFactory.addPendingHit(foreign);queue.addPendingDamage([new core.HitDamage(1,core.HitMask.RED).setSource(a),new core.HitDamage(2,core.HitMask.RED)]);
+  assert.equal(queue.hasPendingHit(foreign),true);await join(a);await join(b);assert.equal(queue.hasPendingHit(foreign),false);assert.ok(queue.getIncomingGeneration()>generation);assert.equal(queue.getQueuedDamage(),3);
+  magicTurns=true;tick();assert.equal(a.getHitpoints(),96);completePreparation(game);mPosition(game,a,b);game.eliminate(a);game.jailed.add(a);
+  const next=new core.PendingHit(b,a,CombatFactory.MELEE_COMBAT,{damage:7,rollAccuracy:false,experience:false,delay:500});CombatFactory.addPendingHit(next);
+  const at=game.area.at(game.layout.jails[game.members.get(a)]);a.moveTo(at);a.setNeedsPlacement(false);const again=queue.getIncomingGeneration();
+  assert.equal(game.rejoin(a),true,'explicit jail checkpoint exercises existing real rejoin owner, not natural death');assert.equal(queue.hasPendingHit(next),false);assert.ok(queue.getIncomingGeneration()>again);
+});
+for(const key of Object.keys(C_CURSES))mTest('E '+key+' new healthy opposing target is independent of a drained first target',async t=>{
+  let other;const f=await eGame(t,{beforeEntry:async(a,b)=>{other=actor(true);ruleStats(other,99);assert.equal(FC.join(other,b.getUsername(),false),true);await join(other);}});
+  const first=await mFire(f,key);bStop(f);mLand(f,first);const before=cStats(f.b);assert.equal(before[C_CURSES[key]],95);
+  mPosition(f.game,f.a,other);tick(10);const next={...f,b:other,trace:mTrace(t,f.a,other)},hit=await mFire(next,key);bStop(next);mLand(next,hit);
+  assert.equal(other.getSkillManager().getCurrentLevel(core.Skill[C_CURSES[key]]),95);assert.deepEqual(cStats(f.b),before);
+});
+for(const key of Object.keys(C_CURSES))mTest('E '+key+' applied stat drain is not reversed by departure queue disposal',async t=>{
+  const f=await eGame(t),hit=await mFire(f,key);bStop(f);mLand(f,hit);const stats=cStats(f.b);assert.equal(stats[C_CURSES[key]],95);
+  f.game.area.leave(f.a,false);assert.deepEqual(cStats(f.b),stats,'queue helper does not roll back an already-applied stat effect');
+});
+for(const refusal of['low-level','wrong-book','missing-resources','unsupported-loadout','staging','same-team'])mTest('E actual '+refusal+' refuses canonical curse before spend',async t=>{
+  const f=await eGame(t,{prepare:refusal!=='staging'}),I=core.ItemIdentifiers;
+  if(refusal==='low-level')f.a.getSkillManager().setCurrentLevel(core.Skill.MAGIC,2,false);
+  if(refusal==='wrong-book')f.a.setSpellbook(core.MagicSpellbook.ANCIENT);
+  if(refusal==='missing-resources')f.a.getInventory().resetItems();
+  if(refusal==='unsupported-loadout')await mEquip(f.a,I.ANCIENT_STAFF);
+  if(refusal==='same-team')f.game.fighters.set(f.b,f.game.fighters.get(f.a));
+  const before=resources(f.a),stats=cStats(f.b),hp=f.b.getHitpoints();await mSpell(f.a,f.b,'CONFUSE');tick(8);assert.deepEqual(resources(f.a),before);assert.deepEqual(cStats(f.b),stats);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);assert.equal(f.b.getHitpoints(),hp);
+});
+mTest('E real lethal paid Fire Blast reaches canonical safe jail rejoin and a fresh Bind',async t=>{
+  const f=await eGame(t);f.b.setHitpoints(1);const hit=await mFire(f,'FIRE_BLAST');bStop(f);mLand(f,hit);
+  for(let n=0;n<60&&!f.game.jailed.has(f.b);n++)tick();assert.equal(f.game.jailed.has(f.b),true);await jailExit(f.b,f.game);assert.equal(f.game.fighters.has(f.b),true);
+  tick(40);mPosition(f.game,f.a,f.b);const trace=fTrace(t,f.b),fresh=await mFire(f,'BIND');bStop(f);assert.notEqual(fresh,hit);mLand(f,fresh);bTimerOracle(trace,8);
+});
+
+mTest('E preview and shared cooldown preserve one actual paid native curse',async t=>{
+  const f=await eGame(t),spell=core.CombatSpells.CONFUSE,before=mInventory(f.a);await mSpell(f.a,f.b,'CONFUSE');
+  assert.equal(spell.canCast(f.a,false),true);assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);
+  const hit=await mFire(f,'CONFUSE');bStop(f);const paid=mInventory(f.a);await mSpell(f.a,f.b,'WEAKEN');
+  assert.equal(f.a.getCombat().getCastSpell(),core.CombatSpells.WEAKEN,'real manual selection precedes negative payment check');
+  assert.equal(core.CombatSpells.WEAKEN.canCast(f.a,true),false,'shared same-tick delay refuses a second cost');assert.deepEqual(mInventory(f.a),paid);assert.equal(f.trace.commits.length,1);bStop(f);mLand(f,hit);assert.equal(f.trace.commits.length,1);
+});
+mTest('E inactive remembered autocast with a native dagger Attack remains melee',async t=>{
+  const f=await eGame(t);await cAutocast(f.a);await tEquip(f.a,core.ItemIdentifiers.DRAGON_DAGGER);assert.equal(f.a.getCombat().getAutocastSpell(),core.CombatSpells.WIND_STRIKE);assert.equal(core.Autocasting.isActive(f.a),false);
+  const before=mInventory(f.a),trace=nmTrace(t,f.a,f.b);nmPlace(f.game,f.a,f.b);ghastTurns=true;await cNativeAttack(f.a,f.b);nmEngineUntil(()=>trace.queued.length>0);f.a.getCombat().reset();ghastTurns=false;
+  assert.ok(trace.queued.some(h=>h.getCombatMethod().type()===core.CombatType.MELEE));assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);
+});
+for(const row of E_ROWS)mTest('E '+row.key+' native hand effect overrides elemental autocast then real paid elemental resumes',async t=>{
+  const f=await eGame(t);cMetadata(row);await cAutocast(f.a);const spell=core.CombatSpells[row.key],cost=mCost(f.a,spell),before=mAmounts(f.a,cost),mind=f.a.getInventory().getAmount(core.ItemIdentifiers.MIND_RUNE),hit=await mFire(f,row.key);mPaid(f.a,cost,before);
+  assert.equal(core.Autocasting.isActive(f.a),true);mLand(f,hit);for(let i=0;i<30&&!f.trace.commits.some(x=>x.spell===core.CombatSpells.WIND_STRIKE);i++)tick();bStop(f);
+  const resumed=f.trace.commits.find(x=>x.spell===core.CombatSpells.WIND_STRIKE);assert.ok(resumed,'actual engine resumes permitted elemental autocast after hand effect');assert.ok(f.trace.hits.some(h=>h.getSpell()===core.CombatSpells.WIND_STRIKE&&h.getSpellContext()===resumed.context));
+  assert.equal(f.trace.commits.filter(x=>x.spell===spell).length,1,'effect is a manual override, not a new autocast family');assert.equal(f.a.getInventory().getAmount(core.ItemIdentifiers.MIND_RUNE),mind-f.trace.commits.filter(x=>x.spell===core.CombatSpells.WIND_STRIKE).length);
+});
+for(const key of['TELEBLOCK','CRUMBLE_UNDEAD'])mTest('E omitted '+key+' stays deferred before payment',async t=>{
+  const f=await eGame(t),before=resources(f.a),stats=cStats(f.b);await mSpell(f.a,f.b,key,key==='TELEBLOCK'?'Tele Block':null);tick(10);bStop(f);assert.deepEqual(resources(f.a),before);assert.deepEqual(cStats(f.b),stats);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
+});
+mTest('E initial Standard disclosures reach both captains before selection',async t=>{
+  cInstall();const a=actor(true),b=actor(true);channel(a);channel(b);const lines=[messagesOf(a),messagesOf(b)],Magic=require('../plugins/minigames/clanwars/Magic.ClanWars');await challenge(a,b);await challenge(b,a);
+  const session=C.negotiations.get(a);assert.equal(session.rules.magic,4);assert.equal(session.revision,0);assert.equal(session.accepted.size,0);
+  for(const messages of lines){assert.ok(messages.some(x=>/Standard combat spells, manual Classic F2P/.test(x)));assert.ok(messages.includes(Magic.SUPPORT));assert.ok(messages.includes(Magic.ACCOUNTING));assert.match(Magic.SUPPORT,/34 finite combat spells/);for(const x of[Magic.CLASSIC_SUPPORT,Magic.CLASSIC_ACCOUNTING,Magic.BINDING_SUPPORT,Magic.BINDING_ACCOUNTING])assert.ok(messages.includes(x));}
+});
+for(const staging of[false,true])mTest('E Standard NORMAL native utility remains paid with six effects enabled staging'+staging,async t=>{
+  const f=await eGame(t,{prepare:!staging}),I=core.ItemIdentifiers;give(f.a,I.BONES,'E-bones');const meta=bUtilityMetadata('Bones to Bananas'),spell=core.EffectSpells.BONES_TO_BANANAS,seen=[],real=PM.emitSpellDisabled.bind(PM),cost=mCost(f.a,spell),before=mAmounts(f.a,cost),bananas=f.a.getInventory().getAmount(I.BANANA);
+  t.mock.method(PM,'emitSpellDisabled',(...args)=>{const result=real(...args);if(args[0]===f.a)seen.push({args,result});return result;});await nativeButton(f.a,meta.widgetId,1,65535,meta.itemId);
+  assert.ok(seen.some(x=>x.args[1]===core.MagicSpellbook.NORMAL&&x.args[3]===spell&&x.result===null));mPaid(f.a,cost,before);assert.ok(f.a.getInventory().getAmount(I.BANANA)>bananas);assert.equal(f.trace.commits.length,1);assert.equal(f.trace.commits[0].spell,spell);assert.equal(f.trace.hits.length,0);
+});
+
+for(const staging of[false,true])mTest('E Standard separate canonical alchemy hook remains paid staging'+staging,async t=>{
+  const f=await eGame(t,{prepare:!staging}),I=core.ItemIdentifiers;give(f.a,I.BRONZE_DAGGER,'E-alchemy');const inventory=f.a.getInventory(),slot=inventory.getSlotForItemId(I.BRONZE_DAGGER),item=inventory.getItems()[slot],value=item.getDefinition().getHighAlchValue(),meta=bUtilityMetadata('High Level Alchemy'),seen=[],events=[],xp=[],real=PM.emitSpellDisabled.bind(PM),emit=PM.emitCustomEvent.bind(PM),sm=f.a.getSkillManager(),add=sm.addExperiences.bind(sm);assert.ok(value>0);
+  t.mock.method(PM,'emitSpellDisabled',(...args)=>{const result=real(...args);if(args[0]===f.a)seen.push({args,result});return result;});t.mock.method(PM,'emitCustomEvent',(name,event)=>{if(event.player===f.a)events.push({name,event});return emit(name,event);});t.mock.method(sm,'addExperiences',(...args)=>{xp.push(args);return add(...args);});
+  const nature=inventory.getAmount(I.NATURE_RUNE),fire=inventory.getAmount(I.FIRE_RUNE),coins=inventory.getAmount(I.COINS),count=inventory.getAmount(I.BRONZE_DAGGER);await f.a.connection.dispatch([{type:'widget_target',sourceWidgetId:meta.widgetId,sourceItemId:meta.itemId,sourceSlot:-1,targetWidgetId:core.CacheDefinitions.getComponentId('inventory:items'),targetSlot:slot,targetItemId:I.BRONZE_DAGGER}]);f.a.connection.processTurnPackets();tick(8);
+  assert.ok(seen.some(x=>x.args[1]===core.MagicSpellbook.NORMAL&&x.args[3]===core.EffectSpells.HIGH_ALCHEMY&&x.result===null));assert.equal(inventory.getAmount(I.NATURE_RUNE),nature-1);assert.equal(inventory.getAmount(I.FIRE_RUNE),fire-5);assert.equal(inventory.getAmount(I.COINS),coins+value);assert.equal(inventory.getAmount(I.BRONZE_DAGGER),count-1);assert.ok(events.some(x=>x.name==='magic:item-spell-cast'&&x.event.spell===core.EffectSpells.HIGH_ALCHEMY));assert.ok(xp.some(x=>x[0]===core.Skill.MAGIC&&x[1]===65));assert.equal(f.trace.hits.length,0);
+});
+
+test('leaving a battle alive restores the player at Ferox like the free-for-all portal; the winner too', async () => {
+  const a=actor(),b=actor();channel(a);channel(b);
+  const glade=await negotiate(a,b,null,1,null,2);await join(a);await join(b);
+  const skills=p=>p.getSkillManager();
+  for(const p of [a,b]) {
+    skills(p).setCurrentLevels(core.Skill.HITPOINTS,3).setCurrentLevels(core.Skill.PRAYER,0).setCurrentLevels(core.Skill.ATTACK,1);
+    p.setPoisonDamage(6);p.setRunEnergy(10);
+  }
+  const restored=p=>{
+    for(const skill of [core.Skill.HITPOINTS,core.Skill.PRAYER,core.Skill.ATTACK])
+      assert.equal(skills(p).getCurrentLevel(skill),skills(p).getMaxLevel(skill),'the level is back to its base level');
+    assert.equal(p.getPoisonDamage(),0);assert.equal(p.getRunEnergy(),100);
+  };
+  const side=glade.members.get(a),xy=side===0?[3422,4996]:[3421,5051];
+  a.moveTo(glade.area.at([xy[0]+1,xy[1]+(side===0?2:-1),0]));tick(2);
+  assert.equal(skills(a).getCurrentLevel(core.Skill.HITPOINTS),3,'nothing restores inside the battle');
+  await layoutObjectInput(a,glade,side===0?'clanwars_exitportal_elfwood_s':'clanwars_exitportal_elfwood_n',xy,'Forfeit');
+  lobby(a);restored(a);
+  assert.equal(skills(b).getCurrentLevel(core.Skill.HITPOINTS),3,'the remaining fighter is not restored yet');
+  core.World.processCycle=glade.starts;tick();
+  assert.equal(glade.phase,'over','an empty side ends the battle');
+  lobby(b);restored(b);
+});
+
+// H: three higher stat curses. Same canonical cInstall/mGame/native producers; no new loader.
+const H_ROWS=[{"key":"VULNERABILITY","label":"Vulnerability","itemId":3317,"widgetId":14286911,"level":66,"runes":[{"id":566,"amount":1},{"id":555,"amount":5},{"id":557,"amount":5}],"baseXP":76,"splashXP":76},{"key":"ENFEEBLE","label":"Enfeeble","itemId":3320,"widgetId":14286914,"level":73,"runes":[{"id":566,"amount":1},{"id":555,"amount":8},{"id":557,"amount":8}],"baseXP":83,"splashXP":83},{"key":"STUN","label":"Stun","itemId":3324,"widgetId":14286918,"level":80,"runes":[{"id":566,"amount":1},{"id":555,"amount":12},{"id":557,"amount":12}],"baseXP":90,"splashXP":90}];
+const H_CURSES={VULNERABILITY:"DEFENCE",ENFEEBLE:"STRENGTH",STUN:"ATTACK"};
+for(const key of['WIND_STRIKE','CONFUSE'])mTest('H baseline paid Standard '+key+' positive control',async t=>{
+  const f=await eGame(t);assert.equal(f.game.rules.magic,1);assert.equal(f.game.phase,'combat');assert.notEqual(f.game.fighters.get(f.a),f.game.fighters.get(f.b));
+  const spell=core.CombatSpells[key],cost=mCost(f.a,spell),amounts=mAmounts(f.a,cost);assert.ok(cost.every(([id,n])=>f.a.getInventory().getAmount(id)>=n));
+  const stats=cStats(f.b),hp=f.b.getHitpoints(),hit=await mFire(f,key);bStop(f);mPaid(f.a,cost,amounts);assert.equal(f.trace.commits.length,1);mLand(f,hit);
+  if(key==='CONFUSE'){cAssertStats(f.b,stats,'ATTACK',5);assert.equal(f.b.getHitpoints(),hp);}else assert.ok(f.b.getHitpoints()<hp);
+});
+mTest('H native Standard Vulnerability commits pays queues and applies canonical higher drain',async t=>{
+  const f=await eGame(t),row=H_ROWS[0];cMetadata(row);assert.equal(f.game.rules.magic,1);assert.equal(f.game.phase,'combat');assert.notEqual(f.game.fighters.get(f.a),f.game.fighters.get(f.b));
+  const stats=cStats(f.b),hp=f.b.getHitpoints(),spell=core.CombatSpells.VULNERABILITY,cost=mCost(f.a,spell),amounts=mAmounts(f.a,cost);assert.equal(stats.DEFENCE,99);assert.ok(cost.every(([id,n])=>f.a.getInventory().getAmount(id)>=n));
+  const hit=await mFire(f,'VULNERABILITY');bStop(f);mPaid(f.a,cost,amounts);assert.equal(hit.getTotalDamage(),0);assert.deepEqual(cStats(f.b),stats);mLand(f,hit);cAssertStats(f.b,stats,'DEFENCE',10);assert.equal(f.b.getHitpoints(),hp);
+});
+for(const row of H_ROWS)for(const accurate of[true,false])for(const freezing of[0,1])mTest(`H ${row.key} native accurate${accurate} Ignore${freezing}`,async t=>{
+  const f=await eGame(t,{rules:{freezing}});cMetadata(row);const stats=cStats(f.b),hp=f.b.getHitpoints(),calls=[],splashes=[];
+  magicRollControl=e=>{if(e.attacker===f.a&&e.target===f.b){e.forceAccurate=accurate;e.forceMaxHit=true;}};
+  // Supplied branch at the real PendingHit's damage event, never a natural probability claim.
+  if(!accurate)magicDamageControl=e=>{if(e.attacker===f.a&&e.target===f.b){e.accurate=false;e.damage.setDamage(0);splashes.push(e);}};
+  const sm=f.a.getSkillManager(),add=sm.addExperience.bind(sm);t.mock.method(sm,'addExperience',(...args)=>{calls.push(args);return add(...args);});
+  const trace=fTrace(t,f.b),cost=mCost(f.a,core.CombatSpells[row.key]),before=mAmounts(f.a,cost),hit=await mFire(f,row.key);bStop(f);mPaid(f.a,cost,before);
+  if(!accurate){assert.equal(splashes.length,1);assert.equal(splashes[0].hit,hit);assert.equal(splashes[0].damage,hit.getHits()[0]);assert.equal(splashes[0].combatType,core.CombatType.MAGIC);assert.equal(splashes[0].accurate,false);assert.equal(splashes[0].damage.getDamage(),0);}
+  assert.equal(hit.isAccurate(),accurate);const damage=hit.getTotalDamage();assert.equal(damage,0);
+  assert.deepEqual(cStats(f.b),stats,'queued effects are not applied early');mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-damage);
+  cAssertStats(f.b,stats,accurate?H_CURSES[row.key]:null,10);
+  assert.ok(calls.some(x=>x[0]===core.Skill.MAGIC&&x[1]===(accurate?row.baseXP:row.splashXP)),'canonical base XP producer is forwarded with independent pinned amount');
+  fNoNewEffects(trace);
+  assert.equal(trace.attempts.length,0);
+});
+for(const key of Object.keys(H_CURSES))mTest('H '+key+' native lowered partial full recovery and impact race remain canonical',async t=>{
+  const f=await eGame(t),skill=core.Skill[H_CURSES[key]],sm=f.b.getSkillManager(),first=await mFire(f,key);bStop(f);mLand(f,first);assert.equal(sm.getCurrentLevel(skill),90);
+  tick(10);const paid=mInventory(f.a),xp=f.a.getSkillManager().getExperience(core.Skill.MAGIC),n=f.trace.commits.length,lines=messagesOf(f.a);
+  await mSpell(f.a,f.b,key);tick(8);bStop(f);assert.deepEqual(mInventory(f.a),paid);assert.equal(f.trace.commits.length,n);assert.equal(f.a.getSkillManager().getExperience(core.Skill.MAGIC),xp);assert.ok(lines.some(x=>/weakened/.test(x)));
+  sm.setCurrentLevel(skill,98,false);await mSpell(f.a,f.b,key);tick(8);bStop(f);assert.deepEqual(mInventory(f.a),paid);assert.equal(f.trace.commits.length,n);
+  sm.setCurrentLevel(skill,99,false);tick(10);const second=await mFire(f,key);bStop(f);assert.notEqual(second,first);sm.setCurrentLevel(skill,98,false);mLand(f,second);assert.equal(sm.getCurrentLevel(skill),98,'intervening drain prevents stacking at impact');
+  const other=key==='STUN'?'ENFEEBLE':'STUN',otherSkill=core.Skill[H_CURSES[other]];sm.setCurrentLevel(otherSkill,99,false);tick(10);const independent=await mFire(f,other);bStop(f);mLand(f,independent);assert.equal(sm.getCurrentLevel(otherSkill),90);
+});
+for(const key of Object.keys(H_CURSES))for(const tome of[false,true])mTest(`H ${key} committed effect floor99 ${tome?'water final-charge swap':'base'} and independent resources`,async t=>{
+  const f=await eGame(t),I=core.ItemIdentifiers;let book;
+  if(tome){await mEquip(f.a,I.TOME_OF_WATER_EMPTY_,core.Equipment.SHIELD_SLOT);book=mTome(f.a,'water',1);f.a.getInventory().deleteNumber(I.WATER_RUNE,f.a.getInventory().getAmount(I.WATER_RUNE));}
+  const cost=mCost(f.a,core.CombatSpells[key]),amounts=mAmounts(f.a,cost),stats=cStats(f.b),hp=f.b.getHitpoints(),hit=await mFire(f,key);bStop(f);mPaid(f.a,cost,amounts);assert.equal(hit.isAccurate(),true);assert.equal(hit.getTotalDamage(),0);assert.deepEqual(cStats(f.b),stats);
+  const context=hit.getSpellContext();if(tome){assert.equal(book.Common.read(book.item).charges,0);assert.equal(context.data.get(require('../plugins/items/elementaltomes/Combat.ElementalTomes').CAST_DATA_KEY).element,'water');f.a.getEquipment().getItems()[core.Equipment.SHIELD_SLOT]=new core.Item(-1);}
+  mLand(f,hit);assert.equal(hit.getSpellContext(),context);cAssertStats(f.b,stats,H_CURSES[key],tome?15:10);assert.equal(f.b.getHitpoints(),hp);if(tome)assert.equal(book.Common.read(book.item).charges,0);
+});
+for(const key of Object.keys(H_CURSES))for(const element of['water','earth'])mTest('H '+key+' unforced real forwarded '+element+' tome attack roll uses committed final charge',async t=>{
+  const f=await eGame(t),I=core.ItemIdentifiers;await mEquip(f.a,I['TOME_OF_'+element.toUpperCase()+'_EMPTY_'],core.Equipment.SHIELD_SLOT);const book=mTome(f.a,element,1),rolls=[],emit=PM.emitCustomEvent.bind(PM);magicRollControl=null;
+  t.mock.method(PM,'emitCustomEvent',(name,event)=>{const own=name==='combat:magic-attack-roll-modify'&&event.attacker===f.a&&event.target===f.b,before=own?event.attackRoll:null;const result=emit(name,event);if(own)rolls.push({before,after:event.attackRoll,context:event.context});return result;});
+  const hit=await mFire(f,key);bStop(f);assert.ok(rolls.length>0);for(const roll of rolls){assert.equal(roll.after,element==='water'?Math.floor(roll.before*1.2):roll.before);assert.equal(roll.context,hit.getSpellContext());}assert.equal(book.Common.read(book.item).charges,element==='water'?0:1);mLand(f,hit);
+  // This separate real-roll observation does not assert a random effect outcome.
+});
+for(const key of Object.keys(H_CURSES))mTest('H '+key+' new healthy opposing target is independent of a drained first target',async t=>{
+  let other;const f=await eGame(t,{beforeEntry:async(a,b)=>{other=actor(true);ruleStats(other,99);assert.equal(FC.join(other,b.getUsername(),false),true);await join(other);}});
+  const first=await mFire(f,key);bStop(f);mLand(f,first);const before=cStats(f.b);assert.equal(before[H_CURSES[key]],90);
+  mPosition(f.game,f.a,other);tick(10);const next={...f,b:other,trace:mTrace(t,f.a,other)},hit=await mFire(next,key);bStop(next);mLand(next,hit);
+  assert.equal(other.getSkillManager().getCurrentLevel(core.Skill[H_CURSES[key]]),90);assert.deepEqual(cStats(f.b),before);
+});
+for(const key of Object.keys(H_CURSES))mTest('H '+key+' applied stat drain is not reversed by departure queue disposal',async t=>{
+  const f=await eGame(t),hit=await mFire(f,key);bStop(f);mLand(f,hit);const stats=cStats(f.b);assert.equal(stats[H_CURSES[key]],90);
+  f.game.area.leave(f.a,false);assert.deepEqual(cStats(f.b),stats,'queue helper does not roll back an already-applied stat effect');
+});
+for(const row of H_ROWS)mTest('H '+row.key+' native hand effect overrides elemental autocast then real paid elemental resumes',async t=>{
+  const f=await eGame(t);cMetadata(row);await cAutocast(f.a);const spell=core.CombatSpells[row.key],cost=mCost(f.a,spell),before=mAmounts(f.a,cost),mind=f.a.getInventory().getAmount(core.ItemIdentifiers.MIND_RUNE),hit=await mFire(f,row.key);mPaid(f.a,cost,before);
+  assert.equal(core.Autocasting.isActive(f.a),true);mLand(f,hit);for(let i=0;i<30&&!f.trace.commits.some(x=>x.spell===core.CombatSpells.WIND_STRIKE);i++)tick();bStop(f);
+  const resumed=f.trace.commits.find(x=>x.spell===core.CombatSpells.WIND_STRIKE);assert.ok(resumed,'actual engine resumes permitted elemental autocast after hand effect');assert.ok(f.trace.hits.some(h=>h.getSpell()===core.CombatSpells.WIND_STRIKE&&h.getSpellContext()===resumed.context));
+  assert.equal(f.trace.commits.filter(x=>x.spell===spell).length,1,'effect is a manual override, not a new autocast family');assert.equal(f.a.getInventory().getAmount(core.ItemIdentifiers.MIND_RUNE),mind-f.trace.commits.filter(x=>x.spell===core.CombatSpells.WIND_STRIKE).length);
+});
+for(const spell of['VULNERABILITY'])for(const boundary of['victim-leave','caster-leave','victim-logout','caster-logout','channel','finish','caster-death'])mTest('H paid native '+spell+' discarded at '+boundary+' without refund or new hold',async t=>{
+  const f=await eGame(t),cost=mCost(f.a,core.CombatSpells[spell]),before=mAmounts(f.a,cost),hit=await mFire(f,spell);bStop(f);mPaid(f.a,cost,before);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);const paid=mInventory(f.a),hp=f.b.getHitpoints(),stats=cStats(f.b);
+  if(boundary==='victim-leave')f.game.area.leave(f.b,false);else if(boundary==='caster-leave')f.game.area.leave(f.a,false);
+  else if(boundary==='victim-logout')PM.emitPlayerLogout({player:f.b,username:f.b.getUsername()});else if(boundary==='caster-logout')PM.emitPlayerLogout({player:f.a,username:f.a.getUsername()});
+  else if(boundary==='channel')FC.leave(f.a,true);else if(boundary==='finish')f.game.finish(null);
+  else{f.a.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(f.a.getHitpoints(),core.HitMask.RED).setSource(f.b)]);tick();}
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);for(const p of[f.a,f.b])p.setNeedsPlacement(false);tick(35);
+  assert.deepEqual(mInventory(f.a),paid);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.b.getTimers().has(core.TimerKey.FREEZE),false);assert.equal(f.trace.resolved.includes(hit),false);assert.deepEqual(cStats(f.b),stats);
+});
+mTest('H actual paid mapped Forfeit cancels the exact native pending hit',async t=>{
+  const f=await eGame(t),hit=await mFire(f,'VULNERABILITY');bStop(f);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);const paid=mInventory(f.a),hp=f.b.getHitpoints(),stats=cStats(f.b);
+  magicTurns=false;await nmForfeit(f.a,f.game);magicTurns=true;for(const p of[f.a,f.b])p.setNeedsPlacement(false);tick(12);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);assert.equal(f.trace.resolved.includes(hit),false);assert.deepEqual(cStats(f.b),stats);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.b.getTimers().has(core.TimerKey.FREEZE),false);assert.deepEqual(mInventory(f.a),paid);
+});
+for(const row of H_ROWS)for(const refusal of['low-level','wrong-book','no-soul','sack-only','unsupported-loadout','staging','same-team','outsider','classic','binding','disabled'])mTest(`H ${row.key} ${refusal} refuses before payment`,async t=>{
+  const magic={classic:2,binding:3,disabled:4}[refusal]??1,f=await eGame(t,{rules:{magic},prepare:refusal!=='staging'}),I=core.ItemIdentifiers;cMetadata(row);
+  if(refusal==='low-level')f.a.getSkillManager().setCurrentLevel(core.Skill.MAGIC,row.level-1,false);
+  if(refusal==='wrong-book')f.a.setSpellbook(core.MagicSpellbook.ANCIENT);
+  if(refusal==='no-soul')f.a.getInventory().deleteNumber(I.SOUL_RUNE,f.a.getInventory().getAmount(I.SOUL_RUNE));
+  if(refusal==='sack-only'){f.a.getInventory().resetItems();f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));}
+  if(refusal==='unsupported-loadout')await mEquip(f.a,I.ANCIENT_STAFF);
+  if(refusal==='same-team')f.game.fighters.set(f.b,f.game.fighters.get(f.a));
+  if(refusal==='outsider'){f.game.area.leave(f.b,false);assert.equal(f.game.phase,'combat');assert.equal(C.matches.get(f.a),f.game);assert.equal(f.game.fighters.has(f.a),true);assert.equal(f.a.getArea(),f.game.area);assert.equal(C.matches.has(f.b),false);assert.equal(f.game.fighters.has(f.b),false);assert.notEqual(f.b.getArea(),f.game.area);assert.equal(f.game.area.canAttack(f.a,f.b,CombatFactory.MAGIC_COMBAT),false,'the actual battle area refuses the departed outsider');}
+  const before=resources(f.a),stats=cStats(f.b),hp=f.b.getHitpoints();await mSpell(f.a,f.b,row.key);tick(8);bStop(f);assert.deepEqual(resources(f.a),before);assert.deepEqual(cStats(f.b),stats);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);assert.equal(f.b.getHitpoints(),hp);
+});
+for(const row of H_ROWS)mTest('H '+row.key+' pouch staff and sacks remain independent',async t=>{
+  const f=await eGame(t),I=core.ItemIdentifiers,Pouch=require('../plugins/items/runepouch/Common.RunePouch');cMetadata(row);await mEquip(f.a,I.STAFF_OF_WATER);give(f.a,I.RUNE_POUCH,'H-pouch');
+  Pouch.setSlots(f.a,[{id:I.SOUL_RUNE,amount:10},null,null,null]);f.a.getInventory().deleteNumber(I.SOUL_RUNE,f.a.getInventory().getAmount(I.SOUL_RUNE));f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));
+  const water=f.a.getInventory().getAmount(I.WATER_RUNE),earth=f.a.getInventory().getAmount(I.EARTH_RUNE),earthCost=core.CombatSpells[row.key].itemsRequired(f.a).find(x=>x.getId()===I.EARTH_RUNE).getAmount(),hit=await mFire(f,row.key);bStop(f);
+  assert.equal(Pouch.amountOf(f.a,I.SOUL_RUNE),9);assert.equal(f.a.getInventory().getAmount(I.BLIGHTED_ENTANGLE_SACK),2);assert.equal(f.a.getInventory().getAmount(I.WATER_RUNE),water);assert.equal(f.a.getInventory().getAmount(I.EARTH_RUNE),earth-earthCost);mLand(f,hit);
+});
+for(const row of H_ROWS)for(const element of['water','earth'])mTest(`H ${row.key} ${element} empty tome preserves ordinary ten percent`,async t=>{
+  const f=await eGame(t),I=core.ItemIdentifiers;await mEquip(f.a,I['TOME_OF_'+element.toUpperCase()+'_EMPTY_'],core.Equipment.SHIELD_SLOT);const book=mTome(f.a,element,0),stats=cStats(f.b),cost=mCost(f.a,core.CombatSpells[row.key]),amounts=mAmounts(f.a,cost),hit=await mFire(f,row.key);bStop(f);mPaid(f.a,cost,amounts);mLand(f,hit);cAssertStats(f.b,stats,H_CURSES[row.key],10);assert.equal(book.Common.read(book.item).charges,0);
+});
+mTest('H preview shared cooldown and full paid native preservation',async t=>{
+  const f=await eGame(t),spell=core.CombatSpells.VULNERABILITY,before=mInventory(f.a);await mSpell(f.a,f.b,'VULNERABILITY');assert.equal(spell.canCast(f.a,false),true);assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);
+  const hit=await mFire(f,'VULNERABILITY');bStop(f);const paid=mInventory(f.a);await mSpell(f.a,f.b,'ENFEEBLE');assert.equal(f.a.getCombat().getCastSpell(),core.CombatSpells.ENFEEBLE);assert.equal(core.CombatSpells.ENFEEBLE.canCast(f.a,true),false);assert.deepEqual(mInventory(f.a),paid);assert.equal(f.trace.commits.length,1);bStop(f);mLand(f,hit);
+});
+mTest('H safe jail rejoin restores canonical stats before a fresh higher curse',async t=>{
+  const f=await eGame(t);f.b.setHitpoints(1);const hit=await mFire(f,'FIRE_BLAST');bStop(f);mLand(f,hit);for(let n=0;n<60&&!f.game.jailed.has(f.b);n++)tick();assert.equal(f.game.jailed.has(f.b),true);await jailExit(f.b,f.game);assert.equal(f.game.fighters.has(f.b),true);tick(40);mPosition(f.game,f.a,f.b);const stats=cStats(f.b),fresh=await mFire(f,'ENFEEBLE');bStop(f);mLand(f,fresh);cAssertStats(f.b,stats,'STRENGTH',10);
+});
+// Capture only the actual F2P spell gate; other F2P world hooks are not installed in this members fixture.
+for(const row of H_ROWS)mTest('H '+row.key+' canonical captured F2P member gate refuses native payment',async t=>{
+  const f=await eGame(t),spell=core.CombatSpells[row.key];assert.equal(spell.isMembers(),true);cMetadata(row);
+  const gates=[],names=['onCanUseItem','onCanEquip','onCanGainExperience','onCanSpawnNpc','onCanStockItem','onCustomEvent','onPrayerDisabled','onCanTeleport','onObjectInteraction','onPlayerProcess'];
+  const api={core,onSpellDisabled:handler=>gates.push(handler)};for(const name of names)api[name]=()=>{};
+  const mode=t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);try{require('../plugins/modes/FreeToPlay.plugin').register(api);}finally{mode.mock.restore();}assert.equal(gates.length,1);
+  const real=PM.emitSpellDisabled.bind(PM),seen=[];t.mock.method(PM,'emitSpellDisabled',(player,book,id,cast)=>{
+    if(player===f.a){const event={player,spellbook:book,spellId:id,spell:cast,disabled:false};gates[0](event);seen.push(event);if(event.disabled)return true;}
+    return real(player,book,id,cast);
+  });
+  const control=await mFire(f,'CONFUSE');bStop(f);mLand(f,control);assert.equal(f.trace.commits.length,1,'actual lower free spell remains paid under same captured gate');
+  f.b.getSkillManager().setCurrentLevel(core.Skill.ATTACK,99,false);assert.deepEqual(cStats(f.b),{ATTACK:99,STRENGTH:99,DEFENCE:99},'controlled full recovery prevents lower Confuse masking Stun membership refusal');
+  const before=resources(f.a),stats=cStats(f.b),n=f.trace.commits.length,lines=messagesOf(f.a);await mSpell(f.a,f.b,row.key);tick(8);bStop(f);
+  assert.ok(seen.some(e=>e.spell===spell&&e.disabled),'actual captured canonical gate refuses higher member object');assert.ok(lines.includes("You need to be on a members' world to cast this spell."));assert.deepEqual(resources(f.a),before);assert.deepEqual(cStats(f.b),stats);assert.equal(f.trace.commits.length,n);
+});
+
+// G: finite manual god family. Literal cache242 identities; canonical producers remain unchanged.
+const G_ROWS=[
+  {key:'SARADOMIN_STRIKE',label:'Saradomin Strike',itemId:3311,widgetId:14286902,staff:2415,cape:2412,skill:'PRAYER',counter:'mage-arena:charge:saradomin',runes:[[556,4],[565,2],[554,2]],hint:2415},
+  {key:'CLAWS_OF_GUTHIX',label:'Claws of Guthix',itemId:3309,widgetId:14286903,staff:2416,cape:2413,skill:'DEFENCE',counter:'mage-arena:charge:guthix',runes:[[556,4],[565,2],[554,1]],hint:8843},
+  {key:'FLAMES_OF_ZAMORAK',label:'Flames of Zamorak',itemId:3310,widgetId:14286904,staff:2417,cape:2414,skill:'MAGIC',counter:'mage-arena:charge:zamorak',runes:[[556,1],[565,2],[554,4]],hint:2417},
+];
+let gInstalled=false;
+function gInstall(){
+  if(gInstalled)return;
+  cInstall();assert.equal(actors.length,0,'actual god hooks register once before G actors');
+  const api=PM.createApi('ClanWarsGCanonicalGods');
+  require('../plugins/minigames/magearena/Spells.MageArena')(api);
+  require('../plugins/minigames/magearena/Statues.MageArena')(api);
+  require('../plugins/combat/ChargeFade.plugin').register(api);
+  gInstalled=true;
+}
+function gUnlock(p){
+  for(const row of G_ROWS)p.setAttribute(row.counter,100);
+  p.setAttribute('mage-arena:cape-received',true);
+}
+function gStats(p){return Object.fromEntries(['ATTACK','STRENGTH','DEFENCE','MAGIC','PRAYER'].map(k=>[k,p.getSkillManager().getCurrentLevel(core.Skill[k])]));}
+function gEffect(before,row,damaging=true){
+  const next={...before};
+  if(damaging)next[row.skill]=Math.max(0,before[row.skill]-(row.skill==='PRAYER'?1:1+Math.floor(before[row.skill]*0.05)));
+  return next;
+}
+function gMetadata(row){
+  const spell=core.CombatSpells[row.key],meta=core.CacheDefinitions.getSpellByName(row.label),params=core.CacheDefinitions.getItem(row.itemId).params;
+  assert.deepEqual(meta,{itemId:row.itemId,widgetId:row.widgetId});
+  assert.equal(core.CacheDefinitions.getSpellName(meta.widgetId,meta.itemId),row.label);
+  assert.equal(spell.getSpellbook(),core.MagicSpellbook.NORMAL);
+  assert.equal(spell.isMembers(),true);assert.equal(spell.levelRequired(),60);
+  assert.equal(spell.baseExperience(),35);assert.equal(spell.splashExperience(),35);assert.equal(spell.maximumHit(),20);
+  // The legacy hint helper includes the equipment UI slot and omits extra Fire606.
+  // Assert those actual hints separately, never call the staff icon a consumed rune.
+  const hints=core.CacheDefinitions.getSpellRequirements(row.label),fire=row.runes.find(x=>x[0]===554)[1],air=row.runes.find(x=>x[0]===556)[1];
+  assert.equal(hints.level,60);assert.deepEqual(hints.runes,[{id:row.hint,amount:1},{id:565,amount:2},{id:556,amount:air}]);
+  assert.equal(params.get(365),row.hint);assert.equal(params.get(606),554);assert.equal(params.get(607),fire);
+  assert.deepEqual(spell.itemsRequired(null).map(x=>[x.getId(),x.getAmount()]).sort((a,b)=>a[0]-b[0]),row.runes.slice().sort((a,b)=>a[0]-b[0]));
+  return meta;
+}
+async function gGame(t,row,options={}){
+  gInstall();const f=await eGame(t,options);gUnlock(f.a);await mEquip(f.a,row.staff);
+  f.b.setHitpoints(99);assert.equal(f.b.getHitpoints(),99);return f;
+}
+async function gFire(f,row,inventoryAudit=true){
+  const cost=mCost(f.a,core.CombatSpells[row.key]),before=mAmounts(f.a,cost),hit=await mFire(f,row.key);
+  bStop(f);if(inventoryAudit)mPaid(f.a,cost,before);return hit;
+}
+async function gChargeButton(a,meta){
+  const {ClientPacketId}=require('../dist/net/protocol/NativeClientPackets'),frame=Buffer.alloc(9);
+  frame[0]=ClientPacketId.IF_BUTTON1;frame.writeInt32BE(meta.widgetId,1);frame.writeUInt16BE(65535,5);frame.writeUInt16BE(meta.itemId,7);
+  await dispatchFrameNow(a,frame);
+}
+async function gCharge(t,f){
+  const a=f.a,meta=core.CacheDefinitions.getSpellByName('Charge'),I=core.ItemIdentifiers;
+  assert.deepEqual(meta,{itemId:3323,widgetId:14286919});
+  const runes=[I.AIR_RUNE,I.FIRE_RUNE,I.BLOOD_RUNE],before=runes.map(id=>a.getInventory().getAmount(id)),lines=messagesOf(a),events=[],xp=[];
+  const emit=PM.emitCustomEvent.bind(PM),add=a.getSkillManager().addExperience.bind(a.getSkillManager());
+  t.mock.method(PM,'emitCustomEvent',(name,e)=>{if(name==='magic:charge-cast'&&e.player===a)events.push({at:C.now(),until:e.until});return emit(name,e);});
+  t.mock.method(a.getSkillManager(),'addExperience',(...args)=>{xp.push(args);return add(...args);});
+  await gChargeButton(a,meta);
+  assert.equal(events.length,1,'native self-cast reaches the actual Charge producer');
+  assert.equal(events[0].until,events[0].at+700);
+  assert.equal(a.getAttribute(core.CombatSpells.CHARGE_UNTIL),events[0].until);
+  assert.ok(lines.includes('<col=ef1020>You feel charged with magic power.</col>'));
+  for(let n=0;n<runes.length;n++)assert.equal(a.getInventory().getAmount(runes[n]),before[n]-3);
+  assert.ok(xp.some(x=>x[0]===core.Skill.MAGIC&&x[1]===180),'actual canonical base XP forwarding');
+  return events[0];
+}
+async function gNpcSpell(a,npc,row){
+  const meta=gMetadata(row),{ClientPacketId}=require('../dist/net/protocol/NativeClientPackets'),frame=Buffer.alloc(12);
+  frame[0]=ClientPacketId.OPNPC_T;frame.writeUInt16BE(npc.getIndex(),1);frame.writeUInt32LE(meta.widgetId,3);
+  frame.writeUInt16BE(65535,7);frame[9]=(meta.itemId+128)&255;frame[10]=meta.itemId>>>8;frame[11]=128;
+  const decoded=decodeClientPackets(frame);assert.equal(decoded.length,1);assert.equal(decoded[0].type,'spell_on_npc');
+  assert.equal(decoded[0].targetIndex,npc.getIndex());assert.equal(decoded[0].spellWidget,meta.widgetId);assert.equal(decoded[0].spellItemId,meta.itemId);
+  await a.connection.dispatch(decoded);a.connection.processTurnPackets();
+}
+for(const row of G_ROWS)mTest('G baseline outside canonical '+row.key+' native paid positive',async t=>{
+  gInstall();const a=actor(true);ruleStats(a,99);a.setSpellbook(core.MagicSpellbook.NORMAL);mFund(a);gUnlock(a);await mEquip(a,row.staff);
+  const at=new core.Location(3222,3218,0);core.RegionManager.loadMapFiles(at.getX(),at.getY());a.moveTo(at);a.setNeedsPlacement(false);AreaManager.process(a);
+  const b=C.api.spawnNpc({id:core.NpcIdentifiers.GUARD,x:3223,y:3218,z:0,wanderRadius:0});fixtureNpcs.add(b);npcQueues();
+  assert.equal(b.isRegistered(),true);assert.equal(b.getId(),core.NpcIdentifiers.GUARD);assert.ok(b.getHitpoints()>0);
+  assert.equal(C.matches.has(a),false);assert.equal(a.getPrivateArea(),null);assert.equal(b.getPrivateArea(),null);
+  magicTurns=true;ghastTurns=true;const f={a,b,trace:mTrace(t,a,b)},cost=mCost(a,core.CombatSpells[row.key]),before=mAmounts(a,cost),hp=b.getHitpoints();
+  tick();await gNpcSpell(a,b,row);assert.equal(a.getCombat().getCastSpell(),core.CombatSpells[row.key]);assert.equal(a.getCombat().getTarget(),b);
+  for(let n=0;n<30&&!f.trace.commits.length;n++)tick();
+  assert.equal(f.trace.commits.length,1,'actual canonical god paid commit outside Clan Wars');
+  assert.equal(f.trace.hits.length,1);const hit=f.trace.hits[0];bStop(f);mPaid(a,cost,before);
+  assert.equal(hit.getSpell(),core.CombatSpells[row.key]);assert.equal(hit.getSpellContext(),f.trace.commits[0].context);
+  mLand(f,hit);assert.ok(hit.getTotalDamage()>0);assert.equal(b.getHitpoints(),Math.max(0,hp-hit.getTotalDamage()));
+});
+for(const key of ['WIND_STRIKE','CONFUSE'])mTest('G baseline paid Standard '+key+' positive control',async t=>{
+  gInstall();const f=await eGame(t),cost=mCost(f.a,core.CombatSpells[key]),before=mAmounts(f.a,cost),stats=cStats(f.b),hp=f.b.getHitpoints(),hit=await mFire(f,key);
+  bStop(f);mPaid(f.a,cost,before);mLand(f,hit);
+  if(key==='CONFUSE'){assert.equal(f.b.getHitpoints(),hp);cAssertStats(f.b,stats,'ATTACK',5);}else assert.ok(f.b.getHitpoints()<hp);
+});
+mTest('G native Standard Saradomin commits pays queues and applies canonical Prayer drain',async t=>{
+  const row=G_ROWS[0],f=await gGame(t,row);gMetadata(row);
+  assert.equal(f.game.rules.magic,1);assert.equal(f.game.phase,'combat');assert.notEqual(f.game.fighters.get(f.a),f.game.fighters.get(f.b));
+  assert.equal(f.a.getAttribute(row.counter),100);assert.equal(f.a.getEquipment().get(core.Equipment.WEAPON_SLOT).getId(),row.staff);
+  const stats=gStats(f.b),hp=f.b.getHitpoints(),cost=mCost(f.a,core.CombatSpells[row.key]);
+  assert.ok(cost.every(([id,n])=>f.a.getInventory().getAmount(id)>=n));assert.equal(stats.PRAYER,99);
+  const before=mAmounts(f.a,cost),hit=await mFire(f,row.key);bStop(f);mPaid(f.a,cost,before);
+  assert.deepEqual(gStats(f.b),stats,'no early queued drain');mLand(f,hit);
+  assert.ok(hit.getTotalDamage()>0);assert.equal(f.b.getHitpoints(),hp-hit.getTotalDamage());assert.deepEqual(gStats(f.b),gEffect(stats,row));
+});
+for(const row of G_ROWS)for(const branch of ['hit','splash','zero'])for(const freezing of [0,1])mTest('G '+row.key+' '+branch+' Ignore'+freezing+' native impact and XP',async t=>{
+  const f=await gGame(t,row,{rules:{freezing}});gMetadata(row);
+  const controlledDamage=[];
+  magicRollControl=e=>{if(e.attacker===f.a&&e.target===f.b){e.forceAccurate=true;e.forceMaxHit=true;}};
+  if(branch!=='hit')magicDamageControl=e=>{if(e.attacker===f.a&&e.target===f.b){
+    if(branch==='splash')e.accurate=false;
+    e.damage.setDamage(0);controlledDamage.push(e);
+  }};
+  const stats=gStats(f.b),hp=f.b.getHitpoints(),calls=[],sm=f.a.getSkillManager(),add=sm.addExperience.bind(sm),trace=fTrace(t,f.b);
+  t.mock.method(sm,'addExperience',(...args)=>{calls.push(args);return add(...args);});
+  const hit=await gFire(f,row);assert.equal(hit.isAccurate(),branch!=='splash');assert.equal(hit.getTotalDamage(),branch==='hit'?20:0);
+  if(branch!=='hit'){
+    assert.equal(controlledDamage.length,1);assert.equal(controlledDamage[0].hit,hit);
+    assert.equal(controlledDamage[0].damage,hit.getHits()[0]);assert.equal(controlledDamage[0].combatType,core.CombatType.MAGIC);
+    assert.equal(controlledDamage[0].accurate,branch!=='splash');assert.equal(controlledDamage[0].damage.getDamage(),0);
+  }
+  assert.deepEqual(gStats(f.b),stats);mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-hit.getTotalDamage());
+  assert.deepEqual(gStats(f.b),gEffect(stats,row,branch==='hit'));assert.ok(calls.some(x=>x[0]===core.Skill.MAGIC&&x[1]===35));
+  fNoNewEffects(trace);assert.equal(trace.attempts.length,0);
+});
+for(const row of G_ROWS)mTest('G '+row.key+' paid repeat damage and nonstacking recovery stay distinct',async t=>{
+  const f=await gGame(t,row),skill=core.Skill[row.skill],sm=f.b.getSkillManager(),start=gStats(f.b),first=await gFire(f,row);mLand(f,first);
+  assert.deepEqual(gStats(f.b),gEffect(start,row));tick(10);
+  const paid=mInventory(f.a),hp=f.b.getHitpoints(),second=await gFire(f,row);assert.notDeepEqual(mInventory(f.a),paid);mLand(f,second);
+  assert.equal(f.b.getHitpoints(),hp-second.getTotalDamage());
+  if(row.skill==='PRAYER')assert.equal(sm.getCurrentLevel(skill),97);else assert.equal(sm.getCurrentLevel(skill),94,'damage repeats without another lowered-stat drain');
+  if(row.skill!=='PRAYER'){sm.setCurrentLevel(skill,98,false);tick(10);const third=await gFire(f,row);mLand(f,third);assert.equal(sm.getCurrentLevel(skill),98,'partial recovery still does not restack');}
+  sm.setCurrentLevel(skill,99,false);tick(10);const fresh=await gFire(f,row);mLand(f,fresh);assert.equal(sm.getCurrentLevel(skill),row.skill==='PRAYER'?98:94);
+});
+for(const row of G_ROWS)mTest('G '+row.key+' impact race and independent new target remain canonical',async t=>{
+  const f=await gGame(t,row),sm=f.b.getSkillManager(),skill=core.Skill[row.skill],hit=await gFire(f,row);
+  sm.setCurrentLevel(skill,row.skill==='PRAYER'?2:94,false);mLand(f,hit);assert.equal(sm.getCurrentLevel(skill),row.skill==='PRAYER'?1:94);
+  const next=await bowAlly(f.b,f.game);next.setHitpoints(99);mPosition(f.game,f.a,next);tick(10);const old=f.b;f.b=next;f.trace=mTrace(t,f.a,next);
+  const stats=gStats(next),fresh=await gFire(f,row);mLand(f,fresh);assert.deepEqual(gStats(next),gEffect(stats,row));
+  assert.equal(old.getSkillManager().getCurrentLevel(skill),row.skill==='PRAYER'?1:94);
+});
+for(const row of G_ROWS)mTest('G '+row.key+' native Charge matching cape twenty thirty and committed hit',async t=>{
+  const f=await gGame(t,row),base=await gFire(f,row);mLand(f,base);assert.equal(base.getTotalDamage(),20);tick(10);
+  await mEquip(f.a,row.cape,core.Equipment.CAPE_SLOT);const charge=await gCharge(t,f);assert.ok(charge.until>C.now());
+  const boosted=await gFire(f,row);assert.equal(boosted.getTotalDamage(),30);
+  // Controlled post-commit removal preserves an already rolled pending hit, not a retail swap-latency claim.
+  f.a.getEquipment().getItems()[core.Equipment.CAPE_SLOT]=new core.Item(-1);
+  mLand(f,boosted);assert.equal(boosted.getTotalDamage(),30);tick(10);
+  const ordinary=await gFire(f,row);mLand(f,ordinary);assert.equal(ordinary.getTotalDamage(),20,'active Charge without matching cape is ordinary');
+});
+for(const row of G_ROWS)mTest('G '+row.key+' native Charge wrong cape expiry and cooldown retain paid boundaries',async t=>{
+  const f=await gGame(t,row),wrong=G_ROWS.find(x=>x.cape!==row.cape);await mEquip(f.a,wrong.cape,core.Equipment.CAPE_SLOT);
+  const charge=await gCharge(t,f),before=mInventory(f.a),meta=core.CacheDefinitions.getSpellByName('Charge'),lines=messagesOf(f.a);
+  await gChargeButton(f.a,meta);assert.deepEqual(mInventory(f.a),before);assert.equal(f.a.getAttribute(core.CombatSpells.CHARGE_UNTIL),charge.until);
+  const unboosted=await gFire(f,row);mLand(f,unboosted);assert.equal(unboosted.getTotalDamage(),20);
+  await mEquip(f.a,row.cape,core.Equipment.CAPE_SLOT);
+  // ChargeFade is a real countdown task: advance every intervening native turn.
+  assert.ok(C.now()<charge.until);tick(charge.until-C.now());assert.equal(C.now(),charge.until);
+  assert.ok(lines.includes('<col=ef1020>Your magical charge fades away.</col>'));
+  const expired=await gFire(f,row);mLand(f,expired);assert.equal(expired.getTotalDamage(),20);
+});
+for(const row of G_ROWS)for(const tome of ['fire','water','earth'])mTest('G '+row.key+' '+tome+' tome supplies without god boost or charge',async t=>{
+  const f=await gGame(t,row),I=core.ItemIdentifiers;await mEquip(f.a,I['TOME_OF_'+tome.toUpperCase()+'_EMPTY_'],core.Equipment.SHIELD_SLOT);const book=mTome(f.a,tome,1);
+  if(tome==='fire')f.a.getInventory().deleteNumber(I.FIRE_RUNE,f.a.getInventory().getAmount(I.FIRE_RUNE));
+  const before=mInventory(f.a),stats=gStats(f.b),hit=await gFire(f,row);assert.equal(hit.getTotalDamage(),20);assert.equal(book.Common.read(book.item).charges,1);
+  if(tome==='fire')assert.equal(f.a.getInventory().getAmount(I.FIRE_RUNE),0);
+  assert.notDeepEqual(mInventory(f.a),before);mLand(f,hit);assert.deepEqual(gStats(f.b),gEffect(stats,row));assert.equal(book.Common.read(book.item).charges,1);
+});
+for(const row of G_ROWS)mTest('G '+row.key+' actual pouch Blood and entangle sacks are independent',async t=>{
+  const f=await gGame(t,row),I=core.ItemIdentifiers,Pouch=require('../plugins/items/runepouch/Common.RunePouch');give(f.a,I.RUNE_POUCH,'G-pouch');
+  Pouch.setSlots(f.a,[{id:I.BLOOD_RUNE,amount:10},null,null,null]);f.a.getInventory().deleteNumber(I.BLOOD_RUNE,f.a.getInventory().getAmount(I.BLOOD_RUNE));f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));
+  const air=f.a.getInventory().getAmount(I.AIR_RUNE),fire=f.a.getInventory().getAmount(I.FIRE_RUNE),hit=await gFire(f,row,false);assert.equal(Pouch.amountOf(f.a,I.BLOOD_RUNE),8);assert.equal(f.a.getInventory().getAmount(I.BLOOD_RUNE),0);assert.equal(f.a.getInventory().getAmount(I.AIR_RUNE),air-row.runes.find(x=>x[0]===556)[1]);assert.equal(f.a.getInventory().getAmount(I.FIRE_RUNE),fire-row.runes.find(x=>x[0]===554)[1]);assert.equal(f.a.getInventory().getAmount(I.BLIGHTED_ENTANGLE_SACK),2);mLand(f,hit);
+});
+for(const row of G_ROWS)for(const refusal of ['locked','low-level','wrong-book','no-blood','sack-only','wrong-god-staff','unarmed','upgraded-staff','shield','staging','same-team','outsider','classic','binding','disabled'])mTest('G '+row.key+' '+refusal+' refuses before native payment',async t=>{
+  const magic={classic:2,binding:3,disabled:4}[refusal]??1,f=await gGame(t,row,{rules:{magic},prepare:refusal!=='staging'}),I=core.ItemIdentifiers;
+  if(refusal==='locked')f.a.setAttribute(row.counter,99);
+  if(refusal==='low-level')f.a.getSkillManager().setCurrentLevel(core.Skill.MAGIC,59,false);
+  if(refusal==='wrong-book')f.a.setSpellbook(core.MagicSpellbook.ANCIENT);
+  if(refusal==='no-blood')f.a.getInventory().deleteNumber(I.BLOOD_RUNE,f.a.getInventory().getAmount(I.BLOOD_RUNE));
+  if(refusal==='sack-only'){f.a.getInventory().resetItems();f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));}
+  if(refusal==='wrong-god-staff')await mEquip(f.a,G_ROWS.find(x=>x.staff!==row.staff).staff);
+  if(refusal==='unarmed')f.a.getEquipment().getItems()[core.Equipment.WEAPON_SLOT]=new core.Item(-1);
+  if(refusal==='upgraded-staff')await mEquip(f.a,I.STAFF_OF_THE_DEAD);
+  if(refusal==='shield')await mEquip(f.a,I.BRONZE_KITESHIELD,core.Equipment.SHIELD_SLOT);
+  if(refusal==='same-team')f.game.fighters.set(f.b,f.game.fighters.get(f.a));
+  if(refusal==='outsider'){f.game.area.leave(f.b,false);assert.equal(C.matches.has(f.b),false);assert.equal(f.game.fighters.has(f.a),true);assert.equal(f.a.getArea(),f.game.area);assert.notEqual(f.b.getArea(),f.game.area);assert.equal(f.game.area.canAttack(f.a,f.b,CombatFactory.MAGIC_COMBAT),false);}
+  const before=resources(f.a),stats=gStats(f.b),hp=f.b.getHitpoints(),lines=messagesOf(f.a);await mSpell(f.a,f.b,row.key);tick(10);bStop(f);
+  assert.deepEqual(resources(f.a),before);assert.deepEqual(gStats(f.b),stats);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);
+  if(refusal==='locked')assert.ok(lines.some(x=>x.includes('100 times inside the Mage Arena')));
+});
+for(const row of G_ROWS)for(const magic of [1,2,3])mTest('G basic staff '+row.staff+' mode'+magic+' ordinary spell policy stays independent',async t=>{
+  const f=await gGame(t,row,{rules:{magic}}),key=magic===3?'BIND':'WIND_STRIKE',before=mInventory(f.a);
+  if(magic===1){const hit=await mFire(f,key);bStop(f);assert.notDeepEqual(mInventory(f.a),before);mLand(f,hit);}
+  else{await mSpell(f.a,f.b,key);tick(10);assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);}
+});
+for(const row of G_ROWS)mTest('G '+row.key+' native remembered upgraded god autocast cannot pay or repeat',async t=>{
+  const f=await gGame(t,row),I=core.ItemIdentifiers,staff={SARADOMIN_STRIKE:I.STAFF_OF_LIGHT,CLAWS_OF_GUTHIX:I.STAFF_OF_BALANCE,FLAMES_OF_ZAMORAK:I.STAFF_OF_THE_DEAD}[row.key],slot={SARADOMIN_STRIKE:52,CLAWS_OF_GUTHIX:19,FLAMES_OF_ZAMORAK:20}[row.key];
+  await mEquip(f.a,staff);await nativeButton(f.a,(593<<16)|23);await nativeButton(f.a,(201<<16)|1,1,slot);
+  assert.equal(f.a.getCombat().getAutocastSpell(),core.CombatSpells[row.key],'ordinary native upgraded selector produced the remembered god spell');
+  await mEquip(f.a,row.staff);assert.equal(f.a.getEquipment().get(core.Equipment.WEAPON_SLOT).getId(),row.staff);
+  assert.equal(f.a.getCombat().getAutocastSpell(),core.CombatSpells[row.key],'ordinary basic-staff swap retains the exact selected god');
+  assert.equal(core.Autocasting.isActive(f.a),true,'retained god autocast is active with the actual basic staff');
+  assert.equal(f.a.getCombat().getCastSpell(),null,'ordinary Attack has no explicit manual cast to bypass the prepromotion guard');
+  const before=mInventory(f.a),hp=f.b.getHitpoints();await cNativeAttack(f.a,f.b);tick(30);bStop(f);
+  assert.deepEqual(mInventory(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);assert.equal(f.b.getHitpoints(),hp);
+  const cost=mCost(f.a,core.CombatSpells[row.key]),amounts=mAmounts(f.a,cost),manual=await mFire(f,row.key);mPaid(f.a,cost,amounts);const paid=mInventory(f.a),n=f.trace.commits.length;mLand(f,manual);tick(30);
+  assert.deepEqual(mInventory(f.a),paid);assert.equal(f.trace.commits.length,n,'the completed manual cast does not turn remembered state into automatic payments');bStop(f);
+  await cAutocast(f.a);const mind=f.a.getInventory().getAmount(I.MIND_RUNE),old=f.trace.commits.length;await cNativeAttack(f.a,f.b);
+  for(let k=0;k<25&&f.trace.commits.length<old+2;k++)tick();bStop(f);
+  assert.ok(f.trace.commits.length>=old+2,'eligible elemental staff still supports actual paid autocast');
+  assert.ok(f.a.getInventory().getAmount(I.MIND_RUNE)<mind);
+});
+for(const row of G_ROWS)for(const specialattacks of [1,2])mTest('G '+row.key+' NoStaff or NoSpecial'+specialattacks+' does not ban ordinary god casts',async t=>{
+  const f=await gGame(t,row,{rules:{specialattacks,melee:1,ranged:1}}),hit=await gFire(f,row);mLand(f,hit);assert.equal(hit.getTotalDamage(),20);assert.equal(f.trace.commits.length,1);
+});
+for(const row of G_ROWS)for(const boundary of ['victim-leave','caster-leave','finish'])mTest('G '+row.key+' paid native queued hit discarded at '+boundary+' without refund',async t=>{
+  const f=await gGame(t,row),hit=await gFire(f,row),paid=mInventory(f.a),hp=f.b.getHitpoints(),stats=gStats(f.b);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);
+  if(boundary==='victim-leave')f.game.area.leave(f.b,false);else if(boundary==='caster-leave')f.game.area.leave(f.a,false);else f.game.finish(null);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);for(const p of [f.a,f.b])p.setNeedsPlacement(false);tick(25);
+  assert.deepEqual(mInventory(f.a),paid);assert.equal(f.trace.resolved.includes(hit),false);
+  if(boundary==='caster-leave'){assert.equal(f.b.getHitpoints(),hp);assert.deepEqual(gStats(f.b),stats);}
+});
+mTest('G canonical paid mapped Forfeit discards pending god hit without refund',async t=>{
+  const f=await gGame(t,G_ROWS[0]),pending=await gFire(f,G_ROWS[0]),paid=mInventory(f.a);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(pending),true);
+  magicTurns=false;await nmForfeit(f.a,f.game);magicTurns=true;
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(pending),false);tick(15);
+  assert.equal(f.trace.resolved.includes(pending),false);assert.deepEqual(mInventory(f.a),paid);
+});
+mTest('G applied drain stays on the participating victim when only its caster leaves',async t=>{
+  const row=G_ROWS[1],f=await gGame(t,row),hit=await gFire(f,row);mLand(f,hit);
+  const paid=mInventory(f.a);assert.equal(f.b.getSkillManager().getCurrentLevel(core.Skill.DEFENCE),94);
+  f.game.area.leave(f.a,false);
+  assert.equal(f.game.phase,'combat');assert.equal(f.game.fighters.has(f.b),true);
+  assert.equal(f.b.getSkillManager().getCurrentLevel(core.Skill.DEFENCE),94,'before any later match-end/Ferox restoration tick');
+  assert.deepEqual(mInventory(f.a),paid);
+});
+mTest('G native Charge actual cape prerequisite refuses before self-cast payment',async t=>{
+  const f=await gGame(t,G_ROWS[0]),meta=core.CacheDefinitions.getSpellByName('Charge');f.a.setAttribute('mage-arena:cape-received',false);
+  const before=resources(f.a),lines=messagesOf(f.a);await gChargeButton(f.a,meta);assert.deepEqual(resources(f.a),before);
+  assert.ok(lines.includes('You need to complete the Mage Arena to cast this spell.'));assert.equal(Number(f.a.getAttribute(core.CombatSpells.CHARGE_UNTIL)??0),0);
+});
+for(const row of G_ROWS)mTest('G '+row.key+' actual captured F2P gate keeps paid free-spell positive and member refusal',async t=>{
+  const f=await gGame(t,row),gates=[],names=['onCanUseItem','onCanEquip','onCanGainExperience','onCanSpawnNpc','onCanStockItem','onCustomEvent','onPrayerDisabled','onCanTeleport','onObjectInteraction','onPlayerProcess'];
+  const api={core,onSpellDisabled:h=>gates.push(h)};for(const name of names)api[name]=()=>{};
+  const mode=t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);try{require('../plugins/modes/FreeToPlay.plugin').register(api);}finally{mode.mock.restore();}assert.equal(gates.length,1);
+  const real=PM.emitSpellDisabled.bind(PM),seen=[];t.mock.method(PM,'emitSpellDisabled',(player,book,id,cast)=>{
+    if(player===f.a){const event={player,spellbook:book,spellId:id,spell:cast,disabled:false};gates[0](event);seen.push(event);if(event.disabled)return true;}
+    return real(player,book,id,cast);
+  });
+  const lower=await mFire(f,'WIND_STRIKE');bStop(f);mLand(f,lower);assert.equal(f.trace.commits.length,1);
+  const before=resources(f.a),stats=gStats(f.b),hp=f.b.getHitpoints(),lines=messagesOf(f.a);await mSpell(f.a,f.b,row.key);tick(10);bStop(f);
+  assert.ok(seen.some(x=>x.spell===core.CombatSpells[row.key]&&x.disabled));assert.ok(lines.includes("You need to be on a members' world to cast this spell."));
+  assert.deepEqual(resources(f.a),before);assert.deepEqual(gStats(f.b),stats);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.trace.commits.length,1);
+});
+
+// Explicit skill checkpoints cover the canonical floor/boost rules; rolls remain controlled.
+mTest('G native paid Saradomin repeats damage at the Prayer zero floor',async t=>{
+  const row=G_ROWS[0],f=await gGame(t,row),sm=f.b.getSkillManager();sm.setCurrentLevel(core.Skill.PRAYER,1,false);
+  for(const expected of [0,0]){
+    const hp=f.b.getHitpoints(),hit=await gFire(f,row);mLand(f,hit);
+    assert.ok(hit.getTotalDamage()>0);assert.equal(f.b.getHitpoints(),hp-hit.getTotalDamage());
+    assert.equal(sm.getCurrentLevel(core.Skill.PRAYER),expected);tick(10);
+  }
+});
+for(const row of G_ROWS.slice(1))mTest('G '+row.key+' native boosted stat118 drains to112',async t=>{
+  const f=await gGame(t,row),sm=f.b.getSkillManager(),skill=core.Skill[row.skill];
+  assert.equal(sm.getMaxLevel(skill),99);sm.setCurrentLevel(skill,118,false);
+  const stats=gStats(f.b),hit=await gFire(f,row);assert.equal(sm.getCurrentLevel(skill),118);mLand(f,hit);
+  assert.equal(sm.getCurrentLevel(skill),112);assert.deepEqual(gStats(f.b),gEffect(stats,row));
+});
+mTest('G native Charge recast is unpaid at99 ticks and paid at100',async t=>{
+  const f=await gGame(t,G_ROWS[0]),charge=await gCharge(t,f),meta=core.CacheDefinitions.getSpellByName('Charge');
+  assert.equal(Number(f.a.getAttribute(core.CombatSpells.CHARGE_NEXT_CAST)),charge.at+100);
+  tick(charge.at+99-C.now());const before=mInventory(f.a);
+  await gChargeButton(f.a,meta);
+  assert.deepEqual(mInventory(f.a),before);assert.equal(Number(f.a.getAttribute(core.CombatSpells.CHARGE_UNTIL)),charge.until);
+  tick(charge.at+100-C.now());assert.equal(C.now(),charge.at+100);
+  const recast=await gCharge(t,f);assert.equal(recast.at,charge.at+100);assert.equal(recast.until,charge.until+100);
+});
+mTest('G real lethal paid Saradomin reaches safe jail rejoin and a fresh god cast',async t=>{
+  const row=G_ROWS[0],f=await gGame(t,row),kept=carriedItems(f.b);f.b.setHitpoints(1);
+  const lethal=await gFire(f,row),paid=mInventory(f.a);mLand(f,lethal);
+  for(let n=0;n<60&&!f.game.jailed.has(f.b);n++)tick();
+  assert.equal(f.game.jailed.has(f.b),true);assert.equal(f.game.fighters.has(f.b),false);
+  assert.deepEqual(carriedItems(f.b),kept);assert.deepEqual(mInventory(f.a),paid);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(lethal),false);
+  await jailExit(f.b,f.game);assert.equal(f.game.fighters.has(f.b),true);
+  assert.deepEqual(carriedItems(f.b),kept);tick(40);mPosition(f.game,f.a,f.b);
+  const stats=gStats(f.b),hp=f.b.getHitpoints(),fresh=await gFire(f,row);mLand(f,fresh);
+  assert.ok(fresh.getTotalDamage()>0);assert.equal(f.b.getHitpoints(),hp-fresh.getTotalDamage());
+  assert.deepEqual(gStats(f.b),gEffect(stats,row));
+});
+
+// S: two staff-specific Standard spells. Current-cache/native routes and actual
+// registered Iban/Slayer producers; charge/accuracy setup is explicitly supplied.
+const S_ROWS=[
+  {key:'IBAN_BLAST',label:'Iban Blast',itemId:3299,widgetId:14286889,staff:1409,slot:47,runes:[[560,1],[554,5]],max:25},
+  {key:'MAGIC_DART',label:'Magic Dart',itemId:4176,widgetId:14286891,staff:4170,slot:18,runes:[[558,4],[560,1]],max:19},
+];
+const S_IBAN_STAVES=[[1409,120],[12658,2500],[33330,120],[33332,2500]];
+function sLevels(p){p.getSkillManager().setMaxLevel(core.Skill.SLAYER,55);p.getSkillManager().setCurrentLevel(core.Skill.SLAYER,55,false);}
+function sItem(p){return p.getEquipment().get(core.Equipment.WEAPON_SLOT);}
+function sCharges(p){return require('../plugins/items/IbansStaff.plugin')._test.chargesOf(sItem(p));}
+function sSetCharges(p,n){require('../plugins/items/IbansStaff.plugin')._test.setCharges(sItem(p),n);assert.equal(sCharges(p),n);}
+function sMetadata(row){
+  const spell=core.CombatSpells[row.key],meta=core.CacheDefinitions.getSpellByName(row.label),params=core.CacheDefinitions.getItem(row.itemId).params;
+  assert.deepEqual(meta,{itemId:row.itemId,widgetId:row.widgetId});assert.equal(core.CacheDefinitions.getSpellName(meta.widgetId,meta.itemId),row.label);
+  assert.equal(spell.getSpellbook(),core.MagicSpellbook.NORMAL);assert.equal(spell.isMembers(),true);assert.equal(spell.levelRequired(),50);assert.equal(spell.baseExperience(),30);
+  assert.equal(core.CacheDefinitions.getEnumValues(1986).get(row.slot),row.itemId,'actual runtime selector enum agrees with reviewed literal');
+  assert.equal(params.get(365),row.key==='IBAN_BLAST'?1409:4170,'equipment hint is not a consumed rune');
+  assert.deepEqual(spell.itemsRequired(null).map(x=>[x.getId(),x.getAmount()]).sort((a,b)=>a[0]-b[0]),row.runes.slice().sort((a,b)=>a[0]-b[0]));
+  const hint=core.CacheDefinitions.getSpellRequirements(row.label);assert.equal(hint.level,50);assert.deepEqual(hint.runes,[{id:row.key==='IBAN_BLAST'?1409:4170,amount:1},{id:560,amount:1},{id:row.key==='IBAN_BLAST'?554:558,amount:row.key==='IBAN_BLAST'?5:4}]);
+  return meta;
+}
+async function sGame(t,row,options={}){
+  const f=await eGame(t,options);sLevels(f.a);await mEquip(f.a,row.staff);sMetadata(row);f.b.setHitpoints(99);return f;
+}
+async function sFire(f,row,audit=true){
+  const cost=mCost(f.a,core.CombatSpells[row.key]),before=mAmounts(f.a,cost),charges=row.key==='IBAN_BLAST'?sCharges(f.a):null;
+  const hit=await mFire(f,row.key);bStop(f);if(audit)mPaid(f.a,cost,before);
+  if(charges!=null)assert.equal(sCharges(f.a),Math.max(0,charges-2),'actual player paid commit debits canonical Iban charges');
+  return hit;
+}
+async function sSelect(f,row){
+  assert.equal(sItem(f.a).getId(),row.staff);sMetadata(row);
+  await nativeButton(f.a,(593<<16)|23);await nativeButton(f.a,(201<<16)|1,1,row.slot);
+  assert.equal(f.a.getCombat().getAutocastSpell(),core.CombatSpells[row.key]);assert.equal(core.Autocasting.isActive(f.a),true);assert.equal(f.a.getCombat().getCastSpell(),null);
+}
+async function sNpcSpell(a,b,row){
+  const meta=sMetadata(row),{ClientPacketId}=require('../dist/net/protocol/NativeClientPackets'),frame=Buffer.alloc(12);
+  frame[0]=ClientPacketId.OPNPC_T;frame.writeUInt16BE(b.getIndex(),1);frame.writeUInt32LE(meta.widgetId,3);frame.writeUInt16BE(65535,7);
+  frame[9]=(meta.itemId+128)&255;frame[10]=meta.itemId>>>8;frame[11]=128;
+  const decoded=decodeClientPackets(frame);assert.equal(decoded.length,1);assert.equal(decoded[0].type,'spell_on_npc');assert.equal(decoded[0].targetIndex,b.getIndex());assert.equal(decoded[0].spellWidget,meta.widgetId);assert.equal(decoded[0].spellItemId,meta.itemId);
+  await a.connection.dispatch(decoded);a.connection.processTurnPackets();
+}
+for(const row of S_ROWS)mTest('S baseline outside canonical '+row.key+' native paid positive',async t=>{
+  cInstall();const a=actor(true);ruleStats(a,99);sLevels(a);a.setSpellbook(core.MagicSpellbook.NORMAL);mFund(a);await mEquip(a,row.staff);
+  const at=new core.Location(3222,3218,0);core.RegionManager.loadMapFiles(at.getX(),at.getY());a.moveTo(at);a.setNeedsPlacement(false);AreaManager.process(a);
+  const b=C.api.spawnNpc({id:core.NpcIdentifiers.GUARD,x:3223,y:3218,z:0,wanderRadius:0});fixtureNpcs.add(b);npcQueues();
+  assert.equal(b.isRegistered(),true);assert.equal(b.getId(),core.NpcIdentifiers.GUARD);assert.ok(b.getHitpoints()>0);assert.equal(C.matches.has(a),false);assert.equal(a.getPrivateArea(),null);assert.equal(b.getPrivateArea(),null);
+  magicTurns=true;ghastTurns=true;const f={a,b,trace:mTrace(t,a,b)},cost=mCost(a,core.CombatSpells[row.key]),before=mAmounts(a,cost),hp=b.getHitpoints(),charges=row.key==='IBAN_BLAST'?sCharges(a):null;
+  tick();await sNpcSpell(a,b,row);assert.equal(a.getCombat().getCastSpell(),core.CombatSpells[row.key]);assert.equal(a.getCombat().getTarget(),b);
+  for(let n=0;n<30&&!f.trace.commits.length;n++)tick();assert.equal(f.trace.commits.length,1,'native canonical staff spell pays outside Clan Wars');assert.equal(f.trace.hits.length,1);
+  const hit=f.trace.hits[0];bStop(f);mPaid(a,cost,before);if(charges!=null)assert.equal(sCharges(a),charges-1,'actual NPC target costs one charge');
+  assert.equal(hit.getSpell(),core.CombatSpells[row.key]);assert.equal(hit.getSpellContext(),f.trace.commits[0].context);assert.equal(hit.getTotalDamage(),Math.min(hp,row.max),'canonical maximum capped to the real NPC hitpoints');
+  mLand(f,hit);assert.equal(b.getHitpoints(),Math.max(0,hp-hit.getTotalDamage()));
+});
+for(const key of ['WIND_STRIKE','CONFUSE'])mTest('S baseline paid Standard '+key+' positive control',async t=>{
+  const f=await eGame(t),cost=mCost(f.a,core.CombatSpells[key]),before=mAmounts(f.a,cost),hp=f.b.getHitpoints(),stats=cStats(f.b),hit=await mFire(f,key);bStop(f);mPaid(f.a,cost,before);mLand(f,hit);
+  if(key==='CONFUSE'){assert.equal(f.b.getHitpoints(),hp);cAssertStats(f.b,stats,'ATTACK',5);}else assert.ok(f.b.getHitpoints()<hp);
+});
+mTest('S native Standard Iban commits pays charges queues and resolves damage',async t=>{
+  const row=S_ROWS[0],f=await sGame(t,row);assert.equal(f.game.rules.magic,1);assert.equal(f.game.phase,'combat');assert.notEqual(f.game.fighters.get(f.a),f.game.fighters.get(f.b));assert.equal(sItem(f.a).getId(),1409);assert.equal(sCharges(f.a),120);
+  const hp=f.b.getHitpoints(),hit=await sFire(f,row);assert.equal(hit.getTotalDamage(),25);assert.equal(f.b.getHitpoints(),hp,'paid queue has not resolved early');mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-25);
+});
+for(const row of S_ROWS)for(const branch of ['hit','splash','zero'])for(const freezing of [0,1])mTest('S '+row.key+' '+branch+' Ignore'+freezing+' native damage XP and paid resources',async t=>{
+  const f=await sGame(t,row,{rules:{freezing}}),events=[],xp=[],sm=f.a.getSkillManager(),add=sm.addExperience.bind(sm),hp=f.b.getHitpoints(),stats=gStats(f.b);
+  t.mock.method(sm,'addExperience',(...args)=>{xp.push(args);return add(...args);});
+  if(branch!=='hit')magicDamageControl=e=>{if(e.attacker===f.a&&e.target===f.b){if(branch==='splash')e.accurate=false;e.damage.setDamage(0);events.push(e);}};
+  const hit=await sFire(f,row);assert.equal(hit.isAccurate(),branch!=='splash');assert.equal(hit.getTotalDamage(),branch==='hit'?row.max:0);
+  if(branch!=='hit'){assert.equal(events.length,1);assert.equal(events[0].hit,hit);assert.equal(events[0].damage,hit.getHits()[0]);assert.equal(events[0].combatType,core.CombatType.MAGIC);assert.equal(events[0].accurate,branch!=='splash');assert.equal(events[0].damage.getDamage(),0);}
+  mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-hit.getTotalDamage());assert.deepEqual(gStats(f.b),{...stats});assert.ok(xp.some(x=>x[0]===core.Skill.MAGIC&&x[1]===30),'canonical base XP forwarded');
+});
+for(const [staff,capacity]of S_IBAN_STAVES)for(const style of ['manual','autocast'])mTest('S Iban staff'+staff+' '+style+' actual paid route capacity'+capacity,async t=>{
+  const row={...S_ROWS[0],staff},f=await sGame(t,row);assert.equal(sCharges(f.a),capacity);
+  if(style==='manual'){const hp=f.b.getHitpoints(),hit=await sFire(f,row);mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-25);}
+  else{
+    await sSelect(f,row);const cost=mCost(f.a,core.CombatSpells.IBAN_BLAST),before=mAmounts(f.a,cost);await cNativeAttack(f.a,f.b);
+    for(let n=0;n<30&&f.trace.commits.length<2;n++)tick();bStop(f);const paid=f.trace.commits.length;assert.ok(paid>=2,'unstopped eligible native Attack repeats paid Iban');
+    assert.equal(sCharges(f.a),capacity-2*paid);for(let n=0;n<cost.length;n++)assert.equal(f.a.getInventory().getAmount(cost[n][0]),before[n]-cost[n][1]*paid);
+    for(const hit of f.trace.hits){assert.equal(hit.getSpell(),core.CombatSpells.IBAN_BLAST);assert.ok(f.trace.commits.some(e=>e.context===hit.getSpellContext()));mLand(f,hit);}assert.equal(f.b.getHitpoints(),99-25*paid);
+  }
+});
+mTest('S Magic Dart existing native selector and ordinary Attack repeat actual paid max producer',async t=>{
+  const row=S_ROWS[1],f=await sGame(t,row);await sSelect(f,row);const cost=mCost(f.a,core.CombatSpells.MAGIC_DART),before=mAmounts(f.a,cost);await cNativeAttack(f.a,f.b);
+  for(let n=0;n<30&&f.trace.commits.length<2;n++)tick();bStop(f);const paid=f.trace.commits.length;assert.ok(paid>=2);for(let n=0;n<cost.length;n++)assert.equal(f.a.getInventory().getAmount(cost[n][0]),before[n]-cost[n][1]*paid);
+  for(const hit of f.trace.hits){assert.equal(hit.getSpell(),core.CombatSpells.MAGIC_DART);assert.equal(hit.getTotalDamage(),19);assert.ok(f.trace.commits.some(e=>e.context===hit.getSpellContext()));mLand(f,hit);}assert.equal(f.b.getHitpoints(),99-19*paid);assert.equal(sItem(f.a).getMetaValue('slayers-staff:charges'),undefined);
+});
+for(const [staff,capacity]of S_IBAN_STAVES)for(const left of [2,1,0])mTest('S Iban staff'+staff+' remaining'+left+' source preservation and empty refusal',async t=>{
+  const row={...S_ROWS[0],staff},f=await sGame(t,row);sSetCharges(f.a,left);
+  if(left>0){const hit=await sFire(f,row);mLand(f,hit);assert.equal(sCharges(f.a),0);assert.equal(hit.getTotalDamage(),25);tick(10);}
+  const before=resources(f.a),hp=f.b.getHitpoints(),n=f.trace.commits.length,lines=messagesOf(f.a);await mSpell(f.a,f.b,row.key);tick(12);bStop(f);
+  assert.equal(sCharges(f.a),0);assert.deepEqual(resources(f.a),before);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.trace.commits.length,n);assert.ok(lines.includes('Your staff has no charges left.'));
+  // left1 records CURRENT SOURCE, not independent retail final-one-charge PvP parity.
+});
+for(const [level,max]of [[50,15],[59,15],[60,16],[99,19],[109,20]])mTest('S Magic Dart current Magic'+level+' actual maximum'+max,async t=>{
+  const row=S_ROWS[1],f=await sGame(t,row);f.a.getSkillManager().setCurrentLevel(core.Skill.MAGIC,level,false);const hp=f.b.getHitpoints(),hit=await sFire(f,row);assert.equal(hit.getTotalDamage(),max);mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-max);
+});
+for(const row of S_ROWS)for(const refusal of ['low-magic','wrong-book','no-death','no-other-rune','wrong-staff','shield','staging','same-team','outsider','classic','binding','disabled'])mTest('S '+row.key+' '+refusal+' refuses before native payment',async t=>{
+  const magic={classic:2,binding:3,disabled:4}[refusal]??1,f=await sGame(t,row,{rules:{magic},prepare:refusal!=='staging'}),I=core.ItemIdentifiers;
+  if(refusal==='low-magic')f.a.getSkillManager().setCurrentLevel(core.Skill.MAGIC,49,false);
+  if(refusal==='wrong-book')f.a.setSpellbook(core.MagicSpellbook.ANCIENT);
+  if(refusal==='no-death')f.a.getInventory().deleteNumber(560,f.a.getInventory().getAmount(560));
+  if(refusal==='no-other-rune'){const id=row.key==='IBAN_BLAST'?554:558;f.a.getInventory().deleteNumber(id,f.a.getInventory().getAmount(id));}
+  if(refusal==='wrong-staff')await mEquip(f.a,row.key==='IBAN_BLAST'?4170:1409);
+  if(refusal==='shield')await mEquip(f.a,I.BRONZE_KITESHIELD,core.Equipment.SHIELD_SLOT);
+  if(refusal==='same-team')f.game.fighters.set(f.b,f.game.fighters.get(f.a));
+  if(refusal==='outsider'){f.game.area.leave(f.b,false);assert.equal(f.game.phase,'combat');assert.equal(C.matches.get(f.a),f.game);assert.equal(f.game.fighters.has(f.a),true);assert.equal(C.matches.has(f.b),false);assert.equal(f.game.fighters.has(f.b),false);assert.notEqual(f.b.getArea(),f.game.area);assert.equal(f.game.area.canAttack(f.a,f.b,CombatFactory.MAGIC_COMBAT),false);}
+  const before=resources(f.a),hp=f.b.getHitpoints();await mSpell(f.a,f.b,row.key);tick(12);bStop(f);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);assert.equal(f.b.getHitpoints(),hp);
+});
+mTest('S Magic Dart actual current Slayer55 gate refuses54 after legitimate equip and recovers at55',async t=>{
+  const row=S_ROWS[1],f=await sGame(t,row),sm=f.a.getSkillManager();assert.equal(sm.getMaxLevel(core.Skill.SLAYER),55);assert.equal(sItem(f.a).getId(),4170);
+  sm.setCurrentLevel(core.Skill.SLAYER,54,false);const before=resources(f.a),hp=f.b.getHitpoints(),lines=messagesOf(f.a);await mSpell(f.a,f.b,row.key);tick(12);bStop(f);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.b.getHitpoints(),hp);assert.ok(lines.includes('You need a Slayer level of 55 to cast this spell.'));
+  sm.setCurrentLevel(core.Skill.SLAYER,55,false);const hit=await sFire(f,row);mLand(f,hit);assert.equal(hit.getTotalDamage(),19);
+});
+for(const [staff]of [...S_IBAN_STAVES,[4170,0]])for(const gate of (staff===4170?['MAGIC','SLAYER']:['ATTACK','MAGIC']))mTest('S native equipment staff'+staff+' actual base '+gate+' gate',async t=>{
+  const f=await eGame(t);sLevels(f.a);const sm=f.a.getSkillManager(),skill=core.Skill[gate],need=gate==='SLAYER'?55:50;
+  sm.setMaxLevel(skill,need-1);sm.setCurrentLevel(skill,99,false);give(f.a,staff,'S-equip-refusal');const before=resources(f.a);await nativeItem(f.a,staff,'Wield');assert.deepEqual(resources(f.a),before);assert.notEqual(sItem(f.a).getId(),staff,'boosted current does not bypass actual base equip requirement');
+  sm.setMaxLevel(skill,need);await nativeItem(f.a,staff,'Wield');assert.equal(sItem(f.a).getId(),staff,'actual gate admits exact base requirement');
+});
+for(const [staff]of [...S_IBAN_STAVES,[4170,0]])for(const magic of [1,2,3])mTest('S staff'+staff+' mode'+magic+' ordinary spell and charge policy',async t=>{
+  const row={...S_ROWS[staff===4170?1:0],staff},f=await sGame(t,row,{rules:{magic}}),key=magic===3?'BIND':'WIND_STRIKE',charges=staff===4170?null:sCharges(f.a),before=resources(f.a);
+  if(magic===1){const hit=await mFire(f,key);bStop(f);mLand(f,hit);assert.ok(hit.getTotalDamage()>0);if(charges!=null)assert.equal(sCharges(f.a),charges,'ordinary spell does not spend Iban charges');}
+  else{await mSpell(f.a,f.b,key);tick(12);bStop(f);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,0);}
+});
+for(const row of S_ROWS)for(const element of ['fire','water','earth'])mTest('S '+row.key+' '+element+' tome supplies without damage boost or charge',async t=>{
+  const f=await sGame(t,row),I=core.ItemIdentifiers;await mEquip(f.a,I['TOME_OF_'+element.toUpperCase()+'_EMPTY_'],core.Equipment.SHIELD_SLOT);const book=mTome(f.a,element,1),rune=I[element.toUpperCase()+'_RUNE'];
+  if(row.key==='IBAN_BLAST'&&element==='fire')f.a.getInventory().deleteNumber(rune,f.a.getInventory().getAmount(rune));
+  const hp=f.b.getHitpoints(),hit=await sFire(f,row);assert.equal(hit.getTotalDamage(),row.max);assert.equal(book.Common.read(book.item).charges,1);mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-row.max);
+});
+for(const row of S_ROWS)mTest('S '+row.key+' actual Death pouch pays once and sacks do not fund it',async t=>{
+  const f=await sGame(t,row),I=core.ItemIdentifiers,Pouch=require('../plugins/items/runepouch/Common.RunePouch');give(f.a,I.RUNE_POUCH,'S-pouch');Pouch.setSlots(f.a,[{id:560,amount:2},null,null,null]);f.a.getInventory().deleteNumber(560,f.a.getInventory().getAmount(560));f.a.getInventory().add(new core.Item(I.BLIGHTED_ENTANGLE_SACK,2));
+  const other=row.key==='IBAN_BLAST'?554:558,otherCost=row.key==='IBAN_BLAST'?5:4,otherBefore=f.a.getInventory().getAmount(other);
+  const hit=await sFire(f,row,false);assert.equal(Pouch.slots(f.a)[0].amount,1);assert.equal(f.a.getInventory().getAmount(560),0);assert.equal(f.a.getInventory().getAmount(other),otherBefore-otherCost);assert.equal(f.a.getInventory().getAmount(I.BLIGHTED_ENTANGLE_SACK),2);mLand(f,hit);tick(10);
+  Pouch.setSlots(f.a,[null,null,null,null]);const before=resources(f.a),hp=f.b.getHitpoints(),n=f.trace.commits.length;await mSpell(f.a,f.b,row.key);tick(12);bStop(f);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,n);assert.equal(f.b.getHitpoints(),hp);
+});
+for(const row of S_ROWS)mTest('S '+row.key+' native remembered spell refuses incompatible admitted staff then compatible resumption',async t=>{
+  const f=await sGame(t,row);await sSelect(f,row);const wrong=row.key==='IBAN_BLAST'?4170:1409;await mEquip(f.a,wrong);
+  assert.equal(f.a.getCombat().getAutocastSpell(),core.CombatSpells[row.key]);assert.equal(core.Autocasting.isActive(f.a),true);assert.equal(f.a.getCombat().getCastSpell(),null);
+  const before=resources(f.a),hp=f.b.getHitpoints();await cNativeAttack(f.a,f.b);tick(25);bStop(f);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.b.getHitpoints(),hp);
+  await mEquip(f.a,row.staff);await sSelect(f,row);await cNativeAttack(f.a,f.b);for(let n=0;n<30&&f.trace.commits.length<2;n++)tick();bStop(f);assert.ok(f.trace.commits.length>=2,'genuine compatible selector/Attack resumes paid repeats');
+});
+for(const row of S_ROWS)for(const boundary of ['victim-leave','caster-leave','finish'])mTest('S '+row.key+' native paid queue discarded at '+boundary+' without refund',async t=>{
+  const f=await sGame(t,row),hit=await sFire(f,row),paid=resources(f.a),hp=f.b.getHitpoints();
+  if(boundary==='finish'){f.game.finish(null);assert.equal(f.game.phase,'over');}else f.game.area.leave(boundary==='victim-leave'?f.b:f.a,false);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);tick(12);assert.equal(f.trace.resolved.includes(hit),false);assert.deepEqual(mInventory(f.a),paid.inventory);assert.deepEqual(contents(f.a.getEquipment()),paid.equipment);if(boundary==='caster-leave')assert.equal(f.b.getHitpoints(),hp);
+});
+for(const row of S_ROWS)mTest('S '+row.key+' real lethal cast safe jail rejoin and fresh paid native cast',async t=>{
+  const f=await sGame(t,row),kept=carriedItems(f.b);f.b.setHitpoints(1);const hit=await sFire(f,row),paid=resources(f.a);mLand(f,hit);
+  for(let n=0;n<60&&!f.game.jailed.has(f.b);n++)tick();assert.equal(f.game.jailed.has(f.b),true);assert.equal(f.game.fighters.has(f.b),false);assert.deepEqual(carriedItems(f.b),kept);assert.deepEqual(mInventory(f.a),paid.inventory);assert.deepEqual(contents(f.a.getEquipment()),paid.equipment);
+  await jailExit(f.b,f.game);assert.equal(f.game.fighters.has(f.b),true);tick(40);mPosition(f.game,f.a,f.b);const hp=f.b.getHitpoints(),fresh=await sFire(f,row);mLand(f,fresh);assert.equal(f.b.getHitpoints(),hp-fresh.getTotalDamage());
+});
+for(const row of S_ROWS)mTest('S '+row.key+' manual override and actual compatible elemental autocast resume',async t=>{
+  const f=await sGame(t,row),slot=row.key==='IBAN_BLAST'?1:13,key=row.key==='IBAN_BLAST'?'WIND_STRIKE':'WIND_WAVE';
+  await nativeButton(f.a,(593<<16)|23);await nativeButton(f.a,(201<<16)|1,1,slot);assert.equal(f.a.getCombat().getAutocastSpell(),core.CombatSpells[key]);assert.equal(core.Autocasting.isActive(f.a),true);
+  const charges=row.key==='IBAN_BLAST'?sCharges(f.a):null,hit=await mFire(f,row.key);mLand(f,hit);
+  for(let n=0;n<30&&!f.trace.commits.some(e=>e.spell===core.CombatSpells[key]);n++)tick();bStop(f);
+  assert.equal(f.trace.commits.filter(e=>e.spell===core.CombatSpells[row.key]).length,1);const resumed=f.trace.commits.find(e=>e.spell===core.CombatSpells[key]);assert.ok(resumed);assert.ok(f.trace.hits.some(h=>h.getSpell()===resumed.spell&&h.getSpellContext()===resumed.context));if(charges!=null)assert.equal(sCharges(f.a),charges-2,'resumed elemental spell spends no Iban charge');
+});
+for(const row of S_ROWS)mTest('S '+row.key+' actual captured membership gate keeps paid free spell control',async t=>{
+  const f=await sGame(t,row),gates=[],names=['onCanUseItem','onCanEquip','onCanGainExperience','onCanSpawnNpc','onCanStockItem','onCustomEvent','onPrayerDisabled','onCanTeleport','onObjectInteraction','onPlayerProcess'];
+  const api={core,onSpellDisabled:h=>gates.push(h)};for(const name of names)api[name]=()=>{};
+  const mode=t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);try{require('../plugins/modes/FreeToPlay.plugin').register(api);}finally{mode.mock.restore();}assert.equal(gates.length,1);
+  const real=PM.emitSpellDisabled.bind(PM),seen=[];t.mock.method(PM,'emitSpellDisabled',(player,book,id,cast)=>{
+    if(player===f.a){const event={player,spellbook:book,spellId:id,spell:cast,disabled:false};gates[0](event);seen.push(event);if(event.disabled)return true;}return real(player,book,id,cast);
+  });
+  const lower=await mFire(f,'WIND_STRIKE');bStop(f);mLand(f,lower);assert.equal(f.trace.commits.length,1);
+  const before=resources(f.a),hp=f.b.getHitpoints(),lines=messagesOf(f.a);await mSpell(f.a,f.b,row.key);tick(12);bStop(f);assert.ok(seen.some(e=>e.spell===core.CombatSpells[row.key]&&e.disabled));assert.ok(lines.includes("You need to be on a members' world to cast this spell."));assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,1);assert.equal(f.b.getHitpoints(),hp);
+});
+for(const row of S_ROWS)mTest('S '+row.key+' canonical paid mapped Forfeit discards queued hit without refund',async t=>{
+  const f=await sGame(t,row),hit=await sFire(f,row),paid=resources(f.a),hp=f.b.getHitpoints();assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);
+  // Existing G/M precedent: hold impact turns while the actual mapped movement
+  // and object dispatcher reach Forfeit; this is not a natural flight-time claim.
+  magicTurns=false;try{await nmForfeit(f.a,f.game);}finally{magicTurns=true;}
+  assert.equal(C.matches.has(f.a),false);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);tick(15);assert.equal(f.trace.resolved.includes(hit),false);assert.equal(f.b.getHitpoints(),hp);assert.deepEqual(mInventory(f.a),paid.inventory);assert.deepEqual(contents(f.a.getEquipment()),paid.equipment);
+});
+for(const row of S_ROWS)for(const specialattacks of [1,2])mTest('S '+row.key+' NoStaff or NoSpecial'+specialattacks+' permits ordinary canonical spell',async t=>{
+  const f=await sGame(t,row,{rules:{specialattacks,melee:1,ranged:1}}),hit=await sFire(f,row);mLand(f,hit);assert.equal(hit.getTotalDamage(),row.max);assert.equal(f.trace.commits.length,1);
+});
+
+// W: EXACT master wand 6914, Standard1 only. Existing canonical cache stats,
+// equip gate, selectors, payment and delayed hit producers remain authoritative.
+const W_MASTER=6914;
+const W_ELEMENTS=M_ELEMENTS.flatMap((element,e)=>M_FAMILIES.map((family,f)=>({key:element+'_'+family,slot:f===4?48+e:f*4+e+1})));
+function wMetadata(p){
+  assert.equal(core.ItemIdentifiers.MASTER_WAND,W_MASTER);
+  const type=core.CacheDefinitions.getItem(W_MASTER),def=core.ItemDefinition.forId(W_MASTER);
+  assert.equal(type.isMembers,true);assert.equal(type.wearPos,core.Equipment.WEAPON_SLOT);
+  assert.equal(type.params.get(299),100);assert.equal(type.params.get(436),55,'retained metadata is not the current equipment requirement array');
+  assert.equal(def.hasCacheBonuses(),true);assert.equal(def.getBonuses()[3],20);assert.equal(def.getBonuses()[8],20);assert.equal(def.getBonuses()[12],10);
+  assert.equal(def.getRequirements()[core.Skill.MAGIC.getIndex()],60);
+  assert.equal(def.getWeaponInterface(),core.WeaponInterfaces.STAFF);
+  if(p){
+    assert.equal(sItem(p).getId(),W_MASTER);assert.equal(p.getEquipment().hasStaffEquipped(),true);
+    const offhand=p.getEquipment().get(core.Equipment.SHIELD_SLOT),bonus=offhand?.getId()>0?offhand.getDefinition().getBonuses():[];
+    assert.equal(p.getBonusManager().getAttackBonus()[3],20+(bonus[3]??0));assert.equal(p.getBonusManager().getDefenceBonus()[3],20+(bonus[8]??0));assert.equal(p.getBonusManager().getOtherBonus()[core.BonusManager.MAGIC_STRENGTH],10+(bonus[12]??0));
+  }
+}
+function wSpellMetadata(key){
+  const label=key.toLowerCase().split('_').map(s=>s[0].toUpperCase()+s.slice(1)).join(' '),meta=core.CacheDefinitions.getSpellByName(label),spell=core.CombatSpells[key];
+  assert.ok(meta);assert.equal(core.CacheDefinitions.getSpellName(meta.widgetId,meta.itemId),label);assert.equal(spell.getSpellbook(),core.MagicSpellbook.NORMAL);
+  const literal={WIND_STRIKE:[3273,14286859],FIRE_WAVE:[3321,14286916],CONFUSE:[3274,14286860],BIND:[3283,14286871]}[key];
+  if(literal)assert.deepEqual(meta,{itemId:literal[0],widgetId:literal[1]});
+  const row=W_ELEMENTS.find(x=>x.key===key);if(row)assert.equal(core.CacheDefinitions.getEnumValues(1986).get(row.slot),meta.itemId);
+  if(key==='FIRE_WAVE'){assert.equal(spell.levelRequired(),75);assert.deepEqual(spell.itemsRequired(null).map(x=>[x.getId(),x.getAmount()]).sort((a,b)=>a[0]-b[0]),[[554,7],[556,5],[565,1]]);}
+  return meta;
+}
+async function wGame(t,options={}){const f=await eGame(t,options);await mEquip(f.a,W_MASTER);wMetadata(f.a);f.b.setHitpoints(99);return f;}
+async function wFire(f,key='FIRE_WAVE',audit=true){
+  wMetadata(f.a);wSpellMetadata(key);const cost=mCost(f.a,core.CombatSpells[key]),amounts=mAmounts(f.a,cost),hit=await mFire(f,key);bStop(f);if(audit)mPaid(f.a,cost,amounts);return hit;
+}
+async function wSelect(f,key='WIND_STRIKE'){
+  wMetadata(f.a);wSpellMetadata(key);const row=W_ELEMENTS.find(x=>x.key===key);assert.ok(row);
+  await nativeButton(f.a,(593<<16)|23);assert.equal(f.a.getPacketSender().getVarp(664),-1,'actual native selector uses the existing Normal list');await nativeButton(f.a,(201<<16)|1,1,row.slot);
+  assert.equal(f.a.getCombat().getAutocastSpell(),core.CombatSpells[key]);assert.equal(core.Autocasting.isActive(f.a),true);assert.equal(f.a.getCombat().getCastSpell(),null);
+  assert.equal(f.a.getPacketSender().getVarbit(276),row.slot);assert.equal(f.a.getPacketSender().getVarp(core.CacheDefinitions.getVarpId('autocast_spell_obj')),wSpellMetadata(key).itemId);
+}
+async function wNoPaid(f,key='FIRE_WAVE'){
+  const before=resources(f.a),hp=f.b.getHitpoints(),commits=f.trace.commits.length,hits=f.trace.hits.length;
+  await mSpell(f.a,f.b,key);tick(15);bStop(f);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,commits);assert.equal(f.trace.hits.length,hits);assert.equal(f.b.getHitpoints(),hp);
+}
+async function wNpcSpell(a,b,key){
+  const meta=wSpellMetadata(key),{ClientPacketId}=require('../dist/net/protocol/NativeClientPackets'),frame=Buffer.alloc(12);
+  frame[0]=ClientPacketId.OPNPC_T;frame.writeUInt16BE(b.getIndex(),1);frame.writeUInt32LE(meta.widgetId,3);frame.writeUInt16BE(65535,7);
+  frame[9]=(meta.itemId+128)&255;frame[10]=meta.itemId>>>8;frame[11]=128;
+  const decoded=decodeClientPackets(frame);assert.equal(decoded.length,1);assert.equal(decoded[0].type,'spell_on_npc');assert.equal(decoded[0].targetIndex,b.getIndex());assert.equal(decoded[0].spellWidget,meta.widgetId);assert.equal(decoded[0].spellItemId,meta.itemId);
+  await a.connection.dispatch(decoded);a.connection.processTurnPackets();
+}
+async function wOutside(t){
+  cInstall();const a=actor(true);ruleStats(a,99);a.setSpellbook(core.MagicSpellbook.NORMAL);mFund(a);await mEquip(a,W_MASTER);wMetadata(a);
+  const at=new core.Location(3222,3218,0);core.RegionManager.loadMapFiles(at.getX(),at.getY());a.moveTo(at);a.setNeedsPlacement(false);AreaManager.process(a);
+  const b=C.api.spawnNpc({id:core.NpcIdentifiers.GUARD,x:3223,y:3218,z:0,wanderRadius:0});fixtureNpcs.add(b);npcQueues();
+  assert.equal(b.isRegistered(),true);assert.equal(b.getId(),core.NpcIdentifiers.GUARD);assert.ok(b.getHitpoints()>0);assert.equal(C.matches.has(a),false);assert.equal(a.getPrivateArea(),null);assert.equal(b.getPrivateArea(),null);
+  magicTurns=true;ghastTurns=true;return{a,b,trace:mTrace(t,a,b)};
+}
+mTest('W baseline outside exact6914 native manual paid positive',async t=>{
+  const f=await wOutside(t),cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),amounts=mAmounts(f.a,cost),hp=f.b.getHitpoints();tick();
+  await wNpcSpell(f.a,f.b,'WIND_STRIKE');assert.equal(f.a.getCombat().getCastSpell(),core.CombatSpells.WIND_STRIKE);assert.equal(f.a.getCombat().getTarget(),f.b);
+  for(let n=0;n<30&&!f.trace.commits.length;n++)tick();bStop(f);assert.equal(f.trace.commits.length,1);assert.equal(f.trace.hits.length,1);mPaid(f.a,cost,amounts);
+  const hit=f.trace.hits[0];assert.equal(hit.getCombatMethod(),CombatFactory.MAGIC_COMBAT);assert.equal(hit.getSpell(),core.CombatSpells.WIND_STRIKE);assert.equal(hit.getSpellContext(),f.trace.commits[0].context);assert.ok(hit.getTotalDamage()>0);
+  mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-hit.getTotalDamage());
+});
+mTest('W baseline outside exact6914 native selector Attack repeats paid casts',async t=>{
+  const f=await wOutside(t),hp=f.b.getHitpoints();await wSelect(f);const cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),amounts=mAmounts(f.a,cost);
+  await ghastAttack(f.a,f.b);for(let n=0;n<30&&f.trace.commits.length<2;n++)tick();bStop(f);const paid=f.trace.commits.length;assert.ok(paid>=2);
+  for(let i=0;i<cost.length;i++)assert.equal(f.a.getInventory().getAmount(cost[i][0]),amounts[i]-paid*cost[i][1]);
+  for(const hit of f.trace.hits){assert.equal(hit.getSpell(),core.CombatSpells.WIND_STRIKE);assert.ok(f.trace.commits.some(x=>x.context===hit.getSpellContext()));mLand(f,hit);}
+  assert.ok(f.b.getHitpoints()<hp);assert.equal(f.trace.hits.length,paid);
+});
+mTest('W baseline plain staff Fire Wave paid player maximum20 positive',async t=>{
+  const f=await eGame(t);await mEquip(f.a,core.ItemIdentifiers.STAFF);wSpellMetadata('FIRE_WAVE');assert.equal(f.a.getBonusManager().getOtherBonus()[core.BonusManager.MAGIC_STRENGTH],0);
+  const cost=mCost(f.a,core.CombatSpells.FIRE_WAVE),amounts=mAmounts(f.a,cost),hp=f.b.getHitpoints(),hit=await mFire(f,'FIRE_WAVE');bStop(f);mPaid(f.a,cost,amounts);assert.equal(hit.getTotalDamage(),20);mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-20);
+});
+mTest('W native Standard exact6914 Fire Wave commits real bonus maximum22',async t=>{
+  const f=await wGame(t);assert.equal(f.game.rules.magic,1);assert.equal(f.game.phase,'combat');assert.notEqual(f.game.fighters.get(f.a),f.game.fighters.get(f.b));
+  const hp=f.b.getHitpoints(),hit=await wFire(f);assert.equal(hit.getTotalDamage(),22);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-22);
+});
+for(const row of W_ELEMENTS)mTest('W exact6914 manual '+row.key+' actual payment queue HP and XP',async t=>{
+  const f=await wGame(t),hp=f.b.getHitpoints(),xp=f.a.getSkillManager().getExperience(core.Skill.MAGIC),hit=await wFire(f,row.key);assert.ok(hit.getTotalDamage()>0);assert.equal(f.b.getHitpoints(),hp);
+  mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-hit.getTotalDamage());assert.ok(f.a.getSkillManager().getExperience(core.Skill.MAGIC)>xp);assert.equal(f.trace.commits.length,1);
+});
+for(const row of W_ELEMENTS)mTest('W exact6914 native selector '+row.slot+' '+row.key+' unstopped paid repeats',async t=>{
+  const f=await wGame(t),hp=f.b.getHitpoints();await wSelect(f,row.key);const cost=mCost(f.a,core.CombatSpells[row.key]),amounts=mAmounts(f.a,cost);
+  await cNativeAttack(f.a,f.b);for(let n=0;n<30&&f.trace.commits.length<2;n++)tick();bStop(f);const paid=f.trace.commits.length;assert.ok(paid>=2);
+  for(let i=0;i<cost.length;i++)assert.equal(f.a.getInventory().getAmount(cost[i][0]),amounts[i]-paid*cost[i][1]);
+  for(const hit of f.trace.hits){assert.equal(hit.getCombatMethod(),CombatFactory.MAGIC_COMBAT);assert.equal(hit.getSpell(),core.CombatSpells[row.key]);assert.ok(f.trace.commits.some(x=>x.context===hit.getSpellContext()));mLand(f,hit);}
+  assert.equal(f.trace.hits.length,paid);assert.equal(f.b.getHitpoints(),hp-f.trace.hits.reduce((n,h)=>n+h.getTotalDamage(),0));
+});
+for(const freezing of [0,1])for(const key of ['CONFUSE','BIND'])mTest('W manual '+key+' with Ignore'+freezing+' pays and preserves real effect policy',async t=>{
+  const f=await wGame(t,{rules:{freezing}}),hp=f.b.getHitpoints(),stats=cStats(f.b),freeze=fTrace(t,f.b),hit=await wFire(f,key);mLand(f,hit);assert.equal(f.b.getHitpoints(),hp);
+  if(key==='CONFUSE')cAssertStats(f.b,stats,'ATTACK',5);
+  else if(freezing)fNoNewEffects(freeze);else assert.ok(freeze.timers.some(x=>x[0]===core.TimerKey.FREEZE));
+});
+for(const key of ['SARADOMIN_STRIKE','CLAWS_OF_GUTHIX','FLAMES_OF_ZAMORAK','IBAN_BLAST','MAGIC_DART'])mTest('W exact6914 preserves canonical matching-staff refusal '+key,async t=>{
+  gInstall();const f=await wGame(t);gUnlock(f.a);sLevels(f.a);await wNoPaid(f,key);
+});
+mTest('W native equipment maxMagic59 refuses current99 then admits actual max60',async t=>{
+  const f=await eGame(t),sm=f.a.getSkillManager();sm.setMaxLevel(core.Skill.MAGIC,59);sm.setCurrentLevel(core.Skill.MAGIC,99,false);give(f.a,W_MASTER,'W-max-gate');const before=resources(f.a);
+  await nativeItem(f.a,W_MASTER,'Wield');assert.deepEqual(resources(f.a),before);assert.notEqual(sItem(f.a).getId(),W_MASTER);
+  sm.setMaxLevel(core.Skill.MAGIC,60);await nativeItem(f.a,W_MASTER,'Wield');wMetadata(f.a);
+});
+mTest('W equipped max99 currentMagic74 refuses Fire Wave then current75 recovers',async t=>{
+  const f=await wGame(t),sm=f.a.getSkillManager();sm.setCurrentLevel(core.Skill.MAGIC,74,false);await wNoPaid(f);sm.setCurrentLevel(core.Skill.MAGIC,75,false);const hit=await wFire(f);assert.equal(hit.getTotalDamage(),22);mLand(f,hit);
+});
+for(const mode of [2,3,4])mTest('W exact6914 mode'+mode+' retains unsupported casting without payment',async t=>{
+  const f=await wGame(t,{rules:{magic:mode}});await wNoPaid(f,mode===3?'BIND':'WIND_STRIKE');
+});
+for(const book of ['ANCIENT','ARCEUUS'])mTest('W other spellbook '+book+' does not admit a Normal hand cast',async t=>{
+  const f=await wGame(t);f.a.setSpellbook(core.MagicSpellbook[book]);await wNoPaid(f);
+});
+mTest('W real LMS20560 remains excluded despite actual master-wand alias and native eligibility',async t=>{
+  const f=await wGame(t);assert.equal(core.CacheDefinitions.getObjId('br_master_wand'),20560);assert.equal(core.ItemAliases.baseOf(20560),W_MASTER);await mEquip(f.a,20560);assert.equal(f.a.getEquipment().hasStaffEquipped(),true);await wNoPaid(f,'WIND_STRIKE');
+});
+for(const id of [6915,18598])mTest('W unwearable note or placeholder '+id+' rejects native wield-slot input',async t=>{
+  const f=await wGame(t);give(f.a,id,'W-unwearable');const before=resources(f.a),slot=f.a.getInventory().getItems().findIndex(item=>item?.getId()===id);
+  assert.equal(core.CacheDefinitions.getItem(id).inventoryActions.includes('Wield'),false);
+  const {MAIN_INVENTORY_WIDGET_UID}=require('../dist/net/protocol/ClientProtocol');
+  // The real inventory operation used by a wand's Wield is unavailable on these
+  // unwearable objects. Send that invalid native widget operation, not tEquip.
+  await nativeButton(f.a,MAIN_INVENTORY_WIDGET_UID,3,slot,id);assert.deepEqual(resources(f.a),before);wMetadata(f.a);
+});
+for(const id of [565,554,556])mTest('W Fire Wave cannot substitute missing ordinary rune '+id,async t=>{
+  const f=await wGame(t);f.a.getInventory().deleteNumber(id,f.a.getInventory().getAmount(id));await wNoPaid(f);
+});
+mTest('W actual Blood pouch source pays once with no negative inventory audit',async t=>{
+  const f=await wGame(t),I=core.ItemIdentifiers,Pouch=require('../plugins/items/runepouch/Common.RunePouch');give(f.a,I.RUNE_POUCH,'W-pouch');Pouch.setSlots(f.a,[{id:565,amount:2},null,null,null]);f.a.getInventory().deleteNumber(565,f.a.getInventory().getAmount(565));
+  const fire=f.a.getInventory().getAmount(554),air=f.a.getInventory().getAmount(556),hit=await wFire(f,'FIRE_WAVE',false);assert.equal(Pouch.slots(f.a)[0].amount,1);assert.equal(f.a.getInventory().getAmount(565),0);assert.equal(f.a.getInventory().getAmount(554),fire-7);assert.equal(f.a.getInventory().getAmount(556),air-5);mLand(f,hit);tick(10);
+  Pouch.setSlots(f.a,[null,null,null,null]);await wNoPaid(f);
+});
+mTest('W actual fire tome supplies and spends its final page charge alongside wand bonus',async t=>{
+  const f=await wGame(t),I=core.ItemIdentifiers;await mEquip(f.a,I.TOME_OF_FIRE_EMPTY_,core.Equipment.SHIELD_SLOT);const book=mTome(f.a,'fire',1);f.a.getInventory().deleteNumber(554,f.a.getInventory().getAmount(554));
+  const blood=f.a.getInventory().getAmount(565),air=f.a.getInventory().getAmount(556),hit=await wFire(f,'FIRE_WAVE',false);assert.equal(book.Common.read(book.item).charges,0);assert.equal(f.a.getInventory().getAmount(554),0);assert.equal(f.a.getInventory().getAmount(565),blood-1);assert.equal(f.a.getInventory().getAmount(556),air-5);mLand(f,hit);tick(10);await wNoPaid(f);
+});
+mTest('W native gear switch removes and restores actual ten-percent bonus with paid resumption',async t=>{
+  const f=await wGame(t);const first=await wFire(f);assert.equal(first.getTotalDamage(),22);mLand(f,first);tick(10);
+  await mEquip(f.a,core.ItemIdentifiers.STAFF);assert.equal(f.a.getBonusManager().getOtherBonus()[core.BonusManager.MAGIC_STRENGTH],0);const cost=mCost(f.a,core.CombatSpells.FIRE_WAVE),amounts=mAmounts(f.a,cost),plain=await mFire(f,'FIRE_WAVE');bStop(f);mPaid(f.a,cost,amounts);assert.equal(plain.getTotalDamage(),20);mLand(f,plain);tick(10);
+  await mEquip(f.a,W_MASTER);wMetadata(f.a);const fresh=await wFire(f);assert.equal(fresh.getTotalDamage(),22);mLand(f,fresh);
+});
+mTest('W remembered elemental autocast refuses excluded LMS then real master selection resumes paid repeats',async t=>{
+  const f=await wGame(t);await wSelect(f,'FIRE_WAVE');await mEquip(f.a,20560);assert.equal(core.Autocasting.isActive(f.a),true);assert.equal(f.a.getCombat().getAutocastSpell(),core.CombatSpells.FIRE_WAVE);
+  const before=resources(f.a),hp=f.b.getHitpoints();await cNativeAttack(f.a,f.b);tick(25);bStop(f);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);assert.equal(f.b.getHitpoints(),hp);
+  await mEquip(f.a,W_MASTER);await wSelect(f,'FIRE_WAVE');const cost=mCost(f.a,core.CombatSpells.FIRE_WAVE),amounts=mAmounts(f.a,cost);await cNativeAttack(f.a,f.b);for(let n=0;n<30&&f.trace.commits.length<2;n++)tick();bStop(f);const paid=f.trace.commits.length;assert.ok(paid>=2);
+  for(let i=0;i<cost.length;i++)assert.equal(f.a.getInventory().getAmount(cost[i][0]),amounts[i]-paid*cost[i][1]);for(const hit of f.trace.hits){assert.equal(hit.getTotalDamage(),22);mLand(f,hit);}assert.equal(f.b.getHitpoints(),hp-22*paid);
+});
+for(const boundary of ['victim-leave','caster-leave','finish','Forfeit'])mTest('W paid player queue '+boundary+' is discarded without resolution or refund',async t=>{
+  const f=await wGame(t),hit=await wFire(f),paid=resources(f.a),hp=f.b.getHitpoints();assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);
+  if(boundary==='Forfeit'){
+    // Hold impact while the existing mapped checkpoint/ObjectAction dispatcher
+    // reaches Forfeit; this is not encoded object-click or natural flight proof.
+    const priorTurns=magicTurns;magicTurns=false;try{await nmForfeit(f.a,f.game);}finally{magicTurns=priorTurns;}
+    assert.equal(C.matches.has(f.a),false);
+  }else if(boundary==='finish'){f.game.finish(null);assert.equal(f.game.phase,'over');}
+  else f.game.area.leave(boundary==='victim-leave'?f.b:f.a,false);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);tick(15);assert.equal(f.trace.resolved.includes(hit),false);assert.deepEqual(mInventory(f.a),paid.inventory);assert.deepEqual(contents(f.a.getEquipment()),paid.equipment);
+  if(boundary==='caster-leave'||boundary==='Forfeit')assert.equal(f.b.getHitpoints(),hp);
+});
+mTest('W lethal native cast retains safe inventory and rejoin permits fresh paid cast',async t=>{
+  const f=await wGame(t),kept=carriedItems(f.b);f.b.setHitpoints(1);const hit=await wFire(f),paid=resources(f.a);mLand(f,hit);
+  for(let n=0;n<60&&!f.game.jailed.has(f.b);n++)tick();assert.equal(f.game.jailed.has(f.b),true);assert.deepEqual(carriedItems(f.b),kept);assert.deepEqual(mInventory(f.a),paid.inventory);assert.deepEqual(contents(f.a.getEquipment()),paid.equipment);
+  await jailExit(f.b,f.game);assert.equal(f.game.fighters.has(f.b),true);tick(40);mPosition(f.game,f.a,f.b);const fresh=await wFire(f);assert.equal(fresh.getTotalDamage(),22);mLand(f,fresh);
+});
+mTest('W captured actual F2P equip gate refuses member wand and preserves basic-staff paid control',async t=>{
+  const f=await eGame(t),gates=[],names=['onCanUseItem','onCanGainExperience','onCanSpawnNpc','onCanStockItem','onCustomEvent','onSpellDisabled','onPrayerDisabled','onCanTeleport','onObjectInteraction','onPlayerProcess'];
+  const api={core,onCanEquip:h=>gates.push(h)};for(const name of names)api[name]=()=>{};
+  const mode=t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);try{require('../plugins/modes/FreeToPlay.plugin').register(api);}finally{mode.mock.restore();}assert.equal(gates.length,1);
+  const real=PM.emitCanEquip.bind(PM),seen=[];t.mock.method(PM,'emitCanEquip',(player,slot,item)=>{
+    if(player===f.a){const event={player,slot,item,allow:null};gates[0](event);seen.push(event);if(event.allow===false)return false;}return real(player,slot,item);
+  });
+  await mEquip(f.a,core.ItemIdentifiers.STAFF);const cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),amounts=mAmounts(f.a,cost),hit=await mFire(f);bStop(f);mPaid(f.a,cost,amounts);mLand(f,hit);
+  give(f.a,W_MASTER,'W-members-equip');const before=resources(f.a);await nativeItem(f.a,W_MASTER,'Wield');assert.deepEqual(resources(f.a),before);assert.equal(sItem(f.a).getId(),core.ItemIdentifiers.STAFF);assert.ok(seen.some(e=>e.item.getId()===W_MASTER&&e.allow===false));
+});
+mTest('W staging refusal precedes ordinary paid recovery in actual combat phase',async t=>{
+  const f=await wGame(t,{prepare:false});assert.equal(f.game.phase,'staging');await wNoPaid(f);completePreparation(f.game);mPosition(f.game,f.a,f.b);assert.equal(f.game.phase,'combat');const hit=await wFire(f);assert.equal(hit.getTotalDamage(),22);mLand(f,hit);
+});
+mTest('W departed outsider refusal has no new payment or impact',async t=>{
+  const f=await wGame(t);f.game.area.leave(f.b,false);assert.equal(C.matches.has(f.b),false);await wNoPaid(f);
+});
+mTest('W unsupported real shield refuses while the explicit tome boundary stays separate',async t=>{
+  const f=await wGame(t);await mEquip(f.a,core.ItemIdentifiers.RUNE_KITESHIELD,core.Equipment.SHIELD_SLOT);await wNoPaid(f);
+});
+for(const specialattacks of [1,2])mTest('W NoStaff or NoSpecial'+specialattacks+' retains ordinary native spell',async t=>{
+  const f=await wGame(t,{rules:{specialattacks,melee:1,ranged:1}}),hit=await wFire(f);assert.equal(hit.getTotalDamage(),22);mLand(f,hit);
+});
+
+// A: EXACT apprentice wand 6910, Standard1 only. Existing canonical cache stats,
+// equip gate, selectors, payment and delayed hit producers remain authoritative.
+const A_APPRENTICE=6910;
+function aMetadata(p){
+  assert.equal(core.ItemIdentifiers.APPRENTICE_WAND,A_APPRENTICE);
+  const type=core.CacheDefinitions.getItem(A_APPRENTICE),def=core.ItemDefinition.forId(A_APPRENTICE);
+  assert.equal(type.name,'Apprentice wand');assert.equal(type.isMembers,true);assert.equal(type.wearPos,core.Equipment.WEAPON_SLOT);
+  assert.equal(type.params.get(3),10);assert.equal(type.params.get(8),10);assert.equal(type.params.has(299),false);
+  assert.equal(def.hasCacheBonuses(),true);assert.equal(def.getBonuses()[3],10);assert.equal(def.getBonuses()[8],10);assert.equal(def.getBonuses()[12],0);
+  assert.equal(def.getRequirements()[core.Skill.MAGIC.getIndex()],50);assert.equal(def.getWeaponInterface(),core.WeaponInterfaces.STAFF);
+  if(p){
+    assert.equal(sItem(p).getId(),A_APPRENTICE);assert.equal(p.getEquipment().hasStaffEquipped(),true);
+    const offhand=p.getEquipment().get(core.Equipment.SHIELD_SLOT),bonus=offhand?.getId()>0?offhand.getDefinition().getBonuses():[];
+    assert.equal(p.getBonusManager().getAttackBonus()[3],10+(bonus[3]??0));assert.equal(p.getBonusManager().getDefenceBonus()[3],10+(bonus[8]??0));assert.equal(p.getBonusManager().getOtherBonus()[core.BonusManager.MAGIC_STRENGTH],bonus[12]??0);
+  }
+}
+async function aGame(t,options={}){const f=await eGame(t,options);await mEquip(f.a,A_APPRENTICE);aMetadata(f.a);f.b.setHitpoints(99);return f;}
+async function aFire(f,key='FIRE_WAVE',audit=true){
+  aMetadata(f.a);wSpellMetadata(key);const cost=mCost(f.a,core.CombatSpells[key]),amounts=mAmounts(f.a,cost),hit=await mFire(f,key);bStop(f);if(audit)mPaid(f.a,cost,amounts);return hit;
+}
+async function aSelect(f,key='WIND_STRIKE'){
+  aMetadata(f.a);wSpellMetadata(key);const row=W_ELEMENTS.find(x=>x.key===key);assert.ok(row);
+  await nativeButton(f.a,(593<<16)|23);assert.equal(f.a.getPacketSender().getVarp(664),-1,'actual native selector uses the existing Normal list');await nativeButton(f.a,(201<<16)|1,1,row.slot);
+  assert.equal(f.a.getCombat().getAutocastSpell(),core.CombatSpells[key]);assert.equal(core.Autocasting.isActive(f.a),true);assert.equal(f.a.getCombat().getCastSpell(),null);
+  assert.equal(f.a.getPacketSender().getVarbit(276),row.slot);assert.equal(f.a.getPacketSender().getVarp(core.CacheDefinitions.getVarpId('autocast_spell_obj')),wSpellMetadata(key).itemId);
+}
+async function aNoPaid(f,key='FIRE_WAVE'){
+  const before=resources(f.a),hp=f.b.getHitpoints(),commits=f.trace.commits.length,hits=f.trace.hits.length;
+  await mSpell(f.a,f.b,key);tick(15);bStop(f);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,commits);assert.equal(f.trace.hits.length,hits);assert.equal(f.b.getHitpoints(),hp);
+}
+async function aOutside(t){
+  cInstall();const a=actor(true);ruleStats(a,99);a.setSpellbook(core.MagicSpellbook.NORMAL);mFund(a);await mEquip(a,A_APPRENTICE);aMetadata(a);
+  const at=new core.Location(3222,3218,0);core.RegionManager.loadMapFiles(at.getX(),at.getY());a.moveTo(at);a.setNeedsPlacement(false);AreaManager.process(a);
+  const b=C.api.spawnNpc({id:core.NpcIdentifiers.GUARD,x:3223,y:3218,z:0,wanderRadius:0});fixtureNpcs.add(b);npcQueues();
+  assert.equal(b.isRegistered(),true);assert.equal(b.getId(),core.NpcIdentifiers.GUARD);assert.ok(b.getHitpoints()>0);assert.equal(C.matches.has(a),false);assert.equal(a.getPrivateArea(),null);assert.equal(b.getPrivateArea(),null);
+  magicTurns=true;ghastTurns=true;return{a,b,trace:mTrace(t,a,b)};
+}
+mTest('A baseline outside exact6910 native manual paid positive',async t=>{
+  const f=await aOutside(t),cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),amounts=mAmounts(f.a,cost),hp=f.b.getHitpoints();tick();
+  await wNpcSpell(f.a,f.b,'WIND_STRIKE');assert.equal(f.a.getCombat().getCastSpell(),core.CombatSpells.WIND_STRIKE);assert.equal(f.a.getCombat().getTarget(),f.b);
+  for(let n=0;n<30&&!f.trace.commits.length;n++)tick();bStop(f);assert.equal(f.trace.commits.length,1);assert.equal(f.trace.hits.length,1);mPaid(f.a,cost,amounts);
+  const hit=f.trace.hits[0];assert.equal(hit.getCombatMethod(),CombatFactory.MAGIC_COMBAT);assert.equal(hit.getSpell(),core.CombatSpells.WIND_STRIKE);assert.equal(hit.getSpellContext(),f.trace.commits[0].context);assert.ok(hit.getTotalDamage()>0);
+  mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-hit.getTotalDamage());
+});
+mTest('A baseline outside exact6910 native selector Attack repeats paid casts',async t=>{
+  const f=await aOutside(t),hp=f.b.getHitpoints();await aSelect(f);const cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),amounts=mAmounts(f.a,cost);
+  await ghastAttack(f.a,f.b);for(let n=0;n<30&&f.trace.commits.length<2;n++)tick();bStop(f);const paid=f.trace.commits.length;assert.ok(paid>=2);
+  for(let i=0;i<cost.length;i++)assert.equal(f.a.getInventory().getAmount(cost[i][0]),amounts[i]-paid*cost[i][1]);
+  for(const hit of f.trace.hits){assert.equal(hit.getSpell(),core.CombatSpells.WIND_STRIKE);assert.ok(f.trace.commits.some(x=>x.context===hit.getSpellContext()));mLand(f,hit);}
+  assert.ok(f.b.getHitpoints()<hp);assert.equal(f.trace.hits.length,paid);
+});
+mTest('A baseline plain staff Fire Wave paid player maximum20 positive',async t=>{
+  const f=await eGame(t);await mEquip(f.a,core.ItemIdentifiers.STAFF);wSpellMetadata('FIRE_WAVE');assert.equal(f.a.getBonusManager().getOtherBonus()[core.BonusManager.MAGIC_STRENGTH],0);
+  const cost=mCost(f.a,core.CombatSpells.FIRE_WAVE),amounts=mAmounts(f.a,cost),hp=f.b.getHitpoints(),hit=await mFire(f,'FIRE_WAVE');bStop(f);mPaid(f.a,cost,amounts);assert.equal(hit.getTotalDamage(),20);mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-20);
+});
+mTest('A native Standard exact6910 Fire Wave commits real zero-percent maximum20',async t=>{
+  const f=await aGame(t);assert.equal(f.game.rules.magic,1);assert.equal(f.game.phase,'combat');assert.notEqual(f.game.fighters.get(f.a),f.game.fighters.get(f.b));
+  const hp=f.b.getHitpoints(),hit=await aFire(f);assert.equal(hit.getTotalDamage(),20);assert.equal(f.b.getHitpoints(),hp);assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-20);
+});
+for(const row of W_ELEMENTS)mTest('A exact6910 manual '+row.key+' actual payment queue HP and XP',async t=>{
+  const f=await aGame(t),hp=f.b.getHitpoints(),xp=f.a.getSkillManager().getExperience(core.Skill.MAGIC),hit=await aFire(f,row.key);assert.ok(hit.getTotalDamage()>0);assert.equal(f.b.getHitpoints(),hp);
+  mLand(f,hit);assert.equal(f.b.getHitpoints(),hp-hit.getTotalDamage());assert.ok(f.a.getSkillManager().getExperience(core.Skill.MAGIC)>xp);assert.equal(f.trace.commits.length,1);
+});
+for(const row of W_ELEMENTS)mTest('A exact6910 native selector '+row.slot+' '+row.key+' unstopped paid repeats',async t=>{
+  const f=await aGame(t),hp=f.b.getHitpoints();await aSelect(f,row.key);const cost=mCost(f.a,core.CombatSpells[row.key]),amounts=mAmounts(f.a,cost);
+  await cNativeAttack(f.a,f.b);for(let n=0;n<30&&f.trace.commits.length<2;n++)tick();bStop(f);const paid=f.trace.commits.length;assert.ok(paid>=2);
+  for(let i=0;i<cost.length;i++)assert.equal(f.a.getInventory().getAmount(cost[i][0]),amounts[i]-paid*cost[i][1]);
+  for(const hit of f.trace.hits){assert.equal(hit.getCombatMethod(),CombatFactory.MAGIC_COMBAT);assert.equal(hit.getSpell(),core.CombatSpells[row.key]);assert.ok(f.trace.commits.some(x=>x.context===hit.getSpellContext()));mLand(f,hit);}
+  assert.equal(f.trace.hits.length,paid);assert.equal(f.b.getHitpoints(),hp-f.trace.hits.reduce((n,h)=>n+h.getTotalDamage(),0));
+});
+for(const freezing of [0,1])for(const key of ['CONFUSE','BIND'])mTest('A manual '+key+' with Ignore'+freezing+' pays and preserves real effect policy',async t=>{
+  const f=await aGame(t,{rules:{freezing}}),hp=f.b.getHitpoints(),stats=cStats(f.b),freeze=fTrace(t,f.b),hit=await aFire(f,key);mLand(f,hit);assert.equal(f.b.getHitpoints(),hp);
+  if(key==='CONFUSE')cAssertStats(f.b,stats,'ATTACK',5);
+  else if(freezing)fNoNewEffects(freeze);else assert.ok(freeze.timers.some(x=>x[0]===core.TimerKey.FREEZE));
+});
+for(const key of ['SARADOMIN_STRIKE','CLAWS_OF_GUTHIX','FLAMES_OF_ZAMORAK','IBAN_BLAST','MAGIC_DART'])mTest('A exact6910 preserves canonical matching-staff refusal '+key,async t=>{
+  gInstall();const f=await aGame(t);gUnlock(f.a);sLevels(f.a);await aNoPaid(f,key);
+});
+mTest('A native equipment maxMagic49 refuses current99 then admits actual max50',async t=>{
+  const f=await eGame(t),sm=f.a.getSkillManager();sm.setMaxLevel(core.Skill.MAGIC,49);sm.setCurrentLevel(core.Skill.MAGIC,99,false);give(f.a,A_APPRENTICE,'A-max-gate');const before=resources(f.a);
+  await nativeItem(f.a,A_APPRENTICE,'Wield');assert.deepEqual(resources(f.a),before);assert.notEqual(sItem(f.a).getId(),A_APPRENTICE);
+  sm.setMaxLevel(core.Skill.MAGIC,50);await nativeItem(f.a,A_APPRENTICE,'Wield');aMetadata(f.a);
+});
+mTest('A equipped max99 currentMagic74 refuses Fire Wave then current75 recovers',async t=>{
+  const f=await aGame(t),sm=f.a.getSkillManager();sm.setCurrentLevel(core.Skill.MAGIC,74,false);await aNoPaid(f);sm.setCurrentLevel(core.Skill.MAGIC,75,false);const hit=await aFire(f);assert.equal(hit.getTotalDamage(),20);mLand(f,hit);
+});
+for(const mode of [2,3,4])mTest('A exact6910 mode'+mode+' retains unsupported casting without payment',async t=>{
+  const f=await aGame(t,{rules:{magic:mode}});await aNoPaid(f,mode===3?'BIND':'WIND_STRIKE');
+});
+for(const book of ['ANCIENT','ARCEUUS'])mTest('A other spellbook '+book+' does not admit a Normal hand cast',async t=>{
+  const f=await aGame(t);f.a.setSpellbook(core.MagicSpellbook[book]);await aNoPaid(f);
+});
+mTest('A real LMS20556 remains excluded despite actual apprentice-wand alias and native eligibility',async t=>{
+  const f=await aGame(t);assert.equal(core.CacheDefinitions.getObjId('br_apprentice_wand'),20556);assert.equal(core.ItemAliases.baseOf(20556),A_APPRENTICE);await mEquip(f.a,20556);assert.equal(f.a.getEquipment().hasStaffEquipped(),true);await aNoPaid(f,'WIND_STRIKE');
+});
+for(const id of [6911,18596])mTest('A unwearable note or placeholder '+id+' rejects native wield-slot input',async t=>{
+  const f=await aGame(t);give(f.a,id,'A-unwearable');const before=resources(f.a),slot=f.a.getInventory().getItems().findIndex(item=>item?.getId()===id);
+  assert.equal(core.CacheDefinitions.getItem(id).inventoryActions.includes('Wield'),false);
+  const {MAIN_INVENTORY_WIDGET_UID}=require('../dist/net/protocol/ClientProtocol');
+  // The real inventory operation used by a wand's Wield is unavailable on these
+  // unwearable objects. Send that invalid native widget operation, not tEquip.
+  await nativeButton(f.a,MAIN_INVENTORY_WIDGET_UID,3,slot,id);assert.deepEqual(resources(f.a),before);aMetadata(f.a);
+});
+for(const id of [565,554,556])mTest('A Fire Wave cannot substitute missing ordinary rune '+id,async t=>{
+  const f=await aGame(t);f.a.getInventory().deleteNumber(id,f.a.getInventory().getAmount(id));await aNoPaid(f);
+});
+mTest('A actual Blood pouch source pays once with no negative inventory audit',async t=>{
+  const f=await aGame(t),I=core.ItemIdentifiers,Pouch=require('../plugins/items/runepouch/Common.RunePouch');give(f.a,I.RUNE_POUCH,'A-pouch');Pouch.setSlots(f.a,[{id:565,amount:2},null,null,null]);f.a.getInventory().deleteNumber(565,f.a.getInventory().getAmount(565));
+  const fire=f.a.getInventory().getAmount(554),air=f.a.getInventory().getAmount(556),hit=await aFire(f,'FIRE_WAVE',false);assert.equal(Pouch.slots(f.a)[0].amount,1);assert.equal(f.a.getInventory().getAmount(565),0);assert.equal(f.a.getInventory().getAmount(554),fire-7);assert.equal(f.a.getInventory().getAmount(556),air-5);mLand(f,hit);tick(10);
+  Pouch.setSlots(f.a,[null,null,null,null]);await aNoPaid(f);
+});
+mTest('A actual fire tome supplies and spends its final page charge with real offhand accounting',async t=>{
+  const f=await aGame(t),I=core.ItemIdentifiers;await mEquip(f.a,I.TOME_OF_FIRE_EMPTY_,core.Equipment.SHIELD_SLOT);const book=mTome(f.a,'fire',1);f.a.getInventory().deleteNumber(554,f.a.getInventory().getAmount(554));
+  const blood=f.a.getInventory().getAmount(565),air=f.a.getInventory().getAmount(556),hit=await aFire(f,'FIRE_WAVE',false);assert.equal(book.Common.read(book.item).charges,0);assert.equal(f.a.getInventory().getAmount(554),0);assert.equal(f.a.getInventory().getAmount(565),blood-1);assert.equal(f.a.getInventory().getAmount(556),air-5);mLand(f,hit);tick(10);await aNoPaid(f);
+});
+mTest('A native gear switch observes actual attack-defence bonuses and zero damage percent with paid resumption',async t=>{
+  const f=await aGame(t);const first=await aFire(f);assert.equal(first.getTotalDamage(),20);mLand(f,first);tick(10);
+  await mEquip(f.a,core.ItemIdentifiers.STAFF);const staff=core.ItemDefinition.forId(core.ItemIdentifiers.STAFF).getBonuses();assert.equal(f.a.getBonusManager().getAttackBonus()[3],staff[3]);assert.equal(f.a.getBonusManager().getDefenceBonus()[3],staff[8]);assert.notDeepEqual([staff[3],staff[8]],[10,10]);assert.equal(f.a.getBonusManager().getOtherBonus()[core.BonusManager.MAGIC_STRENGTH],0);const cost=mCost(f.a,core.CombatSpells.FIRE_WAVE),amounts=mAmounts(f.a,cost),plain=await mFire(f,'FIRE_WAVE');bStop(f);mPaid(f.a,cost,amounts);assert.equal(plain.getTotalDamage(),20);mLand(f,plain);tick(10);
+  await mEquip(f.a,A_APPRENTICE);aMetadata(f.a);const fresh=await aFire(f);assert.equal(fresh.getTotalDamage(),20);mLand(f,fresh);
+});
+mTest('A remembered elemental autocast refuses excluded LMS then real apprentice selection resumes paid repeats',async t=>{
+  const f=await aGame(t);await aSelect(f,'FIRE_WAVE');await mEquip(f.a,20556);assert.equal(core.Autocasting.isActive(f.a),true);assert.equal(f.a.getCombat().getAutocastSpell(),core.CombatSpells.FIRE_WAVE);
+  const before=resources(f.a),hp=f.b.getHitpoints();await cNativeAttack(f.a,f.b);tick(25);bStop(f);assert.deepEqual(resources(f.a),before);assert.equal(f.trace.commits.length,0);assert.equal(f.trace.hits.length,0);assert.equal(f.b.getHitpoints(),hp);
+  await mEquip(f.a,A_APPRENTICE);await aSelect(f,'FIRE_WAVE');const cost=mCost(f.a,core.CombatSpells.FIRE_WAVE),amounts=mAmounts(f.a,cost);await cNativeAttack(f.a,f.b);for(let n=0;n<30&&f.trace.commits.length<2;n++)tick();bStop(f);const paid=f.trace.commits.length;assert.ok(paid>=2);
+  for(let i=0;i<cost.length;i++)assert.equal(f.a.getInventory().getAmount(cost[i][0]),amounts[i]-paid*cost[i][1]);for(const hit of f.trace.hits){assert.equal(hit.getTotalDamage(),20);mLand(f,hit);}assert.equal(f.b.getHitpoints(),hp-20*paid);
+});
+for(const boundary of ['victim-leave','caster-leave','finish','Forfeit'])mTest('A paid player queue '+boundary+' is discarded without resolution or refund',async t=>{
+  const f=await aGame(t),hit=await aFire(f),paid=resources(f.a),hp=f.b.getHitpoints();assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),true);
+  if(boundary==='Forfeit'){
+    // Hold impact while the existing mapped checkpoint/ObjectAction dispatcher
+    // reaches Forfeit; this is not encoded object-click or natural flight proof.
+    const priorTurns=magicTurns;magicTurns=false;try{await nmForfeit(f.a,f.game);}finally{magicTurns=priorTurns;}
+    assert.equal(C.matches.has(f.a),false);
+  }else if(boundary==='finish'){f.game.finish(null);assert.equal(f.game.phase,'over');}
+  else f.game.area.leave(boundary==='victim-leave'?f.b:f.a,false);
+  assert.equal(f.b.getCombat().getHitQueue().hasPendingHit(hit),false);tick(15);assert.equal(f.trace.resolved.includes(hit),false);assert.deepEqual(mInventory(f.a),paid.inventory);assert.deepEqual(contents(f.a.getEquipment()),paid.equipment);
+  if(boundary==='caster-leave'||boundary==='Forfeit')assert.equal(f.b.getHitpoints(),hp);
+});
+mTest('A lethal native cast retains safe inventory and rejoin permits fresh paid cast',async t=>{
+  const f=await aGame(t),kept=carriedItems(f.b);f.b.setHitpoints(1);const hit=await aFire(f),paid=resources(f.a);mLand(f,hit);
+  for(let n=0;n<60&&!f.game.jailed.has(f.b);n++)tick();assert.equal(f.game.jailed.has(f.b),true);assert.deepEqual(carriedItems(f.b),kept);assert.deepEqual(mInventory(f.a),paid.inventory);assert.deepEqual(contents(f.a.getEquipment()),paid.equipment);
+  await jailExit(f.b,f.game);assert.equal(f.game.fighters.has(f.b),true);tick(40);mPosition(f.game,f.a,f.b);const fresh=await aFire(f);assert.equal(fresh.getTotalDamage(),20);mLand(f,fresh);
+});
+mTest('A captured actual F2P equip gate refuses member wand and preserves basic-staff paid control',async t=>{
+  const f=await eGame(t),gates=[],names=['onCanUseItem','onCanGainExperience','onCanSpawnNpc','onCanStockItem','onCustomEvent','onSpellDisabled','onPrayerDisabled','onCanTeleport','onObjectInteraction','onPlayerProcess'];
+  const api={core,onCanEquip:h=>gates.push(h)};for(const name of names)api[name]=()=>{};
+  const mode=t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);try{require('../plugins/modes/FreeToPlay.plugin').register(api);}finally{mode.mock.restore();}assert.equal(gates.length,1);
+  const real=PM.emitCanEquip.bind(PM),seen=[];t.mock.method(PM,'emitCanEquip',(player,slot,item)=>{
+    if(player===f.a){const event={player,slot,item,allow:null};gates[0](event);seen.push(event);if(event.allow===false)return false;}return real(player,slot,item);
+  });
+  await mEquip(f.a,core.ItemIdentifiers.STAFF);const cost=mCost(f.a,core.CombatSpells.WIND_STRIKE),amounts=mAmounts(f.a,cost),hit=await mFire(f);bStop(f);mPaid(f.a,cost,amounts);mLand(f,hit);
+  give(f.a,A_APPRENTICE,'A-members-equip');const before=resources(f.a);await nativeItem(f.a,A_APPRENTICE,'Wield');assert.deepEqual(resources(f.a),before);assert.equal(sItem(f.a).getId(),core.ItemIdentifiers.STAFF);assert.ok(seen.some(e=>e.item.getId()===A_APPRENTICE&&e.allow===false));
+});
+mTest('A staging refusal precedes ordinary paid recovery in actual combat phase',async t=>{
+  const f=await aGame(t,{prepare:false});assert.equal(f.game.phase,'staging');await aNoPaid(f);completePreparation(f.game);mPosition(f.game,f.a,f.b);assert.equal(f.game.phase,'combat');const hit=await aFire(f);assert.equal(hit.getTotalDamage(),20);mLand(f,hit);
+});
+mTest('A departed outsider refusal has no new payment or impact',async t=>{
+  const f=await aGame(t);f.game.area.leave(f.b,false);assert.equal(C.matches.has(f.b),false);await aNoPaid(f);
+});
+mTest('A unsupported real shield refuses while the explicit tome boundary stays separate',async t=>{
+  const f=await aGame(t);await mEquip(f.a,core.ItemIdentifiers.RUNE_KITESHIELD,core.Equipment.SHIELD_SLOT);await aNoPaid(f);
+});
+for(const specialattacks of [1,2])mTest('A NoStaff or NoSpecial'+specialattacks+' retains ordinary native spell',async t=>{
+  const f=await aGame(t,{rules:{specialattacks,melee:1,ranged:1}}),hit=await aFire(f);assert.equal(hit.getTotalDamage(),20);mLand(f,hit);
 });

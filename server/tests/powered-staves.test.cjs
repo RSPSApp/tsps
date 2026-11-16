@@ -11,6 +11,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { ItemIdentifiers: I } = require("../dist/util/ItemIdentifiers");
 const { Item } = require("../dist/game/model/Item");
 const { Location } = require("../dist/game/model/Location");
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 const { FightType } = require("../dist/game/content/combat/FightType");
 
 const core = PluginManager.getCoreApi();
@@ -85,9 +86,12 @@ function player({ weapon = null, magic = 99, items = {}, at = new Location(3200,
       sendTypedMessage: (type, text) => { state.box = text; },
       sendSound: (id) => { state.sound = id; },
     }),
-    // An objectbox is continued at once: only the chain's actions run.
+    // An objectbox is continued at once: only the chain's actions run, and each box logs its own chat line.
     getDialogueManager: () => ({
-      startDialogues: (chain) => [...chain.getDialogues().values()].forEach((dialogue) => dialogue.isSelfAdvancing?.() !== undefined && dialogue.send(self)),
+      startDialogues: (chain) => [...chain.getDialogues().values()].forEach((dialogue) => {
+        if (dialogue.isSelfAdvancing?.() !== undefined) dialogue.send(self);
+        else if (dialogue.getText) Dialogue.sendBoxChatLine(self, dialogue.getText());
+      }),
     }),
     setEnteredAmountAction: (action) => { state.amountAction = action; },
     isSpecialActivated: () => state.special != null,

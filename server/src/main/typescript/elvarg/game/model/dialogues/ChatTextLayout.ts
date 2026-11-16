@@ -79,6 +79,17 @@ export class ChatTextLayout {
         return pages;
     }
 
+    /**
+     * How many lines the client draws `text` on in a text component `width` pixels wide in font 497:
+     * every "<br>" starts a line (an empty one too) and a line too wide breaks at a space. Without
+     * the cache's font, only the "<br>"s count.
+     */
+    static lineCount(text: string, width: number): number {
+        const paragraphs = String(text ?? "").split(/<br\s*\/?>/i);
+        if (!ChatTextLayout.loadAdvances()) return paragraphs.length;
+        return paragraphs.reduce((total, paragraph) => total + Math.max(1, ChatTextLayout.wrapParagraph(paragraph, width).length), 0);
+    }
+
     /** Each line, and whether a "<br>" ends it. */
     private static layout(text: string): Array<[string, boolean]> {
         if (!ChatTextLayout.loadAdvances()) {
@@ -87,22 +98,28 @@ export class ChatTextLayout {
         const lines: Array<[string, boolean]> = [];
         const paragraphs = String(text ?? "").split(/<br\s*\/?>/i);
         for (let p = 0; p < paragraphs.length; p++) {
-            const paragraph = paragraphs[p];
             const first = lines.length;
-            let line = "";
-            for (const word of paragraph.split(" ")) {
-                if (!word) continue;
-                const candidate = line ? `${line} ${word}` : word;
-                if (line && ChatTextLayout.width(candidate) > ChatTextLayout.WIDTH) {
-                    lines.push([line, false]);
-                    line = word;
-                } else {
-                    line = candidate;
-                }
-            }
-            if (line) lines.push([line, false]);
+            for (const line of ChatTextLayout.wrapParagraph(paragraphs[p], ChatTextLayout.WIDTH)) lines.push([line, false]);
             if (p < paragraphs.length - 1 && lines.length > first) lines[lines.length - 1][1] = true;
         }
+        return lines;
+    }
+
+    /** One paragraph's lines, broken at spaces to fit `width`; none for an empty paragraph. */
+    private static wrapParagraph(paragraph: string, width: number): string[] {
+        const lines: string[] = [];
+        let line = "";
+        for (const word of paragraph.split(" ")) {
+            if (!word) continue;
+            const candidate = line ? `${line} ${word}` : word;
+            if (line && ChatTextLayout.width(candidate) > width) {
+                lines.push(line);
+                line = word;
+            } else {
+                line = candidate;
+            }
+        }
+        if (line) lines.push(line);
         return lines;
     }
 }

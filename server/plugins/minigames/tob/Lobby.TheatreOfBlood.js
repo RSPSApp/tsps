@@ -11,6 +11,10 @@
  * party or application.
  * The cache confirms each script's arguments. Wiki: escape crystals are the only way out of
  * the theatre and the Mysterious Stranger sells them, so the entrance offers his shop.
+ *
+ * Player groups (the Grouping plugin, docs/grouping.md; not an OSRS feature): a group's leader
+ * making a party brings the group members waiting in Ver Sinhaza, and a member applying to it is
+ * accepted at once. Without a group (or without that plugin) nothing changes.
  */
 
 const Shared = require("./Shared.TheatreOfBlood");
@@ -54,6 +58,8 @@ const ATTR = {
 };
 const ESCAPE_CRYSTALS = [Shared.ITEM.ESCAPE_CRYSTAL];
 const HARD_LOCKED = "Everyone in your party must have completed the Theatre of Blood in Normal Mode to attempt Hard Mode.";
+/** The name the Grouping plugin knows the theatre by. */
+const GROUPING_ACTIVITY = "Theatre of Blood";
 
 // ---------------------------------------------------------------- the HUD in Ver Sinhaza
 
@@ -147,12 +153,14 @@ function clickListButton(event) {
     openOverview(player);
   } else if (slot === LIST_BUTTON.MY_PARTY) {
     if (Raid.raidOf(player)) return;
-    const party = Parties.partyOf(player) ?? Parties.create(player);
+    const existing = Parties.partyOf(player);
+    const party = existing ?? Parties.create(player);
     const applied = Parties.applicationOf(player);
     if (applied && applied !== party) {
       applied.withdraw(player);
       refreshParty(applied);
     }
+    if (!existing) bringGroup(player, party);
     openInformation(player, party);
     refreshHud(player);
   } else if (slot === LIST_BUTTON.FILTER) {
@@ -273,11 +281,25 @@ function apply(player, party) {
     openInformation(player, party);
     return;
   }
+  enlist(party, player);
+  if (letsStraightIn(party, player)) {
+    acceptAsLeader(party, player);
+    return;
+  }
+  refreshParty(party);
+  openInformation(player, party);
+}
+
+/** An application to this party, withdrawing any other (whose screens follow). */
+function enlist(party, player) {
   const before = Parties.applicationOf(player);
   party.apply(player);
   if (before && before !== party) refreshParty(before);
-  refreshParty(party);
-  openInformation(player, party);
+}
+
+/** The leader's Accept for one of the party's applicants. */
+function acceptAsLeader(party, applicant) {
+  answerApplicant(party.leader, party, party.applicants.indexOf(applicant), true);
 }
 
 function answerApplicant(player, party, index, accept) {
@@ -364,6 +386,61 @@ function resumeButton(event) {
   else if (event.buttonId === INFO_UID) clickInformation({ player: event.player, slot: event.action });
   else return;
   event.handled = true;
+}
+
+// ---------------------------------------------------------------- player groups (the Grouping plugin)
+
+/** At startup: the most players the theatre takes, for the groups' size checks. */
+function announceActivity() {
+  Shared.api().emitCustomEvent("grouping:activity", { name: GROUPING_ACTIVITY, maxSize: Shared.MAX_PARTY_SIZE });
+}
+
+/** The player's group as the Grouping plugin answers it (nothing set without that plugin). */
+function groupOf(player) {
+  const request = { player, activity: GROUPING_ACTIVITY, maxSize: Shared.MAX_PARTY_SIZE };
+  Shared.api().emitCustomEvent("grouping:members", request);
+  return request;
+}
+
+function inLeadersGroup(player, party) {
+  const request = { player, other: party.leader, same: false };
+  Shared.api().emitCustomEvent("grouping:same-group", request);
+  return request.same === true;
+}
+
+/** A member of the leader's group is accepted at once, unless declined before or the party is full. */
+function letsStraightIn(party, player) {
+  return party.members.length < Shared.MAX_PARTY_SIZE && !party.blocked.has(player.getUsername())
+    && inLeadersGroup(player, party);
+}
+
+/**
+ * A group member joins a new party only where they could apply themselves: in Ver Sinhaza, having
+ * met the Mysterious Stranger (the board calls anyone else over), and in no other party.
+ */
+function canBring(party, member) {
+  return party.members.length < Shared.MAX_PARTY_SIZE && Shared.inVerSinhaza(member.getLocation())
+    && hasMetStranger(member) && !Parties.partyOf(member);
+}
+
+/**
+ * A group's leader making a party: each member online who could join is accepted in the group's
+ * order while there's room; the others are told how to follow, and a leader whose group is too
+ * big for the theatre is told so.
+ */
+function bringGroup(leader, party) {
+  const group = groupOf(leader);
+  if (!group.isLeader) return;
+  if (group.fits === false && group.message) leader.sendMessage(group.message);
+  for (const member of group.members ?? []) {
+    if (member === leader) continue;
+    if (canBring(party, member)) {
+      enlist(party, member);
+      acceptAsLeader(party, member);
+    } else {
+      member.sendMessage(`${Shared.displayName(leader)} has made a Theatre of Blood party for your group. Apply at the notice board and you'll be let straight in.`);
+    }
+  }
 }
 
 // ---------------------------------------------------------------- the notice board and entrance
@@ -502,6 +579,7 @@ module.exports = function registerTheatreLobby(api) {
   api.onZoneEnter(Shared.VER_SINHAZA, enterVerSinhaza);
   api.onZoneExit(Shared.VER_SINHAZA, leaveVerSinhaza);
   api.onPlayerLogout(logoutFromLobby);
+  api.onServerStartup(announceActivity);
   Shared.onObject(api, Shared.OBJECT.NOTICE_BOARD, readNoticeBoard);
   Shared.onObject(api, Shared.OBJECT.ENTRANCE, useEntrance);
   api.onInterfaceActionClick(resumeButton);
@@ -510,6 +588,6 @@ module.exports = function registerTheatreLobby(api) {
 
 Object.assign(module.exports, {
   ATTR, openOverview, openInformation, rowText, memberLine, clickListButton, selectRow, clickInformation, resumeButton,
-  LIST_ROW_UIDS,
+  LIST_ROW_UIDS, GROUPING_ACTIVITY, announceActivity,
   useEntrance, refreshHud, leaveParty,
 });

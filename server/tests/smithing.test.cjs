@@ -340,7 +340,7 @@ test("Smelt lists every bar, and smelts on the captured timing", () => {
   objects.get("Furnace").Smelt({ player });
   const menu = lastMenu(player);
   assert.equal(menu.getTitle(), "What would you like to smelt?");
-  assert.deepEqual(menu.getItems(), [I.BRONZE_BAR, I.BLURITE_BAR, I.IRON_BAR, I.SILVER_BAR, I.LEAD_BAR, I.STEEL_BAR,
+  assert.deepEqual(menu.getItems(), [I.BRONZE_BAR, I.LUNAR_BAR, I.BLURITE_BAR, I.IRON_BAR, I.SILVER_BAR, I.LEAD_BAR, I.STEEL_BAR,
     I.GOLD_BAR, I.MITHRIL_BAR, I.ADAMANTITE_BAR, I.CUPRONICKEL_BAR, I.RUNITE_BAR]);
   menu.execute(I.BRONZE_BAR, 2);
   ticks(1);
@@ -359,18 +359,34 @@ test("Smelt lists every bar, and smelts on the captured timing", () => {
 });
 
 
+test("lunar ore smelts to a lunar bar at level 1 for 6.2 XP (Wiki)", t => {
+  t.mock.method(Math, "random", () => 0);
+  const player = furnaceWith([[I.LUNAR_ORE, 1]]);
+  objects.get("Furnace").Smelt({ player });
+  const menu = lastMenu(player);
+  assert.ok(menu.getItems().includes(I.LUNAR_BAR), "the Smelt menu lists the lunar bar");
+  menu.execute(I.LUNAR_BAR, 1);
+  ticks(6);
+  assert.equal(player.items.get(I.LUNAR_ORE), 0);
+  assert.equal(player.items.get(I.LUNAR_BAR), 1);
+  assert.equal(player.xp, 6.2);
+  assert.ok(player.spam.includes("You smelt the magic ore in the furnace."));
+  assert.equal(player.spam.at(-1), "You retrieve a lunar bar.");
+});
+
 test("lead and cupronickel stay out of F2P furnace menus and direct starts", (t) => {
   t.mock.method(PluginManager.getCoreApi().WorldDefinition, "isMembersWorld", () => false);
-  const player = furnaceWith([[I.LEAD_ORE, 2], [I.NICKEL_ORE, 1], [I.COPPER_ORE, 2]]);
+  const player = furnaceWith([[I.LEAD_ORE, 2], [I.NICKEL_ORE, 1], [I.COPPER_ORE, 2], [I.LUNAR_ORE, 1]]);
   objects.get("Furnace").Smelt({ player });
   const listed = lastMenu(player).getItems();
-  assert.ok(!listed.includes(I.LEAD_BAR) && !listed.includes(I.CUPRONICKEL_BAR));
+  assert.ok(!listed.includes(I.LEAD_BAR) && !listed.includes(I.CUPRONICKEL_BAR) && !listed.includes(I.LUNAR_BAR));
   const Smelting = require("../plugins/skills/smithing/Smelting.Smithing");
   const Data = require("../plugins/skills/smithing/Data.Smithing");
-  for (const id of [I.LEAD_BAR, I.CUPRONICKEL_BAR]) {
+  for (const id of [I.LEAD_BAR, I.CUPRONICKEL_BAR, I.LUNAR_BAR]) {
     assert.equal(Smelting.startSmelting(player, Data.SMELTING_RECIPES.find((r) => r.barId === id), 1), false);
   }
   assert.equal(player.items.get(I.LEAD_ORE), 2);
+  assert.equal(player.items.get(I.LUNAR_ORE), 1);
   assert.equal(player.xp, 0);
 });
 
@@ -399,6 +415,25 @@ test("too low a level is a message box; impure iron is lost", (t) => {
   assert.equal(player.items.get(I.IRON_BAR) ?? 0, 0);
   assert.equal(player.spam.at(-1), "The ore is too impure and you fail to refine it.");
   assert.equal(player.xp, 0);
+});
+
+// Wiki (Furnace, Clay forge, Volcanic Furnace, Lava forge, Ancient Furnace): furnaces under other names.
+test("the Clay forge, Volcanic Furnace, Lava forge and Ancient Furnace smelt like any furnace", () => {
+  for (const name of ["Clay forge", "Volcanic Furnace", "Lava forge", "Ancient Furnace"]) {
+    assert.equal(typeof objects.get(name)?.Smelt, "function", `${name} has Smelt`);
+    const player = furnaceWith([[I.COPPER_ORE, 1], [I.TIN_ORE, 1]]);
+    objects.get(name).Smelt({ player });
+    assert.equal(lastMenu(player).getTitle(), "What would you like to smelt?", name);
+    lastMenu(player).execute(I.BRONZE_BAR, 1);
+    ticks(5);
+    assert.equal(player.items.get(I.BRONZE_BAR), 1, `${name} smelts the bar`);
+
+    const used = furnaceWith([[I.IRON_ORE, 2]]);
+    const event = { player: used, itemId: I.IRON_ORE, object: { getDefinition: () => ({ getName: () => name }) } };
+    itemOnObject(event);
+    assert.equal(event.handled, true, `ore used on the ${name}`);
+    assert.equal(lastMenu(used).getTitle(), "What would you like to smelt?");
+  }
 });
 
 test("ore used on a furnace opens the Smelt menu; sand opens molten glass", () => {
@@ -608,6 +643,33 @@ test("cannonballs pour from bars in an ammo mould after Dwarf Cannon", () => {
   assert.equal(double.items.get(I.MITHRIL_CANNONBALL), 12);
   assert.equal(double.items.get(I.MITHRIL_BAR), 0);
   assert.equal(double.xp, 34 * 3);
+});
+
+// Wiki (Ancient Furnace, Cannonball): "5 ticks per action instead of 10" at Grimstone's Ancient Furnace.
+test("the Ancient Furnace casts cannonballs every 5 ticks, by Smelt and by a bar used on it", () => {
+  const ancientId = CacheDefinitions.getLocId("grimstone_furnace");
+  assert.ok(ancientId > 0);
+  const ancient = { getId: () => ancientId, getDefinition: () => ({ getName: () => "Ancient Furnace" }) };
+  const player = furnaceWith([[I.STEEL_BAR, 4], [I.AMMO_MOULD, 1]]);
+  player.quests = new Set(["dwarf_cannon"]);
+  objects.get("Ancient Furnace").Smelt({ player, objectId: ancientId });
+  lastMenu(player).execute(I.STEEL_CANNONBALL, 3);
+  ticks(4);
+  assert.equal(player.items.get(I.STEEL_CANNONBALL) ?? 0, 0);
+  ticks(1);
+  assert.equal(player.items.get(I.STEEL_CANNONBALL), 4);
+  ticks(5);
+  assert.equal(player.items.get(I.STEEL_CANNONBALL), 8);
+  ticks(5);
+  assert.equal(player.items.get(I.STEEL_CANNONBALL), 12);
+  assert.equal(player.items.get(I.STEEL_BAR), 1);
+
+  const used = furnaceWith([[I.STEEL_BAR, 2], [I.AMMO_MOULD, 1]]);
+  used.quests = new Set(["dwarf_cannon"]);
+  itemOnObject({ player: used, itemId: I.STEEL_BAR, object: ancient, objectId: ancientId });
+  lastMenu(used).execute(I.STEEL_CANNONBALL, 2);
+  ticks(10);
+  assert.equal(used.items.get(I.STEEL_CANNONBALL), 8);
 });
 
 test("Shayzien armour from lovakite and keel parts after Pandemonium use the Wiki experience", () => {

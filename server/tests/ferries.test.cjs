@@ -25,7 +25,8 @@ let tasks = [];
 let quests = { complete: new Set(), started: new Set() };
 const starts = [];
 const arrivals = [];
-const hooks = { npc: [], object: [], events: new Map(), conditions: [], logout: [], shutdown: [] };
+const prompts = [];
+const hooks = { npc: [], object: [], events: new Map(), conditions: [], variants: [], logout: [], shutdown: [] };
 
 class Task {
   constructor(delay, key) {
@@ -84,8 +85,14 @@ const api = {
     TeleportHandler: { checkReqs: () => true, destinationAllowed: () => true, teleport: () => assert.fail("a ferry must not cast a teleport") },
     TeleportType: { NORMAL: "NORMAL" },
   },
-  onNpcInteraction: (handler) => hooks.npc.push(handler),
+  // Named hooks (Andras's Travel) are tested in andras-boat.test.cjs.
+  sendMultiChatboxPrompt: (player, title, ...pairs) => prompts.push({ player, title, pairs }),
+  onNpcInteraction: (handler) => { if (typeof handler === "function") hooks.npc.push(handler); },
+  onNpcDialogueVariant: (handler) => hooks.variants.push(handler),
+  onPlayerLogin() {},
+  persistAttribute() {},
   onObjectInteraction: (handler) => hooks.object.push(handler),
+  onObjectRoute: () => {},
   onNpcDialogueCondition: (handler) => hooks.conditions.push(handler),
   onCustomEvent: (name, handler) => hooks.events.set(name, [...(hooks.events.get(name) ?? []), handler]),
   onPlayerLogout: (handler) => hooks.logout.push(handler),
@@ -166,6 +173,7 @@ function createPlayer({ at = new Location(3046, 3236, 0), items = [], worn = [],
     isRegistered: () => registered,
     setRegistered: (value) => { registered = value; },
     sendMessage: (text) => sent.messages.push(text),
+    setPositionToFace: (target) => { sent.faced = [target.getX(), target.getY(), target.getZ()]; },
   };
 }
 
@@ -387,6 +395,109 @@ test("the Rellekka boat's Travel sails to Ungael as Torfinn's boat does; without
   assert.equal(early.handled, false);
   assert.deepEqual(before.sent.spam, []);
   assert.deepEqual(at(before.player), [2639, 3697, 0]);
+});
+
+/** Travel on an island amenity rowboat (a multiloc), as the client sends it. */
+function clickRowboat(player, gameval, location) {
+  const id = CacheDefinitions.getLocId(gameval);
+  const event = { player, objectId: id, clickType: 1, definition: ObjectDefinition.forPlayer(id, player), location, handled: false };
+  for (const handler of hooks.object) handler(event);
+  return event;
+}
+
+test("built island rowboats row both ways; Ynysdail's needs Song of the Elves; unbuilt ones have no Travel", () => {
+  const ynysdail = CacheDefinitions.getVarbitId("amenity_rowboat_ynysdail");
+  const gwenith = { x: 2217, y: 3425, z: 0 };
+  const island = { x: 2228, y: 3467, z: 0 };
+
+  const refused = realPlayer(new Location(2218, 3424, 0), new Map([[ynysdail, 1]]));
+  const messages = [];
+  refused.player.sendMessage = (text) => messages.push(text);
+  const blocked = clickRowboat(refused.player, "amenity_rowboat_ynysdail_in", gwenith);
+  assert.equal(blocked.definition.getInteractions()[0], "Travel");
+  assert.equal(blocked.handled, true);
+  assert.deepEqual(messages, ["You need to complete Song of the Elves to use this rowboat."]);
+  tick(5);
+  assert.deepEqual(at(refused.player), [2218, 3424, 0]);
+
+  quests.complete.add("song_of_the_elves");
+  const out = realPlayer(new Location(2218, 3424, 0), new Map([[ynysdail, 1]]));
+  assert.equal(clickRowboat(out.player, "amenity_rowboat_ynysdail_in", gwenith).handled, true);
+  tick(3);
+  assert.deepEqual(at(out.player), [2227, 3469, 0]);
+  tick(4);
+  assert.equal(out.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(clickRowboat(out.player, "amenity_rowboat_ynysdail_out", island).handled, true);
+  tick(3);
+  assert.deepEqual(at(out.player), [2218, 3424, 0]);
+  tick(4);
+
+  // Rowboats with no quest gate: Corsair Cove to Anglers' Retreat.
+  const anglers = CacheDefinitions.getVarbitId("amenity_rowboat_anglers");
+  const corsair = realPlayer(new Location(2543, 2844, 0), new Map([[anglers, 1]]));
+  assert.equal(clickRowboat(corsair.player, "amenity_rowboat_anglers_in", { x: 2542, y: 2842, z: 0 }).handled, true);
+  tick(3);
+  assert.deepEqual(at(corsair.player), [2471, 2724, 0]);
+  tick(4);
+
+  // Unbuilt: the island shows the space (Build, Inspect), the mainland nothing, and neither sails.
+  const unbuilt = realPlayer(new Location(2227, 3469, 0));
+  const space = clickRowboat(unbuilt.player, "amenity_rowboat_ynysdail_out", island);
+  assert.equal(space.definition.getName(), "Rowboat space");
+  assert.equal(space.handled, false);
+  assert.equal(clickRowboat(unbuilt.player, "amenity_rowboat_ynysdail_in", gwenith).handled, false);
+  tick(5);
+  assert.deepEqual(at(unbuilt.player), [2227, 3469, 0]);
+});
+
+test("the Custodia lake rowboat crosses both ways with no requirement", () => {
+  const west = realPlayer(new Location(1256, 3395, 0));
+  assert.equal(clickRowboat(west.player, "custodia_rowboat_west", { x: 1257, y: 3394, z: 0 }).handled, true);
+  tick(3);
+  assert.deepEqual(at(west.player), [1282, 3385, 0]);
+  tick(4);
+  assert.equal(clickRowboat(west.player, "custodia_rowboat_south", { x: 1281, y: 3386, z: 0 }).handled, true);
+  tick(3);
+  assert.deepEqual(at(west.player), [1256, 3395, 0]);
+  tick(4);
+});
+
+test("the Great Conch's rowboats ask for one of the other two coasts, past Troubled Tortugans' stage 3", () => {
+  const tt = CacheDefinitions.getVarbitId("tt");
+  prompts.length = 0;
+  const early = realPlayer(new Location(3191, 2370, 0), new Map([[tt, 3]]));
+  const messages = [];
+  early.player.sendMessage = (text) => messages.push(text);
+  assert.equal(clickRowboat(early.player, "conch_rowboat_south", { x: 3191, y: 2371, z: 0 }).handled, true);
+  assert.deepEqual(messages, ["You need to make more progress in Troubled Tortugans to use this rowboat."]);
+  assert.equal(prompts.length, 0);
+
+  const later = realPlayer(new Location(3191, 2370, 0), new Map([[tt, 10]]));
+  clickRowboat(later.player, "conch_rowboat_south", { x: 3191, y: 2371, z: 0 });
+  assert.equal(prompts.length, 1);
+  const labels = prompts[0].pairs.filter((_, i) => i % 2 === 0);
+  assert.deepEqual(labels, ["Northern Coast.", "Eastern Coast."]);
+  prompts[0].pairs[3]();
+  tick(3);
+  assert.deepEqual(at(later.player), [3264, 2463, 0]);
+  tick(4);
+
+  // From the east coast, the menu offers the Summer Shore and the north.
+  clickRowboat(later.player, "conch_rowboat_east", { x: 3264, y: 2461, z: 0 });
+  assert.deepEqual(prompts[1].pairs.filter((_, i) => i % 2 === 0), ["The Summer Shore.", "Northern Coast."]);
+  prompts[1].pairs[3]();
+  tick(3);
+  assert.deepEqual(at(later.player), [3197, 2531, 0]);
+  tick(4);
+});
+
+test("every loc trigger names a cache loc and existing routes", () => {
+  for (const entry of Common.data.locs) {
+    for (const gameval of entry.from ?? []) assert.ok(CacheDefinitions.getLocId(gameval) != null, gameval);
+    const routes = entry.menu ? entry.menu.map(([, route]) => route) : [entry.route];
+    for (const route of routes) assert.ok(Common.data.routes[route], `${entry.from}: ${route}`);
+    if (entry.gate) assert.ok(Common.data.gates[entry.gate]?.message, `${entry.gate} has a refusal message`);
+  }
 });
 
 test("Veos's ship fades with the sea's song and says where it sails as the player lands", () => {
@@ -790,4 +901,89 @@ test("Larry's iceberg voyage shows the captured ship interface before landing", 
   tick(1);
   assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], [2660, 3989, 1]);
   assert.equal(player.blocked, false);
+});
+
+test("Jardric's rowboat after Dragon Slayer II: Travel from Fossil Island lands at Lithkren facing north", () => {
+  // rsprox 231/711 tick 5876: the message (spam) and fade on the click, the minimap off a tick
+  // later, the move to 3583,3973 on the third (face_angle 1024), the fade in on the fifth.
+  const minimap = CacheDefinitions.getVarbitId("minimap_state");
+  quests.complete.add("dragon_slayer_ii");
+  const player = createPlayer({ at: new Location(3661, 3849, 0) });
+  const event = click(player, "Jardric", "Travel", { gameval: "jardric_boat", at: [3662, 3848] });
+  assert.equal(event.handled, true);
+  assert.deepEqual(player.sent.spam, ["You board the boat and travel to Lithkren."]);
+  assert.deepEqual(player.sent.subs.at(-1).options.postScripts[0].args, [0, 255, 0, 0, 50]);
+  tick(1);
+  assert.equal(player.sent.varbits.get(minimap), 2);
+  tick(1);
+  assert.deepEqual(at(player), [3661, 3849, 0]);
+  tick(1);
+  assert.deepEqual(at(player), [3583, 3973, 0]);
+  assert.deepEqual(player.sent.faced, [3583, 3974, 0]);
+  tick(2);
+  assert.equal(player.sent.varbits.get(minimap), 0);
+  assert.deepEqual(player.sent.subs.at(-1).options.postScripts[0].args, [0, 0, 0, 255, 50]);
+  assert.equal(player.blocked, false);
+  tick(2);
+  assert.ok(player.sent.closed.includes((161 << 16) | 1));
+  assert.deepEqual(arrivals.map((arrival) => arrival.route), ["lithkren"]);
+});
+
+test("Jardric's Travel at Lithkren rows back to Fossil Island facing east", () => {
+  // rsprox 231/711 tick 5863 (and 227/91, 227/1768): "You board the boat and travel to Fossil Island.", 3660,3849, angle 1536.
+  quests.complete.add("dragon_slayer_ii");
+  const player = createPlayer({ at: new Location(3583, 3974, 0) });
+  click(player, "Jardric", "Travel", { gameval: "jardric_lithkren", at: [3581, 3975] });
+  assert.deepEqual(player.sent.spam, ["You board the boat and travel to Fossil Island."]);
+  tick(3);
+  assert.deepEqual(at(player), [3660, 3849, 0]);
+  assert.deepEqual(player.sent.faced, [3661, 3849, 0]);
+});
+
+test("Jardric's Talk-to offers the crossing after Dragon Slayer II, and Yes please. boards once", () => {
+  const talk = (gameval) => hooks.variants.map((handler) => handler({
+    player: createPlayer(), npc: { getId: () => npcId(gameval) }, npcId: npcId(gameval),
+    definition: { getName: () => "Jardric" }, pages: [],
+  })).find((value) => value != null);
+  assert.equal(talk("jardric_boat"), undefined);
+  assert.equal(talk("jardric_lithkren"), undefined);
+  quests.complete.add("dragon_slayer_ii");
+  assert.equal(talk("jardric_boat"), "standard-dialogue-after-dragon-slayer-ii-fossil-island");
+  assert.equal(talk("jardric_lithkren"), "standard-dialogue-after-dragon-slayer-ii-lithkren");
+
+  // The transcript's boarding message is the trip: the ferry sends it as spam and ends the talk,
+  // so the line isn't said twice (231/711 shows it once, as spam).
+  const player = createPlayer({ at: new Location(3661, 3849, 0) });
+  const step = { player, npcId: npcId("jardric_boat"), stepId: "OoijAs", kind: "message", handled: false };
+  for (const handler of hooks.events.get("npc-dialogue:action")) handler(step);
+  assert.equal(step.handled, true);
+  assert.equal(step.end, true);
+  assert.deepEqual(player.sent.spam, ["You board the boat and travel to Lithkren."]);
+  tick(3);
+  assert.deepEqual(at(player), [3583, 3973, 0]);
+  const back = createPlayer({ at: new Location(3583, 3974, 0) });
+  const home = { player: back, npcId: npcId("jardric_lithkren"), stepId: "0P4s9G", kind: "message", handled: false };
+  for (const handler of hooks.events.get("npc-dialogue:action")) handler(home);
+  assert.deepEqual(back.sent.spam, ["You board the boat and travel to Fossil Island."]);
+});
+
+test("mid Dragon Slayer II, Jardric's Travel is the quest's until it lands the player on Lithkren", () => {
+  // The multi-NPC shows Travel from varbit 6104 65 (the rowboat built), before the quest's own
+  // arrival (Dallas's crossing): the ferry leaves that click alone.
+  const player = createPlayer({ at: new Location(3661, 3849, 0) });
+  const attributes = new Map();
+  player.getAttribute = (key) => attributes.get(key);
+  const early = click(player, "Jardric", "Travel", { gameval: "jardric_boat", at: [3662, 3848] });
+  assert.equal(early.handled, false);
+  assert.deepEqual(player.sent.spam, []);
+  assert.deepEqual(starts, []);
+  tick(3);
+  assert.deepEqual(at(player), [3661, 3849, 0]);
+
+  // Once the quest has landed them there, the rowboat runs both ways before the quest ends.
+  attributes.set("dragon-slayer-ii:lithkren-arrived", true);
+  const later = click(player, "Jardric", "Travel", { gameval: "jardric_boat", at: [3662, 3848] });
+  assert.equal(later.handled, true);
+  tick(3);
+  assert.deepEqual(at(player), [3583, 3973, 0]);
 });

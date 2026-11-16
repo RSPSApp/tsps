@@ -452,10 +452,13 @@ test('warmth regenerates 8% a minute plus 1% per warm item; food and potions res
   assert.equal(Warmth.warmthOf(player), 950, 'under 4 healed does nothing');
   Warmth.setWarmth(player, 100);
   player.inventory.adds(Shared.ITEM.REJUVENATION_2);
+  // The Potions plugin counts the sip (tracking_potions_sipped) between the two lines (233/03262.txt:4957-4960).
+  (hooks.custom['potions:sip'] ??= []).push(({ player: sipper }) => sipper.spam.push('<sip>'));
   hooks.items['Rejuvenation potion (2)'].Drink({ player, slot: 0, itemId: Shared.ITEM.REJUVENATION_2 });
+  hooks.custom['potions:sip'].pop();
   assert.equal(Warmth.warmthOf(player), 400);
   assert.equal(player.inventory.slots[0].id, Shared.ITEM.REJUVENATION_1);
-  assert.deepEqual(player.spam, ['You drink some of your potion.', 'You have 1 dose of potion left.'], 'capture: spam');
+  assert.deepEqual(player.spam, ['You drink some of your potion.', '<sip>', 'You have 1 dose of potion left.'], 'capture: spam');
   assert.deepEqual(player.sounds, [Shared.SOUND.DRINK]);
 });
 
@@ -723,6 +726,21 @@ test('the reward tables follow the Wiki module', () => {
   assert.equal(Rewards.pyromancerPiece(player), I.PYROMANCER_GARB, 'ties: garb first');
   player.inventory.adds(I.PYROMANCER_GARB);
   assert.equal(Rewards.pyromancerPiece(player), I.PYROMANCER_HOOD);
+});
+
+test('the cart sends the loot line before the inventory update that adds it (233/03264 [503]; RuneLite loot tracker)', () => {
+  const player = fakePlayer('Tracker');
+  Round.setRewardsOwed(player, 1);
+  const sent = [];
+  const refresh = player.inventory.refreshItems;
+  player.inventory.refreshItems = () => { sent.push(`inventory, owed ${Round.rewardsOwed(player)}`); return refresh.call(player.inventory); };
+  const push = player.spam.push.bind(player.spam);
+  player.spam.push = (line) => { sent.push(line); return push(line); };
+  Cart.search({ player });
+  ticks(3);
+  const loot = sent.findIndex((line) => line.startsWith('You found some loot: '));
+  assert.ok(loot >= 0, JSON.stringify(sent));
+  assert.equal(sent[loot + 1], 'inventory, owed 0', 'the pool varbit, the line, then the inventory');
 });
 
 test('the cart: Check counts, Search takes one every 3 ticks, and the last ends with a message box', () => {
@@ -1003,4 +1021,23 @@ test('a round below the best score has no high-score line; a better one does', (
     scores.push(player.messages.filter((m) => m.startsWith('You have a new high score!')));
   }
   assert.deepEqual(scores, [['You have a new high score! 700'], [], ['You have a new high score! 800']]);
+});
+
+test('the rewards owed are asked as minigame:points: unanswered as rolled, an answer replaces them', () => {
+  const asked = [];
+  let multiplier = 1;
+  const probe = (request) => { asked.push({ ...request }); request.points *= multiplier; };
+  const listeners = (hooks.custom['minigame:points'] ??= []);
+  listeners.push(probe);
+  const p = fakePlayer('Cart');
+  try {
+    Round.reward(p, 1000); // 1,000 points: exactly 3
+    multiplier = 2;
+    Round.reward(p, 1000);
+  } finally {
+    listeners.splice(listeners.indexOf(probe), 1);
+  }
+  assert.deepEqual(asked, [{ player: p, minigame: 'wintertodt', points: 3 }, { player: p, minigame: 'wintertodt', points: 3 }]);
+  assert.equal(Round.rewardsOwed(p), 9);
+  assert.equal(p.messages.at(-1), "You're owed an additional 6 rewards from the reward cart. You're now owed 9 rewards.");
 });

@@ -63,6 +63,8 @@ export class Combat {
     /** The player whose damage `addDamage` recorded last. */
     private lastDamager: Player | null = null;
     private readonly lastAttack = new TickStopwatch();
+    /** Damage can delay healing without renewing another fighter\'s single-way tag. */
+    private readonly lastDamage = new TickStopwatch();
     // Most NPCs never use these; each SecondsTimer also holds a Stopwatch, so allocate on first use.
     private poisonImmunityTimer: SecondsTimer | null = null;
     private poisonClock: PoisonClock | null = null;
@@ -145,6 +147,18 @@ export class Combat {
     private unreachableDistance = -1;
     /** 20 cycles (10 s) of no progress: an actor is not held in combat with a target it can never hit. */
     private static readonly UNREACHABLE_GIVE_UP_CYCLES = 20;
+    /**
+     * OSRS PJ timer: 8 ticks (4.8 s) of single-way protection while a monster is attacking
+     * the player, refreshed by each attack and ended early when the monster dies
+     * (https://oldschool.runescape.wiki/w/PJ_timer).
+     */
+    private static readonly PJ_TIMER_MS = 8 * 600;
+    /**
+     * Player-versus-player keeps the existing 10-tick hold here. Live uses a longer PvP PJ
+     * timer (20 ticks in Wilderness singles, 16 on PvP worlds), which is a separate change;
+     * the PvM fix must not shorten PvP protection.
+     */
+    private static readonly PVP_TIMER_MS = 10 * 600;
 
     public preserveMovementForTicks(ticks = 1): void {
         this.manualMovementUntilCycle = World.getProcessCycle() + Math.max(0, ticks) - 1;
@@ -283,7 +297,12 @@ export class Combat {
         this.autoRetaliating = autoRetaliation;
         this.method = null;
         this.cycleState = null;
-        if (this.character.isPlayer()) TaskManager.cancelTasks(this.character.getIndex());
+        if (this.character.isPlayer()) {
+            // An attack replaces the player's interaction, clicked or auto-retaliate alike, so a
+            // chop, a fire or a make-X ends even with the target adjacent and no step to take.
+            TaskManager.cancelTasks(this.character.getIndex());
+            this.character.getAsPlayer().interactionCleared("attack");
+        }
         this.character.getMovementQueue().reset();
         // A retaliation chase isn't the player's click: it follows the run setting.
         if (autoRetaliation) this.character.getMovementQueue().endClickRunOverride();
@@ -307,10 +326,15 @@ export class Combat {
         if (this.lastPreMovementCycle === cycle) return;
         this.lastPreMovementCycle = cycle;
 
-        if (this.attacker && this.lastAttack.elapsedTime(6000)) {
-            // Only the attacker expires here: the logout timer runs on to its own 16 ticks.
-            // Before the scripted-walk return, so a long plugin walk still lets it expire.
-            this.clearAttacker();
+        if (this.attacker) {
+            // Wiki (PJ timer): 8 ticks of protection while a monster is attacking; a kill ends
+            // it early (NPC.appendDeath). PvP keeps its longer window for now. Only the attacker
+            // expires here: the logout timer runs on to its own 16 ticks. Before the
+            // scripted-walk return, so a long plugin walk still lets it expire.
+            const timerMs = this.attacker.isNpc() || this.character.isNpc()
+                ? Combat.PJ_TIMER_MS
+                : Combat.PVP_TIMER_MS;
+            if (this.lastAttack.elapsedTime(timerMs)) this.clearAttacker();
         }
 
         // A plugin scripted this NPC's walk; it owns the movement queue and the
@@ -409,8 +433,7 @@ export class Combat {
             return;
         }
 
-        // An overlapped NPC that can still reach its target (a large NPC fighting
-        // underfoot) attacks in place; one that cannot steps aside below.
+        // An NPC over its target can't reach it (CombatRange.canReach): it steps off below.
         if (this.character.isNpc() && CombatRange.overlapsEntities(this.character, target)
             && !reachable) {
             this.processNpcUnderTarget(state);
@@ -781,11 +804,25 @@ export class Combat {
         return this.lastAttackedCycle < 0 ? Infinity : World.getProcessCycle() - this.lastAttackedCycle;
     }
     private clearAttacker(): void {
-        this.applyAttacker(null);
+        // PJ expiry releases the attacker; it is not another hit or an explicit
+        // combat reset, so NPC regeneration keeps its original timestamp.
+        this.applyAttacker(null, false);
     }
-    private applyAttacker(attacker: Mobile | null): void {
+
+    /**
+     * A monster's death ends the PJ timer it held on this character, so the next aggressive
+     * monster can engage on the kill tick. The 16-tick logout timer is separate and keeps
+     * running from `lastAttackedCycle`.
+     */
+    public clearAttackerIf(attacker: Mobile): void {
+        if (this.attacker === attacker) this.applyAttacker(null);
+    }
+    private applyAttacker(attacker: Mobile | null, resetTimer = true): void {
         this.attacker = attacker;
-        this.lastAttack.reset();
+        if (resetTimer) {
+            this.lastAttack.reset();
+            this.lastDamage.reset();
+        }
         if (this.character.isNpc()) {
             World.markNpcCombatActive(this.character.getAsNpc(), attacker != null || this.target != null);
         }
@@ -816,6 +853,7 @@ export class Combat {
     public getTeleblockTimer(): SecondsTimer { return this.teleblockTimer ??= new SecondsTimer(); }
     public getPrayerBlockTimer(): SecondsTimer { return this.prayerBlockTimer ??= new SecondsTimer(); }
     public getLastAttack(): TickStopwatch { return this.lastAttack; }
+    public getLastDamage(): TickStopwatch { return this.lastDamage; }
 
     private shouldRetreat(method: CombatMethod): boolean {
         if (!this.character.isNpc()) return false;
@@ -878,8 +916,47 @@ export class Combat {
                 TaskManager.wasTaskActiveThisCycle(state.target.getIndex?.(), "MovementTask"));
         if (targetBusy) return;
 
-        const [offsetX, offsetY] = [[-1, 0], [1, 0], [0, -1], [0, 1]][Misc.getRandom(3)];
-        movement.setPursuitCheckpoint(this.character.getLocation().transform(offsetX, offsetY));
+        const size = Math.max(1, this.character.getSize() | 0);
+        if (size <= 1) {
+            const [offsetX, offsetY] = [[-1, 0], [1, 0], [0, -1], [0, 1]][Misc.getRandom(3)];
+            movement.setPursuitCheckpoint(this.character.getLocation().transform(offsetX, offsetY));
+            return;
+        }
+        // A large NPC can't clear its target in one step: it walks off the shortest way, a tile a
+        // tick, recomputed each tick, until the target stands beside it (rsprox: a gargoyle,
+        // 237/01143.txt:85622; a moss giant, 227/00569.txt:3987; the Kalphite Queen, 227/00095.txt).
+        // Its own footprint still covers the target mid-step, so the target alone doesn't block it.
+        // One that can't move (blocked, scripted, built into scenery) stays put and can't attack.
+        if (!movement.getMobility().canMove() || movement.isMovementBlocked()) return;
+        if (this.character.getAsNpc().isScriptedMovement() === true) return;
+        if (this.character.hasFlag?.(CombatRange.BUILT_INTO_SCENERY_FLAG)) return;
+        const step = this.stepOffTarget(state.target, size);
+        if (!step) return;
+        movement.ignoreOccupantThisCycle(state.target);
+        movement.setPursuitCheckpoint(step);
+    }
+
+    /**
+     * The first tile of the shortest cardinal way out from over `target`: each direction costs the
+     * tiles it takes to leave the target outside the footprint; directions the NPC can't step are
+     * dropped. Null when it's boxed in.
+     */
+    private stepOffTarget(target: Mobile, size: number): Location | null {
+        const at = this.character.getLocation();
+        const them = target.getLocation();
+        const movement = this.character.getMovementQueue();
+        const options: Array<[number, number, number]> = [
+            [-1, 0, at.getX() + size - them.getX()],
+            [1, 0, them.getX() - at.getX() + 1],
+            [0, -1, at.getY() + size - them.getY()],
+            [0, 1, them.getY() - at.getY() + 1],
+        ];
+        movement.ignoreOccupantThisCycle(target);
+        const open = options
+            .filter(([dx, dy]) => movement.canWalkTo(at.transform(dx, dy)))
+            .sort((a, b) => a[2] - b[2]);
+        movement.ignoreOccupantThisCycle(null);
+        return open.length ? at.transform(open[0][0], open[0][1]) : null;
     }
 
     /**
@@ -974,6 +1051,9 @@ export class Combat {
         if (target.getCombat().getAttacker() == null) {
             CombatFactory.getMethod(target).onCombatBegan(target, this.character);
         }
+        // The first real swing at an own superior in single-way combat (the cycle already accepted the permission and
+        // the attack delay has elapsed): the monster attacking this player stops. Idempotent; nothing for any other target.
+        if (this.character.isPlayer()) CombatFactory.releaseStandardAttackers(this.character, target);
         if (!bypass && !timing.keepDelay) {
             const speed = PluginManager.emitAttackSpeed(this.character, target, method.type(),
                 specialTraits?.attackSpeedTicks ?? method.attackSpeed(this.character));
@@ -1119,9 +1199,14 @@ export class Combat {
         target: Mobile,
         generation: number
     ): void {
+        const pluginMessage = CombatFactory.takePluginDenialMessage(this.character);
         if (this.target !== target || this.generation !== generation) return;
         const player = this.character.isPlayer() ? this.character.getAsPlayer() : null;
         switch (response) {
+            case CanAttackResponse.CANT_ATTACK_IN_AREA:
+                // A plugin's own refusal line (PluginCanAttackEvent.message), only on this attack.
+                if (pluginMessage) player?.sendMessage(pluginMessage);
+                break;
             case CanAttackResponse.COMBAT_METHOD_NOT_ALLOWED:
                 // The weapon/spell is momentarily unusable (no ammo loaded, blowpipe
                 // empty, spell unselected). Keep the target so re-equipping resumes;

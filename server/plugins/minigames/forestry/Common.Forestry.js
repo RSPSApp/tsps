@@ -101,19 +101,44 @@ function award(player, id, amount) {
   if (amount - gather.stored > 0) give(player, id, amount - gather.stored);
 }
 
-/** Bark into the kit or the pack (on the floor when there's no room), with the award line. */
+/** Bark into the kit or the pack (on the floor when there's no room), with the award line; the amount given. */
 function bark(player, amount, lump = false) {
-  if (amount <= 0) return;
+  if (amount <= 0) return 0;
+  // Content may raise the bark ("minigame:points" { player, minigame, points }).
+  const request = { player, minigame: "forestry", points: amount };
+  api.emitCustomEvent("minigame:points", request);
+  amount = request.points;
   award(player, data.items.bark, amount);
   const text = message("bark", { amount });
   if (lump) player.sendMessage(text);
   else spam(player, text);
+  return amount;
+}
+
+/** A loot tracker key for loot sent over more than one tick ("loot-tracker:next-key"). */
+function lootKey(player) {
+  const request = { player, key: undefined };
+  api.emitCustomEvent("loot-tracker:next-key", request);
+  return request.key;
+}
+
+/**
+ * An event's reward in the loot tracker, as live runs script 7192 (loottracker_add_loot) with the
+ * event's NPC: one key a reward, or `key` from lootKey (237/01104.txt ticks 6386-6387, 237/01098.txt).
+ */
+function track(player, npcId, items, key = undefined) {
+  api.emitCustomEvent("loot-tracker:add-npc", { player, npcId, items, key });
 }
 
 function give(player, id, amount) {
   const item = new core.Item(id, amount);
   if (player.getInventory().getAddableAmount(item) >= amount) player.getInventory().add(item, true);
   else core.ItemOnGroundManager.registers(player, item);
+}
+
+/** An owner-only stack on the player's tile, never turning public; `despawnDelay` in ticks (else the default). */
+function drop(player, id, amount = 1, despawnDelay = undefined) {
+  core.ItemOnGroundManager.registerLocation(player, new core.Item(id, amount), player.getLocation().clone(), undefined, { goesGlobal: false, despawnDelay });
 }
 
 function hasKit(player) {
@@ -302,6 +327,8 @@ module.exports = {
   },
   later,
   every,
+  lootKey,
+  track,
   busy,
   randomInt,
   pick,
@@ -314,6 +341,7 @@ module.exports = {
   xp,
   bark,
   give,
+  drop,
   award,
   hasKit,
   distance,

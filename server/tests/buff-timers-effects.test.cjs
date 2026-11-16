@@ -25,7 +25,7 @@ function fixture({ cycle = 1000, players = 0 } = {}) {
     onPlayerProcess: fn => { hooks.process = fn; },
     onPlayerLogout: fn => { hooks.logout = fn; },
   });
-  const attributes = new Map(), slots = new Map(), vars = [];
+  const attributes = new Map(), slots = new Map(), vars = [], scripts = [];
   const player = {
     getAttribute: key => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
@@ -34,12 +34,15 @@ function fixture({ cycle = 1000, players = 0 } = {}) {
     getPacketSender: () => ({
       sendConfig: (id, value) => vars.push([`varp ${id}`, value]),
       sendVarbit: (id, value) => vars.push([`varbit ${id}`, value]),
+      sendClientScript: (id, ...args) => scripts.push([id, ...args]),
     }),
   };
   const sent = () => Object.fromEntries(vars.splice(0).filter(([key]) => !OTHER_TIMERS.has(key)));
+  const ran = () => scripts.splice(0);
   const tick = () => hooks.process({ player });
   const login = () => hooks.login({ player });
-  return { player, attributes, slots, world, group, sent, tick, login };
+  const logout = () => hooks.logout({ player });
+  return { player, attributes, slots, world, group, sent, ran, tick, login, logout };
 }
 
 /** Logged in, with the login's own sends cleared. */
@@ -228,6 +231,56 @@ test('the ammo slot goes on buff_bar_ammo_type and buff_bar_ammo_amount', () => 
   f.slots.delete(AMMUNITION_SLOT);
   f.tick();
   assert.deepEqual(f.sent(), { 'varp 3158': -1, 'varp 3159': 0 });
+});
+
+const bolts = (id, count) => ({ getId: () => id, getAmount: () => count });
+
+test('the ammo buff is started on the first tick after a login, not with the login', () => {
+  const f = fixture();
+  f.slots.set(AMMUNITION_SLOT, bolts(9144, 61));
+  f.login();
+  assert.deepEqual(f.ran(), [], 'before the gameframe the bar ignores a start');
+  f.tick();
+  assert.deepEqual(f.ran(), [[5931, 3659, 61]]);
+  f.tick();
+  assert.deepEqual(f.ran(), [], 'nothing changed');
+});
+
+test('swapping what is in the ammo slot starts the ammo buff again with the new item and count', () => {
+  const f = fixture();
+  f.slots.set(AMMUNITION_SLOT, bolts(9144, 61));
+  f.login();
+  f.tick();
+  f.sent(); f.ran();
+  f.slots.set(AMMUNITION_SLOT, bolts(30384, 1)); // the crystal blessing
+  f.tick();
+  assert.deepEqual(f.sent(), { 'varp 3158': 30384, 'varp 3159': 1 });
+  assert.deepEqual(f.ran(), [[5931, 3659, 1]], 'after the varps it reads');
+  f.slots.set(AMMUNITION_SLOT, bolts(9143, 61)); // a different item, same count as before
+  f.tick();
+  assert.deepEqual(f.ran(), [[5931, 3659, 61]]);
+  f.slots.set(AMMUNITION_SLOT, bolts(9143, 60)); // one fired
+  f.tick();
+  assert.deepEqual(f.ran(), [[5931, 3659, 60]]);
+  f.slots.delete(AMMUNITION_SLOT);
+  f.tick();
+  assert.deepEqual(f.ran(), [[5931, 3659, 0]], 'an emptied slot clears it');
+  f.tick();
+  assert.deepEqual(f.ran(), []);
+});
+
+test('an empty ammo slot starts nothing after a login, and a relog starts the worn ammo again', () => {
+  const f = fixture();
+  f.login();
+  f.tick();
+  assert.deepEqual(f.ran(), []);
+  f.slots.set(AMMUNITION_SLOT, bolts(882, 100));
+  f.tick();
+  assert.deepEqual(f.ran(), [[5931, 3659, 100]]);
+  f.logout();
+  f.login();
+  f.tick();
+  assert.deepEqual(f.ran(), [[5931, 3659, 100]]);
 });
 
 test('the group woodcutting bonus: 96 while chopping, the players at the tree and one less', () => {

@@ -29,6 +29,7 @@ const api = new Proxy({
   registerRangedAttackAccuracyModifier: effects.registerRangedAttackAccuracyModifier,
   registerRangedHitModifier: effects.registerRangedHitModifier,
   registerMagicAttackAccuracyModifier: effects.registerMagicAttackAccuracyModifier,
+  registerMagicAccuracyPercentModifier: effects.registerMagicAccuracyPercentModifier,
   registerMagicHitModifier: effects.registerMagicHitModifier,
   registerMagicDamageBonusModifier: effects.registerMagicDamageBonusModifier,
 }, { get: (object, key) => key in object ? object[key] : fn => (hooks[key] ??= []).push(fn) });

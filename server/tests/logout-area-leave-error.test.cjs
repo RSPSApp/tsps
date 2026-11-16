@@ -25,3 +25,18 @@ test("an area whose leave throws doesn't stop the logout: its hooks still run an
   assert.equal(logouts.mock.callCount(), 1, "the logout hooks ran");
   assert.ok(cancelled.mock.calls.some((call) => call.arguments[0] === p), "and the player's tasks were cancelled");
 });
+
+test("an area's leave on logout runs as its plugin, like any other leave", (t) => {
+  const { PluginContext } = require("../dist/plugins/PluginContext");
+  const p = new Player(null);
+  p.getSession = () => ({ sendClientPacket: () => true, write: () => true, getChannel: () => null });
+  p.setUsername("leave-context");
+  p.setAttribute("bot-skip-persistence", true);
+  const seen = [];
+  p.setArea({ pluginName: "test-area-plugin", leave: (_who, logout) => seen.push([PluginContext.current(), logout]), getName: () => "test" });
+  t.mock.method(PluginManager, "emitPlayerLogout", () => {});
+  t.mock.method(TaskManager, "cancelTasks", () => {});
+  p.onLogout();
+  assert.deepEqual(seen, [["test-area-plugin", true]], "leave ran once, as logout, inside the area's plugin context");
+  assert.equal(PluginContext.current(), null, "and the context was restored afterwards");
+});

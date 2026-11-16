@@ -13,8 +13,8 @@
  *   minecart to Keldagrim? It's free."); "Yes please." or Travel ride it.
  * - Into Keldagrim the screen comes back on the station's track, the cart rolls in, and the player
  *   steps off beside it.
- * Riding, the player is held still, and the client shows no weapon, shield or boots (the worn
- * items are untouched). One ride at a time. Logging out mid-ride finishes it (the save is at the
+ * Riding, the player is held still, sits in a cart (the riding stance) and the client shows no
+ * weapon, shield or boots (the worn items are untouched). One ride at a time. Logging out mid-ride finishes it (the save is at the
  * destination); a death ends it where the player is, with nothing more taken.
  * Any ride needs The Giant Dwarf started (the Wiki).
  * The station's carts are not in the map: they are placed here.
@@ -26,6 +26,10 @@ const CART_SHAPE = 10;
 const ANGLE_ZERO_INDEX = 2;
 const TRAPDOOR_YES = "Yes please.";
 const TRAPDOOR_VARIANT = "inspecting-the-trapdoor-at-the-grand-exchange";
+/** His transcript's line for a player with a follower out: no question, so no ride. */
+const TRAPDOOR_FOLLOWER_VARIANT = "inspecting-the-trapdoor-at-the-grand-exchange-inspecting-the-trapdoor-at-the-grand-exchange-with-a-follower";
+/** The Pets plugin's following pet (the only follower visible from here). */
+const PET_ATTRIBUTE = "pets:current";
 const TRAPDOOR_WAIT_TICKS = 10;
 /** How far from the trapdoor a "Yes please." still rides. */
 const TRAPDOOR_REACH = 2;
@@ -63,9 +67,17 @@ function takeTicket(player, ticket) {
   return true;
 }
 
-/** The worn weapon, shield and boots shown empty (or back), on the model and in the worn view. */
+/**
+ * The worn weapon, shield and boots shown empty (or back), on the model and in the worn view, and the
+ * cart (the feet identity kit) with the riding stance (human_minecart_anim on every stance slot) while
+ * they are hidden.
+ */
 function hideWorn(player, hidden) {
   const equipment = player.getEquipment();
+  player.setRenderAnimations?.(hidden ? Array(7).fill(Common.ids.seqs.ridingStance) : null);
+  const { ridingKits } = Common.data;
+  const male = player.getAppearance?.()?.isMale?.() !== false;
+  player.setDisplayedKits?.(hidden ? { [Common.core.Appearance.FEET]: male ? ridingKits.male : ridingKits.female } : null);
   if (!hidden) {
     player.setDisplayedEquipment(null);
     equipment.sendWornInventory?.();
@@ -290,10 +302,22 @@ function rideCart({ player, objectId, location }) {
   return true;
 }
 
-/** Inspect: the conductor below calls up (his transcript's trapdoor variant). */
+function hasFollower(player) {
+  return player.getAttribute?.(PET_ATTRIBUTE)?.isRegistered?.() === true;
+}
+
+/**
+ * Inspect: the conductor below calls up (his transcript's trapdoor variant). With a follower out
+ * he only says "Ahoy up there! You'd better pick up your follower before you come down here and
+ * ride the minecart." (the transcript's follower variant).
+ */
 function inspectTrapdoor({ player, objectId }) {
   if (objectId !== Common.ids.locs.trapdoor) return false;
   if (riding(player)) return true;
+  if (hasFollower(player)) {
+    Common.api.emitCustomEvent("npc-dialogue:start", { player, npcId: Common.ids.npcs.trapdoor, variant: TRAPDOOR_FOLLOWER_VARIANT, exact: true, handled: false });
+    return true;
+  }
   const start = { player, npcId: Common.ids.npcs.trapdoor, variant: TRAPDOOR_VARIANT, exact: true, handled: false };
   trapdoorAsked.add(player);
   Common.api.emitCustomEvent("npc-dialogue:start", start);

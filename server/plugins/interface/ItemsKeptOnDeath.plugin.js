@@ -20,6 +20,8 @@ const LOST_ITEM_STATE = 1991;
 const DELETED_ITEM_STATE = 368;
 // Wiki: Items Kept on Death: the looting bag "disappears completely"; its contents drop.
 const LOOTING_BAG = "Looting bag";
+// Priced at face value in the guide risk value.
+const CURRENCY = new Set(["Coins", "Platinum token"]);
 const previewSettings = new WeakMap();
 
 function getSettings(player) {
@@ -68,11 +70,46 @@ function neverKept(item) {
   return query.neverKept === true;
 }
 
+/** An untradeable a PvP death takes for the killer (SlayerHelmet's black mask (i), `items:lost-to-pvp-killer`). */
+function lostToPvpKiller(item, settings) {
+  if (!settings.playerKill || settings.wildernessLevel <= 0) return false;
+  const query = { item, lost: false };
+  pluginApi.emitCustomEvent("items:lost-to-pvp-killer", query);
+  return query.lost === true;
+}
+
 function itemState(player, item, lostOnDeath, makesGrave) {
   if (item.getDefinition().getName() === LOOTING_BAG || neverKept(item)) return { itemId: DELETED_ITEM_STATE, quantity: 1 };
   if (!lostOnDeath) return { itemId: KEPT_ITEM_STATE, quantity: 1 };
   if (makesGrave) return { itemId: GRAVE_ITEM_STATE, quantity: 1 + graveFee(player, item) };
   return { itemId: LOST_ITEM_STATE, quantity: 1 };
+}
+
+/**
+ * What one lost item adds to the guide risk value: coins and platinum tokens at their face value,
+ * any other item at the price a death ranks it by (Grand Exchange price, else its alchemy value),
+ * untradeables included. Ours: the Wiki gives no formula for untradeables.
+ */
+function riskValue(item) {
+  const definition = item.getDefinition();
+  const value = CURRENCY.has(definition.getName())
+    ? definition.getValue()
+    : core.PlayerDeathTask.keepValue(item);
+  return Math.max(0, Number(value) || 0);
+}
+
+/**
+ * Perdu's repair cost (or the mangled fee) for an unprotected item the previewed death breaks, or
+ * null: only a PvP death in the Wilderness breaks them (BrokenItems, `broken-items:death-cost`).
+ * Wiki, Items Kept on Death (Interface), "Guide risk value": "Repair costs if the item becomes
+ * broken and must be repaired via Perdu". It counts whether the broken item stays with the player
+ * or is lost.
+ */
+function breakCost(item, settings) {
+  if (!settings.playerKill || settings.wildernessLevel <= 0) return null;
+  const query = { item, wildernessLevel: settings.wildernessLevel, cost: null };
+  pluginApi.emitCustomEvent("broken-items:death-cost", query);
+  return query.cost == null ? null : Math.max(0, Number(query.cost) || 0);
 }
 
 function getDeathItems(player, toKeep, settings, cosmetic = []) {
@@ -93,20 +130,21 @@ function getDeathItems(player, toKeep, settings, cosmetic = []) {
     }
 
     const tradeable = item.isTradeable();
-    const lostOnDeath = !protectedItems.has(item) && (tradeable || item.isLostOnDeath() || grave.makesGrave);
+    const lostOnDeath = !protectedItems.has(item)
+      && (tradeable || item.isLostOnDeath() || grave.makesGrave || lostToPvpKiller(item, settings));
     items.push({
       slot: items.length,
       itemId: item.getId(),
       quantity: item.getAmount(),
     });
-    states.push({ slot: states.length, ...itemState(player, item, lostOnDeath, grave.makesGrave) });
+    const state = itemState(player, item, lostOnDeath, grave.makesGrave);
+    states.push({ slot: states.length, ...state });
 
-    if (tradeable && lostOnDeath) {
-      const value = Math.max(0, Number(core.PlayerDeathTask.keepValue(item)) || 0);
-      risk = Math.min(
-        Number.MAX_SAFE_INTEGER,
-        risk + value * item.getAmount()
-      );
+    const broken = breakCost(item, settings);
+    if (broken != null) {
+      risk = Math.min(Number.MAX_SAFE_INTEGER, risk + broken * item.getAmount());
+    } else if (state.itemId !== KEPT_ITEM_STATE) {
+      risk = Math.min(Number.MAX_SAFE_INTEGER, risk + riskValue(item) * item.getAmount());
     }
   }
 

@@ -17,15 +17,11 @@ function refresh(player) {
   player.getEquipment().refreshItems();
 }
 
-/** The chat type of a mesbox line, as the Castle Wars lobby and the Mime event send them; the number is not verified by this capture (it shows only `type=mesbox`). */
-const MESBOX_CHAT = 115;
-
 /**
  * rsprox 3333: the text goes to the chat as a mesbox line, and a box shows it. The refusal is an
  * OBJECTBOX_DOUBLE (interface 11) with the shard and Darklight; the made box is an OBJECTBOX (interface 193) with Arclight.
  */
 function box(player, entry) {
-  player.getPacketSender().sendTypedMessage(MESBOX_CHAT, entry.getText());
   const { DialogueChainBuilder, EndDialogue } = core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(entry, new EndDialogue(1)));
 }
@@ -98,10 +94,19 @@ function hitResolved({ attacker, hit }) {
   const player = attacker.getAsPlayer(), sword = player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT];
   if (sword?.getId() !== core.ItemIdentifiers.ARCLIGHT) return;
   // Content may spare the charge (a league fragment): the same question every melee weapon with charges asks.
-  const consume = { player, itemId: sword.getId(), skip: false };
+  // `extra`: charges given back on top (Demonic Pacts' Regenerate above 100%), up to the sword's most.
+  const consume = { player, itemId: sword.getId(), skip: false, extra: 0 };
   pluginApi?.emitCustomEvent('combat:melee-charge', consume);
   pluginApi?.emitCustomEvent('combat:consume-charge', consume);
-  if (consume.skip) return;
+  if (consume.skip) {
+    if (consume.extra > 0) {
+      const current = state(sword);
+      current.charges = Math.min(MAX_CHARGES, current.charges + consume.extra);
+      sword.setMetaValue(ARC_META, current);
+      refresh(player);
+    }
+    return;
+  }
   const current = state(sword);
   current.charges = Math.max(0, current.charges - 1);
   current.infusion = Math.min(MAX_CHARGES, current.infusion + 1);

@@ -40,6 +40,7 @@ const deathHandlers = [];
 const objectClicks = {};
 const customEvents = [];
 let slayerTask = null;
+let holdEchoEntry = false;
 const api = new Proxy(
   {
     core,
@@ -56,6 +57,7 @@ const api = new Proxy(
     emitCustomEvent: (name, payload) => {
       customEvents.push({ name, payload });
       if (name === "slayer:current-task") payload.task = slayerTask;
+      if (name === "echo-boss:entry" && holdEchoEntry) payload.handled = true;
     },
   },
   { get: (target, key) => target[key] ?? (() => {}) }
@@ -125,10 +127,10 @@ test("their stats and combat definitions match the captures", () => {
   assert.deepEqual(defs[String(Common.PRIME_ID)].anims, { attack: 2854, block: 2852, death: 2856 });
   assert.deepEqual(defs[String(Common.SUPREME_ID)].anims, { attack: 2855, block: 2852, death: 2856 });
   assert.deepEqual(defs[String(Common.REX_ID)].anims, { attack: 2853, block: 2852, death: 2856 });
-  // Wiki: 150-tick (90s) respawn, 5-tick death everywhere.
+  // Wiki: 150-tick (90s) respawn. rsprox captures (rec 89 tick 5348): loot and removal 2 ticks after the death animation.
   for (const id of Common.KING_IDS) {
     assert.equal(defs[String(id)].respawn, 150);
-    assert.equal(defs[String(id)].deathTicks, 5);
+    assert.equal(defs[String(id)].deathTicks, 2);
   }
   assert.equal(defs[String(Common.PRIME_ID)].projectile, 162);
   assert.equal(defs[String(Common.SUPREME_ID)].projectile, 475);
@@ -322,7 +324,8 @@ test("spinolyps dive and re-emerge, and water cannot be attacked", () => {
   };
   for (const handler of canAttackHandlers) handler(denyEvent);
   assert.equal(denyEvent.allow, false);
-  assert.ok(said.includes("You can't attack this npc."));
+  assert.equal(denyEvent.message, "You can't attack this npc.", "the core says it on the player's attack");
+  assert.deepEqual(said, [], "not the check itself");
   // Surfaced spinolyps attack like anything else.
   const allowEvent = {
     attacker: { isPlayer: () => true, sendMessage: () => {} },
@@ -386,4 +389,29 @@ test("the boss HUD follows each king", () => {
   Hud.hideForLeaver(player);
   assert.ok(customEvents.some((event) => event.name === "boss-hud:hide"));
   assert.ok(!customEvents.some((event) => event.name === "boss-hud:show" && event.payload.npcId === Common.SUPREME_ID));
+});
+
+test("the echo orb menu's later No on the Slayer entrance asks for the dagannoth task again", () => {
+  const moved = [];
+  const said = [];
+  const player = { getLocation: () => new Location(1910, 4367, 0), moveTo: (tile) => moved.push(tile), sendMessage: (line) => said.push(line) };
+  const atLadder = { x: 1911, y: 4367 };
+  holdEchoEntry = true;
+  try {
+    slayerTask = { name: "dagannoth kings" };
+    Entrance.goTask({ player, location: atLadder, objectId: Common.LADDER_ID });
+    const entry = customEvents.filter(({ name }) => name === "echo-boss:entry").at(-1).payload;
+    assert.equal(entry.boss, "dagannoth-kings");
+    assert.equal(moved.length, 0);
+    slayerTask = null; // the task ends while the menu waits
+    entry.enter();
+    assert.equal(moved.length, 0, "No: not let down");
+    assert.ok(said.join(" ").toLowerCase().includes("slayer task"));
+    slayerTask = { name: "dagannoth kings" };
+    entry.enter();
+    assert.deepEqual([moved[0].getX(), moved[0].getY()], [2900, 4385]);
+  } finally {
+    holdEchoEntry = false;
+    slayerTask = null;
+  }
 });

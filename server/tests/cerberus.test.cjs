@@ -2,7 +2,8 @@
 //
 // Cerberus against the OSRS Wiki (Cerberus, Cerberus/Strategies, Cerberus' Lair): the attack
 // table (triple attack, souls below 400, lava below 200, their priority and skip chance), the
-// souls' damage and prayer drain, the lava pools, the task-gated winch and the kill.
+// souls' damage and prayer drain, the lava pools, the task-gated winch and the kill; the fire wall
+// from rsprox captures 1000323/1000286/1000457.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { before, test } = require('node:test');
@@ -12,7 +13,7 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const core = PluginManager.getCoreApi();
 
-let Common, Lair, Fight, Combat, Kills;
+let Common, Lair, Fight, Combat, Kills, FireWall;
 let events, onTaskAnswer, messagesSent;
 
 before(async () => {
@@ -22,6 +23,7 @@ before(async () => {
   Fight = require('../plugins/bosses/cerberus/Fight.Cerberus');
   Combat = require('../plugins/bosses/cerberus/Combat.Cerberus');
   Kills = require('../plugins/bosses/cerberus/Kills.Cerberus');
+  FireWall = require('../plugins/bosses/cerberus/FireWall.Cerberus');
   events = {};
   const prayers = { active: new Set(), PROTECT_FROM_MELEE: 'melee', PROTECT_FROM_MISSILES: 'ranged', PROTECT_FROM_MAGIC: 'magic', isActivated: (player, prayer) => player.prayers.has(prayer) };
   const api = new Proxy({
@@ -363,4 +365,82 @@ test('standing in lava: 15 a tick, 12 with an anti-dragon shield', () => {
   } finally {
     CombatEquipment.hasDragonProtectionGear = shield;
   }
+});
+
+test("the echo orb menu's later No asks for the task again before going in", () => {
+  westArena();
+  const player = fakePlayer(1292, 1254);
+  let held = null;
+  events['echo-boss:entry'] = [(entry) => { entry.handled = true; held = entry; }];
+  try {
+    onTaskAnswer = (request) => request.npcId === Common.ids.npcs.attacking;
+    assert.equal(Lair.turnWinch({ player, location: { x: 1291, y: 1254, z: 0 } }), true);
+    assert.equal(held?.boss, 'cerberus', 'on task: the menu is asked for');
+    assert.equal(player.getLocation().getY(), 1254, 'nothing until it is answered');
+    onTaskAnswer = () => false; // the task ends while the menu waits
+    held.enter();
+    assert.equal(player.getLocation().getY(), 1254, 'No: not let in');
+    assert.equal(player.messages.at(-1), 'You need a hellhound or Cerberus Slayer task to fight Cerberus.');
+    onTaskAnswer = (request) => request.npcId === Common.ids.npcs.attacking;
+    held.enter();
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [1240, 1226], 'still on task: in');
+    held = null;
+    onTaskAnswer = () => false;
+    Lair.turnWinch({ player: fakePlayer(1292, 1254), location: { x: 1291, y: 1254, z: 0 } });
+    assert.equal(held, null, 'off task the menu is never asked for');
+  } finally {
+    delete events['echo-boss:entry'];
+  }
+});
+
+function flamesAt(x, y) {
+  return core.ObjectManager.objectsAt(location(x, y)).filter((object) => object.getId() === Common.ids.locs.flames);
+}
+
+test('the fire wall stands with her and goes with her death (rsprox 1000323)', () => {
+  const arena = Lair.arenas.find((entry) => entry.name === 'north');
+  arena.cerberus = fakeNpc(Common.ids.npcs.sitting, 1302, 1314);
+  arena.fight = null;
+  arena.area = { getPlayers: () => [] };
+  assert.equal(Common.ids.locs.flames, 23105);
+  assert.equal(flamesAt(1304, 1306).length, 0, 'no wall while she sits');
+  arena.wake();
+  for (const x of [1303, 1304, 1305]) {
+    const [flame] = flamesAt(x, 1306);
+    assert.ok(flame, `flame at ${x},1306`);
+    assert.deepEqual([flame.getType(), flame.getFace()], [10, 3]);
+  }
+  arena.wake();
+  assert.equal(flamesAt(1304, 1306).length, 1, 'a second wake places no second wall');
+  const npc = arena.cerberus;
+  Kills.cerberusDeath({ npc, killer: null });
+  assert.equal(FireWall.isUp(arena), false);
+  assert.equal(flamesAt(1304, 1306).length, 0);
+  npc.setNpcTransformationId(Common.ids.npcs.sitting);
+  arena.wake();
+  assert.equal(FireWall.isUp(arena), true, 'back as she stands again');
+  arena.reset();
+  assert.equal(flamesAt(1303, 1306).length, 0, 'gone when the arena empties');
+});
+
+test('every arena has a three-flame wall at the same offset from its entry', () => {
+  for (const def of Common.data.arenas) {
+    const [ex, ey] = def.entry;
+    assert.deepEqual(def.flames, [[ex - 1, ey + 16], [ex, ey + 16], [ex + 1, ey + 16]], def.name);
+  }
+});
+
+test('Pass and Quick Pass step over a flame onto the far side for 5, either way', () => {
+  const north = FireWall.crossing(fakePlayer(1304, 1305), { x: 1304, y: 1306, z: 0 });
+  assert.deepEqual(north, [
+    { face: [1304, 1307] },
+    { wait: 1 },
+    { walk: [[1304, 1307]], tilesPerTick: 2, arrive: true },
+    { hit: 5 },
+  ]);
+  const south = FireWall.crossing(fakePlayer(1240, 1243), { x: 1240, y: 1242, z: 0 });
+  assert.deepEqual(south[2].walk, [[1240, 1241]]);
+  assert.equal(FireWall.pass({ player: fakePlayer(1304, 1305), objectId: 56264, location: { x: 1304, y: 1306, z: 0 } }), false, "Yama's flames are not hers");
+  assert.equal(FireWall.pass({ player: fakePlayer(1304, 1305), objectId: 23105, location: { x: 1000, y: 1000, z: 0 } }), false);
+  assert.equal(FireWall.arenaOfFlame({ x: 1368, y: 1242, z: 0 })?.name, 'east');
 });

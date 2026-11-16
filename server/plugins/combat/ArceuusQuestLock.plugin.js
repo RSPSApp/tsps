@@ -5,8 +5,12 @@
  * all teleportation spells upon unlocking the Arceuus spellbook". Every Arceuus cast reaches Spell.canCast, which asks
  * here ("spell disabled") with the spell's cache item; the teleports carry none. TSPS wording for the refusal: the
  * page quotes no line.
+ *
+ * The world's `quests:equipment-requirements` switch (Quests plugin) lifts this lock with the other quest equipment
+ * and spellbook requirements when it is false.
  */
 const AKD_QUEST = { key: "a_kingdom_divided", name: "A Kingdom Divided" };
+const REQUIREMENTS_CONFIG = "quests:equipment-requirements";
 /** The spells the Wiki names as needing no quest (by cache spell name, lower case). */
 const OPEN_SPELLS = new Set([
   "ghostly grasp",
@@ -37,6 +41,7 @@ function unlockedByContent(player, spellId) {
 
 function lockArceuusSpell(event) {
   if (!event.player || event.spellbook !== core.MagicSpellbook.ARCEUUS) return;
+  if (pluginApi.getPluginConfig(REQUIREMENTS_CONFIG, true) === false) return;
   const spellId = Number(event.spellId);
   if (!(spellId > 0)) return;
   const name = core.CacheDefinitions.getSpellName(-1, spellId)?.trim().toLowerCase();

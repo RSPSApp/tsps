@@ -11,6 +11,8 @@ const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 const ItemDefinitionLoader = require("../plugins/items/ItemDefinitionLoader.plugin");
 const PRICES = require("../data/definitions/item-prices.json").data;
 const ALCH = require("../data/definitions/item-alch.json");
+const GUIDE = require("../data/definitions/item-guide-prices.json").data;
+const { examinePrices } = require("../dist/game/content/ExaminePrice");
 
 const TEAM_6 = 4325;
 const WHIP = 4151;
@@ -28,6 +30,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   ItemDefinitionLoader._test.loadItemPrices();
   ItemDefinitionLoader._test.loadItemAlch();
+  ItemDefinitionLoader._test.loadItemGuidePrices();
 });
 
 test("buy is the higher guide price and sell the lower", () => {
@@ -60,4 +63,27 @@ test("the noted copy mirrors buy and sell", () => {
   assert.equal(note.getNoteId(), WHIP);
   assert.equal(note.getGrandExchangeValue(), live.buy);
   assert.equal(note.getGrandExchangeSellValue(), live.sell);
+});
+
+test("examine and trade values use the official guide price; Grand Exchange offers keep the live quotes", () => {
+  const live = quote(WHIP);
+  const guide = GUIDE[String(WHIP)];
+  assert.ok(Number.isSafeInteger(guide) && guide > 0, "the whip has a guide price");
+  const definition = ItemDefinition.forId(WHIP);
+  assert.equal(definition.getGuidePrice(), guide);
+  assert.equal(definition.getGrandExchangeValue(), live.buy);
+  assert.equal(definition.getGrandExchangeSellValue(), live.sell);
+  assert.equal(examinePrices(WHIP).prices.ge, guide);
+  const note = ItemDefinition.forId(definition.getNoteId());
+  assert.equal(note.getGuidePrice(), guide);
+  assert.equal(examinePrices(note.getId()).prices.ge, guide);
+});
+
+test("an item without a guide price falls back to its Grand Exchange quote", () => {
+  const id = Object.keys(PRICES).map(Number).find((key) => !(String(key) in GUIDE)
+    && ItemDefinition.forId(key) !== ItemDefinition.DEFAULT && !ItemDefinition.forId(key).isNoted()
+    && ItemDefinition.forId(key).hasGrandExchangeValue());
+  assert.ok(id !== undefined, "some quoted item has no guide price");
+  const definition = ItemDefinition.forId(id);
+  assert.equal(definition.getGuidePrice(), definition.getGrandExchangeValue());
 });

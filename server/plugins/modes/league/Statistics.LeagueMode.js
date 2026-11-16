@@ -2,10 +2,11 @@
  * The League Summary's statistics (data.statistics): the tracking varps its rows read, counted
  * from what the server's hooks see for a league character and sent at login and as they change.
  * Kills (NPCs; bosses by the cache's boss param, as NpcDrops reads it), deaths, players killed,
- * damage dealt to and taken from NPCs, the highest hit, food, potions and fish. Rows the server
- * has no source for stay 0 (data.statistics._comment). The logs and ore rows read varps the skills
- * own (data.statistics.skillCounters): Woodcutting and Mining count and send them on every world, so
- * this unit only reads them back for its answer and never writes them. Other plugins ask
+ * damage dealt to and taken from NPCs, the highest hit, food and fish. Rows the server has no
+ * source for stay 0 (data.statistics._comment). The logs, ore and potions rows read varps other
+ * plugins own (data.statistics.skillCounters): Woodcutting, Mining and Potions count and send them
+ * on every world, so this unit only reads them back for its answer and never writes them.
+ * Other plugins ask
  *
  *   api.emitCustomEvent("league:statistics", { player })  -> counters (name -> value)
  */
@@ -137,7 +138,6 @@ module.exports = function attach(api) {
   api.onPlayerDeath(playerDeath);
   api.onPlayerDefeated(playerDefeated);
   api.onCustomEvent("food:eaten", counted("foodEaten"));
-  api.onCustomEvent("potions:drunk", counted("potionsSipped"));
   api.onCustomEvent("fishing:success", fishCaught);
 };
 

@@ -2,6 +2,8 @@
  * Song of the Elves (members, Elf series #8). The Wiki transcript is the source
  * for dialogue and cutscene ids; quest state mirrors the cache's sote varbit.
  */
+const Saws = require("../../items/Saws");
+
 module.exports = function registerSongOfTheElves(api) {
   const { Area, Boundary, Equipment, GameObject, HitDamage, HitMask, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, ObjectManager, PrivateArea, Skill, World } = api.core;
   const { registerQuest, loadTranscripts, startTranscript } = require("../QuestRuntime");
@@ -1257,7 +1259,7 @@ module.exports = function registerSongOfTheElves(api) {
     }
     const inventory = player.getInventory();
     if (inventory.getAmount(ItemIdentifiers.LIMESTONE_BRICK) < 8 ||
-      inventory.getAmount(ItemIdentifiers.SAW) < 1 || inventory.getAmount(ItemIdentifiers.HAMMER) < 1) {
+      !Saws.holdsSaw(api.core, player) || inventory.getAmount(ItemIdentifiers.HAMMER) < 1) {
       player.sendMessage("You need a saw, a hammer, and eight limestone bricks to build Lady Ithell's statue.");
       return true;
     }

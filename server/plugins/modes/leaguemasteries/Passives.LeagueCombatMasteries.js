@@ -67,12 +67,12 @@ function praysAgainst(target, combatType) {
 
 /**
  * What a protection prayer leaves of a player's hit on `target` once the roll bypassed it: 1 when
- * it does not pray against the style, the core's constant when it does, and with the penetration
- * passive 60% of the hit plus 40% of the reduced rest.
+ * it does not pray against the style, what the core leaves when it does (none on a praying NPC),
+ * and with the penetration passive 60% of the hit plus 40% of the reduced rest.
  */
 function damageFactor(attacker, target, combatType) {
   if (!praysAgainst(target, combatType)) return 1;
-  const reduced = core.CombatConstants.PRAYER_DAMAGE_REDUCTION_AGAINST_PLAYERS;
+  const reduced = core.CombatFactory.protectionPrayerFactor(attacker, target);
   const passive = Common.passiveEffect(attacker, 6);
   return passive ? passive.penetration + (1 - passive.penetration) * reduced : reduced;
 }

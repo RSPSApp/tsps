@@ -1,4 +1,5 @@
 import { GameConstants } from "../../../GameConstants";
+import { getNpcViewDistance, MAX_NPC_VIEW_DISTANCE } from "../../../definition/WorldDefinition";
 import { MAIN_PROFILE, type PlayerProfile } from "./persistence/PlayerProfile";
 import { Sound } from "../../../Sound";
 import { PrayerData, PrayerHandler } from "../../../content/PrayerHandler";
@@ -101,6 +102,12 @@ export class Player extends Mobile {
     private static readonly RESTORE_UP_TIMER_SCRIPT = 4517;
     /** The overlay's timers are resent every quarter of the restore cycle. */
     private static readonly RESTORE_TIMER_SEND_TICKS = 25;
+    /**
+     * The restore timer's ticks left, saved at each 25-tick send: a relog resumes it from there, as
+     * live does (its first send after login reads 50 or 25, rsprox_transcripts/239/04288.txt,
+     * 231/02990.txt), instead of starting a fresh minute.
+     */
+    public static readonly STAT_RESTORE_LEFT_ATTRIBUTE = "stats:restore-ticks-left";
     /** Cycle the next drained-stat restore is due on (-1: not started). */
     private statRestoreDue = -1;
     /** Cycle Rapid Restore's own restore is due on; it starts when the prayer is switched on. */
@@ -154,6 +161,8 @@ export class Player extends Mobile {
     private session: PlayerSession;
     public status: PlayerStatus = PlayerStatus.NONE;
     public interfaceId: number = -1
+    /** Counts modal opens (a change to a mounted id), so a held id can be told from the same id mounted again. */
+    private interfaceOpens = 0
     /** The process cycle of the player's last click or key press (0 before any since login). */
     public lastInputCycle = 0;
     private multiIcon: number;
@@ -189,6 +198,7 @@ export class Player extends Mobile {
     private renderAnimations: number[] | null = null;
     /** Equipment slot -> item id shown in the appearance instead of the worn item (-1 shows the slot empty). */
     private displayedEquipment: Map<number, number> | null = null;
+    private displayedKits: Map<number, number> | null = null;
     private drainingPrayer = false;
     private prayerPointDrain = 0;
     /**
@@ -336,9 +346,10 @@ export class Player extends Mobile {
         return WeaponProfiles.attackAnimation(this, fightType.getAnimationAgainst(againstNpc), againstNpc);
     }
 
-    public getAttackSound(): Sound {
+    public getAttackSound(): Sound | null {
         const fightType = FightType.resolve(this.getFightType()) ?? FightType.UNARMED_PUNCH;
-        return WeaponProfiles.get(this)?.attackSound ?? fightType.getAttackSound();
+        const profileSound = WeaponProfiles.get(this)?.attackSound;
+        return profileSound !== undefined ? profileSound : fightType.getAttackSound();
     }
 
     public getBlockAnim(): number {
@@ -587,7 +598,7 @@ export class Player extends Mobile {
      */
     public processStatRestoration(cycle: number): void {
         const skills = this.getSkillManager();
-        if (this.statRestoreDue < 0) this.statRestoreDue = cycle + Player.STAT_RESTORE_TICKS;
+        if (this.statRestoreDue < 0) this.statRestoreDue = cycle + this.savedRestoreTicksLeft();
         const restoreDue = cycle >= this.statRestoreDue;
         if (restoreDue) this.statRestoreDue = cycle + Player.STAT_RESTORE_TICKS;
 
@@ -648,14 +659,22 @@ export class Player extends Mobile {
     private sendRestoreTimers(cycle: number, rapidRestoreRestarted: boolean, rapidRestoreStopped: boolean): void {
         const remaining = this.statRestoreDue - cycle;
         if (remaining % Player.RESTORE_TIMER_SEND_TICKS === 0) {
+            this.setAttribute(Player.STAT_RESTORE_LEFT_ATTRIBUTE, remaining);
             this.getPacketSender().sendClientScript(Player.RESTORE_UP_TIMER_SCRIPT, 0, Player.STAT_RESTORE_TICKS, remaining);
-            PluginManager.emitCustomEvent("stats:restore-timer-sent", { player: this });
+            PluginManager.emitCustomEvent("stats:restore-timer-sent", { player: this, remaining });
         }
         if (rapidRestoreRestarted) {
             this.getPacketSender().sendClientScript(Player.RESTORE_UP_TIMER_SCRIPT, 1, Player.STAT_RESTORE_TICKS, Player.STAT_RESTORE_TICKS);
         } else if (rapidRestoreStopped) {
             this.getPacketSender().sendClientScript(Player.RESTORE_UP_TIMER_SCRIPT, 1, 0, 0);
         }
+    }
+
+    /** The restore timer a save left (a whole 25-tick segment), or a full cycle. */
+    private savedRestoreTicksLeft(): number {
+        const left = Number(this.getAttribute(Player.STAT_RESTORE_LEFT_ATTRIBUTE));
+        return Number.isInteger(left) && left > 0 && left <= Player.STAT_RESTORE_TICKS
+            && left % Player.RESTORE_TIMER_SEND_TICKS === 0 ? left : Player.STAT_RESTORE_TICKS;
     }
 
     /** Worn items changed: the next Hitpoints regen asks gear again, keeping the countdown. */
@@ -738,11 +757,12 @@ export class Player extends Mobile {
             .Sailing.onLogout(this);
         this.getPacketSender().sendInterfaceRemoval();
 
-        // Leave area. An area's leave code that throws must not stop the rest of the logout: the logout hooks, the
-        // task cancel and the save below (a plugin's postLeave error left the player's tasks running and unsaved).
+        // Leave area, through callArea like every other leave: it runs as the area's plugin (tasks and objects
+        // it makes are that plugin's) and an area's leave code that throws is logged there and must not stop the
+        // rest of the logout: the logout hooks, the task cancel and the save below.
         if (this.getArea() != null) {
             try {
-                this.getArea().leave(this, true);
+                PluginManager.callArea(this.getArea(), "leave", this, true);
             } catch (err) {
                 console.error(`[World] area leave failed on logout (${this.getUsername()})`, err);
             }
@@ -867,7 +887,17 @@ export class Player extends Mobile {
             if (this.getInteractingMobile() === following) this.setMobileInteraction(null);
             if (this.getPositionToFace()?.equals(following.getLocation())) this.setPositionToFace(null);
         }
-        PluginManager.emitCustomEvent("player:interaction-cleared", { player: this });
+        this.interactionCleared("item");
+    }
+
+    /**
+     * `player:interaction-cleared` { player, reason }: the player's interaction was replaced, so a
+     * repeating action held outside the task keys (a chop, a fire, a smelt) ends. `reason` is "item"
+     * (an inventory or equipment action) or "attack" (an Attack click, a spell on a target, or
+     * auto-retaliate). osrs-docs: Entity Interactions - Interruptions.
+     */
+    interactionCleared(reason: "item" | "attack"): void {
+        PluginManager.emitCustomEvent("player:interaction-cleared", { player: this, reason });
     }
 
     isStaff(): boolean {
@@ -1074,11 +1104,11 @@ export class Player extends Mobile {
         this.fixedViewDistance = distance == null ? null : Math.max(1, Math.min(64, Math.trunc(distance)));
     }
 
-    /** How far away NPCs (and their projectiles) are seen; 15 unless an area widens it. */
-    private npcViewDistance = Player.NPC_VIEW_DISTANCE;
-    private static readonly NPC_VIEW_DISTANCE = 15;
-    /** NPC positions are sent as signed 8-bit offsets from the player. */
-    private static readonly MAX_NPC_VIEW_DISTANCE = 127;
+    /**
+     * How far away NPCs (and their projectiles) are seen: the world's distance (world.json
+     * `npcViewDistance`, 15 as in OSRS) unless an area widens it.
+     */
+    private npcViewDistance = getNpcViewDistance();
 
     public getNpcViewDistance(): number {
         return this.npcViewDistance;
@@ -1086,12 +1116,12 @@ export class Player extends Mobile {
 
     /**
      * Widens how far NPCs are seen, as OSRS does in some large arenas (the Doom of Mokhaiotl's
-     * fight uses the large NPC update throughout). null puts it back to 15.
+     * fight uses the large NPC update throughout). null puts it back to the world's distance.
      */
     public setNpcViewDistance(distance: number | null): void {
         this.npcViewDistance = distance == null
-            ? Player.NPC_VIEW_DISTANCE
-            : Math.max(1, Math.min(Player.MAX_NPC_VIEW_DISTANCE, Math.trunc(distance)));
+            ? getNpcViewDistance()
+            : Math.max(1, Math.min(MAX_NPC_VIEW_DISTANCE, Math.trunc(distance)));
     }
 
     public resizeViewDistance(localPlayerCount: number): void {
@@ -1137,12 +1167,18 @@ export class Player extends Mobile {
         return this.interfaceId;
     }
 
+    /** How many modals have opened so far; a new open, even of the same id after a close, moves it. */
+    public getInterfaceOpens(): number {
+        return this.interfaceOpens;
+    }
+
     public setInterfaceId(interfaceId: number): this {
         const previousId = this.interfaceId;
         if (this.interfaceId >= 0 && interfaceId >= 0 && this.interfaceId !== interfaceId) {
             PluginManager.emitCustomEvent("interface:closed", { player: this, interfaceId: this.interfaceId });
         }
         this.interfaceId = interfaceId;
+        if (previousId !== interfaceId && interfaceId >= 0) this.interfaceOpens++;
         if (previousId !== interfaceId) {
             PluginManager.emitCustomEvent("interface:changed", { player: this, previousId, interfaceId });
         }
@@ -1245,6 +1281,28 @@ export class Player extends Mobile {
             : null;
         this.getUpdateFlag().flag(Flag.APPEARANCE);
         return this;
+    }
+
+    /**
+     * Shows other identity kits in some look slots (Appearance.HEAD ... Appearance.FEET) without touching the
+     * player's saved look, as live shows a minecart (kit 82, female 83) in the feet slot for a Keldagrim cart
+     * ride; null shows the player's own again.
+     */
+    public setDisplayedKits(overrides: Record<number, number> | null): Player {
+        this.displayedKits = overrides
+            ? new Map(Object.entries(overrides).map(([slot, kit]) => [Number(slot), kit]))
+            : null;
+        this.getUpdateFlag().flag(Flag.APPEARANCE);
+        return this;
+    }
+
+    /** The look the appearance shows: the saved one with any displayed kits over it. */
+    public getAppearanceLook(): number[] {
+        const look = this.getAppearance().getLook();
+        if (!this.displayedKits) return look;
+        const shown = look.slice();
+        for (const [slot, kit] of this.displayedKits) shown[slot] = kit;
+        return shown;
     }
 
     /** The item id each equipment slot shows in the appearance. */

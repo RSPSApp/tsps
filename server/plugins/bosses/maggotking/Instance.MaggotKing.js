@@ -1,9 +1,13 @@
 "use strict";
 
 const Common = require("./Common.MaggotKing");
+const Achievements = require("./CombatAchievements.MaggotKing");
 
 const INSTANCE_ATTRIBUTE = "maggot-king:instance";
 const sessions = new Map();
+// Death observers outlive the live session marker. Only actors spawned by this encounter
+// forfeit automatic loot while the separate corpse-choice reward chain is deferred.
+const encounterBosses = new WeakSet();
 let AreaClass = null;
 
 function areaClass() {
@@ -41,9 +45,23 @@ function areaClass() {
       }
     }
 
-    canAttack(attacker, target) {
-      return (attacker === this.session.player && target === this.session.boss)
-        || (attacker === this.session.boss && target === this.session.player);
+    canAttack(attacker, target, method) {
+      const { player, boss, fight } = this.session;
+      if (attacker === player && target?.__maggotLarva?.fight === fight && fight?.larvae.has(target.__maggotLarva)) return true;
+      if (attacker === player && target === boss) {
+        return !method || method.type() !== Common.core().CombatType.MELEE || fight?.phase === "melee";
+      }
+      return attacker === boss && target === player;
+    }
+
+    process(mobile) {
+      if (mobile === this.session.player) this.session.fight?.processFloor();
+    }
+
+    destroy() {
+      if (this.isDestroyed()) return;
+      this.session.close();
+      super.destroy();
     }
 
     postLeave(mobile, logout) {
@@ -62,7 +80,9 @@ class Session {
     this.player = player;
     this.area = new (areaClass())(this);
     this.boss = null;
+    this.fight = null;
     this.ended = false;
+    this.campingKills = 0;
   }
 
   tile(worldTile) {
@@ -70,11 +90,19 @@ class Session {
     return this.area.tile(worldTile[0] - sourceX, worldTile[1] - sourceY, worldTile[2] ?? 0);
   }
 
+  worldTile(location) {
+    return [location.getX() - this.area.getBaseX() + Common.data.sourceMin[0],
+      location.getY() - this.area.getBaseY() + Common.data.sourceMin[1]];
+  }
+
   enter() {
     const { data } = Common;
     this.area.enter(this.player);
     this.player.setAttribute(INSTANCE_ATTRIBUTE, true);
     this.player.moveTo(this.tile(data.arrival));
+    const { GameObject, ObjectManager } = Common.core();
+    this.exit = new GameObject(data.exit.id, this.tile(data.exit.tile), 10, data.exit.face, this.area);
+    ObjectManager.register(this.exit, true);
     if (!this.spawnBoss()) {
       this.player.moveTo(Common.loc(data.outside));
       this.area.leave(this.player, false);
@@ -92,10 +120,14 @@ class Session {
       owner: this.player, ownerOnly: true, wanderRadius: 0,
     });
     if (!boss) return null;
+    encounterBosses.add(boss);
     boss.__skipDefaultRespawn = true;
     boss.__maggotKingSession = this;
     this.area.add(boss);
     this.boss = boss;
+    const { Fight } = require("./Fight.MaggotKing");
+    this.fight = new Fight(this, boss);
+    this.fight.start();
     return boss;
   }
 
@@ -123,6 +155,10 @@ class Session {
   close() {
     if (this.ended) return;
     this.ended = true;
+    this.fight?.stop();
+    this.fight = null;
+    if (this.exit) Common.core().ObjectManager.deregister(this.exit, true);
+    this.exit = null;
     this.respawnTask?.stop();
     this.respawnTask = null;
     sessions.delete(this.player);
@@ -145,16 +181,32 @@ function enter(player) {
   if (!player || sessionOf(player)) return false;
   const session = new Session(player);
   sessions.set(player, session);
-  return session.enter();
+  try { return session.enter(); }
+  catch (error) {
+    player.moveTo(Common.loc(Common.data.outside));
+    session.area.leave(player, false);
+    throw error;
+  }
 }
 
-function onBossDeath({ npc }) {
+function onBossDeath({ npc, killer }) {
   const session = npc?.__maggotKingSession;
   if (!session || session.ended || session.boss !== npc) return;
+  const ownerKill = killer === session.player && sessions.get(killer) === session
+    && encounterBosses.has(npc) && killer.getPrivateArea() === session.area;
+  session.fight?.stop();
+  session.fight = null;
   npc.__maggotKingSession = null;
   npc.__skipDefaultRespawn = true;
   session.boss = null;
   session.scheduleRespawn(npc.getDefinition().getRespawn());
+  // Achievement notification must not interrupt authoritative retirement/respawn,
+  // including accepted boss deaths with a missing or different killer.
+  if (ownerKill) Achievements.ownerKilled(session);
 }
 
-module.exports = { enter, sessionOf, sessions, areaClass, onBossDeath, _test: { INSTANCE_ATTRIBUTE } };
+function claimBossDrops(claim) {
+  if (encounterBosses.has(claim.npc)) claim.handled = true;
+}
+
+module.exports = { enter, sessionOf, sessions, areaClass, onBossDeath, claimBossDrops, _test: { INSTANCE_ATTRIBUTE } };

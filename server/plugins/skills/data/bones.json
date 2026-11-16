@@ -7,7 +7,7 @@
     { "obj": "bones_burnt", "xp": 4.5, "restore": 1, "bonemeal": "pot_bonemeal_burnt" },
     { "obj": "wolf_bones", "xp": 4.5, "restore": 1, "bonemeal": "pot_bonemeal_wolf" },
     { "obj": "bat_bones", "xp": 5.3, "restore": 1, "bonemeal": "pot_bonemeal_bat", "blessed": "blessed_bat_bones", "shards": 5 },
-    { "obj": "alan_bones", "xp": 3, "restore": 1, "bonemeal": "pot_bonemeal_alan" },
+    { "obj": "alan_bones", "xp": 3, "restore": 1, "bonemeal": "pot_bonemeal_alan", "blessed": "blessed_alan_bones", "shards": 5 },
     { "obj": "mm_normal_monkey_bones", "xp": 5, "restore": 1, "bonemeal": "pot_bonemeal_normal_monkey" },
     { "obj": "mm_small_ninja_monkey_bones", "xp": 5, "restore": 2, "bonemeal": "pot_bonemeal_small_ninja_monkey" },
     { "obj": "mm_medium_ninja_monkey_bones", "xp": 4.5, "restore": 0, "bonemeal": "pot_bonemeal_medium_ninja_monkey" },

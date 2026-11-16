@@ -262,7 +262,9 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
 ### Combat room
 
 - **Combat dummies:** Attach swaps the loc for the dummy NPC, which takes hits, never
-  retaliates and never falls; Detach swaps back (captures).
+  retaliates and never falls; Detach swaps back (captures). While it is attached, the NPC's
+  Upgrade says "You should detach the sand bag first." and Remove says "You must detach the
+  sand bag before you can remove this.", both on the click tick (rsprox.net recs 2765, 2767).
 - **Rings:** Climb-over (Walk-through for the pedestals' barrier) moves a tile across with the
   captured animations and equipment refusals. Players inside the same ring can fight; one
   beaten there is put outside at full health with their items (Wiki).
@@ -318,23 +320,61 @@ Using a pet on menagerie furniture stores it; the pet house's View lists the sto
 
 Amy (Falador), then Marlo, Ellie and Angelo give contracts at the Wiki's tiers for a random
 client's home. Each home's hotspots show, per player, broken (Repair: a plank, or a steel bar
-for a sink, range or bath), old (Remove), empty (Build: the Wiki's planks) or the new piece.
+for a sink, range or bath), repaired, old (Remove), empty (Build: the Wiki's planks) or the new piece.
 The client pays the tier's experience and Carpenter points and restores run energy (the Carpenter's
 outfit adds to the experience, see below). Last-tier contract repeats the last tier; Rewards opens the shop
-(673) with the Wiki's prices; the supply crate rolls the Wiki's table. One Leagues capture
-(recording 1863; decoded-snapshot identity below) gives the tier menu ("Select an option":
-"Beginner Contract", "Novice Contract (Requires 20 Construction)" ... "I'll pass actually.", every tier listed), Repair and
-Build playing `human_poh_build` with synth 938, Remove playing `human_throw_away` with synth 2097
-or 2098 (delay 20), and the last job's `<col=229628>Jeff seems happy with your work. Talk to him
-for your reward.</col>` (him/her from the Wiki's client genders). The homeowner's unfinished work is now listed in hotspot order rather than as a count.
-References to recording 1863 here use the supplied decoded snapshot (`recordings/1863.txt`),
-header revision 227.1, transcript SHA-256
-`4d6405c839d36cb0563148927df5527f54e22d94980103edc34a3a9ca40242df`.
-In that snapshot, lines 88589–88820 show a Beginner Jeff contract asking for a wooden shelf, bed, drawer,
-dresser, mirror repair and chair in successive dialogue pages. These offsets apply only to this
-snapshot's rendering; its decoder build and capture date are unknown. To locate the sequence in
-another render, search for `Hey, I'm your contractor from Mahogany Homes, what did you want done?`,
-then Jeff's `I'd like a Wooden shelf built.` through `I'd like a Wooden chair built.`.
+(673) with the Wiki's prices; the supply crate rolls the Wiki's table.
+
+**rsprox captures** (the user's own rev 241/242 runs in `rsprox/mahogany-homes/`: 42 sessions,
+143 completed contracts at every tier but Expert, all twelve clients; cited by recording id and tick):
+
+- **Amy's first Talk-to** (20261012T114410 t3706, 20261027T082315 t415): "Hey I'm Amy, how may I help
+  you?", the player's three questions and her answers, ending "The clients that I would offer you to
+  go help could be in any of those cities, it might be a bit of a journey to get there!". Continuing
+  that line sets `con_contract_discussed` and offers "I'd like a construction contract." / "Thanks
+  for the information."; the first is followed by "What kind of contract would you like?" and the
+  tier menu. A later Talk-to, and Marlo/Ellie/Angelo before Amy, are not captured (ours).
+- **Tier menu** (Contract, op3): "Select an option", `Beginner Contract`, `Novice Contract (Requires
+  20 Construction)` ..., `I'll pass actually.`; a tier above the player's level is prefixed `<str>`.
+  The pick says "Could I have a/an <tier> contract please?" ("an adept"), and on its continue the job
+  arrives as a game message `<col=ff0000>Novice Contract</col>: Go see <where>.` and the line
+  "Please could you go see <where> for us? You can get another job once you have furnished his/her
+  home." (20261027T082315 t509-514). Last-tier contract (op4) gives both at once (20261108T011509 t626);
+  with work unfinished it is "What's my current construction contract?" and "You're currently on
+  a/an <col=ff0000><tier> Contract</col>. Go see <where>. You can get another job once you have
+  furnished his/her home." (20261029T203602 t7142, 20261031T132042 t30455). Contract with work
+  unfinished is not captured and answers the same. `data/mahogany-homes.json` `descriptions` holds
+  each client's `<where>` as sent, including Bob's `Bob </col>in`.
+- **Hotspots:** Remove plays `human_throw_away` with synth 2097 or 2098 (delay 20), state 3 to 4;
+  Build and Repair play `human_poh_build` with synth 938; Build goes 4 to 5 + tier, Repair 1 to **2**.
+  Experience lands in the same tick (Novice 48 a plank, 160 a plank repair, 120 a steel repair;
+  Adept 72, 190, 120). The last job: `@mes_hl_gre@<client> seems happy with your work. Talk to
+  him/her for your reward.</col>` (resolved for the chatbox's transparency).
+- **Displays:** the eight `con_contract_hotspot_<n>_display` varbits are shared by all twelve homes,
+  so live sends a contract's states only while the player is in its home's area and zeroes them on
+  leaving (20261108T011509 t486 in, t618 out; every run). The areas in `data/mahogany-homes.json`
+  `areas` are the 8x8 zones where captures sent or cleared them, joined with the hotspots' zones; the
+  exact edges live uses are not known. After the reward the finished home stays on show until the
+  player leaves it (t610-618).
+- **Completion** (20261108T011509 t584-602, 143 alike): the player says "I've finished with the work
+  you wanted."; continuing it pays, with "You have completed <col=ef1020>N</col> contract(s) with a
+  total of <col=ef1020>P</col> points." and the contract experience, and the client answers "Thank you
+  so much! Would you like a cup of tea before you go?". The player says "Yes, I'd love a cuppa.", and
+  continuing it plays `human_eat`, synth `liquid` (2401), overhead "Aaah, nothing like a nice cuppa
+  tea!", the spam line "You drink the tea, you feel energized!" and sets run energy to 100%. P is
+  taken as the points held (a purchase between two completions is not captured).
+- **Reward shop** (20261012T114410 t3726): Rewards (op5) sends inv 247 with one `burntfish1` per
+  entry whose count is its price (400, 800, 600, 200, 350, 25, 500, 2000, enum 2645's order), opens
+  673 and enables `construction_contract_shop:confirm` (673:6) slots 0-7. Picking an entry is
+  client-side (script 3530); Confirm is created in child 6 at the entry's index, so its click names
+  the reward. What a purchase sends back is not captured.
+
+The worklist (one Leagues capture, recording 1863, decoded snapshot `recordings/1863.txt`, header
+revision 227.1, transcript SHA-256
+`4d6405c839d36cb0563148927df5527f54e22d94980103edc34a3a9ca40242df`, lines 88589–88820, and
+20261111T195440 t1024-1039): "Hey, I'm your contractor from Mahogany Homes, what did you want done?",
+then one line a piece in hotspot order, "I'd like a Wooden shelf built." ... "I'd like my mirror
+fixed.", "an" before Oak ("I'd like an Oak small table built.").
 The request vocabulary comes from the
 [homeowner transcripts](https://oldschool.runescape.wiki/w/Transcript:Jeff_(Mahogany_Homes)),
 not the loc's generic display names (for example, "Shelves"). The other homeowner transcripts
@@ -350,14 +390,14 @@ documents fixed client/tier layouts. `data/Layouts.Construction.js` records its 
 and Tau four; Sarah has two at every tier; Expert Bob and Jeff have two. The shared Beginner/
 Novice layouts and the Adept/Expert differences are retained. Equal selection among distinct
 documented orders is an inference; neither exact probabilities nor an undocumented third
-Expert Larry order are asserted. The Wiki's display-state table is explicitly unverified;
+Expert Larry order are asserted. Every work order the user's captures assigned (137 contracts,
+Beginner to Adept, each client) is one of these rows. The Wiki's display-state table is explicitly unverified;
 work orders use the active cache's repair/remove states, and removal/building continue using
 its empty and tier-built states. Existing saved contracts are not migrated or rerolled, and
 both contractor actions refuse to overwrite unfinished work.
 
-Other contractor/completion dialogue and messages remain approximations except the captured
-lines described above. These recordings are historical Leagues observations; they establish
-sent dialogue and actions, not current-game probabilities or rendered UI. The native regression
+Lines not listed above (a client before their contract, the refusals) are ours. The captures
+establish sent dialogue and actions, not probabilities or rendered UI. The native regression
 is `node --test tests/mahogany-homes-contract-work.test.cjs` after `yarn build` in `server/`.
 It loads the real cache and plugins and uses registered NPC/object hooks and dialogue resumes
 with seeded players/house ownership; it does not claim walking, login persistence or rendered
@@ -466,6 +506,15 @@ and the remembered tier lasts until logout.
 Pools of restoration to ornate rejuvenation (RejuvenationPool plugin) play `poh_pool_drink`
 when drunk from, with no message or sound (captures).
 
+Chapel lamps (`Altars`), from rsprox captures 230/2850, 227/86 and 227/572: Light on a torch or
+candlestick needs a tinderbox, says "You light the torch." (also for candlesticks), plays synth
+2596 and leaves the lit loc, which stays lit. Light or Re-light on an incense burner uses one clean
+marrentill: "You burn some marrentill in the incense burner." (spam), synth 2066, the lit loc, with
+`human_light_torch` for both. Neither gives experience. Refusals: "You can't light that in
+building mode.", "You need a tinderbox to light the fire." and "Incense burners must be lit with
+Marrentill.". Ours: the Wiki's Firemaking 30 for burners and its message, the order of the
+checks after building mode, and lit torches lasting until the house unloads.
+
 Already there before this page: portal chamber and nexus teleports, altars and incense burners,
 spellbook and occult altars, pools, costume room storage, servants, the Estate agent, guests and
 adverts, house options, the house viewer, chairs.
@@ -570,3 +619,20 @@ shipwrights' workbench; a piece's second skill (Smithing, Runecraft, Farming) is
 outside Construction ask for the multiplier with the `construction:outfit-multiplier` custom event
 (`{ player, multiplier }`); the shipwrights' workbench does. Tested in `tests/carpenter-outfit.test.cjs`
 and `tests/shipwrights-workbench.test.cjs`.
+
+## Crystal saw
+
+`items/CrystalSaw.plugin.js`. OSRS Wiki (Crystal saw): carried in the inventory (it can't be wielded)
+it lets the player build furniture up to 3 levels above their Construction level. Only builds that
+take a saw and a hammer count, flatpacks made at a workbench included; rooms and garden plants (the
+watering-can builds) don't. It has 28 charges, 56 with the medium Western Provinces Diary, and one
+goes per piece that needed the boost; with none left the saw reverts to its seed, which the singing
+bowl sings back into a full saw. Check says "Your saw has # charges left." (rsprox captures,
+recordings 260 rev 229 and 310 rev 230, a game message on the click's tick).
+
+House asks for the boost with `construction:level-boost` (`{ player, buildable, boost }`, see
+`House.furnitureLevel`) and emits `construction:level-boost-used` (`{ player, buildable }`) from
+`useMaterials` when the Construction level alone was below the piece's. The charges used are a
+player attribute (`crystal-saw:charges-used`). Ours: the line shown when the saw reverts; the
+Sailing facilities and boat parts, STASH units and the Hallowed Sepulchre bridge don't use the
+boost yet. Tested in `tests/crystal-saw.test.cjs`.

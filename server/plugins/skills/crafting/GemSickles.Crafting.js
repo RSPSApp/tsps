@@ -84,8 +84,7 @@ function craft(player, recipe, gemId, sickleId) {
   // Not "skills:produced": a quest item, so no league relic doubles it.
   Shared.getApi().emitCustomEvent(GEM_SICKLE_MADE_EVENT, { player, product: recipe.product });
   const text = `You embed the ${recipe.name} into the sickle.`;
-  const { ChatType, DialogueChainBuilder, ItemStatementDialogue, EndDialogue } = Shared.getCore();
-  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
+  const { DialogueChainBuilder, ItemStatementDialogue, EndDialogue } = Shared.getCore();
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
     .add(new ItemStatementDialogue(0, recipe.product, text), new EndDialogue(1)));
 }

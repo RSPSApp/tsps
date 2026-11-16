@@ -20,7 +20,7 @@ import {
     updateClientPreferences,
     type RememberedLoginPreference,
 } from "../preferences/ClientPreferences";
-import { readLocalStorageJson, removeLocalStorageItem } from "../../common/utils/localStorage";
+import { canUseLocalStorage, readLocalStorageJson, removeLocalStorageItem } from "../../common/utils/localStorage";
 import type { LoginScreenExtension } from "./LoginScreenExtension";
 import type { ServerListEntry } from "./renderer/types";
 import { LoginIndex } from "./GameState";
@@ -190,11 +190,8 @@ export class LoginState {
     }
 
     private supportsPersistedLoginState(): boolean {
-        return (
-            isIosStandalonePwa() &&
-            typeof window !== "undefined" &&
-            typeof window.localStorage !== "undefined"
-        );
+        // Blocked storage throws on the property read itself, so ask through the guarded helper.
+        return isIosStandalonePwa() && canUseLocalStorage();
     }
 
     private loadPersistedLoginState(): void {

@@ -16,13 +16,15 @@ test('canonical Brutus rows load the Wiki respawn without losing cache combat an
   const { NpcDefinition } = require('../dist/game/definition/NpcDefinition');
   await CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
   new NpcDefinitionLoader().load();
-  for (const id of [15626, 15627]) {
+  // The Wiki's Brutus infobox: 15626 is the post-quest version, 15627 the Charging one (60 Hitpoints, 15 Attack,
+  // 30 Strength, 0 Magic).
+  for (const [id, hitpoints, levels] of [[15626, 58, [12, 25, 10, 1, 8]], [15627, 60, [15, 30, 10, 1, 0]]]) {
     const definition = NpcDefinition.forId(id);
     assert.equal(definition.getRespawn(), 36);
-    assert.equal(definition.getHitpoints(), 58);
+    assert.equal(definition.getHitpoints(), hitpoints);
     assert.equal(definition.getAttackSpeed(), 5);
     assert.equal(definition.getMaxHit(), 3);
-    assert.deepEqual(definition.getStats().slice(0, 5), [12, 25, 10, 1, 8]);
+    assert.deepEqual(definition.getStats().slice(0, 5), levels);
     assert.deepEqual([definition.getAttackAnim(), definition.getDefenceAnim(), definition.getDeathAnim()], [13783, 13787, 13784]);
   }
   assert.equal(NpcDefinition.forId(1).getRespawn(), 25, 'unconfigured NPCs keep the standard respawn');

@@ -61,6 +61,8 @@ export class Bank extends ItemContainer {
     public static readonly FULL_EVENT = "bank:full";
     /** `{ player }` once the bank interface has opened (not on a tab change). */
     public static readonly OPENED_EVENT = "bank:opened";
+    /** Live's line when a withdraw finds no inventory room, for plugin storages in the bank too. */
+    public static readonly INVENTORY_FULL_MESSAGE = INVENTORY_FULL_MESSAGE;
     /** Players whose items move between tabs, or load, without the capacity applying. */
     private static readonly unlimited = new Set<Player>();
     public static readonly TOTAL_BANK_TABS = 11;
@@ -101,6 +103,23 @@ export class Bank extends ItemContainer {
     /** `{ player }` after the open bank redraws its items and the side panel's inventory. */
     public static readonly REFRESHED_EVENT = "bank:refreshed";
     public static readonly PLACEHOLDER_IDENTITY_EVENT = "bank:placeholder-identity";
+
+    /**
+     * Whether the player owns any of `itemIds` in their inventory, worn equipment or bank: the
+     * bank tabs only (the search tab repeats them), and a placeholder (its id at amount 0) owns
+     * nothing. Other storage (a looting bag, the POH, group storage) is not looked at.
+     */
+    public static owns(player: Player, itemIds: number | readonly number[]): boolean {
+        const ids = (typeof itemIds === "number" ? [itemIds] : [...itemIds]).filter((id) => Number.isInteger(id) && id >= 0);
+        if (!ids.length) return false;
+        const held = (container: ItemContainer | null | undefined) => !!container && ids.some((id) => container.getAmount(id) > 0);
+        if (held(player.getInventory()) || held(player.getEquipment())) return true;
+        const banks = player.getBanks();
+        for (let tab = 0; tab < Bank.TOTAL_BANK_TABS; tab++) {
+            if (tab !== Bank.BANK_SEARCH_TAB_INDEX && held(banks[tab])) return true;
+        }
+        return false;
+    }
 
     public static placeholderIdentity(itemId: number): { placeholderId: number; itemIds: number[] } | null {
         if (!Number.isInteger(itemId) || itemId < 0) return null;
@@ -563,7 +582,10 @@ export class Bank extends ItemContainer {
         player.getBank(tab).refreshItems();
     }
 
-    /** Moves every item in `tab` (placeholders included) into the main tab. */
+    /**
+     * Moves every item in `tab` (placeholders included) into the main tab. Each keeps its own slot, as a
+     * dragged item does (bank fillers stay one per slot); an item whose placeholder is in the main tab fills it.
+     */
     public static collapseTab(player: Player, tab: number): void {
         if (tab <= 0 || tab > Bank.getTabCount(player)) return;
         const items = player.getBank(tab).getValidItems();
@@ -571,9 +593,12 @@ export class Bank extends ItemContainer {
             player.sendMessage("You don't have enough free slots in your main tab to do that.");
             return;
         }
+        // Gaps left by released placeholders are closed first, so the items join after the last one.
+        const main = player.getBank(0).sortItems();
         Bank.withoutLimit(player, () => {
             for (const item of items) {
-                player.getBank(0).add(item.clone(), false);
+                if (Bank.hasPlaceholderFor(main, item)) main.add(item.clone(), false);
+                else main.setItem(Bank.endSlot(main), item.clone());
             }
         });
         player.getBank(tab).resetItems();
@@ -583,6 +608,12 @@ export class Bank extends ItemContainer {
         }
         player.getBank(0).refreshItems();
         GameConstants.PLAYER_PERSISTENCE.requestSave(player, "bank-tab-collapse");
+    }
+
+    /** Whether `bank` holds a placeholder that `item` (a real stack) would fill. */
+    private static hasPlaceholderFor(bank: Bank, item: Item): boolean {
+        return item.getAmount() > 0 && bank.getItems().some((held) => held != null && held.getId() >= 0
+            && held.getAmount() === 0 && Bank.sharesPlaceholder(held.getId(), item.getId()));
     }
 
     /** Removes the placeholders in `tab`, or in every tab for "all items" (0). */
@@ -697,7 +728,7 @@ export class Bank extends ItemContainer {
     }
 
     /** The slot after `bank`'s last item, where a moved item joins the tab; -1 if full. */
-    private static endSlot(bank: Bank): number {
+    public static endSlot(bank: Bank): number {
         const items = bank.getItems();
         let last = -1;
         items.forEach((item, slot) => {
@@ -1196,8 +1227,12 @@ export class Bank extends ItemContainer {
         }
         return false;
     }
-    /** Banks [from]'s items, or only the one in [onlySlot] (a worn panel slot's Bank op). */
-    public static depositItems(player: Player, from: ItemContainer, ignoreReqs: boolean, onlySlot?: number) {
+    /**
+     * Banks [from]'s items, or only the one in [onlySlot] (a worn panel slot's Bank op). [emptyAll] is a
+     * scripted deposit that must empty the container (Peer the Seer's spell): the player's deposit locks
+     * don't apply to it.
+     */
+    public static depositItems(player: Player, from: ItemContainer, ignoreReqs: boolean, onlySlot?: number, { emptyAll = false }: { emptyAll?: boolean } = {}) {
         if (!ignoreReqs) {
             if (!Bank.isOpen(player)) {
                 return;
@@ -1207,12 +1242,20 @@ export class Bank extends ItemContainer {
         for (let item of from.getValidItems()) {
             const slot = from.getItems().indexOf(item);
             if (onlySlot !== undefined && slot !== onlySlot) continue;
-            if (getPluginManager().emitCanBankItem(player, item) === false) {
+            if (getPluginManager().emitCanBankItem(player, item, { container: from, slot, bulk: onlySlot === undefined, emptyAll }) === false) {
+                continue;
+            }
+            // A worn item whose Remove is refused (a Giants' Foundry preform) cannot be banked off either.
+            if (from instanceof Equipment && getPluginManager().emitCanUnequip(player, slot, item) === false) {
                 continue;
             }
             // By slot: a delete by id would take a preset stack in a lower slot instead of this one.
-            from.switchItem(player.getBank(Bank.getTabForItem(player, item.getId())), item.clone(), false, slot, false);
-            movedAny = true;
+            const id = item.getId();
+            const amount = item.getAmount();
+            from.switchItem(player.getBank(Bank.getTabForItem(player, id)), item.clone(), false, slot, false);
+            // A full bank (or a stack at its cap) refuses the move: only what actually left plays the sound.
+            const left = from.getItems()[slot];
+            if (!left || left.getId() !== id || left.getAmount() < amount) movedAny = true;
         }
         from.refreshItems();
         if (player.isSearchingBank()) {
@@ -1378,7 +1421,6 @@ export class Bank extends ItemContainer {
             3959: player.insertModeReturn() ? 1 : 0,
             [Bank.REQUESTED_QUANTITY_VARBIT]: player.getBankCustomQuantity(),
             4150: player.getCurrentBankTab(),
-            4170: 0,
             5450: 1,
             6590: player.getBankQuantityMode(),
         };

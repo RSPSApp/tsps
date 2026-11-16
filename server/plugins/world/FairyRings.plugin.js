@@ -515,8 +515,7 @@ function fairyTeleport(player, ring, from, fromClick) {
 
 /** The refusal's mesbox, logged as a mesbox chat line too (as recorded). */
 function refusalBox(player, text) {
-  const { DialogueChainBuilder, StatementDialogue, ChatType } = core;
-  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
+  const { DialogueChainBuilder, StatementDialogue } = core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
 }
 

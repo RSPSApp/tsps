@@ -29,6 +29,17 @@ export class RangedCombatMethod extends CombatMethod {
     private static readonly NPC_PROJECTILE_DELAY = 41;
     private static readonly NPC_PROJECTILE_END_BASE = 46;
     private static readonly NPC_PROJECTILE_CYCLES_PER_TILE = 5;
+    /**
+     * An NPC's arrow flies at 163 -> 146 on the wire, as a player's bow arrow (quarter-tiles here, sent times four):
+     * all 152 NPC-sourced *_arrow_travel shots (iron/bronze/mithril/rune) in revs 227, 234 and 241, e.g.
+     * rsprox_transcripts/234/00801.txt, 234/00822.txt, 241/900144.txt and 241/911423.txt.
+     */
+    private static readonly NPC_PROJECTILE_START_HEIGHT = 40.75;
+    private static readonly NPC_PROJECTILE_END_HEIGHT = 36.5;
+    /** The same NPC-sourced arrows and knives all carry angle 15, progress 11 (the Projectile defaults are 16 / 64). */
+    private static readonly NPC_PROJECTILE_ANGLE = 15;
+    private static readonly NPC_PROJECTILE_PROGRESS = 11;
+    private static readonly CLIENT_CYCLES_PER_TICK = 30;
 
     type(): CombatType {
         return CombatType.RANGED;
@@ -158,7 +169,13 @@ export class RangedCombatMethod extends CombatMethod {
                 character.performGraphic(new Graphic(launchGraphic, 0, GraphicHeight.ARCHER_DRAW));
             }
             const end = RangedCombatMethod.npcProjectileEnd(character, target);
-            Projectile.createProjectile(character, target, projectileId, RangedCombatMethod.NPC_PROJECTILE_DELAY, end, 43, 31).sendProjectile();
+            // An NPC recorded with its own flight carries it (npc-combat-defs.json `projectileArc`).
+            const arc = character.getAsNpc().getCurrentDefinition().getProjectileArc?.() ?? null;
+            Projectile.createProjectile(character, target, projectileId, RangedCombatMethod.NPC_PROJECTILE_DELAY, end,
+                arc?.startHeight ?? RangedCombatMethod.NPC_PROJECTILE_START_HEIGHT, arc?.endHeight ?? RangedCombatMethod.NPC_PROJECTILE_END_HEIGHT)
+                .withAngle(arc?.angle ?? RangedCombatMethod.NPC_PROJECTILE_ANGLE)
+                .withProgress(arc?.progress ?? RangedCombatMethod.NPC_PROJECTILE_PROGRESS)
+                .sendProjectile();
             return;
         }
 
@@ -169,11 +186,11 @@ export class RangedCombatMethod extends CombatMethod {
         const projectiles = (profile?.projectiles ?? [RangedCombatMethod.DEFAULT_PLAYER_PROJECTILE]).slice(0, limit);
         const distance = CombatPosition.edgeDistance(character, target);
         const processingOrder = target.isNpc() ? 1 : 0;
-        const hitDelays = RangedCombatMethod.landingDelays(character, target)
-            .map((ticks) => ticks + processingOrder).slice(0, limit);
+        const landings = RangedCombatMethod.landingDelays(character, target);
+        const hitDelays = landings.map((ticks) => ticks + processingOrder).slice(0, limit);
         for (let index = 0; index < projectiles.length; index++) {
             const projectile = projectiles[index];
-            const end = RangedCombatMethod.projectileEnd(projectile, distance);
+            const end = RangedCombatMethod.projectileEnd(projectile, distance, landings[index] ?? landings[0]);
             const shot = Projectile.createProjectile(character, target, profile?.projectileId ?? ammo.getProjectileId(), projectile.delay, end, projectile.startHeight, projectile.endHeight);
             if (projectile.angle != null) shot.withAngle(projectile.angle);
             if (projectile.progress != null) shot.withProgress(projectile.progress);
@@ -186,7 +203,9 @@ export class RangedCombatMethod extends CombatMethod {
             // Paid in finished(), on this tick but after hits(): the swing rolls with the ammo it fired (a last
             // fire arrow, silver bolt or thrown weapon is still worn), then the slot drops (rsprox 227/00096).
             const flightTicks = Math.max(1, ...hitDelays);
-            RangedCombatMethod.pendingShots.set(character, { pos: target.getLocation(), amount: arrows, flightTicks });
+            const landing = { attacker: character, target, location: target.getLocation().clone() };
+            PluginManager.emitCustomEvent("ranged:ammo-drop-location", landing);
+            RangedCombatMethod.pendingShots.set(character, { pos: landing.location.clone(), amount: arrows, flightTicks });
         }
     }
 
@@ -214,9 +233,12 @@ export class RangedCombatMethod extends CombatMethod {
     /**
      * A projectile's landing offset in client cycles, from the OSRS server projanim types:
      * delay + lengthAdjustment + stepMultiplier * distance. Profiles without a step keep
-     * their flat speed as the end offset.
+     * their flat speed as the end offset; a landingOffset ends it with its hit (landingTicks).
      */
-    public static projectileEnd(projectile: ProjectileProfile, distance: number): number {
+    public static projectileEnd(projectile: ProjectileProfile, distance: number, landingTicks?: number): number {
+        if (projectile.landingOffset != null && landingTicks != null) {
+            return projectile.landingOffset + RangedCombatMethod.CLIENT_CYCLES_PER_TICK * landingTicks;
+        }
         if (projectile.stepMultiplier != null) {
             return projectile.delay + (projectile.lengthAdjustment ?? 0) + projectile.stepMultiplier * distance;
         }

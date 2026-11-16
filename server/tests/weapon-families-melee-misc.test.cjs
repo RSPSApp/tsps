@@ -118,11 +118,15 @@ function kerisPlayer(weaponId, targetName) {
 
 test("Keris partisans, including the Theatre of Blood and Tombs of Amascut variants, hit kalphites harder", () => {
   let damage;
-  let accuracy;
+  const accuracyModifiers = [];
+  // Every accuracy modifier the plugin registers, applied in order, as EquipmentEffects does.
+  const accuracy = (attacker, roll) => accuracyModifiers.reduce((value, fn) => fn(attacker, value), roll);
   require("../plugins/items/Keris.plugin").register({
     core: { hitTargetOf: require("../dist/game/content/combat/EquipmentEffects").hitTargetOf },
     registerMeleeHitModifier: (fn) => { damage = fn; },
-    registerMeleeAttackAccuracyModifier: (fn) => { accuracy = fn; },
+    registerMeleeAttackAccuracyModifier: (fn) => { accuracyModifiers.push(fn); },
+    onNpcDeath() {},
+    emitCustomEvent() {}, // nobody answers toa:in-tombs: outside the Tombs
   });
   const I = ItemIdentifiers;
   const roll = Misc.randomInclusive;
@@ -144,6 +148,7 @@ test("Keris partisans, including the Theatre of Blood and Tombs of Amascut varia
     assert.equal(accuracy(kerisPlayer(I.KERIS_PARTISAN_OF_BREACHING, "Kalphite Queen"), 900), 1200, "Breaching: 4/3 accuracy");
     assert.equal(accuracy(kerisPlayer(I.KERIS_PARTISAN, "Kalphite Queen"), 900), 900);
     assert.equal(accuracy(kerisPlayer(I.KERIS_PARTISAN_OF_BREACHING, "Goblin"), 900), 900);
+    assert.equal(accuracy(kerisPlayer(I.KERIS_PARTISAN_OF_THE_SUN, "Kalphite Queen"), 900), 900, "sun: no boost outside the Tombs");
   } finally {
     Misc.randomInclusive = roll;
   }

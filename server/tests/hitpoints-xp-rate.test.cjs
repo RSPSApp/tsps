@@ -50,7 +50,8 @@ test("other skills and unmultiplied gains (bonus XP) don't change the rate", () 
   hooks.login({ player: p });
   gained({ player: p, skill: Skill.STRENGTH, multiplied: true, rate: 99, experience: 40 });
   gained({ player: p, skill: Skill.HITPOINTS, multiplied: false, rate: 1, experience: 5 });
-  assert.equal(p.sent.length, 1);
+  const rates = p.sent.filter(({ datasets }) => datasets[0].key === "hitpointsXpRate");
+  assert.equal(rates.length, 1, "only the login rate");
 });
 
 test("addExperience reports the rate it applied", () => {
@@ -77,4 +78,15 @@ test("addExperience reports the rate it applied", () => {
   assert.equal(events[0].rate, GameConstants.EXPERIENCE_MULTIPLIER);
   assert.equal(events[0].multiplied, true);
   assert.equal(events[1].rate, 1, "no rates applied: 1");
+});
+
+test("unmultiplied Hitpoints XP (a league relic's bonus) is tagged for the client, not sent as a rate", () => {
+  const hooks = registered();
+  const gained = hooks["skills:experience-gained"];
+  const p = player();
+  gained({ player: p, skill: Skill.HITPOINTS, multiplied: false, rate: 1, experience: 227.7 });
+  assert.deepEqual(p.sent, [{ source: "server", datasets: [{ key: "hitpointsXpUnmultiplied", rows: [227.7] }] }]);
+  gained({ player: p, skill: Skill.STRENGTH, multiplied: false, rate: 1, experience: 227.7 });
+  gained({ player: p, skill: Skill.HITPOINTS, multiplied: false, rate: 1, experience: 0 });
+  assert.equal(p.sent.length, 1, "other skills and nothing gained send nothing");
 });

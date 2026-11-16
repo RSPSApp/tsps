@@ -116,9 +116,6 @@ function switchAtOccultAltar(player, spellbook, fromMenu = false) {
   if (player.getSpellbook() !== spellbook && refuseLocked(player, spellbook)) return true;
   const text = fromMenu ? "Your mind fills with new knowledge." : "Your mind fills with knowledge.";
   if (!MagicSpellbook.changeSpellbook(player, spellbook, false, fromMenu ? null : text)) return true;
-  if (fromMenu) {
-    player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
-  }
   player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
   player.getPacketSender().sendTab(MAGIC_TAB);
   Sounds.sendSound(player, OCCULT_SWITCH_SOUND);

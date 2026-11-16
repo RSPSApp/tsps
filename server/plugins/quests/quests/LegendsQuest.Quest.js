@@ -697,8 +697,15 @@ module.exports = function registerLegendsQuest(api) {
     }
   }
 
+  const GOLD_BOWL_SMITHING_XP = 30;
+  const GOLD_BOWL_FORGE_TICKS = 5;
+  /** A player's bowl on the anvil, so a second click does not start another (a cancelled task frees it). */
+  const forgingBowl = new WeakMap();
+
   function smithGoldenBowl(player) {
-    if (!held(player, SKETCH)) {
+    // Wiki (Gold bowl, Sketch): the sketch is needed during the quest only. The Wiki's failure chance
+    // (with or without the sketch) has no published rate, so it is still not modelled.
+    if (!quest.isComplete(player) && !held(player, SKETCH)) {
       player.sendMessage("You don't know what vessel to make. Gujuo could draw you a sketch.");
       return;
     }
@@ -714,9 +721,23 @@ module.exports = function registerLegendsQuest(api) {
       player.sendMessage("You need two gold bars to make a bowl.");
       return;
     }
-    take(player, GOLD_BAR, 2);
-    give(player, GOLD_BOWL, 1);
-    player.sendMessage("You forge a beautiful bowl out of solid gold.");
+    if (forgingBowl.get(player)?.isRunning?.()) return;
+    // Wiki (Gold bowl, Creation): the forge takes 5 ticks at the anvil; a success uses both bars and gives
+    // 30 Smithing XP. The bars are taken as the bowl is made, so a walk away or logout first keeps them.
+    const at = player.getLocation().clone();
+    const sequence = api.core.CacheDefinitions.getSeqId("human_smithing");
+    if (sequence != null) player.performAnimation(new api.core.Animation(sequence));
+    const forge = new CountdownTask(player, GOLD_BOWL_FORGE_TICKS, () => {
+      forgingBowl.delete(player);
+      if (player.isRegistered?.() === false || !player.getLocation().equals(at)) return;
+      if (!held(player, HAMMER) || !held(player, GOLD_BAR, 2)) return;
+      take(player, GOLD_BAR, 2);
+      give(player, GOLD_BOWL, 1);
+      player.getSkillManager().addExperiences(Skill.SMITHING, GOLD_BOWL_SMITHING_XP);
+      player.sendMessage("You forge a beautiful bowl from solid gold.");
+    });
+    forgingBowl.set(player, forge);
+    TaskManager.submit(forge);
   }
 
   function cutReed(player) {

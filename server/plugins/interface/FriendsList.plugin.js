@@ -30,6 +30,25 @@ function announceLeave(player, channelKey) {
   pluginApi?.emitCustomEvent("friends-chat:left", { player, channelKey });
 }
 
+/**
+ * "friends-chat:joined" ({ player, channelKey, rejoin }): the counterpart of "friends-chat:left".
+ * `rejoin` is true for the return to the player's last channel at login, not a join they made.
+ */
+function announceJoin(player, channelKey, { rejoin = false } = {}) {
+  pluginApi?.emitCustomEvent("friends-chat:joined", { player, channelKey, rejoin });
+}
+
+/**
+ * "friends-chat:system-channel" ({ key, channel }): runs a chat-channel no player owns under `key`
+ * ({ ownerName, channelName, entryRank?, talkRank?, kickRank?, admits?(player) }), or ends it
+ * when channel is null.
+ */
+function systemChannel({ key, channel }) {
+  if (!key) return;
+  if (channel) FriendsChatManager.registerSystemChannel(key, channel);
+  else FriendsChatManager.removeSystemChannel(key);
+}
+
 /** "friends:send-private-message" ({ sender, recipient, text, sent }): a message sent for a player, such as a bot's reply. */
 function sendPrivateMessage(event) {
   const { sender, recipient, text } = event ?? {};
@@ -71,6 +90,8 @@ module.exports = {
     api.onCustomEvent("friends:send-private-message", sendPrivateMessage);
     pluginApi = api;
     FriendsChatManager.memberRemoved = announceLeave;
+    FriendsChatManager.memberAdded = announceJoin;
+    api.onCustomEvent("friends-chat:system-channel", systemChannel);
     api.onCustomEvent("friends-chat:channel", describeChannel);
     api.onCustomEvent("friends-chat:join", joinChannel);
     api.onCustomEvent("friends-chat:leave", leaveChannel);

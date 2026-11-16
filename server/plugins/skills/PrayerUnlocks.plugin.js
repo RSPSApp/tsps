@@ -14,8 +14,9 @@
  *    slot's own prayer stays usable and PrayerHandler applies the upgrade (Wiki: Deadeye, Mystic
  *    Vigour).
  *
- * The Knight Waves activity is not implemented, so completing King's Ransom stands in for
- * it; when the activity exists this should read its completion instead.
+ * King's Ransom and the Knight Waves Training Ground are both required. The activity answers
+ * "knight-waves:is-complete" and "knight-waves:progress"; if it is disabled, King's Ransom
+ * completion is the fallback so a world without the plugin keeps the old behaviour.
  *
  * Events:
  *  - "prayer:unlocks-bypass" { player, prayer, bypass } -> in: a mode or minigame that hands
@@ -54,9 +55,8 @@ const LEARNED_COLOUR = "<col=7f0000>";
 const ALREADY_LEARNED = "You can make out some faded words on the ancient parchment. "
   + "It appears to be an archaic invocation of the gods. However there's nothing more for you to learn.";
 
-// No OSRS Wiki source: these two are our own wording for a locked prayer.
+// No OSRS Wiki source: our own wording for a locked scroll prayer.
 const PRAYER_LOCKED = "You have not unlocked that prayer.";
-const KINGS_RANSOM_LOCKED = "Complete King's Ransom to unlock";
 
 let api = null;
 let core = null;
@@ -129,9 +129,14 @@ function scrollUnlocked(player, scroll) {
 
 /** The varbit is shared by Chivalry and Piety, so a bypass on either reveals both. */
 function knightWavesUnlocked(player) {
-  return kingsRansomComplete(player)
-    || unlocksBypassed(player, core.PrayerData.CHIVALRY)
-    || unlocksBypassed(player, core.PrayerData.PIETY);
+  if (unlocksBypassed(player, core.PrayerData.CHIVALRY)
+    || unlocksBypassed(player, core.PrayerData.PIETY)) return true;
+  const request = { player, complete: null };
+  api.emitCustomEvent("knight-waves:is-complete", request);
+  if (request.complete === true) return true;
+  // No listener: the plugin is off on this world, so the quest remains the stand-in.
+  if (request.complete === false) return false;
+  return kingsRansomComplete(player);
 }
 
 function sendUnlock(player, scroll) {
@@ -139,8 +144,20 @@ function sendUnlock(player, scroll) {
 }
 
 function sendKnightWaves(player) {
-  player.getPacketSender()
-    .sendVarbit(KNIGHT_WAVES_STATE_VARBIT, knightWavesUnlocked(player) ? KNIGHT_WAVES_COMPLETE : 0);
+  // A mode that hands the prayers out (PvP presets, Last Man Standing, the Leagues grimoire) must
+  // not show 0-7: the book would lock what the server allows. The activity's progress only
+  // describes earned waves, so the bypass answers first.
+  if (unlocksBypassed(player, core.PrayerData.CHIVALRY)
+    || unlocksBypassed(player, core.PrayerData.PIETY)) {
+    player.getPacketSender().sendVarbit(KNIGHT_WAVES_STATE_VARBIT, KNIGHT_WAVES_COMPLETE);
+    return;
+  }
+  const request = { player, progress: null };
+  api.emitCustomEvent("knight-waves:progress", request);
+  const value = Number.isInteger(request.progress)
+    ? request.progress
+    : (knightWavesUnlocked(player) ? KNIGHT_WAVES_COMPLETE : 0);
+  player.getPacketSender().sendVarbit(KNIGHT_WAVES_STATE_VARBIT, value);
 }
 
 function syncUnlocks({ player }) {
@@ -168,6 +185,20 @@ function kingsRansomStageChanged({ player, key }) {
   sendKnightWaves(player);
 }
 
+/**
+ * The recorded refusal a locked Chivalry or Piety gets, as a messagebox (rsprox 227/910291.txt and
+ * 227/910403.txt for Chivalry, 231/911282.txt [1154] and 237/01107.txt for Piety). The same line
+ * names every requirement, so it is the answer whether King's Ransom or the Knight Waves is the
+ * part still missing.
+ */
+function knightPrayerLocked(prayer) {
+  const defence = prayer === core.PrayerData.CHIVALRY ? 65 : 70;
+  return `<col=000080>${prayer.getPrayerName()}</col> requires `
+    + `<col=000080>level ${prayer.requirement} Prayer</col>, `
+    + `<col=000080>level ${defence} Defence</col> and completion of the King's Ransom `
+    + `<col=000080>Knight Waves</col>.`;
+}
+
 function prayerRequirements(event) {
   const { prayer, player } = event;
   const knightPrayer = prayer === core.PrayerData.CHIVALRY || prayer === core.PrayerData.PIETY;
@@ -178,8 +209,9 @@ function prayerRequirements(event) {
   // Minigames that hand everyone the prayers (Last Man Standing) and PvP mode say so here.
   if (unlocksBypassed(player, prayer)) return;
   if (knightPrayer) {
-    if (kingsRansomComplete(player)) return;
-    event.message = `${KINGS_RANSOM_LOCKED} ${prayer.getPrayerName()}.`;
+    if (knightWavesUnlocked(player)) return;
+    event.message = knightPrayerLocked(prayer);
+    event.messageBox = true;
     event.disabled = true;
     return;
   }
@@ -233,10 +265,9 @@ function learnScroll(player, scroll) {
  * animation and graphic, synth 2655, the prayer tab, then the same line in an objectbox of the scroll.
  */
 function showLearned(player, scroll) {
-  const { Animation, Graphic, ChatType, ItemStatementDialogue, DialogueChainBuilder } = core;
+  const { Animation, Graphic, ItemStatementDialogue, DialogueChainBuilder } = core;
   const name = scroll.name.split(" ").map((word) => `${LEARNED_COLOUR}${word}`).join(" ");
   const line = `You study the scroll and learn a new prayer: ${name}</col>`;
-  player.getPacketSender().sendTypedMessage(ChatType.MESBOX, line);
   player.performAnimation(new Animation(scroll.learned.seq));
   player.performGraphic(new Graphic(scroll.learned.spotanim));
   player.getPacketSender().sendSoundEffect(SCROLL_LEARNED_SOUND, 1, 0, 1);

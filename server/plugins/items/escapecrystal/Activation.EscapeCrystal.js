@@ -73,7 +73,9 @@ function saved(player, cause) {
  */
 function toRespawnPoint(player, cause) {
   const { TeleportHandler, GameConstants } = Common.core();
-  const destination = GameConstants.DEFAULT_LOCATION.clone();
+  const request = { player, location: null };
+  Common.api().emitCustomEvent("respawn-point:location", request);
+  const destination = request.location ?? GameConstants.DEFAULT_LOCATION.clone();
   if (!TeleportHandler.checkReqs(player, destination, Common.WILDERNESS_LIMIT)) return false;
   if (cause !== "teleport") return escapeTo(player, destination, cause);
   let escaped = false;

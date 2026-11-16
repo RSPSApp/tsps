@@ -17,6 +17,7 @@ const { Graphic } = require("../dist/game/model/Graphic");
 const { ChatType } = require("../dist/net/protocol/ClientProtocol");
 const { DialogueChainBuilder } = require("../dist/game/model/dialogues/builders/DialogueChainBuilder");
 const { ItemStatementDialogue } = require("../dist/game/model/dialogues/entries/impl/ItemStatementDialogue");
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 
 const plugin = require("../plugins/skills/PrayerUnlocks.plugin");
 
@@ -66,7 +67,8 @@ function nativePlayer(t, { prayer = 99, attributes = {}, items = [] } = {}) {
   t.mock.method(player, "performAnimation", (animation) => sent.push(["seq", animation.getId()]));
   t.mock.method(player, "performGraphic", (graphic) => sent.push(["spotanim", graphic.getId()]));
   const dialogues = [];
-  t.mock.method(player, "getDialogueManager", () => ({ startDialogues: (chain) => dialogues.push(chain) }));
+  // The box shows, logging its own chat line as the real one does.
+  t.mock.method(player, "getDialogueManager", () => ({ startDialogues: (chain) => { dialogues.push(chain); Dialogue.sendBoxChatLine(player, chain.getDialogues().get(0).getText()); } }));
   player.setRegistered(true);
   player.getSkillManager().setMaxLevel(Skill.PRAYER, prayer, false);
   player.getSkillManager().setCurrentLevel(Skill.PRAYER, prayer, false);
@@ -109,14 +111,15 @@ test("the scrolls teach Deadeye and Mystic Vigour without locking Eagle Eye or M
     assert.equal(player.getAttribute(attribute), true, name);
     assert.equal(player.getInventory().contains(item), false, "the scroll is consumed");
     assert.deepEqual(varbits, [[varbit, 1]], name);
-    // rsprox 235/03398.txt [479] (Mystic vigour) and [736] (Deadeye).
+    // rsprox 235/03398.txt [479] (Mystic vigour) and [736] (Deadeye), on one tick; the chat line
+    // goes out with the objectbox.
     const text = `You study the scroll and learn a new prayer: ${line}`;
     assert.deepEqual(sent, [
-      ["sendTypedMessage", ChatType.MESBOX, text],
       ["seq", seq],
       ["spotanim", spotanim],
       ["sendSoundEffect", 2655, 1, 0, 1],
       ["sendTab", 5],
+      ["sendTypedMessage", ChatType.MESBOX, text],
     ], name);
     assert.equal(dialogues.length, 1, "an objectbox of the scroll follows");
   }

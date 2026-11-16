@@ -45,7 +45,6 @@ module.exports = function registerBearYourSoulQuest(api) {
   const SOUL_BEARER = Items.SOUL_BEARER; // 19634
   const SPADE = Items.SPADE; // 952
   const SEARCH_ANIMATION = new Animation(832); // human_pickuptable
-  const READ_ANIMATION = new Animation(1350); // human_readbook
   const DIG_ANIMATION = new Animation(830); // human_dig
   const DIG_SOUND = 1470;
   const REPAIR_SOUND = 1595;

@@ -601,7 +601,8 @@ test('Fluffs action hints become a message box at the matching quest stage only'
     const box = { npcId: N.GERTRUDES_CAT_2, stepId: action.steps[0].id, text: step.text, kind: 'message' };
     h.emit('npc-dialogue:action', box);
     assert.deepEqual(box.box, { statement: true }, 'shown in a message box');
-    assert.deepEqual(h.typed.splice(0), [[h.core.ChatType.MESBOX, step.text]], 'with its mesbox chat line (232/03222.txt tick 12370)');
+    // The message box logs its own mesbox line when the dialogue shows it (gertrudes-cat-fluffs-hint.test.cjs).
+    assert.deepEqual(h.typed.splice(0), [], 'no line sent by hand');
     assert.deepEqual(h.messages, [], 'not an ordinary game message');
     assert.equal(h.quest.getStage(h.player), stage, 'the hint does not grant quest progress');
     const other = { npcId: N.SHILOP, stepId: id, text: step.text, step };

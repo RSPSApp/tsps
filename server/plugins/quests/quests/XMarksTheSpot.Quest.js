@@ -2,7 +2,7 @@
 module.exports = function registerXMarksTheSpotQuest(api) {
   const { giveReward } = require("../QuestRuntime");
   const { Animation, ItemIdentifiers, NpcIdentifiers, WorldDefinition, ItemStatementDialogue, DialogueChainBuilder } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, getRegisteredQuests } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, getRegisteredQuests, questStartMessage } = require("../QuestRuntime");
 
   const VEOS_NPC_ID = NpcIdentifiers.VEOS; // 8484, "veos_visible"
   const VEOS_POST_QUEST_NPC_ID = NpcIdentifiers.VEOS_4; // 10723, "veos_visible_amulet"
@@ -345,7 +345,7 @@ module.exports = function registerXMarksTheSpotQuest(api) {
     if (request.text === "Sounds good, what should I do?" && quest.getStage(request.player) === 0) request.before = () => {
       request.player.setAttribute(ACCEPTED_ATTRIBUTE, 1);
       request.player.getPacketSender().sendVarbit(VARBIT_X_MARKS, 1);
-      request.player.sendMessage("You've started a new quest: <col=081190>X Marks the Spot</col>");
+      request.player.sendMessage(questStartMessage(request.player, "X Marks the Spot"));
     };
     if (request.text.startsWith("Take this scroll.") && quest.getStage(request.player) === 0) request.before = () => giveStartScroll(request.player);
     if (request.text.startsWith("You'll probably want a spade")) request.text = "You'll probably want a spade, I find they're pretty much always needed when it comes to hunting treasure. Check the general store if you don't have one.";

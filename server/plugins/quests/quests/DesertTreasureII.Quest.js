@@ -7,7 +7,7 @@ module.exports = function registerDesertTreasureII(api) {
     if (typeof inventory.getAddableAmount === "function") return inventory.getAddableAmount(new Item(itemId, 1)) >= 1;
     return (inventory.getFreeSlots?.() ?? 1) > 0;
   }
-  const { registerQuest, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, questStartMessage } = require("../QuestRuntime");
   const PAGE = "Desert Treasure II - The Fallen Empire";
   const { findBestPickaxe } = require("../../skills/Mining.plugin");
   const WAR_ROOM_GOLEM_LOC = 49511; // Cache multiloc bases are the actual map objects.
@@ -480,7 +480,11 @@ module.exports = function registerDesertTreasureII(api) {
   const KASONDE_EXPLOSIVE_PROJECTILE = 2526;
   const KASONDE_ACID_POOL = 48747;
   const KASONDE_EXPLOSIVE_POOL = 48749;
-  const ASSASSIN_RANGED_ATTACK_ANIMATION = 7617; // Recorded for NPC 12328 in npc-captured-animations.json.
+  // Every recorded ranged shot of 12328 plays human_bow with mithril_arrow_launch at height 102
+  // (rsprox_transcripts/226/01703.txt:370901, 10 shots).
+  const ASSASSIN_RANGED_ATTACK_ANIMATION = "human_bow";
+  const ASSASSIN_RANGED_LAUNCH_GRAPHIC = "mithril_arrow_launch";
+  const ASSASSIN_RANGED_LAUNCH_HEIGHT = 102;
   class FinalAssassinCombat extends api.core.RangedCombatMethod {
     attackDistance(npc) {
       return npc.__dt2FinalWightNextRanged === true || npc.__dt2FinalWightRangedInFlight === true
@@ -491,9 +495,11 @@ module.exports = function registerDesertTreasureII(api) {
       npc.__dt2FinalWightNextRanged = false;
       npc.__dt2FinalWightRangedInFlight = ranged;
       if (!ranged) return new api.core.MeleeCombatMethod().start(npc, target);
-      // shortcut: the Assassin's projectile is unmapped; retain the core NPC fallback until a capture identifies it.
+      // The core NPC shot with its recorded mithril arrow and flight (npc-combat-defs.json, rsprox_transcripts/226/01703.txt).
       super.start(npc, target);
-      npc.performAnimation(new api.core.Animation(ASSASSIN_RANGED_ATTACK_ANIMATION));
+      npc.performAnimation(new api.core.Animation(api.core.CacheDefinitions.getSeqId(ASSASSIN_RANGED_ATTACK_ANIMATION)));
+      npc.performGraphic(api.core.Graphic.atHeight(api.core.CacheDefinitions.getSpotanimId(ASSASSIN_RANGED_LAUNCH_GRAPHIC),
+        ASSASSIN_RANGED_LAUNCH_HEIGHT));
     }
     hits(npc, target) {
       if (npc.__dt2FinalWightRangedInFlight) {
@@ -1756,6 +1762,8 @@ module.exports = function registerDesertTreasureII(api) {
       guardian.setOwnerOnly?.(true);
       guardian.__skipDefaultRespawn = true;
       guardian.setScriptedMovement?.(true);
+      // Wiki (Ancient Guardian (Desert Treasure II)): "the guardian is immune to freezes from the spells themselves".
+      guardian.setFlag?.("combat:unfreezable");
       guardian.setMaxHitpoints?.(200);
       guardian.setHitpoints?.(200);
       const cycle = api.core.World.getProcessCycle?.() ?? 0;
@@ -2033,7 +2041,7 @@ module.exports = function registerDesertTreasureII(api) {
     if (stage(p) !== 0) return;
     quest.setStage(p, S.STARTED);
     p.setAttribute(ATTR_SMITH_INTRO, false);
-    p.sendMessage(`You've started a new quest: <col=081190>${PAGE}</col>`);
+    p.sendMessage(questStartMessage(p, PAGE));
     const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = api.core;
     p.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, VAULT_DOOR_TOUCH))
       .add(new ActionDialogue(1, { execute() { p.getDialogueManager().reset(); enterVault(p); } })));
@@ -5831,7 +5839,6 @@ module.exports = function registerDesertTreasureII(api) {
       markMedallionFound(p, "whisperer");
       syncWhispererRemains(p, { ...state, medallion: true });
       // Rsprox 1703 t16262 (341501-341515): the mesbox chat line, then an item box (objectbox 193) with the medallion.
-      p.getPacketSender().sendTypedMessage(api.core.ChatType.MESBOX, "You find a medallion amongst the entrails.");
       p.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder().add(
         new api.core.ItemStatementDialogue(0, I.WHISPERERS_MEDALLION, "You find a medallion amongst the entrails.")));
       return true;
@@ -8022,7 +8029,7 @@ module.exports = function registerDesertTreasureII(api) {
     const attackType = attacker.getAsPlayer?.().getFightType?.()?.getBonusType?.();
     if (!Number.isInteger(attackType)) return;
     const style = attackType === 3 ? 3 : attackType === 4 ? 4 : 0;
-    if (npc.__dt2FinalFigurePrayer === style) {
+    if (npc.__dt2FinalFigurePrayer === style && !hit.bypassesProtectionPrayer?.()) {
       for (const damage of hit.getHits?.() ?? []) damage.setDamage(0);
       hit.updateTotalDamage?.();
     }

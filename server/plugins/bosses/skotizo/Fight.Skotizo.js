@@ -288,7 +288,7 @@ class Fight {
     this.boss.performAnimation(new Animation(magic.anim));
     new Projectile(from, to, target, magic.projectile, magic.startCycle, endCycle, magic.startHeight, magic.endHeight, this.session.area)
       .withAngle(magic.angle).withProgress(magic.slope).sendProjectile();
-    target.performGraphicInSlot(SLOT_IMPACT, new Graphic(magic.impact, endCycle));
+    target.performGraphicInSlot(SLOT_IMPACT, Graphic.delayed(magic.impact, endCycle));
     const sender = target.getPacketSender();
     sender.sendAreaSound(magic.castSound, from.getX(), from.getY(), from.getZ(), 1, 0, 10);
     sender.sendAreaSound(magic.impactSound, to.getX(), to.getY(), to.getZ(), 1, endCycle, 10);

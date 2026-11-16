@@ -8,7 +8,7 @@
 | `npc-drop-subtables.json` | the shared tables (rare drop table, gems, herbs, seeds, talismans…) | generated |
 | `npc-drop-overrides.json` | hand edits on top of the two | by hand |
 
-Corrections that need logic (Zulrah's two rolls, the Mad Angel's supply batch, Skotizo's shard roll, Amoxliatl's two rolls with one frozen tear roll, the animated bronze armour, the brimstone and Larran's keys taken off every table because `Keys.Slayer.js` drops them) stay in code, in `applyWikiCorrections`.
+Corrections that need logic (Zulrah's two rolls, the Mad Angel's supply batch, Skotizo's shard roll, Amoxliatl's two rolls with one frozen tear roll, Araxxor's three halberd pieces as one 1/200 roll of the piece the player lacks, the animated bronze armour, the brimstone and Larran's keys taken off every table because `Keys.Slayer.js` drops them) stay in code, in `applyWikiCorrections`.
 
 Loot that depends on where or what the NPC was rather than its table is added by other plugins on `npc-drops:add` { player, npc, npcId, drops }, emitted straight after the roll and before `npc-drops:roll` (so the Collection Log and Ironman rules see it): the Catacombs of Kourend's totem pieces and shards, and Skotizo's totem table ([skotizo.md](skotizo.md)).
 
@@ -33,7 +33,7 @@ cp docs/drops-json/subtables.json ../tsps/server/data/definitions/npc-drop-subta
 
 - **Never edit generated files or repair them through an override:** fix the canonical source/parser, add a regression, regenerate twice, and import exact output. Generated conflicts are resolved by regeneration.
 - **The drop dumper reads monster pages** already fetched by the monster updater (`scripts.monsters.update`), and takes NPC ids from osrsreboxed-db's monster database. A monster that's new since the last monster update gets no table until that runs.
-- **Noted drops:** the dump marks entries the Wiki shows as "(noted)" (`noted: true`), which needs osrsreboxed-db's `fix/drops-noted` branch until it's merged.
+- **Noted drops:** the dump marks entries the Wiki shows as "(noted)" (`noted: true`).
 
 ## God Wars variant loot
 
@@ -158,3 +158,11 @@ Six tables change, only `rolls` and `once_per_kill`: `bloodstarved_venator` (3; 
 
 Royal Titans: Branda and Eldric are rolled twice per claim (the Wiki's two primary rolls). The corpse's Loot used to add one extra roll to its own single roll; with `rolls: 2` exported the own roll is both, so `Corpse.RoyalTitans.js` asks `npc-drops:table-rolls` for the table's own count and adds only `max(0, 2 - own)` extra rolls (one with no exported count, none with `rolls: 2`). This also fixes the uniques: Branda's and Eldric's Pre-roll uniques (the Fire/Ice element staff crown, the prayer scroll, the Giantsoul amulet) used to be tried twice per claim, because the own roll and the extra roll were two separate table rolls that each tried them; with `rolls: 2` and `once_per_kill` they are tried once per claim (the Wiki's rolls=2 is on the repeated rows only). That halves the titans' unique rate as tsps had it; it is a fidelity fix, not a nerf by choice.
 
+
+## Superior pages that state their roll count
+
+The import is the output of pin-line producer commit `68dd512f85` (branch `pin-superior-roll-counts`: the merged pin tip `dcdde7392d` plus the parser change `db62f04d8b`, a docs regeneration `8cede4b0a3` and the once-per-kill fix `68dd512f85`; the same parser change on master is [#92](https://github.com/RSPSApp/osrsreboxed-db/pull/92), merged as `394d876472`). An unmodified `dcdde7392d` generation reproduces the previous import byte for byte. A superior Slayer page says "will always roll N additional items" for the whole table. When every explicit `rolls=` on its main rows is that N, a plain row or access that left `rolls` off no longer makes the count mixed, and the table exports `rolls: N`. A plain row keeps its own count of 1: a pool row is repeated with the table (King kurask's Limpwurt seed), and an independent (`separate_roll`) row with no `rolls` is flagged `once_per_kill`, like a Pre-roll row. Pre-roll rows stay once per kill; a page whose explicit counts disagree with its statement, or that has no statement, is unchanged.
+
+Three tables change against the previous import: `chasm_crawler`, `king_kurask` and `mutated_tortoise` gain `rolls: 3`, and Chasm crawler's "Tooth half of key (moon key)" (a single 1/729 roll; the pinned cache files it under Other, the live Wiki page under Tertiary, with no `rolls=`) gains `once_per_kill: true`. Without that flag the table's three rolls would try it three times per kill (measured 3.12 times its rate in review). No other table changes: the other tables whose `separate_roll` rows lack `once_per_kill` carry their own `rolls` on the Wiki and stay repeated. Two generations with `SOURCE_DATE_EPOCH=1793491200` are byte-identical: `npc-drops.json` SHA-256 `18406d0b9c630d0b9000bc4d99bfc9826460a88a68248ba182c9514a4b7322ff`; subtables stay `719e91adadfea92ee8d0dac8b66bfdb38b50104804a91bac059096783b8877ef`. No generated output was edited manually.
+
+Not covered: the `bloodthirsty_*` tables (their explicit counts are 9 beside plain rows, which the page's "3" does not explain) and the `venator` page (its statement still says 2 beside `rolls=3` rows). Both keep their previous export. Verified by unit tests only (`npc-drops-superior-rolls`: the three tables' `rolls`, the moon key's flag, and a seeded rate for it); not checked in game.

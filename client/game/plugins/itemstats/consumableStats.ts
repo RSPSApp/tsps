@@ -1,4 +1,5 @@
 import foodData from "../../../../server/plugins/items/data/food.json";
+import { BLIGHTED_ITEM_PLACES, isBlightedItemName } from "../../../../server/plugins/items/BlightedItems.js";
 import { findFoodDefinition, readFoodStats, type FoodDefinition, type FoodStats } from "./foodStats";
 
 /** Food effects maintained by the server's item-consumption plugin. */
@@ -60,6 +61,16 @@ export interface RuneStats {
 /** Looks up a food's recorded effects by the cache definition's item name. */
 export function foodStatsForName(name: string): FoodStats | undefined {
     return readFoodStats(findFoodDefinition(name, FOOD_DEFINITIONS));
+}
+
+/**
+ * Where a blighted food or potion can be eaten or drunk, from the server's rule (BlightedItems.js):
+ * any item the cache names "Blighted ..." with an Eat or Drink option. The spell sacks are left out;
+ * the teleport sack has its own, narrower rule.
+ */
+export function blightedPlacesForItem(name: string, actions: readonly (string | null | undefined)[]): readonly string[] | undefined {
+    if (!isBlightedItemName(name)) return undefined;
+    return actions.some((action) => action === "Eat" || action === "Drink") ? BLIGHTED_ITEM_PLACES : undefined;
 }
 
 /** Returns recorded boosts for the potions implemented in the server potion plugin. */

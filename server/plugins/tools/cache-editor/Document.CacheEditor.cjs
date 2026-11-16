@@ -1,8 +1,8 @@
 "use strict";
 
 // The cache editor's canonical document: definitions that are laid over the cache, never written into
-// it. One row is `{ kind, id, baseId, fields }` — a base definition from the cache plus the fields
-// this project overrides — which is the shape `custom-items.json` already proved, made general.
+// it. One row is `{ kind, id, baseId, fields }` — optionally based on a cache definition, with the
+// fields this project overrides — which is the shape `custom-items.json` already proved, made general.
 //
 // Nothing here is applied to the running world yet: saving writes the document and says a restart is
 // needed, exactly as the item overlay does. The point of the file is that every write is validated
@@ -96,10 +96,12 @@ function auditRow(core, row, seen, known = new Set()) {
   if (conflict) problems.push(conflict);
   if (seen.has(`${kind}:${row.id}`)) problems.push(`${kind} ${row.id}: duplicate overlay id`);
   seen.add(`${kind}:${row.id}`);
-  if (!Number.isInteger(row.baseId) || row.baseId < 0 || row.baseId >= total) {
-    problems.push(`${kind} ${row.id}: baseId must be a cache id below ${total}`);
-  } else if (Inspect.resolveId(core, kind, row.baseId) === "missing") {
-    problems.push(`${kind} ${row.id}: base ${row.baseId} does not exist`);
+  if (row.baseId !== null) {
+    if (!Number.isInteger(row.baseId) || row.baseId < 0 || row.baseId >= total) {
+      problems.push(`${kind} ${row.id}: baseId must be null or a cache id below ${total}`);
+    } else if (Inspect.resolveId(core, kind, row.baseId) === "missing") {
+      problems.push(`${kind} ${row.id}: base ${row.baseId} does not exist`);
+    }
   }
   const fields = row.fields ?? {};
   if (typeof fields !== "object" || Array.isArray(fields)) problems.push(`${kind} ${row.id}: fields must be an object`);
@@ -147,46 +149,51 @@ function check(core, document) {
     const bytes = deflateSync(Buffer.from(JSON.stringify({ gamemodeId: "server", datasets: [{ key: "customDefinitions", rows: document.rows }] })));
     if (bytes.length > TRANSPORT_BUDGET) problems.push(`definitions exceed the transport budget (${bytes.length} > ${TRANSPORT_BUDGET} bytes compressed)`);
   }
-  for (const row of document.rows) {
-    for (const pair of [["recolorFrom", "recolorTo"], ["retextureFrom", "retextureTo"]]) {
-      const [from, to] = pair.map(key => row.fields?.[key]);
-      if ((from?.length ?? 0) !== (to?.length ?? 0)) problems.push(`${row.kind} ${row.id}: ${pair.join(" and ")} must have matching lengths`);
-    }
-    const from = row.fields?.recolorFrom;
-    const to = row.fields?.recolorTo;
-    if (Array.isArray(from) && Array.isArray(to)) {
-      for (const value of [...from, ...to]) {
-        if (!Number.isInteger(value) || value < 0 || value > 65535) {
-          problems.push(`${row.kind} ${row.id}: recolour values must be between 0 and 65535`);
-          break;
-        }
-      }
-      // The client's NPC, item and loc model loaders all apply the pairs one after another.
-      const getBase = BASE_GETTERS[row.kind];
-      if (getBase && from.length === to.length) {
-        const base = Number.isInteger(row.baseId) && row.baseId >= 0 && row.baseId < cacheCount(core, row.kind)
-          ? core.CacheDefinitions[getBase](row.baseId) : null;
-        const baseFrom = base?.recolorFrom ?? [];
-        const baseTo = base?.recolorTo ?? [];
-        let newlyChained = false;
-        for (let i = 0; i < from.length; i++) {
-          for (let earlier = 0; earlier < i; earlier++) {
-            if (from[earlier] === to[earlier] || to[earlier] !== from[i]) continue;
-            const inherited = baseFrom[earlier] === from[earlier] && baseTo[earlier] === to[earlier]
-              && baseFrom[i] === from[i] && baseTo[i] === to[i];
-            if (!inherited) {
-              problems.push(`${row.kind} ${row.id}: recolour pair ${i + 1} would recolour an earlier pair's result`);
-              newlyChained = true;
-              break;
-            }
-          }
-          if (newlyChained) break;
-        }
-      }
-    }
-    if (row.kind === "loc" && row.fields?.models && row.fields?.types && row.fields.models.length !== row.fields.types.length) problems.push(`loc ${row.id}: models and types must have matching groups`);
-  }
+  for (const row of document.rows) problems.push(...pairProblems(core, row));
   return { ok: problems.length === 0, problems };
+}
+
+/** The recolour/retexture pair and loc model-group problems of one row. */
+function pairProblems(core, row) {
+  const problems = [];
+  for (const pair of [["recolorFrom", "recolorTo"], ["retextureFrom", "retextureTo"]]) {
+    const [from, to] = pair.map(key => row.fields?.[key]);
+    if ((from?.length ?? 0) !== (to?.length ?? 0)) problems.push(`${row.kind} ${row.id}: ${pair.join(" and ")} must have matching lengths`);
+  }
+  const from = row.fields?.recolorFrom;
+  const to = row.fields?.recolorTo;
+  if (Array.isArray(from) && Array.isArray(to)) {
+    for (const value of [...from, ...to]) {
+      if (!Number.isInteger(value) || value < 0 || value > 65535) {
+        problems.push(`${row.kind} ${row.id}: recolour values must be between 0 and 65535`);
+        break;
+      }
+    }
+    // The client's NPC, item and loc model loaders all apply the pairs one after another.
+    const getBase = BASE_GETTERS[row.kind];
+    if (getBase && from.length === to.length) {
+      const base = Number.isInteger(row.baseId) && row.baseId >= 0 && row.baseId < cacheCount(core, row.kind)
+        ? core.CacheDefinitions[getBase](row.baseId) : null;
+      const baseFrom = base?.recolorFrom ?? [];
+      const baseTo = base?.recolorTo ?? [];
+      let newlyChained = false;
+      for (let i = 0; i < from.length; i++) {
+        for (let earlier = 0; earlier < i; earlier++) {
+          if (from[earlier] === to[earlier] || to[earlier] !== from[i]) continue;
+          const inherited = baseFrom[earlier] === from[earlier] && baseTo[earlier] === to[earlier]
+            && baseFrom[i] === from[i] && baseTo[i] === to[i];
+          if (!inherited) {
+            problems.push(`${row.kind} ${row.id}: recolour pair ${i + 1} would recolour an earlier pair's result`);
+            newlyChained = true;
+            break;
+          }
+        }
+        if (newlyChained) break;
+      }
+    }
+  }
+  if (row.kind === "loc" && row.fields?.models && row.fields?.types && row.fields.models.length !== row.fields.types.length) problems.push(`loc ${row.id}: models and types must have matching groups`);
+  return problems;
 }
 
 /** Keeps saved rows on disk when a newly installed plugin claims an id. */
@@ -197,9 +204,26 @@ function apply(core, root) {
     if (conflict) console.warn(`[cache-editor] skipped overlay: ${conflict}`);
     return !conflict;
   });
-  const verdict = check(core, { ...document, rows });
+  // A row that fails its checks is skipped on its own, so one bad entry does not drop the rest. Repeat
+  // until stable: a row that pointed at a skipped row no longer resolves.
+  let valid = rows;
+  for (;;) {
+    const seen = new Set();
+    const known = new Set(valid.map(row => `${row?.kind}:${row?.id}`));
+    const bad = new Set();
+    for (const row of valid) {
+      const problems = auditRow(core, row, seen, known);
+      if (!problems.length) problems.push(...pairProblems(core, row));
+      if (!problems.length) continue;
+      console.warn(`[cache-editor] skipped overlay row: ${problems.join("; ")}`);
+      bad.add(row);
+    }
+    if (!bad.size) break;
+    valid = valid.filter(row => !bad.has(row));
+  }
+  const verdict = check(core, { ...document, rows: valid });
   if (!verdict.ok) throw new Error(verdict.problems.join("; "));
-  return core.CacheDefinitions.registerCustomDefinitions(rows, SOURCE);
+  return core.CacheDefinitions.registerCustomDefinitions(valid, SOURCE);
 }
 
 function snapshot(root) {
@@ -226,7 +250,7 @@ function upsert(root, { row, revision: expected }) {
 function auditRowCore(_core, row) {
   if (!row.kind || !Fields.KINDS[row.kind]) return [`unknown kind ${String(row.kind)}`];
   if (!Number.isInteger(row.id) || row.id < 0) return ["id must be a non-negative integer"];
-  if (!Number.isInteger(row.baseId) || row.baseId < 0) return ["baseId must be a non-negative integer"];
+  if (row.baseId !== null && (!Number.isInteger(row.baseId) || row.baseId < 0)) return ["baseId must be null or a non-negative integer"];
   if (row.fields !== undefined && (typeof row.fields !== "object" || Array.isArray(row.fields) || row.fields === null)) {
     return ["fields must be an object"];
   }

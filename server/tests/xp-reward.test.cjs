@@ -4,6 +4,7 @@ const { test } = require("node:test");
 const path = require("node:path");
 
 const { Server } = require("../dist/Server");
+const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 Server.installProductionPathResolver();
 
 const { Skill } = require("../dist/game/model/Skill");
@@ -21,14 +22,16 @@ function createPlayer(levels = {}, attributes = {}) {
     sendInterfaceRemoval: () => { log.push("close"); return sender; },
     sendTypedMessage: (type, text) => { log.push(`chat ${type} ${text}`); return sender; },
   };
-  return {
+  const self = {
     log,
     getPacketSender: () => sender,
     getSkillManager: () => ({ getMaxLevel: (skill) => levels[skill.getName()] ?? 99 }),
-    getDialogueManager: () => ({ startDialogues: () => log.push("mesbox") }),
+    // The box logs its own chat line as it opens, as the real one does.
+    getDialogueManager: () => ({ startDialogues: (chain) => { Dialogue.sendBoxChatLine(self, chain.getDialogues().get(0)?.getText?.()); log.push("mesbox"); } }),
     getAttribute: (key) => attributes[key],
     sendMessage: (text) => log.push(`message ${text}`),
   };
+  return self;
 }
 
 Sounds.sendSound = () => {};

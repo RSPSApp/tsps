@@ -31,5 +31,19 @@
     "_calibrated": "No source gives these: the refusals without the hard diary or a set destination.",
     "needsDiary": "You need to complete the hard Wilderness Diary to choose an obelisk's destination.",
     "noDestination": "You haven't set a destination yet."
+  },
+  "house": {
+    "_source": "rsprox recording 2884 (rev 230), the superior garden's obelisk: Activate answered at tick 5907; Set destination at 6165, then Teleport to destination at 6172, answered at 6178. OSRS Wiki, Obelisk_(Construction): it individually teleports players, to a random obelisk without the hard Wilderness Diary.",
+    "loc": "poh_wilderness_obelisk",
+    "_warning": "Recorded before every teleport: varbit cws_warning_id 7, then the modal with its 'Don't ask me this again' toggle hidden and this text. 'Enter Wilderness' resumes sub 1 and 'Don't go' sub 0 (clientscript 1437).",
+    "warning": {
+      "interface": "wilderness_warningscreen",
+      "varbit": "cws_warning_id", "value": 7,
+      "text": "The obelisk will teleport you into the <col=ff0000>Wilderness</col>.<br><br>Do you really wish to go there?",
+      "buttons": 1, "message": 10, "toggle": 13, "enter": 1
+    },
+    "_teleport": "Recorded on 'Enter Wilderness': seq human_wilderness_portal at once, and 2 ticks later the arrival line (the chosen one, for Activate too), the teleport to a tile of the obelisk's pad and seq -1. Activate landed on the level 44 pad (2980,3867) with level 35 set; Teleport to destination on the set level 13 pad (3157,3619).",
+    "seq": "human_wilderness_portal",
+    "teleportAt": 2
   }
 }

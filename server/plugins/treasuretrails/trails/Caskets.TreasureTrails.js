@@ -6,6 +6,7 @@ const RewardScreen = require("../CasketRewardScreen.plugin");
 const Rolls = require("../Rolls.RewardCaskets");
 const Runtime = require("./Runtime.TreasureTrails");
 const { TIERS } = require("./Tiers.TreasureTrails");
+const { onEntrana } = require("../../areas/entrana/Bounds.Entrana");
 const TABLES = require("../../../data/definitions/clue-caskets.json").tables;
 const OPENING_ATTRIBUTE = "treasure-trails:opening-casket";
 // Wiki "Clue scroll (easy)": on Entrana armour and weapon rolls are removed, and non-shared
@@ -16,11 +17,6 @@ let api;
 let core;
 
 function between([minimum, maximum], random) { return minimum + Math.floor(random() * (maximum - minimum + 1)); }
-
-function onEntrana(player) {
-  const pos = player.getLocation();
-  return pos.getZ() === 0 && pos.getX() >= 2800 && pos.getX() <= 2879 && pos.getY() >= 3320 && pos.getY() <= 3391;
-}
 
 function entranaTable(table) {
   const entries = table.entries.filter(entry => !ENTRANA_EXCLUDED.test(entry.section ?? "") || ENTRANA_KEPT.test(entry.section ?? ""));
@@ -42,7 +38,13 @@ function roll(tier, { entrana = false, random = Math.random, rolls = null, playe
   if (!table) throw new Error(`No ${tier.name} reward table`);
   const drops = Rolls.rollTable(entrana ? entranaTable(table) : table, rolls ?? between(table.rolls, random), random,
     Rolls.uniqueMultiplier(api, player));
-  for (const tertiary of table.tertiary ?? []) {
+  return [...drops, ...tertiaries(tier, random)];
+}
+
+/** The table's chance-based tertiaries on their own: the master clue from an elite casket, the Bloodhound from a master one. */
+function tertiaries(tier, random = Math.random) {
+  const drops = [];
+  for (const tertiary of TABLES[tier.name]?.tertiary ?? []) {
     const chance = probability(tertiary.probability);
     if (chance != null && random() < chance) drops.push({ itemId: tertiary.item_id, amount: between(tertiary.quantity, random), noted: tertiary.noted });
   }
@@ -142,13 +144,19 @@ function mimicCasket(player, tier, rolls, opened, random = Math.random) {
   return request.item ?? null;
 }
 
-/** The completion's milestone rewards on their own, for a casket that became the Mimic. */
-function milestoneDrops(player, tier, count) {
-  const request = { player, tier: tier.name, completed: count, milestones: TABLES[tier.name]?.milestones ?? [], drops: [], handled: false, error: null };
+/**
+ * The completion's milestone rewards and the table's tertiaries, for a casket that became the
+ * Mimic (its item rolls go with the Mimic). Ours: no page says when a Mimic casket's tertiaries
+ * come; the Wiki's elite casket value counts its 1/5 master clue on every casket, Mimic or not, so
+ * they are rolled here as the casket is opened, as an ordinary casket's are.
+ */
+function milestoneDrops(player, tier, count, random = Math.random) {
+  const request = { player, tier: tier.name, completed: count, milestones: TABLES[tier.name]?.milestones ?? [], drops: tertiaries(tier, random), handled: false, error: null };
   api.emitCustomEvent("treasure-trails:milestone-rewards", request);
   if (!request.handled || request.error) throw request.error ?? new Error("Treasure Trails milestone service unavailable");
-  const drops = [...request.drops, ...itemMilestones(player, tier, count)];
-  return drops.length ? prepareDrops(clueRewards(player, drops), tier) : [];
+  // A tertiary master clue the player can't receive (clue capacity) drops out here; the Mimic still forms.
+  const drops = clueRewards(player, [...request.drops, ...itemMilestones(player, tier, count)]);
+  return drops.length ? prepareDrops(drops, tier) : [];
 }
 
 // Live captures (rsprox.net): opening a casket says the trail is complete, then the count, the
@@ -156,9 +164,9 @@ function milestoneDrops(player, tier, count) {
 const COMPLETED = "Well done, you've completed the Treasure Trail!";
 const completedCount = (count, tier) => `<col=ef1020>You have completed ${count} ${tier.name} Treasure Trail${count === 1 ? "" : "s"}.</col>`;
 
-/** The rewards' Grand Exchange worth, as the casket's last message gives it. */
-function worth(drops) {
-  return drops.reduce((sum, drop) => sum + drop.amount * (core.ItemDefinition.forId(drop.itemId)?.getGrandExchangeValue?.() ?? 0), 0);
+/** The rewards' Grand Exchange worth, as the casket's last message gives it (shared with the beginner casket). */
+function worth(drops, definitions = core.ItemDefinition) {
+  return drops.reduce((sum, drop) => sum + drop.amount * (definitions.forId(drop.itemId)?.getGrandExchangeValue?.() ?? 0), 0);
 }
 
 function tierOfCasket(id) {
@@ -188,7 +196,7 @@ function open(event) {
         if (Number.isInteger(request.rolls)) rolls = Math.max(minimum, Math.min(maximum, request.rolls));
       }
       mimic = mimicCasket(player, tier, rolls, count);
-      if (mimic) drops = milestoneDrops(player, tier, count);
+      if (mimic) ({ pets, drops } = splitPets(milestoneDrops(player, tier, count)));
       else {
         const request = { player, tier: tier.name, completed: count, milestones: TABLES[tier.name]?.milestones ?? [], drops: roll(tier, { entrana: onEntrana(player), rolls, player }), handled: false, error: null };
         api.emitCustomEvent("treasure-trails:milestone-rewards", request);
@@ -215,6 +223,7 @@ function open(event) {
       }
       player.setAttribute(Runtime.completedAttribute(tier), count);
       give(player, drops);
+      awardPets(player, pets);
       Runtime.restore({ player });
       player.sendMessage("The chest turned out to be the Mimic!");
       player.sendMessage(completedCount(count, tier));
@@ -248,4 +257,4 @@ module.exports = function attachCaskets(pluginApi) {
   for (const tier of TIERS) api.onItemAction(`Reward casket (${tier.name})`, { Open: open });
 };
 
-Object.assign(module.exports, { roll, entranaTable, itemMilestones, clueRewards, prepareDrops, splitPets, give, open, onEntrana, tierOfCasket });
+Object.assign(module.exports, { roll, tertiaries, entranaTable, itemMilestones, clueRewards, prepareDrops, splitPets, give, open, onEntrana, tierOfCasket, worth });

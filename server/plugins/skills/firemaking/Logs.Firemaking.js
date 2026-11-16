@@ -1,6 +1,7 @@
 /** Forester campfire tending and the existing log-lighting loop. Evidence: docs/firemaking.md. */
 let ChatType, Skill, Equipment, Animation, Task, Location, Item, GameObject, MapObjects, RegionManager, Sound, Sounds, ItemIds, ObjectIds;
 const { pauseForLevelUp, actionInterval } = require("../SkillActions");
+const Rest = require("./Rest.Firemaking");
 
 const SESSION_MODE = Object.freeze({
   INVENTORY: "inventory",
@@ -41,6 +42,8 @@ const CAMPFIRE_MAX_LIFETIME_TICKS = 300;
 const CAMPFIRE_MIN_SPACING_TILES = 5;
 
 const PYROMANCER_SET_BONUS = 0.005;
+/** The full Pyromancer outfit in the equipment effects panel (enum 3047). */
+const PYROMANCER_SET_TEXT = 20;
 
 // OSRS Wiki campfire "Check" tiers, in ticks (0.6s each).
 const CAMPFIRE_CHECK_TIERS = [
@@ -108,6 +111,14 @@ function isFiremakingBow(itemId) {
 function isWearing(player, slot, itemIds) {
   const item = player.getEquipment?.()?.getItems?.()[slot];
   return !!item && itemIds.includes(item.getId());
+}
+
+function addPyromancerSetText(request) {
+  const player = request?.player;
+  if (player?.getEquipment && PYROMANCER_OUTFIT.length > 0
+      && PYROMANCER_OUTFIT.every((piece) => isWearing(player, piece.slot, piece.itemIds))) {
+    request.setTexts?.push(PYROMANCER_SET_TEXT);
+  }
 }
 
 function firemakingXpMultiplier(player) {
@@ -712,6 +723,7 @@ function createFiremakingTask(activeSessions) {
       sessionTick++;
       processFires();
       processFiremakingTick(this.activeSessions, sessionTick);
+      Rest.tick();
     }
   }
 
@@ -1016,6 +1028,7 @@ function handleInteractionCleared({ player }) {
 
 function handlePlayerDisconnect({ player }) {
   stopFiremaking(activeSessionsRef, player, false);
+  Rest.forget(player);
 }
 
 /** A level-up pop-up pauses lighting, whichever skill it is for. */
@@ -1041,6 +1054,13 @@ function onItemOnObjectEvent(event) {
 
 function onCheckCampfireEvent(event) {
   handleCheckCampfire(event);
+}
+
+/** Rest sits the player down by the fire (Rest.Firemaking.js); it ends any lighting or tending. */
+function onRestCampfireEvent(event) {
+  stopFiremaking(activeSessionsRef, event.player);
+  Rest.rest(event);
+  event.handled = true;
 }
 
 function onTendToCampfireEvent(event) {
@@ -1073,6 +1093,7 @@ module.exports = {
   CAMPFIRE_MIN_SPACING_TILES,
   isFireTileBlocked,
   blocksFireTile,
+  addPyromancerSetText,
   attach,
 };
 
@@ -1162,6 +1183,7 @@ function attach(api) {
   TaskManager.submit(createFiremakingTask(activeSessionsRef));
   api.onCustomEvent("firemaking:log-xp", answerLogXp);
   api.onCustomEvent("firemaking:xp-multiplier", answerXpMultiplier);
+  api.onCustomEvent("equipment:effects", addPyromancerSetText);
   api.onPlayerDisconnect(handlePlayerDisconnect);
   api.onCustomEvent("player:interaction-cleared", handleInteractionCleared);
   api.onCustomEvent("level-up:popup-opened", handlePlayerLevelUp);
@@ -1180,5 +1202,6 @@ function attach(api) {
   api.onObjectInteraction("Forester's Campfire", {
     "Tend-to": onTendToCampfireEvent,
     Check: onCheckCampfireEvent,
+    Rest: onRestCampfireEvent,
   });
 }

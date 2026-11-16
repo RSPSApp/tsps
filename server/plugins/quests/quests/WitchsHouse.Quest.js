@@ -17,8 +17,9 @@
  * the shed key, and the hand-in takes only the ball.
  *
  * The diary (2408) and ball (2407) are world ground spawns from the data definitions; this
- * plugin only consumes/reads them. The basement boxes supply in-quest leather gloves; the
- * east-room boxes are reachable straight after the ladder, so the pair can be found before the
+ * plugin only consumes/reads them. The basement boxes roll the Wiki's drop table (nothing,
+ * cabbage, needle, thread, leather boots or leather gloves) whether or not gloves are held; the
+ * east-room boxes are reachable straight after the ladder, so gloves can be found before the
  * electric gate.
  *
  * Nora walks the garden's middle row, 2904-2930 on y 3463, a tile a tick, turning at both ends
@@ -112,7 +113,10 @@ module.exports = function registerWitchsHouseQuest(api) {
     { itemId: ItemIdentifiers.LEATHER_BOOTS, name: "a pair of leather boots", weight: 1 / 10 },
     { itemId: GLOVES_ITEM_ID, name: "a pair of leather gloves", weight: 1 / 26 },
   ];
-  /** Cache Boxes (24692) placements in the witch's house basement. */
+  /**
+   * Cache Boxes (24692) placements: six in the witch's house basement and, per the Wiki's map
+   * (Boxes (witch's house)), "two found the tunnels underneath the manhole near the house".
+   */
   const BASEMENT_BOXES = [
     { x: 2899, y: 9871 }, // west room, behind the electric gate
     { x: 2899, y: 9872 },
@@ -120,9 +124,15 @@ module.exports = function registerWitchsHouseQuest(api) {
     { x: 2905, y: 9872 }, // east room, the ladder drops into it
     { x: 2906, y: 9872 },
     { x: 2908, y: 9873 },
+    { x: 2908, y: 9867 }, // the tunnels under the manhole
+    { x: 2914, y: 9861 },
   ];
-  /** The gate column splits the basement; the west room holds the cupboard. */
-  const basementRoom = (x) => (x <= 2902 ? "west" : "east");
+  /** The basement's two rooms (2897-2909, 9870-9878) and the manhole tunnels' walkable span (2898-2924, 9861-9867). */
+  const BASEMENT = { minX: 2897, maxX: 2909, minY: 9870, maxY: 9878 };
+  const TUNNELS = { minX: 2897, maxX: 2925, minY: 9860, maxY: 9868 };
+  const inBounds = (x, y, b) => x >= b.minX && x <= b.maxX && y >= b.minY && y <= b.maxY;
+  /** The gate column splits the basement; the west room holds the cupboard. The tunnels are apart from both. */
+  const basementRoom = (x, y) => (inBounds(x, y, TUNNELS) ? "tunnels" : x <= 2902 ? "west" : "east");
 
   /** Live tiles: the front door's outside is west of x 2901, the garden south of y 3466, the shed east of x 2933. */
   const HOUSE_INSIDE_MIN_X = 2901;
@@ -141,7 +151,6 @@ module.exports = function registerWitchsHouseQuest(api) {
   /** Live animations and sounds (gamevals in comments). */
   const PICKUP_FLOOR_ANIMATION = 827; // human_pickupfloor: plant pot (132), cheese on the hole (307)
   const OPEN_CUPBOARD_ANIMATION = 542; // human_openhighcupboard (222)
-  const READ_BOOK_ANIMATION = 1350; // human_readbook (357)
   const CUPBOARD_OPEN_SOUND = 58; // cupboard_open (222)
   const GATE_SHOCK_SOUND = 575; // killerwatt_ball_attack (204)
   /** The shock lands a tick after the message (204 -> 205): 13 at 69 Hitpoints here, 19 at 99 in rev 233. */
@@ -343,8 +352,9 @@ module.exports = function registerWitchsHouseQuest(api) {
    * Cache Boxes (24692) placements in the basement: 2899,9871 / 2899,9872 / 2900,9872
    * sit in the west room behind the electric gate, while 2905,9872 / 2906,9872 /
    * 2908,9873 sit in the east room the ladder drops into, so the pair can be found
-   * before the gate. Both rooms serve the handout; only the room the player is
-   * standing in can be searched. With gloves already, live says the boxes are empty (236, 259).
+   * before the gate; 2908,9867 / 2914,9861 are in the tunnels under the manhole. Only the room
+   * the player is standing in can be searched. Each search
+   * rolls the Wiki table (BOXES_TABLE) with or without gloves held; a full inventory finds nothing.
    */
   function searchBoxes(event) {
     if (event.objectId !== BOXES_LOC_ID) return;
@@ -352,8 +362,9 @@ module.exports = function registerWitchsHouseQuest(api) {
     if (location.z !== 0) return;
     if (!BASEMENT_BOXES.some((box) => box.x === location.x && box.y === location.y)) return;
     const at = player.getLocation();
-    if (at.getZ() !== 0 || at.getX() < 2897 || at.getX() > 2909 || at.getY() < 9870 || at.getY() > 9878) return;
-    if (basementRoom(at.getX()) !== basementRoom(location.x)) return;
+    if (at.getZ() !== 0) return;
+    if (!inBounds(at.getX(), at.getY(), BASEMENT) && !inBounds(at.getX(), at.getY(), TUNNELS)) return;
+    if (basementRoom(at.getX(), at.getY()) !== basementRoom(location.x, location.y)) return;
     event.handled = true;
     // Wiki (Boxes (witch's house)): not a quest-only search; "Searching the boxes with a full inventory will always
     // yield nothing." The rest is its table, with the recorded lines (233/03246.txt:15693-18881).

@@ -41,8 +41,10 @@
  *   attack"), not per hitsplat, so a two-hit weapon rolls once; the Blindbag attack may Blindbag
  *   again, once for the attack (a guard stops a chain at MAX_BLINDBAG_CHAIN). A "melee weapon" is a
  *   weapon-slot item with a melee attack or strength bonus above its ranged attack bonus. No animation or graphic: none recorded.
- * - 71 talent_2h_melee_echos: a landed two-handed melee hit (not a special, not on a player) has a
- *   5% chance to emit `league:pact-ranged-echo` { player, target, source: "melee" } (Ranged unit).
+ * - 71 talent_2h_melee_echos: a landed two-handed melee hit (accurate, damaging, not a special,
+ *   not on a player) has a 5% chance to emit `league:pact-ranged-echo` { player, target, source:
+ *   "melee" } (Ranged unit). The text makes the echo count as one from a bow, crossbow and thrown
+ *   weapon, so the crossbow echo pact's extra chance is added (ours: no capture of the sum).
  * - 66 talent_hit_restore_spec_energy: each melee hitsplat that deals damage restores N% energy.
  * - 26 talent_melee_distance_healing_chance: each melee attack (once per attack) and each Thorns
  *   trigger has an N% chance to heal the distance in tiles, through `league:pact-heal`.
@@ -65,10 +67,10 @@
  *   reflected whole: the player takes 0 and the attacker the damage (`onPlayerHitModify`, after
  *   protection prayers). Ours: not against players, as Thorns.
  * - 75 talent_shield_block_heal: an attack dealing 0 with Dinh's bulwark (a two-handed shield) or
- *   an off-hand (a shield-slot item that is not a shield) heals 2 (`league:pact-heal`) and restores
- *   2 Prayer. Shields and off-hands are Common's (a shield by name: shield, buckler, ward,
- *   Toktz-ket-xil, the bulwark; an off-hand any other shield-slot item); ours, as no category
- *   plugins can read tells them apart (the cache's category 18 agrees but for the crystal shield).
+ *   an off-hand (any shield-slot item, shields included: the Wiki's off-hand page is the shield
+ *   slot table) heals 2 (`league:pact-heal`) and restores 2 Prayer. A shield is recognised by name
+ *   for Thorns/reflect, and Dinh's by its bulwark weapon interface, so the "Crate of shields" prop
+ *   is not one.
  */
 const Common = require("./Common.LeaguePacts");
 
@@ -89,6 +91,7 @@ const EFFECTS = {
   rangeBoost: "talent_melee_range_conditional_boost",
   distanceMaxHit: "talent_percentage_melee_maxhit_distance",
   echoes: "talent_2h_melee_echos",
+  crossbowEcho: "talent_crossbow_echo_reproc_chance",
   blindbagChance: "talent_unique_blindbag_chance",
   prayerStrength: "talent_melee_strength_prayer_bonus",
   shieldBlockHeal: "talent_shield_block_heal",
@@ -477,7 +480,13 @@ function meleeLanded(player, target, hit) {
   }
   const echoes = value(player, "echoes");
   if (!echoes || specials.has(hit) || isPlayerTarget(target) || target.getHitpoints?.() <= 0) return;
-  if (!isTwoHanded(weapon(player)) || Math.random() >= ECHO_CHANCE * echoes) return;
+  // "When hitting": a miss or a 0-damage hit is no hit to echo (the Ranged unit's crossbow pact
+  // rolls on a landed or missed attack separately; this one is the melee hit's own echo).
+  if (!hit.isAccurate?.() || hit.getTotalDamage?.() <= 0) return;
+  // The text makes the echo count as one from a bow, crossbow and thrown weapon: the crossbow
+  // pact's extra chance applies to the two-handed melee echo too.
+  const chance = Math.min(1, ECHO_CHANCE * echoes + value(player, "crossbowEcho") / 100);
+  if (!isTwoHanded(weapon(player)) || Math.random() >= chance) return;
   api.emitCustomEvent(RANGED_ECHO_EVENT, { player, target, source: "melee" });
 }
 

@@ -1,10 +1,61 @@
 {
   "questKey": "the_blood_moon_rises",
-  "entrance": [2677, 7851, 0],
-  "outside": [2677, 7851, 0],
-  "sourceMin": [2888, 7832, 0],
-  "instanceChunks": [5, 2],
-  "arrival": [2911, 7836, 0],
-  "bossSpawn": [2909, 7838, 0],
-  "exit": { "id": 61994, "tile": [2912, 7833, 0] }
+  "entrance": [
+    2677,
+    7851,
+    0
+  ],
+  "outside": [
+    2677,
+    7851,
+    0
+  ],
+  "sourceMin": [
+    2888,
+    8032,
+    0
+  ],
+  "instanceChunks": [
+    5,
+    2
+  ],
+  "arrival": [
+    2911,
+    8036,
+    0
+  ],
+  "bossSpawn": [
+    2909,
+    8040,
+    0
+  ],
+  "exit": {
+    "id": 61994,
+    "tile": [
+      2919,
+      8033,
+      0
+    ],
+    "face": 1
+  },
+  "respawn": [
+    2322,
+    7370,
+    0
+  ],
+  "combat": {
+    "animations": {
+      "ranged": 13933,
+      "magic": 13934,
+      "screech": 13922,
+      "melee": 13925,
+      "larvaFlight": 13914
+    },
+    "projectiles": {
+      "ranged": 1792,
+      "magic": 1555
+    },
+    "shadowGraphic": 1446,
+    "carrionPiles": 3
+  }
 }

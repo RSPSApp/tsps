@@ -33,15 +33,17 @@ const emitted = [];
 const api = {
   core: PluginManager.getCoreApi(),
   registerShopCurrency() {},
+  persistAttribute() {},
   emitCustomEvent(name, payload) { emitted.push([name, payload]); },
   registerDefinitionSource() {},
   registerNpcCombatMethodProvider() {},
+  onServerStartup() {},
   getAreaManager: () => ({ areas: [] }),
   getObjectManager: () => ObjectManager,
   getRegionManager: () => RegionManager,
   getWorld: () => World,
   onPlayerLogin() {},
-  onObjectInteraction(handler) { objectHandler = handler; },
+  onObjectInteraction(handler) { if (typeof handler === "function") objectHandler = handler; },
   onNpcInteraction(name, options) { npcHandlers[name] = options; },
   onInterfaceActionButton() {},
   onCustomEvent(name, handler) { (customHandlers[name] ??= []).push(handler); },
@@ -53,6 +55,7 @@ const api = {
   onShouldDropItemsOnDeath() {},
   onCanTeleport() {},
   onSpellDisabled() {},
+  onItemAction() {},
   emitObjectInteraction(event) {
     objectHandler?.(event);
     return event.handled === true;
@@ -108,12 +111,14 @@ function endMatch(match) {
   if (!match.ended) match.finish(false, "test over");
 }
 
-test("the Squire's Leave takes the player to their own boat's jetty a tick later, with no message", () => {
+test("the Squire's Leave takes the player to their own boat's jetty two ticks later, with no message", () => {
   for (const key of ["novice", "intermediate", "veteran"]) {
     const { player, sent, match } = startMatch(key);
     try {
       npcHandlers.Squire.Leave({ player, npc: match.squire });
       assert.equal(player.getAttribute("pest-control:match"), match, `${key}: still on the island on the order tick`);
+      TaskManager.process();
+      assert.equal(player.getAttribute("pest-control:match"), match, `${key}: still on the island the tick after (237/04031.txt 611 to 613)`);
       TaskManager.process();
       assert.equal(player.getAttribute("pest-control:match"), null, `${key}: off the island`);
       assert.deepEqual(at(player), JETTY[key], `${key}: on that boat's jetty tile`);
@@ -131,6 +136,7 @@ test("another Squire's Leave, or one after the game ended, does nothing", () => 
   npcHandlers.Squire.Leave({ player, npc: match.squire });
   match.finish(false, "The Void Knight was killed.");
   const after = at(player);
+  TaskManager.process();
   TaskManager.process();
   assert.deepEqual(after, JETTY.veteran, "the game's end already sent them to the jetty");
   assert.deepEqual(at(player), after, "and the pending leave doesn't move them again");

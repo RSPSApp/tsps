@@ -286,12 +286,23 @@ function fizzle(player) {
   player.sendMessage(neypotzli.fizzle);
 }
 
-function onMapSquare({ player, location }) {
-  if (location && !inNeypotzli(location)) fizzle(player);
+/** A copy of Neypotzli (the quest's camp caverns are instances) counts as the place it copies. */
+function sourceOf(player, location) {
+  const area = player.getPrivateArea?.();
+  return typeof area?.toSource === "function" && area.contains?.(location) ? area.toSource(location) : location;
 }
 
+function onMapSquare({ player, location }) {
+  if (location && !inNeypotzli(sourceOf(player, location))) fizzle(player);
+}
+
+/** A tick on: a save made inside a quest's copy of Neypotzli is first put back on its real landing. */
 function onLogin({ player }) {
-  if (!inNeypotzli(player.getLocation())) fizzle(player);
+  const { CountdownTask, TaskManager } = Common.core;
+  TaskManager.submit(new CountdownTask(player, 1, () => {
+    if (player.isRegistered?.() === false) return;
+    if (!inNeypotzli(sourceOf(player, player.getLocation()))) fizzle(player);
+  }));
 }
 
 module.exports = function attachCamps(api) {

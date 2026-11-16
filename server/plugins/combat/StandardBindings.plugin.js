@@ -3,6 +3,8 @@ const HOLD_TICKS_KEY = 'standard-bindings:hold-ticks';
 let core;
 const spells = new Map();
 let armour = [];
+/** The Swampbark helm, body and legs in the equipment effects panel (enum 3047). */
+const SWAMPBARK_SET_TEXT = 25;
 
 function initialize(api) {
   core = api.core;
@@ -14,6 +16,11 @@ function initialize(api) {
   armour = [[E.HEAD_SLOT,I.SWAMPBARK_HELM],[E.BODY_SLOT,I.SWAMPBARK_BODY],[E.LEG_SLOT,I.SWAMPBARK_LEGS]];
 }
 
+function addSwampbarkSetText(request) {
+  const equipment = request?.player?.getEquipment?.()?.getItems?.();
+  if (equipment && armour.length > 0 && armour.every(([slot,id]) => equipment[slot]?.getId?.() === id)) request.setTexts?.push(SWAMPBARK_SET_TEXT);
+}
+
 function disabled(event) {
   if (event.disabled === true || !spells.has(event.spellId)) return;
   const target = event.player.getCombat().getTarget();
@@ -23,8 +30,9 @@ function disabled(event) {
     event.player.sendMessage('Your target is already held by a magical force.');
     event.disabled = true;
   } else if (timers.has(core.TimerKey.FREEZE_IMMUNITY)) {
-    // Wiki (Snare, Trivia): "The target is currently immune to that spell." in the grace period. The
-    // recorded "Your target is ..." line is Enfeeble's on a curse-immune NPC (227/00095.txt:81131).
+    // Wiki (Snare, Trivia): "The target is currently immune to that spell." in the grace period. Recorded
+    // difference: Leagues V's Entangle (the 218:66 button, human_castentangle) says "Your target is currently
+    // immune to that spell." on an impling it had bound 27 ticks before (rsprox_transcripts/227/00095.txt:81131).
     event.player.sendMessage('The target is currently immune to that spell.');
     event.disabled = true;
   }
@@ -58,5 +66,6 @@ module.exports = {
     api.onSpellDisabled(disabled);
     api.onCustomEvent('magic:cast-committed',committed);
     api.onCustomEvent('magic:utility-effect',impact);
+    api.onCustomEvent('equipment:effects',addSwampbarkSetText);
   },
 };

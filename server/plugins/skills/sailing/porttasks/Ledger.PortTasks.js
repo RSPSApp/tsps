@@ -32,19 +32,12 @@ const DEPOSIT_WARNING_VARBIT = 18137;
 const DEPOSIT_TITLE = "Deposit the cargo?";
 const DEPOSIT_OPTIONS = ["Yes.", "Yes, and don't ask again.", "No."];
 
-/** The box's text in the chatbox too. */
-function echo(player, text) {
-  player.getPacketSender().sendTypedMessage(common.core().ChatType.MESBOX, text);
-}
-
 function itemBox(player, itemId, text) {
   const { DialogueChainBuilder, ItemStatementDialogue } = common.core();
-  echo(player, text);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)));
 }
 
 function statement(player, text) {
-  echo(player, text);
   common.core().StatementDialogue.send(player, text);
 }
 
@@ -244,7 +237,6 @@ function depositWarning(player, crate, dock) {
   const text = depositWarningText(crate);
   const sender = player.getPacketSender();
   const owner = {};
-  echo(player, text);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
     .add(new StatementDialogue(0, text))
     .add(new OptionDialogue(1, {
@@ -291,7 +283,11 @@ function depositCargo({ player, location }) {
     common.setCrewCargo(player, index, null);
     common.core().PluginManager.emitCustomEvent("port-tasks:crew-delivered", handIn);
     const taken = Math.max(0, Math.min(crew.amount, Math.trunc(Number(handIn.taken) || 0)));
-    held[index] = { ...held[index], delivered: held[index].delivered + taken };
+    // Crates lost with a destroyed hold count as never taken, so the source ledger hands them out
+    // again; the crate in the player's hands is still to be counted below.
+    const lost = Math.max(0, Math.min(crew.amount - taken, Math.trunc(Number(handIn.lost) || 0)));
+    const delivered = held[index].delivered + taken;
+    held[index] = { ...held[index], taken: Math.max(delivered + 1, held[index].taken - lost), delivered };
     if (taken > 0) player.sendMessage(CREW_DROP_OFF);
   }
   held[index] = { ...held[index], delivered: held[index].delivered + 1 };

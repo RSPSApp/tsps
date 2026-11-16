@@ -49,6 +49,8 @@ let worldNpcs = [];
 let itemOnObject;
 let wellActions;
 let loginHook;
+/** Replaces the charge event's answer for one test (a league relic or Regenerate). */
+let onEmit = null;
 class Item {
     constructor(id, amount = 1) {
         this.id = id;
@@ -69,7 +71,7 @@ class PendingHit {
     setTotalDamage(value) { this.damage = value; }
 }
 Scythe.register({
-    emitCustomEvent: () => {},
+    emitCustomEvent: (name, payload) => onEmit?.(name, payload),
     core: {
         Equipment,
         Item,
@@ -87,7 +89,7 @@ Scythe.register({
     },
     getAreaManager: () => ({ inMulti: () => multi }),
     registerCombatMethodResolver: (r) => { resolver = r; },
-    emitCustomEvent: () => {},
+    emitCustomEvent: (name, payload) => onEmit?.(name, payload),
     onServerStartup: (handler) => handler(),
     persistAttribute: () => {},
     onItemAction: () => {},
@@ -195,9 +197,17 @@ function chargeableItem(id, amount = 0) {
     };
 }
 
-function chargePlayer(weapon, { runes = 0, vials = 0, notedVials = 0, vialId = ItemIdentifiers.VIAL_OF_BLOOD_2, occupied = 0 } = {}) {
+/** The well's chatbox, recorded per player: each box, menu and count dialog it opens. */
+const wellDialogues = Scythe._test.dialogues;
+wellDialogues.mesbox = (p, text, next) => p.shown.push({ kind: 'mesbox', text, next });
+wellDialogues.itemBox = (p, itemId, text, next) => p.shown.push({ kind: 'item', itemId, text, next });
+wellDialogues.options = (p, ...pairs) => p.shown.push({ kind: 'options', options: pairs.map(([text]) => text), pick: (index) => pairs[index][1]() });
+wellDialogues.count = (p, title, execute) => p.shown.push({ kind: 'count', title, execute });
+
+/** `held`: the scythe is in the inventory (the well's Charge-at looks there), not wielded. */
+function chargePlayer(weapon, { runes = 0, vials = 0, notedVials = 0, vialId = ItemIdentifiers.VIAL_OF_BLOOD_2, occupied = 0, held = false } = {}) {
     const equipment = new Array(14).fill(null).map(() => ({ getId: () => -1 }));
-    equipment[Equipment.WEAPON_SLOT] = weapon;
+    if (!held) equipment[Equipment.WEAPON_SLOT] = weapon;
     const counts = new Map([
         [ItemIdentifiers.BLOOD_RUNE, runes],
         [vialId, vials],
@@ -206,7 +216,7 @@ function chargePlayer(weapon, { runes = 0, vials = 0, notedVials = 0, vialId = I
     const amountOf = (id) => counts.get(id) ?? 0;
     // Each stack a player holds takes one inventory slot; `occupied` models items the test does not.
     const heldStacks = new Set([...counts].filter(([, amount]) => amount > 0).map(([id]) => id));
-    const freeSlots = () => 28 - heldStacks.size - occupied;
+    const freeSlots = () => 28 - heldStacks.size - occupied - (held ? 1 : 0);
     const messages = [];
     const varbits = new Map();
     let enteredAmount = null;
@@ -219,7 +229,10 @@ function chargePlayer(weapon, { runes = 0, vials = 0, notedVials = 0, vialId = I
             counts.set(id, left);
             if (left < 1) heldStacks.delete(id);
         },
-        getItems: () => [...heldStacks].map((id) => ({ getId: () => id, getAmount: () => amountOf(id), getMeta: () => undefined })),
+        getItems: () => [
+            ...[...heldStacks].map((id) => ({ getId: () => id, getAmount: () => amountOf(id), getMeta: () => undefined })),
+            ...(held ? [weapon] : []),
+        ],
         // Charging takes plain copies by slot (PoweredStaff.takePlain); the slots follow getItems' order.
         deleteAtSlot(slot, amount = 1) { inventory.deleteNumber([...heldStacks][slot], amount); },
         getFreeSlots: freeSlots,
@@ -232,6 +245,7 @@ function chargePlayer(weapon, { runes = 0, vials = 0, notedVials = 0, vialId = I
     };
     const attributes = new Map();
     const entity = {
+        shown: [],
         isPlayer: () => true,
         getAsPlayer: () => entity,
         getEquipment: () => ({ get: (slot) => equipment[slot], getItems: () => equipment, refreshItems: () => {} }),
@@ -245,7 +259,7 @@ function chargePlayer(weapon, { runes = 0, vials = 0, notedVials = 0, vialId = I
         }),
         sendMessage: (message) => messages.push(message),
     };
-    return { entity, weapon, inventory, messages, varbits, enteredAmount: () => enteredAmount };
+    return { entity, weapon, inventory, messages, varbits, enteredAmount: () => enteredAmount, shown: entity.shown, last: () => entity.shown.at(-1) };
 }
 
 test('a scythe swing spends one charge per attack, and only when a hit deals damage (Wiki)', () => {
@@ -260,6 +274,19 @@ test('a scythe swing spends one charge per attack, and only when a hit deals dam
     const hits = method.hits(loaded.entity, npcOfSize(3));
     assert.equal(hits.length, 3);
     assert.equal(Scythe._test.charges(loaded.weapon), 4, 'three hits still spend one charge');
+});
+
+test('charges given back above 100% Regenerate add to the scythe, up to its most', () => {
+    const loaded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR, 5));
+    onEmit = (name, payload) => {
+        if (name === 'combat:consume-charge') { payload.skip = true; payload.extra = 2; }
+    };
+    try {
+        Scythe._test.consumeSwingCharge(loaded.entity, [{ getTotalDamage: () => 1 }]);
+    } finally {
+        onEmit = null;
+    }
+    assert.equal(Scythe._test.charges(loaded.weapon), 7);
 });
 
 test('the last charge reverts the scythe to its uncharged form', () => {
@@ -331,81 +358,132 @@ test('Check reports charges and Uncharge clears them without a refund (Wiki)', (
     assert.deepEqual([loaded.inventory.runes, loaded.inventory.vials], [0, 0], 'uncharging away from the well returns nothing');
 });
 
-// Vyre well (Wiki: Vyre well#Charging).
-test('Fill stores sets of 100 charges in the well, using vials and blood runes (Wiki)', () => {
+// Vyre well (Wiki: Vyre well#Charging); the chatbox as live shows it (rsprox 20261115T211134).
+test('Fill: the cost in a message box, then a count dialog of sets, then what went in (live)', () => {
     const loaded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_), { runes: 450, vials: 2 });
     assert.equal(Scythe._test.fillWell({ player: loaded.entity }), true);
-    assert.match(loaded.messages[0], /Mixing 1 vial of blood with the power of 200 blood runes/);
-    assert.ok(loaded.enteredAmount(), 'Fill opens the amount prompt');
-    loaded.enteredAmount().execute(2);
+    assert.equal(loaded.last().kind, 'mesbox');
+    assert.equal(loaded.last().text, 'Mixing 1 vial of blood with the power of 200 blood runes into this well will add 100 charges per set.');
+    loaded.last().next();
+    assert.deepEqual([loaded.last().kind, loaded.last().title],
+        ['count', 'How many sets of 100 charges do you wish to add? (Up to 2)'], 'up to what the inventory pays for');
+    loaded.last().execute(5);
 
     assert.equal(Scythe._test.wellCharges(loaded.entity), 200);
     assert.deepEqual([loaded.inventory.runes, loaded.inventory.vials], [50, 0]);
     assert.equal(loaded.varbits.get(Scythe._test.WELL_VARBIT), 2, 'the well varbit is its whole sets');
-    assert.match(loaded.messages.at(-1), /You fill the well with 2 charges/);
+    assert.deepEqual([loaded.last().kind, loaded.last().text], ['mesbox', 'You fill the well with 2 charges.']);
 
     Scythe._test.checkWell({ player: loaded.entity });
-    assert.match(loaded.messages.at(-1), /2 sets of 100 charges/);
+    assert.deepEqual([loaded.last().kind, loaded.last().text], ['mesbox', 'The well contains 2 sets of 100 charges.']);
 });
 
 test('Fill accepts noted vials of blood (Wiki)', () => {
     const loaded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_), { runes: 200, notedVials: 1 });
     Scythe._test.fillWell({ player: loaded.entity });
-    loaded.enteredAmount().execute(1);
+    loaded.last().next();
+    loaded.last().execute(1);
     assert.equal(Scythe._test.wellCharges(loaded.entity), 100);
     assert.equal(loaded.inventory.getAmount(ItemIdentifiers.VIAL_OF_BLOOD_3), 0);
+    assert.equal(loaded.last().text, 'You fill the well with one charge.');
 });
 
-test('Fill refuses without a vial or a full set of runes (Wiki)', () => {
+test('Fill refuses without a vial or a full set of runes, as a plain game message (live)', () => {
     const loaded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_), { runes: 199, vials: 0 });
     assert.equal(Scythe._test.fillWell({ player: loaded.entity }), true);
-    assert.match(loaded.messages.at(-1), /need at least 200 blood runes and 1 vial of blood/);
+    assert.equal(loaded.messages.at(-1), 'You need at least 200 blood runes and 1 vial of blood to start filling the well.');
+    assert.equal(loaded.shown.length, 0, 'no box');
     assert.equal(Scythe._test.wellCharges(loaded.entity), 0);
 });
 
-test('Charge-at moves well charges into the scythe, capped by its 20,000 room (Wiki)', () => {
+test('Check on an empty well is a message box (live)', () => {
     const loaded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_));
-    loaded.entity.setAttribute(Scythe._test.WELL_ATTRIBUTE, 300);
+    Scythe._test.checkWell({ player: loaded.entity });
+    assert.deepEqual([loaded.last().kind, loaded.last().text], ['mesbox', 'The well is empty.']);
+});
+
+test('Charge-at lowers the inventory scythe in, then applies the sets asked for (live)', () => {
+    const loaded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_), { held: true });
+    loaded.entity.setAttribute(Scythe._test.WELL_ATTRIBUTE, 16000);
     assert.equal(Scythe._test.chargeAtWell({ player: loaded.entity }), true);
-    loaded.enteredAmount().execute(500);
+    assert.deepEqual([loaded.last().kind, loaded.last().itemId, loaded.last().text],
+        ['item', ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_, 'You lower your scythe into the well...']);
+    loaded.last().next();
+    assert.equal(loaded.last().title, 'How many sets of 100 charges do you wish to apply? (Up to 160)');
+    // The reply names the charged scythe as its definition does ("Scythe of Vitur" in item-gameplay.json).
+    NAMES.set(ItemIdentifiers.SCYTHE_OF_VITUR, 'Scythe of Vitur');
+    try {
+        loaded.last().execute(160);
+    } finally {
+        NAMES.set(ItemIdentifiers.SCYTHE_OF_VITUR, 'Scythe of vitur');
+    }
 
     assert.equal(loaded.weapon.getId(), ItemIdentifiers.SCYTHE_OF_VITUR);
-    assert.equal(Scythe._test.charges(loaded.weapon), 300, 'the well had 300');
+    assert.equal(Scythe._test.charges(loaded.weapon), 16000);
     assert.equal(Scythe._test.wellCharges(loaded.entity), 0);
     assert.equal(loaded.varbits.get(Scythe._test.WELL_VARBIT), 0, 'an emptied well goes back to its empty form');
-
-    const bare = chargePlayer({ getId: () => -1 });
-    bare.entity.setAttribute(Scythe._test.WELL_ATTRIBUTE, 100);
-    Scythe._test.chargeAtWell({ player: bare.entity });
-    assert.match(bare.messages.at(-1), /nothing that can be charged here/);
+    assert.deepEqual([loaded.last().kind, loaded.last().itemId, loaded.last().text],
+        ['item', ItemIdentifiers.SCYTHE_OF_VITUR, 'You apply 16,000 charges to your Scythe of Vitur.']);
 });
 
-test('Using a charged scythe on the well deposits whole sets and empties it (Wiki)', () => {
-    const loaded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR, 1235));
-    const deposit = {
-        player: loaded.entity,
-        itemId: ItemIdentifiers.SCYTHE_OF_VITUR,
-        item: loaded.weapon,
-        objectId: 33085,
-        handled: false,
-    };
-    assert.equal(Scythe._test.depositScythe(deposit), true);
-    assert.equal(deposit.handled, true, 'generic item-on-object hooks mark the event themselves');
+test('the apply count is capped by the scythe\'s 20,000 room (Wiki)', () => {
+    const loaded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR, 19000), { held: true });
+    loaded.entity.setAttribute(Scythe._test.WELL_ATTRIBUTE, 5000);
+    Scythe._test.chargeAtWell({ player: loaded.entity });
+    loaded.last().pick(0);
+    loaded.last().next();
+    assert.equal(loaded.last().title, 'How many sets of 100 charges do you wish to apply? (Up to 10)');
+    loaded.last().execute(50);
+    assert.equal(Scythe._test.charges(loaded.weapon), 20000);
+    assert.equal(Scythe._test.wellCharges(loaded.entity), 4000);
+});
+
+test('Charge-at ignores a wielded scythe: nothing that can be charged here (live)', () => {
+    const wielded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_));
+    wielded.entity.setAttribute(Scythe._test.WELL_ATTRIBUTE, 100);
+    Scythe._test.chargeAtWell({ player: wielded.entity });
+    assert.deepEqual([wielded.last().kind, wielded.last().text], ['mesbox', 'You have nothing that can be charged here.']);
+});
+
+test('a charged scythe on the well asks to charge or uncharge it; Uncharge, Proceed deposits whole sets (live)', () => {
+    const loaded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR, 16035), { held: true });
+    const use = { player: loaded.entity, itemId: ItemIdentifiers.SCYTHE_OF_VITUR, item: loaded.weapon, objectId: 33085, handled: false };
+    assert.equal(Scythe._test.scytheOnWell(use), true);
+    assert.equal(use.handled, true, 'generic item-on-object hooks mark the event themselves');
+    assert.deepEqual(loaded.last().options, ['Charge the scythe', 'Uncharge the scythe']);
+
+    loaded.last().pick(1);
+    assert.deepEqual([loaded.last().kind, loaded.last().itemId, loaded.last().text],
+        ['item', ItemIdentifiers.SCYTHE_OF_VITUR, 'If you uncharge your scythe into the well, 16,000 charges will be added to the well.']);
+    assert.equal(Scythe._test.charges(loaded.weapon), 16035, 'nothing moves before Proceed');
+    loaded.last().next();
+    assert.deepEqual(loaded.last().options, ['Proceed', 'Cancel']);
+    loaded.last().pick(0);
 
     assert.equal(loaded.weapon.getId(), ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_);
     assert.equal(Scythe._test.charges(loaded.weapon), 0, 'draining empties the scythe');
-    assert.equal(Scythe._test.wellCharges(loaded.entity), 1200, '1,235 rounds down to 1,200');
-    assert.match(loaded.messages.at(-1), /deposit 1,200 charges/);
+    assert.equal(Scythe._test.wellCharges(loaded.entity), 16000, '16,035 rounds down to 16,000');
+    assert.deepEqual([loaded.last().kind, loaded.last().itemId, loaded.last().text],
+        ['item', ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_, 'You uncharge your scythe into the well. It now contains 160 sets of 100 charges.']);
+});
 
-    const uncharged = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_));
-    Scythe._test.depositScythe({
-        player: uncharged.entity,
-        itemId: ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_,
-        item: uncharged.weapon,
-        objectId: 33085,
-    });
-    assert.match(uncharged.messages.at(-1), /not have enough charges to deposit/);
-    assert.equal(Scythe._test.wellCharges(uncharged.entity), 0);
+test('Cancel leaves the scythe charged', () => {
+    const loaded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR, 500), { held: true });
+    Scythe._test.scytheOnWell({ player: loaded.entity, itemId: ItemIdentifiers.SCYTHE_OF_VITUR, item: loaded.weapon, objectId: 33085 });
+    loaded.last().pick(1);
+    loaded.last().next();
+    loaded.last().pick(1);
+    assert.equal(Scythe._test.charges(loaded.weapon), 500);
+    assert.equal(Scythe._test.wellCharges(loaded.entity), 0);
+});
+
+test('an uncharged scythe on the well is lowered straight in (live)', () => {
+    const loaded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_), { held: true });
+    loaded.entity.setAttribute(Scythe._test.WELL_ATTRIBUTE, 300);
+    Scythe._test.scytheOnWell({ player: loaded.entity, itemId: ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_, item: loaded.weapon, objectId: 33085 });
+    assert.equal(loaded.last().text, 'You lower your scythe into the well...');
+    loaded.last().next();
+    assert.equal(loaded.last().title, 'How many sets of 100 charges do you wish to apply? (Up to 3)');
 });
 
 test('Empty returns whole sets as blood runes and noted vials of blood (Wiki)', () => {
@@ -416,7 +494,8 @@ test('Empty returns whole sets as blood runes and noted vials of blood (Wiki)', 
     assert.equal(Scythe._test.wellCharges(loaded.entity), 0);
     assert.equal(loaded.inventory.getAmount(ItemIdentifiers.BLOOD_RUNE), 400);
     assert.equal(loaded.inventory.getAmount(ItemIdentifiers.VIAL_OF_BLOOD_3), 2);
-    assert.match(loaded.messages.at(-1), /You take 400 blood runes and 2 vials of blood out of the well/);
+    assert.equal(loaded.last().kind, 'mesbox');
+    assert.match(loaded.last().text, /You take 400 blood runes and 2 vials of blood out of the well/);
 });
 
 test('Empty refuses when both payouts would share the last free slot, and keeps the well', () => {

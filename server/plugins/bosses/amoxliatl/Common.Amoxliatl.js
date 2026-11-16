@@ -88,7 +88,7 @@ function areaSound(player, sound, location) {
 /** A map animation on a tile, `delay` client cycles in. */
 function tileGraphic(player, location, id, delay = 0) {
   const { Graphic } = core;
-  player.getPacketSender().sendGraphic(new Graphic(id, delay), location);
+  player.getPacketSender().sendGraphic(Graphic.delayed(id, delay), location);
 }
 
 /** A fight's length as the game prints it: m:ss.cc. */

@@ -34,6 +34,7 @@ before(() => {
     persistAttribute() {},
     onObjectInteraction: (name, actions) => { (hooks.objects[name] ??= []).push(actions); },
     onPlayerDeath: (handler) => hooks.deaths.push(handler),
+    onCustomEvent() {}, // the boards' busy reset on close: scoreboard-busy.test.cjs
   };
   Colosseum(api);
   Araxxor.attach(api);

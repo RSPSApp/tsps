@@ -16,7 +16,7 @@ const { Player } = require('../dist/game/entity/impl/player/Player');
 const { AccuracyFormulasDpsCalc } = require('../dist/game/content/combat/formula/AccuracyFormulasDpsCalc');
 const core = PluginManager.getCoreApi();
 
-let Common, Fight, Roof, Combat, Kills, tasks, onTaskAnswer, prayers, killTotal, dropEvents;
+let Common, Fight, Roof, Combat, Kills, tasks, onTaskAnswer, prayers, killTotal, dropEvents, heldEchoEntry;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -43,6 +43,7 @@ before(async () => {
       if (name === 'slayer:on-task') event.onTask = onTaskAnswer(event);
       if (name === 'combat-achievements:count') event.total = killTotal;
       if (name.startsWith('npc-drops:')) dropEvents.push({ name, event });
+      if (name === 'echo-boss:entry' && heldEchoEntry !== undefined) { event.handled = true; heldEchoEntry = event; }
     },
   }, { get: (target, key) => target[key] ?? (() => {}) });
   Common.init(api);
@@ -574,8 +575,13 @@ test("Dusk's kill rolls the Wiki drop table, and Noon is one 1/3,000 tertiary", 
 
   dropEvents = [];
   Kills.guardianDeath({ npc: dusk, killer: player });
+  assert.equal(dropEvents.length, 0, "the loot is rolled in NpcDrops' death roll for her");
+  const generated = { player, npc: dusk, npcId: dusk.getId(), drops: [], handled: false };
+  Kills.duskGenerated(generated);
+  assert.equal(generated.handled, true);
   assert.deepEqual(dropEvents.map((event) => event.name), ['npc-drops:roll-table', 'npc-drops:roll', 'npc-drops:place']);
   assert.equal(dropEvents[0].event.table, drops);
+  assert.equal(dropEvents[2].event.npcId, Common.ids.npcs.duskDeath, 'reported as gargboss_dusk_death');
   flush();
 });
 
@@ -802,10 +808,82 @@ test("Dawn's death never rolls drops or tallies a kill; only Dusk's death does",
   const player = fakePlayer();
   dropEvents = [];
   Kills.guardianDeath({ npc: dawn, killer: player });
+  const dawnGenerated = { player, npc: dawn, npcId: dawn.getId(), drops: [], handled: false };
+  Kills.duskGenerated(dawnGenerated);
   assert.equal(dropEvents.length, 0, "Dawn's death is not the kill and gives nothing");
+  assert.equal(dawnGenerated.handled, false);
   assert.equal(player.getAttribute(Common.KILLS_ATTRIBUTE), undefined);
   Kills.guardianDeath({ npc: dusk, killer: player });
+  Kills.duskGenerated({ player, npc: dusk, npcId: dusk.getId(), drops: [], handled: false });
   assert.deepEqual(dropEvents.map((event) => event.name), ['npc-drops:roll-table', 'npc-drops:roll', 'npc-drops:place']);
   assert.equal(player.getAttribute(Common.KILLS_ATTRIBUTE), 1, "only Dusk's death counts the kill");
   flush();
+});
+
+test("the echo orb menu's later No asks for the task again before going up", () => {
+  const player = fakePlayer(3427, 3541);
+  player.attributes[Common.UNLOCKED_ATTRIBUTE] = true;
+  player.getIndex = () => 1;
+  player.getArea = () => null;
+  player.setArea = () => {};
+  tasks = [];
+  heldEchoEntry = null;
+  try {
+    onTaskAnswer = () => true;
+    Roof.entrance({ player, objectId: Common.ids.locs.entrance });
+    const entry = heldEchoEntry;
+    assert.equal(entry?.boss, 'grotesque-guardians');
+    assert.equal(tasks.length, 0, 'nothing until it is answered');
+    onTaskAnswer = () => false; // the task ends while the menu waits
+    entry.enter();
+    assert.equal(tasks.length, 0, 'No: not taken up');
+    assert.equal(player.boxes.length, 1, 'the usual refusal');
+    onTaskAnswer = () => true;
+    entry.enter();
+    assert.ok(tasks.length > 0, 'still on task: up it goes');
+  } finally {
+    heldEchoEntry = undefined;
+    onTaskAnswer = () => true;
+  }
+});
+
+test('left idle on the roof: warned at 1 minute and 30 seconds left, closed after 5 minutes; a fight stops the timer (rsprox 227/910264)', (t) => {
+  let now = 1000;
+  t.mock.method(core.World, 'getProcessCycle', () => now);
+  const player = fakePlayer();
+  const roof = new Roof.Roof(player);
+  player.attributes[Roof.ROOF_ATTRIBUTE] = roof;
+  const run = (until) => { for (; now <= until; now++) roof.area.process(player); };
+  run(1399);
+  assert.deepEqual(player.messages, [], 'nothing before four minutes');
+  run(1400);
+  assert.deepEqual(player.messages, ['<col=ff0000>The instance will close automatically in 1 minute.']);
+  run(1450);
+  assert.equal(player.messages.at(-1), '<col=ff0000>The instance will close automatically in 30 seconds.');
+  assert.equal(player.messages.length, 2);
+  run(1499);
+  assert.ok(Roof.roofOf(player), 'still open at 499 ticks');
+  run(1500);
+  assert.equal(player.boxes.length, 1, '"The instance has closed."');
+  const at = player.getLocation();
+  assert.deepEqual([at.getX(), at.getY(), at.getZ()], [3426, 3541, 2]);
+  assert.equal(Roof.roofOf(player), null);
+
+  // A fight in between: no warnings while it runs, and the timer starts over once it ends.
+  const busy = fakePlayer();
+  now = 5000;
+  const other = new Roof.Roof(busy);
+  busy.attributes[Roof.ROOF_ATTRIBUTE] = other;
+  now = 5390;
+  other.fight = { stopped: false, stop() { this.stopped = true; } };
+  other.idleSince = null;
+  for (; now < 6000; now++) other.tickIdle();
+  assert.deepEqual(busy.messages, [], 'the fight stopped the timer');
+  other.reset();
+  for (; now < 6399; now++) other.area.process(busy);
+  assert.deepEqual(busy.messages, [], 'started over at the kill');
+  now = 6400;
+  other.area.process(busy);
+  assert.equal(busy.messages.length, 1);
+  other.destroy();
 });

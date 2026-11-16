@@ -117,7 +117,19 @@ A spent node turns into its depleted version (the next id). Rooms are stocked as
 - demi-boss rooms hold only their demi-boss;
 - the other rooms are marked for monsters (phase 4).
 
-Gathering also follows Near-Reality, since the Wiki gives no rates: a yield every 2 ticks, 1 XP, and a 1 in 5 chance of 5-30 shards.
+**Gathering** follows rsprox captures (local recordings 1001295, 1000628, 1000629; index recordings 1158, 3276, 3285; revisions 227-237, both modes):
+- the start line ("You swing your pick at the rock.", "You swing your axe at the roots.", "You start harpooning fish."; none for linum and grym) and the animation come on arrival;
+- the first yield comes a tick later, then one every 3 ticks. Each yield but the last plays the animation again; the last one stops it, and the node turns depleted on the same tick;
+- the line for the last yield: "You mine the last of the salvageable ore from the rock.", "You chop the last of the salvageable bark from the roots.", "You catch the last of the fish."; none for linum or grym;
+- sounds: synth 3600 for each ore, 2581 for each linum or grym leaf, area sound 2735 (range 1, on the chopper's own tile) for each bark plus synth 2734 for the last one, none for fish;
+- the 3-tick cycle carries over a re-click, a switch to another node or a stop. A restart never yields before the running cycle would have; live never yields within 3 ticks of a click (local 1000629 t490);
+- with no tool, a chat message ("You need a pickaxe to mine this rock." and so on), not a message box;
+- if the inventory fills, gathering stops on the next tick with synth 2277. For fish that's a message box ("You can't carry any more fish.", recordings 3276 and 3285); for bark it was a chat line (1000628), from before bark stacked;
+- crystal ore, phren bark and linum stack since the 22 July 2026 update ("Resources in the Gauntlet and Corrupted Gauntlet are now stackable", Wiki changelogs of Crystal ore and Phren bark; the rev 242 cache agrees). A full inventory that already holds them keeps gathering. Recordings 1158, 3276 and 3285 (revisions 234-237) are older and still show one per slot.
+
+XP and shards are the Wiki's, from each node's page, and match the captures. XP is 10 Mining, Woodcutting or Fishing per yield and 1 Farming per linum or grym leaf (the stat deltas in 1001295, and 16 times that on Leagues worlds in 1000629). Each yield has a 1/3 chance of 10-30 shards; the captures found shards on 212 of 571 yields, all between 10 and 30.
+
+Not covered: the `tracking_fish_caught` / `tracking_logs_chopped` varps the captures bump per yield. The response to clicking with a full inventory isn't captured, so it uses the same channel as the mid-gathering stop.
 
 **Nodes.** When a room is lit, the nodes on both sides of each passage to a lit neighbour turn to their lit, unclickable versions (id + 2). The symbols (36097, "Inactive Symbol") are left as they are: Near-Reality swaps them to 36096, but the cache's named "Illuminated Symbol" is 36095, and which one the game uses isn't confirmed.
 
@@ -207,7 +219,7 @@ The Hunllef waits in the boss room from the start of a run. It fights once the b
 | Hitpoints | 600 / 1000 |
 | Attack speed | every 5 ticks |
 | Attack style | Ranged first; switches every 4 attacks (tornado and prayer-disabling attacks count, the stomp doesn't), with animation 8754 |
-| Protection prayer | Protects against one style (forms 9021 / 9022 / 9023: melee / ranged / magic; corrupted 9035–9037). Every 6th off-prayer hit, zeros included, switches it to that hit's style. Hits it protects against do nothing. |
+| Protection prayer | Protects against one style (forms 9021 / 9022 / 9023: melee / ranged / magic; corrupted 9035–9037). Every 6th off-prayer hit, zeros included, switches it to that hit's style. Hits it protects against do nothing, unless the hit bypasses protection prayers (Demonic Pacts prayer penetration, or any hit marked to); ours: such a hit still counts as a wrong-style hit and doesn't switch its prayer. |
 | Stomp | If you stand under it when it attacks |
 | Tornadoes | Crystalline 1 / 2 / 3, Corrupted 2 / 3 / 4, above 66% / 33–66% / below 33% HP. They chase you for 20 ticks; damage by armour tier is in the table below. |
 | Floor | Three pattern sets by those thirds. Tiles turn blue (crimson) then orange, faster each phase; orange tiles deal 10–20 a tick. Floor loc 36149 (36046), +1 blue, +2 orange. |

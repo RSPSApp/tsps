@@ -22,7 +22,6 @@ const ELSEWHERE = new Set([
     'revenant cave teleport',   // Revenant caves
     'target teleport',          // Bounty Hunter target
     'deadman teleport tablet',  // Deadman mode
-    'volcanic mine teleport',   // not yet: no landing tile from a capture or RuneLite
     'guthixian temple teleport', // not yet: no landing tile from a capture or RuneLite
 ]);
 
@@ -144,6 +143,23 @@ test('the Key master, Wilderness crabs and Nardah scrolls land where the Wiki ma
     assertLanding(use('key master teleport', 'teleport').tile, [1310, 1250, 0]);
     assertLanding(use('wilderness crabs teleport', tabletIds.get('wilderness crabs teleport').op).tile, [3352, 3782, 0]);
     assertLanding(use('nardah teleport', 'teleport').tile, [3419, 2917, 0]);
+});
+
+// Wiki (Volcanic mine teleport): the tablet lands in the 3x3 area at x 3810-3812, y 3812-3814 (map polygon
+// 3810,3812-3813,3815, corners as Spider cave's polygon 3657,3402-3660,3405 against its recorded landings
+// x 3657-3659, y 3402-3404), and needs Bone Voyage.
+test('the Volcanic mine tablet lands at the Volcanic Mine entrance and needs Bone Voyage', (t) => {
+    const landed = use('volcanic mine teleport', 'break');
+    assert.equal(landed.teleport?.type, TeleportType.TELE_TAB);
+    assert.deepEqual(landed.tile, [3811, 3813, 0]);
+
+    unfinished = new Set(['bone_voyage']);
+    t.after(() => { unfinished = new Set(); });
+    const refused = use('volcanic mine teleport', 'break');
+    assert.equal(refused.event.handled, true);
+    assert.equal(refused.teleport, undefined);
+    assert.deepEqual(refused.player.messages, ['You need to have completed the Bone Voyage Quest to use this spell.']);
+    assert.equal(refused.player.inventory.get(tabletIds.get('volcanic mine teleport').id), 1, 'the tablet is kept');
 });
 
 test('a scroll is used up on the click, a tablet as it is absorbed', () => {

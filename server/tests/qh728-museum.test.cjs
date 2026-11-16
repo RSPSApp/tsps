@@ -584,7 +584,8 @@ test("Museum: lamp reports show the lamp box and go on to the next report", () =
   assert.equal(getKudos(world, player), 20);
   assert.deepEqual(new Set(player.getAttribute(STATE).minas),
     new Set(["shield_of_arrav", "merlins_crystal", "making_history", "demon_slayer"]));
-  assert.equal(player.messages.filter((message) => message === "You receive an old lamp.").length, 3);
+  // Each lamp: the game message, and the box's own mesbox copy (rsprox 3278 ticks 5785, 5796, 5821).
+  assert.equal(player.messages.filter((message) => message === "You receive an old lamp.").length, 6);
   assert.equal(player.spam.filter((message) => message === KUDOS_MESSAGE).length, 4);
   for (const varbit of [VM.silverlight, VM.soa, VM.soaVisible, VM.excalibur, VM.lathas]) assert.equal(player.getVarbit(varbit), 1, `varbit ${varbit}`);
   for (const lamp of [11185, 11186, 11187]) assert.equal(player.inventory.getAmount(lamp), 1, `lamp ${lamp}`);

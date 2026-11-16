@@ -46,7 +46,7 @@ beforeEach(() => {
 });
 
 /** 28 slots; nails and swamp paste stack, everything else takes a slot each. */
-function createPlayer(slots, { construction = 99 } = {}) {
+function createPlayer(slots, { construction = 99, wielded = {} } = {}) {
   const inventory = Array.from({ length: 28 }, (_, slot) => slots[slot] ?? null);
   const stacks = (itemId) => core.ItemDefinition.forId(itemId).isStackable();
   const said = [];
@@ -88,7 +88,7 @@ function createPlayer(slots, { construction = 99 } = {}) {
     getLocation: () => ANCHOR,
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
-    getEquipment: () => ({ get: () => null }),
+    getEquipment: () => ({ get: (slot) => (wielded[slot] != null ? { getId: () => wielded[slot] } : null) }),
     getInventory: () => container,
     performAnimation: (animation) => animations.push(animation.getId?.() ?? animation.id),
     sendMessage: (text) => said.push(text),
@@ -143,6 +143,18 @@ test("the captured refusals: no tools, then the recipe's materials", () => {
   player.menu().execute(id("boat_repair_kit_camphor"), 1);
   assert.deepEqual(player.said, ["You need two camphor planks, ten adamantite nails and five swamp paste to craft a set of two camphor repair kits."]);
   assert.equal(camphor.entry.amount, 2);
+});
+
+// Decision approved 2026-11-15: any saw held or worn (items/Saws.js). Wiki (Amy's saw): wieldable, its off-hand copy
+// in the shield slot. The workbench's own saw list left the off-hand copy out.
+test("Amy's saw in the off-hand (or the weapon slot) counts as the saw", () => {
+  for (const [slot, sawId] of [[core.Equipment.SHIELD_SLOT, core.ItemIds.AMYS_SAW_OFF_HAND_], [core.Equipment.WEAPON_SLOT, core.ItemIds.AMYS_SAW]]) {
+    const player = createPlayer({ 0: { id: core.ItemIds.HAMMER, amount: 1 } }, { wielded: { [slot]: sawId } });
+    openMenu(player, "kits", ANCHOR);
+    player.menu().execute(id("boat_repair_kit_camphor"), 1);
+    assert.deepEqual(player.said, ["You need two camphor planks, ten adamantite nails and five swamp paste to craft a set of two camphor repair kits."],
+      `past the tool check with ${sawId} wielded`);
+  }
 });
 
 test("the Construction level", () => {

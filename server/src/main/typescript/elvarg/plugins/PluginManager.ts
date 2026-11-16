@@ -28,6 +28,7 @@ import { MultiChatboxPrompt } from "../game/model/menu/MultiChatboxPrompt";
 import {
   PluginApi,
   PluginCanAttackEvent,
+  PluginCanAttackDecision,
   PluginCanDrinkEvent,
   PluginCanEatEvent,
   PluginCanEquipEvent,
@@ -267,6 +268,9 @@ export class PluginManager {
   public static readonly MAX_PLUGIN_DEPTH = 2;
   private static initialized = false;
   private static loadedPlugins: string[] = [];
+  /** The files whose register() succeeded, and the directory loadFromDirectory loaded them from. */
+  private static loadedPluginFiles = new Set<string>();
+  private static loadedDirectory: string | null = null;
   private static lastPersistenceOverride: string | null = null;
   private static loginExtensionFactory?: { pluginName: string; factory: (connection: PluginLoginConnection) => PluginLoginExtension | undefined };
   private static loginHooks: PluginHook<PluginPlayerLoginEvent>[] = [];
@@ -775,6 +779,7 @@ export class PluginManager {
     const acceptedDeclarations = PluginManager.checkConfigDeclarations(toLoad);
     PluginManager.loadPluginCandidatesWithDependencies(toLoad);
 
+    PluginManager.loadedDirectory = path.resolve(pluginDirectory);
     PluginManager.recordLoadedConfigDeclarations(acceptedDeclarations);
     PluginManager.warnAboutInvalidConfigValues(scopedSettings);
     PluginManager.emitCustomEvent("plugins:loaded", { names: new Set(PluginManager.loadedPlugins) });
@@ -1362,18 +1367,29 @@ export class PluginManager {
     target: any,
     method?: any
   ): boolean | null {
+    return PluginManager.emitCanAttackDecision(attacker, target, method).allow;
+  }
+
+  /** emitCanAttack with the refusing handler's `response` / `message` (PluginCanAttackEvent). */
+  public static emitCanAttackDecision(
+    attacker: any,
+    target: any,
+    method?: any
+  ): PluginCanAttackDecision {
     if (PluginManager.canAttackHooks.length === 0) {
-      return null;
+      return { allow: null };
     }
     const event: PluginCanAttackEvent = { attacker, target, method, allow: null };
     let allowed = false;
     for (const hook of PluginManager.canAttackHooks) {
       event.allow = null;
+      event.response = undefined;
+      event.message = undefined;
       PluginManager.executeHook(hook, event, "can_attack", "can_attack");
-      if (event.allow === false) return false;
+      if (event.allow === false) return { allow: false, response: event.response, message: event.message };
       if (event.allow === true) allowed = true;
     }
-    return allowed ? true : null;
+    return { allow: allowed ? true : null };
   }
 
   public static emitCanTeleport(player: any, wildernessLevelLimit: number = 20, destination?: any, spellName?: string): boolean | null {
@@ -1521,9 +1537,12 @@ export class PluginManager {
     return null;
   }
 
-  public static emitCanBankItem(player: any, item: any, { quiet = false }: { quiet?: boolean } = {}): boolean | null {
+  public static emitCanBankItem(
+    player: any, item: any,
+    { quiet = false, container, slot, bulk, emptyAll }: { quiet?: boolean; container?: any; slot?: number; bulk?: boolean; emptyAll?: boolean } = {},
+  ): boolean | null {
     if (PluginManager.canBankItemHooks.length === 0) return null;
-    const event: PluginCanBankItemEvent = { player, item, allow: null, quiet };
+    const event: PluginCanBankItemEvent = { player, item, allow: null, quiet, container, slot, bulk, emptyAll };
     for (const hook of PluginManager.canBankItemHooks) {
       PluginManager.executeHook(hook, event, "can_bank_item", "can_bank_item");
       if (event.allow !== null) return event.allow;
@@ -1695,9 +1714,9 @@ export class PluginManager {
   }
 
   /** The plugin's refusal message when the special attack bar is disabled, or null when it is usable. */
-  public static emitSpecialAttackDisabled(player: any): string | null {
+  public static emitSpecialAttackDisabled(player: any, specialAttackId?: string): string | null {
     if (PluginManager.specialAttackDisabledHooks.length === 0) return null;
-    const event: PluginSpecialAttackDisabledEvent = { player, disabled: null };
+    const event: PluginSpecialAttackDisabledEvent = { player, specialAttackId, disabled: null };
     return PluginManager.firstAnswer(PluginManager.specialAttackDisabledHooks, event, "special_attack_disabled", "disabled") === true
       ? event.message ?? "You can't use special attacks here."
       : null;
@@ -2313,6 +2332,16 @@ export class PluginManager {
       : (defaultValue as T);
   }
 
+  /**
+   * The plugin files the loader actually registered from `pluginDirectory` (resolved paths), or
+   * null when loadFromDirectory has not loaded that directory (the docs script, tests).
+   */
+  public static getLoadedPluginFiles(pluginDirectory: string): ReadonlySet<string> | null {
+    return PluginManager.loadedDirectory === path.resolve(pluginDirectory)
+      ? PluginManager.loadedPluginFiles
+      : null;
+  }
+
   /** Every option a loaded plugin (or the core) declares, keyed by pluginConfig key. */
   public static getConfigDeclarations(): Map<
     string,
@@ -2585,6 +2614,7 @@ export class PluginManager {
       } else {
         candidate.plugin.register(api);
         PluginManager.loadedPlugins.push(candidate.pluginName);
+        PluginManager.loadedPluginFiles.add(path.resolve(candidate.pluginPath));
       }
       return api;
     } catch (err) {
@@ -2620,6 +2650,7 @@ export class PluginManager {
       CombatMethod: require(`${combat}/method/CombatMethod`).CombatMethod,
       CombatSpecial: require(`${combat}/CombatSpecial`).CombatSpecial,
       CombatFactory: require(`${combat}/CombatFactory`).CombatFactory,
+      HitQueue: require(`${combat}/hit/HitQueue`).HitQueue,
       BonusManager: require(`${model}/equipment/BonusManager`).BonusManager,
       EquipmentRequirements: require(`${model}/equipment/EquipmentRequirements`).EquipmentRequirements,
       WeaponInterfaces: require(`${combat}/WeaponInterfaces`).WeaponInterfaces,
@@ -2653,6 +2684,7 @@ export class PluginManager {
         const listener = new MagicOnItemPacketListener();
         return listener.castOnItem(player, typeof spellId === "string" ? listener.resolveSpellId(spellId) : spellId, itemId, slot, source);
       },
+      examineItem: require("../game/content/ExaminePrice").examineItem,
       ChatType: require("../net/protocol/ClientProtocol").ChatType,
       resolveChatHighlights: require("../net/protocol/ClientProtocol").resolveChatHighlights,
       DuelRule: require("../game/content/Duelling").DuelRule,
@@ -2687,6 +2719,7 @@ export class PluginManager {
       Misc: require("../util/Misc").Misc,
       ChatTextLayout: require("../game/model/dialogues/ChatTextLayout").ChatTextLayout,
       TimerKey: require("../util/timers/TimerKey").TimerKey,
+      SecondsTimer: require(`${model}/SecondsTimer`).SecondsTimer,
       Sound: require("../game/Sound").Sound,
       Sounds: require("../game/Sounds").Sounds,
       Location: require(`${model}/Location`).Location,
@@ -4744,6 +4777,10 @@ export class PluginManager {
         require("../game/content/combat/EquipmentEffects").registerRangedAttackAccuracyModifier(
           modifier
         ),
+      registerMagicAccuracyPercentModifier: (modifier) =>
+        require("../game/content/combat/EquipmentEffects").registerMagicAccuracyPercentModifier(
+          modifier
+        ),
       registerMagicAttackAccuracyModifier: (modifier) =>
         require("../game/content/combat/EquipmentEffects").registerMagicAttackAccuracyModifier(
           modifier
@@ -5063,7 +5100,36 @@ export class PluginManager {
         );
       }
     }
-    return false;
+    return PluginManager.splitSpellRuneSources(player, missingItems) !== null;
+  }
+
+  /**
+   * When no one source holds the whole shortfall, each rune may still come from a different one (fire runes from
+   * the rune pouch, nature runes from a charged Bryophyta's staff): the first source holding all of a rune pays
+   * that rune. Null when some rune has no such source. A single rune is never split between two sources.
+   */
+  private static splitSpellRuneSources(player: any, missingItems: any[]): Map<PluginSpellRuneSource, any[]> | null {
+    if (missingItems.length < 2 || PluginManager.spellRuneSources.length < 2) return null;
+    const shares = new Map<PluginSpellRuneSource, any[]>();
+    for (const item of missingItems) {
+      const entry = PluginManager.spellRuneSources.find((candidate) => {
+        try {
+          return candidate.source.check(player, [item]) === true;
+        } catch (err) {
+          console.error(`[plugins] spell rune source check failed (${candidate.pluginName})`, err);
+          return false;
+        }
+      });
+      if (!entry) return null;
+      const share = shares.get(entry.source) ?? [];
+      share.push(item);
+      shares.set(entry.source, share);
+    }
+    // Two runes on one source are checked together, so a share it can only pay one at a time is refused.
+    for (const [source, share] of shares) {
+      if (share.length > 1 && source.check(player, share) !== true) return null;
+    }
+    return shares;
   }
 
   /** Deducts the shortfall from the first source that can supply it, leaving the rest alone. */
@@ -5082,6 +5148,15 @@ export class PluginManager {
           `[plugins] spell rune source consume failed (${entry.pluginName})`,
           err
         );
+      }
+    }
+    const shares = PluginManager.splitSpellRuneSources(player, missingItems);
+    if (!shares) return;
+    for (const [source, share] of shares) {
+      try {
+        source.consume(player, share);
+      } catch (err) {
+        console.error("[plugins] spell rune source consume failed", err);
       }
     }
   }

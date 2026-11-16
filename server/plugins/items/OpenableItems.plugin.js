@@ -11,7 +11,7 @@ const NO_SPACE = "You don't have enough inventory space.";
 const STACK_NO_SPACE = "You don't have enough inventory space to open that.";
 const MAX_STACK_AMOUNT = 0x7fffffff;
 /** The main island, from dwarfcannon's Entrana area. The law altar and dungeon lie outside it. */
-const ENTRANA = { minX: 2801, maxX: 2880, minY: 3328, maxY: 3392 };
+const { onEntrana } = require("../areas/entrana/Bounds.Entrana");
 
 let core;
 let api;
@@ -122,12 +122,6 @@ function slotsNeeded(container) {
   return container.tables.reduce((sum, table) => sum + tableSlots(table), 0);
 }
 
-function onEntrana(player) {
-  const location = player.getLocation();
-  const { minX, maxX, minY, maxY } = ENTRANA;
-  return location.getX() >= minX && location.getX() <= maxX && location.getY() >= minY && location.getY() <= maxY;
-}
-
 function rollEntry(entries) {
   const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
   let roll = Math.random() * total;
@@ -159,7 +153,6 @@ function rewardText(container, reward) {
 
 /** An item box, with its text sent to the chat as a mesbox line first. */
 function itemBox(player, itemId, text) {
-  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, text);
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
     .add(new core.ItemStatementDialogue(0, itemId, text)));
 }

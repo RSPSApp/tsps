@@ -6,13 +6,15 @@
  * enum_929: Plateau is 1; enum_2340: the cap indices below (not the Wiki's older list).
  * The Wiki's Clan Wars page establishes safe deaths and the 100-fighter per-side limit.
  * Enums 374/376 map modes 1..8 to kill targets; enum1119 maps 16..20 to minutes.
- * Objective modes remain unsupported.
+ * Oddskull targets21..23 are offered on Plateau only; other objective modes remain unsupported.
  * Enums919/921/923/925 establish prayer, food, drinks and special-attack choices.
  * Enums2336..2339 establish leaving-channel penalties and the 60-second rejoining delay.
  * Enums927/928 establish loss at zero or five-or-fewer fighters; Ignore 5 is offered for LTS only.
- * Staff-of-the-Dead-only, other combat restrictions and modern clans remain deferred.
+ * Enum917/918 offers bounded Standard combat, Classic F2P combat, Binding only or Disabled; magical specials remain deferred.
  */
 const Layout = require("./Layout.ClanWars");
+const Magic = require("./Magic.ClanWars");
+const Ranged = require("./Ranged.ClanWars");
 const OFFERED_RULES = Object.freeze({
   wincondition: 0,
   arena: 1,
@@ -37,17 +39,23 @@ const OFFERED_RULES = Object.freeze({
 // "Uncapped" remains subject to the activity's maximum of 100 fighters per side.
 const TEAM_CAPS = Object.freeze([100, 1, 5, 10, 15, 20, 50, 100]);
 const KILL_TARGETS = Object.freeze([0, 25, 50, 100, 200, 500, 1000, 5000, 10000]);
+const SKULL_TARGETS = Object.freeze({ 21: 100, 22: 300, 23: 500 });
 const TIME_LIMIT_MINUTES = Object.freeze({ 16: 5, 17: 10, 18: 20, 19: 60, 20: 120 });
 // GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE is 600ms; HUD script213
 // multiplies this tick count by 30 client cycles (script744 uses 50 cycles/s).
 const TICKS_PER_MINUTE = 100;
 const STRAGGLER_LIMITS = Object.freeze([0, 5]);
+const MELEE_DISABLED_NOTICE = "Disabling melee prevents new melee attacks. Attacks already underway may still land.";
+const FREEZING_NOTICE = "TSPS policy: During combat, active fighters ignore new freezes, including current melee weapon binds. Existing freezes and protection from another freeze are not removed. Damage, poison and special-attack costs still apply.";
 const RESTRICTIONS = Object.freeze({
+  melee: Object.freeze([0, 1]),
+  ranged: Object.freeze([0, 1]),
+  magic: Object.freeze([Magic.STANDARD, Magic.CLASSIC_F2P, Magic.BINDING_ONLY, Magic.DISABLED]),
   food: Object.freeze([0, 1]),
   drinks: Object.freeze([0, 1]),
   prayer: Object.freeze([0, 1, 2]),
-  // "No Staff of the Dead" needs separately qualified variant/effect rules.
-  specialattacks: Object.freeze([0, 2]),
+  // Power of Death remains outside the finite casting support in either Magic configuration.
+  specialattacks: Object.freeze([0, 1, 2]),
   leavingcc: Object.freeze([0, 1]),
   rejoiningdelay: Object.freeze([0, 1]),
 });
@@ -69,10 +77,13 @@ function validate(rules) {
       if (!Layout.get(descriptor.value)) return false;
     } else if (key === "wincondition") {
       if ((descriptor.value < 0 || descriptor.value >= KILL_TARGETS.length)
-        && !TIME_LIMIT_MINUTES[descriptor.value]) return false;
+        && !TIME_LIMIT_MINUTES[descriptor.value] && !SKULL_TARGETS[descriptor.value]) return false;
+      if (SKULL_TARGETS[descriptor.value] && Object.getOwnPropertyDescriptor(rules, "arena")?.value !== 1) return false;
     } else if (key === "stragglers") {
       if (descriptor.value < 0 || descriptor.value >= STRAGGLER_LIMITS.length
         || descriptor.value === 1 && Object.getOwnPropertyDescriptor(rules, "wincondition")?.value !== 0) return false;
+    } else if (key === "freezing") {
+      if (descriptor.value !== 0 && descriptor.value !== 1) return false;
     } else if (RESTRICTIONS[key]) {
       if (!RESTRICTIONS[key].includes(descriptor.value)) return false;
     } else if (descriptor.value !== OFFERED_RULES[key]) return false;
@@ -97,7 +108,9 @@ function timeLimitTicks(rules) {
   return validate(rules) ? (TIME_LIMIT_MINUTES[rules.wincondition] ?? 0) * TICKS_PER_MINUTE : null;
 }
 
-function respawns(rules) { return killTarget(rules) > 0 || timeLimitTicks(rules) > 0; }
+function skullTarget(rules) { return validate(rules) ? SKULL_TARGETS[rules.wincondition] ?? 0 : null; }
+
+function respawns(rules) { return killTarget(rules) > 0 || timeLimitTicks(rules) > 0 || skullTarget(rules) > 0; }
 
 /** Server-written confirmation text; wording is ours, mechanics are from the sources above. */
 function summary(rules) {
@@ -106,11 +119,16 @@ function summary(rules) {
   const cap = teamCap(rules);
   const capText = rules.playercap === 0 ? "Uncapped (maximum 100 fighters per team)" : `${cap} v ${cap}`;
   const target = killTarget(rules);
+  const skull = skullTarget(rules);
   const minutes = TIME_LIMIT_MINUTES[rules.wincondition];
   const respawning = respawns(rules);
+  const magicName = rules.magic === Magic.CLASSIC_F2P ? "finite Classic F2P" : rules.magic === Magic.BINDING_ONLY ? "Binding-only" : "bounded Standard";
   return [
-    minutes ? `Most kills in ${minutes} minutes on ${arena}.`
+    skull ? `First to ${skull} Skull points on ${arena}.` : minutes ? `Most kills in ${minutes} minutes on ${arena}.`
       : target ? `First to ${target.toLocaleString("en-US")} kills on ${arena}.` : `Last team standing on ${arena}.`,
+    ...(skull ? ["Three Skull points every four ticks of possession; the first award is four full ticks after Take.",
+      "TSPS policy: an unclaimed dropped skull returns to the middle after 60 seconds. Each new pickup resets the award cadence.",
+      "The holder cannot attack. Removing or swapping the skull drops it directly; it cannot leave the battle."] : []),
     `Team cap: ${capText}.`,
     "Safe deaths: you keep your items. No prizes or stakes.",
     respawning ? "Two minutes to prepare. Joining and rejoining remain open during the battle."
@@ -124,15 +142,39 @@ function summary(rules) {
       : "The selected 60-second rejoining delay cannot reopen entry after Last Team Standing begins."
       : "There is no additional rejoining delay.",
     ...(minutes ? ["At the time limit the higher kill score wins. Equal scores end without a winner."] : []),
-    "Melee combat only. Ranged and magical combat are disabled.",
+    Magic.enabled(rules.magic) ? rules.ranged === 0
+      ? rules.melee === 1
+        ? `Supported standard-bow and ${magicName} combat are allowed; new melee attacks are disabled.`
+        : `Melee, supported standard-bow and ${magicName} combat are allowed.`
+      : rules.melee === 1
+        ? `${rules.magic === Magic.CLASSIC_F2P ? "Finite Classic F2P" : rules.magic === Magic.BINDING_ONLY ? "Binding-only" : "Bounded Standard"} combat is allowed; new melee attacks and Ranged are disabled.`
+        : `Melee and ${magicName} combat. Ranged combat is disabled.`
+      : rules.ranged === 0 ? rules.melee === 1
+        ? "Supported standard-bow combat is allowed. New melee attacks and Magic are disabled."
+        : "Melee and supported standard-bow combat are allowed. Magic is disabled."
+        : rules.melee === 1 ? "No new player combat: Melee, Ranged and Magic are disabled."
+          : "Melee combat only. Ranged and magical combat are disabled.",
+    ...(rules.ranged === 0 ? [Ranged.SUPPORT, Ranged.SPENDING] : []),
+    ...(Magic.enabled(rules.magic) ? [Magic.support(rules.magic), Magic.accounting(rules.magic)] : []),
+    ...(rules.melee === 1 ? [MELEE_DISABLED_NOTICE,
+      "Ghasts can still attack. Existing time limits, departures and forfeits still decide the battle."] : []),
+    rules.freezing === 1 ? FREEZING_NOTICE : "Freezing applies normally.",
     rules.prayer === 2 ? "Prayers are disabled." : rules.prayer === 1
       ? "Prayers with overhead icons are disabled; other prayers are allowed." : "All prayers are allowed.",
     `Food: ${rules.food ? "disabled" : "allowed"}. Drinks: ${rules.drinks ? "disabled" : "allowed"}.`,
-    `Melee special attacks: ${rules.specialattacks === 2 ? "disabled" : "allowed"}.`,
+    rules.specialattacks === 1 ? rules.ranged === 0 && rules.melee === 0
+      ? "Melee special attacks: No Staff of the Dead; other permitted melee specials are allowed."
+      : "Special attacks: No Staff of the Dead; other permitted specials are allowed."
+      : rules.melee === 1 ? `Special attacks: ${rules.specialattacks === 2 ? "disabled" : "allowed where independently permitted"}.`
+        : `Melee special attacks: ${rules.specialattacks === 2 ? "disabled" : "allowed"}.`,
+    ...(rules.melee === 1 ? ["New damaging melee specials are also blocked. Utility specials retain the selected special-attack restriction."] : []),
+    ...(rules.specialattacks === 1 ? [rules.magic === Magic.DISABLED
+      ? "Power of Death is already unavailable while Magic is disabled."
+      : "Power of Death and other magical specials remain unsupported by this finite casting rendition."] : []),
     `${rules.food && rules.drinks ? "Food and drinks are disabled." : rules.food
       ? "Allowed drinks are consumed normally." : rules.drinks ? "Allowed food is consumed normally."
         : "Food and drinks are consumed normally."} Powered staves and Vesta's blighted longsword are not enabled.`,
   ].join("<br>");
 }
 
-module.exports = { OFFERED_RULES, RESTRICTIONS, STRAGGLER_LIMITS, TEAM_CAPS, KILL_TARGETS, TIME_LIMIT_MINUTES, validate, create, teamCap, killTarget, timeLimitTicks, respawns, summary };
+module.exports = { OFFERED_RULES, RESTRICTIONS, FREEZING_NOTICE, STRAGGLER_LIMITS, MELEE_DISABLED_NOTICE, TEAM_CAPS, KILL_TARGETS, TIME_LIMIT_MINUTES, SKULL_TARGETS, validate, create, teamCap, killTarget, timeLimitTicks, skullTarget, respawns, summary };

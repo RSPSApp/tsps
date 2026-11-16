@@ -14,6 +14,8 @@ import net.rsprot.protocol.game.outgoing.social.MessagePrivateEcho
 import net.rsprot.protocol.game.outgoing.social.UpdateFriendList
 import net.rsprot.protocol.game.outgoing.social.UpdateIgnoreList
 import net.rsprot.protocol.message.OutgoingGameMessage
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.random.Random
 
 /**
  * Friends, ignores and the friends chat. tsps sends all three as one full snapshot on every
@@ -27,7 +29,6 @@ import net.rsprot.protocol.message.OutgoingGameMessage
 class Social(private val send: (OutgoingGameMessage) -> Unit) {
     private var loaded = false
     private var channel: Any? = null
-    private var messageCounter = 0
 
     fun handle(packet: TspsPacket): Boolean {
         val reader = packet.reader()
@@ -97,17 +98,28 @@ class Social(private val send: (OutgoingGameMessage) -> Unit) {
     fun chat(chat: TspsChatMessage): Boolean {
         val name = chat.from.replace(ICON, "")
         when (chat.type) {
-            PRIVATE_IN -> send(MessagePrivate(name, WORLD, ++messageCounter, chat.modIcon, chat.text))
+            PRIVATE_IN -> send(MessagePrivate(name, WORLD, nextMessageId(), chat.modIcon, chat.text))
             PRIVATE_OUT -> send(MessagePrivateEcho(name, chat.text))
-            FRIENDS_CHAT -> send(MessageFriendChannel(name, chat.prefix, WORLD, ++messageCounter, chat.modIcon, chat.text))
-            CLAN_CHAT -> send(MessageClanChannel(OWN_CLAN, name, WORLD, ++messageCounter, chat.modIcon, chat.text))
-            GUEST_CLAN_CHAT -> send(MessageClanChannel(GUEST_CLAN, name, WORLD, ++messageCounter, chat.modIcon, chat.text))
+            FRIENDS_CHAT -> send(MessageFriendChannel(name, chat.prefix, WORLD, nextMessageId(), chat.modIcon, chat.text))
+            CLAN_CHAT -> send(MessageClanChannel(OWN_CLAN, name, WORLD, nextMessageId(), chat.modIcon, chat.text))
+            GUEST_CLAN_CHAT -> send(MessageClanChannel(GUEST_CLAN, name, WORLD, nextMessageId(), chat.modIcon, chat.text))
             else -> return false
         }
         return true
     }
 
     private companion object {
+        /**
+         * The client keys private, friends-chat and clan lines by world and this 24-bit counter, and
+         * drops a line whose key it has seen recently. It keeps those keys across logouts, so the
+         * counter is shared by every session (a relog would otherwise reuse the ids of the last
+         * session) and starts at a random value (so a restarted gateway does not replay them either).
+         */
+        const val MESSAGE_COUNTER_MASK = 0xFFFFFF
+        val messageCounter = AtomicInteger(Random.nextInt(MESSAGE_COUNTER_MASK + 1))
+
+        fun nextMessageId(): Int = messageCounter.incrementAndGet() and MESSAGE_COUNTER_MASK
+
         const val PRIVATE_IN = 3
         const val PRIVATE_OUT = 6
         const val FRIENDS_CHAT = 9

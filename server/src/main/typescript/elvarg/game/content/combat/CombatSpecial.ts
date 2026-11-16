@@ -296,7 +296,7 @@ export class CombatSpecial {
 
         // Loaded lazily, as PrayerHandler does: PluginManager imports Player.
         const { PluginManager } = require("../../../plugins/PluginManager");
-        const disabledMessage = PluginManager.emitSpecialAttackDisabled(player);
+        const disabledMessage = PluginManager.emitSpecialAttackDisabled(player, selected.getId());
         if ((equipmentSlot !== undefined || !player.isSpecialActivated()) && disabledMessage !== null) {
             player.sendMessage(disabledMessage);
             CombatSpecial.updateBar(player);

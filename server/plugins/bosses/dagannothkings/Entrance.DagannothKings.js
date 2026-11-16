@@ -34,9 +34,19 @@ function isExit(event) {
   return Common.inEitherLair({ getX: () => at.x, getY: () => at.y, getZ: () => at.z ?? 0 });
 }
 
+/**
+ * A league character carrying the echo orb is asked first ("echo-boss:entry"); otherwise straight
+ * down. `allowed` is the entrance's own rule, asked again when the menu's No comes later.
+ */
+function climbDown(player, spawn, allowed = () => true) {
+  const entry = { player, boss: "dagannoth-kings", enter: () => allowed() && player.moveTo(Common.location([...spawn])), handled: false };
+  Common.api.emitCustomEvent("echo-boss:entry", entry);
+  if (!entry.handled) entry.enter();
+}
+
 function goPublic({ player, location, objectId }) {
   if (!isEntrance({ location, objectId })) return false;
-  player.moveTo(Common.location([...Common.PUBLIC_SPAWN]));
+  climbDown(player, Common.PUBLIC_SPAWN);
   return true;
 }
 
@@ -52,12 +62,14 @@ function taskName(player) {
 
 function goTask({ player, location, objectId }) {
   if (!isEntrance({ location, objectId })) return false;
-  if (!taskName(player).includes("dagannoth")) {
-    player.sendMessage("You need to be assigned dagannoths as a Slayer task to use the Slayer entrance.");
-    return true;
-  }
-  player.moveTo(Common.location([...Common.TASK_SPAWN]));
+  if (onDagannothTask(player)) climbDown(player, Common.TASK_SPAWN, () => onDagannothTask(player));
   return true;
+}
+
+function onDagannothTask(player) {
+  if (taskName(player).includes("dagannoth")) return true;
+  player.sendMessage("You need to be assigned dagannoths as a Slayer task to use the Slayer entrance.");
+  return false;
 }
 
 function goPrivate({ player, location, objectId }) {

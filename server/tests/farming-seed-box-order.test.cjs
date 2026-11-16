@@ -157,7 +157,8 @@ test('the box with no seed for the patch says so in a message box; on a tree pat
     state.weeds = 0;
     useBox(f, patch);
     const text = 'Your seed box does not contain any seeds that can be planted in this patch.';
-    assert.deepEqual(f.messages, [`mesbox:${text}`]);
+    // The box logs its own mesbox chat line as it opens (tests/message-box-chat-line.test.cjs).
+    assert.deepEqual(f.messages, []);
     assert.equal(f.statements.length, 1, 'the message box opens');
     assert.equal(state.crop, undefined);
     f.messages.length = 0;

@@ -135,7 +135,6 @@ function choose(player, productId, amount) {
   if (!recipe?.warning || player.getAttribute(SKIP_WARNING_ATTRIBUTE) === true) return sing(player, productId, amount);
   const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue } = core;
   const seed = recipe.needs[0].itemId;
-  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, recipe.warning.replace(/<br>/g, " "));
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new ItemStatementDialogue(0, seed, recipe.warning),
     new ActionDialogue(1, { execute: () => api.sendMultiChatboxPrompt(player, PROCEED,
@@ -150,7 +149,6 @@ function choose(player, productId, amount) {
 }
 
 function songBox(player, productId) {
-  player.getPacketSender().sendTypedMessage(core.ChatType.MESBOX, SONG.replace(/<br>/g, " "));
   const { DialogueChainBuilder, ItemStatementDialogue } = core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, productId, SONG)));
 }

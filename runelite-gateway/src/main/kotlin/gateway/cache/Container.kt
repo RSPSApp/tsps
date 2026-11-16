@@ -2,9 +2,11 @@ package gateway.cache
 
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.SequenceInputStream
 import java.nio.ByteBuffer
 import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
 /** JS5 container: `u8 compression, i32 length, [i32 uncompressed length], payload`. */
 object Container {
@@ -32,6 +34,12 @@ object Container {
         val length = length(group)
         if (group.size < length + 2) return -1
         return ((group[length].toInt() and 0xFF) shl 8) or (group[length + 1].toInt() and 0xFF)
+    }
+
+    /** A gzip container of [data]. */
+    fun compress(data: ByteArray): ByteArray {
+        val gzip = ByteArrayOutputStream().also { out -> GZIPOutputStream(out).use { it.write(data) } }.toByteArray()
+        return ByteBuffer.allocate(9 + gzip.size).put(GZIP.toByte()).putInt(gzip.size).putInt(data.size).put(gzip).array()
     }
 
     fun decompress(container: ByteArray): ByteArray {

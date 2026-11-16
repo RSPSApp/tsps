@@ -31,7 +31,7 @@ The lair is in the map twice, 128 tiles apart, with the same locs: the normal ro
 | --- | --- | --- |
 | Cave (678, Enter) | (3201, 3679), Wilderness | Not while in combat (Wiki). Ironmen of combat level 90+ enter at (2964, 4382); others enter at (2964, 4254). The arrival tile is based on Offline_Scape. |
 | Cave exit (679, Exit) | (2963, 4254) and (2963, 4382) | "This exit leads to the Wilderness, are you sure?", then (3206, 3681) (Offline_Scape). |
-| Passage (677, Go-through, Peek) | (2971, 4254) and (2971, 4382), 3 tiles wide | Go-through moves you across a tick later: x 2970 to 2974 and back (capture). No pets (Wiki); the message is Offline_Scape's. Peek counts the players in the room (Offline_Scape's messages). |
+| Passage (677, Go-through, Peek) | (2971, 4254) and (2971, 4382), 3 tiles wide | Go-through moves you across a tick later: x 2970 to 2974 and back (capture). No pets (Wiki); the message is Offline_Scape's. Peek counts the players in the room: "You look inside the passage and see no adventurers inside the cave." (rsprox captures, recording 837 tick 277); one is "one adventurer", as the Kalphite Queen and Sarachnis captures say; two or more use the digits (ours). |
 | Corporeal Beast (319) | (2994, 4253) and (2994, 4381), facing south | Capture: (2994, 4381) facing south; the southern copy is the same tile 128 south. Respawns 50 ticks after dying (Wiki). |
 
 - **Multi-combat:** both copies, lobby and room, are multi-combat (Wiki; the capture sets the multi-way varbit on arrival).

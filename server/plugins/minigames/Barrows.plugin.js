@@ -367,6 +367,9 @@ function dig({ player }) {
   }
   // Keep the animation on the mound for two ticks before changing planes.
   state.dig = { from: player.getLocation().clone(), to: brother.crypt, ticks: 2 };
+  // The line goes with the dig's sequence, the tick before the plane change (rsprox_transcripts/226/01694.txt tick
+  // 8800, moved 8801; 237/04057.txt tick 1840, moved 1841): spam.
+  spam(player, "You've broken into a crypt!");
   return true;
 }
 
@@ -387,9 +390,8 @@ function searchCrypt(player, index) {
   if (index === run.tunnel) {
     // rsprox_transcripts/226/01694.txt:169415-169442: a message box (and its mesbox chat line), then on continue the
     // menu "Select an option": "Yeah I'm fearless!" / "No way, that looks scary!".
-    const { DialogueChainBuilder, StatementDialogue, ActionDialogue, ChatType } = pluginApi.core;
+    const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = pluginApi.core;
     const text = "You've found a hidden tunnel, do you want to enter?";
-    player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
     player.getDialogueManager().startDialogues(new DialogueChainBuilder()
       .add(new StatementDialogue(0, text))
       .add(new ActionDialogue(1, { execute: () => pluginApi.sendMultiChatboxPrompt(player, "Select an option",
@@ -536,7 +538,12 @@ class AhrimCombat extends MagicCombatMethod {
   }
 }
 
-function rollRewards(run, runeBonus) {
+/**
+ * The chest's rolls. `boost(itemId)` (a league's boosted drops, "drops:chance" with source
+ * "Barrows") makes an equipment piece that many times as likely: the equipment roll's chance
+ * grows by the remaining pieces' mean boost, and a boosted piece is picked by its weight.
+ */
+function rollRewards(run, runeBonus, boost = null) {
   const potential = Math.min(1000, run.points) + run.killed.length * 2;
   if (potential === 0) return [];
   const equipment = run.killed.flatMap((index) => EQUIPMENT.slice(index * 4, index * 4 + 4));
@@ -546,8 +553,11 @@ function rollRewards(run, runeBonus) {
   const add = (id, amount) => rewards.set(id, (rewards.get(id) ?? 0)
     + (runeBonus && runeIds.includes(id) ? Math.floor(amount * 1.5) : amount));
   for (let i = 0; i <= run.killed.length; i++) {
-    if (equipment.length && randomInt(1, 450 - 58 * run.killed.length) === 1) {
-      const index = randomInt(0, equipment.length - 1);
+    const odds = 450 - 58 * run.killed.length;
+    let index = -1;
+    if (equipment.length) index = boost ? boostedEquipment(equipment, odds, boost)
+      : randomInt(1, odds) === 1 ? randomInt(0, equipment.length - 1) : -1;
+    if (index >= 0) {
       add(equipment.splice(index, 1)[0], 1);
     } else {
       // The table uses a zero-based potential roll; quantities scale with that roll.
@@ -565,6 +575,27 @@ function rollRewards(run, runeBonus) {
     if (!rewards.has(Items.CLUE_SCROLL_ELITE_) && randomInt(1, 200) === 1) add(Items.CLUE_SCROLL_ELITE_, 1);
   }
   return [...rewards].map(([id, amount]) => new Item(id, amount));
+}
+
+/** The remaining equipment piece won on a boosted 1 in `odds` (as rollRewards says), or -1. */
+function boostedEquipment(equipment, odds, boost) {
+  const weights = equipment.map((id) => Math.max(0, boost(id)));
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  if (Math.random() * odds * equipment.length >= total) return -1;
+  let roll = Math.random() * total;
+  for (let i = 0; i < weights.length; i++) if ((roll -= weights[i]) < 0) return i;
+  return weights.length - 1;
+}
+
+/** "drops:chance" for the chest: an item id's multiplier, or null when nothing is boosted. */
+function chestBoost(player) {
+  const rules = [];
+  pluginApi.emitCustomEvent("drops:chance", { player, source: "Barrows", rules });
+  if (rules.length === 0) return null;
+  return (itemId) => {
+    const name = pluginApi.core.ItemDefinition.forId(itemId)?.getName?.() ?? "";
+    return rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
+  };
 }
 
 function showRewards(player, rewards) {
@@ -638,7 +669,7 @@ function searchChest(player, clickType) {
   }
   const diary = { player, diary: "morytania", tier: "hard", complete: false };
   pluginApi.emitCustomEvent("diary:is-complete", diary);
-  const rewards = rollRewards(run, diary.complete === true);
+  const rewards = rollRewards(run, diary.complete === true, chestBoost(player));
   run.chests++;
   run.looted = true;
   for (const item of rewards) {
@@ -800,8 +831,6 @@ function processPlayer({ player }) {
     if (player.getLocation().equals(dig.from) && player.getHitpoints() > 0) {
       cleanupNpcs(player, true);
       player.moveTo(dig.to.clone());
-      // rsprox_transcripts/226/01694.txt:165471 (and every crypt after): spam.
-      spam(player, "You've broken into a crypt!");
     }
   }
   const phase = phaseOf(player);
@@ -909,5 +938,5 @@ module.exports = {
     api.onPlayerLogout(cleanupPlayer);
     api.registerNpcCombatMethodProvider(Npcs.AHRIM_THE_BLIGHTED, AhrimCombat);
   },
-  _test: { searchChest, searchCrypt, chestCount, phaseOf, syncMinimap, processPlayer, dig, useDoor, doorSides, getTunnelMap, getRun, IGNORE_CLIPPING_FLAG },
+  _test: { rollRewards, searchChest, searchCrypt, chestCount, phaseOf, syncMinimap, processPlayer, dig, useDoor, doorSides, getTunnelMap, getRun, IGNORE_CLIPPING_FLAG },
 };

@@ -39,7 +39,7 @@ in `server/plugins/quests/fairytalei/`; the words come from the Wiki transcripts
 Siblings in varp 671: 1804-1806 are the three nature items as 0-based rows of the Wiki's ordered list
 (17-19 = a raw cave eel, edible seaweed, an oyster, 2404; 10-12 = a potato cactus, crushed gem,
 snapdragon, 1001455 tick 1940), cleared to 0 at 90; 1807/1808 (Queen in Nuff's room, the Godfather
-and henchmen) are 0 through stage 10 and 1 from reaching Zanaris at 20 (1255); 1809 is Nuff's first
+and henchmen) are 0 through stage 10; live sets them on reaching Zanaris at 20 (1255), and as they only show there the plugin sets them with stage 20; 1809 is Nuff's first
 meeting, set after her "What do you do around here?" talk (1602).
 
 ## Capture facts

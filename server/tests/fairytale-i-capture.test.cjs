@@ -472,8 +472,17 @@ test("completion after 'Grazie infinite!': the scroll's Queen's secateurs and 'S
   f.player.getInventory().add(new h.core.Item(I.COINS, 40000), false);
   await h.choose(f, "Ok, great.");
   await until(f, "A pleasure doing business with you");
+  await h.continueLine(f);
+  assert.equal(h.shown(f), null, "the sale ends there, with no refusal after it");
   assert.equal(f.player.getInventory().getAmount(I.MAGIC_SECATEURS), 1);
   assert.equal(f.player.getInventory().getAmount(I.COINS), 0);
+  // Before the quest the option is not his to offer (the Wiki guard "If Fairytale Part I has been completed:").
+  const g = h.actor(t, { stage: 0, at: BY_MALIGNIUS, items: [] });
+  g.player.getInventory().add(new h.core.Item(I.COINS, 40000), false);
+  const early = h.spawn(g, N.MALIGNIUS_MORTIFER, MALIGNIUS);
+  await h.talk(g, early);
+  await until(g, "... MORE ...");
+  assert.ok(!h.shown(g).text.includes("About those enchanted secateurs again..."), h.shown(g).text);
 });
 
 test("the dig says 'I can't believe I'm about to do this!' as it starts (2216)", async (t) => {

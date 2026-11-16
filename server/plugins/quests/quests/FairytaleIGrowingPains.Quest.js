@@ -26,8 +26,9 @@
  * Varbits sharing varp 671: 1804-1806 hold the three nature items as indexes 0-30 into the Wiki's
  * ordered list (17-19 named a raw cave eel, edible seaweed and an oyster, FairyTale1 tick 2404; 10-12
  * a potato cactus, crushed gem and snapdragon, 1001455 tick 1940), cleared at completion; 1807 moves
- * the Queen to Nuff's room and 1808 shows the Godfather and his henchmen, both set on reaching Zanaris
- * at stage 20 (1255; still 0 at stage 10); 1809 is Fairy Nuff's first meeting (1602).
+ * the Queen to Nuff's room and 1808 shows the Godfather and his henchmen. Live sets both on reaching
+ * Zanaris at stage 20 (1255; still 0 at stage 10); they only show there, so they follow stage 20 here.
+ * 1809 is Fairy Nuff's first meeting (1602).
  *
  * Gaps (Ours, no source): see docs/quests/fairytale-i-growing-pains/README.md "Not covered".
  */
@@ -160,6 +161,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   const SPADE_ITEM_ID = ItemIdentifiers.SPADE; // 952
   const COINS_ITEM_ID = ItemIdentifiers.COINS;
   const SECATEURS_PRICE = 40000;
+  const SECATEURS_BUY_OPTION = "Ok, great.";
 
   const DRAYNOR_GRAVE_OBJECT_ID = ObjectIdentifiers.GRAVESTONE_8; // 12125 at 3106,3384
   const DRAYNOR_GRAVE_TILE = new Location(3106, 3384, 0);
@@ -288,6 +290,9 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   let quest;
   const draynorDigTasks = new Map();
+  /** Malignius's sale: the purse its three answers read, taken as "Ok, great." is chosen. */
+  const secateursPurse = new WeakMap();
+  const readPurse = (player) => ({ coins: held(player, COINS_ITEM_ID, SECATEURS_PRICE), space: player.getInventory().getFreeSlots() > 0 });
   const Scenes = createFairytaleIScenes(api);
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
@@ -470,13 +475,12 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
       }
       if (text === "If Zogre Flesh Eaters has been completed:") return questIsComplete(player, "zogre_flesh_eaters");
       if (text === "If Zogre Flesh Eaters hasn't been completed:") return !questIsComplete(player, "zogre_flesh_eaters");
-      if (/^If the player has at least 40,000 coins, and enough inventory space:$/.test(text)) {
-        return held(player, COINS_ITEM_ID, SECATEURS_PRICE) && player.getInventory().getFreeSlots() > 0;
-      }
-      if (/^If the player has at least 40,000 coins, but no inventory space:$/.test(text)) {
-        return held(player, COINS_ITEM_ID, SECATEURS_PRICE) && player.getInventory().getFreeSlots() === 0;
-      }
-      if (/^If the player does not have at least 40,000 coins:$/.test(text)) return !held(player, COINS_ITEM_ID, SECATEURS_PRICE);
+      if (text === "If Fairytale Part I has been completed:") return quest.isComplete(player);
+      // The three answers to "Ok, great." are one run: they read the purse as it was when it was said.
+      const purse = secateursPurse.get(player) ?? readPurse(player);
+      if (text === "If the player has at least 40,000 coins, and enough inventory space:") return purse.coins && purse.space;
+      if (text === "If the player has at least 40,000 coins, but no inventory space:") return purse.coins && !purse.space;
+      if (text === "If the player does not have at least 40,000 coins:") return !purse.coins;
       return null;
     }
     if (NATURE_SPIRIT_NPC_IDS.has(npcId)) {
@@ -668,6 +672,10 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   function handleDialogueChoice(event) {
     const { player, npc, npcId, option, definition } = event;
+    if (npcId === MALIGNIUS_NPC_ID) {
+      if (option === SECATEURS_BUY_OPTION) secateursPurse.set(player, readPurse(player));
+      else secateursPurse.delete(player);
+    }
     const own = ownPageFor(npcId, definition);
     if (!own?.options.includes(option)) return;
     // Nuff's first-meeting menu shares the subsequent menu's healing and goodbye branches.

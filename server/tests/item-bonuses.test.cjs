@@ -60,3 +60,17 @@ test("every wearable item with cache stats uses them", () => {
   // The broken Barrows pieces are the only ones set apart (they have no stat params anyway).
   assert.deepEqual(wrong, []);
 });
+
+test("exact master wand keeps cache ten-percent damage and the separately loaded max-Magic requirement", () => {
+  const id = ItemIdentifiers.MASTER_WAND;
+  assert.equal(id, 6914);
+  const cached = CacheDefinitions.getItem(id), definition = ItemDefinition.forId(id);
+  assert.equal(cached.params.get(299), 100);
+  assert.equal(cached.params.get(436), 55, "retained cache metadata is not the inspected equipment gate");
+  assert.equal(definition.hasCacheBonuses(), true);
+  assert.equal(definition.getBonuses()[3], 20);
+  assert.equal(definition.getBonuses()[8], 20);
+  assert.equal(definition.getBonuses()[12], 10, "the generated fallback zero cannot replace cache stats");
+  assert.equal(definition.getRequirements()[6], 60, "current canonical equipment gate uses loaded requirements");
+  assert.equal(definition.getWeaponInterface(), require("../dist/game/content/combat/WeaponInterfaces").WeaponInterfaces.STAFF);
+});

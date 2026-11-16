@@ -1471,3 +1471,50 @@ Iban Blast retains Magic50, members, five Fire and one Death rune, base30Magic X
 Magic Dart retains members/Magic50/currentSlayer55, four Mind and one Death, base30Magic XP and the actual current-Magic maximum10+floor(Magic/10). Plain Slayer's staff has no enchanted-task charge/bonus route. Its native equip requirement uses base Magic50/Slayer55, independently of the current Slayer cast gate. Existing selectors are Iban47 and Dart18 in current cache enum1986 (17 is Crumble Undead). The plain Slayer list permits Dart/Crumble/Wave/Surge, so its support does not imply every elemental autocast.
 
 Canonical inventory/pouch and elemental tome supply/payment remain authoritative. Fire tome can supply Iban's Fire runes without an elemental damage boost or tome charge consumption; neither spell gains an elemental tome bonus. UI equipment icons are not consumed runes. Unsupported spell/weapon/mode/book, missing resources, actual skill/charge gates and participation restrictions still refuse before payment. Participation changes discard queued hits without restoring spent runes or Iban charges. Supplied positions, ticks, accuracy/max and damage branches are controlled fixture proof, not natural-probability, rendered-client, full-F2P-world, full-quest or global-startup proof. No direct retail Iban/Dart cast or final-one-charge PvP recording was established by the bounded qualification search.
+
+### Exact master wand in Standard
+
+Standard additionally accepts **only Master wand 6914**, with the existing
+empty-offhand or elemental-tome boundary. The supported spell set remains34.
+The wand may manually cast the existing20 elemental and9 curse/binding spells
+and use its existing normal elemental autocast selection. Canonical matching-staff
+gates still prevent its use for the three gods, Iban Blast and Magic Dart; gods
+remain manual-only. This is a finite TSPS equipment-support addition, not a retail
+ban or permission for every wand. LMS20560, note6915, placeholder18598, other
+wands/staves, Kodai, other books/modes, utilities and magical specials remain
+outside this addition. Existing Ancient/Arceuus wand capability outside this
+battle policy is unchanged. Acquisition, MTA reward spending and upgrades are
+not implemented or proved here.
+
+[Master wand revision15403014](https://oldschool.runescape.wiki/w/Master_wand?oldid=15403014)
+and [Autocast revision15379930](https://oldschool.runescape.wiki/w/Autocast?oldid=15379930)
+support members/one-handed/no quest, Magic60, +20 magic attack/defence and +10%
+magic damage. The actual cache242 object is `magictraining_wand_master`6914;
+param299=100 hydrates a10% bonus through ItemDefinition. The definition loader
+preserves cache bonuses instead of replacing them with the generated fallback
+zero. BonusManager and the canonical damage formula remain unchanged. No
+item-data repair, bonus override or generated JSON edit is part of this work.
+
+The current native equipment gate reads the loaded requirement array against
+base/max Magic60, independently of current spell-level requirements. Raw cache
+metadata434/436 also contains Magic/55; that literal is retained and disclosed,
+but the inspected equipment gate does not read it. This addition preserves the
+current60 gate and does not certify retail55 or repair requirements. With no
+other gear/prayer modifiers, the real10% gives player-target Fire Wave maximum22
+versus20 with a plain staff. The wand supplies no elemental runes. Inventory,
+pouch, tome supply/charge, member, book, mode and participation gates remain
+canonical; paid resources are not refunded by queue disposal.
+
+The proposed existing native fixture extension is initially unrun: exact cache
+stats/loaded gate, native Wield and manual/selector/ordinary Attack, outside paid
+controls and battle plain-staff positive before the missing-admission target,
+real payment/context/hit/resolution/rune/XP/HP, max/current levels, excluded
+aliases/unwearable objects, source-aware pouch/tome audits, gear bonus removal
+and restoration, lifecycle disposal and safe rejoin. Forfeit uses the existing
+mapped object dispatcher with an explicitly held impact window and restoration
+in finally; this is not an encoded object-click or natural flight-time proof.
+The captured F2P equip hook is not a full F2P loader, and the departed outsider
+is not a co-location/range or sole-cause test. Positions, actors/levels, ticks
+and accuracy/max are controlled. No candidate runtime, rendered client, natural
+probability, full quest/acquisition or global-startup result follows from source
+registration. Prior5938's1457 passes belong only to its own tested head/job.

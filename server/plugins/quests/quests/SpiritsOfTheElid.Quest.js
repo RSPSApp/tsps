@@ -765,7 +765,8 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
         player.sendMessage("You need a rope to climb down here.");
         return;
       }
-      player.getInventory().deleteNumber(ROPE_ITEM_ID, 1);
+      // Live keeps the rope: no inventory update follows the descent, and rsprox 231/03019
+      // uses the same rope on the root three times with no packet in between.
       ensureDungeonExit();
       playRopeDescent(player);
       player.sendMessage("You tie the rope to the root and climb down into the cave.");

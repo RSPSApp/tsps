@@ -114,10 +114,10 @@ test('control: adjacent and distant clicks keep the ordinary walk (no destinatio
   assert.equal(h.route(new Location(3371, 3120, 0)).destination, null, 'twelve tiles off: walk as before');
 });
 
-test('behaviour: using the rope on the root still descends from the bank', () => {
+test('behaviour: using the rope on the root descends from the bank and keeps the rope', () => {
   const h = setup();
   const event = h.useRope();
   assert.equal(event.handled, true);
-  assert.equal(h.inventory.get(ROPE) ?? 0, 0, 'the rope is taken');
+  assert.equal(h.inventory.get(ROPE) ?? 0, 1, 'the rope is kept, as live does');
   assert.equal(h.messages.at(-1), 'You tie the rope to the root and climb down into the cave.');
 });

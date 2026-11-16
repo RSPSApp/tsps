@@ -42,7 +42,7 @@ export async function fetchContent(path: string): Promise<any> {
 
 /** Login art is available from the selected world before an authenticated game session. */
 export async function fetchClientBackground(signal: AbortSignal): Promise<string | undefined> {
-    const path = "/api/client-background";
+    const path = "/api/login-screen";
     if (!await resolveServerTransport() || signal.aborted) return;
     if (state.webRtcConfig) {
         const socket = new WebRtcGameSocket(state.webRtcConfig);

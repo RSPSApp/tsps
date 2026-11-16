@@ -448,14 +448,31 @@ test('// reaches everyone in the channel as type 41 with the clan as prefix, exc
   assert.equal(chatText(ignorer).length, 0);
 });
 
-test('// outside a channel is refused, and a guest clan type is not ours yet', () => {
+test('a clan line never starts with "|", which marks a Group Ironman group\'s line', () => {
+  const owner = player('Owner');
+  const member = player('Member');
+  createClan(owner);
+  addMember(owner, member);
+  const before = chatText(member).length;
+  say(owner, '|| hi');
+  assert.deepEqual(chatText(member).slice(before), [protocol
+    .encodeChatMessage('clan', 'hi', 'Owner', 'Blur', owner.getIndex(), 41)
+    .toString('latin1')]);
+  say(owner, '|');
+  assert.equal(chatText(member).length, before + 1, 'nothing left to say');
+});
+
+test('// outside a channel is refused, and another clan type is left to its own content', () => {
   const self = player('Solo');
   say(self, 'hello');
   assert.deepEqual(self.notices, [[43, 'You are not currently in a clan channel.']]);
   const owner = player('Owner');
   createClan(owner);
-  const event = say(owner, 'hello', 255);
-  assert.equal(event.handled, true);
+  // Clan type 1 is a Group Ironman's group chat (GroupIronman.plugin.js), so Clans takes only its own.
+  for (const clanType of [1, 255]) {
+    const event = say(owner, 'hello', clanType);
+    assert.equal(event.handled, false);
+  }
   assert.equal(chatText(owner).length, 0);
 });
 
@@ -598,8 +615,11 @@ test('naming sets the button, and refuses a taken or bad name', () => {
   assert.deepEqual(founder.messages, ['That name is taken.']);
   nameClan(founder, 'bad<name>');
   assert.match(founder.messages.at(-1), /letters, numbers and spaces/);
+  // Unnamed, the button gets the init's own label: %clan_create_name outlives a panel (a Group
+  // Ironman group's sets it too), and the init draws it.
+  assert.deepEqual(founder.scripts.find((script) => script[0] === 4447), [4447, 705 << 16, (705 << 16) | 8, 3824, '<col=ff981f>Clan name</col>']);
   nameClan(founder, 'Fresh');
-  assert.deepEqual(founder.scripts.find((script) => script[0] === 4447), [4447, 705 << 16, (705 << 16) | 8, 3824, 'Fresh']);
+  assert.deepEqual(founder.scripts.filter((script) => script[0] === 4447).at(-1), [4447, 705 << 16, (705 << 16) | 8, 3824, 'Fresh']);
 });
 
 test('Confirm needs a name, five founders and 25 hours each', () => {
@@ -1890,7 +1910,7 @@ test('an Ironman can\'t withdraw either', () => {
   hooks.objects['Clan Coffer'].Use({ player: owner });
   owner.ironman = 'ultimate';
   clickGroup(owner, 696, 12);
-  assert.match(owner.messages.at(-1), /Ironmen can't withdraw/);
+  assert.equal(owner.messages.at(-1), "As an Ironman, you can't take the Clan's money.");
   assert.equal(clan.coffer, 1000);
   assert.equal(held.coins, 0);
 });
@@ -2175,7 +2195,7 @@ test('an Ironman can\'t deposit, and no transaction moves over 50m', () => {
   hooks.objects['Clan Coffer'].Use({ player: owner });
   owner.ironman = 'ironman';
   clickGroup(owner, 697, 10);
-  assert.match(owner.messages.at(-1), /Ironmen can't deposit/);
+  assert.equal(owner.messages.at(-1), "As an Ironman, you can't share your money like that.");
   assert.equal(clan.coffer ?? 0, 0);
   owner.ironman = 'none';
   clickGroup(owner, 697, 10);

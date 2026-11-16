@@ -1759,6 +1759,7 @@ export interface PluginCoreApi {
   GameConstants: any;
   Music: any;
   WorldDefinition: any;
+  ExaminePrice: typeof import("../game/content/ExaminePrice");
   TeleportHandler: any;
   TeleportType: any;
   DialogueChainBuilder: any;

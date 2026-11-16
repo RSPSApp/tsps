@@ -858,6 +858,13 @@ test('banking is refused inside a dream and allowed outside it', () => {
   Dream.wake({ player: p });
 });
 
+test("a leaver who stays a ranked Group Ironman loses the coins in the coffer (Wiki)", () => {
+  const p = fakePlayer();
+  Common.setCoffer(p, 5000);
+  hooks.events["group-ironman:wipe-tradeables"]({ player: p });
+  assert.equal(Common.coffer(p), 0);
+});
+
 test('the Hard Combat Achievement rewards halve imbue prices, as the cache script 275 shows them (script6931(3))', (t) => {
   const tiers = { Easy: 2, Medium: 2, Hard: 2 };
   const answer = (request) => {

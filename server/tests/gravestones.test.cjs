@@ -464,6 +464,23 @@ test("logging in with items in Death's Office warns by default, unless the login
   assert.equal(login(player), false);
 });
 
+test("a ranked Group Ironman leaver loses what Death's Office holds that they lose (an Item Retrieval Service, Wiki)", () => {
+  const player = account("leaver", "group");
+  player.setAttribute("gravestones:office", [
+    { id: ABYSSAL_WHIP, amount: 1 },
+    { id: COINS, amount: 5000 },
+    { id: RANGER_BOOTS, amount: 1 },
+  ]);
+  // The Group Ironman plugin decides what is lost; here the whip and the coins are, the boots aren't.
+  const lost = (id) => id === ABYSSAL_WHIP || id === COINS;
+  custom["group-ironman:wipe-tradeables"]({ player, lost });
+  const query = { player };
+  custom["gravestones:state"](query);
+  assert.deepEqual(query.office.map((entry) => entry?.id ?? null), [null, null, RANGER_BOOTS]);
+  custom["group-ironman:wipe-tradeables"]({ player });
+  assert.equal(player.getAttribute("gravestones:office").length, 3, "without the test nothing goes");
+});
+
 // A death in a private area puts the grave at the player's respawn point (RespawnPoints.plugin.js answers), the
 // world's spawn without one.
 test("a private-area death puts the grave at the player's own respawn point", () => {

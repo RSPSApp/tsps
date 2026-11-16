@@ -21,6 +21,10 @@
  *   1 angel); a standing grave changes at once.
  * - `gravestones:met-death` { player }: the player has met Death.
  * - `gravestones:tutorial-end` { player }: the first-death tutorial is over; the timer starts.
+ * - `group-ironman:wipe-tradeables` { player, lost(id, amount) }: a leaver who stays a ranked
+ *   Group Ironman loses what Death's Office holds that they lose (Wiki, Group Ironman Mode:
+ *   "Items in an Item Retrieval Service"). A standing grave is left: it lasts minutes, the leaving
+ *   choice comes after a week.
  * Emitted: `gravestones:first-grave` { player, accepted } when a player who hasn't met Death gets
  * a grave; `gravestones:grave-location` { player, location, tile } for an instance to say where
  * its deaths' graves go.
@@ -88,6 +92,19 @@ function officeTake(request) {
   request.taken = taken;
 }
 
+function wipeForGroupIronman({ player, lost }) {
+  if (typeof lost !== "function") return;
+  const records = Storage.office(player);
+  let wiped = false;
+  records.forEach((entry, slot) => {
+    if (entry && lost(entry.id, entry.amount)) {
+      records[slot] = null;
+      wiped = true;
+    }
+  });
+  if (wiped) Storage.setOffice(player, records);
+}
+
 function cofferAdjust(request) {
   const next = Storage.coffer(request.player) + Math.trunc(request.amount);
   request.ok = next >= 0 && next <= Common.MAX_STACK;
@@ -123,6 +140,7 @@ function attach(api) {
   api.onCustomEvent("gravestones:set-style", setStyle);
   api.onCustomEvent("gravestones:met-death", metDeath);
   api.onCustomEvent("gravestones:tutorial-end", tutorialEnd);
+  api.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
 }
 
-module.exports = { attach };
+module.exports = { attach, wipeForGroupIronman };

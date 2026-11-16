@@ -504,7 +504,6 @@ test('A Standard34 names exact apprentice wand without extending other wand or m
   }
 });
 
-
 test('BW Standard34 names exact beginner wand without extending other wand or mode boundaries',()=>{
   for(const magic of [1,2,3,4])for(const specialattacks of [0,1,2]){
     const rules={...Rules.create(2,1),magic,specialattacks},text=Rules.summary(rules);

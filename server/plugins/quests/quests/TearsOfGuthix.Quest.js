@@ -100,15 +100,15 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   /** South of this y is the magical-rock shelf; north of it is the Juna-side ledge. */
   const CHASM_MIDDLE_Y = 9515;
   /**
-   * rsprox 242/911949: the creature answers at tick 19492, float-up (2046) is seven ticks later,
-   * the player glides across one tile per tick and float-down (2047) lands 28 ticks after the
-   * float-up. `tog_player_float_across` (2048) covers the glide.
+   * rsprox 242/911949: the answer at tick 19492, float-up (2046) at 19499 and float-down (2047)
+   * at 19527; 242/912056 waits six ticks instead. The float lasts max(|dx|,|dy|) + 5 ticks (28
+   * from y 9527, 30 from y 9529). The force-movement animation is left 0 so the 2046/2047 pose
+   * is what the client receives.
    */
   const TOG_FLOAT_DELAY_TICKS = 7;
   const TOG_FLOAT_UP_ANIMATION = 2046;
-  const TOG_FLOAT_ACROSS_ANIMATION = 2048;
   const TOG_FLOAT_DOWN_ANIMATION = 2047;
-  const TOG_FLOAT_TICKS = 28;
+  const TOG_FLOAT_POSE_TICKS = 5;
   const ATTRACT_MESSAGE = "The light creature is attracted to your beam and comes towards you...";
   const NO_LANTERN_MESSAGE = "You don't have anything to attract the light creature with.";
 
@@ -125,6 +125,8 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   const SIDE_HAZEEL = 1;
 
   let quest;
+  /** Players with a crossing already waiting or in flight, so a second click does not chain one. */
+  const crossings = new WeakSet();
 
   const has = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
 
@@ -362,30 +364,36 @@ module.exports = function registerTearsOfGuthixQuest(api) {
       player.sendMessage(NO_LANTERN_MESSAGE);
       return true;
     }
+    if (crossings.has(player)) return true;
+    crossings.add(player);
     const southSide = player.getLocation().getY() <= CHASM_MIDDLE_Y;
     const destination = southSide ? JUNA_SIDE_LANDING : ROCK_SIDE_LANDING;
     const start = player.getLocation().clone();
     player.sendMessage(ATTRACT_MESSAGE);
-    // The creature approaches for seven ticks, then the player floats up and glides across;
-    // a player who walked away before the float is left alone.
+    // The creature approaches for six or seven ticks, then the player floats up and glides
+    // across; a player who walked away before the float is left alone.
     TaskManager.submit(new (class extends Task {
       constructor() { super(TOG_FLOAT_DELAY_TICKS, player, false); }
       execute() {
         this.stop();
-        if (!player.getLocation().equals(start)) return;
+        if (!player.getLocation().equals(start)) {
+          crossings.delete(player);
+          return;
+        }
         player.performAnimation(new Animation(TOG_FLOAT_UP_ANIMATION));
         const from = player.getLocation().clone();
         const dx = destination[0] - from.getX();
         const dy = destination[1] - from.getY();
+        const floatTicks = Math.max(Math.abs(dx), Math.abs(dy)) + TOG_FLOAT_POSE_TICKS;
         const direction = Math.abs(dx) > Math.abs(dy) ? dx > 0 ? 1 : 3 : dy > 0 ? 0 : 2;
-        TaskManager.submit(new ForceMovementTask(player, TOG_FLOAT_TICKS,
-          new ForceMovement(from, new Location(dx, dy), 0, TOG_FLOAT_TICKS * 30, direction,
-            TOG_FLOAT_ACROSS_ANIMATION)));
+        TaskManager.submit(new ForceMovementTask(player, floatTicks,
+          new ForceMovement(from, new Location(dx, dy), 0, floatTicks * 30, direction, 0)));
         TaskManager.submit(new (class extends Task {
-          constructor() { super(TOG_FLOAT_TICKS, player, false); }
+          constructor() { super(floatTicks, player, false); }
           execute() {
             this.stop();
             player.performAnimation(new Animation(TOG_FLOAT_DOWN_ANIMATION));
+            crossings.delete(player);
           }
         })());
       }
@@ -491,6 +499,10 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     refreshQuestList(player);
   }
 
+  function handleLogout({ player }) {
+    crossings.delete(player);
+  }
+
   quest = registerQuest(api, {
     key: "tears_of_guthix",
     name: "Tears of Guthix",
@@ -519,4 +531,5 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   api.onObjectInteraction(JUNA_LOC_NAME, { "Talk-to": talkToJuna });
   api.onObjectInteraction("Magical rocks", { Mine: mineMagicStone });
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
 };

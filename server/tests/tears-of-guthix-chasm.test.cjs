@@ -104,7 +104,7 @@ test("the lantern reaches a Chasm light creature and carries the player to the m
   tickTasks(7);
   assert.equal(p.getLocation().getX(), 3234, "the seven-tick approach leaves the player on the ledge");
   assert.equal(p.getAnimation().getId(), 2046, "the player floats up after the creature arrives");
-  tickTasks(28);
+  tickTasks(26); // max(|dx|, |dy|) + 5 from 3234,9525
   assert.equal(p.getLocation().getX(), 3224);
   assert.equal(p.getLocation().getY(), 9504);
   assert.equal(p.getAnimation().getId(), 2047, "the player floats down on the far shelf");
@@ -125,7 +125,7 @@ test("the Attract option works from the ledge and a creature outside the chasm i
   tickTasks(7);
   assert.equal(p.getLocation().getX(), 3234, "the creature approaches before the float");
   assert.equal(p.getAnimation().getId(), 2046);
-  tickTasks(28);
+  tickTasks(26);
   assert.equal(p.getLocation().getX(), 3224);
   assert.equal(p.getLocation().getY(), 9504);
 
@@ -142,16 +142,35 @@ test("the Attract option works from the ledge and a creature outside the chasm i
   const south = player(t, "togattract3", 3226, 9510);
   south.p.getInventory().adds(LIT_LANTERN, 1);
   assert.equal(PM.emitNpcInteraction(npcEvent(south.p, creature(3226, 9518))), true);
-  tickTasks(7 + 28);
+  tickTasks(7 + 25); // max(|dx|, |dy|) + 5 from 3226,9510
   assert.equal(south.p.getLocation().getX(), 3224);
   assert.equal(south.p.getLocation().getY(), 9530, "the south side crosses back to the north edge");
 });
 
+test("a second Attract during the approach does not chain a second crossing", (t) => {
+  const { p, messages } = player(t, "togdouble1", 3234, 9525);
+  p.getInventory().adds(LIT_LANTERN, 1);
+  const npc = creature(3226, 9518);
+  assert.equal(PM.emitNpcInteraction(npcEvent(p, npc)), true);
+  tickTasks(3);
+  assert.equal(PM.emitNpcInteraction(npcEvent(p, npc)), true, "the second click is consumed");
+  assert.equal(messages.filter((text) => text.includes("attracted to your beam")).length, 1,
+    "only the first click prints the attract line");
+  tickTasks(4); // the first chain floats up at tick 7
+  assert.equal(p.getAnimation().getId(), 2046);
+  tickTasks(26);
+  assert.equal(p.getLocation().getX(), 3224);
+  assert.equal(p.getLocation().getY(), 9504);
+  assert.equal(p.getAnimation().getId(), 2047);
+  tickTasks(3);
+  assert.equal(p.getLocation().getX(), 3224, "no second landing follows");
+});
+
 test("both chasm rocks climb one tile over the slope instead of teleporting to the north ledge", (t) => {
-  const { p } = player(t, "togrocks1", 3238, 9498);
-  assert.equal(climb(p, 3239, 9498, ROCK_SOUTH), true);
+  const { p } = player(t, "togrocks1", 3238, 9499);
+  assert.equal(climb(p, 3239, 9499, ROCK_SOUTH), true);
   assert.equal(p.getLocation().getX(), 3240, "south rocks step east, not to 3241,9525");
-  assert.equal(p.getLocation().getY(), 9498);
+  assert.equal(p.getLocation().getY(), 9499);
 
   const north = player(t, "togrocks2", 3241, 9524).p;
   assert.equal(climb(north, 3240, 9524, ROCK_NORTH), true);

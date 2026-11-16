@@ -112,6 +112,7 @@ class FishingTool {
    * variants: items that count as this tool, best first, each with a level and catch bonus.
    * bait: any one of these is used up per catch. worn: one must be equipped.
    * quest: required once that quest is implemented here.
+   * unlock: training permission answered by content through "fishing:unlocked"; unanswered means locked.
    * interval: ticks between attempts, or a function giving them. unboostable: the level must be the real one.
    * spot: a module that moves its own spots and can take over a catch (minnows' flying fish).
    * vessel: a module holding the bait in the tool itself, used up by every attempt (karambwan).
@@ -129,6 +130,7 @@ class FishingTool {
    */
   constructor({
     id, level, animation, loopAnimation = animation, catchAnimation = null, fish, variants, bait = [], worn = [], quest = null, multi = false,
+    unlock = null, unlockMessage = "You need to learn this fishing method before you can fish here.",
     requires = [], interval = FISHING_ACTION_INTERVAL_TICKS, firstRoll = null, animateOnRoll = true, unboostable = false, spot = null,
     vessel = null, stationary = false, startMessage = "You begin to fish..", followMessage = null, missMessage = null,
     noToolStatement = null, noBaitStatement = null, noToolMessage = null, levelStatement = null, table = null, barehand = false, clueBase = null,
@@ -143,6 +145,8 @@ class FishingTool {
     this.bait = bait;
     this.worn = worn;
     this.quest = quest;
+    this.unlock = unlock;
+    this.unlockMessage = unlockMessage;
     this.multi = multi;
     this.requires = requires;
     this.interval = interval;
@@ -422,7 +426,8 @@ const TOOLS = Object.freeze({
     fish: [FISH.LEAPING_STURGEON, FISH.LEAPING_SALMON, FISH.LEAPING_TROUT], variants: BARBARIAN_RODS,
     // Wiki: Barbarian rod. Any of these baits the rod.
     bait: [ItemIds.FISHING_BAIT, ItemIds.FEATHER, ItemIds.FISH_OFFCUTS, ItemIds.ROE, ItemIds.CAVIAR],
-    quest: "Barbarian Training", requires: FISH.LEAPING_TROUT.requires,
+    unlock: "barbarian_rod", requires: FISH.LEAPING_TROUT.requires,
+    unlockMessage: "You need to speak to Otto Godblessed about fishing with a barbarian rod first.",
     startMessage: CAST_AND_ATTEMPT, noBaitStatement: NO_BARBARIAN_BAIT,
   }),
   // Holy Lake: karambwanji first, else shrimps (Wiki: Fishing spot (karambwanji); captures 75 and
@@ -690,6 +695,15 @@ function hasToolRequirements(player, tool) {
   if (tool.quest && !questAllows(player, tool.quest)) {
     player.sendMessage(`You need to complete ${tool.quest} to fish here.`);
     return null;
+  }
+
+  if (tool.unlock) {
+    const request = { player, unlock: tool.unlock, allowed: null };
+    pluginApi?.emitCustomEvent("fishing:unlocked", request);
+    if (request.allowed !== true) {
+      player.sendMessage(tool.unlockMessage);
+      return null;
+    }
   }
 
   const variant = findTool(player, tool);

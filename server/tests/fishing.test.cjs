@@ -148,7 +148,8 @@ test("fishing spots, catch chances and the catch cascade follow OSRS", async () 
   const tooWeak = player({ fishing: 99, levels: { Strength: 14 }, inventory: [I.BARBARIAN_ROD, I.FEATHER] });
   assert.equal(hasToolRequirements(tooWeak, TOOLS.BARBARIAN_ROD), null);
   assert.match(tooWeak.messages[0], /Strength level of at least 15/);
-  assert.ok(hasToolRequirements(player({ inventory: [I.BARBARIAN_ROD, I.FISH_OFFCUTS] }), TOOLS.BARBARIAN_ROD));
+  assert.equal(hasToolRequirements(player({ inventory: [I.BARBARIAN_ROD, I.FISH_OFFCUTS] }), TOOLS.BARBARIAN_ROD), null,
+    "rod permission fails closed without its training owner, including on free worlds");
   assert.deepEqual(FISH.LEAPING_STURGEON.extraXp, [[Skill.STRENGTH, 7], [Skill.AGILITY, 7]]);
 
   // Infernal eels need ice gloves worn; dark crabs need dark fishing bait.

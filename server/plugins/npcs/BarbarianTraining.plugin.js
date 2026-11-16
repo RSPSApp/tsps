@@ -125,6 +125,12 @@ function answerUnlock(request) {
   request.allowed = when === "started" ? herblore >= TASKED : herblore === TOLD;
 }
 
+/** Rod fishing starts with the instruction, before catching a fish or completing other sections. */
+function answerFishingUnlock(request) {
+  if (!request?.player || request.unlock !== "barbarian_rod") return;
+  request.allowed = state(request.player).fishingRod >= TASKED;
+}
+
 /** "fishing:barehand-unlocked": barehanded fishing once Otto has set the harpoon section. */
 function answerBarehand(request) {
   if (!request?.player) return;
@@ -341,8 +347,19 @@ function harpoonDone(player, talk) {
 }
 
 function rodLesson(player, talk) {
-  const tasked = state(player).fishingRod === TASKED;
-  if (lesson(player, talk, tasked ? TRANSCRIPT.again : TRANSCRIPT.first, TOPIC.rod) && !tasked) setStage(player, "fishingRod", TASKED);
+  if (state(player).fishingRod >= TASKED) { lesson(player, talk, TRANSCRIPT.again, TOPIC.rod); return; }
+  const lines = topicLines(player, talk.npc, talk.npcId, TRANSCRIPT.first, TOPIC.rod);
+  const finalReply = lines[lines.length - 1];
+  if (!near(player, talk.npc) || lines.length < 2 || !finalReply?.npc) {
+    player.getPacketSender().sendInterfaceRemoval();
+    return;
+  }
+  // rsprox 237/01149 tick 8766: brut_fishing_r becomes 1 as Otto's final reply begins.
+  play(player, talk.npcId, lines.slice(0, -1), () => {
+    if (!near(player, talk.npc)) { player.getPacketSender().sendInterfaceRemoval(); return; }
+    if (state(player).fishingRod < TASKED) setStage(player, "fishingRod", TASKED);
+    play(player, talk.npcId, [finalReply], () => afterTopic(player, talk));
+  });
 }
 
 function rodDone(player, talk) {
@@ -435,6 +452,7 @@ function attach(pluginApi) {
   api.onCustomEvent("barbarian-pyre:built", builtPyre);
   api.onObjectInteraction(BED, { Search: searchBed });
   api.onCustomEvent("fishing:success", caughtFish);
+  api.onCustomEvent("fishing:unlocked", answerFishingUnlock);
   api.onCustomEvent("herblore:made", madePotion);
   api.onCustomEvent("herblore:unlocked", answerUnlock);
   api.onCustomEvent("fishing:barehand-unlocked", answerBarehand);

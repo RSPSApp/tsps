@@ -1564,3 +1564,38 @@ positions/levels/ticks/accuracy/max-hit checkpoints, not natural probability,
 encoded object-click, full F2P loader, acquisition, client or global-startup proof.
 Source registration alone establishes no runtime outcome. Earlier revision/run
 results retain their original attribution; no passes transfer to this source.
+
+### Exact beginner wand in Standard
+
+Standard additionally accepts **only Beginner wand 6908**, with the existing
+empty-offhand or elemental-tome boundary. The finite34-spell set,29 generic manual
+spells and20 eligible Normal elemental autocasts are unchanged. Canonical five
+matching-staff gates and manual-only god policy remain authoritative. Existing
+Master6914 and Apprentice6910 admission is preserved. This adds one exact identity,
+not the whole wand family: LMS20553, note6909, placeholder18595, Teacher6912 and
+other unadmitted weapons/books/modes/selectors, utilities and magical specials
+remain outside this addition. MTA acquisition, point spending, upgrades and any
+equipment/data/parser/core repair are out of scope.
+
+[Beginner wand revision15182892](https://oldschool.runescape.wiki/w/Beginner_wand?oldid=15182892)
+identifies a members, one-handed staff with no quest requirement, Magic45,
++5 Magic attack/defence and no Magic damage bonus. The actual cache242 object
+`magictraining_wand_beg`6908 has params3=5/8=5 and no299. Existing ItemDefinition
+cache hydration, loader, BonusManager and the canonical damage formula remain
+the producers. Loaded max/base Magic45 agrees with the primary source,
+independently of current spell-level requirements. Without other gear/prayer
+modifiers, player-target Fire Wave remains maximum20, the same as a plain staff.
+The wand supplies no elemental runes; actual offhand bonuses and inventory,
+pouch and tome supply/charges remain canonical.
+
+The implemented native fixture extension covers cache/loaded/worn identity,
+native Wield/manual/Normal selector/ordinary Attack repeats, outside paid
+controls and a plain-staff battle positive, real payment/context/PendingHit,
+resolution/runes/HP/XP, max44/45 equip versus current spell levels, exclusions,
+refusals/gear restoration and safe lifecycle disposal/rejoin. Forfeit uses the
+actual mapped dispatcher with a held impact window and prior-flag restoration
+in finally. These are controlled positions/levels/ticks/accuracy/max-hit
+checkpoints, not natural probability, encoded object-click, full F2P loader,
+acquisition, client or global-startup proof. Source registration alone establishes
+no runtime outcome. Earlier revision/run results retain their original attribution;
+no passes transfer to this source.

@@ -82,6 +82,7 @@ class BotBrain {
     this.chooseNext = typeof options.chooseNext === "function" ? options.chooseNext : null;
     // A paused brain does nothing at all (a bot in a trade must not walk off or close it).
     this.paused = false;
+    this.stopped = false;
     // Optional human pacing (AI bots): { actionPauseMs, activityPauseMs, walkPauseChance,
     // walkPauseMs, dropsPerTick }, each range [min, max]. Without it a bot acts every tick.
     this.pacing = options.pacing ?? null;
@@ -193,6 +194,7 @@ class BotBrain {
   /** Drops everything the brain is doing and starts `activity` as its root. */
   replaceRoot(activity, nowMs = Date.now()) {
     this.reset();
+    this.stopped = false;
     this.rootActivityId = activity.id;
     this.pushRoot(activity, nowMs);
   }
@@ -341,6 +343,10 @@ class BotBrain {
     }
     if (this.ephemeral) {
       this.onExhausted?.();
+      return;
+    }
+    if (behaviour.oneShot === true) {
+      this.stopped = true;
       return;
     }
     this.assignNext(nowMs);
@@ -512,7 +518,7 @@ class BotBrain {
     const frame = this.frames[this.frames.length - 1];
     this.debugTick(frame);
     if (!frame) {
-      if (!this.ephemeral) {
+      if (!this.ephemeral && !this.stopped) {
         this.assignNext(nowMs);
       }
       return "running";

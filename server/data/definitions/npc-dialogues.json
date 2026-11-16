@@ -665047,7 +665047,7 @@
                                         {
                                           "type": "line",
                                           "speaker": "Trufitus",
-                                          "text": "I can only guide you so far as the herbs are not easy to find. With some luck, you will find each herb in turn and bring to me. I will give you details of where to find the next herb.",
+                                          "text": "I can only guide you so far as the herbs are not easy to find. With some luck, you will find each herb in turn and bring it to me. I will then give you details of where to find the next herb.",
                                           "speaker_ids": [
                                             4625
                                           ]
@@ -665089,7 +665089,7 @@
                                                 {
                                                   "type": "line",
                                                   "speaker": "Trufitus",
-                                                  "text": "It grows near the vines in an area to the south west where",
+                                                  "text": "It grows near vines in an area to the south west where",
                                                   "speaker_ids": [
                                                     4625
                                                   ]
@@ -665110,7 +665110,7 @@
                                               "text": "No.",
                                               "steps": [
                                                 {
-                                                  "player": "Hmmm, sounds difficult, I don't know if I am ready for the challenge."
+                                                  "player": "Hmm, sounds difficult, I don't know if I am ready for the challenge."
                                                 },
                                                 {
                                                   "type": "line",
@@ -665277,7 +665277,7 @@
                                   "steps": [
                                     {
                                       "type": "call",
-                                      "branch": "jump-9ec9364c25f6577d"
+                                      "branch": "jump-b3cf669433e27cb5"
                                     }
                                   ]
                                 }
@@ -666050,7 +666050,7 @@
       ]
     },
     "branches": {
-      "jump-9ec9364c25f6577d": [
+      "jump-b3cf669433e27cb5": [
         {
           "player": "Me? How can I help?"
         },
@@ -666065,7 +666065,7 @@
         {
           "type": "line",
           "speaker": "Trufitus",
-          "text": "I can only guide you so far as the herbs are not easy to find. With some luck, you will find each herb in turn and bring to me. I will give you details of where to find the next herb.",
+          "text": "I can only guide you so far as the herbs are not easy to find. With some luck, you will find each herb in turn and bring it to me. I will then give you details of where to find the next herb.",
           "speaker_ids": [
             4625
           ]
@@ -666107,7 +666107,7 @@
                 {
                   "type": "line",
                   "speaker": "Trufitus",
-                  "text": "It grows near the vines in an area to the south west where",
+                  "text": "It grows near vines in an area to the south west where",
                   "speaker_ids": [
                     4625
                   ]
@@ -666131,7 +666131,7 @@
               "text": "No.",
               "steps": [
                 {
-                  "player": "Hmmm, sounds difficult, I don't know if I am ready for the challenge."
+                  "player": "Hmm, sounds difficult, I don't know if I am ready for the challenge."
                 },
                 {
                   "type": "line",
@@ -666213,7 +666213,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-9ec9364c25f6577d"
+                      "branch": "jump-b3cf669433e27cb5"
                     }
                   ]
                 }
@@ -1487447,7 +1487447,7 @@
                                           "npc": "I need to make a special brew! A potion that helps me to commune with the gods. For this potion, I need very special herbs, that are only found in the deep jungle."
                                         },
                                         {
-                                          "npc": "I can only guide you so far as the herbs are not easy to find. With some luck, you will find each herb in turn and bring to me. I will give you details of where to find the next herb."
+                                          "npc": "I can only guide you so far as the herbs are not easy to find. With some luck, you will find each herb in turn and bring it to me. I will then give you details of where to find the next herb."
                                         },
                                         {
                                           "npc": "In return for this great favour I will give you training in Herblore."
@@ -1487469,7 +1487469,7 @@
                                                   "npc": "Snake Weed."
                                                 },
                                                 {
-                                                  "npc": "It grows near the vines in an area to the south west where"
+                                                  "npc": "It grows near vines in an area to the south west where"
                                                 },
                                                 {
                                                   "npc": "the ground turns soft and the water kisses your feet."
@@ -1487482,7 +1487482,7 @@
                                               "text": "No.",
                                               "steps": [
                                                 {
-                                                  "player": "Hmmm, sounds difficult, I don't know if I am ready for the challenge."
+                                                  "player": "Hmm, sounds difficult, I don't know if I am ready for the challenge."
                                                 },
                                                 {
                                                   "npc": "Very well then Bwana, maybe you will return to me invigorated and ready to take up the challenge one day?"
@@ -1487589,7 +1487589,7 @@
                                   "steps": [
                                     {
                                       "type": "call",
-                                      "branch": "jump-3da95a63c030cf17"
+                                      "branch": "jump-bbfd3f28e1fc9a92"
                                     }
                                   ]
                                 }
@@ -1487662,7 +1487662,7 @@
           "npc": "With some blessings we will be safe here."
         },
         {
-          "npc": "You should deliver the good news to Bwana Timfraku, Chief of Tai Bwo Wannai. He lives in a raised hut not far from here."
+          "npc": "You should deliver the good news to Bwana Timfraku, Chief of Tai Bwo Wannai."
         }
       ],
       "selling-herbs-grimy-herb": [
@@ -1487735,7 +1487735,7 @@
       ]
     },
     "branches": {
-      "jump-3da95a63c030cf17": [
+      "jump-bbfd3f28e1fc9a92": [
         {
           "player": "Me? How can I help?"
         },
@@ -1487743,7 +1487743,7 @@
           "npc": "I need to make a special brew! A potion that helps me to commune with the gods. For this potion, I need very special herbs, that are only found in the deep jungle."
         },
         {
-          "npc": "I can only guide you so far as the herbs are not easy to find. With some luck, you will find each herb in turn and bring to me. I will give you details of where to find the next herb."
+          "npc": "I can only guide you so far as the herbs are not easy to find. With some luck, you will find each herb in turn and bring it to me. I will then give you details of where to find the next herb."
         },
         {
           "npc": "In return for this great favour I will give you training in Herblore."
@@ -1487765,7 +1487765,7 @@
                   "npc": "Snake Weed."
                 },
                 {
-                  "npc": "It grows near the vines in an area to the south west where"
+                  "npc": "It grows near vines in an area to the south west where"
                 },
                 {
                   "npc": "the ground turns soft and the water kisses your feet."
@@ -1487781,7 +1487781,7 @@
               "text": "No.",
               "steps": [
                 {
-                  "player": "Hmmm, sounds difficult, I don't know if I am ready for the challenge."
+                  "player": "Hmm, sounds difficult, I don't know if I am ready for the challenge."
                 },
                 {
                   "npc": "Very well then Bwana, maybe you will return to me invigorated and ready to take up the challenge one day?"
@@ -1487833,7 +1487833,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-3da95a63c030cf17"
+                      "branch": "jump-bbfd3f28e1fc9a92"
                     }
                   ]
                 }

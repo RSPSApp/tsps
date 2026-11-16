@@ -14,5 +14,5 @@ opens the same menu.
 Ours: an unheld seed selection closes the menu; if the inventory changes before confirmation or
 there is no room in the shard stack, the exchange aborts silently. These branches and the other
 seed types' result text are not recorded. The quantity selector uses the number of eligible seeds
-in the inventory as its maximum and remembers the last selection; live's empty-menu and
-mixed-seed quantity behaviour has not been captured. Noted seeds never count (Wiki).
+in the inventory as its maximum and defaults to that maximum, as in the recordings; live's
+empty-menu and mixed-seed quantity behaviour has not been captured. Noted seeds never count (Wiki).

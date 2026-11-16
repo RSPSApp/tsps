@@ -3,7 +3,6 @@
 // Amrod's exchange: docs/amrod.md (rsprox captures and the OSRS Wiki).
 const NPC_NAME = "Amrod";
 const ACTION = "Chatbox trade interface opens for crystal seed exchanging.";
-const LAST_AMOUNT_ATTRIBUTE = "amrod:last-amount";
 const MENU_TITLE = "How many do you wish to trade?";
 const SEEDS = [
   ["CRYSTAL_TOOL_SEED", "Crystal tool seed", 100],
@@ -38,7 +37,6 @@ function select(player, seed, requested) {
   const count = Math.min(Math.max(1, Math.trunc(requested) || 1), player.getInventory().getAmount(core.ItemIdentifiers[seed[0]]));
   // Ours: selecting a seed that is not held closes the menu without a transaction.
   if (count <= 0) return;
-  player.setAttribute(LAST_AMOUNT_ATTRIBUTE, count);
   api.sendMultiChatboxPrompt(player, `Trade ${count} x ${seed[1]} for ${count * seed[2]} crystal shards?`,
     "Yes.", () => exchange(player, seed, count), "No.", () => {});
 }
@@ -47,14 +45,13 @@ function openMenu(player) {
   const items = SEEDS.map((seed) => core.ItemIdentifiers[seed[0]]);
   const inventory = player.getInventory();
   const maxAmount = Math.max(1, items.reduce((sum, id) => sum + inventory.getAmount(id), 0));
-  const remembered = player.getAttribute(LAST_AMOUNT_ATTRIBUTE);
   player.getPacketSender().sendCreationMenu(new core.CreationMenu(MENU_TITLE, items, {
     execute(itemId, amount) {
       const seed = SEEDS.find((entry) => core.ItemIdentifiers[entry[0]] === itemId);
       if (seed) select(player, seed, amount);
     },
   }, { mode: 4, labels: SEEDS.map((seed) => seed[1]), maxAmount,
-    lastAmount: Number.isInteger(remembered) && remembered > 0 ? remembered : maxAmount }));
+    lastAmount: maxAmount }));
 }
 
 function trade({ player }) {

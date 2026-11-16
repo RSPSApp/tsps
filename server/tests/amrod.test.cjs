@@ -59,6 +59,15 @@ test('cancel and inventory change cannot consume seeds or create shards',async t
   await f.trade(); await f.pick(3,2); f.inv.deleteNumber(id,1); await f.answer(1);
   assert.equal(f.inv.getAmount(id),1); assert.equal(f.inv.getAmount(shard),0);
 });
+test('reopening the menu defaults to the held total after a smaller exchange',async t=>{
+  const f=setup(t), id=core.ItemIdentifiers.ENHANCED_CRYSTAL_TELEPORT_SEED;
+  f.inv.add(new core.Item(id,2),false); await f.trade(); await f.pick(3,1); await f.answer(1);
+  f.inv.add(new core.Item(id,2),false);
+  f.player.closeInterruptibleInterfaces();
+  await f.trade();
+  const script=f.scripts.filter(s=>s.id===2046).at(-1);
+  assert.equal(script.args[2],3); assert.equal(script.args.at(-1),3);
+});
 test('noted seeds and an overflowing shard stack are never exchanged',async t=>{
   const f=setup(t), id=core.ItemIdentifiers.ENHANCED_CRYSTAL_TELEPORT_SEED, shard=core.ItemIdentifiers.CRYSTAL_SHARD;
   f.inv.add(new core.Item(id+1,1),false); await f.trade(); await f.pick(3,1);

@@ -11,7 +11,8 @@ animation, sound 127, the machine's active animation and the feed message. The b
 follow a tick later. Capture 711 processes five small bones at two-tick intervals and returns
 the machine to its inactive animation after the last. Capture 712 shows a single medium bone.
 
-Ours: after the selected bone, other sizes are processed in inventory order; the recordings
-show a batch of one size only. A level-up interrupts the batch through the normal skill
-cancellation path; no level-up was captured. Ordinary fossils used on the machine are not implemented here;
-the Wiki says they are destroyed without reward, but their interaction is not captured.
+The batch continues with the clicked size only: in capture 711 a small bone click fed the
+remaining small bones in inventory order and left the medium bones carried alongside them.
+A level-up interrupts the batch through the normal skill cancellation path; no level-up was
+captured. Using non-enriched items on this machine is neither captured nor described on the
+Wiki, so they keep the default "Nothing interesting happens."

@@ -51,26 +51,42 @@ function use(p, name, objectId = core.CacheDefinitions.getLocId('fossil_lab_bone
 }
 function give(p, name) { p.getInventory().add(new core.Item(id(name), 1)); }
 
-test('selected bone first, then carried enriched bones, with one cycle per two ticks and Wiki XP', t => {
+test('the batch feeds only the clicked size, one cycle per two ticks, with Wiki XP (rsprox 711)', t => {
   const p = setup(t);
   for (const n of ['small', 'medium', 'large', 'rare']) assert.ok(id(n) > 0, `${n} is in the cache`);
   for (const seq of ['human_pickuptable', 'fi_dkl_bone_machine_active', 'fi_dkl_bone_machine_inactive']) {
     assert.ok(core.CacheDefinitions.getSeqId(seq) > 0, `${seq} is in the cache`);
   }
-  for (const n of ['small', 'medium', 'large', 'rare']) give(p, n);
-  assert.equal(use(p, 'medium').handled, true);
+  // Capture 711: small, medium, medium, then more smalls; the mediums are left untouched.
+  for (const n of ['small', 'medium', 'medium', 'small', 'small', 'rare']) give(p, n);
+  assert.equal(use(p, 'small').handled, true);
   TaskManager.process();
   assert.deepEqual(p.messages, ['You feed the bone into the machine.']);
-  assert.equal(p.getInventory().getAmount(id('medium')), 1);
+  assert.equal(p.getInventory().getAmount(id('small')), 3);
   assert.deepEqual(p.anims, [core.CacheDefinitions.getSeqId('human_pickuptable')]);
   assert.equal(p.sounds[0][0], 127);
   TaskManager.process();
-  assert.equal(p.getInventory().getAmount(id('medium')), 0);
-  assert.deepEqual(p.xp.map(x => x[1]), [1000]);
-  for (let i = 0; i < 6; i++) TaskManager.process();
-  assert.deepEqual(p.xp.map(x => x[1]), [1000, 500, 1500, 2500]);
-  assert.equal(p.messages.length, 4);
+  assert.equal(p.getInventory().getAmount(id('small')), 2);
+  assert.deepEqual(p.xp.map(x => x[1]), [500]);
+  for (let i = 0; i < 8; i++) TaskManager.process();
+  assert.deepEqual(p.xp.map(x => x[1]), [500, 500, 500]);
+  assert.equal(p.messages.length, 3);
+  assert.equal(p.getInventory().getAmount(id('small')), 0);
+  assert.equal(p.getInventory().getAmount(id('medium')), 2);
+  assert.equal(p.getInventory().getAmount(id('rare')), 1);
   assert.equal(p.locs.at(-1), core.CacheDefinitions.getSeqId('fi_dkl_bone_machine_inactive'));
+  assert.equal(p.getSkill(), null);
+});
+
+test('each size gives its Wiki XP (500/1,000/1,500/2,500)', t => {
+  const p = setup(t);
+  for (const n of ['medium', 'large', 'rare']) give(p, n);
+  for (const n of ['medium', 'large', 'rare']) {
+    use(p, n);
+    TaskManager.process();
+    TaskManager.process();
+  }
+  assert.deepEqual(p.xp.map(x => x[1]), [1000, 1500, 2500]);
   assert.equal(p.getSkill(), null);
 });
 

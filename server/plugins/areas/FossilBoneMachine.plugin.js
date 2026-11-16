@@ -51,12 +51,9 @@ function useBone(event) {
       // Wiki: Zealot's robes do not save enriched bones used on this machine.
       inventory.deleteAtSlot(slot, 1);
       player.getSkillManager().addExperiences(core.Skill.PRAYER, values.get(pendingId));
-      // Ours: after the selected bone, process other enriched sizes in inventory order.
-      slot = inventory.getItems().findIndex((item) => item && values.has(item.getId()));
-      if (slot < 0) {
-        return this.stop();
-      }
-      pendingId = inventory.get(slot).getId();
+      // rsprox 711: the batch continues with the clicked size only; other sizes stay.
+      slot = inventory.getItems().findIndex((item) => item && item.getId() === pendingId);
+      if (slot < 0) return this.stop();
       phase = 0;
     }
     stop() {

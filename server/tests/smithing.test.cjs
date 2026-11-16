@@ -370,7 +370,8 @@ test("lunar ore smelts to a lunar bar at level 1 for 6.2 XP (Wiki)", t => {
   assert.equal(player.items.get(I.LUNAR_ORE), 0);
   assert.equal(player.items.get(I.LUNAR_BAR), 1);
   assert.equal(player.xp, 6.2);
-  assert.equal(player.spam.at(-1), "You retrieve a bar of lunar.");
+  assert.ok(player.spam.includes("You smelt the magic ore in the furnace."));
+  assert.equal(player.spam.at(-1), "You retrieve a lunar bar.");
 });
 
 test("lead and cupronickel stay out of F2P furnace menus and direct starts", (t) => {

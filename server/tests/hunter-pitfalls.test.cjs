@@ -415,3 +415,25 @@ test('a miss whose landing is blocked: the creature does not leap across the pit
 function trapState(p) {
   return [...H.traps].find(trap => trap.player === p)?.state ?? 'none';
 }
+
+// Regression: a missed jump's EDGE_TICK step moves towards the pit's edge (main's behaviour), never onto the pit
+// footprint. Creature on the edge tile (2543,2910): it stays there at +3. One column off (2545,2910): one tile west.
+test('a missed jump: a creature already on the edge tile stays there at +3 (it does not step into the pit)', t => {
+  const { p } = hunter(t, NORTH);
+  layPit(p);
+  const { npc } = larupia(t, [2543, 2910]);
+  tease(p, npc);
+  const at = jump(p, false);
+  tick(at + 3 - H.tick);
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [2543, 2910], 'at +3 it is still on the edge tile');
+});
+
+test('a missed jump: a creature one column off the edge steps one tile towards the edge at +3', t => {
+  const { p } = hunter(t, NORTH);
+  layPit(p);
+  const { npc } = larupia(t, [2545, 2910]);
+  tease(p, npc);
+  const at = jump(p, false);
+  tick(at + 3 - H.tick);
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [2544, 2910], 'at +3 it is one tile west, on the edge row');
+});

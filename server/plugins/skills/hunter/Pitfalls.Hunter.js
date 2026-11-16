@@ -275,6 +275,19 @@ function moveTowards(npc, to) {
   npc.exactMove(to.clone());
 }
 
+/**
+ * A missed jump's EDGE_TICK step: one tile towards the pit's edge (main's behaviour), with the same canMove check as the
+ * walk. None when the creature is already on the edge tile, or the tile towards it is blocked.
+ */
+function edgeStep(npc, goal, size, area) {
+  const start = npc.getLocation(), z = start.getZ();
+  if (start.equals(goal)) return null;
+  const first = signWalk(start, goal, z)[0];
+  if (!first) return null;
+  if (!H.core.RegionManager.canMove(start.getX(), start.getY(), first.getX(), first.getY(), z, size, size, area)) return null;
+  return first;
+}
+
 /** One step a tile at a time from `from` to `to`, each tile the sign of the remaining offset (diagonal, then straight). */
 function signWalk(from, to, z) {
   const walk = [];
@@ -368,7 +381,10 @@ function advance(npc, r) {
     }
     return;
   }
-  if (elapsed === EDGE_TICK && r.walk.length) moveTowards(npc, r.walk[0]);
+  if (elapsed === EDGE_TICK) {
+    const step = edgeStep(npc, r.edge, r.size, r.trap.area);
+    if (step) moveTowards(npc, step);
+  }
   if (elapsed === LEAP_TICK) leap(npc, r);
   if (elapsed >= LAND_TICK) land(npc, r);
 }

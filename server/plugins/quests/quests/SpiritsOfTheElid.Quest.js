@@ -160,6 +160,14 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
    * from there is answered on the player's own tile; further off the ordinary walk runs first.
    */
   const ROOT_ROPE_USE_RANGE = 3;
+  /**
+   * Live steps the player onto 3371,3129 the tick after the rope is used and lassoes the root the
+   * tick after that (227/01788 ticks 5027-5029 from 3372,3129; 231/03019 ticks 53-55 from 3372,3130).
+   * Already there, the lasso still comes two ticks on (231/03019 ticks 571-573).
+   */
+  const ROOT_LASSO_TILE = new Location(3371, 3129, 0);
+  const ROOT_STEP_DELAY_TICKS = 1;
+  const ROOT_LASSO_DELAY_TICKS = 2;
   const CREVICE_OBJECT_ID = ObjectIdentifiers.CREVICE_9; // 10416, west of Nardah
   const CREVICE_ROPE_OBJECT_ID = ObjectIdentifiers.ROPE_10; // 10434, inside the crevice
   const CAVE_EXIT_OBJECT_ID = ObjectIdentifiers.CAVE_EXIT_18; // 10417
@@ -768,7 +776,11 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
       // Live keeps the rope: no inventory update follows the descent, and rsprox 231/03019
       // uses the same rope on the root three times with no packet in between.
       ensureDungeonExit();
-      playRopeDescent(player);
+      player.getMovementQueue().reset();
+      if (!player.getLocation().equals(ROOT_LASSO_TILE)) {
+        Scenes.later(player, ROOT_STEP_DELAY_TICKS, () => Scenes.walk(player, ROOT_LASSO_TILE));
+      }
+      Scenes.later(player, ROOT_LASSO_DELAY_TICKS, () => playRopeDescent(player));
       player.sendMessage("You tie the rope to the root and climb down into the cave.");
       return;
     }

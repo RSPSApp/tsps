@@ -4,7 +4,7 @@
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, after, test } = require('node:test');
+const { before, after, test, mock } = require('node:test');
 require('../dist/Server').Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager: PM } = require('../dist/plugins/PluginManager');
@@ -25,6 +25,7 @@ const defenceRolls = [];
 let serial = 0;
 const actorIds = new Set();
 const errors = [];
+const sailingAmenityLogins = [];
 const originalError = console.error;
 const QUEST_ATTRIBUTE = 'quest.the_blood_moon_rises.stage';
 const QUEST_COMPLETE = 110;
@@ -41,7 +42,25 @@ before(async () => {
     if (event.target?.__maggotKingSession) rolledDamage.set(event.damage, event.damage.getDamage());
   });
   PM.createApi('MaggotNativePreDefence').onCustomEvent('combat:defence-roll', event => beforeDefence.set(event, event.defenceRoll));
-  PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
+  // Names are not unique within Sailing: Amenities, Cargo and Log all register `login`.
+  // Observe the real Amenities registration and retain its actual PM wrapper, not a name match.
+  const Amenities = require('../plugins/skills/sailing/Amenities.Sailing');
+  const registerAmenities = Amenities.register;
+  const traceAmenities = mock.method(Amenities, 'register', function(api) {
+    const onLogin = api.onPlayerLogin;
+    const traceLogin = mock.method(api, 'onPlayerLogin', function(callback) {
+      const offset = PM.loginHooks.length;
+      const result = Reflect.apply(onLogin, this, [callback]);
+      const added = PM.loginHooks.slice(offset);
+      assert.equal(added.length, 1, 'one actual PM wrapper per Amenities login registration');
+      sailingAmenityLogins.push({ callback, hook: added[0] });
+      return result;
+    });
+    try { return Reflect.apply(registerAmenities, this, [api]); }
+    finally { traceLogin.mock.restore(); }
+  });
+  try { PM.loadFromDirectory(path.resolve(__dirname, '../plugins')); }
+  finally { traceAmenities.mock.restore(); }
   PM.emitServerStartup({});
   PM.createApi('MaggotNativePostDamage').onCombatHitDamage(event => {
     if (event.target?.__maggotKingSession) {
@@ -2512,9 +2531,13 @@ test('legacy Sailing Sangvesti state survives both registered login orders and r
   const canonical = Amenities._test.BUILT_ATTRIBUTE(site.site.varbit);
   assert.equal(canonical, 'sailing:amenity-bankchest-sangvesti');
   assert.equal(resupplyModule().BUILT_ATTRIBUTE, canonical, 'both consumers use one saved truth');
-  const sailing = PM.loginHooks.filter(hook => hook.pluginName === 'Sailing' && hook.handlerName === 'login');
+  const sailing = sailingAmenityLogins.map(({ hook }) => hook);
   const maggot = PM.loginHooks.filter(hook => hook.pluginName === 'MaggotKing' && hook.handlerName === 'sync');
   assert.equal(sailing.length, 1); assert.equal(maggot.length, 1);
+  assert.equal(sailingAmenityLogins[0].callback.name, 'login');
+  assert.equal(sailing[0].pluginName, 'Sailing');
+  assert.equal(sailing[0].handlerName, 'login');
+  assert.equal(PM.loginHooks.filter(hook => hook === sailing[0]).length, 1, 'the original registered wrapper remains installed');
   // Actual registered consumer wrappers, exercised in both orders. This is not a socket login.
   for (const order of [[sailing[0], maggot[0]], [maggot[0], sailing[0]]]) {
     const f = resupplyActor(t), p = f.p;

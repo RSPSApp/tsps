@@ -41192,7 +41192,10 @@
             "server/plugins/combat/effects/SalveAmulet.EquipmentEffects.js",
             "server/plugins/combat/effects/GearChecks.EquipmentEffects.js",
             "server/plugins/combat/effects/ObsidianArmour.EquipmentEffects.js",
-            "server/tests/gear-passives.test.cjs"
+            "server/tests/gear-passives.test.cjs",
+            "server/plugins/items/alchemistsamulet/Alchemist.AmuletOfChemistry.js",
+            "server/tests/alchemists-amulet.test.cjs",
+            "docs/alchemists-amulet.md"
           ],
           "devNotes": [
             "Main 8166111fa: #1403 the blood fury's charging and melee effect.",
@@ -41203,6 +41206,7 @@
             "PR #751 (f9354e6b): remaining definitions, effects, feedback and edge cases completed.",
             "Known gap: Emir's Arena, Nightmare Zone, Soul Wars and Shades of Mort'ton shops are not modelled, so some reward-shop sources remain unavailable.",
             "Main 82657e165: #1606 the Giantsoul amulet.",
+            "2026-11-16: Alchemist's amulet support adds 50-charge purchase, ten charges per chemistry amulet up to 5000, a 15% eligible extra-dose chance with ordinary XP, noted refunds, persisted item charges and the lost worn PvP gravestone exception. See docs/alchemists-amulet.md and server/tests/alchemists-amulet.test.cjs for 14 real-object/native-path tests and focused consumer coverage. Independent review found a League dose-ownership charge loss and transformed-grave auto-equip mismatch; both reproductions pass after fixes and nine independent scenarios found no new findings in inspected paths. Rendered native controls, natural-RNG brewing, paid purchase and network logout/relog were verified; a clipped confirmation title was shortened and visually rechecked. Exact uncaptured prompt wording and inferred item charge ownership are disclosed. Existing task statuses are unchanged.",
             "Main 3b61a15a8 (6 November 2026): #2486 Credit supported Varrock Diary gameplay and Plank Make batches. Existing completion credit and documented limitations are retained unless explicitly updated below."
           ],
           "taskDetails": [
@@ -42460,10 +42464,14 @@
             "server/plugins/skills/sailing/BoatTeleport.plugin.js",
             "server/tests/consumable-edge-cases.test.cjs",
             "server/tests/boat-teleport.test.cjs",
+            "server/plugins/items/KourendTravelItems.plugin.js",
+            "server/plugins/areas/KourendWoodland.plugin.js",
+            "server/tests/kharedsts-memorial-recharge.test.cjs",
             "server/plugins/items/PharaohsSceptre.plugin.js",
             "server/tests/pharaohs-sceptre.test.cjs"
           ],
           "devNotes": [
+            "2026-11-16: Old Memorial Continue now offers recharge for a held Book of the Dead or memoirs with an attached page. Uses the existing saved charge balance, physical law/body/mind/soul runes (including a carried rune pouch), 10 base Magic XP per charge and live capacity/supply checks. Focused tests and native rendered menu/cancel/Check plus disk logout/relogin verified; terrain remained black/loading in both client renderers, so full scene appearance is unverified. Success animation/timing/full-book wording are not captured. No task-status or completion-percentage change for this slice.",
             "Main fdf193b28: #1320 players are protected while the ectophial refills.",
             "Core TeleportTablets.ts defines tabs 8007 Varrock, 8008 Lumbridge, 8009 Falador, 8010 Camelot, 8011 Ardougne, 8012 Watchtower and TeleportTablets.init(), but nothing calls init and its getTab() builds the lookup from Object.values(TeleportTablet), which is empty on a class - the handler is currently dead and incorrect.",
             "Teleports.plugin.js and TeleportInterface.plugin.js drive the teleport interface and SpellTeleports.plugin.js handles spellbook self-teleports; none of them consume tablet items. Missing: an item action that calls TeleportTablets.init, the teletab break animation (4731) + sound, and other teleport items (ectophial, camulet, chronicle, skull sceptre, xeric's talisman, burning amulet, games necklace/dueling/glory).",

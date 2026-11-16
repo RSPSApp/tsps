@@ -41,16 +41,17 @@ export async function fetchContent(path: string): Promise<any> {
 }
 
 /** Login art is available from the selected world before an authenticated game session. */
-export async function fetchClientBackground(signal: AbortSignal): Promise<string | undefined> {
-    const path = "/api/client-background";
+type LoginScreenAppearance = { jpg?: string; showFlames?: boolean; showLogo?: boolean };
+
+export async function fetchLoginScreenAppearance(signal: AbortSignal): Promise<LoginScreenAppearance | undefined> {
+    const path = "/api/login-screen";
     if (!await resolveServerTransport() || signal.aborted) return;
     if (state.webRtcConfig) {
         const socket = new WebRtcGameSocket(state.webRtcConfig);
         const close = () => socket.close();
         signal.addEventListener("abort", close, { once: true });
         try {
-            const result = await socket.fetchContent(path) as { jpg?: string };
-            return result?.jpg;
+            return await socket.fetchContent(path) as LoginScreenAppearance;
         } finally {
             signal.removeEventListener("abort", close);
             close();
@@ -59,7 +60,7 @@ export async function fetchClientBackground(signal: AbortSignal): Promise<string
     const base = getContentApiBase();
     if (!base) return;
     const response = await fetch(base + path, { signal, cache: "no-cache" });
-    if (response.ok) return (await response.json()).jpg;
+    if (response.ok) return response.json();
 }
 
 /** Prefer the connected world's definition; static files support older browser hosts. */

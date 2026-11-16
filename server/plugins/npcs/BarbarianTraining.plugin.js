@@ -125,6 +125,12 @@ function answerUnlock(request) {
   request.allowed = when === "started" ? herblore >= TASKED : herblore === TOLD;
 }
 
+/** Rod fishing starts with the instruction, before catching a fish or completing other sections. */
+function answerFishingUnlock(request) {
+  if (!request?.player || request.unlock !== "barbarian_rod") return;
+  request.allowed = state(request.player).fishingRod >= TASKED;
+}
+
 /** "fishing:barehand-unlocked": barehanded fishing once Otto has set the harpoon section. */
 function answerBarehand(request) {
   if (!request?.player) return;
@@ -341,12 +347,38 @@ function harpoonDone(player, talk) {
 }
 
 function rodLesson(player, talk) {
-  const tasked = state(player).fishingRod === TASKED;
-  if (lesson(player, talk, tasked ? TRANSCRIPT.again : TRANSCRIPT.first, TOPIC.rod) && !tasked) setStage(player, "fishingRod", TASKED);
+  if (state(player).fishingRod >= TASKED) { lesson(player, talk, TRANSCRIPT.again, TOPIC.rod); return; }
+  const lines = topicLines(player, talk.npc, talk.npcId, TRANSCRIPT.first, TOPIC.rod);
+  const finalReply = lines[lines.length - 1];
+  if (!near(player, talk.npc) || lines.length < 2 || !finalReply?.npc) {
+    player.getPacketSender().sendInterfaceRemoval();
+    return;
+  }
+  // rsprox 237/01149 tick 8766: brut_fishing_r becomes 1 as Otto's final reply begins.
+  play(player, talk.npcId, lines.slice(0, -1), () => {
+    if (!near(player, talk.npc)) { player.getPacketSender().sendInterfaceRemoval(); return; }
+    if (state(player).fishingRod < TASKED) setStage(player, "fishingRod", TASKED);
+    play(player, talk.npcId, [finalReply], () => afterTopic(player, talk));
+  });
 }
 
 function rodDone(player, talk) {
-  if (lesson(player, talk, TRANSCRIPT.fishing, TOPIC.rodDone)) setStage(player, "fishingRod", TOLD);
+  if (state(player).fishingRod !== DONE) return;
+  const lines = topicLines(player, talk.npc, talk.npcId, TRANSCRIPT.fishing, TOPIC.rodDone);
+  const finalReply = lines[lines.length - 1];
+  if (!near(player, talk.npc) || lines.length < 2 || !finalReply?.npc) {
+    player.getPacketSender().sendInterfaceRemoval();
+    return;
+  }
+  // rsprox237/01149 tick8987: stage3 starts with Otto's final reply, after the player's question.
+  play(player, talk.npcId, lines.slice(0, -1), () => {
+    if (!near(player, talk.npc) || state(player).fishingRod !== DONE) {
+      player.getPacketSender().sendInterfaceRemoval();
+      return;
+    }
+    setStage(player, "fishingRod", TOLD);
+    play(player, talk.npcId, [finalReply], () => afterTopic(player, talk));
+  });
 }
 
 function herbloreLesson(player, talk) {
@@ -415,7 +447,8 @@ function caughtFish({ player, itemId, barehand } = {}) {
   const { LEAPING_TROUT, LEAPING_SALMON, LEAPING_STURGEON } = core.ItemIdentifiers;
   if (![LEAPING_TROUT, LEAPING_SALMON, LEAPING_STURGEON].includes(itemId)) return;
   setStage(player, "fishingRod", DONE);
-  player.sendMessage(LEARNED);
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
+    .add(new core.StatementDialogue(0, LEARNED)).add(new core.EndDialogue(1)));
 }
 
 function madePotion({ player, itemId } = {}) {
@@ -435,6 +468,7 @@ function attach(pluginApi) {
   api.onCustomEvent("barbarian-pyre:built", builtPyre);
   api.onObjectInteraction(BED, { Search: searchBed });
   api.onCustomEvent("fishing:success", caughtFish);
+  api.onCustomEvent("fishing:unlocked", answerFishingUnlock);
   api.onCustomEvent("herblore:made", madePotion);
   api.onCustomEvent("herblore:unlocked", answerUnlock);
   api.onCustomEvent("fishing:barehand-unlocked", answerBarehand);

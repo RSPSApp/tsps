@@ -13,7 +13,7 @@ The collection log lives in `server/plugins/achievements/collectionlog/`. What i
     - the Inferno and the Fight Caves: their capes.
 
     ToA, Wintertodt, the Colosseum and the Inferno roll only their pets through `npc-drops:roll` (Pets takes them from there), so no loot is counted twice.
-- **Kills tally the category of the same name,** e.g. killing Zulrah adds to "Zulrah". Plugins that keep their own count answer for it instead (Zulrah, the Kalphite Queen).
+- **Kills tally the category of the same name,** e.g. killing Zulrah adds to "Zulrah". Plugins that keep their own count answer for it instead (Zulrah, the Kalphite Queen; Guardians of the Rift's rifts closed and searches, varps 2048 and 2941).
 - **Pets** report through the log (owned pets are synced silently on login).
 - **Barrows:** each chest's rolled loot is logged once, even when it overflows onto the ground. The category's chest count comes from Barrows' existing saved tally.
 - **Reward shops:** successful purchases of original stock in the shops listed in `plugins/achievements/collectionlog/data/reward-shops.json` log their trackable items through `shop:purchase`. General-store resale and unrelated shops do not grant collection credit. The event reports the quantity actually paid for and delivered.

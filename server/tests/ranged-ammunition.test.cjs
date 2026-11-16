@@ -944,7 +944,7 @@ test('Fire Warrior ordinary attack eligibility and queued hits', async t => {
     const {decodeClientPackets}=require('../dist/net/protocol/ClientProtocol');
     p.getSession().setPlayer(p);
     const connection=new ClientConnection(channel); connection.player=p;
-    const index=npc.getIndex(), frame=Buffer.from([ClientPacketId.OPNPC2,(index+128)&255,index>>>8,0]);
+    const index=npc.getIndex(), frame=Buffer.from([ClientPacketId.OPNPC2,index>>>8,(index+128)&255,0]); // PacketBuffer.writeShortAddLE: high, low+128.
     const decoded=decodeClientPackets(frame);
     assert.deepEqual(decoded,[{type:'npc_option',index,clickType:2}]);
     await connection.dispatch(decoded); connection.processTurnPackets();

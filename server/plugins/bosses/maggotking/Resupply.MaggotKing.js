@@ -120,10 +120,20 @@ function build({ player, object }) {
   core.TaskManager.submit(work.task);
   return true;
 }
+// A stale supplied Build can disagree with the current built definition's Bank slot.
+// Name/action hooks cannot see that contradiction. Leave genuine Bank events to the listener.
+function refuseStaleBuild(event) {
+  if (event.handled || !event.player || event.clickType !== 1
+    || event.objectId !== CHEST.root || event.object?.getId?.() !== CHEST.root
+    || typeof event.option !== "string" || event.option.toLowerCase() !== "build"
+    || !built(event.player)) return;
+  if (build(event)) event.handled = true;
+}
 function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
   api.persistAttribute(BUILT_ATTRIBUTE, 0);
+  api.onBeforeObjectInteraction(refuseStaleBuild);
   api.onObjectInteraction("Bank chest space", { Build: build, Inspect: inspect });
   api.onPlayerLogin(sync);
   api.onPlayerLogout(cancel);

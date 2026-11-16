@@ -2538,6 +2538,9 @@ test('legacy Sailing Sangvesti state survives both registered login orders and r
   assert.equal(sailing[0].pluginName, 'Sailing');
   assert.equal(sailing[0].handlerName, 'login');
   assert.equal(PM.loginHooks.filter(hook => hook === sailing[0]).length, 1, 'the original registered wrapper remains installed');
+  const staleBuild = PM.beforeObjectInteractionHooks.filter(hook =>
+    hook.pluginName === 'MaggotKing' && hook.handlerName === 'refuseStaleBuild');
+  assert.equal(staleBuild.length, 1, 'one owning stale-event guard is registered');
   // Actual registered consumer wrappers, exercised in both orders. This is not a socket login.
   for (const order of [[sailing[0], maggot[0]], [maggot[0], sailing[0]]]) {
     const f = resupplyActor(t), p = f.p;
@@ -2561,6 +2564,34 @@ test('legacy Sailing Sangvesti state survives both registered login orders and r
       input(p, () => new ObjectActionPacketListener().executeAction(p, RESUPPLY.unbuilt,
         RESUPPLY.x, RESUPPLY.y, 1, 'Build')); // stale visible-ID input, not a new eligible build
       ticks(4); resupplyAssertNoCost(f, before); resupplyAssertBuilt(p);
+      const definition = core.ObjectDefinition.forPlayer(RESUPPLY.root, p);
+      assert.equal(definition.id, RESUPPLY.built);
+      assert.equal(definition.getInteractions()[0].toLowerCase(), 'bank',
+        'the current slot is Bank; the explicit Build below is a contradictory direct event');
+      const supplied = { player: p, object: f.root, objectId: RESUPPLY.root,
+        definition, clickType: 1, option: 'build',
+        location: { x: RESUPPLY.x, y: RESUPPLY.y, z: RESUPPLY.z }, handled: false };
+      assert.equal(PM.emitObjectInteraction({ ...supplied, option: 'bank' }), false,
+        'legitimate Bank remains unanswered for ObjectActionPacketListener fallback');
+      // Isolated calls of the actual registered guard: supplied negative fields are not packet proof.
+      const foreignRoot = new core.GameObject(RESUPPLY.built,
+        new core.Location(RESUPPLY.x, RESUPPLY.y, RESUPPLY.z), 10, 1);
+      for (const delta of [{ option: 'Bank' }, { option: 'Inspect' }, { option: null },
+        { clickType: 2 }, { objectId: RESUPPLY.built }, { object: foreignRoot }]) {
+        const event = { ...supplied, ...delta };
+        staleBuild[0].handler(event);
+        assert.equal(event.handled, false, 'the guard leaves other actions, slots and roots alone');
+      }
+      const handled = { ...supplied, handled: true };
+      staleBuild[0].handler(handled); assert.equal(handled.handled, true);
+      p.setAttribute(canonical, 0);
+      try {
+        const unbuilt = { ...supplied };
+        staleBuild[0].handler(unbuilt);
+        assert.equal(unbuilt.handled, false, 'unbuilt state keeps the ordinary named Build path');
+      } finally { p.setAttribute(canonical, 1); }
+      resupplyAssertNoCost(f, before); resupplyAssertBuilt(p);
+      // This direct contradictory event tests refusal ownership, not a second packet/Bank route.
       assert.equal(PM.emitObjectInteraction({ player: p, object: f.root, objectId: RESUPPLY.root,
         definition: core.ObjectDefinition.forPlayer(RESUPPLY.root, p), clickType: 1, option: 'build',
         location: { x: RESUPPLY.x, y: RESUPPLY.y, z: RESUPPLY.z }, handled: false }), true,

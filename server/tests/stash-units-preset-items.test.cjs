@@ -133,11 +133,13 @@ test("a STASH unit builds with Amy's saw wielded in either hand, and not without
     stock(f);
     f.p.getEquipment().set(slot, new core.Item(sawId, 1));
     interact({ player: f.p, objectId: locId, handled: false });
+    core.TaskManager.process();
     assert.equal(built(f), true, `built with ${sawId} wielded`);
   }
   const f = actor(t);
   stock(f);
   interact({ player: f.p, objectId: locId, handled: false });
+  core.TaskManager.process();
   assert.equal(built(f), false, "no saw: not built");
   assert.equal(f.messages.at(-1), "You need a saw and a hammer in order to build a STASH unit here.");
   assert.ok(unit);
@@ -169,18 +171,77 @@ test("a STASH unit builds with an Imcando hammer wielded in either hand; without
     const f = actorWith();
     f.p.getEquipment().set(slot, new core.Item(hammerId, 1));
     interact({ player: f.p, objectId: locId, handled: false });
+    core.TaskManager.process();
     assert.equal(built(f), true, `built with ${hammerId} wielded`);
     assert.deepEqual(f.spam, ["You build a STASH unit."]);
     assert.equal(f.inv.getAmount(I.PLANK), 0, "the planks are used");
   }
   const noHammer = actorWith();
   interact({ player: noHammer.p, objectId: locId, handled: false });
+  core.TaskManager.process();
   assert.equal(built(noHammer), false);
   assert.equal(noHammer.messages.at(-1), "You need a saw and a hammer in order to build a STASH unit here.");
   assert.equal(noHammer.inv.getAmount(I.PLANK), 2, "nothing used");
   const noPlanks = actorWith(false);
   noPlanks.inv.add(new core.Item(I.HAMMER, 1));
   interact({ player: noPlanks.p, objectId: locId, handled: false });
+  core.TaskManager.process();
   assert.equal(built(noPlanks), false);
   assert.equal(noPlanks.messages.at(-1), "You do not have the required materials to build a STASH unit here.");
+});
+
+// rsprox_transcripts/227/01768.txt ticks 10836-10837 (and 227/01858.txt ticks 10728-10729): on reaching the unit,
+// busy, human_poh_build and synth 938; a tick later the materials go, the XP and spam line come and busy clears.
+test("a STASH unit is built a tick after the click, with the build animation and sound first; a second click does not build twice", (t) => {
+  let interact = null;
+  const real = PM.createApi("StashBuildDelayTest");
+  Stash(new Proxy(real, { get: (target, key) => (key === "onBeforeObjectInteraction" ? (handler) => { interact = handler; } : target[key]) }));
+  const [locId] = [...Stash.stashes()].find(([, entry]) => entry.tier.name === "easy");
+  const f = actor(t);
+  f.p.getSkillManager().setMaxLevels(core.Skill.CONSTRUCTION, 99, false).setCurrentLevels(core.Skill.CONSTRUCTION, 99, false);
+  [[I.SAW, 1], [I.HAMMER, 1], [I.PLANK, 4], [I.BRONZE_NAILS, 20]].forEach(([id, amount]) => f.inv.add(new core.Item(id, amount)));
+  const sender = f.p.getPacketSender();
+  const sounds = [], varbits = [], spam = [], animations = [];
+  t.mock.method(sender, "sendSound", (id) => { sounds.push(id); return sender; });
+  t.mock.method(sender, "sendVarbit", (id, value) => { varbits.push([id, value]); return sender; });
+  t.mock.method(sender, "sendTypedMessage", (_type, message) => { spam.push(message); return sender; });
+  t.mock.method(f.p, "performAnimation", (animation) => { animations.push(animation.getId()); });
+  const xp = f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION);
+  const busy = core.CacheDefinitions.getVarbitId("busy");
+  interact({ player: f.p, objectId: locId, handled: false });
+  interact({ player: f.p, objectId: locId, handled: false });
+  assert.deepEqual(animations, [core.CacheDefinitions.getSeqId("human_poh_build")], "one build animation");
+  assert.deepEqual(sounds, [938], "synth 938 on the click tick");
+  assert.deepEqual(varbits, [[busy, 1]]);
+  assert.equal(f.inv.getAmount(I.PLANK), 4, "nothing taken yet");
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION), xp);
+  assert.deepEqual(spam, []);
+  assert.equal((f.p.getAttribute(Stash.BUILT_ATTRIBUTE) ?? []).includes(locId), false);
+  core.TaskManager.process();
+  assert.equal(f.inv.getAmount(I.PLANK), 2, "one unit's planks");
+  assert.equal(f.inv.getAmount(I.BRONZE_NAILS), 10, "one unit's nails");
+  assert.ok(f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION) > xp, "the XP comes on the next tick");
+  assert.deepEqual(spam, ["You build a STASH unit."]);
+  assert.equal(varbits.some(([id, value]) => id === busy && value === 0), true, "busy clears");
+  assert.deepEqual(f.p.getAttribute(Stash.BUILT_ATTRIBUTE), [locId]);
+  core.TaskManager.process();
+  assert.equal(f.inv.getAmount(I.PLANK), 2, "no second build");
+});
+
+// Not recorded: the materials leave the inventory during the build tick; then nothing is built or taken.
+test("a STASH build whose materials are gone by the next tick builds nothing", (t) => {
+  let interact = null;
+  const real = PM.createApi("StashBuildGoneTest");
+  Stash(new Proxy(real, { get: (target, key) => (key === "onBeforeObjectInteraction" ? (handler) => { interact = handler; } : target[key]) }));
+  const [locId] = [...Stash.stashes()].find(([, entry]) => entry.tier.name === "easy");
+  const f = actor(t);
+  f.p.getSkillManager().setMaxLevels(core.Skill.CONSTRUCTION, 99, false).setCurrentLevels(core.Skill.CONSTRUCTION, 99, false);
+  [[I.SAW, 1], [I.HAMMER, 1], [I.PLANK, 2], [I.BRONZE_NAILS, 10]].forEach(([id, amount]) => f.inv.add(new core.Item(id, amount)));
+  const xp = f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION);
+  interact({ player: f.p, objectId: locId, handled: false });
+  f.inv.delete(I.PLANK, 1);
+  core.TaskManager.process();
+  assert.equal((f.p.getAttribute(Stash.BUILT_ATTRIBUTE) ?? []).includes(locId), false);
+  assert.equal(f.inv.getAmount(I.BRONZE_NAILS), 10, "the nails stay");
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION), xp);
 });

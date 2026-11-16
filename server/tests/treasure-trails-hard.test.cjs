@@ -351,6 +351,7 @@ test("the hard casket rolls 4-6 and opens once; hard STASH units need Constructi
   [[I.HAMMER, 1], [I.SAW, 1], [I.TEAK_PLANK, 2], [I.STEEL_NAILS, 10]].forEach(([id, amount], slot) => { f.items[slot] = new core.Item(id, amount); });
   f.skills.level = 55;
   Stash.interact({ player: f.player, objectId: units[0].step.stash.locId, location: units[0].location, handled: false });
+  core.TaskManager.process(); // the unit is built a tick after the click (227/01768.txt ticks 10836-10837)
   assert.deepEqual(f.attributes.get(Stash.BUILT_ATTRIBUTE), [units[0].step.stash.locId]);
   assert.equal(f.skills.xp, 400);
 });

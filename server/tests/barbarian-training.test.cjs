@@ -292,7 +292,8 @@ test("Herblore: Otto asks for an attack mix, takes it, and every mix is learned"
   who.level = 79;
   who.sent.messages.length = 0;
   use(who, "brut_caviar", "2doserangerspotion");
-  assert.deepEqual(who.sent.messages, ["You need a Herblore level of 80 to combine those."]);
+  assert.deepEqual(who.sent.messages, []);
+  assert.match(JSON.stringify(who.chain, (key, value) => value instanceof Map ? [...value.values()] : value), /"You need a Herblore level of 80 to combine those\."/);
   who.level = 80;
   who.sent.xp = 0;
   assert.equal(use(who, "2doserangerspotion", "brut_caviar"), true);

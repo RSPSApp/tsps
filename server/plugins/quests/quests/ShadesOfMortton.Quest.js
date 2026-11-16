@@ -62,6 +62,7 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, openBook, startTranscript } = require("../QuestRuntime");
+  const Herblore = require("../../skills/herblore/Common.Herblore");
 
   const ULSQUIRE_NPC_IDS = new Set([
     NpcIdentifiers.AFFLICTED_ULSQUIRE_,
@@ -996,7 +997,8 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       // ashes on the tarromin vial in slot 9 -> "You make serum 207." (spam), mort_serum3 in slot 9, the ashes' slot
       // emptied, human_herbing_vial, synth 2608 and a Herblore XP drop.
       if (player.getSkillManager().getCurrentLevel(Skill.HERBLORE) < SERUM_207_LEVEL) {
-        player.sendMessage(`You need a Herblore level of ${SERUM_207_LEVEL} to combine those.`);
+        // The Herblore skill's combine refusal: a messagebox with its mesbox chat line.
+        Herblore.mesbox(player, `You need a Herblore level of ${SERUM_207_LEVEL} to combine those.`);
         return;
       }
       const inventory = player.getInventory();

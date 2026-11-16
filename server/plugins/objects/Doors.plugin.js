@@ -54,6 +54,8 @@ const DOOR_NAMES = new Set([
  * for these; each is the actionless, same-model leaf of a named closed door.
  */
 const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
+  IKOV_LUCIEN_DOOR_OPEN: 11403, // ikov_luciendoor_open: same-model, actionless open leaf of O.DOOR_13
+
   DOOR_47_OPEN: 2001, // closed O.DOOR_47 (2000); same models, cache-derived
   DOOR_48_OPEN: 2003, // closed O.DOOR_48 (2002); same models, cache-derived
   PLAGUE_HOUSE_DOOR: 37321, // plagueelenadoorshut, a multi (varbit 9016) with no name of its own
@@ -162,6 +164,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // interior doors (DOOR_499 closed -> DOOR_498 open) are inverted: the open "Close"-only leaf
   // carries the lower id, so the ascending scan never sees the pair.
   SINGLE_DOOR_OPEN_IDS = new Map([
+    // Lucien's house: its cache-named same-model open leaf has no display name or Close action.
+    [O.DOOR_13, NAMELESS_DOOR_LEAF_IDS.IKOV_LUCIEN_DOOR_OPEN],
     // Generic trapdoors have distinct open models, two ids after their closed variants.
     [O.TRAPDOOR_4, O.TRAPDOOR_6],
     [O.TRAPDOOR_5, O.TRAPDOOR_7],

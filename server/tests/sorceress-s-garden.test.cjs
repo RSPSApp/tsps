@@ -9,6 +9,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const plugin = require("../plugins/minigames/SorceresssGarden.plugin");
 
 const core = PluginManager.getCoreApi();
+const { SEASONS } = require("../plugins/minigames/sorceressgarden/Gardens.SorceresssGarden");
 plugin._test.setCore(core);
 
 const WINTER_FRUIT = 10847;
@@ -305,7 +306,7 @@ test("gates check the maze's level before opening", () => {
 
   const ready = player({ level: 65 });
   plugin._test.openGate({ player: ready, objectId: SUMMER_GATE });
-  assert.equal(ready.messages[0], "You open the gate.");
+  assert.deepEqual(ready.messages, [], "the captured entry has no open message");
   assert.equal(plugin._test.openGate({ player: ready, objectId: 12345 }), false);
 });
 

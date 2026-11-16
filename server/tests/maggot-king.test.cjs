@@ -132,7 +132,7 @@ test("the entrance, exit and exact options match the live cache", () => {
 });
 
 test("Blood Moon access opens a private solo lair and cleans it up on escape and logout", () => {
-  assert.deepEqual(persisted, [["maggot-king:kills", 0], [Instance._test.INSTANCE_ATTRIBUTE, false]]);
+  assert.deepEqual(persisted, [["maggot-king:kills", 0], [Instance._test.INSTANCE_ATTRIBUTE, false], [Resupply.BUILT_ATTRIBUTE, false]]);
   const enter = handlers.get("Darkwood trees").Enter;
   const locked = player(1, false);
   assert.equal(enter({ player: locked, objectId: core.ObjectIdentifiers.DARKWOOD_TREES_4 }), true);

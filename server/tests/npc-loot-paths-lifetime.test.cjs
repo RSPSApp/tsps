@@ -316,6 +316,27 @@ test("Temple Trekking: a swamp snake the follower hurt leaves bones for 200 tick
   assertLifetimes("Temple Trekking snake", [Common.data.items.bones], { [Common.data.items.bones]: 200 });
 });
 
+test("after the reveal another player sees a tradeable drop that is not on the Exchange; an untradeable stays the owner's", () => {
+  const Kills = require("../plugins/bosses/scurrius/Kills.Scurrius");
+  require("../plugins/bosses/scurrius/Common.Scurrius").init(api);
+  Kills.attach(api);
+  const lair = new core.Location(3299, 9867, 0);
+  const killer = player("reveal-mvp", lair);
+  const helper = player("reveal-helper", lair);
+  const other = player("reveal-other", lair);
+  const npc = npcAt(7221, lair);
+  Kills._test.onRoll({ player: killer, npc, npcId: 7221, drops: [], damagers: [killer, helper] });
+  const [ring] = floor(DUELING_3);
+  const [key] = floor(ECUMENICAL_KEY);
+  assert.equal(ItemOnGroundManager.canSee(other, ring), false, "hidden for the first 100 ticks");
+  assert.equal(ItemOnGroundManager.canSee(helper, ring), true, "its owner sees it");
+  for (let tick = 0; tick < 100; tick++) { ring.process(); key.process(); }
+  // Wiki (Drops): after 100 ticks "anyone will be able to see (and take) the item if it is tradeable".
+  assert.equal(ItemOnGroundManager.canSee(other, ring), true, "a ring of dueling(3) turns public");
+  assert.equal(ItemOnGroundManager.canSee(other, key), false, "an untradeable never does");
+  assert.equal(ItemOnGroundManager.canSee(helper, key), true);
+});
+
 test("the Wiki's tradeable, not the Grand Exchange flag: ring of dueling(3) and burnt meat trade, an ecumenical key does not", () => {
   const DUELING_8 = 2552, BURNT_MEAT = 2146;
   assert.equal(ItemDefinition.forId(DUELING_8).isTradeable(), true, "on the Exchange");

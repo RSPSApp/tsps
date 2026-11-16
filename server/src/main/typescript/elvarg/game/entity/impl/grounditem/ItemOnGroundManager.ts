@@ -461,7 +461,9 @@ export class ItemOnGroundManager {
         return this.isOwner(player.getUsername(), item)
             || item.isStaticSpawn()
             || item.getOwner() == null
-            || (item.getItem().isTradeable() && item.getItem().isDropable());
+            // Wiki (Drops): once revealed, "anyone will be able to see (and take) the item if it is tradeable":
+            // between players, so a ring of dueling(3) or burnt meat too, not only Grand Exchange items.
+            || (item.getItem().isPlayerTradeable() && item.getItem().isDropable());
     }
 
     /** Picking up stays same-floor; telegrab may reach visible lower floors within its 10-tile range. */

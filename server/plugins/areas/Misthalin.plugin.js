@@ -63,14 +63,17 @@ const SWAMP_CAVE_ROPE_SOUND = 1774;
 /**
  * The cave goblin markers' Look-at. rsprox.net rec 3182 (rev 232): on arrival the player faces
  * the wall, then live sets cave_goblin_markers:symbol to the marker's model (6923 for the north
- * marker at tick 2669, 6924 for the south one at ticks 2877 and 3060), runs
+ * marker at tick 2669, 6924 for the south one at ticks 2877 and 3060, 6922 for the east one at
+ * ticks 2192-2608 and rec 3981 tick 90, 6927 for the west one at tick 2764), runs
  * toplevel_mainmodal_open [0, 0] and opens cave_goblin_markers in the main modal. No message,
- * animation or sound. It is an approach op: all three reads opened where the player stood, two
- * and seven tiles from the wall, with no step taken.
+ * animation or sound. It is an approach op: the recorded reads opened where the player stood, two
+ * to seven tiles from the wall, with no step taken.
  */
 const SWAMP_CAVE_MARKER_MODELS = new Map([
   ["swamp_cavewall_northmarker", 6923],
   ["swamp_cavewall_southmarker", 6924],
+  ["swamp_cavewall_eastmarker", 6922],
+  ["swamp_cavewall_westmarker", 6927],
 ]);
 const MAINMODAL_OPEN_SCRIPT = 2524;
 /** Ours: the engine's default approach range; the recorded reads were from 2 and 7 tiles. */

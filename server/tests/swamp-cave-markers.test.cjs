@@ -53,7 +53,7 @@ const lookAt = (p, gameval) => {
 };
 
 test('the cache has both markers as "Symbol" with a single Look-at, and the modal has its model component', () => {
-  for (const gameval of ['swamp_cavewall_northmarker', 'swamp_cavewall_southmarker']) {
+  for (const gameval of ['swamp_cavewall_northmarker', 'swamp_cavewall_southmarker', 'swamp_cavewall_eastmarker', 'swamp_cavewall_westmarker']) {
     const def = C().getObject(C().getLocId(gameval));
     assert.equal(def.name, 'Symbol');
     assert.equal(def.actions[0], 'Look-at');
@@ -64,7 +64,7 @@ test('the cache has both markers as "Symbol" with a single Look-at, and the moda
 
 test('each marker shows its own recorded model, then toplevel_mainmodal_open [0, 0] and the modal, as recorded', (t) => {
   const symbol = C().getComponentId('cave_goblin_markers:symbol');
-  for (const [gameval, model] of [['swamp_cavewall_northmarker', 6923], ['swamp_cavewall_southmarker', 6924]]) {
+  for (const [gameval, model] of [['swamp_cavewall_northmarker', 6923], ['swamp_cavewall_southmarker', 6924], ['swamp_cavewall_eastmarker', 6922], ['swamp_cavewall_westmarker', 6927]]) {
     const p = realPlayer(t);
     const { event, result } = lookAt(p, gameval);
     assert.equal(result, true);
@@ -102,6 +102,8 @@ test('read where the player stands from the recorded tiles: 2 and 7 tiles off, i
   for (const [gameval, loc, at] of [
     ['swamp_cavewall_southmarker', [3244, 9646], [3246, 9647]],
     ['swamp_cavewall_northmarker', [3251, 9619], [3246, 9612]],
+    // East marker 3230,9613 read from 3227,9614 (tick 2192).
+    ['swamp_cavewall_eastmarker', [3230, 9613], [3227, 9614]],
   ]) {
     const event = routeFrom(t, gameval, loc, at);
     assert.deepEqual(event.destination, { x: at[0], y: at[1], z: 0 }, gameval);

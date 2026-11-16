@@ -702,6 +702,56 @@ test("vengeance takes the Mirrorback's recoil: the recorded message, no hit, thr
   assert.deepEqual(queued(boss), [7]);
 });
 
+// rsprox_transcripts/237/01156.txt tick 1353: a Leagues double hit puts 10 and 4 on the Mirrorback; Vengeance
+// rebounds 7 (75% of the first part) onto Araxxor and the second part still recoils 2 onto the player.
+// Tick 1351: without Vengeance four parts put 3, 1, 2 and 2 on the Mirrorback and 1, 0, 1 and 1 on the player.
+test("a multi-part hit on Araxxor redirects and recoils per part; Vengeance takes only the first part", async () => {
+  const path = require("node:path");
+  require("../dist/Server").Server.installProductionPathResolver();
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  new NpcDefinitionLoader().load();
+  const core = PluginManager.getCoreApi();
+  const Combat = require("../plugins/bosses/araxxor/Combat.Araxxor");
+  Combat.attach(new Proxy({ core, getPrayerHandler: () => ({}) }, { get: (t, k) => (k in t ? t[k] : () => {}) }));
+  const tile = new core.Location(Shared.SPAWN_TILE[0], Shared.SPAWN_TILE[1], Shared.SPAWN_TILE[2]);
+  const boss = new NPC(Shared.BOSS_ID, tile);
+  const mirrorback = new NPC(Shared.MINION_ID.mirrorback, new core.Location(3635, 9813, 0));
+  for (const npc of [boss, mirrorback]) npc.setRegistered(true);
+  boss.setAttribute(Shared.ATTR_ENCOUNTER, { minions: [mirrorback] });
+  const swing = (player, damages) => {
+    const parts = damages.map((damage) => new core.HitDamage(damage, core.HitMask.RED));
+    const hit = { getAttacker: () => player, getHits: () => parts, updateTotalDamage() {} };
+    Combat._test.redirectToMirrorback(boss, hit);
+    return parts.map((part) => part.getDamage());
+  };
+  const queued = (mob) => mob.getCombat().getHitQueue().pendingDamage.map((hit) => hit.getDamage());
+  const player = new Player(null);
+  player.setUsername("araxxor-veng-parts");
+  const messages = [], said = [];
+  player.sendMessage = (text) => messages.push(text);
+  player.forceChat = (text) => said.push(text);
+  player.setHasVengeance(true);
+
+  assert.deepEqual(swing(player, [52, 22]), [41, 17], "four fifths of each part reach Araxxor");
+  assert.deepEqual(queued(mirrorback), [10, 4], "each part's fifth is its own hit on the Mirrorback");
+  assert.deepEqual(messages, [Shared.MIRRORBACK_VENGEANCE_MESSAGE]);
+  assert.deepEqual(said, ["Taste vengeance!"]);
+  assert.equal(player.hasVengeanceReturn(), false, "vengeance is spent");
+  assert.deepEqual(queued(boss), [7], "75% of the first part's 10, not of the 14 total");
+  assert.deepEqual(queued(player), [2], "the second part's 4 still recoils half");
+
+  swing(player, [15, 8, 14, 14]);
+  assert.deepEqual(queued(mirrorback), [10, 4, 3, 1, 2, 2]);
+  assert.deepEqual(queued(player), [2, 1, 0, 1, 1], "half of each part's share, rounded down per part");
+  assert.equal(messages.length, 1, "no message without vengeance");
+  assert.deepEqual(queued(boss), [7]);
+});
+
 // rsprox_transcripts/237/01179.txt tick 223: a direct melee double hit of 13 and 6 on the Mirrorback sends the
 // message, spends vengeance ("Taste vengeance!"), rebounds 9 (75% of 13) onto it and leaves 3 recoil from the 6.
 // Wiki (Araxxor/Strategies): Vengeance at melee distance negates the reflected damage.

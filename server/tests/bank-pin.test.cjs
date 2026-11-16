@@ -404,6 +404,29 @@ test("the host key needs the server's secret, so a save file cannot be tried aga
   assert.equal(Common.isUnlocked(player), false);
 });
 
+// writeFileSync's mode only applies when it creates the file, so an invalid key rewritten in place is chmodded too.
+test("an invalid host key file is rewritten owner-only (0600), as a new one is made", (t) => {
+  const secretFile = path.join(secretDir, 'bank-pin-host-rewrite.key');
+  fs.writeFileSync(secretFile, 'not a secret\n', { mode: 0o644 });
+  const chmods = [];
+  const chmodSync = fs.chmodSync;
+  t.mock.method(fs, 'chmodSync', (file, mode) => { chmods.push([file, mode]); return chmodSync(file, mode); });
+  Common.setHostSecretFile(secretFile);
+  const player = withPin("1234");
+  player.getHostAddress = () => "203.0.113.5";
+  Common.hostKey(player);
+  assert.match(fs.readFileSync(secretFile, 'utf8').trim(), /^[0-9a-f]{64}$/, "the invalid secret is replaced");
+  assert.deepEqual(chmods, [[secretFile, 0o600]]);
+  // Windows keeps no POSIX mode bits to read back.
+  if (process.platform !== 'win32') assert.equal(fs.statSync(secretFile).mode & 0o777, 0o600);
+  // A valid file is read as it is: no rewrite, no chmod.
+  chmods.length = 0;
+  Common.setHostSecretFile(secretFile);
+  Common.hostKey(player);
+  assert.deepEqual(chmods, []);
+  Common.setHostSecretFile(path.join(secretDir, 'bank-pin-host.key'));
+});
+
 test("settings buttons act only with the screen open, from the layer shown, and with the PIN", () => {
   const player = withPin("1234");
   click(player, u().settings.hasPinDelay);

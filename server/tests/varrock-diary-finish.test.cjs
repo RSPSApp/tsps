@@ -241,9 +241,9 @@ test("Gertrude's colour interface action opens the colour menu and is claimed", 
   assert.notEqual(started, null);
 });
 
-test("spottier cape trade takes 2 dashing kebbit furs and 800 coins at 66 Hunter", (t) => {
+test("spottier cape trade takes 2 dashing kebbit furs and 800 coins, with no Hunter level", (t) => {
   const f = serviceFixture(t, asyff);
-  f.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, Y.SPOTTIER_HUNTER_LEVEL);
+  f.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, 1);
   add(f.player, Y.DASHING_KEBBIT_FUR, 2);
   add(f.player, core.ItemIdentifiers.COINS, 800);
 
@@ -254,16 +254,8 @@ test("spottier cape trade takes 2 dashing kebbit furs and 800 coins at 66 Hunter
   assert.equal(f.emitted.some((e) => e.name === Y.SPOTTIER_CAPE_TRADED_EVENT), true);
   assert.match(f.messages.at(-1), /spottier cape/);
 
-  const weak = serviceFixture(t, asyff);
-  weak.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, Y.SPOTTIER_HUNTER_LEVEL - 1);
-  add(weak.player, Y.DASHING_KEBBIT_FUR, 2);
-  add(weak.player, core.ItemIdentifiers.COINS, 800);
-  assert.equal(Y.tradeSpottierCape(weak.api, weak.player), false);
-  assert.equal(weak.player.getInventory().getAmount(Y.DASHING_KEBBIT_FUR), 2);
-  assert.match(weak.messages.at(-1), /66 Hunter/);
-
   const poor = serviceFixture(t, asyff);
-  poor.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, Y.SPOTTIER_HUNTER_LEVEL);
+  poor.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, 1);
   add(poor.player, Y.DASHING_KEBBIT_FUR, 2);
   add(poor.player, core.ItemIdentifiers.COINS, 799);
   assert.equal(Y.tradeSpottierCape(poor.api, poor.player), false);

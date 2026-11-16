@@ -113,21 +113,18 @@ for (const recipe of RECIPES.filter((r) => r.fur.ids.length > 1)) {
   });
 }
 
-test("the spottier cape keeps its 66 Hunter gate and still announces the diary event", (t) => {
+test("the spottier cape is made at any Hunter level (66 is to wear it) and announces the diary event", (t) => {
   const recipe = RECIPES.find((r) => r.id === "spottier-cape");
-  const weak = fixture(t);
-  weak.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, Y.SPOTTIER_HUNTER_LEVEL - 1);
-  add(weak.player, IDS.DASHING_KEBBIT_FUR, 2);
-  add(weak.player, IDS.COINS, 800);
-  assert.equal(Y.tradeRecipe(weak.api, weak.player, recipe), false);
-  assert.equal(count(weak.player, IDS.DASHING_KEBBIT_FUR), 2);
-
-  const ok = fixture(t);
-  ok.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, Y.SPOTTIER_HUNTER_LEVEL);
-  add(ok.player, IDS.DASHING_KEBBIT_FUR, 2);
-  add(ok.player, IDS.COINS, 800);
-  assert.equal(Y.tradeRecipe(ok.api, ok.player, recipe), true);
-  assert.equal(ok.emitted.some((e) => e.name === Y.SPOTTIER_CAPE_TRADED_EVENT), true);
+  // Wiki (Spottier cape): 66 Hunter to equip; no level to make it. The item's equip requirement keeps the 66.
+  const low = fixture(t);
+  low.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, 1);
+  add(low.player, IDS.DASHING_KEBBIT_FUR, 2);
+  add(low.player, IDS.COINS, 800);
+  assert.equal(Y.tradeRecipe(low.api, low.player, recipe), true);
+  assert.equal(count(low.player, IDS.DASHING_KEBBIT_FUR), 0);
+  assert.equal(count(low.player, IDS.COINS), 0);
+  assert.equal(count(low.player, Y.SPOTTIER_CAPE), 1);
+  assert.equal(low.emitted.some((e) => e.name === Y.SPOTTIER_CAPE_TRADED_EVENT), true);
 });
 
 test("only the spottier cape emits the diary event; other recipes emit nothing", (t) => {

@@ -5,7 +5,7 @@
     "revisionTimestamp": "2025-10-16T18:04:03Z",
     "section": "Custom Fur Clothing",
     "url": "https://oldschool.runescape.wiki/w/Asyff?oldid=15006217",
-    "note": "Fee is the coin charge from the Fee column. The Wiki's Item Cost column is the Grand Exchange price of the output and is not charged. The Wiki gives no Hunter level for these rows; spottier-cape keeps the 66 Hunter gate from the earlier plugin."
+    "note": "Fee is the coin charge from the Fee column. The Wiki's Item Cost column is the Grand Exchange price of the output and is not charged. The Wiki gives no Hunter level for these rows. The spottier cape's 66 Hunter is for wearing it (Wiki: Spottier cape), which the item's own equip requirement enforces, so the trade has no level gate."
   },
   "recipes": [
     { "id": "polar-kebbit-top", "set": "Polar kebbit", "output": { "name": "POLAR_CAMO_TOP", "id": 10065, "label": "Polar camo top" }, "fee": 20, "fur": { "names": ["POLAR_KEBBIT_FUR"], "ids": [10117], "amount": 2, "label": "Polar kebbit fur" } },
@@ -27,6 +27,6 @@
     { "id": "kyatt-legs", "set": "Kyatt", "output": { "name": "KYATT_LEGS", "id": 10035, "label": "Kyatt legs" }, "fee": 200, "fur": { "names": ["KYATT_FUR", "TATTY_KYATT_FUR"], "ids": [10103, 10101], "amount": 1, "label": "Kyatt fur or tatty kyatt fur" } },
     { "id": "gloves-of-silence", "set": "Dark kebbit", "output": { "name": "GLOVES_OF_SILENCE", "id": 10075, "label": "Gloves of silence" }, "fee": 600, "fur": { "names": ["DARK_KEBBIT_FUR"], "ids": [10115], "amount": 2, "label": "Dark kebbit fur" } },
     { "id": "spotted-cape", "set": "Spotted kebbit", "output": { "name": "SPOTTED_CAPE", "id": 10069, "label": "Spotted cape" }, "fee": 400, "fur": { "names": ["SPOTTED_KEBBIT_FUR"], "ids": [10125], "amount": 2, "label": "Spotted kebbit fur" } },
-    { "id": "spottier-cape", "set": "Dashing kebbit", "output": { "name": "SPOTTIER_CAPE", "id": 10071, "label": "Spottier cape" }, "fee": 800, "level": 66, "fur": { "names": ["DASHING_KEBBIT_FUR"], "ids": [10127], "amount": 2, "label": "Dashing kebbit fur" } }
+    { "id": "spottier-cape", "set": "Dashing kebbit", "output": { "name": "SPOTTIER_CAPE", "id": 10071, "label": "Spottier cape" }, "fee": 800, "fur": { "names": ["DASHING_KEBBIT_FUR"], "ids": [10127], "amount": 2, "label": "Dashing kebbit fur" } }
   ]
 }

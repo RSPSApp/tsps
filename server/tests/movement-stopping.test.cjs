@@ -91,7 +91,8 @@ function stepActor(t, policy, { player = false, run = false } = {}) {
   const area = new AreaType([new Boundary(3190, 3210, 3190, 3210, 0)]);
   const start = new Location(3200, 3200, 0);
   const mobile = player ? new Player(null) : NPC.create(PluginManager.getCoreApi().NpcIdentifiers.MAN, start);
-  if (player) mobile.getSession = () => ({ sendClientPacket: () => {} });
+  const writes = [];
+  if (player) mobile.getSession = () => ({ sendClientPacket: () => {}, write: packet => writes.push(packet) });
   mobile.setLocation(start);
   if (!player) assert.equal(World.getNpcs().add(mobile), true);
   area.enter(mobile);
@@ -105,7 +106,7 @@ function stepActor(t, policy, { player = false, run = false } = {}) {
   });
   assert.equal(mobile.getArea(), area);
   assert.equal(queue.getMobility().canMove(), true);
-  return { mobile, area, queue, start };
+  return { mobile, area, queue, start, writes };
 }
 
 test('NPC area veto precedes all commits and retains the same queued checkpoint until released', t => {
@@ -134,7 +135,17 @@ test('each diagonal run substep consults the area with the updated source; denia
   const f = stepActor(t, (_npc, from, to) => {
     calls.push([from.clone(), to.clone()]); return calls.length === 1;
   }, { run: true });
-  const first = f.start.transform(1, 1), target = f.start.transform(2, 2);
+  // This is an open-path policy test, not a request to walk through a cache
+  // loc: revision 242 has a solid loc at the old second tile (3202,3202).
+  // Pick a loaded two-diagonal route using the ordinary collision checks before
+  // any queue commit or policy call. Never clear clipping or skip the oracle.
+  const route = [[1, 1], [-1, 1], [1, -1], [-1, -1]]
+    .map(([dx, dy]) => ({ first: f.start.transform(dx, dy), target: f.start.transform(2 * dx, 2 * dy) }))
+    .find(({ first, target }) => RegionManager.getRegion(first.getX(), first.getY())?.isLoaded()
+      && RegionManager.getRegion(target.getX(), target.getY())?.isLoaded()
+      && f.queue.canWalkTo(first) && f.queue.canWalkTo(target, first));
+  assert.ok(route, 'loaded cache geometry supplies two ordinary diagonal steps');
+  const { first, target } = route;
   assert.equal(f.queue.canWalkTo(first), true);
   assert.equal(f.queue.canWalkTo(target, first), true);
   f.queue.addCheckpoint(target); f.queue.process();
@@ -187,6 +198,7 @@ test('the NPC-only step policy never runs for a player sharing that area', t => 
   assert.equal(f.queue.canWalkTo(target), true);
   f.queue.addCheckpoint(target); f.queue.process();
   assert.ok(f.mobile.getLocation().equals(target)); assert.equal(calls, 0);
+  assert.ok(f.writes.length > 0, 'real player movement reaches the session write transport');
 });
 
 test('the inherited neutral area policy preserves ordinary and scripted queued NPC walking', t => {

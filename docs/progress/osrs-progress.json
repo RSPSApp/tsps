@@ -9207,7 +9207,8 @@
             "The 'Elemental Workshop II' page in npc-dialogues.json carries 37 variants ('starting-out-searching-the-bookcase'); source ids/slugs from npc-dialogues.json + npc-dialogue-index.json / osrsreboxed.",
             "Prefer onObjectInteraction name hooks (Bookcase/Furnace/Anvil) over raw ids, per AGENTS.md.",
             "Main 3b61a15a8 (6 November 2026): #2477 Credit supported Kandarin Diary gameplay tasks. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4355 Interaction parity with Jordan's testing scenarios. #3788 Craft mind shields after Elemental Workshop II."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4355 Interaction parity with Jordan's testing scenarios. #3788 Craft mind shields after Elemental Workshop II.",
+            "2026-11-16: added post-quest elemental helmet smithing from one elemental metal with hammer, beaten book and boostable Smithing 20, taking four ticks for 20 base Smithing XP. Direct workbench use and the existing helmet choice share guarded selected-slot ownership; no repeated quest rewards. Real native packet, Bank/removal/retry and PlayerSave regressions are in server/tests/elemental-helmet-smithing-native.test.cjs. Independent real-owner review and rendered native workbench/full-bag/refusal/walk-cancel/retry checks passed; actual disconnect/relogin restored two helmets and committed SQLite after final native logout retained three. Sources, baseline fixture failures, exact presentation limits and the unverified final three-helmet fresh-context relog are in docs/quests/elemental-workshop-ii/README.md. No broader quest completion reassessment."
           ],
           "taskDetails": [
             {
@@ -39927,6 +39928,7 @@
             "server/plugins/items/TonalzticsOfRalos.plugin.js"
           ],
           "devNotes": [
+            "2026-11-16: Soulflame horn Entice now spends its grant on dragon/burning claws and affects their second accuracy check; early first-check success still spends it. Source: Soulflame horn Wiki; docs/soulflame-horn.md records the PvP second-check inference and verification limits. Real Player/NPC/PendingHit integration checks pass 17/17, focused consumers pass, and independent review passed four additional real scenarios. Native two-client horn/NPC/PvP controls, actual mortal-fixture claw HP loss, logout saves and owned service cleanup verified; native first-check successes did not exercise the affected second check. Existing wider Special attacks task assessments are unchanged.",
             "Main 8166111fa: #1405 the Soulreaper axe's soul stacks and Behead; two-handed weapons (166 were wrong) now come from the cache.",
             "Main b7fa4f6b9: #1382 Liquify only works underwater and keeps stronger boosts; #1383 Soulshot uses the Wiki's ammunition-only damage and Magic drain.",
             "Main fdf193b28: #1292 Backstab/Snipe, #1299 Favour, #1313 Lumber Up variants, #1330 Hammer Blow, #1331 Fishstabber variants, #1336 Powershot, #1342 Abyssal Puncture variants, #1343 Rock Knocker variants and #1306 Excalibur's Sanctuary match the Wiki.",

@@ -13,8 +13,11 @@ and no swing. The horn is a Yama unique.
 - It reaches up to 3 other players within 3 tiles, costing 25% special energy per other player
   affected. The user is empowered too, at no extra cost.
 - An empowered player's next melee attack within 10 ticks is a successful hit; this covers melee
-  special attacks. For a multi-hit attack only the first accuracy roll is guaranteed. Against
-  another player it is a 50% accuracy increase instead.
+  special attacks. For a multi-hit attack only the first accuracy roll is guaranteed, except
+  dragon and burning claws: their first check is ordinary and their second check is affected.
+  Against another player it is a 50% accuracy increase instead. Applying that PvP replacement
+  to the same second claw check is inferred from these adjacent Wiki rules; there is no local
+  capture establishing the PvP check order.
 - Inside Nightmare, Nex, all raids, Royal Titans and Yama everyone, Ironmen included, can receive
   it. Elsewhere a player needs Accept Aid on.
 - With no eligible player in range: "You blow your horn into the wind. No-one nearby is able to
@@ -56,11 +59,63 @@ rsprox captures:
   again when it ends: a roll cached earlier that cycle gets the bonus, and the second hit of a
   multi-hit attack does not (`tests/soulflame-horn-pvp-roll.test.cjs`, a real dragon dagger
   special against a real player).
+- First-successful specials use `combat:first-successful-accuracy`, emitted once before any
+  accuracy check. Its `specialId` is captured with the active traits before prepare hooks can
+  change the attacker's selected special; `accuracyRolls` holds fresh per-check overrides for
+  this resolution. The horn spends its grant immediately, including when the first claw check
+  lands and the second is never reached. Dragon/burning claws select index 1; Vesta's single-range
+  Spear Wall uses index 0. PvP scales only that check through `withAccuracyScale(1.5, roll)`,
+  after cached base rolls, with `finally` restoring the scope. No state waits for a damage hook,
+  and the ordinary roll/damage listeners do not receive new first-successful branch calls.
+
+## Verification of the claw integration
+
+- Native path: special orb/bar → `NetworkBuilder` → `CombatSpecial.activate` → horn grant;
+  inventory equip → `EquipPacketListener`/`WeaponInterfaceManager`; Attack NPC/player →
+  `NPC_ACTIONS`/`PlayerOptionPacketListener` → `Combat` → special method `hits` → `PendingHit`
+  → local accuracy overrides → existing formula/range split → queued impact/client sync.
+- `tests/soulflame-horn-pvp-roll.test.cjs`: 17 real Player/NPC/PendingHit checks pass. Actual
+  item-definition, special and equipment plugins initialize through their production APIs;
+  transport and deterministic accuracy RNG are controlled. Tests cover both claw branches,
+  first-success consumption, second-check-only PvP scaling with/without a cached roll,
+  same-cycle follow-ups, one-HP caps, grant replacement/expiry, an intervening prepare-hook
+  special reassignment, Vesta's single-range control and ordinary dragon dagger rolls.
+- The focused horn/melee-special/Vesta/dragon-dagger run initially passed 60 of 61 checks;
+  the remaining existing area-name check needed Git grep on PATH and its MSYS runtime outside
+  the Windows sandbox, then passed separately. Three additional cap/replacement checks brought
+  the real-object horn file from 14 to 17 passing checks. No full suite was run.
+- The original all-plugin test fixture briefly opened an unrelated admin listener through its
+  startup hook; shutdown completed with process exit, and a read-only port check found no
+  remaining listener. The horn integration fixture now initializes only its required plugins.
+- Independent review passed four additional real scenarios with no findings in the inspected
+  paths: the real EquipPacketListener path preserves Entice through a ranged attack, and actual Vesta
+  immunity/CombatFactory/HitQueue impact rejects damage while a later roll remains unscaled.
+- Two rendered clients verified native horn equip/activation, 25% energy per eligible ally,
+  encouragement/fade feedback, dragon/burning claw equip, orb activation and NPC Attack.
+  The NPC hits resolved as `[7,0,0,0]` and `[4,3,0]`, capped to existing Man NPCs' seven HP;
+  inspected screenshots show the special animations and hitsplats. The burning sequence
+  consumed 25% for the horn plus 35% for the claws, leaving 40%.
+- A native two-player Wilderness fight passed the real attack-permission gate and used the
+  actual player Attack packet. The first run retained MCP's default developer protection:
+  visible/resolved damage did not reduce player HP. A focused repeat explicitly enabled
+  `::mortal` for both fixture accounts and acknowledged the client inventory update plus
+  server claw equipment before attacking. The claw hit `[14,7,3,4]` reduced target HP
+  `99→85→78→75→71` across its two impact ticks; applied-damage observers and the rendered
+  HP display agree. A separate ordinary follow-up in the protected run used the plain
+  13,310 attack roll. Controlled stats, items, energy and positions are fixture setup;
+  equipment, horn/special activation, targeting, walking and logout used native controls.
+- Both native claw runs landed their first check, so the second-check guarantee/PvP multiplier
+  was configured but unused. Deterministic real-object tests establish those hidden check
+  semantics; screenshots do not establish accuracy probabilities. Audible playback was not
+  checked. Recording 3865 supports horn feedback, not the claw accuracy rule; the CoX recordings
+  cited above were unavailable for this validation.
+- Native logouts saved both anonymous fixture inventories. The final `gameUpdate 5` countdown
+  completed persistence and exited normally; owned server/client/browser processes stopped
+  and all five assigned ports were clear. An earlier interrupted wrapper stop had no graceful
+  receipt and is not used as evidence of graceful shutdown.
 
 ## Ours
 
 - Configure (radius 0-3, max players 1-20) is not implemented; it always uses 3 tiles and 3 others.
 - With energy for fewer allies than are eligible, the nearest that can be paid for are affected.
 - A press inside the cooldown does nothing and sends nothing.
-- The dragon and burning claws specials (`firstSuccessfulAccuracyDamageRanges`) don't emit the
-  roll event, so they neither spend the effect nor get the Wiki's guaranteed second check.

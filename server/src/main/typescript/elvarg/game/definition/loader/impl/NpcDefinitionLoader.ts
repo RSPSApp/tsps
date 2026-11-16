@@ -74,6 +74,8 @@ const ATTACK_WORDS = new Set([
 /** Combat style words: an attack, unless the name also stands or moves (`top_spider_ranged_idle`). */
 const STYLE_WORDS = new Set(["melee", "ranged", "range", "magic", "mage"]);
 const MOTION_WORDS = new Set(["idle", "ready", "walk", "run", "stand", "standing"]);
+/** An observed entrance or movement is not evidence for an otherwise missing combat role. */
+const NON_COMBAT_WORDS = new Set([...MOTION_WORDS, "tele", "teleport", "appear", "disappear", "spawn"]);
 
 const animationWords = (name: string) => name.split("_").map((word) => word.replace(/\d+$/, "")).filter(Boolean);
 
@@ -438,7 +440,11 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             inferredAnimations += Object.keys(inferred).length;
             if (!configuredAnimationIds.has(npcId)) {
                 // A named animation never fills another role: a death is not guessed as an attack.
-                const ids = Array.from(new Set(observed.filter((id) => Number.isInteger(id) && id >= 0 && !namedRoles.has(id))));
+                const ids = Array.from(new Set(observed.filter((id) => {
+                    if (!Number.isInteger(id) || id < 0 || namedRoles.has(id)) return false;
+                    const name = CacheDefinitions.getSeqName(id);
+                    return !name || !animationWords(name).some((word) => NON_COMBAT_WORDS.has(word));
+                })));
                 const indexes = ids.map((_, index) => index);
                 const preferences: Record<CombatAnimationRole, number[]> = {
                     attack: ids.length <= 2 ? indexes : [1, ...indexes.filter((index) => index !== 1)],

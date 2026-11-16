@@ -54,6 +54,8 @@ const DOOR_NAMES = new Set([
  * for these; each is the actionless, same-model leaf of a named closed door.
  */
 const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
+  IKOV_LUCIEN_DOOR_OPEN: 11403, // ikov_luciendoor_open: same-model, actionless open leaf of O.DOOR_13
+
   DOOR_47_OPEN: 2001, // closed O.DOOR_47 (2000); same models, cache-derived
   DOOR_48_OPEN: 2003, // closed O.DOOR_48 (2002); same models, cache-derived
   PLAGUE_HOUSE_DOOR: 37321, // plagueelenadoorshut, a multi (varbit 9016) with no name of its own
@@ -431,6 +433,19 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // across, from the low side to the high side or back, along their own row. crossDelay holds the
   // opener that many ticks after the opening sound before the gate opens and they cross.
   PASS_THROUGH_GATES = Object.freeze([
+    // Lucien's house: the maintainer's review5926064464 cites 242/912207 ticks13005–13007
+    // and 232/03233 ticks944–946: a blocker stays at the entrance while the opener walks
+    // across, and the closed door returns two ticks later (not an ordinary shared opening).
+    Object.freeze({
+      closed: [[O.DOOR_13, 3122, 3488, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3122, 3488, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.IKOV_LUCIEN_DOOR_OPEN, 3122, 3487, 0, 0],
+      ],
+      crossY: 3488,
+      walkOver: true,
+      closeTicks: 2,
+    }),
     // Authored Ikov passage: a shared blocker preserves unqualified players' clipping.
     // The authorized opener is explicitly carried one tile; this is not ordinary clipped walking.
     Object.freeze({

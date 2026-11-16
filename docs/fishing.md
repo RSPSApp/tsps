@@ -65,6 +65,14 @@ save/worker flush, closed and reopened stores, and loaded players' login hooks f
 0/1/2/3. It seeds gear and levels and controls catch RNG; these checks do not claim a rendered
 client or a full network login handshake.
 
+A separate slot26 live walkthrough on the shipped cache verified the rendered refusal,
+Otto's actual menu and Continue controls, early Escape interruption, stage1 while the final
+instruction reply was displayed, real rod animation/catches and stage2 retained after native
+logout and a real client login. Levels, rod, bait and starting location were seeded; NPC
+operations used the agent's decoded native packets while dialogue and logout/login controls
+used actual canvas pointer/keyboard input. This does not claim complete miniquest or
+free-world visual coverage.
+
 ## Karambwanji and karambwan
 
 - **Karambwanji (Holy Lake, small net, 5 Fishing):** chart 100/250, then shrimps 48/256 when the

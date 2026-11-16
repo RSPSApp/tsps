@@ -737,6 +737,11 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       ? { menu: history[0] ?? context.pageInitialMenu } : "end";
     const match = /^previous(\d*)/i.exec(reference);
     const back = match && match[1] ? Number(match[1]) : 1;
+    // A submenu's way back is the menu whose option opened it (Daero's "Return to previous menu" goes back to his
+    // topics, whichever topic was opened before), not merely the menu shown before it.
+    let opened = current;
+    for (let step = 0; opened && step < back; step++) opened = menuThatOpened(opened);
+    if (opened) return { menu: opened };
     const index = current ? history.indexOf(current) : history.length - 1;
     // "previous" on the first menu means the menu the option came from; only walk
     // further back when the conversation actually has earlier menus.
@@ -751,6 +756,16 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       return { menu: context.pageMenuBefore };
     }
     return "end";
+  };
+
+  // The menu shown in this chat with an option that opens `menu` (its first step is that menu). Steps are rebuilt per
+  // run, so menus are matched on their option texts; the latest copy shown wins.
+  const menuTexts = (menuStep) => (menuStep?.options || []).map((entry) => String(entry?.text ?? "")).join("|");
+  const menuThatOpened = (menu) => {
+    const texts = menuTexts(menu?.step);
+    if (!texts) return undefined;
+    return [...context.menuHistory].reverse().find((shown) => shown !== menu && (shown.step?.options || []).some((entry) =>
+      entry?.steps?.[0]?.type === "choice" && menuTexts(entry.steps[0]) === texts));
   };
 
   // "jump above" targets the same option's earlier occurrence, else the option
@@ -989,11 +1004,8 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         // A paged menu's "~ previous ~" goes back a page. The wiki writes it as a bare option with no action
         // (Transcript:Observatory Quest's sign menu), so the dump leaves it without steps.
         if (!option.steps?.length && PREVIOUS_PAGE_OPTION.test(String(option.text ?? "").trim())) {
-          // The page shown before is the menu with an option that opens this one (steps are rebuilt per run,
-          // so this matches on the option texts).
-          const texts = (menuStep) => (menuStep?.options || []).map((entry) => String(entry?.text ?? "")).join("|");
-          const page = [...context.menuHistory].reverse().find((shown) => (shown.step?.options || []).some((entry) =>
-            (entry?.steps || []).some((inner) => inner?.type === "choice" && texts(inner) === texts(own.step))));
+          // The page shown before is the menu with an option that opens this one.
+          const page = menuThatOpened(own);
           if (page) return presentMenu(page);
         }
         context.currentMenu = own;

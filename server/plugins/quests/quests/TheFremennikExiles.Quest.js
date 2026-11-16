@@ -42,7 +42,8 @@
  *    Magic/Defence when the player is not facing away; the stone bind and Typhor's magic stay
  *    presentation-only (conditions C6zHQ6/DLVETM answered false).
  *  - Captured camera/fade/shake beats use QuestScenes: Rellekka invasion and the longhall
- *    celebration with Olaf (9274). The Island of Stone arrival has no shake.
+ *    celebration with Olaf (9274). The Island of Stone arrival has no shake; it fades out, lands two
+ *    ticks later and fades back in two after that (227/01768.txt ticks 3700-3706).
  *  - The Item Retrieval Service (qY-jfP, the island deathbank) has no interface hook here; the
  *    Collect dialogue is replayed but nothing opens.
  *  - "being-exiled-bjorn-eldgrim" and "being-exiled-any-other-fremennik-in-rellekka" are not
@@ -480,6 +481,17 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   };
 
   const startMenu = new WeakSet();
+  /** Players on the boat to the Island of Stone, between the fade out and the fade back in. */
+  const SAILING_TO_ISLAND = new WeakSet();
+  /**
+   * rsprox_transcripts/227/01768.txt ticks 3700-3706 (also 227/01862.txt 9628-9634, 227/910302.txt
+   * 3981-3987 and 4442-4448): busy and the fade out on the click, the message and the teleport two
+   * ticks later, the fade back in two ticks after that, the overlay closed two ticks on.
+   */
+  const ISLAND_TRAVEL_TICKS = 2;
+  const ISLAND_FADE_IN_TICKS = 4;
+  const ISLAND_CLOSE_FADE_TICKS = 6;
+  const ISLAND_ARRIVAL_MESSAGE = "You board the boat and travel to the Island of Stone.";
   const trackedNpcs = new Map();
   const marketNpcs = new Map();
 
@@ -764,6 +776,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   }
 
   function handleLogout({ player }) {
+    SAILING_TO_ISLAND.delete(player);
     Scenes.cancel(player);
     Scenes.closeFade(player);
     Scenes.controls(player, false);
@@ -1710,7 +1723,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       if (npcId === NpcIdentifiers.HASKELL_3) {
         player.moveTo(RELLEKKA_PORT);
       } else {
-        player.moveTo(ISLAND_LANDING);
+        sailToIsland(player);
       }
       return;
     }
@@ -1983,10 +1996,33 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       return;
     }
     if (stage < STAGE_ISLAND) setStage(player, STAGE_ISLAND);
-    // No camera shake: none of the six recorded arrivals (rsprox_transcripts/227/01768.txt tick 3702, 227/01862.txt,
-    // 227/910302.txt, 227/910380.txt, 227/910418.txt, 227/910597.txt) sends one. The 1/0/10/25 shake once copied here is
-    // Baba Yaga's house (01768 tick 2622), which BabaYagasHouse.plugin.js plays.
-    player.moveTo(ISLAND_LANDING);
+    sailToIsland(player);
+  }
+
+  /**
+   * The fade to the Island of Stone. No camera shake: none of the six recorded arrivals
+   * (rsprox_transcripts/227/01768.txt tick 3702, 227/01862.txt, 227/910302.txt, 227/910380.txt,
+   * 227/910418.txt, 227/910597.txt) sends one. The 1/0/10/25 shake once copied here is Baba Yaga's
+   * house (01768 tick 2622), which BabaYagasHouse.plugin.js plays.
+   */
+  function sailToIsland(player) {
+    if (SAILING_TO_ISLAND.has(player)) return;
+    SAILING_TO_ISLAND.add(player);
+    const busy = CacheDefinitions.getVarbitId("busy");
+    player.getMovementQueue().reset().setBlockMovement(true);
+    if (busy != null) player.getPacketSender().sendVarbit(busy, 1);
+    Scenes.fade(player, true);
+    Scenes.later(player, ISLAND_TRAVEL_TICKS, () => {
+      player.sendMessage(ISLAND_ARRIVAL_MESSAGE);
+      player.moveTo(ISLAND_LANDING);
+    });
+    Scenes.later(player, ISLAND_FADE_IN_TICKS, () => {
+      SAILING_TO_ISLAND.delete(player);
+      player.getMovementQueue().setBlockMovement(false);
+      if (busy != null) player.getPacketSender().sendVarbit(busy, 0);
+      Scenes.fade(player, false);
+    });
+    Scenes.later(player, ISLAND_CLOSE_FADE_TICKS, () => Scenes.closeFade(player));
   }
 
   function enterIslandCave(player) {

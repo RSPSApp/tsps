@@ -503,8 +503,41 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.line(N.BRUNDT_THE_CHIEFTAIN_6, "Dalkar! Get to the boat. It's time for us to go!");
   assert.equal(h.quest.getStage(h.player), 85);
 
+  // rsprox_transcripts/227/01768.txt ticks 3700-3706: fade out on the click, message and teleport two ticks
+  // later, fade back in two after that, the overlay closed two ticks on.
+  const islandSender = h.player.getPacketSender();
+  const islandFades = [], islandCloses = [];
+  const islandMount = islandSender.mountSubInterface;
+  islandSender.mountSubInterface = (target, group, type, options) => {
+    islandFades.push({ group, args: options?.postScripts?.[0]?.args });
+    return islandMount(target, group, type);
+  };
+  islandSender.closeSubInterface = (uid) => { islandCloses.push(uid); return islandSender; };
+  const islandFrom = h.player.getLocation();
   h.object(O.FREMENNIK_BOAT_6);
   assert.equal(h.quest.getStage(h.player), 85);
+  assert.deepEqual(islandFades, [{ group: 174, args: [0, 255, 0, 0, 50] }], 'the boat fades out on the click');
+  assert.equal(h.player.getLocation(), islandFrom, 'still at the dock while the screen fades');
+  const busyVarbit = h.core.CacheDefinitions.getVarbitId('busy');
+  assert.ok(busyVarbit != null, 'the cache names the busy varbit');
+  assert.equal(h.varbits.get(busyVarbit), 1, 'busy while sailing');
+  h.object(O.FREMENNIK_BOAT_6);
+  assert.equal(islandFades.length, 1, 'a second click during the trip does not restart it');
+  h.tick(1);
+  assert.equal(h.player.getLocation(), islandFrom);
+  h.tick(1);
+  assert.equal(h.player.getLocation().getX(), 2470, 'lands on the island two ticks after the click');
+  assert.equal(h.messages.filter((m) => m === 'You board the boat and travel to the Island of Stone.').length, 1);
+  h.tick(1);
+  assert.equal(islandFades.length, 1);
+  h.tick(1);
+  assert.deepEqual(islandFades[1], { group: 174, args: [0, 0, 0, 255, 50] }, 'fades back in four ticks after the click');
+  assert.equal(h.varbits.get(busyVarbit), 0, 'no longer busy on the fade in');
+  const closesBefore = islandCloses.length;
+  h.tick(2);
+  assert.ok(islandCloses.length > closesBefore, 'the fade overlay closes two ticks after the fade in');
+  islandSender.mountSubInterface = islandMount;
+  delete islandSender.closeSubInterface;
   // rsprox_transcripts/227/01768.txt tick 3702 (and five other recorded arrivals): no camera shake, so none is left running.
   assert.deepEqual(h.cameras.shakes, [], 'the Island of Stone arrival sends no camera shake');
   h.setLocation(new h.core.Location(2470, 4010, 0));

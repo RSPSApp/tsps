@@ -1005,7 +1005,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `GnomeGliders` | GnomeGliders | world | yes | Gnome glider pilots: the glider map, flights between destinations with the fade and last-destination option, needing The Grand Tree. (members only) |
 | `Gravestones` | Gravestones | world | yes | A PvM death leaves a gravestone only you can see for 15 minutes, then items go to Death's Office. Can be turned off for the older drop behaviour. |
 | `HalloweenEvents` | HalloweenEvents | world | yes | The 2025 Halloween Spook-a-thon Decoration Contest, with its dialogue and spooky chair items, running only in its calendar window. |
-| `HolidayRewards` | HolidayRewards | world | yes | Diango's Holiday-items interface to reclaim lost holiday items, tracking which rare holiday items and alternate styles a player has unlocked. |
+| `HolidayRewards` | HolidayRewards | world | yes | Diango's Holiday-items interface to reclaim lost holiday items, tracking which rare holiday items and alternate styles a player has unlocked, and his Redeem-code prompt. |
 | `IntelligenceGathering` | IntelligenceGathering | world | yes | Intelligence Gathering: the information board, Captain Ginea's hand-in and the timed gang meetings with a boss and gangsters. (members only) |
 | `KeldagrimMinecarts` | KeldagrimMinecarts | world | yes | Keldagrim minecarts: conductors sell tickets, with rides between Keldagrim, Ice Mountain, White Wolf Mountain and the Grand Exchange. (members only) |
 | `LadyOfTheWaves` | LadyOfTheWaves | world | yes | Captain Shanks on the Lady of the Waves sells a ship ticket after Shilo Village and sails you to Port Khazard or Port Sarim. (members only) |

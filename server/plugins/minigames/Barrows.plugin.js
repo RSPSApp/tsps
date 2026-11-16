@@ -59,6 +59,27 @@ const MINIMAP_STATE_VARBIT = 6719;
 const MINIMAP_SHOWN = 0;
 const MINIMAP_HIDDEN = 2;
 const MAP_USED_ATTRIBUTE = "his-faithful-servants:crypt-map-studied";
+/**
+ * barrows_warning_toggle: the Strange Old Man condenses the tunnel warning into the menu's title
+ * (user rsprox captures BarrowsMiniQuest.bin tick 1034, set as his "AAAA" line shows; and
+ * StrangeOldLockpickBarrows.bin, 1 at login, the prompt as the title at tick 23). Saved.
+ */
+const WARNINGS_VARBIT = 12434;
+const WARNINGS_ATTRIBUTE = "barrows:warnings-condensed";
+const TUNNEL_PROMPT = "You've found a hidden tunnel, do you want to enter?";
+// His transcripts' warning branches: the Strange Old Man page's conditions and screams, and the
+// His Faithful Servants page's two "If the warnings are ..." directions and its scream.
+const WARNINGS_PAGE_SCREAM = { "Strange Old Man": "AAAAAAAAARRRRRRGGGGGHHHHHHHH?", "His Faithful Servants": "AAAAAAAAARRRRRRGGGGGHHHHHHHH!" };
+const WARNINGS_NOT_CONDENSED = /^if the (?:barrows catacomb warning is not condensed|warnings are not combined):?$/i;
+const WARNINGS_CONDENSED = /^if the (?:barrows catacomb warning is condensed|warnings are combined):?$/i;
+/** "Your Strange old lockpick has 48 charges remaining." (user capture StrangeOldLockpickBarrows.bin tick 52). */
+const LOCKPICK_CHARGES = 50;
+const LOCKPICK_CHARGES_KEY = "barrows:lockpick-charges";
+/** A pick on its last charge that has opened its last hallway: it goes once the tunnels are left. */
+const LOCKPICK_SPENT_KEY = "barrows:lockpick-spent";
+const LOCKPICKS = new Set([Items.STRANGE_OLD_LOCKPICK, Items.STRANGE_OLD_LOCKPICK_FULL_]);
+/** Wiki (Strange old lockpick, Trivia): the last charge's hallway. */
+const LOCKPICK_LAST_USE = "The Strange old lockpick almost breaks, but seems in good enough shape for one more use.";
 const CORNERS = [0, 2, 6, 8];
 // Room numbers run NW to SE through a 3x3 grid. The outside corridors wrap around the corners.
 const DOOR_LINKS = [
@@ -224,6 +245,9 @@ function randomiseLayout(run) {
   run.openDoors = [...openDoors, run.puzzleDoor];
   run.exitRoom = CORNERS[randomInt(0, CORNERS.length - 1)];
   run.puzzleSolved = false;
+  // Hallways a strange old lockpick has opened: passable for the rest of this layout, with no
+  // door varbit change (StrangeOldLockpickBarrows.bin ticks 56-64: barrows_door_m stays 1).
+  run.pickedDoors = [];
 }
 
 function freshRun(chests = 0) {
@@ -351,8 +375,8 @@ function dig({ player }) {
   if (!BOUNDS.some((bounds) => bounds.inside(location))) return false;
   const state = session(player);
   if (state.dig || player.getForceMovement()) return true;
-  player.performAnimation(DIG_ANIMATION);
   const brother = BROTHERS.find((entry) => entry.mound.inside(location));
+  player.performAnimation(DIG_ANIMATION);
   if (!brother) {
     player.sendMessage("You dig into the ground, but find nothing.");
     return true;
@@ -373,6 +397,20 @@ function dig({ player }) {
   return true;
 }
 
+/**
+ * A plugin can refuse a brother's mound before the spade's dig starts (`barrows:dig`, `blocked`):
+ * His Faithful Servants before the Strange Old Man's talk gives his line, with no dig sequence or
+ * sound (user rsprox capture BarrowsMiniQuest.bin tick 16).
+ */
+function refuseMoundDig(request) {
+  const { player, location } = request;
+  const brother = BROTHERS.find((entry) => entry.mound.inside(location));
+  if (!brother || session(player).dig) return;
+  const mound = { player, brother: brother.npcId, blocked: false };
+  pluginApi.emitCustomEvent("barrows:dig", mound);
+  if (mound.blocked) request.refused = true;
+}
+
 function enterTunnel(player, run, brother) {
   if (getRun(player) !== run || player.getLocation().getZ() !== 3 ||
       player.getLocation().getDistance(brother.crypt) > 10) return;
@@ -389,14 +427,19 @@ function searchCrypt(player, index) {
   const brother = BROTHERS[index];
   if (index === run.tunnel) {
     // rsprox_transcripts/226/01694.txt:169415-169442: a message box (and its mesbox chat line), then on continue the
-    // menu "Select an option": "Yeah I'm fearless!" / "No way, that looks scary!".
+    // menu "Select an option": "Yeah I'm fearless!" / "No way, that looks scary!". Condensed warnings
+    // (WARNINGS_VARBIT) skip the box: the menu itself is titled with the line (StrangeOldLockpickBarrows.bin tick 23).
     const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = pluginApi.core;
-    const text = "You've found a hidden tunnel, do you want to enter?";
+    const menu = (title) => pluginApi.sendMultiChatboxPrompt(player, title,
+      "Yeah I'm fearless!", () => enterTunnel(player, run, brother),
+      "No way, that looks scary!", () => player.getPacketSender().sendInterfaceRemoval());
+    if (warningsCondensed(player)) {
+      menu(TUNNEL_PROMPT);
+      return;
+    }
     player.getDialogueManager().startDialogues(new DialogueChainBuilder()
-      .add(new StatementDialogue(0, text))
-      .add(new ActionDialogue(1, { execute: () => pluginApi.sendMultiChatboxPrompt(player, "Select an option",
-        "Yeah I'm fearless!", () => enterTunnel(player, run, brother),
-        "No way, that looks scary!", () => player.getPacketSender().sendInterfaceRemoval()) })));
+      .add(new StatementDialogue(0, TUNNEL_PROMPT))
+      .add(new ActionDialogue(1, { execute: () => menu("Select an option") })));
   } else if (state.brother || run.killed.includes(index)) {
     player.sendMessage("The sarcophagus appears to be empty.");
   } else {
@@ -430,26 +473,66 @@ function routeDoor(event) {
   event.destination = { x: sides[0].getX(), y: sides[0].getY(), z: 0 };
 }
 
-function consumeLockpick(player) {
+function lockpickCharges(item) {
+  return item.getId() === Items.STRANGE_OLD_LOCKPICK_FULL_ ? LOCKPICK_CHARGES : Number(item.getMetaValue(LOCKPICK_CHARGES_KEY) ?? LOCKPICK_CHARGES);
+}
+
+function usableLockpick(item) {
+  if (!item || !LOCKPICKS.has(item.getId()) || item.getMetaValue(LOCKPICK_SPENT_KEY) === true) return false;
+  const charges = lockpickCharges(item);
+  return Number.isInteger(charges) && charges >= 1 && charges <= LOCKPICK_CHARGES;
+}
+
+/**
+ * Opens a hallway that was impassable with a strange old lockpick: the one used on its door, else
+ * one carried ("When placed in your inventory, this lockpick will allow you to bypass all Barrows
+ * doors. A charge is consumed when you use the lockpick to open a door which was previously impassable
+ * to you": Jagex, Darkmeyer news). One charge per hallway: its other door is free (user captures
+ * StrangeOldLockpickBarrows.bin ticks 56/63, 48 -> 47 -> 47; BarrowsMiniQuest.bin ticks 543/553). A
+ * full pick becomes the used one in its slot (BarrowsMiniQuest.bin tick 543). Its last charge gives the
+ * Wiki's warning and lasts until the tunnels are left (crumbleSpentLockpicks).
+ */
+function pickLock(player, run, door, used = null) {
   const inventory = player.getInventory();
-  const item = inventory.getItems().find((entry) => entry.getId() === Items.STRANGE_OLD_LOCKPICK || entry.getId() === Items.STRANGE_OLD_LOCKPICK_FULL_);
+  const item = usableLockpick(used) ? used : inventory.getItems().find(usableLockpick);
   if (!item) return false;
-  const charges = item.getId() === Items.STRANGE_OLD_LOCKPICK_FULL_ ? 50 : Number(item.getMetaValue("barrows:lockpick-charges") ?? 50);
-  if (!Number.isInteger(charges) || charges < 1 || charges > 50) return false;
+  const charges = lockpickCharges(item);
   if (charges === 1) {
-    inventory.deleteItem(item, inventory.getItems().indexOf(item));
-    player.sendMessage("Your strange old lockpick crumbles to dust.");
+    item.setMetaValue(LOCKPICK_SPENT_KEY, true);
+    player.sendMessage(LOCKPICK_LAST_USE);
   } else {
     item.setId(Items.STRANGE_OLD_LOCKPICK);
-    item.setMetaValue("barrows:lockpick-charges", charges - 1);
+    item.setMetaValue(LOCKPICK_CHARGES_KEY, charges - 1);
     inventory.refreshItems();
   }
+  run.pickedDoors = [...(run.pickedDoors ?? []), door.varbit];
   return true;
 }
 
+/**
+ * Wiki: "If teleporting out without using the last charge, the strange old lockpick still crumbles to dust."
+ * Ours: it goes without a chat line (none is recorded or quoted) as its holder leaves the tunnels.
+ */
+function crumbleSpentLockpicks(player) {
+  const inventory = player.getInventory();
+  inventory.getItems().forEach((item, slot) => {
+    if (item && LOCKPICKS.has(item.getId()) && item.getMetaValue(LOCKPICK_SPENT_KEY) === true) inventory.deleteItem(item, slot);
+  });
+}
+
 function inspectLockpick({ player, item }) {
-  const charges = item.getId() === Items.STRANGE_OLD_LOCKPICK_FULL_ ? 50 : item.getMetaValue("barrows:lockpick-charges") ?? 50;
-  player.sendMessage(`Your strange old lockpick has ${charges} charges remaining.`);
+  player.sendMessage(`Your Strange old lockpick has ${lockpickCharges(item)} charges remaining.`);
+}
+
+/** The lockpick used on a tunnel door: opens it as Open does, a charge only for an impassable hallway. */
+function useLockpickOnDoor(event) {
+  const { player, object, item } = event;
+  if (!LOCKPICKS.has(event.itemId) || !inTunnels(player)) return false;
+  const door = doorAt(object);
+  if (!door) return false;
+  event.handled = true;
+  useDoor(player, door, item);
+  return true;
 }
 
 function crossDoor(player, door) {
@@ -472,19 +555,20 @@ function crossDoor(player, door) {
   movement.addSteps(to.clone());
 }
 
-function useDoor(player, door) {
+function useDoor(player, door, lockpick = null) {
   const state = session(player);
   if (state.crossing || player.getForceMovement()) return;
   const run = getRun(player);
   if (!doorSides(door).some((side) => side.equals(player.getLocation()))) return;
   const centre = DOOR_LINKS.find(([id]) => id === door.varbit).slice(1).includes(4);
-  if (!run.openDoors.includes(door.varbit)) {
-    if (!consumeLockpick(player)) {
+  const picked = (run.pickedDoors ?? []).includes(door.varbit);
+  if (!run.openDoors.includes(door.varbit) && !picked) {
+    if (!pickLock(player, run, door, lockpick)) {
       player.sendMessage("This door is locked.");
       return;
     }
-  } else if (centre && !run.puzzleSolved && roomAt(player.getLocation()) !== 4 && !run.looted) {
-    if (!consumeLockpick(player)) {
+  } else if (centre && !picked && !run.puzzleSolved && roomAt(player.getLocation()) !== 4 && !run.looted) {
+    if (!pickLock(player, run, door, lockpick)) {
       showPuzzle(player, door);
       return;
     }
@@ -670,6 +754,9 @@ function searchChest(player, clickType) {
   const diary = { player, diary: "morytania", tier: "hard", complete: false };
   pluginApi.emitCustomEvent("diary:is-complete", diary);
   const rewards = rollRewards(run, diary.complete === true, chestBoost(player));
+  // Other plugins' items join the loot, in its window (His Faithful Servants' strange icon comes
+  // first: BarrowsMiniQuest.bin tick 885, trail_rewardinv's slot 0).
+  pluginApi.emitCustomEvent("barrows:chest-rewards", { player, run, rewards });
   run.chests++;
   run.looted = true;
   for (const item of rewards) {
@@ -838,7 +925,10 @@ function processPlayer({ player }) {
   if (phase !== state.phase) {
     // A looted run stays looted until the next crypt is dug into (dig), as live keeps it: a
     // teleport out and back into the chest room (league Evil eye) finds it empty (237/04057).
-    if (state.phase === "tunnels" && phase !== "tunnels") cleanupNpcs(player, true);
+    if (state.phase === "tunnels" && phase !== "tunnels") {
+      cleanupNpcs(player, true);
+      crumbleSpentLockpicks(player);
+    }
     state.puzzle = null;
     // Each entry into a crypt restarts the drain's 30 ticks (rsprox_transcripts/226/01694.txt: in at ticks 8801, 8868,
     // 8916, 8966 and 9046, drained at 8831, 8898, 8946, 8996 and 9076).
@@ -895,13 +985,72 @@ function playerDeath(event) {
   if (run?.looted) event.player.setAttribute(ATTRIBUTE, freshRun(run.chests));
 }
 
+// ------------------------------------------------------------------ The Strange Old Man's tunnel warnings
+function warningsCondensed(player) {
+  return Number(player.getAttribute(WARNINGS_ATTRIBUTE)) === 1;
+}
+
+function sendWarningsVarbit({ player }) {
+  player.getPacketSender().sendVarbit(WARNINGS_VARBIT, warningsCondensed(player) ? 1 : 0);
+}
+
+const isStrangeOldMan = (npcId) => npcId === Npcs.STRANGE_OLD_MAN;
+
+/** The Strange Old Man page's "If the barrows catacomb warning is (not) condensed:" conditions. */
+function answerWarningsCondition({ npcId, player, text }) {
+  if (!isStrangeOldMan(npcId)) return null;
+  const value = String(text ?? "").trim();
+  if (WARNINGS_NOT_CONDENSED.test(value)) return !warningsCondensed(player);
+  if (WARNINGS_CONDENSED.test(value)) return warningsCondensed(player);
+  return null;
+}
+
+/** Per player: the lines of the warnings direction that doesn't apply, left out as they come up. */
+const warningLinesSkipped = new WeakMap();
+
+/**
+ * His Faithful Servants' "If the warnings are (not) combined:" are directions in the export, each
+ * followed by its own lines: the one that applies plays them (BarrowsMiniQuest.bin ticks 1030-1031, not
+ * yet condensed), the other's are skipped, and both go on to his scream.
+ */
+function answerWarningsDirection(event) {
+  if (!isStrangeOldMan(event.npcId) || event.kind === "message" || !Array.isArray(event.step?.steps)) return;
+  const text = String(event.text ?? "").trim();
+  const condensed = warningsCondensed(event.player);
+  const applies = WARNINGS_NOT_CONDENSED.test(text) ? !condensed : WARNINGS_CONDENSED.test(text) ? condensed : null;
+  if (applies === null) return;
+  let skipped = warningLinesSkipped.get(event.player);
+  if (!skipped) warningLinesSkipped.set(event.player, skipped = new Set());
+  for (const step of event.step.steps) {
+    if (applies) skipped.delete(step);
+    else skipped.add(step);
+  }
+}
+
+/** His scream answers the request: the toggle flips as it shows (BarrowsMiniQuest.bin tick 1034). */
+function toggleWarningsOnScream(event) {
+  if (!isStrangeOldMan(event.npcId)) return;
+  if (warningLinesSkipped.get(event.player)?.has(event.step)) {
+    event.skip = true;
+    return;
+  }
+  const scream = WARNINGS_PAGE_SCREAM[event.pages?.[0]?.page];
+  if (!scream || (event.step?.npc ?? event.step?.text) !== scream) return;
+  const previous = event.before;
+  event.before = () => {
+    previous?.();
+    event.player.setAttribute(WARNINGS_ATTRIBUTE, warningsCondensed(event.player) ? 0 : 1);
+    sendWarningsVarbit(event);
+  };
+}
+
 function chestCount(request) {
   if (request.category === "Barrows Chests") request.count = Number(request.player.getAttribute(ATTRIBUTE)?.chests) || 0;
 }
 
 module.exports = {
   name: "Barrows",
-  description: "Adds the Barrows minigame: the six brothers' crypts and puzzle door, the prayer drain, the reward chest and the Barrows minimap.",
+  description: "Adds the Barrows minigame: the six brothers' crypts and puzzle door, the prayer drain, the reward chest, the Barrows minimap, the strange old lockpick on the tunnel doors and the Strange Old Man's condensed tunnel warnings.",
   members: true,
   register(api) {
     World = api.getWorld();
@@ -911,8 +1060,15 @@ module.exports = {
     initRegionBuildingAnalysisCoreAccess(api);
     api.persistAttribute(ATTRIBUTE);
     api.onItemAction("Spade", { Dig: dig });
+    api.persistAttribute(WARNINGS_ATTRIBUTE, 0);
     api.onItemAction("Strange old lockpick", { Inspect: inspectLockpick });
     api.onItemAction("Strange old lockpick (full)", { Inspect: inspectLockpick });
+    api.onItemOnObject(useLockpickOnDoor);
+    api.onCustomEvent("spade:before-dig", refuseMoundDig);
+    api.onNpcDialogueCondition(answerWarningsCondition);
+    api.onCustomEvent("npc-dialogue:action", answerWarningsDirection);
+    api.onCustomEvent("npc-dialogue:line", toggleWarningsOnScream);
+    api.onPlayerLogin(sendWarningsVarbit);
     api.onObjectRoute(routeDoor);
     api.onObjectInteraction(handleObject);
     api.onInterfaceActionClick(answerPuzzle);
@@ -938,5 +1094,6 @@ module.exports = {
     api.onPlayerLogout(cleanupPlayer);
     api.registerNpcCombatMethodProvider(Npcs.AHRIM_THE_BLIGHTED, AhrimCombat);
   },
-  _test: { rollRewards, searchChest, searchCrypt, chestCount, phaseOf, syncMinimap, processPlayer, dig, useDoor, doorSides, getTunnelMap, getRun, IGNORE_CLIPPING_FLAG },
+  _test: { rollRewards, searchChest, searchCrypt, chestCount, phaseOf, syncMinimap, processPlayer, dig, useDoor, doorSides, getTunnelMap, getRun, IGNORE_CLIPPING_FLAG,
+    useLockpickOnDoor, inspectLockpick, refuseMoundDig, WARNINGS_ATTRIBUTE },
 };

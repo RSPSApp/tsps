@@ -1299,9 +1299,11 @@ export class MovementQueue {
 
         TaskManager.submit(new MovementTask(this.player.getIndex(), (task: MovementTask) => {
             if (reachedDestination) {
-                action?.();
-                this.player.getMovementQueue().reset();
+                // Stop first, then act, as walkToObject does: an action that moves the player on
+                // (a Barrows door's walk through its doorway) keeps its step.
                 task.stop();
+                this.player.getMovementQueue().reset();
+                action?.();
                 return;
             }
 

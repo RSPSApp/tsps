@@ -18,11 +18,14 @@ const SPADE = 952;
 const actions = new Map();
 const fallbacks = new Map();
 
+const refusers = [];
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   Spade.register({
     core: PluginManager.getCoreApi(),
     onItemAction: (name, named, options) => (options?.fallback ? fallbacks : actions).set(name, named),
+    // spade:before-dig: a listener may refuse the dig (refused) before it starts.
+    emitCustomEvent: (name, request) => { if (name === 'spade:before-dig') refusers.forEach((refuse) => refuse(request)); },
   });
 });
 
@@ -34,6 +37,7 @@ function digPlayer() {
     isPlayer: () => true,
     isPlayerBot: () => false,
     getAsPlayer() { return this; },
+    getLocation: () => new Location(3200, 3200, 0),
     getMovementQueue: () => ({ reset: () => { movement.resets++; } }),
     performAnimation: (animation) => animations.push(animation.getId()),
     getPacketSender: () => ({
@@ -80,4 +84,15 @@ test('a real player keeps its queued route through a Dig and shows the sequence'
   actions.get('Spade').Dig({ player, itemId: SPADE, slot: 0, clickType: 1, option: 'Dig', handled: false });
   assert.equal(player.getAnimation().getId(), CacheDefinitions.getSeqId('human_dig') ?? 830);
   assert.equal(player.getMovementQueue().size(), queued, 'the walk is not cleared by the dig');
+});
+
+test('a dig content refuses before it starts plays no sequence or sound and claims the click', (t) => {
+  const { player, animations, sounds } = digPlayer();
+  const refuse = (request) => { if (request.player === player) request.refused = true; };
+  refusers.push(refuse);
+  t.after(() => refusers.splice(refusers.indexOf(refuse), 1));
+  const event = { player, itemId: SPADE, slot: 0, clickType: 1, option: 'Dig', handled: false };
+  assert.equal(actions.get('Spade').Dig(event), true, 'claimed: no other dig, no nothing-found line');
+  assert.deepEqual(animations, []);
+  assert.deepEqual(sounds, []);
 });

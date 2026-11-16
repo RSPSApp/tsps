@@ -5,7 +5,6 @@ const os = require("node:os");
 const path = require("node:path");
 const { test } = require("node:test");
 const { createRequestHandler } = require("../plugins/tools/worldadmin/Http.WorldAdmin");
-const sprites = require("../plugins/world/CustomSprites.plugin");
 
 test("the admin saves and resets both images served by the world", async t => {
   const cwd = process.cwd();
@@ -16,6 +15,7 @@ test("the admin saves and resets both images served by the world", async t => {
   const banner = fs.readFileSync(path.resolve(__dirname, "../data/sprites/30000-welcome-banner.png"), "base64");
   const background = fs.readFileSync(path.resolve(__dirname, "../../client/public/images/loading-bg.jpg"), "base64");
   const resources = new Map();
+  const sprites = require("../plugins/world/CustomSprites.plugin");
   sprites.register({ registerContentEndpoint: (name, handler) => resources.set(name, handler), log() {} });
   const sprite = () => resources.get("sprites")(null, ["30000"]);
   const title = () => resources.get("client-background")(null, []);

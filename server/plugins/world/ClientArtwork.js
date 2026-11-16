@@ -47,14 +47,23 @@ function artworkFile(id) {
   return path.resolve("data/client-artwork", id + ".json");
 }
 
-function readArtwork(id) {
+function readJson(file) {
   try {
-    const data = JSON.parse(fs.readFileSync(artworkFile(id), "utf8"));
-    return isValidArtwork(id, data) ? data : null;
+    return JSON.parse(fs.readFileSync(file, "utf8"));
   } catch (error) {
     if (error.code === "ENOENT" || error instanceof SyntaxError) return null;
     throw error;
   }
+}
+
+function readArtwork(id) {
+  const data = readJson(artworkFile(id));
+  return isValidArtwork(id, data) ? data : null;
+}
+
+function readLoginScreenSettings() {
+  const data = readJson(path.resolve("data/client-artwork/login-screen.json"));
+  return { showFlames: data?.showFlames !== false, showLogo: data?.showLogo !== false };
 }
 
 function saveArtwork(id, data) {
@@ -74,4 +83,4 @@ function saveArtwork(id, data) {
   }
 }
 
-module.exports = { isArtworkId, isValidArtwork, readArtwork, saveArtwork };
+module.exports = { isArtworkId, isValidArtwork, readArtwork, readLoginScreenSettings, saveArtwork };

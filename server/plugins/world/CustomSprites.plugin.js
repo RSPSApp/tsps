@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { readArtwork } = require("./ClientArtwork");
+const { readArtwork, readLoginScreenSettings } = require("./ClientArtwork");
 
 /**
  * Sprites the cache doesn't have, `data/sprites/<id>[-name].png`, from id 30000 like custom
@@ -35,9 +35,10 @@ function spritesResource(_query, segments) {
   return png === undefined ? undefined : { id, png };
 }
 
-function backgroundResource(_query, segments) {
-  const jpg = segments.length === 0 ? readArtwork("background") : null;
-  return jpg ? { jpg } : undefined;
+function loginScreenResource(_query, segments) {
+  if (segments.length) return undefined;
+  const jpg = readArtwork("background");
+  return { ...readLoginScreenSettings(), ...(jpg ? { jpg } : {}) };
 }
 
 module.exports = {
@@ -47,7 +48,7 @@ module.exports = {
   register(api) {
     sprites = loadSprites();
     api.registerContentEndpoint("sprites", spritesResource);
-    api.registerContentEndpoint("login-screen", backgroundResource);
+    api.registerContentEndpoint("login-screen", loginScreenResource);
     api.log("registered", { sprites: [...sprites.keys()] });
   },
 };

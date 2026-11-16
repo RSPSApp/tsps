@@ -1,14 +1,16 @@
 /**
  * Shows a warning screen for whatever leads into its area, and remembers it per player.
  *
- * Content asks with `api.emitCustomEvent("warning-screen:show", { player, warning, proceed, stayOut })`:
+ * Content asks with `api.emitCustomEvent("warning-screen:show", { player, warning, proceed, stayOut, texts })`:
  * - a warning toggled off (7) is skipped: `proceed()` runs at once;
  * - otherwise the screen opens (toplevel_mainmodal_open 2524 [-1, -1], then the interface), counting
  *   the showing up to 6. From then on it shows its "Don't ask me this again" checkbox, which toggles
  *   it off (7) and back (6) while it is open;
  * - a question's Yes (17) closes it and runs `proceed()`; No (18), Close (12) or closing it any
  *   other way (walking off) runs `stayOut()`;
- * - the two notices (Icy Path Area, Death Plateau) only inform: they open and `proceed()` runs.
+ * - the two notices (Icy Path Area, Death Plateau) only inform: they open and `proceed()` runs;
+ * - `texts` ({ component: text }) rewrites the screen's lines once it is open, as live does with
+ *   if_settext where one screen serves several entrances (the mole hill's 568:14/17/18).
  * The event comes back `handled` when this plugin answered it; content that sees it unhandled
  * (this plugin off) carries on as if warned.
  *
@@ -35,8 +37,8 @@ const pending = new WeakMap();
 const toggleOf = (entry) => (entry.notice ? NOTICE_TOGGLE : QUESTION_TOGGLE);
 const toggleLayerOf = (entry) => (entry.notice ? NOTICE_TOGGLE_LAYER : QUESTION_TOGGLE_LAYER);
 
-/** Opens the warning's screen, counting the showing. */
-function open(player, entry) {
+/** Opens the warning's screen, counting the showing, then any text the entrance rewrites. */
+function open(player, entry, texts) {
   const shown = Shared.state(player, entry.warning);
   const sender = player.getPacketSender();
   if (entry.varbit !== null && shown >= Shared.SHOWN_ENOUGH) {
@@ -46,6 +48,7 @@ function open(player, entry) {
   }
   sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(entry.interfaceId);
+  for (const [child, text] of Object.entries(texts ?? {})) sender.sendString(String(text), (entry.interfaceId << 16) | Number(child));
 }
 
 /** "warning-screen:show": the warning, or straight on when it is off. */
@@ -60,7 +63,7 @@ function show(event) {
     proceed();
     return;
   }
-  open(player, entry);
+  open(player, entry, event.texts);
   if (entry.notice) {
     proceed();
     return;
@@ -81,7 +84,7 @@ function toggle(player, entry) {
   if (entry.varbit === null || shown < Shared.SHOWN_ENOUGH) return;
   const off = shown !== Shared.OFF;
   Shared.setState(player, entry.warning, off ? Shared.OFF : Shared.SHOWN_ENOUGH);
-  player.sendMessage(off ? Shared.SCREEN_TOGGLED_OFF_MESSAGE : Shared.TOGGLED_ON_MESSAGE);
+  player.sendMessage(off ? Shared.SCREEN_TOGGLED_OFF_MESSAGE : Shared.SCREEN_TOGGLED_ON_MESSAGE);
 }
 
 function click(event) {

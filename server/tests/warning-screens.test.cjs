@@ -121,6 +121,27 @@ test("a warning counts its showings to 6, then offers Don't ask me this again; o
   assert.ok(!player.log.includes(`sendInterface ${SHANTAY_SCREEN}`));
 });
 
+test("the screen's own checkbox: off with the Doomsayer line, back on with the screen's line (as captured)", () => {
+  const player = createPlayer({ [Shared.stateAttribute(15)]: 6 });
+  show(player, 15, {});
+  click(player, 578, 20);
+  assert.equal(player.log.at(-1), `message ${Shared.SCREEN_TOGGLED_OFF_MESSAGE}`);
+  click(player, 578, 20);
+  assert.equal(Shared.state(player, 15), 6);
+  assert.equal(player.log.at(-1), "message You have toggled this warning screen interface on. You will continue to see this warning screen until you turn it off.");
+});
+
+test("an entrance's texts rewrite the screen's lines once it is open", () => {
+  const player = createPlayer();
+  show(player, 3, { texts: { 17: "Proceed regardless.", 18: "Don't go down yet." } });
+  const opened = player.log.indexOf("sendInterface 568");
+  assert.ok(opened >= 0);
+  assert.deepEqual(player.log.slice(opened + 1), [
+    `sendString Proceed regardless. ${(568 << 16) | 17}`,
+    `sendString Don't go down yet. ${(568 << 16) | 18}`,
+  ]);
+});
+
 test("No, Close and walking off stay out; a checkbox below 6 does nothing", () => {
   for (const close of [(player) => click(player, SHANTAY_SCREEN, 18), (player) => click(player, SHANTAY_SCREEN, 12),
     (player) => hooks.custom.get("interface:closed")({ player, interfaceId: SHANTAY_SCREEN })]) {

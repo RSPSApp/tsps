@@ -26,9 +26,10 @@
  * light source, or the Fire of Eternal Light built in its fire pit, the dig is refused with the
  * line captured on the north-west spade (rsprox_transcripts/240/911352.txt tick 45: no animation,
  * no move); the mole hills are taken to refuse the same way (Wiki, Mole Hole: entered "with a
- * light source such as a lit candle or lantern"). With a light, the dark-area warning
- * (cws_warning_3, "Falador Mole Lair", shown by WarningScreens) comes first until it is turned off
- * (Wiki, Doomsayer: "Entering the cave").
+ * light source such as a lit candle or lantern"). With a light, the dig (anim 830, synth sound
+ * 1470) starts and the dark-area warning (cws_warning_3, "Falador Mole Lair", shown by
+ * WarningScreens) opens on the same tick until it is turned off, its lines rewritten to the mole
+ * hill's (rsprox_transcripts/227/910326.txt tick 1288); Yes finishes the dig.
  *
  * For her combat achievements (GiantMole.CombatAchievements.js) each life keeps, on the NPC
  * (a respawn is a new clone, so it starts clean): how often she burrowed, the tick she last
@@ -60,6 +61,13 @@ const Darkness = require("../world/Darkness.plugin");
 
 /** cws_warning_3 (568): "This area is very dark. Do not extinquish your light source!" */
 const MOLE_LAIR_WARNING = 3;
+/** The mole hill's lines on that screen (568:14, 17 and 18), as live rewrites them. */
+const MOLE_LAIR_WARNING_TEXTS = {
+  14: "It would probably be a good idea to bring a tinderbox<br>in case your light source is extinguished.",
+  17: "Proceed regardless.",
+  18: "Don't go down yet.",
+};
+const DIG_SOUND = 1470;
 
 const BURIED_ATTRIBUTE = "giant-mole:buried";
 const BURROWS_ATTRIBUTE = "giant-mole:burrows";
@@ -130,23 +138,24 @@ function setRespawn({ NpcDefinition, NpcIdentifiers }) {
 const diggingIn = new WeakSet();
 
 function digIntoLair(core, player) {
-  const { Location } = core;
+  const { Animation, Location } = core;
   if (diggingIn.has(player)) return;
   if (!Darkness.canSeeAt(player, new Location(MOLE_LAIR_ENTRANCE.x, MOLE_LAIR_ENTRANCE.y, 0))) {
     player.sendMessage(NEED_LIGHT_MESSAGE);
     return;
   }
-  const warning = { player, warning: MOLE_LAIR_WARNING, proceed: () => digIn(core, player) };
+  player.performAnimation(new Animation(DIG_ANIMATION_ID));
+  player.getPacketSender().sendSound(DIG_SOUND, 1, 0);
+  const warning = { player, warning: MOLE_LAIR_WARNING, texts: MOLE_LAIR_WARNING_TEXTS, proceed: () => digIn(core, player) };
   core.PluginManager.emitCustomEvent("warning-screen:show", warning);
   if (!warning.handled) digIn(core, player);
 }
 
-/** The dig itself: in 2 ticks with a spam line, as captured. */
+/** Through the hill: in 2 ticks with a spam line, as captured. */
 function digIn(core, player) {
-  const { Animation, Location, Task, TaskManager } = core;
+  const { Location, Task, TaskManager } = core;
   if (diggingIn.has(player)) return;
   diggingIn.add(player);
-  player.performAnimation(new Animation(DIG_ANIMATION_ID));
   const task = new Task(DIG_IN_TICKS, player, false);
   task.execute = () => {
     task.stop();

@@ -33,6 +33,8 @@ const TOGGLED_ON_MESSAGE = "You have toggled this warning screen on. You will se
 const TOGGLED_OFF_MESSAGE = "You have toggled this warning screen off. You will no longer see this warning screen.";
 /** The screen's own checkbox says where to turn it back on (docs/shantay-pass.md). */
 const SCREEN_TOGGLED_OFF_MESSAGE = "You have toggled this warning screen off. You will not see this warning screen unless you speak to the Doomsayer in Lumbridge to turn it on again.";
+/** Unticking the screen's own checkbox (rsprox_transcripts/227/910212.txt tick 278). */
+const SCREEN_TOGGLED_ON_MESSAGE = "You have toggled this warning screen interface on. You will continue to see this warning screen until you turn it off.";
 const CANNOT_TOGGLE_MESSAGE = "You cannot toggle this warning screen on or off. You need to go to the area it is linked to enough times to have the option to do so.";
 
 /** Every warning: { warning, name, interfaceId (null: not a cws screen), varbit (null: no toggle), doomsayerRow, notice }. */
@@ -84,6 +86,7 @@ module.exports = {
   TOGGLED_ON_MESSAGE,
   TOGGLED_OFF_MESSAGE,
   SCREEN_TOGGLED_OFF_MESSAGE,
+  SCREEN_TOGGLED_ON_MESSAGE,
   CANNOT_TOGGLE_MESSAGE,
   all,
   byInterface,

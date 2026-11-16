@@ -21,7 +21,8 @@
  *    varbit (279) for good (Wiki). The rope is used up.
  *  - Dark hole > Climb-down: the tile below the side the player used, once roped. Without a
  *    tinderbox the swamp cave warning (cws_warning_13, shown by WarningScreens) comes first:
- *    "...Are you sure you want to go in without a tinderbox?".
+ *    "...Are you sure you want to go in without a tinderbox?", its answers rewritten as live does
+ *    (rsprox_transcripts/242/911917.txt tick 21674).
  *  - Symbol (the cave goblin markers on the cave walls) > Look-at: shows that marker in the
  *    cave_goblin_markers modal (rsprox.net rec 3182, rev 232).
  */
@@ -64,6 +65,8 @@ const SWAMP_CAVE_ROPE_QUESTION = "Attach a rope to the top of the hole?";
 const SWAMP_CAVE_ROPE_SOUND = 1774;
 /** cws_warning_13 (572), "Lumbridge Swamp Cave Rope". */
 const SWAMP_CAVE_WARNING = 13;
+/** That screen's answers (572:17, 18), as live rewrites them. */
+const SWAMP_CAVE_WARNING_TEXTS = { 17: "I'll be fine without a tinderbox.", 18: "I'll come back with a tinderbox." };
 /**
  * The cave goblin markers' Look-at. rsprox.net rec 3182 (rev 232): on arrival the player faces
  * the wall, then live sets cave_goblin_markers:symbol to the marker's model (6923 for the north
@@ -243,7 +246,7 @@ function climbDownDarkHole(event) {
     climb();
     return true;
   }
-  const warning = { player, warning: SWAMP_CAVE_WARNING, proceed: climb };
+  const warning = { player, warning: SWAMP_CAVE_WARNING, texts: SWAMP_CAVE_WARNING_TEXTS, proceed: climb };
   pluginApi.emitCustomEvent("warning-screen:show", warning);
   if (!warning.handled) climb();
   return true;

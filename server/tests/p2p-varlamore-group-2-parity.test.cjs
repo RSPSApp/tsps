@@ -889,7 +889,8 @@ test('TP Mezan prays against a style used four times, falls without dying and an
   const blocked = hit(core.CombatType.MELEE); h.hooks.onNpcHitModify.forEach(fn => fn({ npc: mezan, hit: blocked })); assert.equal(blocked.parts[0].damage, 0);
   const event = { npc: mezan, preventDeath: false }; h.hooks.onNpcBeforeDeath.forEach(fn => fn(event)); assert.equal(event.preventDeath, true);
   h.tick(2); assert.equal(p.varbits.get(9832), 2);
-  h.tick(6); assert.match(p.text, /^You fought well in there/);
+  h.tick(6); assert.deepEqual(src(p, p.getLocation()), [1804, 9521], 'the player returns beside Mezan instead of overlapping him');
+  assert.match(p.text, /^You fought well in there/);
   h.continueUntil(p, () => p.text === 'Perfect! Thanks.'); assert.equal(p.varbits.get(9832), 3); assert.equal(h.quest.getStage(p), 16);
 });
 
@@ -923,7 +924,9 @@ test('TP judgement: the crest goes back (24), the letter (26) and its paper (28)
   p.manager.advance(); h.tick(3); assert.match(p.text, /found to be a traitor/);
   assert.deepEqual(src(p, ennius.getLocation()), [1679, 3158], 'Ennius stands beside Velam before the execution');
   h.continueUntil(p, () => p.text === "For you, this is the only thing that's right."); p.manager.advance();
-  h.tick(1); assert.ok(h.npcs.find(npc => npc.id === 12909).animations.includes(836));
+  const executioner = h.npcs.find(npc => npc.id === 12893), victim = h.npcs.find(npc => npc.id === 12909);
+  assert.deepEqual(src(p, executioner.faceTo), src(p, victim.getLocation()), 'Ennius faces Velam as the strike starts');
+  h.tick(1); assert.ok(victim.animations.includes(836));
   h.tick(6); assert.equal(p.text, 'The rest of you are dismissed.');
   p.manager.advance(); h.tick(3); assert.equal(h.quest.getStage(p), 32); assert.equal(p.items.get(I.INCRIMINATING_LETTER), 0);
   h.tick(6); assert.equal(p.text, 'You killed him!'); assert.ok(!live().includes(12893));

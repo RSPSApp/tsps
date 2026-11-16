@@ -203,6 +203,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const ARENA_BOUNDS = [[1806, 1842, 3088, 3128, 0]];
   const TEOMAT_BOUNDS = [[1425, 1465, 3140, 3205, 0]];
   const COLOSSEUM_LOBBY_TILE = [1803, 9521, 0];
+  const COLOSSEUM_LOBBY_PLAYER_TILE = [1804, 9521, 0];
   // Live plays each scene in an instance (rev 242 capture rebuild_region): 13 x 13 chunks of every
   // plane, unturned, from these source chunks (ticks 1855, 1984, 2290, 2539 and 2764). The aftermath
   // copies the Teomat again, a chunk further south.
@@ -1179,7 +1180,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
     });
     Scenes.later(scene, 4, () => {
       Scenes.end(player, false);
-      player.moveTo(new Location(...COLOSSEUM_LOBBY_TILE));
+      player.moveTo(new Location(...COLOSSEUM_LOBBY_PLAYER_TILE));
       Scenes.controls(player, true);
       Scenes.later(player, 2, () => Scenes.fade(player, false));
       Scenes.later(player, 4, () => {
@@ -1195,7 +1196,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
     if (Scenes.get(player)?.name !== "mezan") return false;
     event.handled = true;
     Scenes.end(player, false);
-    player.moveTo(new Location(...COLOSSEUM_LOBBY_TILE));
+    player.moveTo(new Location(...COLOSSEUM_LOBBY_PLAYER_TILE));
     return true;
   }
 
@@ -1250,6 +1251,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
       return;
     }
     if (stepId === STEP.VELAM_KILLED) {
+      if (scene.ennius && scene.velam) Scenes.face(scene.ennius, scene.velam.getLocation());
       scene.ennius?.performAnimation(new Animation(ENNIUS_STRIKE_ANIMATION, 5));
       Scenes.later(scene, 1, () => {
         scene.velam?.performAnimation(new Animation(VELAM_FALL_ANIMATION, 20));

@@ -103,3 +103,16 @@ test("stage 6 with both schematics still offers the claw", (t) => {
   assert.ok(prompt, "the claw choice opens at the existing stage-6 handoff too");
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.ELEMENTAL_SHIELD), 0);
 });
+
+test("the existing helmet choice preserves the bar before EW II is complete", (t) => {
+  const p = player(t, { stage: 5, craneSchematic: true });
+  p.getInventory().adds(core.ItemIdentifiers.BEATEN_BOOK, 1);
+  const before = p.getSkillManager().getExperience(core.Skill.SMITHING);
+  useMetal(p);
+  assert.equal(core.MultiChatboxPrompt.handleInterfaceActionClick({ player: p, groupId: 219, slot: 2 }), true);
+  for (let i = 0; i < 4; i++) core.TaskManager.process();
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.ELEMENTAL_METAL), 1);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.ELEMENTAL_HELMET), 0);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.SMITHING), before);
+  assert.equal(Runtime.getRegisteredQuests().find(q => q.key === EW2_KEY).getStage(p), 5);
+});

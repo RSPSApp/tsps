@@ -1,4 +1,4 @@
-// Shared harness for the Fairytale I capture tests (fairytale-i-capture.test.cjs).
+// Shared harness for the Shilo Village capture tests (shilo-village-*.test.cjs).
 // Real Player, PlayerSession and ClientConnection, the real plugins, cache and map: talks and
 // clicks are packets and each tick runs as World.process does.
 const assert = require("node:assert/strict");
@@ -15,7 +15,7 @@ const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxProm
 const QuestRuntime = require("../plugins/quests/QuestRuntime");
 
 const h = { core: null, PM, MultiChatboxPrompt, QuestRuntime };
-let next = 9100;
+let next = 9300;
 
 h.setup = async function setup(regions) {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -28,16 +28,18 @@ h.setup = async function setup(regions) {
 };
 h.teardown = () => PM.emitServerShutdown({});
 
-h.quest = (key = "fairytale_i_growing_pains") => QuestRuntime.getRegisteredQuests().findLast((entry) => entry.key === key);
+h.quest = (key = "shilo_village") => QuestRuntime.getRegisteredQuests().findLast((entry) => entry.key === key);
 h.stage = (f) => h.quest().getStage(f.player);
+/** A unit's returned helpers (quests/shilovillage/*.ShiloVillage.js), e.g. h.unit("Village").raiseMist. */
+h.unit = (name) => h.quest().state.units[name];
 
-h.actor = function actor(t, { stage = 0, items = [], at, amulet = false, attributes = {}, done = ["lost_city", "nature_spirit"], farming = 30 } = {}) {
+h.actor = function actor(t, { stage = 0, items = [], at, beads = false, attributes = {}, done = ["jungle_potion"], levels = {} } = {}) {
   const { core } = h;
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const session = new PlayerSession(channel);
   const player = new Player(session);
   session.setPlayer(player);
-  player.setUsername("fairy" + next++);
+  player.setUsername("shilo" + next++);
   player.setLongUsername(core.Misc.stringToLongBigInt(player.getUsername()));
   player.setAttribute("bot-skip-persistence", true);
   player.setLocation(new core.Location(...at));
@@ -46,7 +48,7 @@ h.actor = function actor(t, { stage = 0, items = [], at, amulet = false, attribu
   const connection = new ClientConnection(channel);
   connection.player = player;
   connection.sendPlayerBootstrap();
-  const f = { t, player, connection, tick: 0, calls: [], said: [], messages: [], npcs: [], animations: [] };
+  const f = { t, player, connection, tick: 0, calls: [], said: [], messages: [], npcs: [], animations: [], locs: [], graphics: [] };
   record(f);
   t.after(() => {
     for (const npc of f.npcs) core.World.getNpcs().remove(npc);
@@ -57,14 +59,17 @@ h.actor = function actor(t, { stage = 0, items = [], at, amulet = false, attribu
   });
   for (const key of done) {
     const q = h.quest(key);
-    q.setStage(player, q.completionValue);
+    // Jungle Potion is finished once Trufitus has told his news after it (varp 175 13), as Shilo Village needs.
+    q.setStage(player, key === "jungle_potion" ? 13 : q.completionValue);
   }
-  player.getSkillManager().setMaxLevels(core.Skill.FARMING, farming);
-  player.getSkillManager().setCurrentLevel(core.Skill.FARMING, farming, false);
+  for (const [skill, level] of Object.entries({ CRAFTING: 20, AGILITY: 32, PRAYER: 10, ...levels })) {
+    player.getSkillManager().setMaxLevels(core.Skill[skill], level);
+    player.getSkillManager().setCurrentLevel(core.Skill[skill], level, false);
+  }
   // The saved attributes first: the stage change re-sends the varbits derived from them.
   for (const [key, value] of Object.entries(attributes)) player.setAttribute(key, value);
   h.quest().setStage(player, stage);
-  if (amulet) player.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(core.ItemIdentifiers.GHOSTSPEAK_AMULET, 1));
+  if (beads) player.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(core.ItemIdentifiers.BEADS_OF_THE_DEAD, 1));
   for (const id of items) player.getInventory().add(new core.Item(id, 1), false);
   return f;
 };
@@ -100,12 +105,33 @@ function record(f) {
     f.messages.push({ tick: f.tick, text, type });
     return typed(type, text, ...rest);
   };
+  const global = sender.sendGlobalGraphic.bind(sender);
+  sender.sendGlobalGraphic = (graphic, at, ...rest) => {
+    f.graphics.push({ tick: f.tick, id: graphic.getId?.() ?? graphic.id, at: [at.getX(), at.getY()] });
+    return global(graphic, at, ...rest);
+  };
   const animate = f.player.performAnimation.bind(f.player);
   f.player.performAnimation = (animation) => {
     f.animations.push({ tick: f.tick, id: animation.getId() });
     return animate(animation);
   };
 }
+
+/** Every loc the quest swaps in or out while `f` plays, as [tick, "add"|"del", id, x, y]. */
+h.watchLocs = function watchLocs(f) {
+  const { ObjectManager } = h.core;
+  for (const [name, kind] of [["register", "add"], ["deregister", "del"]]) {
+    const original = ObjectManager[name];
+    f.t.mock.method(ObjectManager, name, function (object, ...rest) {
+      const at = object?.getLocation?.();
+      if (at) f.locs.push([f.tick, kind, object.getId(), at.getX(), at.getY()]);
+      return original.call(this, object, ...rest);
+    });
+  }
+};
+
+h.at = (f) => [f.player.getLocation().getX(), f.player.getLocation().getY()];
+h.lines = (f) => f.messages.map((m) => m.text);
 
 h.tick = function tick(f) {
   const { core } = h;

@@ -1333,6 +1333,25 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         // Quest actions may start a different conversation (for example, after
         // a cutscene action). Do not let this transcript's remaining tail replace it.
         if (current && manager.getCurrent() !== current) return;
+        // A handler can hold the conversation with `wait(resume)`: the chatbox closes, an idle
+        // entry holds the chain, and the transcript carries on when the handler calls resume()
+        // (a document it opened is closed, say). Another conversation meanwhile owns the chat.
+        if (typeof action.wait === "function") {
+          const waiting = new ActionDialogue(0, { execute: () => {} }, true);
+          const idle = new DialogueChainBuilder();
+          idle.add(waiting);
+          const packets = player.getPacketSender();
+          const open = packets.getChatboxGroupId?.() ?? -1;
+          if (open >= 0) packets.closeInterface(open);
+          startChain(idle);
+          action.wait(() => {
+            // A main interface the handler opened clears the idle entry; only a new chat stops it.
+            const now = manager.getCurrent?.();
+            if (cancelled || (now && now !== waiting)) return;
+            run(rest, currentRecord);
+          });
+          return;
+        }
         // A handler can also hand back `steps` to play first (a story picked from another page).
         if (action.handled) return action.end ? close() : run([...(action.steps ?? []), ...rest], currentRecord);
         if (step.type === "end") return close();

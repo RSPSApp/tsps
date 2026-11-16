@@ -23,6 +23,8 @@ const VARP_STAGE = 175;
 const START_HOOK = 'quest:jungle-potion:start';
 const COMPLETE_ACTION = 'WiofTb';
 const ENTER_CAVE_MESSAGE = 'LP0T9g';
+// Live starts the quest as the player continues past this acceptance line (rsprox captures, JunglePotion ticks 158-160).
+const ACCEPT_LINE = "It sounds like just the challenge for me. And it would make a nice break from killing things!";
 
 const HERBS = [
   {
@@ -227,6 +229,24 @@ function harness() {
       for (const handler of actions('npc-dialogue:action')) handler(event);
       return event;
     },
+    /** A message step as the dialogue runtime emits it; `after` runs as its box is continued. */
+    message(stepId, text = '', npcId = TRUFITUS) {
+      const event = { player, npcId, stepId, text, kind: 'message', handled: false };
+      for (const handler of actions('npc-dialogue:action')) handler(event);
+      event.after?.();
+      return event;
+    },
+    /** A speech line as the dialogue runtime emits it; `after` runs as it is continued. */
+    line(text, npcId = TRUFITUS) {
+      const event = { player, npcId, text, skip: false };
+      for (const handler of actions('npc-dialogue:line')) handler(event);
+      event.after?.();
+      return event;
+    },
+    /** Continue the last chain started (a message box), running its actions. */
+    continueBox() {
+      for (const entry of boxes.at(-1).getDialogues().values()) if (entry instanceof core.ActionDialogue) entry.send(player);
+    },
     objectSearch(objectId) {
       const event = {
         player, objectId, clickType: 2, handled: false,
@@ -281,14 +301,18 @@ test('fresh stage 0 starts at stage 1; searching before the request yields nothi
   assert.match(h.messages.at(-1), /nothing of interest/i);
 
   h.hook(START_HOOK);
+  assert.equal(h.quest.getStage(h.player), 0, '"Yes." alone does not start it');
+  h.line(ACCEPT_LINE);
   assert.equal(h.quest.getStage(h.player), 1);
   assert.equal(h.configs.get(VARP_STAGE), 1);
+  assert.match(h.messages.at(-1), /^You've started a new quest: /);
 });
 
 test('mandatory route: search, clean and hand in all five herbs, enter and leave the cave, then complete', (t) => {
   t.mock.method(Math, 'random', () => 0);
   const h = harness();
   h.hook(START_HOOK);
+  h.line(ACCEPT_LINE);
   assert.equal(h.quest.getStage(h.player), 1);
 
   for (const [index, herb] of HERBS.entries()) {
@@ -296,8 +320,9 @@ test('mandatory route: search, clean and hand in all five herbs, enter and leave
       const entrance = h.objectSearch(O.ROCKS_4);
       assert.equal(entrance.handled, true);
       assert.equal(TRANSCRIPTS.at(-1).variant, 'rogue-s-purse-search-rocks');
-      h.action(ENTER_CAVE_MESSAGE);
-      assert.deepEqual(h.moves.at(-1), [2830, 9520, 0], 'the cave message moves the player inside');
+      const enter = h.message(ENTER_CAVE_MESSAGE);
+      assert.deepEqual(enter.box, { statement: true }, 'the cave message is a message box');
+      assert.deepEqual(h.moves.at(-1), [2830, 9520, 0], 'continuing the cave message moves the player inside');
     }
 
     const search = h.objectSearch(herb.locId);
@@ -305,6 +330,8 @@ test('mandatory route: search, clean and hand in all five herbs, enter and leave
     assert.equal(h.spam.at(-1), herb.search);
     // The vine rolls 10 ticks after the search (rsprox captures); the others find it at once.
     if (herb.locId === O.MARSHY_JUNGLE_VINE) h.tick(10);
+    // The fungus wall rolls every 6 ticks (fitted to the rsprox captures).
+    if (herb.locId === O.FUNGUS_COVERED_CAVERN_WALL) h.tick(6);
     assert.equal(h.has(herb.grimy), true, `${herb.name} grimy herb is added`);
     assert.equal(h.quest.getStage(h.player), herb.found);
     assert.equal(h.configs.get(VARP_STAGE), herb.found);
@@ -322,7 +349,11 @@ test('mandatory route: search, clean and hand in all five herbs, enter and leave
     if (index === HERBS.length - 1) {
       const climb = h.objectClimb(O.HAND_HOLDS);
       assert.equal(climb.handled, true);
-      assert.deepEqual(h.moves.at(-1), [2823, 3120, 0], 'climbing the hand holds leaves the cave');
+      assert.deepEqual(h.moves.at(-1), [2830, 9520, 0], 'the climb waits for its message box');
+      h.continueBox();
+      assert.deepEqual(h.moves.at(-1), [2830, 9520, 0], 'still inside the tick the box is continued');
+      h.tick(1);
+      assert.deepEqual(h.moves.at(-1), [2823, 3120, 0], 'out of the cave the tick after');
     }
 
     h.handIn(herb.handIn);

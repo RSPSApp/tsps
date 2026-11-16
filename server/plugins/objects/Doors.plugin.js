@@ -265,9 +265,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     woodenGate(O.GATE_322, O.GATE_319, O.GATE_320, O.GATE_321),
     // Tutorial Island survival gate: swings open into 8810/8811's open panels (Zenyte Gate.java).
     woodenGate(O.GATE_90, O.GATE_91, O.GATE_85, O.GATE_86),
-    // Shilo Village's inner gate: its nameless open panels (2263/2264) are not placed
-    // on the cache map, so the generic same-model pairing cannot find them.
-    woodenGate(O.WOODEN_GATE, O.WOODEN_GATE_2, 2263, 2264),
+    // Shilo Village's inner gate (2261/2262) is the quest's: shut before it, a step through after it
+    // (quests/shilovillage/Village.ShiloVillage.js).
   ]);
 
   WOODEN_GATE_BY_ID = new Map();

@@ -728,7 +728,13 @@ test('Fairytale II: permission and the four-code hideout route through real ring
       assert.equal(p.getPacketSender().getVarbit(2338), 4);
       p.closeInterruptibleInterfaces();
     }
-    if (permission) PluginManager.emitCustomEvent('npc-dialogue:choice', { player: p, npcId: core.NpcIdentifiers.FAIRY_GODFATHER, option: 'Yes, okay.' });
+    if (permission) {
+      // Permission comes as the Godfather's "wrong scroll" line shows (FairyTale2 tick 511).
+      const line = { player: p, npcId: core.NpcIdentifiers.FAIRY_GODFATHER,
+        step: { type: 'line', text: 'Eet does? Oh, sorry, must-a geeven yous da wrong-a scroll.' } };
+      PluginManager.emitCustomEvent('npc-dialogue:line', line);
+      line.before?.();
+    }
     if (!certificate) p.getInventory().deleteNumber(I.NUFFS_CERTIFICATE, 1);
     t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() }); });
     return { p, packets, messages };
@@ -784,7 +790,7 @@ test('Fairytale II: permission and the four-code hideout route through real ring
     await nativeTravel('DJQ'); assert.deepEqual(at(p), [2213, 3099, 0], 'DJQ has no invented destination');
     assert.equal(quest.getStage(p), 40);
     await nativeTravel('AJS'); assert.deepEqual(at(p), [2328, 4426, 0]);
-    assert.equal(quest.getStage(p), 45, 'real teleport landing enters the existing hideout zone');
+    assert.equal(quest.getStage(p), 40, 'landing in the hideout keeps 40; Fairy Nuff\'s welcome sets 45 (FairyTale2 846, 976)');
     p.getSession().flushPackets();
     assert.ok(packets.length > 0, 'actual PacketSender encoded native dial and animation updates');
     travel(p, 'AJS'); assert.deepEqual(at(p), [2500, 3896, 0], 'a second AJS requires the sequence again');

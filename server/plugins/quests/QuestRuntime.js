@@ -875,14 +875,23 @@ function registerQuest(api, def) {
       if (def.onReward) def.onReward(player, quest, options);
       // A plain add would clamp at a capped stack; giveReward's forceAdd floors what does not fit.
       if (def.rewardItemId !== undefined) giveReward(player, def.rewardItemId, 1);
+      quest.announceCompletion(player, options);
+      // `options` as passed in: listeners can tell a played completion from a quest pack's (scroll: false).
+      api.emitCustomEvent?.("quest:completed", { player, key: def.key, quest, options });
+      return true;
+    },
+    /**
+     * The completion jingle, chat line and scroll on their own: a quest whose live stage and rewards
+     * land before its scroll (Fairytale II's lamp box) completes with `{ scroll: false, announce:
+     * false }` and calls this once the player continues. `options` as complete() takes them.
+     */
+    announceCompletion(player, options = {}) {
+      const points = Number(player.getAttribute(QUEST_POINTS_ATTRIBUTE)) || 0;
       if (options.scroll !== false) player.getPacketSender().sendJingle(def.completionJingleId ?? QUEST_COMPLETE_JINGLE, 0);
       if (options.announce !== false) {
         player.sendMessage(`Congratulations, you've completed a quest: ${questLink(player, def.name)}`);
       }
       if (options.scroll !== false) showCompletedScroll(player, quest, points | 0);
-      // `options` as passed in: listeners can tell a played completion from a quest pack's (scroll: false).
-      api.emitCustomEvent?.("quest:completed", { player, key: def.key, quest, options });
-      return true;
     },
   };
   quests.push(quest);

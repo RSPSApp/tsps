@@ -469,9 +469,14 @@ module.exports = function attachAhZaRhoon(api, sv) {
     sv.scene(player, NPC.TRUFITUS, variant);
   }
 
+  /** The torch/candle prompt's title (t2480). */
+  const LIGHT_PROMPT = "Are you sure? You won't get that item back.";
+
   function handleChoice(event) {
     const { player, option } = event;
     if (!player || event.npcId !== NPC.TRUFITUS) return;
+    // A light prompt shut unanswered is dropped by the next menu that isn't it.
+    if (pendingLight.has(player) && event.prompt !== LIGHT_PROMPT) pendingLight.delete(player);
     if (pendingLight.has(player) && (option === "Yes" || option === "No")) {
       if (option === "No") pendingLight.delete(player);
       else sv.later(player, 1, () => player.performAnimation(new api.core.Animation(PICK_UP)));

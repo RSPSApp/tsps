@@ -25,6 +25,7 @@ module.exports = function registerShiloVillageQuest(api) {
   const { Skill } = api.core;
   const { registerQuest, refreshQuestList } = require("../QuestRuntime");
   const sv = createState(api);
+  sv.ObstacleRunner.init(api);
 
   /** A Shilo transcript message live shows in a box (Boxes.ShiloVillage.js); the rest stay game messages. */
   function boxMessage(event) {

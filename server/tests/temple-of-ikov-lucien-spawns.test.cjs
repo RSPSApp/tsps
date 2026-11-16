@@ -70,3 +70,60 @@ test('once started, the attackable Lucien waits at his house near Edgeville', ()
   assert.deepEqual(at(house[0]), NEAR_EDGEVILLE);
   assert.deepEqual(at(spawns.find((spec) => spec.id === INN_LUCIEN)), FLYING_HORSE_INN);
 });
+
+// Qualification only: selected alone in a fresh HF process. This records actual cache
+// geometry before choosing entrance coordinates or writing an interaction regression.
+test('Ikov house active-cache qualification records its actual entrance geometry', () => {
+  const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+  const { CacheMaps } = require('../dist/game/cache/CacheMaps');
+  const { MapRegionReplacementManager } = require('../dist/game/collision/MapRegionReplacementManager');
+  const crypto = require('node:crypto');
+  const core = PluginManager.getCoreApi();
+  const active = CachePipeline.getActive();
+  assert.equal(active.name, 'osrs-242_2026-11-03');
+  assert.equal(active.revision, 242);
+  // No World players/NPCs, items, tasks or object hooks are installed by this case.
+  // Refuse an already initialized region registry rather than resetting shared state.
+  assert.equal(core.RegionManager.regions.size, 0, 'fresh isolated qualification process');
+  core.RegionManager.init();
+  const anchor = NEAR_EDGEVILLE, radius = 12;
+  const regionId = ((anchor.x >> 6) << 8) | (anchor.y >> 6);
+  const bytes = CacheMaps.getRegion(regionId);
+  assert.ok(bytes?.terrainData && bytes?.objectData, 'actual active-cache region streams');
+  core.RegionManager.loadMapFiles(anchor.x, anchor.y, false);
+  assert.equal(core.RegionManager.regions.get(regionId)?.isLoaded(), true, 'real region loader reached');
+  const definitions = [102, 11403].map(id => {
+    const d = core.CacheDefinitions.getObject(id);
+    assert.ok(d, 'actual cache loc definition ' + id);
+    return { id, gameval: core.CacheDefinitions.getLocNames().get(id), name: d.name,
+      actions: d.actions, models: d.models, sizeX: d.sizeX, sizeY: d.sizeY,
+      clipType: d.clipType, clipMask: d.clipMask, blocksProjectile: d.blocksProjectile };
+  });
+  const objects = [];
+  for (const list of core.MapObjects.mapObjects.values()) for (const object of list) {
+    const at = object.getLocation();
+    if (at.getZ() !== anchor.z || Math.abs(at.getX() - anchor.x) > radius
+        || Math.abs(at.getY() - anchor.y) > radius) continue;
+    const d = core.CacheDefinitions.getObject(object.getId());
+    objects.push({ id: object.getId(), x: at.getX(), y: at.getY(), z: at.getZ(),
+      shape: object.getType(), rotation: object.getFace(), gameval: core.CacheDefinitions.getLocNames().get(object.getId()),
+      name: d?.name, actions: d?.actions });
+    assert.ok(core.MapObjects.mapObjects.get(core.MapObjects.getHash(at.getX(), at.getY(), at.getZ()))?.includes(object),
+      'observed exact object pointer remains in its canonical tile list');
+  }
+  objects.sort((a, b) => a.id - b.id || a.x - b.x || a.y - b.y || a.shape - b.shape || a.rotation - b.rotation);
+  assert.ok(objects.length > 0 && objects.length <= 2048, 'bounded actual house surroundings');
+  const collision = [];
+  for (let x = anchor.x - radius; x <= anchor.x + radius; x++)
+    for (let y = anchor.y - radius; y <= anchor.y + radius; y++)
+      collision.push([x, y, anchor.z, core.RegionManager.getClipping(x, y, anchor.z, null)]);
+  const digest = data => crypto.createHash('sha256').update(data).digest('hex');
+  const record = { event: 'ikov-house-active-cache-578', cache: { name: active.name, revision: active.revision },
+    anchor, radius, regionId, terrainSHA256: digest(bytes.terrainData), objectSHA256: digest(bytes.objectData),
+    hasRegionReplacement: MapRegionReplacementManager.getReplacementMapData(regionId) != null,
+    definitions, entranceCandidates: objects.filter(o => o.id === 102 || o.id === 11403), objects, collision,
+    scope: 'Canonical cache definitions and production region placement/collision observation only; no Open, path, quest branch, authenticated login or retail transform/timing claim' };
+  const encoded = JSON.stringify(record);
+  assert.ok(Buffer.byteLength(encoded) <= 196608, 'complete metadata output fits declared bound');
+  console.log(encoded);
+});

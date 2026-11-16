@@ -1442,7 +1442,7 @@ Primary behavior: [Vulnerability14968444](https://oldschool.runescape.wiki/w/Vul
 
 Participation-boundary disposal still clears queued incoming and still-queued outgoing hits without refund and preserves self/null-source damage. A caster leaving does not reverse a drain on a victim who remains in battle. Canonical alive departure/winner Ferox restoration may restore departing stats/HP/Prayer/energy/status; logout skips that restoration. No departed-victim drain-preservation guarantee. The explicit native fixture does not register full production CombinationRunes composition. Captured F2P spell-gate checks exercise the actual handler and ordinary dispatch/payment refusal with a lower free-spell positive; they do not load a complete F2P world.
 
-The source and fixture extension is initially unrun. Prospective native tests cover three cache objects, paid commits/context/impact, controlled accurate/splash and Ignore branches, relevant-stat recovery/race/new targets, charged/empty/other tomes and real roll observations, resources/no-Soul/sacks, book/mode/phase/actor/loadout refusals, hand-cast/paid elemental resumption, and representative safe lifecycle disposal/rejoin. No callback, build, native runtime or provider outcome is inferred from their registration. Earlier #5821's own1,073 belongs only to its exact source/job; later source requires its own reviewed admission and actual evidence.
+The implemented native fixtures cover three cache objects, paid commits/context/impact, controlled accurate/splash and Ignore branches, relevant-stat recovery/race/new targets, charged/empty/other tomes and real roll observations, resources/no-Soul/sacks, book/mode/phase/actor/loadout refusals, hand-cast/paid elemental resumption, and representative safe lifecycle disposal/rejoin. No callback, build, native runtime or provider outcome is inferred from their registration. Earlier #5821's own1,073 belongs only to its exact source/job; later source requires its own reviewed admission and actual evidence.
 
 
 ### Manual god-family extension (native Standard1)
@@ -1459,7 +1459,7 @@ Primary revisions: [Saradomin Strike15366110](https://oldschool.runescape.wiki/w
 
 A bounded revision235.1 recording3344 shows Claws unlock feedback after NPC casting, the exact Saradomin/StaffOfLight refusal and a native Charge button followed by red charged feedback/sound1651. It does not show Clan Wars god casting or prove normal costs, damage,100casts, cooldown or duration. Its boosted/scaled account state is not fixture setup; current242 widgets differ from that recording. Numeric mechanics above come from primary/canonical sources.
 
-The new source fixtures are unrun at this stage. They extend the existing native game/rules fixture with actual scoped MageArena/Statues/ChargeFade registration, real packet/payment/pending-context/resolver paths, outside-NPC and battle positive controls, skill/recovery/race/floor/boost cases, Charge/tomes/pouch/refusals, remembered-autocast/manual controls and safe lifecycle/rejoin. Positions, counters/cape progress, ticks, accuracy/max-hit and zero-damage branches are disclosed controlled setup. Captured F2P gate checks are not a full F2P world/loader proof; departed outsider refusal is not co-location/range or sole-causal area-guard proof. Source registration inventory is not a runtime result. The paired merged-production baseline must classify the actual first failure and downstream reach before a fixed selection. Prior #5874's own1164 belongs only to its tested head/job and is not transferred here. No rendered client, natural probability, exhaustive spellbook or full startup claim is made.
+The implemented native fixtures extend the existing native game/rules fixture with actual scoped MageArena/Statues/ChargeFade registration, real packet/payment/pending-context/resolver paths, outside-NPC and battle positive controls, skill/recovery/race/floor/boost cases, Charge/tomes/pouch/refusals, remembered-autocast/manual controls and safe lifecycle/rejoin. Positions, counters/cape progress, ticks, accuracy/max-hit and zero-damage branches are disclosed controlled setup. Captured F2P gate checks are not a full F2P world/loader proof; departed outsider refusal is not co-location/range or sole-causal area-guard proof. Source registration inventory is not a runtime result. For later fixture changes, the paired baseline must classify the actual first failure and downstream reach before a fixed selection. Prior #5874's own1164 belongs only to its tested head/job and is not transferred here. No rendered client, natural probability, exhaustive spellbook or full startup claim is made.
 
 
 ### Standard staff spells: Iban Blast and Magic Dart
@@ -1505,7 +1505,7 @@ versus20 with a plain staff. The wand supplies no elemental runes. Inventory,
 pouch, tome supply/charge, member, book, mode and participation gates remain
 canonical; paid resources are not refunded by queue disposal.
 
-The proposed existing native fixture extension is initially unrun: exact cache
+The implemented native fixture extension covers exact cache
 stats/loaded gate, native Wield and manual/selector/ordinary Attack, outside paid
 controls and battle plain-staff positive before the missing-admission target,
 real payment/context/hit/resolution/rune/XP/HP, max/current levels, excluded
@@ -1515,6 +1515,19 @@ mapped object dispatcher with an explicitly held impact window and restoration
 in finally; this is not an encoded object-click or natural flight-time proof.
 The captured F2P equip hook is not a full F2P loader, and the departed outsider
 is not a co-location/range or sole-cause test. Positions, actors/levels, ticks
-and accuracy/max are controlled. No candidate runtime, rendered client, natural
+and accuracy/max are controlled. No runtime, rendered client, natural
 probability, full quest/acquisition or global-startup result follows from source
-registration. Prior5938's1457 passes belong only to its own tested head/job.
+registration alone. Prior5938's1457 passes belong only to its own tested head/job.
+
+
+### Execution evidence for the completed fixture extensions
+
+The higher-curse, god-family and exact Master-wand fixtures above were exercised
+in the whole selected game/rules files on tested head
+`e490d2358b0d216896be50711158d5e5d1eeede6` (tree
+`231374edc7233ba4d98e2a318827426be2802caf`). [PR #5946](https://github.com/RSPSApp/tsps/pull/5946)
+records the runnable setup, literal output and independent review of that run:
+1,570/1,570 tests across eleven files, including all 81 Master-wand cases.
+Those results belong only to that tested revision; they do not establish a run
+of its later merge or transfer to later source. The controlled setup and retail,
+client, probability, acquisition and startup limits above still apply.

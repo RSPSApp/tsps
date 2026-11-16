@@ -38,6 +38,13 @@ const MAX_STACK = 2147483647;
 const CURRENCY_IDS = new Set([995, 6529, 21555]);
 /** loottracker_add_loot (npc, key, obj, count); cache script 7192. */
 const LOOT_TRACKER_SCRIPT = 7192;
+/**
+ * Wiki (Drops): "Tradeable drops will remain on the ground for 200 game ticks", untradeable ones 300 (the
+ * ground-item default). The recordings agree for tradeables (rsprox_transcripts/224/01463.txt tick 3491:
+ * fiendish ashes and a bolt at reveal=100, despawn=200); they also show untradeable keys at 200, which the
+ * Wiki overrides. Player drops keep 300 (232/00428.txt, 241/900032.txt: despawn=300).
+ */
+const TRADEABLE_DROP_DESPAWN_TICKS = 200;
 /** Each kill's loot key (script 7192), counting up as live's do. */
 let lootKey = 1;
 const RING_OF_WEALTH_TABLES = new Set(["rareDrop", "gem", "megaRare"]);
@@ -1255,18 +1262,31 @@ function placeDrops(player, drops, location, placement = {}) {
       if (amount <= 0) continue;
     }
     const itemId = droppedItemId(drop);
+    const lifetime = dropLifetime(player, itemId, options);
     const item = new Item(itemId, amount);
     const stackable = item.getDefinition && item.getDefinition()
       ? item.getDefinition().isStackable()
       : false;
     if (stackable) {
-      itemOnGroundManager.registerLocation(player, item, location, undefined, options);
+      itemOnGroundManager.registerLocation(player, item, location, undefined, lifetime);
     } else {
       for (let i = 0; i < amount; i++) {
-        itemOnGroundManager.registerLocation(player, new Item(itemId, 1), location, undefined, options);
+        itemOnGroundManager.registerLocation(player, new Item(itemId, 1), location, undefined, lifetime);
       }
     }
   }
+}
+
+/**
+ * A drop's ground options with the monster-drop lifetime: tradeable items last
+ * {@link TRADEABLE_DROP_DESPAWN_TICKS}; untradeables, a drop's own `despawnDelay` and an instance's
+ * own floor lifetime (PrivateArea.groundItemDespawnDelay) are left as they are.
+ */
+function dropLifetime(player, itemId, options) {
+  if (options.despawnDelay != null) return options;
+  if (player.getPrivateArea?.()?.groundItemDespawnDelay?.() != null) return options;
+  if (ItemDefinition.forId(itemId)?.isTradeable?.() !== true) return options;
+  return { ...options, despawnDelay: TRADEABLE_DROP_DESPAWN_TICKS };
 }
 
 /**

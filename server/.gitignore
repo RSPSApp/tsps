@@ -38,3 +38,6 @@ data/saves/seasonal-rares.json
 data/saves/seasonal-rares.json.tmp
 # The Bank PIN host-key secret (plugins/interface/bankpin/Common.BankPin.js); never in a player save.
 data/saves/bank-pin-host.key
+
+# Per-world uploads from the host panels
+data/client-artwork/

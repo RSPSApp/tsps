@@ -133,6 +133,11 @@ module.exports = function registerSoulflameHornSpecialAttack(api) {
     else roll.forceAccurate = true;
   }
 
+  /** The roll is over once its damage is out: the +50% belongs to that one roll. */
+  function endPvpRoll({ attacker }) {
+    if (attacker) pvpRoll.delete(attacker);
+  }
+
   const pvpAccuracy = (entity, attackRoll) => (pvpRoll.has(entity) ? Math.floor(attackRoll * PVP_ACCURACY_MULTIPLIER) : attackRoll);
 
   api.registerCombatSpecial({
@@ -149,8 +154,8 @@ module.exports = function registerSoulflameHornSpecialAttack(api) {
     combatMethod: new SoulflameHornCombatMethod(),
   });
   api.onCombatHitRoll(onHitRoll);
-  // The roll is over once its damage is out: the +50% belongs to that one roll.
-  api.onCombatHitDamage(({ attacker }) => { if (attacker) pvpRoll.delete(attacker); });
+  api.onCombatHitDamage(endPvpRoll);
   api.registerMeleeAttackAccuracyModifier(pvpAccuracy);
-
 };
+
+module.exports.AID_FREE_AREAS = AID_FREE_AREAS;

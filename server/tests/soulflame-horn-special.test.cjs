@@ -216,3 +216,13 @@ test("a press inside the 4-tick cooldown does nothing", () => {
   blow(user);
   assert.equal(user.energy, 50);
 });
+
+test("every exempt area class name still names an area class in the plugins", () => {
+  const { execFileSync } = require("node:child_process");
+  const { AID_FREE_AREAS } = require("../plugins/combat/specials/SoulflameHorn.SpecialAttack");
+  const plugins = require("node:path").resolve(__dirname, "../plugins");
+  for (const name of AID_FREE_AREAS) {
+    const found = execFileSync("grep", ["-rlE", `class ${name} extends`, plugins], { encoding: "utf8" }).trim();
+    assert.ok(found.length > 0, `${name} is not declared in server/plugins`);
+  }
+});

@@ -36,6 +36,10 @@ Rsprox recording **3220** shows the tea attempt message, `human_pickuptable` and
 
 The attempt now faces the stall and checks its lookouts. On success it plays cache animation `human_pickuptable` (**832**, rather than pickpocket animation 881), with sound 2581. Loot, XP, the recorded success message, theft state and depletion follow on the next tick. Restocking counts from depletion. Attempts begun together can both complete; later clicks cannot steal from the empty stall. A full inventory at completion prevents both loot and XP.
 
+### Loot tracker
+
+rsprox captures (rev 241/242, local recordings 1001550 and 58 more, 12,498 thefts) show every theft from the Ardougne baker's stall (`cakethiefstall`, 11730) adding a loot tracker entry on the tick the item arrives: client script 7193 (the loc, the player's next loot tracker key, category 6, -1) and then 7194 (the loc, the same key, the item, 1), after the inventory update and before the XP (1001550 tick 3905). The key is the one every other entry counts with (`LootTracker.plugin.js`, "loot-tracker:add-loc"). A missed or caught attempt adds nothing. Other stalls send no entry in revisions that send it elsewhere: the Varrock tea stall (83 thefts, 1001438, rev 241), the Draynor seed stall (1002184, rev 242, in the same session as baker's stall entries) and the Civitas silk and baker's stalls (rev 237), so only `cakethiefstall` is tracked (`LOOT_TRACKED_STALLS`). The other Ardougne market stalls have no capture since the tracker was added, and aren't tracked.
+
 ### Merchant memory
 
 The [Thieving stalls section](https://oldschool.runescape.wiki/w/Thieving#Stalls) says successful theft prevents interaction with owners of that stall type for ten consecutive in-game minutes. [Silk merchant](https://oldschool.runescape.wiki/w/Silk_merchant) confirms the ten-minute wait restarts after logging back in. Specific NPC pages give different waits: [Baker](https://oldschool.runescape.wiki/w/Baker) says fifteen minutes, and [Spice seller](https://oldschool.runescape.wiki/w/Spice_seller) says six. The implementation follows those specific durations for bakery and spice, with ten minutes for the other supported types. No recording measured expiration; the disagreement between the general and specific Wiki pages remains an evidence limitation.
@@ -369,7 +373,7 @@ clue rolled at the cap keeps the clue, and the key waits for the next success.
 - **The Ardougne diary:** no diary system exists yet. Its effects would be +10% success (medium: in Ardougne; hard: everywhere), the gloves of silence becoming ineffective, and coin pouch limits of 56, 84 and 140.
 - **Location- or quest-only loot:** the Pirate's medallion fragment (The Onyx Crest only), the Pirate's very rare medium clue (no rate given), and the H.A.M. robe table during Death to the Dorgeshuun.
 - **The H.A.M. camp's failures:** "You feel slightly concussed from the blow.", "Your agility helps you partially avoid the blow." and "You're beaten unconscious and bundled out of the HAM Camp." (1723, Leagues V, and the Wiki). A failure here is the ordinary stun.
-- **The in-game loot tracker:** OSRS adds each pickpocket's loot to it (client script 7192, `loottracker_lootadd`).
+- **The in-game loot tracker beyond the baker's stall:** the Ardougne silk, fur, spice, gem and silver stalls aren't tracked: no capture since the tracker was added shows whether they are.
 
 ## Cache NPCs with a Pickpocket option that this doesn't cover
 

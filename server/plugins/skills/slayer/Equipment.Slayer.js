@@ -3,7 +3,8 @@
 /**
  * Protective Slayer equipment (data/slayer-gear.json, from the Wiki):
  * - A monster that punishes the unprotected (banshees without earmuffs, dust devils without a
- *   facemask...) lands its hit, at its unprotected max, and drains stats.
+ *   facemask...) lands its hit, at its unprotected max, and drains stats. Wall beasts only
+ *   grab the unprotected (WallBeast.Slayer.js).
  * - Kurask and turoth only take damage from leaf-bladed weapons, broad ammunition and Magic Dart.
  * - A thrall deals them, and a Vyrewatch Sentinel, no damage ("magic:thrall-attack").
  * Content may give a Slayer helmet's protection without one ("slayer:helmet", a league relic).
@@ -23,7 +24,8 @@ const thrallImmuneIds = new Set(GEAR.thrallImmuneIds ?? []);
 function init(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
-  for (const monster of GEAR.monsters) for (const name of monster.names) byName.set(name, monster);
+  // A grab monster's own unit punishes the grab; its normal attacks are ordinary (Wiki: Wall beast).
+  for (const monster of GEAR.monsters) if (!monster.grab) for (const name of monster.names) byName.set(name, monster);
 }
 
 function npcName(npc) {

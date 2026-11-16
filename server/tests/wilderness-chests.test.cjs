@@ -468,6 +468,8 @@ after(() => {
 function ikovFixture(t) {
   ikovSetup();
   let worldTurn = 0;
+  // Only a Doors walkOver crossing (the trap-lever door) may hold movement:ignore-clipping, and only that opener.
+  let walkingOver = null;
   const fixtures = new Map(), tuples = new Map(), events = [];
   const regionChange = core.ObjectManager.onRegionChange;
   t.mock.method(core.ObjectManager, 'onRegionChange', function(...args) {
@@ -487,7 +489,7 @@ function ikovFixture(t) {
       core.World.process();
       for (const { player } of fixtures.values()) {
         assert.equal(player.isRegistered(), true); assert.ok(player.getHitpoints() > 0);
-        assert.equal(player.hasFlag('movement:ignore-clipping'), false);
+        if (player !== walkingOver) assert.equal(player.hasFlag('movement:ignore-clipping'), false);
         assert.equal(player.getPrivateArea(), null, 'ordinary shared dungeon, not a private-instance claim');
       }
     }
@@ -620,7 +622,8 @@ function ikovFixture(t) {
     assert.equal(tasks.length, 1, 'one actual scheduler task keyed to this opened object');
     return tasks[0];
   }
-  return { actor, base, opened, operate, replay, turns, shared, timer, events, now: () => worldTurn };
+  return { actor, base, opened, operate, replay, turns, shared, timer, events, now: () => worldTurn,
+    walkOver: player => { walkingOver = player; } };
 }
 
 function ikovFeedback(f) {
@@ -1119,28 +1122,42 @@ test('Ikov trapped lever Search uses current boosted42 with no XP and only safe 
   assert.ok(a.animations.some(row => row.id === core.CacheDefinitions.getSeqId('macro_lever_switch_down')));
   assert.equal(trapFlag(b, IKOV_TRAP_UNLOCKED), 0); assert.equal(trapFlag(b, IKOV_TRAP_DISARMED), 0);
   assert.ok(h.tasks(a).every(task => !task.isRunning())); assert.equal(a.player.getMovementQueue().isMovementBlocked(), false);
-  await h.operate(a, h.currentDoor(a, b), 'Open');
-  let primary;
-  try {
-    const open = h.currentDoor(a, b); assert.notDeepEqual(h.pose(open), closed);
-    assert.equal(open.getId(), 92); assert.deepEqual(ikovAt(open), [2648, 9858, 0]); assert.equal(open.getFace(), 2);
-    assert.equal(crosses(), true, 'real catalog opening removes the doorway edge clipping');
-    await h.operate(b, open, 'Open'); assert.deepEqual(h.pose(h.currentDoor(a, b)), h.pose(open), 'locked bystander cannot toggle shared opened door');
-    const trace = [];
-    await a.connection.dispatch([{ type: 'move', worldX: 2648, worldY: 9860, modifierFlags: 0, run: false }]);
-    for (let turn = 0; turn < 32; turn++) { h.turns(); trace.push(ikovAt(a.player)); }
-    assert.deepEqual(ikovAt(a.player), [2648, 9860, 0], 'ordinary clipped walk enters the western room');
-    assert.deepEqual(ikovItems(a.player), items); assert.equal(a.player.getHitpoints(), 60);
-    console.log('IKOV_TRAP_DOOR_ROUTE', JSON.stringify({ closed, open: h.pose(open), trace, authoredRouteModel: true }));
-  } catch (error) { primary = error; throw error; }
-  finally {
-    try {
-      const live = h.currentDoor(a, b);
-      if (JSON.stringify(h.pose(live)) !== JSON.stringify(closed)) await h.operate(a, live, 'Open');
-      assert.deepEqual(h.pose(h.currentDoor(a, b)), closed);
-      assert.equal(crosses(), false, 'retoggle restores the closed door clipping');
-    } catch (error) { if (!primary) throw error; console.error('IKOV_TRAP_DOOR_CLEANUP_FAILED_AFTER_PRIMARY', error); }
-  }
+  // rsprox_transcripts/242/912156.txt ticks 1764-1768 (north), 1885-1893 (south), 2014-2019: Open puts inviswall
+  // 38848 on the doorway and inactiveposhdoor 1542 on the tile north, door_open (62), the opener steps across and
+  // the door is back two ticks later.
+  const sounds = [], sendSound = core.Sounds.sendSound;
+  t.mock.method(core.Sounds, 'sendSound', function(player, sound, ...rest) {
+    if (player === a.player) sounds.push(sound.getId?.() ?? sound.id);
+    return Reflect.apply(sendSound, this, [player, sound, ...rest]);
+  });
+  h.walkOver(a.player);
+  await h.operate(a, h.door, 'Open');
+  const handled = h.now(), here = () => ikovAt(a.player);
+  const at = (id, y) => core.MapObjects.get(id, new core.Location(2648, y, 0), null);
+  const wall = at(38848, 9857), leaf = at(1542, 9858);
+  assert.ok(wall && leaf, 'inviswall on the doorway and inactiveposhdoor north of it');
+  assert.deepEqual([wall.getType(), wall.getFace(), leaf.getType(), leaf.getFace()], [0, 1, 0, 2]);
+  assert.equal(core.MapObjects.get(92, h.door.getLocation(), null), null, 'the closed door is swapped out');
+  assert.equal(crosses(), false, 'the blocker keeps the doorway shut to ordinary walking');
+  assert.deepEqual(sounds, [62], 'door_open');
+  for (let turn = 0; turn < 4 && here()[1] !== 9858; turn++) h.turns();
+  assert.deepEqual(here(), [2648, 9858, 0], 'the opener steps through into the western room');
+  assert.ok(h.now() - handled <= 1, 'one step, on the tick after the Open');
+  h.turns(2 - (h.now() - handled));
+  assert.deepEqual(h.pose(h.currentDoor(a, b)), closed, 'the door is back two ticks after the Open');
+  assert.equal(at(1542, 9858), null); assert.equal(crosses(), false);
+  await h.operate(a, h.currentDoor(a, b), 'Open'); // the restored door is a fresh registration
+  for (let turn = 0; turn < 4 && here()[1] !== 9857; turn++) h.turns();
+  assert.deepEqual(here(), [2648, 9857, 0], 'and back out the same way');
+  h.turns(3); assert.deepEqual(h.pose(h.currentDoor(a, b)), closed);
+  assert.equal(a.player.hasFlag('movement:ignore-clipping'), false, 'the walk-over flag ends once across');
+  h.walkOver(null);
+  await b.connection.dispatch([{ type: 'move', worldX: 2648, worldY: 9857, modifierFlags: 0, run: false }]);
+  h.turns(16);
+  await h.operate(b, h.currentDoor(a, b), 'Open'); h.turns(3);
+  assert.deepEqual(h.pose(h.currentDoor(a, b)), closed, 'a locked player cannot open it');
+  assert.notEqual(ikovAt(b.player)[1], 9858);
+  assert.deepEqual(ikovItems(a.player), items); assert.equal(a.player.getHitpoints(), 60);
   assert.deepEqual(ikovItems(a.player), items); assert.equal(a.player.getSkillManager().getExperience(core.Skill.THIEVING), xp); h.shared();
 });
 
@@ -1220,6 +1237,51 @@ test('Ikov trap named Search and Pull leave matching-name wrong-placement lever 
     }
     assert.equal(h.statementCount(a, 'You find a trap on the lever! You disable the trap.'), 0); h.shared();
   } finally { core.ObjectManager.deregister(wrong, true); }
+});
+
+// rsprox_transcripts/242/912156.txt: Search (tick 1236) plays lever_switch_up_down (2141) with its mesbox; Pull,
+// handled at 1240, moves the quest on at once, macro_lever_switch_down (2140) at 1241, and at 1242 the lever shows as
+// ikov_leverdown (88, shape 4 rotation 1) with synth sound lever (2400) until 1247.
+test('Ikov trapped lever Search animates and a safe Pull lowers the lever for 5 ticks with its sound, 2 ticks on', async t => {
+  const h = ikovTrapFixture(t), a = h.actor(42), b = h.actor(42);
+  assert.deepEqual([core.CacheDefinitions.getSeqId('lever_switch_up_down'), core.CacheDefinitions.getSeqId('macro_lever_switch_down')], [2141, 2140]);
+  assert.equal(core.CacheDefinitions.getLocId('ikov_leverdown'), 88);
+  const at = h.lever.getLocation(), handledTurn = () => h.events.filter(e => e.player === a.player && e.handled === true).at(-1).turn;
+  await h.operate(a, h.lever, 'Search for traps');
+  const searched = handledTurn();
+  assert.deepEqual(a.animations.filter(row => row.id === 2141).map(row => row.turn), [searched], 'search animation with the mesbox');
+  assert.equal(h.statementCount(a, 'You find a trap on the lever! You disable the trap.'), 1);
+  a.player.closeInterruptibleInterfaces?.();
+  await h.operate(a, h.lever, 'Pull');
+  const pulled = handledTurn();
+  assert.equal(trapFlag(a, IKOV_TRAP_UNLOCKED), 1, 'unlocked on the tick the Pull is handled');
+  assert.equal(a.animations.some(row => row.id === 2140), false, 'no pull animation on the click tick');
+  const lowered = () => core.ObjectManager.objectsAt(at).find(o => o.getId() === 88 && o.getOwner() === a.player);
+  h.turns();
+  assert.deepEqual(a.animations.filter(row => row.id === 2140).map(row => row.turn), [pulled + 1]);
+  assert.equal(lowered(), undefined);
+  h.turns();
+  const down = lowered();
+  assert.ok(down, 'the owner sees the lowered lever');
+  assert.deepEqual([down.getType(), down.getFace()], [4, 1]);
+  assert.deepEqual(a.sounds.filter(row => row.args[0] === 2400).map(row => row.turn), [pulled + 2]);
+  assert.equal(a.removedAt.some(row => row.object === h.lever && row.turn === pulled + 2), true, 'the shared lever is hidden for the owner');
+  assert.equal(b.removed.includes(h.lever) || b.shown.includes(down), false, 'another player still sees the shared lever');
+  assert.equal(a.player.getMovementQueue().isMovementBlocked(), false, 'released once the lever is down');
+  h.turns(4); assert.ok(lowered(), 'still down 4 ticks later');
+  h.turns(); assert.equal(lowered(), undefined, 'back up after 5 ticks');
+  assert.ok(a.shownAt.some(row => row.object === h.lever && row.turn === pulled + 7));
+  assert.equal(core.MapObjects.get(91, at, null), h.lever); h.shared();
+});
+
+test('Ikov logout while the trapped lever is down restores the owner view', async t => {
+  const h = ikovTrapFixture(t), a = h.actor(42);
+  await h.operate(a, h.lever, 'Search for traps'); a.player.closeInterruptibleInterfaces?.();
+  await h.operate(a, h.lever, 'Pull'); h.turns(2);
+  assert.ok(core.ObjectManager.objectsAt(h.lever.getLocation()).some(o => o.getId() === 88 && o.getOwner() === a.player));
+  PM.emitPlayerLogout({ player: a.player, username: a.player.getUsername() });
+  assert.equal(core.ObjectManager.objectsAt(h.lever.getLocation()).some(o => o.getId() === 88 && o.getOwner() === a.player), false);
+  assert.equal(trapFlag(a, IKOV_TRAP_UNLOCKED), 1); h.turns(6); h.shared();
 });
 
 const IKOV_WARRIOR_DEFEATED = 'temple-of-ikov:fire-warrior-defeated';
@@ -1343,6 +1405,69 @@ test('Ikov encounter readiness cancels on owner relocation and logout without a 
   PM.emitPlayerLogout({ player: b.player, username: b.player.getUsername() }); // hook fixture keeps actor registered
   h.turns(10);
   assert.equal(h.speech.some(row => row.npc === other), false); assert.equal(h.own(b), undefined); h.closed();
+});
+
+// rsprox_transcripts/242/912156.txt ticks 1779-1786: smokepuff (86) and its sound (1930) on his tile, his add with
+// human_smokepuff_tele_appear (803) and fire_teleport (1629), "You will not pass!" 2 ticks on, "Amitus! Setitii!" with
+// human_caststrike (711), fireblast_casting (129), fireblast_travel (130) to the door and fireblast_impact (131) there,
+// then a one-tile exactmove south (30/56 cycles, angle 1024) with human_stumble_back (846) at delay 30.
+test('Ikov Fire Warrior arrives in smoke, casts the fire blast on his second line and knocks the player back stumbling', async t => {
+  const h = ikovWarriorFixture(t), a = h.actor(), b = h.actor();
+  const seq = name => core.CacheDefinitions.getSeqId(name), spot = name => core.CacheDefinitions.getSpotanimId(name);
+  assert.deepEqual([seq('human_smokepuff_tele_appear'), seq('human_caststrike'), seq('human_stumble_back')], [803, 711, 846]);
+  assert.deepEqual([spot('smokepuff'), spot('fireblast_casting'), spot('fireblast_travel'), spot('fireblast_impact')], [86, 129, 130, 131]);
+  const rows = { graphics: [], sounds: [], projectiles: [], npcAnims: [], npcGraphics: [], anims: [] };
+  for (const f of [a, b]) {
+    const sender = f.player.getPacketSender();
+    for (const [method, list] of [['sendGraphic', rows.graphics], ['sendAreaSound', rows.sounds], ['sendProjectile', rows.projectiles]]) {
+      const original = sender[method].bind(sender);
+      sender[method] = (...args) => { list.push({ player: f.player.getUsername(), args, turn: h.now() }); return original(...args); };
+    }
+  }
+  const npcAnimation = core.NPC.prototype.performAnimation, npcGraphic = core.NPC.prototype.performGraphic;
+  t.mock.method(core.NPC.prototype, 'performAnimation', function(animation) {
+    if (this.getId() === 3448) rows.npcAnims.push({ id: animation.getId(), turn: h.now() });
+    return Reflect.apply(npcAnimation, this, [animation]);
+  });
+  t.mock.method(core.NPC.prototype, 'performGraphic', function(graphic) {
+    if (this.getId() === 3448) rows.npcGraphics.push({ id: graphic.id, height: graphic.height, turn: h.now() });
+    return Reflect.apply(npcGraphic, this, [graphic]);
+  });
+  const animation = a.player.performAnimation;
+  a.player.performAnimation = anim => { rows.anims.push({ id: anim.getId(), delay: anim.getDelay(), turn: h.now() }); return animation(anim); };
+  await h.operate(a, h.door, 'Open');
+  const handled = h.now(), npc = h.own(a), tile = npc.getLocation(), start = a.player.getLocation().clone();
+  let force = null, forceTurn = null;
+  for (let turn = 0; turn < 12; turn++) {
+    h.turns();
+    if (!force && a.player.getForceMovement()) { force = a.player.getForceMovement(); forceTurn = h.now(); }
+  }
+  const at = row => [row.args[1].getX(), row.args[1].getY()];
+  const smoke = rows.graphics.filter(row => row.args[0].id === 86);
+  assert.deepEqual(smoke.map(row => [row.player, row.turn, ...at(row)]), [[a.player.getUsername(), handled, tile.getX(), tile.getY()]], 'smokepuff on his tile, owner only');
+  assert.deepEqual(rows.npcAnims.filter(row => row.id === 803).map(row => row.turn), [handled], 'appears as he is added');
+  assert.deepEqual(rows.sounds.filter(row => [1930, 1629].includes(row.args[0])).map(row => [row.player, row.args[0], row.turn]),
+    [[a.player.getUsername(), 1930, handled], [a.player.getUsername(), 1629, handled]]);
+  const lines = h.speech.filter(row => row.npc === npc);
+  assert.deepEqual(lines.map(row => row.text), ['You will not pass!', 'Amitus! Setitii!']);
+  assert.equal(lines[0].turn, handled + 2, 'first line 2 ticks after he appears');
+  const blastTurn = lines[1].turn;
+  // His ordinary magic attacks also use human_caststrike; the scene's blast is the one on his line.
+  assert.ok(rows.npcAnims.some(row => row.id === 711 && row.turn === blastTurn), 'human_caststrike with the line');
+  assert.deepEqual(rows.npcGraphics.filter(row => row.id === 129 && row.turn === blastTurn).map(row => row.height), [92]);
+  assert.deepEqual(rows.projectiles.filter(row => row.args[4] === 130).map(row => [row.player, row.args[4], row.args[1].getX(), row.args[1].getY(), row.args[3], row.args[8], row.turn]),
+    [[a.player.getUsername(), 130, 2646, 9870, 130, 76, blastTurn]], 'fire blast travels to the door');
+  const impact = rows.graphics.filter(row => row.args[0].id === 131);
+  assert.deepEqual(impact.map(row => [...at(row), row.args[0].delay, row.args[0].height, row.turn]), [[2646, 9870, 130, 124, blastTurn]]);
+  assert.deepEqual(rows.sounds.filter(row => [155, 156].includes(row.args[0])).map(row => [row.args[0], row.args[5], row.turn]),
+    [[155, 0, blastTurn], [156, 124, blastTurn]]);
+  assert.ok(force, 'knock-back force move');
+  assert.deepEqual([force.getSpeed(), force.getReverseSpeed(), force.getDirection(), force.getAnimation()], [30, 56, 0, 846]);
+  assert.deepEqual(rows.anims.filter(row => row.id === 846).map(row => [row.delay, row.turn]), [[30, forceTurn]], 'stumbles back at delay 30');
+  assert.deepEqual(ikovAt(a.player), [start.getX(), start.getY() - 1, 0]);
+  const scene = row => row.player === b.player.getUsername() && [86, 131, 1930, 1629, 155, 156].includes(row.args[0]?.id ?? row.args[0]);
+  assert.equal(rows.graphics.some(scene) || rows.sounds.some(scene)
+    || rows.projectiles.some(row => row.player === b.player.getUsername() && row.args[4] === 130), false, 'another player sees none of the scene effects');
 });
 
 test('Ikov foreign death cannot credit a live encounter and relocated authorized carry still restores shared93', async t => {

@@ -175,6 +175,76 @@ test('Quests.plugin registers every quest and enforces equipment requirements wh
   ]);
 });
 
+test("Mourning's End II brings Eluned in when the static Lletya spawn is absent", () => {
+  const { api, handlers } = mockApi();
+  const spawned = [], removed = [], tasks = [];
+  api.core = { ...api.core, TaskManager: { submit: task => tasks.push(task) } };
+  api.getWorld = () => ({ getNpcs: () => [] });
+  api.spawnNpc = spawn => {
+    const npc = {
+      id: spawn.id,
+      getLocation: () => new api.core.Location(spawn.x, spawn.y, spawn.z),
+      getOwner: () => spawn.owner,
+    };
+    spawned.push(spawn);
+    return npc;
+  };
+  api.removeNpc = npc => removed.push(npc);
+  require("../plugins/quests/quests/MourningsEndPartII.Quest")(api);
+  let dialogueActive = true;
+  const player = {
+    getAttribute: () => undefined,
+    setAttribute: () => {},
+    getDialogueManager: () => ({ isActive: () => dialogueActive }),
+  };
+  const arianwyn = { getLocation: () => new api.core.Location(2353, 3172, 0) };
+  for (const handler of handlers.custom.get("npc-dialogue:action") ?? []) {
+    handler({ player, stepId: "vIeP1X", npc: arianwyn });
+  }
+  assert.equal(spawned.length, 1, "one owned Eluned copy stands in");
+  assert.equal(spawned[0].id, 6286, "the Lletya Eluned id");
+  assert.equal(tasks.length, 1, "a dialogue watcher is scheduled");
+
+  // The line event fires before the line is shown, so the copy must stay for the whole dialogue.
+  tasks.shift().execute();
+  assert.equal(removed.length, 0, "the copy stays while the dialogue is open");
+
+  dialogueActive = false;
+  tasks.shift().execute();
+  assert.equal(removed.length, 1, "closing or walking away from the dialogue clears the copy");
+});
+
+test("Mourning's End II ignores another player's owner-only Eluned copy", () => {
+  const { api, handlers } = mockApi();
+  const spawned = [];
+  api.core = { ...api.core, TaskManager: { submit: () => {} } };
+  const firstPlayer = { name: "first" };
+  const otherCopy = {
+    getId: () => 6286,
+    getLocation: () => new api.core.Location(2354, 3172, 0),
+    getOwner: () => firstPlayer,
+    getCurrentDefinition: () => ({ getName: () => "Eluned" }),
+  };
+  api.getWorld = () => ({ getNpcs: () => [otherCopy] });
+  api.spawnNpc = spawn => {
+    spawned.push(spawn);
+    return { id: spawn.id, getLocation: () => new api.core.Location(spawn.x, spawn.y, spawn.z), getOwner: () => spawn.owner };
+  };
+  api.removeNpc = () => {};
+  require("../plugins/quests/quests/MourningsEndPartII.Quest")(api);
+  const secondPlayer = {
+    getAttribute: () => undefined,
+    setAttribute: () => {},
+    getDialogueManager: () => ({ isActive: () => true }),
+  };
+  const arianwyn = { getLocation: () => new api.core.Location(2353, 3172, 0) };
+  for (const handler of handlers.custom.get("npc-dialogue:action") ?? []) {
+    handler({ player: secondPlayer, stepId: "vIeP1X", npc: arianwyn });
+  }
+  assert.equal(spawned.length, 1, "the second player gets their own copy beside Arianwyn");
+  assert.equal(spawned[0].owner, secondPlayer);
+});
+
 test('Lost City only warns about low combat when a starting skill is also missing', () => {
   const { api, handlers } = mockApi();
   require('../plugins/quests/quests/LostCity.Quest')(api);

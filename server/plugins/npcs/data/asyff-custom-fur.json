@@ -1,0 +1,32 @@
+{
+  "source": {
+    "page": "Asyff",
+    "revid": 15006217,
+    "revisionTimestamp": "2025-10-16T18:04:03Z",
+    "section": "Custom Fur Clothing",
+    "url": "https://oldschool.runescape.wiki/w/Asyff?oldid=15006217",
+    "note": "Fee is the coin charge from the Fee column. The Wiki's Item Cost column is the Grand Exchange price of the output and is not charged. The Wiki gives no Hunter level for these rows; spottier-cape keeps the 66 Hunter gate from the earlier plugin."
+  },
+  "recipes": [
+    { "id": "polar-kebbit-top", "set": "Polar kebbit", "output": { "name": "POLAR_CAMO_TOP", "id": 10065, "label": "Polar camo top" }, "fee": 20, "fur": { "names": ["POLAR_KEBBIT_FUR"], "ids": [10117], "amount": 2, "label": "Polar kebbit fur" } },
+    { "id": "polar-kebbit-legs", "set": "Polar kebbit", "output": { "name": "POLAR_CAMO_LEGS", "id": 10067, "label": "Polar camo legs" }, "fee": 20, "fur": { "names": ["POLAR_KEBBIT_FUR"], "ids": [10117], "amount": 2, "label": "Polar kebbit fur" } },
+    { "id": "common-kebbit-top", "set": "Common kebbit", "output": { "name": "WOOD_CAMO_TOP", "id": 10053, "label": "Wood camo top" }, "fee": 20, "fur": { "names": ["COMMON_KEBBIT_FUR"], "ids": [10121], "amount": 2, "label": "Common kebbit fur" } },
+    { "id": "common-kebbit-legs", "set": "Common kebbit", "output": { "name": "WOOD_CAMO_LEGS", "id": 10055, "label": "Wood camo legs" }, "fee": 20, "fur": { "names": ["COMMON_KEBBIT_FUR"], "ids": [10121], "amount": 2, "label": "Common kebbit fur" } },
+    { "id": "feldip-weasel-top", "set": "Feldip weasel", "output": { "name": "JUNGLE_CAMO_TOP", "id": 10057, "label": "Jungle camo top" }, "fee": 20, "fur": { "names": ["FELDIP_WEASEL_FUR"], "ids": [10119], "amount": 2, "label": "Feldip weasel fur" } },
+    { "id": "feldip-weasel-legs", "set": "Feldip weasel", "output": { "name": "JUNGLE_CAMO_LEGS", "id": 10059, "label": "Jungle camo legs" }, "fee": 20, "fur": { "names": ["FELDIP_WEASEL_FUR"], "ids": [10119], "amount": 2, "label": "Feldip weasel fur" } },
+    { "id": "desert-devil-top", "set": "Desert devil", "output": { "name": "DESERT_CAMO_TOP", "id": 10061, "label": "Desert camo top" }, "fee": 20, "fur": { "names": ["DESERT_DEVIL_FUR"], "ids": [10123], "amount": 2, "label": "Desert devil fur" } },
+    { "id": "desert-devil-legs", "set": "Desert devil", "output": { "name": "DESERT_CAMO_LEGS", "id": 10063, "label": "Desert camo legs" }, "fee": 20, "fur": { "names": ["DESERT_DEVIL_FUR"], "ids": [10123], "amount": 2, "label": "Desert devil fur" } },
+    { "id": "larupia-hat", "set": "Larupia", "output": { "name": "LARUPIA_HAT", "id": 10045, "label": "Larupia hat" }, "fee": 500, "fur": { "names": ["LARUPIA_FUR"], "ids": [10095], "amount": 1, "label": "Larupia fur" } },
+    { "id": "larupia-top", "set": "Larupia", "output": { "name": "LARUPIA_TOP", "id": 10043, "label": "Larupia top" }, "fee": 100, "fur": { "names": ["LARUPIA_FUR", "TATTY_LARUPIA_FUR"], "ids": [10095, 10093], "amount": 1, "label": "Larupia fur or tatty larupia fur" } },
+    { "id": "larupia-legs", "set": "Larupia", "output": { "name": "LARUPIA_LEGS", "id": 10041, "label": "Larupia legs" }, "fee": 100, "fur": { "names": ["LARUPIA_FUR", "TATTY_LARUPIA_FUR"], "ids": [10095, 10093], "amount": 1, "label": "Larupia fur or tatty larupia fur" } },
+    { "id": "graahk-headdress", "set": "Graahk", "output": { "name": "GRAAHK_HEADDRESS", "id": 10051, "label": "Graahk headdress" }, "fee": 750, "fur": { "names": ["GRAAHK_FUR"], "ids": [10099], "amount": 1, "label": "Graahk fur" } },
+    { "id": "graahk-top", "set": "Graahk", "output": { "name": "GRAAHK_TOP", "id": 10049, "label": "Graahk top" }, "fee": 150, "fur": { "names": ["GRAAHK_FUR", "TATTY_GRAAHK_FUR"], "ids": [10099, 10097], "amount": 1, "label": "Graahk fur or tatty graahk fur" } },
+    { "id": "graahk-legs", "set": "Graahk", "output": { "name": "GRAAHK_LEGS", "id": 10047, "label": "Graahk legs" }, "fee": 150, "fur": { "names": ["GRAAHK_FUR", "TATTY_GRAAHK_FUR"], "ids": [10099, 10097], "amount": 1, "label": "Graahk fur or tatty graahk fur" } },
+    { "id": "kyatt-hat", "set": "Kyatt", "output": { "name": "KYATT_HAT", "id": 10039, "label": "Kyatt hat" }, "fee": 1000, "fur": { "names": ["KYATT_FUR"], "ids": [10103], "amount": 1, "label": "Kyatt fur" } },
+    { "id": "kyatt-top", "set": "Kyatt", "output": { "name": "KYATT_TOP", "id": 10037, "label": "Kyatt top" }, "fee": 200, "fur": { "names": ["KYATT_FUR", "TATTY_KYATT_FUR"], "ids": [10103, 10101], "amount": 1, "label": "Kyatt fur or tatty kyatt fur" } },
+    { "id": "kyatt-legs", "set": "Kyatt", "output": { "name": "KYATT_LEGS", "id": 10035, "label": "Kyatt legs" }, "fee": 200, "fur": { "names": ["KYATT_FUR", "TATTY_KYATT_FUR"], "ids": [10103, 10101], "amount": 1, "label": "Kyatt fur or tatty kyatt fur" } },
+    { "id": "gloves-of-silence", "set": "Dark kebbit", "output": { "name": "GLOVES_OF_SILENCE", "id": 10075, "label": "Gloves of silence" }, "fee": 600, "fur": { "names": ["DARK_KEBBIT_FUR"], "ids": [10115], "amount": 2, "label": "Dark kebbit fur" } },
+    { "id": "spotted-cape", "set": "Spotted kebbit", "output": { "name": "SPOTTED_CAPE", "id": 10069, "label": "Spotted cape" }, "fee": 400, "fur": { "names": ["SPOTTED_KEBBIT_FUR"], "ids": [10125], "amount": 2, "label": "Spotted kebbit fur" } },
+    { "id": "spottier-cape", "set": "Dashing kebbit", "output": { "name": "SPOTTIER_CAPE", "id": 10071, "label": "Spottier cape" }, "fee": 800, "level": 66, "fur": { "names": ["DASHING_KEBBIT_FUR"], "ids": [10127], "amount": 2, "label": "Dashing kebbit fur" } }
+  ]
+}

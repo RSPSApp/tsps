@@ -146,11 +146,40 @@ function take(api,event) {
     if (!stored.taken) return;
   } else inventory.addItem(item);
 }
+// Redeem-code (rsprox recs 3200 tick 318-328, local 1001332 ticks 143-154): op5 runs
+// meslayer_mode9 "Please enter your code." with -1; an unknown code answers "That code was not
+// recognised." on the next tick. The Wiki (Diango, Mystic cards) lists one code still in use,
+// which plays the Diango transcript's mystic-cards conversation and gives the cards.
+const CODE_PROMPT_SCRIPT = 110;
+const CODE_PROMPT = "Please enter your code.";
+const CODE_UNKNOWN = "That code was not recognised.";
+// league_3_cardthrow is the Mystic cards (27645), Diango enum 708 slot 174.
+const CODES = new Map([["v1r354cqu1r173und0", {item:"league_3_cardthrow", variant:"standard-dialogue-obtaining-mystic-cards"}]]);
+function redeemPrompt(api,{player,npc}) {
+  if (player.busy() || player.getHitpoints() <= 0) return true;
+  player.setEnteredSyntaxAction({execute:(text)=>redeem(api,player,npc,text)});
+  player.getPacketSender().sendClientScript(CODE_PROMPT_SCRIPT,CODE_PROMPT,-1);
+  return true;
+}
+function redeem(api,player,npc,text) {
+  // Ours: the code is matched without case or surrounding spaces.
+  const code=CODES.get(String(text ?? "").trim().toLowerCase());
+  if (!code || player.getHitpoints() <= 0) return player.sendMessage(CODE_UNKNOWN);
+  const d=data(api),id=d.byName.get(code.item),name=code.item;
+  if (!unlocked(player).includes(name)) player.setAttribute(UNLOCKED_ATTRIBUTE,[...unlocked(player),name]);
+  // Ours: the cards are handed over as the conversation starts. With a set already owned
+  // nothing more is given; with no room the unlock stays for Holiday-items.
+  if (!owns(api,player,d.families.get(id))) {
+    if (player.getInventory().getAddableAmount(new api.core.Item(id,1))===1) player.getInventory().adds(id,1);
+    else player.sendMessage(`${UNLOCK_MESSAGE}<col=ef1020>${api.core.CacheDefinitions.getItem(id).name}</col>`);
+  }
+  api.emitCustomEvent("npc-dialogue:start",{player,npc,npcId:npc?.getId?.() ?? api.core.NpcIdentifiers.DIANGO,variant:code.variant,exact:true});
+}
 function closed(api,{player,interfaceId}) {if(interfaceId===data(api).group)sessions.delete(player);}
 function changed(api,{player,interfaceId}) {if(interfaceId!==data(api).group)sessions.delete(player);}
 function logout({player}) {sessions.delete(player);}
 
-module.exports={name:"HolidayRewards",description:"Diango's Holiday-items interface to reclaim lost holiday items, tracking which rare holiday items and alternate styles a player has unlocked.",register(api){
+module.exports={name:"HolidayRewards",description:"Diango's Holiday-items interface to reclaim lost holiday items, tracking which rare holiday items and alternate styles a player has unlocked, and his Redeem-code prompt.",register(api){
   api.persistAttribute(UNLOCKED_ATTRIBUTE,[]);
   api.persistAttribute(HouseState.HOUSE_ATTRIBUTE,HouseState.defaultHouse());
   api.persistAttribute(HouseState.DECORATIONS_ATTRIBUTE,{});
@@ -159,7 +188,7 @@ module.exports={name:"HolidayRewards",description:"Diango's Holiday-items interf
   api.onCustomEvent("equipment:changed",equipped.bind(null,api));
   api.onCustomEvent("construction:costume-retrieve",HouseRetrieval.retrieve.bind(null,api));
   api.onCustomEvent("construction:planted",HouseRetrieval.planted.bind(null,api));
-  api.onNpcInteraction("Diango",{"Holiday-items":open.bind(null,api)});
+  api.onNpcInteraction("Diango",{"Holiday-items":open.bind(null,api),"Redeem-code":redeemPrompt.bind(null,api)});
   api.onCustomEvent("holiday-rewards:open",open.bind(null,api));
   api.onInterfaceActionClick(take.bind(null,api));
   api.onCustomEvent("interface:closed",closed.bind(null,api));

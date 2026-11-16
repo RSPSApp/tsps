@@ -648,7 +648,8 @@ test('Grim Tales destroyed-bean recovery selects the canonical receipt tail', ()
   assert.equal(choice?.variant, 'getting-sylas-magic-bean-returning-to-sylas');
   assert.equal(typeof choice?.select, 'function');
   const dialogue = require('../data/definitions/npc-dialogues.json')['Grim Tales'];
-  const selected = choice.select(dialogue.variants[choice.variant]);
+  // speaker_ids is derived identity metadata; this checks which steps are selected.
+  const selected = choice.select(dialogue.variants[choice.variant]).map(({ speaker_ids, ...step }) => step);
   assert.deepEqual(selected, [
     { type: 'line', speaker: 'Sylas', text: 'Here are the beans as promised.' },
     { type: 'action', action: 'receive', text: 'Magic beans', id: '4ncaBB' },

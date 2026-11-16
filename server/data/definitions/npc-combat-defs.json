@@ -487,6 +487,7 @@
     "9046": {"name": "Corrupted Bear", "anims": {"attack": 4925, "block": 4927, "death": 4929}},
     "9047": {"name": "Corrupted Dragon", "projectile": 1702, "anims": {"attack": 84, "block": 89, "death": 92}},
     "9048": {"name": "Corrupted Dark Beast", "projectile": 1606, "anims": {"attack": 2731, "block": 2732, "death": 2733}},
+    "9118": {"name": "Rabbit (Prifddinas)", "anims": {"attack": 6090, "block": 6091, "death": 6092}, "deathTicks": 5},
     "9209": {"name": "null", "anims": {"attack": 289, "block": 290, "death": 292}, "sounds": {"death": 3835}},
     "9390": {"name": "Man", "anims": {"attack": 422, "block": 424, "death": 836}, "sounds": {"death": 512}},
     "9391": {"name": "Man", "anims": {"attack": 422, "block": 424, "death": 836}, "sounds": {"death": 512}},

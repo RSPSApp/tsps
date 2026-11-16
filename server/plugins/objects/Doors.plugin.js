@@ -78,7 +78,7 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   PIP_CELL_GATE_OPEN: 3464,
   CRANDOR_SECRET_DOOR_OPEN: 25039, // dragonsecretdoor_open; capture 2951
   INVISWALL: 38848, // actionless collision blocker; captures 2951 and 740
-  HAROLD_DOOR_OPEN: 1542, // inactiveposhdoor: Harold's door (3747) open, 233/03247.txt:4726
+  HAROLD_DOOR_OPEN: 1542, // inactiveposhdoor: Harold's door (3747) open, 233/03247.txt:4726; Temple of Ikov's trap-lever door (92), 242/912156.txt:26149
   CASTLE_DOOR_OPEN: 3744, // castledoor_inactive: the Death Plateau equipment room door (3743) open, 233/03252.txt:36063
   MOURNER_CAGE_GATE_LEFT_OPEN: 2059, // mournerquaters_gatelopen; Biohazard capture tick 557
   MOURNER_CAGE_GATE_RIGHT_OPEN: 2061, // mournerquaters_gateropen
@@ -109,7 +109,6 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // GATE_52 (Gnome Ball pitch and Tree Gnome Village): its same-model open variants (193, 2395)
   // are nameless with no actions and are never placed, so the pairing below cannot find them.
   SELF_OPENING_DOOR_IDS = new Set([O.DOOR_223, O.DOOR_225, O.DOOR_226, O.DOOR_227, O.DOOR_228, O.DOOR_229, O.DOOR_230, O.DOOR_231,
-    O.DOOR_10, // Ikov trap-lever door92 is Open-only with no separate open loc; TempleQuest guards its unlock.
     O.DOOR_67, // Khazard stronghold: Open-only door 2184 has no paired open loc.
     O.DOOR_283, // Ardougne Castle's lockpick door has no separate open loc in the cache.
     // The magic axe hut's and Pirates' Hideout's lockpick doors (toollock2/3, #5744) have no open loc either: their
@@ -559,6 +558,18 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       closeTicks: 2,
       openSoundId: 81,
     })),
+    // Temple of Ikov's trap-lever door (ikov_trapleverdoor 92), rsprox_transcripts/242/912156.txt ticks 1764-1768,
+    // 1885-1893 and 2014-2019: Open puts inviswall 38848 on the doorway and inactiveposhdoor (1542) on the tile
+    // north, sound 62, the player steps across (either way) and the door is back two ticks later. TempleOfIkov
+    // keeps it shut until the trapped lever is pulled safely (door:toggle).
+    Object.freeze({
+      closed: [[O.DOOR_10, 2648, 9857, 0, 1]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2648, 9857, 0, 1], [NAMELESS_DOOR_LEAF_IDS.HAROLD_DOOR_OPEN, 2648, 9858, 0, 2]],
+      crossY: 9858,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
     // Waterfall guide xWBSnGkQTi4 3:53.2-3:54.4: Golrie's panel opens, the player walks
     // through, then it closes (~1.2s). Cache 1991 is Open-only model609, with no open loc.
     Object.freeze({

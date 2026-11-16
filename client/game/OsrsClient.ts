@@ -7508,6 +7508,10 @@ export class OsrsClient {
         // A bag snapshot replaces this registry entry with its 28-slot container.
         // Rebind the shop's retained container before publishing stock/transmits.
         this.cs2Vm?.context?.inventories?.set(516, this.shopInventory);
+        // A shop the server opens under its live inventory id (Farming Supplies: farmer_supplies, 894) is
+        // drawn by the cache scripts from that id, whose enums say whether its stock is infinite (no counts).
+        const inventoryId = typeof state.inventoryId === "number" && state.inventoryId > 0 ? state.inventoryId : 516;
+        if (inventoryId !== 516) this.cs2Vm?.context?.inventories?.set(inventoryId, this.shopInventory);
 
         // Clear existing items and populate with shop stock
         this.shopInventory.clear();
@@ -7525,6 +7529,7 @@ export class OsrsClient {
 
         // Mark inv cycle for shop (516) - handlers fire during processWidgetTransmits()
         markInvTransmit(516);
+        if (inventoryId !== 516) markInvTransmit(inventoryId);
     }
 
     /**

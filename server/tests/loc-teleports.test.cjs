@@ -1324,6 +1324,7 @@ test("the Lumbridge Swamp Caves dark hole needs a rope tied once, as the game's 
     onPlayerLogin: (handler) => logins.push(handler),
     getTaskManager: () => core.TaskManager,
     sendMultiChatboxPrompt: (player, title, ...pairs) => { ropePrompts.push({ title, pairs }); return true; },
+    onObjectRoute() {},
   };
   const ropePrompts = [];
   require("../plugins/objects/Ladders.plugin").register(api);

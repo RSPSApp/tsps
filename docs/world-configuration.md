@@ -457,7 +457,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `KourendWoodland` | KourendWoodland | areas | yes | The Old Memorial in the Kourend Woodland: Inspect shows King Kharedst IV's inscription. (members only) |
 | `McGruborsWood` | McGruborsWood | areas | yes | Keeps McGrubor's Wood's main gate locked, so the wood is entered by the loose railing or a fairy ring. |
 | `MiningGuild` | MiningGuild | areas | yes | Mining Guild entry needs 60 Mining; its members' area gives an invisible +7 Mining level, halves rock respawn times and rolls unidentified minerals. |
-| `Misthalin` | Misthalin | areas | yes | Misthalin area interactions: the Edgeville dungeon ladder and trapdoor, Varrock's manhole to the sewers and the Wizards' Tower basement. |
+| `Misthalin` | Misthalin | areas | yes | Misthalin area interactions: the Edgeville dungeon ladder and trapdoor, Varrock's manhole to the sewers, the Wizards' Tower basement, and the Lumbridge Swamp Caves dark hole and wall markers. |
 | `MorUiRek` | MorUiRek | areas | yes | Mor Ul Rek (the TzHaar city): its cave exit back to the Karamja volcano and its hot vent doors. (members only) |
 | `MotherlodeMine` | MotherlodeMine | areas | yes | Motherlode Mine: mining pay-dirt, washing it in Prospector Percy's machine and collecting ore from the sack, with its HUD. (members only) |
 | `MythsGuild` | MythsGuild | areas | yes | The Myths' Guild's statue down to its basement, and the guild dog's Pet. (members only) |
@@ -703,7 +703,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `ItemInspects` | ItemInspects | items | yes | Inspect on the sailing keys and shipbuilding parts (stormy, fetid and serrated keys, barrel stand, bottled storm, captured wind mote, Heart of Ithell, the three Barracuda Trial fabric rolls) and the unscented vyre noble disguise shows the item's line in an object box. (members only) |
 | `ItemStyles` | ItemStyles | items | yes | Opens the native style chooser for holiday cosmetics whose Change, Colour, Carve or Paint option alters their look, and applies the chosen style. |
 | `Jewellery` | Jewellery | items | yes | Runs charged and eternal jewellery such as dueling rings, games necklaces and glories: Rub and worn-option teleports, charge counts and Check messages. (members only) |
-| `Keris` | Keris | items | yes | Gives the keris family extra damage against Kalphites and Scabarites, with a rare triple-damage hit, and Amascut's partisan its own boost. (members only) |
+| `Keris` | Keris | items | yes | Gives the keris family extra damage against Kalphites and Scabarites, with a rare triple-damage hit, and Amascut's partisan its own boost, and the sun partisan's Tombs of Amascut accuracy and kill heal. (members only) |
 | `KourendTravelItems` | KourendTravelItems | items | yes | Adds Kharedst's memoirs, the Book of the Dead and Xeric's talisman teleports to Kourend, with charges and Wilderness limits. (members only) |
 | `LightSources` | LightSources | items | yes | Lets a tinderbox light unlit torches, candles and lanterns at the right Firemaking level, and lets lit torches and mining helmets be put out again. (members only) |
 | `Lightbearer` | Lightbearer | items | yes | Makes a worn Lightbearer ring restore special attack energy every 25 ticks instead of every 50. (members only) |
@@ -846,7 +846,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `AggressionToggle` | AggressionToggle | npcs | yes | Adds the ::aggro command, an administrator cheat that keeps monsters aggressive after the ten-minute tolerance, usable by all if commands allow. |
 | `AliLeafletDropper` | AliLeafletDropper | npcs | yes | Ali the Leaflet Dropper in Al Kharid hands out the Al kharid flyer (Take-flyer and his Talk-to), and the flyer can be read. |
 | `Apothecary` | Apothecary | npcs | yes | Gives the Varrock Apothecary's Potions interface: strength, energy and antipoison potions made from the player's own ingredients, feeding the Varrock diary. |
-| `Asyff` | Asyff | npcs | yes | Adds Asyff's Custom Fur Clothing in Varrock: two dashing kebbit furs and 800 coins at 66 Hunter make a spottier cape. (members only) |
+| `Asyff` | Asyff | npcs | yes | Adds Asyff's Custom Fur Clothing in Varrock: the wiki's kebbit, camo, Larupia, Graahk and Kyatt sets, gloves and capes for their fur and coin fees. (members only) |
 | `Baraek` | Baraek | npcs | yes | Makes Baraek in Varrock sell fur for 20 coins, or 18 as the fallback, taking the coins and giving the fur from his dialogue. |
 | `BarbarianTraining` | BarbarianTraining | npcs | yes | Adds Barbarian Training's rod fishing, barehanded fishing and Herblore steps with Otto Godblessed, unlocking leaping fish catches, barehanded harpoon fishing and the barbarian mixes. (members only) |
 | `Bartenders` | Bartenders | npcs | yes | Makes the Blue Moon Inn, Dancing Donkey, Sheared Ram and Dragon Inn bartenders take coins and hand over a beer or Greenman's ale. |
@@ -905,6 +905,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Tutors` | Tutors | npcs | yes | Lumbridge combat and skill tutors: hands out training weapons, runes, tools and other starter gear, with a shared 30-minute claim for ranged and magic. |
 | `Tyss` | Tyss | npcs | yes | Tyss at the Dark Altar toggles the Arceuus spellbook from his Spellbook option and two dialogue choices. (members only) |
 | `UndeadDruids` | UndeadDruids | npcs | yes | Undead Druids use melee at melee range and magic from range, matching the Wiki and RSProx 2966. (members only) |
+| `WizardJalarast` | WizardJalarast | npcs | yes | Wizard Jalarast at the Wizards' Tower makes splitbark armour: Trade opens the purchase menu, and each piece takes its bark, fine cloth and coins. (members only) |
 | `Wyrms` | Wyrms | npcs | yes | Wyrm and wyrmling combat: melee when the target is adjacent, magic from range, with separate max hits per style. (members only) |
 | `Wyson` | Wyson | npcs | yes | Wyson the gardener sells woad leaves through his dialogue: 15 coins for one leaf, 20 coins for two. |
 | `Zahur` | Zahur | npcs | yes | Zahur in Nardah makes unfinished potions from clean herbs and vials of water or blood for 200 coins each, after the hard Desert Diary or with a Herblore cape. (members only) |
@@ -962,10 +963,10 @@ This table lists bundled plugins that have a description. The world config page 
 | `PrayerUnlocks` | PrayerUnlocks | skills | yes | Gates prayers that need more than a level: Chivalry and Piety via King's Ransom, and Rigour, Augury and Preserve via scrolls; Deadeye and Mystic Vigour scrolls upgrade Eagle Eye and Mystic Might. (members only) |
 | `RalosRise` | RalosRise | skills | yes | Prayer training at Ralos' Rise: blessing bones and wine at the altar, breaking blessed bones into shards and the libation bowl. (members only) |
 | `Reanimation` | Reanimation | skills | yes | Gives Prayer XP to the caster who kills a creature reanimated by an Arceuus ensouled-head spell. (members only) |
-| `Runecrafting` | Runecrafting | skills | yes | Runecrafting: entering altars with talismans or tiaras, crafting runes, binding tiaras, the Blood, Soul and Dark Altars, dark essence fragments and exit portals. |
+| `Runecrafting` | Runecrafting | skills | yes | Runecrafting: entering altars with talismans or tiaras, crafting runes, binding tiaras, the Blood, Soul and Dark Altars, dark essence fragments, swampbark and bloodbark infusion, and exit portals. |
 | `Sailing` | Sailing | skills | yes | Sailing boats, travel, shipyards, crews, port tasks, sea charting and combat. (members only) |
 | `ShootingStars` | ShootingStars | skills | yes | Crashed stars land around the world on a timer; players mine them layer by layer for stardust and trade it with Dusuri, with an optional landing announcement. |
-| `Slayer` | Slayer | skills | yes | Slayer: tasks, masters, points and rewards, superiors, finishers, and the slaughter and expeditious bracelets, built on the cache's Slayer tables. (members only) |
+| `Slayer` | Slayer | skills | yes | Slayer: tasks, masters, points and rewards, superiors, finishers, wall beasts' grab, and the slaughter and expeditious bracelets, built on the cache's Slayer tables. (members only) |
 | `Smithing` | Smithing | skills | yes | Smelting at furnaces and smithing at anvils, plus cannonballs, godswords, dragon and visage shields, barbarian spears, Varrock armour and Superheat Item. |
 | `Thieving` | Thieving | skills | yes | Thieving: pickpocketing NPCs (with the Civitas urchins' distractions of the Wealthy citizens), opening coin pouches, stealing from stalls, blackjacking, the ham trapdoor, the Ardougne castle doors, Dorgesh-Kaan's rich and average chests, the Isle of Souls Dungeon chest, the Aldarin villa chests, the Sailing pirate chests, the Lizardman Temple chests, the lock-pick doors of the magic axe hut, Pirates' Hideout, East Ardougne and the Chaos Druid Tower, the Crumbling Tower's Dark Chest and Civitas illa Fortis's house robbery (stealing valuables). (members only) |
 | `Woodcutting` | Woodcutting | skills | yes | Woodcutting: chopping trees with the Forestry despawn timer, stump respawns, the logs-chopped tracker, and bird's nest and ring drops. |
@@ -1005,7 +1006,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `GnomeGliders` | GnomeGliders | world | yes | Gnome glider pilots: the glider map, flights between destinations with the fade and last-destination option, needing The Grand Tree. (members only) |
 | `Gravestones` | Gravestones | world | yes | A PvM death leaves a gravestone only you can see for 15 minutes, then items go to Death's Office. Can be turned off for the older drop behaviour. |
 | `HalloweenEvents` | HalloweenEvents | world | yes | The 2025 Halloween Spook-a-thon Decoration Contest, with its dialogue and spooky chair items, running only in its calendar window. |
-| `HolidayRewards` | HolidayRewards | world | yes | Diango's Holiday-items interface to reclaim lost holiday items, tracking which rare holiday items and alternate styles a player has unlocked. |
+| `HolidayRewards` | HolidayRewards | world | yes | Diango's Holiday-items interface to reclaim lost holiday items, tracking which rare holiday items and alternate styles a player has unlocked, and his Redeem-code prompt. |
 | `IntelligenceGathering` | IntelligenceGathering | world | yes | Intelligence Gathering: the information board, Captain Ginea's hand-in and the timed gang meetings with a boss and gangsters. (members only) |
 | `KeldagrimMinecarts` | KeldagrimMinecarts | world | yes | Keldagrim minecarts: conductors sell tickets, with rides between Keldagrim, Ice Mountain, White Wolf Mountain and the Grand Exchange. (members only) |
 | `LadyOfTheWaves` | LadyOfTheWaves | world | yes | Captain Shanks on the Lady of the Waves sells a ship ticket after Shilo Village and sails you to Port Khazard or Port Sarim. (members only) |

@@ -254,6 +254,10 @@ export interface PluginNpcDeathEvent {
   killer: any;
   /** Every player who damaged the npc recently, the killer among them. */
   damagers?: any[];
+  /** The player who landed the killing hit (Combat.getLastDamager), which can differ from the top damager `killer`. */
+  lastDamager?: any;
+  /** The weapon `lastDamager` held as the NPC began dying (-1 for none), not whatever they swapped to since. */
+  lastDamagerWeaponId?: number;
   npc: any;
   npcId: number;
   location: { x: number; y: number; z: number };

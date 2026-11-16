@@ -1,0 +1,73 @@
+// Run after `yarn build`: node --test tests/shop-live-inventory.test.cjs
+//
+// Shops opened under their live inventory (data/definitions/shop-inventories.json): the cache's
+// shop scripts are given it, and script 5022 draws an inventory that enums 4824/5412 mark with no
+// counts (infinite stock). Farming Supplies (the Fossil Island squirrels' shop, every item at
+// stock inf on the Wiki) is farmer_supplies; every other shop keeps the shared 516.
+const assert = require("node:assert/strict");
+const path = require("node:path");
+const { test, before } = require("node:test");
+
+const { Server } = require("../dist/Server");
+Server.installProductionPathResolver();
+
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { ShopDefinition } = require("../dist/game/definition/ShopDefinition");
+const { ShopDefinitionLoader } = require("../dist/game/definition/loader/impl/ShopDefinitionLoader");
+const { ShopManager } = require("../dist/game/model/container/shop/ShopManager");
+
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  assert.equal(new ShopDefinitionLoader().load(), true, "the server's shops");
+  ShopManager.initialize();
+});
+
+const shopId = (name) => ShopDefinition.all().find((entry) => entry.getName() === name).getId();
+
+/** Opens a shop for a real player, recording the client scripts run and the SHOP_OPEN packet. */
+function open(name) {
+  const p = new Player(null);
+  p.setUsername(`shopinv${Math.floor(Math.random() * 1e6)}`);
+  const scripts = [];
+  const packets = [];
+  const sender = new Proxy({}, {
+    get: (_target, key) => (key === "sendInterfaceScript" ? (id, args) => (scripts.push([id, args]), sender) : () => sender),
+  });
+  p.getPacketSender = () => sender;
+  p.getSession = () => ({ sendClientPacket: (packet) => (packets.push(Buffer.from(packet)), true) });
+  assert.equal(ShopManager.open(p, shopId(name)), true, `${name} opens`);
+  const init = scripts.find(([id]) => id === 1074);
+  return { scriptInventory: init[1][0], packetInventory: packets.at(-1).readUInt16BE(packets.at(-1).length - 2) };
+}
+
+test("the cache marks farmer_supplies as infinite stock: its items draw with no counts", () => {
+  const inventory = CacheDefinitions.getInventoryId("farmer_supplies");
+  assert.equal(inventory, 894);
+  assert.equal(CacheDefinitions.getEnumValues(4824).get(inventory), 1);
+  assert.notEqual(CacheDefinitions.getEnumValues(4824).get(516), 1, "the shared 516 is not");
+  assert.notEqual(CacheDefinitions.getEnumValues(5412).get(516), 1);
+});
+
+test("Farming Supplies opens under farmer_supplies: the shop scripts and the SHOP_OPEN packet name it", () => {
+  const farming = open("Farming Supplies");
+  assert.equal(farming.scriptInventory, 894);
+  assert.equal(farming.packetInventory, 894);
+  assert.equal(ShopManager.inventoryId(shopId("Farming Supplies")), 894);
+});
+
+test("a shop without a live inventory keeps the shared 516", () => {
+  const general = open("Lumbridge General Store");
+  assert.equal(general.scriptInventory, 516);
+  assert.equal(general.packetInventory, 516);
+});
+
+test("every live inventory in shop-inventories.json names a real shop and a cache inventory", () => {
+  const { inventories } = require("../data/definitions/shop-inventories.json");
+  for (const [id, name] of Object.entries(inventories)) {
+    assert.ok(ShopDefinition.all().some((shop) => shop.getId() === Number(id)), `shop ${id}`);
+    assert.notEqual(CacheDefinitions.getInventoryId(name), null, name);
+  }
+});

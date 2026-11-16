@@ -24,6 +24,7 @@ const Pouches = require("./runecrafting/Pouches.Runecrafting");
 const Combination = require("./runecrafting/Combination.Runecrafting");
 const Raiments = require("./runecrafting/Raiments.Runecrafting");
 const DarkEssence = require("./runecrafting/DarkEssence.Runecrafting");
+const BarkArmour = require("./runecrafting/BarkArmour.Runecrafting");
 let RUINS;
 /** The exit portal's sound (synth 200). */
 const EXIT_PORTAL_SOUND = 200;
@@ -1132,7 +1133,7 @@ function useDenseOnDarkAltar(event) {
 
 module.exports = {
   name: "Runecrafting",
-  description: "Runecrafting: entering altars with talismans or tiaras, crafting runes, binding tiaras, the Blood, Soul and Dark Altars, dark essence fragments and exit portals.",
+  description: "Runecrafting: entering altars with talismans or tiaras, crafting runes, binding tiaras, the Blood, Soul and Dark Altars, dark essence fragments, swampbark and bloodbark infusion, and exit portals.",
   register(api) {
     initialize(api);
     api.persistAttribute(ESSENCE_MINE_RETURN_ATTRIBUTE);
@@ -1154,6 +1155,7 @@ module.exports = {
     Combination.attach(api, { standIns });
     Raiments.attach(api);
     DarkEssence.attach(api);
+    BarkArmour.attach(api);
     api.onCustomEvent("runecrafting:altar-rune", answerAltarRune);
 
     for (const talisman of TALISMANS.values()) {

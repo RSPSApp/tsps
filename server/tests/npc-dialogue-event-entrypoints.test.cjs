@@ -5370,7 +5370,7 @@ async function ikovApproachProducedLucien(t, f) {
   const items = ikovGuardianItems(f.player), stage = f.quest.getStage(f.player);
   const side = f.player.getAttribute('quest.temple_of_ikov.side');
   const points = f.player.getAttribute('quest.points') ?? 0;
-  const xp = f.player.getSkillManager().getExperiences().slice();
+  const xp = f.player.getSkillManager().getSkills().getExperiences().slice();
   // Supplied post-login lifecycle checkpoint, through the existing public hook.
   // World MobileList.add only calls Player.onLogin; NetworkBuilder.enterWorld
   // separately emits this hook. This is NOT network authentication/save proof.
@@ -5402,7 +5402,7 @@ async function ikovApproachProducedLucien(t, f) {
   assert.equal(f.quest.getStage(f.player), stage);
   assert.equal(f.player.getAttribute('quest.temple_of_ikov.side'), side);
   assert.equal(f.player.getAttribute('quest.points') ?? 0, points);
-  assert.deepEqual(f.player.getSkillManager().getExperiences(), xp);
+  assert.deepEqual(f.player.getSkillManager().getSkills().getExperiences(), xp);
   const houses = [...core.World.getNpcs()].filter(ownedHouse);
   assert.equal(houses.length, 1, 'supplied login hook produced exactly this actor\'s working house Lucien');
   const house = houses[0], at = house.getLocation();
@@ -5463,10 +5463,10 @@ test('Ikov actually acquired staff completes the produced Lucien hand-in once th
   assert.ok(skill.getExperience(core.Skill.FLETCHING) > fletching);
   assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.BOOTS_OF_LIGHTNESS), boots);
   assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.COINS), coins);
-  const xp = skill.getExperiences().slice();
+  const xp = skill.getSkills().getExperiences().slice();
   await f.connection.dispatch([{ type:'dialogue_continue', widgetId:(oldGroup << 16) | 5, childIndex:-1 }]);
   f.connection.processTurnPackets(); f.tick();
-  assert.deepEqual(skill.getExperiences(), xp); assert.equal(f.player.getAttribute('quest.points'), points + 1);
+  assert.deepEqual(skill.getSkills().getExperiences(), xp); assert.equal(f.player.getAttribute('quest.points'), points + 1);
   assert.equal(rewards.length, 2, 'a stale ordinary Continue cannot award the quest twice');
 });
 
@@ -5474,7 +5474,7 @@ test('Ikov removed originating Lucien cannot consume staff or complete through t
   const f = await ikovAcquireStaffForEnding(t), other = ikovGuardianFixture(t, { world:true });
   await ikovApproachProducedLucien(t, f); await ikovAcceptStaffHandIn(f);
   const items = ikovGuardianItems(f.player), foreign = ikovGuardianItems(other.player);
-  const points = f.player.getAttribute('quest.points') ?? 0, xp = f.player.getSkillManager().getExperiences().slice();
+  const points = f.player.getAttribute('quest.points') ?? 0, xp = f.player.getSkillManager().getSkills().getExperiences().slice();
   const attempts = [], emit = PM.emitCustomEvent;
   t.mock.method(PM, 'emitCustomEvent', function(name, event) {
     const result = Reflect.apply(emit, this, [name,event]);
@@ -5492,7 +5492,7 @@ test('Ikov removed originating Lucien cannot consume staff or complete through t
   assert.equal(attempts[0].end, true);
   assert.deepEqual(ikovGuardianItems(f.player), items); assert.equal(f.quest.getStage(f.player), 70);
   assert.equal(f.player.getAttribute('quest.points') ?? 0, points);
-  assert.deepEqual(f.player.getSkillManager().getExperiences(), xp);
+  assert.deepEqual(f.player.getSkillManager().getSkills().getExperiences(), xp);
   assert.deepEqual(ikovGuardianItems(other.player), foreign); assert.equal(other.quest.getStage(other.player), 50);
   assert.equal(core.World.getNpcs().get(other.npc.getIndex()), other.npc);
 });
@@ -5501,7 +5501,7 @@ test('Ikov a real bank replacement keeps its UI and staff when the old hand-in C
   const f = await ikovAcquireStaffForEnding(t);
   await ikovApproachProducedLucien(t, f); await ikovAcceptStaffHandIn(f);
   const oldGroup = f.player.getPacketSender().getChatboxGroupId(), items = ikovGuardianItems(f.player);
-  const points = f.player.getAttribute('quest.points') ?? 0, xp = f.player.getSkillManager().getExperiences().slice();
+  const points = f.player.getAttribute('quest.points') ?? 0, xp = f.player.getSkillManager().getSkills().getExperiences().slice();
   f.player.getBank(0).open();
   const replacement = f.player.getInterfaceId(); assert.ok(replacement >= 0);
   await f.connection.dispatch([{ type:'dialogue_continue', widgetId:(oldGroup << 16) | 5, childIndex:-1 }]);
@@ -5509,7 +5509,7 @@ test('Ikov a real bank replacement keeps its UI and staff when the old hand-in C
   assert.equal(f.player.getInterfaceId(), replacement); assert.deepEqual(ikovGuardianItems(f.player), items);
   assert.equal(f.quest.getStage(f.player), 70); assert.equal(f.quest.isComplete(f.player), false);
   assert.equal(f.player.getAttribute('quest.points') ?? 0, points);
-  assert.deepEqual(f.player.getSkillManager().getExperiences(), xp);
+  assert.deepEqual(f.player.getSkillManager().getSkills().getExperiences(), xp);
 });
 
 test('Ikov earned Armadyl pendant reaches the produced Lucien native attack and death ending with rewards once', async t => {
@@ -5594,9 +5594,9 @@ test('Ikov earned Armadyl pendant reaches the produced Lucien native attack and 
   assert.equal([...core.World.getNpcs()].some(npc=>npc.getOwner()===f.player
     && [core.NpcIdentifiers.LUCIEN_4,core.NpcIdentifiers.LUCIEN_5].includes(npc.getId())),false);
   assert.equal(ownedTasks.some(task=>task instanceof NPCRespawnTask && task.isRunning()),false);
-  const xp=skill.getExperiences().slice();
+  const xp=skill.getSkills().getExperiences().slice();
   await f.connection.dispatch([{type:'dialogue_continue',widgetId:(oldGroup<<16)|5,childIndex:-1}]);
   f.connection.processTurnPackets(); f.tick();
-  assert.deepEqual(skill.getExperiences(),xp); assert.equal(f.player.getAttribute('quest.points'),points+1);
+  assert.deepEqual(skill.getSkills().getExperiences(),xp); assert.equal(f.player.getAttribute('quest.points'),points+1);
   assert.equal(rewards.length,2);
 });

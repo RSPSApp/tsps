@@ -1030,6 +1030,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `TableItems` | TableItems | world | yes | Using a tradeable item on a table places it there, visible to others after 60 seconds and despawning after 10 minutes. |
 | `TarSwampMushroom` | TarSwampMushroom | world | yes | Fossil Island's Tar Swamp rubber cap mushroom: Jump on throws the player to the mud pit, softened by 9 bittercaps (Fill). (members only) |
 | `Vineyard` | Vineyard | world | yes | Aldarin's vineyard foreman hands out the grape barrel. (members only) |
+| `WarningScreens` | WarningScreens | world | yes | Warning screens before dangerous areas, counted per player and toggled off after enough showings, and the Lumbridge Doomsayer who turns them back on. |
 | `WaterSources` | WaterSources | world | yes | Using an empty jug, vial, bucket, bowl, cup, fishbowl or waterskin on a fountain, sink, well, pump or tap fills them one per tick. |
 <!-- world-config:generated:end -->
 

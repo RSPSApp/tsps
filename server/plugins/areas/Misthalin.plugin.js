@@ -19,7 +19,9 @@
  * Lumbridge Swamp Caves
  *  - Dark hole at 3169,3172 > Use Rope: ties a rope and sets the SWAMP_CAVES_ROPED_ENTRANCE
  *    varbit (279) for good (Wiki). The rope is used up.
- *  - Dark hole > Climb-down: the tile below the side the player used, once roped.
+ *  - Dark hole > Climb-down: the tile below the side the player used, once roped. Without a
+ *    tinderbox the swamp cave warning (cws_warning_13, shown by WarningScreens) comes first:
+ *    "...Are you sure you want to go in without a tinderbox?".
  *  - Symbol (the cave goblin markers on the cave walls) > Look-at: shows that marker in the
  *    cave_goblin_markers modal (rsprox.net rec 3182, rev 232).
  */
@@ -60,6 +62,8 @@ const SWAMP_CAVE_NEEDS_ROPE = "There is a sheer drop below the hole. You'll need
 const SWAMP_CAVE_TIED_ROPE = "You tie the rope to the top of the hole and throw it down.";
 const SWAMP_CAVE_ROPE_QUESTION = "Attach a rope to the top of the hole?";
 const SWAMP_CAVE_ROPE_SOUND = 1774;
+/** cws_warning_13 (572), "Lumbridge Swamp Cave Rope". */
+const SWAMP_CAVE_WARNING = 13;
 /**
  * The cave goblin markers' Look-at. rsprox.net rec 3182 (rev 232): on arrival the player faces
  * the wall, then live sets cave_goblin_markers:symbol to the marker's model (6923 for the north
@@ -234,9 +238,21 @@ function climbDownDarkHole(event) {
     player.sendMessage(SWAMP_CAVE_NEEDS_ROPE);
     return true;
   }
-  const landing = swampCavesLanding(player.getLocation());
-  pluginApi.emitCustomEvent("ladders:climbDown", { player, destination: toLocation(landing) });
+  const climb = () => pluginApi.emitCustomEvent("ladders:climbDown", { player, destination: toLocation(swampCavesLanding(player.getLocation())) });
+  if (hasTinderbox(player)) {
+    climb();
+    return true;
+  }
+  const warning = { player, warning: SWAMP_CAVE_WARNING, proceed: climb };
+  pluginApi.emitCustomEvent("warning-screen:show", warning);
+  if (!warning.handled) climb();
   return true;
+}
+
+/** The warning asks about going in "without a tinderbox": a tinderbox or golden tinderbox held. */
+function hasTinderbox(player) {
+  const tinderboxes = [Items.TINDERBOX, Items.GOLDEN_TINDERBOX];
+  return tinderboxes.some((id) => player.getInventory().contains(id));
 }
 
 function swampCaveMarkerModel(objectId) {

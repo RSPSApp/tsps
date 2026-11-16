@@ -13,6 +13,8 @@ const Common = require("../plugins/areas/shantaypass/Common.ShantayPass");
 const attachGate = require("../plugins/areas/shantaypass/Gate.ShantayPass");
 const Shantay = require("../plugins/areas/shantaypass/Shantay.ShantayPass");
 const Jail = require("../plugins/areas/shantaypass/Jail.ShantayPass");
+// The desert warning is the WarningScreens plugin's (cws_warning_10).
+const WarningScreens = require("../plugins/world/warningscreens/Screens.WarningScreens");
 
 const SHANTAY_PASS = 1854;
 const COINS = 995;
@@ -36,10 +38,12 @@ const api = {
     if (name === "quest:is-started") payload.started = answers.quests.has(payload.key);
     if (name === "diary:is-complete") payload.complete = answers.diaries.has(payload.tier);
     if (name === "ironman:mode") payload.mode = answers.ultimate ? "ultimate" : "none";
+    if (name === "warning-screen:show") WarningScreens.show(payload);
   },
 };
 Common.init(api);
 attachGate(api);
+hooks.click = WarningScreens.click;
 
 function runTasks() {
   for (let guard = 0; guard < 50 && tasks.length; guard++) {
@@ -136,7 +140,7 @@ test("going north is free, and the elite Desert Diary needs no pass", () => {
 
   answers.diaries.add("elite");
   const elite = createPlayer();
-  elite.setAttribute("shantay-pass:warnings", 7);
+  elite.setAttribute("warning-screens:warning-10", 7);
   hooks.gate["Go-through"]({ player: elite });
   runTasks();
   assert.deepEqual([elite.getLocation().getX(), elite.getLocation().getY()], [3303, 3115]);

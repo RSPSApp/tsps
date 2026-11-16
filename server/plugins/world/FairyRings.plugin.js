@@ -23,13 +23,11 @@ const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cach
 
 const DIALS_INTERFACE = 398;
 const LOG_INTERFACE = 381;
-const WARNING_INTERFACE = 578;
 const SIDE_MODAL = (161 << 16) | 74;
 /** toplevel_mainmodal_background: the dim backdrop over the whole game view, as captured. */
 const MODAL_BACKGROUND_SCRIPT = 917;
 const MODAL_BACKGROUND = [4212288, 50];
 /** toplevel_mainmodal_open, sent (as captured) before the warning replaces the dials. */
-const MODAL_OPEN_SCRIPT = 2524;
 /** meslayer_close: closes the chatbox input if it is in mode 28, the travel log's search. */
 const MESLAYER_CLOSE_SCRIPT = 101;
 const SEARCH_MESLAYER = 28;
@@ -49,11 +47,9 @@ const LAST_LOCATION_VARBIT = 5374;
 const LAST_LOCATION_OP_VARBIT = 20251;
 const LAST_LOCATION_OP_VISIBLE = 64;
 
-const DARK_WARNING_VARBIT = 3865;
+/** cws_warning_15 (578), shown by WarningScreens: AJQ leads to a dark area. */
+const DARK_WARNING = 15;
 const DARK_WARNING_CODE = "AJQ";
-const WARNING_YES = 17;
-const WARNING_NO = 18;
-const WARNING_DONT_ASK = 20;
 
 const HIDEOUT_COMPONENT = 140;
 const HIDEOUT_CODE = "AIR";
@@ -599,14 +595,15 @@ function confirmDial(player) {
   sendLastDestination(player, ring);
   player.setAttribute(LAST_CODE_ATTRIBUTE, ring.code);
   if (ring.code === DARK_WARNING_CODE && !hasLightSource(player)) {
-    const asked = sender.getVarbit(DARK_WARNING_VARBIT);
-    if (asked !== 2) {
-      sender.sendVarbit(DARK_WARNING_VARBIT, 1)
-        .sendVarbit(BUSY_VARBIT, 1)
-        .sendClientScript(MODAL_OPEN_SCRIPT, -1, -1)
-        .sendInterface(WARNING_INTERFACE);
-      return;
-    }
+    sender.sendVarbit(BUSY_VARBIT, 1);
+    const warning = {
+      player,
+      warning: DARK_WARNING,
+      proceed: () => fairyTeleport(player, ring, configuredRing.get(player), true),
+      stayOut: () => sender.sendVarbit(BUSY_VARBIT, 0),
+    };
+    pluginApi.emitCustomEvent("warning-screen:show", warning);
+    if (warning.handled) return;
   }
   fairyTeleport(player, ring, configuredRing.get(player), true);
 }
@@ -675,32 +672,18 @@ function interfaceAction(event) {
   } else if (groupId === LOG_INTERFACE) {
     event.handled = true;
     logAction(player, childId, event.action ?? event.opId);
-  } else if (groupId === WARNING_INTERFACE) {
-    event.handled = true;
-    if (childId === WARNING_DONT_ASK) {
-      sender.sendVarbit(DARK_WARNING_VARBIT, sender.getVarbit(DARK_WARNING_VARBIT) === 2 ? 1 : 2);
-      return;
-    }
-    if (childId !== WARNING_YES && childId !== WARNING_NO) return;
-    if (childId === WARNING_YES) going.add(player);
-    sender.sendInterfaceRemoval();
-    going.delete(player);
-    if (childId === WARNING_YES) fairyTeleport(player, rings.get(DARK_WARNING_CODE), configuredRing.get(player), true);
-    else sender.sendVarbit(BUSY_VARBIT, 0);
   }
 }
 
 /**
  * Closing the dials, by any route, closes the travel log and its search box in the chatbox (as
- * OSRS does on Confirm). Closing them or the warning without going clears busy.
+ * OSRS does on Confirm). Closing them without going clears busy (the warning's own stay-out does).
  */
 function interfaceClosed({ player, interfaceId }) {
-  if (interfaceId !== DIALS_INTERFACE && interfaceId !== WARNING_INTERFACE) return;
+  if (interfaceId !== DIALS_INTERFACE) return;
   const sender = player.getPacketSender();
-  if (interfaceId === DIALS_INTERFACE) {
-    sender.closeSubInterface(SIDE_MODAL);
-    sender.sendClientScript(MESLAYER_CLOSE_SCRIPT, SEARCH_MESLAYER);
-  }
+  sender.closeSubInterface(SIDE_MODAL);
+  sender.sendClientScript(MESLAYER_CLOSE_SCRIPT, SEARCH_MESLAYER);
   if (!going.has(player)) sender.sendVarbit(BUSY_VARBIT, 0);
 }
 

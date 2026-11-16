@@ -23,6 +23,8 @@ const Doors = require("../plugins/areas/strongholdofsecurity/Doors.StrongholdOfS
 const Rewards = require("../plugins/areas/strongholdofsecurity/Rewards.StrongholdOfSecurity");
 const Travel = require("../plugins/areas/strongholdofsecurity/Travel.StrongholdOfSecurity");
 const Sceptre = require("../plugins/areas/strongholdofsecurity/Sceptre.StrongholdOfSecurity");
+// The ladder warning is the WarningScreens plugin's (cws_warning_4).
+const WarningScreens = require("../plugins/world/warningscreens/Screens.WarningScreens");
 
 const tasks = [];
 const prompts = [];
@@ -37,6 +39,7 @@ const registerSos = () => Sos.register(new Proxy({
   sendMultiChatboxPrompt: (player, title, ...pairs) => prompts.push({ title, pairs }),
   emitCustomEvent: (name, event) => {
     if (name === "diary:is-complete") event.complete = event.diary === "varrock" && diaryDone.has(event.tier);
+    else if (name === "warning-screen:show") WarningScreens.show(event);
     else events.push({ name, ...event });
   },
 }, { get: (target, key) => target[key] ?? (() => {}) }));
@@ -61,6 +64,7 @@ function createPlayer({ x = 2040, y = 5244, combat = 3, free = 28 } = {}) {
     sendVarbit: (id, value) => { log.push(`varbit ${id}=${value}`); return sender; },
     sendInterface: (id) => { log.push(`open ${id}`); return sender; },
     sendInterfaceScript: () => sender,
+    sendInterfaceDisplayState: () => sender,
     sendInterfaceRemoval: () => { log.push("close"); return sender; },
     sendJingle: (id) => { log.push(`jingle ${id}`); return sender; },
     sendCreationMenu: (menu) => { log.push(`menu ${menu.getTitle?.() ?? menu.title}`); player.menu = menu; return sender; },
@@ -258,14 +262,15 @@ test("as captured: the ladder down warns, then climbs; floor 2 completes the Var
   Travel.climbDown({ player, object: { getId: () => 20785 } });
   assert.deepEqual(player.log, ["varbit 3854=1", "open 579"]);
   player.log.length = 0;
-  Travel.warningClick({ player, buttonId: (579 << 16) | 17 });
+  WarningScreens.click({ player, buttonId: (579 << 16) | 17 });
   assert.deepEqual(player.log, ["close", "anim 828"]);
   player.log.length = 0;
   runTicks();
   assert.deepEqual(player.log, ["You climb down the ladder to the next level.", "move 2042,5245,0"]);
   assert.deepEqual(events.map((e) => [e.name, e.diary, e.task]), [["diary:task", "varrock", "enter-the-second-level-of-the-stronghold-of-secu"]]);
-  // "Don't ask me this again".
-  Travel.warningClick({ player, buttonId: (579 << 16) | 20 });
+  // "Don't ask me this again", offered once it has been shown six times.
+  player.setAttribute("warning-screens:warning-4", 6);
+  WarningScreens.click({ player, buttonId: (579 << 16) | 20 });
   player.log.length = 0;
   Travel.climbDown({ player, object: { getId: () => 19004 } });
   assert.deepEqual(player.log, ["anim 828"]);

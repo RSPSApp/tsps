@@ -1436,9 +1436,7 @@ module.exports = function registerLostTribeQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemAction("Goblin symbol book", { Read: readSymbolBook });
   api.onInterfaceActionClick(turnSymbolBookPage);
-  api.onInterfaceActionClick(cellarHole.warningClick);
   api.onCustomEvent("interface:closed", closeSymbolBook);
-  api.onCustomEvent("interface:closed", cellarHole.warningClosed);
   api.onCustomEvent("player:emote", greetMistag);
   api.onCustomEvent("npc-dialogue:choice", answerWitnessQuestion);
   api.onCustomEvent("npc-dialogue:menu", nameWitnessInMenu);
@@ -1451,5 +1449,4 @@ module.exports = function registerLostTribeQuest(api) {
   api.onItemOnObject(digRubble, { noted: false });
   api.onGroundItemPickup(handleGroundItemPickup);
   api.onPlayerLogin(handleLogin);
-  api.onPlayerLogin(cellarHole.restoreWarningCount);
 };

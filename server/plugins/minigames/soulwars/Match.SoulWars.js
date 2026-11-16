@@ -360,8 +360,9 @@ class Game {
 /** Every Soul Wars item goes when a game ends or is left (Wiki: bandages vanish; recorded: cleared slots). */
 function clearGameItems(player) {
   player.setAttribute(IN_GAME_ATTRIBUTE, false);
-  const { items } = Common.data;
-  const ids = [items.fragment, items.bones, items.bandages, ...items.potions, items.capes.blue, items.capes.red];
+  const { items, barricades } = Common.data;
+  const ids = [items.fragment, items.bones, items.bandages, ...items.potions, items.capes.blue, items.capes.red,
+    barricades.items.blue, barricades.items.red];
   const inventory = player.getInventory();
   for (const id of ids) {
     const amount = inventory.getAmount(id);

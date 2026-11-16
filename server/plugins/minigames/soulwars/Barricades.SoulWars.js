@@ -19,6 +19,15 @@ function teamItem(team) {
   return Common.data.barricades.items[team];
 }
 
+/** Whether `barricade` stands on `location` (same plane). */
+function onTile(barricade, location) {
+  const at = barricade.getLocation?.();
+  if (!at) return false;
+  return at.getX() === location.getX()
+    && at.getY() === location.getY()
+    && (at.getZ?.() ?? 0) === (location.getZ?.() ?? 0);
+}
+
 /** The barricade item's Set-up: spawn the team's barricade on the player's tile. */
 function setup(event) {
   const game = Match.gameOf(event.player);
@@ -32,12 +41,17 @@ function setup(event) {
   }
   const location = event.player.getLocation();
   const area = event.player.getPrivateArea();
+  // `game.spawn` queues the NPC, so the world's tile index is not filled until the queue drains:
+  // a barricade already tracked on this tile blocks a second Set-up in the same tick.
+  const stacked = [...game.barricades].some((barricade) => onTile(barricade, location));
   if (regionManager?.blocked?.(location, area) === true
-    || world?.isNpcOccupyingTile?.(location, null, 1, area) === true) {
+    || world?.isNpcOccupyingTile?.(location, null, 1, area) === true
+    || stacked) {
     event.player.sendMessage("You can't set up a barricade here.");
     return true;
   }
-  const npc = game.spawn(npcs[team], [location.getX(), location.getY(), location.getZ()]);
+  // `spawn` takes the arena's template tile; the player is at its instance copy.
+  const npc = game.spawn(npcs[team], game.area.templateOf(location));
   npc.setFlag(core.NPC.BLOCKS_PLAYERS_FLAG);
   npc.setFlag(core.NPC.BLOCKS_PROJECTILES_FLAG);
   npc.setFlag("combat:no-retaliate");

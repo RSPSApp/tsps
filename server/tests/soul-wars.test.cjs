@@ -1626,6 +1626,7 @@ test("a Soul Wars barricade sets up for its team, up to ten, and a kill frees th
   const npcId = Common.data.barricades.npcs[team];
   const setup = hooks.items.get("Barricade:Set-up");
   const put = () => p.inventory.add(new core.Item(itemId, 1));
+  const start = p.getLocation();
 
   put();
   assert.equal(setup({ player: p, itemId }), true);
@@ -1634,12 +1635,21 @@ test("a Soul Wars barricade sets up for its team, up to ten, and a kill frees th
   const [npc] = [...game.barricades];
   assert.equal(npc.getId(), npcId);
   assert.equal(npc.getDefinition().getHitpoints(), 50);
+  assert.deepEqual(
+    [npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ()],
+    [start.getX(), start.getY(), start.getZ()], "it stands on the player's tile");
 
   const enemy = players.find((other) => game.teamOf(other) !== team);
   assert.equal(setup({ player: enemy, itemId }), false, "another team's barricade is not this handler's");
 
-  for (let i = 0; i < 9; i++) { put(); setup({ player: p, itemId }); }
+  // One barricade a tile: move the player so each of the remaining nine has room.
+  for (let i = 1; i < 10; i++) {
+    place(game, p, start.getX() + i, start.getY());
+    put();
+    assert.equal(setup({ player: p, itemId }), true, `barricade ${i + 1}`);
+  }
   assert.equal(game.teamBarricadeCount(team), 10);
+  place(game, p, start.getX() + 10, start.getY());
   put();
   assert.equal(setup({ player: p, itemId }), true);
   assert.ok(p.messages.includes("Your team already has 10 barricades set up."));
@@ -1647,6 +1657,30 @@ test("a Soul Wars barricade sets up for its team, up to ten, and a kill frees th
 
   for (const handler of hooks.npcDeath ?? []) handler({ npc, npcId: npcId });
   assert.equal(game.teamBarricadeCount(team), 9, "a destroyed barricade frees a slot");
+});
+
+test("two Set-ups on one tile in the same tick do not stack or spend both items", () => {
+  const { game, players } = startGame(2);
+  const p = players[0];
+  const team = game.teamOf(p);
+  const itemId = Common.data.barricades.items[team];
+  const setup = hooks.items.get("Barricade:Set-up");
+  p.inventory.add(new core.Item(itemId, 2));
+
+  assert.equal(setup({ player: p, itemId }), true);
+  assert.equal(setup({ player: p, itemId }), true, "the second click is refused, not dropped");
+  assert.equal(p.inventory.getAmount(itemId), 1, "only one item is spent");
+  assert.equal(game.teamBarricadeCount(team), 1, "one barricade stands on the tile");
+  assert.ok(p.messages.includes("You can't set up a barricade here."));
+});
+
+test("an unused barricade item leaves with the game", () => {
+  const { game, players } = startGame(2);
+  const p = players[0];
+  const itemId = Common.data.barricades.items[game.teamOf(p)];
+  p.inventory.add(new core.Item(itemId, 2));
+  game.remove(p);
+  assert.equal(p.inventory.getAmount(itemId), 0, "the held barricade is cleared like the bandages");
 });
 
 test("the barricade table gives the team's barricade item", () => {

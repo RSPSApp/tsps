@@ -22,15 +22,10 @@ const SPOTTIER_CAPE = SPOTTIER.output.id;
 const DASHING_KEBBIT_FUR = SPOTTIER.fur.ids[0];
 const SPOTTIER_FURS = SPOTTIER.fur.amount;
 const SPOTTIER_COST = SPOTTIER.fee;
-const SPOTTIER_HUNTER_LEVEL = SPOTTIER.level;
 
 function tradeRecipe(api, player, recipe) {
   const inventory = player.getInventory();
   const coins = api.core.ItemIdentifiers.COINS;
-  if (recipe.level && player.getSkillManager().getCurrentLevel(api.core.Skill.HUNTER) < recipe.level) {
-    player.sendMessage(`You need ${recipe.level} Hunter to make a ${recipe.output.label.toLowerCase()}.`);
-    return false;
-  }
   const furId = recipe.fur.ids.find((id) => inventory.getAmount(id) >= recipe.fur.amount);
   if (furId === undefined) {
     player.sendMessage(`You need ${recipe.fur.amount} ${recipe.fur.label}.`);
@@ -125,7 +120,7 @@ module.exports = {
   },
   _test: {
     ASYFF_NPC_ID, CUSTOM_FUR_TARGET, DASHING_KEBBIT_FUR, SPOTTIER_CAPE, SPOTTIER_FURS,
-    SPOTTIER_COST, SPOTTIER_HUNTER_LEVEL, SPOTTIER_CAPE_TRADED_EVENT, RECIPES, SOURCE,
+    SPOTTIER_COST, SPOTTIER_CAPE_TRADED_EVENT, RECIPES, SOURCE,
     tradeRecipe, tradeSpottierCape, onAsyffFurClothing, openSetMenu, openPieceMenu, onDialogueAction,
   },
 };

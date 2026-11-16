@@ -20,8 +20,9 @@
  * The skull comes from the Digsite workman's Steal-from table and the cup from panning mud.
  *
  * Gaps (no dump/index support): the three exams are multi-question quizzes in
- * OSRS; here talking to the student matching the current stage signs the
- * certificate, even before their lost item is returned. The digging/talisman/explosive
+ * OSRS; here a student signs each certificate instead. The level 1 certificate
+ * waits until all three lost items are back; the purple student signs level 2 and the
+ * orange student level 3 (the level 3 opal request is not built). The digging/talisman/explosive
  * minigames (winch, powder, tinderbox) are not simulated; Terry's progress and the
  * temple discovery are driven by the exam certificates and the chemical compound
  * message steps.
@@ -157,6 +158,9 @@ module.exports = function registerDigSiteQuest(api) {
   const holdsLetter = (player) => held(player, UNSTAMPED_LETTER_ITEM_ID) || held(player, STAMPED_LETTER_ITEM_ID);
   /** Still waiting on the letter: started, and the examiner hasn't taken a stamped one. */
   const awaitingLetter = (player) => quest.getStage(player) === STAGE_STARTED && !delivered(player);
+  /** All three first-exam students have their lost item back. */
+  const allStudentsHelped = (player) => [...STUDENT_LOST_ITEM.values()]
+    .every(({ attribute }) => Number(player.getAttribute(attribute)) === STUDENT_HELPED);
 
   function giveLetter(player, itemId) {
     if (player.getInventory().getFreeSlots() < 1) {
@@ -367,13 +371,30 @@ module.exports = function registerDigSiteQuest(api) {
     }
     const student = STUDENT_LOST_ITEM.get(npcId);
     if (student) {
-      // Each student signs one certificate; talking to the student matching the
-      // current stage stands in for passing that exam. The check runs on every talk,
-      // not only the first: an early request to a later student, or a full inventory
-      // when the right one is asked, must not take the certificate opportunity away.
+      const state = Number(player.getAttribute(student.attribute)) || 0;
+      let variant;
+      if (state === STUDENT_HELPED) {
+        variant = student.again;
+      } else if (state === STUDENT_ASKED) {
+        if (held(player, student.itemId)) {
+          player.getInventory().deleteNumber(student.itemId, 1);
+          player.setAttribute(student.attribute, STUDENT_HELPED);
+          variant = student.give;
+        } else {
+          variant = student.missing;
+        }
+      } else {
+        player.setAttribute(student.attribute, STUDENT_ASKED);
+        variant = student.ask;
+      }
+      // Each certificate stands in for passing that exam. The first needs the answers of all
+      // three students, so their lost items must all be back (Wiki: "after helping out all three
+      // students"); any student then signs it. The later two are signed by the purple and the
+      // orange student. The check runs on every talk, so an early request to a later student, or
+      // a full inventory, never takes the certificate opportunity away.
       const certificate = CERTIFICATE_FOR_STAGE.get(stage);
       const isRightStudent =
-        (npcId === STUDENT_GREEN_NPC_ID && stage === STAGE_STARTED) ||
+        (stage === STAGE_STARTED && allStudentsHelped(player)) ||
         (npcId === STUDENT_PURPLE_NPC_ID && stage === STAGE_STARTED + 1) ||
         (npcId === STUDENT_ORANGE_NPC_ID && stage === STAGE_STARTED + 2);
       // The first exam only begins once the examiner has the stamped letter.
@@ -387,16 +408,7 @@ module.exports = function registerDigSiteQuest(api) {
           quest.setStage(player, stage + 1);
         }
       }
-      const state = Number(player.getAttribute(student.attribute)) || 0;
-      if (state === STUDENT_HELPED) return student.again;
-      if (state === STUDENT_ASKED) {
-        if (!held(player, student.itemId)) return student.missing;
-        player.getInventory().deleteNumber(student.itemId, 1);
-        player.setAttribute(student.attribute, STUDENT_HELPED);
-        return student.give;
-      }
-      player.setAttribute(student.attribute, STUDENT_ASKED);
-      return student.ask;
+      return variant;
     }
     if (npcId === RESEARCHER_NPC_ID) {
       if (stage < STAGE_EXAMS_DONE) {

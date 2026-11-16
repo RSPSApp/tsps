@@ -312,8 +312,14 @@ test("Dig Site: the journal remembers the curator's stamp after a stage 1 reload
   assert.match(digSite.buildJournal(restored.p, digSite).join(" "), /curator stamped my letter/);
 });
 
+/** The three first-exam students have their lost items back (the level 1 exam needs all three answers). */
+const studentsHelped = (f) => {
+  for (const item of ["animal-skull", "teddy", "special-cup"]) f.p.setAttribute(`quest.the_dig_site.student.${item}`, 2);
+  return f;
+};
+
 test("Dig Site: the first student signs after a reload following letter delivery", async (t) => {
-  const started = actor(t, DIG, 1);
+  const started = studentsHelped(actor(t, DIG, 1));
   put(started, I.UNSTAMPED_LETTER, 0);
   await talk(t, started, N.CURATOR_HAIG_HALEN);
   assert.equal(started.inv.getAmount(I.SEALED_LETTER), 1);
@@ -337,12 +343,12 @@ test("Dig Site: a legacy save after the first exam still points to the students"
 test("Dig Site: the student refuses a full bag and the exam waits; with room he signs", async (t) => {
   // The students only take part once the examiner has the curator's stamped letter (stage 1).
   const letterDelivered = (f) => { f.p.setAttribute("quest.the_dig_site.letter_delivered", true); return f; };
-  const control = letterDelivered(actor(t, DIG, 1));
+  const control = studentsHelped(letterDelivered(actor(t, DIG, 1)));
   await talk(t, control, N.STUDENT);
   assert.equal(control.inv.getAmount(I.LEVEL_1_CERTIFICATE), 1, "control: the certificate");
   assert.equal(stageOf(control, DIG), 2, "control: and the stage");
 
-  const f = letterDelivered(actor(t, DIG, 1));
+  const f = studentsHelped(letterDelivered(actor(t, DIG, 1)));
   fill(f);
   await talk(t, f, N.STUDENT);
   assert.equal(stageOf(f, DIG), 1, "the exam waits");

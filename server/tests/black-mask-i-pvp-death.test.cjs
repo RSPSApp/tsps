@@ -207,9 +207,10 @@ test("a protected helmet, a monster's kill or a death outside the Wilderness kee
   }
 });
 
-test("Items Kept on Death shows a Slayer helmet (i) or plain helmet lost on a PvP death, not the Soul Wars one", () => {
+test("Items Kept on Death shows a Slayer helmet (i), plain or Soul Wars helmet lost on a PvP death, not the Emir's Arena one", () => {
   for (const [id, expected] of [[I.SLAYER_HELMET_I_, true], [I.SLAYER_HELMET, true],
-    [core.CacheDefinitions.getObjId("sw_slayer_helm_i"), false]]) {
+    [core.CacheDefinitions.getObjId("sw_slayer_helm_i"), true], [core.CacheDefinitions.getObjId("sw_black_mask_5"), true],
+    [core.CacheDefinitions.getObjId("pvpa_slayer_helm_i"), false]]) {
     const query = { item: new core.Item(id, 1), lost: false };
     PM.emitCustomEvent("items:lost-to-pvp-killer", query);
     assert.equal(query.lost, expected, String(id));
@@ -231,4 +232,34 @@ test("a plain recoloured helmet gives its head back; a Hooded one loses its hood
   assert.equal(victim.getInventory().getAmount(kbd), 1, "the KBD heads come back");
   assert.equal(victim.getInventory().getAmount(hood), 0, "the hood is lost");
   assert.equal(victim.getInventory().getAmount(I.SCROLL_OF_IMBUING), 0, "nothing was imbued");
+});
+
+// Wiki, Black mask (i): lost on a PvP death, "the player will be reimbursed" the NMZ points, Zeal Tokens or scroll.
+// The Nomad's imbue costs 500 tokens (enum 3543).
+const zealTokens = (p) => require("../plugins/minigames/soulwars/Common.SoulWars").getVarp(p, "zeal_tokens");
+
+test("a Soul Wars imbued mask (5) lost to a PKer drops as Black mask (5) and refunds the Zeal Tokens", (t) => {
+  const victim = player(t);
+  const killer = player(t);
+  const mask = core.CacheDefinitions.getObjId("sw_black_mask_5");
+  victim.getInventory().setItem(0, new core.Item(mask, 1));
+  const drops = die(t, victim, killer);
+  assert.deepEqual(drops.filter(([, id]) => id !== I.BONES), [[killer, I.BLACK_MASK_5_, 1]]);
+  assert.equal(victim.getInventory().getAmount(mask), 0);
+  assert.equal(zealTokens(victim), 500, "the imbue's tokens back");
+  assert.equal(victim.getInventory().getAmount(I.SCROLL_OF_IMBUING), 0, "no scroll as well");
+});
+
+test("a Soul Wars imbued Hydra helmet drops as a black mask, gives the head back and refunds the Zeal Tokens", (t) => {
+  const victim = player(t);
+  const killer = player(t);
+  const helm = core.CacheDefinitions.getObjId("sw_slayer_helm_i_hydra");
+  victim.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(helm, 1));
+  const drops = die(t, victim, killer);
+  assert.deepEqual(drops.filter(([, id]) => id !== I.BONES), [[killer, I.BLACK_MASK, 1]]);
+  assert.equal(victim.getEquipment().getAmount(helm) + victim.getInventory().getAmount(helm), 0);
+  assert.equal(victim.getInventory().getAmount(core.CacheDefinitions.getObjId("poh_alchemical_hydra_head")), 1);
+  assert.equal(zealTokens(victim), 500);
+  assert.equal(NmzCommon.points(victim), 0);
+  assert.equal(victim.getInventory().getAmount(I.SCROLL_OF_IMBUING), 0);
 });

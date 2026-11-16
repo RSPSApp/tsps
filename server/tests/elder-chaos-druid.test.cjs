@@ -33,11 +33,11 @@ before(async () => {
 function scene(t, { lineOfSight = true } = {}) {
   let cycle = 5000;
   t.mock.method(core.World, "getProcessCycle", () => cycle);
-  t.mock.method(core.World, "isPlayerOccupyingTile", () => false);
   t.mock.method(core.RegionManager, "blocked", () => false);
   t.mock.method(core.RegionManager, "canMove", () => true);
   t.mock.method(core.RegionManager, "canProjectileAttackTarget", () => lineOfSight);
-  t.mock.method(core.TaskManager, "submit", () => {});
+  const tasks = [];
+  t.mock.method(core.TaskManager, "submit", (task) => tasks.push(task));
   listeners.length = 0;
   _test.active.clear();
 
@@ -63,7 +63,7 @@ function scene(t, { lineOfSight = true } = {}) {
     return player;
   };
   _test.active.add(druid);
-  return { druid, said, targeted, runner, advance: (ticks) => { cycle += ticks; } };
+  return { druid, said, targeted, runner, tasks, advance: (ticks) => { cycle += ticks; } };
 }
 
 const at = (player) => [player.getLocation().getX() - TEMPLE.x, player.getLocation().getY() - TEMPLE.y];
@@ -145,5 +145,21 @@ test("a dead or forgotten druid stops being processed", (t) => {
   const { druid } = scene(t);
   druid.getCombat().clearDamageMap();
   assert.equal(_test.processPulls(), false);
+  assert.equal(_test.active.has(druid), false);
+});
+
+test("a druid's combat starts the pull task, which stops once the druid is idle", (t) => {
+  const { druid, runner, tasks } = scene(t);
+  _test.active.clear();
+  const player = runner("tracked", { dx: 0, dy: -6 });
+  new (_test.methodClass())().onCombatBegan(druid, player);
+  assert.equal(tasks.length, 1);
+  assert.equal(_test.active.has(druid), true);
+  tasks[0].execute();
+  assert.deepEqual(at(player), [0, -1]);
+  druid.getCombat().clearDamageMap();
+  t.mock.method(druid.getCombat(), "getTarget", () => null);
+  tasks[0].execute();
+  assert.equal(tasks[0].isRunning(), false);
   assert.equal(_test.active.has(druid), false);
 });

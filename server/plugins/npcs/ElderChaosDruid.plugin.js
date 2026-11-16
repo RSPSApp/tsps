@@ -115,8 +115,7 @@ function landingTile(npc, player) {
   const from = player.getLocation();
   const open = besideTiles(npc).filter((tile) =>
     !core.RegionManager.blocked(tile, area) &&
-    core.RegionManager.canMove(at.getX(), at.getY(), tile.getX(), tile.getY(), at.getZ(), 1, 1, area) &&
-    !core.World.isPlayerOccupyingTile?.(tile));
+    core.RegionManager.canMove(at.getX(), at.getY(), tile.getX(), tile.getY(), at.getZ(), 1, 1, area));
   open.sort((a, b) => a.distanceToPoint(from.getX(), from.getY()) - b.distanceToPoint(from.getX(), from.getY()));
   return open[0] ?? null;
 }
@@ -207,6 +206,8 @@ function methodClass() {
     }
 
     start(npc, target) {
+      // A fight begun by a cannon or a splash never calls onCombatBegan; every swing tracks too.
+      track(npc);
       this.teleBlock = blockWanted(target);
       this.landing = this.teleBlock ? castTeleBlock(npc, target) : castWindWave(npc, target);
     }
@@ -258,5 +259,5 @@ module.exports = {
   description: "Adds the Wilderness Elder Chaos druid, a magic attacker casting Wind Wave and Tele Block with captured animations and projectiles, that teleports fleeing players back beside it.",
   members: true,
   register: attach,
-  _test: { blockWanted, methodClass, flees, landingTile, fleeingTarget, pull, processPulls, active, PULL_EVENT },
+  _test: { blockWanted, methodClass, track, flees, landingTile, fleeingTarget, pull, processPulls, active, PULL_EVENT },
 };

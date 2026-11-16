@@ -775,12 +775,31 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
       }
       // Live keeps the rope: no inventory update follows the descent, and rsprox 231/03019
       // uses the same rope on the root three times with no packet in between.
-      ensureDungeonExit();
-      player.getMovementQueue().reset();
-      if (!player.getLocation().equals(ROOT_LASSO_TILE)) {
-        Scenes.later(player, ROOT_STEP_DELAY_TICKS, () => Scenes.walk(player, ROOT_LASSO_TILE));
+      // One descent at a time: a second use during the lasso or the fade is ignored. Its click reset
+      // the movement queue on arrival, so a step already under way is put back.
+      const pending = ropeDescents.get(player);
+      if (pending) {
+        if (pending.stepping && !player.getLocation().equals(ROOT_LASSO_TILE)) Scenes.walk(player, ROOT_LASSO_TILE);
+        return;
       }
-      Scenes.later(player, ROOT_LASSO_DELAY_TICKS, () => playRopeDescent(player));
+      ensureDungeonExit();
+      const descent = { from: player.getLocation().clone() };
+      ropeDescents.set(player, descent);
+      player.getMovementQueue().reset();
+      if (!descent.from.equals(ROOT_LASSO_TILE)) {
+        Scenes.later(player, ROOT_STEP_DELAY_TICKS, () => {
+          if (ropeDescents.get(player) !== descent) return;
+          // Moved off (a teleport, a walk) before the step: no descent.
+          if (!player.getLocation().equals(descent.from)) return endRopeDescent(player, descent);
+          descent.stepping = true;
+          Scenes.walk(player, ROOT_LASSO_TILE);
+        });
+      }
+      Scenes.later(player, ROOT_LASSO_DELAY_TICKS, () => {
+        if (ropeDescents.get(player) !== descent) return;
+        if (!player.getLocation().equals(ROOT_LASSO_TILE)) return endRopeDescent(player, descent);
+        playRopeDescent(player, descent);
+      });
       player.sendMessage("You tie the rope to the root and climb down into the cave.");
       return;
     }
@@ -803,11 +822,32 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     }
   }
 
+  /**
+   * The rope descents under way: from the use until the move into the cave. Live holds the player
+   * from the step on (busy 12393 set at 227/01788 tick 5028); here the lasso holds them in place.
+   */
+  const ropeDescents = new WeakMap();
+
+  function endRopeDescent(player, descent) {
+    if (ropeDescents.get(player) !== descent) return;
+    ropeDescents.delete(player);
+    player.getMovementQueue().setBlockMovement(false);
+  }
+
   /** Capture 1788: descent camera, fade, teleport to (3349,9536), reset and theme. */
-  function playRopeDescent(player) {
+  function playRopeDescent(player, descent) {
+    player.getMovementQueue().reset().setBlockMovement(true);
     Scenes.camera(player, [3368, 3134, 1175], [3372, 3130, 25], { rate: 1, rate2: 200 });
     Scenes.fade(player, true);
     Scenes.later(player, 2, () => {
+      if (ropeDescents.get(player) !== descent) return;
+      endRopeDescent(player, descent);
+      if (!player.getLocation().equals(ROOT_LASSO_TILE)) {
+        // Teleported away during the fade: no pull into the cave, and nothing left half-open.
+        Scenes.closeFade(player);
+        player.getPacketSender().sendCameraReset();
+        return;
+      }
       player.moveTo(DUNGEON_ENTRY_TILE);
       player.getPacketSender().sendCameraReset().sendSong(462);
       Scenes.fade(player, false);
@@ -818,6 +858,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   /** Logout/death during the rope fade: cancel pending ticks and leave no half-open transition. */
   function handleTransitionInterrupted({ player } = {}) {
     if (!player) return;
+    ropeDescents.delete(player);
     Scenes.cancel(player);
     Scenes.closeFade(player);
     Scenes.controls(player, false);

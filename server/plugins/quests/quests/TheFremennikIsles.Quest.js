@@ -1352,14 +1352,19 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         setStage(player, STAGE_ORE_TASK);
         return;
       // Ores.
+      // Wiki Transcript:The Fremennik Isles: both are {{tbox}} message boxes, the coins one with the
+      // coins picture. The blanks fill the event's own text: the step is the shared transcript, so
+      // writing it would show the first player's tier to everyone after.
       case "-UQEZy":
         if (hasTaskOres(player)) takeTaskOres(player);
-        event.step && (event.step.text = fillText(player, event.step.text));
+        event.text = fillText(player, event.text);
+        event.box = { statement: true };
         setStage(player, STAGE_ORES_DELIVERED);
         return;
       case "02jNR_":
         addCoins(player, miningTier(player).coins);
-        event.step && (event.step.text = fillText(player, event.step.text));
+        event.text = fillText(player, event.text);
+        event.box = { items: [COINS] };
         return;
       // Jester and spies.
       case "U8RN0U":
@@ -1464,9 +1469,11 @@ module.exports = function registerTheFremennikIslesQuest(api) {
           setStage(player, STAGE_TEN_TROLLS);
         }
         return;
+      // {{mes}} game messages; the transcript writes the count as a bare "X".
       case "3CHUQU":
       case "m4TmXs":
-        event.step && (event.step.text = fillText(player, event.step.text));
+        event.handled = true;
+        player.sendMessage(fillText(player, event.text).replace(/\bX\b/, String(Math.max(0, 10 - trollKills(player)))));
         return;
       // Head and completion.
       case "xq4Jp-":

@@ -406,6 +406,60 @@ test('the boulder: chips (+1, 5 XP), a fragment by the Wiki odds, and the giant 
   assert.deepEqual(game.area.templateOf(game.boulder.loc.getLocation()), [3804, 10133, 1]);
 });
 
+test('the boulder: 10 players open the western channel and 20 the eastern (Wiki)', () => {
+  assert.equal(Boulder.channelCount(9), 1);
+  assert.equal(Boulder.channelCount(10), 2);
+  assert.equal(Boulder.channelCount(19), 2);
+  assert.equal(Boulder.channelCount(20), 3);
+
+  const ten = Array.from({ length: 10 }, () => enter());
+  const two = Game.gameOf(ten[0]);
+  ticks(51);
+  assert.equal(two.boulders.length, 2);
+  assert.deepEqual(two.boulders.map((b) => b.channel), ['central', 'west']);
+  assert.deepEqual(two.area.templateOf(two.boulders[1].loc.getLocation()), [3788, 10124, 1]);
+  assert.deepEqual(Boulder.stageTiles('west')[2], [3789, 10148, 1]);
+  assert.deepEqual(Boulder.stageTiles('west')[4], [3791, 10182, 1]);
+  two.end();
+  Game.reset();
+
+  const twenty = Array.from({ length: 20 }, () => enter());
+  const three = Game.gameOf(twenty[0]);
+  ticks(51);
+  assert.equal(three.boulders.length, 3);
+  assert.deepEqual(three.boulders.map((b) => b.channel), ['central', 'west', 'east']);
+  assert.deepEqual(three.area.templateOf(three.boulders[2].loc.getLocation()), [3820, 10124, 1]);
+  assert.deepEqual(Boulder.stageTiles('east')[4], [3823, 10184, 1]);
+});
+
+test('the boulder: a click mines the channel it hit, not the central boulder', () => {
+  const team = Array.from({ length: 10 }, () => enter());
+  const p = team[0];
+  const game = Game.gameOf(p);
+  ticks(51);
+  const [central, west] = game.boulders;
+  const centralHp = central.hp;
+  Math.random = () => 0.99;
+  click(p, 31034, 1, west.loc);
+  ticks(4);
+  Math.random = random;
+  assert.ok(west.hp < central.hp, 'west lost hitpoints');
+  assert.equal(central.hp, centralHp, 'the central boulder is untouched');
+});
+
+test('the boulder: each channel pays the Wiki\'s vortex points when its last stage is mined out', () => {
+  const team = Array.from({ length: 20 }, () => enter());
+  const p = team[0];
+  const game = Game.gameOf(p);
+  ticks(51);
+  const before = game.points.get(p) ?? 0;
+  Boulder.vortex(game, game.boulders[1]);
+  assert.equal(game.points.get(p), before + Common.data.points.vortex);
+  assert.equal(game.boulders[1].done, true);
+  Boulder.vortex(game, game.boulders[2]);
+  assert.equal(game.points.get(p), before + 2 * Common.data.points.vortex);
+});
+
 test('the exit ladder: the HUD reset, Pete\'s line, out at (3816,3808), Mining XP and shop points for the game\'s points', () => {
   const p = enter();
   const game = Game.gameOf(p);

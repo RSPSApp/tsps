@@ -67,6 +67,14 @@
 
   "_boulder": "Stages from the Wiki (40 HP a player each, the small 60; fragment chance per chip); tiles of the first three as recorded (the SW tile; the floating npc moves a tile a tick). The medium and small stops are calibrated, further up the channel to the whirlpool.",
   "boulder": {
+    "_channels": "Wiki (Volcanic Mine#Boulder): fewer than 10 players one boulder in the central channel, 10 or more a second in the western channel, 20 or more a third in the eastern channel. Wiki (Boulder (Volcanic Mine)) instead says 10 or more spawns a boulder in both the east and west channels and 20 or more all three; this data follows the first page (10 = west, 20 = east).",
+    "_extraFaces": "The extra channels reuse the central stages' faces; the Wiki pins give tiles only.",
+    "secondAt": 10,
+    "thirdAt": 20,
+    "extraChannels": {
+      "west": { "_source": "Wiki (Boulder (Volcanic Mine)) map pins minus the central pin-to-origin offset: the first three offsets are recorded in 1858 (3,3; 3,3; 2,1), the medium and small are calibrated (1,6; 0,14). Pins x=3791 at y=10127, 10136, 10149, 10172, 10196.", "stageTiles": [[3788, 10124, 1], [3788, 10133, 1], [3789, 10148, 1], [3790, 10166, 1], [3791, 10182, 1]] },
+      "east": { "_source": "Wiki (Boulder (Volcanic Mine)) map pins minus the central pin-to-origin offset: the first three offsets are recorded in 1858 (3,3; 3,3; 2,1), the medium and small are calibrated (1,6; 0,14). Pins x=3823 at y=10127, 10136, 10149, 10172, 10198.", "stageTiles": [[3820, 10124, 1], [3820, 10133, 1], [3821, 10148, 1], [3822, 10166, 1], [3823, 10184, 1]] }
+    },
     "stages": [
       { "loc": 31034, "tile": [3804, 10124, 1], "face": 1, "hp": 40, "fragment": 20, "breaking": 7807, "breakSeq": "vmi_mining_boulder_giant_breakoff" },
       { "loc": 31035, "tile": [3804, 10133, 1], "face": 0, "hp": 40, "fragment": 12, "floating": 7808, "from": [3804, 10125, 1], "breaking": 7809, "breakSeq": "vmi_mining_boulder_giant_destroy" },

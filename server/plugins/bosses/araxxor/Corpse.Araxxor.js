@@ -222,6 +222,13 @@ function validCorpse(npc, session) {
 }
 
 /** Turns drops (and a stashed Nid) into the player's inventory, excess to the floor (Wiki). */
+/** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+function lootOptions(player, itemId, area) {
+  const request = { player, itemId, area, options: {} };
+  api.emitCustomEvent("npc-drops:ground-options", request);
+  return request.options;
+}
+
 function spawnDrops(player, session, drops) {
   const { Item, ItemDefinition } = core;
   const manager = api.getItemOnGroundManager();
@@ -247,10 +254,10 @@ function spawnDrops(player, session, drops) {
       }
     }
     if (stackable) {
-      manager.registerLocation(player, new Item(itemId, drop.amount), where, area);
+      manager.registerLocation(player, new Item(itemId, drop.amount), where, area, lootOptions(player, itemId, area));
     } else {
       for (let index = 0; index < drop.amount; index++) {
-        manager.registerLocation(player, new Item(itemId, 1), where, area);
+        manager.registerLocation(player, new Item(itemId, 1), where, area, lootOptions(player, itemId, area));
       }
     }
   }

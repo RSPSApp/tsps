@@ -261,6 +261,13 @@ function lootLocation(lair) {
   return toLocation(lair.loot);
 }
 
+/** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+function lootOptions(player, itemId, area) {
+  const request = { player, itemId, area, options: {} };
+  api.emitCustomEvent("npc-drops:ground-options", request);
+  return request.options;
+}
+
 function dropLoot(session, drops) {
   const { Item, ItemDefinition } = core;
   const manager = api.getItemOnGroundManager();
@@ -270,8 +277,8 @@ function dropLoot(session, drops) {
     const noteId = ItemDefinition.forId(drop.itemId).getNoteId();
     const itemId = drop.noted && noteId >= 0 && ItemDefinition.forId(noteId).isNoted() ? noteId : drop.itemId;
     const stackable = ItemDefinition.forId(itemId).isStackable();
-    if (stackable) manager.registerLocation(session.player, new Item(itemId, drop.amount), location, session.area);
-    else for (let i = 0; i < drop.amount; i++) manager.registerLocation(session.player, new Item(itemId, 1), location, session.area);
+    if (stackable) manager.registerLocation(session.player, new Item(itemId, drop.amount), location, session.area, lootOptions(session.player, itemId, session.area));
+    else for (let i = 0; i < drop.amount; i++) manager.registerLocation(session.player, new Item(itemId, 1), location, session.area, lootOptions(session.player, itemId, session.area));
     api.emitCustomEvent("collection-log:obtain", { player: session.player, itemId: drop.itemId, amount: drop.amount });
   }
 }

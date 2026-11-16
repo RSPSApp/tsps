@@ -272,13 +272,20 @@ function createMaledictus(api, core, { inCaves, surge }) {
     for (const watcher of watchers) watcher.sendMessage(line);
   }
 
+  /** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+  function lootOptions(player, itemId, area) {
+    const request = { player, itemId, area, options: {} };
+    api.emitCustomEvent("npc-drops:ground-options", request);
+    return request.options;
+  }
+
   function give(watchers, player, itemId, amount, noted = false) {
     const noteId = core.ItemDefinition.forId(itemId).getNoteId();
     const id = noted && noteId >= 0 ? noteId : itemId;
     const stackable = noted || core.ItemDefinition.forId(id).isStackable();
     const where = player.getLocation().clone();
-    if (stackable) core.ItemOnGroundManager.registerLocation(player, new core.Item(id, amount), where);
-    else for (let i = 0; i < amount; i++) core.ItemOnGroundManager.registerLocation(player, new core.Item(id, 1), where);
+    if (stackable) core.ItemOnGroundManager.registerLocation(player, new core.Item(id, amount), where, undefined, lootOptions(player, id));
+    else for (let i = 0; i < amount; i++) core.ItemOnGroundManager.registerLocation(player, new core.Item(id, 1), where, undefined, lootOptions(player, id));
     api.emitCustomEvent("collection-log:obtain", { player, itemId, amount });
     announce(watchers, player, itemId, amount);
   }

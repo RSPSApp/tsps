@@ -1280,13 +1280,25 @@ function placeDrops(player, drops, location, placement = {}) {
 /**
  * A drop's ground options with the monster-drop lifetime: tradeable items last
  * {@link TRADEABLE_DROP_DESPAWN_TICKS}; untradeables, a drop's own `despawnDelay` and an instance's
- * own floor lifetime (PrivateArea.groundItemDespawnDelay) are left as they are.
+ * own floor lifetime (PrivateArea.groundItemDespawnDelay) are left as they are. `area` is where the
+ * stack lands (registerLocation's privateArea: the player's own by default).
  */
-function dropLifetime(player, itemId, options) {
+function dropLifetime(player, itemId, options, area = player.getPrivateArea?.()) {
   if (options.despawnDelay != null) return options;
-  if (player.getPrivateArea?.()?.groundItemDespawnDelay?.() != null) return options;
+  if (area?.groundItemDespawnDelay?.() != null) return options;
   if (ItemDefinition.forId(itemId)?.isTradeable?.() !== true) return options;
   return { ...options, despawnDelay: TRADEABLE_DROP_DESPAWN_TICKS };
+}
+
+/**
+ * "npc-drops:ground-options" { player, itemId, area?, options? }: the ground options a kill's loot placed by its own
+ * plugin (a boss's loot tile, a corpse's pack overflow) should pass to registerLocation, so it gets the monster-drop
+ * lifetime as placeDrops gives it. Answered in `options`; `area` is the registerLocation privateArea, if not the player's.
+ */
+function groundOptions(event) {
+  if (!event?.player || !Number.isInteger(event.itemId)) return;
+  const area = Object.hasOwn(event, "area") && event.area !== undefined ? event.area : event.player.getPrivateArea?.();
+  event.options = dropLifetime(event.player, event.itemId, event.options ?? {}, area);
 }
 
 /**
@@ -1359,6 +1371,7 @@ module.exports = {
       request.drops.push(...rollTable(table, request.player, npc, killContext(request.player, npc), source));
     });
     api.onCustomEvent("npc-drops:place", placeRolled);
+    api.onCustomEvent("npc-drops:ground-options", groundOptions);
     api.onCustomEvent("npc-drops:report", reportRolled);
 
     api.onNpcDeath(({ killer, npc, npcId, damagers }) => {
@@ -1403,5 +1416,5 @@ module.exports = {
   _test: { loadDrops, tablesByNpc, sharedTables, sharedCategories, rollSharedTable, rollSharedRequest },
 
   // Exposed for the smoke test.
-  __internals: { questRequirement, npcCombatLevel, withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
+  __internals: { questRequirement, npcCombatLevel, withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, groundOptions, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
 };

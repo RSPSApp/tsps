@@ -50,8 +50,8 @@
  *    indexed to any NPC id in the dump and cannot fire.
  *  - The unsealed letter has no Read transcript in the dump; its body is sent as game messages
  *    from Transcript:Unsealed letter.
- *  - Lunar ore smelting (60 Smithing) is missing from the Smithing plugin, so a quest-scoped
- *    fallback smelts one lunar ore into one lunar bar at any furnace (13 Smithing XP).
+ *  - Lunar ore smelting lives in Smithing's furnace recipes (Wiki: level 1, 6.2 XP, one
+ *    lunar ore to a lunar bar), so the quest defers it there like any other bar.
  *  - The Dräpare honorific has no title system here. Varbit 9472 (Neitiznot faceguard story) belongs
  *    to the NeitiznotFaceguard plugin, not to this quest.
  */
@@ -234,7 +234,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const GLASSBLOWING_PIPE_ITEM = ItemIdentifiers.GLASSBLOWING_PIPE; // 1785
   const HAMMER_ITEM = ItemIdentifiers.HAMMER; // 2347
   const LUNAR_BAR_ITEM = ItemIdentifiers.LUNAR_BAR; // 9077
-  const LUNAR_ORE_ITEM = ItemIdentifiers.LUNAR_ORE; // 9076
   const ASTRAL_RUNE_ITEM = ItemIdentifiers.ASTRAL_RUNE; // 9075
   const ICE_GLOVES_ITEM = ItemIdentifiers.ICE_GLOVES; // 1580
   const SMITHS_GLOVES_I_ITEM = ItemIdentifiers.SMITHS_GLOVES_I_; // 27031
@@ -315,16 +314,9 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     ObjectIdentifiers.ANVIL, // 2031
     ObjectIdentifiers.AN_EXPERIMENTAL_ANVIL, // 2672
   ]);
-  // Shipped rev241 Varrock/Lumbridge anvils and furnaces use these; quest objects keep
-  // their canonical cache names, so ordinary smithing still falls through below.
+  // Shipped rev241 Varrock/Lumbridge anvils use these; quest objects keep their canonical
+  // cache names, so ordinary smithing still falls through below.
   const CANONICAL_ANVIL_ID = 2097;
-  const CANONICAL_FURNACE_ID = 24009;
-  const FURNACE_IDS = new Set([
-    ObjectIdentifiers.FURNACE, // 2030
-    ObjectIdentifiers.FURNACE_2, // 2966
-    ObjectIdentifiers.FURNACE_3, // 3294
-    ObjectIdentifiers.SMALL_FURNACE, // 3994
-  ]);
 
   function objectName(event) {
     return event.definition?.getName?.() ?? ObjectDefinition.forId(event.objectId)?.getName?.() ?? "";
@@ -332,10 +324,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
 
   function isAnvil(event) {
     return ANVIL_IDS.has(event.objectId) || event.objectId === CANONICAL_ANVIL_ID || objectName(event) === "Anvil";
-  }
-
-  function isFurnace(event) {
-    return FURNACE_IDS.has(event.objectId) || event.objectId === CANONICAL_FURNACE_ID || objectName(event) === "Furnace";
   }
 
   // ==========================================================================
@@ -2332,23 +2320,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       startTranscript(api, player, BABA_YAGA, PAGE, "making-v-s-shield-v-sigil-anvil");
       return;
     }
-    if (itemId === LUNAR_ORE_ITEM && isFurnace(event)) {
-      if (stageOf(player) < STAGE_COMPONENTS || stageOf(player) >= STAGE_MARKET) return;
-      event.handled = true;
-      smeltLunarOre(player);
-      return;
-    }
-  }
-
-  function smeltLunarOre(player) {
-    if (player.getSkillManager().getMaxLevel(Skill.SMITHING) < 60) {
-      player.sendMessage("You need a Smithing level of 60 to smelt lunar ore.");
-      return;
-    }
-    if (!takeItem(player, LUNAR_ORE_ITEM)) return;
-    addItem(player, LUNAR_BAR_ITEM);
-    player.getSkillManager().addExperiences(Skill.SMITHING, 13);
-    player.sendMessage("You smelt the lunar ore into a lunar bar.");
   }
 
   function handleItemOnItem(event) {

@@ -1010,13 +1010,13 @@ test("a reload restores the unlocks and their varbits", () => {
 // These are independent named-place/outline facts, not assertions against copied classifier code.
 test("Misthalin's northeast Lumbridge path and Chasm do not inherit the Desert square", () => {
   for (const league of [4, 5, 6]) {
-    for (const [x, y] of [[3263, 3260], [3264, 3260], [3265, 3260], [3265, 3290],
+    for (const [x, y] of [[3263, 3260], [3264, 3260], [3265, 3260], [3265, 3290], [3265, 3295], [3265, 3296],
       [3267, 3227], [3267, 3228],
       [3266, 3322], [3236, 9512], [3257, 9517], [3309, 9613]]) {
       assert.equal(areaAt(x, y, { league }), MISTHALIN, `${league}: Misthalin ${x},${y}`);
     }
     for (const [x, y] of [[3270, 3220], [3300, 3290], [3290, 3180], [3270, 3260],
-      [3268, 3227], [3268, 3228], [3266, 3260], [3266, 3290], [3267, 3322]]) {
+      [3268, 3227], [3268, 3228], [3266, 3260], [3266, 3290], [3267, 3322], [3265, 3297]]) {
       assert.equal(areaAt(x, y, { league }), DESERT, `${league}: actual Desert ${x},${y}`);
     }
   }
@@ -1394,20 +1394,21 @@ test("league correction retains an already owned private Area and does not regis
 
 
 test("real league two-step run stops at the sourced intra-square Misthalin edge", t => {
-  const p = movingCharacter(t, "league-edge-run", 3265, 3256, "league");
+  const p = movingCharacter(t, "league-edge-run", 3265, 3295, "league");
   const movement = p.getMovementQueue();
   const xyz = location => [location.getX(), location.getY(), location.getZ()];
   const start = p.getLocation().clone();
-  // Tile centres cross the sourced southern edge after the first legal step.
-  // Earlier static suitability does not replace these sequential LEAGUE-scene checks.
-  const first = at(3265, 3255), denied = at(3265, 3254);
+  // The source outline's northern diagonal excludes the final tile centre. Retained
+  // STATICCATALOG002 supplies both positive north-edge masks and all three origin buckets.
+  // That older MAIN snapshot is suitability only; these guards observe the current LEAGUE scene.
+  const first = at(3265, 3296), denied = at(3265, 3297);
   assert.equal(areaAt(start.getX(), start.getY()), MISTHALIN, "LEAGUE5386_RUN_PREREQUISITE: start ownership");
   assert.deepEqual([start, first, denied].map(location => [location.getX() >> 6, location.getY() >> 6, location.getZ()]),
-    [[51, 50, 0], [51, 50, 0], [51, 50, 0]], "LEAGUE5386_RUN_PREREQUISITE: same square and plane");
+    [[51, 51, 0], [51, 51, 0], [51, 51, 0]], "LEAGUE5386_RUN_PREREQUISITE: same square and plane");
   const startClip = core.RegionManager.getClipping(start.getX(), start.getY(), start.getZ(), p.getPrivateArea());
   assert.equal(Number.isInteger(startClip), true, "LEAGUE5386_RUN_PREREQUISITE: numeric standing clip");
   assert.equal(startClip & 0x12c0100, 0, "LEAGUE5386_RUN_PREREQUISITE: conservative standing mask clear");
-  const edges = [[start, at(3265, 3255)], [at(3265, 3255), at(3265, 3254)]].map(([source, target]) => ({
+  const edges = [[start, at(3265, 3296)], [at(3265, 3296), at(3265, 3297)]].map(([source, target]) => ({
     source: xyz(source), target: xyz(target),
     staticPass: core.RegionManager.canMovestart(source, target, p.getSize(), p.getSize(), p.getPrivateArea()),
     dynamicBlocked: core.World.isPlayerBlockingNpcOnTile(target, p.getSize(), p.getPrivateArea()),
@@ -1416,17 +1417,17 @@ test("real league two-step run stops at the sourced intra-square Misthalin edge"
   console.log("LEAGUE5386_EDGE_RUN_PREREQUISITES", JSON.stringify({
     start: xyz(start), health: p.getHitpoints(), needsPlacement: p.isNeedsPlacement(),
     running: p.isRunningReturn(), runToggled: movement.isRunToggled(), energyUnits: p.getRunEnergyUnits(),
-    mobilityCanMove: movement.getMobility().canMove(), combinedCanWalkSouth: movement.canWalk(0, -1), edges,
+    mobilityCanMove: movement.getMobility().canMove(), combinedCanWalkNorth: movement.canWalk(0, 1), edges,
     league: p.getAttribute("league:type"), unlocked: p.getAttribute("league:areas"),
   }));
   assert.equal(p.getAttribute("league:type"), 4, "LEAGUE5386_RUN_PREREQUISITE: type4");
   assert.deepEqual(p.getAttribute("league:areas"), [MISTHALIN, KARAMJA]);
-  assert.equal(movement.canWalk(0, -1), true, "LEAGUE5386_RUN_PREREQUISITE: mobility/first static step");
-  assert.equal(movement.canWalkTo(at(3265, 3255)), true, "LEAGUE5386_RUN_PREREQUISITE: first static/dynamic step");
-  assert.equal(movement.canWalkTo(at(3265, 3254), at(3265, 3255)), true,
+  assert.equal(movement.canWalk(0, 1), true, "LEAGUE5386_RUN_PREREQUISITE: mobility/first static step");
+  assert.equal(movement.canWalkTo(at(3265, 3296)), true, "LEAGUE5386_RUN_PREREQUISITE: first static/dynamic step");
+  assert.equal(movement.canWalkTo(at(3265, 3297), at(3265, 3296)), true,
     "LEAGUE5386_RUN_PREREQUISITE: second static/dynamic edge prerequisite");
-  assert.equal(areaAt(3265, 3255), MISTHALIN, "tile centre is north of the outline edge");
-  assert.equal(areaAt(3265, 3254), DESERT, "south of this edge stays Desert");
+  assert.equal(areaAt(3265, 3296), MISTHALIN, "first tile centre stays inside the sourced outline");
+  assert.equal(areaAt(3265, 3297), DESERT, "crossing rule excludes the tile centre on the northern diagonal");
   const messages = p.sent.messages.length;
   const energy = p.getRunEnergyUnits();
   p.setRunning(true);
@@ -1449,7 +1450,7 @@ test("real league two-step run stops at the sourced intra-square Misthalin edge"
   assert.equal(routeEvents.length, 1, "LEAGUE5386_RUN_PREREQUISITE: one ordinary walk request");
   for (const event of [routeEvents[0].before, routeEvents[0].after]) {
     assert.equal(event.player, p);
-    assert.deepEqual(event.destination, { x: 3265, y: 3254, z: 0 });
+    assert.deepEqual(event.destination, { x: 3265, y: 3297, z: 0 });
     assert.equal(event.handled, false, "LEAGUE5386_RUN_PREREQUISITE: walk hook did not handle/substitute request");
   }
   assert.equal(routeEvents[0].result, false);
@@ -1463,7 +1464,7 @@ test("real league two-step run stops at the sourced intra-square Misthalin edge"
   for (const [x, y, z] of checkpoints) {
     assert.equal(x, 3265);
     assert.equal(z, 0);
-    assert.ok(y < previousY && y >= 3254, "LEAGUE5386_RUN_PREREQUISITE: direct south route through first tile");
+    assert.ok(y > previousY && y <= 3297, "LEAGUE5386_RUN_PREREQUISITE: direct north route through first tile");
     previousY = y;
   }
   console.log("LEAGUE5386_EDGE_RUN_ROUTE", JSON.stringify({
@@ -1473,9 +1474,9 @@ test("real league two-step run stops at the sourced intra-square Misthalin edge"
   }));
   // Route/edge observations precede process; they do not seal the scene against later mutation.
   movement.process();
-  assertPlacement(p, 3265, 3255);
+  assertPlacement(p, 3265, 3296);
   assert.deepEqual(p.sent.messages.slice(messages), ["You haven't unlocked that area yet."], "one actual policy correction");
-  assert.equal(core.World.isPlayerOccupyingTile(at(3265, 3254), null, 1, p.getPrivateArea()), false);
+  assert.equal(core.World.isPlayerOccupyingTile(at(3265, 3297), null, 1, p.getPrivateArea()), false);
   assert.equal(p.getRunEnergyUnits(), energy, "one legal step and one denied step do not consume run energy");
   const actual = p.getLocation().clone();
   p.setNeedsPlacement(false);

@@ -26,6 +26,7 @@ const Finishers = require("../plugins/skills/slayer/Finishers.Slayer");
 const Superiors = require("../plugins/skills/slayer/Superiors.Slayer");
 const Keys = require("../plugins/skills/slayer/Keys.Slayer");
 const Choice = require("../plugins/skills/slayer/Choice.Slayer");
+const Helper = require("../plugins/skills/slayer/Helper.Slayer");
 
 const core = PluginManager.getCoreApi();
 const handlers = { events: new Map(), death: [], canAttack: [] };
@@ -532,6 +533,94 @@ test("the gem's Check gives the task and the streak", () => {
   assert.equal(player.messages[0],
     "<col=ef1020>You're assigned to kill </col>bloodveld<col=ef1020>; only </col>44<col=ef1020> more to go.");
   assert.match(player.messages[1], /currently have a total of <\/col>20 points/);
+});
+
+/** The helper's packets, as sent: [kind, ...args]. */
+function recordHelper(player) {
+  const sent = [];
+  const sender = player.getPacketSender();
+  const helperVarbit = CacheDefinitions.getVarbitId("current_helper");
+  for (const name of ["sendSubInterface", "closeSubInterface", "sendClientScript"]) {
+    const original = sender[name].bind(sender);
+    sender[name] = (...args) => { sent.push([name, ...args]); return original(...args); };
+  }
+  const sendVarbit = sender.sendVarbit.bind(sender);
+  sender.sendVarbit = (id, value) => {
+    if (id === helperVarbit) sent.push(["current_helper", value]);
+    return sendVarbit(id, value);
+  };
+  return sent;
+}
+
+/** Runs the world's tasks for `ticks` ticks. */
+function runTicks(ticks) {
+  for (let tick = 0; tick < ticks; tick++) core.TaskManager.process();
+}
+
+const HELPER_CONTENT = (161 << 16) | 12; // toplevel_osrs_stretch:helper_content
+const HELPER_OPEN = [
+  ["current_helper", 3],
+  ["sendSubInterface", HELPER_CONTENT, 711, 1],
+  ["sendClientScript", 4689, HELPER_CONTENT, 3, 148, 308],
+  ["sendClientScript", 5317],
+];
+const HELPER_CLOSE = [["current_helper", 0], ["closeSubInterface", HELPER_CONTENT]];
+
+function clickGem(player, itemId, option) {
+  return PluginManager.emitItemAction({
+    player, interfaceId: 149 << 16, item: { getId: () => itemId, getAmount: () => 1 }, itemId, slot: 0,
+    clickType: option === "Activate" ? 1 : 2, option, handled: false,
+  });
+}
+
+test("rsprox 1002084 t127: the gem's Check gives the task lines, then opens the Slayer helper; Activate doesn't", () => {
+  for (const [itemId, name] of [[4155, "Enchanted gem"], [21270, "Eternal gem"]]) {
+    const player = createPlayer({ points: 172 });
+    giveTask(player, 3, "Bloodveld", 41);
+    const sent = recordHelper(player);
+    clickGem(player, itemId, "Activate");
+    assert.equal(player.messages.length, 2, `${name} Activate answers`);
+    assert.deepEqual(sent, [], `${name} Activate leaves the helper shut`);
+    clickGem(player, itemId, "Check");
+    assert.equal(player.messages.length, 4, `${name} Check answers`);
+    assert.match(player.messages[2], /You're assigned to kill <\/col>bloodveld/);
+    assert.deepEqual(sent, HELPER_OPEN, `${name} Check opens the helper`);
+    clickGem(player, itemId, "Check");
+    assert.deepEqual(sent, HELPER_OPEN, "a second Check while it shows sends nothing more");
+    Helper.close(player);
+  }
+});
+
+test("rsprox 1002067: the helper opens on assignment and task kills, and closes 501 ticks after it opened", () => {
+  const player = createPlayer();
+  const sent = recordHelper(player);
+  Tasks.assign(player, master(3), () => 0.5);
+  assert.deepEqual(sent, HELPER_OPEN, "t185: the assignment opens it");
+  const target = npcNamed("Hill Giant");
+  const taskKill = (extra = {}) => handlers.events.get("slayer:task-kill").forEach((fn) => fn({ player, npc: target, xp: 35, ...extra }));
+  runTicks(200);
+  taskKill();
+  runTicks(300);
+  assert.deepEqual(sent, HELPER_OPEN, "kills while it shows neither reopen nor extend it");
+  runTicks(1);
+  assert.deepEqual(sent, [...HELPER_OPEN, ...HELPER_CLOSE], "t686: closed 501 ticks after opening");
+  sent.length = 0;
+  taskKill();
+  assert.deepEqual(sent, HELPER_OPEN, "t789: the next task kill opens it again");
+  Helper.close(player);
+  sent.length = 0;
+  taskKill({ offTask: true });
+  assert.deepEqual(sent, [], "an off-task kill (no task) doesn't open it");
+});
+
+test("the Settings' Slayer helper toggle keeps the helper shut", () => {
+  const player = createPlayer();
+  setVarbit(player, "slayer_helper_disabled", 1);
+  const sent = recordHelper(player);
+  assert.equal(Helper.open(player), false);
+  Tasks.assign(player, master(3), () => 0.5);
+  assert.deepEqual(sent, []);
+  assert.equal(varbit(player, "current_helper"), 0);
 });
 
 test("rewards: unlocks spend points and set their bit; cancel and block", () => {

@@ -52,6 +52,10 @@ function actor(t, at) {
   c.player = p;
   const messages = [];
   const boxes = [];
+  const flags = [];
+  const sender = p.getPacketSender();
+  const sendFlags = sender.sendInterfaceFlagsRange.bind(sender);
+  t.mock.method(sender, "sendInterfaceFlagsRange", (...args) => { flags.push(args); return sendFlags(...args); });
   const sendMessage = p.sendMessage.bind(p);
   t.mock.method(p, "sendMessage", (text) => { messages.push(String(text)); return sendMessage(text); });
   const dialogues = p.getDialogueManager();
@@ -67,7 +71,7 @@ function actor(t, at) {
     core.TaskManager.cancelTasks(p);
     core.TaskManager.cancelTasks(p.getIndex());
   });
-  return { p, c, messages, boxes };
+  return { p, c, messages, boxes, flags };
 }
 
 function tick(f) {
@@ -104,7 +108,10 @@ async function send(f, packet) {
 const choose = (f, n) => send(f, { type: "dialogue_continue", widgetId: (219 << 16) | 1, childIndex: n });
 async function inspect(f) {
   await send(f, { type: "object_option", id: memorialId, x: MEMORIAL[0], y: MEMORIAL[1], clickType: 1 });
-  await send(f, { type: "dialogue_continue", widgetId: (229 << 16) | 2, childIndex: -1 });
+  const widgetId = core.CacheDefinitions.getComponentId("messagebox:continue");
+  assert.ok(f.flags.some((args) => args[0] === widgetId && args[1] === -1 && args[2] === -1 && args[3] === 1),
+    "the active messagebox Continue receives native pause flags");
+  await send(f, { type: "dialogue_continue", widgetId, childIndex: -1 });
 }
 function book(f, amount = 32) {
   f.p.getInventory().addItem(new core.Item(25818, 1));

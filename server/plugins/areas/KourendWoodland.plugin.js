@@ -28,7 +28,7 @@ function inspectMemorial({ player, object }) {
 
 module.exports = {
   name: "KourendWoodland",
-  description: "The Old Memorial in the Kourend Woodland: Inspect shows King Kharedst IV's inscription.",
+  description: "The Old Memorial in the Kourend Woodland: Inspect shows King Kharedst IV's inscription, then offers book recharging.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

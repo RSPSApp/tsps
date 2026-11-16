@@ -2787,7 +2787,9 @@ test('Nature Spirit retains its canonical Drezel prerequisite refusal', async t 
 });
 
 const REJECTED_START_ROUTES = [
-  { page: 'Jungle Potion', key: 'jungle_potion', npc: 'TRUFITUS', quests: ['druidic_ritual'],
+  // Live starts Jungle Potion as the player continues past their acceptance line, not on "Yes."
+  // (rsprox captures, the user's JunglePotion run ticks 158-160; docs/quests/jungle-potion/README.md).
+  { page: 'Jungle Potion', key: 'jungle_potion', npc: 'TRUFITUS', quests: ['druidic_ritual'], startsAfterLines: 1,
     route: ['What does Bwana mean?', 'Yes, of course I do.', 'A proposition eh? Sounds interesting!', 'Me? How can I help?', 'Yes.'] },
   { page: 'Haunted Mine', key: 'haunted_mine', npc: 'ZEALOT', skills: true, quests: ['priest_in_peril'],
     route: ['I follow the path of Saradomin.', 'I come seeking challenges and quests.', 'Yes.'] },
@@ -2846,6 +2848,7 @@ for (const definition of REJECTED_START_ROUTES) test(`${definition.page} normal 
   if (definition.skills) await refuse();
   completePrerequisites(f.player, definition.quests);
   await followNativeStartRoute(f, definition);
+  for (let n = 0; n < (definition.startsAfterLines ?? 0); n++) await nextLine(f);
   assert.ok(registeredQuest(definition.key).getStage(f.player) > 0);
   assert.ok(f.player.getDialogueManager().getCurrent(), 'eligible acceptance still plays its source branch');
 });

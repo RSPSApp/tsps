@@ -76,7 +76,8 @@ function actor(t, lowSkill, jungleComplete = true) {
 async function advance(f) {
   assert.ok(f.player.getDialogueManager().getCurrent(), 'active generated dialogue');
   const group = f.player.getPacketSender().getChatboxGroupId();
-  const child = ({ 231: 5, 217: 5, 229: 4 })[group];
+  // 193 objectbox continues on its universe component (193:0), as live does.
+  const child = ({ 231: 5, 217: 5, 229: 4, 193: 0 })[group];
   assert.notEqual(child, undefined, `known dialogue group ${group}`);
   assert.equal(f.player.getPacketSender().isChatboxInterface(group), true);
   await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: (group << 16) | child, childIndex: -1 }]);

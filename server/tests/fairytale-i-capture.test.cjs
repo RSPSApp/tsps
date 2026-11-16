@@ -6,7 +6,7 @@
 // each tick runs as World.process does. Tick numbers are FairyTale1's unless a recording is named.
 const assert = require("node:assert/strict");
 const { before, after, test } = require("node:test");
-const h = require("./fairytale-i-harness.cjs");
+const h = require("./quest-capture-harness.cjs");
 
 const MARTIN = [3077, 3256, 0];
 const BY_MARTIN = [3078, 3256, 0];

@@ -185,7 +185,7 @@ test("Otto teaches rod fishing first; the bed gives the rod and a leaping fish c
   assert.equal(stages(who).fishingRod, 1, "an ordinary trout is not a leaping fish");
   T.caughtFish({ player: who, itemId: core.ItemIdentifiers.LEAPING_TROUT });
   assert.equal(stages(who).fishingRod, 2);
-  assert.deepEqual(who.sent.messages, [T.LEARNED]);
+  assert.deepEqual(read(who).said, [T.LEARNED]);
 
   shown = talk(who);
   assert.deepEqual(shown.options, [T.TOPIC.harpoon, T.TOPIC.firemaking, T.TOPIC.rodDone, T.TOPIC.farming, T.TOPIC.leave]);

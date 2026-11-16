@@ -16,6 +16,7 @@ const Fishing = require('../plugins/skills/Fishing.plugin');
 const FINAL_REPLY = 'We do not use these fish quite as you might expect. When you return we can speak more of this matter.';
 let core, otto, spot;
 let emptyTranscript = false;
+let emptyReportTranscript = false;
 const ownedNpcs = [];
 
 before(async () => {
@@ -28,6 +29,7 @@ before(async () => {
   Training.register(PM.createApi('BarbarianTraining'));
   PM.createApi('RodTranscriptFaultFixture').onCustomEvent('npc-dialogue:start', (request) => {
     if (emptyTranscript && request.variant === 'starting-off-after-speaking-to-him-once') request.select([]);
+    if (emptyReportTranscript && request.variant === 'fishing') request.select([]);
   });
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(2500, 3487);
@@ -158,12 +160,93 @@ test('untaught native Use-rod cannot start or catch; actual instruction unlocks 
   const options = f.current().getOptions();
   await f.send({type: 'dialogue_continue', widgetId: (219 << 16) | 1,
     childIndex: options.indexOf(Training._test.TOPIC.rodDone) + 1});
+  assert.equal(Training._test.state(p).fishingRod, 2);
+  for (let i = 0; i < 3; i++) await f.resume();
   assert.equal(Training._test.state(p).fishingRod, 3);
   roundTrip(t, p, 3);
   // All original baits remain usable once taught, including offcuts.
   p.getInventory().deleteNumber(I.FEATHER, 4);
   p.getInventory().add(new core.Item(I.FISH_OFFCUTS, 2), false);
   assert.ok(Fishing.hasToolRequirements(p, Fishing.TOOLS.BARBARIAN_ROD));
+});
+
+async function reportCatch(f) {
+  await f.option(otto, 'Talk-to');
+  for (let i = 0; i < 15 && !f.current()?.getOptions; i++) await f.resume();
+  const options = f.current().getOptions();
+  assert.ok(options.includes(Training._test.TOPIC.rodDone));
+  await f.send({type: 'dialogue_continue', widgetId: (219 << 16) | 1,
+    childIndex: options.indexOf(Training._test.TOPIC.rodDone) + 1});
+}
+
+test('rod catch report waits for Otto acknowledgment and rejects interruption, distance and missing transcript', async (t) => {
+  const f = fixture(t), p = f.player;
+  const precedingLines = [
+    "I've fished with a barbarian rod!",
+    'Your mind is as clear as the waters you have fished. This is good.',
+    "So what do I do with these fish? They are all bloated and so nasty looking that even a starving vulture wouldn't eat one.",
+  ];
+  Training._test.setStage(p, 'fishingRod', 2);
+  for (let closeAt = 0; closeAt < precedingLines.length; closeAt++) {
+    await reportCatch(f);
+    for (let i = 0; i <= closeAt; i++) {
+      assert.equal(f.current().getText(), precedingLines[i]);
+      assert.equal(Training._test.state(p).fishingRod, 2, 'all three preceding lines remain unacknowledged');
+      if (i < closeAt) await f.resume();
+    }
+    p.getPacketSender().sendInterfaceRemoval();
+    roundTrip(t, p, 2);
+    await f.resume();
+    assert.equal(Training._test.state(p).fishingRod, 2, 'stale Continue after closing cannot acknowledge');
+  }
+
+  await reportCatch(f);
+  await f.resume();
+  await f.resume();
+  assert.equal(f.current().getText(), precedingLines[2]);
+  const priorLocation = otto.getLocation();
+  otto.setLocation(new core.Location(2510, 3490, 0));
+  try { await f.resume(); }
+  finally { otto.setLocation(priorLocation); }
+  assert.equal(Training._test.state(p).fishingRod, 2, 'Otto must still be nearby when replying');
+  assert.equal(p.getDialogueManager().isActive(), false);
+
+  emptyReportTranscript = true;
+  try { await reportCatch(f); }
+  finally { emptyReportTranscript = false; }
+  assert.equal(Training._test.state(p).fishingRod, 2);
+  assert.equal(p.getDialogueManager().isActive(), false, 'a missing reply cannot acknowledge');
+
+  await reportCatch(f);
+  for (let i = 0; i < precedingLines.length; i++) {
+    assert.equal(f.current().getText(), precedingLines[i]);
+    assert.equal(Training._test.state(p).fishingRod, 2);
+    await f.resume();
+  }
+  assert.match(f.current().getText(), /^Patience young one\./);
+  assert.equal(Training._test.state(p).fishingRod, 3, 'acknowledgment is saved as Otto starts replying');
+  roundTrip(t, p, 3);
+});
+
+test('first native rod catch opens the captured completion message box once', async (t) => {
+  const f = fixture(t), p = f.player;
+  Training._test.setStage(p, 'fishingRod', 1);
+  const priorRandom = Math.random;
+  Math.random = () => 0.02;
+  try {
+    await f.option(spot, 'Use-rod');
+    for (let i = 0; i < 2; i++) f.tick();
+    assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.LEAPING_TROUT), 1);
+    assert.equal(Training._test.state(p).fishingRod, 2);
+    assert.equal(p.getPacketSender().getChatboxGroupId(), 229, 'recording237/01149 tick8954 opens messagebox');
+    assert.equal(f.current().getText(), Training._test.LEARNED);
+    await f.resume();
+    assert.equal(p.getDialogueManager().isActive(), false, 'native229:4 Continue closes completion box');
+    await f.option(spot, 'Use-rod');
+    for (let i = 0; i < 7; i++) f.tick();
+    assert.ok(p.getInventory().getAmount(core.ItemIdentifiers.LEAPING_TROUT) >= 2);
+    assert.equal(p.getDialogueManager().isActive(), false, 'later catches do not repeat completion');
+  } finally { Math.random = priorRandom; }
 });
 
 function roundTrip(t, original, stage) {
@@ -280,6 +363,8 @@ test('disk SQLite save, worker flush and fresh-store load retain native rod prog
   const options = f.current().getOptions();
   await f.send({type: 'dialogue_continue', widgetId: (219 << 16) | 1,
     childIndex: options.indexOf(Training._test.TOPIC.rodDone) + 1});
+  assert.equal(Training._test.state(f.player).fishingRod, 2);
+  for (let i = 0; i < 3; i++) await f.resume();
   assert.equal(Training._test.state(f.player).fishingRod, 3);
   f = await relog(f, 3);
   await f.option(spot, 'Use-rod');

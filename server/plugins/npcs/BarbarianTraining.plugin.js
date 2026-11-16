@@ -363,7 +363,22 @@ function rodLesson(player, talk) {
 }
 
 function rodDone(player, talk) {
-  if (lesson(player, talk, TRANSCRIPT.fishing, TOPIC.rodDone)) setStage(player, "fishingRod", TOLD);
+  if (state(player).fishingRod !== DONE) return;
+  const lines = topicLines(player, talk.npc, talk.npcId, TRANSCRIPT.fishing, TOPIC.rodDone);
+  const finalReply = lines[lines.length - 1];
+  if (!near(player, talk.npc) || lines.length < 2 || !finalReply?.npc) {
+    player.getPacketSender().sendInterfaceRemoval();
+    return;
+  }
+  // rsprox237/01149 tick8987: stage3 starts with Otto's final reply, after the player's question.
+  play(player, talk.npcId, lines.slice(0, -1), () => {
+    if (!near(player, talk.npc) || state(player).fishingRod !== DONE) {
+      player.getPacketSender().sendInterfaceRemoval();
+      return;
+    }
+    setStage(player, "fishingRod", TOLD);
+    play(player, talk.npcId, [finalReply], () => afterTopic(player, talk));
+  });
 }
 
 function herbloreLesson(player, talk) {
@@ -432,7 +447,8 @@ function caughtFish({ player, itemId, barehand } = {}) {
   const { LEAPING_TROUT, LEAPING_SALMON, LEAPING_STURGEON } = core.ItemIdentifiers;
   if (![LEAPING_TROUT, LEAPING_SALMON, LEAPING_STURGEON].includes(itemId)) return;
   setStage(player, "fishingRod", DONE);
-  player.sendMessage(LEARNED);
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
+    .add(new core.StatementDialogue(0, LEARNED)).add(new core.EndDialogue(1)));
 }
 
 function madePotion({ player, itemId } = {}) {

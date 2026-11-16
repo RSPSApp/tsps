@@ -49,7 +49,8 @@ function fixture() {
     emitCustomEvent: (name, request) => { for (const fn of events.get(name) ?? []) fn(request); },
     onPlayerLogout() {}, onPlayerDisconnect() {}, onPlayerLogin() {}, onPlayerDeath: fn => deaths.push(fn), onNpcDeath() {},
     spawnNpc: def => {
-      const npc = { def, removed: false, hitpoints: 10, attacked: null, said: null, forceChat(text) { npc.said = text; }, getLocation: () => new core.Location(def.x, def.y, def.z),
+      const index = 40000 + spawned.length;
+      const npc = { def, removed: false, hitpoints: 10, getId: () => def.id, getIndex: () => index, attacked: null, said: null, forceChat(text) { npc.said = text; }, getLocation: () => new core.Location(def.x, def.y, def.z),
         getHitpoints() { return this.hitpoints; }, isRegistered() { return !this.removed; }, getCombat() { return { attack: target => { npc.attacked = target; } }; } };
       spawned.push(npc);
       return npc;
@@ -89,6 +90,9 @@ const GROUP_PARAM = require("../plugins/treasuretrails/trails/Catalogue.Treasure
 /** One worn item per requirement: the first listed item, or any item of the clue item group. */
 const outfit = step => step.equipment.filter(requirement => requirement.emptySlot == null).map(requirement => new core.Item(requirement.anyOf?.[0] ??
   [...C.getObjNames().keys()].find(id => C.getItem(id)?.params?.get?.(GROUP_PARAM) === requirement.group), 1));
+/** The cluehelper_npc_id varp and current_hint_arrow varbit writes, in order. */
+const vars = f => f.sent.filter(([name, id]) => (name === "sendConfig" && id === C.getVarpId("cluehelper_npc_id")) ||
+  (name === "sendVarbit" && id === C.getVarbitId("current_hint_arrow")));
 const ofKind = (family, target) => steps().filter(step => step.family === family && (!target || step.target === target));
 
 test("every hard step is a distinct cache clue item with its fight, puzzle box or challenge", () => {
@@ -232,10 +236,15 @@ test("a dug-up wizard appears in a smoke puff with the hint arrow on it, cleared
   const arrows = f.sent.filter(([name]) => name === "clearHintArrow" || name === "sendEntityHint");
   assert.deepEqual(arrows.map(([name]) => name), ["clearHintArrow", "sendEntityHint"]);
   assert.equal(arrows[1][1], wizard);
+  const sound = f.sent.find(([name]) => name === "sendAreaSound");
+  assert.deepEqual(sound, ["sendAreaSound", 1930, wizard.def.x, wizard.def.y, wizard.def.z, 1, 0, 4], "smokepuff area sound, range 4");
+  assert.deepEqual(vars(f), [["sendConfig", C.getVarpId("cluehelper_npc_id"), (wizard.def.id << 16) | wizard.getIndex()],
+    ["sendVarbit", C.getVarbitId("current_hint_arrow"), 3]]);
   f.sent.length = 0;
   wizard.hitpoints = 0;
   Runtime.encounterDied({ npc: wizard });
   assert.deepEqual(f.sent.filter(([name]) => name === "clearHintArrow").length, 1, "the arrow resets on death");
+  assert.deepEqual(vars(f), [["sendVarbit", C.getVarbitId("current_hint_arrow"), 0], ["sendConfig", C.getVarpId("cluehelper_npc_id"), -1]]);
 });
 
 test("a dug-up wizard dismissed while alive (the player died to it) takes its hint arrow with it", () => {
@@ -248,6 +257,7 @@ test("a dug-up wizard dismissed while alive (the player died to it) takes its hi
   f.die();
   assert.equal(f.spawned[0].removed, true);
   assert.equal(f.sent.filter(([name]) => name === "clearHintArrow").length, 1);
+  assert.deepEqual(vars(f), [["sendVarbit", C.getVarbitId("current_hint_arrow"), 0], ["sendConfig", C.getVarpId("cluehelper_npc_id"), -1]]);
 });
 
 test("an emote's double agent appears in a smoke puff with no hint arrow (227/01768.txt tick 10782)", () => {
@@ -263,10 +273,16 @@ test("an emote's double agent appears in a smoke puff with no hint arrow (227/01
   assert.equal(puff?.[1].id, C.getSpotanimId("smokepuff_large"));
   assert.deepEqual([puff[2].getX(), puff[2].getY()], [agent.def.x, agent.def.y]);
   assert.equal(f.sent.filter(([name]) => name === "clearHintArrow" || name === "sendEntityHint").length, 0);
+  assert.equal(f.sent.filter(([name]) => name === "sendAreaSound").length, 0, "no smokepuff sound for a double agent");
+  assert.deepEqual(vars(f), [["sendConfig", C.getVarpId("cluehelper_npc_id"), (agent.def.id << 16) | agent.getIndex()]], "no hint-arrow varbit");
   f.sent.length = 0;
   agent.hitpoints = 0;
   Runtime.encounterDied({ npc: agent });
   assert.equal(f.sent.filter(([name]) => name === "clearHintArrow").length, 0);
+  // Uri follows the agent here, and the varp goes straight to him (227/01768.txt tick 10821).
+  const uri = f.spawned[1];
+  assert.equal(uri?.def.id, Runtime.data(HARD).uri);
+  assert.deepEqual(vars(f), [["sendConfig", C.getVarpId("cluehelper_npc_id"), (uri.def.id << 16) | uri.getIndex()]]);
 });
 
 test("a wizard who vanishes (logout, despawn) is summoned again by the next dig", () => {

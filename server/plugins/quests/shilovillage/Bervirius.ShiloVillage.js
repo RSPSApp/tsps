@@ -439,10 +439,15 @@ module.exports = function attachBervirius(api, sv) {
     areaSound(player, MIST_SOUND, RASHILIYIA_TILE);
   }
 
+  /** Ours: how long Rashiliyia waits for a chat that was closed (the capture always continues). */
+  const SCENE_NPC_TICKS = 100;
+
   /** The box's continue: the mist, and Rashiliyia beside the dolmen a tick later, facing the player (t5248-5250). */
   function raiseRashiliyia(player) {
+    dismissRashiliyia(player);
     mist(player);
     sv.later(player, 1, () => {
+      dismissRashiliyia(player);
       const npc = api.spawnNpc({
         id: NPC.RASHILIYIA, x: RASHILIYIA_TILE[0], y: RASHILIYIA_TILE[1], z: player.getLocation().getZ(),
         wanderRadius: 0, owner: player, ownerOnly: true,
@@ -450,6 +455,8 @@ module.exports = function attachBervirius(api, sv) {
       if (!npc) return;
       npc.setPositionToFace?.(player.getLocation());
       rashiliyiaByPlayer.set(player, npc);
+      // Ours: a chat closed before her last line leaves her; she goes after SCENE_NPC_TICKS.
+      sv.later(player, SCENE_NPC_TICKS, () => { if (rashiliyiaByPlayer.get(player) === npc) dismissRashiliyia(player); });
     });
   }
 

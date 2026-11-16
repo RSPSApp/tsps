@@ -286,3 +286,20 @@ test("leaving Ah Za Rhoon at stage 7 any way out is stage 8 (the glory teleport 
   h.ticks(f, 3);
   assert.equal(h.stage(f), 8);
 });
+
+test("Zadimus laid to rest, the chat closed at his line, twice: one spirit at most, and he goes in the end (ours: 100 ticks)", async (t) => {
+  const f = h.actor(t, { at: SACRED, stage: 8, items: [CORPSE] });
+  const spirits = () => [...(h.core.World.getNpcs().toArray?.() ?? h.core.World.getNpcs())]
+    .filter((npc) => npc?.getId?.() === 5341 && npc.isRegistered?.() !== false);
+  for (let round = 0; round < 2; round++) {
+    await h.dispatch(f, { type: "inventory_action", slot: slot(f, CORPSE), itemId: CORPSE, widgetId: 3214, option: "Bury" });
+    await untilShown(f);
+    await h.continueLine(f);
+    assert.match(shownText(f), /^You have released me from my torture/);
+    f.player.getDialogueManager().reset();
+    h.ticks(f, 2);
+    assert.equal(spirits().length, 1, `round ${round + 1}`);
+  }
+  h.ticks(f, 101);
+  assert.equal(spirits().length, 0, "gone after the wait");
+});

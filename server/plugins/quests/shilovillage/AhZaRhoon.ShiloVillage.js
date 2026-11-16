@@ -395,14 +395,21 @@ module.exports = function attachAhZaRhoon(api, sv) {
     ]);
   }
 
+  /** Ours: how long a scene's spirit waits for a chat that was closed (the capture always continues). */
+  const SCENE_NPC_TICKS = 100;
+
   /** The box's continue: the smoke, and the spirit stands there for his line (t3205-3210). */
   function raiseSpirit(player) {
+    dismissSpirit(player);
     mapAnim(player, SMOKEPUFF, SPIRIT_TILE, 5);
     const spirit = api.spawnNpc({
       id: NPC.SPIRIT_OF_ZADIMUS, x: SPIRIT_TILE[0], y: SPIRIT_TILE[1], z: player.getLocation().getZ(),
       wanderRadius: 0, owner: player, ownerOnly: true,
     });
-    if (spirit) spirits.set(player, spirit);
+    if (!spirit) return;
+    spirits.set(player, spirit);
+    // Ours: a chat closed before his line is continued leaves him; he goes after SCENE_NPC_TICKS.
+    sv.later(player, SCENE_NPC_TICKS, () => { if (spirits.get(player) === spirit) dismissSpirit(player); });
   }
 
   function dismissSpirit(player) {

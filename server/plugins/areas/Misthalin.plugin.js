@@ -66,8 +66,9 @@ const SWAMP_CAVE_ROPE_SOUND = 1774;
  * marker at tick 2669, 6924 for the south one at ticks 2877 and 3060, 6922 for the east one at
  * ticks 2192-2608 and rec 3981 tick 90, 6927 for the west one at tick 2764), runs
  * toplevel_mainmodal_open [0, 0] and opens cave_goblin_markers in the main modal. No message,
- * animation or sound. It is an approach op: the recorded reads opened where the player stood, two
- * to seven tiles from the wall, with no step taken.
+ * animation or sound. It is an approach op: most reads opened where the player stood, two to
+ * seven tiles from the wall; from 3229,9608 (tick 2591) and rec 3981's 3223,9618 (tick 89) the
+ * east marker was out of sight, and the player ran until it was in sight, then it opened.
  */
 const SWAMP_CAVE_MARKER_MODELS = new Map([
   ["swamp_cavewall_northmarker", 6923],

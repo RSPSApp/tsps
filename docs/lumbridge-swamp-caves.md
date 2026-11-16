@@ -25,9 +25,11 @@ From rsprox captures, each read did this. The sources are rsprox.net rec 3182 (r
 
 No message, animation or sound follows.
 
-It is an approach op. The recorded reads opened where the player stood, two to seven tiles from
-the wall, without a step. The marker tiles are blocked terrain, so a normal walk-up route can't
+It is an approach op. Most reads opened where the player stood, two to seven tiles from the
+wall, without a step. In two reads the east marker was out of sight: from 3229,9608 (rec 3182
+tick 2591) and from 3223,9618 (rec 3981 tick 89). There the player ran until it was in sight,
+and it opened on that step. The marker tiles are blocked terrain, so a normal walk-up route can't
 end on them. Within range and in sight, the plugin reads from the player's tile. From further
 away it sets the shared approach range (`approachRange`), so the walk stops once the marker is
 in sight. Ours: the range is 10, the engine's default approach range. No recording reads from
-further than seven tiles.
+further than seven tiles away.

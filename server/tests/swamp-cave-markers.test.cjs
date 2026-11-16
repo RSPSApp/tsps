@@ -19,6 +19,7 @@ const hooks = {};
 before(() => {
   CachePipeline.initialize();
   core = PluginManager.getCoreApi();
+  core.RegionManager.init();
   Misthalin = require('../plugins/areas/Misthalin.plugin');
   Misthalin.register({
     core,
@@ -120,4 +121,13 @@ test('out of range: walk until in range (approach op); other locs and options ar
   assert.equal(other.approachRange, undefined);
   const examine = routeFrom(t, 'swamp_cavewall_southmarker', [3244, 9646], [3246, 9647], 10);
   assert.equal(examine.destination, null);
+});
+
+test('in range but out of sight: walk until in sight, as the recorded east-marker walk-ups', (t) => {
+  // rec 3182 tick 2591 from 3229,9608 and rec 3981 tick 89 from 3223,9618: the player ran first, then it opened.
+  for (const at of [[3229, 9608], [3223, 9618]]) {
+    const event = routeFrom(t, 'swamp_cavewall_eastmarker', [3230, 9613], at);
+    assert.equal(event.destination, null, String(at));
+    assert.equal(event.approachRange, Misthalin._test.SWAMP_CAVE_MARKER_RANGE);
+  }
 });

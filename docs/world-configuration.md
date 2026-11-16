@@ -845,6 +845,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `PvpMode` | PvpMode | modes | yes | Adds the ::presets and ::kits commands, opens presets after a PvP death, and lets accounts that may use presets have their prayers without the unlock quests. |
 | `AggressionToggle` | AggressionToggle | npcs | yes | Adds the ::aggro command, an administrator cheat that keeps monsters aggressive after the ten-minute tolerance, usable by all if commands allow. |
 | `AliLeafletDropper` | AliLeafletDropper | npcs | yes | Ali the Leaflet Dropper in Al Kharid hands out the Al kharid flyer (Take-flyer and his Talk-to), and the flyer can be read. |
+| `Amrod` | Amrod | npcs | yes | Amrod exchanges unnoted crystal seeds for crystal shards in Prifddinas. (members only) |
 | `Apothecary` | Apothecary | npcs | yes | Gives the Varrock Apothecary's Potions interface: strength, energy and antipoison potions made from the player's own ingredients, feeding the Varrock diary. |
 | `Asyff` | Asyff | npcs | yes | Adds Asyff's Custom Fur Clothing in Varrock: the wiki's kebbit, camo, Larupia, Graahk and Kyatt sets, gloves and capes for their fur and coin fees. (members only) |
 | `Baraek` | Baraek | npcs | yes | Makes Baraek in Varrock sell fur for 20 coins, or 18 as the fallback, taking the coins and giving the fur from his dialogue. |

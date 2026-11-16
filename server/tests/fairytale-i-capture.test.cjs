@@ -438,6 +438,18 @@ test("the grove at 70: the Gate Keeper, the box, the sidestep and synth 1107, th
   assert.deepEqual(at(f), [2396, 4379, 0]);
 });
 
+test("a thrall lands no hit on the Tanglefoot or its babies, which only magic secateurs (or recoil) can hurt (the Wiki)", async (t) => {
+  const f = h.actor(t, { stage: 70, at: BY_GODFATHER, items: [] });
+  for (const id of [N.TANGLEFOOT, N.BABY_TANGLEFOOT, N.BABY_TANGLEFOOT_2]) {
+    const attack = { player: f.player, thrall: null, target: h.spawn(f, id, GODFATHER), cancelled: false };
+    h.PM.emitCustomEvent("magic:thrall-attack", attack);
+    assert.equal(attack.cancelled, true, `npc ${id}`);
+  }
+  const other = { player: f.player, thrall: null, target: h.spawn(f, N.FAIRY_GODFATHER, GODFATHER), cancelled: false };
+  h.PM.emitCustomEvent("magic:thrall-attack", other);
+  assert.equal(other.cancelled, false, "other NPCs still take thrall hits");
+});
+
 test("completion after 'Grazie infinite!': the scroll's Queen's secateurs and 'Some Magic Secateurs', the recipe varbits cleared; then the Godfather ignores the player and Malignius offers a pair (4179-4201, 4454-4482)", async (t) => {
   const f = h.actor(t, { stage: 80, at: BY_GODFATHER, items: [I.QUEENS_SECATEURS], attributes: { [ITEMS]: "18,19,20" } });
   const godfather = h.spawn(f, N.FAIRY_GODFATHER, GODFATHER);

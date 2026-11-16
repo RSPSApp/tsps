@@ -1014,6 +1014,16 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     hit?.updateTotalDamage?.();
   }
 
+  /**
+   * `magic:thrall-attack`: a thrall's hit skips the hit-modify hooks, so the Tanglefoot's immunity is
+   * applied here. The Wiki: it "cannot be damaged by any other means" than magic secateurs, "with the
+   * exception of a ring of recoil". The thrall still attacks; no hit lands.
+   */
+  function handleThrallAttack(event) {
+    const target = event?.target;
+    if (SECATEURS_ONLY_NPC_IDS.has(target?.getContentId?.() ?? target?.getId?.())) event.cancelled = true;
+  }
+
   /** A melee swing with anything else says so on the swing (1001455 ticks 3033, 3037; 424 tick 18688). */
   function handleHitQueued({ player, target, hit }) {
     if (!SECATEURS_ONLY_NPC_IDS.has(target?.getContentId?.() ?? target?.getId?.())) return;
@@ -1112,6 +1122,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleActionEvent);
   api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onCustomEvent("combat:hit-queued", handleHitQueued);
+  api.onCustomEvent("magic:thrall-attack", handleThrallAttack);
   api.onNpcInteraction(handleNpcInteraction);
   api.onObjectInteraction(handleObjectInteraction);
   api.onCustomEvent("ground-items:taken", handleItemTaken);

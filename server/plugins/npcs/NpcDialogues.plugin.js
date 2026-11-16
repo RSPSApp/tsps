@@ -894,8 +894,20 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     let above = current.id - 1;
     while (above > 0 && lineThenSameAs(records[above]?.steps)) above--;
     const prev = above >= 0 ? realBody(records[above]?.steps) : undefined;
-    const pick = [realBody(sameText?.steps), realBody(fromPage), near, similar, fromLine, prev].find(answers);
-    return pick ? unrepeated(pick) : "end";
+    const candidates = [realBody(sameText?.steps), realBody(fromPage), near, similar, fromLine, prev];
+    const pick = candidates.find(answers);
+    if (pick) return unrepeated(pick);
+    // Every candidate only replays this jump, and the option was picked from the last menu shown: that menu comes
+    // back (Timfraku's "I've been doing some work around the village." returns to his four options after his reply,
+    // rsprox_transcripts/237/01102.txt), rather than the chat closing. An option-less menu (a wiki-export gap, as in
+    // the page's copy he lands on) is never drawn, so it is passed over.
+    const found = candidates.filter(Boolean);
+    const shown = [context.currentMenu, ...[...context.menuHistory].reverse()].find((menu) => menu?.step?.options?.length);
+    if (found.length && found.every((candidate) => replaysJump(candidate))
+      && (shown?.step.options ?? []).some((option) => optionRecords.get(option) === current)) {
+      return { menu: shown };
+    }
+    return "end";
   };
 
   const flattenOptions = () => ({ resolveCondition, resolveJump, lazyConditions: true,

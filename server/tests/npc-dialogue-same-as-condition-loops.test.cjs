@@ -87,5 +87,9 @@ test('Timfraku: "I\'ve been doing some work around the village." is said once wi
   assert.equal(f.count("I've been doing some work around the village."), 1, JSON.stringify(f.said));
   assert.ok(f.said.some((line) => line.startsWith("That's good Bwana, I would hate to think that you were just being lazy")), JSON.stringify(f.said));
   assert.ok(f.said.length < 12, JSON.stringify(f.said));
-  assert.notEqual(options, 'still talking after 120 lines');
+  // Transcript:Timfraku has {{tact|above}} there, and rsprox_transcripts/237/01102.txt shows the same four-option
+  // menu again after his reply.
+  assert.ok(Array.isArray(options), `his menu comes back: ${JSON.stringify(options)} after ${JSON.stringify(f.said)}`);
+  assert.ok(options.includes("I've been doing some work around the village."), JSON.stringify(options));
+  assert.ok(options.includes('What do you do here?'), JSON.stringify(options));
 });

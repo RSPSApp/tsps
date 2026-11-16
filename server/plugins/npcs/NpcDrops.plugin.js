@@ -967,8 +967,14 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
   }
 
   for (const group of separateGroups.values()) {
-    // A group of uniques still takes the boss rare multiplier row by row (Araxxor's halberd pieces).
-    const entry = rollWeighted(group, Number(group[0]?.out_of), rules, (candidate) => rareMultiplier(table, candidate));
+    // A group whose rows are all uniques is one rarity roll with alternative outcomes, so it still
+    // takes the boss rare multiplier row by row (Araxxor's halberd pieces). A quantity group like
+    // Skotizo's ancient shards always rolls and only varies the amount: boosting its rare rows
+    // would lift the quantity distribution, so it keeps the rates it had before grouping.
+    const bonus = group.every((entry) => isUniqueEntry(entry))
+      ? (candidate) => rareMultiplier(table, candidate)
+      : null;
+    const entry = rollWeighted(group, Number(group[0]?.out_of), rules, bonus ?? undefined);
     if (entry) drops.push(...resolveEntry(entry, player, context));
   }
 

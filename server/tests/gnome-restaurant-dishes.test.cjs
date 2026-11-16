@@ -1,6 +1,6 @@
 // Run after `yarn build`: node --test tests/gnome-restaurant-dishes.test.cjs
-// A real Player makes each easy-order dish through the gnome cuisine menu: Prepare on the half baked crunchy or batta, pick the dish and
-// create; the bake row in cooking.json; then the garnish on the baked dish. Toad crunchies are the control.
+// Real Players prepare and garnish controlled baked inputs; actual native-menu
+// and range baking coverage lives in gnome-restaurant.test.cjs. Toad is the control.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -16,7 +16,7 @@ const DISHES = [
   { name: "vegetable batta", menu: "Half baked batta", base: "half_baked_batta", slot: 3, half: 9485, baked: 9486, finisher: "equa_leaves", out: "vegetable_batta", items: [["tomato", 2], ["dwellberries", 1], ["onion", 1], ["cheese", 1], ["cabbage", 1]] },
 ];
 
-test("the five easy-order dishes can be prepared, baked and garnished", async () => {
+test("easy-order preparations and garnishes retain spice and consume leaves", async (t) => {
   require(src("Server")).Server.installProductionPathResolver();
   await require(src("game/cache/CachePipeline")).CachePipeline.initialize(path.resolve(__dirname, ".."));
   const { PluginManager } = require(src("plugins/PluginManager"));
@@ -38,7 +38,7 @@ test("the five easy-order dishes can be prepared, baked and garnished", async ()
   for (const d of DISHES) {
     const session = new PlayerSession({ isOpen: () => true, send: () => {} });
     const player = new Player(session); session.setPlayer(player); player.setUsername("dish" + DISHES.indexOf(d));
-    player.isRegistered = () => true;
+    player.setRegistered(true);
     player.getSkillManager().setLevel(Skill.COOKING, 60);
     const inv = player.getInventory();
     inv.adds(obj(d.base), 1);
@@ -59,7 +59,54 @@ test("the five easy-order dishes can be prepared, baked and garnished", async ()
     for (const fn of onItems) fn(ev);
     assert.equal(inv.getAmount(obj(d.out)), 1, `${d.name}: the finished dish (${d.out}) is in the pack`);
     assert.equal(inv.getAmount(d.baked), 0, `${d.name}: the baked item is used up`);
+    if (d.finisher === "gnome_spice") assert.equal(inv.getAmount(obj("gnome_spice")), 1, `${d.name}: reusable spice remains`);
+    else assert.equal(inv.getAmount(obj(d.finisher)), 0, `${d.name}: the garnish leaf is consumed`);
     const gained = player.getSkillManager().getExperience(Skill.COOKING) - xp0;
     assert.ok(gained > 0, `${d.name}: Cooking XP`);
   }
+  const { UseItemPacketListener } = require(src("net/packet/impl/UseItemPacketListener"));
+  let actorIndex = 0;
+  function actor() {
+    const session = new PlayerSession({ isOpen: () => true, send: () => {} }), p = new Player(session);
+    session.setPlayer(p); p.setUsername("spicetest" + actorIndex++); p.setRegistered(true);
+    p.getInventory().adds(9580, 1); p.getInventory().adds(obj("gnome_spice"), 1);
+    return p;
+  }
+  const snapshot = p => p.getInventory().getItems().map(item => [item.getId(), item.getAmount(), item.getMeta()]);
+  const xp = p => p.getSkillManager().getExperience(Skill.COOKING);
+  const slot = (p, value) => p.getInventory().getSlotForItemId(value);
+  await t.test("selected restricted spice cannot fall back to a plain spare", () => {
+    for (const key of [core.Item.PRESET_META, core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META]) {
+      const p = actor(), inv = p.getInventory(), selected = slot(p, obj("gnome_spice"));
+      inv.getItems()[selected].setMetaValue(key, true); inv.adds(obj("gnome_spice"), 1);
+      const before = snapshot(p), beforeXp = xp(p);
+      UseItemPacketListener.itemOnItem(p, slot(p, 9580), selected);
+      assert.deepEqual(snapshot(p), before); assert.equal(xp(p), beforeXp);
+      const plain = inv.getItems().findIndex(item => item.getId() === obj("gnome_spice") && !item.isPresetItem() && !item.isUntradeable() && !item.isUnbankable());
+      assert.ok(plain >= 0); UseItemPacketListener.itemOnItem(p, plain, slot(p, 9580));
+      assert.equal(inv.getAmount(obj("spicy_crunchies")), 1); assert.equal(inv.getAmount(obj("gnome_spice")), 2);
+    }
+  });
+  await t.test("a real slot move rejects an adversarial stale event; fresh native use succeeds in a full pack", () => {
+    const p = actor(), inv = p.getInventory(), sourceSlot = slot(p, 9580), toolSlot = slot(p, obj("gnome_spice"));
+    const selectedTool = inv.getItems()[toolSlot];
+    const stale = { player: p, usedItem: inv.getItems()[sourceSlot], usedItemId: 9580, usedItemSlot: sourceSlot,
+      usedWithItem: selectedTool, usedWithItemId: obj("gnome_spice"), usedWithItemSlot: toolSlot, handled: false };
+    inv.swap(toolSlot, 5); inv.refreshItems();
+    const before = snapshot(p), beforeXp = xp(p);
+    // Native item-on-item is synchronous; this stale hook event is adversarial.
+    PluginManager.emitItemOnItem(stale);
+    assert.deepEqual(snapshot(p), before); assert.equal(xp(p), beforeXp);
+    inv.adds(obj("bread"), inv.getFreeSlots()); assert.equal(inv.getFreeSlots(), 0);
+    UseItemPacketListener.itemOnItem(p, 5, slot(p, 9580));
+    assert.equal(inv.getAmount(obj("spicy_crunchies")), 1); assert.equal(inv.getAmount(obj("gnome_spice")), 1);
+    assert.equal(inv.getItems()[5], selectedTool); assert.equal(inv.getFreeSlots(), 0); assert.equal(xp(p) - beforeXp, 42);
+  });
+  await t.test("malformed selected tool amount is rejected without food or XP", () => {
+    const p = actor(), inv = p.getInventory(), selected = slot(p, obj("gnome_spice"));
+    inv.getItems()[selected].setAmount(2);
+    const before = snapshot(p), beforeXp = xp(p);
+    UseItemPacketListener.itemOnItem(p, slot(p, 9580), selected);
+    assert.deepEqual(snapshot(p), before); assert.equal(xp(p), beforeXp);
+  });
 });

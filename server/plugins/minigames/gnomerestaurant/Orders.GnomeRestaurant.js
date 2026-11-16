@@ -126,12 +126,9 @@ function pick(list, rng) {
  * no order is one the player cannot fill (a delivered one is still accepted):
  * - the three savoury gnomebowls: no gnomebowl cuisine menu or garnish steps (the chocolate bomb's are in
  *   cooking.json);
- * - the two cocktails with no pour/heat/garnish stages;
- * - five crunchies and battas with empty Gnome.Cooking menu slots and no cooking.json rows. Open PR #5292
- *   adds these five: remove them from this list once it lands.
+ * - the two cocktails with no pour/heat/garnish stages.
  */
-const UNBUILT_DISHES = new Set(["Tangled toad's legs", "Worm hole", "Veg ball", "Choc saturday", "Blurberry special",
-  "Spicy crunchies", "Worm crunchies", "Fruit batta", "Worm batta", "Vegetable batta"]);
+const UNBUILT_DISHES = new Set(["Tangled toad's legs", "Worm hole", "Veg ball", "Choc saturday", "Blurberry special"]);
 
 function orderable(tier) {
   return DATA.items[tier].filter((item) => !UNBUILT_DISHES.has(item.name));

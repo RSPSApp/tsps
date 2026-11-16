@@ -40,9 +40,9 @@ const FINISH = [
   { source: 9582, ingredient: "equa_leaves", result: "toad_crunchies", xp: 40 },
   { source: 9578, ingredient: "chocolate_dust", result: "chocchip_crunchies", xp: 46 },
   { source: 9484, ingredient: "equa_leaves", result: "cheese+tom_batta", xp: 88 },
-  { source: 9580, ingredient: "gnome_spice", result: "spicy_crunchies", xp: 42 },
-  { source: 9584, ingredient: "gnome_spice", result: "worm_crunchies", xp: 44 },
-  { source: 9479, ingredient: "gnome_spice", result: "fruit_batta", xp: 80 },
+  { source: 9580, ingredient: "gnome_spice", tool: true, result: "spicy_crunchies", xp: 42 },
+  { source: 9584, ingredient: "gnome_spice", tool: true, result: "worm_crunchies", xp: 44 },
+  { source: 9479, ingredient: "gnome_spice", tool: true, result: "fruit_batta", xp: 80 },
   { source: 9481, ingredient: "equa_leaves", result: "worm_batta", xp: 84 },
   { source: 9486, ingredient: "equa_leaves", result: "vegetable_batta", xp: 86 },
 ];
@@ -54,10 +54,12 @@ function alive(player) { return Common.core.WorldDefinition.isMembersWorld() && 
 /**
  * Selected ingredients and results are normal, nonstackable cache items. Plan
  * actual plain slots and the entire output capacity before changing inventory.
- * Tools that are not transformed are checked separately and never consumed.
+ * Retained tools obey the same selected-slot checks as materials, but neither
+ * enter the deletion plan nor count as space freed for the output.
  */
-function plan(player, inputs, outputs, preferred = []) {
+function plan(player, inputs, outputs, preferred = [], tools = []) {
   const inventory = player.getInventory(), items = inventory.getItems(), used = new Set(), slots = [];
+  const retained = new Set(tools.map(id));
   for (const [name, count] of inputs) {
     const itemId = id(name);
     if (new Common.core.Item(itemId, 1).getDefinition().isStackable()) return null;
@@ -70,7 +72,9 @@ function plan(player, inputs, outputs, preferred = []) {
       if (remaining <= 0) break;
       const item = items[slot];
       if (used.has(slot) || item?.getId() !== itemId || item.getAmount() !== 1 || !plain(item)) continue;
-      used.add(slot); slots.push(slot); remaining--;
+      used.add(slot);
+      if (!retained.has(itemId)) slots.push(slot);
+      remaining--;
     }
     if (remaining) return null;
   }
@@ -233,7 +237,7 @@ function useItems(event) {
     event.handled = true;
     const inputs = simple ? [[simple[0], 1], [simple[1], 1]] : [[finish.source, 1], [finish.ingredient, 1]];
     const product = simple ? simple[2] : finish.result, xp = simple ? simple[3] : finish.xp;
-    const transaction = plan(player, inputs, [[product, 1]], pair);
+    const transaction = plan(player, inputs, [[product, 1]], pair, finish?.tool ? [finish.ingredient] : []);
     if (transaction) apply(player, transaction, product, xp, "make");
     return;
   }

@@ -2170,8 +2170,8 @@ test('optional Maggot resupply static root resolves two players independently an
 // one learns a reached standing tile through the real visible-ID click and cache route.
 let resupplyStanding;
 function resupplyModule() { return require('../plugins/bosses/maggotking/Resupply.MaggotKing'); }
-function resupplyActor(t, level = 70, saw = core.ItemIdentifiers.SAW) {
-  const p = player(t);
+function resupplyActor(t, level = 70, saw = core.ItemIdentifiers.SAW, complete = true) {
+  const p = player(t, complete);
   p.getSkillManager().setMaxLevels(core.Skill.CONSTRUCTION, level, false)
     .setExperience(core.Skill.CONSTRUCTION, core.SkillManager.getExperienceForLevel(level))
     .setCurrentLevels(core.Skill.CONSTRUCTION, level, false);
@@ -2181,7 +2181,7 @@ function resupplyActor(t, level = 70, saw = core.ItemIdentifiers.SAW) {
     [core.ItemIdentifiers.ADAMANTITE_BAR, 2], [core.ItemIdentifiers.IRONWOOD_PLANK, 4]]) {
     assert.ok(Number.isInteger(id)); p.getInventory().adds(id, n);
   }
-  p.setAttribute(resupplyModule().BUILT_ATTRIBUTE, false);
+  p.setAttribute(resupplyModule().BUILT_ATTRIBUTE, 0);
   p.getPacketSender().sendVarbit(RESUPPLY.varbit, 0);
   const root = resupplyRoot(p);
   const stand = resupplyStanding ?? [2577, 7818, 0];
@@ -2235,7 +2235,7 @@ function resupplyClick(t, f, action = 'Build', observer = observeResupply(t, f.p
   return observer;
 }
 function resupplyAssertBuilt(p, value = true) {
-  assert.equal(p.getAttribute(resupplyModule().BUILT_ATTRIBUTE), value);
+  assert.equal(p.getAttribute(resupplyModule().BUILT_ATTRIBUTE), value ? 1 : 0);
   assert.equal(p.getPacketSender().getVarbit(RESUPPLY.varbit), value ? 1 : 0);
   assert.equal(core.ObjectDefinition.forPlayer(RESUPPLY.root, p).id, value ? RESUPPLY.built : RESUPPLY.unbuilt);
 }
@@ -2281,9 +2281,9 @@ test('optional Maggot trip banking uses real route/dispatch then commits once on
 test('optional Maggot chest save/apply/login and projection stay per-player and preserve other varp bits', t => {
   const a = resupplyActor(t), b = resupplyActor(t), { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
   const key = resupplyModule().BUILT_ATTRIBUTE;
-  assert.equal(Object.hasOwn(PlayerSave.fromPlayer(b.p).attributes, key), false, 'defaultfalse omitted');
+  assert.equal(Object.hasOwn(PlayerSave.fromPlayer(b.p).attributes, key), false, 'canonical default0 omitted');
   resupplyClick(t, a); ticks(3);
-  const save = PlayerSave.fromPlayer(a.p); assert.equal(save.attributes[key], true);
+  const save = PlayerSave.fromPlayer(a.p); assert.equal(save.attributes[key], 1);
   save.attributes = JSON.parse(JSON.stringify(save.attributes));
   save.applyToPlayer(b.p);
   const sentinel = (1 << 7) | (1 << 30); b.p.getPacketSender().sendConfig(RESUPPLY.varp, sentinel);
@@ -2297,11 +2297,11 @@ test('optional Maggot chest save/apply/login and projection stay per-player and 
 
 test('optional Maggot chest stale canonical-built entry and commit reject duplicate payment', t => {
   const f = resupplyActor(t), before = resupplySnapshot(f.p);
-  f.p.setAttribute(resupplyModule().BUILT_ATTRIBUTE, true); // supplied stale projection, not a genuine prior Build
+  f.p.setAttribute(resupplyModule().BUILT_ATTRIBUTE, 1); // supplied stale projection, not a genuine prior Build
   resupplyClick(t, f); ticks(4); resupplyAssertBuilt(f.p); resupplyAssertNoCost(f, before);
   const g = resupplyActor(t), beforeG = resupplySnapshot(g.p);
   resupplyClick(t, g); ticks(2);
-  g.p.setAttribute(resupplyModule().BUILT_ATTRIBUTE, true); g.p.getPacketSender().sendVarbit(RESUPPLY.varbit, 1);
+  g.p.setAttribute(resupplyModule().BUILT_ATTRIBUTE, 1); g.p.getPacketSender().sendVarbit(RESUPPLY.varbit, 1);
   ticks(3); resupplyAssertNoCost(g, beforeG); resupplyAssertBuilt(g.p);
 });
 
@@ -2503,6 +2503,85 @@ test('optional Maggot chest wrong anchor or supplied private copy cannot start a
   finally { areaObserver.mock.restore(); }
   assert.equal(privateCopy.getPrivateArea, originalArea); assert.equal(f.p.getPrivateArea(), previous);
   afterRestore();
+});
+
+test('legacy Sailing Sangvesti state survives both registered login orders and refuses another Build without costs', t => {
+  const Amenities = require('../plugins/skills/sailing/Amenities.Sailing');
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const site = Amenities._test.siteAt(RESUPPLY.root);
+  const canonical = Amenities._test.BUILT_ATTRIBUTE(site.site.varbit);
+  assert.equal(canonical, 'sailing:amenity-bankchest-sangvesti');
+  assert.equal(resupplyModule().BUILT_ATTRIBUTE, canonical, 'both consumers use one saved truth');
+  const sailing = PM.loginHooks.filter(hook => hook.pluginName === 'Sailing' && hook.handlerName === 'login');
+  const maggot = PM.loginHooks.filter(hook => hook.pluginName === 'MaggotKing' && hook.handlerName === 'sync');
+  assert.equal(sailing.length, 1); assert.equal(maggot.length, 1);
+  // Actual registered consumer wrappers, exercised in both orders. This is not a socket login.
+  for (const order of [[sailing[0], maggot[0]], [maggot[0], sailing[0]]]) {
+    const f = resupplyActor(t), p = f.p;
+    p.setAttribute(canonical, 1); // pre-existing Sailing save, without the unmerged Maggot flag
+    const snapshot = PlayerSave.fromPlayer(p).attributes;
+    assert.equal(snapshot[canonical], 1);
+    assert.equal(Object.hasOwn(snapshot, 'maggot-king:resupply-chest-built'), false);
+    const sentinel = (1 << 7) | (1 << 30), writes = [], send = p.getPacketSender().sendVarbit;
+    p.getPacketSender().sendConfig(RESUPPLY.varp, sentinel); // stale unbuilt projection at login
+    const watch = t.mock.method(p.getPacketSender(), 'sendVarbit', function(id, value) {
+      if (id === RESUPPLY.varbit) writes.push(value);
+      return Reflect.apply(send, this, [id, value]);
+    });
+    try {
+      const event = { player: p, username: p.getUsername(), isNewAccount: false, profile: p.getProfile() };
+      for (const hook of order) hook.handler(event);
+      assert.deepEqual(writes, [1, 1], 'neither registered login consumer resets the existing chest');
+      resupplyAssertBuilt(p);
+      assert.equal(p.getPacketSender().getVarp(RESUPPLY.varp), sentinel | RESUPPLY.bit);
+      const before = resupplySnapshot(p);
+      input(p, () => new ObjectActionPacketListener().executeAction(p, RESUPPLY.unbuilt,
+        RESUPPLY.x, RESUPPLY.y, 1, 'Build')); // stale visible-ID input, not a new eligible build
+      ticks(4); resupplyAssertNoCost(f, before); resupplyAssertBuilt(p);
+      assert.equal(PM.emitObjectInteraction({ player: p, object: f.root, objectId: RESUPPLY.root,
+        definition: core.ObjectDefinition.forPlayer(RESUPPLY.root, p), clickType: 1, option: 'build',
+        location: { x: RESUPPLY.x, y: RESUPPLY.y, z: RESUPPLY.z }, handled: false }), true,
+        'registered owning handler consumes stale Build rather than generic Sailing payment');
+      ticks(4); resupplyAssertNoCost(f, before); resupplyAssertBuilt(p);
+      assert.equal(p.getPacketSender().getVarp(RESUPPLY.varp), sentinel | RESUPPLY.bit);
+    } finally { watch.mock.restore(); }
+  }
+});
+
+test('Sangvesti Build refuses incomplete Blood Moon Rises and accepts the completed quest without a new lair prerequisite', t => {
+  const locked = resupplyActor(t, 70, core.ItemIdentifiers.SAW, false);
+  locked.p.setAttribute(QUEST_ATTRIBUTE, 100); // supplied mid-quest scene access, not natural quest traversal
+  assert.equal(Common.questComplete(locked.p), false);
+  const before = resupplySnapshot(locked.p), lines = [], send = locked.p.sendMessage;
+  const watch = t.mock.method(locked.p, 'sendMessage', function(text, ...args) {
+    lines.push(text); return Reflect.apply(send, this, [text, ...args]);
+  });
+  try {
+    resupplyClick(t, locked); ticks(4);
+    resupplyAssertNoCost(locked, before); resupplyAssertBuilt(locked.p, false);
+    assert.ok(lines.some(text => text.includes('complete The Blood Moon Rises')));
+  } finally { watch.mock.restore(); }
+  const allowed = resupplyActor(t);
+  assert.equal(Common.questComplete(allowed.p), true);
+  assert.equal(Instance.sessionOf(allowed.p), null, 'the completed quest suffices without entering a lair');
+  const positive = resupplySnapshot(allowed.p);
+  resupplyClick(t, allowed); ticks(3); resupplyAssertBuilt(allowed.p);
+  assert.equal(allowed.p.getInventory().getAmount(core.ItemIdentifiers.MAGIC_STONE), 0);
+  assert.equal(allowed.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION) - positive.xp,
+    Math.floor(1787 * core.GameConstants.EXPERIENCE_MULTIPLIER * 10 + 1e-6) / 10);
+});
+
+test('Sangvesti quest eligibility is rechecked before third-tick payment and a later eligible build can succeed', t => {
+  const f = resupplyActor(t);
+  resupplyClick(t, f); ticks(2);
+  f.p.setAttribute(QUEST_ATTRIBUTE, 100); // explicit invalidation checkpoint while the task is pending
+  assert.equal(Common.questComplete(f.p), false);
+  const before = resupplySnapshot(f.p);
+  ticks(3); resupplyAssertNoCost(f, before); resupplyAssertBuilt(f.p, false);
+  f.p.setAttribute(QUEST_ATTRIBUTE, QUEST_COMPLETE);
+  assert.equal(Common.questComplete(f.p), true);
+  resupplyClick(t, f); ticks(3); resupplyAssertBuilt(f.p);
+  assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.MAGIC_STONE), 0);
 });
 
 test('optional Maggot chest shutdown cancels pending payment and leaves no delayed completion', t => {

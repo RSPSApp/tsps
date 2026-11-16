@@ -2,13 +2,17 @@
 
 // Optional between-trip banking, not a new encounter or death-recovery gate.
 // Primary: Maggot King/Strategies rev15402578; Bank chest (amenity) rev15402269.
-const BUILT_ATTRIBUTE = "maggot-king:resupply-chest-built";
+const Common = require("./Common.MaggotKing");
+// This is the existing Sailing amenity's persisted 0/1 state for varbit15621.
+// Both login handlers must project the same state, including already-built saves.
+const BUILT_ATTRIBUTE = "sailing:amenity-bankchest-sangvesti";
 const CHEST = Object.freeze({ root: 62185, unbuilt: 62186, built: 62187,
   varbit: 15621, x: 2576, y: 7833, z: 0, shape: 10, face: 1 });
 const BUILD_TICKS = 3;
 const BASE_XP = 1787;
 // These presentation lines are repository-owned; no retail message/animation capture is claimed.
 const REQUIREMENTS = "You need level 70 Construction, a hammer, a saw, 1 magic stone, 2 cupronickel bars, 2 adamantite bars and 4 ironwood planks.";
+const QUEST_REQUIRED = "You need to complete The Blood Moon Rises to build this bank chest.";
 let api, core;
 const pending = new Map();
 
@@ -23,7 +27,7 @@ function buildable() {
       [ids.ADAMANTITE_BAR, 2], [ids.IRONWOOD_PLANK, 4]]
       .map(([itemId, amount]) => Object.freeze({ itemId, amount }))) });
 }
-function built(player) { return player.getAttribute(BUILT_ATTRIBUTE) === true; }
+function built(player) { return Number(player.getAttribute(BUILT_ATTRIBUTE)) === 1; }
 function sync({ player }) {
   player.getPacketSender().sendVarbit(CHEST.varbit, built(player) ? 1 : 0);
 }
@@ -47,7 +51,7 @@ function reached(player, object) {
 }
 function eligible(player, descriptor, materials) {
   const helpers = house();
-  return helpers.hasHammer(player) && helpers.hasSaw(player)
+  return Common.questComplete(player) && helpers.hasHammer(player) && helpers.hasSaw(player)
     && helpers.furnitureLevel(player, descriptor) >= descriptor.level
     && [...materials].every(([id, amount]) => player.getInventory().getAmount(id) + helpers.storedAmount(player, id) >= amount);
 }
@@ -70,6 +74,7 @@ function build({ player, object }) {
   if (!target(player, object)) return object?.getId?.() === CHEST.root;
   if (pending.has(player)) return true;
   if (built(player)) { sync({ player }); return true; }
+  if (!Common.questComplete(player)) { player.sendMessage(QUEST_REQUIRED); return true; }
   if (!unbuiltTarget(player, object) || !reached(player, object)) return true;
   const descriptor = buildable();
   const materials = new Map(descriptor.materials.map(({ itemId, amount }) => [itemId, amount]));
@@ -97,7 +102,7 @@ function build({ player, object }) {
         // Existing helper owns needed crystal charge, bounded material discounts,
         // inventory-first and carried storage remainder. No second charge or stale snapshot.
         house().useMaterials(player, descriptor, materials);
-        player.setAttribute(BUILT_ATTRIBUTE, true);
+        player.setAttribute(BUILT_ATTRIBUTE, 1);
         sync({ player });
         const outfit = { player, multiplier: 1 };
         api.emitCustomEvent("construction:outfit-multiplier", outfit);
@@ -118,7 +123,7 @@ function build({ player, object }) {
 function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
-  api.persistAttribute(BUILT_ATTRIBUTE, false);
+  api.persistAttribute(BUILT_ATTRIBUTE, 0);
   api.onObjectInteraction("Bank chest space", { Build: build, Inspect: inspect });
   api.onPlayerLogin(sync);
   api.onPlayerLogout(cancel);

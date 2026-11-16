@@ -260,13 +260,25 @@ function realPlayer() {
   return player;
 }
 
+/**
+ * The Lair's own attach, so the fight log hears skills:current-level-changed through the real registration and
+ * dispatch (PluginManager.createApi's onCustomEvent, SkillManager's emitCustomEvent). Only onCustomEvent reaches
+ * the real api, so the chamber's other hooks are not left on the global hook lists; the custom event hooks are
+ * swapped for a fresh map for the test and put back after it.
+ */
+function registerLair(t) {
+  const hooks = PluginManager.customEventHooks;
+  PluginManager.customEventHooks = new Map();
+  t.after(() => { PluginManager.customEventHooks = hooks; });
+  const real = PluginManager.createApi('AlchemicalHydraTest');
+  Lair.attach(new Proxy({ onCustomEvent: real.onCustomEvent }, { get: (target, key) => target[key] ?? (() => {}) }));
+}
+
 // Wiki, No Pressure: "no more than 10 Hitpoints throughout the entire fight"; its strategy tick-eats with low-healing
 // food. A real Player's heal and hit between two of the Hydra's ticks reach the log through skills:current-level-changed.
 test('No Pressure: a heal above 10 that a hit takes back down between two Hydra ticks still fails the task', (t) => {
   const player = realPlayer();
-  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
-    if (name === 'skills:current-level-changed') Fight.logHitpointsChange(event);
-  });
+  registerLair(t);
   const npc = fakeHydra();
   const hydra = new Fight.Fight(fakeLair(player), npc);
   processCycle = 7000;
@@ -297,9 +309,7 @@ test('No Pressure: a heal above 10 that a hit takes back down between two Hydra 
 
 test('No Pressure: a change outside a live fight is not logged into it', (t) => {
   const player = realPlayer();
-  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
-    if (name === 'skills:current-level-changed') Fight.logHitpointsChange(event);
-  });
+  registerLair(t);
   let inside = true;
   const lair = { ...fakeLair(player), players: () => (inside ? [player] : []) };
   const npc = fakeHydra();
@@ -307,6 +317,8 @@ test('No Pressure: a change outside a live fight is not logged into it', (t) => 
   processCycle = 9000;
   player.setHitpoints(8);
   hydra.tick([player]);
+  player.heal(1); // 9 inside the room, between two ticks: logged through the event
+  assert.equal(Fight.lifeOf(npc).hitpoints.get(player).some((entry) => entry.hp === 9), true, 'a change inside is logged');
   inside = false; // left the room
   player.heal(20);
   hydra.stop();

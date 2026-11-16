@@ -766,7 +766,7 @@ test('Veos native travel menus work without quests and throughout Client of Kour
     return { p, npc, choose, arrive, next, finish };
   }
   for (const [variant, option, route, tile, id] of [
-    ['standard-dialogue-at-port-piscarilius', 'Travel to Port Sarim.', 'kourend-sarim', [1825, 3691, 0], core.NpcIdentifiers.VEOS_5],
+    ['standard-dialogue-at-port-piscarilius', 'Travel to Port Sarim.', 'kourend-sarim', [1825, 3691, 0], core.NpcIdentifiers.VEOS_7],
     ['standard-dialogue-at-port-sarim-subsequent-dialogue', "I'd like to travel to Port Piscarilius, please.", 'kourend-piscarilius', [3054, 3245, 0], core.NpcIdentifiers.VEOS],
   ]) {
     const f = actor(id, tile), request = { player: f.p, npc: f.npc, npcId: id, variant: { page: 'Veos', variant }, exact: true };
@@ -786,7 +786,7 @@ test('Veos native travel menus work without quests and throughout Client of Kour
   const client = quests.find(q => q.key === 'client_of_kourend'), xmarks = quests.find(q => q.key === 'x_marks_the_spot');
   for (const stage of [0, 1, 2, 3, 4, 5]) {
     for (const [id, tile, option, route] of [
-      [core.NpcIdentifiers.VEOS_5, [1825, 3691, 0], 'Travel to Port Sarim.', 'kourend-sarim'],
+      [core.NpcIdentifiers.VEOS_7, [1825, 3691, 0], 'Travel to Port Sarim.', 'kourend-sarim'],
       [core.NpcIdentifiers.VEOS, [3054, 3245, 0], "I'd like to travel to Port Piscarilius, please.", 'kourend-piscarilius'],
     ]) {
       const f = actor(id, tile);
@@ -799,7 +799,7 @@ test('Veos native travel menus work without quests and throughout Client of Kour
     }
   }
   for (const option of ["Travel to Land's End.", 'Stay where you are.']) {
-    const f = actor(core.NpcIdentifiers.VEOS_5, [1825, 3691, 0]);
+    const f = actor(core.NpcIdentifiers.VEOS_7, [1825, 3691, 0]);
     xmarks.setStage(f.p, 6); client.setStage(f.p, 1);
     PM.emitNpcInteraction({ player: f.p, npc: f.npc, npcId: f.npc.getId(), action: 'Talk-to', clickType: 1, handled: false });
     await f.choose('Can you take me somewhere?'); await f.choose(option);

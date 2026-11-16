@@ -20,7 +20,7 @@ const ENTRANCE_GUARDIAN = { id: 5978, at: [3363, 3304] };
 const KING_ROALD = { id: 5215, at: [3222, 3472] };
 const GNOSI = { id: 8190, at: [1276, 3561] };
 const MAWNIS = { id: 2979, at: [2335, 3799] };
-const VEOS = { id: 10724, at: [1825, 3691] };
+const VEOS = { id: 2147, at: [1825, 3691] };
 let core, next = 9700;
 
 before(async () => {
@@ -158,6 +158,7 @@ test('Mawnis: "No, thanks." during the bridge repairs does not loop', async (t) 
 // open another variant's menu (the Port Sarim one).
 test('Veos at Port Piscarilius: "Let\'s talk about your client..." ends the chat, not the Port Sarim menu', async (t) => {
   const f = harness(t, npcOf(VEOS.id, VEOS.at));
+  questKeyed('x_marks_the_spot').setStage(f.player, 6);
   questKeyed('client_of_kourend').setStage(f.player, 5);
   await f.talk();
   await f.choose('Where am I exactly?');

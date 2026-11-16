@@ -27,9 +27,11 @@
  *
  * The quest-side light-creature crossing and south-shelf rock climb are handled here.
  * The minigame plugin supplies the cave, eligibility, timer, bowl and tear streams.
- * Gaps: the surface Dark hole's rope entry belongs to shared world travel; the
- * exact carry animation/landing is uncaptured. Temple of Ikov does not track the
- * Lucien choice, so both Lucien story conditions answer false.
+ * Gaps: the surface Dark hole's rope entry belongs to shared world travel. The
+ * recordings pin the message, 2046/2047, the landings and the timing (float-up
+ * six or seven ticks after the answer, float-down max(|dx|,|dy|) + 5 ticks
+ * later). Temple of Ikov does
+ * not track the Lucien choice, so both Lucien story conditions answer false.
  *
  * Chasm of Tears (cache region 12948, plane 2), from the cache and the shared
  * world data:
@@ -41,15 +43,22 @@
  *   5785 also exists but the shared spawn has it a floor up and the cache
  *   gives that NPC no menu option; Juna is talked to as the loc.)
  * - The pool between the ledges remains clipped. The Quest Helper lantern target
- *   is 3228,9518,2; the cache light creatures occupy 3224-3226,9516-9518. From
- *   the ledge at 3239,9525,2, item-on-NPC uses the quest-scoped eight-tile reach
- *   and projectile-clip exception to route to a valid shore tile without entering
- *   the pool. The lantern handler then carries the player across.
- * - Juna's platform is reached from the chasm ledge (3241,9525) by the shared
- *   "Rocks" 6673 climb, and the rock side is reached by the lantern crossing.
+ *   is 3228,9518,2; the cache light creatures (id 5435, the only light creature
+ *   spawned in the chasm) occupy 3224-3226,9516-9518. Their only cache option is
+ *   Attract, so both that option and using the lit lantern on them use the
+ *   quest-scoped eight-tile reach and projectile-clip exception to route to a
+ *   valid shore tile without entering the pool. The handler sends the recorded
+ *   attract line, waits six or seven ticks for the creature, floats the player
+ *   up (2046), glides them across with a straight-line force movement and lands
+ *   on the far side (3224,9504 from the north; 3224,9530 from the south) with
+ *   float-down (2047) max(|dx|,|dy|) + 5 ticks after the float-up.
+ * - The chasm's rocks (6672 on the south shelf, 6673 by the north ledge) move
+ *   the player to the tile beyond the rock (rock x ± 1), not a teleport between
+ *   the ledges.
  */
 module.exports = function registerTearsOfGuthixQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Location } = api.core;
+  const { Animation, ForceMovement, ForceMovementTask, Skill, ItemIdentifiers, NpcIdentifiers,
+    ObjectIdentifiers, Location, Task, TaskManager } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, getRegisteredQuests, loadTranscripts } = require("../QuestRuntime");
   const mining = require("../../skills/Mining.plugin.js");
 
@@ -79,15 +88,30 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   const JUNA_LOC_NAME = "<col=ffff00>Juna</col>";
   /** tog_juna_bowl: the quest stage as Juna's multiloc reads it (bits 0-1 of varp 449). */
   const JUNA_BOWL_VARBIT = 451;
-  const LIGHT_CREATURE_NPC_ID = NpcIdentifiers.LIGHT_CREATURE_3; // 5784, the Chasm of Tears spawn
-  /** Rocks 6672 on the south shelf climbs back to the light-creature shelf (Quest Helper route). */
-  const TOG_ROCK_CLIMB_OBJECT_ID = ObjectIdentifiers.ROCKS_27;
-  const ROCK_SIDE_LANDING = [3229, 9505, 2];
-  const JUNA_SIDE_LANDING = [3241, 9525, 2];
+  const LIGHT_CREATURE_NPC_ID = NpcIdentifiers.LIGHT_CREATURE_4; // 5435, the Chasm of Tears spawn
+  /** The two chasm slopes: 6672 on the south shelf, 6673 by the north ledge. */
+  const CHASM_ROCK_IDS = new Set([ObjectIdentifiers.ROCKS_27, ObjectIdentifiers.ROCKS_28]);
+  /** Recorded landings: the magical-rock shelf, and the north edge by the creature spawns. */
+  const ROCK_SIDE_LANDING = [3224, 9504, 2];
+  const JUNA_SIDE_LANDING = [3224, 9530, 2];
 
-  /** The cache ledge is eight tiles from the nearest 5784 spawn at the north edge. */
+  /** The cache ledge is eight tiles from the nearest 5435 spawn at the north edge. */
   const LIGHT_CREATURE_USE_RANGE = 8;
   const LIGHT_CREATURE_TILE_BOUNDS = { x0: 3224, x1: 3226, y0: 9516, y1: 9518, z: 2 };
+  /** South of this y is the magical-rock shelf; north of it is the Juna-side ledge. */
+  const CHASM_MIDDLE_Y = 9515;
+  /**
+   * rsprox 242/911949: the answer at tick 19492, float-up (2046) at 19499 and float-down (2047)
+   * at 19527; 242/912056 waits six ticks instead. The float lasts max(|dx|,|dy|) + 5 ticks (28
+   * from y 9527, 30 from y 9529). The force-movement animation is left 0 so the 2046/2047 pose
+   * is what the client receives.
+   */
+  const TOG_FLOAT_DELAY_TICKS = 7;
+  const TOG_FLOAT_UP_ANIMATION = 2046;
+  const TOG_FLOAT_DOWN_ANIMATION = 2047;
+  const TOG_FLOAT_POSE_TICKS = 5;
+  const ATTRACT_MESSAGE = "The light creature is attracted to your beam and comes towards you...";
+  const NO_LANTERN_MESSAGE = "You don't have anything to attract the light creature with.";
 
   const START_HOOK = "quest:tears-of-guthix:start";
   const COMPLETE_ACTION_ID = "BitWHU";
@@ -102,6 +126,8 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   const SIDE_HAZEEL = 1;
 
   let quest;
+  /** Players with a crossing already waiting or in flight, so a second click does not chain one. */
+  const crossings = new WeakSet();
 
   const has = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
 
@@ -332,15 +358,65 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     startTranscript(api, event.player, JUNA_NPC_ID, PAGE, "starting-off-using-the-magic-stone-on-juna");
   }
 
-  /** The lit sapphire lantern attracts a Chasm light creature across to the magic rocks. */
+  /** The lit sapphire lantern attracts a Chasm light creature across to the far side. */
+  function crossChasm(player, npcLocation) {
+    if (quest.getStage(player) !== STAGE_STONE_BOWL || !isChasmLightCreature(npcLocation)) return false;
+    if (!has(player, LIT_SAPPHIRE_LANTERN_ITEM_ID)) {
+      player.sendMessage(NO_LANTERN_MESSAGE);
+      return true;
+    }
+    if (crossings.has(player)) return true;
+    crossings.add(player);
+    const southSide = player.getLocation().getY() <= CHASM_MIDDLE_Y;
+    const destination = southSide ? JUNA_SIDE_LANDING : ROCK_SIDE_LANDING;
+    const start = player.getLocation().clone();
+    player.sendMessage(ATTRACT_MESSAGE);
+    // The creature approaches for six or seven ticks, then the player floats up and glides
+    // across; a player who walked away before the float is left alone.
+    TaskManager.submit(new (class extends Task {
+      constructor() { super(TOG_FLOAT_DELAY_TICKS, player, false); }
+      execute() {
+        this.stop();
+        if (!player.getLocation().equals(start)) {
+          crossings.delete(player);
+          return;
+        }
+        player.performAnimation(new Animation(TOG_FLOAT_UP_ANIMATION));
+        const from = player.getLocation().clone();
+        const dx = destination[0] - from.getX();
+        const dy = destination[1] - from.getY();
+        const floatTicks = Math.max(Math.abs(dx), Math.abs(dy)) + TOG_FLOAT_POSE_TICKS;
+        const direction = Math.abs(dx) > Math.abs(dy) ? dx > 0 ? 1 : 3 : dy > 0 ? 0 : 2;
+        TaskManager.submit(new ForceMovementTask(player, floatTicks,
+          new ForceMovement(from, new Location(dx, dy), 0, floatTicks * 30, direction, 0)));
+        TaskManager.submit(new (class extends Task {
+          constructor() { super(floatTicks, player, false); }
+          execute() {
+            this.stop();
+            player.performAnimation(new Animation(TOG_FLOAT_DOWN_ANIMATION));
+            crossings.delete(player);
+          }
+        })());
+      }
+    })());
+    return true;
+  }
+
+  /** The cache's only light-creature option is Attract; it does what the lantern use does. */
+  function attractLightCreature(event) {
+    const { player, npc } = event;
+    if ((event.npcId ?? npc?.getId?.()) !== LIGHT_CREATURE_NPC_ID) return false;
+    const handled = crossChasm(player, npc?.getLocation?.() ?? event.location);
+    if (handled) event.handled = true;
+    return handled;
+  }
+
+  /** The lit sapphire lantern, used on a Chasm light creature. */
   function handleLanternOnLightCreature(event) {
     if (event.itemId !== LIT_SAPPHIRE_LANTERN_ITEM_ID) return;
     const npcId = event.npcId ?? event.target?.getId?.();
-    if (npcId !== LIGHT_CREATURE_NPC_ID || quest.getStage(event.player) !== STAGE_STONE_BOWL ||
-      !isChasmLightCreature(event.target?.getLocation?.() ?? event.location)) return;
-    event.handled = true;
-    event.player.moveTo(new Location(...ROCK_SIDE_LANDING));
-    event.player.sendMessage("The light creature carries you across the chasm.");
+    if (npcId !== LIGHT_CREATURE_NPC_ID) return;
+    event.handled = crossChasm(event.player, event.target?.getLocation?.() ?? event.location);
   }
 
   function isChasmLightCreature(location) {
@@ -352,26 +428,36 @@ module.exports = function registerTearsOfGuthixQuest(api) {
       Number(y) >= LIGHT_CREATURE_TILE_BOUNDS.y0 && Number(y) <= LIGHT_CREATURE_TILE_BOUNDS.y1;
   }
 
-  /** QH lantern use targets the creature from the chasm's walkable ledge. */
+  /** Both the lantern use and the Attract option target the creature from the ledge. */
   function routeLanternToLightCreature(event) {
-    if (event.clickType !== 0 || event.itemId !== LIT_SAPPHIRE_LANTERN_ITEM_ID ||
-      event.npcId !== LIGHT_CREATURE_NPC_ID || quest.getStage(event.player) !== STAGE_STONE_BOWL ||
-      !isChasmLightCreature(event.location)) return;
+    const npcId = event.npcId ?? event.npc?.getId?.();
+    if (npcId !== LIGHT_CREATURE_NPC_ID || quest.getStage(event.player) !== STAGE_STONE_BOWL ||
+      (event.itemId !== undefined && event.itemId !== LIT_SAPPHIRE_LANTERN_ITEM_ID) ||
+      !isChasmLightCreature(event.npc?.getLocation?.() ?? event.location)) return;
     event.range = LIGHT_CREATURE_USE_RANGE;
     event.ignoreProjectileClip = true;
   }
 
-  /** The south-shelf rocks climb back to the ledge by Juna and the light creatures. */
+  /**
+   * Both chasm slopes are climbed one tile east or west over the rock, as the source's
+   * exact move does; the south rocks used to teleport the player to the north ledge.
+   */
   function climbTogRocks(event) {
-    if (event.objectId !== TOG_ROCK_CLIMB_OBJECT_ID) return;
+    if (!CHASM_ROCK_IDS.has(event.objectId)) return;
     // The packet listener lower-cases the option before dispatching it, so the
     // canonical option is compared case-insensitively.
     const option = String(
       event.option || event.definition?.getInteractions()?.[event.clickType - 1] || ""
     ).toLowerCase();
     if (option !== "climb") return;
+    const rock = event.object?.getLocation?.() ?? event.location;
+    if (!rock) return;
+    const rockX = rock.getX?.() ?? rock.x;
+    const rockY = rock.getY?.() ?? rock.y;
+    const rockZ = rock.getZ?.() ?? rock.z;
+    const playerX = event.player.getLocation().getX();
     event.handled = true;
-    event.player.moveTo(new Location(...JUNA_SIDE_LANDING));
+    event.player.moveTo(new Location(rockX + (playerX < rockX ? 1 : -1), rockY, rockZ));
   }
 
   /**
@@ -414,6 +500,10 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     refreshQuestList(player);
   }
 
+  function handleLogout({ player }) {
+    crossings.delete(player);
+  }
+
   quest = registerQuest(api, {
     key: "tears_of_guthix",
     name: "Tears of Guthix",
@@ -435,10 +525,12 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   api.onItemOnItem(handleChiselOnStone);
   api.onItemOnNpc(handleStoneOnJuna);
   api.onItemOnNpc(handleLanternOnLightCreature);
+  api.onNpcInteraction("Light creature", { Attract: attractLightCreature });
   api.onNpcRoute(routeLanternToLightCreature);
   api.onObjectInteraction(climbTogRocks);
   api.onCustomEvent("npc-dialogue:action", handleStoryActions);
   api.onObjectInteraction(JUNA_LOC_NAME, { "Talk-to": talkToJuna });
   api.onObjectInteraction("Magical rocks", { Mine: mineMagicStone });
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
 };

@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const { fork } = require("node:child_process");
 const { resolveAccess, originAllowed } = require("../plugins/tools/worldadmin/Access.WorldAdmin");
 const { createRequestHandler, HttpError, send } = require("../plugins/tools/worldadmin/Http.WorldAdmin");
+const { botEditorRoutes } = require("../plugins/tools/worldadmin/BotEditor.WorldAdmin");
 const { playerRoutes } = require("../plugins/tools/worldadmin/Players.WorldAdmin");
 const { createPageServer, watchCertificate } = require("../plugins/tools/worldadmin/Tls.WorldAdmin");
 
@@ -120,6 +121,12 @@ if (process.argv[2] === "--runner") {
   }
 
   async function dispatch(request, response, url) {
+    if (url.pathname === "/bot-editor" || url.pathname === "/bot-graph") {
+      if (request.method !== "GET") throw new HttpError(405, "Method not allowed");
+      send(response, 302, "", { Location: "/?view=bots&edit=1" });
+      return true;
+    }
+    if (await botEditorRoutes(request, response, url)) return true;
     if (url.pathname === "/api/catalog") return false;
     if (!url.pathname.startsWith("/api/")) return false;
     if (url.pathname === "/api/server/shutdown") throw new HttpError(404, "Not found");

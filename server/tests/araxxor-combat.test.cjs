@@ -736,3 +736,56 @@ test("each halberd piece drop is the next piece the player lacks; a new set star
     Math.random = originalRandom;
   }
 });
+
+test("the mirrorback recoils melee only from melee distance", () => {
+  const recoiled = [];
+  const fakeCore = {
+    CombatType: { MELEE: 0, RANGED: 1, MAGIC: 2 },
+    HitDamage: class { constructor(damage, mask) { this.damage = damage; this.mask = mask; } },
+    HitMask: { RED: 1 },
+    NpcIdentifiers: { EGG_10: 1, EGG_11: 2, EGG_12: 3, MIRRORBACK_ARAXYTE: 4, RUPTURA_ARAXYTE: 5, ACIDIC_ARAXYTE: 6 },
+    CombatMethod: class {},
+  };
+  Minions.attach({
+    core: fakeCore,
+    onNpcHitModify: () => {},
+    registerNpcCombatMethodProvider: () => {},
+    getBonusManager: () => null,
+  });
+
+  const at = (x, y) => ({ getX: () => x, getY: () => y, getZ: () => 0 });
+  const mirrorback = { getId: () => Shared.MINION_ID.mirrorback, getLocation: () => at(100, 100), getSize: () => 2 };
+  const playerAt = (x, y) => {
+    const player = {
+      isPlayer: () => true,
+      getAsPlayer: () => player,
+      getLocation: () => at(x, y),
+      getEquipment: () => ({ getWeapon: () => ({ getId: () => 1, getDefinition: () => ({ getName: () => "Scythe of vitur" }) }) }),
+      getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => recoiled.push(...hits) }) }),
+      getBonusManager: () => null,
+    };
+    return player;
+  };
+  const strike = (player, type = 0) => Minions.modifyHit({
+    npc: mirrorback,
+    hit: {
+      getAttacker: () => player,
+      getCombatType: () => type,
+      getHits: () => [{ getDamage: () => 20 }],
+      updateTotalDamage: () => {},
+    },
+  });
+
+  // The 2x2 body covers 100,100-101,101: 102,100 is edge-adjacent, 103,100 has a tile between.
+  strike(playerAt(102, 100));
+  assert.equal(recoiled.length, 1, "adjacent melee recoils");
+  assert.equal(recoiled[0].damage, 10, "half of the damage");
+  recoiled.length = 0;
+
+  strike(playerAt(103, 100));
+  assert.equal(recoiled.length, 0, "a tile between negates the recoil (Wiki)");
+  recoiled.length = 0;
+
+  strike(playerAt(102, 100), 1);
+  assert.equal(recoiled.length, 0, "ranged never recoils");
+});

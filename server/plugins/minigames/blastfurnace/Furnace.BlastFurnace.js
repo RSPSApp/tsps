@@ -515,9 +515,24 @@ function cool(player) {
   setDispenser(player, DISPENSER_COOL);
 }
 
+/**
+ * Whether the player's belt load will pour bars once it lands: the belt runs, the coffer pays, and
+ * the pot plus the belt hold a whole recipe (as `smelt` would make it). Coal or tin alone, a
+ * stopped belt or an empty coffer pour nothing, so Take answers at once.
+ */
+function barsComing(player) {
+  const state = stateOf(player);
+  if (!state.conveyor.length || !Machinery.beltRunning() || !Machinery.canSmelt()) return false;
+  if (Machinery.automated() && state.coffer === 0) return false;
+  const ores = { ...state.ores };
+  for (const load of state.conveyor) ores[load.item] = (ores[load.item] ?? 0) + load.count;
+  return BARS.some((bar) => (state.bars[bar.barId] ?? 0) < BAR_LIMIT &&
+    bar.ingredients.every(([id, amount]) => (ores[id] ?? 0) >= amount));
+}
+
 function takeBars({ player }) {
   const state = stateOf(player);
-  const coming = state.conveyor.length > 0 && !Object.values(state.bars).some((count) => count > 0);
+  const coming = !Object.values(state.bars).some((count) => count > 0) && barsComing(player);
   if (dispenserState(player) === DISPENSER_POURING || coming) {
     waitingToTake.set(player, player.getLocation());
     return;
@@ -668,6 +683,8 @@ function pourFinished(player) {
   waitingToTake.delete(player);
   // Ours: walking off cancels the wait; without gloves the early Take gets the molten box.
   if (!player.getLocation().equals(from) || player.getMovementQueue().size() > 0) return;
+  // Ours: a dialogue or interface opened meanwhile is left alone.
+  if (player.getDialogueManager().isActive?.() || (player.getInterfaceId?.() ?? -1) >= 0) return;
   takeBars({ player });
 }
 

@@ -428,6 +428,37 @@ test("op1 on the empty dispenser waits for coming bars, or says it has none", ()
   assert.deepEqual(p.menu.getItems(), [ItemIds.IRON_BAR]);
 });
 
+// Review r1: only a load that will pour bars holds the click; otherwise main's empty-dispenser box.
+test("an early Take on a load that pours nothing still says the dispenser is empty", () => {
+  const coal = player({ items: { [ItemIds.COAL]: 3 }, hands: ItemIds.ICE_GLOVES });
+  stateOf(coal).coffer = 1000;
+  putOre(coal);
+  takeBars({ player: coal });
+  assert.equal(coal.statement, "The dispenser doesn't contain any bars.", "coal alone");
+  const unpaid = player({ items: { [ItemIds.IRON_ORE]: 3 }, hands: ItemIds.ICE_GLOVES });
+  stateOf(unpaid).coffer = 1000;
+  putOre(unpaid);
+  stateOf(unpaid).coffer = 0;
+  takeBars({ player: unpaid });
+  assert.equal(unpaid.statement, "The dispenser doesn't contain any bars.", "empty coffer stalls the belt");
+  dwarfOperated = false;
+  const stopped = player({ items: { [ItemIds.IRON_ORE]: 3 }, hands: ItemIds.ICE_GLOVES });
+  stateOf(stopped).conveyor.push({ item: ItemIds.IRON_ORE, count: 3, tiles: 0 });
+  takeBars({ player: stopped });
+  assert.equal(stopped.statement, "The dispenser doesn't contain any bars.", "nobody pedalling");
+});
+
+test("an early Take leaves an interface opened meanwhile alone", () => {
+  const p = player({ items: { [ItemIds.IRON_ORE]: 3 }, hands: ItemIds.ICE_GLOVES });
+  p.getInterfaceId = () => 12;
+  stateOf(p).coffer = 1000;
+  putOre(p);
+  takeBars({ player: p });
+  ticks(6);
+  assert.equal(p.varbits.get(DISPENSER), 3);
+  assert.equal(p.menu, null);
+});
+
 test("walking off cancels an early Take", () => {
   const p = player({ items: { [ItemIds.IRON_ORE]: 3 }, hands: ItemIds.ICE_GLOVES });
   stateOf(p).coffer = 1000;

@@ -25,7 +25,7 @@ The dwarven furnace under Keldagrim (`server/plugins/minigames/BlastFurnace.plug
   - Molten bars need ice gloves or smiths gloves (i), or a bucket of water thrown on them (animation 2450).
   - Take opens the skillmulti "How many would you like to take?" menu ("What would you like to take?" when more than one metal is waiting), using take mode 17 and an available-quantity limit, and gives as many as fit in the free inventory slots, with a message box "You take 23 mithril bars from the dispenser." (a single bar: "You take one iron bar from the dispenser.").
   - Ice gloves or smiths gloves (i) see the bars cooled (state 3) the tick the pour ends.
-  - Take clicked while the player's own ore is still on the belt or pouring waits, and the menu opens the tick the bars can be taken. Walking off cancels the wait (ours); without cold gloves that tick gives the molten-bars box (ours, no capture without gloves).
+  - Take clicked while the player's own ore is still on the belt or pouring waits, and the menu opens the tick the bars can be taken. Only a load that will pour bars waits (the belt runs, the coffer pays, the pot and belt hold a whole recipe); coal alone or a stalled belt still gets the empty-dispenser box. Walking off, or a dialogue or interface opened meanwhile, cancels the wait (ours); without cold gloves that tick gives the molten-bars box (ours, no capture without gloves).
 - **Also:**
   - The sink fills a bucket of water (`human_pickuptable`, sound 2609, "You fill the bucket from the sink.").
   - The temperature gauge opens interface 30.

@@ -352,7 +352,7 @@ test("Otto takes only an attack mix that keeps no restriction", () => {
 test("bow firemaking publishes brut_fire, and Otto's pyre ship talk opens the Ancient Cavern whirlpool", () => {
   const who = player();
   const varbit = (id) => who.sent.varbits.get(id) ?? 0;
-  assert.deepEqual(Object.fromEntries(Object.entries(T.VARBITS)), { harpoon: 3757, fishingRod: 3758, firemaking: 3759, herblore: 3761, pyreShips: 3764 });
+  assert.deepEqual(Object.fromEntries(Object.entries(T.VARBITS)), { harpoon: 3757, fishingRod: 3758, firemaking: 3759, herblore: 3761, spear: 3762, hasta: 3763, pyreShips: 3764 });
 
   let shown = pick(who, talk(who), T.TOPIC.firemaking);
   assert.equal(varbit(T.VARBITS.firemaking), 1);

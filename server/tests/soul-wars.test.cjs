@@ -62,6 +62,8 @@ before(() => {
     onCanShop: (fn) => { hooks.canShop = fn; },
     onInterfaceActionButton: (ids, fn) => { for (const id of [].concat(ids)) (hooks.buttons ??= new Map()).set(id, fn); },
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),
+    getRegionManager: () => RegionManager,
+    getWorld: () => ({ isNpcOccupyingTile: () => false }),
   };
   require('../plugins/minigames/SoulWars.plugin').register(api);
   // Food knows what food is once registered (bots leave theirs behind).
@@ -1614,4 +1616,44 @@ test('the Hard Combat Achievement rewards halve imbue costs, as the cache script
   button('confirm_imbue')({ player: p, slot: 15 });
   assert.equal(zealTokens(p), 0, 'the Slayer helmet for 250 of its 500 tokens');
   assert.equal(p.inventory.getItems()[0].getId(), 25177);
+});
+
+test("a Soul Wars barricade sets up for its team, up to ten, and a kill frees the slot", () => {
+  const { game, players } = startGame(4);
+  const p = players[0];
+  const team = game.teamOf(p);
+  const itemId = Common.data.barricades.items[team];
+  const npcId = Common.data.barricades.npcs[team];
+  const setup = hooks.items.get("Barricade:Set-up");
+  const put = () => p.inventory.add(new core.Item(itemId, 1));
+
+  put();
+  assert.equal(setup({ player: p, itemId }), true);
+  assert.equal(p.inventory.getAmount(itemId), 0, "the item is spent");
+  assert.equal(game.teamBarricadeCount(team), 1);
+  const [npc] = [...game.barricades];
+  assert.equal(npc.getId(), npcId);
+  assert.equal(npc.getDefinition().getHitpoints(), 50);
+
+  const enemy = players.find((other) => game.teamOf(other) !== team);
+  assert.equal(setup({ player: enemy, itemId }), false, "another team's barricade is not this handler's");
+
+  for (let i = 0; i < 9; i++) { put(); setup({ player: p, itemId }); }
+  assert.equal(game.teamBarricadeCount(team), 10);
+  put();
+  assert.equal(setup({ player: p, itemId }), true);
+  assert.ok(p.messages.includes("Your team already has 10 barricades set up."));
+  assert.equal(game.teamBarricadeCount(team), 10, "the eleventh is refused");
+
+  for (const handler of hooks.npcDeath ?? []) handler({ npc, npcId: npcId });
+  assert.equal(game.teamBarricadeCount(team), 9, "a destroyed barricade frees a slot");
+});
+
+test("the barricade table gives the team's barricade item", () => {
+  const { game, players } = startGame(2);
+  const p = players[0];
+  const team = game.teamOf(p);
+  const table = { getId: () => 40443 };
+  assert.equal(Supplies.take(p, table, 1), true);
+  assert.equal(p.inventory.getAmount(Common.data.barricades.items[team]), 1);
 });

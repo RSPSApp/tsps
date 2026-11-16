@@ -114,6 +114,7 @@ class Game {
     this.elapsed = 0;
     this.over = false;
     this.npcs = new Set();
+    this.barricades = new Set();
     this.balance(players);
   }
 
@@ -158,7 +159,21 @@ class Game {
   despawn(npc) {
     if (!npc) return;
     this.npcs.delete(npc);
+    this.barricades.delete(npc);
     Common.core.World.getRemoveNPCQueue().push(npc);
+  }
+
+  trackBarricade(npc, team) {
+    npc.soulWarsTeam = team;
+    this.barricades.add(npc);
+  }
+
+  teamBarricadeCount(team) {
+    return [...this.barricades].filter((npc) => npc.soulWarsTeam === team).length;
+  }
+
+  releaseBarricade(npc) {
+    this.barricades.delete(npc);
   }
 
   start() {

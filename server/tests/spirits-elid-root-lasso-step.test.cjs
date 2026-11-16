@@ -24,8 +24,8 @@ after(() => h.teardown());
 
 const at = (f) => [f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()];
 
-async function useRope(t, from, { during } = {}) {
-  const f = h.actor(t, { at: from, items: [ROPE], done: [] });
+async function useRope(t, from, { during, stage = 0 } = {}) {
+  const f = h.actor(t, { at: from, items: [ROPE], done: [], stage });
   const sender = f.player.getPacketSender();
   const cameraTicks = [];
   const moveCamera = sender.sendCameraMoveTo.bind(sender);
@@ -49,7 +49,7 @@ async function useRope(t, from, { during } = {}) {
     if (target === f.player) views.push([f.tick, view]);
     return view;
   };
-  const ropeLocs = [];
+  const ropeLocs = [], stages = [];
   const slot = f.player.getInventory().getItems().findIndex((item) => item?.getId?.() === ROPE);
   await h.dispatch(f, { type: "item_on_object", objectId: ROOT, x: ROOT_TILE[0], y: ROOT_TILE[1], itemId: ROPE, slot,
     widgetId: h.core.Inventory.INTERFACE_ID << 16 });
@@ -61,13 +61,14 @@ async function useRope(t, from, { during } = {}) {
     if (during) await during(f, i);
     h.tick(f);
     tiles[f.tick] = at(f);
+    stages[f.tick] = h.stage(f);
     ropeLocs[f.tick] = h.core.ObjectManager.objectsAt(new h.core.Location(3371, 3130, 0))
       .filter((o) => o.getId() === ropeLoc).map((o) => [o.getType(), o.getFace()]);
   }
   const used = f.messages.find((m) => m.text === "You tie the rope to the root and climb down into the cave.")?.tick ?? -1;
   const busy = f.calls.filter((c) => c.name === "sendVarbit" && c.args[0] === h.core.CacheDefinitions.getVarbitId("busy"))
     .map((c) => [c.tick, c.args[1]]);
-  return { f, used, tiles, cameraTicks, anims, sounds, fades, closes, views, ropeLocs, busy };
+  return { f, used, tiles, cameraTicks, anims, sounds, fades, closes, views, ropeLocs, busy, stages };
 }
 
 test("from 3372,3129 the player steps onto 3371,3129 the tick after the use, and the lasso's camera comes the tick after (01788 5027-5029)", async (t) => {
@@ -222,4 +223,45 @@ test("a second use on the rope after the climb is ignored: no walk off it, one d
   for (let k = used + 6; k < used + 13; k++) assert.deepEqual(tiles[k], [3371, 3132, 0], `tick ${k - used}`);
   assert.deepEqual(at(f), [3349, 9536, 0]);
   assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+});
+
+// 227/01788 tick 5036: elidquest goes 20 to 25 at the fade (L+7); the key was grabbed earlier with the stage at 20.
+test("the descent advances the quest from 20 to 25 at the fade, and a teleport before it does not", async (t) => {
+  const { used, stages } = await useRope(t, [3371, 3129, 0], { stage: 20 });
+  const lasso = used + 2;
+  assert.equal(stages[lasso + 6], 20, "still 20 the tick before the fade");
+  assert.equal(stages[lasso + 7], 25, "25 at the fade");
+  const away = await useRope(t, [3371, 3129, 0], {
+    stage: 20, during: (g, tick) => { if (tick === 7) g.player.moveTo(new h.core.Location(3220, 3218, 0)); },
+  });
+  assert.equal(h.stage(away.f), 20, "a teleport at L+5 leaves it at 20");
+  const early = await useRope(t, [3371, 3129, 0], { stage: 10 });
+  assert.equal(h.stage(early.f), 10, "before the ballad the descent leaves the stage alone");
+});
+
+// Two players climbing within five ticks of each other: one rope loc stands on the tile until the later climb's
+// five ticks are over, rather than the first climb's delete taking the second's rope with it.
+test("a second player's climb keeps the rope loc for its own five ticks", async (t) => {
+  const ropeLoc = h.core.CacheDefinitions.getLocId("elid_climbing_rope_up_3x3");
+  const ropes = () => h.core.ObjectManager.objectsAt(new h.core.Location(3371, 3130, 0)).filter((o) => o.getId() === ropeLoc).length;
+  let second = null, secondUsed = -1;
+  const first = await useRope(t, [3371, 3129, 0], {
+    during: async (g, i) => {
+      if (i !== 2) return;
+      second = h.actor(t, { at: [3371, 3129, 0], items: [ROPE], done: [] });
+      second.tick = g.tick;
+      const slot = second.player.getInventory().getItems().findIndex((item) => item?.getId?.() === ROPE);
+      await h.dispatch(second, { type: "item_on_object", objectId: ROOT, x: ROOT_TILE[0], y: ROOT_TILE[1], itemId: ROPE, slot,
+        widgetId: h.core.Inventory.INTERFACE_ID << 16 });
+      secondUsed = g.tick;
+    },
+  });
+  // The first climbs at use+6, the second (used two ticks later) at use+8; its rope must stand to use+12.
+  assert.equal(secondUsed, first.used + 2);
+  for (let k = first.used + 6; k <= first.used + 12; k++) {
+    assert.deepEqual(first.ropeLocs[k], [[10, 2]], `one rope at tick ${k - first.used}`);
+  }
+  assert.equal(first.ropeLocs[first.used + 13]?.length, 0, "gone five ticks after the second climb");
+  assert.equal(ropes(), 0);
+  assert.ok(second);
 });

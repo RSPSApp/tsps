@@ -876,12 +876,22 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     player.getMovementQueue().setBlockMovement(false);
   }
 
-  /** The climb's rope loc: there five ticks, whatever becomes of the descent. */
+  /**
+   * The climb's rope loc: there five ticks after each climb, whatever becomes of the descent. One loc stands on the
+   * tile, so a climb within another's five ticks keeps it up until the later climb's five are over.
+   */
+  const climbRope = { object: null, holders: 0 };
   function showClimbRope() {
     const rope = new GameObject(api.core.CacheDefinitions.getLocId(ROPE_CLIMB_LOC), ROPE_CLIMB_LOC_TILE.clone(), 10,
       ROPE_CLIMB_LOC_ROTATION, null);
     ObjectManager.register(rope, true);
-    api.core.TaskManager.submit(new api.core.CountdownTask(rope, ROPE_CLIMB_LOC_TICKS, () => ObjectManager.deregister(rope, true)));
+    climbRope.object = rope;
+    climbRope.holders++;
+    api.core.TaskManager.submit(new api.core.CountdownTask(rope, ROPE_CLIMB_LOC_TICKS, () => {
+      if (--climbRope.holders > 0) return;
+      ObjectManager.deregister(climbRope.object, true);
+      climbRope.object = null;
+    }));
   }
 
   /** Capture 1788: lasso, descent camera, climb, fade, teleport to (3349,9536), reset and theme. */
@@ -911,7 +921,12 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
       ticks++;
       if (!stillAtRoot()) return;
       if (ticks === climbAt) climb(player, descent);
-      else if (ticks === fadeAt) Scenes.fade(player, true);
+      else if (ticks === fadeAt) {
+        // Live advances the quest here, the key already grabbed, just before the fade (227/01788 tick 5036: elidquest
+        // 20 to 25). Only from 20: a descent before the ballad, or after 25, leaves the stage alone.
+        if (quest.getStage(player) === STAGE_BALLAD) quest.setStage(player, STAGE_KEY);
+        Scenes.fade(player, true);
+      }
       else if (ticks === caveAt) {
         endRopeDescent(player, descent);
         player.moveTo(DUNGEON_ENTRY_TILE);
@@ -1436,12 +1451,6 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     );
   }
 
-  /** The table is out of reach: OSRS requires Telekinetic Grab for the key. */
-  function handleTelekineticGrab({ player, itemId }) {
-    if (itemId !== ANCESTRAL_KEY_ITEM_ID) return;
-    if (quest.getStage(player) < STAGE_KEY) quest.setStage(player, STAGE_KEY);
-  }
-
   function ensureShoes(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_MAYOR || quest.isComplete(player)) return;
@@ -1534,7 +1543,6 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("door:toggle", handleDoorToggle);
-  api.onCustomEvent("magic:telekinetic-grab", handleTelekineticGrab);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnObject(handleItemOnObject, { noted: false });

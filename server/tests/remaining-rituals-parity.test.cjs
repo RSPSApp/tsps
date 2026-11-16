@@ -277,7 +277,9 @@ test('Spirits of the Elid follows native varbit stages, spawns/telegrabs its key
   assert.equal(h.inventory.get(I.TORN_ROBE), 1);
   assert.equal(h.inventory.get(I.TORN_ROBE_2), 1);
   for (const fn of h.hooks.custom.get('magic:telekinetic-grab') ?? []) fn({ player: h.player, itemId: 6792 });
-  assert.equal(h.quest.getStage(h.player), 25);
+  // The grab leaves 20; live advances to 25 at the rope descent's fade (227/01788 tick 5036), as the lasso-step test checks.
+  assert.equal(h.quest.getStage(h.player), 20);
+  h.quest.setStage(h.player, 25);
 
   h.equipment.body = I.ROBE_OF_ELIDINIS;
   h.equipment.leg = I.ROBE_OF_ELIDINIS_2;

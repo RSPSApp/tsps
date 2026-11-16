@@ -2516,7 +2516,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   function reconcileDreamNpcs(player) {
     const world = api.getWorld();
     if (world?.getNpcs) {
-      for (const npc of world.getNpcs()) {
+      for (const npc of (world.getNpcsOwnedBy?.(player) ?? world.getNpcs())) {
         if (npc?.getOwner?.() === player && DREAM_SPAWN_IDS.has(npc.getId?.())) api.removeNpc(npc);
       }
     }
@@ -2535,7 +2535,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   function ownedJack(player) {
     const world = api.getWorld();
     if (!world?.getNpcs) return null;
-    for (const npc of world.getNpcs()) {
+    for (const npc of (world.getNpcsOwnedBy?.(player) ?? world.getNpcs())) {
       if (npc?.getId?.() === JACK_SHIP && npc.getOwner?.() === player) return npc;
     }
     return null;

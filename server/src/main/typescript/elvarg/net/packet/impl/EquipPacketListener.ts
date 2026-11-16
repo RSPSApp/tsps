@@ -5,28 +5,29 @@ import { EquipmentSounds } from "../../../game/definition/EquipmentSounds";
 import { Sounds } from "../../../game/Sounds";
 import { Wilderness } from "../../../game/content/wilderness/Wilderness";
 import { EquipmentRequirements } from "../../../game/model/equipment/EquipmentRequirements";
+import { lazyRequire } from "../../../util/LazyRequire";
 
-const getInventoryCtor = () =>
+const getInventoryCtor = lazyRequire(() =>
   require("../../../game/model/container/impl/Inventory")
-    .Inventory as typeof import("../../../game/model/container/impl/Inventory").Inventory;
-const getEquipmentCtor = () =>
+    .Inventory as typeof import("../../../game/model/container/impl/Inventory").Inventory);
+const getEquipmentCtor = lazyRequire(() =>
   require("../../../game/model/container/impl/Equipment")
-    .Equipment as typeof import("../../../game/model/container/impl/Equipment").Equipment;
-const getItemCtor = () =>
+    .Equipment as typeof import("../../../game/model/container/impl/Equipment").Equipment);
+const getItemCtor = lazyRequire(() =>
   require("../../../game/model/Item")
-    .Item as typeof import("../../../game/model/Item").Item;
-const getFlagEnum = () =>
+    .Item as typeof import("../../../game/model/Item").Item);
+const getFlagEnum = lazyRequire(() =>
   require("../../../game/model/Flag")
-    .Flag as typeof import("../../../game/model/Flag").Flag;
-const getBonusManager = () =>
+    .Flag as typeof import("../../../game/model/Flag").Flag);
+const getBonusManager = lazyRequire(() =>
   require("../../../game/model/equipment/BonusManager")
-    .BonusManager as typeof import("../../../game/model/equipment/BonusManager").BonusManager;
-const getCombatSpecial = () =>
+    .BonusManager as typeof import("../../../game/model/equipment/BonusManager").BonusManager);
+const getCombatSpecial = lazyRequire(() =>
   require("../../../game/content/combat/CombatSpecial")
-    .CombatSpecial as typeof import("../../../game/content/combat/CombatSpecial").CombatSpecial;
-const getAutocasting = () =>
+    .CombatSpecial as typeof import("../../../game/content/combat/CombatSpecial").CombatSpecial);
+const getAutocasting = lazyRequire(() =>
   require("../../../game/content/combat/magic/Autocasting")
-    .Autocasting as typeof import("../../../game/content/combat/magic/Autocasting").Autocasting;
+    .Autocasting as typeof import("../../../game/content/combat/magic/Autocasting").Autocasting);
 
 export class EquipPacketListener {
   private static readonly EQUIPMENT_SLOTS = [0, 1, 2, 3, 4, 5, 7, 9, 10, 12, 13];

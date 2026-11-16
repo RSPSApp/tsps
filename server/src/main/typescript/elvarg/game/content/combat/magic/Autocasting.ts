@@ -8,9 +8,10 @@ import { CombatSpell } from "./CombatSpell";
 import { CombatSpells } from "./CombatSpells";
 import { Barrows } from "../Barrows";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
+import { lazyRequire } from "../../../../util/LazyRequire";
 
-const getBonusManager = () => require("../../../model/equipment/BonusManager").BonusManager as typeof import("../../../model/equipment/BonusManager").BonusManager;
-const getWeaponInterfaceManager = () => require("../WeaponInterfaceManager").WeaponInterfaceManager as typeof import("../WeaponInterfaceManager").WeaponInterfaceManager;
+const getBonusManager = lazyRequire(() => require("../../../model/equipment/BonusManager").BonusManager as typeof import("../../../model/equipment/BonusManager").BonusManager);
+const getWeaponInterfaceManager = lazyRequire(() => require("../WeaponInterfaceManager").WeaponInterfaceManager as typeof import("../WeaponInterfaceManager").WeaponInterfaceManager);
 
 export class Autocasting {
     private static readonly COMBAT_INTERFACE = 593;

@@ -64,15 +64,32 @@ function onAsyffFurClothing(api, event) {
   return true;
 }
 
-function openSetMenu(api, player) {
+/** A chatbox prompt shows at most five options (Jewellery's PROMPT_PAGE_SIZE); every entry counts, navigation included. */
+const MENU_PAGE_SIZE = 5;
+/** A page with more sets to come holds three sets, "More..." and Cancel. */
+const SETS_PER_PAGE = MENU_PAGE_SIZE - 2;
+
+function openSetMenu(api, player, from = 0) {
   const sets = [...new Set(RECIPES.map((recipe) => recipe.set))];
+  const remaining = sets.slice(from);
+  // Every remaining set and Cancel fit one page, or the page shows three sets and "More...".
+  const paged = remaining.length + 1 > MENU_PAGE_SIZE;
+  const shown = remaining.slice(0, paged ? SETS_PER_PAGE : remaining.length);
+  const actions = shown.map((set) => () => openPieceMenu(api, player, set));
+  const labels = [...shown];
+  if (paged) {
+    actions.push(() => openSetMenu(api, player, from + SETS_PER_PAGE));
+    labels.push("More...");
+  }
+  actions.push(null);
+  labels.push("Cancel");
   const menu = new api.core.OptionDialogue(0, {
     executeOption(option) {
       player.getPacketSender().sendInterfaceRemoval();
-      const set = sets[Number(option) - 1];
-      if (set) openPieceMenu(api, player, set);
+      const action = actions[Number(option) - 1];
+      if (action) action();
     },
-  }, ...sets, "Cancel").setTitle("Custom Fur Clothing");
+  }, ...labels).setTitle("Custom Fur Clothing");
   player.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder().add(menu));
 }
 

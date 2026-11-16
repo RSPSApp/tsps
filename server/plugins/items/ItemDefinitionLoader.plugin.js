@@ -257,6 +257,8 @@ function applyItemOverrides(overrides) {
         continue;
       }
       definition[field] = Array.isArray(value) ? [...value] : value;
+      // A world's tradeable override decides player trading too (isPlayerTradeable), not only the Exchange flag.
+      if (field === "tradeable") definition.untradeable = !value;
       // The world's price is the one examine and trade values show too, over the official guide price.
       if (field === "grandExchangeValue") definition.guidePrice = value;
     }

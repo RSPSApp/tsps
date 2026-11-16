@@ -163,6 +163,7 @@ function setup(pluginPath, questKey, options = {}) {
     getLocation: () => location, moveTo(value) { location = value; },
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }), setUntargetable() {},
     getUsername: () => 'tester', getDisplayName: () => 'tester', getAppearance: () => ({ isMale: () => true }), getPositionToFace: () => null,
+    setPositionToFace(tile) { player.facing = tile; },
     setEnteredSyntaxAction(action) { player.syntaxAction = action; },
     getDialogueManager: () => ({ startDialogues(chain) { current = chain; }, getCurrent: () => current, reset() { current = null; }, isActive: () => Boolean(current), advance() {} }),
     isPlayer: () => true, isNpc: () => false, isRegistered: () => true, isPlayerBot: () => false,
@@ -526,7 +527,9 @@ test('Fremennik Exiles captured stages: exile, shield, kegs, invasion, island, p
   h.tick(1);
   assert.equal(h.player.getLocation(), islandFrom);
   h.tick(1);
-  assert.equal(h.player.getLocation().getX(), 2470, 'lands on the island two ticks after the click');
+  assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY()], [2472, 3994],
+    'lands where every recording does, two ticks after the click');
+  assert.deepEqual([h.player.facing?.getX(), h.player.facing?.getY()], [2472, 3995], 'facing north (angle 1024)');
   assert.equal(h.messages.filter((m) => m === 'You board the boat and travel to the Island of Stone.').length, 1);
   h.tick(1);
   assert.equal(islandFades.length, 1);

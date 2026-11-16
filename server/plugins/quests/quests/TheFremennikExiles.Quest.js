@@ -456,7 +456,9 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const PRISON_JORMUNGAND = new Location(2452, 10373, 0);
   const LONGHALL_LANDING = new Location(2659, 3665, 0);
   const RELLEKKA_PORT = new Location(2625, 3692, 0);
-  const ISLAND_LANDING = new Location(2470, 4010, 0);
+  /** Every recorded arrival lands here facing north (angle 1024): 227/01768.txt tick 3702, 01862, 910302, 910380, 910418, 910597. */
+  const ISLAND_LANDING = new Location(2472, 3994, 0);
+  const ISLAND_LANDING_FACING = new Location(2472, 3995, 0);
 
   const INVASION_CAMERA = [[2659, 3665, 600], [2659, 3670, 100]];
   const INVASION_CAMERA_TWO = [[2655, 3670, 600], [2659, 3675, 100]];
@@ -776,7 +778,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   }
 
   function handleLogout({ player }) {
-    SAILING_TO_ISLAND.delete(player);
+    if (SAILING_TO_ISLAND.delete(player)) player.setUntargetable(false);
     Scenes.cancel(player);
     Scenes.closeFade(player);
     Scenes.controls(player, false);
@@ -2009,18 +2011,28 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     if (SAILING_TO_ISLAND.has(player)) return;
     SAILING_TO_ISLAND.add(player);
     const busy = CacheDefinitions.getVarbitId("busy");
+    // Held and untargetable for the trip, as the ferries' fade trips (Voyages.Ferries.js hold()).
     player.getMovementQueue().reset().setBlockMovement(true);
+    player.setUntargetable(true);
     if (busy != null) player.getPacketSender().sendVarbit(busy, 1);
     Scenes.fade(player, true);
+    // A death already under way (a hit or poison from before the click) keeps the player at the dock:
+    // the death drops there and its own respawn moves them, so the trip neither lands nor releases them.
+    const dying = () => player.isDyingReturn?.() === true;
     Scenes.later(player, ISLAND_TRAVEL_TICKS, () => {
+      if (dying()) return;
       player.sendMessage(ISLAND_ARRIVAL_MESSAGE);
       player.moveTo(ISLAND_LANDING);
+      player.setPositionToFace(ISLAND_LANDING_FACING);
     });
     Scenes.later(player, ISLAND_FADE_IN_TICKS, () => {
       SAILING_TO_ISLAND.delete(player);
-      player.getMovementQueue().setBlockMovement(false);
       if (busy != null) player.getPacketSender().sendVarbit(busy, 0);
+      // The screen comes back either way; a dying player stays held by the death.
       Scenes.fade(player, false);
+      if (dying()) return;
+      player.getMovementQueue().setBlockMovement(false);
+      player.setUntargetable(false);
     });
     Scenes.later(player, ISLAND_CLOSE_FADE_TICKS, () => Scenes.closeFade(player));
   }

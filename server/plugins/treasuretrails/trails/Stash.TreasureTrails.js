@@ -11,6 +11,12 @@ const BUILT_ATTRIBUTE = "treasure-trails:stash-built";
 const STORED_ATTRIBUTE = "treasure-trails:stash-stored";
 const NAILS_PER_UNIT = 10;
 const PLANKS_PER_UNIT = 2;
+// rsprox_transcripts/227/01768.txt ticks 10836-10837, 227/01858.txt ticks 10728-10729: on reaching the
+// unit, busy, human_poh_build and synth 938; a tick later the materials go, the XP and spam line come,
+// the unit's varbit is set and busy clears.
+const BUILD_SOUND = 938; // synth "poh_build_wood"
+const BUILD_TICKS = 1;
+const building = new WeakSet();
 let api;
 let core;
 let units;
@@ -51,34 +57,57 @@ function count(inventory, id) {
   return inventory.getItems().reduce((sum, item) => sum + (item && item.getId() === id ? item.getAmount() : 0), 0);
 }
 
-function build(player, unit) {
+/** The level, tools and materials a build needs; the first missing one's line, unless quiet. */
+function canBuild(player, unit, quiet = false) {
   const { stash } = unit.tier;
   const inventory = player.getInventory();
   const I = core.ItemIdentifiers;
+  const refuse = message => { if (!quiet) player.sendMessage(message); return false; };
   if (player.getSkillManager().getCurrentLevel(core.Skill.CONSTRUCTION) < stash.level) {
     // rsprox_transcripts/227/910209.txt, 910443.txt.
-    player.sendMessage("You do not have the required construction level in order to build a STASH unit here.");
-    return;
+    return refuse("You do not have the required construction level in order to build a STASH unit here.");
   }
   const nail = nails(inventory);
   // Wiki (STASH): "any hammer and saw", carried or wielded (items/Hammers.js, items/Saws.js).
   if (!Hammers.holdsHammer(core, player) || !Saws.holdsSaw(core, player)) {
     // rsprox_transcripts/242/912100.txt; rev 227 (01768.txt ticks 10208, 14258) read "a saw and hammer".
-    player.sendMessage("You need a saw and a hammer in order to build a STASH unit here.");
-    return;
+    return refuse("You need a saw and a hammer in order to build a STASH unit here.");
   }
   // Master units also take a gold leaf (Wiki "STASH").
   const extra = (stash.extra ?? []).map(([name, amount]) => [I[name], amount]);
   if (count(inventory, I[stash.plank]) < PLANKS_PER_UNIT || nail == null || extra.some(([id, amount]) => count(inventory, id) < amount)) {
     // rsprox_transcripts/227/910308.txt, 910597.txt.
-    player.sendMessage("You do not have the required materials to build a STASH unit here.");
-    return;
+    return refuse("You do not have the required materials to build a STASH unit here.");
   }
+  return true;
+}
+
+function build(player, unit) {
+  if (building.has(player) || !canBuild(player, unit)) return;
+  building.add(player);
+  const busy = core.CacheDefinitions.getVarbitId("busy");
+  if (busy != null) player.getPacketSender().sendVarbit(busy, 1);
+  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("human_poh_build")));
+  player.getPacketSender().sendSound(BUILD_SOUND, 1, 0);
+  core.TaskManager.submit(new core.CountdownTask(player, BUILD_TICKS, () => {
+    building.delete(player);
+    if (busy != null) player.getPacketSender().sendVarbit(busy, 0);
+    // Not recorded: the materials or tools gone by the next tick; nothing is built then.
+    if (player.isRegistered?.() === false || built(player).includes(unit.step.stash.locId) || !canBuild(player, unit, true)) return;
+    finishBuild(player, unit);
+  }));
+}
+
+function finishBuild(player, unit) {
+  const { stash } = unit.tier;
+  const inventory = player.getInventory();
+  const I = core.ItemIdentifiers;
+  const extra = (stash.extra ?? []).map(([name, amount]) => [I[name], amount]);
+  const nail = nails(inventory);
   inventory.delete(I[stash.plank], PLANKS_PER_UNIT);
   for (const [id, amount] of extra) inventory.delete(id, amount);
   inventory.delete(nail, NAILS_PER_UNIT);
   player.getSkillManager().addExperiences(core.Skill.CONSTRUCTION, stash.xp);
-  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("human_poh_build")));
   // rsprox_transcripts/227/01768.txt: a spam line as it is built.
   player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You build a STASH unit.");
   player.setAttribute(BUILT_ATTRIBUTE, [...built(player), unit.step.stash.locId]);

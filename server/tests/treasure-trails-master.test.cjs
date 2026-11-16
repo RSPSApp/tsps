@@ -439,7 +439,8 @@ test("master STASH units need Construction 88, mahogany planks and a gold leaf",
   assert.equal(units.length, 25);
   [[I.HAMMER, 1], [I.SAW, 1], [I.MAHOGANY_PLANK, 2], [I.STEEL_NAILS, 10]].forEach(([id, amount], slot) => { f.items[slot] = new core.Item(id, amount); });
   f.skills.level = 88;
-  const build = () => Stash.interact({ player: f.player, objectId: units[0].step.stash.locId, location: units[0].location, handled: false });
+  // The unit is built a tick after the click (227/01768.txt ticks 10836-10837).
+  const build = () => { Stash.interact({ player: f.player, objectId: units[0].step.stash.locId, location: units[0].location, handled: false }); core.TaskManager.process(); };
   build();
   assert.equal(f.attributes.get(Stash.BUILT_ATTRIBUTE), undefined, "no gold leaf, no unit");
   // rsprox_transcripts/227/910308.txt: the one materials line, gold leaf included.

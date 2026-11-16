@@ -407,7 +407,8 @@ test("an easy STASH unit is built with Construction 27, then stores and returns 
   assert.equal(units.length, 31);
   const unit = units[0];
   const locId = unit.step.stash.locId;
-  const use = () => { const event = { player: f.player, objectId: locId, location: unit.location, handled: false }; Stash.interact(event); return event.handled; };
+  // A build finishes a tick after the click (227/01768.txt ticks 10836-10837).
+  const use = () => { const event = { player: f.player, objectId: locId, location: unit.location, handled: false }; Stash.interact(event); core.TaskManager.process(); return event.handled; };
   f.items.fill(null);
   [[I.HAMMER, 1], [I.SAW, 1], [I.PLANK, 2], [I.DRAGON_NAILS, 10]].forEach(([id, amount], slot) => { f.items[slot] = new core.Item(id, amount); });
   f.skills.level = 26;

@@ -264,7 +264,8 @@ test("a medium STASH unit needs Construction 42 and oak planks", () => {
   const units = [...Stash.stashes().values()].filter(unit => unit.tier === MEDIUM);
   assert.equal(units.length, 25);
   const unit = units[0];
-  const use = () => { const event = { player: f.player, objectId: unit.step.stash.locId, location: unit.location, handled: false }; Stash.interact(event); };
+  // A build finishes a tick after the click (227/01768.txt ticks 10836-10837).
+  const use = () => { const event = { player: f.player, objectId: unit.step.stash.locId, location: unit.location, handled: false }; Stash.interact(event); core.TaskManager.process(); };
   [[I.HAMMER, 1], [I.SAW, 1], [I.PLANK, 2], [I.STEEL_NAILS, 10]].forEach(([id, amount], slot) => { f.items[slot] = new core.Item(id, amount); });
   f.skills.level = 42;
   use();

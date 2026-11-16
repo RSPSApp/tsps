@@ -731,7 +731,9 @@ export class NPC extends Mobile {
         if (this.owner !== owner) {
             if (this.owner) NPC.ownedNpcs.get(this.owner)?.delete(this);
             this.owner = owner;
-            NPC.indexOwner(this);
+            // Only NPCs in the world are indexed (World's NPC list adds and drops them), so the
+            // index never holds an NPC that was removed, or that never entered the world.
+            if (this.isRegistered()) NPC.indexOwner(this);
         }
         return this;
     }
@@ -739,8 +741,8 @@ export class NPC extends Mobile {
     /**
      * NPCs by owner, so content can find a player's own NPCs without scanning every NPC in the
      * world (quests did, on each login and logout: seconds per minute with hundreds of players).
-     * Entries are added with the owner and again when the NPC re-enters the world, and dropped
-     * when it leaves; ownedBy() checks owner and registration, so a stale entry never shows.
+     * It holds exactly the owned NPCs in the world: World's NPC list indexes one as it is added
+     * and drops it as it is removed, by any route, and setOwner moves a registered one.
      */
     private static readonly ownedNpcs = new WeakMap<object, Set<NPC>>();
 
@@ -755,7 +757,7 @@ export class NPC extends Mobile {
         return found;
     }
 
-    /** Indexes an NPC under its owner (on setOwner, and when it is added to the world). */
+    /** Indexes an NPC under its owner (when it is added to the world, or given an owner there). */
     public static indexOwner(npc: NPC): void {
         const owner = npc.owner;
         if (!owner) return;

@@ -51,8 +51,10 @@ export class World {
     private static playerBots: Map<string, any> = new Map<string, any>();
     private static npcs: MobileList<NPC> = new MobileList<NPC>(
         World.MAX_NPCS,
-        (npc) => World.registerNpcPosition(npc),
-        (npc) => World.unregisterNpcPosition(npc)
+        // The owner index follows the list itself, so every way in and out (the queues,
+        // PluginManager.removeNpc's direct removal, a rolled-back add) keeps it exact.
+        (npc) => { World.registerNpcPosition(npc); NPC.indexOwner(npc); },
+        (npc) => { World.unregisterNpcPosition(npc); NPC.forgetOwner(npc); }
     );
     private static items: ItemOnGround[] = [];
     private static playerArray: Player[] = []
@@ -1290,7 +1292,6 @@ export class World {
                 if (!npc)
                     break;
                 const added = World.npcs.add(npc);
-                if (added) NPC.indexOwner(npc);
                 if (!added) {
                     console.warn("[world:npc] add_queue_failed", {
                         npcId: typeof npc.getId === "function" ? npc.getId() : null,
@@ -1328,7 +1329,6 @@ export class World {
                 const indexBefore = typeof npc.getIndex === "function" ? npc.getIndex() : null;
                 try {
                     World.npcs.remove(npc);
-                    NPC.forgetOwner(npc);
                 } catch (e) {
                     // Same contract as players: a throwing removal hook must not abort the tick.
                     console.error("[world] Failed to remove npc", indexBefore, e);

@@ -20,6 +20,7 @@ const MaggotKing = require("../plugins/bosses/MaggotKing.plugin");
 const Common = require("../plugins/bosses/maggotking/Common.MaggotKing");
 const Instance = require("../plugins/bosses/maggotking/Instance.MaggotKing");
 const Entrance = require("../plugins/bosses/maggotking/Entrance.MaggotKing");
+const Resupply = require("../plugins/bosses/maggotking/Resupply.MaggotKing");
 
 const core = PluginManager.getCoreApi();
 const handlers = new Map();
@@ -36,6 +37,7 @@ const api = {
   onObjectInteraction: (name, actions) => handlers.set(name, actions),
   onPlayerLogin: handler => loginHandlers.push(handler),
   onNpcDeath: handler => deathHandlers.push(handler),
+  onPlayerLogout() {}, onPlayerDisconnect() {}, onPlayerBeforeDeath() {},
   onPlayerDeath() {}, onServerShutdown: handler => shutdownHandlers.push(handler), onCustomEvent() {}, onNpcAttackOption() {}, onItemAction() {},
   onAttackTiming() {}, onCombatAttackDistance() {}, onPlayerHitModify() {}, onCombatHitDamage() {}, onCombatHitResolved() {},
   registerCombatMethodResolver() {},
@@ -322,7 +324,7 @@ test("Camping shutdown callback retires the run instead of saving it for a new e
     assert.equal(Instance.sessionOf(owner), null);
     assert.equal(Instance.enter(owner), true);
     assert.equal(Instance.sessionOf(owner).campingKills, 0);
-    assert.deepEqual(persisted, [["maggot-king:kills", 0], [Instance._test.INSTANCE_ATTRIBUTE, false]],
+    assert.deepEqual(persisted, [["maggot-king:kills", 0], [Instance._test.INSTANCE_ATTRIBUTE, false], [Resupply.BUILT_ATTRIBUTE, false]],
       "no persisted Camping counter or login catch-up");
   } finally { Instance.sessionOf(owner)?.area.leave(owner, false); }
 });

@@ -34,8 +34,8 @@ const BEER_GLASS_ID = 1919;
 const COOKING_XP_PER_BREW = 5;
 
 /**
- * `gate` is where the gate's wall stands and which side of its tile (0 west, 1 north, 2 east, 3 south); the cache
- * gives it no open leaf, so the player is walked across that edge (Apprentice's openGate).
+ * `gate` is where the gate's wall stands and the direction into the maze (0 west, 1 north, 2 east, 3 south).
+ * Captures 227/01863 and 227/01843 place the player across that edge without changing the gate.
  * `caught` is where an elemental's catch puts the player, outside the maze's gate (rsprox captures).
  * `area` is the maze's walkable bounding box (from a flood fill of the cache's clipping
  * with the gate tiles removed); `elementals` are its spawned patrol NPC ids.

@@ -175,6 +175,7 @@ const pluginConfig = {};
 function attachPlugins(prompts, quests = [], zones = [], customHooks = [], interfaceHooks = []) {
     const api = {
         core,
+        getTaskManager: () => TaskManager,
         getPluginConfig: (key, fallback) => (key in pluginConfig ? pluginConfig[key] : fallback),
         persistAttribute: () => {},
     onInterfaceActionClick: (handler) => interfaceHooks.push(handler),

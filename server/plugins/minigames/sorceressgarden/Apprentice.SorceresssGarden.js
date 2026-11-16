@@ -21,9 +21,9 @@
  * 110 on the player, area sounds 127 and 126), and three ticks after that the player lands
  * on (2912, 5474).
  *
- * The gates (12617 winter, 12639 autumn, 12719 spring, 11987 summer) are single wall objects with
- * only "Open" and no open leaf, and their edge is blocked on both sides in the collision data, so
- * opening one checks the level and then walks the player one tile across the gate's edge. A
+ * The gates (12617 winter, 12639 autumn, 12719 spring, 11987 summer) have blocked wall edges.
+ * Captures 227/01863 and 227/01843 show entry from the gate tile: busy for one server turn,
+ * then instant placement one tile into the maze with synth 71; the gate remains visible. A
  * low-level player who got through another way is turned back by the maze's Area.postEnter. Entry
  * is checked against the current (boosted) Thieving level, per the Wiki.
  */
@@ -64,8 +64,8 @@ const VARIANT = Object.freeze({
 const LANDING = Object.freeze({ x: 2912, y: 5474 });
 const CURSE = Object.freeze({ CAST: 108, PROJECTILE: 109, IMPACT: 110, SOUND_CAST: 127, SOUND_IMPACT: 126 });
 const GATE_IDS = Object.values(SEASONS).map((season) => season.gateId);
-/** The gate is taken out of the way for this many ticks after the player has crossed. */
-const GATE_OPEN_TICKS = 2;
+/** The entry sound in captures 227/01863 and 227/01843 (cache synth_71). */
+const GATE_SOUND = 71;
 
 let api;
 let core;
@@ -203,51 +203,19 @@ function teleportByApprentice(event) {
   teleportIn(player, npc);
 }
 
-/** The two tiles either side of the gate's wall: [the west/south one, the east/north one]. */
-function gateSides({ x, y, face }) {
-  if (face === 0) return [[x - 1, y], [x, y]];
-  if (face === 2) return [[x, y], [x + 1, y]];
-  if (face === 1) return [[x, y], [x, y + 1]];
-  return [[x, y - 1], [x, y]];
+/** Only entry is recorded; routing to the gate tile belongs to MovementQueue. */
+function gateEntry({ x, y, face }, at) {
+  if (at.getX() !== x || at.getY() !== y || at.getZ() !== PLANE) return null;
+  if (face === 0) return [x - 1, y];
+  if (face === 2) return [x + 1, y];
+  if (face === 1) return [x, y + 1];
+  return [x, y - 1];
 }
 
-/**
- * The walk across the gate from where the player stands: one tile if they are on a side tile, or onto the nearer
- * side first if the click left them a tile off. Null when they are too far from the gate to cross.
- */
-function gateCrossing(gate, at) {
-  const [a, b] = gateSides(gate);
-  const distance = ([x, y]) => Math.abs(at.getX() - x) + Math.abs(at.getY() - y);
-  const onSide = distance(a) === 0 || distance(b) === 0;
-  const start = distance(a) <= distance(b) ? a : b;
-  if (distance(start) > 2) return null;
-  const end = start === a ? b : a;
-  return onSide ? [end] : [start, end];
-}
-
-/** Shows or hides the gate for the players who can see it. */
-function showGate(object, gate, shown) {
-  core.World.forEachNetworkPlayer((viewer) => {
-    if (!viewer.getSession?.()?.isTileInScene?.(gate.x, gate.y, PLANE)) return;
-    if (shown) viewer.getPacketSender().sendObject(object);
-    else viewer.getPacketSender().sendObjectRemoval(object);
-  });
-}
-
-function crossGate(player, object, gate) {
-  const path = gateCrossing(gate, player.getLocation());
-  if (!path || ObstacleRunner.isBusy(player)) return;
-  showGate(object, gate, false);
-  ObstacleRunner.run({ player }, [{ wait: 1 }, { walk: path }], {
-    onFinish: () => {
-      const task = new core.Task(GATE_OPEN_TICKS, false);
-      task.execute = () => {
-        task.stop();
-        showGate(object, gate, true);
-      };
-      api.getTaskManager().submit(task);
-    },
-  });
+function crossGate(player, gate) {
+  const destination = gateEntry(gate, player.getLocation());
+  if (!destination || ObstacleRunner.isBusy(player)) return;
+  ObstacleRunner.run({ player }, [{ wait: 1 }, { tele: destination }, { sound: GATE_SOUND }], { busyVarbit: true });
 }
 
 function openGate(event) {
@@ -257,8 +225,7 @@ function openGate(event) {
     event.player.sendMessage(`You need a Thieving level of ${season.level} to enter this garden.`);
     return;
   }
-  event.player.sendMessage("You open the gate.");
-  if (event.object) crossGate(event.player, event.object, season.gate);
+  if (event.object) crossGate(event.player, season.gate);
 }
 
 function drinkFromFountain(event) {
@@ -305,8 +272,7 @@ module.exports._test = {
   handleAction,
   teleportByApprentice,
   openGate,
-  gateSides,
-  gateCrossing,
+  gateEntry,
   drinkFromFountain,
   _setApi(value) {
     api = value;

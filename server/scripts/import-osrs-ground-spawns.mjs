@@ -16,9 +16,10 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const SOURCE_PIN = Object.freeze({
-  revision: "e689983a7341e7306de06e5dfb6bc8e7886df238",
-  exportSha256: "ac6ab32e5637ae03595e216fb3385add0b630811abb72535bde160a28abd49f2",
-  inputSha256: "3c2de222f445a46dc47aecd7c7bd9fb5857932c3ffb5be52322c21c30169bcaa",
+  repository: "autismoyah-hub/osrsreboxed-db",
+  revision: "71f934bafd7225ae759dde8cedf821afda9a3c3f",
+  exportSha256: "db79758a92e8f26b402258d13b65bbbbe8632d8802f4e2c26db6521761cb012e",
+  inputSha256: "00d8bcd0ed7d8d0340f69953fb73aa2e51813f03dbbc964b70d9872fe4ad048a",
 });
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../..");
@@ -78,6 +79,21 @@ function isAuditedMemberOrdinaryRow(row) {
   return location !== undefined && row.members === true && row.quantity === 1 && row.infobox_respawn_ticks === 100
     && location === row.location;
 }
+// This member quest stock is public; pickup eligibility remains in TempleOfIkov.Quest.js.
+// The producer reconciles case-only page aliases and retains their source identities.
+const AUDITED_MEMBER_QUEST_ROWS = new Map([
+  ["Staff of Armadyl:84:2638:9906:0", "[[Temple of Ikov (dungeon)|Temple of Ikov]]"],
+  ["Staff of armadyl:84:2638:9906:0", "[[Temple of Ikov (dungeon)|Temple of Ikov]]"],
+]);
+function isAuditedMemberQuestRow(row) {
+  const location = AUDITED_MEMBER_QUEST_ROWS.get([row.page,row.id,row.x,row.y,row.plane].join(":"));
+  return location !== undefined && row.members === true && location === row.location;
+}
+// Exact previously audited legacy state, not replacement output. Values to import
+// always come from the pinned producer; other legacy discrepancies remain held.
+const AUDITED_LEGACY_STATE = new Map([
+  ["84:2638:9906:0", { quantity:1, respawn:0, members:false }],
+]);
 // Individually audited ordinary Coins rows outside the fully audited Corsair Cove Dungeon row.
 const AUDITED_ORDINARY_EXACT = new Map([
   ["995:3003:9801:0", "[[Dwarven Mine]]"],
@@ -144,11 +160,42 @@ function reconcilePickupReplacements(rows, existing) {
   return { definitions, statuses };
 }
 
+function conflictingCaseAliases(rows) {
+  const byTitle = new Map(), conflicts = new Set();
+  for (const row of rows) {
+    const title = row.page.toLowerCase();
+    byTitle.set(title, [...(byTitle.get(title) ?? []), row]);
+  }
+  const couldShareIdentity = (a,b) => ["id","x","y","plane"].every(key => {
+    if (Number.isInteger(a[key]) && Number.isInteger(b[key]) && a[key] !== b[key]) return false;
+    if (key === "id") for (const [known, uncertain] of [[a,b],[b,a]]) {
+      if (Number.isInteger(known.id) && uncertain.candidate_ids?.length
+        && !uncertain.candidate_ids.includes(known.id)) return false;
+    }
+    return true;
+  });
+  const state = row => JSON.stringify([row.quantity,row.infobox_respawn_ticks,row.members,
+    row.location,row.tile_respawn_raw,row.pickup_replacement ?? null]);
+  for (const aliases of byTitle.values()) for (let i=0;i<aliases.length;i++) {
+    for (let k=i+1;k<aliases.length;k++) {
+      const a=aliases[i], b=aliases[k];
+      if (!couldShareIdentity(a,b)) continue;
+      // Already-unresolved pairs stay held under their original source diagnostics.
+      if (a.unresolved_reasons.length && b.unresolved_reasons.length) continue;
+      if (a.unresolved_reasons.length || b.unresolved_reasons.length || state(a) !== state(b)) {
+        conflicts.add(a); conflicts.add(b);
+      }
+    }
+  }
+  return conflicts;
+}
+
 export function importSpawns(source, existing) {
   if (source.schema !== 1 || !Array.isArray(source.rows) || !Array.isArray(existing)) {
     throw new Error("Expected source schema1 and an array of existing definitions");
   }
-  const reconciled = reconcilePickupReplacements(source.rows, existing);
+  const aliasConflicts = conflictingCaseAliases(source.rows);
+  const reconciled = reconcilePickupReplacements(source.rows.filter(row => !aliasConflicts.has(row)), existing);
   existing = reconciled.definitions;
   const definitions = structuredClone(existing);
   const exact = new Map();
@@ -161,7 +208,10 @@ export function importSpawns(source, existing) {
   for (const row of source.rows) {
     const entry = { source: row, status: null, reasons: [...row.unresolved_reasons] };
     const owner = ownerOf(row);
-    if (reconciled.statuses.has(row)) {
+    if (aliasConflicts.has(row)) {
+      entry.status = "conflicting-source-alias-state";
+      entry.reasons = [...new Set([...entry.reasons, "conflicting-source-alias-state"])];
+    } else if (reconciled.statuses.has(row)) {
       entry.status = reconciled.statuses.get(row);
     } else if (owner) {
       entry.status = "area-owned-or-instance-integration";
@@ -170,9 +220,9 @@ export function importSpawns(source, existing) {
       entry.status = "unresolved-source";
     } else if (row.members !== false
       && !(row.members === true && AUDITED_MEMBER_ORDINARY_ITEMS.get(row.page) === row.id)
-      && !isAuditedEasternConchShell(row) && !isAuditedMemberOrdinaryRow(row)) {
+      && !isAuditedEasternConchShell(row) && !isAuditedMemberOrdinaryRow(row) && !isAuditedMemberQuestRow(row)) {
       entry.status = "members-world-scope-deferred";
-    } else if (AUDITED_ORDINARY_ITEMS.get(row.page) !== row.id && !isAuditedEasternConchShell(row) && !isAuditedMemberOrdinaryRow(row)
+    } else if (AUDITED_ORDINARY_ITEMS.get(row.page) !== row.id && !isAuditedEasternConchShell(row) && !isAuditedMemberOrdinaryRow(row) && !isAuditedMemberQuestRow(row)
       && !(row.page === "Coins" && row.members === false
         && ((AUDITED_ORDINARY_EXACT.has(rowKey(row)) && AUDITED_ORDINARY_EXACT.get(rowKey(row)) === row.location)
           || (row.id === 995 && row.location === "[[Corsair Cove Dungeon]]" && row.plane === 0
@@ -197,6 +247,20 @@ export function importSpawns(source, existing) {
     const row = entries[0].source;
     const present = exact.get(key);
     if (present?.length) {
+      const prior = AUDITED_LEGACY_STATE.get(key);
+      if (prior && present.length === 1 && entries.every(entry => isAuditedMemberQuestRow(entry.source))
+        && (!Object.hasOwn(present[0], "amt") || (Number.isInteger(present[0].amt) && present[0].amt === prior.quantity))
+        && present[0].respawn === prior.respawn
+        && (!Object.hasOwn(present[0], "members") || (typeof present[0].members === "boolean" && present[0].members === prior.members))) {
+        const index = existing.indexOf(present[0]);
+        definitions[index] = { ...definitions[index], amt:row.quantity,
+          respawn:row.infobox_respawn_ticks, members:row.members };
+        for (const entry of entries) {
+          entry.status = "existing-audited-source-state-reconciled";
+          entry.existingCount = 1;
+        }
+        continue;
+      }
       for (const entry of entries) {
         entry.status = present.every(d => (d.amt ?? 1) === row.quantity && d.respawn === row.infobox_respawn_ticks
           && (d.members === true) === row.members)
@@ -228,7 +292,7 @@ export function importSpawns(source, existing) {
   const counts = {};
   for (const entry of report) counts[entry.status] = (counts[entry.status] ?? 0) + 1;
   return { definitions, report: { schema:1, sourceInputSha256:source.input_sha256,
-    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Earth rune/Mind rune/Fire rune/Nature rune and nine exact eastern Great Conch Sea shell rows and exact member ordinary rows plus five exact Dwarven Mine/Asgarnian Ice Dungeon Coins rows and the ordinary Corsair Cove Dungeon Coins row; explicit infobox ticks applied only without tile override; legacy entries preserved except exact source-proven pickup reward projections.",
+    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Earth rune/Mind rune/Fire rune/Nature rune and nine exact eastern Great Conch Sea shell rows and exact member ordinary rows plus five exact Dwarven Mine/Asgarnian Ice Dungeon Coins rows and the ordinary Corsair Cove Dungeon Coins row; explicit infobox ticks applied only without tile override; legacy entries preserved except exact source-proven pickup reward projections and audited Temple of Ikov staff state reconciliation from pinned source (alias provenance retained).",
     counts, rows:report } };
 }
 
@@ -250,6 +314,7 @@ function main() {
     throw new Error("Pinned source export changed; re-audit source conditions and update the explicit pin before importing");
   }
   const result = importSpawns(source,JSON.parse(fs.readFileSync(existingFile,"utf8")));
+  result.report.sourceRepository = SOURCE_PIN.repository;
   result.report.sourceRevision = SOURCE_PIN.revision;
   result.report.sourceExportSha256 = crypto.createHash("sha256").update(raw).digest("hex");
   const rendered = "[\n"+result.definitions.map(row => "  "+JSON.stringify(row)).join(",\n")+"\n]\n";

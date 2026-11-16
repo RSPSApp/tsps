@@ -147,7 +147,8 @@ module.exports = function registerTempleOfIkovQuest(api) {
   /** The guardian attacks when Lucien's follower takes the staff. */
   const TAKE_STAFF_ACTION_ID = "zJVI_k";
   /** Lucien's two quest-complete endings. */
-  const COMPLETE_ACTION_IDS = new Set(["f8loKo", "rgR_39"]);
+  const LUCIEN_STAFF_COMPLETE_ACTION_ID = "f8loKo";
+  const COMPLETE_ACTION_IDS = new Set([LUCIEN_STAFF_COMPLETE_ACTION_ID, "rgR_39"]);
   /** Every hostile Guardian action in the imported Temple of Ikov transcript. */
   const GUARDIAN_ATTACK_STEP_IDS = new Set([
     "ir-ZYZ", "Z00rUz", "GUJaTp", "yrI1iq", "yPcDYb", "yW7QWI", "KcVBoC", TAKE_STAFF_ACTION_ID,
@@ -190,6 +191,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const guardianChallenges = new WeakMap();
   const defeatedGuardian = new WeakMap();
   const guardianConversations = new WeakMap();
+  const lucienConversations = new WeakMap();
 
   const held = (player, itemId, amount = 1) =>
     player.getInventory().getAmount(itemId) >= amount;
@@ -401,6 +403,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   }
 
   function removeLucien(player) {
+    lucienConversations.delete(player);
     const entry = lucienSpawnsByPlayer.get(player);
     if (!entry) return;
     lucienSpawnsByPlayer.delete(player);
@@ -626,10 +629,38 @@ module.exports = function registerTempleOfIkovQuest(api) {
       return;
     }
     if (LUCIEN_NPC_IDS.has(npcId) && COMPLETE_ACTION_IDS.has(stepId)) {
-      if (!quest.isComplete(player)) {
-        if (held(player, STAFF_OF_ARMADYL_ITEM_ID)) {
-          player.getInventory().deleteNumber(STAFF_OF_ARMADYL_ITEM_ID, 1);
+      if (stepId === LUCIEN_STAFF_COMPLETE_ACTION_ID) {
+        // Preserve the existing atomic hand-in/completion boundary. The earlier
+        // prose message is not a second transfer or a durable delivery receipt.
+        const conversation = lucienConversations.get(player), npc = event.npc;
+        const manager = player.getDialogueManager(), here = player.getLocation(), there = npc?.getLocation();
+        event.handled = true;
+        if (!conversation || conversation.npc !== npc || conversation.owner !== manager.getOwner()
+          || !(manager.getCurrent() instanceof api.core.ActionDialogue)
+          || !event.pages?.some(page => page.page === PAGE
+            && page.variants?.includes("finishing-up-talking-to-lucien-near-varrock"))
+          || !player.isRegistered() || player.getHitpoints() <= 0 || !npc?.isRegistered() || npc.getHitpoints() <= 0
+          || npcId !== HOUSE_LUCIEN_NPC_ID || npc.getId() !== npcId || npc.getIndex() !== conversation.npcIndex
+          || api.core.World.getNpcs().get(conversation.npcIndex) !== npc
+          || lucienSpawnsByPlayer.get(player)?.house !== npc || npc.getOwner() !== player || !npc.isOwnerOnly()
+          || player.getPrivateArea() !== conversation.privateArea || npc.getPrivateArea() !== conversation.privateArea
+          || here.getZ() !== conversation.plane || there.getZ() !== conversation.plane
+          || Math.max(Math.abs(here.getX() - there.getX()), Math.abs(here.getY() - there.getY())) > 1
+          || quest.getStage(player) !== conversation.stage || conversation.stage < STAGE_HAS_STAFF
+          || quest.isComplete(player) || !held(player, STAFF_OF_ARMADYL_ITEM_ID)) {
+          event.end = true;
+          if (lucienConversations.get(player) === conversation) lucienConversations.delete(player);
+          return;
         }
+        const inventory = player.getInventory(), before = inventory.getAmount(STAFF_OF_ARMADYL_ITEM_ID);
+        inventory.deleteNumber(STAFF_OF_ARMADYL_ITEM_ID, 1);
+        if (inventory.getAmount(STAFF_OF_ARMADYL_ITEM_ID) !== before - 1) { event.end = true; return; }
+        quest.complete(player);
+        return;
+      }
+      // The existing Armadyl death-transcript ending retains its current behavior.
+      if (!quest.isComplete(player)) {
+        if (held(player, STAFF_OF_ARMADYL_ITEM_ID)) player.getInventory().deleteNumber(STAFF_OF_ARMADYL_ITEM_ID, 1);
         quest.complete(player);
       }
     }
@@ -845,8 +876,18 @@ module.exports = function registerTempleOfIkovQuest(api) {
       return;
     }
     if (npcId === HOUSE_LUCIEN_NPC_ID && action === "talk-to") {
+      const npc = event.npc;
+      if (!player.isRegistered() || !npc?.isRegistered()
+        || api.core.World.getNpcs().get(npc.getIndex()) !== npc
+        || lucienSpawnsByPlayer.get(player)?.house !== npc || npc.getOwner() !== player || !npc.isOwnerOnly()
+        || npc.getPrivateArea() !== player.getPrivateArea() || npc.getLocation().getZ() !== player.getLocation().getZ()) return;
       event.handled = true;
-      startTranscript(api, player, npcId, PAGE, "finishing-up-talking-to-lucien-near-varrock");
+      lucienConversations.delete(player);
+      if (startTranscript(api, player, npcId, PAGE, "finishing-up-talking-to-lucien-near-varrock", undefined, npc, { scoped: true })) {
+        const owner = player.getDialogueManager().getOwner();
+        if (owner) lucienConversations.set(player, { owner, npc, npcIndex:npc.getIndex(),
+          privateArea:player.getPrivateArea(), plane:player.getLocation().getZ(), stage:quest.getStage(player) });
+      }
     }
   }
 

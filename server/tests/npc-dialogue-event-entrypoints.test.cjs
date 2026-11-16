@@ -4992,40 +4992,106 @@ test('Ikov Guardian stale Continue after a real bank replacement cannot grant or
 });
 
 function ikovStaffFixture(t, options = {}) {
+  const { GroundItemRespawnTask } = require('../dist/game/task/impl/GroundItemRespawnTask');
   let f, stock;
-  const prior = new Set(core.World.getItems());
-  // Before every fallible setup step; never reset the world item array.
+  const prior = new Set(core.World.getItems()), ownedPositions = new Set(), respawns = [], submittedAt = new Map();
+  // Registered before any actor/map/loader setup: cleanup only exact created
+  // Location identities and their actual respawn tasks, never the global task key.
   t.after(() => {
-    if (!f) return;
-    const errors = [];
+    const errors = [], clean = fn => { try { fn(); } catch (error) { errors.push(error); } };
+    for (const task of respawns) clean(() => { if (task.isRunning()) task.stop(); });
+    const owns = item => ownedPositions.has(item.getPosition())
+      || (f && !prior.has(item) && item.getOwner() === f.player.getUsername());
+    const foreign = core.World.getItems().filter(item => !owns(item));
     for (const item of [...core.World.getItems()]) {
-      if (item !== stock && (prior.has(item) || item.getOwner() !== f.player.getUsername())) continue;
-      try {
-        core.ItemOnGroundManager.deregister(item);
+      if (!owns(item)) continue;
+      clean(() => core.ItemOnGroundManager.deregister(item));
+      clean(() => {
         const at = core.World.getItems().indexOf(item);
-        if (at >= 0) core.World.getItems().splice(at, 1); // This exact fixture-owned stack only.
-      } catch (error) { errors.push(error); }
+        if (at >= 0) core.World.getItems().splice(at, 1);
+      });
     }
-    if (errors.length) throw new AggregateError(errors, 'staff fixture exact-stack cleanup failed');
+    clean(() => assert.ok(respawns.every(task => !task.isRunning()), 'exact owned respawn tasks stopped'));
+    clean(() => assert.ok(core.World.getItems().every(item => !ownedPositions.has(item.getPosition()))));
+    clean(() => assert.ok(foreign.every(item => core.World.getItems().includes(item)), 'cleanup preserves every foreign item identity'));
+    if (errors.length) throw new AggregateError(errors, 'staff fixture exact item/task cleanup failed');
+  });
+  const submit = core.TaskManager.submit;
+  t.mock.method(core.TaskManager, 'submit', function(task) {
+    if (task instanceof GroundItemRespawnTask && ownedPositions.has(task.item.getPosition()) && !respawns.includes(task)) {
+      respawns.push(task); submittedAt.set(task, core.World.getProcessCycle());
+    }
+    return Reflect.apply(submit, this, [task]);
   });
   f = ikovGuardianFixture(t, { ...options, world: true });
   f.player.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 99);
   f.player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 99, false); f.player.setHitpoints(99);
-  f.npc.__skipDefaultRespawn = true; // Owned fixture lifecycle, not a production respawn claim.
+  f.npc.__skipDefaultRespawn = true; // Owned NPC fixture, not the production stock lifecycle.
   f.tick = () => { core.World.process(); f.connection.processTurnPackets(); };
   for (let turn = 0; turn < 4; turn++) f.tick();
   assert.equal(f.player.getArea()?.constructor.name, 'TempleOfIkovIceChests');
   const rows = require('../data/definitions/ground-items.json').filter(row => row.id === core.ItemIdentifiers.STAFF_OF_ARMADYL
     && row.location.x === 2638 && row.location.y === 9906 && row.location.z === 0);
-  assert.equal(rows.length, 1, 'one unchanged canonical stock definition, no alias-created second staff');
-  const row = rows[0]; assert.equal(row.amt, 1); assert.equal(row.respawn, 0, 'current unresolved stock lifecycle is explicit');
+  assert.equal(rows.length, 1, 'one regenerated canonical stock definition, no alias-created second staff');
+  const row = rows[0]; assert.equal(row.amt, 1); assert.equal(row.respawn, 100); assert.equal(row.members, true);
   const tile = new core.Location(row.location.x, row.location.y, row.location.z);
-  assert.equal(core.World.getItems().some(item => item.getItem().getId() === row.id && item.getPosition().equals(tile)), false,
-    'fixture may create its supplied stock only when it would not overlap a live production stack');
-  stock = new core.ItemOnGround(core.GroundItemState.SEEN_BY_EVERYONE, null, tile, new core.Item(row.id, row.amt),
-    false, row.respawn, null, true);
-  core.ItemOnGroundManager.register(stock); f.stock = stock;
+  const isTarget = item => item.getItem().getId() === row.id && item.getPosition().equals(tile);
+  assert.equal(core.World.getItems().some(isTarget), false, 'no supplied stock may overlap a live target stack');
+  if (options.productionStock === true) {
+    const { GroundItemSpawnDefinitionLoader } = require('../dist/game/definition/loader/impl/GroundItemSpawnDefinitionLoader');
+    const { isMembersWorld } = require('../dist/game/definition/WorldDefinition');
+    const { MAX_STACK_AMOUNT } = require('../dist/game/model/container/StackType');
+    assert.equal(isMembersWorld(), true, 'actual member-world loader precondition; no converter-only or forced membership proof');
+    assert.equal(core.CacheDefinitions.hasItem(row.id), true);
+    const baseline = core.World.getItems().map(item => ({ item, fields:{...item}, value:item.getItem(),
+      amount:item.getItem().getAmount(), id:item.getItem().getId(), meta:JSON.stringify(item.getItem().getMeta()) }));
+    // Same read-only merge precondition as the maintained natural-lever case:
+    // refuse setup before a loader registration could mutate a baseline stack.
+    const mayMerge = (incoming, existing) => {
+      if (!incoming.getItem().getDefinition().isStackable() || existing.isPendingRemoval() || existing === incoming
+        || !core.Location.isSameTile(existing.getPosition(), incoming.getPosition())
+        || existing.getPrivateArea() !== incoming.getPrivateArea()
+        || existing.getDespawnDelay() !== incoming.getDespawnDelay() || !existing.hasSameOperationPolicy(incoming)
+        || existing.getOwner() !== incoming.getOwner() || existing.getItem().getId() !== incoming.getItem().getId()
+        || JSON.stringify(existing.getItem().getMeta() ?? null) !== JSON.stringify(incoming.getItem().getMeta() ?? null)) return false;
+      const recurring = existing.isStaticSpawn() && existing.respawns(), nextRecurring = incoming.isStaticSpawn() && incoming.respawns();
+      if ((recurring || nextRecurring) && (!recurring || !nextRecurring
+        || existing.getRespawnTimer() !== incoming.getRespawnTimer() || existing.getState() !== incoming.getState()
+        || existing.getgoesGlobal() !== incoming.getgoesGlobal() || existing.isAgingPaused() !== incoming.isAgingPaused()
+        || existing.getRespawnAmount() + incoming.getRespawnAmount() > MAX_STACK_AMOUNT)) return false;
+      return existing.getItem().getAmount() + incoming.getItem().getAmount() <= MAX_STACK_AMOUNT;
+    };
+    const register = core.ItemOnGroundManager.register; let loading = false;
+    t.mock.method(core.ItemOnGroundManager, 'register', function(item) {
+      if (loading) {
+        assert.equal(baseline.some(saved => core.World.getItems().includes(saved.item) && mayMerge(item, saved.item)), false,
+          'full loader cannot merge into any pre-existing stack');
+        ownedPositions.add(item.getPosition()); // Capture before a possibly throwing real register.
+      }
+      return Reflect.apply(register, this, [item]);
+    });
+    let loaded;
+    try { loading = true; loaded = new GroundItemSpawnDefinitionLoader().load(); } finally { loading = false; }
+    for (const saved of baseline) {
+      assert.ok(core.World.getItems().includes(saved.item)); assert.equal(saved.item.getItem(), saved.value);
+      assert.equal(saved.value.getId(), saved.id); assert.equal(saved.value.getAmount(), saved.amount);
+      assert.equal(JSON.stringify(saved.value.getMeta()), saved.meta); assert.deepEqual({...saved.item}, saved.fields);
+    }
+    assert.equal(loaded, true, 'actual full core+contributed loader succeeded');
+    const matches = core.World.getItems().filter(isTarget); assert.equal(matches.length, 1);
+    stock = matches[0]; assert.ok(ownedPositions.has(stock.getPosition()), 'target came through actual loader registration');
+    f.loadedThroughProduction = true;
+  } else {
+    stock = new core.ItemOnGround(core.GroundItemState.SEEN_BY_EVERYONE, null, tile, new core.Item(row.id, row.amt),
+      false, row.respawn, null, true);
+    ownedPositions.add(stock.getPosition()); core.ItemOnGroundManager.register(stock);
+    f.loadedThroughProduction = false; // Existing bounded handler fixtures still supply their stack.
+  }
+  f.stock = stock; f.stockRespawns = respawns; f.stockRespawnSubmittedAt = submittedAt;
   assert.ok(core.World.getItems().includes(stock)); assert.equal(stock.isStaticSpawn(), true);
+  assert.equal(stock.getRespawnTimer(), 100); assert.equal(stock.getRespawnAmount(), 1);
+  assert.equal(stock.getOwner() == null, true); assert.equal(stock.getPrivateArea(), null);
+  assert.equal(stock.getState(), core.GroundItemState.SEEN_BY_EVERYONE);
   f.takes = [];
   const pickup = PM.emitGroundItemPickup;
   t.mock.method(PM, 'emitGroundItemPickup', function(event) {
@@ -5033,14 +5099,14 @@ function ikovStaffFixture(t, options = {}) {
     if (event.player === f.player) f.takes.push({ item: event.groundItem, handled: result });
     return result;
   });
-  f.take = async () => {
+  f.take = async (target = stock) => {
     f.player.closeInterruptibleInterfaces(); const before = f.takes.length;
     await f.connection.dispatch([{ type: 'ground_item_action', itemId: row.id, x: tile.getX(), y: tile.getY(),
-      option: 'Take', stackId: stock.getId() }]);
+      option: 'Take', stackId: target.getId() }]);
     f.connection.processTurnPackets();
     for (let turn = 0; turn < 32 && f.takes.length === before; turn++) f.tick();
     assert.equal(f.takes.length, before + 1, 'one decoded ordinary Take reaches the actual stock producer');
-    assert.equal(f.takes.at(-1).item, stock);
+    assert.equal(f.takes.at(-1).item, target);
   };
   return f;
 }
@@ -5240,4 +5306,256 @@ test('Ikov shared Guardian fighting another World actor refuses an ordinary staf
   assert.equal(f.stock.isPendingRemoval(), false);
   assert.ok(core.World.getItems().includes(f.stock));
   assert.equal(other.npc.getCombat().getTarget(), null, 'the separate owned bystander Guardian stays idle');
+});
+
+test('Ikov production member staff loader restores one shared stock at its actual 100-tick deadline without duplicate credit', async t => {
+  const f = ikovStaffFixture(t, { productionStock: true });
+  assert.equal(f.loadedThroughProduction, true);
+  await f.take();
+  for (let turn = 0; turn < 16 && f.npc.getCombat().getTarget() !== f.player; turn++) f.tick();
+  assert.equal(f.npc.getCombat().getTarget(), f.player);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.STAFF_OF_ARMADYL), 0);
+  await ikovKillChallengedGuardian(t, f); // Controlled actual native queued death, not a naturally won fight.
+  await f.take();
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.STAFF_OF_ARMADYL), 1);
+  assert.equal(f.quest.getStage(f.player), 70);
+  assert.equal(f.player.getAttribute('quest.temple_of_ikov.side'), 2);
+  for (let turn = 0; turn < 4 && f.stockRespawns.length === 0; turn++) f.tick();
+  assert.equal(f.stockRespawns.length, 1, 'ordinary ground processing scheduled exactly the original stock task');
+  const task = f.stockRespawns[0], birth = f.stockRespawnSubmittedAt.get(task);
+  assert.equal(task.item, f.stock); assert.equal(task.getDelay(), 100);
+  assert.equal(task.getRemainingTicks(), 100); assert.equal(task.isRunning(), true);
+  const activeStock = () => core.World.getItems().filter(item => item.getItem().getId() === core.ItemIdentifiers.STAFF_OF_ARMADYL
+    && item.getPosition().equals(f.stock.getPosition()) && !item.isPendingRemoval());
+  const items = ikovGuardianItems(f.player), points = f.player.getAttribute('quest.points') ?? 0;
+  for (let elapsed = 1; elapsed < 100; elapsed++) {
+    f.tick();
+    assert.equal(core.World.getProcessCycle() - birth, elapsed);
+    assert.equal(task.getRemainingTicks(), 100 - elapsed);
+    assert.equal(activeStock().length, 0, 'no stock before the real task deadline');
+    assert.deepEqual(ikovGuardianItems(f.player), items);
+  }
+  f.tick();
+  assert.equal(core.World.getProcessCycle() - birth, 100); assert.equal(task.isRunning(), false);
+  const restored = activeStock(); assert.equal(restored.length, 1);
+  assert.notEqual(restored[0], f.stock); assert.equal(restored[0].getPosition(), f.stock.getPosition());
+  assert.equal(restored[0].getItem().getAmount(), 1); assert.equal(restored[0].getRespawnTimer(), 100);
+  assert.equal(restored[0].getOwner() == null, true); assert.equal(restored[0].getPrivateArea(), null);
+  assert.equal(restored[0].getState(), core.GroundItemState.SEEN_BY_EVERYONE);
+  await f.take(restored[0]); // A fresh real stack operation still cannot duplicate this actor's staff.
+  assert.deepEqual(ikovGuardianItems(f.player), items); assert.equal(f.quest.getStage(f.player), 70);
+  assert.equal(f.player.getAttribute('quest.points') ?? 0, points);
+  assert.equal(activeStock().length, 1); assert.equal(restored[0].isPendingRemoval(), false);
+});
+
+async function ikovAcquireStaffForEnding(t) {
+  const f = ikovStaffFixture(t);
+  await f.take();
+  for (let n = 0; n < 16 && f.npc.getCombat().getTarget() !== f.player; n++) f.tick();
+  assert.equal(f.npc.getCombat().getTarget(), f.player);
+  await ikovKillChallengedGuardian(t, f);
+  await f.take();
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.STAFF_OF_ARMADYL), 1);
+  assert.equal(f.quest.getStage(f.player), 70);
+  return f;
+}
+
+async function ikovApproachProducedLucien(f) {
+  const houses = [...core.World.getNpcs()].filter(npc => npc.getId() === core.NpcIdentifiers.LUCIEN_4
+    && npc.getOwner() === f.player && npc.isOwnerOnly());
+  assert.equal(houses.length, 1, 'real World login produced exactly this actor\'s working house Lucien');
+  const house = houses[0], at = house.getLocation();
+  assert.ok(house.isRegistered()); assert.equal(core.World.getNpcs().get(house.getIndex()), house);
+  assert.ok(house.getHitpoints() > 0, 'actual working NPC, no seeded NPC statistics');
+  core.RegionManager.loadMapFiles(at.getX(), at.getY());
+  const approaches = [[0,-1],[1,0],[0,1],[-1,0]].map(([x,y]) => at.transform(x,y));
+  const approach = approaches.find(location => core.RegionManager.canMovestart(location, at, 1, 1, null));
+  assert.ok(approach, 'actual map has a reachable adjacent stand');
+  // Supplied house-approach checkpoint, preserving the actually acquired item.
+  // This is not proof of ordinary travel from the Guardian room to the house.
+  f.player.moveTo(approach);
+  for (let n = 0; n < 4; n++) f.tick();
+  assert.ok(f.player.getLocalNpcs().includes(house), 'actual World visibility includes the produced private NPC');
+  f.house = house;
+  f.houseTalk = async () => {
+    f.player.closeInterruptibleInterfaces();
+    const clickType = house.getCurrentDefinition(f.player).getActions().findIndex(action => action?.toLowerCase() === 'talk-to') + 1;
+    assert.ok(clickType > 0); const before = f.operations.length;
+    await f.connection.dispatch([{ type:'npc_option', index:house.getIndex(), clickType }]);
+    f.connection.processTurnPackets();
+    for (let n = 0; n < 4 && f.operations.length === before; n++) f.tick();
+    assert.equal(f.operations.length, before + 1);
+    assert.equal(f.operations.at(-1).npc, house); assert.equal(f.operations.at(-1).result, true);
+    return f.text();
+  };
+  return house;
+}
+
+async function ikovAcceptStaffHandIn(f) {
+  assert.equal(await f.houseTalk(), 'Have you got the Staff of Armadyl yet?');
+  await ikovGuardianChoose(f, 'Yes! Here it is.');
+  assert.equal(f.text(), 'Yes! Here it is.');
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.STAFF_OF_ARMADYL), 1,
+    'keep the existing atomic terminal hand-in boundary, no early irreversible delivery');
+  assert.equal(f.quest.isComplete(f.player), false);
+}
+
+test('Ikov actually acquired staff completes the produced Lucien hand-in once through ordinary Talk and Continue', async t => {
+  const f = await ikovAcquireStaffForEnding(t);
+  await ikovApproachProducedLucien(f);
+  const points = f.player.getAttribute('quest.points') ?? 0;
+  const boots = f.player.getInventory().getAmount(core.ItemIdentifiers.BOOTS_OF_LIGHTNESS);
+  const coins = f.player.getInventory().getAmount(core.ItemIdentifiers.COINS);
+  const skill = f.player.getSkillManager(), rewards = [], add = skill.addExperiences;
+  const ranged = skill.getExperience(core.Skill.RANGED), fletching = skill.getExperience(core.Skill.FLETCHING);
+  t.mock.method(skill, 'addExperiences', function(id, amount) {
+    rewards.push([id,amount]); return Reflect.apply(add, this, [id,amount]);
+  });
+  await ikovAcceptStaffHandIn(f);
+  const oldGroup = f.player.getPacketSender().getChatboxGroupId();
+  await ikovGuardianFinish(f);
+  assert.equal(f.quest.isComplete(f.player), true);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.STAFF_OF_ARMADYL), 0);
+  assert.equal(f.player.getAttribute('quest.points'), points + 1);
+  assert.deepEqual(rewards, [[core.Skill.RANGED,10500],[core.Skill.FLETCHING,8000]]);
+  assert.ok(skill.getExperience(core.Skill.RANGED) > ranged);
+  assert.ok(skill.getExperience(core.Skill.FLETCHING) > fletching);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.BOOTS_OF_LIGHTNESS), boots);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.COINS), coins);
+  const xp = skill.getExperiences().slice();
+  await f.connection.dispatch([{ type:'dialogue_continue', widgetId:(oldGroup << 16) | 5, childIndex:-1 }]);
+  f.connection.processTurnPackets(); f.tick();
+  assert.deepEqual(skill.getExperiences(), xp); assert.equal(f.player.getAttribute('quest.points'), points + 1);
+  assert.equal(rewards.length, 2, 'a stale ordinary Continue cannot award the quest twice');
+});
+
+test('Ikov removed originating Lucien cannot consume staff or complete through the still-open ordinary continuation', async t => {
+  const f = await ikovAcquireStaffForEnding(t), other = ikovGuardianFixture(t, { world:true });
+  await ikovApproachProducedLucien(f); await ikovAcceptStaffHandIn(f);
+  const items = ikovGuardianItems(f.player), foreign = ikovGuardianItems(other.player);
+  const points = f.player.getAttribute('quest.points') ?? 0, xp = f.player.getSkillManager().getExperiences().slice();
+  const attempts = [], emit = PM.emitCustomEvent;
+  t.mock.method(PM, 'emitCustomEvent', function(name, event) {
+    const result = Reflect.apply(emit, this, [name,event]);
+    if (name === 'npc-dialogue:action' && event.player === f.player && event.stepId === 'f8loKo')
+      attempts.push({ npc:event.npc, end:event.end });
+    return result;
+  });
+  PM.removeNpc(f.house); // Supplied disappearing-NPC counterfactual, not an observed item-loss route.
+  assert.equal(f.house.isRegistered(), false);
+  assert.ok(f.player.getDialogueManager().getCurrent(), 'the original conversation is still present before native Continue');
+  await ikovGuardianFinish(f);
+  assert.equal(attempts.length, 1, 'real playback reaches the actual guarded terminal action');
+  assert.equal(f.quest.isComplete(f.player), false, 'removed originating Lucien cannot complete the quest');
+  assert.equal(attempts[0].npc === f.house, true, 'terminal event retains its actual originating NPC');
+  assert.equal(attempts[0].end, true);
+  assert.deepEqual(ikovGuardianItems(f.player), items); assert.equal(f.quest.getStage(f.player), 70);
+  assert.equal(f.player.getAttribute('quest.points') ?? 0, points);
+  assert.deepEqual(f.player.getSkillManager().getExperiences(), xp);
+  assert.deepEqual(ikovGuardianItems(other.player), foreign); assert.equal(other.quest.getStage(other.player), 50);
+  assert.equal(core.World.getNpcs().get(other.npc.getIndex()), other.npc);
+});
+
+test('Ikov a real bank replacement keeps its UI and staff when the old hand-in Continue arrives', async t => {
+  const f = await ikovAcquireStaffForEnding(t);
+  await ikovApproachProducedLucien(f); await ikovAcceptStaffHandIn(f);
+  const oldGroup = f.player.getPacketSender().getChatboxGroupId(), items = ikovGuardianItems(f.player);
+  const points = f.player.getAttribute('quest.points') ?? 0, xp = f.player.getSkillManager().getExperiences().slice();
+  f.player.getBank(0).open();
+  const replacement = f.player.getInterfaceId(); assert.ok(replacement >= 0);
+  await f.connection.dispatch([{ type:'dialogue_continue', widgetId:(oldGroup << 16) | 5, childIndex:-1 }]);
+  f.connection.processTurnPackets(); f.tick();
+  assert.equal(f.player.getInterfaceId(), replacement); assert.deepEqual(ikovGuardianItems(f.player), items);
+  assert.equal(f.quest.getStage(f.player), 70); assert.equal(f.quest.isComplete(f.player), false);
+  assert.equal(f.player.getAttribute('quest.points') ?? 0, points);
+  assert.deepEqual(f.player.getSkillManager().getExperiences(), xp);
+});
+
+test('Ikov earned Armadyl pendant reaches the produced Lucien native attack and death ending with rewards once', async t => {
+  const { NPCDeathTask } = require('../dist/game/task/impl/NPCDeathTask');
+  const { NPCRespawnTask } = require('../dist/game/task/impl/NPCRespawnTask');
+  let f, house;
+  const prior = new Set(core.World.getItems()), ownedTasks = [];
+  // Before fallible actor/setup/attack work, including native death or drop failures.
+  t.after(() => {
+    const errors = [], clean = fn => { try { fn(); } catch (error) { errors.push(error); } };
+    for (const task of ownedTasks) clean(() => { if (task.isRunning()) core.Task.prototype.stop.call(task); });
+    const ownsDrop = item => f && !prior.has(item) && item.getOwner() === f.player.getUsername();
+    const foreign = core.World.getItems().filter(item => !ownsDrop(item));
+    for (const item of [...core.World.getItems()]) if (ownsDrop(item)) {
+      clean(() => core.ItemOnGroundManager.deregister(item));
+      clean(() => { const at=core.World.getItems().indexOf(item); if (at>=0) core.World.getItems().splice(at,1); });
+    }
+    clean(() => assert.ok(ownedTasks.every(task => !task.isRunning())));
+    clean(() => assert.ok(foreign.every(item => core.World.getItems().includes(item))));
+    if (errors.length) throw new AggregateError(errors, 'Armadyl ending exact owned task/drop cleanup failed');
+  });
+  const submit = core.TaskManager.submit;
+  t.mock.method(core.TaskManager, 'submit', function(task) {
+    if (house && (task instanceof NPCDeathTask || task instanceof NPCRespawnTask) && task.npc === house)
+      ownedTasks.push(task);
+    return Reflect.apply(submit, this, [task]);
+  });
+  f = ikovGuardianFixture(t, { world:true });
+  f.player.getSkillManager().setMaxLevel(core.Skill.HITPOINTS,99);
+  f.player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS,99,false); f.player.setHitpoints(99);
+  f.tick = () => { core.World.process(); f.connection.processTurnPackets(); };
+  for (let n=0;n<4;n++) f.tick();
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.ARMADYL_PENDANT),0);
+  await ikovGuardianAcceptHelp(f); await ikovGuardianFinish(f);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.ARMADYL_PENDANT),1);
+  assert.equal(f.player.getAttribute('quest.temple_of_ikov.side'),1);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.STAFF_OF_ARMADYL),0);
+  const pendant = core.ItemIdentifiers.ARMADYL_PENDANT;
+  const actions = core.CacheDefinitions.getItem(pendant).inventoryActions;
+  const optionIndex = actions.findIndex(action => /^(wear|wield|equip)$/i.test(action ?? '')) + 1;
+  assert.ok(optionIndex>0,'the actual cache supplies the equip operation');
+  await f.connection.dispatch([{ type:'inventory_action', widgetId:core.CacheDefinitions.getComponentId('inventory:items'),
+    itemId:pendant, slot:f.player.getInventory().getSlotForItemId(pendant), option:actions[optionIndex-1], optionIndex }]);
+  f.connection.processTurnPackets(); f.tick();
+  assert.equal(f.player.getInventory().getAmount(pendant),0);
+  assert.equal(f.player.getEquipment().get(core.Equipment.AMULET_SLOT).getId(),pendant,
+    'the actually granted pendant reaches the worn slot through the real equip producer');
+  house = await ikovApproachProducedLucien(f); // Supplied approach, not natural travel from the Guardian room.
+  const attack = house.getCurrentDefinition(f.player).getActions().findIndex(action => action?.toLowerCase()==='attack')+1;
+  assert.ok(attack>0); assert.ok(house.getHitpoints()>0,'native NPC health is not seeded');
+  await f.connection.dispatch([{ type:'npc_option', index:house.getIndex(), clickType:attack }]);
+  f.connection.processTurnPackets();
+  for(let n=0;n<4 && f.player.getCombat().getTarget()!==house;n++) f.tick();
+  assert.equal(f.player.getCombat().getTarget(),house,'ordinary attack is actually admitted with the earned worn pendant');
+  const deaths=[], emit=PM.emitNpcDeath;
+  t.mock.method(PM,'emitNpcDeath',function(event){
+    const aliveSlot = event.npc===house && house.isRegistered() && core.World.getNpcs().get(house.getIndex())===house;
+    const result=Reflect.apply(emit,this,[event]);
+    if(event.npc===house) deaths.push({npc:event.npc,killer:event.killer,aliveSlot});
+    return result;
+  });
+  core.CombatFactory.addPendingHit(new core.PendingHit(f.player,house,core.CombatFactory.getMethod(f.player),
+    {statusDamage:true,damage:house.getHitpoints(),handleAfterHitEffects:false})); // Controlled native lethal hit, not natural combat accuracy.
+  for(let n=0;n<24 && deaths.length===0;n++) f.tick();
+  assert.equal(deaths.length,1); assert.equal(deaths[0].npc,house); assert.equal(deaths[0].killer,f.player);
+  assert.equal(deaths[0].aliveSlot,true,'native death reaches the actual producing NPC before its retirement');
+  assert.equal(f.text(),'You have defeated me for now! I shall reappear in the North!');
+  assert.equal(f.quest.isComplete(f.player),false,'existing completion remains after its actual ending line');
+  const points=f.player.getAttribute('quest.points')??0, boots=f.player.getInventory().getAmount(core.ItemIdentifiers.BOOTS_OF_LIGHTNESS);
+  const coins=f.player.getInventory().getAmount(core.ItemIdentifiers.COINS), skill=f.player.getSkillManager();
+  const ranged=skill.getExperience(core.Skill.RANGED), fletching=skill.getExperience(core.Skill.FLETCHING), rewards=[], add=skill.addExperiences;
+  t.mock.method(skill,'addExperiences',function(id,amount){rewards.push([id,amount]);return Reflect.apply(add,this,[id,amount]);});
+  const oldGroup=f.player.getPacketSender().getChatboxGroupId();
+  await ikovGuardianFinish(f);
+  assert.equal(f.quest.isComplete(f.player),true); assert.equal(f.player.getAttribute('quest.points'),points+1);
+  assert.deepEqual(rewards,[[core.Skill.RANGED,10500],[core.Skill.FLETCHING,8000]]);
+  assert.ok(skill.getExperience(core.Skill.RANGED)>ranged); assert.ok(skill.getExperience(core.Skill.FLETCHING)>fletching);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.STAFF_OF_ARMADYL),0);
+  assert.equal(f.player.getEquipment().get(core.Equipment.AMULET_SLOT).getId(),pendant);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.BOOTS_OF_LIGHTNESS),boots);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.COINS),coins);
+  assert.equal([...core.World.getNpcs()].some(npc=>npc.getOwner()===f.player
+    && [core.NpcIdentifiers.LUCIEN_4,core.NpcIdentifiers.LUCIEN_5].includes(npc.getId())),false);
+  assert.equal(ownedTasks.some(task=>task instanceof NPCRespawnTask && task.isRunning()),false);
+  const xp=skill.getExperiences().slice();
+  await f.connection.dispatch([{type:'dialogue_continue',widgetId:(oldGroup<<16)|5,childIndex:-1}]);
+  f.connection.processTurnPackets(); f.tick();
+  assert.deepEqual(skill.getExperiences(),xp); assert.equal(f.player.getAttribute('quest.points'),points+1);
+  assert.equal(rewards.length,2);
 });

@@ -1,7 +1,7 @@
 {
   "$comment": "What the cache doesn't hold about Smithing. Anvil products (level, bars, amount) come from cache enums 844-846 and their slots from anvil-layout.json (yarn dump:smithing); this file has the furnace recipes and the experience. Item keys are ItemIdentifiers names.",
   "source": "https://oldschool.runescape.wiki/w/Smithing",
-  "$smelting": "Furnace recipes in Smelt-menu order (rsprox captures, rev 227-235 normal worlds: Bronze, Blurite, Iron, Silver, Steel, Gold, Mithril, Adamantite, Runite). Messages: rev 237 captures where docs/smithing.md says so, the same pattern otherwise. The newer lead/cupronickel smelt, retrieve and missing-ore messages are our unverified wording, pending live captures.",
+  "$smelting": "Furnace recipes in Smelt-menu order (rsprox captures, rev 227-235 normal worlds: Bronze, Blurite, Iron, Silver, Steel, Gold, Mithril, Adamantite, Runite). Messages: rev 237 captures where docs/smithing.md says so, the same pattern otherwise. The newer lead/cupronickel smelt, retrieve and missing-ore messages are our unverified wording, pending live captures. Lunar (level 1, 6.2 XP) is the Wiki's Lunar bar recipe; its messages reuse the existing pattern and are unverified pending a capture.",
   "smelting": [
     {
       "name": "Bronze bar",
@@ -13,6 +13,18 @@
       "smeltMessage": "You smelt the copper and tin together in the furnace.",
       "retrieveMessage": "You retrieve a bar of bronze.",
       "missingMessage": "You need at least one copper ore and one tin ore to smelt a bronze bar."
+    },
+    {
+      "name": "Lunar bar",
+      "bar": "LUNAR_BAR",
+      "level": 1,
+      "xp": 6.2,
+      "ingredients": [["LUNAR_ORE", 1]],
+      "barPhrase": "a lunar bar",
+      "smeltMessage": "You smelt the lunar ore into a lunar bar.",
+      "retrieveMessage": "You retrieve a bar of lunar.",
+      "missingMessage": "You need at least one lunar ore to smelt a lunar bar.",
+      "members": true
     },
     {
       "name": "Blurite bar",

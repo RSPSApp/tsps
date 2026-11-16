@@ -800,9 +800,9 @@ test('Fremennik Exiles uses shipped Anvil/Furnace names and defers ordinary smit
   assert.equal(h.inventory.get(I.LUNAR_BAR), 0);
   assert.equal(h.inventory.get(I.V_SIGIL), 1);
   const furnace = h.itemOnObject(I.LUNAR_ORE, 24009);
-  assert.equal(furnace.handled, true, 'canonical Furnace 24009 owns lunar ore');
-  assert.equal(h.inventory.get(I.LUNAR_ORE), 0);
-  assert.equal(h.inventory.get(I.LUNAR_BAR), 1);
+  assert.equal(furnace.handled, false, 'lunar ore defers to Smithing');
+  assert.equal(h.inventory.get(I.LUNAR_ORE), 1);
+  assert.equal(h.inventory.get(I.LUNAR_BAR), 0);
   const ordinary = h.itemOnObject(I.IRON_BAR, 2097);
   assert.equal(ordinary.handled, false, 'ordinary bars defer to Smithing');
   h.quest.setStage(h.player, 35);

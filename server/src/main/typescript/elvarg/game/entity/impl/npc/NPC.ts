@@ -728,8 +728,45 @@ export class NPC extends Mobile {
     }
 
     public setOwner(owner: Player): NPC {
-        this.owner = owner;
+        if (this.owner !== owner) {
+            if (this.owner) NPC.ownedNpcs.get(this.owner)?.delete(this);
+            this.owner = owner;
+            NPC.indexOwner(this);
+        }
         return this;
+    }
+
+    /**
+     * NPCs by owner, so content can find a player's own NPCs without scanning every NPC in the
+     * world (quests did, on each login and logout: seconds per minute with hundreds of players).
+     * Entries are added with the owner and again when the NPC re-enters the world, and dropped
+     * when it leaves; ownedBy() checks owner and registration, so a stale entry never shows.
+     */
+    private static readonly ownedNpcs = new WeakMap<object, Set<NPC>>();
+
+    /** The registered NPCs `owner` owns: what a scan of World.getNpcs() for getOwner() === owner finds. */
+    public static ownedBy(owner: Player | null | undefined): NPC[] {
+        const owned = owner ? NPC.ownedNpcs.get(owner) : undefined;
+        if (!owned) return [];
+        const found: NPC[] = [];
+        for (const npc of owned) {
+            if (npc.owner === owner && npc.isRegistered()) found.push(npc);
+        }
+        return found;
+    }
+
+    /** Indexes an NPC under its owner (on setOwner, and when it is added to the world). */
+    public static indexOwner(npc: NPC): void {
+        const owner = npc.owner;
+        if (!owner) return;
+        let owned = NPC.ownedNpcs.get(owner);
+        if (!owned) NPC.ownedNpcs.set(owner, owned = new Set());
+        owned.add(npc);
+    }
+
+    /** Drops an NPC from its owner's index (when it is removed from the world). */
+    public static forgetOwner(npc: NPC): void {
+        if (npc.owner) NPC.ownedNpcs.get(npc.owner)?.delete(npc);
     }
 
     public getSpawnLineage(): NpcSpawnLineage | null {

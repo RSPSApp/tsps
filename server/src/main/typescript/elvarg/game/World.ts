@@ -1133,6 +1133,11 @@ export class World {
         return this.removeNPCQueue;
     }
 
+    /** The registered NPCs `owner` owns (an index, not a scan of every NPC). */
+    public static getNpcsOwnedBy(owner: Player | null | undefined): NPC[] {
+        return NPC.ownedBy(owner);
+    }
+
     public findSpawnedObject(id: number, loc: Location): GameObject | undefined {
         return World.objects.find(i => i.getId() === id && i.getLocation().equals(loc));
     }
@@ -1285,6 +1290,7 @@ export class World {
                 if (!npc)
                     break;
                 const added = World.npcs.add(npc);
+                if (added) NPC.indexOwner(npc);
                 if (!added) {
                     console.warn("[world:npc] add_queue_failed", {
                         npcId: typeof npc.getId === "function" ? npc.getId() : null,
@@ -1322,6 +1328,7 @@ export class World {
                 const indexBefore = typeof npc.getIndex === "function" ? npc.getIndex() : null;
                 try {
                     World.npcs.remove(npc);
+                    NPC.forgetOwner(npc);
                 } catch (e) {
                     // Same contract as players: a throwing removal hook must not abort the tick.
                     console.error("[world] Failed to remove npc", indexBefore, e);

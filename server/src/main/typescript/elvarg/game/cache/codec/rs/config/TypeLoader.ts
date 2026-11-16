@@ -35,8 +35,11 @@ export class DummyTypeLoader<T extends Type> implements TypeLoader<T> {
 export abstract class BaseTypeLoader<T extends Type> implements TypeLoader<T> {
     // LRU-bounded cache to avoid unbounded memory growth
     cache: Map<number, T> = new Map();
-    // Conservative default; can be tuned per loader if needed
-    protected maxCacheSize: number = 4096;
+    // Large enough for the types a busy world keeps using (varbits, items and NPCs are read per
+    // tick by packets and plugins); at 4096, hundreds of players kept evicting and re-decoding.
+    protected maxCacheSize: number = 16384;
+    private readonly lastUse: Map<number, number> = new Map();
+    private useClock = 0;
 
     constructor(
         readonly typeConstructor: TypeConstructor<T>,
@@ -48,9 +51,10 @@ export abstract class BaseTypeLoader<T extends Type> implements TypeLoader<T> {
     load(id: number): T {
         const cached = this.cache.get(id);
         if (cached) {
-            // Touch for LRU semantics
-            this.cache.delete(id);
-            this.cache.set(id, cached);
+            // Recency is a counter per entry, not the map's order: deleting and re-inserting on
+            // every hit (a varbit per packet, items per preset) churned the map and cost more
+            // than the lookup itself.
+            this.lastUse.set(id, ++this.useClock);
             return cached;
         }
         const type = new this.typeConstructor(id, this.cacheInfo);
@@ -64,6 +68,7 @@ export abstract class BaseTypeLoader<T extends Type> implements TypeLoader<T> {
             console.error("Failed loading type " + id, e);
         }
         this.cache.set(id, type);
+        this.lastUse.set(id, ++this.useClock);
         this.evictIfNeeded();
         return type;
     }
@@ -72,14 +77,17 @@ export abstract class BaseTypeLoader<T extends Type> implements TypeLoader<T> {
 
     clearCache(): void {
         this.cache.clear();
+        this.lastUse.clear();
     }
 
+    /** When full, drops the least recently used quarter in one pass (not one entry per load). */
     protected evictIfNeeded(): void {
-        while (this.cache.size > this.maxCacheSize) {
-            // Evict oldest entry
-            const k = this.cache.keys().next();
-            if (k.done) break;
-            this.cache.delete(k.value);
+        if (this.cache.size <= this.maxCacheSize) return;
+        const keep = this.maxCacheSize - Math.max(1, this.maxCacheSize >> 2);
+        const byAge = [...this.lastUse].sort((a, b) => a[1] - b[1]);
+        for (let i = 0; i < byAge.length - keep; i++) {
+            this.cache.delete(byAge[i][0]);
+            this.lastUse.delete(byAge[i][0]);
         }
     }
 }

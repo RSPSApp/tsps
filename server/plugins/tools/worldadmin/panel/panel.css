@@ -102,13 +102,46 @@ label.host-setting.host-switch-field { cursor: pointer; }
     box-shadow: inset 0 1px 0 #2a2b30;
 }
 .host-image-preview {
+    position: relative;
     width: 112px;
     height: 54px;
     flex: none;
-    object-fit: contain;
     border-radius: 4px;
     background: #15171a;
 }
+.host-image-preview img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: inherit;
+}
+.host-image-download {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    color: #f0e3c8;
+}
+.host-image-download svg {
+    width: 18px;
+    height: 18px;
+    padding: 2px;
+    border: 1px solid #756343;
+    border-radius: 4px;
+    background: #17181c;
+    box-sizing: border-box;
+}
+.host-image-download:hover svg,
+.host-image-download:focus-visible svg {
+    background: #33302a;
+    color: #fff1d2;
+}
+.host-image-download:focus-visible { outline: none; }
+.host-image-download:focus-visible svg { outline: 2px solid #e4c47b; outline-offset: 1px; }
 .host-image-actions {
     display: flex;
     flex: 0 1 170px;

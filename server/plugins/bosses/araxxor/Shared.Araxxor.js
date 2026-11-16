@@ -96,6 +96,9 @@ const CLEAVE_SELF_MAX = 12;
 /** A living Mirrorback redirects a fifth of boss damage to itself, half of that back (Wiki). */
 const MIRRORBACK_REDIRECT_FACTOR = 0.2;
 const MIRRORBACK_RECOIL_FACTOR = 0.5;
+/** Vengeance taking the Mirrorback's recoil, sent as recorded with no closing tag
+ * (rsprox_transcripts/237/01156.txt ticks 1353 and 3589, 237/01179.txt tick 223). */
+const MIRRORBACK_VENGEANCE_MESSAGE = "<col=3366ff>You reflect the Mirrorback's reflected damage!";
 /** On-hit drains (Wiki): a ranged hit drains 9% defence, a magic hit 9% prayer. */
 const DRAIN_RANGED_DEFENCE = 0.09;
 /**
@@ -380,6 +383,7 @@ module.exports = {
   CLEAVE_SELF_MAX,
   MIRRORBACK_REDIRECT_FACTOR,
   MIRRORBACK_RECOIL_FACTOR,
+  MIRRORBACK_VENGEANCE_MESSAGE,
   DRAIN_RANGED_DEFENCE,
   ARANEA_RANGED_COOLDOWN_TICKS,
   ARANEA_CLEAVE_COOLDOWN_TICKS,

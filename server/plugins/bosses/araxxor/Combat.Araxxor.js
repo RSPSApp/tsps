@@ -360,7 +360,16 @@ function redirectToMirrorback(boss, hit) {
   mirrorback.getCombat().getHitQueue().addPendingDamage([
     new core.HitDamage(redirect, core.HitMask.RED),
   ]);
+  const player = attacker.getAsPlayer();
   const recoil = Math.floor(redirect * Shared.MIRRORBACK_RECOIL_FACTOR);
+  if (recoil > 0 && player.hasVengeanceReturn?.()) {
+    // Vengeance takes the recoil: the player is not hit, and three quarters of the Mirrorback's
+    // share rebounds onto Araxxor (rsprox_transcripts/237/01156.txt tick 1353: 10 on the
+    // Mirrorback, the message, "Taste vengeance!" and 7 on Araxxor; tick 3589: 7 and 5).
+    player.sendMessage(Shared.MIRRORBACK_VENGEANCE_MESSAGE);
+    core.CombatFactory.handleVengeance(player, boss, redirect);
+    return;
+  }
   if (recoil > 0) {
     attacker.getAsPlayer().getCombat().getHitQueue().addPendingDamage([
       new core.HitDamage(recoil, core.HitMask.RED),
@@ -391,5 +400,5 @@ module.exports = {
   checkEnrage,
   startCleave,
   drainSkill,
-  _test: { isAdjacent, protections, chooseDistantAttack, shotTicks, araneaNegates, wearsAraneaBoots },
+  _test: { isAdjacent, protections, chooseDistantAttack, shotTicks, araneaNegates, wearsAraneaBoots, redirectToMirrorback },
 };

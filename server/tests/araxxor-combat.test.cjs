@@ -651,6 +651,107 @@ test("the enrage raises Defence by 35, Magic by 28 and Ranged by 31 on the real 
   }
 });
 
+// rsprox_transcripts/237/01156.txt tick 1353: a whip hit on Araxxor puts 10 on the Mirrorback, sends
+// "<col=3366ff>You reflect the Mirrorback's reflected damage!", "Taste vengeance!" and 7 on Araxxor;
+// tick 3589: 7 on the Mirrorback and 5 on Araxxor, the player unhit both times.
+test("vengeance takes the Mirrorback's recoil: the recorded message, no hit, three quarters on Araxxor", async () => {
+  const path = require("node:path");
+  require("../dist/Server").Server.installProductionPathResolver();
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  new NpcDefinitionLoader().load();
+  const core = PluginManager.getCoreApi();
+  const Combat = require("../plugins/bosses/araxxor/Combat.Araxxor");
+  Combat.attach(new Proxy({ core, getPrayerHandler: () => ({}) }, { get: (t, k) => (k in t ? t[k] : () => {}) }));
+  const tile = new core.Location(Shared.SPAWN_TILE[0], Shared.SPAWN_TILE[1], Shared.SPAWN_TILE[2]);
+  const boss = new NPC(Shared.BOSS_ID, tile);
+  const mirrorback = new NPC(Shared.MINION_ID.mirrorback, new core.Location(3635, 9813, 0));
+  for (const npc of [boss, mirrorback]) npc.setRegistered(true);
+  boss.setAttribute(Shared.ATTR_ENCOUNTER, { minions: [mirrorback] });
+  const swing = (player, damages) => {
+    const parts = damages.map((damage) => new core.HitDamage(damage, core.HitMask.RED));
+    const hit = { getAttacker: () => player, getHits: () => parts, updateTotalDamage() {} };
+    Combat._test.redirectToMirrorback(boss, hit);
+    return parts.map((part) => part.getDamage());
+  };
+  const queued = (mob) => mob.getCombat().getHitQueue().pendingDamage.map((hit) => hit.getDamage());
+  const player = new Player(null);
+  player.setUsername("araxxor-veng");
+  const messages = [], said = [];
+  player.sendMessage = (text) => messages.push(text);
+  player.forceChat = (text) => said.push(text);
+  player.setHasVengeance(true);
+
+  assert.deepEqual(swing(player, [52]), [41], "four fifths reach Araxxor");
+  assert.deepEqual(queued(mirrorback), [10], "a fifth on the Mirrorback");
+  assert.deepEqual(messages, ["<col=3366ff>You reflect the Mirrorback's reflected damage!"]);
+  assert.deepEqual(said, ["Taste vengeance!"]);
+  assert.equal(player.hasVengeanceReturn(), false, "vengeance is spent");
+  assert.deepEqual(queued(player), [], "the player takes no recoil");
+  assert.deepEqual(queued(boss), [7], "75% of the Mirrorback's 10 rebounds onto Araxxor");
+
+  // Without vengeance the next swing recoils half of the Mirrorback's share as before.
+  swing(player, [35]);
+  assert.deepEqual(queued(mirrorback), [10, 7]);
+  assert.deepEqual(queued(player), [3], "half of 7");
+  assert.equal(messages.length, 1, "no message without vengeance");
+  assert.deepEqual(queued(boss), [7]);
+});
+
+// rsprox_transcripts/237/01179.txt tick 223: a direct melee double hit of 13 and 6 on the Mirrorback sends the
+// message, spends vengeance ("Taste vengeance!"), rebounds 9 (75% of 13) onto it and leaves 3 recoil from the 6.
+// Wiki (Araxxor/Strategies): Vengeance at melee distance negates the reflected damage.
+test("vengeance on a direct melee hit takes the Mirrorback's recoil; later parts still recoil", async () => {
+  const path = require("node:path");
+  require("../dist/Server").Server.installProductionPathResolver();
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  new NpcDefinitionLoader().load();
+  const core = PluginManager.getCoreApi();
+  Minions.attach(new Proxy({ core, getBonusManager: () => null }, { get: (t, k) => (k in t ? t[k] : () => {}) }));
+  const mirrorback = new NPC(Shared.MINION_ID.mirrorback, new core.Location(3635, 9813, 0));
+  mirrorback.setRegistered(true);
+  const queued = (mob) => mob.getCombat().getHitQueue().pendingDamage.map((hit) => hit.getDamage());
+  const player = new Player(null);
+  player.setUsername("araxxor-veng-melee");
+  player.setLocation(new core.Location(3635 + mirrorback.getSize(), 9813, 0));
+  const messages = [], said = [];
+  player.sendMessage = (text) => messages.push(text);
+  player.forceChat = (text) => said.push(text);
+  const strike = (damages) => Minions.modifyHit({
+    npc: mirrorback,
+    hit: {
+      getAttacker: () => player,
+      getCombatType: () => core.CombatType.MELEE,
+      getHits: () => damages.map((damage) => new core.HitDamage(damage, core.HitMask.RED)),
+      updateTotalDamage() {},
+    },
+  });
+
+  player.setHasVengeance(true);
+  strike([13, 6]);
+  assert.deepEqual(messages, [Shared.MIRRORBACK_VENGEANCE_MESSAGE]);
+  assert.equal(Shared.MIRRORBACK_VENGEANCE_MESSAGE, "<col=3366ff>You reflect the Mirrorback's reflected damage!");
+  assert.deepEqual(said, ["Taste vengeance!"]);
+  assert.equal(player.hasVengeanceReturn(), false, "vengeance is spent");
+  assert.deepEqual(queued(mirrorback), [9], "75% of the first part rebounds onto the Mirrorback");
+  assert.deepEqual(queued(player), [3], "the second part still recoils half");
+
+  // Without vengeance a direct hit recoils half, with no message.
+  strike([20]);
+  assert.deepEqual(queued(player), [3, 10]);
+  assert.equal(messages.length, 1);
+  assert.deepEqual(queued(mirrorback), [9]);
+});
+
 // Wiki (Araxxor, Drops): "The rate to receive any halberd piece is 1/200. Players will not receive
 // duplicate pieces until each full set is obtained." The export listed each piece as its own 1/200
 // roll, so any piece was 3/200 and one kill could hand out two or three (issue #5927).

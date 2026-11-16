@@ -14,7 +14,7 @@
  *   option (docs/splitbark-armour.md).
  * - A pick plays the transcript's shop-dialogue line for that piece: "There you go, enjoy your new
  *   armour!" when the bark, fine cloth and coins are carried (they go and the piece comes), else
- *   "You need ... for a splitbark helm." The amounts and prices are those lines' (Wiki, Wizard
+ *   "You need ... for a splitbark helm." with the chatsad2 head (recording 3202, tick 2736). The amounts and prices are those lines' (Wiki, Wizard
  *   Jalarast's dialogue). Ours: only unnoted bark and cloth count, and the piece takes a slot the
  *   materials leave (no recording of a purchase).
  * - The transcript's "If the player is on a non-members world:" conditions are answered false
@@ -32,6 +32,8 @@ const SHOP_ACTION = "Continues with shop dialogue.";
 const NON_MEMBERS = "If the player is on a non-members world:";
 const HAS_SUPPLIES = "If the player has the supplies:";
 const LACKS_SUPPLIES = "If the player does not have the supplies:";
+/** The refusal's head animation (rsprox.net recording 3202, tick 2736: chatsad2). */
+const REFUSAL_SEQ = "chatsad2";
 
 /** The menu's pieces in its order, with the transcript's option and the bark/cloth and coins it takes. */
 const PIECES = [
@@ -58,6 +60,7 @@ function itemIds() {
     cloth: objId("fine_cloth"),
     coins: objId("coins"),
     pieces: PIECES.map((piece) => ({ ...piece, id: objId(piece.obj) })),
+    refusal: core.CacheDefinitions.getSeqId?.(REFUSAL_SEQ) ?? 611,
   };
   return ids;
 }
@@ -93,7 +96,9 @@ function outcomeSteps(piece, made) {
     const option = menu?.options?.find((entry) => entry.text === piece.option);
     const wanted = made ? HAS_SUPPLIES : LACKS_SUPPLIES;
     const condition = option?.steps?.find((step) => step?.type === "condition" && step.text === wanted);
-    return condition?.steps ?? [];
+    const lines = condition?.steps ?? [];
+    // The made line has no recording, so it keeps the transcript's default head.
+    return made ? lines : lines.map((step) => (step?.npc ? { ...step, expression: itemIds().refusal } : step));
   };
 }
 

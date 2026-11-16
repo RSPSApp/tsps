@@ -121,6 +121,7 @@ test("a helm takes 2 bark, 2 fine cloth and 6,000 coins", async (t) => {
   await click("Trade");
   const line = pick(ids.helm);
   assert.equal(line?.getText?.(), MADE);
+  assert.notEqual(line?.expression, native.CacheDefinitions.getSeqId("chatsad2"), "only the refusal is sad");
   assert.equal(inv.getAmount(ids.helm), 1);
   assert.equal(inv.getAmount(ids.bark), 1);
   assert.equal(inv.getAmount(ids.cloth), 0);
@@ -147,6 +148,7 @@ test("without the supplies the piece's line names them and nothing is taken", as
   await click("Trade");
   const line = pick(ids.body);
   assert.equal(line?.getText?.(), "You need 4 pieces of bark, 4 pieces of fine cloth and 37,000 coins for a splitbark body.");
+  assert.equal(line?.expression, native.CacheDefinitions.getSeqId("chatsad2"), "the refusal's head is chatsad2, as recorded");
   assert.equal(inv.getAmount(ids.body), 0);
   assert.equal(inv.getAmount(ids.bark), 4);
   assert.equal(inv.getAmount(COINS), 36999);

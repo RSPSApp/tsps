@@ -451,7 +451,11 @@ course's `marks` block:
   leaf (1548; 1573/1574 for the gates) stands on the tile behind it, then the closed loc returns.
   The start line is spam, "You go through the gate and try to edge over the ridge..."; entering ends
   with "You skillfully balance across the ridge..." and leaving with "...along the ridge...". The
-  exit route opens the south door behind the player as they cross it.
+  player passes through both ends. Going in (449 ticks 15-32, 451 ticks 31-47): the door swaps with
+  the start line and the first step onto 2998,3917; a tile a tick to 2998,3930; then the north gates
+  swap, the end line plays and the player steps onto 2998,3931, all on the same tick. Coming out
+  (451 ticks 49-65): the gates swap with the start line and the first step south, and the south
+  door opens behind the player as they cross it.
 - **Pipe:** sequence 749 (`human_doublepipesqueeze`, both hands empty in the cache) for each crawl;
   the sequence's 30-cycle start delay and the exact-move start are the same cycle, as in the
   native client, so equipped hands render until the crawl begins and the squeeze's empty hands

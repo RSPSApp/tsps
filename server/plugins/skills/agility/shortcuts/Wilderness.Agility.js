@@ -4,7 +4,9 @@ const { ShortcutAnim, hops } = require("./Builders.Agility");
  * The Wilderness Agility Course entrance: the south door and the north gate pair are balance
  * gates. rsprox 449/450 show each opening as a two-tick loc swap: an inviswall on the threshold,
  * the open leaf on the tile behind it, then the closed loc back. The player edges along the ridge
- * itself, one tile a tick, between the start and end lines.
+ * itself, one tile a tick, between the start and end lines, and passes through both ends: going in,
+ * the door opens with the first step and the north gates with the last (rsprox 449 ticks 16 and 30,
+ * 451 ticks 31 and 45), so the player never walks into a closed gate.
  */
 const RIDGE = Object.freeze({
   door: 23555, // balancegate52a
@@ -92,13 +94,18 @@ function openRidgeGates(context) {
 
 /** Wilderness shortcut scripts (agility-shortcuts.json). */
 module.exports = {
-  /** Into the course: open the south door, then edge north along the ridge. */
+  /**
+   * Into the course: open the south door, edge north along the ridge to the gates, then open
+   * them and step through on the same tick as the end line.
+   */
   wildernessRidgeIn: () => ({
     end: { spam: RIDGE.endIn },
     steps: [
       { msg: { spam: RIDGE.start } },
       { run: openRidgeDoor },
-      { walk: [[RIDGE.gateLeftTile[0], RIDGE.gateLeftTile[1]]] },
+      { walk: [[RIDGE.gateOpenLeftTile[0], RIDGE.gateOpenLeftTile[1]]] },
+      { run: openRidgeGates },
+      { walk: [[RIDGE.gateLeftTile[0], RIDGE.gateLeftTile[1]]], arrive: true },
     ],
   }),
 

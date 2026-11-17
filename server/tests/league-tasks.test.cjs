@@ -998,3 +998,19 @@ test("the trigger overlay names only its league's own tasks, and maps the shared
     }
   }
 });
+
+test("the trigger overlay's NPC and item names are the cache's (a misspelt name never matches)", () => {
+  const overlay = require("../plugins/modes/data/league-task-triggers.json");
+  const npcs = new Set(), items = new Set();
+  const counts = CacheDefinitions.getCounts();
+  for (let id = 0; id < counts.npcs; id++) { const name = CacheDefinitions.getNpc(id)?.name; if (name) npcs.add(name.toLowerCase()); }
+  for (let id = 0; id < counts.items; id++) { const name = CacheDefinitions.getItem(id)?.name; if (name) items.add(name.toLowerCase()); }
+  for (const [type, entries] of Object.entries(overlay)) {
+    if (type === "$comment") continue;
+    for (const [id, trigger] of Object.entries(entries)) {
+      if (["hunt", "pickpocket", "kill", "npc-op"].includes(trigger.kind)) for (const npc of trigger.npcs ?? []) assert.ok(npcs.has(npc.toLowerCase()), `${type}/${id}: NPC ${npc}`);
+      if (["produce", "eat", "deed", "steal", "obtain", "equip"].includes(trigger.kind)) for (const each of trigger.items ?? []) if (typeof each === "string") assert.ok(items.has(each.toLowerCase()), `${type}/${id}: item ${each}`);
+      for (const each of trigger.wearing ?? []) assert.ok(items.has(String(each).toLowerCase()), `${type}/${id}: worn ${each}`);
+    }
+  }
+});

@@ -278,6 +278,9 @@ test("mining: swing message, dust each success, 32 xp (16 on free-to-play), bonu
   assert.equal(p.getSkillManager().getExperience(core.Skill.MINING) - before, 16);
   const success = emitted.find((entry) => entry.name === "mining:success");
   assert.equal(success.payload.petBase, 521550);
+  // The league's "Mine a Shooting Star" / "size 8 or 9": each dust names the star's size.
+  const mined = emitted.filter((entry) => entry.name === "shooting-stars:mined");
+  assert.ok(mined.length >= 4 && mined.every((entry) => entry.payload.player === p && entry.payload.size === 9), JSON.stringify(mined.map((entry) => entry.payload.size)));
 });
 
 test("the full prospector kit raises a stardust's 32 Mining XP to 32.8 (Wiki Shooting_Stars)", () => {

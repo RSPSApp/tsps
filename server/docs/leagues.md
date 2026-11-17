@@ -2040,6 +2040,16 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
   Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
   and the barrel.
+- **A second batch of Demonic Pacts mappings** (overlay only, existing kinds): the hunter catches
+  (snared birds, butterflies, swamp lizards and salamanders, the Feldip Hills' crimson swift and spined
+  larupia in Kandarin, the sabre-toothed kyatt), Tirannwn's gold ore and roast rabbit, the eight
+  crafted snelms, rune brutal and broad ammunition, the Fish stall, Civitas' Spice stall and Hosidius'
+  Golovanova fruit top, and shooting stars (Mining's new `shooting-stars:mined` { player, size } per
+  stardust: "Mine a Shooting Star", and `where` size 8 or 9). "Activate Deadeye" / "Activate Mystic
+  Vigour" count Eagle Eye's / Mystic Might's slot with its prayer scroll read (PrayerHandler's own
+  `deadeyeActive` / `mysticVigourActive`). Not mapped yet: what needs a named place the catalog lacks
+  ("in Shayzien", "in the Stonecutter Outpost"), a Lunar or item teleport the server names no cast
+  of, or content the server doesn't have (pineapples are not pickable).
 - **Deeds** (`Actions.LeagueTasks.js`) listen to the events the skills already emit, counted per
   task in `league:task-progress` (task id -> count) until done (a trigger with an `area` counts
   only deeds done on its map there, where the player stands, `league:area-at`; a potion counts by

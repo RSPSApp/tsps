@@ -835,6 +835,11 @@ function prayed({ player, prayerId }) {
   if (!player) return;
   const name = Common.core.PrayerData?.prayerData?.get?.(prayerId)?.name;
   if (name) count(player, "prayer", name);
+  // A slot the player's prayer scroll upgraded is that prayer too (Deadeye in Eagle Eye's, Mystic Vigour
+  // in Mystic Might's; PrayerHandler's own reading of the scrolls).
+  const handler = Common.core.PrayerHandler;
+  if (prayerId === handler?.EAGLE_EYE && handler.deadeyeActive?.(player)) count(player, "prayer", "Deadeye");
+  if (prayerId === handler?.MYSTIC_MIGHT && handler.mysticVigourActive?.(player)) count(player, "prayer", "Mystic Vigour");
   // `prayer { any: true }`: whichever prayer it is ("Activate a prayer near an altar").
   const type = Common.leagueOf(player);
   if (type !== null) countTasks(player, type, indexOf(type).prayerAny);

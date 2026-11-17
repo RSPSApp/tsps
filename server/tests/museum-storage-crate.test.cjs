@@ -224,7 +224,7 @@ test("placing that item follows the used find when the inventory is rearranged",
 
 test("a reward that would overflow the carried stack keeps the find", () => {
   const original = Math.random;
-  Math.random = () => 0; // coins, the table's minimum of 17
+  Math.random = () => 0; // coins, the table's minimum of 19
   try {
     const player = makePlayer([[995, 2147483647], [ids.arrowheads], [ids.pottery]]);
     use(player, ids.arrowheads, 1);
@@ -235,7 +235,7 @@ test("a reward that would overflow the carried stack keeps the find", () => {
     assert.deepEqual(player.spam, []);
     assert.deepEqual(player.messages, ["You don't have enough inventory space."]);
 
-    const nearly = makePlayer([[995, 2147483647 - 17], [ids.arrowheads], [ids.pottery]]);
+    const nearly = makePlayer([[995, 2147483647 - 19], [ids.arrowheads], [ids.pottery]]);
     use(nearly, ids.arrowheads, 1);
     choose(nearly, 1);
     assert.equal(nearly.getInventory().getAmount(995), 2147483647, "the first reward fits exactly");
@@ -248,12 +248,12 @@ test("a reward that would overflow the carried stack keeps the find", () => {
 
 test("a stackable reward joins the stack already carried", () => {
   const original = Math.random;
-  Math.random = () => 0; // the first row: coins, the table's minimum of 17
+  Math.random = () => 0; // the first row: coins, the table's minimum of 19
   try {
     const player = makePlayer([[995, 100], [ids.arrowheads]]);
     use(player, ids.arrowheads, 1);
     choose(player, 2);
-    assert.equal(player.getInventory().getAmount(995), 117);
+    assert.equal(player.getInventory().getAmount(995), 119);
     assert.equal(idAt(player, 1), -1);
   } finally {
     Math.random = original;
@@ -270,6 +270,7 @@ test("the reward table is the Wiki's 195 weights and rolls every row", () => {
     cumulative += entry.weight;
   }
   assert.deepEqual(StorageCrate.rollReward(() => 0.99999), { itemId: ids.lamp, amount: 1 });
+  assert.deepEqual(StorageCrate.rollReward(() => 0), { itemId: 995, amount: 19 });
   const darts = DATA.rewards.find((entry) => entry.name === "Iron dart");
   assert.deepEqual([darts.min, darts.max], [1, 50]);
 });

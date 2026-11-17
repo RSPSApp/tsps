@@ -33,6 +33,24 @@
     height: 100%;
 }
 
+.protocol-notice {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    /* Below the sidebar panel (24) and its open/close arrow (23). */
+    z-index: 22;
+    box-sizing: border-box;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    background: #292015;
+    color: #ffdda0;
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    text-align: center;
+}
+
 .game-viewport-mobile {
     /* Allow the canvas to shrink below OSRS fixed-mode size on phones. */
     min-width: 0;

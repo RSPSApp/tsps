@@ -5,12 +5,12 @@ module.exports = function registerSessionTools(ctx) {
 
   tool(
     "login",
-    "Log a player in with no client attached, through the normal login (a new name creates the account with this password). They stay online until logout; drive them with the other tools. A new account's first-login screens (the character designer, the Ironman setup) are skipped unless onboarding is \"show\": they hold every world click until answered.",
+    "Log a player in with no client attached, through the normal login (a new name creates the account with this password). They stay online until logout; drive them with the other tools. A new account's first-login screens (the character designer, the Ironman setup, an unstarted league tutorial) are skipped unless onboarding is \"show\": they hold every world click until answered.",
     {
       username: z.string().min(1).max(12),
       password: z.string().min(1).max(64),
       onboarding: z.enum(["skip", "show"]).default("skip")
-        .describe("skip: close a new account's character designer and Ironman setup (default look, no Ironman mode); show: leave them for the test"),
+        .describe("skip: default look/no Ironman setup; skip only a league tutorial at initial stage 0 without rewards or unlocks; progressed tutorials and other UI remain; show: retain onboarding"),
     },
     async ({ username, password, onboarding }) => {
       const { player: p, error } = await core.connectHeadlessClient(username, password);

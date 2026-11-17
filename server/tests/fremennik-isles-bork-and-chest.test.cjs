@@ -248,7 +248,8 @@ test("a registered Neitiznot stump checks current Woodcutting before making a sh
       stage: quest.getStage(p), wcBase: sm.getMaxLevel(Skill.WOODCUTTING), wcCurrent: sm.getCurrentLevel(Skill.WOODCUTTING),
       wcXp: sm.getExperience(Skill.WOODCUTTING), craftXp: sm.getExperience(Skill.CRAFTING), hp: p.getHitpoints() };
   }
-  function useStump(p) {
+  // Cut-wood opens the stump's skillmulti (Neitiznot shield, Arctic pine split log); the test picks `choice`.
+  function useStump(p, choice = I.NEITIZNOT_SHIELD) {
     assert.equal(World.getPlayers().get(p.getIndex()), p, "registered actor identity");
     assert.equal(p.isRegistered(), true);
     assert.ok(p.getHitpoints() > 0);
@@ -262,6 +263,9 @@ test("a registered Neitiznot stump checks current Woodcutting before making a sh
     finally { movement.walkToObject = original; }
     assert.equal(typeof queued?.execute, "function", "the real object listener queued the action");
     queued.execute(); // Scoped walk adapter: no natural walking or timing claim.
+    const menu = p.getCreationMenu();
+    assert.deepEqual(menu?.getItems(), [I.NEITIZNOT_SHIELD, I.SPLIT_LOG], "Cut-wood opens the stump's menu");
+    menu.execute(choice, 1);
   }
   const diaryTask = "craft-a-neitiznot-shield-on-neitiznot";
   const completionCounts = new Map(), emitCustomEvent = PM.emitCustomEvent;
@@ -318,8 +322,8 @@ test("a registered Neitiznot stump checks current Woodcutting before making a sh
     assert.equal(hasShieldTask(p), false, scenario);
     useStump(p);
     assert.equal(hasShieldTask(p), false, scenario + " gives no shield diary credit");
-    assert.equal(p.getInventory().getAmount(I.ARCTIC_PINE_LOGS), 0, scenario);
-    assert.equal(p.getInventory().getAmount(I.SPLIT_LOG), 2, scenario);
+    assert.equal(p.getInventory().getAmount(I.ARCTIC_PINE_LOGS), 2, scenario + ": the shield choice never splits the logs");
+    assert.equal(p.getInventory().getAmount(I.SPLIT_LOG), 0, scenario);
     assert.equal(p.getInventory().getAmount(I.NEITIZNOT_SHIELD), shield, scenario);
     assert.equal(p.getInventory().getAmount(I.ROPE), rope, scenario);
     assert.equal(p.getInventory().getAmount(I.BRONZE_NAILS), nail, scenario);

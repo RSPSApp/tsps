@@ -93,7 +93,8 @@
  *  - Instanced fights are owner-only spawns: Kruk (6805), Kob (7107), Keef (7105),
  *    the three lab gorillas (7095), four Stronghold gorillas (7097) and demonic
  *    Glough (7101). The Crash Site gorillas (7150/7151, 7144-7149) already exist
- *    as static spawns and are counted instead. Multi-phase Glough is one spawn.
+ *    as static spawns and are counted instead. Glough's owned encounter supplies
+ *    its copied cave, room retreats and attempt/final-credit lifecycle.
  *  - Nieve does not follow: being "recruited" is the stage, and the fight credit
  *    is counted on the player's own kills.
  *  - Zooknock's Kruk-greegree conversation has no MM2 transcript anywhere in the
@@ -425,7 +426,6 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     new Location(2432, 3510, 0),
   ];
   const CRASH_LANDING = new Location(2130, 5645, 0);
-  const GLOUGH_SPAWN = new Location(2075, 5677, 0);
   const CRASH_ZONE = { minX: 2050, maxX: 2167, minY: 5640, maxY: 5695, levels: [0] };
   const GRAND_TREE_KING = new Location(2465, 3496, 0);
   const AWOWOGEI_SPAWN = new Location(2803, 2764, 0);
@@ -467,6 +467,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   const npcs = new Map(); // player -> { kruk, lab: [], stronghold: [], glough, awowogei, kob, keef }
 
   let quest;
+  let gloughEncounter;
 
   // ==========================================================================
   // Small helpers
@@ -705,9 +706,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   }
 
   function spawnDemonicGlough(player) {
-    const state = playerState(player);
-    if (alive(state.glough)) return;
-    state.glough = spawnOwnerNpc(player, GLOUGH_DEMON_ID, GLOUGH_SPAWN);
+    return gloughEncounter.start(player);
   }
 
   // ==========================================================================
@@ -1168,6 +1167,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       case "d_zUT5": // Glough consumes the mutagen
         return;
       case "DPLs0V": // Glough retreats
+        if (stageOf(player) === STAGE_CRASH_GORILLAS) spawnDemonicGlough(player);
         return;
       case "7wLJF6": // Glough falls, the cavern collapses
         advance(player, STAGE_ZOOKNOCK_SAVED);
@@ -1613,6 +1613,10 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       player.sendMessage("You see a dark cavern ahead.");
       return;
     }
+    if (stage === STAGE_CRASH_GORILLAS) {
+      spawnDemonicGlough(player);
+      return;
+    }
     if (stage >= STAGE_CRASH_ENTERED) {
       player.moveTo(CRASH_LANDING);
       return;
@@ -1627,6 +1631,17 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     if (stageOf(player) !== STAGE_GARKOR_BREACH) return;
     play(player, GLOUGH_CAVERN_ID, "chapter-v-confronting-glough");
     advance(player, STAGE_CRASH_ENTERED);
+  }
+
+  // LocTeleports can own the cache cavern's Enter before this quest's generic
+  // object hook. Its successful-arrival event is the normal retry producer;
+  // returning from a failed fight to the parent cave is not another entry.
+  function handleRecordedCavernArrival({ player, objectId, location }) {
+    if (objectId !== CRASH_CAVERN_ID || stageOf(player) !== STAGE_CRASH_GORILLAS
+      || location?.x !== 2026 || location?.y !== 5612 || location?.z !== 0
+      || player.getPrivateArea() != null
+      || !player.getLocation().equals(new Location(2128, 5647, 0))) return;
+    spawnDemonicGlough(player);
   }
 
   // ==========================================================================
@@ -1789,7 +1804,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       return;
     }
     if (npcId === GLOUGH_DEMON_ID) {
-      if (stageOf(player) !== STAGE_CRASH_GORILLAS) return;
+      if (!gloughEncounter.claimDeath(event)) return;
       advance(player, STAGE_GLOUGH_DEFEATED);
       play(player, GLOUGH_CAVERN_ID, "chapter-v-after-defeating-glough");
     }
@@ -1806,7 +1821,6 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     if (attribute(player, CRASH_DEMONIC_ATTRIBUTE) < 2) return;
     advance(player, STAGE_CRASH_GORILLAS);
     play(player, GLOUGH_CAVERN_ID, "chapter-v-after-defeating-all-the-gorillas");
-    spawnDemonicGlough(player);
   }
 
   // ==========================================================================
@@ -2173,6 +2187,8 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     onReward: grantReward,
   });
 
+  gloughEncounter = require("../monkeymadnessii/Scene.MonkeyMadnessII").attach(api, { stageOf });
+
   api.onCustomEvent("monkey-madness-ii:zooknock-ownership", answerZooknockOwnership);
   api.onNpcDialogueVariant(selectNarnodeVariant);
   api.onNpcInteraction(handleNpcInteraction);
@@ -2183,6 +2199,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   api.onItemAction(handleItemAction);
   api.onNpcDeath(handleNpcDeath);
   api.onZoneEnter(CRASH_ZONE, handleCrashZone);
+  api.onCustomEvent("loc-teleports:arrived", handleRecordedCavernArrival);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("quest:completed", handleQuestCompleted);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);

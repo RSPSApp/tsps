@@ -3,6 +3,8 @@
 // prerequisites, starting stage 0 and the ordinary supplies, then dispatches the
 // registered NPC/object/item handlers and plays the real transcripts. It does not
 // prove a live playthrough, a natural travel route or the Java overlay.
+// The owned Glough scene is stubbed at its module boundary in this contract
+// harness; monkey-madness-ii-glough-native.test.cjs exercises the real encounter.
 const assert = require('node:assert/strict');
 const { test, before } = require('node:test');
 const path = require('node:path');
@@ -164,7 +166,31 @@ function register() {
   }, { get: (target, key) => target[key] ?? ((...args) => {
     (hooks[key] ??= []).push(args.find(arg => typeof arg === 'function'));
   }) });
-  require(root + '/plugins/quests/quests/MonkeyMadnessII.Quest')(api);
+  const scenePath = path.join(root, 'plugins/quests/monkeymadnessii/Scene.MonkeyMadnessII.js');
+  const previousScene = require.cache[scenePath];
+  const activeGlough = new WeakMap();
+  require.cache[scenePath] = { id: scenePath, filename: scenePath, loaded: true, exports: {
+    attach(sceneApi) {
+      return {
+        start(player) {
+          if (!activeGlough.has(player)) activeGlough.set(player, sceneApi.spawnNpc({
+            id: N.GLOUGH_4, x: 2075, y: 5677, z: 0, owner: player, ownerOnly: true,
+          }));
+          return activeGlough.get(player);
+        },
+        claimDeath({ killer, npc }) {
+          if (activeGlough.get(killer) !== npc) return false;
+          activeGlough.delete(killer);
+          return true;
+        },
+      };
+    },
+  } };
+  try { require(root + '/plugins/quests/quests/MonkeyMadnessII.Quest')(api); }
+  finally {
+    if (previousScene) require.cache[scenePath] = previousScene;
+    else delete require.cache[scenePath];
+  }
   return {
     api, hooks, spawned, removed, drops, objects,
     quest: runtime.getRegisteredQuests().findLast(quest => quest.key === 'monkey_madness_ii'),
@@ -710,6 +736,9 @@ test('stage 0 to completion through the registered handlers and transcripts', ()
     npcDeath(harness, p, N.TORTURED_GORILLA_4);
     npcDeath(harness, p, N.DEMONIC_GORILLA);
     npcDeath(harness, p, N.DEMONIC_GORILLA);
+    expected(160);
+
+    drive(p); // Complete the actual mutagen/retreat transcript before the fight.
     expected(160);
 
     npcDeath(harness, p, N.GLOUGH_4);

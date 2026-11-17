@@ -78,8 +78,8 @@ function actor(t, stage, [x, y, z = 0], attributes = {}) {
   sender.sendVarbit = (id, value) => { log.varbits.push({ tick: now, id, value }); return sendVarbit(id, value); };
   const sendClientScript = sender.sendClientScript.bind(sender);
   sender.sendClientScript = (id, ...args) => { log.scripts.push({ tick: now, id }); return sendClientScript(id, ...args); };
-  const sendSubInterface = sender.sendSubInterface.bind(sender);
-  sender.sendSubInterface = (uid, id, ...args) => { log.subs.push({ tick: now, uid, id }); return sendSubInterface(uid, id, ...args); };
+  const sendSubInterface = sender.mountSubInterface.bind(sender);
+  sender.mountSubInterface = (uid, id, ...args) => { log.subs.push({ tick: now, uid, id }); return sendSubInterface(uid, id, ...args); };
   const animate = player.performAnimation.bind(player);
   player.performAnimation = (animation) => { log.anims.push({ tick: now, id: animation.getId() }); return animate(animation); };
   quest.setStage(player, stage);
@@ -218,6 +218,97 @@ test("Colin's mermaid: held lead-in, cutscene at +2, Colin at the telescope, eac
   assert.equal(varbitAt(player, VARBIT_CABINBOY).at(-1).value, 1);
   assert.equal(varbitAt(player, CUTSCENE_STATUS).at(-1).value, 0);
   assert.equal(owned(player, 7965), null, "Colin's copy is gone");
+});
+
+test("Colin flashback: native interface close restores the cove and cancels pending credit", async (t) => {
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const player = actor(t, STAGE_INVESTIGATING, [2557, 2858, 1]);
+  QuestRuntime.startTranscript(api, player, 7968, PAGE, "colin-s-curse-talking-to-colin", from("I was using Ithoi's telescope"));
+  tick(5);
+  assert.equal(text(player), "Such a beautiful night!");
+  assert.equal(player.getMovementQueue().isMovementBlocked(), true);
+  const connection = new ClientConnection(player.getSession().getChannel());
+  connection.player = player;
+  await connection.dispatch([{ type: "interface_close" }]);
+  connection.processTurnPackets();
+  tick(30);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  assert.deepEqual(at(player), [2557, 2858, 1]);
+  assert.equal((player.getAttribute("quest.the_corsair_curse.cabinboy") ?? 0), 0);
+  assert.equal(player.getAttribute("corsair-curse:scene-exit"), null);
+  assert.equal(owned(player, 7965), null);
+  assert.equal(varbitAt(player, CUTSCENE_STATUS).at(-1).value, 0);
+  assert.equal(current(player), undefined);
+});
+
+test("Colin flashback: same-group replacement during a delayed line survives stale scene callbacks", (t) => {
+  const player = actor(t, STAGE_INVESTIGATING, [2557, 2858, 1]);
+  QuestRuntime.startTranscript(api, player, 7968, PAGE, "colin-s-curse-talking-to-colin", from("I was using Ithoi's telescope"));
+  tick(5);
+  player.getDialogueManager().advance();
+  // Replace the empty statement group with the same group: no interface:closed event.
+  const replacement = new core.DialogueChainBuilder().add(new core.StatementDialogue(0, "Replacement conversation"));
+  const owner = {};
+  player.getDialogueManager().startDialogues(replacement, owner);
+  const mount = player.getPacketSender().getSubInterfaceAt((162 << 16) | 568);
+  tick(35);
+  assert.equal(text(player), "Replacement conversation");
+  assert.equal(player.getDialogueManager().getOwner(), owner);
+  assert.equal(player.getPacketSender().getSubInterfaceAt((162 << 16) | 568), mount);
+  assert.deepEqual(at(player), [2557, 2858, 1]);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(player.getAttribute("quest.the_corsair_curse.cabinboy") ?? 0, 0);
+  assert.equal(owned(player, 7965), null);
+});
+
+test("Colin flashback: closing the held lead-in cancels opening, then a fresh replay completes", (t) => {
+  const player = actor(t, STAGE_INVESTIGATING, [2557, 2858, 1]);
+  const start = () => QuestRuntime.startTranscript(api, player, 7968, PAGE, "colin-s-curse-talking-to-colin", from("I was using Ithoi's telescope"));
+  start();
+  player.getPacketSender().sendInterfaceRemoval();
+  tick(8);
+  assert.deepEqual(at(player), [2557, 2858, 1]);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(owned(player, 7965), null);
+  start();
+  tick(2);
+  assert.ok(owned(player, 7965));
+  playThrough(player, now);
+  assert.equal(player.getAttribute("quest.the_corsair_curse.cabinboy"), 1);
+  assert.deepEqual(at(player), [2557, 2858, 1]);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+});
+
+test("Colin flashback: a replacement on the exact timer turn is never overwritten", (t) => {
+  const player = actor(t, STAGE_INVESTIGATING, [2557, 2858, 1]);
+  QuestRuntime.startTranscript(api, player, 7968, PAGE, "colin-s-curse-talking-to-colin", from("I was using Ithoi's telescope"));
+  tick(5);
+  player.getDialogueManager().advance();
+  tick(1);
+  const replacement = new core.DialogueChainBuilder().add(new core.NpcDialogue(0, 7968, "New NPC conversation", "Colin"));
+  player.getDialogueManager().startDialogues(replacement);
+  const mount = player.getPacketSender().getSubInterfaceAt((162 << 16) | 568);
+  tick(1);
+  assert.equal(text(player), "New NPC conversation");
+  assert.equal(player.getPacketSender().getSubInterfaceAt((162 << 16) | 568), mount);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  tick(30);
+  assert.equal(text(player), "New NPC conversation");
+  assert.equal(player.getAttribute("quest.the_corsair_curse.cabinboy") ?? 0, 0);
+});
+
+test("Colin flashback: a real scene-area leave cancels credit and never returns an external move", (t) => {
+  const player = actor(t, STAGE_INVESTIGATING, [2557, 2858, 1]);
+  QuestRuntime.startTranscript(api, player, 7968, PAGE, "colin-s-curse-talking-to-colin", from("I was using Ithoi's telescope"));
+  tick(5);
+  const instance = player.getArea();
+  player.moveTo(new core.Location(3222, 3218, 0));
+  instance.leave(player, false);
+  tick(35);
+  assert.deepEqual(at(player), [3222, 3218, 0]);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(owned(player, 7965), null);
+  assert.equal(player.getAttribute("quest.the_corsair_curse.cabinboy") ?? 0, 0);
 });
 
 test("Gnocci's doll: the cache's doll script after the scream, Gnocci buries it and runs east, cook 1 at the last line", (t) => {

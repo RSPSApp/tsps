@@ -717,7 +717,7 @@ export class MovementQueue {
         ) {
             return false;
         }
-        if (this.isDynamicallyOccupied(next)) {
+        if (this.isDynamicallyOccupied(next, source)) {
             return false;
         }
         // The "full" flag is collision like a wall's: a diagonal step needs both tiles it
@@ -750,15 +750,17 @@ export class MovementQueue {
      * and need both, so one flag covers it; split canWalkThroughNPCs() if an NPC
      * ever needs to pass NPCs but not players.
      */
-    private isDynamicallyOccupied(next: Location): boolean {
+    private isDynamicallyOccupied(next: Location, source: Location | null = null): boolean {
         const size = this.character.getSize();
         const privateArea = this.character.getPrivateArea();
         if (this.character.isNpc() && !(this.character as NPC).canWalkThroughNPCs()) {
-            if (World.isNpcOccupyingTile(next, this.character as NPC, size, privateArea, true)) {
+            // Only the tiles the step enters: a large NPC's next footprint overlaps its current one,
+            // and whatever stands under that overlap doesn't stop it (World.coversTile, issue 6116).
+            if (World.isNpcOccupyingTile(next, this.character as NPC, size, privateArea, true, source)) {
                 return true;
             }
             const ignored = this.ignoredOccupant?.isPlayer() ? this.ignoredOccupant.getAsPlayer() : null;
-            if (World.isPlayerOccupyingTile(next, ignored, size, privateArea, true)) {
+            if (World.isPlayerOccupyingTile(next, ignored, size, privateArea, true, source)) {
                 return true;
             }
         } else if (this.character.isPlayer() && World.isPlayerBlockingNpcOnTile(next, size, privateArea)) {
@@ -798,7 +800,7 @@ export class MovementQueue {
                 this.character.getSize(),
                 this.character.getSize(),
                 this.character.getPrivateArea()
-            ) && this.isDynamicallyOccupied(next)) {
+            ) && this.isDynamicallyOccupied(next, source)) {
                 this.blockedByDynamicOccupancy = true;
             }
         }

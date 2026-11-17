@@ -276,3 +276,31 @@ test("a preset Amulet of torture is refused", (t) => {
   assert.deepEqual(state.messages, [TEXT.preset]);
   assert.equal(state.dialogue, null);
 });
+
+for (const [label, fangFirst] of [["the chisel on the fang", false], ["the fang on the chisel", true]]) {
+  test(`${label} etches it, as the Etch option does`, (t) => {
+    const state = crafter(t, 86);
+    state.inventory.setItem(0, new core.Item(I.CHISEL, 1));
+    state.inventory.setItem(6, new core.Item(I.ARAXYTE_FANG, 1));
+    assert.equal(fangFirst ? use(state.player, 6, 0) : use(state.player, 0, 6), true);
+    assert.equal(state.inventory.getItems()[6].getId(), I.ETCHED_ARAXYTE_FANG);
+    assert.equal(state.inventory.getAmount(I.CHISEL), 1, "the chisel is kept");
+
+    const rupture = crafter(t);
+    rupture.inventory.setItem(0, new core.Item(I.CHISEL, 1));
+    rupture.inventory.setItem(6, new core.Item(I.ELDER_VENATOR_FANG, 1));
+    assert.equal(fangFirst ? use(rupture.player, 6, 0) : use(rupture.player, 0, 6), true);
+    assert.equal(rupture.inventory.getItems()[6].getId(), I.ETCHED_ELDER_VENATOR_FANG);
+    assert.deepEqual(texts(rupture), [TEXT.etched]);
+  });
+}
+
+test("a preset fang is not etched", (t) => {
+  const state = crafter(t, 86);
+  state.inventory.setItem(0, new core.Item(I.CHISEL, 1));
+  state.inventory.setItem(5, new core.Item(I.ARAXYTE_FANG, 1));
+  state.inventory.getItems()[5].setMetaValue(core.Item.PRESET_META, true);
+  assert.equal(etchBy(state.player, 5), true);
+  assert.deepEqual(state.messages, [TEXT.preset]);
+  assert.equal(state.inventory.getItems()[5].getId(), I.ARAXYTE_FANG);
+});

@@ -25,14 +25,17 @@
  * rancour." and 500 Crafting experience. Neither the Wiki recipe nor the transcript names a bank,
  * so it works anywhere.
  *
+ * Both Wiki item pages describe the etch as "using a chisel on" the fang, so the chisel used on
+ * the fang (either way round) does what the fang's Etch option does.
+ *
  * Neither upgrade is reversible, and the cache gives neither product a Dismantle.
  *
  * Ours: the level messages (no transcript has one; the Araxyte fang transcript lists the etch level
  * refusal as missing), the rupture dialogue boxes' items. The rupture bank check is LeagueMode's
  * shared `league:near-bank`, as the chugging barrel and the giant egg sac use. The product takes the
- * jewellery's slot. Only the plain base item is accepted (Necklace of anguish 19547, not the
+ * jewellery's slot. Etching happens on the click (the Wiki recipe gives 1 tick). Only the plain base item is accepted (Necklace of anguish 19547, not the
  * cache's other copy 27172; Amulet of torture 19553, not the ornamented one), and preset (or other
- * untradeable or unbankable) copies are refused.
+ * untradeable or unbankable) copies are refused, both when etching and when combining.
  */
 let api;
 let core;
@@ -139,6 +142,10 @@ function etch(recipe, { player, item }) {
   const inventory = player.getInventory();
   const slot = inventory.getItems().indexOf(item);
   if (slot < 0 || item.getId() !== recipe.fang) return false;
+  if (restricted(item)) {
+    player.sendMessage(PRESET);
+    return true;
+  }
   if (!inventory.contains(core.ItemIdentifiers.CHISEL)) {
     box(player, recipe.text.noChisel, recipe.text.noChiselItem);
     return true;
@@ -151,6 +158,12 @@ function etch(recipe, { player, item }) {
   inventory.refreshItems();
   if (recipe.text.etched) box(player, recipe.text.etched, recipe.etched);
   return true;
+}
+
+/** A chisel used on the fang (either way round) is the same as its Etch option. */
+function chiselOn(recipe, { player, usedItem, usedWithItem }) {
+  const item = [usedItem, usedWithItem].find((it) => it.getId() === recipe.fang);
+  return item ? etch(recipe, { player, item }) : false;
 }
 
 /** Everything the combine needs, checked again when Yes is chosen. Sends the refusal and returns false. */
@@ -220,6 +233,7 @@ module.exports = {
     core = api.core;
     for (const recipe of recipes()) {
       api.onItemAction(recipe.fangName, { Etch: (event) => etch(recipe, event) });
+      api.onItemOnItem("Chisel", recipe.fangName, (event) => chiselOn(recipe, event), { noted: false });
       api.onItemOnItem(recipe.etchedName, recipe.baseName, (event) => combine(recipe, event), { noted: false });
       if (recipe.text.unetched) {
         api.onItemOnItem(recipe.fangName, recipe.baseName, (event) => unetched(recipe, event), { noted: false });

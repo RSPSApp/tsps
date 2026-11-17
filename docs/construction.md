@@ -227,8 +227,21 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
   battlestaffs cost 100 and mystic staffs 1,000 runes of the new element (Wiki).
 - **Bookcases:** `poh_bookcase` (910) lists enum 5210's books and shows the found ones from
   varps 805, 261-266 and 1037 (cache scripts 7834-7843); a click takes a copy with the captured
-  messages. A book counts as found once the player has carried or banked it when they search a
-  bookcase (the live game marks it when the book is obtained).
+  messages. Successful additions to the player's actual inventory immediately remember catalog
+  books, including when the last copy is dropped before the first Search. Planning inventories,
+  save snapshots, failed additions and bank placeholders do not discover books. Login/Search
+  also remember positive quantities already carried or banked by older saves; previously lost,
+  unrecorded history cannot be reconstructed.
+  [Book on chemicals](https://oldschool.runescape.wiki/w/Book_on_chemicals?oldid=15282307),
+  [Translation book](https://oldschool.runescape.wiki/w/Translation_book?oldid=15282283) and
+  [Beaten book](https://oldschool.runescape.wiki/w/Beaten_book) become recoverable only after
+  The Dig Site, The Grand Tree and Elemental Workshop II respectively. Both the displayed
+  found state and Take enforce these requirements, including for older premature saved flags;
+  acquisition history itself is retained. Original recovery sources remain separate, including
+  the Exam Centre. These three requirements do not constitute an audit of every catalog entry.
+  `tests/poh-bookcase-discovery.test.cjs` exercises real shop purchase, native Drop/Take, the
+  existing Exam Centre quest source, all three registered quest gates, Bank/pickup/trade
+  transfers, item identity/metadata, partial/clamped additions, capacity and a save round trip.
 - **Tip jars:** guests tip coins or platinum tokens (amount prompt ours); the owner sees the
   captured contents box and takes them to the inventory or bank; Setup shows and switches
   notifications and banking on logout. One balance per house; Ironmen can't tip (Wiki).

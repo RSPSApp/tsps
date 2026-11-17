@@ -21,6 +21,16 @@ export class Inventory extends ItemContainer {
     return StackType.DEFAULT;
   }
 
+  protected onItemsAdded(itemId: number, amount: number): void {
+    const player = this.getPlayer();
+    // Planning and save copies are also built on a player. Only the authoritative
+    // inventory observes acquisition; bootstrap owners need not expose one yet.
+    if (player?.getInventory?.() !== this) return;
+    require("../../../../plugins/PluginManager").PluginManager.emitCustomEvent("inventory:acquired", {
+      player, itemId, amount,
+    });
+  }
+
   public refreshItems(): ItemContainer {
     // Only the player's own inventory is shown. A copy built on the player to plan a change (does the loot fit
     // once the key is gone?) must never reach the client: sending it showed the planned state, the key gone,

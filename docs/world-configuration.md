@@ -661,6 +661,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `BrokenItems` | BrokenItems | items | yes | Untradeable items that break on a PvP death, and Perdu, who repairs, locks and unlocks them. |
 | `BryophytasStaff` | BryophytasStaff | items | yes | Bryophyta's staff: charged with up to 1,000 nature runes, Check, bank Configure-Charges, and worn it pays spells' nature runes with a 1/15 chance to save one. |
 | `BurningClaws` | BurningClaws | items | yes | Burning claws: use one Burning claw on another to combine them after 4 ticks, with the captured animation, sound and item box. (members only) |
+| `CalcifiedMoth` | CalcifiedMoth | items | yes | Crushing a calcified moth teleports to Cam Torum once Perilous Moons has opened the city. (members only) |
 | `Camulet` | Camulet | items | yes | Camulet: teleports to Enakhra's Temple or the quarry entrance using charges, recharged with ugthanki dung. (members only) |
 | `CapeOfSkulls` | CapeOfSkulls | items | yes | Cape of skulls: warns before you wear it, then skulls the player for 20 minutes, again on re-equip or login. (members only) |
 | `Chinchompas` | Chinchompas | items | yes | Chinchompa weapons: fuse-based accuracy by distance, area explosion hitting nearby targets in multicombat, and one chinchompa used per throw. (members only) |

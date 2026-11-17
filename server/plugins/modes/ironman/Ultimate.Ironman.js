@@ -39,7 +39,10 @@ function resumePile({ player }) {
 }
 
 function forgetTaken({ groundItem }) {
-  if (!groundItem) return;
+  // A partial pickup fires the same report while the source stack is still on the floor.
+  // Keep it in the pile until the manager has actually removed it, or logout would stop
+  // pausing the remaining deathpile.
+  if (!groundItem || groundItem.pendingRemoval !== true) return;
   for (const pile of deathpiles.values()) pile.delete(groundItem);
 }
 

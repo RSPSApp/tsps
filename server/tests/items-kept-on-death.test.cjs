@@ -756,10 +756,21 @@ test('Ultimate Ironman deathpiles pause while logged out', () => {
   handlers.get('player-death:drop-options')({ player, options });
   assert.equal(options.despawnDelay, 6000);
 
-  const ground = { paused: false, setAgingPaused(value) { this.paused = value; } };
+  const ground = { paused: false, pendingRemoval: false, setAgingPaused(value) { this.paused = value; } };
   handlers.get('player-death:dropped')({ player, groundItem: ground });
   handlers.get('logout')({ player });
   assert.equal(ground.paused, true, 'the timer is paused while the UIM is logged out');
   handlers.get('login')({ player });
   assert.equal(ground.paused, false, 'and resumes on the next login');
+
+  // A partial pickup leaves the same stack registered; its remainder must stay in the
+  // paused pile, while a fully removed stack can be forgotten.
+  handlers.get('ground-items:taken')({ player, groundItem: ground, amount: 1 });
+  handlers.get('logout')({ player });
+  assert.equal(ground.paused, true, 'a partially credited stack stays in the pile');
+  handlers.get('login')({ player });
+  ground.pendingRemoval = true;
+  handlers.get('ground-items:taken')({ player, groundItem: ground, amount: 1 });
+  handlers.get('logout')({ player });
+  assert.equal(ground.paused, false, 'a removed stack leaves the pile');
 });

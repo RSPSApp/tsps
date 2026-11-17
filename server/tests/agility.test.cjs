@@ -702,6 +702,32 @@ test("Piscatoris falconry stile (19222) crosses its 1x2 footprint both ways at l
   }
 });
 
+test("Tenzing's stile (3730) steps onto it, walks over it and steps off, both ways (rsprox local 1001800 ticks 25271-25275)", () => {
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  RegionManager.init();
+  const at = [2817, 3562, 0], ends = [[2817, 3561, 0], [2817, 3564, 0]];
+  RegionManager.loadMapFiles(at[0], at[1]);
+  const object = MapObjects.get(3730, new Location(...at), null);
+  assert.ok(object, "cache stile at Tenzing's hut");
+  for (const end of ends) assert.equal(RegionManager.blocked(new Location(...end), null), false, `${end} is walkable`);
+  for (const side of [0, 1]) {
+    const from = ends[side], to = ends[1 - side];
+    const player = createPlayer(...from, 1);
+    const route = { player, object, objectId: 3730, clickType: 1, destination: null };
+    hooks.route.forEach(handler => handler(route));
+    assert.deepEqual(route.destination, { x: from[0], y: from[1], z: from[2] }, `approach stays on side ${side}`);
+    player.setLocation(new Location(...from));
+    const moves = [];
+    const setForceMovement = player.setForceMovement;
+    player.setForceMovement = (value) => { if (value) moves.push(value); return setForceMovement(value); };
+    assert.notEqual(operate(player, 3730, at, object.getFace()), false);
+    assert.deepEqual(tileOf(player), to, `crossing from side ${side} ends off the stile`);
+    assert.equal(moves.length, 1, "one exact move, over the stile");
+    assert.deepEqual(player.state.messages ?? [], [], "no message");
+  }
+});
+
 test("native Lizardman Canyon handholds enter and leave both crossings at level 1", () => {
   const { RegionManager } = require("../dist/game/collision/RegionManager");
   const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");

@@ -220,7 +220,7 @@ test('the NPC flag is a bit a tile: a player crossing it, or an NPC stepping off
     isNpc: () => true, isPlayer: () => false, getSize: () => 1, getPrivateArea: () => null, canWalkThroughNPCs: () => false,
   };
   const blocked = (x, y) => MovementQueue.prototype.isDynamicallyOccupied.call({ character: mover }, at(x, y));
-  const player = { getPrivateArea: () => null, claimTileOccupancy() {}, getNpcViewDistance: () => 15 };
+  const player = { getPrivateArea: () => null, claimTileOccupancy() {}, getNpcViewDistance: () => 15, getTeleportSerial: () => 0, isRegistered: () => false };
   try {
     assert.equal(blocked(3320, 3300), true, 'an NPC blocks its tile');
     World.onPlayerMoved(player, at(3320, 3299), at(3320, 3300));

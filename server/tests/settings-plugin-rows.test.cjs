@@ -49,7 +49,7 @@ before(async () => {
   // The search view lists every setting: categories, then their rows, in enum order.
   for (const [, structId] of [...CacheDefinitions.getEnumValues(422)].sort(([a], [b]) => a - b)) {
     const category = CacheDefinitions.getStructParams(Number(structId));
-    for (const [, s] of [...CacheDefinitions.getEnumValues(Number(category.get(745)))].sort(([a], [b]) => a - b)) {
+    for (const [, s] of Settings.settingsEnumEntries(Number(category.get(745)))) {
       searchOrder.push(Number(CacheDefinitions.getStructParams(Number(s)).get(1077)));
     }
   }
@@ -298,4 +298,53 @@ test('Farming protection payment confirmation (295): an old save\'s "don\'t ask 
   const fresh = relog(t, never);
   assert.equal(varbit(fresh.p, 98), 0);
   assert.equal('gardenerNoAsk' in Patches.farmFor(fresh.p), false);
+});
+
+test('native dialogue display is reachable in category and search, changes only its bit, and survives saved login', async t => {
+  const f = actor(t), sender = f.p.getPacketSender(), content = [], flags = [];
+  const sendContent = sender.sendContentData.bind(sender), sendFlags = sender.sendInterfaceFlagsRange.bind(sender);
+  t.mock.method(sender, 'sendContentData', (source, datasets) => { content.push({source, datasets}); return sendContent(source, datasets); });
+  t.mock.method(sender, 'sendInterfaceFlagsRange', (...args) => { flags.push(args); return sendFlags(...args); });
+  Settings.openAllSettings(f.p);
+  assert.equal(content[0].source, 'settings:catalog', 'the override owns only its named content sender');
+  const override = content.flatMap(c => c.datasets).find(d => d.key === 'enumOverrides')?.rows.find(r => r.enumId === 1561);
+  assert.ok(override, 'native Chat catalog must expose the existing dialogue-display struct');
+  assert.equal(override.entries.filter(([, id]) => id === 4452).length, 1);
+  assert.deepEqual(override.entries.slice(0, -1), [...CacheDefinitions.getEnumValues(1561)], 'existing native Chat rows keep their keys and order');
+  assert.equal(CacheDefinitions.getStructParams(4452).get(1077), 303);
+  const chatRow = override.entries.findIndex(([, id]) => id === 4452);
+  const ids = [];
+  for (const [, s] of CacheDefinitions.getEnumValues(422)) {
+    const category = CacheDefinitions.getStructParams(Number(s)), enumId = Number(category.get(745));
+    for (const [, row] of enumId === 1561 ? override.entries : CacheDefinitions.getEnumValues(enumId))
+      ids.push(Number(CacheDefinitions.getStructParams(Number(row)).get(1077)));
+  }
+  assert.ok(flags.some(([uid, from, to]) => uid === (134 << 16 | 20) && from === 0 && to >= ids.length - 1), 'last native search row is clickable');
+  assert.equal(varbit(f.p, 14709), 0, 'fresh accounts retain the native off default');
+  sender.sendConfig(3552, 1 << 5); // unrelated nondefault sibling bit must survive every setting click.
+  const clickRow = async (view, slot) => {
+    f.p.setAttribute('settings-view', view);
+    await input(f, {type:'widget_action', widgetId:(134 << 16) | 20, groupId:134, childId:20, buttonNum:1, slot});
+  };
+  await clickRow(2, chatRow);
+  assert.equal(varbit(f.p, 14709), 1);
+  assert.equal(sender.getVarp(3552), (1 << 17) | (1 << 5));
+  const {PlayerSave} = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const saved = PlayerSave.fromPlayer(f.p), loaded = actor(t);
+  saved.applyToPlayer(loaded.p); restoreSettings({player:loaded.p});
+  assert.equal(varbit(loaded.p, 14709), 1, 'a serialized setting restores into a fresh real Player');
+  await clickRow(-1, ids.indexOf(303));
+  assert.equal(varbit(f.p, 14709), 0);
+  assert.equal(f.p.getAttribute('settings:values')['varbit:14709'], 0, 'off is saved too');
+  assert.equal(sender.getVarp(3552), 1 << 5);
+  const off = actor(t);
+  PlayerSave.fromPlayer(f.p).applyToPlayer(off.p); restoreSettings({player:off.p});
+  assert.equal(varbit(off.p, 14709), 0, 'saved off also restores into a fresh real Player');
+  Settings.openAllSettings(f.p);
+  const repeat = content.at(-1).datasets[0].rows[0];
+  assert.deepEqual(repeat.entries, override.entries, 'reopening neither drops nor duplicates native rows');
+  await clickRow(-1, ids.length - 1);
+  assert.equal(varbit(f.p, 9657), ids.at(-1), 'the last search row reaches its own setting');
+  await clickRow(2, chatRow - 1);
+  assert.equal(varbit(f.p, 9657), ids[ids.indexOf(303) - 1], 'the preceding native row keeps its identity');
 });

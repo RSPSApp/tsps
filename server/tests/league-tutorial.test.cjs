@@ -109,12 +109,18 @@ function character(name, { league = 5, isNewAccount = true, profile = "league", 
   if (joined) player.setAttribute("league:type", league);
   if (stage !== undefined) player.setAttribute("league:tutorial-stage", stage);
   const sent = { varbits: new Map(), scripts: [], subs: [], closed: [], flags: [], strings: [], messages: [], logouts: 0, hidden: new Map() };
+  const mounts = new Map(); // target -> immutable lifetime, as PacketSender
   const open = new Map(); // groupId -> target
   const mount = (to, group, type) => {
+    const previousTarget = open.get(group);
+    if (previousTarget !== undefined && previousTarget !== to) mounts.delete(previousTarget);
     for (const [mounted, at] of open) if (at === to && mounted !== group) open.delete(mounted);
     open.set(group, to);
+    const lifetime = Object.freeze({ targetUid: to, groupId: group, type });
+    mounts.set(to, lifetime);
     sent.subs.push([to, group]);
     emit("interface:opened", { player, groupId: group, targetUid: to, type });
+    return lifetime;
   };
   const sender = new Proxy({}, {
     get: (target, key) => {
@@ -127,6 +133,13 @@ function character(name, { league = 5, isNewAccount = true, profile = "league", 
           sent.scripts.push([id, args]);
           return sender;
         };
+        case "mountSubInterface": return (to, group, type = 1) => mount(to, group, type);
+        case "getSubInterfaceAt": return (to) => mounts.get(to);
+        case "closeSubInterfaceMount": return (lifetime) => {
+          if (mounts.get(lifetime.targetUid) !== lifetime) return false;
+          sender.closeSubInterface(lifetime.targetUid);
+          return true;
+        };
         case "sendSubInterface": return (to, group, type = 1) => (mount(to, group, type), sender);
         case "sendInterface": return (group) => {
           // As Player.setInterfaceId: replacing a main interface closes the one before.
@@ -138,6 +151,7 @@ function character(name, { league = 5, isNewAccount = true, profile = "league", 
         };
         case "sendInterfaceRemoval": return () => (closeMain(player), sender);
         case "closeSubInterface": return (to) => {
+          mounts.delete(to);
           for (const [group, at] of open) if (at === to) open.delete(group);
           sent.closed.push(to);
           return sender;
@@ -160,13 +174,14 @@ function character(name, { league = 5, isNewAccount = true, profile = "league", 
   worldLeague = league;
   hooks.onPlayerLogin({ player, username: name, isNewAccount, profile });
   worldLeague = previous;
-  return Object.assign(player, { sent, open });
+  return Object.assign(player, { sent, open, mounts });
 }
 
 /** The main interface closes, as Escape, walking away or an interface removal does. */
 function closeMain(player) {
   const closing = player.getInterfaceId();
   for (const [group, at] of player.open) if (at === MAIN_MODAL || at >>> 16 === closing) player.open.delete(group); // and what it held
+  for (const [target] of player.mounts) if (target === MAIN_MODAL || target >>> 16 === closing) player.mounts.delete(target);
   player.setInterfaceId(-1);
   if (closing >= 0) emit("interface:closed", { player, interfaceId: closing });
 }
@@ -600,5 +615,27 @@ test("Tutorial Island leaves new and returning Leagues VI characters' journal us
     await settle();
     assert.equal(league.open.has(629), true, "welcome replay cannot reapply the island UI");
     assert.equal(league.sent.closed.includes(uid(161, 78)), false);
+  }
+});
+
+
+test("explicit Agent onboarding skip ends only the initial league tutorial without completing tasks", async () => {
+  for (const afterMount of [false, true]) {
+    const league = character(`agent initial ${afterMount}`, { league: 4 });
+    if (afterMount) { await tick(); assertPage(league, 0); }
+    const before = points(league);
+    const unlocked = league.getAttribute("league:areas");
+    emit("account:skip-onboarding", { player: league });
+    assert.equal(league.getAttribute("league:tutorial-stage"), 12);
+    assert.equal(league.sent.varbits.get(STAGE), 12);
+    assert.equal(points(league), before, "skipping earns no tutorial task");
+    assert.equal(league.getAttribute("league:areas"), unlocked);
+    assert.equal(league.getInterfaceId(), -1);
+    assert.equal(league.open.has(MAIN), false);
+    assert.equal(league.open.has(OVERLAY), false);
+    await tick();
+    assert.equal(league.open.has(MAIN), false, "queued initial page cannot reopen");
+    emit("account:skip-onboarding", { player: league });
+    assert.equal(points(league), before);
   }
 });

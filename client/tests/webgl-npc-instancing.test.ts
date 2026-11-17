@@ -25,7 +25,7 @@ function harness(entries: { map: any; dataOffset: number; key: string; worldView
         resolveUnbatchedNpcGeometry: (id: number) => ({ key: entries[id].key, npcTypeId: 1 }),
         uploadDynamicNpcGeometry: () => { uploads++; return 12; },
         dynamicNpcDrawCall: drawCall,
-        osrsClient: { npcEcs: { getWorldViewId: (id: number) => entries[id].worldView ?? -1 } },
+        osrsClient: { npcEcs: { getWorldViewId: (id: number) => entries[id].worldView ?? -1, getNpcTypeId: () => 1 } },
         getNpcModelYOffset: () => 10, getWorldEntityDeckHeight: () => 0,
         worldEntityAnimator: { getTransform: () => transform },
         dynamicNpcSingleDrawRange: [0, 0, 1],

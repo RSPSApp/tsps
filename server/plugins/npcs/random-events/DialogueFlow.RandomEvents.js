@@ -6,23 +6,9 @@
 // cache's legacy OptionDialogue chatbox menus are not wired for this client (their send
 // throws on the missing title), so options go through api.sendMultiChatboxPrompt.
 //
-// Live copies every spoken line to the chatbox as a dialogue game message just before the
-// dialogue opens: MessageGame type=114 'Niles|Thank you, ...' (552 tick 20013), the player's
-// lines too ('<name>|Here you are.', 560 tick 13080). A line may carry its chathead animation
-// as `expression`, and a line break the speaker's text was authored with as "<br>".
-const DIALOGUE_CHAT_TYPE = 114;
 // RunClientScript 58's title in 636 live menus. Invitation prompts are the exception, "What would
 // you like to say?" (53 live, 4156, 1846, 1855), and pass it as `title`.
 const OPTIONS_TITLE = "Select an option";
-
-function mirrored(player, entry, name, text) {
-  const send = entry.send;
-  entry.send = (viewer) => {
-    player.getPacketSender().sendTypedMessage(DIALOGUE_CHAT_TYPE, text.replace(/<br>/g, " "), name);
-    send.call(entry, viewer);
-  };
-  return entry;
-}
 
 /** A page's chathead animation: its own `expression`, or a family's first animation + its line count. */
 function expressionOf(api, page, base) {
@@ -35,12 +21,11 @@ function expressionOf(api, page, base) {
 
 function npcLine(api, player, index, npcId, text, expression) {
   const entry = new api.core.NpcDialogue(index, npcId, text, undefined, expression);
-  const name = api.core.NpcDefinition?.forId(npcId)?.getName()?.replace(/_/g, " ") ?? "";
-  return mirrored(player, entry, name, text);
+  return entry;
 }
 
 function playerLine(api, player, index, text, expression) {
-  return mirrored(player, new api.core.PlayerDialogue(index, text, expression), player.getDisplayName(), text);
+  return new api.core.PlayerDialogue(index, text, expression);
 }
 
 function chat(api, { player, npcId = -1, title = OPTIONS_TITLE, lines = [], playerLines = [],

@@ -61,6 +61,7 @@ function actor(gameval, tile, { coins: carried = 0, permanent = false } = {}) {
     sender[name] = (...args) => { record(...args); return original(...args); };
   };
   wrap("sendSubInterface", (uid, id) => sent.subs.push(id));
+  wrap("mountSubInterface", (uid, id) => sent.subs.push(id));
   wrap("closeSubInterface", (uid) => sent.closed.push(uid));
   wrap("sendVarbit", (id, value) => sent.varbits.push([id, value]));
   wrap("sendSound", (id) => sent.sounds.push(id));

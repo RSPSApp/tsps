@@ -434,6 +434,8 @@ module.exports = function registerRomeoAndJulietQuest(api) {
   }
   function timedSpeech(player,npcId,text) {
     const sender=player.getPacketSender(),group=npcId===null?217:231;
+    const name = npcId === null ? player.getDisplayName() : npcId === CONGREGATION_NPC_ID ? "Congregation" : "";
+    api.core.NpcDialogue.sendDialogueChatLine(player, name, text);
     sender.sendChatboxInterface(group).sendString(text,(group<<16)|6).sendString("",(group<<16)|5).sendInterfaceFlagsRange((group<<16)|5,-1,-1,0);
     if(npcId===null) sender.sendPlayerHeadOnInterface((group<<16)|2);
     else sender.sendNpcHeadOnInterface(npcId,(group<<16)|2).sendString(npcId===CONGREGATION_NPC_ID?"Congregation":"",(group<<16)|4);

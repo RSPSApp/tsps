@@ -66,10 +66,14 @@ function current(player) {
 /** The lobby's Stranger (the Theatre of Blood has another Mysterious Stranger). */
 const STRANGER_NAMES = ["hallowed_lobby_npc", "hallowed_lobby_npc_1op", "hallowed_lobby_npc_3op"];
 
+function isStranger(npc) {
+  const id = npc?.getId?.();
+  return STRANGER_NAMES.some((name) => cache().getNpcId(name) === id);
+}
+
 /** Exchange on the Mysterious Stranger. */
 function open({ player, npc }) {
-  const id = npc?.getId?.();
-  if (!STRANGER_NAMES.some((name) => cache().getNpcId(name) === id)) return false;
+  if (!isStranger(npc)) return false;
   if (!near(player, npc) || player.busy() && !current(player)) return true;
   sessions.set(player, { npc, selected: 0, amount: 0 });
   sync(player);
@@ -189,4 +193,4 @@ function attachTools(api) {
   api.onPlayerLogout(logout);
 }
 
-module.exports = { attachTools, STORED_ATTRIBUTE };
+module.exports = { attachTools, STORED_ATTRIBUTE, isStranger };

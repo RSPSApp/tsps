@@ -144,7 +144,23 @@ function createPlayer({ at = new Location(3046, 3236, 0), items = [], worn = [],
     sendInterfaceAnimation: (uid, seq) => { sent.anims.push([uid, seq]); return sender; },
     sendInterfaceDisplayState: (uid, hide) => { if (!hide) sent.shown.push(uid); return sender; },
     sendSubInterface: (uid, id, type, options) => { sent.subs.push({ uid, id, options }); return sender; },
-    closeSubInterface: (uid) => { sent.closed.push(uid); return sender; },
+    mountSubInterface: (uid, id, type, options) => {
+      const mount = { uid, id, type };
+      if (uid === ((161 << 16) | 1)) sent.fadeMount = mount;
+      sent.subs.push({ uid, id, options });
+      return mount;
+    },
+    closeSubInterfaceMount: (mount) => {
+      if (sent.fadeMount !== mount) return false;
+      sent.fadeMount = null;
+      sent.closed.push(mount.uid);
+      return true;
+    },
+    closeSubInterface: (uid) => {
+      sent.closed.push(uid);
+      if (uid === ((161 << 16) | 1)) sent.fadeMount = null;
+      return sender;
+    },
     sendInterfaceRemoval: () => { sent.removals++; return sender; },
     sendTabInterface: () => sender,
     sendVarbit: (id, value) => { sent.varbits.set(id, value); return sender; },
@@ -237,6 +253,24 @@ test("Take-boat to Entrana: the captured search line, ship_journey route 1, the 
   assert.deepEqual(player.sent.scripts, [...journey, [2524, -1, -1]], "landing clears the background for the next modal");
   assert.equal(player.blocked, false);
   assert.equal(player.area, null);
+});
+
+test("a back-to-back trip keeps its own fade when the previous trip's delayed close fires", () => {
+  const player = createPlayer({ at: new Location(3661, 3849, 0) });
+  const overlay = (161 << 16) | 1;
+  assert.equal(Voyages.travel(player, "lithkren"), true);
+  tick(5);
+  assert.equal(player.blocked, false, "the first trip unlocked the controls");
+
+  assert.equal(Voyages.travel(player, "lithkren-back"), true, "the return trip starts immediately");
+  const closedBefore = player.sent.closed.filter((uid) => uid === overlay).length;
+  tick(2);
+  assert.equal(player.sent.closed.filter((uid) => uid === overlay).length, closedBefore,
+    "the first trip's delayed close must not remove the return trip's fade");
+
+  tick(5);
+  assert.equal(player.sent.closed.filter((uid) => uid === overlay).length, closedBefore + 1,
+    "the return trip closes its own fade at +7");
 });
 
 test("the monks turn back weapons or armour, worn or carried, with the transcript's own refusal", () => {

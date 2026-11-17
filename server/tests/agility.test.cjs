@@ -86,6 +86,7 @@ function chainable(sender) {
 function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], boostedTo = level } = {}) {
   let location = new Location(x, y, z);
   let forceMovement = null;
+  let skillAnimation = -1;
   const attributes = new Map();
   const state = { xp: 0, otherXp: {}, messages: [], spam: [], varbits: new Map(), varbitLog: [], scripts: [], sounds: [], animations: [], hits: 0, blocked: false, walked: 0 };
   const player = {
@@ -104,7 +105,9 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
     }),
     getForceMovement: () => forceMovement,
     setForceMovement: (value) => { forceMovement = value; return player; },
-    setSkillAnimation: (id) => { (state.renders ??= []).push(id); },
+    getSkillAnimation: () => skillAnimation,
+    setSkillAnimation: (id) => { skillAnimation = id; (state.renders ??= []).push(id); },
+    setTemporaryMovementType: (type) => { state.temporaryMovementType = type; },
     getUpdateFlag: () => ({ flag() {} }),
     performAnimation: (animation) => state.animations.push(animation.getId()),
     performGraphic() {},
@@ -2408,6 +2411,72 @@ test("as captured (rsprox 1638, local 1001895, 1001899): the Nature Grotto bridg
   }
 });
 
+test("as captured (rsprox 359; local 1001631, 1001653, 1001659, 1001991, 1002015, 1002076): the Fremennik log balance and its river fall", () => {
+  const LOG = 16542;
+  const random = Math.random;
+  const tiles = (player, ticks) => ticks.map((entry, index) => (entry.moved ? index : null)).filter((index) => index != null);
+  try {
+    // Successes: two tiles a tick, the success line a tick in, BUSY off and 4 XP 4 ticks in, both ways.
+    Math.random = () => 0;
+    for (const [start, finish] of [[[2722, 3592, 0], [2722, 3596, 0]], [[2722, 3596, 0], [2722, 3592, 0]]]) {
+      const player = createPlayer(...start, 60);
+      const ticks = timeline(player, LOG, [2722, 3593, 0]);
+      assert.deepEqual(tileOf(player), finish, `from ${start}`);
+      assert.deepEqual(tiles(player, ticks), [0, 1], "the middle tile, then the far end");
+      assert.deepEqual(ticks[0].messages, ["You attempt to walk across the slippery log."]);
+      assert.deepEqual(player.state.spam, ["You attempt to walk across the slippery log."]);
+      assert.deepEqual(ticks[1].messages, ["You make it across the log without any problems."]);
+      assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(2470)), [0, 1]);
+      assert.equal(ticks.length - 1, 4);
+      assert.equal(ticks[4].xp, 4);
+      assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393).map(([, value]) => value), [1, 0]);
+      assert.equal(player.state.hits, 0);
+    }
+
+    // Failures: to the middle, into the river east of it (exactmove and teleport on one tick),
+    // washed four tiles to the north bank, 6 damage and 2 XP 7 ticks in.
+    Math.random = () => 0.999;
+    const player = createPlayer(2722, 3592, 0, 48);
+    const moves = [];
+    const setForceMovement = player.setForceMovement;
+    const cleared = [];
+    player.setForceMovement = (value) => {
+      if (value) moves.push([value.getStart().getX(), value.getStart().getY(), value.getEnd().getX(), value.getEnd().getY(), value.getSpeed(), value.getReverseSpeed(), value.getDirection()]);
+      else cleared.push(String(tileOf(player)));
+      return setForceMovement(value);
+    };
+    const path = [];
+    const ticks = [];
+    const recorded = timeline(player, LOG, [2722, 3593, 0]);
+    recorded.forEach((entry, index) => { if (entry.moved) path.push(index); ticks.push(entry); });
+    assert.deepEqual(tileOf(player), [2725, 3597, 0], "on the north bank");
+    assert.deepEqual(path, [0, 1, 3, 4, 5, 6], "the middle, the fall, then a tile a tick down the river");
+    assert.deepEqual(moves, [[2722, 3594, 2, 0, 22, 35, 0]], "exactmove from the middle tile, cycles 22-35, facing north");
+    assert.deepEqual(cleared, ["2724,3594,0"], "the teleport onto the river tile keeps the exactmove; it is cleared on the splash tick, before the river walk");
+    assert.deepEqual(ticksWith(ticks, (entry) => entry.animations.includes(2582)), [1]);
+    assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(2493)), [1]);
+    assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(1658)), [2]);
+    assert.deepEqual(player.state.tileGraphics, [[68, 3, 2724, 3594, 0]]);
+    assert.deepEqual(ticks.map((entry) => entry.messages), [
+      ["You attempt to walk across the slippery log."],
+      ["You lose your footing and fall into the water."],
+      [],
+      ["You're being washed down the river."],
+      ["You feel like you're drowning..."],
+      ["You finally come to shore."],
+      [],
+      [],
+    ]);
+    assert.deepEqual(player.state.spam, ["You attempt to walk across the slippery log.", "You feel like you're drowning...", "You finally come to shore."]);
+    assert.deepEqual(player.state.damage, [6]);
+    assert.equal(ticks[7].xp, 2);
+    assert.equal(ticks.reduce((sum, entry) => sum + entry.xp, 0), 2);
+    assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393).map(([, value]) => value), [1, 0]);
+  } finally {
+    Math.random = random;
+  }
+});
+
 test("the Nature Grotto bridge rolls the Wiki's success chart (low 60, high 252) and is no longer a bare teleport", () => {
   const entry = SHORTCUTS.find((shortcut) => shortcut.name === "Bridge (Nature Grotto)");
   assert.equal(entry.level, 1);
@@ -2725,9 +2794,10 @@ test("Wilderness ridge door: opening the south door and the north gates swaps th
   assert.deepEqual(enter.steps[2], { walk: [[2998, 3930]] });
   assert.deepEqual(enter.steps[4], { walk: [[2998, 3931]], arrive: true });
   const leave = require("../plugins/skills/agility/shortcuts/Wilderness.Agility").wildernessRidgeOut();
-  assert.deepEqual(leave.end, { spam: RIDGE.endOut });
+  assert.equal(leave.end, undefined, 'the early exit line has no completion duplicate');
   assert.deepEqual(leave.steps[2], { walk: [[2998, 3918]] });
-  assert.deepEqual(leave.steps[4], { walk: [[2998, 3916]] });
+  assert.deepEqual(leave.steps[4], { msg: { spam: RIDGE.endOut } });
+  assert.deepEqual(leave.steps.at(-1), { walk: [[2998, 3916]], tilesPerTick: 2, arrive: true, traversalType: 1 });
 });
 
 test("as captured (rsprox 449 ticks 15-32, 451 ticks 31-47): the ridge door opens as the player steps in, the north gates as they step out", () => {

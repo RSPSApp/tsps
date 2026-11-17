@@ -64,6 +64,7 @@ function overseerLine(index, text) {
     const { NpcDialogue } = Common.core;
     OverseerLine = class extends NpcDialogue {
       send(player) {
+        NpcDialogue.sendDialogueChatLine(player, "The Overseer", this.getText());
         const head = (CHAT_GROUP << 16) | 2;
         player.getPacketSender()
           .sendChatboxInterface(CHAT_GROUP)

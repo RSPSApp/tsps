@@ -3,7 +3,6 @@ import { ItemContainerChanged, WidgetLoaded } from "@runelite/api/events";
 import * as InventoryID from "@runelite/api/gameval/InventoryID";
 import type { OsrsClient } from "../../game/OsrsClient";
 import type { Inventory, InventoryEvent } from "../../rs/inventory/Inventory";
-import { bindDialogueChat } from "./DialogueChatSource";
 
 /**
  * Posts ItemContainerChanged from the client's backpack (INV, 93) and worn equipment (WORN,
@@ -32,7 +31,7 @@ export function bindContainerEvents(client: OsrsClient, post: (event: object) =>
 }
 
 /**
- * The event sources that read the widget manager (WidgetLoaded, dialogue pages as DIALOG chat).
+ * The WidgetLoaded event source that reads the widget manager.
  * `RuneLite.load()` runs from the OsrsClient constructor, before the widget manager exists, so
  * `bind()` does nothing until the client calls it again once the manager is created. Binding
  * twice is a no-op; `release()` unbinds.
@@ -49,12 +48,7 @@ export class WidgetSourceBinder {
     bind(): boolean {
         if (this.unbind) return true;
         if (!this.client.widgetManager) return false;
-        const unbindWidgets = bindWidgetEvents(this.client, this.post);
-        const unbindDialogue = bindDialogueChat(this.client, this.post);
-        this.unbind = () => {
-            unbindWidgets();
-            unbindDialogue();
-        };
+        this.unbind = bindWidgetEvents(this.client, this.post);
         return true;
     }
 

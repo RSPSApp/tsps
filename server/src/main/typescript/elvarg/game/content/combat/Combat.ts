@@ -14,6 +14,8 @@ import { StatementDialogue } from "../../model/dialogues/entries/impl/StatementD
 import { TickStopwatch } from "../../../util/TickStopwatch";
 import { ServerPerf } from "../../../util/ServerPerf";
 import { World } from "../../World";
+import { Wilderness } from "../wilderness/Wilderness";
+import { hasGlobalWorldTag } from "../../definition/WorldDefinition";
 import { CombatConstants } from "./CombatConstants";
 import { CombatFactory, CanAttackResponse } from "./CombatFactory";
 import { CombatRange } from "./CombatRange";
@@ -153,12 +155,27 @@ export class Combat {
      * (https://oldschool.runescape.wiki/w/PJ_timer).
      */
     private static readonly PJ_TIMER_MS = 8 * 600;
-    /**
-     * Player-versus-player keeps the existing 10-tick hold here. Live uses a longer PvP PJ
-     * timer (20 ticks in Wilderness singles, 16 on PvP worlds), which is a separate change;
-     * the PvM fix must not shorten PvP protection.
-     */
+    /** Other player-versus-player holds keep the old 10-tick window. */
     private static readonly PVP_TIMER_MS = 10 * 600;
+    /** Wiki (PJ timer): 20 ticks in Wilderness single-way and singles-plus combat. */
+    private static readonly WILDERNESS_PVP_TIMER_MS = 20 * 600;
+    /** Wiki (PJ timer): 16 ticks in single-way combat on a PvP world. */
+    private static readonly PVP_WORLD_TIMER_MS = 16 * 600;
+
+    /**
+     * The player-versus-player PJ window for the character being attacked. The timer only
+     * exists in single-way/singles-plus combat: Wilderness fights use 20 ticks and PvP worlds
+     * 16, while every other PvP context keeps the old 10-tick hold.
+     */
+    public static pvpPjTimerMs(character: Mobile, pvpWorld: boolean = hasGlobalWorldTag("pvp")): number {
+        const location = character.getLocation();
+        if (!location) return this.PVP_TIMER_MS;
+        // Multi-combat has no PJ lock; leave its existing retarget hold alone.
+        if (Wilderness.isMulti(location.getX(), location.getY(), location.getZ())) return this.PVP_TIMER_MS;
+        if (Wilderness.isGeographicPvp(location)) return this.WILDERNESS_PVP_TIMER_MS;
+        if (pvpWorld) return this.PVP_WORLD_TIMER_MS;
+        return this.PVP_TIMER_MS;
+    }
 
     public preserveMovementForTicks(ticks = 1): void {
         this.manualMovementUntilCycle = World.getProcessCycle() + Math.max(0, ticks) - 1;
@@ -328,12 +345,13 @@ export class Combat {
 
         if (this.attacker) {
             // Wiki (PJ timer): 8 ticks of protection while a monster is attacking; a kill ends
-            // it early (NPC.appendDeath). PvP keeps its longer window for now. Only the attacker
-            // expires here: the logout timer runs on to its own 16 ticks. Before the
-            // scripted-walk return, so a long plugin walk still lets it expire.
+            // it early (NPC.appendDeath). PvP uses 20 ticks in the Wilderness and 16 on PvP
+            // worlds (single-way only). Only the attacker expires here: the logout timer runs
+            // on to its own 16 ticks. Before the scripted-walk return, so a long plugin walk
+            // still lets it expire.
             const timerMs = this.attacker.isNpc() || this.character.isNpc()
                 ? Combat.PJ_TIMER_MS
-                : Combat.PVP_TIMER_MS;
+                : Combat.pvpPjTimerMs(this.character);
             if (this.lastAttack.elapsedTime(timerMs)) this.clearAttacker();
         }
 

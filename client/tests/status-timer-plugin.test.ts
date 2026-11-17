@@ -34,7 +34,7 @@ for (const [width, height, cssW, cssH, portrait] of [
     const client = {
         runeLite,
         widgetManager: { rootInterface: 601, canvasWidth: width, canvasHeight: height },
-        renderer: { canvas: { clientWidth: cssW, clientHeight: cssH } },
+        renderer: { canvas: { width: cssW, height: cssH, clientWidth: cssW, clientHeight: cssH } },
     } as any;
     let previousRight = (8 + 64) * cssW / width;
     for (let slot = 0; slot < 7; slot++) {
@@ -71,7 +71,7 @@ for (const [cssW, cssH, dpr, scale] of [[848, 720, 1, 1], [640, 385, 2, 1], [144
     }
 }
 const packed = { runeLite, widgetManager: { rootInterface: 601, canvasWidth: 800, canvasHeight: 400 },
-    renderer: { canvas: { clientWidth: 800, clientHeight: 400 } } } as any;
+    renderer: { canvas: { width: 800, height: 400, clientWidth: 800, clientHeight: 400 } } } as any;
 const before = mobileCombatTimerStyle(packed, 1)!;
 packed.renderer.canvas.clientWidth = 1600;
 assert.equal(mobileCombatTimerStyle(packed, 0)!.transform, "scale(2.5)", "resize updates timer size without reloading");

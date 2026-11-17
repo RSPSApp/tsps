@@ -27,12 +27,14 @@ export class NpcDialogue extends Dialogue {
     public send(player: Player): void {
         const sender = player.getPacketSender();
         const headUid = (this.groupId << 16) | 2;
+        const name = this.speakerName ?? (NpcDefinition.forId(this.npcId)?.getName()?.replace(/_/g, " ") || "");
+        Dialogue.sendDialogueChatLine(player, name, this.text);
         sender
             .sendChatboxInterface(this.groupId)
             .sendNpcHeadOnInterface(this.npcId, headUid)
             .sendInterfaceAnimation(headUid, typeof this.expression === "number" ? this.expression : this.expression.getExpression())
             .sendString(
-                this.speakerName ?? (NpcDefinition.forId(this.npcId)?.getName()?.replace(/_/g, " ") || ""),
+                name,
                 (this.groupId << 16) | 4
             );
         NpcDialogue.sendChatText(player, this.text, (this.groupId << 16) | 6, (this.groupId << 16) | 5);

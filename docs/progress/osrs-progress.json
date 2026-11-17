@@ -53241,7 +53241,8 @@
             "Main 0a219d100 (2026-11-03): #1941 adds optional clipboard paste and name/word/regex highlights plus configurable chat notifications; #1917 propagates display and previous names through live chat.",
             "Main 8403b60db (4 November 2026): #2071, #2128, #2189 — Chat timestamps/filter options, legacy colour tags and login welcome output are corrected.",
             "Main 3b61a15a8 (6 November 2026): #2297 fix: keep chat history consumers off the API event bus; #2399 Use the native OSRS quest list and repair quest state publication; #2561 Restore touch keyboard access for GE item search; #2707 Wire skull prevention settings into the player attack policy; #2708 Allow iron arrows with basic bows and sync ammo pickup settings. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4313 Settings: player Trade and Report options and Ctrl+click run mode follow their rows. #3651 Fix public chat colour and pattern prefix parsing."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4313 Settings: player Trade and Report options and Ctrl+click run mode follow their rows. #3651 Fix public chat colour and pattern prefix parsing.",
+            "2026-11-17 dialogue history: shared NPC/player pages and custom spoken scene boundaries now send recorded type 114 with displayed speaker, flattened breaks and a 200-character combined payload; the client posts one network-backed plugin event. Native All Settings > Chat and settings search expose existing setting303/struct4452 through one effective Chat catalog. Its natural toggle shows/hides dialogue history and saves the14709 preference across logout/fresh login, preserving default0. Native history itself resets on fresh login; it is not persisted."
           ],
           "taskDetails": [
             {

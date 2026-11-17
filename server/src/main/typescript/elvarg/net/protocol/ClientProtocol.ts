@@ -1116,6 +1116,8 @@ export const ChatType = {
   TRADE: 102,
   /** An NPC's overhead line, shown as "Name: text"; the NPC's name goes in `from`. */
   NPC_SAY: 116,
+  /** Spoken dialogue history, with "Name|text" in the message (rsprox `type=dialogue`). */
+  DIALOGUE: 114,
   /** A message box's text, logged in the chatbox as live does when one opens (rsprox `type=mesbox`). */
   MESBOX: 115,
   /** The login greeting, "Welcome to Old School RuneScape." (rsprox `type=108`). */

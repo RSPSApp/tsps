@@ -233,8 +233,6 @@ const pendingColours = new WeakMap();
 // Rows and dropdown options that may reach us (0..512). Search
 // results number rows across every category, so they run far past one category's length.
 const ALL_SETTINGS_LAST_SLOT = 511;
-// The settings list's rows, as live enables them (RSProx captures); a search lists more than 512.
-const ALL_SETTINGS_LAST_ROW = 538;
 // The All Settings window's volume sliders (scripts 9260, 9266, 9272, 9278) trigger the list's
 // row with the setting and the new volume; live gives the list the transmit-trigger event for it.
 const ALL_SETTINGS_VOLUME_VARPS = new Map([
@@ -317,6 +315,33 @@ const PARAM_SETTING_OPTIONS = 1091;
 const SETTING_TYPE_TOGGLE = 0;
 const SETTING_TYPE_DROPDOWN = 2;
 const SEARCH_VIEW = -1;
+const CHAT_SETTINGS_ENUM = 1561;
+const DIALOGUE_DISPLAY_SETTING = 303;
+const DIALOGUE_DISPLAY_STRUCT = 4452;
+const SETTINGS_CATALOG_SOURCE = "settings:catalog";
+
+/** Native row303 exists, but rev242's Chat enum omits it. Use the same rows for scripts and clicks. */
+function settingsEnumEntries(enumId) {
+  const entries = [...CacheDefinitions.getEnumValues(enumId)].sort(([a], [b]) => a - b);
+  if (enumId !== CHAT_SETTINGS_ENUM) return entries;
+  const definition = CacheDefinitions.getStructParams(DIALOGUE_DISPLAY_STRUCT);
+  if (definition.get(PARAM_SETTING_ID) !== DIALOGUE_DISPLAY_SETTING
+      || definition.get(PARAM_SETTING_TYPE) !== SETTING_TYPE_TOGGLE) {
+    throw new Error("Unsupported native dialogue-display setting definition");
+  }
+  const matches = entries.filter(([, id]) => CacheDefinitions.getStructParams(Number(id)).get(PARAM_SETTING_ID) === DIALOGUE_DISPLAY_SETTING);
+  if (matches.length > 1 || (matches.length === 1 && Number(matches[0][1]) !== DIALOGUE_DISPLAY_STRUCT)) {
+    throw new Error("Ambiguous native dialogue-display setting row");
+  }
+  if (!matches.length) entries.push([Math.max(-1, ...entries.map(([key]) => key)) + 1, DIALOGUE_DISPLAY_STRUCT]);
+  return entries;
+}
+
+function sendSettingsCatalog({ player }) {
+  player.getPacketSender().sendContentData(SETTINGS_CATALOG_SOURCE, [{ key: "enumOverrides", rows: [{
+    enumId: CHAT_SETTINGS_ENUM, valueType: "J", defaultValue: -1, entries: settingsEnumEntries(CHAT_SETTINGS_ENUM),
+  }] }]);
+}
 
 // Row locks. A setting struct with param 1115 set can be locked, and param 1116 is the text a
 // locked row shows. The cache's settings scripts grey the row out while script 2520 says it is
@@ -383,7 +408,7 @@ function catalog() {
     const category = CacheDefinitions.getStructParams(Number(structId));
     const categoryId = Number(category.get(PARAM_CATEGORY_ID));
     const rows = [];
-    for (const [, settingStruct] of [...CacheDefinitions.getEnumValues(Number(category.get(PARAM_CATEGORY_SETTINGS)))].sort(([a], [b]) => a - b)) {
+    for (const [, settingStruct] of settingsEnumEntries(Number(category.get(PARAM_CATEGORY_SETTINGS)))) {
       const params = CacheDefinitions.getStructParams(Number(settingStruct));
       const settingId = params.get(PARAM_SETTING_ID);
       const options = params.get(PARAM_SETTING_OPTIONS);
@@ -806,13 +831,14 @@ function chooseNpcAttackOption({ player, slot }) {
 }
 
 function openAllSettings(player) {
+  sendSettingsCatalog({ player });
   player.setInterfaceId(ALL_SETTINGS_INTERFACE_ID);
   const sender = player.getPacketSender();
   sender.sendSubInterface(MAIN_MODAL_UID, ALL_SETTINGS_INTERFACE_ID, 0);
   // The settings/controls are dynamic children created client-side; without
   // these transmit flags their ops never reach us. Op1 over the used slot range.
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_CATEGORIES_CLICKZONE, 0, 15, TRANSMIT_OP1);
-  sender.sendInterfaceFlagsRange(ALL_SETTINGS_SETTINGS_CLICKZONE, 0, ALL_SETTINGS_LAST_ROW, TRANSMIT_OP1 | TRANSMIT_TRIGGER);
+  sender.sendInterfaceFlagsRange(ALL_SETTINGS_SETTINGS_CLICKZONE, 0, catalog().all.length - 1, TRANSMIT_OP1 | TRANSMIT_TRIGGER);
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_DROPDOWN_BUTTONS, 0, ALL_SETTINGS_LAST_SLOT, TRANSMIT_OP1);
   // It opens on the category shown last; live sends nothing for it.
   player.setAttribute("settings-view", sender.getVarbit(SETTINGS_CATEGORY_VARBIT));
@@ -1225,6 +1251,7 @@ module.exports = {
   applyDefaultKeybindings,
   syncPlayerKeybindings,
   openAllSettings,
+  settingsEnumEntries,
   openKeybindings,
   keybindVarbitForRow,
   refuseLockedSetting,
@@ -1260,6 +1287,7 @@ module.exports = {
     api.persistAttribute(QUEST_LIST_SHOW_MIGRATED_ATTRIBUTE, false);
     api.persistAttribute(GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE, false);
     api.onPlayerLogin(restoreSettings);
+    api.onPlayerLogin(sendSettingsCatalog);
     api.onPlayerLogin(sendMouseoverText);
     // Changing category, or searching, changes what a row's slot means.
     api.onInterfaceActionButton(ALL_SETTINGS_CATEGORIES_CLICKZONE, clickCategory);

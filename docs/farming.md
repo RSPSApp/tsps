@@ -111,3 +111,13 @@ When the inventory fills: spam "You have run out of inventory space.", on the ti
   from the inventory would (weeds, level, tool, seed count).
 - The Wiki's Seed_box page (fetched this session) says Check lists the contents in chat; the captures show the window
   instead, so the captures are followed.
+
+## Lumbridge Swamp shed tools
+
+In rsprox capture 3174 (rev 232, ticks 71–160), taking the shed's `farming_shed_tools`
+with neither tool opens “Which would you like to take?” with Rake, Spade and Both. Choosing
+Spade gives a spade and the spam line “You 'borrow' a spade.” Taking again gives a rake with
+its corresponding spam line; with both held the game line is “You've already got a spade and
+a rake.” Ours: Both gives each missing tool with the individual lines and requires room for
+both; the full-inventory message and outcomes, the rake menu choice, and having only a rake
+are not captured.

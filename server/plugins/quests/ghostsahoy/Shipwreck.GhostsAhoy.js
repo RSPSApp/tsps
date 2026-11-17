@@ -63,6 +63,7 @@ const JUMP_ANIM = 1604; // human_jump_stones, delay 26
 const JUMP_SOUND = 2461;
 const FALL_ANIM = 767; // human_falling_end
 const FALL_SOUND = 2455;
+const JUMP_ENERGY_UNITS = 500; // Wiki: 5%; rev242/900302 ticks940 and981, at leap start.
 const JUMP_XP = 10; // Transcript: "10 Agility experience" a successful jump
 /** Wiki (Ghosts Ahoy): 25 Agility, boostable, "to cross the rocks". */
 const JUMP_AGILITY = 25;
@@ -388,10 +389,17 @@ function jumpToRock(event) {
     return true;
   }
   const falls = fallRoll();
+  let energyDebited = false;
+  const debitEnergy = () => {
+    if (energyDebited) return;
+    energyDebited = true;
+    player.addRunEnergyUnits(-JUMP_ENERGY_UNITS);
+    player.getPacketSender().sendRunEnergy();
+  };
   const steps = [];
   const here = player.getLocation();
   if (here.getX() !== jump.from[0] || here.getY() !== jump.from[1]) steps.push({ walk: [jump.from] });
-  steps.push({ sound: JUMP_SOUND });
+  steps.push({ run: debitEnergy }, { sound: JUMP_SOUND });
   steps.push({ move: [...jump.to, 0], anim: JUMP_ANIM, delay: 26, speed: [47, 59], ticks: 2 });
   if (falls) {
     steps.push({ anim: FALL_ANIM }, { sound: FALL_SOUND }, { wait: 2 },
@@ -399,7 +407,11 @@ function jumpToRock(event) {
   } else {
     steps.push({ run: () => player.getSkillManager().addExperiences(core.Skill.AGILITY, JUMP_XP) });
   }
-  ObstacleRunner.run({ player }, steps, { busyVarbit: true, agility: true });
+  ObstacleRunner.run({ player }, steps, {
+    busyVarbit: true, agility: true,
+    // The runner's forced landing skips run steps; charge a completed jump only once.
+    onFinish: (completed) => { if (completed) debitEnergy(); },
+  });
   return true;
 }
 

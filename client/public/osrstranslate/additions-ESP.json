@@ -24,7 +24,11 @@
   },
   {
    "ref": "feat/mouseover-and-combat-labels",
-   "commit": "3a5930aff59bfa9dd57ebdebb4481322e2b76ff1"
+   "commit": "be93c2071d65aec06794db8710e58e41d0860c34"
+  },
+  {
+   "ref": "fix/broav-messages",
+   "commit": "01f6d0f39fb55bf01a5516a51713cfd0fbd1fe98"
   }
  ],
  "files": {
@@ -12038,7 +12042,9 @@
     "You have already unlocked that teleport.": "Ya has desbloqueado ese teletransporte.",
     "Your telegrab fizzles as you move too far away.": "Tu telegrab falla porque te alejaste demasiado.",
     "Too late - it's gone!": "¡Demasiado tarde, ya no está!",
-    "This spell can not be cast on this item.": "Este hechizo no se puede lanzar sobre este objeto."
+    "This spell can not be cast on this item.": "Este hechizo no se puede lanzar sobre este objeto.",
+    "You let the broav sniff the dirty shirt...": "Dejas que el broav olfatee la camisa sucia...",
+    "The broav seems to have found something interesting...": "El broav parece haber encontrado algo interesante..."
    },
    "fix": {
     "Nothing interesting happens.": [

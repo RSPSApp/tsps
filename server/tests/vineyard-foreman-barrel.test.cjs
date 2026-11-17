@@ -174,6 +174,9 @@ test("four ripe vines of the player's own sparkle (map_anim 3005 at height 50) a
   const unripe = Vineyard.vineTiles().find((tile) => !ripe.some((each) => String(each) === String(tile)));
   await pickAt(p, connection, unripe);
   assert.ok(messages.includes(Vineyard.UNRIPE), messages.join(" | "));
+  await pickAt(p, connection, ripe[0]);
+  assert.equal(messages.at(-1), "You don't have anything to put those grapes in.", "a ripe vine with no barrel (1098 tick 16266)");
+  assert.equal(p.getAttribute(Vineyard.RIPE_ATTRIBUTE).length, 4, "and it stays ripe");
 
   besideForeman(p);
   await askForWork(p);

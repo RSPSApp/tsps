@@ -221,14 +221,17 @@ function inArea(player, type, task) {
 
 /**
  * A trigger's own conditions on the player as the deed happens:
- * - `wearing { items }`: one of the items worn (by name), "Cook something with an apron equipped";
+ * - `wearing: [items]` (or `{ items }`): one of the items worn (by name), "Cook something with an apron
+ *   equipped";
  * - `near { npcs?, objects?, options?, distance }`: an NPC or a loc of one of the names (or a loc
  *   offering one of the menu options: an altar's "Pray-at") within `distance` tiles (Chebyshev, to
  *   the nearest tile of its footprint) on the player's plane and instance: "Cry near a child",
  *   "Activate a prayer near an altar".
  */
 function conditionsMet(player, task) {
-  const { wearing, near } = task.trigger;
+  const { near } = task.trigger;
+  // `wearing: [items]`, or `wearing: { items }` as other kinds name their lists.
+  const wearing = Array.isArray(task.trigger.wearing) ? task.trigger.wearing : task.trigger.wearing?.items;
   if (wearing && !wearing.some((unit) => wornUnit(wornIndexOf(player), unit))) return false;
   if (near && !isNear(player, near)) return false;
   return true;
@@ -269,7 +272,7 @@ function isNear(player, { npcs, objects, options, distance }) {
 
 /**
  * The names an NPC goes by for this player: the form it shows them (a multinpc resolved by their
- * vars), its own, and, for a multinpc parent with no name, its forms' (Civitas' quetzal is spawn
+ * vars), its own, and every one of a multinpc's forms' (Civitas' quetzal is spawn
  * 13355, unnamed, whose forms include Renu; RSProx 237/1098 tick 14440 shows it as Renu's form).
  */
 function npcNamesOf(npc, player) {

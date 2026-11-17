@@ -28,8 +28,7 @@
  *
  * Ours, no source: which vines can ripen (live numbers its ripe vines in 6-bit varbits 11343-11346,
  * aldarin_grapes_position_1..4, by a list the cache does not carry, so this server takes any Pick
- * grapevine of the three vineyards and sends no such varbit); a partly filled barrel's Check line;
- * Pick with no barrel. Recorded difference: live ripened one new vine the tick the barrel filled
+ * grapevine of the three vineyards and sends no such varbit); a partly filled barrel's Check line. Recorded difference: live ripened one new vine the tick the barrel filled
  * (1098 tick 16588) and the other three at the hand-in; the Wiki says they refresh only after the
  * turn-in, which this follows.
  */
@@ -58,7 +57,8 @@ const UNRIPE = "Those grapes don't look ripe enough to pick yet.";
 const CHECK_EMPTY = "The grape barrel is empty.";
 const CHECK_FULL = "The grape barrel is full. You should return it to the Vineyard foreman.";
 const CHECK_SOME = (sets) => `The grape barrel contains ${sets}/${SETS} sets of grapes.`; // Ours
-const NO_BARREL = "You need a grape barrel from the Vineyard foreman to collect these grapes."; // Ours
+/** A ripe vine with no barrel carried (RSProx 237/1098 tick 16266, before the first barrel). */
+const NO_BARREL = "You don't have anything to put those grapes in.";
 const FULL_VARIANT = "standard-dialogue-talking-with-a-full-grape-barrel-in-your-inventory";
 const PAYMENT_LINE = "Great work! Here, keep some grapes as payment.";
 

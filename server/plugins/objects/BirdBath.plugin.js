@@ -31,6 +31,8 @@ const OUTCOMES = [
 ];
 
 let api = null;
+/** A drink waiting on its outcome: a second Yes in those two ticks is no second drink (ours). */
+const drinking = new WeakSet();
 
 function apply(player, outcome) {
   const { core } = api;
@@ -49,10 +51,13 @@ function apply(player, outcome) {
 
 function drink(player, random) {
   const { core } = api;
+  if (drinking.has(player)) return;
+  drinking.add(player);
   player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("poh_pool_drink_silent")));
   player.getPacketSender().sendSoundEffect(DRINK_SOUND, 1, 0);
   const from = player.getLocation().clone();
   core.TaskManager.submit(new core.CountdownTask(player, OUTCOME_TICKS, () => {
+    drinking.delete(player);
     if (!player.isRegistered() || player.getHitpoints() <= 0 || !player.getLocation().equals(from)) return;
     const index = Math.min(OUTCOMES.length - 1, Math.floor((random ?? Math.random)() * OUTCOMES.length));
     const outcome = OUTCOMES[index];

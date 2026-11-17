@@ -2107,6 +2107,18 @@ test("wearing: something cooked with an apron on (Cook something with an apron);
   assert.ok(done(g, "cook-something-with-an-apron"), "a white apron");
 });
 
+test("wearing: written as a list or as { items }, both read the same", async (t) => {
+  const Common = require("../plugins/modes/leaguetasks/Common.LeagueTasks");
+  const task = Common.catalog(6).tasks.find((each) => each.id === "cook-something-with-an-apron");
+  const list = task.trigger.wearing;
+  t.after(() => { task.trigger.wearing = list; });
+  task.trigger.wearing = { items: list };
+  const f = pactsCharacter(t);
+  f.player.getEquipment().setItem(core.Equipment.BODY_SLOT, new core.Item(item("White apron")));
+  assert.equal(await cookShark(t, f), 1);
+  assert.ok(done(f, "cook-something-with-an-apron"));
+});
+
 test("chop-logs: any logs chopped (Chop Some Logs)", async (t) => {
   const f = pactsCharacter(t);
   assert.ok(!done(f, "chop-some-logs"));

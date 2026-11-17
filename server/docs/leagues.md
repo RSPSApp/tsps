@@ -2007,10 +2007,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   a rule in the generator, or an entry in the overlay; or have the plugin that knows the deed emit
   `league:complete-task`. Everything else in the catalog is visible and counts once mapped.
 - **Conditions** on any counted deed trigger (`Actions.LeagueTasks.js`, `conditionsMet`):
-  `wearing { items }`, one of the items worn as the deed happens ("Cook something with an
+  `wearing: [items]` (or `{ items }`), one of the items worn as the deed happens ("Cook something with an
   apron": a Brown or White apron; the Wiki: a Golden apron does not work), and `near { npcs?,
   objects?, options?, distance }`, an NPC or loc of one of the names, or a loc offering one of the
-  options (an altar's `Pray-at`), within `distance` tiles of the player (Chebyshev, to the nearest
+  options (an altar's `Pray-at`; "near an altar" takes `Pray-at` and `Pray`, so a god statue,
+  shrine or statuette with Pray counts too, ours), within `distance` tiles of the player (Chebyshev, to the nearest
   tile of its footprint, same plane and instance). The Demonic Pacts tasks the generator could not
   word-map are in the overlay (issue 6108). The distances are fitted to rsprox.net recording 1098
   (rev 237, Leagues VI), the only one that completes them; the Wiki gives none:

@@ -109,7 +109,8 @@ Ours and recorded differences (besides the two above):
   (`aldarin_grapes_position_1..4`) by an index list the cache doesn't carry. The six indices recorded are
   6 = 1355,2933; 9 = 1364,2933; 10 = 1354,2931; 14 = 1356,2929; 16 = 1358,2913; 21 = 1361,2909. This
   server picks from every Pick grapevine of the three vineyards and sends no position varbit.
-- **Check on a partly filled barrel** and **Pick with no barrel** use our own lines.
+- **Check on a partly filled barrel** uses our own line. Pick on a ripe vine with no barrel says "You don't
+  have anything to put those grapes in." (1098 tick 16266, before the first barrel).
 - **When the vines refresh**: live ripened one new vine on the tick the barrel filled (1098 tick 16588),
   and the other three at the hand-in. The Wiki says they refresh only after the turn-in, which this
   server follows.

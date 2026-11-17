@@ -71,6 +71,15 @@ test("bird bath: No closes the menu; a bowl, jug, bucket or vial used on it says
   assert.ok(messages.includes(BirdBath.NOT_ENOUGH_WATER), messages.join(" | "));
 });
 
+test("bird bath: a second Yes while the first drink waits is no second outcome", (t) => {
+  const { p } = player(t);
+  BirdBath.drink(p, () => 0.3); // 1 damage
+  core.TaskManager.process();
+  BirdBath.drink(p, () => 0.3);
+  for (let i = 0; i < 4; i++) core.TaskManager.process();
+  assert.deepEqual(p.getCombat().getHitQueue().pendingDamage.map((hit) => hit.getDamage()), [1], "one hit");
+});
+
 test("Dairy Buffalo: no empty bucket, no milking", (t) => {
   const { p, messages } = player(t);
   const Buffalo = require("../plugins/objects/DairyBuffalo.plugin.js")._test;

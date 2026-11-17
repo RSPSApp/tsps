@@ -2043,7 +2043,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
 - **A second batch of Demonic Pacts mappings** (overlay only, existing kinds): the hunter catches
   (snared birds, butterflies, swamp lizards and salamanders, the Feldip Hills' crimson swift and spined
   larupia in Kandarin, the sabre-toothed kyatt), Tirannwn's gold ore and cooked rabbit, the nine
-  crafted snelms (broken bark too), rune brutal and broad ammunition, the Fish stall, Civitas' Spice stall and Hosidius'
+  crafted snelms (broken bark too), rune brutal and broad ammunition, the Fish stall, Civitas' Spice stall (by its loc id, 51936: Port Roberts' has the same name and
+  area; Stalls now sends `objectId` with `thieving:success`) and Hosidius'
   Golovanova fruit top, and shooting stars (Mining's new `shooting-stars:mined` { player, size } per
   stardust: "Mine a Shooting Star", and `where` size 8 or 9). "Activate Deadeye" / "Activate Mystic
   Vigour" count Eagle Eye's / Mystic Might's slot with its prayer scroll read (PrayerHandler's own

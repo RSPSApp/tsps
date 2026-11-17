@@ -1010,7 +1010,7 @@ test("the trigger overlay's NPC and item names are the cache's (a misspelt name 
     for (const [id, trigger] of Object.entries(entries)) {
       if (["hunt", "pickpocket", "kill", "npc-op"].includes(trigger.kind)) for (const npc of trigger.npcs ?? []) assert.ok(npcs.has(npc.toLowerCase()), `${type}/${id}: NPC ${npc}`);
       if (["produce", "eat", "deed", "steal", "obtain", "equip"].includes(trigger.kind)) for (const each of trigger.items ?? []) if (typeof each === "string") assert.ok(items.has(each.toLowerCase()), `${type}/${id}: item ${each}`);
-      for (const each of trigger.wearing ?? []) assert.ok(items.has(String(each).toLowerCase()), `${type}/${id}: worn ${each}`);
+      for (const each of (Array.isArray(trigger.wearing) ? trigger.wearing : trigger.wearing?.items) ?? []) assert.ok(items.has(String(each).toLowerCase()), `${type}/${id}: worn ${each}`);
     }
   }
 });

@@ -2280,7 +2280,9 @@ test("batch 2: hunter catches, area produce, snelms, ammo, stall thefts and shoo
   made("Rune brutal", 50);
   assert.ok(done(f, "make-200-brutal-rune-arrows"));
 
-  PM.emitCustomEvent("thieving:success", { player, method: "stall", stall: "Spice stall", itemId: item("Spice") });
+  PM.emitCustomEvent("thieving:success", { player, method: "stall", stall: "Spice stall", itemId: item("Spice"), objectId: 58105 });
+  assert.ok(!done(f, "steal-from-the-fortis-spice-stall"), "Port Roberts' spice stall, also in Varlamore");
+  PM.emitCustomEvent("thieving:success", { player, method: "stall", stall: "Spice stall", itemId: item("Spice"), objectId: 51936 });
   assert.ok(done(f, "steal-from-the-fortis-spice-stall"), "the spice stall in Civitas");
   PM.emitCustomEvent("thieving:success", { player, method: "stall", stall: "Fish stall", itemId: item("Raw salmon") });
   assert.ok(done(f, "steal-a-fish"));

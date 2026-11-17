@@ -425,7 +425,7 @@ function finishTheft(event, stall) {
   spam(player, message ?? stealLine(reward));
   if (stall.marksMerchant !== false) rememberTheft(player, stall, theftVarbitKey(object, stall));
   pluginApi.emitCustomEvent("thieving:success", { player, skill: core.Skill.THIEVING, petBase: stall.petBase, method: "stall",
-    stall: event.definition.getName(), itemId: reward.getId(), location: object.getLocation() });
+    stall: event.definition.getName(), itemId: reward.getId(), location: object.getLocation(), objectId: object.getId() });
   const ticks = object.getId() === core.ObjectIdentifiers.BAKERY_STALL_2 ? 16 : stall.respawnTicks;
   // Content may keep the stall stocked ("thieving:deplete-stall", a league relic) and ask for another go ("thieving:done").
   const depletion = { player, object, handled: false };

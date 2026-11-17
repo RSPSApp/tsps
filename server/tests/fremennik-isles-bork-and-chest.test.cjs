@@ -266,6 +266,8 @@ test("a registered Neitiznot stump checks current Woodcutting before making a sh
     const menu = p.getCreationMenu();
     assert.deepEqual(menu?.getItems(), [I.NEITIZNOT_SHIELD, I.SPLIT_LOG], "Cut-wood opens the stump's menu");
     menu.execute(choice, 1);
+    core.TaskManager.process();
+    core.TaskManager.process();
   }
   const diaryTask = "craft-a-neitiznot-shield-on-neitiznot";
   const completionCounts = new Map(), emitCustomEvent = PM.emitCustomEvent;

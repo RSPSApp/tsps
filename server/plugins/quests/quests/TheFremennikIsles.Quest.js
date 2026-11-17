@@ -1687,27 +1687,32 @@ module.exports = function registerTheFremennikIslesQuest(api) {
    * The stump's "Neitiznot shield" choice ("woodcutting:stump-shield" from
    * skills/woodcutting/SplitLogs.Woodcutting.js, which also splits the logs).
    */
+  const SHIELD_WOODCUTTING_LEVEL = 56;
+  const SHIELD_CRAFTING_XP = 34;
+  const SHIELD_SOUND = 2101;
+
   function makeNeitiznotShield(request) {
     const { player } = request;
-    if (stageOf(player) < STAGE_ARMOUR_DONE || hasItem(player, NEITIZNOT_SHIELD)) return;
-    if (
-      !hasItem(player, ARCTIC_PINE_LOGS, 2) ||
-      !hasItem(player, ROPE) ||
-      !hasItem(player, BRONZE_NAILS) ||
-      !hasItem(player, HAMMER)
-    ) {
-      return;
-    }
+    if (stageOf(player) < STAGE_ARMOUR_DONE) return;
+    const inventory = player.getInventory();
+    const available = () => Math.min(Math.floor(inventory.getAmount(ARCTIC_PINE_LOGS) / 2),
+      inventory.getAmount(ROPE), inventory.getAmount(BRONZE_NAILS));
+    if (available() < 1 || !hasItem(player, HAMMER)) return;
     request.handled = true;
-    if (player.getSkillManager().getCurrentLevel(Skill.WOODCUTTING) < 56) {
-      return;
-    }
-    player.getInventory().deleteNumber(ARCTIC_PINE_LOGS, 2);
-    player.getInventory().deleteNumber(ROPE, 1);
-    player.getInventory().deleteNumber(BRONZE_NAILS, 1);
-    player.getInventory().adds(NEITIZNOT_SHIELD, 1);
-    player.sendMessage("You make a Neitiznot shield.");
-    api.emitCustomEvent("fremennik-isles:shield-made", { player });
+    const canMake = () => stageOf(player) >= STAGE_ARMOUR_DONE && available() > 0 &&
+      hasItem(player, HAMMER) && player.getSkillManager().getCurrentLevel(Skill.WOODCUTTING) >= SHIELD_WOODCUTTING_LEVEL;
+    request.start(Math.min(request.amount, available()), canMake, () => {
+      inventory.deleteNumber(ARCTIC_PINE_LOGS, 2);
+      inventory.deleteNumber(ROPE, 1);
+      inventory.deleteNumber(BRONZE_NAILS, 1);
+      inventory.adds(NEITIZNOT_SHIELD, 1);
+      player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You make a Neitiznot shield.");
+      player.performAnimation(new api.core.Animation(api.core.CacheDefinitions.getSeqId("human_woodcrafting_hammer")));
+      player.getPacketSender().sendSoundEffect(SHIELD_SOUND, 1, 0, 0);
+      player.getSkillManager().addExperiences(Skill.CRAFTING, SHIELD_CRAFTING_XP);
+      api.emitCustomEvent("fremennik-isles:shield-made", { player });
+      return true;
+    });
   }
 
   function handleObjectInteraction(event) {

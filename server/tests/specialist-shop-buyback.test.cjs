@@ -169,6 +169,21 @@ test("Farming Supplies and the inns buy nothing; a shop with a Buys at isn't fla
   assert.equal(chocs.buysAt, 650);
 });
 
+test("canonical ticket-shop buy=N/A imports refuse Value and Sell without taking stock", () => {
+  for (const name of ["Agility Arena Store", "Brimhaven Agility Arena Ticket Exchange", "Ranging Guild Ticket Exchange"]) {
+    const definition = ShopDefinition.forId(shopId(name));
+    assert.equal(definition.getSalesPolicy().buysNothing, true, name);
+    const id = definition.getOriginalStock()[0].id;
+    const p = player();
+    p.getInventory().add(new Item(id, 1), false);
+    assert.equal(ShopManager.open(p, definition.getId()), true);
+    assert.equal(value(p, id), "You cannot sell to this shop.", name);
+    sell(p, id);
+    assert.equal(p.messages.at(-1), "You cannot sell to this shop.", name);
+    assert.equal(p.getInventory().getAmount(id), 1, "sale refusal preserves the item");
+  }
+});
+
 // Ten coin shops write "Buys at" 0 (buymultiplier=0) with every StoreLine buy=N/A: they buy nothing either, and say so.
 test("an inn whose Wiki Buys at is 0 refuses a sale as the others do: beer at the Dancing Donkey Inn", () => {
   const policy = ShopDefinition.forId(shopId("Dancing Donkey Inn")).getSalesPolicy();

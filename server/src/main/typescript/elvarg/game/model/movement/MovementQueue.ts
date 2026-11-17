@@ -722,8 +722,9 @@ export class MovementQueue {
 
     /**
      * Occupancy the static clipping map cannot know about. The NPC flag is set and
-     * checked by NPCs only; players pass over it (and clear it in OSRS, which is
-     * the entity-stacking mechanic) - osrs-docs: Entity Collision, NPC flag
+     * checked by NPCs only; players pass over it and clear it, as does an NPC stepping
+     * off a tile another still stands on (World.clearedNpcFlags: the entity-stacking
+     * mechanic) - osrs-docs: Entity Collision, NPC flag
      * "Checked by: all NPCs but the excluded NPCs". Only the separate "full" flag
      * (NPC.BLOCKS_PLAYERS_FLAG: the Agility Pyramid's blocks) blocks players; they keep
      * their path and step on once it moves.
@@ -737,7 +738,7 @@ export class MovementQueue {
         const size = this.character.getSize();
         const privateArea = this.character.getPrivateArea();
         if (this.character.isNpc() && !(this.character as NPC).canWalkThroughNPCs()) {
-            if (World.isNpcOccupyingTile(next, this.character as NPC, size, privateArea)) {
+            if (World.isNpcOccupyingTile(next, this.character as NPC, size, privateArea, true)) {
                 return true;
             }
             const ignored = this.ignoredOccupant?.isPlayer() ? this.ignoredOccupant.getAsPlayer() : null;

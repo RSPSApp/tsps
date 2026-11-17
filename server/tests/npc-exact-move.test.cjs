@@ -206,6 +206,43 @@ test('players walk through NPCs, while NPCs still block each other', () => {
   }
 });
 
+test('the NPC flag is a bit a tile: a player crossing it, or an NPC stepping off a shared tile, lets NPCs stack', () => {
+  // osrs-docs: Entity Collision; rsprox 20261116T202915/T211301: TzHaar-Ket-Rak's Yt-HurKot stack
+  // on the tiles a player runs through, and on the one a stacked healer just left.
+  const { World } = require('../dist/game/World');
+  const { MovementQueue } = require('../dist/game/model/movement/MovementQueue');
+  const at = (x, y) => new Location(x, y, 0);
+  const a = new NPC(3106, at(3320, 3300));
+  const b = new NPC(3106, at(3320, 3303));
+  assert.ok(World.getNpcs().add(a, true), 'registered');
+  assert.ok(World.getNpcs().add(b, true), 'registered');
+  const mover = {
+    isNpc: () => true, isPlayer: () => false, getSize: () => 1, getPrivateArea: () => null, canWalkThroughNPCs: () => false,
+  };
+  const blocked = (x, y) => MovementQueue.prototype.isDynamicallyOccupied.call({ character: mover }, at(x, y));
+  const player = { getPrivateArea: () => null, claimTileOccupancy() {}, getNpcViewDistance: () => 15 };
+  try {
+    assert.equal(blocked(3320, 3300), true, 'an NPC blocks its tile');
+    World.onPlayerMoved(player, at(3320, 3299), at(3320, 3300));
+    World.onPlayerMoved(player, at(3320, 3300), at(3319, 3300));
+    assert.equal(blocked(3320, 3300), false, 'a player crossing it lowers the flag');
+    assert.equal(World.isNpcOccupyingTile(at(3320, 3300), null, 1, null), true, 'the NPC still stands there for anything else');
+    a.setLocation(at(3320, 3301));
+    assert.equal(blocked(3320, 3301), true, 'moving on raises it again');
+    // b steps onto a's lowered tile: a stack.
+    World.onPlayerMoved(player, at(3319, 3300), at(3320, 3301));
+    World.onPlayerMoved(player, at(3320, 3301), at(3319, 3302));
+    assert.equal(blocked(3320, 3301), false);
+    b.setLocation(at(3320, 3301));
+    assert.equal(blocked(3320, 3301), true, 'the NPC stepping on raised it');
+    a.setLocation(at(3321, 3301));
+    assert.equal(blocked(3320, 3301), false, 'and one stepping off lowers it under the other');
+  } finally {
+    World.getNpcs().remove(a);
+    World.getNpcs().remove(b);
+  }
+});
+
 test('the attack timing hook lets an attack ignore the timer, or leave it as it was', () => {
   const { PluginManager } = require('../dist/plugins/PluginManager');
   const api = PluginManager.createApi('timing-test');

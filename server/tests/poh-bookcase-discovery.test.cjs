@@ -54,17 +54,20 @@ function actor(t) {
   p.setLocation(new core.Location(3366, 3335, 0)); p.setNeedsPlacement(false);
   const c = new ClientConnection(channel); c.player = p;
   p.getSession().setPlayer(p); p.getSession().setTurnPacketProcessor(() => c.processTurnPackets());
-  const configs = new Map(), messages = [];
+  const configs = new Map(), messages = [], typed = [], sounds = [];
   const sender = p.getPacketSender(), sendConfig = sender.sendConfig.bind(sender), sendMessage = sender.sendMessage.bind(sender);
+  const sendTyped = sender.sendTypedMessage.bind(sender), sendSound = sender.sendSoundEffect.bind(sender);
   t.mock.method(sender, 'sendConfig', (id, value) => { configs.set(id, value); return sendConfig(id, value); });
   t.mock.method(sender, 'sendMessage', (message, ...rest) => { messages.push(message); return sendMessage(message, ...rest); });
+  t.mock.method(sender, 'sendTypedMessage', (type, message, ...rest) => { typed.push([type, message]); return sendTyped(type, message, ...rest); });
+  t.mock.method(sender, 'sendSoundEffect', (...args) => { sounds.push(args); return sendSound(...args); });
   t.after(() => {
     p.getPacketSender().sendInterfaceRemoval(); House.releaseHouse(p, true);
     core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex());
     for (const ground of [...core.World.getItems()]) if (ground.getOwner() === p.getUsername()) core.ItemOnGroundManager.deregister(ground);
     if (p.isRegistered()) core.World.getPlayers().remove(p);
   });
-  return { p, c, configs, messages };
+  return { p, c, configs, messages, typed, sounds };
 }
 const quest = key => { const q = Runtime.getRegisteredQuests().find(q => q.key === key); assert.ok(q, key); return q; };
 const held = (f, id) => f.p.getInventory().getAmount(id);
@@ -341,4 +344,24 @@ test('invalid or non-authoritative GE receipt payloads cannot discover a catalog
     { amount: 1, destination: 'inventory', container: inv }, // no actual item accepted
   ]) PM.emitCustomEvent('ge:offer-collected', { player: f.p, itemId: 7162, ...receipt });
   assert.deepEqual(f.p.getAttribute(FOUND) ?? [], []);
+});
+
+test('native Take uses captured sound and spam channel while duplicate and full refusals stay silent', async t => {
+  const f = actor(t); buyPieBook(f); await drop(f, 7162);
+  const object = ownHouse(f); search(f, object);
+  f.sounds.length = 0; f.typed.length = 0; // Observe Take independently of the earlier shop purchase sound.
+  await take(f, 45, 7162);
+  assert.equal(held(f, 7162), 1);
+  assert.deepEqual(f.sounds.filter(([id]) => id === 2582), [[2582, 1, 5, 1]], 'capture230/2922: one take sound with delay5');
+  assert.ok(f.typed.some(([type, message]) => type === 105 && message === 'You take: <col=ef1020>Pie recipe book</col>'), 'captured Take feedback uses SPAM');
+  await take(f, 45, 7162);
+  assert.equal(held(f, 7162), 1);
+  assert.equal(f.messages.at(-1), "You're already carrying a copy of that book.");
+  assert.equal(f.sounds.filter(([id]) => id === 2582).length, 1, 'duplicate refusal has no take sound');
+  await drop(f, 7162); search(f, object);
+  while (f.p.getInventory().getFreeSlots()) f.p.getInventory().add(new core.Item(954, 1), false);
+  await take(f, 45, 7162);
+  assert.equal(held(f, 7162), 0);
+  assert.equal(f.messages.at(-1), "You don't have enough inventory space to do that.", 'capture230/2922 tick2411');
+  assert.equal(f.sounds.filter(([id]) => id === 2582).length, 1, 'capacity refusal has no take sound');
 });

@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, Animation, CacheDefinitions, ItemDefinition } = require("./Core.Construction");
+const { api, Animation, CacheDefinitions, ChatType, ItemDefinition } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 
@@ -17,6 +17,8 @@ const BOOK_ENUM = 5210;
 const FOUND_VARPS = ["macro_bee_pos_1", "if1", "if2", "if3", "if4", "if5", "if6", "pattern_varp"].map(Ids.varp);
 const FOUND_ATTRIBUTE = "construction:books-found";
 const TAKE_BOOK = Ids.seq("poh_larder_examine");
+// RSProx230/02922 tick1738; active242 sound index4 archive2582.
+const TAKE_BOOK_SOUND = 2582;
 const QUEST_BOOKS = new Map([
   [Ids.obj("digsitebook"), "the_dig_site"],
   [Ids.obj("grandtree_translationbook"), "grand_tree"],
@@ -111,10 +113,11 @@ function interfaceClick(event) {
   if ((event.opId ?? event.action ?? 1) > 1) return player.sendMessage(ItemDefinition.forId(itemId)?.getExamine?.() ?? "It's a book.");
   if (!foundBooks(player).has(slot) || !canRecover(player, itemId)) return player.sendMessage("You have not found that book yet.");
   if (player.getInventory().contains(itemId)) return player.sendMessage("You're already carrying a copy of that book.");
-  if (player.getInventory().getFreeSlots() === 0) return player.sendMessage("You don't have enough inventory space.");
+  if (player.getInventory().getFreeSlots() === 0) return player.sendMessage("You don't have enough inventory space to do that.");
   player.getInventory().adds(itemId, 1);
   player.performAnimation(new Animation(TAKE_BOOK));
-  player.sendMessage(`You take: <col=ef1020>${ItemDefinition.forId(itemId)?.getName?.() ?? "the book"}</col>`);
+  player.getPacketSender().sendSoundEffect(TAKE_BOOK_SOUND, 1, 5, 1);
+  player.getPacketSender().sendTypedMessage(ChatType.SPAM, `You take: <col=ef1020>${ItemDefinition.forId(itemId)?.getName?.() ?? "the book"}</col>`);
 }
 
 function attachBookcase(api) {

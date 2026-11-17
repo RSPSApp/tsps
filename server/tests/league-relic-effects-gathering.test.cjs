@@ -519,3 +519,68 @@ test("Dodgy Deals: sure thieving, loot noted and multiplied by the crowd of the 
     assert.equal(emit("thieving:done", { player, kind: "pickpocket", npc: man, succeeded: true, again: false }).again, false, "the other league's slot repeats pickpockets too");
   }
 });
+
+// Actual chart-stall completion and real relic listeners; later success events cannot rescue an early miss.
+for (const config of [
+  {label:'owner overrides a losing random roll'},
+  {label:'same-league without relic still misses', control:'without'},
+  {label:'other league same slots still miss', control:'other'},
+  {label:'main profile still misses', control:'main'},
+  {label:'ordinary winning roll still succeeds', control:'main', roll:0, wins:true},
+  {label:'automatic repeat keeps XP and two-tick cadence', repeat:true},
+  {label:'level requirement remains', level:64, refused:true},
+  {label:'full inventory remains refused', full:true, refused:true},
+  {label:'inventory filled during attempt remains refused', lateFull:true, refused:true},
+  {label:'monkey form remains refused', monkey:true, refused:true},
+  {label:'quest access refusal remains', access:true, refused:true},
+  {label:'click delay remains', delay:true, refused:true},
+  {label:'ordinary stall does not acquire a random gate', silk:true},
+]) test(`Dodgy Deals stall roll: ${config.label}`, t=>{
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(3200,3200);
+  const who=cases(DODGY_DEALS,5),player=who[config.control??'relic'],inventory=player.getInventory();
+  player.setIndex(1640);player.getSkillManager().setCurrentLevel(Skill.THIEVING,config.level??65);
+  if(config.delay)player.getClickDelay().reset();
+  const fill=()=>{while(inventory.getFreeSlots()>0)inventory.add(new core.Item(I.RAKE),false);};
+  if(config.full)fill();
+  const tasks=[],interactions=new Map(),events=[],messages=[],xpAwards=[];
+  const sender=player.getPacketSender();
+  t.mock.method(player,'sendMessage',text=>messages.push(text));
+  t.mock.method(player,'getPacketSender',()=>new Proxy(sender,{get(target,key){
+    if(key==='sendTypedMessage')return(_type,text)=>{messages.push(text);return target;};return target[key];
+  }}));
+  const skills=player.getSkillManager(),add=skills.addExperiences.bind(skills);
+  t.mock.method(skills,'addExperiences',(skill,xp)=>{if(skill===Skill.THIEVING)xpAwards.push(xp);return add(skill,xp);});
+  const api=new Proxy({
+    core:{...core,TaskManager:{submit(task){task.setRunning(true);tasks.push(task);}}},
+    onObjectInteraction:(name,actions)=>interactions.set(name,actions),
+    emitCustomEvent:(name,payload)=>{
+      if(name==='greegree:form'&&config.monkey)payload.form='SMALL_NINJA';
+      if(name==='thieving:stall-access'&&config.access)payload.refused=true;
+      emit(name,payload);events.push({name,payload:{...payload}});
+    },
+  },{get:(target,key)=>key in target?target[key]:()=>{}});
+  const Stalls=require('../plugins/skills/thieving/Stalls.Thieving');Stalls(api);
+  const id=config.silk?core.ObjectIdentifiers.SILK_STALL:core.ObjectIdentifiers.MAGIC_STALL;
+  const object=new core.GameObject(id,new Location(3200,3201),10,0,null),name=config.silk?'Silk stall':'Magic Stall';
+  t.mock.method(Math,'random',()=>config.roll??0.99);
+  t.after(()=>{Stalls._test.logout({player});for(const task of tasks)task.stop();
+    for(const oid of [id,Stalls._test.emptyStallId(object)]){const current=core.MapObjects.get(oid,object.getLocation(),null);if(current)core.ObjectManager.deregister(current,false);}
+  });
+  interactions.get(name)[config.silk?'Steal-from':'Steal from']({player,object,definition:{getName:()=>name}});
+  if(config.lateFull)fill();
+  if(tasks.length)tasks[0].tick();
+  const succeeds=!config.refused&&(!config.control||config.wins);
+  if(config.repeat){assert.equal(tasks.length,2);tasks[1].tick();tasks[2].tick();}
+  const count=succeeds?(config.repeat?2:1):0;
+  assert.deepEqual(xpAwards,Array(count).fill(config.silk?24:90),'only actual completed thefts pay one unchanged XP award');
+  const reward=config.silk?I.SILK:config.roll===0?I.AIR_RUNE:I.NATURE_RUNE;
+  assert.equal(inventory.getAmount(reward),count,'one unchanged base reward per successful attempt');
+  assert.equal(events.filter(event=>event.name==='thieving:success').length,count);
+  assert.equal(events.filter(event=>event.name==='thieving:done').length,count);
+  assert.equal(Stalls._test.depleted.has(object),!!(config.wins&&config.control),'ordinary success depletes, relic success retains stock');
+  const rolls=events.filter(event=>event.name==='thieving:stall-roll');
+  assert.equal(rolls.length,config.refused||config.silk?0:config.repeat?2:1,'only reached chart attempts consult the relic');
+  if(succeeds)assert.equal(messages.some(text=>text.includes('miss your chance')),false);
+  else if(!config.refused)assert.ok(messages.some(text=>text.includes('miss your chance')));
+  if(config.level===64)assert.ok(messages.some(text=>text.includes('Thieving level of at least65')||text.includes('Thieving level of at least 65')));
+});

@@ -107,6 +107,7 @@ test("Harold drinks the ale and the Blurberry special as recorded", async (t) =>
     QuestRuntime.startTranscript(PM.createApi("DeathPlateauParityTest"), a.player, core.NpcIdentifiers.HAROLD, PAGE, WEAKNESS,
       (steps) => steps.slice(steps.findIndex((step) => step.id === "_ELP6x")), harold);
     await a.continueChat();
+    assert.equal(a.sender.getChatboxGroupId(), -1, "the box closes on its continue while Harold drinks (tick 24267)");
     const from = a.now();
     for (let i = 0; i < 6; i++) a.advance();
     assert.deepEqual(animations, [{ tick: from + 2, id: 829 }]);
@@ -308,5 +309,28 @@ test("the five stone balls lie where live has them and come back 8 ticks after a
   // red, blue, yellow, purple, green (death_cannonball_*), rsprox local 1001800 and 1001683.
   assert.deepEqual(where, {
     3109: [2893, 3565, 0, 8], 3110: [2893, 3564, 0, 8], 3111: [2893, 3561, 0, 8], 3112: [2893, 3563, 0, 8], 3113: [2893, 3562, 0, 8],
+  });
+});
+
+test("a hand-out's item comes with its box, not a continue later (the lost map, Dunstan's spikes)", async (t) => {
+  await t.test("Tenzing's replacement map", () => {
+    const a = actor(2820, 3555, 0, { stage: 78 });
+    a.player.setAttribute("death-plateau:map-received", true);
+    QuestRuntime.startTranscript(PM.createApi("DeathPlateauParityTest"), a.player, core.NpcIdentifiers.TENZING, PAGE,
+      "new-route-up-death-plateau-talking-to-tenzing-after-losing-the-map", (steps) => steps.slice(steps.findIndex((step) => step.id === "U16B4S")));
+    assert.ok(a.log.some((e) => e.name === "sendChatboxInterface" && e.args[0] === 193), "the map's box is up");
+    assert.equal(a.player.getInventory().getAmount(core.ItemIdentifiers.SECRET_WAY_MAP), 1);
+  });
+  await t.test("Dunstan takes the bar and boots and gives the spiked boots with the double box", () => {
+    const a = actor(2919, 3574, 0, { stage: 73, items: [[core.ItemIdentifiers.CLIMBING_BOOTS], [core.ItemIdentifiers.IRON_BAR]] });
+    a.player.setAttribute("death-plateau:certificate-delivered", true);
+    QuestRuntime.startTranscript(PM.createApi("DeathPlateauParityTest"), a.player, core.NpcIdentifiers.DUNSTAN, PAGE,
+      "new-route-up-death-plateau-talking-to-dunstan-before-getting-the-spiked-boots", (steps) => {
+        const find = (list) => { for (const step of list ?? []) { if (step.id === "kH8gZk" || step.id === "V1M373") return list.slice(list.indexOf(step)); const hit = find(step.steps) ?? (step.options ?? []).reduce((h, o) => h ?? find(o.steps), null); if (hit) return hit; } return null; };
+        return find(steps) ?? [];
+      });
+    assert.ok(a.log.some((e) => e.name === "sendChatboxInterface" && e.args[0] === 11), "objectbox_double");
+    assert.equal(a.player.getInventory().getAmount(core.ItemIdentifiers.SPIKED_BOOTS), 1);
+    assert.equal(a.player.getInventory().getAmount(core.ItemIdentifiers.IRON_BAR), 0);
   });
 });

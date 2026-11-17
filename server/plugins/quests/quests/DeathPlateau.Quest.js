@@ -110,9 +110,11 @@ module.exports = function registerDeathPlateauQuest(api) {
 
   /** Transcript message ids that hand the player a key item (the dump repeats each line). */
   const GIVE_IOU_IDS = new Set(["4p9H2-", "MBm6Sz", "mhKulF", "wAz_jn", "23tpMt", "mUS50D"]);
-  const GIVE_MAP_IDS = new Set(["yDYvE0", "MtULDz", "TgL2Wy"]);
+  // Each hand-out acts on its item box (the first of a box/chat pair), so the item arrives with the box.
+  const GIVE_MAP_IDS = new Set(["yDYvE0", "U16B4S", "MtULDz", "TgL2Wy"]);
   const GIVE_CLIMBING_BOOTS_IDS = new Set(["aZ5-DY", "FG69_B", "gUxInm"]);
-  const GIVE_SPIKED_BOOTS_IDS = new Set(["AuWfYt", "MKP0WU", "1TFYaK", "WryBLk"]);
+  // From "You give Dunstan an iron bar and the climbing boots." on: live swaps them on that box's tick (rsprox local 1001800 tick 25101).
+  const GIVE_SPIKED_BOOTS_IDS = new Set(["kH8gZk", "V1M373", "AuWfYt", "MKP0WU", "1TFYaK", "WryBLk"]);
   const GIVE_CERTIFICATE_IDS = new Set(["KZG0PG", "VuuQKK"]);
 
   /** Hand-over lines that consume what the transcript says the player gives. */
@@ -613,6 +615,10 @@ module.exports = function registerDeathPlateauQuest(api) {
     const { DialogueChainBuilder, ActionDialogue, TaskManager, CountdownTask, Animation, Graphic } = api.core;
     const manager = player.getDialogueManager();
     const waiting = new ActionDialogue(0, { execute: () => {} }, true);
+    // The box closes on its continue, as live (ticks 24267, 24311); the idle entry holds the chain meanwhile.
+    const sender = player.getPacketSender();
+    const open = sender.getChatboxGroupId?.() ?? -1;
+    if (open >= 0) sender.closeInterface(open);
     manager.startDialogues(new DialogueChainBuilder().add(waiting));
     const still = () => manager.getCurrent?.() === waiting;
     const at = (ticks, action) => TaskManager.submit(new CountdownTask(player, ticks, () => { if (still()) action(); }));

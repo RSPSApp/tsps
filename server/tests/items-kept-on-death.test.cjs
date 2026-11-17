@@ -23,7 +23,7 @@ before(async () => {
 const WILDERNESS = new Location(3090, 3600, 0);
 const EDGEVILLE = new Location(3090, 3490, 0);
 
-function fakePlayer({ items, protectItem = false, skulled = false, location = EDGEVILLE }) {
+function fakePlayer({ items, protectItem = false, skulled = false, location = EDGEVILLE, attributes = new Map() }) {
   const prayers = new Array(40).fill(false);
   if (protectItem) prayers.fill(true);
   return {
@@ -35,6 +35,8 @@ function fakePlayer({ items, protectItem = false, skulled = false, location = ED
     getPrayerActive: () => prayers,
     getLocation: () => location,
     getRights: () => PlayerRights.NONE,
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
   };
 }
 
@@ -683,4 +685,92 @@ test('ordinary preview matches completed death across skull and Protect Item sta
       player.setAttribute('gravestones:grave', null);
     }
   });
+});
+
+test('Ultimate Ironman deaths drop untradeables too (Wiki: cannot keep any items on death)', (t) => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
+  const api = PluginManager.createApi('UimDeathRuleTest');
+  api.onShouldKeepItemOnDeath((event) => {
+    if (event.player.getAttribute?.('ironman:mode') === 'ultimate') event.keep = false;
+  });
+  api.onCustomEvent('player-death:drop-options', (event) => {
+    if (event.player.getAttribute?.('ironman:mode') === 'ultimate') event.options.despawnDelay = 6000;
+  });
+
+  const scimitar = new Item(I.RUNE_SCIMITAR, 1);
+  const defender = new Item(I.DRAGON_DEFENDER, 1);
+  const inventory = {
+    items: [scimitar, defender],
+    getItems() { return this.items; },
+    getValidItems() { return this.items; },
+    resetItems() { this.items = []; return this; },
+    refreshItems() { return this; },
+  };
+  const equipment = {
+    items: [],
+    getItems() { return this.items; },
+    getValidItems() { return this.items; },
+    resetItems() { this.items = []; return this; },
+    refreshItems() { return this; },
+  };
+  const player = {
+    ...fakePlayer({ items: [], attributes: new Map([['ironman:mode', 'ultimate']]) }),
+    getInventory: () => inventory,
+    getEquipment: () => equipment,
+  };
+  const ground = [];
+  const registrations = [];
+  const original = ItemOnGroundManager.registerLocation;
+  t.after(() => { ItemOnGroundManager.registerLocation = original; });
+  ItemOnGroundManager.registerLocation = (_owner, item, _position, _area, options) => {
+    ground.push(item.getId());
+    registrations.push({ id: item.getId(), options });
+    return item;
+  };
+
+  assert.deepEqual(PlayerDeathTask.dropItems(player, null, EDGEVILLE), [], 'a UIM keeps nothing');
+  assert.deepEqual(ground.sort((a, b) => a - b), [I.DRAGON_DEFENDER, I.RUNE_SCIMITAR].sort((a, b) => a - b),
+    'both the tradeable and the untradeable reach the floor');
+  assert.equal(registrations.find((entry) => entry.id === I.DRAGON_DEFENDER).options.despawnDelay, 6000,
+    'the mode policy gives the untradeable the one-hour deathpile lifetime');
+  assert.equal(inventory.getValidItems().length + equipment.getValidItems().length, 0, 'the death empties both containers');
+});
+
+test('Ultimate Ironman deathpiles pause while logged out', () => {
+  const Ultimate = require('../plugins/modes/ironman/Ultimate.Ironman');
+  require('../plugins/modes/ironman/Common.Ironman').init({ core: {} });
+  const handlers = new Map();
+  Ultimate({
+    onCanBank() {},
+    onShouldKeepItemOnDeath() {},
+    onCustomEvent(name, handler) { handlers.set(name, handler); },
+    onPlayerLogout(handler) { handlers.set('logout', handler); },
+    onPlayerLogin(handler) { handlers.set('login', handler); },
+  });
+  const player = {
+    getAttribute: (key) => (key === 'ironman:mode' ? 'ultimate' : undefined),
+    getUsername: () => 'uim',
+  };
+  const options = {};
+  handlers.get('player-death:drop-options')({ player, options });
+  assert.equal(options.despawnDelay, 6000);
+
+  const ground = { paused: false, pendingRemoval: false, setAgingPaused(value) { this.paused = value; } };
+  handlers.get('player-death:dropped')({ player, groundItem: ground });
+  handlers.get('logout')({ player });
+  assert.equal(ground.paused, true, 'the timer is paused while the UIM is logged out');
+  handlers.get('login')({ player });
+  assert.equal(ground.paused, false, 'and resumes on the next login');
+
+  // A partial pickup leaves the same stack registered; its remainder must stay in the
+  // paused pile, while a fully removed stack can be forgotten.
+  handlers.get('ground-items:taken')({ player, groundItem: ground, amount: 1 });
+  handlers.get('logout')({ player });
+  assert.equal(ground.paused, true, 'a partially credited stack stays in the pile');
+  handlers.get('login')({ player });
+  ground.pendingRemoval = true;
+  handlers.get('ground-items:taken')({ player, groundItem: ground, amount: 1 });
+  handlers.get('logout')({ player });
+  assert.equal(ground.paused, false, 'a removed stack leaves the pile');
 });

@@ -34722,7 +34722,7 @@
         {
           "name": "Ultimate Ironman",
           "tasks": [
-            "in-progress",
+            "done",
             "in-progress",
             "done",
             "done"
@@ -34756,7 +34756,8 @@
             "Allowed/forbidden storage exceptions and some Ultimate-specific looting/POH/seed-vault limits remain incomplete.",
             "PR #856 routes Telekinetic Grab through the same ownership veto as normal Ironman pickup, closing the other-player loot bypass. The remaining mode-specific exception/storage criteria are unchanged.",
             "Main 8403b60db (4 November 2026): #2113, #2204 — Bank/storage safeguards and Count Check PIN exemption are repaired; missing broader account-mode restrictions retain partial credit.",
-            "Main 3b61a15a8 (6 November 2026): #2249 fix: confirm and remove bank incinerator stacks; #2332 fix: reject stale bank inventory drags; #2522 Refuse preset items in charging, storage and Grand Exchange sales; #2663 Store and keep gems in an open gem bag; #2675 Add the Party Room chest, lever and balloons; #2695 Fix rev 241 client actions the server dropped or misrouted (Accept Aid, teleport warnings, furnace, nexus, clans, fairy log, close buttons). Existing completion credit and documented limitations are retained unless explicitly updated below."
+            "Main 3b61a15a8 (6 November 2026): #2249 fix: confirm and remove bank incinerator stacks; #2332 fix: reject stale bank inventory drags; #2522 Refuse preset items in charging, storage and Grand Exchange sales; #2663 Store and keep gems in an open gem bag; #2675 Add the Party Room chest, lever and balloons; #2695 Fix rev 241 client actions the server dropped or misrouted (Accept Aid, teleport warnings, furnace, nexus, clans, fairy log, close buttons). Existing completion credit and documented limitations are retained unless explicitly updated below.",
+            "2026-11-16, fix/uim-death-rules: UIM death now drops untradeables as well as tradeables instead of returning them, honouring the keep=false answer the mode already gives every item; the drop keeps the Wiki's one-hour logged-in deathpile lifetime and pauses while the owner is logged out, including the remainder of a partially picked-up stack (server/src/main/typescript/elvarg/game/task/impl/PlayerDeath.ts, server/plugins/modes/ironman/Ultimate.Ironman.js; server/tests/items-kept-on-death.test.cjs). Graves are already skipped and Zenesha/Zulrah retrieval and the Coffer refusal remain. Task 2 stays in progress for the Wilderness coin conversion and the instance/God Wars outside placement, which the Wiki states without a numeric/source rule."
           ],
           "taskDetails": [
             {

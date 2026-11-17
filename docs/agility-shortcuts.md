@@ -5,6 +5,26 @@ The shortcuts live in `server/plugins/skills/data/agility-shortcuts.json` (forma
 rebuilt from live OSRS recordings (rsprox, revisions 223-239); the rest follow the Wiki and the map,
 and say what is still a guess in `unverified`.
 
+## Wilderness ridge exit
+
+Normal recording `233/00451` sends the exit line at tick62 while the player is still on2998,3918,
+with normal walking appearance restored. The south door opens with sound62 on tick63 and the
+player crosses to2998,3916 in one compact two-tile movement with a temporary WALK traversal;
+the run preference stays cached. The door returns two ticks later. There is no intervening
+movement or object click between the initial north-gate operation and that final crossing.
+
+The exit recipe plays the line before a one-tick wait, then the door and crossing together.
+The runner's optional traversal override belongs only to the movement it produced. A later
+native move, teleport, forced movement or private-world change cannot inherit it. The movement
+remains available to every observer until the update resets, and is excluded from saves.
+Entry still requires52 Agility, exit requires1, and neither crossing adds XP. Existing entry
+movement and independent two-tick restoration remain unchanged.
+
+The focused real-World regression is `server/tests/wilderness-ridge-exit-timing.test.cjs`;
+the actual client-decoder round trip is `client/tests/player-sync-temporary-traversal.test.ts`.
+These cover this exit sequence and generic traversal ownership, not every shortcut's animation
+set or timing.
+
 ## How the captures were used
 
 - **Per attempt, not merged:** each recording's events from the player's arrival (exact moves,

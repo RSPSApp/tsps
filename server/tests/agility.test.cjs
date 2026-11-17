@@ -86,6 +86,7 @@ function chainable(sender) {
 function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], boostedTo = level } = {}) {
   let location = new Location(x, y, z);
   let forceMovement = null;
+  let skillAnimation = -1;
   const attributes = new Map();
   const state = { xp: 0, otherXp: {}, messages: [], spam: [], varbits: new Map(), varbitLog: [], scripts: [], sounds: [], animations: [], hits: 0, blocked: false, walked: 0 };
   const player = {
@@ -104,7 +105,9 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
     }),
     getForceMovement: () => forceMovement,
     setForceMovement: (value) => { forceMovement = value; return player; },
-    setSkillAnimation: (id) => { (state.renders ??= []).push(id); },
+    getSkillAnimation: () => skillAnimation,
+    setSkillAnimation: (id) => { skillAnimation = id; (state.renders ??= []).push(id); },
+    setTemporaryMovementType: (type) => { state.temporaryMovementType = type; },
     getUpdateFlag: () => ({ flag() {} }),
     performAnimation: (animation) => state.animations.push(animation.getId()),
     performGraphic() {},
@@ -2791,9 +2794,10 @@ test("Wilderness ridge door: opening the south door and the north gates swaps th
   assert.deepEqual(enter.steps[2], { walk: [[2998, 3930]] });
   assert.deepEqual(enter.steps[4], { walk: [[2998, 3931]], arrive: true });
   const leave = require("../plugins/skills/agility/shortcuts/Wilderness.Agility").wildernessRidgeOut();
-  assert.deepEqual(leave.end, { spam: RIDGE.endOut });
+  assert.equal(leave.end, undefined, 'the early exit line has no completion duplicate');
   assert.deepEqual(leave.steps[2], { walk: [[2998, 3918]] });
-  assert.deepEqual(leave.steps[4], { walk: [[2998, 3916]] });
+  assert.deepEqual(leave.steps[4], { msg: { spam: RIDGE.endOut } });
+  assert.deepEqual(leave.steps.at(-1), { walk: [[2998, 3916]], tilesPerTick: 2, arrive: true, traversalType: 1 });
 });
 
 test("as captured (rsprox 449 ticks 15-32, 451 ticks 31-47): the ridge door opens as the player steps in, the north gates as they step out", () => {

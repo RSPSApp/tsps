@@ -236,6 +236,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
     start(npc, player) {
       const arena = npc.getArea();
       if (!(arena instanceof BullArena)) return super.start(npc, player);
+      api.emitCustomEvent("ides-of-milk:brutus-attack", { player });
       const at = npc.getLocation().clone();
       arena.special = this.nextAttack(npc, player);
       if (!arena.special) {
@@ -666,6 +667,9 @@ module.exports = function registerIdesOfMilkQuest(api) {
     // ponytail: timed from the bull entering; live may start it at the first hit.
     arena.startTick = World.getProcessCycle();
     arena.enter(npc);
+    if (quest.isComplete(arena.player)) {
+      api.emitCustomEvent("ides-of-milk:brutus-spawn", { player: arena.player });
+    }
     bullsByPlayer.set(arena.player, npc);
     npc.performAnimation(new Animation(ANIMATION.spawn));
   }

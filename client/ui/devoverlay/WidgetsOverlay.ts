@@ -9,6 +9,7 @@ import { mobileHudScale } from "../../game/widgets/MobileHudLayout";
 import { getUiScale } from "../UiScale";
 import { FONT_BOLD_12, FONT_VERDANA_13 } from "../fonts";
 import { getChooseOptionMenuRect } from "../../widgets/gl/choose-option";
+import { MINIMAP_REFRESH_MS, minimapSignature } from "../../widgets/gl/minimapSignature";
 
 import { GLRenderer } from "../../widgets/gl/renderer";
 import {
@@ -22,7 +23,7 @@ import { drawTextGL } from "../../widgets/components/TextRenderer";
 import type { WidgetManager } from "../../widgets/WidgetManager";
 import type { WidgetNode } from "../../widgets/WidgetNode";
 import type { GameFrameDrawContext, WidgetOverlay } from "../../game/plugins/ClientPluginManager";
-import { captureAppendedRects, composeDrawAboveWidgets } from "../../widgets/gl/widgetsGl/glRenderOpts";
+import { composeDrawAboveWidgets } from "../../widgets/gl/widgetsGl/glRenderOpts";
 import { Overlay, OverlayInitArgs, OverlayUpdateArgs, RenderPhase } from "./Overlay";
 import { isCurrentClientType, reportedClientType } from "../../rs/cs2/ClientType";
 import { overlayFontsVersion } from "../../runelite/client/ui/overlay/OverlayFonts";
@@ -155,7 +156,19 @@ export class WidgetsOverlay implements Overlay {
     private currentBeforeMenuOverlays: WidgetOverlay[] = [];
     private overlayDrawnThisPass = false;
     private menuOverlayDrawnThisPass = false;
+    /**
+     * Device rects per overlay layer as of its last draw: anchored (status bars, drawn inside
+     * the tree), above the tree (opponent info ...) and before the menu (tooltips, rune pouch).
+     * A partial pass redraws only some layers, so each keeps its own rects and
+     * widgetOverlayRects is rebuilt from all three at the end of every pass.
+     */
+    private anchorOverlayRects: DirtyRect[] = [];
+    private aboveOverlayRects: DirtyRect[] = [];
     private beforeMenuOverlayRects: DirtyRect[] = [];
+    /** Set when anchored overlays were drawn in any dirty rect of the current pass. */
+    private anchorDrawnThisPass = false;
+    /** During a partial pass, the dirty rect being redrawn: overlays drawn there are clipped to it. */
+    private beforeMenuClip: DirtyRect | undefined;
     private visible: Map<number, boolean> = new Map();
     private hasPresentedFrame: boolean = false;
 
@@ -239,6 +252,9 @@ export class WidgetsOverlay implements Overlay {
         this.lastRootSignature = "";
         this.lastWidgetOverlays = [];
         this.widgetOverlayRects = [];
+        this.anchorOverlayRects = [];
+        this.aboveOverlayRects = [];
+        this.beforeMenuOverlayRects = [];
         this.belowWidgetOverlayRects = [];
         this.lastMenuVisualSignature = "";
         this.lastMenuVisualRect = undefined;
@@ -875,7 +891,17 @@ export class WidgetsOverlay implements Overlay {
                 const gameCtx = this.ctx.getGameContext?.();
                 const cameraYaw = gameCtx?.osrsClient?.camera?.yaw ?? 0;
                 widgetManager.updateCompassAngle(cameraYaw);
-                widgetManager.updateMinimap();
+                // An unchanged minimap is not redrawn every frame (see MINIMAP_REFRESH_MS).
+                const minimapClient = gameCtx?.osrsClient;
+                if (minimapClient) {
+                    widgetManager.updateMinimap(
+                        minimapSignature(minimapClient),
+                        performance.now(),
+                        MINIMAP_REFRESH_MS,
+                    );
+                } else {
+                    widgetManager.updateMinimap();
+                }
 
                 // Rebuilt widgets only need a redraw if they came out different.
                 widgetManager.flushChildRebuilds?.();
@@ -938,15 +964,9 @@ export class WidgetsOverlay implements Overlay {
                 !!gameFrame ||
                 overlaySetChanged ||
                 overlayNeedsFullRedraw ||
-                overlayFontsChanged ||
-                // Before-menu overlays draw once a pass from inside the tree, clipped to the
-                // first dirty rect, so a partial pass could not put back the rest of them.
-                (beforeMenuOverlays.length > 0 &&
-                    (anyDirty ||
-                        preciseDirtyWidgets.length > 0 ||
-                        menuVisualDirty ||
-                        mouseOverTextDirty ||
-                        overlayDirtyRects.length > 0));
+                overlayFontsChanged;
+            // Before-menu overlays (tooltips, rune pouch) take part in partial passes: they are
+            // drawn again inside each dirty rect, scissored to it (drawWidgetOverlaysBeforeMenu).
             const preciseDirtyCount = preciseDirtyWidgets.length | 0;
             const shouldRedraw =
                 anyDirty ||
@@ -1044,7 +1064,11 @@ export class WidgetsOverlay implements Overlay {
 
                     this.currentWidgetOverlays = widgetOverlays;
                     this.overlayDrawnThisPass = false;
+                    this.anchorDrawnThisPass = false;
                     this.menuOverlayDrawnThisPass = false;
+                    // A full pass redraws every layer.
+                    this.anchorOverlayRects = [];
+                    this.aboveOverlayRects = [];
                     this.beforeMenuOverlayRects = [];
                     for (const entry of this.widgetEntries) {
                         const drawAboveWidgets = this.drawAboveWidgetsForEntry(
@@ -1062,13 +1086,8 @@ export class WidgetsOverlay implements Overlay {
                     }
                     // Anchor overlays (status bars) draw inside the tree so tooltips win;
                     // the rest (opponent info, ...) draw above the tree as before.
-                    const aboveOverlays = widgetOverlays.filter((overlay) => overlay.drawAtAnchor !== true);
-                    if (this.overlayDrawnThisPass) {
-                        if (aboveOverlays.length > 0) this.drawWidgetOverlays(aboveOverlays, false);
-                    } else {
-                        this.drawWidgetOverlays(widgetOverlays, true);
-                    }
-                    this.commitBeforeMenuOverlayRects();
+                    this.drawOverlaysAboveTree(widgetOverlays);
+                    this.commitWidgetOverlayRects();
                     this.drawTradeAmountOverlay(widgetManager);
                     this.drawMouseOverText(mouseOverTextState);
                     this.rootSetChanged = false;
@@ -1092,50 +1111,7 @@ export class WidgetsOverlay implements Overlay {
                         }
                         gl.scissor(0, 0, canvasW, canvasH);
                     }
-                    this.currentWidgetOverlays = widgetOverlays;
-                    this.overlayDrawnThisPass = false;
-                    this.menuOverlayDrawnThisPass = false;
-                    this.beforeMenuOverlayRects = [];
-                    for (const dirtyRect of dirtyRects) {
-                        const rootClip = {
-                            x0: dirtyRect.x,
-                            y0: dirtyRect.y,
-                            x1: dirtyRect.x + dirtyRect.w,
-                            y1: dirtyRect.y + dirtyRect.h,
-                        };
-
-                        const renderableEntries = this.widgetEntries.filter((entry) => {
-                            const rootRect = this.getRootRect(widgetManager, entry.root);
-                            return !!rootRect && this.rectsIntersect(rootRect, dirtyRect);
-                        });
-                        const entriesToRender = renderableEntries.length > 0
-                            ? renderableEntries
-                            : this.widgetEntries.slice(0, 1);
-                        for (const entry of entriesToRender) {
-                            const drawAboveWidgets = this.drawAboveWidgetsForEntry(
-                                entry,
-                                entry === entriesToRender[entriesToRender.length - 1],
-                            );
-                            renderWidgetTreeGL(this.glRenderer, entry.root, {
-                                ...entry.renderOpts,
-                                rootClip,
-                                ...(drawAboveWidgets ? { drawAboveWidgets } : {}),
-                            });
-                        }
-                    }
-                    // Bar values changed: repaint them even if the panel was not the dirty
-                    // region (the anchor callback did not fire for that case).
-                    if (redrawWidgetOverlays) {
-                        const aboveOverlays = widgetOverlays.filter(
-                            (overlay) => overlay.drawAtAnchor !== true,
-                        );
-                        if (this.overlayDrawnThisPass) {
-                            if (aboveOverlays.length > 0) this.drawWidgetOverlays(aboveOverlays, false);
-                        } else {
-                            this.drawWidgetOverlays(widgetOverlays, true);
-                        }
-                    }
-                    this.commitBeforeMenuOverlayRects();
+                    this.redrawDirtyRects(widgetManager, dirtyRects, widgetOverlays, redrawWidgetOverlays);
                     this.drawTradeAmountOverlay(widgetManager);
                     const mouseOverTextRect = mouseOverTextState.rect;
                     if (
@@ -1224,18 +1200,134 @@ export class WidgetsOverlay implements Overlay {
     }
 
     /**
+     * The widget part of a partial pass, after the dirty rects were cleared: each rect gets the
+     * widget tree back (clipped to it) and with it every overlay that was there, clipped to it:
+     * anchored ones (status bars) at their anchor inside the tree, before-menu ones (tooltips,
+     * rune pouch) before the menu. Each overlay layer that drew records its rects; layers that
+     * did not keep theirs from the last pass.
+     */
+    private redrawDirtyRects(
+        widgetManager: WidgetManager,
+        dirtyRects: DirtyRect[],
+        widgetOverlays: WidgetOverlay[],
+        redrawWidgetOverlays: boolean,
+        renderTree: typeof renderWidgetTreeGL = renderWidgetTreeGL,
+    ): void {
+        const glr = this.glRenderer;
+        if (!glr) return;
+        this.currentWidgetOverlays = widgetOverlays;
+        this.anchorDrawnThisPass = false;
+        const anchoredOverlays = widgetOverlays.filter((overlay) => overlay.drawAtAnchor === true);
+        const anchorMissedRects: DirtyRect[] = [];
+        for (const dirtyRect of dirtyRects) {
+            // Once per rect, not once per pass: a pass with two separate rects (a bar on each
+            // side of the panel) needs both bars back.
+            this.beforeMenuClip = dirtyRect;
+            this.overlayDrawnThisPass = false;
+            this.menuOverlayDrawnThisPass = false;
+            const rootClip = {
+                x0: dirtyRect.x,
+                y0: dirtyRect.y,
+                x1: dirtyRect.x + dirtyRect.w,
+                y1: dirtyRect.y + dirtyRect.h,
+            };
+
+            const renderableEntries = this.widgetEntries.filter((entry) => {
+                const rootRect = this.getRootRect(widgetManager, entry.root);
+                return !!rootRect && this.rectsIntersect(rootRect, dirtyRect);
+            });
+            const entriesToRender = renderableEntries.length > 0
+                ? renderableEntries
+                : this.widgetEntries.slice(0, 1);
+            for (const entry of entriesToRender) {
+                const drawAboveWidgets = this.drawAboveWidgetsForEntry(
+                    entry,
+                    entry === entriesToRender[entriesToRender.length - 1],
+                );
+                renderTree(glr, entry.root, {
+                    ...entry.renderOpts,
+                    rootClip,
+                    ...(drawAboveWidgets ? { drawAboveWidgets } : {}),
+                });
+            }
+            if (!this.overlayDrawnThisPass) anchorMissedRects.push(dirtyRect);
+        }
+        this.beforeMenuClip = undefined;
+        // Rects where the tree did not reach the anchor but that cleared part of an anchored
+        // overlay get that part back, clipped to the rect, with the before-menu overlays over
+        // it again. (When the anchor was reached nowhere, the whole layer is redrawn below.)
+        if (this.anchorDrawnThisPass && anchoredOverlays.length > 0) {
+            for (const missed of anchorMissedRects) {
+                if (!this.anchorOverlayRects.some((rect) => this.rectsIntersect(rect, missed))) continue;
+                this.drawClippedTo(missed, () => {
+                    this.anchorOverlayRects = this.drawWidgetOverlays(anchoredOverlays, false, []);
+                });
+                this.beforeMenuClip = missed;
+                this.menuOverlayDrawnThisPass = false;
+                this.drawWidgetOverlaysBeforeMenu();
+                this.beforeMenuClip = undefined;
+            }
+        }
+        this.overlayDrawnThisPass = this.anchorDrawnThisPass;
+        // Bar values changed: repaint them even if the panel was not the dirty region (the
+        // anchor callback did not fire for that case). Their rects are all inside the cleared
+        // rects (redrawWidgetOverlays merged them in).
+        if (redrawWidgetOverlays) this.drawOverlaysAboveTree(widgetOverlays);
+        this.commitWidgetOverlayRects();
+    }
+
+    /**
      * Draws the widget overlays (status bars) as soon as a side-panel anchor widget has
      * drawn its own content. Everything the tree draws afterwards - tab content, tooltips,
      * menus - stays on top of the bars.
      */
     private drawWidgetOverlaysAtAnchor(): void {
+        // Once per pass in a full pass; once per dirty rect in a partial pass (the tree's own
+        // scissor clips it to that rect, and the flag is reset for every rect).
         if (this.overlayDrawnThisPass) return;
         const overlays = (this.currentWidgetOverlays ?? []).filter(
             (overlay) => overlay.drawAtAnchor === true,
         );
         if (overlays.length === 0) return;
         this.overlayDrawnThisPass = true;
-        this.drawWidgetOverlays(overlays, true);
+        this.anchorDrawnThisPass = true;
+        this.anchorOverlayRects = this.drawWidgetOverlays(overlays, false, []);
+    }
+
+    /**
+     * After the tree: the overlays above it, and - when the tree never reached the anchor - the
+     * anchored ones too, whole. Each layer records its own rects.
+     */
+    private drawOverlaysAboveTree(widgetOverlays: WidgetOverlay[]): void {
+        if (this.overlayDrawnThisPass) {
+            const aboveOverlays = widgetOverlays.filter((overlay) => overlay.drawAtAnchor !== true);
+            this.aboveOverlayRects = aboveOverlays.length > 0 ? this.drawWidgetOverlays(aboveOverlays, false, []) : [];
+            return;
+        }
+        this.drawWidgetOverlays(widgetOverlays, false, []);
+        const anchor: DirtyRect[] = [];
+        const above: DirtyRect[] = [];
+        for (const overlay of widgetOverlays) {
+            const rects = this.lastOverlayRects.get(overlay) ?? [];
+            (overlay.drawAtAnchor === true ? anchor : above).push(...rects);
+        }
+        this.anchorOverlayRects = anchor;
+        this.aboveOverlayRects = above;
+    }
+
+    /** Runs `draw` scissored to `rect` (device pixels, y down). */
+    private drawClippedTo(rect: DirtyRect, draw: () => void): void {
+        const glr = this.glRenderer;
+        if (!glr) return;
+        glr.flush();
+        glr.gl.enable(glr.gl.SCISSOR_TEST);
+        glr.gl.scissor(rect.x, (glr.height | 0) - (rect.y + rect.h), rect.w, rect.h);
+        try {
+            draw();
+        } finally {
+            glr.flush();
+            glr.gl.disable(glr.gl.SCISSOR_TEST);
+        }
     }
 
     /** The render tree calls this after widget content and tooltip widgets, just before its menu. */
@@ -1244,13 +1336,23 @@ export class WidgetsOverlay implements Overlay {
         this.menuOverlayDrawnThisPass = true;
         const overlays = this.currentBeforeMenuOverlays;
         if (overlays.length === 0) return;
-        this.beforeMenuOverlayRects = captureAppendedRects(this.widgetOverlayRects, () =>
-            this.drawWidgetOverlays(overlays, false),
-        );
+        const draw = () => {
+            this.beforeMenuOverlayRects = this.drawWidgetOverlays(overlays, false, []);
+        };
+        // A partial pass: the tree has turned scissoring off by now, so clip to the cleared
+        // rect; outside it the overlays are still on the canvas from the last pass.
+        const clip = this.beforeMenuClip;
+        if (clip) this.drawClippedTo(clip, draw);
+        else draw();
     }
 
-    private commitBeforeMenuOverlayRects(): void {
-        this.widgetOverlayRects.push(...this.beforeMenuOverlayRects);
+    /** The rects of every overlay layer, as of each layer's last draw. */
+    private commitWidgetOverlayRects(): void {
+        this.widgetOverlayRects = [
+            ...this.anchorOverlayRects,
+            ...this.aboveOverlayRects,
+            ...this.beforeMenuOverlayRects,
+        ];
     }
 
     private drawAboveWidgetsForEntry(entry: WidgetRenderEntry, isLastRenderedRoot: boolean): (() => void) | undefined {

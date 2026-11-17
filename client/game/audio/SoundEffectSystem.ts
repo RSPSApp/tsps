@@ -123,7 +123,27 @@ type ActiveAmbientSound = {
     swapPending?: boolean;
     fadeInDurationSec: number;
     fadeOutDurationSec: number;
+    /** The sound fields soundKeyFor last keyed, and the key it built from them. */
+    keyedSoundId?: number;
+    keyedSoundIds?: AmbientSoundInstance["soundIds"];
+    keyedSoundKey?: string;
 };
+
+/** An ambient emitter's position, rounded for its key (NaN and undefined count as 0). */
+function quantAmbient(value: number | undefined): number {
+    if (value === undefined || Number.isNaN(value)) return 0;
+    return Math.round(value);
+}
+
+/** Whether any alternate (overlay) sound id is set. */
+function hasAlternateAmbientSound(soundIds: AmbientSoundInstance["soundIds"]): boolean {
+    if (!soundIds) return false;
+    for (let i = 0; i < soundIds.length; i++) {
+        const id = soundIds[i];
+        if (id !== undefined && id >= 0) return true;
+    }
+    return false;
+}
 
 // Game cycle = 20ms (client runs at ~50fps). soundEffectMinDelay/MaxDelay are in game cycles.
 const CYCLE_LENGTH_SECONDS = 0.02;
@@ -152,6 +172,8 @@ export class SoundEffectSystem {
     private readonly activeSources: AudioBufferSourceNode[] = [];
     private readonly maxSimultaneous = 32;
     private readonly ambientSounds = new Map<string, ActiveAmbientSound>();
+    /** Keys of the emitters seen this updateAmbientSounds call (reused each frame). */
+    private readonly activeAmbientKeys = new Set<string>();
     private listenerX = 0;
     private listenerY = 0;
     private listenerZ = 0;
@@ -673,7 +695,9 @@ export class SoundEffectSystem {
                 ? Math.min(Math.max(now - this.lastAmbientUpdateTime, 0), 1)
                 : 0;
         this.lastAmbientUpdateTime = now;
-        const activeKeys = new Set<string>();
+        // Runs every frame: one Set, cleared, rather than a new one each time.
+        const activeKeys = this.activeAmbientKeys;
+        activeKeys.clear();
 
         for (const instance of instances) {
             const key = this.ambientKey(instance);
@@ -701,7 +725,7 @@ export class SoundEffectSystem {
 
             // A different resolved sound set (e.g. transformed loc): fade to
             // silence with the fade-out curve, then retune.
-            const soundKey = SoundEffectSystem.soundKeyOf(instance);
+            const soundKey = this.soundKeyFor(active, instance);
             if (soundKey !== active.soundKey) {
                 active.swapPending = true;
             }
@@ -744,10 +768,7 @@ export class SoundEffectSystem {
                 this.startLoopSource(active, desiredLoopId, ctx, now);
             }
 
-            const hasAlternates =
-                instance.soundIds !== undefined &&
-                instance.soundIds.length > 0 &&
-                instance.soundIds.some((id) => id !== undefined && id >= 0);
+            const hasAlternates = hasAlternateAmbientSound(instance.soundIds);
 
             if (!hasAlternates) {
                 active.nextChangeTime = Infinity;
@@ -830,11 +851,26 @@ export class SoundEffectSystem {
     }
 
     private ambientKey(instance: AmbientSoundInstance): string {
-        const quant = (value: number | undefined): number => {
-            if (value === undefined || Number.isNaN(value)) return 0;
-            return Math.round(value);
-        };
-        return `${instance.locId}_${quant(instance.x)}_${quant(instance.y)}_${quant(instance.z)}`;
+        return `${instance.locId}_${quantAmbient(instance.x)}_${quantAmbient(instance.y)}_${quantAmbient(instance.z)}`;
+    }
+
+    /**
+     * soundKeyOf for this emitter, recomputed only when its sound fields change: they come from
+     * the (immutable) loc type, so the same arrays arrive every frame.
+     */
+    private soundKeyFor(active: ActiveAmbientSound, instance: AmbientSoundInstance): string {
+        if (
+            active.keyedSoundKey !== undefined &&
+            active.keyedSoundId === instance.soundId &&
+            active.keyedSoundIds === instance.soundIds
+        ) {
+            return active.keyedSoundKey;
+        }
+        const key = SoundEffectSystem.soundKeyOf(instance);
+        active.keyedSoundId = instance.soundId;
+        active.keyedSoundIds = instance.soundIds;
+        active.keyedSoundKey = key;
+        return key;
     }
 
     private computeOverlayDelaySec(instance: AmbientSoundInstance): number {

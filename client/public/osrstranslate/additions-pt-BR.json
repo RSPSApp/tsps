@@ -25,10 +25,12 @@
   {
    "ref": "feat/mouseover-and-combat-labels",
    "commit": "be93c2071d65aec06794db8710e58e41d0860c34"
-  },
+  }
+ ],
+ "localSources": [
   {
-   "ref": "fix/stash-full-slots",
-   "commit": "a9cead4e14e1779d23b51f7de93b94d4c1b76a14"
+   "path": "scripts/osrs-translate-additions/stash.json",
+   "sha256": "07c1afbb690ef0cd6746bb1ffa7b68a0d3a49d07b285597690b0609af866084f"
   }
  ],
  "files": {

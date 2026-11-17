@@ -1,0 +1,34 @@
+{
+  "$comment": "The two guards shouting at each other from their watchtowers between Jatizso and Neitiznot (plane 2), from rsprox recording 3027 (rev 231) ticks 5008-5420 and 6930-7060 and local recording 1000323 (rev 227) ticks 6513-6584: five Watch-shouting clicks, each followed by the same exchange. `guards` are keyed by cache gameval: `at` is the spawn tile, `camera` the watcher's camera when that guard is clicked (move-to and look-at x, y, height; rate 20/50). The round (one line every 5 ticks) is the generated Wiki transcript's `watching-the-shouting` (`transcript`); the recordings' fifth line after a Jatizso-guard click reads \"CALL THAT A TOWN? ...\" (rec 3027 ticks 5032/5251/5354), a recorded difference. Docs: docs/viking-shouters.md.",
+  "guards": {
+    "frisd_izso_viking_shouter": {
+      "at": [2372, 3801, 2],
+      "camera": { "moveTo": [2380, 3802, 1000], "lookAt": [2364, 3800, 128] }
+    },
+    "frisd_iznot_viking_shouter": {
+      "at": [2364, 3800, 2],
+      "camera": { "moveTo": [2356, 3800, 1000], "lookAt": [2372, 3801, 128] }
+    }
+  },
+  "cameraRates": { "rate": 20, "rate2": 50 },
+  "transcript": {
+    "$comment": "The round and the chants are read from the generated transcript (npc-dialogues.json): its overhead lines in order, of which the last one per guard (before \"Both guards continue to shout the names of their islands at each other\") is that guard's chant between rounds; `speakers` maps each line's speaker to its guard.",
+    "page": "Guard (Jatizso watchtower)",
+    "variant": "watching-the-shouting",
+    "speakers": { "Guard (Jatizso tower)": "frisd_izso_viking_shouter", "Guard (Neitiznot tower)": "frisd_iznot_viking_shouter" }
+  },
+  "dialogueSteps": {
+    "$comment": "The generated transcripts' \"Can I watch?\" choice ends on an action step that continues at Watching the shouting (npc-dialogues.json, Guard (Jatizso watchtower) / Guard (Neitiznot watchtower)); it plays the same round.",
+    "jF2L2R": "frisd_izso_viking_shouter",
+    "iJSutJ": "frisd_iznot_viking_shouter"
+  },
+  "timing": {
+    "$comment": "Ticks. The round starts `roundDelay` after the click's arrival (+3 in all five); a line every `lineInterval`. Each guard chants every `chantInterval`; chants stop for the round and resume at `chantResume` ticks after the round start (izso +56..+61, iznot +62..+66 recorded; the medians), and the watcher's camera resets at `cameraReset` (+63 in all five).",
+    "roundDelay": 3,
+    "lineInterval": 5,
+    "chantInterval": 6,
+    "chantResume": { "frisd_izso_viking_shouter": 58, "frisd_iznot_viking_shouter": 64 },
+    "chantStart": { "frisd_izso_viking_shouter": 0, "frisd_iznot_viking_shouter": 5 },
+    "cameraReset": 63
+  }
+}

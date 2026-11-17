@@ -224,6 +224,9 @@ export interface MinimapRenderMask {
     height: number;
 }
 
+/** Quad corner UVs for drawOverlay, in its vertex order. */
+const OVERLAY_CORNERS = [0, 0, 1, 0, 1, 1, 0, 1] as const;
+
 interface DotInstance {
     x: number; // Position relative to player (in pixels, pre-rotation)
     y: number;
@@ -282,6 +285,14 @@ export class MinimapRenderer {
     private dotInstances: DotInstance[] = [];
     /** Reused 4-vert × 4-float quad; avoids per-draw Float32Array allocs on every minimap tile/dot. */
     private quadVerts = new Float32Array(16);
+    /** Textures whose NEAREST/CLAMP sampling has been set. */
+    private readonly nearestTextures = new WeakSet<WebGLTexture>();
+    /**
+     * Programs whose per-frame uniforms (projection, centre, rotation, zoom, radius, mask
+     * bounds) are set since begin(). Uniforms belong to the program and only this class uses
+     * these programs, so they hold until the next begin().
+     */
+    private readonly preparedPrograms = new Set<WebGLProgram>();
 
     // Current state
     private centerX = 0;
@@ -364,6 +375,10 @@ export class MinimapRenderer {
     private bindNearestTexture(tex: WebGLTexture): void {
         const gl = this.gl;
         gl.bindTexture(gl.TEXTURE_2D, tex);
+        // Sampling state belongs to the texture: set it once, not on every draw. Nothing else
+        // sets these textures' filters back, so this leaves the same state as before.
+        if (this.nearestTextures.has(tex)) return;
+        this.nearestTextures.add(tex);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -374,13 +389,15 @@ export class MinimapRenderer {
         uUseMask: WebGLUniformLocation,
         uMaskTexture: WebGLUniformLocation,
         uMaskBounds: WebGLUniformLocation,
+        setUniforms: boolean = true,
     ): void {
         const gl = this.gl;
         const mask = this.mask;
-        gl.uniform1i(uUseMask, mask ? 1 : 0);
+        if (setUniforms) gl.uniform1i(uUseMask, mask ? 1 : 0);
         if (!mask) return;
         gl.activeTexture(gl.TEXTURE1);
         this.bindNearestTexture(mask.tex);
+        if (!setUniforms) return;
         gl.uniform1i(uMaskTexture, 1);
         gl.uniform4f(uMaskBounds, mask.x, mask.y, mask.width, mask.height);
     }
@@ -415,6 +432,47 @@ export class MinimapRenderer {
         this.cos = Math.cos(radians);
 
         this.dotInstances.length = 0;
+        this.preparedPrograms.clear();
+    }
+
+    /**
+     * Makes `program` current; the first time since begin() also sets its frame uniforms.
+     * The mask texture is bound every time: other GL code may have used texture unit 1.
+     */
+    private useMinimapProgram(program: WebGLProgram): void {
+        const gl = this.gl;
+        gl.useProgram(program);
+        const first = !this.preparedPrograms.has(program);
+        if (first) this.preparedPrograms.add(program);
+        if (program === this.progMinimap) {
+            if (first) {
+                gl.uniformMatrix4fv(this.uProj_mm, false, this.proj);
+                gl.uniform2f(this.uCenter_mm, this.centerX, this.centerY);
+                gl.uniform1f(this.uSin_mm, this.sin);
+                gl.uniform1f(this.uCos_mm, this.cos);
+                gl.uniform1f(this.uZoom_mm, this.zoom);
+                gl.uniform1f(this.uRadius_mm, this.radius);
+                gl.uniform1f(this.uAlpha_mm, 1.0);
+            }
+            this.bindMask(this.uUseMask_mm, this.uMaskTexture_mm, this.uMaskBounds_mm, first);
+            gl.uniform1i(this.uTexture_mm, 0);
+        } else if (program === this.progOverlay) {
+            if (first) {
+                gl.uniformMatrix4fv(this.uProj_ov, false, this.proj);
+                gl.uniform2f(this.uCenter_ov, this.centerX, this.centerY);
+                gl.uniform1f(this.uRadius_ov, this.radius);
+                gl.uniform1f(this.uAlpha_ov, 1.0);
+            }
+            this.bindMask(this.uUseMask_ov, this.uMaskTexture_ov, this.uMaskBounds_ov, first);
+            gl.uniform1i(this.uTexture_ov, 0);
+        } else {
+            if (first) {
+                gl.uniformMatrix4fv(this.uProj_solid, false, this.proj);
+                gl.uniform2f(this.uCenter_solid, this.centerX, this.centerY);
+                gl.uniform1f(this.uRadius_solid, this.radius);
+            }
+            this.bindMask(this.uUseMask_solid, this.uMaskTexture_solid, this.uMaskBounds_solid, first);
+        }
     }
 
     /**
@@ -427,19 +485,9 @@ export class MinimapRenderer {
     drawTile(tex: MinimapTexture, relX: number, relY: number, size: number) {
         const gl = this.gl;
 
-        gl.useProgram(this.progMinimap);
-        gl.uniformMatrix4fv(this.uProj_mm, false, this.proj);
-        gl.uniform2f(this.uCenter_mm, this.centerX, this.centerY);
-        gl.uniform1f(this.uSin_mm, this.sin);
-        gl.uniform1f(this.uCos_mm, this.cos);
-        gl.uniform1f(this.uZoom_mm, this.zoom);
-        gl.uniform1f(this.uRadius_mm, this.radius);
-        gl.uniform1f(this.uAlpha_mm, 1.0);
-        this.bindMask(this.uUseMask_mm, this.uMaskTexture_mm, this.uMaskBounds_mm);
-
+        this.useMinimapProgram(this.progMinimap);
         gl.activeTexture(gl.TEXTURE0);
         this.bindNearestTexture(tex.tex);
-        gl.uniform1i(this.uTexture_mm, 0);
 
         // Quad vertices: position relative to minimap center + UV
         const x0 = relX;
@@ -486,12 +534,7 @@ export class MinimapRenderer {
 
         const gl = this.gl;
 
-        gl.useProgram(this.progOverlay);
-        gl.uniformMatrix4fv(this.uProj_ov, false, this.proj);
-        gl.uniform2f(this.uCenter_ov, this.centerX, this.centerY);
-        gl.uniform1f(this.uRadius_ov, this.radius);
-        gl.uniform1f(this.uAlpha_ov, 1.0);
-        this.bindMask(this.uUseMask_ov, this.uMaskTexture_ov, this.uMaskBounds_ov);
+        this.useMinimapProgram(this.progOverlay);
 
         gl.bindVertexArray(this.vao);
 
@@ -510,7 +553,6 @@ export class MinimapRenderer {
         for (const [texId, dots] of byTex) {
             gl.activeTexture(gl.TEXTURE0);
             this.bindNearestTexture(texId);
-            gl.uniform1i(this.uTexture_ov, 0);
 
             const floatCount = dots.length * 6 * 4;
             if (floatCount > this.dotBuffer.length) {
@@ -580,16 +622,9 @@ export class MinimapRenderer {
         const w = width ?? tex.w;
         const h = height ?? tex.h;
 
-        gl.useProgram(this.progOverlay);
-        gl.uniformMatrix4fv(this.uProj_ov, false, this.proj);
-        gl.uniform2f(this.uCenter_ov, this.centerX, this.centerY);
-        gl.uniform1f(this.uRadius_ov, this.radius);
-        gl.uniform1f(this.uAlpha_ov, 1.0);
-        this.bindMask(this.uUseMask_ov, this.uMaskTexture_ov, this.uMaskBounds_ov);
-
+        this.useMinimapProgram(this.progOverlay);
         gl.activeTexture(gl.TEXTURE0);
         this.bindNearestTexture(tex.tex);
-        gl.uniform1i(this.uTexture_ov, 0);
 
         // Sprite pixel (pivotX, pivotY) lands on the pivot point; corners are
         // rotated clockwise (screen y-down) by `angle` around it.
@@ -598,7 +633,7 @@ export class MinimapRenderer {
         const sin = Math.sin(angle);
         const cos = Math.cos(angle);
         const verts = this.quadVerts;
-        const corners = [0, 0, 1, 0, 1, 1, 0, 1];
+        const corners = OVERLAY_CORNERS;
         for (let i = 0; i < 4; i++) {
             const u = corners[i * 2];
             const v = corners[i * 2 + 1];
@@ -628,12 +663,8 @@ export class MinimapRenderer {
     ) {
         const gl = this.gl;
 
-        gl.useProgram(this.progSolid);
-        gl.uniformMatrix4fv(this.uProj_solid, false, this.proj);
-        gl.uniform2f(this.uCenter_solid, this.centerX, this.centerY);
-        gl.uniform1f(this.uRadius_solid, this.radius);
+        this.useMinimapProgram(this.progSolid);
         gl.uniform4fv(this.uColor_solid, color);
-        this.bindMask(this.uUseMask_solid, this.uMaskTexture_solid, this.uMaskBounds_solid);
 
         const x0 = screenX - width / 2;
         const y0 = screenY - height / 2;

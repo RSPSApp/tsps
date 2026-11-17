@@ -354,6 +354,30 @@ test("Tinsay: the vessel for Tiadeche, then his manual's box 4 ticks later with 
   assert.equal(f.player.getAttribute(STATE.TIADECHE), 5);
 });
 
+test("Tinsay last home: his 'Very well. I will meet you in the village...' continued is tbwt_main 4", async (t) => {
+  const f = actor(t, { at: BY_TINSAY, stage: 3, items: [[I.MARINATED_J_BONES, 1]], attributes: { [STATE.TINSAY]: 6, [STATE.TIADECHE]: 6, [STATE.TAMAYU]: 4 } });
+  const tin = h.spawn(f, h.core.NpcIdentifiers.TINSAY, TINSAY);
+  await h.talk(f, tin);
+  await until(f, "Yes.|No.");
+  await h.choose(f, "Yes.");
+  await until(f, "Very well. I will meet you in the village once you have helped my brothers and spoken to my father.");
+  assert.equal(stage(f), 3, "not yet as the line shows");
+  await h.continueLine(f);
+  assert.equal(stage(f), 4);
+});
+
+test("Tinsay's manual comes even if the player logs out before its box", async (t) => {
+  const f = actor(t, { at: BY_TINSAY, stage: 3, items: [[I.KARAMBWAN_VESSEL_3, 1]], attributes: { [STATE.TINSAY]: 7, [STATE.TIADECHE]: 4 } });
+  const tin = h.spawn(f, h.core.NpcIdentifiers.TINSAY, TINSAY);
+  await use(f, tin, I.KARAMBWAN_VESSEL_3);
+  await until(f, "You hand over the Karambwan vessel to Tinsay.");
+  await h.continueLine(f);
+  assert.equal(count(f, I.CRAFTING_MANUAL), 0);
+  h.PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  assert.equal(count(f, I.CRAFTING_MANUAL), 1, "given at the logout");
+  assert.equal(f.player.getAttribute(STATE.TIADECHE), 5);
+});
+
 // ------------------------------------------------------------------ Tamayu
 
 test("Tamayu: the watched hunt, back 25 ticks later with his lines (local 1001562 ticks 7097-7130)", async (t) => {
@@ -438,6 +462,24 @@ test("a tinderbox on jogre bones: the bones on the ground, the fire 4 ticks late
   h.ticks(f, 35);
   assert.ok(!h.core.ObjectManager.objectsAt(tile).some((object) => object.getId() === 3862));
   assert.ok(onTile(I.BURNT_JOGRE_BONES), "burnt bones where the fire was");
+});
+
+test("jogre bones: a second use while lighting does nothing, a burning tile refuses them as logs, and a fire burns out after a logout too", async (t) => {
+  const f = actor(t, { at: BONES_TILE, items: [[I.TINDERBOX, 1], [I.JOGRE_BONES, 2]] });
+  await combine(f, I.TINDERBOX, I.JOGRE_BONES);
+  await combine(f, I.TINDERBOX, I.JOGRE_BONES);
+  assert.equal(count(f, I.JOGRE_BONES), 1, "the second set stays in the pack");
+  const tile = new h.core.Location(...BONES_TILE);
+  for (let i = 0; i < 6 && !h.core.ObjectManager.objectsAt(tile).some((object) => object.getId() === 3862); i++) h.tick(f);
+  assert.ok(h.core.ObjectManager.objectsAt(tile).some((object) => object.getId() === 3862));
+  f.player.moveTo(tile.clone());
+  await combine(f, I.TINDERBOX, I.JOGRE_BONES);
+  assert.ok(messages(f).includes("You can't light a fire here."), "not on the burning bones' tile, as logs");
+  assert.equal(count(f, I.JOGRE_BONES), 1);
+  h.core.TaskManager.cancelTasks(f.player); // what a logout does to the player's own timers
+  h.ticks(f, 36);
+  assert.ok(!h.core.ObjectManager.objectsAt(tile).some((object) => object.getId() === 3862), "burnt out");
+  assert.ok(h.core.ItemOnGroundManager.getGroundItem(f.player.getUsername(), I.BURNT_JOGRE_BONES, tile, f.player.getPrivateArea()));
 });
 
 test("raw Karambwanji loads each empty vessel 2 ticks apart, with no message (local 1001562 ticks 6004-6007)", async (t) => {

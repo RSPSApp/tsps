@@ -174,7 +174,7 @@ module.exports = function attachTinsay(api, t) {
       case MANUAL_BOX:
         // The manual and varp 321 4 -> 5 come as its box shows (local 1001562 tick 7761).
         event.box = { items: [ITEM.CRAFTING_MANUAL], delayTicks: MANUAL_DELAY };
-        t.later(player, MANUAL_DELAY, () => {
+        t.giveLater(player, MANUAL_DELAY, () => {
           t.give(player, ITEM.CRAFTING_MANUAL);
           if (t.state(player, KEY.TIADECHE) >= TIADECHE.ASKED_MANUAL) t.raise(player, KEY.TIADECHE, TIADECHE.HAS_MANUAL);
         });

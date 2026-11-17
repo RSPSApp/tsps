@@ -20,7 +20,7 @@
 module.exports = function attachCrafting(api, t) {
   const { ITEM, LOC } = t;
   const { Skill, Location, Item, Animation, GameObject, ObjectManager, ItemOnGroundManager, Sounds, Sound, HitDamage, HitMask } = api.core;
-  const { lightingSuccessChance } = require("../../skills/firemaking/Logs.Firemaking");
+  const { lightingSuccessChance, canLightFireAt } = require("../../skills/firemaking/Logs.Firemaking");
 
   const NEED_FIREMAKING = "You need a firemaking level of 30 to burn Jogre bones. You could find some other way of burning them.";
   const FIRE_HEATS = "You heat the bones over the fire, but they don't look any different.";
@@ -75,8 +75,12 @@ module.exports = function attachCrafting(api, t) {
       player.sendMessage(NEED_FIREMAKING);
       return;
     }
+    // One set at a time; a second use while it is being lit does nothing.
+    if (lighting.has(player)) return;
     const tile = player.getLocation().clone();
     const area = player.getPrivateArea();
+    // Where logs can't be lit ("You can't light a fire here."), neither can the bones (Firemaking's own check).
+    if (!canLightFireAt(player, tile, area)) return;
     t.take(player, ITEM.JOGRE_BONES);
     ItemOnGroundManager.registerLocation(player, new Item(ITEM.JOGRE_BONES, 1), tile, area);
     const attempt = {};
@@ -86,9 +90,12 @@ module.exports = function attachCrafting(api, t) {
       player.performAnimation(new Animation(LIGHT_ANIMATION));
     };
     const roll = () => {
-      if (lighting.get(player) !== attempt || !player.getLocation().equals(tile)) return;
+      if (lighting.get(player) !== attempt) return;
       const ground = ItemOnGroundManager.getGroundItem(player.getUsername(), ITEM.JOGRE_BONES, tile, area);
-      if (!ground) return;
+      if (!player.getLocation().equals(tile) || !ground) {
+        lighting.delete(player); // walked off, or the bones were picked up: they stay as they are
+        return;
+      }
       if (Math.random() >= lightingSuccessChance(t.level(player, Skill.FIREMAKING))) {
         tryLight();
         t.later(player, RETRY_TICKS, roll);
@@ -97,7 +104,7 @@ module.exports = function attachCrafting(api, t) {
       lighting.delete(player);
       ItemOnGroundManager.deregister(ground);
       step(player);
-      t.later(player, 1, () => burn(player, tile, area));
+      t.worldLater(1, () => burn(player, tile, area));
     };
     tryLight();
     t.later(player, FIRST_ROLL_TICKS, roll);
@@ -121,7 +128,8 @@ module.exports = function attachCrafting(api, t) {
     t.addXp(player, Skill.FIREMAKING, BONES_FIREMAKING_XP);
     Sounds.sendSound(player, Sound.FIRE_SUCCESSFUL);
     spam(player, "The fire catches and the bones begin to burn.");
-    t.later(player, BURN_TICKS, () => {
+    // On a world timer, as Firemaking's fires: it burns out and leaves the bones even if the player logs out.
+    t.worldLater(BURN_TICKS, () => {
       ObjectManager.deregister(fire, true);
       ItemOnGroundManager.registerLocation(player, new Item(ITEM.BURNT_JOGRE_BONES, 1), tile, area);
     });

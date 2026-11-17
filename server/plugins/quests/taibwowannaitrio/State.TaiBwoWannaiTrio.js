@@ -144,6 +144,34 @@ module.exports = function createState(api) {
   t.later = (player, ticks, callback) => TaskManager.submit(new CountdownTask(player, ticks, () => {
     if (player.isRegistered?.() !== false) callback();
   }));
+  /** A timer not tied to a player: it runs on through a logout (a fire left burning). */
+  const worldKey = {};
+  t.worldLater = (ticks, callback) => TaskManager.submit(new CountdownTask(worldKey, ticks, callback));
+  /**
+   * A hand-out due `ticks` from now (an item box live shows a few ticks later): given then, or at once if the
+   * player logs out first, so nothing taken from them is lost in the gap.
+   */
+  const pending = new Map();
+  t.giveLater = (player, ticks, give) => {
+    const list = pending.get(player) ?? [];
+    const entry = { give, done: false };
+    list.push(entry);
+    pending.set(player, list);
+    t.later(player, ticks, () => {
+      if (entry.done) return;
+      entry.done = true;
+      give();
+    });
+  };
+  t.flushPending = (player) => {
+    for (const entry of pending.get(player) ?? []) {
+      if (!entry.done) {
+        entry.done = true;
+        entry.give();
+      }
+    }
+    pending.delete(player);
+  };
   t.npcAnimation = (npc, id) => npc?.performAnimation?.(new api.core.Animation(id));
   t.play = (player, npcId, variant, select, npc = null) => startTranscript(api, player, npcId, t.PAGE, variant, select, npc);
   t.Skill = Skill;

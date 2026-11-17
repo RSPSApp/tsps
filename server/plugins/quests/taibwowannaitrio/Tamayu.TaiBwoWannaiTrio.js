@@ -192,7 +192,7 @@ module.exports = function attachTamayu(api, t) {
     }
     if (stepId === SKIN_BOX) {
       event.box = { items: [ITEM.MONKEY_SKIN], delayTicks: 4 };
-      t.later(player, 4, () => {
+      t.giveLater(player, 4, () => {
         t.give(player, ITEM.MONKEY_SKIN);
         t.give(player, ITEM.MONKEY_BONES);
       });

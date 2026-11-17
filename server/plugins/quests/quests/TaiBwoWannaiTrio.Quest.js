@@ -24,12 +24,15 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
   const t = createState(api);
   const { KEY, STAGE } = t;
 
-  /** "You should go and see..." and the brothers' "I will meet you in the village..." lines. */
+  /**
+   * The brothers' "I will meet you in the village..." lines: the stage moves on as the last son's is continued.
+   * Tinsay's starts "Very well." (local 1001562 t7725), so the match is not anchored.
+   */
   function line(event) {
     t.applyPause(event);
     // Wiki-export artefact: a couple of lines end in stray "}}" braces.
     if (typeof event.text === "string" && event.text.endsWith("}}")) event.text = event.text.replace(/\}+$/, "");
-    if (t.isPage(event) && event.player && /^I will meet you in the village once you have helped my brothers/.test(String(event.text))) {
+    if (t.isPage(event) && event.player && /I will meet you in the village once you have helped my brothers/.test(String(event.text))) {
       const before = event.after;
       event.after = () => {
         before?.();
@@ -39,7 +42,9 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
   }
 
   function logout({ player }) {
-    if (player) t.lastUsedItem.delete(player);
+    if (!player) return;
+    t.lastUsedItem.delete(player);
+    t.flushPending(player);
   }
 
   /**

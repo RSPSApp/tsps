@@ -121,7 +121,8 @@ const FADE_OVERLAY = 174;
 const FADE_SCRIPT = 948;
 const FADE_CYCLES = 50;
 
-const falling = (player) => player.getAttribute(ATTR_FALLING) === true;
+// Each fall holds its own token, so a fall ended early (death, logout) leaves its later steps inert.
+const falling = (player) => player.getAttribute(ATTR_FALLING) != null;
 
 function later(ticks, action) {
   const { Task, TaskManager } = core;
@@ -155,13 +156,14 @@ function jumpIn({ player }) {
 function fall(player) {
   const { ForceMovement, ForceMovementTask, Location, StatementDialogue, TaskManager } = core;
   const from = player.getLocation().clone();
-  player.setAttribute(ATTR_FALLING, true);
+  const token = {};
+  player.setAttribute(ATTR_FALLING, token);
   player.getMovementQueue().setBlockMovement(true);
   player.getMovementQueue().reset();
   // North (direction 0), from where they stand into the chasm.
   TaskManager.submit(new ForceMovementTask(player, 1,
     new ForceMovement(from, new Location(0, FALL.leapTiles, 0), 0, FALL.leapCycles, 0, FALL.jumpAnim)));
-  const live = () => player.isRegistered() && falling(player);
+  const live = () => player.isRegistered() && player.getAttribute(ATTR_FALLING) === token;
   for (const [ticks, text] of FALL.boxes) {
     later(ticks, () => live() && StatementDialogue.send(player, text, false));
   }
@@ -194,6 +196,17 @@ function fallLogout({ player }) {
   if (!run.sessionOf(player)) player.moveTo(new core.Location(JUMP_TILE.x, JUMP_TILE.y, 0));
 }
 
+/**
+ * Dying mid-fall (poison already ticking, say) ends the fall: the normal death takes the player
+ * home, and nothing later in the fall may carry them into a run.
+ */
+function fallDeath({ player }) {
+  if (!falling(player)) return;
+  player.setAttribute(ATTR_FALLING, null);
+  player.getMovementQueue().setBlockMovement(false);
+  player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID);
+}
+
 function exitCave({ player }) {
   if (!run.sessionOf(player)) return false;
   api.sendMultiChatboxPrompt(player, "Really leave?",
@@ -216,5 +229,5 @@ function leaveNow(player) {
 module.exports = {
   ATTR_SACRIFICED, INFERNO_ENTRANCE,
   init, answerCondition, handOverCape, syncEntrance, routeToChasm, jumpIn, exitCave, quickExit,
-  noTeleportMidFall, fallLogout, FALL, JUMP_TILE,
+  noTeleportMidFall, fallLogout, fallDeath, FALL, JUMP_TILE,
 };

@@ -40,6 +40,8 @@ module.exports = {
     require("./inferno/CombatAchievements.Inferno")(api);
     require("./inferno/EscapeCrystal.Inferno")(api);
     api.onPlayerBeforeDeath(run.defeatedLine);
+    // Before runDeath, which marks the death handled.
+    api.onPlayerDeath(entry.fallDeath);
     api.onPlayerDeath(run.runDeath);
     api.onShouldDropItemsOnDeath(run.keepItemsInRun);
     api.onCanTeleport(run.noTeleportOut);

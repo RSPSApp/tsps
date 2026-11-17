@@ -825,6 +825,28 @@ test('logging out mid-fall puts the player back on the walkway, not in the chasm
   assert.equal(run.sessionOf(player), null, 'the fall does not carry on without them');
 });
 
+test('dying mid-fall ends that fall: the respawned player is not carried into a run', () => {
+  const player = new FakePlayer({ [entry.ATTR_SACRIFICED]: true });
+  player.moveTo(new Location(2496, 5115, 0));
+  entry.jumpIn({ player });
+  tick(player, 5);
+  entry.fallDeath({ player });
+  assert.equal(player.getMovementQueue().blocked, false);
+  tick(player, 1);
+  entry.jumpIn({ player });
+  tick(player, 10);
+  assert.equal(run.sessionOf(player), null, 'the first fall landing does nothing');
+  tick(player, 6);
+  assert.ok(run.sessionOf(player), 'the new jump lands on its own time');
+  run.leave(player);
+  const dead = new FakePlayer({ [entry.ATTR_SACRIFICED]: true });
+  entry.jumpIn({ player: dead });
+  tick(dead, 5);
+  entry.fallDeath({ player: dead });
+  tick(dead, 30);
+  assert.equal(run.sessionOf(dead), null);
+});
+
 test('the chasm is jumped into from 2496,5115 on the walkway, as its pit has no walkable edge (rsprox)', () => {
   const { routeToChasm } = require('../plugins/minigames/inferno/Entry.Inferno');
   const route = (x) => {

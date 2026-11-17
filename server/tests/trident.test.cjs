@@ -222,3 +222,71 @@ for (const [fullId, chargedId] of [
     assert.equal(returned.getMetaValue("test:origin"), "kept");
   });
 }
+
+test("every charged trident refuses dangerous PvP before spending, but still casts on Wilderness NPCs and safe Castle Wars opponents", t => {
+  // Removing the Trident permission guard must spend a charge in the forbidden Wilderness case.
+  const { AreaManager } = require("../dist/game/model/areas/AreaManager");
+  const { CanAttackResponse } = require("../dist/game/content/combat/CombatFactory");
+  require("../plugins/areas/Wilderness.plugin").register(PluginManager.createApi("TridentWildernessRegression"));
+  PluginManager.emitServerStartup({});
+  const cwApi = PluginManager.createApi("TridentSafePvpRegression");
+  const game = require("../plugins/minigames/castlewars/Game.CastleWars")(cwApi);
+  require("../plugins/minigames/castlewars/Areas.CastleWars")(cwApi, game);
+  const teams = Object.keys(game.data.TEAM_DATA);
+  const ids = ItemIdentifiers;
+  const variants = [
+    ids.TRIDENT_OF_THE_SEAS_FULL_, ids.TRIDENT_OF_THE_SEAS_FULL_O_,
+    ids.TRIDENT_OF_THE_SEAS, ids.TRIDENT_OF_THE_SEAS_O_,
+    ids.TRIDENT_OF_THE_SEAS_E_, ids.TRIDENT_OF_THE_SEAS_E_O_,
+    ids.TRIDENT_OF_THE_SWAMP, ids.TRIDENT_OF_THE_SWAMP_O_,
+    ids.TRIDENT_OF_THE_SWAMP_E_, ids.TRIDENT_OF_THE_SWAMP_E_O_,
+  ];
+  for (const id of variants) {
+    const p = realActor(t), opponent = realActor(t);
+    for (const [actor, x] of [[p, 3200], [opponent, 3201]]) {
+      actor.setLocation(new core.Location(x, 3700));
+      actor.setNeedsPlacement(false);
+      actor.getSkillManager().setMaxLevels(core.Skill.HITPOINTS, 99, false).setCurrentLevels(core.Skill.HITPOINTS, 99, false);
+      AreaManager.process(actor);
+      assert.equal(actor.getArea()?.constructor.name, "WildernessArea");
+    }
+    const full = id === ids.TRIDENT_OF_THE_SEAS_FULL_ || id === ids.TRIDENT_OF_THE_SEAS_FULL_O_;
+    p.getInventory().setItem(0, new Item(id, 1, {
+      "test:origin": "kept", ...(full ? {} : { "trident-charges": 12 }),
+    }));
+    EquipPacketListener.equip(p, id, 0, core.Inventory.INTERFACE_ID);
+    const staff = p.getEquipment().get(core.Equipment.WEAPON_SLOT);
+    const charges = full ? 2500 : 12;
+    const method = core.CombatFactory.getMethod(p);
+    assert.equal(core.CombatFactory.canAttackPermission(p, opponent, false, method), CanAttackResponse.CAN_ATTACK,
+      `${id}: the real Wilderness area otherwise permits these opponents`);
+    assert.equal(core.CombatFactory.canAttack(p, method, opponent), CanAttackResponse.COMBAT_METHOD_NOT_ALLOWED,
+      `${id}: built-in spell refuses dangerous PvP`);
+    assert.equal(staff.getId(), id);
+    assert.equal(Trident._test.getCharges(staff), charges);
+    assert.equal(opponent.getCombat().getHitQueue().isEmpty(), true);
+
+    const npc = new core.NPC(core.NpcIdentifiers.MAN, new core.Location(3201, 3700));
+    assert.equal(core.World.getNpcs().add(npc), true);
+    t.after(() => { core.TaskManager.cancelTasks(npc); core.World.getNpcs().removes(npc); });
+    npc.setNeedsPlacement(false);
+    AreaManager.process(npc);
+    assert.equal(core.CombatFactory.canAttack(p, method, npc), CanAttackResponse.CAN_ATTACK,
+      `${id}: Wilderness NPC remains attackable`);
+    assert.equal(Trident._test.getCharges(staff), charges - 1);
+
+    p.setLocation(new core.Location(2395, 3110));
+    opponent.setLocation(new core.Location(2396, 3110));
+    game.setTeamId(p, teams[0]); game.setTeamId(opponent, teams[1]);
+    p.setArea(game.gameArea); opponent.setArea(game.gameArea);
+    assert.equal(core.CombatFactory.canAttack(p, method, opponent), CanAttackResponse.CAN_ATTACK,
+      `${id}: real Castle Wars opposing-team policy preserves safe PvP`);
+    method.start(p, opponent);
+    const hit = method.hits(p, opponent)[0];
+    assert.ok(hit instanceof core.PendingHit);
+    core.CombatFactory.addPendingHit(hit);
+    assert.equal(opponent.getCombat().getHitQueue().isEmpty(), false);
+    assert.equal(Trident._test.getCharges(staff), charges - 2);
+    assert.equal(staff.getMetaValue("test:origin"), "kept");
+  }
+});

@@ -166,6 +166,15 @@ function chargeUsed(recipe) {
   };
 }
 
+/** Wiki: built-in charges work in safe minigames, but not dangerous PvP. */
+function canAttack(player, target) {
+  if (target?.isPlayer?.() && (core.Wilderness.isIn(player) || core.Wilderness.isIn(target))) {
+    player.sendMessage("You can't use your trident's built-in spell in dangerous PvP.");
+    return false;
+  }
+  return true;
+}
+
 function staffConfig(recipe) {
   return {
     name: recipe.look.name,
@@ -176,6 +185,7 @@ function staffConfig(recipe) {
     attackSpeed: ATTACK_SPEED,
     range: ATTACK_RANGE,
     levelRequired: recipe.levelRequired,
+    canAttack,
     spell: look(recipe),
     hitDelay: (attacker, target) => ticksFor(projectileEnd(attacker, target)),
     impact: impact(recipe),

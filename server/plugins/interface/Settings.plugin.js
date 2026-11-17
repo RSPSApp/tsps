@@ -103,9 +103,11 @@ const UNMUTED_DEFAULT_VOLUME = 100;
 // (encodeGameframeFlags sends them).
 const DISPLAY_LAYOUT_DROPDOWN = DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID;
 // Enum 3509 order: Fixed, Resizable Classic, Resizable Modern, Resizable 317, Fixed 317. The cache
-// has the first three; our client adds the two 317 layouts, to both dropdowns.
+// has the first three; our client adds the two 317 layouts, to both dropdowns. Classic is
+// toplevel_osrs_stretch (161) and Modern toplevel_pre_eoc (164): RSProx recording 100 opens 161 for
+// row 2 (Resizable - Classic) and 164 for row 3 (Resizable - Modern).
 const GAMEFRAME_LAYOUT_ENUM = 3509;
-const GAMEFRAME_LAYOUT_ROOTS = [548, 164, 161, 161, 548];
+const GAMEFRAME_LAYOUT_ROOTS = [548, 161, 164, 161, 548];
 const GAMEFRAME_317_OPTION = 3;
 const GAMEFRAME_317_FIXED_OPTION = 4;
 const GAMEFRAME_317_VARP = 7995; // mirrors client/common/ui/gameframeLayout.ts
@@ -116,10 +118,11 @@ const ORBS_PANE_UID = (ROOT_INTERFACE << 16) | 33;
 // panel's, and "Show data orbs" (8), a toggle on varbit 4084 orbs_disabled.
 const GAME_CLIENT_LAYOUT_SETTING = 12;
 const SHOW_DATA_ORBS_SETTING = 8;
-// world.json "gameframe" -> the dropdown option (enum 3509 index) it forces on login.
+// world.json "gameframe" -> the dropdown option (enum 3509 index) it forces on login. "modern"
+// means the OSRS gameframe rather than the 317 one; its resizable world boots the default 161.
 const WORLD_GAMEFRAME_OPTIONS = {
   "modern-fixed": 0,
-  "modern-resizable": 2,
+  "modern-resizable": 1,
   "317-resizable": GAMEFRAME_317_OPTION,
   "317-fixed": GAMEFRAME_317_FIXED_OPTION,
 };
@@ -128,8 +131,8 @@ const WORLD_GAMEFRAME_OPTIONS = {
 // Like the layout dropdown, an option's row is at slot option + 1 (live sends op1 on 1..5 / 1..4).
 const PLAYER_ATTACK_OPTIONS_SETTING = 55;
 const NPC_ATTACK_OPTIONS_SETTING = 56;
-// Cache script 3962 reads this to pick the selected dropdown row; 4607 is only
-// a display mirror of the layout (no rendering effect in this revision).
+// Cache script 3962 reads this to pick the selected dropdown row (resizable: 0 Classic, 1 Modern);
+// 4607 is only a display mirror of the layout (no rendering effect in this revision).
 const GAMEFRAME_STONE_VARBIT = 4607;
 // The enhanced client's mouseover text setting (All Settings row 147; cache script 4582 toggles
 // it), from rev 241 mouseover_text_disabled (it was 12377, mouseover_text_enabled). Our client
@@ -736,10 +739,10 @@ function syncGameframeVarbit(player) {
   const root = getGameframeRoot(player);
   player.getPacketSender()
     .sendConfig(GAMEFRAME_317_VARP, !isMobileClient(player) && (root === 161 || root === 548) && player.getAttribute(CLIENT_LAYOUT_317_ATTRIBUTE) === true ? 1 : 0)
-    .sendVarbit(GAMEFRAME_STONE_VARBIT, root === 164 ? 0 : 1);
+    .sendVarbit(GAMEFRAME_STONE_VARBIT, root === 164 ? 1 : 0);
 }
 
-// Switches the client's gameframe to `root` (548 fixed / 164 classic / 161
+// Switches the client's gameframe to `root` (548 fixed / 161 classic / 164
 // modern). The client moves every server-mounted sub-interface onto the new
 // layout's components; flags have to be re-sent because set_root clears them.
 // Mobile clients stay on the stock mobile toplevel (601) and never persist the

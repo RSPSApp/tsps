@@ -246,6 +246,8 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
   transfers, item identity/metadata, partial/clamped additions, capacity and a save round trip.
   Capture 230/02922 also supplies Take's spam channel and sound 2582 with delay 5, and the
   full-inventory refusal; duplicate and capacity refusals do not play the Take sound.
+  Search enables the captured Take/Check and Examine actions on every interactive catalog row;
+  the range follows the cache enum so the actual client can transmit these clicks.
 - **Tip jars:** guests tip coins or platinum tokens (amount prompt ours); the owner sees the
   captured contents box and takes them to the inventory or bank; Setup shows and switches
   notifications and banking on logout. One balance per house; Ironmen can't tip (Wiki).

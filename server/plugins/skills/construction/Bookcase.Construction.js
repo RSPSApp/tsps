@@ -12,6 +12,7 @@ const House = require("./House.Construction");
 // already held by older saves. Wiki item pages gate the three quest books below on completion.
 const INTERFACE = Ids.iface("poh_bookcase");
 const BOOKS_COMPONENT = 5;
+const BOOK_ACTION_FLAGS = (1 << 1) | (1 << 10); // Captured OP1 (Take/Check) and OP10 (Examine).
 const BOOK_ENUM = 5210;
 // The varps the bookcase's script reads the found books from, in its order.
 const FOUND_VARPS = ["macro_bee_pos_1", "if1", "if2", "if3", "if4", "if5", "if6", "pattern_varp"].map(Ids.varp);
@@ -99,6 +100,9 @@ function search(event) {
   sendFound(event.player, new Set(bookList().filter(([slot, itemId]) => found.has(slot)
     && canRecover(event.player, itemId)).map(([slot]) => slot)));
   event.player.getPacketSender().sendInterface(INTERFACE);
+  const lastSlot = bookList().at(-1)?.[0];
+  if (lastSlot != null) event.player.getPacketSender().sendInterfaceFlagsRange(
+    (INTERFACE << 16) | BOOKS_COMPONENT, 0, lastSlot, BOOK_ACTION_FLAGS);
   return true;
 }
 

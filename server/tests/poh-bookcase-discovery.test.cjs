@@ -54,7 +54,9 @@ function actor(t) {
   p.setLocation(new core.Location(3366, 3335, 0)); p.setNeedsPlacement(false);
   const c = new ClientConnection(channel); c.player = p;
   p.getSession().setPlayer(p); p.getSession().setTurnPacketProcessor(() => c.processTurnPackets());
-  const configs = new Map(), messages = [], typed = [], sounds = [];
+  const configs = new Map(), messages = [], typed = [], sounds = [], frames = [];
+  const sendPacket = p.getSession().sendClientPacket.bind(p.getSession());
+  t.mock.method(p.getSession(), 'sendClientPacket', frame => { frames.push(Buffer.from(frame)); return sendPacket(frame); });
   const sender = p.getPacketSender(), sendConfig = sender.sendConfig.bind(sender), sendMessage = sender.sendMessage.bind(sender);
   const sendTyped = sender.sendTypedMessage.bind(sender), sendSound = sender.sendSoundEffect.bind(sender);
   t.mock.method(sender, 'sendConfig', (id, value) => { configs.set(id, value); return sendConfig(id, value); });
@@ -67,7 +69,7 @@ function actor(t) {
     for (const ground of [...core.World.getItems()]) if (ground.getOwner() === p.getUsername()) core.ItemOnGroundManager.deregister(ground);
     if (p.isRegistered()) core.World.getPlayers().remove(p);
   });
-  return { p, c, configs, messages, typed, sounds };
+  return { p, c, configs, messages, typed, sounds, frames };
 }
 const quest = key => { const q = Runtime.getRegisteredQuests().find(q => q.key === key); assert.ok(q, key); return q; };
 const held = (f, id) => f.p.getInventory().getAmount(id);
@@ -364,4 +366,15 @@ test('native Take uses captured sound and spam channel while duplicate and full 
   assert.equal(held(f, 7162), 0);
   assert.equal(f.messages.at(-1), "You don't have enough inventory space to do that.", 'capture230/2922 tick2411');
   assert.equal(f.sounds.filter(([id]) => id === 2582).length, 1, 'capacity refusal has no take sound');
+});
+
+test('Search enables actual encoded Take and Examine transmissions for every interactive catalog row', t => {
+  const f = actor(t), object = ownHouse(f); f.frames.length = 0; search(f, object);
+  const FLAGS_RANGE_OPCODE = 109; // ServerPackets: fixed12-byte WIDGET_SET_FLAGS_RANGE payload.
+  const packets = f.frames.filter(frame => frame[0] === FLAGS_RANGE_OPCODE
+    && frame.length === 13 && frame.readInt32BE(1) === ((910 << 16) | 5));
+  assert.equal(packets.length, 1, 'onOp menu visibility alone cannot transmit actual mouse clicks');
+  assert.equal(packets[0].readUInt16BE(5), 0);
+  assert.equal(packets[0].readUInt16BE(7), 159, 'active242 has160 interactive catalog rows, no text/icon children');
+  assert.equal(packets[0].readInt32BE(9), 1026, 'captured OP1 and OP10 only');
 });

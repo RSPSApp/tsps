@@ -109,7 +109,7 @@ const inTaskLair = (at) => within(TASK_LAIR, at);
 const inEitherLair = (at) => inPublicLair(at) || inTaskLair(at);
 
 function isKing(npc) {
-  return KING_IDS.includes(npc?.getId?.());
+  return !!npc?.__echoKings || KING_IDS.includes(npc?.getId?.());
 }
 
 function isSpinolyp(npc) {

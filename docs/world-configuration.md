@@ -337,6 +337,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | `PlayerBots:activeRegionBotsByRegion` | json | *Shipped value in bot-sites.json* | **Wilderness bots per map square.** Target number of bots in individual 64x64 map squares, keyed plane:regionX:regionY with whole-number counts. Replaces pvp.activeRegionBotsByRegion in bot-sites.json. |
 | `PlayerBots:ai` | json | *AI bots off (3 bots when enabled)* | **AI bots.** Settings for bots that chat through an AI model, merged over the shipped defaults, e.g. { "enabled": true, "count": 3, "places": ["lumbridge"] }. Also takes names, disclose, providers and gifts; API keys come from the server environment, never here. |
 | `PlayerBots:allowedActivities` | json | *Every activity* | **Bot activities allowed.** A list of the activities bots may be spawned for; any other spawn is refused, e.g. ["bounty-hunter", "last-man-standing"]. Activities: world (the world's own population: Wilderness roamers and the bot sites), ai, bounty-hunter, last-man-standing, castle-wars, soul-wars, pest-control, developer (bot commands, the benchmark, --stressTest). |
+| `PlayerBots:retreatTeleportChance` | number (integer, >= 0, <= 100) | `25` | **PvP bot retreat teleport chance (%).** Percentage chance, rolled once when a PvP bot runs out of food, to try teleporting after the retreat grace period. Otherwise it flees on foot. |
 | `PlayerBots:sites` | json | *No overrides: the shipped bot-sites.json applies* | **Bot site overrides.** Maps a bot site id to the properties to change for it, e.g. { "some_site": { "enabled": false } }. Sites not named keep their shipped properties; a world.local.json value replaces the world.json one as a whole. |
 
 #### Plugin area `combat` (`pluginConfig`)
@@ -510,6 +511,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `GrotesqueGuardians` | GrotesqueGuardians | bosses | yes | Dusk and Dawn on the Slayer Tower roof: the key, bell and exit, the four-phase fight and the kill. (members only) |
 | `Hueycoatl` | Hueycoatl | bosses | yes | The Hueycoatl in the Darkfrost, Varlamore: a public or private fight with five body segments, Rain Fire, pillars, the half-health shield and a final phase. (members only) |
 | `KalphiteQueen` | KalphiteQueen | bosses | yes | The Kalphite Queen fight, run entirely from its encounter unit. (members only) |
+| `KillCountMessages` | KillCountMessages | bosses | yes | Tells the kill count on a kill for bosses whose count is kept only by Combat Achievements. (members only) |
 | `KingBlackDragon` | KingBlackDragon | bosses | yes | The King Black Dragon: the Lava Maze ladder and lair lever, and the fight with dragonfire checked against antifire protection. (members only) |
 | `Kraken` | Kraken | bosses | yes | The Kraken and cave krakens in Kraken Cove: disturb the whirlpool to surface them, four tentacles beside the boss, and Magic-only damage. (members only) |
 | `Leviathan` | Leviathan | bosses | yes | The Leviathan: its site, the fight and the rewards. (members only) |
@@ -845,6 +847,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `ValeTotems` | ValeTotems | minigames | yes | Adds the Vale Totems Fletching minigame in the Auburn Valley: building and decorating totems, ent offerings, loot and research points. (members only) |
 | `VolcanicMine` | VolcanicMine | minigames | yes | Adds the Volcanic Mine on Fossil Island: Petrified Pete, vents, gas, lava, the boulder, hazards and the reward on exit. (members only) |
 | `Wintertodt` | Wintertodt | minigames | yes | Adds Wintertodt: the world-wide round behind the Doors of Dinh, the camp outside and its reward cart. (members only) |
+| `EchoBosses` | EchoBosses | modes | yes | Leagues VI Echo encounters using normal-mechanics placeholders. (members only) |
 | `FreeToPlay` | FreeToPlay | modes | no | Switches this world to free-to-play. The spawn must be inside a free-to-play area. |
 | `GroupIronman` | GroupIronman | modes | yes | Group Ironman's rules: The Node, the Group Ironman tab and group chat, storage unlocks, forming groups, Hardcore groups' shared lives, Unranked groups, what a leaver becomes, and new members' weekly wealth limits and item restrictions. |
 | `Ironman` | Ironman | modes | yes | Adds Ironman, Ultimate, Hardcore and Group Ironman accounts (Group, Hardcore Group and Unranked Group), chosen at the Ironman tutor, downgraded with Adam, or set by the ::ironman command. |

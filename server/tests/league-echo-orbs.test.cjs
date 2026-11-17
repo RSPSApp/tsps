@@ -25,6 +25,7 @@ const DEMONIC_PACTS = 6;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
   core = PluginManager.getCoreApi();
   GameConstants.setWorldProfile("league");
   const lists = {};
@@ -163,7 +164,7 @@ test("no orbs for a main character, another league, or another NPC", () => {
   assert.deepEqual(kill(character("other"), "Hellhound", 1), []);
 });
 
-test("carrying the orb, the entrance asks first: No enters as usual, Yes is the placeholder", () => {
+test("carrying the orb, the entrance asks first: No enters as usual; Yes with no Echo fight to start is refused", () => {
   const player = character("entry");
   player.getInventory().add(new Item(ORB().KANDARIN_ECHO_ORB, 1));
   let entered = 0;
@@ -173,9 +174,14 @@ test("carrying the orb, the entrance asks first: No enters as usual, Yes is the 
   assert.equal(prompts.length, 1);
   assert.equal(prompts[0].title, "Fight the Echo of the Thermonuclear Smoke Devil?");
   assert.deepEqual(prompts[0].options, ["Yes.", "No."]);
-  const [, yes, , no] = prompts[0].pairs;
+  const [, firstYes, , no] = prompts[0].pairs;
   no();
   assert.equal(entered, 1, "No: the usual entry");
+  firstYes();
+  assert.deepEqual(player.messages, [], "a prompt takes one answer");
+  // Without the boss plugin answering echo-boss:start, Yes cannot start a fight.
+  emit("echo-boss:entry", { player, boss: "thermonuclear-smoke-devil", enter: () => entered++, handled: false });
+  const [, yes] = prompts[1].pairs;
   yes();
   assert.equal(entered, 1, "Yes: not let in");
   assert.deepEqual(player.messages, ["Nothing interesting happens."]);

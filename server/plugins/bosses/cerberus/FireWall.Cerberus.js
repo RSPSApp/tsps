@@ -21,7 +21,7 @@ function place(arena) {
   const { GameObject, ObjectManager } = Common.core;
   const { shape, rotation } = Common.data.fireWall;
   const objects = tiles.map(([x, y]) => {
-    const object = new GameObject(Common.ids.locs.flames, new Common.core.Location(x, y, 0), shape, rotation, null);
+    const object = new GameObject(Common.ids.locs.flames, new Common.core.Location(x, y, 0), shape, rotation, arena.privateArea ?? null);
     ObjectManager.register(object, true);
     return object;
   });

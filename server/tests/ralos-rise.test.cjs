@@ -90,6 +90,8 @@ function playerWith(items, { prayer = 99, points = prayer, worn = [], attributes
   const amountOf = (itemId) => slots.reduce((sum, item) => sum + (item?.getId() === itemId ? item.getAmount() : 0), 0);
   const inventory = {
     getItems: () => slots,
+    getCopiedItems: () => slots.map((item) => item?.clone() ?? new core.Item(-1, 0)),
+    full: () => sent.messages.push("Not enough space in your inventory."),
     setItem: (slot, item) => { slots[slot] = item; },
     refreshItems() {},
     getSlotForItemId: (itemId) => slots.findIndex((item) => item?.getId() === itemId),
@@ -451,4 +453,90 @@ test("Check tells the charges left; the bowl's state is saved and sent again at 
   const fresh = playerWith([]);
   logins.forEach((login) => login({ player: fresh }));
   assert.equal(fresh.sent.varbits.size, 0, "nothing to send for an empty bowl");
+});
+
+function realBreakPlayer(t, shardAmount, boneCount = 2) {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const player = new Player(new PlayerSession({ kind: "test", isOpen: () => true, send: () => true,
+    close() {}, onData() {}, onError() {}, onClose() {} }));
+  player.setIndex(9136).setUsername("shardcheck9136").setRegistered(true);
+  t.after(() => { Bones.sessions.get(player)?.stop(); player.setRegistered(false); });
+  player.getSkillManager().setMaxLevels(core.Skill.PRAYER, 99, false);
+  player.getSkillManager().setMaxLevels(core.Skill.CRAFTING, 99, false);
+  player.getSkillManager().setExperience(core.Skill.CRAFTING, 14000000);
+  const inventory = player.getInventory();
+  inventory.adds(id("chisel"), 1);
+  inventory.adds(id("blessed_bones"), boneCount);
+  if (shardAmount > 0) inventory.adds(id("blessed_bone_shard"), shardAmount);
+  return player;
+}
+
+for (const room of [0, 1, 3, 4]) {
+  test(`real conversion requires the complete four-shard reward: cap headroom ${room}`, (t) => {
+    const MAX = 2147483647;
+    const player = realBreakPlayer(t, MAX - room);
+    const inventory = player.getInventory();
+    const bones = inventory.getAmount(id("blessed_bones"));
+    const originalItems = inventory.getItems().slice();
+    const originalState = originalItems.map((item) => [item.getId(), item.getAmount(), item.getMeta()]);
+    let refreshed = 0;
+    const refreshItems = inventory.refreshItems.bind(inventory);
+    inventory.refreshItems = () => { refreshed++; return refreshItems(); };
+    const xp = player.getSkillManager().getExperience(core.Skill.CRAFTING);
+    itemActions.get("Blessed bones")["Break-down"]({ player, itemId: id("blessed_bones") });
+    assert.equal(inventory.getAmount(id("blessed_bones")), bones - (room === 4 ? 1 : 0));
+    assert.equal(inventory.getAmount(id("blessed_bone_shard")), room === 4 ? MAX : MAX - room);
+    assert.equal(player.getSkillManager().getExperience(core.Skill.CRAFTING), xp + (room === 4 ? 5 : 0));
+    if (room < 4) {
+      assert.equal(refreshed, 0, "preview cannot send a phantom inventory update");
+      inventory.getItems().forEach((item, slot) => assert.equal(item, originalItems[slot], "source item identity preserved"));
+      assert.deepEqual(inventory.getItems().map((item) => [item.getId(), item.getAmount(), item.getMeta()]), originalState);
+    }
+    runTicks(8);
+    assert.equal(inventory.getAmount(id("blessed_bones")), bones - (room === 4 ? 1 : 0), "remaining bones survive queued attempts");
+    assert.equal(inventory.getAmount(id("blessed_bone_shard")), room === 4 ? MAX : MAX - room);
+  });
+}
+
+test("real conversion uses the consumed bone's slot in a full pack without merging preset shards", (t) => {
+  const player = realBreakPlayer(t, 0, 1);
+  const inventory = player.getInventory();
+  const preset = new core.Item(id("blessed_bone_shard"), 90).setMetaValue(core.Item.PRESET_META, true);
+  inventory.addItem(preset);
+  while (inventory.getFreeSlots() > 0) inventory.adds(id("logs"), 1);
+  const heldPreset = inventory.getItems().find((item) => item.isPresetItem());
+  const xp = player.getSkillManager().getExperience(core.Skill.CRAFTING);
+  itemActions.get("Blessed bones")["Break-down"]({ player, itemId: id("blessed_bones") });
+  assert.equal(inventory.getAmount(id("blessed_bones")), 0);
+  assert.equal(inventory.getFreeSlots(), 0, "the new plain shard stack uses the freed input slot");
+  assert.equal(heldPreset.getAmount(), 90);
+  assert.equal(heldPreset.isPresetItem(), true);
+  const plain = inventory.getItems().find((item) => item.getId() === id("blessed_bone_shard") && item.getMeta() == null);
+  assert.equal(plain.getAmount(), 4);
+  assert.equal(player.getSkillManager().getExperience(core.Skill.CRAFTING), xp + 5);
+});
+
+test("a real refused conversion preserves item metadata through save/load and can retry without losing the tick", (t) => {
+  const player = realBreakPlayer(t, 2147483647, 1);
+  const inventory = player.getInventory();
+  const bone = inventory.getItems().find((item) => item.getId() === id("blessed_bones"));
+  bone.setMetaValue("test:origin", "retained");
+  itemActions.get("Blessed bones")["Break-down"]({ player, itemId: bone.getId() });
+  assert.equal(inventory.getItems().includes(bone), true);
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  const persistence = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+  persistence.register({ getSkillManager: () => require("../dist/game/content/skill/SkillManager").SkillManager,
+    setPlayerPersistence() {}, log() {} });
+  const { JsonPlayerPersistence } = persistence;
+  const codec = new JsonPlayerPersistence();
+  const loaded = realBreakPlayer(t, 0, 1);
+  codec.hydratePlayerSave(JSON.parse(JSON.stringify(PlayerSave.fromPlayer(player), codec.replacer.bind(codec)), codec.reviver.bind(codec)))
+    .applyToPlayer(loaded);
+  assert.equal(loaded.getInventory().getAmount(id("blessed_bone_shard")), 2147483647);
+  assert.equal(loaded.getInventory().getItems().find((item) => item.getId() === id("blessed_bones")).getMetaValue("test:origin"), "retained");
+  inventory.deleteAtSlot(inventory.getSlotForItemId(id("blessed_bone_shard")), 4);
+  itemActions.get("Blessed bones")["Break-down"]({ player, itemId: bone.getId() });
+  assert.equal(inventory.getAmount(id("blessed_bones")), 0, "a refused attempt did not spend the tick");
+  assert.equal(inventory.getAmount(id("blessed_bone_shard")), 2147483647);
 });

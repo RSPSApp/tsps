@@ -1,4 +1,5 @@
 import { AnimationFrames } from "../AnimationFrames";
+import type { NpcOverride } from "../../custom/npcs/NpcModelOverrideRegistry";
 
 export type NpcInstance = {
     /** Optional server-authored NPC index (OSRS: 1..65534). */
@@ -15,10 +16,10 @@ export type NpcInstance = {
      */
     ownerMapId?: number;
     /**
-     * Server model customisation riding this NPC: when typeId is a synthetic id, the worker
-     * (a separate thread) registers it from here before resolving the type.
+     * Server model and type customisation riding this NPC: when typeId is a synthetic id, the
+     * worker (a separate thread) registers it from here before resolving the type.
      */
-    modelOverride?: { baseId: number; models: Array<{ slot: number; modelId: number }> };
+    modelOverride?: NpcOverride;
 };
 
 /** The map square that owns (draws, picks) an NPC instance. */

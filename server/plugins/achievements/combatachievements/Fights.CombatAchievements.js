@@ -99,6 +99,7 @@ function weaponId(player) {
 
 /** Whether a rule reads this NPC's fights. */
 function watched(npc) {
+  if (npc?.getAttribute?.("echo-boss:encounter")) return false;
   ensureRules();
   return rules.has(npcName(npc).toLowerCase());
 }
@@ -309,6 +310,7 @@ function onKill(name, tests) {
 /** onNpcDeath: every player who fought it, against its rules; then the fight is forgotten. */
 function onNpcDeath(event) {
   const { npc } = event ?? {};
+  if (npc?.getAttribute?.("echo-boss:encounter")) { fights.delete(npc); defence.delete(npc); return; }
   ensureRules();
   const byPlayer = npc ? fights.get(npc) : null;
   fights.delete(npc);

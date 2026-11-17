@@ -114,6 +114,15 @@ const completed = (player) => Object.keys(player.getAttribute("league:tasks") ??
 const points = (player) => { const query = { player, points: 0, tasks: 0 }; for (const handler of custom["league:points"]) handler(query); return query.points; };
 const npc = (name) => ({ getCurrentDefinition: () => ({ getName: () => name }), getMaxHitpoints: () => 10 });
 const kill = (player, name) => hooks.onNpcDeath({ killer: player, npc: npc(name), npcId: 0, location: { x: 0, y: 0, z: 0 } });
+
+test('Echo-marked forms never satisfy ordinary same-name league kill tasks', () => {
+  const player=character('EchoNoNormal'),target=npc('Guard');
+  target.getAttribute=key=>key==='echo-boss:encounter'?{boss:'fixture',token:'token'}:null;
+  hooks.onNpcDeath({killer:player,npc:target,npcId:0,location:{x:0,y:0,z:0}});
+  const completed=()=>require('../plugins/modes/leaguetasks/Common.LeagueTasks').completedIds(player);
+  assert.equal(completed().includes('defeat-a-guard'),false);
+  kill(player,'Guard');assert.equal(completed().includes('defeat-a-guard'),true,'ordinary kill remains eligible');
+});
 function setLevel(player, skill, level) {
   const skills = player.getSkillManager();
   const previous = skills.getMaxLevel(skill);

@@ -27,5 +27,6 @@ module.exports = {
     Typeless.attach(api);
     Area.attach(api);
     Entrance.attach(api);
+    require("./thermonuclear/Echo.ThermonuclearSmokeDevil").attach(api);
   },
 };

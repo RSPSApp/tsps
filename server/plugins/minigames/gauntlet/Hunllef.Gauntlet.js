@@ -185,6 +185,13 @@ class HunllefFight {
     npc.setHeadIcon(HEAD_ICON[this.protecting]);
     npc.getMovementQueue().setBlockMovement(true);
     this.run.map.add(npc);
+    if (this.run.echo) {
+      // The normal Corrupted Hunllef; its three style forms share one model, so the Echo
+      // appearance EchoBosses gives this instance holds through every style change.
+      const configure = { player: this.run.player, boss: "corrupted-hunllef", role: "boss", npc, token: this.run.echo.token, configured: false };
+      Shared.api().emitCustomEvent("echo-boss:configure", configure);
+      if (!configure.configured) throw new Error("Echo Hunllef could not be configured");
+    }
     return npc;
   }
 
@@ -206,7 +213,7 @@ class HunllefFight {
   }
 
   phase() {
-    const left = this.npc.getHitpoints() / HITPOINTS[this.mode];
+    const left = this.npc.getHitpoints() / (this.npc.getMaxHitpoints?.() ?? HITPOINTS[this.mode]);
     return left > 2 / 3 ? 0 : left > 1 / 3 ? 1 : 2;
   }
 
@@ -264,7 +271,7 @@ class HunllefFight {
 
   attack(player) {
     const { Animation } = Shared.core();
-    this.nextAttack = this.ticks + ATTACK_SPEED;
+    this.nextAttack = this.ticks + (this.run.echo ? this.npc.getCurrentDefinition().getAttackSpeed() : ATTACK_SPEED);
     if (this.underneath(player)) {
       // The stomp is not one of the four attacks before a switch.
       this.npc.performAnimation(new Animation(ANIMATION.STOMP));
@@ -299,7 +306,7 @@ class HunllefFight {
     Shared.later(this, Math.max(1, Math.ceil(speed / 30)), () => {
       if (this.run.stage !== "boss") return;
       const prayed = protects(player, style);
-      const amount = randomInt(this.random, 0, MAX_HIT[this.mode][prayed ? "prayed" : "unprayed"][tier]);
+      const amount = randomInt(this.random, 0, this.attackCap(prayed, tier));
       if (!prayed) this.taken.offPrayer += amount;
       damage(player, amount);
       if (disable) {
@@ -307,6 +314,13 @@ class HunllefFight {
         player.sendMessage("<col=ff0000>Your prayers have been disabled!</col>");
       }
     });
+  }
+
+  attackCap(prayed, tier) {
+    const normal = MAX_HIT[this.mode][prayed ? "prayed" : "unprayed"][tier];
+    if (!this.run.echo) return normal;
+    // Placeholder-derived caps: Wiki's 85 base hit, normal Corrupted armour/prayer ratios.
+    return Math.floor(normal * this.npc.getCurrentDefinition().getMaxHit() / MAX_HIT.corrupted.unprayed[0]);
   }
 
   // -------------------------------------------------------------- tornadoes

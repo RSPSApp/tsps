@@ -59,24 +59,31 @@ class Fight {
   /** Called after hits: Dawn flying off at half health, then Dusk turning defensive. */
   checkPhase() {
     const { ids, data } = Common;
-    if (this.phase === 1 && this.dawn.getHitpoints() <= data.phases.dawnFliesBelow) {
+    if (this.phase === 1 && this.dawn.getHitpoints() <= this.phaseThreshold(this.dawn)) {
       this.phase = 2;
       this.dawn.getCombat?.().reset?.();
       this.dawn.performAnimation(new Common.core.Animation(ids.seqs.dawnFlyUp));
-      this.dawn.setNpcTransformationId(ids.npcs.dawnFlying);
-      this.dusk.setNpcTransformationId(ids.npcs.duskPhase2);
+      this.changeForm(this.dawn, "dawnFlying");
+      this.changeForm(this.dusk, "duskPhase2");
       return true;
     }
-    if (this.phase === 2 && this.dusk.getHitpoints() <= data.phases.dawnReturnsBelow) {
+    if (this.phase === 2 && this.dusk.getHitpoints() <= this.phaseThreshold(this.dusk)) {
       this.phase = 3;
       this.rocks = [];
-      this.dusk.setNpcTransformationId(ids.npcs.duskPhase3);
-      this.dawn.setNpcTransformationId(ids.npcs.dawnPhase3);
+      this.changeForm(this.dusk, "duskPhase3");
+      this.changeForm(this.dawn, "dawnPhase3");
       this.dawn.performAnimation(new Common.core.Animation(ids.seqs.dawnFlyDown));
       this.lightningUntil = this.tickCount + data.lightning.ticks;
       return true;
     }
     return false;
+  }
+
+  phaseThreshold(npc) { return this.roof.echo ? Math.floor(npc.getMaxHitpoints() / 2) :
+    Common.data.phases[npc === this.dawn ? "dawnFliesBelow" : "dawnReturnsBelow"]; }
+  changeForm(npc, ordinary) {
+    if (this.roof.form) this.roof.form(npc, ordinary);
+    else npc.setNpcTransformationId(Common.ids.npcs[ordinary]);
   }
 
   /** Dawn finished: Dusk takes in her essence and fights alone, opening with a prison. */
@@ -86,11 +93,11 @@ class Fight {
     this.phase = 4;
     this.vortices = [];
     this.spheres = [];
-    this.dusk.setNpcTransformationId(ids.npcs.duskPhase4Spawn);
+    this.changeForm(this.dusk, "duskPhase4Spawn");
     this.dusk.performAnimation(new Common.core.Animation(ids.seqs.duskEnrage));
     Common.later(3, () => {
       if (this.stopped) return;
-      this.dusk.setNpcTransformationId(ids.npcs.duskPhase4);
+      this.changeForm(this.dusk, "duskPhase4");
       const target = this.roof.players()[0];
       if (target) this.imprison(target);
     });

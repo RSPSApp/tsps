@@ -148,3 +148,19 @@ delay (2 ticks) reproduces the typical landing.
 - Cannon destruction (live destroys a cannon set up in the room; here setup is refused).
 - Wind-spell 20% weakness (Wiki, 2025) and the walk-under/safespot/redemption methods -
 player-side choices, no server behaviour.
+# Leagues VI Echo placeholder
+
+The matching orb opens an isolated private fight with the normal boss, which
+EchoBosses dresses in the Echo appearance and Wiki profile (1,200 HP, maximum hit 51,
+two-tick attacks) for that instance only ([echo-bosses.md](echo-bosses.md)). It deliberately
+uses the normal boss's smoke projectile, typeless prayer penetration, facemask
+rule and movement. Echo charged attacks and other Echo specials are not implemented;
+this encounter does not claim Echo combat parity. Ordinary public fights keep
+their existing task and diary rules. Echo requires base 93 Slayer but no assignment.
+
+The central Echo service owns rewards/progression and suppresses normal orb rolls.
+The adapter completes once, never respawns, and clears its actors/pending damage
+on departure, death, logout and shutdown. Disconnected players recover outside
+the crevice. Each player receives a separate instance.
+
+Source: [Echo Thermonuclear smoke devil](https://oldschool.runescape.wiki/w/Thermonuclear_smoke_devil_(Echo)).

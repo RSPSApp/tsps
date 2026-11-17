@@ -29,7 +29,7 @@ test('PvP retreat starts when actual food runs out at any HP, runs first, then r
   const RETREAT_RUN_GRACE_MS = 5000;
   let routes = [], teleports = [], loads = 0, blocked = false, frozen = false;
   let allowed = true, hp = 10, teleporting = false, retaliate = true, globalPvp = false;
-  let nowMs = 1000;
+  let nowMs = 1000, roll = 0.249, chance;
   let inventoryItems = [{ getId: () => ItemIdentifiers.SHARK }];
   let location = new Location(3100, 3600, 0), target = {}, attacker = { getLocation: () => new Location(3100, 3601, 0) };
   const originalCheck = TeleportHandler.checkReqs;
@@ -37,7 +37,7 @@ test('PvP retreat starts when actual food runs out at any HP, runs first, then r
   const originalIsIn = Wilderness.isIn;
   const module = { exports: {} };
   vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {
-    module, require: (name) => {
+    module, Math: Object.assign(Object.create(Math), { random: () => roll }), require: (name) => {
       if (name.endsWith('/WorldDefinition')) return { hasGlobalWorldTag: () => globalPvp };
       if (name.endsWith('/Navigation.PlayerBots')) return {
         queueRouteAndFlagAppearance: (_, x, y) => routes.push({ x, y }),
@@ -74,7 +74,13 @@ test('PvP retreat starts when actual food runs out at any HP, runs first, then r
   const node = new module.exports.PvpDefensiveActionNode({
     setPhase: (state, phase) => { state.pvp.phase = phase; },
     getProfile: () => ({ id: profile, foodCharges: 10 }), stopPvp: () => {},
-    api: { getCombatFactory: () => ({ canAttackPermission: () => undefined, getMethod: () => null }) },
+    api: {
+      getPluginConfig: (key) => {
+        assert.equal(key, 'PlayerBots:retreatTeleportChance');
+        return chance;
+      },
+      getCombatFactory: () => ({ canAttackPermission: () => undefined, getMethod: () => null }),
+    },
   });
   const tick = () => node.tick({ player, state, nowMs, target: null });
   try {
@@ -183,14 +189,39 @@ test('PvP retreat starts when actual food runs out at any HP, runs first, then r
 
     teleporting = false; state.pvp.retreat = null; hp = 10;
     state.virtualFoodChargesRemaining = 0;
-    blocked = true; attacker = null; retaliate = true; location = new Location(3100, 3600, 0);
+    roll = 0.25;
+    attacker = { getLocation: () => new Location(3100, 3601, 0) };
+    retaliate = true; location = new Location(3100, 3600, 0);
     tick();
-    assert.deepEqual(routes.at(-1), { x: state.home.x, y: state.home.y }, 'walk home after combat while teleblocked');
+    roll = 0;
+    nowMs += RETREAT_RUN_GRACE_MS;
+    tick();
+    tick();
+    assert.equal(teleports.length, 6, 'a roll at 25% commits to running even when later rolls would pass');
+    assert.deepEqual(routes.at(-1), { x: 3100, y: 3588 }, 'the bot keeps running away while pursued');
+    const routesBeforeDeath = routes.length;
+    hp = 0;
+    assert.equal(tick().status, 'failure', 'a dead bot stops retreating');
+    assert.equal(routes.length, routesBeforeDeath);
+    hp = 10;
+    attacker = null;
+    tick();
+    assert.deepEqual(routes.at(-1), { x: state.home.x, y: state.home.y }, 'walk home when the attacker disengages');
     location = new Location(state.home.x, state.home.y, 0);
     tick();
     assert.equal(loads, 3, 'walking home also replenishes the bot');
     assert.equal(state.pvp.retreat, null);
     assert.equal(retaliate, true);
+
+    for (const override of [0, 100]) {
+      chance = override;
+      location = new Location(3100, 3600, 0);
+      tick();
+      nowMs += RETREAT_RUN_GRACE_MS;
+      tick();
+      assert.equal(teleports.length, override === 0 ? 6 : 7, `respects a ${override}% override`);
+      state.pvp.retreat = null;
+    }
   } finally {
     TeleportHandler.checkReqs = originalCheck;
     TeleportHandler.teleport = originalTeleport;

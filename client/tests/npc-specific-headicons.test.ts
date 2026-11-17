@@ -107,6 +107,8 @@ test("real OsrsClient NPC_INFO type-change continuation retains icons while plai
         const host: any = Object.create(OsrsClient.prototype);
         host.npcHeadIcons = new Map();
         host.npcModelOverrides = new Map();
+        host.npcSlotOverrides = new Map();
+        host.npcTypeCustomisations = new Map();
         host.npcInstances = { instanceMap: new Map() };
         host.npcEcs = createNpcEcs(() => undefined, index => host.npcHeadIcons.delete(index));
         const spawn = (type: number) => {

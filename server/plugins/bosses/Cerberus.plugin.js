@@ -19,5 +19,6 @@ module.exports = {
     Combat.attach(api);
     Kills.attach(api);
     FireWall.attach(api);
+    require("./cerberus/Echo.Cerberus")(api);
   },
 };

@@ -117,6 +117,7 @@ module.exports = function registerClientOfKourendQuest(api) {
   const ORB_SCAN_SOUND = 1900; // wanted_scan
   const ORB_SHATTER_DELAY_TICKS = 2; // the scan at 1793, the shatter at 1795 (1002104: 3991, 3993)
   const GLASS_BREAK_SOUND = 2127; // glass_break, with the shatter
+  const BUSY_VARBIT = 12393; // "busy": 1 from the orb click (tick 1793; 1002104 tick 3991)
   const VEOS_ARGH_ANIMATION = 4341; // urn_search_bit on Veos, this player only (tick 2093)
   const POSSESSION_GRAPHIC = 560; // skeleton_killerwatt_electricshock on Veos (tick 2095)
   const POSSESSION_ANIMATION = 3170; // human_killerwatt_electricshock on Veos (tick 2095)
@@ -711,9 +712,13 @@ module.exports = function registerClientOfKourendQuest(api) {
     // The player holds the orb up as Wanted!'s crystal ball scans; it shatters two ticks later.
     player.performAnimation(new Animation(ORB_SCAN_ANIMATION));
     player.performGraphic(Graphic.atHeight(ORB_SCAN_GRAPHIC, ORB_SCAN_GRAPHIC_HEIGHT));
-    player.getPacketSender().sendSoundEffect(ORB_SCAN_SOUND);
+    player.getPacketSender().sendSoundEffect(ORB_SCAN_SOUND, 1, 0);
+    player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
     TaskManager.submit(new CountdownTask(player, ORB_SHATTER_DELAY_TICKS, () => {
-      if (!questActive(player) || quest.getStage(player) !== STAGE_ORB || !held(player, MYSTERIOUS_ORB_ITEM_ID)) return;
+      // Ours: live keeps busy until the chat closes (tick 1800); here it ends with the scan.
+      player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+      // The orb was dropped, banked or carried away during the scan: nothing shatters.
+      if (!questActive(player) || quest.getStage(player) !== STAGE_ORB || !held(player, MYSTERIOUS_ORB_ITEM_ID) || !nearDarkAltar(player)) return;
       startTranscript(api, player, NARRATOR_NPC_ID, PAGE, "activating-the-orb-using-the-activate-option-on-the-mysterious-orb-by-the-dark-altar");
     }));
   }
@@ -808,7 +813,7 @@ module.exports = function registerClientOfKourendQuest(api) {
       if (quest.getStage(player) < STAGE_ORB_USED) quest.setStage(player, STAGE_ORB_USED);
       // With the box: the player's overhead "Argh!", the glass breaking and the whisper in chat (tick 1795).
       player.forceChat("Argh!");
-      player.getPacketSender().sendSoundEffect(GLASS_BREAK_SOUND);
+      player.getPacketSender().sendSoundEffect(GLASS_BREAK_SOUND, 1, 0);
       player.sendMessage(ORB_WHISPER_CHAT);
       return;
     }

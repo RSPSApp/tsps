@@ -152,6 +152,7 @@ test("the whole quest as the revision 242 captures play it", async (t) => {
   await h.dispatch(f, { type: "inventory_action", widgetId: h.core.CacheDefinitions.getComponentId("inventory:items"), itemId: I.MYSTERIOUS_ORB, slot: slot(f, I.MYSTERIOUS_ORB), option: "Activate", optionIndex: 2 });
   assert.ok(f.animations.some((a) => a.tick === click && a.id === 2721));
   assert.ok(f.calls.some((c) => c.tick === click && c.name === "sendSoundEffect" && c.args[0] === 1900));
+  assert.ok(varbitAt(f, 12393).some(([tick, value]) => tick === click && value === 1), "busy from the click (tick 1793)");
   const orbLines = await talk(f, async () => h.ticks(f, 3));
   const shatter = orbLines.find((s) => s.text === "The orb shatters after being held in the air.");
   assert.equal(shatter.tick - click, 2);
@@ -242,4 +243,17 @@ test("Port Sarim's Veos shows his travel options once Kourend has been visited",
   const shown = npc.getCurrentDefinition(done.player);
   assert.equal(shown.getId(), N.VEOS_5);
   assert.deepEqual(shown.getActions().filter(Boolean), ["Talk-to", "Port Piscarilius", "Land's End"]);
+});
+
+test("an orb carried away from the altar during the scan does not shatter", async (t) => {
+  const f = actor(t, { at: ALTAR_TILE });
+  quest().setStage(f.player, 3);
+  f.player.getInventory().add(new h.core.Item(I.MYSTERIOUS_ORB, 1), false);
+  h.ticks(f, 2);
+  await h.dispatch(f, { type: "inventory_action", widgetId: h.core.CacheDefinitions.getComponentId("inventory:items"), itemId: I.MYSTERIOUS_ORB, slot: slot(f, I.MYSTERIOUS_ORB), option: "Activate", optionIndex: 2 });
+  f.player.moveTo(new h.core.Location(1712, 3860, 0)); // out of the altar's reach before the shatter
+  h.ticks(f, 4);
+  assert.equal(f.player.getInventory().getAmount(I.MYSTERIOUS_ORB), 1);
+  assert.equal(quest().getStage(f.player), 3);
+  assert.equal(f.player.getPacketSender().getVarbit(12393), 0, "busy ends with the scan");
 });

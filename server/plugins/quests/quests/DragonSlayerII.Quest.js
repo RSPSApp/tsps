@@ -277,13 +277,9 @@ module.exports = function registerDragonSlayerII(api) {
   // (3659,3849) is inside its footprint. Varbit6104 changes it from Build to Travel.
   const ROWBOAT_OBJECT_TILE = { x: 3658, y: 3848, z: 0 };
   const ROWBOAT_SPACE_TILE = { x: 3659, y: 3849, z: 0 };
-  // After the quest the rowboat stays usable: it lands at Lithkren's rowboat (32079), which
-  // returns to this side. The two landing tiles are the Shortest Path table's.
+  // After the quest the rowboat stays usable through the Ferries plugin's recorded
+  // `lithkren`/`lithkren-back` fade trips (fade, minimap off, move, fade in, close).
   const LITHKREN_ROWBOAT_TILE = { x: 3582, y: 3971, z: 0 };
-  const LITHKREN_ROWBOAT_LANDING = new Location(3583, 3973, 0);
-  const FOSSIL_ROWBOAT_LANDING = new Location(3660, 3849, 0);
-  const ROWBOAT_TO_LITHKREN_MESSAGE = "You row across to Lithkren and step ashore near the ancient fortress.";
-  const ROWBOAT_TO_FOSSIL_ISLAND_MESSAGE = "You row back to Fossil Island.";
   // QuestHelper's surface route continues at the courtyard stairs on Lithkren.
   const LITHKREN_LANDING = new Location(3559, 4004, 0);
   // The ancient doors lead into the Deep Lithkren vault, on the north edge of the
@@ -869,8 +865,7 @@ module.exports = function registerDragonSlayerII(api) {
     if (objectId === O.ROWBOAT_13 || visibleObjectId === O.ROWBOAT_13) {
       if (location.x !== LITHKREN_ROWBOAT_TILE.x || location.y !== LITHKREN_ROWBOAT_TILE.y || location.z !== 0) return false;
       if (stage(p) < S.TO_LITHKREN || (!p.getAttribute(ATTR_ROWBOAT_BUILT) && stage(p) < S.COMPLETE)) return false;
-      p.moveTo(FOSSIL_ROWBOAT_LANDING);
-      p.sendMessage(ROWBOAT_TO_FOSSIL_ISLAND_MESSAGE);
+      api.emitCustomEvent("ferries:travel", { player: p, route: "lithkren-back" });
       return true;
     }
     if (![29916, O.ROWBOAT_SPACE, O.ROWBOAT_14].includes(objectId)
@@ -880,8 +875,7 @@ module.exports = function registerDragonSlayerII(api) {
     // After the quest the built rowboat still crosses to Lithkren's shore.
     if (stage(p) >= S.COMPLETE) {
       if (!travelOption) return false;
-      p.moveTo(LITHKREN_ROWBOAT_LANDING);
-      p.sendMessage(ROWBOAT_TO_LITHKREN_MESSAGE);
+      api.emitCustomEvent("ferries:travel", { player: p, route: "lithkren" });
       return true;
     }
     if (travelOption) {
@@ -916,7 +910,7 @@ module.exports = function registerDragonSlayerII(api) {
       || !p.getAttribute(ATTR_ROWBOAT_BUILT) || stage(p) < S.TO_LITHKREN || stage(p) >= S.COMPLETE) return false;
     p.moveTo(LITHKREN_LANDING);
     p.setAttribute(ATTR_LITHKREN_ARRIVED, true);
-    p.sendMessage(ROWBOAT_TO_LITHKREN_MESSAGE);
+    p.sendMessage("You row across to Lithkren and step ashore near the ancient fortress.");
     return true;
   }
   function onLithkrenDialogueAction({ player: p, stepId }) {

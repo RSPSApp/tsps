@@ -11317,6 +11317,7 @@ test('Dragon Slayer II rowboat build consumes the Wiki supplies and uses the rea
   const itemOnObjectHandlers = [];
   const playerProcesses = [];
   const custom = new Map();
+  const ferryRoutes = [];
   const { api: base } = mockApi();
   const objectManager = base.core.ObjectManager;
   const register = objectManager.register;
@@ -11332,6 +11333,9 @@ test('Dragon Slayer II rowboat build consumes the Wiki supplies and uses the rea
       if (prop === 'onItemOnObject') return (handler) => itemOnObjectHandlers.push(handler);
       if (prop === 'onPlayerProcess') return (handler) => playerProcesses.push(handler);
       if (prop === 'onCustomEvent') return (name, handler) => custom.set(name, [...(custom.get(name) ?? []), handler]);
+      if (prop === 'emitCustomEvent') return (name, payload) => {
+        if (name === 'ferries:travel') ferryRoutes.push(payload.route);
+      };
       return target[prop];
     },
   });
@@ -11423,43 +11427,60 @@ test('Dragon Slayer II rowboat build consumes the Wiki supplies and uses the rea
   assert.ok(messages.includes('You successfully build the boat.'));
 
   // The built rowboat crosses while the quest is in progress, and stays usable afterwards.
+  const ferryData = require('../plugins/world/data/ferries.json').routes;
+  for (const route of ['lithkren', 'lithkren-back']) {
+    assert.deepEqual(
+      [ferryData[route].style, ferryData[route].teleport, ferryData[route].fadeIn, ferryData[route].close, ferryData[route].minimap],
+      ['fade', 3, 5, 7, [1, 5]], `${route} keeps the recorded fade/minimap transit`);
+  }
+  assert.deepEqual(ferryData.lithkren.to, [3583, 3973, 0]);
+  assert.deepEqual(ferryData['lithkren-back'].to, [3660, 3849, 0]);
+
   attributes.set('quest.dragon_slayer_ii.stage', 6);
   playerLocation = { x: 3660, y: 3849, z: 0 };
   destination = undefined;
+  ferryRoutes.length = 0;
   assert.equal(objectHandlers[0]({
     player, objectId: 29916, clickType: 1,
     definition: { id: O.ROWBOAT_14, getInteractions: () => ['Travel'] },
     location: { x: 3658, y: 3848, z: 0 },
   }), true);
   assert.deepEqual(destination, [3559, 4004, 0], 'during the quest the boat lands at Dallas\' courtyard');
+  assert.deepEqual(ferryRoutes, [], 'the quest landing is not a ferry route');
 
   attributes.set('quest.dragon_slayer_ii.stage', 14);
   playerLocation = { x: 3660, y: 3849, z: 0 };
   destination = undefined;
+  ferryRoutes.length = 0;
   assert.equal(objectHandlers[0]({
     player, objectId: 29916, clickType: 1,
     definition: { id: O.ROWBOAT_14, getInteractions: () => ['Travel'] },
     location: { x: 3658, y: 3848, z: 0 },
   }), true, 'the completed quest rowboat still crosses');
-  assert.deepEqual(destination, [3583, 3973, 0], 'after the quest it reaches Lithkren\'s rowboat');
+  assert.equal(destination, undefined, 'the ferry service owns the move');
+  assert.deepEqual(ferryRoutes, ['lithkren']);
 
   playerLocation = { x: 3583, y: 3973, z: 0 };
   destination = undefined;
+  ferryRoutes.length = 0;
   assert.equal(objectHandlers[0]({
     player, objectId: O.ROWBOAT_13, clickType: 1,
     definition: { id: O.ROWBOAT_13, getInteractions: () => ['Travel'] },
     location: { x: 3582, y: 3971, z: 0 },
   }), true, 'the Lithkren rowboat returns to Fossil Island');
-  assert.deepEqual(destination, [3660, 3849, 0]);
+  assert.equal(destination, undefined);
+  assert.deepEqual(ferryRoutes, ['lithkren-back']);
 
   attributes.set('quest.dragon_slayer_ii.stage', 1);
   destination = undefined;
+  ferryRoutes.length = 0;
   assert.equal(objectHandlers[0]({
     player, objectId: 29916, clickType: 1,
     definition: { id: O.ROWBOAT_14, getInteractions: () => ['Travel'] },
     location: { x: 3658, y: 3848, z: 0 },
   }), false, 'a character who has not started the quest cannot use the rowboat');
   assert.equal(destination, undefined);
+  assert.deepEqual(ferryRoutes, []);
 });
 
 test('Desert Treasure II shadow spells interrupt the private Leviathan encounter', () => {

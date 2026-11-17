@@ -105,6 +105,8 @@ class FakePlayer extends FakeMob {
       sendVarbit(id, value) { player.varbits.set(id, value); return this; },
       sendRunEnergy() { return this; },
       sendObjectAnimation() { return this; },
+      sendSound() { return this; },
+      sendGlobalGraphic() { return this; },
       sendSubInterface(target, id) { player.overlay = id; return this; },
       closeSubInterface() { player.overlay = null; return this; },
     };
@@ -147,14 +149,14 @@ class FakeArea {
 }
 
 function createWorld() {
-  const world = { cycle: 0, tasks: [], npcs: [], objects: new Set(), removedObjects: [], hits: [], projectiles: 0, providers: new Map(), hooks: {}, random: 0, events: [] };
+  const world = { cycle: 0, tasks: [], npcs: [], objects: new Set(), removedObjects: [], hits: [], projectiles: 0, sent: [], providers: new Map(), hooks: {}, random: 0, events: [] };
   const core = {
     World: { getProcessCycle: () => world.cycle },
     Location,
     Boundary: class {},
     PrivateArea: FakeArea,
     Misc: {
-      getRandom: (max) => Math.min(max, world.random),
+      getRandom: (max) => Math.min(max, world.randoms?.length ? world.randoms.shift() : world.random),
       randomInclusive: (min, max) => Math.min(max, Math.max(min, min + world.random)),
     },
     NpcIdentifiers: Npcs,
@@ -164,22 +166,34 @@ function createWorld() {
     CombatMethod: class {},
     PendingHit: class {
       constructor(attacker, target, method, config) {
-        Object.assign(this, { attacker, target, style: method.type(), rollAccuracy: config?.rollAccuracy ?? true });
+        Object.assign(this, { attacker, target, style: method.type(), rollAccuracy: config?.rollAccuracy ?? true, delay: typeof config === 'number' ? config : config?.delay ?? 0 });
       }
     },
     CombatFactory: { addPendingHit: (hit) => world.hits.push(hit) },
     PrayerHandler: { PROTECT_FROM_MAGIC: 16, PROTECT_FROM_MISSILES: 17, isActivated: (mob, prayer) => mob.prayers?.has(prayer) === true },
     Projectile: class {
-      static createProjectile() { return { sendProjectile: () => world.projectiles++ }; }
+      static createProjectile(source, target, id, start, end, startHeight, endHeight) {
+        const sent = { id, start, end, startHeight, endHeight, progress: 64, source };
+        return {
+          withProgress(progress) { sent.progress = progress; return this; },
+          withSource(from) { sent.source = from; return this; },
+          sendProjectile: () => { world.projectiles++; world.sent.push(sent); },
+        };
+      }
+      static flightDistance(start, end) { return Math.max(Math.abs(start.getX() - end.getX()), Math.abs(start.getY() - end.getY())); }
       static arrivalCycles() { return 60; }
       static arrivalTicks() { return 2; }
-      static centreOf(mob) { return mob.getLocation(); }
+      static centreOf(mob) { const offset = (mob.getSize() - 1) >> 1; return mob.getLocation().transform(offset, offset); }
       sendProjectile() { world.projectiles++; }
     },
     Task: FakeTask,
     TaskManager: { submit: (task) => world.tasks.push({ task, remaining: task.delay }) },
     Animation: class { constructor(id) { this.id = id; } },
-    Graphic: class { constructor(id) { this.id = id; } },
+    Graphic: class {
+      constructor(id) { this.id = id; this.delay = 0; this.height = 0; }
+      static delayed(id, delay, height = 0) { return Object.assign(new this(id), { delay, height }); }
+      static atHeight(id, height, delay = 0) { return this.delayed(id, delay, height); }
+    },
     HitDamage: class { constructor(damage) { this.damage = damage; } },
     HitMask: { RED: 1, BLUE: 0 },
     GameObject: class { constructor(id, location, type, face) { Object.assign(this, { id, location, type, face }); } },
@@ -459,6 +473,9 @@ test('JalTok-Jad melees up close and attacks again 4 ticks later; its ranged and
   player.moveTo(new Location(2270, 5348, 0));
   world.random = 0;
   method.start(jad, player);
+  assert.notEqual(jad.animations.at(-1), 7590, 'one time in three it keeps to ranged or magic up close');
+  world.random = 1;
+  method.start(jad, player);
   assert.equal(jad.animations.at(-1), 7590, 'the melee swing');
   assert.equal(jad.attackDelay, 4);
   assert.equal(method.hits(jad, player)[0].style, CombatType.MELEE);
@@ -467,6 +484,72 @@ test('JalTok-Jad melees up close and attacks again 4 ticks later; its ranged and
   method.start(jad, player);
   assert.notEqual(jad.animations.at(-1), 7590);
   assert.equal(jad.attackDelay, 0, 'a ranged or magic attack leaves the normal speed alone');
+});
+
+test('JalTok-Jad launches 3 ticks after its tell, as recorded: the prayer then counts, the splat follows its flight', () => {
+  const player = new FakePlayer();
+  const sounds = [];
+  const tiles = [];
+  const graphics = [];
+  player.packets.sendSound = (id, volume, delay) => { sounds.push([id, delay]); return player.packets; };
+  player.packets.sendGlobalGraphic = (graphic, at) => { tiles.push([graphic.id, graphic.height, at.getX(), at.getY()]); return player.packets; };
+  player.performGraphic = (graphic) => graphics.push([graphic.id, graphic.delay]);
+  const jad = new FakeNpc(Npcs.JALTOK_JAD, new Location(2265, 5348, 0));
+  const method = new (world.providers.get(Npcs.JALTOK_JAD))();
+  const attack = (random) => {
+    world.random = random;
+    world.hits.length = 0;
+    world.sent.length = 0;
+    sounds.length = tiles.length = graphics.length = 0;
+    method.start(jad, player);
+    method.hits(jad, player);
+  };
+
+  // Magic, 7 tiles south of Jad's centre (2267,5350): the fireballs end at 58, 62 and 68.
+  player.moveTo(new Location(2267, 5343, 0));
+  attack(1);
+  assert.equal(jad.animations.at(-1), 7592);
+  assert.deepEqual(sounds, [[159, 0]]);
+  tick(player, 2);
+  assert.equal(world.hits.length, 0, 'nothing leaves Jad before T+3');
+  tick(player);
+  assert.equal(world.hits.length, 1);
+  assert.equal(world.hits[0].style, CombatType.MAGIC);
+  assert.deepEqual(world.sent.map(({ id, start, end }) => [id, start, end]), [[448, 2, 58], [449, 6, 62], [450, 10, 68]]);
+  assert.ok(world.sent.every((sent) => sent.startHeight === 128 && sent.endHeight === 31 && sent.progress === 32 && sent.source === null));
+  assert.deepEqual(graphics, [[157, 58]]);
+  assert.deepEqual(sounds, [[159, 0], [162, 0], [163, 58]]);
+  assert.equal(world.hits[0].delay, 1, 'the splat at T+4');
+
+  // Three tiles from its centre (next to it, as recorded) the first fireball lands at 26: the splat at T+3.
+  player.moveTo(new Location(2267, 5347, 0));
+  world.randoms = [0];
+  attack(1);
+  tick(player, 3);
+  assert.equal(world.sent[0].end, 26);
+  assert.equal(world.hits[0].delay, 0);
+
+  // Ranged: the rocks on the target's tile at T+3, the splat at T+5.
+  world.randoms = [0];
+  attack(0);
+  assert.equal(jad.animations.at(-1), 7593);
+  assert.deepEqual(sounds, []);
+  tick(player, 3);
+  assert.equal(world.hits[0].style, CombatType.RANGED);
+  assert.deepEqual(tiles, [[451, 92, 2267, 5347]]);
+  assert.deepEqual(graphics, [[157, 60]]);
+  assert.deepEqual(sounds, [[163, 0]]);
+  assert.equal(world.hits[0].delay, 2);
+  assert.equal(world.sent.length, 0, 'no projectile for the rocks');
+
+  // Jad dead before T+3: nothing is launched.
+  world.randoms = [0];
+  attack(0);
+  jad.setHitpoints(0);
+  tick(player, 3);
+  assert.equal(world.hits.length, 0);
+  jad.setHitpoints(350);
+  world.random = 0;
 });
 
 test('TzKal-Zuk: the glyph shields, summons arrive on cue and his death wins the cape', () => {

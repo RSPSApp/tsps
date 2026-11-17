@@ -25,6 +25,22 @@ const DEFEATED_MESSAGE = "You have been defeated!";
 let ChallengeArea = null;
 let hooks = { lastJadDown() {}, completed() {}, failed() {}, refused() {} };
 
+/**
+ * The tile beside the Jad's footprint nearest `from`: on its west or east side when `from` is
+ * further out that way, else south or north. A tile already beside it is its own answer.
+ */
+function besideJad(from, jad) {
+  const at = jad.getLocation();
+  const size = jad.getSize?.() ?? 5;
+  const clamp = (value, low) => Math.max(low, Math.min(low + size - 1, value));
+  const x = clamp(from.getX(), at.getX());
+  const y = clamp(from.getY(), at.getY());
+  const dx = from.getX() - x;
+  const dy = from.getY() - y;
+  if (Math.abs(dx) >= Math.abs(dy)) return [dx < 0 ? at.getX() - 1 : at.getX() + size, y];
+  return [x, dy < 0 ? at.getY() - 1 : at.getY() + size];
+}
+
 class Challenge {
   constructor(player, number) {
     this.player = player;
@@ -74,14 +90,30 @@ class Challenge {
     this.jads.push({ npc, index, healers: [], called: false });
   }
 
+  /** Open tiles round the Jad, `spawnDistance` tiles out from its footprint. */
+  healerTiles(jad) {
+    const { core, data } = Common;
+    const at = jad.getLocation();
+    const size = jad.getSize?.() ?? 5;
+    const [near, far] = data.healers.spawnDistance;
+    const tiles = [];
+    for (let dx = -far; dx < size + far; dx++) {
+      for (let dy = -far; dy < size + far; dy++) {
+        const out = Math.max(-dx, dx - size + 1, -dy, dy - size + 1);
+        if (out < near || out > far) continue;
+        const tile = at.transform(dx, dy);
+        if (!core.RegionManager.blocked(tile, this.area)) tiles.push(tile);
+      }
+    }
+    return tiles;
+  }
+
   spawnHealers(entry) {
     const { api, data, ids } = Common;
-    const at = entry.npc.getLocation();
-    const size = entry.npc.getSize?.() ?? 5;
-    const ring = [[-1, -1], [size, -1], [-1, size], [size, size], [Math.floor(size / 2), -1]];
-    for (let index = 0; index < data.healers.perJad; index++) {
-      const [dx, dy] = ring[index % ring.length];
-      const healer = api.spawnNpc({ id: ids.npcs.healer, x: at.getX() + dx, y: at.getY() + dy, z: 0, owner: this.player, wanderRadius: 0 });
+    const tiles = this.healerTiles(entry.npc);
+    for (let index = 0; index < data.healers.perJad && tiles.length > 0; index++) {
+      const [tile] = tiles.splice(Common.randomInt(0, tiles.length - 1), 1);
+      const healer = api.spawnNpc({ id: ids.npcs.healer, x: tile.getX(), y: tile.getY(), z: 0, owner: this.player, wanderRadius: 0 });
       if (!healer) continue;
       healer.__skipDefaultRespawn = true;
       healer.__tkrChallenge = this;
@@ -91,7 +123,11 @@ class Challenge {
     }
   }
 
-  /** Yt-HurKot: at half health, once; they heal in melee reach (or a few tiles while fighting). */
+  /**
+   * Yt-HurKot: at half health, once. Each walks to the nearest tile beside the Jad (a side, not a
+   * corner) and heals as it gets there, then every 4 ticks on its own count - full or not, as
+   * recorded. Once drawn into a fight it goes for the player and never heals again.
+   */
   tendHealers(entry) {
     const { core, data } = Common;
     const { npc: jad } = entry;
@@ -103,18 +139,21 @@ class Challenge {
     }
     const now = Common.cycle();
     for (const healer of entry.healers) {
-      const fighting = healer.getCombat().getTarget() != null;
-      const distance = healer.calculateDistance(jad);
-      if (distance <= data.healers.reach || (fighting && distance <= data.healers.fightReach)) {
-        if (now % data.healers.healTicks === 0 && jad.getHitpoints() < max) {
-          healer.setMobileInteraction(jad);
-          healer.performAnimation(new core.Animation(data.healers.healAnim));
-          jad.performGraphic(new core.Graphic(data.healers.healGraphic));
-          jad.heal(Math.min(max - jad.getHitpoints(), Common.randomInt(data.healers.healMin, data.healers.healMax)));
-        }
-      } else if (!fighting) {
-        core.PathFinder.calculateWalkRoute(healer, jad.getLocation().getX(), jad.getLocation().getY());
+      if (healer.getCombat().getTarget() != null) healer.__tkrDrawn = true;
+      if (healer.__tkrDrawn) continue;
+      const [x, y] = besideJad(healer.getLocation(), jad);
+      if (healer.getLocation().getX() !== x || healer.getLocation().getY() !== y) {
+        core.PathFinder.calculateWalkRoute(healer, x, y);
+        continue;
       }
+      if (healer.__tkrNextHeal === undefined) healer.getMovementQueue?.().reset();
+      if (now < (healer.__tkrNextHeal ?? now)) continue;
+      healer.__tkrNextHeal = now + data.healers.healTicks;
+      healer.setMobileInteraction(jad);
+      healer.performAnimation(new core.Animation(data.healers.healAnim));
+      jad.performGraphic(core.Graphic.atHeight(data.healers.healGraphic, data.healers.healGraphicHeight));
+      const missing = max - jad.getHitpoints();
+      if (missing > 0) jad.heal(Math.min(missing, Common.randomInt(data.healers.healMin, data.healers.healMax)));
     }
   }
 

@@ -247,3 +247,71 @@ console.log('native Inspect submenu dispatch passed');
     setShiftClickDrop(0);
 }
 console.log("inventory shift-click drop passed");
+
+// Native-observed bookcase row: CS2 keeps the interactive graphic itemless,
+// with the item on a separate icon. Its configured op10 belongs to the router.
+{
+    const { WidgetActionRouter } = require("../game/widgets/WidgetActionRouter");
+    const { decodeClientPackets } = require("../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol");
+    const { setPacketSocket, flushPackets } = require("../network/packet");
+    const { state } = require("../network/serverConnection/state");
+    const frames: Buffer[] = [];
+    const socket = { readyState: 1, send: (frame: Uint8Array) => frames.push(Buffer.from(frame)) };
+    (globalThis as any).WebSocket ??= { OPEN: 1 };
+    state.socket = socket;
+    setPacketSocket(socket as any);
+    const row: any = {uid:910 << 16 | 5, id:910 << 16 | 5, parentUid:910 << 16 | 5,
+        groupId:910, fileId:-1, childIndex:45, itemId:-1, type:3,
+        actions:['Take',null,null,null,null,null,null,null,null,'Examine'],
+        onOp:[7845,-2147483644,-2147483645,-2147483643,0]};
+    let flags = 1026, details = 0, custom = 0;
+    const manager: any = {meslayerContinueWidget:null, getWidgetFlags:()=>flags,
+        getWidgetOpMask:()=>0, getWidgetByUid:()=>undefined};
+    const deps: any = new Proxy({getWidgetManager:()=>manager,
+        getWidgetInteraction:()=>({isWidgetDraggable:()=>false}),
+        getCustomInterfaces:()=>({handleWidgetClick:()=>false,rowIdAt:()=>undefined,handleWidgetOp(){}}),
+        getPlayerDesign:()=>({handleWidgetAction:()=>false}),
+    }, {get:(target:any,key:any)=>target[key] ?? (()=>undefined)});
+    const router = new WidgetActionRouter(deps);
+    const ui = {onWidgetAction:(event:any)=>router.handleWidgetAction(event),
+        onWidgetExamine:()=>details++};
+    const invoke = (widget:any, extra?:any) => {
+        const actual = deriveMenuEntriesForWidget(widget,false,()=>flags,()=>undefined);
+        const entry = actual.find(e=>e.option==='Examine');
+        assert.ok(entry, 'configured onOp exposes Examine even without transmission flags');
+        assert.equal(entry.opIndex,10);
+        assert.equal(entry.opcode,1007);
+        const mapped = widgetEntriesToSimple([{...entry,...extra}],
+            {ui,chosenWidget:widget,scheduleRender:()=>undefined})[0];
+        mapped.onClick?.(0,0,{source:'menu'});
+        flushPackets();
+        const packets = frames.flatMap(frame=>decodeClientPackets(frame)); frames.length=0;
+        return packets;
+    };
+    const packets = invoke(row);
+    assert.equal(packets.length,1,'native itemless dynamic Examine reaches the real router');
+    assert.deepEqual(packets[0],{type:'widget_action',widgetId:910 << 16 | 5,groupId:910,
+        childId:5,buttonNum:10,slot:45,itemId:undefined});
+    assert.equal(details,0,'the itemless row must not use the local item-details owner');
+    flags=2;
+    assert.equal(invoke(row).length,0,'onOp menu visibility cannot bypass the OP10 transmission flag');
+    assert.equal(details,0);
+    flags=1026;
+    for (const widget of [
+        {...row,uid:(149 << 16)+32769,parentUid:149 << 16,groupId:149,childIndex:1,itemId:954},
+        {...row,uid:387 << 16 | 15,groupId:387,fileId:15,childIndex:-1,itemId:-1},
+    ]) {
+        assert.equal(invoke(widget).length,0,'ordinary inventory and static equipment Examine stay local');
+    }
+    assert.equal(details,2,'preserve the local cache-text/price and equipment-child owner');
+    assert.equal(invoke(row,{onClick:()=>custom++}).length,0,'custom Examine callbacks retain ownership');
+    assert.equal(custom,1);
+    assert.equal(invoke(row,{suppressWidgetAction:true}).length,0,'explicit suppression prevents dispatch');
+    const [fallback] = widgetEntriesToSimple([{option:'Examine'}],
+        {ui,chosenWidget:row,scheduleRender:()=>undefined});
+    fallback.onClick?.();
+    assert.equal(details,3,'metadata-less Examine retains its local fallback');
+    state.socket = undefined;
+    setPacketSocket(undefined as any);
+}
+console.log('configured itemless dynamic Examine routes through real flagged packet owner');

@@ -28,7 +28,8 @@
  *
  * Ours, no source: which vines can ripen (live numbers its ripe vines in 6-bit varbits 11343-11346,
  * aldarin_grapes_position_1..4, by a list the cache does not carry, so this server takes any Pick
- * grapevine of the three vineyards and sends no such varbit); a partly filled barrel's Check line. Recorded difference: live ripened one new vine the tick the barrel filled
+ * grapevine of the three vineyards and sends no such varbit); a partly filled barrel's Check line; Pick on a ripe vine with a full barrel (the
+ * full Check line). Recorded difference: live ripened one new vine the tick the barrel filled
  * (1098 tick 16588) and the other three at the hand-in; the Wiki says they refresh only after the
  * turn-in, which this follows.
  */

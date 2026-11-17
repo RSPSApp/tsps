@@ -61,6 +61,9 @@ test("bird bath: each of the transcript's four outcomes, two ticks after the Yes
 test("bird bath: No closes the menu; a bowl, jug, bucket or vial used on it says there is not enough water (Wiki)", (t) => {
   const { p, messages } = player(t);
   BirdBath.drinkFrom({ player: p });
+  core.TaskManager.process();
+  assert.equal(p.getDialogueManager().getCurrent(), undefined, "no question a tick after the arrival");
+  core.TaskManager.process();
   p.getDialogueManager().getCurrent().execute(2);
   for (let i = 0; i < 4; i++) core.TaskManager.process();
   assert.equal(p.getAnimation()?.getId() === core.CacheDefinitions.getSeqId("poh_pool_drink_silent"), false, "no drink");

@@ -1,8 +1,8 @@
 "use strict";
 
 /**
- * The bird baths of Civitas illa Fortis (Wiki: Bird bath, Transcript:Bird bath). Drink-from asks
- * "Drink from the bird bath?" (Yes. / No.); a yes plays poh_pool_drink_silent and synth 2401 and
+ * The bird baths of Civitas illa Fortis (Wiki: Bird bath, Transcript:Bird bath). Drink-from asks,
+ * two ticks after the arrival, "Drink from the bird bath?" (Yes. / No.); a yes plays poh_pool_drink_silent and synth 2401 and
  * closes the menu, and two ticks later one of the transcript's four random outcomes follows, the
  * player's line with it (RSProx 237/1098 ticks 14895-14897, the poison outcome: the poison first,
  * "You have been poisoned!", then the line with the chatsad1 head):
@@ -70,9 +70,20 @@ function drink(player, random) {
   }));
 }
 
+/** The question opens two ticks after the arrival (RSProx 237/1098: arrival 14891, menu 14893). */
+const QUESTION_TICKS = 2;
+
 function drinkFrom({ player }) {
   const { core } = api;
-  const { DialogueChainBuilder, OptionDialogue } = core;
+  const from = player.getLocation().clone();
+  core.TaskManager.submit(new core.CountdownTask(player, QUESTION_TICKS, () => {
+    if (player.isRegistered() && player.getLocation().equals(from)) ask(player);
+  }));
+  return true;
+}
+
+function ask(player) {
+  const { DialogueChainBuilder, OptionDialogue } = api.core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new OptionDialogue(0, {
       executeOption(option) {
@@ -81,7 +92,6 @@ function drinkFrom({ player }) {
       },
     }, "Yes.", "No.").setTitle(QUESTION),
   ));
-  return true;
 }
 
 function vesselOnBath(event) {

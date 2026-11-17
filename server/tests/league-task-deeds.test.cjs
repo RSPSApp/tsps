@@ -2196,6 +2196,7 @@ test("deeds: a buffalo milked, a bird bath drunk from, scenery admired, stew giv
   assert.ok(bath, "the bird bath west of Civitas");
   f.player.getPacketSender().sendInterfaceRemoval();
   BirdBath.drinkFrom({ player: f.player, object: bath });
+  for (let i = 0; i < 2; i++) core.TaskManager.process(); // the question two ticks on (1098 tick 14893)
   const menu = f.player.getDialogueManager().getCurrent();
   assert.equal(menu?.constructor?.name, "OptionDialogue", "Drink from the bird bath? Yes. / No.");
   menu.execute(1);

@@ -30,7 +30,7 @@ collect the milk." No buffalo recording shows a message there, and a bottomless 
 ## Bird bath
 
 The bird bath is loc 52394. The Transcript:Bird bath page and recording 1098 (ticks 14874-14897) give this sequence:
-- Drink-from opens the chat menu "Drink from the bird bath?" with the options "Yes." and "No.".
+- Drink-from opens, two ticks after the arrival (tick 14893), the chat menu "Drink from the bird bath?" with the options "Yes." and "No.".
 - Yes plays `poh_pool_drink_silent` (10415) and synth 2401, and closes the menu.
 - Two ticks later, one of four outcomes happens at random:
 

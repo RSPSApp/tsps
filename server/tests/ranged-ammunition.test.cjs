@@ -75,7 +75,7 @@ test('a shot refreshes the native equipment counter immediately, including the f
     set: (slot, item) => { assert.equal(slot, Equipment.AMMUNITION_SLOT); ammo = item; },
     refreshItems: () => amounts.push(ammo.getAmount()),
   };
-  const p = { getEquipment: () => equipment, sendMessage() {},
+  const p = { getEquipment: () => equipment, getPrivateArea: () => null, sendMessage() {},
     getCombat: () => ({ getRangedWeapon: () => RangedWeapon.SHORTBOW, getAmmunition: () => Ammunition.BRONZE_ARROW }) };
   CombatFactory.decrementAmmo(p, null, 1);
   assert.equal(ammo.getAmount(), 1); assert.deepEqual(amounts, [1]);
@@ -88,6 +88,7 @@ test('a shot refreshes the native equipment counter immediately, including the f
 const { CombatFactory: Factory } = require('../dist/game/content/combat/CombatFactory');
 const { Equipment: Slots } = require('../dist/game/model/container/impl/Equipment');
 const { Item: GroundItem } = require('../dist/game/model/Item');
+const { Location } = require('../dist/game/model/Location');
 const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 
@@ -115,7 +116,7 @@ ItemOnGroundManager.registerLocation = (player, item, position) => {
   drops.push({ id: item.getId(), amount: item.getAmount(), position });
 };
 
-const POS = { x: 3000, y: 3000, z: 0 };
+const POS = new Location(3000, 3000, 0);
 
 function ammoHarness({ itemId = Items.BRONZE_ARROW, amount = 5, capeId = -1, bodyId = -1, rangedWeapon = RangedWeapon.SHORTBOW } = {}) {
   let ammo = new GroundItem(itemId, amount);
@@ -128,6 +129,7 @@ function ammoHarness({ itemId = Items.BRONZE_ARROW, amount = 5, capeId = -1, bod
   };
   const player = {
     getEquipment: () => equipment,
+    getPrivateArea: () => null,
     sendMessage() {},
     getCombat: () => ({ getRangedWeapon: () => rangedWeapon, getAmmunition: () => Ammunition.getForItem(itemId) }),
   };

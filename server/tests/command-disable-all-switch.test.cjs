@@ -1,8 +1,8 @@
-// The "commands:custom" world switch (#5682). Default off: nothing changes. On: the player-level custom ::commands are
+// The "commands:disableAll" world switch (#5682). Default off: nothing changes. On: the player-level custom ::commands are
 // refused through the unknown-command path; staff-level commands, ::bank and a commands:permissions rank are not changed.
 // Real PluginManager.emitCommand and the real CommandPacketListener; the ::bank registration is the real AdminCommands one.
 //
-// Run after `yarn build`: node --test tests/command-custom-switch.test.cjs
+// Run after `yarn build`: node --test tests/command-disable-all-switch.test.cjs
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, test } = require("node:test");
@@ -16,7 +16,7 @@ const adminCommands = require("../plugins/commands/AdminCommands.plugin");
 
 const UNKNOWN = "This command does not exist. Try ::players.";
 const DENIED = "You do not have permission to use this command.";
-const probe = PluginManager.createApi("CommandCustomSwitchProbe");
+const probe = PluginManager.createApi("CommandDisableAllSwitchProbe");
 const ran = [];
 
 before(async () => {
@@ -69,7 +69,7 @@ test("default (switch absent): a player-level command runs for a player", () => 
 });
 
 test("switch on: a player-level command is refused through the unknown-command path", () => {
-  worldConfig({ "commands:custom": true });
+  worldConfig({ "commands:disableAll": true });
   ran.length = 0;
   const p = player(PlayerRights.NONE);
   chat(p, "probeplayer");
@@ -78,7 +78,7 @@ test("switch on: a player-level command is refused through the unknown-command p
 });
 
 test("switch on: a command with no rank entry (anyone) is refused too", () => {
-  worldConfig({ "commands:custom": true });
+  worldConfig({ "commands:disableAll": true });
   ran.length = 0;
   const p = player(PlayerRights.NONE);
   chat(p, "probenull");
@@ -87,7 +87,7 @@ test("switch on: a command with no rank entry (anyone) is refused too", () => {
 });
 
 test("switch on: a staff-level command is unchanged (a player gets the permission denial, staff run it)", () => {
-  worldConfig({ "commands:custom": true });
+  worldConfig({ "commands:disableAll": true });
   ran.length = 0;
   const low = player(PlayerRights.NONE);
   chat(low, "probestaff");
@@ -99,7 +99,7 @@ test("switch on: a staff-level command is unchanged (a player gets the permissio
 });
 
 test("switch on: ::bank stays as it is (owner-only; a player gets the permission denial)", () => {
-  worldConfig({ "commands:custom": true });
+  worldConfig({ "commands:disableAll": true });
   ran.length = 0;
   const low = player(PlayerRights.NONE);
   chat(low, "bank");
@@ -108,7 +108,7 @@ test("switch on: ::bank stays as it is (owner-only; a player gets the permission
 });
 
 test("switch on: a commands:permissions rank that raises a player-level command still applies", () => {
-  worldConfig({ "commands:custom": true, "commands:permissions": { probeoverride: "OWNER" } });
+  worldConfig({ "commands:disableAll": true, "commands:permissions": { probeoverride: "OWNER" } });
   ran.length = 0;
   const low = player(PlayerRights.NONE);
   chat(low, "probeoverride");
@@ -119,7 +119,7 @@ test("switch on: a commands:permissions rank that raises a player-level command 
 });
 
 test("switch on: only the exact boolean true enables it (a string does not)", () => {
-  worldConfig({ "commands:custom": "true" });
+  worldConfig({ "commands:disableAll": "true" });
   ran.length = 0;
   const p = player(PlayerRights.NONE);
   chat(p, "probeplayer");
@@ -128,7 +128,7 @@ test("switch on: only the exact boolean true enables it (a string does not)", ()
 });
 
 test("switch off explicitly: the same as the default", () => {
-  worldConfig({ "commands:custom": false });
+  worldConfig({ "commands:disableAll": false });
   ran.length = 0;
   const p = player(PlayerRights.NONE);
   chat(p, "probeplayer");
@@ -142,7 +142,7 @@ test("switch on: getRegisteredCommands (the journal buttons and Commands list) o
   const listed = (rights) => PluginManager.getRegisteredCommands(player(rights)).map(({ command }) => command);
   assert.ok(listed(PlayerRights.NONE).includes("probeplayer"), "switch absent: a player-level command is listed");
   assert.ok(listed(PlayerRights.NONE).includes("probenull"), "switch absent: a no-rank command is listed");
-  worldConfig({ "commands:custom": true });
+  worldConfig({ "commands:disableAll": true });
   const refused = listed(PlayerRights.NONE);
   assert.ok(!refused.includes("probeplayer"), "switch on: the refused command is not listed");
   assert.ok(!refused.includes("probenull"), "switch on: the refused no-rank command is not listed");

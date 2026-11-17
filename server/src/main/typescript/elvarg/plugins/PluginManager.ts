@@ -2140,12 +2140,12 @@ export class PluginManager {
   }
 
   /**
-   * Whether the "commands:custom" world switch refuses `base`: only player-level commands (the effective rank is
+   * Whether the "commands:disableAll" world switch refuses `base`: only player-level commands (the effective rank is
    * NONE or unset), and only while the switch is exactly true. A commands:permissions rank still applies first, so
    * a command raised to a staff rank keeps its staff gate. The refusal is the unknown-command path, not a new message.
    */
-  private static refusedByCustomCommandsSwitch(base: string): boolean {
-    if (PluginManager.getPluginConfig<unknown>("commands:custom", false) !== true) {
+  private static refusedByDisableAllCommandsSwitch(base: string): boolean {
+    if (PluginManager.getPluginConfig<unknown>("commands:disableAll", false) !== true) {
       return false;
     }
     const required = PluginManager.requiredCommandRights(base);
@@ -2197,7 +2197,7 @@ export class PluginManager {
 
   public static getRegisteredCommands(player: any): Array<{ command: string; description: string }> {
     return [...PluginManager.commandHandlersByBase]
-      .filter(([command]) => !PluginManager.refusedByCustomCommandsSwitch(command))
+      .filter(([command]) => !PluginManager.refusedByDisableAllCommandsSwitch(command))
       .filter(([command]) => PluginManager.playerHasCommandRights(player, command))
       .map(([command, hooks]) => ({ command, description: hooks.find((hook) => hook.description)?.description ?? "" }))
       .sort((a, b) => a.command.localeCompare(b.command));
@@ -2217,7 +2217,7 @@ export class PluginManager {
       return event.handled;
     }
 
-    if (PluginManager.refusedByCustomCommandsSwitch(event.base)) {
+    if (PluginManager.refusedByDisableAllCommandsSwitch(event.base)) {
       return event.handled;
     }
 

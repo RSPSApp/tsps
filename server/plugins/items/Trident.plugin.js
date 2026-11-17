@@ -155,6 +155,11 @@ function venom(hit) {
 
 function chargeUsed(recipe) {
   return (player, staff, left) => {
+    if (recipe.fullChargedIds.has(staff.getId())) {
+      const unchargedId = recipe.staff.unchargedByCharged.get(staff.getId());
+      staff.setId(recipe.staff.chargedByUncharged.get(unchargedId));
+      refreshTridentState(player, staff);
+    }
     if (left > 0 && left % WARNING_EVERY === 0) {
       player.sendMessage(`Your ${recipe.look.name} has ${left.toLocaleString("en-US")} charges left.`);
     }

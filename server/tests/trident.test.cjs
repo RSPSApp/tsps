@@ -133,3 +133,92 @@ test("named inventory actions expose Charge, Check, and Uncharge", () => {
   assert.equal(typeof actions.get("Trident of the Swamp").Check, "function");
   assert.equal(typeof actions.get("Trident of the Swamp").Uncharge, "function");
 });
+
+const path = require("node:path");
+const { before } = require("node:test");
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { PlayerSession } = require("../dist/net/PlayerSession");
+const { EquipPacketListener } = require("../dist/net/packet/impl/EquipPacketListener");
+const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+const core = PluginManager.getCoreApi();
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  Trident.register(PluginManager.createApi("TridentFullIdRegression"));
+  require("../plugins/persistence/JsonPlayerPersistence.plugin").register(PluginManager.createApi("TridentPersistenceRegression"));
+  PluginManager.createApi("TridentChargePreservation").onCustomEvent("combat:consume-charge", event => {
+    if (event.player.getAttribute("test:spare-trident-charge") === true) event.skip = true;
+  });
+});
+
+function realActor(t) {
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setUsername("tridentcast"); p.setAttribute("bot-skip-persistence", true);
+  assert.equal(core.World.getPlayers().add(p), true);
+  p.setLocation(new core.Location(3200, 3200, 0));
+  p.getSkillManager().setMaxLevels(core.Skill.MAGIC, 99, false).setCurrentLevels(core.Skill.MAGIC, 99, false);
+  t.after(() => { core.TaskManager.cancelTasks(p); core.World.getPlayers().removes(p); });
+  return p;
+}
+
+function saveLoad(t, p) {
+  const codec = new JsonPlayerPersistence();
+  const record = JSON.parse(JSON.stringify(PlayerSave.fromPlayer(p), codec.replacer.bind(codec)), codec.reviver.bind(codec));
+  const loaded = realActor(t);
+  codec.hydratePlayerSave(record).applyToPlayer(loaded);
+  loaded.setAttribute("bot-skip-persistence", true);
+  return loaded;
+}
+
+for (const [fullId, chargedId] of [
+  [ItemIdentifiers.TRIDENT_OF_THE_SEAS_FULL_, ItemIdentifiers.TRIDENT_OF_THE_SEAS],
+  [ItemIdentifiers.TRIDENT_OF_THE_SEAS_FULL_O_, ItemIdentifiers.TRIDENT_OF_THE_SEAS_O_],
+]) {
+  test(`full trident ${fullId} becomes ${chargedId} only after a real charge spend and survives equipment/save transitions`, t => {
+    const p = realActor(t), inventory = p.getInventory();
+    const original = new Item(fullId, 1, { "test:origin": "kept", [Item.PRESET_META]: true });
+    const untouched = new Item(fullId, 1);
+    inventory.setItem(0, original); inventory.setItem(1, untouched);
+    assert.equal(Trident._test.getCharges(original), 2500);
+    assert.equal(original.getId(), fullId, "checking the inventory copy does not normalize its ID");
+    EquipPacketListener.equip(p, fullId, 0, core.Inventory.INTERFACE_ID);
+    const staff = p.getEquipment().get(core.Equipment.WEAPON_SLOT);
+    assert.notEqual(staff, original, "real equip transfers a metadata-preserving copy");
+    assert.equal(staff.getId(), fullId);
+    const npc = new core.NPC(core.NpcIdentifiers.MAN, new core.Location(3201, 3200, 0));
+    const method = core.CombatFactory.getMethod(p);
+    assert.ok(method instanceof core.MagicCombatMethod, "production resolver chooses the built-in magic method");
+    assert.equal(staff.getId(), fullId, "resolving/seeding full charges does not normalize before spending");
+    assert.equal(Trident._test.getCharges(staff), 2500);
+    p.setAttribute("test:spare-trident-charge", true);
+    assert.equal(method.canAttack(p, npc), true);
+    assert.equal(staff.getId(), fullId, "a genuinely spared cast keeps the full variant");
+    assert.equal(Trident._test.getCharges(staff), 2500);
+    p.setAttribute("test:spare-trident-charge", false);
+    assert.equal(method.canAttack(p, npc), true, "actual powered-staff canAttack spends its charge");
+    method.start(p, npc);
+    assert.equal(method.hits(p, npc).length, 1, "the native spell produces a real PendingHit");
+    assert.equal(staff.getId(), chargedId);
+    assert.equal(Trident._test.getCharges(staff), 2499);
+    assert.equal(staff.getMetaValue("test:origin"), "kept");
+    assert.equal(staff.isPresetItem(), true);
+    assert.equal(p.getEquipment().get(core.Equipment.WEAPON_SLOT), staff);
+    assert.equal(untouched.getId(), fullId, "the independent inventory copy stays full");
+    assert.equal(Trident._test.getCharges(untouched), 2500);
+    const loaded = saveLoad(t, p), loadedStaff = loaded.getEquipment().get(core.Equipment.WEAPON_SLOT);
+    assert.equal(loadedStaff.getId(), chargedId);
+    assert.equal(Trident._test.getCharges(loadedStaff), 2499);
+    assert.equal(loadedStaff.getMetaValue("test:origin"), "kept");
+    assert.equal(loadedStaff.isPresetItem(), true);
+    assert.ok(core.CombatFactory.getMethod(loaded) instanceof core.MagicCombatMethod);
+    assert.equal(Trident._test.getCharges(loadedStaff), 2499, "re-resolving after load does not refill it");
+    EquipPacketListener.unequip(loaded, core.Equipment.WEAPON_SLOT);
+    const returned = loaded.getInventory().getItems().find(item => item.getId() === chargedId);
+    assert.ok(returned, "real unequip returns the partially charged ID to inventory");
+    assert.equal(Trident._test.getCharges(returned), 2499);
+    assert.equal(returned.getMetaValue("test:origin"), "kept");
+  });
+}

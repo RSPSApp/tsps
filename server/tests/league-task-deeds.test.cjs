@@ -2394,3 +2394,78 @@ test("places from location lines: the Stonecutter Outpost's rocks, Tlati's trees
   assert.ok(done(f, "bank-at-land-s-end"), `the Land's End bank chest: ${f.messages}`);
 
 });
+
+// ---- PR B: condition kinds -----------------------------------------------------------------------
+
+test("ca-boss with monsters: every one of a Wiki group's Combat Achievement monsters finished (all three Dagannoth Kings)", (t) => {
+  const f = pactsCharacter(t);
+  const Data = require("../plugins/achievements/combatachievements/Data.CombatAchievements");
+  const Progress = require("../plugins/achievements/combatachievements/Progress.CombatAchievements");
+  const finish = (name) => {
+    const monster = [...Data.monsters().values()].find((each) => each.name === name);
+    assert.ok(monster?.tasks.length > 0, `CA monster ${name}`);
+    for (const task of monster.tasks) Progress.complete(f.player, task.id, { silent: true });
+  };
+  finish("DK: Prime");
+  finish("DK: Rex");
+  assert.ok(!done(f, "dagannoth-kings-combat-achievements"), "two of the three kings");
+  finish("DK: Supreme");
+  assert.ok(done(f, "dagannoth-kings-combat-achievements"), "all three, on the real plugin's completion event");
+  finish("Kalphite Queen");
+  assert.ok(done(f, "kalphite-queen-combat-achievements"), "a single monster the generator could not word");
+});
+
+test("resetOn: five cooked in a row (Cook 5 pieces of food in a row without burning them); a burn starts the count again", async (t) => {
+  const f = pactsCharacter(t);
+  for (let i = 0; i < 3; i++) {
+    f.player.getInventory().resetItems();
+    assert.equal(await cookShark(t, f), 1, `the real Cooking: ${f.messages}`);
+  }
+  PM.emitCustomEvent("cooking:burnt", { player: f.player, itemId: item("Burnt shark") });
+  assert.equal((f.player.getAttribute("league:task-progress") ?? {})["successfully-cook-5-pieces-of-food"], undefined, "the burn reset it");
+  for (let i = 0; i < 4; i++) {
+    f.player.getInventory().resetItems();
+    await cookShark(t, f);
+  }
+  assert.ok(!done(f, "successfully-cook-5-pieces-of-food"), "four since the burn");
+  f.player.getInventory().resetItems();
+  await cookShark(t, f);
+  assert.ok(done(f, "successfully-cook-5-pieces-of-food"), "five in a row");
+
+  // A failed pick of a man-table target (Citizens share it) starts the citizen streak again.
+  for (let i = 0; i < 9; i++) PM.emitCustomEvent("thieving:success", { player: f.player, method: "pickpocket", target: "man" });
+  PM.emitCustomEvent("thieving:failure", { player: f.player, method: "pickpocket", target: "man" });
+  for (let i = 0; i < 9; i++) PM.emitCustomEvent("thieving:success", { player: f.player, method: "pickpocket", target: "man" });
+  assert.ok(!done(f, "successfully-pickpocket-a-citizen-10-times-in-a-row"), "nine since the failure");
+  PM.emitCustomEvent("thieving:success", { player: f.player, method: "pickpocket", target: "man" });
+  assert.ok(done(f, "successfully-pickpocket-a-citizen-10-times-in-a-row"));
+});
+
+test("prayer-bonus: worn items reaching a Prayer bonus of 15, then 30, as BonusManager sums them", (t) => {
+  const f = pactsCharacter(t);
+  const E = core.Equipment;
+  const wear = (slot, name) => { f.player.getEquipment().setItem(slot, new core.Item(item(name))); f.player.getEquipment().refreshItems(); };
+  wear(E.BODY_SLOT, "Monk's robe top"); // +6
+  assert.ok(!done(f, "reach-a-prayer-bonus-of-15"));
+  wear(E.LEG_SLOT, "Monk's robe"); // +5
+  wear(E.AMULET_SLOT, "Holy symbol"); // +8
+  assert.ok(done(f, "reach-a-prayer-bonus-of-15"), `bonus ${f.player.getBonusManager().getOtherBonus()[core.BonusManager.PRAYER]}`);
+  assert.ok(!done(f, "reach-a-prayer-bonus-of-30"));
+});
+
+test("hit: one hit of 66 with an elemental spell, 150 with the Keris Partisan, through the hit-resolved hook", (t) => {
+  const f = pactsCharacter(t);
+  const target = npcAt(t, f, "Goblin", 1, 0);
+  const land = (damage, spell = null) => PM.emitCombatHitResolved({ attacker: f.player, target, hit: { getTotalDamage: () => damage, getSpell: () => spell } });
+  land(65, core.CombatSpells.FIRE_SURGE);
+  assert.ok(!done(f, "deal-66-damage-with-an-elemental-spell"), "65");
+  land(70, core.CombatSpells.SARADOMIN_STRIKE);
+  assert.ok(!done(f, "deal-66-damage-with-an-elemental-spell"), "a god spell is no elemental one");
+  land(66, core.CombatSpells.WATER_WAVE);
+  assert.ok(done(f, "deal-66-damage-with-an-elemental-spell"));
+  land(160);
+  assert.ok(!done(f, "hit-150-with-the-keris-partisan"), "no Keris wielded");
+  f.player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(25979));
+  land(150);
+  assert.ok(done(f, "hit-150-with-the-keris-partisan"));
+});

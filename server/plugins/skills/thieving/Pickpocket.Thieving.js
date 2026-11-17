@@ -393,6 +393,9 @@ function succeed(player, npc, target, name, npcId) {
 
 /** Caught: the message and the NPC's line now (no pickpocket animation); the stun follows. */
 function fail(player, npc, target, name, npcId) {
+  // `thieving:failure` { player, method, target, npcId }: a pick that failed, noticed or not (a league's
+  // "10 times in a row without failing" starts again).
+  pluginApi.emitCustomEvent("thieving:failure", { player, method: "pickpocket", target: target.name, npcId });
   if (core.ArceuusSpells.hasShadowVeil(player) && Math.random() < SHADOW_VEIL_CHANCE) {
     player.sendMessage("Your shadow veil prevents you from being noticed.");
     return;

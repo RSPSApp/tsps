@@ -204,7 +204,8 @@ function checkAchievements(player) {
     } else if (trigger.kind === "ca-bosses") {
       reached = finished.size >= trigger.count;
     } else if (trigger.kind === "ca-boss") {
-      reached = finished.has(monsterKey(trigger.monster));
+      // `monsters`: a group the Wiki's task names, every one of them finished ("all three Dagannoth Kings").
+      reached = (trigger.monsters ?? [trigger.monster]).every((monster) => finished.has(monsterKey(monster)));
     }
     if (reached) Complete.complete(player, task.id, type);
   }

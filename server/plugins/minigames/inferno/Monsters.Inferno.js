@@ -16,13 +16,23 @@ module.exports = function registerInfernoMonsters(api, hooks) {
   const BAT_RANGE = 3;
   const BAT_RUN_DRAIN = 3;
   const JAD_RANGE = 15;
-  const JAD_IMPACT_TICKS = 3;
+  const JAD_LAUNCH_TICKS = 3;
   // Wiki (JalTok-Jad): it "can attack with melee every 4 ticks", against its usual 8.
   const JAD_MELEE_SPEED = 4;
   const BLOB_SCAN_TICKS = 2;
   const MAGER_REVIVE_ANIM = new Animation(7611);
-  const JAD_ROCK_GRAPHIC = new Graphic(451); // TZHAAR_ROCK_SMASH
-  const JAD_FIREBALL = 448; // TZHAAR_FIRE_SPIT_TRAVEL
+  // rsprox (2026-11-16, three Ket-Rak fights): heights as the packet's / 4, times in client cycles.
+  const JAD = {
+    burst: 157, // the impact spotanim on the target, for both ranged and magic
+    melee: { anim: 7590, sound: 408 },
+    ranged: { anim: 7593, rocks: 451, rocksHeight: 92, sound: 163, burstDelay: 60, splatTicks: 2 },
+    magic: {
+      anim: 7592, sound: 159, launchSound: 162, impactSound: 163,
+      // [projectile, start cycle, extra end cycles]: each ends 8 cycles a tile on from its start.
+      fireballs: [[448, 2, 0], [449, 6, 0], [450, 10, 2]],
+      cyclesPerTile: 8, startHeight: 128, endHeight: 31, progress: 32,
+    },
+  };
 
   // Carries a hit's style on its own: PendingHit reads the style from its method as it is
   // built, and an attack's method has usually moved on by then.
@@ -206,32 +216,41 @@ module.exports = function registerInfernoMonsters(api, hooks) {
     }
   }
 
-  // JalTok-Jad: melee up close (its next attack 4 ticks on), otherwise ranged or magic told
-  // apart by the animation, both landing three ticks after it.
+  // JalTok-Jad, as recorded (rsprox, TzHaar-Ket-Rak's First Challenge, three fights): each attack
+  // is told by its animation, and its projectile or rocks leave three ticks later (T+3), when the
+  // hit is rolled - so the protection prayer up on that tick is the one that counts.
+  // - Magic (7592, synth 159): three fireballs at T+3 (synth 162), 8 cycles a tile; the splat as the
+  //   first lands (T+3 up to 3 tiles away, T+4 at 5-7), the burst (spotanim 157, synth 163) with it.
+  // - Ranged (7593): the rocks (map anim 451) fall on the target's tile at T+3 (synth 163), the
+  //   burst 60 cycles later and the splat at T+5, wherever the target stood.
+  // - Melee (7590, synth 408): lands at once, and the next attack comes 4 ticks later.
+  // Up close it swung 5 of 7 times; it never walks.
   class JalTokJadCombat extends CombatMethod {
     start(jad, target) {
       npcStrike(jad);
-      this.style = adjacent(jad, target) && Misc.getRandom(2) === 0
+      this.style = adjacent(jad, target) && Misc.getRandom(2) !== 0
         ? CombatType.MELEE
         : Misc.getRandom(1) === 0 ? CombatType.RANGED : CombatType.MAGIC;
       if (this.style === CombatType.MELEE) {
-        jad.performAnimation(new Animation(7590));
+        jad.performAnimation(new Animation(JAD.melee.anim));
         jad.getCombat().setAttackDelay(JAD_MELEE_SPEED);
+        synth(target, JAD.melee.sound);
       } else if (this.style === CombatType.RANGED) {
-        jad.performAnimation(new Animation(7593));
-        target.delayedGraphic(JAD_ROCK_GRAPHIC, JAD_IMPACT_TICKS - 1);
+        jad.performAnimation(new Animation(JAD.ranged.anim));
       } else {
-        jad.performAnimation(new Animation(7592));
-        // Lands as the impact rolls (3 ticks, 90 cycles), wherever the target stands: 10 cycles a
-        // tile reached it after the hit from beyond 5 tiles (#1862).
-        Projectile.createProjectile(jad, target, JAD_FIREBALL, 25, JAD_IMPACT_TICKS * 30 - 1, 110, 33)
-          .sendProjectile();
+        jad.performAnimation(new Animation(JAD.magic.anim));
+        synth(target, JAD.magic.sound);
       }
     }
 
     hits(jad, target) {
       if (this.style === CombatType.MELEE) return [new PendingHit(jad, target, STYLES[CombatType.MELEE], 0)];
-      land(jad, target, this.style, JAD_IMPACT_TICKS);
+      const style = this.style;
+      later(jad, JAD_LAUNCH_TICKS, () => {
+        if (target.getHitpoints() <= 0 || !target.isRegistered()) return;
+        const splat = style === CombatType.RANGED ? jadRocks(target) : jadFireballs(jad, target);
+        CombatFactory.addPendingHit(new PendingHit(jad, target, STYLES[style], splat));
+      });
       return [];
     }
 
@@ -242,6 +261,42 @@ module.exports = function registerInfernoMonsters(api, hooks) {
     type() {
       return CombatType.MAGIC;
     }
+  }
+
+  /** A synth for the player in the fight (live sends Jad's to its target only). */
+  function synth(target, sound, delay = 0) {
+    if (target.isPlayer()) target.getPacketSender().sendSound(sound, 0, delay);
+  }
+
+  /** The rocks of a ranged attack, falling on the target's tile now: returns the splat's delay. */
+  function jadRocks(target) {
+    const { ranged } = JAD;
+    const tile = target.getLocation();
+    const rocks = Graphic.atHeight(ranged.rocks, ranged.rocksHeight);
+    if (target.isPlayer()) target.getPacketSender().sendGlobalGraphic(rocks, tile);
+    else target.performGraphic(rocks);
+    target.performGraphic(Graphic.delayed(JAD.burst, ranged.burstDelay));
+    synth(target, ranged.sound);
+    return ranged.splatTicks;
+  }
+
+  /** The three fireballs of a magic attack, off now: returns the splat's delay, as the first lands. */
+  function jadFireballs(jad, target) {
+    const { magic } = JAD;
+    const tiles = Projectile.flightDistance(Projectile.centreOf(jad), target.getLocation(), target);
+    let firstLands = 0;
+    for (const [id, start, extra] of magic.fireballs) {
+      const end = start + tiles * magic.cyclesPerTile + extra;
+      if (firstLands === 0) firstLands = end;
+      Projectile.createProjectile(jad, target, id, start, end, magic.startHeight, magic.endHeight)
+        .withProgress(magic.progress)
+        .withSource(null)
+        .sendProjectile();
+    }
+    target.performGraphic(Graphic.delayed(JAD.burst, firstLands));
+    synth(target, magic.launchSound);
+    synth(target, magic.impactSound, firstLands);
+    return Math.floor(firstLands / 30);
   }
 
   function npcStrike(npc) {

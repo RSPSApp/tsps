@@ -60,6 +60,9 @@ const JS_LISTENER_FOR_EVENT: Partial<Record<WidgetEventType, string>> = {
 /** Magic string for target name substitution */
 export const EVENT_OPBASE = "event_opbase";
 
+/** The long locals of every script frame that has none (zero-length, so never written). */
+const EMPTY_LONGS = new BigInt64Array(0);
+
 /**
  * ScriptEvent holds all context for a widget event
  * Used for queueing and executing script handlers
@@ -1499,7 +1502,8 @@ export class Cs2Vm {
             const intCount = frameScript.localIntCount;
             const stringCount = frameScript.localObjCount;
             const longCount = frameScript.localLongCount;
-            const frameLongs = longCount > 0 ? new BigInt64Array(longCount) : new BigInt64Array(0);
+            // Most scripts have no long locals: share one empty array instead of one per call.
+            const frameLongs = longCount > 0 ? new BigInt64Array(longCount) : EMPTY_LONGS;
 
             if (
                 this.localIntPool.length > 0 &&

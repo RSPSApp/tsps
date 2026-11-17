@@ -30,9 +30,13 @@ module.exports = function createState(api) {
     TIADECHE_VARP: 321, // tbwt_tiadeche
     STAGE: Object.freeze({ NOT_STARTED: 0, MET: 1, PROMPTED: 2, STARTED: 3, BROTHERS_DONE: 4, REWARDED: 5, COMPLETE: 6 }),
 
-    /** Jungle Potion's varp 175 at 13: Trufitus has been told the news (JunglePotion.Quest.js). */
+    /**
+     * Jungle Potion complete (varp 175 at 12; 13 once Trufitus is told): the transcript's "If the player has
+     * completed Jungle Potion:". Captures show a player before it (JunglePotion t534-575) and at 13 (t1429),
+     * none at 12, so the Wiki's condition decides.
+     */
     JUNGLE_POTION_STAGE: "quest.jungle_potion.stage",
-    JUNGLE_POTION_TOLD: 13,
+    JUNGLE_POTION_COMPLETE: 12,
 
     NPC: Object.freeze({
       TIMFRAKU: N.TIMFRAKU, // 4698
@@ -139,7 +143,7 @@ module.exports = function createState(api) {
   t.level = (player, skill) => player.getSkillManager().getCurrentLevel(skill);
   t.addXp = (player, skill, amount) => player.getSkillManager().addExperiences(skill, amount);
   t.stage = (player) => t.quest.getStage(player);
-  t.junglePotionTold = (player) => t.state(player, t.JUNGLE_POTION_STAGE) >= t.JUNGLE_POTION_TOLD;
+  t.junglePotionDone = (player) => t.state(player, t.JUNGLE_POTION_STAGE) >= t.JUNGLE_POTION_COMPLETE;
   t.isPage = (event) => (event?.pages ?? []).some((entry) => (entry?.page ?? entry) === t.PAGE);
   t.later = (player, ticks, callback) => TaskManager.submit(new CountdownTask(player, ticks, () => {
     if (player.isRegistered?.() !== false) callback();

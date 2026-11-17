@@ -11,7 +11,6 @@ const { PlayerSession } = require('../dist/net/PlayerSession');
 const { ClientConnection } = require('../dist/net/NetworkBuilder');
 const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
 let core, nextIndex = 5100;
-const JUNGLE_POTION_TOLD = 13;
 const SENT_AWAY_MENU = ["Why should I leave?", "Right, I'm going then."];
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -67,9 +66,9 @@ function actor(t, lowSkill, jungleComplete = true) {
   const druidic = quest('druidic_ritual'); druidic.setStage(player, druidic.completionValue);
   assert.equal(completeQuery(player, 'druidic_ritual'), true);
   const jungle = quest('jungle_potion');
-  // Jungle Potion done and Trufitus told (varp 175 at 13): only then does Timfraku hear "Trufitus sent me."
-  // (RSProx capture JunglePotion, revision 242.1, ticks 534-575 and 1429).
-  if (jungleComplete) jungle.setStage(player, JUNGLE_POTION_TOLD);
+  // Only once Jungle Potion is complete does Timfraku hear "Trufitus sent me." (RSProx capture JunglePotion,
+  // revision 242.1, ticks 534-575; the transcript's "If the player has completed Jungle Potion:").
+  if (jungleComplete) jungle.setStage(player, jungle.completionValue);
   assert.equal(completeQuery(player, 'jungle_potion'), jungleComplete);
   assert.equal(quest('tai_bwo_wannai_trio').getStage(player), 0);
   assert.equal(core.WorldDefinition.isMembersWorld(), true);
@@ -163,8 +162,6 @@ test('registered Trufitus hand-in completes Jungle Potion', async t => {
   // Close the completion presentation via its registered client route before the next conversation.
   await f.connection.dispatch([{ type: 'interface_close' }]); f.connection.processTurnPackets();
   f.player.setLocation(new core.Location(2795, 3151, 1)); f.player.setNeedsPlacement(false);
-  // Trufitus's post-quest talk takes varp 175 to 13 (JunglePotion.Quest.js); Timfraku waits for it.
-  jungle.setStage(f.player, JUNGLE_POTION_TOLD);
   await startTrio(f, true);
   assert.equal(quest('tai_bwo_wannai_trio').getStage(f.player), 3);
   assert.equal(quest('tai_bwo_wannai_trio').isStarted(f.player), true);

@@ -48,10 +48,10 @@ The brothers' field NPCs (6235/6237/6239) are multinpcs on varp 320 at 0-5 and t
 
 ## Facts the plugin relies on
 
-- **Timfraku.** Until Jungle Potion's news reaches Trufitus (varp 175 at 13), the menu after "Well then ..." is
-  only "Why should I leave?" and "Right, I'm going then.", and a second talk is "You again! Only a fool would
-  ignore my instructions." with three answers, each "I said: begone!" (JunglePotion t534-575). With the news,
-  the menu adds "Trufitus sent me." and "Ask about Village." (local 1001562 t5486), and a met player opens
+- **Timfraku.** Until Jungle Potion is complete, the menu after "Well then ..." is only "Why should I leave?"
+  and "Right, I'm going then.", and a second talk is "You again! Only a fool would
+  ignore my instructions." with three answers, each "I said: begone!" (JunglePotion t534-575). Complete (the transcript's
+  "If the player has completed Jungle Potion:"; the captures show varp 175 at 13, none at 12), the menu adds "Trufitus sent me." and "Ask about Village." (local 1001562 t5486), and a met player opens
   with "Trufitus sent me." (JunglePotion t1429). "Timfraku appears to concentrate very deeply." comes as "Then
   it must be true." is continued; the chatbox closes and "I cannot thank you enough..." follows 4 ticks later
   (t5511-5515). A refused start: "Are you ready to help me?", "What do I have to do?", the request and the

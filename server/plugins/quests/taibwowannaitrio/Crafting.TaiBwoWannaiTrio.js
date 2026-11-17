@@ -105,6 +105,8 @@ module.exports = function attachCrafting(api, t) {
       lighting.delete(player);
       ItemOnGroundManager.deregister(ground);
       step(player);
+      // The XP with the roll, on the player's own timer; the fire itself on a world one.
+      t.addXp(player, Skill.FIREMAKING, BONES_FIREMAKING_XP);
       t.worldLater(1, () => burn(player, tile, area));
     };
     tryLight();
@@ -126,7 +128,6 @@ module.exports = function attachCrafting(api, t) {
     const fire = new GameObject(LOC.BURNING_BONES, tile.clone(), 10, 1, area);
     ObjectManager.register(fire, true);
     player.setPositionToFace?.(tile);
-    t.addXp(player, Skill.FIREMAKING, BONES_FIREMAKING_XP);
     Sounds.sendSound(player, Sound.FIRE_SUCCESSFUL);
     spam(player, "The fire catches and the bones begin to burn.");
     // On a world timer, as Firemaking's fires: it burns out and leaves the bones even if the player logs out.

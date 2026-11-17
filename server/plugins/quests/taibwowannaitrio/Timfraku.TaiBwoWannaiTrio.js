@@ -3,9 +3,9 @@
  * (revision 241, ticks 5471-5561 and 8073-8105), 75 (revision 227, ticks 3068-3106 and 5043-5066) and
  * JunglePotion (revision 242.1, ticks 534-575 and 1429-1469) play him:
  * - tbwt_main 0 -> 1 as the player continues past "Well then <title>, you would do better to...". Until
- *   Jungle Potion's news has reached Trufitus (varp 175 at 13) the menu after it is only "Why should I leave?"
- *   and "Right, I'm going then.", and the next talk is "You again! Only a fool would ignore my
- *   instructions.". A met player with the news opens with "Trufitus sent me.".
+ *   Jungle Potion is complete (the transcript's condition; the captures show it before, JunglePotion t544, and
+ *   at varp 175 13) the menu after it is only "Why should I leave?" and "Right, I'm going then.", and the next
+ *   talk is "You again! Only a fool would ignore my instructions.". A met player opens with "Trufitus sent me.".
  * - "Timfraku appears to concentrate very deeply." as "Then it must be true." is continued; the chatbox
  *   closes and "I cannot thank you enough..." follows 4 ticks later.
  * - 1 -> 2 as the start prompt opens; 2 -> 3 and the start message on "Yes.". A refused start replays the
@@ -56,20 +56,20 @@ module.exports = function attachTimfraku(api, t) {
     if (stage >= STAGE.BROTHERS_DONE) return VARIANT.REWARD;
     if (stage >= STAGE.STARTED) return VARIANT.STARTED;
     if (stage === STAGE.PROMPTED) return VARIANT.REFUSED;
-    if (stage === STAGE.MET && !t.junglePotionTold(player)) return VARIANT.AGAIN;
+    if (stage === STAGE.MET && !t.junglePotionDone(player)) return VARIANT.AGAIN;
     return VARIANT.START;
   }
 
   /** Talk-to for a met player with the news: straight into "Trufitus sent me." (JunglePotion tick 1429). */
   function talk({ player, npc }) {
-    if (t.stage(player) !== STAGE.MET || !t.junglePotionTold(player)) return false;
+    if (t.stage(player) !== STAGE.MET || !t.junglePotionDone(player)) return false;
     const news = t.findStep((step) => step?.text === NEWS_OPTION && Array.isArray(step.steps));
     if (!news) return false;
     return t.play(player, NPC.TIMFRAKU, VARIANT.START, () => news.steps, npc);
   }
 
   function condition({ player, stepId }) {
-    if (JUNGLE_POTION_CONDITIONS.has(stepId)) return t.junglePotionTold(player);
+    if (JUNGLE_POTION_CONDITIONS.has(stepId)) return t.junglePotionDone(player);
     if (TITLE_CONDITIONS.has(stepId)) return t.state(player, KEY.TITLE) === TITLE_CONDITIONS.get(stepId);
     if (CLEANUP_IDLE.has(stepId)) return true;
     if (CLEANUP_DONE.has(stepId)) return false;
@@ -99,7 +99,7 @@ module.exports = function attachTimfraku(api, t) {
 
   function start({ player, npcId, hook }) {
     if (npcId !== NPC.TIMFRAKU || hook !== START_HOOK) return;
-    if (t.stage(player) >= STAGE.STARTED || !t.junglePotionTold(player)) return;
+    if (t.stage(player) >= STAGE.STARTED || !t.junglePotionDone(player)) return;
     t.quest.setStage(player, STAGE.STARTED);
     // Before "Ok, I'll do it." (local 1001562 tick 5547).
     player.sendMessage(questStartMessage(player, t.PAGE));

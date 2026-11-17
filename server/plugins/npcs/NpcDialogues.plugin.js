@@ -1346,11 +1346,14 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
                   : new DoubleItemStatementDialogue(boxIndex++, first, second, text));
             }
             box.add(new ActionDialogue(boxIndex, { execute: () => {
-              message.after?.();
-              // `box.pauseTicks`: once the box is continued the chatbox closes and the conversation
-              // waits that many ticks (an NPC eating what it was handed), as a line's `pauseTicks` does.
               const pause = Number.isInteger(message.box?.pauseTicks) && message.box.pauseTicks > 0 ? message.box.pauseTicks : 0;
+              const current = pause ? manager.getCurrent?.() : null;
+              message.after?.();
               if (!pause) return run(rest, currentRecord);
+              // `box.pauseTicks`: once the box is continued the chatbox closes and the conversation
+              // waits that many ticks (an NPC eating what it was handed), as a line's `pauseTicks` does;
+              // like it, an `after` that started another conversation keeps the chat.
+              if (current && manager.getCurrent() !== current) return;
               const waiting = new ActionDialogue(0, { execute: () => {} }, true);
               const idle = new DialogueChainBuilder();
               idle.add(waiting);

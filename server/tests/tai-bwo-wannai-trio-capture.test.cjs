@@ -143,7 +143,7 @@ test("the start: varp 320 1 at the continue past 'Well then', 2 as the prompt op
   await until(f, "Ok, I'll do it.");
 });
 
-test("before Jungle Potion's news: no 'Trufitus sent me.', and the next talk is 'You again!' (JunglePotion ticks 534-575)", async (t) => {
+test("before Jungle Potion is complete: no 'Trufitus sent me.', and the next talk is 'You again!' (JunglePotion ticks 534-575)", async (t) => {
   const f = actor(t, { jungle: 5 });
   const tim = h.spawn(f, h.core.NpcIdentifiers.TIMFRAKU, TIMFRAKU);
   const from = await converse(f, () => h.talk(f, tim), ["Who me? Oh I'm just a nobody."]);
@@ -159,7 +159,14 @@ test("before Jungle Potion's news: no 'Trufitus sent me.', and the next talk is 
   ]);
 });
 
-test("met, with Jungle Potion's news: the player opens with 'Trufitus sent me.' (JunglePotion tick 1429)", async (t) => {
+test("Jungle Potion complete (12, Trufitus not yet told): the news is offered (the transcript's condition)", async (t) => {
+  const f = actor(t, { jungle: 12 });
+  const tim = h.spawn(f, h.core.NpcIdentifiers.TIMFRAKU, TIMFRAKU);
+  const from = await converse(f, () => h.talk(f, tim), ["I am a roving adventurer."]);
+  assert.equal(said(f, from).at(-1), "MENU: Why should I leave?|Right, I'm going then.|Trufitus sent me.|Ask about Village.");
+});
+
+test("met, with Jungle Potion done: the player opens with 'Trufitus sent me.' (JunglePotion tick 1429)", async (t) => {
   const f = actor(t, { stage: 1 });
   const tim = h.spawn(f, h.core.NpcIdentifiers.TIMFRAKU, TIMFRAKU);
   await h.talk(f, tim);

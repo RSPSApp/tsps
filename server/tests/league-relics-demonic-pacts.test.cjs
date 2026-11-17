@@ -2326,3 +2326,106 @@ function magicRateFor(player, skill, base) {
   control.getSkillManager().addExperiences(skill, base);
   return xp(control, skill) - before;
 }
+
+for (const room of [0, 5, 9, 10]) {
+  test(`Transmute complete input requires full product stack room ${room}`, (t) => {
+    const tick = withClock(t), player = cases(TRANSMUTE).relic, inventory = player.getInventory();
+    inventory.resetItems().adds(I.FIRE_RUNE, 10).adds(I.CHAOS_RUNE, 2147483647 - room);
+    const input = inventory.get(0), beforeXp = xp(player, Skill.MAGIC);
+    const expectedXp = magicRate(player, 100);
+    castOn(player, "Alchemic Divergence", 0);
+    assert.equal(inventory.getAmount(I.FIRE_RUNE), room === 10 ? 0 : 10);
+    assert.equal(inventory.getAmount(I.CHAOS_RUNE), room === 10 ? 2147483647 : 2147483647 - room);
+    assert.equal(xp(player, Skill.MAGIC) - beforeXp, room === 10 ? expectedXp : 0);
+    if (room < 10) {
+      assert.equal(inventory.get(0), input, "refusal retains the real source Item");
+      assert.equal(player.sent.messages.at(-1), "<col=ff3045>You do not have inventory space for anymore transmuted items of that type.");
+    }
+    tick(10);
+    assert.equal(inventory.getAmount(I.FIRE_RUNE), room === 10 ? 0 : 10);
+  });
+}
+
+test("Transmute complete input frees a slot for plain output beside a preset stack", (t) => {
+  withClock(t);
+  const player = cases(TRANSMUTE).relic, inventory = player.getInventory();
+  inventory.resetItems().adds(I.FIRE_RUNE, 10);
+  inventory.setItem(1, new core.Item(I.CHAOS_RUNE, 100).setMetaValue(core.Item.PRESET_META, true));
+  const preset = inventory.get(1);
+  while (inventory.getFreeSlots() > 0) inventory.adds(I.LOGS, 1);
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.FIRE_RUNE), 0);
+  assert.equal(inventory.get(1), preset);
+  assert.equal(preset.getAmount(), 100);
+  assert.equal(preset.isPresetItem(), true);
+  assert.equal(inventory.get(0).getId(), I.CHAOS_RUNE);
+  assert.equal(inventory.get(0).getAmount(), 10);
+  assert.equal(inventory.get(0).getMeta(), null);
+});
+
+test("Transmute queued recast stops at product cap without consuming the remaining input", (t) => {
+  const tick = withClock(t), player = cases(TRANSMUTE).relic, inventory = player.getInventory();
+  inventory.resetItems().adds(I.FIRE_RUNE, 20).adds(I.CHAOS_RUNE, 2147483637);
+  const before = xp(player, Skill.MAGIC), grant = magicRate(player, 100);
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.FIRE_RUNE), 10);
+  tick(15);
+  assert.equal(inventory.getAmount(I.FIRE_RUNE), 10);
+  assert.equal(inventory.getAmount(I.CHAOS_RUNE), 2147483647);
+  assert.equal(xp(player, Skill.MAGIC) - before, grant);
+});
+
+for (const room of [0, 5, 10]) {
+  test(`Transmute bank full-reward capacity ${room} preserves noted fallback`, (t) => {
+    withClock(t);
+    const player = cases(TRANSMUTE).relic, inventory = player.getInventory();
+    const note = Common.noted(I.UNCUT_EMERALD);
+    inventory.resetItems().adds(I.UNCUT_SAPPHIRE_2, 10);
+    toggle(player, "league_relic_transmutation_bank_toggle");
+    const bank = player.getBank(core.Bank.getTabForItem(player, I.UNCUT_EMERALD));
+    bank.adds(I.UNCUT_EMERALD, 2147483647 - room);
+    const beforeXp = xp(player, Skill.MAGIC), grant = magicRate(player, 100);
+    castOn(player, "Alchemic Divergence", 0);
+    assert.equal(inventory.getAmount(I.UNCUT_SAPPHIRE_2), 0);
+    assert.equal(bank.getAmount(I.UNCUT_EMERALD), room === 10 ? 2147483647 : 2147483647 - room);
+    assert.equal(inventory.getAmount(note), room === 10 ? 0 : 10, "fallback output retains the source's noted form");
+    assert.equal(inventory.getAmount(I.UNCUT_EMERALD), 0);
+    assert.equal(xp(player, Skill.MAGIC) - beforeXp, grant);
+  });
+}
+
+test("Transmute refuses without input or XP loss when neither bank nor inventory fits the whole batch", (t) => {
+  const tick = withClock(t), player = cases(TRANSMUTE).relic, inventory = player.getInventory();
+  inventory.resetItems().adds(I.UNCUT_SAPPHIRE_2, 10).adds(Common.noted(I.UNCUT_EMERALD), 2147483642);
+  toggle(player, "league_relic_transmutation_bank_toggle");
+  const bank = player.getBank(core.Bank.getTabForItem(player, I.UNCUT_EMERALD));
+  bank.adds(I.UNCUT_EMERALD, 2147483642);
+  const before = xp(player, Skill.MAGIC);
+  castOn(player, "Alchemic Divergence", 0);
+  tick(10);
+  assert.equal(inventory.getAmount(I.UNCUT_SAPPHIRE_2), 10);
+  assert.equal(inventory.getAmount(Common.noted(I.UNCUT_EMERALD)), 2147483642);
+  assert.equal(bank.getAmount(I.UNCUT_EMERALD), 2147483642);
+  assert.equal(xp(player, Skill.MAGIC), before);
+});
+
+test("Transmute capped bank falls back to a separate plain stack without merging preset output", (t) => {
+  withClock(t);
+  const player = cases(TRANSMUTE).relic, inventory = player.getInventory();
+  inventory.resetItems().adds(I.FIRE_RUNE, 10);
+  const preset = new core.Item(I.CHAOS_RUNE, 100).setMetaValue(core.Item.PRESET_META, true);
+  inventory.setItem(1, preset);
+  while (inventory.getFreeSlots() > 0) inventory.adds(I.LOGS, 1);
+  const bank = player.getBank(core.Bank.getTabForItem(player, I.CHAOS_RUNE));
+  bank.adds(I.CHAOS_RUNE, 2147483647);
+  toggle(player, "league_relic_transmutation_bank_toggle");
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(bank.getAmount(I.CHAOS_RUNE), 2147483647);
+  assert.equal(inventory.getAmount(I.FIRE_RUNE), 0);
+  assert.equal(inventory.get(1), preset);
+  assert.equal(preset.getAmount(), 100);
+  assert.equal(preset.isPresetItem(), true);
+  assert.equal(inventory.get(0).getId(), I.CHAOS_RUNE);
+  assert.equal(inventory.get(0).getAmount(), 10);
+  assert.equal(inventory.get(0).getMeta(), null);
+});

@@ -196,57 +196,31 @@ export function initTextureArray(host: WebGLOsrsRendererHost, ) {
             host.textureArray = undefined;
         }
         host.loadedTextureIds.clear();
+        host.textureMipmapsDirty = false;
+        host.textureMipmapsDirtyUpdates = 0;
         host.textureLayerCount = host.textureIds.length + 1;
 
-        console.time("load textures");
-
-        const pixelCount = TEXTURE_SIZE * TEXTURE_SIZE;
-
-        const textureCount = host.textureIds.length;
-        const pixels = new Int32Array(host.textureLayerCount * pixelCount);
-
-        // Initialize ALL layers to white so missing textures don't render black
-        // Layer 0 remains white (non-textured faces sample this)
-        pixels.fill(0xffffffff);
-
-        const cacheInfo = host.osrsClient.loadedCache?.info;
-        if (!cacheInfo) return;
-
-        let maxPreloadTextures = textureCount;
-        // we should check if the texture loader is procedural instead
-        if (cacheInfo.game === "runescape" && cacheInfo.revision >= 508) {
-            maxPreloadTextures = 64;
-        }
-
-        for (let i = 0; i < Math.min(textureCount, maxPreloadTextures); i++) {
-            const textureId = host.textureIds[i];
-            try {
-                const texturePixels = host.osrsClient.textureLoader.getPixelsArgb(
-                    textureId,
-                    TEXTURE_SIZE,
-                    true,
-                    1.0,
-                );
-                if (texturePixels.length === 0) continue;
-                pixels.set(texturePixels, (i + 1) * pixelCount);
-                host.loadedTextureIds.add(textureId);
-            } catch (e) {
-                console.error("Failed loading texture", textureId, e);
-            }
-        }
+        const pixels = new Uint8Array(host.textureLayerCount * TEXTURE_SIZE * TEXTURE_SIZE * 4);
+        // Missing layers stay white until the worker or a map loads them.
+        pixels.fill(255);
 
         host.textureArray = createTextureArray(
             host.app,
-            new Uint8Array(pixels.buffer),
+            pixels,
             TEXTURE_SIZE,
             TEXTURE_SIZE,
-            textureCount + 1,
+            host.textureLayerCount,
             {},
         );
 
         host.updateTextureFiltering();
 
-        console.timeEnd("load textures");
+        const textureArray = host.textureArray;
+        void host.osrsClient.workerPool.preloadWorldTextures(host.textureIds, TEXTURE_SIZE).then((textures) => {
+            if (host.textureArray === textureArray) host.updateTextureArray(textures);
+        }).catch((error) => {
+            if (host.textureArray === textureArray) console.warn("World texture preload failed", error);
+        });
     
 }
 
@@ -353,12 +327,8 @@ export function updateTextureArray(host: WebGLOsrsRendererHost, textures: Map<nu
 export function maybeRegenerateTextureMipmaps(host: WebGLOsrsRendererHost, nowMs: number): void {
 
         if (!host.textureMipmapsDirty || !host.textureArray) return;
-        if (host.textureFilterMode === TextureFilterMode.DISABLED) {
-            // No mipmaps required for nearest sampling.
-            host.textureMipmapsDirty = false;
-            host.textureMipmapsDirtyUpdates = 0;
-            return;
-        }
+        // Keep pending uploads dirty in case filtering is enabled later.
+        if (host.textureFilterMode === TextureFilterMode.DISABLED) return;
 
         // Off-screen preloads can stay busy after the foreground scene and texture uploads settle.
         const quietForMs = nowMs - host.textureMipmapsDirtyAtMs;

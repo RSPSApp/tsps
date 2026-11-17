@@ -65,10 +65,26 @@ for (const [floor, expected] of floorTitles.entries()) test(`floor ${floor} Sear
 test('other bookcases and the basement remain unhandled', (t) => {
   const { p, sent } = player(t);
   const towerId = core.CacheDefinitions.getLocId('fai_wiztower_bookcase');
+  const wallId = core.CacheDefinitions.getLocId('fai_wiztower_bookcase_wall');
   for (const event of [
     { objectId: towerId, location: { x: 3113, y: 9560, z: 0 } },
     { objectId: towerId, location: { x: 3113, y: 3160, z: 2 } },
+    { objectId: wallId, location: { x: 3113, y: 9560, z: 0 } },
+    { objectId: wallId, location: { x: 3104, y: 3158, z: 2 } },
     { objectId: core.CacheDefinitions.getLocId('hauntedbookcasel'), location: { x: 3113, y: 3160, z: 0 } },
   ]) assert.equal(search({ player: p, ...event }), false);
   assert.deepEqual(sent, []);
+});
+
+test('the mapped wall bookcase opens the library dialogue', (t) => {
+  const { p } = player(t);
+  t.mock.method(Math, 'random', () => 0);
+  assert.equal(search({ player: p, objectId: core.CacheDefinitions.getLocId('fai_wiztower_bookcase_wall'),
+    location: { x: 3104, y: 3158, z: 0 } }), true);
+  const dm = p.getDialogueManager();
+  assert.match(dm.getCurrent().getText(), /^There's a large selection of books/);
+  dm.advance();
+  assert.equal(dm.getCurrent().getText(), `'${floorTitles[0][0]}'`);
+  dm.advance();
+  assert.equal(dm.getCurrent().getText(), 'Interesting...');
 });

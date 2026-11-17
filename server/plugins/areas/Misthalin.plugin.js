@@ -66,7 +66,8 @@ const TRAIBORN_BOOKS = [
 function searchBooks(event) {
   const { location, objectId, player } = event;
   // The same name is used by other bookcases, including the basement clue.
-  if (objectId !== CacheDefinitions.getLocId("fai_wiztower_bookcase") ||
+  if ((objectId !== CacheDefinitions.getLocId("fai_wiztower_bookcase") &&
+       objectId !== CacheDefinitions.getLocId("fai_wiztower_bookcase_wall")) ||
       !location || location.x < 3100 || location.x > 3119 || location.y < 3150 || location.y > 3169 ||
       (location.z !== 0 && location.z !== 1)) return false;
   const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;

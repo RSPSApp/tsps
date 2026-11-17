@@ -307,6 +307,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
+| `commands:disableAll` | boolean | `false` | **Disable player-level commands.** When on, the player-level custom ::commands (for example ::home, ::ge, ::store) are refused as unknown. Staff commands, ::bank and any commands:permissions rank are unchanged. |
 | `commands:permissions` | json | `{}` | **Command permissions.** Lowest rank that may run each command, e.g. { "items": "NONE", "teleports": "OWNER" }. Ranks: NONE, MODERATOR, ADMINISTRATOR, OWNER, DEVELOPER. |
 
 #### Plugin area `accounts` (`pluginConfig`)

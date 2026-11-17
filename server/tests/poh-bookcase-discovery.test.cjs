@@ -286,3 +286,59 @@ test('real native two-screen trade discovers the recipient book while rejecting 
   await drop(recipient, 7162); const object = ownHouse(recipient); search(recipient, object);
   assert.equal(shown(recipient, 45), true, 'confirmed recipient acquisition survives disposal');
 });
+
+function finishedGeBook(f) {
+  f.p.setAttribute('grand-exchange-offers', { 0: { slot: 0, itemId: 7162, sell: false,
+    quantity: 1, price: 5, total: 5, traded: 5, finished: true, completesAt: null } });
+  PM.emitCommand({ player: f.p, raw: 'gecollect', base: 'gecollect', parts: ['gecollect'], handled: false });
+  assert.equal(f.p.getInterfaceId(), 402, 'actual collection-box command opens the native widget');
+}
+async function collectGeBook(f, bank = false) {
+  await input(f, { type: 'widget_action', widgetId: (402 << 16) | (bank ? 4 : 5),
+    groupId: 402, childId: bank ? 4 : 5, buttonNum: 1, slot: bank ? 0 : 3, itemId: bank ? -1 : 7162 });
+}
+
+test('native GE collection commits discovery before disposal and first Search', async t => {
+  const f = actor(t), events = acquisitions(t, f); finishedGeBook(f); await collectGeBook(f);
+  assert.equal(held(f, 7162), 1, 'actual GE collect commits the book');
+  assert.deepEqual(events, [], 'GE staged inventory is deliberately not an acquisition observer');
+  await drop(f, 7162); const object = ownHouse(f); search(f, object);
+  assert.equal(shown(f, 45), true, 'postcommit GE receipt remembers the disposed book');
+  await take(f, 45, 7162); assert.equal(held(f, 7162), 1);
+});
+
+test('failed GE capacity planning discovers nothing and successful retry commits once', async t => {
+  const f = actor(t), inv = f.p.getInventory();
+  while (inv.getFreeSlots()) inv.add(new core.Item(954, 1), false);
+  finishedGeBook(f); await collectGeBook(f);
+  assert.equal(held(f, 7162), 0);
+  assert.deepEqual(f.p.getAttribute(FOUND) ?? [], [], 'failed scratch addition never discovers the offer');
+  assert.ok(f.p.getAttribute('grand-exchange-offers')[0], 'failed collection retains the offer');
+  inv.deleteNumber(954, 1); await collectGeBook(f);
+  assert.equal(held(f, 7162), 1);
+  assert.deepEqual(f.p.getAttribute(FOUND), [45], 'successful retry observes only the committed receipt');
+});
+
+test('native GE bank collection records only a committed player-owned destination', async t => {
+  const f = actor(t); finishedGeBook(f); await collectGeBook(f, true);
+  assert.equal(held(f, 7162), 0);
+  const tab = Bank.getTabForItem(f.p, 7162), bank = f.p.getBank(tab);
+  assert.equal(bank.getAmount(7162), 1, 'real bank collection commits the catalog book');
+  assert.deepEqual(f.p.getAttribute(FOUND), [45], 'actual owned Bank receipt is acquisition too');
+  f.p.getPacketSender().sendInterfaceRemoval(); bank.open();
+  Bank.withdraw(f.p, 7162, bank.getSlotForItemId(7162), 1, tab);
+  f.p.getPacketSender().sendInterfaceRemoval(); await drop(f, 7162);
+  const object = ownHouse(f); search(f, object); assert.equal(shown(f, 45), true);
+});
+
+test('invalid or non-authoritative GE receipt payloads cannot discover a catalog item', t => {
+  const f = actor(t), inv = f.p.getInventory(), copy = new Inventory(f.p);
+  for (const receipt of [
+    { amount: 0, destination: 'inventory', container: inv },
+    { amount: '1', destination: 'inventory', container: inv },
+    { amount: 1, destination: 'inventory', container: copy },
+    { amount: 1, destination: 'bank', container: inv },
+    { amount: 1, destination: 'inventory', container: inv }, // no actual item accepted
+  ]) PM.emitCustomEvent('ge:offer-collected', { player: f.p, itemId: 7162, ...receipt });
+  assert.deepEqual(f.p.getAttribute(FOUND) ?? [], []);
+});

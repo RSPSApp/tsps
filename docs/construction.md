@@ -239,8 +239,10 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
   found state and Take enforce these requirements, including for older premature saved flags;
   acquisition history itself is retained. Original recovery sources remain separate, including
   the Exam Centre. These three requirements do not constitute an audit of every catalog entry.
+  Grand Exchange collection uses its committed receipt event, since it stages items on a copy
+  before replacing the inventory or bank contents. A failed collection discovers nothing.
   `tests/poh-bookcase-discovery.test.cjs` exercises real shop purchase, native Drop/Take, the
-  existing Exam Centre quest source, all three registered quest gates, Bank/pickup/trade
+  existing Exam Centre quest source, all three registered quest gates, GE/Bank/pickup/trade
   transfers, item identity/metadata, partial/clamped additions, capacity and a save round trip.
 - **Tip jars:** guests tip coins or platinum tokens (amount prompt ours); the owner sees the
   captured contents box and takes them to the inventory or bank; Setup shows and switches

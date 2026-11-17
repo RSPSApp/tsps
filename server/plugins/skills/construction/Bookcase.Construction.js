@@ -52,6 +52,15 @@ function recordAcquired({ player, itemId, amount }) {
   player.setAttribute(FOUND_ATTRIBUTE, [...found]);
 }
 
+/** GE stages collection on a copy, then publishes this receipt after committing its destination. */
+function recordCollected({ player, itemId, amount, destination, container }) {
+  if (!Number.isInteger(itemId) || !Number.isInteger(amount) || amount <= 0) return;
+  const owned = destination === "inventory" ? container === player?.getInventory()
+    : destination === "bank" && (player?.getBanks() ?? []).includes(container);
+  if (!owned || (container?.getAmount(itemId) ?? 0) < amount) return;
+  recordAcquired({ player, itemId, amount });
+}
+
 function canRecover(player, itemId) {
   const key = QUEST_BOOKS.get(itemId);
   if (!key) return true;
@@ -111,6 +120,7 @@ function interfaceClick(event) {
 function attachBookcase(api) {
   api.persistAttribute(FOUND_ATTRIBUTE, []);
   api.onCustomEvent("inventory:acquired", recordAcquired);
+  api.onCustomEvent("ge:offer-collected", recordCollected);
   api.onPlayerLogin(login);
   api.onObjectInteraction("Bookcase", { Search: search });
   api.onInterfaceActionClick(interfaceClick);

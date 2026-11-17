@@ -292,7 +292,6 @@ export class Player extends Mobile {
         WeaponInterfaceManager.assign(this);
         BonusManager.update(this);
         PrayerHandler.deactivatePrayers(this);
-        this.getVengeanceTimer().stop();
         ArceuusSpells.clearStatuses(this);
         LunarSpells.clearStatuses(this);
         this.getEquipment().refreshItems();
@@ -826,6 +825,7 @@ export class Player extends Mobile {
             Autocasting.setAutocast(this, autocastSpell);
         }
         CombatPoisonEffect.resume(this);
+        ArceuusSpells.syncDeathCharge(this);
         for (const [varpId, value] of Object.entries(this.audioSettings)) {
             const id = Number(varpId);
             // The music settings share varp 19 with bits the server owns.

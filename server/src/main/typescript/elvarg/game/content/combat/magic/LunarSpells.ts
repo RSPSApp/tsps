@@ -831,7 +831,9 @@ export class LunarSpells {
         player.setAttribute(MAGIC_IMBUE_UNTIL_ATTRIBUTE, null);
         player.setAttribute(MAGIC_IMBUE_READY_AT_ATTRIBUTE, null);
         player.setAttribute(HEAL_GROUP_READY_AT_ATTRIBUTE, null);
-        player.setAttribute(SPELLBOOK_SWAP_ATTRIBUTE, null);
+        // A live swap must return the caster to Lunar before its marker goes: otherwise the
+        // temporary book survives the death/logout with no state left to end it.
+        Spell.endSpellbookSwap(player);
     }
 
     public static expireSpellbookSwap(player: Player): void {

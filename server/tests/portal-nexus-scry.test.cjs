@@ -159,7 +159,8 @@ test('Scry Mode: other players near the view are counted', async t => {
 });
 
 test('Scry Mode: the alternates and the nexus icon view their places', async t => {
-  const f = actor(t, { slots: ['varrock teleport'] });
+  const f = actor(t, { slots: ['varrock teleport', 'camelot teleport'] });
+  f.p.setAttribute('achievement-diaries:rewards', { kandarin: ['hard'] });
   await scryOn(f);
   await pause(f, 'rows2', 1);
   assert.deepEqual(at(f), [2724, 3487, 0], "Seers' Village");
@@ -202,7 +203,8 @@ test('nexus teleports land anywhere in the spell\'s 5x5 square', async t => {
 test('nexus alternates land in their own squares; Yanille on its tile', async t => {
   const expected = [[0, [3163, 3478, 0], 2], [1, [2726, 3484, 0], 2], [2, [2583, 3095, 0], 0]];
   for (const [sub, centre, radius] of expected) {
-    const f = actor(t, { slots: ['varrock teleport'] });
+    const f = actor(t, { slots: ['varrock teleport', 'camelot teleport', 'watchtower teleport'] });
+    f.p.setAttribute('achievement-diaries:rewards', { varrock: ['medium'], kandarin: ['hard'], ardougne: ['hard'] });
     objectAction(f, 'teleport menu');
     await pause(f, 'rows2', sub);
     assert.ok(within(at(f), centre, radius), `${sub}: ${at(f).join(',')}`);
@@ -247,4 +249,117 @@ test('portal frames land anywhere in the spell\'s 5x5 square', async t => {
   }
   assert.ok(tiles.size > 1, 'not always the centre tile');
   assert.equal(typeof Portals.landingTile, 'function');
+});
+
+// Client script 2674 retains locked alternate placeholders in configured slot order;
+// script 2664 checks the viewer's claimed reward rather than task completion alone.
+const alternateCases = [
+  ['varrock teleport', 'varrock', 'medium', 151, [3163, 3478, 0], 2],
+  ['camelot teleport', 'kandarin', 'hard', 154, [2726, 3484, 0], 2],
+  ['watchtower teleport', 'ardougne', 'hard', 156, [2583, 3095, 0], 0],
+];
+for (const [base, diary, tier, alternate, centre, radius] of alternateCases) {
+  test(`nexus ${diary}: locked forged row and key preserve house and saved state`, async t => {
+    for (const component of ['rows2', 'extra_key_listeners']) {
+      const f = actor(t, { slots: [base] });
+      const state = f.p.getAttribute('construction:nexus');
+      objectAction(f, 'teleport menu'); const menuAt = at(f); f.messages.length = 0;
+      await pause(f, component, 0);
+      assert.equal(House.houseFor(f.p), f.house); assert.deepEqual(at(f), menuAt);
+      assert.equal(f.p.getAttribute('construction:nexus'), state);
+      assert.equal(f.p.getInterfaceId(), core.CacheDefinitions.getInterfaceId('telenexus_teleport'));
+      assert.equal(f.messages.length, 0);
+    }
+  });
+  test(`nexus ${diary}: minimum and higher claimed rewards unlock singleton alternate row zero`, async t => {
+    for (const claimed of [tier, 'elite']) {
+      const f = actor(t, { slots: [base] });
+      f.p.setAttribute('achievement-diaries:rewards', { [diary]: [claimed] });
+      objectAction(f, 'teleport menu'); await pause(f, 'rows2', 0);
+      assert.equal(House.houseFor(f.p), null); assert.ok(within(at(f), centre, radius));
+    }
+  });
+  test(`nexus ${diary}: persisted invalid default is preserved and unlocked default uses real coordinate event`, t => {
+    for (const unlocked of [false, true]) {
+      const f = actor(t, { slots: [base] });
+      const state = { slots: [idOf(base)], left: alternate }; f.p.setAttribute('construction:nexus', state);
+      if (unlocked) f.p.setAttribute('achievement-diaries:rewards', { [diary]: [tier] });
+      objectAction(f, 'teleport'); for (let tick = 0; tick < 3; tick++) core.TaskManager.process();
+      assert.equal(f.p.getAttribute('construction:nexus'), state);
+      if (unlocked) { assert.equal(House.houseFor(f.p), null); assert.ok(within(at(f), centre, radius)); }
+      else assert.equal(House.houseFor(f.p), f.house);
+    }
+  });
+}
+
+test('nexus completed-but-unclaimed diary does not unlock an alternate', async t => {
+  const f = actor(t, { slots: ['varrock teleport'] });
+  const diary = require('../plugins/achievements/diaries/Data.AchievementDiaries').BY_KEY.get('varrock');
+  f.p.setAttribute('achievement-diaries:tasks', { varrock: diary.tiers.medium.tasks.map(task => task.key) });
+  const complete = { player: f.p, diary: 'varrock', tier: 'medium', complete: false }; PM.emitCustomEvent('diary:is-complete', complete);
+  assert.equal(complete.complete, true);
+  objectAction(f, 'teleport menu'); await pause(f, 'rows2', 0); assert.equal(House.houseFor(f.p), f.house);
+});
+
+test('nexus alternate index follows reordered slots, including locked placeholders', async t => {
+  const f = actor(t, { slots: ['watchtower teleport', 'varrock teleport', 'camelot teleport'] });
+  f.p.setAttribute('achievement-diaries:rewards', { varrock: ['elite'] });
+  objectAction(f, 'teleport menu'); await pause(f, 'rows2', 0); assert.equal(House.houseFor(f.p), f.house);
+  await pause(f, 'rows2', 1); assert.ok(within(at(f), [3163, 3478, 0], 2));
+});
+
+test('nexus forged absent-parent alternate cannot travel even with all rewards', async t => {
+  const f = actor(t, { slots: ['lumbridge teleport'] });
+  f.p.setAttribute('achievement-diaries:rewards', { varrock: ['elite'], kandarin: ['elite'], ardougne: ['elite'] });
+  objectAction(f, 'teleport menu'); for (const sub of [0,1,2]) await pause(f, 'rows2', sub);
+  assert.equal(House.houseFor(f.p), f.house);
+  f.p.setAttribute('construction:nexus', { slots: [idOf('lumbridge teleport')], left: 151 });
+  objectAction(f, 'teleport'); for(let i=0;i<3;i++)core.TaskManager.process(); assert.equal(House.houseFor(f.p), f.house);
+});
+
+test('nexus guest uses their own rewards and saved choices, not host rewards/default', async t => {
+  const host = actor(t, { slots: ['varrock teleport'] });
+  host.p.setAttribute('achievement-diaries:rewards', { varrock: ['elite'] });
+  host.p.setAttribute('construction:nexus', { slots: [idOf('varrock teleport')], left: 151 });
+  const { p, conn } = connect(t, `pohscryguest${++actorIndex}`);
+  p.moveTo(new core.Location(2542,3096,0)); p.setNeedsPlacement(false);
+  House.visitHouse(p, host.p.getUsername(), 6);
+  assert.equal(House.houseFor(p), host.house);
+  p.setAttribute('construction:nexus', { slots: [idOf('varrock teleport')], left: 0 });
+  const guest = { ...host, p, conn };
+  objectAction(guest, 'teleport menu'); await pause(guest, 'rows2', 0); assert.equal(House.houseFor(p), host.house);
+  p.setAttribute('achievement-diaries:rewards', { varrock: ['medium'] });
+  host.p.setAttribute('achievement-diaries:rewards', {});
+  await pause(guest, 'rows2', 0); assert.equal(House.houseFor(p), null); assert.ok(within(at(guest), [3163,3478,0], 2));
+});
+async function configAction(f, name, slot = -1) {
+  const widgetId = core.CacheDefinitions.getComponentId(`telenexus:${name}`);
+  await f.conn.dispatch([{ type: 'widget_action', widgetId, groupId: widgetId >>> 16, childId: widgetId & 0xffff, buttonNum: 1, slot }]);
+  f.conn.processTurnPackets();
+}
+async function selectConfigBase(f) {
+  objectAction(f, 'configuration');
+  const sourceWidgetId = core.CacheDefinitions.getComponentId('telenexus:slotted_list');
+  const targetWidgetId = core.CacheDefinitions.getComponentId('telenexus:click_layer');
+  await f.conn.dispatch([{type:'widget_action',sourceWidgetId,sourceSlot:1,targetWidgetId,targetSlot:-1}]); f.conn.processTurnPackets();
+}
+test('nexus configuration rejects locked alternate radio and commits only authorized choices', async t => {
+ for (const [base,diary,tier,alternate] of alternateCases) {
+  const f=actor(t,{slots:[base]});await selectConfigBase(f);
+  await configAction(f,'radio_button_options',3);await configAction(f,'telenexus_donebutton');
+  assert.deepEqual(f.p.getAttribute('construction:nexus'),{slots:[idOf(base)],left:idOf(base)});
+  f.p.setAttribute('achievement-diaries:rewards',{[diary]:[tier]});await selectConfigBase(f);
+  await configAction(f,'radio_button_options',3);await configAction(f,'telenexus_donebutton');
+  assert.equal(f.p.getAttribute('construction:nexus').left,alternate);
+  // Reward changes between selection and commit are an adversarial boundary, not a monotonic normal diary route.
+  await selectConfigBase(f);await configAction(f,'radio_button_options',3);
+  const saved=f.p.getAttribute('construction:nexus');f.p.setAttribute('achievement-diaries:rewards',{});
+  await configAction(f,'telenexus_donebutton');assert.equal(f.p.getAttribute('construction:nexus'),saved);
+ }
+});
+test('nexus final delayed teleport rechecks reward eligibility before exiting', t=>{
+ const f=actor(t,{slots:['camelot teleport']});const saved={slots:[idOf('camelot teleport')],left:154};
+ f.p.setAttribute('construction:nexus',saved);f.p.setAttribute('achievement-diaries:rewards',{kandarin:['hard']});
+ objectAction(f,'teleport');f.p.setAttribute('achievement-diaries:rewards',{});
+ for(let i=0;i<3;i++)core.TaskManager.process();assert.equal(House.houseFor(f.p),f.house);assert.equal(f.p.getAttribute('construction:nexus'),saved);
 });

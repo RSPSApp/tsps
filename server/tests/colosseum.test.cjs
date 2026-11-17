@@ -24,7 +24,7 @@ const CombatAchievements = require('../plugins/minigames/colosseum/CombatAchieve
 const Patterns = require('../plugins/minigames/colosseum/SolPatterns.Colosseum');
 const Scoreboard = require('../plugins/minigames/colosseum/Scoreboard.Colosseum');
 
-const hooks = { objects: {}, npcs: {}, buttons: [], prompts: [], dialogues: [], variants: [], custom: {}, login: [], death: [], drops: [], attack: [] };
+const hooks = { objects: {}, npcs: {}, buttons: [], prompts: [], dialogues: [], variants: [], custom: {}, login: [], death: [], drops: [], attack: [], emitted: [] };
 const spawned = [];
 let nextIndex = 1;
 
@@ -92,6 +92,7 @@ function fakeApi() {
     onCanAttack: (handler) => hooks.attack.push(handler),
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),
     emitCustomEvent: (name, payload) => {
+      hooks.emitted.push([name, payload]);
       if (name === 'npc-dialogue:start') {
         hooks.dialogues.push(payload.variant);
         payload.handled = true;
@@ -584,8 +585,13 @@ test('damage taken: the wave total, Blasphemy drains prayer, Doom stacks and kil
   assert.equal(player.damage.length, 4);
   run.hurt(1);
   assert.equal(player.damage.at(-1), player.getHitpoints(), 'the fifth stack kills at Doom III');
+  hooks.emitted.length = 0;
   run.completeWave();
   assert.equal(run.doomStacks, 0, 'stacks clear with the wave');
+  const waves = hooks.emitted.filter(([name]) => name === 'colosseum:wave-completed');
+  assert.equal(waves.length, 1, 'colosseum:wave-completed, once (a league\'s Colosseum wave tasks)');
+  assert.equal(waves[0][1].player, player);
+  assert.equal(waves[0][1].wave, run.wave, 'the wave just cleared (completeWave counts it first)');
   run.end('left');
 });
 

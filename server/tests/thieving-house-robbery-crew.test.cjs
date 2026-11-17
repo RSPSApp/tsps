@@ -133,9 +133,12 @@ test("a paid lookup: 15 valuables for the next house to go (rsprox 1105 tick 108
   talkTo(a);
   await a.choose("I could do with some information on houses.");
   assert.ok(said(a, "Hello. A fine day for stealing, wouldn't you say?"));
+  const informed = [];
+  PM.createApi("UrchinInformedTest").onCustomEvent("house-robbery:informed", (event) => { if (event.player === a.p) informed.push(event); });
   const menu = await a.choose("Yes.");
   assert.deepEqual(menu.options, ["Yes.", "Yes, don't ask me again.", "No."]);
   assert.equal(a.count(VALUABLE()), 5);
+  assert.equal(informed.length, 1, "house-robbery:informed on the paid Yes (rsprox 1105 tick 10840)");
   await a.choose("Yes please.");
   await a.playToEnd();
   assert.ok(said(a, "I hear that <col=990000>Victor</col> might be leaving his house soon."), JSON.stringify(a.lines));

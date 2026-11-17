@@ -76,7 +76,7 @@
  *   `tob { modes, count }` (`tob:completed`, a raid of one of the modes), `emote { slots, count }`
  *   (`player:emote`, by the emote tab's slot), `take { items, source, count }` (`ground-items:taken`,
  *   picked up by hand, "pickup", or by Telekinetic Grab, "telegrab"), `pickpocket-loot { npcs, items,
- *   count }` (`thieving:loot`, the pocket's loot holding one of the items), `bird-nest { count }`
+ *   count }` (`thieving:looted`, the loot handed over holding one of the items), `bird-nest { count }`
  *   (`woodcutting:nest-drop`, a nest from a tree), `buy { items, shops, count }` (`shop:purchase`, that
  *   item bought from one of those shops, by their names), `alch { coins, count }`
  *   (`magic:alchemy-completed`, an alchemy paying at least that many coins), `bank { place, count }`
@@ -975,7 +975,8 @@ module.exports = function attach(api) {
   api.onCustomEvent("woodcutting:success", onEvent("chop-logs"));
   api.onCustomEvent("skills:produced", onEvent("cook"));
   api.onCustomEvent("ground-items:taken", onEvent("take"));
-  api.onCustomEvent("thieving:loot", onEvent("pickpocket-loot"));
+  // The loot as given, not as rolled: "thieving:loot" listeners may still replace it (the 40-pick house key).
+  api.onCustomEvent("thieving:looted", onEvent("pickpocket-loot"));
   api.onCustomEvent("woodcutting:nest-drop", onEvent("bird-nest"));
   api.onCustomEvent("shop:purchase", onEvent("buy"));
   api.onCustomEvent("magic:alchemy-completed", onEvent("alch"));

@@ -677,7 +677,12 @@ test('beaten, it leaves a burrow hole; descending starts delve 2', () => {
 
 test('the hole shows the loot; claiming moves it to the chest; Leave ends the run', () => {
   const { player, run } = surfacedRun();
+  const delves = [];
+  customEvents.set('doom:delve-defeated', [...(customEvents.get('doom:delve-defeated') ?? []), (event) => delves.push(event)]);
   run.defeated();
+  assert.equal(delves.length, 1, 'doom:delve-defeated, once (a league\'s deep delve tasks)');
+  assert.equal(delves[0].player, player);
+  assert.equal(delves[0].level, run.level);
   ticks(5);
   assert.ok(run.loot.length >= 1, 'a delve rolls loot');
   const event = { player, option: 'Investigate', clickType: 1 };

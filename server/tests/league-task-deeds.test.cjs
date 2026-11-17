@@ -393,6 +393,21 @@ test("pickpocket-loot: an item in the pocket's loot (Pickpocket a Diamond From a
   assert.ok(done(f, "pickpocket-a-diamond-from-a-tzhaar"));
 });
 
+test("pickpocket-loot counts the loot as given: the wealthy citizen's 40th dry pick is the house key (Steal a House Key)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.THIEVING, 99);
+  skills.setCurrentLevel(core.Skill.THIEVING, 99);
+  f.player.setAttribute(require("../plugins/skills/thieving/WealthyCitizens.Thieving")._test.KEY_DRY_STREAK_ATTRIBUTE, 40);
+  const { npc, clickType } = npcBeside(t, f, "Wealthy citizen", "pickpocket");
+  // The success roll, then middling rolls (no clue): coins, which the dry streak swaps for the key.
+  const rolls = [0];
+  t.mock.method(Math, "random", () => (new Error().stack.includes("Pickpocket.Thieving") ? rolls.shift() ?? 0.5 : 0.5));
+  await send(f, { type: "npc_option", index: npc.getIndex(), clickType }, 6);
+  assert.equal(f.player.getInventory().getAmount(item("House keys")), 1, `the real Thieving gives the key: ${f.messages}`);
+  assert.ok(done(f, "steal-a-house-key"));
+});
+
 test("shortcut: an agility shortcut crossed, by its name (Take a Shortcut Across the Shilo Village River)", async (t) => {
   core.RegionManager.loadMapFiles(2863, 2971);
   const f = pactsCharacter(t);
@@ -2583,9 +2598,9 @@ test("Varlamore and Kourend deeds: Colosseum waves, Mixology buys, Stealing Valu
   assert.ok(!done(f, "steal-25-valuables"), "24 valuables");
   emit("house-robbery:stole", { amount: 1 });
   assert.ok(done(f, "steal-25-valuables"), "25");
-  emit("thieving:loot", { method: "pickpocket", target: "wealthy citizen", loot: [{ id: 995, amount: 85 }] });
+  emit("thieving:looted", { method: "pickpocket", target: "wealthy citizen", loot: [{ id: 995, amount: 85 }] });
   assert.ok(!done(f, "steal-a-house-key"), "coins");
-  emit("thieving:loot", { method: "pickpocket", target: "wealthy citizen", loot: [{ id: 29325, amount: 1 }] });
+  emit("thieving:looted", { method: "pickpocket", target: "wealthy citizen", loot: [{ id: 29325, amount: 1 }] });
   assert.ok(done(f, "steal-a-house-key"));
   emit("house-robbery:informed", { npcId: 13318 });
   assert.ok(done(f, "pay-an-urchin-for-information"));

@@ -26,14 +26,18 @@ export class ArceuusUtilities {
 
     public static degrime(player: Player): void {
         let experience = 0;
+        let herbs = 0;
         for (const item of player.getInventory().getValidItems()) {
             const herb = this.eligibleClean(player, item.getId());
             if (herb?.clean != null) {
                 item.setId(herb.clean);
                 experience += (herb.xp ?? 0) / 2;
+                herbs++;
             }
         }
         player.getInventory().refreshItems();
         if (experience > 0) player.getSkillManager().addExperiences(Skill.HERBLORE, experience);
+        // `magic:degrimed` { player, herbs }: the herbs one cast cleaned ("Clean 26 herbs at the same time").
+        require("../../../../plugins/PluginManager").PluginManager.emitCustomEvent("magic:degrimed", { player, herbs });
     }
 }

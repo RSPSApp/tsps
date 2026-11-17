@@ -2473,3 +2473,74 @@ test("hit: one hit of 66 with an elemental spell, 150 with the Keris Partisan, t
   land(150);
   assert.ok(done(f, "hit-150-with-the-keris-partisan"));
 });
+
+// ---- spells and item teleports (issue 6108 follow-ups) -------------------------------------------
+
+test("spells and item teleports: their own events complete their tasks; Degrime through the real spell effect", (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const emit = (name, payload = {}) => PM.emitCustomEvent(name, { player, ...payload });
+
+  emit("spell:teleport-arrival", { name: "moonclan teleport" });
+  assert.ok(done(f, "cast-moonclan-teleport"));
+  emit("magic:lunar-cast", { name: "spellbook swap" });
+  assert.ok(done(f, "cast-spellbook-swap"));
+  emit("farming:spell-fertilized", { spell: "cure plant" });
+  assert.ok(!done(f, "cast-fertile-soil"), "another farming spell");
+  emit("farming:spell-fertilized", { spell: "fertile soil" });
+  assert.ok(done(f, "cast-fertile-soil"));
+
+  // Degrime: 25 herbs at once is not 26.
+  const { ArceuusUtilities } = require("../dist/game/content/combat/magic/ArceuusUtilities");
+  const skills = player.getSkillManager();
+  skills.setMaxLevel(core.Skill.HERBLORE, 99);
+  skills.setCurrentLevel(core.Skill.HERBLORE, 99);
+  const grimy = (n) => { player.getInventory().resetItems(); player.getInventory().add(new core.Item(item("Grimy guam leaf"), n), true); };
+  grimy(25);
+  for (let i = 0; i < 25; i++) player.getInventory().setItem(i, new core.Item(item("Grimy guam leaf"), 1));
+  ArceuusUtilities.degrime(player);
+  assert.ok(!done(f, "cast-degrime-spell-full-clean"), "25 herbs");
+  for (let i = 0; i < 26; i++) player.getInventory().setItem(i, new core.Item(item("Grimy guam leaf"), 1));
+  ArceuusUtilities.degrime(player);
+  assert.equal(player.getInventory().getAmount(item("Guam leaf")), 26, "the real Degrime cleaned them");
+  assert.ok(done(f, "cast-degrime-spell-full-clean"));
+
+  emit("xerics-talisman:teleported", { destination: "glade" });
+  assert.ok(!done(f, "teleport-to-xeric-s-honour"), "another destination");
+  emit("xerics-talisman:teleported", { destination: "honour" });
+  assert.ok(done(f, "teleport-to-xeric-s-honour"));
+  emit("cam-torum:arrived");
+  assert.ok(done(f, "teleport-to-cam-torum-using-a-calcified-moth"));
+  emit("giantsoul-amulet:teleported", { lair: "obor" });
+  assert.ok(!done(f, "teleport-with-a-giantsoul-amulet"), "Obor's lair");
+  emit("giantsoul-amulet:teleported", { lair: "branda and eldric" });
+  assert.ok(done(f, "teleport-with-a-giantsoul-amulet"));
+  emit("basalt:teleported", { itemId: item("Stony basalt") });
+  assert.ok(!done(f, "use-some-icy-basalt-to-teleport-to-weiss"), "stony basalt");
+  emit("basalt:teleported", { itemId: item("Icy basalt") });
+  assert.ok(done(f, "use-some-icy-basalt-to-teleport-to-weiss"));
+
+  for (const [rune, essence] of [["Air rune", 150], ["Mist rune", 50]]) emit("runecrafting:success", { runeId: item(rune), rolls: essence, amountPerEssence: 1 });
+  assert.ok(done(f, "craft-any-combination-rune"), "a mist rune");
+  assert.ok(done(f, "craft-200-essence-into-runes"), "200 essence, whatever the rune");
+  assert.ok(!done(f, "craft-2500-essence-into-runes"));
+
+  emit("skills:produced", { itemId: item("Pat of butter"), amount: 1, kind: "churn" });
+  assert.ok(done(f, "churn-some-butter"));
+  emit("crystal-singing:sung", { itemId: item("Crystal bow"), amount: 1 });
+  assert.ok(!done(f, "craft-a-piece-of-crystal-armour"), "a bow is no armour");
+  emit("crystal-singing:sung", { itemId: item("Crystal legs"), amount: 1 });
+  assert.ok(done(f, "craft-a-piece-of-crystal-armour"));
+
+  for (const [spell, id] of [["CLAWS_OF_GUTHIX", "cast-claws-of-guthix"], ["FLAMES_OF_ZAMORAK", "cast-flames-of-zamorak"], ["SARADOMIN_STRIKE", "cast-saradomin-strike"]]) {
+    emit("magic:cast-committed", { spell: core.CombatSpells[spell] });
+    assert.ok(done(f, id), spell);
+  }
+});
+
+test("item-op: reading the teleport anchoring scroll through its real Read (Use a teleport anchoring scroll)", async (t) => {
+  const f = pactsCharacter(t);
+  f.player.getInventory().add(new core.Item(item("Teleport anchoring scroll")), true);
+  await inventoryOption(f, "Teleport anchoring scroll", "Read", 1, 3);
+  assert.ok(done(f, "use-a-teleport-anchoring-scroll"), f.messages.join(" | "));
+});

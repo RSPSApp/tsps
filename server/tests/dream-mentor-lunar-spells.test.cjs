@@ -104,3 +104,17 @@ test("quests:equipment-requirements off: Olm's flames can be doused with Humidif
   poor.p.getInventory().resetItems();
   assert.equal(OlmRoom.prototype.canHumidify.call({}, poor.p), false, "still needs its runes");
 });
+
+test("a Lunar spell cast emits magic:lunar-cast with its name (a league's \"Cast the Spellbook Swap spell\"); a refused one does not", (t) => {
+  const casts = [];
+  const api = PM.createApi("LunarCastTest");
+  let listening = true;
+  api.onCustomEvent("magic:lunar-cast", (event) => { if (listening) casts.push(event.name); });
+  t.after(() => { listening = false; });
+  const refused = caster(t, false);
+  LunarSpells.handleSelf(refused.p, "spellbook swap", 2);
+  assert.deepEqual(casts, [], "no Dream Mentor, no cast");
+  const f = caster(t, true);
+  LunarSpells.handleSelf(f.p, "spellbook swap", 2); // the Standard quick pick
+  assert.deepEqual(casts, ["spellbook swap"], f.messages.join(" | "));
+});

@@ -750,6 +750,8 @@ const EVENT_KINDS = new Map([
   // Something cooked on a fire or range (Cooking's `skills:produced` of kind "cook"), whatever it is.
   ["cook", (_trigger, event) => event.skill === Common.core.Skill.COOKING && event.kind === "cook"],
   ["tob", (trigger, event) => trigger.modes.includes(event.mode)],
+  // Counted from runecrafting:success's essence (see attach), not a custom event of its own.
+  ["rc-essence", () => false],
   // Counted by hitLanded from the hit-resolved hook, not a custom event; listed so indexOf files it.
   ["hit", () => false],
   ["teleport", (trigger, event) => trigger.spells.includes(String(event.name ?? "").toLowerCase())],
@@ -823,6 +825,8 @@ function didDeed(name, event) {
   const type = player ? Common.leagueOf(player) : null;
   if (type === null) return;
   const tasks = (indexOf(type).deeds.get(name) ?? []).filter((task) => (!task.trigger.items || task.trigger.items.some((each) => key(each) === key(itemName(event.itemId))))
+    // `atLeast`: the event's fields at least those values ("26 herbs at the same time").
+    && Object.entries(task.trigger.atLeast ?? {}).every(([field, value]) => Number(event[field]) >= Number(value))
     && Object.entries(task.trigger.where ?? {}).every(([field, value]) => (Array.isArray(value) ? value : [value]).some((each) => String(event[field]).toLowerCase() === String(each).toLowerCase())));
   countTasks(player, type, tasks);
 }
@@ -983,6 +987,13 @@ module.exports = function attach(api) {
 
   api.onCustomEvent("world:picked", picked);
   api.onCustomEvent("magic:cast-committed", cast);
+  // A Lunar spell by its name ("spellbook swap"), as the `cast` kind names it.
+  api.onCustomEvent("magic:lunar-cast", ({ player, name }) => player && name && count(player, "cast", name));
+  // Essence crafted into runes, whatever the rune (`rc-essence`): the essence the craft used.
+  api.onCustomEvent("runecrafting:success", ({ player, rolls }) => {
+    const type = player ? Common.leagueOf(player) : null;
+    if (type !== null) countTasks(player, type, indexOf(type).events.get("rc-essence"), Math.max(0, Number(rolls) || 0));
+  });
   api.onCustomEvent("magic:item-spell-cast", cast);
   api.onCustomEvent("firemaking:success", burnt);
   api.onCustomEvent("cooking:burnt", burntFood);

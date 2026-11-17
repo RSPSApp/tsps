@@ -10,9 +10,11 @@ const Giantsoul = require('../plugins/items/GiantsoulAmulet.plugin');
 const core = PluginManager.getCoreApi();
 const { Item, ItemIdentifiers: I } = core;
 const prompts = [];
+const emitted = [];
 Giantsoul.register(new Proxy({
   core,
   sendMultiChatboxPrompt: (player, title, ...pairs) => prompts.push({ title, pairs }),
+  emitCustomEvent: (name, payload) => emitted.push([name, payload]),
 }, { get: (object, key) => object[key] ?? (() => {}) }));
 
 function fakePlayer(carried = {}) {
@@ -98,6 +100,7 @@ test("Rub offers the three lairs and Nowhere; worn options go straight there", (
   assert.deepEqual(prompt.pairs.filter((entry) => typeof entry === 'string'), ["Bryophyta's lair", "Obor's lair", "Branda and Eldric's lair", 'Nowhere']);
   prompt.pairs[5]();
   assert.deepEqual(arrivals.at(-1), [2950, 9574], "the titans' entrance tunnel");
+  assert.equal(emitted.filter(([name]) => name === 'giantsoul-amulet:teleported').at(-1)?.[1].lair, 'branda and eldric', "a league's \"teleport to the Royal Titans\"");
   assert.equal(Giantsoul._test.charges(item), 1);
   Giantsoul._test.itemAction(event('Obor'));
   assert.deepEqual(arrivals.at(-1), [3095, 9833]);

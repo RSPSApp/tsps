@@ -199,6 +199,9 @@ class LunarSpell extends Spell {
         if (!this.pay(player)) return true;
         effect();
         player.getSkillManager().addExperiences(Skill.MAGIC, this.data.experience);
+        // `magic:lunar-cast` { player, name }: a Lunar spell cast, its runes paid ("Cast the Spellbook Swap spell").
+        // Teleports say so on their landing instead (`spell:teleport-arrival`), not as the cast starts.
+        if (!(this instanceof LunarTeleport)) PluginManager.emitCustomEvent("magic:lunar-cast", { player, name: this.name });
         return true;
     }
 }

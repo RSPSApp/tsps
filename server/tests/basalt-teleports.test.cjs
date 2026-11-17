@@ -31,6 +31,7 @@ function scene({ quest = true, at = [3162, 3487, 0], canTeleport = true, item = 
     setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => ({ getVarbit: (id) => varbits.get(id) ?? 0, sendVarbit: (id, value) => varbits.set(id, value) }),
   };
+  const emitted = [];
   const api = {
     core: { ...core, TeleportHandler: {
       checkReqs: () => canTeleport,
@@ -40,6 +41,7 @@ function scene({ quest = true, at = [3162, 3487, 0], canTeleport = true, item = 
     onItemAction: (name, actions) => handlers.set(name, actions),
     onPlayerLogin: (handler) => { onLogin = handler; },
     emitCustomEvent: (name, request) => {
+      emitted.push([name, request]);
       if (name === 'quest:is-complete' && request.key === 'making_friends_with_my_arm') request.complete = quest;
       if (name === 'diary:is-complete' && request.diary === 'fremennik' && request.tier === 'hard') request.complete = diary;
     },
@@ -47,7 +49,7 @@ function scene({ quest = true, at = [3162, 3487, 0], canTeleport = true, item = 
   Basalt.attach(api);
   return {
     player, actions: handlers.get('Icy basalt'), stony: handlers.get('Stony basalt'), onItemActionName: [...handlers.keys()][0],
-    messages, teleports, confirms, varbits, attributes, login: () => onLogin({ player }), count: () => count,
+    messages, teleports, confirms, varbits, attributes, emitted, login: () => onLogin({ player }), count: () => count,
   };
 }
 
@@ -69,6 +71,10 @@ test('Weiss on icy basalt uses one basalt and teleports to the captured Weiss ti
   assert.equal(type, Basalt.basaltTeleport(core));
   assert.equal(s.confirms[0].options.item, I.ICY_BASALT);
   assert.deepEqual(s.messages, []);
+  // The landing names the basalt (a league's "Use some Icy Basalt to teleport to Weiss").
+  s.teleports[0][4]();
+  const landed = s.emitted.find(([name]) => name === 'basalt:teleported');
+  assert.equal(landed?.[1].itemId, I.ICY_BASALT);
 });
 
 test('without Making Friends with My Arm, or in the Weiss square, nothing is used', () => {

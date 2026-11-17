@@ -142,7 +142,8 @@ function teleport(player, amulet, lair) {
     if (charges(carried) <= 0) return;
     // Equipping during the animation clones the item, so pay before it can move.
     useCharge(player, carried);
-    TeleportHandler.teleport(player, target, TeleportType.NORMAL, false);
+    // `giantsoul-amulet:teleported` { player, lair } on the landing (the league's "teleport to the Royal Titans").
+    TeleportHandler.teleport(player, target, TeleportType.NORMAL, false, () => api.emitCustomEvent("giantsoul-amulet:teleported", { player, lair: lair.wornOption }));
   }, WILDERNESS_LEVEL, { item: amulet });
 }
 

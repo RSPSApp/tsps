@@ -469,7 +469,7 @@ module.exports = function createFightArenaScenes(api, hooks) {
       Scenes.controls(player, true);
       Scenes.later(player, ESCAPE_FADE_IN_TICKS, () => {
         // A scene opened since (a re-entry) owns the player's controls now.
-        if (player.isRegistered?.() === false || Scenes.get(player)) return;
+        if (player.isRegistered?.() === false || Scenes.get(player) || playing.has(player)) return;
         Scenes.fade(player, false);
         Scenes.controls(player, false);
       });

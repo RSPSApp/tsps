@@ -193,7 +193,7 @@ test("the keys on Sammy's door play the cell cutscene in a copy and start the og
   const ogre = fightNpc(f, core.NpcIdentifiers.KHAZARD_OGRE);
   assert.deepEqual(npcAt(f, ogre), [2602, 3165, 0], "tick 11839: the ogre's");
   ticks(f, 1);
-  assert.equal(ogre.getCombat().getTarget?.(), f.player, "tick 11840: the ogre comes for the player");
+  assert.equal(ogre.getCombat().getTarget?.() === f.player, true, "tick 11840: the ogre comes for the player");
   const fightCast = cast(f);
   const has = (name, x, y) => fightCast.some(([id, cx, cy]) => id === npcName(name) && cx === x && cy === y);
   assert.ok(has("arena_scorpion_cutscene", 2608, 3159) && has("arena_bouncer_cutscene", 2608, 3162), "the pens still to come");
@@ -248,7 +248,7 @@ test("each kill plays its scene: Khazard, the jail and Hengrad, the scorpion's a
   const khazard = fightNpc(f, core.NpcIdentifiers.GENERAL_KHAZARD);
   assert.deepEqual(npcAt(f, khazard), [2600, 3153, 0], "tick 12205");
   ticks(f, 1);
-  assert.equal(khazard.getCombat().getTarget?.(), f.player, "tick 12206: Khazard hits first");
+  assert.equal(khazard.getCombat().getTarget?.() === f.player, true, "tick 12206: Khazard hits first");
   assert.equal(cast(f).filter(([id]) => id === npcName("general_khazard_arena")).length, 0,
     "the stand's Khazard is not in his own fight (#3777: a second Khazard stood by the gates)");
   const moves = f.cameras.map(([x, y, h]) => `${x},${y},${h}`);
@@ -360,10 +360,10 @@ test("escaping stops the fight: nothing hits in the dark, and a kill landing the
   PM.emitCustomEvent("npc-dialogue:action", { player: f.player, npcId: core.NpcIdentifiers.HENGRAD, stepId: "XDkdB3", handled: false });
   ticks(f, 2);
   const scorpion = fightNpc(f, core.NpcIdentifiers.KHAZARD_SCORPION);
-  assert.equal(scorpion.getCombat().getTarget(), f.player);
+  assert.equal(scorpion.getCombat().getTarget() === f.player, true);
 
   clickEscape(f, 2);
-  assert.equal(scorpion.getCombat().getTarget(), null, "the beast stops with the answer (tick 12214)");
+  assert.equal(scorpion.getCombat().getTarget() === null, true, "the beast stops with the answer (tick 12214)");
   assert.equal(f.player.isUntargetable(), true);
   assert.equal(f.player.getPacketSender().getVarbit(6719), 2, "the minimap goes off");
   ticks(f, 1);

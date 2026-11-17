@@ -86,6 +86,8 @@ function handIn(event, season) {
   player.getInventory().delete(season.juiceId, 1);
   player.getInventory().refreshItems();
   player.getSkillManager().addExperiences(core.Skill.THIEVING, season.handInXp);
+  // `sorceress-garden:juice-handed-in` { player, season, amount }: glasses given to Osman or Selim, one per talk here.
+  api.emitCustomEvent("sorceress-garden:juice-handed-in", { player, season: season.name, amount: 1 });
   player.sendMessage(
     `Osman imparts some Thieving advice to you (${season.handInXp} Thieving experience points) `
     + "as a reward for the sq'irk juice."

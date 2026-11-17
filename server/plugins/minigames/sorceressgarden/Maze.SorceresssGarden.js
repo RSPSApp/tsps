@@ -210,6 +210,8 @@ function pickFruit(event) {
   inventory.refreshItems();
   player.getSkillManager().addExperiences(core.Skill.FARMING, season.farmingXp);
   player.sendMessage(`You pick a ${season.name} sq'irk.`);
+  // `sorceress-garden:picked` { player, season }: a sq'irk picked, "winter" to "summer" (a league's "Pick a Winter Sq'irk").
+  api.emitCustomEvent("sorceress-garden:picked", { player, season: season.name });
   player.moveTo(centralGarden());
 }
 

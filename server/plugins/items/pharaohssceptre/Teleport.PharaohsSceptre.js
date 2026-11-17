@@ -167,6 +167,8 @@ function commune({ player, objectId }) {
     Common.sync(player);
   }
   player.sendMessage(Common.message("communed"));
+  // `pharaohs-sceptre:communed` { player } (a league's "Commune a Pharaoh's Sceptre to the Necropolis").
+  Common.api.emitCustomEvent("pharaohs-sceptre:communed", { player });
   return true;
 }
 

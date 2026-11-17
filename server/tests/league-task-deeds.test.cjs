@@ -2741,3 +2741,75 @@ test("Asgarnia, Kandarin and Fremennik deeds through their events: minnows, Cast
   emit("fishing:success", { skill: core.Skill.FISHING, itemId: item("Raw shark"), barehand: true });
   assert.ok(done(f, "barehand-catch-a-shark"));
 });
+
+// ---- deeds reported by their content: Morytania, the Desert and Tirannwn (issue 6108 follow-ups) --
+
+test("Desert and Morytania deeds through their plugins: sq'irks, Osman's juice, Simon's pyramid tops, the Necropolis obelisk", async (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const inventory = player.getInventory();
+  player.setAttribute("league:areas", [21, 6]); // Varlamore and the Desert
+  const skills = player.getSkillManager();
+  skills.setMaxLevel(core.Skill.THIEVING, 99);
+  skills.setCurrentLevel(core.Skill.THIEVING, 99);
+
+  // The Sorceress's Garden: the real Pick-Fruit on the winter tree counts for winter only (a pick sends the player
+  // into the central garden, so the other seasons go through the event).
+  const start = player.getLocation().clone();
+  await objectOption(t, f, 13407, "Pick-Fruit");
+  assert.equal(inventory.getAmount(item("Winter sq'irk")), 1, `the real tree gives the fruit: ${f.messages}`);
+  player.moveTo(start);
+  player.needsPlacement = false;
+  ticks(f, 2);
+  assert.ok(done(f, "pick-a-winter-sq-irk") && !done(f, "pick-a-spring-sq-irk"));
+  PM.emitCustomEvent("sorceress-garden:picked", { player, season: "spring" });
+  assert.ok(done(f, "pick-a-spring-sq-irk") && !done(f, "pick-a-autumn-sq-irk"));
+
+  // Osman: Talk-to with a winter sq'irkjuice hands it in.
+  inventory.resetItems().refreshItems();
+  inventory.add(new core.Item(item("Winter sq'irkjuice")), true);
+  const { npc, clickType } = npcBeside(t, f, "Osman", "talk-to");
+  await send(f, { type: "npc_option", index: npc.getIndex(), clickType }, 4);
+  assert.equal(inventory.getAmount(item("Winter sq'irkjuice")), 0, `the real Osman takes it: ${f.messages}`);
+  assert.ok(done(f, "turn-in-a-winter-sq-irkjuice-to-osman"));
+  core.World.getNpcs().remove(npc);
+  player.getDialogueManager().reset();
+
+  // Simon Templeton: the pyramid tops he buys (none carried is no sale).
+  const Simon = require("../plugins/minigames/pyramidplunder/Simon.PyramidPlunder")._test;
+  Simon.sellTops({ player });
+  assert.ok(!done(f, "turn-in-a-pyramid-top-to-simon-templeton"), "no tops");
+  const top = core.CacheDefinitions.getObjId("agility_pyramid_gold_pyramid");
+  inventory.add(new core.Item(top), true);
+  Simon.sellTops({ player });
+  assert.equal(inventory.getAmount(top), 0, "the real sale takes it");
+  assert.ok(done(f, "turn-in-a-pyramid-top-to-simon-templeton"));
+
+  // The Necropolis obelisk: Commune with a Pharaoh's sceptre in the pack (without one, nothing).
+  const obelisk = require("../plugins/items/pharaohssceptre/Common.PharaohsSceptre").ids.locs.obelisk;
+  await objectOption(t, f, obelisk, "Commune", 4);
+  assert.ok(!done(f, "commune-a-pharoah-s-sceptre-to-the-necropolis"), "no sceptre");
+  inventory.add(new core.Item(core.CacheDefinitions.getObjId("pharaohs_sceptre")), true); // two items share the name
+  await objectOption(t, f, obelisk, "Commune", 4);
+  assert.ok(done(f, "commune-a-pharoah-s-sceptre-to-the-necropolis"), f.messages.join(" | "));
+});
+
+test("Morytania deeds through their events: the Taxidermist, bark runescrolls, Shades pyres, sacred eels, Andras", (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const emit = (name, payload = {}) => PM.emitCustomEvent(name, { player, ...payload });
+  emit("taxidermist:stuffed", { itemId: 1 });
+  assert.ok(done(f, "have-the-taxidermist-stuff-something-for-you"));
+  emit("runecrafting:bark-learnt", { kind: "swampbark" });
+  assert.ok(done(f, "learn-how-to-make-swampbark") && !done(f, "learn-how-to-make-bloodbark"));
+  emit("runecrafting:bark-learnt", { kind: "bloodbark" });
+  assert.ok(done(f, "learn-how-to-make-bloodbark"));
+  for (let i = 0; i < 19; i++) emit("shades-of-mortton:cremated", { remains: 1, wood: 1, reward: null });
+  assert.ok(!done(f, "burn-20-pyre-logs"), "19 pyres");
+  emit("shades-of-mortton:cremated", { remains: 1, wood: 1, reward: null });
+  assert.ok(done(f, "burn-20-pyre-logs"));
+  for (let i = 0; i < 50; i++) emit("cooking:sacred-eel-dissected", { itemId: 1, scales: 3 });
+  assert.ok(done(f, "dissect-50-sacred-eels") && !done(f, "dissect-250-sacred-eels"));
+  emit("ferries:andras-permanent-access");
+  assert.ok(done(f, "unlock-permanent-boat-travel-with-andras"));
+});

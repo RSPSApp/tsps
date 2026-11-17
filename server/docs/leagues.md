@@ -2041,6 +2041,16 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
   Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
   and the barrel.
+- **Morytania and Desert deeds**, from their content's events:
+  - The Sorceress's Garden: `sorceress-garden:picked` { player, season } on a sq'irk picked, `where` season;
+    `sorceress-garden:juice-handed-in` { player, season, amount } on a glass given to Osman or Selim. Only the
+    single winter juice is mapped: this server hands in one glass per talk, so the "in one go" tasks aren't.
+  - Simon Templeton: `pyramid-plunder:pyramid-tops-sold` { player, amount }.
+  - The Taxidermist: `taxidermist:stuffed` { player, itemId }.
+  - The Necropolis obelisk: `pharaohs-sceptre:communed` { player } on Commune with a sceptre in the pack.
+  - The bark runescrolls: BarkArmour's existing `runecrafting:bark-learnt`, `where` kind.
+  - Shades of Mort'ton's existing `shades-of-mortton:cremated`: one pyre log burnt per cremation.
+  - Sacred eels: `cooking:sacred-eel-dissected`; Andras: `ferries:andras-permanent-access`.
 - **Asgarnia, Kandarin and Fremennik deeds**, from their content's events (all new but Castle Wars' and Fishing's):
   - The Warriors' Guild: `warriors-guild:shot-put` { player, distance } on a landed throw (`atLeast` 12), and
     `warriors-guild:kegs-balanced` { player, kegs } as each keg goes on the head (`atLeast` 5).

@@ -361,6 +361,8 @@ function stewOnOli(event) {
   if (event.handled || event.itemId !== core.ItemIdentifiers.STEW || event.npcId !== npcId("varlamore_thieving_house_urchin_d")) return;
   event.handled = true;
   event.player.getInventory().delete(core.ItemIdentifiers.STEW, 1);
+  // `oli:fed-stew` { player, npc }: the league's "Give Oli some Stew", on the tick the stew goes (rsprox 1098).
+  pluginApi.emitCustomEvent("oli:fed-stew", { player: event.player, npc: event.target });
   pluginApi.emitCustomEvent("npc-dialogue:start", { player: event.player, npc: event.target, npcId: event.npcId, variant: OLI_STEW });
 }
 

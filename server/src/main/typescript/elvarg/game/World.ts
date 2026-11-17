@@ -369,11 +369,14 @@ export class World {
         // NPC movement only: a player who has not moved since logging in does not block NPCs yet
         // (live; LostCity PLAYER_OCC). Other callers (a rolling block, arena placement) still
         // see every player standing there.
-        blockingNpcsOnly = false
+        blockingNpcsOnly = false,
+        /** A step's source: tiles its footprint already covers are skipped (World.coversTile). */
+        from: Location | null = null
     ): boolean {
         if (!location) return false;
         for (let x = 0; x < Math.max(1, size); x++) {
             for (let y = 0; y < Math.max(1, size); y++) {
+                if (World.coversTile(from, size, location.getX() + x, location.getY() + y, location.getZ())) continue;
                 const key = World.getNpcTileKey(location.getX() + x, location.getY() + y, location.getZ());
                 if (World.playerTileOccupants.get(key)?.some((player) => player && player !== ignoredPlayer &&
                     (privateArea === undefined || player.getPrivateArea() === privateArea) &&
@@ -512,13 +515,16 @@ export class World {
         size = 1,
         privateArea?: any,
         /** Movement's question: only NPCs whose flag on the tile is still up (World.clearedNpcFlags). */
-        byFlag = false
+        byFlag = false,
+        /** A step's source: tiles its footprint already covers are skipped (World.coversTile). */
+        from: Location | null = null
     ): boolean {
         if (!location) {
             return false;
         }
         for (let x = 0; x < Math.max(1, size); x++) {
             for (let y = 0; y < Math.max(1, size); y++) {
+                if (World.coversTile(from, size, location.getX() + x, location.getY() + y, location.getZ())) continue;
                 const key = World.getNpcTileKey(location.getX() + x, location.getY() + y, location.getZ());
                 // A hidden NPC (setVisible(false): burrowed, vanished, swapped out for another) is out of
                 // the world for players, so it holds no tile: a woken Observatory guard has to walk back
@@ -534,6 +540,19 @@ export class World {
             }
         }
         return false;
+    }
+
+    /**
+     * Whether a `size` footprint at `from` covers the tile. The NPC flag is a bit in the same
+     * collision map as walls (osrs-docs: Entity Collision), and a step reads that map only on the
+     * tiles the footprint enters: the leading column or row, and the corner on a diagonal
+     * (RegionManager.canMove). Reading the whole next footprint froze two large NPCs stacked on one
+     * tile, since every step either tried still overlapped the other (issue 6116).
+     */
+    private static coversTile(from: Location | null, size: number, x: number, y: number, z: number): boolean {
+        if (!from || from.getZ() !== z) return false;
+        const span = Math.max(1, size);
+        return x >= from.getX() && x < from.getX() + span && y >= from.getY() && y < from.getY() + span;
     }
 
     /** Whether an NPC with the "full" flag (NPC.BLOCKS_PLAYERS_FLAG) covers any tile of the footprint. */

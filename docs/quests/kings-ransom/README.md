@@ -42,6 +42,15 @@ No native playthrough recorded; natural completion pending.
   explicit destination/approach overrides and other gates retain their existing timing. Queued native
   input through real World turns verifies both directions, restoration, energy, cancellation and
   temporary clipping ownership; this does not claim that other pass-through gates match every capture.
+  The gate also retains the Wiki recovery after a trapped grail box: Camelot and Sinclair gate
+  dispatch return the player to the cell through the grail/recovery stages. Arthur must receive his
+  disguise before Camelot entry becomes ordinary again; completed quests remain ordinary. Real
+  queued World tests cover stage65/70 recovery, inventory retention and the return/completion
+  boundaries. Native Search on the actual Keep table at (1694,4259,2), then a wrong box and
+  Camelot Open, also verifies recovery with controlled travel between locations. The successful
+  trap transcript owns its single 5-damage impact and cave teleport; the fallback runs only when
+  that transcript is unavailable. Real HitQueue checks cover 99→94, 6→1 and 5→0 hitpoints on both
+  paths. These checks are not a full quest playthrough.
 - **open** The lock-picking interface 588 is still not driven: the cell door plays the success message
   directly. Its feedback widgets have no cache script and no capture was found.
 

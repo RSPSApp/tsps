@@ -384,3 +384,119 @@ test("as captured: from inside the grounds the gate lets the player back out sou
   assert.ok(until(() => at(player)[1] === GATE_Y, 6), `the player steps out: ${at(player)}`);
   assert.ok(until(isShut, 3), "the gate is back");
 });
+
+
+// Wiki King's Ransom: a trapped grail box sends the player out; the Camelot/Sinclair
+// gates must still return them to the cell. Arthur returns only after receiving his disguise.
+const QUEST_DISGUISE_ATTRIBUTE = "quest.kings_ransom.disguise-given";
+const kingsRansom = () => require("../plugins/quests/QuestRuntime").questNamed("King's Ransom");
+const recoveryStages = [
+  { stage: 0, label: "before the quest", captive: false },
+  { stage: 35, label: "after the trial before capture", captive: false },
+  { stage: 40, label: "before the first statue capture", captive: false },
+  { stage: 45, label: "first jailed", captive: true },
+  { stage: 50, label: "Merlin briefed", captive: true },
+  { stage: 55, label: "Merlin escaped", captive: true },
+  { stage: 64, label: "before opening the cell", captive: true },
+  { stage: 65, label: "cell open and grail riddle recovery", captive: true },
+  { stage: 70, label: "grail obtained", grail: true, captive: true },
+  { stage: 70, label: "lost grail recovery", captive: true },
+  { stage: 75, label: "Cromperty briefed", grail: true, captive: true },
+  { stage: 80, label: "Arthur freed but awaiting disguise", grail: true, captive: true },
+  { stage: 80, label: "Arthur returned in disguise", disguise: true, grail: true, captive: false },
+  { stage: 85, label: "quest complete", grail: true, captive: false },
+];
+
+for (const [index, row] of recoveryStages.entries()) {
+  test("King's Ransom native gate: " + row.label, async (t) => {
+    settle();
+    const x = index % 2 === 0 ? 2757 : 2758;
+    const id = x === 2757 ? LEFT : RIGHT;
+    const f = nativeActor(t, [x, GATE_Y], false);
+    kingsRansom().setStage(f.player, row.stage);
+    f.player.setAttribute(QUEST_DISGUISE_ATTRIBUTE, row.disguise === true);
+    f.player.getInventory().adds(core.ItemIdentifiers.ROPE, 1);
+    if (row.grail) f.player.getInventory().adds(core.ItemIdentifiers.HOLY_GRAIL, 1);
+    const serial = f.player.getTeleportSerial();
+    await f.connection.dispatch([{ type: "object_option", id, x, y: GATE_Y, clickType: 1 }]);
+    assert.deepEqual(at(f.player), [x, GATE_Y], "native input remains queued");
+    core.World.process();
+    assert.deepEqual(at(f.player), row.captive ? [1904, 4275] : [x, NORTH_Y], row.label);
+    assert.equal(isOpen(), !row.captive);
+    assert.equal(kingsRansom().getStage(f.player), row.stage, "gate recovery never rewinds progression");
+    assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.ROPE), 1);
+    assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.HOLY_GRAIL), row.grail ? 1 : 0,
+      "gate recovery neither charges items nor grants a replacement grail");
+    assert.equal(f.sounds.filter(([, sound]) => sound === 69).length, row.captive ? 0 : 1);
+    assert.equal(f.player.hasFlag(MovementQueue.IGNORE_CLIPPING_FLAG), !row.captive);
+    assert.equal(core.TaskManager.hasWalkToTask(f.player.getIndex()), false);
+    if (row.captive) assert.ok(f.player.getTeleportSerial() > serial, "real jail placement owner ran");
+    for (let turn = 0; turn < 3; turn++) core.World.process();
+    assert.ok(isShut());
+    assert.equal(f.player.hasFlag(MovementQueue.IGNORE_CLIPPING_FLAG), false);
+  });
+}
+
+for (const route of ["Camelot door toggle", "Camelot object dispatch", "Sinclair object dispatch"]) {
+  test("King's Ransom recovery agrees across " + route, (t) => {
+    for (const row of recoveryStages) {
+      settle();
+      const { player } = actor(t, 2757, GATE_Y);
+      kingsRansom().setStage(player, row.stage);
+      player.setAttribute(QUEST_DISGUISE_ATTRIBUTE, row.disguise === true);
+      const object = route.startsWith("Sinclair")
+        ? new core.GameObject(core.ObjectIdentifiers.STURDY_WOODEN_GATE, new core.Location(2757, GATE_Y, 0), 0, 1)
+        : locAt(LEFT, 2757, GATE_Y);
+      const definition = core.ObjectDefinition.forPlayer(object.getId(), player);
+      const event = { player, object, objectId: object.getId(), definition, clickType: 1,
+        location: { x: 2757, y: GATE_Y, z: 0 }, handled: false };
+      if (route.endsWith("toggle")) PluginManager.emitCustomEvent("door:toggle", event);
+      else PluginManager.emitObjectInteraction(event);
+      if (row.captive || route.endsWith("toggle")) assert.equal(event.handled, row.captive, row.label);
+      assert.deepEqual(at(player), row.captive ? [1904, 4275] : [2757, GATE_Y], row.label);
+      assert.equal(kingsRansom().getStage(player), row.stage);
+    }
+  });
+}
+
+
+test("the actual Keep grail trap deals five damage once and native Camelot Open returns to jail", async (t) => {
+  settle();
+  const f = nativeActor(t, [2757, GATE_Y], false);
+  const player = f.player;
+  kingsRansom().setStage(player, 65);
+  player.getSkillManager().setMaxLevels(core.Skill.HITPOINTS, 99, false)
+    .setCurrentLevels(core.Skill.HITPOINTS, 99, false);
+  player.getInventory().adds(core.ItemIdentifiers.ROPE, 1);
+  // Controlled travel to the actual cache map's table, not a replacement object.
+  player.moveTo(new core.Location(1694, 4258, 2));
+  core.RegionManager.loadMapFiles(1694, 4258);
+  for (let turn = 0; turn < 3; turn++) core.World.process();
+  const table = core.MapObjects.getPrivateArea(player, core.ObjectIdentifiers.TABLE_33,
+    new core.Location(1694, 4259, 2));
+  assert.ok(table, "actual Keep Le Faye table from the active cache map");
+  await f.connection.dispatch([{ type: "object_option", id: table.getId(), x: 1694, y: 4259, clickType: 1 }]);
+  for (let turn = 0; turn < 8 && player.getInterfaceId() !== 390; turn++) core.World.process();
+  assert.equal(player.getInterfaceId(), 390, "native Search reaches the actual table and opens the riddle");
+  const serial = player.getTeleportSerial();
+  await f.connection.dispatch([{ type: "widget_action", widgetId: (390 << 16) | 9,
+    groupId: 390, childId: 9, opId: 1 }]);
+  core.World.process();
+  assert.equal(player.getHitpoints(), 94);
+  assert.equal(player.getTeleportSerial(), serial + 1);
+  assert.deepEqual(at(player), [2611, 3220]);
+  assert.equal(kingsRansom().getStage(player), 65);
+  // Only the journey back is seeded; the trap and following gate actions use native queued inputs.
+  player.closeInterruptibleInterfaces();
+  player.moveTo(new core.Location(2757, GATE_Y, 0));
+  for (let turn = 0; turn < 3; turn++) core.World.process();
+  await f.connection.dispatch([{ type: "object_option", id: LEFT, x: 2757, y: GATE_Y, clickType: 1 }]);
+  core.World.process();
+  assert.deepEqual(at(player), [1904, 4275]);
+  assert.equal(player.getHitpoints(), 94, "gate recovery adds no damage");
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.ROPE), 1);
+  assert.equal(kingsRansom().getStage(player), 65);
+  assert.ok(isShut());
+  assert.equal(f.sounds.filter(([, sound]) => sound === 69).length, 0);
+  assert.equal(player.hasFlag(MovementQueue.IGNORE_CLIPPING_FLAG), false);
+});

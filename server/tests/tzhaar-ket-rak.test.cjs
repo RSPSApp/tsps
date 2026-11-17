@@ -385,8 +385,22 @@ test('Yt-HurKot: five at half health, once; scattered round it, they walk beside
     at(412);
     assert.equal(jad.heals.length, 16);
     healers[0].fighting = null;
+    healers[0].target = null;
     at(416);
     assert.equal(jad.heals.length, 21, 'the drawn healer stays out (the late one due again too)');
+    assert.equal(healers[0].target, player, 'and goes back for the player when its combat lets go');
+    // A hit on a healer draws it off as it lands, even with no target of its own.
+    cycle = 419;
+    Challenge.dealt({ player, target: healers[1], hit: { getCombatType: () => core.CombatType.RANGED, getDelay: () => 2 } });
+    at(420);
+    assert.equal(jad.heals.length, 26, 'it heals while the hit is in flight');
+    assert.equal(healers[1].target, null);
+    at(421);
+    assert.equal(healers[1].target, null, 'still in flight: a hit on an NPC lands a tick after its delay');
+    at(422);
+    assert.equal(healers[1].target, player, 'the hit landed: it goes for the player');
+    at(424);
+    assert.equal(jad.heals.length, 30, 'and heals no more');
     healers.forEach((healer) => { healer.hp = 0; });
     late.hp = 0;
     at(418);

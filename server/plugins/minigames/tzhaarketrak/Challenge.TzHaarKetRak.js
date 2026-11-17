@@ -126,7 +126,8 @@ class Challenge {
   /**
    * Yt-HurKot: at half health, once. Each walks to the nearest tile beside the Jad (a side, not a
    * corner) and heals as it gets there, then every 4 ticks on its own count - full or not, as
-   * recorded. Once drawn into a fight it goes for the player and never heals again.
+   * recorded. Once the player's hit on it lands it goes for the player, stays on them however its
+   * own combat lapses, and never heals again.
    */
   tendHealers(entry) {
     const { core, data } = Common;
@@ -139,8 +140,12 @@ class Challenge {
     }
     const now = Common.cycle();
     for (const healer of entry.healers) {
-      if (healer.getCombat().getTarget() != null) healer.__tkrDrawn = true;
-      if (healer.__tkrDrawn) continue;
+      if (healer.getCombat().getTarget() != null || now >= (healer.__tkrDrawnAt ?? Infinity)) healer.__tkrDrawn = true;
+      if (healer.__tkrDrawn) {
+        // Drawn off for good: back onto the player whenever its own combat lets go.
+        if (healer.getCombat().getTarget() !== this.player) healer.getCombat().attack(this.player);
+        continue;
+      }
       const [x, y] = besideJad(healer.getLocation(), jad);
       if (healer.getLocation().getX() !== x || healer.getLocation().getY() !== y) {
         core.PathFinder.calculateWalkRoute(healer, x, y);
@@ -194,8 +199,16 @@ class Challenge {
     return (this.endAt === -1 ? Common.cycle() : this.endAt - Common.data.endTicks) - this.startTick;
   }
 
-  dealt(target, style) {
+  dealt(target, style, delay = 0) {
     if (style !== "MELEE") this.nonMelee = true;
+    // A healer the player hits (or splashes) is drawn off once the hit lands (rsprox: it heals
+    // until then), whatever its own combat makes of it.
+    if (target?.__tkrChallenge === this && target.getId?.() === Common.ids.npcs.healer) {
+      // As CombatFactory.addPendingHit: NPCs process before players, so a hit on an NPC lands
+      // one tick after its delay (hitProcessingDelay).
+      const lands = Common.cycle() + delay + 1;
+      target.__tkrDrawnAt = Math.min(target.__tkrDrawnAt ?? lands, lands);
+    }
     if (!target?.__tkrChallenge || target.getId?.() !== Common.ids.npcs.jad) return;
     if (!this.styles.has(target)) this.styles.set(target, new Set());
     this.styles.get(target).add(style);
@@ -424,7 +437,7 @@ function leaveWorld({ player }) {
 function dealt({ player, target, hit }) {
   const challenge = challengeOf(player);
   // CombatType is a numeric enum: its reverse mapping gives the name.
-  if (challenge) challenge.dealt(target, String(Common.core.CombatType[hit?.getCombatType?.()] ?? ""));
+  if (challenge) challenge.dealt(target, String(Common.core.CombatType[hit?.getCombatType?.()] ?? ""), hit?.getDelay?.() ?? 0);
 }
 
 function attach(api, handlers) {

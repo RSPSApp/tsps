@@ -34,7 +34,9 @@ export class DropItemPacketListener {
    * the warnings answered so far. Before an item lands on the floor, "item:drop-warning"
    * { player, item, itemId, slot, answered, warned, proceed } lets a plugin ask first: unless its
    * warning is in `answered` or another plugin already `warned`, it sets `warned` and calls
-   * `proceed(name)` on the player's yes, which drops again so the next warning can ask.
+   * `proceed(name)` on the player's yes, which drops again so the next warning can ask. Once every
+   * warning is answered, "item:dropping" { player, item, itemId, slot } fires just before the item
+   * lands, for a change the drop itself makes to the item.
    */
   public static drop(player: any, id: number, interfaceId: number, itemSlot: number, confirmed: boolean | readonly string[] = false): void {
     if (player == null || player.getHitpoints() <= 0) {
@@ -102,6 +104,9 @@ export class DropItemPacketListener {
         PluginManager.emitCustomEvent("item:drop-warning", warning);
         if (warning.warned) return;
       }
+      // Every warning is answered and the item now leaves the inventory: what it turns into on the floor (a
+      // Barrows piece breaks) changes here, not in the drop policy, so a cancelled warning leaves it as it was.
+      PluginManager.emitCustomEvent("item:dropping", { player, item, itemId: id, slot: itemSlot });
       if (dropEvent.dropToGround !== false) {
         const toFloor = item.clone();
         if (Wilderness.isIn(player)) {

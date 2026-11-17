@@ -10,10 +10,11 @@
  *   "You find N doses of swamp paste at the bottom of the chest."; the chest stands open 4 ticks.
  *   With another key: "You don't have the correct key. You need a <metal> key with a <colour>
  *   trim to open this chest."
- * Wiki: the chests' loot (the red-key tables: one roll, then coins for what the roll left), coins
+ * Wiki: legacy red-key tables for other metals; silver uses Rewards.ShadesOfMortton\n * (see docs/shades-silver-rewards.md). One main reward, then coins for what remains; coins
  * of (roll - the loot's value) / 3.
  */
 const Common = require("./Common.ShadesOfMortton");
+const Rewards = require("./Rewards.ShadesOfMortton");
 
 const COINS = 995;
 const SWAMP_PASTE = "swamppaste";
@@ -93,7 +94,11 @@ function openChestName({ metal, colour }) {
 const value = (id) => Number(Common.core.CacheDefinitions.getItem(id)?.price) || 0;
 
 /** One roll on the metal's table (its weights over the page's denominator), or nothing. */
-function rollLoot(metal) {
+function rollLoot(metal, player, colour = "bloodred") {
+  if (metal === "silver") {
+    if (!player) throw new Error("Silver chest loot requires player context");
+    return Rewards.rollSilver(player, colour);
+  }
   const { denominator, items } = Common.data.chests.loot[metal];
   let roll = Math.random() * denominator;
   for (const [id, min, max, weight] of items) {
@@ -181,25 +186,37 @@ function chest({ player, object }) {
     sound(player, cat().sounds.locked);
     return true;
   }
-  const loot = rollLoot(found.metal);
+  const loot = rollLoot(found.metal, player, found.colour);
+  // Use noted ids only for delivery; coins use the unnoted item's value.
+  const lootId = loot?.noted ? Common.core.ItemDefinition.forId(loot.id).getNoteId() : loot?.id;
   const coins = coinsFor(found.metal, loot);
   const [pasteLow, pasteHigh] = Common.data.chests.swampPaste[found.metal];
   const paste = Common.randomInt(pasteLow, pasteHigh);
-  const rewards = [loot && [loot.id, loot.amount], coins > 0 && [COINS, coins], [Common.objId(SWAMP_PASTE), paste]].filter(Boolean);
+  const secondary = found.metal === "silver" ? Rewards.rollSecondary(player) : null;
+  const extra = secondary ?? { id: Common.objId(SWAMP_PASTE), amount: paste };
+  const rewards = [loot && [lootId, loot.amount], coins > 0 && [COINS, coins], [extra.id, extra.amount]].filter(Boolean);
   if (!fits(inventory, rewards)) {
     player.sendMessage(Common.message("noRoom"));
     return true;
   }
   inventory.delete(keyId, 1);
-  if (loot) give(player, loot.id, loot.amount);
+  if (loot) {
+    give(player, lootId, loot.amount);
+    if (loot.receivedAttribute) player.setAttribute(loot.receivedAttribute, true);
+    Common.api.emitCustomEvent("collection-log:obtain", { player, itemId: loot.id, amount: loot.amount });
+  }
   if (coins > 0) give(player, COINS, coins);
-  give(player, Common.objId(SWAMP_PASTE), paste);
+  give(player, extra.id, extra.amount);
+  if (secondary) Common.api.emitCustomEvent("collection-log:obtain", { player, itemId: extra.id, amount: extra.amount });
   inventory.refreshItems?.();
   sound(player, cat().sounds.chest);
   swap(object, openChestName(found), Common.data.chests.openTicks);
   raiseZealot(player, object);
   const treasure = coins > 0 ? Common.message("treasure", { coins }) : Common.message("noTreasureCoins");
-  talk(player, [[treasure, loot?.id ?? COINS], [Common.message("swampPaste", { paste }), Common.objId(SWAMP_PASTE)]]);
+  const pages = [[treasure, loot?.id ?? COINS]];
+  // No fabricated bag dialogue: the inventory and collection log show its receipt.
+  if (!secondary) pages.push([Common.message("swampPaste", { paste }), Common.objId(SWAMP_PASTE)]);
+  talk(player, pages);
   // "chest:opened" { player, objectId }: the catacombs chest really gave its key's loot, for a league's
   // "Open a Bronze/Black/Gold Chest". The wrong-key and no-room refusals return above without it.
   Common.api.emitCustomEvent("chest:opened", { player, objectId: object.getId() });

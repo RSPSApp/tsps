@@ -275,7 +275,14 @@ export class PlayerDeathTask extends Task {
         // reaches here past the hooks' own eligibility check.
         const owner = PlayerDeathTask.lootOwner(player, killer);
         for (const item of droppedItems) {
-            ItemOnGroundManager.registerLocation(owner, item, position);
+            // A mode may give its death drops a different lifetime (Ultimate Ironman's one-hour
+            // deathpile); the options are generic so the mode plugin owns the policy.
+            const options: { despawnDelay?: number } = {};
+            PluginManager.emitCustomEvent("player-death:drop-options", { player, item, options });
+            const groundItem = ItemOnGroundManager.registerLocation(owner, item, position, undefined, {
+                despawnDelay: options.despawnDelay,
+            });
+            PluginManager.emitCustomEvent("player-death:dropped", { player, item, groundItem });
             dropped = true;
         }
         itemsToKeep.push(...lostUntradeables);

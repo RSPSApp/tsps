@@ -694,6 +694,9 @@ test('Ultimate Ironman deaths drop untradeables too (Wiki: cannot keep any items
   api.onShouldKeepItemOnDeath((event) => {
     if (event.player.getAttribute?.('ironman:mode') === 'ultimate') event.keep = false;
   });
+  api.onCustomEvent('player-death:drop-options', (event) => {
+    if (event.player.getAttribute?.('ironman:mode') === 'ultimate') event.options.despawnDelay = 6000;
+  });
 
   const scimitar = new Item(I.RUNE_SCIMITAR, 1);
   const defender = new Item(I.DRAGON_DEFENDER, 1);
@@ -717,12 +720,46 @@ test('Ultimate Ironman deaths drop untradeables too (Wiki: cannot keep any items
     getEquipment: () => equipment,
   };
   const ground = [];
+  const registrations = [];
   const original = ItemOnGroundManager.registerLocation;
   t.after(() => { ItemOnGroundManager.registerLocation = original; });
-  ItemOnGroundManager.registerLocation = (_owner, item) => ground.push(item.getId());
+  ItemOnGroundManager.registerLocation = (_owner, item, _position, _area, options) => {
+    ground.push(item.getId());
+    registrations.push({ id: item.getId(), options });
+    return item;
+  };
 
   assert.deepEqual(PlayerDeathTask.dropItems(player, null, EDGEVILLE), [], 'a UIM keeps nothing');
   assert.deepEqual(ground.sort((a, b) => a - b), [I.DRAGON_DEFENDER, I.RUNE_SCIMITAR].sort((a, b) => a - b),
     'both the tradeable and the untradeable reach the floor');
+  assert.equal(registrations.find((entry) => entry.id === I.DRAGON_DEFENDER).options.despawnDelay, 6000,
+    'the mode policy gives the untradeable the one-hour deathpile lifetime');
   assert.equal(inventory.getValidItems().length + equipment.getValidItems().length, 0, 'the death empties both containers');
+});
+
+test('Ultimate Ironman deathpiles pause while logged out', () => {
+  const Ultimate = require('../plugins/modes/ironman/Ultimate.Ironman');
+  require('../plugins/modes/ironman/Common.Ironman').init({ core: {} });
+  const handlers = new Map();
+  Ultimate({
+    onCanBank() {},
+    onShouldKeepItemOnDeath() {},
+    onCustomEvent(name, handler) { handlers.set(name, handler); },
+    onPlayerLogout(handler) { handlers.set('logout', handler); },
+    onPlayerLogin(handler) { handlers.set('login', handler); },
+  });
+  const player = {
+    getAttribute: (key) => (key === 'ironman:mode' ? 'ultimate' : undefined),
+    getUsername: () => 'uim',
+  };
+  const options = {};
+  handlers.get('player-death:drop-options')({ player, options });
+  assert.equal(options.despawnDelay, 6000);
+
+  const ground = { paused: false, setAgingPaused(value) { this.paused = value; } };
+  handlers.get('player-death:dropped')({ player, groundItem: ground });
+  handlers.get('logout')({ player });
+  assert.equal(ground.paused, true, 'the timer is paused while the UIM is logged out');
+  handlers.get('login')({ player });
+  assert.equal(ground.paused, false, 'and resumes on the next login');
 });

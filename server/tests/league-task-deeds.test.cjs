@@ -2338,7 +2338,7 @@ test("batch 2: Deadeye and Mystic Vigour, Eagle Eye's and Mystic Might's slots w
   assert.ok(done(f, "activate-mystic-vigour"), `Mystic Vigour: ${f.messages}`);
 });
 
-// ---- named places from subjects' location lines (PR A of the remaining Demonic Pacts tasks) ---------
+// ---- named places from subjects' location lines (issue 6108 follow-ups) ---------------------------
 
 test("places from location lines: the Stonecutter Outpost's rocks, Tlati's trees, the Shayzien yews, the Forsaken Tower's magic trees, two sand pits, Land's End's bank chest and Puro-Puro", async (t) => {
   const f = pactsCharacter(t, [1666, 3136, 0], [21, 20, 8, 1]);

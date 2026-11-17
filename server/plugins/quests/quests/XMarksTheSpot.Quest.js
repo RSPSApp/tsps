@@ -6,6 +6,13 @@ module.exports = function registerXMarksTheSpotQuest(api) {
 
   const VEOS_NPC_ID = NpcIdentifiers.VEOS; // 8484, "veos_visible"
   const VEOS_POST_QUEST_NPC_ID = NpcIdentifiers.VEOS_4; // 10723, "veos_visible_amulet"
+  /** Port Sarim's Veos in each form his varbit shows: the travel forms (8630, 10724) are the same man. */
+  const SARIM_VEOS_NPC_IDS = new Set([
+    VEOS_NPC_ID,
+    NpcIdentifiers.VEOS_3, // 8630, "veos_visible_travel"
+    VEOS_POST_QUEST_NPC_ID,
+    NpcIdentifiers.VEOS_5, // 10724, "veos_visible_travel_amulet"
+  ]);
 
   const LUMBRIDGE_VISIBILITY = 12151;
   const SARIM_VISIBILITY = 12148;
@@ -178,7 +185,7 @@ module.exports = function registerXMarksTheSpotQuest(api) {
   function handleVeosTalk(event) {
     const location = event.location ?? event.npc?.getLocation?.();
     if (event.clickType !== 1 || !atPortSarim(location)) return;
-    if (event.npcId !== VEOS_NPC_ID && event.npcId !== VEOS_POST_QUEST_NPC_ID) return;
+    if (!SARIM_VEOS_NPC_IDS.has(event.npcId)) return;
     if (quest.getStage(event.player) < STAGE_COMPLETE) return;
     recoverVeosRewards(event.player);
   }
@@ -217,7 +224,11 @@ module.exports = function registerXMarksTheSpotQuest(api) {
     const sender = player.getPacketSender();
     const departed = herbertTookOver(player);
     sender.sendVarbit(LUMBRIDGE_VISIBILITY, stage < STAGE_CASKET ? 2 : 0);
-    sender.sendVarbit(SARIM_VISIBILITY, departed ? 0 : stage >= STAGE_COMPLETE ? 1 : 3);
+    // Parent 1063: 1 amulet, 3 plain, Talk-to only; 2 and 4 add Port Piscarilius and Land's End once
+    // the player has sailed to Kourend (cache multinpc; rsprox local 1001445 logs in visited with 4,
+    // then 2 after this quest; 1001998 and 1002104 with 2).
+    const travel = hasVisitedKourend(player) ? 1 : 0;
+    sender.sendVarbit(SARIM_VISIBILITY, departed ? 0 : (stage >= STAGE_COMPLETE ? 1 : 3) + travel);
     // Wiki: Veos wears the casket's amulet after X Marks the Spot. Parent 2147
     // resolves 1 to the amulet form, 2 to the plain form, and 0 to no NPC.
     sender.sendVarbit(PISCARILIUS_VISIBILITY, departed ? 0 : stage >= STAGE_COMPLETE ? 1 : 2);
@@ -225,6 +236,11 @@ module.exports = function registerXMarksTheSpotQuest(api) {
 
   function handleVisibilityStageChanged({ player, key }) {
     if (player && (key === AKD_KEY || key === "x_marks_the_spot")) ensureVeos(player);
+  }
+
+  /** Client of Kourend's first sail there (or a login of a player who has made it). */
+  function handleKourendVisited({ player }) {
+    if (player) ensureVeos(player);
   }
 
   // ==========================================================================
@@ -249,7 +265,7 @@ module.exports = function registerXMarksTheSpotQuest(api) {
 
   function handleAction(event) {
     const { player, npcId, stepId } = event;
-    if (npcId !== VEOS_NPC_ID && npcId !== VEOS_POST_QUEST_NPC_ID) return;
+    if (!SARIM_VEOS_NPC_IDS.has(npcId)) return;
     if (stepId === RECEIVE_SCROLL_ACTION_ID) {
       giveStartScroll(player);
       event.text = "Veos has given you a scroll.";
@@ -297,7 +313,7 @@ module.exports = function registerXMarksTheSpotQuest(api) {
 
   /** Remember a turned-away start so Veos offers the scroll again next time. */
   function handleCondition({ player, npcId, stepId }) {
-    if (npcId !== VEOS_NPC_ID && npcId !== VEOS_POST_QUEST_NPC_ID) return;
+    if (!SARIM_VEOS_NPC_IDS.has(npcId)) return;
     if (NO_SPACE_CONDITION_IDS.has(stepId)) {
       player.setAttribute(AWAITING_SCROLL_ATTRIBUTE, 1);
     }
@@ -308,7 +324,7 @@ module.exports = function registerXMarksTheSpotQuest(api) {
   // ==========================================================================
 
   function selectVariant({ npcId, player }) {
-    if (npcId !== VEOS_NPC_ID && npcId !== VEOS_POST_QUEST_NPC_ID) return null;
+    if (!SARIM_VEOS_NPC_IDS.has(npcId)) return null;
     const stage = quest.getStage(player);
     if (stage >= STAGE_COMPLETE) {
       // Both ids answer, so the dock Veos keeps working until the next login swaps
@@ -330,7 +346,7 @@ module.exports = function registerXMarksTheSpotQuest(api) {
   }
 
   function answerCondition({ npcId, npc, player, text }) {
-    if (npcId !== VEOS_NPC_ID && npcId !== VEOS_POST_QUEST_NPC_ID) return null;
+    if (!SARIM_VEOS_NPC_IDS.has(npcId)) return null;
     const value = String(text).toLowerCase();
     if (value.includes("does not have any free inventory space")) {
       return player.getInventory().getFreeSlots() <= 0;
@@ -351,7 +367,7 @@ module.exports = function registerXMarksTheSpotQuest(api) {
   /** Fill the wiki's "[player name]" / "[scroll/orb]" placeholders. */
   function fillTranscriptBlanks(request) {
     if (!request?.player || typeof request.text !== "string") return;
-    if (request.npcId !== VEOS_NPC_ID && request.npcId !== VEOS_POST_QUEST_NPC_ID) return;
+    if (!SARIM_VEOS_NPC_IDS.has(request.npcId)) return;
     if (request.text === "Sounds good, what should I do?" && quest.getStage(request.player) === 0) request.before = () => {
       request.player.setAttribute(ACCEPTED_ATTRIBUTE, 1);
       request.player.getPacketSender().sendVarbit(VARBIT_X_MARKS, 1);
@@ -451,7 +467,7 @@ module.exports = function registerXMarksTheSpotQuest(api) {
 
   function resumeHandIn(event) {
     const { player, npcId } = event;
-    if (![VEOS_NPC_ID, VEOS_POST_QUEST_NPC_ID].includes(npcId) || quest.getStage(player) !== STAGE_CASKET || !player.getAttribute(HANDED_CASKET_ATTRIBUTE)) return;
+    if (!SARIM_VEOS_NPC_IDS.has(npcId) || quest.getStage(player) !== STAGE_CASKET || !player.getAttribute(HANDED_CASKET_ATTRIBUTE)) return;
     event.handled = true;
     startTranscript(api, player, npcId, PAGE, "finishing-up", (steps) => steps.slice(6));
   }
@@ -635,4 +651,5 @@ module.exports = function registerXMarksTheSpotQuest(api) {
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
   api.onCustomEvent("quest:stage-changed", handleVisibilityStageChanged);
+  api.onCustomEvent("kourend:visited", handleKourendVisited);
 };

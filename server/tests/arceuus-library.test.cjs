@@ -157,7 +157,8 @@ test("Biblia names the requested book and where it is", (t) => {
   const player = fixture(t);
   const book = T.assignRequest(player, T.SAM, () => 0);
   const spot = T.locateBook(book);
-  const hint = dialogues.Biblia.branches.Zyj0sH;
+  // The shared branch's id is a hash of its content, so find it by its question.
+  const hint = Object.values(dialogues.Biblia.branches).find((steps) => String(steps[0]?.player).startsWith("I'm looking for a book"));
   const player_ = { player, npcId: T.BIBLIA, text: hint[0].player };
   T.onBibliaLine(player_);
   assert.ok(player_.text.includes(T.BOOKS.get(book)));

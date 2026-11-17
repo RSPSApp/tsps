@@ -1897,6 +1897,7 @@ export class OsrsClient {
             clanRank: 0,
             friendsChatMinKick: 0,
             sendFriendsChatAction,
+            invTypeLoader: this.loaderFactory.getInvTypeLoader(),
             paramTypeLoader: this.loaderFactory.getParamTypeLoader(),
             enumTypeLoader: this.loaderFactory.getEnumTypeLoader(),
             structTypeLoader: this.loaderFactory.getStructTypeLoader(),

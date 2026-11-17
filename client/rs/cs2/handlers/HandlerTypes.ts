@@ -223,6 +223,7 @@ export interface HandlerContext {
     varManager: VarManager;
     loadScript: (id: number) => Script | null;
     objTypeLoader?: ObjTypeLoader;
+    invTypeLoader?: import("../../config/invtype/InvTypeLoader").InvTypeLoader;
     paramTypeLoader?: ParamTypeLoader;
     enumTypeLoader?: TypeLoader<EnumType>;
     structTypeLoader?: TypeLoader<StructType>;

@@ -135,6 +135,37 @@ test("splitting needs 56 Woodcutting and an axe", (t) => {
   }
 });
 
+test("each split requires a usable axe and current level, and uses the current axe", (t) => {
+  for (const change of ["axe", "level", "replacement"]) {
+    const { p, log } = actor(t, { level: 56, items: [[I.BRONZE_AXE, 1], [I.ARCTIC_PINE_LOGS, 4]] });
+    cutWood(p);
+    p.getCreationMenu().execute(I.SPLIT_LOG, 4);
+    run(log, 2);
+    if (change === "level") p.getSkillManager().setCurrentLevels(core.Skill.WOODCUTTING, 55);
+    else {
+      p.getInventory().delete(I.BRONZE_AXE, 1);
+      if (change === "replacement") p.getInventory().add(new core.Item(I.IRON_AXE, 1), true);
+    }
+    const ticks = run(log, 3);
+    assert.equal(p.getInventory().getAmount(I.SPLIT_LOG), change === "replacement" ? 2 : 1, change);
+    if (change === "replacement") {
+      assert.ok(ticks[2].includes(`seq ${core.CacheDefinitions.getSeqId("human_woodcrafting_axe_iron")}`));
+    }
+  }
+});
+
+test("interaction replacement and emotes interrupt splitting", (t) => {
+  for (const event of ["player:interaction-cleared", "player:emote"]) {
+    const { p, log } = actor(t);
+    cutWood(p);
+    p.getCreationMenu().execute(I.SPLIT_LOG, 4);
+    run(log, 2);
+    PM.emitCustomEvent(event, { player: p, reason: "item" });
+    run(log, 9);
+    assert.equal(p.getInventory().getAmount(I.SPLIT_LOG), 1, event);
+  }
+});
+
 test("the shield choice without the parts sends the captured line", (t) => {
   const { p, log } = actor(t);
   cutWood(p);

@@ -29,6 +29,8 @@ per log, an axe and the woodcutting stump.
 - The level and no-axe refusals: not captured, so their wording is ours.
 - Axes other than the dragon axe play the cache's `human_woodcrafting_axe_*` (felling axes:
   `human_woodcrafting_*_2h_axe`) sequence of the same axe; only the dragon axe's is recorded.
+- Each cycle rechecks the current level and usable axe; replacing the interaction or performing an
+  emote stops the batch. The exact interruption and requirement-loss responses are not captured.
 
 ## Recorded, not matched yet: making the shield
 

@@ -112,8 +112,7 @@ function startSplitting(player, amount) {
     player.sendMessage(`You need a Woodcutting level of ${SPLIT_LEVEL} to split arctic pine logs.`);
     return;
   }
-  const axe = deps.findBestUsableAxe(player);
-  if (!axe) {
+  if (!deps.findBestUsableAxe(player)) {
     // Ours: not captured.
     player.sendMessage("You need an axe to split arctic pine logs.");
     return;
@@ -136,6 +135,11 @@ function startSplitting(player, amount) {
       }
       const tick = ++this.ticks;
       if (tick < FIRST_TICK || (tick - FIRST_TICK) % INTERVAL_TICKS !== 0) return;
+      const axe = deps.findBestUsableAxe(player);
+      if (player.getSkillManager().getCurrentLevel(core.Skill.WOODCUTTING) < SPLIT_LEVEL || !axe) {
+        this.stop();
+        return;
+      }
       if (!splitOne(player, axe) || --this.remaining <= 0 || !hasLog()) this.stop();
     }
     stop() {
@@ -184,13 +188,19 @@ function cutWood(event) {
   player.getPacketSender().sendCreationMenu(menu);
 }
 
+function interruptSplitting({ player }) {
+  stopSplitting(player);
+}
+
 function attach(pluginApi, woodcutting) {
   api = pluginApi;
   core = pluginApi.core;
   deps = woodcutting;
   sequenceByAxeId = null;
   api.onObjectInteraction("Woodcutting stump", { "Cut-wood": cutWood });
-  api.onPlayerDisconnect(({ player }) => stopSplitting(player));
+  api.onPlayerDisconnect(interruptSplitting);
+  api.onCustomEvent("player:interaction-cleared", interruptSplitting);
+  api.onCustomEvent("player:emote", interruptSplitting);
 }
 
 module.exports = { attach, SPLIT_MESSAGE, NO_PINE, NO_SHIELD_PARTS, SPLIT_XP, SPLIT_LEVEL };

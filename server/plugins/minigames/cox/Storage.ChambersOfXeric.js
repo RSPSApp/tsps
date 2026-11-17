@@ -86,6 +86,7 @@ const SHARED_ITEM_SET = new Set(SHARED_ITEMS);
 const ATTR_PRIVATE = "cox:private-storage";
 const ATTR_DISMISSED = "cox:storage-warning-dismissed";
 const ATTR_VIEW = "cox:storage-view";
+const BANK_PIN_FEATURE = "cox-mountain-storage";
 
 const uid = (group, component) => (group << 16) | component;
 
@@ -197,6 +198,27 @@ function tierOf(raid) {
 
 // ---------------------------------------------------------------- the interfaces
 
+/** Wiki update, 26 January 2017: Quidamortem's private unit requires Bank PIN entry. */
+function mountPinLocked(player) {
+  const session = player.getSession();
+  const at = player.getLocation().clone();
+  const area = player.getPrivateArea();
+  const raid = Raid.raidOf(player);
+  const request = {
+    player,
+    feature: BANK_PIN_FEATURE,
+    resume: () => {
+      // Unlocking only reopens this recovery view; never replay an old transfer or overwrite another UI.
+      if (!player.isRegistered() || player.getHitpoints() <= 0 || player.getSession() !== session
+        || !player.getLocation().equals(at) || player.getPrivateArea() !== area || Raid.raidOf(player) !== raid
+        || player.getInterfaceId() !== -1) return;
+      openPrivate(player, -1);
+    },
+  };
+  Shared.api().emitCustomEvent("bank-pin:guard", request);
+  return request.locked === true;
+}
+
 /** What the player has open: { kind: "private" | "shared", size, raid }. */
 /**
  * The storage the player has open: only while its interface is open, and the raid's own storage only inside the raid
@@ -210,7 +232,7 @@ function viewOf(player) {
   const raid = Raid.raidOf(player);
   const open = player.getInterfaceId?.() === expected
     && (view.mount || (raid != null && (view.kind !== "shared" || view.raid === raid)));
-  if (open) return view;
+  if (open && !(view.mount && mountPinLocked(player))) return view;
   player.setAttribute(ATTR_VIEW, null);
   return null;
 }
@@ -228,6 +250,7 @@ function sendSide(player, privateView) {
 
 /** The private storage; `size` -1 is the mountain's unit (withdraw only, no shared button). */
 function openPrivate(player, size) {
+  if (size === -1 && mountPinLocked(player)) return;
   const sender = player.getPacketSender();
   const items = privateItems(player);
   const noSharedSpace = size === -1 || tierOf(Raid.raidOf(player)) === 0;

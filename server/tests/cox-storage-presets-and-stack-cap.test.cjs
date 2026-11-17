@@ -58,6 +58,8 @@ const Storage = require("../plugins/minigames/cox/Storage.ChambersOfXeric");
 const PRESET_TEXT = "Preset items cannot be used for this.";
 
 const Raid = require("../plugins/minigames/cox/RaidState.ChambersOfXeric");
+const BankPin = require("../plugins/interface/bankpin/Common.BankPin");
+const PinKeypad = require("../plugins/interface/bankpin/Keypad.BankPin");
 const Parties = require("../plugins/minigames/cox/Parties.ChambersOfXeric");
 const { InterfaceActionClickOpcode: Input } = require("../dist/net/packet/impl/InterfaceActionClickOpcode");
 const { encodeVarbit, encodeWidgetOpenSub } = require("../dist/net/protocol/ClientProtocol");
@@ -96,6 +98,139 @@ function click(f, group, child, slot = 0, op = 1) {
   assert.equal(Input.handle(f.p, (group << 16) | child, op,
     { groupId: group, childId: child, slot, opId: op, itemId: f.inv.getItems()[slot]?.getId() ?? -1 }), true);
 }
+
+function lockPin(f) {
+  BankPin.set(f.p, "hash", BankPin.hash(f.p, "1234"));
+  BankPin.lock(f.p);
+}
+
+function mountain(f) {
+  const objectId = 30107; // Active cache: Mount Quidamortem private storage unit.
+  const object = new core.GameObject(objectId, f.p.getLocation().clone(), 10, 0, null);
+  assert.equal(PM.emitObjectInteraction({ player: f.p, object, objectId, location: object.getLocation(), clickType: 1, handled: false }), true);
+}
+
+function answerPin(f, amount) {
+  const answer = f.p.getEnteredAmountAction();
+  assert.ok(answer);
+  answer.execute(amount);
+  core.TaskManager.process();
+  core.TaskManager.process();
+}
+
+test("mountain private storage asks for its locked PIN before opening or releasing items", (t) => {
+  const f = actor(t);
+  lockPin(f);
+  f.p.setAttribute("cox:private-storage", [{ id: I.COINS, amount: 50 }]);
+  mountain(f);
+  assert.equal(f.p.getInterfaceId(), BankPin.ids.groups.keypad, "locked PIN opens keypad, not private storage");
+  for (const child of [6, 9, 10]) click(f, 271, child);
+  assert.equal(f.inv.getAmount(I.COINS), 0);
+  assert.equal(stored(f, I.COINS), 50);
+  assert.equal(f.p.getBank(core.Bank.getTabForItem(f.p, I.COINS)).getAmount(I.COINS), 0);
+  answerPin(f, 1234);
+  assert.equal(BankPin.isUnlocked(f.p), true);
+  assert.equal(f.p.getInterfaceId(), 271);
+  assert.equal(f.inv.getAmount(I.COINS), 0, "unlock opens recovery, without replaying any forged transfer");
+  click(f, 271, 6);
+  assert.equal(f.inv.getAmount(I.COINS), 1);
+  assert.equal(stored(f, I.COINS), 49);
+  assert.equal(f.p.getPacketSender().getSubInterfaceAt(core.CacheDefinitions.getComponentId("toplevel_osrs_stretch:sidemodal")).groupId, 551);
+});
+
+test("mountain recovery from canEnter is PIN guarded and does not automatically enter a raid", (t) => {
+  const f = actor(t);
+  lockPin(f);
+  f.p.setAttribute("cox:private-storage", [{ id: I.COINS, amount: 50 }]);
+  assert.equal(Storage.canEnter(f.p), false);
+  assert.equal(f.p.getInterfaceId(), BankPin.ids.groups.keypad);
+  answerPin(f, 1234);
+  assert.equal(f.p.getInterfaceId(), 271);
+  assert.equal(Raid.raidOf(f.p), null);
+  assert.equal(Storage.canEnter(f.p), false, "still must empty personal storage");
+});
+
+test("mountain PIN continuation refuses wrong or exited PIN and changed actor context", (t) => {
+  for (const change of ["wrong", "exit", "move", "logout", "interface", "session", "raid", "area"]) {
+    const f = actor(t);
+    lockPin(f);
+    f.p.setAttribute("cox:private-storage", [{ id: I.COINS, amount: 50 }]);
+    mountain(f);
+    assert.equal(f.p.getInterfaceId(), BankPin.ids.groups.keypad);
+    if (change === "wrong" || change === "exit") answerPin(f, change === "wrong" ? 9999 : PinKeypad.EXIT_ANSWER);
+    else {
+      const answer = f.p.getEnteredAmountAction();
+      answer.execute(1234); // The guard's continuation is now queued for the next task cycle.
+      if (change === "move") f.p.setLocation(new core.Location(3201, 3200, 0));
+      if (change === "logout") f.p.setRegistered(false);
+      if (change === "interface") f.p.getPacketSender().sendInterface(550);
+      if (change === "session") f.p.setSession(new PlayerSession(f.p.getSession().getChannel()));
+      if (change === "raid") {
+        const party = Parties.create(f.p, { key: "coxpin" + f.p.getIndex() });
+        const raid = new Raid.Raid(party);
+        party.raid = raid;
+        raid.players.add(f.p);
+        f.p.setAttribute(Raid.ATTR_RAID, raid);
+        t.after(() => { f.p.setAttribute(Raid.ATTR_RAID, null); raid.players.clear(); raid.destroy("empty"); });
+      }
+      if (change === "area") {
+        const area = new core.PrivateArea();
+        area.add(f.p);
+        t.after(() => { area.remove(f.p); area.destroy(); });
+      }
+      core.TaskManager.process();
+      core.TaskManager.process();
+    }
+    assert.notEqual(f.p.getInterfaceId(), 271, change + " cannot reopen a recovery interface");
+    assert.equal(f.inv.getAmount(I.COINS), 0);
+    assert.equal(stored(f, I.COINS), 50);
+  }
+});
+
+test("relocking an open mountain view protects pending Withdraw-X, Withdraw-all and Bank-all", (t) => {
+  for (const operation of ["amount", "withdraw-all", "bank-all", "drag"]) {
+    const f = actor(t);
+    lockPin(f);
+    BankPin.unlock(f.p);
+    f.p.setAttribute("cox:private-storage", [{ id: I.COINS, amount: 50 }, { id: I.DEATH_RUNE, amount: 3 }]);
+    mountain(f);
+    let amountAction;
+    if (operation === "amount") { click(f, 271, 6, 0, 5); amountAction = f.p.getEnteredAmountAction(); }
+    BankPin.lock(f.p);
+    if (operation === "amount") amountAction.execute(10);
+    else if (operation === "drag") Storage.dragPrivate({ player: f.p, packet: { sourceWidgetId: (271 << 16) | 6, targetWidgetId: (271 << 16) | 6, sourceSlot: 0, targetSlot: 1 } });
+    else click(f, 271, operation === "withdraw-all" ? 9 : 10);
+    assert.equal(f.p.getInterfaceId(), BankPin.ids.groups.keypad, operation);
+    assert.equal(f.p.getAttribute("cox:storage-view"), null);
+    assert.equal(f.inv.getAmount(I.COINS), 0);
+    assert.deepEqual(Storage.privateItems(f.p), [{ id: I.COINS, amount: 50 }, { id: I.DEATH_RUNE, amount: 3 }]);
+    assert.equal(f.p.getBank(core.Bank.getTabForItem(f.p, I.COINS)).getAmount(I.COINS), 0);
+    answerPin(f, 1234);
+    assert.equal(f.p.getInterfaceId(), 271);
+    assert.equal(f.inv.getAmount(I.COINS), 0, "old operation not replayed after unlocking");
+  }
+});
+
+test("mountain no-PIN and unlocked access work, without adding a PIN rule to in-raid storage", (t) => {
+  for (const unlocked of [false, true]) {
+    const f = actor(t);
+    if (unlocked) { lockPin(f); BankPin.unlock(f.p); }
+    f.p.setAttribute("cox:private-storage", [{ id: I.COINS, amount: 50 }]);
+    mountain(f);
+    assert.equal(f.p.getInterfaceId(), 271);
+    click(f, 271, 6);
+    assert.equal(f.inv.getAmount(I.COINS), 1);
+  }
+  const f = registeredStorage(t);
+  lockPin(f);
+  f.p.setAttribute("cox:private-storage", [{ id: I.COINS, amount: 50 }]);
+  Storage.openPrivate(f.p, 30);
+  click(f, 271, 6);
+  assert.equal(f.inv.getAmount(I.COINS), 1);
+  Storage.openShared(f.p, f.raid);
+  assert.equal(f.p.getInterfaceId(), 550);
+  assert.equal(BankPin.isUnlocked(f.p), false, "no unsupported in-raid unlock prerequisite");
+});
 
 test("private/shared storage mounts its cache side modal after its onLoad varbits, including close and reopen", async (t) => {
   const f = registeredStorage(t);

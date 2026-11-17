@@ -670,9 +670,9 @@ function deliverScroll(player) {
   })());
 }
 
-/** `items:lost-to-pvp-killer` { item, lost }: the Items Kept on Death preview of a PvP death. */
+/** `items:lost-to-pvp-killer` { item, wildernessLevel, lost }: only a Wilderness PvP death takes the imbue. */
 function answerLostToPvpKiller(query) {
-  if (losesImbueToKiller(query?.item)) query.lost = true;
+  if (Number(query?.wildernessLevel) > 0 && losesImbueToKiller(query?.item)) query.lost = true;
 }
 
 module.exports = {

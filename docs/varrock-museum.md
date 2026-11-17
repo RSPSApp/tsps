@@ -105,3 +105,40 @@ Code: `server/plugins/world/museum/SalvagingRelics.Museum.js`; test:
 - Talk-to: the option is hooked (shown only with a relic, then the same hand-in), but the parsed
   standard dialogue puts Fossil Island's sub-options in Haig's first menu, so his real menu,
   where the option sits, is reached only through "Talk about Fossil Island." after Bone Voyage.
+
+# Storage crate: common finds for a reward
+
+`server/plugins/world/museum/StorageCrate.Museum.js`, table in
+`server/plugins/world/data/museum-storage-crate.json`.
+
+## From rsprox captures (local 1000153, revision 227, Leagues V)
+
+Arrowheads used on the crate (`vm_crate`, 24534):
+
+- On arrival: chatmenu 219 via script 58, titled "Finds placed in this crate cannot be
+  retrieved.", options "Place all your finds in the crate.", "Place that item in the crate:
+  Arrowheads", "Place all your finds, and don't ask this again.", "Keep your items.".
+- Choosing the single item (tick 1317): spam line "You place the find into the crate with all
+  the others and pick up your reward from the crate.", `human_pickupfloor` (827), the reward
+  (coal) in the find's own inventory slot, synth sound 2739 with delay 15, then Tinse Torpe
+  (`vm_archaeologist6_npc_dummy`, 1908, `chathap1`): "Thanks for helping us out; we really do
+  appreciate it."
+- "Don't ask this again" is the cache's varbit `vm_crate_warningdisabled` (11466). With it set the
+  finds go in without the menu.
+
+## From the Wiki (Storage crate, Specimen cleaning, Antique lamp (Varrock Museum))
+
+- Pottery, jewellery, arrowheads and old chipped vases go in; each gives one item from a
+  195-weight table (coins 19-69, bowl, pot, iron bolts 1-10, iron dagger, bronze limbs, wooden
+  stock, ores, iron knife, iron darts 1-50, iron arrowtips 1-49, uncut jade/opal, big bones, and
+  the antique lamp at 2/195).
+- That lamp (11189) is 500 XP in a skill of at least level 10.
+- The crate's left-click "Add finds" option came with the 14 March 2019 update.
+
+## Ours
+
+- "Add finds" opens the same menu without the single-item line (only use-on-crate was recorded).
+- With no finds carried, "Add finds" says "You don't have any finds to put in the crate.".
+- Several finds at once give one spam line and one thanks; only one find was recorded.
+- The thanks always comes from Tinse Torpe, the recorded speaker.
+- A stackable reward goes onto a stack already carried; otherwise it takes the find's slot.

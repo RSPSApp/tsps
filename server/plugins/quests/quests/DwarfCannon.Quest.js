@@ -174,7 +174,7 @@ module.exports = function registerDwarfCannonQuest(api) {
   const stage = (player) => quest.getStage(player);
   /** Lollk, untied, per rescuer. */
   const rescuedLollk = new Map();
-  /** Players part-way through the crate's search, and the tile they search from (live is busy for it). */
+  /** Players part-way through the crate's search: the tile they search from and the movement hold it took (live is busy for it). */
   const searching = new WeakMap();
 
   function buildJournal(player, questHandle) {
@@ -533,8 +533,8 @@ module.exports = function registerDwarfCannonQuest(api) {
     if (searching.has(player)) return;
     // Live holds the player for the search (varbit busy from the search to Lollk's first line;
     // a second click in 1001565 did nothing), so walking waits; a move by other means ends it.
-    searching.set(player, player.getLocation().clone());
-    player.getMovementQueue().reset().setBlockMovement(true);
+    const queue = player.getMovementQueue().reset().setBlockMovement(true);
+    searching.set(player, { from: player.getLocation().clone(), hold: queue.getBlockMovementGeneration() });
     // Captured (1001565, 1002239): the search, the child 3 ticks on, untied 2 after that.
     player.sendMessage("You search the crate...");
     player.performAnimation(new Animation(SEARCH_ANIMATION));
@@ -546,16 +546,28 @@ module.exports = function registerDwarfCannonQuest(api) {
     TaskManager.submit(new CountdownTask(player, UNTIED_TICKS, () => untieLollk(player)));
   }
 
-  /** Still on the tile the search began from, and still registered. */
+  /**
+   * Still registered, alive, on the tile the search began from, and still holding its own movement
+   * hold: a death (whose task takes the hold) or anything else that moves or re-holds the player ends it.
+   */
   function stillSearching(player) {
-    const from = searching.get(player);
-    return !!from && player.isRegistered() && player.getLocation().equals(from);
+    const search = searching.get(player);
+    return !!search && player.isRegistered() && player.getHitpoints() > 0 && !player.isDyingReturn()
+      && player.getLocation().equals(search.from)
+      && player.getMovementQueue().getBlockMovementGeneration() === search.hold;
   }
 
+  /**
+   * Clears the search; the movement hold is released only while it is still the search's own, and
+   * never for a dying player, whose death task takes and gives back the hold itself.
+   */
   function endSearch(player) {
-    if (!searching.has(player)) return;
+    const search = searching.get(player);
+    if (!search) return;
     searching.delete(player);
-    player.getMovementQueue().setBlockMovement(false);
+    const queue = player.getMovementQueue();
+    const dying = player.getHitpoints() <= 0 || player.isDyingReturn();
+    if (!dying && queue.getBlockMovementGeneration() === search.hold) queue.setBlockMovement(false);
   }
 
   function untieLollk(player) {

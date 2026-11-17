@@ -67,10 +67,12 @@ function playerFixture(inventory = inventoryFixture()) {
   const hits = [];
   const levels = new Map();
   let blocked = false;
+  let holdGeneration = 0;
   const movement = {
     reset: () => movement,
-    setBlockMovement(value) { blocked = value; return movement; },
+    setBlockMovement(value) { blocked = value; holdGeneration++; return movement; },
     isMovementBlocked: () => blocked,
+    getBlockMovementGeneration: () => holdGeneration,
   };
   let location = new core.Location(2567, 3460, 0);
   let manager;
@@ -112,6 +114,8 @@ function playerFixture(inventory = inventoryFixture()) {
     }),
     getLocation: () => location,
     getMovementQueue: () => movement,
+    getHitpoints: () => 10,
+    isDyingReturn: () => false,
     moveTo(target) { location = target; },
     getDialogueManager: () => manager,
     getPacketSender: () => sender,

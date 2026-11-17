@@ -306,6 +306,27 @@ test("the crate's search holds the player; a move by other means ends it without
   assert.equal(stage(g), 6, "a new search works");
 });
 
+test("a death during the crate's search ends it and leaves the death's movement hold alone (review on #6039)", async (t) => {
+  const f = actor(t, { stage: 5, at: CRATE.stand });
+  await click(f, CRATE);
+  h.ticks(f, 2);
+  f.player.setHitpoints(0);
+  f.player.appendDeath();
+  const queue = f.player.getMovementQueue();
+  const release = queue.setBlockMovement.bind(queue);
+  const searchReleases = [];
+  queue.setBlockMovement = (value) => {
+    if (value === false && new Error().stack.includes("endSearch")) searchReleases.push(f.tick);
+    return release(value);
+  };
+  h.ticks(f, 3);
+  assert.equal(stage(f), 5, "no rescue for a dying player");
+  assert.ok(!f.messages.some((m) => m.text === "You untie the child."));
+  assert.equal(h.shown(f), null, "no conversation opens");
+  assert.deepEqual(searchReleases, [], "the search never releases a dying player's movement hold");
+  assert.equal(queue.isMovementBlocked(), true, "the death task still holds the player");
+});
+
 test("the mud pile: the climb animation 2 ticks on, outside a tick later", async (t) => {
   const f = actor(t, { stage: 6, at: MUDPILE.stand });
   await click(f, MUDPILE);

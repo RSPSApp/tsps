@@ -215,6 +215,8 @@ test("Oriana below 50 Thieving: lookout duty and the box (rsprox 1102 ticks 1842
 
 test("stew on Oli: the stew goes, its box, and his thanks (rsprox 1098)", async () => {
   const a = actor(OLI(), { items: [[core.ItemIdentifiers.STEW, 1]] });
+  const fed = [];
+  PM.createApi("OliStewEventTest").onCustomEvent("oli:fed-stew", (event) => { if (event.player === a.p) fed.push(event); });
   const slot = a.p.getInventory().getItems().findIndex((item) => item?.getId() === core.ItemIdentifiers.STEW);
   const event = PM.emitItemOnNpc({
     player: a.p, target: a.npc, definition: a.npc.getCurrentDefinition(a.p), npcId: a.npc.getContentId(a.p), targetIndex: a.npc.getIndex(),
@@ -225,6 +227,7 @@ test("stew on Oli: the stew goes, its box, and his thanks (rsprox 1098)", async 
   assert.equal(a.count(core.ItemIdentifiers.STEW), 0);
   assert.ok(said(a, "You give the stew to Oli and he gets it down in a flash."));
   assert.ok(said(a, "Thanks! That sure is tasty!"));
+  assert.equal(fed.length, 1, "oli:fed-stew, once, for a league's \"Give Oli some Stew\"");
 });
 
 test("a part of the valuables with no room for the coins is refused, with nothing lost; all of them frees their slot", async () => {

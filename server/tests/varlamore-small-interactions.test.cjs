@@ -2,7 +2,7 @@
 //
 // Issue 6108: the Varlamore interactions behind five league tasks, through the real plugins: the
 // bird bath's four outcomes and its vessel line (Wiki: Transcript:Bird bath), the Dairy Buffalo
-// with no bucket, and Oli's recorded reply to the stew (RSProx 237/1098 tick 15381).
+// with no bucket. (Stew on Oli is HouseRobberyCrew's, tested in thieving-house-robbery-crew.test.cjs.)
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { test, before, after } = require("node:test");
@@ -90,28 +90,4 @@ test("Dairy Buffalo: no empty bucket, no milking", (t) => {
   for (let i = 0; i < 3; i++) core.TaskManager.process();
   assert.ok(messages.includes(Buffalo.NO_BUCKET));
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.BUCKET_OF_MILK), 0);
-});
-
-test("Oli and the stew: the item box, then his thanks, the player's 'more?' and his refusal, as recorded", (t) => {
-  const { p } = player(t);
-  const Oli = require("../plugins/npcs/OliStew.plugin.js")._test;
-  const oli = core.NPC.create(Oli.OLI, new core.Location(1557, 3170, 0));
-  p.getInventory().setItem(0, new core.Item(core.ItemIdentifiers.STEW, 1));
-  const event = { player: p, target: oli, itemId: core.ItemIdentifiers.STEW, slot: 0, item: p.getInventory().getItems()[0], handled: false };
-  Oli.giveStew(event);
-  assert.equal(event.handled, true);
-  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.STEW), 0);
-  const manager = p.getDialogueManager();
-  assert.equal(manager.getCurrent().getItemId(), core.ItemIdentifiers.STEW);
-  const texts = [];
-  for (let i = 0; i < 6 && manager.getCurrent(); i++) {
-    const current = manager.getCurrent();
-    const text = current.getText?.() ?? current.text;
-    if (text) texts.push(text);
-    manager.advance();
-  }
-  assert.deepEqual(texts, [Oli.BOX, ...Oli.LINES.map((line) => line.npc ?? line.player)]);
-  const other = { player: p, target: oli, itemId: core.ItemIdentifiers.BREAD ?? 2309, slot: 0, handled: false };
-  Oli.giveStew(other);
-  assert.equal(other.handled, false, "another item is not the stew");
 });

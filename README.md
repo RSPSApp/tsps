@@ -73,6 +73,11 @@ The server announces its explicit wire protocol version before the existing welc
 The browser client accepts a matching version and refuses a known mismatch before sending
 login credentials. Worlds with no valid announcement remain accessible with a compatibility
 warning; their version is unknown, even if they otherwise resemble a version 1 world.
+Compatibility notices stay within the game area and disappear after three seconds. To hide
+them, open Configuration → RSPS.app and turn off **Show protocol compatibility notices**.
+This changes only the display; known mismatches still block login and explain the error.
+The wire protocol version describes the compiled client/server packet format, not the OSRS
+cache revision or an editable supported-version list. A mismatch notice shows both versions.
 Existing clients can ignore the announcement on the existing plugin-message channel.
 
 For an incompatible browser game wire change, increment the positive integer

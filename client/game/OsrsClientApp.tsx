@@ -458,7 +458,7 @@ function OsrsClientApp() {
         content = <div className="center-container max-height content-text">{errorMessage}</div>;
     } else if (osrsClient) {
         // Show GameContainer - LoginRenderer handles all loading states (DOWNLOADING and LOADING)
-        content = <GameContainer osrsClient={osrsClient} />;
+        content = <GameContainer osrsClient={osrsClient} protocolNotice={protocolNotice} />;
     } else {
         // Brief loading state before OsrsClient is created (checking storage, opening caches, etc.)
         content = (
@@ -673,14 +673,6 @@ function OsrsClientApp() {
 
     return (
         <div className={appClassName}>
-            {protocolNotice ? (
-                <div role={protocolNotice.kind === "error" ? "alert" : "status"}
-                    style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 10000,
-                        background: "#292015", color: "#ffdda0", padding: "8px 16px",
-                        fontSize: "0.9rem", lineHeight: 1.4, textAlign: "center" }}>
-                    {protocolNotice.message}
-                </div>
-            ) : null}
             {bannerWrapper}
             {content}
             {cacheEditor ? (

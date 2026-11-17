@@ -9,6 +9,13 @@ export type SidebarModeValue = (typeof SidebarMode)[keyof typeof SidebarMode];
  * each plugin's on/off key). The plugin hub opens them from its pinned client row.
  */
 export const RuneLiteConfig = ConfigGroup("runelite", {
+    showProtocolCompatibilityNotices: ConfigItem<boolean>({
+        keyName: "showProtocolCompatibilityNotices",
+        name: "Show protocol compatibility notices",
+        description: "Show compatibility notices in the game for three seconds. Incompatible worlds still cannot log in when notices are hidden.",
+        default: true,
+        position: 1,
+    }),
     sidebarMode: ConfigItem<SidebarModeValue>({
         keyName: "sidebarMode",
         name: "Sidebar panels",

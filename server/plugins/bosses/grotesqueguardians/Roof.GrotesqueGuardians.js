@@ -25,10 +25,17 @@ const { Fight } = require("./Fight.GrotesqueGuardians");
 const ROOF_ATTRIBUTE = "grotesque-guardians:roof";
 
 let RoofClass = null;
+/** The Echo role (EchoBosses) of each normal Guardian form. */
+const ECHO_ROLES = Object.freeze({
+  dawnPhase1: "dawn", dawnFlying: "dawn", dawnPhase3: "dawn",
+  duskPhase1: "dusk", duskToPhase2: "dusk", duskPhase2: "dusk", duskPhase3: "dusk",
+  duskPhase4Spawn: "dusk-final", duskPhase4: "dusk-final",
+});
 
 class Roof {
-  constructor(player) {
+  constructor(player, echo = null) {
     this.player = player;
+    this.echo = echo;
     const [minX, maxX, minY, maxY] = Common.data.roof.floor;
     this.floor = { minX, maxX, minY, maxY };
     this.area = new RoofClass(this);
@@ -78,7 +85,7 @@ class Roof {
     return this.player.isRegistered?.() !== false && this.area.getPlayers().includes(this.player) ? [this.player] : [];
   }
 
-  spawn(id, tile) {
+  spawn(id, tile, role) {
     const { NPC, World } = Common.core;
     const npc = NPC.create(id, Common.toLocation(tile));
     npc.__skipDefaultRespawn = true;
@@ -87,17 +94,39 @@ class Roof {
     npc.getMovementCoordinator?.().setRadius?.(10);
     this.area.add(npc);
     World.getAddNPCQueue().push(npc);
+    if (this.echo) this.dressEcho(npc, role);
     return npc;
+  }
+
+  /** An Echo roof's Guardian takes the Echo form of `role` (EchoBosses), once per role change. */
+  dressEcho(npc, role) {
+    if (npc.__ggRole === role) return;
+    const request = { player: this.player, boss: "grotesque-guardians", role, npc, token: this.echo.token, configured: false };
+    Common.api.emitCustomEvent("echo-boss:configure", request);
+    if (!request.configured) throw new Error(`Echo Guardians: ${role} could not be configured`);
+    npc.__ggRole = role;
+  }
+
+  /** Every phase is the normal form; an Echo roof re-dresses it when the Echo role changes. */
+  form(npc, ordinary) {
+    npc.setNpcTransformationId(Common.ids.npcs[ordinary]);
+    if (this.echo) this.dressEcho(npc, ECHO_ROLES[ordinary]);
   }
 
   /** The bell: both statues come down and the fight starts. */
   start() {
+    if (this.echo && !this.echo.token) {
+      const claim = { player: this.player, boss: "grotesque-guardians", token: null };
+      Common.api.emitCustomEvent("echo-boss:claim", claim);
+      if (!claim.token) return;
+      this.echo.token = claim.token;
+    }
     const { ids, data } = Common;
     const sender = this.player.getPacketSender();
     sender.sendVarbit(ids.varbits.duskStatueHidden, 1);
     sender.sendVarbit(ids.varbits.dawnStatueHidden, 1);
-    this.dusk = this.spawn(ids.npcs.duskPhase1, data.roof.dusk);
-    this.dawn = this.spawn(ids.npcs.dawnPhase1, data.roof.dawn);
+    this.dusk = this.spawn(ids.npcs.duskPhase1, data.roof.dusk, "dusk");
+    this.dawn = this.spawn(ids.npcs.dawnPhase1, data.roof.dawn, "dawn");
     this.dusk.performAnimation(new Common.core.Animation(ids.seqs.duskSpawn));
     this.dawn.performAnimation(new Common.core.Animation(ids.seqs.dawnSpawn));
     this.fight = new Fight(this, this.dusk, this.dawn);
@@ -138,6 +167,7 @@ class Roof {
   destroy() {
     this.fight?.stop();
     this.fight = null;
+    if (this.echo?.token) Common.api.emitCustomEvent("echo-boss:release", { player: this.player, token: this.echo.token });
     this.area.destroy();
   }
 }
@@ -228,9 +258,9 @@ function travel(player, ticks, messageKey, move) {
   });
 }
 
-function goUp(player) {
+function goUp(player, echo = null) {
   leaveRoof(player);
-  const roof = new Roof(player);
+  const roof = new Roof(player, echo);
   player.setAttribute(ROOF_ATTRIBUTE, roof);
   player.moveTo(Common.toLocation(Common.data.roof.arrive));
   const current = player.getArea?.();
@@ -252,7 +282,7 @@ function sendUnlocked(player) {
 /** The Roof Entrance: locked until the key is used on it; then up, for a player on task. */
 function entrance({ player, objectId }) {
   if (objectId !== Common.ids.locs.entrance) return false;
-  if (!mayGoUp(player)) return true;
+  if (!unlocked(player)) { player.sendMessage(Common.message("locked")); return true; }
   // A league character carrying the echo orb is asked first ("echo-boss:entry"); its No comes later, so it asks again.
   const entry = { player, boss: "grotesque-guardians", enter: () => mayGoUp(player) && travel(player, Common.data.travel.upTicks, "goUp", () => goUp(player)), handled: false };
   Common.api.emitCustomEvent("echo-boss:entry", entry);
@@ -360,7 +390,7 @@ function guardianHit({ npc, hit }) {
     return;
   }
   // A hit stops at the phase's threshold: Dawn flies up, or Dusk turns defensive, at 225.
-  const floor = (dawn && fight.phase === 1) || (dusk && fight.phase === 2) ? Common.data.phases.dawnFliesBelow : 0;
+  const floor = (dawn && fight.phase === 1) || (dusk && fight.phase === 2) ? fight.phaseThreshold(npc) : 0;
   if (floor <= 0) return;
   let over = parts.reduce((sum, part) => sum + part.getDamage(), 0) - Math.max(0, npc.getHitpoints() - floor);
   for (const part of [...parts].reverse()) {

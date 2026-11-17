@@ -377,11 +377,20 @@ test("the ladder takes players down, gates the task lair, and peeks", () => {
   assert.deepEqual([out[0].getX(), out[0].getY()], [1910, 4367]);
 });
 
-test("the boss HUD follows each king", () => {
+test("normal kings show no boss HUD (rsprox.net 1856, 3433)", () => {
   const player = { isPlayer: () => true, getHitpoints: () => 99 };
   const npc = { ...fakeNpc(Common.PRIME_ID, 2911, 4451), getCurrentDefinition: () => ({ getHitpoints: () => 255 }) };
+  customEvents.length = 0;
   Hud.engaged(npc, player);
-  assert.ok(customEvents.some((event) => event.name === "boss-hud:show" && event.payload.npcId === Common.PRIME_ID && event.payload.maximum === 255));
+  assert.ok(!customEvents.some((event) => event.name.startsWith("boss-hud:")));
+});
+
+test("the Echo kings' boss HUD follows each king, at its own maximum (rsprox.net 89)", () => {
+  const player = { isPlayer: () => true, getHitpoints: () => 99 };
+  const npc = { ...fakeNpc(Common.PRIME_ID, 2911, 4451), __echoKings: {}, getMaxHitpoints: () => 1800,
+    getCurrentDefinition: () => ({ getHitpoints: () => 255 }) };
+  Hud.engaged(npc, player);
+  assert.ok(customEvents.some((event) => event.name === "boss-hud:show" && event.payload.npcId === Common.PRIME_ID && event.payload.maximum === 1800));
   Hud.died({ npc });
   assert.ok(customEvents.some((event) => event.name === "boss-hud:hide"));
   customEvents.length = 0;
@@ -389,6 +398,19 @@ test("the boss HUD follows each king", () => {
   Hud.hideForLeaver(player);
   assert.ok(customEvents.some((event) => event.name === "boss-hud:hide"));
   assert.ok(!customEvents.some((event) => event.name === "boss-hud:show" && event.payload.npcId === Common.SUPREME_ID));
+});
+
+test("a king death only hides HUDs in its own private instance", () => {
+  const firstArea = {}, secondArea = {};
+  const first = { isPlayer: () => true, getHitpoints: () => 99, getPrivateArea: () => firstArea };
+  const second = { isPlayer: () => true, getHitpoints: () => 99, getPrivateArea: () => secondArea };
+  const npc = { ...fakeNpc(Common.PRIME_ID, 2911, 4451), __echoKings: {}, getPrivateArea: () => firstArea, getCurrentDefinition: () => ({ getHitpoints: () => 1800 }) };
+  Hud.engaged(npc, first);
+  Hud.engaged({ ...npc, getPrivateArea: () => secondArea }, second);
+  customEvents.length = 0;
+  Hud.died({ npc });
+  assert.deepEqual(customEvents.filter(event => event.name === "boss-hud:hide").map(event => event.payload.player), [first]);
+  Hud.hideForLeaver(second);
 });
 
 test("the echo orb menu's later No on the Slayer entrance asks for the dagannoth task again", () => {

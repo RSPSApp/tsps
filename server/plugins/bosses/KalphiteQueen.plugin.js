@@ -4,5 +4,6 @@ module.exports = {
   members: true,
   register(api) {
     require("./kalphitequeen/Encounter.KalphiteQueen")(api);
+    require("./kalphitequeen/Echo.KalphiteQueen")(api);
   },
 };

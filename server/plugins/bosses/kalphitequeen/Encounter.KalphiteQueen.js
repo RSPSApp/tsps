@@ -75,6 +75,20 @@ function isAirborne(npc) {
   return npc?.getId?.() === AIRBORNE || npc?.getId?.() === core.NpcIdentifiers.KALPHITE_QUEEN_5;
 }
 
+/**
+ * An Echo Queen (Echo.KalphiteQueen) is re-dressed as each form she takes. The Wiki gives her
+ * three attack maxima rather than one, refreshed with every form. Answers whether EchoBosses
+ * accepted her.
+ */
+function configureEcho(npc, role) {
+  const session = npc.__echoKq;
+  if (!session) return false;
+  const request = { player: session.player, boss: "kalphite-queen", role, npc, token: session.token, configured: false };
+  api.emitCustomEvent("echo-boss:configure", request);
+  npc.__echoKqMaxHits = request.maxHits ?? [];
+  return request.configured;
+}
+
 function configureAggression() {
   for (const id of KQ_IDS) {
     Object.assign(core.NpcDefinition.forId(id), KQ_AGGRESSION);
@@ -84,13 +98,17 @@ function configureAggression() {
 
 /** Keep the ranged roll before protection, while PendingHit still applies all damage reductions. */
 function createHit(character, target, method, delay) {
-  if (method.type() !== core.CombatType.RANGED || !target.isPlayer()) {
+  const style = method.type() === core.CombatType.MELEE ? "melee" : method.type() === core.CombatType.RANGED ? "ranged" : "magic";
+  const maximum = character.__echoKqMaxHits?.find(entry => entry.label === style)?.maxHit;
+  const hasStyleMaximum = character.__echoKq && Number.isInteger(maximum) && maximum >= 0;
+  const drainsPrayer = method.type() === core.CombatType.RANGED && target.isPlayer();
+  if (!hasStyleMaximum && !drainsPrayer) {
     return new core.PendingHit(character, target, method, delay);
   }
-  const rolled = core.Misc.randomInclusive(0, core.DamageFormulas.sourceMaxHit(character, core.CombatType.RANGED));
+  const rolled = core.Misc.randomInclusive(0, hasStyleMaximum ? maximum : core.DamageFormulas.sourceMaxHit(character, core.CombatType.RANGED));
   const hit = new core.PendingHit(character, target, method, { delay, damage: rolled });
   // The Wiki specifies a positive roll, even when Protect from Missiles blocks it.
-  if (rolled > 0) rangedPrayerDrains.add(hit);
+  if (drainsPrayer && rolled > 0) rangedPrayerDrains.add(hit);
   return hit;
 }
 
@@ -161,7 +179,7 @@ function defineTypes() {
         if (!next) {
           break;
         }
-        hits.push(new core.PendingHit(character, next, this, delay));
+        hits.push(createHit(character, next, this, delay));
         hitTargets.add(next);
         previous = current;
         current = next;
@@ -193,8 +211,9 @@ function defineTypes() {
       molting.delete(this.npc);
       if (this.npc.isRegistered?.() && this.npc.getHitpoints?.() > 0) {
         this.npc.setNpcTransformationId(AIRBORNE);
+        configureEcho(this.npc, "air");
         this.npc.performAnimation(core.Animation.DEFAULT_RESET_ANIMATION);
-        this.npc.setHitpoints(KQ_HITPOINTS);
+        this.npc.setHitpoints(this.npc.__echoKq ? this.npc.getMaxHitpoints() : KQ_HITPOINTS);
         this.npc.setUntargetable(false);
         core.TaskManager.submit(new RevertTask(this.npc));
       }
@@ -207,6 +226,7 @@ function defineTypes() {
     execute() {
       if (this.npc.isRegistered?.() && isAirborne(this.npc) && this.npc.getHitpoints?.() > 0) {
         this.npc.setNpcTransformationId(CRAWLING);
+        configureEcho(this.npc, "ground");
       }
       this.stop();
     }
@@ -227,6 +247,7 @@ function transformFirstForm(event) {
   npc.getCombat().reset();
   npc.getCombat().getHitQueue().clear();
   npc.setNpcTransformationId(AIRBORNE);
+  configureEcho(npc, "air");
   npc.performAnimation(new core.Animation(MOLT_ANIMATION));
   npc.performGraphic(new core.Graphic(MOLT_GRAPHIC));
   core.TaskManager.submit(new TransformTask(npc));
@@ -267,6 +288,7 @@ function hatchWorker(event) {
   }
   const [x, y, z, offsetX, offsetY] = nearbyCocoons[core.Misc.randomInclusive(0, nearbyCocoons.length - 1)];
   const worker = new KqWorker(KQ_WORKER, new core.Location(x + offsetX, y + offsetY, z));
+  if (queen.getPrivateArea?.()) queen.getPrivateArea().add(worker);
   worker.__skipDefaultRespawn = true;
   if (event.attacker?.isPlayer?.()) {
     worker.getCombat().attack(event.attacker);
@@ -411,6 +433,7 @@ function onLogin({ player }) {
 }
 
 function awardConditionalDrops({ killer, npc }) {
+  if (npc?.__echoKq) return;
   if (!killer?.isPlayer?.() || !isAirborne(npc)) {
     return;
   }
@@ -467,3 +490,6 @@ function attach(pluginApi) {
 }
 
 module.exports = attach;
+module.exports.isAirborne = isAirborne;
+module.exports.configureEcho = configureEcho;
+module.exports._test = { createHit };

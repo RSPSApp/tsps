@@ -1217,8 +1217,11 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           return;
         }
         playedAny = true;
+        // The Wiki's colour, as live draws the line (`styled`: Client of Kourend's possessed Veos in
+        // <col=000080>), unless a handler rewrote the words.
+        const shown = request.text === speech && typeof step.styled === "string" ? formatPlayerText(step.styled, player) : formatted;
         // Pages as the chatbox holds them: four lines of font 497 in 380 pixels (ChatTextLayout).
-        const pages = api.core?.ChatTextLayout?.pages(formatted) ?? characterPages(formatted);
+        const pages = api.core?.ChatTextLayout?.pages(shown) ?? characterPages(shown);
         // A typed line spoken by someone other than the NPC being talked to (a
         // paired NPC talking to them, a cutscene actor) gets that speaker's head.
         // An item's own transcript has no NPC; a named speaker still gets their head.
@@ -1315,7 +1318,9 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           playedAny = true;
           const [first, second] = Array.isArray(message.box?.items) ? message.box.items : [];
           if (first !== undefined || message.box?.statement === true) {
-            const text = formatPlayerText(String(message.text ?? ""), player);
+            // A box keeps the Wiki's colour (`styled`) unless a handler rewrote its words.
+            const words = message.text === step.text && typeof step.styled === "string" ? step.styled : message.text;
+            const text = formatPlayerText(String(words ?? ""), player);
             const box = new DialogueChainBuilder();
             // `box.holdTicks` (statement boxes): the box first shows that many ticks without
             // "Click here to continue" while a scene plays out, as live sends it; then it gains

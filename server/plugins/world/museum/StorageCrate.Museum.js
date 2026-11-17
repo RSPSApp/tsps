@@ -13,7 +13,8 @@
  *
  * Ours: "Add finds" (the left-click, Wiki: Varrock Museum, 14 March 2019) is the same menu
  * without the single-item line; the message when no finds are carried; one message and one
- * thanks for a batch of several finds (only a single find was recorded).
+ * thanks for a batch of several finds (only a single find was recorded); a rolled stackable
+ * reward that would overflow the carried stack leaves its find in place with a space message.
  */
 "use strict";
 
@@ -28,6 +29,8 @@ const KEEP = "Keep your items.";
 const PLACED_MESSAGE = "You place the find into the crate with all the others and pick up your reward from the crate.";
 const NO_FINDS_MESSAGE = "You don't have any finds to put in the crate."; // Ours
 const THANKS = "Thanks for helping us out; we really do appreciate it.";
+const FULL_STACK_MESSAGE = "You don't have enough inventory space."; // Ours
+const MAX_STACK = 2147483647;
 const PLACE_SOUND = 2739;
 const PLACE_SOUND_DELAY = 15;
 const FINDS = new Set(DATA.finds);
@@ -88,17 +91,23 @@ function rollReward(random = Math.random) {
   return { itemId: picked.item, amount };
 }
 
-/** The find in `slot` becomes its reward: in the same slot, or onto a stack already carried. */
+/**
+ * The find in `slot` becomes its reward: in the same slot, or onto a stack already carried.
+ * A reward that would overflow the carried stack is refused before the find is taken (false).
+ */
 function swapForReward(player, slot) {
   const inventory = player.getInventory();
   const reward = rollReward();
   const stackable = api.core.ItemDefinition.forId(reward.itemId).isStackable();
-  if (stackable && inventory.getAmount(reward.itemId) > 0) {
+  const carried = stackable ? inventory.getAmount(reward.itemId) : 0;
+  if (carried > 0) {
+    if (carried > MAX_STACK - reward.amount) return false;
     inventory.deleteAtSlot(slot, 1, false);
     inventory.add(new api.core.Item(reward.itemId, reward.amount), false);
   } else {
     inventory.setItem(slot, new api.core.Item(reward.itemId, reward.amount));
   }
+  return true;
 }
 
 function close(player) {
@@ -112,14 +121,30 @@ function place(player, slots) {
     close(player);
     return;
   }
-  for (const slot of live) swapForReward(player, slot);
+  let placed = 0;
+  for (const slot of live) {
+    if (!swapForReward(player, slot)) break;
+    placed++;
+  }
+  if (placed === 0) {
+    close(player);
+    player.sendMessage(FULL_STACK_MESSAGE);
+    return;
+  }
   player.getInventory().refreshItems();
+  if (placed < live.length) player.sendMessage(FULL_STACK_MESSAGE);
   player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, PLACED_MESSAGE);
   player.performAnimation(new api.core.Animation(idsOf().pickup));
   player.getPacketSender().sendSound(PLACE_SOUND, 255, PLACE_SOUND_DELAY);
   const { DialogueChainBuilder, NpcDialogue } = api.core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
     .add(new NpcDialogue(0, idsOf().thanksNpc, THANKS, undefined, idsOf().happy)));
+}
+
+/** Where the used find is now: its slot if it is still there, else the same item moved. */
+function usedSlot(player, itemId, slot) {
+  const inventory = player.getInventory();
+  return inventory.getItems()[slot]?.getId?.() === itemId ? slot : inventory.getSlotForItemId(itemId);
 }
 
 /** The warning menu; `slot` is the used find, or null for the Add finds option. */
@@ -134,8 +159,9 @@ function offer(player, slot) {
   }
   const options = [[PLACE_ALL, () => place(player, findSlots(player))]];
   if (slot != null) {
-    const name = api.core.ItemDefinition.forId(player.getInventory().getItems()[slot].getId()).getName();
-    options.push([PLACE_ONE + name, () => place(player, [slot])]);
+    const itemId = player.getInventory().getItems()[slot].getId();
+    const name = api.core.ItemDefinition.forId(itemId).getName();
+    options.push([PLACE_ONE + name, () => place(player, [usedSlot(player, itemId, slot)])]);
   }
   options.push([PLACE_ALL_QUIET, () => {
     disableWarning(player);

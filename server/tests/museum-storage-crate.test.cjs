@@ -200,6 +200,39 @@ test("a find moved away before the choice is not placed", () => {
   assert.equal(player.getDialogueManager().isActive(), false);
 });
 
+test("placing that item follows the used find when the inventory is rearranged", () => withBowls(() => {
+  const player = makePlayer([[ids.pottery], [ids.arrowheads]]);
+  use(player, ids.pottery, 0);
+  player.getInventory().swap(0, 1); // the inventory-move packet, with the menu still open
+  choose(player, 2);
+  assert.equal(idAt(player, 0), ids.arrowheads, "the other find now in the old slot stays");
+  assert.equal(idAt(player, 1), BOWL, "the pottery is the one placed");
+}));
+
+test("a reward that would overflow the carried stack keeps the find", () => {
+  const original = Math.random;
+  Math.random = () => 0; // coins, 19
+  try {
+    const player = makePlayer([[995, 2147483647], [ids.arrowheads], [ids.pottery]]);
+    use(player, ids.arrowheads, 1);
+    choose(player, 1);
+    assert.equal(player.getInventory().getAmount(995), 2147483647);
+    assert.equal(idAt(player, 1), ids.arrowheads);
+    assert.equal(idAt(player, 2), ids.pottery);
+    assert.deepEqual(player.spam, []);
+    assert.deepEqual(player.messages, ["You don't have enough inventory space."]);
+
+    const nearly = makePlayer([[995, 2147483647 - 19], [ids.arrowheads], [ids.pottery]]);
+    use(nearly, ids.arrowheads, 1);
+    choose(nearly, 1);
+    assert.equal(nearly.getInventory().getAmount(995), 2147483647, "the first reward fits exactly");
+    assert.equal(idAt(nearly, 2), ids.pottery, "the second would overflow and stays");
+    assert.deepEqual(nearly.spam, [PLACED]);
+  } finally {
+    Math.random = original;
+  }
+});
+
 test("a stackable reward joins the stack already carried", () => {
   const original = Math.random;
   Math.random = () => 0; // the first row: coins, the table's minimum of 19

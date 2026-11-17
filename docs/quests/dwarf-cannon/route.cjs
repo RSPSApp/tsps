@@ -308,7 +308,7 @@ async function route() {
         if (attempt > 12) fail(`railing ${railing.id} not fixed after 12 attempts`);
         await call("object_option", { player, id: railing.id, x: railing.x, y: railing.y, option: "Inspect" });
         // "This railing is broken and needs to be replaced." is a message box; its continue makes the attempt.
-        // (A finished attempt can leave its action entry as the open "dialogue", so wait for the box itself.)
+        // Wait for the box itself: the walk to the railing comes first.
         for (let tick = 0; (await call("dialogue", { player }, { allowError: true }))?.kind !== "statement"; tick += 1) {
           if (tick >= 40) fail(`no box for railing ${railing.id}`);
           await call("wait_ticks", { player, ticks: 1 });

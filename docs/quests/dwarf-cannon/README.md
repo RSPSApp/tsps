@@ -76,7 +76,7 @@ one effect, the same in all three recordings (counts over the three):
 | You accidentally crush your hand in the railing. | Ow! | 2 damage | stops (9 of 9) |
 | You wrench your back trying to handle the railings. | Gah! | Strength -1 | swings again 4 ticks later (7 of 7) |
 
-One of sounds 518-521 (delay 20) comes with each failure. The success chance is the Wiki's ("Railing", from
+One of sounds 518-521 (delay 20) comes with each failure; on a hit live sends a second one with the hit splat, its ordinary player-hit sound, which this server doesn't send for any hit. The success chance is the Wiki's ("Railing", from
 Mod Ash): Crafting only, 24% at level 1 to 59% at 99 (low 60, high 150 of 256); each failure is one of the four
 at 25%.
 

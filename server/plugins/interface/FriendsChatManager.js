@@ -651,7 +651,7 @@ class FriendsChatManager {
     static setOwnChannelName(player, rawName) {
         const name = channelName(rawName);
         if (!name) {
-            this.notification(player, "Chat-channel names must contain 1 to 12 valid characters.");
+            this.notification(player, "Invalid chat-channel name entered!");
             return;
         }
         if (this.setupIsLive(player)) {

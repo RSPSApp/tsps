@@ -779,7 +779,7 @@ function leave(player) {
 }
 
 function guideTalk(player) {
-  const nomad = Common.core.World?.getNpcs?.()?.find?.((npc) => npc?.getId?.() === 10528 && Common.inBox(npc.getLocation(), Common.data.lobby.bounds));
+  const nomad = Common.npcsInBox(Common.data.lobby.bounds).find((npc) => npc?.getId?.() === 10528);
   const head = nomad?.getId?.() ?? 10529;
   if (player.getInventory().getFreeSlots() <= 0) {
     talk(player, [...lines("back"), ...lines("noGuideRoom")], { head });

@@ -86,15 +86,15 @@ function setObject(id, tile) {
   ObjectManager.register(new GameObject(id, Shared.loc(tile), 10, 0, null), true);
 }
 
+/** The NPC on the corner's pyromancer tile (lowest index), from a region query, not a walk of every NPC slot. */
 function pyromancerNpc(index) {
   const tile = state[index].corner.pyromancer;
   const { World } = Shared.core();
-  for (const npc of World.getNpcs()) {
-    if (!npc) continue;
-    const at = npc.getLocation();
-    if (at.getX() === tile.x && at.getY() === tile.y && at.getZ() === 0) return npc;
+  let found = null;
+  for (const npc of World.getNpcsNear(Shared.loc(tile), 0)) {
+    if (!found || npc.getIndex() < found.getIndex()) found = npc;
   }
-  return null;
+  return found;
 }
 
 function say(index, text) {

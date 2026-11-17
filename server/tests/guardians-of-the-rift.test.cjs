@@ -1848,8 +1848,9 @@ test('the Great Guardian sleeps after the close and wakes as the rift opens', ()
   openGame(player);
   const guardian = fakeNpc({ id: Shared.npc(Shared.NPC.GREAT_GUARDIAN), x: 3613, y: 9501 });
   const { World } = Shared.core();
-  const getNpcs = World.getNpcs;
-  World.getNpcs = () => [guardian];
+  const getNpcsNear = World.getNpcsNear;
+  World.getNpcsNear = (at, radius) => [guardian].filter((npc) =>
+    Math.max(Math.abs(npc.x - at.getX()), Math.abs(npc.y - at.getY())) <= radius);
   try {
     Game.setPower(100);
     const closedRift = () => player.messages.some((m) => m.includes('successfully closed the rift'));
@@ -1873,7 +1874,7 @@ test('the Great Guardian sleeps after the close and wakes as the rift opens', ()
     ticks(1);
     assert.ok(guardian.animations.includes(Shared.seq('portal_guardian_wakeup')));
   } finally {
-    World.getNpcs = getNpcs;
+    World.getNpcsNear = getNpcsNear;
   }
 });
 
@@ -1980,8 +1981,9 @@ test('a loss: the captured lines, then the Great Guardian sleeps a tick later', 
   openGame(player);
   const guardian = fakeNpc({ id: Shared.npc(Shared.NPC.GREAT_GUARDIAN), x: 3613, y: 9501 });
   const { World } = Shared.core();
-  const getNpcs = World.getNpcs;
-  World.getNpcs = () => [guardian];
+  const getNpcsNear = World.getNpcsNear;
+  World.getNpcsNear = (at, radius) => [guardian].filter((npc) =>
+    Math.max(Math.abs(npc.x - at.getX()), Math.abs(npc.y - at.getY())) <= radius);
   try {
     Game._game.phase = Game.PHASE.ATTACK;
     Game.addPower(-Game._game.power);
@@ -1993,7 +1995,7 @@ test('a loss: the captured lines, then the Great Guardian sleeps a tick later', 
     ticks(1);
     assert.equal(guardian.animations.at(-1), Shared.seq('portal_guardian_sleep'), 'no death animation, just sleep');
   } finally {
-    World.getNpcs = getNpcs;
+    World.getNpcsNear = getNpcsNear;
   }
 });
 
@@ -2004,8 +2006,9 @@ test('a creature hitting the Great Guardian shows splat 17 without a health bar'
   const shown = [];
   guardian.showHitsplat = (damage, splat, health) => shown.push({ damage, splat, health });
   const { World } = Shared.core();
-  const getNpcs = World.getNpcs;
-  World.getNpcs = () => [guardian];
+  const getNpcsNear = World.getNpcsNear;
+  World.getNpcsNear = (at, radius) => [guardian].filter((npc) =>
+    Math.max(Math.abs(npc.x - at.getX()), Math.abs(npc.y - at.getY())) <= radius);
   try {
     Game._game.phase = Game.PHASE.ATTACK;
     Game._game.power = 100;
@@ -2017,7 +2020,7 @@ test('a creature hitting the Great Guardian shows splat 17 without a health bar'
     assert.deepEqual(shown.at(-1).splat, { mine: 17, others: 17 });
     assert.equal(shown.at(-1).health, false);
   } finally {
-    World.getNpcs = getNpcs;
+    World.getNpcsNear = getNpcsNear;
     Creatures.clear();
   }
 });
@@ -2082,4 +2085,29 @@ test('the Amulet of the Eye teleport made during a game leaves the game on arriv
     TeleportHandler.teleport = teleport;
     resetGame();
   }
+});
+
+/** Runs fn with World.getNpcsNear answering from `npcs` (radius and plane honoured) and World.getNpcs() refused. */
+function withNpcsNear(World, npcs, fn) {
+  const { getNpcs, getNpcsNear } = World;
+  World.getNpcs = () => { throw new Error('walked every NPC slot'); };
+  World.getNpcsNear = (at, radius) => npcs.filter((npc) => npc.getLocation().getZ() === at.getZ()
+    && Math.max(Math.abs(npc.getLocation().getX() - at.getX()), Math.abs(npc.getLocation().getY() - at.getY())) <= radius);
+  try {
+    return fn();
+  } finally {
+    World.getNpcs = getNpcs;
+    World.getNpcsNear = getNpcsNear;
+  }
+}
+
+test("the temple's NPCs are found by a region query over the temple, not by walking every NPC slot", () => {
+  const id = Shared.npc(Shared.NPC.GREAT_GUARDIAN);
+  const inside = Object.assign(fakeNpc({ id, x: 3613, y: 9501 }), { getIndex: () => 9 });
+  const outside = Object.assign(fakeNpc({ id, x: 3222, y: 3218 }), { getIndex: () => 2 });
+  withNpcsNear(Shared.core().World, [outside, inside], () => {
+    assert.equal(Game.greatGuardian(), inside);
+    assert.equal(Shared.templeNpc(Shared.npc('gotr_tamara_parent')), null);
+  });
+  withNpcsNear(Shared.core().World, [outside], () => assert.equal(Game.greatGuardian(), null, 'none in the temple'));
 });

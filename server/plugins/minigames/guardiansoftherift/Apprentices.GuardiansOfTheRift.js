@@ -261,12 +261,7 @@ function chatter() {
   if (now < nextChatter || !Game.isRunning()) return;
   nextChatter = now + Shared.random(...CHATTER_TICKS);
   const id = Shared.npc(CHATTERERS[Shared.random(0, CHATTERERS.length - 1)]);
-  for (const npc of Shared.core().World.getNpcs()) {
-    if (npc && npc.getId?.() === id && Shared.inTemple(npc.getLocation())) {
-      npc.forceChat(CHATTER[Shared.random(0, CHATTER.length - 1)]);
-      return;
-    }
-  }
+  Shared.templeNpc(id)?.forceChat(CHATTER[Shared.random(0, CHATTER.length - 1)]);
 }
 
 module.exports = {

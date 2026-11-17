@@ -772,8 +772,16 @@
       "object": 23274,
       "level": 20,
       "xp": 8.5,
+      "busy": true,
       "render": "BALANCE_WALK",
-      "between": {"ends":[[2598,3477,0],[2603,3477,0]],"cross":[{"walk":["to"]}]}
+      "start": {"spam":"You walk carefully across the slippery log..."},
+      "end": {"spam":"... and make it safely to the other side."},
+      "between": {
+        "ends":[[2598,3477,0],[2603,3477,0]],
+        "via":[[2599,3477,0],[2602,3477,0]],
+        "cross":[{"walk":["via0"]},{"sound":2470,"loops":2},{"walk":["via1"]},{"sound":2470},{"walk":["to"]}]
+      },
+      "note": "rsprox captures 353, local 1001512, 1001582, 1002239, 1002251"
     },
     {
       "name": "Log balance (Fremennik Province)",

@@ -6,6 +6,12 @@ const PIECES = [
 ];
 const LEVEL = 72;
 const XP = 100;
+/** Review of #6084 citing rsprox_transcripts/227/01768.txt: Yes at 22081, the animation at 22082, the halberd with sound 6647 and its item box at 22085. */
+const SEQUENCE = "human_fletching_noxious_halberd";
+const SOUND = 6647;
+const ANIMATION_TICK = 1;
+const ASSEMBLED_TICK = 4;
+const ASSEMBLED = "You successfully create a noxious halberd.";
 
 let api;
 let pieces;
@@ -34,16 +40,40 @@ function canAssemble(player) {
   return true;
 }
 
+/** Yes: the animation a tick later, the halberd three ticks after that, if everything is still there. */
 function assemble(player) {
   if (!canAssemble(player)) return;
-  const { ItemIdentifiers: I, Skill } = api.core;
+  const { Animation, CacheDefinitions, Task, TaskManager } = api.core;
+  let elapsed = 0;
+  TaskManager.submit(new (class NoxiousHalberdTask extends Task {
+    constructor() { super(1, player, false); }
+    execute() {
+      elapsed++;
+      if (elapsed === ANIMATION_TICK) {
+        const sequence = CacheDefinitions.getSeqId(SEQUENCE);
+        if (sequence != null) player.performAnimation(new Animation(sequence));
+      }
+      if (elapsed < ASSEMBLED_TICK) return;
+      this.stop();
+      finish(player);
+    }
+  })());
+}
+
+/** Rechecked: a piece may have been dropped or banked, or a boost run out, meanwhile. */
+function finish(player) {
+  if (!canAssemble(player)) return;
+  const { ItemIdentifiers: I, Skill, DialogueChainBuilder, ItemStatementDialogue, EndDialogue } = api.core;
   const inventory = player.getInventory();
-  const all = resolve();
-  for (const { id } of all) inventory.deleteNumber(id, 1);
+  for (const { id } of resolve()) inventory.deleteNumber(id, 1);
   inventory.adds(I.NOXIOUS_HALBERD, 1);
   player.getSkillManager().addExperiences(Skill.CRAFTING, XP);
   player.getSkillManager().addExperiences(Skill.SMITHING, XP);
-  player.sendMessage("You successfully create a noxious halberd.");
+  player.getPacketSender().sendSoundEffect(SOUND, 1, 0, 255);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new ItemStatementDialogue(0, I.NOXIOUS_HALBERD, ASSEMBLED),
+    new EndDialogue(1),
+  ));
 }
 
 function combine({ player, usedItemId, usedWithItemId }) {
@@ -72,5 +102,5 @@ module.exports = {
     api.onItemOnItem("Noxious point", "Noxious pommel", combine, { noted: false });
     api.onItemOnItem("Noxious blade", "Noxious pommel", combine, { noted: false });
   },
-  _test: { combine, assemble, resolve },
+  _test: { combine, assemble, resolve, SEQUENCE, SOUND, ASSEMBLED_TICK },
 };

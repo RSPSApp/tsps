@@ -45765,7 +45765,8 @@
             "Entrana equipment refusals, fares/quest restrictions, duplicate trip protection and completion on logout/shutdown are implemented. #1067 fixes Herbert replacing Veos at Port Sarim. Existing Barnaby, Keldagrim and gangplank services retain their own handlers; player-controlled Sailing remains a separate partial skill.",
             "Main 281766303 (2 November 2026): #1772 replaces Captain Barnaby's spell teleport with ferry transit. Unresolved Red Reef ship-part visuals are documented in #1656.",
             "Main 3b61a15a8 (6 November 2026): #2489 Credit supported Falador Diary gameplay tasks; #2501 Complete Western Provinces Diary gameplay task integrations; #2545 Finish Kourend Diary travel and service gameplay tasks; #2555 Credit Karamja diary only after accepted Slayer and ferry actions; #2706 Allow reaching the Dwarven Boatman before starting The Giant Dwarf. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026): #4097 adds guest boarding on a friend’s boat. #4419 adds item-drop warnings while sailing."
+            "Main 3e9ee2d67 (11 November 2026): #4097 adds guest boarding on a friend’s boat. #4419 adds item-drop warnings while sailing.",
+            "2026-11-16, fix/6028-lithkren-rowboat: after Dragon Slayer II, the west Fossil Island rowboat still crosses to Lithkren (3583,3973) and Lithkren's rowboat returns to (3660,3849) through the Ferries plugin's recorded lithkren/lithkren-back fade trips; during the quest the built boat keeps the Dallas courtyard landing. Verified by server/tests/quest-plugins.test.cjs and by using both boats in game."
           ],
           "taskDetails": [
             {

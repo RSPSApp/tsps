@@ -41,8 +41,6 @@ export function processWidgetShortcutInput(
 ): Set<number> {
     const input = frame.input;
     const vm = deps.getCs2Vm();
-    const mode = vm.widgetKeyInputMode;
-    const target = vm.widgetKeyInputTarget;
     const consumed = new Set<number>();
     const widgets = collectShortcutWidgets(frame, manager);
     if (!widgets.length) return consumed;
@@ -52,6 +50,9 @@ export function processWidgetShortcutInput(
         // A previous operation can close this group or replace this dynamic child.
         if (manager.getWidgetByUid(widget.uid) !== widget || manager.isEffectivelyHidden(widget.uid)) continue;
         if (group !== manager.rootInterface && ![...manager.interfaceParents.values()].some(p => p.group === group)) continue;
+        // onOp runs synchronously and may change eligibility for the next widget.
+        const mode = vm.widgetKeyInputMode;
+        const target = vm.widgetKeyInputTarget;
         const component = widget.fileId === -1 ? widget.parentUid ?? widget.uid : widget.uid;
         if (mode === 1 || (mode === 2 && component >>> 16 !== target) || (mode === 3 && component !== target)) continue;
         for (let slot = 0; slot < (widget.opKeys?.length ?? 0); slot++) {
@@ -75,15 +76,16 @@ export function processWidgetShortcutInput(
                 }
             }
             if (matchedKey >= 0) {
-                const timers = widget.keyTimers ??= new Array(11).fill(0);
-                const { rate = 0, delay = 0 } = widget.opKeyRates?.[slot] ?? {};
-                timers[slot] = rate ? cycle + rate + (timers[slot] === 0 ? delay : 0) : 0x7fffffff;
                 consumed.add(matchedKey);
                 deps.handleWidgetAction({ widget, source: "shortcut", opIndex: slot === 10 ? 0 : slot + 1,
                     option: slot === 10 ? widget.targetVerb : widget.actions?.[slot] ?? undefined,
                     target: "", itemId: widget.itemId });
                 // An onOp can rebuild its own tree. Never dispatch another binding on the old instance.
                 if (manager.getWidgetByUid(widget.uid) !== widget || manager.isEffectivelyHidden(widget.uid)) break;
+                // Native scheduling observes callback changes to rates and ignore-held timers.
+                const timers = widget.keyTimers ??= new Array(11).fill(0);
+                const { rate = 0, delay = 0 } = widget.opKeyRates?.[slot] ?? {};
+                timers[slot] = rate ? cycle + rate + (timers[slot] === 0 ? delay : 0) : 0x7fffffff;
             }
             if (!active && widget.keyTimers) widget.keyTimers[slot] = 0;
         }

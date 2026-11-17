@@ -176,6 +176,60 @@ test("repeat uses initial delay plus rate, then rate, independent of DOM repeats
     release(); key(65, "a"); process(); assert.equal(packets.length, 4);
 });
 
+test("synchronous onOp scope changes apply to later widgets in the same scan", () => {
+    const later = wm.getWidgetByUid((595 << 16) | 27)!;
+    const savedOnOp = later.onOp;
+    later.onOp = undefined;
+    later.flags = 2;
+    later.hidden = false;
+    bind(1, 48);
+    execute([...ints(1, 48, 0, later.uid), [Opcodes.IF_SETOPKEY, 0], [Opcodes.RETURN, 0]], later);
+    try {
+        for (const [opcode, target, expected] of [
+            [3139, undefined, 1], [3136, escape.uid, 1], [3136, later.uid, 2],
+            [3137, 594, 1], [3137, 595, 2],
+        ]) {
+            (input as any).onFocusOut(); input.onFrameEnd(); cycle++;
+            vm.widgetKeyInputMode = 0;
+            escape.keyTimers = undefined; later.keyTimers = undefined; packets.length = 0;
+            listener(escape, "onOp", [...(target === undefined ? [] : ints(target)),
+                [opcode!, 0], [Opcodes.RETURN, 0]]);
+            key(65, "a"); process();
+            assert.equal(packets.length, expected, `later widget observes onOp scope ${opcode}/${target}`);
+        }
+    } finally {
+        later.hasKeyBindings = false; later.opKeys = []; later.keyTimers = undefined;
+        later.onOp = savedOnOp;
+    }
+});
+
+test("onOp repeat changes take effect before committing the current activation deadline", () => {
+    bind(1, 48);
+    listener(escape, "onOp", [...ints(1, 5, 15, escape.uid),
+        [Opcodes.IF_SETOPKEYRATE, 0], [Opcodes.RETURN, 0]]);
+    const start = cycle;
+    key(65, "a"); process();
+    assert.equal(escape.keyTimers![0], start + 20, "callback enables first repeat with its delay");
+    next(start + 19); assert.equal(packets.length, 1);
+    next(start + 20); assert.equal(packets.length, 2);
+    assert.equal(escape.keyTimers![0], start + 25);
+    listener(escape, "onOp", [...ints(1, 0, 0, escape.uid),
+        [Opcodes.IF_SETOPKEYRATE, 0], [Opcodes.RETURN, 0]]);
+    next(start + 25); assert.equal(packets.length, 3);
+    next(start + 100); assert.equal(packets.length, 3, "callback also disables further held repeats");
+});
+
+test("callback ignore-held timer mutation is read before post-operation repeat scheduling", () => {
+    bind(1, 48);
+    listener(escape, "onOp", [...ints(1, 5, 15, escape.uid), [Opcodes.IF_SETOPKEYRATE, 0],
+        ...ints(1, escape.uid), [Opcodes.IF_SETOPKEYIGNOREHELD, 0], [Opcodes.RETURN, 0]]);
+    const start = cycle;
+    key(65, "a"); process();
+    assert.equal(escape.keyTimers![0], start + 5, "nonzero callback timer skips initial delay");
+    next(start + 4); assert.equal(packets.length, 1);
+    next(start + 5); assert.equal(packets.length, 2);
+});
+
 test("ignore-held suppresses the current hold and permits a new press after release", () => {
     bind(1, 48); key(65, "a");
     execute([...ints(1, escape.uid), [Opcodes.IF_SETOPKEYIGNOREHELD, 0], [Opcodes.RETURN, 0]]);

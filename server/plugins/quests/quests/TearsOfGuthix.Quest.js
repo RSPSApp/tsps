@@ -111,6 +111,7 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   const CLIMBING_LOOP_COUNT = 5;
   const TOO_UNEVEN_MESSAGE = "You could climb down here, but it is too uneven to climb up.";
   /** ForceMovement directions (PlayerSession: 0 north, 1 east, 2 south, 3 west). */
+  const FACE_NORTH = 0;
   const FACE_SOUTH = 2;
   const FACE_WEST = 3;
   const TICK_CYCLES = 30;
@@ -466,6 +467,11 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     swingAtRock(player, pickaxe);
   }
 
+  /** The mining and chisel lines are spam-type (filterable) in both recordings (1001964 ticks 19608-19618). */
+  function spam(player, text) {
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, text);
+  }
+
   /** An inventory action or an attack replaces the swing, as it does any mining. */
   function interruptSwing({ player }) {
     const key = swings.get(player);
@@ -482,7 +488,7 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     swings.set(player, key);
     const at = player.getLocation().clone();
     const swing = () => {
-      player.sendMessage(MINE_SWING_MESSAGE);
+      spam(player, MINE_SWING_MESSAGE);
       player.performAnimation(pickaxe.animation);
     };
     if (MINE_SWING_DELAY_TICKS === 0) swing();
@@ -505,7 +511,7 @@ module.exports = function registerTearsOfGuthixQuest(api) {
         player.performAnimation(new Animation(-1));
         if (has(player, MAGIC_STONE_ITEM_ID) || player.getInventory().isFull()) return;
         player.getInventory().adds(MAGIC_STONE_ITEM_ID, 1);
-        player.sendMessage(MINE_STONE_MESSAGE);
+        spam(player, MINE_STONE_MESSAGE);
       }
     })());
   }
@@ -527,7 +533,7 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     }
     player.getInventory().deleteNumber(MAGIC_STONE_ITEM_ID, 1);
     player.getInventory().adds(STONE_BOWL_ITEM_ID, 1);
-    player.sendMessage("You make a stone bowl.");
+    spam(player, "You make a stone bowl.");
     player.performAnimation(new Animation(api.core.CacheDefinitions.getSeqId(CHISEL_ANIMATION)));
     player.getPacketSender().sendSound(CHISEL_SOUND, 1, 0);
   }
@@ -639,7 +645,9 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     movement.setBlockMovement(true);
     player.performAnimation(new Animation(TOG_FLOAT_UP_ANIMATION));
     // Live sends a still exact move with the float (to1 = to2 = the player's tile, 50 cycles, facing south).
-    player.setForceMovement(new ForceMovement(from.clone(), new Location(0, 0), 0, TOG_FLOAT_HOLD_CYCLES, FACE_SOUTH, 0));
+    // Ours: the unrecorded northbound float (from the shelf) faces north.
+    const facing = destination[1] > from.getY() ? FACE_NORTH : FACE_SOUTH;
+    player.setForceMovement(new ForceMovement(from.clone(), new Location(0, 0), 0, TOG_FLOAT_HOLD_CYCLES, facing, 0));
     if (carrier) {
       const cache = api.core.CacheDefinitions;
       carrier.telejump(new Location(from.getX() - 1, from.getY() - 1, z));
@@ -673,7 +681,7 @@ module.exports = function registerTearsOfGuthixQuest(api) {
           player.moveTo(next);
           expected = next;
           player.setForceMovement(new ForceMovement(at, new Location(step[0] - at.getX(), step[1] - at.getY()), 0,
-            TICK_CYCLES, FACE_SOUTH, 0));
+            TICK_CYCLES, facing, 0));
           if (carrier) carrier.telejump(new Location(step[0] - 1, step[1] - 1, z));
         } else if (tick > TOG_CARRY_FIRST_STEP_TICK) {
           player.setForceMovement(null);
@@ -709,8 +717,11 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     };
     if (!landed) return free();
     const at = creature.getLocation();
-    creature.telejump(new Location(at.getX() + LIGHT_CREATURE_RELEASE_HOP, at.getY() + LIGHT_CREATURE_RELEASE_HOP, at.getZ()));
-    Chasm.setHeading(creature, 0, 1);
+    // Ours: after the unrecorded northbound landing the hop is mirrored (south-east), back into the chasm.
+    const north = at.getY() + LIGHT_CREATURE_RELEASE_HOP > Chasm.BOUNDS.y1;
+    const hopY = north ? -LIGHT_CREATURE_RELEASE_HOP : LIGHT_CREATURE_RELEASE_HOP;
+    creature.telejump(new Location(at.getX() + LIGHT_CREATURE_RELEASE_HOP, at.getY() + hopY, at.getZ()));
+    Chasm.setHeading(creature, 0, north ? -1 : 1);
     TaskManager.submit(new api.core.CountdownTask(creature, 1, free));
   }
 

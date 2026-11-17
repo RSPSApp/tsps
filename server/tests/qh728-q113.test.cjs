@@ -98,6 +98,7 @@ function playerFixture(options = {}) {
     sendCameraMoveTo(...args) { calls.push(['camera-move', ...args]); return sender; },
     sendCameraReset() { calls.push(['camera-reset']); return sender; },
     sendSound(id) { calls.push(['sound', id]); return sender; },
+    sendTypedMessage(type, text) { messages.push(text); calls.push(['typed', type, text]); return sender; },
     getVarp(id) { return configs.get(id) ?? 0; },
   }, { get: (target, key) => target[key] ?? (() => sender) });
   return {
@@ -443,6 +444,8 @@ test('mining the magical rocks requires 20 Mining, a pickaxe and a free slot', (
   h.tick(1);
   assert.equal(miner.inventory.getAmount(I.MAGIC_STONE), 1);
   assert.deepEqual(miner.messages, ['You swing your pick at the rock.', 'You manage to mine some stone.']);
+  assert.ok(miner.calls.filter((call) => call[0] === 'typed').every((call) => call[1] === core.ChatType.SPAM),
+    'both are spam-type lines, as recorded');
 });
 
 test('chiselling needs stage 1 and 20 Crafting before the stone is consumed', () => {
@@ -796,6 +799,7 @@ test('chiselling the stone plays the recorded animation and sound', () => {
   assert.equal(player.inventory.getAmount(I.STONE_BOWL), 1);
   assert.ok(player.calls.some((call) => call[0] === 'animation' && call[1] === 890));
   assert.ok(player.calls.some((call) => call[0] === 'sound' && call[1] === 2586));
+  assert.ok(player.calls.some((call) => call[0] === 'typed' && call[1] === core.ChatType.SPAM && call[2] === 'You make a stone bowl.'));
 });
 
 test('a start conversation that closes early still gives the camera back, once', () => {

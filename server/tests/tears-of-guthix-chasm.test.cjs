@@ -285,6 +285,25 @@ test("a logout mid-float saves the player on the far side and frees the creature
   assert.equal(npc.isScriptedMovement(), false, "and drifts");
 });
 
+test("the unrecorded northbound float faces north and the creature hops back into the chasm", (t) => {
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const Chasm = require("../plugins/minigames/tearsofguthix/Chasm.TearsOfGuthix");
+  const { p } = player(t, "tognorth1", 3224, 9504);
+  p.getInventory().adds(LIT_LANTERN, 1);
+  const npc = new NPC(LIGHT_CREATURE, new core.Location(3224, 9505, 2));
+  assert.equal(PM.emitNpcInteraction(npcEvent(p, npc)), true);
+  const directions = new Set();
+  for (let i = 0; i < 60; i++) {
+    tickTasks(1);
+    const move = p.getForceMovement();
+    if (move) directions.add(move.getDirection());
+  }
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3224, 9530]);
+  assert.deepEqual([...directions], [0], "facing north all the way");
+  const y = npc.getLocation().getY();
+  assert.ok(y <= Chasm.BOUNDS.y1, `the creature lands back inside the chasm (y ${y})`);
+});
+
 // rsprox local 1001964/1002071, 1696: on the far tile at once with a 100-cycle exact move facing
 // west and climbing_loop; down (east) two ticks after the last step with 2050, up (west) one tick
 // after with 2049. The interaction runs a tick after the last step, so down waits one more tick.

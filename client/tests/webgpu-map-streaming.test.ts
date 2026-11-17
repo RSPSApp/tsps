@@ -31,6 +31,7 @@ test("client ticks flush interface input before scene rendering is ready", () =>
         queuePacket(packet);
         const client = {
             transmitCycles: { cycleCntr: 0 },
+            isLoggedIn: () => false,
             updateSoundListener() {}, processWidgetTransmits() {},
             processWidgetTimers() {}, processScriptEvents() {},
             get renderer() { assert.fail("sending input must not require a rendered scene"); },

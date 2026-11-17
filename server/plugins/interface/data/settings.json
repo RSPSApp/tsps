@@ -215,6 +215,7 @@
     "300": { "name": "Compact boss health overlay", "varbit": 14707 },
     "301": { "name": "Health overlay display type", "varbit": 14708 },
     "302": { "name": "Disable Phantom Muspah messages", "varbit": 14711 },
+    "303": { "name": "Show dialogue in the chatbox", "varbit": 14709 },
     "305": { "name": "Ammo-picking behaviour", "varbit": 5697 },
     "306": { "name": "Rune-picking behaviour", "varbit": 5698 },
     "307": { "name": "Wilderness cave decay", "varbit": 14691 },

@@ -42,15 +42,16 @@
  *    Magic/Defence when the player is not facing away; the stone bind and Typhor's magic stay
  *    presentation-only (conditions C6zHQ6/DLVETM answered false).
  *  - Captured camera/fade/shake beats use QuestScenes: Rellekka invasion and the longhall
- *    celebration with Olaf (9274). The Island of Stone arrival has no shake.
+ *    celebration with Olaf (9274). The Island of Stone arrival has no shake; it fades out, lands two
+ *    ticks later and fades back in two after that (227/01768.txt ticks 3700-3706).
  *  - The Item Retrieval Service (qY-jfP, the island deathbank) has no interface hook here; the
  *    Collect dialogue is replayed but nothing opens.
  *  - "being-exiled-bjorn-eldgrim" and "being-exiled-any-other-fremennik-in-rellekka" are not
  *    indexed to any NPC id in the dump and cannot fire.
  *  - The unsealed letter has no Read transcript in the dump; its body is sent as game messages
  *    from Transcript:Unsealed letter.
- *  - Lunar ore smelting (60 Smithing) is missing from the Smithing plugin, so a quest-scoped
- *    fallback smelts one lunar ore into one lunar bar at any furnace (13 Smithing XP).
+ *  - Lunar ore smelting lives in Smithing's furnace recipes (Wiki: level 1, 6.2 XP, one
+ *    lunar ore to a lunar bar), so the quest defers it there like any other bar.
  *  - The Dräpare honorific has no title system here. Varbit 9472 (Neitiznot faceguard story) belongs
  *    to the NeitiznotFaceguard plugin, not to this quest.
  */
@@ -233,7 +234,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const GLASSBLOWING_PIPE_ITEM = ItemIdentifiers.GLASSBLOWING_PIPE; // 1785
   const HAMMER_ITEM = ItemIdentifiers.HAMMER; // 2347
   const LUNAR_BAR_ITEM = ItemIdentifiers.LUNAR_BAR; // 9077
-  const LUNAR_ORE_ITEM = ItemIdentifiers.LUNAR_ORE; // 9076
   const ASTRAL_RUNE_ITEM = ItemIdentifiers.ASTRAL_RUNE; // 9075
   const ICE_GLOVES_ITEM = ItemIdentifiers.ICE_GLOVES; // 1580
   const SMITHS_GLOVES_I_ITEM = ItemIdentifiers.SMITHS_GLOVES_I_; // 27031
@@ -314,16 +314,9 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     ObjectIdentifiers.ANVIL, // 2031
     ObjectIdentifiers.AN_EXPERIMENTAL_ANVIL, // 2672
   ]);
-  // Shipped rev241 Varrock/Lumbridge anvils and furnaces use these; quest objects keep
-  // their canonical cache names, so ordinary smithing still falls through below.
+  // Shipped rev241 Varrock/Lumbridge anvils use these; quest objects keep their canonical
+  // cache names, so ordinary smithing still falls through below.
   const CANONICAL_ANVIL_ID = 2097;
-  const CANONICAL_FURNACE_ID = 24009;
-  const FURNACE_IDS = new Set([
-    ObjectIdentifiers.FURNACE, // 2030
-    ObjectIdentifiers.FURNACE_2, // 2966
-    ObjectIdentifiers.FURNACE_3, // 3294
-    ObjectIdentifiers.SMALL_FURNACE, // 3994
-  ]);
 
   function objectName(event) {
     return event.definition?.getName?.() ?? ObjectDefinition.forId(event.objectId)?.getName?.() ?? "";
@@ -331,10 +324,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
 
   function isAnvil(event) {
     return ANVIL_IDS.has(event.objectId) || event.objectId === CANONICAL_ANVIL_ID || objectName(event) === "Anvil";
-  }
-
-  function isFurnace(event) {
-    return FURNACE_IDS.has(event.objectId) || event.objectId === CANONICAL_FURNACE_ID || objectName(event) === "Furnace";
   }
 
   // ==========================================================================
@@ -455,7 +444,9 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const PRISON_JORMUNGAND = new Location(2452, 10373, 0);
   const LONGHALL_LANDING = new Location(2659, 3665, 0);
   const RELLEKKA_PORT = new Location(2625, 3692, 0);
-  const ISLAND_LANDING = new Location(2470, 4010, 0);
+  /** Every recorded arrival lands here facing north (angle 1024): 227/01768.txt tick 3702, 01862, 910302, 910380, 910418, 910597. */
+  const ISLAND_LANDING = new Location(2472, 3994, 0);
+  const ISLAND_LANDING_FACING = new Location(2472, 3995, 0);
 
   const INVASION_CAMERA = [[2659, 3665, 600], [2659, 3670, 100]];
   const INVASION_CAMERA_TWO = [[2655, 3670, 600], [2659, 3675, 100]];
@@ -480,6 +471,17 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   };
 
   const startMenu = new WeakSet();
+  /** Players on the boat to the Island of Stone, between the fade out and the fade back in. */
+  const SAILING_TO_ISLAND = new WeakSet();
+  /**
+   * rsprox_transcripts/227/01768.txt ticks 3700-3706 (also 227/01862.txt 9628-9634, 227/910302.txt
+   * 3981-3987 and 4442-4448): busy and the fade out on the click, the message and the teleport two
+   * ticks later, the fade back in two ticks after that, the overlay closed two ticks on.
+   */
+  const ISLAND_TRAVEL_TICKS = 2;
+  const ISLAND_FADE_IN_TICKS = 4;
+  const ISLAND_CLOSE_FADE_TICKS = 6;
+  const ISLAND_ARRIVAL_MESSAGE = "You board the boat and travel to the Island of Stone.";
   const trackedNpcs = new Map();
   const marketNpcs = new Map();
 
@@ -764,6 +766,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   }
 
   function handleLogout({ player }) {
+    if (SAILING_TO_ISLAND.delete(player)) player.setUntargetable(false);
     Scenes.cancel(player);
     Scenes.closeFade(player);
     Scenes.controls(player, false);
@@ -1710,7 +1713,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       if (npcId === NpcIdentifiers.HASKELL_3) {
         player.moveTo(RELLEKKA_PORT);
       } else {
-        player.moveTo(ISLAND_LANDING);
+        sailToIsland(player);
       }
       return;
     }
@@ -1983,10 +1986,61 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       return;
     }
     if (stage < STAGE_ISLAND) setStage(player, STAGE_ISLAND);
-    // No camera shake: none of the six recorded arrivals (rsprox_transcripts/227/01768.txt tick 3702, 227/01862.txt,
-    // 227/910302.txt, 227/910380.txt, 227/910418.txt, 227/910597.txt) sends one. The 1/0/10/25 shake once copied here is
-    // Baba Yaga's house (01768 tick 2622), which BabaYagasHouse.plugin.js plays.
-    player.moveTo(ISLAND_LANDING);
+    sailToIsland(player);
+  }
+
+  /**
+   * Haskell's third option: "Island of Stone" on the Rellekka Haskell (haskell_travel 9271, recorded
+   * as opnpc3 in rsprox_transcripts/227/01862.txt tick 9626 and 227/01770.txt, followed by the same
+   * fade trip as the boat), "Rellekka" on the island one, the same moves as his "Yes please.".
+   */
+  function travelWithHaskell(event) {
+    const player = event.player;
+    if (!player) return false;
+    const npcId = contentNpcId(event);
+    if (!HASKELL_NPC_IDS.has(npcId) || stageOf(player) < STAGE_BOAT) return false;
+    if (npcId === NpcIdentifiers.HASKELL_3) {
+      player.moveTo(RELLEKKA_PORT);
+    } else {
+      sailToIsland(player);
+    }
+    return true;
+  }
+
+  /**
+   * The fade to the Island of Stone. No camera shake: none of the six recorded arrivals
+   * (rsprox_transcripts/227/01768.txt tick 3702, 227/01862.txt, 227/910302.txt, 227/910380.txt,
+   * 227/910418.txt, 227/910597.txt) sends one. The 1/0/10/25 shake once copied here is Baba Yaga's
+   * house (01768 tick 2622), which BabaYagasHouse.plugin.js plays.
+   */
+  function sailToIsland(player) {
+    if (SAILING_TO_ISLAND.has(player)) return;
+    SAILING_TO_ISLAND.add(player);
+    const busy = CacheDefinitions.getVarbitId("busy");
+    // Held and untargetable for the trip, as the ferries' fade trips (Voyages.Ferries.js hold()).
+    player.getMovementQueue().reset().setBlockMovement(true);
+    player.setUntargetable(true);
+    if (busy != null) player.getPacketSender().sendVarbit(busy, 1);
+    Scenes.fade(player, true);
+    // A death already under way (a hit or poison from before the click) keeps the player at the dock:
+    // the death drops there and its own respawn moves them, so the trip neither lands nor releases them.
+    const dying = () => player.isDyingReturn?.() === true;
+    Scenes.later(player, ISLAND_TRAVEL_TICKS, () => {
+      if (dying()) return;
+      player.sendMessage(ISLAND_ARRIVAL_MESSAGE);
+      player.moveTo(ISLAND_LANDING);
+      player.setPositionToFace(ISLAND_LANDING_FACING);
+    });
+    Scenes.later(player, ISLAND_FADE_IN_TICKS, () => {
+      SAILING_TO_ISLAND.delete(player);
+      if (busy != null) player.getPacketSender().sendVarbit(busy, 0);
+      // The screen comes back either way; a dying player stays held by the death.
+      Scenes.fade(player, false);
+      if (dying()) return;
+      player.getMovementQueue().setBlockMovement(false);
+      player.setUntargetable(false);
+    });
+    Scenes.later(player, ISLAND_CLOSE_FADE_TICKS, () => Scenes.closeFade(player));
   }
 
   function enterIslandCave(player) {
@@ -2284,23 +2338,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       startTranscript(api, player, BABA_YAGA, PAGE, "making-v-s-shield-v-sigil-anvil");
       return;
     }
-    if (itemId === LUNAR_ORE_ITEM && isFurnace(event)) {
-      if (stageOf(player) < STAGE_COMPONENTS || stageOf(player) >= STAGE_MARKET) return;
-      event.handled = true;
-      smeltLunarOre(player);
-      return;
-    }
-  }
-
-  function smeltLunarOre(player) {
-    if (player.getSkillManager().getMaxLevel(Skill.SMITHING) < 60) {
-      player.sendMessage("You need a Smithing level of 60 to smelt lunar ore.");
-      return;
-    }
-    if (!takeItem(player, LUNAR_ORE_ITEM)) return;
-    addItem(player, LUNAR_BAR_ITEM);
-    player.getSkillManager().addExperiences(Skill.SMITHING, 13);
-    player.sendMessage("You smelt the lunar ore into a lunar bar.");
   }
 
   function handleItemOnItem(event) {
@@ -2606,6 +2643,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   api.onNpcInteraction("Askeladden", { "Talk-to": talksToMyQuest });
   api.onNpcInteraction("Sailor", { "Talk-to": talksToMyQuest });
   api.onNpcInteraction("Fossegrimen", { "Talk-to": talksToMyQuest });
+  api.onNpcInteraction("Haskell", { "Island of Stone": travelWithHaskell, Rellekka: travelWithHaskell });
   api.onNpcInteraction("Door-support", { Destroy: destroyWaterbirthSupport });
   api.onNpcRoute(routeWaterbirthSupport);
   api.onNpcDialogueVariant(selectVariant);

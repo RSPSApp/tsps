@@ -11,7 +11,7 @@
  * docs/quests/observatory-quest/README.md has the facts and ticks):
  * - the start rolls the star sign (observatory_starsign 3828), the glass hand-in which marked
  *   dungeon chest holds the kitchen key (observatory_chestchoice 3827);
- * - the surface stairs warn first (cws_warning_9, interface 560);
+ * - the surface stairs warn first (cws_warning_9, interface 560, shown by WarningScreens);
  * - the three marked chests open, are searched and close; the sleeping guard sleeps until
  *   prodded, when a goblin guard takes his place and attacks;
  * - the kitchen gate stays shut while that guard is awake (unless he is trapped north of it),
@@ -38,7 +38,6 @@ module.exports = function registerObservatoryQuest(api) {
   const VARBIT_SCOPE_LOOKED = 3836; // observatory_scopelooked
   const VARBIT_MOULD_PRESENT = 3837; // observatory_mould_pres
   const VARBIT_CUTSCENE_SEEN = 3838; // observatory_cutscene_seen
-  const VARBIT_DUNGEON_WARNINGS = 3859; // cws_warning_9
 
   const STAGE_PLANKS = 1;
   const STAGE_BRONZE = 2;
@@ -55,7 +54,6 @@ module.exports = function registerObservatoryQuest(api) {
   const PROFESSOR_NAME_ATTRIBUTE = "observatory-quest:professor-name-known";
   const CHEST_CHOICE_ATTRIBUTE = "observatory-quest:chest-choice";
   const CUTSCENE_SEEN_ATTRIBUTE = "observatory-quest:cutscene-seen";
-  const DUNGEON_WARNINGS_ATTRIBUTE = "observatory-quest:dungeon-warnings";
 
   const START_HOOK = "quest:observatory-quest:start";
 
@@ -164,13 +162,8 @@ module.exports = function registerObservatoryQuest(api) {
   const TELESCOPE_INTERFACE = 552; // qip_obs_telescope
   const TELESCOPE_STARS = (TELESCOPE_INTERFACE << 16) | 7;
   const MAINMODAL_OPEN_SCRIPT = 2524; // toplevel_mainmodal_open
-  const DUNGEON_WARNING = 560; // cws_warning_9
-  const WARNING_PROCEED = 17; // warn1, "Proceed regardless"
-  const WARNING_STAY_OUT = 18; // warn2
-  const WARNING_CLOSE = 12; // cws_close
-  /** Ours: the count stops below 7, the value the box's script draws as "Don't ask me this again". */
-  const WARNING_COUNT_MAX = 6;
-  const PENDING_DESCENT = new WeakSet();
+  /** cws_warning_9 (560): "Low level players beware." */
+  const DUNGEON_WARNING = 9;
 
   /** Live wording where the Wiki transcript differs or has none (capture ticks in the docs). */
   const MESSAGES = {
@@ -242,7 +235,6 @@ module.exports = function registerObservatoryQuest(api) {
     sender.sendVarbit(VARBIT_CUTSCENE_SEEN, player.getAttribute(CUTSCENE_SEEN_ATTRIBUTE) === true ? 1 : 0);
     sender.sendVarbit(VARBIT_STAR_SIGN, Math.max(0, SIGNS.indexOf(signOf(player))));
     sender.sendVarbit(VARBIT_CHEST_CHOICE, chestChoice(player));
-    sender.sendVarbit(VARBIT_DUNGEON_WARNINGS, Number(player.getAttribute(DUNGEON_WARNINGS_ATTRIBUTE)) || 0);
     syncMouldPresence(player);
   }
 
@@ -339,6 +331,45 @@ module.exports = function registerObservatoryQuest(api) {
     }
 
     return null;
+  }
+
+  /** The page-1 Aquarius copy of "If the player did not see this sign:", the only one with the professor's reply. */
+  const WRONG_SIGN_CONDITION_ID = "i43r18";
+  const TELESCOPE_VARIANT = "after-viewing-the-telescope";
+
+  /** The steps of the option or condition `match` finds in `steps`, searched depth first. */
+  function findSteps(steps, match) {
+    for (const step of steps ?? []) {
+      if (match(step)) return step.steps ?? [];
+      for (const option of step.options ?? []) {
+        if (match(option)) return option.steps ?? [];
+        const nested = findSteps(option.steps, match);
+        if (nested) return nested;
+      }
+      const nested = findSteps(step.steps, match);
+      if (nested) return nested;
+    }
+    return null;
+  }
+
+  /**
+   * A wrong sign other than Aquarius: the Wiki gives its "If the player did not see this sign:" as "(same as above)",
+   * the Aquarius copy ("I'm afraid not. Have another look..."), but the dump keeps only a jump that ends the chat after
+   * the player's line (every page, Capricorn to Pisces). Play the player's line, then the Aquarius copy's reply.
+   */
+  function handleSignChoice(event) {
+    const { player, npc, npcId, option } = event;
+    if (!PROFESSOR_NPC_IDS.has(npcId) || option === "Aquarius" || !SIGN_BY_NAME.has(option)) return;
+    if (signOf(player)?.name === option) return;
+    event.end = true;
+    api.emitCustomEvent("npc-dialogue:start", {
+      player, npc, npcId, variant: { page: PAGE, variant: TELESCOPE_VARIANT }, handled: false,
+      select: (steps) => {
+        const line = findSteps(steps, (entry) => entry?.text === option)?.[0];
+        const reply = findSteps(steps, (entry) => entry?.type === "condition" && entry.id === WRONG_SIGN_CONDITION_ID);
+        return typeof line?.player === "string" && reply?.length ? [line, ...reply] : [];
+      },
+    });
   }
 
   /** Answers the page's prose conditions; scoped so other quests' handlers are not shadowed. */
@@ -760,30 +791,16 @@ module.exports = function registerObservatoryQuest(api) {
   // Stairs, the Observatory and its telescope
   // ==========================================================================
 
-  /** The surface stairs' "Low level players beware" box; it counts each showing (227-236). */
-  function warnBeforeDungeon(player) {
-    const shown = Math.min(WARNING_COUNT_MAX, (Number(player.getAttribute(DUNGEON_WARNINGS_ATTRIBUTE)) || 0) + 1);
-    player.setAttribute(DUNGEON_WARNINGS_ATTRIBUTE, shown);
-    PENDING_DESCENT.add(player);
-    const sender = player.getPacketSender();
-    sender.sendVarbit(VARBIT_DUNGEON_WARNINGS, shown);
-    sender.sendInterfaceScript(MAINMODAL_OPEN_SCRIPT, [-1, -1]);
-    sender.sendInterface(DUNGEON_WARNING);
+  /** The player is below two ticks after Proceed regardless (237-239). */
+  function descendToDungeon(player) {
+    later(player, 2, () => player.moveTo(new Location(DUNGEON_NORTH_LANDING.x, DUNGEON_NORTH_LANDING.y, DUNGEON_NORTH_LANDING.z)));
   }
 
-  /** Proceed closes the box and the player is below two ticks later (237-239). */
-  function dungeonWarningClick(event) {
-    const buttonId = Number(event.buttonId ?? 0);
-    if ((event.groupId ?? (buttonId >>> 16)) !== DUNGEON_WARNING) return;
-    const child = event.childId ?? (buttonId & 0xffff);
-    if (child !== WARNING_PROCEED && child !== WARNING_STAY_OUT && child !== WARNING_CLOSE) return;
-    const { player } = event;
-    event.handled = true;
-    const pending = PENDING_DESCENT.has(player);
-    PENDING_DESCENT.delete(player);
-    player.getPacketSender().sendInterfaceRemoval();
-    if (child !== WARNING_PROCEED || !pending) return;
-    later(player, 2, () => player.moveTo(new Location(DUNGEON_NORTH_LANDING.x, DUNGEON_NORTH_LANDING.y, DUNGEON_NORTH_LANDING.z)));
+  /** The surface stairs' "Low level players beware" box, counted each showing (227-236). */
+  function warnBeforeDungeon(player) {
+    const warning = { player, warning: DUNGEON_WARNING, proceed: () => descendToDungeon(player) };
+    api.emitCustomEvent("warning-screen:show", warning);
+    if (!warning.handled) descendToDungeon(player);
   }
 
   function cutsceneSeen(player) {
@@ -903,7 +920,6 @@ module.exports = function registerObservatoryQuest(api) {
   api.persistAttribute(PROFESSOR_NAME_ATTRIBUTE, false);
   api.persistAttribute(CHEST_CHOICE_ATTRIBUTE, 0);
   api.persistAttribute(CUTSCENE_SEEN_ATTRIBUTE, false);
-  api.persistAttribute(DUNGEON_WARNINGS_ATTRIBUTE, 0);
   api.onCustomEvent("player:bootstrap-complete", syncHelperState);
   api.onCustomEvent("item:discarded", handleMouldDiscarded);
   api.onPlayerDefeated(handleMouldAfterDeath);
@@ -912,11 +928,11 @@ module.exports = function registerObservatoryQuest(api) {
   api.onNpcInteraction("Sleeping guard", { Prod: prodSleepingGuard });
   api.onNpcDeath(handleNpcDeath);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
+  api.onCustomEvent("npc-dialogue:choice", handleSignChoice);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("ladders:climb", claimObservatoryClimb);
   api.onCustomEvent("door:toggle", handleKitchenGate);
-  api.onInterfaceActionClick(dungeonWarningClick);
   api.onInterfaceActionClick(telescopeClose);
   api.onItemOnItem(handleItemOnItem);
   api.onObjectInteraction(handleObjectInteraction);

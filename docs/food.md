@@ -111,6 +111,7 @@ separate audits; this correction does not establish complete food/potion parity.
 | `overheal` | `{ "percent", "max" }`: Hitpoints may rise above the base level by that share of it (rounded down), at most `max` (haddock: 20% or 10, whichever is lower; Wiki: Haddock). Like the anglerfish, not while in combat in a PvP area. |
 | `special` | `anglerfish`: its heal from the eater's Hitpoints level (the level levelled up to, not the health left) and its overheal (not in combat in a PvP area). |
 | `message`, `messages`, `healMessage`, `afterMessage` | The eat line (or one per bite), the heal line (`null` for none), and a line after it. |
+| `fullHealthMessage` | The line sent in place of the heal line when the bite heals nothing (cooked mystery meat). |
 | `messageType` | `"game"`: the eat line and the lines after it are game messages, not spam (the Araxyte venom sac; the Bottle of wine, rec 20261111T225402-5ab63b4 tick 26). |
 | `say` | A line the player says overhead as they eat it, on the same tick as the (spam) eat line (the cup of tea). |
 | `refuse` | The item can't be eaten; this is the message. |
@@ -129,6 +130,22 @@ separate audits; this correction does not establish complete food/potion parity.
 - **Bowls:** the Wiki says an empty bowl remains for stew, curry and banana stew; the other bowl
   foods ("a bowl of ...") leave one the same way.
 - Mackerel's "You eat the cod." is live's own text (recorded).
+
+## Darkmeyer's blood pint and mystery meat
+
+Tests: `server/tests/darkmeyer-blood-pint.test.cjs`.
+
+- **Cooked mystery meat** heals 5 ([Wiki](https://oldschool.runescape.wiki/w/Cooked_mystery_meat)).
+  rsprox.net recs 3056 (tick 944) and 3052, both at full Hitpoints, send "You eat the meat." and "It
+  tastes concerningly nice." (spam). When it heals, the second line is the Wiki's "It heals some
+  health, and tastes concerningly nice." (no recording eats one while hurt).
+- **Blood pint** is drunk in `plugins/items/Potions.plugin.js` like the other ales
+  ([Wiki](https://oldschool.runescape.wiki/w/Blood_pint)): Attack and Strength +(4% + 2), Magic and
+  Prayer -(4% + 2), no heal, a beer glass left. rsprox.net rec 3056 (rev 231) tick 948 at 99s:
+  `human_eat`, sound 2401, "You drink the Blood Pint." and "It tastes unsurprisingly awful and makes
+  you feel a bit sick." (spam; the Wiki prints them as one), Attack and Strength 104, Prayer and Magic
+  94; no `tracking_food_eaten` change. The drain is of the base level: rec 1864 (rev 227) tick 3825
+  takes a boosted Magic 103 to 98, where 4% of 103 would take 6.
 
 ## Drinks eaten as food
 

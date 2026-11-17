@@ -24,9 +24,22 @@ const transcriptStub = (api, player, npcId, page, variant) => {
 runtime.startTranscript = transcriptStub;
 
 // These contract checks drive the quest's plain path, the one its action steps take without a
-// cutscene up; tests/fight-arena-cutscenes.test.cjs plays the cutscenes on a real player and map.
+// cutscene up; tests/fight-arena-cutscenes.test.cjs plays the cutscenes and the fights' copies on a
+// real player and map. Here the scenes do nothing and each fight's copy is only recorded.
 const scenesModule = require.resolve('../plugins/quests/fightarena/Scenes.FightArena');
-const noScenes = new Proxy({}, { get: () => () => false });
+/** player -> the fights opened for them, in order ('ogre', 'scorpion', 'bouncer', 'khazard'). */
+const fightsOpened = new WeakMap();
+const fought = (player) => fightsOpened.get(player) ?? [];
+const recordFight = (player, kind) => { fightsOpened.set(player, [...fought(player), kind]); return true; };
+const sceneStub = {
+  ESCAPE_TILE: [2607, 3151, 0],
+  ESCAPE_DOOR_NAME: 'fightarena_door2_escape',
+  Scenes: { fade() {}, later(_key, _ticks, callback) { callback(); } },
+  fight: recordFight,
+  nextBeast: recordFight,
+  inFight: (player) => fought(player).length > 0,
+};
+const noScenes = new Proxy(sceneStub, { get: (target, key) => (key in target ? target[key] : () => false) });
 require.cache[scenesModule] = { id: scenesModule, filename: scenesModule, loaded: true, exports: () => noScenes };
 
 const COINS = core.ItemIdentifiers.COINS;
@@ -416,8 +429,7 @@ test('WALKTHROUGH: Fight Arena runs fresh stage 0 to the cache completion thresh
     dialogueAction(player, N().SAMMY_SERVIL, '0Xedz5');
     dialogueAction(player, N().SAMMY_SERVIL, 'jXf_Wp');
     assert.equal(quest.getStage(player), 6, "the transcript's ogre action starts the ogre fight");
-    assert.ok(spawned.some((npc) => npc.def.id === N().KHAZARD_OGRE), 'the ogre is spawned');
-    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2605, 3153], "live's ogre-fight tile");
+    assert.deepEqual(fought(player), ['ogre'], "the ogre's fight opens once, in its copy");
 
     kill(player, N().KHAZARD_OGRE);
     assert.equal(quest.getStage(player), 8);
@@ -433,13 +445,12 @@ test('WALKTHROUGH: Fight Arena runs fresh stage 0 to the cache completion thresh
     assert.equal(talkVariant(player, N().HENGRAD), 'the-battles-talking-to-hengrad-in-the-jail-cell');
 
     dialogueAction(player, N().HENGRAD, 'XDkdB3');
-    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2604, 3155]);
-    assert.ok(spawned.some((npc) => npc.def.id === N().KHAZARD_SCORPION), 'the scorpion is spawned');
+    assert.equal(fought(player).at(-1), 'scorpion', "the scorpion's fight opens");
 
     kill(player, N().KHAZARD_SCORPION);
     assert.equal(quest.getStage(player), 10);
     for (let tick = 0; tick < 4; tick++) core.TaskManager.process(); // Khazard's "Bring on Bouncer!" scene delay
-    assert.ok(spawned.some((npc) => npc.def.id === N().BOUNCER), 'Bouncer is spawned after the scorpion');
+    assert.equal(fought(player).at(-1), 'bouncer', 'Bouncer comes after the scorpion');
 
     kill(player, N().BOUNCER);
     assert.equal(quest.getStage(player), 11);
@@ -497,31 +508,17 @@ test('the defeat-Khazard branch completes above the cache threshold', () => {
   }
 });
 
-test('a relog mid-fight restores the required arena beast', () => {
-  // Fixture start: saved stages only; the owner-only beast is gone after logout.
+test('a relog at a fight stage spawns nothing: the fights are copies, re-entered at the arena door', () => {
+  // Fixture start: saved stages only; a logout in a fight saves the player outside the arena door.
   const { quest, spawned, cleanup } = registerQuestPlugin();
   try {
-    const player = playerFixture();
-
-    quest.setStage(player, 6);
-    PluginManager.emitPlayerLogin({ player });
-    assert.ok(spawned.some((npc) => npc.def.id === N().KHAZARD_OGRE), 'stage 6 relog respawns the ogre');
-
-    spawned.length = 0;
-    quest.setStage(player, 8);
-    PluginManager.emitPlayerLogin({ player });
-    assert.equal(spawned.length, 0, 'stage 8 needs no beast');
-
-    spawned.length = 0;
-    quest.setStage(player, 9);
-    PluginManager.emitPlayerLogin({ player });
-    assert.ok(spawned.some((npc) => npc.def.id === N().KHAZARD_SCORPION),
-      'stage 9 relog restores the scorpion for a player who already left Hengrad\'s cell');
-
-    spawned.length = 0;
-    quest.setStage(player, 10);
-    PluginManager.emitPlayerLogin({ player });
-    assert.ok(spawned.some((npc) => npc.def.id === N().BOUNCER), 'stage 10 relog respawns Bouncer');
+    for (const stage of [6, 8, 9, 10, 11, 12]) {
+      const player = playerFixture();
+      quest.setStage(player, stage);
+      PluginManager.emitPlayerLogin({ player });
+      assert.deepEqual(spawned, [], `stage ${stage} relog spawns no beast on the real map`);
+      assert.deepEqual(fought(player), [], `stage ${stage} relog opens no fight by itself`);
+    }
   } finally {
     cleanup();
   }
@@ -546,7 +543,7 @@ test('the door guard\'s jail-return branch still reaches Hengrad and the scorpio
       'the-battles-talking-to-hengrad-in-the-jail-cell'
     );
     dialogueAction(player, N().HENGRAD, 'XDkdB3');
-    assert.ok(spawned.some((npc) => npc.def.id === N().KHAZARD_SCORPION));
+    assert.deepEqual(fought(player), ['scorpion']);
   } finally {
     cleanup();
   }
@@ -604,18 +601,16 @@ test('closing the chatbox after the follow-into-arena step still leaves the ogre
     quest.setStage(player, 5);
     // Step 10 of Sammy's scene teleports into the arena; the chatbox is closed before step 12.
     dialogueAction(player, N().SAMMY_SERVIL, '0Xedz5');
-    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2605, 3153]);
     assert.equal(quest.getStage(player), 6, 'the follow step starts the ogre fight');
-    const ogres = () => spawned.filter((npc) => npc.def.id === N().KHAZARD_OGRE).length;
-    assert.equal(ogres(), 1, 'the ogre is in the arena without the ogre step');
-    assert.equal(doorToggle(player, core.ObjectIdentifiers.DOOR_9).handled, false, 'the arena door is no longer locked');
+    const ogres = () => fought(player).filter((kind) => kind === 'ogre').length;
+    assert.equal(ogres(), 1, "the ogre's fight opens without the ogre step");
 
     dialogueAction(player, N().SAMMY_SERVIL, 'jXf_Wp');
-    assert.equal(ogres(), 1, 'the ogre step keeps the ogre already spawned');
+    assert.equal(ogres(), 1, 'the ogre step keeps the fight already open');
 
     quest.setStage(player, 8);
     dialogueAction(player, N().SAMMY_SERVIL, '0Xedz5');
-    assert.equal(ogres(), 1, 'a stale follow step after the ogre kill spawns no ogre');
+    assert.equal(ogres(), 1, 'a stale follow step after the ogre kill opens no fight');
   } finally {
     cleanup();
   }
@@ -774,8 +769,7 @@ test('stage 11 plays the canonical post-Bouncer Khazard line and advances to sta
 
     dialogueAction(player, N().GENERAL_KHAZARD_5, 'ZGx6Rg');
     assert.equal(quest.getStage(player), 12, 'the Khazard attack sets stage 12');
-    assert.ok(spawned.some((npc) => npc.def.id === N().GENERAL_KHAZARD),
-      'the attacking Khazard is spawned');
+    assert.deepEqual(fought(player), ['khazard'], "Khazard's own fight opens");
 
     assert.equal(talkVariant(player, N().GENERAL_KHAZARD_5), 'the-battles-upon-killing-bouncer',
       'the stage-12 branch is retained');
@@ -826,10 +820,21 @@ test('registered dispatch: the arena door lock survives the shared Doors handlin
     ], 'the shared handling keeps every unrelated door');
 
     quest.setStage(player, 6);
+    // The fixture stands west of the door: on the arena floor's side, where the door only lets the player out.
     const open = clickObject(player, core.ObjectIdentifiers.DOOR_9);
     assert.equal(open, true);
     assert.deepEqual(doors.opened.at(-1), core.ObjectIdentifiers.DOOR_9,
-      'after stage 6 the shared Doors handling opens the arena door');
+      'after stage 6 the shared Doors handling opens the arena door for a player inside');
+    // From outside it asks to return to the fight instead (the Wiki's "Re-entering the arena").
+    const outside = playerFixture();
+    quest.setStage(outside, 6);
+    outside.moveTo(new core.Location(2607, 3151, 0));
+    const asked = [];
+    outside.setDialogueManager({ startDialogues: (chain) => asked.push(chain), isActive: () => false, getCurrent: () => null, reset() {} });
+    const openedBefore = doors.opened.length;
+    assert.equal(clickObject(outside, core.ObjectIdentifiers.DOOR_9), true);
+    assert.equal(doors.opened.length, openedBefore, 'the door does not open from outside mid-quest');
+    assert.equal(asked.length, 1, '"Return to the arena?" is asked');
     assert.equal(player.messages.filter((message) => message === 'The door is securely locked.').length, 1,
       'the unlocked door is not reported as locked');
   } finally {
@@ -860,9 +865,7 @@ test('the door-guard jail return persists the jail leg and lands in Hengrad\'s c
     );
     assert.equal(talkVariant(player, N().HENGRAD), 'the-battles-talking-to-hengrad-in-the-jail-cell');
     dialogueAction(player, N().HENGRAD, 'XDkdB3');
-    assert.ok(spawned.some((npc) => npc.def.id === N().KHAZARD_SCORPION),
-      'the route to the scorpion survives the jail return');
-    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2604, 3155]);
+    assert.deepEqual(fought(player), ['scorpion'], 'the route to the scorpion survives the jail return');
   } finally {
     cleanup();
   }

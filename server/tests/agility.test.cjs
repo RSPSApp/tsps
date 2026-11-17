@@ -86,6 +86,7 @@ function chainable(sender) {
 function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], boostedTo = level } = {}) {
   let location = new Location(x, y, z);
   let forceMovement = null;
+  let skillAnimation = -1;
   const attributes = new Map();
   const state = { xp: 0, otherXp: {}, messages: [], spam: [], varbits: new Map(), varbitLog: [], scripts: [], sounds: [], animations: [], hits: 0, blocked: false, walked: 0 };
   const player = {
@@ -104,7 +105,9 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
     }),
     getForceMovement: () => forceMovement,
     setForceMovement: (value) => { forceMovement = value; return player; },
-    setSkillAnimation: (id) => { (state.renders ??= []).push(id); },
+    getSkillAnimation: () => skillAnimation,
+    setSkillAnimation: (id) => { skillAnimation = id; (state.renders ??= []).push(id); },
+    setTemporaryMovementType: (type) => { state.temporaryMovementType = type; },
     getUpdateFlag: () => ({ flag() {} }),
     performAnimation: (animation) => state.animations.push(animation.getId()),
     performGraphic() {},
@@ -138,7 +141,7 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
       sendInterfaceScript: (id, args) => state.scripts.push([id, ...args]),
       sendTypedMessage: (type, message) => { state.spam.push(message); state.messages.push(message); },
       sendSound() {},
-      sendSoundEffect: (id, loops, delay) => state.sounds.push(id),
+      sendSoundEffect: (id, loops, delay) => { state.sounds.push(id); (state.soundDetails ??= []).push([id, loops, delay]); },
       sendObjectAnimation() {},
       sendGlobalGraphic: (graphic, at) => { (state.tileGraphics ??= []).push([graphic.id, graphic.delay, at.getX(), at.getY(), at.getZ()]); },
     }),
@@ -696,6 +699,32 @@ test("Piscatoris falconry stile (19222) crosses its 1x2 footprint both ways at l
     assert.notEqual(operate(player, 19222, at, object.getFace()), false);
     assert.deepEqual(tileOf(player), to, `crossing from side ${side}`);
     assert.equal(player.state.xp, 0);
+  }
+});
+
+test("Tenzing's stile (3730) steps onto it, walks over it and steps off, both ways (rsprox local 1001800 ticks 25271-25275)", () => {
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  RegionManager.init();
+  const at = [2817, 3562, 0], ends = [[2817, 3561, 0], [2817, 3564, 0]];
+  RegionManager.loadMapFiles(at[0], at[1]);
+  const object = MapObjects.get(3730, new Location(...at), null);
+  assert.ok(object, "cache stile at Tenzing's hut");
+  for (const end of ends) assert.equal(RegionManager.blocked(new Location(...end), null), false, `${end} is walkable`);
+  for (const side of [0, 1]) {
+    const from = ends[side], to = ends[1 - side];
+    const player = createPlayer(...from, 1);
+    const route = { player, object, objectId: 3730, clickType: 1, destination: null };
+    hooks.route.forEach(handler => handler(route));
+    assert.deepEqual(route.destination, { x: from[0], y: from[1], z: from[2] }, `approach stays on side ${side}`);
+    player.setLocation(new Location(...from));
+    const moves = [];
+    const setForceMovement = player.setForceMovement;
+    player.setForceMovement = (value) => { if (value) moves.push(value); return setForceMovement(value); };
+    assert.notEqual(operate(player, 3730, at, object.getFace()), false);
+    assert.deepEqual(tileOf(player), to, `crossing from side ${side} ends off the stile`);
+    assert.equal(moves.length, 1, "one exact move, over the stile");
+    assert.deepEqual(player.state.messages ?? [], [], "no message");
   }
 });
 
@@ -2339,6 +2368,29 @@ function ticksWith(ticks, test) {
   return ticks.map((entry, index) => (test(entry) ? index : null)).filter((index) => index != null);
 }
 
+test("Coal Trucks log: captured feedback and five-tick crossing in both directions", () => {
+  for (const [start, end] of [[[2598, 3477, 0], [2603, 3477, 0]], [[2603, 3477, 0], [2598, 3477, 0]]]) {
+    const player = createPlayer(...start, 20);
+    const ticks = timeline(player, 23274, [start[0] === 2598 ? 2599 : 2602, 3477, 0]);
+    assert.deepEqual(tileOf(player), end);
+    assert.deepEqual(ticks[0].messages, ["You walk carefully across the slippery log..."]);
+    assert.deepEqual(ticks[5].messages, ["... and make it safely to the other side."]);
+    assert.deepEqual(player.state.spam, ["You walk carefully across the slippery log...", "... and make it safely to the other side."]);
+    assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(2470)), [1, 4]);
+    assert.deepEqual(player.state.soundDetails, [[2470, 2, 0], [2470, 1, 0]]);
+    assert.equal(ticks[5].xp, 8.5);
+    assert.equal(ticks.length - 1, 5);
+    assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393).map(([, value]) => value), [1, 0]);
+    assert.equal(player.state.blocked, false);
+  }
+  const novice = createPlayer(2598, 3477, 0, 19);
+  timeline(novice, 23274, [2599, 3477, 0]);
+  assert.deepEqual(tileOf(novice), [2598, 3477, 0]);
+  assert.deepEqual(novice.state.messages, ["You need an Agility level of at least 20 to attempt this."]);
+  assert.equal(novice.state.xp, 0);
+  assert.deepEqual(novice.state.sounds, []);
+});
+
 test("as captured (RSProx 20261109T224258-5ab63b4): the Auburn Valley log balance, a tile a tick with sound 2470 each", () => {
   for (const [objectId, start, object, finish, steps] of [
     [56991, [1453, 3336, 0], [1453, 3335, 0], [1453, 3329], 7],
@@ -2403,6 +2455,72 @@ test("as captured (rsprox 1638, local 1001895, 1001899): the Nature Grotto bridg
       assert.ok(player.state.damage.every((damage) => damage >= 1 && damage <= 7));
       assert.equal(ticks[6].xp, 2);
     }
+  } finally {
+    Math.random = random;
+  }
+});
+
+test("as captured (rsprox 359; local 1001631, 1001653, 1001659, 1001991, 1002015, 1002076): the Fremennik log balance and its river fall", () => {
+  const LOG = 16542;
+  const random = Math.random;
+  const tiles = (player, ticks) => ticks.map((entry, index) => (entry.moved ? index : null)).filter((index) => index != null);
+  try {
+    // Successes: two tiles a tick, the success line a tick in, BUSY off and 4 XP 4 ticks in, both ways.
+    Math.random = () => 0;
+    for (const [start, finish] of [[[2722, 3592, 0], [2722, 3596, 0]], [[2722, 3596, 0], [2722, 3592, 0]]]) {
+      const player = createPlayer(...start, 60);
+      const ticks = timeline(player, LOG, [2722, 3593, 0]);
+      assert.deepEqual(tileOf(player), finish, `from ${start}`);
+      assert.deepEqual(tiles(player, ticks), [0, 1], "the middle tile, then the far end");
+      assert.deepEqual(ticks[0].messages, ["You attempt to walk across the slippery log."]);
+      assert.deepEqual(player.state.spam, ["You attempt to walk across the slippery log."]);
+      assert.deepEqual(ticks[1].messages, ["You make it across the log without any problems."]);
+      assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(2470)), [0, 1]);
+      assert.equal(ticks.length - 1, 4);
+      assert.equal(ticks[4].xp, 4);
+      assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393).map(([, value]) => value), [1, 0]);
+      assert.equal(player.state.hits, 0);
+    }
+
+    // Failures: to the middle, into the river east of it (exactmove and teleport on one tick),
+    // washed four tiles to the north bank, 6 damage and 2 XP 7 ticks in.
+    Math.random = () => 0.999;
+    const player = createPlayer(2722, 3592, 0, 48);
+    const moves = [];
+    const setForceMovement = player.setForceMovement;
+    const cleared = [];
+    player.setForceMovement = (value) => {
+      if (value) moves.push([value.getStart().getX(), value.getStart().getY(), value.getEnd().getX(), value.getEnd().getY(), value.getSpeed(), value.getReverseSpeed(), value.getDirection()]);
+      else cleared.push(String(tileOf(player)));
+      return setForceMovement(value);
+    };
+    const path = [];
+    const ticks = [];
+    const recorded = timeline(player, LOG, [2722, 3593, 0]);
+    recorded.forEach((entry, index) => { if (entry.moved) path.push(index); ticks.push(entry); });
+    assert.deepEqual(tileOf(player), [2725, 3597, 0], "on the north bank");
+    assert.deepEqual(path, [0, 1, 3, 4, 5, 6], "the middle, the fall, then a tile a tick down the river");
+    assert.deepEqual(moves, [[2722, 3594, 2, 0, 22, 35, 0]], "exactmove from the middle tile, cycles 22-35, facing north");
+    assert.deepEqual(cleared, ["2724,3594,0"], "the teleport onto the river tile keeps the exactmove; it is cleared on the splash tick, before the river walk");
+    assert.deepEqual(ticksWith(ticks, (entry) => entry.animations.includes(2582)), [1]);
+    assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(2493)), [1]);
+    assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(1658)), [2]);
+    assert.deepEqual(player.state.tileGraphics, [[68, 3, 2724, 3594, 0]]);
+    assert.deepEqual(ticks.map((entry) => entry.messages), [
+      ["You attempt to walk across the slippery log."],
+      ["You lose your footing and fall into the water."],
+      [],
+      ["You're being washed down the river."],
+      ["You feel like you're drowning..."],
+      ["You finally come to shore."],
+      [],
+      [],
+    ]);
+    assert.deepEqual(player.state.spam, ["You attempt to walk across the slippery log.", "You feel like you're drowning...", "You finally come to shore."]);
+    assert.deepEqual(player.state.damage, [6]);
+    assert.equal(ticks[7].xp, 2);
+    assert.equal(ticks.reduce((sum, entry) => sum + entry.xp, 0), 2);
+    assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393).map(([, value]) => value), [1, 0]);
   } finally {
     Math.random = random;
   }
@@ -2687,15 +2805,17 @@ test("Wilderness ridge door: opening the south door and the north gates swaps th
     },
     Task: class { constructor(delay, key) { this.delay = delay; this.key = key; } stop() { this.stopped = true; } },
     TaskManager: { submit: (task) => events.push(["task", task]) },
+    Sound: class { constructor(id) { this.id = id; } },
+    Sounds: { sendSound: (player, sound) => events.push(["sound", sound.id]) },
   };
   const context = { core, player: { getPrivateArea: () => null } };
 
   assert.equal(openRidgeDoor(context), true);
-  assert.deepEqual(events.slice(0, 3), [
-    ["deregister", RIDGE.door], ["register", RIDGE.invisWall], ["register", RIDGE.prisonDoorOpen],
+  assert.deepEqual(events.slice(0, 4), [
+    ["deregister", RIDGE.door], ["register", RIDGE.invisWall], ["register", RIDGE.prisonDoorOpen], ["sound", 62],
   ]);
-  assert.equal(events[3][0], "task");
-  const doorTask = events[3][1];
+  assert.equal(events[4][0], "task");
+  const doorTask = events[4][1];
   assert.equal(doorTask.delay, 2);
   events.length = 0;
   doorTask.execute();
@@ -2708,7 +2828,7 @@ test("Wilderness ridge door: opening the south door and the north gates swaps th
   assert.deepEqual(events.filter(([kind]) => kind !== "task"), [
     ["deregister", RIDGE.gateLeft], ["deregister", RIDGE.gateRight],
     ["register", RIDGE.invisWall], ["register", RIDGE.invisWall],
-    ["register", RIDGE.gateOpenLeft], ["register", RIDGE.gateOpenRight],
+    ["register", RIDGE.gateOpenLeft], ["register", RIDGE.gateOpenRight], ["sound", 62],
   ]);
 
   // A missing gate leaf leaves every closed loc in place: no partial swap.
@@ -2720,11 +2840,81 @@ test("Wilderness ridge door: opening the south door and the north gates swaps th
   const enter = require("../plugins/skills/agility/shortcuts/Wilderness.Agility").wildernessRidgeIn();
   assert.deepEqual(enter.end, { spam: RIDGE.endIn });
   assert.deepEqual(enter.steps[0], { msg: { spam: RIDGE.start } });
-  assert.deepEqual(enter.steps[2], { walk: [[2998, 3931]] });
+  assert.deepEqual(enter.steps[2], { walk: [[2998, 3930]] });
+  assert.deepEqual(enter.steps[4], { walk: [[2998, 3931]], arrive: true });
   const leave = require("../plugins/skills/agility/shortcuts/Wilderness.Agility").wildernessRidgeOut();
-  assert.deepEqual(leave.end, { spam: RIDGE.endOut });
+  assert.equal(leave.end, undefined, 'the early exit line has no completion duplicate');
   assert.deepEqual(leave.steps[2], { walk: [[2998, 3918]] });
-  assert.deepEqual(leave.steps[4], { walk: [[2998, 3916]] });
+  assert.deepEqual(leave.steps[4], { msg: { spam: RIDGE.endOut } });
+  assert.deepEqual(leave.steps.at(-1), { walk: [[2998, 3916]], tilesPerTick: 2, arrive: true, traversalType: 1 });
+});
+
+test("as captured (rsprox 449 ticks 15-32, 451 ticks 31-47): the ridge door opens as the player steps in, the north gates as they step out", () => {
+  const { RIDGE } = require("../plugins/skills/agility/shortcuts/Wilderness.Agility")._test;
+  const core = agilityApi.core;
+  const saved = { register: core.ObjectManager.register, deregister: core.ObjectManager.deregister, get: core.MapObjects.get, submit: core.TaskManager.submit };
+  const placed = new Map();
+  const key = (id, x, y, z) => `${id}:${x},${y},${z}`;
+  for (const [id, [x, y, z]] of [[RIDGE.door, RIDGE.doorTile], [RIDGE.gateLeft, RIDGE.gateLeftTile], [RIDGE.gateRight, RIDGE.gateRightTile]]) {
+    placed.set(key(id, x, y, z), gameObject(id, x, y, z));
+  }
+  const swaps = [];
+  core.ObjectManager.register = (object) => swaps.push(["add", object.getId()]);
+  core.ObjectManager.deregister = (object) => swaps.push(["del", object.getId()]);
+  core.MapObjects.get = (id, at) => placed.get(key(id, at.getX(), at.getY(), at.getZ())) ?? null;
+  core.TaskManager.submit = (task) => taskManager.submit(task);
+  try {
+    const player = createPlayer(2998, 3915, 0, 52);
+    const rows = [];
+    let seen = 0;
+    const record = () => {
+      rows.push({ tile: tileOf(player).slice(0, 2).join(","), messages: player.state.messages.splice(0), swaps: swaps.slice(seen) });
+      seen = swaps.length;
+    };
+    const object = gameObject(RIDGE.door, ...RIDGE.doorTile);
+    const route = { player, object, objectId: RIDGE.door, clickType: 1, destination: null };
+    hooks.route.forEach((handler) => handler(route));
+    assert.deepEqual([route.destination.x, route.destination.y], [2998, 3916]);
+    player.setLocation(new Location(2998, 3916, 0));
+    hooks.click.get(RIDGE.door)({ player, object, objectId: RIDGE.door, clickType: 1, location: { x: 2998, y: 3917, z: 0 } });
+    record();
+    while (player.getAttribute("agility.obstacle") != null) {
+      assert.ok(rows.length < 40, "the ridge never finished");
+      tick();
+      record();
+    }
+    // Live tick 16: the start message, the door swap and the first step onto the door tile together.
+    assert.deepEqual(rows[0], {
+      tile: "2998,3917",
+      messages: [RIDGE.start],
+      swaps: [["del", RIDGE.door], ["add", RIDGE.invisWall], ["add", RIDGE.prisonDoorOpen]],
+    });
+    // A tile a tick to 2998,3930 (live ticks 17-29), the door back two ticks after it opened (tick 18).
+    for (let index = 1; index <= 13; index++) assert.equal(rows[index].tile, `2998,${3917 + index}`, `tick ${index}`);
+    assert.deepEqual(rows[2].swaps, [["del", RIDGE.invisWall], ["del", RIDGE.prisonDoorOpen], ["add", RIDGE.door]]);
+    // Live tick 30: the north gates swap as the player steps through them, with the end message.
+    const last = rows.at(-1);
+    assert.equal(rows.length, 15);
+    assert.equal(last.tile, "2998,3931");
+    assert.deepEqual(last.messages, [RIDGE.endIn]);
+    assert.deepEqual(last.swaps, [
+      ["del", RIDGE.gateLeft], ["del", RIDGE.gateRight],
+      ["add", RIDGE.invisWall], ["add", RIDGE.invisWall],
+      ["add", RIDGE.gateOpenLeft], ["add", RIDGE.gateOpenRight],
+    ]);
+    // ... and are back two ticks later (live tick 32).
+    tick();
+    tick();
+    assert.deepEqual(swaps.slice(seen), [
+      ["del", RIDGE.invisWall], ["del", RIDGE.invisWall], ["del", RIDGE.gateOpenLeft], ["del", RIDGE.gateOpenRight],
+      ["add", RIDGE.gateLeft], ["add", RIDGE.gateRight],
+    ]);
+  } finally {
+    core.ObjectManager.register = saved.register;
+    core.ObjectManager.deregister = saved.deregister;
+    core.MapObjects.get = saved.get;
+    core.TaskManager.submit = saved.submit;
+  }
 });
 
 test("Fossil Island sea-floor obstacles and holes each give 4.5 Agility XP (Wiki: Underwater Agility and Thieving)", () => {

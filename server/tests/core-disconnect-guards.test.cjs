@@ -226,6 +226,76 @@ test('a throwing removal hook cannot corrupt list size or leak its slot', () => 
   assert.equal(next.getIndex(), 1, 'the freed slot is reused');
 });
 
+test('a list that holds freed slots gives them out again only after releaseHeldSlots (issue 6113)', () => {
+  const list = new MobileList(8, undefined, undefined, { holdFreedSlots: true });
+  const gone = stubMobile();
+  assert.equal(list.add(gone), true);
+  const index = gone.getIndex();
+  list.remove(gone);
+  const sameCycle = stubMobile();
+  assert.equal(list.add(sameCycle), true);
+  assert.notEqual(sameCycle.getIndex(), index, 'a slot freed this cycle is not handed to a new mobile');
+  list.releaseHeldSlots();
+  const nextCycle = stubMobile();
+  assert.equal(list.add(nextCycle), true);
+  assert.equal(nextCycle.getIndex(), index, 'released, the lowest free slot is reused');
+});
+
+for (const failureAt of ['onAdd', 'onAdded']) {
+  test(`registration rollback preserves list and position state when ${failureAt} throws`, () => {
+    const positions = new Set();
+    const failure = new Error(`${failureAt} failed`);
+    let doomed, removed = 0;
+    const list = new MobileList(4, mobile => {
+      positions.add(mobile);
+      if (mobile === doomed && failureAt === 'onAdded') throw failure;
+    }, mobile => positions.delete(mobile));
+    const bystander = stubMobile();
+    assert.equal(list.add(bystander), true);
+    const bystanderIndex = bystander.getIndex();
+    doomed = stubMobile({ index: 91,
+      onAdd() { positions.add(this); if (failureAt === 'onAdd') throw failure; },
+      onRemove() { removed++; },
+    });
+    assert.throws(() => list.add(doomed), error => error === failure);
+    assert.equal(list.sizeReturn(), 1);
+    assert.equal(doomed.isRegistered(), false);
+    assert.equal(doomed.getIndex(), 91, 'pre-registration index restored');
+    assert.equal(removed, 1);
+    assert.deepEqual([...positions], [bystander]);
+    assert.equal(list.get(bystanderIndex), bystander);
+    assert.equal(bystander.isRegistered(), true);
+    assert.deepEqual([...list], [bystander]);
+    const next = stubMobile();
+    assert.equal(list.add(next), true);
+    assert.equal(next.getIndex(), 2, 'failed allocation returned exactly once to the free heap');
+    const last = stubMobile();
+    assert.equal(list.add(last), true);
+    assert.equal(last.getIndex(), 3, 'no duplicate free slot');
+    assert.equal(list.sizeReturn(), 3);
+    assert.equal(list.get(2), next);
+  });
+}
+
+test('registration rollback attempts both cleanup hooks and retains the original failure', () => {
+  const failure = new Error('registration failed');
+  const positionFailure = new Error('position cleanup failed');
+  const mobileFailure = new Error('mobile cleanup failed');
+  let removed = 0;
+  const list = new MobileList(2, () => { throw failure; }, () => { throw positionFailure; });
+  const doomed = stubMobile({ onRemove() { removed++; throw mobileFailure; } });
+  assert.throws(() => list.add(doomed), error => {
+    assert.equal(error.cause, failure);
+    assert.deepEqual(error.errors, [failure, positionFailure, mobileFailure]);
+    return true;
+  });
+  assert.equal(removed, 1);
+  assert.equal(list.sizeReturn(), 0);
+  assert.equal(doomed.isRegistered(), false);
+  assert.equal(doomed.getIndex(), -1);
+  assert.deepEqual([...list], []);
+});
+
 test('a critically backpressured socket is closed instead of buffering', () => {
   let closed = null;
   const channel = {
@@ -795,7 +865,10 @@ test('inventory Drop and Release reach item action hooks before the ground/drop 
 });
 
 
-test('alchemy policy keeps rune and spellbook checks before neutralising a permitted item', () => {
+test('alchemy policy keeps rune and spellbook checks before neutralising a permitted item', (t) => {
+  const {ItemDefinition}=require('../dist/game/definition/ItemDefinition');
+  // The missing-rune message now reads rune names; this transport fixture has no cache.
+  t.mock.method(ItemDefinition,'forId',id=>({getName:()=>id===561?'Nature rune':'Fire rune'}));
   const {PluginManager}=require('../dist/plugins/PluginManager');
   const {MagicOnItemPacketListener}=require('../dist/net/packet/impl/MagicOnItemPacketListener');
   const {MagicSpellbook}=require('../dist/game/model/MagicSpellbook');

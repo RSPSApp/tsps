@@ -22,6 +22,11 @@ const {
 const { registerAiBots } = require("./ai/RegisterAiBots.PlayerBots");
 const { AI_BOT_ATTRIBUTE } = require("./ai/Config.PlayerBots");
 
+const {
+  RETREAT_TELEPORT_CHANCE_CONFIG,
+  DEFAULT_RETREAT_TELEPORT_CHANCE,
+} = require("./behaviours/nodes/pvp/PvpDefensiveActionNode.PlayerBots");
+
 const BOT_BEHAVIOR_MODE = Object.freeze({
   ROAMING: "roaming",
   WOODCUTTING: "woodcutting",
@@ -219,6 +224,11 @@ module.exports = {
       type: "json", label: "AI bots", defaultText: "AI bots off (3 bots when enabled)",
       help: "Settings for bots that chat through an AI model, merged over the shipped defaults, e.g. { \"enabled\": true, \"count\": 3, \"places\": [\"lumbridge\"] }. Also takes names, disclose, providers and gifts; API keys come from the server environment, never here.",
     },
+    [RETREAT_TELEPORT_CHANCE_CONFIG]: {
+      type: "number", label: "PvP bot retreat teleport chance (%)", default: DEFAULT_RETREAT_TELEPORT_CHANCE,
+      integer: true, min: 0, max: 100,
+      help: "Percentage chance, rolled once when a PvP bot runs out of food, to try teleporting after the retreat grace period. Otherwise it flees on foot.",
+    },
     "PlayerBots:sites": {
       type: "json", label: "Bot site overrides", defaultText: "No overrides: the shipped bot-sites.json applies",
       help: "Maps a bot site id to the properties to change for it, e.g. { \"some_site\": { \"enabled\": false } }. Sites not named keep their shipped properties; a world.local.json value replaces the world.json one as a whole.",
@@ -252,7 +262,7 @@ module.exports = {
       recentBotLogsByUsername,
       config: BOT_CONFIG,
     });
-    setActiveBotRuntime(boot.runtime, BOT_CONFIG.behaviorMode);
+    setActiveBotRuntime(boot.runtime, BOT_CONFIG.behaviorMode, boot.brainRegistry);
 
     createBotBenchmark({
       api,
@@ -293,7 +303,7 @@ module.exports = {
       brainRegistry: boot.brainRegistry,
     });
 
-    registerAiBots({
+    const aiRuntime = registerAiBots({
       api,
       botApi,
       runtime: boot.runtime,
@@ -301,6 +311,7 @@ module.exports = {
       world: boot.brainWorld,
       resetMovementState,
     });
+    boot.brainRegistry.aiAgentAvailable = typeof aiRuntime?.getAiGraphAgent === "function";
 
     registerBotEvents({
       api,

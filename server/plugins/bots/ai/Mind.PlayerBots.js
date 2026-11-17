@@ -68,10 +68,69 @@ class AiBotMind {
       gifts: services.config.gifts,
       givenToday: services.givenToday,
     });
+    this.graphRequest = null;
+    this.graphResults = new Map();
   }
 
   get name() {
     return this.bot.getUsername();
+  }
+
+  requestGraphChoice({ requestId, prompt, choices, nowMs = Date.now() }) {
+    const completed = this.graphResults.get(requestId);
+    if (completed) {
+      this.graphResults.delete(requestId);
+      return completed;
+    }
+    if (this.graphRequest) return { status: "pending" };
+    if (this.inFlight) return { status: "pending" };
+    if (!this.services.limiter.allow(this.name, nowMs)) return { status: "error", error: "AI model rate limit reached." };
+    const request = { requestId, cancelled: false };
+    this.graphRequest = request;
+    this.inFlight = true;
+    try {
+      const ask = `Choose exactly one route for the graph. ${prompt}\nAvailable routes:\n${choices.map(choice => `- ${choice.label}: ${choice.description}`).join("\n")}\nCall choose_graph_route with exactly one route label. Do not call any other tool.`;
+      const situation = buildSituation(observe(this, ask, nowMs));
+      const tool = {
+        name: "choose_graph_route",
+        description: "Select one exact route label from the available graph choices.",
+        parameters: {
+          type: "object",
+          properties: { choice: { type: "string", enum: choices.map(choice => choice.label) } },
+          required: ["choice"], additionalProperties: false,
+        },
+      };
+      this.provider.generate({ system: this.services.system, prompt: situation, tools: [tool] })
+        .then(result => {
+          if (request.cancelled) return;
+          const call = result?.calls?.find(entry => entry.name === tool.name);
+          const choice = call?.input?.choice;
+          const valid = choices.some(entry => entry.label === choice);
+          const response = valid && result.refused !== true
+            ? { status: "selected", choice }
+            : { status: "error", error: result?.refused ? "AI provider refused this decision." : "AI provider returned no valid route." };
+          this.graphResults.set(requestId, response);
+          this.services.log("ai_bot_graph_decision", { bot: this.name, choice: valid ? choice : null, model: this.provider.model });
+        })
+        .catch(error => {
+          if (!request.cancelled) this.graphResults.set(requestId, { status: "error", error: String(error?.message ?? error).slice(0, 180) });
+          this.services.log("ai_bot_graph_call_failed", { bot: this.name, error: String(error?.message ?? error) });
+        })
+        .finally(() => {
+          this.inFlight = false;
+          if (this.graphRequest === request) this.graphRequest = null;
+        });
+    } catch (error) {
+      this.inFlight = false;
+      this.graphRequest = null;
+      return { status: "error", error: String(error?.message ?? error).slice(0, 180) };
+    }
+    return { status: "pending" };
+  }
+
+  cancelGraphChoice(requestId) {
+    if (this.graphRequest?.requestId === requestId) this.graphRequest.cancelled = true;
+    this.graphResults.delete(requestId);
   }
 
   checkInDelay() {

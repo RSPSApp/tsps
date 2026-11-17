@@ -9,6 +9,8 @@ Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+const { ObjectDefinition } = require('../dist/game/definition/ObjectDefinition');
+const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
 const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
 const runtime = require('../plugins/quests/QuestRuntime');
 const { createQuestScenes } = require('../plugins/quests/QuestScenes');
@@ -101,7 +103,7 @@ test('singing bowl Inspect stays on the near rim or routes to the captured appro
 
 function harness(pluginName, options = {}) {
   const pluginNames = Array.isArray(pluginName) ? pluginName : [pluginName];
-  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], npcActions = new Map(), areas = [];
+  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], npcActions = new Map(), objectActions = new Map(), areas = [];
   const api = new Proxy(
     {
       core: {
@@ -125,6 +127,7 @@ function harness(pluginName, options = {}) {
       },
       onObjectInteraction: (nameOrHandler, actions) => {
         const handlers = typeof nameOrHandler === 'function' ? [nameOrHandler] : Object.values(actions ?? {});
+        if (typeof nameOrHandler === 'string') objectActions.set(nameOrHandler, actions ?? {});
         (hooks.onObjectInteraction ??= []).push(...handlers);
       },
       onCustomEvent: (key, fn) => (events[key] ??= []).push(fn),
@@ -162,7 +165,7 @@ function harness(pluginName, options = {}) {
   const registered = runtime.getRegisteredQuests().slice(registeredBefore);
   const quest = registered.at(-1);
   const h = {
-    api, hooks, events, tasks, npcs, removed, npcActions, areas, quest,
+    api, hooks, events, tasks, npcs, removed, npcActions, objectActions, areas, quest,
     quests: new Map(registered.map((entry) => [entry.key, entry])),
     emit: (name, event) => (events[name] ?? []).forEach((fn) => fn(event)),
     variant(p, npcId) {
@@ -180,6 +183,24 @@ function harness(pluginName, options = {}) {
     action(p, npcId, stepId) {
       const event = { player: p, npcId, stepId };
       h.emit('npc-dialogue:action', event);
+      return event;
+    },
+    objectOption(p, objectId, option, at = { x: 2390, y: 9826, z: 0 }) {
+      const definition = ObjectDefinition.forPlayer(objectId, p);
+      const clickType = (definition?.getInteractions() ?? []).indexOf(option) + 1;
+      const event = {
+        player: p,
+        objectId,
+        clickType,
+        option: option.toLowerCase(),
+        definition,
+        location: at,
+        object: new core.GameObject(objectId, new core.Location(at.x, at.y, at.z ?? 0), 10, 0),
+        handled: false,
+      };
+      if (clickType < 1) return event;
+      const handler = objectActions.get(definition?.getName())?.[option];
+      if (typeof handler === 'function' && handler(event) !== false) event.handled = true;
       return event;
     },
     choice(p, npcId, option) {
@@ -240,6 +261,10 @@ function player(overrides = {}) {
     moveTo: (to) => { location = to; },
     getInventory: () => ({
       getAmount: (id) => items.get(id) ?? 0,
+      getItems: () => Array.from({ length: 28 }, (_, slot) => {
+        const [id, amount] = [...items.entries()].filter(([, count]) => count > 0)[slot] ?? [-1, 0];
+        return new core.Item(id, amount);
+      }),
       getFreeSlots: () => 28,
       isFull: () => false,
       adds: (id, amount = 1) => items.set(id, (items.get(id) ?? 0) + amount),
@@ -258,6 +283,8 @@ function player(overrides = {}) {
     getPacketSender: () => {
       const packet = new Proxy({
         sendVarbit: (id, value) => { varbits.set(id, value); return packet; },
+        getVarbit: (id) => varbits.get(id) ?? 0,
+        getVarp: (id) => varbits.get(id) ?? 0,
         sendConfig: (id, value) => { varbits.set(id, value); return packet; },
         sendSubInterface: (...args) => { log.push(['sendSubInterface', ...args]); return packet; },
         mountSubInterface: (...args) => { log.push(['sendSubInterface', ...args]); return {}; },
@@ -346,9 +373,9 @@ test('LOTG early route walks 2 -> 4 -> 6 -> 8 -> 10 through Zanik, Grubfoot and 
   h.action(p, N.OLDAK, '8mebE2');
   assert.equal(h.quest.getStage(p), 10);
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2617, 9797]);
+  // The cave entrance (loc 2, mcannoncave) is LocTeleports' captured crawl to (2620, 9797), not this quest's.
   p.moveTo(new core.Location(2624, 3393, 0));
-  object(h, p, 2);
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2617, 9797], 'cave entrance enters the real goblin cave');
+  assert.equal(object(h, p, 2).handled, undefined, 'the quest leaves the cave entrance to LocTeleports');
 });
 
 test('LOTG potion needs no equipment and the temple route reaches freed Zanik', () => {
@@ -1438,6 +1465,102 @@ test('EOG Brimstail counts a banked crystal saw or seed: no second seed to hand 
   assert.equal(condition({ player: none, npcId: brimstail, text }), true, 'none owned: Brimstail offers one');
 });
 
+test('Eyes machine map locs keep their stage transform and login varbit in step', () => {
+  const h = harness('EyesOfGlouphrie');
+  const p = player();
+  const machine = MapObjects.get(17282, new core.Location(2390, 9826, 0), null);
+  const exchanger = MapObjects.get(17283, new core.Location(2391, 9826, 0), null);
+  assert.equal(machine?.getId(), 17282);
+  assert.equal(exchanger?.getId(), 17283);
+
+  h.quest.setStage(p, 3);
+  assert.equal(p.varbits.get(2502), 0);
+  assert.equal(ObjectDefinition.forPlayer(machine.getId(), p).id, 17247, 'before sabotage, the map machine offers Unlock');
+  h.quest.setStage(p, 4);
+  assert.equal(p.varbits.get(2502), 1);
+  assert.equal(ObjectDefinition.forPlayer(machine.getId(), p).id, 17246, 'sabotage changes the map machine to Repair');
+  assert.equal(ObjectDefinition.forPlayer(exchanger.getId(), p).id, 17249, 'the exchanger follows the broken state');
+  h.quest.setStage(p, 7);
+  assert.equal(p.varbits.get(2502), 2);
+  assert.equal(ObjectDefinition.forPlayer(machine.getId(), p).id, 17245, 'repair changes the map machine to Operate');
+  assert.equal(ObjectDefinition.forPlayer(exchanger.getId(), p).id, 17248, 'repair restores the exchanger');
+
+  p.varbits.delete(2502);
+  h.login(p);
+  assert.equal(p.varbits.get(2502), 2, 'login restores the state from saved quest progress');
+  h.quest.setStage(p, 12);
+  assert.equal(p.varbits.get(2502), 0, 'completed-login recordings omit 2502; completion zero is the documented interim inference');
+  assert.equal(ObjectDefinition.forPlayer(machine.getId(), p).id, 17247);
+});
+
+test('Eyes Machine panel Inspect still records the cave inspection', () => {
+  const h = harness('EyesOfGlouphrie');
+  const p = player();
+  const inspect = h.objectOption(p, core.ObjectIdentifiers.MACHINE_PANEL, 'Inspect', { x: 2391, y: 9826, z: 0 });
+  assert.equal(inspect.handled, true);
+  assert.equal(p.varbits.get(2516), 1);
+  assert.equal((p.attrs.get('quest.the_eyes_of_glouphrie.bits') & (1 << 1)) !== 0, true);
+
+  const outside = h.objectOption(p, core.ObjectIdentifiers.MACHINE_PANEL, 'Inspect', { x: 2450, y: 9870, z: 0 });
+  assert.equal(outside.handled, false, 'outside the cave the registered Inspect action declines the click');
+  assert.equal(p.varbits.get(2516), 1, 'outside inspection leaves the cache varbit unchanged');
+  assert.equal((p.attrs.get('quest.the_eyes_of_glouphrie.bits') & (1 << 1)) !== 0, true);
+});
+
+test('Eyes item-on-map dispatch follows each real machine transform and exchanger stage', () => {
+  const h = harness('EyesOfGlouphrie');
+  const itemOn = (p, objectId, itemId = I.RED_SQUARE) => {
+    const event = { player: p, itemId, objectId, handled: false };
+    h.hooks.onItemOnObject[0](event);
+    return event;
+  };
+  for (const stage of [3, 7, 9, 10]) {
+    const p = player();
+    p.items.set(I.RED_SQUARE, 1);
+    h.quest.setStage(p, stage);
+    const event = itemOn(p, 17282);
+    assert.equal(event.handled, true, `machine item use is handled at stage ${stage}`);
+    assert.equal(p.items.get(I.RED_SQUARE), 1, `machine item use consumes nothing at stage ${stage}`);
+    assert.equal(p.items.get(I.RED_CIRCLE) ?? 0, 0);
+    assert.equal(p.items.get(I.RED_TRIANGLE) ?? 0, 0);
+  }
+
+  const p = player();
+  p.items.set(I.RED_SQUARE, 1);
+  h.quest.setStage(p, 4);
+  const exchanger = itemOn(p, 17283);
+  assert.equal(exchanger.handled, true, 'disc use on broken exchanger is routed at stage 4');
+  assert.equal(p.items.get(I.RED_SQUARE), 1, 'broken exchanger does not consume the disc');
+  assert.equal(p.items.get(I.RED_CIRCLE) ?? 0, 0);
+  assert.equal(p.items.get(I.RED_TRIANGLE) ?? 0, 0);
+});
+
+test('Eyes stage-6 Repair option routes from the broken map machine and consumes ingredients once', () => {
+  const h = harness('EyesOfGlouphrie');
+  const p = player();
+  const oak = I.OAK_LOGS, maple = I.MAPLE_LOGS, glue = I.MAGIC_GLUE, saw = I.SAW, hammer = I.HAMMER;
+  for (const id of [oak, maple, glue, saw, hammer]) p.items.set(id, 1);
+  h.quest.setStage(p, 6);
+
+  const broken = ObjectDefinition.forPlayer(17282, p);
+  assert.equal(broken.getName(), "Oaknock's Machine");
+  assert.deepEqual(broken.getInteractions().filter(Boolean), ['Repair']);
+  const repair = h.objectOption(p, 17282, broken.getInteractions()[0]);
+  assert.equal(repair.handled, true, 'cache action resolves through object name and Repair option');
+  assert.equal(h.quest.getStage(p), 7);
+  assert.equal(p.varbits.get(2502), 2);
+  for (const id of [oak, maple, glue]) assert.equal(p.items.get(id), 0, `ingredient ${id} is consumed once`);
+  assert.equal(p.items.get(saw), 1, 'saw is a requirement, not an ingredient');
+  assert.equal(p.items.get(hammer), 1, 'hammer is a requirement, not an ingredient');
+
+  const repaired = ObjectDefinition.forPlayer(17282, p);
+  assert.deepEqual(repaired.getInteractions().filter(Boolean), ['Operate']);
+  const secondRepair = h.objectOption(p, 17282, 'Repair');
+  assert.equal(secondRepair.handled, false, 'the repaired cache object no longer routes Repair');
+  h.objectActions.get("Oaknock's Machine").Repair({ player: p, objectId: 17282 });
+  for (const id of [oak, maple, glue]) assert.equal(p.items.get(id), 0, `repeat click cannot consume ingredient ${id}`);
+});
+
 test('Eyes machine object opens native panel and validates disc slots through cancel and activation', () => {
   const h = harness('EyesOfGlouphrie');
   const ids = [I.RED_SQUARE, I.YELLOW_TRIANGLE, I.GREEN_SQUARE, I.BLUE_TRIANGLE, I.YELLOW_PENTAGON, I.VIOLET_PENTAGON];
@@ -1459,38 +1582,43 @@ test('Eyes machine object opens native panel and validates disc slots through ca
   const p = player({ getInventory: () => inventory, getPacketSender: () => sender, getInterfaceId: () => opened });
   h.quest.setStage(p, 8);
   const objectAction = (name, id) => h.hooks.onObjectInteraction.find((fn) => fn.name === name)({ player: p, objectId: id });
+  const itemOnObject = (objectId, itemId) => {
+    const event = { player: p, objectId, itemId, handled: false };
+    h.hooks.onItemOnObject[0](event);
+    return event;
+  };
   const button = (uid, slot, itemId) => {
     const event = { player: p, buttonId: uid, action: 1, slot, itemId, handled: false };
     h.hooks.onInterfaceActionButton.find((fn) => fn.name === 'machineButton')(event);
     return event;
   };
   const select = (slot) => button(185 << 16, slot, ids[slot]);
-  objectAction('unlockMachine', 17247);
+  assert.equal(itemOnObject(17282, I.RED_SQUARE).handled, true, 'red square use on the cache map machine opens the lock panel');
   assert.equal(opened, 145);
   assert.ok(packets.some((p) => p[0] === 'sub' && p[2] === 185));
   assert.ok(packets.some((p) => p[0] === 'inventory' && p[1] === 440));
   assert.ok(packets.some((p) => p[0] === 'script' && p[1] === 149));
   button((145 << 16) | 13);
   assert.equal(opened, -1, 'explicit lock close removes the interface');
-  objectAction('unlockMachine', 17247);
+  objectAction('unlockMachine', 17282);
   h.emit('interface:closed', { player: p, interfaceId: 185 });
   select(0); button((145 << 16) | 8); button((145 << 16) | 12);
   assert.equal(h.quest.getStage(p), 8, 'closing the side invalidates subsequent actions');
-  objectAction('unlockMachine', 17247);
+  objectAction('unlockMachine', 17282);
   button(185 << 16, 27, undefined); // malformed empty slot must not throw
   button(185 << 16, 0, I.BLUE_TRIANGLE); // stale packet must not select the red square
   button((145 << 16) | 8);
   button((145 << 16) | 12);
   assert.equal(h.quest.getStage(p), 8);
-  objectAction('unlockMachine', 17247);
+  objectAction('unlockMachine', 17282);
   select(0); button((145 << 16) | 8); button((145 << 16) | 12);
   assert.equal(h.quest.getStage(p), 9);
   assert.equal(inventory.getAmount(I.RED_SQUARE), 2, 'unlock retains the existing quest approximation');
-  objectAction('operateMachine', 17245);
+  objectAction('operateMachine', 17282);
   assert.equal(opened, 189);
   button((189 << 16) | 42);
   assert.equal(opened, -1, 'explicit machine close removes the interface');
-  objectAction('operateMachine', 17245);
+  objectAction('operateMachine', 17282);
   select(2); button((189 << 16) | 24);
   button((189 << 16) | 38);
   assert.equal(inventory.getAmount(I.GREEN_SQUARE), 1, 'cancel leaves inventory intact');
@@ -1499,7 +1627,7 @@ test('Eyes machine object opens native panel and validates disc slots through ca
   button((189 << 16) | 27);
   assert.equal(h.quest.getStage(p), 9);
   assert.equal(inventory.getAmount(I.GREEN_SQUARE), 1, 'incomplete row activation consumes nothing');
-  objectAction('operateMachine', 17245);
+  objectAction('operateMachine', 17282);
   h.hooks.onPlayerLogout[0]({ player: p });
   button((189 << 16) | 39);
   assert.equal(h.quest.getStage(p), 9, 'a stale click after logout cannot activate');
@@ -1508,21 +1636,21 @@ test('Eyes machine object opens native panel and validates disc slots through ca
       select(slot); button((189 << 16) | child);
     }
   };
-  objectAction('operateMachine', 17245);
+  objectAction('operateMachine', 17282);
   fillPanel();
   h.quest.setStage(p, 8);
   button((189 << 16) | 39);
   assert.equal(opened, -1, 'stage regression closes the stale panel');
   for (const id of ids) assert.equal(inventory.getAmount(id), id === I.RED_SQUARE ? 2 : 1, 'stage regression consumes nothing');
   h.quest.setStage(p, 9);
-  objectAction('operateMachine', 17245);
+  objectAction('operateMachine', 17282);
   fillPanel();
   h.quest.setStage(p, 10);
   button((189 << 16) | 39);
   assert.equal(opened, -1, 'completed stage closes the stale panel');
   for (const id of ids) assert.equal(inventory.getAmount(id), id === I.RED_SQUARE ? 2 : 1, 'completed stage consumes nothing');
   h.quest.setStage(p, 9);
-  objectAction('operateMachine', 17245);
+  objectAction('operateMachine', 17282);
   fillPanel();
   const setStage = h.quest.setStage;
   h.quest.setStage = () => { throw new Error('stage failure'); };
@@ -1536,7 +1664,7 @@ test('Eyes machine object opens native panel and validates disc slots through ca
   assert.equal(inventory.getAmount(I.RED_SQUARE), 1, 'a repeated activation cannot consume another disc');
   slots = Array.from({ length: 28 }, (_, i) => new core.Item(ids[i] ?? -1, i < ids.length ? 1 : 0));
   h.quest.setStage(p, 9);
-  objectAction('operateMachine', 17245);
+  objectAction('operateMachine', 17282);
   fillPanel();
   button((189 << 16) | 39);
   assert.equal(h.quest.getStage(p), 10, 'final activation control also advances the quest');

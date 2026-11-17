@@ -25,6 +25,7 @@ const DEMONIC_PACTS = 6;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
   core = PluginManager.getCoreApi();
   GameConstants.setWorldProfile("league");
   const lists = {};
@@ -265,6 +266,7 @@ test("a dropped orb stays the killer's and lies 18,000 ticks; the rest of the lo
   NpcDrops.__internals.placeDrops(character("ground2"), [drops[0], { itemId: core.ItemIdentifiers.ASHES, amount: 1 }], new Location(3200, 3200, 0), { public: false });
   assert.deepEqual(placed, [
     { id: ORB().ASGARNIA_ECHO_ORB, options: { public: false, goesGlobal: false, despawnDelay: 18000 } },
-    { id: core.ItemIdentifiers.ASHES, options: { public: false } },
+    // A tradeable monster drop lasts 200 ticks (Wiki, Drops; NpcDrops TRADEABLE_DROP_DESPAWN_TICKS).
+    { id: core.ItemIdentifiers.ASHES, options: { public: false, despawnDelay: 200 } },
   ]);
 });

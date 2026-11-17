@@ -1,15 +1,16 @@
 import { CacheDefinitions } from "../../../game/cache/CacheDefinitions";
 import { PluginManager } from "../../../plugins/PluginManager";
+import { lazyRequire } from "../../../util/LazyRequire";
 
-const getInventoryCtor = () =>
+const getInventoryCtor = lazyRequire(() =>
   require("../../../game/model/container/impl/Inventory")
-    .Inventory as typeof import("../../../game/model/container/impl/Inventory").Inventory;
-const getEquipmentCtor = () =>
+    .Inventory as typeof import("../../../game/model/container/impl/Inventory").Inventory);
+const getEquipmentCtor = lazyRequire(() =>
   require("../../../game/model/container/impl/Equipment")
-    .Equipment as typeof import("../../../game/model/container/impl/Equipment").Equipment;
-const getEquipPacketListener = () =>
+    .Equipment as typeof import("../../../game/model/container/impl/Equipment").Equipment);
+const getEquipPacketListener = lazyRequire(() =>
   require("./EquipPacketListener")
-    .EquipPacketListener as typeof import("./EquipPacketListener").EquipPacketListener;
+    .EquipPacketListener as typeof import("./EquipPacketListener").EquipPacketListener);
 
 const DROP_OPTIONS = new Set(["drop", "destroy", "discard", "release"]);
 

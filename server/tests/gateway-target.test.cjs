@@ -53,3 +53,8 @@ test("the world list carries the world type's flags and activity", () => {
     GameConstants.WORLD_TYPE = before;
   }
 });
+
+test("username/password logins stay allowed: param 30 is true", () => {
+  // False makes the client show "You now need to play via the Jagex Launcher", with no way to log in.
+  assert.match(javConfig(), /^param=30=true$/m);
+});

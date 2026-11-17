@@ -1904,6 +1904,7 @@ export class OsrsClient {
             clanRank: 0,
             friendsChatMinKick: 0,
             sendFriendsChatAction,
+            invTypeLoader: this.loaderFactory.getInvTypeLoader(),
             paramTypeLoader: this.loaderFactory.getParamTypeLoader(),
             enumTypeLoader: this.loaderFactory.getEnumTypeLoader(),
             structTypeLoader: this.loaderFactory.getStructTypeLoader(),
@@ -5912,8 +5913,9 @@ export class OsrsClient {
         // This ensures this.gameState returns the new state when callbacks fire
         this.stateMachine.transition(newState, true);
 
-        if (newState === GameState.LOGIN_SCREEN && !this.loginState.titleMusicDisabled) {
-            this.scheduleLoginMusicStart(100);
+        if (newState === GameState.LOGIN_SCREEN) {
+            void this.loginRenderer.refreshClientBackground();
+            if (!this.loginState.titleMusicDisabled) this.scheduleLoginMusicStart(100);
         }
 
         // AFTER transition: set up callbacks that depend on the new state
@@ -6427,6 +6429,7 @@ export class OsrsClient {
                               }
                             : null,
                     );
+                    void this.loginRenderer.refreshClientBackground();
                     void this.loginState.refreshServerName();
                     this.loginState.saveLastServer();
                     this.loginState.showRememberedLogin();
@@ -7515,6 +7518,10 @@ export class OsrsClient {
         // A bag snapshot replaces this registry entry with its 28-slot container.
         // Rebind the shop's retained container before publishing stock/transmits.
         this.cs2Vm?.context?.inventories?.set(516, this.shopInventory);
+        // A shop the server opens under its live inventory id (Farming Supplies: farmer_supplies, 894) is
+        // drawn by the cache scripts from that id, whose enums say whether its stock is infinite (no counts).
+        const inventoryId = typeof state.inventoryId === "number" && state.inventoryId > 0 ? state.inventoryId : 516;
+        if (inventoryId !== 516) this.cs2Vm?.context?.inventories?.set(inventoryId, this.shopInventory);
 
         // Clear existing items and populate with shop stock
         this.shopInventory.clear();
@@ -7532,6 +7539,7 @@ export class OsrsClient {
 
         // Mark inv cycle for shop (516) - handlers fire during processWidgetTransmits()
         markInvTransmit(516);
+        if (inventoryId !== 516) markInvTransmit(inventoryId);
     }
 
     /**

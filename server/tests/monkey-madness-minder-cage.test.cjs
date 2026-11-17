@@ -7,7 +7,7 @@
 // Not verified: the pen tile (2602,3280) and retail timing; no retail capture of this sequence is in the corpus.
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { before, test } = require("node:test");
+const { before, after, test } = require("node:test");
 
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
@@ -30,20 +30,51 @@ const CAGE_LINE = "Let's put you back in your cage where you belong...";
 const LAST_LINE = "I must be imagining things ... monkeys can't talk.";
 const CAGE_DIARY_TASK = "have-a-zookeeper-put-you-in-ardougne-zoo-s-monke";
 const diaryTasks = [];
+const hookErrors = [];
+const originalConsoleError = console.error;
+let hunterShutdown;
 let index = 19000;
 
 before(async () => {
+  console.error = (...args) => {
+    if (String(args[0]).includes("hook failed")) hookErrors.push(String(args[0]));
+    originalConsoleError(...args);
+  };
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
-  PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  const previousDisableBots = process.env.DISABLE_PLAYER_BOTS;
+  try {
+    process.env.DISABLE_PLAYER_BOTS = "1";
+    PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  } finally {
+    if (previousDisableBots === undefined) delete process.env.DISABLE_PLAYER_BOTS;
+    else process.env.DISABLE_PLAYER_BOTS = previousDisableBots;
+  }
   core.ObjectDefinition.init();
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(ZOO_OUTSIDE.getX(), ZOO_OUTSIDE.getY());
+  // Hunter's Ceto line hook reads its startup-owned core on every dialogue line.
+  // Run the actual registered lifecycle pair; unrelated HTTP/world startup is unnecessary.
+  const starts = PM.serverStartupHooks.filter(hook => hook.pluginName === "Hunter" && hook.handlerName === "bound start");
+  const stops = PM.serverShutdownHooks.filter(hook => hook.pluginName === "Hunter");
+  assert.equal(starts.length, 1, "Hunter has one registered startup hook");
+  assert.equal(stops.length, 1, "Hunter has one registered shutdown hook");
+  hunterShutdown = stops[0].handler;
+  starts[0].handler({ timestamp: Date.now() });
   // Records the cage diary task each time the quest emits it (the quest calls PluginManager.emitCustomEvent at call time).
   const emit = PM.emitCustomEvent.bind(PM);
   PM.emitCustomEvent = (name, payload) => {
     if (name === "diary:task" && payload?.task) diaryTasks.push(payload.task);
     return emit(name, payload);
   };
+});
+
+after(() => {
+  try {
+    hunterShutdown?.({ timestamp: Date.now() });
+  } finally {
+    console.error = originalConsoleError;
+  }
+  assert.deepEqual(hookErrors, [], "the native dialogue path has no plugin hook errors");
 });
 
 /** A player in monkey form at stage 8, outside the zoo pen, with a recording of the lines the dialogue shows. */
@@ -156,7 +187,8 @@ test("a stale pending placement after an abandoned capture cannot place the play
   for (let i = 0; i < 40 && p.getDialogueManager().isActive(); i++) await continueOnce();
   assert.ok(!p.getLocation().equals(ZOO_PEN), "the later chat does not move the player into the pen");
   // The Minder's last line in any later chat (here injected as that line event) queues no placement once the origin is cleared.
-  const lineEvent = { player: p, npcId: npc.getId(), text: LAST_LINE };
+  const lineEvent = { player: p, npc, npcId: npc.getId(), text: LAST_LINE, skip: false,
+    step: { type: "line", speaker: "Monkey minder", text: LAST_LINE, speaker_ids: [npc.getId()] } };
   PM.emitCustomEvent("npc-dialogue:line", lineEvent);
   assert.equal(lineEvent.after, undefined, "no placement is queued by the Minder last line");
   assert.notEqual(p.getAttribute("quest.monkey_madness_i.monkey-captured"), true, "the later chat does not set the capture flag");

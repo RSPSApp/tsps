@@ -599,6 +599,48 @@ test("equipped arena arrows are cleaned up on finish and reconnect", () => {
 
 // Wiki Imcando_hammer and Barbarian_Assault/Strategies: the Defender can use either
 // Imcando hammer variant, carried or equipped, to repair runner traps.
+test("the north wall supplies the hammer and two logs for trap repairs", (t) => {
+  const { match } = createMatch([data.ROLE.DEFENDER]);
+  t.after(() => match.finish(false));
+  match.arena = data.ARENA.normal;
+  match.spawnRepairSupplies();
+  const logs = [...match.groundItems].filter((item) => item.getItem().getId() === data.ITEM.LOGS);
+  assert.equal(logs.length, 2);
+  // Wiki tile markers: both logs share the one log tile on the normal arena's north wall.
+  assert.ok(logs.every((log) => log.getPosition().getX() === 1885 && log.getPosition().getY() === 5486));
+  const supplied = [...match.groundItems].map((item) => item.getItem().getId());
+  assert.equal(supplied.filter((id) => id === data.ITEM.HAMMER).length, 1);
+  assert.equal(supplied.filter((id) => id === data.ITEM.LOGS).length, 2);
+  assert.ok([...match.groundItems].every((item) => item.getDespawnDelay() > ItemOnGroundManager.DESPAWN_DELAY),
+    "the supplies last longer than the world's 300-tick ground despawn");
+});
+
+test("a picked-up repair supply comes back after ten ticks", (t) => {
+  const { match, players } = createMatch([data.ROLE.DEFENDER]);
+  t.after(() => match.finish(false));
+  match.arena = data.ARENA.normal;
+  match.phase = Match.PHASE.WAVE;
+  match.spawnRepairSupplies();
+  const player = players[0];
+  const logsOnGround = () =>
+    [...match.groundItems].filter((item) => item.getItem().getId() === data.ITEM.LOGS).length;
+  assert.equal(logsOnGround(), 2);
+
+  const log = [...match.groundItems].find((item) => item.getItem().getId() === data.ITEM.LOGS);
+  const held = player.getInventory().getAmount(data.ITEM.LOGS);
+  assert.equal(match.handleGroundItem({ player, groundItem: log, groundItemId: data.ITEM.LOGS, handled: false }), true);
+  assert.equal(player.getInventory().getAmount(data.ITEM.LOGS), held + 1);
+  assert.equal(Items.isTracked(player, data.ITEM.LOGS), true, "the arena tracks the copy it gave");
+  assert.equal(logsOnGround(), 1, "the picked-up log leaves the ground");
+
+  for (let tick = 1; tick < 10; tick++) core.TaskManager.process();
+  assert.equal(logsOnGround(), 1, "it does not return early");
+  core.TaskManager.process();
+  assert.equal(logsOnGround(), 2, "the tenth tick puts a fresh log back");
+  assert.ok([...match.groundItems].every((item) => item.getDespawnDelay() > ItemOnGroundManager.DESPAWN_DELAY),
+    "the returned log also outlives the world despawn");
+});
+
 test("runner trap repairs accept carried and equipped Imcando hammers", async (t) => {
   const I = core.ItemIdentifiers;
   const variants = [
@@ -630,6 +672,7 @@ test("runner trap repairs accept carried and equipped Imcando hammers", async (t
     assert.equal(trap.charges, 2);
     assert.equal(trap.object.getId(), data.OBJECT.RUNNER_TRAP_2);
     assert.equal(inventory.getAmount(I.LOGS), 0);
+    assert.equal(inventory.getAmount(I.HAMMER), 1, "the hammer is a reusable tool, not a repair ingredient");
   }));
 
   await t.test("a hammer without logs leaves the broken trap unchanged", () => scenario(({ match, player, trap, inventory }) => {

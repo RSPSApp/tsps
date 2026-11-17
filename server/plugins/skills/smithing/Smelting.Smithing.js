@@ -262,7 +262,7 @@ function smelt({ player, objectId }) {
  * which aren't on it, open a menu of their own product.
  */
 function useOnFurnace(event) {
-  const furnace = event.object.getDefinition().getName();
+  const furnace = (event.definition ?? event.object.getDefinition()).getName();
   if (furnace === LOVAKITE_FURNACE) return smeltLovakite(event);
   const recipes = Data.SMELTING_RECIPES.filter((recipe) => !recipe.furnace
     && (!recipe.members || Core.WorldDefinition.isMembersWorld())

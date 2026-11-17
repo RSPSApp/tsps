@@ -549,6 +549,23 @@ const worker = {
 
         return Transfer(pixels, [pixels.buffer]);
     },
+    async preloadWorldTextures(ids: number[], size: number): Promise<TransferDescriptor<Map<number, Int32Array>>> {
+        const state = await workerStatePromise;
+        if (!state) throw new Error("Worker not initialized");
+
+        const { game, revision } = state.cache.info;
+        const preloadIds = game === "runescape" && revision >= 508 ? ids.slice(0, 64) : ids;
+        const textures = new Map<number, Int32Array>();
+        for (const id of preloadIds) {
+            try {
+                const pixels = state.textureLoader.getPixelsArgb(id, size, true, 1.0);
+                if (pixels.length > 0) textures.set(id, pixels);
+            } catch (error) {
+                console.debug("World texture will load with its map", id, error);
+            }
+        }
+        return Transfer(textures, Array.from(textures.values(), (pixels) => pixels.buffer));
+    },
     async setNpcInstances(instances: NpcInstance[]): Promise<void> {
         const statePromise = workerStatePromise;
         const workerState = await statePromise;

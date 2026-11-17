@@ -14,6 +14,8 @@ import { StatementDialogue } from "../../model/dialogues/entries/impl/StatementD
 import { TickStopwatch } from "../../../util/TickStopwatch";
 import { ServerPerf } from "../../../util/ServerPerf";
 import { World } from "../../World";
+import { Wilderness } from "../wilderness/Wilderness";
+import { hasGlobalWorldTag } from "../../definition/WorldDefinition";
 import { CombatConstants } from "./CombatConstants";
 import { CombatFactory, CanAttackResponse } from "./CombatFactory";
 import { CombatRange } from "./CombatRange";
@@ -63,6 +65,8 @@ export class Combat {
     /** The player whose damage `addDamage` recorded last. */
     private lastDamager: Player | null = null;
     private readonly lastAttack = new TickStopwatch();
+    /** Damage can delay healing without renewing another fighter\'s single-way tag. */
+    private readonly lastDamage = new TickStopwatch();
     // Most NPCs never use these; each SecondsTimer also holds a Stopwatch, so allocate on first use.
     private poisonImmunityTimer: SecondsTimer | null = null;
     private poisonClock: PoisonClock | null = null;
@@ -151,12 +155,27 @@ export class Combat {
      * (https://oldschool.runescape.wiki/w/PJ_timer).
      */
     private static readonly PJ_TIMER_MS = 8 * 600;
-    /**
-     * Player-versus-player keeps the existing 10-tick hold here. Live uses a longer PvP PJ
-     * timer (20 ticks in Wilderness singles, 16 on PvP worlds), which is a separate change;
-     * the PvM fix must not shorten PvP protection.
-     */
+    /** Other player-versus-player holds keep the old 10-tick window. */
     private static readonly PVP_TIMER_MS = 10 * 600;
+    /** Wiki (PJ timer): 20 ticks in Wilderness single-way and singles-plus combat. */
+    private static readonly WILDERNESS_PVP_TIMER_MS = 20 * 600;
+    /** Wiki (PJ timer): 16 ticks in single-way combat on a PvP world. */
+    private static readonly PVP_WORLD_TIMER_MS = 16 * 600;
+
+    /**
+     * The player-versus-player PJ window for the character being attacked. The timer only
+     * exists in single-way/singles-plus combat: Wilderness fights use 20 ticks and PvP worlds
+     * 16, while every other PvP context keeps the old 10-tick hold.
+     */
+    public static pvpPjTimerMs(character: Mobile, pvpWorld: boolean = hasGlobalWorldTag("pvp")): number {
+        const location = character.getLocation();
+        if (!location) return this.PVP_TIMER_MS;
+        // Multi-combat has no PJ lock; leave its existing retarget hold alone.
+        if (Wilderness.isMulti(location.getX(), location.getY(), location.getZ())) return this.PVP_TIMER_MS;
+        if (Wilderness.isGeographicPvp(location)) return this.WILDERNESS_PVP_TIMER_MS;
+        if (pvpWorld) return this.PVP_WORLD_TIMER_MS;
+        return this.PVP_TIMER_MS;
+    }
 
     public preserveMovementForTicks(ticks = 1): void {
         this.manualMovementUntilCycle = World.getProcessCycle() + Math.max(0, ticks) - 1;
@@ -326,12 +345,13 @@ export class Combat {
 
         if (this.attacker) {
             // Wiki (PJ timer): 8 ticks of protection while a monster is attacking; a kill ends
-            // it early (NPC.appendDeath). PvP keeps its longer window for now. Only the attacker
-            // expires here: the logout timer runs on to its own 16 ticks. Before the
-            // scripted-walk return, so a long plugin walk still lets it expire.
+            // it early (NPC.appendDeath). PvP uses 20 ticks in the Wilderness and 16 on PvP
+            // worlds (single-way only). Only the attacker expires here: the logout timer runs
+            // on to its own 16 ticks. Before the scripted-walk return, so a long plugin walk
+            // still lets it expire.
             const timerMs = this.attacker.isNpc() || this.character.isNpc()
                 ? Combat.PJ_TIMER_MS
-                : Combat.PVP_TIMER_MS;
+                : Combat.pvpPjTimerMs(this.character);
             if (this.lastAttack.elapsedTime(timerMs)) this.clearAttacker();
         }
 
@@ -802,7 +822,9 @@ export class Combat {
         return this.lastAttackedCycle < 0 ? Infinity : World.getProcessCycle() - this.lastAttackedCycle;
     }
     private clearAttacker(): void {
-        this.applyAttacker(null);
+        // PJ expiry releases the attacker; it is not another hit or an explicit
+        // combat reset, so NPC regeneration keeps its original timestamp.
+        this.applyAttacker(null, false);
     }
 
     /**
@@ -813,9 +835,12 @@ export class Combat {
     public clearAttackerIf(attacker: Mobile): void {
         if (this.attacker === attacker) this.applyAttacker(null);
     }
-    private applyAttacker(attacker: Mobile | null): void {
+    private applyAttacker(attacker: Mobile | null, resetTimer = true): void {
         this.attacker = attacker;
-        this.lastAttack.reset();
+        if (resetTimer) {
+            this.lastAttack.reset();
+            this.lastDamage.reset();
+        }
         if (this.character.isNpc()) {
             World.markNpcCombatActive(this.character.getAsNpc(), attacker != null || this.target != null);
         }
@@ -846,6 +871,7 @@ export class Combat {
     public getTeleblockTimer(): SecondsTimer { return this.teleblockTimer ??= new SecondsTimer(); }
     public getPrayerBlockTimer(): SecondsTimer { return this.prayerBlockTimer ??= new SecondsTimer(); }
     public getLastAttack(): TickStopwatch { return this.lastAttack; }
+    public getLastDamage(): TickStopwatch { return this.lastDamage; }
 
     private shouldRetreat(method: CombatMethod): boolean {
         if (!this.character.isNpc()) return false;

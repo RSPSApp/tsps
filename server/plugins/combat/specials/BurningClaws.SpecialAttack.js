@@ -5,7 +5,6 @@ module.exports = function registerBurningClawsSpecialAttack(api) {
   const DRAIN = 35;
   const SPECIAL_ANIMATION = new Animation(11140);
   const SPECIAL_VFX = new Graphic(2814);
-  const SLASH_DEFENCE_BONUS_INDEX = 1;
   const ACCURACY_ROLLS = 3;
   // Wiki (Burning claws): a burn deals 10 damage over 40 ticks, up to five at once. Each hitsplat
   // burns with the chance of the accuracy roll that landed (1st, 2nd, 3rd); a full miss never burns.
@@ -45,7 +44,6 @@ module.exports = function registerBurningClawsSpecialAttack(api) {
     accuracyMultiplier: 1,
     traits: {
       hitCount: 3,
-      meleeDefenceBonusIndex: SLASH_DEFENCE_BONUS_INDEX,
       accuracyRollCount: ACCURACY_ROLLS,
       firstSuccessfulAccuracyDamageRanges: [
         { minimumDamageMultiplier: 0.75, maximumDamageMultiplier: 1.75, hitDamageMultipliers: [0.25, 0.25, 0.5] },

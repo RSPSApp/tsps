@@ -521,6 +521,12 @@ class VespulaRoom extends Raid.Room {
     });
   }
 
+  /** ::coxclear: the portal falls as it would (the boils burst, the pillars and tendrils go), then the rest goes. */
+  devFinish() {
+    if (!this.completed && this.portal) this.onNpcDeath(this.portal, null);
+    Shared.later(this.raid, 3, () => this.cleanup());
+  }
+
   feed(player, grub) {
     if (!grub.__coxStung) {
       player.sendMessage("It doesn't look like it needs feeding.");

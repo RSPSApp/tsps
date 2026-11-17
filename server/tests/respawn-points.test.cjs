@@ -225,3 +225,12 @@ test("PvP mode opens presets after a death at the player's own respawn point", (
   afterDeath(lumbridge);
   assert.deepEqual(opened, [edgeville, lumbridge], 'no point: the world spawn, as before');
 });
+
+test('the Knight Waves grant Camelot and set the respawn point', () => {
+  const player = actor();
+  PM.emitCustomEvent('respawn-point:grant', { player, key: 'camelot', set: true });
+  assert.equal(T.pointOf(player), 'camelot');
+  assert.deepEqual(where(player), [2757, 3478, 0]);
+  PM.emitCustomEvent('respawn-point:grant', { player, key: 'lumbridge', set: true });
+  assert.equal(T.pointOf(player), 'lumbridge');
+});

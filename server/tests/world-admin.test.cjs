@@ -278,6 +278,18 @@ test("the panel links to the map and cache editors on this worktree's client por
   assert.match(page.text, /function updateToolLink\(id, href, flag\)/);
 });
 
+test("legacy bot editor links open the shared panel behind authentication", async (t) => {
+  const { port } = await start(t);
+  for (const path of ["/bot-editor", "/bot-graph"]) {
+    assert.equal((await request(port, { path })).status, 401);
+    const result = await request(port, { path, headers: auth });
+    assert.equal(result.status, 302);
+    assert.equal(result.headers.location, "/?view=bots&edit=1");
+  }
+  const page = await request(port, { path: "/", headers: auth });
+  assert.match(page.text, /id="tab-bots" aria-controls="panel-bots"/);
+});
+
 test("the editor links show only where the page is open on this machine, not on a hosted world's domain", () => {
   const vm = require("node:vm");
   const page = fs.readFileSync(path.join(__dirname, "../plugins/tools/worldadmin/panel/page.html"), "utf8");
@@ -364,7 +376,10 @@ test("plugin ZIPs can be deleted and re-imported, with access and package checks
   const upload = (body, headers = {}) => request(port, {
     method: "POST", path: "/api/plugins/import", headers: { "Content-Type": "application/zip", ...headers }, body,
   });
-  const manifest = { format: 1, id: "welcome", name: "Welcome", version: "1.0.0", description: "Greets players" };
+  const manifest = {
+    format: 1, id: "welcome", name: "Welcome", version: "1.0.0", description: "Greets players",
+    config: { "Welcome:message": { type: "string", label: "Message", help: "Shown at login.", default: "Welcome!" } },
+  };
   const makeZip = (source, filename = "Welcome.plugin.js") => {
     const zip = new AdmZip();
     zip.addFile("plugin.json", Buffer.from(JSON.stringify(manifest)));

@@ -72,8 +72,8 @@ function neverKept(item) {
 
 /** An untradeable a PvP death takes for the killer (SlayerHelmet's black mask (i), `items:lost-to-pvp-killer`). */
 function lostToPvpKiller(item, settings) {
-  if (!settings.playerKill || settings.wildernessLevel <= 0) return false;
-  const query = { item, lost: false };
+  if (!settings.playerKill) return false;
+  const query = { item, wildernessLevel: settings.wildernessLevel, lost: false };
   pluginApi.emitCustomEvent("items:lost-to-pvp-killer", query);
   return query.lost === true;
 }
@@ -129,15 +129,21 @@ function getDeathItems(player, toKeep, settings, cosmetic = []) {
       continue;
     }
 
-    const tradeable = item.isTradeable();
+    let makesGrave = grave.makesGrave;
+    if (settings.playerKill && !protectedItems.has(item)) {
+      const itemGrave = { player, item, playerKill: true, makesGrave: false };
+      pluginApi.emitCustomEvent("gravestones:makes-grave", itemGrave);
+      makesGrave = itemGrave.makesGrave;
+    }
+    const tradeable = item.isPlayerTradeable();
     const lostOnDeath = !protectedItems.has(item)
-      && (tradeable || item.isLostOnDeath() || grave.makesGrave || lostToPvpKiller(item, settings));
+      && (tradeable || item.isLostOnDeath() || makesGrave || lostToPvpKiller(item, settings));
     items.push({
       slot: items.length,
       itemId: item.getId(),
       quantity: item.getAmount(),
     });
-    const state = itemState(player, item, lostOnDeath, grave.makesGrave);
+    const state = itemState(player, item, lostOnDeath, makesGrave);
     states.push({ slot: states.length, ...state });
 
     const broken = breakCost(item, settings);

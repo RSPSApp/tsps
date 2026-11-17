@@ -93,7 +93,11 @@ test('world.json plugins turns plugins on and off over their default, and warns 
 test('the older disabledPlugins list still decides alone, with a deprecation warning', () => {
   const { loaded, warn } = loadPlugins({ plugins: { On: false }, disabledPlugins: ['Other'] }, switchFiles);
   assert.deepEqual(loaded.sort(), ['Off', 'On']);
-  assert.equal(warn.length, 1);
+  assert.equal(warn.length, 3);
+  assert.deepEqual(warn.slice(1), [
+    '[plugins] world.json names a plugin that does not exist: crossfloor',
+    '[plugins] world.json names a plugin that does not exist: freetoplay',
+  ], 'legacy normalization injects built-in defaults absent from this toy registry');
   assert.match(warn[0], /disabledPlugins is deprecated/);
 });
 
@@ -341,7 +345,7 @@ test('combat policy respects either distinct area denial and retains global deni
   const { CombatFactory, CanAttackResponse } = require('../dist/game/content/combat/CombatFactory');
   const { PluginManager } = require('../dist/plugins/PluginManager');
   const { Location } = require('../dist/game/model/Location');
-  const global = t.mock.method(PluginManager, 'emitCanAttack', () => null);
+  const global = t.mock.method(PluginManager, 'emitCanAttackDecision', () => ({ allow: null }));
   const calls = [];
   const area = (name, verdict) => ({
     getName: () => name,
@@ -362,7 +366,7 @@ test('combat policy respects either distinct area denial and retains global deni
   calls.length = 0;
   assert.equal(response(allow, allow), CanAttackResponse.CAN_ATTACK);
   assert.deepEqual(calls, ['allow'], 'a shared area runs once');
-  global.mock.mockImplementation(() => false);
+  global.mock.mockImplementation(() => ({ allow: false }));
   assert.equal(response(allow, neutral), CanAttackResponse.CANT_ATTACK_IN_AREA);
 });
 

@@ -26,6 +26,7 @@
 module.exports = function registerHeroesQuest(api) {
   const { Skill, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, startTranscript, refreshQuestList, QUEST_POINTS_ATTRIBUTE } = require("../QuestRuntime");
+  const Herblore = require("../../skills/herblore/Common.Herblore");
 
   const PAGE = "Heroes' Quest";
   const REQUIRED_QUEST_POINTS = 55;
@@ -427,9 +428,10 @@ module.exports = function registerHeroesQuest(api) {
     const { player } = event;
     event.handled = true;
     // Wiki (Blamish oil): "requires level 25 Herblore to be made and gives 80 Herblore experience". The refusal is
-    // the Herblore plugin's own combine line (no recording shows it).
+    // the Herblore plugin's own combine line (no recording shows it for this oil), a messagebox with its mesbox
+    // chat line as the skill's (rsprox_transcripts/227/910269.txt tick 22640).
     if (player.getSkillManager().getCurrentLevel(Skill.HERBLORE) < BLAMISH_OIL_LEVEL) {
-      player.sendMessage(`You need a Herblore level of ${BLAMISH_OIL_LEVEL} to combine those.`);
+      Herblore.mesbox(player, `You need a Herblore level of ${BLAMISH_OIL_LEVEL} to combine those.`);
       return;
     }
     take(player, BLAMISH_SLIME);

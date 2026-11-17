@@ -96,6 +96,9 @@ const CLEAVE_SELF_MAX = 12;
 /** A living Mirrorback redirects a fifth of boss damage to itself, half of that back (Wiki). */
 const MIRRORBACK_REDIRECT_FACTOR = 0.2;
 const MIRRORBACK_RECOIL_FACTOR = 0.5;
+/** Vengeance taking the Mirrorback's recoil, sent as recorded with no closing tag
+ * (rsprox_transcripts/237/01156.txt ticks 1353 and 3589, 237/01179.txt tick 223). */
+const MIRRORBACK_VENGEANCE_MESSAGE = "<col=3366ff>You reflect the Mirrorback's reflected damage!";
 /** On-hit drains (Wiki): a ranged hit drains 9% defence, a magic hit 9% prayer. */
 const DRAIN_RANGED_DEFENCE = 0.09;
 /**
@@ -237,6 +240,13 @@ const ATTR_DESTROY_NO_PROMPT = "araxxor:destroy-no-prompt";
 /** Player attribute keys: the kill count and best fight time (ticks), persisted. */
 const ATTR_KILLS = "araxxor:kills";
 const ATTR_BEST_TICKS = "araxxor:best-ticks";
+/**
+ * The noxious halberd's pieces (point, blade, pommel). The Wiki's unique table gives any one of
+ * them at 1/200 and "Players will not receive duplicate pieces until each full set is obtained".
+ */
+const HALBERD_PIECES = Object.freeze([29790, 29792, 29794]);
+/** Player attribute: the pieces received since the last full set, a bitmask in HALBERD_PIECES order. */
+const ATTR_HALBERD_PIECES = "araxxor:halberd-pieces";
 
 const Attack = { MELEE: "melee", RANGED: "ranged", MAGIC: "magic", CLEAVE: "cleave" };
 
@@ -373,6 +383,7 @@ module.exports = {
   CLEAVE_SELF_MAX,
   MIRRORBACK_REDIRECT_FACTOR,
   MIRRORBACK_RECOIL_FACTOR,
+  MIRRORBACK_VENGEANCE_MESSAGE,
   DRAIN_RANGED_DEFENCE,
   ARANEA_RANGED_COOLDOWN_TICKS,
   ARANEA_CLEAVE_COOLDOWN_TICKS,
@@ -428,6 +439,8 @@ module.exports = {
   ATTR_DESTROY_NO_PROMPT,
   ATTR_KILLS,
   ATTR_BEST_TICKS,
+  HALBERD_PIECES,
+  ATTR_HALBERD_PIECES,
   ENRAGE_MODELS,
   playSound,
   playCaptured,

@@ -221,7 +221,10 @@ export class Sound {
     public static PRAYER_EAGLE_EYE = new Sound(2665, 1, 0, 0)
     public static PRAYER_MYSTIC_MIGHT = new Sound(2669, 1, 0, 0)
     public static PRAYER_RETRIBUTION = new Sound(2682, 1, 0, 0)
+    // 2680 (redemption) is a 97 Hz bass tone: it plays, but small speakers cannot reproduce it.
     public static PRAYER_REDEMPTION = new Sound(2680, 1, 0, 0)
+    // redemption_heal: played when the prayer heals (CombatFactory.handleRedemption).
+    public static PRAYER_REDEMPTION_HEAL = new Sound(2681, 1, 0, 0)
     public static PRAYER_SMITE = new Sound(2686, 1, 0, 0)
     public static PRAYER_CHIVALRY = new Sound(3826, 1, 0, 0)
     public static PRAYER_PIETY = new Sound(3825, 1, 0, 0)

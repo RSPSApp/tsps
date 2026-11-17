@@ -16,7 +16,7 @@ module.exports = {
     Doors.bind(api);
     Travel.bind(api);
     Sceptre.attach(api);
-    for (const key of [Data.CLAIMED_ATTRIBUTE, Travel.DONT_ASK_ATTRIBUTE, Travel.WARNINGS_ATTRIBUTE]) api.persistAttribute(key);
+    api.persistAttribute(Data.CLAIMED_ATTRIBUTE);
     api.onPlayerLogin(Data.restore);
     api.onObjectInteraction("Entrance", { "Climb-down": Travel.enter });
     for (const floor of Data.FLOORS) {
@@ -27,6 +27,5 @@ module.exports = {
     for (const name of ["Ladder", "Dripping vine", "Boney ladder"]) api.onObjectInteraction(name, { "Climb-down": Travel.climbDown, "Climb-up": Travel.climbUp });
     api.onObjectInteraction("Bone Chain", { "Climb-up": Travel.climbUp });
     api.onObjectInteraction("Portal", { Use: Travel.usePortal });
-    api.onInterfaceActionClick(Travel.warningClick);
   },
 };

@@ -1,7 +1,6 @@
 const core = require("./Core.Farming");
 const Patches = require("./Patches.Farming");
 const Data = require("./Data.Farming");
-const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 // Cache241: scripts2813/2820 read inventories93/626 and seed-category obj param709.
 const CAPACITY = 104;
@@ -261,6 +260,14 @@ function guarded(player, session) {
 function refreshOpen(player) {
     if (current(player)) sync(player);
 }
+/** "group-ironman:wipe-tradeables" { player }: a leaver who stays a ranked Group Ironman loses the seeds in the seed vault (Wiki). */
+function wipeForGroupIronman({ player }) {
+    const farm = Patches.farmFor(player);
+    farm.vault = {};
+    farm.vaultOrder = undefined;
+    prepare(farm);
+    core.PluginManager.emitCustomEvent("persistence:save", { player, reason: "seed-vault" });
+}
 function changed(player) {
     player.getInventory().refreshItems();
     sync(player);
@@ -416,6 +423,9 @@ function click(event) {
     if (buttonId === uid("seed_vault:search")) {
         // Script2865 owns local text input and filtering. Its search box replaced a count prompt,
         // which an abort would close too (script 138), so only the prompt's answer is dropped.
+        // The lock editor's clamp (script612, noclickthrough) covers Search, and a click there
+        // runs script4207, which hides the editor and answers 0: it closes as on Done.
+        if (session.popup) closeLockPopup(player, session, session.popup);
         player.setEnteredAmountAction(null);
         return;
     }
@@ -478,7 +488,7 @@ function click(event) {
             displayed = count ? id : core.CacheDefinitions.getItem(id).placeholder;
         if (itemId > 0 && itemId !== displayed) return;
         if (action === 10) {
-            examineItem(player, id, count);
+            core.examineItem(player, id, count);
             return;
         }
         if (!count) {
@@ -519,7 +529,7 @@ function click(event) {
         const item = player.getInventory().forSlot(slot);
         if (!item || item.getId() <= 0 || (itemId > 0 && itemId !== item.getId())) return;
         if (action === 10) {
-            examineItem(player, item.getId(), item.getAmount());
+            core.examineItem(player, item.getId(), item.getAmount());
             return;
         }
         const originalId = item.getId();
@@ -566,4 +576,4 @@ function drag(event) {
 function logout({ player }) {
     SESSIONS.delete(player);
 }
-Object.assign(module.exports, { open, click, drag, logout, eligible, held, refreshOpen });
+Object.assign(module.exports, { open, click, drag, logout, eligible, held, refreshOpen, wipeForGroupIronman });

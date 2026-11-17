@@ -703,7 +703,7 @@ module.exports = function registerDreamMentorQuest(api) {
   function ownedJack(player) {
     const world = api.getWorld();
     if (!world?.getNpcs) return null;
-    for (const npc of world.getNpcs()) {
+    for (const npc of (world.getNpcsOwnedBy?.(player) ?? world.getNpcs())) {
       if (npc?.getId?.() === JACK_NPC_ID && npc.getOwner?.() === player) return npc;
     }
     return null;

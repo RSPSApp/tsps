@@ -171,7 +171,7 @@ test('precondition: a fresh key at stage 20 is telegrabbable in range (cast rout
   h.ballad();
   assert.ok(ItemOnGroundManager.getGroundItem(h.player.getUsername(), KEY, KEY_TILE, null), 'key is on the table');
   grabKey(t, h, new Location(3430, 2928, 0));
-  assert.equal(h.quest.getStage(h.player), STAGE_KEY, 'in-range telegrab advances 20 -> 25');
+  assert.equal(h.quest.getStage(h.player), STAGE_BALLAD, 'the grab leaves the stage at 20: live advances it at the rope descent (227/01788 tick 5036)');
   assert.equal(h.inventory.get(KEY), 1, 'the key is in the inventory');
 }));
 
@@ -189,7 +189,7 @@ test('precondition: a fresh key is telegrabbable from out of range via the walk,
   assert.equal(h.walks[0].reached(h.player), true, 'arrival is in range');
   h.walks[0].action();
   advance(3);
-  assert.equal(h.quest.getStage(h.player), STAGE_KEY, 'the arrival grab advances 20 -> 25');
+  assert.equal(h.quest.getStage(h.player), STAGE_BALLAD, 'the arrival grab leaves the stage at 20');
 }));
 
 test('defect (BEFORE fails here): the key is still on the table after the default 300-tick lifetime, so the telegrab advances the quest', (t) => withWorld(() => {
@@ -201,7 +201,7 @@ test('defect (BEFORE fails here): the key is still on the table after the defaul
   assert.ok(ItemOnGroundManager.getGroundItem(h.player.getUsername(), KEY, KEY_TILE, null),
     'the key is still on the table after 301 ticks (BEFORE: it was removed at the 300-tick lifetime)');
   grabKey(t, h, new Location(3430, 2928, 0));
-  assert.equal(h.quest.getStage(h.player), STAGE_KEY, 'the key is still on the table and the grab advances 20 -> 25');
+  assert.equal(h.quest.getStage(h.player), STAGE_BALLAD, 'the key is still on the table and the grab takes it; the stage waits for the descent');
   assert.equal(h.inventory.get(KEY), 1);
 }));
 

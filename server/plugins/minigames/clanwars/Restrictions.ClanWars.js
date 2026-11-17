@@ -93,7 +93,7 @@ function noSpellbookMagic(event) {
           ? "Cast supported Classic F2P spells manually at an opposing fighter during the battle."
           : game.rules.magic === Magic.BINDING_ONLY
           ? "Cast Bind, Snare or Entangle at an opposing fighter during the battle."
-          : "Cast supported Standard elemental or manual effect spells at an opposing fighter during the battle.";
+          : "Cast supported Standard spells at an opposing fighter during the battle.";
       }
     }
     if (!message) return;

@@ -1115,8 +1115,10 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
                 view: msaa?.depthView ?? this.depthView,
                 depthClearValue: 1.0,
                 depthLoadOp: "clear",
-                // Multisampled depth is only read again to resolve it for the extension.
-                depthStoreOp: msaa && !hdrTarget ? "discard" : "store",
+                // Depth is only read after this pass by a scene extension (HD's afterScene, or
+                // resolving multisampled depth for it). Without one nothing reads it, and the
+                // next frame clears it, so it is not written back: free on tiled mobile GPUs.
+                depthStoreOp: (msaa && !hdrTarget) || !world.extensionActive ? "discard" : "store",
             },
         });
 

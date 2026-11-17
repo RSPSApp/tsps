@@ -1,5 +1,5 @@
 {
-  "$comment": "NPC ferries, as rsprox recordings play them (226-239; see plugins/world/Ferries.plugin.js for which recording each comes from). A route is a travel style, its timings, its landing tile and its lines. ship_journey is interface 299 with script 1131's route arg; longship is misc_shipjourney 224 with a model animation; galleon is quest_lunar_galleon 431; fade is fade_overlay 174 / script 948; a fade route's face is the tile the player turns to on landing; rowing is seaslug_boat_travel 461 (arriveTick: the message box tick when the leg is longer than 8; song: played before the jingle). The fossil-barge-* routes are the Bone Voyage barge (the user's rev 242 capture BoneVoyage-CursedVoyage: board/off ticks 116/151, the navigators' crossings 784/829), and the Junior Navigator's row is fossil-island (tick 738). The sea-slug-* routes are Holgart's legs in Sea Slug (capture 20261110T112750 ticks 78, 172, 220, 427); SeaSlug.Quest.js sends them with ferries:travel. Triggers: an NPC option (name, label, which dock by its base npc gameval or nearest tile), or a transcript step id from npc-dialogues.json. A loc option (locs: the visible loc's name and label, the loc by its base gameval) starts one too. A fade route's minimap and busy pairs are the ticks the minimap goes off/on and varbit busy is set/cleared. talk: per NPC name, the Talk-to variant its dock (base npc gameval) plays once its gate passes (Jardric's post-Dragon Slayer II rowboat, 231/711). The Jardric routes are rsprox 231/711 tick 5876 (Travel at Fossil Island: the message and fade on the click, the move on the third tick facing north, angle 1024) and tick 5863 (Talk-to at Lithkren, Yes please.: the same timeline to Fossil Island facing east, angle 1536). Their Travel waits for Dragon Slayer II's own arrival on Lithkren: the cache shows it from varbit 6104 65 (rowboat built), mid-quest. Their steps are the transcript's message steps, so the ferry says the line once, as spam. here: per NPC name, a transcript's \"If not already at X:\" condition text and the base npc gameval standing at X (the option is hidden there).",
+  "$comment": "NPC ferries, as rsprox recordings play them (226-239; see plugins/world/Ferries.plugin.js for which recording each comes from). A route is a travel style, its timings, its landing tile and its lines. ship_journey is interface 299 with script 1131's route arg; longship is misc_shipjourney 224 with a model animation; galleon is quest_lunar_galleon 431; fade is fade_overlay 174 / script 948; a fade route's face is the tile the player turns to on landing; rowing is seaslug_boat_travel 461 (arriveTick: the message box tick when the leg is longer than 8; song: played before the jingle). The fossil-barge-* routes are the Bone Voyage barge (the user's rev 242 capture BoneVoyage-CursedVoyage: board/off ticks 116/151, the navigators' crossings 784/829), and the Junior Navigator's row is fossil-island (tick 738). The sea-slug-* routes are Holgart's legs in Sea Slug (capture 20261110T112750 ticks 78, 172, 220, 427); SeaSlug.Quest.js sends them with ferries:travel. Triggers: an NPC option (name, label, which dock by its base npc gameval or nearest tile), or a transcript step id from npc-dialogues.json. A loc option (locs: the visible loc's name and label, the loc by its base gameval) starts one too. A fade route's minimap and busy pairs are the ticks the minimap goes off/on and varbit busy is set/cleared. talk: per NPC name, the Talk-to variant its dock (base npc gameval) plays once its gate passes (Jardric's post-Dragon Slayer II rowboat, 231/711). The Jardric routes are rsprox 231/711 tick 5876 (Travel at Fossil Island: the message and fade on the click, the move on the third tick facing north, angle 1024) and tick 5863 (Talk-to at Lithkren, Yes please.: the same timeline to Fossil Island facing east, angle 1536). Their Travel waits for Dragon Slayer II's own arrival on Lithkren: the cache shows it from varbit 6104 65 (rowboat built), mid-quest. Their steps are the transcript's message steps, so the ferry says the line once, as spam. here: per NPC name, a transcript's \"If not already at X:\" condition text and the base npc gameval standing at X (the option is hidden there). The rowboat-* routes are the Sailing island amenity rowboats (Wiki: Rowboat (amenity)), not captured: each pair is one varbit (amenity_rowboat_*, set by Amenities.Sailing.js once built), its _out multiloc on the island and its _in one on the mainland; the landings are the tiles RuneLite shortest-path uses for them, checked walkable in the cache, and the fade timings are the Ungael boat's. A locs entry's gate refuses with the gate's message (Ynysdail's needs Song of the Elves, per the Wiki; the text is ours). The rowboat-custodia-* routes are the lake rowboat between the Custodia Mountains and the Custodia Pass (Wiki: Rowboat (Custodia), no requirements); the rowboat-conch-* routes are the Great Conch's three rowboats (Wiki: Rowboat (The Great Conch)), whose menu (a locs entry's menu: [label, route] pairs), labels and gate (Troubled Tortugans' stage varbit tt above 3, a gate's varbit/above) are RuneLite shortest-path's; their landings are its tiles too, checked walkable, and their timings and refusal text are ours like the island rowboats'.",
   "routes": {
     "larry-weiss": { "style": "larry_weiss", "ticks": 9, "to": [2849, 3968, 0] },
     "larry-iceberg": { "style": "larry_iceberg", "ticks": 7, "to": [2660, 3989, 1] },
@@ -25,6 +25,21 @@
     "rellekka-lokar": { "style": "fade", "teleport": 3, "fadeIn": 6, "close": 9, "to": [2621, 3686, 0] },
     "lunar-isle": { "style": "galleon", "seq": "quest_lunar_set_sail_right", "ticks": 11, "to": [2130, 3899, 2] },
     "pirates-cove-bentley": { "style": "fade", "teleport": 3, "fadeIn": 6, "close": 9, "to": [2224, 3796, 2] },
+    "rowboat-vatrachos": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [1877, 2975, 0] },
+    "rowboat-vatrachos-back": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [1773, 2961, 0] },
+    "rowboat-anglers": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [2471, 2724, 0] },
+    "rowboat-anglers-back": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [2543, 2844, 0] },
+    "rowboat-soul-tear": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [2321, 2779, 0] },
+    "rowboat-soul-tear-back": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [2291, 2796, 0] },
+    "rowboat-ynysdail": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [2227, 3469, 0] },
+    "rowboat-ynysdail-back": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [2218, 3424, 0] },
+    "rowboat-buccaneers": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [2086, 3689, 0] },
+    "rowboat-buccaneers-back": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [2203, 3803, 0] },
+    "rowboat-custodia-south": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [1282, 3385, 0] },
+    "rowboat-custodia-west": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [1256, 3395, 0] },
+    "rowboat-conch-summer-shore": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [3191, 2370, 0] },
+    "rowboat-conch-north": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [3197, 2531, 0] },
+    "rowboat-conch-east": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "to": [3264, 2463, 0] },
     "ungael": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "message": { "at": 0, "text": "You board the boat and travel to Ungael.", "spam": true }, "to": [2277, 4034, 0] },
     "ungael-back": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "message": { "at": 0, "text": "You board the boat and travel to Rellekka.", "spam": true }, "to": [2640, 3697, 0] },
     "varla-kastori": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "busy": [1, 5], "message": { "at": 3, "text": "Achilka takes you along the river to Kastori.", "spam": true }, "to": [1390, 3074, 0] },
@@ -89,7 +104,22 @@
     { "npc": "Achilka", "option": "Gloomthorn Trail", "from": ["tlati_riverboat_owner_south", "tlati_riverboat_owner_west"], "route": "varla-gloomthorn" }
   ],
   "locs": [
-    { "loc": "Fremennik Boat", "option": "Travel", "from": ["fremennik_boat_ungael"], "route": "ungael" }
+    { "loc": "Fremennik Boat", "option": "Travel", "from": ["fremennik_boat_ungael"], "route": "ungael" },
+    { "loc": "Rowboat", "option": "Travel", "from": ["amenity_rowboat_vatrachos_in"], "route": "rowboat-vatrachos" },
+    { "loc": "Rowboat", "option": "Travel", "from": ["amenity_rowboat_vatrachos_out"], "route": "rowboat-vatrachos-back" },
+    { "loc": "Rowboat", "option": "Travel", "from": ["amenity_rowboat_anglers_in"], "route": "rowboat-anglers" },
+    { "loc": "Rowboat", "option": "Travel", "from": ["amenity_rowboat_anglers_out"], "route": "rowboat-anglers-back" },
+    { "loc": "Rowboat", "option": "Travel", "from": ["amenity_rowboat_soul_tear_in"], "route": "rowboat-soul-tear" },
+    { "loc": "Rowboat", "option": "Travel", "from": ["amenity_rowboat_soul_tear_out"], "route": "rowboat-soul-tear-back" },
+    { "loc": "Rowboat", "option": "Travel", "from": ["amenity_rowboat_ynysdail_in"], "route": "rowboat-ynysdail", "gate": "songOfTheElves" },
+    { "loc": "Rowboat", "option": "Travel", "from": ["amenity_rowboat_ynysdail_out"], "route": "rowboat-ynysdail-back", "gate": "songOfTheElves" },
+    { "loc": "Rowboat", "option": "Travel", "from": ["amenity_rowboat_buccaneers_in"], "route": "rowboat-buccaneers" },
+    { "loc": "Rowboat", "option": "Travel", "from": ["amenity_rowboat_buccaneers_out"], "route": "rowboat-buccaneers-back" },
+    { "loc": "Rowboat", "option": "Travel", "from": ["custodia_rowboat_west"], "route": "rowboat-custodia-south" },
+    { "loc": "Rowboat", "option": "Travel", "from": ["custodia_rowboat_south"], "route": "rowboat-custodia-west" },
+    { "loc": "Rowboat", "option": "Travel", "from": ["conch_rowboat_north"], "gate": "troubledTortugans", "menu": [["The Summer Shore.", "rowboat-conch-summer-shore"], ["Eastern Coast.", "rowboat-conch-east"]] },
+    { "loc": "Rowboat", "option": "Travel", "from": ["conch_rowboat_east"], "gate": "troubledTortugans", "menu": [["The Summer Shore.", "rowboat-conch-summer-shore"], ["Northern Coast.", "rowboat-conch-north"]] },
+    { "loc": "Rowboat", "option": "Travel", "from": ["conch_rowboat_south"], "gate": "troubledTortugans", "menu": [["Northern Coast.", "rowboat-conch-north"], ["Eastern Coast.", "rowboat-conch-east"]] }
   ],
   "steps": {
     "b8yDey": "entrana",
@@ -154,7 +184,9 @@
     "fremennikIsles": { "quest": "the_fremennik_isles", "started": true, "refusal": "before-the-fremennik-trials" },
     "dragonSlayerII": { "quest": "dragon_slayer_ii", "complete": true },
     "dragonSlayerIILithkren": { "quest": "dragon_slayer_ii", "complete": true, "orAttribute": "dragon-slayer-ii:lithkren-arrived" },
-    "sinsOfTheFather": { "quest": "sins_of_the_father", "complete": true }
+    "sinsOfTheFather": { "quest": "sins_of_the_father", "complete": true },
+    "songOfTheElves": { "quest": "song_of_the_elves", "complete": true, "message": "You need to complete Song of the Elves to use this rowboat." },
+    "troubledTortugans": { "varbit": "tt", "above": 3, "message": "You need to make more progress in Troubled Tortugans to use this rowboat." }
   },
   "morytania": {
     "$comment": "The boats between Burgh de Rott, Meiyerditch, the Icyene Graveyard and Slepe once Sins of the Father is complete (rsprox 231/392 ticks 5337-8060, 239/4266 tick 786). Board on any dock's boat asks title and lists the other three docks in this order. docks: the clicked loc's base gameval (the multilocs show their Boat from Darkness of Hallowvale's and Sins of the Father's varbits). The Meiyerditch boat is boarded from the rock beside it: on the pick's tick the player jumps onto the boat tile, and the trip starts jump.depart ticks after the pick (239/4266 tick 788; rev 231's 392 tick 7363 jumped a tick later with 58/70 and started at pick+4). rock: Jump-onto from the boat tile back to the rock, with its own delays and speeds (231/392 tick 7213, 231/393 ticks 62 and 298).",

@@ -185,7 +185,7 @@ test("Otto teaches rod fishing first; the bed gives the rod and a leaping fish c
   assert.equal(stages(who).fishingRod, 1, "an ordinary trout is not a leaping fish");
   T.caughtFish({ player: who, itemId: core.ItemIdentifiers.LEAPING_TROUT });
   assert.equal(stages(who).fishingRod, 2);
-  assert.deepEqual(who.sent.messages, [T.LEARNED]);
+  assert.deepEqual(read(who).said, [T.LEARNED]);
 
   shown = talk(who);
   assert.deepEqual(shown.options, [T.TOPIC.harpoon, T.TOPIC.firemaking, T.TOPIC.rodDone, T.TOPIC.farming, T.TOPIC.leave]);
@@ -292,7 +292,8 @@ test("Herblore: Otto asks for an attack mix, takes it, and every mix is learned"
   who.level = 79;
   who.sent.messages.length = 0;
   use(who, "brut_caviar", "2doserangerspotion");
-  assert.deepEqual(who.sent.messages, ["You need a Herblore level of 80 to combine those."]);
+  assert.deepEqual(who.sent.messages, []);
+  assert.match(JSON.stringify(who.chain, (key, value) => value instanceof Map ? [...value.values()] : value), /"You need a Herblore level of 80 to combine those\."/);
   who.level = 80;
   who.sent.xp = 0;
   assert.equal(use(who, "2doserangerspotion", "brut_caviar"), true);
@@ -351,7 +352,7 @@ test("Otto takes only an attack mix that keeps no restriction", () => {
 test("bow firemaking publishes brut_fire, and Otto's pyre ship talk opens the Ancient Cavern whirlpool", () => {
   const who = player();
   const varbit = (id) => who.sent.varbits.get(id) ?? 0;
-  assert.deepEqual(Object.fromEntries(Object.entries(T.VARBITS)), { harpoon: 3757, fishingRod: 3758, firemaking: 3759, herblore: 3761, pyreShips: 3764 });
+  assert.deepEqual(Object.fromEntries(Object.entries(T.VARBITS)), { harpoon: 3757, fishingRod: 3758, firemaking: 3759, herblore: 3761, spear: 3762, hasta: 3763, pyreShips: 3764 });
 
   let shown = pick(who, talk(who), T.TOPIC.firemaking);
   assert.equal(varbit(T.VARBITS.firemaking), 1);

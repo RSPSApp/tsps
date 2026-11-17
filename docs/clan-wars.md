@@ -1340,7 +1340,7 @@ Merged Ignore freezing vetoes only new holds on protected current targets. Allow
 
 This finite TSPS rendition exposes the native Magic row in existing safe legacy-channel battles. Magic starts **Disabled (4)**. Captains can choose **Standard spells (1)**, finite **Classic F2P combat (2)** or **Binding only (3)**; the native All spellbooks (0) choice is not implemented here and resynchronizes to the authoritative offer. Existing modes, arenas, teams, melee and melee-special terms remain. Merged standard-bow Ranging has its independent choice; supported bows and finite Standard casting can both be enabled, including with Melee Disabled.
 
-Standard supports the complete twenty wind/water/earth/fire Strike, Bolt, Blast, Wave and Surge combat spells plus manual Confuse, Weaken, Curse, Bind, Snare and Entangle: twenty-six finite combat objects, not the complete Standard spellbook. Cast the six effects manually; the elementals can be cast manually while unarmed, or manually/autocast with basic and elemental staves: staff, magic staff, battlestaff; the four single-element staff/battlestaff/mystic families; the six combination-element battlestaff/mystic families. The four canonical lava/steam cosmetic supplier identities are included. Canonical aliases follow the same base-family boundary. In the observed cache242 registration there are no aliases of these admitted staff families; the ten registered staff/wand copies all have unsupported bases and remain refused. No supported-alias casting witness is claimed. This is 27 base identities plus four direct cosmetics, not all unpowered staves or items with a staff interface. Offhand casting support is empty or the existing Fire, Water and Earth tome families, charged and empty. Other combat spells, casting weapons/offhands, powered casts, magical specials, the four Power of Death utility activations and NPC ranged/magic expansion remain unsupported. These are explicit TSPS support boundaries, not retail Clan Wars equipment restrictions. Existing NORMAL noncombat utility retains its ordinary conditions and the activity's teleport ban; nonNORMAL books remain unavailable.
+Standard supports the complete twenty wind/water/earth/fire Strike, Bolt, Blast, Wave and Surge combat spells plus manual Confuse, Weaken, Curse, Bind, Snare, Entangle, Vulnerability, Enfeeble and Stun, plus manual Saradomin Strike, Claws of Guthix and Flames of Zamorak: thirty-four finite combat objects, including Iban Blast and Magic Dart through their existing manual and eligible autocast routes, not the complete Standard spellbook. Cast the nine effects manually; the elementals can be cast manually while unarmed, or manually/autocast with basic and elemental staves: staff, magic staff, battlestaff; the four single-element staff/battlestaff/mystic families; the six combination-element battlestaff/mystic families. The four canonical lava/steam cosmetic supplier identities are included. Canonical aliases follow the same base-family boundary. In the observed cache242 registration there are no aliases of these admitted staff families; the ten registered staff/wand copies all have unsupported bases and remain refused. No supported-alias casting witness is claimed. Standard additionally permits the three basic god staves (2415/2416/2417), with the matching staff required for each manual god spell, the four Iban staff variants (1409/12658/33330/33332), and plain Slayer's staff (4170). Classic and Binding-only do not gain these weapons. The inherited elemental boundary is 27 base identities plus four direct cosmetics, not all unpowered staves or items with a staff interface. Offhand casting support is empty or the existing Fire, Water and Earth tome families, charged and empty. Other combat spells, casting weapons/offhands, powered casts, magical specials, the four Power of Death utility activations and NPC ranged/magic expansion remain unsupported. These are explicit TSPS support boundaries, not retail Clan Wars equipment restrictions. Existing NORMAL noncombat utility retains its ordinary conditions and the activity's teleport ban; nonNORMAL books remain unavailable.
 
 Setup, successful Standard selection, confirmation and joining disclose this support and accounting. Ordinary inventory and rune-pouch payment, staff rune supply and elemental-tome supply/charge consumption remain canonical. Matching charged tomes spend one charge at paid-cast commit, preserving their pre-consumption cast context, including the final charge and later gear changes. Empty/malformed state, nonmatching casts, misses, level/book/equipment/resource/cooldown checks and damage/XP use existing canonical rules. No activity rune source, free-cast override, inventory reconstruction or refund is added. Safe death protects remaining carried/equipped items; spent runes and tome charges remain spent through jail, return, leaving, logout and battle end.
 
@@ -1420,9 +1420,9 @@ Setup titles/change notices, summaries, confirmation and join terms cover all si
 The source fixtures extend existing native helpers, with deliberate once-only StandardCurses composition alongside guarded resource/bind/sack/Freezes plugins before actors. Cursed-stat recovery checkpoints, clocks, placement, impact holds and supplied accuracy branches are explicit fixture setup; source registration counts are not runtime results. A controlled miss changes the real hit-damage event's accuracy/damage and asserts exact PendingHit/damage identity; it is not natural probability measurement. The separate Water-tome roll observation forwards the real modifier without forced accuracy. New source/fixture/metadata, exact inputs and actual evidence require the same independent workflow; this documentation makes no new executed-count, rendered-client, natural-flight, exhaustive spellbook or documentation-test claim.
 
 
-### Standard manual effect-spell extension (native Magic1)
+### Original Standard six manual effects (native Magic1)
 
-The six additions are canonical Confuse, Weaken, Curse, Bind, Snare and Entangle. Higher Vulnerability, Enfeeble and Stun, god/undead spells, Tele Block and other combat families remain deferred TSPS support, not retail bans. Native enum917/918 and [Clan Wars revision15379109](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109) establish the Standard-book restriction, not exhaustive twenty-six-spell coverage. The existing basic/elemental-staff, unarmed and empty-offhand/tome boundaries remain TSPS support. Mode2's finite sixteen and mode3's three bindings are unchanged; mode0 remains unsupported.
+The six additions are canonical Confuse, Weaken, Curse, Bind, Snare and Entangle. Vulnerability, Enfeeble and Stun are added by the higher-curse follow-up below; the manual god-family follow-up below adds three more objects; undead spells, Tele Block and other omitted combat families remain deferred TSPS support, not retail bans. Native enum917/918 and [Clan Wars revision15379109](https://oldschool.runescape.wiki/w/Clan_Wars?oldid=15379109) establish the Standard-book restriction, not exhaustive twenty-six-spell coverage. The existing basic/elemental-staff, unarmed and empty-offhand/tome boundaries remain TSPS support. Mode2's finite sixteen and mode3's three bindings are unchanged; mode0 remains unsupported.
 
 Select these effects manually through the ordinary player-target spell route. No effect spell is added to the native autocast map. Standard's existing elemental autocast remains available: a real hand-effect cast overrides its current selection and elemental autocast may resume afterward. This differs from Classic2's manual-only/no-automatic-repeat policy. Inactive remembered autocast and ordinary melee retain their existing behavior. Initial challenge, setup, confirmation and joining disclose the extended support.
 
@@ -1431,3 +1431,171 @@ Confuse/Weaken/Curse use canonical Attack/Strength/Defence drains, current-versu
 Standard NORMAL utility/noncast/settings and its separate teleport/alchemy hooks retain their existing scope; this extension does not import mode2/3's blanket other-cast refusal. Standard's existing broad participation queue disposal and self/null-source preservation remain unchanged, with no refund or applied-effect rollback. Already-applied stat drains follow canonical restoration/death behavior. No core/effect/resource/cache/generated-data change or NPC-target expansion is introduced.
 
 Primary spell sources: [Confuse14922747](https://oldschool.runescape.wiki/w/Confuse?oldid=14922747), [Weaken15159508](https://oldschool.runescape.wiki/w/Weaken?oldid=15159508), [Curse14797456](https://oldschool.runescape.wiki/w/Curse?oldid=14797456), [Bind15165009](https://oldschool.runescape.wiki/w/Bind?oldid=15165009), [Snare15175486](https://oldschool.runescape.wiki/w/Snare?oldid=15175486), [Entangle15364849](https://oldschool.runescape.wiki/w/Entangle?oldid=15364849), [Tome of Water15372318](https://oldschool.runescape.wiki/w/Tome_of_Water?oldid=15372318), [Swampbark15218142](https://oldschool.runescape.wiki/w/Swampbark_armour?oldid=15218142) and [Blighted entangle sack15189710](https://oldschool.runescape.wiki/w/Blighted_entangle_sack?oldid=15189710). Native widget/item/rune identifiers come from literal cache242 declarations, not group218 alone or effect IDs. Source and fixture preparation is not runtime acceptance; no prior Classic/Binding/Freeze or external maintainer result transfers to this extension.
+
+## Standard higher stat curses: finite manual extension
+
+Standard (1) additionally admits the complete higher stat-curse family: manual Vulnerability, Enfeeble and Stun. They use existing canonical zero-damage curse objects, not new effects or an autocast selector. The relevant stat falls by 10%, or 15% with a charged Water tome; at current/base 99 canonical integer flooring removes 9 or 14 levels. Water also modifies the real attack roll by 20%, spends one charge at paid commit and preserves the committed final-charge context across later gear changes. Misses, shared cooldown, relevant-stat nonstacking/partial/full recovery and impact-race rules remain canonical. Ignore freezing does not suppress stat drains, cost, accuracy or XP.
+
+All three are members-only, at levels 66/73/80. Cache242 native objects3317/3320/3324 use widgets218:63/66/70 and require one Soul plus Water/Earth5/8/12 respectively. These are actual immutable native declarations, not group218 inference. Rune pouch/staff/tome supply remains canonical; entangle sacks cannot fund higher curses. Existing Classic F2P(2), Binding only(3), Disabled(4), unsupported All(0), loadouts, utilities, manual override and subsequent elemental autocast, independent styles and strict native negotiation terms are preserved.
+
+Primary behavior: [Vulnerability14968444](https://oldschool.runescape.wiki/w/Vulnerability?oldid=14968444), [Enfeeble14964310](https://oldschool.runescape.wiki/w/Enfeeble?oldid=14964310), [Stun14797453](https://oldschool.runescape.wiki/w/Stun?oldid=14797453) and [Tome of Water15372318](https://oldschool.runescape.wiki/w/Tome_of_Water?oldid=15372318). Clan Wars15379109 supplies Standard-book permission; the then29-object subset/equipment and queue boundaries are TSPS support choices, not retail exclusions. A bounded recording70rev227.1 interval shows Vulnerability/Enfeeble level-unlock UI only, not casts, paid drains or Clan Wars behavior; none is inferred from that recording.
+
+Participation-boundary disposal still clears queued incoming and still-queued outgoing hits without refund and preserves self/null-source damage. A caster leaving does not reverse a drain on a victim who remains in battle. Canonical alive departure/winner Ferox restoration may restore departing stats/HP/Prayer/energy/status; logout skips that restoration. No departed-victim drain-preservation guarantee. The explicit native fixture does not register full production CombinationRunes composition. Captured F2P spell-gate checks exercise the actual handler and ordinary dispatch/payment refusal with a lower free-spell positive; they do not load a complete F2P world.
+
+The implemented native fixtures cover three cache objects, paid commits/context/impact, controlled accurate/splash and Ignore branches, relevant-stat recovery/race/new targets, charged/empty/other tomes and real roll observations, resources/no-Soul/sacks, book/mode/phase/actor/loadout refusals, hand-cast/paid elemental resumption, and representative safe lifecycle disposal/rejoin. No callback, build, native runtime or provider outcome is inferred from their registration. Earlier #5821's own1,073 belongs only to its exact source/job; later source requires its own reviewed admission and actual evidence.
+
+
+### Manual god-family extension (native Standard1)
+
+Standard adds manual Saradomin Strike, Claws of Guthix and Flames of Zamorak, bringing its finite subset from29 to32. Only the basic Saradomin/Guthix/Zamorak staves2415/2416/2417 are added, only in Standard1. Canonical matching-staff checks still apply. Upgraded god, bladed, toxic, revenant and void-mace variants remain unsupported TSPS loadouts; these are support boundaries, not retail Clan Wars bans. Other admitted Standard spells may use a basic god staff where their canonical equipment rules allow it. Classic2/Binding3/Disabled4/unsupportedAll0, existing loadouts, offhand/tomes, independent styles, NoStaff/NoSpecial, utilities and queue disposal retain their existing scope.
+
+The three existing canonical spells are members-only, require Magic60 and forward base35 Magic XP. Their neutral base maximum is20. Saradomin consumes4Air/2Blood/2Fire; Claws4Air/2Blood/1Fire; Flames1Air/2Blood/4Fire. A positive damaging Saradomin impact removes one Prayer, flooring at0 on repeated paid damaging casts. Claws lowers Defence and Flames lowers Magic by1+floor(current*5%):99 becomes94 and118 becomes112. Their percentage drains do not restack below base until recovery, but further casts still pay and damage. Existing canonical accurate-zero/splash behavior applies no secondary drain. This extension changes activity admission, not these producers.
+
+Actual registered Mage Arena spell hooks retain each god's persisted100-cast unlock;99 refuses outside the arena. Fixtures explicitly supply counters and cape progress, not natural miniquest traversal. Existing native Charge self-casting requires80Magic,3Air/3Fire/3Blood, forwards180 base XP, allows recasting after100ticks and lasts700ticks. A matching god cape raises the neutral base maximum to30 before other modifiers; wrong/no cape or expiry retains20. Already rolled pending damage survives later cape removal. The existing Charge prerequisite queries the actual Statues cape-received hook; this preserves its current checkpoint rather than claiming complete Wiki staff-acquisition parity. ChargeFade's real hook/task handles the fade line and logout cleanup.
+
+God spells remain manual-only. No selector is added to basic god staves. The activity refuses automatic promotion of remembered god autocast state before payment, including ordinary upgraded-selector/weapon-swap attempts, while preserving eligible elemental autocasting and native manual casts. Fire tome can supply Fire without a god-spell damage boost or charge consumption; Water/Earth acquire no god bonus. Inventory, pouch, sacks, equipment, membership, levels, cooldown and no-refund lifecycle rules remain canonical. Applied drains are not rolled back when only the caster leaves; ordinary departing-victim/Ferox restoration remains unchanged.
+
+Primary revisions: [Saradomin Strike15366110](https://oldschool.runescape.wiki/w/Saradomin_Strike?oldid=15366110), [Claws15366111](https://oldschool.runescape.wiki/w/Claws_of_Guthix?oldid=15366111), [Flames15366096](https://oldschool.runescape.wiki/w/Flames_of_Zamorak?oldid=15366096), [Charge15364440](https://oldschool.runescape.wiki/w/Charge?oldid=15364440) and [Mage Arena15326168](https://oldschool.runescape.wiki/w/Mage_Arena?oldid=15326168). Actual cache242 objects3311/3309/3310 use218:54/55/56; Charge3323 uses218:71. Equipment UIparam365 is not a consumed rune; Guthix icon8843 is not weapon2416, and Fire requirements include606/607. Canonical server spell IDs1190/1191/1192 are separate from native item IDs.
+
+A bounded revision235.1 recording3344 shows Claws unlock feedback after NPC casting, the exact Saradomin/StaffOfLight refusal and a native Charge button followed by red charged feedback/sound1651. It does not show Clan Wars god casting or prove normal costs, damage,100casts, cooldown or duration. Its boosted/scaled account state is not fixture setup; current242 widgets differ from that recording. Numeric mechanics above come from primary/canonical sources.
+
+The implemented native fixtures extend the existing native game/rules fixture with actual scoped MageArena/Statues/ChargeFade registration, real packet/payment/pending-context/resolver paths, outside-NPC and battle positive controls, skill/recovery/race/floor/boost cases, Charge/tomes/pouch/refusals, remembered-autocast/manual controls and safe lifecycle/rejoin. Positions, counters/cape progress, ticks, accuracy/max-hit and zero-damage branches are disclosed controlled setup. Captured F2P gate checks are not a full F2P world/loader proof; departed outsider refusal is not co-location/range or sole-causal area-guard proof. Source registration inventory is not a runtime result. For later fixture changes, the paired baseline must classify the actual first failure and downstream reach before a fixed selection. Prior #5874's own1164 belongs only to its tested head/job and is not transferred here. No rendered client, natural probability, exhaustive spellbook or full startup claim is made.
+
+
+### Standard staff spells: Iban Blast and Magic Dart
+
+The finite Standard subset additionally admits canonical Iban Blast and Magic Dart, bringing32 to34 supported spells. Both support manual casts and their existing eligible native autocast routes. Only Iban's staff1409, upgraded12658, ornament33330, upgraded ornament33332 and plain Slayer's staff4170 are added as Standard-only loadouts. This does not admit other staff families, enchanted Slayer21255, new selectors or Slayer-task NPC combat. God spells remain manual-only, and existing elemental autocast and independent mode/queue/utility policies keep their scopes.
+
+Iban Blast retains Magic50, members, five Fire and one Death rune, base30Magic XP and max25. Canonical equipment requirements also need base Attack50/Magic50. The four Iban variants retain capacities120/2500/120/2500 and the actual committed-cast charge producer: one charge for an NPC and two for a player, including paid splashes and zero damage. Other admitted spells do not spend Iban charges. Zero charges refuses before payment. **Source-preservation limit:** the current canonical gate admits a positive finalONE charge, and its player debit clamps to0; retail behavior with only one charge remains UNKNOWN. This work preserves that source behavior rather than claiming retail parity or repairing the charge mechanic. LastTWO→0/next refusal is a distinct boundary. Staff ownership is supplied equipment setup, not full Underground Pass traversal; recharge/upgrading/ornament creation is outside this addition.
+
+Magic Dart retains members/Magic50/currentSlayer55, four Mind and one Death, base30Magic XP and the actual current-Magic maximum10+floor(Magic/10). Plain Slayer's staff has no enchanted-task charge/bonus route. Its native equip requirement uses base Magic50/Slayer55, independently of the current Slayer cast gate. Existing selectors are Iban47 and Dart18 in current cache enum1986 (17 is Crumble Undead). The plain Slayer list permits Dart/Crumble/Wave/Surge, so its support does not imply every elemental autocast.
+
+Canonical inventory/pouch and elemental tome supply/payment remain authoritative. Fire tome can supply Iban's Fire runes without an elemental damage boost or tome charge consumption; neither spell gains an elemental tome bonus. UI equipment icons are not consumed runes. Unsupported spell/weapon/mode/book, missing resources, actual skill/charge gates and participation restrictions still refuse before payment. Participation changes discard queued hits without restoring spent runes or Iban charges. Supplied positions, ticks, accuracy/max and damage branches are controlled fixture proof, not natural-probability, rendered-client, full-F2P-world, full-quest or global-startup proof. No direct retail Iban/Dart cast or final-one-charge PvP recording was established by the bounded qualification search.
+
+### Exact master wand in Standard
+
+Standard additionally accepts **only Master wand 6914**, with the existing
+empty-offhand or elemental-tome boundary. The supported spell set remains34.
+The wand may manually cast the existing20 elemental and9 curse/binding spells
+and use its existing normal elemental autocast selection. Canonical matching-staff
+gates still prevent its use for the three gods, Iban Blast and Magic Dart; gods
+remain manual-only. This is a finite TSPS equipment-support addition, not a retail
+ban or permission for every wand. LMS20560, note6915, placeholder18598, other
+wands/staves, Kodai, other books/modes, utilities and magical specials remain
+outside this addition. Existing Ancient/Arceuus wand capability outside this
+battle policy is unchanged. Acquisition, MTA reward spending and upgrades are
+not implemented or proved here.
+
+[Master wand revision15403014](https://oldschool.runescape.wiki/w/Master_wand?oldid=15403014)
+and [Autocast revision15379930](https://oldschool.runescape.wiki/w/Autocast?oldid=15379930)
+support members/one-handed/no quest, Magic60, +20 magic attack/defence and +10%
+magic damage. The actual cache242 object is `magictraining_wand_master`6914;
+param299=100 hydrates a10% bonus through ItemDefinition. The definition loader
+preserves cache bonuses instead of replacing them with the generated fallback
+zero. BonusManager and the canonical damage formula remain unchanged. No
+item-data repair, bonus override or generated JSON edit is part of this work.
+
+The current native equipment gate reads the loaded requirement array against
+base/max Magic60, independently of current spell-level requirements. Raw cache
+metadata434/436 also contains Magic/55; that literal is retained and disclosed,
+but the inspected equipment gate does not read it. This addition preserves the
+current60 gate and does not certify retail55 or repair requirements. With no
+other gear/prayer modifiers, the real10% gives player-target Fire Wave maximum22
+versus20 with a plain staff. The wand supplies no elemental runes. Inventory,
+pouch, tome supply/charge, member, book, mode and participation gates remain
+canonical; paid resources are not refunded by queue disposal.
+
+The implemented native fixture extension covers exact cache
+stats/loaded gate, native Wield and manual/selector/ordinary Attack, outside paid
+controls and battle plain-staff positive before the missing-admission target,
+real payment/context/hit/resolution/rune/XP/HP, max/current levels, excluded
+aliases/unwearable objects, source-aware pouch/tome audits, gear bonus removal
+and restoration, lifecycle disposal and safe rejoin. Forfeit uses the existing
+mapped object dispatcher with an explicitly held impact window and restoration
+in finally; this is not an encoded object-click or natural flight-time proof.
+The captured F2P equip hook is not a full F2P loader, and the departed outsider
+is not a co-location/range or sole-cause test. Positions, actors/levels, ticks
+and accuracy/max are controlled. No runtime, rendered client, natural
+probability, full quest/acquisition or global-startup result follows from source
+registration alone. Prior5938's1457 passes belong only to its own tested head/job.
+
+
+### Execution evidence for the completed fixture extensions
+
+The higher-curse, god-family and exact Master-wand fixtures above were exercised
+in the whole selected game/rules files on tested head
+`e490d2358b0d216896be50711158d5e5d1eeede6` (tree
+`231374edc7233ba4d98e2a318827426be2802caf`). [PR #5946](https://github.com/RSPSApp/tsps/pull/5946)
+records the runnable setup, literal output and independent review of that run:
+1,570/1,570 tests across eleven files, including all 81 Master-wand cases.
+Those results belong only to that tested revision; they do not establish a run
+of its later merge or transfer to later source. The controlled setup and retail,
+client, probability, acquisition and startup limits above still apply.
+
+### Exact apprentice wand in Standard
+
+Standard additionally accepts **only Apprentice wand 6910**, with the existing
+empty-offhand or elemental-tome boundary. The finite34-spell set,29 generic manual
+spells and20 eligible Normal elemental autocasts are unchanged. Canonical five
+matching-staff gates and manual-only god policy remain authoritative. This adds
+one exact identity, not the whole wand family: LMS20556, note6911,
+placeholder18596, Teacher6912, Beginner6908 and other wands/books/modes/selectors,
+utilities and magical specials remain outside this addition. MTA acquisition,
+point spending, upgrades and any equipment/data repair are out of scope.
+
+[Apprentice wand revision15182775](https://oldschool.runescape.wiki/w/Apprentice_wand?oldid=15182775)
+identifies a members, one-handed staff with no quest requirement, Magic50,
++10 Magic attack/defence and no Magic damage bonus. The actual cache242 object
+`magictraining_wand_appr`6910 has params3=10/8=10 and no299. ItemDefinition cache
+hydration and the existing loader preserve these stats; BonusManager and the
+canonical damage formula remain the producers. Loaded max/base Magic50 agrees
+with the primary source, independently of current spell-level requirements.
+Without other gear/prayer modifiers, player-target Fire Wave remains maximum20,
+the same as a plain staff. The wand supplies no elemental runes. Actual offhand
+bonuses and inventory/pouch/tome supply/charges remain canonical.
+
+The native fixtures cover cache/loaded/worn identity, native Wield/manual/Normal
+selector/ordinary Attack repeats, outside paid controls and a plain-staff battle
+positive, real payment/context/PendingHit/resolution/runes/HP/XP, max49/50 equip
+versus current cast levels, exclusions/refusals/gear restoration and safe
+lifecycle disposal/rejoin. Forfeit uses the actual mapped dispatcher with a held
+impact window and observed-flag restoration in finally. These are controlled
+positions/levels/ticks/accuracy/max-hit checkpoints, not natural probability,
+encoded object-click, full F2P loader, acquisition, client or global-startup proof.
+Source registration alone establishes no runtime outcome. Earlier revision/run
+results retain their original attribution; no passes transfer to this source.
+
+### Exact beginner wand in Standard
+
+Standard additionally accepts **only Beginner wand 6908**, with the existing
+empty-offhand or elemental-tome boundary. The finite34-spell set,29 generic manual
+spells and20 eligible Normal elemental autocasts are unchanged. Canonical five
+matching-staff gates and manual-only god policy remain authoritative. Existing
+Master6914 and Apprentice6910 admission is preserved. This adds one exact identity,
+not the whole wand family: LMS20553, note6909, placeholder18595, Teacher6912 and
+other unadmitted weapons/books/modes/selectors, utilities and magical specials
+remain outside this addition. MTA acquisition, point spending, upgrades and any
+equipment/data/parser/core repair are out of scope.
+
+[Beginner wand revision15182892](https://oldschool.runescape.wiki/w/Beginner_wand?oldid=15182892)
+identifies a members, one-handed staff with no quest requirement, Magic45,
++5 Magic attack/defence and no Magic damage bonus. The actual cache242 object
+`magictraining_wand_beg`6908 has params3=5/8=5 and no299. Existing ItemDefinition
+cache hydration, loader, BonusManager and the canonical damage formula remain
+the producers. Loaded max/base Magic45 agrees with the primary source,
+independently of current spell-level requirements. Without other gear/prayer
+modifiers, player-target Fire Wave remains maximum20, the same as a plain staff.
+The wand supplies no elemental runes; actual offhand bonuses and inventory,
+pouch and tome supply/charges remain canonical.
+
+The implemented native fixture extension covers cache/loaded/worn identity,
+native Wield/manual/Normal selector/ordinary Attack repeats, outside paid
+controls and a plain-staff battle positive, real payment/context/PendingHit,
+resolution/runes/HP/XP, max44/45 equip versus current spell levels, exclusions,
+refusals/gear restoration and safe lifecycle disposal/rejoin. Forfeit uses the
+actual mapped dispatcher with a held impact window and prior-flag restoration
+in finally. These are controlled positions/levels/ticks/accuracy/max-hit
+checkpoints, not natural probability, encoded object-click, full F2P loader,
+acquisition, client or global-startup proof. Source registration alone establishes
+no runtime outcome. Earlier revision/run results retain their original attribution;
+no passes transfer to this source.

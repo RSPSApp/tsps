@@ -26,6 +26,18 @@ const URI_TRANSFORM_HARD_CLUES = 300;
 // (236/03930.txt ticks 180 and 261); an emote's double agent comes with no arrow (227/01768.txt tick 10782).
 const SPAWN_SMOKE = "smokepuff_large";
 const SPAWN_SMOKE_HEIGHT = 124;
+// A dug-up NPC's puff also plays the smokepuff area sound, range 4, on its tile (236/03930.txt tick 180,
+// 237/01106.txt tick 2194, 237/01134.txt tick 9290); an emote's double agent gets none (227/01768.txt
+// tick 10782, 235/01034.txt, 236/03929.txt).
+const SPAWN_SMOKE_SOUND = 1930; // synth "smokepuff"
+const SPAWN_SMOKE_SOUND_RANGE = 4;
+// Every spawn sets cluehelper_npc_id to (npc type << 16) | npc index, and a dig with the arrow sets
+// current_hint_arrow to 3; on the death tick the varbit goes to 0 and the varp to -1 (236/03930.txt ticks
+// 180, 261; 237/01106.txt ticks 2194, 2226; 227/01768.txt tick 10782 for a double agent). A master fight's
+// second and third wizards also fill cluehelper_npc_id2/3 (227/01768.txt tick 14302); that is not sent here.
+const CLUEHELPER_NPC_VARP = "cluehelper_npc_id";
+const HINT_ARROW_VARBIT = "current_hint_arrow";
+const HINT_ARROW_NPC = 3;
 let catalogues = new Map();
 const uris = new WeakMap();
 // A trail's live fight (Wiki "Saradomin wizard", "Double agent"): player -> { npc, token }, and back.
@@ -618,13 +630,17 @@ function summon(player, trail) {
     if (npc) {
       Wizards.shout(npc, id);
       Wizards.closeIn(npc, id);
-      appear(player, spot);
+      appear(player, spot, trail.step.family !== "emote");
     }
     return npc;
   }).filter(Boolean);
   if (!npcs.length) return null;
   const hinted = trail.step.family !== "emote";
-  if (hinted) player.getPacketSender().clearHintArrow().sendEntityHint(npcs[0]);
+  sendClueHelperNpc(player, npcs[0]);
+  if (hinted) {
+    sendVarbit(player, HINT_ARROW_VARBIT, HINT_ARROW_NPC);
+    player.getPacketSender().clearHintArrow().sendEntityHint(npcs[0]);
+  }
   encounters.set(player, { npcs, token: trail.state.token, hinted });
   for (const npc of npcs) {
     encounterOwners.set(npc, player);
@@ -634,9 +650,32 @@ function summon(player, trail) {
 }
 
 /** The smoke puff an encounter NPC appears in; only its owner sees the NPC, so only they see the puff. */
-function appear(player, tile) {
+function appear(player, tile, dug) {
   const id = core.CacheDefinitions.getSpotanimId(SPAWN_SMOKE);
   if (id != null) player.getPacketSender().sendGraphic(core.Graphic.atHeight(id, SPAWN_SMOKE_HEIGHT), tile);
+  if (dug) player.getPacketSender().sendAreaSound(SPAWN_SMOKE_SOUND, tile.getX(), tile.getY(), tile.getZ(), 1, 0, SPAWN_SMOKE_SOUND_RANGE);
+}
+
+function sendVarp(player, name, value) {
+  const id = core.CacheDefinitions.getVarpId(name);
+  if (id != null) player.getPacketSender().sendConfig(id, value);
+}
+
+function sendVarbit(player, name, value) {
+  const id = core.CacheDefinitions.getVarbitId(name);
+  if (id != null) player.getPacketSender().sendVarbit(id, value);
+}
+
+/** The fight is over: the arrow varbit and the clue-helper NPC varp go back as on the death tick. */
+function resetEncounterVars(player, active, clearNpc = true) {
+  if (active.hinted) sendVarbit(player, HINT_ARROW_VARBIT, 0);
+  if (clearNpc) sendVarp(player, CLUEHELPER_NPC_VARP, -1);
+}
+
+/** cluehelper_npc_id names the trail NPC the player was given: its type in the high 16 bits, its index in the low. */
+function sendClueHelperNpc(player, npc) {
+  const index = npc.getIndex?.();
+  if (Number.isInteger(index) && index >= 0) sendVarp(player, CLUEHELPER_NPC_VARP, (npc.getId() << 16) | (index & 0xffff));
 }
 
 function dismissEncounter(player) {
@@ -644,7 +683,10 @@ function dismissEncounter(player) {
   const live = (active?.npcs ?? []).filter(alive);
   for (const npc of live) api.removeNpc(npc);
   // The arrow points at a dug-up NPC that is now gone (the player died to it, or the trail moved on).
-  if (active?.hinted && live.length) player.getPacketSender().clearHintArrow();
+  if (active && live.length) {
+    resetEncounterVars(player, active);
+    if (active.hinted) player.getPacketSender().clearHintArrow();
+  }
   encounters.delete(player);
 }
 
@@ -654,13 +696,17 @@ function encounterDied({ npc }) {
   const active = player && encounters.get(player);
   if (!active || !active.npcs.includes(npc) || active.npcs.some(other => other !== npc && alive(other))) return;
   encounters.delete(player);
-  if (active.hinted) player.getPacketSender().clearHintArrow();
   const trail = trails(player).find(entry => entry.state.token === active.token);
-  if (!trail) return;
-  const state = { ...trail.state, defeated: true, revision: trail.state.revision + 1 };
-  trail.item.setMetaValue(metaKey(trail.tier), state);
-  player.getInventory().refreshItems();
-  if (trail.step.family === "emote" && emoteReady(player, trail.step)) spawnUri(player, { ...trail, state });
+  let uri = null;
+  if (trail) {
+    const state = { ...trail.state, defeated: true, revision: trail.state.revision + 1 };
+    trail.item.setMetaValue(metaKey(trail.tier), state);
+    player.getInventory().refreshItems();
+    if (trail.step.family === "emote" && emoteReady(player, trail.step)) uri = spawnUri(player, { ...trail, state });
+  }
+  // A double agent's death hands cluehelper_npc_id straight to Uri, with no -1 between (227/01768.txt tick 10821).
+  resetEncounterVars(player, active, !uri);
+  if (active.hinted) player.getPacketSender().clearHintArrow();
 }
 
 function wearing(player, requirement) {
@@ -698,7 +744,11 @@ function spawnUri(player, trail) {
   const spot = freeTile(player);
   if (!spot) return;
   const npc = api.spawnNpc({ id: data(trail.tier).uri, x: spot.getX(), y: spot.getY(), z: spot.getZ(), owner: player, ownerOnly: true, wanderRadius: 0 });
-  if (npc) uris.set(player, { npc, trail, done: 1 });
+  if (!npc) return null;
+  uris.set(player, { npc, trail, done: 1 });
+  // Uri takes cluehelper_npc_id too, on the tick he is added (227/01768.txt tick 10821, 237/01149.txt).
+  sendClueHelperNpc(player, npc);
+  return npc;
 }
 
 function songPlayed({ player, trackId }) {

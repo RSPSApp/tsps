@@ -1,3 +1,4 @@
+import { clearWelcomeTimer } from "../protocolCompatibility";
 import { setPacketSocket } from "../../packet";
 import { preferWebRtcRelay } from "../../../config/clientEnv";
 import { WS_GLOBAL_KEY, WS_SUPPRESS_RECONNECT_KEY, RECONNECT_DELAY_MAX_MS, RECONNECT_MAX_ATTEMPTS } from "../constants";
@@ -12,6 +13,7 @@ export function initSocketCloseHandler(ws: GameSocket, initConnection: (url: str
             return;
         }
 
+        clearWelcomeTimer();
         state.socket = null;
         const reasonPart = evt.reason ? `, reason=${evt.reason}` : "";
         // eslint-disable-next-line no-console
@@ -42,7 +44,8 @@ export function initSocketCloseHandler(ws: GameSocket, initConnection: (url: str
             // A world that drops a logged-in player mid-login can refuse the next attempt once
             // (session-error, relay restart), so 4000 only ends a first login. sendLogin stores the
             // credentials before connecting, so they can't tell a first login from a logged-in one.
-            const terminalConnectFailure = evt.code === 4000 && !state.hasLoggedIn;
+            const protocolFailure = evt.code === 4003 || evt.code === 4004;
+            const terminalConnectFailure = (evt.code === 4000 && !state.hasLoggedIn) || protocolFailure;
             const shouldReconnect =
                 hasSession &&
                 !suppress &&
@@ -87,7 +90,7 @@ export function initSocketCloseHandler(ws: GameSocket, initConnection: (url: str
             }
 
             // If reconnection not possible and we were trying to reconnect, notify failure
-            if (!shouldReconnect && (state.isReconnecting || terminalConnectFailure)) {
+            if (!protocolFailure && !shouldReconnect && (state.isReconnecting || terminalConnectFailure)) {
                 // Reconnection attempts exhausted - notify failure
                 state.isReconnecting = false;
                 state.hasLoggedIn = false;

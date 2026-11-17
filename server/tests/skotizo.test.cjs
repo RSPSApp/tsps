@@ -20,13 +20,19 @@ const SHARD = 19677;
 const WEAPON_SLOT = 3;
 
 const emitted = [];
+const teleports = [];
+const prompts = [];
 before(() => {
   __internals.loadDrops();
   Common.init({
     core: {
       ItemIdentifiers: { DARK_TOTEM_BASE: BASE, DARK_TOTEM_MIDDLE: MIDDLE, DARK_TOTEM_TOP: TOP, DARK_TOTEM: TOTEM, ANCIENT_SHARD: SHARD },
       Equipment: { WEAPON_SLOT },
+      Location,
+      TeleportType: { NORMAL: "normal" },
+      TeleportHandler: { teleport: (...args) => teleports.push(args) },
     },
+    sendMultiChatboxPrompt: (player, title, ...pairs) => prompts.push({ player, title, pairs }),
     emitCustomEvent: (name, payload) => emitted.push({ name, payload }),
   });
 });
@@ -190,6 +196,7 @@ test("the hellfire burst's hit lands on the tick the projectile does (#1862)", (
       PendingHit: class { constructor(attacker, target, method, delay) { this.delay = delay; } },
       Projectile: FakeProjectile,
     },
+    sendMultiChatboxPrompt: (player, title, ...pairs) => prompts.push({ player, title, pairs }),
     emitCustomEvent: (name, payload) => emitted.push({ name, payload }),
   });
   try {
@@ -209,7 +216,11 @@ test("the hellfire burst's hit lands on the tick the projectile does (#1862)", (
       assert.ok(hit.delay * 30 >= end, `${tiles} tiles: no splat before the burst lands`);
     }
   } finally {
-    Common.init({ core: previous, emitCustomEvent: (name, payload) => emitted.push({ name, payload }) });
+    Common.init({
+      core: previous,
+      sendMultiChatboxPrompt: (player, title, ...pairs) => prompts.push({ player, title, pairs }),
+      emitCustomEvent: (name, payload) => emitted.push({ name, payload }),
+    });
   }
 });
 
@@ -408,4 +419,147 @@ test("native Skotizo lair deaths count for Konar's Catacombs demon assignments",
   assert.equal(varp(blackPlayer, "slayer_count"), 4, "actual black-demon task decrements once");
   assert.equal(varp(player, "slayer_count"), 4, "later World ticks do not credit the first death twice");
   assert.deepEqual(errors, [], "native death and on-task paths report no hidden errors");
+});
+
+const Teleports = require("../plugins/bosses/skotizo/Teleports.Skotizo");
+const NO_SHARD = "You need at least 1 ancient shard to use the altar's teleportation powers.";
+const checks = [];
+const asks = [];
+
+function shardPlayer(amount) {
+  const items = new Map([[SHARD, amount]]);
+  const inventory = {
+    contains: (id) => (items.get(id) ?? 0) > 0,
+    delete: (id, count) => items.set(id, Math.max(0, (items.get(id) ?? 0) - count)),
+    getAmount: (id) => items.get(id) ?? 0,
+    refreshItems() {},
+  };
+  return {
+    messages: [],
+    inventory,
+    sendMessage(message) { this.messages.push(message); },
+    getInventory: () => inventory,
+  };
+}
+
+function altarHook({ check = true, go = true } = {}) {
+  const core = {
+    ItemIdentifiers: { ANCIENT_SHARD: SHARD },
+    Location,
+    TeleportType: { NORMAL: "normal" },
+    TeleportHandler: {
+      checkReqs: (player, target, level) => {
+        checks.push({ player, target, level });
+        return check;
+      },
+      // Like the real one: nothing is spent before `go` runs (on the yes, if anything asks).
+      confirm: (player, target, callback, level, options) => {
+        asks.push({ player, target, callback, level, options });
+        if (go) callback();
+      },
+      teleport: (...args) => teleports.push(args),
+    },
+  };
+  const hooks = [];
+  Teleports({
+    core,
+    onObjectInteraction: (name, actions) => hooks.push({ name, actions }),
+    sendMultiChatboxPrompt: (player, title, ...pairs) => prompts.push({ player, title, pairs }),
+  });
+  return { hook: hooks[0] };
+}
+
+test("the Catacombs altar's Teleport opens the recorded four-line menu and spends one shard", () => {
+  teleports.length = 0;
+  prompts.length = 0;
+  checks.length = 0;
+  asks.length = 0;
+  const { hook } = altarHook();
+  assert.equal(hook.name, "Altar");
+  const p = shardPlayer(2);
+  assert.equal(hook.actions.Teleport({ player: p, objectId: 28900 }), true);
+  assert.equal(prompts.length, 1);
+  assert.equal(prompts[0].title, "Where do you want to go? (1 shard)");
+  const pairs = prompts[0].pairs;
+  assert.deepEqual(pairs.filter((value) => typeof value === "string"),
+    ["Demons' Run", "Dragons' Den", "Reeking Cove", "The Shallows"], "the capture's four lines, no Cancel");
+  pairs[1]();
+  assert.equal(checks.length, 1, "the choice passes the teleport checks");
+  assert.equal(asks.length, 1, "and asks before spending anything");
+  assert.equal(asks[0].options.item, SHARD);
+  assert.equal(p.getInventory().getAmount(SHARD), 1, "one shard spent");
+  assert.equal(teleports.length, 1);
+  assert.deepEqual(
+    [teleports[0][1].getX(), teleports[0][1].getY(), teleports[0][1].getZ()],
+    [1719, 10069, 0], "Demons' Run, the Wiki's destination tile");
+  assert.deepEqual(
+    [checks[0].target.getX(), checks[0].target.getY(), checks[0].target.getZ()],
+    [1719, 10069, 0], "the checked destination is the chosen one");
+});
+
+test("the Catacombs altar refuses a teleport without a shard at once, without a menu", () => {
+  teleports.length = 0;
+  prompts.length = 0;
+  checks.length = 0;
+  asks.length = 0;
+  const { hook } = altarHook();
+  const p = shardPlayer(0);
+  assert.equal(hook.actions.Teleport({ player: p, objectId: 28900 }), true);
+  assert.equal(prompts.length, 0, "no menu when there is nothing to spend");
+  assert.equal(checks.length + asks.length, 0);
+  assert.equal(teleports.length, 0);
+  assert.deepEqual(p.messages, [NO_SHARD]);
+});
+
+test("a shard lost while the menu is open is refused and the teleport does not run", () => {
+  teleports.length = 0;
+  prompts.length = 0;
+  checks.length = 0;
+  asks.length = 0;
+  const { hook } = altarHook();
+  const p = shardPlayer(1);
+  hook.actions.Teleport({ player: p, objectId: 28900 });
+  p.inventory.delete(SHARD, 1);
+  prompts[0].pairs[1]();
+  assert.equal(teleports.length, 0);
+  assert.equal(checks.length + asks.length, 0);
+  assert.deepEqual(p.messages, [NO_SHARD]);
+});
+
+test("the shard is not spent before the teleport's confirm runs", () => {
+  teleports.length = 0;
+  prompts.length = 0;
+  checks.length = 0;
+  asks.length = 0;
+  const { hook } = altarHook({ go: false });
+  const p = shardPlayer(1);
+  hook.actions.Teleport({ player: p, objectId: 28900 });
+  prompts[0].pairs[1]();
+  assert.equal(p.getInventory().getAmount(SHARD), 1, "still carried while asking");
+  assert.equal(teleports.length, 0, "not teleported while asking");
+  asks[0].callback();
+  assert.equal(p.getInventory().getAmount(SHARD), 0, "spent on the yes");
+  assert.equal(teleports.length, 1, "and the teleport starts then");
+});
+
+test("a failed teleport check does not spend a shard", () => {
+  teleports.length = 0;
+  prompts.length = 0;
+  checks.length = 0;
+  asks.length = 0;
+  const { hook } = altarHook({ check: false });
+  const p = shardPlayer(1);
+  hook.actions.Teleport({ player: p, objectId: 28900 });
+  prompts[0].pairs[1]();
+  assert.equal(checks.length, 1);
+  assert.equal(asks.length, 0);
+  assert.equal(p.getInventory().getAmount(SHARD), 1);
+  assert.equal(teleports.length, 0);
+});
+
+test("another altar's Teleport option is left alone", () => {
+  prompts.length = 0;
+  const { hook } = altarHook();
+  assert.equal(hook.actions.Teleport({ player: shardPlayer(1), objectId: 409 }, ), false);
+  assert.equal(prompts.length, 0);
 });

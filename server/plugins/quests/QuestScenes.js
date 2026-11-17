@@ -16,7 +16,8 @@
  *
  * Instance scenes play in a copy of the map, as live's rebuild_region does: pass
  * `{ instance: { sourceChunk: [chunkX, chunkY], size }, at, exit }` to `open`. The copy takes
- * `size` x `size` chunks of every plane, unturned, from the source chunk; the player is moved to
+ * `size` x `size` chunks of every plane, unturned, from the source chunk (with `fill: true`, every ground
+ * chunk is a copy of the source chunk itself, and tiles count on from it); the player is moved to
  * `at`. Everything stays in source coordinates: tiles given as `[x, y, z]` arrays to `actor`,
  * `loc`, `face`, `camera`, `place` and `walk` are translated into the copy, while a `Location`
  * (a mobile's own position) is used as it is. Walking out of `bounds` ends the scene on the
@@ -100,12 +101,20 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
   let QuestInstanceScene = null;
   // Built on first use, so a factory whose core has no instances (a test's stub) still works.
   const instanceScene = () => QuestInstanceScene ??= class extends sceneRules(TemplatedInstanceArea) {
-    constructor(owner, bounds, { sourceChunk: [chunkX, chunkY], size }) {
+    constructor(owner, bounds, { sourceChunk: [chunkX, chunkY], size, fill = false }) {
       super(size, size);
       this.owner = owner;
       this.bounds = bounds;
       this.sourceX = chunkX * 8;
       this.sourceY = chunkY * 8;
+      if (fill) {
+        // `fill`: every chunk of the ground plane is a copy of the one source chunk, as live tiles open
+        // sea around a view (The Corsair Curse's telescope). Tiles still count on from the source chunk.
+        for (let x = 0; x < size; x++) for (let y = 0; y < size; y++) {
+          this.setChunk(0, x, y, { sourceChunkX: chunkX, sourceChunkY: chunkY, sourcePlane: 0, rotation: 0 });
+        }
+        return;
+      }
       for (let z = 0; z < PLANES; z++) this.copySquare(size, chunkX, chunkY, z, 0, 0, z, 0);
     }
     getName() { return `${scenes.get(this.owner)?.name ?? "quest"} scene`; }
@@ -159,9 +168,13 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
     player.moveTo(tileFor(player, target));
   }
 
-  /** Walks a mobile to a source tile, inside its scene's instance when it has one. */
+  /**
+   * Walks a mobile to a source tile, inside its scene's instance when it has one. Like a live walk,
+   * it heads for the tile each step (diagonal, then x, then y), so it goes round what blocks the
+   * straight line: a size-4 NPC slides along a cave wall rather than stopping at the first rock.
+   */
   function walk(mobile, target) {
-    mobile?.getMovementQueue().addSteps(tileFor(mobile, target));
+    mobile?.getMovementQueue().addCheckpoint(tileFor(mobile, target));
   }
 
   /** Runs `callback` after `ticks`; keyed tasks die with their scene (or their player). */
@@ -252,10 +265,10 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
     mobile.setPositionToFace(tileFor(mobile, [x, y, mobile.getLocation().getZ()]));
   }
 
-  /** Camera packets take scene tiles; heights stay as given. */
-  function camera(player, [mx, my, mh], [lx, ly, lh], rates = CAMERA_RATES) {
+  /** Camera packets take scene tiles; heights stay as given. `lookRates` default to the move's. */
+  function camera(player, [mx, my, mh], [lx, ly, lh], rates = CAMERA_RATES, lookRates = rates) {
     const move = tileFor(player, [mx, my, 0]), look = tileFor(player, [lx, ly, 0]);
-    player.getPacketSender().sendCameraMoveTo(move.getX(), move.getY(), mh, rates).sendCameraLookAt(look.getX(), look.getY(), lh, rates);
+    player.getPacketSender().sendCameraMoveTo(move.getX(), move.getY(), mh, rates).sendCameraLookAt(look.getX(), look.getY(), lh, lookRates);
   }
 
   function open(player, name, bounds, rules = {}, { instance, at, exit } = {}) {
@@ -264,7 +277,7 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
     end(player, false);
     const scene = { name, owner: player, actors: [], locs: [], rules, exit: exit ?? null, area: null };
     scene.area = instance
-      ? new (instanceScene())(player, bounds, { sourceChunk: instance.sourceChunk, size: instance.size ?? INSTANCE_CHUNKS })
+      ? new (instanceScene())(player, bounds, { sourceChunk: instance.sourceChunk, size: instance.size ?? INSTANCE_CHUNKS, fill: instance.fill === true })
       : new QuestScene(player, bounds);
     scenes.set(player, scene);
     scene.area.enter(player);
@@ -277,9 +290,13 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
     return scenes.get(player) ?? null;
   }
 
-  function actor(scene, id, [x, y, z = 0], faceTile) {
+  /**
+   * An NPC only the owner sees, standing still unless `wanderRadius` lets it walk about its tile; `direction` is
+   * a spawn facing (a Direction id) for an actor with no tile to face.
+   */
+  function actor(scene, id, [x, y, z = 0], faceTile, { wanderRadius = 0, direction } = {}) {
     const at = tileFor(scene, [x, y, z]);
-    const npc = api.spawnNpc({ id, x: at.getX(), y: at.getY(), z, owner: scene.owner, ownerOnly: true, wanderRadius: 0 });
+    const npc = api.spawnNpc({ id, x: at.getX(), y: at.getY(), z, owner: scene.owner, ownerOnly: true, wanderRadius, face: direction });
     if (!npc) return null;
     npc.__skipDefaultRespawn = true;
     npc.__questSceneOwner = scene.owner;

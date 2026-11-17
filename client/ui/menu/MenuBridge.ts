@@ -359,10 +359,15 @@ export function widgetEntriesToSimple(
     ): ((gx?: number, gy?: number, ctx?: MenuClickContext) => void) => {
         const lower = String(option || "").toLowerCase();
         const inspectOperation = isWidgetInspectOperation(e, option);
+        const widget = e.widget ?? chosenWidget;
+        // Item Examine (including static equipment slots) keeps its local text/price
+        // owner. An itemless CC_CREATE row can instead configure Examine as an op.
+        const examineOperation = lower === "examine" && hasNativeWidgetOperation(e) &&
+            widget?.fileId === -1 && widget?.itemId < 0 && typeof e.onClick !== "function";
         const shouldDispatchWidgetAction =
             !e.suppressWidgetAction &&
             lower !== "cancel" &&
-            lower !== "examine" &&
+            (lower !== "examine" || examineOperation) &&
             (lower !== "inspect" || inspectOperation);
         const dispatchWidgetAction = (clickCtx?: MenuClickContext): boolean => {
             if (!shouldDispatchWidgetAction) return false;
@@ -408,7 +413,7 @@ export function widgetEntriesToSimple(
                 closeMenus();
             };
         }
-        if (lower === "cancel" || lower === "examine" || (lower === "inspect" && !inspectOperation)) {
+        if (lower === "cancel" || (lower === "examine" && !examineOperation) || (lower === "inspect" && !inspectOperation)) {
             return () => {
                 const hook = ui?.onWidgetExamine || ui?.setDetails;
                 if (typeof hook === "function") hook(chosenWidget);

@@ -468,6 +468,8 @@ after(() => {
 function ikovFixture(t) {
   ikovSetup();
   let worldTurn = 0;
+  // Only a Doors walkOver crossing (the trap-lever door) may hold movement:ignore-clipping, and only that opener.
+  let walkingOver = null;
   const fixtures = new Map(), tuples = new Map(), events = [];
   const regionChange = core.ObjectManager.onRegionChange;
   t.mock.method(core.ObjectManager, 'onRegionChange', function(...args) {
@@ -487,7 +489,7 @@ function ikovFixture(t) {
       core.World.process();
       for (const { player } of fixtures.values()) {
         assert.equal(player.isRegistered(), true); assert.ok(player.getHitpoints() > 0);
-        assert.equal(player.hasFlag('movement:ignore-clipping'), false);
+        if (player !== walkingOver) assert.equal(player.hasFlag('movement:ignore-clipping'), false);
         assert.equal(player.getPrivateArea(), null, 'ordinary shared dungeon, not a private-instance claim');
       }
     }
@@ -620,7 +622,8 @@ function ikovFixture(t) {
     assert.equal(tasks.length, 1, 'one actual scheduler task keyed to this opened object');
     return tasks[0];
   }
-  return { actor, base, opened, operate, replay, turns, shared, timer, events, now: () => worldTurn };
+  return { actor, base, opened, operate, replay, turns, shared, timer, events, now: () => worldTurn,
+    walkOver: player => { walkingOver = player; } };
 }
 
 function ikovFeedback(f) {
@@ -1119,28 +1122,42 @@ test('Ikov trapped lever Search uses current boosted42 with no XP and only safe 
   assert.ok(a.animations.some(row => row.id === core.CacheDefinitions.getSeqId('macro_lever_switch_down')));
   assert.equal(trapFlag(b, IKOV_TRAP_UNLOCKED), 0); assert.equal(trapFlag(b, IKOV_TRAP_DISARMED), 0);
   assert.ok(h.tasks(a).every(task => !task.isRunning())); assert.equal(a.player.getMovementQueue().isMovementBlocked(), false);
-  await h.operate(a, h.currentDoor(a, b), 'Open');
-  let primary;
-  try {
-    const open = h.currentDoor(a, b); assert.notDeepEqual(h.pose(open), closed);
-    assert.equal(open.getId(), 92); assert.deepEqual(ikovAt(open), [2648, 9858, 0]); assert.equal(open.getFace(), 2);
-    assert.equal(crosses(), true, 'real catalog opening removes the doorway edge clipping');
-    await h.operate(b, open, 'Open'); assert.deepEqual(h.pose(h.currentDoor(a, b)), h.pose(open), 'locked bystander cannot toggle shared opened door');
-    const trace = [];
-    await a.connection.dispatch([{ type: 'move', worldX: 2648, worldY: 9860, modifierFlags: 0, run: false }]);
-    for (let turn = 0; turn < 32; turn++) { h.turns(); trace.push(ikovAt(a.player)); }
-    assert.deepEqual(ikovAt(a.player), [2648, 9860, 0], 'ordinary clipped walk enters the western room');
-    assert.deepEqual(ikovItems(a.player), items); assert.equal(a.player.getHitpoints(), 60);
-    console.log('IKOV_TRAP_DOOR_ROUTE', JSON.stringify({ closed, open: h.pose(open), trace, authoredRouteModel: true }));
-  } catch (error) { primary = error; throw error; }
-  finally {
-    try {
-      const live = h.currentDoor(a, b);
-      if (JSON.stringify(h.pose(live)) !== JSON.stringify(closed)) await h.operate(a, live, 'Open');
-      assert.deepEqual(h.pose(h.currentDoor(a, b)), closed);
-      assert.equal(crosses(), false, 'retoggle restores the closed door clipping');
-    } catch (error) { if (!primary) throw error; console.error('IKOV_TRAP_DOOR_CLEANUP_FAILED_AFTER_PRIMARY', error); }
-  }
+  // rsprox_transcripts/242/912156.txt ticks 1764-1768 (north), 1885-1893 (south), 2014-2019: Open puts inviswall
+  // 38848 on the doorway and inactiveposhdoor 1542 on the tile north, door_open (62), the opener steps across and
+  // the door is back two ticks later.
+  const sounds = [], sendSound = core.Sounds.sendSound;
+  t.mock.method(core.Sounds, 'sendSound', function(player, sound, ...rest) {
+    if (player === a.player) sounds.push(sound.getId?.() ?? sound.id);
+    return Reflect.apply(sendSound, this, [player, sound, ...rest]);
+  });
+  h.walkOver(a.player);
+  await h.operate(a, h.door, 'Open');
+  const handled = h.now(), here = () => ikovAt(a.player);
+  const at = (id, y) => core.MapObjects.get(id, new core.Location(2648, y, 0), null);
+  const wall = at(38848, 9857), leaf = at(1542, 9858);
+  assert.ok(wall && leaf, 'inviswall on the doorway and inactiveposhdoor north of it');
+  assert.deepEqual([wall.getType(), wall.getFace(), leaf.getType(), leaf.getFace()], [0, 1, 0, 2]);
+  assert.equal(core.MapObjects.get(92, h.door.getLocation(), null), null, 'the closed door is swapped out');
+  assert.equal(crosses(), false, 'the blocker keeps the doorway shut to ordinary walking');
+  assert.deepEqual(sounds, [62], 'door_open');
+  for (let turn = 0; turn < 4 && here()[1] !== 9858; turn++) h.turns();
+  assert.deepEqual(here(), [2648, 9858, 0], 'the opener steps through into the western room');
+  assert.ok(h.now() - handled <= 1, 'one step, on the tick after the Open');
+  h.turns(2 - (h.now() - handled));
+  assert.deepEqual(h.pose(h.currentDoor(a, b)), closed, 'the door is back two ticks after the Open');
+  assert.equal(at(1542, 9858), null); assert.equal(crosses(), false);
+  await h.operate(a, h.currentDoor(a, b), 'Open'); // the restored door is a fresh registration
+  for (let turn = 0; turn < 4 && here()[1] !== 9857; turn++) h.turns();
+  assert.deepEqual(here(), [2648, 9857, 0], 'and back out the same way');
+  h.turns(3); assert.deepEqual(h.pose(h.currentDoor(a, b)), closed);
+  assert.equal(a.player.hasFlag('movement:ignore-clipping'), false, 'the walk-over flag ends once across');
+  h.walkOver(null);
+  await b.connection.dispatch([{ type: 'move', worldX: 2648, worldY: 9857, modifierFlags: 0, run: false }]);
+  h.turns(16);
+  await h.operate(b, h.currentDoor(a, b), 'Open'); h.turns(3);
+  assert.deepEqual(h.pose(h.currentDoor(a, b)), closed, 'a locked player cannot open it');
+  assert.notEqual(ikovAt(b.player)[1], 9858);
+  assert.deepEqual(ikovItems(a.player), items); assert.equal(a.player.getHitpoints(), 60);
   assert.deepEqual(ikovItems(a.player), items); assert.equal(a.player.getSkillManager().getExperience(core.Skill.THIEVING), xp); h.shared();
 });
 
@@ -1220,6 +1237,51 @@ test('Ikov trap named Search and Pull leave matching-name wrong-placement lever 
     }
     assert.equal(h.statementCount(a, 'You find a trap on the lever! You disable the trap.'), 0); h.shared();
   } finally { core.ObjectManager.deregister(wrong, true); }
+});
+
+// rsprox_transcripts/242/912156.txt: Search (tick 1236) plays lever_switch_up_down (2141) with its mesbox; Pull,
+// handled at 1240, moves the quest on at once, macro_lever_switch_down (2140) at 1241, and at 1242 the lever shows as
+// ikov_leverdown (88, shape 4 rotation 1) with synth sound lever (2400) until 1247.
+test('Ikov trapped lever Search animates and a safe Pull lowers the lever for 5 ticks with its sound, 2 ticks on', async t => {
+  const h = ikovTrapFixture(t), a = h.actor(42), b = h.actor(42);
+  assert.deepEqual([core.CacheDefinitions.getSeqId('lever_switch_up_down'), core.CacheDefinitions.getSeqId('macro_lever_switch_down')], [2141, 2140]);
+  assert.equal(core.CacheDefinitions.getLocId('ikov_leverdown'), 88);
+  const at = h.lever.getLocation(), handledTurn = () => h.events.filter(e => e.player === a.player && e.handled === true).at(-1).turn;
+  await h.operate(a, h.lever, 'Search for traps');
+  const searched = handledTurn();
+  assert.deepEqual(a.animations.filter(row => row.id === 2141).map(row => row.turn), [searched], 'search animation with the mesbox');
+  assert.equal(h.statementCount(a, 'You find a trap on the lever! You disable the trap.'), 1);
+  a.player.closeInterruptibleInterfaces?.();
+  await h.operate(a, h.lever, 'Pull');
+  const pulled = handledTurn();
+  assert.equal(trapFlag(a, IKOV_TRAP_UNLOCKED), 1, 'unlocked on the tick the Pull is handled');
+  assert.equal(a.animations.some(row => row.id === 2140), false, 'no pull animation on the click tick');
+  const lowered = () => core.ObjectManager.objectsAt(at).find(o => o.getId() === 88 && o.getOwner() === a.player);
+  h.turns();
+  assert.deepEqual(a.animations.filter(row => row.id === 2140).map(row => row.turn), [pulled + 1]);
+  assert.equal(lowered(), undefined);
+  h.turns();
+  const down = lowered();
+  assert.ok(down, 'the owner sees the lowered lever');
+  assert.deepEqual([down.getType(), down.getFace()], [4, 1]);
+  assert.deepEqual(a.sounds.filter(row => row.args[0] === 2400).map(row => row.turn), [pulled + 2]);
+  assert.equal(a.removedAt.some(row => row.object === h.lever && row.turn === pulled + 2), true, 'the shared lever is hidden for the owner');
+  assert.equal(b.removed.includes(h.lever) || b.shown.includes(down), false, 'another player still sees the shared lever');
+  assert.equal(a.player.getMovementQueue().isMovementBlocked(), false, 'released once the lever is down');
+  h.turns(4); assert.ok(lowered(), 'still down 4 ticks later');
+  h.turns(); assert.equal(lowered(), undefined, 'back up after 5 ticks');
+  assert.ok(a.shownAt.some(row => row.object === h.lever && row.turn === pulled + 7));
+  assert.equal(core.MapObjects.get(91, at, null), h.lever); h.shared();
+});
+
+test('Ikov logout while the trapped lever is down restores the owner view', async t => {
+  const h = ikovTrapFixture(t), a = h.actor(42);
+  await h.operate(a, h.lever, 'Search for traps'); a.player.closeInterruptibleInterfaces?.();
+  await h.operate(a, h.lever, 'Pull'); h.turns(2);
+  assert.ok(core.ObjectManager.objectsAt(h.lever.getLocation()).some(o => o.getId() === 88 && o.getOwner() === a.player));
+  PM.emitPlayerLogout({ player: a.player, username: a.player.getUsername() });
+  assert.equal(core.ObjectManager.objectsAt(h.lever.getLocation()).some(o => o.getId() === 88 && o.getOwner() === a.player), false);
+  assert.equal(trapFlag(a, IKOV_TRAP_UNLOCKED), 1); h.turns(6); h.shared();
 });
 
 const IKOV_WARRIOR_DEFEATED = 'temple-of-ikov:fire-warrior-defeated';
@@ -1343,6 +1405,69 @@ test('Ikov encounter readiness cancels on owner relocation and logout without a 
   PM.emitPlayerLogout({ player: b.player, username: b.player.getUsername() }); // hook fixture keeps actor registered
   h.turns(10);
   assert.equal(h.speech.some(row => row.npc === other), false); assert.equal(h.own(b), undefined); h.closed();
+});
+
+// rsprox_transcripts/242/912156.txt ticks 1779-1786: smokepuff (86) and its sound (1930) on his tile, his add with
+// human_smokepuff_tele_appear (803) and fire_teleport (1629), "You will not pass!" 2 ticks on, "Amitus! Setitii!" with
+// human_caststrike (711), fireblast_casting (129), fireblast_travel (130) to the door and fireblast_impact (131) there,
+// then a one-tile exactmove south (30/56 cycles, angle 1024) with human_stumble_back (846) at delay 30.
+test('Ikov Fire Warrior arrives in smoke, casts the fire blast on his second line and knocks the player back stumbling', async t => {
+  const h = ikovWarriorFixture(t), a = h.actor(), b = h.actor();
+  const seq = name => core.CacheDefinitions.getSeqId(name), spot = name => core.CacheDefinitions.getSpotanimId(name);
+  assert.deepEqual([seq('human_smokepuff_tele_appear'), seq('human_caststrike'), seq('human_stumble_back')], [803, 711, 846]);
+  assert.deepEqual([spot('smokepuff'), spot('fireblast_casting'), spot('fireblast_travel'), spot('fireblast_impact')], [86, 129, 130, 131]);
+  const rows = { graphics: [], sounds: [], projectiles: [], npcAnims: [], npcGraphics: [], anims: [] };
+  for (const f of [a, b]) {
+    const sender = f.player.getPacketSender();
+    for (const [method, list] of [['sendGraphic', rows.graphics], ['sendAreaSound', rows.sounds], ['sendProjectile', rows.projectiles]]) {
+      const original = sender[method].bind(sender);
+      sender[method] = (...args) => { list.push({ player: f.player.getUsername(), args, turn: h.now() }); return original(...args); };
+    }
+  }
+  const npcAnimation = core.NPC.prototype.performAnimation, npcGraphic = core.NPC.prototype.performGraphic;
+  t.mock.method(core.NPC.prototype, 'performAnimation', function(animation) {
+    if (this.getId() === 3448) rows.npcAnims.push({ id: animation.getId(), turn: h.now() });
+    return Reflect.apply(npcAnimation, this, [animation]);
+  });
+  t.mock.method(core.NPC.prototype, 'performGraphic', function(graphic) {
+    if (this.getId() === 3448) rows.npcGraphics.push({ id: graphic.id, height: graphic.height, turn: h.now() });
+    return Reflect.apply(npcGraphic, this, [graphic]);
+  });
+  const animation = a.player.performAnimation;
+  a.player.performAnimation = anim => { rows.anims.push({ id: anim.getId(), delay: anim.getDelay(), turn: h.now() }); return animation(anim); };
+  await h.operate(a, h.door, 'Open');
+  const handled = h.now(), npc = h.own(a), tile = npc.getLocation(), start = a.player.getLocation().clone();
+  let force = null, forceTurn = null;
+  for (let turn = 0; turn < 12; turn++) {
+    h.turns();
+    if (!force && a.player.getForceMovement()) { force = a.player.getForceMovement(); forceTurn = h.now(); }
+  }
+  const at = row => [row.args[1].getX(), row.args[1].getY()];
+  const smoke = rows.graphics.filter(row => row.args[0].id === 86);
+  assert.deepEqual(smoke.map(row => [row.player, row.turn, ...at(row)]), [[a.player.getUsername(), handled, tile.getX(), tile.getY()]], 'smokepuff on his tile, owner only');
+  assert.deepEqual(rows.npcAnims.filter(row => row.id === 803).map(row => row.turn), [handled], 'appears as he is added');
+  assert.deepEqual(rows.sounds.filter(row => [1930, 1629].includes(row.args[0])).map(row => [row.player, row.args[0], row.turn]),
+    [[a.player.getUsername(), 1930, handled], [a.player.getUsername(), 1629, handled]]);
+  const lines = h.speech.filter(row => row.npc === npc);
+  assert.deepEqual(lines.map(row => row.text), ['You will not pass!', 'Amitus! Setitii!']);
+  assert.equal(lines[0].turn, handled + 2, 'first line 2 ticks after he appears');
+  const blastTurn = lines[1].turn;
+  // His ordinary magic attacks also use human_caststrike; the scene's blast is the one on his line.
+  assert.ok(rows.npcAnims.some(row => row.id === 711 && row.turn === blastTurn), 'human_caststrike with the line');
+  assert.deepEqual(rows.npcGraphics.filter(row => row.id === 129 && row.turn === blastTurn).map(row => row.height), [92]);
+  assert.deepEqual(rows.projectiles.filter(row => row.args[4] === 130).map(row => [row.player, row.args[4], row.args[1].getX(), row.args[1].getY(), row.args[3], row.args[8], row.turn]),
+    [[a.player.getUsername(), 130, 2646, 9870, 130, 76, blastTurn]], 'fire blast travels to the door');
+  const impact = rows.graphics.filter(row => row.args[0].id === 131);
+  assert.deepEqual(impact.map(row => [...at(row), row.args[0].delay, row.args[0].height, row.turn]), [[2646, 9870, 130, 124, blastTurn]]);
+  assert.deepEqual(rows.sounds.filter(row => [155, 156].includes(row.args[0])).map(row => [row.args[0], row.args[5], row.turn]),
+    [[155, 0, blastTurn], [156, 124, blastTurn]]);
+  assert.ok(force, 'knock-back force move');
+  assert.deepEqual([force.getSpeed(), force.getReverseSpeed(), force.getDirection(), force.getAnimation()], [30, 56, 0, 846]);
+  assert.deepEqual(rows.anims.filter(row => row.id === 846).map(row => [row.delay, row.turn]), [[30, forceTurn]], 'stumbles back at delay 30');
+  assert.deepEqual(ikovAt(a.player), [start.getX(), start.getY() - 1, 0]);
+  const scene = row => row.player === b.player.getUsername() && [86, 131, 1930, 1629, 155, 156].includes(row.args[0]?.id ?? row.args[0]);
+  assert.equal(rows.graphics.some(scene) || rows.sounds.some(scene)
+    || rows.projectiles.some(row => row.player === b.player.getUsername() && row.args[4] === 130), false, 'another player sees none of the scene effects');
 });
 
 test('Ikov foreign death cannot credit a live encounter and relocated authorized carry still restores shared93', async t => {
@@ -1924,4 +2049,379 @@ test('Ikov bridge arrival hold preserves replacement ownership and does not retu
   assert.equal(other.player.getMovementQueue().getBlockMovementGeneration(), generation);
   assert.deepEqual(ikovAt(other.player), [h.west, h.y, 0]);
   replacement.stop(); h.shared();
+});
+
+// Guide oldid15363124: cross, take the world lever, return, fit, then Pull.
+// Initial stage10/east-bank start/boots/pendant/99HP are supplied by the maintained
+// fixture. Stock comes from the actual startup loader. This is a same-actor
+// acquisition relation, not a natural quest start, authenticated save or retail fall proof.
+test('Ikov ordinary crossing and registered lever Take conserve the same item through return and bracket Pull', async t => {
+  const h = ikovBridgeFixture(t);
+  const { GroundItemSpawnDefinitionLoader } = require('../dist/game/definition/loader/impl/GroundItemSpawnDefinitionLoader');
+  const { GroundItemRespawnTask } = require('../dist/game/task/impl/GroundItemRespawnTask');
+  const { MAX_STACK_AMOUNT } = require('../dist/game/model/container/StackType');
+  const loader = new GroundItemSpawnDefinitionLoader(), stockAt = new core.Location(2637, 9819, 0);
+  const isLeverStock = ground => ground.getItem().getId() === I.LEVER && ground.getPosition().equals(stockAt);
+  const priorStock = new Set(core.World.getItems());
+  // The World already holds ground items after the fixture (their source is not identified); the loader result is
+  // diffed against this snapshot below, so existing items are tolerated. Only the lever stock tile must be free.
+  const describeStock = ground => [ground.getItem().getId(), ground.getPosition().getX(), ground.getPosition().getY(), ground.getPosition().getZ()];
+  assert.deepEqual([...priorStock].filter(isLeverStock).map(describeStock), [],
+    `no existing lever stock at 2637,9819,0 before loading (existing ground items: ${JSON.stringify([...priorStock].map(describeStock))})`);
+  const baseline = [...priorStock].map(ground => ({ ground, fields: { ...ground },
+    item: ground.getItem(), amount: ground.getItem().getAmount(), id: ground.getItem().getId(),
+    meta: JSON.stringify(ground.getItem().getMeta()) }));
+  const rows = JSON.parse(require('node:fs').readFileSync(loader.file(), 'utf8')).filter(row => row.id === I.LEVER);
+  assert.equal(I.LEVER, 83); assert.equal(rows.length, 1);
+  assert.deepEqual([rows[0].location, rows[0].amt, rows[0].respawn], [{ x: 2637, y: 9819, z: 0 }, 1, 100]);
+  assert.equal(core.CacheDefinitions.hasItem(I.LEVER), true, 'actual cache supports the stock before loading');
+  assert.equal(core.ItemDefinition.forId(I.LEVER).getWeight(), 56);
+  // Observe the actual register calls before loading, so partial loader failure
+  // also leaves an exact cleanup set. No registration or definition is replaced.
+  const ownedPositions = new Set(), registerStock = core.ItemOnGroundManager.register;
+  // The manager has no read-only canMerge API. Guard this loader's exact
+  // production merge eligibility BEFORE registration, so setup never mutates
+  // an existing stack. This is a fixture precondition, not a merge behavior test.
+  function mergesIntoExisting(incoming, existing) {
+    if (!incoming.getItem().getDefinition().isStackable() || existing.isPendingRemoval() || existing === incoming
+      || !core.Location.isSameTile(existing.getPosition(), incoming.getPosition())
+      || existing.getPrivateArea() !== incoming.getPrivateArea()
+      || existing.getDespawnDelay() !== incoming.getDespawnDelay()
+      || !existing.hasSameOperationPolicy(incoming) || existing.getOwner() !== incoming.getOwner()
+      || existing.getItem().getId() !== incoming.getItem().getId()
+      || JSON.stringify(existing.getItem().getMeta() ?? null) !== JSON.stringify(incoming.getItem().getMeta() ?? null)) return false;
+    const recurring = existing.isStaticSpawn() && existing.respawns(), incomingRecurring = incoming.isStaticSpawn() && incoming.respawns();
+    if ((recurring || incomingRecurring) && (!recurring || !incomingRecurring
+      || existing.getRespawnTimer() !== incoming.getRespawnTimer() || existing.getState() !== incoming.getState()
+      || existing.getgoesGlobal() !== incoming.getgoesGlobal() || existing.isAgingPaused() !== incoming.isAgingPaused()
+      || existing.getRespawnAmount() + incoming.getRespawnAmount() > MAX_STACK_AMOUNT)) return false;
+    return existing.getItem().getAmount() + incoming.getItem().getAmount() <= MAX_STACK_AMOUNT;
+  }
+  let loading = false;
+  t.mock.method(core.ItemOnGroundManager, 'register', function(ground) {
+    if (loading) {
+      assert.equal([...priorStock].some(existing => core.World.getItems().includes(existing) && mergesIntoExisting(ground, existing)), false,
+        'loader setup cannot merge into pre-existing stock; preserve it without rollback');
+      ownedPositions.add(ground.getPosition());
+    }
+    return Reflect.apply(registerStock, this, [ground]);
+  });
+  // Respawn clones retain their loader-created Location identity; cleanup never
+  // removes a foreign drop merely because its id or tile matches.
+  t.after(() => {
+    for (const task of ikovTasks) {
+      if (task instanceof GroundItemRespawnTask && ownedPositions.has(task.item.getPosition()) && task.isRunning()) task.stop();
+    }
+    const worldStock = core.World.getItems();
+    for (let index = worldStock.length - 1; index >= 0; index--)
+      if (ownedPositions.has(worldStock[index].getPosition())) worldStock.splice(index, 1);
+    assert.equal(worldStock.some(ground => ownedPositions.has(ground.getPosition())), false);
+  });
+  let loadedSuccessfully;
+  try { loading = true; loadedSuccessfully = loader.load(); } finally { loading = false; }
+  for (const saved of baseline) {
+    assert.equal(core.World.getItems().includes(saved.ground), true, 'loader setup preserves existing stock membership');
+    assert.equal(saved.ground.getItem(), saved.item);
+    assert.equal(saved.item.getId(), saved.id);
+    assert.equal(saved.item.getAmount(), saved.amount);
+    assert.equal(JSON.stringify(saved.item.getMeta()), saved.meta);
+    assert.deepEqual({ ...saved.ground }, saved.fields, 'all pre-existing stack fields are conserved before ordinary inputs');
+  }
+  assert.equal(loadedSuccessfully, true, 'the real ground definition loader accepts its actual sources');
+  const loaded = core.World.getItems().filter(ground => !priorStock.has(ground));
+  assert.ok(loaded.every(ground => ownedPositions.has(ground.getPosition())));
+  const matches = loaded.filter(isLeverStock); assert.equal(matches.length, 1);
+  const stock = matches[0];
+  assert.equal(stock.isStaticSpawn(), true); assert.equal(stock.getOwner() == null, true);
+  assert.equal(stock.getPrivateArea(), null); assert.equal(stock.getState(), core.GroundItemState.SEEN_BY_EVERYONE);
+  assert.equal(stock.getItem().getAmount(), 1); assert.equal(stock.getRespawnTimer(), 100);
+  const f = h.actor(), startItems = ikovItems(f.player), grams = f.player.getCarriedWeightGrams();
+  assert.equal(f.player.isNeedsPlacement(), false); assert.equal(f.player.getInventory().getAmount(I.LEVER), 0);
+  assert.ok(f.player.getInventory().getFreeSlots() > 0 && f.player.getWeightKg() < 0);
+  const takeOp = core.ItemOnGroundManager.takeOperation(I.LEVER);
+  assert.ok(takeOp >= 1 && takeOp <= 5); assert.equal(stock.isOperationEnabled(f.player, takeOp), true);
+  const pickups = [], uses = [], emitPickup = PM.emitGroundItemPickup, emitUse = PM.emitItemOnObject;
+  t.mock.method(PM, 'emitGroundItemPickup', function(event) {
+    if (event.player === f.player) pickups.push({ event, at: ikovAt(f.player), turn: h.now(), held: f.player.getInventory().getAmount(I.LEVER) });
+    return Reflect.apply(emitPickup, this, [event]);
+  });
+  t.mock.method(PM, 'emitItemOnObject', function(event) {
+    const result = Reflect.apply(emitUse, this, [event]);
+    if (event.player === f.player) uses.push(event);
+    return result;
+  });
+  await h.walk(f, h.west, 20);
+  const westArrival = f.player.getLocation().clone();
+  assert.deepEqual(ikovAt(f.player), [h.west, h.y, 0], 'explicit ordinary crossing reaches the actual west endpoint');
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false, 'arrival hold has actually released before Take');
+  assert.equal(f.player.getAttribute('agility.obstacle') == null, true);
+  assert.deepEqual(ikovItems(f.player), startItems);
+  assert.ok(h.walks.some(row => row.player === f.player && row.handled && row.destination.x === h.west));
+  assert.equal(core.ItemOnGroundManager.canOperate(f.player, stock, takeOp), true, 'same-floor shared stock is genuinely operable');
+  // The lever room is behind the bridge's west end: closed Large doors 1521 and 1524 (a wall on 2645,9828 and
+  // 2645,9829, found by the reachability probe of the failed Take). A player opens them first, as the Wiki's
+  // "Walk across the bridge and take the lever on the other side" requires walking through.
+  const doorLeaves = [[1521, 2645, 9828], [1524, 2645, 9829]].map(([id, x, y]) => core.MapObjects.get(id, new core.Location(x, y, 0), null));
+  assert.ok(doorLeaves.every(Boolean), 'the real closed Large door leaves stand at the bridge\'s west end');
+  const doorStep = () => core.RegionManager.canMovestart(new core.Location(2645, 9828, 0), new core.Location(2644, 9828, 0), 1, 1, null);
+  assert.equal(doorStep(), false, 'closed: the wall on 2645,9828 stops a step west');
+  // Execute only this pair's production auto-close cleanup, including on failure.
+  const doorKey = doorLeaves.map(object => `${object.getId()}:${object.getLocation().getX()},${object.getLocation().getY()},0`).sort().join('|');
+  const priorDoorTasks = new Set(ikovTasks);
+  t.after(() => {
+    for (const task of ikovTasks)
+      if (!priorDoorTasks.has(task) && task.key === doorKey) task.execute();
+    for (const leaf of doorLeaves) {
+      const restored = core.MapObjects.get(leaf.getId(), leaf.getLocation(), null);
+      assert.ok(restored, 'owned door cleanup restores the closed leaf');
+      assert.equal(restored.getType(), leaf.getType()); assert.equal(restored.getFace(), leaf.getFace());
+    }
+    assert.equal(doorStep(), false, 'owned door cleanup restores the original wall clipping');
+  });
+  await h.operate(f, doorLeaves[0], 'Open');
+  assert.equal(doorStep(), true, 'the door actually opened: the step west from 2645,9828 is now free (not just a handled click)');
+  const atDoor = ikovAt(f.player);
+  assert.equal(f.player.isNeedsPlacement(), false); assert.equal(atDoor[2], 0);
+  assert.ok(atDoor[0] >= 2645 && atDoor[0] <= 2647 && [9828, 9829].includes(atDoor[1]),
+    `opening walked the player to the door and did not carry it across: ${JSON.stringify(atDoor)}`);
+  const beforeTake = ikovAt(f.player), takeTurn = h.now();
+  await f.connection.dispatch([{ type: 'ground_item_action', itemId: I.LEVER, x: stockAt.getX(), y: stockAt.getY(),
+    option: 'Take', optionIndex: takeOp, stackId: stock.getId() }]);
+  assert.equal(f.player.getInventory().getAmount(I.LEVER), 0, 'dispatch alone does not credit an unreachable distant item');
+  const pickupTrace = [];
+  for (let turn = 0; turn < 64 && f.player.getInventory().getAmount(I.LEVER) === 0; turn++) {
+    h.turns(); pickupTrace.push(ikovAt(f.player));
+  }
+  assert.equal(pickups.length, 1, 'decoded Take reaches the real native ground pickup producer once');
+  assert.equal(pickups[0].event.groundItem, stock); assert.equal(pickups[0].held, 0);
+  assert.ok(pickups[0].turn > takeTurn && pickupTrace.some(at => at.some((value, index) => value !== beforeTake[index])),
+    'ordinary ground-item approach genuinely advanced before its deferred action');
+  assert.equal(core.PathFinder.reachedObj(f.player, stockAt), true, 'actual route reached the item or a collision-reachable adjacent tile');
+  assert.equal(f.player.getInventory().getAmount(I.LEVER), 1, 'native pickup positively credited one real lever');
+  assert.ok(stock.isPendingRemoval() || !core.World.getItems().includes(stock), 'the credited source was consumed');
+  assert.equal(f.player.getCarriedWeightGrams(), grams + 56); assert.ok(f.player.getWeightKg() < 0);
+  const carried = ikovItems(f.player), expectedCarried = structuredClone(startItems);
+  const acquiredSlot = f.player.getInventory().getSlotForItemId(I.LEVER);
+  assert.ok(acquiredSlot >= 0);
+  expectedCarried[0][acquiredSlot] = { id: I.LEVER, amount: 1, meta: stock.getItem().getMeta() };
+  assert.deepEqual(carried, expectedCarried, 'only the credited lever changes the complete inventory/equipment snapshot');
+  // Take does not emit the bridge walk hook, and this stock is outside its
+  // approach corridor. Return by ordinary movement to the actually observed
+  // west endpoint before issuing the separate eastward crossing; no guessed waypoint.
+  await h.walk(f, westArrival.getX(), 64);
+  assert.deepEqual(ikovAt(f.player), [westArrival.getX(), westArrival.getY(), westArrival.getZ()],
+    'native path can return from the stock to the previously reached west bank');
+  assert.deepEqual(ikovItems(f.player), carried);
+  await h.walk(f, h.east, 20);
+  assert.deepEqual(ikovAt(f.player), [h.east, h.y, 0]);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(f.player.getAttribute('agility.obstacle') == null, true);
+  assert.deepEqual(ikovItems(f.player), carried, 'ordinary return conserves the actually acquired item');
+  // Return through the initial room's northern gate before using its bracket
+  // (retained Wiki route; same-cache013 placements, not a proven409 barrier).
+  const northern = [[core.ObjectIdentifiers.GATE_13, 2661], [core.ObjectIdentifiers.GATE_12, 2662]]
+    .map(([id, x]) => core.MapObjects.get(id, new core.Location(x, 9815, 0), null));
+  assert.ok(northern.every(Boolean), 'both actual northern leaves must exist; no invented substitute');
+  const northPose = object => ({ id: object.getId(), type: object.getType(), face: object.getFace(),
+    location: { x: object.getLocation().getX(), y: object.getLocation().getY(), z: object.getLocation().getZ() },
+    privateArea: object.getPrivateArea() });
+  const northClosed = northern.map(northPose);
+  assert.deepEqual(northClosed, [
+    { id: 95, type: 0, face: 3, location: { x: 2661, y: 9815, z: 0 }, privateArea: null },
+    { id: 94, type: 0, face: 3, location: { x: 2662, y: 9815, z: 0 }, privateArea: null },
+  ]);
+  for (const leaf of northern) {
+    assert.equal(leaf.getOwner(), null);
+    const def = core.CacheDefinitions.getObject(leaf.getId());
+    assert.equal(def.name, 'Gate');
+    assert.ok(def.actions?.includes('Open') && !def.actions.includes('Close'),
+      'actual catalog prerequisite: both leaves are Open-only');
+    assert.ok(Array.isArray(def.models) && def.models.length > 0, 'actual model prerequisite');
+  }
+  assert.deepEqual(core.CacheDefinitions.getObject(northern[0].getId()).models,
+    core.CacheDefinitions.getObject(northern[1].getId()).models, 'actual same-model prerequisite, not consecutive IDs alone');
+  const northSteps = () => [2661, 2662].map(x => core.RegionManager.canMovestart(
+    new core.Location(x, 9815, 0), new core.Location(x, 9814, 0), 1, 1, null));
+  const northClips = () => [2660, 2661, 2662, 2663].flatMap(x => [9814, 9815, 9816]
+    .map(y => [x, y, core.RegionManager.getClipping(x, y, 0, null)]));
+  const northBefore = northClips();
+  assert.deepEqual(northSteps(), [false, false], 'actual standing northern threshold blocks both southward steps');
+  const { OPEN_OBJECT_STATES: northStates, RUNTIME_DOUBLE_DOOR_RECORDS: northRecords } =
+    require('../plugins/objects/Doors.plugin').__internals;
+  const northPriorStates = new Map(northStates), northPriorRecords = new Set(northRecords), northPriorTasks = new Set(ikovTasks);
+  const northOwnedRecords = new Set();
+  const isNorthClosed = snapshot => northClosed.some(original => JSON.stringify(original) === JSON.stringify(snapshot));
+  assert.ok(![...northStates.values()].some(state => state.closed.some(isNorthClosed)),
+    'fixture owns no pre-existing northern open state');
+  assert.ok(!northRecords.some(record => northClosed.some(original => record.privateArea === original.privateArea
+    && record.z === original.location.z
+    && ((record.originalId === original.id && record.originalX === original.location.x && record.originalY === original.location.y)
+      || (record.currentId === original.id && record.x === original.location.x && record.y === original.location.y)))),
+    'fixture refuses pre-existing records related by original identity or exact current lookup identity');
+  // Observe only this actor's synchronous production Open. Preserve this/args/
+  // result; retained actual touched objects also cover a throw before anchor creation.
+  let northOpening = false;
+  const northTouched = new Map(), northRegistered = new Set(), northOwnedStates = new Map(), northOwnedTasks = new Set();
+  const northSet = northStates.set, northSubmit = core.TaskManager.submit;
+  t.mock.method(northStates, 'set', function(anchor, state) {
+    if (northOpening) northOwnedStates.set(anchor, state);
+    return Reflect.apply(northSet, this, [anchor, state]);
+  });
+  t.mock.method(core.TaskManager, 'submit', function(task, ...args) {
+    if (northOpening) northOwnedTasks.add(task);
+    return Reflect.apply(northSubmit, this, [task, ...args]);
+  });
+  const northEmit = PM.emitObjectInteraction;
+  t.mock.method(PM, 'emitObjectInteraction', function(event) {
+    const previous = northOpening;
+    northOpening = event.player === f.player && northern.includes(event.object) && event.clickType ===
+      core.CacheDefinitions.getObject(event.object.getId()).actions.indexOf('Open') + 1;
+    const beforeRecords = northOpening ? new Set(northRecords) : null;
+    try { return Reflect.apply(northEmit, this, [event]); } finally {
+      if (beforeRecords) for (const record of northRecords) if (!beforeRecords.has(record)) northOwnedRecords.add(record);
+      northOpening = previous;
+    }
+  });
+  for (const method of ['register', 'deregister']) {
+    const original = core.ObjectManager[method];
+    t.mock.method(core.ObjectManager, method, function(object, ...args) {
+      if (northOpening) {
+        const at = object.getLocation(), key = at.toString();
+        if (!northTouched.has(key)) northTouched.set(key, { at: at.clone(),
+          objects: [...new Set([...(core.MapObjects.mapObjects.get(core.MapObjects.getHash(at.getX(), at.getY(), at.getZ())) ?? []),
+            ...core.ObjectManager.objectsAt(at)])] });
+        if (method === 'register') northRegistered.add(object);
+      }
+      return Reflect.apply(original, this, [object, ...args]);
+    });
+  }
+  t.after(() => {
+    const errors = [];
+    const clean = action => { try { action(); } catch (error) { errors.push(error); } };
+    let replacement = false;
+    // Exact captured production state/task identities; no guessed anchor/pose.
+    for (const [anchor, state] of northOwnedStates) {
+      const current = northStates.get(anchor);
+      const slotObjects = snapshot => [...new Set([
+        ...(core.MapObjects.mapObjects.get(core.MapObjects.getHash(
+          snapshot.location.x, snapshot.location.y, snapshot.location.z)) ?? []),
+        ...core.ObjectManager.objectsAt(new core.Location(
+          snapshot.location.x, snapshot.location.y, snapshot.location.z)),
+      ])].filter(object => object.getType() === snapshot.type
+        && object.getPrivateArea() === snapshot.privateArea && object.getOwner() === null);
+      const originals = new Set([...northTouched.values()].flatMap(touched => touched.objects));
+      let custodyError;
+      if (current && current !== state) custodyError = 'foreign replacement state';
+      else if (current && !state.closed.every(isNorthClosed)) custodyError = 'foreign closed leaf in owned anchor';
+      else if (current && !state.current.every(snapshot => {
+        const standing = slotObjects(snapshot);
+        return standing.length === 1 && northRegistered.has(standing[0])
+          && JSON.stringify(northPose(standing[0])) === JSON.stringify(snapshot);
+      })) custodyError = 'foreign or missing current leaf before production auto-close';
+      else if (current && !state.closed.every(snapshot => slotObjects(snapshot)
+        .every(object => northRegistered.has(object) || (originals.has(object)
+          && JSON.stringify(northPose(object)) === JSON.stringify(snapshot)))))
+        custodyError = 'foreign occupant in production restore slot';
+      if (custodyError) {
+        replacement = true;
+        errors.push(new Error('northern cleanup preserves/report: ' + custodyError));
+        // Stop only captured own tasks: do not let a later auto-close erase the replacement.
+        for (const task of northOwnedTasks) if (task.key === anchor) clean(() => task.stop());
+        continue; // no production close, state deletion, or subsequent journal teardown
+      }
+      if (!current) continue; // the actual auto-close may already have restored it
+      for (const task of northOwnedTasks) if (task.key === anchor && northStates.get(anchor) === state)
+        clean(() => task.execute());
+      // A submit/execute failure can leave state without completed auto-close.
+      if (northStates.get(anchor) === state) {
+        for (const task of northOwnedTasks) if (task.key === anchor) clean(() => task.stop());
+        northStates.delete(anchor);
+      }
+    }
+    // Finish a partial synchronous Open from its actual touched objects. This
+    // teardown runs after gameplay, never before the original bracket assertions.
+    if (!replacement) {
+      for (const object of northRegistered) clean(() => {
+        const at = object.getLocation();
+        if (core.MapObjects.get(object.getId(), at, object.getPrivateArea()) === object
+          || core.ObjectManager.objectsAt(at).includes(object)) {
+          const standing = [...(core.MapObjects.mapObjects.get(core.MapObjects.getHash(at.getX(), at.getY(), at.getZ())) ?? []),
+            ...core.ObjectManager.objectsAt(at)].filter(other => other.getType() === object.getType()
+            && other.getPrivateArea() === object.getPrivateArea() && other.getOwner() === object.getOwner());
+          assert.ok(standing.every(other => other === object),
+            'partial teardown refuses a foreign occupant before deregistering its owned leaf');
+          core.ObjectManager.deregister(object, true);
+        }
+      });
+      for (const { objects } of northTouched.values()) for (const object of objects) clean(() => {
+        const at = object.getLocation(), current = core.MapObjects.get(object.getId(), at, object.getPrivateArea());
+        if (current && JSON.stringify(northPose(current)) === JSON.stringify(northPose(object))
+          && current.getOwner() === object.getOwner()) return;
+        const standing = [...(core.MapObjects.mapObjects.get(core.MapObjects.getHash(at.getX(), at.getY(), at.getZ())) ?? []),
+          ...core.ObjectManager.objectsAt(at)];
+        assert.ok(!standing.some(other => other.getType() === object.getType()
+          && other.getPrivateArea() === object.getPrivateArea() && other.getOwner() === object.getOwner()),
+          'partial cleanup must not overwrite a foreign replacement in the touched slot');
+        core.ObjectManager.register(object, true);
+      });
+      for (let index = northRecords.length - 1; index >= 0; index--) {
+        const record = northRecords[index];
+        if (!northPriorRecords.has(record) && northOwnedRecords.has(record)) northRecords.splice(index, 1);
+      }
+    }
+    clean(() => assert.deepEqual(northern.map(leaf =>
+      northPose(core.MapObjects.get(leaf.getId(), leaf.getLocation(), null))), northClosed));
+    clean(() => assert.deepEqual(northClips(), northBefore, 'owned gate cleanup restores exact nearby clipping for bystanders'));
+    clean(() => assert.deepEqual(northSteps(), [false, false]));
+    for (const { at, objects } of northTouched.values()) for (const object of objects) clean(() => {
+      const actual = core.MapObjects.get(object.getId(), at, object.getPrivateArea())
+        ?? core.ObjectManager.objectsAt(at).find(other => other === object);
+      assert.ok(actual, 'original touched-tile bystander survives cleanup');
+      assert.deepEqual(northPose(actual), northPose(object)); assert.equal(actual.getOwner(), object.getOwner());
+    });
+    if (errors.length) throw new AggregateError(errors, 'northern gate cleanup/conservation failed');
+  });
+  await h.operate(f, northern[0], 'Open');
+  assert.deepEqual(ikovItems(f.player), carried, 'ordinary gate approach and Open conserve the actual carried lever');
+  const northOpened = [...northStates].filter(([anchor, state]) => northPriorStates.get(anchor) !== state
+    && state.closed.some(isNorthClosed));
+  assert.equal(northOpened.length, 1, 'actual catalog resolved one production northern-door anchor');
+  const [northAnchor, northState] = northOpened[0];
+  assert.deepEqual([...northState.closed].sort((a, b) => a.id - b.id), [...northClosed].sort((a, b) => a.id - b.id),
+    'actual production pairing contains exactly these two original leaves');
+  assert.equal(northState.current.length, 2);
+  for (const pose of northState.current) {
+    const actual = core.MapObjects.get(pose.id, new core.Location(pose.location.x, pose.location.y, pose.location.z), null);
+    assert.ok(actual, 'actual production open pose stands in the map');
+    assert.deepEqual(northPose(actual), pose);
+    assert.equal(actual.getOwner(), null);
+  }
+  assert.notDeepEqual(northState.current, northState.closed, 'Open actually changed the observed pair pose');
+  assert.ok([...ikovTasks].some(task => !northPriorTasks.has(task) && task.key === northAnchor && task.isRunning()),
+    'actual new production anchor owns its auto-close');
+  assert.deepEqual(northSteps(), [true, true], 'ordinary Open actually freed the northern southward threshold');
+  const bracket = core.MapObjects.get(86, new core.Location(...IKOV_BRACKET, 0), null);
+  assert.ok(bracket); assert.equal(bracket.getOwner(), null);
+  assert.equal(f.player.getAttribute(IKOV_UNLOCK) ?? 0, 0);
+  const overlay = () => core.ObjectManager.objectsAt(bracket.getLocation()).find(object =>
+    object.getOwner() === f.player && [87, 88].includes(object.getId()));
+  await f.connection.dispatch([{ type: 'item_on_object', widgetId: core.Inventory.INTERFACE_ID, objectId: 86,
+    x: IKOV_BRACKET[0], y: IKOV_BRACKET[1], itemId: I.LEVER, slot: f.player.getInventory().getSlotForItemId(I.LEVER) }]);
+  for (let turn = 0; turn < 64 && !uses.length; turn++) {
+    assert.equal(f.player.getInventory().getAmount(I.LEVER), 1, 'walking to the bracket does not consume early');
+    h.turns();
+  }
+  assert.equal(uses.length, 1, 'decoded item-on-object reaches the real bracket handler once');
+  assert.equal(uses[0].object, bracket); assert.equal(uses[0].itemId, I.LEVER);
+  assert.equal(uses[0].handled, true); assert.equal(f.player.getInventory().getAmount(I.LEVER), 0);
+  const fitted = overlay(); assert.ok(fitted); assert.equal(fitted.getId(), 87); assert.equal(fitted.getOwner(), f.player);
+  assert.equal(f.player.getAttribute(IKOV_UNLOCK) ?? 0, 0, 'fitting alone does not unlock');
+  const afterFit = ikovItems(f.player);
+  assert.deepEqual(afterFit, startItems, 'fit consumes exactly the acquired lever and preserves every other item');
+  await h.operate(f, fitted, 'Pull');
+  assert.equal(f.player.getAttribute(IKOV_UNLOCK), 1); assert.equal(overlay().getId(), 88);
+  assert.deepEqual(ikovItems(f.player), afterFit, 'Pull cannot consume a second lever');
+  assert.equal(f.player.getHitpoints(), 99); h.shared();
+  console.log('IKOV_NATURAL_LEVER_RELATION', JSON.stringify({ start: [h.east, h.y, 0], beforeTake,
+    pickup: pickups[0].at, pickupTrace, afterPull: ikovAt(f.player), gramsBefore: grams, gramsAfterPickup: grams + 56 }));
 });

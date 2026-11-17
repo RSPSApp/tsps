@@ -51,8 +51,12 @@ export class World {
     private static playerBots: Map<string, any> = new Map<string, any>();
     private static npcs: MobileList<NPC> = new MobileList<NPC>(
         World.MAX_NPCS,
-        (npc) => World.registerNpcPosition(npc),
-        (npc) => World.unregisterNpcPosition(npc)
+        // The owner index follows the list itself, so every way in and out (the queues,
+        // PluginManager.removeNpc's direct removal, a rolled-back add) keeps it exact.
+        (npc) => { World.registerNpcPosition(npc); NPC.indexOwner(npc); },
+        (npc) => { World.unregisterNpcPosition(npc); NPC.forgetOwner(npc); },
+        // A removed NPC's index waits for the cycle's updates before another NPC can take it.
+        { holdFreedSlots: true }
     );
     private static items: ItemOnGround[] = [];
     private static playerArray: Player[] = []
@@ -61,6 +65,16 @@ export class World {
     private static combatActiveNpcs = new Set<NPC>();
     private static playerTileOccupants: Map<string, Player[]> = new Map();
     private static npcTileOccupants: Map<string, NPC[]> = new Map();
+    /**
+     * OSRS's NPC flag is one bit a tile, not a count of who stands there (osrs-docs: Entity
+     * Collision): an NPC stepping on sets it, and stepping off clears it even under another NPC
+     * still standing there; a player stepping on or off clears it too. A tile an NPC stands on stops
+     * other NPCs only while its flag is up, which is how NPCs come to stack. The tiles an NPC
+     * stands on whose flag has been cleared since it stepped on them; it raises them again by
+     * moving. rsprox (TzHaar-Ket-Rak, Yt-HurKot chasing a player running through them): 27 of 29
+     * stacks formed on a tile the player had just crossed, the rest on one an NPC had just left.
+     */
+    private static clearedNpcFlags: WeakMap<NPC, Set<string>> = new WeakMap();
     private static npcRegionOccupants: Map<string, Set<NPC>> = new Map();
     private static activeRegionIndex: ActiveRegionIndex = new ActiveRegionIndex(1);
     private static realPlayerObserverBuckets: Map<string, Array<{ x: number; y: number; z: number }>> = new Map();
@@ -292,6 +306,9 @@ export class World {
         const bucket = World.playerTileOccupants.get(key)?.filter((candidate) => candidate !== player);
         if (!bucket?.length) World.playerTileOccupants.delete(key);
         else World.playerTileOccupants.set(key, bucket);
+        // Players remove the ordinary NPC flag on departure, even if an NPC spawned
+        // beneath them after arrival. Physical occupancy and Full blocking stay intact.
+        World.clearNpcFlag(key, player.getPrivateArea?.() ?? null);
     }
 
     public static registerPlayerPosition(player: Player, location: Location | null | undefined = player?.getLocation?.()): void {
@@ -309,9 +326,14 @@ export class World {
         nextLocation: Location | null | undefined
     ): void {
         if (!player || !previousLocation || !nextLocation || previousLocation.equals(nextLocation)) return;
+        const teleportSerial = player.getTeleportSerial();
         player.claimTileOccupancy?.();
         World.removePlayerFromTileOccupants(player, previousLocation);
         World.addPlayerToTileOccupants(player, nextLocation);
+        World.clearNpcFlag(
+            World.getNpcTileKey(nextLocation.getX(), nextLocation.getY(), nextLocation.getZ()),
+            player.getPrivateArea?.() ?? null,
+        );
         if ((previousLocation.getX() >> 6) !== (nextLocation.getX() >> 6)
             || (previousLocation.getY() >> 6) !== (nextLocation.getY() >> 6)
             || previousLocation.getZ() !== nextLocation.getZ()) {
@@ -323,6 +345,22 @@ export class World {
             }
             PluginManager.emitPlayerMapSquareChange({ player, previous: previousLocation, location: nextLocation });
         }
+        // Existing map-square hooks can move the player recursively. That move already emits its
+        // own notification; never publish the stale outer destination as the current location.
+        if (player.isRegistered() && player.getLocation().equals(nextLocation)
+            && player.getTeleportSerial() === teleportSerial) {
+            PluginManager.emitPlayerLocationChange({
+                player, previous: previousLocation.clone(), location: nextLocation.clone(),
+            });
+        }
+    }
+
+    public static onPlayerAreaChanged(player: Player, previousPrivateArea: any): void {
+        const location = player.getLocation();
+        const key = World.getNpcTileKey(location.getX(), location.getY(), location.getZ());
+        // Changing instances is a departure and arrival even without changing coordinates.
+        World.clearNpcFlag(key, previousPrivateArea);
+        World.clearNpcFlag(key, player.getPrivateArea() ?? null);
     }
 
     public static isPlayerOccupyingTile(
@@ -333,11 +371,14 @@ export class World {
         // NPC movement only: a player who has not moved since logging in does not block NPCs yet
         // (live; LostCity PLAYER_OCC). Other callers (a rolling block, arena placement) still
         // see every player standing there.
-        blockingNpcsOnly = false
+        blockingNpcsOnly = false,
+        /** A step's source: tiles its footprint already covers are skipped (World.coversTile). */
+        from: Location | null = null
     ): boolean {
         if (!location) return false;
         for (let x = 0; x < Math.max(1, size); x++) {
             for (let y = 0; y < Math.max(1, size); y++) {
+                if (World.coversTile(from, size, location.getX() + x, location.getY() + y, location.getZ())) continue;
                 const key = World.getNpcTileKey(location.getX() + x, location.getY() + y, location.getZ());
                 if (World.playerTileOccupants.get(key)?.some((player) => player && player !== ignoredPlayer &&
                     (privateArea === undefined || player.getPrivateArea() === privateArea) &&
@@ -367,7 +408,25 @@ export class World {
                 } else {
                     World.npcTileOccupants.set(key, [npc]);
                 }
+                // Stepping on raises the tile's flag.
+                World.clearedNpcFlags.get(npc)?.delete(key);
             }
+        }
+    }
+
+    /**
+     * Lowers the NPC flag on a tile (World.clearedNpcFlags): the NPCs standing there in `privateArea`
+     * stop blocking other NPCs there until they move. Pets never raise it.
+     */
+    private static clearNpcFlag(key: string, privateArea: any, leaving: NPC | null = null): void {
+        // Only an NPC that holds the flag can lower it: a pet never raises it, and a hidden NPC
+        // is out of the world and blocks nothing.
+        if (leaving?.isPet?.() || (leaving && !leaving.isVisible())) return;
+        for (const npc of World.npcTileOccupants.get(key) ?? []) {
+            if (npc === leaving || npc.isPet() || (npc.getPrivateArea() ?? null) !== (privateArea ?? null)) continue;
+            let cleared = World.clearedNpcFlags.get(npc);
+            if (!cleared) World.clearedNpcFlags.set(npc, cleared = new Set());
+            cleared.add(key);
         }
     }
 
@@ -381,7 +440,12 @@ export class World {
                 const key = World.getNpcTileKey(location.getX() + x, location.getY() + y, location.getZ());
                 const nextBucket = World.npcTileOccupants.get(key)?.filter((candidate) => candidate !== npc);
                 if (!nextBucket?.length) World.npcTileOccupants.delete(key);
-                else World.npcTileOccupants.set(key, nextBucket);
+                else {
+                    World.npcTileOccupants.set(key, nextBucket);
+                    // Stepping off lowers the flag, even under an NPC still standing there.
+                    World.clearNpcFlag(key, npc.getPrivateArea() ?? null, npc);
+                }
+                World.clearedNpcFlags.get(npc)?.delete(key);
             }
         }
     }
@@ -451,25 +515,46 @@ export class World {
         location: Location | null | undefined,
         ignoredNpc: NPC | null = null,
         size = 1,
-        privateArea?: any
+        privateArea?: any,
+        /** Movement's question: only NPCs whose flag on the tile is still up (World.clearedNpcFlags). */
+        byFlag = false,
+        /** A step's source: tiles its footprint already covers are skipped (World.coversTile). */
+        from: Location | null = null
     ): boolean {
         if (!location) {
             return false;
         }
         for (let x = 0; x < Math.max(1, size); x++) {
             for (let y = 0; y < Math.max(1, size); y++) {
+                if (World.coversTile(from, size, location.getX() + x, location.getY() + y, location.getZ())) continue;
                 const key = World.getNpcTileKey(location.getX() + x, location.getY() + y, location.getZ());
                 // A hidden NPC (setVisible(false): burrowed, vanished, swapped out for another) is out of
                 // the world for players, so it holds no tile: a woken Observatory guard has to walk back
                 // onto the post the hidden sleeping guard keeps.
                 if (World.npcTileOccupants.get(key)?.some((npc) => npc && npc !== ignoredNpc && !npc.isPet() &&
                     npc.isVisible() &&
+                    // The full flag (barricades, pyramid blocks) is separate from the NPC flag and
+                    // still blocks NPCs once the NPC flag is lowered (osrs-docs: Entity Collision).
+                    !(byFlag && !npc.hasFlag(NPC.BLOCKS_PLAYERS_FLAG) && World.clearedNpcFlags.get(npc)?.has(key)) &&
                     (privateArea === undefined || npc.getPrivateArea() === privateArea))) {
                     return true;
                 }
             }
         }
         return false;
+    }
+
+    /**
+     * Whether a `size` footprint at `from` covers the tile. The NPC flag is a bit in the same
+     * collision map as walls (osrs-docs: Entity Collision), and a step reads that map only on the
+     * tiles the footprint enters: the leading column or row, and the corner on a diagonal
+     * (RegionManager.canMove). Reading the whole next footprint froze two large NPCs stacked on one
+     * tile, since every step either tried still overlapped the other (issue 6116).
+     */
+    private static coversTile(from: Location | null, size: number, x: number, y: number, z: number): boolean {
+        if (!from || from.getZ() !== z) return false;
+        const span = Math.max(1, size);
+        return x >= from.getX() && x < from.getX() + span && y >= from.getY() && y < from.getY() + span;
     }
 
     /** Whether an NPC with the "full" flag (NPC.BLOCKS_PLAYERS_FLAG) covers any tile of the footprint. */
@@ -1133,6 +1218,11 @@ export class World {
         return this.removeNPCQueue;
     }
 
+    /** The registered NPCs `owner` owns (an index, not a scan of every NPC). */
+    public static getNpcsOwnedBy(owner: Player | null | undefined): NPC[] {
+        return NPC.ownedBy(owner);
+    }
+
     public findSpawnedObject(id: number, loc: Location): GameObject | undefined {
         return World.objects.find(i => i.getId() === id && i.getLocation().equals(loc));
     }
@@ -1280,11 +1370,18 @@ export class World {
         });
         // Add pending Npcs..
         timed("queue_add_npcs", () => {
+            // Adds that failed only because every free index is still held this cycle: they go back on
+            // the queue after this pass and get an index once reset_npcs releases them.
+            const waiting: NPC[] = [];
             for (let i = 0; i < GameConstants.QUEUED_LOOP_THRESHOLD; i++) {
                 let npc = World.addNPCQueue.shift();
                 if (!npc)
                     break;
                 const added = World.npcs.add(npc);
+                if (!added && !npc.isRegistered() && World.npcs.waitingOnHeldSlots()) {
+                    waiting.push(npc);
+                    continue;
+                }
                 if (!added) {
                     console.warn("[world:npc] add_queue_failed", {
                         npcId: typeof npc.getId === "function" ? npc.getId() : null,
@@ -1309,6 +1406,7 @@ export class World {
                     });
                 }
             }
+            if (waiting.length) World.addNPCQueue.unshift(...waiting);
         });
 
         // Removing pending npcs..
@@ -1447,6 +1545,8 @@ export class World {
                     console.log(e);
                 }
             }
+            // Every observer has now been sent this cycle's removals; their indices are free again.
+            World.npcs.releaseHeldSlots();
         });
     }
 

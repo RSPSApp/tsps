@@ -295,6 +295,18 @@ function retrievalItems(request) {
   for (const entry of held(request.player)?.items ?? []) if (entry) request.items.push({ itemId: entry.id, amount: entry.amount });
 }
 
+/**
+ * "group-ironman:wipe-tradeables" { player, lost(id, amount) }: a leaver who stays a ranked Group
+ * Ironman loses what the Mimic's chest holds that they lose (Wiki, Group Ironman Mode: "Items in an Item
+ * Retrieval Service").
+ */
+function wipeForGroupIronman({ player, lost }) {
+  const value = held(player);
+  if (!value || typeof lost !== "function") return;
+  const items = value.items.map((entry) => (entry && lost(entry.id, entry.amount) ? null : entry));
+  if (items.some((entry, slot) => entry !== value.items[slot])) setHeld(player, { ...value, items });
+}
+
 function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
@@ -313,6 +325,7 @@ function attach(pluginApi) {
   pluginApi.onInterfaceActionButton(COMPONENT.button, button);
   pluginApi.onInterfaceActionButton(COMPONENT.items, clickItem);
   pluginApi.onCustomEvent("item-retrieval:items", retrievalItems);
+  pluginApi.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
 }
 
-module.exports = { attach, held, open, button, clickItem, deathDrops, summary, FEE, ATTR };
+module.exports = { attach, held, open, button, clickItem, deathDrops, summary, wipeForGroupIronman, FEE, ATTR };

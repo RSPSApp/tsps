@@ -72,6 +72,8 @@ function passes(player, gateName) {
   // `orAttribute`: a quest's own flag that also lets the player through (Jardric's rowboat once
   // Dragon Slayer II has landed the player on Lithkren).
   if (gate.orAttribute && player.getAttribute?.(gate.orAttribute)) return true;
+  // `varbit` / `above`: a quest's own stage varbit past a value (the Great Conch's rowboats).
+  if (gate.varbit) return player.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId(gate.varbit)) > gate.above;
   const state = questState(player, gate.quest);
   return gate.complete ? state.complete : state.started;
 }

@@ -38,6 +38,15 @@ const MAX_STACK = 2147483647;
 const CURRENCY_IDS = new Set([995, 6529, 21555]);
 /** loottracker_add_loot (npc, key, obj, count); cache script 7192. */
 const LOOT_TRACKER_SCRIPT = 7192;
+/**
+ * Wiki (Drops): "Tradeable drops will remain on the ground for 200 game ticks", untradeable ones 300 (the
+ * ground-item default). The recordings agree for tradeables (rsprox_transcripts/224/01463.txt tick 3491:
+ * fiendish ashes and a bolt at reveal=100, despawn=200); they also show untradeable keys at 200, which the
+ * Wiki overrides. Player drops keep 300 (232/00428.txt, 241/900032.txt: despawn=300).
+ * "Tradeable" is the Wiki's (between players), not the cache's Grand Exchange flag: burnt meat and rings of
+ * dueling below (8) trade but are not on the Exchange, and burnt meat drops at despawn=200 too (224/01463.txt tick 2092).
+ */
+const TRADEABLE_DROP_DESPAWN_TICKS = 200;
 /** Each kill's loot key (script 7192), counting up as live's do. */
 let lootKey = 1;
 const RING_OF_WEALTH_TABLES = new Set(["rareDrop", "gem", "megaRare"]);
@@ -375,6 +384,7 @@ function applyWikiCorrections(tableById) {
   correctSkotizo(tableById.skotizo);
   correctAmoxliatl(tableById.amoxliatl);
   correctAlchemicalHydra(tableById.alchemical_hydra);
+  correctAraxxor(tableById.araxxor);
   const kalphiteQueen = tableById.kalphite_queen;
   if (!kalphiteQueen) {
     return;
@@ -458,6 +468,25 @@ function correctAlchemicalHydra(table) {
   }
 }
 
+/** Noxious point, blade, pommel. */
+const ARAXXOR_HALBERD_PIECES = new Set([29790, 29792, 29794]);
+
+/**
+ * Araxxor (Wiki, Drops): "The rate to receive any halberd piece is 1/200. Players will not receive
+ * duplicate pieces until each full set is obtained." The export lists each of the three pieces as
+ * its own 1/200 separate roll, which makes any piece 3/200 and can hand out two or three in one
+ * kill. They are the rows of one 1/200 roll (the 3/4 piece side of the 1/150 unique table, beside
+ * the 1/600 araxyte fang); the corpse hands over the piece the player lacks.
+ */
+function correctAraxxor(table) {
+  if (!table) return;
+  for (const entry of table.entries || []) {
+    if (ARAXXOR_HALBERD_PIECES.has(entry.item_id)) {
+      Object.assign(entry, { separate_roll: true, roll_group: "araxxor_halberd_piece", weight: 1, out_of: 600 });
+    }
+  }
+}
+
 function loadDrops() {
   tablesByNpc.clear();
   sharedTables.clear();
@@ -527,7 +556,9 @@ function loadDrops() {
       }
       // A row is one of: a nested table (the rare drop table rolls the gem table on 20/128),
       // an empty slot, or an item. Only the last needs an id.
-      if (entry.shared_table) {
+      if (entry.location_talisman === true) {
+        entries.push({ locationTalisman: true, weight: rarity.weight, outOf: rarity.outOf });
+      } else if (entry.shared_table) {
         entries.push({ ref: entry.shared_table, weight: rarity.weight, outOf: rarity.outOf });
       } else if (entry.nothing) {
         entries.push({ nothing: true, weight: rarity.weight, outOf: rarity.outOf });
@@ -790,7 +821,7 @@ function locationTalisman(player) {
 }
 
 /** `ringOfWealth: false` rolls the full pool even with a ring of wealth worn. */
-function rollSharedTable(name, player, depth = 0, { ringOfWealth = true, combatLevel = null } = {}) {
+function rollSharedTable(name, player, depth = 0, { ringOfWealth = true, combatLevel = null, sourceEntity = null } = {}) {
   // Shared tables reference each other (rare -> gem -> mega-rare), so cap the chain.
   if (depth > 4) {
     return [];
@@ -817,11 +848,14 @@ function rollSharedTable(name, player, depth = 0, { ringOfWealth = true, combatL
       if (entry.nothing) {
         return [];
       }
+      if (entry.locationTalisman) {
+        return [{ itemId: locationTalisman(sourceEntity ?? player), amount: 1, noted: false }];
+      }
       if (entry.ref) {
         if (name === GEM_TABLE && entry.ref === MEGA_RARE_TABLE && !legendsQuestComplete(player)) {
-          return [{ itemId: locationTalisman(player), amount: 1, noted: false }];
+          return [{ itemId: locationTalisman(sourceEntity ?? player), amount: 1, noted: false }];
         }
-        return rollSharedTable(entry.ref, player, depth + 1, { ringOfWealth, combatLevel });
+        return rollSharedTable(entry.ref, player, depth + 1, { ringOfWealth, combatLevel, sourceEntity });
       }
       const [min, max] = entry.quantity;
       return [{
@@ -842,7 +876,7 @@ function resolveEntry(entry, player, context = null) {
     // A row the Wiki gives several rolls of its shared table (the spectres' herb roll) rolls it that many times.
     const drops = [];
     for (let roll = RollCounts.pick(entry.roll_count_weights, randomInt); roll > 0; roll--) {
-      drops.push(...rollSharedTable(entry.shared_table, player, 0, { combatLevel: context?.combatLevel ?? null }));
+      drops.push(...rollSharedTable(entry.shared_table, player, 0, { combatLevel: context?.combatLevel ?? null, sourceEntity: context?.sourceEntity ?? null }));
     }
     return drops;
   }
@@ -865,10 +899,10 @@ function resolveEntry(entry, player, context = null) {
  * The world's boss rare multiplier is applied by rollOnce, which rolls those entries on their
  * own instead of growing this pool.
  */
-function rollWeighted(entries, outOf, rules) {
+function rollWeighted(entries, outOf, rules, bonus = () => 1) {
   let total = Number.isInteger(outOf) && outOf > 0 ? outOf : entries.reduce((sum, entry) => sum + entry.weight, 0);
   const weights = entries.map((entry) => {
-    const weight = entry.weight * rulesMultiplier(entry, rules);
+    const weight = entry.weight * rulesMultiplier(entry, rules) * bonus(entry);
     total += weight - entry.weight;
     return weight;
   });
@@ -947,7 +981,14 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
   }
 
   for (const group of separateGroups.values()) {
-    const entry = rollWeighted(group, Number(group[0]?.out_of), rules);
+    // A group whose rows are all uniques is one rarity roll with alternative outcomes, so it still
+    // takes the boss rare multiplier row by row (Araxxor's halberd pieces). A quantity group like
+    // Skotizo's ancient shards always rolls and only varies the amount: boosting its rare rows
+    // would lift the quantity distribution, so it keeps the rates it had before grouping.
+    const bonus = group.every((entry) => isUniqueEntry(entry))
+      ? (candidate) => rareMultiplier(table, candidate)
+      : null;
+    const entry = rollWeighted(group, Number(group[0]?.out_of), rules, bonus ?? undefined);
     if (entry) drops.push(...resolveEntry(entry, player, context));
   }
 
@@ -981,7 +1022,7 @@ function npcCombatLevel(npc) {
 }
 
 function killContext(player, npc) {
-  const context = { perfectKill: false, bountyTask: null, preferredMethodLocation: null, handledItemIds: new Set(), combatLevel: npcCombatLevel(npc) };
+  const context = { perfectKill: false, bountyTask: null, preferredMethodLocation: null, handledItemIds: new Set(), combatLevel: npcCombatLevel(npc), sourceEntity: npc ?? null };
   pluginApi?.emitCustomEvent("npc-drops:context", { player, npc, npcId: npc?.getId?.() ?? null, context });
   return context;
 }
@@ -1123,7 +1164,7 @@ function tableRolls(event) {
 function rollSharedRequest(event) {
   ensureDropsLoaded?.();
   if (!Array.isArray(event?.drops) || typeof event.table !== "string") return;
-  event.drops.push(...rollSharedTable(event.table, event.player, 0, { ringOfWealth: event.ringOfWealth !== false, combatLevel: Number.isSafeInteger(event.combatLevel) ? event.combatLevel : null }));
+  event.drops.push(...rollSharedTable(event.table, event.player, 0, { ringOfWealth: event.ringOfWealth !== false, combatLevel: Number.isSafeInteger(event.combatLevel) ? event.combatLevel : null, sourceEntity: event.npc ?? null }));
 }
 
 let ensureDropsLoaded = null;
@@ -1220,26 +1261,49 @@ function placeDrops(player, drops, location, placement = {}) {
     if (CURRENCY_IDS.has(drop.itemId) && isWearingRingOfWealth(player) && autoCollectCurrencies(player)) {
       // Into the pack up to the stack cap; anything past it drops to the ground as it would without the ring.
       const inventory = player.getInventory();
-      const collected = typeof inventory.getAddableAmount === "function"
-        ? inventory.getAddableAmount(new Item(drop.itemId, amount))
-        : (inventory.contains(drop.itemId) || inventory.getFreeSlots() > 0 ? amount : 0);
+      const collected = inventory.getAddableAmount(new Item(drop.itemId, amount));
       if (collected > 0) inventory.adds(drop.itemId, collected);
       amount -= collected;
       if (amount <= 0) continue;
     }
     const itemId = droppedItemId(drop);
+    const lifetime = dropLifetime(player, itemId, options);
     const item = new Item(itemId, amount);
     const stackable = item.getDefinition && item.getDefinition()
       ? item.getDefinition().isStackable()
       : false;
     if (stackable) {
-      itemOnGroundManager.registerLocation(player, item, location, undefined, options);
+      itemOnGroundManager.registerLocation(player, item, location, undefined, lifetime);
     } else {
       for (let i = 0; i < amount; i++) {
-        itemOnGroundManager.registerLocation(player, new Item(itemId, 1), location, undefined, options);
+        itemOnGroundManager.registerLocation(player, new Item(itemId, 1), location, undefined, lifetime);
       }
     }
   }
+}
+
+/**
+ * A drop's ground options with the monster-drop lifetime: tradeable items last
+ * {@link TRADEABLE_DROP_DESPAWN_TICKS}; untradeables, a drop's own `despawnDelay` and an instance's
+ * own floor lifetime (PrivateArea.groundItemDespawnDelay) are left as they are. `area` is where the
+ * stack lands (registerLocation's privateArea: the player's own by default).
+ */
+function dropLifetime(player, itemId, options, area = player.getPrivateArea?.()) {
+  if (options.despawnDelay != null) return options;
+  if (area?.groundItemDespawnDelay?.() != null) return options;
+  if (ItemDefinition.forId(itemId)?.isPlayerTradeable?.() !== true) return options;
+  return { ...options, despawnDelay: TRADEABLE_DROP_DESPAWN_TICKS };
+}
+
+/**
+ * "npc-drops:ground-options" { player, itemId, area?, options? }: the ground options a kill's loot placed by its own
+ * plugin (a boss's loot tile, a corpse's pack overflow) should pass to registerLocation, so it gets the monster-drop
+ * lifetime as placeDrops gives it. Answered in `options`; `area` is the registerLocation privateArea, if not the player's.
+ */
+function groundOptions(event) {
+  if (!event?.player || !Number.isInteger(event.itemId)) return;
+  const area = Object.hasOwn(event, "area") && event.area !== undefined ? event.area : event.player.getPrivateArea?.();
+  event.options = dropLifetime(event.player, event.itemId, event.options ?? {}, area);
 }
 
 /**
@@ -1312,6 +1376,7 @@ module.exports = {
       request.drops.push(...rollTable(table, request.player, npc, killContext(request.player, npc), source));
     });
     api.onCustomEvent("npc-drops:place", placeRolled);
+    api.onCustomEvent("npc-drops:ground-options", groundOptions);
     api.onCustomEvent("npc-drops:report", reportRolled);
 
     api.onNpcDeath(({ killer, npc, npcId, damagers }) => {
@@ -1356,5 +1421,5 @@ module.exports = {
   _test: { loadDrops, tablesByNpc, sharedTables, sharedCategories, rollSharedTable, rollSharedRequest },
 
   // Exposed for the smoke test.
-  __internals: { questRequirement, npcCombatLevel, withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
+  __internals: { questRequirement, npcCombatLevel, withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, groundOptions, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
 };

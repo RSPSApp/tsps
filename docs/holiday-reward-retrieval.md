@@ -268,3 +268,28 @@ Placed decorations belong to Construction (`Decorations.Construction.js`, data i
   Hell cat ears' Revert turns them back into Cat ears (the option's name; not described).
 
 Tests: `node --test tests/holiday-placed-items.test.cjs` from `server/` after a build.
+
+## Redeem-code
+
+Diango's op5 Redeem-code runs meslayer_mode9 (script 110) with "Please enter your code." and
+-1, as rsprox captures show (recording 3200 tick 318-319, rev 232; local 1001332 tick 143,
+rev 240). The typed code comes back as resume_p_stringdialog; an unknown code gets the game
+message "That code was not recognised." on the next tick in both recordings (3200 tick 328,
+1001332 tick 154).
+
+The [OSRS Wiki: Diango](https://oldschool.runescape.wiki/w/Diango) lists four codes. Three
+are struck out (now unlocked by default) and are not recognised here. `v1r354cqu1r173und0`
+gives the Mystic cards ([Wiki](https://oldschool.runescape.wiki/w/Mystic_cards); cache
+`league_3_cardthrow`, enum 708 slot 174) and plays the Diango transcript's
+"Obtaining mystic cards" conversation (npc-dialogues.json variant
+`standard-dialogue-obtaining-mystic-cards`). The code also records the cards as unlocked, so a
+lost set comes back through Holiday-items.
+
+No recording redeems a valid code. These parts are ours:
+
+- Ours: the code is matched ignoring case and surrounding spaces.
+- Ours: the cards are added as the conversation starts.
+- Ours: redeeming again while a set is held, worn or banked gives nothing more. The
+  conversation still plays.
+- Ours: with a full inventory, only the unlock is recorded. The player gets the existing
+  "You've unlocked a holiday item: Mystic cards" line and can take the cards from Holiday-items.

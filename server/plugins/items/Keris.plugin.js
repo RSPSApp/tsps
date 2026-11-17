@@ -24,6 +24,18 @@ const AMASCUT_PARTISANS = new Set([
   ItemIdentifiers.KERIS_PARTISAN_OF_AMASCUT,
   ItemIdentifiers.KERIS_PARTISAN_OF_AMASCUT_2,
 ]);
+const SUN_PARTISANS = new Set([
+  ItemIdentifiers.KERIS_PARTISAN_OF_THE_SUN,
+  ItemIdentifiers.KERIS_PARTISAN_OF_THE_SUN_2,
+]);
+/**
+ * Keris partisan of the sun (https://oldschool.runescape.wiki/w/Keris_partisan_of_the_sun), both only in
+ * the Tombs of Amascut: "a 25% increase to accuracy for targets with less than 25% health", and on a kill it
+ * heals "12 Hitpoints ... at the cost of 5 prayer points", overhealing "up to 12 Hitpoints above their base
+ * Hitpoints level". Since 13 May 2026 the heal works on every Kephri scarab too, so any kill counts.
+ */
+const SUN_HEAL = 12;
+const SUN_HEAL_PRAYER_COST = 5;
 const BREACHING_PARTISANS = new Set([
   ItemIdentifiers.KERIS_PARTISAN_OF_BREACHING,
   ItemIdentifiers.KERIS_PARTISAN_OF_BREACHING_2,
@@ -50,10 +62,12 @@ function isKalphiteOrScabarite(target) {
 }
 
 let core;
+let pluginApi;
 
 /** The core API; target checks judge an area hit against its own victim (core.hitTargetOf). */
 function init(api) {
   core = api.core;
+  pluginApi = api;
 }
 
 function applyKerisDamage(attacker, maxHit) {
@@ -77,13 +91,58 @@ function applyBreachingAccuracy(attacker, attackRoll) {
   return Math.floor(attackRoll * 4 / 3);
 }
 
+function inTombs(player) {
+  const query = { player, inside: false };
+  pluginApi.emitCustomEvent("toa:in-tombs", query);
+  return query.inside === true;
+}
+
+/** Below 25% of its hitpoints: the sun partisan's accuracy threshold. */
+function belowQuarterHealth(target) {
+  if (!target?.isNpc?.()) return false;
+  const npc = target.getAsNpc();
+  const max = Number(npc.getMaxHitpoints?.() ?? 0);
+  return max > 0 && npc.getHitpoints() * 4 < max;
+}
+
+function applySunAccuracy(attacker, attackRoll) {
+  const player = attacker?.isPlayer?.() ? attacker.getAsPlayer() : null;
+  if (!player || !SUN_PARTISANS.has(weaponId(player))) return attackRoll;
+  if (!belowQuarterHealth(core?.hitTargetOf(attacker)) || !inTombs(player)) return attackRoll;
+  return Math.floor(attackRoll * 5 / 4);
+}
+
+/**
+ * The sun partisan's kill heal goes to the player who landed the killing hit, judged by the weapon they held
+ * as the NPC began dying. Ours: with fewer than 5 prayer
+ * points left it neither heals nor drains (the Wiki gives only the cost), and a player already at the
+ * 12-over cap keeps both their hitpoints and their prayer.
+ */
+function sunKillHeal(event) {
+  const player = event?.lastDamager;
+  // The weapon that killed it, as the death began: a swap during the death animation doesn't count.
+  const weapon = Number(event.lastDamagerWeaponId ?? weaponId(player));
+  if (!player?.isRegistered?.() || !SUN_PARTISANS.has(weapon) || !inTombs(player)) return;
+  const { Skill } = core;
+  const skills = player.getSkillManager();
+  const prayer = skills.getCurrentLevel(Skill.PRAYER);
+  if (prayer < SUN_HEAL_PRAYER_COST) return;
+  const hitpoints = skills.getCurrentLevel(Skill.HITPOINTS);
+  const healed = Math.min(hitpoints + SUN_HEAL, skills.getMaxLevel(Skill.HITPOINTS) + SUN_HEAL);
+  if (healed <= hitpoints) return;
+  skills.setCurrentLevels(Skill.PRAYER, prayer - SUN_HEAL_PRAYER_COST);
+  player.setHitpoints(healed);
+}
+
 module.exports = {
   name: "Keris",
-  description: "Gives the keris family extra damage against Kalphites and Scabarites, with a rare triple-damage hit, and Amascut's partisan its own boost.",
+  description: "Gives the keris family extra damage against Kalphites and Scabarites, with a rare triple-damage hit, and Amascut's partisan its own boost, and the sun partisan's Tombs of Amascut accuracy and kill heal.",
   members: true,
   register(api) {
     init(api);
     api.registerMeleeHitModifier(applyKerisDamage);
     api.registerMeleeAttackAccuracyModifier(applyBreachingAccuracy);
+    api.registerMeleeAttackAccuracyModifier(applySunAccuracy);
+    api.onNpcDeath(sunKillHeal);
   },
 };

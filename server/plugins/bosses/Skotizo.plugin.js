@@ -16,6 +16,7 @@ module.exports = {
   register(api) {
     Common.init(api);
     require("./skotizo/Totems.Skotizo")(api);
+    require("./skotizo/Teleports.Skotizo")(api);
     Lair.attachLair(api);
     Fight.attachFight(api);
     require("./skotizo/Kills.Skotizo")(api);

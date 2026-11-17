@@ -978,3 +978,18 @@ test("league:complete-task and ::leaguetask complete a catalog task once; a main
   for (const handler of custom["league:complete-task"]) handler(request);
   assert.deepEqual([request.found, request.completed], [false, false]);
 });
+
+test("opening the Grubby Chest credits its league tasks, including the pact task", () => {
+  const overlay = require("../plugins/modes/data/league-task-triggers.json");
+  assert.deepEqual(overlay["6"]["open-1-grubby-chest"], { kind: "open-chest", chests: ["Grubby Chest"], count: 1 });
+
+  worldLeague = 6;
+  const opener = character("grubbyopener");
+  worldLeague = 4;
+  assert.ok(!completed(opener).includes("open-1-grubby-chest"));
+  emit("chests:opened", { player: opener, chest: "Grubby Chest" });
+  assert.ok(completed(opener).includes("open-1-grubby-chest"), "the first chest completes the pact task");
+  for (let i = 0; i < 24; i++) emit("chests:opened", { player: opener, chest: "Grubby Chest" });
+  assert.ok(completed(opener).includes("open-10-grubby-chests"), "ten chests");
+  assert.ok(completed(opener).includes("open-25-grubby-chests"), "twenty-five chests");
+});

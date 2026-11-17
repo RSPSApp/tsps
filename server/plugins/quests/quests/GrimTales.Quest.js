@@ -1005,7 +1005,8 @@ module.exports = function registerGrimTalesQuest(api) {
     event.handled = true;
     if (!held(player, SHRUNK_OGLEROOT_ITEM_ID) || !held(player, root)) return;
     if (Herblore.level(player) < SHRINK_ME_QUICK_HERBLORE_LEVEL) {
-      player.sendMessage(SHRINK_ME_QUICK_LEVEL_MESSAGE);
+      // The Herblore skill's combine refusal: a messagebox with its mesbox chat line.
+      Herblore.mesbox(player, SHRINK_ME_QUICK_LEVEL_MESSAGE);
       return;
     }
     player.getInventory().deleteNumber(SHRUNK_OGLEROOT_ITEM_ID, 1);

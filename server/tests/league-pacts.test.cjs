@@ -331,6 +331,17 @@ test("a pact task gives a point with the captured line; sharing an effect adds u
   assert.equal(Common.spendable(pacts), 0);
 });
 
+test("opening the Grubby Chest earns its Demonic Pact point", () => {
+  const pacts = character("pactgrubby");
+  const task = require("../plugins/modes/data/league-tasks.json").leagues["6"].tasks.find((entry) => entry.id === "open-1-grubby-chest");
+  assert.equal(task.pactTask, true);
+  for (const handler of custom["chests:opened"] ?? []) handler({ player: pacts, chest: "Grubby Chest" });
+  const lines = pacts.sent.messages.slice(-2);
+  assert.match(lines[0], /^Congratulations, you've completed an easy task: .*Open 1 Grubby Chest/);
+  assert.equal(lines[1], "<col=229628>Congratulations, you've earned a Demonic Pact! You now have 1 Demonic Pact to spend.</col>");
+  assert.equal(Common.earned(pacts), 1);
+});
+
 test("the panel's reset: the captured message and Yes / No; Yes clears every pact and effect and uses a reset", () => {
   const pacts = character("pactresetter");
   pacts.setAttribute(Common.POINTS_ATTRIBUTE, 1);

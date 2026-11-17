@@ -645,7 +645,15 @@ function openPresetInterface(player, preset = null) {
     postScripts: [{ scriptId: 227, args: [uid(COMPONENT.FRAME), "Presets"] }],
   });
 
-  selectPreset(player, preset ?? null);
+  // Restore the saved custom row when the caller did not ask for a specific preset. A saved
+  // slot that no longer holds a preset falls back to the first global row, as before.
+  const savedSlot = selectedCustomPresetSlot(player);
+  const savedPreset = savedSlot >= 0 ? customPresets(player)[savedSlot] : null;
+  if (!preset && savedPreset) {
+    selectPreset(player, savedPreset, savedSlot);
+  } else {
+    selectPreset(player, preset ?? getGlobalPresetPool()[0] ?? null);
+  }
   return true;
 }
 
@@ -999,6 +1007,8 @@ module.exports = {
     presetsEnabled = true;
     setPresetShopPricesEnabled(true);
     api.persistAttribute(CUSTOM_PRESETS_ATTRIBUTE);
+    api.persistAttribute(OPEN_ON_DEATH_ATTRIBUTE, true);
+    api.persistAttribute(CUSTOM_PRESET_SLOT_ATTRIBUTE, -1);
     api.registerCustomInterface(INTERFACE_DEFINITION);
     api.onCanBankItem((event) => {
       if (!event.item?.isUnbankable?.()) return;

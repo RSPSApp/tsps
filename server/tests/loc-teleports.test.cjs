@@ -217,6 +217,19 @@ test("the SOTE supply cave Exit returns to a walkable tile beside its surface en
   assert.equal(path.success, true, 'the landing connects to the camp by ordinary walking');
 });
 
+test("Ynysdail's cave entrance and the cavern's exit lead to each other, onto walkable tiles beside them", () => {
+  const enter = data.locs.find((loc) => loc.name === "ynysdail_cave_entrance");
+  const exit = data.locs.find((loc) => loc.name === "ynysdail_cave_exit");
+  assert.deepEqual([enter.id, enter.x, enter.y, enter.z, enter.op], [CacheDefinitions.getLocId("ynysdail_cave_entrance"), 2218, 3478, 0, 1]);
+  assert.deepEqual([exit.id, exit.x, exit.y, exit.z, exit.op], [CacheDefinitions.getLocId("ynysdail_cave_exit"), 2293, 9913, 0, 1]);
+  assert.equal(CacheDefinitions.getObject(enter.id).actions[0], "Enter");
+  assert.equal(CacheDefinitions.getObject(exit.id).actions[0], "Exit");
+  assert.ok(locAt(enter.id, 2218, 3478, 0) && locAt(exit.id, 2293, 9913, 0), "both locs are placed where the entries say");
+  assert.deepEqual(enter.to, [2292, 9914, 0], "west of the 1x3 exit");
+  assert.deepEqual(exit.to, [2219, 3477, 0], "south of the 2x2 entrance");
+  for (const [x, y, z] of [enter.to, exit.to]) assert.equal(core.RegionManager.getClipping(x, y, z, null) & 0x1200100, 0, `${x},${y} is walkable`);
+});
+
 test("the Well of Voyage enters Iban's temple beside its real well and door", () => {
   const entry = data.locs.find((loc) => loc.id === 4005);
   assert.deepEqual([entry.x, entry.y, entry.z, entry.op, entry.to], [2341, 9622, 0, 1, [2138, 4647, 1]]);
@@ -944,6 +957,27 @@ test("the Wilderness Slayer Cave's exits lead out beside their surface stairs, a
   assert.deepEqual(walk(40390, 3293, 3746, [3293, 3749, 0], "ladders:climb"), [3406, 10145, 0], "north entrance");
 });
 
+test("the Isle of Souls tower basement ladders go down as captured and back up beside the trapdoor (#5838)", () => {
+  const climb = (id, x, y, from) => {
+    const object = locAt(id, x, y, 0);
+    const visit = explorer(from);
+    const request = { player: visit.player, object, objectId: id, clickType: 1, handled: false };
+    hooks["ladders:climb"](request);
+    assert.equal(request.handled, true, `loc ${id} is taken`);
+    runTicks(visit, 4);
+    const at = visit.player.getLocation();
+    return { at: [at.getX(), at.getY(), at.getZ()], log: visit.ticks };
+  };
+  const down = climb(40745, 2131, 2994, [2132, 2994, 0]);
+  assert.deepEqual(down.at, [1940, 9451, 0], "the captured landing beside the exit ladder");
+  // Captured (local 1000195): the climb two ticks after arriving, the move on tick 3. The click
+  // is handled the tick after arriving, so each comes one tick earlier from the click.
+  assert.deepEqual(down.log.slice(0, 3), [[], ["anim 827"], ["move 1940,9451,0"]]);
+  const up = climb(40746, 1941, 9451, [1940, 9451, 0]);
+  assert.deepEqual(up.at, [2132, 2994, 0], "back where the climb down was clicked from");
+  for (const [x, y, z] of [down.at, up.at]) assert.equal(core.RegionManager.getClipping(x, y, z, null) & 0x1200100, 0, `${x},${y} is walkable`);
+});
+
 test("another tile or option isn't claimed: the click falls through to whoever handles it", () => {
   const object = locAt(57591, 1288, 3133, 0);
   const visit = explorer([1289, 3136, 0]);
@@ -1311,6 +1345,7 @@ test("the Lumbridge Swamp Caves dark hole needs a rope tied once, as the game's 
     onPlayerLogin: (handler) => logins.push(handler),
     getTaskManager: () => core.TaskManager,
     sendMultiChatboxPrompt: (player, title, ...pairs) => { ropePrompts.push({ title, pairs }); return true; },
+    onObjectRoute() {},
   };
   const ropePrompts = [];
   require("../plugins/objects/Ladders.plugin").register(api);
@@ -1745,7 +1780,6 @@ test("the 2026-11-15 run's locs land where the captures show, from the tile each
 test("one-way captures and a quest's own staircase are skipped, so no entry strands a player", () => {
   const skipped = [
     ["brimhaven_slayer_dragon_tunnel", "Crevice", /Slayer-only/],
-    ["sw_tower_basement_trapdoor", "Ladder", /strand/],
     ["viking_warrior_ladder", "Ladder", /strand/],
     ["ardougne_prison_entry", "Staircase", /Song of the Elves/],
   ];

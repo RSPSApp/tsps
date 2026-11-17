@@ -26,6 +26,7 @@ const Finishers = require("../plugins/skills/slayer/Finishers.Slayer");
 const Superiors = require("../plugins/skills/slayer/Superiors.Slayer");
 const Keys = require("../plugins/skills/slayer/Keys.Slayer");
 const Choice = require("../plugins/skills/slayer/Choice.Slayer");
+const Helper = require("../plugins/skills/slayer/Helper.Slayer");
 
 const core = PluginManager.getCoreApi();
 const handlers = { events: new Map(), death: [], canAttack: [] };
@@ -38,6 +39,10 @@ Slayer.register({
   core,
   persistAttribute: (key, initial) => persistedAttributes.set(key, initial),
   onPlayerLogin() {},
+  onPlayerLogout() {},
+  onPlayerDisconnect() {},
+  onPlayerMapSquareChange() {},
+  onServerStartup() {},
   onNpcDeath: (fn) => handlers.death.push(fn),
   onCanAttack: (fn) => handlers.canAttack.push(fn),
   onNpcInteraction() {},
@@ -509,6 +514,58 @@ test("Turael replaces another master's task and resets the streak", () => {
   assert.equal(varbit(player, "slayer_master"), 1);
 });
 
+test("Turael replacing a Krystilia task resets only the Wilderness streak (Wiki, Slayer reward point)", () => {
+  const player = createPlayer();
+  setVarbit(player, "slayer_tasks_completed", 12);
+  setVarbit(player, "slayer_wilderness_tasks_completed", 7);
+  giveTask(player, 7, "Black Demons", 100);
+  const offer = "If you do get a new one, you will reset your standard task streak of [task streak amount]. Is that okay? It won't affect your Wilderness task streak of [task streak amount].";
+  const line = { player, definition: { getName: () => "Turael" }, text: offer };
+  Masters.fillLine(line);
+  assert.equal(line.text, "If you do get a new one, you will reset your Wilderness task streak of 7. Is that okay? It won't affect your standard task streak of 12.");
+  assert.match(Masters.replaceTask(player, master(1)), /^Your new task is to kill/);
+  assert.equal(varbit(player, "slayer_wilderness_tasks_completed"), 0);
+  assert.equal(varbit(player, "slayer_tasks_completed"), 12);
+});
+
+test("Nieve and Konar give more points with their elite diaries (Wiki, Slayer reward point)", (t) => {
+  const prior = handlers.events.get("diary:is-complete");
+  let elite = null;
+  handlers.events.set("diary:is-complete", [(request) => {
+    if (request.diary === elite && request.tier === "elite") request.complete = true;
+  }]);
+  t.after(() => prior ? handlers.events.set("diary:is-complete", prior) : handlers.events.delete("diary:is-complete"));
+  for (const [masterId, diary, plain, boosted] of [[6, "western", 12, 15], [8, "kourend", 18, 20]]) {
+    for (const [done, points] of [[null, plain], [diary, boosted]]) {
+      elite = done;
+      const player = createPlayer();
+      setVarbit(player, "slayer_tasks_completed", 4);
+      assert.ok(Tasks.assign(player, master(masterId)).line);
+      Tasks.complete(player, Tasks.current(player));
+      assert.equal(varbit(player, "slayer_points"), points, `master ${masterId}, ${done ?? "no"} elite diary`);
+    }
+  }
+});
+
+test("Double Trouble: Dusk's death counts two kills towards the task (Wiki, Slayer Rewards)", () => {
+  let duskId = -1;
+  for (let id = 0; id < CacheDefinitions.getCounts().npcs && duskId < 0; id++) {
+    if (CacheDefinitions.getNpc(id)?.name === "Dusk" && Data.npcCountsFor(taskId("Gargoyles"), id, "Dusk")) duskId = id;
+  }
+  assert.ok(duskId >= 0, "a Dusk counts for Gargoyles");
+  const dusk = npc(duskId, { getX: () => 1700, getY: () => 4570, getZ: () => 0 });
+  const player = createPlayer();
+  giveTask(player, 5, "Gargoyles", 10);
+  kill(player, dusk);
+  assert.equal(varp(player, "slayer_count"), 9, "one kill without the unlock");
+  const doubleTrouble = [...Data.get().unlocks.values()].find((entry) => entry.name === "Double Trouble");
+  Rewards.setUnlockBit(player, doubleTrouble.bit, true);
+  kill(player, dusk);
+  assert.equal(varp(player, "slayer_count"), 7, "two kills with Double Trouble");
+  kill(player, npcNamed("Gargoyle"));
+  assert.equal(varp(player, "slayer_count"), 6, "a gargoyle still counts one");
+});
+
 test("monsters with a Slayer level can't be attacked below it", () => {
   const player = createPlayer({ slayer: 84 });
   const event = { attacker: player, target: npcNamed("Abyssal demon"), allow: null };
@@ -528,6 +585,104 @@ test("the gem's Check gives the task and the streak", () => {
   assert.equal(player.messages[0],
     "<col=ef1020>You're assigned to kill </col>bloodveld<col=ef1020>; only </col>44<col=ef1020> more to go.");
   assert.match(player.messages[1], /currently have a total of <\/col>20 points/);
+});
+
+/** The helper's packets, as sent: [kind, ...args]. */
+function recordHelper(player) {
+  const sent = [];
+  const sender = player.getPacketSender();
+  const helperVarbit = CacheDefinitions.getVarbitId("current_helper");
+  for (const name of ["sendSubInterface", "closeSubInterface", "sendClientScript"]) {
+    const original = sender[name].bind(sender);
+    sender[name] = (...args) => { sent.push([name, ...args]); return original(...args); };
+  }
+  const sendVarbit = sender.sendVarbit.bind(sender);
+  sender.sendVarbit = (id, value) => {
+    if (id === helperVarbit) sent.push(["current_helper", value]);
+    return sendVarbit(id, value);
+  };
+  return sent;
+}
+
+/** Runs the world's tasks for `ticks` ticks. */
+function runTicks(ticks) {
+  for (let tick = 0; tick < ticks; tick++) core.TaskManager.process();
+}
+
+const HELPER_CONTENT = (161 << 16) | 12; // toplevel_osrs_stretch:helper_content
+const HELPER_OPEN = [
+  ["current_helper", 3],
+  ["sendSubInterface", HELPER_CONTENT, 711, 1],
+  ["sendClientScript", 4689, HELPER_CONTENT, 3, 148, 308],
+  ["sendClientScript", 5317],
+];
+const HELPER_CLOSE = [["current_helper", 0], ["closeSubInterface", HELPER_CONTENT]];
+
+function clickGem(player, itemId, option) {
+  return PluginManager.emitItemAction({
+    player, interfaceId: 149 << 16, item: { getId: () => itemId, getAmount: () => 1 }, itemId, slot: 0,
+    clickType: option === "Activate" ? 1 : 2, option, handled: false,
+  });
+}
+
+test("rsprox 1002084 t127: the gem's Check gives the task lines, then opens the Slayer helper; Activate doesn't", () => {
+  for (const [itemId, name] of [[4155, "Enchanted gem"], [21270, "Eternal gem"]]) {
+    const player = createPlayer({ points: 172 });
+    giveTask(player, 3, "Bloodveld", 41);
+    const sent = recordHelper(player);
+    clickGem(player, itemId, "Activate");
+    assert.equal(player.messages.length, 2, `${name} Activate answers`);
+    assert.deepEqual(sent, [], `${name} Activate leaves the helper shut`);
+    clickGem(player, itemId, "Check");
+    assert.equal(player.messages.length, 4, `${name} Check answers`);
+    assert.match(player.messages[2], /You're assigned to kill <\/col>bloodveld/);
+    assert.deepEqual(sent, HELPER_OPEN, `${name} Check opens the helper`);
+    clickGem(player, itemId, "Check");
+    assert.deepEqual(sent, HELPER_OPEN, "a second Check while it shows sends nothing more");
+    Helper.close(player);
+  }
+});
+
+test("rsprox 1002067: the helper opens on assignment and task kills, and closes 501 ticks after it opened", () => {
+  const player = createPlayer();
+  const sent = recordHelper(player);
+  Tasks.assign(player, master(3), () => 0.5);
+  assert.deepEqual(sent, HELPER_OPEN, "t185: the assignment opens it");
+  const target = npcNamed("Hill Giant");
+  const taskKill = (extra = {}) => handlers.events.get("slayer:task-kill").forEach((fn) => fn({ player, npc: target, xp: 35, ...extra }));
+  runTicks(200);
+  taskKill();
+  runTicks(300);
+  assert.deepEqual(sent, HELPER_OPEN, "kills while it shows neither reopen nor extend it");
+  runTicks(1);
+  assert.deepEqual(sent, [...HELPER_OPEN, ...HELPER_CLOSE], "t686: closed 501 ticks after opening");
+  sent.length = 0;
+  taskKill();
+  assert.deepEqual(sent, HELPER_OPEN, "t789: the next task kill opens it again");
+  Helper.close(player);
+  sent.length = 0;
+  taskKill({ offTask: true });
+  assert.deepEqual(sent, [], "an off-task kill (no task) doesn't open it");
+});
+
+test("the helper's close survives content cancelling the player's own tasks", () => {
+  const player = createPlayer();
+  const sent = recordHelper(player);
+  Tasks.assign(player, master(3), () => 0.5);
+  core.TaskManager.cancelTasks(player);
+  runTicks(501);
+  assert.deepEqual(sent, [...HELPER_OPEN, ...HELPER_CLOSE]);
+  assert.equal(varbit(player, "current_helper"), 0);
+});
+
+test("the Settings' Slayer helper toggle keeps the helper shut", () => {
+  const player = createPlayer();
+  setVarbit(player, "slayer_helper_disabled", 1);
+  const sent = recordHelper(player);
+  assert.equal(Helper.open(player), false);
+  Tasks.assign(player, master(3), () => 0.5);
+  assert.deepEqual(sent, []);
+  assert.equal(varbit(player, "current_helper"), 0);
 });
 
 test("rewards: unlocks spend points and set their bit; cancel and block", () => {

@@ -121,6 +121,7 @@ export function createCacheVm(dir?: string) {
         widgetManager: new WidgetManager(cache, new WidgetLoader(cache)),
         varManager: new VarManager(loaders.getVarBitTypeLoader(), loaders.getVarcIntTypeLoader()),
         objTypeLoader: loaders.getObjTypeLoader(),
+        invTypeLoader: loaders.getInvTypeLoader(),
         paramTypeLoader: loaders.getParamTypeLoader(),
         enumTypeLoader: loaders.getEnumTypeLoader(),
         structTypeLoader: loaders.getStructTypeLoader(),

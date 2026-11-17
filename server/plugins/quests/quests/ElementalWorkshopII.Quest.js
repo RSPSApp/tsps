@@ -36,8 +36,9 @@
  *   - Elemental metal on the workbench is claimed first by ElementalWorkshopI's handler
  *     (registered earlier in Quests.plugin.js). EW I defers while EW II's crane schematic is
  *     taken/held and the claw is still needed, including before the second schematic advances
- *     the stage to 6 (issue #5739), so the claw choice is reachable; otherwise it crafts the
- *     shield. Using the crane schematic on the workbench also starts the claw choice.
+ *     the stage to 6 (issue #5739), so the claw choice is reachable. It also defers for the
+ *     completed quest's beaten-book elemental helmet recipe; otherwise it crafts the shield.
+ *     Using the crane schematic on the workbench also starts the claw choice.
  *   - The wind tunnel pins and the old crane sit in blocking scenery, so a route assist
  *     sends the use to the player's own tile when they are already beside the footprint
  *     (the walk-to reach check rejects every adjacent tile); the workshop stairs are
@@ -47,13 +48,16 @@
  *     lines are reused and the stage advances. The fan dries the bar instantly instead of
  *     on a timer. Random crate contents are rolled with Math.random once per player.
  *   - Mind shield smithing is supported only for item use after completion with the slashed book alone.
+ *   - Elemental helmets follow the Wiki's four-tick recipe after completion. Exact success
+ *     wording, animation and sound have no local recording and are not fabricated here.
  */
 module.exports = function registerElementalWorkshopIIQuest(api) {
   const {
-    Animation, CacheDefinitions, CountdownTask, Item, ItemIdentifiers, Location, NpcIdentifiers,
+    Animation, CacheDefinitions, CountdownTask, Item, ItemIdentifiers, Location, MapObjects, NpcIdentifiers,
     ObjectIdentifiers, Skill, Sound, Sounds, TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { holdsHammer } = require("../../items/Hammers");
 
   const PAGE = "Elemental Workshop II";
   const START_HOOK = "quest:elemental-workshop-ii:start";
@@ -121,7 +125,11 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
   const MIND_SHIELD = ItemIdentifiers.MIND_SHIELD;
   const MIND_SHIELD_SMITH_TICKS = 4;
   const MIND_SMITHING_LEVEL = 30;
-  const shieldSmithing = new WeakMap();
+  const workbenchSmithing = new WeakMap();
+  const workbenchUse = new WeakMap();
+  const ELEMENTAL_HELMET = ItemIdentifiers.ELEMENTAL_HELMET;
+  const ELEMENTAL_HELMET_SMITH_TICKS = 4;
+  const ELEMENTAL_HELMET_SMITHING_LEVEL = 20;
   const MIND_HELMET = ItemIdentifiers.MIND_HELMET; // 9733
   const ELEMENTAL_METAL = ItemIdentifiers.ELEMENTAL_METAL; // 2893
   const HAMMER = ItemIdentifiers.HAMMER; // 2347
@@ -545,7 +553,8 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     }
   }
 
-  function startClawChoice(player) {
+  function startClawChoice(event) {
+    const { player } = event;
     if (has(player, CRANE_CLAW) || jigState(player).fireState >= 1) return;
     if (!has(player, ELEMENTAL_METAL)) {
       player.sendMessage("You need an elemental metal bar to make a crane claw.");
@@ -555,6 +564,14 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
       player.sendMessage("You need a hammer to work the metal.");
       return;
     }
+    const inventory = player.getInventory();
+    const itemSlot = event.itemId === ELEMENTAL_METAL ? event.itemSlot
+      : inventory.getItems().findIndex(item => item?.getId() === ELEMENTAL_METAL);
+    workbenchUse.set(player, {
+      ...event, itemId: ELEMENTAL_METAL, itemSlot,
+      item: event.itemId === ELEMENTAL_METAL ? event.item : inventory.getItems()[itemSlot],
+      start: player.getLocation().clone(), teleportSerial: player.getTeleportSerial(),
+    });
     play(player, "into-the-workshop-making-an-elemental-claw");
   }
 
@@ -921,7 +938,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
       && player.getMovementQueue().size() === 0 && player.getForceMovement() == null;
 
     const task = new CountdownTask(player, MIND_SHIELD_SMITH_TICKS, () => {
-      shieldSmithing.delete(player);
+      workbenchSmithing.delete(player);
       if (!staysAtWorkbench() || !holdsSelectedBar() || !quest.isComplete(player)
         || !has(player, SLASHED_BOOK) || has(player, BEATEN_BOOK) || !canWorkMindMetal(player)) return;
       inventory.setItem(itemSlot, new Item(MIND_SHIELD, 1));
@@ -932,13 +949,59 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     task.onTick = () => {
       if (task.isRunning() && !staysAtWorkbench()) {
         task.stop();
-        shieldSmithing.delete(player);
+        workbenchSmithing.delete(player);
       }
     };
-    shieldSmithing.set(player, task);
+    workbenchSmithing.set(player, task);
     player.performAnimation(new Animation(CacheDefinitions.getSeqId("human_smithing")));
     Sounds.sendSound(player, Sound.SMITHING);
     TaskManager.submit(task);
+  }
+
+  /** Wiki Elemental helmet Recipe: one bar, hammer/book, boostable Smithing20, 4 ticks, 20XP. */
+  function makeElementalHelmet(event) {
+    const { player, item, itemSlot, object, objectId } = event;
+    if (workbenchSmithing.get(player)?.isRunning()) return;
+    const inventory = player.getInventory();
+    const start = event.start ?? player.getLocation().clone();
+    const teleportSerial = event.teleportSerial ?? player.getTeleportSerial();
+    const valid = () => player.isRegistered() && player.getHitpoints() > 0
+      && player.getTeleportSerial() === teleportSerial && player.getLocation().equals(start)
+      && player.getMovementQueue().size() === 0 && player.getForceMovement() == null
+      && !player.busy() && !player.getPacketSender().hasInterruptibleInterface()
+      && quest.isComplete(player) && has(player, BEATEN_BOOK) && holdsHammer(api.core, player)
+      && player.getSkillManager().getCurrentLevel(Skill.SMITHING) >= ELEMENTAL_HELMET_SMITHING_LEVEL
+      && Number.isInteger(itemSlot) && inventory.getItems()[itemSlot] === item
+      && item?.getId() === ELEMENTAL_METAL && item.getAmount() === 1 && item.getMeta() == null
+      && objectId === WORKBENCH && object != null
+      && MapObjects.stillStands(player, objectId, object.getLocation(), object, true);
+    if (!valid()) return;
+    // Keep this exchange in the clicked slot: a full bag is valid and replacement bars are not.
+    const task = new CountdownTask(player.getIndex(), ELEMENTAL_HELMET_SMITH_TICKS, () => {
+      workbenchSmithing.delete(player);
+      if (!valid()) return;
+      inventory.setItem(itemSlot, new Item(ELEMENTAL_HELMET, 1));
+      inventory.refreshItems();
+      player.getSkillManager().addExperiences(Skill.SMITHING, 20);
+    });
+    task.onTick = () => {
+      if (task.isRunning() && !valid()) {
+        task.stop();
+        workbenchSmithing.delete(player);
+      }
+    };
+    workbenchSmithing.set(player, task);
+    TaskManager.submit(task);
+  }
+
+  function cancelWorkbenchSmithing({ player }) {
+    workbenchSmithing.get(player)?.stop();
+    workbenchSmithing.delete(player);
+  }
+
+  function discardWorkbenchUse(event) {
+    workbenchUse.delete(event.player);
+    cancelWorkbenchSmithing(event);
   }
 
   function smithWorkbench(player) {
@@ -1139,15 +1202,23 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
       }
     }
     if (objectId === WORKBENCH) {
+      if (workbenchSmithing.get(player)?.isRunning()) {
+        if ([CRANE_SCHEMATIC, ELEMENTAL_METAL, PRIMED_MIND_BAR].includes(itemId)) event.handled = true;
+        return;
+      }
+      if (itemId === ELEMENTAL_METAL && quest.isComplete(player) && has(player, BEATEN_BOOK)) {
+        event.handled = true;
+        makeElementalHelmet(event);
+        return;
+      }
       if (itemId === CRANE_SCHEMATIC || itemId === ELEMENTAL_METAL) {
         if (!hasFlag(player, FLAG_CRANE_SCHEMATIC_TAKEN) && !has(player, CRANE_SCHEMATIC)) return;
         event.handled = true;
-        startClawChoice(player);
+        startClawChoice(event);
         return;
       }
       if (itemId === PRIMED_MIND_BAR) {
         event.handled = true;
-        if (shieldSmithing.get(player)?.isRunning()) return;
         if (quest.isComplete(player) && has(player, SLASHED_BOOK) && !has(player, BEATEN_BOOK)) {
           makeMindShield(event);
         } else {
@@ -1214,7 +1285,21 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
       grantSchematic(player, LEVER_SCHEMATIC, FLAG_LEVER_SCHEMATIC_TAKEN);
       return;
     }
-    if (option === "An elemental claw.") craftCraneClaw(player);
+    if (option === "An elemental helm.") {
+      const use = workbenchUse.get(player);
+      workbenchUse.delete(player);
+      event.end = true;
+      if (use && event.prompt === "Would you like to make..."
+        && event.pages?.some(page => page.page === PAGE
+          && page.variants?.includes("into-the-workshop-making-an-elemental-claw"))) {
+        makeElementalHelmet(use);
+      }
+      return;
+    }
+    if (option === "An elemental claw.") {
+      workbenchUse.delete(player);
+      craftCraneClaw(player);
+    }
   }
 
   function answerCondition(event) {
@@ -1358,6 +1443,11 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
   api.onObjectRoute(routeAdjacentObjectUse);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("interface:close", discardWorkbenchUse);
+  api.onCustomEvent("interface:opened", cancelWorkbenchSmithing);
+  api.onCustomEvent("player:interaction-cleared", discardWorkbenchUse);
+  api.onPlayerLogout(discardWorkbenchUse);
+  api.onPlayerDisconnect(discardWorkbenchUse);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject);
   api.onItemOnNpc(handleItemOnNpc);

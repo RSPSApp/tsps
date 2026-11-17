@@ -1,7 +1,7 @@
 "use strict";
 
 // Cuisine preparation is available independently of tutorial progress.
-// Only the recipes listed below are supported by this unit.
+// Only the recipes listed below are supported by this unit: the cocktails, and the easy-order batta and crunchies.
 const Common = require("./Common.Cooking");
 const MENU = "aluft_cooking";
 const MENU_TYPE = "aluft_cooking_type";
@@ -21,12 +21,17 @@ const COCKTAILS = [
   { selector: 3, level: 20, mixed: 9567, product: "sgg", mix: [["vodka", 1], ["lime", 3]], finish: [["lime_slices", 1], ["equa_leaves", 1]], finishXp: 90 },
   { selector: 4, level: 32, mixed: MIXED_DRAGON_SHAKER, poured: MIXED_DRAGON_POURED, product: "drunk_dragon", mix: [["vodka", 1], ["gin", 1], ["dwellberries", 1]] },
 ];
-const BATTA = [null,
+const BATTA = [
+  { selector: 7, level: 25, result: 9478, ingredients: [["equa_leaves", 4], ["lime_chunks", 1], ["orange_chunks", 1], ["pineapple_chunks", 1]] },
   { selector: 8, level: 26, result: 9482, ingredients: [["equa_leaves", 1], ["toads_legs", 1], ["cheese", 1]], spice: true },
-  null, null, { selector: 11, level: 29, result: 9483, ingredients: [["tomato", 1], ["cheese", 1]] }];
+  { selector: 9, level: 27, result: 9480, ingredients: [["king_worm", 1], ["cheese", 1]], spice: true },
+  { selector: 10, level: 30, result: 9485, ingredients: [["tomato", 2], ["dwellberries", 1], ["onion", 1], ["cheese", 1], ["cabbage", 1]] },
+  { selector: 11, level: 29, result: 9483, ingredients: [["tomato", 1], ["cheese", 1]] }];
 const CRUNCHY = [
   { selector: 16, level: 10, result: 9581, ingredients: [["toads_legs", 2]], spice: true },
-  null, null, { selector: 19, level: 16, result: 9577, ingredients: [["chocolate_bar", 2]], spice: true },
+  { selector: 17, level: 12, result: 9579, ingredients: [["equa_leaves", 2]], spice: true },
+  { selector: 18, level: 14, result: 9583, ingredients: [["king_worm", 2], ["equa_leaves", 1]], spice: true },
+  { selector: 19, level: 16, result: 9577, ingredients: [["chocolate_bar", 2]], spice: true },
 ];
 const MENUS = [COCKTAILS.concat([null, null]), BATTA, CRUNCHY];
 // The per-product Creation tables list Cooking 1 for these final garnish
@@ -35,6 +40,11 @@ const FINISH = [
   { source: 9582, ingredient: "equa_leaves", result: "toad_crunchies", xp: 40 },
   { source: 9578, ingredient: "chocolate_dust", result: "chocchip_crunchies", xp: 46 },
   { source: 9484, ingredient: "equa_leaves", result: "cheese+tom_batta", xp: 88 },
+  { source: 9580, ingredient: "gnome_spice", tool: true, result: "spicy_crunchies", xp: 42 },
+  { source: 9584, ingredient: "gnome_spice", tool: true, result: "worm_crunchies", xp: 44 },
+  { source: 9479, ingredient: "gnome_spice", tool: true, result: "fruit_batta", xp: 80 },
+  { source: 9481, ingredient: "equa_leaves", result: "worm_batta", xp: 84 },
+  { source: 9486, ingredient: "equa_leaves", result: "vegetable_batta", xp: 86 },
 ];
 
 function id(value) { return typeof value === "number" ? value : Common.gameval("obj", value); }
@@ -43,11 +53,14 @@ function alive(player) { return Common.core.WorldDefinition.isMembersWorld() && 
 
 /**
  * Selected ingredients and results are normal, nonstackable cache items. Plan
- * actual plain slots and the entire output capacity before changing inventory.
- * Tools that are not transformed are checked separately and never consumed.
+ * actual plain slots and output capacity before changing inventory. Recipes that
+ * explicitly spill overflow use the shared inventory/ground-item service instead.
+ * Retained tools obey the same selected-slot checks as materials, but neither
+ * enter the deletion plan nor count as space freed for the output.
  */
-function plan(player, inputs, outputs, preferred = []) {
+function plan(player, inputs, outputs, preferred = [], tools = [], spillOverflow = false) {
   const inventory = player.getInventory(), items = inventory.getItems(), used = new Set(), slots = [];
+  const retained = new Set(tools.map(id));
   for (const [name, count] of inputs) {
     const itemId = id(name);
     if (new Common.core.Item(itemId, 1).getDefinition().isStackable()) return null;
@@ -60,7 +73,9 @@ function plan(player, inputs, outputs, preferred = []) {
       if (remaining <= 0) break;
       const item = items[slot];
       if (used.has(slot) || item?.getId() !== itemId || item.getAmount() !== 1 || !plain(item)) continue;
-      used.add(slot); slots.push(slot); remaining--;
+      used.add(slot);
+      if (!retained.has(itemId)) slots.push(slot);
+      remaining--;
     }
     if (remaining) return null;
   }
@@ -69,14 +84,18 @@ function plan(player, inputs, outputs, preferred = []) {
     if (new Common.core.Item(id(name), 1).getDefinition().isStackable()) return null;
     needed += count;
   }
-  if (inventory.getFreeSlots() + slots.length < needed) return null;
-  return { inventory, slots, outputs };
+  if (!spillOverflow && inventory.getFreeSlots() + slots.length < needed) return null;
+  return { inventory, slots, outputs, spillOverflow };
 }
 
 function apply(player, transaction, product, xp, kind) {
   const { inventory, slots, outputs } = transaction;
   for (const slot of slots) inventory.deleteAtSlot(slot, 1, false);
-  for (const [name, count] of outputs) inventory.add(new Common.core.Item(id(name), count), false);
+  for (const [name, count] of outputs) {
+    const item = new Common.core.Item(id(name), count);
+    if (transaction.spillOverflow) inventory.forceAdd(player, item);
+    else inventory.add(item, false);
+  }
   inventory.refreshItems();
   Common.addXp(player, xp);
   if (kind) Common.api.emitCustomEvent("skills:produced", { player, skill: Common.core.Skill.COOKING,
@@ -189,24 +208,73 @@ function interfaceClosed({ player, interfaceId }) {
   // A previous close listener may have synchronously opened a new group 49.
   if (session && player.getPacketSender().getSubInterfaceAt(ui().main) !== session.mount) sessions.delete(player);
 }
-function clearPlayer({ player }) { sessions.delete(player); cuts.delete(player); }
+function stopCut({ player }) {
+  const token = cuts.get(player);
+  if (token?.task) token.task.stop();
+  else cuts.delete(player);
+}
+function cutInterfaceOpened({ player }) {
+  const token = cuts.get(player);
+  if (token && (token.task || player.getCreationMenu() !== token.menu)) stopCut({ player });
+}
+function clearPlayer({ player }) { sessions.delete(player); stopCut({ player }); }
 
 const FRUIT = {
-  pineapple: [["Dice", "pineapple_chunks", 1], ["Slice", "pineapple_ring", 4]],
+  // Wiki: excess rings fall to the ground. Rec 227/01858: Slice first, then Dice.
+  pineapple: [["Slice it into 4 rings", "pineapple_ring", 4, true, "You cut the pineapple into rings."],
+    ["Dice it", "pineapple_chunks", 1, false, "You cut the pineapple into chunks."]],
   lemon: [["Dice", "lemon_chunks", 1], ["Slice", "lemon_slices", 1]],
   orange: [["Dice", "orange_chunks", 1], ["Slice", "orange_slices", 1]],
   lime: [["Dice", "lime_chunks", 1], ["Slice", "lime_slices", 1]],
 };
+// Rec 227/01858 (Leagues), tick 14993; active skillmulti supports these labels and mode.
+const FRUIT_MENUS = { pineapple: { title: "How would you like to cut the pineapple?", mode: 12 } };
 
-function chooseCut(player, token, output, count) {
-  if (cuts.get(player) !== token || !alive(player)) return;
-  cuts.delete(player);
+function eligibleFruit(item, fruitId) {
+  return item?.getId() === fruitId && item.getAmount() === 1 && plain(item);
+}
+
+function commitCut(player, token, fruit, output, count, spillOverflow, successMessage) {
   const items = player.getInventory().getItems();
-  if (items[token.fruit.slot] !== token.fruit.item || items[token.knife.slot] !== token.knife.item
-      || token.knife.item.getId() !== token.knife.id) return;
-  const transaction = plan(player, [[token.fruit.id, 1]], [[output, count]], [token.fruit]);
-  if (!transaction) return;
+  if (items[token.knife.slot] !== token.knife.item || token.knife.item.getId() !== token.knife.id
+      || token.knife.item.getAmount() !== 1 || !plain(token.knife.item)) return false;
+  const transaction = plan(player, [[token.fruit.id, 1]], [[output, count]], [fruit], [], spillOverflow);
+  if (!transaction) return false;
+  // Recorded success chat precedes the inventory delta (227/910449 and 227/910356).
+  if (successMessage) Common.spam(player, successMessage);
   apply(player, transaction, output, 0, "make");
+  return true;
+}
+
+function chooseCut(player, token, output, count, spillOverflow = false, successMessage = null, amount = null) {
+  if (cuts.get(player) !== token || !alive(player)) return;
+  if (amount === null) {
+    cuts.delete(player);
+    commitCut(player, token, token.fruit, output, count, spillOverflow, successMessage);
+    return;
+  }
+  let remaining = Math.min(Math.max(1, amount | 0), token.maxAmount), first = true;
+  token.task = new (class PineappleCutTask extends Common.core.Task {
+    constructor() { super(1, player.getIndex(), false); }
+    execute() {
+      if (cuts.get(player) !== token || !alive(player)) { this.stop(); return; }
+      const items = player.getInventory().getItems();
+      const slot = first ? token.fruit.slot : items.findIndex(item => eligibleFruit(item, token.fruit.id));
+      const fruit = first ? token.fruit : { slot, item: items[slot], id: token.fruit.id };
+      if (slot < 0 || !commitCut(player, token, fruit, output, count, spillOverflow, successMessage)) {
+        this.stop(); return;
+      }
+      first = false;
+      if (--remaining <= 0) this.stop();
+      else this.setDelay(2);
+    }
+    stop() {
+      super.stop();
+      // A cancelled old task must never erase a subsequently opened menu or batch.
+      if (cuts.get(player) === token) cuts.delete(player);
+    }
+  })();
+  Common.core.TaskManager.submit(token.task);
 }
 
 function useItems(event) {
@@ -223,7 +291,7 @@ function useItems(event) {
     event.handled = true;
     const inputs = simple ? [[simple[0], 1], [simple[1], 1]] : [[finish.source, 1], [finish.ingredient, 1]];
     const product = simple ? simple[2] : finish.result, xp = simple ? simple[3] : finish.xp;
-    const transaction = plan(player, inputs, [[product, 1]], pair);
+    const transaction = plan(player, inputs, [[product, 1]], pair, finish?.tool ? [finish.ingredient] : []);
     if (transaction) apply(player, transaction, product, xp, "make");
     return;
   }
@@ -233,7 +301,22 @@ function useItems(event) {
   if (!fruit || !plain(fruit.item)) return;
   const name = Object.keys(FRUIT).find((value) => id(value) === fruit.id), token = { fruit, knife };
   event.handled = true;
+  stopCut({ player });
   cuts.set(player, token);
+  const menu = FRUIT_MENUS[name];
+  if (menu) {
+    const choices = FRUIT[name];
+    token.maxAmount = player.getInventory().getItems().filter(item => eligibleFruit(item, fruit.id)).length;
+    token.menu = new Common.core.CreationMenu(menu.title,
+      choices.map(([, output]) => id(output)), {
+        execute: (itemId, amount) => {
+          const choice = choices.find(([, output]) => id(output) === itemId);
+          if (choice) chooseCut(player, token, choice[1], choice[2], choice[3], choice[4], amount);
+        },
+      }, { mode: menu.mode, maxAmount: token.maxAmount, lastAmount: token.maxAmount, labels: choices.map(([text]) => text) });
+    player.getPacketSender().sendCreationMenu(token.menu);
+    return;
+  }
   const pairs = FRUIT[name].flatMap(([text, output, count]) => [text, () => chooseCut(player, token, output, count)]);
   if (!Common.api.sendMultiChatboxPrompt(player, "How would you like to cut the fruit?", ...pairs)) cuts.delete(player);
 }
@@ -259,6 +342,8 @@ function attach(api) {
   api.onItemOnItem(useItems, { noted: false });
   api.onInterfaceActionClick(interfaceAction);
   api.onCustomEvent("interface:closed", interfaceClosed);
+  api.onCustomEvent("interface:opened", cutInterfaceOpened);
+  api.onCustomEvent("player:interaction-cleared", stopCut);
   api.onPlayerLogout(clearPlayer);
   api.onPlayerDisconnect(clearPlayer);
   api.onPlayerDeath(clearPlayer);

@@ -18,6 +18,8 @@ const realTeleportCheck = TeleportHandler.checkReqs;
 const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 const { StatementDialogue } = require("../dist/game/model/dialogues/entries/impl/StatementDialogue");
 const FairyRings = require("../plugins/world/FairyRings.plugin");
+// AJQ's dark warning is the WarningScreens plugin's (cws_warning_15, 578).
+const WarningScreens = require("../plugins/world/warningscreens/Screens.WarningScreens");
 
 const T = FairyRings._test;
 const DRAMEN_STAFF = 772;
@@ -46,6 +48,7 @@ before(async () => {
       if (name === "quest:get-stage") event.stage = questStages.get(event.key) ?? 1000;
       if (name.startsWith("fairy-rings:")) emitted.push({ name, code: event.code });
       if (name === "diary:is-complete") event.complete = event.diary === "lumbridge" && event.tier === "elite" && eliteLumbridge.has(event.player);
+      if (name === "warning-screen:show") WarningScreens.show(event);
     },
     onPlayerLogin() {}, onCanAttack: handler => { canAttackHook = handler; }, log() {},
   });
@@ -89,6 +92,8 @@ function player({ weapon = DRAMEN_STAFF, inventory = [], at = new Location(3129,
     closeSubInterface: () => sender,
     sendInterfaceRemoval: () => ((open = -1), log("close"), sender),
     sendClientScript: (id, ...args) => (log(`script ${id} [${args}]`), sender),
+    sendInterfaceScript: (id, args) => (log(`script ${id} [${args}]`), sender),
+    sendInterfaceDisplayState: () => sender,
     sendSoundEffect: (id) => (log(`sound ${id}`), sender),
     sendTypedMessage: (type, text) => (log(`mesbox ${text}`), sender),
   };
@@ -137,7 +142,11 @@ function runTicks({ ticks, nextTick }, count) {
 
 /** The ring in the capture (ring-walk.txt), configured from the tile north of it. */
 const RING = { x: 3129, y: 3496, z: 0 };
-const click = (p, groupId, childId, option, action) => T.interfaceAction({ player: p, groupId, childId, option, action, handled: false });
+const click = (p, groupId, childId, option, action) => {
+  const event = { player: p, groupId, childId, option, action, handled: false };
+  WarningScreens.click(event);
+  if (!event.handled) T.interfaceAction(event);
+};
 
 test("the cache's fairy ring table: 64 combinations, as captured for AJR and AJQ", () => {
   const rings = T.rings();
@@ -728,7 +737,13 @@ test('Fairytale II: permission and the four-code hideout route through real ring
       assert.equal(p.getPacketSender().getVarbit(2338), 4);
       p.closeInterruptibleInterfaces();
     }
-    if (permission) PluginManager.emitCustomEvent('npc-dialogue:choice', { player: p, npcId: core.NpcIdentifiers.FAIRY_GODFATHER, option: 'Yes, okay.' });
+    if (permission) {
+      // Permission comes as the Godfather's "wrong scroll" line shows (FairyTale2 tick 511).
+      const line = { player: p, npcId: core.NpcIdentifiers.FAIRY_GODFATHER,
+        step: { type: 'line', text: 'Eet does? Oh, sorry, must-a geeven yous da wrong-a scroll.' } };
+      PluginManager.emitCustomEvent('npc-dialogue:line', line);
+      line.before?.();
+    }
     if (!certificate) p.getInventory().deleteNumber(I.NUFFS_CERTIFICATE, 1);
     t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() }); });
     return { p, packets, messages };
@@ -784,7 +799,7 @@ test('Fairytale II: permission and the four-code hideout route through real ring
     await nativeTravel('DJQ'); assert.deepEqual(at(p), [2213, 3099, 0], 'DJQ has no invented destination');
     assert.equal(quest.getStage(p), 40);
     await nativeTravel('AJS'); assert.deepEqual(at(p), [2328, 4426, 0]);
-    assert.equal(quest.getStage(p), 45, 'real teleport landing enters the existing hideout zone');
+    assert.equal(quest.getStage(p), 40, 'landing in the hideout keeps 40; Fairy Nuff\'s welcome sets 45 (FairyTale2 846, 976)');
     p.getSession().flushPackets();
     assert.ok(packets.length > 0, 'actual PacketSender encoded native dial and animation updates');
     travel(p, 'AJS'); assert.deepEqual(at(p), [2500, 3896, 0], 'a second AJS requires the sequence again');

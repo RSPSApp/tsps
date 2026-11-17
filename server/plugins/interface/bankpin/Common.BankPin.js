@@ -90,10 +90,18 @@ function loadHostSecret() {
     if (err?.code !== "ENOENT") console.warn(`[BankPin] could not read the host key secret (${err.message}); using one for this run`);
   }
   const secret = crypto.randomBytes(32).toString("hex");
+  // The secret goes into a new owner-only file that is then renamed over the old one: writing the old
+  // file in place would keep its old (maybe looser) mode, as writeFileSync's mode only applies to a new file.
+  const temp = `${hostSecretFile}.${process.pid}.tmp`;
   try {
     fs.mkdirSync(path.dirname(hostSecretFile), { recursive: true });
-    fs.writeFileSync(hostSecretFile, `${secret}\n`, { mode: 0o600 });
+    fs.rmSync(temp, { force: true });
+    fs.writeFileSync(temp, `${secret}\n`, { mode: 0o600, flag: "wx" });
+    fs.renameSync(temp, hostSecretFile);
   } catch (err) {
+    try {
+      fs.rmSync(temp, { force: true });
+    } catch {}
     console.warn(`[BankPin] could not save the host key secret (${err.message}); using one for this run`);
   }
   return secret;

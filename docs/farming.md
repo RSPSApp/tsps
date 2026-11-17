@@ -23,6 +23,7 @@ Ticks count from the player's arrival at the patch.
 | Inspect | | | game "This is a fruit tree patch. The soil has been treated with ultracompost. The patch has Palm tree growing in it and is at state 3/6." Empty: "The patch is empty and weeded." / "The patch needs weeding." Grown: "The patch (Crystal tree) is fully grown." Protected: a second line, "A nearby gardener is looking after this patch for you." |
 | Check health | | | spam "You examine the tree for signs of disease and find that it is in perfect health." ("the Spirit Tree", "the Calquat Tree", "the potato cactus"), then the Hespori seed roll |
 | Dig up | confirm "Are you sure you want to dig up this patch?" / "Yes, I want to clear it for new crops." / "No, I want to leave it as it is." | `human_dig` + 1470 at 0 and +3, cleared at +5 | spam "You start digging the farming patch..." then "You have successfully cleared this patch for new crops."; stumps: "You start digging up the (fruit) tree stump." / "You dig up the (fruit) tree stump."; a stump that regrows mid-dig ends the dig at +5 with the animation reset and gamemessage "You are too late - the tree has already regrown.", the tree kept (rsprox.net local 1000118 tick 358; fruit trees ours); no spade: "You need a spade to clear a farming patch." |
+| Wrong-state items (rsprox.net local 1000104, 1000253, 1000278, 1000296, 1000340, 1000454, 819) | | | all game, nothing used: a seed on weeds "This patch needs weeding first."; plant cure on an empty patch "This farming patch is empty.", on a growing crop "This patch doesn't need curing." (a weedy patch and a grown crop take the same, ours); an unpotted tree seed on its patch "You can only plant calquat tree seeds in a plantpot.", "willow tree seeds" (local 1000296), "Magic Tree seeds" (local 1000296, 1000253), "a crystal acorns" (other trees: "<crop> tree seeds", ours); a rake with no weeds "This bush patch doesn't need weeding right now." (the patch's name); compost on the hespori patch "This patch won't benefit from that kind of treatment." (Fertile Soil refuses with it before its runes go, ours) |
 | Chop without an axe | | | tree patches: "You need an axe to chop down this tree.<br>You do not have an axe which you have the woodcutting level to use."; fruit and crystal trees: "...that you have the Woodcutting level to use." |
 
 ## Harvests
@@ -110,3 +111,13 @@ When the inventory fills: spam "You have run out of inventory space.", on the ti
   from the inventory would (weeds, level, tool, seed count).
 - The Wiki's Seed_box page (fetched this session) says Check lists the contents in chat; the captures show the window
   instead, so the captures are followed.
+
+## Lumbridge Swamp shed tools
+
+In rsprox capture 3174 (rev 232, ticks 71–160), taking the shed's `farming_shed_tools`
+with neither tool opens “Which would you like to take?” with Rake, Spade and Both. Choosing
+Spade gives a spade and the spam line “You 'borrow' a spade.” Taking again gives a rake with
+its corresponding spam line; with both held the game line is “You've already got a spade and
+a rake.” Ours: Both gives each missing tool with the individual lines and requires room for
+both; the full-inventory message and outcomes, the rake menu choice, and having only a rake
+are not captured.

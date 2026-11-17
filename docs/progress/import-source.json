@@ -1,0 +1,10 @@
+{
+  "url": "https://rsps.app/assets/extensions/rsps-world-auth/osrs-progress.json",
+  "retrievedDate": "2026-11-14",
+  "upstreamUpdated": "2026-11-11",
+  "sourceBytes": 3649516,
+  "sourceSha256": "e84ae055454b9dd90dd466a237a0850b47444c183bc489dd3221409a009de81e",
+  "categories": 20,
+  "items": 520,
+  "note": "Provenance of the initial import only. osrs-progress.json is maintained in this repository after import; formatting differs from source bytes. This receipt is not a freshness assertion for later edits."
+}

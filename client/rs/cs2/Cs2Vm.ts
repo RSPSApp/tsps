@@ -60,6 +60,9 @@ const JS_LISTENER_FOR_EVENT: Partial<Record<WidgetEventType, string>> = {
 /** Magic string for target name substitution */
 export const EVENT_OPBASE = "event_opbase";
 
+/** The long locals of every script frame that has none (zero-length, so never written). */
+const EMPTY_LONGS = new BigInt64Array(0);
+
 /**
  * ScriptEvent holds all context for a widget event
  * Used for queueing and executing script handlers
@@ -199,6 +202,7 @@ export interface Cs2Context {
      */
     clientRevision?: number;
     objTypeLoader?: ObjTypeLoader;
+    invTypeLoader?: import("../config/invtype/InvTypeLoader").InvTypeLoader;
     paramTypeLoader?: ParamTypeLoader;
     enumTypeLoader?: TypeLoader<EnumType>;
     structTypeLoader?: TypeLoader<StructType>;
@@ -548,6 +552,9 @@ export class Cs2Vm {
     // Type 2 = interface-scoped (only widgets in inputDialogWidgetId interface)
     // Type 3 = widget-scoped (only inputDialogWidgetId widget can receive input)
     inputDialogType: number = 0;
+    /** Cache-defined widget shortcut scope; persists between script executions. */
+    widgetKeyInputMode: 0 | 1 | 2 | 3 = 0;
+    widgetKeyInputTarget = -1;
     inputDialogWidgetId: number = -1;
     // Current input string being typed by user
     inputDialogString: string = "";
@@ -893,6 +900,7 @@ export class Cs2Vm {
             varManager: vm.context.varManager,
             loadScript: vm.context.loadScript,
             objTypeLoader: vm.context.objTypeLoader,
+            invTypeLoader: vm.context.invTypeLoader,
             paramTypeLoader: vm.context.paramTypeLoader,
             enumTypeLoader: vm.context.enumTypeLoader,
             structTypeLoader: vm.context.structTypeLoader,
@@ -1499,7 +1507,8 @@ export class Cs2Vm {
             const intCount = frameScript.localIntCount;
             const stringCount = frameScript.localObjCount;
             const longCount = frameScript.localLongCount;
-            const frameLongs = longCount > 0 ? new BigInt64Array(longCount) : new BigInt64Array(0);
+            // Most scripts have no long locals: share one empty array instead of one per call.
+            const frameLongs = longCount > 0 ? new BigInt64Array(longCount) : EMPTY_LONGS;
 
             if (
                 this.localIntPool.length > 0 &&

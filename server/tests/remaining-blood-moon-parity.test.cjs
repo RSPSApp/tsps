@@ -1207,6 +1207,7 @@ test('Paterdomus fight is reached through the captured side trapdoor, cellar lad
       }
     },
     onRegionLoaded: noop, onObjectRoute: noop, onServerStartup: noop, onPlayerProcess: noop,
+    onPlayerLogin: noop,
     onItemOnObject: noop, persistAttribute: noop, registerArea: noop, sendMultiChatboxPrompt: () => true,
   };
   delete require.cache[require.resolve('../plugins/objects/Doors.plugin')];
@@ -1238,7 +1239,7 @@ test('Paterdomus fight is reached through the captured side trapdoor, cellar lad
     getLocation: () => position, moveTo: (to) => { position = to; },
     getAttribute: () => undefined, setAttribute: noop,
     getPacketSender: () => packets,
-    getMovementQueue: () => ({ isMovementBlocked: () => false, setBlockMovement() { return this; }, reset() { return this; } }),
+    getMovementQueue: () => ({ isMovementBlocked: () => false, setBlockMovement() { return this; }, reset() { return this; }, addSteps(to) { position = to; }, size: () => 0 }),
     isRegistered: () => true, getHitpoints: () => 99, performAnimation: noop,
     getSkillManager: () => ({ getTotalLevel: () => 2000 }),
     getEquipment: () => ({ contains: () => true }), getInventory: () => ({ contains: () => true }),
@@ -1271,7 +1272,7 @@ test('Paterdomus fight is reached through the captured side trapdoor, cellar lad
   //    rejected BFS showed. Opening the real double door through its registered handler is
   //    what frees the doorway, not any manual clip removal.
   const route = new RsmodRouteFinding((x, y, z, area) => RegionManager.getClipping(x, y, z, area));
-  const routeTo = (x, y) => route.findRoute({ level: 0, srcX: 3405, srcY: 3506, srcSize: 1,
+  const routeTo = (x, y) => route.findRoute({ level: 0, srcX: position.getX(), srcY: position.getY(), srcSize: 1,
     destX: x, destY: y, privateArea: null, moveNear: false });
   const monks = [[3418, 3491], [3415, 3486], [3414, 3490], [3409, 3488]];
   for (const [x, y] of monks) assert.equal(routeTo(x, y).success, false,
@@ -1281,7 +1282,10 @@ test('Paterdomus fight is reached through the captured side trapdoor, cellar lad
   assert.equal(click(3489, 3408, 3489, 'Open', 'Large door').handled, true);
   assert.equal(raw(3491, 3409, 3489)?.getId(), 3491, 'south leaf swings east into open loc 3491');
   assert.equal(raw(3492, 3409, 3488)?.getId(), 3492, 'north leaf swings east into open loc 3492');
-  assert.equal(RegionManager.getClipping(3408, 3489, 0, null), 0, 'the door handler clears the doorway tile');
+  assert.notEqual(RegionManager.getClipping(3408, 3489, 0, null), 0,
+    'the captured pass-through gate retains its invisible doorway blocker');
+  assert.deepEqual([position.getX(), position.getY()], [3409, 3489],
+    'Open queues the ordinary crossing onto the inside tile');
   for (const [x, y] of monks) {
     const path = routeTo(x, y);
     assert.equal(path.success, true, `open front door gives an ordinary route to ${x},${y}`);

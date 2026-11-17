@@ -10,8 +10,13 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Location } = require("../dist/game/model/Location");
 const Drops = require("../plugins/npcs/NpcDrops.plugin");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+const { Item } = require("../dist/game/model/Item");
+const { Equipment } = require("../dist/game/model/container/impl/Equipment");
 
 let legends = false;
+const listeners = new Map();
 before(() => {
   CachePipeline.initialize();
   const core = PluginManager.getCoreApi();
@@ -19,9 +24,81 @@ before(() => {
     core,
     emitCustomEvent: (name, event) => { if (name === "quest:is-complete" && event.key === "legends_quest") event.complete = legends; },
     getPluginConfig: (_key, fallback) => fallback,
+    onCustomEvent: (name, handler) => listeners.set(name, handler),
   }, { get: (target, key) => (key in target ? target[key] : () => {}) });
   Drops.register(api);
   Drops._test.loadDrops();
+});
+
+test("ordinary gem talisman slots use the source NPC map, with ring and Legends independent", (t) => {
+  const actor = new Player(null);
+  const npc = new NPC(1, new Location(3222, 3218, 0));
+  for (const ring of [false, true]) {
+    actor.getEquipment().setItem(Equipment.RING_SLOT, ring ? new Item(2572, 1) : null);
+    const denominator = ring ? 65 : 128;
+    const first = ring ? 56 : 119;
+    for (const complete of [false, true]) {
+      legends = complete;
+      for (const underground of [false, true]) {
+        npc.setLocation(new Location(3222, underground ? 9618 : 3218, 0));
+        actor.setLocation(new Location(3222, underground ? 3218 : 9618, 0));
+        for (let slot = first; slot < first + 3; slot++) {
+          t.mock.method(Math, "random", () => (slot + 0.5) / denominator);
+          const request = { player: actor, npc, table: "gem", drops: [] };
+          listeners.get("npc-drops:roll-shared")(request);
+          assert.deepEqual(request.drops, [{ itemId: underground ? 1452 : 1462, amount: 1, noted: false }], `ring=${ring} quest=${complete} slot=${slot}`);
+          t.mock.restoreAll();
+        }
+      }
+    }
+  }
+});
+
+test("gem slot boundaries and the genuine Waterbirth table keep their own rewards", (t) => {
+  const actor = new Player(null);
+  for (const ring of [false, true]) {
+    actor.getEquipment().setItem(Equipment.RING_SLOT, ring ? new Item(2572, 1) : null);
+    const denominator = ring ? 65 : 128;
+    for (const [slot, expected] of [[ring ? 55 : 118, 1619], [ring ? 59 : 122, 1617]]) {
+      t.mock.method(Math, "random", () => (slot + 0.5) / denominator);
+      assert.equal(Drops._test.rollSharedTable("gem", actor)[0].itemId, expected);
+      t.mock.restoreAll();
+    }
+  }
+  t.mock.method(Math, "random", () => 0);
+  assert.equal(Drops._test.rollSharedTable("talisman", actor)[0].itemId, 1438, "Waterbirth still begins with air talismans");
+});
+
+test("NPC table dispatch carries the source through nested gem rolls and Legends fallback", (t) => {
+  const actor = new Player(null);
+  actor.setLocation(new Location(3222, 9618, 0));
+  const npc = new NPC(1, new Location(3222, 3218, 0));
+  for (const slot of [119, 127]) {
+    legends = false;
+    // Bones' fixed quantity roll, Molanisk's actual 7/128 gem access, then gem slot.
+    const rolls = [0, 127.5 / 128, (slot + 0.5) / 128];
+    t.mock.method(Math, "random", () => rolls.shift() ?? 0.99);
+    const request = { player: actor, npc, npcId: 1, drops: [] };
+    listeners.get("npc-drops:roll-table")(request);
+    assert.ok(request.drops.some(drop => drop.itemId === 1462), JSON.stringify(request.drops));
+    assert.ok(!request.drops.some(drop => drop.itemId === 1452));
+    t.mock.restoreAll();
+  }
+});
+
+test("an ordinary talisman follows the NPC's copied map chunk", (t) => {
+  const { TemplatedInstanceArea } = require("../dist/game/model/areas/impl/TemplatedInstanceArea");
+  const area = new TemplatedInstanceArea(1, 1);
+  t.after(() => area.destroy());
+  const actor = new Player(null);
+  actor.setLocation(new Location(3222, 3218, 0));
+  const npc = new NPC(1, area.tile(2, 2, 0));
+  npc.setArea(area);
+  area.setChunk(0, 0, 0, { sourceChunkX: 3222 >> 3, sourceChunkY: 9618 >> 3, sourcePlane: 0, rotation: 1 });
+  t.mock.method(Math, "random", () => 119.5 / 128);
+  const request = { player: actor, npc, table: "gem", drops: [] };
+  listeners.get("npc-drops:roll-shared")(request);
+  assert.deepEqual(request.drops, [{ itemId: 1452, amount: 1, noted: false }]);
 });
 
 const player = (x, y) => ({ getLocation: () => new Location(x, y, 0), getEquipment: () => ({ get: () => null, getItems: () => [] }) });

@@ -103,9 +103,11 @@ const UNMUTED_DEFAULT_VOLUME = 100;
 // (encodeGameframeFlags sends them).
 const DISPLAY_LAYOUT_DROPDOWN = DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID;
 // Enum 3509 order: Fixed, Resizable Classic, Resizable Modern, Resizable 317, Fixed 317. The cache
-// has the first three; our client adds the two 317 layouts, to both dropdowns.
+// has the first three; our client adds the two 317 layouts, to both dropdowns. Classic is
+// toplevel_osrs_stretch (161) and Modern toplevel_pre_eoc (164): RSProx recording 100 opens 161 for
+// row 2 (Resizable - Classic) and 164 for row 3 (Resizable - Modern).
 const GAMEFRAME_LAYOUT_ENUM = 3509;
-const GAMEFRAME_LAYOUT_ROOTS = [548, 164, 161, 161, 548];
+const GAMEFRAME_LAYOUT_ROOTS = [548, 161, 164, 161, 548];
 const GAMEFRAME_317_OPTION = 3;
 const GAMEFRAME_317_FIXED_OPTION = 4;
 const GAMEFRAME_317_VARP = 7995; // mirrors client/common/ui/gameframeLayout.ts
@@ -116,10 +118,11 @@ const ORBS_PANE_UID = (ROOT_INTERFACE << 16) | 33;
 // panel's, and "Show data orbs" (8), a toggle on varbit 4084 orbs_disabled.
 const GAME_CLIENT_LAYOUT_SETTING = 12;
 const SHOW_DATA_ORBS_SETTING = 8;
-// world.json "gameframe" -> the dropdown option (enum 3509 index) it forces on login.
+// world.json "gameframe" -> the dropdown option (enum 3509 index) it forces on login. "modern"
+// means the OSRS gameframe rather than the 317 one; its resizable world boots the default 161.
 const WORLD_GAMEFRAME_OPTIONS = {
   "modern-fixed": 0,
-  "modern-resizable": 2,
+  "modern-resizable": 1,
   "317-resizable": GAMEFRAME_317_OPTION,
   "317-fixed": GAMEFRAME_317_FIXED_OPTION,
 };
@@ -128,8 +131,8 @@ const WORLD_GAMEFRAME_OPTIONS = {
 // Like the layout dropdown, an option's row is at slot option + 1 (live sends op1 on 1..5 / 1..4).
 const PLAYER_ATTACK_OPTIONS_SETTING = 55;
 const NPC_ATTACK_OPTIONS_SETTING = 56;
-// Cache script 3962 reads this to pick the selected dropdown row; 4607 is only
-// a display mirror of the layout (no rendering effect in this revision).
+// Cache script 3962 reads this to pick the selected dropdown row (resizable: 0 Classic, 1 Modern);
+// 4607 is only a display mirror of the layout (no rendering effect in this revision).
 const GAMEFRAME_STONE_VARBIT = 4607;
 // The enhanced client's mouseover text setting (All Settings row 147; cache script 4582 toggles
 // it), from rev 241 mouseover_text_disabled (it was 12377, mouseover_text_enabled). Our client
@@ -233,8 +236,6 @@ const pendingColours = new WeakMap();
 // Rows and dropdown options that may reach us (0..512). Search
 // results number rows across every category, so they run far past one category's length.
 const ALL_SETTINGS_LAST_SLOT = 511;
-// The settings list's rows, as live enables them (RSProx captures); a search lists more than 512.
-const ALL_SETTINGS_LAST_ROW = 538;
 // The All Settings window's volume sliders (scripts 9260, 9266, 9272, 9278) trigger the list's
 // row with the setting and the new volume; live gives the list the transmit-trigger event for it.
 const ALL_SETTINGS_VOLUME_VARPS = new Map([
@@ -317,6 +318,33 @@ const PARAM_SETTING_OPTIONS = 1091;
 const SETTING_TYPE_TOGGLE = 0;
 const SETTING_TYPE_DROPDOWN = 2;
 const SEARCH_VIEW = -1;
+const CHAT_SETTINGS_ENUM = 1561;
+const DIALOGUE_DISPLAY_SETTING = 303;
+const DIALOGUE_DISPLAY_STRUCT = 4452;
+const SETTINGS_CATALOG_SOURCE = "settings:catalog";
+
+/** Native row303 exists, but rev242's Chat enum omits it. Use the same rows for scripts and clicks. */
+function settingsEnumEntries(enumId) {
+  const entries = [...CacheDefinitions.getEnumValues(enumId)].sort(([a], [b]) => a - b);
+  if (enumId !== CHAT_SETTINGS_ENUM) return entries;
+  const definition = CacheDefinitions.getStructParams(DIALOGUE_DISPLAY_STRUCT);
+  if (definition.get(PARAM_SETTING_ID) !== DIALOGUE_DISPLAY_SETTING
+      || definition.get(PARAM_SETTING_TYPE) !== SETTING_TYPE_TOGGLE) {
+    throw new Error("Unsupported native dialogue-display setting definition");
+  }
+  const matches = entries.filter(([, id]) => CacheDefinitions.getStructParams(Number(id)).get(PARAM_SETTING_ID) === DIALOGUE_DISPLAY_SETTING);
+  if (matches.length > 1 || (matches.length === 1 && Number(matches[0][1]) !== DIALOGUE_DISPLAY_STRUCT)) {
+    throw new Error("Ambiguous native dialogue-display setting row");
+  }
+  if (!matches.length) entries.push([Math.max(-1, ...entries.map(([key]) => key)) + 1, DIALOGUE_DISPLAY_STRUCT]);
+  return entries;
+}
+
+function sendSettingsCatalog({ player }) {
+  player.getPacketSender().sendContentData(SETTINGS_CATALOG_SOURCE, [{ key: "enumOverrides", rows: [{
+    enumId: CHAT_SETTINGS_ENUM, valueType: "J", defaultValue: -1, entries: settingsEnumEntries(CHAT_SETTINGS_ENUM),
+  }] }]);
+}
 
 // Row locks. A setting struct with param 1115 set can be locked, and param 1116 is the text a
 // locked row shows. The cache's settings scripts grey the row out while script 2520 says it is
@@ -383,7 +411,7 @@ function catalog() {
     const category = CacheDefinitions.getStructParams(Number(structId));
     const categoryId = Number(category.get(PARAM_CATEGORY_ID));
     const rows = [];
-    for (const [, settingStruct] of [...CacheDefinitions.getEnumValues(Number(category.get(PARAM_CATEGORY_SETTINGS)))].sort(([a], [b]) => a - b)) {
+    for (const [, settingStruct] of settingsEnumEntries(Number(category.get(PARAM_CATEGORY_SETTINGS)))) {
       const params = CacheDefinitions.getStructParams(Number(settingStruct));
       const settingId = params.get(PARAM_SETTING_ID);
       const options = params.get(PARAM_SETTING_OPTIONS);
@@ -711,10 +739,10 @@ function syncGameframeVarbit(player) {
   const root = getGameframeRoot(player);
   player.getPacketSender()
     .sendConfig(GAMEFRAME_317_VARP, !isMobileClient(player) && (root === 161 || root === 548) && player.getAttribute(CLIENT_LAYOUT_317_ATTRIBUTE) === true ? 1 : 0)
-    .sendVarbit(GAMEFRAME_STONE_VARBIT, root === 164 ? 0 : 1);
+    .sendVarbit(GAMEFRAME_STONE_VARBIT, root === 164 ? 1 : 0);
 }
 
-// Switches the client's gameframe to `root` (548 fixed / 164 classic / 161
+// Switches the client's gameframe to `root` (548 fixed / 161 classic / 164
 // modern). The client moves every server-mounted sub-interface onto the new
 // layout's components; flags have to be re-sent because set_root clears them.
 // Mobile clients stay on the stock mobile toplevel (601) and never persist the
@@ -806,13 +834,14 @@ function chooseNpcAttackOption({ player, slot }) {
 }
 
 function openAllSettings(player) {
+  sendSettingsCatalog({ player });
   player.setInterfaceId(ALL_SETTINGS_INTERFACE_ID);
   const sender = player.getPacketSender();
   sender.sendSubInterface(MAIN_MODAL_UID, ALL_SETTINGS_INTERFACE_ID, 0);
   // The settings/controls are dynamic children created client-side; without
   // these transmit flags their ops never reach us. Op1 over the used slot range.
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_CATEGORIES_CLICKZONE, 0, 15, TRANSMIT_OP1);
-  sender.sendInterfaceFlagsRange(ALL_SETTINGS_SETTINGS_CLICKZONE, 0, ALL_SETTINGS_LAST_ROW, TRANSMIT_OP1 | TRANSMIT_TRIGGER);
+  sender.sendInterfaceFlagsRange(ALL_SETTINGS_SETTINGS_CLICKZONE, 0, catalog().all.length - 1, TRANSMIT_OP1 | TRANSMIT_TRIGGER);
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_DROPDOWN_BUTTONS, 0, ALL_SETTINGS_LAST_SLOT, TRANSMIT_OP1);
   // It opens on the category shown last; live sends nothing for it.
   player.setAttribute("settings-view", sender.getVarbit(SETTINGS_CATEGORY_VARBIT));
@@ -1225,6 +1254,7 @@ module.exports = {
   applyDefaultKeybindings,
   syncPlayerKeybindings,
   openAllSettings,
+  settingsEnumEntries,
   openKeybindings,
   keybindVarbitForRow,
   refuseLockedSetting,
@@ -1260,6 +1290,7 @@ module.exports = {
     api.persistAttribute(QUEST_LIST_SHOW_MIGRATED_ATTRIBUTE, false);
     api.persistAttribute(GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE, false);
     api.onPlayerLogin(restoreSettings);
+    api.onPlayerLogin(sendSettingsCatalog);
     api.onPlayerLogin(sendMouseoverText);
     // Changing category, or searching, changes what a row's slot means.
     api.onInterfaceActionButton(ALL_SETTINGS_CATEGORIES_CLICKZONE, clickCategory);

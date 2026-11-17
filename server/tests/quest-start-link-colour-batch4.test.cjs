@@ -1,7 +1,7 @@
 // Run after `yarn build`: node --test tests/quest-start-link-colour-batch4.test.cjs
 // Start-message link colour follows the chatbox (chatbox_transparency 4608: <col=081190> opaque / a default player,
-// <col=0ab0ff> transparent) for Sheep Shearer, Witch's Potion, Prince Ali Rescue, Dragon Slayer I, Death on the Isle and the
-// miniquest His Faithful Servants. These starts are two-step: the real start hook sets the plugin's pending flag (or the
+// <col=0ab0ff> transparent) for Sheep Shearer, Witch's Potion, Prince Ali Rescue, Dragon Slayer I and Death on the Isle;
+// the miniquest His Faithful Servants starts with no line. These starts are two-step: the real start hook sets the plugin's pending flag (or the
 // requirements are met through the real quest registry and skill levels), then the committing line fires; the wording is
 // unchanged. Real PluginManager and plugins.
 const assert = require('node:assert/strict');
@@ -73,10 +73,16 @@ for (const [background, transparent, colour] of [['opaque (a default player)', f
     hook(p, N().PATZI, 'quest:death-on-the-isle:start');
     expect(p, 'Death on the Isle');
   });
-  test(`His Faithful Servants (a miniquest) on an ${background} chatbox: the start link is ${colour}, the wording stays 'miniquest'`, (t) => {
+  // Live starts His Faithful Servants with no chat line (user rsprox capture BarrowsMiniQuest.bin tick 79).
+  test(`His Faithful Servants (a miniquest) on an ${background} chatbox: it starts with no start line`, (t) => {
     const p = actor(t, transparent);
     complete(p, 'priest_in_peril');
-    line(p, N().STRANGE_OLD_MAN, "It's time.");
-    expect(p, 'His Faithful Servants', 'miniquest');
+    const event = { player: p, npcId: N().STRANGE_OLD_MAN, text: 'Okay...', step: { player: 'Okay...' },
+      pages: [{ page: 'His Faithful Servants', variants: ['starting-out-talking-to-the-strange-old-man'] }] };
+    PM.emitCustomEvent('npc-dialogue:line', event);
+    event.before?.();
+    const hfs = runtime.getRegisteredQuests().find((x) => x.key === 'his_faithful_servants');
+    assert.equal(hfs.getStage(p), 2);
+    assert.ok(!p.messages.some((text) => text.startsWith("You've started a new")), p.messages.join('|'));
   });
 }

@@ -19,7 +19,12 @@
  * Lumbridge Swamp Caves
  *  - Dark hole at 3169,3172 > Use Rope: ties a rope and sets the SWAMP_CAVES_ROPED_ENTRANCE
  *    varbit (279) for good (Wiki). The rope is used up.
- *  - Dark hole > Climb-down: the tile below the side the player used, once roped.
+ *  - Dark hole > Climb-down: the tile below the side the player used, once roped. Without a
+ *    tinderbox the swamp cave warning (cws_warning_13, shown by WarningScreens) comes first:
+ *    "...Are you sure you want to go in without a tinderbox?", its answers rewritten as live does
+ *    (rsprox_transcripts/242/911917.txt tick 21674).
+ *  - Symbol (the cave goblin markers on the cave walls) > Look-at: shows that marker in the
+ *    cave_goblin_markers modal (rsprox.net rec 3182, rev 232).
  */
 let pluginApi;
 let Location, Animation, GameObject, CacheDefinitions, ObjectManager, Objects, Items;
@@ -34,6 +39,47 @@ const EDGEVILLE_DUNGEON_LANDING = { x: 3096, y: 9867, z: 0 };
 // Varrock
 const VARROCK_MANHOLE = { x: 3237, y: 3458, z: 0 };
 const VARROCK_SEWER_LADDER = { x: 3237, y: 9858, z: 0 };
+
+const INTRO = "There's a large selection of books, the majority of which look fairly<br>old. Some very strange names... You pick one at random :";
+// The Wiki gives different spellings for the ground-floor library and Traiborn's room.
+const LIBRARY_BOOKS = [
+  "101 Ways to Impress Your Mates with Magic",
+  "The Dark Arts of Magical Wands",
+  "Fire, Earth and Water ~ What's it all About?",
+  "How to become the Ultimate Wizard of the Universe",
+  "The Life & Times of a Thingummywut by Traiborn the Wizard",
+  "Life With a Wizard Husband ~ a Housewife's Story",
+  "So You Think You're a Mage? Volume 28",
+  "Wind Strike for Beginners",
+];
+const TRAIBORN_BOOKS = [
+  "101 Ways to Impress your Mates with Magic",
+  "The Dark Arts of Magical Wands",
+  "Fire, Earth and Water - What's it all about?",
+  "How to become the Ultimate Wizard of the Universe",
+  "The Life & Times of a Thingummywut by Traiborn the Wizard",
+  "Living with a Wizard Husband - A housewife's Story",
+  "So you think you're a Mage? Volume 28",
+  "Wind Strike for Beginners",
+];
+
+function searchBooks(event) {
+  const { location, objectId, player } = event;
+  // The same name is used by other bookcases, including the basement clue.
+  if ((objectId !== CacheDefinitions.getLocId("fai_wiztower_bookcase") &&
+       objectId !== CacheDefinitions.getLocId("fai_wiztower_bookcase_wall")) ||
+      !location || location.x < 3100 || location.x > 3119 || location.y < 3150 || location.y > 3169 ||
+      (location.z !== 0 && location.z !== 1)) return false;
+  const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
+  const books = location.z === 0 ? LIBRARY_BOOKS : TRAIBORN_BOOKS;
+  const title = books[Math.floor(Math.random() * books.length)];
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new StatementDialogue(0, INTRO),
+    new StatementDialogue(1, `'${title}'`),
+    new StatementDialogue(2, "Interesting..."),
+  ));
+  return true;
+}
 
 // Wizards' Tower basement
 const TOWER_LADDER = { x: 3104, y: 3162, z: 0 };
@@ -58,6 +104,29 @@ const SWAMP_CAVE_NEEDS_ROPE = "There is a sheer drop below the hole. You'll need
 const SWAMP_CAVE_TIED_ROPE = "You tie the rope to the top of the hole and throw it down.";
 const SWAMP_CAVE_ROPE_QUESTION = "Attach a rope to the top of the hole?";
 const SWAMP_CAVE_ROPE_SOUND = 1774;
+/** cws_warning_13 (572), "Lumbridge Swamp Cave Rope". */
+const SWAMP_CAVE_WARNING = 13;
+/** That screen's answers (572:17, 18), as live rewrites them. */
+const SWAMP_CAVE_WARNING_TEXTS = { 17: "I'll be fine without a tinderbox.", 18: "I'll come back with a tinderbox." };
+/**
+ * The cave goblin markers' Look-at. rsprox.net rec 3182 (rev 232): on arrival the player faces
+ * the wall, then live sets cave_goblin_markers:symbol to the marker's model (6923 for the north
+ * marker at tick 2669, 6924 for the south one at ticks 2877 and 3060, 6922 for the east one at
+ * ticks 2192-2608 and rec 3981 tick 90, 6927 for the west one at tick 2764), runs
+ * toplevel_mainmodal_open [0, 0] and opens cave_goblin_markers in the main modal. No message,
+ * animation or sound. It is an approach op: most reads opened where the player stood, two to
+ * seven tiles from the wall; from 3229,9608 (tick 2591) and rec 3981's 3223,9618 (tick 89) the
+ * east marker was out of sight, and the player ran until it was in sight, then it opened.
+ */
+const SWAMP_CAVE_MARKER_MODELS = new Map([
+  ["swamp_cavewall_northmarker", 6923],
+  ["swamp_cavewall_southmarker", 6924],
+  ["swamp_cavewall_eastmarker", 6922],
+  ["swamp_cavewall_westmarker", 6927],
+]);
+const MAINMODAL_OPEN_SCRIPT = 2524;
+/** Ours: the engine's default approach range; the recorded reads were from 2 and 7 tiles. */
+const SWAMP_CAVE_MARKER_RANGE = 10;
 
 function initialize(api) {
   pluginApi = api;
@@ -213,14 +282,62 @@ function climbDownDarkHole(event) {
     player.sendMessage(SWAMP_CAVE_NEEDS_ROPE);
     return true;
   }
-  const landing = swampCavesLanding(player.getLocation());
-  pluginApi.emitCustomEvent("ladders:climbDown", { player, destination: toLocation(landing) });
+  const climb = () => pluginApi.emitCustomEvent("ladders:climbDown", { player, destination: toLocation(swampCavesLanding(player.getLocation())) });
+  if (hasTinderbox(player)) {
+    climb();
+    return true;
+  }
+  const warning = { player, warning: SWAMP_CAVE_WARNING, texts: SWAMP_CAVE_WARNING_TEXTS, proceed: climb };
+  pluginApi.emitCustomEvent("warning-screen:show", warning);
+  if (!warning.handled) climb();
+  return true;
+}
+
+/** The warning asks about going in "without a tinderbox": a tinderbox or golden tinderbox held. */
+function hasTinderbox(player) {
+  const tinderboxes = [Items.TINDERBOX, Items.GOLDEN_TINDERBOX];
+  return tinderboxes.some((id) => player.getInventory().contains(id));
+}
+
+function swampCaveMarkerModel(objectId) {
+  for (const [gameval, model] of SWAMP_CAVE_MARKER_MODELS) {
+    if (CacheDefinitions.getLocId(gameval) === objectId) return model;
+  }
+  return undefined;
+}
+
+// Lumbridge Swamp Caves: a marker is read from where the player stands when it is in range and in
+// sight; from further away they walk until it is (the shared approach-op route).
+function swampCaveMarkerRoute(event) {
+  if (event.clickType !== 1 || swampCaveMarkerModel(event.objectId) === undefined) return;
+  const where = event.object?.getLocation?.();
+  const at = event.player.getLocation();
+  if (!where || where.getZ() !== at.getZ()) return;
+  const distance = Math.max(Math.abs(where.getX() - at.getX()), Math.abs(where.getY() - at.getY()));
+  const inSight = distance <= SWAMP_CAVE_MARKER_RANGE && pluginApi.core.RegionManager.canProjectileAttackBounds(
+    at, new Location(where.getX(), where.getY(), where.getZ()), 1, 1, 1, 1, event.player.getPrivateArea?.() ?? null);
+  if (inSight) event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
+  else event.approachRange = SWAMP_CAVE_MARKER_RANGE;
+}
+
+// Lumbridge Swamp Caves: a cave goblin marker's picture.
+function lookAtSwampCaveMarker(event) {
+  const { player, objectId } = event;
+  const model = swampCaveMarkerModel(objectId);
+  if (model === undefined) return false;
+  event.handled = true;
+  // Read from where they stand, so turned to the marker here (rec 3182's face_angle 360 and 1227).
+  if (event.location) player.setPositionToFace(new Location(event.location.x, event.location.y, event.location.z ?? 0));
+  const sender = player.getPacketSender();
+  sender.sendInterfaceRawModel(CacheDefinitions.getComponentId("cave_goblin_markers:symbol"), model);
+  sender.sendInterfaceScript(MAINMODAL_OPEN_SCRIPT, [0, 0]);
+  sender.sendInterface(CacheDefinitions.getInterfaceId("cave_goblin_markers"));
   return true;
 }
 
 module.exports = {
   name: "Misthalin",
-  description: "Misthalin area interactions: the Edgeville dungeon ladder and trapdoor, Varrock's manhole to the sewers and the Wizards' Tower basement.",
+  description: "Misthalin area interactions: the Edgeville dungeon ladder and trapdoor, Varrock's manhole to the sewers, the Wizards' Tower basement, and the Lumbridge Swamp Caves dark hole and wall markers.",
   register(api) {
     initialize(api);
     // Edgeville
@@ -233,6 +350,7 @@ module.exports = {
       "Climb-down": varrockClimbDownManhole,
     });
     api.onObjectInteraction("Ladder", { "Climb-up": varrockClimbUpToManhole });
+    api.onObjectInteraction("Bookcase", { Search: searchBooks });
     // Wizards tower basement
     api.onObjectInteraction("Ladder", {
       "Climb-down": wizardsTowerClimbDown,
@@ -243,6 +361,8 @@ module.exports = {
     api.onObjectInteraction("Dark hole", { "Climb-down": climbDownDarkHole });
     api.onItemOnObject("Rope", "Dark hole", useRopeOnDarkHole, { noted: false });
     api.onPlayerLogin(syncSwampCavesRope);
+    api.onObjectRoute(swampCaveMarkerRoute);
+    api.onObjectInteraction("Symbol", { "Look-at": lookAtSwampCaveMarker });
   },
-  _test: { swampCavesLanding, SWAMP_CAVE_ROPED_ATTRIBUTE, SWAMP_CAVE_ROPED_VARBIT },
+  _test: { swampCavesLanding, lookAtSwampCaveMarker, swampCaveMarkerRoute, SWAMP_CAVE_MARKER_RANGE, SWAMP_CAVE_ROPED_ATTRIBUTE, SWAMP_CAVE_ROPED_VARBIT },
 };

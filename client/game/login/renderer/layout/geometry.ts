@@ -4,7 +4,7 @@ import type { LoginRendererHost, RenderContext } from "../host";
 export function getTitleBackgroundLayout(host: LoginRendererHost) {
 
         const art = host.titleBackgroundImage;
-        if (art && host.titleBackgroundFromCache) {
+        if (art && host.titleBackgroundFromCache && !host.customTitleBackgroundImage) {
             // The cache's title art: centred on the scene and drawn whole, growing past the scene's
             // scale (up to TITLE_ART_MAX_GROWTH times) while the viewport still fits it, so large
             // screens are not mostly black. Where even the scene's scale doesn't fit it whole, its
@@ -31,10 +31,10 @@ export function getTitleBackgroundLayout(host: LoginRendererHost) {
             const drawH = art.height * scale;
             return { drawX: centerX - drawW / 2, drawY: centerY - drawH / 2, drawW, drawH, scale };
         }
-        // The bundled widescreen image covers the viewport.
+        // Widescreen backgrounds cover the viewport.
         const targetW = Math.max(1, host.containerWidth);
         const targetH = Math.max(1, host.containerHeight);
-        const img = host.titleBackgroundImage;
+        const img = host.customTitleBackgroundImage ?? host.titleBackgroundImage;
         const srcW = img?.width || LOGIN_LAYOUT.TITLE_BG_WIDTH;
         const srcH = img?.height || LOGIN_LAYOUT.MAX_BG_HEIGHT;
         const scale = Math.max(targetW / srcW, targetH / srcH);
@@ -59,7 +59,7 @@ export function getTitleBackgroundLayout(host: LoginRendererHost) {
 export function getTitleArtScene(host: LoginRendererHost) {
 
         const bg = getTitleBackgroundLayout(host);
-        const artW = host.titleBackgroundImage?.width || LOGIN_LAYOUT.TITLE_BG_WIDTH;
+        const artW = (host.customTitleBackgroundImage ?? host.titleBackgroundImage)?.width || LOGIN_LAYOUT.TITLE_BG_WIDTH;
         const cropX = Math.max(0, Math.floor((artW - host.SCENE_WIDTH) / 2));
         const scale = bg.drawW / artW;
         return { x: bg.drawX + cropX * scale, y: bg.drawY, scale };

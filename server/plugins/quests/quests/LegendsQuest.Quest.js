@@ -703,7 +703,9 @@ module.exports = function registerLegendsQuest(api) {
   const forgingBowl = new WeakMap();
 
   function smithGoldenBowl(player) {
-    if (!held(player, SKETCH)) {
+    // Wiki (Gold bowl, Sketch): the sketch is needed during the quest only. The Wiki's failure chance
+    // (with or without the sketch) has no published rate, so it is still not modelled.
+    if (!quest.isComplete(player) && !held(player, SKETCH)) {
       player.sendMessage("You don't know what vessel to make. Gujuo could draw you a sketch.");
       return;
     }

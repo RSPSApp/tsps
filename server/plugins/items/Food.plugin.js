@@ -352,6 +352,8 @@ function applyFood(player, food, random = Math.random, foodEvent = {}) {
   if (food.then) scheduleSecondHeal(player, food.then, foodEvent.itemId);
   const healMessage = food.healMessage === undefined ? HEAL_MESSAGE : food.healMessage;
   if (healed > 0 && healMessage) after.push(healMessage);
+  // A food whose heal line carries its taste says the taste alone when it heals nothing (cooked mystery meat).
+  else if (healed <= 0 && food.fullHealthMessage) after.push(food.fullHealthMessage);
   if (food.afterMessage) after.push(food.afterMessage);
   return after;
 }

@@ -6,7 +6,7 @@ const STANDARD = 1;
 const CLASSIC_F2P = 2;
 const BINDING_ONLY = 3;
 const DISABLED = 4;
-const SUPPORT = "Standard combat: the 20 strike, bolt, blast, wave and surge spells plus manual Confuse, Weaken, Curse, Bind, Snare and Entangle (26 finite combat spells, not the complete Standard spellbook). Cast unarmed or with basic/elemental staves; use an empty offhand or an elemental tome. Other combat spells, casting weapons/offhands and magical specials are unsupported.";
+const SUPPORT = "Standard combat: the 20 strike, bolt, blast, wave and surge spells plus manual Confuse, Weaken, Curse, Bind, Snare, Entangle, Vulnerability, Enfeeble and Stun, manual Saradomin Strike, Claws of Guthix and Flames of Zamorak, and Iban Blast and Magic Dart with their existing manual/autocast routes (34 finite combat spells, not the complete Standard spellbook). In Standard, cast unarmed or with basic/elemental staves, the basic Saradomin, Guthix and Zamorak staves, the four Iban staff variants or plain Slayer's staff or the exact master wand (6914) or the exact apprentice wand (6910) or the exact beginner wand (6908); use an empty offhand or an elemental tome. God spells require their matching basic god staff and manual targeting. Other combat spells, casting weapons/offhands and magical specials are unsupported.";
 const ACCOUNTING = "Runes, entangle sacks and tome charges are used normally and are not restored by safe death, returning or leaving. In Standard-enabled battles, death, leaving and battle end discard queued battle hits without refund.";
 const BINDING_SUPPORT = "Binding only: Bind, Snare and Entangle. Cast manually with basic/elemental staves or no weapon, and an empty offhand or elemental tome. TSPS policy: other spell casts, including utility spells, are unsupported while joined to this battle. Magical specials and binding autocast are unsupported.";
 const BINDING_ACCOUNTING = "Runes, entangle sacks and tome charges are used normally and are not restored. TSPS policy: joining, rejoining, elimination, leaving and battle end discard queued incoming and still-queued outgoing hits, including Bow/Melee and pre-entry hits, without refund. Applied effects and owner self/null-source pending damage are not reversed.";
@@ -15,20 +15,43 @@ const CLASSIC_ACCOUNTING = "Canonical runes, pouch/staff supplies and tome charg
 const CLASSIC_REFUSAL = "Only the 12 elemental strike, bolt and blast spells, Confuse, Weaken, Curse and Bind are supported in Classic F2P combat.";
 const CLASSIC_MANUAL_REFUSAL = "Classic F2P combat supports manual casts only; select a spell and cast it at an opposing fighter.";
 const spells = new Set();
+const gods = new Set();
+const standardStaves = new Set();
 const classic = new Set();
 const bindings = new Set();
 const staves = new Map();
 
 function initialize() {
   spells.clear();
+  gods.clear();
+  standardStaves.clear();
   classic.clear();
   staves.clear();
   bindings.clear();
-  for (const name of ["CONFUSE", "WEAKEN", "CURSE", "BIND", "SNARE", "ENTANGLE"]) {
+  for (const name of ["CONFUSE", "WEAKEN", "CURSE", "BIND", "SNARE", "ENTANGLE", "VULNERABILITY", "ENFEEBLE", "STUN"]) {
     const spell = C.core.CombatSpells[name];
     if (!spell || typeof spell.spellId !== "function") throw new Error(`Missing canonical ${name}`);
     spells.add(spell);
     if (["BIND", "SNARE", "ENTANGLE"].includes(name)) bindings.add(spell);
+  }
+  for (const name of ["SARADOMIN_STRIKE", "CLAWS_OF_GUTHIX", "FLAMES_OF_ZAMORAK"]) {
+    const spell = C.core.CombatSpells[name];
+    if (!spell || typeof spell.spellId !== "function") throw new Error(`Missing canonical ${name}`);
+    spells.add(spell);
+    gods.add(spell);
+  }
+  for (const name of ["IBAN_BLAST", "MAGIC_DART"]) {
+    const spell = C.core.CombatSpells[name];
+    if (!spell || typeof spell.spellId !== "function") throw new Error(`Missing canonical ${name}`);
+    spells.add(spell);
+  }
+  // Exact Standard-only identities. Canonical equipment, skill and charge gates
+  // still decide cast eligibility; no new selector or weapon family is implied.
+  for (const name of ["SARADOMIN_STAFF", "GUTHIX_STAFF", "ZAMORAK_STAFF",
+    "IBANS_STAFF", "IBANS_STAFF_U_", "IBANS_STAFF_O_", "IBANS_STAFF_U_O_", "SLAYERS_STAFF", "MASTER_WAND", "APPRENTICE_WAND", "BEGINNER_WAND"]) {
+    const id = C.core.ItemIdentifiers[name];
+    if (!Number.isInteger(id) || id <= 0) throw new Error(`Missing canonical ${name}`);
+    standardStaves.add(id);
   }
   for (const element of ["WIND", "WATER", "EARTH", "FIRE"]) {
     for (const family of ["STRIKE", "BOLT", "BLAST", "WAVE", "SURGE"]) {
@@ -65,11 +88,12 @@ function accounting(mode) { return mode === CLASSIC_F2P ? CLASSIC_ACCOUNTING : m
 function supportedSpell(spell, mode = STANDARD) {
   return spell != null && (mode === CLASSIC_F2P ? classic : mode === BINDING_ONLY ? bindings : spells).has(spell);
 }
-function supportedLoadout(player) {
+function supportedLoadout(player, mode = STANDARD) {
   const equipment = player.getEquipment();
   const weapon = equipment.get(C.core.Equipment.WEAPON_SLOT)?.getId() ?? -1;
   const offhand = equipment.get(C.core.Equipment.SHIELD_SLOT)?.getId() ?? -1;
-  return (weapon <= 0 || C.core.ItemAliases.lookup(staves, weapon) === true)
+  return (weapon <= 0 || C.core.ItemAliases.lookup(staves, weapon) === true
+      || mode === STANDARD && standardStaves.has(weapon))
     && (offhand <= 0 || Tomes.getDefinition(offhand) != null);
 }
 function selectedSpell(player) {
@@ -81,12 +105,19 @@ function refusal(player, spell, rules) {
   if (!enabled(rules.magic)) return "Magic is disabled in this Clan Wars battle.";
   if (!supportedSpell(spell, rules.magic)) return rules.magic === CLASSIC_F2P ? CLASSIC_REFUSAL : rules.magic === BINDING_ONLY
     ? "Only Bind, Snare and Entangle casts are supported in this Clan Wars battle."
-    : "Only the 20 standard elemental spells plus manual Confuse, Weaken, Curse, Bind, Snare and Entangle are supported in this Clan Wars battle.";
-  if (!supportedLoadout(player)) return "For Clan Wars casting, use basic/elemental staves or no weapon, and an empty offhand or an elemental tome.";
+    : "Only the 20 standard elemental spells plus manual Confuse, Weaken, Curse, Bind, Snare, Entangle, Vulnerability, Enfeeble and Stun plus manual Saradomin Strike, Claws of Guthix and Flames of Zamorak, Iban Blast and Magic Dart are supported in this Clan Wars battle.";
+  if (!supportedLoadout(player, rules.magic)) return rules.magic === STANDARD
+    ? "For Standard Clan Wars casting, use basic/elemental staves, one of the three basic god staves, an Iban staff variant, plain Slayer's staff, the exact master wand (6914), exact apprentice wand (6910), exact beginner wand (6908) or no weapon, and an empty offhand or an elemental tome."
+    : "For Clan Wars casting, use basic/elemental staves or no weapon, and an empty offhand or an elemental tome.";
   // Area permission runs before MagicCombatMethod promotes an active autocast.
   // A native hand cast has an explicit castSpell even with autocast configured;
   // finished() clears it, so the next automatic turn is refused before payment.
   if (rules.magic === CLASSIC_F2P && player.getCombat().getCastSpell() == null) return CLASSIC_MANUAL_REFUSAL;
+  // A remembered god autocast can outlive an earlier weapon selection. Area
+  // permission runs before promotion into castSpell: require a real hand cast.
+  if (rules.magic === STANDARD && gods.has(spell) && player.getCombat().getCastSpell() == null) {
+    return "God spells support manual casts only; select a spell and cast it at an opposing fighter.";
+  }
   return null;
 }
 function canAttack(player, method, rules) {

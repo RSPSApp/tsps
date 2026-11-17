@@ -69,10 +69,14 @@ four-tick attack speed is asserted against the loaded definition.
 
 Digging with a spade (Spade, Large spade, Eastfloor spade) while standing on a Falador Park
 mole hill (loc 12202, a single walkable tile) enters the lair, as the Wiki's Mole Hole page
-describes. Using the spade on the hill does the same. Both play the shared dig animation (830)
-and move the player to (1752, 5237) 2 ticks later with the spam line "You seem to have dropped
-down into a network of mole tunnels.", as captured (rsprox_transcripts/226/01638.txt ticks
-272-274). A dig anywhere else is left to the other dig handlers and the spade's "Nothing
+describes. Using the spade on the hill does the same. Both play the shared dig animation (830,
+synth sound 1470) and open the dark-area warning (cws_warning_3, "Falador Mole Lair",
+rsprox_transcripts/227/910326.txt tick 1288). Yes, or the dig itself once the warning is turned
+off, asks "What kind of tunnels would you like to enter?" (Public. / Private.). Either choice
+plays the dig again and drops the player at (1752, 5237) one tick later with the spam line "You
+seem to have dropped down into a network of mole tunnels." (227/910326.txt ticks 1292-1295
+Public., 227/910356.txt ticks 13201-13207 Private.). Private. rents the instance below, exactly
+as Fight-privately does. A dig anywhere else is left to the other dig handlers and the spade's "Nothing
 interesting happens."
 
 The Mole Hole is a dark area (Darkness.plugin.js; Wiki, Light source: "Light source required"):
@@ -147,6 +151,8 @@ ticks after a kill while the player is there. Leaving, dying or teleporting ends
 inside logs back in by the spade. A death there leaves its grave by the spade, outside the entrance
 (Wiki, Instance, Giant Mole row: "Grave outside instance entrance"). Look-inside counts only the public lair.
 
-Ours: no Giant Mole payment was recorded, so the payment and short-of-coins lines reuse the
-Sarachnis instance's wording, and no "dropped down" line is sent. Not done: the public lair's
+Private. from a mole hill reaches the same instance a tick after the choice and sends the
+"dropped down" spam line, as captured (227/910356.txt tick 13207); Fight-privately on the spade
+sends none. Ours: no Giant Mole payment was recorded, so the payment and short-of-coins lines
+reuse the Sarachnis instance's wording. Not done: the public lair's
 baby moles in an instance.

@@ -4,7 +4,9 @@ const { ShortcutAnim, hops } = require("./Builders.Agility");
  * The Wilderness Agility Course entrance: the south door and the north gate pair are balance
  * gates. rsprox 449/450 show each opening as a two-tick loc swap: an inviswall on the threshold,
  * the open leaf on the tile behind it, then the closed loc back. The player edges along the ridge
- * itself, one tile a tick, between the start and end lines.
+ * itself, one tile a tick, between the start and end lines, and passes through both ends: going in,
+ * the door opens with the first step and the north gates with the last (rsprox 449 ticks 16 and 30,
+ * 451 ticks 31 and 45), so the player never walks into a closed gate.
  */
 const RIDGE = Object.freeze({
   door: 23555, // balancegate52a
@@ -24,6 +26,7 @@ const RIDGE = Object.freeze({
   endIn: "You skillfully balance across the ridge...",
   endOut: "You skillfully balance along the ridge...",
   closeTicks: 2,
+  openSound: 62, // synth_sound on each opening (449 ticks 16 and 30, 451 ticks 45 and 49)
 });
 
 function ridgeLocation(core, [x, y, z]) {
@@ -45,7 +48,8 @@ function ridgeObject(core, context, id, tile) {
 }
 
 /**
- * Swaps the closed locs for their open pair, then puts the closed locs back two ticks later.
+ * Swaps the closed locs for their open pair with the opening sound, then puts the closed locs back
+ * two ticks later, silently.
  * Every closed loc is found before anything changes, so a missing loc leaves the map untouched.
  */
 function ridgeSwap(context, closedTiles, openTiles) {
@@ -57,6 +61,7 @@ function ridgeSwap(context, closedTiles, openTiles) {
     new core.GameObject(id, ridgeLocation(core, tile), 0, face, area));
   for (const object of closed) core.ObjectManager.deregister(object, true);
   for (const object of opened) core.ObjectManager.register(object, true);
+  core.Sounds.sendSound(context.player, new core.Sound(RIDGE.openSound, 1, 0, 0));
   const task = new core.Task(RIDGE.closeTicks, { task: "wilderness:ridge-gate" });
   task.execute = () => {
     task.stop();
@@ -92,25 +97,32 @@ function openRidgeGates(context) {
 
 /** Wilderness shortcut scripts (agility-shortcuts.json). */
 module.exports = {
-  /** Into the course: open the south door, then edge north along the ridge. */
+  /**
+   * Into the course: open the south door, edge north along the ridge to the gates, then open
+   * them and step through on the same tick as the end line.
+   */
   wildernessRidgeIn: () => ({
     end: { spam: RIDGE.endIn },
     steps: [
       { msg: { spam: RIDGE.start } },
       { run: openRidgeDoor },
-      { walk: [[RIDGE.gateLeftTile[0], RIDGE.gateLeftTile[1]]] },
+      { walk: [[RIDGE.gateOpenLeftTile[0], RIDGE.gateOpenLeftTile[1]]] },
+      { run: openRidgeGates },
+      { walk: [[RIDGE.gateLeftTile[0], RIDGE.gateLeftTile[1]]], arrive: true },
     ],
   }),
 
-  /** Out of the course: open the north gates, edge south, then the south door behind the player. */
+  /** Out: finish balancing at3918, then cross the south door on the next tick (233/00451). */
   wildernessRidgeOut: () => ({
-    end: { spam: RIDGE.endOut },
     steps: [
       { msg: { spam: RIDGE.start } },
       { run: openRidgeGates },
       { walk: [[2998, 3918]] },
+      { render: null },
+      { msg: { spam: RIDGE.endOut } },
+      { wait: 1 },
       { run: openRidgeDoor },
-      { walk: [[RIDGE.doorOpenTile[0], RIDGE.doorOpenTile[1]]] },
+      { walk: [[RIDGE.doorOpenTile[0], RIDGE.doorOpenTile[1]]], tilesPerTick: 2, arrive: true, traversalType: 1 },
     ],
   }),
 

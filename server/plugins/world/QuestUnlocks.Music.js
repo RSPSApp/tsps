@@ -12,12 +12,21 @@
 const QUEST_HINT = /^(?:during|after completing) (?:the )?(.+?) (?:quest|miniquest|quests)\.?$/i;
 
 /** Lower-case, no leading "The", punctuation folded to spaces: "Another Slice of H.A.M." == "...H.A.M". */
+// Memoised: the names are the cache's hints and the registered quests, a fixed set, and each
+// completion check normalises every hint name again for each quest.
+const normalisedQuestNames = new Map();
 function normaliseQuestName(name) {
-  return String(name ?? "")
-    .toLowerCase()
-    .replace(/^the\s+/, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  const key = String(name ?? "");
+  let plain = normalisedQuestNames.get(key);
+  if (plain === undefined) {
+    plain = key
+      .toLowerCase()
+      .replace(/^the\s+/, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+    normalisedQuestNames.set(key, plain);
+  }
+  return plain;
 }
 
 /** The hint's quest names, or undefined for an area, boss, minigame or event hint. */

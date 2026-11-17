@@ -32,10 +32,10 @@ function herbalist(t, level) {
   p.setIndex(next++); p.setUsername('serum' + next); p.setRegistered(true); p.setLocation(new core.Location(3481, 3279, 0)); p.needsPlacement = false;
   p.getSkillManager().setMaxLevel(core.Skill.HERBLORE, level, true).setCurrentLevel(core.Skill.HERBLORE, level, true);
   const c = new ClientConnection(channel); c.player = p;
-  const messages = [];
+  const messages = [], typedMessages = [];
   const sender = p.getPacketSender(), typed = sender.sendTypedMessage.bind(sender);
   t.mock.method(sender, 'sendMessage', (m) => { messages.push(m); return sender; });
-  t.mock.method(sender, 'sendTypedMessage', (type, m, ...r) => { messages.push(m); return typed(type, m, ...r); });
+  t.mock.method(sender, 'sendTypedMessage', (type, m, ...r) => { messages.push(m); typedMessages.push([type, m]); return typed(type, m, ...r); });
   t.after(() => { PM.emitPlayerLogout({ player: p, username: p.getUsername() }); p.setRegistered(false); });
   quest.setStage(p, 5);
   const inv = p.getInventory(), I = core.ItemIdentifiers;
@@ -44,7 +44,7 @@ function herbalist(t, level) {
   inv.setItem(13, new core.Item(I.ASHES, 1));
   const raw = () => p.getSkillManager().skills.experience[core.Skill.HERBLORE.getIndex()];
   const use = async () => { await c.dispatch([{ type: 'inventory_use_on', itemId: I.ASHES, slot: 13, target: { kind: 'inventory', slot: 9 } }]); c.processTurnPackets(); };
-  return { p, inv, messages, raw, use };
+  return { p, inv, messages, typedMessages, raw, use };
 }
 test('at 15 Herblore: Serum 207 (3) in the tarromin vial\'s slot, 50 XP, the captured line', async (t) => {
   const f = herbalist(t, 15);
@@ -58,13 +58,33 @@ test('at 15 Herblore: Serum 207 (3) in the tarromin vial\'s slot, 50 XP, the cap
   assert.ok(f.messages.includes('You make serum 207.'), f.messages.join(' | '));
   assert.equal(quest.getStage(f.p), 10, 'the quest moves on');
 });
-test('at 14 Herblore nothing is made', async (t) => {
+test('at 14 Herblore nothing is made, and the Herblore combine refusal opens', async (t) => {
   const f = herbalist(t, 14);
+  const before = f.raw();
   await f.use();
   const I = core.ItemIdentifiers;
   assert.equal(f.inv.forSlot(9)?.getId(), I.TARROMIN_POTION_UNF_);
   assert.equal(f.inv.getAmount(I.ASHES), 1);
   assert.equal(quest.getStage(f.p), 5);
+  assert.equal(f.raw() - before, 0, 'no XP');
+  // The Herblore skill's refusal: a messagebox with its type=mesbox chat line (rsprox_transcripts/227/910269.txt,
+  // "You need a Herblore level of 63 to combine those." for another mix), here with serum 207's level 15 (Wiki).
+  const line = 'You need a Herblore level of 15 to combine those.';
+  assert.deepEqual(f.typedMessages.filter(([, m]) => m === line), [[core.ChatType.MESBOX, line]]);
+  assert.ok(!f.messages.includes('You make serum 207.'));
+  assert.equal(f.p.getDialogueManager().isActive(), true, 'the refusal opens a messagebox');
+  // Nothing carries on in the background.
+  for (let i = 0; i < 4; i++) core.TaskManager.process();
+  assert.equal(f.inv.forSlot(9)?.getId(), I.TARROMIN_POTION_UNF_);
+});
+
+// Wiki (Serum 207): the level is boostable, so 14 boosted to 15 makes it.
+test('14 Herblore boosted to 15 makes it', async (t) => {
+  const f = herbalist(t, 14);
+  f.p.getSkillManager().setCurrentLevel(core.Skill.HERBLORE, 15, true);
+  await f.use();
+  assert.equal(f.inv.forSlot(9)?.getId(), core.ItemIdentifiers.SERUM_207_3_);
+  assert.ok(!f.typedMessages.some(([, m]) => /to combine those/.test(m)));
 });
 
 // #3824 review: no Make-X; it carries on until the vials or ashes run out (Wiki), the second two ticks after the first

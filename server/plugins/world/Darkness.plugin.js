@@ -70,9 +70,12 @@ const LUMBRIDGE_SWAMP_CAVES_BOUNDS = [new Boundary(3136, 3264, 9536, 9600, 0)];
 // my2arm_fire_mole). The bounds are GiantMole's Look-inside lair.
 const MOLE_HOLE_BOUNDS = [new Boundary(1720, 1795, 5120, 5250, 0)];
 
-/** Each dark area, with the varbit of a Fire of Eternal Light that lights it for good, if any. */
+/**
+ * Each dark area, with the varbit of a Fire of Eternal Light that lights it for good, if any (Wiki: Fire of
+ * Eternal Light, an inextinguishable light source in its area; FireOfEternalLight builds them).
+ */
 const DARK_AREAS = [
-  { name: "Lumbridge Swamp Caves", bounds: LUMBRIDGE_SWAMP_CAVES_BOUNDS, fireVarbit: null },
+  { name: "Lumbridge Swamp Caves", bounds: LUMBRIDGE_SWAMP_CAVES_BOUNDS, fireVarbit: "my2arm_fire_lumb" },
   { name: "Mole Hole", bounds: MOLE_HOLE_BOUNDS, fireVarbit: "my2arm_fire_mole" },
 ];
 

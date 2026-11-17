@@ -58,7 +58,7 @@
     {"name": "Cooked larupia", "heal": 6, "then": {"ticks": 7, "heal": 5}},
     {"name": "Cooked meat", "heal": 3},
     {"name": "Cooked moonlight antelope", "heal": 14, "then": {"ticks": 7, "heal": 12, "curePoison": true}},
-    {"name": "Cooked mystery meat", "heal": 5},
+    {"name": "Cooked mystery meat", "heal": 5, "message": "You eat the meat.", "healMessage": "It heals some health, and tastes concerningly nice.", "fullHealthMessage": "It tastes concerningly nice."},
     {"name": "Cooked oomlie wrap", "heal": 14},
     {"name": "Cooked pyre fox", "heal": 11, "then": {"ticks": 7, "heal": 8}},
     {"name": "Cooked rabbit", "heal": 5, "message": "You eat the rabbit."},

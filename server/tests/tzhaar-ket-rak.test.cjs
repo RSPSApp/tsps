@@ -74,7 +74,9 @@ function fakeNpc(id, x, y) {
     setArea: () => {},
     isNpc: () => true,
     getAsNpc: () => npc,
-    getLocation: () => loc(x, y),
+    getLocation: () => npc.tile,
+    moveTo: (to) => { npc.tile = to; },
+    getMovementQueue: () => ({ reset() { npc.stops = (npc.stops ?? 0) + 1; } }),
     getSize: () => definition.getSize?.() ?? 1,
     getDefinition: () => definition,
     getHitpoints: () => npc.hp,
@@ -88,9 +90,11 @@ function fakeNpc(id, x, y) {
     getCombat: () => ({
       setAttackDelay: (t) => { npc.attackDelay = t; },
       attack: (t) => { npc.target = t; },
+      getLastAttack: () => ({ reset: () => { npc.lastAttackResets = (npc.lastAttackResets ?? 0) + 1; } }),
       getTarget: () => npc.fighting ?? npc.target,
     }),
   };
+  npc.tile = loc(x, y);
   return npc;
 }
 
@@ -326,7 +330,7 @@ test("a challenge's Jads: as many as its number, on its recorded tiles and facin
   Challenge.end(player);
 });
 
-test('Yt-HurKot: five at half health, once; they walk over and heal 15-24 every 4 ticks in reach', () => {
+test('Yt-HurKot: five at half health, once; scattered round it, they walk beside it and heal about 10 every 4 ticks each, until drawn off', () => {
   const player = fakePlayer();
   const challenge = begin(player, 1);
   const jad = spawned[0];
@@ -337,26 +341,70 @@ test('Yt-HurKot: five at half health, once; they walk over and heal 15-24 every 
   assert.equal(spawned.length, 6);
   const healers = spawned.slice(1);
   assert.ok(healers.every((npc) => npc.getId() === Common.ids.npcs.healer));
-  assert.ok(walks.length >= 5, 'out of reach, they walk to it');
-  healers.forEach((healer) => { healer.distance = 1; });
+  const base = jad.getLocation();
+  const [west, south, east, north] = [base.getX() - 1, base.getY() - 1, base.getX() + 5, base.getY() + 5];
+  const beside = (x, y) => ((x === west || x === east) && y > south && y < north) || ((y === south || y === north) && x > west && x < east);
+  for (const healer of healers) {
+    const at = healer.getLocation();
+    const out = Math.max(base.getX() - at.getX(), at.getX() - base.getX() - 4, base.getY() - at.getY(), at.getY() - base.getY() - 4);
+    assert.ok(out >= 2 && out <= 4, `scattered 2-4 tiles out (${out})`);
+    const walk = walks.find(([npc]) => npc === healer);
+    assert.ok(walk && beside(walk[1], walk[2]), 'each walks to a tile beside it, not a corner');
+  }
+  assert.equal(new Set(healers.map((healer) => `${healer.getLocation().getX()},${healer.getLocation().getY()}`)).size, 5, 'each on its own tile');
+  const sides = [[west, base.getY() + 1], [west, base.getY() + 3], [base.getX() + 1, south], [base.getX() + 3, north], [east, base.getY() + 2]];
+  healers.forEach((healer, index) => healer.moveTo(loc(...sides[index])));
   const original = core.World.getProcessCycle;
   let cycle = 400;
   core.World.getProcessCycle = () => cycle;
+  const at = (now, hp = 100) => { cycle = now; jad.hp = hp; tick(challenge); };
   try {
-    tick(challenge);
-    assert.equal(jad.heals.length, 5);
-    assert.ok(jad.heals.every((amount) => amount >= 15 && amount <= 24));
-    cycle = 401;
-    tick(challenge);
+    at(400);
+    assert.equal(jad.heals.length, 5, 'each heals as it gets there');
+    assert.ok(jad.heals.every((amount) => amount >= 5 && amount <= 15));
+    assert.ok(healers.every((healer) => healer.stops === 1), 'and stops there');
+    at(401);
     assert.equal(jad.heals.length, 5, 'every 4 ticks');
-    jad.hp = 350;
-    cycle = 404;
-    tick(challenge);
-    assert.equal(jad.heals.length, 5, 'no healing at full');
-    jad.hp = 100;
+    at(404, 350);
+    assert.equal(jad.heals.length, 5, 'nothing to heal at full');
+    assert.ok(healers.every((healer) => healer.anims.filter((id) => id === 2639).length === 2), 'but they go through the motion');
+    // One arriving late keeps its own count.
+    const late = fakeNpc(Common.ids.npcs.healer, west, south);
+    challenge.jads[0].healers.push(late);
+    at(405);
+    assert.equal(jad.heals.length, 5, 'from a corner it steps to a side first');
+    assert.deepEqual(walks.at(-1).slice(1), [west, base.getY()]);
+    late.moveTo(loc(west, base.getY()));
+    at(406);
+    assert.equal(jad.heals.length, 6);
+    at(408);
+    assert.equal(jad.heals.length, 11);
+    at(410);
+    assert.equal(jad.heals.length, 12, 'the late one 4 ticks on from its own arrival');
+    // Drawn off: never heals again, even with the fight over.
+    healers[0].fighting = { player };
+    at(412);
+    assert.equal(jad.heals.length, 16);
+    healers[0].fighting = null;
+    healers[0].target = null;
+    at(416);
+    assert.equal(jad.heals.length, 21, 'the drawn healer stays out (the late one due again too)');
+    assert.equal(healers[0].target, player, 'and goes back for the player when its combat lets go');
+    // A hit on a healer draws it off as it lands, even with no target of its own.
+    cycle = 419;
+    Challenge.dealt({ player, target: healers[1], hit: { getCombatType: () => core.CombatType.RANGED, getDelay: () => 2 } });
+    at(420);
+    assert.equal(jad.heals.length, 26, 'it heals while the hit is in flight');
+    assert.equal(healers[1].target, null);
+    at(421);
+    assert.equal(healers[1].target, null, 'still in flight: a hit on an NPC lands a tick after its delay');
+    at(422);
+    assert.equal(healers[1].target, player, 'the hit landed: it goes for the player');
+    at(424);
+    assert.equal(jad.heals.length, 30, 'and heals no more');
     healers.forEach((healer) => { healer.hp = 0; });
-    cycle = 408;
-    tick(challenge);
+    late.hp = 0;
+    at(418);
     assert.equal(spawned.length, 6, 'they do not come again');
   } finally {
     core.World.getProcessCycle = original;

@@ -5,7 +5,9 @@ const fs = require("node:fs");
 const { fork } = require("node:child_process");
 const { resolveAccess, originAllowed } = require("../plugins/tools/worldadmin/Access.WorldAdmin");
 const { createRequestHandler, HttpError, send } = require("../plugins/tools/worldadmin/Http.WorldAdmin");
+const { botEditorRoutes } = require("../plugins/tools/worldadmin/BotEditor.WorldAdmin");
 const { playerRoutes } = require("../plugins/tools/worldadmin/Players.WorldAdmin");
+const { readPluginZip, downloadPluginRelease, savePluginZip, deletePluginZip } = require("../plugins/tools/worldadmin/PluginZip.WorldAdmin");
 const { createPageServer, watchCertificate } = require("../plugins/tools/worldadmin/Tls.WorldAdmin");
 
 if (process.argv[2] === "--runner") {
@@ -40,6 +42,49 @@ if (process.argv[2] === "--runner") {
   let restartAfterStop = false;
   let lastCatalogue;
   let closing = false;
+  const definitions = path.dirname(tokenFile);
+  const pluginDirectory = path.resolve("plugins");
+  const offlineRoutes = new Set(["/api/preview", "/api/apply", "/api/plugins/import", "/api/plugins/install", "/api/plugins/delete"]);
+
+  function offline() {
+    return phase === "stopped" && !runner;
+  }
+
+  function offlineConfig() {
+    if (!offline()) throw new HttpError(409, "The game server is changing state.");
+    require("ts-node/register/transpile-only");
+    const { WorldConfigStore } = require("../src/main/typescript/elvarg/game/definition/WorldConfigStore");
+    const { WorldConfigCatalog } = require("../src/main/typescript/elvarg/plugins/WorldConfigCatalog");
+    const layers = WorldConfigStore.read(definitions);
+    const catalog = WorldConfigCatalog.build(pluginDirectory, layers, true);
+    return { WorldConfigStore, WorldConfigCatalog, layers, catalog };
+  }
+
+  function offlinePlan({ changes, localHash }, apply = false) {
+    const { WorldConfigStore, layers, catalog } = offlineConfig();
+    if (layers.localError || layers.localHash !== localHash) {
+      throw new HttpError(409, "world.local.json changed or could not be read. Reload the panel.");
+    }
+    const plan = WorldConfigStore.plan(layers, changes, catalog);
+    if (!apply) return { status: 200, body: plan };
+    if (plan.errors.length) return { status: 400, body: plan };
+    try {
+      WorldConfigStore.write(definitions, plan.nextLocal, layers.localHash);
+    } catch (error) {
+      throw new HttpError(/changed since loaded|fix it by hand/.test(error.message) ? 409 : 500, error.message);
+    }
+    return { status: 200, body: { applied: "written", restartNeeded: true, plan } };
+  }
+
+  function installOffline(release) {
+    const { WorldConfigCatalog } = offlineConfig();
+    const { PluginManager, pluginNameFromFile } = require("../src/main/typescript/elvarg/plugins/PluginManager");
+    const knownBundled = (lastCatalogue?.catalog.plugins ?? []).filter(plugin => !plugin.file.startsWith("imported/"));
+    const files = fs.existsSync(pluginDirectory) ? PluginManager.discoverPluginFiles(pluginDirectory, PluginManager.MAX_PLUGIN_DEPTH) : [];
+    savePluginZip(pluginDirectory, release, [...knownBundled, ...files.map(file => ({ file, name: pluginNameFromFile(file) }))]);
+    WorldConfigCatalog.invalidate();
+    return { status: 201, body: { name: release.manifest.name, version: release.manifest.version } };
+  }
 
   function start() {
     phase = "starting";
@@ -111,6 +156,15 @@ if (process.argv[2] === "--runner") {
       return { status: 200, body: { ...data, serverStatus: phase } };
     } catch {
       if (phase === "online") phase = "starting";
+      if (offline()) {
+        const { layers, catalog } = offlineConfig();
+        const importedNames = new Set(catalog.plugins.map(plugin => plugin.name));
+        return { status: 200, body: {
+          catalog: { ...catalog, world: [], options: catalog.options.filter(option => importedNames.has(option.owner)) },
+          layers: { localHash: layers.localHash, localExists: layers.localExists, localError: layers.localError },
+          offlinePluginEditing: true, mode: "manual", onlinePlayers: 0, serverStatus: phase,
+        } };
+      }
       return { status: 200, body: {
         catalog: lastCatalogue?.catalog ?? { plugins: [], options: [], world: [], membersWorld: true },
         layers: lastCatalogue?.layers ?? { localHash: "", localExists: false },
@@ -120,7 +174,14 @@ if (process.argv[2] === "--runner") {
   }
 
   async function dispatch(request, response, url) {
+    if (url.pathname === "/bot-editor" || url.pathname === "/bot-graph") {
+      if (request.method !== "GET") throw new HttpError(405, "Method not allowed");
+      send(response, 302, "", { Location: "/?view=bots&edit=1" });
+      return true;
+    }
+    if (await botEditorRoutes(request, response, url)) return true;
     if (url.pathname === "/api/catalog") return false;
+    if (offline() && offlineRoutes.has(url.pathname)) return false;
     if (!url.pathname.startsWith("/api/")) return false;
     if (url.pathname === "/api/server/shutdown") throw new HttpError(404, "Not found");
     if (request.method !== "GET" && !originAllowed(request)) throw new HttpError(403, "Cross-origin request refused");
@@ -165,7 +226,19 @@ if (process.argv[2] === "--runner") {
   // WORLD_ADMIN_TLS_CERT and _KEY make this listener https; the game behind the pipe stays http.
   const page = createPageServer(access.tls, createRequestHandler({
     token: access.token, loopback: access.loopback, port: () => server.address().port,
-  }, { catalog: catalogue, dispatch }, []));
+  }, {
+    catalog: catalogue, dispatch,
+    preview: body => offlinePlan(body),
+    apply: body => offlinePlan(body, true),
+    importPlugin: body => installOffline(readPluginZip(body)),
+    installPlugin: async ({ packageId, version }) => installOffline(await downloadPluginRelease(packageId, version)),
+    deletePlugin: ({ packageId }) => {
+      const { WorldConfigCatalog } = offlineConfig();
+      deletePluginZip(pluginDirectory, packageId);
+      WorldConfigCatalog.invalidate();
+      return { status: 200, body: { deleted: true } };
+    },
+  }, []));
   if (page.error) {
     console.error(`[local-panel] ${page.error}`);
     process.exit(1);

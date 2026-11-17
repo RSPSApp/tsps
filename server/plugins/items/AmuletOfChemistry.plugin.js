@@ -23,6 +23,7 @@ const EXTRA_DOSE_CHANCE = 0.05;
 const MAX_DOSES = 4;
 const UNFINISHED_POTION = /\(unf\)$/i;
 const CHARGE_WORDS = { 1: "one charge" };
+const attachAlchemist = require("./alchemistsamulet/Alchemist.AmuletOfChemistry");
 /**
  * Products outside the cache's potion dose families that the amulet still upgrades, by cache name. Wiki:
  * "Despite not being a potion, the amulet also affects Haemostatic dressing, creating 4 'doses' instead of 3."
@@ -50,7 +51,8 @@ function chargeText(left) {
 
 /** The product with one dose more, when it is a finished potion of fewer than four doses. */
 function withExtraDose(productId) {
-  if (UNFINISHED_POTION.test(core.ItemDefinition.forId(productId)?.getName?.() ?? "")) return null;
+  const name = core.ItemDefinition.forId(productId)?.getName?.() ?? "";
+  if (UNFINISHED_POTION.test(name) || /^Guthix rest\(/i.test(name)) return null;
   if (nonPotionExtraDoses.has(productId)) return nonPotionExtraDoses.get(productId);
   const request = { itemId: productId, family: null };
   api.emitCustomEvent("potions:dose-family", request);
@@ -61,7 +63,7 @@ function withExtraDose(productId) {
 }
 
 /**
- * The doses the brew came out with: recordings 4211 and 4213 only show 3-dose mixes made 4-dose
+ * The doses the brew came out with: recording 4213 shows 3-dose mixes made 4-dose
  * ("...create a 4-dose potion."); a 1- or 2-dose input names its own count (Ours: the Wiki's
  * Mechanics give the extra dose for any input under 4, and no message for it). Haemostatic
  * dressing, which has no dose family, comes as 4.
@@ -115,7 +117,8 @@ function onMix(request) {
  * potion with 4 doses anyway clears `extraDose` (Wiki: no benefit for potions that always come with 4 doses).
  */
 function onMade(made) {
-  if (made.mix?.extraDose === true) spendCharge(made);
+  // The upgraded amulet uses the same cancellable dose flag, but owns its own item charge.
+  if (made.mix?.extraDose === true && !made.mix.alchemistExtraDose) spendCharge(made);
 }
 
 function options({ player }) {
@@ -167,6 +170,7 @@ function initialize(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
   amuletIds = new Set([core.ItemIdentifiers.AMULET_OF_CHEMISTRY]);
+  attachAlchemist.initialize(pluginApi, withExtraDose);
   nonPotionExtraDoses = new Map(Object.entries(NON_POTION_EXTRA_DOSES).map(([from, to]) => {
     const fromId = core.CacheDefinitions.getObjId(from), toId = core.CacheDefinitions.getObjId(to);
     if (fromId == null || toId == null) throw new Error(`Missing amulet of chemistry product: ${from} or ${to}`);
@@ -176,7 +180,7 @@ function initialize(pluginApi) {
 
 module.exports = {
   name: "AmuletOfChemistry",
-  description: "Amulet of chemistry: 5% chance of an extra potion dose when mixing in Herblore, five charges per amulet, with Options and Break.",
+  description: "Amulet of chemistry: 5% extra-dose chance with five charges. Alchemist's amulet: 15% chance, charging, noted refunds and persistent item charges.",
   members: true,
   _test: { initialize, onMix, onMade, withExtraDose, breakClicked, CHARGES_ATTRIBUTE, STOP_ON_BREAK_ATTRIBUTE, MAX_CHARGES },
   register(api) {
@@ -186,5 +190,6 @@ module.exports = {
     api.onCustomEvent("herblore:mix", onMix);
     api.onCustomEvent("herblore:made", onMade);
     api.onItemAction("Amulet of chemistry", { Options: options, Break: breakOption });
+    attachAlchemist(api);
   },
 };

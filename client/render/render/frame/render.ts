@@ -1122,7 +1122,8 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                         ) {
                             break;
                         }
-                        if (!host.shouldRenderPlayerIndex(i)) continue;
+                        // Every player's splats draw, not only the one whose model the tile shows.
+                        if (pe.getIsHidden(i)) continue;
 
                         // Get server ID for this player
                         const serverId = pe.getServerIdForIndex?.(i);
@@ -1323,7 +1324,8 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                             }
                             const ecsId = map.npcEntityIds[j] | 0;
                             if (ecsId <= 0 || seen.has(ecsId)) continue;
-                            if (!host.shouldRenderNpcFromMap(map, ecsId)) continue;
+                            // Overheads draw for every NPC on a tile; only the model is one per tile.
+                            if (!host.shouldRenderNpcOwnershipFromMap(map, ecsId) || !host.getEffectiveNpcType(npcEcs.getNpcTypeId(ecsId) | 0)) continue;
                             if (!npcEcs.isActive(ecsId)) continue;
                             if ((npcEcs.getWorldViewId(ecsId) | 0) >= 0) continue; // the deck pass below
                             seen.add(ecsId);

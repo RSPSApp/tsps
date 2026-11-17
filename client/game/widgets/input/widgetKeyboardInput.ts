@@ -1,3 +1,4 @@
+import { processWidgetShortcutInput } from "./widgetShortcutInput";
 import { chatHistory } from "../../../rs/cs2/ChatHistory";
 import type { ScriptEvent } from "../../../rs/cs2/Cs2Vm";
 import { VARBIT_KEYBINDING_ESC_TO_CLOSE } from "../../../common/vars";
@@ -62,6 +63,11 @@ export function processWidgetKeyboardInput(
     widgetManager: WidgetManager,
 ): void {
     const { input, mx, my } = frame;
+    const shortcutMode = deps.getCs2Vm().widgetKeyInputMode;
+    const dialogOwnsKeys = deps.getCs2Vm().inputDialogType > 1 ||
+        deps.getPendingInputDialogAction() !== null || deps.getPendingTradeQuantityAction() !== null;
+    const shortcutKeys = !dialogOwnsKeys && !isConstructionOpen(widgetManager)
+        ? processWidgetShortcutInput(deps, frame, widgetManager) : new Set<number>();
     processWidgetKeyDownUpInput(deps, frame, widgetManager);
     if (input.keyEvents.length > 0) {
         if (processConstructionKeyboardInput(deps, input, widgetManager)) return;
@@ -174,6 +180,7 @@ export function processWidgetKeyboardInput(
         const OSRS_KEY_ESCAPE = 13;
         if (
             input.keyEvents.some((keyEvent) => keyEvent.keyTyped === OSRS_KEY_ESCAPE) &&
+            !shortcutKeys.has(OSRS_KEY_ESCAPE) && (shortcutMode === 0 || shortcutMode === undefined) &&
             deps.getVarManager().getVarbit(VARBIT_KEYBINDING_ESC_TO_CLOSE) !== 0
         ) {
             if (closeOpenModal(widgetManager, deps.getCs2Vm())) return;

@@ -11,6 +11,8 @@ const Resurrection = require("./tzhaar/Resurrection.TzhaarFightCaves");
 
 const ATTR_WAVE = "tzhaar:fight-cave-wave";
 const ATTR_ROTATION = "tzhaar:fight-cave-rotation";
+/** ::fightcavewave outside a run: the wave the next run starts at (not saved). */
+const ATTR_START_WAVE = "tzhaar:fight-cave-start-wave";
 const WAVE_MESSAGE_COLOUR = "ef1020";
 const FINAL_WAVE = 63;
 const DEFEATED_MESSAGE = "You have been defeated!";
@@ -25,6 +27,8 @@ const HEALER_LOSES_PLAYER_AT = 10;
 const HEALER_LOSES_PLAYER_TICKS = 9;
 const ATTR_HEALER_LAST_HIT = "tzhaar:healer-last-hit";
 const HEAL_GRAPHIC = 444; // TZHAAR_HEAL
+// Combat lets a target go at 40 tiles (CombatFactory.validTarget); a little inside it.
+const TARGET_DROP_DISTANCE = 36;
 const TZREK_JAD = /^TzRek-Jad$/;
 // rsprox 236/03960.txt:6017, 227/02118.txt:4620 (the Inferno's identical request line).
 const LOGOUT_PAUSED = "<col=ef1020>Your logout request has been received. The minigame will be paused at the end of this wave."
@@ -215,6 +219,31 @@ function tendJad(player, session) {
   }
 }
 
+/**
+ * The cave is 64 tiles across, and combat drops a target 40 or more tiles off, so a monster that
+ * spawns at the far end from the player (the south spawn is 50 tiles from the entrance) let go
+ * at once and stood there, holding up the wave. Wave monsters never lose the player: one without
+ * a target walks towards them until it is close enough to take them on again. Healers have their
+ * own rules (tendJad).
+ */
+function keepAfterPlayer(player, npc) {
+  if (npc.getId() === core.NpcIdentifiers.YT_HURKOT || !npc.hasFlag("combat:keep-target")) return;
+  const combat = npc.getCombat();
+  if (combat.getTarget() != null) {
+    // The engine refills an NPC not hit for 20 seconds by a tenth a tick, fighting or not: Jad,
+    // left alone while his healers were dealt with, was back to full in a few ticks. One still
+    // after the player is in combat.
+    combat.getLastAttack().reset();
+    return;
+  }
+  const at = player.getLocation();
+  if (npc.getLocation().getDistance(at) < TARGET_DROP_DISTANCE) {
+    combat.attack(player);
+  } else if (npc.getMovementQueue().size() === 0) {
+    core.PathFinder.calculateWalkRoute(npc, at.getX(), at.getY());
+  }
+}
+
 function healerHit({ target }) {
   if (target?.isNpc?.() && target.getId() === core.NpcIdentifiers.YT_HURKOT) {
     target.setAttribute(ATTR_HEALER_LAST_HIT, core.World.getProcessCycle());
@@ -240,7 +269,10 @@ function processRun({ player }) {
   tendJad(player, session);
   CombatAchievements.tick(player);
   for (const npc of session.npcs) {
-    if (npc.getHitpoints() > 0) continue;
+    if (npc.getHitpoints() > 0) {
+      keepAfterPlayer(player, npc);
+      continue;
+    }
     session.npcs.delete(npc);
     splitTzKek(player, session, npc);
   }
@@ -251,7 +283,8 @@ function processRun({ player }) {
     return;
   }
   if (session.nextWaveAt === -1 && session.npcs.size === 0 && session.wave < FINAL_WAVE) {
-    session.wave++;
+    session.wave = session.nextWave ?? session.wave + 1;
+    session.nextWave = null;
     player.setAttribute(ATTR_WAVE, session.wave);
     session.nextWaveAt = cycle + WAVE_DELAY_TICKS;
     if (session.logoutRequested) {
@@ -313,13 +346,41 @@ function rescueGroundItems(player, area) {
     // A stack picked up this tick is only marked pending until the next ground-item pass: it is in the inventory
     // already, and moving it to the exit as well gave it twice (Gallery.ChampionsChallenge skips these too).
     if (item.isPendingRemoval?.() || item.getPrivateArea() !== area) continue;
-    ItemOnGroundManager.deregister(item);
-    ItemOnGroundManager.registerLocation(player, item.getItem(), tile(EXIT), null);
+    // Moved as the same stack: its despawn timer carries on rather than restarting at the exit.
+    ItemOnGroundManager.relocate(item, tile(EXIT), null);
   }
 }
 
+/**
+ * ::fightcavewave <n> (developer): the next wave to spawn is n. In a run, a wave under way is
+ * finished first; outside, the next run starts at it. As ::infernowave does for the Inferno.
+ */
+function setNextWave({ player, parts }) {
+  const wave = Number(parts?.[1]);
+  if (!Number.isInteger(wave) || wave < 1 || wave > FINAL_WAVE) {
+    player.sendMessage(`Usage: ::fightcavewave <1-${FINAL_WAVE}>`);
+    return;
+  }
+  const session = sessions.get(player);
+  if (!session) {
+    player.setAttribute(ATTR_START_WAVE, wave);
+    player.sendMessage(`Your next Fight Cave run starts at wave ${wave}.`);
+    return;
+  }
+  if (session.nextWaveAt !== -1) {
+    session.wave = wave;
+    player.setAttribute(ATTR_WAVE, wave);
+    player.sendMessage(`The next wave is wave ${wave}.`);
+    return;
+  }
+  session.nextWave = wave;
+  player.sendMessage(`Once this wave is cleared, the next is wave ${wave}.`);
+}
+
 function enterCave({ player }) {
-  startRun(player, 1, core.Misc.getRandom(SPAWN_CYCLE.length - 1), ENTRY);
+  const wave = Number(player.getAttribute(ATTR_START_WAVE) ?? 1);
+  player.setAttribute(ATTR_START_WAVE, null);
+  startRun(player, wave, core.Misc.getRandom(SPAWN_CYCLE.length - 1), ENTRY);
   api.emitCustomEvent("fight-caves:entered", { player });
   say(player, "You're on your own now JalYt, prepare to fight for your life!");
   return true;
@@ -436,8 +497,10 @@ module.exports = {
     pluginApi.onCanTeleport(noTeleportOut);
     pluginApi.onCanLogout(holdLogout);
     pluginApi.onCustomEvent("npc-drops:tertiary-chance", jadPetChance);
+    pluginApi.registerCommand("fightcavewave", setNextWave, core.PlayerRights.DEVELOPER, "Set the next Fight Cave wave");
   },
   waveMonsters,
   waveSpawns,
   jadSpawn,
+  setNextWave,
 };

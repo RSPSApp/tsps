@@ -1375,6 +1375,12 @@
       "red": 25207
     }
   },
+  "_barricades": "Wiki (Barricade (Soul Wars)): the item's Set-up places an attackable 50 HP barricade on the player's tile, at most 10 a team, gone when destroyed. The items and NPCs are the cache's soul_wars_barricade_red/blue forms; the refusal lines are our wording.",
+  "barricades": {
+    "items": { "blue": 25210, "red": 25209 },
+    "npcs": { "blue": 10539, "red": 10540 },
+    "max": 10
+  },
   "_bones": "Wiki: buried in a graveyard (or the base) they give the team's avatar 1% strength back, a third of that in a graveyard the team doesn't hold; a death drops one set plus every bone and fragment carried. Unrecorded: the burial line.",
   "boneStrength": 1,
   "_activity": "Recorded: the bar (varbit soul_wars_activity_value) is 800, falling 3 a tick from 18 ticks in, reset by actions. Wiki: an empty bar removes the player, and they wait 10 minutes to rejoin. Unrecorded: the removal's line.",

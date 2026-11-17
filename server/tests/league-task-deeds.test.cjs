@@ -755,7 +755,7 @@ test("kill-any-one: one of a group reaching the count, a mix counting nothing (D
 });
 
 test("kill-each with noLeave: every king without leaving; a step outside wipes it (Defeat the Dagannoth Kings Without Leaving)", (t) => {
-  const f = pactsCharacter(t);
+  const f = pactsCharacter(t, [2910, 4440, 0], [8]); // Unlock the Fremennik Province before entering its lair.
   f.player.moveTo(new core.Location(2910, 4440, 0));
   f.player.needsPlacement = false;
   killWith(f, "Dagannoth Rex");

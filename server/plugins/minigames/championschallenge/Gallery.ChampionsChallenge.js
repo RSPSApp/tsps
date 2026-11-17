@@ -206,9 +206,13 @@ function rescueScrolls(session) {
     if (ground?.isPendingRemoval?.() || ground?.getPrivateArea?.() !== session.area) continue;
     const item = ground.getItem?.();
     if (!item || !scrollIds.has(item.getId())) continue;
-    ItemOnGroundManager.deregister(ground);
-    if (player.getInventory().getFreeSlots() > 0) player.getInventory().adds(item.getId(), item.getAmount());
-    else ItemOnGroundManager.registerLocation(player, new Item(item.getId(), item.getAmount()), outside, null);
+    if (player.getInventory().getFreeSlots() > 0) {
+      ItemOnGroundManager.deregister(ground);
+      player.getInventory().adds(item.getId(), item.getAmount());
+    } else {
+      // The same stack, moved out: it keeps its timer and its owner-only time rather than starting both again.
+      ItemOnGroundManager.relocate(ground, outside, null);
+    }
   }
 }
 

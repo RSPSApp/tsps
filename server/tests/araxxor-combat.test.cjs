@@ -650,3 +650,358 @@ test("the enrage raises Defence by 35, Magic by 28 and Ranged by 31 on the real 
     core.TaskManager.cancelTasks(npc);
   }
 });
+
+// rsprox_transcripts/237/01156.txt tick 1353: a whip hit on Araxxor puts 10 on the Mirrorback, sends
+// "<col=3366ff>You reflect the Mirrorback's reflected damage!", "Taste vengeance!" and 7 on Araxxor;
+// tick 3589: 7 on the Mirrorback and 5 on Araxxor, the player unhit both times.
+test("vengeance takes the Mirrorback's recoil: the recorded message, no hit, three quarters on Araxxor", async () => {
+  const path = require("node:path");
+  require("../dist/Server").Server.installProductionPathResolver();
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  new NpcDefinitionLoader().load();
+  const core = PluginManager.getCoreApi();
+  const Combat = require("../plugins/bosses/araxxor/Combat.Araxxor");
+  Combat.attach(new Proxy({ core, getPrayerHandler: () => ({}) }, { get: (t, k) => (k in t ? t[k] : () => {}) }));
+  const tile = new core.Location(Shared.SPAWN_TILE[0], Shared.SPAWN_TILE[1], Shared.SPAWN_TILE[2]);
+  const boss = new NPC(Shared.BOSS_ID, tile);
+  const mirrorback = new NPC(Shared.MINION_ID.mirrorback, new core.Location(3635, 9813, 0));
+  for (const npc of [boss, mirrorback]) npc.setRegistered(true);
+  boss.setAttribute(Shared.ATTR_ENCOUNTER, { minions: [mirrorback] });
+  const swing = (player, damages) => {
+    const parts = damages.map((damage) => new core.HitDamage(damage, core.HitMask.RED));
+    const hit = { getAttacker: () => player, getHits: () => parts, updateTotalDamage() {} };
+    Combat._test.redirectToMirrorback(boss, hit);
+    return parts.map((part) => part.getDamage());
+  };
+  const queued = (mob) => mob.getCombat().getHitQueue().pendingDamage.map((hit) => hit.getDamage());
+  const player = new Player(null);
+  player.setUsername("araxxor-veng");
+  const messages = [], said = [];
+  player.sendMessage = (text) => messages.push(text);
+  player.forceChat = (text) => said.push(text);
+  player.setHasVengeance(true);
+
+  assert.deepEqual(swing(player, [52]), [41], "four fifths reach Araxxor");
+  assert.deepEqual(queued(mirrorback), [10], "a fifth on the Mirrorback");
+  assert.deepEqual(messages, ["<col=3366ff>You reflect the Mirrorback's reflected damage!"]);
+  assert.deepEqual(said, ["Taste vengeance!"]);
+  assert.equal(player.hasVengeanceReturn(), false, "vengeance is spent");
+  assert.deepEqual(queued(player), [], "the player takes no recoil");
+  assert.deepEqual(queued(boss), [7], "75% of the Mirrorback's 10 rebounds onto Araxxor");
+
+  // Without vengeance the next swing recoils half of the Mirrorback's share as before.
+  swing(player, [35]);
+  assert.deepEqual(queued(mirrorback), [10, 7]);
+  assert.deepEqual(queued(player), [3], "half of 7");
+  assert.equal(messages.length, 1, "no message without vengeance");
+  assert.deepEqual(queued(boss), [7]);
+});
+
+// rsprox_transcripts/237/01156.txt tick 1353: a Leagues double hit puts 10 and 4 on the Mirrorback; Vengeance
+// rebounds 7 (75% of the first part) onto Araxxor and the second part still recoils 2 onto the player.
+// Tick 1351: without Vengeance four parts put 3, 1, 2 and 2 on the Mirrorback and 1, 0, 1 and 1 on the player.
+test("a multi-part hit on Araxxor redirects and recoils per part; Vengeance takes only the first part", async () => {
+  const path = require("node:path");
+  require("../dist/Server").Server.installProductionPathResolver();
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  new NpcDefinitionLoader().load();
+  const core = PluginManager.getCoreApi();
+  const Combat = require("../plugins/bosses/araxxor/Combat.Araxxor");
+  Combat.attach(new Proxy({ core, getPrayerHandler: () => ({}) }, { get: (t, k) => (k in t ? t[k] : () => {}) }));
+  const tile = new core.Location(Shared.SPAWN_TILE[0], Shared.SPAWN_TILE[1], Shared.SPAWN_TILE[2]);
+  const boss = new NPC(Shared.BOSS_ID, tile);
+  const mirrorback = new NPC(Shared.MINION_ID.mirrorback, new core.Location(3635, 9813, 0));
+  for (const npc of [boss, mirrorback]) npc.setRegistered(true);
+  boss.setAttribute(Shared.ATTR_ENCOUNTER, { minions: [mirrorback] });
+  const swing = (player, damages) => {
+    const parts = damages.map((damage) => new core.HitDamage(damage, core.HitMask.RED));
+    const hit = { getAttacker: () => player, getHits: () => parts, updateTotalDamage() {} };
+    Combat._test.redirectToMirrorback(boss, hit);
+    return parts.map((part) => part.getDamage());
+  };
+  const queued = (mob) => mob.getCombat().getHitQueue().pendingDamage.map((hit) => hit.getDamage());
+  const player = new Player(null);
+  player.setUsername("araxxor-veng-parts");
+  const messages = [], said = [];
+  player.sendMessage = (text) => messages.push(text);
+  player.forceChat = (text) => said.push(text);
+  player.setHasVengeance(true);
+
+  assert.deepEqual(swing(player, [52, 22]), [41, 17], "four fifths of each part reach Araxxor");
+  assert.deepEqual(queued(mirrorback), [10, 4], "each part's fifth is its own hit on the Mirrorback");
+  assert.deepEqual(messages, [Shared.MIRRORBACK_VENGEANCE_MESSAGE]);
+  assert.deepEqual(said, ["Taste vengeance!"]);
+  assert.equal(player.hasVengeanceReturn(), false, "vengeance is spent");
+  assert.deepEqual(queued(boss), [7], "75% of the first part's 10, not of the 14 total");
+  assert.deepEqual(queued(player), [2], "the second part's 4 still recoils half");
+
+  swing(player, [15, 8, 14, 14]);
+  assert.deepEqual(queued(mirrorback), [10, 4, 3, 1, 2, 2]);
+  assert.deepEqual(queued(player), [2, 1, 0, 1, 1], "half of each part's share, rounded down per part");
+  assert.equal(messages.length, 1, "no message without vengeance");
+  assert.deepEqual(queued(boss), [7]);
+});
+
+// rsprox_transcripts/237/01179.txt tick 223: a direct melee double hit of 13 and 6 on the Mirrorback sends the
+// message, spends vengeance ("Taste vengeance!"), rebounds 9 (75% of 13) onto it and leaves 3 recoil from the 6.
+// Wiki (Araxxor/Strategies): Vengeance at melee distance negates the reflected damage.
+test("vengeance on a direct melee hit takes the Mirrorback's recoil; later parts still recoil", async () => {
+  const path = require("node:path");
+  require("../dist/Server").Server.installProductionPathResolver();
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  new NpcDefinitionLoader().load();
+  const core = PluginManager.getCoreApi();
+  Minions.attach(new Proxy({ core, getBonusManager: () => null }, { get: (t, k) => (k in t ? t[k] : () => {}) }));
+  const mirrorback = new NPC(Shared.MINION_ID.mirrorback, new core.Location(3635, 9813, 0));
+  mirrorback.setRegistered(true);
+  const queued = (mob) => mob.getCombat().getHitQueue().pendingDamage.map((hit) => hit.getDamage());
+  const player = new Player(null);
+  player.setUsername("araxxor-veng-melee");
+  player.setLocation(new core.Location(3635 + mirrorback.getSize(), 9813, 0));
+  const messages = [], said = [];
+  player.sendMessage = (text) => messages.push(text);
+  player.forceChat = (text) => said.push(text);
+  const strike = (damages) => Minions.modifyHit({
+    npc: mirrorback,
+    hit: {
+      getAttacker: () => player,
+      getCombatType: () => core.CombatType.MELEE,
+      getHits: () => damages.map((damage) => new core.HitDamage(damage, core.HitMask.RED)),
+      updateTotalDamage() {},
+    },
+  });
+
+  player.setHasVengeance(true);
+  strike([13, 6]);
+  assert.deepEqual(messages, [Shared.MIRRORBACK_VENGEANCE_MESSAGE]);
+  assert.equal(Shared.MIRRORBACK_VENGEANCE_MESSAGE, "<col=3366ff>You reflect the Mirrorback's reflected damage!");
+  assert.deepEqual(said, ["Taste vengeance!"]);
+  assert.equal(player.hasVengeanceReturn(), false, "vengeance is spent");
+  assert.deepEqual(queued(mirrorback), [9], "75% of the first part rebounds onto the Mirrorback");
+  assert.deepEqual(queued(player), [3], "the second part still recoils half");
+
+  // Without vengeance a direct hit recoils half, with no message.
+  strike([20]);
+  assert.deepEqual(queued(player), [3, 10]);
+  assert.equal(messages.length, 1);
+  assert.deepEqual(queued(mirrorback), [9]);
+});
+
+// Wiki (Araxxor, Drops): "The rate to receive any halberd piece is 1/200. Players will not receive
+// duplicate pieces until each full set is obtained." The export listed each piece as its own 1/200
+// roll, so any piece was 3/200 and one kill could hand out two or three (issue #5927).
+test("Araxxor's halberd pieces are one 1/200 roll, so a kill can hand over at most one", () => {
+  const path = require("node:path");
+  require("../dist/Server").Server.installProductionPathResolver();
+  const Drops = require("../plugins/npcs/NpcDrops.plugin");
+  Drops._test.loadDrops();
+  const table = Drops._test.tablesByNpc.get(Shared.BOSS_ID)[0];
+  const pieces = table.entries.filter((entry) => Shared.HALBERD_PIECES.includes(entry.item_id));
+  assert.equal(pieces.length, 3, "point, blade and pommel");
+  for (const piece of pieces) {
+    assert.equal(piece.separate_roll, true);
+    assert.equal(piece.roll_group, "araxxor_halberd_piece", "one roll chooses the piece, not three");
+    assert.equal(piece.weight, 1);
+    assert.equal(piece.out_of, 600);
+  }
+  const anyPiece = pieces.reduce((sum, piece) => sum + piece.weight, 0) / pieces[0].out_of;
+  assert.equal(anyPiece, 1 / 200, "any piece, once per kill");
+
+  const player = { getEquipment: () => ({ get: () => null, getItems: () => [] }), getAttribute: () => undefined };
+  const npc = {
+    getId: () => Shared.BOSS_ID,
+    getLocation: () => new (require("../dist/game/model/Location").Location)(3631, 9814, 0),
+    getCurrentDefinition: () => ({ getName: () => "Araxxor", getCombatLevel: () => 890 }),
+  };
+  const originalRandom = Math.random;
+  try {
+    Math.random = () => 0; // every separate roll hits
+    const hit = Drops.__internals.rollTable(table, player, npc);
+    assert.equal(hit.filter((drop) => Shared.HALBERD_PIECES.includes(drop.itemId)).length, 1, "one piece at most");
+    Math.random = () => 0.999999; // none does
+    const miss = Drops.__internals.rollTable(table, player, npc);
+    assert.equal(miss.filter((drop) => Shared.HALBERD_PIECES.includes(drop.itemId)).length, 0, "no piece");
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test("each halberd piece drop is the next piece the player lacks; a new set starts after all three", () => {
+  const Corpse = require("../plugins/bosses/araxxor/Corpse.Araxxor");
+  Corpse.attach({
+    core: {
+      Bank: { TOTAL_BANK_TABS: 11, BANK_SEARCH_TAB_INDEX: 10 },
+      Animation: class {},
+      Item: class {},
+      ItemDefinition: { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => false }) },
+      World: { getRemoveNPCQueue: () => ({ push() {} }), getProcessCycle: () => 0 },
+      Task: class { stop() {} },
+      TaskManager: { submit: (task) => task.execute() },
+    },
+    persistAttribute() {}, onNpcDeath() {}, onCustomEvent() {}, onNpcInteraction() {},
+    emitCustomEvent() {}, getItemOnGroundManager: () => ({ registerLocation() {} }),
+  });
+  const attrs = new Map();
+  const player = {
+    performAnimation() {},
+    getAttribute: (key) => attrs.get(key),
+    setAttribute: (key, value) => attrs.set(key, value),
+    getInventory: () => ({ getAmount: () => 0 }),
+    getBank: () => ({ getAmount: () => 0 }),
+  };
+  const originalRandom = Math.random;
+  Math.random = () => 0; // the first of those still missing
+  try {
+    const set = [1, 2, 3].map(() => Corpse.nextHalberdPiece(player));
+    assert.deepEqual(set, Shared.HALBERD_PIECES, "each of the three once, in order");
+    assert.equal(Corpse.nextHalberdPiece(player), Shared.HALBERD_PIECES[0], "the fourth starts a new set");
+
+    const drops = Corpse.resolveHalberdPieces(player, [{ itemId: 29790, amount: 1 }, { itemId: 1434, amount: 2 }]);
+    assert.deepEqual(drops.map((drop) => drop.itemId), [Shared.HALBERD_PIECES[1], 1434], "the rolled piece becomes the next one lacked");
+    assert.deepEqual(drops.map((drop) => drop.amount), [1, 2], "the rest of the loot is untouched");
+
+    // An account that looted before the counter existed starts from what it holds.
+    const holder = {
+      getAttribute: () => undefined,
+      setAttribute() {},
+      getInventory: () => ({ getAmount: (id) => (id === Shared.HALBERD_PIECES[0] ? 2 : 0) }),
+      getBank: () => ({ getAmount: () => 0 }),
+    };
+    assert.equal(Corpse.nextHalberdPiece(holder), Shared.HALBERD_PIECES[1], "already-held point is not handed out again");
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test("the mirrorback recoils melee only from melee distance", () => {
+  const recoiled = [];
+  const fakeCore = {
+    CombatType: { MELEE: 0, RANGED: 1, MAGIC: 2 },
+    HitDamage: class { constructor(damage, mask) { this.damage = damage; this.mask = mask; } },
+    HitMask: { RED: 1 },
+    NpcIdentifiers: { EGG_10: 1, EGG_11: 2, EGG_12: 3, MIRRORBACK_ARAXYTE: 4, RUPTURA_ARAXYTE: 5, ACIDIC_ARAXYTE: 6 },
+    CombatMethod: class {},
+  };
+  Minions.attach({
+    core: fakeCore,
+    onNpcHitModify: () => {},
+    registerNpcCombatMethodProvider: () => {},
+    getBonusManager: () => null,
+  });
+
+  const at = (x, y) => ({ getX: () => x, getY: () => y, getZ: () => 0 });
+  const mirrorback = { getId: () => Shared.MINION_ID.mirrorback, getLocation: () => at(100, 100), getSize: () => 2 };
+  const playerAt = (x, y) => {
+    const player = {
+      isPlayer: () => true,
+      getAsPlayer: () => player,
+      getLocation: () => at(x, y),
+      getEquipment: () => ({ getWeapon: () => ({ getId: () => 1, getDefinition: () => ({ getName: () => "Scythe of vitur" }) }) }),
+      getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => recoiled.push(...hits) }) }),
+      getBonusManager: () => null,
+    };
+    return player;
+  };
+  const strike = (player, type = 0) => Minions.modifyHit({
+    npc: mirrorback,
+    hit: {
+      getAttacker: () => player,
+      getCombatType: () => type,
+      getHits: () => [{ getDamage: () => 20 }],
+      updateTotalDamage: () => {},
+    },
+  });
+
+  // The 2x2 body covers 100,100-101,101: 102,100 is edge-adjacent, 103,100 has a tile between.
+  strike(playerAt(102, 100));
+  assert.equal(recoiled.length, 1, "adjacent melee recoils");
+  assert.equal(recoiled[0].damage, 10, "half of the damage");
+  recoiled.length = 0;
+
+  strike(playerAt(103, 100));
+  assert.equal(recoiled.length, 0, "a tile between negates the recoil (Wiki)");
+  recoiled.length = 0;
+
+  strike(playerAt(102, 100), 1);
+  assert.equal(recoiled.length, 0, "ranged never recoils");
+});
+
+// The one-time seed counts what the player keeps anywhere: a looting bag's contents (LootingBag's
+// "storage:contents") and their Group Ironman group storage (GroupStorage's "group-storage:amount").
+test("the halberd seed counts pieces in a looting bag and in group storage", async () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  require("../dist/Server").Server.installProductionPathResolver();
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  const core = PluginManager.getCoreApi();
+  const GroupStorage = require("../plugins/interface/GroupStorage.plugin");
+  const { Store } = GroupStorage._test;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "araxxor-seed-"));
+  const previousFile = process.env[Store.FILE_ENV];
+  process.env[Store.FILE_ENV] = path.join(dir, "group-storage.json");
+  Store.reset();
+  const handlers = new Map();
+  let groupOf = () => null;
+  const emit = (name, payload) => {
+    if (name === "grouping:get") payload.group = groupOf(payload.player);
+    for (const handler of handlers.get(name) ?? []) handler(payload);
+    return payload;
+  };
+  const api = new Proxy({
+    core,
+    onCustomEvent: (name, handler) => handlers.set(name, [...(handlers.get(name) ?? []), handler]),
+    emitCustomEvent: emit,
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) });
+  require("../plugins/items/LootingBag.plugin").register(api);
+  GroupStorage.register(api);
+  const Corpse = require("../plugins/bosses/araxxor/Corpse.Araxxor");
+  Corpse.attach(api);
+  const [POINT, BLADE, POMMEL] = Shared.HALBERD_PIECES;
+  const originalRandom = Math.random;
+  Math.random = () => 0; // the first of those still missing
+  try {
+    // The point in a looting bag in the pack, the blade in the bank: the pommel comes next.
+    const bagged = new Player(null);
+    bagged.setUsername("araxxor-bag");
+    const bag = new core.Item(core.ItemIdentifiers.LOOTING_BAG, 1);
+    bag.setMetaValue("lootingBag", [{ id: POINT, amount: 1 }]);
+    bagged.getInventory().add(bag);
+    bagged.getBank(0).add(new core.Item(BLADE, 1));
+    assert.equal(Corpse.nextHalberdPiece(bagged), POMMEL, "the bagged point and banked blade count");
+
+    // The point and blade in the group's storage: the pommel again; outside a group, the point.
+    const grouped = new Player(null);
+    grouped.setUsername("araxxor-group");
+    Store.commit(7, [{ id: POINT, amount: 1 }, null, { id: BLADE, amount: 1 }]);
+    groupOf = (player) => (player === grouped ? { id: 7, ironman: true } : null);
+    assert.equal(Corpse.nextHalberdPiece(grouped), POMMEL, "group storage counts");
+    const loner = new Player(null);
+    loner.setUsername("araxxor-loner");
+    assert.equal(Corpse.nextHalberdPiece(loner), POINT, "nothing held anywhere: the first piece");
+  } finally {
+    Math.random = originalRandom;
+    Store.reset();
+    if (previousFile === undefined) delete process.env[Store.FILE_ENV];
+    else process.env[Store.FILE_ENV] = previousFile;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

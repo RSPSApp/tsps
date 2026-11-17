@@ -195,12 +195,15 @@ test('Giant Dwarf start moves the boat ride to Blasidar and refuses to rewind', 
   assert.equal(h.variant(p, N.DWARVEN_BOATMAN_3), 'starting-off-talking-to-dwarven-boatman');
   h.emit('npc-dialogue:choice', { player: p, npcId: N.DWARVEN_BOATMAN_3, option: 'Yes.' });
   assert.equal(h.quest.getStage(p), 5);
-  h.emit('npc-dialogue:choice', { player: p, npcId: N.DWARVEN_BOATMAN_3, option: 'Yes, I will do this.' });
-  assert.equal(h.quest.getStage(p), 10);
   p.log.length = 0;
   h.action(p, N.DWARVEN_BOATMAN_3, 'TWPrRb');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3210, 3220],
+    'a completion action without an active boat scene must not teleport');
+  // This harness does not run the boat scene; exercise its explicit Skip option.
+  h.action(p, N.DWARVEN_BOATMAN_3, 'rbNSPj');
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2827, 10214], 'the boat arrives at the Black Guard');
-  assert.ok(p.log.some(row => row[0] === 'sendSubInterface' && row[2] === 174), 'arrival closes the boat fade');
+  h.emit('npc-dialogue:choice', { player: p, npcId: N.DWARVEN_BOATMAN_3, option: 'Yes, I will do this.' });
+  assert.equal(h.quest.getStage(p), 10);
   assert.equal(h.variant(p, N.BLASIDAR_THE_SCULPTOR), 'starting-off-talking-to-blasidar-the-sculptor');
   h.emit('npc-dialogue:choice', { player: p, npcId: N.BLASIDAR_THE_SCULPTOR, option: 'Yes, I will do this.' });
   assert.equal(h.quest.getStage(p), 20);
@@ -1119,14 +1122,22 @@ test('Defender of Varrock invasion camera resets on logout and the cutscene resu
   h.tick(1);
   const resets = () => p.log.filter(row => row[0] === 'sendCameraReset').length;
   const before = resets();
-  h.hooks.onPlayerLogout[0]({ player: p });
+  h.hooks.onPlayerLogout.forEach(handler => handler({ player: p }));
   assert.equal(resets(), before + 1, 'logging out cannot leave the scene camera locked');
   assert.equal(h.quest.getStage(p), 50);
-  h.hooks.onPlayerLogin[0]({ player: p });
+  h.hooks.onPlayerLogin.forEach(handler => handler({ player: p }));
   const dimintheis = h.npcActions.get('Dimintheis')['Talk-to'];
   dimintheis({ player: p, npcId: N.DIMINTHEIS });
-  h.action(p, N.DIMINTHEIS, '8eNIjz');
+  const cameraMoves = () => p.log.filter(row => row[0] === 'sendCameraMoveTo');
+  const beforeResume = cameraMoves().length;
+  h.action(p, N.DIMINTHEIS, '8eNIJz');
+  p.manager.reset();
+  h.tick(1);
+  assert.equal(cameraMoves().length, beforeResume + 1, 'resuming starts the invasion camera again');
+  assert.deepEqual(cameraMoves().at(-1).slice(1, 3), [3925, 4938], 'the resumed scene starts at its first cut');
   assert.equal(h.quest.getStage(p), 50, 'the interrupted cutscene restarts without skipping the stage');
+  while (p.manager.getCurrent()) p.manager.advance();
+  assert.equal(h.quest.getStage(p), 52, 'the resumed scene reaches its victory stage');
 });
 
 test('Defender and Curse of Arrav share the placed trapdoor without skipping the key route', () => {

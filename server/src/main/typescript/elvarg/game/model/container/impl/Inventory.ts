@@ -1,6 +1,10 @@
 import { Player } from "../../../entity/impl/player/Player";
 import { StackType } from "../StackType";
 import { ItemContainer } from "../ItemContainer";
+import { lazyRequire } from "../../../../util/LazyRequire";
+
+/** Loaded lazily: Bank reaches back into this container. */
+const getBank = lazyRequire(() => (require("./Bank") as typeof import("./Bank")).Bank);
 
 export class Inventory extends ItemContainer {
   public static readonly INTERFACE_ID: number = 3214;
@@ -17,6 +21,16 @@ export class Inventory extends ItemContainer {
     return StackType.DEFAULT;
   }
 
+  protected onItemsAdded(itemId: number, amount: number): void {
+    const player = this.getPlayer();
+    // Planning and save copies are also built on a player. Only the authoritative
+    // inventory observes acquisition; bootstrap owners need not expose one yet.
+    if (player?.getInventory?.() !== this) return;
+    require("../../../../plugins/PluginManager").PluginManager.emitCustomEvent("inventory:acquired", {
+      player, itemId, amount,
+    });
+  }
+
   public refreshItems(): ItemContainer {
     // Only the player's own inventory is shown. A copy built on the player to plan a change (does the loot fit
     // once the key is gone?) must never reach the client: sending it showed the planned state, the key gone,
@@ -24,11 +38,14 @@ export class Inventory extends ItemContainer {
     const own = this.getPlayer().getInventory?.();
     if (own && own !== this) return this;
     // The bank inventory's Wield/Wear labels follow the slots (lazy: Bank imports Inventory).
-    const { Bank } = require("./Bank") as typeof import("./Bank");
+    const Bank = getBank();
     if (this.getPlayer().getInterfaceId?.() === Bank.MAIN_INTERFACE_ID) Bank.sendSideOps(this.getPlayer());
     this.getPlayer()
       .getPacketSender()
       .sendItemContainer(this, Inventory.INTERFACE_ID);
+    // The run-orb packet is also the carried-weight update. Without it a player at full run energy
+    // kept the old kg until they next ran or a regen tick moved the energy (issue 5952).
+    this.getPlayer().getPacketSender().sendRunEnergy();
     return this;
   }
 

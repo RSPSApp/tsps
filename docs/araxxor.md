@@ -93,7 +93,23 @@ Ticks below count from the action named; the captured gamevals are in brackets.
 
 Where the task text is open (how the speed tasks are timed, whether Betrayal needs one explosion), these are our readings; the Wiki doesn't say.
 
+## Araxyte fang and the Amulet of rancour
+
+`server/plugins/items/EtchedFangs.plugin.js` (shared with the Necklace of rupture). From the Wiki
+(Araxyte fang, Etched araxyte fang, Amulet of rancour, and their transcripts); no recording has
+either step, in the user's captures or the rsprox.net index.
+
+| Step | Needs | Result |
+|---|---|---|
+| Etch on the Araxyte fang | A chisel, 86 Crafting (boostable) | Etched araxyte fang in the fang's slot, 0 XP, no message. Without a chisel, a box with the chisel: "Creating a araxyte fang requires a chisel." (sic) |
+| Araxyte fang on an Amulet of torture | | Box with the etched fang: "You need to etch the fang in order to use it to craft." |
+| Etched fang on an Amulet of torture (either way round) | 86 Crafting (boostable), no bank | The non-reversible warning, "Do you wish to create a amulet of rancour?" Yes./No.; Yes makes the Amulet of rancour in the amulet's slot, 500 Crafting XP, "You successfully create a amulet of rancour." |
+
+Ours: the two level refusals (the Araxyte fang transcript lists the etch level refusal as
+missing). Only the plain Amulet of torture is accepted.
+
 ## Not captured yet
 
 - **Destroy:** the clue roll and the corpse's timing after Destroy.
 - **Ruptura player damage:** how much the explosion deals to the player (the Wiki's 70/49/28/7 is used).
+- **Etching and the Amulet of rancour:** the level refusals, and whether the ornamented Amulet of torture is accepted.

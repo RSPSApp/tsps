@@ -167,6 +167,8 @@ export interface HandlerResult {
 /** Forward declaration for Cs2Vm to avoid circular imports */
 export interface Cs2VmLike {
     inputDialogType: number;
+    widgetKeyInputMode: 0 | 1 | 2 | 3;
+    widgetKeyInputTarget: number;
     inputDialogWidgetId: number;
     inputDialogString: string;
     onInputDialogComplete?: (type: "count" | "name" | "string" | "obj", value: string | number) => void;
@@ -223,6 +225,7 @@ export interface HandlerContext {
     varManager: VarManager;
     loadScript: (id: number) => Script | null;
     objTypeLoader?: ObjTypeLoader;
+    invTypeLoader?: import("../../config/invtype/InvTypeLoader").InvTypeLoader;
     paramTypeLoader?: ParamTypeLoader;
     enumTypeLoader?: TypeLoader<EnumType>;
     structTypeLoader?: TypeLoader<StructType>;

@@ -27,7 +27,7 @@ From the [Bone dagger](https://oldschool.runescape.wiki/w/Bone_dagger) and
 
 The Dorgeshuun crossbow "can fire metal bolts up to iron, except silver bolts, and is the only
 crossbow that can use bone bolts", and not "bolts containing unique tips and their (e)
-variants" (Dorgeshuun crossbow page). So it fires bronze, iron and bone bolts.
+variants" (Dorgeshuun crossbow page). So it fires bronze, blurite, iron and bone bolts.
 [Bone bolts](https://oldschool.runescape.wiki/w/Bone_bolts) "can only be used with the
 Dorgeshuun crossbow" and have +49 Ranged Strength. Their projectile is the cache's
 `dttd_bone_crossbowbolt_travel` spotanim (696).

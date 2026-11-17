@@ -45,6 +45,9 @@ function channelView(key) {
   };
 }
 
+/** A test's answer to "group-pvm:can-start" (Group Ironman's rules), or null for none. */
+let groupPvm = null;
+
 function fakeApi() {
   return {
     core: PluginManager.getCoreApi(),
@@ -63,6 +66,8 @@ function fakeApi() {
         for (const channel of channels.values()) channel.members.delete(payload.player);
       } else if (name === 'ironman:mode') {
         payload.mode = modes.get(payload.player) ?? 'none';
+      } else if (name === 'group-pvm:can-start') {
+        groupPvm?.(payload);
       }
     },
     sendMultiChatboxPrompt(player, title, ...args) { player.prompts.push({ title, args }); },
@@ -392,6 +397,36 @@ test('a raid: in, started by the leader, points, a safe death, and out', () => {
   Parties.clear();
 });
 
+test('"Begin the raid." asks again whether the raid may start: someone who entered while it was up counts', () => {
+  Parties.clear();
+  const leader = fakePlayer('Raider');
+  channelWith('Raider', leader);
+  Lobby.makeParty(leader);
+  leader.setAttribute(Shared.ATTR.WARNED, true);
+  Lobby.enterChambers({ player: leader });
+  const raid = Parties.partyOf(leader).raid;
+  ticks(3 + 2);
+  const checks = [];
+  // As a Hardcore group would: no one from outside the group.
+  groupPvm = (check) => {
+    checks.push(check);
+    if (check.players.length > 1) { check.allowed = false; check.reason = 'No outsiders.'; }
+  };
+  try {
+    RaidUnit.startRaid({ player: leader });
+    assert.equal(checks.at(-1).confirms, true, "the question that follows confirms, so a warning doesn't refuse");
+    raid.players.add(fakePlayer('Outsider'));
+    leader.prompts.at(-1).args[1]();
+    assert.equal(raid.stage, RaidModule.STAGE.WAITING, 'not begun');
+    assert.equal(checks.length, 2, 'asked again at Begin');
+    assert.equal(checks.at(-1).confirms, false, 'Begin is the start itself: a group not yet warned is refused');
+    assert.ok(leader.messages.includes('No outsiders.'));
+  } finally {
+    groupPvm = null;
+    Parties.clear();
+  }
+});
+
 test('a death with few points costs the team 5% instead', () => {
   const party = new Parties.Party(fakePlayer('Lead'), { key: 'Lead' });
   const raid = new RaidModule.Raid(party);
@@ -656,6 +691,28 @@ test('a Challenge Mode raid loads every room without errors', () => {
   ticks(8);
   assert.equal(ice.stage, 'fighting');
   assert.equal(demon.getNpcTransformationId(), 7585);
+  // Its third comes off the rolled hitsplat, before the hitpoints cap: at 2 hitpoints a ranged hit of
+  // 30 still kills (taken off after the cap, 2 / 3 was 0 and the demon couldn't die).
+  const { CombatType } = PluginManager.getCoreApi();
+  leader.getCombat = () => ({ getPreviousCast: () => null, getSelectedSpell: () => null });
+  leader.getEquipment = () => ({ getItems: () => [] });
+  const rolledHit = (value) => {
+    const damage = { value, getDamage() { return this.value; }, setDamage(v) { this.value = v; } };
+    const hit = {
+      getAttacker: () => leader, getCombatType: () => CombatType.RANGED, getSpell: () => null,
+      getHits: () => [damage], updateTotalDamage() {}, getTotalDamage: () => damage.value,
+    };
+    return { damage, hit };
+  };
+  const rolled = rolledHit(30);
+  RaidUnit.roomNpcRolledHit({ target: demon, hit: rolled.hit, damage: rolled.damage });
+  assert.equal(rolled.damage.value, 10, 'a third of the roll');
+  assert.equal(rolled.hit.rolledResistance, true);
+  ice.modifyHit(demon, rolled.hit);
+  assert.equal(rolled.damage.value, 10, 'not taken off again as it lands');
+  const unrolled = rolledHit(30);
+  ice.modifyHit(demon, unrolled.hit);
+  assert.equal(unrolled.damage.value, 10, 'a hitsplat nothing rolled still lands as a third');
   // rsprox captures: Vasa's special runs 13 ticks from 7409 to lighting his next crystal.
   const vasa = raid.rooms.find((room) => room.key === 'VASA_NISTIRIO');
   vasa.vasa.isRegistered = () => true;

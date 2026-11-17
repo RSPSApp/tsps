@@ -587,7 +587,9 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
 
   /** Drops this player's own same-id NPC copies on a tile (relog leaves them behind). */
   function cullOwnedNpcs(player, npcId, x, y, z) {
-    for (const other of api.getWorld?.()?.getNpcs?.() ?? []) {
+    const world = api.getWorld?.();
+    // The owner index (World.getNpcsOwnedBy) instead of scanning every NPC per call.
+    for (const other of world?.getNpcsOwnedBy?.(player) ?? world?.getNpcs?.() ?? []) {
       if (other?.getOwner?.() !== player || other.getId?.() !== npcId) continue;
       const at = other.getLocation?.();
       if (at && (at.getX?.() !== x || at.getY?.() !== y || at.getZ?.() !== z)) continue;

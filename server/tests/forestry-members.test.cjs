@@ -31,6 +31,7 @@ before(() => {
     onNpcInteraction: (name, actions) => { if (typeof name !== 'function') for (const [op, fn] of Object.entries(actions)) hooks.npcs.set(`${name}:${op}`, fn); },
     onCustomEvent() {},
     onPlayerLogout() {},
+    onItemAction() {},
     onPlayerLogin() {},
     emitCustomEvent() {},
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push(args),

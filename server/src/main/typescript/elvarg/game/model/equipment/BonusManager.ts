@@ -3,14 +3,17 @@ import { ItemDefinition } from "../../definition/ItemDefinition";
 import { Equipment } from "../container/impl/Equipment";
 import { getCrystalBowAttackBonus, getCrystalBowRangedStrength, isCrystalBow } from "../../content/combat/ranged/CrystalBow";
 import { PluginManager } from "../../../plugins/PluginManager";
+import { lazyRequire } from "../../../util/LazyRequire";
 
 /** Ranged strength's place in an item's bonus array. */
 const RANGED_STRENGTH_INDEX = 11;
 
 /** Loaded lazily: the ranged data reaches back into combat, which uses this class. */
+const getAmmunition = lazyRequire(() =>
+    (require("../../content/combat/ranged/RangedData") as typeof import("../../content/combat/ranged/RangedData")).Ammunition);
+
 function firesFromAmmoSlot(player: Player): boolean {
-    const { Ammunition } = require("../../content/combat/ranged/RangedData");
-    return Ammunition.firesFromAmmoSlot(player);
+    return getAmmunition().firesFromAmmoSlot(player);
 }
 
 export class BonusManager {

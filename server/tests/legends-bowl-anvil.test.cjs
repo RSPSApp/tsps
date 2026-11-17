@@ -77,6 +77,16 @@ test('boosted Smithing level reaches the canonical attempt',async t=>{
  assert.equal(skills.getMaxLevel(core.Skill.SMITHING),50);assert.equal(skills.getCurrentLevel(core.Skill.SMITHING),51);assert.equal(skills.getExperience(core.Skill.SMITHING),core.SkillManager.getExperienceForLevel(50));
  const seen=observe(t,f,'itemOnObjectHooks','handleItemOnObject',e=>e.itemId===f.I.GOLD_BAR&&e.objectId===anvil.getId());await send(f,anvilPacket(f,f.I.GOLD_BAR),()=>seen.length>0);assert.equal(seen.length,1);assert.equal(seen[0].before,false);assert.equal(seen[0].after,true);for(let i=0;i<5;i++)turn(f);assert.equal(f.inv.getAmount(f.I.GOLD_BOWL),1);assert.equal(f.inv.getAmount(f.I.GOLD_BAR),0);assert.equal(f.inv.getAmount(f.I.SKETCH),1);assert.equal(f.inv.getAmount(f.I.HAMMER),1);assert.equal(quest.getStage(f.p),8);
 });
+test('after the quest the bowl is forged without the sketch',async t=>{
+ // Wiki (Gold bowl; Sketch): the sketch is needed during the quest only. Failure chance is not modelled.
+ const a=anvil.getLocation(),f=actor(t,1416,new core.Location(a.getX()-1,a.getY(),0)),xp=f.p.getSkillManager().getExperience(core.Skill.SMITHING),messages=[];
+ quest.setStage(f.p,quest.completionValue);assert.equal(quest.isComplete(f.p),true);f.inv.deleteNumber(f.I.SKETCH,1);assert.equal(f.inv.getAmount(f.I.SKETCH),0);
+ t.mock.method(f.p,'sendMessage',m=>{messages.push(m);});
+ const seen=observe(t,f,'itemOnObjectHooks','handleItemOnObject',e=>e.itemId===f.I.GOLD_BAR&&e.objectId===anvil.getId());await send(f,anvilPacket(f,f.I.GOLD_BAR),()=>seen.length>0);assert.equal(seen.length,1);assert.equal(seen[0].after,true);
+ for(let i=0;i<5;i++)turn(f);
+ assert.equal(f.inv.getAmount(f.I.GOLD_BOWL),1);assert.equal(f.inv.getAmount(f.I.GOLD_BAR),0);assert.equal(f.p.getSkillManager().getExperience(core.Skill.SMITHING)-xp,30);
+ assert.ok(!messages.some(m=>/sketch/i.test(m)),messages.join(' | '));assert.equal(quest.isComplete(f.p),true);
+});
 test('a second click and a walk away during the 5-tick forge make no bowl and keep both bars',async t=>{
  const a=anvil.getLocation(),f=actor(t,1417,new core.Location(a.getX()-1,a.getY(),0)),xp=f.p.getSkillManager().getExperience(core.Skill.SMITHING);
  const seen=observe(t,f,'itemOnObjectHooks','handleItemOnObject',e=>e.itemId===f.I.GOLD_BAR&&e.objectId===anvil.getId());

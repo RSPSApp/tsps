@@ -236,7 +236,9 @@ test("a herb in a vial of water makes the unfinished potion, with no XP", () => 
 test("a secondary finishes the potion at the Wiki's level and XP", () => {
   const low = player([["guamvial"], ["eye_of_newt"]], 2);
   use(low, "eye_of_newt", "guamvial");
-  assert.deepEqual(low.sent.messages, ["You need a Herblore level of 3 to combine those."]);
+  // rsprox_transcripts/227/910269.txt tick 22640: a messagebox, not a plain chat line.
+  assert.deepEqual(low.sent.messages, []);
+  assert.match(low.sent.dialogue, /"You need a Herblore level of 3 to combine those\."/);
   const who = player([["ranarrvial"], ["snape_grass"]], 38);
   use(who, "snape_grass", "ranarrvial");
   assert.equal(who.inv.count("3doseprayerrestore"), 1);

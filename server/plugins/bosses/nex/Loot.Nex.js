@@ -73,6 +73,13 @@ function rollLoot(contribution, present, random = Math.random) {
   });
 }
 
+/** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+function lootOptions(player, itemId, area) {
+  const request = { player, itemId, area, options: {} };
+  Common.api.emitCustomEvent("npc-drops:ground-options", request);
+  return request.options;
+}
+
 /** The kill's loot under her, for each player who is owed some. */
 function reward(fight, players, where) {
   const { Item, ItemDefinition } = Common.core;
@@ -89,9 +96,9 @@ function reward(fight, players, where) {
       const noteId = ItemDefinition.forId(drop.itemId).getNoteId();
       const itemId = drop.noted && noteId >= 0 && ItemDefinition.forId(noteId).isNoted() ? noteId : drop.itemId;
       if (ItemDefinition.forId(itemId).isStackable()) {
-        manager.registerLocation(player, new Item(itemId, drop.amount), where, area);
+        manager.registerLocation(player, new Item(itemId, drop.amount), where, area, lootOptions(player, itemId, area));
       } else {
-        for (let i = 0; i < drop.amount; i++) manager.registerLocation(player, new Item(itemId, 1), where, area);
+        for (let i = 0; i < drop.amount; i++) manager.registerLocation(player, new Item(itemId, 1), where, area, lootOptions(player, itemId, area));
       }
     }
     if (entry.mvp) player.sendMessage(Common.data.kill.mvp);

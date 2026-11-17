@@ -62,6 +62,8 @@ before(() => {
     onCanShop: (fn) => { hooks.canShop = fn; },
     onInterfaceActionButton: (ids, fn) => { for (const id of [].concat(ids)) (hooks.buttons ??= new Map()).set(id, fn); },
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),
+    getRegionManager: () => RegionManager,
+    getWorld: () => ({ isNpcOccupyingTile: () => false }),
   };
   require('../plugins/minigames/SoulWars.plugin').register(api);
   // Food knows what food is once registered (bots leave theirs behind).
@@ -1614,4 +1616,106 @@ test('the Hard Combat Achievement rewards halve imbue costs, as the cache script
   button('confirm_imbue')({ player: p, slot: 15 });
   assert.equal(zealTokens(p), 0, 'the Slayer helmet for 250 of its 500 tokens');
   assert.equal(p.inventory.getItems()[0].getId(), 25177);
+});
+
+test("a Soul Wars barricade sets up for its team, up to ten, and a kill frees the slot", () => {
+  const { game, players } = startGame(4);
+  const p = players[0];
+  const team = game.teamOf(p);
+  const itemId = Common.data.barricades.items[team];
+  const npcId = Common.data.barricades.npcs[team];
+  const setup = hooks.items.get("Barricade:Set-up");
+  const put = () => p.inventory.add(new core.Item(itemId, 1));
+  const start = p.getLocation();
+
+  put();
+  assert.equal(setup({ player: p, itemId }), true);
+  assert.equal(p.inventory.getAmount(itemId), 0, "the item is spent");
+  assert.equal(game.teamBarricadeCount(team), 1);
+  const [npc] = [...game.barricades];
+  assert.equal(npc.getId(), npcId);
+  assert.equal(npc.getDefinition().getHitpoints(), 50);
+  assert.deepEqual(
+    [npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ()],
+    [start.getX(), start.getY(), start.getZ()], "it stands on the player's tile");
+
+  const enemy = players.find((other) => game.teamOf(other) !== team);
+  assert.equal(setup({ player: enemy, itemId }), false, "another team's barricade is not this handler's");
+
+  // One barricade a tile: move the player so each of the remaining nine has room.
+  for (let i = 1; i < 10; i++) {
+    place(game, p, start.getX() + i, start.getY());
+    put();
+    assert.equal(setup({ player: p, itemId }), true, `barricade ${i + 1}`);
+  }
+  assert.equal(game.teamBarricadeCount(team), 10);
+  place(game, p, start.getX() + 10, start.getY());
+  put();
+  assert.equal(setup({ player: p, itemId }), true);
+  assert.ok(p.messages.includes("Your team already has 10 barricades set up."));
+  assert.equal(game.teamBarricadeCount(team), 10, "the eleventh is refused");
+
+  for (const handler of hooks.npcDeath ?? []) handler({ npc, npcId: npcId });
+  assert.equal(game.teamBarricadeCount(team), 9, "a destroyed barricade frees a slot");
+});
+
+test("two Set-ups on one tile in the same tick do not stack or spend both items", () => {
+  const { game, players } = startGame(2);
+  const p = players[0];
+  const team = game.teamOf(p);
+  const itemId = Common.data.barricades.items[team];
+  const setup = hooks.items.get("Barricade:Set-up");
+  p.inventory.add(new core.Item(itemId, 2));
+
+  assert.equal(setup({ player: p, itemId }), true);
+  assert.equal(setup({ player: p, itemId }), true, "the second click is refused, not dropped");
+  assert.equal(p.inventory.getAmount(itemId), 1, "only one item is spent");
+  assert.equal(game.teamBarricadeCount(team), 1, "one barricade stands on the tile");
+  assert.ok(p.messages.includes("You can't set up a barricade here."));
+});
+
+test("an unused barricade item leaves with the game", () => {
+  const { game, players } = startGame(2);
+  const p = players[0];
+  const itemId = Common.data.barricades.items[game.teamOf(p)];
+  p.inventory.add(new core.Item(itemId, 2));
+  game.remove(p);
+  assert.equal(p.inventory.getAmount(itemId), 0, "the held barricade is cleared like the bandages");
+});
+
+test("the barricade table gives the team's barricade item", () => {
+  const { game, players } = startGame(2);
+  const p = players[0];
+  const team = game.teamOf(p);
+  const table = { getId: () => 40443 };
+  assert.equal(Supplies.take(p, table, 1), true);
+  assert.equal(p.inventory.getAmount(Common.data.barricades.items[team]), 1);
+});
+
+/** Runs fn with World.getNpcsNear answering from `npcs` (radius and plane honoured) and World.getNpcs() refused. */
+function withNpcsNear(World, npcs, fn) {
+  const { getNpcs, getNpcsNear } = World;
+  World.getNpcs = () => { throw new Error('walked every NPC slot'); };
+  World.getNpcsNear = (at, radius) => npcs.filter((npc) => npc.getLocation().getZ() === at.getZ()
+    && Math.max(Math.abs(npc.getLocation().getX() - at.getX()), Math.abs(npc.getLocation().getY() - at.getY())) <= radius);
+  try {
+    return fn();
+  } finally {
+    World.getNpcs = getNpcs;
+    World.getNpcsNear = getNpcsNear;
+  }
+}
+
+test("the lobby's Nomad is found by a region query over the lobby and takes his transforming form", () => {
+  const nomad = (x, y, index) => {
+    const npc = { transform: -1, getId: () => 10528, getIndex: () => index, getLocation: () => new Location(x, y, 0),
+      setNpcTransformationId: (id) => { npc.transform = id; } };
+    return npc;
+  };
+  const lobby = nomad(2212, 2857, 5);
+  const away = nomad(2020, 5929, 1);
+  const found = withNpcsNear(Common.core.World, [away, lobby], () => Rewards.findNomad());
+  assert.equal(found, false, 'found: the task stops');
+  assert.equal(lobby.transform, 10555);
+  assert.equal(away.transform, -1);
 });

@@ -190,6 +190,20 @@ function imbue({ player, slot }) {
   return true;
 }
 
+/**
+ * "soul-wars:refund-imbue" { player, imbuedItemId, refunded }: an item imbued here and lost to a PvP death gets its
+ * Zeal Tokens back (Wiki, Black mask (i): the player is reimbursed the "Zeal Tokens"), the price the shop shows now
+ * (halved with the Hard rewards, as the Nightmare Zone's refund). `refunded` is the tokens paid, left null when the
+ * shop doesn't imbue that item.
+ */
+function refundImbue(request) {
+  const slot = enumOf("imbueIndex").get(Number(request?.imbuedItemId));
+  const cost = slot == null ? null : imbueCost(request.player, slot);
+  if (cost == null) return;
+  Common.addVarp(request.player, "zeal_tokens", cost);
+  request.refunded = cost;
+}
+
 // ---------------------------------------------------------------- other rewards
 
 function otherList({ player, slot, opId }) {
@@ -258,9 +272,8 @@ function buyOther({ player, slot }) {
 /** The lobby's Nomad takes his transforming form, so each player's tutorial varbit picks his options. */
 function findNomad() {
   if (nomadFound) return false;
-  const npcs = Common.core.World?.getNpcs?.();
-  for (const npc of npcs ?? []) {
-    if (npc?.getId?.() !== NOMAD_SPAWNED || !Common.inBox(npc.getLocation(), Common.data.lobby.bounds)) continue;
+  for (const npc of Common.npcsInBox(Common.data.lobby.bounds)) {
+    if (npc?.getId?.() !== NOMAD_SPAWNED) continue;
     npc.setNpcTransformationId?.(NOMAD_ROOT);
     nomadFound = true;
     return false;
@@ -273,9 +286,10 @@ function attachRewards(api) {
   api.onInterfaceActionButton(uid("xp_rewards"), whileOpen(xpList));
   api.onInterfaceActionButton(uid("confirm_xp"), whileOpen(buyXp));
   api.onInterfaceActionButton(uid("confirm_imbue"), whileOpen(imbue));
+  api.onCustomEvent("soul-wars:refund-imbue", refundImbue);
   api.onInterfaceActionButton(uid("other_rewards"), whileOpen(otherList));
   api.onInterfaceActionButton(uid("confirm_other"), whileOpen(buyOther));
   Common.every(findNomad);
 }
 
-module.exports = { attachRewards, open, canShop, xpList, buyXp, imbue, otherList, buyOther, xpPerToken, findNomad, SHOP_ID };
+module.exports = { attachRewards, open, canShop, xpList, buyXp, imbue, refundImbue, otherList, buyOther, xpPerToken, findNomad, SHOP_ID };

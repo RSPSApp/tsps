@@ -6,7 +6,7 @@ function openPresets({ player }) {
   if (player.busy?.()) {
     player.getPacketSender().sendInterfaceRemoval();
   }
-  Presets.openPresetInterface(player, Presets.getGlobalPresetPool()[0] ?? null);
+  Presets.openPresetInterface(player);
   return true;
 }
 

@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-197 quests · ✅ passed: 26 · ⚠️ passed with issues: 20 · 🔄 in progress: 9 · ❌ failed: 1 · 🔁 needs recheck: 43 · untested: 98
+197 quests · ✅ passed: 26 · ⚠️ passed with issues: 20 · 🔄 in progress: 10 · ❌ failed: 1 · 🔁 needs recheck: 43 · untested: 97
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -109,7 +109,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Mountain Daughter | untested |  |  |  |  |
 | [Mourning's End Part I](mournings-end-part-i/README.md) | untested |  |  |  |  |
 | Mourning's End Part II | untested |  |  |  |  |
-| [Mudfoot's Big Adventure](mudfoots-big-adventure/README.md) | untested |  | agent | claude-sonnet-5-5 | 10 |
+| [Mudfoot's Big Adventure](mudfoots-big-adventure/README.md) | untested |  |  |  |  |
 | [Murder Mystery](murder-mystery/README.md) | ✅ passed | 2026-10-25 | agent |  |  |
 | My Arm's Big Adventure | untested |  |  |  |  |
 | [Nature Spirit](nature-spirit/README.md) | untested |  |  |  |  |
@@ -144,7 +144,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Sheep Herder](sheep-herder/README.md) | untested |  |  |  |  |
 | [Sheep Shearer](sheep-shearer/README.md) | 🔁 needs recheck | 2026-11-07 | agent | claude-opus-5-5 | 5 |
 | [Shield of Arrav](shield-of-arrav/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 7 |
-| Shilo Village | untested |  |  |  |  |
+| [Shilo Village](shilo-village/README.md) | 🔄 in progress | 2026-11-16 | agent | claude-opus-5-5 |  |
 | [Sins of the Father](sins-of-the-father/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Skippy and the Mogres](skippy-and-the-mogres/README.md) | 🔁 needs recheck | 2026-10-31 | agent | deepseek-v4.1-flash | 1 |
 | [Sleeping Giants](sleeping-giants/README.md) | 🔁 needs recheck | 2026-11-08 | agent | claude-sonnet-5-5 |  |

@@ -21,6 +21,7 @@ import { TaskManager } from "../../task/TaskManager";
 import { Stopwatch } from "../../../util/Stopwatch";
 import { TimerRepository } from "../../../util/timers/TimerRepository";
 import { Misc } from "../../../util/Misc";
+import type { Area } from "../../model/areas/Area";
 import type { Boundary } from "../../model/Boundary";
 
 const getPlayerCtor = lazyRequire(() =>
@@ -152,6 +153,14 @@ export abstract class Mobile extends Entity {
     public abstract onRemove(): void;
 
     public abstract manipulateHit(hit: PendingHit): PendingHit;
+
+    public override setArea(area: Area): void {
+        const previousPrivateArea = this.getPrivateArea();
+        super.setArea(area);
+        if (this.isPlayer() && this.isRegistered() && previousPrivateArea !== this.getPrivateArea()) {
+            getWorld().onPlayerAreaChanged(this.getAsPlayer(), previousPrivateArea);
+        }
+    }
 
     public override setLocation(location: Location): Mobile {
         const previousLocation = this.getLocation();
@@ -756,14 +765,15 @@ export abstract class Mobile extends Entity {
             outcome = 0;
         hit.setHealthLost(this.getHitpoints() - outcome);
         const source = hit.getSource();
+        if (this.isNpc() && hit.getHealthLost() > 0 && source && source !== this) this.getCombat().getLastDamage().reset();
         // Reflections land separately from the attack, sometimes after their source died.
         if (hit.isReflected() && source && source !== this && hit.getHealthLost() > 0) {
             if (this.isNpc()) {
                 // Such a hit pauses regeneration, but it never takes a single-way NPC from
                 // the player fighting it, and a dead or logged-out source tags nobody. While
-                // another attacker is held its own clock is left alone: restarting it would keep
-                // an absent fighter's tag alive, and regeneration (20s) can't start before that
-                // tag expires (6s), which resets the clock anyway.
+                // another attacker is held its PJ clock is left alone: restarting it would
+                // keep an absent fighter's tag alive. The independent damage clock above
+                // delays regeneration even when this reflection cannot renew that tag.
                 const combat = this.getCombat();
                 const attacker = combat.getAttacker();
                 const sourceLive = source.isRegistered() && source.getHitpoints() > 0;

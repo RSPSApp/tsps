@@ -179,7 +179,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `construction:materials` | Construction, before a build's materials go | `{ player, buildable, materials }`: a listener may lower an amount |
 | `magic:enchant-pieces`, `magic:spell-batch` | the jewellery enchantments; the Lunar crafting spells | `{ player, spellName, itemId, pieces }` pieces a cast enchants, each with its XP; `{ player, spellName, batch }` items a cast converts |
 | `magic:alchemy-policy` (extended) | core alchemy | now with `high` (High Level Alchemy) |
-| `minigame:chance` | the Motherlode Mine (`golden-nugget`), Hunter's drift nets and the Volcanic Mine (`fossil-island` `fossil`); also asked, with nothing in a league answering: the Fishing Trawler (`angler-outfit`), the Hallowed Sepulchre (`strange-lockpick`, `ring-of-endurance`), Pyramid Plunder (`pharaohs-sceptre`), the Gnome Restaurant's hard tip (`unique`: the goggles and scarf rows), Tai Bwo Wannai Cleanup (`gout-tuber`) and aerial fishing (`golden-tench`) | `{ player, minigame, kind, multiplier }`: the find `multiplier` times as likely (below 1 counts as 1) |
+| `minigame:chance` | the Motherlode Mine (`golden-nugget`), Hunter's drift nets and the Volcanic Mine (`fossil-island` `fossil`); the Fishing Trawler (`angler-outfit`), the Hallowed Sepulchre (`ring-of-endurance`), Pyramid Plunder (`pharaohs-sceptre`), Tai Bwo Wannai Cleanup (`gout-tuber`) and aerial fishing (`golden-tench`), which the league answers through `MINIGAME_FINDS`; also asked, with nothing in a league answering: the Hallowed Sepulchre's `strange-lockpick` and the Gnome Restaurant's hard tip (`unique`: the goggles and scarf rows) | `{ player, minigame, kind, multiplier }`: the find `multiplier` times as likely (below 1 counts as 1) |
 | `big-chompy-bird-hunting:kill-credit` | Big Chompy Bird Hunting's kill count | `{ player, kills }` a chompy kill counts for |
 | `thieving:pickpocket-target` (extended) | Thieving | now with `chanceBonus` (a percent more success, stacking as the gloves of silence do) and `painless` (a stun without the damage) |
 | `thieving:loot` (extended) | Thieving | now with `multiplier`, applied with the rogue outfit's doubling as the loot is handed over |
@@ -722,10 +722,11 @@ rule from the Wiki's Shattered Relics pages. They draw only for league type 3 (v
   server's, said once per boss every few seconds.
 
 Not yet: Barbarian Assault's honour points and the Rogues' Den safe, which this server
-doesn't have; Rune Escape, which needs the Ourania Altar this server doesn't have; Plank
+doesn't have; Rune Escape's fragment effect (the Ourania Altar itself is implemented); Plank
 Stretcher outside a house build, as Mahogany Homes; the ranged weapons' own charges, which
 no hook reports; the league's waystone objects themselves (only the portable one's teleports
-are here); The Alchemist's jugs of wine (no wine making here). Fishing has no clue bottles of
+are here); The Alchemist's wine batching (wine making exists, but its `make` loop is not among
+the set's supported `cook` activities). Fishing has no clue bottles of
 its own, so Message In A Bottle reaches only Hunter's aerial fishing and drift nets for bottles.
 A listed fragment can also be dragged onto a slot (no recording; the cache's drag scripts):
 each fragment's icon gets DEPTH1, a slot's fragment (735:36) and its frame (735:35) DRAGTARGET,
@@ -1044,8 +1045,9 @@ Animal Wrangler's Hunter and cooking ones) do not.
   pottery, gems, glassblowing, spinning), and a 25% chance of the same product again, banked with
   its XP (`skills:produced`; only when the bank has room). "All at once" is up to 28 a cycle, the
   inventory's slots: ours. Molten glass, smelted at a furnace, is Crafting and not on either
-  list. Not here: jugs of wine (no wine making in this server); Guardians of the Rift's essence is
-  not a Crafting loop here, so the Wiki's exclusion holds.
+  list. Wine making and fermentation are implemented, but the wine-making `make` loop is not
+  batched by this relic's `cook` activity. Guardians of the Rift's essence is not a Crafting loop
+  here, so the Wiki's exclusion holds.
 - **Production Master** (Raging Echoes tier 5): the same list all at once, plus arrow shafts,
   headless arrows, arrows, bolts and gem-tipped bolts, and darts (10 times the usual a cycle,
   Wiki; darts and bolts by default fletch in one click, and that click makes 10 too), and amethyst
@@ -1302,14 +1304,18 @@ Tier 1 counts once the character chose its first relic.
   Wintertodt's reward cart and supply crates (`Wintertodt`), Tempoross's reward pool
   (`Tempoross`) and the Rewards Guardian's rare table (`Guardians of the Rift`) ask per search:
   each boosted unique's own 1-in-n roll is that many times as likely (warm gloves 1/150 to 5/150,
-  the Wiki's 1/30); the pets and the intricate pouch are not boosted. Sources rolled by their own
-  plugins are in the data but inert until that plugin asks `drops:chance` with the source's name:
-  the Grotesque Guardians, Corporeal Beast's sigils (not on its table here), the Gauntlet,
-  Fishing Trawler, the Grand Hallowed Coffin, Moons
-  of Peril, the Colosseum, Hunter rumours, the Shrine, the seed pack, aerial fishing, the
-  Fountain of Rune, Larran's and the brimstone chest, the Zombie Pirate's Locker, chewed bones,
-  the Volcanic Mine ore pack, Pyramid Plunder, Tai Bwo Wannai, Shades of Mort'ton, and the
-  pickpocketed blood shards (vyres) and teleport seeds (elves).
+  the Wiki's 1/30); the pets and the intricate pouch are not boosted. Minigames that ask
+  `minigame:chance` { player, minigame, kind, multiplier } for one rare find get the rate on
+  that find when its source's row names it (`MINIGAME_FINDS` in `BoostedDrops.LeagueMode.js`):
+  Pyramid Plunder's sceptre (`Pyramid plunder`), the Grand Hallowed Coffin's ring of endurance,
+  Fishing Trawler's angler pieces, Tai Bwo Wannai's gout tuber and, in Raging Echoes and Demonic
+  Pacts, aerial fishing's golden tench (the coffins' strange lockpick is not on the pages).
+  Sources rolled by their own plugins are in the data but inert until that plugin asks
+  `drops:chance` with the source's name: the Grotesque Guardians, Corporeal Beast's sigils (not
+  on its table here), the Gauntlet, Moons of Peril, the Colosseum, Hunter rumours, the Shrine,
+  the seed pack, the Fountain of Rune, Larran's and the brimstone chest, the Zombie Pirate's
+  Locker, chewed bones, the Volcanic Mine ore pack, Shades of Mort'ton, and the pickpocketed
+  blood shards (vyres) and teleport seeds (elves).
 - **Minigame points** (Trailblazer Reloaded 3x/5x/8x from tiers 2/5/7; Raging Echoes and Demonic
   Pacts 4x/8x from tiers 1/4): a minigame asks `minigame:points { player, minigame, points }` as it awards and
   the league multiplies `points` (floored) when the passive's `minigames` (leagues.json) lists it. Other
@@ -1778,7 +1784,12 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
 - **The map** is ours, since the cache has no map-square to area table: each area lists 64 x 64
   map squares (`rects` and `squares`, map coordinates = tile >> 6) drawn from the Wiki's
   descriptions, over the cache's own map list (`CacheMaps.getRegionIds`). The lowest-numbered area
-  naming a square owns it, a league's `overrides` reassign squares (the Stranglewood: Kourend in
+  naming a square owns it. `tilePolygons` refine named mixed squares using sourced tile-grid outlines,
+  sampling each tile at its centre (`x + 0.5`, `y + 0.5`) with the crossing rule; outline edges
+  are not included separately.
+  The northeast Lumbridge squares use the Wiki's mainland Misthalin outline, leaving Al Kharid's
+  mine outside it. Explicit underground squares include the Chasm of Tears and the Dorgesh-Kaan
+  mine; they do not inherit the Desert from the unrelated surface square. A league's `overrides` reassign squares (the Stranglewood: Kourend in
   Trailblazer Reloaded, Varlamore in Raging Echoes), an unnamed underground square (map y >= 100)
   follows its surface square (the Wiki's "underground areas with an entrance in X"; Taverley
   Dungeon is Asgarnia's, the Underground Pass Tirannwn's by explicit squares; dungeons on no surface
@@ -1787,9 +1798,9 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   levels and the Dagannoth Kings' lair with the Fremennik Province, and in Raging Echoes the Lithkren
   Vault with the Fremennik Province, whose unlock its metal dragons need), and a square nobody
   names is open to everyone: instances, Death's Office, the POH, random events, the essence mine,
-  Tutorial Island (the Wiki's accommodations). Known approximations of the grid: the four tiles
-  between Lumbridge and the Al Kharid gate and Catherby's beach east of x 2816 fall with Al Kharid
-  / Asgarnia, the River Salve's east bank at Paterdomus with Misthalin, the Citharede Abbey and the
+  Tutorial Island (the Wiki's accommodations). The surface-offset fallback remains an
+  approximation of entrance ownership, not an authoritative dungeon map. Known approximations
+  of the remaining grid: Catherby's beach east of x 2816 falls with Asgarnia, the River Salve's east bank at Paterdomus with Misthalin, the Citharede Abbey and the
   Giants' Plateau east of Al Kharid (the map square holding the abbey's own cabbage field) with the
   desert while the Abandoned Mine in the square below stays Morytania, Tutorial Island's eastern
   tip with the desert. `league:area-at { x, y }` answers for any tile.
@@ -1805,7 +1816,11 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   before its exit portal opens, and a locked destination becomes the league home (the respawn rule
   applied to the portal; ours, as no capture shows a locked exit). The league home is the world's spawn, or Misthalin's hub
   (Lumbridge) when the spawn is locked (this world's spawn sits on the Wilderness ditch), so it is
-  always open; a character that logs in inside a locked square (a new one at that spawn, an old
+  always open. Within mixed squares, the synchronous `onPlayerLocationChange` hook checks the
+  committed tile after occupancy and existing map-square hooks, before the movement queue continues.
+  The tile briefly exists in memory before correction; this is post-commit correction, not a veto.
+  A callback redirect clears stale queue directions and synchronizes the actual location as placement.
+  No Area ownership or global player-tick sweep is added. A character that logs in inside a locked square (a new one at that spawn, an old
   one whose square the data no longer gives it) starts there.
 - **The interface**, as captured (227/00070, 00075, 00095, 00196, 01710): the side panel's View
   Areas (656:40) opens `trailblazer_areas` (512) as the main modal with `if_setevents` on its menu
@@ -2299,9 +2314,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   Zombie Pirate Lockers (the plugin drops loot with no menu-option event), the Ornate Lockbox (a
   "Take", no lockbox handler), the Varlamore Moon Chest and its "moon key" chest (no content); so do
   a bucket of sand (no sandpit fill), a grape barrel for the Foreman (its loc has no actions), the
-  icy basalt's Weiss teleport, a herring on a Mighty tree, an Elven teleport crystal and a
-  teleport-anchoring scroll (no plugin answers their use), and a Sacred eel dissection (no dissection
-  interaction). Obtain tasks with no content behind them also stay unmapped: Arnold Lydspor's Swan
+  icy basalt's Weiss teleport, a herring on a Mighty tree, an Elven teleport crystal, and a
+  teleport-anchoring scroll (its Read task is now mapped; Abyssal demon player teleports are handled,
+  while Elder Chaos druid pulls remain unsupported; see teleport-anchoring-scroll.md), and a Sacred
+  eel dissection (no dissection interaction). Obtain tasks with no content behind them also stay
+  unmapped: Arnold Lydspor's Swan
   Song hands over only a small fishing net ("Receive a gift from Arnold"), a Gorak exists only in
   its quest and has no drop table ("Get a Gem from a Gorak"), an Ecumenical Key is only a Nex shard
   combine here, not the Wilderness God Wars drop the task names ("Obtain an Ecumenical Key"), the

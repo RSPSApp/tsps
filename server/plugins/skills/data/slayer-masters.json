@@ -66,6 +66,10 @@
     "127": ["Bronze dragon", "Iron dragon", "Steel dragon", "Mithril dragon", "Adamant dragon", "Rune dragon"],
     "131": ["Venator", "Blood-starved venator"]
   },
+  "_unlockKills": "Rewards unlocks that make one kill count as more than one towards the task, by the slayer_unlock name and the NPC names whose death is the counted kill (Wiki, Slayer Rewards, Double Trouble: \"Slaying Dusk and Dawn now counts for two kills towards your task rather than one.\"; the pair's one counted kill is Dusk's death, Kills.GrotesqueGuardians.js).",
+  "unlockKills": [
+    {"unlock": "Double Trouble", "names": ["Dusk"], "kills": 2}
+  ],
   "_taskQuests": "Quests a task needs before a master assigns it (Wiki, Slayer task): by task id, any one of `any` complete, or only started where the Wiki says a quest is needed partially (`started`). The quest plugins answer quest:is-complete / quest:is-started; a quest tsps doesn't have yet gets no answer and doesn't block (The Blood Moon Rises for Venators, so that is left out).",
   "taskQuests": {
     "23": {"task": "Ghouls", "any": ["priest_in_peril"]},

@@ -71,6 +71,7 @@ function setup() {
   const varbits = new Map();
   const configs = new Map();
   const messages = [];
+  const statements = [];
   const itemAmounts = new Map();
   const stackableItems = new Set([core.ItemIdentifiers.SHRUNK_OGLEROOT]);
   const xp = new Map();
@@ -199,6 +200,7 @@ function setup() {
     moveTo(next) { location = next; },
     getUsername: () => 'qh728-q053',
     sendMessage: (message) => messages.push(message),
+    getDialogueManager: () => ({ startDialogues(chain) { statements.push(JSON.stringify(chain, (key, value) => value instanceof Map ? [...value.values()] : value)); } }),
     isRegistered: () => true,
   };
 
@@ -264,7 +266,7 @@ function setup() {
   };
 
   return {
-    quest, player, attributes, itemAmounts, varbits, configs, messages, prompts, spawned, registeredObjects,
+    quest, player, attributes, itemAmounts, varbits, configs, messages, statements, prompts, spawned, registeredObjects,
     otherPlayer,
     groundItems, xp, variant, condition, line, choice, action, object, onObject, onNpc, useItems,
     playNote,
@@ -648,7 +650,8 @@ test('Grim Tales destroyed-bean recovery selects the canonical receipt tail', ()
   assert.equal(choice?.variant, 'getting-sylas-magic-bean-returning-to-sylas');
   assert.equal(typeof choice?.select, 'function');
   const dialogue = require('../data/definitions/npc-dialogues.json')['Grim Tales'];
-  const selected = choice.select(dialogue.variants[choice.variant]);
+  // speaker_ids is derived identity metadata; this checks which steps are selected.
+  const selected = choice.select(dialogue.variants[choice.variant]).map(({ speaker_ids, ...step }) => step);
   assert.deepEqual(selected, [
     { type: 'line', speaker: 'Sylas', text: 'Here are the beans as promised.' },
     { type: 'action', action: 'receive', text: 'Magic beans', id: '4ncaBB' },
@@ -759,7 +762,10 @@ test('shrink-me-quick at Herblore 51 unboosted is refused with nothing consumed 
   assert.equal(h.itemAmounts.get(I.TARROMIN_POTION_UNF_), 1);
   assert.equal(h.itemAmounts.get(I.SHRINK_ME_QUICK) ?? 0, 0);
   assert.equal(h.xp.get(HERBLORE) ?? 0, 0);
-  assert.deepEqual(h.messages, [SHRINK_LEVEL_MESSAGE]);
+  // The Herblore skill's refusal: a messagebox (rsprox_transcripts/227/910269.txt tick 22640), not a chat line.
+  assert.deepEqual(h.messages, []);
+  assert.equal(h.statements.length, 1);
+  assert.ok(h.statements[0].includes(JSON.stringify(SHRINK_LEVEL_MESSAGE)), h.statements[0]);
 });
 
 test('shrink-me-quick at Herblore 51 with a real skills:level-boost of +1 is made, for 6 XP', () => {

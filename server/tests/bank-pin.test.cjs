@@ -404,6 +404,58 @@ test("the host key needs the server's secret, so a save file cannot be tried aga
   assert.equal(Common.isUnlocked(player), false);
 });
 
+// writeFileSync's mode only applies when it creates the file, so an invalid key is replaced by a new
+// owner-only file renamed over it: the new secret is never written into the old file under its old mode.
+test("an invalid host key file is replaced by a new owner-only (0600) file, never rewritten in place", (t) => {
+  const secretFile = path.join(secretDir, 'bank-pin-host-rewrite.key');
+  fs.writeFileSync(secretFile, 'not a secret\n', { mode: 0o644 });
+  const writes = [];
+  const renames = [];
+  const writeFileSync = fs.writeFileSync;
+  const renameSync = fs.renameSync;
+  t.mock.method(fs, 'writeFileSync', (file, data, options) => { writes.push([file, options]); return writeFileSync(file, data, options); });
+  t.mock.method(fs, 'renameSync', (from, to) => { renames.push([from, to]); return renameSync(from, to); });
+  Common.setHostSecretFile(secretFile);
+  const player = withPin("1234");
+  player.getHostAddress = () => "203.0.113.5";
+  Common.hostKey(player);
+  assert.match(fs.readFileSync(secretFile, 'utf8').trim(), /^[0-9a-f]{64}$/, "the invalid secret is replaced");
+  assert.equal(writes.length, 1);
+  const [temp, options] = writes[0];
+  assert.notEqual(temp, secretFile, "the old file is not written in place");
+  assert.equal(options.mode, 0o600);
+  assert.equal(options.flag, 'wx', "the secret goes into a file made new, so its mode applies");
+  assert.deepEqual(renames, [[temp, secretFile]]);
+  assert.equal(fs.existsSync(temp), false);
+  // Windows keeps no POSIX mode bits to read back.
+  if (process.platform !== 'win32') assert.equal(fs.statSync(secretFile).mode & 0o777, 0o600);
+  // A valid file is read as it is: no rewrite.
+  writes.length = 0;
+  renames.length = 0;
+  Common.setHostSecretFile(secretFile);
+  Common.hostKey(player);
+  assert.deepEqual(writes, []);
+  assert.deepEqual(renames, []);
+  Common.setHostSecretFile(path.join(secretDir, 'bank-pin-host.key'));
+});
+
+test("a host key secret that cannot be moved into place warns it was not saved and leaves no temp file", (t) => {
+  const secretFile = path.join(secretDir, 'bank-pin-host-unsaved.key');
+  t.mock.method(fs, 'renameSync', () => { throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' }); });
+  const warnings = [];
+  t.mock.method(console, 'warn', (line) => warnings.push(line));
+  Common.setHostSecretFile(secretFile);
+  const player = withPin("1234");
+  player.getHostAddress = () => "203.0.113.5";
+  const key = Common.hostKey(player);
+  assert.match(key, /^[0-9a-f]{64}$/, "a secret for this run still gives a key");
+  assert.equal(fs.existsSync(secretFile), false);
+  assert.deepEqual(fs.readdirSync(secretDir).filter((name) => name.startsWith('bank-pin-host-unsaved.key.')), []);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /could not save the host key secret/);
+  Common.setHostSecretFile(path.join(secretDir, 'bank-pin-host.key'));
+});
+
 test("settings buttons act only with the screen open, from the layer shown, and with the PIN", () => {
   const player = withPin("1234");
   click(player, u().settings.hasPinDelay);

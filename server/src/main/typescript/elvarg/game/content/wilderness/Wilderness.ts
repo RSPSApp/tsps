@@ -1,4 +1,5 @@
 import { Location } from "../../model/Location";
+import { Boundary } from "../../model/Boundary";
 import { Mobile } from "../../entity/impl/Mobile";
 import { WORLD_ZONE_BOUNDARIES } from "../../definition/WorldDefinition";
 
@@ -38,6 +39,27 @@ export class Wilderness {
         }
         return !Wilderness.isInSafeBuilding(location) && !WORLD_ZONE_BOUNDARIES.safe.some((boundary) => boundary.inside(location))
             && Wilderness.isPvpArea(location);
+    }
+
+    /**
+     * The Wilderness map's own PvP ground (world.json zones with bounds), not a PvP world's
+     * global `pvp` tag. The PJ timer's 20-tick Wilderness rule follows geography; the global
+     * tag only makes the whole world attackable and uses the PvP-world timer elsewhere.
+     */
+    public static isGeographicPvp(location: Location | null | undefined): boolean {
+        if (!location) {
+            return false;
+        }
+        if (Wilderness.isInSafeBuilding(location) || WORLD_ZONE_BOUNDARIES.safe.some((boundary) => boundary.inside(location))) {
+            return false;
+        }
+        return WORLD_ZONE_BOUNDARIES.pvp.some((boundary) => !Wilderness.isGlobalPvpBoundary(boundary) && boundary.inside(location));
+    }
+
+    /** A PvP zone with no map bounds covers every tile (a PvP world's global tag). */
+    private static isGlobalPvpBoundary(boundary: Boundary): boolean {
+        return boundary.getX() <= 0 && boundary.getX2() >= 0x3fff
+            && boundary.getY() <= 0 && boundary.getY2() >= 0x3fff;
     }
 
     public static isIn(character: Mobile | null | undefined): boolean {

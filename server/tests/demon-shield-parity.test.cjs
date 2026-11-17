@@ -69,6 +69,7 @@ function player() {
   const index = actorIndex++;
   const inventory = {
     getAmount: (id) => items.get(id) || 0,
+    contains: (id) => (items.get(id) || 0) > 0,
     adds: (id, amount) => items.set(id, (items.get(id) || 0) + amount),
     deleteNumber: (id, amount) => items.set(id, Math.max(0, (items.get(id) || 0) - amount)),
     getFreeSlots: () => 28 - [...items].reduce((sum, [id, amount]) => sum + (id === 995 ? Number(amount > 0) : amount), 0),

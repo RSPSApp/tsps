@@ -84,6 +84,7 @@ SlayerHelmet.register({
   onItemOnItem() {},
   onItemAction: (name, actions) => itemActions.set(name, actions),
   onPlayerDeathItemDrop() {},
+  onPlayerDeathDrops() {},
   onCustomEvent() {},
 });
 

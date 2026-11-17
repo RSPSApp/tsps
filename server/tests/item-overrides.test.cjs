@@ -15,9 +15,7 @@ const BONES = 526;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
-  ItemDefinitionLoader._test.loadItemPrices();
-  ItemDefinitionLoader._test.loadItemAlch();
-  ItemDefinitionLoader._test.loadItemGuidePrices();
+  ItemDefinitionLoader.register({ log() {}, registerContentEndpoint() {}, onPlayerLogin() {} });
 });
 
 // Runs first: the next test makes the whip untradeable, which leaves it no examine price line.
@@ -47,6 +45,7 @@ test("a world's overrides win over the cache, prices and alch", () => {
   assert.equal(whip.getHighAlchValue(), 1);
   assert.equal(whip.getDropValue(), 5);
   assert.equal(whip.isTradeable(), false);
+  assert.equal(whip.isPlayerTradeable(), false, "not tradeable between players either");
   assert.equal(whip.isSellable(), false);
   assert.equal(whip.getAttackSpeed(), 3);
   assert.deepEqual(whip.getBonuses(), bonuses);
@@ -54,6 +53,16 @@ test("a world's overrides win over the cache, prices and alch", () => {
   assert.equal(whip.getExamine(), "Sharper.");
   bonuses[1] = 0;
   assert.equal(whip.getBonuses()[1], 90, "the definition keeps its own copy");
+});
+
+test("a tradeable override decides player trading too, both ways", () => {
+  const DUELING_3 = 2562;       // trades, not on the Exchange
+  const ECUMENICAL_KEY = 11942; // the cache's tradeable=no
+  assert.equal(ItemDefinition.forId(DUELING_3).isPlayerTradeable(), true);
+  ItemDefinitionLoader._test.applyItemOverrides({ [DUELING_3]: { tradeable: false }, [ECUMENICAL_KEY]: { tradeable: true } });
+  assert.equal(ItemDefinition.forId(DUELING_3).isPlayerTradeable(), false);
+  assert.equal(ItemDefinition.forId(ECUMENICAL_KEY).isTradeable(), true);
+  assert.equal(ItemDefinition.forId(ECUMENICAL_KEY).isPlayerTradeable(), true);
 });
 
 test("invalid fields and unknown items are skipped, not fatal", () => {

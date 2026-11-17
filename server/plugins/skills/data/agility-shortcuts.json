@@ -772,8 +772,16 @@
       "object": 23274,
       "level": 20,
       "xp": 8.5,
+      "busy": true,
       "render": "BALANCE_WALK",
-      "between": {"ends":[[2598,3477,0],[2603,3477,0]],"cross":[{"walk":["to"]}]}
+      "start": {"spam":"You walk carefully across the slippery log..."},
+      "end": {"spam":"... and make it safely to the other side."},
+      "between": {
+        "ends":[[2598,3477,0],[2603,3477,0]],
+        "via":[[2599,3477,0],[2602,3477,0]],
+        "cross":[{"walk":["via0"]},{"sound":2470,"loops":2},{"walk":["via1"]},{"sound":2470},{"walk":["to"]}]
+      },
+      "note": "rsprox captures 353, local 1001512, 1001582, 1002239, 1002251"
     },
     {
       "name": "Log balance (Fremennik Province)",
@@ -781,29 +789,17 @@
       "level": 48,
       "xp": 4,
       "render": "BALANCE_WALK",
-      "fail": {
-        "low": 140,
-        "high": 255,
-        "xp": 2,
-        "steps": [
-          {"anim":"BALANCE_FALL"},
-          {"wait":1},
-          {"hit":[1,3]},
-          {"msg":"You slip and fall."}
-        ]
-      },
-      "unverified": "the failure's steps (no capture); the walk (the capture only shows the sounds and messages)",
-      "between": {
+      "busy": true,
+      "fail": {"low": 140, "high": 255, "xp": 2},
+      "script": "fremennikLogBalance",
+      "params": {
         "ends": [[2722,3592,0],[2722,3596,0]],
-        "cross": [
-          {"sound":2470,"loops":2},
-          {"msg":"You attempt to walk across the slippery log."},
-          {"walk":["to"]},
-          {"sound":2470,"loops":2},
-          {"msg":"You make it across the log without any problems."}
-        ]
+        "middle": [2722,3594],
+        "fall": [2724,3594],
+        "river": [[2725,3594],[2726,3595],[2726,3596],[2725,3597]]
       },
-      "note": "rsprox captures 359"
+      "unverified": "a failure from the north end (every captured failure starts from the south); the walk and swim render ids (the captures' appearance blocks carry none)",
+      "note": "rsprox captures 359, 1001623, 1001631, 1001653, 1001659, 1001991, 1002015, 1002076"
     },
     {
       "name": "Loose railing (Fishing Guild)",
@@ -2197,8 +2193,8 @@
       "name": "Stile (Burthorpe)",
       "object": 3730,
       "level": 1,
-      "end": "You climb over the stile.",
-      "between": {"ends":[[2817,3561,0],[2817,3564,0]],"cross":[{"use":"climbOver","args":["to"]}]}
+      "note": "Tenzing's stile (1x2, both tiles blocked), rsprox local 1001676, 1001683 and 1001800 (5 crossings, all northbound): from 2817,3561 a forced step onto the stile (2817,3562), the next tick human_walk_style (839) and exact_move at cycles 30-94 to 2817,3563, and when the 3 busy ticks end a step off it to 2817,3564 (1001800 tick 25275); no message. Ours: southbound is the same mirrored (no capture)",
+      "between": {"ends":[[2817,3561,0],[2817,3564,0]],"via":[[2817,3562,0],[2817,3563,0]],"cross":[{"walk":["via0"]},{"move":"via1","anim":"CLIMB_OVER","delay":30,"speed":[30,94],"ticks":3},{"walk":["to"]}]}
     },
     {
       "name": "Rocks (God Wars Dungeon path)",

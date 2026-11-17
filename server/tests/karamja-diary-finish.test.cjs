@@ -254,7 +254,7 @@ test("a cart ride takes the quoted fare and moves to the other cart; a poor play
   assert.equal(poor.getAttribute("moved"), undefined);
 });
 
-test("Vigroy's exported message charges and arrives, without a speech-line event", () => {
+test("Vigroy's ride charges and arrives on its exported action, once: the boxes around it don't ride (rev 242 capture)", () => {
   const api = bus({ quests: { shilo_village: true } });
   Cart.register(api);
   const player = playerAt(2831, 2952, 0, { coins: 500 });
@@ -262,9 +262,14 @@ test("Vigroy's exported message charges and arrives, without a speech-line event
   api.fire("variant", { player, definition });
   const transcript = require("../data/definitions/npc-dialogues.json").Vigroy;
   const variant = transcript.variants[Cart._test.DRIVERS.get(5357).normal];
-  const message = variant[1].options[0].steps[1].steps[0];
-  assert.equal(message.type, "message");
-  api.fire("npc-dialogue:action", { player, definition, kind: message.type, text: message.text });
+  const steps = variant[1].options[0].steps[1].steps;
+  const action = steps.find((step) => step.type === "action");
+  assert.equal(action.text, "The player is transported to Brimhaven");
+  for (const step of steps.filter((entry) => entry.type === "message")) {
+    api.fire("npc-dialogue:action", { player, definition, kind: "message", text: step.text });
+  }
+  assert.equal(player.getAttribute("moved"), undefined, "the boxes alone don't ride");
+  api.fire("npc-dialogue:action", { player, definition, text: action.text });
   assert.equal(player.getAttribute("moved").getY(), 3214);
   assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.COINS), 475);
 });

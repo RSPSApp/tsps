@@ -394,6 +394,13 @@ module.exports = function registerKingsRansomQuest(api) {
     return player.getAttribute(DISGUISE_ATTRIBUTE) === true;
   }
 
+  /** Wiki: the gates return a player after a trapped grail box, until Arthur returns to Camelot. */
+  function needsGateJailRecovery(player) {
+    const stage = stageOf(player);
+    return stage > STAGE_STATUE && (stage < STAGE_FREED_ARTHUR
+      || (stage === STAGE_FREED_ARTHUR && !disguiseGiven(player)));
+  }
+
   /** 11681 has no static spawn; register the dining-room paper for the owner. */
   function ensureScrapPaper(player) {
     const stage = stageOf(player);
@@ -879,8 +886,13 @@ module.exports = function registerKingsRansomQuest(api) {
     return false;
   }
 
-  function talkSquire(player, npcId, stage) {
+  function talkSquire(player, npcId, stage, npc = null) {
     if (stage < STAGE_COMPLETE) return false;
+    // The Knight Waves own the squire once the quest is done; play their rules/refusal
+    // conversation when that plugin is loaded, otherwise keep the quest's own line.
+    const request = { player, npcId, npc, handled: false };
+    api.emitCustomEvent("knight-waves:squire", request);
+    if (request.handled) return true;
     return play(player, npcId, "post-quest-dialogue-talking-to-squire") || true;
   }
 
@@ -930,7 +942,7 @@ module.exports = function registerKingsRansomQuest(api) {
       return;
     }
     if (npcId === SQUIRE_ID) {
-      if (talkSquire(player, npcId, stage)) event.handled = true;
+      if (talkSquire(player, npcId, stage, event.npc)) event.handled = true;
       return;
     }
     const fragment = SERVANT_FRAGMENTS.get(npcId);
@@ -1130,7 +1142,7 @@ module.exports = function registerKingsRansomQuest(api) {
       return;
     }
     if (CAMELOT_GATE_IDS.has(objectId) || SINCLAIR_GATE_IDS.has(objectId)) {
-      if (stage <= STAGE_STATUE || stage >= STAGE_CELL_OPEN) return;
+      if (!needsGateJailRecovery(player)) return;
       player.moveTo(JAIL_TILE);
       event.handled = true;
     }
@@ -1151,7 +1163,8 @@ module.exports = function registerKingsRansomQuest(api) {
       play(player, NpcIdentifiers.MERLIN, "prison-break-solving-the-riddle-and-finding-the-grail");
       return;
     }
-    play(player, NpcIdentifiers.MERLIN, "prison-break-booby-trapped-box");
+    // The transcript message iWIqF7 owns its damage and teleport; only a missing transcript needs the fallback.
+    if (play(player, NpcIdentifiers.MERLIN, "prison-break-booby-trapped-box")) return;
     player.getCombat().getHitQueue().addPendingDamage([new HitDamage(5, HitMask.RED)]);
     player.moveTo(ARDOUGNE_CAVE_TILE);
   }
@@ -1228,8 +1241,7 @@ module.exports = function registerKingsRansomQuest(api) {
   function handleGateToggleClaim(request) {
     const { player, objectId } = request;
     if (!player || !CAMELOT_GATE_IDS.has(objectId)) return;
-    const stage = stageOf(player);
-    if (stage <= STAGE_STATUE || stage >= STAGE_CELL_OPEN) return;
+    if (!needsGateJailRecovery(player)) return;
     request.handled = true;
     player.moveTo(JAIL_TILE);
   }

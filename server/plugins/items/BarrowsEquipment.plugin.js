@@ -11,6 +11,7 @@ const { HitDamage } = require("../../src/main/typescript/elvarg/game/content/com
 const { HitMask } = require("../../src/main/typescript/elvarg/game/content/combat/hit/HitMask");
 const { Graphic } = require("../../src/main/typescript/elvarg/game/model/Graphic");
 const { WeaponInterfaceManager } = require("../../src/main/typescript/elvarg/game/content/combat/WeaponInterfaceManager");
+const ValueWarning = require("../interface/ValueWarning");
 
 const META_KEY = "barrows";
 const MAX_DURABILITY = 1000;
@@ -70,10 +71,7 @@ function checkDurability(event) {
     ? event.option ?? definition.params?.get?.(WORN_OPTION_PARAM + event.clickType - FIRST_WORN_OPTION_CLICK)
     : definition.inventoryActions?.[event.clickType - 1];
   if (option !== "Check") return;
-  const slot = event.item.getDefinition().getEquipmentType().getSlot();
-  const part = { [Equipment.HEAD_SLOT]: "helm", [Equipment.WEAPON_SLOT]: "weapon",
-    [Equipment.BODY_SLOT]: "body", [Equipment.LEG_SLOT]: "legs" }[slot];
-  const name = `${baseName(event.item).split("'s")[0]}'s ${part}`;
+  const name = pieceName(event.item);
   const pristine = Barrows.isPristine(event.itemId);
   const percent = Math.ceil(((durability(event.item) - 1) % 250 + 1) * 100 / 250);
   event.player.sendMessage(pristine
@@ -88,6 +86,16 @@ function checkDurability(event) {
  * hood, Karil's coif), body, legs ("have", platelegs) or skirt, weapon.
  */
 function degradedLine(item) {
+  const name = pieceName(item);
+  return `<col=ef1020>${name} ${name.endsWith(" legs") ? "have" : "has"} degraded slightly.</col>`;
+}
+
+/**
+ * "<Brother>'s <part>", as both the degrade line and Check name the piece: rsprox 2600/2601 Check "Torag's weapon" and
+ * "Torag's legs", the degrade lines above "Torag's helmet" and "Torag's weapon". Ours: Check naming a head piece the
+ * degrade line's way (hood, coif, helmet); no recording Checks a helm.
+ */
+function pieceName(item) {
   const name = baseName(item);
   const brother = name.split("'s")[0];
   const slot = item.getDefinition?.()?.getEquipmentType?.()?.getSlot?.();
@@ -95,7 +103,7 @@ function degradedLine(item) {
   if (slot === Equipment.HEAD_SLOT) part = /hood/i.test(name) ? "hood" : /coif/i.test(name) ? "coif" : "helmet";
   else if (slot === Equipment.BODY_SLOT) part = "body";
   else if (slot === Equipment.LEG_SLOT) part = /skirt/i.test(name) ? "skirt" : "legs";
-  return `<col=ef1020>${brother}'s ${part} ${part === "legs" ? "have" : "has"} degraded slightly.</col>`;
+  return `${brother}'s ${part}`;
 }
 
 function sendDegradeMessage(player, item, stage) {
@@ -156,6 +164,43 @@ function degradeEquipment(player) {
   return changed;
 }
 
+/**
+ * Each player's current fight: `cycle`, when its first swing (theirs or one at them) started, and `seen`, once the
+ * player was in combat after it. `outgoing` preserves a genuine first use when manual spell teardown clears the
+ * target before the next task. Cleared when a seen fight ends.
+ */
+const engagedCycles = new WeakMap();
+/**
+ * How long a swing at a player keeps its record before the player is in combat. The defender only gets an attacker
+ * when the hit lands (CombatFactory sets under-attack on impact), a turn or more after the swing, and their task can
+ * run in between; ranged and magic hits land up to several ticks later. Ours: 10 ticks covers the longest of those.
+ */
+const PENDING_SWING_TICKS = 10;
+
+function processCycle() {
+  return Number(pluginApi?.core?.World?.getProcessCycle?.()) || 0;
+}
+
+/**
+ * "combat:attack-started": a swing, the player's own or one at them, is what puts them in combat for their gear. A
+ * target picked with Attack and still being run at is not (issue 6061): rsprox 2600 attacks an NPC (OpNpc) on tick
+ * 2669, walks, swings (seq 2068) on 2671 and the pristine Torag's hammers turn 100 on 2672, the tick after the swing.
+ */
+function swingStarted({ attacker, target }) {
+  for (const entity of [attacker, target]) {
+    if (!entity?.isPlayer?.()) continue;
+    let engaged = engagedCycles.get(entity);
+    if (!engaged) {
+      engaged = { cycle: processCycle(), seen: false, outgoing: false };
+      engagedCycles.set(entity, engaged);
+    }
+    if (entity === attacker && !engaged.seen && !engaged.outgoing) {
+      engaged.outgoing = true;
+      engaged.cycle = processCycle();
+    }
+  }
+}
+
 function startDegradation(player, TaskManager, CombatFactory, tasks) {
   if (tasks.has(player)) return;
   let inCombat = false;
@@ -168,11 +213,20 @@ function startDegradation(player, TaskManager, CombatFactory, tasks) {
         this.stop();
         return;
       }
-      if (!CombatFactory.inCombat(player)) {
+      const engaged = engagedCycles.get(player);
+      // A hand-cast's real swing is already a use, even though MagicCombatMethod.finished resets its target.
+      // Incoming-only records still wait for impact; this does not extend the existing combat-exit policy.
+      const outgoingFirstUse = engaged?.outgoing && !engaged.seen && processCycle() > engaged.cycle;
+      if (!CombatFactory.inCombat(player) && !outgoingFirstUse) {
+        // A swing at the player whose hit has not landed yet keeps its record (PR 6072 review): only a fight they
+        // were in, or a swing that never connected, ends here.
+        if (engaged?.seen || (engaged && processCycle() - engaged.cycle > PENDING_SWING_TICKS)) engagedCycles.delete(player);
         inCombat = false;
         ticks = 0;
         return;
       }
+      if (engaged === undefined || processCycle() <= engaged.cycle) return;
+      engaged.seen = true;
       if (!inCombat) {
         inCombat = true;
         ticks = TICKS_PER_DEGRADE;
@@ -187,6 +241,42 @@ function startDegradation(player, TaskManager, CombatFactory, tasks) {
   })();
   tasks.set(player, task);
   TaskManager.submit(task);
+}
+
+/** This warning's name in "item:drop-warning"'s `answered`. */
+const DROP_WARNING = "barrows-break";
+/** Wiki (Dharok's helm, infobox): the drop warning's own words. */
+const DROP_WARNING_TEXT = "If you drop this item it will break. Are you sure you want to drop it?";
+
+/**
+ * Wiki (Barrows equipment): "When dropped, any piece of Barrows equipment will automatically degrade to 0. Players who
+ * attempt to drop Barrows equipment will receive a warning message about this." A broken piece has nothing left to
+ * lose and drops at once. Ours: the dialogue's layout (item box, then the yes/no options), as the value warning's.
+ */
+function dropWarning(request) {
+  const { player, item } = request ?? {};
+  const id = item?.getId?.();
+  if (!player || request.warned || request.answered?.includes(DROP_WARNING)) return;
+  if (!Barrows.isBarrowsItem(id) || Barrows.isBroken(id)) return;
+  request.warned = true;
+  ValueWarning.confirm(pluginApi.core, player, {
+    itemId: id,
+    text: DROP_WARNING_TEXT,
+    title: `${item.getDefinition().getName()}: Really drop it?`,
+    yes: "Drop it.",
+    no: "No, keep it.",
+    proceed: () => request.proceed(DROP_WARNING),
+  });
+}
+
+/**
+ * "item:dropping": the piece breaks as it leaves the inventory, once every warning (this one, the value warning) is
+ * answered. Breaking it in the drop policy, before the warnings, left a cancelled drop broken in the inventory and
+ * made the confirmed one miss, as the slot no longer held the id that was clicked (issue 6061; the wiki's 8 January
+ * 2025 changelog fixes the same "break prematurely ... with the 'valuable item' warning active" on live).
+ */
+function breakOnDrop({ item }) {
+  if (Barrows.isBarrowsItem(item?.getId?.())) setDurability(item, 0);
 }
 
 function repairAll(player, costMultiplier = 1) {
@@ -313,7 +403,7 @@ module.exports = {
   name: "BarrowsEquipment",
   description: "Barrows armour and weapons: durability that degrades over time, repairs, and the Dharok, Guthan, Verac, Torag and Karil set-effect combat modifiers.",
   members: true,
-  _test: { addSetTexts, durability, setDurability, stageFor, degradeEquipment, repairAll, refresh, placeholderIdentity },
+  _test: { addSetTexts, durability, setDurability, stageFor, degradeEquipment, repairAll, refresh, placeholderIdentity, dropWarning, breakOnDrop, swingStarted, pieceName, DROP_WARNING_TEXT },
   register(api) {
     pluginApi = api;
     BonusManager = api.getBonusManager();
@@ -388,7 +478,6 @@ module.exports = {
       }
     });
     api.onItemDropPolicy((event) => {
-      if (Barrows.isBarrowsItem(event.item?.getId?.())) setDurability(event.item, 0);
       if (event.item?.getId?.() === Barrows.AMULET_OF_THE_DAMNED) {
         event.item.setId(-1);
         event.handled = true;
@@ -405,6 +494,9 @@ module.exports = {
         event.handled = true;
       }
     });
+    api.onCustomEvent("item:drop-warning", dropWarning);
+    api.onCustomEvent("item:dropping", breakOnDrop);
+    api.onCustomEvent("combat:attack-started", swingStarted);
     api.onItemAction(checkDurability);
     api.onNpcInteraction("Bob", { Repair: repairEquipment });
     api.onNpcInteraction("Aneirin", { Repair: repairEquipment });

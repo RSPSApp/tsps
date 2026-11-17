@@ -25,6 +25,22 @@ const DEFEATED_MESSAGE = "You have been defeated!";
 let ChallengeArea = null;
 let hooks = { lastJadDown() {}, completed() {}, failed() {}, refused() {} };
 
+/**
+ * The tile beside the Jad's footprint nearest `from`: on its west or east side when `from` is
+ * further out that way, else south or north. A tile already beside it is its own answer.
+ */
+function besideJad(from, jad) {
+  const at = jad.getLocation();
+  const size = jad.getSize?.() ?? 5;
+  const clamp = (value, low) => Math.max(low, Math.min(low + size - 1, value));
+  const x = clamp(from.getX(), at.getX());
+  const y = clamp(from.getY(), at.getY());
+  const dx = from.getX() - x;
+  const dy = from.getY() - y;
+  if (Math.abs(dx) >= Math.abs(dy)) return [dx < 0 ? at.getX() - 1 : at.getX() + size, y];
+  return [x, dy < 0 ? at.getY() - 1 : at.getY() + size];
+}
+
 class Challenge {
   constructor(player, number) {
     this.player = player;
@@ -74,14 +90,30 @@ class Challenge {
     this.jads.push({ npc, index, healers: [], called: false });
   }
 
+  /** Open tiles round the Jad, `spawnDistance` tiles out from its footprint. */
+  healerTiles(jad) {
+    const { core, data } = Common;
+    const at = jad.getLocation();
+    const size = jad.getSize?.() ?? 5;
+    const [near, far] = data.healers.spawnDistance;
+    const tiles = [];
+    for (let dx = -far; dx < size + far; dx++) {
+      for (let dy = -far; dy < size + far; dy++) {
+        const out = Math.max(-dx, dx - size + 1, -dy, dy - size + 1);
+        if (out < near || out > far) continue;
+        const tile = at.transform(dx, dy);
+        if (!core.RegionManager.blocked(tile, this.area)) tiles.push(tile);
+      }
+    }
+    return tiles;
+  }
+
   spawnHealers(entry) {
     const { api, data, ids } = Common;
-    const at = entry.npc.getLocation();
-    const size = entry.npc.getSize?.() ?? 5;
-    const ring = [[-1, -1], [size, -1], [-1, size], [size, size], [Math.floor(size / 2), -1]];
-    for (let index = 0; index < data.healers.perJad; index++) {
-      const [dx, dy] = ring[index % ring.length];
-      const healer = api.spawnNpc({ id: ids.npcs.healer, x: at.getX() + dx, y: at.getY() + dy, z: 0, owner: this.player, wanderRadius: 0 });
+    const tiles = this.healerTiles(entry.npc);
+    for (let index = 0; index < data.healers.perJad && tiles.length > 0; index++) {
+      const [tile] = tiles.splice(Common.randomInt(0, tiles.length - 1), 1);
+      const healer = api.spawnNpc({ id: ids.npcs.healer, x: tile.getX(), y: tile.getY(), z: 0, owner: this.player, wanderRadius: 0 });
       if (!healer) continue;
       healer.__skipDefaultRespawn = true;
       healer.__tkrChallenge = this;
@@ -91,7 +123,12 @@ class Challenge {
     }
   }
 
-  /** Yt-HurKot: at half health, once; they heal in melee reach (or a few tiles while fighting). */
+  /**
+   * Yt-HurKot: at half health, once. Each walks to the nearest tile beside the Jad (a side, not a
+   * corner) and heals as it gets there, then every 4 ticks on its own count - full or not, as
+   * recorded. Once the player's hit on it lands it goes for the player, stays on them however its
+   * own combat lapses, and never heals again.
+   */
   tendHealers(entry) {
     const { core, data } = Common;
     const { npc: jad } = entry;
@@ -103,18 +140,25 @@ class Challenge {
     }
     const now = Common.cycle();
     for (const healer of entry.healers) {
-      const fighting = healer.getCombat().getTarget() != null;
-      const distance = healer.calculateDistance(jad);
-      if (distance <= data.healers.reach || (fighting && distance <= data.healers.fightReach)) {
-        if (now % data.healers.healTicks === 0 && jad.getHitpoints() < max) {
-          healer.setMobileInteraction(jad);
-          healer.performAnimation(new core.Animation(data.healers.healAnim));
-          jad.performGraphic(new core.Graphic(data.healers.healGraphic));
-          jad.heal(Math.min(max - jad.getHitpoints(), Common.randomInt(data.healers.healMin, data.healers.healMax)));
-        }
-      } else if (!fighting) {
-        core.PathFinder.calculateWalkRoute(healer, jad.getLocation().getX(), jad.getLocation().getY());
+      if (healer.getCombat().getTarget() != null || now >= (healer.__tkrDrawnAt ?? Infinity)) healer.__tkrDrawn = true;
+      if (healer.__tkrDrawn) {
+        // Drawn off for good: back onto the player whenever its own combat lets go.
+        if (healer.getCombat().getTarget() !== this.player) healer.getCombat().attack(this.player);
+        continue;
       }
+      const [x, y] = besideJad(healer.getLocation(), jad);
+      if (healer.getLocation().getX() !== x || healer.getLocation().getY() !== y) {
+        core.PathFinder.calculateWalkRoute(healer, x, y);
+        continue;
+      }
+      if (healer.__tkrNextHeal === undefined) healer.getMovementQueue?.().reset();
+      if (now < (healer.__tkrNextHeal ?? now)) continue;
+      healer.__tkrNextHeal = now + data.healers.healTicks;
+      healer.setMobileInteraction(jad);
+      healer.performAnimation(new core.Animation(data.healers.healAnim));
+      jad.performGraphic(core.Graphic.atHeight(data.healers.healGraphic, data.healers.healGraphicHeight));
+      const missing = max - jad.getHitpoints();
+      if (missing > 0) jad.heal(Math.min(missing, Common.randomInt(data.healers.healMin, data.healers.healMax)));
     }
   }
 
@@ -131,6 +175,9 @@ class Challenge {
         continue;
       }
       if (entry.npc.getCombat().getTarget() !== player) entry.npc.getCombat().attack(player);
+      // The engine refills an NPC not hit for 20 seconds by a tenth a tick, fighting or not: a Jad
+      // left alone while the others (or its healers) were fought was back to full in a few ticks.
+      entry.npc.getCombat().getLastAttack().reset();
       this.tendHealers(entry);
     }
     if (this.infinite) {
@@ -155,8 +202,16 @@ class Challenge {
     return (this.endAt === -1 ? Common.cycle() : this.endAt - Common.data.endTicks) - this.startTick;
   }
 
-  dealt(target, style) {
+  dealt(target, style, delay = 0) {
     if (style !== "MELEE") this.nonMelee = true;
+    // A healer the player hits (or splashes) is drawn off once the hit lands (rsprox: it heals
+    // until then), whatever its own combat makes of it.
+    if (target?.__tkrChallenge === this && target.getId?.() === Common.ids.npcs.healer) {
+      // As CombatFactory.addPendingHit: NPCs process before players, so a hit on an NPC lands
+      // one tick after its delay (hitProcessingDelay).
+      const lands = Common.cycle() + delay + 1;
+      target.__tkrDrawnAt = Math.min(target.__tkrDrawnAt ?? lands, lands);
+    }
     if (!target?.__tkrChallenge || target.getId?.() !== Common.ids.npcs.jad) return;
     if (!this.styles.has(target)) this.styles.set(target, new Set());
     this.styles.get(target).add(style);
@@ -385,7 +440,7 @@ function leaveWorld({ player }) {
 function dealt({ player, target, hit }) {
   const challenge = challengeOf(player);
   // CombatType is a numeric enum: its reverse mapping gives the name.
-  if (challenge) challenge.dealt(target, String(Common.core.CombatType[hit?.getCombatType?.()] ?? ""));
+  if (challenge) challenge.dealt(target, String(Common.core.CombatType[hit?.getCombatType?.()] ?? ""), hit?.getDelay?.() ?? 0);
 }
 
 function attach(api, handlers) {

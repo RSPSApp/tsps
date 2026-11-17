@@ -195,18 +195,21 @@ test("the Telekinetic Grab projectile and landing graphic go out as recorded: 48
     assert.equal(projectiles.length, 1);
     const { startCycleOffset, endCycleOffset } = projectiles[0].getTiming();
     assert.deepEqual([startCycleOffset, endCycleOffset], [48, 90], "the projectile flies 48 to 90 cycles, landing with the splash");
+    // Heights go out x4: 140 to 0 on the floor (map_projanim_v2 of 143, e.g. 233/00458; v1 35 to 0 in 227/00075).
+    assert.deepEqual([projectiles[0].startHeight * 4, projectiles[0].endHeight * 4], [140, 0], "leaves at 140, ends on the floor");
 });
 
 // Items on tables were recorded landing higher: rsprox 234/03270 (the table at 2930,3515) and 237/01108
 // (1736,3168) send telegrab_impact (144) at delay=90, height=100; floor items stay at 20 (227/00075, 2124,9301).
-test("the landing graphic stands on a table at height 100, and on the floor at 20", async (t) => {
+test("the landing graphic stands on a table at height 100, and on the floor at 20; the projectile ends at 80 and 0", async (t) => {
     const path = require('node:path');
     const { CachePipeline } = require('../dist/game/cache/CachePipeline');
     const { RegionManager } = require('../dist/game/collision/RegionManager');
     await CachePipeline.initialize(path.resolve(__dirname, '..'));
     RegionManager.init();
     t.mock.method(TaskManager, 'submit', () => {});
-    t.mock.method(Projectile.prototype, 'sendProjectile', () => {});
+    let projectile = null;
+    t.mock.method(Projectile.prototype, 'sendProjectile', function () { projectile = this; });
     t.mock.method(Sounds, 'sendSound', () => {});
     t.mock.method(CombatRange, 'withinApproachDistance', () => true);
     const land = (x, y) => {
@@ -231,6 +234,9 @@ test("the landing graphic stands on a table at height 100, and on the floor at 2
         };
         listener.castGroundItem(player, 245, x, y, 1168);
         assert.equal(graphics.length, 1);
+        // The projectile ends where the item stands: 80 on a table, 0 on the floor (x4 on the wire; 234/03270, 237/01108, 233/00458).
+        assert.equal(projectile.startHeight * 4, 140);
+        assert.equal(projectile.endHeight * 4, graphics[0].getHeight() === 100 ? 80 : 0, `projectile end height at ${x},${y}`);
         return [graphics[0].getId(), graphics[0].getDelay(), graphics[0].getHeight()];
     };
     assert.deepEqual(land(2930, 3515), [144, 90, 100], "the Zamorak temple table (its south-west tile)");

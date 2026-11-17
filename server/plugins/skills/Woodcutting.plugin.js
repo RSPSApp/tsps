@@ -15,6 +15,7 @@ const CrystalAxe = require("./woodcutting/CrystalAxe.Woodcutting");
 const EntTrunk = require("./woodcutting/EntTrunk.Woodcutting");
 const ThickVines = require("./woodcutting/ThickVines.Woodcutting");
 const Shrine = require("./woodcutting/Shrine.Woodcutting");
+const SplitLogs = require("./woodcutting/SplitLogs.Woodcutting");
 const KandarinHeadgear = require("./woodcutting/KandarinHeadgear.Woodcutting");
 const FarmedRedwood = require("./farming/Redwood.Farming");
 const { pauseForLevelUp, actionInterval } = require("./SkillActions");
@@ -1571,6 +1572,7 @@ module.exports = {
     ThickVines.attach(api, { axesBestFirst: AXES_BEST_FIRST, lumberjackXpMultiplier });
     KandarinHeadgear.attach(api);
     Shrine.attach(api);
+    SplitLogs.attach(api, { findBestUsableAxe, lumberjackXpMultiplier });
 
     api.onPlayerDisconnect(({ player }) => {
       stopWoodcutting(activeSessions, player, false);

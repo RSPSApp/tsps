@@ -2214,14 +2214,12 @@ module.exports = function registerLunarDiplomacyQuest(api) {
     }
 
     if (itemId === LUNAR_ORE && ObjectDefinition.forId(objectId)?.getName?.() === "Furnace") {
-      event.handled = true;
+      // Before the staff the player has no reason to smelt it; from then on Smithing's
+      // furnace recipe owns the bar (Wiki: level 1, 6.2 XP, one lunar ore).
       if (stageOf(player) < STAGE_STAFF_GIVEN) {
+        event.handled = true;
         return reject(player, "You are not ready to work lunar ore yet.");
       }
-      if (!held(player, LUNAR_ORE)) return false;
-      player.getInventory().deleteNumber(LUNAR_ORE, 1);
-      player.getInventory().adds(LUNAR_BAR, 1);
-      player.sendMessage("You smelt the lunar ore into a lunar bar.");
       return;
     }
 
@@ -2518,7 +2516,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   function reconcileDreamNpcs(player) {
     const world = api.getWorld();
     if (world?.getNpcs) {
-      for (const npc of world.getNpcs()) {
+      for (const npc of (world.getNpcsOwnedBy?.(player) ?? world.getNpcs())) {
         if (npc?.getOwner?.() === player && DREAM_SPAWN_IDS.has(npc.getId?.())) api.removeNpc(npc);
       }
     }
@@ -2537,7 +2535,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   function ownedJack(player) {
     const world = api.getWorld();
     if (!world?.getNpcs) return null;
-    for (const npc of world.getNpcs()) {
+    for (const npc of (world.getNpcsOwnedBy?.(player) ?? world.getNpcs())) {
       if (npc?.getId?.() === JACK_SHIP && npc.getOwner?.() === player) return npc;
     }
     return null;

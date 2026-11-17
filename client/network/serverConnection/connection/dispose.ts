@@ -1,9 +1,11 @@
+import { clearWelcomeTimer } from "../protocolCompatibility";
 import { WS_GLOBAL_KEY, WS_SUPPRESS_RECONNECT_KEY } from "../constants";
 import { clearLoginConnectRetryTimer } from "./loginHelpers";
 import { createDefaultTradeState } from "../domain/defaults";
 import { state } from "../state";
 
 export function disposeServerConnection(reason: string = "hmr refresh"): void {
+    clearWelcomeTimer();
     try {
         // Prevent any in-flight reconnect timers
         try {

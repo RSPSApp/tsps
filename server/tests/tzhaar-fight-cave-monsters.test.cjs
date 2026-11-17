@@ -142,6 +142,7 @@ test("a monster that can't get to the player keeps it, and comes on when it can"
 
 function jadWithOneHealer(t) {
   const f = resume(t, 63);
+  f.p.setAutoRetaliate(false); // Measure healing without random retaliatory damage to Jad.
   const { NpcIdentifiers: N } = core;
   waitForWave(f, N.TZTOK_JAD);
   const [jad] = alive(f, N.TZTOK_JAD);

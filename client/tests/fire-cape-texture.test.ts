@@ -75,25 +75,28 @@ test("WebGPU material reads preserve signed scroll speeds for capes and other an
     }
 });
 
-test("texture preloads leave missing and empty sparse textures available for later uploads", async (t) => {
+test("renderers can use map textures before worker preloads finish", async (t) => {
     t.mock.method(console, "error", () => {});
     t.mock.method(console, "log", () => {});
     (globalThis as any).self = globalThis;
     for (const ext of [".png", ".jpg", ".webp"]) {
         require.extensions[ext] = (module, file) => { module.exports = file; };
     }
+    const pico = require("picogl");
+    pico.PicoGL = pico;
     const { WorldResources } = require("../render/webgpu/WorldResources");
-    const { initTextureArray } = require("../render/render/textures/array");
+    const { initTextureArray, updateTextureArray } = require("../render/render/textures/array");
     const pixels = new Int32Array(128 * 128).fill(0xff123456);
+    const pending: ((textures: Map<number, Int32Array>) => void)[] = [];
     const client = {
-        loadedCache: { info: { game: "oldschool", revision: 235 } },
+        workerPool: { preloadWorldTextures: (ids: number[], size: number) => {
+            assert.deepEqual(ids, [1, 2, 3]);
+            assert.equal(size, 128);
+            return new Promise<Map<number, Int32Array>>((resolve) => pending.push(resolve));
+        } },
         textureLoader: {
             getTextureIds: () => [1, 2, 3], isSd: () => true,
             getMaterial: (id: number) => textureLoader.getMaterial(id === 1 ? 40 : 59),
-            getPixelsArgb: (id: number) => {
-                if (id === 2) throw new Error("sprite still downloading");
-                return id === 3 ? new Int32Array() : pixels;
-            },
         },
         clientPlugins: { createWebGPUSceneExtension: () => undefined },
     };
@@ -111,9 +114,13 @@ test("texture preloads leave missing and empty sparse textures available for lat
     const world = await WorldResources.create(device, client, "rgba8unorm");
     assert.deepEqual(Array.from(materialBytes!.slice(4, 6)), [0, 254], "Fire cape's -2 is uploaded as unsigned byte 254");
     assert.deepEqual(Array.from(materialBytes!.slice(8, 10)), [0, 255], "Infernal cape's -1 is uploaded as unsigned byte 255");
-    assert.deepEqual([...world.loadedTextureIds], [1], "WebGPU only skips textures with real uploaded pixels");
-    world.uploadMapTextures(new Map([[2, pixels], [3, pixels]]));
-    assert.deepEqual([...world.loadedTextureIds], [1, 2, 3], "worker results can fill previously missing layers");
+    assert.equal(world.loadedTextureIds.size, 0);
+    world.uploadMapTextures(new Map([[2, pixels]]));
+    pending.shift()!(new Map([[1, pixels], [2, pixels]]));
+    await Promise.resolve();
+    assert.deepEqual([...world.loadedTextureIds], [2, 1], "missing layers remain available for map uploads");
+    world.uploadMapTextures(new Map([[3, pixels]]));
+    assert.equal(world.loadedTextureIds.size, 3);
     world.destroy();
 
     class MockGL {}
@@ -126,12 +133,18 @@ test("texture preloads leave missing and empty sparse textures available for lat
         textureIdIndexMap: new Map([[1, 1], [2, 2], [3, 3]]),
         app: { gl, state: { textures: [], activeTexture: 0 } }, gl,
         updateTextureFiltering() {},
+        updateTextureArray(textures: Map<number, Int32Array>) { updateTextureArray(this, textures); },
     };
     initTextureArray(host);
-    assert.deepEqual([...host.loadedTextureIds], [1], "WebGL only skips textures with real uploaded pixels");
-    client.textureLoader.getPixelsArgb = () => pixels;
+    assert.equal(host.loadedTextureIds.size, 0);
     initTextureArray(host);
-    assert.deepEqual([...host.loadedTextureIds], [1, 2, 3]);
+    host.updateTextureArray(new Map([[2, pixels]]));
+    pending.shift()!(new Map([[3, pixels]]));
+    pending.shift()!(new Map([[1, pixels], [2, pixels]]));
+    await Promise.resolve();
+    assert.deepEqual([...host.loadedTextureIds], [2, 1], "a replaced atlas ignores the stale preload");
+    host.updateTextureArray(new Map([[3, pixels]]));
+    assert.equal(host.loadedTextureIds.size, 3);
 });
 
 test("quiet mipmap regeneration does not wait for off-screen preload or retry backoff", async () => {
@@ -153,6 +166,11 @@ test("quiet mipmap regeneration does not wait for off-screen preload or retry ba
     maybeRegenerateTextureMipmaps(host, 300);
     assert.equal(generated, 0, "foreground streaming still defers the quiet path");
     ready = true;
+    host.textureFilterMode = TextureFilterMode.DISABLED;
+    maybeRegenerateTextureMipmaps(host, 300);
+    assert.equal(generated, 0);
+    assert.equal(host.textureMipmapsDirty, true, "enabling filtering must still see pending uploads");
+    host.textureFilterMode = TextureFilterMode.BILINEAR;
     maybeRegenerateTextureMipmaps(host, 300);
     assert.equal(generated, 1, "even a single remaining texture gets mipmaps during background work");
     assert.equal(host.textureMipmapsDirty, false);

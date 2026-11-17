@@ -461,13 +461,18 @@ test("the ornament kit on each part, Dismantle back; an ornament cannon uses its
 
 test("restrictions: every Wiki area has its message; outlines are polygons; instances refuse", () => {
   const data = Restrictions.load();
-  assert.equal(data.restrictions.length, 73);
+  assert.equal(data.restrictions.length, 74);
   for (const r of data.restrictions) {
     assert.ok(r.name && r.message, r.name);
     for (const area of r.areas ?? []) assert.ok(area.points.length >= 3 && r.source, r.name);
   }
   assert.equal(Restrictions.restrictionAt(new core.Location(3165, 3490, 0)), "The Grand Exchange staff prefer not to have heavy artillery operated around their premises.");
   assert.equal(Restrictions.restrictionAt(new core.Location(3200, 10100, 0)), "You can't set up a cannon here.", "the Revenant Caves");
+  // Wiki (Ynysdail Cavern): the whole cavern, from beside its exit to its far end; not the island above.
+  for (const [x, y] of [[2292, 9914], [2243, 9832], [2298, 9918]]) {
+    assert.equal(Restrictions.restrictionAt(new core.Location(x, y, 0)), "The ground is too damp to set up a cannon here.", `${x},${y}`);
+  }
+  assert.equal(Restrictions.restrictionAt(new core.Location(2219, 3477, 0)), null, "Ynysdail's surface");
   assert.equal(Restrictions.restrictionAt(CENTRE), null);
   assert.equal(Restrictions.restrictionAt(CENTRE, {}), data.default, "an instance");
 });

@@ -111,9 +111,14 @@ function burnMessage(cookable) {
 const FIRE_OBJECT_NAMES = new Set(["Fire", "Forester's Campfire", "Firepit", "Firepit with hook", "Firepit with pot"]);
 const HOUSE_RANGE_NAMES = new Set(["Small oven", "Large oven", "Steel range", "Fancy range"]);
 // The cache spells the clay ovens two ways: "Clay oven" in Hosidius (the kitchen and the mess) and
-// on Neitiznot, "Clay Oven" in Nardah.
-const RANGE_OBJECT_NAMES = new Set(["Cooking range", "Range", "Stove", "Oven", "Clay oven", "Clay Oven"]);
+// on Neitiznot, "Clay Oven" in Nardah. A "Cooking pot" with Cook is a range too (Wiki: the Sailing
+// islands' amenity, The Pandemonium's pot), as is Fossil Island's built one (fossil_range_built).
+const RANGE_OBJECT_NAMES = new Set(["Cooking range", "Range", "Gnome cooker", "Stove", "Oven", "Clay oven", "Clay Oven", "Cooking pot"]);
 const COOKABLE_OBJECT_NAMES = new Set([...RANGE_OBJECT_NAMES, ...HOUSE_RANGE_NAMES, ...FIRE_OBJECT_NAMES]);
+// Names that are cookers only with their Cook option. The op-less "Cooking pot"s (fireplacecookingpot
+// 26180, qip_sheep_shearer_fireplacecookingpot 12969, fai_varrock_shanty_cookingpot 7483) stay out:
+// live cooks on 26180 as a fire (rsprox 240/911358 tick 1197-1201, human_firecooking), not a range.
+const COOK_OPTION_ONLY_NAMES = new Set(["Cooking pot"]);
 
 function cookAnimationFor(name) {
   const seq = FIRE_OBJECT_NAMES.has(name) || HOUSE_RANGE_NAMES.has(name) ? "human_firecooking" : "human_cooking";
@@ -668,13 +673,15 @@ function isCookingActive(player) {
 /** A cooker this use or click reaches: a fire, or a range or oven with a Cook option. */
 function isCooker(definition) {
   const actions = definition.getInteractions() ?? [];
+  const name = definition.getName();
+  if (COOK_OPTION_ONLY_NAMES.has(name)) return actions.includes("Cook");
   // A Forester's Campfire has no Cook action; food is used on it directly.
-  return COOKABLE_OBJECT_NAMES.has(definition.getName())
-    && (!actions.some(Boolean) || actions.includes("Cook") || FIRE_OBJECT_NAMES.has(definition.getName()));
+  return COOKABLE_OBJECT_NAMES.has(name)
+    && (!actions.some(Boolean) || actions.includes("Cook") || FIRE_OBJECT_NAMES.has(name));
 }
 
 function handleCook(event) {
-  const definition = event.object.getDefinition();
+  const definition = event.definition ?? event.object.getDefinition();
   if (!isCooker(definition)) return;
 
   const cookable = cookableFor(event.itemId);
@@ -690,7 +697,7 @@ function handleCook(event) {
 
 /** Anything else used on a cooker, when no other content takes it (rsprox captures 269, 1718). */
 function refuseCook(event) {
-  if (!isCooker(event.object.getDefinition())) return;
+  if (!isCooker(event.definition ?? event.object.getDefinition())) return;
   event.handled = true;
   Common.mesbox(event.player, CANNOT_COOK_MESSAGE);
 }
@@ -760,10 +767,12 @@ function attachCookers(api) {
   api.onItemOnObject(refuseCook, { noted: false, fallback: true });
   api.onObjectInteraction("Fire", { Cook: handleCookClick });
   api.onObjectInteraction("Range", { Cook: handleCookClick });
+  api.onObjectInteraction("Gnome cooker", { Cook: handleCookClick });
   api.onObjectInteraction("Cooking range", { Cook: handleCookClick });
   api.onObjectInteraction("Stove", { Cook: handleCookClick });
   api.onObjectInteraction("Oven", { Cook: handleCookClick });
   api.onObjectInteraction("Clay oven", { Cook: handleCookClick });
+  api.onObjectInteraction("Cooking pot", { Cook: handleCookClick });
   api.onObjectInteraction("Clay Oven", { Cook: handleCookClick });
   api.onObjectInteraction("Small oven", { Cook: handleCookClick });
   api.onObjectInteraction("Large oven", { Cook: handleCookClick });

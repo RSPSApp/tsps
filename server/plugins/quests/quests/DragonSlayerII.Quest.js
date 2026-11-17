@@ -277,6 +277,9 @@ module.exports = function registerDragonSlayerII(api) {
   // (3659,3849) is inside its footprint. Varbit6104 changes it from Build to Travel.
   const ROWBOAT_OBJECT_TILE = { x: 3658, y: 3848, z: 0 };
   const ROWBOAT_SPACE_TILE = { x: 3659, y: 3849, z: 0 };
+  // After the quest the rowboat stays usable through the Ferries plugin's recorded
+  // `lithkren`/`lithkren-back` fade trips (fade, minimap off, move, fade in, close).
+  const LITHKREN_ROWBOAT_TILE = { x: 3582, y: 3971, z: 0 };
   // QuestHelper's surface route continues at the courtyard stairs on Lithkren.
   const LITHKREN_LANDING = new Location(3559, 4004, 0);
   // The ancient doors lead into the Deep Lithkren vault, on the north edge of the
@@ -857,11 +860,25 @@ module.exports = function registerDragonSlayerII(api) {
   }
   function buildLithkrenRowboat({ player: p, objectId, location, definition }) {
     const visibleObjectId = definition?.id ?? objectId;
+    const travelOption = visibleObjectId === O.ROWBOAT_14 || definition?.getInteractions?.()?.[0] === "Travel";
+    // Lithkren's own rowboat: back to Fossil Island once the boat exists (or the quest is done).
+    if (objectId === O.ROWBOAT_13 || visibleObjectId === O.ROWBOAT_13) {
+      if (location.x !== LITHKREN_ROWBOAT_TILE.x || location.y !== LITHKREN_ROWBOAT_TILE.y || location.z !== 0) return false;
+      if (stage(p) < S.TO_LITHKREN || (!p.getAttribute(ATTR_ROWBOAT_BUILT) && stage(p) < S.COMPLETE)) return false;
+      api.emitCustomEvent("ferries:travel", { player: p, route: "lithkren-back" });
+      return true;
+    }
     if (![29916, O.ROWBOAT_SPACE, O.ROWBOAT_14].includes(objectId)
       && ![O.ROWBOAT_SPACE, O.ROWBOAT_14].includes(visibleObjectId)) return false;
     if (location.x !== ROWBOAT_OBJECT_TILE.x || location.y !== ROWBOAT_OBJECT_TILE.y || location.z !== 0
-      || stage(p) < S.TO_LITHKREN || stage(p) >= S.COMPLETE) return false;
-    if (visibleObjectId === O.ROWBOAT_14 || definition?.getInteractions?.()?.[0] === "Travel") {
+      || stage(p) < S.TO_LITHKREN) return false;
+    // After the quest the built rowboat still crosses to Lithkren's shore.
+    if (stage(p) >= S.COMPLETE) {
+      if (!travelOption) return false;
+      api.emitCustomEvent("ferries:travel", { player: p, route: "lithkren" });
+      return true;
+    }
+    if (travelOption) {
       return travelRowboat({ player: p, objectId: visibleObjectId, location });
     }
     if (p.getAttribute(ATTR_ROWBOAT_BUILT)) {
@@ -888,7 +905,7 @@ module.exports = function registerDragonSlayerII(api) {
     return true;
   }
   function travelRowboat({ player: p, objectId, location }) {
-    if (![O.ROWBOAT_14, O.ROWBOAT_SPACE].includes(objectId)
+    if (![29916, O.ROWBOAT_14, O.ROWBOAT_SPACE].includes(objectId)
       || location.x !== ROWBOAT_OBJECT_TILE.x || location.y !== ROWBOAT_OBJECT_TILE.y || location.z !== 0
       || !p.getAttribute(ATTR_ROWBOAT_BUILT) || stage(p) < S.TO_LITHKREN || stage(p) >= S.COMPLETE) return false;
     p.moveTo(LITHKREN_LANDING);
@@ -2305,8 +2322,8 @@ module.exports = function registerDragonSlayerII(api) {
     const option = definition?.getInteractions?.()?.[clickType - 1];
     if (takeAssaultSupply({ player: p, objectId })) return true;
     if (repairAssaultShip({ player: p, objectId, location })) return true;
-    if ([29916, O.ROWBOAT_SPACE, O.ROWBOAT_14].includes(objectId)
-      || [O.ROWBOAT_SPACE, O.ROWBOAT_14].includes(definition?.id)) {
+    if ([29916, O.ROWBOAT_SPACE, O.ROWBOAT_14, O.ROWBOAT_13].includes(objectId)
+      || [O.ROWBOAT_SPACE, O.ROWBOAT_14, O.ROWBOAT_13].includes(definition?.id)) {
       return buildLithkrenRowboat({ player: p, objectId, location, definition });
     }
     if (handleUngaelLab({ player: p, objectId, location })) return true;
@@ -2465,6 +2482,7 @@ module.exports = function registerDragonSlayerII(api) {
     return false;
   }
   function onLogin({ player: p }) {
+    clearVeosTravel({ player: p });
     syncUngaelExit(p);
     syncForgeHeadVarbits(p);
     if (stage(p) >= S.KEYS && (p.getAttribute(ATTR_CRYPT_ORDER) || p.getAttribute(ATTR_CRYPT_PLACED)
@@ -2526,6 +2544,7 @@ module.exports = function registerDragonSlayerII(api) {
     p.setAttribute(ATTR_ASSAULT_DEFENSE_ACTIVE, false);
   }
   function onPlayerLogout({ player: p }) {
+    clearVeosTravel({ player: p });
     if (p.getAttribute(ATTR_AREA) instanceof QuestArea) {
       leaveArea(p);
       p.setAttribute(ATTR_ASSAULT_DEFENSE_ACTIVE, false);
@@ -2578,8 +2597,20 @@ module.exports = function registerDragonSlayerII(api) {
       ? "The locator orb pulses strongly. The key piece must be buried very close by."
       : `The locator orb glows and pulls you ${direction}. It shocks you as you use it.`);
   }
+  function clearVeosTravel({ player }) {
+    if (player.getAttribute(ATTR_VEOS_TRAVEL_DESTINATION) != null) {
+      player.setAttribute(ATTR_VEOS_TRAVEL_DESTINATION, null);
+    }
+  }
+  function closeVeosTravel(event) {
+    // Switching between player/NPC lines also closes the previous group, but
+    // mounts its replacement first. Only an actual close ends this intent.
+    if (event.player.getPacketSender?.()?.getChatboxGroupId?.() < 0) clearVeosTravel(event);
+  }
   function rememberVeosTravelDestination(event) {
-    if (!VEOS_NPC_IDS.has(event.npcId) || stage(event.player) < S.KEYS || stage(event.player) >= S.FORGE) return;
+    if (!VEOS_NPC_IDS.has(event.npcId)) return;
+    clearVeosTravel(event);
+    if (stage(event.player) < S.KEYS || stage(event.player) >= S.FORGE) return;
     const destination = VEOS_DESTINATIONS[event.option];
     if (destination) event.player.setAttribute(ATTR_VEOS_TRAVEL_DESTINATION, [destination.getX(), destination.getY(), destination.getZ()]);
   }
@@ -2596,12 +2627,21 @@ module.exports = function registerDragonSlayerII(api) {
     return true;
   }
   function finishVeosTravel(event) {
-    const { player: p, npcId, text } = event;
+    const { player: p, npc, npcId, text } = event;
     if (!VEOS_NPC_IDS.has(npcId) || !/^As you wish, I hope you don't get seasick, it is a\s+long voyage\.$/.test(text ?? "")) return;
     const destination = p.getAttribute(ATTR_VEOS_TRAVEL_DESTINATION);
     if (!Array.isArray(destination) || destination.length !== 3) return;
+    // Client of Kourend already owns ordinary travel and validates the live
+    // Veos form. Keep that callback, rather than replacing its destination/guard.
+    if (event.after) {
+      clearVeosTravel(event);
+      return;
+    }
     event.after = () => {
-      p.setAttribute(ATTR_VEOS_TRAVEL_DESTINATION, null);
+      if (p.getAttribute(ATTR_VEOS_TRAVEL_DESTINATION) !== destination) return;
+      clearVeosTravel(event);
+      if (stage(p) < S.KEYS || stage(p) >= S.FORGE) return;
+      if (npc && npc.getCurrentDefinition(p)?.getId() !== npcId) return;
       p.moveTo(new Location(destination[0], destination[1], destination[2]));
     };
   }
@@ -2661,7 +2701,6 @@ module.exports = function registerDragonSlayerII(api) {
   api.persistAttribute(ATTR_ASSAULT_INDEX); api.persistAttribute(ATTR_ASSAULT_CHECKPOINT);
   api.persistAttribute(ATTR_ASSAULT_DEFENSE_ACTIVE); api.persistAttribute(ATTR_ASSAULT_DEFENDED);
   api.persistAttribute(ATTR_MORYTANIA); api.persistAttribute(ATTR_ORB_TARGET);
-  api.persistAttribute(ATTR_VEOS_TRAVEL_DESTINATION);
   api.persistAttribute(ATTR_MURAL_READ); api.persistAttribute(ATTR_NOTES_READ); api.persistAttribute(ATTR_KARAMJA_JOURNAL);
   api.persistAttribute(ATTR_CRANDOR_BLOCKAGE_PROGRESS);
   api.persistAttribute(ATTR_MURAL_GUARDIAN_DEFEATED);
@@ -2740,6 +2779,8 @@ module.exports = function registerDragonSlayerII(api) {
   api.onCustomEvent("npc-dialogue:action", handleEllenTrainingAction);
   api.onCustomEvent("npc-dialogue:choice", rememberVeosTravelDestination);
   api.onCustomEvent("npc-dialogue:line", finishVeosTravel);
+  api.onBeforeNpcInteraction(clearVeosTravel);
+  api.onCustomEvent("interface:closed", closeVeosTravel);
   api.onObjectFirstClick(O.CAVE_63, enterKaramjaMaze);
   api.onObjectInteraction("Cave", {
     Enter(event) {

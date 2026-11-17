@@ -9,7 +9,7 @@ export type WidgetActionEvent = {
     widget?: any;
     option?: string;
     target?: string;
-    source?: "menu" | "primary";
+    source?: "menu" | "primary" | "shortcut";
     cursorX?: number;
     cursorY?: number;
     slot?: number;

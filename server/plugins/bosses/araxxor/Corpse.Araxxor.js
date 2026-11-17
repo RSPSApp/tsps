@@ -152,9 +152,80 @@ function logReceived(player, drops) {
   }
 }
 
+/**
+ * How many of `itemId` the player holds: the inventory and the bank, what storage items among them
+ * hold (a looting bag, through its owner's "storage:contents"), and their group storage
+ * ("group-storage:amount").
+ */
+function heldAmount(player, itemId) {
+  const containers = [player.getInventory?.()];
+  const { Bank } = core;
+  const tabs = Bank?.TOTAL_BANK_TABS ?? 0;
+  for (let tab = 0; tab < tabs; tab++) {
+    if (tab !== Bank.BANK_SEARCH_TAB_INDEX) containers.push(player.getBank?.(tab));
+  }
+  let amount = 0;
+  for (const container of containers) {
+    if (!container) continue;
+    amount += container.getAmount?.(itemId) ?? 0;
+    for (const item of container.getValidItems?.() ?? []) {
+      const request = { player, item, contents: [], handled: false };
+      api.emitCustomEvent("storage:contents", request);
+      if (!request.handled) continue;
+      for (const entry of request.contents) if (entry?.id === itemId) amount += entry.amount ?? 0;
+    }
+  }
+  const stored = { player, itemId, amount: 0 };
+  api.emitCustomEvent("group-storage:amount", stored);
+  return amount + (Number(stored.amount) || 0);
+}
+
+/** What the player holds as a piece bitmask: the counter's first value for a player who looted before it existed. */
+function heldHalberdPieces(player) {
+  let mask = 0;
+  Shared.HALBERD_PIECES.forEach((itemId, index) => {
+    if (heldAmount(player, itemId) > 0) mask |= 1 << index;
+  });
+  return mask;
+}
+
+/**
+ * A halberd piece drop is the next piece the player lacks (Wiki: "Players will not receive
+ * duplicate pieces until each full set is obtained"), picked among those missing since their last
+ * full set; a new set starts after all three. An account whose counter has never run adopts what it
+ * already holds, so pieces looted before this existed are not handed out again.
+ */
+function nextHalberdPiece(player) {
+  const full = (1 << Shared.HALBERD_PIECES.length) - 1;
+  const saved = player.getAttribute?.(Shared.ATTR_HALBERD_PIECES);
+  let had = (Number.isInteger(saved) ? saved : heldHalberdPieces(player)) & full;
+  if (had === full) had = 0;
+  const missing = Shared.HALBERD_PIECES.filter((_itemId, index) => !(had & (1 << index)));
+  const index = Shared.HALBERD_PIECES.indexOf(missing[Math.floor(Math.random() * missing.length)]);
+  player.setAttribute?.(Shared.ATTR_HALBERD_PIECES, had | (1 << index));
+  return Shared.HALBERD_PIECES[index];
+}
+
+/** The stashed halberd piece, if one rolled, becomes the next piece the player lacks; other loot is unchanged. */
+function resolveHalberdPieces(player, drops) {
+  let piece = null;
+  return drops.map((drop) => {
+    if (piece !== null || !Shared.HALBERD_PIECES.includes(drop?.itemId)) return drop;
+    piece = nextHalberdPiece(player);
+    return { ...drop, itemId: piece };
+  });
+}
+
 function validCorpse(npc, session) {
   return !!npc && npc.getId?.() === Shared.CORPSE_ID && !!session && session.corpse === npc
     && session.harvested !== true && session.destroyed !== true;
+}
+
+/** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+function lootOptions(player, itemId, area) {
+  const request = { player, itemId, area, options: {} };
+  api.emitCustomEvent("npc-drops:ground-options", request);
+  return request.options;
 }
 
 /** Turns drops (and a stashed Nid) into the player's inventory, excess to the floor (Wiki). */
@@ -183,10 +254,10 @@ function spawnDrops(player, session, drops) {
       }
     }
     if (stackable) {
-      manager.registerLocation(player, new Item(itemId, drop.amount), where, area);
+      manager.registerLocation(player, new Item(itemId, drop.amount), where, area, lootOptions(player, itemId, area));
     } else {
       for (let index = 0; index < drop.amount; index++) {
-        manager.registerLocation(player, new Item(itemId, 1), where, area);
+        manager.registerLocation(player, new Item(itemId, 1), where, area, lootOptions(player, itemId, area));
       }
     }
   }
@@ -206,14 +277,14 @@ function harvest({ player, npc }) {
   if (!validCorpse(npc, session)) return false;
   session.harvested = true;
   player.performAnimation(new core.Animation(Shared.HARVEST_ANIMATION));
-  const stash = session.stash ?? [];
   const pet = session.pendingPet ?? [];
   later(HARVEST_LOOT_TICKS, npc, () => {
     if (!npc.isRegistered?.()) return;
-    spawnDrops(player, session, stash);
+    const loot = resolveHalberdPieces(player, session.stash ?? []);
+    spawnDrops(player, session, loot);
     // The harvested loot is this roll, so the collection log, the clan loot broadcast and the loot notifications (which
     // read the emptied death roll a microtask later) see it here. The death roll already counted the kill.
-    api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: [...stash, ...pet], countKill: false });
+    api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: [...loot, ...pet], countKill: false });
   });
   later(HARVEST_SINK_TICKS, npc, () => {
     if (npc.isRegistered?.()) endCorpse(npc, session, 2);
@@ -281,6 +352,7 @@ function attach(pluginApi) {
   core = pluginApi.core;
   pluginApi.persistAttribute(Shared.ATTR_KILLS);
   pluginApi.persistAttribute(Shared.ATTR_BEST_TICKS);
+  pluginApi.persistAttribute(Shared.ATTR_HALBERD_PIECES);
   pluginApi.onNpcDeath(bossDied);
   pluginApi.onCustomEvent("npc-drops:roll", stashRoll);
   pluginApi.onCustomEvent("npc-drops:generated", stashGenerated);
@@ -298,4 +370,6 @@ module.exports = {
   spawnDrops,
   validCorpse,
   formatTicks,
+  nextHalberdPiece,
+  resolveHalberdPieces,
 };

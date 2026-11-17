@@ -28,6 +28,8 @@ import { Animation } from "../../model/Animation";
 import { EffectTimer } from "../../model/EffectTimer"
 import { Flag } from "../../model/Flag";
 import { Graphic } from "../../model/Graphic";
+import { Sound } from "../../Sound";
+import { Sounds } from "../../Sounds";
 import { GraphicHeight } from "../../model/GraphicHeight";
 import { Item } from "../../model/Item";
 import { Location } from "../../model/Location";
@@ -1793,10 +1795,16 @@ export class CombatFactory {
             return;
         }
         player.performGraphic(new Graphic(436));
+        // The heal's own sound (synth 2681, redemption_heal), with the graphic and the heal.
+        // The graphic's animation (seq 2596) carries no sound, so nothing played here before.
+        Sounds.sendSound(player, Sound.PRAYER_REDEMPTION_HEAL);
         skills.setCurrentLevels(Skill.PRAYER, 0);
         skills.setCurrentLevels(Skill.HITPOINTS, hitpoints + Math.floor(skills.getMaxLevel(Skill.PRAYER) / 4));
         player.sendMessage("You have run out of Prayer points!");
-        PrayerHandler.deactivatePrayers(player);
+        // One switch-off sound, as before with Redemption alone, and not one more on the
+        // same tick for every other prayer that was on.
+        PrayerHandler.deactivatePrayers(player, false);
+        Sounds.sendSound(player, Sound.PRAYER_TURN_OFF);
     }
 
     /** Smite drains a quarter of the damage dealt from the target's Prayer, rounded down (Wiki: Smite). */

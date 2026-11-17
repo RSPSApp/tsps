@@ -104,6 +104,8 @@ export type PlayerView = Tile & ActorUpdateView & {
   index: number;
   appearance: Buffer;
   movementType?: 1 | 2;
+  /** One-update traversal override; independent of movement geometry and cached speed. */
+  temporaryMovementType?: 1 | 2;
   resetPath?: boolean;
   appearanceDirty?: boolean;
   faceDirection?: number;
@@ -1128,6 +1130,8 @@ export const ChatType = {
   TRADE: 102,
   /** An NPC's overhead line, shown as "Name: text"; the NPC's name goes in `from`. */
   NPC_SAY: 116,
+  /** Spoken dialogue history, with "Name|text" in the message (rsprox `type=dialogue`). */
+  DIALOGUE: 114,
   /** A message box's text, logged in the chatbox as live does when one opens (rsprox `type=mesbox`). */
   MESBOX: 115,
   /** The login greeting, "Welcome to Old School RuneScape." (rsprox `type=108`). */
@@ -2120,14 +2124,17 @@ function encodeShopSlotPayload(slot: ShopSlotView): Buffer {
   return payload;
 }
 
-export function encodeShopOpen(id: string, name: string, currencyItemId: number, general: boolean, buyMode: number, sellMode: number, stock: ShopSlotView[]): Buffer {
+/** `inventoryId` trails the stock (2 bytes): the inventory the cache's shop scripts read the stock from (516 by default). */
+export function encodeShopOpen(id: string, name: string, currencyItemId: number, general: boolean, buyMode: number, sellMode: number, stock: ShopSlotView[], inventoryId = 516): Buffer {
   const header = Buffer.alloc(7);
   header.writeUInt16BE(currencyItemId & 0xffff);
   header[2] = general ? 1 : 0;
   header[3] = buyMode;
   header[4] = sellMode;
   header.writeUInt16BE(stock.length, 5);
-  return encodeServerPacket(ServerPacketId.SHOP_OPEN, Buffer.concat([string(id), string(name), header, ...stock.map(encodeShopSlotPayload)]));
+  const inventory = Buffer.alloc(2);
+  inventory.writeUInt16BE(inventoryId & 0xffff);
+  return encodeServerPacket(ServerPacketId.SHOP_OPEN, Buffer.concat([string(id), string(name), header, ...stock.map(encodeShopSlotPayload), inventory]));
 }
 
 export function encodeShopClose(): Buffer {
@@ -2233,6 +2240,11 @@ export function encodeSystemUpdate(remainingCentis: number): Buffer {
   const payload = Buffer.alloc(4);
   payload.writeUInt32BE(Math.max(0, Math.floor(remainingCentis)) >>> 0);
   return encodeServerPacket(ServerPacketId.SYSTEM_UPDATE, payload);
+}
+
+/** OSRS url_open: the client opens [url] in the player's web browser. */
+export function encodeUrlOpen(url: string): Buffer {
+  return encodeServerPacket(ServerPacketId.URL_OPEN, string(url));
 }
 
 export function encodeDestination(x: number, y: number): Buffer {
@@ -3234,7 +3246,7 @@ function playerUpdateMask(
     (writeInteraction ? PLAYER_MASK.FACE_ENTITY : 0) |
     (view.forcedMovement ? PLAYER_MASK.FORCE_MOVEMENT : 0) |
     (writeMovementType ? PLAYER_MASK.MOVEMENT_TYPE : 0) |
-    (view.resetPath ? PLAYER_MASK.MOVEMENT_FLAG : 0) |
+    (view.resetPath || view.temporaryMovementType !== undefined ? PLAYER_MASK.MOVEMENT_FLAG : 0) |
     (view.tint ? PLAYER_MASK.TINT : 0) |
     (view.graphics?.length ? PLAYER_MASK.SPOT_ANIM : 0);
 }
@@ -3315,7 +3327,8 @@ function writePlayerUpdateBlock(
     bytes.push(...view.appearance.subarray(0, length));
   }
   if (view.forcedMovement) writeForcedMovement(bytes, view.forcedMovement);
-  if (view.resetPath) byteS(bytes, 127);
+  if (view.resetPath || view.temporaryMovementType !== undefined)
+    byteS(bytes, view.resetPath ? 127 : view.temporaryMovementType!);
   if (view.graphics?.length) {
     byteA(bytes, view.graphics.length);
     for (const graphic of view.graphics) {

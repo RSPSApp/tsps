@@ -1,3 +1,4 @@
+import { subscribeProtocolNotice, type ProtocolNotice } from "../network/serverConnection/protocolCompatibility";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { registerSerializer } from "threads";
@@ -100,6 +101,8 @@ if (typeof module !== "undefined" && module.hot) {
 
 function OsrsClientApp() {
     const [errorMessage, setErrorMessage] = useState<string>();
+    const [protocolNotice, setProtocolNotice] = useState<ProtocolNotice>();
+    useEffect(() => subscribeProtocolNotice(setProtocolNotice), []);
     const [osrsClient, setOsrsClient] = useState<OsrsClient>();
     const [storageWarnings, setStorageWarnings] = useState<string[]>([]);
     const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<BeforeInstallPromptEvent>();
@@ -455,7 +458,7 @@ function OsrsClientApp() {
         content = <div className="center-container max-height content-text">{errorMessage}</div>;
     } else if (osrsClient) {
         // Show GameContainer - LoginRenderer handles all loading states (DOWNLOADING and LOADING)
-        content = <GameContainer osrsClient={osrsClient} />;
+        content = <GameContainer osrsClient={osrsClient} protocolNotice={protocolNotice} />;
     } else {
         // Brief loading state before OsrsClient is created (checking storage, opening caches, etc.)
         content = (

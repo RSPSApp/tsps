@@ -2041,6 +2041,8 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                     sellPrice: reader.readInt(),
                 });
             }
+            // Trailing, optional: the live shop inventory the cache's shop scripts are given (absent: 516).
+            const inventoryId = reader.remaining >= 2 ? reader.readShort() : undefined;
             return {
                 type: "shop",
                 payload: {
@@ -2052,6 +2054,7 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                     buyMode,
                     sellMode,
                     stock,
+                    inventoryId,
                 },
             };
         }
@@ -2439,6 +2442,9 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 },
             };
 
+        case ServerPacketId.URL_OPEN:
+            return { type: "url_open", payload: { url: reader.readString() } };
+
         default:
             console.warn(`Unknown server packet opcode: ${opcode}`);
             return null;
@@ -2531,7 +2537,16 @@ export function decodeBatchedServerPackets(data: Uint8Array | ArrayBuffer): Batc
 
         // Extract this packet and decode it
         const packetData = buffer.slice(offset, offset + totalPacketSize);
-        const decoded = decodeServerPacket(packetData);
+        let decoded: DecodedServerMessage | null;
+        try {
+            decoded = decodeServerPacket(packetData);
+        } catch (error) {
+            // Retain a valid greeting prefix: a malformed later packet must not
+            // erase a known mismatch and let a subsequent WELCOME release auth.
+            console.warn(`[batch] Malformed packet at offset ${offset}; stalling stream`, error);
+            stalled = true;
+            break;
+        }
         if (decoded) {
             messages.push(decoded);
         }

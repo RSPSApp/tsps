@@ -173,6 +173,7 @@
     "perDay": [0, 100, 150, 250],
     "varbit": "ardougne_free_essence"
   },
+  "rantz": { "npc": "Rantz", "diary": "western", "item": "ogre_arrow", "perDay": [25, 50, 100, 150], "varbit": "western_rantz_arrows" },
   "lundail": {
     "npc": "Lundail",
     "diary": "wilderness",

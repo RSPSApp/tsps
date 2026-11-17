@@ -363,6 +363,7 @@ module.exports = function registerRestlessGhostQuest(api) {
       const ghost = api.spawnNpc({ id: NpcIdentifiers.RESTLESS_GHOST, x: tile.getX(), y: tile.getY(), z: 0, owner: player, ownerOnly: true, wanderRadius: 0 });
       scene.ghost = ghost; if (ghost) { scene.enter(ghost); ghost.forceChat("Release! Thank you"); }
       fade(player, false); sceneCamera(player, scene, [3252, 3193, 350], [3246, 3193, 200]);
+      api.core.NpcDialogue.sendDialogueChatLine(player, "Restless ghost", "Release! Thank you stranger..");
       player.getPacketSender().sendChatboxInterface(231).sendNpcHeadOnInterface(NpcIdentifiers.RESTLESS_GHOST, (231 << 16) | 2)
         .sendString("Restless ghost", (231 << 16) | 4).sendString("Release! Thank you stranger..", (231 << 16) | 6)
         .sendString("", (231 << 16) | 5).sendInterfaceFlagsRange((231 << 16) | 5, -1, -1, 0);

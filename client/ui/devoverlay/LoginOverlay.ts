@@ -386,7 +386,7 @@ export class LoginOverlay implements Overlay {
 
         // Update fire texture every frame (small 128x264 texture)
         // Skip when world select is open since fire is hidden behind it
-        if (isLoginScreenWithFire && !loginState.worldSelectOpen) {
+        if (isLoginScreenWithFire && loginRenderer.showLoginFlames !== false && !loginState.worldSelectOpen) {
             const fireAnim = loginRenderer.getFireAnimation();
             if (fireAnim) {
                 const fireCanvas = fireAnim.updateAndGetCanvas(loginRenderer.cycle);
@@ -563,7 +563,7 @@ export class LoginOverlay implements Overlay {
         const showFire =
             this.gameState >= GameState.LOGIN_SCREEN ||
             (this.gameState === GameState.LOADING && fireAnimAvailable);
-        if (showFire && !loginState.worldSelectOpen && this.fireDrawCall && this.fireTexture) {
+        if (showFire && loginRenderer.showLoginFlames !== false && !loginState.worldSelectOpen && this.fireDrawCall && this.fireTexture) {
             // Enable alpha blending for fire
             this.app.enable(PicoGL.BLEND);
             this.gl.blendFunc(PicoGL.SRC_ALPHA, PicoGL.ONE_MINUS_SRC_ALPHA);

@@ -333,12 +333,7 @@ function message(text, recipients = players()) {
 // ------------------------------------------------------------------ the Great Guardian
 
 function greatGuardian() {
-  const id = Shared.npc(Shared.NPC.GREAT_GUARDIAN);
-  const { World } = Shared.core();
-  for (const npc of World.getNpcs()) {
-    if (npc && npc.getId?.() === id && Shared.inTemple(npc.getLocation())) return npc;
-  }
-  return null;
+  return Shared.templeNpc(Shared.npc(Shared.NPC.GREAT_GUARDIAN));
 }
 
 // ------------------------------------------------------------------ the game's moments

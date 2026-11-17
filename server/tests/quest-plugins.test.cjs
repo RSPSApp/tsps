@@ -175,6 +175,76 @@ test('Quests.plugin registers every quest and enforces equipment requirements wh
   ]);
 });
 
+test("Mourning's End II brings Eluned in when the static Lletya spawn is absent", () => {
+  const { api, handlers } = mockApi();
+  const spawned = [], removed = [], tasks = [];
+  api.core = { ...api.core, TaskManager: { submit: task => tasks.push(task) } };
+  api.getWorld = () => ({ getNpcs: () => [] });
+  api.spawnNpc = spawn => {
+    const npc = {
+      id: spawn.id,
+      getLocation: () => new api.core.Location(spawn.x, spawn.y, spawn.z),
+      getOwner: () => spawn.owner,
+    };
+    spawned.push(spawn);
+    return npc;
+  };
+  api.removeNpc = npc => removed.push(npc);
+  require("../plugins/quests/quests/MourningsEndPartII.Quest")(api);
+  let dialogueActive = true;
+  const player = {
+    getAttribute: () => undefined,
+    setAttribute: () => {},
+    getDialogueManager: () => ({ isActive: () => dialogueActive }),
+  };
+  const arianwyn = { getLocation: () => new api.core.Location(2353, 3172, 0) };
+  for (const handler of handlers.custom.get("npc-dialogue:action") ?? []) {
+    handler({ player, stepId: "vIeP1X", npc: arianwyn });
+  }
+  assert.equal(spawned.length, 1, "one owned Eluned copy stands in");
+  assert.equal(spawned[0].id, 6286, "the Lletya Eluned id");
+  assert.equal(tasks.length, 1, "a dialogue watcher is scheduled");
+
+  // The line event fires before the line is shown, so the copy must stay for the whole dialogue.
+  tasks.shift().execute();
+  assert.equal(removed.length, 0, "the copy stays while the dialogue is open");
+
+  dialogueActive = false;
+  tasks.shift().execute();
+  assert.equal(removed.length, 1, "closing or walking away from the dialogue clears the copy");
+});
+
+test("Mourning's End II ignores another player's owner-only Eluned copy", () => {
+  const { api, handlers } = mockApi();
+  const spawned = [];
+  api.core = { ...api.core, TaskManager: { submit: () => {} } };
+  const firstPlayer = { name: "first" };
+  const otherCopy = {
+    getId: () => 6286,
+    getLocation: () => new api.core.Location(2354, 3172, 0),
+    getOwner: () => firstPlayer,
+    getCurrentDefinition: () => ({ getName: () => "Eluned" }),
+  };
+  api.getWorld = () => ({ getNpcs: () => [otherCopy] });
+  api.spawnNpc = spawn => {
+    spawned.push(spawn);
+    return { id: spawn.id, getLocation: () => new api.core.Location(spawn.x, spawn.y, spawn.z), getOwner: () => spawn.owner };
+  };
+  api.removeNpc = () => {};
+  require("../plugins/quests/quests/MourningsEndPartII.Quest")(api);
+  const secondPlayer = {
+    getAttribute: () => undefined,
+    setAttribute: () => {},
+    getDialogueManager: () => ({ isActive: () => true }),
+  };
+  const arianwyn = { getLocation: () => new api.core.Location(2353, 3172, 0) };
+  for (const handler of handlers.custom.get("npc-dialogue:action") ?? []) {
+    handler({ player: secondPlayer, stepId: "vIeP1X", npc: arianwyn });
+  }
+  assert.equal(spawned.length, 1, "the second player gets their own copy beside Arianwyn");
+  assert.equal(spawned[0].owner, secondPlayer);
+});
+
 test('Lost City only warns about low combat when a starting skill is also missing', () => {
   const { api, handlers } = mockApi();
   require('../plugins/quests/quests/LostCity.Quest')(api);
@@ -2211,6 +2281,8 @@ test('Blood Moon dining room holds the poem scroll on its captured tile until th
   api.spawnNpc = spec => ({ ...spec, getHitpoints: () => 10, setScriptedMovement() {} });
   api.removeNpc = () => {};
   const drops = [], items = new Map();
+  // Other dining-room loot (including mysterious jerky) is independent of this scroll.
+  const poemDrops = () => drops.filter(([id]) => id === 33746);
   api.getItemOnGroundManager = () => ({ getGroundItem: () => null,
     registerLocation: (_player, item, location) => drops.push([item.getId(), location.getX(), location.getY(), location.getZ()]) });
   require('../plugins/quests/quests/TheBloodMoonRises.Quest')(api);
@@ -2235,19 +2307,19 @@ test('Blood Moon dining room holds the poem scroll on its captured tile until th
     location: { x, y, z }, option: 'Enter', handled: false });
   enter(61577, 2327, 7360);
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 2, 'the lobby door leads into the dining room');
-  assert.deepEqual(drops, [[33746, 2337, 7365, 0]], 'the poem scroll lies on the tile live drops it (rec 4288 tick 3124)');
+  assert.deepEqual(poemDrops(), [[33746, 2337, 7365, 0]], 'the poem scroll lies on the tile live drops it (rec 4288 tick 3124)');
 
   drops.length = 0;
   enter(61572, 2341, 7373);
   assert.equal(attributes.get('quest.the_blood_moon_rises.castle-room'), 1);
-  assert.deepEqual(drops, [], 'the lobby gets no scroll');
+  assert.deepEqual(poemDrops(), [], 'the lobby gets no scroll');
   items.set(33746, 1);
   enter(61577, 2327, 7360);
-  assert.deepEqual(drops, [], 'a carried scroll is not dropped again');
+  assert.deepEqual(poemDrops(), [], 'a carried scroll is not dropped again');
   items.set(33746, 0);
   enter(61572, 2341, 7373);
   enter(61577, 2327, 7360);
-  assert.deepEqual(drops, [[33746, 2337, 7365, 0]], 'a lost scroll is back on its tile');
+  assert.deepEqual(poemDrops(), [[33746, 2337, 7365, 0]], 'a lost scroll is back on its tile');
 });
 
 test('Blood Moon prisoner scene waits for the transcript, then leaves the player by the bench key', () => {
@@ -8635,7 +8707,9 @@ test('Desert Treasure II final wights expose their distinct smoke, clone, vial a
     assert.equal(core.PrayerHandler.getProtectingPrayer(rangedFollowup.style), core.PrayerHandler.PROTECT_FROM_MISSILES,
       'Protect from Missiles applies through the ordinary ranged hit pipeline');
     assert.equal(current.__dt2FinalWightNextRanged, false, 'starting the follow-up consumes its one-shot marker');
-    assert.equal(current.animation?.id, 7617, 'the ranged follow-up uses the animation captured for NPC 12328');
+    assert.equal(current.animation?.id, 426, 'the ranged follow-up draws a bow (human_bow), as every recorded 12328 shot');
+    assert.deepEqual([current.graphic?.id, current.graphic?.height], [21, 102],
+      'the shot launches mithril_arrow_launch at height 102 (rsprox_transcripts/226/01703.txt:370902)');
     assassinCombat.start(current, p);
     const nextAssassinHit = assassinCombat.hits(current, p)[0];
     assert.equal(nextAssassinHit.style, core.CombatType.MELEE, 'later Assassin attacks return to ordinary melee');
@@ -11243,6 +11317,7 @@ test('Dragon Slayer II rowboat build consumes the Wiki supplies and uses the rea
   const itemOnObjectHandlers = [];
   const playerProcesses = [];
   const custom = new Map();
+  const ferryRoutes = [];
   const { api: base } = mockApi();
   const objectManager = base.core.ObjectManager;
   const register = objectManager.register;
@@ -11258,6 +11333,9 @@ test('Dragon Slayer II rowboat build consumes the Wiki supplies and uses the rea
       if (prop === 'onItemOnObject') return (handler) => itemOnObjectHandlers.push(handler);
       if (prop === 'onPlayerProcess') return (handler) => playerProcesses.push(handler);
       if (prop === 'onCustomEvent') return (name, handler) => custom.set(name, [...(custom.get(name) ?? []), handler]);
+      if (prop === 'emitCustomEvent') return (name, payload) => {
+        if (name === 'ferries:travel') ferryRoutes.push(payload.route);
+      };
       return target[prop];
     },
   });
@@ -11347,6 +11425,62 @@ test('Dragon Slayer II rowboat build consumes the Wiki supplies and uses the rea
   assert.equal(amounts.get(I.DRAGON_KEY), 0);
   assert.equal(attributes.get('quest.dragon_slayer_ii.stage'), 11);
   assert.ok(messages.includes('You successfully build the boat.'));
+
+  // The built rowboat crosses while the quest is in progress, and stays usable afterwards.
+  const ferryData = require('../plugins/world/data/ferries.json').routes;
+  for (const route of ['lithkren', 'lithkren-back']) {
+    assert.deepEqual(
+      [ferryData[route].style, ferryData[route].teleport, ferryData[route].fadeIn, ferryData[route].close, ferryData[route].minimap],
+      ['fade', 3, 5, 7, [1, 5]], `${route} keeps the recorded fade/minimap transit`);
+  }
+  assert.deepEqual(ferryData.lithkren.to, [3583, 3973, 0]);
+  assert.deepEqual(ferryData['lithkren-back'].to, [3660, 3849, 0]);
+
+  attributes.set('quest.dragon_slayer_ii.stage', 6);
+  playerLocation = { x: 3660, y: 3849, z: 0 };
+  destination = undefined;
+  ferryRoutes.length = 0;
+  assert.equal(objectHandlers[0]({
+    player, objectId: 29916, clickType: 1,
+    definition: { id: O.ROWBOAT_14, getInteractions: () => ['Travel'] },
+    location: { x: 3658, y: 3848, z: 0 },
+  }), true);
+  assert.deepEqual(destination, [3559, 4004, 0], 'during the quest the boat lands at Dallas\' courtyard');
+  assert.deepEqual(ferryRoutes, [], 'the quest landing is not a ferry route');
+
+  attributes.set('quest.dragon_slayer_ii.stage', 14);
+  playerLocation = { x: 3660, y: 3849, z: 0 };
+  destination = undefined;
+  ferryRoutes.length = 0;
+  assert.equal(objectHandlers[0]({
+    player, objectId: 29916, clickType: 1,
+    definition: { id: O.ROWBOAT_14, getInteractions: () => ['Travel'] },
+    location: { x: 3658, y: 3848, z: 0 },
+  }), true, 'the completed quest rowboat still crosses');
+  assert.equal(destination, undefined, 'the ferry service owns the move');
+  assert.deepEqual(ferryRoutes, ['lithkren']);
+
+  playerLocation = { x: 3583, y: 3973, z: 0 };
+  destination = undefined;
+  ferryRoutes.length = 0;
+  assert.equal(objectHandlers[0]({
+    player, objectId: O.ROWBOAT_13, clickType: 1,
+    definition: { id: O.ROWBOAT_13, getInteractions: () => ['Travel'] },
+    location: { x: 3582, y: 3971, z: 0 },
+  }), true, 'the Lithkren rowboat returns to Fossil Island');
+  assert.equal(destination, undefined);
+  assert.deepEqual(ferryRoutes, ['lithkren-back']);
+
+  attributes.set('quest.dragon_slayer_ii.stage', 1);
+  destination = undefined;
+  ferryRoutes.length = 0;
+  assert.equal(objectHandlers[0]({
+    player, objectId: 29916, clickType: 1,
+    definition: { id: O.ROWBOAT_14, getInteractions: () => ['Travel'] },
+    location: { x: 3658, y: 3848, z: 0 },
+  }), false, 'a character who has not started the quest cannot use the rowboat');
+  assert.equal(destination, undefined);
+  assert.deepEqual(ferryRoutes, []);
 });
 
 test('Desert Treasure II shadow spells interrupt the private Leviathan encounter', () => {
@@ -16400,12 +16534,16 @@ test('Dragon Slayer II handles Veos direct cache travel options by their visible
 test('Port Piscarilius spawns the cache-active Veos with both onward boat options', async () => {
   const spawn = require('../data/definitions/npc-spawns.json')
     .find(({ x, y, name }) => name === 'Veos' && x === 1825 && y === 3691);
-  assert.equal(spawn?.id, 10724, '2147 is a null transform parent with no interaction options');
+  assert.equal(spawn?.id, 2147, 'the dock parent resolves separately for each player');
   const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
-  const actions = CacheDefinitions.getNpc(spawn.id).actions;
-  assert.equal(actions[0], 'Talk-to');
-  assert.equal(actions[2], 'Port Piscarilius');
-  assert.equal(actions[3], "Land's End");
+  for (const visibility of [1, 2]) {
+    const resolved = CacheDefinitions.resolveNpc(spawn.id, {
+      getVarbit: (id) => id === 12146 ? visibility : 0, getVarp: () => 0,
+    });
+    assert.equal(resolved.id, visibility === 1 ? 10727 : 10726);
+    assert.deepEqual(resolved.actions.filter(Boolean), ['Talk-to', 'Port Sarim', "Land's End"]);
+  }
+  assert.equal(CacheDefinitions.resolveNpc(spawn.id, { getVarbit: () => 0, getVarp: () => 0 }), undefined);
 });
 
 
@@ -18686,7 +18824,9 @@ test('boot and map exchanges happen together and cannot strand a cancelled dialo
   const I = api.core.ItemIdentifiers, { DUNSTAN, TENZING } = api.core.NpcIdentifiers;
   const act = (npcId, stepId) => handlers.custom.get('npc-dialogue:action').forEach(h => h({ player, npcId, kind: 'message', stepId }));
   quest.setStage(player,73);items.set(I.CLIMBING_BOOTS,1);items.set(I.IRON_BAR,1);
-  act(DUNSTAN,'V1M373');assert.equal(items.get(I.CLIMBING_BOOTS),1,'cancelling before reward retains materials');
+  // The swap happens on the "You give Dunstan..." box itself (rsprox local 1001800 tick 25101): cancelling after it
+  // keeps the spiked boots, and the later hand-out lines do not take or give again.
+  act(DUNSTAN,'V1M373');assert.equal(items.get(I.CLIMBING_BOOTS),0);assert.equal(items.get(I.SPIKED_BOOTS),1,'one step, nothing stranded');
   act(DUNSTAN,'1TFYaK');act(DUNSTAN,'WryBLk');
   assert.equal(items.get(I.CLIMBING_BOOTS),0);assert.equal(items.get(I.IRON_BAR),0);assert.equal(items.get(I.SPIKED_BOOTS),1);
   items.set(I.BREAD,10);items.set(I.TROUT,10);

@@ -21,18 +21,30 @@ const ATTR_START_WAVE = "inferno:start-wave";
 const ATTR_SUPPORTS = "inferno:supports";
 const ATTR_COMPLETIONS = "inferno:completions";
 const WAVE_MESSAGE_COLOUR = "ef1020";
+// rsprox 20261116T222326 (three jumps in): Wave 1 is called 21 ticks after the landing. A run
+// resumed after a logout has no capture; it keeps the old 10.
+const FIRST_WAVE_AFTER_LANDING_TICKS = 21;
 const FIRST_WAVE_DELAY_TICKS = 10;
 const WAVE_DELAY_TICKS = 8;
 const ZUK_WAVE_DELAY_TICKS = 2;
 const EXIT_DELAY_TICKS = 8;
 const COMPLETION_TOKKUL = 16440;
+// Wiki (Jal-nib-rek): 1/100 for a completion, 1/75 when TzKal-Zuk is the Slayer task.
 const PET_CHANCE = 100;
+const PET_CHANCE_ON_TASK = 75;
 // Tokkul for a failed run is half the hitpoints of every creature in the waves cleared.
 const FAILED_RUN_TOKKUL_SHARE = 0.5;
 
 const BOUNDS = { minX: 2240, maxX: 2303, minY: 5312, maxY: 5375 };
-const CENTRE = { x: 2271, y: 5343 };
-const EXIT = { x: 2495, y: 5111 };
+// rsprox 20261116T222326: the landing, 19 tiles north and 1 east of the cave exit (2269,5325) in
+// all three runs, with the landing seq 4367.
+const CENTRE = { x: 2270, y: 5344 };
+const LANDING_ANIM = 4367;
+// Out, on a free tile within 2 of TzHaar-Ket-Keh (2494,5113): 2494,5111, 2497,5115 and 2495,5115
+// in the same recording.
+const EXIT = { x: 2495, y: 5113 };
+const EXIT_SPREAD = 2;
+const TZHAAR_KET_KEH_TILE = { x: 2494, y: 5113 };
 const NIBBLER_NEST = { x: 2266, y: 5345 };
 const NIBBLERS_PER_TILE = 2;
 // South-west corners. Each wave's creatures take a different one, in shuffled order.
@@ -100,10 +112,22 @@ function inArena(player) {
     && location.getY() >= BOUNDS.minY && location.getY() <= BOUNDS.maxY;
 }
 
+/**
+ * TzHaar-Ket-Keh's chathead is named by hand: the server's definition for 7690 has no name, so the
+ * box went out nameless where live shows it (rsprox 20261116T222326).
+ */
+const SPEAKER_NAMES = { 7690: "TzHaar-Ket-Keh" };
+// rsprox 20261116T222326: "Not a very good attempt..." plays chathead seq 610.
+const DISAPPOINTED_SEQ = 610;
+
 function say(player, npcId, ...lines) {
+  sayWith(player, npcId, undefined, ...lines);
+}
+
+function sayWith(player, npcId, expression, ...lines) {
   const { DialogueChainBuilder, EndDialogue, NpcDialogue } = core;
   const chain = new DialogueChainBuilder();
-  lines.forEach((line, index) => chain.add(new NpcDialogue(index, npcId, line)));
+  lines.forEach((line, index) => chain.add(new NpcDialogue(index, npcId, line, SPEAKER_NAMES[npcId], expression)));
   chain.add(new EndDialogue(lines.length));
   player.getDialogueManager().startDialogues(chain);
 }
@@ -158,7 +182,7 @@ function spawn(session, id, at, { target = null, wave = true } = {}) {
   return npc;
 }
 
-function startRun(player, wave, supportHitpoints) {
+function startRun(player, wave, supportHitpoints, firstWaveTicks = FIRST_WAVE_DELAY_TICKS) {
   const area = createArea();
   area.enter(player);
   player.moveTo(tile(CENTRE));
@@ -172,7 +196,7 @@ function startRun(player, wave, supportHitpoints) {
     nibblerTurn: 0,
     jads: [],
     zuk: null,
-    nextWaveAt: cycle() + FIRST_WAVE_DELAY_TICKS,
+    nextWaveAt: cycle() + firstWaveTicks,
     exitAt: -1,
   };
   sessions.set(player, session);
@@ -357,6 +381,9 @@ function tendWave(session) {
       const id = npc.getId();
       const target = npc.getCombat().getTarget();
       const idle = !target || target.getHitpoints() <= 0 || !target.isRegistered();
+      // The engine refills an NPC not hit for 20 seconds by a tenth a tick, fighting or not (a Jad
+      // left alone while its healers are dealt with). A creature still fighting is in combat.
+      if (!idle) npc.getCombat().getLastAttack().reset();
       if (idle && id !== Npcs.JAL_NIB && id !== Npcs.TZKAL_ZUK && !npc.__infernoDigging) npc.getCombat().attack(session.player);
       continue;
     }
@@ -535,7 +562,11 @@ function processRun({ player }) {
   tendJads(session);
   CombatAchievements.tick(player, session.wave);
   if (session.zuk) {
-    if (zuk.tend(session)) session.exitAt = now + EXIT_DELAY_TICKS;
+    if (zuk.tend(session)) {
+      session.exitAt = now + EXIT_DELAY_TICKS;
+      // Asked as he falls: his death can finish the Slayer task before the run pays out.
+      session.petChance = petChance(player);
+    }
     return;
   }
   if (session.nextWaveAt === -1 && session.npcs.size === 0) {
@@ -568,6 +599,12 @@ function failedRunTokkul(wavesCleared) {
   return Math.floor(total * FAILED_RUN_TOKKUL_SHARE);
 }
 
+function petChance(player) {
+  const request = { player, npcId: core.NpcIdentifiers.TZKAL_ZUK, location: tile(CENTRE), onTask: false };
+  api.emitCustomEvent("slayer:on-task", request);
+  return request.onTask === true ? PET_CHANCE_ON_TASK : PET_CHANCE;
+}
+
 // Ends the run outside, by TzHaar-Ket-Keh.
 function finishRun(player, wavesCleared, won) {
   const { ItemIdentifiers: Items } = core;
@@ -583,7 +620,7 @@ function finishRun(player, wavesCleared, won) {
   }
   player.getCombat().reset();
   player.getMovementQueue().setBlockMovement(false);
-  player.moveTo(tile(EXIT));
+  player.moveTo(exitTile());
   const keh = TZHAAR_KET_KEH;
   if (won) {
     player.setAttribute(ATTR_COMPLETIONS, Number(player.getAttribute(ATTR_COMPLETIONS) ?? 0) + 1);
@@ -592,7 +629,7 @@ function finishRun(player, wavesCleared, won) {
     api.emitCustomEvent("collection-log:obtain", { player, itemId: Items.INFERNAL_CAPE, amount: 1 });
     const completionTokkul = tokkulFor(player, COMPLETION_TOKKUL);
     give(player, Items.TOKKUL, completionTokkul);
-    if (core.Misc.getRandom(PET_CHANCE - 1) === 0) {
+    if (core.Misc.getRandom((session?.petChance ?? petChance(player)) - 1) === 0) {
       // Pets awards it as a follower (or backpack item on a duplicate) and removes it
       // from the array; without the Pets plugin it still lands as an item.
       const drops = [{ itemId: Items.JAL_NIB_REK, amount: 1 }];
@@ -611,7 +648,7 @@ function finishRun(player, wavesCleared, won) {
   if (tokkul > 0) {
     say(player, keh, "Well done in the Inferno, you can have this TokKul as reward.");
   } else {
-    say(player, keh, "Not a very good attempt JalYt. Better luck next time.");
+    sayWith(player, keh, DISAPPOINTED_SEQ, "Not a very good attempt JalYt. Better luck next time.");
   }
 }
 
@@ -619,11 +656,28 @@ function finishRun(player, wavesCleared, won) {
 // the spawn at 2494, 5113 in data/definitions/npc-spawns.json.
 const TZHAAR_KET_KEH = 7690;
 
+/** A free tile within EXIT_SPREAD of the exit spot, never TzHaar-Ket-Keh's own. */
+function exitTile() {
+  const tiles = [];
+  for (let dx = -EXIT_SPREAD; dx <= EXIT_SPREAD; dx++) {
+    for (let dy = -EXIT_SPREAD; dy <= EXIT_SPREAD; dy++) {
+      const x = EXIT.x + dx;
+      const y = EXIT.y + dy;
+      if (x === TZHAAR_KET_KEH_TILE.x && y === TZHAAR_KET_KEH_TILE.y) continue;
+      const at = tile({ x, y });
+      if (core.RegionManager?.blocked?.(at, null)) continue;
+      tiles.push(at);
+    }
+  }
+  return tiles.length ? tiles[core.Misc.getRandom(tiles.length - 1)] : tile(EXIT);
+}
+
+/** The landing from the chasm (Entry.Inferno.js stages the fall): the run starts here. */
 function enter(player) {
   const wave = Number(player.getAttribute(ATTR_START_WAVE) ?? 1);
   player.setAttribute(ATTR_START_WAVE, null);
-  startRun(player, wave, null);
-  player.sendMessage("You hit the ground in the centre of The Inferno.");
+  startRun(player, wave, null, FIRST_WAVE_AFTER_LANDING_TICKS);
+  player.performAnimation(new core.Animation(LANDING_ANIM));
 }
 
 function leave(player) {
@@ -708,7 +762,7 @@ function resumeRun({ player }) {
   if (wave >= 1 && wave <= FINAL_WAVE && inArena(player)) {
     startRun(player, wave, player.getAttribute(ATTR_SUPPORTS) ?? null);
   } else if (inArena(player)) {
-    player.moveTo(tile(EXIT));
+    player.moveTo(exitTile());
   } else if (wave !== 0) {
     player.setAttribute(ATTR_WAVE, null);
     player.setAttribute(ATTR_SUPPORTS, null);

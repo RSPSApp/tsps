@@ -78,11 +78,14 @@ function choose(p, settingId, option) {
   return handlers.clickDropdownOption({ player: p, slot: option * 3 });
 }
 
+// RSProx recording 100: Resizable - Classic opens toplevel_osrs_stretch (161), Resizable - Modern
+// toplevel_pre_eoc (164). Script 3962 shows the resizable row from varbit 4607: 0 Classic, 1 Modern.
 test('Game client layout in All Settings switches the root and keeps it, for each of its options', () => {
-  for (const [option, root] of [[0, 548], [1, 164], [2, 161]]) {
+  for (const [option, root, stone] of [[0, 548, 0], [1, 161, 0], [2, 164, 1]]) {
     const p = player();
     assert.equal(choose(p, 12, option), true, `option ${option} is handled`);
     assert.deepEqual(p.sent.roots, [root], `option ${option} opens root ${root}`);
+    assert.equal(p.getPacketSender().getVarbit(4607), stone, `option ${option} shows its own dropdown row`);
     assert.equal(p.getAttribute('client-layout-root'), root, 'saved for the next login');
     assert.equal(p.getAttribute('client-layout317'), false);
     assert.deepEqual(p.sent.opened, [[ORBS_PANE, 160]], 'the orbs reopen for the new layout');

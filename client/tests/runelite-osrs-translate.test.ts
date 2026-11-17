@@ -38,6 +38,26 @@ import {
     type FetchDeps,
 } from "../game/plugins/osrstranslate/TranslationRepository";
 import { REQUIRED_FILES } from "../game/plugins/osrstranslate/TranslationState";
+import { applyAdditions } from "../game/plugins/osrstranslate/additions";
+
+const TRADE_KEYS = ["Sending trade offer...", "Accepted trade."];
+const tradeAdditions = (language: string) => {
+    const bundled = JSON.parse(readFileSync(join(__dirname, `../public/osrstranslate/additions-${language}.json`), "utf8"));
+    const source = bundled.files["translations_game_message.json"].add;
+    const add = Object.fromEntries(TRADE_KEYS.map((key) => {
+        assert.equal(typeof source[key], "string", `${language}: actual trade notification is bundled`);
+        return [key, source[key]];
+    }));
+    return { files: { "translations_game_message.json": { add } } };
+};
+
+for (const language of ["pt-BR", "ESP"]) {
+    const additions = tradeAdditions(language);
+    const original = new Map(TRADE_KEYS.map((key) => [key, `Author: ${key}`]));
+    const retired = applyAdditions({ "translations_game_message.json": original }, additions);
+    assert.equal(retired.added, 0, "published author entries retire our bundled trade additions");
+    assert.deepEqual(retired.data["translations_game_message.json"], original);
+}
 
 class MemoryStorage implements ConfigStorage {
     private readonly values = new Map<string, string>();
@@ -230,6 +250,7 @@ async function main(): Promise<void> {
     // tsps's bundled additions (client/public/osrstranslate), served from the page's own origin.
     bodies.set("/osrstranslate/additions-pt-BR.json", encode(JSON.stringify({
         files: {
+            ...tradeAdditions("pt-BR").files,
             "translations.json": {
                 add: {
                     "Only in our additions.": "Só nas nossas adições.",
@@ -242,6 +263,18 @@ async function main(): Promise<void> {
             },
         },
     })));
+    bodies.set("/osrstranslate/additions-ESP.json", encode(JSON.stringify(tradeAdditions("ESP"))));
+
+    // Real bundled Broav additions, through the repository and production chat callback.
+    const broavLines = ["You let the broav sniff the dirty shirt...","The broav seems to have found something interesting..."];
+    const broavExpected = {"pt-BR":["Você deixa o broav cheirar a camisa suja...","O broav parece ter encontrado algo interessante..."],"ESP":["Dejas que el broav olfatee la camisa sucia...","El broav parece haber encontrado algo interesante..."]};
+    for (const language of ["pt-BR", "ESP"] as const) {
+        const bundle = JSON.parse(readFileSync(`public/osrstranslate/additions-${language}.json`, "utf8"));
+        const current = JSON.parse(new TextDecoder().decode(bodies.get(`/osrstranslate/additions-${language}.json`) ?? encode("{}")));
+        current.files ??= {};
+        current.files["translations_game_message.json"] = bundle.files["translations_game_message.json"];
+        bodies.set(`/osrstranslate/additions-${language}.json`, encode(JSON.stringify(current)));
+    }
     const fetched: string[] = [];
     let offline = false;
     const fakeFetch = (async (input: RequestInfo | URL) => {
@@ -459,8 +492,44 @@ async function main(): Promise<void> {
     assert.equal(build(0, "You have unlocked a new music track: <col=e00a19>Forever").message,
         "Você desbloqueou uma nova faixa de música: <col=e00a19>Forever", "the track name stays red, as the game sends it");
     assert.equal(build(2, "Nothing interesting happens.").message, "Nothing interesting happens.", "players' public chat is never translated");
+    assert.equal(build(102, "Sending trade offer...").message, "Enviando oferta de troca...");
+    assert.equal(build(102, "Accepted trade.").message, "Troca aceita.");
+    assert.equal(build(102, "Accepted trade. (3)").message, "Troca aceita. (3)");
+    assert.equal(build(102, "<col=ef1020>Accepted trade.</col>").message, "<col=ef1020>Troca aceita.");
+    for (const type of [2, 3, 101]) {
+        assert.equal(build(type, "Accepted trade.").message, "Accepted trade.", "player chat and actionable requests stay English");
+    }
+    const tradeUid = chatHistory.addMessage(102, "Accepted trade.", "Trade peer");
+    const tradeVm: any = { intStack: [0, tradeUid], intStackSize: 2, stringStack: ["channel", "Trade peer", "Accepted trade.", "[12:00]"], stringStackSize: 4 };
+    plugin.onScriptCallback({ eventName: "chatMessageBuilding", vm: tradeVm });
+    assert.deepEqual(tradeVm.stringStack, ["channel", "Trade peer", "Troca aceita.", "[12:00]"]);
+    assert.equal(chatHistory.getByUid(tradeUid)?.text, "Accepted trade.", "trade history stays English");
+    assert.equal(chatHistory.getByUid(tradeUid)?.from, "Trade peer", "sender is unchanged");
+    configManager.setConfigValue(OsrsTranslateConfig, "enableGameMessages", false);
+    assert.equal(build(102, "Accepted trade.").message, "Accepted trade.");
+    configManager.setConfigValue(OsrsTranslateConfig, "enableGameMessages", true);
     const history = chatHistory.getByUid(chatHistory.addMessage(0, "Nothing interesting happens."));
     assert.equal(history?.text, "Nothing interesting happens.", "the chat history keeps the game's text");
+
+    const stash = (n: number) => "You do not have enough free space to withdraw your items from the STASH unit; you need at least " + n + " free slots.";
+    for (const n of [1, 2, 3, 28]) {
+        const expected = "Você não tem espaço livre suficiente para retirar seus itens da unidade STASH; precisa de pelo menos " + n + (n === 1 ? " espaço livre." : " espaços livres.");
+        assert.equal(build(0, stash(n)).message, expected, "real STASH count through loaded additions/callback");
+        assert.equal(chatHistory.getByUid(chatHistory.addMessage(0, stash(n)))?.text, stash(n));
+    }
+    configManager.setConfigValue(OsrsTranslateConfig, "enableGameMessages", false);
+    assert.equal(build(0, stash(2)).message, stash(2));
+    configManager.setConfigValue(OsrsTranslateConfig, "enableGameMessages", true);
+
+    for (let i = 0; i < broavLines.length; i++) {
+        assert.equal(build(0, broavLines[i]).message, broavExpected["pt-BR"][i]);
+        assert.equal(build(2, broavLines[i]).message, broavLines[i]);
+        const uid = chatHistory.addMessage(0, broavLines[i]);
+        assert.equal(chatHistory.getByUid(uid)?.text, broavLines[i]);
+    }
+    configManager.setConfigValue(OsrsTranslateConfig, "enableGameMessages", false);
+    assert.equal(build(0, broavLines[0]).message, broavLines[0]);
+    configManager.setConfigValue(OsrsTranslateConfig, "enableGameMessages", true);
 
     // Toggles.
     configManager.setConfigValue(OsrsTranslateConfig, "enableDialogues", false);
@@ -490,10 +559,19 @@ async function main(): Promise<void> {
     assert.equal(menuOptionDisplayText("Talk-to"), "Talk-to", "the old language is dropped at once");
     await plugin.update();
     assert.equal(menuOptionDisplayText("Talk-to"), "Hablar-con");
+    assert.equal(build(102, "Sending trade offer...").message, "Enviando oferta de intercambio...");
+    assert.equal(build(102, "Accepted trade.").message, "Intercambio aceptado.");
     assert.equal(dialogue("Hello, what are you<br>doing here?")?.text, "Hola, ¿qué haces aquí?");
+
+    for (const n of [1, 2, 3, 28]) {
+        assert.equal(build(0, stash(n)).message, "No tienes suficiente espacio libre para retirar tus objetos de la unidad STASH; necesitas al menos " + n + (n === 1 ? " espacio libre." : " espacios libres."));
+    }
+
+    for (let i = 0; i < broavLines.length; i++) assert.equal(build(0, broavLines[i]).message, broavExpected.ESP[i]);
 
     // Disabling: English again, and the menu transform is released.
     await pluginManager.setPluginEnabled(OsrsTranslatePlugin, false);
+    assert.equal(build(102, "Accepted trade.").message, "Accepted trade.", "disabled plugin keeps trade notifications English");
     assert.equal(menuOptionDisplayText("Talk-to"), "Talk-to");
     assert.equal(dialogue("Hello, what are you<br>doing here?"), undefined);
     assert.equal(hooks.npcOverheadText(1, "I need your help, Zezima!"), "I need your help, Zezima!");

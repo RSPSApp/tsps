@@ -172,7 +172,7 @@ export class Combat {
         if (!location) return this.PVP_TIMER_MS;
         // Multi-combat has no PJ lock; leave its existing retarget hold alone.
         if (Wilderness.isMulti(location.getX(), location.getY(), location.getZ())) return this.PVP_TIMER_MS;
-        if (Wilderness.isInLocation(location)) return this.WILDERNESS_PVP_TIMER_MS;
+        if (Wilderness.isGeographicPvp(location)) return this.WILDERNESS_PVP_TIMER_MS;
         if (pvpWorld) return this.PVP_WORLD_TIMER_MS;
         return this.PVP_TIMER_MS;
     }

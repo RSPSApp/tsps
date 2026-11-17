@@ -34,6 +34,7 @@ module.exports = {
     api.onObjectSecondClick(Objects.CAVE_EXIT_22, entry.quickExit);
     api.onPlayerLogin(entry.syncEntrance);
     api.onPlayerLogin(run.resumeRun);
+    api.onPlayerLogout(entry.fallLogout);
     api.onPlayerLogout(run.runLogout);
     api.onPlayerProcess(run.processRun);
     require("./inferno/CombatAchievements.Inferno")(api);
@@ -42,6 +43,7 @@ module.exports = {
     api.onPlayerDeath(run.runDeath);
     api.onShouldDropItemsOnDeath(run.keepItemsInRun);
     api.onCanTeleport(run.noTeleportOut);
+    api.onCanTeleport(entry.noTeleportMidFall);
     api.onCanAttack(run.guardPassives);
     api.onNpcBeforeDeath(run.supportsCollapse);
     api.onCombatHitResolved(zuk.provoke);

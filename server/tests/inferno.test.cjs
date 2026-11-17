@@ -105,7 +105,12 @@ class FakePlayer extends FakeMob {
       sendVarbit(id, value) { player.varbits.set(id, value); return this; },
       sendRunEnergy() { return this; },
       sendObjectAnimation() { return this; },
-      sendSubInterface(target, id) { player.overlay = id; return this; },
+      sendSubInterface(target, id, type, options) {
+        player.overlay = id;
+        if (options?.postScripts) (player.fadeArgs ??= []).push([world.cycle, options.postScripts[0].args]);
+        return this;
+      },
+      sendInterfaceRemoval() { (player.removals ??= []).push(world.cycle); return this; },
       closeSubInterface() { player.overlay = null; return this; },
     };
     this.inventory = {
@@ -123,7 +128,7 @@ class FakePlayer extends FakeMob {
   getPacketSender() { return this.packets; }
   getInventory() { return this.inventory; }
   getEquipment() { return { get: () => ({ getId: () => this.cape }) }; }
-  getDialogueManager() { return { startDialogues: (chain) => this.dialogues.push(chain.lines) }; }
+  getDialogueManager() { return { startDialogues: (chain) => { this.dialogues.push(chain.lines); (this.chats ??= []).push(chain.entries); } }; }
   getRunEnergy() { return this.runEnergy; }
   setRunEnergy(value) { this.runEnergy = value; }
   getArea() { return this.area; }
@@ -147,7 +152,7 @@ class FakeArea {
 }
 
 function createWorld() {
-  const world = { cycle: 0, tasks: [], npcs: [], objects: new Set(), removedObjects: [], hits: [], projectiles: 0, providers: new Map(), hooks: {}, random: 0, events: [] };
+  const world = { cycle: 0, tasks: [], npcs: [], objects: new Set(), removedObjects: [], hits: [], projectiles: 0, forceMoves: [], providers: new Map(), hooks: {}, random: 0, events: [] };
   const core = {
     World: { getProcessCycle: () => world.cycle },
     Location,
@@ -177,6 +182,14 @@ function createWorld() {
       sendProjectile() { world.projectiles++; }
     },
     Task: FakeTask,
+    ForceMovement: class {
+      constructor(start, end, speed, reverseSpeed, direction, animation) { Object.assign(this, { start, end, speed, reverseSpeed, direction, animation }); }
+    },
+    ForceMovementTask: class {
+      constructor(player, delay, movement) { Object.assign(this, { player, delay, movement }); world.forceMoves.push(movement); }
+      execute() { this.player.moveTo(this.movement.start.transform(this.movement.end.getX(), this.movement.end.getY(), 0)); }
+    },
+    StatementDialogue: { send: (player, text, canContinue) => (player.boxes ??= []).push([world.cycle, text, canContinue]) },
     TaskManager: { submit: (task) => world.tasks.push({ task, remaining: task.delay }) },
     Animation: class { constructor(id) { this.id = id; } },
     Graphic: class { constructor(id) { this.id = id; } },
@@ -200,8 +213,8 @@ function createWorld() {
     ItemOnGroundManager: { registerLocation() {} },
     RegionManager: { blocked: () => false },
     PathFinder: { calculateWalkRoute: (npc, x, y) => { npc.walkingTo = { x, y }; } },
-    DialogueChainBuilder: class { constructor() { this.lines = []; } add(entry) { if (entry.text) this.lines.push(entry.text); return this; } },
-    NpcDialogue: class { constructor(index, npcId, text) { this.text = text; } },
+    DialogueChainBuilder: class { constructor() { this.lines = []; this.entries = []; } add(entry) { if (entry.text) { this.lines.push(entry.text); this.entries.push(entry); } return this; } },
+    NpcDialogue: class { constructor(index, npcId, text, speaker, expression) { Object.assign(this, { npcId, text, speaker, expression }); } },
     EndDialogue: class {},
     Equipment: { CAPE_SLOT: 1 },
   };
@@ -299,12 +312,13 @@ test('every creature has a combat method', () => {
 test('a run raises three supports and opens with Jal-Nib on a support and a bat on the player', () => {
   const player = new FakePlayer({ [entry.ATTR_SACRIFICED]: true });
   entry.jumpIn({ player });
+  tick(player, 16); // the fall
   const session = run.sessionOf(player);
   assert.ok(session);
   assert.equal(session.supports.length, 3);
   assert.equal(player.varbits.get(SUPPORT_VARBIT), 0);
-  assert.equal(player.getLocation().getX(), 2271);
-  tick(player, 10);
+  assert.equal(player.getLocation().getX(), 2270);
+  tick(player, 21);
   assert.ok(player.messages.some((message) => message.includes('Wave: 1')));
   const nibblers = [...session.npcs].filter((npc) => npc.id === Npcs.JAL_NIB);
   assert.equal(nibblers.length, 3);
@@ -520,7 +534,7 @@ test('TzKal-Zuk: the glyph shields, summons arrive on cue and his death wins the
   assert.equal(player.items.get(Items.TOKKUL), 16440);
   assert.equal(run.completions(player), 1);
   assert.equal(player.getAttribute(run.ATTR_WAVE), null);
-  assert.equal(player.getLocation().getX(), 2495);
+  assert.ok(Math.abs(player.getLocation().getX() - 2495) <= 2 && Math.abs(player.getLocation().getY() - 5113) <= 2, 'out by TzHaar-Ket-Keh');
 });
 
 function winZuk(random) {
@@ -679,15 +693,64 @@ test('Jal-Xil keeps range between melee swings and reaches further on the Zuk wa
   if (hits.length) assert.equal(hits[0].style, CombatType.MELEE);
 });
 
-test('the chasm is jumped into from the tip of the walkway, as its pit has no walkable edge', () => {
+test('the jump and the fall run as recorded: the leap, four boxes, the fades, the landing and the release', () => {
+  // rsprox 20261116T222326: three jumps, the same each time.
+  const player = new FakePlayer({ [entry.ATTR_SACRIFICED]: true });
+  player.moveTo(new Location(2496, 5115, 0));
+  world.forceMoves.length = 0;
+  const start = world.cycle;
+  entry.jumpIn({ player });
+  assert.equal(player.getMovementQueue().blocked, true, 'held still from the jump');
+  const [leap] = world.forceMoves;
+  assert.deepEqual([leap.end.getX(), leap.end.getY(), leap.reverseSpeed, leap.direction, leap.animation], [0, 11, 15, 0, 6723]);
+  entry.jumpIn({ player });
+  assert.equal(world.forceMoves.length, 1, 'a second click mid-fall does nothing');
+  assert.equal(player.getAttribute(run.ATTR_WAVE), undefined);
+  tick(player, 15);
+  assert.equal(run.sessionOf(player), null, 'still falling');
+  assert.equal(entry.noTeleportMidFall(Object.assign({ player, allow: true })), undefined);
+  const teleport = { player, allow: true };
+  entry.noTeleportMidFall(teleport);
+  assert.equal(teleport.allow, false, 'no teleport out of the air');
+  tick(player);
+  const session = run.sessionOf(player);
+  assert.ok(session, 'landed 16 ticks after the jump');
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2270, 5344]);
+  assert.equal(player.animations.at(-1), 4367, 'the landing');
+  assert.deepEqual(player.boxes.map(([at, text, canContinue]) => [at - start, text, canContinue]), [
+    [5, 'You jump into the fiery cauldron of the Inferno. Your heart is<br>pulsating.', false],
+    [11, 'You fall and fall and feel the temperature rising.', false],
+    [14, 'Your heart is in your throat...', false],
+    [16, 'You hit the ground in the centre of The Inferno.', false],
+  ]);
+  tick(player, 10);
+  assert.deepEqual(player.fadeArgs.map(([at, args]) => [at - start, args]), [[6, [0, 255, 0, 0, 50]], [17, [0, 0, 0, 255, 50]]]);
+  assert.deepEqual(player.removals.map((at) => at - start), [26], 'the last box closes 26 ticks after the jump');
+  assert.equal(player.getMovementQueue().blocked, false, 'and the player may move');
+  assert.equal(session.nextWaveAt - (start + 16), 21, 'Wave 1 comes 21 ticks after the landing');
+  run.leave(player);
+});
+
+test('logging out mid-fall puts the player back on the walkway, not in the chasm', () => {
+  const player = new FakePlayer({ [entry.ATTR_SACRIFICED]: true });
+  player.moveTo(new Location(2496, 5115, 0));
+  entry.jumpIn({ player });
+  tick(player, 3);
+  entry.fallLogout({ player });
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2496, 5115]);
+  tick(player, 30);
+  assert.equal(run.sessionOf(player), null, 'the fall does not carry on without them');
+});
+
+test('the chasm is jumped into from 2496,5115 on the walkway, as its pit has no walkable edge (rsprox)', () => {
   const { routeToChasm } = require('../plugins/minigames/inferno/Entry.Inferno');
   const route = (x) => {
     const event = { objectId: 30352, player: { getLocation: () => new Location(x, 5110, 0) } };
     routeToChasm(event);
     return event.destination;
   };
-  assert.deepEqual(route(2496), { x: 2496, y: 5119, z: 0 });
-  assert.deepEqual(route(2499), { x: 2497, y: 5119, z: 0 }, 'the nearer of the two tip tiles');
+  assert.deepEqual(route(2496), { x: 2496, y: 5115, z: 0 });
+  assert.deepEqual(route(2499), { x: 2496, y: 5115, z: 0 }, 'always the recorded jump tile');
   const other = { objectId: 30283, player: { getLocation: () => new Location(2496, 5110, 0) } };
   routeToChasm(other);
   assert.equal(other.destination, undefined);
@@ -740,7 +803,7 @@ test('::infernowave sets the next wave: after the one under way, or for the next
   const session = run.sessionOf(player);
   assert.equal(session.wave, 30, 'the run starts there');
 
-  tick(player, 20);
+  tick(player, 22);
   assert.equal(session.nextWaveAt, -1, 'wave 30 is under way');
   run.setNextWave({ player, parts: ['infernowave', '67'] });
   assert.equal(session.wave, 30, 'the wave under way is finished first');
@@ -766,6 +829,9 @@ test('the cave exit, a map loc, can be walked to from inside the arena, and Quic
   const entry = require('../plugins/minigames/inferno/Entry.Inferno');
   assert.equal(entry.quickExit({ player }), true);
   assert.equal(run.sessionOf(player), null, 'out without being asked');
+  const [line] = player.chats.at(-1);
+  assert.deepEqual([line.npcId, line.speaker, line.expression, line.text],
+    [7690, 'TzHaar-Ket-Keh', 610, 'Not a very good attempt JalYt. Better luck next time.'], 'named, with the recorded chathead seq');
 });
 
 test('the supports the map has standing are removed when a run starts without them', () => {
@@ -805,7 +871,9 @@ test('logging out mid-wave ends the run as dying does; between waves the run is 
   assert.equal(run.sessionOf(player), null);
   assert.equal(player.getAttribute(run.ATTR_WAVE), null, 'nothing to resume');
   assert.equal(player.items.get(Items.TOKKUL), Math.floor((25 * 3) / 2), 'the TokKul for waves 1 and 2');
-  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2495, 5111], 'back outside');
+  const out = player.getLocation();
+  assert.ok(Math.abs(out.getX() - 2495) <= 2 && Math.abs(out.getY() - 5113) <= 2, 'back outside, by TzHaar-Ket-Keh');
+  assert.ok(!(out.getX() === 2494 && out.getY() === 5113), 'never on his own tile');
 });
 
 test("Zuk's ranger and mager come as a set, and not again while the last set stands", () => {

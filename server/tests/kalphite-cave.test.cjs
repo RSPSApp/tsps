@@ -34,7 +34,10 @@ before(async () => {
   KalphiteCave.register(api);
 });
 
-function fakePlayer({ onTask = false, retaliating = false, target = null, amulet = -1 } = {}) {
+function fakePlayer({ onTask = false, retaliating = false, target = null, amulet = -1, legs = -1 } = {}) {
+  const equipment = new core.Equipment();
+  equipment.set(core.Equipment.AMULET_SLOT, new core.Item(amulet));
+  equipment.set(core.Equipment.LEG_SLOT, new core.Item(legs));
   const player = {
     onTask,
     target,
@@ -44,7 +47,7 @@ function fakePlayer({ onTask = false, retaliating = false, target = null, amulet
     getAsPlayer: () => player,
     sendMessage: (text) => player.messages.push(text),
     getCombat: () => ({ isAutoRetaliating: () => retaliating, getTarget: () => player.target ?? null }),
-    getEquipment: () => ({ get: (slot) => (slot === core.Equipment.AMULET_SLOT && amulet >= 0 ? new core.Item(amulet) : null) }),
+    getEquipment: () => equipment,
   };
   return player;
 }
@@ -90,6 +93,34 @@ test("Buggie is understood with a ghostspeak amulet on (Transcript:Entomologist)
     const npc = fakeNpc(958);
     area.canAttack(fakePlayer({ target: npc, amulet }), npc);
     assert.equal(dialogues[0].variant, T.BUGGIE_VARIANTS.understood);
+  }
+});
+
+test("worn Morytania legs 2-4 replace ghostspeak without granting attack permission", () => {
+  for (const legs of [core.ItemIdentifiers.MORYTANIA_LEGS_2, core.ItemIdentifiers.MORYTANIA_LEGS_3, core.ItemIdentifiers.MORYTANIA_LEGS_4]) {
+    dialogues.length = 0;
+    const npc = fakeNpc(958);
+    const player = fakePlayer({ target: npc, legs });
+    assert.equal(area.canAttack(player, npc), false);
+    assert.equal(dialogues[0].variant, T.BUGGIE_VARIANTS.understood);
+    assert.deepEqual(player.messages, [T.BUGGIE_MESSAGE]);
+    const tasked = fakePlayer({ onTask: true, target: npc, legs });
+    assert.equal(area.canAttack(tasked, npc), null);
+    assert.deepEqual(tasked.messages, []);
+  }
+});
+
+test("legs 1 and merely carrying ghostspeak equipment leave Buggie ghostly", () => {
+  for (const legs of [-1, core.ItemIdentifiers.MORYTANIA_LEGS_1]) {
+    dialogues.length = 0;
+    const npc = fakeNpc(956);
+    const player = fakePlayer({ target: npc, legs });
+    const inventory = new core.Inventory();
+    inventory.setItem(0, new core.Item(core.ItemIdentifiers.MORYTANIA_LEGS_4));
+    inventory.setItem(1, new core.Item(core.ItemIdentifiers.GHOSTSPEAK_AMULET));
+    player.getInventory = () => inventory;
+    assert.equal(area.canAttack(player, npc), false);
+    assert.equal(dialogues[0].variant, T.BUGGIE_VARIANTS.ghostly);
   }
 });
 

@@ -509,7 +509,6 @@ class EzekielRoom extends Raid.Room {
       }
       Shared.areaSound(this.area, this.ezekiel, 12407, 120 + 30 * step);
       const impactTicks = Math.floor(IMPACT_DELAYS[step] / 30);
-      for (const player of this.fighters()) Shared.prayerCue(player, "magic", impactTicks);
       // On the tick the impact shows (captured: 124/154/184 cycles, ticks 4-6), applied at once.
       // Protect from Magic lessens the lightning (Wiki; the share is an estimate).
       this.later(impactTicks, () => {

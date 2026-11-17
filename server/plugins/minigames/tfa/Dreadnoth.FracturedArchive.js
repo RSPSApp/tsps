@@ -175,7 +175,12 @@ class DreadnothRoom extends Raid.Room {
         // The landing shakes the whole arena: Protect from Melee for it (Wiki).
         this.strike(this.boss, player, "melee", DAMAGE.SLAM, 0, { prayerMultiplier: 0 });
         // Then the volley at them: Protect from Missiles (Wiki); its blobs still land beside them.
-        this.strike(this.boss, player, "ranged", DAMAGE.VOLLEY, Math.ceil(PROJ01[0].end / 30), { prayerMultiplier: 0 });
+        // A separate attack from the slam: its hit is made (and its prayer checked) as it lands,
+        // so a player switches from Melee to Missiles between the two.
+        this.later(Math.ceil(PROJ01[0].end / 30), () => {
+          if (this.dead || !this.fighters().includes(player)) return;
+          this.strike(this.boss, player, "ranged", DAMAGE.VOLLEY, 0, { prayerMultiplier: 0 });
+        });
         for (const flight of PROJ01) {
           const tile = this.freeTileNear(Shared.tileOf(player), 2, landed);
           if (!tile) continue;
@@ -294,7 +299,6 @@ class DreadnothRoom extends Raid.Room {
     this.boss.performAnimation(anim("dreadnoth_jump02"));
     Shared.graphicAt(this.area, named("spotanim", "tfa_boss_jelly_5x5_jump"), { x: landing.getX() + 2, y: landing.getY() + 2, z: 0 });
     this.boss.exactMove(landing, { endCycles: TIME.JUMP_CYCLES });
-    for (const player of this.fighters()) Shared.prayerCue(player, "melee", Math.ceil(TIME.JUMP_CYCLES / 30));
     this.later(Math.ceil(TIME.JUMP_CYCLES / 30), () => {
       this.slam(landing);
       this.spit();

@@ -997,15 +997,12 @@ class OcellusRoom extends Raid.Room {
     this.boss.performAnimation(anim("npc_ocellus_phase3_prayer_in"));
     this.boss.performGraphicInSlot(4, spot("vfx_ocellus_phase3_melee_prayer_in"));
     const debris = this.fighters().map((player) => Shared.tileOf(player));
-    for (const player of this.fighters()) Shared.prayerCue(player, "melee", 3);
     // Each strike three ticks after the last; the circle forms in between (captured: the cog's
     // graphic per strike, "prayer_out" on the last; the loop animation between them).
     for (let k = 1; k <= loops; k++) {
       const disrupted = new Set();
       if (k > 1) {
-        // Prayers off while the circle forms, then Protect from Melee for the strike.
-        this.at(3 * k - 3, () => { for (const player of this.fighters()) Shared.prayerCue(player, "none", 1); });
-        this.at(3 * k - 1, () => { for (const player of this.fighters()) Shared.prayerCue(player, "melee", 1); });
+        // Prayers off while the circle forms (checked between strikes).
         this.at(3 * k - 2, () => {
           for (const player of this.fighters()) if (overhead(player)) disrupted.add(player);
         });
@@ -1389,7 +1386,6 @@ class OcellusRoom extends Raid.Room {
     const style = Shared.randomOf(["melee", "magic", "ranged"]);
     this.boss.performAnimation(anim("npc_ocellus_phase3_melee_hybrid"));
     this.boss.performGraphicInSlot(2, spot(style === "melee" ? "vfx_ocellus_phase3_melee_hybrid" : `vfx_ocellus_phase3_melee_hybrid_${style}`));
-    for (const player of this.fighters()) Shared.prayerCue(player, style, 3);
     // A tick on he prays Soul Split (captured head icon 11, kept until his next deflect): an
     // unprayed blast heals him what it deals; praying against it negates the heal (Wiki).
     this.at(1, () => {

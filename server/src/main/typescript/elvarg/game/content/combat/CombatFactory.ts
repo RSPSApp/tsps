@@ -109,8 +109,6 @@ export class CombatFactory {
     private static readonly RANDOM = new RandomGen();
     /** Non-zero while a PendingHit is rolling: its defences belong to the impact tick. */
     private static hitRollDepth = 0;
-    /** NPC flag: its owner (anyone, unowned) may attack it in single combat while under attack. */
-    public static readonly ATTACKABLE_WHILE_UNDER_ATTACK_FLAG = "combat:attackable-while-under-attack";
     public static readonly RECOIL_DAMAGE_ATTRIBUTE = "ring-of-recoil:damage";
     public static readonly RECOIL_IMMUNE_ATTRIBUTE = "combat:recoil-immune";
     public static readonly CRYSTAL_BOW_SHOTS_ATTRIBUTE = "crystal-bow:shots-in-stage";
@@ -786,11 +784,6 @@ export class CombatFactory {
                 const by = mobile.getCombat().getAttacker();
                 return by != null && !(by.isNpc() && by.getAsNpc().isMultiCombat()) && !npcBrawl(mobile, by);
             };
-            // An NPC flagged attackable-while-under-attack (a Slayer superior) may be attacked by its
-            // owner, or anyone when unowned, though something else is attacking them.
-            const exemptFromAttackerLock = target.isNpc() &&
-                target.getAsNpc().hasFlag?.(CombatFactory.ATTACKABLE_WHILE_UNDER_ATTACK_FLAG) === true &&
-                (target.getAsNpc().getOwner() == null || target.getAsNpc().getOwner() === attacker);
             const hitQueueFree = (mobile: Mobile, except: Mobile) => mobile.isNpc() && except.isPlayer()
                 ? mobile.getCombat().getHitQueue().isEmptyButFreeNpcs(except)
                 : mobile.getCombat().getHitQueue().isEmpty(except);
@@ -799,7 +792,6 @@ export class CombatFactory {
             // lifted; the hit queue and the target checks below still apply.
             const ownSuperior = CombatFactory.isOwnSuperiorInSingleWay(attacker, target);
             if (
-                !exemptFromAttackerLock &&
                 ServerPerf.measurePhase("combat.process.can_attack.attacker_busy", () =>
                     (
                         !(ownSuperior && attacker.getCombat().getAttacker()?.isNpc() === true) &&

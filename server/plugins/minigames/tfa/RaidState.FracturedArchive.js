@@ -402,8 +402,6 @@ class Room {
    */
   styledHit(npc, target, style, maxHit, delay, { accurate = false, prayerMultiplier = 0, prayable = true } = {}) {
     const { PendingHit, CombatFactory } = Shared.core();
-    // The prayer counts as the attack is thrown (below), however long it takes to land.
-    if (prayable) Shared.prayerCue(target, style, 0, delay);
     const hit = new PendingHit(npc, target, styleMethod(style), { delay, rollAccuracy: !accurate });
     CombatFactory.applyStyleDamage(hit, Math.max(0, Math.floor(maxHit)), { bypassProtectionPrayer: true });
     if (prayable && target.isPlayer?.() && Shared.isProtected(target, style)) {

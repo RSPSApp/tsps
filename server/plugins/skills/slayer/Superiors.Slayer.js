@@ -80,18 +80,9 @@ function spawnForTask(player, task) {
   const at = player.getLocation();
   const superior = api.spawnNpc({ id, x: at.getX() + 1, y: at.getY(), z: at.getZ(), owner: player });
   if (!superior) return null;
-  markAttackableUnderAttack(superior);
   player.sendMessage(DATA.message);
   superior.getCombat?.()?.attack?.(player);
   return superior;
-}
-
-/**
- * Wiki "Superior slayer monster": "a superior Slayer monster can be attacked even if the player is
- * under attack by another monster" (only by the player it spawned for, its owner).
- */
-function markAttackableUnderAttack(superior) {
-  superior.setFlag?.(core.CombatFactory.ATTACKABLE_WHILE_UNDER_ATTACK_FLAG);
 }
 
 function isSuperior(npc) {
@@ -159,7 +150,6 @@ function spawnWhereDied(player, npc, id, fromId) {
   const at = npc.getLocation();
   const superior = api.spawnNpc({ id, x: at.getX(), y: at.getY(), z: at.getZ(), owner: player });
   if (!superior) return null;
-  markAttackableUnderAttack(superior);
   if (Number.isInteger(fromId)) spawnedFrom.set(superior, fromId);
   player.sendMessage(DATA.message);
   superior.getCombat?.()?.attack?.(player);

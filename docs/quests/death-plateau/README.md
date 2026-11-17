@@ -78,4 +78,8 @@ ticks below are 1001800's. Where these differ from the Wiki transcript, the Wiki
   on later visits in local 1001676.
 - **Stile** (3730): it crosses from 2817,3562 to 2817,3563 with human_walk_style (839) and exact_move at cycles
   30-94, with no message (5 crossings in 1001676, 1001683 and 1001800).
-- **Recorded difference, not followed:** none. Every live dialogue line in 1001800 is in the transcript data.
+- **Stone balls:** they lie as live has them (x 2893: red 3565, blue 3564, purple 3563, green 3562, yellow 3561).
+  They respawn after the Wiki's 10 ticks (Stone ball infobox).
+- **Drunk Harold's jingle:** a drunk Harold pays out after "You lose!" with Bad Roll (93), as both recordings show.
+- **Recorded differences, not followed:** the stone balls come back 8 ticks after a pickup in both recordings (1001800 ticks 24484-24539),
+  where the Wiki says 10. Every live dialogue line in 1001800 is in the transcript data.

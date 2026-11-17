@@ -282,16 +282,20 @@ test("the Death Plateau notice (warning 24) opens on the first step into the tra
   assert.equal(a.log.some((e) => e.name === "sendInterface" && e.args[0] === 581), false);
   a.player.setLocation(new core.Location(2833, 3599, 0));
   AreaManager.process(a.player);
+  assert.equal(a.log.some((e) => e.name === "sendInterface" && e.args[0] === 581), false, "not on the step's own tick");
+  a.advance(1);
   assert.ok(a.log.some((e) => e.name === "sendVarbit" && e.args[0] === 3872 && e.args[1] === 1), "cws_warning_24 0->1");
   assert.ok(a.log.some((e) => e.name === "sendInterface" && e.args[0] === 581));
   const opened = a.log.filter((e) => e.name === "sendInterface" && e.args[0] === 581).length;
   a.player.setLocation(new core.Location(2835, 3597, 0));
   AreaManager.process(a.player);
+  a.advance(1);
   assert.equal(a.log.filter((e) => e.name === "sendInterface" && e.args[0] === 581).length, opened, "walking within the zone does not reopen it");
   a.player.setLocation(new core.Location(2839, 3591, 0));
   AreaManager.process(a.player);
   a.player.setLocation(new core.Location(2839, 3593, 0));
   AreaManager.process(a.player);
+  a.advance(1);
   assert.equal(a.log.filter((e) => e.name === "sendInterface" && e.args[0] === 581).length, opened + 1, "entering again from the south");
 });
 
@@ -305,12 +309,12 @@ test("Tenzing's stile: a step onto it, then human_walk_style over it at cycles 3
   assert.equal(stile.end, undefined);
 });
 
-test("the five stone balls lie where live has them and come back 8 ticks after a pickup", () => {
+test("the five stone balls lie where live has them and come back after the Wiki's 10 ticks (recorded: 8)", () => {
   const spawns = require("../data/definitions/ground-items.json").filter((entry) => entry.id >= 3109 && entry.id <= 3113);
   const where = Object.fromEntries(spawns.map((entry) => [entry.id, [entry.location.x, entry.location.y, entry.location.z, entry.respawn]]));
   // red, blue, yellow, purple, green (death_cannonball_*), rsprox local 1001800 and 1001683.
   assert.deepEqual(where, {
-    3109: [2893, 3565, 0, 8], 3110: [2893, 3564, 0, 8], 3111: [2893, 3561, 0, 8], 3112: [2893, 3563, 0, 8], 3113: [2893, 3562, 0, 8],
+    3109: [2893, 3565, 0, 10], 3110: [2893, 3564, 0, 10], 3111: [2893, 3561, 0, 10], 3112: [2893, 3563, 0, 10], 3113: [2893, 3562, 0, 10],
   });
 });
 

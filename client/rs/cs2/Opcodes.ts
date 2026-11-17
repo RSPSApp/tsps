@@ -399,18 +399,16 @@ export enum Opcodes {
     SETSHOWLOADINGMESSAGES = 3126,
     SETTAPTODROP = 3127,
     GETTAPTODROP = 3128,
-    /** Sets key input mode to all keys (used by world map search). */
-    SETKEYINPUTMODE_ALL = 3138,
-    /** Sets key input mode to keyboard only (filtered input). */
-    SETKEYINPUTMODE_KEYBOARD = 3139,
-    /** Gets the current key input mode. */
-    GETKEYINPUTMODE = 3140,
     /** Pops one int; no observable client-side effect. */
     GETCANVASSIZE = 3132,
     MOBILE_SETFPS = 3133,
     MOBILE_OPENSTORE = 3134,
     MOBILE_OPENSTORECATEGORY = 3135,
-    CLIENT_SET_SIDE_PANEL = 3136,
+    SETKEYINPUTMODE_COMPONENT = 3136,
+    SETKEYINPUTMODE_INTERFACE = 3137,
+    SETKEYINPUTMODE_ALL = 3138,
+    SETKEYINPUTMODE_NONE = 3139,
+    SETKEYINPUTMODE_ACTIVECOMPONENT = 3140,
     SETHIDEUSERNAME = 3141,
     GETHIDEUSERNAME = 3142,
     SETREMEMBERUSERNAME = 3143,

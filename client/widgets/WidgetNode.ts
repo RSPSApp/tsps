@@ -233,11 +233,10 @@ export interface WidgetNode {
     // Keyboard Shortcuts (Runtime)
     // CC_SETOPKEY supports up to 5 key pairs per op, IF_SETOPKEY supports 1 key pair
     opKeys?: ({ keyChars: number[]; keyCodes: number[]; opIndex?: number } | null)[];
-    opKeyRates?: ({ rate: number; enabled: boolean; opIndex?: number } | null)[];
-    opKeyIgnoreHeld?: boolean[];
+    opKeyRates?: ({ rate: number; delay: number; opIndex?: number } | null)[];
 
     // Raw key binding arrays
-    // Key characters for each op (up to 11 ops, 5 keys each)
+    // Internal key codes and modifier masks, not typed characters (11 slots, up to 5 alternatives).
     // Key codes for each op
     // Key repeat rates per op
     // Key timers per op

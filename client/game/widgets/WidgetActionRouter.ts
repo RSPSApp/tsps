@@ -13,6 +13,7 @@ import {
     handleWidgetActionCloseButton,
     handleWidgetActionPauseButton,
     handleWidgetActionTargeting,
+    handleWidgetShortcutTarget,
     type SelectedSpellInfo,
     type SpellSelectionState,
     type WidgetActionHandlersDeps,
@@ -95,6 +96,11 @@ export class WidgetActionRouter {
     constructor(private readonly deps: WidgetActionRouterDeps) {}
 
     handleWidgetAction(event: WidgetActionEvent): void {
+        if (event.source === "shortcut") {
+            if (event.opIndex === 0) handleWidgetShortcutTarget(this.deps, event.widget);
+            else this.dispatchWidgetOperation(event);
+            return;
+        }
         const widgetManager = this.deps.getWidgetManager();
         let w = resolveDynamicChildForAction(widgetManager, event.widget, event.slot);
         if (w !== event.widget) {
@@ -212,6 +218,19 @@ export class WidgetActionRouter {
             event.source === "primary" &&
             widgetInteraction.clickedWidgetHandled &&
             event.widget?.uid === widgetInteraction.clickedWidget?.uid;
+        this.dispatchWidgetOperation(event, skipCs2Handlers);
+    }
+
+    /** Shared onOp/listener and runtime transmit-flag path, without mouse targeting/drag rules. */
+    private dispatchWidgetOperation(event: WidgetActionEvent, skipCs2Handlers = false): void {
+        const widgetManager = this.deps.getWidgetManager();
+        const groupId = event.widget?.groupId ?? event.widget?.uid >>> 16;
+        const childId =
+            event.widget?.fileId != null && event.widget.fileId >= 0
+                ? event.widget.fileId
+                : typeof event.widget?.childIndex === "number"
+                  ? event.widget.childIndex
+                  : event.widget?.uid & 0xffff;
         const meslayerBeforeAction = widgetManager?.meslayerContinueWidget ?? null;
 
         const cs2Vm = this.deps.getCs2Vm();
@@ -248,7 +267,7 @@ export class WidgetActionRouter {
             };
 
             if (event.widget.eventHandlers) {
-                const eventType = event.source === "menu" ? "onOp" : "onClick";
+                const eventType = event.source === "menu" || event.source === "shortcut" ? "onOp" : "onClick";
                 handled = cs2Vm.invokeEventHandler(
                     event.widget,
                     eventType as any,
@@ -266,9 +285,9 @@ export class WidgetActionRouter {
 
             if (!handled) {
                 let handler: any[] | undefined;
-                if (event.source === "menu" && event.widget.onOp) {
+                if ((event.source === "menu" || event.source === "shortcut") && event.widget.onOp) {
                     handler = event.widget.onOp;
-                } else if (event.widget.onClick) {
+                } else if (event.source !== "shortcut" && event.widget.onClick) {
                     handler = event.widget.onClick;
                 } else if (event.source === "primary" && event.widget.onOp) {
                     handler = event.widget.onOp;

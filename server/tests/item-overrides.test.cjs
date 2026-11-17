@@ -15,9 +15,7 @@ const BONES = 526;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
-  ItemDefinitionLoader._test.loadItemPrices();
-  ItemDefinitionLoader._test.loadItemAlch();
-  ItemDefinitionLoader._test.loadItemGuidePrices();
+  ItemDefinitionLoader.register({ log() {}, registerContentEndpoint() {}, onPlayerLogin() {} });
 });
 
 // Runs first: the next test makes the whip untradeable, which leaves it no examine price line.

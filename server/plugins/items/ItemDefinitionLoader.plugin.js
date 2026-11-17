@@ -276,30 +276,34 @@ function loadItemOverrides() {
   return { filePath, loaded: applyItemOverrides(JSON.parse(fs.readFileSync(filePath, "utf8"))) };
 }
 
-/** Exact-ID Wiki policy is separate from the cache's Exchange flag. Missing source stays unknown. */
-function loadItemPlayerTradeability() {
-  const ItemDefinition = getItemDefinition();
+/** Validate the required policy before replacing any last-known definitions or sourced fields. */
+function readItemPlayerTradeability() {
   const filePath = path.resolve(process.cwd(), getGameConstants().DEFINITIONS_DIRECTORY, "item-player-tradeability.json");
-  if (!fs.existsSync(filePath)) return { loaded: 0, inheritedNotes: 0, skipped: 0 };
   const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
   if (data?.schema !== 1 || !Array.isArray(data.rows) || !/^[a-f0-9]{64}$/.test(data.input_sha256 ?? "")) {
-    throw new Error("Invalid item-player-tradeability.json source contract");
+    throw new Error("Invalid required item-player-tradeability.json source contract");
   }
   const normalize = value => value.normalize("NFKC").replace(/_/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
   const explicit = new Map();
-  let skipped = 0, inheritedNotes = 0;
   for (const row of data.rows) {
-    if (!Number.isInteger(row?.id) || row.id < 0 || explicit.has(row.id) || typeof row.name !== "string"
+    if (!Number.isSafeInteger(row?.id) || row.id < 0 || row.id >= CacheDefinitions.getCounts().items
+        || explicit.has(row.id) || typeof row.name !== "string" || !row.name.trim()
         || typeof row.playerTradeable !== "boolean" || !(row.noteable === null || typeof row.noteable === "boolean")) {
-      throw new Error("Invalid or duplicate item-player-tradeability row");
+      throw new Error("Invalid or duplicate required item-player-tradeability row");
     }
-    // A name can survive ID reuse: bank placeholders must never receive a source item's policy.
-    const def = ItemDefinition.forId(row.id);
-    if (def === ItemDefinition.DEFAULT || CacheDefinitions.getItem(row.id).placeholderTemplate !== -1
-        || normalize(def.getName()) !== normalize(row.name)) { skipped++; continue; }
+    const cached = CacheDefinitions.getItem(row.id);
+    if (cached.placeholderTemplate !== -1 || normalize(cached.name) !== normalize(row.name)) {
+      throw new Error("Required item-player-tradeability row does not match the active cache");
+    }
     explicit.set(row.id, row);
-    def.playerTradeable = row.playerTradeable;
   }
+  return explicit;
+}
+
+function applyItemPlayerTradeability(explicit) {
+  const ItemDefinition = getItemDefinition();
+  let inheritedNotes = 0;
+  for (const row of explicit.values()) ItemDefinition.forId(row.id).playerTradeable = row.playerTradeable;
   for (const row of explicit.values()) {
     const def = ItemDefinition.forId(row.id);
     if (def.isNoted() || row.noteable !== true) continue;
@@ -311,17 +315,33 @@ function loadItemPlayerTradeability() {
       inheritedNotes++;
     }
   }
-  return { loaded: explicit.size, inheritedNotes, skipped };
+  return { loaded: explicit.size, inheritedNotes, skipped: 0 };
 }
 
 function loadItemDefinitions() {
+  const ItemDefinition = getItemDefinition();
+  const policy = readItemPlayerTradeability();
+  const previousDefinitions = ItemDefinition.definitions;
+  const previousReady = ItemDefinition.playerTradeabilityReady;
+  ItemDefinition.definitions = new Map();
+  ItemDefinition.playerTradeabilityReady = false;
+  try {
+    const result = buildItemDefinitions(policy);
+    ItemDefinition.playerTradeabilityReady = true;
+    return result;
+  } catch (error) {
+    ItemDefinition.definitions = previousDefinitions;
+    ItemDefinition.playerTradeabilityReady = previousReady;
+    throw error;
+  }
+}
+
+function buildItemDefinitions(policy) {
   const ItemDefinition = getItemDefinition();
   const filePath = getItemDefinitionsPath();
   const content = fs.readFileSync(filePath, "utf8");
   const rawDefs = JSON.parse(content);
   const defs = Array.isArray(rawDefs) ? rawDefs : Object.values(rawDefs);
-
-  ItemDefinition.definitions.clear();
 
   let loaded = 0;
   let unresolvedWeaponInterfaces = 0;
@@ -379,7 +399,7 @@ function loadItemDefinitions() {
     }
   }
 
-  const playerTradeability = loadItemPlayerTradeability();
+  const playerTradeability = applyItemPlayerTradeability(policy);
 
   const customPath = path.resolve(process.cwd(), getGameConstants().DEFINITIONS_DIRECTORY, "custom-items.json");
   let customRows = [];

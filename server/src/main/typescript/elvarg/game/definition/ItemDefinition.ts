@@ -46,6 +46,8 @@ export class ItemDefinition {
 
     public static definitions: Map<number, ItemDefinition> = new Map<number, ItemDefinition>();
     public static DEFAULT = new ItemDefinition();
+    /** Player trading is unavailable until the required policy and complete definition load succeed. */
+    public static playerTradeabilityReady: boolean = false;
 
     public static registerCustom(id: number, baseId: number, raw: Record<string, unknown> = {}): ItemDefinition {
         const base = baseId >= 0 ? this.forId(baseId) : this.DEFAULT;
@@ -255,6 +257,7 @@ export class ItemDefinition {
      * trade but are not on the Exchange ("exchange: No"), so they have no `tradeable=yes`.
      */
     public isPlayerTradeable(): boolean {
+        if (!ItemDefinition.playerTradeabilityReady) return false;
         return this.playerTradeable ?? (this.tradeable === true || !this.untradeable);
     }
 

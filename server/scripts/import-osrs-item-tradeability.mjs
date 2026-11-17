@@ -56,7 +56,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     for (let id = 0; id < CacheDefinitions.getCounts().items; id++) {
         const item = ItemDefinition.forId(id);
         const raw = CacheDefinitions.getItem(id);
-        cache.set(id, { id, name: item.getName(), playerTradeable: item.isPlayerTradeable(), ge: item.isTradeable(),
+        cache.set(id, { id, name: item.getName(), playerTradeable: item.isTradeable() || raw.isUntradable !== true, ge: item.isTradeable(),
             placeholder: raw.placeholderTemplate !== -1, noteBaseId: item.isNoted() ? item.getNoteId() : null });
     }
     const sourceBytes = fs.readFileSync(sourceFile), source = JSON.parse(sourceBytes);

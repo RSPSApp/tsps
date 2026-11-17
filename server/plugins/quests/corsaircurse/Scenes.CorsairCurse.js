@@ -325,9 +325,11 @@ module.exports = function createCorsairCurseScenes(api, hooks) {
 
   function sceneEnded(player, scene, logout) {
     if (scene.name === "fight") {
-      // A death, a teleport or a logout in the copy: the fight plays again from the stairs.
+      // A death, a teleport or a logout in the copy: the fight plays again from the stairs, unless
+      // Ithoi already died (the two ticks before the copy ends), when the kill still counts.
+      const entry = fights.get(player);
       fights.delete(player);
-      hooks.fightLeft?.(player);
+      if (entry?.won) hooks.fightWon(player);
       return;
     }
     const state = playing.get(player);
@@ -713,7 +715,8 @@ module.exports = function createCorsairCurseScenes(api, hooks) {
   /** His death: the real hut two ticks after "Awww!", where the player stood in the copy. */
   function fightWon(player) {
     const entry = fights.get(player);
-    if (!entry) return;
+    if (!entry || entry.won) return;
+    entry.won = true;
     Scenes.later(player, 2, () => {
       if (fights.get(player) !== entry) return;
       fights.delete(player);
@@ -727,13 +730,11 @@ module.exports = function createCorsairCurseScenes(api, hooks) {
     const entry = fights.get(player);
     if (!entry) return false;
     fights.delete(player);
+    // Down the stairs in the two ticks after his death: the kill still counts.
+    if (entry.won) hooks.fightWon(player);
     Scenes.end(player, false);
     player.moveTo(new Location(2532, 2833, 0));
     return true;
-  }
-
-  function fightEnded(player) {
-    fights.delete(player);
   }
 
   // ==========================================================================
@@ -751,14 +752,13 @@ module.exports = function createCorsairCurseScenes(api, hooks) {
   }
 
   return {
-    COLIN_SCENE, GNOCCI_SCENE, TELESCOPE_SCENE, FIRE_SCENE,
     ensureBound,
     ship,
     colin: (player, npcId) => { ensureBound(); play(player, COLIN_SCENE, { npcId }); },
     gnocci: (player, npcId) => { ensureBound(); play(player, GNOCCI_SCENE, { npcId }); },
     telescope,
     fire,
-    fight, fightOf, fightWon, leaveFight, fightEnded,
+    fight, fightOf, fightWon, leaveFight,
     /** The capture's plain fades, out to black (50 cycles) or back in. */
     fade: (player, way) => overlay(player, way === "out" ? FADE_OUT : FADE_IN),
     /** A player's line without its continue: the dig's, while the doll runs off. */
@@ -767,6 +767,5 @@ module.exports = function createCorsairCurseScenes(api, hooks) {
     scene: (player) => Scenes.get(player),
     stop,
     tailAfter: (variant, anchor) => tailAfter(variantSteps(variant), anchor),
-    sceneLines,
   };
 };

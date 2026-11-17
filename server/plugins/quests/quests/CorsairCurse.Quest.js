@@ -132,7 +132,7 @@ module.exports = function registerCorsairCurseQuest(api) {
   const SOUND_SPADE = 2733;
   const SOUND_TINDERBOX = 2582;
   const JINGLE_SAIL = 171;
-  /** Ticks the spade's sand stays empty after it is taken (capture ticks 5753-5766). */
+  /** Ticks the spade's sand stays empty after it is taken (capture ticks 4753-4766). */
   const SPADE_RESPAWN_TICKS = 13;
 
   const CABINBOY_ATTRIBUTE = "quest.the_corsair_curse.cabinboy";
@@ -703,7 +703,7 @@ module.exports = function registerCorsairCurseQuest(api) {
     climbVine(player, false);
   }
 
-  /** Picking the spade out of the sand (capture tick 5753): the sand shows empty for 13 ticks. */
+  /** Picking the spade out of the sand (capture tick 4753): the sand shows empty for 13 ticks. */
   function takeSpade(player, object) {
     if (player.getInventory().getAmount(SPADE_ITEM) > 0) return;
     if (player.getInventory().isFull()) {
@@ -945,7 +945,8 @@ module.exports = function registerCorsairCurseQuest(api) {
     if (ITHOI_NPC_IDS.has(npcId) && line.startsWith("Okay, it doesn't sound like you know")) { setNavigator(player, NAVIGATOR_TOLD); if (stage < STAGE_INVESTIGATING) advance(player, STAGE_INVESTIGATING); }
     if (ARSEN_NPC_IDS.has(npcId) && line.startsWith("I'd hoped I could use my amazing")) { player.setAttribute(THIEF_STORY_ATTRIBUTE, true); setThief(player, THIEF_HEARD); }
     if (ARSEN_NPC_IDS.has(npcId) && line.startsWith("Maybe you could get the relic back")) { player.setAttribute(THIEF_STORY_ATTRIBUTE, false); setThief(player, THIEF_HEARD); }
-    if (npcId === NpcIdentifiers.CHIEF_TESS && line.startsWith("Dis is tooth-pick.") && thief(player) === THIEF_HAS_ARTEFACT) {
+    if (npcId === NpcIdentifiers.CHIEF_TESS && line.startsWith("Dis is tooth-pick.") && thief(player) === THIEF_HAS_ARTEFACT
+      && player.getInventory().getAmount(OGRE_ARTEFACT_ITEM) > 0) {
       player.getInventory().deleteNumber(OGRE_ARTEFACT_ITEM, 1);
       setThief(player, THIEF_RETURNED_RELIC);
     }
@@ -1043,6 +1044,9 @@ module.exports = function registerCorsairCurseQuest(api) {
     scrollItemId: SCROLL_ITEM,
     buildJournal,
   });
+
+  // The scene tables against the transcript's words, at load: a regenerated transcript that moved a line fails here.
+  Scenes.ensureBound();
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);

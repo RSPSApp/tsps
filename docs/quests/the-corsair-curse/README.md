@@ -109,7 +109,7 @@ ticks later the real hut and progress 55.
 ### Other interactions
 
 - Spade in the sand (`sand_withspade`): seq 832, sound 2733, the spade; the sand shows `sand_withoutspade`
-  for 13 ticks (5753-5766).
+  for 13 ticks (4753-4766).
 - Tinderbox by Gnocci's bed: seq 827, then the tinderbox and sound 2582 a tick later (5436-5437).
 - Vines into the ogre cave: seq 827, the cave a tick later on the side the player stood on (5606-5609);
   out: seq 828, the cove a tick later (5677-5678).

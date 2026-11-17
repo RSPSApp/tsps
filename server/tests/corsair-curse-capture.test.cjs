@@ -386,3 +386,31 @@ test("a logout mid-dig takes the doll away; a logout mid-flashback leaves the co
   assert.equal(owned(listener, 7965), null);
   assert.equal(Number(listener.getAttribute("quest.the_corsair_curse.cabinboy")) || 0, 0, "the flashback plays again next time");
 });
+
+test("down Ithoi's stairs in the two ticks after his death: the kill still counts", (t) => {
+  const player = actor(t, STAGE_KILL_ORDER, [2532, 2833, 0]);
+  PluginManager.emitCustomEvent("ladders:climb", { player, objectId: 31735, object: { getLocation: () => new core.Location(2531, 2833, 0) }, handled: false });
+  tick(1);
+  owned(player, 7964).appendDeath();
+  tick(1);
+  const down = { player, objectId: 31735, object: { getLocation: () => new core.Location(2529, 2834, 1) }, handled: false };
+  PluginManager.emitCustomEvent("ladders:climb", down);
+  assert.equal(down.handled, true);
+  assert.deepEqual(at(player), [2532, 2833, 0]);
+  assert.equal(quest.getStage(player), STAGE_KILLED);
+  tick(3);
+  assert.equal(quest.getStage(player), STAGE_KILLED);
+});
+
+test("Tess's tooth-pick line takes the artefact, and without it the relic step stays where it was", (t) => {
+  const run = (player) => { const event = { player, npcId: core.NpcIdentifiers.CHIEF_TESS, text: "Dis is tooth-pick. Tess got plenty more.", step: {} };
+    PluginManager.emitCustomEvent("npc-dialogue:line", event); event.before?.(); };
+  const carrying = actor(t, STAGE_INVESTIGATING, [2012, 9006, 1], { "quest.the_corsair_curse.thief": 2 });
+  carrying.getInventory().adds(21837, 1);
+  run(carrying);
+  assert.equal(carrying.getInventory().getAmount(21837), 0);
+  assert.equal(Number(carrying.getAttribute("quest.the_corsair_curse.thief")), 3);
+  const empty = actor(t, STAGE_INVESTIGATING, [2012, 9006, 1], { "quest.the_corsair_curse.thief": 2 });
+  run(empty);
+  assert.equal(Number(empty.getAttribute("quest.the_corsair_curse.thief")), 2);
+});

@@ -49537,13 +49537,13 @@
           "plugin": {
             "name": "Pets",
             "path": "server/plugins/npcs/Pets.plugin.js",
-            "server/plugins/npcs/pets/RockGolem.Pets.js",
-            "server/tests/rock-golem-forms.test.cjs",
             "exists": true
           },
           "wiki": "https://oldschool.runescape.wiki/w/Skilling_pets",
           "implementedIn": [
             "server/plugins/npcs/Pets.plugin.js",
+            "server/plugins/npcs/pets/RockGolem.Pets.js",
+            "server/tests/rock-golem-forms.test.cjs",
             "server/plugins/skills/Fishing.plugin.js",
             "server/plugins/skills/Woodcutting.plugin.js",
             "server/plugins/skills/Mining.plugin.js",

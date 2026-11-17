@@ -32,5 +32,6 @@ module.exports = {
     require("./hallowedsepulchre/Skills.HallowedSepulchre").attachSkills(api);
     require("./hallowedsepulchre/Coffins.HallowedSepulchre").attachCoffins(api);
     require("./hallowedsepulchre/Tools.HallowedSepulchre").attachTools(api);
+    require("./hallowedsepulchre/Retrieval.HallowedSepulchre").attachRetrieval(api);
   },
 };

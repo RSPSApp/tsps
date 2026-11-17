@@ -5,6 +5,9 @@ import type { OsrsClient } from "../OsrsClient";
 import { RENDER_CONSTANTS } from "../../render/render/constants";
 import { TimersPlugin } from "../plugins/statustimer/TimersPlugin";
 import { adjustMobilePortraitWidget } from "../plugins/portraitmode/PortraitLayout";
+import { TimersPosition } from "../plugins/statustimer/TimersConfig";
+import { packTimers, timersScale } from "../plugins/statustimer/TimersLayout";
+import { loadGameframePaneRedirect, STANDARD_GAMEFRAME_ROOT, SIDE_MODAL_CHILD } from "./gameframePanes";
 
 const MOBILE_ROOT = 601;
 const PVP_GROUP = 90;
@@ -32,7 +35,7 @@ export function combatTimerCount(client: OsrsClient, before = 7): number {
     return client.runeLite?.pluginManager.getPlugin(TimersPlugin)?.visibleInfoboxCount(before) ?? 0;
 }
 
-export function combatStatusAnchor(client: OsrsClient):
+function nativeCombatStatusAnchor(client: OsrsClient):
     | {
           right: number;
           top: number;
@@ -52,7 +55,7 @@ export function combatStatusAnchor(client: OsrsClient):
     const hudScale = mobileHudScale(manager.rootInterface, css.width, manager.canvasWidth);
     const scale = { scaleX: sx * hudScale, scaleY: sy * hudScale };
     if (manager.rootInterface === MOBILE_ROOT) {
-        return {
+        const anchor = {
             right: ((8 + PVP_WIDTH) * canvas.width) / manager.canvasWidth + GAP * sx * hudScale,
             top: (HUD_TOP * canvas.height) / manager.canvasHeight,
             rowHeight:
@@ -64,6 +67,7 @@ export function combatStatusAnchor(client: OsrsClient):
             mobile: true,
             ...scale,
         };
+        return anchor;
     }
     if (
         !minimap?._absWidth ||
@@ -74,7 +78,7 @@ export function combatStatusAnchor(client: OsrsClient):
     )
         return;
     const widgetScale = minimap._absWidth / minimap.width;
-    return {
+    const anchor = {
         right: minimap._absX + minimap._absWidth - 80 * widgetScale - GAP * sx,
         top: minimap._absY + minimap._absHeight + 8 * widgetScale,
         rowHeight:
@@ -83,6 +87,81 @@ export function combatStatusAnchor(client: OsrsClient):
         mobile: false,
         ...scale,
     };
+    return anchor;
+}
+
+type CombatAnchor = NonNullable<ReturnType<typeof nativeCombatStatusAnchor>>;
+
+export function combatStatusAnchor(client: OsrsClient): CombatAnchor | undefined {
+    const anchor = nativeCombatStatusAnchor(client);
+    return anchor && reserveTimerRows(client, anchor);
+}
+
+function timerLayout(client: OsrsClient, anchor: CombatAnchor) {
+    const canvas = client.renderer!.canvas;
+    const css = getCanvasCssSize(canvas);
+    const manager = client.widgetManager;
+    const plugin = client.runeLite?.pluginManager.getPlugin(TimersPlugin);
+    const configured = plugin?.config.position();
+    const position = Object.values(TimersPosition).includes(configured!) ? configured : TimersPosition.COMBAT_ROW;
+    const scale = mobileHudScale(manager.rootInterface, css.width, manager.canvasWidth) * timersScale(plugin?.config.scale() ?? 100);
+    const sx = css.width / canvas.width;
+    const sy = css.height / canvas.height;
+    const top = anchor.top * sy;
+    const margin = 8;
+    const bounds = {
+        left: anchor.mobile ? ((8 + PVP_WIDTH) * css.width) / manager.canvasWidth + GAP * scale : margin,
+        top,
+        right: anchor.mobile ? css.width - margin : anchor.right * sx,
+        bottom: css.height - margin,
+    };
+    if (position !== TimersPosition.COMBAT_ROW) {
+        bounds.left = margin;
+        bounds.right = css.width - margin;
+        bounds.top += anchor.rowHeight * sy;
+        // Read the native chat geometry, rather than assuming a desktop size.
+        for (const widget of manager.getAllGroupRoots?.(162) ?? []) {
+                if (manager.isEffectivelyHidden(widget.uid) || !widget._absWidth || !widget._absHeight) continue;
+                const y = (widget._absY ?? 0) * sy;
+                if (y > bounds.top) bounds.bottom = Math.min(bounds.bottom, y - margin);
+        }
+        // Tabs replace their content interfaces. Reserve their native pane owners instead,
+        // using the same cache redirects that mount them on each gameframe.
+        const root = manager.rootInterface;
+        const redirect = root === STANDARD_GAMEFRAME_ROOT ? undefined
+            : loadGameframePaneRedirect(client.loaderFactory?.getEnumTypeLoader(), root);
+        const sidePanes = [SIDE_MODAL_CHILD, ...Array.from({ length: 14 }, (_, i) => 76 + i)];
+        for (const standardChild of sidePanes) {
+            const child = root === STANDARD_GAMEFRAME_ROOT ? standardChild : redirect?.get(standardChild);
+            if (child === undefined || child < 0) continue;
+            const uid = (root << 16) | child;
+            const widget = manager.getWidgetByUid?.(uid);
+            if (!widget?._absWidth || !widget._absHeight || manager.isEffectivelyHidden(uid)) continue;
+            const x = (widget._absX ?? 0) * sx;
+            if (x > bounds.left) bounds.right = Math.min(bounds.right, x - margin);
+        }
+        if (anchor.mobile) bounds.bottom = Math.min(bounds.bottom, css.height - 64 * scale);
+    }
+    // An interface in a very short viewport must not create a negative packing rectangle.
+    bounds.top = Math.max(margin, Math.min(bounds.top, css.height - margin - 28));
+    bounds.bottom = Math.max(bounds.top + 1, bounds.bottom);
+    bounds.right = Math.max(bounds.left + 1, bounds.right);
+    const packed = packTimers(combatTimerCount(client), bounds, scale,
+        position === TimersPosition.TOP_RIGHT || position === TimersPosition.BOTTOM_RIGHT ||
+            (position === TimersPosition.COMBAT_ROW && !anchor.mobile),
+        position === TimersPosition.BOTTOM_LEFT || position === TimersPosition.BOTTOM_RIGHT);
+    return { ...packed, position, top: bounds.top };
+}
+
+/** Keep the shared Boosts corner below the whole wrapped/scaled upper timer group. */
+function reserveTimerRows(client: OsrsClient, anchor: CombatAnchor): CombatAnchor {
+    if (combatTimerCount(client) === 0) return anchor;
+    const layout = timerLayout(client, anchor);
+    if (layout.position === TimersPosition.BOTTOM_LEFT || layout.position === TimersPosition.BOTTOM_RIGHT) return anchor;
+    const canvas = client.renderer!.canvas;
+    const css = getCanvasCssSize(canvas);
+    const timerBottom = layout.top + layout.height;
+    return { ...anchor, rowHeight: Math.max(anchor.rowHeight, timerBottom * canvas.height / css.height - anchor.top + GAP * anchor.scaleY) };
 }
 
 /** All Settings (group 134) window; its script sizes it to the canvas minus the chat's height. */
@@ -205,31 +284,16 @@ export function mobileCombatTimerStyle(
     const manager = client.widgetManager;
     const canvas = client.renderer?.canvas;
     if (!canvas || !manager?.canvasWidth || !manager.canvasHeight) return;
-    const css = getCanvasCssSize(canvas);
-    slot = combatTimerCount(client, slot);
-    if (manager.rootInterface !== MOBILE_ROOT) {
-        const anchor = combatStatusAnchor(client);
-        if (!anchor) return;
-        return {
-            left: Math.max(
-                8,
-                (anchor.right * css.width) / canvas.width - TIMER_SIZE - slot * (TIMER_SIZE + GAP),
-            ),
-            top: (anchor.top * css.height) / canvas.height,
-            right: "auto",
-            bottom: "auto",
-            width: TIMER_SIZE,
-            height: TIMER_SIZE,
-        };
-    }
-    const scale = mobileHudScale(manager.rootInterface, css.width, manager.canvasWidth);
+    const anchor = nativeCombatStatusAnchor(client);
+    if (!anchor) return;
+    const layout = timerLayout(client, anchor);
+    const at = layout.slots[combatTimerCount(client, slot)];
+    if (!at) return;
     return {
-        transform: `scale(${scale})`,
+        transform: `scale(${layout.scale})`,
         transformOrigin: "top left",
-        left:
-            ((8 + PVP_WIDTH) * css.width) / manager.canvasWidth +
-            (GAP + slot * (TIMER_SIZE + GAP)) * scale,
-        top: (HUD_TOP * css.height) / manager.canvasHeight,
+        left: at.left,
+        top: at.top,
         right: "auto",
         bottom: "auto",
         width: TIMER_SIZE,

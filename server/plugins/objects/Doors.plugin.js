@@ -576,6 +576,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       ],
       crossY: 3483,
       walkOver: true,
+      operateBeforeMovement: true,
       closeTicks: 2,
       openSoundId: 69,
     }),
@@ -2233,6 +2234,9 @@ function routeWallDoor(event) {
   // player across) but stands beside the doorway like any open leaf, so it keeps ordinary wall reach.
   if (isPassThroughOpenLeaf(event.object)) return;
   event.blockAccessFlags = (event.blockAccessFlags ?? 0) | 0x5;
+  const at = event.object.getLocation();
+  const gate = passThroughGateAt(event.objectId, at.getX(), at.getY(), at.getZ());
+  if (event.clickType === 1 && gate?.operateBeforeMovement === true) event.operateBeforeMovement = true;
 }
 
 function isPassThroughOpenLeaf(object) {

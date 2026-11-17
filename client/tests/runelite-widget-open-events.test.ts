@@ -1,7 +1,6 @@
 import { strict as assert } from "node:assert";
-import { ChatMessage, WidgetLoaded } from "@runelite/api/events";
+import { WidgetLoaded } from "@runelite/api/events";
 import { bindWidgetEvents, WidgetSourceBinder } from "../runelite/impl/ContainerEventSource";
-import { bindDialogueChat } from "../runelite/impl/DialogueChatSource";
 import { WidgetManager } from "../widgets/WidgetManager";
 
 // RuneLite posts WidgetLoaded on every interface open. The widget manager keeps a group loaded when
@@ -37,15 +36,6 @@ const loaded: number[] = [];
 bindWidgetEvents(client, (e) => {
     if (e instanceof WidgetLoaded) loaded.push(e.getGroupId());
 });
-const ticks = new Set<() => void>();
-const dialog: string[] = [];
-bindDialogueChat(client, (e: ChatMessage) => dialog.push(e.getMessage()), (tick) => {
-    ticks.add(tick);
-    return () => ticks.delete(tick);
-});
-const tick = () => {
-    for (const t of ticks) t();
-};
 const setText = (child: number, text: string) => {
     manager.getWidgetByUid((CHAT_LEFT << 16) | child)!.text = text;
 };
@@ -54,32 +44,23 @@ const setText = (child: number, text: string) => {
 manager.openSubInterface(HOST, CHAT_LEFT, 0);
 setText(4, "Falo the Bard");
 setText(6, "Page one");
-tick();
 assert.deepEqual(loaded.filter((g) => g === CHAT_LEFT), [CHAT_LEFT], "the first page loads the group");
-assert.deepEqual(dialog, ["Falo the Bard|Page one"]);
 
 // Page 2: the server re-opens the same group with no close; the group stays loaded.
 manager.openSubInterface(HOST, CHAT_LEFT, 0);
 setText(6, "Page two");
-tick();
 assert.deepEqual(loaded.filter((g) => g === CHAT_LEFT), [CHAT_LEFT, CHAT_LEFT], "the second page is an open too");
-assert.deepEqual(dialog, ["Falo the Bard|Page one", "Falo the Bard|Page two"]);
 
 // Page 3 in the same tick as page 2's text change is still one page per open.
 manager.openSubInterface(HOST, CHAT_LEFT, 0);
 setText(6, "Page three");
-tick();
-assert.equal(dialog.length, 3);
-assert.equal(dialog[2], "Falo the Bard|Page three");
 
 // Closing and reopening loads the group again: exactly one event, not two.
 manager.closeSubInterface(HOST, true);
 manager.openSubInterface(HOST, CHAT_LEFT, 0);
 setText(4, "Falo the Bard");
 setText(6, "After close");
-tick();
 assert.equal(loaded.filter((g) => g === CHAT_LEFT).length, 4, "load and open of one IF_OPENSUB count once");
-assert.equal(dialog.length, 4);
 
 // --- Binding before the widget manager exists ---------------------------------------------------------
 // RuneLite.load() runs from the OsrsClient constructor; the widget manager is created later in the
@@ -94,10 +75,10 @@ assert.equal(dialog.length, 4);
     late.widgetManager = manager;
     const before = manager.groupLoadedListeners.size;
     assert.equal(binder.bind(), true, "bound once the manager exists");
-    // Two listeners: WidgetLoaded and the dialogue chat source each watch group loads.
-    assert.equal(manager.groupLoadedListeners.size, before + 2, "the listeners are on the real manager");
+    // Only WidgetLoaded watches the group; dialogue events come from network chat.
+    assert.equal(manager.groupLoadedListeners.size, before + 1, "the listeners are on the real manager");
     assert.equal(binder.bind(), true, "binding again is a no-op");
-    assert.equal(manager.groupLoadedListeners.size, before + 2, "no duplicate listeners");
+    assert.equal(manager.groupLoadedListeners.size, before + 1, "no duplicate listeners");
     manager.closeSubInterface(HOST, true);
     manager.openSubInterface(HOST, CHAT_LEFT, 0);
     assert.deepEqual(lateLoaded, [CHAT_LEFT], "and sees the next open");

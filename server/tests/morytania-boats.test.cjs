@@ -72,6 +72,7 @@ function actor(tile, { done = true } = {}) {
     sender[name] = (...args) => { record(...args); return original(...args); };
   };
   wrap("sendSubInterface", (uid, id) => { sent.subs.push(id); sent.log.push(`sub ${id}`); });
+  wrap("mountSubInterface", (uid, id) => { sent.subs.push(id); sent.log.push(`sub ${id}`); });
   wrap("closeSubInterface", (uid) => sent.closed.push(uid));
   wrap("sendVarbit", (id, value) => sent.varbits.push([id, value]));
   wrap("sendSong", (id) => sent.songs.push(id));

@@ -20,9 +20,11 @@ const MaggotKing = require("../plugins/bosses/MaggotKing.plugin");
 const Common = require("../plugins/bosses/maggotking/Common.MaggotKing");
 const Instance = require("../plugins/bosses/maggotking/Instance.MaggotKing");
 const Entrance = require("../plugins/bosses/maggotking/Entrance.MaggotKing");
+const Resupply = require("../plugins/bosses/maggotking/Resupply.MaggotKing");
 
 const core = PluginManager.getCoreApi();
 const handlers = new Map();
+const beforeObjectHandlers = [];
 const loginHandlers = [];
 const deathHandlers = [];
 const shutdownHandlers = [];
@@ -34,8 +36,10 @@ const api = {
   core,
   persistAttribute: (...args) => persisted.push(args),
   onObjectInteraction: (name, actions) => handlers.set(name, actions),
+  onBeforeObjectInteraction: handler => beforeObjectHandlers.push(handler),
   onPlayerLogin: handler => loginHandlers.push(handler),
   onNpcDeath: handler => deathHandlers.push(handler),
+  onPlayerLogout() {}, onPlayerDisconnect() {}, onPlayerBeforeDeath() {},
   onPlayerDeath() {}, onServerShutdown: handler => shutdownHandlers.push(handler), onCustomEvent() {}, onNpcAttackOption() {}, onItemAction() {},
   onAttackTiming() {}, onCombatAttackDistance() {}, onPlayerHitModify() {}, onCombatHitDamage() {}, onCombatHitResolved() {},
   registerCombatMethodResolver() {},
@@ -130,7 +134,9 @@ test("the entrance, exit and exact options match the live cache", () => {
 });
 
 test("Blood Moon access opens a private solo lair and cleans it up on escape and logout", () => {
-  assert.deepEqual(persisted, [["maggot-king:kills", 0], [Instance._test.INSTANCE_ATTRIBUTE, false]]);
+  assert.deepEqual(persisted, [["maggot-king:kills", 0], [Instance._test.INSTANCE_ATTRIBUTE, false], [Resupply.BUILT_ATTRIBUTE, 0]]);
+  assert.deepEqual(beforeObjectHandlers.map(handler => handler.name), ["refuseStaleBuild"],
+    "the hybrid API retains the required production before-object registration");
   const enter = handlers.get("Darkwood trees").Enter;
   const locked = player(1, false);
   assert.equal(enter({ player: locked, objectId: core.ObjectIdentifiers.DARKWOOD_TREES_4 }), true);
@@ -322,7 +328,7 @@ test("Camping shutdown callback retires the run instead of saving it for a new e
     assert.equal(Instance.sessionOf(owner), null);
     assert.equal(Instance.enter(owner), true);
     assert.equal(Instance.sessionOf(owner).campingKills, 0);
-    assert.deepEqual(persisted, [["maggot-king:kills", 0], [Instance._test.INSTANCE_ATTRIBUTE, false]],
+    assert.deepEqual(persisted, [["maggot-king:kills", 0], [Instance._test.INSTANCE_ATTRIBUTE, false], [Resupply.BUILT_ATTRIBUTE, 0]],
       "no persisted Camping counter or login catch-up");
   } finally { Instance.sessionOf(owner)?.area.leave(owner, false); }
 });

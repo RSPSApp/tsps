@@ -21,12 +21,14 @@ function playerWithAttributes(attributes = new Map()) {
     sendItemOnInterfaces() { return sender; },
     sendInterfaceDisplayState() { return sender; },
     sendEnterInputPrompt() { return sender; },
+    sendSubInterface() { return sender; },
   };
   let syntaxAction = null;
   const player = {
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInterfaceId: () => GROUP_ID,
+    setInterfaceId: () => {},
     getPacketSender: () => sender,
     sendMessage: (message) => sender.sendMessage(message),
     setEnteredSyntaxAction: (action) => { syntaxAction = action; },
@@ -123,12 +125,16 @@ test("custom presets rehydrate from their persisted attribute", () => {
     getPrayerHandler: () => ({}),
     getCombatFactory: () => ({}),
     getSkillManager: () => ({}),
-    persistAttribute: (key) => persisted.push(key),
+    persistAttribute: (key, defaultValue) => persisted.push([key, defaultValue]),
     registerCustomInterface() {},
     onCanBankItem(handler) { onCanBankItem = handler; },
     onInterfaceActionButton(_buttons, handler) { onButton = handler; },
   });
-  assert.deepEqual(persisted, ["pvp:custom-presets"]);
+  assert.deepEqual(persisted, [
+    ["pvp:custom-presets", undefined],
+    ["pvp:open-presets-on-death", true],
+    ["pvp:selected-custom-preset-slot", -1],
+  ]);
 
   const customSlot = uid(PRESET_ROW_START + GLOBAL_ROW_COUNT);
   const source = playerWithAttributes();
@@ -157,6 +163,42 @@ test("custom presets rehydrate from their persisted attribute", () => {
   assert.deepEqual(messages, ["Preset items cannot be banked."]);
 });
 
+test("opening presets restores the saved custom row", () => {
+  let onButton;
+  presets.register({
+    getPrayerHandler: () => ({}),
+    getCombatFactory: () => ({}),
+    getSkillManager: () => ({}),
+    persistAttribute() {},
+    registerCustomInterface() {},
+    onCanBankItem() {},
+    onInterfaceActionButton(_buttons, handler) { onButton = handler; },
+  });
+  const customSlot = uid(PRESET_ROW_START + GLOBAL_ROW_COUNT);
+  const saved = playerWithAttributes();
+  onButton({ player: saved.player, buttonId: customSlot });
+  saved.player.getEnteredSyntaxAction().execute("saved build");
+  assert.equal(saved.player.getAttribute("pvp:selected-custom-preset-slot"), 0);
+
+  presets.openPresetInterface(saved.player);
+  assert.equal(saved.player.getAttribute("pvp:current-preset").getName(), "Saved Build");
+  assert.equal(saved.player.getAttribute("pvp:selected-custom-preset-slot"), 0);
+  assert.ok(saved.strings.includes("<col=ffffff>Saved Build</col>"));
+
+  // A saved slot whose preset is gone falls back to the first global row.
+  saved.player.setAttribute("pvp:selected-custom-preset-slot", 5);
+  presets.openPresetInterface(saved.player);
+  assert.equal(saved.player.getAttribute("pvp:current-preset"), presets.getGlobalPresetPool()[0]);
+  assert.equal(saved.player.getAttribute("pvp:selected-custom-preset-slot"), -1);
+
+  // An explicitly requested preset still wins over the saved row.
+  saved.player.setAttribute("pvp:selected-custom-preset-slot", 0);
+  const explicit = presets.getGlobalPresetPool()[1];
+  presets.openPresetInterface(saved.player, explicit);
+  assert.equal(saved.player.getAttribute("pvp:current-preset"), explicit);
+  assert.equal(saved.player.getAttribute("pvp:selected-custom-preset-slot"), -1);
+});
+
 test("custom presets survive the player save round trip", () => {
   const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
   const { SkillManager } = require("../dist/game/content/skill/SkillManager");
@@ -179,6 +221,8 @@ test("custom presets survive the player save round trip", () => {
     onInterfaceActionButton() {},
   });
   assert.equal(PlayerSave.persistentAttributeKeys.has("pvp:custom-presets"), true);
+  assert.equal(PlayerSave.persistentAttributeKeys.has("pvp:open-presets-on-death"), true);
+  assert.equal(PlayerSave.persistentAttributeKeys.has("pvp:selected-custom-preset-slot"), true);
 
   const records = [{
     name: "Saved Build",

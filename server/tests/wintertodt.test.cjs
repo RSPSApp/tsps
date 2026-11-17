@@ -1041,3 +1041,28 @@ test('the rewards owed are asked as minigame:points: unanswered as rolled, an an
   assert.equal(Round.rewardsOwed(p), 9);
   assert.equal(p.messages.at(-1), "You're owed an additional 6 rewards from the reward cart. You're now owed 9 rewards.");
 });
+
+/** Runs fn with World.getNpcsNear answering from `npcs` (radius and plane honoured) and World.getNpcs() refused. */
+function withNpcsNear(World, npcs, fn) {
+  const { getNpcs, getNpcsNear } = World;
+  World.getNpcs = () => { throw new Error('walked every NPC slot'); };
+  World.getNpcsNear = (at, radius) => npcs.filter((npc) => npc.getLocation().getZ() === at.getZ()
+    && Math.max(Math.abs(npc.getLocation().getX() - at.getX()), Math.abs(npc.getLocation().getY() - at.getY())) <= radius);
+  try {
+    return fn();
+  } finally {
+    World.getNpcs = getNpcs;
+    World.getNpcsNear = getNpcsNear;
+  }
+}
+
+test("a corner's pyromancer is the NPC on its tile, found by a region query", () => {
+  const npc = (x, y, index) => ({ getIndex: () => index, getLocation: () => new Location(x, y, 0) });
+  const { x, y } = Shared.CORNERS[0].pyromancer;
+  const pyromancer = npc(x, y, 4);
+  const beside = npc(x + 1, y, 1);
+  withNpcsNear(World, [beside, pyromancer], () => {
+    assert.equal(Corners.pyromancerNpc(0), pyromancer);
+    assert.equal(Corners.pyromancerNpc(1), null);
+  });
+});

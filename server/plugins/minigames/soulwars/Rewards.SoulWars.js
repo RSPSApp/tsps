@@ -272,9 +272,8 @@ function buyOther({ player, slot }) {
 /** The lobby's Nomad takes his transforming form, so each player's tutorial varbit picks his options. */
 function findNomad() {
   if (nomadFound) return false;
-  const npcs = Common.core.World?.getNpcs?.();
-  for (const npc of npcs ?? []) {
-    if (npc?.getId?.() !== NOMAD_SPAWNED || !Common.inBox(npc.getLocation(), Common.data.lobby.bounds)) continue;
+  for (const npc of Common.npcsInBox(Common.data.lobby.bounds)) {
+    if (npc?.getId?.() !== NOMAD_SPAWNED) continue;
     npc.setNpcTransformationId?.(NOMAD_ROOT);
     nomadFound = true;
     return false;

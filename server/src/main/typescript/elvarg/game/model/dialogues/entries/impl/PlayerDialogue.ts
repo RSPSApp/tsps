@@ -27,6 +27,7 @@ export class PlayerDialogue extends Dialogue {
     }
 
     static send(player: Player, text: string, expression: number | DialogueExpression) {
+        Dialogue.sendDialogueChatLine(player, player.getDisplayName(), text);
         player.getPacketSender()
             .sendChatboxInterface(PlayerDialogue.GROUP_ID)
             .sendPlayerHeadOnInterface(PlayerDialogue.HEAD_UID)

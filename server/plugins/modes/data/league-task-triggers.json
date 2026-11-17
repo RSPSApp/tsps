@@ -3,12 +3,16 @@
   "4": {
     "create-the-long-rope-shortcut-in-darkmeyer": {"kind": "deed", "event": "darkmeyer-wall:rope-attached"},
     "defeat-a-troll-in-asgarnia": {"kind": "kill", "npcs": ["Troll", "Mountain troll"], "count": 1, "area": 3},
-    "make-some-flour": {"kind": "deed", "event": "windmill:flour-collected"}
+    "make-some-flour": {"kind": "deed", "event": "windmill:flour-collected"},
+    "open-1-grubby-chest": {"kind": "open-chest", "chests": ["Grubby Chest"], "count": 1},
+    "open-15-grubby-chests": {"kind": "open-chest", "chests": ["Grubby Chest"], "count": 15},
+    "open-30-grubby-chests": {"kind": "open-chest", "chests": ["Grubby Chest"], "count": 30}
   },
   "5": {
     "create-the-long-rope-shortcut-in-darkmeyer": {"kind": "deed", "event": "darkmeyer-wall:rope-attached"},
     "defeat-a-troll-in-asgarnia": {"kind": "kill", "npcs": ["Troll", "Mountain troll"], "count": 1, "area": 3},
     "make-some-flour": {"kind": "deed", "event": "windmill:flour-collected"},
+    "open-1-grubby-chest": {"kind": "open-chest", "chests": ["Grubby Chest"], "count": 1},
     "open-1-zombie-pirate-locker": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 1},
     "open-15-zombie-pirate-lockers": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 15},
     "open-50-zombie-pirate-lockers": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 50}
@@ -19,6 +23,9 @@
     "defeat-a-troll-in-asgarnia": {"kind": "kill", "npcs": ["Troll", "Mountain troll"], "count": 1, "area": 3},
     "feed-a-dog-some-bones": {"kind": "deed", "event": "stray-dogs:fed", "where": {"food": "bones"}, "count": 1},
     "make-some-flour": {"kind": "deed", "event": "windmill:flour-collected"},
+    "open-1-grubby-chest": {"kind": "open-chest", "chests": ["Grubby Chest"], "count": 1},
+    "open-10-grubby-chests": {"kind": "open-chest", "chests": ["Grubby Chest"], "count": 10},
+    "open-25-grubby-chests": {"kind": "open-chest", "chests": ["Grubby Chest"], "count": 25},
     "open-1-zombie-pirate-locker": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 1},
     "open-15-zombie-pirate-lockers": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 15},
     "open-50-zombie-pirate-lockers": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 50}

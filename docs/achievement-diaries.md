@@ -127,6 +127,12 @@ From the Wiki ([Desert Diary](https://oldschool.runescape.wiki/w/Desert_Diary), 
 - **Wilderness, elite:** dragon bones dropped in the Wilderness are noted, except the King Black Dragon's.
 - **Not done:** Pirate Jackie the Fruit's switch for the bars, and the Lesser Fanatic's option for the Wilderness bones (the Wiki's drop notes also tie the lava dragon bones to it). Their dialogue is generated and the Wiki gives no wording, so the rewards are always on and the lava dragon bones are not noted.
 
+## Kourend easy: Xeric's talisman drops
+
+Completing the easy Kourend & Kebos diary doubles the chance of an inert Xeric's talisman from lizardmen, brutes and shamans from 1/250 to 1/125; the stone chest is unaffected. The shaman's 500-slot main table takes the two extra talisman slots from its fang entry (40 becomes 38), leaving all other entries unchanged. Normal lizardmen and brutes roll the talisman independently. The reward needs completion, not a claimed blessing. `KourendTalismanDrops.plugin.js` supplies the drop rules; the imported drop data is unchanged.
+
+Sources: [Xeric's talisman](https://oldschool.runescape.wiki/w/Xeric%27s_talisman), [Lizardman shaman](https://oldschool.runescape.wiki/w/Lizardman_shaman), and [Kourend & Kebos Diary](https://oldschool.runescape.wiki/w/Kourend_%26_Kebos_Diary). No captured drop sequence establishes the rates; these exact rates come from the Wiki.
+
 ## Achievement diary cape
 
 Once every diary tier is complete, Twiggy O'Korn's Talk-to conversation offers the cape and hood for 99,000 coins. The dialogue checks two free inventory slots before confirmation, and the server checks eligibility, coins and space again before transferring them. Twiggy offers another set or a hood through the existing owned-cape conversation. The cape is trimmed when the existing quest-cape requirement reports every quest complete.

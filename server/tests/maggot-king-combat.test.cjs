@@ -4,7 +4,7 @@
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, after, test } = require('node:test');
+const { before, after, test, mock } = require('node:test');
 require('../dist/Server').Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager: PM } = require('../dist/plugins/PluginManager');
@@ -25,6 +25,7 @@ const defenceRolls = [];
 let serial = 0;
 const actorIds = new Set();
 const errors = [];
+const sailingAmenityLogins = [];
 const originalError = console.error;
 const QUEST_ATTRIBUTE = 'quest.the_blood_moon_rises.stage';
 const QUEST_COMPLETE = 110;
@@ -41,7 +42,25 @@ before(async () => {
     if (event.target?.__maggotKingSession) rolledDamage.set(event.damage, event.damage.getDamage());
   });
   PM.createApi('MaggotNativePreDefence').onCustomEvent('combat:defence-roll', event => beforeDefence.set(event, event.defenceRoll));
-  PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
+  // Names are not unique within Sailing: Amenities, Cargo and Log all register `login`.
+  // Observe the real Amenities registration and retain its actual PM wrapper, not a name match.
+  const Amenities = require('../plugins/skills/sailing/Amenities.Sailing');
+  const registerAmenities = Amenities.register;
+  const traceAmenities = mock.method(Amenities, 'register', function(api) {
+    const onLogin = api.onPlayerLogin;
+    const traceLogin = mock.method(api, 'onPlayerLogin', function(callback) {
+      const offset = PM.loginHooks.length;
+      const result = Reflect.apply(onLogin, this, [callback]);
+      const added = PM.loginHooks.slice(offset);
+      assert.equal(added.length, 1, 'one actual PM wrapper per Amenities login registration');
+      sailingAmenityLogins.push({ callback, hook: added[0] });
+      return result;
+    });
+    try { return Reflect.apply(registerAmenities, this, [api]); }
+    finally { traceLogin.mock.restore(); }
+  });
+  try { PM.loadFromDirectory(path.resolve(__dirname, '../plugins')); }
+  finally { traceAmenities.mock.restore(); }
   PM.emitServerStartup({});
   PM.createApi('MaggotNativePostDamage').onCombatHitDamage(event => {
     if (event.target?.__maggotKingSession) {
@@ -1699,7 +1718,38 @@ test('real paid Soul Rend keeps its permanent magic bonus drain while encounter 
   npc.setDefenceBonusOverrides([null, 7, null, 150, null]); // supplied positive starting bonus, not this definition's native zero
   assert.equal(npc.getDefenceBonus(3), 150);
   assert.equal(suppliedBurn(f), true); // supplied live shared stack; fire producer is proved separately
-  const random = t.mock.method(Math, 'random', () => 0.5);
+  // DISTINCT DIAGNOSTIC PROPOSAL ONLY: unchanged RNG value, assertions and turn counts.
+  let diagnoseExpiry = false, diagnosticPhase = null, diagnosticRandomCalls = 0;
+  let nextRandomReport = 1024, diagnosticErrors = 0;
+  const random = t.mock.method(Math, 'random', () => {
+    if (diagnoseExpiry && ++diagnosticRandomCalls === nextRandomReport) {
+      console.log(JSON.stringify({ event: 'maggot-ayak-expiry-random-growth',
+        cycle: core.World.getProcessCycle(), phase: diagnosticPhase,
+        callsSinceExpiryStart: diagnosticRandomCalls, heapUsed: process.memoryUsage().heapUsed }));
+      nextRandomReport *= 2;
+    }
+    return 0.5;
+  });
+  const { ServerPerf } = require('../dist/util/ServerPerf');
+  const originalMeasurePhase = ServerPerf.measurePhase, originalConsoleError = console.error;
+  ServerPerf.measurePhase = function(phase, fn) {
+    if (!diagnoseExpiry) return Reflect.apply(originalMeasurePhase, this, [phase, fn]);
+    const previous = diagnosticPhase; diagnosticPhase = phase;
+    console.log(JSON.stringify({ event: 'maggot-ayak-expiry-phase', edge: 'enter',
+      phase, cycle: core.World.getProcessCycle(), randomCalls: random.mock.callCount() }));
+    try { return Reflect.apply(originalMeasurePhase, this, [phase, fn]); }
+    finally {
+      console.log(JSON.stringify({ event: 'maggot-ayak-expiry-phase', edge: 'leave',
+        phase, cycle: core.World.getProcessCycle(), randomCalls: random.mock.callCount() }));
+      diagnosticPhase = previous;
+    }
+  };
+  console.error = function(...args) {
+    if (diagnoseExpiry) console.log(JSON.stringify({ event: 'maggot-ayak-expiry-console-error',
+      ordinal: ++diagnosticErrors, phase: diagnosticPhase, cycle: core.World.getProcessCycle(),
+      argTypes: args.map(value => typeof value) }));
+    return Reflect.apply(originalConsoleError, this, args);
+  };
   // AFTER012 aborted without per-case TAP. Emit only scalars to locate the missing boundary;
   // these observations do not replace assertions, change RNG, or change native turn counts.
   const checkpoint = label => console.log(JSON.stringify({ event: 'maggot-native-ayak-boundary', label,
@@ -1732,17 +1782,24 @@ test('real paid Soul Rend keeps its permanent magic bonus drain while encounter 
     checkpoint('before-defence-query');
     assert.equal(magicRoll(f), 209 * (Math.max(0, drained - 20) + 64));
     checkpoint('after-defence-query');
+    diagnoseExpiry = true;
     for (let turn = 0; turn < 26; turn++) {
       ticks(1);
       checkpoint(`expiry-turn-${turn + 1}`);
     }
+    diagnoseExpiry = false;
     assert.equal(nativeBurnState(npc).stacks, 0);
     assert.equal(npc.getDefenceBonus(3), drained);
     assert.equal(magicRoll(f), 209 * (drained + 64), 'burn expiry restores no part of the permanent Soul Rend drain');
     assert.equal(f.resolved.length, 1);
     assert.equal(staff.getMetaValue(CHARGES_KEY), 99);
     checkpoint('assertions-complete');
-  } finally { checkpoint('finally'); random.mock.restore(); }
+  } finally {
+    diagnoseExpiry = false;
+    ServerPerf.measurePhase = originalMeasurePhase;
+    console.error = originalConsoleError;
+    checkpoint('finally'); random.mock.restore();
+  }
 });
 
 test('the shared read-only count distinguishes mixed burn durations on an unrelated native player', t => {
@@ -2085,4 +2142,504 @@ test('Camping resets on native Escape and owned logout/teleport retirement bound
   assert.equal(session.area.isDestroyed(), true);
   assert.equal(Instance.sessionOf(p), null);
   assert.equal(enter(p).campingKills, 0, 'a new lair does not restore the old run');
+});
+// Optional Maggot trip-resupply source fixture; UNEXECUTED at source preparation.
+const RESUPPLY = Object.freeze({ root: 62185, unbuilt: 62186, built: 62187,
+  varbit: 15621, varp: 4968, bit: 1 << 28, x: 2576, y: 7833, z: 0 });
+function resupplyRoot(p) {
+  const at = new core.Location(RESUPPLY.x, RESUPPLY.y, RESUPPLY.z);
+  core.RegionManager.loadMapFiles(RESUPPLY.x, RESUPPLY.y);
+  const object = core.World.findCacheObject(p, RESUPPLY.root, at);
+  assert.ok(object, 'actual static root is loaded; no synthetic replacement');
+  assert.equal(object.getId(), RESUPPLY.root);
+  assert.equal(object.getType(), 10);
+  assert.equal(object.getFace(), 1);
+  return object;
+}
+function resupplyReached(p, object) {
+  const base = core.ObjectDefinition.forId(object.getId());
+  const shown = core.ObjectDefinition.forPlayer(object.getId(), p);
+  return core.PathFinder.reachedObject(p, RESUPPLY.x, RESUPPLY.y,
+    base.getSizeX(), base.getSizeY(), object.getFace(), 10, shown.getBlockingMask());
+}
+
+test('optional Maggot resupply static root resolves two players independently and preserves other varp bits', t => {
+  const a = player(t), b = player(t);
+  const root = resupplyRoot(a);
+  const sentinelA = (1 << 2) | (1 << 29), sentinelB = (1 << 7) | (1 << 30);
+  a.getPacketSender().sendConfig(RESUPPLY.varp, sentinelA);
+  b.getPacketSender().sendConfig(RESUPPLY.varp, sentinelB);
+  assert.equal(core.ObjectDefinition.forPlayer(root.getId(), a).id, RESUPPLY.unbuilt);
+  assert.equal(core.ObjectDefinition.forPlayer(root.getId(), b).id, RESUPPLY.unbuilt);
+  // Supplied varbit state probes the maintained transform only: this is NOT a Build or saved-state result.
+  a.getPacketSender().sendVarbit(RESUPPLY.varbit, 1);
+  assert.equal(a.getPacketSender().getVarp(RESUPPLY.varp), sentinelA | RESUPPLY.bit);
+  assert.equal(b.getPacketSender().getVarp(RESUPPLY.varp), sentinelB);
+  assert.equal(core.ObjectDefinition.forPlayer(root.getId(), a).id, RESUPPLY.built);
+  assert.equal(core.ObjectDefinition.forPlayer(root.getId(), b).id, RESUPPLY.unbuilt);
+  a.getPacketSender().sendVarbit(RESUPPLY.varbit, 0);
+  assert.equal(a.getPacketSender().getVarp(RESUPPLY.varp), sentinelA);
+  assert.equal(root.getId(), RESUPPLY.root, 'the shared physical root was never replaced');
+  console.log(JSON.stringify({ event: 'maggot-resupply-native-transform-probe', supplied: true,
+    root: root.getId(), sentinelA, sentinelB, scope: 'per-player native cache/PacketSender transform only; no persistence/build proof' }));
+});
+
+
+// These cases are prepared native fixtures, not a prior execution result. The first
+// one learns a reached standing tile through the real visible-ID click and cache route.
+let resupplyStanding;
+function resupplyModule() { return require('../plugins/bosses/maggotking/Resupply.MaggotKing'); }
+function resupplyActor(t, level = 70, saw = core.ItemIdentifiers.SAW, complete = true) {
+  const p = player(t, complete);
+  p.getSkillManager().setMaxLevels(core.Skill.CONSTRUCTION, level, false)
+    .setExperience(core.Skill.CONSTRUCTION, core.SkillManager.getExperienceForLevel(level))
+    .setCurrentLevels(core.Skill.CONSTRUCTION, level, false);
+  p.getInventory().resetItems();
+  for (const [id, n] of [[core.ItemIdentifiers.HAMMER, 1], [saw, 1],
+    [core.ItemIdentifiers.MAGIC_STONE, 1], [core.ItemIdentifiers.CUPRONICKEL_BAR, 2],
+    [core.ItemIdentifiers.ADAMANTITE_BAR, 2], [core.ItemIdentifiers.IRONWOOD_PLANK, 4]]) {
+    assert.ok(Number.isInteger(id)); p.getInventory().adds(id, n);
+  }
+  p.setAttribute(resupplyModule().BUILT_ATTRIBUTE, 0);
+  p.getPacketSender().sendVarbit(RESUPPLY.varbit, 0);
+  const root = resupplyRoot(p);
+  const stand = resupplyStanding ?? [2577, 7818, 0];
+  p.moveTo(new core.Location(...stand)); p.setNeedsPlacement(false);
+  ticks(1);
+  return { p, root };
+}
+function resupplySnapshot(p) {
+  return { items: p.getInventory().getCopiedItems().map(i => [i.getId(), i.getAmount(), i.getMeta()]),
+    xp: p.getSkillManager().getExperience(core.Skill.CONSTRUCTION),
+    // Preserve stored tenths as well as the whole-XP display projection.
+    storedXp: p.getSkillManager().getSkills().experience[core.Skill.CONSTRUCTION.getIndex()],
+    charge: p.getAttribute('crystal-saw:charges-used'), built: p.getAttribute(resupplyModule().BUILT_ATTRIBUTE) };
+}
+function observeResupply(t, p) {
+  const rows = [], operated = [];
+  const original = PM.emitObjectInteraction;
+  const dispatch = t.mock.method(PM, 'emitObjectInteraction', function(event) {
+    const match = event.player === p && event.objectId === RESUPPLY.root
+      && event.location?.x === RESUPPLY.x && event.location?.y === RESUPPLY.y && event.location?.z === RESUPPLY.z;
+    const row = match ? { cycle: core.World.getProcessCycle(), child: event.definition?.id,
+      option: event.option, before: event.handled, returned: null, after: null } : null;
+    if (row) rows.push(row);
+    const result = Reflect.apply(original, this, [event]);
+    if (row) { row.returned = result; row.after = event.handled; }
+    return result;
+  });
+  const originalCustom = PM.emitCustomEvent;
+  const custom = t.mock.method(PM, 'emitCustomEvent', function(name, event) {
+    if (name === 'object:operated' && event.player === p && event.objectId === RESUPPLY.root) operated.push(event.option);
+    return Reflect.apply(originalCustom, this, [name, event]);
+  });
+  t.after(() => { custom.mock.restore(); dispatch.mock.restore(); });
+  return { rows, operated };
+}
+function resupplyClick(t, f, action = 'Build', observer = observeResupply(t, f.p)) {
+  const before = observer.rows.length;
+  const shown = core.ObjectDefinition.forPlayer(f.root.getId(), f.p);
+  const click = shown.getInteractions().findIndex(v => v?.toLowerCase() === action.toLowerCase()) + 1;
+  assert.ok(click > 0);
+  input(f.p, () => new ObjectActionPacketListener().executeAction(f.p, shown.id, RESUPPLY.x, RESUPPLY.y, click, action));
+  for (let n = 0; observer.rows.length === before && n < 80; n++) ticks(1);
+  assert.equal(observer.rows.length, before + 1, 'real listener dispatched exactly one reached operation');
+  const row = observer.rows.at(-1);
+  assert.equal(row.option, action.toLowerCase());
+  assert.equal(row.before, false);
+  // Bank is deliberately unanswered by plugins; the listener opens it afterwards.
+  const handledByPlugin = action.toLowerCase() !== 'bank';
+  assert.equal(row.returned, handledByPlugin);
+  assert.equal(row.after, handledByPlugin);
+  return observer;
+}
+function resupplyAssertBuilt(p, value = true) {
+  assert.equal(p.getAttribute(resupplyModule().BUILT_ATTRIBUTE), value ? 1 : 0);
+  assert.equal(p.getPacketSender().getVarbit(RESUPPLY.varbit), value ? 1 : 0);
+  assert.equal(core.ObjectDefinition.forPlayer(RESUPPLY.root, p).id, value ? RESUPPLY.built : RESUPPLY.unbuilt);
+}
+function resupplyAssertNoCost(f, before) {
+  const after = resupplySnapshot(f.p);
+  assert.deepEqual(after.items, before.items);
+  assert.equal(after.xp, before.xp);
+  assert.equal(after.storedXp, before.storedXp, 'no fractional Construction XP leaked');
+  assert.equal(after.charge, before.charge);
+}
+
+test('optional Maggot trip banking uses real route/dispatch then commits once on the third reached-operation tick', t => {
+  const f = resupplyActor(t), { p, root } = f;
+  const sentinel = (1 << 2) | (1 << 29);
+  p.getPacketSender().sendConfig(RESUPPLY.varp, sentinel);
+  const before = resupplySnapshot(p), amounts = [core.ItemIdentifiers.MAGIC_STONE, core.ItemIdentifiers.CUPRONICKEL_BAR,
+    core.ItemIdentifiers.ADAMANTITE_BAR, core.ItemIdentifiers.IRONWOOD_PLANK].map(id => p.getInventory().getAmount(id));
+  const witness = resupplyClick(t, f);
+  assert.equal(resupplyReached(p, root), true);
+  assert.notDeepEqual([p.getLocation().getX(), p.getLocation().getY()], [2577, 7818]);
+  resupplyStanding = [p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()];
+  resupplyAssertBuilt(p, false); resupplyAssertNoCost(f, before);
+  ticks(1); resupplyAssertBuilt(p, false); resupplyAssertNoCost(f, before);
+  ticks(1); resupplyAssertBuilt(p, false); resupplyAssertNoCost(f, before);
+  ticks(1); resupplyAssertBuilt(p);
+  assert.equal(p.getPacketSender().getVarp(RESUPPLY.varp), sentinel | RESUPPLY.bit);
+  assert.deepEqual(amounts, [1, 2, 2, 4]);
+  for (const id of [core.ItemIdentifiers.MAGIC_STONE, core.ItemIdentifiers.CUPRONICKEL_BAR,
+    core.ItemIdentifiers.ADAMANTITE_BAR, core.ItemIdentifiers.IRONWOOD_PLANK]) assert.equal(p.getInventory().getAmount(id), 0);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.HAMMER), 1);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.SAW), 1);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.CONSTRUCTION) - before.xp,
+    Math.floor(1787 * core.GameConstants.EXPERIENCE_MULTIPLIER * 10 + 1e-6) / 10);
+  assert.deepEqual(witness.operated, ['build']);
+  const after = resupplySnapshot(p); ticks(5); assert.deepEqual(resupplySnapshot(p), after);
+  resupplyClick(t, f, 'Bank', witness);
+  assert.equal(core.Bank.isOpen(p), true, 'unchanged generic Bank fallback');
+  assert.deepEqual(witness.operated, ['build', 'bank'], 'generic Bank fallback reports the actual operated action');
+  console.log(JSON.stringify({ event: 'maggot-resupply-native-after', witness: witness.rows,
+    standing: resupplyStanding, baseXP: 1787, taskTicks: 3, scope: 'supplied access/player; actual map, visible listener, route, tasks and Bank; no socket/client/scout traversal' }));
+});
+
+test('optional Maggot chest save/apply/login and projection stay per-player and preserve other varp bits', t => {
+  const a = resupplyActor(t), b = resupplyActor(t), { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const key = resupplyModule().BUILT_ATTRIBUTE;
+  assert.equal(Object.hasOwn(PlayerSave.fromPlayer(b.p).attributes, key), false, 'canonical default0 omitted');
+  resupplyClick(t, a); ticks(3);
+  const save = PlayerSave.fromPlayer(a.p); assert.equal(save.attributes[key], 1);
+  save.attributes = JSON.parse(JSON.stringify(save.attributes));
+  save.applyToPlayer(b.p);
+  const sentinel = (1 << 7) | (1 << 30); b.p.getPacketSender().sendConfig(RESUPPLY.varp, sentinel);
+  emitMaggotCountLogin(b.p); resupplyAssertBuilt(b.p);
+  assert.equal(b.p.getPacketSender().getVarp(RESUPPLY.varp), sentinel | RESUPPLY.bit);
+  emitMaggotCountLogin(b.p); assert.equal(b.p.getPacketSender().getVarp(RESUPPLY.varp), sentinel | RESUPPLY.bit);
+  const c = resupplyActor(t); emitMaggotCountLogin(c.p); resupplyAssertBuilt(c.p, false);
+  assert.equal(c.root, a.root, 'same main-world cache root; no global replacement');
+  console.log(JSON.stringify({ event: 'maggot-resupply-native-save', scope: 'registered PlayerSave snapshot/attributeJSON/apply/loginhooks only; no disk/backend/socket/fullfile' }));
+});
+
+test('optional Maggot chest stale canonical-built entry and commit reject duplicate payment', t => {
+  const f = resupplyActor(t), before = resupplySnapshot(f.p);
+  f.p.setAttribute(resupplyModule().BUILT_ATTRIBUTE, 1); // supplied stale projection, not a genuine prior Build
+  resupplyClick(t, f); ticks(4); resupplyAssertBuilt(f.p); resupplyAssertNoCost(f, before);
+  const g = resupplyActor(t), beforeG = resupplySnapshot(g.p);
+  resupplyClick(t, g); ticks(2);
+  g.p.setAttribute(resupplyModule().BUILT_ATTRIBUTE, 1); g.p.getPacketSender().sendVarbit(RESUPPLY.varbit, 1);
+  ticks(3); resupplyAssertNoCost(g, beforeG); resupplyAssertBuilt(g.p);
+});
+
+test('optional Maggot chest repeated clicks and reentrant material callbacks commit only one recipe', t => {
+  const f = resupplyActor(t), before = resupplySnapshot(f.p), original = PM.emitCustomEvent;
+  let reentered = 0;
+  const observer = t.mock.method(PM, 'emitCustomEvent', function(name, event) {
+    if (name === 'construction:materials' && event.player === f.p && event.buildable?.key === 'maggot-resupply-chest') {
+      reentered++;
+      // Native listener receives another click during the synchronous commit; no direct handler call.
+      new ObjectActionPacketListener().executeAction(f.p, RESUPPLY.unbuilt, RESUPPLY.x, RESUPPLY.y, 1, 'Build');
+      PM.emitCustomEvent('player:interaction-cleared', { player: f.p, reason: 'item' });
+    }
+    return Reflect.apply(original, this, [name, event]);
+  });
+  t.after(() => observer.mock.restore());
+  const witness = resupplyClick(t, f);
+  // A new ordinary click cancels/replaces the pending index-key action; the replacement may build once.
+  resupplyClick(t, f, 'Build', witness); ticks(5); resupplyAssertBuilt(f.p);
+  assert.equal(reentered, 1);
+  assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.MAGIC_STONE), 0);
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION) - before.xp,
+    Math.floor(1787 * core.GameConstants.EXPERIENCE_MULTIPLIER * 10 + 1e-6) / 10);
+});
+
+test('optional Maggot chest each missing material/tool, noted-only material and low level cost nothing', t => {
+  for (const name of ['MAGIC_STONE', 'CUPRONICKEL_BAR', 'ADAMANTITE_BAR', 'IRONWOOD_PLANK', 'HAMMER', 'SAW']) {
+    const f = resupplyActor(t); f.p.getInventory().deleteNumber(core.ItemIdentifiers[name], 99);
+    const before = resupplySnapshot(f.p); resupplyClick(t, f); ticks(4); resupplyAssertBuilt(f.p, false); resupplyAssertNoCost(f, before);
+  }
+  const f = resupplyActor(t, 69), before = resupplySnapshot(f.p);
+  resupplyClick(t, f); ticks(4); resupplyAssertNoCost(f, before); resupplyAssertBuilt(f.p, false);
+  const g = resupplyActor(t); g.p.getInventory().deleteNumber(core.ItemIdentifiers.IRONWOOD_PLANK, 4);
+  const noted = core.ItemDefinition.forId(core.ItemIdentifiers.IRONWOOD_PLANK).getNoteId();
+  assert.ok(Number.isInteger(noted) && noted > 0); g.p.getInventory().adds(noted, 4);
+  const snap = resupplySnapshot(g.p); resupplyClick(t, g); ticks(4); resupplyAssertNoCost(g, snap); resupplyAssertBuilt(g.p, false);
+});
+
+test('optional Maggot chest material/tool loss, boost expiry and moved origin at commit cause no partial payment', t => {
+  for (const change of [f => f.p.getInventory().deleteNumber(core.ItemIdentifiers.MAGIC_STONE, 1),
+    f => f.p.getInventory().deleteNumber(core.ItemIdentifiers.SAW, 1),
+    f => f.p.getSkillManager().setCurrentLevels(core.Skill.CONSTRUCTION, 69, false),
+    f => f.p.moveTo(new core.Location(f.p.getLocation().getX() + 2, f.p.getLocation().getY(), 0))]) {
+    const f = resupplyActor(t); resupplyClick(t, f); ticks(2); change(f);
+    const before = resupplySnapshot(f.p); ticks(3); resupplyAssertNoCost(f, before); resupplyAssertBuilt(f.p, false);
+  }
+});
+
+test('optional Maggot chest crystal saw boost charges only a successful necessary boost and retains the last-charge seed', t => {
+  for (const [level, used, success, expectedUsed] of [[67, 0, true, 1], [70, 0, true, 0], [66, 0, false, 0], [67, 28, false, 28], [67, 27, true, 0]]) {
+    const f = resupplyActor(t, level, core.ItemIdentifiers.CRYSTAL_SAW);
+    f.p.setAttribute('crystal-saw:charges-used', used);
+    const before = resupplySnapshot(f.p); resupplyClick(t, f); ticks(3); resupplyAssertBuilt(f.p, success);
+    assert.equal(f.p.getAttribute('crystal-saw:charges-used'), expectedUsed);
+    if (!success) resupplyAssertNoCost(f, before);
+    if (used === 27 && success) { assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.CRYSTAL_SAW), 0); assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.CRYSTAL_SAW_SEED), 1); }
+  }
+  const f = resupplyActor(t, 67, core.ItemIdentifiers.CRYSTAL_SAW); resupplyClick(t, f); ticks(2);
+  f.p.setAttribute('crystal-saw:charges-used', 28); const snap = resupplySnapshot(f.p); ticks(2);
+  resupplyAssertNoCost(f, snap); resupplyAssertBuilt(f.p, false);
+});
+
+test('optional Maggot chest native tool alternatives and temporary Construction boost use existing helpers', t => {
+  const f = resupplyActor(t, 69); f.p.getSkillManager().setCurrentLevels(core.Skill.CONSTRUCTION, 70, false);
+  resupplyClick(t, f); ticks(3); resupplyAssertBuilt(f.p);
+  for (const [tool, slot, removed] of [[core.ItemIdentifiers.IMCANDO_HAMMER, core.Equipment.WEAPON_SLOT, core.ItemIdentifiers.HAMMER],
+    [core.ItemIdentifiers.AMYS_SAW_OFF_HAND_, core.Equipment.SHIELD_SLOT, core.ItemIdentifiers.SAW]]) {
+    const g = resupplyActor(t); g.p.getInventory().deleteNumber(removed, 1); g.p.getEquipment().setItem(slot, new core.Item(tool, 1));
+    resupplyClick(t, g); ticks(3); resupplyAssertBuilt(g.p); assert.equal(g.p.getEquipment().get(slot).getId(), tool);
+  }
+});
+
+test('optional Maggot chest interruptions clear pending work without costs and allow a later build', t => {
+  const interruptions = [f => f.p.getMovementQueue().walkToReset(),
+    f => PM.emitCustomEvent('player:interaction-cleared', { player: f.p, reason: 'item' }),
+    f => PM.emitCustomEvent('player:interaction-cleared', { player: f.p, reason: 'attack' }),
+    f => PM.emitPlayerLogout({ player: f.p, username: f.p.getUsername() }),
+    f => PM.emitPlayerDisconnect({ player: f.p, username: f.p.getUsername(), source: 'fixture' }),
+    f => PM.emitPlayerBeforeDeath({ player: f.p, preventDeath: false })];
+  for (const interrupt of interruptions) {
+    const f = resupplyActor(t); resupplyClick(t, f); ticks(1); interrupt(f);
+    const before = resupplySnapshot(f.p); ticks(4); resupplyAssertNoCost(f, before); resupplyAssertBuilt(f.p, false);
+    resupplyClick(t, f); ticks(3); resupplyAssertBuilt(f.p);
+  }
+});
+
+test('optional Maggot chest carried Ironwood sack, bounded material discount and outfit multiplier reuse normal events', t => {
+  const f = resupplyActor(t); f.p.getInventory().deleteNumber(core.ItemIdentifiers.IRONWOOD_PLANK, 3);
+  f.p.getInventory().adds(core.ItemIdentifiers.PLANK_SACK, 1);
+  f.p.setAttribute('storage-items:plank-sack', [[core.ItemIdentifiers.IRONWOOD_PLANK, 3]]);
+  resupplyClick(t, f); ticks(3); resupplyAssertBuilt(f.p);
+  assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.IRONWOOD_PLANK), 0);
+  assert.equal(f.p.getAttribute('storage-items:plank-sack'), null);
+  const g = resupplyActor(t), before = resupplySnapshot(g.p), original = PM.emitCustomEvent;
+  let materialCalls = 0, outfitCalls = 0;
+  const observer = t.mock.method(PM, 'emitCustomEvent', function(name, event) {
+    const result = Reflect.apply(original, this, [name, event]);
+    if (event.player === g.p && name === 'construction:materials') {
+      materialCalls++;
+      event.materials = event.materials.map(([id, n]) => [id, id === core.ItemIdentifiers.IRONWOOD_PLANK ? 0 : n]);
+    }
+    if (event.player === g.p && name === 'construction:outfit-multiplier') { outfitCalls++; event.multiplier *= 1.025; }
+    return result;
+  });
+  t.after(() => observer.mock.restore());
+  resupplyClick(t, g); ticks(3); resupplyAssertBuilt(g.p);
+  assert.equal(materialCalls, 1); assert.equal(outfitCalls, 1);
+  assert.equal(g.p.getInventory().getAmount(core.ItemIdentifiers.IRONWOOD_PLANK), 4);
+  // SkillManager stores tenths; getExperience() is the whole-XP display accessor.
+  // Match the existing Carpenter outfit test's stored-delta measurement, retaining the fractional award.
+  assert.equal(Math.round((g.p.getSkillManager().getSkills().experience[core.Skill.CONSTRUCTION.getIndex()] - before.storedXp) * 10) / 10,
+    Math.floor(1787 * 1.025 * core.GameConstants.EXPERIENCE_MULTIPLIER * 10 + 1e-6) / 10);
+  assert.equal(g.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION),
+    Math.floor(before.storedXp + Math.floor(1787 * 1.025 * core.GameConstants.EXPERIENCE_MULTIPLIER * 10 + 1e-6) / 10),
+    'whole-XP display is projected from the complete stored total');
+  // The discount/outfit are supplied hook controls, not an actual equipped league fragment/outfit integration claim.
+});
+
+test('optional Maggot chest simultaneous players pay independently for the same physical cache root', t => {
+  const a = resupplyActor(t), b = resupplyActor(t);
+  const beforeB = resupplySnapshot(b.p);
+  resupplyClick(t, a); ticks(3); resupplyAssertBuilt(a.p);
+  resupplyAssertBuilt(b.p, false); resupplyAssertNoCost(b, beforeB);
+  assert.equal(a.root, b.root);
+  resupplyClick(t, b); ticks(3); resupplyAssertBuilt(b.p);
+  assert.equal(a.root.getId(), RESUPPLY.root);
+});
+
+test('optional Maggot chest full inventory and Inspect retain tools and expose only documented requirements', t => {
+  const f = resupplyActor(t);
+  while (f.p.getInventory().getFreeSlots() > 0) f.p.getInventory().adds(core.ItemIdentifiers.LOGS, 1);
+  const before = resupplySnapshot(f.p), lines = [], send = f.p.sendMessage;
+  const observer = t.mock.method(f.p, 'sendMessage', function(text, ...args) {
+    lines.push(text); return Reflect.apply(send, this, [text, ...args]);
+  });
+  t.after(() => observer.mock.restore());
+  resupplyClick(t, f, 'Inspect'); ticks(3); resupplyAssertNoCost(f, before); resupplyAssertBuilt(f.p, false);
+  assert.ok(lines.some(text => text.includes('70 Construction') && text.includes('4 ironwood planks')),
+    'repository-owned requirement text, not a captured retail sentence');
+  resupplyClick(t, f); ticks(3); resupplyAssertBuilt(f.p);
+  assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.HAMMER), 1);
+  assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.SAW), 1);
+});
+
+test('optional Maggot chest removed carried sack or removed/depleted boosted saw cannot pay partially', t => {
+  const f = resupplyActor(t); f.p.getInventory().deleteNumber(core.ItemIdentifiers.IRONWOOD_PLANK, 4);
+  f.p.getInventory().adds(core.ItemIdentifiers.PLANK_SACK, 1);
+  f.p.setAttribute('storage-items:plank-sack', [[core.ItemIdentifiers.IRONWOOD_PLANK, 4]]);
+  resupplyClick(t, f); ticks(2); f.p.getInventory().deleteNumber(core.ItemIdentifiers.PLANK_SACK, 1);
+  const before = resupplySnapshot(f.p); ticks(2); resupplyAssertNoCost(f, before); resupplyAssertBuilt(f.p, false);
+  assert.deepEqual(f.p.getAttribute('storage-items:plank-sack'), [[core.ItemIdentifiers.IRONWOOD_PLANK, 4]]);
+  const g = resupplyActor(t, 67, core.ItemIdentifiers.CRYSTAL_SAW); resupplyClick(t, g); ticks(2);
+  g.p.getInventory().deleteNumber(core.ItemIdentifiers.CRYSTAL_SAW, 1);
+  const snap = resupplySnapshot(g.p); ticks(2); resupplyAssertNoCost(g, snap); resupplyAssertBuilt(g.p, false);
+});
+
+test('optional Maggot chest wrong anchor or supplied private copy cannot start a build', t => {
+  // The generic Sailing amenity also owns this cache name/site. A Maggot refusal
+  // must be consumed, not fall through to its immediate material payment.
+  const Amenities = require('../plugins/skills/sailing/Amenities.Sailing');
+  const site = Amenities._test.siteAt(RESUPPLY.root);
+  assert.equal(site?.site.loc, 'amenity_bankchest_sangvesti');
+  const sailingBuilt = Amenities._test.BUILT_ATTRIBUTE(site.site.varbit);
+  const saves = [], originalCustom = PM.emitCustomEvent;
+  const saveObserver = t.mock.method(PM, 'emitCustomEvent', function(name, event) {
+    if (name === 'persistence:save') saves.push(event.player);
+    return Reflect.apply(originalCustom, this, [name, event]);
+  });
+  t.after(() => saveObserver.mock.restore());
+  function refused(f, object) {
+    const before = resupplySnapshot(f.p), previousSailing = f.p.getAttribute(sailingBuilt);
+    const at = object.getLocation(), saveCount = saves.filter(p => p === f.p).length;
+    assert.equal(PM.emitObjectInteraction({ player: f.p, object, objectId: RESUPPLY.root,
+      definition: core.ObjectDefinition.forPlayer(RESUPPLY.root, f.p), clickType: 1, option: 'build',
+      location: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false }), true,
+      'the owning root consumes refusal before the generic Sailing payment');
+    // Check synchronous fallback costs before ticks as well as delayed work afterwards.
+    resupplyAssertNoCost(f, before); resupplyAssertBuilt(f.p, false);
+    assert.equal(f.p.getAttribute(sailingBuilt), previousSailing, 'no generic amenity state written');
+    return () => {
+      ticks(4); resupplyAssertNoCost(f, before); resupplyAssertBuilt(f.p, false);
+      assert.equal(f.p.getAttribute(sailingBuilt), previousSailing, 'no delayed generic amenity state written');
+      assert.equal(saves.filter(p => p === f.p).length, saveCount, 'no chest save requested');
+    };
+  }
+  // Supplemental callback-level guards use supplied native objects; ordinary map/route
+  // proof belongs to the first success case, not these unreachable copies.
+  for (const at of [new core.Location(RESUPPLY.x + 3, RESUPPLY.y, 0), new core.Location(RESUPPLY.x, RESUPPLY.y, 1)]) {
+    const f = resupplyActor(t), object = new core.GameObject(RESUPPLY.root, at, 10, 1);
+    refused(f, object)();
+  }
+  const f = resupplyActor(t), previous = f.p.getPrivateArea();
+  // The marker probes refusal only, not a real owned scene; keep the restore check.
+  const privateCopy = new core.GameObject(RESUPPLY.root, new core.Location(RESUPPLY.x, RESUPPLY.y, 0), 10, 1);
+  const originalArea = privateCopy.getPrivateArea, marker = {};
+  const areaObserver = t.mock.method(privateCopy, 'getPrivateArea', () => marker);
+  let afterRestore;
+  try { afterRestore = refused(f, privateCopy); }
+  finally { areaObserver.mock.restore(); }
+  assert.equal(privateCopy.getPrivateArea, originalArea); assert.equal(f.p.getPrivateArea(), previous);
+  afterRestore();
+});
+
+test('legacy Sailing Sangvesti state survives both registered login orders and refuses another Build without costs', t => {
+  const Amenities = require('../plugins/skills/sailing/Amenities.Sailing');
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const site = Amenities._test.siteAt(RESUPPLY.root);
+  const canonical = Amenities._test.BUILT_ATTRIBUTE(site.site.varbit);
+  assert.equal(canonical, 'sailing:amenity-bankchest-sangvesti');
+  assert.equal(resupplyModule().BUILT_ATTRIBUTE, canonical, 'both consumers use one saved truth');
+  const sailing = sailingAmenityLogins.map(({ hook }) => hook);
+  const maggot = PM.loginHooks.filter(hook => hook.pluginName === 'MaggotKing' && hook.handlerName === 'sync');
+  assert.equal(sailing.length, 1); assert.equal(maggot.length, 1);
+  assert.equal(sailingAmenityLogins[0].callback.name, 'login');
+  assert.equal(sailing[0].pluginName, 'Sailing');
+  assert.equal(sailing[0].handlerName, 'login');
+  assert.equal(PM.loginHooks.filter(hook => hook === sailing[0]).length, 1, 'the original registered wrapper remains installed');
+  const staleBuild = PM.beforeObjectInteractionHooks.filter(hook =>
+    hook.pluginName === 'MaggotKing' && hook.handlerName === 'refuseStaleBuild');
+  assert.equal(staleBuild.length, 1, 'one owning stale-event guard is registered');
+  // Actual registered consumer wrappers, exercised in both orders. This is not a socket login.
+  for (const order of [[sailing[0], maggot[0]], [maggot[0], sailing[0]]]) {
+    const f = resupplyActor(t), p = f.p;
+    p.setAttribute(canonical, 1); // pre-existing Sailing save, without the unmerged Maggot flag
+    const snapshot = PlayerSave.fromPlayer(p).attributes;
+    assert.equal(snapshot[canonical], 1);
+    assert.equal(Object.hasOwn(snapshot, 'maggot-king:resupply-chest-built'), false);
+    const sentinel = (1 << 7) | (1 << 30), writes = [], send = p.getPacketSender().sendVarbit;
+    p.getPacketSender().sendConfig(RESUPPLY.varp, sentinel); // stale unbuilt projection at login
+    const watch = t.mock.method(p.getPacketSender(), 'sendVarbit', function(id, value) {
+      if (id === RESUPPLY.varbit) writes.push(value);
+      return Reflect.apply(send, this, [id, value]);
+    });
+    try {
+      const event = { player: p, username: p.getUsername(), isNewAccount: false, profile: p.getProfile() };
+      for (const hook of order) hook.handler(event);
+      assert.deepEqual(writes, [1, 1], 'neither registered login consumer resets the existing chest');
+      resupplyAssertBuilt(p);
+      assert.equal(p.getPacketSender().getVarp(RESUPPLY.varp), sentinel | RESUPPLY.bit);
+      const before = resupplySnapshot(p);
+      input(p, () => new ObjectActionPacketListener().executeAction(p, RESUPPLY.unbuilt,
+        RESUPPLY.x, RESUPPLY.y, 1, 'Build')); // stale visible-ID input, not a new eligible build
+      ticks(4); resupplyAssertNoCost(f, before); resupplyAssertBuilt(p);
+      const definition = core.ObjectDefinition.forPlayer(RESUPPLY.root, p);
+      assert.equal(definition.id, RESUPPLY.built);
+      assert.equal(definition.getInteractions()[0].toLowerCase(), 'bank',
+        'the current slot is Bank; the explicit Build below is a contradictory direct event');
+      const supplied = { player: p, object: f.root, objectId: RESUPPLY.root,
+        definition, clickType: 1, option: 'build',
+        location: { x: RESUPPLY.x, y: RESUPPLY.y, z: RESUPPLY.z }, handled: false };
+      assert.equal(PM.emitObjectInteraction({ ...supplied, option: 'bank' }), false,
+        'legitimate Bank remains unanswered for ObjectActionPacketListener fallback');
+      // Isolated calls of the actual registered guard: supplied negative fields are not packet proof.
+      const foreignRoot = new core.GameObject(RESUPPLY.built,
+        new core.Location(RESUPPLY.x, RESUPPLY.y, RESUPPLY.z), 10, 1);
+      for (const delta of [{ option: 'Bank' }, { option: 'Inspect' }, { option: null },
+        { clickType: 2 }, { objectId: RESUPPLY.built }, { object: foreignRoot }]) {
+        const event = { ...supplied, ...delta };
+        staleBuild[0].handler(event);
+        assert.equal(event.handled, false, 'the guard leaves other actions, slots and roots alone');
+      }
+      const handled = { ...supplied, handled: true };
+      staleBuild[0].handler(handled); assert.equal(handled.handled, true);
+      p.setAttribute(canonical, 0);
+      try {
+        const unbuilt = { ...supplied };
+        staleBuild[0].handler(unbuilt);
+        assert.equal(unbuilt.handled, false, 'unbuilt state keeps the ordinary named Build path');
+      } finally { p.setAttribute(canonical, 1); }
+      resupplyAssertNoCost(f, before); resupplyAssertBuilt(p);
+      // This direct contradictory event tests refusal ownership, not a second packet/Bank route.
+      assert.equal(PM.emitObjectInteraction({ player: p, object: f.root, objectId: RESUPPLY.root,
+        definition: core.ObjectDefinition.forPlayer(RESUPPLY.root, p), clickType: 1, option: 'build',
+        location: { x: RESUPPLY.x, y: RESUPPLY.y, z: RESUPPLY.z }, handled: false }), true,
+        'registered owning handler consumes stale Build rather than generic Sailing payment');
+      ticks(4); resupplyAssertNoCost(f, before); resupplyAssertBuilt(p);
+      assert.equal(p.getPacketSender().getVarp(RESUPPLY.varp), sentinel | RESUPPLY.bit);
+    } finally { watch.mock.restore(); }
+  }
+});
+
+test('Sangvesti Build refuses incomplete Blood Moon Rises and accepts the completed quest without a new lair prerequisite', t => {
+  const locked = resupplyActor(t, 70, core.ItemIdentifiers.SAW, false);
+  locked.p.setAttribute(QUEST_ATTRIBUTE, 100); // supplied mid-quest scene access, not natural quest traversal
+  assert.equal(Common.questComplete(locked.p), false);
+  const before = resupplySnapshot(locked.p), lines = [], send = locked.p.sendMessage;
+  const watch = t.mock.method(locked.p, 'sendMessage', function(text, ...args) {
+    lines.push(text); return Reflect.apply(send, this, [text, ...args]);
+  });
+  try {
+    resupplyClick(t, locked); ticks(4);
+    resupplyAssertNoCost(locked, before); resupplyAssertBuilt(locked.p, false);
+    assert.ok(lines.some(text => text.includes('complete The Blood Moon Rises')));
+  } finally { watch.mock.restore(); }
+  const allowed = resupplyActor(t);
+  assert.equal(Common.questComplete(allowed.p), true);
+  assert.equal(Instance.sessionOf(allowed.p), null, 'the completed quest suffices without entering a lair');
+  const positive = resupplySnapshot(allowed.p);
+  resupplyClick(t, allowed); ticks(3); resupplyAssertBuilt(allowed.p);
+  assert.equal(allowed.p.getInventory().getAmount(core.ItemIdentifiers.MAGIC_STONE), 0);
+  assert.equal(allowed.p.getSkillManager().getExperience(core.Skill.CONSTRUCTION) - positive.xp,
+    Math.floor(1787 * core.GameConstants.EXPERIENCE_MULTIPLIER * 10 + 1e-6) / 10);
+});
+
+test('Sangvesti quest eligibility is rechecked before third-tick payment and a later eligible build can succeed', t => {
+  const f = resupplyActor(t);
+  resupplyClick(t, f); ticks(2);
+  f.p.setAttribute(QUEST_ATTRIBUTE, 100); // explicit invalidation checkpoint while the task is pending
+  assert.equal(Common.questComplete(f.p), false);
+  const before = resupplySnapshot(f.p);
+  ticks(3); resupplyAssertNoCost(f, before); resupplyAssertBuilt(f.p, false);
+  f.p.setAttribute(QUEST_ATTRIBUTE, QUEST_COMPLETE);
+  assert.equal(Common.questComplete(f.p), true);
+  resupplyClick(t, f); ticks(3); resupplyAssertBuilt(f.p);
+  assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.MAGIC_STONE), 0);
+});
+
+test('optional Maggot chest shutdown cancels pending payment and leaves no delayed completion', t => {
+  const f = resupplyActor(t); resupplyClick(t, f); ticks(2);
+  const before = resupplySnapshot(f.p);
+  PM.emitServerShutdown({}); ticks(4); resupplyAssertNoCost(f, before); resupplyAssertBuilt(f.p, false);
 });

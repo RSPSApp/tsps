@@ -54,9 +54,9 @@
  * for every id, varbit and placement (`lookup-gameval`, `dump:loc`).
  *
  * Gaps / approximations:
- *  - The Goblin Cave map exists (loc 2 enters at 2622,3392; the chamber around
- *    2617,9797 and guards at 2580,9852 are walkable), so the cave is entered and walked
- *    normally. The temple staircase loc is absent from this cache (MapObjects is empty
+ *  - The Goblin Cave map exists (the chamber around 2617,9797 and guards at 2580,9852
+ *    are walkable), so the cave is entered (loc 2, mcannoncave, played by LocTeleports as
+ *    captured) and walked normally. The temple staircase loc is absent from this cache (MapObjects is empty
  *    at 2581,9853), so accepting the guards moves the player inside the temple.
  *  - Goblin form uses the supported player appearance transform
  *    (setNpcTransformationId with the six lotg unarmoured goblins), the type varbit and
@@ -133,8 +133,6 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   const GOBLIN_TYPE_ATTRIBUTE = "land-of-the-goblins:goblin-type";
   const MIGRATION_ATTRIBUTE = "land-of-the-goblins:migration";
   const MIGRATION_VERSION = 2;
-  const CAVE_ENTRANCE_OBJECT_ID = 2; // mcannoncave, the Fishing Guild goblin cave entrance
-  const CAVE_ENTRANCE_TILE = { x: 2624, y: 3393 };
   const GOBLIN_CAVE_TILE = { x: 2617, y: 9797 };
 
   const STAGE_STARTED = 2;
@@ -1679,11 +1677,6 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
 
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
-    if (objectId === CAVE_ENTRANCE_OBJECT_ID) {
-      event.handled = true;
-      teleport(player, player.getLocation().getY() >= 9000 ? CAVE_ENTRANCE_TILE : GOBLIN_CAVE_TILE);
-      return;
-    }
     if (objectId === BLACK_MUSHROOMS_OBJECT_ID) {
       // 6311 is shared with The Golem and world content: only claim it inside LOTG's
       // Goblin Cave while this quest is active, leaving every other placement alone.

@@ -137,7 +137,7 @@ test('a wrong box (each of the other eight) is the trap: 5 damage is queued and 
     const original = queue.addPendingDamage.bind(queue);
     queue.addPendingDamage = hits => { damage.push(...hits.map(hit => hit.getDamage())); return original(hits); };
     click(f, child);
-    assert.ok(damage.includes(5), `box at component ${child}: 5 damage queued (${damage})`);
+    assert.deepEqual(damage, [5], `box at component ${child}: exactly one 5-damage impact`);
     assert.equal(f.p.getLocation().getX(), 2611, `box at component ${child}: the cave north of the monastery`);
     assert.equal(have(f, GRAIL), 0);
   }
@@ -157,3 +157,36 @@ test('controls: another player, no search first, and a click once the grail is h
   assert.equal(a.p.getLocation().getX(), 1900, 'with the grail held a stale click does not trap');
   assert.equal(have(a, GRAIL), 1);
 });
+
+
+for (const transcript of [true, false]) {
+  test("wrong-box actual HitQueue applies five damage once (transcript " + transcript + ")", t => {
+    const data = runtime.loadTranscripts({ core });
+    const variants = data["King's Ransom"].variants;
+    const variant = "prison-break-booby-trapped-box";
+    const original = variants[variant];
+    if (!transcript) {
+      // Only the unavailable external transcript is a fixture; the fallback, quest,
+      // Player, placement identity and HitQueue remain the production owners.
+      delete variants[variant];
+      t.after(() => { variants[variant] = original; });
+    }
+    for (const hp of [99, 6, 5]) {
+      const f = actor(t, "krtrap" + hp);
+      quest().setStage(f.p, STAGE_CELL_OPEN);
+      f.p.getSkillManager().setMaxLevels(core.Skill.HITPOINTS, 99, false)
+        .setCurrentLevels(core.Skill.HITPOINTS, hp, false);
+      searchTable(f);
+      const serial = f.p.getTeleportSerial();
+      const cycle = core.World.getProcessCycle();
+      click(f, 9);
+      f.p.getCombat().getHitQueue().process(cycle + 1);
+      assert.equal(f.p.getHitpoints(), hp - 5, "one five-damage impact, including low-hitpoint survival/death");
+      assert.equal(f.p.getTeleportSerial(), serial + 1, "one cave placement");
+      assert.deepEqual([f.p.getLocation().getX(), f.p.getLocation().getY()], [2611, 3220]);
+      f.p.getCombat().getHitQueue().process(cycle + 2);
+      assert.equal(f.p.getHitpoints(), hp - 5, "no repeated trap damage next cycle");
+      assert.equal(quest().getStage(f.p), STAGE_CELL_OPEN);
+    }
+  });
+}

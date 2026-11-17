@@ -424,6 +424,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `AdventurePaths` | AdventurePaths | achievements | yes | Adventure Paths with Adventurer Jon: the Combat and Gatherer paths, task claims, starter kits, the Combat voucher and the Lamp of the Gatherer. |
 | `CollectionLog` | CollectionLog | achievements | yes | Collection log: records items obtained from drops and other sources, with the log and overview interfaces, new-item popups and a ::clog command. |
 | `CombatAchievements` | CombatAchievements | achievements | yes | Combat Achievements: 655 tasks in six tiers with points, Ghommal's tier rewards, the five interfaces and boss kill counts. |
+| `KourendTalismanDrops` | KourendTalismanDrops | achievements | yes | Doubles Xeric's talisman drops from lizardmen after the easy Kourend diary. (members only) |
 | `AgentMcp` | AgentMcp | agent | yes | Runs an MCP server that lets a tool such as Claude Code drive an online player for testing. Active only when AGENT_MCP=1 is set. |
 | `AgilityPyramid` | AgilityPyramid | areas | yes | Moves the Agility Pyramid's sliding blocks on floors 1 and 3, which push players down a floor for 8 damage. The course itself is a separate plugin. (members only) |
 | `AncientPyramidMummies` | Ancient Pyramid Mummies | areas | yes | Ancient Pyramid mummy transformations: fire spells and lit fire arrows set them alight, water spells douse them. (members only) |
@@ -765,6 +766,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `SteelKeyRing` | SteelKeyRing | items | yes | Stores reusable keys and opens the native Check-keys interface. |
 | `StorageItems` | StorageItems | items | yes | Adds the coal bag, gem bag, gem pouch, fish barrel, log basket, Forestry kit, plank sack, tackle box, meat and fur pouches and reagent pouch, filled by gathering skills. (members only) |
 | `SurgePotion` | SurgePotion | items | yes | Surge potions restore 25% special attack energy a dose, with a five-minute wait between doses that a house pool, the free-for-all portal or a death ends. (members only) |
+| `TeleportAnchoringScroll` | TeleportAnchoringScroll | items | yes | Read the teleport anchoring scroll to unlock protection from Abyssal demon and Elder Chaos druid player teleports. (members only) |
 | `TeleportSpheres` | TeleportSpheres | items | yes | Breaking a Dorgesh-kaan, Goblin village or Plain of Mud sphere teleports to a random spot in its area. (members only) |
 | `TonalzticsOfRalos` | TonalzticsOfRalos | items | yes | Adds Tonalztics of Ralos, a thrown weapon charged with Sunfire splinters, one charge per throw, with Check, Charge and Uncharge. (members only) |
 | `ToxicBlowpipe` | ToxicBlowpipe | items | yes | Adds the toxic blowpipe: loading Zulrah's scales and darts, dart-based ranged strength, checking, unloading, uncharging, dismantling and picking ammunition up into it. (members only) |
@@ -853,7 +855,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Apothecary` | Apothecary | npcs | yes | Gives the Varrock Apothecary's Potions interface: strength, energy and antipoison potions made from the player's own ingredients, feeding the Varrock diary. |
 | `Asyff` | Asyff | npcs | yes | Adds Asyff and Pellem's Custom Fur Clothing: the Wiki's kebbit, camo, Larupia, Graahk and Kyatt sets, gloves and capes for their fur and coin fees. (members only) |
 | `Baraek` | Baraek | npcs | yes | Makes Baraek in Varrock sell fur for 20 coins, or 18 as the fallback, taking the coins and giving the fur from his dialogue. |
-| `BarbarianTraining` | BarbarianTraining | npcs | yes | Adds Barbarian Training's rod fishing, barehanded fishing and Herblore steps with Otto Godblessed, unlocking leaping fish catches, barehanded harpoon fishing and the barbarian mixes. (members only) |
+| `BarbarianTraining` | BarbarianTraining | npcs | yes | Adds Otto's Barbarian Training lessons and progression for fishing, firemaking, Herblore and spear/hasta smithing. (members only) |
 | `Bartenders` | Bartenders | npcs | yes | Makes the Blue Moon Inn, Dancing Donkey, Sheared Ram and Dragon Inn bartenders take coins and hand over a beer or Greenman's ale. |
 | `BasiliskKnights` | BasiliskKnights | npcs | yes | Basilisk Knight combat: walks into melee range, then melee or magic beside the player; magic from where it can't step closer, at the player's attack speed (4 ticks at the fastest), with the captured cast. (members only) |
 | `Caique` | Caique | npcs | yes | Lets players pet the sitting caiques of Kastori and the Tlati Rainforest, which peck back for 1 damage with the captured animations. (members only) |
@@ -911,6 +913,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Tutors` | Tutors | npcs | yes | Lumbridge combat and skill tutors: hands out training weapons, runes, tools and other starter gear, with a shared 30-minute claim for ranged and magic. |
 | `Tyss` | Tyss | npcs | yes | Tyss at the Dark Altar toggles the Arceuus spellbook from his Spellbook option and two dialogue choices. (members only) |
 | `UndeadDruids` | UndeadDruids | npcs | yes | Undead Druids use melee at melee range and magic from range, matching the Wiki and RSProx 2966. (members only) |
+| `VikingShouters` | VikingShouters | npcs | yes | The Jatizso and Neitiznot watchtower guards chant their islands' names, and Watch-shouting shows their recorded insult round with its camera. (members only) |
 | `WizardJalarast` | WizardJalarast | npcs | yes | Wizard Jalarast at the Wizards' Tower makes splitbark armour: Trade opens the purchase menu, and each piece takes its bark, fine cloth and coins. (members only) |
 | `Wyrms` | Wyrms | npcs | yes | Wyrm and wyrmling combat: melee when the target is adjacent, magic from range, with separate max hits per style. (members only) |
 | `Wyson` | Wyson | npcs | yes | Wyson the gardener sells woad leaves through his dialogue: 15 coins for one leaf, 20 coins for two. |
@@ -925,6 +928,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Chests` | Chests | objects | yes | Generic household chests: Open and Shut swap between the closed and open locs, and searching an open one finds nothing. |
 | `DairyCow` | DairyCow | objects | yes | Dairy cows: Milk fills an empty bucket, and Steal-cowbell is a 15 Thieving action unlocked once Cold War is started. |
 | `Doors` | Doors | objects | yes | Opens and closes doors, gates and double doors, swapping between closed and open locs, with route handling and reapplied state on region load. |
+| `FarmingShed` | FarmingShed | objects | yes | Borrow a rake and spade from the Lumbridge Swamp shed. |
 | `KeyChests` | KeyChests | objects | yes | Key-opened chests: Taverley crystal chest, Mount Karuulm brimstone chest, Larran's Wilderness chests, Prifddinas' Elven chest, Forthos' Grubby Chest and the Zombie Pirate's Locker, plus crystal key crafting. (members only) |
 | `Ladders` | Ladders | objects | yes | Climbing for ladders, staircases, trapdoors, ropes and similar scenery, moving the player a level up or down with the climb animation. |
 | `LeafyPalmTree` | LeafyPalmTree | objects | yes | Lets players shake Kharazi Jungle's Leafy Palm Trees for a palm leaf on the ground, with a 35-second cooldown per tree. (members only) |

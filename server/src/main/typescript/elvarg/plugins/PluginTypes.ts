@@ -44,6 +44,16 @@ export interface PluginPlayerMapSquareChangeEvent {
   location: any;
 }
 
+/** Synchronous post-commit location notification, after occupancy and map-square hooks.
+ * A prior listener may redirect the player: read its live location before acting.
+ * Each listener receives its own previous/location snapshots.
+ */
+export interface PluginPlayerLocationChangeEvent {
+  player: any;
+  previous: any;
+  location: any;
+}
+
 export interface PluginPlayerLoginEvent {
   player: any;
   username: string;
@@ -161,6 +171,12 @@ export interface PluginObjectRouteEvent {
    * tiles of the loc's footprint with a clear line to it, instead of walking right up to it.
    */
   approachRange?: number;
+  /**
+   * Resolve an already-reached ordinary object operation before this turn's movement, so
+   * movement queued by that operation can use the normal movement pass. Default operations
+   * remain post-movement; explicit destinations and approach-range operations keep precedence.
+   */
+  operateBeforeMovement?: boolean;
 }
 
 export interface PluginWalkRouteEvent {
@@ -1040,6 +1056,7 @@ export interface PluginApi {
   /** Fires per map square crossed, not per tile: content spread over the map (patches, bird
    * houses) syncs here instead of checking every player every tick. */
   onPlayerMapSquareChange(handler: (event: PluginPlayerMapSquareChangeEvent) => void): void;
+  onPlayerLocationChange(handler: (event: PluginPlayerLocationChangeEvent) => void): void;
   onPlayerDisconnect(handler: (event: PluginPlayerDisconnectEvent) => void): void;
   onPlayerLogout(handler: (event: PluginPlayerLogoutEvent) => void): void;
   onSocialPacket(handler: (event: PluginSocialPacketEvent) => void): void;

@@ -210,3 +210,48 @@ test('shop importer preserves formula currencies and consumes explicit fixed-cur
   result = run(); assert.notEqual(result.status, 0); assert.match(result.stderr, /Conflicting exported prices/);
   assert.equal(fs.readFileSync(output, 'utf8'), first, 'ambiguous input cannot partially replace the output');
 });
+
+test('recorded display titles preserve source-key shop ids and survive repeated imports', (t) => {
+  const os = require('node:os');
+  const { spawnSync } = require('node:child_process');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shop-title-import-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const scripts = path.join(root, 'server/scripts');
+  const definitions = path.join(root, 'server/data/definitions');
+  const docs = path.join(root, 'docs');
+  for (const dir of [scripts, definitions, docs]) fs.mkdirSync(dir, { recursive: true });
+  const importer = path.join(scripts, 'import-osrs-shops.mjs');
+  fs.copyFileSync(path.join(__dirname, '../scripts/import-osrs-shops.mjs'), importer);
+  const output = path.join(definitions, 'shops.json');
+  const old = [
+    { id: 1026, name: 'Auburn Pub' },
+    { id: 1415, name: 'The Pandemonium (pub)' },
+    { id: 7, name: 'Legacy', currency: 'COINS', originalStock: [] },
+  ];
+  fs.writeFileSync(output, JSON.stringify(old));
+  const record = display_name => ({ display_name, shop_info: { currency: 'coins' }, owners: [], items: [] });
+  const input = { 'Auburn Pub': record('The Auburn Pub'), 'The Pandemonium (pub)': record('The Pandemonium') };
+  const inputFile = path.join(docs, 'shops-items-by-shop.json');
+  const write = () => fs.writeFileSync(inputFile, JSON.stringify(input));
+  const run = (...args) => spawnSync(process.execPath, [importer, '--docs', docs, ...args], { encoding: 'utf8' });
+  write();
+  let result = run(); assert.equal(result.status, 0, result.stderr);
+  const first = fs.readFileSync(output, 'utf8');
+  const imported = JSON.parse(first);
+  assert.deepEqual(imported.map(shop => [shop.id, shop.name]), [[7, 'Legacy'], [1026, 'The Auburn Pub'], [1415, 'The Pandemonium']]);
+  assert.deepEqual(imported[0], old[2], 'unrelated legacy rows survive');
+  result = run(); assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readFileSync(output, 'utf8'), first, 'a second import reuses the same ids and drops no rows');
+  result = run('--check'); assert.equal(result.status, 0, result.stderr);
+  input['The Pandemonium (pub)'].display_name = 'The Auburn Pub'; write();
+  result = run(); assert.notEqual(result.status, 0); assert.match(result.stderr, /Ambiguous shop identity/);
+  assert.equal(fs.readFileSync(output, 'utf8'), first, 'ambiguous titles cannot replace output');
+  input['The Pandemonium (pub)'].display_name = 'Auburn Pub'; write();
+  result = run(); assert.notEqual(result.status, 0); assert.match(result.stderr, /Ambiguous shop identity/);
+  assert.equal(fs.readFileSync(output, 'utf8'), first);
+  input['The Pandemonium (pub)'].display_name = 'The Pandemonium'; write();
+  fs.writeFileSync(output, JSON.stringify([...JSON.parse(first), old[0]]));
+  const ambiguous = fs.readFileSync(output, 'utf8');
+  result = run(); assert.notEqual(result.status, 0); assert.match(result.stderr, /Ambiguous existing shop/);
+  assert.equal(fs.readFileSync(output, 'utf8'), ambiguous);
+});

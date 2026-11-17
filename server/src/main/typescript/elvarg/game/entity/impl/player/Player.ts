@@ -13,6 +13,8 @@ import { WeaponInterfaceManager } from "../../../content/combat/WeaponInterfaceM
 import { WeaponProfiles } from "../../../content/combat/WeaponProfile";
 import { PendingHit } from "../../../content/combat/hit/PendingHit";
 import { Autocasting } from "../../../content/combat/magic/Autocasting";
+import { ArceuusSpells } from "../../../content/combat/magic/ArceuusSpells";
+import { LunarSpells } from "../../../content/combat/magic/LunarSpells";
 import { SkillManager } from "../../../content/skill/SkillManager";
 import { ItemDefinition } from "../../../definition/ItemDefinition";
 import type { Item } from "../../../model/Item";
@@ -241,6 +243,42 @@ export class Player extends Mobile {
     public weapon: WeaponInterfaces = WeaponInterfaces.UNARMED;
     private autoRetaliate = true;
     private audioSettings: Record<number, number> = { ...DEFAULT_AUDIO_SETTINGS };
+    /** Traversal for this exact ordinary movement, shared by every observer in the cycle. */
+    private temporaryMovementType?: {
+        type: 1 | 2; cycle: number; location: Location; x: number; y: number; z: number;
+        walk: number; run: number; teleportSerial: number; privateArea: object | null;
+    };
+
+    public setTemporaryMovementType(type: 1 | 2 | undefined): void {
+        if (type === undefined) { this.temporaryMovementType = undefined; return; }
+        if (type !== 1 && type !== 2) throw new RangeError("Invalid temporary movement type");
+        const location = this.getLocation();
+        this.temporaryMovementType = {
+            type, cycle: World.getProcessCycle(), location,
+            x: location.getX(), y: location.getY(), z: location.getZ(),
+            walk: this.getWalkingDirection().getId(), run: this.getRunningDirection().getId(),
+            teleportSerial: this.getTeleportSerial(), privateArea: this.getPrivateArea(),
+        };
+    }
+
+    public getTemporaryMovementType(): 1 | 2 | undefined {
+        const movement = this.temporaryMovementType, location = this.getLocation();
+        if (!movement || movement.cycle !== World.getProcessCycle()
+            || movement.location !== location || movement.x !== location.getX()
+            || movement.y !== location.getY() || movement.z !== location.getZ()
+            || movement.walk !== this.getWalkingDirection().getId()
+            || movement.run !== this.getRunningDirection().getId()
+            || movement.teleportSerial !== this.getTeleportSerial()
+            || movement.privateArea !== this.getPrivateArea()
+            || (movement.walk < 0 && movement.run < 0)
+            || this.isNeedsPlacement() || this.getForceMovement() != null) return undefined;
+        return movement.type;
+    }
+
+    public resetUpdating(): void {
+        super.resetUpdating();
+        this.temporaryMovementType = undefined;
+    }
 
     // Rights
     public rights = PlayerRights.NONE;
@@ -290,6 +328,8 @@ export class Player extends Mobile {
         WeaponInterfaceManager.assign(this);
         BonusManager.update(this);
         PrayerHandler.deactivatePrayers(this);
+        ArceuusSpells.clearStatuses(this);
+        LunarSpells.clearStatuses(this);
         this.getEquipment().refreshItems();
         this.getInventory().refreshItems();
         // Every level back to where it rests: the base, raised by a plugin's permanent boost
@@ -776,8 +816,12 @@ export class Player extends Mobile {
         this.getRelations().updateLists(false);
         CombatPoisonEffect.suspend(this);
         TaskManager.cancelTasks(this);
+        // Logout hooks may fast-forward an obstacle and create a final movement receipt.
+        this.temporaryMovementType = undefined;
         this.setHasVengeance(false);
         this.getVengeanceTimer().stop();
+        ArceuusSpells.clearStatuses(this);
+        LunarSpells.clearStatuses(this);
         if (this.getAttribute?.(ATTR_SKIP_PERSISTENCE) !== true) {
             GameConstants.PLAYER_PERSISTENCE.cancelRequestedSave(this);
             GameConstants.PLAYER_PERSISTENCE.save(this, "logout");
@@ -819,6 +863,7 @@ export class Player extends Mobile {
             Autocasting.setAutocast(this, autocastSpell);
         }
         CombatPoisonEffect.resume(this);
+        ArceuusSpells.syncDeathCharge(this);
         for (const [varpId, value] of Object.entries(this.audioSettings)) {
             const id = Number(varpId);
             // The music settings share varp 19 with bits the server owns.

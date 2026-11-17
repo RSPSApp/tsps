@@ -136,7 +136,8 @@ test("as captured: a door speaks with its floor's door NPC as the head, door_cha
   const calls = [];
   const sender = new Proxy({}, { get: (_t, method) => (...args) => { calls.push([method, ...args]); return sender; } });
   new DoorChatDialogue(0, 2495, "Rickety Door", "Correct!").send({ getPacketSender: () => sender });
-  assert.deepEqual(calls.slice(0, 4), [
+  assert.deepEqual(calls.slice(0, 5), [
+    ["sendTypedMessage", 114, "Rickety Door|Correct!"],
     ["sendChatboxInterface", 231],
     ["sendNpcHeadOnInterface", 2495, (231 << 16) | 2],
     ["sendInterfaceAnimation", (231 << 16) | 2, 4281],

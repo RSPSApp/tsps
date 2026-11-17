@@ -79,6 +79,35 @@ test("room for it all takes the prize", (t) => {
   assert.equal(p.getInventory().getAmount(I.COINS), 5000);
 });
 
+test("a native chest take displays the captured coin objectbox and Continue closes it", async t => {
+  const f = gamesActor(t), scene = gamesHouse(f);
+  const chest = scene.house.furnitureEntries().find(entry => entry.furniture.buildableKey === "OAK_PRIZE_CHEST").furniture;
+  const object = scene.house.furnitureObjects.find(candidate => {
+    const at = candidate.getLocation();
+    return scene.house.getFurnitureAt({ x: at.getX(), y: at.getY(), z: at.getZ() }, candidate.getId(), candidate.getType()) === chest;
+  });
+  const at = object.getLocation();
+  f.p.moveTo(new core.Location(at.getX() - 1, at.getY(), at.getZ()));
+  f.p.setNeedsPlacement(false);
+  const key = require("../plugins/skills/construction/Ids.Construction").obj("poh_prize_key");
+  f.p.getInventory().adds(key, 1);
+  await f.connection.dispatch([{ type: "object_option", id: object.getId(), x: at.getX(), y: at.getY(), clickType: 1 }]);
+  f.connection.processTurnPackets();
+  for (let n = 0; n < 6 && scene.house.save.prize > 0; n++) {
+    f.p.getMovementQueue().process(); core.TaskManager.processWalkTo(f.p.getIndex()); gameTicks(1);
+  }
+  assert.equal(scene.house.save.prize, 0);
+  assert.equal(f.p.getInventory().getAmount(I.COINS), 1000);
+  assert.equal(f.p.getInventory().getAmount(key), 0);
+  const dialogue = f.p.getDialogueManager().getCurrent();
+  assert.ok(dialogue instanceof core.ItemStatementDialogue);
+  assert.equal(dialogue.getItemId(), core.CacheDefinitions.getObjId("coins_100"));
+  assert.equal(dialogue.getText(), "You take the prize.");
+  await f.connection.dispatch([{ type: "dialogue_continue", widgetId: (193 << 16) | 0, childIndex: 0 }]);
+  f.connection.processTurnPackets();
+  assert.equal(f.p.getDialogueManager().getCurrent(), undefined);
+});
+
 // Registered games-room entry and real house/menu/task lifecycle. The house and equipment are
 // seeded; these cases do not claim acquisition or client-rendered overlay behavior.
 const { ClientConnection } = require("../dist/net/NetworkBuilder");

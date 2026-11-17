@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, DialogueChainBuilder, Inventory, Item, ItemIdentifiers, StatementDialogue } = require("./Core.Construction");
+const { api, DialogueChainBuilder, Inventory, Item, ItemIdentifiers, ItemStatementDialogue, StatementDialogue } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 
@@ -11,6 +11,7 @@ const House = require("./House.Construction");
 // the chest. The owner fills the chest with coins, up to the Wiki's maximum per chest; that coins
 // are the prize, and how they go in, is this server's reading of "Prize amount".
 const COINS = ItemIdentifiers.COINS;
+const PRIZE_MODEL = Ids.obj("coins_100");
 const PRIZE_KEY = Ids.obj("poh_prize_key");
 const KEY_SOUND = 933;
 const CHEST_LIMITS = { OAK_PRIZE_CHEST: 20000, TEAK_PRIZE_CHEST: 50000, MAHOGANY_PRIZE_CHEST: 100000 };
@@ -80,7 +81,9 @@ function open(event) {
   offeredTo.delete(house);
   player.getInventory().adds(COINS, prize);
   House.saveHouse(house);
-  player.sendMessage(`You take ${prize.toLocaleString("en-US")} coins from the chest.`);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new ItemStatementDialogue(0, PRIZE_MODEL, "You take the prize.")
+  ));
   return true;
 }
 

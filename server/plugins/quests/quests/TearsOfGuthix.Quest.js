@@ -466,6 +466,14 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     swingAtRock(player, pickaxe);
   }
 
+  /** An inventory action or an attack replaces the swing, as it does any mining. */
+  function interruptSwing({ player }) {
+    const key = swings.get(player);
+    if (!key) return;
+    swings.delete(player);
+    TaskManager.cancelTasks(key);
+  }
+
   /** The swing and the stone, timed as recorded (MINE_SWING_DELAY_TICKS); moving off stops it. */
   function swingAtRock(player, pickaxe) {
     const previous = swings.get(player);
@@ -575,7 +583,8 @@ module.exports = function registerTearsOfGuthixQuest(api) {
           const at = carrier.getLocation();
           const dx = Math.sign(start.getX() - at.getX());
           const dy = Math.sign(start.getY() - at.getY());
-          if (dx || dy) carrier.moveTo(new Location(at.getX() + dx, at.getY() + dy, at.getZ()));
+          // Live sends each tile as an in-place teleport (1001964 ticks 19493-19497), which telejump keeps in view.
+          if (dx || dy) carrier.telejump(new Location(at.getX() + dx, at.getY() + dy, at.getZ()));
           if (carrier.getLocation().getX() === start.getX() && carrier.getLocation().getY() === start.getY()) arrivedTick = tick;
           if (tick > LIGHT_CREATURE_APPROACH_LIMIT) {
             this.stop();
@@ -665,7 +674,7 @@ module.exports = function registerTearsOfGuthixQuest(api) {
           expected = next;
           player.setForceMovement(new ForceMovement(at, new Location(step[0] - at.getX(), step[1] - at.getY()), 0,
             TICK_CYCLES, FACE_SOUTH, 0));
-          if (carrier) carrier.moveTo(new Location(step[0] - 1, step[1] - 1, z));
+          if (carrier) carrier.telejump(new Location(step[0] - 1, step[1] - 1, z));
         } else if (tick > TOG_CARRY_FIRST_STEP_TICK) {
           player.setForceMovement(null);
         }
@@ -689,17 +698,20 @@ module.exports = function registerTearsOfGuthixQuest(api) {
 
   /**
    * Back to the plain creature, which drifts again (Chasm.TearsOfGuthix.js). After a landing it
-   * first hops two tiles north-east and heads north (1001964: 3223,9503 to 3225,9505, then north).
+   * first hops two tiles north-east, still the carrying creature, and is the plain one heading
+   * north the tick after (1001964 ticks 19528 and 19529: 3223,9503 to 3225,9505, then north).
    */
   function releaseCreature(creature, landed) {
-    creature.setNpcTransformationId(-1);
-    if (landed) {
-      const at = creature.getLocation();
-      creature.moveTo(new Location(at.getX() + LIGHT_CREATURE_RELEASE_HOP, at.getY() + LIGHT_CREATURE_RELEASE_HOP, at.getZ()));
-      Chasm.setHeading(creature, 0, 1);
-    }
-    creature.setScriptedMovement(false);
-    carriers.delete(creature);
+    const free = () => {
+      creature.setNpcTransformationId(-1);
+      creature.setScriptedMovement(false);
+      carriers.delete(creature);
+    };
+    if (!landed) return free();
+    const at = creature.getLocation();
+    creature.telejump(new Location(at.getX() + LIGHT_CREATURE_RELEASE_HOP, at.getY() + LIGHT_CREATURE_RELEASE_HOP, at.getZ()));
+    Chasm.setHeading(creature, 0, 1);
+    TaskManager.submit(new api.core.CountdownTask(creature, 1, free));
   }
 
   /** The cache's only light-creature option is Attract; it does what the lantern use does. */
@@ -889,6 +901,8 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   api.onCustomEvent("npc-dialogue:line", handleJunaLine);
   api.onObjectInteraction(JUNA_LOC_NAME, { "Talk-to": talkToJuna });
   api.onObjectInteraction("Magical rocks", { Mine: mineMagicStone });
+  api.onCustomEvent("player:interaction-cleared", interruptSwing);
+  api.persistAttribute(Juna.INTRO_ATTRIBUTE, false);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
 };

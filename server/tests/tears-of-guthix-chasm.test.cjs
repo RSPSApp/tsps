@@ -184,14 +184,28 @@ test("the attracted light creature comes to the player and carries them across, 
   const npc = new NPC(LIGHT_CREATURE, new core.Location(3228, 9522, 2));
   const at = () => [npc.getLocation().getX(), npc.getLocation().getY()];
   const me = () => [p.getLocation().getX(), p.getLocation().getY()];
+  const { World } = require("../dist/game/World");
+  // A plain moveTo drops an NPC from every client's view for the tick; live sends in-place teleports.
+  // Checks the tick, then ends it as the world's sync does (resetUpdating, placement done).
+  const inView = () => {
+    const visible = !npc.isNeedsPlacement() || World.staysInViewWhenPlaced(npc);
+    npc.resetUpdating();
+    npc.setNeedsPlacement(false);
+    return visible;
+  };
 
   assert.equal(PM.emitNpcInteraction(npcEvent(p, npc)), true);
   assert.equal(npc.isScriptedMovement(), true, "it stops drifting to come over");
   const approach = [];
-  for (let i = 0; i < 5; i++) { tickTasks(1); approach.push(at().join(",")); }
+  for (let i = 0; i < 5; i++) {
+    tickTasks(1);
+    approach.push(at().join(","));
+    assert.ok(inView(), `the creature stays in view on approach step ${i + 1}`);
+  }
   assert.deepEqual(approach, ["3229,9523", "3230,9524", "3231,9525", "3231,9526", "3231,9527"],
     "diagonally until in line, then straight onto the player's tile (1001964)");
   tickTasks(1);
+  inView();
   assert.notEqual(p.getAnimation()?.getId(), 2046, "no float the tick after it arrives");
   tickTasks(1);
   assert.equal(p.getAnimation().getId(), 2046, "the float two ticks after it arrives");
@@ -200,9 +214,14 @@ test("the attracted light creature comes to the player and carries them across, 
   assert.equal(npc.getAnimation().getId(), 2052, "light_creature_grow");
   assert.equal(npc.getNpcTransformationId(), 13429, "tog_light_creature_transition");
   assert.deepEqual(sounds, [1799], "light_creature_up");
+  assert.ok(inView(), "the telejump keeps it in view");
   tickTasks(1);
   assert.equal(npc.getNpcTransformationId(), 5784, "tog_light_creature_carrying");
-  tickTasks(2);
+  inView();
+  tickTasks(1);
+  inView();
+  tickTasks(1);
+  inView();
   assert.deepEqual(me(), [3231, 9527], "no step before the fourth tick");
   const path = [];
   const under = [];
@@ -210,6 +229,7 @@ test("the attracted light creature comes to the player and carries them across, 
     tickTasks(1);
     path.push(me().join(","));
     under.push(at().join(","));
+    assert.ok(inView(), `the creature stays in view under the player on step ${i + 1}`);
   }
   assert.deepEqual(path.slice(0, 4), ["3231,9526", "3231,9525", "3231,9524", "3231,9523"], "four tiles straight south first");
   assert.deepEqual(path.slice(4, 11), ["3230,9522", "3229,9521", "3228,9520", "3227,9519", "3226,9518", "3225,9517", "3224,9516"], "then the diagonal leg");
@@ -217,6 +237,7 @@ test("the attracted light creature comes to the player and carries them across, 
   assert.deepEqual(under, path.map((tile) => tile.split(",").map(Number)).map(([x, y]) => `${x - 1},${y - 1}`),
     "the creature a tile south-west of the player all the way");
   tickTasks(1);
+  inView();
   assert.notEqual(p.getAnimation()?.getId(), 2047);
   tickTasks(1); // the float lasts the 23 steps + 5 = 28 ticks
   assert.equal(p.getAnimation().getId(), 2047);
@@ -224,10 +245,14 @@ test("the attracted light creature comes to the player and carries them across, 
   assert.deepEqual(sounds, [1799, 1792], "light_creature_down");
   assert.equal(npc.getNpcTransformationId(), 5784);
   assert.equal(p.getMovementQueue().isMovementBlocked(), true);
+  inView();
   tickTasks(1);
   assert.equal(p.getMovementQueue().isMovementBlocked(), false, "free to move the tick after");
-  assert.equal(npc.getNpcTransformationId(), -1, "the plain creature again");
   assert.deepEqual(at(), [3225, 9505], "it hops two tiles north-east");
+  assert.ok(inView());
+  assert.equal(npc.getNpcTransformationId(), 5784, "still carrying on the hop (19528)");
+  tickTasks(1);
+  assert.equal(npc.getNpcTransformationId(), -1, "the plain creature the tick after (19529)");
   assert.equal(npc.isScriptedMovement(), false, "and drifts again");
 });
 

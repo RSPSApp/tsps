@@ -63,7 +63,9 @@ let junaNpcId;
 const sender = (player) => player.getPacketSender();
 const isJuna = (event) => event.npcId === junaNpcId;
 const stories = (player) => Number(player.getAttribute(STORIES_ATTRIBUTE)) || 0;
-const introHeard = (player) => player.getAttribute(INTRO_ATTRIBUTE) === true;
+/** A save from before the flag existed that has started the quest has met her too. */
+const introHeard = (player) => player.getAttribute(INTRO_ATTRIBUTE) === true ||
+  require("../../quests/QuestRuntime").getRegisteredQuests().some((quest) => quest.key === "tears_of_guthix" && quest.isStarted(player));
 const storiesVarbit = (player) => Math.max(stories(player), introHeard(player) ? 1 : 0);
 
 function questDone(player) {
@@ -241,6 +243,7 @@ module.exports = function registerJuna(pluginApi) {
   api.onCustomEvent("tears-of-guthix:journal", journal);
 };
 
+module.exports.INTRO_ATTRIBUTE = INTRO_ATTRIBUTE;
 module.exports.introHeard = introHeard;
 module.exports.markIntroHeard = markIntroHeard;
 module.exports._test = { eligibility, answerCondition, verdictSteps, setApi: (value) => { api = value; junaNpcId = value.core.NpcIdentifiers.JUNA; } };

@@ -41,8 +41,18 @@ const VARROCK_MANHOLE = { x: 3237, y: 3458, z: 0 };
 const VARROCK_SEWER_LADDER = { x: 3237, y: 9858, z: 0 };
 
 const INTRO = "There's a large selection of books, the majority of which look fairly<br>old. Some very strange names... You pick one at random :";
-// The Wiki lists all eight titles; the recording differs on one capitalisation (see docs).
-const BOOKS = [
+// The Wiki gives different spellings for the ground-floor library and Traiborn's room.
+const LIBRARY_BOOKS = [
+  "101 Ways to Impress Your Mates with Magic",
+  "The Dark Arts of Magical Wands",
+  "Fire, Earth and Water ~ What's it all About?",
+  "How to become the Ultimate Wizard of the Universe",
+  "The Life & Times of a Thingummywut by Traiborn the Wizard",
+  "Life With a Wizard Husband ~ a Housewife's Story",
+  "So You Think You're a Mage? Volume 28",
+  "Wind Strike for Beginners",
+];
+const TRAIBORN_BOOKS = [
   "101 Ways to Impress your Mates with Magic",
   "The Dark Arts of Magical Wands",
   "Fire, Earth and Water - What's it all about?",
@@ -60,7 +70,8 @@ function searchBooks(event) {
       !location || location.x < 3100 || location.x > 3119 || location.y < 3150 || location.y > 3169 ||
       (location.z !== 0 && location.z !== 1)) return false;
   const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
-  const title = BOOKS[Math.floor(Math.random() * BOOKS.length)];
+  const books = location.z === 0 ? LIBRARY_BOOKS : TRAIBORN_BOOKS;
+  const title = books[Math.floor(Math.random() * books.length)];
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new StatementDialogue(0, INTRO),
     new StatementDialogue(1, `'${title}'`),

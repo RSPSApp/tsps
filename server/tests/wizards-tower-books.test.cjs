@@ -28,27 +28,38 @@ function player(t) {
   return { p, sent };
 }
 
-test('library Search offers the complete three-page dialogue and every Wiki title', (t) => {
-  const titles = new Set();
+const floorTitles = [
+  [
+    '101 Ways to Impress Your Mates with Magic', 'The Dark Arts of Magical Wands',
+    "Fire, Earth and Water ~ What's it all About?", 'How to become the Ultimate Wizard of the Universe',
+    'The Life & Times of a Thingummywut by Traiborn the Wizard', "Life With a Wizard Husband ~ a Housewife's Story",
+    "So You Think You're a Mage? Volume 28", 'Wind Strike for Beginners',
+  ],
+  [
+    '101 Ways to Impress your Mates with Magic', 'The Dark Arts of Magical Wands',
+    "Fire, Earth and Water - What's it all about?", 'How to become the Ultimate Wizard of the Universe',
+    'The Life & Times of a Thingummywut by Traiborn the Wizard', "Living with a Wizard Husband - A housewife's Story",
+    "So you think you're a Mage? Volume 28", 'Wind Strike for Beginners',
+  ],
+];
+
+for (const [floor, expected] of floorTitles.entries()) test(`floor ${floor} Search offers all Wiki titles in a three-page dialogue`, (t) => {
   for (let i = 0; i < 8; i++) {
     t.mock.method(Math, 'random', () => (i + 0.5) / 8);
     const { p, sent } = player(t);
-    const event = { player: p, objectId: core.CacheDefinitions.getLocId('fai_wiztower_bookcase'), location: { x: 3113, y: 3160, z: i % 2 } };
+    const location = floor === 0 ? { x: 3113, y: 3160, z: 0 } : { x: 3110, y: 3163, z: 1 };
+    const event = { player: p, objectId: core.CacheDefinitions.getLocId('fai_wiztower_bookcase'), location };
     assert.equal(search(event), true);
     const dm = p.getDialogueManager();
     assert.match(dm.getCurrent().getText(), /^There's a large selection of books/);
     dm.advance();
-    const title = dm.getCurrent().getText();
-    assert.match(title, /^'.+'$/);
-    titles.add(title);
+    assert.equal(dm.getCurrent().getText(), `'${expected[i]}'`);
     dm.advance();
     assert.equal(dm.getCurrent().getText(), 'Interesting...');
     dm.advance();
     assert.ok(sent.some(([name]) => name === 'sendInterfaceRemoval'));
     t.mock.restoreAll();
   }
-  assert.equal(titles.size, 8);
-  assert.ok(titles.has("'Living with a Wizard Husband - A housewife's Story'"));
 });
 
 test('other bookcases and the basement remain unhandled', (t) => {

@@ -228,7 +228,15 @@ export class InputManager {
      * press is held back until it either moves past RIGHT_DRAG_THRESHOLD, which turns the camera
      * like a middle drag, or is released, which then plays the press as the usual right-click.
      */
-    rightDragCamera: boolean = false;
+    get rightDragCamera(): boolean {
+        return this._rightDragCamera;
+    }
+    set rightDragCamera(enabled: boolean) {
+        this._rightDragCamera = enabled;
+        // Turned off mid-press: the held-back press and any drag end here, not on a later move.
+        if (!enabled) this.cancelRightGesture();
+    }
+    private _rightDragCamera = false;
     /** A held-back right press: where it went down and the event for the mouse handlers. */
     private pendingRightPress?: { x: number; y: number; event: MouseEvent };
     /** The current camera drag is the right button's, not the middle's. */
@@ -438,6 +446,7 @@ export class InputManager {
         this.element.removeEventListener("touchcancel", this.onTouchCancel);
         this.element.removeEventListener("contextmenu", this.onContextMenu);
         this.element.removeEventListener("focusout", this.onFocusOut);
+        this.cancelRightGesture();
         this.removeDocumentGrab();
         this.touchAdapter.destroy();
 
@@ -902,7 +911,8 @@ export class InputManager {
         this._dragStartY = -1;
         this.mouseX = x;
         this.mouseY = y;
-        this.removeDocumentGrab();
+        // The right button is still held: keep catching its release outside the canvas.
+        if (!this.isRightCameraDrag()) this.removeDocumentGrab();
     };
 
     /**
@@ -921,10 +931,34 @@ export class InputManager {
         for (const handler of this.mouseHandlers) handler.onMouseDown?.(press.event);
     }
 
+    /**
+     * Ends the right-button gesture without a click: the window lost focus, the input was torn
+     * down, the option was turned off, or the button turned out to be up (a missed release).
+     */
+    private cancelRightGesture(): void {
+        if (this.rightCameraDragging) this.mouseWheelDown = false;
+        this.pendingRightPress = undefined;
+        this.rightCameraDragging = false;
+        if (this.clickMode2 === ClickMode.NONE && !this.mouseWheelDown) this.removeDocumentGrab();
+    }
+
+    /**
+     * A move with the right button up while its gesture is still on means its release never
+     * reached us: end the gesture so hovering doesn't turn the camera.
+     */
+    private checkRightButtonHeld(event: MouseEvent): void {
+        if (!this.isRightCameraDrag() || typeof event.buttons !== "number") return;
+        if ((event.buttons & 2) === 0) this.cancelRightGesture();
+    }
+
     /** A held-back right press moved far enough: it turns the camera instead of clicking. */
     private startRightCameraDrag(x: number, y: number): boolean {
         const press = this.pendingRightPress;
         if (!press) return false;
+        if (!this._rightDragCamera) {
+            this.cancelRightGesture();
+            return false;
+        }
         if (Math.hypot(x - press.x, y - press.y) < InputManager.RIGHT_DRAG_THRESHOLD) return false;
         this.pendingRightPress = undefined;
         this.rightCameraDragging = true;
@@ -967,6 +1001,7 @@ export class InputManager {
             this.deltaMouseY -= event.movementY;
         }
 
+        this.checkRightButtonHeld(event);
         this.startRightCameraDrag(x, y);
         // Update camera drag position while middle-dragging (OSRS: mouseDragged) - Fixed
         if (this.mouseWheelDown) {
@@ -1029,11 +1064,14 @@ export class InputManager {
         this.lastInputTimeMs = this.nowMs();
         this.mouseX = x;
         this.mouseY = y;
+        this.checkRightButtonHeld(event);
     };
 
     /** Document-level mouseup — catches releases that occur outside the canvas. */
     private onDocGrabUp = (event: MouseEvent) => {
-        this.removeDocumentGrab();
+        // Another button lifting mid right-drag: keep the grab for the right button's release.
+        const keepRightDrag = this.isRightCameraDrag() && event.button !== 2;
+        if (!keepRightDrag) this.removeDocumentGrab();
         if (!this.element) return;
         // If released inside our element, the element's own onMouseUp handles it.
         if (this.element.contains(event.target as Node)) return;
@@ -1044,7 +1082,7 @@ export class InputManager {
         this.lastInputTimeMs = this.nowMs();
         if (event.button === 2) this.releaseRightButton();
         this.clickMode2 = ClickMode.NONE;
-        this.mouseWheelDown = false;
+        if (!(keepRightDrag && this.rightCameraDragging)) this.mouseWheelDown = false;
         this._dragStartX = -1;
         this._dragStartY = -1;
         this.mouseX = x;
@@ -1389,6 +1427,7 @@ export class InputManager {
     };
 
     resetMouse() {
+        this.cancelRightGesture();
         this.mouseX = -1;
         this.mouseY = -1;
         this.clickMode2 = ClickMode.NONE;

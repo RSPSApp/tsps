@@ -2060,7 +2060,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
 - **Spells and item teleports**, each from its own content's event:
   - Moonclan Teleport: `spell:teleport-arrival`, which LunarSpells already sends for its teleports.
   - Spellbook Swap: `cast` on LunarSpell's new `magic:lunar-cast` { player, name }. It is sent for every
-    paid Lunar spell except the teleports, which have their arrival.
+    Lunar spell cast through `LunarSpell.cast`, except the teleports, which have their arrival. Spells that
+    pay per item (Bake Pie, String Jewellery, Plank Make) don't send it.
   - Fertile Soil: Farming's `farming:spell-fertilized` { spell: "fertile soil" }.
   - Degrime "26 herbs at the same time": ArceuusUtilities' new `magic:degrimed` { player, herbs }, with a
     `deed` `atLeast { herbs: 26 }`.

@@ -206,6 +206,9 @@ function onChoice(choice) {
   if (!urchinIds().has(id)) return;
   if (option === "Yes." || option === "Yes, don't ask me again.") {
     if (!gladiator(player)) player.getInventory().delete(itemId("valuable"), Math.min(DATA.info.cost, holding(player, "valuable")));
+    // `house-robbery:informed` { player, npcId }: an urchin paid (or a Gladiator told) for the house (a league's
+    // "Pay an Urchin for Information").
+    pluginApi.emitCustomEvent("house-robbery:informed", { player, npcId: id });
     const state = houseState();
     if (state.house && state.status !== "vacant") tellHouse(player, state.house);
     return;

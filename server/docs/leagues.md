@@ -2040,6 +2040,21 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
   Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
   and the barrel.
+- **Varlamore and Kourend deeds**, from their content's events:
+  - Fortis Colosseum waves: Run's new `colosseum:wave-completed` { player, wave }, with `atLeast` wave 1
+    and wave 12.
+  - Mixology's Reagent pouch and Chugging barrel: Omnishop's `omnishop:purchase`, by item.
+  - Stealing Valuables:
+    - valuables taken: HouseRobbery's new `house-robbery:stole` { player, amount }, counted with a deed's
+      new `sum` field (a shiny object is 14);
+    - house keys: `pickpocket-loot` of the wealthy citizen's "House keys";
+    - an urchin paid: HouseRobberyCrew's new `house-robbery:informed`.
+  - The Arceuus Library's books: `arceuus-library:book-handed-in`.
+  - The Chambers of Xeric completions: credited kills of the CoX plugin's "Chambers of Xeric" and "CM:
+    Chambers of Xeric".
+  - Doom of Mokhaiotl at delve level 8 or deeper: the new `doom:delve-defeated` { player, level }, with
+    `atLeast` level 8.
+  - The Garden of Death: `quest`.
 - **Spells and item teleports**, each from its own content's event:
   - Moonclan Teleport: `spell:teleport-arrival`, which LunarSpells already sends for its teleports.
   - Spellbook Swap: `cast` on LunarSpell's new `magic:lunar-cast` { player, name }. It is sent for every

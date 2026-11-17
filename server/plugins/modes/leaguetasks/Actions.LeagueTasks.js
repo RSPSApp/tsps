@@ -836,7 +836,10 @@ function didDeed(name, event) {
     // `atLeast`: the event's fields at least those values ("26 herbs at the same time").
     && Object.entries(task.trigger.atLeast ?? {}).every(([field, value]) => Number(event[field]) >= Number(value))
     && Object.entries(task.trigger.where ?? {}).every(([field, value]) => (Array.isArray(value) ? value : [value]).some((each) => String(event[field]).toLowerCase() === String(each).toLowerCase())));
-  countTasks(player, type, tasks);
+  // `sum`: the event's field adds that much ("Steal 25 Valuables": a shiny object is 14), else one per event.
+  const summed = tasks.filter((task) => task.trigger.sum);
+  countTasks(player, type, tasks.filter((task) => !task.trigger.sum));
+  for (const task of summed) countTasks(player, type, [task], Math.max(0, Number(event[task.trigger.sum]) || 0));
 }
 
 /**

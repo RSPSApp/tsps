@@ -1008,7 +1008,12 @@ test("the trigger overlay's NPC and item names are the cache's (a misspelt name 
   for (const [type, entries] of Object.entries(overlay)) {
     if (type === "$comment") continue;
     for (const [id, trigger] of Object.entries(entries)) {
-      if (["hunt", "pickpocket", "kill", "npc-op"].includes(trigger.kind)) for (const npc of trigger.npcs ?? []) assert.ok(npcs.has(npc.toLowerCase()), `${type}/${id}: NPC ${npc}`);
+      // A credited kill names the Combat Achievements monster its plugin credits ("CM: Chambers of Xeric"), no NPC.
+      if (["hunt", "pickpocket", "kill", "npc-op"].includes(trigger.kind) && !trigger.credited) for (const npc of trigger.npcs ?? []) assert.ok(npcs.has(npc.toLowerCase()), `${type}/${id}: NPC ${npc}`);
+      if (trigger.credited) {
+        const monsters = new Set([...CacheDefinitions.getEnumValues(3970)].map(([, name]) => String(name).toLowerCase()));
+        for (const npc of trigger.npcs ?? []) assert.ok(monsters.has(npc.toLowerCase()), `${type}/${id}: CA monster ${npc}`);
+      }
       if (["produce", "eat", "deed", "steal", "obtain", "equip"].includes(trigger.kind)) for (const each of trigger.items ?? []) if (typeof each === "string") assert.ok(items.has(each.toLowerCase()), `${type}/${id}: item ${each}`);
       for (const each of (Array.isArray(trigger.wearing) ? trigger.wearing : trigger.wearing?.items) ?? []) assert.ok(items.has(String(each).toLowerCase()), `${type}/${id}: worn ${each}`);
     }

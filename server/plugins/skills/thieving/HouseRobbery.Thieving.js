@@ -524,6 +524,8 @@ function sendLifetime(player, total) {
 
 function steal(player, visit, count, xp, line = true) {
   player.getInventory().adds(itemId("valuable"), count);
+  // `house-robbery:stole` { player, amount }: valuables taken from a house (a league's "Steal 25 Valuables").
+  pluginApi.emitCustomEvent("house-robbery:stole", { player, amount: count });
   visit.stolen += count;
   if (line) {
     player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, DATA.messages.found);

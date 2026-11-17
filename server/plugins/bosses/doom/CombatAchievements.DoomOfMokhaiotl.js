@@ -21,6 +21,8 @@ function defeated(run, ticks) {
   const api = Shared.api();
   const complete = (task) => api.emitCustomEvent("combat-achievements:complete", { player, task });
   api.emitCustomEvent("combat-achievements:kill", { player, monster: "Doom of Mokhaiotl", count: totalDelves(player) });
+  // `doom:delve-defeated` { player, level }: the delve won (a league's "Defeat the Doom ... at delve level 8").
+  api.emitCustomEvent("doom:delve-defeated", { player, level });
   for (const [task, depth] of DEPTH) if (level >= depth) complete(task);
   if (level === 1 && ticks * 0.6 < FIRST_DELVE_SECONDS) complete("Doom Crawler");
   if (level === 8 && run.startedAt === 1) {

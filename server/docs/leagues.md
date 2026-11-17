@@ -2030,8 +2030,10 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   { player, itemId }, 1098 tick 16024), "Turn any Logs Into a Plank" on the sawmill choice
   (`sawmill:planks-made` { player, npcId, itemId, amount }, 1103 tick 485), "Chop Some Logs" on the
   log (1098 tick 11083), "Pet a Caique" on the peck (`caique:pecked` { player, npc }, 1098 tick
-  27022) and "Pet Xolo in Civitas" on the Pet (`npc-op`, in Varlamore: every Xolo stands in or by
-  the city; 1098 tick 14824). Leagues 4 and 5 share the first four of these tasks and take the
+  27022) and "Pet Xolo in Civitas" on the Pet (`npc-op`, in Varlamore, area 21: the catalog names no
+  Civitas place, so the Xolo of Aldarin, 1354,2951, counts too; 1098 tick 14824). The four Varlamore
+  emote tasks also count only in Varlamore (area 21), as their region says: a "Child" stands in many
+  towns. Leagues 4 and 5 share the first four of these tasks and take the
   same triggers. Five more are the content's own `deed` events (docs/varlamore-small-interactions.md):
   "Milk a Buffalo" (`dairy-buffalo:milked`), "Drink from a bird bath" (`bird-bath:drank`), "Admire
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a

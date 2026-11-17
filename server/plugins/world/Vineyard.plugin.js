@@ -23,6 +23,9 @@
  *   new vines (`vineyard:barrel-handed-in` { player }, the league's "Fill a Grape Barrel for the
  *   Foreman", on that line's tick).
  *
+ * A barrel handed out after a batch was picked from comes with a fresh batch (ours: a barrel lost
+ * part-full would otherwise be unfillable), and grapes that don't fit a full pack land at the player's feet (ours).
+ *
  * Ours, no source: which vines can ripen (live numbers its ripe vines in 6-bit varbits 11343-11346,
  * aldarin_grapes_position_1..4, by a list the cache does not carry, so this server takes any Pick
  * grapevine of the three vineyards and sends no such varbit); a partly filled barrel's Check line;
@@ -104,7 +107,11 @@ function giveBarrel(event) {
   if (hasBarrel(player) || !hasSpace(player)) return;
   player.getInventory().adds(core.ItemIdentifiers.GRAPE_BARREL, 1);
   player.setAttribute(BARREL_RECEIVED_ATTRIBUTE, true);
-  player.setAttribute(GRAPES_ATTRIBUTE, 0); // a new barrel is an empty one
+  // A new barrel is an empty one. A batch already picked from (a barrel lost part-full) is renewed,
+  // or the new barrel could never be filled: the batch otherwise only renews at a hand-in. An
+  // untouched batch stays, as live keeps the vines ripened on arrival (RSProx 237/1098 tick 16348).
+  player.setAttribute(GRAPES_ATTRIBUTE, 0);
+  if ((ripeOf(player)?.length ?? 0) < SETS) ripen(player);
   // The recorded handout opens OBJECTBOX 193 with the barrel and the message, not a bare chat line.
   event.box = { items: [core.ItemIdentifiers.GRAPE_BARREL] };
 }
@@ -259,7 +266,13 @@ function line(request) {
 function handIn(player) {
   if (!hasBarrel(player) || grapes(player) < SETS) return;
   player.setAttribute(GRAPES_ATTRIBUTE, 0);
-  player.getInventory().adds(core.ItemIdentifiers.GRAPES_2, PAYMENT);
+  const payment = new core.Item(core.ItemIdentifiers.GRAPES_2, PAYMENT);
+  // Ours (no recording with a full pack): what doesn't fit lands at the player's feet, theirs.
+  if (player.getInventory().getAddableAmount(payment) >= PAYMENT) player.getInventory().adds(payment.getId(), PAYMENT);
+  else {
+    core.ItemOnGroundManager.register(new core.ItemOnGround(core.GroundItemState.SEEN_BY_PLAYER, player.getUsername(),
+      player.getLocation().clone(), payment, false, -1, player.getPrivateArea?.() ?? null));
+  }
   ripen(player);
   api.emitCustomEvent("vineyard:barrel-handed-in", { player });
 }

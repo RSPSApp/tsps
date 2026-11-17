@@ -201,3 +201,37 @@ test("four ripe vines of the player's own sparkle (map_anim 3005 at height 50) a
   assert.equal(p.getAttribute(Vineyard.RIPE_ATTRIBUTE).length, 4, "four new ripe vines");
   assert.ok(seen.length >= 5, "the six-line conversation");
 });
+
+test("a barrel lost part-full: the replacement comes with four ripe vines again, so it can still be filled", async () => {
+  const p = player();
+  const connection = new ClientConnection({ kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} });
+  connection.player = p;
+  const messages = messagesOf(p);
+  besideForeman(p);
+  await askForWork(p);
+  const ripe = p.getAttribute(Vineyard.RIPE_ATTRIBUTE);
+  assert.equal(ripe.length, 4);
+  for (let i = 0; i < 2; i++) await pickAt(p, connection, ripe[i]);
+  assert.equal(p.getAttribute(Vineyard.GRAPES_ATTRIBUTE), 2);
+  p.getInventory().deleteNumber(BARREL, 1);
+  besideForeman(p);
+  await askForWork(p);
+  assert.equal(p.getAttribute(Vineyard.GRAPES_ATTRIBUTE), 0, "the new barrel is empty");
+  const fresh = p.getAttribute(Vineyard.RIPE_ATTRIBUTE);
+  assert.equal(fresh.length, 4, "and four vines ripe for it");
+  for (const tile of fresh) await pickAt(p, connection, tile);
+  assert.equal(messages.at(-1), Vineyard.FULL, messages.join(" | "));
+});
+
+test("handing in with a full pack: the 5 noted grapes land at the player's feet, not lost", () => {
+  const p = player(0);
+  p.getInventory().resetItems();
+  p.getInventory().adds(BARREL, 1);
+  p.getInventory().adds(core.ItemIdentifiers.BONES, 27);
+  p.setAttribute(Vineyard.GRAPES_ATTRIBUTE, 4);
+  Vineyard.handIn(p);
+  const floor = core.ItemOnGroundManager.getGroundItem?.(p.getUsername(), core.ItemIdentifiers.GRAPES_2, p.getLocation(), null)
+    ?? [...(core.ItemOnGroundManager.getItems?.() ?? [])].find((drop) => drop.getItem().getId() === core.ItemIdentifiers.GRAPES_2 && drop.getPosition?.().equals(p.getLocation()));
+  assert.ok(floor, "the grapes on the floor");
+  assert.equal(floor.getItem().getAmount(), 5);
+});

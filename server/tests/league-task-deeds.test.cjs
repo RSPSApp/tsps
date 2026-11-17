@@ -2038,6 +2038,14 @@ test("near: an emote by a child, bard or quetzal counts within the recorded dist
   }
 });
 
+test("near, in Varlamore only: a cry beside a child in Yama's Lair is no Varlamore task", async (t) => {
+  const f = pactsCharacter(t, [1503, 5602, 0]);
+  npcAt(t, f, "Child", 1, 0);
+  await emote(f, 16);
+  assert.equal(f.player.getAnimation()?.getId() > 0, true, `cried: ${f.messages}`);
+  assert.ok(!done(f, "cry-near-a-child"), "area 21, as the task's region");
+});
+
 test("near a multinpc: Bow beside Civitas' quetzal, Renu's unnamed spawn 13355, 2 tiles from its footprint (RSProx 237/1098 tick 14440)", async (t) => {
   core.RegionManager.loadMapFiles(1696, 3139);
   const f = pactsCharacter(t, [1696, 3138, 0]);

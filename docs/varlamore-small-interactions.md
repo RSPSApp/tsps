@@ -94,14 +94,17 @@ barrel and Grapevine pages.
 **The barrel**
 - Check: "The grape barrel is empty." / "The grape barrel is full. You should return it to the Vineyard
   foreman.".
-- A new barrel from the foreman starts empty.
+- A new barrel from the foreman starts empty. If the player's batch was already picked from (a barrel lost
+  part-full), a fresh batch of four ripens with it, or the barrel could never be filled (ours). An
+  untouched batch stays, as live keeps the vines ripened on arrival.
+- With no room for the 5 noted grapes at the hand-in, they land at the player's feet (ours, unrecorded).
 
 **Handing it in**
 - The foreman's full-barrel dialogue variant plays when the player carries a full barrel.
 - On his "Great work! Here, keep some grapes as payment." line, the player gets 5 noted grapes, the
   barrel empties and four new vines ripen.
 
-Ours and recorded differences:
+Ours and recorded differences (besides the two above):
 - **Which vines ripen** is ours. Live numbers its ripe vines in the 6-bit varbits 11343-11346
   (`aldarin_grapes_position_1..4`) by an index list the cache doesn't carry. The six indices recorded are
   6 = 1355,2933; 9 = 1364,2933; 10 = 1354,2931; 14 = 1356,2929; 16 = 1358,2913; 21 = 1361,2909. This

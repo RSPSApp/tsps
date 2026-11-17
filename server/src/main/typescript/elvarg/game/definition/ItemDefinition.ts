@@ -67,7 +67,10 @@ export class ItemDefinition {
                 (definition as any)[key] = Array.isArray(value) ? [...value] : value;
             }
         }
-        if (typeof raw.tradeable === "boolean") definition.untradeable = !raw.tradeable;
+        if (typeof raw.tradeable === "boolean") {
+            definition.untradeable = !raw.tradeable;
+            definition.playerTradeable = raw.tradeable;
+        }
         this.definitions.set(id, definition);
         return definition;
     }
@@ -82,6 +85,8 @@ export class ItemDefinition {
     private tradeable: boolean;
     /** The cache's explicit `tradeable=no`: see {@link isPlayerTradeable}. Unknown items count as untradeable. */
     private untradeable: boolean = true;
+    /** Explicit exact-ID Wiki policy, then a world/custom override; null keeps the cache fallback. */
+    private playerTradeable: boolean | null = null;
     private dropable: boolean;
     private sellable: boolean;
     private noted: boolean;
@@ -245,12 +250,12 @@ export class ItemDefinition {
     }
 
     /**
-     * Tradeable between players, as the Wiki's infobox "tradeable" means it: the Grand Exchange flag
+     * Tradeable between players: explicit Wiki policy when loaded, otherwise the Grand Exchange flag
      * ({@link isTradeable}) or neither cache flag. Rings of dueling below (8), burnt meat and the like
      * trade but are not on the Exchange ("exchange: No"), so they have no `tradeable=yes`.
      */
     public isPlayerTradeable(): boolean {
-        return this.tradeable === true || !this.untradeable;
+        return this.playerTradeable ?? (this.tradeable === true || !this.untradeable);
     }
 
     public isSellable(): boolean {

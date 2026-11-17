@@ -258,7 +258,10 @@ function applyItemOverrides(overrides) {
       }
       definition[field] = Array.isArray(value) ? [...value] : value;
       // A world's tradeable override decides player trading too (isPlayerTradeable), not only the Exchange flag.
-      if (field === "tradeable") definition.untradeable = !value;
+      if (field === "tradeable") {
+        definition.untradeable = !value;
+        definition.playerTradeable = value;
+      }
       // The world's price is the one examine and trade values show too, over the official guide price.
       if (field === "grandExchangeValue") definition.guidePrice = value;
     }
@@ -271,6 +274,44 @@ function loadItemOverrides() {
   const filePath = path.resolve(process.cwd(), getGameConstants().DEFINITIONS_DIRECTORY, "item-overrides.json");
   if (!fs.existsSync(filePath)) return { filePath, loaded: 0 };
   return { filePath, loaded: applyItemOverrides(JSON.parse(fs.readFileSync(filePath, "utf8"))) };
+}
+
+/** Exact-ID Wiki policy is separate from the cache's Exchange flag. Missing source stays unknown. */
+function loadItemPlayerTradeability() {
+  const ItemDefinition = getItemDefinition();
+  const filePath = path.resolve(process.cwd(), getGameConstants().DEFINITIONS_DIRECTORY, "item-player-tradeability.json");
+  if (!fs.existsSync(filePath)) return { loaded: 0, inheritedNotes: 0, skipped: 0 };
+  const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  if (data?.schema !== 1 || !Array.isArray(data.rows) || !/^[a-f0-9]{64}$/.test(data.input_sha256 ?? "")) {
+    throw new Error("Invalid item-player-tradeability.json source contract");
+  }
+  const normalize = value => value.normalize("NFKC").replace(/_/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+  const explicit = new Map();
+  let skipped = 0, inheritedNotes = 0;
+  for (const row of data.rows) {
+    if (!Number.isInteger(row?.id) || row.id < 0 || explicit.has(row.id) || typeof row.name !== "string"
+        || typeof row.playerTradeable !== "boolean" || !(row.noteable === null || typeof row.noteable === "boolean")) {
+      throw new Error("Invalid or duplicate item-player-tradeability row");
+    }
+    // A name can survive ID reuse: bank placeholders must never receive a source item's policy.
+    const def = ItemDefinition.forId(row.id);
+    if (def === ItemDefinition.DEFAULT || CacheDefinitions.getItem(row.id).placeholderTemplate !== -1
+        || normalize(def.getName()) !== normalize(row.name)) { skipped++; continue; }
+    explicit.set(row.id, row);
+    def.playerTradeable = row.playerTradeable;
+  }
+  for (const row of explicit.values()) {
+    const def = ItemDefinition.forId(row.id);
+    if (def.isNoted() || row.noteable !== true) continue;
+    const noteId = def.getNoteId();
+    if (noteId < 0 || explicit.has(noteId)) continue;
+    const note = ItemDefinition.forId(noteId);
+    if (note.isNoted() && note.getNoteId() === row.id) {
+      note.playerTradeable = row.playerTradeable;
+      inheritedNotes++;
+    }
+  }
+  return { loaded: explicit.size, inheritedNotes, skipped };
 }
 
 function loadItemDefinitions() {
@@ -337,6 +378,8 @@ function loadItemDefinitions() {
       if (stage === 4) variant.bonuses = new Array(14).fill(0);
     }
   }
+
+  const playerTradeability = loadItemPlayerTradeability();
 
   const customPath = path.resolve(process.cwd(), getGameConstants().DEFINITIONS_DIRECTORY, "custom-items.json");
   let customRows = [];
@@ -412,6 +455,7 @@ function loadItemDefinitions() {
     total: ItemDefinition.definitions.size,
     unresolvedWeaponInterfaces,
     mismatched,
+    playerTradeability,
     prices: loadItemPrices(),
     guidePrices: loadItemGuidePrices(),
     alch: loadItemAlch(),
@@ -466,6 +510,7 @@ module.exports = {
       total: result.total,
       unresolvedWeaponInterfaces: result.unresolvedWeaponInterfaces,
       mismatched: result.mismatched,
+      playerTradeability: result.playerTradeability,
       prices: result.prices.loaded,
       guidePrices: result.guidePrices.loaded,
       alch: result.alch.loaded,

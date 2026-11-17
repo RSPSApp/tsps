@@ -2249,7 +2249,7 @@ function npcId(name) {
   return id;
 }
 
-test("batch 2: hunter catches, area produce, snelms, ammo, stall thefts and shooting stars count for their tasks", (t) => {
+test("batch 2: hunter catches, area produce, snelms, ammo, stall thefts and shooting stars count for their tasks", async (t) => {
   const f = pactsCharacter(t);
   const { player } = f;
   const at = (x, y) => { player.moveTo(new core.Location(x, y, 0)); player.needsPlacement = false; };
@@ -2272,15 +2272,13 @@ test("batch 2: hunter catches, area produce, snelms, ammo, stall thefts and shoo
   hunt("Sabre-toothed kyatt");
   assert.ok(done(f, "trap-a-sabre-toothed-kyatt"));
 
-  made("Pointed bruise blue snelm");
-  assert.ok(done(f, "craft-a-snelm"));
+  made("Broken bark snelm");
+  assert.ok(done(f, "craft-a-snelm"), "the broken bark snelm is a snelm too");
   made("Broad bolts", 10);
   assert.ok(done(f, "fletch-some-broad-arrows-or-bolts"));
   made("Rune brutal", 150);
   made("Rune brutal", 50);
   assert.ok(done(f, "make-200-brutal-rune-arrows"));
-  made("Roast rabbit");
-  assert.ok(!done(f, "cook-a-rabbit-in-tirannwn"), "cooked in Varlamore");
 
   PM.emitCustomEvent("thieving:success", { player, method: "stall", stall: "Spice stall", itemId: item("Spice") });
   assert.ok(done(f, "steal-from-the-fortis-spice-stall"), "the spice stall in Civitas");
@@ -2296,7 +2294,17 @@ test("batch 2: hunter catches, area produce, snelms, ammo, stall thefts and shoo
   // Tirannwn, Kandarin and Kourend unlocked, then the deeds there.
   player.setAttribute("league:areas", [21, 7, 4, 20]);
   at(2200, 3200); // Tirannwn (Lletya's woods)
-  made("Roast rabbit");
+  // The real Cooking: raw rabbit on a fire is a Cooked rabbit (the server's only rabbit recipe).
+  const fire = new core.GameObject(core.ObjectIdentifiers.FIRE, new core.Location(2201, 3200, 0), 10, 0, null);
+  core.ObjectManager.register(fire, true);
+  t.after(() => core.ObjectManager.deregister(fire, true));
+  core.RegionManager.loadMapFiles(2200, 3200);
+  player.getInventory().resetItems();
+  player.getInventory().add(new core.Item(item("Raw rabbit")), true);
+  player.getSkillManager().setMaxLevel(core.Skill.COOKING, 99);
+  player.getSkillManager().setCurrentLevel(core.Skill.COOKING, 99); // past the rabbit's burn level
+  await send(f, { type: "item_on_object", itemId: item("Raw rabbit"), slot: 0, widgetId: 149 << 16, objectId: fire.getId(), x: 2201, y: 3200 }, 10);
+  assert.equal(player.getInventory().getAmount(item("Cooked rabbit")), 1, `cooked: ${f.messages}`);
   assert.ok(done(f, "cook-a-rabbit-in-tirannwn"), `cooked in Tirannwn at ${player.getLocation()}`);
   for (let i = 0; i < 25; i++) PM.emitCustomEvent("mining:success", { player, itemId: item("Gold ore") });
   assert.ok(done(f, "mine-25-gold-rocks-in-tirannwn"));

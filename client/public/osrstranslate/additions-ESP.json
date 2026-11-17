@@ -24,7 +24,13 @@
   },
   {
    "ref": "feat/mouseover-and-combat-labels",
-   "commit": "3a5930aff59bfa9dd57ebdebb4481322e2b76ff1"
+   "commit": "be93c2071d65aec06794db8710e58e41d0860c34"
+  }
+ ],
+ "localSources": [
+  {
+   "path": "scripts/osrs-translate-additions/stash.json",
+   "sha256": "07c1afbb690ef0cd6746bb1ffa7b68a0d3a49d07b285597690b0609af866084f"
   }
  ],
  "files": {
@@ -12038,7 +12044,9 @@
     "You have already unlocked that teleport.": "Ya has desbloqueado ese teletransporte.",
     "Your telegrab fizzles as you move too far away.": "Tu telegrab falla porque te alejaste demasiado.",
     "Too late - it's gone!": "¡Demasiado tarde, ya no está!",
-    "This spell can not be cast on this item.": "Este hechizo no se puede lanzar sobre este objeto."
+    "This spell can not be cast on this item.": "Este hechizo no se puede lanzar sobre este objeto.",
+    "You do not have enough free space to withdraw your items from the STASH unit; you need at least 1 free slots.": "No tienes suficiente espacio libre para retirar tus objetos de la unidad STASH; necesitas al menos 1 espacio libre.",
+    "You do not have enough free space to withdraw your items from the STASH unit; you need at least [number] free slots.": "No tienes suficiente espacio libre para retirar tus objetos de la unidad STASH; necesitas al menos [number] espacios libres."
    },
    "fix": {
     "Nothing interesting happens.": [

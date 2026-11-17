@@ -1,6 +1,6 @@
 // Builds client/public/osrstranslate/additions-<language>.json: the OSRS Translate entries tsps
-// adds before the author's dictionaries have them. They are our own contributions, open as pull
-// requests on walterrezende12-tech/osrs-translate-translations; the plugin uses an addition only
+// adds before the author's dictionaries have them. Historical source refs and project-owned
+// inputs in scripts/osrs-translate-additions/*.json provide the entries. The plugin uses an addition only
 // while the author's dictionary has no entry for it, and a fix only while his entry still holds
 // the text the fix replaces, so both retire themselves once he merges and republishes.
 //
@@ -13,6 +13,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { addLocalEntries, loadLocalSources } from "./osrs-translate-local-sources.mjs";
 
 const LANGUAGES = ["pt-BR", "ESP"];
 const FILES = [
@@ -43,6 +44,7 @@ const read = (ref, path) => {
 };
 
 const outDir = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "osrstranslate");
+const localSources = loadLocalSources(join(dirname(fileURLToPath(import.meta.url)), "osrs-translate-additions"), LANGUAGES, FILES);
 mkdirSync(outDir, { recursive: true });
 
 for (const language of LANGUAGES) {
@@ -66,6 +68,7 @@ for (const language of LANGUAGES) {
                 }
             }
         }
+        addLocalEntries(localSources, language, file, original, add);
         const entry = {};
         if (Object.keys(add).length) entry.add = add;
         if (Object.keys(fix).length) entry.fix = fix;
@@ -77,6 +80,7 @@ for (const language of LANGUAGES) {
         about: "tsps's additions to the OSRS Translate dictionaries; see client/game/plugins/osrstranslate/README.md",
         base: git("rev-parse", base).trim(),
         pullRequests: refs.map((ref) => ({ ref, commit: git("rev-parse", ref).trim() })),
+        ...(localSources.length ? { localSources: localSources.map(({ name, sha256 }) => ({ path: `scripts/osrs-translate-additions/${name}`, sha256 })) } : {}),
         files,
     };
     const path = join(outDir, `additions-${language}.json`);

@@ -277,6 +277,13 @@ module.exports = function registerDragonSlayerII(api) {
   // (3659,3849) is inside its footprint. Varbit6104 changes it from Build to Travel.
   const ROWBOAT_OBJECT_TILE = { x: 3658, y: 3848, z: 0 };
   const ROWBOAT_SPACE_TILE = { x: 3659, y: 3849, z: 0 };
+  // After the quest the rowboat stays usable: it lands at Lithkren's rowboat (32079), which
+  // returns to this side. The two landing tiles are the Shortest Path table's.
+  const LITHKREN_ROWBOAT_TILE = { x: 3582, y: 3971, z: 0 };
+  const LITHKREN_ROWBOAT_LANDING = new Location(3583, 3973, 0);
+  const FOSSIL_ROWBOAT_LANDING = new Location(3660, 3849, 0);
+  const ROWBOAT_TO_LITHKREN_MESSAGE = "You row across to Lithkren and step ashore near the ancient fortress.";
+  const ROWBOAT_TO_FOSSIL_ISLAND_MESSAGE = "You row back to Fossil Island.";
   // QuestHelper's surface route continues at the courtyard stairs on Lithkren.
   const LITHKREN_LANDING = new Location(3559, 4004, 0);
   // The ancient doors lead into the Deep Lithkren vault, on the north edge of the
@@ -857,11 +864,27 @@ module.exports = function registerDragonSlayerII(api) {
   }
   function buildLithkrenRowboat({ player: p, objectId, location, definition }) {
     const visibleObjectId = definition?.id ?? objectId;
+    const travelOption = visibleObjectId === O.ROWBOAT_14 || definition?.getInteractions?.()?.[0] === "Travel";
+    // Lithkren's own rowboat: back to Fossil Island once the boat exists (or the quest is done).
+    if (objectId === O.ROWBOAT_13 || visibleObjectId === O.ROWBOAT_13) {
+      if (location.x !== LITHKREN_ROWBOAT_TILE.x || location.y !== LITHKREN_ROWBOAT_TILE.y || location.z !== 0) return false;
+      if (stage(p) < S.TO_LITHKREN || (!p.getAttribute(ATTR_ROWBOAT_BUILT) && stage(p) < S.COMPLETE)) return false;
+      p.moveTo(FOSSIL_ROWBOAT_LANDING);
+      p.sendMessage(ROWBOAT_TO_FOSSIL_ISLAND_MESSAGE);
+      return true;
+    }
     if (![29916, O.ROWBOAT_SPACE, O.ROWBOAT_14].includes(objectId)
       && ![O.ROWBOAT_SPACE, O.ROWBOAT_14].includes(visibleObjectId)) return false;
     if (location.x !== ROWBOAT_OBJECT_TILE.x || location.y !== ROWBOAT_OBJECT_TILE.y || location.z !== 0
-      || stage(p) < S.TO_LITHKREN || stage(p) >= S.COMPLETE) return false;
-    if (visibleObjectId === O.ROWBOAT_14 || definition?.getInteractions?.()?.[0] === "Travel") {
+      || stage(p) < S.TO_LITHKREN) return false;
+    // After the quest the built rowboat still crosses to Lithkren's shore.
+    if (stage(p) >= S.COMPLETE) {
+      if (!travelOption) return false;
+      p.moveTo(LITHKREN_ROWBOAT_LANDING);
+      p.sendMessage(ROWBOAT_TO_LITHKREN_MESSAGE);
+      return true;
+    }
+    if (travelOption) {
       return travelRowboat({ player: p, objectId: visibleObjectId, location });
     }
     if (p.getAttribute(ATTR_ROWBOAT_BUILT)) {
@@ -888,12 +911,12 @@ module.exports = function registerDragonSlayerII(api) {
     return true;
   }
   function travelRowboat({ player: p, objectId, location }) {
-    if (![O.ROWBOAT_14, O.ROWBOAT_SPACE].includes(objectId)
+    if (![29916, O.ROWBOAT_14, O.ROWBOAT_SPACE].includes(objectId)
       || location.x !== ROWBOAT_OBJECT_TILE.x || location.y !== ROWBOAT_OBJECT_TILE.y || location.z !== 0
       || !p.getAttribute(ATTR_ROWBOAT_BUILT) || stage(p) < S.TO_LITHKREN || stage(p) >= S.COMPLETE) return false;
     p.moveTo(LITHKREN_LANDING);
     p.setAttribute(ATTR_LITHKREN_ARRIVED, true);
-    p.sendMessage("You row across to Lithkren and step ashore near the ancient fortress.");
+    p.sendMessage(ROWBOAT_TO_LITHKREN_MESSAGE);
     return true;
   }
   function onLithkrenDialogueAction({ player: p, stepId }) {
@@ -2305,8 +2328,8 @@ module.exports = function registerDragonSlayerII(api) {
     const option = definition?.getInteractions?.()?.[clickType - 1];
     if (takeAssaultSupply({ player: p, objectId })) return true;
     if (repairAssaultShip({ player: p, objectId, location })) return true;
-    if ([29916, O.ROWBOAT_SPACE, O.ROWBOAT_14].includes(objectId)
-      || [O.ROWBOAT_SPACE, O.ROWBOAT_14].includes(definition?.id)) {
+    if ([29916, O.ROWBOAT_SPACE, O.ROWBOAT_14, O.ROWBOAT_13].includes(objectId)
+      || [O.ROWBOAT_SPACE, O.ROWBOAT_14, O.ROWBOAT_13].includes(definition?.id)) {
       return buildLithkrenRowboat({ player: p, objectId, location, definition });
     }
     if (handleUngaelLab({ player: p, objectId, location })) return true;

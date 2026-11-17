@@ -21,6 +21,7 @@ import { TaskManager } from "../../task/TaskManager";
 import { Stopwatch } from "../../../util/Stopwatch";
 import { TimerRepository } from "../../../util/timers/TimerRepository";
 import { Misc } from "../../../util/Misc";
+import type { Area } from "../../model/areas/Area";
 import type { Boundary } from "../../model/Boundary";
 
 const getPlayerCtor = lazyRequire(() =>
@@ -152,6 +153,14 @@ export abstract class Mobile extends Entity {
     public abstract onRemove(): void;
 
     public abstract manipulateHit(hit: PendingHit): PendingHit;
+
+    public override setArea(area: Area): void {
+        const previousPrivateArea = this.getPrivateArea();
+        super.setArea(area);
+        if (this.isPlayer() && this.isRegistered() && previousPrivateArea !== this.getPrivateArea()) {
+            getWorld().onPlayerAreaChanged(this.getAsPlayer(), previousPrivateArea);
+        }
+    }
 
     public override setLocation(location: Location): Mobile {
         const previousLocation = this.getLocation();

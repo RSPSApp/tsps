@@ -415,7 +415,10 @@ function finishTheft(event, stall) {
   const { item: reward, message } = rollStall(stall);
   const request = { player, itemId: reward.getId(), amount: reward.getAmount(), stored: 0 };
   pluginApi.emitCustomEvent("storage:gather", request);
-  if (reward.getAmount() > request.stored) player.getInventory().addItem(new core.Item(reward.getId(), reward.getAmount() - request.stored));
+  const inventory = player.getInventory();
+  const remaining = new core.Item(reward.getId(), Math.max(0, reward.getAmount() - request.stored));
+  const amount = inventory.getAddableAmount(remaining);
+  if (remaining.getAmount() > 0) inventory.addItem(remaining);
   // Live: the tracker entry follows the inventory update, before the XP (1001550 tick 3905).
   const lootCategory = LOOT_TRACKED_STALLS.get(core.CacheDefinitions.getLocNames().get(object.getId()));
   if (lootCategory !== undefined) {
@@ -425,7 +428,7 @@ function finishTheft(event, stall) {
   spam(player, message ?? stealLine(reward));
   if (stall.marksMerchant !== false) rememberTheft(player, stall, theftVarbitKey(object, stall));
   pluginApi.emitCustomEvent("thieving:success", { player, skill: core.Skill.THIEVING, petBase: stall.petBase, method: "stall",
-    stall: event.definition.getName(), itemId: reward.getId(), location: object.getLocation() });
+    stall: event.definition.getName(), itemId: reward.getId(), amount, location: object.getLocation() });
   const ticks = object.getId() === core.ObjectIdentifiers.BAKERY_STALL_2 ? 16 : stall.respawnTicks;
   // Content may keep the stall stocked ("thieving:deplete-stall", a league relic) and ask for another go ("thieving:done").
   const depletion = { player, object, handled: false };

@@ -10,7 +10,6 @@
  * Not here: the tenfold Varlamore house valuables (house thieving is not on the server).
  */
 const Common = require("./Common.LeagueRelics");
-const { plainAmount, takePlain } = require("../../items/PoweredStaff");
 
 let effect;
 
@@ -36,20 +35,36 @@ function keepStall(request) {
   if (active(request.player)) request.handled = true;
 }
 
-/** The stall's item, just handed over, comes noted and ten times over. */
-function stallLoot({ player, method, itemId }) {
-  if (method !== "stall" || !Number.isInteger(itemId) || !active(player) || !Common.multipliable(itemId)) return;
+/** The delivered plain bundle comes noted and ten times over, without consuming older metadata. */
+function stallLoot({ player, method, itemId, amount = 1 }) {
+  if (method !== "stall" || !Number.isInteger(itemId) || !Number.isSafeInteger(amount) || amount <= 0
+      || !active(player) || !Common.multipliable(itemId)) return;
+  const { Item, Inventory } = Common.core;
   const inventory = player.getInventory();
-  // The stolen copy is plain: by id, a preset copy held earlier in the pack would be taken in its place.
-  if (plainAmount(inventory, itemId) <= 0) return;
+  const copies = inventory.getItems().map((item, slot) => ({ item, slot }))
+    .filter(({ item }) => item.getId() === itemId && item.getMeta() == null);
+  if (copies.reduce((sum, { item }) => sum + item.getAmount(), 0) < amount) return;
   const noted = Common.noted(itemId);
-  const amount = effect.lootMultiplier;
+  const output = amount * effect.lootMultiplier;
   if (noted === itemId) {
-    inventory.adds(itemId, amount - 1);
+    if (inventory.getAddableAmount(new Item(itemId, output - amount)) < output - amount) return inventory.full();
+    inventory.adds(itemId, output - amount);
     return;
   }
-  takePlain(inventory, itemId, 1);
-  inventory.adds(noted, amount);
+  // A note may use a slot freed by its inputs. Preview on cloned items never refreshes the real inventory.
+  const preview = new Inventory(player).setItems(inventory.getCopiedItems());
+  let left = amount;
+  const taken = [];
+  for (const { item, slot } of copies) {
+    const count = Math.min(left, item.getAmount());
+    if (count <= 0) break;
+    preview.deleteAtSlot(slot, count, false);
+    taken.push({ slot, count });
+    left -= count;
+  }
+  if (preview.getAddableAmount(new Item(noted, output)) < output) return inventory.full();
+  for (const { slot, count } of taken) inventory.deleteAtSlot(slot, count);
+  inventory.adds(noted, output);
 }
 
 function unseen(watch) {

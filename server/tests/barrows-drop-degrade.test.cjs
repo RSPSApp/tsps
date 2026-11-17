@@ -180,3 +180,46 @@ test('degradation starts on the first swing, a tick later, not when Attack picks
   assert.equal(BarrowsEquipment._test.durability(items[0]), 998);
   assert.equal(Barrows.stageOf(items[0].getId()), 0);
 });
+
+function defender(id) {
+  const items = new Array(14).fill(null).map(() => new Item(-1));
+  items[0] = new Item(id);
+  const p = {
+    isPlayer: () => true,
+    getEquipment: () => ({ getItems: () => items, get: (slot) => items[slot], refreshItems() {} }),
+    getInventory: () => ({ getItems: () => [], refreshItems() {} }),
+    getUpdateFlag: () => ({ flag() {} }),
+    sendMessage() {},
+  };
+  loginHandler({ player: p });
+  return { p, items, defenderTask: task };
+}
+
+test('a swing at a player keeps its record until the hit lands and puts them in combat (PR 6072 review)', () => {
+  const { p, items, defenderTask } = defender(DHAROKS_HELM);
+  const tick = (count = 1) => { for (let i = 0; i < count; i++) { cycle++; defenderTask.execute(); } };
+  const attacker = { isPlayer: () => true };
+  combat = false; // auto-retaliate off: no target, and no attacker until the hit lands
+  emit('combat:attack-started', { attacker, target: p });
+  tick(2); // the defender's task runs before the queued impact
+  assert.equal(BarrowsEquipment._test.durability(items[0]), 1000, 'nothing wears before the hit lands');
+  combat = true; // impact: under attack
+  tick();
+  assert.equal(BarrowsEquipment._test.durability(items[0]), 999, 'the first incoming swing still spends the entry point');
+  combat = false;
+  tick();
+  combat = true; // a new fight with no swing yet: the old, seen record is gone
+  tick(5);
+  assert.equal(BarrowsEquipment._test.durability(items[0]), 999);
+});
+
+test('a swing at a player that never lands expires, so a later approach does not wear the gear', () => {
+  const { items, p, defenderTask } = defender(DHAROKS_HELM);
+  const tick = (count = 1) => { for (let i = 0; i < count; i++) { cycle++; defenderTask.execute(); } };
+  combat = false;
+  emit('combat:attack-started', { attacker: { isPlayer: () => true }, target: p });
+  tick(11); // past the pending window, still never in combat
+  combat = true; // the player picks a target and runs at it
+  tick(5);
+  assert.equal(BarrowsEquipment._test.durability(items[0]), 1000);
+});

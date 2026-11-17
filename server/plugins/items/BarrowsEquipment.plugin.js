@@ -164,8 +164,17 @@ function degradeEquipment(player) {
   return changed;
 }
 
-/** The cycle each player's current fight first swung, by them or at them; cleared when the fight ends. */
+/**
+ * Each player's current fight: `cycle`, when its first swing (theirs or one at them) started, and `seen`, once the
+ * player was in combat after it. Cleared when a seen fight ends.
+ */
 const engagedCycles = new WeakMap();
+/**
+ * How long a swing at a player keeps its record before the player is in combat. The defender only gets an attacker
+ * when the hit lands (CombatFactory sets under-attack on impact), a turn or more after the swing, and their task can
+ * run in between; ranged and magic hits land up to several ticks later. Ours: 10 ticks covers the longest of those.
+ */
+const PENDING_SWING_TICKS = 10;
 
 function processCycle() {
   return Number(pluginApi?.core?.World?.getProcessCycle?.()) || 0;
@@ -178,7 +187,7 @@ function processCycle() {
  */
 function swingStarted({ attacker, target }) {
   for (const entity of [attacker, target]) {
-    if (entity?.isPlayer?.() && !engagedCycles.has(entity)) engagedCycles.set(entity, processCycle());
+    if (entity?.isPlayer?.() && !engagedCycles.has(entity)) engagedCycles.set(entity, { cycle: processCycle(), seen: false });
   }
 }
 
@@ -194,14 +203,17 @@ function startDegradation(player, TaskManager, CombatFactory, tasks) {
         this.stop();
         return;
       }
+      const engaged = engagedCycles.get(player);
       if (!CombatFactory.inCombat(player)) {
-        engagedCycles.delete(player);
+        // A swing at the player whose hit has not landed yet keeps its record (PR 6072 review): only a fight they
+        // were in, or a swing that never connected, ends here.
+        if (engaged?.seen || (engaged && processCycle() - engaged.cycle > PENDING_SWING_TICKS)) engagedCycles.delete(player);
         inCombat = false;
         ticks = 0;
         return;
       }
-      const engaged = engagedCycles.get(player);
-      if (engaged === undefined || processCycle() <= engaged) return;
+      if (engaged === undefined || processCycle() <= engaged.cycle) return;
+      engaged.seen = true;
       if (!inCombat) {
         inCombat = true;
         ticks = TICKS_PER_DEGRADE;

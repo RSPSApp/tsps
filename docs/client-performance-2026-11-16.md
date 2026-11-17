@@ -28,7 +28,9 @@ Follows [client-performance-2026-11-01.md](client-performance-2026-11-01.md) (#1
 ## What changed
 
 - Before-menu overlays take part in partial passes: drawn again in each dirty rect, scissored to
-  it; their rects replace the last pass's instead of being appended.
+  it. Anchored overlays (Status Bars) likewise draw once per dirty rect at their anchor inside
+  the tree (review finding: once per pass lost the second bar when a pass cleared both). Each
+  overlay layer keeps its own rects, rebuilt into `widgetOverlayRects` at the end of every pass.
 - The minimap redraws when a hash of what it shows changes (player, plane, yaw, zoom, flag, player
   and NPC dots, ground-item version), and at least every 200 ms (plugins treat minimap geometry
   older than 500 ms as stale; it also catches tile images finishing loading). On a boat or with

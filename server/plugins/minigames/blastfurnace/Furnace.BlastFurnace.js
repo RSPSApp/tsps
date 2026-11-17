@@ -576,6 +576,8 @@ function take(player, barId, amount) {
   if (count <= 0) return;
   state.bars[barId] -= count;
   player.getInventory().addItem(new core.Item(barId, count));
+  // `blast-furnace:bars-taken` { player, itemId, amount }: bars out of the dispenser ("Smelt 100 Mithril Bars").
+  pluginApi.emitCustomEvent("blast-furnace:bars-taken", { player, itemId: barId, amount: count });
   syncContents(player);
   const name = itemName(barId).toLowerCase();
   // rsprox 1001645 tick 170, 1001957, 1001962: a single bar is "one".

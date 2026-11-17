@@ -224,6 +224,8 @@ function itemOnPyre(event) {
     player.getSkillManager().addExperiences(core.Skill.FIREMAKING, row.firemakingXp);
     use.object = swap(object, PYRE_LIT);
     player.sendMessage("You light the pyre.");
+    // `barbarian-pyre:lit` { player, logsId } (a league's "Light a Barbarian Pyre Ship").
+    api.emitCustomEvent("barbarian-pyre:lit", { player, logsId: use.logsId });
     event.handled = true;
     core.TaskManager.submit(new (class extends core.Task {
       constructor() { super(6); this.floating = false; }

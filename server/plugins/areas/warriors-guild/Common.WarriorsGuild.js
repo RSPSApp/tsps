@@ -223,4 +223,6 @@ module.exports = {
   init, ITEMS, NPCS, LEDGER_ATTRIBUTE, ledger, credit, tokenMultiplier, payOut, baseLevel, later, every, tile, at,
   npcNear, talk, npcSays, playTranscript, crossDoor, spawnFor, despawn, wearing, wearsAttackCape, random, damage,
   get core() { return core; },
+  /** A custom event for content outside the guild (a league's Warriors' Guild tasks). */
+  emit(name, payload) { pluginApi?.emitCustomEvent(name, payload); },
 };

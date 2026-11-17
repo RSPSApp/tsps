@@ -61,7 +61,12 @@ function checkDoorKey(api, event) {
   const door = doorAt(core, event);
   if (!door) return;
   if (door.freeExit && at(event.player.getLocation(), door.inside)) return;
-  if (hasKey(api, event.player, core.ItemIdentifiers[door.key])) return;
+  if (hasKey(api, event.player, core.ItemIdentifiers[door.key])) {
+    // `taverley-dungeon:key-door` { player, key }: a locked door opened with its key (a league's "Unlock a gate
+    // in Taverley Dungeon using the Dusty Key"); key is the identifier, "DUSTY_KEY".
+    api.emitCustomEvent('taverley-dungeon:key-door', { player: event.player, key: door.key });
+    return;
+  }
   event.player.sendMessage('The door is locked.');
   event.handled = true;
 }

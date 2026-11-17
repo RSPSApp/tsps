@@ -122,6 +122,8 @@ function dock(voyage, crew) {
     player.getPacketSender().sendInterfaceRemoval().sendInterfaceScript(MAIN_MODAL_OPEN, NO_MODAL_BACKGROUND);
     player.setAttribute(Shared.AT_SEA_ATTRIBUTE, false);
     player.moveTo(Shared.loc(Shared.DATA.port));
+    // `fishing-trawler:completed` { player }: a trip back in port (a league's "Complete a Fishing Trawler game").
+    Shared.api().emitCustomEvent("fishing-trawler:completed", { player });
     try {
       Rewards.award(player, voyage);
     } catch (error) {

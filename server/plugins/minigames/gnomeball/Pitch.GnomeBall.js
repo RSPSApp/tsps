@@ -326,6 +326,8 @@ function scoreGoal(player, session) {
   player.getSkillManager().addExperiences(core.Skill.RANGED, xp);
   player.getSkillManager().addExperiences(core.Skill.AGILITY, xp);
   api.emitCustomEvent("diary:task", { player, ...DIARY });
+  // `gnomeball:goal` { player }: a goal scored (a league's "Score a Goal in Gnomeball").
+  api.emitCustomEvent("gnomeball:goal", { player });
   if (session.goals >= GOALS_PER_GAME) {
     session.goals = 0;
     session.won = true;
@@ -568,6 +570,7 @@ function attach(pluginApi) {
 
 module.exports = {
   attach,
+  scoreGoal,
   isCarrying,
   isPlaying,
   beginGame,

@@ -77,6 +77,8 @@ function pickUpKeg({ player, objectId }) {
     current.kegs++;
     current.taken.add(objectId);
     balancing.set(player, current);
+    // `warriors-guild:kegs-balanced` { player, kegs }: the kegs now on the head (a league's "Balance 5 barrels").
+    Guild.emit("warriors-guild:kegs-balanced", { player, kegs: current.kegs });
     player.getPacketSender().sendVarbit(KEGS.get(objectId), 1);
     setHead(player, Guild.ITEMS.ONE_BARREL + current.kegs - 1);
     player.setRenderAnimations(BALANCE_ANIMATIONS);

@@ -98,7 +98,7 @@ function setBusy(player, busy) {
 
 function fade(player, out) {
   const args = out ? [0, 255, 0, 0, FADE_CYCLES] : [0, 0, 0, 255, FADE_CYCLES];
-  sender(player).sendSubInterface(OVERLAY_ATMOSPHERE_UID, FADE_OVERLAY, 1, { postScripts: [{ scriptId: FADE_SCRIPT, args }] });
+  return sender(player).mountSubInterface(OVERLAY_ATMOSPHERE_UID, FADE_OVERLAY, 1, { postScripts: [{ scriptId: FADE_SCRIPT, args }] });
 }
 
 function hold(player, held) {
@@ -221,8 +221,11 @@ function fadeTrip(player, trip) {
   const out = sender(player);
   const [minimapOff, minimapOn] = trip.minimap ?? [];
   const [busyOn, busyOff] = trip.busy ?? [];
+  const pending = { land: () => { land(); finish(); } };
+  const isCurrent = () => Common.trips.get(player) === pending;
+  let fadeInMount = null;
   const land = () => {
-    if (!Common.travelling(player)) return;
+    if (!isCurrent()) return;
     player.moveTo(Common.toLocation(trip.to));
     if (trip.face) player.setPositionToFace(Common.toLocation([...trip.face, trip.to[2] ?? 0]));
     Common.arrived(player, trip.routeName);
@@ -237,9 +240,9 @@ function fadeTrip(player, trip) {
   if (trip.message?.at === 0) message(player, trip.message.text, trip.message.spam);
   fade(player, true);
   if (box) out.withChatboxOwner(box, () => Common.core.StatementDialogue.send(player, trip.messageBox, false));
-  Common.begin(player, { land: () => { land(); finish(); } });
+  Common.begin(player, pending);
   const finish = () => {
-    if (!Common.travelling(player)) return;
+    if (!isCurrent()) return;
     Common.end(player);
     hold(player, false);
     if (box) out.closeChatboxFor(box);
@@ -249,18 +252,24 @@ function fadeTrip(player, trip) {
   const steps = {
     [trip.teleport]: land,
     [trip.fadeIn]: () => {
+      if (!isCurrent()) return;
       if (minimapOn === trip.fadeIn) setMinimap(player, false);
-      fade(player, false);
+      fadeInMount = fade(player, false);
       finish();
     },
-    [trip.close]: () => out.closeSubInterface(OVERLAY_ATMOSPHERE_UID),
+    [trip.close]: () => {
+      // A back-to-back trip can mount its own fade before this delayed close fires. Only
+      // close the mount this trip created; closeSubInterfaceMount refuses another trip's.
+      if (fadeInMount) out.closeSubInterfaceMount(fadeInMount);
+      else out.closeSubInterface(OVERLAY_ATMOSPHERE_UID);
+    },
   };
   const messageAt = trip.message?.at;
   if (messageAt > 0 && messageAt !== trip.teleport) {
     const previous = steps[messageAt];
     steps[messageAt] = () => {
       previous?.();
-      if (Common.travelling(player)) message(player, trip.message.text, trip.message.spam);
+      if (isCurrent()) message(player, trip.message.text, trip.message.spam);
     };
   }
   if (minimapOff != null) {

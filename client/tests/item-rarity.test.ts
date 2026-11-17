@@ -39,7 +39,8 @@ const integratedMenuOverlay = {
 const widgetsOverlay = new WidgetsOverlay({} as any, {
     getGameContext: () => ({ osrsClient: { clientPlugins: { widgetOverlays: () => [integratedMenuOverlay] } } }),
     } as any) as any;
-widgetsOverlay.glRenderer = { width: 100, height: 100, flush() {} };
+widgetsOverlay.glRenderer = { width: 100, height: 100, flush() {}, canvas: {} };
+widgetsOverlay.app = { gl: { canvas: { clientWidth: 100, clientHeight: 100, getBoundingClientRect: () => ({ width: 100, height: 100 }) } } };
 widgetsOverlay.widgetOverlayRects = [];
 widgetsOverlay.currentBeforeMenuOverlays = [integratedMenuOverlay];
 const rootHook = (label: string) => () => overlayIntegrationOrder.push(label);
@@ -48,7 +49,7 @@ const lastRootHook = widgetsOverlay.drawAboveWidgetsForEntry({ renderOpts: { dra
 firstRootHook();
 lastRootHook();
 drawBeforeContextMenu(undefined, () => overlayIntegrationOrder.push("context menu"));
-widgetsOverlay.commitBeforeMenuOverlayRects();
+widgetsOverlay.commitWidgetOverlayRects();
 assert.deepEqual(overlayIntegrationOrder, ["first root hook", "last root hook", "rarity", "context menu"], "WidgetsOverlay preserves each root hook and draws rarity once before the final menu");
 assert.deepEqual(widgetsOverlay.widgetOverlayRects, [{ x: 4, y: 5, w: 7, h: 8 }], "WidgetsOverlay retains rarity bounds for dirty-region redraws");
 assert.equal(itemRarity(99, thresholds), undefined);

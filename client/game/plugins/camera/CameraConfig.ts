@@ -96,6 +96,14 @@ export const CameraConfig = ConfigGroup(
             section: "mouseSettings",
             default: false,
         }),
+        rightClickMovesCamera: ConfigItem({
+            name: "Right click moves camera",
+            description:
+                "Hold the right mouse button and move the mouse to turn the camera. A quick right-click still opens the menu.",
+            position: 14,
+            section: "mouseSettings",
+            default: false,
+        }),
         easing: ConfigItem({
             name: "Camera easing",
             description: "Eases the camera into and out of turns instead of starting and stopping at once.",

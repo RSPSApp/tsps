@@ -198,6 +198,13 @@ async function main(): Promise<void> {
     set("cameraSpeed", 1);
     set("invertYaw", false);
 
+    // Right click moves camera (#6067): off by default, handed to the input manager.
+    assert.equal(client.inputManager.rightDragCamera, false, "off by default");
+    set("rightClickMovesCamera", true);
+    assert.equal(client.inputManager.rightDragCamera, true);
+    set("rightClickMovesCamera", false);
+    assert.equal(client.inputManager.rightDragCamera, false);
+
     // Easing: eases into a turn and out of it, and drops it when something else turns the camera.
     set("easing", true);
     set("easeFrom", EaseFrom.KEYS);

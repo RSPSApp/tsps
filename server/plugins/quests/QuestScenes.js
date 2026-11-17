@@ -281,9 +281,13 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
     return scenes.get(player) ?? null;
   }
 
-  function actor(scene, id, [x, y, z = 0], faceTile) {
+  /**
+   * An NPC only the owner sees, standing still unless `wanderRadius` lets it walk about its tile; `direction` is
+   * a spawn facing (a Direction id) for an actor with no tile to face.
+   */
+  function actor(scene, id, [x, y, z = 0], faceTile, { wanderRadius = 0, direction } = {}) {
     const at = tileFor(scene, [x, y, z]);
-    const npc = api.spawnNpc({ id, x: at.getX(), y: at.getY(), z, owner: scene.owner, ownerOnly: true, wanderRadius: 0 });
+    const npc = api.spawnNpc({ id, x: at.getX(), y: at.getY(), z, owner: scene.owner, ownerOnly: true, wanderRadius, face: direction });
     if (!npc) return null;
     npc.__skipDefaultRespawn = true;
     npc.__questSceneOwner = scene.owner;

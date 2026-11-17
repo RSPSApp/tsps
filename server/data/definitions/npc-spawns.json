@@ -4553,6 +4553,7 @@
   {"level":0,"name":"General Khazard","x":2600,"y":3153,"id":1200,"direction":6,"wanderRadius":0},
   {"level":0,"name":"Justin Servil","x":2602,"y":3153,"id":1212,"direction":6,"wanderRadius":0},
   {"level":0,"name":"Sammy Servil","x":2603,"y":3153,"id":12033,"direction":6,"wanderRadius":0},
+  {"level":0,"name":"Khazard Guard","x":2606,"y":3154,"id":1198,"direction":5,"wanderRadius":0},
   {"level":0,"name":"Khazard Guard","x":2606,"y":3171,"id":1211},
   {"level":0,"name":"Khazard Guard","x":2607,"y":3183,"id":1211},
   {"level":0,"name":"Khazard Guard","x":2607,"y":3185,"id":1211},

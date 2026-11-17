@@ -104,8 +104,8 @@
  *
  * Any counted trigger may add `wearing { items }` (one of them worn as the deed happens) and
  * `near { npcs?, objects?, options?, distance }` (an NPC or loc of one of the names, or a loc with
- * one of the options, that close, to its
- * footprint): "Cook something with an apron", "Cry near a child".
+ * one of the options, that close to its footprint): "Cook something with an apron", "Cry near a
+ * child".
  *
  * A trigger with an `area` counts only deeds done there (`league:area-at`, the player's tile), one
  * with a `place` only inside that place's bounds.
@@ -245,8 +245,7 @@ function isNear(player, { npcs, objects, options, distance }) {
   if (npcs?.length) {
     const names = new Set(npcs.map(key));
     for (const npc of Common.core.World.getNpcsNear(at, reach + LARGEST_SIDE, area)) {
-      const name = npc.getCurrentDefinition?.()?.getName?.() ?? npcName(npc.getId());
-      if (!names.has(key(name)) || npc.getLocation().getZ() !== at.getZ()) continue;
+      if (!npcNamesOf(npc, player).some((name) => names.has(key(name))) || npc.getLocation().getZ() !== at.getZ()) continue;
       if (npcFootprintDistance(npc, at) <= reach) return true;
     }
   }
@@ -266,6 +265,19 @@ function isNear(player, { npcs, objects, options, distance }) {
     }
   }
   return false;
+}
+
+/**
+ * The names an NPC goes by for this player: the form it shows them (a multinpc resolved by their
+ * vars), its own, and, for a multinpc parent with no name, its forms' (Civitas' quetzal is spawn
+ * 13355, unnamed, whose forms include Renu; RSProx 237/1098 tick 14440 shows it as Renu's form).
+ */
+function npcNamesOf(npc, player) {
+  const names = [npc.getCurrentDefinition?.(player)?.getName?.(), npcName(npc.getId())];
+  for (const child of Common.core.CacheDefinitions.getNpc(npc.getId())?.transforms ?? []) {
+    if (Number.isInteger(child) && child >= 0) names.push(npcName(child));
+  }
+  return names.filter((name) => name && name !== "null");
 }
 
 function npcFootprintDistance(npc, at) {

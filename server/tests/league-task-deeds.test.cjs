@@ -14,6 +14,7 @@ const { GameConstants } = require("../dist/game/GameConstants");
 
 let core;
 let next = 1700;
+const BirdBath = require("../plugins/objects/BirdBath.plugin.js")._test;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -2021,8 +2022,6 @@ test("near: an emote by a child, bard or quetzal counts within the recorded dist
     { id: "cry-near-a-child", slot: 16, npc: "Child", near: 2, far: 3 },
     // Dance: none 3 tiles from the bards (tick 25550), completed 1 tile away (25555).
     { id: "dance-near-a-bard", slot: 12, npc: "Bard", near: 1, far: 3 },
-    // Bow: completed 6 tiles west of Civitas' quetzal (size 3; tick 14440).
-    { id: "bow-near-a-quetzal", slot: 2, npc: "Quetzal", near: 6, far: 7 },
   ];
   for (const each of cases) {
     const npc = npcAt(t, f, each.npc, each.far, 0);
@@ -2037,6 +2036,20 @@ test("near: an emote by a child, bard or quetzal counts within the recorded dist
     assert.ok(done(f, each.id), `${each.id}: ${each.near} tiles`);
     core.World.getNpcs().remove(npc);
   }
+});
+
+test("near a multinpc: Bow beside Civitas' quetzal, Renu's unnamed spawn 13355, 2 tiles from its footprint (RSProx 237/1098 tick 14440)", async (t) => {
+  core.RegionManager.loadMapFiles(1696, 3139);
+  const f = pactsCharacter(t, [1696, 3138, 0]);
+  const renu = core.NPC.create(13355, new core.Location(1696, 3141, 0));
+  core.World.getNpcs().add(renu);
+  t.after(() => core.World.getNpcs().remove(renu));
+  await emote(f, 2);
+  assert.ok(!done(f, "bow-near-a-quetzal"), "3 tiles off");
+  f.player.moveTo(new core.Location(1696, 3139, 0)); // the recorded tile
+  f.player.needsPlacement = false;
+  await emote(f, 2);
+  assert.ok(done(f, "bow-near-a-quetzal"), `bowed 2 tiles from it: ${f.messages}`);
 });
 
 test("near a loc: Salute next to Civitas' statue of Quoatlos, 3 tiles from its footprint as recorded (RSProx 237/1098 tick 15055)", async (t) => {
@@ -2138,4 +2151,70 @@ test("deed and npc-op: a sitting caique pecks on the fourth tick (Pet a Caique);
   const xolo = npcBeside(t, f, "Xolo", "pet");
   await send(f, { type: "npc_option", index: xolo.npc.getIndex(), clickType: xolo.clickType }, 3);
   assert.ok(done(f, "pet-xolo-in-civitas"), `the real StrayDogs pets it: ${f.messages}`);
+});
+
+test("deeds: a buffalo milked, a bird bath drunk from, scenery admired, stew given to Oli, a full barrel handed in (the Varlamore tasks of issue 6108)", async (t) => {
+  const f = pactsCharacter(t);
+  const go = (x, y) => { f.player.moveTo(new core.Location(x, y, 0)); f.player.needsPlacement = false; core.RegionManager.loadMapFiles(x, y); };
+  const objectAt = (x, y, name) => core.MapObjects.getObjectsAt(new core.Location(x, y, 0), null).find((object) => object.getDefinition()?.getName() === name);
+
+  // Milk a Buffalo: a Dairy Buffalo, two ticks after the arrival (RSProx 237/1098 tick 14560).
+  go(1587, 3118);
+  const dairy = new core.GameObject(52576, new core.Location(1588, 3118, 0), 10, 0, null);
+  core.ObjectManager.register(dairy, true);
+  t.after(() => core.ObjectManager.deregister(dairy, true));
+  f.player.getInventory().add(new core.Item(item("Bucket")), true);
+  await send(f, { type: "object_option", id: 52576, x: 1588, y: 3118, action: "Milk" }, 1);
+  assert.ok(!done(f, "milk-a-buffalo"), "not before the milking");
+  await ticks(f, 6);
+  assert.equal(f.player.getInventory().getAmount(item("Bucket of milk")), 1, `milked: ${f.messages} ${f.player.getLocation()}`);
+  assert.ok(done(f, "milk-a-buffalo"));
+
+  // Drink from a bird bath: Yes, then the outcome two ticks on (1098 tick 14897).
+  go(1556, 3170);
+  const bath = objectAt(1555, 3170, "Bird bath");
+  assert.ok(bath, "the bird bath west of Civitas");
+  f.player.getPacketSender().sendInterfaceRemoval();
+  BirdBath.drinkFrom({ player: f.player, object: bath });
+  const menu = f.player.getDialogueManager().getCurrent();
+  assert.equal(menu?.constructor?.name, "OptionDialogue", "Drink from the bird bath? Yes. / No.");
+  menu.execute(1);
+  assert.ok(!done(f, "drink-from-a-bird-bath"), "not on the Yes");
+  t.mock.method(Math, "random", () => 0.99); // the poison outcome, as recorded
+  for (let i = 0; i < 3; i++) core.TaskManager.process();
+  t.mock.restoreAll();
+  assert.ok(done(f, "drink-from-a-bird-bath"), `drank: ${f.messages}`);
+  assert.ok(f.messages.includes("You have been poisoned!"), f.messages.join(" | "));
+  assert.equal(f.player.getDialogueManager().getCurrent()?.getText?.() ?? f.player.getDialogueManager().getCurrent()?.text, "Eugh! I don't feel too good...");
+
+  // Admire some beautiful scenery: the Auburn Valley's beautiful rock at 1438,3330 (1098 tick 16910).
+  f.player.getPacketSender().sendInterfaceRemoval();
+  f.player.getDialogueManager().reset();
+  go(1437, 3331);
+  const rock = objectAt(1438, 3330, "Beautiful rock");
+  assert.ok(rock, "the beautiful rock");
+  await send(f, { type: "object_option", id: rock.getId(), x: 1438, y: 3330, action: "Admire" }, 6);
+  assert.ok(done(f, "admire-some-beautiful-scenery"), `admired: ${f.messages}`);
+
+  // Give Oli some Stew: on the arrival, with the item box (1098 tick 15383).
+  go(1653, 3103);
+  const oli = core.NPC.create(13318, new core.Location(1654, 3103, 0));
+  core.World.getNpcs().add(oli);
+  t.after(() => core.World.getNpcs().remove(oli));
+  f.player.getInventory().resetItems();
+  f.player.getInventory().setItem(0, new core.Item(item("Stew"), 1));
+  await send(f, { type: "item_on_npc", targetIndex: oli.getIndex(), itemId: item("Stew"), slot: 0, widgetId: 149 << 16 }, 4);
+  assert.equal(f.player.getInventory().getAmount(item("Stew")), 0, `Oli eats it: ${f.messages}`);
+  assert.ok(done(f, "give-oli-some-stew"));
+
+  // Fill a Grape Barrel for the Foreman: on the payment (1098 tick 16598; the whole flow is in
+  // vineyard-foreman-barrel.test.cjs).
+  const Vineyard = require("../plugins/world/Vineyard.plugin.js")._test;
+  f.player.getInventory().add(new core.Item(item("Grape barrel")), true);
+  f.player.setAttribute(Vineyard.GRAPES_ATTRIBUTE, 3);
+  Vineyard.handIn(f.player);
+  assert.ok(!done(f, "fill-a-grape-barrel-for-the-foreman"), "a barrel short of full pays nothing");
+  f.player.setAttribute(Vineyard.GRAPES_ATTRIBUTE, 4);
+  Vineyard.handIn(f.player);
+  assert.ok(done(f, "fill-a-grape-barrel-for-the-foreman"));
 });

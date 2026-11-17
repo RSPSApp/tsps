@@ -2017,8 +2017,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   - "Cry near a child" (Cry, slot 16): completed 2 tiles from a child (tick 14398); distance 2.
   - "Dance near a bard" (Dance, slot 12): no task 3 tiles from the Avium Savannah bards (tick 25550),
     completed 1 tile from one (25555); distance 2.
-  - "Bow near a quetzal" (Bow, slot 2): completed 6 tiles west of Civitas' quetzal (size 3; tick
-    14440); distance 6.
+  - "Bow near a quetzal" (Bow, slot 2): completed 2 tiles from Civitas' quetzal (spawn 13355, a
+    size-3 multinpc with no name of its own, whose forms are Renu; tick 14440); distance 2. A
+    multinpc matches by the form the player sees and by its forms' names.
   - "Salute next to a statue of Quoatlos" (Salute, slot 21): completed 3 tiles from the Grand
     Museum statue's 3x3 footprint at 1719,3155 (tick 15055); distance 3.
   - "Activate a prayer near an altar": completed beside the altar at 1225,3103 (tick 9770);
@@ -2031,7 +2032,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   log (1098 tick 11083), "Pet a Caique" on the peck (`caique:pecked` { player, npc }, 1098 tick
   27022) and "Pet Xolo in Civitas" on the Pet (`npc-op`, in Varlamore: every Xolo stands in or by
   the city; 1098 tick 14824). Leagues 4 and 5 share the first four of these tasks and take the
-  same triggers.
+  same triggers. Five more are the content's own `deed` events (docs/varlamore-small-interactions.md):
+  "Milk a Buffalo" (`dairy-buffalo:milked`), "Drink from a bird bath" (`bird-bath:drank`), "Admire
+  some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
+  Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
+  and the barrel.
 - **Deeds** (`Actions.LeagueTasks.js`) listen to the events the skills already emit, counted per
   task in `league:task-progress` (task id -> count) until done (a trigger with an `area` counts
   only deeds done on its map there, where the player stands, `league:area-at`; a potion counts by

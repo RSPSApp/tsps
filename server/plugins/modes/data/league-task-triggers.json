@@ -13,6 +13,9 @@
     "open-30-grubby-chests": {"kind": "open-chest", "chests": ["Grubby Chest"], "count": 30}
   },
   "5": {
+    "fill-a-grape-barrel-for-the-foreman": {"kind": "deed", "event": "vineyard:barrel-handed-in", "count": 1},
+    "give-oli-some-stew": {"kind": "deed", "event": "oli:fed-stew", "count": 1},
+    "milk-a-buffalo": {"kind": "deed", "event": "dairy-buffalo:milked", "count": 1},
     "cast-home-teleport": {"kind": "deed", "event": "magic:home-teleport-landed", "count": 1},
     "chop-some-logs": {"kind": "chop-logs", "count": 1},
     "light-a-torch": {"kind": "deed", "event": "light-sources:lit", "items": ["Lit torch"], "count": 1},
@@ -27,8 +30,13 @@
     "open-50-zombie-pirate-lockers": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 50}
   },
   "6": {
+    "admire-some-beautiful-scenery": {"kind": "deed", "event": "scenery:admired", "count": 1},
+    "drink-from-a-bird-bath": {"kind": "deed", "event": "bird-bath:drank", "count": 1},
+    "fill-a-grape-barrel-for-the-foreman": {"kind": "deed", "event": "vineyard:barrel-handed-in", "count": 1},
+    "give-oli-some-stew": {"kind": "deed", "event": "oli:fed-stew", "count": 1},
+    "milk-a-buffalo": {"kind": "deed", "event": "dairy-buffalo:milked", "count": 1},
     "activate-a-prayer-near-an-altar": {"kind": "prayer", "any": true, "near": {"options": ["Pray-at", "Pray"], "distance": 2}, "count": 1},
-    "bow-near-a-quetzal": {"kind": "emote", "slots": [2], "near": {"npcs": ["Quetzal", "Renu"], "distance": 6}, "count": 1},
+    "bow-near-a-quetzal": {"kind": "emote", "slots": [2], "near": {"npcs": ["Quetzal", "Renu"], "distance": 2}, "count": 1},
     "cast-home-teleport": {"kind": "deed", "event": "magic:home-teleport-landed", "count": 1},
     "chop-some-logs": {"kind": "chop-logs", "count": 1},
     "cook-something-with-an-apron": {"kind": "cook", "wearing": ["Brown apron", "White apron"], "count": 1},

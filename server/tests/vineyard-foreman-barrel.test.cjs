@@ -129,3 +129,75 @@ test("a player who lost the barrel is given another on the repeat branch", async
   await askForWork(p);
   assert.equal(p.getInventory().getAmount(BARREL), 1, "the foreman replaces a lost barrel");
 });
+
+// ---- picking (issue 6108; RSProx 237/1098 ticks 11955-16598) ---------------------------------------
+
+const Vineyard = require("../plugins/world/Vineyard.plugin.js")._test;
+
+/** Pick on a vine tile through the object option packet, the player standing beside it. */
+async function pickAt(p, connection, [x, y]) {
+  p.moveTo(new core.Location(x + 1, y, 0)); p.needsPlacement = false;
+  const vine = core.MapObjects.getObjectsAt(new core.Location(x, y, 0), null).find((object) => object.getDefinition()?.getName() === "Grapevine");
+  assert.ok(vine, `a grapevine at ${x},${y}`);
+  await connection.dispatch([{ type: "object_option", id: vine.getId(), x, y, action: "Pick" }]);
+  for (let i = 0; i < 4; i++) tick(p, connection);
+}
+
+function besideForeman(p) {
+  const at = foreman.getLocation();
+  p.moveTo(new core.Location(at.getX() + 1, at.getY(), 0)); p.needsPlacement = false;
+}
+
+function messagesOf(p) {
+  const messages = [];
+  const send = p.sendMessage.bind(p);
+  p.sendMessage = (text, ...rest) => (messages.push(String(text)), send(text, ...rest));
+  return messages;
+}
+
+test("four ripe vines of the player's own sparkle (map_anim 3005 at height 50) and fill the barrel 1/4..4/4; an unripe one does not", async () => {
+  assert.ok(Vineyard.vineTiles().length > 20, `the vineyards' Pick grapevines: ${Vineyard.vineTiles().length}`);
+  const p = player();
+  const connection = new ClientConnection({ kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} });
+  connection.player = p;
+  const messages = messagesOf(p);
+  const graphics = [];
+  const sendGraphic = p.getPacketSender().sendGraphic.bind(p.getPacketSender());
+  p.getPacketSender().sendGraphic = (graphic, at) => (graphics.push([graphic.id, graphic.height, at.getX(), at.getY()]), sendGraphic(graphic, at));
+  Vineyard.arrived(p);
+  const ripe = p.getAttribute(Vineyard.RIPE_ATTRIBUTE);
+  assert.equal(ripe.length, 4, "four ripe vines on arriving, before any barrel (tick 11955)");
+  assert.equal(new Set(ripe.map(String)).size, 4, "four different ones");
+  core.TaskManager.process();
+  for (const [x, y] of ripe) assert.ok(graphics.some(([id, height, gx, gy]) => id === 3005 && height === 50 && gx === x && gy === y), `${x},${y} sparkles`);
+
+  const unripe = Vineyard.vineTiles().find((tile) => !ripe.some((each) => String(each) === String(tile)));
+  await pickAt(p, connection, unripe);
+  assert.ok(messages.includes(Vineyard.UNRIPE), messages.join(" | "));
+
+  besideForeman(p);
+  await askForWork(p);
+  assert.equal(p.getInventory().getAmount(BARREL), 1);
+  Vineyard.check({ player: p });
+  assert.equal(messages.at(-1), Vineyard.CHECK_EMPTY);
+  for (let i = 0; i < 4; i++) {
+    await pickAt(p, connection, ripe[i]);
+    assert.equal(messages.at(-1), i < 3 ? Vineyard.PICKED(i + 1) : Vineyard.FULL, messages.join(" | "));
+  }
+  assert.equal(p.getAttribute(Vineyard.RIPE_ATTRIBUTE).length, 0, "every ripe vine picked");
+  await pickAt(p, connection, ripe[0]);
+  assert.equal(messages.at(-1), Vineyard.UNRIPE, "a picked vine is no longer ripe");
+  Vineyard.check({ player: p });
+  assert.equal(messages.at(-1), Vineyard.CHECK_FULL);
+
+  // The full barrel: the foreman's full-barrel variant pays on "Great work!..." (tick 16598).
+  const before = p.getInventory().getAmount(core.ItemIdentifiers.GRAPES_2);
+  besideForeman(p);
+  await talk(p);
+  const seen = finish(p);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.GRAPES_2) - before, 5, "5 noted grapes");
+  assert.equal(p.getAttribute(Vineyard.GRAPES_ATTRIBUTE), 0, "the barrel is empty again");
+  assert.equal(p.getInventory().getAmount(BARREL), 1, "the barrel is kept");
+  assert.equal(p.getAttribute(Vineyard.RIPE_ATTRIBUTE).length, 4, "four new ripe vines");
+  assert.ok(seen.length >= 5, "the six-line conversation");
+});

@@ -242,6 +242,13 @@ async function main(): Promise<void> {
             },
         },
     })));
+    for (const language of ["pt-BR", "ESP"]) {
+        const url = "/osrstranslate/additions-" + language + ".json";
+        const bundled = JSON.parse(readFileSync(join(__dirname, "../public" + url), "utf8"));
+        const fixture = bodies.has(url) ? JSON.parse(new TextDecoder().decode(bodies.get(url))) : { files: {} };
+        fixture.files["translations_game_message.json"] = bundled.files["translations_game_message.json"];
+        bodies.set(url, encode(JSON.stringify(fixture)));
+    }
     const fetched: string[] = [];
     let offline = false;
     const fakeFetch = (async (input: RequestInfo | URL) => {
@@ -462,6 +469,15 @@ async function main(): Promise<void> {
     const history = chatHistory.getByUid(chatHistory.addMessage(0, "Nothing interesting happens."));
     assert.equal(history?.text, "Nothing interesting happens.", "the chat history keeps the game's text");
 
+    const stash = (n: number) => "You do not have enough free space to withdraw your items from the STASH unit; you need at least " + n + " free slots.";
+    for (const n of [1, 2, 3, 28]) {
+        const expected = "Você não tem espaço livre suficiente para retirar seus itens da unidade STASH; precisa de pelo menos " + n + (n === 1 ? " espaço livre." : " espaços livres.");
+        assert.equal(build(0, stash(n)).message, expected, "real STASH count through loaded additions/callback");
+        assert.equal(chatHistory.getByUid(chatHistory.addMessage(0, stash(n)))?.text, stash(n));
+    }
+    configManager.setConfigValue(OsrsTranslateConfig, "enableGameMessages", false);
+    assert.equal(build(0, stash(2)).message, stash(2));
+    configManager.setConfigValue(OsrsTranslateConfig, "enableGameMessages", true);
     // Toggles.
     configManager.setConfigValue(OsrsTranslateConfig, "enableDialogues", false);
     assert.equal(dialogue("Hello, what are you<br>doing here?"), undefined, "dialogue toggle");
@@ -492,6 +508,9 @@ async function main(): Promise<void> {
     assert.equal(menuOptionDisplayText("Talk-to"), "Hablar-con");
     assert.equal(dialogue("Hello, what are you<br>doing here?")?.text, "Hola, ¿qué haces aquí?");
 
+    for (const n of [1, 2, 3, 28]) {
+        assert.equal(build(0, stash(n)).message, "No tienes suficiente espacio libre para retirar tus objetos de la unidad STASH; necesitas al menos " + n + (n === 1 ? " espacio libre." : " espacios libres."));
+    }
     // Disabling: English again, and the menu transform is released.
     await pluginManager.setPluginEnabled(OsrsTranslatePlugin, false);
     assert.equal(menuOptionDisplayText("Talk-to"), "Talk-to");

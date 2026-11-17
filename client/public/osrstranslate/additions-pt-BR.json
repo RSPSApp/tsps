@@ -24,7 +24,11 @@
   },
   {
    "ref": "feat/mouseover-and-combat-labels",
-   "commit": "3a5930aff59bfa9dd57ebdebb4481322e2b76ff1"
+   "commit": "be93c2071d65aec06794db8710e58e41d0860c34"
+  },
+  {
+   "ref": "fix/stash-full-slots",
+   "commit": "a9cead4e14e1779d23b51f7de93b94d4c1b76a14"
   }
  ],
  "files": {
@@ -11734,7 +11738,9 @@
     "You have already unlocked that teleport.": "Você já desbloqueou esse teleporte.",
     "Your telegrab fizzles as you move too far away.": "Seu telegrab falha porque você se afastou demais.",
     "Too late - it's gone!": "Tarde demais - já sumiu!",
-    "This spell can not be cast on this item.": "Este feitiço não pode ser lançado neste item."
+    "This spell can not be cast on this item.": "Este feitiço não pode ser lançado neste item.",
+    "You do not have enough free space to withdraw your items from the STASH unit; you need at least 1 free slots.": "Você não tem espaço livre suficiente para retirar seus itens da unidade STASH; precisa de pelo menos 1 espaço livre.",
+    "You do not have enough free space to withdraw your items from the STASH unit; you need at least [number] free slots.": "Você não tem espaço livre suficiente para retirar seus itens da unidade STASH; precisa de pelo menos [number] espaços livres."
    }
   },
   "translations_welcome.json": {

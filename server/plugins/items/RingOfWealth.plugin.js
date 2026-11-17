@@ -253,6 +253,16 @@ function removeImbueOnDeath(event, itemOnGroundManager) {
   if (Array.isArray(event.extraDrops)) event.extraDrops.push(coins);
 }
 
+/** Read-only PvP preview: an unprotected imbued ring becomes its tradeable normal ring. */
+function answerLostToPvpKiller(query) {
+  const item = query?.item;
+  const unimbuedId = UNIMBUED_RING_IDS.get(item?.getId?.());
+  if (unimbuedId && !item.isLostOnDeath()
+      && new Item(unimbuedId, item.getAmount(), item.getMeta()).isPlayerTradeable()) {
+    query.lost = true;
+  }
+}
+
 module.exports = {
   name: "RingOfWealth",
   description: "Handles the ring of wealth: charge counts, imbuing for 50,000 coins, teleport destinations, drop-collection settings and the ring's crumbling.",
@@ -304,6 +314,7 @@ module.exports = {
     });
 
     api.onPlayerDeathItemDrop((event) => removeImbueOnDeath(event, itemOnGroundManager));
+    api.onCustomEvent("items:lost-to-pvp-killer", answerLostToPvpKiller);
   },
   isWearingRingOfWealth,
   isWearingImbuedRingOfWealth,

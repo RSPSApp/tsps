@@ -197,3 +197,50 @@ for (const mode of ["kept", "metadata", "ironman"]) {
     assert.deepEqual(drops.filter(([, id]) => id === RING_3), mode === "ironman" ? [[victim, RING_3, 1]] : []);
   });
 }
+
+function preview(t, player, { pvp = false, wilderness = false } = {}) {
+  const sender = player.getPacketSender(), snapshots = [];
+  const send = sender.sendInterfaceScript;
+  t.mock.method(sender, "sendInterfaceScript", function (...args) {
+    if (args[0] === 972) snapshots.push({ args: args[1], inventories: args[4] });
+    return send.apply(this, args);
+  });
+  assert.equal(PM.emitInterfaceActionClick({ player, buttonId: (387 << 16) | 5, action: 0 }), true);
+  for (const action of [...(pvp ? [2] : []), ...(wilderness ? [3] : [])]) {
+    assert.equal(PM.emitInterfaceActionClick({ player, buttonId: (4 << 16) | 12, action }), true);
+  }
+  return snapshots.at(-1);
+}
+
+for (const wilderness of [false, true]) {
+  test(`an unprotected imbued ring is lost in the PvP preview at level ${wilderness ? 21 : 0}`, (t) => {
+    const player = actor(t);
+    player.setSkullTimer(1000);
+    player.getInventory().addItem(new core.Item(20788, 1));
+    const { inventories } = preview(t, player, { pvp: true, wilderness });
+    assert.deepEqual(inventories[584].slots.map(({ itemId }) => itemId), [20788]);
+    assert.deepEqual(inventories[468].slots.map(({ itemId }) => itemId), [1991]);
+  });
+}
+
+test("an imbued ring's preview keeps the PvM grave and ranked protection controls", (t) => {
+  const player = actor(t);
+  player.getInventory().addItem(new core.Item(20788, 1));
+  const protectedPreview = preview(t, player, { pvp: true, wilderness: true });
+  assert.deepEqual(protectedPreview.inventories[584].slots, []);
+  assert.ok(protectedPreview.args.includes(20788), "the protected ring is in the kept list");
+  const skulled = actor(t);
+  skulled.setSkullTimer(1000);
+  skulled.getInventory().addItem(new core.Item(20788, 1));
+  assert.deepEqual(preview(t, skulled).inventories[468].slots.map(({ itemId }) => itemId), [367]);
+});
+
+test("the imbued-ring preview query leaves normal and metadata-restricted copies alone", () => {
+  for (const item of [new core.Item(RING_3, 1), new core.Item(20788, 1, { [core.Item.UNTRADEABLE_META]: true })]) {
+    const before = [item.getId(), item.getMeta()];
+    const query = { item, wildernessLevel: 21, lost: false };
+    PM.emitCustomEvent("items:lost-to-pvp-killer", query);
+    assert.equal(query.lost, false);
+    assert.deepEqual([item.getId(), item.getMeta()], before, "the preview does not mutate the item");
+  }
+});

@@ -72,8 +72,8 @@ function neverKept(item) {
 
 /** An untradeable a PvP death takes for the killer (SlayerHelmet's black mask (i), `items:lost-to-pvp-killer`). */
 function lostToPvpKiller(item, settings) {
-  if (!settings.playerKill || settings.wildernessLevel <= 0) return false;
-  const query = { item, lost: false };
+  if (!settings.playerKill) return false;
+  const query = { item, wildernessLevel: settings.wildernessLevel, lost: false };
   pluginApi.emitCustomEvent("items:lost-to-pvp-killer", query);
   return query.lost === true;
 }

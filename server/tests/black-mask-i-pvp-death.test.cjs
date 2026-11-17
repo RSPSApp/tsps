@@ -143,12 +143,24 @@ test("a protected mask, a monster's kill or a death outside the Wilderness keeps
 test("Items Kept on Death shows the mask lost on a PvP death and kept otherwise", (t) => {
   const p = player(t);
   p.getInventory().setItem(0, new core.Item(I.BLACK_MASK_I_, 1));
-  let lost = { item: p.getInventory().get(0), lost: false };
+  let lost = { item: p.getInventory().get(0), wildernessLevel: 10, lost: false };
   PM.emitCustomEvent("items:lost-to-pvp-killer", lost);
   assert.equal(lost.lost, true);
-  lost = { item: new core.Item(I.BLACK_MASK, 1), lost: false };
+  lost = { item: new core.Item(I.BLACK_MASK, 1), wildernessLevel: 10, lost: false };
   PM.emitCustomEvent("items:lost-to-pvp-killer", lost);
   assert.equal(lost.lost, false, "a plain mask is tradeable already");
+});
+
+test("the shared preview query preserves the mask's Wilderness and metadata guards", () => {
+  for (const wildernessLevel of [0, 21]) {
+    for (const restricted of [false, true]) {
+      const item = new core.Item(I.BLACK_MASK_I_, 1, restricted ? { [core.Item.UNTRADEABLE_META]: true } : null);
+      const query = { item, wildernessLevel, lost: false };
+      PM.emitCustomEvent("items:lost-to-pvp-killer", query);
+      assert.equal(query.lost, wildernessLevel > 0 && !restricted);
+      assert.equal(item.getId(), I.BLACK_MASK_I_, "the preview does not change the mask");
+    }
+  }
 });
 
 // Wiki, Items Kept on Death, Slayer helmet (imbued or non-imbued) in PvP: "Dropped to the PKer as a black mask. The
@@ -211,7 +223,7 @@ test("Items Kept on Death shows a Slayer helmet (i), plain or Soul Wars helmet l
   for (const [id, expected] of [[I.SLAYER_HELMET_I_, true], [I.SLAYER_HELMET, true],
     [core.CacheDefinitions.getObjId("sw_slayer_helm_i"), true], [core.CacheDefinitions.getObjId("sw_black_mask_5"), true],
     [core.CacheDefinitions.getObjId("pvpa_slayer_helm_i"), false]]) {
-    const query = { item: new core.Item(id, 1), lost: false };
+    const query = { item: new core.Item(id, 1), wildernessLevel: 10, lost: false };
     PM.emitCustomEvent("items:lost-to-pvp-killer", query);
     assert.equal(query.lost, expected, String(id));
   }

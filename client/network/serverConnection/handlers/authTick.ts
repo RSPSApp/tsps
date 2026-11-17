@@ -1,3 +1,4 @@
+import { receiveProtocolGreeting } from "../protocolCompatibility";
 import { ClientState } from "../../../game/ClientState";
 import { clearHintArrow, setHintArrowNpc, setHintArrowPlayer,
     setHintArrowWorldEntity, setHintArrowTile } from "../../../game/HintArrow";
@@ -7,6 +8,7 @@ import { LOGIN_FLAG_REMEMBER, LOGIN_FLAG_TOKEN } from "../constants";
 import { state } from "../state";
 
 export function handleAuthTickMessage(msg: any): boolean {
+    if (!receiveProtocolGreeting(msg)) return true;
     if (state.loginExtension?.handleMessage(msg)) return true;
     if (msg.type === "welcome") {
         console.log(

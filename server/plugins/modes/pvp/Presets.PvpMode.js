@@ -999,6 +999,8 @@ module.exports = {
     presetsEnabled = true;
     setPresetShopPricesEnabled(true);
     api.persistAttribute(CUSTOM_PRESETS_ATTRIBUTE);
+    api.persistAttribute(OPEN_ON_DEATH_ATTRIBUTE, true);
+    api.persistAttribute(CUSTOM_PRESET_SLOT_ATTRIBUTE, -1);
     api.registerCustomInterface(INTERFACE_DEFINITION);
     api.onCanBankItem((event) => {
       if (!event.item?.isUnbankable?.()) return;

@@ -123,12 +123,16 @@ test("custom presets rehydrate from their persisted attribute", () => {
     getPrayerHandler: () => ({}),
     getCombatFactory: () => ({}),
     getSkillManager: () => ({}),
-    persistAttribute: (key) => persisted.push(key),
+    persistAttribute: (key, defaultValue) => persisted.push([key, defaultValue]),
     registerCustomInterface() {},
     onCanBankItem(handler) { onCanBankItem = handler; },
     onInterfaceActionButton(_buttons, handler) { onButton = handler; },
   });
-  assert.deepEqual(persisted, ["pvp:custom-presets"]);
+  assert.deepEqual(persisted, [
+    ["pvp:custom-presets", undefined],
+    ["pvp:open-presets-on-death", true],
+    ["pvp:selected-custom-preset-slot", -1],
+  ]);
 
   const customSlot = uid(PRESET_ROW_START + GLOBAL_ROW_COUNT);
   const source = playerWithAttributes();
@@ -179,6 +183,8 @@ test("custom presets survive the player save round trip", () => {
     onInterfaceActionButton() {},
   });
   assert.equal(PlayerSave.persistentAttributeKeys.has("pvp:custom-presets"), true);
+  assert.equal(PlayerSave.persistentAttributeKeys.has("pvp:open-presets-on-death"), true);
+  assert.equal(PlayerSave.persistentAttributeKeys.has("pvp:selected-custom-preset-slot"), true);
 
   const records = [{
     name: "Saved Build",

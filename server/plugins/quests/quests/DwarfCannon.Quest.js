@@ -174,8 +174,8 @@ module.exports = function registerDwarfCannonQuest(api) {
   const stage = (player) => quest.getStage(player);
   /** Lollk, untied, per rescuer. */
   const rescuedLollk = new Map();
-  /** Players part-way through the crate's search (live is busy for it). */
-  const searching = new WeakSet();
+  /** Players part-way through the crate's search, and the tile they search from (live is busy for it). */
+  const searching = new WeakMap();
 
   function buildJournal(player, questHandle) {
     const current = questHandle.getStage(player);
@@ -531,21 +531,38 @@ module.exports = function registerDwarfCannonQuest(api) {
       return;
     }
     if (searching.has(player)) return;
-    searching.add(player);
+    // Live holds the player for the search (varbit busy from the search to Lollk's first line;
+    // a second click in 1001565 did nothing), so walking waits; a move by other means ends it.
+    searching.set(player, player.getLocation().clone());
+    player.getMovementQueue().reset().setBlockMovement(true);
     // Captured (1001565, 1002239): the search, the child 3 ticks on, untied 2 after that.
     player.sendMessage("You search the crate...");
     player.performAnimation(new Animation(SEARCH_ANIMATION));
     TaskManager.submit(new CountdownTask(player, CHILD_SEEN_TICKS, () => {
+      if (!stillSearching(player)) return endSearch(player);
       player.sendMessage("Inside you see a dwarf child, tied up!");
       player.performAnimation(new Animation(UNTIE_ANIMATION, UNTIE_ANIMATION_DELAY));
     }));
     TaskManager.submit(new CountdownTask(player, UNTIED_TICKS, () => untieLollk(player)));
   }
 
-  function untieLollk(player) {
+  /** Still on the tile the search began from, and still registered. */
+  function stillSearching(player) {
+    const from = searching.get(player);
+    return !!from && player.isRegistered() && player.getLocation().equals(from);
+  }
+
+  function endSearch(player) {
+    if (!searching.has(player)) return;
     searching.delete(player);
+    player.getMovementQueue().setBlockMovement(false);
+  }
+
+  function untieLollk(player) {
+    const searched = stillSearching(player);
+    endSearch(player);
     const current = stage(player);
-    if (!player.isRegistered() || (current !== STAGE_FIND_LOLLK && current !== STAGE_IN_CAVE)) return;
+    if (!searched || (current !== STAGE_FIND_LOLLK && current !== STAGE_IN_CAVE)) return;
     player.sendMessage("You untie the child.");
     quest.setStage(player, STAGE_LOLLK_RESCUED);
     const lollk = spawnLollk(player);
@@ -731,6 +748,7 @@ module.exports = function registerDwarfCannonQuest(api) {
   }
 
   function handleLogout({ player }) {
+    endSearch(player);
     removeLollk(player);
   }
 

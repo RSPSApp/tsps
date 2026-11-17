@@ -66,6 +66,12 @@ function playerFixture(inventory = inventoryFixture()) {
   const dialogueText = [];
   const hits = [];
   const levels = new Map();
+  let blocked = false;
+  const movement = {
+    reset: () => movement,
+    setBlockMovement(value) { blocked = value; return movement; },
+    isMovementBlocked: () => blocked,
+  };
   let location = new core.Location(2567, 3460, 0);
   let manager;
   const sender = new Proxy({
@@ -105,6 +111,7 @@ function playerFixture(inventory = inventoryFixture()) {
       setCurrentLevel(skill, level) { levels.set(skill, level); },
     }),
     getLocation: () => location,
+    getMovementQueue: () => movement,
     moveTo(target) { location = target; },
     getDialogueManager: () => manager,
     getPacketSender: () => sender,

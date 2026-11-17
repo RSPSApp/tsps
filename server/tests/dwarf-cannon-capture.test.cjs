@@ -277,6 +277,35 @@ test("the cave entrance moves varp 0 to 5; the crate's search, child and untie a
   assert.equal(lollk.isRegistered?.() ?? false, false, "gone after four steps");
 });
 
+test("the crate's search holds the player; a move by other means ends it without the rescue (review on #6039)", async (t) => {
+  // Walking during the search: live is busy for it, so the click waits and the rescue happens at the crate.
+  const f = actor(t, { stage: 5, at: CRATE.stand });
+  await click(f, CRATE);
+  assert.ok(f.messages.some((m) => m.text === "You search the crate..."));
+  await f.connection.dispatch([{ type: "move", worldX: 2568, worldY: 9848, modifierFlags: 0 }]);
+  h.ticks(f, 6);
+  assert.deepEqual(at(f), CRATE.stand, "no step during the search");
+  assert.equal(stage(f), 6);
+  assert.equal(h.shown(f)?.text, "Thank the heavens, you saved me! I thought I'd be goblin lunch for sure!");
+  await finish(f);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false, "free again once the search is over");
+
+  // Moved off the tile mid-search (a teleport): nothing more happens, and the crate can be searched again.
+  const g = actor(t, { stage: 5, at: CRATE.stand });
+  await click(g, CRATE);
+  h.ticks(g, 1);
+  g.player.moveTo(new h.core.Location(2568, 9848, 0));
+  h.ticks(g, 6);
+  assert.equal(stage(g), 5, "no rescue away from the crate");
+  assert.ok(!g.messages.some((m) => m.text === "You untie the child."));
+  assert.equal(h.shown(g), null, "no conversation opens");
+  g.player.moveTo(new h.core.Location(...CRATE.stand));
+  h.tick(g);
+  await click(g, CRATE);
+  h.ticks(g, 6);
+  assert.equal(stage(g), 6, "a new search works");
+});
+
 test("the mud pile: the climb animation 2 ticks on, outside a tick later", async (t) => {
   const f = actor(t, { stage: 6, at: MUDPILE.stand });
   await click(f, MUDPILE);

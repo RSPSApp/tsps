@@ -53,11 +53,12 @@ function alive(player) { return Common.core.WorldDefinition.isMembersWorld() && 
 
 /**
  * Selected ingredients and results are normal, nonstackable cache items. Plan
- * actual plain slots and the entire output capacity before changing inventory.
+ * actual plain slots and output capacity before changing inventory. Recipes that
+ * explicitly spill overflow use the shared inventory/ground-item service instead.
  * Retained tools obey the same selected-slot checks as materials, but neither
  * enter the deletion plan nor count as space freed for the output.
  */
-function plan(player, inputs, outputs, preferred = [], tools = []) {
+function plan(player, inputs, outputs, preferred = [], tools = [], spillOverflow = false) {
   const inventory = player.getInventory(), items = inventory.getItems(), used = new Set(), slots = [];
   const retained = new Set(tools.map(id));
   for (const [name, count] of inputs) {
@@ -83,14 +84,18 @@ function plan(player, inputs, outputs, preferred = [], tools = []) {
     if (new Common.core.Item(id(name), 1).getDefinition().isStackable()) return null;
     needed += count;
   }
-  if (inventory.getFreeSlots() + slots.length < needed) return null;
-  return { inventory, slots, outputs };
+  if (!spillOverflow && inventory.getFreeSlots() + slots.length < needed) return null;
+  return { inventory, slots, outputs, spillOverflow };
 }
 
 function apply(player, transaction, product, xp, kind) {
   const { inventory, slots, outputs } = transaction;
   for (const slot of slots) inventory.deleteAtSlot(slot, 1, false);
-  for (const [name, count] of outputs) inventory.add(new Common.core.Item(id(name), count), false);
+  for (const [name, count] of outputs) {
+    const item = new Common.core.Item(id(name), count);
+    if (transaction.spillOverflow) inventory.forceAdd(player, item);
+    else inventory.add(item, false);
+  }
   inventory.refreshItems();
   Common.addXp(player, xp);
   if (kind) Common.api.emitCustomEvent("skills:produced", { player, skill: Common.core.Skill.COOKING,
@@ -206,19 +211,22 @@ function interfaceClosed({ player, interfaceId }) {
 function clearPlayer({ player }) { sessions.delete(player); cuts.delete(player); }
 
 const FRUIT = {
-  pineapple: [["Dice", "pineapple_chunks", 1], ["Slice", "pineapple_ring", 4]],
+  // Wiki: excess rings fall to the ground. Rec 227/01858: Slice first, then Dice.
+  pineapple: [["Slice it into 4 rings", "pineapple_ring", 4, true], ["Dice it", "pineapple_chunks", 1]],
   lemon: [["Dice", "lemon_chunks", 1], ["Slice", "lemon_slices", 1]],
   orange: [["Dice", "orange_chunks", 1], ["Slice", "orange_slices", 1]],
   lime: [["Dice", "lime_chunks", 1], ["Slice", "lime_slices", 1]],
 };
+// Rec 227/01858 (Leagues), tick 14993; active skillmulti supports these labels and mode.
+const FRUIT_MENUS = { pineapple: { title: "How would you like to cut the pineapple?", mode: 12 } };
 
-function chooseCut(player, token, output, count) {
+function chooseCut(player, token, output, count, spillOverflow = false) {
   if (cuts.get(player) !== token || !alive(player)) return;
   cuts.delete(player);
   const items = player.getInventory().getItems();
   if (items[token.fruit.slot] !== token.fruit.item || items[token.knife.slot] !== token.knife.item
       || token.knife.item.getId() !== token.knife.id) return;
-  const transaction = plan(player, [[token.fruit.id, 1]], [[output, count]], [token.fruit]);
+  const transaction = plan(player, [[token.fruit.id, 1]], [[output, count]], [token.fruit], [], spillOverflow);
   if (!transaction) return;
   apply(player, transaction, output, 0, "make");
 }
@@ -248,6 +256,18 @@ function useItems(event) {
   const name = Object.keys(FRUIT).find((value) => id(value) === fruit.id), token = { fruit, knife };
   event.handled = true;
   cuts.set(player, token);
+  const menu = FRUIT_MENUS[name];
+  if (menu) {
+    const choices = FRUIT[name];
+    player.getPacketSender().sendCreationMenu(new Common.core.CreationMenu(menu.title,
+      choices.map(([, output]) => id(output)), {
+        execute: (itemId) => {
+          const choice = choices.find(([, output]) => id(output) === itemId);
+          if (choice) chooseCut(player, token, choice[1], choice[2], choice[3]);
+        },
+      }, { mode: menu.mode, maxAmount: 1, lastAmount: 1, labels: choices.map(([text]) => text) }));
+    return;
+  }
   const pairs = FRUIT[name].flatMap(([text, output, count]) => [text, () => chooseCut(player, token, output, count)]);
   if (!Common.api.sendMultiChatboxPrompt(player, "How would you like to cut the fruit?", ...pairs)) cuts.delete(player);
 }

@@ -49,7 +49,9 @@ const TAMAYU_CLAIMED = 5;
 const TAI_BWO_STARTED = 3;
 const TAI_BWO_COMPLETE = 6;
 const LUBUFU_KEY = "quest.tai_bwo_wannai_trio.lubufu";
-const LUBUFU_GIVEN = 25;
+// 20 Karambwanji delivered and "What do you use to catch Karambwan?" asked twice: the third ask is his
+// apprentice offer (RSProx captures local 1001562 and 75; TaiBwoWannaiTrio State.LUBUFU).
+const LUBUFU_ASKED_TWICE = 27;
 const LUBUFU_APPRENTICE = 31;
 const BECOME_APPRENTICE = [/use to catch Karambwan/, /^Yes!$/];
 
@@ -430,7 +432,7 @@ test("Tamayu: levelling from his XP step ends the transcript there, with one spe
 function lubufu(t) {
   const f = actor(t);
   quest("tai_bwo_wannai_trio").setStage(f.p, TAI_BWO_STARTED);
-  f.p.setAttribute(LUBUFU_KEY, LUBUFU_GIVEN);
+  f.p.setAttribute(LUBUFU_KEY, LUBUFU_ASKED_TWICE);
   return f;
 }
 

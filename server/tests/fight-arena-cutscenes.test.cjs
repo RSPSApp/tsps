@@ -351,3 +351,31 @@ test("a logout in a fight comes back outside the arena door, with nothing spawne
   PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
   assert.equal(fightNpc(f, core.NpcIdentifiers.GENERAL_KHAZARD), undefined, "Khazard is not spawned on the real map at login");
 });
+
+test("escaping stops the fight: nothing hits in the dark, and a kill landing then counts for nothing", (t) => {
+  const f = actor(t, [2607, 3151, 0]);
+  ticks(f, 3);
+  quest().setStage(f.player, 9);
+  f.player.setAttribute("fight-arena:scorpion-cutscene-seen", 1);
+  PM.emitCustomEvent("npc-dialogue:action", { player: f.player, npcId: core.NpcIdentifiers.HENGRAD, stepId: "XDkdB3", handled: false });
+  ticks(f, 2);
+  const scorpion = fightNpc(f, core.NpcIdentifiers.KHAZARD_SCORPION);
+  assert.equal(scorpion.getCombat().getTarget(), f.player);
+
+  clickEscape(f, 2);
+  assert.equal(scorpion.getCombat().getTarget(), null, "the beast stops with the answer (tick 12214)");
+  assert.equal(f.player.isUntargetable(), true);
+  assert.equal(f.player.getPacketSender().getVarbit(6719), 2, "the minimap goes off");
+  ticks(f, 1);
+  // The player's last hit lands in the dark.
+  kill(f, scorpion);
+  assert.equal(quest().getStage(f.player), 9, "the scorpion is still to beat");
+  ticks(f, 1);
+  assert.equal(inScene(f), false, "no Bouncer scene opens");
+  assert.deepEqual(xyz(f.player.getLocation()), [2607, 3151, 0]);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), true, "held until the fade in");
+  ticks(f, 2);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(f.player.isUntargetable(), false);
+  assert.equal(f.player.getPacketSender().getVarbit(6719), 0);
+});

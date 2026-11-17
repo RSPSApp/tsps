@@ -758,6 +758,7 @@ module.exports = function registerFightArenaQuest(api) {
     scenes.Scenes.fade(player, true);
     scenes.Scenes.later(player, REENTER_MOVE_TICKS, () => {
       if (player.isRegistered?.() === false || quest.getStage(player) !== stage) {
+        scenes.Scenes.fade(player, false);
         player.getMovementQueue().setBlockMovement(false);
         return;
       }
@@ -865,6 +866,8 @@ module.exports = function registerFightArenaQuest(api) {
     const player = event.killer ?? event.player;
     if (!player) return;
     const { npcId } = event;
+    // A hit landing after the player chose to escape: the fight is over, its copy about to go.
+    if (scenes.leaving(player)) return;
     const stage = quest.getStage(player);
     // Each kill plays its scene the tick the beast goes (rev 241 ticks 7568, 7723, 7892); the
     // plain Khazard conversation is what is left without one.

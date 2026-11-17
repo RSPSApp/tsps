@@ -408,9 +408,10 @@ module.exports = function createFightArenaScenes(api, hooks) {
     fightScenes.add(scene);
     fights.set(player, holder);
     populate(player, scene, spec.without ?? []);
+    holder.pens = {};
     for (const pen of spec.pens) {
       const [npc, tile, face] = PENNED[pen];
-      Scenes.actor(scene, gameval("npc", npc), tile, face);
+      holder.pens[pen] = Scenes.actor(scene, gameval("npc", npc), tile, face);
     }
     locs(holder, [ESCAPE_DOOR]);
     Scenes.face(player, spec.beast[1]);
@@ -423,6 +424,12 @@ module.exports = function createFightArenaScenes(api, hooks) {
     const holder = fights.get(player);
     if (!holder || Scenes.get(player) !== holder.scene) return fight(player, kind);
     holder.kind = kind;
+    // The beast leaves its pen: its caged version goes from the copy.
+    const caged = holder.pens?.[kind];
+    if (caged) {
+      Scenes.removeActor(holder.scene, caged);
+      delete holder.pens[kind];
+    }
     spawnBeast(player, holder, kind);
     return holder;
   }
@@ -448,18 +455,30 @@ module.exports = function createFightArenaScenes(api, hooks) {
   /** "Yes.": the fade out at once, the real map outside the door two ticks later, the fade in after two more. */
   function leave(player, holder) {
     holder.leaving = true;
-    player.getMovementQueue().reset().setBlockMovement(true);
+    // The fight stops with the answer: live's Yes sets busy and clears the HP HUD (local 1002138 tick 12214),
+    // and the minimap goes the tick after (12215). Nothing more can hit, or be hit, in the dark.
+    player.getCombat().reset();
+    holder.beast?.getCombat?.().reset?.();
+    Scenes.controls(player, true);
+    player.setUntargetable(true);
     Scenes.fade(player, true);
     Scenes.later(player, ESCAPE_MOVE_TICKS, () => {
       if (fights.get(player) !== holder || player.isRegistered?.() === false) return;
       Scenes.end(player, false);
       player.moveTo(new Location(...ESCAPE_TILE));
+      Scenes.controls(player, true);
       Scenes.later(player, ESCAPE_FADE_IN_TICKS, () => {
-        if (player.isRegistered?.() === false) return;
+        // A scene opened since (a re-entry) owns the player's controls now.
+        if (player.isRegistered?.() === false || Scenes.get(player)) return;
         Scenes.fade(player, false);
-        player.getMovementQueue().setBlockMovement(false);
+        Scenes.controls(player, false);
       });
     });
+  }
+
+  /** The player chose to leave this fight: a hit still landing on its beast counts for nothing. */
+  function leaving(player) {
+    return fights.get(player)?.leaving === true;
   }
 
   function inFight(player) {
@@ -687,6 +706,6 @@ module.exports = function createFightArenaScenes(api, hooks) {
     PAGE, SCENES, RELEASES, SCORPION_SEEN_ATTRIBUTE, BOUNCER_SEEN_ATTRIBUTE, Scenes,
     cellScene, unlockCell, sammyRuns, followSammy, ogreAttacks, ogreDied, takenToJail, scorpionScene, scorpionDied,
     bouncerDied, khazardAttacks, line, active, logout, login,
-    fight, nextBeast, escape, inFight, FIGHTS, ESCAPE_TILE, ESCAPE_DOOR_NAME: ESCAPE_DOOR[0],
+    fight, nextBeast, escape, inFight, leaving, FIGHTS, ESCAPE_TILE, ESCAPE_DOOR_NAME: ESCAPE_DOOR[0],
   };
 };

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertNotSame
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
+import java.awt.image.BufferedImage
 
 /** The served cache follows what tsps's /api/league-content says, read again at each refresh. */
 class ServedCacheTest {
@@ -34,6 +35,18 @@ class ServedCacheTest {
         assertEquals(mapOf(1 to 20), EnumDefinition.decode(points(second)).entries)
         body = null
         assertSame(second, served.refresh(), "tsps gone: what was served stays")
+    }
+
+    @Test
+    fun `tsps's own sprites are served before and after a league's content`() {
+        val sprite = Sprites.encode(BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB))
+        var body: String? = null
+        val served = ServedCache(cache, listOf(NewGroup(SPRITES_ARCHIVE, ADDED_SPRITE, "test-banner", sprite))) { body }
+        assertArrayEquals(sprite, Container.decompress(requireNotNull(served.refresh().container(SPRITES_ARCHIVE, ADDED_SPRITE))))
+        body = payload(10)
+        val league = served.refresh()
+        assertEquals(mapOf(1 to 10), EnumDefinition.decode(points(league)).entries)
+        assertArrayEquals(sprite, Container.decompress(requireNotNull(league.container(SPRITES_ARCHIVE, ADDED_SPRITE))))
     }
 
     @Test
@@ -103,5 +116,7 @@ class ServedCacheTest {
         const val CONFIG_ARCHIVE = 2
         const val ENUM_GROUP = 8
         const val POINTS_ENUM = 2671
+        const val SPRITES_ARCHIVE = 8
+        const val ADDED_SPRITE = 30_999
     }
 }

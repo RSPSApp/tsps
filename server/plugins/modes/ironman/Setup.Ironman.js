@@ -7,7 +7,8 @@
  * option hands out the mode's armour.
  *
  * Other plugins ask a player's mode with `ironman:mode` ({ player } -> mode, label), and may lock
- * it: every choice first asks `ironman:change-mode` ({ player, from, to, allowed, reason }), and
+ * it: every choice first asks `ironman:change-mode` ({ player, from, to, upgrades, allowed, reason }:
+ * `upgrades` is true on Tutorial Island), and
  * one answered `allowed: false` is refused with its reason. Opening the setup at all first asks
  * `ironman:can-open-setup` ({ player, allowed, reason }): refused, it stays shut and the reason
  * is said.
@@ -73,8 +74,15 @@ function choose(player, mode) {
   if (!open) return;
   const { upgrades } = open;
   const current = Ironman.modeOf(player);
-  if (mode === "group") {
-    player.sendMessage(Ironman.message("groupUnavailable"));
+  if (!upgrades && Ironman.data.modes[mode].islandOnly && mode !== current) {
+    player.sendMessage(Ironman.message("groupIslandOnly"));
+    return;
+  }
+  // Once in Group Ironman Mode an account never becomes a solo Ironman (leaving it is by leaving the
+  // group, as a regular account).
+  const groupModes = Ironman.data.groupModes;
+  if (!upgrades && groupModes.includes(current) && mode !== "none" && !groupModes.includes(mode)) {
+    player.sendMessage(Ironman.message("groupNotSolo"));
     return;
   }
   if (mode === current) {
@@ -86,7 +94,7 @@ function choose(player, mode) {
     player.sendMessage(Ironman.message("modeAlready", { mode: Ironman.data.modes[mode].label }));
     return;
   }
-  const change = { player, from: current, to: mode, allowed: true, reason: null };
+  const change = { player, from: current, to: mode, upgrades, allowed: true, reason: null };
   Ironman.api.emitCustomEvent("ironman:change-mode", change);
   if (change.allowed === false) {
     if (change.reason) player.sendMessage(change.reason);
@@ -112,7 +120,7 @@ function choose(player, mode) {
       closePopup(player);
       if (answer !== 1) return;
       if (Ironman.modeOf(player) !== current) return;
-      const commit = { player, from: current, to: mode, allowed: true, reason: null };
+      const commit = { player, from: current, to: mode, upgrades, allowed: true, reason: null };
       Ironman.api.emitCustomEvent("ironman:change-mode", commit);
       if (commit.allowed === false) {
         if (commit.reason) player.sendMessage(commit.reason);
@@ -128,13 +136,19 @@ function choose(player, mode) {
   });
 }
 
-/** The mode's armour, if the inventory has room; returns the line Adam says. */
+/**
+ * The mode's armour, if the inventory has room; returns the line Adam says. "ironman:armour"
+ * { player, items } lets a mode hand out its own set (Group Ironman: the platebody of the group's size).
+ */
 function handOutArmour(player) {
   const armour = Ironman.data.modes[Ironman.modeOf(player)]?.armour;
   if (!armour) return Ironman.message("armourNotIron");
+  const request = { player, items: null };
+  Ironman.api.emitCustomEvent("ironman:armour", request);
+  const items = request.items ?? armour.map((name) => core.ItemIdentifiers[name]);
   const inv = player.getInventory();
-  if (inv.getFreeSlots() < armour.length) return Ironman.message("armourFull");
-  for (const name of armour) inv.adds(core.ItemIdentifiers[name], 1);
+  if (inv.getFreeSlots() < items.length) return Ironman.message("armourFull");
+  for (const id of items) inv.adds(id, 1);
   return Ironman.message("armour");
 }
 

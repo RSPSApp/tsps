@@ -38,6 +38,15 @@ const MAX_STACK = 2147483647;
 const CURRENCY_IDS = new Set([995, 6529, 21555]);
 /** loottracker_add_loot (npc, key, obj, count); cache script 7192. */
 const LOOT_TRACKER_SCRIPT = 7192;
+/**
+ * Wiki (Drops): "Tradeable drops will remain on the ground for 200 game ticks", untradeable ones 300 (the
+ * ground-item default). The recordings agree for tradeables (rsprox_transcripts/224/01463.txt tick 3491:
+ * fiendish ashes and a bolt at reveal=100, despawn=200); they also show untradeable keys at 200, which the
+ * Wiki overrides. Player drops keep 300 (232/00428.txt, 241/900032.txt: despawn=300).
+ * "Tradeable" is the Wiki's (between players), not the cache's Grand Exchange flag: burnt meat and rings of
+ * dueling below (8) trade but are not on the Exchange, and burnt meat drops at despawn=200 too (224/01463.txt tick 2092).
+ */
+const TRADEABLE_DROP_DESPAWN_TICKS = 200;
 /** Each kill's loot key (script 7192), counting up as live's do. */
 let lootKey = 1;
 const RING_OF_WEALTH_TABLES = new Set(["rareDrop", "gem", "megaRare"]);
@@ -1255,18 +1264,43 @@ function placeDrops(player, drops, location, placement = {}) {
       if (amount <= 0) continue;
     }
     const itemId = droppedItemId(drop);
+    const lifetime = dropLifetime(player, itemId, options);
     const item = new Item(itemId, amount);
     const stackable = item.getDefinition && item.getDefinition()
       ? item.getDefinition().isStackable()
       : false;
     if (stackable) {
-      itemOnGroundManager.registerLocation(player, item, location, undefined, options);
+      itemOnGroundManager.registerLocation(player, item, location, undefined, lifetime);
     } else {
       for (let i = 0; i < amount; i++) {
-        itemOnGroundManager.registerLocation(player, new Item(itemId, 1), location, undefined, options);
+        itemOnGroundManager.registerLocation(player, new Item(itemId, 1), location, undefined, lifetime);
       }
     }
   }
+}
+
+/**
+ * A drop's ground options with the monster-drop lifetime: tradeable items last
+ * {@link TRADEABLE_DROP_DESPAWN_TICKS}; untradeables, a drop's own `despawnDelay` and an instance's
+ * own floor lifetime (PrivateArea.groundItemDespawnDelay) are left as they are. `area` is where the
+ * stack lands (registerLocation's privateArea: the player's own by default).
+ */
+function dropLifetime(player, itemId, options, area = player.getPrivateArea?.()) {
+  if (options.despawnDelay != null) return options;
+  if (area?.groundItemDespawnDelay?.() != null) return options;
+  if (ItemDefinition.forId(itemId)?.isPlayerTradeable?.() !== true) return options;
+  return { ...options, despawnDelay: TRADEABLE_DROP_DESPAWN_TICKS };
+}
+
+/**
+ * "npc-drops:ground-options" { player, itemId, area?, options? }: the ground options a kill's loot placed by its own
+ * plugin (a boss's loot tile, a corpse's pack overflow) should pass to registerLocation, so it gets the monster-drop
+ * lifetime as placeDrops gives it. Answered in `options`; `area` is the registerLocation privateArea, if not the player's.
+ */
+function groundOptions(event) {
+  if (!event?.player || !Number.isInteger(event.itemId)) return;
+  const area = Object.hasOwn(event, "area") && event.area !== undefined ? event.area : event.player.getPrivateArea?.();
+  event.options = dropLifetime(event.player, event.itemId, event.options ?? {}, area);
 }
 
 /**
@@ -1339,6 +1373,7 @@ module.exports = {
       request.drops.push(...rollTable(table, request.player, npc, killContext(request.player, npc), source));
     });
     api.onCustomEvent("npc-drops:place", placeRolled);
+    api.onCustomEvent("npc-drops:ground-options", groundOptions);
     api.onCustomEvent("npc-drops:report", reportRolled);
 
     api.onNpcDeath(({ killer, npc, npcId, damagers }) => {
@@ -1383,5 +1418,5 @@ module.exports = {
   _test: { loadDrops, tablesByNpc, sharedTables, sharedCategories, rollSharedTable, rollSharedRequest },
 
   // Exposed for the smoke test.
-  __internals: { questRequirement, npcCombatLevel, withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
+  __internals: { questRequirement, npcCombatLevel, withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, groundOptions, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
 };

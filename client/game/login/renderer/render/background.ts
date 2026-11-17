@@ -3,11 +3,12 @@ import { getTitleBackgroundLayout } from "../layout/geometry";
 
 export function drawTitleBackgroundToCtx(host: LoginRendererHost, ctx: RenderContext) {
 
-        if (!host.titleBackgroundImage) return;
+        const image = host.customTitleBackgroundImage ?? host.titleBackgroundImage;
+        if (!image) return;
 
         const bg = getTitleBackgroundLayout(host);
         ctx.drawImage(
-            host.titleBackgroundImage,
+            image,
             bg.drawX,
             bg.drawY,
             bg.drawW,

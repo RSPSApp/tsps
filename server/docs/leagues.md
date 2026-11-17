@@ -2303,9 +2303,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   Zombie Pirate Lockers (the plugin drops loot with no menu-option event), the Ornate Lockbox (a
   "Take", no lockbox handler), the Varlamore Moon Chest and its "moon key" chest (no content); so do
   a bucket of sand (no sandpit fill), a grape barrel for the Foreman (its loc has no actions), the
-  icy basalt's Weiss teleport, a herring on a Mighty tree, an Elven teleport crystal and a
-  teleport-anchoring scroll (no plugin answers their use), and a Sacred eel dissection (no dissection
-  interaction). Obtain tasks with no content behind them also stay unmapped: Arnold Lydspor's Swan
+  icy basalt's Weiss teleport, a herring on a Mighty tree, an Elven teleport crystal, and a
+  teleport-anchoring scroll (its Read task is now mapped; Abyssal demon player teleports are handled,
+  while Elder Chaos druid pulls remain unsupported; see teleport-anchoring-scroll.md), and a Sacred
+  eel dissection (no dissection interaction). Obtain tasks with no content behind them also stay
+  unmapped: Arnold Lydspor's Swan
   Song hands over only a small fishing net ("Receive a gift from Arnold"), a Gorak exists only in
   its quest and has no drop table ("Get a Gem from a Gorak"), an Ecumenical Key is only a Nex shard
   combine here, not the Wilderness God Wars drop the task names ("Obtain an Ecumenical Key"), the

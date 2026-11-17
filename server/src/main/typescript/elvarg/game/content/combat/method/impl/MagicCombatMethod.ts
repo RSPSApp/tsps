@@ -19,7 +19,10 @@ import { Spell } from "../../magic/Spell";
 import { Autocasting } from "../../magic/Autocasting";
 import { CrossFloor } from "../../../../CrossFloor";
 import { ChatType } from "../../../../../net/protocol/ClientProtocol";
+import { lazyRequire } from "../../../../../util/LazyRequire";
 
+
+const getCombatSpells = lazyRequire(() => require("../../magic/CombatSpells").CombatSpells);
 
 export class MagicCombatMethod extends CombatMethod {
 
@@ -111,7 +114,7 @@ export class MagicCombatMethod extends CombatMethod {
      */
     private static sendBloodDrainLine(character: Mobile, spell: CombatSpell, hits: PendingHit[]): void {
         if (!character.isPlayer()) return;
-        const { CombatSpells } = require("../../magic/CombatSpells");
+        const CombatSpells = getCombatSpells();
         if (![CombatSpells.BLOOD_RUSH, CombatSpells.BLOOD_BURST, CombatSpells.BLOOD_BLITZ, CombatSpells.BLOOD_BARRAGE].includes(spell)) return;
         const drained = hits.filter((hit) => hit.isAccurate()).length;
         if (drained === 0) return;

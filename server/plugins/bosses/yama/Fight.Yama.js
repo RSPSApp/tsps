@@ -302,9 +302,9 @@ class Fight {
       const noteId = ItemDefinition.forId(drop.itemId).getNoteId();
       const itemId = drop.noted && noteId >= 0 && ItemDefinition.forId(noteId).isNoted() ? noteId : drop.itemId;
       if (ItemDefinition.forId(itemId).isStackable()) {
-        manager.registerLocation(this.player, new Item(itemId, drop.amount), where, this.session.area);
+        manager.registerLocation(this.player, new Item(itemId, drop.amount), where, this.session.area, lootOptions(this.player, itemId, this.session.area));
       } else {
-        for (let i = 0; i < drop.amount; i++) manager.registerLocation(this.player, new Item(itemId, 1), where, this.session.area);
+        for (let i = 0; i < drop.amount; i++) manager.registerLocation(this.player, new Item(itemId, 1), where, this.session.area, lootOptions(this.player, itemId, this.session.area));
       }
     }
   }
@@ -333,6 +333,13 @@ class Fight {
     if (this.yama && this.yama.isRegistered?.()) Common.api.removeNpc(this.yama);
     this.yama = null;
   }
+}
+
+/** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+function lootOptions(player, itemId, area) {
+  const request = { player, itemId, area, options: {} };
+  Common.api.emitCustomEvent("npc-drops:ground-options", request);
+  return request.options;
 }
 
 /** A fight's length as Yama's messages print it: m:ss. */

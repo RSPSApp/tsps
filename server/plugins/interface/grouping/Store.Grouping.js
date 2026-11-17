@@ -11,7 +11,11 @@
  * account's main, league and hardcore characters share its name but not their groups.
  *
  * Group: { id, profile, leader, members: Set<encoded>, joined: Map<encoded, ms>,
- *          invites: Map<encoded, expiry ms> }
+ *          invites: Map<encoded, expiry ms>, ironman: boolean,
+ *          leaving: Map<encoded, { until: ms, kicked: boolean }>, seen: Map<encoded, ms>,
+ *          stepDown: { successor: encoded, until: ms } | null, name: string ("" for none) }
+ * A Group Ironman group (ironman) keeps a member who leaves or is removed for a while, in leaving;
+ * seen is when each member last logged in or out, and stepDown a leader's hand-over still waiting.
  */
 
 const fs = require("fs");
@@ -40,6 +44,8 @@ function revive(saved) {
   for (const member of saved.members) {
     if (typeof member.name === "string" && member.name) spellings.set(BigInt(member.account), member.name);
   }
+  const leaving = (saved.leaving ?? []).map((entry) =>
+    [BigInt(entry.account), { until: Number(entry.until) || 0, kicked: entry.kicked === true }]);
   return {
     id: saved.id,
     profile: saved.profile,
@@ -47,6 +53,13 @@ function revive(saved) {
     members: new Set(members.map(([account]) => account)),
     joined: new Map(members),
     invites: new Map(),
+    ironman: saved.ironman === true,
+    leaving: new Map(leaving),
+    seen: new Map(saved.members.filter((member) => Number(member.seen) > 0)
+      .map((member) => [BigInt(member.account), Number(member.seen)])),
+    stepDown: saved.stepDown
+      ? { successor: BigInt(saved.stepDown.successor), until: Number(saved.stepDown.until) || 0 } : null,
+    name: typeof saved.name === "string" ? saved.name : "",
   };
 }
 
@@ -79,7 +92,14 @@ function serialise(group) {
     leader: String(group.leader),
     members: [...group.members].map((account) => ({
       account: String(account), name: spellings.get(account) ?? "", joined: group.joined.get(account) ?? 0,
+      ...(group.seen.get(account) ? { seen: group.seen.get(account) } : {}),
     })),
+    ...(group.ironman ? { ironman: true } : {}),
+    ...(group.name ? { name: group.name } : {}),
+    ...(group.stepDown ? { stepDown: { successor: String(group.stepDown.successor), until: group.stepDown.until } } : {}),
+    ...(group.leaving.size ? {
+      leaving: [...group.leaving].map(([account, { until, kicked }]) => ({ account: String(account), until, kicked })),
+    } : {}),
   };
 }
 
@@ -104,10 +124,12 @@ function all() {
   return load().values();
 }
 
-function create(profile, leader, now) {
+/** A new group led by `leader`; `ironman` makes it a Group Ironman group for good. */
+function create(profile, leader, now, ironman = false) {
   load();
   const group = {
     id: nextId++, profile, leader, members: new Set([leader]), joined: new Map([[leader, now]]), invites: new Map(),
+    ironman: ironman === true, leaving: new Map(), seen: new Map([[leader, now]]), stepDown: null, name: "",
   };
   groups.set(group.id, group);
   memberships.set(slot(profile, leader), group);
@@ -119,6 +141,7 @@ function create(profile, leader, now) {
 function addMember(group, account, now) {
   group.members.add(account);
   group.joined.set(account, now);
+  group.seen.set(account, now);
   group.invites.delete(account);
   memberships.set(slot(group.profile, account), group);
   save();
@@ -128,13 +151,51 @@ function addMember(group, account, now) {
 function removeMember(group, account) {
   group.members.delete(account);
   group.joined.delete(account);
+  group.leaving.delete(account);
+  group.seen.delete(account);
+  if (group.stepDown?.successor === account) group.stepDown = null;
   memberships.delete(slot(group.profile, account));
   save();
 }
 
 function setLeader(group, account) {
   group.leader = account;
+  group.stepDown = null;
   save();
+}
+
+/** A leader's hand-over to `successor` at `until` (ms), or null to call it off. */
+function setStepDown(group, stepDown) {
+  group.stepDown = stepDown;
+  save();
+}
+
+function setName(group, name) {
+  group.name = name;
+  save();
+}
+
+/** The group with this name, ignoring case, or undefined. */
+function byName(name) {
+  const wanted = String(name ?? "").toLowerCase();
+  return [...all()].find((group) => group.name && group.name.toLowerCase() === wanted);
+}
+
+/** Notes when a member last logged in or out (saved, for the inactive-leader rule). */
+function markSeen(group, account, now) {
+  if (!group.members.has(account)) return;
+  group.seen.set(account, now);
+  save();
+}
+
+/** Marks a member of a Group Ironman group as leaving until `until` (ms); `kicked` if removed by the leader. */
+function setLeaving(group, account, until, kicked) {
+  group.leaving.set(account, { until, kicked: kicked === true });
+  save();
+}
+
+function clearLeaving(group, account) {
+  if (group.leaving.delete(account)) save();
 }
 
 function remove(group) {
@@ -211,7 +272,8 @@ function reset() {
 }
 
 module.exports = {
-  FILE_ENV, all, byId, groupOf, create, addMember, removeMember, setLeader, remove, byTenure,
+  FILE_ENV, all, byId, byName, groupOf, create, setName, addMember, removeMember, setLeader, setStepDown, markSeen, setLeaving, clearLeaving,
+  remove, byTenure,
   invitationStands, invitationsFor, withdrawInvitations, setPresent, isPresent, rememberSpelling, spellingOf,
   save, reset,
 };

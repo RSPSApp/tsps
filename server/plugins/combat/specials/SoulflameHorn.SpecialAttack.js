@@ -1,7 +1,8 @@
 // Soulflame horn Entice (https://oldschool.runescape.wiki/w/Soulflame_horn): the horn empowers up to
 // three other players within three tiles, costing 25% energy per player affected, and the user too
 // at no extra cost. An empowered player's next melee attack within 10 ticks is a successful hit (only
-// the first accuracy roll of a multi-hit attack); against a player it is +50% accuracy instead. With
+// the first accuracy roll of a multi-hit attack, or the second for dragon/burning claws); against a
+// player it is +50% accuracy instead. With
 // no one eligible nearby it costs nothing and sends "You blow your horn into the wind...". Inside
 // Nightmare, Nex, the raids, Royal Titans and Yama everyone can receive it (Ironmen included);
 // elsewhere a player needs Accept Aid on (Ironmen never have it). 4-tick cooldown.
@@ -20,6 +21,7 @@ const DURATION_TICKS = 10;
 const COOLDOWN_TICKS = 4;
 /** Wiki: "If attacking another player, the effect is replaced by a 50% accuracy increase". */
 const PVP_ACCURACY_MULTIPLIER = 1.5;
+const CLAW_SPECIAL_IDS = new Set(["dragon_claws", "burning_claws"]);
 const SOUND = 10236;
 const NO_ONE_MESSAGE = "<col=ef1020>You blow your horn into the wind. No-one nearby is able to listen.";
 const USER_MESSAGE = "<col=3366ff>You encourage nearby allies, which also empowers your next melee attack!";
@@ -137,6 +139,19 @@ module.exports = function registerSoulflameHornSpecialAttack(api) {
     } else roll.forceAccurate = true;
   }
 
+  /** First-successful specials spend Entice on the attack, even if its first check lands. */
+  function onFirstSuccessfulAccuracy({ attacker, target, combatType, specialId, accuracyRolls }) {
+    if (!attacker?.isPlayer?.() || combatType !== CombatType.MELEE || !empowered.has(attacker)) return;
+    // The identity was captured with the attack's traits, before shared prepare hooks.
+    const roll = accuracyRolls?.[CLAW_SPECIAL_IDS.has(specialId) ? 1 : 0];
+    if (!roll) return;
+    empowered.delete(attacker);
+    // Wiki replaces the guarantee in PvP; applying that replacement to the same claw check
+    // is inferred from the adjacent rules, rather than established by a PvP capture.
+    if (target?.isPlayer?.()) roll.accuracyMultiplier = PVP_ACCURACY_MULTIPLIER;
+    else roll.forceAccurate = true;
+  }
+
   /** The roll is over once its damage is out: the +50% belongs to that one roll. */
   function endPvpRoll({ attacker }) {
     if (!attacker || !pvpRoll.delete(attacker)) return;
@@ -160,6 +175,7 @@ module.exports = function registerSoulflameHornSpecialAttack(api) {
     combatMethod: new SoulflameHornCombatMethod(),
   });
   api.onCombatHitRoll(onHitRoll);
+  api.onCustomEvent("combat:first-successful-accuracy", onFirstSuccessfulAccuracy);
   api.onCombatHitDamage(endPvpRoll);
   api.registerMeleeAttackAccuracyModifier(pvpAccuracy);
 };

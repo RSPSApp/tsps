@@ -21,6 +21,8 @@ let core;
 let Barrows;
 let diaryApi;
 let cleanupPlayer;
+let deathHook;
+let defeatedHook;
 const subjects = new Set();
 let originalError;
 let errors;
@@ -60,16 +62,27 @@ before(async () => {
   diaryApi.onCustomEvent("diary:is-complete", Diaries._test.onIsComplete);
   diaryApi.onCustomEvent("collection-log:obtain", (event) => event.player.collected?.push([event.itemId, event.amount]));
   diaryApi.onCustomEvent("barrows:chest-looted", (event) => { event.player.chestEvents = (event.player.chestEvents ?? 0) + 1; });
+  // Hook order as on the server: the Death's Office's first-grave arrival (deathsoffice loads before minigames).
+  diaryApi.onPlayerDeath((event) => {
+    if (!event.player.firstGrave || event.handled) return;
+    event.handled = true;
+    event.player.tookByDeathsOffice = true;
+  });
   Barrows.register(new Proxy({
     core,
     getWorld: () => core.World,
     getRegionManager: () => core.RegionManager,
     getTaskManager: () => core.TaskManager,
     onPlayerLogout: (fn) => { cleanupPlayer = fn; },
+    onPlayerDeath: (fn) => { deathHook = fn; },
+    onPlayerDefeated: (fn) => { defeatedHook = fn; },
     emitCustomEvent: (name, request) => diaryApi.emitCustomEvent(name, request),
     // A menu is logged as [title, ...option texts] on its player.
     sendMultiChatboxPrompt: (subject, title, ...rest) => (subject.prompts ??= []).push([title, ...rest.filter((entry) => typeof entry === "string")]),
   }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  // Barrows' own death hooks, into the real PluginManager after the Death's Office stand-in.
+  diaryApi.onPlayerDeath(deathHook);
+  diaryApi.onPlayerDefeated(defeatedHook);
 });
 
 function player() {
@@ -609,6 +622,61 @@ test("Barrows: after the warning the last charge opens the next locked hallway, 
   processPlayer({ player: subject });
   Barrows._test.useDoor(subject, third);
   assert.equal(subject.sent.messages.at(-1), "This door is locked.");
+});
+
+test("Barrows: a death in the tunnels leaves them too: a warned pick crumbles, kept or dropped; an unwarned one, or a death outside, keeps it", () => {
+  const { crumbleWarnedLockpickOnDeath } = Barrows._test;
+  // The death's own order (PlayerDeath.ts): kept items back, emitPlayerDefeated, then emitPlayerDeath,
+  // all on the death tile, through the real PluginManager with Barrows' registered hooks.
+  const die = (subject) => {
+    PluginManager.emitPlayerDefeated(null, subject);
+    PluginManager.emitPlayerDeath({ player: subject, killer: null, itemsLost: true, handled: false });
+  };
+  const PICK = core.ItemIdentifiers.STRANGE_OLD_LOCKPICK;
+  const warnedPick = (subject, first) => {
+    subject.getInventory().add(lockpick(1), false);
+    useOn(subject, first, subject.getInventory().get(0));
+    assert.equal(subject.sent.messages.at(-1), "The Strange old lockpick almost breaks, but seems in good enough shape for one more use.");
+    return subject.getInventory().get(0);
+  };
+  // Kept (Protect Item): back in the inventory on the death tile as the death hook runs.
+  const kept = player();
+  warnedPick(kept, lockedHallway(kept).first);
+  die(kept);
+  assert.equal(kept.getInventory().getAmount(PICK), 0, "a kept warned pick crumbles");
+  // Dropped: it goes to neither the grave nor the floor.
+  const dropped = player();
+  const item = warnedPick(dropped, lockedHallway(dropped).first);
+  const drop = (subject, entry, extra = {}) => {
+    const event = { player: subject, killer: null, item: entry, kept: false, shouldDropItems: true, dropEligible: false,
+      suppressDefaultDrop: false, handled: false, extraDrops: [], ...extra };
+    crumbleWarnedLockpickOnDeath(event);
+    return event.handled;
+  };
+  assert.equal(drop(dropped, item), true, "a dropped warned pick crumbles");
+  assert.equal(drop(dropped, item, { kept: true }), false, "a kept one is left to the death hook");
+  assert.equal(drop(dropped, item, { shouldDropItems: false }), false, "a death that keeps everything keeps it");
+  // Not warned, or the death is not in the tunnels: untouched.
+  const fresh = player();
+  lockedHallway(fresh);
+  fresh.getInventory().add(lockpick(5), false);
+  assert.equal(drop(fresh, fresh.getInventory().get(0)), false);
+  die(fresh);
+  assert.equal(fresh.getInventory().getAmount(PICK), 1, "an unwarned pick survives");
+  const outside = player();
+  const warned = warnedPick(outside, lockedHallway(outside).first);
+  outside.setLocation(SURFACE.clone());
+  assert.equal(drop(outside, warned), false);
+  die(outside);
+  assert.equal(outside.getInventory().getAmount(PICK), 1, "a death out of the tunnels is not ours");
+  // A first-ever grave death: the Death's Office tutorial (Tutorial.DeathsOffice.js arriveAtDeath, registered
+  // before Barrows) takes the onPlayerDeath, so Barrows' death hook never runs. Its stand-in here takes it the same way.
+  const firstGrave = player();
+  warnedPick(firstGrave, lockedHallway(firstGrave).first);
+  firstGrave.firstGrave = true;
+  die(firstGrave);
+  assert.equal(firstGrave.tookByDeathsOffice, true, "the tutorial took the death");
+  assert.equal(firstGrave.getInventory().getAmount(PICK), 0, "a kept warned pick still crumbles");
 });
 
 test("Barrows: the lockpick on a door outside the tunnels, or another item on a door, is not ours", () => {

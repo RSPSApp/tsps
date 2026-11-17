@@ -2465,6 +2465,7 @@ module.exports = function registerDragonSlayerII(api) {
     return false;
   }
   function onLogin({ player: p }) {
+    clearVeosTravel({ player: p });
     syncUngaelExit(p);
     syncForgeHeadVarbits(p);
     if (stage(p) >= S.KEYS && (p.getAttribute(ATTR_CRYPT_ORDER) || p.getAttribute(ATTR_CRYPT_PLACED)
@@ -2526,6 +2527,7 @@ module.exports = function registerDragonSlayerII(api) {
     p.setAttribute(ATTR_ASSAULT_DEFENSE_ACTIVE, false);
   }
   function onPlayerLogout({ player: p }) {
+    clearVeosTravel({ player: p });
     if (p.getAttribute(ATTR_AREA) instanceof QuestArea) {
       leaveArea(p);
       p.setAttribute(ATTR_ASSAULT_DEFENSE_ACTIVE, false);
@@ -2578,8 +2580,20 @@ module.exports = function registerDragonSlayerII(api) {
       ? "The locator orb pulses strongly. The key piece must be buried very close by."
       : `The locator orb glows and pulls you ${direction}. It shocks you as you use it.`);
   }
+  function clearVeosTravel({ player }) {
+    if (player.getAttribute(ATTR_VEOS_TRAVEL_DESTINATION) != null) {
+      player.setAttribute(ATTR_VEOS_TRAVEL_DESTINATION, null);
+    }
+  }
+  function closeVeosTravel(event) {
+    // Switching between player/NPC lines also closes the previous group, but
+    // mounts its replacement first. Only an actual close ends this intent.
+    if (event.player.getPacketSender?.()?.getChatboxGroupId?.() < 0) clearVeosTravel(event);
+  }
   function rememberVeosTravelDestination(event) {
-    if (!VEOS_NPC_IDS.has(event.npcId) || stage(event.player) < S.KEYS || stage(event.player) >= S.FORGE) return;
+    if (!VEOS_NPC_IDS.has(event.npcId)) return;
+    clearVeosTravel(event);
+    if (stage(event.player) < S.KEYS || stage(event.player) >= S.FORGE) return;
     const destination = VEOS_DESTINATIONS[event.option];
     if (destination) event.player.setAttribute(ATTR_VEOS_TRAVEL_DESTINATION, [destination.getX(), destination.getY(), destination.getZ()]);
   }
@@ -2596,12 +2610,21 @@ module.exports = function registerDragonSlayerII(api) {
     return true;
   }
   function finishVeosTravel(event) {
-    const { player: p, npcId, text } = event;
+    const { player: p, npc, npcId, text } = event;
     if (!VEOS_NPC_IDS.has(npcId) || !/^As you wish, I hope you don't get seasick, it is a\s+long voyage\.$/.test(text ?? "")) return;
     const destination = p.getAttribute(ATTR_VEOS_TRAVEL_DESTINATION);
     if (!Array.isArray(destination) || destination.length !== 3) return;
+    // Client of Kourend already owns ordinary travel and validates the live
+    // Veos form. Keep that callback, rather than replacing its destination/guard.
+    if (event.after) {
+      clearVeosTravel(event);
+      return;
+    }
     event.after = () => {
-      p.setAttribute(ATTR_VEOS_TRAVEL_DESTINATION, null);
+      if (p.getAttribute(ATTR_VEOS_TRAVEL_DESTINATION) !== destination) return;
+      clearVeosTravel(event);
+      if (stage(p) < S.KEYS || stage(p) >= S.FORGE) return;
+      if (npc && npc.getCurrentDefinition(p)?.getId() !== npcId) return;
       p.moveTo(new Location(destination[0], destination[1], destination[2]));
     };
   }
@@ -2661,7 +2684,6 @@ module.exports = function registerDragonSlayerII(api) {
   api.persistAttribute(ATTR_ASSAULT_INDEX); api.persistAttribute(ATTR_ASSAULT_CHECKPOINT);
   api.persistAttribute(ATTR_ASSAULT_DEFENSE_ACTIVE); api.persistAttribute(ATTR_ASSAULT_DEFENDED);
   api.persistAttribute(ATTR_MORYTANIA); api.persistAttribute(ATTR_ORB_TARGET);
-  api.persistAttribute(ATTR_VEOS_TRAVEL_DESTINATION);
   api.persistAttribute(ATTR_MURAL_READ); api.persistAttribute(ATTR_NOTES_READ); api.persistAttribute(ATTR_KARAMJA_JOURNAL);
   api.persistAttribute(ATTR_CRANDOR_BLOCKAGE_PROGRESS);
   api.persistAttribute(ATTR_MURAL_GUARDIAN_DEFEATED);
@@ -2740,6 +2762,8 @@ module.exports = function registerDragonSlayerII(api) {
   api.onCustomEvent("npc-dialogue:action", handleEllenTrainingAction);
   api.onCustomEvent("npc-dialogue:choice", rememberVeosTravelDestination);
   api.onCustomEvent("npc-dialogue:line", finishVeosTravel);
+  api.onBeforeNpcInteraction(clearVeosTravel);
+  api.onCustomEvent("interface:closed", closeVeosTravel);
   api.onObjectFirstClick(O.CAVE_63, enterKaramjaMaze);
   api.onObjectInteraction("Cave", {
     Enter(event) {

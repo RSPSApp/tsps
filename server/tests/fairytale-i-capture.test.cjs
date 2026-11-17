@@ -438,6 +438,18 @@ test("the grove at 70: the Gate Keeper, the box, the sidestep and synth 1107, th
   assert.deepEqual(at(f), [2396, 4379, 0]);
 });
 
+test("a thrall lands no hit on the Tanglefoot or its babies, which only magic secateurs (or recoil) can hurt (the Wiki)", async (t) => {
+  const f = h.actor(t, { stage: 70, at: BY_GODFATHER, items: [] });
+  for (const id of [N.TANGLEFOOT, N.BABY_TANGLEFOOT, N.BABY_TANGLEFOOT_2]) {
+    const attack = { player: f.player, thrall: null, target: h.spawn(f, id, GODFATHER), cancelled: false };
+    h.PM.emitCustomEvent("magic:thrall-attack", attack);
+    assert.equal(attack.cancelled, true, `npc ${id}`);
+  }
+  const other = { player: f.player, thrall: null, target: h.spawn(f, N.FAIRY_GODFATHER, GODFATHER), cancelled: false };
+  h.PM.emitCustomEvent("magic:thrall-attack", other);
+  assert.equal(other.cancelled, false, "other NPCs still take thrall hits");
+});
+
 test("completion after 'Grazie infinite!': the scroll's Queen's secateurs and 'Some Magic Secateurs', the recipe varbits cleared; then the Godfather ignores the player and Malignius offers a pair (4179-4201, 4454-4482)", async (t) => {
   const f = h.actor(t, { stage: 80, at: BY_GODFATHER, items: [I.QUEENS_SECATEURS], attributes: { [ITEMS]: "18,19,20" } });
   const godfather = h.spawn(f, N.FAIRY_GODFATHER, GODFATHER);
@@ -483,6 +495,25 @@ test("completion after 'Grazie infinite!': the scroll's Queen's secateurs and 'S
   await h.talk(g, early);
   await until(g, "... MORE ...");
   assert.ok(!h.shown(g).text.includes("About those enchanted secateurs again..."), h.shown(g).text);
+});
+
+test("at 80 without the Queen's secateurs the Godfather neither talks nor completes the quest; one dropped mid-chat leaves it open", async (t) => {
+  const f = h.actor(t, { stage: 80, at: BY_GODFATHER, items: [] });
+  const godfather = h.spawn(f, N.FAIRY_GODFATHER, GODFATHER);
+  const from = f.messages.length;
+  await h.talk(f, godfather);
+  h.ticks(f, 2);
+  assert.equal(h.shown(f), null, "no transcript gives him a line without them");
+  assert.deepEqual(f.messages.slice(from).map((m) => m.text).filter((m) => !m.startsWith("You have unlocked a new music track")), []);
+  assert.equal(h.stage(f), 80);
+
+  const g = h.actor(t, { stage: 80, at: BY_GODFATHER, items: [I.QUEENS_SECATEURS] });
+  const again = h.spawn(g, N.FAIRY_GODFATHER, GODFATHER);
+  await h.talk(g, again);
+  await until(g, "Grazie infinite!");
+  g.player.getInventory().deleteNumber(I.QUEENS_SECATEURS, 1);
+  await h.continueLine(g);
+  assert.equal(h.stage(g), 80, "the pair is what he takes");
 });
 
 test("the dig says 'I can't believe I'm about to do this!' as it starts (2216)", async (t) => {

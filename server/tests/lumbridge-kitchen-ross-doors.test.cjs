@@ -12,7 +12,7 @@
 // ObjectActionPacketListener.executeAction, and the movement queue and tick tasks running.
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { before, test } = require("node:test");
+const { before, after, test } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
@@ -36,6 +36,8 @@ before(async () => {
   core.RegionManager.loadMapFiles(2610, 3316);
   PluginManager.emitServerStartup({});
 });
+// Stop the services this fixture starts so its native test process can finish normally.
+after(() => PluginManager.emitServerShutdown({}));
 
 function actor(x, y, z = 0) {
   const channel = {

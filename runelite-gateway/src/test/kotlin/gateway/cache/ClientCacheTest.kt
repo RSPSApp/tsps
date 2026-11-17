@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.awt.image.BufferedImage
 import java.nio.ByteBuffer
 import java.util.zip.CRC32
 
@@ -67,6 +68,25 @@ class ClientCacheTest {
         )
     }
 
+    @Test
+    fun `an added sprite is served under its id, listed in the sprite index and the master index`() {
+        val sprite = Sprites.encode(BufferedImage(4, 2, BufferedImage.TYPE_INT_RGB).apply { setRGB(1, 1, 0x3366CC) })
+        val withSprite = ClientCache(cache, additions = listOf(NewGroup(SPRITES_ARCHIVE, ADDED_SPRITE, "test-banner", sprite)))
+        val container = requireNotNull(withSprite.container(SPRITES_ARCHIVE, ADDED_SPRITE))
+        assertArrayEquals(sprite, Container.decompress(container))
+        val table = ReferenceTable.decode(Container.decompress(requireNotNull(withSprite.container(DiskStore.MASTER_ARCHIVE, SPRITES_ARCHIVE))))
+        val group = table.groups.getValue(ADDED_SPRITE)
+        assertEquals(listOf(crc(container), container.size, sprite.size), listOf(group.crc, group.length, group.uncompressedLength))
+        assertEquals(cache.table(SPRITES_ARCHIVE).groups.keys + ADDED_SPRITE, table.groups.keys)
+        val master = ByteBuffer.wrap(Container.decompress(withSprite.masterIndex()))
+        val index = requireNotNull(withSprite.container(DiskStore.MASTER_ARCHIVE, SPRITES_ARCHIVE))
+        assertEquals(crc(index), master.getInt(SPRITES_ARCHIVE * 8))
+        assertEquals(cache.table(SPRITES_ARCHIVE).version, master.getInt(SPRITES_ARCHIVE * 8 + 4))
+        // The cache's own sprites and the other patches are as before.
+        assertArrayEquals(cache.container(SPRITES_ARCHIVE, 0), withSprite.container(SPRITES_ARCHIVE, 0))
+        assertArrayEquals(client.container(CONFIG_ARCHIVE, ENUM_GROUP), withSprite.container(CONFIG_ARCHIVE, ENUM_GROUP))
+    }
+
     private fun servedTable(archive: Int): ReferenceTable =
         ReferenceTable.decode(Container.decompress(requireNotNull(client.container(DiskStore.MASTER_ARCHIVE, archive))))
 
@@ -84,5 +104,7 @@ class ClientCacheTest {
         const val VARBIT_GROUP = 14
         const val GROUPING_WORLDS_ENUM = 850
         const val NO_WORLD = -1
+        const val SPRITES_ARCHIVE = 8
+        const val ADDED_SPRITE = 30_999
     }
 }

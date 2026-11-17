@@ -22,9 +22,9 @@ const Lair = require('../plugins/bosses/phantommuspah/Lair.PhantomMuspah');
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'muspah-scoreboard-'));
 const hooks = { objects: {}, npcDeaths: [], routes: [], defeated: [], deaths: [], persisted: new Map() };
-/** What the lair moves to the exit: [owner, itemId] per stack registered. */
+/** What the lair moves to the exit: [stack, tile] per stack relocated. */
 const moved = [];
-const groundManager = { deregister() {}, registerLocation: (owner, item) => moved.push([owner, item.getId()]) };
+const groundManager = { relocate: (ground, tile) => moved.push([ground, tile]) };
 let INTERFACE, BOARD_MULTI, BOARD;
 let index = 1;
 
@@ -244,5 +244,30 @@ test("a lair death moves its floor loot to the exit, but not a stack already pic
   t.mock.method(World, "getItems", () => items);
   moved.length = 0;
   for (const handler of hooks.deaths) handler({ player: p, handled: false });
-  assert.deepEqual(moved.map(([, id]) => id), [4151], "the picked-up stack is in the inventory already");
+  assert.deepEqual(moved.map(([ground]) => ground.getItem().getId()), [4151], "the picked-up stack is in the inventory already");
+});
+
+// Wiki (Drops): tradeable loot lasts 200 ticks. Carried out on a death, it is the same stack: the time it has
+// already lain in the lair counts, and it is not given a fresh 300.
+test("loot moved out of the lair on a death keeps its drop timer", (t) => {
+  const { World, ItemOnGroundManager, Item, Location } = PluginManager.getCoreApi();
+  const p = realPlayer(t);
+  t.mock.method(p, 'getUsername', () => 'MuspahMover');
+  const area = {};
+  Lair._setSession(p, area);
+  t.after(() => Lair.sessionOf(p)?.end());
+  const items = World.getItems(), previous = items.splice(0), cycleBefore = World.getProcessCycle();
+  t.after(() => { items.splice(0, items.length, ...previous); World.processCycle = cycleBefore; });
+  t.mock.method(groundManager, 'relocate', (...args) => ItemOnGroundManager.relocate(...args));
+  World.processCycle = 7000;
+  const loot = ItemOnGroundManager.registerLocation(p, new Item(4151), new Location(2900, 10320, 0), area, { despawnDelay: 200 });
+  for (let i = 0; i < 120; i++) { World.processCycle++; ItemOnGroundManager.process(); }
+  const { expiresTick } = loot.getTiming();
+  for (const handler of hooks.deaths) handler({ player: p, handled: false });
+  const outside = World.getItems().filter((ground) => !ground.isPendingRemoval());
+  assert.equal(outside.length, 1);
+  const [x, y, z] = Common.data.lair.exit;
+  assert.deepEqual([outside[0].getItem().getId(), outside[0].getPrivateArea(), outside[0].getPosition().getX(),
+    outside[0].getPosition().getY(), outside[0].getPosition().getZ()], [4151, null, x, y, z]);
+  assert.equal(outside[0].getTiming().expiresTick, expiresTick, 'the move keeps the 200-tick timer running');
 });

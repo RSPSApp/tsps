@@ -16474,12 +16474,16 @@ test('Dragon Slayer II handles Veos direct cache travel options by their visible
 test('Port Piscarilius spawns the cache-active Veos with both onward boat options', async () => {
   const spawn = require('../data/definitions/npc-spawns.json')
     .find(({ x, y, name }) => name === 'Veos' && x === 1825 && y === 3691);
-  assert.equal(spawn?.id, 10724, '2147 is a null transform parent with no interaction options');
+  assert.equal(spawn?.id, 2147, 'the dock parent resolves separately for each player');
   const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
-  const actions = CacheDefinitions.getNpc(spawn.id).actions;
-  assert.equal(actions[0], 'Talk-to');
-  assert.equal(actions[2], 'Port Piscarilius');
-  assert.equal(actions[3], "Land's End");
+  for (const visibility of [1, 2]) {
+    const resolved = CacheDefinitions.resolveNpc(spawn.id, {
+      getVarbit: (id) => id === 12146 ? visibility : 0, getVarp: () => 0,
+    });
+    assert.equal(resolved.id, visibility === 1 ? 10727 : 10726);
+    assert.deepEqual(resolved.actions.filter(Boolean), ['Talk-to', 'Port Sarim', "Land's End"]);
+  }
+  assert.equal(CacheDefinitions.resolveNpc(spawn.id, { getVarbit: () => 0, getVarp: () => 0 }), undefined);
 });
 
 

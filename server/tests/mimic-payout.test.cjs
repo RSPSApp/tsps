@@ -184,7 +184,7 @@ test("opening into a nearly capped real Coins stack preserves every coin as inve
   const { Inventory } = require("../dist/game/model/container/impl/Inventory");
   const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
   const f = fixture("elite", 4), ground = [];
-  f.player.getPacketSender = () => ({sendItemContainer() {}, sendSubInterface() {}, sendInterfaceScript() {}});
+  f.player.getPacketSender = () => ({sendItemContainer() {}, sendSubInterface() {}, sendInterfaceScript() {}, sendRunEnergy() {}});
   const inventory = new Inventory(f.player);
   f.player.getInventory = () => inventory;
   inventory.setItem(0, f.item);

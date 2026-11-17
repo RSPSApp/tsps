@@ -61,6 +61,13 @@ function oneSpine(rolls) {
   }
 }
 
+/** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+function lootOptions(player, itemId, area) {
+  const request = { player, itemId, area, options: {} };
+  api.emitCustomEvent("npc-drops:ground-options", request);
+  return request.options;
+}
+
 function dropFor(player, drops, location) {
   const { Item, ItemDefinition } = core;
   const manager = api.getItemOnGroundManager();
@@ -68,8 +75,8 @@ function dropFor(player, drops, location) {
     if (!Number.isInteger(drop.itemId) || drop.amount <= 0) continue;
     const noteId = ItemDefinition.forId(drop.itemId).getNoteId();
     const itemId = drop.noted && noteId >= 0 && ItemDefinition.forId(noteId).isNoted() ? noteId : drop.itemId;
-    if (ItemDefinition.forId(itemId).isStackable()) manager.registerLocation(player, new Item(itemId, drop.amount), location);
-    else for (let i = 0; i < drop.amount; i++) manager.registerLocation(player, new Item(itemId, 1), location);
+    if (ItemDefinition.forId(itemId).isStackable()) manager.registerLocation(player, new Item(itemId, drop.amount), location, undefined, lootOptions(player, itemId));
+    else for (let i = 0; i < drop.amount; i++) manager.registerLocation(player, new Item(itemId, 1), location, undefined, lootOptions(player, itemId));
   }
 }
 

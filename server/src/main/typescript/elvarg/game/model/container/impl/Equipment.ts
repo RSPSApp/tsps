@@ -69,6 +69,9 @@ export class Equipment extends ItemContainer {
 
     public refreshItems(change?: { equipped: true; itemId: number; slot: number }): ItemContainer {
         this.getPlayer().getPacketSender().sendItemContainer(this, Equipment.INVENTORY_INTERFACE_ID);
+        // The run-orb packet is also the carried-weight update; wearing or removing an item changes
+        // the weight even while the run energy stays full (issue 5952).
+        this.getPlayer().getPacketSender().sendRunEnergy();
         if ((this.getPlayer().getNpcTransformationId?.() ?? -1) >= 0) {
             this.sendWornInventory();
         }

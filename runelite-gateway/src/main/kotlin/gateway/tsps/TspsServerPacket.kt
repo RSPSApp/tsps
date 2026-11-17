@@ -112,6 +112,7 @@ object TspsServerPacket {
     const val NOTIFICATION = 200
     const val GAMEMODE_DATA = 210
     const val SYSTEM_UPDATE = 220
+    const val URL_OPEN = 221
     const val DEBUG = 250
 
     val LENGTHS: Map<Int, Int> =
@@ -221,6 +222,7 @@ object TspsServerPacket {
             NOTIFICATION to -1,
             GAMEMODE_DATA to -2,
             SYSTEM_UPDATE to 4,
+            URL_OPEN to -2,
             DEBUG to -2,
         )
 }

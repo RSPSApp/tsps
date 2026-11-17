@@ -335,12 +335,25 @@ function modifyHit(event) {
   // Wiki: only melee "within melee distance" recoils. A tile between the player and the
   // mirrorback (a two-tile melee weapon such as a scythe) negates the effect.
   if (edgeDistance(npc, player) > 1) return;
-  const damage = hits.reduce((total, part) => total + (part.getDamage?.() ?? 0), 0);
-  if (damage <= 1) return;
+  const parts = hits.map((part) => part.getDamage?.() ?? 0);
+  let damage = parts.reduce((total, part) => total + part, 0);
+  if (player.hasVengeanceReturn?.()) {
+    // Vengeance takes the first part's recoil: the message, "Taste vengeance!" and three quarters
+    // of that part back on the Mirrorback; later parts still recoil (rsprox_transcripts/237/01179.txt
+    // tick 223: 13 and 6, a 9 rebound, 3 on the player; 237/01180.txt tick 65: 29 and 3, 21 and 1).
+    const first = parts.findIndex((part) => Math.floor(part * Shared.MIRRORBACK_RECOIL_FACTOR) > 0);
+    if (first >= 0) {
+      player.sendMessage(Shared.MIRRORBACK_VENGEANCE_MESSAGE);
+      core.CombatFactory.handleVengeance(player, npc, parts[first]);
+      damage -= parts[first];
+    }
+  }
+  const recoil = Math.floor(damage * Shared.MIRRORBACK_RECOIL_FACTOR);
+  if (recoil <= 0) return;
   player.getCombat().getHitQueue().addPendingDamage([
-    new core.HitDamage(Math.floor(damage / 2), core.HitMask.RED),
+    new core.HitDamage(recoil, core.HitMask.RED),
   ]);
-  CombatAchievements.avoidableDamage(player, Math.floor(damage / 2));
+  CombatAchievements.avoidableDamage(player, recoil);
 }
 
 /** The eggs themselves are inert: no attacks, no retaliation, no pursuit. */

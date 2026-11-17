@@ -212,6 +212,16 @@ export class TeleportHandler {
     }
 
     public static checkReqs(player: Player, targetLocation: Location, wildernessLevelLimit: number = 20, spellName?: string): boolean {
+        return TeleportHandler.playerReqs(player, wildernessLevelLimit)
+            && TeleportHandler.destinationAllowed(player, targetLocation, wildernessLevelLimit, spellName);
+    }
+
+    /**
+     * checkReqs' own checks on the player (busy, the Wilderness level, a teleblock, blocked movement),
+     * without asking content about the destination: for an escape content allows where teleports
+     * are refused (the Ring of Life for a Hardcore Group Ironman in a minigame).
+     */
+    public static playerReqs(player: Player, wildernessLevelLimit: number = 20): boolean {
         if (player.busy()) {
             player.sendMessage("You cannot do that right now.");
             return false;
@@ -233,11 +243,7 @@ export class TeleportHandler {
             }
         }
 
-        if (player.getMovementQueue().isMovementBlocked()) {
-            return false;
-        }
-
-        return TeleportHandler.destinationAllowed(player, targetLocation, wildernessLevelLimit, spellName);
+        return !player.getMovementQueue().isMovementBlocked();
     }
 
     /**

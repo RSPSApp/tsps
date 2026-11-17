@@ -619,6 +619,22 @@ export class MovementQueue {
                 break;
             }
 
+            // An area may veto the resolved NPC step, including an explicitly
+            // clipping-ignoring walk. It never permits a candidate that failed
+            // the existing clipping/occupancy checks. Keep this checkpoint and
+            // stop before changing location, direction or following history.
+            if (this.character.isNpc()) {
+                const area = this.character.getArea();
+                if (typeof area?.canNpcStep === "function"
+                    && require("../../../plugins/PluginManager").PluginManager.callArea(
+                        area, "canNpcStep", this.character.getAsNpc(), current, next
+                    ) === false) {
+                    this.stepBlocked = true;
+                    this.stepBlockedByEntity = false;
+                    break;
+                }
+            }
+
             const direction = Direction.fromDeltas(
                 next.getX() - current.getX(),
                 next.getY() - current.getY()

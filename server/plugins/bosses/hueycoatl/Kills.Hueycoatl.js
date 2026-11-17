@@ -145,6 +145,13 @@ function describe(drop) {
   return drop.amount > 1 ? `${drop.amount.toLocaleString("en-US")} x ${itemName(drop.itemId)}` : itemName(drop.itemId);
 }
 
+/** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+function lootOptions(player, itemId, area) {
+  const request = { player, itemId, area, options: {} };
+  api.emitCustomEvent("npc-drops:ground-options", request);
+  return request.options;
+}
+
 /** On the floor for the player only (inside the fight's instance, for a private one). */
 function placeDrops(player, session, drops, location) {
   const { Item, ItemDefinition } = core;
@@ -154,9 +161,9 @@ function placeDrops(player, session, drops, location) {
     const noteId = ItemDefinition.forId(drop.itemId).getNoteId();
     const itemId = drop.noted && noteId >= 0 && ItemDefinition.forId(noteId).isNoted() ? noteId : drop.itemId;
     if (ItemDefinition.forId(itemId).isStackable()) {
-      manager.registerLocation(player, new Item(itemId, drop.amount), location, session.area);
+      manager.registerLocation(player, new Item(itemId, drop.amount), location, session.area, lootOptions(player, itemId, session.area));
     } else {
-      for (let index = 0; index < drop.amount; index++) manager.registerLocation(player, new Item(itemId, 1), location, session.area);
+      for (let index = 0; index < drop.amount; index++) manager.registerLocation(player, new Item(itemId, 1), location, session.area, lootOptions(player, itemId, session.area));
     }
   }
 }

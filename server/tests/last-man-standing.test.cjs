@@ -720,6 +720,14 @@ test("a prayer the game bans, left on from the lobby, goes off as the game start
   assert.equal(p.getPrayerActive()[PrayerHandler.STEEL_SKIN], true, 'an allowed prayer stays on');
 });
 
+test('a leaver who stays a ranked Group Ironman loses the coins in the coffer (Wiki)', (t) => {
+  const Coffer = require('../plugins/minigames/lms/Coffer.LastManStanding');
+  const p = realPlayer(t);
+  Profile.setCoffer(p, 5000);
+  Coffer.wipeForGroupIronman({ player: p });
+  assert.equal(Profile.coffer(p), 0);
+});
+
 test('earned points are asked as minigame:points; an answer is what is earned, ranks are untouched', (t) => {
   const asked = [];
   t.mock.method(Common.api, 'emitCustomEvent', (name, request) => {

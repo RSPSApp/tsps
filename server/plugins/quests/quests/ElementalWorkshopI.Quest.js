@@ -146,6 +146,13 @@ module.exports = function registerElementalWorkshopIQuest(api) {
     return (flags & EW2_CRANE_SCHEMATIC_TAKEN) !== 0 || has(player, ItemIdentifiers.CRANE_SCHEMATIC);
   }
 
+  function ew2CanMakeElementalHelmet(player) {
+    if (!has(player, ItemIdentifiers.BEATEN_BOOK)) return false;
+    const request = { player, key: EW2_KEY, complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
+  }
+
   function setBit(player, bit, enabled = true) {
     write(player, enabled ? raw(player) | bit : raw(player) & ~bit);
   }
@@ -384,10 +391,9 @@ module.exports = function registerElementalWorkshopIQuest(api) {
       return;
     }
     if (objectId === WORKBENCH && itemId === ItemIdentifiers.ELEMENTAL_METAL) {
-      // EW2's crane claw is made from the same bar on the same workbench. Yield only
-      // while EW2 is on its schematics stage, still needs the claw and the crane is
-      // un-repaired, so its registered handler (and choice) runs.
-      if (ew2NeedsCraneClaw(player)) return;
+      // EW2 owns the unfinished claw choice and completed players following the
+      // beaten book's elemental helmet recipe; all other bars keep the EW I shield path.
+      if (ew2NeedsCraneClaw(player) || ew2CanMakeElementalHelmet(player)) return;
       if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < 20) {
         player.sendMessage("You need level 20 Smithing to work elemental metal.");
       } else if (!has(player, ItemIdentifiers.HAMMER)) {

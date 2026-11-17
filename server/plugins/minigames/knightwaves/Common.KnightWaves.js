@@ -17,8 +17,8 @@ const COMPLETE = 8;
 const KNIGHT_WAVES_STATE_VARBIT = 3909;
 const KINGS_RANSOM_KEY = "kings_ransom";
 
-/** The training room on Camelot Castle's top floor (plane 2), east of the large doors. */
-const ROOM = Object.freeze({ minX: 2754, maxX: 2766, minY: 3498, maxY: 3516, z: 2 });
+/** The static map's first room tile beyond the two large doors (plane 2). */
+const ROOM = Object.freeze({ minX: 2753, maxX: 2766, minY: 3498, maxY: 3516, z: 2 });
 /** West of the large doors, beside the squire: where refusals and deaths put the player. */
 const OUTSIDE = Object.freeze({ x: 2750, y: 3507, z: 2 });
 /** The first free floor tile north of the room's centre. */

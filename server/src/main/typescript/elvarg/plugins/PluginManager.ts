@@ -138,6 +138,14 @@ import {
   PluginPlayerLogoutEvent,
   PluginSocialPacketEvent,
 } from "./PluginTypes";
+import { lazyRequire } from "../util/LazyRequire";
+
+// Game modules this file reaches lazily (they import the plugin manager); each resolved once.
+const getEquipmentClass = lazyRequire(() => require("../game/model/container/impl/Equipment").Equipment);
+const getNpcClass = lazyRequire(() => require("../game/entity/impl/npc/NPC").NPC);
+const getNpcSpawnLineage = lazyRequire(() => require("../game/entity/impl/npc/NpcSpawnLineage").NpcSpawnLineage);
+const getLocationClass = lazyRequire(() => require("../game/model/Location").Location);
+const getWorldClass = lazyRequire(() => require("../game/World").World);
 
 type PluginHook<T> = {
   pluginName: string;
@@ -973,7 +981,7 @@ export class PluginManager {
   public static itemActionSubOption(definition: any, event: PluginItemActionEvent): string | null {
     if (!definition || !Number.isInteger(event.subOpId) || (event.subOpId as number) <= 0) return null;
     const sub = (event.subOpId as number) - 1;
-    const { Equipment } = require("../game/model/container/impl/Equipment");
+    const Equipment = getEquipmentClass();
     let text: unknown;
     if (event.interfaceId === Equipment.INVENTORY_INTERFACE_ID) {
       const op = event.clickType - PluginManager.FIRST_WORN_OPTION_CLICK;
@@ -990,7 +998,7 @@ export class PluginManager {
 
   /** Inventory items have five options; an equipped item's worn options (params 451+) run past that. */
   private static maxItemActionClick(event: PluginItemActionEvent): number {
-    const { Equipment } = require("../game/model/container/impl/Equipment");
+    const Equipment = getEquipmentClass();
     return event.interfaceId === Equipment.INVENTORY_INTERFACE_ID ? PluginManager.MAX_WORN_OPTION_CLICK : 5;
   }
 
@@ -999,7 +1007,7 @@ export class PluginManager {
    * (a Slayer helmet's worn Check is its inventory Disassemble's slot), else an inventory one.
    */
   private static itemActionOption(definition: any, event: PluginItemActionEvent): string | null {
-    const { Equipment } = require("../game/model/container/impl/Equipment");
+    const Equipment = getEquipmentClass();
     if (event.interfaceId === Equipment.INVENTORY_INTERFACE_ID) {
       if (event.option) return event.option;
       const index = event.clickType - PluginManager.FIRST_WORN_OPTION_CLICK;
@@ -1041,10 +1049,10 @@ export class PluginManager {
     if (!Number.isFinite(id) || id < 0) {
       return null;
     }
-    const { NPC } = require("../game/entity/impl/npc/NPC");
-    const { NpcSpawnLineage } = require("../game/entity/impl/npc/NpcSpawnLineage");
-    const { Location } = require("../game/model/Location");
-    const { World } = require("../game/World");
+    const NPC = getNpcClass();
+    const NpcSpawnLineage = getNpcSpawnLineage();
+    const Location = getLocationClass();
+    const World = getWorldClass();
     const unique = typeof definition.unique === "string" && definition.unique.length > 0 ? definition.unique : null;
     if (unique !== null && NpcSpawnLineage.uniqueHolder(unique)) {
       console.warn(`[plugins] ${pluginName ?? "a plugin"} spawned unique NPC "${unique}" while it is live; refused`);
@@ -1092,7 +1100,7 @@ export class PluginManager {
       return;
     }
     (npc as any).__skipDefaultRespawn = true;
-    const { World } = require("../game/World");
+    const World = getWorldClass();
     const addQueue = World.getAddNPCQueue();
     const queued = addQueue.indexOf(npc);
     if (queued !== -1) {
@@ -1123,9 +1131,8 @@ export class PluginManager {
     eventName: PluginCustomEventName,
     payload: any
   ): void {
-    if (!isPluginCustomEventName(eventName)) {
-      return;
-    }
+    // onCustomEvent only registers well-formed names, so a name with no hooks (malformed or not)
+    // is a single map miss; validating the name with a regex on every emit cost more than that.
     const hooks = PluginManager.customEventHooks.get(eventName);
     if (!hooks?.length) {
       return;
@@ -2802,6 +2809,8 @@ export class PluginManager {
       Music: require("../game/Music").Music,
       // world.json accessors (isMembersWorld, isMembersArea, WORLD_SPAWN, zone boundaries).
       WorldDefinition: require("../game/definition/WorldDefinition"),
+      // examineItem(player, itemId, amount): an item's examine line and its price, as the bank says them.
+      ExaminePrice: require("../game/content/ExaminePrice"),
       TeleportHandler: require(`${model}/teleportation/TeleportHandler`).TeleportHandler,
       TeleportType: require(`${model}/teleportation/TeleportType`).TeleportType,
       DialogueChainBuilder: require(`${model}/dialogues/builders/DialogueChainBuilder`).DialogueChainBuilder,
@@ -2811,6 +2820,7 @@ export class PluginManager {
       StatementDialogue: require(`${model}/dialogues/entries/impl/StatementDialogue`).StatementDialogue,
       ItemStatementDialogue: require(`${model}/dialogues/entries/impl/ItemStatementDialogue`).ItemStatementDialogue,
       DoubleItemStatementDialogue: require(`${model}/dialogues/entries/impl/DoubleItemStatementDialogue`).DoubleItemStatementDialogue,
+      GraphicStatementDialogue: require(`${model}/dialogues/entries/impl/GraphicStatementDialogue`).GraphicStatementDialogue,
       ActionDialogue: require(`${model}/dialogues/entries/impl/ActionDialogue`).ActionDialogue,
       EndDialogue: require(`${model}/dialogues/entries/impl/EndDialogue`).EndDialogue,
       CreationMenu: require(`${model}/menu/CreationMenu`).CreationMenu,
@@ -4670,8 +4680,7 @@ export class PluginManager {
       setWorldType: (type) => GameConstants.setWorldType(type),
       getActiveRegionSnapshot: () => {
         try {
-          const worldModule = require("../game/World");
-          const World = worldModule?.World;
+          const World = getWorldClass();
           return World?.getActiveRegionSnapshot?.() ?? {
             processCycle: 0,
             updatedAtMs: 0,
@@ -4693,28 +4702,28 @@ export class PluginManager {
           };
         }
       },
-      getWorld: () => require("../game/World").World,
-      getTaskManager: () => require("../game/task/TaskManager").TaskManager,
-      getRegionManager: () =>
-        require("../game/collision/RegionManager").RegionManager,
-      getCombatFactory: () =>
-        require("../game/content/combat/CombatFactory").CombatFactory,
-      getAreaManager: () =>
-        require("../game/model/areas/AreaManager").AreaManager,
-      getPrayerHandler: () =>
-        require("../game/content/PrayerHandler").PrayerHandler,
-      getBonusManager: () =>
-        require("../game/model/equipment/BonusManager").BonusManager,
-      getItemOnGroundManager: () =>
+      getWorld: getWorldClass,
+      getTaskManager: lazyRequire(() => require("../game/task/TaskManager").TaskManager),
+      getRegionManager: lazyRequire(() =>
+        require("../game/collision/RegionManager").RegionManager),
+      getCombatFactory: lazyRequire(() =>
+        require("../game/content/combat/CombatFactory").CombatFactory),
+      getAreaManager: lazyRequire(() =>
+        require("../game/model/areas/AreaManager").AreaManager),
+      getPrayerHandler: lazyRequire(() =>
+        require("../game/content/PrayerHandler").PrayerHandler),
+      getBonusManager: lazyRequire(() =>
+        require("../game/model/equipment/BonusManager").BonusManager),
+      getItemOnGroundManager: lazyRequire(() =>
         require("../game/entity/impl/grounditem/ItemOnGroundManager")
-          .ItemOnGroundManager,
-      getObjectManager: () =>
-        require("../game/entity/impl/object/ObjectManager").ObjectManager,
-      getServerPerf: () => require("../util/ServerPerf").ServerPerf,
-      getSkillManager: () =>
-        require("../game/content/skill/SkillManager").SkillManager,
-      getPlayerPunishment: () =>
-        require("../util/PlayerPunishment").PlayerPunishment,
+          .ItemOnGroundManager),
+      getObjectManager: lazyRequire(() =>
+        require("../game/entity/impl/object/ObjectManager").ObjectManager),
+      getServerPerf: lazyRequire(() => require("../util/ServerPerf").ServerPerf),
+      getSkillManager: lazyRequire(() =>
+        require("../game/content/skill/SkillManager").SkillManager),
+      getPlayerPunishment: lazyRequire(() =>
+        require("../util/PlayerPunishment").PlayerPunishment),
       emitCanEat: (player, itemId) => PluginManager.emitCanEat(player, itemId),
       emitCanDrink: (player, itemId) => PluginManager.emitCanDrink(player, itemId),
       emitCanBank: (player, source) => PluginManager.emitCanBank(player, source),

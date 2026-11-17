@@ -364,7 +364,7 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
   function hasCatFollower(player) {
     const world = api.getWorld();
     if (!world?.getNpcs) return false;
-    for (const npc of world.getNpcs()) {
+    for (const npc of (world.getNpcsOwnedBy?.(player) ?? world.getNpcs())) {
       if (npc && npc.getOwner?.() === player && CAT_NPC_IDS.has(npc.getId())) return true;
     }
     return false;
@@ -407,7 +407,7 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
     }
     const world = api.getWorld();
     if (!world?.getNpcs) return;
-    for (const npc of world.getNpcs()) {
+    for (const npc of (world.getNpcsOwnedBy?.(player) ?? world.getNpcs())) {
       if (npc && npc.getOwner?.() === player && CAT_NPC_IDS.has(npc.getId())) api.removeNpc(npc);
     }
   }
@@ -502,7 +502,7 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
   function removeOwnedNpcs(player, npcIds, keep) {
     const world = api.getWorld();
     if (!world?.getNpcs) return;
-    for (const npc of world.getNpcs()) {
+    for (const npc of (world.getNpcsOwnedBy?.(player) ?? world.getNpcs())) {
       if (!npc || npc === keep) continue;
       if (npc.getOwner?.() === player && npcIds.has(npc.getId())) api.removeNpc(npc);
     }

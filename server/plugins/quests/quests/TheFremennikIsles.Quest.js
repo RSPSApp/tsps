@@ -501,11 +501,16 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     setFlag(player, BORK_ATTRIBUTE, bit);
   }
 
+  // Wiki (The Fremennik Isles walkthrough): "The king's reward for the ores is 5,000 coins.", whichever ores were
+  // asked for; the page's "Around 14,000 coins" of rewards adds up with it (5,000 + 1,000 + 1,500 + 1,500 + 2,500 +
+  // 2,500). The transcript leaves Thorkel's "[amount]" blank.
+  const ORE_REWARD_COINS = 5000;
+
   function miningTier(player) {
     const mining = player.getSkillManager().getMaxLevel(Skill.MINING);
-    if (mining >= 55) return { itemId: MITHRIL_ORE, amount: 6, word: "six", ore: "mithril", coins: 6000 };
-    if (mining >= 2) return { itemId: COAL, amount: 7, word: "seven", ore: "coal", coins: 4000 };
-    return { itemId: TIN_ORE, amount: 8, word: "eight", ore: "tin", coins: 2000 };
+    if (mining >= 55) return { itemId: MITHRIL_ORE, amount: 6, word: "six", ore: "mithril" };
+    if (mining >= 2) return { itemId: COAL, amount: 7, word: "seven", ore: "coal" };
+    return { itemId: TIN_ORE, amount: 8, word: "eight", ore: "tin" };
   }
 
   function hasTaskOres(player) {
@@ -523,7 +528,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     return String(text ?? "")
       .replace(/\[six\/seven\/eight\]/g, tier.word)
       .replace(/\[tin\/coal\/mithril\]/g, tier.ore)
-      .replace(/\[amount\]/g, String(tier.coins))
+      .replace(/\[amount\]/g, String(ORE_REWARD_COINS))
       .replace(/\[X\]/g, String(Math.max(0, 10 - trollKills(player))))
       .replace(/\[number\]/g, "1");
   }
@@ -1362,7 +1367,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         setStage(player, STAGE_ORES_DELIVERED);
         return;
       case "02jNR_":
-        addCoins(player, miningTier(player).coins);
+        addCoins(player, ORE_REWARD_COINS);
         event.text = fillText(player, event.text);
         event.box = { items: [COINS] };
         return;

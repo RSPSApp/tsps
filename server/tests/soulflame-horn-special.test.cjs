@@ -21,6 +21,7 @@ require("../plugins/combat/specials/SoulflameHorn.SpecialAttack")({
   registerCombatSpecial: CombatSpecial.register,
   onCombatHitRoll: (handler) => handlers.roll.push(handler),
   onCombatHitDamage: (handler) => handlers.damage.push(handler),
+  onCustomEvent() {},
   registerMeleeAttackAccuracyModifier: (modifier) => handlers.accuracy.push(modifier),
 });
 const special = CombatSpecial.getById("soulflame_horn");

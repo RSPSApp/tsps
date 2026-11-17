@@ -94,17 +94,68 @@ test('Timfraku: "I\'ve been doing some work around the village." is said once wi
   assert.ok(options.includes('What do you do here?'), JSON.stringify(options));
 });
 
-// Transcript:Observatory Quest, after viewing the telescope: a page 2-3 sign's "If the player did not see this sign:"
-// branch is only {{tact|above}}, and the page-1 copy it stands for ends the chat. A jump that opens a condition branch
-// never goes back to the menu (the menu return above is Timfraku's, not this): the chat still ends after "Libra!".
-test('Observatory professor: a wrong page-2 sign ends the chat instead of drawing the zodiac menu again', async (t) => {
+// Transcript:Observatory Quest, after viewing the telescope: a wrong sign's "If the player did not see this sign:"
+// branch is {{tact|above}} for every sign but Aquarius, and the page-1 Aquarius copy it stands for is the professor's
+// "I'm afraid not. Have another look..." and the end of the chat. The dump's jump ended the chat after the player's
+// line on pages 2-4; ObservatoryQuest plays the reply. It never goes back to the zodiac menu.
+const WRONG_SIGN_REPLY = "I'm afraid not. Have another look. Remember, you can check the star charts on the walls for reference.";
+for (const [sign, pages] of [['Capricorn', 0], ['Libra', 1], ['Cancer', 2], ['Pisces', 3]]) {
+  test(`Observatory professor: a wrong sign (${sign}) gets the reply, then the chat ends`, async (t) => {
+    const f = harness(t);
+    f.player.setAttribute('quest.observatory_quest.constellation', 'Aquarius');
+    f.play(core.NpcIdentifiers.OBSERVATORY_PROFESSOR, 'Observatory Quest', 'after-viewing-the-telescope');
+    await f.choose('Talk about the Observatory quest.');
+    for (let page = 0; page < pages; page++) await f.choose('~ next ~');
+    await f.choose(sign);
+    const options = await f.menu();
+    assert.equal(f.count(`${sign}!`), 1, JSON.stringify(f.said));
+    assert.equal(f.said.at(-1), WRONG_SIGN_REPLY, JSON.stringify(f.said));
+    assert.equal(f.said.indexOf(WRONG_SIGN_REPLY), f.said.indexOf(`${sign}!`) + 1, 'the reply follows the sign');
+    assert.equal(options, null, `the chat ends: ${JSON.stringify(options)} after ${JSON.stringify(f.said)}`);
+  });
+}
+
+test('Observatory professor: the right page-2 sign still plays its own branch', async (t) => {
   const f = harness(t);
-  f.player.setAttribute('quest.observatory_quest.constellation', 'Aquarius');
+  f.player.setAttribute('quest.observatory_quest.constellation', 'Libra');
   f.play(core.NpcIdentifiers.OBSERVATORY_PROFESSOR, 'Observatory Quest', 'after-viewing-the-telescope');
   await f.choose('Talk about the Observatory quest.');
   await f.choose('~ next ~');
   await f.choose('Libra');
-  const options = await f.menu();
-  assert.equal(f.count('Libra!'), 1, JSON.stringify(f.said));
-  assert.equal(options, null, `the chat ends: ${JSON.stringify(options)} after ${JSON.stringify(f.said)}`);
+  await f.menu();
+  assert.ok(f.said.includes("That's exactly it!"), JSON.stringify(f.said));
+  assert.equal(f.count(WRONG_SIGN_REPLY), 0);
+});
+
+// Transcript:Observatory Quest, after viewing the telescope: the sign menu has four pages (Aquarius-Scorpio, Libra-Leo,
+// Cancer-Taurus, Aries-Pisces); "~ next ~" opens the next page (rsprox_transcripts/242/900266.txt ticks 1626-1631) and
+// pages 2-4 open with a bare "~ previous ~". It went nowhere: the dump option has no steps, so the chat ended.
+const PAGES = [
+  ['Aquarius', 'Capricorn', 'Sagittarius', 'Scorpio', '~ next ~'],
+  ['~ previous ~', 'Libra', 'Virgo', 'Leo', '~ next ~'],
+  ['~ previous ~', 'Cancer', 'Gemini', 'Taurus', '~ next ~'],
+  ['~ previous ~', 'Aries', 'Pisces'],
+];
+test('Observatory professor: "~ previous ~" goes back a page, all the way to the first, and a sign still answers', async (t) => {
+  const f = harness(t);
+  f.player.setAttribute('quest.observatory_quest.constellation', 'Taurus');
+  f.play(core.NpcIdentifiers.OBSERVATORY_PROFESSOR, 'Observatory Quest', 'after-viewing-the-telescope');
+  await f.choose('Talk about the Observatory quest.');
+  for (let page = 1; page < 4; page++) {
+    await f.choose('~ next ~');
+    assert.deepEqual(await f.menu(), PAGES[page]);
+  }
+  for (let page = 2; page >= 0; page--) {
+    await f.choose('~ previous ~');
+    assert.deepEqual(await f.menu(), PAGES[page], `back to page ${page + 1}`);
+  }
+  await f.choose('~ next ~');
+  await f.choose('~ next ~');
+  assert.deepEqual(await f.menu(), PAGES[2]);
+  await f.choose('~ previous ~');
+  assert.deepEqual(await f.menu(), PAGES[1], 'back again after paging forward a second time');
+  await f.choose('~ next ~');
+  await f.choose('Taurus');
+  await f.menu();
+  assert.ok(f.said.includes("That's exactly it!"), JSON.stringify(f.said));
 });

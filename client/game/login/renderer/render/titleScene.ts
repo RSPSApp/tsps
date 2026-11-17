@@ -37,7 +37,7 @@ export function computeTitleStateHash(
             state.trustComputer
         }|${state.titleMusicDisabled}|${
             state.worldId
-        }|${width}|${height}|${layoutWidth}|${layoutHeight}|${skipFire}|${host.worldSortOption}|${
+        }|${width}|${height}|${layoutWidth}|${layoutHeight}|${skipFire}|${host.showLoginFlames}|${host.showClientLogo}|${host.worldSortOption}|${
             host.worldSortDirection
         }|${isCaretVisible(host)}|${getViewportTransformStateHash(host)}|${getTitleAssetStateHash(host)}|${
             state.extension?.hash() ?? ""
@@ -120,7 +120,7 @@ export function drawTitle(host: LoginRendererHost, state: LoginState, gameState:
                     // Rune animations (only on login screen - gameState >= 10)
                     // Skip if using separate fire texture
                     if (
-                        !skipFire &&
+                        !skipFire && host.showLoginFlames !== false &&
                         gameState >= GameState.LOGIN_SCREEN &&
                         host.loginScreenRunesAnimation
                     ) {

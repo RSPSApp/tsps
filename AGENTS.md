@@ -2,6 +2,15 @@
 
 Server rules and plugin conventions are in [server/AGENTS.md](server/AGENTS.md).
 
+## Content progress
+
+Before selecting missing content, read [docs/progress/README.md](docs/progress/README.md)
+and the relevant item in [docs/progress/osrs-progress.json](docs/progress/osrs-progress.json).
+Reconcile recorded gaps with current source and merged PRs. Include the affected task
+statuses, delivered behavior, public evidence and remaining scope in the content PR;
+follow that guide rather than waiting for the external progress page to update.
+Run `node scripts/check-content-progress.mjs` after editing the inventory.
+
 ## Generated data
 
 Manual modifications to `npc-dialogues.json` or **any generated JSON dumped from

@@ -22,6 +22,7 @@ import net.rsprot.protocol.game.outgoing.misc.client.HintArrow
 import net.rsprot.protocol.game.outgoing.misc.client.ResetInteractionMode
 import net.rsprot.protocol.game.outgoing.misc.client.SetInteractionMode
 import net.rsprot.protocol.game.outgoing.misc.client.UpdateRebootTimerV2
+import net.rsprot.protocol.game.outgoing.misc.client.UrlOpen
 import net.rsprot.protocol.game.outgoing.sound.MidiJingle
 import net.rsprot.protocol.game.outgoing.sound.MidiSongV2
 import net.rsprot.protocol.game.outgoing.sound.SynthSound
@@ -214,6 +215,7 @@ class World(
                 val centis = reader.i32()
                 send(UpdateRebootTimerV2(centis / CENTIS_PER_TICK, UpdateRebootTimerV2.IgnoreUpdateMessage))
             }
+            TspsServerPacket.URL_OPEN -> send(UrlOpen(reader.string()))
             TspsServerPacket.CAMERA_CONTROL -> camera(packet)
             TspsServerPacket.PROJECTILES -> repeat(reader.u16()) { projectile(reader) }
             else -> return false

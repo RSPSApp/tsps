@@ -152,16 +152,32 @@ function logReceived(player, drops) {
   }
 }
 
-/** How many of `itemId` the player holds in the inventory and the bank. */
+/**
+ * How many of `itemId` the player holds: the inventory and the bank, what storage items among them
+ * hold (a looting bag, through its owner's "storage:contents"), and their group storage
+ * ("group-storage:amount").
+ */
 function heldAmount(player, itemId) {
-  let amount = player.getInventory?.()?.getAmount?.(itemId) ?? 0;
+  const containers = [player.getInventory?.()];
   const { Bank } = core;
   const tabs = Bank?.TOTAL_BANK_TABS ?? 0;
   for (let tab = 0; tab < tabs; tab++) {
-    if (tab === Bank.BANK_SEARCH_TAB_INDEX) continue;
-    amount += player.getBank?.(tab)?.getAmount?.(itemId) ?? 0;
+    if (tab !== Bank.BANK_SEARCH_TAB_INDEX) containers.push(player.getBank?.(tab));
   }
-  return amount;
+  let amount = 0;
+  for (const container of containers) {
+    if (!container) continue;
+    amount += container.getAmount?.(itemId) ?? 0;
+    for (const item of container.getValidItems?.() ?? []) {
+      const request = { player, item, contents: [], handled: false };
+      api.emitCustomEvent("storage:contents", request);
+      if (!request.handled) continue;
+      for (const entry of request.contents) if (entry?.id === itemId) amount += entry.amount ?? 0;
+    }
+  }
+  const stored = { player, itemId, amount: 0 };
+  api.emitCustomEvent("group-storage:amount", stored);
+  return amount + (Number(stored.amount) || 0);
 }
 
 /** What the player holds as a piece bitmask: the counter's first value for a player who looted before it existed. */
@@ -205,6 +221,13 @@ function validCorpse(npc, session) {
     && session.harvested !== true && session.destroyed !== true;
 }
 
+/** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+function lootOptions(player, itemId, area) {
+  const request = { player, itemId, area, options: {} };
+  api.emitCustomEvent("npc-drops:ground-options", request);
+  return request.options;
+}
+
 /** Turns drops (and a stashed Nid) into the player's inventory, excess to the floor (Wiki). */
 function spawnDrops(player, session, drops) {
   const { Item, ItemDefinition } = core;
@@ -231,10 +254,10 @@ function spawnDrops(player, session, drops) {
       }
     }
     if (stackable) {
-      manager.registerLocation(player, new Item(itemId, drop.amount), where, area);
+      manager.registerLocation(player, new Item(itemId, drop.amount), where, area, lootOptions(player, itemId, area));
     } else {
       for (let index = 0; index < drop.amount; index++) {
-        manager.registerLocation(player, new Item(itemId, 1), where, area);
+        manager.registerLocation(player, new Item(itemId, 1), where, area, lootOptions(player, itemId, area));
       }
     }
   }

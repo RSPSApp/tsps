@@ -18,7 +18,9 @@ const { ClientConnection } = require("../dist/net/NetworkBuilder");
 const TRAPDOOR_BASE = 2444;
 const TRAPDOOR_DISPLAY = 26243;
 const TRAPDOOR_TILE = { x: 2487, y: 3464, z: 2 };
-const SCENE_ENTRANCE = { x: 2492, y: 9863, z: 0 };
+// rsprox capture local 1002189 t12209-12218: the reach, the fade, then a copy of the cave at 2491,9864 with
+// Glough walking in; the demon only comes with "Fool... meet my little friend!".
+const SCENE_ENTRANCE = { x: 2491, y: 9864, z: 0 };
 const STAGE_TRAPDOOR = 130;
 
 let core;
@@ -89,8 +91,17 @@ function npcNear(player, id) {
   return core.World.getNpcsNear(player.getLocation(), 15, player.getPrivateArea()).find((npc) => npc.getId() === id);
 }
 
+function tick(player) {
+  core.World.processCycle++;
+  core.TaskManager.process();
+  player.getMovementQueue().process();
+}
+
 function assertSceneStarted(f, label) {
-  assert.ok(f.player.getLocation().equals(new core.Location(SCENE_ENTRANCE.x, SCENE_ENTRANCE.y, SCENE_ENTRANCE.z)),
+  for (let i = 0; i < 10; i++) tick(f.player);
+  const area = f.player.getPrivateArea();
+  assert.ok(area && typeof area.toSource === 'function', `${label}: the cutscene plays in a copy of the cave`);
+  assert.ok(area.toSource(f.player.getLocation()).equals(new core.Location(SCENE_ENTRANCE.x, SCENE_ENTRANCE.y, SCENE_ENTRANCE.z)),
     `${label}: the scene entrance, not the generic ladder landing`);
   assert.ok(npcNear(f.player, core.NpcIdentifiers.GLOUGH), `${label}: Glough is staged for the cutscene`);
   assert.equal(npcNear(f.player, core.NpcIdentifiers.BLACK_DEMON_2), undefined,

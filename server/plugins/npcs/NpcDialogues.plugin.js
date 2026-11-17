@@ -15,7 +15,8 @@
  * `box: { items }` (one or two item ids) to show it as an item box, as OSRS shows
  * hand-outs, instead of a chat message, and `after` to run once the player continues past
  * that box. A statement box can also hold its continue for `box.holdTicks` while a scene
- * plays, then continue normally or, with `box.advance`, move on by itself. A line's `pauseTicks`
+ * plays, then continue normally or, with `box.advance`, move on by itself; `box.delayTicks` closes
+ * the chatbox and opens the box that many ticks later instead. A line's `pauseTicks`
  * closes the chatbox after it and waits that many ticks before the conversation carries on (a
  * scene between two lines). "npc-dialogue:start" plays a named variant on demand
  * and returns an optional request.cancel handle scoped to that playback's chain/chatbox.
@@ -28,6 +29,8 @@
 const fs = require("fs");
 const path = require("path");
 const { isDeepStrictEqual } = require("node:util");
+/** A paged menu's back option ("~ previous ~"), as the wiki labels it. */
+const PREVIOUS_PAGE_OPTION = /^~\s*previous\s*~$/i;
 /** successor id -> the retired id whose transcript it plays until it has its own (data/retired-npcs.json). */
 const PREDECESSOR = new Map(Object.entries(require("./data/retired-npcs.json").successors)
   .map(([retired, successor]) => [successor.id, Number(retired)]));
@@ -734,6 +737,11 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       ? { menu: history[0] ?? context.pageInitialMenu } : "end";
     const match = /^previous(\d*)/i.exec(reference);
     const back = match && match[1] ? Number(match[1]) : 1;
+    // A submenu's way back is the menu whose option opened it (Daero's "Return to previous menu" goes back to his
+    // topics, whichever topic was opened before), not merely the menu shown before it.
+    let opened = current;
+    for (let step = 0; opened && step < back; step++) opened = menuThatOpened(opened);
+    if (opened) return { menu: opened };
     const index = current ? history.indexOf(current) : history.length - 1;
     // "previous" on the first menu means the menu the option came from; only walk
     // further back when the conversation actually has earlier menus.
@@ -748,6 +756,16 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       return { menu: context.pageMenuBefore };
     }
     return "end";
+  };
+
+  // The menu shown in this chat with an option that opens `menu` (its first step is that menu). Steps are rebuilt per
+  // run, so menus are matched on their option texts; the latest copy shown wins.
+  const menuTexts = (menuStep) => (menuStep?.options || []).map((entry) => String(entry?.text ?? "")).join("|");
+  const menuThatOpened = (menu) => {
+    const texts = menuTexts(menu?.step);
+    if (!texts) return undefined;
+    return [...context.menuHistory].reverse().find((shown) => shown !== menu && (shown.step?.options || []).some((entry) =>
+      entry?.steps?.[0]?.type === "choice" && menuTexts(entry.steps[0]) === texts));
   };
 
   // "jump above" targets the same option's earlier occurrence, else the option
@@ -983,6 +1001,13 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         api.emitCustomEvent("npc-dialogue:choice", choice);
         if (choice.end) return;
         const own = ownMenu(option);
+        // A paged menu's "~ previous ~" goes back a page. The wiki writes it as a bare option with no action
+        // (Transcript:Observatory Quest's sign menu), so the dump leaves it without steps.
+        if (!option.steps?.length && PREVIOUS_PAGE_OPTION.test(String(option.text ?? "").trim())) {
+          // The page shown before is the menu with an option that opens this one.
+          const page = menuThatOpened(own);
+          if (page) return presentMenu(page);
+        }
         context.currentMenu = own;
         context.lastChoice = option.text;
         run([...(option.steps || []), ...(own === menu ? rest : own.rest || []), ...tail], recordOption(option));
@@ -1318,6 +1343,23 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
               message.after?.();
               run(rest, currentRecord);
             } }));
+            // `box.delayTicks`: the chatbox closes and the box opens that many ticks later, while a scene
+            // the handler started plays out (an idle entry holds the conversation, as `pauseTicks` does).
+            const delayTicks = Number.isInteger(message.box?.delayTicks) && message.box.delayTicks > 0 ? message.box.delayTicks : 0;
+            if (delayTicks) {
+              const waiting = new ActionDialogue(0, { execute: () => {} }, true);
+              const idle = new DialogueChainBuilder();
+              idle.add(waiting);
+              const packets = player.getPacketSender();
+              const open = packets.getChatboxGroupId?.() ?? -1;
+              if (open >= 0) packets.closeInterface(open);
+              startChain(idle);
+              api.core.TaskManager.submit(new api.core.CountdownTask(player, delayTicks, () => {
+                if (cancelled || manager.getCurrent?.() !== waiting) return;
+                startChain(box);
+              }));
+              return;
+            }
             startChain(box);
             return;
           }

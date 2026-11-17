@@ -13,6 +13,7 @@
  *   answer "collection-log:category-count" { player, category, struct, count, extraCounts? } with kept counts
  *   ask "collection-log:slots" { player, category? } -> count: the category's slots filled (all, with none)
  *   ask "collection-log:obtained" { player, itemId } -> count: how many of a logged item the player has obtained
+ *   ask "collection-log:kill-count" { player, category } -> count: a category's kill count (0 for none)
  *   hear "collection-log:slot-filled" { player, itemId }: any slot filled, silent and ensured ones too
  *   hear "collection-log:new-item" { player, itemId }: an item newly earned and announced, from any source
  *   api.emitCustomEvent("collection-log:open", { player, category? })  open it, at a category by name
@@ -106,6 +107,13 @@ function onCount(request) {
   for (const category of categoriesNamed(request.category)) Progress.addCategoryCount(request.player, category, Number(request.amount ?? 1));
 }
 
+/** "collection-log:kill-count" { player, category }: the category's count, as the log shows it. */
+function killCountQuery(request) {
+  if (!request?.player) return;
+  request.count = categoriesNamed(request.category)
+    .reduce((sum, category) => sum + Progress.categoryCount(request.player, category), 0);
+}
+
 function onPurchase(event) {
   if (!REWARD_SHOPS.has(event.shopName) || !event.originalStock) return;
   Progress.obtain(event.player, event.itemId, event.amount);
@@ -161,6 +169,7 @@ module.exports = {
     api.onCustomEvent("collection-log:obtained", obtainedQuery);
     api.onCustomEvent("collection-log:is-item", isLoggedItem);
     api.onCustomEvent("collection-log:count", onCount);
+    api.onCustomEvent("collection-log:kill-count", killCountQuery);
     api.onCustomEvent("shop:purchase", onPurchase);
     api.registerCommand("clog", clogCommand, api.core.PlayerRights.ADMINISTRATOR, "Collection log: ::clog <item> [amount] | count <category> <n> | reset");
   },

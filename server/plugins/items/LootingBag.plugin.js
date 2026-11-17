@@ -89,6 +89,16 @@ const bagItems = (bag) => (bag?.getMetaValue?.(BAG_DATA) ?? []).filter((item) =>
 );
 const setBagItems = (bag, items) => bag.setMetaValue(BAG_DATA, items);
 const bagFor = (player) => player.getInventory().getValidItems().find(isBag);
+
+/** "group-ironman:wipe-tradeables" { player }: a leaver who stays a ranked Group Ironman loses what is in a looting bag (Wiki); the bag stays. Every bag, carried or banked. */
+function wipeForGroupIronman({ player }) {
+  const containers = [player.getInventory(), ...(player.getBanks?.() ?? [])].filter(Boolean);
+  for (const container of containers) {
+    for (const item of container.getItems()) {
+      if (isBag(item) && bagItems(item).length) setBagItems(item, []);
+    }
+  }
+}
 const itemKey = (item) => `${item.getId()}:${JSON.stringify(item.getMeta?.() ?? null)}`;
 const entryKey = (entry) => `${entry.id}:${JSON.stringify(entry.meta ?? null)}`;
 const isStackable = (id) => ItemDefinition.forId(id).isStackable();
@@ -441,6 +451,32 @@ function bankViewing(player) {
   return Bank.isOpen(player) && player.getPacketSender().getVarbit(Bank.VIEW_CONTAINER_VARBIT) === BANK_VIEW;
 }
 
+/** The bag's contents each player's client was last sent for the bank, slot by slot. */
+const sentToBank = new WeakMap();
+
+/**
+ * Bank.REFRESHED_EVENT: the bank's inventory panel gives the bag its "View" op only while the
+ * client holds something in inv looting_bag (bankside script 296 looks through it before it builds
+ * each slot's ops, 297); without it the bag has the Deposit ops alone and nothing can be taken out.
+ * So the contents go out with the bank's own items, whenever they differ from what was last sent:
+ * on opening, when the bag is withdrawn, and emptied once the bag is gone.
+ */
+function syncBankContents({ player }) {
+  if (!core.Bank.isOpen(player)) return;
+  const bag = bagFor(player);
+  const items = bag ? bagItems(bag) : [];
+  const signature = items.map((entry) => `${entry.id}x${entry.amount}`).join(",");
+  if (sentToBank.get(player) === signature) return;
+  sentToBank.set(player, signature);
+  player.getPacketSender().sendInventory(BAG_INVENTORY, BAG_SIZE, items, core.Bank.MAIN_INTERFACE_ID);
+}
+
+/** Bank.OPENED_EVENT: a newly opened bank is always told, whatever an earlier one was sent. */
+function bankOpened({ player }) {
+  sentToBank.delete(player);
+  syncBankContents({ player });
+}
+
 function bankComponents() {
   const id = (name) => core.CacheDefinitions.getComponentId(name);
   return { items: id("bankside:lootingbag_items"), bankAll: id("bankside:lootingbag_bankall"), dismiss: id("bankside:lootingbag_dismiss") };
@@ -628,9 +664,12 @@ module.exports = {
     api.onPlayerLogin(sendSettings);
     api.onCustomEvent("storage:contents", answerContents);
     api.onCustomEvent("looting-bag:store", storeLoot);
+    api.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
     api.onCustomEvent("destroy-item:prompt", destroyPrompt);
     api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, viewInBank);
     api.onCustomEvent("bank:empty-containers", emptyContainers);
+    api.onCustomEvent(core.Bank.OPENED_EVENT, bankOpened);
+    api.onCustomEvent(core.Bank.REFRESHED_EVENT, syncBankContents);
     api.onGroundItemPickup(pickUp);
     api.onCustomEvent("ground-items:take", refuseSecondBag);
     api.onCustomEvent("magic:can-telekinetic-grab", refuseTelegrab);

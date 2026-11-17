@@ -256,7 +256,10 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const REWARD_GIVEN_ATTRIBUTE = "fairytale-ii-cure-a-queen:reward-given";
   /** Set when the Queen wakes (80): an 80 without it is an older save's completion (see migrate). */
   const QUEEN_WOKE_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:queen-woke";
-  /** The lamp box completed the quest; its scroll is still to show (not saved: a relog skips it). */
+  /**
+   * The lamp box completed the quest; its jingle, chat line and scroll are still to show. Saved, so a
+   * walk-off or a logout on the box still shows them (once the box is gone, or at the next login).
+   */
   const ANNOUNCE_PENDING_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:announce-pending";
   const PLANE_COSMIC = 1 << 0;
   const PLANE_GORAK = 1 << 1;
@@ -652,10 +655,8 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     event.handled = true;
     event.end = true;
     // The lamp box already completed the quest (2532); the scroll comes as it is continued (2535).
-    if (flag(player, REWARD_GIVEN_ATTRIBUTE) && quest.isComplete(player) && flag(player, ANNOUNCE_PENDING_ATTRIBUTE)) {
-      player.setAttribute(ANNOUNCE_PENDING_ATTRIBUTE, 0);
-      quest.announceCompletion(player);
-    } else if (quest.getStage(player) >= STAGE_QUEEN_AWAKE && !quest.isComplete(player)) {
+    announcePending(player);
+    if (quest.getStage(player) >= STAGE_QUEEN_AWAKE && !quest.isComplete(player)) {
       quest.complete(player);
       syncProgress(player);
     }
@@ -663,7 +664,30 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
 
   const waitForScroll = new WeakMap();
 
+  /** The lamp box's held-back jingle, chat line and scroll, once; true when they were shown now. */
+  function announcePending(player) {
+    if (!flag(player, ANNOUNCE_PENDING_ATTRIBUTE)) return false;
+    player.setAttribute(ANNOUNCE_PENDING_ATTRIBUTE, 0);
+    if (!flag(player, REWARD_GIVEN_ATTRIBUTE) || !quest.isComplete(player)) return false;
+    quest.announceCompletion(player);
+    return true;
+  }
+
+  /**
+   * Ours: the lamp box closed some other way than its continue (walking off). No recording has it, so
+   * the announcement comes a tick later, once the talk is over, rather than being lost.
+   */
+  function announceAfterLampBox(player) {
+    if (!flag(player, ANNOUNCE_PENDING_ATTRIBUTE)) return;
+    api.core.TaskManager.submit(new api.core.CountdownTask({}, 1, () => {
+      // Offline (a logout closed it), the saved flag shows it at the next login instead.
+      if (player.isRegistered?.() === false || player.getDialogueManager?.()?.getCurrent?.()) return;
+      announcePending(player);
+    }));
+  }
+
   function handleInterfaceClosed({ player, interfaceId }) {
+    announceAfterLampBox(player);
     if (interfaceId !== GODFATHER_SCROLL_INTERFACE) return;
     const waiting = waitForScroll.get(player);
     if (!waiting) return;
@@ -1105,6 +1129,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     migrateLegacyCompletion(player);
     refreshQuestList(player);
     syncProgress(player);
+    announcePending(player); // a logout on the lamp box
     if (insideZone(player.getLocation?.(), STAR_PLANE_ZONE)) enterStarPlane(player);
   }
 
@@ -1155,6 +1180,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   api.persistAttribute(RECAP_DONE_ATTRIBUTE, 0);
   api.persistAttribute(REWARD_GIVEN_ATTRIBUTE, 0);
   api.persistAttribute(QUEEN_WOKE_ATTRIBUTE, 0);
+  api.persistAttribute(ANNOUNCE_PENDING_ATTRIBUTE, 0);
 
   groundItems = api.getItemOnGroundManager();
 

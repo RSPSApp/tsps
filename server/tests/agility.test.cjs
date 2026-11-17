@@ -2687,15 +2687,17 @@ test("Wilderness ridge door: opening the south door and the north gates swaps th
     },
     Task: class { constructor(delay, key) { this.delay = delay; this.key = key; } stop() { this.stopped = true; } },
     TaskManager: { submit: (task) => events.push(["task", task]) },
+    Sound: class { constructor(id) { this.id = id; } },
+    Sounds: { sendSound: (player, sound) => events.push(["sound", sound.id]) },
   };
   const context = { core, player: { getPrivateArea: () => null } };
 
   assert.equal(openRidgeDoor(context), true);
-  assert.deepEqual(events.slice(0, 3), [
-    ["deregister", RIDGE.door], ["register", RIDGE.invisWall], ["register", RIDGE.prisonDoorOpen],
+  assert.deepEqual(events.slice(0, 4), [
+    ["deregister", RIDGE.door], ["register", RIDGE.invisWall], ["register", RIDGE.prisonDoorOpen], ["sound", 62],
   ]);
-  assert.equal(events[3][0], "task");
-  const doorTask = events[3][1];
+  assert.equal(events[4][0], "task");
+  const doorTask = events[4][1];
   assert.equal(doorTask.delay, 2);
   events.length = 0;
   doorTask.execute();
@@ -2708,7 +2710,7 @@ test("Wilderness ridge door: opening the south door and the north gates swaps th
   assert.deepEqual(events.filter(([kind]) => kind !== "task"), [
     ["deregister", RIDGE.gateLeft], ["deregister", RIDGE.gateRight],
     ["register", RIDGE.invisWall], ["register", RIDGE.invisWall],
-    ["register", RIDGE.gateOpenLeft], ["register", RIDGE.gateOpenRight],
+    ["register", RIDGE.gateOpenLeft], ["register", RIDGE.gateOpenRight], ["sound", 62],
   ]);
 
   // A missing gate leaf leaves every closed loc in place: no partial swap.
@@ -2720,11 +2722,80 @@ test("Wilderness ridge door: opening the south door and the north gates swaps th
   const enter = require("../plugins/skills/agility/shortcuts/Wilderness.Agility").wildernessRidgeIn();
   assert.deepEqual(enter.end, { spam: RIDGE.endIn });
   assert.deepEqual(enter.steps[0], { msg: { spam: RIDGE.start } });
-  assert.deepEqual(enter.steps[2], { walk: [[2998, 3931]] });
+  assert.deepEqual(enter.steps[2], { walk: [[2998, 3930]] });
+  assert.deepEqual(enter.steps[4], { walk: [[2998, 3931]], arrive: true });
   const leave = require("../plugins/skills/agility/shortcuts/Wilderness.Agility").wildernessRidgeOut();
   assert.deepEqual(leave.end, { spam: RIDGE.endOut });
   assert.deepEqual(leave.steps[2], { walk: [[2998, 3918]] });
   assert.deepEqual(leave.steps[4], { walk: [[2998, 3916]] });
+});
+
+test("as captured (rsprox 449 ticks 15-32, 451 ticks 31-47): the ridge door opens as the player steps in, the north gates as they step out", () => {
+  const { RIDGE } = require("../plugins/skills/agility/shortcuts/Wilderness.Agility")._test;
+  const core = agilityApi.core;
+  const saved = { register: core.ObjectManager.register, deregister: core.ObjectManager.deregister, get: core.MapObjects.get, submit: core.TaskManager.submit };
+  const placed = new Map();
+  const key = (id, x, y, z) => `${id}:${x},${y},${z}`;
+  for (const [id, [x, y, z]] of [[RIDGE.door, RIDGE.doorTile], [RIDGE.gateLeft, RIDGE.gateLeftTile], [RIDGE.gateRight, RIDGE.gateRightTile]]) {
+    placed.set(key(id, x, y, z), gameObject(id, x, y, z));
+  }
+  const swaps = [];
+  core.ObjectManager.register = (object) => swaps.push(["add", object.getId()]);
+  core.ObjectManager.deregister = (object) => swaps.push(["del", object.getId()]);
+  core.MapObjects.get = (id, at) => placed.get(key(id, at.getX(), at.getY(), at.getZ())) ?? null;
+  core.TaskManager.submit = (task) => taskManager.submit(task);
+  try {
+    const player = createPlayer(2998, 3915, 0, 52);
+    const rows = [];
+    let seen = 0;
+    const record = () => {
+      rows.push({ tile: tileOf(player).slice(0, 2).join(","), messages: player.state.messages.splice(0), swaps: swaps.slice(seen) });
+      seen = swaps.length;
+    };
+    const object = gameObject(RIDGE.door, ...RIDGE.doorTile);
+    const route = { player, object, objectId: RIDGE.door, clickType: 1, destination: null };
+    hooks.route.forEach((handler) => handler(route));
+    assert.deepEqual([route.destination.x, route.destination.y], [2998, 3916]);
+    player.setLocation(new Location(2998, 3916, 0));
+    hooks.click.get(RIDGE.door)({ player, object, objectId: RIDGE.door, clickType: 1, location: { x: 2998, y: 3917, z: 0 } });
+    record();
+    while (player.getAttribute("agility.obstacle") != null) {
+      assert.ok(rows.length < 40, "the ridge never finished");
+      tick();
+      record();
+    }
+    // Live tick 16: the start message, the door swap and the first step onto the door tile together.
+    assert.deepEqual(rows[0], {
+      tile: "2998,3917",
+      messages: [RIDGE.start],
+      swaps: [["del", RIDGE.door], ["add", RIDGE.invisWall], ["add", RIDGE.prisonDoorOpen]],
+    });
+    // A tile a tick to 2998,3930 (live ticks 17-29), the door back two ticks after it opened (tick 18).
+    for (let index = 1; index <= 13; index++) assert.equal(rows[index].tile, `2998,${3917 + index}`, `tick ${index}`);
+    assert.deepEqual(rows[2].swaps, [["del", RIDGE.invisWall], ["del", RIDGE.prisonDoorOpen], ["add", RIDGE.door]]);
+    // Live tick 30: the north gates swap as the player steps through them, with the end message.
+    const last = rows.at(-1);
+    assert.equal(rows.length, 15);
+    assert.equal(last.tile, "2998,3931");
+    assert.deepEqual(last.messages, [RIDGE.endIn]);
+    assert.deepEqual(last.swaps, [
+      ["del", RIDGE.gateLeft], ["del", RIDGE.gateRight],
+      ["add", RIDGE.invisWall], ["add", RIDGE.invisWall],
+      ["add", RIDGE.gateOpenLeft], ["add", RIDGE.gateOpenRight],
+    ]);
+    // ... and are back two ticks later (live tick 32).
+    tick();
+    tick();
+    assert.deepEqual(swaps.slice(seen), [
+      ["del", RIDGE.invisWall], ["del", RIDGE.invisWall], ["del", RIDGE.gateOpenLeft], ["del", RIDGE.gateOpenRight],
+      ["add", RIDGE.gateLeft], ["add", RIDGE.gateRight],
+    ]);
+  } finally {
+    core.ObjectManager.register = saved.register;
+    core.ObjectManager.deregister = saved.deregister;
+    core.MapObjects.get = saved.get;
+    core.TaskManager.submit = saved.submit;
+  }
 });
 
 test("Fossil Island sea-floor obstacles and holes each give 4.5 Agility XP (Wiki: Underwater Agility and Thieving)", () => {

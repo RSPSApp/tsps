@@ -1,4 +1,6 @@
 import { state } from "./state";
+import { WebRtcGameSocket } from "./connection/WebRtcGameSocket";
+import { resolveServerTransport } from "./outgoing/connectionInfo";
 
 /**
  * Base URL for the game server's read-only JSON endpoints. They are served by the same
@@ -36,6 +38,29 @@ export async function fetchContent(path: string): Promise<any> {
     const response = await fetch(`${base}${path}`);
     if (!response.ok) throw new Error(`Content request failed: ${response.status}`);
     return response.json();
+}
+
+/** Login art is available from the selected world before an authenticated game session. */
+type LoginScreenAppearance = { jpg?: string; showFlames?: boolean; showLogo?: boolean };
+
+export async function fetchLoginScreenAppearance(signal: AbortSignal): Promise<LoginScreenAppearance | undefined> {
+    const path = "/api/login-screen";
+    if (!await resolveServerTransport() || signal.aborted) return;
+    if (state.webRtcConfig) {
+        const socket = new WebRtcGameSocket(state.webRtcConfig);
+        const close = () => socket.close();
+        signal.addEventListener("abort", close, { once: true });
+        try {
+            return await socket.fetchContent(path) as LoginScreenAppearance;
+        } finally {
+            signal.removeEventListener("abort", close);
+            close();
+        }
+    }
+    const base = getContentApiBase();
+    if (!base) return;
+    const response = await fetch(base + path, { signal, cache: "no-cache" });
+    if (response.ok) return response.json();
 }
 
 /** Prefer the connected world's definition; static files support older browser hosts. */

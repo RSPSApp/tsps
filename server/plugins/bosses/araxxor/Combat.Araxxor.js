@@ -350,23 +350,35 @@ function redirectToMirrorback(boss, hit) {
     minion?.getId?.() === Shared.MINION_ID.mirrorback && alive(minion));
   if (!mirrorback) return;
   const hits = hit.getHits?.() ?? [];
-  const total = hits.reduce((sum, part) => sum + (part.getDamage?.() ?? 0), 0);
-  const redirect = Math.floor(total * Shared.MIRRORBACK_REDIRECT_FACTOR);
-  if (redirect <= 0) return;
+  // Each part of the hit moves its own fifth and recoils its own half (rsprox_transcripts/237/01156.txt
+  // tick 1351: four parts put 3, 1, 2 and 2 on the Mirrorback and 1, 0, 1 and 1 on the player).
+  const shares = hits.map((part) => Math.floor((part.getDamage?.() ?? 0) * Shared.MIRRORBACK_REDIRECT_FACTOR));
+  if (!shares.some((share) => share > 0)) return;
   for (const part of hits) {
     part.setDamage(Math.floor((part.getDamage?.() ?? 0) * (1 - Shared.MIRRORBACK_REDIRECT_FACTOR)));
   }
   hit.updateTotalDamage?.();
-  mirrorback.getCombat().getHitQueue().addPendingDamage([
-    new core.HitDamage(redirect, core.HitMask.RED),
-  ]);
-  const recoil = Math.floor(redirect * Shared.MIRRORBACK_RECOIL_FACTOR);
-  if (recoil > 0) {
-    attacker.getAsPlayer().getCombat().getHitQueue().addPendingDamage([
-      new core.HitDamage(recoil, core.HitMask.RED),
-    ]);
-    CombatAchievements.avoidableDamage(attacker.getAsPlayer(), recoil);
+  mirrorback.getCombat().getHitQueue().addPendingDamage(
+    shares.filter((share) => share > 0).map((share) => new core.HitDamage(share, core.HitMask.RED)),
+  );
+  const player = attacker.getAsPlayer();
+  const recoils = shares.map((share) => (share > 0 ? Math.floor(share * Shared.MIRRORBACK_RECOIL_FACTOR) : null));
+  const first = recoils.findIndex((recoil) => recoil > 0);
+  if (first >= 0 && player.hasVengeanceReturn?.()) {
+    // Vengeance takes the first part's recoil: the player is not hit by it, and three quarters of
+    // that part's share rebounds onto Araxxor; later parts still recoil (rsprox_transcripts/237/01156.txt
+    // tick 1353: 10 and 4 on the Mirrorback, the message, "Taste vengeance!", 7 on Araxxor and 2 on
+    // the player; tick 3589: 7 and 5, the player unhit).
+    player.sendMessage(Shared.MIRRORBACK_VENGEANCE_MESSAGE);
+    core.CombatFactory.handleVengeance(player, boss, shares[first]);
+    recoils[first] = null;
   }
+  const total = recoils.reduce((sum, recoil) => sum + (recoil ?? 0), 0);
+  if (total <= 0) return;
+  player.getCombat().getHitQueue().addPendingDamage(
+    recoils.filter((recoil) => recoil != null).map((recoil) => new core.HitDamage(recoil, core.HitMask.RED)),
+  );
+  CombatAchievements.avoidableDamage(player, total);
 }
 
 function attach(pluginApi) {
@@ -391,5 +403,5 @@ module.exports = {
   checkEnrage,
   startCleave,
   drainSkill,
-  _test: { isAdjacent, protections, chooseDistantAttack, shotTicks, araneaNegates, wearsAraneaBoots },
+  _test: { isAdjacent, protections, chooseDistantAttack, shotTicks, araneaNegates, wearsAraneaBoots, redirectToMirrorback },
 };

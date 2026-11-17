@@ -6,6 +6,7 @@
 const assert = require("node:assert/strict");
 const { test, beforeEach } = require("node:test");
 const Room = require("../plugins/minigames/knightwaves/Room.KnightWaves");
+const Common = require("../plugins/minigames/knightwaves/Common.KnightWaves");
 
 const plugin = require("../plugins/minigames/KnightWaves.plugin");
 
@@ -67,6 +68,7 @@ const core = {
   PrayerHandler: { resetAll() { resetPrayers++; } },
   RegionManager: {},
   World: { getProcessCycle: () => now },
+  ObjectIdentifiers: { LARGE_DOOR_73: 25594, LARGE_DOOR_74: 25595 },
 };
 
 plugin.register({
@@ -80,6 +82,7 @@ plugin.register({
   onCanAttack(handler) { hooks.canAttack = handler; },
   onPrayerDisabled(handler) { hooks.prayerDisabled = handler; },
   onCombatHitResolved(handler) { hooks.hitResolved = handler; },
+  onObjectRoute(handler) { hooks.objectRoute = handler; },
   onCustomEvent(name, handler) { customHandlers.set(name, [...(customHandlers.get(name) ?? []), handler]); },
   spawnNpc(definition) {
     const npc = {
@@ -160,6 +163,52 @@ test("King's Ransom is required", () => {
   assert.equal(spawned.length, 0);
   assert.equal(p.location.x, 2750);
   assert.equal(p.messages.at(-1), "You need to have completed the King's Ransom Quest to gain access to the Knight Waves.");
+});
+
+test("the training doors enforce entry checks and carry an allowed player across", () => {
+  const toggleDoor = customHandlers.get("door:toggle")[0];
+  const request = (p, id = core.ObjectIdentifiers.LARGE_DOOR_73, y = 3507) => {
+    const event = { player: p, objectId: id, location: { x: 2751, y, z: 2 }, handled: false };
+    toggleDoor(event);
+    return event;
+  };
+
+  const noQuest = player({ kr: false, inside: false });
+  assert.equal(request(noQuest).handled, true);
+  assert.equal(noQuest.messages.at(-1), "You need to have completed the King's Ransom Quest to gain access to the Knight Waves.");
+  assert.equal(tasks.length, 0, "a player without King's Ransom is not moved through the door");
+
+  const completed = player({ wave: 8, inside: false });
+  assert.equal(request(completed).handled, true);
+  assert.equal(completed.messages.at(-1), "I'm afraid not, my liege. Once you have won, you cannot re-enter.");
+  assert.equal(tasks.length, 0, "a completed player cannot re-enter");
+
+  const admitted = player({ inside: false });
+  assert.equal(request(admitted, core.ObjectIdentifiers.LARGE_DOOR_74, 3508).handled, true);
+  runTasks();
+  assert.deepEqual([admitted.location.x, admitted.location.y, admitted.location.z], [2753, 3508, 2]);
+  assert.equal(Common.inRoom(admitted), true, "the captured landing tile starts the activity");
+
+  admitted.location = new StubLocation(2754, 3508, 2);
+  const route = {
+    player: admitted,
+    objectId: core.ObjectIdentifiers.LARGE_DOOR_74,
+    object: { getLocation: () => ({ x: 2751, y: 3508, z: 2 }) },
+    destination: null,
+  };
+  hooks.objectRoute(route);
+  assert.deepEqual(route.destination, { x: 2753, y: 3508, z: 2 }, "the inside approach routes to the door's clear side");
+
+  admitted.location = new StubLocation(2759, 3510, 2);
+  assert.equal(request(admitted).handled, true);
+  runTasks();
+  assert.deepEqual([admitted.location.x, admitted.location.y, admitted.location.z], [2751, 3507, 2], "the door also lets players leave after finishing");
+
+  const moved = player({ inside: false });
+  request(moved);
+  moved.location = new StubLocation(2750, 3508, 2);
+  runTasks();
+  assert.deepEqual([moved.location.x, moved.location.y, moved.location.z], [2750, 3508, 2], "a delayed click does not carry a player after they move away");
 });
 
 test("the first wave is Sir Bedivere and the order runs to Sir Lancelot", () => {

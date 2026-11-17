@@ -504,6 +504,41 @@ test("the potion on the Queen: 75 with the pour and her waking, 80 four ticks la
     "2,500 Thieving XP", "Fairy Ring Access", "An Antique Lamp"]);
 });
 
+test("walking off the lamp box still shows the jingle, 'Congratulations' and the scroll once; a logout on it shows them at the next login (Ours)", async (t) => {
+  const lampBox = async (f) => {
+    const nuff = h.spawn(f, N.FAIRY_NUFF, NUFF);
+    await h.talk(f, nuff);
+    await until(f, "us in trying times, but please accept this magic lamp as a sign of our thanks.");
+    await h.continueLine(f);
+    assert.equal(h.shown(f)?.text, "The Fairy Queen gives you an XP lamp.");
+    assert.equal(h.stage(f), 90);
+  };
+  const congratulations = (f) => messages(f).filter((m) => /^Congratulations, you've completed a quest: .*Fairytale II/.test(m)).length;
+  const f = actor(t, { stage: 80, at: BY_NUFF, attributes: { "quest.fairytale-ii-cure-a-queen:queen-woke": 1 } });
+  await lampBox(f);
+  assert.equal(congratulations(f), 0);
+  const jingles = [];
+  const sender = f.player.getPacketSender();
+  const jingle = sender.sendJingle.bind(sender);
+  sender.sendJingle = (id, ...rest) => { jingles.push(id); return jingle(id, ...rest); };
+  f.player.getPacketSender().sendInterfaceRemoval();
+  f.player.getDialogueManager().reset();
+  f.player.moveTo(new h.core.Location(2352, 4460, 0));
+  h.ticks(f, 3);
+  assert.equal(congratulations(f), 1, "shown once the box is gone");
+  assert.equal(jingles.filter((id) => id === 238).length, 1, "with the quest jingle");
+  assert.ok(f.calls.some((c) => c.name === "sendString" && c.args[0] === "An Antique Lamp"), "and the scroll");
+  f.player.getPacketSender().sendInterfaceRemoval();
+  h.ticks(f, 3);
+  assert.equal(congratulations(f), 1, "and only once");
+
+  const g = actor(t, { stage: 80, at: BY_NUFF, attributes: { "quest.fairytale-ii-cure-a-queen:queen-woke": 1 } });
+  await lampBox(g);
+  assert.equal(g.player.getAttribute("quest.fairytale-ii-cure-a-queen:announce-pending"), 1, "saved with the player");
+  h.PM.emitPlayerLogin({ player: g.player, username: g.player.getUsername() });
+  assert.equal(congratulations(g), 1, "at the next login");
+});
+
 test("the star flowers: a shoot 42 ticks after arriving, its bloom 58 later, Pick takes the flower as it withers (1966-2082)", async (t) => {
   const f = actor(t, { stage: 70, at: STAR_PLANE, items: [9025] });
   f.player.getSkillManager().setMaxLevels(h.core.Skill.FARMING, 49);

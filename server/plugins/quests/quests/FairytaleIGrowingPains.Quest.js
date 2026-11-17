@@ -791,8 +791,9 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     if (!FAIRY_GODFATHER_NPC_IDS.has(npcId)) return;
     event.handled = true;
     event.end = true;
-    if (quest.getStage(player) >= STAGE_TANGLEFOOT_DEFEATED && !quest.isComplete(player)) {
-      if (held(player, QUEENS_SECATEURS_ITEM_ID)) player.getInventory().deleteNumber(QUEENS_SECATEURS_ITEM_ID, 1);
+    // The Queen's secateurs are what he takes: a pair dropped during the chat leaves the quest open.
+    if (quest.getStage(player) >= STAGE_TANGLEFOOT_DEFEATED && !quest.isComplete(player) && held(player, QUEENS_SECATEURS_ITEM_ID)) {
+      player.getInventory().deleteNumber(QUEENS_SECATEURS_ITEM_ID, 1);
       quest.complete(player);
     }
   }
@@ -859,6 +860,13 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     const stage = quest.getStage(player);
     if (GARDENER_NPC_IDS.has(npcId) || INVALID_GARDENER_NPC_IDS.has(npcId)) {
       if (stage === STAGE_STARTED) talkToGardener(event);
+      return;
+    }
+    if (FAIRY_GODFATHER_NPC_IDS.has(npcId) && stage >= STAGE_TANGLEFOOT_DEFEATED && !quest.isComplete(player)
+      && !held(player, QUEENS_SECATEURS_ITEM_ID)) {
+      // His only transcript at 80 hands the Queen's secateurs over. Without them neither the Wiki nor a
+      // recording gives a line, so he stays silent; the Gate Keeper's grove gives a lost pair back.
+      event.handled = true;
       return;
     }
     if (FAIRY_GODFATHER_NPC_IDS.has(npcId) && stage >= STAGE_COMPLETE && ft2Stage(player) === 0) {
@@ -1014,6 +1022,16 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     hit?.updateTotalDamage?.();
   }
 
+  /**
+   * `magic:thrall-attack`: a thrall's hit skips the hit-modify hooks, so the Tanglefoot's immunity is
+   * applied here. The Wiki: it "cannot be damaged by any other means" than magic secateurs, "with the
+   * exception of a ring of recoil". The thrall still attacks; no hit lands.
+   */
+  function handleThrallAttack(event) {
+    const target = event?.target;
+    if (SECATEURS_ONLY_NPC_IDS.has(target?.getContentId?.() ?? target?.getId?.())) event.cancelled = true;
+  }
+
   /** A melee swing with anything else says so on the swing (1001455 ticks 3033, 3037; 424 tick 18688). */
   function handleHitQueued({ player, target, hit }) {
     if (!SECATEURS_ONLY_NPC_IDS.has(target?.getContentId?.() ?? target?.getId?.())) return;
@@ -1112,6 +1130,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleActionEvent);
   api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onCustomEvent("combat:hit-queued", handleHitQueued);
+  api.onCustomEvent("magic:thrall-attack", handleThrallAttack);
   api.onNpcInteraction(handleNpcInteraction);
   api.onObjectInteraction(handleObjectInteraction);
   api.onCustomEvent("ground-items:taken", handleItemTaken);

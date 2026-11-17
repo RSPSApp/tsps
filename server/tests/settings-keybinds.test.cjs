@@ -204,9 +204,9 @@ test('a desktop layout change reopens the orbs on the new root after the root, a
     assert.equal(dropdown({ player, slot }), true);
     return player.sent.filter(entry => entry.startsWith('root ') || entry.startsWith('open '));
   };
-  assert.deepEqual(layoutChange(3), ['root 161', `open ${orbsUid}:160:1`], 'resizable modern');
+  assert.deepEqual(layoutChange(3), ['root 164', `open ${orbsUid}:160:1`], 'resizable modern');
   assert.deepEqual(layoutChange(1), ['root 548', `open ${orbsUid}:160:1`], 'fixed: the orbs are placed again');
-  assert.deepEqual(layoutChange(2), ['root 164', `open ${orbsUid}:160:1`], 'resizable classic');
+  assert.deepEqual(layoutChange(2), ['root 161', `open ${orbsUid}:160:1`], 'resizable classic');
 });
 
 test('as captured: the search bar takes the keyboard, and closing All Settings by any route gives it back', () => {

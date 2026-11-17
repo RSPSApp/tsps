@@ -609,7 +609,7 @@ Two Interfaces rows that change the gameframe itself, handled in `Settings.plugi
 
 | Setting | Id | Variable | What it does |
 | --- | --- | --- | --- |
-| Game client layout (dropdown: Fixed - Classic, Resizable - Classic, Resizable - Modern, Resizable - 317, Fixed - 317) | 12 | the saved layout (`client-layout-root`), as the side panel's dropdown | the same switch as the side panel's dropdown (116:40): the root interface becomes 548, 164 or 161, the open interfaces move onto it and the orbs are reopened for it |
+| Game client layout (dropdown: Fixed - Classic, Resizable - Classic, Resizable - Modern, Resizable - 317, Fixed - 317) | 12 | the saved layout (`client-layout-root`), as the side panel's dropdown | the same switch as the side panel's dropdown (116:40): the root interface becomes 548, 161 (Classic, `toplevel_osrs_stretch`) or 164 (Modern, `toplevel_pre_eoc`), the open interfaces move onto it and the orbs are reopened for it |
 | Show data orbs | 8 | varbit 4084 `orbs_disabled` (1 hides them) | the orbs interface (160, or 897 on the mobile layout) closes while it is set and opens again when it is cleared |
 
 - **Game client layout.** Both dropdowns are on enum 3509. The cache has its first three options; our client adds the two 317 layouts to it, so both list all five, and the server takes all five (the official client shows only the three). On the mobile client the layout stays mobile and the choice isn't saved, as with the side panel.

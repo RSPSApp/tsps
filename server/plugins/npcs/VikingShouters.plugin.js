@@ -5,6 +5,8 @@
  * recordings 3027 (rev 231, four Watch-shouting clicks) and local 1000323 (rev 227, one) show:
  * - between rounds each guard chants its island's name ("JATIZSO!" / "NEITIZNOT!") every 6
  *   ticks, facing the other guard;
+ * - the round's lines and the chants are the generated Wiki transcript's (`watching-the-shouting`
+ *   of Guard (Jatizso watchtower)), read at startup;
  * - Watch-shouting on either guard moves that player's camera behind the clicked guard, looking
  *   at the other one, and 3 ticks after the player arrives the guards trade the 11-line round of
  *   insults, one line every 5 ticks, the Jatizso guard first. Chants stop for the round and
@@ -15,14 +17,16 @@
  *   shouting") plays the same round with the same camera; Ours: its timing, as no recording
  *   finishes that conversation.
  *
- * Ours: a Watch-shouting during a round joins it (its camera resets with the round's) rather than
- * starting another; no recording clicks during a round. The chant phases at startup (Neitiznot 5
- * ticks after Jatizso) are the first recorded run's. The guards face each other when they speak,
+ * Ours: a Watch-shouting during a round's lines joins it (its camera resets with the round's)
+ * rather than starting another; one after the last line starts the next round; no recording
+ * clicks during or just after a round. The chant phases at startup (Neitiznot 5 ticks after
+ * Jatizso) are the first recorded run's. The guards face each other when they speak,
  * where live sends a face_angle; it is the same direction (471 / 1496).
  * Data: plugins/npcs/data/viking-shouters.json; docs/viking-shouters.md.
  */
 const path = require("path");
 const DATA = require(path.join(__dirname, "data", "viking-shouters.json"));
+const { loadTranscripts } = require("../quests/QuestRuntime");
 
 const OPTION = "Watch-shouting";
 /** How far from its spawn tile a guard is looked for (they never wander). */
@@ -31,6 +35,11 @@ const FIND_RADIUS = 2;
 const FIND_RETRY_TICKS = 10;
 
 let core = null;
+let pluginApi = null;
+/** The round: [guard gameval, text] per line, from the generated transcript at startup. */
+let ROUND = [];
+/** Guard gameval -> its chant between rounds (the transcript's closing line per guard). */
+const CHANTS = new Map();
 /** Npc id -> its gameval key in DATA.guards. */
 const keysById = new Map();
 const state = {
@@ -106,7 +115,7 @@ function shout(guards, key, text) {
 
 /** The round's lines run from its start until the last line is said. */
 function inRoundLines(round, tick) {
-  return round != null && tick >= round.start && tick <= round.start + (DATA.round.length - 1) * DATA.timing.lineInterval;
+  return round != null && tick >= round.start && tick <= round.start + (ROUND.length - 1) * DATA.timing.lineInterval;
 }
 
 function processRound(guards) {
@@ -114,7 +123,7 @@ function processRound(guards) {
   const at = state.tick - round.start;
   if (at >= 0 && at % DATA.timing.lineInterval === 0) {
     const index = at / DATA.timing.lineInterval;
-    if (index < DATA.round.length) shout(guards, ...DATA.round[index]);
+    if (index < ROUND.length) shout(guards, ...ROUND[index]);
   }
   if (at === DATA.timing.cameraReset) endRound(round);
 }
@@ -130,7 +139,7 @@ function processChants(guards) {
   if (inRoundLines(state.round, state.tick)) return;
   for (const key of guardKeys()) {
     if (state.tick < state.nextChant.get(key)) continue;
-    shout(guards, key, DATA.guards[key].chant);
+    shout(guards, key, CHANTS.get(key));
     state.nextChant.set(key, state.tick + DATA.timing.chantInterval);
   }
 }
@@ -147,15 +156,43 @@ function tick() {
   processChants(guards);
 }
 
-function startRound() {
+/**
+ * The transcript's overhead lines in order, each with the guard that says it. Its closing lines,
+ * one per guard, are the chants the guards "continue to shout"; the rest is the round. Throws when
+ * the variant is missing or doesn't name both guards.
+ */
+function loadRound() {
+  const { page, variant, speakers } = DATA.transcript;
+  const steps = loadTranscripts(pluginApi)?.[page]?.variants?.[variant] ?? [];
+  const lines = steps
+    .filter((step) => step.presentation === "overhead" && typeof step.text === "string")
+    .map((step) => [speakers[step.speaker], step.text]);
+  const keys = guardKeys();
+  const chants = lines.slice(-keys.length);
+  const round = lines.slice(0, -keys.length);
+  if (round.length === 0 || lines.some(([key]) => !DATA.guards[key]) ||
+      keys.some((key) => !chants.some(([speaker]) => speaker === key))) {
+    throw new Error(`VikingShouters: ${page} / ${variant} missing, or without both guards' chants`);
+  }
+  CHANTS.clear();
+  for (const [key, text] of chants) CHANTS.set(key, text);
+  return round;
+}
+
+function startRound(watchers = new Set()) {
   const start = state.tick + DATA.timing.roundDelay;
-  state.round = { start, watchers: new Set() };
+  state.round = { start, watchers };
   for (const key of guardKeys()) state.nextChant.set(key, start + DATA.timing.chantResume[key]);
   return state.round;
 }
 
+/**
+ * Joins the running round while it still has lines to say; after its last line a click starts a
+ * new round, which takes over the old round's watchers so each still gets its cam_reset.
+ */
 function watch(player, key) {
-  const round = state.round ?? startRound();
+  const round = inRoundLines(state.round, Math.max(state.tick, state.round?.start ?? 0))
+    ? state.round : startRound(state.round?.watchers);
   round.watchers.add(player);
   const { moveTo, lookAt } = DATA.guards[key].camera;
   const rates = { rate: DATA.cameraRates.rate, rate2: DATA.cameraRates.rate2, heightRelative: false };
@@ -181,6 +218,7 @@ function dialogueWatch(action) {
 
 function start() {
   loadIds();
+  ROUND = loadRound();
   resetState();
   core.TaskManager.submit(new (class VikingShoutersTask extends core.Task {
     constructor() {
@@ -195,6 +233,7 @@ function start() {
 
 function attach(api) {
   core = api.core;
+  pluginApi = api;
 }
 
 module.exports = {

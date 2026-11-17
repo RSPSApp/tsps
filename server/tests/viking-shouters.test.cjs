@@ -168,3 +168,31 @@ test("a second watcher joins the running round and is reset with it; other Guard
   const other = { getId: () => core.CacheDefinitions.getNpcId("pest_squire_ship_portsarim") };
   assert.equal(s.watch(other).handled, false);
 });
+
+test("the round is the generated transcript's watching-the-shouting overhead lines, in order", () => {
+  const s = scene();
+  s.watch(s.jatizso);
+  s.run(60);
+  const generated = require("../data/definitions/npc-dialogues.json")["Guard (Jatizso watchtower)"]
+    .variants["watching-the-shouting"].filter((step) => step.presentation === "overhead").map((step) => step.text);
+  // The closing two are the chants the guards go back to.
+  assert.deepEqual(generated.slice(-2), ["JATIZSO!", "NEITIZNOT!"]);
+  generated.splice(-2);
+  assert.equal(generated.length, 11);
+  assert.deepEqual(s.log.filter(([, , text]) => !CHANTS.has(text)).map(([, , text]) => text), generated);
+});
+
+test("a click after the round's last line starts a full new round, and the earlier watcher still gets a reset", () => {
+  const s = scene();
+  const first = s.watch(s.jatizso).who;
+  s.run(56);
+  const before = s.log.filter(([, , text]) => !CHANTS.has(text)).length;
+  const late = s.watch(s.neitiznot).who;
+  s.run(70);
+  const after = s.log.filter(([, , text]) => !CHANTS.has(text)).length - before;
+  assert.equal(before, 11);
+  assert.equal(after, 11);
+  assert.deepEqual(late.camera.map(([kind]) => kind), ["moveTo", "lookAt", "reset"]);
+  assert.deepEqual(first.camera.map(([kind]) => kind), ["moveTo", "lookAt", "reset"]);
+  assert.equal(s.plugin._test.state.round, null);
+});

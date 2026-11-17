@@ -1,31 +1,22 @@
 {
-  "$comment": "The two guards shouting at each other from their watchtowers between Jatizso and Neitiznot (plane 2), from rsprox recording 3027 (rev 231) ticks 5008-5420 and 6930-7060 and local recording 1000323 (rev 227) ticks 6513-6584: five Watch-shouting clicks, each followed by the same exchange. `guards` are keyed by cache gameval: `at` is the spawn tile, `chant` what it shouts between rounds, `camera` the watcher's camera when that guard is clicked (move-to and look-at x, y, height; rate 20/50). `round` is the exchange, one line every 5 ticks, worded as the Wiki transcripts (Transcript:Guard (Jatizso watchtower)); the recordings' fifth line after a Jatizso-guard click reads \"CALL THAT A TOWN? ...\" (rec 3027 ticks 5032/5251/5354), a recorded difference. Docs: docs/viking-shouters.md.",
+  "$comment": "The two guards shouting at each other from their watchtowers between Jatizso and Neitiznot (plane 2), from rsprox recording 3027 (rev 231) ticks 5008-5420 and 6930-7060 and local recording 1000323 (rev 227) ticks 6513-6584: five Watch-shouting clicks, each followed by the same exchange. `guards` are keyed by cache gameval: `at` is the spawn tile, `camera` the watcher's camera when that guard is clicked (move-to and look-at x, y, height; rate 20/50). The round (one line every 5 ticks) is the generated Wiki transcript's `watching-the-shouting` (`transcript`); the recordings' fifth line after a Jatizso-guard click reads \"CALL THAT A TOWN? ...\" (rec 3027 ticks 5032/5251/5354), a recorded difference. Docs: docs/viking-shouters.md.",
   "guards": {
     "frisd_izso_viking_shouter": {
       "at": [2372, 3801, 2],
-      "chant": "JATIZSO!",
       "camera": { "moveTo": [2380, 3802, 1000], "lookAt": [2364, 3800, 128] }
     },
     "frisd_iznot_viking_shouter": {
       "at": [2364, 3800, 2],
-      "chant": "NEITIZNOT!",
       "camera": { "moveTo": [2356, 3800, 1000], "lookAt": [2372, 3801, 128] }
     }
   },
   "cameraRates": { "rate": 20, "rate2": 50 },
-  "round": [
-    ["frisd_izso_viking_shouter", "YOU WOULDN'T KNOW HOW TO KILL A TROLL IF IT CAME UP AND BIT YER ARM OFF!"],
-    ["frisd_iznot_viking_shouter", "YOU WOULDN'T KNOW HOW TO SHAVE A YAK IF YOUR LIFE DEPENDED ON IT!"],
-    ["frisd_izso_viking_shouter", "YAK LOVERS!"],
-    ["frisd_iznot_viking_shouter", "MISERABLE LOSERS!"],
-    ["frisd_izso_viking_shouter", "CALL THAT A TOWN, I'VE SEEN BETTER HAMLETS!"],
-    ["frisd_iznot_viking_shouter", "YOUR MOTHER WAS A HAMSTER."],
-    ["frisd_izso_viking_shouter", "AND YOUR FATHER SMELLED OF WINTERBERRIES."],
-    ["frisd_iznot_viking_shouter", "AT LEAST WE HAVE SOMETHING OTHER THAN SMELLY FISH!"],
-    ["frisd_izso_viking_shouter", "WOODEN BRIDGES ARE RUBBISH!"],
-    ["frisd_iznot_viking_shouter", "AT LEAST WE CAN COOK!"],
-    ["frisd_izso_viking_shouter", "OUR KING'S BETTER THAN YOUR BURGHER!"]
-  ],
+  "transcript": {
+    "$comment": "The round and the chants are read from the generated transcript (npc-dialogues.json): its overhead lines in order, of which the last one per guard (before \"Both guards continue to shout the names of their islands at each other\") is that guard's chant between rounds; `speakers` maps each line's speaker to its guard.",
+    "page": "Guard (Jatizso watchtower)",
+    "variant": "watching-the-shouting",
+    "speakers": { "Guard (Jatizso tower)": "frisd_izso_viking_shouter", "Guard (Neitiznot tower)": "frisd_iznot_viking_shouter" }
+  },
   "dialogueSteps": {
     "$comment": "The generated transcripts' \"Can I watch?\" choice ends on an action step that continues at Watching the shouting (npc-dialogues.json, Guard (Jatizso watchtower) / Guard (Neitiznot watchtower)); it plays the same round.",
     "jF2L2R": "frisd_izso_viking_shouter",

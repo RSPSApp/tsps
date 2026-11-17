@@ -141,7 +141,7 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
       sendInterfaceScript: (id, args) => state.scripts.push([id, ...args]),
       sendTypedMessage: (type, message) => { state.spam.push(message); state.messages.push(message); },
       sendSound() {},
-      sendSoundEffect: (id, loops, delay) => state.sounds.push(id),
+      sendSoundEffect: (id, loops, delay) => { state.sounds.push(id); (state.soundDetails ??= []).push([id, loops, delay]); },
       sendObjectAnimation() {},
       sendGlobalGraphic: (graphic, at) => { (state.tileGraphics ??= []).push([graphic.id, graphic.delay, at.getX(), at.getY(), at.getZ()]); },
     }),
@@ -2341,6 +2341,29 @@ function timeline(player, objectId, objectTile) {
 function ticksWith(ticks, test) {
   return ticks.map((entry, index) => (test(entry) ? index : null)).filter((index) => index != null);
 }
+
+test("Coal Trucks log: captured feedback and five-tick crossing in both directions", () => {
+  for (const [start, end] of [[[2598, 3477, 0], [2603, 3477, 0]], [[2603, 3477, 0], [2598, 3477, 0]]]) {
+    const player = createPlayer(...start, 20);
+    const ticks = timeline(player, 23274, [start[0] === 2598 ? 2599 : 2602, 3477, 0]);
+    assert.deepEqual(tileOf(player), end);
+    assert.deepEqual(ticks[0].messages, ["You walk carefully across the slippery log..."]);
+    assert.deepEqual(ticks[5].messages, ["... and make it safely to the other side."]);
+    assert.deepEqual(player.state.spam, ["You walk carefully across the slippery log...", "... and make it safely to the other side."]);
+    assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(2470)), [1, 4]);
+    assert.deepEqual(player.state.soundDetails, [[2470, 2, 0], [2470, 1, 0]]);
+    assert.equal(ticks[5].xp, 8.5);
+    assert.equal(ticks.length - 1, 5);
+    assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393).map(([, value]) => value), [1, 0]);
+    assert.equal(player.state.blocked, false);
+  }
+  const novice = createPlayer(2598, 3477, 0, 19);
+  timeline(novice, 23274, [2599, 3477, 0]);
+  assert.deepEqual(tileOf(novice), [2598, 3477, 0]);
+  assert.deepEqual(novice.state.messages, ["You need an Agility level of at least 20 to attempt this."]);
+  assert.equal(novice.state.xp, 0);
+  assert.deepEqual(novice.state.sounds, []);
+});
 
 test("as captured (RSProx 20261109T224258-5ab63b4): the Auburn Valley log balance, a tile a tick with sound 2470 each", () => {
   for (const [objectId, start, object, finish, steps] of [

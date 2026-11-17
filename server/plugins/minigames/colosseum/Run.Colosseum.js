@@ -65,10 +65,13 @@ function arenaClass() {
       return false;
     }
 
-    /** Leaving the arena any way but through Minimus (a teleport, a logout) ends the run. */
+    /**
+     * Leaving the arena any way but through Minimus (a teleport, a logout) ends the run. A dying player moved out by
+     * another death hook (Death's Office on a first death) has died.
+     */
     postLeave(mobile, logout) {
       if (mobile.isPlayer?.() && this.run?.player === mobile.getAsPlayer()) {
-        this.run.end(logout ? "logout" : "teleported", { fromArea: true });
+        this.run.end(this.run.dying ? "death" : logout ? "logout" : "teleported", { fromArea: true });
       }
       super.postLeave(mobile, logout);
     }
@@ -129,6 +132,8 @@ class ColosseumRun {
     this.glory = 0;
     this.hitByEnemy = false;
     this.chest = null;
+    /** The death animation has started (Arena's player:dying). */
+    this.dying = false;
     runs.set(player, this);
   }
 
@@ -334,7 +339,8 @@ class ColosseumRun {
    */
   hurt(amount, mask = "RED", fromEnemy = false) {
     const { HitDamage, HitMask } = Shared.core();
-    if (amount <= 0 || this.stage === "ended") return;
+    // A dying player takes nothing more: a hit queued during the death animation landed after the respawn, in the lobby.
+    if (amount <= 0 || this.stage === "ended" || this.dying) return;
     this.player.getCombat().getHitQueue().addPendingDamage([new HitDamage(amount, HitMask[mask])]);
     Effects.damageTaken(this, amount, fromEnemy);
   }

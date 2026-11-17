@@ -1,7 +1,7 @@
 /** Cowbell amulet: Wiki mechanics; Ring/no-air statements and sounds from rsprox 4153. */
 const { plainAmount, takePlain, PRESET_TEXT } = require("../../../items/PoweredStaff");
 module.exports = function attachCowbellAmulet(api) {
-  const { ItemIdentifiers: I, Equipment, DialogueChainBuilder, StatementDialogue, ItemStatementDialogue,
+  const { Item, ItemIdentifiers: I, Equipment, DialogueChainBuilder, StatementDialogue, ItemStatementDialogue,
     Animation, Graphic, TeleportType, TeleportHandler, Location, Flag, World } = api.core;
   const CHARGES_META_KEY = "cowbell-amulet:charges";
   const CHARGES_VARBIT = 20097; // cache charges_cowbell_amulet_quantity
@@ -87,12 +87,13 @@ module.exports = function attachCowbellAmulet(api) {
     const remaining = charges(item);
     if (remaining <= 0) return true;
     const inventory = player.getInventory();
-    // Plain runes never join a preset stack, so only a plain stack gives them room without a free slot.
-    if (plainAmount(inventory, I.AIR_RUNE) === 0 && inventory.getFreeSlots() < 1) {
+    // Match addItem: a plain refund needs room for every rune in a matching stack or a free slot.
+    const refund = new Item(I.AIR_RUNE, remaining);
+    if (inventory.getAddableAmount(refund) < remaining) {
       player.sendMessage("You need a free inventory slot for the Air Runes.");
       return true;
     }
-    inventory.adds(I.AIR_RUNE, remaining);
+    inventory.addItem(refund);
     setCharges(player, item, 0);
     return true;
   }

@@ -49,7 +49,8 @@ const LAYOUT = {
   /** The corpse piles round the edge (the map's tfa_xarth01_corpse_pile01-08). */
   piles: [[4191, 5545], [4201, 5535], [4191, 5524], [4181, 5535], [4180, 5544], [4200, 5544], [4200, 5524], [4180, 5524]],
 };
-const HITPOINTS = { 2: 2600, 3: 3770, 4: 4860, 5: 5950 };
+/** Wiki (Strategies): 2,700 / 3,770 / 4,860 / 5,950 / 7,050 / 8,140 / 9,230 for two to eight. */
+const HITPOINTS = { 2: 2700, 3: 3770, 4: 4860, 5: 5950, 6: 7050, 7: 8140, 8: 9230 };
 
 const TIME = {
   CYCLE_ONE: 31,
@@ -70,7 +71,8 @@ const TIME = {
   HEAP_GONE: 3,
   DEATH: 6,
 };
-const DAMAGE = { MAGIC: 30, AOE: 35, WAVE: 45, RANGED: 25, FIRE: 6 };
+/** Max hits 36 magic, 34 ranged (Wiki infobox); behind a heap the blast still does ~7 (Wiki). */
+const DAMAGE = { MAGIC: 36, AOE: 35, WAVE: 45, SHELTERED: 7, RANGED: 34, MELEE: 34, FIRE: 6 };
 /** How far from his footprint the arena fires land (captured: 107 fires). */
 const FIRE_DISTANCES = [[1, 4], [2, 15], [3, 31], [4, 28], [5, 21], [6, 6], [7, 2]];
 /** The heaps, by index into LAYOUT.rubble: south and north first (one at random), east second. */
@@ -119,8 +121,11 @@ class XarthRoom extends Raid.Room {
     if (cycle < this.order.length - 1) this.later(TIME.CYCLE_ONE, () => this.phaseOneCycle());
   }
 
+  /** At the closest player (Wiki). */
   magic() {
-    const player = Shared.randomOf(this.fighters());
+    const fighters = this.fighters();
+    const closest = Math.min(...fighters.map((p) => Shared.distanceTo(this.boss, Shared.tileOf(p))));
+    const player = Shared.randomOf(fighters.filter((p) => Shared.distanceTo(this.boss, Shared.tileOf(p)) === closest));
     if (!player || this.dead) return;
     this.boss.setPositionToFace(player.getLocation());
     this.boss.performAnimation(anim("xarth_attack_magic_01"));
@@ -159,6 +164,7 @@ class XarthRoom extends Raid.Room {
       if (this.dead) return;
       const all = cycle >= this.order.length - 1;
       const full = [];
+      const sheltered = [];
       const { arena } = LAYOUT;
       for (let x = arena.minX; x <= arena.maxX; x++) {
         for (let y = arena.minY; y <= arena.maxY; y++) {
@@ -166,6 +172,7 @@ class XarthRoom extends Raid.Room {
           const distance = Shared.distanceTo(this.boss, tile);
           if (distance === 0 || (!all && heap && !inWedge(tile, heap.tile))) continue;
           const cover = heap ? shelter(tile, heap.tile) : "none";
+          if (cover !== "none") sheltered.push(tile);
           if (cover === "full") continue;
           const smaller = cover === "partial";
           Shared.graphicAt(this.area, named("spotanim", smaller ? "vfx_vmq4_ennius_fire_explosion_smaller" : "vfx_vmq4_ennius_fire_explosion"), tile, { delay: distance });
@@ -174,6 +181,7 @@ class XarthRoom extends Raid.Room {
       }
       Shared.areaSound(this.area, this.boss, 10579);
       this.hitOn(full, DAMAGE.WAVE);
+      this.hitOn(sheltered, DAMAGE.SHELTERED);
       if (heap) this.collapse(heap);
       if (all) this.startPhaseTwo();
     });
@@ -224,13 +232,28 @@ class XarthRoom extends Raid.Room {
   }
 
   ranged() {
+    if (this.dead) return;
+    // Anyone in reach gets his slash instead, straight through Protect from Melee (Wiki).
+    const beside = this.fighters().filter((p) => Shared.distanceTo(this.boss, Shared.tileOf(p)) <= 1);
+    if (beside.length) return this.melee(Shared.randomOf(beside));
     const player = Shared.randomOf(this.fighters());
-    if (!player || this.dead) return;
+    if (!player) return;
     this.boss.setPositionToFace(player.getLocation());
     this.boss.performAnimation(anim("xarth_attack_ranged_01"));
     this.boss.performGraphic(spot("vfx_xarth_attack_ranged_spotanim_01"));
     Shared.projectile(this.area, this.boss, player, named("spotanim", "vfx_xarth_attack_ranged_projectile_01"), { delay: 60, end: 120, angle: 10, progress: 200, startHeight: 470, endHeight: 120 });
     this.strike(this.boss, player, "ranged", DAMAGE.RANGED, 4, { prayerMultiplier: 0 });
+  }
+
+  /** His slash (Wiki: max 34, through Protect from Melee); the animation only if the cache has it. */
+  melee(player) {
+    this.boss.setPositionToFace(player.getLocation());
+    try {
+      this.boss.performAnimation(anim("xarth_attack_melee_01"));
+    } catch {
+      // No melee sequence under that name: the hit lands without one.
+    }
+    this.strike(this.boss, player, "melee", DAMAGE.MELEE, 1, { prayable: false });
   }
 
   /** A magic attack at an edge tile, where a corpse rises three ticks later. */

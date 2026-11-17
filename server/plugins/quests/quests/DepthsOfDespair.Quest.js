@@ -59,6 +59,7 @@ module.exports = function registerDepthsOfDespairQuest(api) {
     DialogueChainBuilder,
     EndDialogue,
     ItemIdentifiers,
+    ItemStatementDialogue,
     Location,
     NpcIdentifiers,
     ObjectIdentifiers,
@@ -765,7 +766,10 @@ module.exports = function registerDepthsOfDespairQuest(api) {
     player.getInventory().deleteNumber(LANCALLIUMS_PAGE_ITEM_ID, 1);
     player.setAttribute(MEMOIR_PAGE_ADDED_ATTRIBUTE, 1);
     player.getPacketSender().sendVarbit(VARBIT_PAGE_ADDED, 1);
-    player.sendMessage("You add an entry to Kharedst's Memoirs.");
+    // Imported recording 20261024T220030-d73fc6a, tick134: the page objectbox.
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+      new ItemStatementDialogue(0, LANCALLIUMS_PAGE_ITEM_ID, "You add an entry to Kharedst's Memoirs.")
+    ));
   }
 
   // ==========================================================================

@@ -79,3 +79,92 @@ test("Uncharge with a full pack and only a preset air-rune stack keeps the charg
   assert.equal(inventory.getItems()[27]?.getAmount(), 40);
   assert.equal(inventory.getItems()[27].isPresetItem(), false, "the refunded runes are plain");
 });
+
+const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+const MAX_RUNES = 0x7fffffff;
+const CHARGES = "cowbell-amulet:charges";
+
+const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
+const { EquipPacketListener } = require("../dist/net/packet/impl/EquipPacketListener");
+
+function invokeUncharge(player, amulet) {
+  const worn = player.getEquipment().getItems().includes(amulet);
+  const container = worn ? player.getEquipment() : player.getInventory();
+  return ItemActionPacketListener.handleAction(player,
+    worn ? core.Equipment.INVENTORY_INTERFACE_ID : core.Inventory.INTERFACE_ID,
+    amulet.getId(), container.getItems().indexOf(amulet),
+    core.CacheDefinitions.getItem(amulet.getId()).inventoryActions.indexOf("Uncharge") + 1, "Uncharge");
+}
+function restored(t, player) {
+  const codec = new JsonPlayerPersistence();
+  const record = JSON.parse(JSON.stringify(PlayerSave.fromPlayer(player), codec.replacer.bind(codec)), codec.reviver.bind(codec));
+  const result = setup(t).p;
+  codec.hydratePlayerSave(record).applyToPlayer(result);
+  return result;
+}
+
+for (const worn of [false, true]) {
+  for (const headroom of [0, 10, 39, 40]) {
+    test(`Uncharge ${worn ? "worn" : "carried"} amulet requires its entire refund: stack room ${headroom}`, t => {
+      const { p, amulet: original } = setup(t), inventory = p.getInventory();
+      let amulet = original;
+      amulet.setId(I.COWBELL_AMULET_2).setMetaValue(CHARGES, 40);
+      amulet.setMetaValue(core.Item.PRESET_META, true);
+      amulet.setMetaValue("test:identity", "kept");
+      if (worn) {
+        EquipPacketListener.equip(p, amulet.getId(), 0, core.Inventory.INTERFACE_ID);
+        amulet = p.getEquipment().get(core.Equipment.AMULET_SLOT);
+        assert.notEqual(amulet, original, "real equip transfers a metadata-preserving copy");
+      }
+      const runes = new core.Item(I.AIR_RUNE, MAX_RUNES - headroom);
+      inventory.setItem(1, runes);
+      inventory.setItem(2, presetRunes(500));
+      // Free slots do not let add() overflow an existing matching stack.
+      const messages = [];
+      const sendMessage = p.sendMessage.bind(p);
+      p.sendMessage = text => { messages.push(text); return sendMessage(text); };
+      const before = inventory.getItems().map(item => ({ id: item.getId(), amount: item.getAmount(), meta: item.getMeta() }));
+      invokeUncharge(p, amulet);
+      const fits = headroom === 40;
+      assert.equal(runes.getAmount(), fits ? MAX_RUNES : MAX_RUNES - headroom);
+      assert.equal(amulet.getMetaValue(CHARGES), fits ? undefined : 40);
+      assert.equal(amulet.getId(), fits ? I.COWBELL_AMULET : I.COWBELL_AMULET_2);
+      assert.equal(amulet.getMetaValue("test:identity"), "kept");
+      assert.equal(amulet.isPresetItem(), true);
+      assert.equal((worn ? p.getEquipment().getItems() : inventory.getItems()).includes(amulet), true);
+      assert.equal(inventory.get(2).getAmount(), 500);
+      assert.equal(inventory.get(2).isPresetItem(), true);
+      if (!fits) {
+        assert.deepEqual(inventory.getItems().map(item => ({ id: item.getId(), amount: item.getAmount(), meta: item.getMeta() })), before);
+        assert.deepEqual(messages, ["You need a free inventory slot for the Air Runes."]);
+      }
+      const loaded = restored(t, p);
+      const savedAmulet = worn ? loaded.getEquipment().get(core.Equipment.AMULET_SLOT) : loaded.getInventory().get(0);
+      assert.equal(savedAmulet.getMetaValue(CHARGES), fits ? undefined : 40);
+      assert.equal(savedAmulet.getMetaValue("test:identity"), "kept");
+      assert.equal(savedAmulet.isPresetItem(), true);
+      assert.equal(loaded.getInventory().get(1).getAmount(), runes.getAmount());
+      assert.equal(loaded.getInventory().get(2).isPresetItem(), true);
+    });
+  }
+}
+
+test("metadata-bearing unrestricted rune stack cannot absorb a plain refund in a full pack", t => {
+  const { p, amulet } = setup(t), inv = p.getInventory();
+  amulet.setId(I.COWBELL_AMULET_2).setMetaValue(CHARGES, 40);
+  const runes = new core.Item(I.AIR_RUNE, 10).setMetaValue("test:origin", "kept");
+  inv.setItem(1, runes);
+  for (let slot = 2; slot < 28; slot++) inv.setItem(slot, new core.Item(I.LOGS, 1));
+  invokeUncharge(p, amulet);
+  assert.equal(amulet.getMetaValue(CHARGES), 40);
+  assert.equal(inv.getAmount(I.AIR_RUNE), 10);
+  assert.equal(inv.get(1), runes);
+  inv.deleteAtSlot(27, 1);
+  invokeUncharge(p, amulet);
+  assert.equal(amulet.getId(), I.COWBELL_AMULET);
+  assert.equal(inv.get(27).getAmount(), 40);
+  assert.equal(inv.get(27).getMeta(), null);
+  invokeUncharge(p, amulet);
+  assert.equal(inv.getAmount(I.AIR_RUNE), 50, "repeated Uncharge cannot duplicate the refund");
+});

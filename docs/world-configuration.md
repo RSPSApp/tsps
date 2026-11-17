@@ -832,7 +832,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `SoulWars` | Soul Wars | minigames | yes | Adds Soul Wars: the lobby and queue, the instanced arena, team avatars, graveyards, souls and fragments, and the obelisk. (members only) |
 | `StealingArtefacts` | StealingArtefacts | minigames | yes | Adds Stealing Artefacts at Port Piscarilius: Captain Khaled's tasks, the six houses' drawers, patrolling guards and the hand-in. (members only) |
 | `TaiBwoWannaiCleanup` | TaiBwoWannaiCleanup | minigames | yes | Adds Tai Bwo Wannai Cleanup: hacking the jungle, mending the fence, trading sticks and their shop, machetes, parcels and the Hardwood Grove. (members only) |
-| `TearsOfGuthix` | TearsOfGuthix | minigames | yes | Adds the weekly Tears of Guthix minigame: Juna's entry check, the timed cave with its bowl and the tear streams. (members only) |
+| `TearsOfGuthix` | TearsOfGuthix | minigames | yes | Adds the weekly Tears of Guthix minigame: Juna's entry check, the timed cave with its bowl, the tear streams and the chasm's light creatures. (members only) |
 | `TempleTrekking` | TempleTrekking | minigames | yes | Adds Temple Trekking and the Burgh de Rott Ramble: escorting a follower between Burgh de Rott and Paterdomus, with events on the way and a reward token. (members only) |
 | `Tempoross` | Tempoross | minigames | yes | Adds Tempoross, the Spirit Anglers' fishing boss: the Ruins of Unkah ferries, a cove instance per trip, the fight and the reward pool. (members only) |
 | `TheMess` | TheMess | minigames | yes | Adds The Mess in Hosidius: cooking meat pies, stews and pineapple pizzas for the Shayzien soldiers and serving them at the buffet tables. (members only) |

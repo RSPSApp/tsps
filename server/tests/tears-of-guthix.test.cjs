@@ -188,29 +188,42 @@ test("the journal shows both outstanding requirements and eligible reminders hap
   assert.equal(player.messages.length, 2);
 });
 
-test("light creatures require the lit sapphire lantern and leave the WGS creature alone", () => {
-  const tasks = [];
-  const h = captureApi({ core: { ...core, TaskManager: { submit: (task) => tasks.push(task) } } });
-  require("../plugins/minigames/tearsofguthix/Chasm.TearsOfGuthix")(h.api);
-  const attract = h.hooks.onNpcInteraction[0][1].Attract;
-  const npc = (x, y) => ({ getId: () => core.NpcIdentifiers.LIGHT_CREATURE_4, getLocation: () => new core.Location(x, y, 2) });
-  const player = fakePlayer();
-  let lantern = 4701;
-  player.getInventory = () => ({ contains: (id) => id === lantern });
-  assert.equal(attract({ player, npc: npc(3226, 9518) }), true);
-  assert.equal(tasks.length, 0);
-  assert.match(player.messages.pop(), /lit sapphire lantern/);
-  assert.equal(attract({ player, npc: npc(3228, 9525) }), false);
-  lantern = 4702;
-  player.getLocation = () => new core.Location(3233, 9525, 2);
-  player.getCombat = () => ({ reset() {} });
-  player.getMovementQueue = () => ({ reset() {} });
-  player.setForceMovement = (move) => { player.force = move; };
-  player.getForceMovement = () => player.force;
-  player.moveTo = (at) => { player.at = at; };
-  attract({ player, npc: npc(3226, 9518) });
-  tasks.pop().execute();
-  assert.deepEqual([player.at.x, player.at.y, player.at.z], [3229, 9505, 2]);
+// rsprox local 1001964/1002071: nine tog_light_creature (401) drift over the chasm a tile a tick,
+// inside x 3211-3237, y 9505-9529; a creature the crossing has taken over is left alone.
+test("the chasm's light creatures are nine multinpc spawns that drift a tile a tick inside the chasm", () => {
+  const Chasm = require("../plugins/minigames/tearsofguthix/Chasm.TearsOfGuthix");
+  const spawns = require("../data/definitions/npc-spawns.json")
+    .filter((spawn) => spawn.level === 2 && spawn.name === "Light creature" && spawn.x >= 3211 && spawn.x <= 3237 &&
+      spawn.y >= 9505 && spawn.y <= 9529);
+  assert.equal(spawns.length, 9, "nine creatures, as both recordings see");
+  const TOG_LIGHT_CREATURE = 401; // gameval tog_light_creature (this file loads no cache)
+  assert.ok(spawns.every((spawn) => spawn.id === TOG_LIGHT_CREATURE),
+    "the multinpc the client resolves by varbit 451, not the always-Attract 5435");
+  const moves = [];
+  const npc = (x, y, scripted = false) => {
+    let at = new core.Location(x, y, 2);
+    return {
+      getLocation: () => at,
+      isScriptedMovement: () => scripted,
+      exactMove(to) { moves.push([to.getX(), to.getY()]); at = to; },
+    };
+  };
+  Chasm._test.setApi({ core });
+  Chasm._test.setRandom(seeded(11));
+  const drifting = npc(3237, 9529);
+  const state = { heading: 1 }; // north-east, straight out of the corner
+  for (let tick = 0; tick < 400; tick++) Chasm._test.drift(drifting, state);
+  assert.ok(moves.length > 300, "it moves on most ticks");
+  let last = [3237, 9529];
+  for (const [x, y] of moves) {
+    assert.ok(Math.abs(x - last[0]) <= 1 && Math.abs(y - last[1]) <= 1 && (x !== last[0] || y !== last[1]), "a tile a tick");
+    assert.ok(x >= Chasm.BOUNDS.x0 && x <= Chasm.BOUNDS.x1 && y >= Chasm.BOUNDS.y0 && y <= Chasm.BOUNDS.y1, `inside the chasm: ${x},${y}`);
+    last = [x, y];
+  }
+  moves.length = 0;
+  Chasm._test.drift(npc(3225, 9515, true), { heading: 0 });
+  assert.equal(moves.length, 0, "a creature carrying or coming for a player is left to the crossing");
+  Chasm._test.setRandom(Math.random);
 });
 
 test("WGS leaves the crossing creatures to Tears and still handles its northern descent", () => {
@@ -314,4 +327,22 @@ test("simultaneous visits are private, share the world's stream colours and clea
   h.hooks.onPlayerDisconnect[0][0]({ player: fifth });
   assert.equal(fifthArea.isDestroyed(), true);
   assert.equal(fifth.getAttribute(Cave.LAST_VISIT_ATTRIBUTE), undefined);
+});
+
+// tog_juna_stories (452) is 1 on every recorded post-quest login once Juna has introduced herself.
+test("Juna's introduction keeps tog_juna_stories at 1 or more across a relog", () => {
+  const h = captureApi();
+  Juna(h.api);
+  const player = fakePlayer();
+  const varbit = () => player.getPacketSender().getVarbit(452);
+  Juna.markIntroHeard(player);
+  assert.equal(Juna.introHeard(player), true);
+  assert.equal(varbit(), 1);
+  player.getPacketSender().sendVarbit(452, 0); // a fresh login's client
+  const login = h.hooks.onPlayerLogin[0][0];
+  login({ player });
+  assert.equal(varbit(), 1, "login replays it");
+  player.setAttribute("tears-of-guthix:stories", 2);
+  login({ player });
+  assert.equal(varbit(), 2, "her own stories still count above it");
 });

@@ -10,6 +10,7 @@ const { PlayerSession } = require('../dist/net/PlayerSession');
 const { ClientConnection } = require('../dist/net/NetworkBuilder');
 const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
 const { CREATION_MENU_GROUP_ID, CREATION_MENU_FIRST_ITEM_COMPONENT } = require('../dist/net/packet/PacketSender');
+const { SERVER_PACKET_LENGTHS } = require('../dist/net/protocol/ServerPackets');
 let core, serial = 0;
 const errors = [], originalError = console.error;
 before(async () => {
@@ -44,6 +45,7 @@ function fixture(t, freeSlots = 0, fruitName = 'pineapple') {
   const knifeSlot = inv.getSlotForItemId(id('knife')), fruitSlot = inv.getSlotForItemId(id(fruitName));
   const knife = inv.getItems()[knifeSlot];
   const c = new ClientConnection(channel); c.player = p;
+  session.setTurnPacketProcessor(() => c.processTurnPackets());
   const send = async packet => { await c.dispatch([packet]); c.processTurnPackets(); };
   const use = () => send({type: 'inventory_use_on', itemId: id('knife'), slot: knifeSlot,
     target: {kind: 'inventory', id: id(fruitName), slot: fruitSlot}});
@@ -72,8 +74,87 @@ function fixture(t, freeSlots = 0, fruitName = 'pineapple') {
     core.TaskManager.process();
   };
   const slice = () => choose('pineapple_ring');
-  return {p, inv, id, knife, knifeSlot, fruitSlot, send, use, choose, slice, floor, packets, turn};
+  return {p, inv, id, knife, knifeSlot, fruitSlot, send, use, choose, slice, floor, packets, turn, connection:c};
 }
+
+// Inspect the actual encoded client frames, rather than replacing PacketSender.
+function wire(frame) {
+  const opcode = frame[0], length = SERVER_PACKET_LENGTHS[opcode];
+  const payload = frame.subarray(length === -2 ? 3 : length === -1 ? 2 : 1);
+  if (opcode === 120) {
+    const end = payload.indexOf(0);
+    return {opcode, text:payload.toString('latin1',0,end), type:payload[end+1]};
+  }
+  if (opcode === 55) {
+    const count = payload.readUInt16BE(4), upserts=[];
+    for (let n=0;n<count;n++) {
+      const b=payload.subarray(6+n*34,6+(n+1)*34);
+      upserts.push({id:b.readInt32BE(0), itemId:b.readUInt16BE(4), amount:b.readInt32BE(6),
+        created:b.readInt32BE(15), privateUntil:b.readInt32BE(19), expires:b.readInt32BE(23),
+        ownerId:b.readInt32BE(27), private:b[31]===1, ownership:b[32]});
+    }
+    const start=6+count*34, removes=[];
+    for(let n=0;n<payload.readUInt16BE(start);n++)removes.push(payload.readInt32BE(start+2+n*4));
+    return {opcode,upserts,removes};
+  }
+  return {opcode};
+}
+const cuttingMessages = f => f.packets.map(wire).filter(p=>p.text?.startsWith('You cut the pineapple'));
+
+test('successful pineapple choices send the recorded spam line once before inventory output', async t => {
+  for(const [output,text] of [['pineapple_ring','You cut the pineapple into rings.'],
+    ['pineapple_chunks','You cut the pineapple into chunks.']]) await t.test(output,async t=>{
+    const f=fixture(t,4); await f.use(); f.packets.length=0; await f.choose(output);
+    const packets=f.packets.map(wire), messages=cuttingMessages(f);
+    assert.deepEqual(messages,[{opcode:120,text,type:core.ChatType.SPAM}]);
+    const messageIndex=packets.findIndex(p=>p.text===text), inventoryIndex=packets.findIndex(p=>p.opcode===50||p.opcode===51);
+    assert.ok(messageIndex>=0&&inventoryIndex>messageIndex,'recorded success chat precedes the committed inventory update');
+    await f.send({type:'dialogue_continue',widgetId:(CREATION_MENU_GROUP_ID<<16)|CREATION_MENU_FIRST_ITEM_COMPONENT,childIndex:1});
+    assert.equal(cuttingMessages(f).length,1,'stale repeat cannot announce another cut');
+  });
+});
+
+test('pineapple overflow follows the real World ground lifecycle and encoded visibility boundaries', async t => {
+  const f=fixture(t), other=fixture(t,3), ring=f.id('pineapple_ring');
+  await f.connection.dispatch([{type:'inventory_use_on',itemId:f.id('knife'),slot:f.knifeSlot,
+    target:{kind:'inventory',id:f.id('pineapple'),slot:f.fruitSlot}}]);
+  core.World.process();
+  assert.ok(f.p.getCreationMenu(),'World player-input pass opens the native menu');
+  f.packets.length=0; other.packets.length=0;
+  await f.connection.dispatch([{type:'dialogue_continue',widgetId:(CREATION_MENU_GROUP_ID<<16)|CREATION_MENU_FIRST_ITEM_COMPONENT,childIndex:1}]);
+  const cutTick=core.World.getProcessCycle()+1;
+  core.World.process();
+  const pile=f.floor().find(g=>g.getItem().getId()===ring);
+  assert.ok(pile); assert.equal(pile.getItem().getAmount(),3);
+  // World ages ground before player input; the committed cut counts as its first floor tick.
+  assert.equal(pile.getTick(),1); assert.equal(pile.getAgedCycle(),cutTick);
+  const relevant=actor=>actor.packets.map(wire).filter(p=>p.opcode===55);
+  const adds=actor=>relevant(actor).flatMap(p=>p.upserts).filter(p=>p.id===pile.getId());
+  const removes=actor=>relevant(actor).flatMap(p=>p.removes).filter(id=>id===pile.getId());
+  assert.equal(adds(f).length,1); assert.equal(adds(other).length,0);
+  assert.deepEqual(adds(f)[0],{id:pile.getId(),itemId:ring,amount:3,created:cutTick-1,
+    privateUntil:cutTick+99,expires:cutTick+299,ownerId:f.p.getIndex(),private:true,ownership:1});
+  assert.equal(core.ItemOnGroundManager.canSee(f.p,pile),true);
+  assert.equal(core.ItemOnGroundManager.canSee(other.p,pile),false);
+  assert.deepEqual(cuttingMessages(f),[{opcode:120,text:'You cut the pineapple into rings.',type:core.ChatType.SPAM}]);
+  while(pile.getTick()<99)core.World.process();
+  assert.equal(core.World.getProcessCycle(),cutTick+98);
+  assert.equal(adds(other).length,0); assert.equal(removes(f).length,0);
+  core.World.process();
+  assert.equal(pile.getTick(),100); assert.equal(core.World.getProcessCycle(),cutTick+99);
+  assert.equal(core.ItemOnGroundManager.canSee(other.p,pile),true);
+  assert.equal(removes(f).length,1,'private owner view is removed before the public update');
+  assert.equal(adds(f).at(-1).private,false);
+  assert.deepEqual(adds(other).at(-1),{id:pile.getId(),itemId:ring,amount:3,created:cutTick-1,
+    privateUntil:0,expires:cutTick+299,ownerId:-1,private:false,ownership:2});
+  while(pile.getTick()<299)core.World.process();
+  assert.ok(core.World.getItems().includes(pile)); assert.equal(removes(other).length,0);
+  core.World.process();
+  assert.equal(core.World.getProcessCycle(),cutTick+299);
+  assert.equal(pile.isPendingRemoval(),true); assert.equal(core.World.getItems().includes(pile),false);
+  assert.equal(removes(other).length,1); assert.equal(removes(f).length,2);
+  assert.equal(cuttingMessages(f).length,1,'aging and reveal cannot repeat success chat');
+});
 test('pineapple knife-use mounts the recorded Slice/Dice skillmulti menu', async t => {
   const f = fixture(t, 3); await f.use();
   const menu = f.p.getCreationMenu();
@@ -145,6 +226,7 @@ test('Dice and other fruits keep their original output and consume no knife', as
   await lemon.send({type:'dialogue_continue',widgetId:MultiChatboxPrompt.OPTIONS_WIDGET_ID,childIndex:2});
   assert.equal(lemon.inv.getAmount(lemon.id('lemon_slices')), 1);
   assert.equal(lemon.inv.getItems()[lemon.knifeSlot], lemon.knife); assert.equal(lemon.floor().length, 0);
+  assert.deepEqual(cuttingMessages(lemon), [], 'other fruit does not acquire pineapple feedback');
 });
 
 test('closing and real ingredient Drop invalidate the pending native selection', async t => {
@@ -156,5 +238,6 @@ test('closing and real ingredient Drop invalidate the pending native selection',
     assert.equal(f.inv.getAmount(f.id('pineapple_ring')), 0);
     assert.equal(f.inv.getAmount(f.id('pineapple')), action === 'close' ? 1 : 0);
     assert.equal(f.inv.getItems()[f.knifeSlot], f.knife);
+    assert.deepEqual(cuttingMessages(f), [], 'a cancelled choice cannot announce a successful cut');
   });
 });

@@ -212,7 +212,8 @@ function clearPlayer({ player }) { sessions.delete(player); cuts.delete(player);
 
 const FRUIT = {
   // Wiki: excess rings fall to the ground. Rec 227/01858: Slice first, then Dice.
-  pineapple: [["Slice it into 4 rings", "pineapple_ring", 4, true], ["Dice it", "pineapple_chunks", 1]],
+  pineapple: [["Slice it into 4 rings", "pineapple_ring", 4, true, "You cut the pineapple into rings."],
+    ["Dice it", "pineapple_chunks", 1, false, "You cut the pineapple into chunks."]],
   lemon: [["Dice", "lemon_chunks", 1], ["Slice", "lemon_slices", 1]],
   orange: [["Dice", "orange_chunks", 1], ["Slice", "orange_slices", 1]],
   lime: [["Dice", "lime_chunks", 1], ["Slice", "lime_slices", 1]],
@@ -220,7 +221,7 @@ const FRUIT = {
 // Rec 227/01858 (Leagues), tick 14993; active skillmulti supports these labels and mode.
 const FRUIT_MENUS = { pineapple: { title: "How would you like to cut the pineapple?", mode: 12 } };
 
-function chooseCut(player, token, output, count, spillOverflow = false) {
+function chooseCut(player, token, output, count, spillOverflow = false, successMessage = null) {
   if (cuts.get(player) !== token || !alive(player)) return;
   cuts.delete(player);
   const items = player.getInventory().getItems();
@@ -228,6 +229,8 @@ function chooseCut(player, token, output, count, spillOverflow = false) {
       || token.knife.item.getId() !== token.knife.id) return;
   const transaction = plan(player, [[token.fruit.id, 1]], [[output, count]], [token.fruit], [], spillOverflow);
   if (!transaction) return;
+  // Recorded success chat precedes the inventory delta (227/910449 and 227/910356).
+  if (successMessage) Common.spam(player, successMessage);
   apply(player, transaction, output, 0, "make");
 }
 
@@ -263,7 +266,7 @@ function useItems(event) {
       choices.map(([, output]) => id(output)), {
         execute: (itemId) => {
           const choice = choices.find(([, output]) => id(output) === itemId);
-          if (choice) chooseCut(player, token, choice[1], choice[2], choice[3]);
+          if (choice) chooseCut(player, token, choice[1], choice[2], choice[3], choice[4]);
         },
       }, { mode: menu.mode, maxAmount: 1, lastAmount: 1, labels: choices.map(([text]) => text) }));
     return;

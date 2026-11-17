@@ -281,7 +281,7 @@ pages cover the later rock entries. As elsewhere on this page, this is the sourc
 **Expert mining gloves** come from Belona in the Mining Guild ([Wiki](https://oldschool.runescape.wiki/w/Expert_mining_gloves)):
 her "Can you combine my mining gloves?" option takes a pair of Mining gloves, a pair of Superior mining gloves and a
 fee of 40 unidentified minerals. `plugins/areas/MiningGuild.plugin.js` answers the transcript's three prose
-conditions (no gloves, fewer than 40 minerals, everything) and its "receive" step. Only unnoted gloves in the
+conditions (no gloves, fewer than 40 minerals, everything) and its "receive" step. Only gloves in the
 inventory count (ours: the Wiki does not say whether worn gloves do). No rsprox capture covers the combine.
 
 ## Varrock armour and extra ore

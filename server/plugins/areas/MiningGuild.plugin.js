@@ -47,7 +47,7 @@ const MINERALS_OFF = "You will no longer receive unidentified minerals when you 
  * Belona's "Can you combine my mining gloves?" (https://oldschool.runescape.wiki/w/Expert_mining_gloves,
  * https://oldschool.runescape.wiki/w/Belona): Mining gloves and Superior mining gloves, for a fee of 40
  * unidentified minerals, become Expert mining gloves. The transcript guards the hand-over with prose
- * conditions and a "receive" action, answered here. Ours: only unnoted gloves in the inventory count
+ * conditions and a "receive" action, answered here. Ours: only gloves in the inventory count
  * (her line asks the player to bring them; no source covers worn gloves). No capture covers it.
  */
 const MINING_GLOVES = 21343;

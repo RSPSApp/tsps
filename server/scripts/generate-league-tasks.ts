@@ -791,14 +791,16 @@ const PLACE_DEFS: PlaceDef[] = [
   // The Citharede Abbey (the Giants' Plateau, east of Al Kharid): the abbey and its cabbage field
   // round the page's own pin (it has no polygon).
   // Subjects' location lines (issue 6108's follow-ups): where the task's rocks, trees, sand pits and
-  // bank chest stand, two tiles round each (the player beside it), and Puro-Puro's map square.
-  { key: "stonecutter-outpost-rocks", names: ["Stonecutter Outpost rocks"], page: "Coal_rocks", locLines: { pages: ["Coal_rocks", "Mithril_rocks"], location: "Stonecutter Outpost", pad: 2 } },
-  { key: "tlati-rainforest-trees", names: ["Tlati Rainforest trees"], page: "Teak_tree", locLines: { pages: ["Teak_tree", "Mahogany_tree"], location: "Tlati Rainforest", pad: 2 } },
-  { key: "shayzien-yew-trees", names: ["Shayzien yew trees"], page: "Yew_tree", locLines: { pages: ["Yew_tree"], location: "Shayzien", pad: 2 } },
-  { key: "forsaken-tower-magic-trees", names: ["Forsaken Tower magic trees"], page: "Magic_tree", locLines: { pages: ["Magic_tree"], location: "The Forsaken Tower (location)", pad: 2 } },
-  { key: "rellekka-sand-pit", names: ["Rellekka sand pit"], page: "Sand_pit", locLines: { pages: ["Sand_pit"], location: "Rellekka", pad: 2 } },
-  { key: "sunset-coast-sand-pit", names: ["Sunset Coast sand pit"], page: "Sand_pit", locLines: { pages: ["Sand_pit"], location: "Sunset Coast", pad: 2 } },
-  { key: "lands-end-bank-chest", names: ["Land's End bank chest"], page: "Bank_chest", locLines: { pages: ["Bank_chest"], location: "Land's End", pad: 2 } },
+  // bank chest stand, three tiles round each pin, and Puro-Puro's map square. Three, not two: a pin is
+  // its object's south-west tile, and a 3x3 one (Shayzien's yews) has its north and east sides three off;
+  // the Sunset Coast pit's pin is a tile south of the pit (the cache's 1519,3001).
+  { key: "stonecutter-outpost-rocks", names: ["Stonecutter Outpost rocks"], page: "Coal_rocks", locLines: { pages: ["Coal_rocks", "Mithril_rocks"], location: "Stonecutter Outpost", pad: 3 } },
+  { key: "tlati-rainforest-trees", names: ["Tlati Rainforest trees"], page: "Teak_tree", locLines: { pages: ["Teak_tree", "Mahogany_tree"], location: "Tlati Rainforest", pad: 3 } },
+  { key: "shayzien-yew-trees", names: ["Shayzien yew trees"], page: "Yew_tree", locLines: { pages: ["Yew_tree"], location: "Shayzien", pad: 3 } },
+  { key: "forsaken-tower-magic-trees", names: ["Forsaken Tower magic trees"], page: "Magic_tree", locLines: { pages: ["Magic_tree"], location: "The Forsaken Tower (location)", pad: 3 } },
+  { key: "rellekka-sand-pit", names: ["Rellekka sand pit"], page: "Sand_pit", locLines: { pages: ["Sand_pit"], location: "Rellekka", pad: 3 } },
+  { key: "sunset-coast-sand-pit", names: ["Sunset Coast sand pit"], page: "Sand_pit", locLines: { pages: ["Sand_pit"], location: "Sunset Coast", pad: 3 } },
+  { key: "lands-end-bank-chest", names: ["Land's End bank chest"], page: "Bank_chest", locLines: { pages: ["Bank_chest"], location: "Land's End", pad: 3 } },
   { key: "puro-puro", names: ["Puro-Puro"], page: "Baby_impling", locLines: { pages: ["Baby_impling"], location: "Puro Puro", square: true } },
   { key: "citharede-abbey", names: ["Citharede Abbey"], page: "Citharede_Abbey", server: { rects: [[3402, 3171, 3423, 3188]], from: "the abbey and its cabbage field" } },
 ];

@@ -2387,10 +2387,10 @@ test("places from location lines: the Stonecutter Outpost's rocks, Tlati's trees
   assert.equal(Common.inPlace("puro-puro", 2624, 4320), false);
   assert.equal(Common.catalog(6).byId.get("catch-50-implings-in-puro-puro").trigger.place, "puro-puro");
 
-  // Land's End: the real bank chest (26707) beside its location line's tile.
+  // Land's End: a Bank chest (Use, as the cache's 19051 there) beside its location line's tile.
   core.RegionManager.loadMapFiles(1513, 3421);
   at(1512, 3421);
-  await objectOption(t, f, 26707, "Use", 3);
+  await objectOption(t, f, 19051, "Use", 3);
   assert.ok(done(f, "bank-at-land-s-end"), `the Land's End bank chest: ${f.messages}`);
 
 });

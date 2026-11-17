@@ -82,5 +82,9 @@ test("the location-line places are their subjects' own pins: the Stonecutter Out
   assert.ok(holds("stonecutter-outpost-rocks", 1732, 2948), "beside a listed coal rock");
   assert.ok(!holds("stonecutter-outpost-rocks", 1666, 3136), "not Civitas");
   assert.deepEqual(places["puro-puro"].rects, [[2560, 4288, 2623, 4351]], "Puro-Puro's map square");
+  // Every open tile beside the object, not just beside the pin: a 3x3 yew's north and east sides, the
+  // Sunset Coast pit's north side (its pin is a tile south of the pit).
+  assert.ok(holds("shayzien-yew-trees", 1550, 3548) && holds("shayzien-yew-trees", 1552, 3546), "a 3x3 yew's far sides");
+  assert.ok(holds("sunset-coast-sand-pit", 1519, 3003) && holds("sunset-coast-sand-pit", 1520, 3003), "the pit's north side");
   for (const key of ["tlati-rainforest-trees", "shayzien-yew-trees", "forsaken-tower-magic-trees", "rellekka-sand-pit", "sunset-coast-sand-pit", "lands-end-bank-chest"]) assert.ok(places[key]?.rects.length > 0, key);
 });

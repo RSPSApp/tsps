@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-11",
+  "updated": "2026-11-16",
   "note": "Progress measures functional equivalence with OSRS through implementation tasks: done counts fully, in progress counts halfway, and to do counts zero. Automated test coverage is evidence, not a scoring requirement. Reconciled against tsps main 3e9ee2d67 on 11 November 2026, covering 1,355 merged PRs since the 6 November checkpoint 3b61a15a8. This sync credits the implemented portions of Clan Wars, Burthorpe Games Room, ranked PvP Arena, Trouble Brewing, Intelligence Gathering, Halloween, seasonal rares, Brutus and Maggot King. It also records Hunter Rumours, diary and League task updates, Sailing, bank-funded Grand Exchange offers, Curse of the Empty Lord, quest progression fixes, combat and interface work. Existing inventory, task scope and weights are retained. Only merged main changes are credited.",
   "schema": {
     "item": [
@@ -33792,7 +33792,8 @@
           "devNotes": [
             "Main 0a219d100 (2026-11-03): #1898 adds the cache-generated Demonic Pacts catalog: 1,104 of 1,592 tasks have award triggers across about 80 kinds. Completion/points are award-once and update the native list in-session. The other 488 tasks and missing content/events remain documented, so gameplay-trigger coverage stays partial.",
             "Main 3b61a15a8 (6 November 2026): #2306 fix: apply Forester rations to felling-axe chops; #2333 fix(leagues): Leagues VI bugs from #2324; #2509 fix(leagues): Leagues VI relic fixes from #2449; #2511 feat(mining): Cam Torum calcified rocks and oozing water; #2513 feat(leagues): 15 more Map of Alacrity shortcuts (stacked on #2509); #2578 Bring eight stale tests up to date. (7 merged PRs touch the recorded implementation; highlights shown.) Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026): #3259 and #4057 expand the Demonic Pacts task triggers. Coverage remains partial."
+            "Main 3e9ee2d67 (11 November 2026): #3259 and #4057 expand the Demonic Pacts task triggers. Coverage remains partial.",
+            "2026-11-16, fix/6031-grubby-chest-task: opening the Grubby Chest now credits its Open 1/10/15/25/30 league tasks through the key chests' chests:opened event, including the Demonic Pacts Open 1 Grubby Chest pact task. Verified by server/tests/league-tasks.test.cjs and server/tests/league-pacts.test.cjs, and by opening the chest in game. Coverage remains partial: tasks without a verified award trigger stay open."
           ],
           "taskDetails": [
             {

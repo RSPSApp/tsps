@@ -2532,6 +2532,14 @@ test("spells and item teleports: their own events complete their tasks; Degrime 
   emit("crystal-singing:sung", { itemId: item("Crystal legs"), amount: 1 });
   assert.ok(done(f, "craft-a-piece-of-crystal-armour"));
 
+  // Inside the Mage Arena (Spells.MageArena.js's box) a god spell is no task; outside it is.
+  const civitas = player.getLocation();
+  player.setAttribute("league:areas", [21, 11]); // the Wilderness unlocked, or the area rules send the player back
+  player.setLocation(new core.Location(3105, 3934, 0));
+  assert.equal(player.getLocation().getX(), 3105, "in the Mage Arena");
+  emit("magic:cast-committed", { spell: core.CombatSpells.CLAWS_OF_GUTHIX });
+  assert.ok(!done(f, "cast-claws-of-guthix"), "cast inside the arena");
+  player.setLocation(civitas);
   for (const [spell, id] of [["CLAWS_OF_GUTHIX", "cast-claws-of-guthix"], ["FLAMES_OF_ZAMORAK", "cast-flames-of-zamorak"], ["SARADOMIN_STRIKE", "cast-saradomin-strike"]]) {
     emit("magic:cast-committed", { spell: core.CombatSpells[spell] });
     assert.ok(done(f, id), spell);

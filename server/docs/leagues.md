@@ -2061,8 +2061,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   - The churn's butter: `produce`.
   - A piece of Crystal armour: CrystalSinging's new `crystal-singing:sung` { itemId, amount }. It is not
     `skills:produced`, which production relics would double.
-  - Claws of Guthix, Flames of Zamorak and Saradomin Strike: `cast`. Ours: "outside of the Mage Arena" is
-    not checked, since there is no Mage Arena place.
+  - Claws of Guthix, Flames of Zamorak and Saradomin Strike: `cast`, with a new `outside { rects, z }`
+    condition. Its box is the Mage Arena as `Spells.MageArena.js` bounds it (3089-3117 x 3921-3946, plane 0),
+    since a player's first casts are the arena's 100 before the spells work outside it.
 - **More conditions** (`Actions.LeagueTasks.js`, `Triggers.LeagueTasks.js`):
   - `resetOn { event, items?, npcs? }` on a counted trigger: that event starts its count again.
     - "Cook 5 pieces of food in a row without burning them" is `cook` reset by `cooking:burnt`.

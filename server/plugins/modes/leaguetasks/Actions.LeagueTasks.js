@@ -240,6 +240,14 @@ function conditionsMet(player, task) {
   const wearing = Array.isArray(task.trigger.wearing) ? task.trigger.wearing : task.trigger.wearing?.items;
   if (wearing && !wearing.some((unit) => wornUnit(wornIndexOf(player), unit))) return false;
   if (near && !isNear(player, near)) return false;
+  // `outside { rects, z? }`: not inside those boxes (a server area restated: "outside of the Mage Arena").
+  const outside = task.trigger.outside;
+  if (outside) {
+    const at = player.getLocation?.();
+    const inside = at && (outside.z === undefined || at.getZ() === outside.z)
+      && outside.rects.some(([minX, minY, maxX, maxY]) => at.getX() >= minX && at.getX() <= maxX && at.getY() >= minY && at.getY() <= maxY);
+    if (inside) return false;
+  }
   return true;
 }
 

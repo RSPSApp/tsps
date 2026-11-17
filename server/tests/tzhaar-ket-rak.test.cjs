@@ -395,6 +395,8 @@ test('Yt-HurKot: five at half health, once; scattered round it, they walk beside
     at(420);
     assert.equal(jad.heals.length, 26, 'it heals while the hit is in flight');
     assert.equal(healers[1].target, null);
+    at(421);
+    assert.equal(healers[1].target, null, 'still in flight: a hit on an NPC lands a tick after its delay');
     at(422);
     assert.equal(healers[1].target, player, 'the hit landed: it goes for the player');
     at(424);

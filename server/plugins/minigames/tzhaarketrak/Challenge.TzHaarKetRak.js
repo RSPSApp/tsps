@@ -204,7 +204,9 @@ class Challenge {
     // A healer the player hits (or splashes) is drawn off once the hit lands (rsprox: it heals
     // until then), whatever its own combat makes of it.
     if (target?.__tkrChallenge === this && target.getId?.() === Common.ids.npcs.healer) {
-      const lands = Common.cycle() + delay;
+      // As CombatFactory.addPendingHit: NPCs process before players, so a hit on an NPC lands
+      // one tick after its delay (hitProcessingDelay).
+      const lands = Common.cycle() + delay + 1;
       target.__tkrDrawnAt = Math.min(target.__tkrDrawnAt ?? lands, lands);
     }
     if (!target?.__tkrChallenge || target.getId?.() !== Common.ids.npcs.jad) return;

@@ -403,7 +403,9 @@ export class World {
      * stop blocking other NPCs there until they move. Pets never raise it.
      */
     private static clearNpcFlag(key: string, privateArea: any, leaving: NPC | null = null): void {
-        if (leaving?.isPet?.()) return;
+        // Only an NPC that holds the flag can lower it: a pet never raises it, and a hidden NPC
+        // is out of the world and blocks nothing.
+        if (leaving?.isPet?.() || (leaving && !leaving.isVisible())) return;
         for (const npc of World.npcTileOccupants.get(key) ?? []) {
             if (npc === leaving || npc.isPet() || (npc.getPrivateArea() ?? null) !== (privateArea ?? null)) continue;
             let cleared = World.clearedNpcFlags.get(npc);
@@ -511,7 +513,10 @@ export class World {
                 // the world for players, so it holds no tile: a woken Observatory guard has to walk back
                 // onto the post the hidden sleeping guard keeps.
                 if (World.npcTileOccupants.get(key)?.some((npc) => npc && npc !== ignoredNpc && !npc.isPet() &&
-                    npc.isVisible() && !(byFlag && World.clearedNpcFlags.get(npc)?.has(key)) &&
+                    npc.isVisible() &&
+                    // The full flag (barricades, pyramid blocks) is separate from the NPC flag and
+                    // still blocks NPCs once the NPC flag is lowered (osrs-docs: Entity Collision).
+                    !(byFlag && !npc.hasFlag(NPC.BLOCKS_PLAYERS_FLAG) && World.clearedNpcFlags.get(npc)?.has(key)) &&
                     (privateArea === undefined || npc.getPrivateArea() === privateArea))) {
                     return true;
                 }

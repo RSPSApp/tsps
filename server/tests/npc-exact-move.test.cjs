@@ -243,6 +243,32 @@ test('the NPC flag is a bit a tile: a player crossing it, or an NPC stepping off
   }
 });
 
+test('only an NPC holding the flag lowers it, and the full flag keeps blocking NPCs once the NPC flag is down', () => {
+  const { World } = require('../dist/game/World');
+  const { MovementQueue } = require('../dist/game/model/movement/MovementQueue');
+  const at = (x, y) => new Location(x, y, 0);
+  const hidden = new NPC(3106, at(3340, 3300));
+  const visible = new NPC(3106, at(3340, 3300));
+  const barricade = new NPC(3106, at(3342, 3300));
+  barricade.setFlag(NPC.BLOCKS_PLAYERS_FLAG);
+  for (const npc of [hidden, visible, barricade]) assert.ok(World.getNpcs().add(npc, true), 'registered');
+  hidden.setVisible(false);
+  const mover = {
+    isNpc: () => true, isPlayer: () => false, getSize: () => 1, getPrivateArea: () => null, canWalkThroughNPCs: () => false,
+  };
+  const blocked = (x, y) => MovementQueue.prototype.isDynamicallyOccupied.call({ character: mover }, at(x, y));
+  const player = { getPrivateArea: () => null, claimTileOccupancy() {}, getNpcViewDistance: () => 15, getTeleportSerial: () => 0, isRegistered: () => false };
+  try {
+    hidden.setLocation(at(3340, 3305));
+    assert.equal(blocked(3340, 3300), true, 'a hidden NPC leaving does not lower the flag of the visible one');
+    World.onPlayerMoved(player, at(3342, 3299), at(3342, 3300));
+    World.onPlayerMoved(player, at(3342, 3300), at(3342, 3301));
+    assert.equal(blocked(3342, 3300), true, 'a barricade still blocks NPCs after a player crosses it');
+  } finally {
+    for (const npc of [hidden, visible, barricade]) World.getNpcs().remove(npc);
+  }
+});
+
 test('the attack timing hook lets an attack ignore the timer, or leave it as it was', () => {
   const { PluginManager } = require('../dist/plugins/PluginManager');
   const api = PluginManager.createApi('timing-test');

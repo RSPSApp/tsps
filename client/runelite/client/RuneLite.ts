@@ -1,6 +1,6 @@
 import { subscribePluginMessages } from "../../network/serverConnection/domain/pluginMessages";
 import { PluginMessage } from "@runelite/api/events/PluginMessage";
-import { ChatMessage, GameStateChanged, StatChanged } from "@runelite/api/events";
+import { GameStateChanged, StatChanged } from "@runelite/api/events";
 import { ClientTick } from "@runelite/api/events/ClientTick";
 import { CommandExecuted } from "@runelite/api/events/CommandExecuted";
 import { FocusChanged } from "@runelite/api/events/FocusChanged";
@@ -9,7 +9,7 @@ import { PostClientTick } from "@runelite/api/events/PostClientTick";
 import { BeforeRender } from "@runelite/api/events/BeforeRender";
 import type { OsrsClient } from "../../game/OsrsClient";
 import { subscribeTick } from "../../network/serverConnection/timing";
-import { subscribeChatMessages, subscribeSkills } from "../../network/serverConnection/subscriptions/ui";
+import { subscribeSkills } from "../../network/serverConnection/subscriptions/ui";
 import { setManagedMenus } from "../../ui/menu/menuTransforms";
 import { ConfigManager } from "./config/ConfigManager";
 import { watchNotificationSettings } from "./Notifier";
@@ -24,6 +24,7 @@ import { bindOverlayFonts } from "./ui/overlay/OverlayFonts";
 import { CLIENT_TOKEN } from "./plugins/PluginInjector";
 import { CORE_PLUGINS, LEGACY_CONFIG_MIGRATIONS } from "./plugins";
 import { toRuneLiteGameState } from "../impl/GameStateMapping";
+import { bindChatEvents } from "../impl/ChatEventSource";
 import { bindNpcEvents } from "../impl/NpcEventSource";
 import { syncWorldMapPoints } from "./ui/overlay/worldmap/worldMapLayout";
 import { bindContainerEvents, WidgetSourceBinder } from "../impl/ContainerEventSource";
@@ -120,9 +121,7 @@ export class RuneLite {
         });
 
         subscribePluginMessages(({ channel, data }) => this.eventBus.post(new PluginMessage(channel, data)));
-        subscribeChatMessages((msg) => this.eventBus.post(
-            new ChatMessage(msg.chatType ?? 0, msg.from ?? "", msg.text ?? "", msg.prefix ?? null),
-        ));
+        bindChatEvents((message) => this.eventBus.post(message));
 
         // A stats snapshot (login) or update: one StatChanged per skill it carries.
         subscribeSkills((update) => {

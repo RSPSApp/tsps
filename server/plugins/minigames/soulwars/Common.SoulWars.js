@@ -112,6 +112,18 @@ function inBox(location, [x0, y0, x1, y1]) {
   return x >= x0 && x <= x1 && y >= y0 && y <= y1;
 }
 
+/**
+ * The NPCs standing in a box on plane z, lowest index first. A region query: walking
+ * World.getNpcs() steps through every NPC slot (65535), every time it is asked.
+ */
+function npcsInBox([x0, y0, x1, y1], z = 0) {
+  const cx = (x0 + x1 + 1) >> 1;
+  const cy = (y0 + y1 + 1) >> 1;
+  const radius = Math.max(cx - x0, x1 - cx, cy - y0, y1 - cy);
+  const near = core.World?.getNpcsNear?.(new core.Location(cx, cy, z), radius) ?? [];
+  return near.filter((npc) => inBox(npc.getLocation(), [x0, y0, x1, y1])).sort((a, b) => a.getIndex() - b.getIndex());
+}
+
 function level(player, skill) {
   return player.getSkillManager().getCurrentLevel(core.Skill[skill]);
 }
@@ -151,6 +163,7 @@ module.exports = {
   toLocation,
   other,
   inBox,
+  npcsInBox,
   level,
   maxLevel,
 };

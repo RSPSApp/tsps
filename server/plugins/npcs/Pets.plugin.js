@@ -27,6 +27,7 @@ const TombsOfAmascut = require("./pets/TombsOfAmascut.Pets");
 const Beaver = require("./pets/Beaver.Pets");
 const GiantSquirrel = require("./pets/GiantSquirrel.Pets");
 const Rocky = require("./pets/Rocky.Pets");
+const RockGolem = require("./pets/RockGolem.Pets");
 
 const CURRENT_PET_ATTRIBUTE = "pets:current";
 /** The item of the follower the player logged out with; re-summoned on login. */
@@ -296,6 +297,7 @@ const PETS = [
   },
   {
     enumName: "ROCK_GOLEM",
+    itemDefinesVariant: true,
     petId: NpcIdentifiers.ROCK_GOLEM_20,
     houseNpcId: NpcIdentifiers.ROCK_GOLEM_8,
     dialogueVariant: "standard-dialogue-normal-variant",
@@ -899,6 +901,8 @@ function getVariantMap(player) {
 
 /** The stored npc id of the chosen metamorphosis form for this pet's family. */
 function getStoredVariant(player, pet) {
+  // Physical forms are authoritative, including old saves with a stale family preference.
+  if (pet.itemDefinesVariant) return pet.petId;
   const variant = getVariantMap(player)[petFamily(pet)];
   // Older saves used the house definition as the follower. Resolve that legacy
   // form without registering actual menagerie NPCs as owned world pets.
@@ -2230,6 +2234,15 @@ function addRockyForms({ CacheDefinitions }) {
   }
 }
 
+/** Rock golem ore colours, each its own physical item and follower. */
+function addRockGolemForms({ CacheDefinitions }) {
+  for (const pet of RockGolem.rows(PET_BY_NAME.get("ROCK_GOLEM"), CacheDefinitions)) {
+    if (PET_BY_ID.has(pet.petId) || PET_BY_ITEM_ID.has(pet.itemId)) continue;
+    PETS.push(pet); PET_BY_ID.set(pet.petId, pet); PET_BY_NAME.set(pet.enumName, pet); PET_BY_ITEM_ID.set(pet.itemId, pet);
+    if (Number.isInteger(pet.houseNpcId)) PET_BY_HOUSE_ID.set(pet.houseNpcId, pet);
+  }
+}
+
 /** The player's own active follower, free to change form now. */
 function isOwnFollower(player, npc) {
   return player?.getAttribute?.(CURRENT_PET_ATTRIBUTE) === npc && npc?.getOwner?.() === player
@@ -2279,6 +2292,7 @@ module.exports = {
     addBeaverForms(api.core);
     addGiantSquirrelForms(api.core);
     addRockyForms(api.core);
+    addRockGolemForms(api.core);
     addExtensionPets(api);
     api.persistAttribute(OWNED_ATTRIBUTE);
     api.persistAttribute(LAST_PET_ATTRIBUTE);
@@ -2322,6 +2336,7 @@ module.exports = {
     Beaver.attach(api, {getPetForItemId, recordOwnership, setStoredVariant, transformFollower, isOwnFollower});
     GiantSquirrel.attach(api, {getPetForItemId, recordOwnership, setStoredVariant, transformFollower, isOwnFollower});
     Rocky.attach(api, {transformFollower, isOwnFollower});
+    RockGolem.attach(api, {recordOwnership, setStoredVariant, transformFollower, isOwnFollower});
     TombsOfAmascut.attach(api, {world: World, currentAttribute: CURRENT_PET_ATTRIBUTE, activeAttribute: ACTIVE_PET_ATTRIBUTE,
       lastAttribute: LAST_PET_ATTRIBUTE, getPetByNpcId, setStoredVariant});
 

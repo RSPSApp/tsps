@@ -16,6 +16,8 @@
  *                                     reached (a tightrope's XP), not the tick after
  *   { walk: [[x, y], ...], tilesPerTick: 2 }
  *                                     two tiles a tick, sent as a run step (Seers' tightrope)
+ *   { walk: [[x, y], ...], traversalType: 1 | 2 }
+ *                                     this movement's traversal, independent of tile count
  *   { move: [x, y, z?], anim?, speed?, dir?, ticks? }
  *                                     exact-move to a tile, landing after `ticks` ticks;
  *                                     `ticks: 0` starts the move and leaves landing to a `tele`
@@ -114,7 +116,9 @@ function toLocation(player, tile) {
 }
 
 function setRender(player, animationId) {
-  player.setSkillAnimation(animationId ?? RESET_ANIMATION);
+  const next = animationId ?? RESET_ANIMATION;
+  if (player.getSkillAnimation() === next) return;
+  player.setSkillAnimation(next);
   player.getUpdateFlag().flag(Flag.APPEARANCE);
 }
 
@@ -209,6 +213,7 @@ function createObstacleTask(Task) {
       this.walkedTiles = 0;
       this.walkArrives = false;
       this.walkTilesPerTick = 1;
+      this.walkTraversalType = undefined;
       this.finished = false;
       this.completed = false;
       // Ticks run, and the tick this obstacle last started an animation on.
@@ -248,15 +253,22 @@ function createObstacleTask(Task) {
           stepped++;
           if (this.walkArrives && this.walkPath.length === 1 && this.atTile(this.walkPath[0])) {
             this.walkPath = null;
+            this.recordWalkTraversal(stepped);
             return;
           }
-          if (stepped >= this.walkTilesPerTick) return;
+          if (stepped >= this.walkTilesPerTick) { this.recordWalkTraversal(stepped); return; }
           continue;
         }
-        if (stepped > 0) return;
+        if (stepped > 0) { this.recordWalkTraversal(stepped); return; }
         this.walkPath.shift();
       }
       this.walkPath = null;
+      this.recordWalkTraversal(stepped);
+    }
+
+    recordWalkTraversal(stepped) {
+      if (stepped > 0 && this.walkTraversalType !== undefined)
+        this.player.setTemporaryMovementType(this.walkTraversalType);
     }
 
     atTile(tile) {
@@ -282,6 +294,7 @@ function createObstacleTask(Task) {
         this.walkedTiles = 0;
         this.walkArrives = step.arrive === true;
         this.walkTilesPerTick = step.tilesPerTick ?? 1;
+        this.walkTraversalType = step.traversalType;
         this.advanceWalk();
       } else if (step.moveStart) {
         this.startMove(step.moveStart);

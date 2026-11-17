@@ -618,13 +618,14 @@ test("Barrows login task uses eligible combat ticks only, preserves stages and r
   const assign = WeaponInterfaceManager.assign;
   WeaponInterfaceManager.assign = () => {};
   try {
-    let login, logout, task, combat = false;
+    let login, logout, task, combat = false, cycle = 0;
     const { api } = buildApi({
       onPlayerLogin: (handler) => { login = handler; },
       onPlayerLogout: (handler) => { logout = handler; },
       getTaskManager: () => ({ submit: (submitted) => { task = submitted; } }),
       getCombatFactory: () => ({ inCombat: () => combat }),
     });
+    api.core.World = { getProcessCycle: () => cycle };
     BarrowsEquipment.register(api);
     const { Barrows } = require("../dist/game/content/combat/Barrows");
     for (const base of [4708, 4716, 4724, 4732, 4745, 4753]) {
@@ -632,11 +633,16 @@ test("Barrows login task uses eligible combat ticks only, preserves stages and r
       const { player, items, inventory, counts } = fixture;
       inventory.push(new Item(base));
       login({ player });
-      const tick = (count) => { for (let i = 0; i < count; i++) task.execute(); };
+      const tick = (count) => { for (let i = 0; i < count; i++) { cycle++; task.execute(); } };
+      // Combat for the gear starts on a swing, either side's (issue 6061).
+      const swing = () => api.emitCustomEvent("combat:attack-started", { attacker: player, target: {} });
       combat = false;
       tick(1000);
       assert.equal(items[0].getId(), base, "idle does not degrade");
       combat = true;
+      tick(50);
+      assert.equal(items[0].getId(), base, "a target picked but not yet swung at does not degrade");
+      swing();
       tick(1);
       assert.equal(BarrowsEquipment._test.durability(items[0]), 999, "combat entry spends one point");
       assert.equal(Barrows.stageOf(items[0].getId()), 0);
@@ -654,7 +660,8 @@ test("Barrows login task uses eligible combat ticks only, preserves stages and r
         combat = false; tick(100);
         assert.equal(BarrowsEquipment._test.durability(items[0]), remaining, "serialized item survives relog and idle");
         combat = true;
-        // Re-entry consumes a point; do it before the next accelerated interval.
+        // Re-entry consumes a point on its first swing; do it before the next accelerated interval.
+        swing();
         if (remaining) tick(1);
       }
       BarrowsEquipment._test.repairAll(player);

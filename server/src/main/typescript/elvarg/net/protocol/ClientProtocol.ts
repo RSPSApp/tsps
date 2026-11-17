@@ -104,6 +104,8 @@ export type PlayerView = Tile & ActorUpdateView & {
   index: number;
   appearance: Buffer;
   movementType?: 1 | 2;
+  /** One-update traversal override; independent of movement geometry and cached speed. */
+  temporaryMovementType?: 1 | 2;
   resetPath?: boolean;
   appearanceDirty?: boolean;
   faceDirection?: number;
@@ -1114,6 +1116,8 @@ export const ChatType = {
   TRADE: 102,
   /** An NPC's overhead line, shown as "Name: text"; the NPC's name goes in `from`. */
   NPC_SAY: 116,
+  /** Spoken dialogue history, with "Name|text" in the message (rsprox `type=dialogue`). */
+  DIALOGUE: 114,
   /** A message box's text, logged in the chatbox as live does when one opens (rsprox `type=mesbox`). */
   MESBOX: 115,
   /** The login greeting, "Welcome to Old School RuneScape." (rsprox `type=108`). */
@@ -3224,7 +3228,7 @@ function playerUpdateMask(
     (writeInteraction ? PLAYER_MASK.FACE_ENTITY : 0) |
     (view.forcedMovement ? PLAYER_MASK.FORCE_MOVEMENT : 0) |
     (writeMovementType ? PLAYER_MASK.MOVEMENT_TYPE : 0) |
-    (view.resetPath ? PLAYER_MASK.MOVEMENT_FLAG : 0) |
+    (view.resetPath || view.temporaryMovementType !== undefined ? PLAYER_MASK.MOVEMENT_FLAG : 0) |
     (view.tint ? PLAYER_MASK.TINT : 0) |
     (view.graphics?.length ? PLAYER_MASK.SPOT_ANIM : 0);
 }
@@ -3283,7 +3287,8 @@ function writePlayerUpdateBlock(
     bytes.push(...view.appearance.subarray(0, length));
   }
   if (view.forcedMovement) writeForcedMovement(bytes, view.forcedMovement);
-  if (view.resetPath) byteS(bytes, 127);
+  if (view.resetPath || view.temporaryMovementType !== undefined)
+    byteS(bytes, view.resetPath ? 127 : view.temporaryMovementType!);
   if (view.graphics?.length) {
     byteA(bytes, view.graphics.length);
     for (const graphic of view.graphics) {

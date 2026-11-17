@@ -45,6 +45,8 @@ export class MapManager<T extends MapSquare> {
     static readonly SCENE_STREAM_HALF_TILES = MapManager.SCENE_STREAM_SIZE_TILES >> 1;
     // OSRS preferences use 0..5 levels; distant scenery can request a wider static window.
     static readonly SCENE_EXPANDED_STEP_TILES = 8;
+    // Keep the default browser view together; farther scenery streams after publication.
+    static readonly SCENE_READY_RANGE_TILES = 25;
     static readonly SCENE_MAX_EXPANDED_LEVEL = 20;
     // Scene base rebases when local player exits [16, 88) in the 104x104 window.
     static readonly SCENE_REBASE_MIN_LOCAL_TILE = 16;
@@ -507,11 +509,14 @@ export class MapManager<T extends MapSquare> {
 
     /**
      * Whether the square holding the tile (`tileX`, `tileZ`) is drawn: built, and in the active
-     * grid, which only switches once every square in view of the new one is built. A frame asks
+     * grid, which switches once the required near view of the new one is built. A frame asks
      * this of the player's tile before streaming has caught up with it (the view is last frame's).
      */
     isSquareReadyAt(tileX: number, tileZ: number, frameCount: number): boolean {
         if (ClientState.inInstance) return this.isSceneReady(frameCount);
+        // Walking can bring an unfinished optional neighbor into the required near group.
+        // The loading UI and both frame holds must wait for that group, not only our own map.
+        if (!this.isTargetGridReady(frameCount)) return false;
         const mapId = getMapSquareId(
             Math.floor(tileX / Scene.MAP_SQUARE_SIZE),
             Math.floor(tileZ / Scene.MAP_SQUARE_SIZE),
@@ -523,7 +528,7 @@ export class MapManager<T extends MapSquare> {
     private isTargetGridReady(frameCount: number): boolean {
         for (let i = 0; i < this.gridMapCount; i++) {
             const mapId = this.gridMapIds[i];
-            if (!this.isMapInView(mapId)) continue;
+            if (!this.gatesScene(mapId)) continue;
             if (this.invalidMapIds.has(mapId) || this.mapSquares.get(mapId)?.canRender(frameCount)) {
                 continue;
             }
@@ -540,12 +545,21 @@ export class MapManager<T extends MapSquare> {
         return false;
     }
 
+    private gatesScene(mapId: number): boolean {
+        if (!this.usingSceneBaseStreaming || this.viewRangeTiles < 0) return this.isMapInView(mapId);
+        return this.isMapWithin(mapId, Math.min(this.viewRangeTiles, MapManager.SCENE_READY_RANGE_TILES));
+    }
+
     private isMapInView(mapId: number): boolean {
-        if (this.viewRangeTiles < 0) return true;
+        return this.isMapWithin(mapId, this.viewRangeTiles);
+    }
+
+    private isMapWithin(mapId: number, range: number): boolean {
+        if (range < 0) return true;
         const x = (mapId >> 8) * Scene.MAP_SQUARE_SIZE + 32;
         const z = (mapId & 0xff) * Scene.MAP_SQUARE_SIZE + 32;
         return Math.max(Math.abs(this.viewX - x) - 32, Math.abs(this.viewZ - z) - 32, 0) <=
-            this.viewRangeTiles + CHUNK_SIZE;
+            range + CHUNK_SIZE;
     }
 
     private commitTargetGridAsActive(): void {
@@ -603,12 +617,6 @@ export class MapManager<T extends MapSquare> {
             return;
         }
 
-        this.viewX = posX;
-        this.viewZ = posZ;
-        this.viewRangeTiles = streamRangeTiles === undefined ? -1 : Math.max(0, streamRangeTiles);
-
-        const playerMapX = Math.floor(posX / Scene.MAP_SQUARE_SIZE);
-        const playerMapY = Math.floor(posZ / Scene.MAP_SQUARE_SIZE);
         const baseX = Number(sceneBaseX) | 0;
         const baseY = Number(sceneBaseY) | 0;
         const baseFiniteAndPositive =
@@ -616,6 +624,19 @@ export class MapManager<T extends MapSquare> {
             Number.isFinite(sceneBaseY as number) &&
             baseX >= 0 &&
             baseY >= 0;
+        // A rebuild can arrive before this renderer frame has the new player coordinates.
+        // Anchor loading to its authoritative target rather than publishing an empty view.
+        if (baseFiniteAndPositive && (posX < baseX || posZ < baseY ||
+            posX >= baseX + MapManager.SCENE_STREAM_SIZE_TILES ||
+            posZ >= baseY + MapManager.SCENE_STREAM_SIZE_TILES)) {
+            posX = baseX + MapManager.SCENE_STREAM_HALF_TILES;
+            posZ = baseY + MapManager.SCENE_STREAM_HALF_TILES;
+        }
+        this.viewX = posX;
+        this.viewZ = posZ;
+        this.viewRangeTiles = streamRangeTiles === undefined ? -1 : Math.max(0, streamRangeTiles);
+        const playerMapX = Math.floor(posX / Scene.MAP_SQUARE_SIZE);
+        const playerMapY = Math.floor(posZ / Scene.MAP_SQUARE_SIZE);
         const expandedLoadingLevel = this.resolveExpandedMapLoading(expandedMapLoading);
 
         const useSceneBaseStreaming = baseFiniteAndPositive;
@@ -780,18 +801,24 @@ export class MapManager<T extends MapSquare> {
                 }
             }
 
-            // Publish the whole foreground together, including initial loads and teleports.
+            // Publish the near foreground together, including initial loads and teleports.
             this.gridTransitionPending = true;
         }
 
-        // Foreground builds take priority over scenery that is still outside the view.
+        // Required near squares build before optional foreground and off-screen scenery.
         let viewMapCount = 0;
         for (let i = 0; i < this.gridMapCount; i++) {
             const mapId = this.gridMapIds[i];
             if (!this.isMapInView(mapId)) continue;
             viewMapCount++;
             if (!this.activeGridMapIdSet.has(mapId)) this.gridTransitionPending = true;
-            this.loadMap(mapId >> 8, mapId & 0xff, false, this.gridRevision);
+            if (this.gatesScene(mapId)) this.loadMap(mapId >> 8, mapId & 0xff, false, this.gridRevision);
+        }
+        for (let i = 0; i < this.gridMapCount; i++) {
+            const mapId = this.gridMapIds[i];
+            if (this.isMapInView(mapId) && !this.gatesScene(mapId)) {
+                this.loadMap(mapId >> 8, mapId & 0xff, false, this.gridRevision);
+            }
         }
         if (viewMapCount !== this.activeGridMapCount) this.gridTransitionPending = true;
 

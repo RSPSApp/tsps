@@ -285,7 +285,7 @@ function isUltimateIronman(player) {
   return query.mode === "ultimate";
 }
 
-function deposit(player, slot, amount) {
+function deposit(player, slot, amount, bulkFeedback = null) {
   const view = viewOf(player);
   if (!view || view.mount) {
     if (view?.mount) player.sendMessage("You can't store items now.");
@@ -309,7 +309,8 @@ function deposit(player, slot, amount) {
   }
   const store = view.kind === "private" ? privateItems(player) : sharedStore(view.raid);
   if (restricted(item)) {
-    player.sendMessage(PRESET_TEXT);
+    if (!bulkFeedback?.presetWarned) player.sendMessage(PRESET_TEXT);
+    if (bulkFeedback) bulkFeedback.presetWarned = true;
     return;
   }
   const stored = stacks(id) ? depositStack(inventory, store, view.size, slot, amount) : depositEach(inventory, store, view.size, slot, amount);
@@ -426,8 +427,9 @@ function depositOrBankAll({ player }) {
   const view = privateView(player);
   if (!view) return true;
   if (!view.mount) {
+    const bulkFeedback = { presetWarned: false };
     player.getInventory().getItems().forEach((item, slot) => {
-      if (item && item.getId() >= 0) deposit(player, slot, item.getAmount());
+      if (item && item.getId() >= 0) deposit(player, slot, item.getAmount(), bulkFeedback);
     });
     return true;
   }

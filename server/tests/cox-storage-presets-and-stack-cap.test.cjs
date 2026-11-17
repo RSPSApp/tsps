@@ -75,6 +75,30 @@ test("a preset stack of death runes is refused and stays in the inventory", (t) 
   assert.equal(amount(f.inv, I.DEATH_RUNE, true), 1000);
 });
 
+test("Deposit-all warns once per operation while preserving restricted copies and storing plain items", (t) => {
+  const f = inStorage(t);
+  const restricted = [preset(new core.Item(I.DEATH_RUNE, 1000)), preset(new core.Item(I.ABYSSAL_WHIP)), new core.Item(I.COINS, 25)];
+  restricted[2].setMetaValue(core.Item.UNBANKABLE_META, true);
+  restricted.forEach((item, slot) => f.inv.setItem(slot, item));
+  f.inv.setItem(3, new core.Item(I.DEATH_RUNE, 300));
+  f.inv.setItem(4, new core.Item(I.ABYSSAL_WHIP));
+  const before = restricted.map((item) => ({ id: item.getId(), amount: item.getAmount(), meta: { ...item.getMeta() } }));
+  Storage.depositOrBankAll({ player: f.p });
+  assert.deepEqual(f.messages, [PRESET_TEXT]);
+  assert.equal(stored(f, I.DEATH_RUNE), 300);
+  assert.equal(stored(f, I.ABYSSAL_WHIP), 1);
+  assert.equal(stored(f, I.COINS), 0);
+  restricted.forEach((item, slot) => {
+    assert.equal(f.inv.getItems()[slot], item, "same restricted item instance remains in its slot");
+    assert.deepEqual({ id: item.getId(), amount: item.getAmount(), meta: { ...item.getMeta() } }, before[slot]);
+  });
+  Storage.depositOrBankAll({ player: f.p });
+  assert.deepEqual(f.messages, [PRESET_TEXT, PRESET_TEXT], "another operation gets its own warning");
+  Storage.deposit(f.p, 0, 1000);
+  Storage.deposit(f.p, 1, 1);
+  assert.equal(f.messages.length, 4, "individual refused deposits still each warn");
+});
+
 test("depositing a plain stack takes that stack, never a preset one of the same id", (t) => {
   const f = inStorage(t);
   f.inv.setItem(0, preset(new core.Item(I.DEATH_RUNE, 1000))); // first in slot order

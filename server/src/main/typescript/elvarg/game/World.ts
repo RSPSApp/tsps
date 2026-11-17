@@ -54,7 +54,9 @@ export class World {
         // The owner index follows the list itself, so every way in and out (the queues,
         // PluginManager.removeNpc's direct removal, a rolled-back add) keeps it exact.
         (npc) => { World.registerNpcPosition(npc); NPC.indexOwner(npc); },
-        (npc) => { World.unregisterNpcPosition(npc); NPC.forgetOwner(npc); }
+        (npc) => { World.unregisterNpcPosition(npc); NPC.forgetOwner(npc); },
+        // A removed NPC's index waits for the cycle's updates before another NPC can take it.
+        { holdFreedSlots: true }
     );
     private static items: ItemOnGround[] = [];
     private static playerArray: Player[] = []
@@ -1535,6 +1537,8 @@ export class World {
                     console.log(e);
                 }
             }
+            // Every observer has now been sent this cycle's removals; their indices are free again.
+            World.npcs.releaseHeldSlots();
         });
     }
 

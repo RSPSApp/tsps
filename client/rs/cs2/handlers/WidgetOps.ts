@@ -342,7 +342,6 @@ const WIDGET_ARRAY_PROPS = [
     "actions",
     "opKeys",
     "opKeyRates",
-    "opKeyIgnoreHeld",
     "keyChars",
     "keyCodes",
     "keyRepeatRates",
@@ -2992,24 +2991,24 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         }
     });
 
-    // CC_SETOPTKEY: 2 args as array [keyChar, keyCode], opIndex = 10 (typed key)
+    // CC_SETOPTKEY: 2 args as array [keyChar, keyCode], opIndex = 10 (target-selection slot)
     handlers.set(Opcodes.CC_SETOPTKEY, (ctx, intOp) => {
         ctx.intStackSize -= 2;
         const keyChar = ctx.intStack[ctx.intStackSize];
         const keyCode = ctx.intStack[ctx.intStackSize + 1];
-        const opIndex = 10; // Typed key slot
+        const opIndex = 10; // Target-selection slot, after operations 1-10
         const w = getTargetWidget(ctx, intOp);
         if (w) {
             if (!w.opKeys) w.opKeys = [];
             if (keyChar >= 0) {
-                w.opKeys[opIndex - 1] = {
+                w.opKeys[opIndex] = {
                     keyChars: [keyChar],
                     keyCodes: [keyCode],
                     opIndex,
                 };
                 w.hasKeyBindings = true;
             } else {
-                w.opKeys[opIndex - 1] = null;
+                w.opKeys[opIndex] = null;
                 w.hasKeyBindings = w.opKeys.some((k) => k !== null && k !== undefined);
             }
         }
@@ -3021,19 +3020,19 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.intStackSize -= 2;
         const keyChar = ctx.intStack[ctx.intStackSize];
         const keyCode = ctx.intStack[ctx.intStackSize + 1];
-        const opIndex = 10; // Typed key slot
+        const opIndex = 10; // Target-selection slot, after operations 1-10
         const w = getWidget(ctx, uid);
         if (w) {
             if (!w.opKeys) w.opKeys = [];
             if (keyChar >= 0) {
-                w.opKeys[opIndex - 1] = {
+                w.opKeys[opIndex] = {
                     keyChars: [keyChar],
                     keyCodes: [keyCode],
                     opIndex,
                 };
                 w.hasKeyBindings = true;
             } else {
-                w.opKeys[opIndex - 1] = null;
+                w.opKeys[opIndex] = null;
                 w.hasKeyBindings = w.opKeys.some((k) => k !== null && k !== undefined);
             }
         }
@@ -3050,7 +3049,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
             if (!w.opKeyRates) w.opKeyRates = [];
             w.opKeyRates[opIndex] = {
                 rate: keyRate,
-                enabled: tickRate !== 0,
+                delay: tickRate,
                 opIndex: opIndex + 1,
             };
         }
@@ -3068,47 +3067,47 @@ export function registerWidgetOps(handlers: HandlerMap): void {
             if (!w.opKeyRates) w.opKeyRates = [];
             w.opKeyRates[opIndex] = {
                 rate: keyRate,
-                enabled: tickRate !== 0,
+                delay: tickRate,
                 opIndex: opIndex + 1,
             };
         }
     });
 
     // CC_SETOPTKEYRATE pops 2 ints sequentially
-    // var5 = 10 (hardcoded opIndex for typed key)
+    // var5 = 10 (hardcoded target-selection slot)
     // var6 = pop keyRate, var7 = pop tickRate
     handlers.set(Opcodes.CC_SETOPTKEYRATE, (ctx, intOp) => {
-        const opIndex = 10; // Hardcoded for typed key slot
+        const opIndex = 10; // Target-selection slot
         const keyRate = ctx.intStack[--ctx.intStackSize];
         const tickRate = ctx.intStack[--ctx.intStackSize];
         const w = getTargetWidget(ctx, intOp);
         if (w) {
             if (!w.opKeyRates) w.opKeyRates = [];
-            w.opKeyRates[opIndex - 1] = { rate: keyRate, enabled: tickRate !== 0, opIndex };
+            w.opKeyRates[opIndex] = { rate: keyRate, delay: tickRate, opIndex };
         }
     });
 
     handlers.set(Opcodes.IF_SETOPTKEYRATE, (ctx) => {
         // Reference: uid first, then 2 sequential pops like CC variant
         const uid = ctx.intStack[--ctx.intStackSize];
-        const opIndex = 10; // Hardcoded for typed key slot
+        const opIndex = 10; // Target-selection slot
         const keyRate = ctx.intStack[--ctx.intStackSize];
         const tickRate = ctx.intStack[--ctx.intStackSize];
         const w = getWidget(ctx, uid);
         if (w) {
             if (!w.opKeyRates) w.opKeyRates = [];
-            w.opKeyRates[opIndex - 1] = { rate: keyRate, enabled: tickRate !== 0, opIndex };
+            w.opKeyRates[opIndex] = { rate: keyRate, delay: tickRate, opIndex };
         }
     });
 
     // CC_SETOPKEYIGNOREHELD pops only 1 arg (opIndex)
-    // Sets ignore held = true (no enabled flag from stack)
+    // Suppress the current hold until a release resets the per-slot deadline.
     handlers.set(Opcodes.CC_SETOPKEYIGNOREHELD, (ctx, intOp) => {
         const opIndex = ctx.intStack[--ctx.intStackSize] - 1;
         const w = getTargetWidget(ctx, intOp);
         if (w && opIndex >= 0 && opIndex <= 9) {
-            if (!w.opKeyIgnoreHeld) w.opKeyIgnoreHeld = [];
-            w.opKeyIgnoreHeld[opIndex] = true;
+            if (!w.keyTimers) w.keyTimers = new Array(11).fill(0);
+            w.keyTimers[opIndex] = 0x7fffffff;
         }
     });
 
@@ -3118,30 +3117,30 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const opIndex = ctx.intStack[--ctx.intStackSize] - 1;
         const w = getWidget(ctx, uid);
         if (w && opIndex >= 0 && opIndex <= 9) {
-            if (!w.opKeyIgnoreHeld) w.opKeyIgnoreHeld = [];
-            w.opKeyIgnoreHeld[opIndex] = true;
+            if (!w.keyTimers) w.keyTimers = new Array(11).fill(0);
+            w.keyTimers[opIndex] = 0x7fffffff;
         }
     });
 
     // CC_SETOPTKEYIGNOREHELD takes NO args
-    // opIndex is hardcoded to 10 (typed key slot)
+    // opIndex is hardcoded to 10 (target-selection slot)
     handlers.set(Opcodes.CC_SETOPTKEYIGNOREHELD, (ctx, intOp) => {
-        const opIndex = 10; // Hardcoded for typed key slot
+        const opIndex = 10; // Target-selection slot
         const w = getTargetWidget(ctx, intOp);
         if (w) {
-            if (!w.opKeyIgnoreHeld) w.opKeyIgnoreHeld = [];
-            w.opKeyIgnoreHeld[opIndex - 1] = true;
+            if (!w.keyTimers) w.keyTimers = new Array(11).fill(0);
+            w.keyTimers[opIndex] = 0x7fffffff;
         }
     });
 
     handlers.set(Opcodes.IF_SETOPTKEYIGNOREHELD, (ctx) => {
         // Reference: only uid, opIndex is hardcoded to 10
         const uid = ctx.intStack[--ctx.intStackSize];
-        const opIndex = 10; // Hardcoded for typed key slot
+        const opIndex = 10; // Target-selection slot
         const w = getWidget(ctx, uid);
         if (w) {
-            if (!w.opKeyIgnoreHeld) w.opKeyIgnoreHeld = [];
-            w.opKeyIgnoreHeld[opIndex - 1] = true;
+            if (!w.keyTimers) w.keyTimers = new Array(11).fill(0);
+            w.keyTimers[opIndex] = 0x7fffffff;
         }
     });
 

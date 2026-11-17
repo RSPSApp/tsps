@@ -613,11 +613,6 @@ export function registerClientOps(handlers: HandlerMap): void {
         ctx.pushInt(pressed ? 1 : 0);
     });
 
-    handlers.set(Opcodes.CLIENT_SET_SIDE_PANEL, (ctx) => {
-        const interfaceId = ctx.intStack[--ctx.intStackSize];
-        ctx.openMobileTab?.(interfaceId);
-    });
-
     // === Settings ===
     handlers.set(Opcodes.MOUSECAM, (ctx) => {
         const enabled = ctx.intStack[--ctx.intStackSize] === 1;
@@ -713,31 +708,26 @@ export function registerClientOps(handlers: HandlerMap): void {
         ctx.intStackSize--; // pop enabled
     });
 
-    // Key input mode control opcodes ()
-    // These opcodes control the key input state for chatbox dialogs
-    // Type 0 = no dialog active (all widgets can receive input)
-    // Type 1 = default/reset state
-    // Type 2 = interface-scoped (only widgets in specified interface)
-    // Type 3 = widget-scoped (only specified widget can receive input)
-
-    // Opcode 3138: SETKEYINPUTMODE_ALL - Clear input dialog (type 0)
-    // No widgets are restricted, input mode is cleared
+    // Widget shortcut scope is independent of chatbox count/name input dialogs.
+    handlers.set(Opcodes.SETKEYINPUTMODE_COMPONENT, (ctx) => {
+        ctx.cs2Vm.widgetKeyInputMode = 3;
+        ctx.cs2Vm.widgetKeyInputTarget = ctx.intStack[--ctx.intStackSize];
+    });
+    handlers.set(Opcodes.SETKEYINPUTMODE_INTERFACE, (ctx) => {
+        ctx.cs2Vm.widgetKeyInputMode = 2;
+        ctx.cs2Vm.widgetKeyInputTarget = ctx.intStack[--ctx.intStackSize];
+    });
     handlers.set(Opcodes.SETKEYINPUTMODE_ALL, (ctx) => {
-        ctx.cs2Vm.inputDialogType = 0;
-        ctx.cs2Vm.inputDialogWidgetId = -1;
-        ctx.cs2Vm.inputDialogString = "";
+        ctx.cs2Vm.widgetKeyInputMode = 0;
     });
-
-    // Opcode 3139: SETKEYINPUTMODE_KEYBOARD - Enable keyboard input mode (type 1)
-    // Used to enable chatbox input for typing
-    handlers.set(Opcodes.SETKEYINPUTMODE_KEYBOARD, (ctx) => {
-        ctx.cs2Vm.inputDialogType = 1;
+    handlers.set(Opcodes.SETKEYINPUTMODE_NONE, (ctx) => {
+        ctx.cs2Vm.widgetKeyInputMode = 1;
     });
-
-    // Opcode 3140: GETKEYINPUTMODE - Get current key input mode
-    // Returns the current input dialog type
-    handlers.set(Opcodes.GETKEYINPUTMODE, (ctx) => {
-        ctx.pushInt(ctx.cs2Vm.inputDialogType);
+    handlers.set(Opcodes.SETKEYINPUTMODE_ACTIVECOMPONENT, (ctx, intOp) => {
+        const widget = intOp === 1 ? ctx.dotWidget : ctx.activeWidget;
+        ctx.cs2Vm.widgetKeyInputMode = 3;
+        ctx.cs2Vm.widgetKeyInputTarget = widget
+            ? (widget.fileId === -1 ? widget.parentUid ?? widget.uid : widget.uid) : -1;
     });
 
     handlers.set(Opcodes.SETHIDEUSERNAME, (ctx) => {

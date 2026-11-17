@@ -167,6 +167,8 @@ export interface HandlerResult {
 /** Forward declaration for Cs2Vm to avoid circular imports */
 export interface Cs2VmLike {
     inputDialogType: number;
+    widgetKeyInputMode: 0 | 1 | 2 | 3;
+    widgetKeyInputTarget: number;
     inputDialogWidgetId: number;
     inputDialogString: string;
     onInputDialogComplete?: (type: "count" | "name" | "string" | "obj", value: string | number) => void;

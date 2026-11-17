@@ -548,6 +548,9 @@ export class Cs2Vm {
     // Type 2 = interface-scoped (only widgets in inputDialogWidgetId interface)
     // Type 3 = widget-scoped (only inputDialogWidgetId widget can receive input)
     inputDialogType: number = 0;
+    /** Cache-defined widget shortcut scope; persists between script executions. */
+    widgetKeyInputMode: 0 | 1 | 2 | 3 = 0;
+    widgetKeyInputTarget = -1;
     inputDialogWidgetId: number = -1;
     // Current input string being typed by user
     inputDialogString: string = "";

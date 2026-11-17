@@ -161,6 +161,12 @@ export interface PluginObjectRouteEvent {
    * tiles of the loc's footprint with a clear line to it, instead of walking right up to it.
    */
   approachRange?: number;
+  /**
+   * Resolve an already-reached ordinary object operation before this turn's movement, so
+   * movement queued by that operation can use the normal movement pass. Default operations
+   * remain post-movement; explicit destinations and approach-range operations keep precedence.
+   */
+  operateBeforeMovement?: boolean;
 }
 
 export interface PluginWalkRouteEvent {

@@ -141,6 +141,10 @@ export class DatCacheLoaderFactory implements CacheLoaderFactory {
         return DatIdkTypeLoader.load(this.cacheInfo, this.configArchive);
     }
 
+    getInvTypeLoader(): undefined {
+        return undefined;
+    }
+
     getEnumTypeLoader(): undefined {
         return undefined;
     }

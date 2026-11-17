@@ -148,9 +148,15 @@ export function registerClientOps(handlers: HandlerMap): void {
         const inv = ctx.getInventory(invId);
         let size: number;
         if (inv) {
+            // Explicit runtime capacities include custom containers (the legacy shop wire
+            // uses 516 with 300 slots, while the native cache's 516 is a 28-slot bag).
             size = inv.capacity;
+        } else if (ctx.invTypeLoader) {
+            // Interface initialization can precede the first inventory packet. Its slot
+            // count must come from the definition even when no live container exists yet.
+            size = ctx.invTypeLoader.load(invId).size;
         } else {
-            // Default sizes for common inventories
+            // Legacy caches without inventory definitions retain the common defaults.
             const defaultSizes: Record<number, number> = {
                 93: 28, // Backpack
                 94: 14, // Equipment (11 slots but indexed 0-13)

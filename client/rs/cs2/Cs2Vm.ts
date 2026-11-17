@@ -199,6 +199,7 @@ export interface Cs2Context {
      */
     clientRevision?: number;
     objTypeLoader?: ObjTypeLoader;
+    invTypeLoader?: import("../config/invtype/InvTypeLoader").InvTypeLoader;
     paramTypeLoader?: ParamTypeLoader;
     enumTypeLoader?: TypeLoader<EnumType>;
     structTypeLoader?: TypeLoader<StructType>;
@@ -893,6 +894,7 @@ export class Cs2Vm {
             varManager: vm.context.varManager,
             loadScript: vm.context.loadScript,
             objTypeLoader: vm.context.objTypeLoader,
+            invTypeLoader: vm.context.invTypeLoader,
             paramTypeLoader: vm.context.paramTypeLoader,
             enumTypeLoader: vm.context.enumTypeLoader,
             structTypeLoader: vm.context.structTypeLoader,

@@ -48,6 +48,7 @@ export interface CacheLoaderFactory {
     // Player appearance: IdentityKit loader
     getIdkTypeLoader(): IdkTypeLoader;
 
+    getInvTypeLoader(): import("../../config/invtype/InvTypeLoader").InvTypeLoader | undefined;
     getEnumTypeLoader(): EnumTypeLoader | undefined;
     getStructTypeLoader(): StructTypeLoader | undefined;
 

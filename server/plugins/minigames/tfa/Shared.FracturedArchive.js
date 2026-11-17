@@ -548,6 +548,17 @@ function isProtected(player, style) {
   return PrayerHandler.isActivated(player, prayer);
 }
 
+/**
+ * "tfa:prayer-cue" { player, prayer, ticks, lands }: an attack is on its way. `prayer` is the
+ * style to protect from ("melee", "magic", "ranged") or "none" for prayers off; `ticks` until the
+ * prayer is checked (0: as it is thrown, as most attacks are), `lands` until the hit lands.
+ * Listened to by the prayer helper (plugins/interface/PrayerHelper.plugin.js).
+ */
+function prayerCue(player, prayer, ticks, lands = ticks) {
+  if (!player?.isPlayer?.()) return;
+  api()?.emitCustomEvent("tfa:prayer-cue", { player, prayer, ticks: Math.max(0, ticks), lands: Math.max(0, lands, ticks) });
+}
+
 /** if_triggeroplocal arguments: ints as zigzag varints (as Omnishop reads them). */
 function triggerInts(argsData) {
   const ints = [];
@@ -581,5 +592,5 @@ module.exports = {
   LOBBY, ARCHIVE_SQUARES, ARCHIVE_BOXES, ARCHIVE_PLANES, CHASM, TILE, MAX_PARTY_SIZE, MAX_APPLICANTS, LIST_ROWS, SLOT,
   loc, tileOf, inBox, inLobby, inArchive, cycle, later, repeat, cancel, mesbox, options, fade, closeFade,
   displayName, random, randomOf, shuffle, gfx, graphicAt, sound, areaSound, damage, projectile,
-  distanceTo, floorFree, forceMove, standingOn, damageNow, isProtected, triggerInts, questComplete, attr,
+  distanceTo, floorFree, forceMove, standingOn, damageNow, isProtected, prayerCue, triggerInts, questComplete, attr,
 };

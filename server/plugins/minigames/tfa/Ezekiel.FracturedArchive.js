@@ -54,8 +54,8 @@ const LAYOUT = {
   /** The finale's open 3x3 in front of him. */
   pen: { minX: 4062, maxX: 4064, minY: 5534, maxY: 5536 },
 };
-/** Five players captured (6,870); the rest follow Dreadnoth's ratios from the cache's 3,000. */
-const HITPOINTS = { 2: 3000, 3: 4360, 4: 5610, 5: 6870 };
+/** Wiki (Strategies), after the duo buff; five players also captured (6,870). */
+const HITPOINTS = { 2: 3300, 3: 4350, 4: 5610, 5: 6870 };
 
 const TIME = {
   FIRST_SPECIAL: 6,
@@ -71,7 +71,14 @@ const TIME = {
   BARRAGE: 11,
   WON_AFTER_DEATH: 10,
 };
-const DAMAGE = { MELEE: 35, MAGIC: 25, STAR: 25, SWORD: 45, SWORD_ON_HIM: 30, BARRAGE: 40, HEAL_SHARE: 0.05 };
+/**
+ * Swords: players take at most 70 from one (Wiki); each hit on a sword adds to what it does to
+ * him, up to 120 more (Wiki). Only the tank's Protect from Melee lessens the cleave (Wiki).
+ */
+const DAMAGE = {
+  MELEE: 35, MELEE_TANK_PRAYED: 0.3, MAGIC: 25, STAR: 25, SWORD: 45, SWORD_MAX: 70, SWORD_ON_HIM: 30, SWORD_ON_HIM_BONUS: 120,
+  BARRAGE: 40, BARRAGE_PRAYED: 0.5, HEAL_SHARE: 0.05,
+};
 const STAR_DELAYS = [34, 64, 94];
 const SWORD_TIMER = { id: 87, fill: 60, cycles: 390 };
 const SWORD_CHARGE = { id: 42, width: 30, full: 32 };
@@ -179,7 +186,8 @@ class EzekielRoom extends Raid.Room {
       for (const player of this.fighters()) {
         const at = Shared.tileOf(player);
         if (!tiles.some((tile) => tile.x === at.x && tile.y === at.y)) continue;
-        const hit = this.styledHit(this.ezekiel, player, "melee", DAMAGE.MELEE, 0, { prayerMultiplier: 0.3 });
+        const tank = player === target;
+        const hit = this.styledHit(this.ezekiel, player, "melee", DAMAGE.MELEE, 0, tank ? { prayerMultiplier: DAMAGE.MELEE_TANK_PRAYED } : { prayable: false });
         Shared.core().CombatFactory.executeHit(hit);
       }
     });
@@ -282,7 +290,8 @@ class EzekielRoom extends Raid.Room {
     sword.exactMove(Shared.loc({ x: state.tile.x + step[0], y: state.tile.y + step[1], z: 0 }), { endCycles: 30 });
     // It fades out as it ends its flight (captured: cycles 30 to 60).
     sword.fade(255, { from: 0, startCycles: 30, endCycles: 60 });
-    const damage = Math.round(DAMAGE.SWORD * (1 + Math.min(state.charge, SWORD_CHARGE.full) / SWORD_CHARGE.full));
+    const charged = Math.min(state.charge, SWORD_CHARGE.full) / SWORD_CHARGE.full;
+    const damage = Math.min(DAMAGE.SWORD_MAX, Math.round(DAMAGE.SWORD * (1 + charged)));
     for (const player of this.fighters()) {
       if (!this.inLane(state, Shared.standingOn(player)) || this.rollOut(player, state)) continue;
       Shared.damage(player, Shared.random(Math.floor(damage / 2), damage));
@@ -296,7 +305,7 @@ class EzekielRoom extends Raid.Room {
     const through = vertical
       ? state.tile.x <= at.getX() + 2 && state.tile.x + 2 >= at.getX()
       : state.tile.y <= at.getY() + 2 && state.tile.y + 2 >= at.getY();
-    if (through) Shared.damage(this.ezekiel, DAMAGE.SWORD_ON_HIM);
+    if (through) Shared.damage(this.ezekiel, DAMAGE.SWORD_ON_HIM + Math.round(DAMAGE.SWORD_ON_HIM_BONUS * charged));
     return through;
   }
 
@@ -499,12 +508,17 @@ class EzekielRoom extends Raid.Room {
         }
       }
       Shared.areaSound(this.area, this.ezekiel, 12407, 120 + 30 * step);
+      const impactTicks = Math.floor(IMPACT_DELAYS[step] / 30);
+      for (const player of this.fighters()) Shared.prayerCue(player, "magic", impactTicks);
       // On the tick the impact shows (captured: 124/154/184 cycles, ticks 4-6), applied at once.
-      this.later(Math.floor(IMPACT_DELAYS[step] / 30), () => {
+      // Protect from Magic lessens the lightning (Wiki; the share is an estimate).
+      this.later(impactTicks, () => {
         if (this.dead) return;
         for (const player of this.fighters()) {
           const at = Shared.standingOn(player);
-          if (struck.some((tile) => tile.x === at.x && tile.y === at.y)) Shared.damageNow(player, Shared.random(DAMAGE.BARRAGE / 2, DAMAGE.BARRAGE));
+          if (!struck.some((tile) => tile.x === at.x && tile.y === at.y)) continue;
+          const damage = Shared.random(DAMAGE.BARRAGE / 2, DAMAGE.BARRAGE);
+          Shared.damageNow(player, Shared.isProtected(player, "magic") ? Math.floor(damage * DAMAGE.BARRAGE_PRAYED) : damage);
         }
       });
     });

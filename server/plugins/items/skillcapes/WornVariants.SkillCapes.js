@@ -46,6 +46,16 @@ function normalise({ player }) {
   if (swapIn(player.getInventory().getItems(), ITEM_BY_WORN)) player.getInventory().refreshItems();
 }
 
+/**
+ * A worn id never reaches the bank: "Deposit worn items" (and a worn slot's Bank op) banks the
+ * cape as its inventory item, as live does, so it fills the cape's placeholder or joins its tab
+ * instead of landing as a separate "new" cape. Runs before the bank picks the tab and copies it.
+ */
+function bankAsItem({ item }) {
+  const id = item?.getId?.() ?? -1;
+  if (ITEM_BY_WORN.has(id)) item.setId(ITEM_BY_WORN.get(id));
+}
+
 function normaliseOnLogin({ player }) {
   normalise({ player });
   for (const bank of player.getBanks()) {
@@ -57,6 +67,7 @@ module.exports = function attachWornVariants(api) {
   buildPairs();
   api.onCustomEvent("equipment:changed", normalise);
   api.onPlayerLogin(normaliseOnLogin);
+  api.onCanBankItem(bankAsItem);
 };
 
-module.exports._test = { WORN_BY_ITEM, ITEM_BY_WORN, normalise };
+module.exports._test = { WORN_BY_ITEM, ITEM_BY_WORN, normalise, bankAsItem };

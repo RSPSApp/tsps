@@ -41,14 +41,16 @@ const LAYOUT = {
   /** Its jumps land no further west than this (captured: never west of the arrival's edge). */
   jumpMinX: 4184,
 };
-const HITPOINTS = { 2: 2100, 3: 3050, 4: 3930, 5: 4810 };
+/** Wiki: 2,100 / 3,050 / 3,930 / 4,810 / 5,690 / 6,570 / 7,460 for two to eight. */
+const HITPOINTS = { 2: 2100, 3: 3050, 4: 3930, 5: 4810, 6: 5690, 7: 6570, 8: 7460 };
 /** Volleys at these shares of its health (captured), and how many volleys each wave has. */
 const WAVES = [[0.85, 1], [0.65, 2], [0.45, 3]];
 const PHASE_TWO = 0.25;
 
 const TIME = {
   CRAWL: 2,
-  MELEE: 5,
+  /** Wiki infobox: 4 ticks. */
+  MELEE: 4,
   VOLLEY_GAP: 6,
   JELLIES_AFTER: 8,
   JELLY_GONE: 3,
@@ -61,7 +63,11 @@ const TIME = {
   DEATH_GONE: 4,
   JELLY_ATTACK: 4,
 };
-const DAMAGE = { MELEE: 35, SPIT: 20, TILE: 8, SLAM: 40, HEAL_SHARE: 0.01 };
+/**
+ * Max hit 45 (Wiki infobox). The wave's arena slam is prayed with Protect from Melee and its
+ * projectiles with Protect from Missiles (Wiki); its tiles burn 6-8 a tick (Wiki).
+ */
+const DAMAGE = { MELEE: 45, SPIT: 20, VOLLEY: 20, TILE: [6, 8], SLAM: 40, HEAL_SHARE: 0.01 };
 /** Lets it and the jellies pass other NPCs (the jellies stack, and never block it). */
 const WALK_THROUGH = "movement:walk-through-entities";
 const PROJ01 = [{ delay: 10, end: 90 }, { delay: 12, end: 120 }, { delay: 14, end: 150 }];
@@ -166,6 +172,10 @@ class DreadnothRoom extends Raid.Room {
       for (const tile of this.footprintTiles(3)) this.addDamageTile(tile);
       Shared.areaSound(this.area, this.boss, 12361);
       for (const player of this.fighters()) {
+        // The landing shakes the whole arena: Protect from Melee for it (Wiki).
+        this.strike(this.boss, player, "melee", DAMAGE.SLAM, 0, { prayerMultiplier: 0 });
+        // Then the volley at them: Protect from Missiles (Wiki); its blobs still land beside them.
+        this.strike(this.boss, player, "ranged", DAMAGE.VOLLEY, Math.ceil(PROJ01[0].end / 30), { prayerMultiplier: 0 });
         for (const flight of PROJ01) {
           const tile = this.freeTileNear(Shared.tileOf(player), 2, landed);
           if (!tile) continue;
@@ -221,7 +231,7 @@ class DreadnothRoom extends Raid.Room {
     if (this.tiles.size === 0) return;
     for (const player of this.fighters()) {
       const at = player.getLocation();
-      if (this.tiles.has(`${at.getX()},${at.getY()}`)) Shared.damage(player, DAMAGE.TILE);
+      if (this.tiles.has(`${at.getX()},${at.getY()}`)) Shared.damage(player, Shared.random(...DAMAGE.TILE));
     }
   }
 
@@ -284,6 +294,7 @@ class DreadnothRoom extends Raid.Room {
     this.boss.performAnimation(anim("dreadnoth_jump02"));
     Shared.graphicAt(this.area, named("spotanim", "tfa_boss_jelly_5x5_jump"), { x: landing.getX() + 2, y: landing.getY() + 2, z: 0 });
     this.boss.exactMove(landing, { endCycles: TIME.JUMP_CYCLES });
+    for (const player of this.fighters()) Shared.prayerCue(player, "melee", Math.ceil(TIME.JUMP_CYCLES / 30));
     this.later(Math.ceil(TIME.JUMP_CYCLES / 30), () => {
       this.slam(landing);
       this.spit();
@@ -316,6 +327,8 @@ class DreadnothRoom extends Raid.Room {
     for (const player of this.fighters()) {
       const at = Shared.tileOf(player);
       if (at.x < landing.getX() || at.x > landing.getX() + 4 || at.y < landing.getY() || at.y > landing.getY() + 4) continue;
+      // Protect from Melee for the enraged slam (Wiki); what gets through heals it.
+      if (Shared.isProtected(player, "melee")) continue;
       const amount = Math.min(player.getHitpoints(), Shared.random(DAMAGE.SLAM / 2, DAMAGE.SLAM));
       Shared.damage(player, amount);
       dealt += amount;

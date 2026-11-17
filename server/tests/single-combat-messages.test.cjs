@@ -82,6 +82,24 @@ test("something else is fighting you: 'I'm already under attack.', once, and the
   assert.deepEqual(you.messages, ["spam:I'm already under attack."]);
 });
 
+test("a Slayer superior can be attacked by its owner while something else is fighting them (Wiki)", () => {
+  const you = mobile("player", "You");
+  const someoneElse = mobile("player", "Someone");
+  const goblin = mobile("npc", "Goblin");
+  const flags = new Set([CombatFactory.ATTACKABLE_WHILE_UNDER_ATTACK_FLAG]);
+  const superior = Object.assign(mobile("npc", "Superior"), { getOwner: () => you, hasFlag: (flag) => flags.has(flag) });
+  superior.getAsNpc = () => superior;
+  you.getCombat().setUnderAttack(goblin);
+  someoneElse.getCombat().setUnderAttack(goblin);
+  // Past the single-combat lock come checks this stand-in player can't answer (special attack,
+  // timers); getting to them is the pass, so a throw there counts as not refused by the lock.
+  let ownerResponse;
+  try { ownerResponse = permission(you, superior); } catch { ownerResponse = "past the lock"; }
+  assert.notEqual(ownerResponse, CanAttackResponse.ALREADY_UNDER_ATTACK);
+  // Only its owner: anyone else is still tied up by what is fighting them.
+  assert.equal(permission(someoneElse, superior), CanAttackResponse.ALREADY_UNDER_ATTACK);
+});
+
 test("an npc waits for a taken target instead of giving up", () => {
   const guard = mobile("npc", "Guard");
   const you = mobile("player", "You");

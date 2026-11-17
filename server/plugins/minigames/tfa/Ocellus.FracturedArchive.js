@@ -77,8 +77,9 @@ const LAYOUT = {
     { loc: "tfa_ocellus_artifact_damage_melee", inactive: "tfa_ocellus_artifact_damage_melee_inactive", x: 4138, y: 5684, effect: "melee" },
   ],
 };
-const P1_HP = { 2: 2500, 3: 3630, 4: 4680, 5: 5730, 6: 6780 };
-const P3_HP = { 2: 5250, 3: 7610, 4: 9820, 5: 12020 };
+/** Wiki (Ocellus), after the duo buff: the first phase's shield and the pool after it, two to eight. */
+const P1_HP = { 2: 2750, 3: 3630, 4: 4680, 5: 5730, 6: 6780, 7: 7830, 8: 8880 };
+const P3_HP = { 2: 5780, 3: 7610, 4: 9820, 5: 12020, 6: 14230, 7: 16430, 8: 18640 };
 const P1_COLOURS = [132, 623, 853];
 /**
  * His headbars (captured): the first phase's blue one (10) with cyan hitsplats (18 yours, 19
@@ -130,11 +131,21 @@ const TIME = {
   FINAL_LOOP: 60,
   BLADE_AFTER_DEATH: 14,
 };
+/**
+ * Wiki: his swings max 30 and his void shot 36 (infobox); the final stand's blast 40-60 unprayed,
+ * 5-10 prayed. Practice-tool logs (ArchiveOcellusTrainer): Protect from Melee leaves about a third
+ * of a swing; a deflect throws back a tenth of the hit; the Blade can take the pool to 75% at most.
+ */
 const DAMAGE = {
   BASIC: 25, EXPLODE: 35, DEATH_AWAITS: [17, 18], ANNIHILATION: [80, 90],
   PORTAL: [20, 25], POOL: 25,
-  MELEE: 40, SLASH: 35, VOID_SHOT: 25, DEBRIS: 30, COG: 40, VINE: 50, ERUPT: 40, SLAM: 45, DEGEN: [6, 7],
-  COLLAPSE_FALL: 99, FLARE: 30, HYBRID: 45, HYBRID_PRAYED: [6, 7], BURST: [15, 16], BLADE_SHARE: 0.43,
+  MELEE: 30, MELEE_PRAYED: 0.35, SLASH: 35, VOID_SHOT: 36, DEBRIS: 30, COG: 40, VINE: 50, ERUPT: 40, SLAM: 45, DEGEN: [6, 7],
+  COLLAPSE_FALL: 99, FLARE: 30, HYBRID: [40, 60], HYBRID_PRAYED: [5, 10], BURST: [15, 16], BLADE_SHARE: 0.43,
+  BLADE_FLOOR: 0.75, DEFLECT_SHARE: 0.1, UNBLOCKED_TENDRIL_HEAL: 2,
+  /** A Siphon's heal every four ticks, and what killing one heals its killer (Wiki, trainer). */
+  SIPHON_HEAL: [12, 14], SIPHON_KILL_HEAL: 22,
+  /** The Saradomin censer (Wiki): hitpoints and prayer for everyone. */
+  SARADOMIN_CENSER: 40,
 };
 const CHARGE_PER_TENDRIL = 2;
 /** His charge from which "Embrace... annihilation..." comes instead of "Death... awaits..." (estimate). */
@@ -389,6 +400,12 @@ class OcellusRoom extends Raid.Room {
       if (standers.length === 0) {
         this.charge = Math.min(EXTRA_MAX, this.charge + CHARGE_PER_TENDRIL);
         this.extraBar(this.charge, EXTRA_MAX, EXTRA_COLOURS);
+        // An unblocked tendril also heals him a little (trainer logs: the small 2s).
+        const healed = Math.min(DAMAGE.UNBLOCKED_TENDRIL_HEAL, this.boss.getMaxHitpoints() - this.boss.getHitpoints());
+        if (healed > 0) {
+          this.boss.setHitpoints(this.boss.getHitpoints() + healed);
+          this.boss.showHitsplat(healed, SPLAT.HEAL);
+        }
         return;
       }
       for (const player of standers) this.healChip(player);
@@ -902,7 +919,7 @@ class OcellusRoom extends Raid.Room {
     }
     this.boss.getMovementQueue().reset();
     this.boss.performAnimation(anim("npc_ocellus_phase3_melee_basic"));
-    this.strike(this.boss, target, "melee", DAMAGE.MELEE, 1, { prayerMultiplier: 0 });
+    this.strike(this.boss, target, "melee", DAMAGE.MELEE, 1, { prayerMultiplier: DAMAGE.MELEE_PRAYED });
   }
 
   /**
@@ -971,22 +988,28 @@ class OcellusRoom extends Raid.Room {
   }
 
   /**
-   * The cog (the charged blade), once a quadrant more each time: while the circle forms under him
-   * prayers must be off, and Protect from Melee on when the cog strikes (Wiki, guides). Debris
-   * falls where everyone stood, leaving void (captured).
+   * The cog (the charged blade), once a quadrant more each time. The first spin is Protect from
+   * Melee; for each cut after it, prayers must be off while the circle forms and Protect from Melee
+   * back on as it strikes (Wiki). Debris falls where everyone stood, leaving void (captured).
    */
   cog() {
     const loops = this.quadrantIndex + 1;
     this.boss.performAnimation(anim("npc_ocellus_phase3_prayer_in"));
     this.boss.performGraphicInSlot(4, spot("vfx_ocellus_phase3_melee_prayer_in"));
     const debris = this.fighters().map((player) => Shared.tileOf(player));
+    for (const player of this.fighters()) Shared.prayerCue(player, "melee", 3);
     // Each strike three ticks after the last; the circle forms in between (captured: the cog's
     // graphic per strike, "prayer_out" on the last; the loop animation between them).
     for (let k = 1; k <= loops; k++) {
       const disrupted = new Set();
-      this.at(3 * k - 2, () => {
-        for (const player of this.fighters()) if (overhead(player)) disrupted.add(player);
-      });
+      if (k > 1) {
+        // Prayers off while the circle forms, then Protect from Melee for the strike.
+        this.at(3 * k - 3, () => { for (const player of this.fighters()) Shared.prayerCue(player, "none", 1); });
+        this.at(3 * k - 1, () => { for (const player of this.fighters()) Shared.prayerCue(player, "melee", 1); });
+        this.at(3 * k - 2, () => {
+          for (const player of this.fighters()) if (overhead(player)) disrupted.add(player);
+        });
+      }
       this.at(3 * k, () => {
         this.boss.performGraphicInSlot(2, spot(k === loops ? "vfx_ocellus_phase3_melee_prayer_out" : "vfx_ocellus_phase3_melee_prayer"));
         for (const player of this.fighters()) {
@@ -1125,7 +1148,8 @@ class OcellusRoom extends Raid.Room {
           if (!this.adds.has(flare) || this.dead) return false;
           Shared.projectile(this.area, flare, this.boss, named("spotanim", "vfx_ocellus_voidflare_healing_projanim"), { end: 30 });
           Shared.areaSound(this.area, flare, 12543);
-          this.pool = Math.min(this.poolMax, this.pool + Math.round(this.poolMax * 0.01));
+          this.pool = Math.min(this.poolMax, this.pool + Shared.random(...DAMAGE.SIPHON_HEAL));
+          this.showPool();
           return true;
         });
       }
@@ -1360,13 +1384,14 @@ class OcellusRoom extends Raid.Room {
     return this.voidFloor === "far" ? d <= 1 : d > 1;
   }
 
-  /** His charged attack, a style at random: Protect from it for 6-7, else 40+ (Wiki, guides). */
+  /** His charged attack, a style at random: Protect from it for 5-10, else 40-60 (Wiki). */
   hybrid() {
     const style = Shared.randomOf(["melee", "magic", "ranged"]);
     this.boss.performAnimation(anim("npc_ocellus_phase3_melee_hybrid"));
     this.boss.performGraphicInSlot(2, spot(style === "melee" ? "vfx_ocellus_phase3_melee_hybrid" : `vfx_ocellus_phase3_melee_hybrid_${style}`));
-    // A tick on he prays Soul Split (captured head icon 11, kept until his next deflect): the
-    // blast heals him a fifth of what it deals (estimate).
+    for (const player of this.fighters()) Shared.prayerCue(player, style, 3);
+    // A tick on he prays Soul Split (captured head icon 11, kept until his next deflect): an
+    // unprayed blast heals him what it deals; praying against it negates the heal (Wiki).
     this.at(1, () => {
       this.boss.setHeadIcon?.(11);
       this.deflect = null;
@@ -1374,11 +1399,12 @@ class OcellusRoom extends Raid.Room {
     this.at(3, () => {
       let dealt = 0;
       for (const player of this.fighters()) {
+        const prayed = Shared.isProtected(player, style);
         const before = player.getHitpoints();
-        Shared.damageNow(player, Shared.isProtected(player, style) ? Shared.random(...DAMAGE.HYBRID_PRAYED) : Shared.random(DAMAGE.HYBRID - 5, DAMAGE.HYBRID + 5));
-        dealt += before - player.getHitpoints();
+        Shared.damageNow(player, Shared.random(...(prayed ? DAMAGE.HYBRID_PRAYED : DAMAGE.HYBRID)));
+        if (!prayed) dealt += before - player.getHitpoints();
       }
-      const healed = Math.min(this.poolMax - this.pool, Math.floor(dealt / 5));
+      const healed = Math.min(this.poolMax - this.pool, dealt);
       this.pool += healed;
       if (healed > 0) this.boss.showHitsplat(healed, SPLAT.HEAL);
       this.showPool();
@@ -1547,7 +1573,9 @@ class OcellusRoom extends Raid.Room {
       return;
     }
     if (npc === this.sword && this.phase === 2) {
-      this.pool = Math.max(1, this.pool - Math.floor((hit.getTotalDamage?.() ?? 0) * DAMAGE.BLADE_SHARE));
+      // Part of the Blade's damage carries over, but never below three quarters of the pool.
+      const floor = Math.ceil(this.poolMax * DAMAGE.BLADE_FLOOR);
+      this.pool = Math.max(floor, this.pool - Math.floor((hit.getTotalDamage?.() ?? 0) * DAMAGE.BLADE_SHARE));
       return;
     }
     if (npc !== this.boss || this.phase < 3) return;
@@ -1558,7 +1586,8 @@ class OcellusRoom extends Raid.Room {
       const attacker = hit.getAttacker?.();
       const dealt = hit.getTotalDamage?.() ?? 0;
       zero();
-      if (attacker?.isPlayer?.() && dealt > 0) Shared.damageNow(attacker, dealt);
+      const reflected = Math.floor(dealt * DAMAGE.DEFLECT_SHARE);
+      if (attacker?.isPlayer?.() && reflected > 0) Shared.damageNow(attacker, reflected);
       return;
     }
     if (this.halfDamage) {
@@ -1585,6 +1614,9 @@ class OcellusRoom extends Raid.Room {
     }
     if (this.adds.has(npc)) {
       this.adds.delete(npc);
+      // Killing a Siphon heals whoever did it (Wiki).
+      const killer = npc.getCombat?.()?.getKiller?.(true) ?? npc.getCombat?.()?.getKiller?.();
+      if (npc.__tfaFlare === "heal" && killer?.isPlayer?.()) heal(killer, DAMAGE.SIPHON_KILL_HEAL);
       if (npc.__tfaFlare) npc.performAnimation(anim(`vfx_ocellus_voidflare_${npc.__tfaFlare}_despawn`));
       this.later(npc.__tfaFlare ? 1 : 0, () => this.despawn(npc));
       return true;
@@ -1651,8 +1683,8 @@ class OcellusRoom extends Raid.Room {
     for (const member of this.fighters()) {
       const skills = member.getSkillManager();
       if (censer.effect === "heal") {
-        heal(member, 50);
-        skills.setCurrentLevel(Skill.PRAYER, Math.min(skills.getMaxLevel(Skill.PRAYER), skills.getCurrentLevel(Skill.PRAYER) + 50), true);
+        heal(member, DAMAGE.SARADOMIN_CENSER);
+        skills.setCurrentLevel(Skill.PRAYER, Math.min(skills.getMaxLevel(Skill.PRAYER), skills.getCurrentLevel(Skill.PRAYER) + DAMAGE.SARADOMIN_CENSER), true);
       } else if (censer.effect === "spec") {
         member.setSpecialPercentage?.(Math.min(100, (member.getSpecialPercentage?.() ?? 0) + 50));
         Shared.core().CombatSpecial?.updateBar?.(member);

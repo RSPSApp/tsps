@@ -19,9 +19,12 @@ const INFERNO_COMPLETIONS_ATTRIBUTE = "inferno:completions";
  * The Wiki transcripts' blank for the player's TzHaar name ("Can I help you [TzHaar caste]-[player
  * name]?"), sometimes written after "JalYt-" or before "-Xo" too. Live fills it with the whole name
  * ("You need help JalYt-Mej-Z-Kris?", rsprox_transcripts/227/00073.txt; "JalYt-Mej-Xo-..." once into
- * the inner core, 227/01749.txt). A Fight Pit champion's caste is not the player's: left alone.
+ * the inner core, 227/01749.txt). A Fight Pit champion's caste is not the player's: left alone. Some pages
+ * spell it "[Tzhaar caste]" (TzHaar-Mej-Jal's greeting), so case is ignored, and TzHaar-Ket-Keh's write
+ * "JalYt-[caste]-Xo-[player name]".
  */
-const CASTE_PLACEHOLDER = /(?:JalYt-(?:Hur-)?)?\[TzHaar caste\](?:-Xo)?(?!-\[champion's name\])/g;
+const CASTE_PLACEHOLDER = /(?:JalYt-(?:Hur-)?)?\[(?:TzHaar )?caste\](?:-(?:Xo|Kal))?(?!-\[champion's name\])/gi;
+const hasCasteBlank = (text) => /\[(?:TzHaar )?caste\]/i.test(String(text ?? ""));
 const CASTE_CONDITION = /^if the player's caste is jalyt-(mej|ket|xil|hur):?$/;
 const CAPE_SHOWN_STEP = "2-PLAV";
 const CAPE_BRANCH_ID = "qovHJi";
@@ -59,7 +62,7 @@ function tzhaarTitle(player) {
 }
 
 function fillTzhaarTitle(request) {
-  if (typeof request.text !== "string" || !request.text.includes("[TzHaar caste]")) return;
+  if (typeof request.text !== "string" || !hasCasteBlank(request.text)) return;
   const title = tzhaarTitle(request.player);
   request.text = request.text.replace(CASTE_PLACEHOLDER, title);
 }
@@ -70,9 +73,9 @@ function fillTzhaarTitle(request) {
  */
 function fillTzhaarMenu(notice) {
   const options = Array.isArray(notice?.options) ? notice.options : [];
-  if (!options.some((option) => String(option?.text ?? "").includes("[TzHaar caste]"))) return;
+  if (!options.some((option) => hasCasteBlank(option?.text))) return;
   const title = tzhaarTitle(notice.player);
-  notice.options = options.map((option) => (String(option?.text ?? "").includes("[TzHaar caste]")
+  notice.options = options.map((option) => (hasCasteBlank(option?.text)
     ? { ...option, text: option.text.replace(CASTE_PLACEHOLDER, title) }
     : option));
 }

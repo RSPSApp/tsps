@@ -169,6 +169,9 @@ function chargeUsed(recipe) {
 /** Wiki: built-in charges work in safe minigames, but not dangerous PvP. */
 function canAttack(player, target) {
   if (target?.isPlayer?.() && (core.Wilderness.isIn(player) || core.Wilderness.isIn(target))) {
+    const context = { attacker: player, target, safe: false };
+    api.emitCustomEvent("combat:safe-pvp", context);
+    if (context.safe === true) return true;
     player.sendMessage("You can't use your trident's built-in spell in dangerous PvP.");
     return false;
   }

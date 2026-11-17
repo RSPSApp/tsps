@@ -32,12 +32,116 @@ function actor(t, stage) {
   p.setIndex(next++); p.setUsername("isles" + p.getIndex()); p.setRegistered(true); p.setAttribute("bot-skip-persistence", true);
   const messages = [];
   t.mock.method(p.getPacketSender(), "sendMessage", (message) => { messages.push(message); return p.getPacketSender(); });
-  t.after(() => p.setRegistered(false));
+  t.after(() => {
+    if (core.World.getPlayers().get(p.getIndex()) === p) core.World.getPlayers().removes(p);
+    else p.setRegistered(false);
+  });
   QuestRuntime.questNamed("The Fremennik Isles").setStage(p, stage);
   return { p, inv: p.getInventory(), messages };
 }
 
 const action = (f, stepId) => PM.emitCustomEvent("npc-dialogue:action", { player: f.p, npcId: core.NpcIdentifiers.BORK_SIGMUNDSON, stepId, kind: "action" });
+
+test("registered Bork Request-supplies uses the guarded dialogue and persistent once-only requests", async (t) => {
+  const { World, NPC, Location, TaskManager, MultiChatboxPrompt: Multi } = core;
+  const errors = [], originalError = console.error;
+  t.mock.method(console, "error", (...args) => { errors.push(args.map(String).join(" ")); originalError(...args); });
+  const { NPCOptionPacketListener } = require("../dist/net/packet/impl/NPCOptionPacketListener");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  const f = actor(t, 18);
+  f.p.setRegistered(false);
+  assert.equal(World.getPlayers().add(f.p), true);
+  f.p.setLocation(new Location(2399, 10276, 1)); f.p.needsPlacement = false;
+  const npc = NPC.create(core.NpcIdentifiers.BORK_SIGMUNDSON, new Location(2400, 10276, 1));
+  npc.setScriptedMovement(true);
+  assert.equal(World.getNpcs().add(npc), true); npc.needsPlacement = false;
+  t.after(() => {
+    f.p.getPacketSender().sendInterfaceRemoval(); f.p.getDialogueManager().reset();
+    TaskManager.cancelTasks(f.p); TaskManager.cancelTasks(f.p.getIndex());
+    if (f.p.isRegistered()) World.getPlayers().removes(f.p);
+    PM.removeNpc(npc);
+    assert.notEqual(World.getPlayers().get(f.p.getIndex()), f.p);
+    assert.notEqual(World.getNpcs().get(npc.getIndex()), npc);
+    assert.equal(f.p.getDialogueManager().isActive(), false);
+    assert.equal(Multi.getPending(f.p), null);
+    assert.deepEqual(errors, [], "no caught engine or cleanup errors");
+  });
+  const connection = new ClientConnection({ kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} });
+  connection.player = f.p;
+  const options = npc.getCurrentDefinition(f.p).getActions();
+  assert.equal(options[2], "Request-supplies");
+  const talk = options.findIndex((s) => s?.toLowerCase() === "talk-to") + 1;
+  function open(option = 3) {
+    f.p.getDialogueManager().reset(); f.p.getPacketSender().sendInterfaceRemoval();
+    const movement = f.p.getMovementQueue(), original = movement.walkToEntity;
+    let arrival;
+    movement.walkToEntity = (_npc, callback) => { arrival = callback; return true; };
+    try { new NPCOptionPacketListener().executeOption(f.p, npc.getIndex(), option); }
+    finally { movement.walkToEntity = original; }
+    assert.equal(typeof arrival, "function");
+    arrival(); // Arrival adapter only: dispatch, dialogue, containers and save remain real.
+  }
+  async function resume(choice = 1) {
+    const pending = Multi.getPending(f.p), group = f.p.getPacketSender().chatboxGroupId;
+    await connection.dispatch([{ type: "dialogue_continue", widgetId: pending ? Multi.OPTIONS_WIDGET_ID : (group << 16) | 5,
+      childIndex: pending ? choice : -1 }]);
+    connection.processTurnPackets();
+    for (let i = 0; i < 4; i++) TaskManager.process();
+  }
+  async function menu(option = 3) {
+    open(option);
+    assert.equal(f.p.getDialogueManager().isActive(), true, "registered option opens Bork dialogue");
+    for (let i = 0; i < 12 && !Multi.getPending(f.p); i++) await resume();
+    assert.ok(Multi.getPending(f.p), "supplies menu is reachable");
+  }
+  async function finish() {
+    for (let i = 0; i < 20 && f.p.getDialogueManager().isActive(); i++) await resume();
+  }
+  await menu(); // Regression: option 3 previously fell through to Nothing interesting happens.
+  assert.equal(f.inv.getAmount(I.TUNA), 0, "opening the shortcut never grants automatically");
+  await menu(talk); // Existing Talk-to remains a working control.
+  const quest = QuestRuntime.questNamed("The Fremennik Isles");
+  for (const stage of [0, 17, 340]) {
+    quest.setStage(f.p, stage); open();
+    assert.equal(f.p.getDialogueManager().isActive(), false, `no supply dialogue at stage ${stage}`);
+    assert.equal(f.inv.getAmount(I.TUNA), 0);
+    assert.equal(Number(f.p.getAttribute("quest.the_fremennik_isles.bork")) || 0, 0);
+  }
+  quest.setStage(f.p, 18);
+  t.mock.method(Math, "random", () => 0.99);
+  f.inv.adds(I.LOGS, 24);
+  await menu(); await resume(1);
+  f.inv.adds(I.LOGS, 2); // Space changes after the selection but before the grant.
+  await finish();
+  assert.equal(f.inv.getAmount(I.TUNA), 2);
+  assert.equal(f.p.getAttribute("quest.the_fremennik_isles.bork"), 1);
+  f.inv.deleteNumber(I.LOGS, 26);
+  await menu(); await resume(1); await finish();
+  assert.equal(f.inv.getAmount(I.TUNA), 2, "freeing space cannot top up the first request");
+  f.inv.adds(I.LOGS, 26);
+  await menu(); await resume(3); await finish();
+  assert.equal(f.inv.getAmount(I.PRAYER_POTION_3_), 0);
+  assert.equal(f.p.getAttribute("quest.the_fremennik_isles.bork"), 5);
+  f.inv.deleteNumber(I.LOGS, 26);
+  await menu(); await resume(3); await finish();
+  assert.equal(f.inv.getAmount(I.PRAYER_POTION_3_), 0, "zero-capacity request is also consumed");
+  const restored = actor(t, 18);
+  PlayerSave.fromPlayer(f.p).applyToPlayer(restored.p);
+  assert.equal(restored.p.getAttribute("quest.the_fremennik_isles.bork"), 5);
+  assert.equal(restored.inv.getAmount(I.TUNA), 2);
+  assert.equal(restored.inv.getAmount(I.PRAYER_POTION_3_), 0);
+  await menu(); await resume(2); await finish();
+  assert.equal(f.inv.getAmount(I.STRENGTH_POTION_4_), 4, "strength remains independently available");
+  assert.equal(f.p.getAttribute("quest.the_fremennik_isles.bork"), 7);
+  open();
+  assert.equal(f.p.getDialogueManager().isActive(), true, "all requests lead to the exhausted dialogue");
+  assert.equal(Multi.getPending(f.p), null);
+  assert.match(f.p.getDialogueManager().getCurrent().getText(), /^I've run out of supplies, .*Only our bravery remains\.$/);
+  await finish();
+  assert.equal(f.p.getAttribute("quest.the_fremennik_isles.bork"), 7);
+});
 
 test("each of Bork's supplies is given once", (t) => {
   t.mock.method(Math, "random", () => 0.99); // the top of each range
@@ -64,15 +168,29 @@ test("Bork's amounts are the Wiki's ranges: 8-10 tuna, 2-4 of each potion", (t) 
   }
 });
 
-test("a supply that does not fit is not claimed, so it can be asked for again", (t) => {
-  t.mock.method(Math, "random", () => 0.99); // four potions
+test("Bork fills the remaining space once for each supply, without a later top-up", (t) => {
+  t.mock.method(Math, "random", () => 0.99);
+  for (const [step, id, bit] of [["1eVvoF", I.TUNA, 1], ["eJNB7e", I.STRENGTH_POTION_4_, 2], ["eCZJLI", I.PRAYER_POTION_3_, 4]]) {
+    const f = actor(t, 18);
+    f.inv.adds(I.LOGS, 25);
+    action(f, step);
+    assert.equal(f.inv.getAmount(id), 3, "all three available slots are filled");
+    assert.equal(f.p.getAttribute("quest.the_fremennik_isles.bork"), bit);
+    f.inv.deleteNumber(I.LOGS, 25);
+    action(f, step);
+    assert.equal(f.inv.getAmount(id), 3, "freeing room does not allow a second request");
+  }
+});
+
+test("a request with no inventory space still uses that supply request", (t) => {
   const f = actor(t, 18);
-  for (let slot = 0; slot < 25; slot++) f.inv.setItem(slot, new core.Item(I.LOGS, 1));
+  f.inv.adds(I.LOGS, 28);
   action(f, "eCZJLI");
-  assert.equal(f.inv.getAmount(I.PRAYER_POTION_3_), 0, "three free slots cannot take four potions");
-  f.inv.setItem(24, new core.Item(-1, 0));
+  assert.equal(f.inv.getAmount(I.PRAYER_POTION_3_), 0);
+  assert.equal(f.p.getAttribute("quest.the_fremennik_isles.bork"), 4);
+  f.inv.deleteNumber(I.LOGS, 28);
   action(f, "eCZJLI");
-  assert.equal(f.inv.getAmount(I.PRAYER_POTION_3_), 4);
+  assert.equal(f.inv.getAmount(I.PRAYER_POTION_3_), 0, "the Wiki allows only one request, even when no items fit");
 });
 
 test("the jester chest needs room for all four pieces before it gives any", (t) => {

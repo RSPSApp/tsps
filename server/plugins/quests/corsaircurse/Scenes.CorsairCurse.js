@@ -65,6 +65,7 @@ module.exports = function createCorsairCurseScenes(api, hooks) {
     ActionDialogue, Animation, DialogueChainBuilder, Graphic, Location, NpcDialogue, PlayerDialogue, StatementDialogue,
     CacheDefinitions,
   } = api.core;
+  const CHAT_UID = CacheDefinitions.getComponentId("chatbox:chatmodal");
   const { loadTranscripts } = require("../QuestRuntime");
   const { formatPlayerText } = require("../../npcs/NpcDialogues.plugin.js");
   const Scenes = createQuestScenes(api, { onEnd: sceneEnded, recoveryAttribute: "corsair-curse:scene-exit" });
@@ -76,7 +77,9 @@ module.exports = function createCorsairCurseScenes(api, hooks) {
   // ==========================================================================
 
   function overlay(player, args) {
-    player.getPacketSender().mountSubInterface(FADE_UID, FADE_INTERFACE, 1, { postScripts: [{ scriptId: FADE_SCRIPT, args }] });
+    const mount = player.getPacketSender().mountSubInterface(FADE_UID, FADE_INTERFACE, 1, { postScripts: [{ scriptId: FADE_SCRIPT, args }] });
+    const state = playing.get(player);
+    if (state) state.overlay = mount;
   }
 
   function varbit(name) {
@@ -158,7 +161,11 @@ module.exports = function createCorsairCurseScenes(api, hooks) {
   }
 
   function emptyBox(player) {
-    Scenes.hold(player);
+    const state = playing.get(player);
+    if (!state?.ownsChat) return Scenes.hold(player);
+    present(player, state, new DialogueChainBuilder().add(new ActionDialogue(0, {
+      execute: () => player.getPacketSender().withChatboxOwner(state, () => StatementDialogue.send(player, "", false)),
+    }, true)));
   }
 
   function expression(speaker, text) {
@@ -250,18 +257,56 @@ module.exports = function createCorsairCurseScenes(api, hooks) {
       : new NpcDialogue(0, headOf(state, line, step), words, line.speaker, animation);
     const chain = new DialogueChainBuilder();
     if (step.held !== undefined) {
-      chain.add(new ActionDialogue(0, { execute: () => entry.sendHeld(player) }, true));
-      player.getDialogueManager().startDialogues(chain);
+      chain.add(new ActionDialogue(0, { execute: () => player.getPacketSender().withChatboxOwner(state.ownsChat ? state : undefined, () => entry.sendHeld(player)) }, true));
+      present(player, state, chain);
       if (typeof step.held === "number") Scenes.later(player, step.held, () => { if (active(player, state)) next(); });
       return;
     }
     chain.add(entry);
     chain.add(new ActionDialogue(1, { execute: () => { if (active(player, state)) next(); } }));
-    player.getDialogueManager().startDialogues(chain);
+    present(player, state, chain);
   }
 
+  // DialogueManager has no reset callback, and replacing the same chat group sends no
+  // interface:closed event. Watch the exact owner/mount, including between timed lines.
+  function present(player, state, chain) {
+    state.presenting = true;
+    try {
+      player.getDialogueManager().startDialogues(chain, state.ownsChat ? state : undefined);
+      if (state.ownsChat) state.chat = player.getPacketSender().getSubInterfaceAt(CHAT_UID);
+    } finally { state.presenting = false; }
+  }
+
+  function ownsChat(player, state) {
+    const sender = player.getPacketSender();
+    return player.getDialogueManager().getOwner() === state
+      && sender.getChatboxGroupId() >= 0 && sender.getChatboxOwner() === state
+      && sender.getSubInterfaceAt(CHAT_UID) === state.chat;
+  }
+
+  function watch(player, state) {
+    Scenes.later(player, 1, () => {
+      if (!active(player, state)) return;
+      if (!ownsChat(player, state)) { stop(player); return; }
+      watch(player, state);
+    });
+  }
+
+  function chatClosed({ player }) {
+    const state = playing.get(player);
+    if (state?.ownsChat && !state.presenting && !ownsChat(player, state)) stop(player);
+  }
+  api.onCustomEvent("interface:closed", chatClosed);
+
   function active(player, state) {
-    return playing.get(player) === state;
+    if (playing.get(player) !== state) return false;
+    // Check before every delayed action as well as the watcher: a timer due this
+    // turn must not overwrite a conversation opened since the previous turn.
+    if (state.ownsChat && state.chat && !state.presenting && !ownsChat(player, state)) {
+      stop(player);
+      return false;
+    }
+    return true;
   }
 
   /** Runs step `index`: its events from now, its line `at` ticks later (an empty box until then). */
@@ -284,10 +329,11 @@ module.exports = function createCorsairCurseScenes(api, hooks) {
 
   function play(player, spec, extra = {}) {
     stop(player);
-    const state = { spec, scene: null, actors: {}, npcId: extra.npcId, return: player.getLocation().clone(), ...extra };
+    const state = { spec, scene: null, actors: {}, ownsChat: true, npcId: extra.npcId, return: player.getLocation().clone(), ...extra };
     playing.set(player, state);
     player.getMovementQueue().reset().setBlockMovement(true);
     runStep(player, state, 0);
+    watch(player, state);
     return state;
   }
 
@@ -308,7 +354,9 @@ module.exports = function createCorsairCurseScenes(api, hooks) {
   }
 
   function finish(player, state) {
-    if (playing.get(player) === state) playing.delete(player);
+    if (!active(player, state)) return;
+    playing.delete(player);
+    Scenes.cancel(player);
     player.getMovementQueue().setBlockMovement(false);
   }
 
@@ -318,8 +366,12 @@ module.exports = function createCorsairCurseScenes(api, hooks) {
     if (!state) return;
     playing.delete(player);
     Scenes.cancel(player);
+    const sender = player.getPacketSender();
+    if (state.ownsChat) sender.closeChatboxFor(state);
+    if (state.overlay) sender.closeSubInterfaceMount(state.overlay);
     if (Scenes.get(player)) Scenes.end(player, logout);
     else if (!logout) cutscene(player, false);
+    if (!logout) player.moveTo(state.return);
     player.getMovementQueue().setBlockMovement(false);
   }
 
@@ -572,8 +624,8 @@ module.exports = function createCorsairCurseScenes(api, hooks) {
         }],
         [3, (p) => p.getPacketSender().sendJingle(244)],
         [4, (p) => camera(p, [2552, 2845, 400], [2552, 2846, 300])],
-        [5, (p) => {
-          p.getPacketSender().sendSubInterface(FADE_UID, TELESCOPE_INTERFACE, 1);
+        [5, (p, s) => {
+          s.overlay = p.getPacketSender().mountSubInterface(FADE_UID, TELESCOPE_INTERFACE, 1);
           moveCamera(p, [2552, 2842, 400], SLOW);
         }],
         [11, (p) => p.getPacketSender().sendJingle(138)],
@@ -612,10 +664,10 @@ module.exports = function createCorsairCurseScenes(api, hooks) {
     name: "fire",
     steps: [
       { events: [
-        [0, (p) => {
+        [0, (p, s) => {
           anim(p, 733);
-          p.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-            new ActionDialogue(0, { execute: () => StatementDialogue.send(p, fireBox(), false) }, true)));
+          present(p, s, new DialogueChainBuilder().add(
+            new ActionDialogue(0, { execute: () => p.getPacketSender().withChatboxOwner(s, () => StatementDialogue.send(p, fireBox(), false)) }, true)));
         }],
         [2, (p) => {
           hooks.fireLit(p);

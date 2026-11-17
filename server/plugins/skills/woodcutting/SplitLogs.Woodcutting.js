@@ -117,44 +117,52 @@ function startSplitting(player, amount) {
     player.sendMessage("You need an axe to split arctic pine logs.");
     return;
   }
-  stopSplitting(player);
-  const startLocation = player.getLocation().clone();
-  const hasLog = () => player.getInventory().contains(core.ItemIdentifiers.ARCTIC_PINE_LOGS);
+  startBatch(player, amount,
+    () => player.getInventory().contains(core.ItemIdentifiers.ARCTIC_PINE_LOGS),
+    () => {
+      const axe = deps.findBestUsableAxe(player);
+      if (player.getSkillManager().getCurrentLevel(core.Skill.WOODCUTTING) < SPLIT_LEVEL || !axe) return false;
+      return splitOne(player, axe);
+    });
+}
 
-  class SplitTask extends core.Task {
+/** Both stump recipes own the same interruptible activity, including pending tasks. */
+function startBatch(player, amount, canMake, makeOne) {
+  stopSplitting(player);
+  if (!Number.isInteger(amount) || amount <= 0 || !canMake()) return;
+  const startLocation = player.getLocation().clone();
+  class StumpTask extends core.Task {
     constructor() {
       super(1, player);
       this.ticks = 0;
       this.remaining = amount;
     }
     execute() {
-      if (!player.isRegistered() || player.getHitpoints() <= 0 || player.getMovementQueue().size() > 0 ||
-        !player.getLocation().equals(startLocation) || player.getInterfaceId() !== -1 || !hasLog()) {
+      if (player.getAttribute(TASK_ATTRIBUTE) !== this || !player.isRegistered() || player.getHitpoints() <= 0 ||
+        player.getMovementQueue().size() > 0 || !player.getLocation().equals(startLocation) ||
+        player.getInterfaceId() !== -1 || !canMake()) {
         this.stop();
         return;
       }
       const tick = ++this.ticks;
       if (tick < FIRST_TICK || (tick - FIRST_TICK) % INTERVAL_TICKS !== 0) return;
-      const axe = deps.findBestUsableAxe(player);
-      if (player.getSkillManager().getCurrentLevel(core.Skill.WOODCUTTING) < SPLIT_LEVEL || !axe) {
-        this.stop();
-        return;
-      }
-      if (!splitOne(player, axe) || --this.remaining <= 0 || !hasLog()) this.stop();
+      if (!makeOne() || --this.remaining <= 0 || !canMake()) this.stop();
     }
     stop() {
       super.stop();
       if (player.getAttribute(TASK_ATTRIBUTE) === this) player.setAttribute(TASK_ATTRIBUTE, null);
     }
   }
-
-  const task = new SplitTask();
+  const task = new StumpTask();
   player.setAttribute(TASK_ATTRIBUTE, task);
   api.getTaskManager().submit(task);
 }
 
-function makeShield(player) {
-  const request = { player, handled: false };
+function makeShield(player, amount) {
+  stopSplitting(player);
+  // The quest owns its gate and recipe; the stump owns the shared activity's lifetime.
+  const request = { player, amount, handled: false,
+    start: (count, canMake, makeOne) => startBatch(player, count, canMake, makeOne) };
   api.emitCustomEvent("woodcutting:stump-shield", request);
   if (request.handled) return;
   const inventory = player.getInventory();
@@ -179,7 +187,7 @@ function cutWood(event) {
     [I.NEITIZNOT_SHIELD, I.SPLIT_LOG],
     {
       execute: (itemId, amount) => {
-        if (itemId === I.NEITIZNOT_SHIELD) makeShield(player);
+        if (itemId === I.NEITIZNOT_SHIELD) makeShield(player, amount);
         else if (itemId === I.SPLIT_LOG) startSplitting(player, amount);
       },
     },
@@ -192,6 +200,10 @@ function interruptSplitting({ player }) {
   stopSplitting(player);
 }
 
+function interruptForInterface({ player, type }) {
+  if (type === 0) stopSplitting(player);
+}
+
 function attach(pluginApi, woodcutting) {
   api = pluginApi;
   core = pluginApi.core;
@@ -199,6 +211,7 @@ function attach(pluginApi, woodcutting) {
   sequenceByAxeId = null;
   api.onObjectInteraction("Woodcutting stump", { "Cut-wood": cutWood });
   api.onPlayerDisconnect(interruptSplitting);
+  api.onCustomEvent("interface:opened", interruptForInterface);
   api.onCustomEvent("player:interaction-cleared", interruptSplitting);
   api.onCustomEvent("player:emote", interruptSplitting);
 }

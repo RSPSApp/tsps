@@ -66,7 +66,7 @@ export class World {
     /**
      * OSRS's NPC flag is one bit a tile, not a count of who stands there (osrs-docs: Entity
      * Collision): an NPC stepping on sets it, and stepping off clears it even under another NPC
-     * still standing there; a player stepping on clears it too. A tile an NPC stands on stops
+     * still standing there; a player stepping on or off clears it too. A tile an NPC stands on stops
      * other NPCs only while its flag is up, which is how NPCs come to stack. The tiles an NPC
      * stands on whose flag has been cleared since it stepped on them; it raises them again by
      * moving. rsprox (TzHaar-Ket-Rak, Yt-HurKot chasing a player running through them): 27 of 29
@@ -304,6 +304,9 @@ export class World {
         const bucket = World.playerTileOccupants.get(key)?.filter((candidate) => candidate !== player);
         if (!bucket?.length) World.playerTileOccupants.delete(key);
         else World.playerTileOccupants.set(key, bucket);
+        // Players remove the ordinary NPC flag on departure, even if an NPC spawned
+        // beneath them after arrival. Physical occupancy and Full blocking stay intact.
+        World.clearNpcFlag(key, player.getPrivateArea?.() ?? null);
     }
 
     public static registerPlayerPosition(player: Player, location: Location | null | undefined = player?.getLocation?.()): void {
@@ -348,6 +351,14 @@ export class World {
                 player, previous: previousLocation.clone(), location: nextLocation.clone(),
             });
         }
+    }
+
+    public static onPlayerAreaChanged(player: Player, previousPrivateArea: any): void {
+        const location = player.getLocation();
+        const key = World.getNpcTileKey(location.getX(), location.getY(), location.getZ());
+        // Changing instances is a departure and arrival even without changing coordinates.
+        World.clearNpcFlag(key, previousPrivateArea);
+        World.clearNpcFlag(key, player.getPrivateArea() ?? null);
     }
 
     public static isPlayerOccupyingTile(

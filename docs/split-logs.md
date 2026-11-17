@@ -32,11 +32,21 @@ per log, an axe and the woodcutting stump.
 - Each cycle rechecks the current level and usable axe; replacing the interaction or performing an
   emote stops the batch. The exact interruption and requirement-loss responses are not captured.
 
-## Recorded, not matched yet: making the shield
+## Making the shield
 
 Rec 3027 tick 9355 (the shield choice, amount 4) makes one shield 2 ticks after the choice, then
 another 3 ticks later, the second while the first is still carried. Each one sends
 `You make a Neitiznot shield.` (spam), `human_woodcrafting_hammer`, synth sound 2101 and
-34 Crafting XP. The server still makes the shield through The Fremennik Isles' one-shot path
-(`woodcutting:stump-shield`): one shield at most, no XP, only at quest stage 17+ while no shield
-is carried. Otherwise a player who has all the parts gets no response.
+34 Crafting XP. The selected quantity is limited by the carried recipe materials: two arctic pine
+logs, one bronze nail and one rope per shield, with a hammer and current Woodcutting level 56.
+Carrying an earlier shield does not prevent another. The quest owns the recipe through
+`woodcutting:stump-shield`; both stump recipes share one interruptible task. Walking, an emote,
+a blocking interface, disconnect or a new stump selection stops the pending batch. Each output
+keeps the existing `fremennik-isles:shield-made` diary event. Completed outputs and XP save
+normally; a pending batch does not resume on login.
+
+The existing quest-stage 17 gate is retained. The recording establishes batching and XP, not
+the exact earliest quest unlock; that stage question remains outside this fix. Requirement-loss
+and interruption responses are not recorded. Wiki: [Neitiznot shield](https://oldschool.runescape.wiki/w/Neitiznot_shield)
+gives the recipe, level, 34 Crafting XP and three-tick rate. The pinned rev241 dump and active
+cache identify `human_woodcrafting_hammer` as sequence 5754; sound 2101 is the recorded synth.

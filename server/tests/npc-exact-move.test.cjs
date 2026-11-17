@@ -728,3 +728,73 @@ test('large NPCs stacked on one tile walk apart; a step only checks the tiles it
     for (const npc of npcs) World.getNpcs().remove(npc);
   }
 });
+
+
+// Real map, actors and movement: an NPC can spawn after player registration, so
+// arrival-only clearing cannot cover the first departure from that tile.
+for (const departure of ['walk', 'teleport', 'plane', 'unregister', 'area-before-move', 'area-only', 'area-remove', 'list-remove', 'multiple-players']) {
+  test(`a player's ${departure} lowers an NPC flag raised beneath the stationary player`, () => {
+    const { World } = require('../dist/game/World');
+    const { Player } = require('../dist/game/entity/impl/player/Player');
+    const { RegionManager } = require('../dist/game/collision/RegionManager');
+    const { PrivateArea } = require('../dist/game/model/areas/impl/PrivateArea');
+    RegionManager.init(); RegionManager.loadMapFiles(3104, 3588);
+    const at = (x, y, z = 0) => new Location(x, y, z), tile = at(3104, 3588);
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const player = new Player(new PlayerSession(channel));
+    player.setIndex(7900); player.setUsername('departureqa'); player.setLocation(tile.clone());
+    const area = departure.startsWith('area') ? new PrivateArea() : null;
+    if (area) area.add(player);
+    player.setAttribute('bot-skip-persistence', true);
+    if (departure === 'list-remove') assert.ok(World.getPlayers().add(player));
+    else { player.setRegistered(true); World.registerPlayerPosition(player); }
+    player.deferTileOccupancy();
+    const stationary = new NPC(3106, tile.clone()), mover = new NPC(3106, at(3103, 3588));
+    const foreign = new NPC(3106, tile.clone());
+    const foreignArea = new PrivateArea(); foreignArea.add(foreign);
+    if (area) { area.add(stationary); area.add(mover); }
+    for (const npc of [stationary, mover, foreign]) assert.ok(World.getNpcs().add(npc, true));
+    const q = mover.getMovementQueue();
+    const otherPlayer = departure === 'multiple-players' ? new Player(new PlayerSession(channel)) : null;
+    if (otherPlayer) {
+      otherPlayer.setLocation(tile.clone()); otherPlayer.deferTileOccupancy();
+      otherPlayer.setRegistered(true); World.registerPlayerPosition(otherPlayer);
+    }
+    try {
+      assert.equal(q.isDynamicallyOccupied(tile), true, 'spawn raises ordinary NPC flag');
+      assert.equal(player.isOccupyingTile(), false, 'stationary login has not claimed the player flag');
+      player.setNeedsPlacement(false); mover.setNeedsPlacement(false);
+      if (departure === 'walk' || departure === 'multiple-players') {
+        player.getMovementQueue().addCheckpoint(at(3104, 3589)); player.getMovementQueue().process();
+        assert.ok(player.getLocation().equals(at(3104, 3589)));
+      } else if (departure === 'teleport' || departure === 'plane') {
+        player.moveTo(at(3104, 3589, departure === 'plane' ? 1 : 0));
+      } else if (departure === 'unregister') {
+        World.unregisterPlayerPosition(player); player.setRegistered(false);
+      } else if (departure === 'list-remove') {
+        World.getPlayers().remove(player);
+        assert.equal(player.isRegistered(), false);
+      } else if (departure === 'area-remove') {
+        area.remove(player);
+      } else {
+        foreignArea.add(player); // Real instance reassignment can precede the location change.
+        if (departure === 'area-before-move') player.moveTo(at(3104, 3589));
+      }
+      assert.equal(q.isDynamicallyOccupied(tile), false, 'departure lowers the old instance NPC flag');
+      assert.equal(World.isNpcOccupyingTile(tile, null, 1, area), true, 'physical occupancy survives');
+      if (otherPlayer) assert.equal(World.isPlayerOccupyingTile(tile, null, 1, area), true,
+        'a remaining stationary player does not prevent lowering the NPC flag');
+      assert.equal(World.isNpcOccupyingTile(tile, null, 1, foreignArea, true), !['area-only', 'area-before-move'].includes(departure), 'only the departed and arrived instances change');
+      q.addCheckpoint(tile); q.process();
+      assert.ok(mover.getLocation().equals(tile), 'real NPC movement enters the occupied but lowered tile');
+      mover.setLocation(at(3103, 3588));
+      stationary.setFlag(NPC.BLOCKS_PLAYERS_FLAG);
+      assert.equal(q.isDynamicallyOccupied(tile), true, 'Full blocking survives the ordinary flag clear');
+    } finally {
+      for (const npc of [stationary, mover, foreign]) World.getNpcs().remove(npc);
+      World.unregisterPlayerPosition(player); player.setRegistered(false);
+      if (otherPlayer) { World.unregisterPlayerPosition(otherPlayer); otherPlayer.setRegistered(false); }
+    }
+  });
+}

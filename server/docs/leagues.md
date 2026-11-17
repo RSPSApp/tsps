@@ -2043,11 +2043,13 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   and the barrel.
 - **Morytania and Desert deeds**, from their content's events:
   - The Sorceress's Garden: `sorceress-garden:picked` { player, season } on a sq'irk picked, `where` season;
-    `sorceress-garden:juice-handed-in` { player, season, amount } on a glass given to Osman or Selim. Only the
-    single winter juice is mapped: this server hands in one glass per talk, so the "in one go" tasks aren't.
+    `sorceress-garden:juice-handed-in` { player, season, amount } on a glass given to Osman or Selim. The winter
+    juice and the 50 summer ones (summed over hand-ins; its description has no "in one go") are mapped. The
+    10 spring and 25 autumn tasks say "in one go", and this server hands in one glass per talk, so they aren't.
   - Simon Templeton: `pyramid-plunder:pyramid-tops-sold` { player, amount }.
   - The Taxidermist: `taxidermist:stuffed` { player, itemId }.
-  - The Necropolis obelisk: `pharaohs-sceptre:communed` { player } on Commune with a sceptre in the pack.
+  - The Necropolis obelisk: `pharaohs-sceptre:communed` { player } on Commune with a sceptre in the pack (league 4
+    spells its task id "pharaoh", leagues 5 and 6 "pharoah").
   - The bark runescrolls: BarkArmour's existing `runecrafting:bark-learnt`, `where` kind.
   - Shades of Mort'ton's existing `shades-of-mortton:cremated`: one pyre log burnt per cremation.
   - Sacred eels: `cooking:sacred-eel-dissected`; Andras: `ferries:andras-permanent-access`.

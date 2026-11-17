@@ -2812,4 +2812,10 @@ test("Morytania deeds through their events: the Taxidermist, bark runescrolls, S
   assert.ok(done(f, "dissect-50-sacred-eels") && !done(f, "dissect-250-sacred-eels"));
   emit("ferries:andras-permanent-access");
   assert.ok(done(f, "unlock-permanent-boat-travel-with-andras"));
+  // Osman's 50 summer juices add up over hand-ins; winter glasses don't count toward them.
+  emit("sorceress-garden:juice-handed-in", { season: "winter", amount: 1 });
+  for (let i = 0; i < 49; i++) emit("sorceress-garden:juice-handed-in", { season: "summer", amount: 1 });
+  assert.ok(!done(f, "turn-in-50-summer-sq-irkjuices-to-osman"), "49 summer and a winter");
+  emit("sorceress-garden:juice-handed-in", { season: "summer", amount: 1 });
+  assert.ok(done(f, "turn-in-50-summer-sq-irkjuices-to-osman"));
 });

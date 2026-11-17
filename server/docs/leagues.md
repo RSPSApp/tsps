@@ -2060,8 +2060,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   15 times without leaving". Each needs its encounter's own event first.
 - **Places from location lines** (`generate-league-tasks.ts`, `PLACE_DEFS` with `locLines`): a task
   whose place is where its subject stands takes the subject pages' own location lines for bounds. The
-  `{{LocLine}}` / `{{ObjectLocLine}}` pins whose `location` links the place, two tiles round each (the
-  player beside it), or their whole map square for an area of its own:
+  `{{LocLine}}` / `{{ObjectLocLine}}` pins whose `location` links the place, three tiles round each (a pin
+  is the object's south-west tile: a 3x3 object's far sides are three off, and a pin may be a tile off its
+  object), or their whole map square for an area of its own:
   - `stonecutter-outpost-rocks`: Coal rocks and Mithril rocks at "Stonecutter Outpost".
   - `tlati-rainforest-trees`: Teak and Mahogany trees in the "Tlati Rainforest".
   - `shayzien-yew-trees`: Yew trees in "Shayzien".

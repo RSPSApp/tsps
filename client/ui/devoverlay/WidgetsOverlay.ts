@@ -9,6 +9,7 @@ import { mobileHudScale } from "../../game/widgets/MobileHudLayout";
 import { getUiScale } from "../UiScale";
 import { FONT_BOLD_12, FONT_VERDANA_13 } from "../fonts";
 import { getChooseOptionMenuRect } from "../../widgets/gl/choose-option";
+import { MINIMAP_REFRESH_MS, minimapSignature } from "../../widgets/gl/minimapSignature";
 
 import { GLRenderer } from "../../widgets/gl/renderer";
 import {
@@ -156,6 +157,10 @@ export class WidgetsOverlay implements Overlay {
     private overlayDrawnThisPass = false;
     private menuOverlayDrawnThisPass = false;
     private beforeMenuOverlayRects: DirtyRect[] = [];
+    /** The before-menu rects last pushed onto widgetOverlayRects. */
+    private committedBeforeMenuRects: DirtyRect[] = [];
+    /** During a partial pass, the dirty rect the before-menu overlays are clipped to. */
+    private beforeMenuClip: DirtyRect | undefined;
     private visible: Map<number, boolean> = new Map();
     private hasPresentedFrame: boolean = false;
 
@@ -875,7 +880,17 @@ export class WidgetsOverlay implements Overlay {
                 const gameCtx = this.ctx.getGameContext?.();
                 const cameraYaw = gameCtx?.osrsClient?.camera?.yaw ?? 0;
                 widgetManager.updateCompassAngle(cameraYaw);
-                widgetManager.updateMinimap();
+                // An unchanged minimap is not redrawn every frame (see MINIMAP_REFRESH_MS).
+                const minimapClient = gameCtx?.osrsClient;
+                if (minimapClient) {
+                    widgetManager.updateMinimap(
+                        minimapSignature(minimapClient),
+                        performance.now(),
+                        MINIMAP_REFRESH_MS,
+                    );
+                } else {
+                    widgetManager.updateMinimap();
+                }
 
                 // Rebuilt widgets only need a redraw if they came out different.
                 widgetManager.flushChildRebuilds?.();
@@ -938,15 +953,9 @@ export class WidgetsOverlay implements Overlay {
                 !!gameFrame ||
                 overlaySetChanged ||
                 overlayNeedsFullRedraw ||
-                overlayFontsChanged ||
-                // Before-menu overlays draw once a pass from inside the tree, clipped to the
-                // first dirty rect, so a partial pass could not put back the rest of them.
-                (beforeMenuOverlays.length > 0 &&
-                    (anyDirty ||
-                        preciseDirtyWidgets.length > 0 ||
-                        menuVisualDirty ||
-                        mouseOverTextDirty ||
-                        overlayDirtyRects.length > 0));
+                overlayFontsChanged;
+            // Before-menu overlays (tooltips, rune pouch) take part in partial passes: they are
+            // drawn again inside each dirty rect, scissored to it (drawWidgetOverlaysBeforeMenu).
             const preciseDirtyCount = preciseDirtyWidgets.length | 0;
             const shouldRedraw =
                 anyDirty ||
@@ -1097,6 +1106,9 @@ export class WidgetsOverlay implements Overlay {
                     this.menuOverlayDrawnThisPass = false;
                     this.beforeMenuOverlayRects = [];
                     for (const dirtyRect of dirtyRects) {
+                        // Each cleared rect gets the before-menu overlays back, clipped to it.
+                        this.beforeMenuClip = dirtyRect;
+                        this.menuOverlayDrawnThisPass = false;
                         const rootClip = {
                             x0: dirtyRect.x,
                             y0: dirtyRect.y,
@@ -1123,6 +1135,7 @@ export class WidgetsOverlay implements Overlay {
                             });
                         }
                     }
+                    this.beforeMenuClip = undefined;
                     // Bar values changed: repaint them even if the panel was not the dirty
                     // region (the anchor callback did not fire for that case).
                     if (redrawWidgetOverlays) {
@@ -1244,13 +1257,33 @@ export class WidgetsOverlay implements Overlay {
         this.menuOverlayDrawnThisPass = true;
         const overlays = this.currentBeforeMenuOverlays;
         if (overlays.length === 0) return;
-        this.beforeMenuOverlayRects = captureAppendedRects(this.widgetOverlayRects, () =>
-            this.drawWidgetOverlays(overlays, false),
-        );
+        const clip = this.beforeMenuClip;
+        const glr = this.glRenderer;
+        // A partial pass: the tree has turned scissoring off by now, so clip to the cleared
+        // rect; outside it the overlays are still on the canvas from the last pass.
+        if (clip && glr) {
+            glr.flush();
+            glr.gl.enable(glr.gl.SCISSOR_TEST);
+            glr.gl.scissor(clip.x, (glr.height | 0) - (clip.y + clip.h), clip.w, clip.h);
+        }
+        try {
+            this.beforeMenuOverlayRects = captureAppendedRects(this.widgetOverlayRects, () =>
+                this.drawWidgetOverlays(overlays, false),
+            );
+        } finally {
+            if (clip && glr) glr.gl.disable(glr.gl.SCISSOR_TEST);
+        }
     }
 
     private commitBeforeMenuOverlayRects(): void {
+        // A partial pass keeps widgetOverlayRects from the last pass: replace this layer's
+        // rects rather than appending them again every frame.
+        const previous = this.committedBeforeMenuRects;
+        if (previous.length > 0) {
+            this.widgetOverlayRects = this.widgetOverlayRects.filter((rect) => !previous.includes(rect));
+        }
         this.widgetOverlayRects.push(...this.beforeMenuOverlayRects);
+        this.committedBeforeMenuRects = this.beforeMenuOverlayRects;
     }
 
     private drawAboveWidgetsForEntry(entry: WidgetRenderEntry, isLastRenderedRoot: boolean): (() => void) | undefined {

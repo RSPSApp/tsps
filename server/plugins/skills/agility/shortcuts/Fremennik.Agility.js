@@ -1,5 +1,11 @@
 const { Anim } = require("../Constants.Agility");
-const { ShortcutAnim, climbOver } = require("./Builders.Agility");
+const { ShortcutAnim, between, climbOver } = require("./Builders.Agility");
+
+/** The log balance's sounds and graphic (rsprox 359, local 1001631, 1002015 ...: docs/agility-shortcuts.md). */
+const LOG_BALANCE_SOUND = 2470; // log_balance
+const STUMBLE_SOUND = 2493; // stumble_loop
+const POOL_PLOP_SOUND = 1658;
+const WATERSPLASH = 68;
 
 function tileDistance(a, x, y) {
   return Math.max(Math.abs(a[0] - x), Math.abs(a[1] - y));
@@ -110,4 +116,67 @@ module.exports = {
   rockslide: ({ northY, southY }) => ({
     steps: ({ pos, obj }) => [climbOver([pos.x, pos.y < obj.y ? northY : southY])],
   }),
+
+  /**
+   * The slippery log north of the Sinclair Mansion, between `ends` across `middle`. As captured
+   * (rsprox 359; local 1001623 ... 1002212, ticks from the click's arrival): two tiles a tick, the
+   * roll on the middle tile a tick in. A success says so then and walks off; BUSY clears and the
+   * XP lands 4 ticks in. A failure falls east into the river at `fall` (exactmove from the middle,
+   * `human_wobbleandfall_short_r`), splashes a tick later, is washed along `river` a tile a tick
+   * from 3 ticks in, and takes 6 damage on the north bank 7 ticks in (local 1001631, 1001653,
+   * 1001659, 1001991, 1002015: every capture starts from the south and hits 6).
+   */
+  fremennikLogBalance: ({ ends, middle, fall, river }) => {
+    const attempt = [
+      { sound: LOG_BALANCE_SOUND, loops: 2 },
+      { msg: { spam: "You attempt to walk across the slippery log." } },
+      { walk: [middle], tilesPerTick: 2 },
+    ];
+    const crossing = between({
+      ends,
+      cross: (from, to) => [
+        ...attempt,
+        { msg: "You make it across the log without any problems." },
+        { sound: LOG_BALANCE_SOUND, loops: 2 },
+        { walk: [to], tilesPerTick: 2 },
+        { wait: 2 },
+      ],
+    });
+    return {
+      route: crossing.route,
+      steps: crossing.steps,
+      fail: {
+        steps: ({ pos, core }) => {
+          // Ours: no capture fails from the north end; it falls the same way, facing south.
+          const dir = pos.y < middle[1] ? "north" : "south";
+          const [x, y, z = pos.z] = fall;
+          const splashAt = new core.Location(x, y, z);
+          const [first, second, third, last] = river;
+          return [
+            ...attempt,
+            { msg: "You lose your footing and fall into the water." },
+            { move: fall, anim: ShortcutAnim.FALL_INTO_WATER_RIGHT, speed: [22, 35], dir, ticks: 0 },
+            // The exactmove and the teleport onto the river tile share a tick (unlike `tele`, which ends the move).
+            { run: ({ player }) => player.moveTo(new core.Location(x, y, z)) },
+            { sound: STUMBLE_SOUND, loops: 10 },
+            { wait: 1 },
+            { run: ({ player }) => player.getPacketSender().sendGlobalGraphic(new core.Graphic(WATERSPLASH, 3), splashAt) },
+            { sound: POOL_PLOP_SOUND },
+            // Ours: the swim render (the capture's appearance updates here and on the last tile carry no ids).
+            { render: ShortcutAnim.SWIM },
+            { wait: 1 },
+            { msg: "You're being washed down the river." },
+            { walk: [first] },
+            { msg: { spam: "You feel like you're drowning..." } },
+            { walk: [second] },
+            { msg: { spam: "You finally come to shore." } },
+            { walk: [third] },
+            { render: null },
+            { walk: [last] },
+            { hit: 6 },
+          ];
+        },
+      },
+    };
+  },
 };

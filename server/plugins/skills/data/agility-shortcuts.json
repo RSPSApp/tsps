@@ -781,29 +781,17 @@
       "level": 48,
       "xp": 4,
       "render": "BALANCE_WALK",
-      "fail": {
-        "low": 140,
-        "high": 255,
-        "xp": 2,
-        "steps": [
-          {"anim":"BALANCE_FALL"},
-          {"wait":1},
-          {"hit":[1,3]},
-          {"msg":"You slip and fall."}
-        ]
-      },
-      "unverified": "the failure's steps (no capture); the walk (the capture only shows the sounds and messages)",
-      "between": {
+      "busy": true,
+      "fail": {"low": 140, "high": 255, "xp": 2},
+      "script": "fremennikLogBalance",
+      "params": {
         "ends": [[2722,3592,0],[2722,3596,0]],
-        "cross": [
-          {"sound":2470,"loops":2},
-          {"msg":"You attempt to walk across the slippery log."},
-          {"walk":["to"]},
-          {"sound":2470,"loops":2},
-          {"msg":"You make it across the log without any problems."}
-        ]
+        "middle": [2722,3594],
+        "fall": [2724,3594],
+        "river": [[2725,3594],[2726,3595],[2726,3596],[2725,3597]]
       },
-      "note": "rsprox captures 359"
+      "unverified": "a failure from the north end (every captured failure starts from the south); the walk and swim render ids (the captures' appearance blocks carry none)",
+      "note": "rsprox captures 359, 1001623, 1001631, 1001653, 1001659, 1001991, 1002015, 1002076"
     },
     {
       "name": "Loose railing (Fishing Guild)",

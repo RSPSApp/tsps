@@ -73,7 +73,7 @@
  *  - Bridges keep their broken appearance after Repair (the swap object has no
  *    placement here); clicking Walk-across on a repaired bridge moves the
  *    player over it. Rope spinning enforces Crafting 30 with a
- *    system message. The chest, splitting, curing, shield-making and head-taking
+ *    system message. The chest, curing, shield-making and head-taking
  *    steps use short system messages where the wiki transcript has no line.
  *    The shield Woodcutting level refusal is silent until wording is sourced.
  *  - The weapon/shield "hands free" check follows Cold War: WEAPON_SLOT and
@@ -226,7 +226,6 @@ module.exports = function registerTheFremennikIslesQuest(api) {
 
   const JESTER_CHEST = ObjectIdentifiers.CHEST_70; // 21299
   const SPINNING_WHEEL = ObjectIdentifiers.SPINNING_WHEEL_5; // 21304
-  const WOODCUTTING_STUMP = ObjectIdentifiers.WOODCUTTING_STUMP; // 21305
   const WEST_BRIDGE_IDS = new Set([
     ObjectIdentifiers.ROPE_BRIDGE_6, // 21310
     ObjectIdentifiers.ROPE_BRIDGE_7, // 21311
@@ -1684,34 +1683,31 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     player.sendMessage("You spin the yak hair into rope.");
   }
 
-  function useWoodcuttingStump(event) {
-    const { player } = event;
-    if (stageOf(player) >= STAGE_ARMOUR_DONE && !hasItem(player, NEITIZNOT_SHIELD)) {
-      if (
-        hasItem(player, ARCTIC_PINE_LOGS, 2) &&
-        hasItem(player, ROPE) &&
-        hasItem(player, BRONZE_NAILS) &&
-        hasItem(player, HAMMER)
-      ) {
-        event.handled = true;
-        if (player.getSkillManager().getCurrentLevel(Skill.WOODCUTTING) < 56) {
-          return;
-        }
-        player.getInventory().deleteNumber(ARCTIC_PINE_LOGS, 2);
-        player.getInventory().deleteNumber(ROPE, 1);
-        player.getInventory().deleteNumber(BRONZE_NAILS, 1);
-        player.getInventory().adds(NEITIZNOT_SHIELD, 1);
-        player.sendMessage("You make a Neitiznot shield.");
-        api.emitCustomEvent("fremennik-isles:shield-made", { player });
-        return;
-      }
+  /**
+   * The stump's "Neitiznot shield" choice ("woodcutting:stump-shield" from
+   * skills/woodcutting/SplitLogs.Woodcutting.js, which also splits the logs).
+   */
+  function makeNeitiznotShield(request) {
+    const { player } = request;
+    if (stageOf(player) < STAGE_ARMOUR_DONE || hasItem(player, NEITIZNOT_SHIELD)) return;
+    if (
+      !hasItem(player, ARCTIC_PINE_LOGS, 2) ||
+      !hasItem(player, ROPE) ||
+      !hasItem(player, BRONZE_NAILS) ||
+      !hasItem(player, HAMMER)
+    ) {
+      return;
     }
-    if (!hasItem(player, ARCTIC_PINE_LOGS)) return;
-    event.handled = true;
-    const amount = player.getInventory().getAmount(ARCTIC_PINE_LOGS);
-    player.getInventory().deleteNumber(ARCTIC_PINE_LOGS, amount);
-    player.getInventory().adds(SPLIT_LOG, amount);
-    player.sendMessage("You split the arctic pine logs.");
+    request.handled = true;
+    if (player.getSkillManager().getCurrentLevel(Skill.WOODCUTTING) < 56) {
+      return;
+    }
+    player.getInventory().deleteNumber(ARCTIC_PINE_LOGS, 2);
+    player.getInventory().deleteNumber(ROPE, 1);
+    player.getInventory().deleteNumber(BRONZE_NAILS, 1);
+    player.getInventory().adds(NEITIZNOT_SHIELD, 1);
+    player.sendMessage("You make a Neitiznot shield.");
+    api.emitCustomEvent("fremennik-isles:shield-made", { player });
   }
 
   function handleObjectInteraction(event) {
@@ -1750,10 +1746,6 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     }
     if (objectId === SPINNING_WHEEL) {
       spinYakHair(event);
-      return;
-    }
-    if (objectId === WOODCUTTING_STUMP) {
-      useWoodcuttingStump(event);
     }
   }
 
@@ -2008,6 +2000,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onObjectInteraction(handleObjectInteraction);
+  api.onCustomEvent("woodcutting:stump-shield", makeNeitiznotShield);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction(handleItemAction);

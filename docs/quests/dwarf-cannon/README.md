@@ -2,11 +2,11 @@
 quest: Dwarf Cannon
 key: dwarf_cannon
 status: passed-with-issues
-tested: 2026-11-03
+tested: 2026-11-17
 tester: agent
 model: claude-opus-5-5
-commit: e213d50ad1792cc4be775e5c2c398abe7d428493
-cache: osrs-241_2026-10-20
+commit: b2e77194316d11779a27595cf65aedc65a4b21b1
+cache: osrs-242_2026-11-03
 start: fresh
 travel: travel_to
 ---
@@ -159,6 +159,21 @@ Newest first.
   which landed at (2623, 3391).
 
 ## Runs
+
+### 2026-11-17 · agent · claude-opus-5-5
+
+- **Start:** fresh account; the route's declared setup (`::master`, `::maxgear melee`, `::tele` beside
+  Lawgof), Quest Helper `06da90f` headless through the bridge.
+- **Route:** [route.cjs](https://github.com/RSPSApp/tsps/blob/main/docs/quests/dwarf-cannon/route.cjs) on the capture-aligned plugin: each
+  railing's message box continued as a client would, the remains taken after the player's line,
+  the goblin cave entered by LocTeleports' captured crawl.
+- **Result:** passed, 15 of 15 steps in 13 min 6 s. varp 0 = 0 → 1 (start) → 1 (six railings) → 2 (report)
+  → 3 (tower) → 4 (hand-in) → 5 (cave) → 6 (untie) → 7 (toolkit) → 8 → 9 → 10 → 11, the saved stage
+  matching each time. Quest points +1, Crafting XP +750, the notes and the mould taken; a repeat talk and a
+  relog changed nothing.
+- **Findings (all known, above):** Quest Helper unavailable once on two scene changes; it does not see the
+  repair interface, so the Wiki order was clicked; `travel_to` no-route at (2600-2601, 3477) both ways
+  between Lawgof and Nulodion, recovering on the next call.
 
 ### 2026-11-03 · agent · claude-opus-5-5
 

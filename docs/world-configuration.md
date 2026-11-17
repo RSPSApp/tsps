@@ -913,6 +913,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Tutors` | Tutors | npcs | yes | Lumbridge combat and skill tutors: hands out training weapons, runes, tools and other starter gear, with a shared 30-minute claim for ranged and magic. |
 | `Tyss` | Tyss | npcs | yes | Tyss at the Dark Altar toggles the Arceuus spellbook from his Spellbook option and two dialogue choices. (members only) |
 | `UndeadDruids` | UndeadDruids | npcs | yes | Undead Druids use melee at melee range and magic from range, matching the Wiki and RSProx 2966. (members only) |
+| `VikingShouters` | VikingShouters | npcs | yes | The Jatizso and Neitiznot watchtower guards chant their islands' names, and Watch-shouting shows their recorded insult round with its camera. (members only) |
 | `WizardJalarast` | WizardJalarast | npcs | yes | Wizard Jalarast at the Wizards' Tower makes splitbark armour: Trade opens the purchase menu, and each piece takes its bark, fine cloth and coins. (members only) |
 | `Wyrms` | Wyrms | npcs | yes | Wyrm and wyrmling combat: melee when the target is adjacent, magic from range, with separate max hits per style. (members only) |
 | `Wyson` | Wyson | npcs | yes | Wyson the gardener sells woad leaves through his dialogue: 15 coins for one leaf, 20 coins for two. |

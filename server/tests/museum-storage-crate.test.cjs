@@ -24,6 +24,7 @@ const DATA = require("../plugins/world/data/museum-storage-crate.json");
 const TITLE = "Finds placed in this crate cannot be retrieved.";
 const PLACED = "You place the find into the crate with all the others and pick up your reward from the crate.";
 const STATE = "museum:state";
+const { ChatType } = PluginManager.getCoreApi();
 
 let ids;
 let hooks;
@@ -46,7 +47,7 @@ before(async () => {
   StorageCrate({
     core: PluginManager.getCoreApi(),
     onObjectInteraction: (name, actions) => hooks.named.set(name, actions),
-    onItemOnObject: (fn) => hooks.itemOnObject.push(fn),
+    onItemOnObject: (itemName, objectName, fn) => hooks.itemOnObject.push({ itemName, objectName, fn }),
     onPlayerLogin: (fn) => hooks.login.push(fn),
   });
 });
@@ -59,7 +60,7 @@ function makePlayer(items, attributes = {}) {
     if (key === "sendChatboxInterface") return (id) => { chatbox = id; return sender; };
     if (key === "isChatboxInterface") return (id) => chatbox === id;
     if (key === "sendInterfaceRemoval") return () => { chatbox = null; return sender; };
-    if (key === "sendTypedMessage") return (_type, text) => { player.spam.push(text); return sender; };
+    if (key === "sendTypedMessage") return (type, text) => { if (type === ChatType.SPAM) player.spam.push(text); return sender; };
     if (key === "sendSound") return (id, _volume, delay) => { player.sounds.push([id, delay]); return sender; };
     if (key === "sendVarbit") return (id, value) => { player.varbits.push([id, value]); return sender; };
     return () => sender;
@@ -82,7 +83,11 @@ function makePlayer(items, attributes = {}) {
 
 function use(player, itemId, slot) {
   const event = { player, itemId, itemSlot: slot, objectId: ids.crate, handled: false };
-  for (const fn of hooks.itemOnObject) fn(event);
+  // The named overload: exact item and object names, handled unless the handler returns false.
+  for (const hook of hooks.itemOnObject) {
+    if (event.handled || CacheDefinitions.getItem(itemId).name !== hook.itemName || hook.objectName !== "Storage crate") continue;
+    if (hook.fn(event) !== false) event.handled = true;
+  }
   return event;
 }
 
@@ -175,6 +180,14 @@ test("don't ask again sets vm_crate_warningdisabled, skips the menu next time an
   assert.deepEqual(next.spam, [PLACED]);
 }));
 
+test("the use hooks are named for the four finds on the Storage crate", () => {
+  assert.deepEqual(hooks.itemOnObject.map((hook) => hook.objectName), Array(4).fill("Storage crate"));
+  assert.deepEqual(hooks.itemOnObject.map((hook) => hook.itemName).sort(),
+    [ids.arrowheads, ids.jewellery, ids.pottery, ids.vase].map((id) => CacheDefinitions.getItem(id).name).sort());
+  const other = { player: makePlayer([[ids.pottery]]), itemId: ids.pottery, itemSlot: 0, objectId: ids.crate + 1, handled: false };
+  assert.equal(hooks.itemOnObject.find((hook) => hook.itemName === "Pottery").fn(other), false, "other storage crates fall through");
+});
+
 test("Add finds opens the menu without the single-item line, and refuses with no finds", () => {
   const addFinds = hooks.named.get("Storage crate")["Add finds"];
   const player = makePlayer([[ids.arrowheads]]);
@@ -211,7 +224,7 @@ test("placing that item follows the used find when the inventory is rearranged",
 
 test("a reward that would overflow the carried stack keeps the find", () => {
   const original = Math.random;
-  Math.random = () => 0; // coins, 19
+  Math.random = () => 0; // coins, the table's minimum of 17
   try {
     const player = makePlayer([[995, 2147483647], [ids.arrowheads], [ids.pottery]]);
     use(player, ids.arrowheads, 1);
@@ -222,7 +235,7 @@ test("a reward that would overflow the carried stack keeps the find", () => {
     assert.deepEqual(player.spam, []);
     assert.deepEqual(player.messages, ["You don't have enough inventory space."]);
 
-    const nearly = makePlayer([[995, 2147483647 - 19], [ids.arrowheads], [ids.pottery]]);
+    const nearly = makePlayer([[995, 2147483647 - 17], [ids.arrowheads], [ids.pottery]]);
     use(nearly, ids.arrowheads, 1);
     choose(nearly, 1);
     assert.equal(nearly.getInventory().getAmount(995), 2147483647, "the first reward fits exactly");
@@ -235,12 +248,12 @@ test("a reward that would overflow the carried stack keeps the find", () => {
 
 test("a stackable reward joins the stack already carried", () => {
   const original = Math.random;
-  Math.random = () => 0; // the first row: coins, the table's minimum of 19
+  Math.random = () => 0; // the first row: coins, the table's minimum of 17
   try {
     const player = makePlayer([[995, 100], [ids.arrowheads]]);
     use(player, ids.arrowheads, 1);
     choose(player, 2);
-    assert.equal(player.getInventory().getAmount(995), 119);
+    assert.equal(player.getInventory().getAmount(995), 117);
     assert.equal(idAt(player, 1), -1);
   } finally {
     Math.random = original;

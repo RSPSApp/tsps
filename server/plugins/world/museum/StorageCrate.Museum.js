@@ -34,6 +34,7 @@ const MAX_STACK = 2147483647;
 const PLACE_SOUND = 2739;
 const PLACE_SOUND_DELAY = 15;
 const FINDS = new Set(DATA.finds);
+const FIND_NAMES = ["Arrowheads", "Jewellery", "Pottery", "Old chipped vase"];
 
 let api = null;
 let ids = null;
@@ -182,12 +183,11 @@ function addFinds({ player, objectId }) {
 
 function useFind(event) {
   const { player, itemId, objectId, itemSlot: slot } = event;
-  if (objectId !== idsOf().crate || !FINDS.has(itemId)) return;
-  event.handled = true;
+  if (objectId !== idsOf().crate || !FINDS.has(itemId)) return false;
   const items = player.getInventory().getItems();
   const used = Number.isInteger(slot) && items[slot]?.getId?.() === itemId ? slot : player.getInventory().getSlotForItemId(itemId);
-  if (used < 0) return;
-  offer(player, used);
+  if (used >= 0) offer(player, used);
+  return true;
 }
 
 function syncWarningVarbit({ player }) {
@@ -197,7 +197,7 @@ function syncWarningVarbit({ player }) {
 module.exports = function registerStorageCrate(pluginApi) {
   api = pluginApi;
   pluginApi.onObjectInteraction("Storage crate", { "Add finds": addFinds });
-  pluginApi.onItemOnObject(useFind);
+  for (const name of FIND_NAMES) pluginApi.onItemOnObject(name, "Storage crate", useFind);
   pluginApi.onPlayerLogin(syncWarningVarbit);
 };
 

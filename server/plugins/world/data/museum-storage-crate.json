@@ -11,7 +11,7 @@
     {
       "name": "Coins",
       "item": 995,
-      "min": 19,
+      "min": 17,
       "max": 69,
       "weight": 19
     },

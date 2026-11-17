@@ -45,21 +45,22 @@ function die(t, victim, killer, at, { kept = false } = {}) {
   victim.setLocation(at);
   killer?.setLocation(at);
   if (!kept) core.CombatFactory.skull(victim, core.SkullType.WHITE_SKULL, core.CombatFactory.PVP_SKULL_SECONDS);
-  const coins = [];
+  const coins = [], drops = [];
   const register = core.ItemOnGroundManager.registerLocation;
   t.mock.method(core.ItemOnGroundManager, "registerLocation", (owner, item, location, ...rest) => {
+    drops.push([owner, item.getId(), item.getAmount()]);
     if (item.getId() === I.COINS) coins.push([owner?.getUsername?.(), item.getAmount()]);
     return register.call(core.ItemOnGroundManager, owner, item, location, ...rest);
   });
   const lost = [];
   const emitDrops = PM.emitPlayerDeathDrops;
   t.mock.method(PM, "emitPlayerDeathDrops", (event) => {
-    // Both lists the grave hooks get: the cache has the charged ring of wealth (3) untradeable, so it is in the second.
+    // Record both lists passed to the grave hooks, including untradeable imbued forms.
     lost.push(...[...event.items, ...event.untradeables].map((item) => [item.getId(), item.getAmount()]));
     return emitDrops.call(PM, event);
   });
   const keptItems = PlayerDeathTask.dropItems(victim, killer, at).map((item) => [item.getId(), item.getAmount()]);
-  return { coins, lost, kept: keptItems };
+  return { coins, drops, lost, kept: keptItems };
 }
 
 const WILDERNESS = () => new core.Location(3100, 3600, 0);
@@ -107,3 +108,92 @@ test("an Ironman killer gets no coins; they go on the floor for the victim", (t)
   assert.equal(killer.getInventory().getAmount(I.COINS), 0);
   assert.deepEqual(coins, [[victim.getUsername(), 50000]]);
 });
+
+// The Wiki's exact (3) variant is player-tradeable, but is not on the Grand Exchange.
+// Neither ordinary charge consumption nor imbuing creates untradeable item metadata.
+for (const y of [3600, 3800]) {
+  for (const id of [11984, 20788]) {
+    test(`a lost ${id} ring at Wilderness y=${y} becomes killer-owned ring (3) loot`, (t) => {
+      const victim = actor(t), killer = actor(t);
+      victim.getInventory().addItem(new core.Item(id, 1));
+      const { kept, drops } = die(t, victim, killer, new core.Location(3100, y, 0));
+      assert.deepEqual(kept, [], "the victim does not retain the lost ring");
+      assert.deepEqual(drops.filter(([, itemId]) => itemId === RING_3), [[killer, RING_3, 1]]);
+      assert.equal(killer.getInventory().getAmount(I.COINS), id === 20788 ? 50000 : 0);
+    });
+  }
+}
+
+test("a protected ordinary partly charged ring remains with its victim", (t) => {
+  const victim = actor(t), killer = actor(t);
+  victim.getInventory().addItem(new core.Item(RING_3, 1));
+  const { kept, drops } = die(t, victim, killer, WILDERNESS(), { kept: true });
+  assert.deepEqual(kept, [[RING_3, 1]]);
+  assert.ok(!drops.some(([, id]) => id === RING_3));
+});
+
+test("untradeable metadata still destroys a ring rather than giving it to the killer", (t) => {
+  const victim = actor(t), killer = actor(t);
+  victim.getInventory().addItem(new core.Item(RING_3, 1, { [core.Item.UNTRADEABLE_META]: true }));
+  const { kept, drops } = die(t, victim, killer, WILDERNESS());
+  assert.deepEqual(kept, []);
+  assert.ok(!drops.some(([, id]) => id === RING_3));
+});
+
+test("an ordinary partly charged ring lost to an Ironman is floor loot for its victim", (t) => {
+  const victim = actor(t), killer = actor(t);
+  killer.setAttribute("ironman:mode", "ironman");
+  victim.getInventory().addItem(new core.Item(RING_3, 1));
+  const { kept, drops } = die(t, victim, killer, WILDERNESS());
+  assert.deepEqual(kept, []);
+  assert.deepEqual(drops.filter(([, id]) => id === RING_3), [[victim, RING_3, 1]]);
+});
+
+for (const id of [RING_3, 20788]) {
+  test(`a lost ${id} ring goes into its eligible killer's loot key after its death conversion`, (t) => {
+    const victim = actor(t), killer = actor(t);
+    const keys = require("../plugins/items/LootKeys.plugin");
+    keys.setLootKeysEnabled(killer, true);
+    victim.getInventory().addItem(new core.Item(id, 1));
+    const { kept, drops } = die(t, victim, killer, WILDERNESS());
+    PM.emitPlayerDefeated(killer, victim);
+    assert.deepEqual(kept, []);
+    assert.ok(!drops.some(([, itemId]) => itemId === RING_3), "no duplicate floor ring");
+    const key = killer.getInventory().getValidItems().find(keys.isLootKey);
+    assert.ok(key, "a loot key is awarded");
+    assert.deepEqual(keys.keyItems(key).map(({ id, amount }) => [id, amount]), [[RING_3, 1]]);
+  });
+}
+
+test("the native death preview marks an ordinary ring (3) as lost in PvP", (t) => {
+  const victim = actor(t);
+  victim.getInventory().addItem(new core.Item(RING_3, 1));
+  core.CombatFactory.skull(victim, core.SkullType.WHITE_SKULL, core.CombatFactory.PVP_SKULL_SECONDS);
+  const sender = victim.getPacketSender(), inventories = [];
+  const send = sender.sendInterfaceScript;
+  t.mock.method(sender, "sendInterfaceScript", function (...args) {
+    if (args[0] === 972) inventories.push(args[4]);
+    return send.apply(this, args);
+  });
+  assert.equal(PM.emitInterfaceActionClick({ player: victim, buttonId: (387 << 16) | 5, action: 0 }), true);
+  assert.equal(PM.emitInterfaceActionClick({ player: victim, buttonId: (4 << 16) | 12, action: 2 }), true);
+  const state = inventories.at(-1);
+  assert.deepEqual(state[584].slots.map(({ itemId }) => itemId), [RING_3]);
+  assert.deepEqual(state[468].slots.map(({ itemId }) => itemId), [1991], "the client renders the lost-item state");
+});
+
+for (const mode of ["kept", "metadata", "ironman"]) {
+  test(`imbue removal with loot keys preserves the ${mode} ownership guard`, (t) => {
+    const victim = actor(t), killer = actor(t);
+    const keys = require("../plugins/items/LootKeys.plugin");
+    keys.setLootKeysEnabled(killer, true);
+    if (mode === "ironman") killer.setAttribute("ironman:mode", "ironman");
+    const meta = mode === "metadata" ? { [core.Item.UNTRADEABLE_META]: true } : null;
+    victim.getInventory().addItem(new core.Item(20788, 1, meta));
+    const { kept, drops } = die(t, victim, killer, WILDERNESS(), { kept: mode === "kept" });
+    PM.emitPlayerDefeated(killer, victim);
+    assert.equal(killer.getInventory().getValidItems().filter(keys.isLootKey).length, 0);
+    assert.deepEqual(kept, mode === "kept" ? [[RING_3, 1]] : []);
+    assert.deepEqual(drops.filter(([, id]) => id === RING_3), mode === "ironman" ? [[victim, RING_3, 1]] : []);
+  });
+}

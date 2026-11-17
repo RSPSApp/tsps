@@ -239,6 +239,10 @@ function removeImbueOnDeath(event, itemOnGroundManager) {
     return;
   }
   event.item.setId(unimbuedId);
+  // LootKeys retains this event before the conversion. Its later decision must see
+  // the normal ring's player-tradeability, while respecting kept/preset/safe deaths.
+  event.dropEligible = event.shouldDropItems === true && event.kept !== true
+    && event.item.isPlayerTradeable() && !event.item.isLostOnDeath();
   const coins = new Item(COINS, IMBUE_COST);
   const killer = event.killer;
   if (killer && killer !== event.player && killer.isPlayer?.() === true && killer.getInventory) {

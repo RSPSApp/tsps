@@ -135,7 +135,7 @@ function getDeathItems(player, toKeep, settings, cosmetic = []) {
       pluginApi.emitCustomEvent("gravestones:makes-grave", itemGrave);
       makesGrave = itemGrave.makesGrave;
     }
-    const tradeable = item.isTradeable();
+    const tradeable = item.isPlayerTradeable();
     const lostOnDeath = !protectedItems.has(item)
       && (tradeable || item.isLostOnDeath() || makesGrave || lostToPvpKiller(item, settings));
     items.push({

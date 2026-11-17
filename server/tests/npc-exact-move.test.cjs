@@ -683,3 +683,48 @@ test('pet occupancy stays walk-through across moves, classification changes and 
   }
   assert.equal(World.isNpcOccupyingTile(at), false);
 });
+
+test('large NPCs stacked on one tile walk apart; a step only checks the tiles it enters (issue 6116)', () => {
+  // A 2x2 NPC's next footprint always overlaps where it stands, so two stacked on one tile
+  // froze each other for good: Scurrius's giant rats, the Warriors' Guild Cyclopes.
+  const { World } = require('../dist/game/World');
+  const at = (x, y) => new Location(x, y, 0);
+  const pos = (npc) => [npc.getLocation().getX(), npc.getLocation().getY()];
+  const walk = (npc, to) => npc.getMovementQueue().setPursuitCheckpoint(to);
+  const tick = (...npcs) => npcs.forEach((npc) => npc.getMovementQueue().process());
+  const npcs = [];
+  const spawn = (id, location) => {
+    const npc = new NPC(id, location);
+    assert.ok(World.getNpcs().add(npc, true), 'registered');
+    npcs.push(npc);
+    return npc;
+  };
+  try {
+    for (const id of [2463, 7223]) { // Cyclops, Giant rat (both 2x2)
+      const a = spawn(id, at(3222, 3222));
+      const b = spawn(id, at(3222, 3222));
+      assert.equal(a.getSize(), 2);
+      walk(a, at(3232, 3222));
+      walk(b, at(3212, 3222));
+      tick(a, b);
+      assert.deepEqual(pos(a), [3223, 3222], 'the first steps out of the stack');
+      assert.deepEqual(pos(b), [3221, 3222], 'and the other the opposite way');
+      tick(a, b);
+      assert.deepEqual([pos(a), pos(b)], [[3224, 3222], [3220, 3222]]);
+      for (const npc of [a, b]) World.getNpcs().remove(npc);
+    }
+
+    // Whatever stands in the tiles it enters still stops it, diagonals included.
+    const big = spawn(2463, at(3222, 3222));
+    const blocker = spawn(3106, at(3224, 3223));
+    walk(big, at(3232, 3222));
+    tick(big);
+    assert.deepEqual(pos(big), [3222, 3222], 'an NPC on its leading column blocks the step east');
+    assert.equal(big.getMovementQueue().wasBlockedByDynamicOccupancy(), true);
+    walk(big, at(3232, 3232));
+    tick(big);
+    assert.deepEqual(pos(big), [3222, 3223], 'north-east enters (3224, 3223): it squares the corner north');
+  } finally {
+    for (const npc of npcs) World.getNpcs().remove(npc);
+  }
+});

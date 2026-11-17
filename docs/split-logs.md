@@ -29,3 +29,12 @@ per log, an axe and the woodcutting stump.
 - The level and no-axe refusals: not captured, so their wording is ours.
 - Axes other than the dragon axe play the cache's `human_woodcrafting_axe_*` (felling axes:
   `human_woodcrafting_*_2h_axe`) sequence of the same axe; only the dragon axe's is recorded.
+
+## Recorded, not matched yet: making the shield
+
+Rec 3027 tick 9355 (the shield choice, amount 4) makes one shield 2 ticks after the choice, then
+another 3 ticks later, the second while the first is still carried. Each one sends
+`You make a Neitiznot shield.` (spam), `human_woodcrafting_hammer`, synth sound 2101 and
+34 Crafting XP. The server still makes the shield through The Fremennik Isles' one-shot path
+(`woodcutting:stump-shield`): one shield at most, no XP, only at quest stage 17+ while no shield
+is carried. Otherwise a player who has all the parts gets no response.

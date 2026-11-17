@@ -11,6 +11,8 @@ import { decodeClientPacket } from "../../server/src/main/typescript/elvarg/net/
 import { getTransmitCycles } from "../game/TransmitCycles";
 import { ClientState } from "../game/ClientState";
 import { SpellSelectionController } from "../game/widgets/SpellSelectionController";
+import { buildSelectedSpellPayload } from "../common/spells/selectedSpellPayload";
+import { createSelectedSpellOnNpcPacket } from "../game/selectedSpellPackets";
 
 const { vm } = createCacheVm();
 const wm = vm.context.widgetManager;
@@ -332,6 +334,33 @@ test("operation10 and target-slot selection coexist, including target leave/ente
     release(); key(66, "b"); process();
     assert.equal(ClientState.isSpellSelected, true, "target shortcut reselects instead of mouse toggle-off");
     assert.equal(vm.context.varManager.getVarcInt(10002), 2);
+});
+
+test("dynamic target shortcuts retain the native parent and slot through selected-spell packets", () => {
+    execute([...ints(escape.uid, 4, 0, 0), [Opcodes.CC_CREATE, 0],
+        ...ints(68, 0), [Opcodes.CC_SETOPTKEY, 0], [Opcodes.RETURN, 0]]);
+    const child = escape.children![0]!;
+    assert.equal(child.id, escape.uid);
+    assert.notEqual(child.uid, escape.uid, "dynamic render identity differs from its native component");
+    listener(child, "onTargetEnter", [...ints(1), [Opcodes.SET_VARC_INT, 10001], [Opcodes.RETURN, 0]]);
+    listener(child, "onTargetLeave", [...ints(2), [Opcodes.SET_VARC_INT, 10002], [Opcodes.RETURN, 0]]);
+
+    key(66, "b"); process();
+    assert.equal(ClientState.selectedSpellSourceWidget, child, "callbacks retain the original dynamic source");
+    assert.equal(vm.context.varManager.getVarcInt(10001), 1);
+    assert.equal(ClientState.selectedSpellChildIndex, 0);
+    assert.equal(ClientState.selectedSpellWidget, escape.uid, "selection uses the native parent component");
+    selection.normalizeSelectedSpellState();
+    const selected = buildSelectedSpellPayload(ClientState.selectedSpellWidget,
+        ClientState.selectedSpellChildIndex, ClientState.selectedSpellItemId)!;
+    const packet = createSelectedSpellOnNpcPacket(17, selected, false);
+    assert.deepEqual(decodeClientPacket(Buffer.from(packet.packetBuffer.data.subarray(0,
+        packet.packetBuffer.offset))), { type: "spell_on_npc", targetIndex: 17,
+        spellWidget: 38993924, spellChild: 0, spellItemId: 65535 });
+    assert.equal(packets.length, 0, "selecting a target does not send an operation packet");
+    release(); key(66, "b"); process();
+    assert.equal(vm.context.varManager.getVarcInt(10002), 2);
+    assert.equal(ClientState.selectedSpellSourceWidget, child);
 });
 
 test("hidden ancestry and native focusout suppress shortcuts and permit subsequent presses", () => {

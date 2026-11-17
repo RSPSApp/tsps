@@ -19,7 +19,7 @@ import type { WidgetManager } from "../../widgets/WidgetManager";
 import { isWidgetUseTarget } from "../../widgets/WidgetFlags";
 import { ClientState } from "../ClientState";
 import { createSelectedSpellOnWidgetPacket } from "../selectedSpellPackets";
-import type { WidgetActionEvent } from "./widgetActionPayload";
+import { resolveWidgetIdentifiers, type WidgetActionEvent } from "./widgetActionPayload";
 import { closeOpenModal } from "./input/widgetKeyboardInput";
 import { spellWidgetChildSlot } from "./SpellSelectionController";
 
@@ -348,8 +348,9 @@ export function handleWidgetActionTargeting(
 export function handleWidgetShortcutTarget(deps: WidgetActionHandlersDeps, widget: any): void {
     if (!widget) return;
     deps.clearSelectedSpell();
+    const widgetId = resolveWidgetIdentifiers(deps.getWidgetManager(), widget)?.widgetId ?? widget.uid;
     const selection = deps.resolveSpellSelectionFromWidget(
-        widget, widget.uid, spellWidgetChildSlot(widget), widget.itemId ?? -1,
+        widget, widgetId, spellWidgetChildSlot(widget), widget.itemId ?? -1,
     );
     selectWidgetTarget(deps, { widget }, selection,
         widget.targetVerb || widget.spellActionName || "null", deps.getWidgetTargetMask(widget));

@@ -21,6 +21,7 @@ const TILE = new Location(3229, 3297, 0);
 
 before(async () => {
   await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
+  require('../plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, registerContentEndpoint() {}, onPlayerLogin() {} });
   const noop = () => undefined;
   NpcDrops.register(new Proxy({
     core: {},

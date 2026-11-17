@@ -25,7 +25,7 @@ ItemDefinition.forId = (id) => {
   const def = DEFINITIONS[id] ?? { name: "null", stackable: false, value: 0 };
   return {
     getId: () => id, getName: () => def.name, isStackable: () => def.stackable, getValue: () => def.value,
-    getGrandExchangeValue: () => def.value, getGuidePrice: () => def.value, isTradeable: () => true, isNoted: () => false,
+    getGrandExchangeValue: () => def.value, getGuidePrice: () => def.value, isTradeable: () => true, isPlayerTradeable: () => true, isNoted: () => false,
   };
 };
 

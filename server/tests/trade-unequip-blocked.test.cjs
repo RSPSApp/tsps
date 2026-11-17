@@ -21,6 +21,7 @@ let next = 9800;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   core = PluginManager.getCoreApi();
+  require("../plugins/items/ItemDefinitionLoader.plugin").register(PluginManager.createApi("TradeUnequipItemDefinitions"));
   require("../plugins/interface/Trading.plugin").register(PluginManager.createApi("TradeUnequip"));
 });
 

@@ -2052,9 +2052,12 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   - The Giantsoul amulet to the Royal Titans: its new `giantsoul-amulet:teleported` { lair: "branda and
     eldric" } on the landing.
   - Icy Basalt to Weiss: BasaltTeleports' new `basalt:teleported` { itemId } on the landing.
-  - The teleport anchoring scroll: `item-op` Read.
+  - The teleport anchoring scroll: TeleportAnchoringScroll's new `teleport-anchoring:learnt` { player } when
+    the scroll is absorbed, not when Read opens the question (a Cancel, or a player who already knows it,
+    is no use of it).
   - Crafting runes: a combination rune (Mist, Dust, Mud, Smoke, Steam, Lava), and 200 / 2500 essence
-    whatever the rune. That is the new `rc-essence` kind, counting `runecrafting:success`'s `rolls`.
+    whatever the rune. That is the new `rc-essence` kind, counting `runecrafting:success`'s `rolls` (a
+    combination craft its `runeAmount`, the essence it bound).
   - The churn's butter: `produce`.
   - A piece of Crystal armour: CrystalSinging's new `crystal-singing:sung` { itemId, amount }. It is not
     `skills:produced`, which production relics would double.

@@ -38,6 +38,6 @@ export class ArceuusUtilities {
         player.getInventory().refreshItems();
         if (experience > 0) player.getSkillManager().addExperiences(Skill.HERBLORE, experience);
         // `magic:degrimed` { player, herbs }: the herbs one cast cleaned ("Clean 26 herbs at the same time").
-        require("../../../../plugins/PluginManager").PluginManager.emitCustomEvent("magic:degrimed", { player, herbs });
+        PluginManager.emitCustomEvent("magic:degrimed", { player, herbs });
     }
 }

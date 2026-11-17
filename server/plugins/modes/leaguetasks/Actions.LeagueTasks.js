@@ -990,9 +990,11 @@ module.exports = function attach(api) {
   // A Lunar spell by its name ("spellbook swap"), as the `cast` kind names it.
   api.onCustomEvent("magic:lunar-cast", ({ player, name }) => player && name && count(player, "cast", name));
   // Essence crafted into runes, whatever the rune (`rc-essence`): the essence the craft used.
-  api.onCustomEvent("runecrafting:success", ({ player, rolls }) => {
+  // A combination craft counts the essence it bound (`runeAmount`), not what a failed bind lost.
+  api.onCustomEvent("runecrafting:success", ({ player, rolls, combination, runeAmount }) => {
     const type = player ? Common.leagueOf(player) : null;
-    if (type !== null) countTasks(player, type, indexOf(type).events.get("rc-essence"), Math.max(0, Number(rolls) || 0));
+    const essence = combination ? Number(runeAmount) : Number(rolls);
+    if (type !== null) countTasks(player, type, indexOf(type).events.get("rc-essence"), Math.max(0, essence || 0));
   });
   api.onCustomEvent("magic:item-spell-cast", cast);
   api.onCustomEvent("firemaking:success", burnt);

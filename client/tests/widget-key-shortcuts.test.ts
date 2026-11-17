@@ -230,6 +230,34 @@ test("callback ignore-held timer mutation is read before post-operation repeat s
     next(start + 5); assert.equal(packets.length, 2);
 });
 
+test("a callback hiding its live widget retains the completed activation schedule", () => {
+    const parent = wm.getWidgetByUid(escape.parentUid!)!;
+    for (const hiddenTarget of [escape, parent]) {
+        release(); packets.length = 0;
+        bind(1, 48); bind(2, 48);
+        escape.flags = 6;
+        execute([...ints(1, 5, 15, escape.uid), [Opcodes.IF_SETOPKEYRATE, 0], [Opcodes.RETURN, 0]]);
+        listener(escape, "onOp", [...ints(1, hiddenTarget.uid), [Opcodes.IF_SETHIDE, 0], [Opcodes.RETURN, 0]]);
+        const start = cycle;
+        try {
+            key(65, "a"); process();
+            assert.equal(hiddenTarget.hidden, true);
+            assert.equal(packets.length, 1, "hiding still prevents another bound slot from dispatching");
+            assert.equal(escape.keyTimers?.[0], start + 20, "completed activation retains its deadline");
+            escape.eventHandlers = undefined;
+            execute([...ints(2, -1, 0, escape.uid), [Opcodes.IF_SETOPKEY, 0],
+                ...ints(0, hiddenTarget.uid), [Opcodes.IF_SETHIDE, 0], [Opcodes.RETURN, 0]]);
+            assert.equal(wm.getWidgetByUid(escape.uid), escape);
+            next(start + 19); assert.equal(packets.length, 1);
+            next(start + 20); assert.equal(packets.length, 2, "revealed same instance resumes while still held");
+        } finally {
+            escape.eventHandlers = undefined;
+            execute([...ints(2, -1, 0, escape.uid), [Opcodes.IF_SETOPKEY, 0],
+                ...ints(0, hiddenTarget.uid), [Opcodes.IF_SETHIDE, 0], [Opcodes.RETURN, 0]]);
+        }
+    }
+});
+
 test("ignore-held suppresses the current hold and permits a new press after release", () => {
     bind(1, 48); key(65, "a");
     execute([...ints(1, escape.uid), [Opcodes.IF_SETOPKEYIGNOREHELD, 0], [Opcodes.RETURN, 0]]);

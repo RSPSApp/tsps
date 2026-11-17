@@ -81,11 +81,13 @@ export function processWidgetShortcutInput(
                     option: slot === 10 ? widget.targetVerb : widget.actions?.[slot] ?? undefined,
                     target: "", itemId: widget.itemId });
                 // An onOp can rebuild its own tree. Never dispatch another binding on the old instance.
-                if (manager.getWidgetByUid(widget.uid) !== widget || manager.isEffectivelyHidden(widget.uid)) break;
+                if (manager.getWidgetByUid(widget.uid) !== widget) break;
                 // Native scheduling observes callback changes to rates and ignore-held timers.
                 const timers = widget.keyTimers ??= new Array(11).fill(0);
                 const { rate = 0, delay = 0 } = widget.opKeyRates?.[slot] ?? {};
                 timers[slot] = rate ? cycle + rate + (timers[slot] === 0 ? delay : 0) : 0x7fffffff;
+                // Hiding stops further bindings, but does not undo this completed activation.
+                if (manager.isEffectivelyHidden(widget.uid)) break;
             }
             if (!active && widget.keyTimers) widget.keyTimers[slot] = 0;
         }

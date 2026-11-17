@@ -23,6 +23,9 @@
  *   - The natural history quiz (museum/NaturalHistoryQuiz.Museum.js): 2 Kudos per
  *     display case, through AWARD_KUDOS_EVENT.
  *
+ *   - The storage crate (museum/StorageCrate.Museum.js): common finds for a random reward,
+ *     including the 500 XP antique lamp.
+ *
  *   - The Sailing salvaging relics (museum/SalvagingRelics.Museum.js): Inspect, and handing each
  *     to Curator Haig Halen for 1 Kudos and an antique lamp, or 5,000 coins once claimed.
  *
@@ -291,6 +294,10 @@ const SALVAGE_LAMPS = new Map([
   [32872, { xp: 10000, minLevel: 40 }], // salvaging_rare_lamp_med
   [32873, { xp: 15000, minLevel: 50 }], // salvaging_rare_lamp_large
 ]);
+
+/** The storage crate's lamp (Wiki: Antique lamp (Varrock Museum), the uncleaned finds version). */
+const CRATE_LAMP = require("./data/museum-storage-crate.json").lamp;
+const CRATE_LAMPS = new Map([[CRATE_LAMP.item, { xp: CRATE_LAMP.xp, minLevel: CRATE_LAMP.minLevel }]]);
 
 const TOOL_ITEMS = [
   [ITEM.TROWEL, "trowel"],
@@ -771,7 +778,7 @@ function showMinasMessage(message) {
 }
 
 function rubLamp(event) {
-  const lamp = LAMPS.get(event.itemId) ?? SALVAGE_LAMPS.get(event.itemId);
+  const lamp = LAMPS.get(event.itemId) ?? SALVAGE_LAMPS.get(event.itemId) ?? CRATE_LAMPS.get(event.itemId);
   if (!lamp) return false;
   const { player, item, slot } = event;
   if (player.getInventory().get(slot) !== item) return true;
@@ -931,7 +938,7 @@ function handleBootstrap({ player }) {
 
 module.exports = {
   name: "Museum",
-  description: "Varrock Museum Kudos: the Dig Site cleaning activity, display cases, Historian Minas's quest timeline reports and Curator Haig Halen's salvaging relics.",
+  description: "Varrock Museum Kudos: the Dig Site cleaning activity, the finds storage crate, display cases, Historian Minas's quest timeline reports and Curator Haig Halen's salvaging relics.",
   members: true,
   register(pluginApi) {
     api = pluginApi;
@@ -961,5 +968,6 @@ module.exports = {
     pluginApi.onCustomEvent("player:bootstrap-complete", handleBootstrap);
     require("./museum/NaturalHistoryQuiz.Museum")(pluginApi);
     require("./museum/SalvagingRelics.Museum")(pluginApi);
+    require("./museum/StorageCrate.Museum")(pluginApi);
   },
 };

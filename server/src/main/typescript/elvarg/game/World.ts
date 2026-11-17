@@ -1370,11 +1370,18 @@ export class World {
         });
         // Add pending Npcs..
         timed("queue_add_npcs", () => {
+            // Adds that failed only because every free index is still held this cycle: they go back on
+            // the queue after this pass and get an index once reset_npcs releases them.
+            const waiting: NPC[] = [];
             for (let i = 0; i < GameConstants.QUEUED_LOOP_THRESHOLD; i++) {
                 let npc = World.addNPCQueue.shift();
                 if (!npc)
                     break;
                 const added = World.npcs.add(npc);
+                if (!added && !npc.isRegistered() && World.npcs.waitingOnHeldSlots()) {
+                    waiting.push(npc);
+                    continue;
+                }
                 if (!added) {
                     console.warn("[world:npc] add_queue_failed", {
                         npcId: typeof npc.getId === "function" ? npc.getId() : null,
@@ -1399,6 +1406,7 @@ export class World {
                     });
                 }
             }
+            if (waiting.length) World.addNPCQueue.unshift(...waiting);
         });
 
         // Removing pending npcs..

@@ -25,6 +25,10 @@ class SlotMinHeap {
         }
     }
 
+    get size(): number {
+        return this.heap.length;
+    }
+
     shift(): number | undefined {
         if (this.heap.length === 0) return undefined;
         const top = this.heap[0];
@@ -164,6 +168,14 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
         if (!this.heldSlots?.length) return;
         for (const index of this.heldSlots) this.slotQueue.push(index);
         this.heldSlots.length = 0;
+    }
+
+    /**
+     * No slot is free now, only held ones: an add that fails for it can succeed once they are
+     * released, so a queue should keep it rather than drop it.
+     */
+    public waitingOnHeldSlots(): boolean {
+        return this.slotQueue.size === 0 && (this.heldSlots?.length ?? 0) > 0;
     }
 
     public contains(e: E): boolean {

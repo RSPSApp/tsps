@@ -26,6 +26,8 @@ const O = core.ObjectIdentifiers;
 const PAGE = 'Tears of Guthix';
 const START_HOOK = 'quest:tears-of-guthix:start';
 const COMPLETE_ACTION = 'BitWHU';
+/** "The camera pans south ...": live starts the quest on this step (rsprox local 1001964 tick 19454). */
+const START_ACTION = 'ZFn96I';
 const WIRE = 451;
 const STORAGE_VARP = 449;
 const JUNA = N.JUNA;
@@ -93,6 +95,9 @@ function playerFixture(options = {}) {
     sendVarbit(id, value) { varbits.set(id, value); calls.push(['varbit', id, value]); return sender; },
     sendConfig(id, value) { configs.set(id, value); calls.push(['config', id, value]); return sender; },
     getVarbit(id) { return varbits.get(id) ?? 0; },
+    sendCameraMoveTo(...args) { calls.push(['camera-move', ...args]); return sender; },
+    sendCameraReset() { calls.push(['camera-reset']); return sender; },
+    sendSound(id) { calls.push(['sound', id]); return sender; },
     getVarp(id) { return configs.get(id) ?? 0; },
   }, { get: (target, key) => target[key] ?? (() => sender) });
   return {
@@ -111,7 +116,11 @@ function playerFixture(options = {}) {
     getUsername: () => 'qh728-q113',
     getLocation: () => options.location ?? new core.Location(3250, 9525, 2),
     moveTo(next) { moves.push([next.getX(), next.getY(), next.getZ()]); },
-    performAnimation() {},
+    getMovementQueue: () => ({ reset() {}, setBlockMovement() {}, isMovementBlocked: () => false }),
+    setForceMovement(move) { this.forceMovement = move; },
+    setPositionToFace() {},
+    getForceMovement() { return this.forceMovement ?? null; },
+    performAnimation(animation) { calls.push(['animation', animation?.getId?.()]); },
     sendMessage(text) { messages.push(text); },
     isRegistered: () => true,
     getDialogueManager: () => ({ isActive: () => false, getCurrent: () => null, startDialogues() {}, reset() {} }),
@@ -131,7 +140,10 @@ function harness() {
   // they are only recorded, so a crossing shows as its attract line and a submitted task.
   const tasks = [];
   const api = new Proxy({
-    core: { ...core, CountdownTask: undefined, TaskManager: { submit: (task) => tasks.push(task), cancelTasks() {} } },
+    core: { ...core, TaskManager: {
+      submit: (task) => { task.setRunning?.(true); tasks.push(task); },
+      cancelTasks: (key) => tasks.forEach((task) => task.key === key && task.stop?.()),
+    } },
     persistAttribute() {},
     onNpcDialogueVariant: (handler) => variants.push(handler),
     onNpcDialogueCondition: (handler) => conditions.push(handler),
@@ -148,6 +160,18 @@ function harness() {
     api, events, variants, conditions, itemOnItem, itemOnNpc, objectInteraction, npcRoutes, login, tasks,
     quest: runtime.getRegisteredQuests().findLast((entry) => entry.key === 'tears_of_guthix'),
     emit(name, event) { (events[name] ?? []).forEach((handler) => handler(event)); },
+    /** Runs the submitted tasks for `ticks` ticks, as TaskManager would. */
+    tick(ticks = 1) {
+      for (let i = 0; i < ticks; i++) for (const task of [...tasks]) if (task.isRunning?.()) task.tick();
+    },
+    /** "Yes." to the start question, then the camera pan step that starts the quest. */
+    start(player) {
+      const hook = { player, npcId: JUNA, hook: START_HOOK };
+      (events['npc-dialogue:hook'] ?? []).forEach((handler) => handler(hook));
+      if (hook.end) return hook;
+      (events['npc-dialogue:action'] ?? []).forEach((handler) => handler({ player, npcId: JUNA, stepId: START_ACTION, handled: false }));
+      return hook;
+    },
     routeNpc(event) { npcRoutes.forEach((handler) => handler(event)); },
     variant(npcId, player) {
       for (const handler of variants) {
@@ -311,8 +335,11 @@ test('cache contract: stage 1/2 write canonical varbit 451, not whole varp 449',
   assert.equal(h.quest.completionValue, 2);
 
   h.emit('npc-dialogue:hook', { player, npcId: JUNA, hook: START_HOOK });
+  assert.equal(h.quest.getStage(player), 0, '"Yes." alone does not start it');
+  h.start(player);
   assert.equal(h.quest.getStage(player), 1);
   assert.equal(player.varbits.get(WIRE), 1, 'start writes tog_juna_bowl 1');
+  assert.ok(player.messages.some((text) => text.startsWith("You've started a new quest: ") && text.includes('Tears of Guthix')));
   assert.equal(player.configs.has(STORAGE_VARP), false, 'the shared varp is not overwritten');
 
   h.quest.setStage(player, 2);
@@ -341,12 +368,14 @@ test('start is gated by 43 Quest Points and the first story variant is starting-
   const h = harness();
   const player = playerFixture({ attributes: { 'quest.points': 42 } });
   assert.equal(h.variant(JUNA, player), 'starting-off');
-  h.emit('npc-dialogue:hook', { player, npcId: JUNA, hook: START_HOOK });
+  assert.equal(h.start(player).end, true, 'the story is not told');
   assert.equal(h.quest.getStage(player), 0);
   assert.ok(player.messages.some((text) => text.includes('43 Quest Points')));
+  h.emit('npc-dialogue:action', { player, npcId: JUNA, stepId: START_ACTION, handled: false });
+  assert.equal(h.quest.getStage(player), 0, 'the pan step cannot start it either');
 
   player.setAttribute('quest.points', 43);
-  h.emit('npc-dialogue:hook', { player, npcId: JUNA, hook: START_HOOK });
+  assert.equal(h.start(player).end, undefined);
   assert.equal(h.quest.getStage(player), 1);
   assert.equal(h.variant(JUNA, player), 'starting-off-talking-to-her-before-making-the-stone-bowl');
 });
@@ -404,10 +433,16 @@ test('mining the magical rocks requires 20 Mining, a pickaxe and a free slot', (
   assert.equal(full.inventory.getAmount(I.MAGIC_STONE), 0);
   assert.ok(full.messages.some((text) => text.includes('free inventory space')));
 
+  // rsprox local 1001964 tick 19605: the swing when the interaction runs, the stone five ticks on.
   const miner = playerFixture({ items: [[I.BRONZE_PICKAXE, 1]] });
   h.quest.setStage(miner, 1);
   mine(h, miner);
+  assert.deepEqual(miner.messages, ['You swing your pick at the rock.']);
+  h.tick(4);
+  assert.equal(miner.inventory.getAmount(I.MAGIC_STONE), 0);
+  h.tick(1);
   assert.equal(miner.inventory.getAmount(I.MAGIC_STONE), 1);
+  assert.deepEqual(miner.messages, ['You swing your pick at the rock.', 'You manage to mine some stone.']);
 });
 
 test('chiselling needs stage 1 and 20 Crafting before the stone is consumed', () => {
@@ -447,6 +482,7 @@ test('light creature crossing, south-rock climb and stone-on-Juna use the regist
   // #5875: the rock is climbed one tile over, not teleported to the north ledge.
   const climber = playerFixture({ location: new core.Location(3238, 9499, CHASM_PLANE) });
   assert.equal(climb(h, climber).handled, true);
+  h.tick(1);
   assert.deepEqual(climber.moves.at(-1), [3240, 9499, 2]);
 
   transcripts = [];
@@ -458,6 +494,7 @@ test('light creature crossing, south-rock climb and stone-on-Juna use the regist
 
 test('the Climb option from the real dispatch path climbs the player over the south rock', () => {
   const h = realHarness();
+  const { TaskManager } = core;
   try {
     const player = playerFixture({ location: new core.Location(3238, 9499, CHASM_PLANE) });
     h.quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'tears_of_guthix');
@@ -465,6 +502,7 @@ test('the Climb option from the real dispatch path climbs the player over the so
 
     const climb = dispatchObject(player, O.ROCKS_27, 'climb');
     assert.equal(climb.handled, true, 'the dispatcher reports the climb as handled');
+    TaskManager.process();
     assert.deepEqual(player.moves.at(-1), [3240, 9499, 2], 'the player climbs one tile over the rock (#5875)');
 
     const other = dispatchObject(player, O.ROCKS_29, 'climb');
@@ -486,17 +524,21 @@ test('fresh stage 0 reaches completion through the mandatory quest-local handler
   });
 
   assert.equal(h.quest.getStage(player), 0);
-  h.emit('npc-dialogue:hook', { player, npcId: JUNA, hook: START_HOOK });
+  h.start(player);
   assert.equal(h.quest.getStage(player), 1);
 
   mine(h, player, O.MAGICAL_ROCKS_2);
+  h.tick(5);
   assert.equal(player.inventory.getAmount(I.MAGIC_STONE), 1);
   chisel(h, player);
   assert.equal(player.inventory.getAmount(I.STONE_BOWL), 1);
 
   lantern(h, player);
   assert.equal(player.varbits.get(WIRE), 1, 'crossing does not advance the quest');
-  climb(h, player);
+  const shelf = playerFixture({ location: new core.Location(3238, 9499, CHASM_PLANE) });
+  climb(h, shelf);
+  h.tick(1);
+  assert.deepEqual(shelf.moves.at(-1), [3240, 9499, 2], 'back down the south rocks to Juna');
 
   assert.equal(h.variant(JUNA, player), 'returning-with-a-stone-bowl');
   h.emit('npc-dialogue:action', { player, npcId: JUNA, stepId: COMPLETE_ACTION, handled: false, end: false });
@@ -517,6 +559,7 @@ test('a lost bowl can be recovered from another magic stone before completion', 
   h.quest.setStage(player, 1);
   assert.equal(h.variant(JUNA, player), 'starting-off-talking-to-her-before-making-the-stone-bowl');
   mine(h, player);
+  h.tick(5);
   chisel(h, player);
   assert.equal(player.inventory.getAmount(I.STONE_BOWL), 1);
 });
@@ -693,11 +736,82 @@ test('the lantern crossing and the rock climb only fire on their own target and 
   assert.equal(player.moves.length, 0, 'the climb did not move the player');
 });
 
-test('the completion scroll lists the real rewards and no consumed bowl', () => {
+test('the completion scroll shows the bowl and lists the real rewards', () => {
   const h = harness();
-  assert.equal(h.quest.scrollItemId, undefined, 'the stone bowl is not a reward');
+  // rsprox local 1001964 tick 19677: questscroll:quest_model is tog_bowl, though Juna keeps it.
+  assert.equal(h.quest.scrollItemId, I.STONE_BOWL, 'the scroll shows the stone bowl');
   assert.equal(h.quest.rewardItemId, undefined, 'no item is granted');
   assert.equal(h.quest.questPoints, 1);
   assert.deepEqual(h.quest.xpRewards, [{ skillId: core.Skill.CRAFTING.getIndex(), amount: 1000, label: 'Crafting' }]);
   assert.deepEqual(h.quest.otherRewards, ['Access to the Tears of Guthix']);
+});
+
+// rsprox local 1001964 ticks 19369-19473 (1002071 ticks 5699-5747 agree): the first Talk-to goes
+// straight to "A story?"; her introduction's last line sets tog_juna_stories (452) as the menu
+// opens; "You tell Juna some stories of your adventures." is a statement box; the quest starts on
+// the camera pan with the start message and cam_moveto, and the camera resets after the last line.
+test('Juna\'s first meeting, the story box and the start camera follow the recordings', () => {
+  const h = harness();
+  const started = [];
+  h.events['npc-dialogue:start'] = [(request) => started.push(request)];
+  const juna = h.objectInteraction.find((entry) => entry.name === JUNA_LOC_NAME);
+  const player = playerFixture({ attributes: { 'quest.points': 43 } });
+  juna.actions['Talk-to']({ player });
+  assert.equal(typeof started[0].select, 'function', 'the first meeting narrows her transcript');
+  const steps = runtime.loadTranscripts(h.api)[PAGE].variants['starting-off'];
+  const first = started[0].select(steps);
+  assert.equal(first[0].text, 'Tell me... a story...');
+  assert.equal(first[1].player, 'A story?', 'no opening menu: the player asks straight away');
+  assert.equal(first.find((step) => step.type === 'choice').options.map((option) => option.text).join('|'),
+    'Okay...|What are the Tears of Guthix?|Not now');
+
+  const intro = { player, npcId: JUNA, text: 'Then you can drink of the power of balance, which will make you stronger in whatever area you are weakest.' };
+  h.emit('npc-dialogue:line', intro);
+  assert.equal(player.varbits.get(452), undefined, 'not before the player continues');
+  intro.after();
+  assert.equal(player.varbits.get(452), 1, 'tog_juna_stories 0 -> 1 as the menu opens');
+  juna.actions['Talk-to']({ player });
+  assert.equal(started[1].select, undefined, 'once introduced, her opening menu shows');
+
+  const box = { player, npcId: JUNA, stepId: 'zK1Z1j', kind: 'message', handled: false };
+  h.emit('npc-dialogue:action', box);
+  assert.deepEqual(box.box, { statement: true }, 'the story line is a statement box, not a chat message');
+
+  h.start(player);
+  assert.deepEqual(player.calls.find((call) => call[0] === 'camera-move'),
+    ['camera-move', 3232, 9507, 700, { rate: 5, rate2: 3, heightRelative: false }]);
+  const last = { player, npcId: JUNA, text: 'Mine some stone from that cave, make it into a bowl, and bring it to me, and then I will let you catch the Tears.' };
+  h.emit('npc-dialogue:line', last);
+  assert.equal(player.calls.some((call) => call[0] === 'camera-reset'), false);
+  last.after();
+  assert.equal(player.calls.some((call) => call[0] === 'camera-reset'), true, 'the camera comes back as the chat closes');
+});
+
+// rsprox local 1001964 tick 19618: human_opalcutting (890) and synth chisel (2586) with the bowl.
+test('chiselling the stone plays the recorded animation and sound', () => {
+  const h = harness();
+  const player = playerFixture({ items: [[I.CHISEL, 1], [I.MAGIC_STONE, 1]] });
+  h.quest.setStage(player, 1);
+  chisel(h, player);
+  assert.equal(player.inventory.getAmount(I.STONE_BOWL), 1);
+  assert.ok(player.calls.some((call) => call[0] === 'animation' && call[1] === 890));
+  assert.ok(player.calls.some((call) => call[0] === 'sound' && call[1] === 2586));
+});
+
+test('a start conversation that closes early still gives the camera back, once', () => {
+  const h = harness();
+  const player = playerFixture({ attributes: { 'quest.points': 43 } });
+  let active = true;
+  player.getDialogueManager = () => ({ isActive: () => active, getCurrent: () => null, startDialogues() {}, reset() {} });
+  h.start(player);
+  h.tick(3);
+  assert.equal(player.calls.filter((call) => call[0] === 'camera-reset').length, 0, 'held while she talks');
+  active = false; // walked away before "Mine some stone ..."
+  h.tick(1);
+  assert.equal(player.calls.filter((call) => call[0] === 'camera-reset').length, 1);
+  const last = { player, npcId: JUNA, text: 'Mine some stone from that cave, make it into a bowl, and bring it to me, and then I will let you catch the Tears.' };
+  h.emit('npc-dialogue:line', last);
+  last.after();
+  h.tick(2);
+  assert.equal(player.calls.filter((call) => call[0] === 'camera-reset').length, 1, 'never twice');
 });

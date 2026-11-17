@@ -16,9 +16,16 @@ const Cave = require("./Cave.TearsOfGuthix");
 const JUNA_LOC_NAME = "<col=ffff00>Juna</col>";
 const QUEST_COMPLETE_VARBIT = 451;
 const QUEST_COMPLETE = 2;
-/** tog_juna_stories: how many of her own stories Juna has told (0-3). */
+/**
+ * tog_juna_stories. Live sets it 0 -> 1 when Juna's first introduction ends ("Then you can drink of
+ * the power of balance ...", rsprox local 1001964 tick 19407, 1002071 tick 5719), and every
+ * recorded login after the quest sends 1 or 2. Ours: the count of her own stories she has told
+ * rides on it, never below 1 once she has introduced herself.
+ */
 const STORIES_VARBIT = 452;
 const STORIES_ATTRIBUTE = "tears-of-guthix:stories";
+/** Juna has introduced herself, so her opening menu shows (the first Talk-to goes straight to "A story?"). */
+const INTRO_ATTRIBUTE = "tears-of-guthix:heard-intro";
 const REMINDERS_ATTRIBUTE = "tears-of-guthix:reminders";
 const LAST_REMINDER_ATTRIBUTE = "tears-of-guthix:last-reminder";
 /** Set while a conversation came from right-click "Story" rather than Talk-to. */
@@ -56,6 +63,8 @@ let junaNpcId;
 const sender = (player) => player.getPacketSender();
 const isJuna = (event) => event.npcId === junaNpcId;
 const stories = (player) => Number(player.getAttribute(STORIES_ATTRIBUTE)) || 0;
+const introHeard = (player) => player.getAttribute(INTRO_ATTRIBUTE) === true;
+const storiesVarbit = (player) => Math.max(stories(player), introHeard(player) ? 1 : 0);
 
 function questDone(player) {
   return sender(player).getVarbit(QUEST_COMPLETE_VARBIT) >= QUEST_COMPLETE;
@@ -120,7 +129,13 @@ function answerProse(player, text) {
 
 function setStories(player, count) {
   player.setAttribute(STORIES_ATTRIBUTE, count);
-  sender(player).sendVarbit(STORIES_VARBIT, count);
+  sender(player).sendVarbit(STORIES_VARBIT, storiesVarbit(player));
+}
+
+/** The end of Juna's first introduction (the quest's "A story?"). */
+function markIntroHeard(player) {
+  player.setAttribute(INTRO_ATTRIBUTE, true);
+  sender(player).sendVarbit(STORIES_VARBIT, storiesVarbit(player));
 }
 
 function onChoice({ npcId, player, option }) {
@@ -189,7 +204,7 @@ function tellStory({ player }) {
 }
 
 function login({ player }) {
-  if (stories(player) > 0) sender(player).sendVarbit(STORIES_VARBIT, stories(player));
+  if (storiesVarbit(player) > 0) sender(player).sendVarbit(STORIES_VARBIT, storiesVarbit(player));
   if (!questDone(player) || player.getAttribute(REMINDERS_ATTRIBUTE) !== true ||
     player.getAttribute(LAST_REMINDER_ATTRIBUTE) === Cave.today()) return;
   const { daysLeft, adventures } = eligibility(player);
@@ -212,6 +227,7 @@ module.exports = function registerJuna(pluginApi) {
   api = pluginApi;
   junaNpcId = api.core.NpcIdentifiers.JUNA;
   api.persistAttribute(STORIES_ATTRIBUTE, 0);
+  api.persistAttribute(INTRO_ATTRIBUTE, false);
   api.persistAttribute(REMINDERS_ATTRIBUTE, false);
   api.persistAttribute(LAST_REMINDER_ATTRIBUTE);
   api.onNpcDialogueVariant(selectVariant);
@@ -225,4 +241,6 @@ module.exports = function registerJuna(pluginApi) {
   api.onCustomEvent("tears-of-guthix:journal", journal);
 };
 
+module.exports.introHeard = introHeard;
+module.exports.markIntroHeard = markIntroHeard;
 module.exports._test = { eligibility, answerCondition, verdictSteps, setApi: (value) => { api = value; junaNpcId = value.core.NpcIdentifiers.JUNA; } };

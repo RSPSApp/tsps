@@ -2449,7 +2449,7 @@ test("as captured (rsprox 359; local 1001631, 1001653, 1001659, 1001991, 1002015
     assert.deepEqual(tileOf(player), [2725, 3597, 0], "on the north bank");
     assert.deepEqual(path, [0, 1, 3, 4, 5, 6], "the middle, the fall, then a tile a tick down the river");
     assert.deepEqual(moves, [[2722, 3594, 2, 0, 22, 35, 0]], "exactmove from the middle tile, cycles 22-35, facing north");
-    assert.deepEqual(cleared, ["2725,3597,0"], "the teleport onto the river tile keeps the exactmove (cleared only as it ends)");
+    assert.deepEqual(cleared, ["2724,3594,0"], "the teleport onto the river tile keeps the exactmove; it is cleared on the splash tick, before the river walk");
     assert.deepEqual(ticksWith(ticks, (entry) => entry.animations.includes(2582)), [1]);
     assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(2493)), [1]);
     assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(1658)), [2]);

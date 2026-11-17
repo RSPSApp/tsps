@@ -160,6 +160,9 @@ module.exports = {
             { run: ({ player }) => player.moveTo(new core.Location(x, y, z)) },
             { sound: STUMBLE_SOUND, loops: 10 },
             { wait: 1 },
+            // The fall has played (cycle 35): clear it, or the client is kept on its end tile and
+            // the river walk below reaches it as one teleport (live: idle here, then a walk a tick).
+            { run: ({ player }) => player.setForceMovement(null) },
             { run: ({ player }) => player.getPacketSender().sendGlobalGraphic(new core.Graphic(WATERSPLASH, 3), splashAt) },
             { sound: POOL_PLOP_SOUND },
             // Ours: the swim render (the capture's appearance updates here and on the last tile carry no ids).

@@ -2457,6 +2457,10 @@ test("hit: one hit of 66 with an elemental spell, 150 with the Keris Partisan, t
   const f = pactsCharacter(t);
   const target = npcAt(t, f, "Goblin", 1, 0);
   const land = (damage, spell = null) => PM.emitCombatHitResolved({ attacker: f.player, target, hit: { getTotalDamage: () => damage, getSpell: () => spell } });
+  target.setHitpoints(5);
+  land(66, core.CombatSpells.WATER_WAVE);
+  assert.ok(!done(f, "deal-66-damage-with-an-elemental-spell"), "a 66 roll on 5 hitpoints is a 5 hitsplat");
+  target.setHitpoints(300);
   land(65, core.CombatSpells.FIRE_SURGE);
   assert.ok(!done(f, "deal-66-damage-with-an-elemental-spell"), "65");
   land(70, core.CombatSpells.SARADOMIN_STRIKE);

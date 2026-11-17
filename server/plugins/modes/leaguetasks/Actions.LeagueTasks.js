@@ -746,11 +746,12 @@ const EVENT_KINDS = new Map([
   ["take", (trigger, event) => trigger.source === event.source && trigger.items.some((each) => key(each) === key(itemName(event.itemId)))],
   ["emote", (trigger, event) => trigger.slots.includes(Number(event.slot))],
   // Any logs chopped ("Chop any kind of logs"): a woodcutting success that gave logs, by the item's name.
-  ["hit", () => false], // counted by hitLanded, not a custom event
   ["chop-logs", (_trigger, event) => Number(event.logAmount ?? 1) > 0 && /\blogs$/i.test(itemName(event.logId) ?? "")],
   // Something cooked on a fire or range (Cooking's `skills:produced` of kind "cook"), whatever it is.
   ["cook", (_trigger, event) => event.skill === Common.core.Skill.COOKING && event.kind === "cook"],
   ["tob", (trigger, event) => trigger.modes.includes(event.mode)],
+  // Counted by hitLanded from the hit-resolved hook, not a custom event; listed so indexOf files it.
+  ["hit", () => false],
   ["teleport", (trigger, event) => trigger.spells.includes(String(event.name ?? "").toLowerCase())],
   ["bank", () => true],
   ["shortcut", (trigger, event) => trigger.shortcuts.includes(event.shortcut)],
@@ -839,7 +840,9 @@ function hitLanded({ attacker, target, hit }) {
   if (type === null) return;
   const tasks = indexOf(type).events.get("hit");
   if (!tasks?.length) return;
-  const damage = Number(hit?.getTotalDamage?.()) || 0;
+  // As the hitsplat shows it: the roll, but no more than the target had left (Mobile.decrementHealth
+  // caps it later; overkill on a 5-hitpoint goblin is no 66).
+  const damage = Math.min(Number(hit?.getTotalDamage?.()) || 0, Math.max(0, Number(target.getHitpoints?.()) || 0));
   const spell = spellName(hit?.getSpell?.());
   const weapon = player.getEquipment?.().getItems?.()[Common.core.Equipment.WEAPON_SLOT]?.getId?.();
   countTasks(player, type, tasks.filter((task) => damage >= Number(task.trigger.min)

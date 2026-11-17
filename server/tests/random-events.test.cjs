@@ -1159,9 +1159,7 @@ test('gift events follow the captured overhead timeline, smoke and refusal lines
   // The spoken line is copied to the chatbox as a type 114 message when the page opens.
   h.hooks['Rick Turpentine']['Talk-to']({ player: r, npc: rick });
   assert.deepEqual(npcLines(r), ['Today is your lucky day, madam!<br>I am donating to the victims of crime to atone for my<br>past actions!']);
-  const [line] = r.dialogue.getDialogues().values();
-  try { line.send(r); } catch { /* the fake sender has no chathead packets */ }
-  assert.deepEqual(r.typed.at(-1), [114, 'Today is your lucky day, madam! I am donating to the victims of crime to atone for my past actions!', 'Rick Turpentine']);
+  // The exact wire echo is checked on real Player/PacketSender in dialogue-chat-history.test.cjs.
 });
 
 const FROG_TOUCH = ["Very well, if a touch is all you need, I'll do it.", "Yes, I will touch you.",
@@ -3089,6 +3087,7 @@ test('spoken dialogue preserves text for native wrapping and spaces its lines as
   const { Dialogue } = require('../dist/game/model/dialogues/entries/Dialogue');
   const strings = [], scripts = [], flags = [];
   const sender = {
+    sendTypedMessage() { return this; },
     sendChatboxInterface() { return this; }, sendNpcHeadOnInterface() { return this; },
     sendPlayerHeadOnInterface() { return this; }, sendInterfaceAnimation() { return this; },
     sendString(...args) { strings.push(args); return this; },

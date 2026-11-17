@@ -769,6 +769,7 @@ module.exports = function registerCorsairCurseQuest(api) {
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ActionDialogue(0,{execute:()=>StatementDialogue.send(player,"",false)})));
   }
   function sceneSpeech(player,npcId,name,text) {
+    api.core.NpcDialogue.sendDialogueChatLine(player, name, text);
     player.getPacketSender().sendChatboxInterface(231).sendNpcHeadOnInterface(npcId,(231<<16)|2).sendString(name,(231<<16)|4)
       .sendString(text,(231<<16)|6).sendString("",(231<<16)|5).sendInterfaceFlagsRange((231<<16)|5,-1,-1,0);
   }
@@ -828,8 +829,12 @@ module.exports = function registerCorsairCurseQuest(api) {
       const ogre = api.spawnNpc({ id: NpcIdentifiers.BUGS_2, x: 2528, y: 2822, z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
       if (ogre) scene.enter(ogre);
       freezeScene(player);
-      later(scene,9,()=>player.getPacketSender().sendChatboxInterface(217).sendPlayerHeadOnInterface((217<<16)|2)
-        .sendString("That doesn't look anything like a mermaid. That's an ogre!",(217<<16)|6).sendString("",(217<<16)|5).sendInterfaceFlagsRange((217<<16)|5,-1,-1,0));
+      later(scene,9,()=>{
+        const text = "That doesn't look anything like a mermaid. That's an ogre!";
+        api.core.PlayerDialogue.sendDialogueChatLine(player, player.getDisplayName(), text);
+        player.getPacketSender().sendChatboxInterface(217).sendPlayerHeadOnInterface((217<<16)|2)
+          .sendString(text,(217<<16)|6).sendString("",(217<<16)|5).sendInterfaceFlagsRange((217<<16)|5,-1,-1,0);
+      });
       later(scene, 18, () => {
         endScene(player); setCabinboy(player, CABINBOY_TELESCOPE);
         startTranscript(api, player, ITHOI, PAGE, "colin-s-curse-using-ithoi-s-telescope", (steps) => steps.slice(2));

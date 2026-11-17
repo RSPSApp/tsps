@@ -133,6 +133,7 @@ function chatLineClasses() {
   const mood = (name, text) => MOOD[name] + Math.min(4, Math.max(1, Misc.wrapText(text, LINE_WIDTH).length)) - 1;
   const show = (player, group, head, name, entry) => {
     const uid = (child) => (group << 16) | child;
+    entry.constructor.sendDialogueChatLine(player, name, entry.getText());
     const sender = player.getPacketSender().sendChatboxInterface(group);
     head(sender, uid(2));
     sender.sendInterfaceAnimation(uid(2), mood(entry.mood, entry.getText())).sendString(name, uid(4));

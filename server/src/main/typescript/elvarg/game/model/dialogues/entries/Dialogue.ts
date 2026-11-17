@@ -30,6 +30,13 @@ export abstract class Dialogue {
         player.getPacketSender().sendTypedMessage(ChatType.MESBOX, line);
     }
 
+    /** Live dialogue history: the displayed speaker and text share the 200-character limit. */
+    static sendDialogueChatLine(player: Player, name: string, text: string): void {
+        // rsprox 242/900150: the long Lumbridge Guide page ends at 200 including "Name|".
+        const line = `${name}|${text.replace(/<br>/g, " ")}`.slice(0, Dialogue.BOX_CHAT_LINE_LIMIT);
+        player.getPacketSender().sendTypedMessage(ChatType.DIALOGUE, line);
+    }
+
     /**
      * The line height for chat text: lines the client wraps count too (ChatTextLayout, the
      * component's 380 pixels), so text sent without "<br>"s spreads as live's pre-broken text does.

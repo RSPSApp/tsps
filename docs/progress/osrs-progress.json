@@ -35029,8 +35029,8 @@
           "name": "PvP worlds",
           "tasks": [
             "done",
-            "in-progress",
-            "todo",
+            "done",
+            "done",
             "done"
           ],
           "plugin": {
@@ -35058,7 +35058,8 @@
             "Main 0a219d100 (2026-11-03): #1924 adds optional contextual PvP bot chatter and Edgeville prayer policies; #1966 adds validated per-site pvp.loadouts selection. These are configurable custom behaviours and do not increase OSRS-parity task credit.",
             "Main 8403b60db (4 November 2026): #1993, #2002, #2181 — Roaming target policy, optional regional PvP bot prayer/chatter and combat brackets are updated. Optional bot policy is not credited as new OSRS content.",
             "Main 3b61a15a8 (6 November 2026): #2218 Fire Wilderness Diary tasks that never completed; #2258 feat(interface): add Character Summary and persistent PvP statistics; #2340 Keep bots teleblocked and in fights they are part of; #2529 Wilderness: Fix diary progress and regional effects; #2534 Implement Ardougne Hard and Elite diary gameplay tasks. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3904 Prayer: Ironmen and league characters need the real unlocks for Rigour, Augury, Preserve, Chivalry and Piety. #3345 fix: loading a custom preset gives back the real item, not the saved copy. #3334 fix: a custom preset can't turn a preset copy into a real item. 5 merged PRs changed recorded implementation files for this entry."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3904 Prayer: Ironmen and league characters need the real unlocks for Rigour, Augury, Preserve, Chivalry and Piety. #3345 fix: loading a custom preset gives back the real item, not the saved copy. #3334 fix: a custom preset can't turn a preset copy into a real item. 5 merged PRs changed recorded implementation files for this entry.",
+            "2026-11-16, fix/pvp-pj-timer-preset-prefs: the single-way PJ timer is now 20 ticks inside geographic Wilderness (singles and singles-plus) and 16 on a PvP world's global PvP ground, with multi-combat keeping the old 10-tick retarget hold (server/src/main/typescript/elvarg/game/content/combat/Combat.ts, server/src/main/typescript/elvarg/game/content/wilderness/Wilderness.ts; server/tests/pvp-pj-timer.test.cjs). The open-presets-on-death and selected-custom-preset-slot preferences are persisted alongside custom presets, and opening presets restores the saved custom row (server/plugins/modes/pvp/Presets.PvpMode.js; server/tests/presets-persistence.test.cjs)."
           ],
           "taskDetails": [
             {

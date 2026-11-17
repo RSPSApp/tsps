@@ -65,6 +65,19 @@ test("a shop without a live inventory keeps the shared 516", () => {
   assert.equal(general.packetInventory, 516);
 });
 
+test("recorded pub titles reach script 1074 without changing shop or inventory ids", () => {
+  for (const [id, title, inventory] of [
+    [1026, "The Auburn Pub", "pub_auburnvale"],
+    [1415, "The Pandemonium", "pub_pandemonium_2"],
+  ]) {
+    assert.equal(shopId(title), id);
+    const result = open(title);
+    assert.equal(result.args[1], title, "the client border receives the recorded title");
+    assert.equal(result.scriptInventory, CacheDefinitions.getInventoryId(inventory));
+    assert.equal(result.packetInventory, result.scriptInventory);
+  }
+});
+
 // The inns and Efaritay's Supplies (enum 5412's pub_* and 4824's efaritay_weapon_shop): each live
 // inventory is an infinite-stock one (its size equals the shop's item count), and the shop opens under it.
 test("every mapped live inventory is infinite stock and named on open", () => {
@@ -78,7 +91,7 @@ test("every mapped live inventory is infinite stock and named on open", () => {
     assert.equal(ShopManager.inventoryId(shop.id), inventory, shop.name);
   }
   assert.equal(open("Deepfin Inn").scriptInventory, CacheDefinitions.getInventoryId("pub_deepfin"));
-  assert.equal(open("The Pandemonium (pub)").packetInventory, CacheDefinitions.getInventoryId("pub_pandemonium_2"));
+  assert.equal(open("The Pandemonium").packetInventory, CacheDefinitions.getInventoryId("pub_pandemonium_2"));
 });
 
 test("every live inventory in shop-inventories.json names a real shop and a cache inventory", () => {

@@ -243,4 +243,17 @@ test("the crate's antique lamp rubs for 500 XP in a skill of 10 or more", () => 
   const [name, payload] = events.find(([key]) => key === "xpreward:open");
   assert.equal(name, "xpreward:open");
   assert.equal(payload.minLevel, 10);
+
+  const skill = { getName: () => "Mining" };
+  const gained = [];
+  let xp = 0;
+  player.getSkillManager = () => ({
+    getMaxLevel: () => 10,
+    getExperience: () => xp,
+    addExperience: (_skill, amount) => { gained.push(amount); xp += amount; },
+  });
+  const granted = payload.onConfirm(skill, "Mining");
+  assert.deepEqual(gained, [500]);
+  assert.match(granted, /500 Mining experience/);
+  assert.equal(player.getInventory().getAmount(ids.lamp), 0, "the lamp is used up");
 });

@@ -118,7 +118,7 @@ Arrowheads used on the crate (`vm_crate`, 24534):
 - On arrival: chatmenu 219 via script 58, titled "Finds placed in this crate cannot be
   retrieved.", options "Place all your finds in the crate.", "Place that item in the crate:
   Arrowheads", "Place all your finds, and don't ask this again.", "Keep your items.".
-- Choosing the single item (tick 1317): spam line "You place the find into the crate with all
+- Choosing "Place all your finds in the crate." with only the arrowheads carried (tick 1317): spam line "You place the find into the crate with all
   the others and pick up your reward from the crate.", `human_pickupfloor` (827), the reward
   (coal) in the find's own inventory slot, synth sound 2739 with delay 15, then Tinse Torpe
   (`vm_archaeologist6_npc_dummy`, 1908, `chathap1`): "Thanks for helping us out; we really do
@@ -138,6 +138,8 @@ Arrowheads used on the crate (`vm_crate`, 24534):
 ## Ours
 
 - "Add finds" opens the same menu without the single-item line (only use-on-crate was recorded).
+- "Place that item in the crate" is not recorded: it places just the used find, with the same
+  feedback.
 - With no finds carried, "Add finds" says "You don't have any finds to put in the crate.".
 - Several finds at once give one spam line and one thanks; only one find was recorded.
 - The thanks always comes from Tinse Torpe, the recorded speaker.

@@ -5,6 +5,16 @@ export enum Gender {
     FEMALE = 1,
 }
 
+/** Reused output for getHash/getCacheKey (single-threaded; read straight away). */
+const HASH_SCRATCH: [number, number] = [0, 0];
+/** The two hash lanes while getHashLanes runs (module state, so folding allocates nothing). */
+let laneLo = 0;
+let laneHi = 0;
+function fold(value: number): void {
+    laneLo = (Math.imul(laneLo, 31) + value) | 0;
+    laneHi = (Math.imul(laneHi ^ value, 0x01000193) + (laneLo >>> 16)) | 0;
+}
+
 // Minimal OSRS-like appearance representation for Phase A
 export class PlayerAppearance {
     readonly colorTextureOverrides: Array<{colors:number[]|null;textures:number[]|null}|undefined> = [];
@@ -45,44 +55,56 @@ export class PlayerAppearance {
         this.firstPersonArmsOnly = firstPersonArmsOnly;
     }
 
-    // Polynomial rolling hash for caching composites
+    /**
+     * Polynomial rolling hash (×31 per value) for caching composites, as two independent
+     * 32-bit lanes. It was one 64-bit BigInt fold, which allocated a heap BigInt for every
+     * multiply, add and mask, on every player, every frame; integer lanes allocate nothing.
+     * The value is only ever a cache key inside this session.
+     */
+    getHashLanes(out: [number, number] = [0, 0]): [number, number] {
+        laneLo = (this.npcTransformationId + 1) | 0;
+        laneHi = 0x9e3779b9 | 0;
+        fold(this.gender & 1);
+        for (let i = 0; i < this.kits.length; i++) fold(((this.kits[i] ?? -1) + 1) | 0);
+        for (let i = 0; i < this.colors.length; i++) fold(this.colors[i] & 0xff);
+        const equipCount = Math.min(this.equip.length, 12);
+        for (let i = 0; i < equipCount; i++) fold(((this.equip[i] ?? -1) + 1) | 0);
+        for (let slot = 0; slot < this.colorTextureOverrides.length; slot++) {
+            const override = this.colorTextureOverrides[slot];
+            if (!override) continue;
+            fold(slot + 1);
+            const colors = override.colors;
+            if (colors) for (let i = 0; i < colors.length; i++) fold(colors[i] & 0xffff);
+            const textures = override.textures;
+            if (textures) for (let i = 0; i < textures.length; i++) fold(textures[i] & 0xffff);
+        }
+        if (this.compositionItems.size > 0) {
+            for (const [slot, item] of this.compositionItems) fold(((slot << 20) + item) | 0);
+        }
+        out[0] = laneLo >>> 0;
+        out[1] = laneHi >>> 0;
+        return out;
+    }
+
+    /** The hash as one 64-bit value (hi:lo). Prefer getHashLanes or getCacheKey in hot paths. */
     getHash(): bigint {
-        const MASK_64 = (1n << 64n) - 1n;
-        const PRIME = 31n;
-        let h = BigInt(this.npcTransformationId + 1);
-        h = (h * PRIME + BigInt(this.gender & 1)) & MASK_64;
-        for (let i = 0; i < this.kits.length; i++) {
-            const v = BigInt((this.kits[i] ?? -1) + 1);
-            h = (h * PRIME + v) & MASK_64;
-        }
-        for (let i = 0; i < this.colors.length; i++) {
-            const v = BigInt(this.colors[i] & 0xff);
-            h = (h * PRIME + v) & MASK_64;
-        }
-        for (let i = 0; i < Math.min(this.equip.length, 12); i++) {
-            const v = BigInt((this.equip[i] ?? -1) + 1);
-            h = (h * PRIME + v) & MASK_64;
-        }
-        for (let slot=0;slot<this.colorTextureOverrides.length;slot++) {
-            const override=this.colorTextureOverrides[slot];if(!override)continue;
-            h=(h*PRIME+BigInt(slot+1))&MASK_64;
-            for(const value of override.colors ?? [])h=(h*PRIME+BigInt(value&0xffff))&MASK_64;
-            for(const value of override.textures ?? [])h=(h*PRIME+BigInt(value&0xffff))&MASK_64;
-        }
-        for(const [slot,item] of this.compositionItems)h=(h*PRIME+BigInt((slot<<20)+item))&MASK_64;
-        return h;
+        const [lo, hi] = this.getHashLanes(HASH_SCRATCH);
+        return (BigInt(hi) << 32n) | BigInt(lo);
     }
 
     getEquipKey(): string {
-        const parts: number[] = [];
         const count = Math.min(this.equip.length, 14);
-        for (let i = 0; i < count; i++) parts.push((this.equip[i] ?? -1) | 0);
-        return `${this.npcTransformationId | 0}|${this.gender | 0}|${parts.join(",")}`;
+        let key = `${this.npcTransformationId | 0}|${this.gender | 0}|`;
+        for (let i = 0; i < count; i++) {
+            if (i > 0) key += ",";
+            key += (this.equip[i] ?? -1) | 0;
+        }
+        return key;
     }
 
     getCacheKey(): string {
-        const hash = this.getHash?.().toString() ?? "0";
-        return `${hash}|${this.getEquipKey()}|${this.firstPersonArmsOnly ? "first-person" : "full"}`;
+        const [lo, hi] = this.getHashLanes(HASH_SCRATCH);
+        return `${hi.toString(36)}.${lo.toString(36)}|${this.getEquipKey()}|${this.firstPersonArmsOnly ? "first-person" : "full"}`;
     }
 
     static defaultMale(idkLoader: IdkTypeLoader): PlayerAppearance {

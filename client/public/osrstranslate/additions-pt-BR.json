@@ -25,10 +25,20 @@
   {
    "ref": "feat/mouseover-and-combat-labels",
    "commit": "be93c2071d65aec06794db8710e58e41d0860c34"
+  }
+ ],
+ "localSources": [
+  {
+   "path": "scripts/osrs-translate-additions/broav.json",
+   "sha256": "cecb9432407566be53117d9854f47d394768d345e0b32d36e49d48ddde0a78c9"
   },
   {
-   "ref": "fix/trade-status-notifications",
-   "commit": "44849f861ff9aab1704f2e86cb8893bef2e0a926"
+   "path": "scripts/osrs-translate-additions/stash.json",
+   "sha256": "07c1afbb690ef0cd6746bb1ffa7b68a0d3a49d07b285597690b0609af866084f"
+  },
+  {
+   "path": "scripts/osrs-translate-additions/trade-status.json",
+   "sha256": "b91f586373ff0e99735e6d7dc189e0d99faa57d592f342ff02f847049aa73910"
   }
  ],
  "files": {
@@ -11739,6 +11749,10 @@
     "Your telegrab fizzles as you move too far away.": "Seu telegrab falha porque você se afastou demais.",
     "Too late - it's gone!": "Tarde demais - já sumiu!",
     "This spell can not be cast on this item.": "Este feitiço não pode ser lançado neste item.",
+    "You let the broav sniff the dirty shirt...": "Você deixa o broav cheirar a camisa suja...",
+    "The broav seems to have found something interesting...": "O broav parece ter encontrado algo interessante...",
+    "You do not have enough free space to withdraw your items from the STASH unit; you need at least 1 free slots.": "Você não tem espaço livre suficiente para retirar seus itens da unidade STASH; precisa de pelo menos 1 espaço livre.",
+    "You do not have enough free space to withdraw your items from the STASH unit; you need at least [number] free slots.": "Você não tem espaço livre suficiente para retirar seus itens da unidade STASH; precisa de pelo menos [number] espaços livres.",
     "Sending trade offer...": "Enviando oferta de troca...",
     "Accepted trade.": "Troca aceita."
    }

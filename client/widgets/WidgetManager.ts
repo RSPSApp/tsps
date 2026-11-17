@@ -2582,14 +2582,33 @@ export class WidgetManager {
         }
     }
 
+    private lastMinimapSignature = NaN;
+    private lastMinimapWidget: WidgetNode | null = null;
+    private lastMinimapRedrawMs = -Infinity;
+
     /**
-     * Redraws the minimap every frame it is on screen, as OSRS draws it: its zoom, the player,
-     * the dots and the destination flag all change it, and none of them marks a widget dirty.
-     * Only the minimap's own rectangle is redrawn.
+     * Redraws the minimap's own rectangle while it is on screen: its zoom, the player, the dots
+     * and the destination flag all change it, and none of them marks a widget dirty. With a
+     * `signature` of what it shows (minimapSignature), an unchanged minimap is only redrawn
+     * every `refreshMs`; without one it is redrawn every frame.
      */
-    updateMinimap(): void {
+    updateMinimap(signature?: number, nowMs: number = performance.now(), refreshMs: number = 0): void {
         const minimap = this.minimapWidget;
-        if (!minimap || !this.isMinimapMapVisible() || this.isEffectivelyHidden(minimap.uid)) return;
+        if (!minimap || !this.isMinimapMapVisible() || this.isEffectivelyHidden(minimap.uid)) {
+            this.lastMinimapWidget = null;
+            return;
+        }
+        if (
+            signature !== undefined &&
+            signature === this.lastMinimapSignature &&
+            minimap === this.lastMinimapWidget &&
+            nowMs - this.lastMinimapRedrawMs < refreshMs
+        ) {
+            return;
+        }
+        this.lastMinimapSignature = signature ?? NaN;
+        this.lastMinimapWidget = minimap;
+        this.lastMinimapRedrawMs = nowMs;
         this.invalidateWidgetRect(minimap);
     }
 }

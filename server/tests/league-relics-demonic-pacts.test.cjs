@@ -567,8 +567,7 @@ test("Larcenist: sure pickpockets, ten times the pouches, loot noted and tenfold
   assert.deepEqual(loot.loot, [{ id: Common.noted(I.LOGS), amount: 10 }]);
   assert.equal(emit("thieving:done", { player: who.relic, kind: "stall", again: false }).again, true);
   assert.equal(emit("thieving:deplete-stall", { player: who.relic, handled: false }).handled, true);
-  who.relic.getInventory().adds(I.LOGS, 1);
-  emit("thieving:success", { player: who.relic, method: "stall", itemId: I.LOGS });
+  assert.equal(emit("thieving:stall-reward", { player: who.relic, stall: "Crafting stall", itemId: I.LOGS, amount: 1, handled: false }).handled, true);
   assert.deepEqual([who.relic.getInventory().getAmount(I.LOGS), who.relic.getInventory().getAmount(Common.noted(I.LOGS))], [0, 10]);
   for (const player of others(who)) {
     assert.equal(emit("thieving:pickpocket-target", { player, target: {}, alwaysSucceeds: false, pouchLimit: 28 }).pouchLimit, 28);
@@ -576,16 +575,16 @@ test("Larcenist: sure pickpockets, ten times the pouches, loot noted and tenfold
   }
 });
 
-test("Larcenist: a stolen item is noted from its plain copy, never from a preset copy held earlier", () => {
+test("Larcenist: newly delivered notes leave older plain and preset copies untouched", () => {
   const who = cases(LARCENIST);
   const inventory = who.relic.getInventory();
   const preset = new core.Item(I.STEEL_SCIMITAR, 1);
   for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) preset.setMetaValue(meta, true);
   inventory.setItem(0, preset);
   inventory.setItem(1, new core.Item(I.STEEL_SCIMITAR, 1));
-  emit("thieving:success", { player: who.relic, method: "stall", itemId: I.STEEL_SCIMITAR });
+  emit("thieving:stall-reward", { player: who.relic, stall: "Crafting stall", itemId: I.STEEL_SCIMITAR, amount: 1, handled: false });
   assert.equal(inventory.getItems()[0]?.isPresetItem(), true, "the preset scimitar stays");
-  assert.equal(inventory.getAmount(I.STEEL_SCIMITAR), 1, "only the stolen plain one was noted");
+  assert.equal(inventory.getAmount(I.STEEL_SCIMITAR), 2, "older plain and preset scimitars stay");
   assert.equal(inventory.getAmount(Common.noted(I.STEEL_SCIMITAR)), 10);
 });
 
@@ -599,7 +598,7 @@ for (const config of [
   {label:'three limbs become thirty notes', item:'BRONZE_LIMBS', roll:0.6, expected:30},
   {label:'single-item stall control', item:'SILK', roll:0, expected:10, silk:true},
   {label:'without relic keeps the ordinary bundle', item:'BRONZE_LIMBS', roll:0.6, expected:3, ordinary:true},
-  {label:'one free slot delivers only one base limb', item:'BRONZE_LIMBS', roll:0.6, expected:10, slots:1},
+  {label:'one free slot receives all thirty noted limbs', item:'BRONZE_LIMBS', roll:0.6, expected:30, slots:1},
   {label:'older preset and metadata-bearing copies stay', item:'BRONZE_LIMBS', roll:0.6, expected:30, metadata:true},
   {label:'noted stack exact headroom', item:'BRONZE_LIMBS', roll:0.6, expected:30, room:30},
   {label:'noted stack partial headroom retains plain bundle', item:'BRONZE_LIMBS', roll:0.6, expected:0, room:29},
@@ -644,7 +643,7 @@ for (const config of [
   assert.equal(event.handled,true);assert.equal(api.tasks.length,1,'actual attempt queues its completion');
   api.tasks[0].execute();
   if(config.repeat){api.tasks.at(-1).execute();api.tasks.at(-1).execute();}
-  const delivered=config.stackRoom!==undefined?Math.min(3,config.stackRoom):config.slots===1?1:config.silk?1:3;
+  const delivered=config.stackRoom!==undefined?Math.min(3,config.stackRoom):config.silk?1:3;
   assert.equal(seen.length,config.repeat?2:1);
   assert.deepEqual(gains,config.repeat?[52,52]:[config.silk?24:52],'one base theft XP award, independent of loot multiplier');
   const retained=config.room!==undefined&&config.room<30;
@@ -671,6 +670,36 @@ test("Larcenist: guards never catch the relic's owner at a stall (thieving:stall
   const who = cases(LARCENIST);
   assert.equal(emit("thieving:stall-watch", { player: who.relic, object: {}, unseen: false }).unseen, true);
   for (const player of others(who)) assert.equal(emit("thieving:stall-watch", { player, object: {}, unseen: false }).unseen, false);
+});
+
+for (const name of ["Magic Stall", "Scimitar Stall"]) test(`Larcenist stall exception: ${name}`, t => {
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(3200, 3200);
+  const player = character("stall-exception", "league", LARCENIST);
+  player.setIndex(1621); player.setAttribute("bot-skip-persistence", true);
+  player.getSkillManager().setCurrentLevel(Skill.THIEVING, 99);
+  const interactions = new Map(), api = skillApi(), gains = [];
+  api.onObjectInteraction = (label, actions) => interactions.set(label, actions);
+  const Stalls = require("../plugins/skills/thieving/Stalls.Thieving"); Stalls(api);
+  const object = new core.GameObject(name === "Magic Stall" ? core.ObjectIdentifiers.MAGIC_STALL : core.ObjectIdentifiers.SCIMITAR_STALL,
+    new Location(3200, 3201), 10, 0, null);
+  const skills = player.getSkillManager(), add = skills.addExperiences.bind(skills);
+  t.mock.method(skills, "addExperiences", (skill, amount) => { if (skill === Skill.THIEVING) gains.push(amount); return add(skill, amount); });
+  t.mock.method(Math, "random", () => 0);
+  t.after(() => {
+    Stalls._test.logout({ player }); for (const task of api.tasks) task.stop();
+    for (const id of [object.getId(), Stalls._test.emptyStallId(object)]) {
+      const current = core.MapObjects.get(id, object.getLocation(), null); if (current) core.ObjectManager.deregister(current, false);
+    }
+  });
+  const event = { player, object, definition: object.getDefinition() };
+  interactions.get(name)["Steal from"](event);
+  assert.equal(event.handled, true);
+  api.tasks[0].execute();
+  const id = name === "Magic Stall" ? I.AIR_RUNE : I.IRON_SCIMITAR;
+  assert.equal(player.getInventory().getAmount(id), 1, "excluded stall reward is neither multiplied nor noted");
+  if (name === "Scimitar Stall") assert.equal(player.getInventory().getAmount(Common.noted(id)), 0);
+  assert.deepEqual(gains, [name === "Magic Stall" ? 90 : 210]);
+  assert.equal(api.tasks.length, name === "Magic Stall" ? 2 : 1, "only Magic Stall retains automatic repeat");
 });
 
 test("Soul Harvest: dropped bones and ashes become soul shards in the inventory (while toggled), crops come as shards", () => {

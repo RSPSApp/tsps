@@ -28,6 +28,7 @@ function loot(request) {
 }
 
 function again(request) {
+  if (request.kind === "stall" && request.object?.getDefinition()?.getName() === "Scimitar Stall") return;
   if (active(request.player)) request.again = true;
 }
 
@@ -35,36 +36,19 @@ function keepStall(request) {
   if (active(request.player)) request.handled = true;
 }
 
-/** The delivered plain bundle comes noted and ten times over, without consuming older metadata. */
-function stallLoot({ player, method, itemId, amount = 1 }) {
-  if (method !== "stall" || !Number.isInteger(itemId) || !Number.isSafeInteger(amount) || amount <= 0
+/** Deliver the complete noted bundle before plain-item capacity can truncate it. */
+function stallLoot(request) {
+  const { player, stall, itemId, amount } = request;
+  // The Wiki excludes Magic's multiplier and Scimitar's multiplier/noting/auto-steal.
+  if (request.handled || stall === "Magic Stall" || stall === "Scimitar Stall"
+      || !Number.isInteger(itemId) || !Number.isSafeInteger(amount) || amount <= 0
       || !active(player) || !Common.multipliable(itemId)) return;
-  const { Item, Inventory } = Common.core;
+  const { Item } = Common.core;
   const inventory = player.getInventory();
-  const copies = inventory.getItems().map((item, slot) => ({ item, slot }))
-    .filter(({ item }) => item.getId() === itemId && item.getMeta() == null);
-  if (copies.reduce((sum, { item }) => sum + item.getAmount(), 0) < amount) return;
-  const noted = Common.noted(itemId);
-  const output = amount * effect.lootMultiplier;
-  if (noted === itemId) {
-    if (inventory.getAddableAmount(new Item(itemId, output - amount)) < output - amount) return inventory.full();
-    inventory.adds(itemId, output - amount);
-    return;
-  }
-  // A note may use a slot freed by its inputs. Preview on cloned items never refreshes the real inventory.
-  const preview = new Inventory(player).setItems(inventory.getCopiedItems());
-  let left = amount;
-  const taken = [];
-  for (const { item, slot } of copies) {
-    const count = Math.min(left, item.getAmount());
-    if (count <= 0) break;
-    preview.deleteAtSlot(slot, count, false);
-    taken.push({ slot, count });
-    left -= count;
-  }
-  if (preview.getAddableAmount(new Item(noted, output)) < output) return inventory.full();
-  for (const { slot, count } of taken) inventory.deleteAtSlot(slot, count);
-  inventory.adds(noted, output);
+  const output = new Item(Common.noted(itemId), amount * effect.lootMultiplier);
+  if (inventory.getAddableAmount(output) < output.getAmount()) return inventory.full();
+  inventory.addItem(output);
+  request.handled = true;
 }
 
 function unseen(watch) {
@@ -77,6 +61,6 @@ module.exports = function attach(api) {
   api.onCustomEvent("thieving:loot", loot);
   api.onCustomEvent("thieving:done", again);
   api.onCustomEvent("thieving:deplete-stall", keepStall);
-  api.onCustomEvent("thieving:success", stallLoot);
+  api.onCustomEvent("thieving:stall-reward", stallLoot);
   api.onCustomEvent("thieving:stall-watch", unseen);
 };

@@ -417,8 +417,11 @@ function finishTheft(event, stall) {
   pluginApi.emitCustomEvent("storage:gather", request);
   const inventory = player.getInventory();
   const remaining = new core.Item(reward.getId(), Math.max(0, reward.getAmount() - request.stored));
-  const amount = inventory.getAddableAmount(remaining);
-  if (remaining.getAmount() > 0) inventory.addItem(remaining);
+  // Relics can deliver the full final bundle before plain-item capacity truncates it.
+  const delivery = { player, object, stall: event.definition.getName(), itemId: remaining.getId(), amount: remaining.getAmount(), handled: false };
+  pluginApi.emitCustomEvent("thieving:stall-reward", delivery);
+  const amount = delivery.handled ? remaining.getAmount() : inventory.getAddableAmount(remaining);
+  if (!delivery.handled && remaining.getAmount() > 0) inventory.addItem(remaining);
   // Live: the tracker entry follows the inventory update, before the XP (1001550 tick 3905).
   const lootCategory = LOOT_TRACKED_STALLS.get(core.CacheDefinitions.getLocNames().get(object.getId()));
   if (lootCategory !== undefined) {

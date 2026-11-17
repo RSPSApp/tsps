@@ -36,8 +36,9 @@ the Wiki's "CALL THAT A TOWN, I'VE SEEN BETTER HAMLETS!" (rec 3027 tick 6965, lo
 
 ## Ours
 
-- A Watch-shouting while a round runs joins it: the watcher's camera resets with that round's,
-  and no second round starts. No recording clicks during a round.
+- A Watch-shouting while a round still has lines to say joins it (the watcher's camera resets
+  with that round's). One after its last line starts the next round, which keeps the earlier
+  watchers for their cam_reset. No recording clicks during or just after a round.
 - The "Can I watch?" path's timing (camera when the choice's action step runs, round 3 ticks
   later): no recording finishes that conversation.
 - The chant phases at startup (Neitiznot 5 ticks after Jatizso) are the first recorded run's.

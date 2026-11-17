@@ -73,6 +73,8 @@ function read({ player, item }) {
         player.performAnimation(new core.Animation(READ_ANIMATION));
         sender.sendSoundEffect(READ_SOUND, 1, 0);
         say(player, new core.ItemStatementDialogue(0, ITEM_ID, COMPLETE));
+        // `teleport-anchoring:learnt` { player }: the scroll absorbed (the league's "Use a teleport anchoring scroll").
+        api.emitCustomEvent("teleport-anchoring:learnt", { player });
       },
     }, CONFIRM_YES, CONFIRM_NO).setTitle(CONFIRM_TITLE));
   player.getDialogueManager().startDialogues(chain);

@@ -2538,9 +2538,14 @@ test("spells and item teleports: their own events complete their tasks; Degrime 
   }
 });
 
-test("item-op: reading the teleport anchoring scroll through its real Read (Use a teleport anchoring scroll)", async (t) => {
+test("deed: the teleport anchoring scroll absorbed through its real Read and Yes, not on opening it (Use a teleport anchoring scroll)", async (t) => {
   const f = pactsCharacter(t);
   f.player.getInventory().add(new core.Item(item("Teleport anchoring scroll")), true);
   await inventoryOption(f, "Teleport anchoring scroll", "Read", 1, 3);
+  assert.ok(!done(f, "use-a-teleport-anchoring-scroll"), "the question is open, nothing absorbed yet");
+  const manager = f.player.getDialogueManager();
+  for (let i = 0; i < 3 && manager.getCurrent()?.constructor?.name !== "OptionDialogue"; i++) manager.advance();
+  manager.getCurrent().execute(1);
+  assert.equal(f.player.getInventory().getAmount(item("Teleport anchoring scroll")), 0, "the scroll is used up");
   assert.ok(done(f, "use-a-teleport-anchoring-scroll"), f.messages.join(" | "));
 });

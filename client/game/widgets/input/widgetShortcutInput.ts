@@ -86,8 +86,6 @@ export function processWidgetShortcutInput(
                 const timers = widget.keyTimers ??= new Array(11).fill(0);
                 const { rate = 0, delay = 0 } = widget.opKeyRates?.[slot] ?? {};
                 timers[slot] = rate ? cycle + rate + (timers[slot] === 0 ? delay : 0) : 0x7fffffff;
-                // Hiding stops further bindings, but does not undo this completed activation.
-                if (manager.isEffectivelyHidden(widget.uid)) break;
             }
             if (!active && widget.keyTimers) widget.keyTimers[slot] = 0;
         }

@@ -1,6 +1,6 @@
 // Run after `yarn build`: node --test tests/fight-arena-live-npcs.test.cjs
 //
-// The Fight Arena NPCs the world spawns are live's quest versions (rsprox_transcripts/241/911665.txt
+// The Fight Arena NPCs the world spawns are live's quest versions (rsprox recording local 1001680
 // ticks 7427-7433 and 7627): multinpc parents on arenaquest (varp 17), so the pens' beasts, Sammy in his
 // cell, Justin in the arena and the Khazards' stand show only at the stages live shows them. A real
 // Player's packet sender holds the varp; NPC.getContentId resolves the parent as interactions do.
@@ -93,4 +93,12 @@ test("Sammy, Justin and the Khazards' stand show at live's stages", () => {
     assert.equal(seen(npc, player, last), id(vis));
     assert.equal(seen(npc, player, last + 1), null, `${vis} gone after stage ${last}`);
   }
+  // Their guard on the stand (local 1002138 ticks 11113 and 11992: arena_guard_family, spawnangle=north-west).
+  const guard = spawned(2606, 3154);
+  assert.equal(guard.getId(), id("arena_guard_family"));
+  assert.equal(facing(2606, 3154), core.Direction.NORTH_WEST);
+  assert.equal(seen(guard, player, 8), null);
+  assert.equal(seen(guard, player, 9), id("arena_guard_family_vis"));
+  assert.equal(seen(guard, player, 11), id("arena_guard_family_vis"));
+  assert.equal(seen(guard, player, 12), null);
 });

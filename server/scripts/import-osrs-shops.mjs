@@ -327,9 +327,31 @@ function main() {
   const shopsByNpc = fs.existsSync(shopsByNpcFile) ? readJson(shopsByNpcFile) : null;
   const existing = readJson(existingFile);
 
+  // Wiki page keys remain the identity used by stock, pricing and NPC joins.
+  // A recorded interface title is an additional alias, never a renamed source key.
+  const sourceByName = new Map(Object.keys(byShop).map(name => [name, name]));
+  for (const [name, record] of Object.entries(byShop)) {
+    if (record.display_name === undefined) continue;
+    const title = record.display_name;
+    if (typeof title !== "string" || !title.trim() || title !== title.trim()) {
+      throw new Error(`Invalid shop display name: ${name}`);
+    }
+    if (sourceByName.has(title) && sourceByName.get(title) !== name) {
+      throw new Error(`Ambiguous shop identity: ${title}`);
+    }
+    sourceByName.set(title, name);
+  }
+
   const idByName = new Map();
+  const existingIds = new Set();
   for (const shop of existing) {
-    if (typeof shop?.name === "string" && Number.isInteger(shop?.id)) idByName.set(shop.name, shop.id);
+    if (typeof shop?.name !== "string" || !Number.isInteger(shop?.id)) continue;
+    const name = sourceByName.get(shop.name) ?? shop.name;
+    if (idByName.has(name) || existingIds.has(shop.id)) {
+      throw new Error(`Ambiguous existing shop: ${name}`);
+    }
+    idByName.set(name, shop.id);
+    existingIds.add(shop.id);
   }
   let nextId = existing.reduce((max, shop) => Math.max(max, Number(shop?.id) ?? -1), -1) + 1;
 
@@ -344,7 +366,7 @@ function main() {
     const id = idByName.has(name) ? idByName.get(name) : nextId++;
     rebuilt.push({
       id,
-      name,
+      name: record.display_name ?? name,
       currency,
       ...(typeof record.shop_info?.general_store === "boolean" ? { generalStore: record.shop_info.general_store } : {}),
       ...(buysNothing(record) ? { buysNothing: true } : {}),
@@ -358,7 +380,7 @@ function main() {
   // Keep core/legacy shops that the osrsreboxed dump does not describe. A dump
   // shop skipped above is described, so its old entry is dropped, not kept.
   for (const shop of existing) {
-    if (!byShop[shop.name]) rebuilt.push(shop);
+    if (!sourceByName.has(shop.name)) rebuilt.push(shop);
   }
   rebuilt.sort((a, b) => a.id - b.id);
 

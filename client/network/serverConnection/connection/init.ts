@@ -1,3 +1,4 @@
+import { resetProtocolCompatibility, startWelcomeTimer, receiveProtocolGreeting, isProtocolRejected } from "../protocolCompatibility";
 import { replaceCustomDefinitions } from "../../../custom/definitions/CustomDefinitionStore";
 import { PlayerSyncContext } from "../../../game/sync/PlayerSyncContext";
 import { PlayerUpdateDecoder } from "../../../game/sync/PlayerUpdateDecoder";
@@ -69,6 +70,7 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
             : new WebSocket(url);
         const ws = state.socket;
         state.lastWelcome = undefined;
+        resetProtocolCompatibility();
         state.loginExtension?.resetConnection();
         state.loginOnWelcome = null;
         try {
@@ -93,6 +95,7 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
                 const g: any = (typeof window !== "undefined" ? window : globalThis) as any;
                 g[WS_SUPPRESS_RECONNECT_KEY] = false;
             } catch {}
+            startWelcomeTimer(ws);
             // Wire up the packet writer for binary protocol
             setPacketSocket(ws);
             send({
@@ -154,6 +157,11 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
                     const { decodeBatchedServerPackets } = require("../../packet/ServerBinaryDecoder");
                     const { messages: decoded, stalled } = decodeBatchedServerPackets(raw);
                     if (stalled) {
+                        // A later invalid packet must not hide a known incompatible prefix.
+                        for (const msg of decoded) {
+                            if (!receiveProtocolGreeting(msg)) return;
+                            if (msg.type === "welcome") break;
+                        }
                         // Stream desynced (client/server packet tables out of lockstep,
                         // or a corrupted frame). Keeping the socket open leaves every
                         // later batch corrupt, so force a reconnect: the close handler
@@ -180,6 +188,7 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
 
                 // Process all messages (may be multiple from batching)
                 for (const msg of messages) {
+                    if (isProtocolRejected()) return;
                     processServerMessage(msg);
                 }
             } catch (e) {

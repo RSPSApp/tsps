@@ -46,6 +46,8 @@ export class ItemDefinition {
 
     public static definitions: Map<number, ItemDefinition> = new Map<number, ItemDefinition>();
     public static DEFAULT = new ItemDefinition();
+    /** Player trading is unavailable until the required policy and complete definition load succeed. */
+    public static playerTradeabilityReady: boolean = false;
 
     public static registerCustom(id: number, baseId: number, raw: Record<string, unknown> = {}): ItemDefinition {
         const base = baseId >= 0 ? this.forId(baseId) : this.DEFAULT;
@@ -67,7 +69,10 @@ export class ItemDefinition {
                 (definition as any)[key] = Array.isArray(value) ? [...value] : value;
             }
         }
-        if (typeof raw.tradeable === "boolean") definition.untradeable = !raw.tradeable;
+        if (typeof raw.tradeable === "boolean") {
+            definition.untradeable = !raw.tradeable;
+            definition.playerTradeable = raw.tradeable;
+        }
         this.definitions.set(id, definition);
         return definition;
     }
@@ -82,6 +87,8 @@ export class ItemDefinition {
     private tradeable: boolean;
     /** The cache's explicit `tradeable=no`: see {@link isPlayerTradeable}. Unknown items count as untradeable. */
     private untradeable: boolean = true;
+    /** Explicit exact-ID Wiki policy, then a world/custom override; null keeps the cache fallback. */
+    private playerTradeable: boolean | null = null;
     private dropable: boolean;
     private sellable: boolean;
     private noted: boolean;
@@ -245,12 +252,13 @@ export class ItemDefinition {
     }
 
     /**
-     * Tradeable between players, as the Wiki's infobox "tradeable" means it: the Grand Exchange flag
+     * Tradeable between players: explicit Wiki policy when loaded, otherwise the Grand Exchange flag
      * ({@link isTradeable}) or neither cache flag. Rings of dueling below (8), burnt meat and the like
      * trade but are not on the Exchange ("exchange: No"), so they have no `tradeable=yes`.
      */
     public isPlayerTradeable(): boolean {
-        return this.tradeable === true || !this.untradeable;
+        if (!ItemDefinition.playerTradeabilityReady) return false;
+        return this.playerTradeable ?? (this.tradeable === true || !this.untradeable);
     }
 
     public isSellable(): boolean {

@@ -256,9 +256,13 @@ test('Harold wagers use native NPC, amount, Roll and Continue dispatch', async (
     sender.sendMessage = text => { messages.push(text); return message(text); };
     sender.sendInterfaceAnimation = (uid, seq) => { animations.push({ uid, seq }); return animation(uid, seq); };
     const send = async packet => { await connection.dispatch([packet]); connection.processTurnPackets(); };
-    const click = name => send(name === 'continue_button'
+    const tick = (n = 1) => { for (let i = 0; i < n; i++) core.TaskManager.process(); };
+    // Harold's dice land 3 and 6 ticks after the interface opens and Roll shows at 9; the player's dice
+    // take the same 6 ticks before Continue (rsprox local 1001800 ticks 24357-24375).
+    const press = name => send(name === 'continue_button'
       ? { type: 'dialogue_continue', widgetId: component(name), childIndex: -1 }
       : { type: 'widget_action', widgetId: component(name), groupId: 99, childId: component(name) & 65535, buttonNum: 1 });
+    const click = async name => { await press(name); if (name === 'roll_button') tick(6); };
     async function drain() {
       for (let i = 0; i < 50; i++) {
         if (player.getEnteredAmountAction() || player.getInterfaceId() === 99) return;
@@ -282,9 +286,12 @@ test('Harold wagers use native NPC, amount, Roll and Continue dispatch', async (
       await talk();
       assert.ok(player.getEnteredAmountAction(), 'native Enter amount prompt remains armed after the transcript action');
       await send({ type: 'dialogue_amount', amount });
-      if (finishPreamble) await drain();
+      if (finishPreamble) {
+        await drain();
+        if (player.getInterfaceId() === 99) tick(9);
+      }
     }
-    return { player, send, click, drain, talk, wager, messages, animations, coins: () => player.getInventory().getAmount(I().COINS) };
+    return { player, send, press, click, tick, drain, talk, wager, messages, animations, coins: () => player.getInventory().getAmount(I().COINS) };
   }
 
   await t.test('sober loss debits the chosen stake once; Continue cannot skip Roll', async (t) => {

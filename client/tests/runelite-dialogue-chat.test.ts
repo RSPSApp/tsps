@@ -1,87 +1,52 @@
-import { strict as assert } from "node:assert";
-import { ChatMessageType } from "@runelite/api/ChatMessageType";
-import { ChatMessage } from "@runelite/api/events";
-import { bindDialogueChat } from "../runelite/impl/DialogueChatSource";
+import assert from 'node:assert/strict';
+import { ChatMessage } from '@runelite/api/events';
+import { bindChatEvents } from '../runelite/impl/ChatEventSource';
+import { WidgetSourceBinder } from '../runelite/impl/ContainerEventSource';
+import { encodeChatMessage } from '../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol';
+import { decodeServerPacket } from '../network/packet/ServerBinaryDecoder';
+import { handleInboundUi } from '../network/serverConnection/handlers/inboundUi';
+import { subscribeChatMessages } from '../network/serverConnection/subscriptions/ui';
+import { state } from '../network/serverConnection/state';
+import { ChatHistoryStore } from '../rs/cs2/ChatHistory';
 
-// RuneLite's DIALOG (114) chat messages: "<name>|<text>" for each NPC (chat_left, 231) or player
-// (chat_right, 217) dialogue page, read on the game tick after the group loads, when the server's
-// text has arrived. Plugins such as Clue Scroll match Charlie's tasks and Falo the Bard on them.
-
-assert.equal(ChatMessageType.GAMEMESSAGE, 0);
-assert.equal(ChatMessageType.SPAM, 105);
-assert.equal(ChatMessageType.DIALOG, 114);
-
-const CHAT_LEFT = 231, CHAT_RIGHT = 217, CHATMENU = 219;
-const uid = (group: number, child: number) => (group << 16) | child;
-
-const widgets = new Map<number, { text?: string; isHidden?: boolean }>();
-const groupLoadedListeners = new Set<(groupId: number) => void>();
-const ticks = new Set<() => void>();
-const client: any = {
-    widgetManager: { groupLoadedListeners, getWidgetByUid: (id: number) => widgets.get(id) },
-};
-const posted: ChatMessage[] = [];
-const unbind = bindDialogueChat(client, (e) => posted.push(e), (tick) => {
-    ticks.add(tick);
-    return () => ticks.delete(tick);
+const events: ChatMessage[] = [], history = new ChatHistoryStore();
+const unbind = bindChatEvents(event => events.push(event));
+// The same history insertion used by OsrsClient's network subscriber.
+const stopHistory = subscribeChatMessages(msg => history.addMessage(msg.chatType ?? msg.messageType, msg.text, msg.from ?? '', msg.prefix ?? ''));
+const groupLoadedListeners = new Set<(group: number) => void>();
+const groupRemountedListeners = new Set<(group: number) => void>();
+const widgets = new Map<number, { text: string }>();
+const binder = new WidgetSourceBinder({ widgetManager: { groupLoadedListeners, groupRemountedListeners,
+    getWidgetByUid: (id: number) => widgets.get(id) } } as any, event => {
+    if (event instanceof ChatMessage) events.push(event);
 });
-const load = (group: number) => {
+assert.ok(binder.bind());
+const receive = (name: string, text: string, group: number) => {
+    const line = `${name}|${text}`;
+    const packet = decodeServerPacket(encodeChatMessage('game', line, '', '', -1, 114));
+    assert.ok(packet);
+    assert.ok(handleInboundUi(packet));
+    widgets.set((group << 16) | 4, { text: name });
+    widgets.set((group << 16) | 6, { text });
     for (const listener of groupLoadedListeners) listener(group);
+    for (const listener of groupRemountedListeners) listener(group);
+    for (const listener of state.tickListeners) listener(1, 600);
+    return line;
 };
-const tick = () => {
-    for (const t of ticks) t();
-};
-
-// --- An NPC page: name and text, read after the tick ---------------------------------------------
-widgets.set(uid(CHAT_LEFT, 4), { text: "Falo the Bard" });
-widgets.set(uid(CHAT_LEFT, 6), { text: "A blood red weapon, a strong curved sword, found on the island of primate lords." });
-load(CHAT_LEFT);
-assert.equal(posted.length, 0, "nothing until the tick: the text arrives after the open");
-tick();
-assert.equal(posted.length, 1);
-assert.equal(posted[0].getType(), ChatMessageType.DIALOG);
-assert.equal(posted[0].getName(), "");
-assert.equal(posted[0].getMessage(), "Falo the Bard|A blood red weapon, a strong curved sword, found on the island of primate lords.");
-assert.equal(posted[0].getSender(), null);
-tick();
-assert.equal(posted.length, 1, "one message per page, not per tick");
-
-// --- A player page ---------------------------------------------------------------------------------
-widgets.set(uid(CHAT_RIGHT, 4), { text: "Kraken" });
-widgets.set(uid(CHAT_RIGHT, 6), { text: "I need you to cook me a trout." });
-load(CHAT_RIGHT);
-tick();
-assert.equal(posted.length, 2);
-assert.equal(posted[1].getMessage(), "Kraken|I need you to cook me a trout.");
-
-// --- Other groups and hidden or missing text post nothing ----------------------------------------
-load(CHATMENU);
-tick();
-assert.equal(posted.length, 2, "a chat menu is not a dialogue page");
-
-widgets.set(uid(CHAT_LEFT, 6), { text: "Hidden line", isHidden: true });
-load(CHAT_LEFT);
-tick();
-assert.equal(posted.length, 2, "a hidden text widget posts nothing");
-
-widgets.delete(uid(CHAT_LEFT, 6));
-load(CHAT_LEFT);
-tick();
-assert.equal(posted.length, 2, "a missing text widget posts nothing");
-
-// --- The same page loaded twice in one tick posts once ------------------------------------------
-widgets.set(uid(CHAT_LEFT, 6), { text: "Twice" });
-load(CHAT_LEFT);
-load(CHAT_LEFT);
-tick();
-assert.equal(posted.length, 3);
-assert.equal(posted[2].getMessage(), "Falo the Bard|Twice");
-
-unbind();
-load(CHAT_LEFT);
-tick();
-assert.equal(posted.length, 3, "unbinding stops the posts");
+const npc = receive('Falo the Bard', '<col=ff0000>One<lt>two<gt></col>', 231);
+assert.equal(events.length, 1, 'the packet plus widget load/remount is one plugin event');
+assert.equal(events[0].getType(), 114);
+assert.equal(events[0].getName(), '');
+assert.equal(events[0].getMessage(), npc);
+const player = receive('DialogueTester', 'Yes please.', 217);
+assert.equal(events.length, 2);
+receive('DialogueTester', 'Yes please.', 217);
+assert.equal(events.length, 3, 'intentional repeated pages are not deduplicated');
+assert.equal(history.getLength(114), 3);
+assert.equal(history.getByTypeAndLine(114, 0), player);
+handleInboundUi(decodeServerPacket(encodeChatMessage('game', 'Ordinary game line.')));
+assert.equal(events.length, 4);
+assert.equal(events[3].getType(), 0);
+unbind(); stopHistory(); binder.release();
 assert.equal(groupLoadedListeners.size, 0);
-assert.equal(ticks.size, 0);
-
-console.log("runelite-dialogue-chat: ok");
+console.log('runelite-dialogue-chat: network history and exactly-once events passed');

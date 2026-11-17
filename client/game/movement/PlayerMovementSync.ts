@@ -341,6 +341,13 @@ export class PlayerMovementSync {
             finalSubX = (currX << 7) + 64;
             finalSubY = (currY << 7) + 64;
             path = new MovementPath(fromTile, tile, steps, false);
+        } else if (!forcedTeleport && chebyshevDist > 0 && chebyshevDist <= 2 && traversals[0] === 1) {
+            // Compact movement supplies an endpoint, not explicit path directions. WALK
+            // appends that destination directly; only RUN uses the local route finder.
+            const direction = deltaToDirection(Math.sign(dxToDest), Math.sign(dyToDest))!;
+            path = new MovementPath(fromTile, destTile, [{
+                tile: destTile, direction, run: false, traversal: 1,
+            }], false);
         } else if (!forcedTeleport && chebyshevDist > 0) {
             tile = destTile;
             finalSubX = typeof serverSubX === "number" ? serverSubX : (destTile.x << 7) + 64;

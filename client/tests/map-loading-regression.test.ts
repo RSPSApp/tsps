@@ -1,4 +1,5 @@
 import "./browser-self";
+import "./register-render-assets";
 import Denque from "denque";
 import { strict as assert } from "node:assert";
 import { existsSync, readFileSync } from "node:fs";
@@ -734,6 +735,7 @@ const session: any = {
     clearInteractHighlightHoverTarget() {},
     clearDynamicNpcAnimRuntimeState() {},
     clearCameraShake() {},
+    setSkybox() {},
 };
 for (const key of [
     "npcDefaultHeightCache", "npcNameCache", "npcHitsplats", "playerHitsplats",

@@ -1,0 +1,14 @@
+{
+  "ESP": {
+    "translations_game_message.json": {
+      "You let the broav sniff the dirty shirt...": "Dejas que el broav olfatee la camisa sucia...",
+      "The broav seems to have found something interesting...": "El broav parece haber encontrado algo interesante..."
+    }
+  },
+  "pt-BR": {
+    "translations_game_message.json": {
+      "You let the broav sniff the dirty shirt...": "Você deixa o broav cheirar a camisa suja...",
+      "The broav seems to have found something interesting...": "O broav parece ter encontrado algo interessante..."
+    }
+  }
+}

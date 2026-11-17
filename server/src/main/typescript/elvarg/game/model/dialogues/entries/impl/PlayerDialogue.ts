@@ -26,7 +26,16 @@ export class PlayerDialogue extends Dialogue {
         PlayerDialogue.send(player, this.text, this.expression);
     }
 
+    /** The line with its "Click here to continue" held back: blank and not clickable (a cutscene's camera move). */
+    public sendHeld(player: Player): void {
+        this.send(player);
+        player.getPacketSender()
+            .sendString("", PlayerDialogue.CONTINUE_UID)
+            .sendInterfaceFlagsRange(PlayerDialogue.CONTINUE_UID, -1, -1, 0);
+    }
+
     static send(player: Player, text: string, expression: number | DialogueExpression) {
+        Dialogue.sendDialogueChatLine(player, player.getDisplayName(), text);
         player.getPacketSender()
             .sendChatboxInterface(PlayerDialogue.GROUP_ID)
             .sendPlayerHeadOnInterface(PlayerDialogue.HEAD_UID)

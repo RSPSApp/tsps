@@ -61,7 +61,21 @@ module.exports = function registerTravelTools(ctx, { areas }) {
     core, tool, z, player, find, send, tile, settle, sleepTicks, takeMessages, takeClient, area,
     nearby, npcClick, items, activity, waitingOn, movementBlocked,
   } = ctx;
-  const { World, Skill, RegionManager, MapObjects, ObjectDefinition, PluginManager, Location, Wilderness } = core;
+  const { World, Skill, RegionManager, MapObjects, ObjectDefinition, PluginManager, Location, Wilderness, CacheDefinitions, RsmodRouteFinding } = core;
+
+  const opens = (transport) => /^open /i.test(transport.menu);
+  const family = (baseId, transport) => opens(transport) && transport.id != null
+    && CacheDefinitions.getObject?.(baseId)?.transforms?.includes(transport.id);
+  const descent = (transport, thing) => {
+    if (!family(thing.id, transport)) return undefined;
+    const [, originY, z] = transport.from;
+    const y = transport.object?.y ?? originY;
+    const down = transport.to[2] < z || transport.to[1] - y >= 6400;
+    const up = transport.to[2] > z || y - transport.to[1] >= 6400;
+    if (!down && !up) return undefined;
+    const options = (thing.options ?? []).filter((option) => new RegExp(`^(go|climb)-${down ? "down" : "up"}$`, "i").test(option));
+    return options.length === 1 ? options[0] : undefined;
+  };
 
   // Missing map squares are off the map, not open floor.
   const regions = new Map();
@@ -114,6 +128,36 @@ module.exports = function registerTravelTools(ctx, { areas }) {
 
   const plan = (p, goal, { exact, failed, ignoreRequirements }) => {
     const index = transports();
+    // Some annotations start on the blocked floor loc itself. Offer only a native reachable
+    // approach to an Open-first multiloc, leaving all other routing edges untouched.
+    const approachCache = new Map();
+    let reach;
+    const at = (x, y, z) => {
+      const hash = key(x, y, z);
+      if (approachCache.has(hash)) return approachCache.get(hash);
+      const found = [...(index.get(hash) ?? [])];
+      for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+        const ox = x + dx, oy = y + dy;
+        const rows = index.get(key(ox, oy, z));
+        if (!rows || !(getFlag(ox, oy, z) & BLOCKED)) continue;
+        for (const row of rows) {
+          if (!opens(row)) continue;
+          for (const object of MapObjects.mapObjects.get(MapObjects.getHash(ox, oy, z)) ?? []) {
+            const pos = object.getLocation();
+            if (object.getType() !== 22 || pos.getX() !== ox || pos.getY() !== oy || pos.getZ() !== z || !family(object.getId(), row)) continue;
+            const def = ObjectDefinition.forPlayer(object.getId(), p);
+            // MovementQueue.buildObjectRouteSpec uses the resolved child's footprint for
+            // type22, rectangle reach shape10, face and resolved access mask.
+            if (!def || !(reach ??= new RsmodRouteFinding()).reachedAbsolute({ level: z, srcX: x, srcY: y, srcSize: Math.max(1, p.getSize()),
+              destX: ox, destY: oy, destWidth: def.getSizeX(), destLength: def.getSizeY(),
+              locAngle: object.getFace(), locShape: 10, blockAccessFlags: def.getBlockingMask(), privateArea: null })) continue;
+            found.push({ ...row, from: [x, y, z], object: { x: ox, y: oy, z } });
+          }
+        }
+      }
+      approachCache.set(hash, found);
+      return found;
+    };
     const itemGroups = require(DATA_FILE).itemGroups;
     const reasons = new Map();
     const usable = (transport) => {
@@ -124,7 +168,7 @@ module.exports = function registerTravelTools(ctx, { areas }) {
     };
     const route = planTravel({
       from: tile(p.getLocation()), to: goal, getFlag,
-      transportsAt: (x, y, z) => index.get(key(x, y, z)) ?? [],
+      transportsAt: at,
       doorAt: doorAt(p), usable, goalReach: exact ? 0 : undefined,
     });
     return route && { legs: toLegs(route.steps), cost: route.cost };
@@ -147,8 +191,8 @@ module.exports = function registerTravelTools(ctx, { areas }) {
     const named = (thing) => thing.name && menu.endsWith(` ${String(thing.name).toLowerCase()}`);
     const byDistance = (a, b) => chebyshev(a, from) - chebyshev(b, from);
     const objectMatches = transport.object
-      ? objects.filter((o) => o.x === transport.object.x && o.y === transport.object.y && o.id === transport.id)
-      : objects.filter((o) => transport.id != null && (o.id === transport.id || o.displayId === transport.id));
+      ? objects.filter((o) => o.x === transport.object.x && o.y === transport.object.y && (o.id === transport.id || family(o.id, transport)))
+      : objects.filter((o) => transport.id != null && (o.id === transport.id || o.displayId === transport.id || family(o.id, transport)));
     // By id first; by name when this cache's id differs from the live data's.
     const candidates = [
       ...objectMatches.sort(byDistance).map((thing) => ({ kind: "object", thing })),
@@ -158,7 +202,8 @@ module.exports = function registerTravelTools(ctx, { areas }) {
     ];
     if (!candidates.length) return { error: `no "${transport.menu}" (id ${transport.id}) within ${CLICK_RADIUS} tiles` };
     for (const candidate of candidates) {
-      const option = optionFor(candidate.thing, candidate.kind === "npc");
+      const option = optionFor(candidate.thing, candidate.kind === "npc")
+        ?? (candidate.kind === "object" ? descent(transport, candidate.thing) : undefined);
       if (option) return { ...candidate, option, renamed: `${option} ${candidate.thing.name}`.toLowerCase() !== menu };
     }
     const { thing } = candidates[0];
@@ -267,6 +312,12 @@ module.exports = function registerTravelTools(ctx, { areas }) {
     const { transport, arrive } = leg;
     const click = resolveClick(p, transport);
     if (click.error) return { result: "blocked", reason: click.error };
+    const before = tile(p.getLocation());
+    const scene = p.getPrivateArea?.();
+    const session = p.getSession?.();
+    const messageStart = messages.length;
+    const original = click.kind === "object" && family(click.thing.id, transport)
+      ? MapObjects.getPrivateArea(p, click.thing.id, new Location(click.thing.x, click.thing.y, before.z)) : null;
     send(p, clickPacket(p, click));
     const notes = [
       ...(click.byName && transport.id != null ? [`found by name; the live data's id is ${transport.id}`] : []),
@@ -276,6 +327,26 @@ module.exports = function registerTravelTools(ctx, { areas }) {
       ...(notes.length ? { note: notes.join("; ") } : {}) };
     let outcome = await ride(username, transport, arrive, deadline, messages);
     if (outcome.result === "budget") return { ...outcome, clicked };
+    // Opening changes the displayed child, not the player's floor. Continue once, only
+    // on the same native loc and unchanged actor/scene; refusal/no change stays blocked.
+    const now = find(username);
+    const pos = tile(now.getLocation());
+    if (outcome.result === "stopped" && original && click.option.toLowerCase() === "open"
+      && now === p && p.isRegistered() && p.getSession() === session && p.getPrivateArea?.() === scene
+      && messages.length === messageStart
+      && pos.x === before.x && pos.y === before.y && pos.z === before.z
+      && MapObjects.getPrivateArea(p, click.thing.id, new Location(click.thing.x, click.thing.y, before.z)) === original
+      && World.getProcessCycle() < deadline) {
+      const current = nearby(p, CLICK_RADIUS).objects.find((o) => o.id === click.thing.id && o.x === click.thing.x && o.y === click.thing.y);
+      const option = current && current.displayId !== click.thing.displayId && descent(transport, current);
+      if (option) {
+        const followup = { kind: "object", thing: current, option };
+        send(p, clickPacket(p, followup));
+        clicked.followup = { id: current.id, option, x: current.x, y: current.y };
+        outcome = await ride(username, transport, arrive, deadline, messages);
+        if (outcome.result === "budget") return { ...outcome, clicked };
+      }
+    }
     const here = tile(find(username).getLocation());
     const from = asTile(transport.from);
     // A door opens and leaves the player in front of it: step through.

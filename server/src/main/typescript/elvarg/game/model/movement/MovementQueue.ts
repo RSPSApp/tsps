@@ -643,7 +643,23 @@ export class MovementQueue {
             this.followY = current.getY();
             previous = current;
             current = next;
+            const teleportSerial = this.character.getTeleportSerial();
             this.character.setLocation(next);
+            if (!this.character.getLocation().equals(next)
+                || this.character.getTeleportSerial() !== teleportSerial) {
+                // A synchronous location/map-square hook redirected this step. Encode the actual
+                // destination as placement, not the stale queued walk/run. A rollback to the
+                // previous tile preserves earlier legal steps' energy, never the denied step.
+                current = this.character.getLocation();
+                stepsMoved = current.equals(previous) ? stepsMoved : 0;
+                moved = !current.equals(start);
+                this.reset();
+                this.character.setWalkingDirection(Direction.NONE);
+                this.character.setRunningDirection(Direction.NONE);
+                this.character.setNeedsPlacement(true);
+                this.character.setResetMovementQueue(true);
+                break;
+            }
             if (!moved) {
                 this.character.setWalkingDirection(direction);
             } else {
@@ -722,8 +738,9 @@ export class MovementQueue {
 
     /**
      * Occupancy the static clipping map cannot know about. The NPC flag is set and
-     * checked by NPCs only; players pass over it (and clear it in OSRS, which is
-     * the entity-stacking mechanic) - osrs-docs: Entity Collision, NPC flag
+     * checked by NPCs only; players pass over it and clear it, as does an NPC stepping
+     * off a tile another still stands on (World.clearedNpcFlags: the entity-stacking
+     * mechanic) - osrs-docs: Entity Collision, NPC flag
      * "Checked by: all NPCs but the excluded NPCs". Only the separate "full" flag
      * (NPC.BLOCKS_PLAYERS_FLAG: the Agility Pyramid's blocks) blocks players; they keep
      * their path and step on once it moves.
@@ -737,7 +754,7 @@ export class MovementQueue {
         const size = this.character.getSize();
         const privateArea = this.character.getPrivateArea();
         if (this.character.isNpc() && !(this.character as NPC).canWalkThroughNPCs()) {
-            if (World.isNpcOccupyingTile(next, this.character as NPC, size, privateArea)) {
+            if (World.isNpcOccupyingTile(next, this.character as NPC, size, privateArea, true)) {
                 return true;
             }
             const ignored = this.ignoredOccupant?.isPlayer() ? this.ignoredOccupant.getAsPlayer() : null;
@@ -1797,6 +1814,7 @@ export class MovementQueue {
 
         const routeSpec = this.buildObjectRouteSpec(object, routeEvent.blockAccessFlags);
         const approachRange = Math.max(0, routeEvent.approachRange ?? 0);
+        const operateBeforeMovement = routeEvent.operateBeforeMovement === true && approachRange === 0;
         // A frozen player still operates what they reach from where they stand (a ladder, a
         // cave entrance: Wiki, Freeze); anything further is "I can't reach that!" as live.
         // Another lock (a stun) still stops a frozen player.
@@ -1858,8 +1876,23 @@ export class MovementQueue {
 
         this.player.setPositionToFace(new Location(objectX, objectY));
         const interactionArea = this.player.getPrivateArea();
+        const interactionTeleportSerial = this.player.getTeleportSerial();
         const stoodAtClick = this.character.isPlayer() && MapObjects.stillStands(this.player, id, object.getLocation(), object, true);
         let repathAttempts = 0;
+        const operateReachedObject = (task: MovementTask) => {
+            // Consume the old operation first. Its action may replace this pursuit or queue new movement.
+            this.entityPursuit = null;
+            task.stop();
+            TaskManager.cancelTasks(this.player.getIndex());
+            if (objectX === this.player.getLocation().getX() && objectY === this.player.getLocation().getY()) {
+                this.player.setDirection([Direction.WEST, Direction.NORTH, Direction.EAST, Direction.SOUTH][direction]);
+            }
+            this.pathX = this.player.getLocation().getX();
+            this.pathY = this.player.getLocation().getY();
+            this.player.setPositionToFace(objectX === this.player.getLocation().getX() && objectY === this.player.getLocation().getY()
+                ? null : new Location(objectX, objectY, this.player.getLocation().getZ()));
+            action.execute();
+        };
         const task = new MovementTask(this.player.getIndex(), (task) => {
             if (this.player.getPrivateArea() !== interactionArea || !this.isInteractionObjectValid(object, id, type, stoodAtClick)) {
                 this.reset();
@@ -1886,17 +1919,8 @@ export class MovementQueue {
                 // this already does. A global delay would make every one of those a tick slower
                 // than OSRS and break tick-based skilling. Ops that move the player get it from
                 // the shared climb (Ladders.plugin.js ladders:climbUp/climbDown) or ObstacleRunner.
-                if (this.didMoveThisCycle()) return;
-                if (objectX === this.player.getLocation().getX() && objectY === this.player.getLocation().getY()) {
-                    this.player.setDirection([Direction.WEST, Direction.NORTH, Direction.EAST, Direction.SOUTH][direction]);
-                }
-                this.pathX = this.player.getLocation().getX();
-                this.pathY = this.player.getLocation().getY();
-                this.player.setPositionToFace(objectX === this.player.getLocation().getX() && objectY === this.player.getLocation().getY()
-                    ? null : new Location(objectX, objectY, this.player.getLocation().getZ()));
-                task.stop();
-                TaskManager.cancelTasks(this.player.getIndex());
-                action.execute();
+                if (operateBeforeMovement || this.didMoveThisCycle()) return;
+                operateReachedObject(task);
                 return;
             }
             if (this.points.length || this.player.getMovementQueue().isMovings()) {
@@ -1948,9 +1972,22 @@ export class MovementQueue {
                 this.entityPursuit = null;
                 return;
             }
-            if (this.player.getPrivateArea() !== interactionArea ||
-                !this.isInteractionObjectValid(object, id, type, stoodAtClick)) {
+            const invalidTarget = this.player.getPrivateArea() !== interactionArea ||
+                !this.isInteractionObjectValid(object, id, type, stoodAtClick);
+            if (operateBeforeMovement && (invalidTarget || !this.player.isRegistered() || this.player.busy()
+                || this.player.getTeleportSerial() !== interactionTeleportSerial)) {
+                // A later placement/modal/death must cancel this input, not revive it after that state clears.
+                this.entityPursuit = null;
+                task.stop();
+                this.reset();
+                return;
+            }
+            if (invalidTarget) {
                 this.reset(); // the task's own check ends the interaction after this cycle
+                return;
+            }
+            if (operateBeforeMovement && this.points.length === 0 && this.reachesObject(object, routeSpec)) {
+                operateReachedObject(task);
             }
         };
         TaskManager.submit(task);

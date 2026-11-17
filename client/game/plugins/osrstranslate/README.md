@@ -24,9 +24,16 @@ requested while it is off.
 
 ## tsps's additions
 
-Entries tsps contributes to the author's dictionaries (pull requests #4, #5 and #6 there, and
-branches still to be opened; the additions files list their commits) are also
-bundled with the client, in `client/public/osrstranslate/`, so players get them before he merges:
+New project-owned entries live in `client/scripts/osrs-translate-additions/*.json`, keyed by
+language, dictionary filename and English text. The generator validates these inputs, fills
+only keys absent from the canonical base, and records each input path and SHA256 fingerprint
+(with line endings normalized to LF) in `localSources`. Runtime upstream entries retain priority.
+Regenerate the bundles; never edit generated additions by hand. These inputs require no external
+contribution or upstream pull request.
+
+Project-owned entries and historical contributions (including pull requests #4, #5 and #6;
+the additions files list their commits) are bundled with the client in
+`client/public/osrstranslate/`:
 All Settings window text, the welcome screen's membership box, diary messages, missing dialogue
 and game messages, and fixes such as "No pasa Nothing interesante.". They are fetched with the
 release and applied on top of it:

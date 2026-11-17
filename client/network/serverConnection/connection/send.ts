@@ -1,8 +1,10 @@
+import { isProtocolRejected } from "../protocolCompatibility";
 import { encodeClientMessage } from "../../packet/ClientBinaryEncoder";
 import type { ClientToServer } from "../types/clientMessages";
 import { state } from "../state";
 
 export function send(msg: ClientToServer): void {
+    if (isProtocolRejected()) return;
     if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return;
     if (msg.type === "login") {
         if (!state.lastWelcome) {

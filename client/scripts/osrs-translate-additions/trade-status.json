@@ -1,0 +1,14 @@
+{
+  "ESP": {
+    "translations_game_message.json": {
+      "Sending trade offer...": "Enviando oferta de intercambio...",
+      "Accepted trade.": "Intercambio aceptado."
+    }
+  },
+  "pt-BR": {
+    "translations_game_message.json": {
+      "Sending trade offer...": "Enviando oferta de troca...",
+      "Accepted trade.": "Troca aceita."
+    }
+  }
+}

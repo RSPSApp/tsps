@@ -556,7 +556,9 @@ function loadDrops() {
       }
       // A row is one of: a nested table (the rare drop table rolls the gem table on 20/128),
       // an empty slot, or an item. Only the last needs an id.
-      if (entry.shared_table) {
+      if (entry.location_talisman === true) {
+        entries.push({ locationTalisman: true, weight: rarity.weight, outOf: rarity.outOf });
+      } else if (entry.shared_table) {
         entries.push({ ref: entry.shared_table, weight: rarity.weight, outOf: rarity.outOf });
       } else if (entry.nothing) {
         entries.push({ nothing: true, weight: rarity.weight, outOf: rarity.outOf });
@@ -819,7 +821,7 @@ function locationTalisman(player) {
 }
 
 /** `ringOfWealth: false` rolls the full pool even with a ring of wealth worn. */
-function rollSharedTable(name, player, depth = 0, { ringOfWealth = true, combatLevel = null } = {}) {
+function rollSharedTable(name, player, depth = 0, { ringOfWealth = true, combatLevel = null, sourceEntity = null } = {}) {
   // Shared tables reference each other (rare -> gem -> mega-rare), so cap the chain.
   if (depth > 4) {
     return [];
@@ -846,11 +848,14 @@ function rollSharedTable(name, player, depth = 0, { ringOfWealth = true, combatL
       if (entry.nothing) {
         return [];
       }
+      if (entry.locationTalisman) {
+        return [{ itemId: locationTalisman(sourceEntity ?? player), amount: 1, noted: false }];
+      }
       if (entry.ref) {
         if (name === GEM_TABLE && entry.ref === MEGA_RARE_TABLE && !legendsQuestComplete(player)) {
-          return [{ itemId: locationTalisman(player), amount: 1, noted: false }];
+          return [{ itemId: locationTalisman(sourceEntity ?? player), amount: 1, noted: false }];
         }
-        return rollSharedTable(entry.ref, player, depth + 1, { ringOfWealth, combatLevel });
+        return rollSharedTable(entry.ref, player, depth + 1, { ringOfWealth, combatLevel, sourceEntity });
       }
       const [min, max] = entry.quantity;
       return [{
@@ -871,7 +876,7 @@ function resolveEntry(entry, player, context = null) {
     // A row the Wiki gives several rolls of its shared table (the spectres' herb roll) rolls it that many times.
     const drops = [];
     for (let roll = RollCounts.pick(entry.roll_count_weights, randomInt); roll > 0; roll--) {
-      drops.push(...rollSharedTable(entry.shared_table, player, 0, { combatLevel: context?.combatLevel ?? null }));
+      drops.push(...rollSharedTable(entry.shared_table, player, 0, { combatLevel: context?.combatLevel ?? null, sourceEntity: context?.sourceEntity ?? null }));
     }
     return drops;
   }
@@ -1017,7 +1022,7 @@ function npcCombatLevel(npc) {
 }
 
 function killContext(player, npc) {
-  const context = { perfectKill: false, bountyTask: null, preferredMethodLocation: null, handledItemIds: new Set(), combatLevel: npcCombatLevel(npc) };
+  const context = { perfectKill: false, bountyTask: null, preferredMethodLocation: null, handledItemIds: new Set(), combatLevel: npcCombatLevel(npc), sourceEntity: npc ?? null };
   pluginApi?.emitCustomEvent("npc-drops:context", { player, npc, npcId: npc?.getId?.() ?? null, context });
   return context;
 }
@@ -1159,7 +1164,7 @@ function tableRolls(event) {
 function rollSharedRequest(event) {
   ensureDropsLoaded?.();
   if (!Array.isArray(event?.drops) || typeof event.table !== "string") return;
-  event.drops.push(...rollSharedTable(event.table, event.player, 0, { ringOfWealth: event.ringOfWealth !== false, combatLevel: Number.isSafeInteger(event.combatLevel) ? event.combatLevel : null }));
+  event.drops.push(...rollSharedTable(event.table, event.player, 0, { ringOfWealth: event.ringOfWealth !== false, combatLevel: Number.isSafeInteger(event.combatLevel) ? event.combatLevel : null, sourceEntity: event.npc ?? null }));
 }
 
 let ensureDropsLoaded = null;

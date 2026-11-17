@@ -49,6 +49,7 @@ const TOGGLES = {
   235: 13827,
   257: 5368,
   265: 14179,
+  303: 14709,
   306: 5698,
   311: 14806,
   312: 6580,
@@ -249,7 +250,7 @@ before(async () => {
   Settings.register(new Proxy(api, { get: (t, p) => (p in t ? t[p] : () => {}) }));
   for (const [, structId] of [...CacheDefinitions.getEnumValues(422)].sort(([a], [b]) => a - b)) {
     const category = CacheDefinitions.getStructParams(Number(structId));
-    const settings = [...CacheDefinitions.getEnumValues(Number(category.get(745)))].sort(([a], [b]) => a - b);
+    const settings = Settings.settingsEnumEntries(Number(category.get(745)));
     settings.forEach(([, s], slot) => {
       const params = CacheDefinitions.getStructParams(Number(s));
       const id = Number(params.get(1077));
@@ -333,6 +334,20 @@ test('a fresh account starts with the side panel setting live sends', () => {
   const p = player();
   handlers.restoreSettings({ player: p });
   assert.equal(p.getPacketSender().getVarbit(4609), 1);
+});
+
+test('dialogue catalog extension preserves cache data, is idempotent, and rejects ambiguous native metadata', t => {
+  const native = new Map(CacheDefinitions.getEnumValues(1561));
+  const extended = Settings.settingsEnumEntries(1561);
+  assert.deepEqual([...CacheDefinitions.getEnumValues(1561)], [...native], 'the cache itself is never patched');
+  const getEnums = CacheDefinitions.getEnumValues.bind(CacheDefinitions);
+  t.mock.method(CacheDefinitions, 'getEnumValues', id => id === 1561 ? new Map(extended) : getEnums(id));
+  assert.deepEqual(Settings.settingsEnumEntries(1561), extended, 'a future cache already listing303 needs no duplicate');
+  t.mock.method(CacheDefinitions, 'getEnumValues', id => id === 1561 ? new Map([...extended, [extended.at(-1)[0] + 1, 4452]]) : getEnums(id));
+  assert.throws(() => Settings.settingsEnumEntries(1561), /Ambiguous native dialogue-display/);
+  const getStruct = CacheDefinitions.getStructParams.bind(CacheDefinitions);
+  t.mock.method(CacheDefinitions, 'getStructParams', id => id === 4452 ? new Map([[1077,303],[1078,2]]) : getStruct(id));
+  assert.throws(() => Settings.settingsEnumEntries(1561), /Unsupported native dialogue-display/);
 });
 
 test('Single mouse button mode flips varp 170, the var the cache reads it from, and keeps it at the next login', () => {

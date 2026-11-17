@@ -20,6 +20,7 @@ class DoorChatDialogue extends Dialogue {
   }
 
   send(player) {
+    Dialogue.sendDialogueChatLine(player, this.name, this.text);
     player.getPacketSender()
       .sendChatboxInterface(231)
       .sendNpcHeadOnInterface(this.head, uid(231, 2))

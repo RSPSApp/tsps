@@ -77,7 +77,9 @@ const FERRY_ROUTES = require('../plugins/world/data/ferries.json').routes;
 const landing = (route) => FERRY_ROUTES[route].to;
 
 function setup() {
-  const questCore = { ...core, CountdownTask: undefined, TaskManager: undefined };
+  // A delayed step (the orb shatters two ticks after the scan) runs at once here.
+  class CountdownTask { constructor(_key, _ticks, run) { this.run = run; } }
+  const questCore = { ...core, CountdownTask, TaskManager: { submit: (task) => task.run() } };
   const custom = new Map();
   const variants = [];
   const conditions = [];
@@ -170,6 +172,9 @@ function setup() {
     getUsername: () => 'qh728-q010',
     sendMessage: (message) => messages.push(message),
     isRegistered: () => true,
+    performAnimation() {},
+    performGraphic() {},
+    forceChat() {},
   };
 
   const variant = (npcId) => { const result = variants.map((handler) => handler({ player, npcId })).find(Boolean); return typeof result === 'string' ? { variant: result } : result ?? null; };
@@ -316,7 +321,7 @@ test('Client of Kourend runs the mandatory Quest Helper route from stage 0 to co
   assert.equal(transcripts.at(-1).variant, 'activating-the-orb-using-the-activate-option-on-the-mysterious-orb-by-the-dark-altar');
   h.message(N.VEOS_7, 'vy1GZz');
   assert.equal(h.items.get(I.MYSTERIOUS_ORB) ?? 0, 0);
-  assert.equal(h.items.get(I.BROKEN_GLASS), 1);
+  assert.equal(h.items.get(I.BROKEN_GLASS_2), 1, 'the shattered orb is broken glass 1469 (rsprox local 1001998 tick 1795)');
   assert.equal(h.quest.getStage(h.player), 4);
   assert.equal(h.varbits.get(5619), 5, 'activated orb sends Quest Helper wire 5');
 
@@ -326,7 +331,7 @@ test('Client of Kourend runs the mandatory Quest Helper route from stage 0 to co
   assert.equal(h.attributes.get('quest.points'), 1);
   assert.equal(h.items.get(I.KHAREDSTS_MEMOIRS), 1);
   assert.equal(h.items.get(I.ANTIQUE_LAMP_17), 2);
-  assert.equal(h.varbits.get(5619), 9, 'completed Client of Kourend unlocks the teleport varbit');
+  assert.equal(h.varbits.get(5619), 7, 'completion sends the quest dbrow endstate 7 (rsprox local 1001998 tick 2127)');
   assert.ok(h.messages.some((text) => text.includes('Client of Kourend')));
 
   const lampCount = h.items.get(I.ANTIQUE_LAMP_17);
@@ -541,7 +546,7 @@ test('Client of Kourend quill accepts the plain/stripy/coloured feathers and rej
 test('Client of Kourend wire stages survive setStage and the real login resend', () => {
   const h = setup();
   const I = core.ItemIdentifiers;
-  const expected = [[0, 0], [1, 1], [2, 2], [3, 4], [4, 5], [5, 9]];
+  const expected = [[0, 0], [1, 1], [2, 2], [3, 4], [4, 5], [5, 7]];
 
   for (const [durable, wire] of expected) {
     h.quest.setStage(h.player, durable);
@@ -563,7 +568,7 @@ test('Client of Kourend wire stages survive setStage and the real login resend',
   h.quest.setStage(h.player, 5);
   h.varbits.clear();
   runtime.sendQuestVarps({ player: h.player });
-  assert.equal(h.varbits.get(5619), 9, 'completion replay keeps the teleport unlock value');
+  assert.equal(h.varbits.get(5619), 7, 'completion replay keeps the endstate');
 });
 
 test('Client of Kourend antique lamp rub spends one lamp for 500 XP', () => {
@@ -584,13 +589,15 @@ test('Client of Kourend antique lamp rub spends one lamp for 500 XP', () => {
   const request = h.xpreward.at(-1);
   assert.ok(request, 'Rub opens the shared xpreward interface');
   const skill = { getName: () => 'Attack' };
-  assert.match(request.onConfirm(skill, 'Attack'), /500 Attack XP/);
+  assert.equal(request.onConfirm(skill, 'Attack'), '<col=0000ff>Your wish has been granted!</col><br>You have been awarded 500 Attack experience!');
   assert.equal(h.getXp(), 500);
   assert.equal(h.items.get(I.ANTIQUE_LAMP_17), 1, 'one lamp is consumed');
+  assert.equal(h.varbits.get(5619), 8, 'one lamp used: veos_progress 8 (local 1001998 tick 2140)');
 
   h.itemAction('Antique lamp', 'Rub', { itemId: I.ANTIQUE_LAMP_17, item: lamp, slot: 3 });
-  assert.match(h.xpreward.at(-1).onConfirm(skill, 'Attack'), /500 Attack XP/);
+  assert.match(h.xpreward.at(-1).onConfirm(skill, 'Attack'), /awarded 500 Attack experience!$/);
   assert.equal(h.getXp(), 1000);
+  assert.equal(h.varbits.get(5619), 9, 'both lamps used: veos_progress 9 (tick 2150)');
   assert.equal(h.items.get(I.ANTIQUE_LAMP_17) ?? 0, 0, 'both lamps are consumed');
 });
 

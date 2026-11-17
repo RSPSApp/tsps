@@ -200,7 +200,7 @@ export class PlayerDeathTask extends Task {
 
         for (const item of playerItems) {
             const dropEligible =
-                (item.isTradeable() || (!item.isLostOnDeath() && Barrows.isBarrowsItem(item.getId()))) &&
+                (item.isPlayerTradeable() || (!item.isLostOnDeath() && Barrows.isBarrowsItem(item.getId()))) &&
                 !itemsToKeep.includes(item) &&
                 !PlayerDeathTask.keepsEverything(player);
             const deathDropEvent = {
@@ -242,9 +242,15 @@ export class PlayerDeathTask extends Task {
             if (item.isLostOnDeath() || itemsToKeep.includes(item)) {
                 continue;
             }
-            // Untradeables are kept unless a death-drops hook takes them (a grave).
-            if (!item.isTradeable() && !Barrows.isBarrowsItem(item.getId())) {
-                lostUntradeables.push(item);
+            // Untradeables are kept unless a death-drops hook takes them (a grave) or a mode
+            // says they are never kept (Ultimate Ironman). The keep hook already excluded
+            // them from the kept slots; honour that answer here too instead of returning them.
+            if (!item.isPlayerTradeable() && !Barrows.isBarrowsItem(item.getId())) {
+                if (PluginManager.emitShouldKeepItemOnDeath(player, item) === false) {
+                    droppedItems.push(item);
+                } else {
+                    lostUntradeables.push(item);
+                }
                 continue;
             }
             droppedItems.push(item);
@@ -269,7 +275,14 @@ export class PlayerDeathTask extends Task {
         // reaches here past the hooks' own eligibility check.
         const owner = PlayerDeathTask.lootOwner(player, killer);
         for (const item of droppedItems) {
-            ItemOnGroundManager.registerLocation(owner, item, position);
+            // A mode may give its death drops a different lifetime (Ultimate Ironman's one-hour
+            // deathpile); the options are generic so the mode plugin owns the policy.
+            const options: { despawnDelay?: number } = {};
+            PluginManager.emitCustomEvent("player-death:drop-options", { player, item, options });
+            const groundItem = ItemOnGroundManager.registerLocation(owner, item, position, undefined, {
+                despawnDelay: options.despawnDelay,
+            });
+            PluginManager.emitCustomEvent("player-death:dropped", { player, item, groundItem });
             dropped = true;
         }
         itemsToKeep.push(...lostUntradeables);

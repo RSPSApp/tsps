@@ -70,7 +70,7 @@ export class ChatTextLayout {
      * space (the client wraps them again the same way), a "<br>" the text had is kept.
      */
     static pages(text: string): string[] {
-        const lines = ChatTextLayout.layout(text);
+        const lines = ChatTextLayout.carryColour(ChatTextLayout.layout(text));
         const pages: string[] = [];
         for (let start = 0; start < lines.length; start += ChatTextLayout.LINES_PER_PAGE) {
             const page = lines.slice(start, start + ChatTextLayout.LINES_PER_PAGE);
@@ -88,6 +88,20 @@ export class ChatTextLayout {
         const paragraphs = String(text ?? "").split(/<br\s*\/?>/i);
         if (!ChatTextLayout.loadAdvances()) return paragraphs.length;
         return paragraphs.reduce((total, paragraph) => total + Math.max(1, ChatTextLayout.wrapParagraph(paragraph, width).length), 0);
+    }
+
+    /**
+     * A colour still open at the end of a line starts the next line again: live repeats the tag on
+     * every line of a coloured passage (Client of Kourend's possessed Veos, rsprox local 1001998
+     * ticks 2109-2121: "<col=000080>...<br><col=000080>..."), and a page is a new chatbox.
+     */
+    private static carryColour(lines: Array<[string, boolean]>): Array<[string, boolean]> {
+        let open: string | null = null;
+        return lines.map(([line, br]) => {
+            const shown: string = open && !/^<col=[0-9a-f]{6}>/i.test(line) ? `${open}${line}` : line;
+            for (const [tag] of shown.matchAll(/<col=[0-9a-f]{6}>|<\/col>/gi)) open = tag.startsWith("</") ? null : tag;
+            return [shown, br];
+        });
     }
 
     /** Each line, and whether a "<br>" ends it. */

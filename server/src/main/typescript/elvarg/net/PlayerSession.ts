@@ -775,6 +775,7 @@ export class PlayerSession {
       movementType: player.getRunningDirection().getId() >= 0
         ? 2
         : player.getWalkingDirection().getId() >= 0 ? 1 : undefined,
+      temporaryMovementType: player.getTemporaryMovementType(),
       appearanceDirty: dirty,
       faceDirection: player.getUpdateFlag().flagged(Flag.FACE_POSITION) && positionToFace
         ? this.faceDirection(location, positionToFace)

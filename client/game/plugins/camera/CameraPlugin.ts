@@ -38,7 +38,7 @@ const PITCH_MAX = 512;
 
 /**
  * RuneLite's Camera plugin: wider zoom limits, a zoom step, Control to zoom or to reset the
- * zoom, camera speed, inverted mouse axes and no camera shake. On top of it, camera easing:
+ * zoom, camera speed, inverted mouse axes, right-drag to turn the camera and no camera shake. On top of it, camera easing:
  * turns speed up and slow down smoothly instead of starting and stopping at once.
  *
  * The zoom options work on the cache's own zoom scripts, as in RuneLite: the limits are the
@@ -70,6 +70,7 @@ export class CameraPlugin extends Plugin implements ClientPlugin, InputKeyHandle
     private cameraSpeed = 1;
     private invertYaw = false;
     private invertPitch = false;
+    private rightClickMovesCamera = false;
     private easingEnabled = true;
     private easeIn = 30;
     private easeOut = 30;
@@ -94,6 +95,7 @@ export class CameraPlugin extends Plugin implements ClientPlugin, InputKeyHandle
 
     protected override async startUp(): Promise<void> {
         this.readConfig();
+        this.client.inputManager.rightDragCamera = this.rightClickMovesCamera;
         this.removeKeyHandler = this.client.inputManager.addKeyHandler(this);
         if (this.client.isLoggedIn()) this.limitsChanged();
     }
@@ -102,6 +104,7 @@ export class CameraPlugin extends Plugin implements ClientPlugin, InputKeyHandle
         this.removeKeyHandler?.();
         this.removeKeyHandler = undefined;
         this.client.cameraShakeDisabled = false;
+        this.client.inputManager.rightDragCamera = false;
         this.easing.stop();
         this.applyLimits(false, 0);
         this.reapplyZoom();
@@ -208,12 +211,16 @@ export class CameraPlugin extends Plugin implements ClientPlugin, InputKeyHandle
         this.cameraSpeed = config.cameraSpeed();
         this.invertYaw = config.invertYaw();
         this.invertPitch = config.invertPitch();
+        this.rightClickMovesCamera = config.rightClickMovesCamera();
         this.easingEnabled = config.easing();
         this.easeIn = config.easeIn();
         this.easeOut = config.easeOut();
         this.easeFrom = config.easeFrom();
         this.easePitch = config.easePitch();
-        if (this.isStarted()) this.client.cameraShakeDisabled = config.disableCameraShake();
+        if (this.isStarted()) {
+            this.client.cameraShakeDisabled = config.disableCameraShake();
+            this.client.inputManager.rightDragCamera = this.rightClickMovesCamera;
+        }
     }
 
     /** camera_set_zoom_limits just wrote the cache's limits: keep them, then widen them. */

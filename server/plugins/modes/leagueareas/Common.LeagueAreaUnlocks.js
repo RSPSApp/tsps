@@ -59,6 +59,7 @@ function loadAreas() {
       teleport: unpackCoord(row.int(ids.teleport, 0)),
       rects: config.rects ?? [],
       squares: config.squares ?? [],
+      tilePolygons: config.tilePolygons ?? [],
     });
   }
   for (const id of Object.keys(data.areas)) {

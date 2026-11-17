@@ -112,15 +112,17 @@ module.exports = {
     ],
   }),
 
-  /** Out of the course: open the north gates, edge south, then the south door behind the player. */
+  /** Out: finish balancing at3918, then cross the south door on the next tick (233/00451). */
   wildernessRidgeOut: () => ({
-    end: { spam: RIDGE.endOut },
     steps: [
       { msg: { spam: RIDGE.start } },
       { run: openRidgeGates },
       { walk: [[2998, 3918]] },
+      { render: null },
+      { msg: { spam: RIDGE.endOut } },
+      { wait: 1 },
       { run: openRidgeDoor },
-      { walk: [[RIDGE.doorOpenTile[0], RIDGE.doorOpenTile[1]]] },
+      { walk: [[RIDGE.doorOpenTile[0], RIDGE.doorOpenTile[1]]], tilesPerTick: 2, arrive: true, traversalType: 1 },
     ],
   }),
 

@@ -63,6 +63,16 @@ export class World {
     private static combatActiveNpcs = new Set<NPC>();
     private static playerTileOccupants: Map<string, Player[]> = new Map();
     private static npcTileOccupants: Map<string, NPC[]> = new Map();
+    /**
+     * OSRS's NPC flag is one bit a tile, not a count of who stands there (osrs-docs: Entity
+     * Collision): an NPC stepping on sets it, and stepping off clears it even under another NPC
+     * still standing there; a player stepping on clears it too. A tile an NPC stands on stops
+     * other NPCs only while its flag is up, which is how NPCs come to stack. The tiles an NPC
+     * stands on whose flag has been cleared since it stepped on them; it raises them again by
+     * moving. rsprox (TzHaar-Ket-Rak, Yt-HurKot chasing a player running through them): 27 of 29
+     * stacks formed on a tile the player had just crossed, the rest on one an NPC had just left.
+     */
+    private static clearedNpcFlags: WeakMap<NPC, Set<string>> = new WeakMap();
     private static npcRegionOccupants: Map<string, Set<NPC>> = new Map();
     private static activeRegionIndex: ActiveRegionIndex = new ActiveRegionIndex(1);
     private static realPlayerObserverBuckets: Map<string, Array<{ x: number; y: number; z: number }>> = new Map();
@@ -311,9 +321,14 @@ export class World {
         nextLocation: Location | null | undefined
     ): void {
         if (!player || !previousLocation || !nextLocation || previousLocation.equals(nextLocation)) return;
+        const teleportSerial = player.getTeleportSerial();
         player.claimTileOccupancy?.();
         World.removePlayerFromTileOccupants(player, previousLocation);
         World.addPlayerToTileOccupants(player, nextLocation);
+        World.clearNpcFlag(
+            World.getNpcTileKey(nextLocation.getX(), nextLocation.getY(), nextLocation.getZ()),
+            player.getPrivateArea?.() ?? null,
+        );
         if ((previousLocation.getX() >> 6) !== (nextLocation.getX() >> 6)
             || (previousLocation.getY() >> 6) !== (nextLocation.getY() >> 6)
             || previousLocation.getZ() !== nextLocation.getZ()) {
@@ -324,6 +339,14 @@ export class World {
                 World.activeNpcsForUpdate = World.collectActiveNpcsForUpdate();
             }
             PluginManager.emitPlayerMapSquareChange({ player, previous: previousLocation, location: nextLocation });
+        }
+        // Existing map-square hooks can move the player recursively. That move already emits its
+        // own notification; never publish the stale outer destination as the current location.
+        if (player.isRegistered() && player.getLocation().equals(nextLocation)
+            && player.getTeleportSerial() === teleportSerial) {
+            PluginManager.emitPlayerLocationChange({
+                player, previous: previousLocation.clone(), location: nextLocation.clone(),
+            });
         }
     }
 
@@ -369,7 +392,25 @@ export class World {
                 } else {
                     World.npcTileOccupants.set(key, [npc]);
                 }
+                // Stepping on raises the tile's flag.
+                World.clearedNpcFlags.get(npc)?.delete(key);
             }
+        }
+    }
+
+    /**
+     * Lowers the NPC flag on a tile (World.clearedNpcFlags): the NPCs standing there in `privateArea`
+     * stop blocking other NPCs there until they move. Pets never raise it.
+     */
+    private static clearNpcFlag(key: string, privateArea: any, leaving: NPC | null = null): void {
+        // Only an NPC that holds the flag can lower it: a pet never raises it, and a hidden NPC
+        // is out of the world and blocks nothing.
+        if (leaving?.isPet?.() || (leaving && !leaving.isVisible())) return;
+        for (const npc of World.npcTileOccupants.get(key) ?? []) {
+            if (npc === leaving || npc.isPet() || (npc.getPrivateArea() ?? null) !== (privateArea ?? null)) continue;
+            let cleared = World.clearedNpcFlags.get(npc);
+            if (!cleared) World.clearedNpcFlags.set(npc, cleared = new Set());
+            cleared.add(key);
         }
     }
 
@@ -383,7 +424,12 @@ export class World {
                 const key = World.getNpcTileKey(location.getX() + x, location.getY() + y, location.getZ());
                 const nextBucket = World.npcTileOccupants.get(key)?.filter((candidate) => candidate !== npc);
                 if (!nextBucket?.length) World.npcTileOccupants.delete(key);
-                else World.npcTileOccupants.set(key, nextBucket);
+                else {
+                    World.npcTileOccupants.set(key, nextBucket);
+                    // Stepping off lowers the flag, even under an NPC still standing there.
+                    World.clearNpcFlag(key, npc.getPrivateArea() ?? null, npc);
+                }
+                World.clearedNpcFlags.get(npc)?.delete(key);
             }
         }
     }
@@ -453,7 +499,9 @@ export class World {
         location: Location | null | undefined,
         ignoredNpc: NPC | null = null,
         size = 1,
-        privateArea?: any
+        privateArea?: any,
+        /** Movement's question: only NPCs whose flag on the tile is still up (World.clearedNpcFlags). */
+        byFlag = false
     ): boolean {
         if (!location) {
             return false;
@@ -466,6 +514,9 @@ export class World {
                 // onto the post the hidden sleeping guard keeps.
                 if (World.npcTileOccupants.get(key)?.some((npc) => npc && npc !== ignoredNpc && !npc.isPet() &&
                     npc.isVisible() &&
+                    // The full flag (barricades, pyramid blocks) is separate from the NPC flag and
+                    // still blocks NPCs once the NPC flag is lowered (osrs-docs: Entity Collision).
+                    !(byFlag && !npc.hasFlag(NPC.BLOCKS_PLAYERS_FLAG) && World.clearedNpcFlags.get(npc)?.has(key)) &&
                     (privateArea === undefined || npc.getPrivateArea() === privateArea))) {
                     return true;
                 }

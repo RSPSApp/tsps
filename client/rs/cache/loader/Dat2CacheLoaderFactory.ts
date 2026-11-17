@@ -92,6 +92,7 @@ import { CacheInfo } from "../CacheInfo";
 import { CacheSystem } from "../CacheSystem";
 import { CacheType } from "../CacheType";
 import { ConfigType } from "../ConfigType";
+import { DeferredArchiveInvTypeLoader, InvTypeLoader } from "../../config/invtype/InvTypeLoader";
 import { IndexType } from "../IndexType";
 import { CacheLoaderFactory } from "./CacheLoaderFactory";
 
@@ -134,6 +135,7 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
                 id => id < nativeSeqCount ? undefined : view().getSource("seq", id), () => view().getCount("seq")),
         };
     }
+    private invTypeLoader?: InvTypeLoader;
     private enumTypeLoader?: EnumTypeLoader;
     private underlayTypeLoader?: FloorTypeLoader;
     private overlayTypeLoader?: OverlayFloorTypeLoader;
@@ -336,6 +338,15 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
         const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
         const idkArchive = configIndex.getArchive(ConfigType.DAT2.identkits);
         return (this.idkTypeLoader = new ArchiveIdkTypeLoader(this.cacheInfo, idkArchive));
+    }
+
+    getInvTypeLoader(): InvTypeLoader | undefined {
+        if (this.invTypeLoader) return this.invTypeLoader;
+        const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
+        if (!configIndex.archiveExists(ConfigType.DAT2.inv)) return undefined;
+        return this.invTypeLoader = new DeferredArchiveInvTypeLoader(this.cacheInfo, () =>
+            configIndex.getArchive(ConfigType.DAT2.inv),
+        );
     }
 
     getEnumTypeLoader(): EnumTypeLoader | undefined {

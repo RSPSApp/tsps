@@ -208,7 +208,16 @@ function interfaceClosed({ player, interfaceId }) {
   // A previous close listener may have synchronously opened a new group 49.
   if (session && player.getPacketSender().getSubInterfaceAt(ui().main) !== session.mount) sessions.delete(player);
 }
-function clearPlayer({ player }) { sessions.delete(player); cuts.delete(player); }
+function stopCut({ player }) {
+  const token = cuts.get(player);
+  if (token?.task) token.task.stop();
+  else cuts.delete(player);
+}
+function cutInterfaceOpened({ player }) {
+  const token = cuts.get(player);
+  if (token && (token.task || player.getCreationMenu() !== token.menu)) stopCut({ player });
+}
+function clearPlayer({ player }) { sessions.delete(player); stopCut({ player }); }
 
 const FRUIT = {
   // Wiki: excess rings fall to the ground. Rec 227/01858: Slice first, then Dice.
@@ -221,17 +230,51 @@ const FRUIT = {
 // Rec 227/01858 (Leagues), tick 14993; active skillmulti supports these labels and mode.
 const FRUIT_MENUS = { pineapple: { title: "How would you like to cut the pineapple?", mode: 12 } };
 
-function chooseCut(player, token, output, count, spillOverflow = false, successMessage = null) {
-  if (cuts.get(player) !== token || !alive(player)) return;
-  cuts.delete(player);
+function eligibleFruit(item, fruitId) {
+  return item?.getId() === fruitId && item.getAmount() === 1 && plain(item);
+}
+
+function commitCut(player, token, fruit, output, count, spillOverflow, successMessage) {
   const items = player.getInventory().getItems();
-  if (items[token.fruit.slot] !== token.fruit.item || items[token.knife.slot] !== token.knife.item
-      || token.knife.item.getId() !== token.knife.id) return;
-  const transaction = plan(player, [[token.fruit.id, 1]], [[output, count]], [token.fruit], [], spillOverflow);
-  if (!transaction) return;
+  if (items[token.knife.slot] !== token.knife.item || token.knife.item.getId() !== token.knife.id
+      || token.knife.item.getAmount() !== 1 || !plain(token.knife.item)) return false;
+  const transaction = plan(player, [[token.fruit.id, 1]], [[output, count]], [fruit], [], spillOverflow);
+  if (!transaction) return false;
   // Recorded success chat precedes the inventory delta (227/910449 and 227/910356).
   if (successMessage) Common.spam(player, successMessage);
   apply(player, transaction, output, 0, "make");
+  return true;
+}
+
+function chooseCut(player, token, output, count, spillOverflow = false, successMessage = null, amount = null) {
+  if (cuts.get(player) !== token || !alive(player)) return;
+  if (amount === null) {
+    cuts.delete(player);
+    commitCut(player, token, token.fruit, output, count, spillOverflow, successMessage);
+    return;
+  }
+  let remaining = Math.min(Math.max(1, amount | 0), token.maxAmount), first = true;
+  token.task = new (class PineappleCutTask extends Common.core.Task {
+    constructor() { super(1, player.getIndex(), false); }
+    execute() {
+      if (cuts.get(player) !== token || !alive(player)) { this.stop(); return; }
+      const items = player.getInventory().getItems();
+      const slot = first ? token.fruit.slot : items.findIndex(item => eligibleFruit(item, token.fruit.id));
+      const fruit = first ? token.fruit : { slot, item: items[slot], id: token.fruit.id };
+      if (slot < 0 || !commitCut(player, token, fruit, output, count, spillOverflow, successMessage)) {
+        this.stop(); return;
+      }
+      first = false;
+      if (--remaining <= 0) this.stop();
+      else this.setDelay(2);
+    }
+    stop() {
+      super.stop();
+      // A cancelled old task must never erase a subsequently opened menu or batch.
+      if (cuts.get(player) === token) cuts.delete(player);
+    }
+  })();
+  Common.core.TaskManager.submit(token.task);
 }
 
 function useItems(event) {
@@ -258,17 +301,20 @@ function useItems(event) {
   if (!fruit || !plain(fruit.item)) return;
   const name = Object.keys(FRUIT).find((value) => id(value) === fruit.id), token = { fruit, knife };
   event.handled = true;
+  stopCut({ player });
   cuts.set(player, token);
   const menu = FRUIT_MENUS[name];
   if (menu) {
     const choices = FRUIT[name];
-    player.getPacketSender().sendCreationMenu(new Common.core.CreationMenu(menu.title,
+    token.maxAmount = player.getInventory().getItems().filter(item => eligibleFruit(item, fruit.id)).length;
+    token.menu = new Common.core.CreationMenu(menu.title,
       choices.map(([, output]) => id(output)), {
-        execute: (itemId) => {
+        execute: (itemId, amount) => {
           const choice = choices.find(([, output]) => id(output) === itemId);
-          if (choice) chooseCut(player, token, choice[1], choice[2], choice[3], choice[4]);
+          if (choice) chooseCut(player, token, choice[1], choice[2], choice[3], choice[4], amount);
         },
-      }, { mode: menu.mode, maxAmount: 1, lastAmount: 1, labels: choices.map(([text]) => text) }));
+      }, { mode: menu.mode, maxAmount: token.maxAmount, lastAmount: token.maxAmount, labels: choices.map(([text]) => text) });
+    player.getPacketSender().sendCreationMenu(token.menu);
     return;
   }
   const pairs = FRUIT[name].flatMap(([text, output, count]) => [text, () => chooseCut(player, token, output, count)]);
@@ -296,6 +342,8 @@ function attach(api) {
   api.onItemOnItem(useItems, { noted: false });
   api.onInterfaceActionClick(interfaceAction);
   api.onCustomEvent("interface:closed", interfaceClosed);
+  api.onCustomEvent("interface:opened", cutInterfaceOpened);
+  api.onCustomEvent("player:interaction-cleared", stopCut);
   api.onPlayerLogout(clearPlayer);
   api.onPlayerDisconnect(clearPlayer);
   api.onPlayerDeath(clearPlayer);

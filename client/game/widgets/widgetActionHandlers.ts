@@ -19,7 +19,7 @@ import type { WidgetManager } from "../../widgets/WidgetManager";
 import { isWidgetUseTarget } from "../../widgets/WidgetFlags";
 import { ClientState } from "../ClientState";
 import { createSelectedSpellOnWidgetPacket } from "../selectedSpellPackets";
-import type { WidgetActionEvent } from "./widgetActionPayload";
+import { resolveWidgetIdentifiers, type WidgetActionEvent } from "./widgetActionPayload";
 import { closeOpenModal } from "./input/widgetKeyboardInput";
 import { spellWidgetChildSlot } from "./SpellSelectionController";
 
@@ -336,47 +336,67 @@ export function handleWidgetActionTargeting(
             return true;
         }
 
-        ClientState.clearItemSelection();
-        try {
-            deps.getInventory()?.setSelectedSlot?.(null);
-        } catch {}
-        ClientState.isSpellSelected = true;
-        ClientState.selectedSpellWidget = spellSelection.widgetId;
-        ClientState.selectedSpellChildIndex = spellSelection.childIndex;
-        ClientState.selectedSpellItemId = spellSelection.itemId;
-        ClientState.selectedSpellActionName = targetVerb;
-        ClientState.selectedSpellName =
-            event.widget.opBase ||
-            event.widget.dataText ||
-            event.widget.name ||
-            event.target ||
-            "";
-        ClientState.spellTargetEnteredFrame = Date.now();
-        ClientState.selectedSpellTargetMask = targetMask;
-
-        console.log(
-            `[OsrsClient] Entered spell targeting mode: widget=${
-                spellSelection.widgetId
-            }, verb="${targetVerb}", name="${
-                ClientState.selectedSpellName
-            }", group=${(spellSelection.widgetId >>> 16) & 0xffff}, child=${
-                spellSelection.childIndex
-            }, targetMask=0x${ClientState.selectedSpellTargetMask.toString(16)}`,
-        );
-
-        deps.setSelectedSpell(
-            {
-                spellId: spellSelection.childIndex,
-                spellName: ClientState.selectedSpellName,
-                spellLevel: 1,
-            },
-            event.widget,
-        );
+        selectWidgetTarget(deps, event, spellSelection, targetVerb, targetMask);
 
         return true;
     }
 
     return false;
+}
+
+/** The eleventh key slot selects a target; it never performs a mouse click on that target. */
+export function handleWidgetShortcutTarget(deps: WidgetActionHandlersDeps, widget: any): void {
+    if (!widget) return;
+    deps.clearSelectedSpell();
+    const widgetId = resolveWidgetIdentifiers(deps.getWidgetManager(), widget)?.widgetId ?? widget.uid;
+    const selection = deps.resolveSpellSelectionFromWidget(
+        widget, widgetId, spellWidgetChildSlot(widget), widget.itemId ?? -1,
+    );
+    selectWidgetTarget(deps, { widget }, selection,
+        widget.targetVerb || widget.spellActionName || "null", deps.getWidgetTargetMask(widget));
+}
+
+function selectWidgetTarget(
+    deps: WidgetActionHandlersDeps, event: WidgetActionEvent, spellSelection: SpellSelectionState,
+    targetVerb: string, targetMask: number,
+): void {
+    ClientState.clearItemSelection();
+    try {
+        deps.getInventory()?.setSelectedSlot?.(null);
+    } catch {}
+    ClientState.isSpellSelected = true;
+    ClientState.selectedSpellWidget = spellSelection.widgetId;
+    ClientState.selectedSpellChildIndex = spellSelection.childIndex;
+    ClientState.selectedSpellItemId = spellSelection.itemId;
+    ClientState.selectedSpellActionName = targetVerb;
+    ClientState.selectedSpellName =
+        event.widget.opBase ||
+        event.widget.dataText ||
+        event.widget.name ||
+        event.target ||
+        "";
+    ClientState.spellTargetEnteredFrame = Date.now();
+    ClientState.selectedSpellTargetMask = targetMask;
+
+    console.log(
+        `[OsrsClient] Entered spell targeting mode: widget=${
+            spellSelection.widgetId
+        }, verb="${targetVerb}", name="${
+            ClientState.selectedSpellName
+        }", group=${(spellSelection.widgetId >>> 16) & 0xffff}, child=${
+            spellSelection.childIndex
+        }, targetMask=0x${ClientState.selectedSpellTargetMask.toString(16)}`,
+    );
+
+    deps.setSelectedSpell(
+        {
+            spellId: spellSelection.childIndex,
+            spellName: ClientState.selectedSpellName,
+            spellLevel: 1,
+        },
+        event.widget,
+    );
+
 }
 
 /** Pause/continue button widgets. Returns true when fully handled. */

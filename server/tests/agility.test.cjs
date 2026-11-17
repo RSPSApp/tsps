@@ -86,6 +86,7 @@ function chainable(sender) {
 function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], boostedTo = level } = {}) {
   let location = new Location(x, y, z);
   let forceMovement = null;
+  let skillAnimation = -1;
   const attributes = new Map();
   const state = { xp: 0, otherXp: {}, messages: [], spam: [], varbits: new Map(), varbitLog: [], scripts: [], sounds: [], animations: [], hits: 0, blocked: false, walked: 0 };
   const player = {
@@ -104,7 +105,9 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
     }),
     getForceMovement: () => forceMovement,
     setForceMovement: (value) => { forceMovement = value; return player; },
-    setSkillAnimation: (id) => { (state.renders ??= []).push(id); },
+    getSkillAnimation: () => skillAnimation,
+    setSkillAnimation: (id) => { skillAnimation = id; (state.renders ??= []).push(id); },
+    setTemporaryMovementType: (type) => { state.temporaryMovementType = type; },
     getUpdateFlag: () => ({ flag() {} }),
     performAnimation: (animation) => state.animations.push(animation.getId()),
     performGraphic() {},
@@ -138,7 +141,7 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
       sendInterfaceScript: (id, args) => state.scripts.push([id, ...args]),
       sendTypedMessage: (type, message) => { state.spam.push(message); state.messages.push(message); },
       sendSound() {},
-      sendSoundEffect: (id, loops, delay) => state.sounds.push(id),
+      sendSoundEffect: (id, loops, delay) => { state.sounds.push(id); (state.soundDetails ??= []).push([id, loops, delay]); },
       sendObjectAnimation() {},
       sendGlobalGraphic: (graphic, at) => { (state.tileGraphics ??= []).push([graphic.id, graphic.delay, at.getX(), at.getY(), at.getZ()]); },
     }),
@@ -696,6 +699,32 @@ test("Piscatoris falconry stile (19222) crosses its 1x2 footprint both ways at l
     assert.notEqual(operate(player, 19222, at, object.getFace()), false);
     assert.deepEqual(tileOf(player), to, `crossing from side ${side}`);
     assert.equal(player.state.xp, 0);
+  }
+});
+
+test("Tenzing's stile (3730) steps onto it, walks over it and steps off, both ways (rsprox local 1001800 ticks 25271-25275)", () => {
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  RegionManager.init();
+  const at = [2817, 3562, 0], ends = [[2817, 3561, 0], [2817, 3564, 0]];
+  RegionManager.loadMapFiles(at[0], at[1]);
+  const object = MapObjects.get(3730, new Location(...at), null);
+  assert.ok(object, "cache stile at Tenzing's hut");
+  for (const end of ends) assert.equal(RegionManager.blocked(new Location(...end), null), false, `${end} is walkable`);
+  for (const side of [0, 1]) {
+    const from = ends[side], to = ends[1 - side];
+    const player = createPlayer(...from, 1);
+    const route = { player, object, objectId: 3730, clickType: 1, destination: null };
+    hooks.route.forEach(handler => handler(route));
+    assert.deepEqual(route.destination, { x: from[0], y: from[1], z: from[2] }, `approach stays on side ${side}`);
+    player.setLocation(new Location(...from));
+    const moves = [];
+    const setForceMovement = player.setForceMovement;
+    player.setForceMovement = (value) => { if (value) moves.push(value); return setForceMovement(value); };
+    assert.notEqual(operate(player, 3730, at, object.getFace()), false);
+    assert.deepEqual(tileOf(player), to, `crossing from side ${side} ends off the stile`);
+    assert.equal(moves.length, 1, "one exact move, over the stile");
+    assert.deepEqual(player.state.messages ?? [], [], "no message");
   }
 });
 
@@ -2339,6 +2368,29 @@ function ticksWith(ticks, test) {
   return ticks.map((entry, index) => (test(entry) ? index : null)).filter((index) => index != null);
 }
 
+test("Coal Trucks log: captured feedback and five-tick crossing in both directions", () => {
+  for (const [start, end] of [[[2598, 3477, 0], [2603, 3477, 0]], [[2603, 3477, 0], [2598, 3477, 0]]]) {
+    const player = createPlayer(...start, 20);
+    const ticks = timeline(player, 23274, [start[0] === 2598 ? 2599 : 2602, 3477, 0]);
+    assert.deepEqual(tileOf(player), end);
+    assert.deepEqual(ticks[0].messages, ["You walk carefully across the slippery log..."]);
+    assert.deepEqual(ticks[5].messages, ["... and make it safely to the other side."]);
+    assert.deepEqual(player.state.spam, ["You walk carefully across the slippery log...", "... and make it safely to the other side."]);
+    assert.deepEqual(ticksWith(ticks, (entry) => entry.sounds.includes(2470)), [1, 4]);
+    assert.deepEqual(player.state.soundDetails, [[2470, 2, 0], [2470, 1, 0]]);
+    assert.equal(ticks[5].xp, 8.5);
+    assert.equal(ticks.length - 1, 5);
+    assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393).map(([, value]) => value), [1, 0]);
+    assert.equal(player.state.blocked, false);
+  }
+  const novice = createPlayer(2598, 3477, 0, 19);
+  timeline(novice, 23274, [2599, 3477, 0]);
+  assert.deepEqual(tileOf(novice), [2598, 3477, 0]);
+  assert.deepEqual(novice.state.messages, ["You need an Agility level of at least 20 to attempt this."]);
+  assert.equal(novice.state.xp, 0);
+  assert.deepEqual(novice.state.sounds, []);
+});
+
 test("as captured (RSProx 20261109T224258-5ab63b4): the Auburn Valley log balance, a tile a tick with sound 2470 each", () => {
   for (const [objectId, start, object, finish, steps] of [
     [56991, [1453, 3336, 0], [1453, 3335, 0], [1453, 3329], 7],
@@ -2791,9 +2843,10 @@ test("Wilderness ridge door: opening the south door and the north gates swaps th
   assert.deepEqual(enter.steps[2], { walk: [[2998, 3930]] });
   assert.deepEqual(enter.steps[4], { walk: [[2998, 3931]], arrive: true });
   const leave = require("../plugins/skills/agility/shortcuts/Wilderness.Agility").wildernessRidgeOut();
-  assert.deepEqual(leave.end, { spam: RIDGE.endOut });
+  assert.equal(leave.end, undefined, 'the early exit line has no completion duplicate');
   assert.deepEqual(leave.steps[2], { walk: [[2998, 3918]] });
-  assert.deepEqual(leave.steps[4], { walk: [[2998, 3916]] });
+  assert.deepEqual(leave.steps[4], { msg: { spam: RIDGE.endOut } });
+  assert.deepEqual(leave.steps.at(-1), { walk: [[2998, 3916]], tilesPerTick: 2, arrive: true, traversalType: 1 });
 });
 
 test("as captured (rsprox 449 ticks 15-32, 451 ticks 31-47): the ridge door opens as the player steps in, the north gates as they step out", () => {

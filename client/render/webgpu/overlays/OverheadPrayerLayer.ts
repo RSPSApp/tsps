@@ -8,6 +8,10 @@ import type { OverlayHost } from "./OverlayHost";
 import type { ScreenLayer, ScreenTexture } from "./ScreenLayer";
 import { indexedSpriteToPixels } from "./textTextures";
 
+function pushSprite(out: ScreenTexture[], sprite: ScreenTexture | undefined): void {
+    if (sprite !== undefined) out.push(sprite);
+}
+
 /**
  * Port of client/ui/devoverlay/OverheadPrayerOverlay.ts: PK skull, prayer and NPC head icons
  * in the same per-actor stacking order.
@@ -33,6 +37,8 @@ export class OverheadPrayerLayer {
     private archiveIds = { pk: -1, prayer: -1, hint: -1 };
 
     scale = 1.0;
+    /** One entry's sprites, refilled per entry in draw(). */
+    private readonly spriteScratch: ScreenTexture[] = [];
 
     constructor(host: OverlayHost, screen: ScreenLayer) {
         this.host = host;
@@ -50,16 +56,17 @@ export class OverheadPrayerLayer {
         const helpers = args.helpers;
         const stacks = args.state.actor2dStacks;
 
+        // Same order as before (pk, prayer, hint, NPC icons, custom icons); one array per frame.
+        const sprites = this.spriteScratch;
         for (const entry of entries) {
-            const sprites = [
-                this.getSprite("pk", entry.headIconPk | 0),
-                this.getSprite("prayer", entry.headIconPrayer | 0),
-                entry.headIconHint && isHintArrowBlinkOn() ? this.getSprite("hint", 0) : undefined,
-                ...(entry.npcHeadIcons ?? []).map((icon) =>
-                    this.getNpcSprite(icon.archiveId, icon.spriteId),
-                ),
-                ...(entry.customHeadIcons ?? []).map((icon) => this.getCustomSprite(icon)),
-            ].filter((sprite): sprite is ScreenTexture => sprite !== undefined);
+            sprites.length = 0;
+            pushSprite(sprites, this.getSprite("pk", entry.headIconPk | 0));
+            pushSprite(sprites, this.getSprite("prayer", entry.headIconPrayer | 0));
+            if (entry.headIconHint && isHintArrowBlinkOn()) pushSprite(sprites, this.getSprite("hint", 0));
+            const npcIcons = entry.npcHeadIcons;
+            if (npcIcons) for (const icon of npcIcons) pushSprite(sprites, this.getNpcSprite(icon.archiveId, icon.spriteId));
+            const customIcons = entry.customHeadIcons;
+            if (customIcons) for (const icon of customIcons) pushSprite(sprites, this.getCustomSprite(icon));
             if (sprites.length === 0) continue;
 
             const plane = entry.plane | 0;

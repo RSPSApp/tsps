@@ -49,11 +49,7 @@ function portalLoc(direction) {
 }
 
 function tamara() {
-  const id = Shared.npc(TAMARA);
-  for (const npc of Shared.core().World.getNpcs()) {
-    if (npc && npc.getId?.() === id && Shared.inTemple(npc.getLocation())) return npc;
-  }
-  return null;
+  return Shared.templeNpc(Shared.npc(TAMARA));
 }
 
 function portalOpened({ direction }) {

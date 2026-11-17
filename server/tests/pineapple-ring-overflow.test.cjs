@@ -17,6 +17,7 @@ before(async () => {
   console.error = (...args) => { errors.push(args.map(String).join(' ')); originalError(...args); };
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   core = PM.getCoreApi();
+  require('../plugins/items/ItemDefinitionLoader.plugin').register(PM.createApi('ItemDefinitionLoader'));
   require('../plugins/skills/Cooking.plugin').register(PM.createApi('Cooking'));
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(3226, 3218);
@@ -51,13 +52,13 @@ function fixture(t, freeSlots = 0, fruitName = 'pineapple') {
     target: {kind: 'inventory', id: id(fruitName), slot: fruitSlot}});
   const floor = () => core.ItemOnGroundManager.ownedBy(p.getUsername()).filter(g =>
     !g.isPendingRemoval() && g.getPosition().equals(p.getLocation()) && g.getPrivateArea() === p.getPrivateArea());
-  const choose = async output => {
+  const choose = async (output, amount = 1) => {
     const menu = p.getCreationMenu();
     assert.ok(menu, 'native fruit choice must have a current skillmulti menu');
     const index = menu.getItems().indexOf(id(output));
     assert.ok(index >= 0);
     return send({type: 'dialogue_continue', widgetId: (CREATION_MENU_GROUP_ID << 16) |
-      (CREATION_MENU_FIRST_ITEM_COMPONENT + index), childIndex: 1});
+      (CREATION_MENU_FIRST_ITEM_COMPONENT + index), childIndex: amount});
   };
   t.after(() => {
     p.closeInterruptibleInterfaces();
@@ -104,7 +105,7 @@ const cuttingMessages = f => f.packets.map(wire).filter(p=>p.text?.startsWith('Y
 test('successful pineapple choices send the recorded spam line once before inventory output', async t => {
   for(const [output,text] of [['pineapple_ring','You cut the pineapple into rings.'],
     ['pineapple_chunks','You cut the pineapple into chunks.']]) await t.test(output,async t=>{
-    const f=fixture(t,4); await f.use(); f.packets.length=0; await f.choose(output);
+    const f=fixture(t,4); await f.use(); f.packets.length=0; await f.choose(output); f.turn();
     const packets=f.packets.map(wire), messages=cuttingMessages(f);
     assert.deepEqual(messages,[{opcode:120,text,type:core.ChatType.SPAM}]);
     const messageIndex=packets.findIndex(p=>p.text===text), inventoryIndex=packets.findIndex(p=>p.opcode===50||p.opcode===51);
@@ -122,6 +123,8 @@ test('pineapple overflow follows the real World ground lifecycle and encoded vis
   assert.ok(f.p.getCreationMenu(),'World player-input pass opens the native menu');
   f.packets.length=0; other.packets.length=0;
   await f.connection.dispatch([{type:'dialogue_continue',widgetId:(CREATION_MENU_GROUP_ID<<16)|CREATION_MENU_FIRST_ITEM_COMPONENT,childIndex:1}]);
+  core.World.process();
+  assert.equal(f.inv.getAmount(ring),0,'selection turn has no output');
   const cutTick=core.World.getProcessCycle()+1;
   core.World.process();
   const pile=f.floor().find(g=>g.getItem().getId()===ring);
@@ -166,7 +169,7 @@ test('pineapple knife-use mounts the recorded Slice/Dice skillmulti menu', async
 });
 test('Slice preserves all four rings with no free inventory slot', async t => {
   const f = fixture(t), before = f.p.getSkillManager().getExperience(core.Skill.COOKING);
-  assert.equal(f.inv.getFreeSlots(), 0); await f.use(); await f.slice();
+  assert.equal(f.inv.getFreeSlots(), 0); await f.use(); await f.slice(); f.turn();
   const floorRings = f.floor().filter(g => g.getItem().getId() === f.id('pineapple_ring'));
   assert.equal(f.inv.getAmount(f.id('pineapple_ring')) + floorRings.reduce((sum,g) => sum+g.getItem().getAmount(),0), 4,
     'Slice conserves four rings across inventory and owned ground');
@@ -182,7 +185,7 @@ test('Slice fits exactly the available slots and spills the remainder once', asy
     const others = () => f.inv.getItems().filter(item => item.getId() > 0 &&
       ![f.id('pineapple'), ring].includes(item.getId())).map(item => [item.getId(), item.getAmount(), item.getMeta()]);
     const before = others(), xp = f.p.getSkillManager().getExperience(core.Skill.COOKING);
-    await f.use(); await f.slice();
+    await f.use(); await f.slice(); f.turn();
     assert.equal(f.inv.getAmount(ring), Math.min(4, free + 1));
     assert.equal(f.floor().reduce((n,g) => n + (g.getItem().getId() === ring ? g.getItem().getAmount() : 0), 0), Math.max(0, 3-free));
     assert.deepEqual(others(), before);
@@ -195,7 +198,7 @@ test('Slice fits exactly the available slots and spills the remainder once', asy
 
 test('overflow belongs to its player and native Take preserves it across full and partial pickup', async t => {
   const f = fixture(t), other = fixture(t, 3), ring = f.id('pineapple_ring');
-  await f.use(); await f.slice();
+  await f.use(); await f.slice(); f.turn();
   const pile = f.floor().find(g => g.getItem().getId() === ring);
   assert.ok(pile); assert.equal(pile.getItem().getAmount(), 3);
   assert.equal(pile.getOwner(), f.p.getUsername());
@@ -218,7 +221,7 @@ test('overflow belongs to its player and native Take preserves it across full an
 });
 
 test('Dice and other fruits keep their original output and consume no knife', async t => {
-  const f = fixture(t); await f.use(); await f.choose('pineapple_chunks');
+  const f = fixture(t); await f.use(); await f.choose('pineapple_chunks'); f.turn();
   assert.equal(f.inv.getAmount(f.id('pineapple_chunks')), 1);
   assert.equal(f.inv.getItems()[f.knifeSlot], f.knife); assert.equal(f.floor().length, 0);
   const lemon = fixture(t, 0, 'lemon'); await lemon.use();
@@ -239,5 +242,97 @@ test('closing and real ingredient Drop invalidate the pending native selection',
     assert.equal(f.inv.getAmount(f.id('pineapple')), action === 'close' ? 1 : 0);
     assert.equal(f.inv.getItems()[f.knifeSlot], f.knife);
     assert.deepEqual(cuttingMessages(f), [], 'a cancelled choice cannot announce a successful cut');
+  });
+});
+
+test('queued World pineapple quantities start next turn and repeat every two turns', async t => {
+  for (const output of ['pineapple_ring','pineapple_chunks']) for (const amount of [1,2,99]) await t.test(output+' quantity '+amount,async t=>{
+    const f=fixture(t,12), fruit=f.id('pineapple'), product=f.id(output), each=output==='pineapple_ring'?4:1;
+    f.inv.add(new core.Item(fruit,2),false);
+    const xp=f.p.getSkillManager().getExperience(core.Skill.COOKING);
+    await f.use(); assert.equal(f.p.getCreationMenu().getOptions().maxAmount,3);
+    assert.equal(f.p.getCreationMenu().getOptions().lastAmount,3);
+    await f.connection.dispatch([{type:'dialogue_continue',widgetId:(CREATION_MENU_GROUP_ID<<16)|
+      (CREATION_MENU_FIRST_ITEM_COMPONENT+(output==='pineapple_chunks'?1:0)),childIndex:amount}]);
+    core.World.process(); assert.equal(f.p.getCreationMenu(),null); assert.equal(f.inv.getAmount(product),0);
+    const counts=[]; for(let tick=1;tick<=7;tick++){ core.World.process(); counts.push(f.inv.getAmount(product)); }
+    const total=Math.min(amount,3);
+    assert.deepEqual(counts,[1,1,Math.min(2,total),Math.min(2,total),total,total,total].map(n=>n*each));
+    assert.equal(cuttingMessages(f).length,total); assert.equal(f.inv.getAmount(fruit),3-total);
+    assert.equal(f.inv.getItems()[f.knifeSlot],f.knife);
+    assert.equal(f.p.getSkillManager().getExperience(core.Skill.COOKING),xp);
+  });
+});
+
+
+test('selected pineapple is first and repeats re-read eligible fruit with full-bag overflow',async t=>{
+  const f=fixture(t), fruit=f.id('pineapple'), ring=f.id('pineapple_ring');
+  const bread=f.inv.getSlotForItemId(f.id('bread'));
+  f.inv.setItem(bread,new core.Item(fruit,1));
+  // Selected fruit occupies the later slot, so id-based first-slot deletion would be wrong.
+  f.inv.swap(f.fruitSlot,bread);
+  f.inv.setItem(5,new core.Item(fruit,1,{preset:true}));
+  await f.use(); assert.equal(f.p.getCreationMenu().getOptions().maxAmount,2);
+  await f.choose('pineapple_ring',99); f.turn();
+  assert.equal(f.inv.getItems()[f.fruitSlot].getId(),ring);
+  assert.equal(f.inv.getItems()[bread].getId(),fruit);
+  f.turn(); f.turn();
+  assert.equal(f.inv.getItems()[5].isPresetItem(),true);
+  assert.equal(f.inv.getAmount(ring)+f.floor().filter(g=>g.getItem().getId()===ring).reduce((n,g)=>n+g.getItem().getAmount(),0),8);
+  assert.equal(cuttingMessages(f).length,2);
+});
+
+test('retained selected slots reject real empty/refill and same-id replacements',async t=>{
+  for(const target of ['fruit','knife']) for(const transition of ['refill','replace','move']) await t.test(target+' '+transition,async t=>{
+    const f=fixture(t,8), slot=target==='fruit'?f.fruitSlot:f.knifeSlot;
+    const itemId=f.inv.getItems()[slot].getId(); await f.use(); await f.choose('pineapple_ring');
+    if(transition==='replace') f.inv.setItem(slot,new core.Item(itemId,1));
+    else if(transition==='move') f.inv.swap(slot,27);
+    else { f.inv.deleteAtSlot(slot,1,false); f.inv.add(new core.Item(itemId,1),false); }
+    f.turn(); f.turn(); assert.equal(f.inv.getAmount(f.id('pineapple_ring')),0);
+    assert.equal(cuttingMessages(f).length,0); assert.equal(f.inv.getAmount(itemId),1);
+  });
+});
+
+test('walking, new item-use, interface replacement and lifecycle events stop pending and repeated cuts',async t=>{
+  for(const afterFirst of [false,true]) for(const action of ['walk','use','interface','logout','disconnect','death']) await t.test(action+' afterFirst='+afterFirst,async t=>{
+    const f=fixture(t,12); f.inv.add(new core.Item(f.id('pineapple'),2),false);
+    await f.use(); await f.choose('pineapple_ring',99); if(afterFirst)f.turn();
+    if(action==='walk')await f.send({type:'move',worldX:3227,worldY:3218,modifierFlags:0,run:false});
+    if(action==='use')await f.use();
+    if(action==='interface')f.p.getPacketSender().sendInterface(12);
+    if(action==='logout')PM.emitPlayerLogout({player:f.p,username:f.p.getUsername()});
+    if(action==='disconnect')PM.emitPlayerDisconnect({player:f.p,username:f.p.getUsername()});
+    if(action==='death')PM.emitPlayerDeath({player:f.p});
+    for(let n=0;n<6;n++)f.turn();
+    assert.equal(f.inv.getAmount(f.id('pineapple_ring')),afterFirst?4:0);
+    assert.equal(cuttingMessages(f).length,afterFirst?1:0);
+  });
+});
+
+test('replacement creation menu cannot execute an older captured menu',async t=>{
+  const f=fixture(t,12); f.inv.add(new core.Item(f.id('pineapple'),1),false);
+  await f.use(); const stale=f.p.getCreationMenu();
+  f.p.getPacketSender().sendCreationMenu(new core.CreationMenu('Replacement',[f.id('bread')],{execute(){}},{maxAmount:1}));
+  stale.execute(f.id('pineapple_ring'),1); f.turn(); assert.equal(cuttingMessages(f).length,0);
+  await f.use(); await f.choose('pineapple_ring',2);
+  await f.use(); await f.choose('pineapple_chunks',2);
+  for(let n=0;n<5;n++)f.turn();
+  assert.equal(f.inv.getAmount(f.id('pineapple_ring')),0); assert.equal(f.inv.getAmount(f.id('pineapple_chunks')),2);
+});
+
+test('real bank deposit/withdraw invalidates a waiting cut and permits a fresh selection',async t=>{
+  for(const target of ['pineapple','knife'])await t.test(target,async t=>{
+    const f=fixture(t,10), item=f.id(target), slot=f.inv.getSlotForItemId(item);
+    await f.use(); await f.choose('pineapple_ring');
+    f.p.setStatus(core.PlayerStatus.BANKING); f.p.setInterfaceId(core.Bank.MAIN_INTERFACE_ID);
+    core.Bank.deposit(f.p,item,slot,1,false);
+    const tab=core.Bank.getTabForItem(f.p,item), bank=f.p.getBank(tab);
+    assert.equal(bank.getAmount(item),1);
+    core.Bank.withdraw(f.p,item,bank.getSlotForItemId(item),1,tab);
+    assert.equal(f.inv.getAmount(item),1);
+    f.p.closeInterruptibleInterfaces(); f.p.setStatus(core.PlayerStatus.NONE);
+    for(let n=0;n<3;n++)f.turn(); assert.equal(f.inv.getAmount(f.id('pineapple_ring')),0);
+    await f.use(); await f.choose('pineapple_ring'); f.turn(); assert.equal(f.inv.getAmount(f.id('pineapple_ring')),4);
   });
 });

@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-16",
+  "updated": "2026-11-17",
   "note": "Progress measures functional equivalence with OSRS through implementation tasks: done counts fully, in progress counts halfway, and to do counts zero. Automated test coverage is evidence, not a scoring requirement. Reconciled against tsps main 3e9ee2d67 on 11 November 2026, covering 1,355 merged PRs since the 6 November checkpoint 3b61a15a8. This sync credits the implemented portions of Clan Wars, Burthorpe Games Room, ranked PvP Arena, Trouble Brewing, Intelligence Gathering, Halloween, seasonal rares, Brutus and Maggot King. It also records Hunter Rumours, diary and League task updates, Sailing, bank-funded Grand Exchange offers, Curse of the Empty Lord, quest progression fixes, combat and interface work. Existing inventory, task scope and weights are retained. Only merged main changes are credited.",
   "schema": {
     "item": [
@@ -17307,7 +17307,8 @@
             "Quest objectives remain partial where the module documents substituted puzzles, travel, followers or encounters; completion alone is not treated as full OSRS equivalence.",
             "Documented implementation limits: - The fortress wall (loc 2341) is pushed by the earlier BlackKnightsFortress plugin, which does not know this quest, so the \"full black armour\" gate is enforced when climbing down the basement ladder (25843) instead of on the push. - No Telekinetic Grab on the jail guard and no Mastermind interface 588: the knights' pocket hand-outs supply a lockpick (Kay's) and opening the cell door plays the transcript's success message directly. - The box-selection interface (390) is not driven; the grail table plays the wiki riddle then a Box 1..9 prompt (correct box 8). A wrong box teleports with 5 damage; the stat drain is skipped. - Venting out lands at the Catherby docks instead of the keep's back dock. - Trial witnesses are not spawned: picking a name in the judge's menu starts that witness's testimony transcript once the chatbox clears. - Evidence items are presented by menu choice and not consumed. The scrap paper has no static ground spawn, so it is registered per player in the dining room (the address form has one already). - No Knight Waves training grounds, no Chivalry/Piety unlock.",
             "Main 3b61a15a8 (6 November 2026): #2399 Use the native OSRS quest list and repair quest state publication. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4274 King's Ransom: the grail table opens the nine-box interface. #3911 XP rewards: diary, quest and minigame lamps, tomes and rewards take the world and account rates. #3725 King's Ransom lamp: spent only when its XP lands, from the rubbed slot. 4 merged PRs changed recorded implementation files for this entry."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4274 King's Ransom: the grail table opens the nine-box interface. #3911 XP rewards: diary, quest and minigame lamps, tomes and rewards take the world and account rates. #3725 King's Ransom lamp: spent only when its XP lands, from the rubbed slot. 4 merged PRs changed recorded implementation files for this entry.",
+            "17 November 2026: Camelot grounds gate Open now opens and crosses in one ordinary walking cycle, matching capture242/911979 while retaining two-tick restoration and the captive refusal. The default-off object-route phase preserves other gates and item/spell/destination/approach behavior; stale busy/death/teleport/placement input is canceled. Verification and scope: docs/quests/kings-ransom/README.md and server/tests/camelot-gate.test.cjs. This localized gate fix does not complete the remaining quest puzzles or change existing task statuses."
           ],
           "taskDetails": [
             {
@@ -34724,7 +34725,7 @@
         {
           "name": "Ultimate Ironman",
           "tasks": [
-            "in-progress",
+            "done",
             "in-progress",
             "done",
             "done"
@@ -34758,7 +34759,8 @@
             "Allowed/forbidden storage exceptions and some Ultimate-specific looting/POH/seed-vault limits remain incomplete.",
             "PR #856 routes Telekinetic Grab through the same ownership veto as normal Ironman pickup, closing the other-player loot bypass. The remaining mode-specific exception/storage criteria are unchanged.",
             "Main 8403b60db (4 November 2026): #2113, #2204 — Bank/storage safeguards and Count Check PIN exemption are repaired; missing broader account-mode restrictions retain partial credit.",
-            "Main 3b61a15a8 (6 November 2026): #2249 fix: confirm and remove bank incinerator stacks; #2332 fix: reject stale bank inventory drags; #2522 Refuse preset items in charging, storage and Grand Exchange sales; #2663 Store and keep gems in an open gem bag; #2675 Add the Party Room chest, lever and balloons; #2695 Fix rev 241 client actions the server dropped or misrouted (Accept Aid, teleport warnings, furnace, nexus, clans, fairy log, close buttons). Existing completion credit and documented limitations are retained unless explicitly updated below."
+            "Main 3b61a15a8 (6 November 2026): #2249 fix: confirm and remove bank incinerator stacks; #2332 fix: reject stale bank inventory drags; #2522 Refuse preset items in charging, storage and Grand Exchange sales; #2663 Store and keep gems in an open gem bag; #2675 Add the Party Room chest, lever and balloons; #2695 Fix rev 241 client actions the server dropped or misrouted (Accept Aid, teleport warnings, furnace, nexus, clans, fairy log, close buttons). Existing completion credit and documented limitations are retained unless explicitly updated below.",
+            "2026-11-16, fix/uim-death-rules: UIM death now drops untradeables as well as tradeables instead of returning them, honouring the keep=false answer the mode already gives every item; the drop keeps the Wiki's one-hour logged-in deathpile lifetime and pauses while the owner is logged out, including the remainder of a partially picked-up stack (server/src/main/typescript/elvarg/game/task/impl/PlayerDeath.ts, server/plugins/modes/ironman/Ultimate.Ironman.js; server/tests/items-kept-on-death.test.cjs). Graves are already skipped and Zenesha/Zulrah retrieval and the Coffer refusal remain. Task 2 stays in progress for the Wilderness coin conversion and the instance/God Wars outside placement, which the Wiki states without a numeric/source rule."
           ],
           "taskDetails": [
             {
@@ -46233,7 +46235,8 @@
             "Main 0a219d100 (2026-11-03): #1968 adds both Lizardman Canyon crossings to the shared shortcut runner with native-map approaches/landings and both directions. All four handholds work at level 1 without XP or favour gates; climb animation choice/duration remain explicitly unverified.",
             "Main 8403b60db (4 November 2026): #1977, #2043, #2211 — Course audit and River Lum stepping stones use current approach/movement handling; Brimhaven obstacle animations follow their recorded crossings.",
             "Main 3b61a15a8 (6 November 2026): #2248 fix: correct Falador rooftop paths and actor grounding; #2264 Agility: handle Al Kharid course failures; #2310 Agility: audit shortcut gates and animations; #2326 Bosses: add access and encounter setup; #2479 Match Wilderness Agility gate swaps and delayed sequence hand overrides; #2651 Finish the Shilo Village followup: cart, gate, Mosol Rei, Yanni, drops, rocks, bridge. (7 merged PRs touch the recorded implementation; highlights shown.) Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4093 Fix quest progression, temple repair, and bone shortbow combat. #2831 Dragon Slayer I: align with the revision 242 capture. #3212 fix: the Karamja Strong Tree crosses barehanded at 78 Agility."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4093 Fix quest progression, temple repair, and bone shortbow combat. #2831 Dragon Slayer I: align with the revision 242 capture. #3212 fix: the Karamja Strong Tree crosses barehanded at 78 Agility.",
+            "2026-11-17: corrected Wilderness ridge exit ordering from normal recording233/00451: end line and normal appearance at3918, south-door opening plus compact two-tile temporary WALK on the next tick, with cached run preference retained. Local recipe and generic movement-receipt/encoding owners are covered by real queued-input World regression and actual client-decoder checks. Entry52/exit1, zero XP and independent gate restoration retained. This does not claim every shortcut animation/timing is audited."
           ],
           "taskDetails": [
             {
@@ -49543,6 +49546,8 @@
           "wiki": "https://oldschool.runescape.wiki/w/Skilling_pets",
           "implementedIn": [
             "server/plugins/npcs/Pets.plugin.js",
+            "server/plugins/npcs/pets/RockGolem.Pets.js",
+            "server/tests/rock-golem-forms.test.cjs",
             "server/plugins/skills/Fishing.plugin.js",
             "server/plugins/skills/Woodcutting.plugin.js",
             "server/plugins/skills/Mining.plugin.js",
@@ -49551,6 +49556,7 @@
             "client/game/menu/WorldMenuBuilder.ts"
           ],
           "devNotes": [
+            "Rock golem ore-use recolouring: inventory and own-follower use supports all 19 cache forms, including all granite sizes and rock reset; physical item identity survives pickup and save/login. Native real-object regression covers supported ores, cost, ownership, notes and legacy normalization. Successful ore cost is observed in retail video Wt4YeKDJhAA; exact response text/ticks and same-form behavior remain unrecorded, and reset cost follows the general one-item transformation rule.",
             "Main bce571cb3: #1458 chinchompa colours, #1459 the Giant squirrel, #1461 Tangleroot and #1463-#1466 Rift guardian colours, GOTR exclusion and the unlocked-colour chooser; #1460 a winning Mining roll takes the last slot over the ore.",
             "Main ece91aca2: #1451 the Beaver uses its real follower, and #1452 a winning roll takes the last slot over the log; #1456 the normal Rock Golem is awarded again.",
             "GIANT_SQUIRREL exists in SKILLING_PETS (chance 5000) but Agility only emits agility:lap while Pets subscribes to agility:success, so it can never roll; Hunter now emits hunter:success so the chinchompas are reachable, and Tangleroot stays dead until Farming lands.",
@@ -52141,6 +52147,7 @@
           "devNotes": [
             "Bank storage/packets live in client/network/serverConnection/outgoing/bank.ts; the bank widget group is cache-defined and quantity overlays are client-side.",
             "Custom shops are declared server-side by server/plugins/interface/CustomShops.plugin.js (group 30009) and rendered by the generic client/widgets/custom/CustomInterfaceRuntime.ts, so no shop-specific client code is needed.",
+            "Recorded pub interface titles: Auburn Pub now displays The Auburn Pub (RSProx 232/03127:13254); The Pandemonium (pub) displays The Pandemonium (235/00910:10701, also 242/900167:220974). Canonical osrsreboxed display_name evidence preserves source keys and shop IDs1026/1415 across repeated imports. Native Trade title rendering is checked; stock rendering remains a separate baseline limitation. Task statuses are unchanged.",
             "Empty/failed bank and shop states render without crashing, malformed shop definitions are rejected by ShopDefinitionLoader, and buys without coins are refused by ShopManager (verified, no code change required).",
             "Main 0a219d100 (2026-11-03): #1919 adds bank/selection value displays and value-aware searches through the Bank plugin.",
             "Main 3b61a15a8 (6 November 2026): #2295 fix: restore RFD feast, chest access and affected saves; #2381 Delete across split stacks, and stop two-handed swaps splitting them; #2522 Refuse preset items in charging, storage and Grand Exchange sales; #2550 Collect a single Grand Exchange purchase as the item. Existing completion credit and documented limitations are retained unless explicitly updated below."
@@ -53236,7 +53243,8 @@
             "Main 0a219d100 (2026-11-03): #1941 adds optional clipboard paste and name/word/regex highlights plus configurable chat notifications; #1917 propagates display and previous names through live chat.",
             "Main 8403b60db (4 November 2026): #2071, #2128, #2189 — Chat timestamps/filter options, legacy colour tags and login welcome output are corrected.",
             "Main 3b61a15a8 (6 November 2026): #2297 fix: keep chat history consumers off the API event bus; #2399 Use the native OSRS quest list and repair quest state publication; #2561 Restore touch keyboard access for GE item search; #2707 Wire skull prevention settings into the player attack policy; #2708 Allow iron arrows with basic bows and sync ammo pickup settings. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4313 Settings: player Trade and Report options and Ctrl+click run mode follow their rows. #3651 Fix public chat colour and pattern prefix parsing."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4313 Settings: player Trade and Report options and Ctrl+click run mode follow their rows. #3651 Fix public chat colour and pattern prefix parsing.",
+            "2026-11-17 dialogue history: shared NPC/player pages and custom spoken scene boundaries now send recorded type 114 with displayed speaker, flattened breaks and a 200-character combined payload; the client posts one network-backed plugin event. Native All Settings > Chat and settings search expose existing setting303/struct4452 through one effective Chat catalog. Its natural toggle shows/hides dialogue history and saves the14709 preference across logout/fresh login, preserving default0. Native history itself resets on fresh login; it is not persisted."
           ],
           "taskDetails": [
             {

@@ -72,14 +72,21 @@ const emptyClientLog = () => ({ varbits: {}, varps: {}, interfaces: [], graphics
 // Wraps the PacketSender calls a test asserts on. Varbits and varps keep their latest value;
 // interface and interaction mode events keep their order.
 function recordClient(sender, state) {
-  const wrap = (name, record) => {
+  // Only sendSubInterface delegates immediately to mount; sendInterface first emits player callbacks.
+  const legacyMountCalls = [];
+  const wrap = (name, record, legacyMount = false) => {
     const original = sender[name]?.bind(sender);
     if (!original) return;
     sender[name] = (...args) => {
-      record(...args);
-      if (state.client.interfaces.length > MAX_MESSAGES) state.client.interfaces.shift();
-      if (state.client.interactionModes.length > MAX_MESSAGES) state.client.interactionModes.shift();
-      return original(...args);
+      if (legacyMount) legacyMountCalls.push({ pending: true });
+      try {
+        record(...args);
+        while (state.client.interfaces.length > MAX_MESSAGES) state.client.interfaces.shift();
+        if (state.client.interactionModes.length > MAX_MESSAGES) state.client.interactionModes.shift();
+        return original(...args);
+      } finally {
+        if (legacyMount) legacyMountCalls.pop();
+      }
     };
   };
   wrap("sendGraphic", (graphic, at) => {
@@ -90,7 +97,13 @@ function recordClient(sender, state) {
   wrap("sendVarbit", (id, value) => { state.client.varbits[id] = value; });
   wrap("sendConfig", (id, value) => { state.client.varps[id] = value; });
   wrap("sendInterface", (id) => state.client.interfaces.push(`open ${id}`));
-  wrap("sendSubInterface", (target, group) => state.client.interfaces.push(`open ${group} on ${target >>> 16}:${target & 0xffff}`));
+  wrap("sendSubInterface", () => {}, true);
+  wrap("mountSubInterface", (target, group, type = 1) => {
+    const legacy = legacyMountCalls.at(-1);
+    if (legacy?.pending) legacy.pending = false;
+    else if (target === ((161 << 16) | 16) && type === 0) state.client.interfaces.push(`open ${group}`);
+    state.client.interfaces.push(`open ${group} on ${target >>> 16}:${target & 0xffff}`);
+  });
   wrap("closeSubInterface", (target) => state.client.interfaces.push(`close ${target >>> 16}:${target & 0xffff}`));
   wrap("sendInterfaceRemoval", () => state.client.interfaces.push("close main"));
   wrap("sendInterfaceDisplayState", (uid, hide) => state.client.interfaces.push(`${hide ? "hide" : "show"} ${uid >>> 16}:${uid & 0xffff}`));

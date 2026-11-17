@@ -1,0 +1,14 @@
+{
+  "ESP": {
+    "translations_game_message.json": {
+      "You do not have enough free space to withdraw your items from the STASH unit; you need at least 1 free slots.": "No tienes suficiente espacio libre para retirar tus objetos de la unidad STASH; necesitas al menos 1 espacio libre.",
+      "You do not have enough free space to withdraw your items from the STASH unit; you need at least [number] free slots.": "No tienes suficiente espacio libre para retirar tus objetos de la unidad STASH; necesitas al menos [number] espacios libres."
+    }
+  },
+  "pt-BR": {
+    "translations_game_message.json": {
+      "You do not have enough free space to withdraw your items from the STASH unit; you need at least 1 free slots.": "Você não tem espaço livre suficiente para retirar seus itens da unidade STASH; precisa de pelo menos 1 espaço livre.",
+      "You do not have enough free space to withdraw your items from the STASH unit; you need at least [number] free slots.": "Você não tem espaço livre suficiente para retirar seus itens da unidade STASH; precisa de pelo menos [number] espaços livres."
+    }
+  }
+}

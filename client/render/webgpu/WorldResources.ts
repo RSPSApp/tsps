@@ -303,40 +303,11 @@ export class WorldResources {
             );
         }
 
-        const pixels = new Int32Array(layerCount * pixelCount);
-        pixels.fill(0xffffffff);
-
-        // Mirror initTextureArray: layer 0 is white, textureIds[i] is layer i+1. Textures
-        // past the preload are streamed per map via uploadMapTextures.
+        // Mirror initTextureArray: layer 0 is white, textureIds[i] is layer i+1.
         const textureIdIndexMap = new Map<number, number>();
         const loadedTextureIds = new Set<number>();
-        for (let i = 0; i < Math.min(textureIds.length, layerCount - 1); i++) {
+        for (let i = 0; i < layerCount - 1; i++) {
             textureIdIndexMap.set(textureIds[i], i + 1);
-        }
-
-        const cacheInfo = osrsClient.loadedCache?.info;
-        let maxPreloadTextures = textureIds.length;
-        if (cacheInfo && cacheInfo.game === "runescape" && cacheInfo.revision >= 508) {
-            maxPreloadTextures = 64;
-        }
-        if (textureLoader) {
-            const preloadCount = Math.min(textureIds.length, maxPreloadTextures, layerCount - 1);
-            for (let i = 0; i < preloadCount; i++) {
-                const textureId = textureIds[i];
-                try {
-                    const texturePixels = textureLoader.getPixelsArgb(
-                        textureId,
-                        TEXTURE_SIZE,
-                        true,
-                        1.0,
-                    );
-                    if (texturePixels.length === 0) continue;
-                    pixels.set(texturePixels, (i + 1) * pixelCount);
-                    loadedTextureIds.add(textureId);
-                } catch (e) {
-                    console.error("Failed loading texture", textureId, e);
-                }
-            }
         }
 
         const textureArray = device.createTexture({
@@ -347,12 +318,11 @@ export class WorldResources {
         });
         ownedTextures.push(textureArray);
 
-        const pixelBytes = new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength);
-        const layerBytes = pixelCount * 4;
+        const whitePixels = new Uint8Array(pixelCount * 4).fill(255);
         for (let layer = 0; layer < layerCount; layer++) {
             device.queue.writeTexture(
                 { texture: textureArray, origin: { x: 0, y: 0, z: layer } },
-                pixelBytes.subarray(layer * layerBytes, (layer + 1) * layerBytes),
+                whitePixels,
                 { bytesPerRow: TEXTURE_SIZE * 4, rowsPerImage: TEXTURE_SIZE },
                 { width: TEXTURE_SIZE, height: TEXTURE_SIZE, depthOrArrayLayers: 1 },
             );
@@ -578,7 +548,7 @@ export class WorldResources {
             });
         };
 
-        return new WorldResources({
+        const world = new WorldResources({
             device,
             canvasFormat,
             sceneData,
@@ -609,6 +579,12 @@ export class WorldResources {
             textureIdIndexMap,
             loadedTextureIds,
         });
+        void osrsClient.workerPool.preloadWorldTextures(textureIds.slice(0, layerCount - 1), TEXTURE_SIZE)
+            .then((textures) => world.uploadMapTextures(textures))
+            .catch((error) => {
+                if (!world.destroyed) console.warn("World texture preload failed", error);
+            });
+        return world;
     }
 
     /** 66 floats matching the SceneUniforms layout in bindings.ts. */

@@ -134,7 +134,9 @@ export class PlayerPoseGeometry {
             app = withActionSeqHandItems(app, this.client.seqTypeLoader.load(actionSeqId), actionSeqId, actionDelay);
         } catch {}
 
-        const base = this.baseForAppearance(app);
+        // One key per player per frame: the base, pose and rest caches all start from it.
+        const appKey = app.getCacheKey?.() ?? this.appearanceFallbackKey(app);
+        const base = this.baseForAppearance(app, appKey);
         if (!base) return undefined;
 
         let movementFrameIdx = 0;
@@ -172,8 +174,7 @@ export class PlayerPoseGeometry {
                 ? `|${overlaySeqId | 0}|${overlayFrameIdx | 0}`
                 : "";
         const cycleKey = interpolationKey(interpolation);
-        const appKey = app.getCacheKey?.() ?? this.appearanceFallbackKey(app);
-        const key = `${appKey}|${seqId}|${frameIdx}${cycleKey}${overlayKey}`;
+        const key =`${appKey}|${seqId}|${frameIdx}${cycleKey}${overlayKey}`;
 
         const cpuPose = this.geomCache.get(key);
         // Only final CPU poses have bounds; rest meshes do not bound a GPU label animation.
@@ -303,8 +304,8 @@ export class PlayerPoseGeometry {
         return `${app.getHash?.().toString() ?? "0"}|${app.getEquipKey?.() ?? ""}`;
     }
 
-    private baseForAppearance(app: PlayerAppearance): BaseAppearance | undefined {
-        const key = app.getCacheKey?.() ?? this.appearanceFallbackKey(app);
+    private baseForAppearance(app: PlayerAppearance, appKey?: string): BaseAppearance | undefined {
+        const key = appKey ?? app.getCacheKey?.() ?? this.appearanceFallbackKey(app);
         const cached = this.baseCache.get(key);
         if (cached !== undefined) return cached;
 

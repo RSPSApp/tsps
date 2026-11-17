@@ -216,6 +216,10 @@ export class RenderDataWorkerPool {
         );
     }
 
+    async preloadWorldTextures(ids: number[], size: number): Promise<Map<number, Int32Array>> {
+        return this.pool.queue((worker) => worker.preloadWorldTextures(ids, size));
+    }
+
     setVars(vars: Int32Array): Promise<void> {
         return this.runAll((w) => w.setVars(vars));
     }

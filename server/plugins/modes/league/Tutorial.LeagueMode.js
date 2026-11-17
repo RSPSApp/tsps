@@ -38,6 +38,8 @@ const WELCOME_PLAY = uid(data.welcomePlay);
 const awaitingOpen = new WeakSet();
 /** Players whose welcome screen is up. */
 const welcomeShown = new WeakSet();
+/** Initial onboarding only: exact mount lifetimes and UI state contributed by this tutorial. */
+const initialPresentation = new WeakMap();
 /** Per player: the section whose button was clicked, waiting for its screen. */
 const pendingSection = new WeakMap();
 /** Per player: where a section's screen was mounted, to close it after its walkthrough. */
@@ -78,14 +80,20 @@ function nextPage(flow, stage) {
 }
 
 /** league_tutorial (653) with its click blocker and the chat overlay, as captured before every page. */
-function showOverlay(player) {
+function showOverlay(player, initial) {
   const { screens, varbits } = data;
   const sender = player.getPacketSender();
   sender.sendVarbit(varbits.allowMesOverlap, 1);
-  sender.sendSubInterface(uid(screens.overlay.target), screens.overlay.group, OVERLAY);
+  if (initial) initial.overlap = true;
+  if (initial) {
+    if (!mountInitial(player, initial, uid(screens.overlay.target), screens.overlay.group, OVERLAY)) return false;
+  } else sender.sendSubInterface(uid(screens.overlay.target), screens.overlay.group, OVERLAY);
   sender.sendInterfaceDisplayState(uid([screens.overlay.group, screens.overlay.noclick]), false);
-  sender.sendSubInterface(uid(screens.mesoverlay.target), screens.mesoverlay.group, OVERLAY);
+  if (initial) {
+    if (!mountInitial(player, initial, uid(screens.mesoverlay.target), screens.mesoverlay.group, OVERLAY)) return false;
+  } else sender.sendSubInterface(uid(screens.mesoverlay.target), screens.mesoverlay.group, OVERLAY);
   sender.sendInterfaceScript(screens.mesoverlayScript, [""]);
+  return true;
 }
 
 function closeScreens(player) {
@@ -96,6 +104,74 @@ function closeScreens(player) {
   sender.closeSubInterface(uid(screens.mesoverlay.target));
   sender.closeSubInterface(uid(screens.overlay.target));
   sender.sendVarbit(varbits.allowMesOverlap, 0);
+}
+
+/** Close only the lifetime we produced, including a mount returned after a reentrant skip. */
+function closeInitialMount(player, mount) {
+  const sender = player.getPacketSender();
+  if (sender.getSubInterfaceAt(mount.targetUid) !== mount) return;
+  if (mount.groupId === data.screens.overlay.group) {
+    sender.sendInterfaceDisplayState(uid([data.screens.overlay.group, data.screens.overlay.noclick]), true);
+  }
+  const closed = sender.closeSubInterfaceMount(mount);
+  if (closed && mount.groupId === data.screens.main
+    && mount.targetUid === uid(data.screens.mainModal)
+    && sender.getSubInterfaceAt(mount.targetUid) === undefined
+    && player.getInterfaceId() === data.screens.main) player.setInterfaceId(-1);
+}
+
+/** Only reconcile overlap after every mount has returned its exact lifetime. */
+function resetInitialOverlap(player, initial) {
+  if (!initial.overlap || initial.inFlight > 0 || initial.uncaptured) return;
+  const sender = player.getPacketSender();
+  const replacedOverlay = initial.mounts.some(mount =>
+    (mount.groupId === data.screens.overlay.group || mount.groupId === data.screens.mesoverlay.group)
+    && sender.getSubInterfaceAt(mount.targetUid) !== undefined
+    && sender.getSubInterfaceAt(mount.targetUid) !== mount);
+  if (!replacedOverlay) sender.sendVarbit(data.varbits.allowMesOverlap, 0);
+}
+
+function mountInitial(player, initial, target, group, type) {
+  if (initial.skipped) return false;
+  let mount;
+  initial.inFlight++;
+  try {
+    mount = player.getPacketSender().mountSubInterface(target, group, type);
+    initial.mounts.push(mount);
+  } catch (error) {
+    // A throwing opened hook may have mounted/replaced UI without returning its lifetime.
+    initial.uncaptured = true;
+    throw error;
+  } finally {
+    initial.inFlight--;
+  }
+  if (!initial.skipped) return true;
+  closeInitialMount(player, mount);
+  resetInitialOverlap(player, initial);
+  return false;
+}
+
+/** Explicit Agent onboarding skip, not completion: no task, reward or unlock is earned. */
+function skipInitialOnboarding({ player }) {
+  const flow = player ? flowOf(Common.leagueOf(player)) : null;
+  if (!flow || activeStage(player) !== 0) return;
+  const initial = initialPresentation.get(player);
+  if (initial) initial.skipped = true;
+  awaitingOpen.delete(player);
+  initialPresentation.delete(player);
+  player.setAttribute(STAGE_ATTRIBUTE, flow.final);
+  const sender = player.getPacketSender();
+  sender.sendVarbit(data.varbits.stage, flow.final);
+  if (!initial) return;
+  // Snapshot before cleanup: callbacks may replace even the same group at the same target.
+  const owned = initial.mounts.slice();
+  for (const mount of owned.slice().reverse()) closeInitialMount(player, mount);
+  // Main-id callbacks and in-flight opened hooks may replace tutorial mounts.
+  resetInitialOverlap(player, initial);
+  if (initial.orbsHidden) {
+    sender.sendVarbit(data.varbits.orbsDisabled, 0);
+    Common.api.emitCustomEvent("settings:restore-data-orbs", { player });
+  }
 }
 
 /** Moves to `stage` and, on a page, shows it: the overlay, the page's own cue, the modal. */
@@ -110,7 +186,8 @@ function present(player, stage) {
   if (!page) return;
   // As captured: the page closes and opens again, so the client draws the new stage's text.
   if (sender.isSubInterfaceOpen(screens.main)) sender.closeSubInterface(uid(screens.mainModal));
-  showOverlay(player);
+  const initial = stage === 0 ? initialPresentation.get(player) : null;
+  if (!showOverlay(player, initial)) return;
   if (page === "journal") {
     sender.sendVarbit(varbits.flashSide, data.flashJournal);
     for (const stone of JOURNAL_STONES) sender.sendInterfaceFlagsRange(stone, -1, -1, FLAG_OP1);
@@ -120,7 +197,26 @@ function present(player, stage) {
     sender.sendInterfaceScript(pulse.start, [uid(sections[page].highlight)]);
   }
   sender.sendInterfaceScript(screens.modalSizeScript[0], screens.modalSizeScript[1]);
-  sender.sendInterface(screens.main);
+  if (initial) {
+    // The setter can emit callbacks before a mount exists. Retain ownership of that pending id.
+    const target = uid(screens.mainModal);
+    const pendingMain = { id: player.getInterfaceId(), opens: player.getInterfaceOpens(), mount: sender.getSubInterfaceAt(target) };
+    player.setInterfaceId(screens.main);
+    if (initial.skipped) {
+      const opens = player.getInterfaceOpens();
+      if (pendingMain.id !== screens.main && pendingMain.mount === undefined
+        && Number.isSafeInteger(pendingMain.opens) && pendingMain.opens >= 0
+        && Number.isSafeInteger(opens) && opens === pendingMain.opens + 1
+        && player.getInterfaceId() === screens.main && sender.getSubInterfaceAt(target) === undefined) {
+        player.setInterfaceId(-1);
+      }
+      resetInitialOverlap(player, initial);
+      return;
+    }
+    if (!(player.isUnwatchedBot?.() ?? player.isPlayerBot?.())) {
+      mountInitial(player, initial, uid(screens.mainModal), screens.main, 0);
+    }
+  } else sender.sendInterface(screens.main);
 }
 
 /**
@@ -409,6 +505,7 @@ function login({ player }) {
   const flow = flowOf(Common.leagueOf(player));
   const stage = activeStage(player);
   if (stage === null) return;
+  if (stage === 0) initialPresentation.set(player, { mounts: [], inFlight: 0, uncaptured: false, overlap: false, orbsHidden: true, skipped: false });
   player.getPacketSender().sendVarbit(data.varbits.orbsDisabled, 1);
   player.setAttribute(STAGE_ATTRIBUTE, resumeStage(flow, stage));
   awaitingOpen.add(player);
@@ -450,6 +547,7 @@ function interfaceClosed({ player, interfaceId }) {
 }
 
 function logout({ player }) {
+  initialPresentation.delete(player);
   awaitingOpen.delete(player);
   welcomeShown.delete(player);
   pendingSection.delete(player);
@@ -484,6 +582,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("league:joined", joined);
   api.onCustomEvent("league:tutorial-stage", answerStage);
   api.onCustomEvent("league:login", login);
+  api.onCustomEvent("account:skip-onboarding", skipInitialOnboarding);
   api.onCustomEvent("league:content-rows", content);
   api.onCustomEvent("league:area-unlocked", areaUnlocked);
   api.onCustomEvent("league:relic-unlocked", relicUnlocked);

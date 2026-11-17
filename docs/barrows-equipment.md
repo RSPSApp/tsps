@@ -36,3 +36,22 @@ chance of a second hit for half the damage, Ahrim's 25% chance of 30% more spell
   `onCombatHitDamage` runs after it; the Wiki does not say which comes first.
 - Ahrim's Strength drain only lowers a player target's Strength. The Wiki says "the enemy's
   Strength" without saying whether it works on NPCs.
+
+## Combat entry degradation
+
+A genuine outgoing swing spends the first durability point on the following task tick,
+including a manually cast spell whose target is cleared when casting finishes. Merely
+selecting a target and approaching it does not spend durability. An incoming-only swing
+still waits until its impact puts the defender in combat; a cancelled projectile does not
+spend the defender's point. Continuous combat retains the existing 90-tick wear interval.
+
+The [Barrows equipment Wiki page](https://oldschool.runescape.wiki/w/Barrows_equipment)
+supplies the entry point and 90-tick interval. Retail recording 229/02600 shows target
+selection at tick 2669, the first melee swing at 2671, and the degradation message and worn
+item update at 2672. This is general first-use timing evidence, not a manual-magic recording.
+
+The plugin preserves the shared combat-exit definition: a player with neither target nor
+attacker has left combat once their pending outgoing first use is consumed. A later isolated
+manual cast therefore starts another entry. The retail fight boundary between repeated,
+unretaliated manual casts has not been independently recorded here; this fix does not add a
+grace period or change manual-cast target reset and safespot behavior.

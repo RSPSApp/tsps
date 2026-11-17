@@ -166,7 +166,8 @@ function degradeEquipment(player) {
 
 /**
  * Each player's current fight: `cycle`, when its first swing (theirs or one at them) started, and `seen`, once the
- * player was in combat after it. Cleared when a seen fight ends.
+ * player was in combat after it. `outgoing` preserves a genuine first use when manual spell teardown clears the
+ * target before the next task. Cleared when a seen fight ends.
  */
 const engagedCycles = new WeakMap();
 /**
@@ -187,7 +188,16 @@ function processCycle() {
  */
 function swingStarted({ attacker, target }) {
   for (const entity of [attacker, target]) {
-    if (entity?.isPlayer?.() && !engagedCycles.has(entity)) engagedCycles.set(entity, { cycle: processCycle(), seen: false });
+    if (!entity?.isPlayer?.()) continue;
+    let engaged = engagedCycles.get(entity);
+    if (!engaged) {
+      engaged = { cycle: processCycle(), seen: false, outgoing: false };
+      engagedCycles.set(entity, engaged);
+    }
+    if (entity === attacker && !engaged.seen && !engaged.outgoing) {
+      engaged.outgoing = true;
+      engaged.cycle = processCycle();
+    }
   }
 }
 
@@ -204,7 +214,10 @@ function startDegradation(player, TaskManager, CombatFactory, tasks) {
         return;
       }
       const engaged = engagedCycles.get(player);
-      if (!CombatFactory.inCombat(player)) {
+      // A hand-cast's real swing is already a use, even though MagicCombatMethod.finished resets its target.
+      // Incoming-only records still wait for impact; this does not extend the existing combat-exit policy.
+      const outgoingFirstUse = engaged?.outgoing && !engaged.seen && processCycle() > engaged.cycle;
+      if (!CombatFactory.inCombat(player) && !outgoingFirstUse) {
         // A swing at the player whose hit has not landed yet keeps its record (PR 6072 review): only a fight they
         // were in, or a swing that never connected, ends here.
         if (engaged?.seen || (engaged && processCycle() - engaged.cycle > PENDING_SWING_TICKS)) engagedCycles.delete(player);

@@ -242,9 +242,15 @@ export class PlayerDeathTask extends Task {
             if (item.isLostOnDeath() || itemsToKeep.includes(item)) {
                 continue;
             }
-            // Untradeables are kept unless a death-drops hook takes them (a grave).
+            // Untradeables are kept unless a death-drops hook takes them (a grave) or a mode
+            // says they are never kept (Ultimate Ironman). The keep hook already excluded
+            // them from the kept slots; honour that answer here too instead of returning them.
             if (!item.isTradeable() && !Barrows.isBarrowsItem(item.getId())) {
-                lostUntradeables.push(item);
+                if (PluginManager.emitShouldKeepItemOnDeath(player, item) === false) {
+                    droppedItems.push(item);
+                } else {
+                    lostUntradeables.push(item);
+                }
                 continue;
             }
             droppedItems.push(item);

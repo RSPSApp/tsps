@@ -35,6 +35,10 @@
   {
    "path": "scripts/osrs-translate-additions/stash.json",
    "sha256": "07c1afbb690ef0cd6746bb1ffa7b68a0d3a49d07b285597690b0609af866084f"
+  },
+  {
+   "path": "scripts/osrs-translate-additions/trade-status.json",
+   "sha256": "b91f586373ff0e99735e6d7dc189e0d99faa57d592f342ff02f847049aa73910"
   }
  ],
  "files": {
@@ -12052,7 +12056,9 @@
     "You let the broav sniff the dirty shirt...": "Dejas que el broav olfatee la camisa sucia...",
     "The broav seems to have found something interesting...": "El broav parece haber encontrado algo interesante...",
     "You do not have enough free space to withdraw your items from the STASH unit; you need at least 1 free slots.": "No tienes suficiente espacio libre para retirar tus objetos de la unidad STASH; necesitas al menos 1 espacio libre.",
-    "You do not have enough free space to withdraw your items from the STASH unit; you need at least [number] free slots.": "No tienes suficiente espacio libre para retirar tus objetos de la unidad STASH; necesitas al menos [number] espacios libres."
+    "You do not have enough free space to withdraw your items from the STASH unit; you need at least [number] free slots.": "No tienes suficiente espacio libre para retirar tus objetos de la unidad STASH; necesitas al menos [number] espacios libres.",
+    "Sending trade offer...": "Enviando oferta de intercambio...",
+    "Accepted trade.": "Intercambio aceptado."
    },
    "fix": {
     "Nothing interesting happens.": [

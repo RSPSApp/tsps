@@ -185,9 +185,12 @@ test('bull release is private, uses the captured bull and cleans up pending or a
   h.action(p, N.BULL, 'kaznTu'); assert.equal(p.varbits.get(20160), 1);
   h.tick(2); const arena = p.getArea();
   assert.ok(arena); assert.equal(h.npcs[0].id, N.BRUTUS);
+  assert.equal(h.eventCounts.get('ides-of-milk:brutus-spawn') ?? 0, 0, 'quest kills are not combat achievement encounters');
   assert.equal(h.npcs[0].getArea(), arena); assert.equal(h.npcs[0].xpMultiplier, 2); assert.equal(other.getArea(), null);
   assert.deepEqual(h.objects.map(object => object.getId()), [60762, 60761, 60764, 60765]);
   assert.ok(h.objects.every(object => object.getArea() === arena));
+  new h.api.combat().start(h.npcs[0], p);
+  assert.equal(h.eventCounts.get('ides-of-milk:brutus-attack'), 1, 'the attack start counts even when its hit misses');
   h.hooks.onPlayerLogout[0]({ player: p }); assert.equal(p.getArea(), null); assert.equal(h.npcs[0].removed, true);
   const pending = player(); h.quest.setStage(pending, 18); h.action(pending, N.BULL, 'mKQNRL');
   h.hooks.onPlayerLogout[0]({ player: pending }); h.tick(4); assert.equal(h.npcs.length, 1);
@@ -198,6 +201,7 @@ test('bull release is private, uses the captured bull and cleans up pending or a
 test('leaving a post-quest fight restores the cow-field gates so Brutus can be released again', () => {
   const h = harness(), p = player(); h.quest.setStage(p, 22);
   h.action(p, N.BULL, 'mKQNRL'); h.tick(4);
+  assert.equal(h.eventCounts.get('ides-of-milk:brutus-spawn'), 1, 'post-quest release starts an achievement encounter');
   h.hooks.onObjectInteraction[0]({ player: p, objectId: O.GATE_323 });
   assert.equal(p.getArea(), null, 'the exit gate ends the private field');
   assert.deepEqual(p.objectsSent.slice(-4).map(object => [object.getId(), object.getLocation().getX(), object.getLocation().getY(), object.getFace()])

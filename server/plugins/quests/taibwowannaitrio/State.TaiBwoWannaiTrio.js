@@ -151,7 +151,7 @@ module.exports = function createState(api) {
    * A hand-out due `ticks` from now (an item box live shows a few ticks later): given then, or at once if the
    * player logs out first, so nothing taken from them is lost in the gap.
    */
-  const pending = new Map();
+  const pending = new WeakMap();
   t.giveLater = (player, ticks, give) => {
     const list = pending.get(player) ?? [];
     const entry = { give, done: false };
@@ -161,6 +161,9 @@ module.exports = function createState(api) {
       if (entry.done) return;
       entry.done = true;
       give();
+      const left = (pending.get(player) ?? []).filter((other) => !other.done);
+      if (left.length) pending.set(player, left);
+      else pending.delete(player);
     });
   };
   t.flushPending = (player) => {

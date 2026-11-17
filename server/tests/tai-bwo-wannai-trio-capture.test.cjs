@@ -211,6 +211,21 @@ test("the reward: 4 -> 5 and 2,000 coins at Timfraku's coin box, 5 -> 6 as it is
   await until(f, "What do you do here?|Is there anything interesting to do here?|I've been doing some work around the village.|Ok, thanks.");
 });
 
+test("a logout at Timfraku's coin box completes the quest with its quest points", async (t) => {
+  const f = actor(t, { stage: 4 });
+  const points = Number(f.player.getAttribute(h.QuestRuntime.QUEST_POINTS_ATTRIBUTE)) || 0;
+  const tim = h.spawn(f, h.core.NpcIdentifiers.TIMFRAKU, TIMFRAKU);
+  await h.talk(f, tim);
+  await until(f, "Oh it was nothing really.");
+  await h.choose(f, "Oh it was nothing really.");
+  await until(f, "Timfraku hands you a big stack of gold coins.");
+  assert.equal(stage(f), 5);
+  h.PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  assert.equal(stage(f), 6);
+  assert.equal((Number(f.player.getAttribute(h.QuestRuntime.QUEST_POINTS_ATTRIBUTE)) || 0) - points, 2);
+  assert.equal(count(f, I.COINS), 2000, "the coins once");
+});
+
 // ------------------------------------------------------------------ Lubufu
 
 test("Lubufu: the player's 'Who are you?', and his bait offer once he has said what he does with his Karambwan (local 1001562 ticks 5616-5713)", async (t) => {

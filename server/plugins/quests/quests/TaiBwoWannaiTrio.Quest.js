@@ -45,6 +45,9 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
     if (!player) return;
     t.lastUsedItem.delete(player);
     t.flushPending(player);
+    // Logged out at Timfraku's coin box (stage 5, coins given): complete it now, quest points and all, before
+    // the save; the login migration below only sets the stage, for saves from before the native stages.
+    if (t.stage(player) === STAGE.REWARDED && !t.quest.isComplete(player)) t.quest.complete(player, { scroll: false });
   }
 
   /**

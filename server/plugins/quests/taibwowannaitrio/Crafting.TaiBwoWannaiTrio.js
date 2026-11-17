@@ -75,15 +75,16 @@ module.exports = function attachCrafting(api, t) {
       player.sendMessage(NEED_FIREMAKING);
       return;
     }
-    // One set at a time; a second use while it is being lit does nothing.
-    if (lighting.has(player)) return;
+    // One set at a time; a second use while it is being lit does nothing. Walked off, the old attempt is over.
+    const current = lighting.get(player);
+    if (current && player.getLocation().equals(current.tile)) return;
     const tile = player.getLocation().clone();
     const area = player.getPrivateArea();
     // Where logs can't be lit ("You can't light a fire here."), neither can the bones (Firemaking's own check).
     if (!canLightFireAt(player, tile, area)) return;
     t.take(player, ITEM.JOGRE_BONES);
     ItemOnGroundManager.registerLocation(player, new Item(ITEM.JOGRE_BONES, 1), tile, area);
-    const attempt = {};
+    const attempt = { tile };
     lighting.set(player, attempt);
     const tryLight = () => {
       spam(player, "You attempt to light the Jogre bones.");

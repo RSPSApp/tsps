@@ -2040,6 +2040,29 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
   Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
   and the barrel.
+- **Places from location lines** (`generate-league-tasks.ts`, `PLACE_DEFS` with `locLines`): a task
+  whose place is where its subject stands takes the subject pages' own location lines for bounds. The
+  `{{LocLine}}` / `{{ObjectLocLine}}` pins whose `location` links the place, two tiles round each (the
+  player beside it), or their whole map square for an area of its own:
+  - `stonecutter-outpost-rocks`: Coal rocks and Mithril rocks at "Stonecutter Outpost".
+  - `tlati-rainforest-trees`: Teak and Mahogany trees in the "Tlati Rainforest".
+  - `shayzien-yew-trees`: Yew trees in "Shayzien".
+  - `forsaken-tower-magic-trees`: Magic trees at "The Forsaken Tower (location)".
+  - `rellekka-sand-pit` and `sunset-coast-sand-pit`: the Sand pit page's two.
+  - `lands-end-bank-chest`: the Bank chest at "Land's End".
+  - `puro-puro`: Baby impling's "Puro Puro" lines, their map square 2560-2623 x 4288-4351. That matches
+    the server's own Puro-Puro bounds (`Catching.Hunter.js` `inPuroPuro`).
+  These are named for their subject ("Stonecutter Outpost rocks"), so the phrase rules never take one
+  for a whole town. The overlay names them by key, and the generator writes every place the overlay
+  names as well as the ones its own triggers name; an overlay place with no `PLACE_DEFS` row fails the
+  run. Mapped with them, in each league that has the task:
+  - Mine some Coal from / 20 Mithril Ore in the Stonecutter Outpost;
+  - Chop a tree in the Tlati Rainforest (any logs, at a teak or mahogany: ours, the only Tlati trees
+    the Wiki locates);
+  - Chop 15 Yew Logs in Shayzien, and a Magic log at the Forsaken Tower;
+  - fill buckets of sand at Rellekka (20) and the Sunset Coast (`sand-pit:filled`);
+  - Bank at Land's End;
+  - catch 50 / 200 implings in Puro-Puro.
 - **A second batch of Demonic Pacts mappings** (overlay only, existing kinds): the hunter catches
   (snared birds, butterflies, swamp lizards and salamanders, the Feldip Hills' crimson swift and spined
   larupia in Kandarin, the sabre-toothed kyatt), Tirannwn's gold ore and cooked rabbit, the nine

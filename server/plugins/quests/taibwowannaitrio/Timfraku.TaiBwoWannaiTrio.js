@@ -123,12 +123,14 @@ module.exports = function attachTimfraku(api, t) {
     if (COIN_BOXES.has(stepId)) {
       if (t.stage(player) < STAGE.BROTHERS_DONE || t.quest.isComplete(player)) return;
       if (t.stage(player) < STAGE.REWARDED) {
+        t.setState(player, KEY.REWARD_PENDING, 1);
         t.quest.setStage(player, STAGE.REWARDED);
         t.give(player, ITEM.COINS, 2000);
       }
       event.box = { items: [ITEM.COINS_STACK] };
       event.after = () => {
         if (!t.quest.isComplete(player)) t.quest.complete(player);
+        t.setState(player, KEY.REWARD_PENDING, 0);
       };
       return;
     }

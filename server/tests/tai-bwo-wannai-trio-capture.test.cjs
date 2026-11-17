@@ -233,6 +233,37 @@ test("a logout at Timfraku's coin box completes the quest with its quest points"
   assert.equal(count(f, I.COINS), 2000, "the coins once");
 });
 
+test("a save taken at the coin box, reloaded with no logout hook, finishes the completion at login with the quest points once", async (t) => {
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  const points = (player) => Number(player.getAttribute(h.QuestRuntime.QUEST_POINTS_ATTRIBUTE)) || 0;
+  const f = actor(t, { stage: 4 });
+  const before = points(f.player);
+  const tim = h.spawn(f, h.core.NpcIdentifiers.TIMFRAKU, TIMFRAKU);
+  await h.talk(f, tim);
+  await until(f, "Oh it was nothing really.");
+  await h.choose(f, "Oh it was nothing really.");
+  await until(f, "Timfraku hands you a big stack of gold coins.");
+  assert.equal(stage(f), 5);
+  // An online save (World.savePlayers) while the box shows, then a stop without the logout hook.
+  const saved = PlayerSave.fromPlayer(f.player);
+  const g = actor(t, { stage: 0 });
+  saved.applyToPlayer(g.player); // a fresh Player loaded from that save (as agility-pyramid-top-relog.test.cjs does)
+  h.PM.emitPlayerLogin({ player: g.player, username: g.player.getUsername() });
+  assert.equal(stage(g), 6);
+  assert.equal(points(g.player) - before, 2, "the quest points");
+  assert.equal(count(g, I.COINS), 2000, "the coins once");
+  h.PM.emitPlayerLogin({ player: g.player, username: g.player.getUsername() });
+  assert.equal(points(g.player) - before, 2, "not twice");
+});
+
+test("an old save at stage 5 (completion before the native stages) only moves to 6, its points already paid", async (t) => {
+  const f = actor(t, { stage: 5 });
+  const points = Number(f.player.getAttribute(h.QuestRuntime.QUEST_POINTS_ATTRIBUTE)) || 0;
+  h.PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername() });
+  assert.equal(stage(f), 6);
+  assert.equal((Number(f.player.getAttribute(h.QuestRuntime.QUEST_POINTS_ATTRIBUTE)) || 0) - points, 0);
+});
+
 // ------------------------------------------------------------------ Lubufu
 
 test("Lubufu: the player's 'Who are you?', and his bait offer once he has said what he does with his Karambwan (local 1001562 ticks 5616-5713)", async (t) => {

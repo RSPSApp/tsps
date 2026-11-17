@@ -109,6 +109,8 @@ module.exports = function createState(api) {
       TITLE: "quest.tai_bwo_wannai_trio.title",
       KARAMBWAN: "quest.tai_bwo_wannai_trio.karambwan",
       LUBUFU_COUNT: "quest.tai_bwo_wannai_trio.lubufu-count",
+      /** 1 from Timfraku's coin box (stage 5, coins paid) until the completion: a save in between is finished at login. */
+      REWARD_PENDING: "quest.tai_bwo_wannai_trio.reward-pending",
     }),
 
     TIADECHE: Object.freeze({ MET: 1, WAITING: 2, TRAPPED: 3, ASKED_MANUAL: 4, HAS_MANUAL: 5, DONE: 6, CLAIMED: 7 }),

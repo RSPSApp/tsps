@@ -46,16 +46,30 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
     t.lastUsedItem.delete(player);
     t.flushPending(player);
     // Logged out at Timfraku's coin box (stage 5, coins given): complete it now, quest points and all, before
-    // the save; the login migration below only sets the stage, for saves from before the native stages.
-    if (t.stage(player) === STAGE.REWARDED && !t.quest.isComplete(player)) t.quest.complete(player, { scroll: false });
+    // the save.
+    finishPendingReward(player);
   }
 
   /**
-   * Old saves used 5 for completion; native completion is 6. Live's 5 lasts only while Timfraku's coin box
-   * shows, so a 5 at login is taken as complete, as before. Tiadeche's varp is sent from his saved progress.
+   * A stage 5 from Timfraku's coin box (REWARD_PENDING): the coins are paid, the completion isn't. It is finished
+   * through complete() (the quest points, quest:completed) exactly once, without the scroll; the coins aren't
+   * paid again (they come with the box, not with the completion).
+   */
+  function finishPendingReward(player) {
+    if (t.stage(player) !== STAGE.REWARDED || t.quest.isComplete(player)) return;
+    if (t.state(player, KEY.REWARD_PENDING) !== 1) return;
+    t.quest.complete(player, { scroll: false });
+    t.setState(player, KEY.REWARD_PENDING, 0);
+  }
+
+  /**
+   * A save taken at the coin box (an online save, then a stop without the logout hook) is finished here. Older
+   * saves used 5 for completion, quest points paid: those, without the marker, only move to the native 6, as
+   * before. Tiadeche's varp is sent from his saved progress.
    */
   function login({ player }) {
     if (!player) return;
+    finishPendingReward(player);
     if (t.stage(player) === STAGE.REWARDED && !t.quest.isComplete(player)) t.quest.setStage(player, STAGE.COMPLETE);
     t.sendTiadecheVarp(player);
     refreshQuestList(player);

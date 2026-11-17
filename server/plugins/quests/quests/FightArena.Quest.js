@@ -744,6 +744,8 @@ module.exports = function registerFightArenaQuest(api) {
    * leads to it when that scene was never played through.
    */
   function reenterArena(player) {
+    // A death already under way keeps the player: its respawn decides where they go.
+    if (dying(player)) return false;
     const stage = quest.getStage(player);
     if (stage === STAGE_DEFEATED_OGRE) return scenes.ogreDied(player);
     if (stage === STAGE_SENT_JAIL && scenes.scorpionScene(player)) return true;
@@ -757,7 +759,11 @@ module.exports = function registerFightArenaQuest(api) {
     player.getMovementQueue().reset().setBlockMovement(true);
     scenes.Scenes.fade(player, true);
     scenes.Scenes.later(player, REENTER_MOVE_TICKS, () => {
-      if (player.isRegistered?.() === false || quest.getStage(player) !== stage) {
+      if (player.isRegistered?.() === false) return;
+      // Died in the dark (a poison tick, a hit already queued): no copy opens, the screen comes back for the
+      // death animation, and the death keeps the player's controls until its respawn.
+      if (dying(player)) return scenes.Scenes.fade(player, false);
+      if (quest.getStage(player) !== stage) {
         scenes.Scenes.fade(player, false);
         player.getMovementQueue().setBlockMovement(false);
         return;
@@ -766,17 +772,19 @@ module.exports = function registerFightArenaQuest(api) {
       scenes.Scenes.later(player, REENTER_FADE_IN_TICKS, () => {
         if (player.isRegistered?.() === false) return;
         scenes.Scenes.fade(player, false);
-        player.getMovementQueue().setBlockMovement(false);
+        if (!dying(player)) player.getMovementQueue().setBlockMovement(false);
       });
     });
     return true;
   }
 
+  const dying = (player) => player.isDyingReturn?.() === true;
+
   function askToReenter(player) {
     const { DialogueChainBuilder, OptionDialogue } = api.core;
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new OptionDialogue(0, {
       executeOption(option) {
-        player.getDialogueManager().reset();
+        scenes.closeMenu(player);
         if (Number(option) === 1) reenterArena(player);
       },
     }, "Yes.", "No.").setTitle("Return to the arena?")));

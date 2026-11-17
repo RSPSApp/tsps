@@ -445,15 +445,28 @@ module.exports = function createFightArenaScenes(api, hooks) {
     const { DialogueChainBuilder, OptionDialogue } = api.core;
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new OptionDialogue(0, {
       executeOption(option) {
-        player.getDialogueManager().reset();
+        closeMenu(player);
         if (Number(option) === 1) leave(player, holder);
       },
     }, "Yes.", "No.").setTitle("Are you sure you want to leave?")));
     return true;
   }
 
+  /**
+   * Takes an answered Yes/No menu off the screen: the dialogue manager's reset alone leaves its chatbox (219)
+   * mounted. Called before whatever the answer starts, so a scene's own held chatbox is never the one closed.
+   */
+  function closeMenu(player) {
+    const sender = player.getPacketSender();
+    if (sender.getChatboxGroupId?.() === 219) sender.closeInterface(219);
+    else player.getDialogueManager().reset();
+  }
+
+  const dying = (player) => player.isDyingReturn?.() === true;
+
   /** "Yes.": the fade out at once, the real map outside the door two ticks later, the fade in after two more. */
   function leave(player, holder) {
+    if (dying(player)) return;
     holder.leaving = true;
     // The fight stops with the answer: live's Yes sets busy and clears the HP HUD (local 1002138 tick 12214),
     // and the minimap goes the tick after (12215). Nothing more can hit, or be hit, in the dark.
@@ -464,6 +477,8 @@ module.exports = function createFightArenaScenes(api, hooks) {
     Scenes.fade(player, true);
     Scenes.later(player, ESCAPE_MOVE_TICKS, () => {
       if (fights.get(player) !== holder || player.isRegistered?.() === false) return;
+      // A hit already queued killed the player in the dark: the death's respawn takes them out of the copy.
+      if (dying(player)) return Scenes.fade(player, false);
       Scenes.end(player, false);
       player.moveTo(new Location(...ESCAPE_TILE));
       Scenes.controls(player, true);
@@ -471,7 +486,7 @@ module.exports = function createFightArenaScenes(api, hooks) {
         // A scene opened since (a re-entry) owns the player's controls now.
         if (player.isRegistered?.() === false || Scenes.get(player) || playing.has(player)) return;
         Scenes.fade(player, false);
-        Scenes.controls(player, false);
+        if (!dying(player)) Scenes.controls(player, false);
       });
     });
   }
@@ -706,6 +721,6 @@ module.exports = function createFightArenaScenes(api, hooks) {
     PAGE, SCENES, RELEASES, SCORPION_SEEN_ATTRIBUTE, BOUNCER_SEEN_ATTRIBUTE, Scenes,
     cellScene, unlockCell, sammyRuns, followSammy, ogreAttacks, ogreDied, takenToJail, scorpionScene, scorpionDied,
     bouncerDied, khazardAttacks, line, active, logout, login,
-    fight, nextBeast, escape, inFight, leaving, FIGHTS, ESCAPE_TILE, ESCAPE_DOOR_NAME: ESCAPE_DOOR[0],
+    fight, nextBeast, escape, inFight, leaving, closeMenu, FIGHTS, ESCAPE_TILE, ESCAPE_DOOR_NAME: ESCAPE_DOOR[0],
   };
 };

@@ -319,7 +319,7 @@ test("the escape door asks first, then leaves the fight outside the arena door a
   await f.connection.dispatch([{ type: "object_option", id: ESCAPE_DOOR(), x: door.getX(), y: door.getY(), action: "Quick-escape" }]);
   ticks(f, 8);
   assert.equal(menuTitle(f) ?? null, null, "no question");
-  assert.equal(copy(f), null);
+  assert.equal(copy(f) === null, true);
   assert.deepEqual(xyz(f.player.getLocation()), [2607, 3151, 0]);
 });
 
@@ -347,7 +347,7 @@ test("a logout in a fight comes back outside the arena door, with nothing spawne
   ticks(f, 1);
   assert.equal(f.player.getDialogueManager().isActive(), true, "a guard by the door speaks");
   await clickThrough(f, () => texts.some((text) => text.includes("You're the one who killed Bouncer")), 4);
-  assert.equal(copy(f), null);
+  assert.equal(copy(f) === null, true);
   PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
   assert.equal(fightNpc(f, core.NpcIdentifiers.GENERAL_KHAZARD), undefined, "Khazard is not spawned on the real map at login");
 });
@@ -378,4 +378,52 @@ test("escaping stops the fight: nothing hits in the dark, and a kill landing the
   assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
   assert.equal(f.player.isUntargetable(), false);
   assert.equal(f.player.getPacketSender().getVarbit(6719), 0);
+});
+
+test("an answered Yes/No menu leaves the chatbox, whichever the answer", async (t) => {
+  const f = actor(t, [2607, 3151, 0]);
+  ticks(f, 3);
+  quest().setStage(f.player, 6);
+  const sender = f.player.getPacketSender();
+  openArenaDoor(f);
+  assert.equal(sender.getChatboxGroupId(), 219, '"Return to the arena?" is up');
+  await f.connection.dispatch([{ type: "dialogue_continue", widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: 2 }]);
+  tick(f);
+  assert.equal(sender.getChatboxGroupId(), -1, "No closes the menu");
+  assert.equal(copy(f) === null, true);
+
+  openArenaDoor(f);
+  await f.connection.dispatch([{ type: "dialogue_continue", widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: 1 }]);
+  tick(f);
+  assert.equal(sender.getChatboxGroupId(), -1, "Yes closes it before the fade");
+  ticks(f, 3);
+  assert.ok(inFight(f, "ogre"));
+  assert.equal(sender.getChatboxGroupId(), -1, "and nothing is left over in the fight");
+
+  clickEscape(f);
+  assert.equal(sender.getChatboxGroupId(), 219, '"Are you sure you want to leave?" is up');
+  await f.connection.dispatch([{ type: "dialogue_continue", widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: 2 }]);
+  tick(f);
+  assert.equal(sender.getChatboxGroupId(), -1, "No closes the escape question too");
+  assert.ok(inFight(f, "ogre"), "and the fight goes on");
+});
+
+test("a death in the re-entry's dark opens no copy and leaves the death its controls", async (t) => {
+  const f = actor(t, [2607, 3151, 0]);
+  ticks(f, 3);
+  quest().setStage(f.player, 6);
+  openArenaDoor(f);
+  await f.connection.dispatch([{ type: "dialogue_continue", widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: 1 }]);
+  tick(f);
+  // A hit already on its way (or a poison tick) kills the player before the copy opens.
+  f.player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 0);
+  f.player.appendDeath();
+  assert.equal(f.player.isDyingReturn(), true);
+  const blocked = [];
+  for (let i = 0; i < 4; i++) {
+    tick(f);
+    assert.equal(copy(f) === null, true, `no fight copy opens while dying (tick ${i + 1})`);
+    if (f.player.isDyingReturn()) blocked.push(f.player.getMovementQueue().isMovementBlocked());
+  }
+  assert.ok(blocked.length > 0 && blocked.every(Boolean), "the death keeps the player held until its respawn");
 });

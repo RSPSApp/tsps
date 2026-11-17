@@ -1993,3 +1993,149 @@ test("deed: a teleport with the Eternal teleport crystal (Use an Elven Teleport 
   assert.equal(f.player.getLocation().getY() > 6000, true, `the toggled left-click goes to Prifddinas: ${f.player.getLocation()}`);
   assert.ok(done(f, "use-an-elven-teleport-crystal"), "the arrival counts");
 });
+
+// ---- issue 6108: the Demonic Pacts tasks the generator left without a trigger ----------------------
+
+/** An NPC of the cache name at an offset from the player (its south-west tile there). */
+function npcAt(t, f, name, dx, dy) {
+  const id = [...Array(20000).keys()].find((each) => core.CacheDefinitions.getNpc(each)?.name === name);
+  const at = f.player.getLocation();
+  const npc = core.NPC.create(id, new core.Location(at.getX() + dx, at.getY() + dy, at.getZ()));
+  core.World.getNpcs().add(npc);
+  t.after(() => core.World.getNpcs().remove(npc));
+  return npc;
+}
+
+/** The emote tab's slot, clicked (Bow 2, Dance 12, Cry 16, Salute 21: the slots RSProx 237/1098 clicks). */
+async function emote(f, slot) {
+  await ticks(f, 1); // whatever the login opens next (the league's screens), then closed
+  f.player.getPacketSender().sendInterfaceRemoval();
+  await send(f, { type: "widget_action", widgetId: (216 << 16) | 2, groupId: 216, childId: 2, slot, itemId: -1, buttonNum: 1 }, 1);
+}
+
+test("near: an emote by a child, bard or quetzal counts within the recorded distance, a farther one not (RSProx 237/1098)", async (t) => {
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const f = pactsCharacter(t);
+  const cases = [
+    // Cry: completed 2 tiles from a child (tick 14398).
+    { id: "cry-near-a-child", slot: 16, npc: "Child", near: 2, far: 3 },
+    // Dance: none 3 tiles from the bards (tick 25550), completed 1 tile away (25555).
+    { id: "dance-near-a-bard", slot: 12, npc: "Bard", near: 1, far: 3 },
+    // Bow: completed 6 tiles west of Civitas' quetzal (size 3; tick 14440).
+    { id: "bow-near-a-quetzal", slot: 2, npc: "Quetzal", near: 6, far: 7 },
+  ];
+  for (const each of cases) {
+    const npc = npcAt(t, f, each.npc, each.far, 0);
+    await emote(f, each.slot);
+    assert.equal(f.player.getAnimation()?.getId() > 0, true, `the real Emotes plays it: ${f.messages}`);
+    assert.ok(!done(f, each.id), `${each.id}: ${each.far} tiles is too far`);
+    const at = f.player.getLocation();
+    npc.moveTo(new core.Location(at.getX() + each.near, at.getY(), at.getZ()));
+    await emote(f, 0); // Yes: another emote is none
+    assert.ok(!done(f, each.id), `${each.id}: another emote`);
+    await emote(f, each.slot);
+    assert.ok(done(f, each.id), `${each.id}: ${each.near} tiles`);
+    core.World.getNpcs().remove(npc);
+  }
+});
+
+test("near a loc: Salute next to Civitas' statue of Quoatlos, 3 tiles from its footprint as recorded (RSProx 237/1098 tick 15055)", async (t) => {
+  core.RegionManager.loadMapFiles(1719, 3155);
+  const f = pactsCharacter(t, [1718, 3161, 0]);
+  await emote(f, 21);
+  assert.ok(!done(f, "salute-next-to-a-statue-of-quoatlos"), "4 tiles off");
+  f.player.moveTo(new core.Location(1718, 3160, 0));
+  f.player.needsPlacement = false;
+  await emote(f, 21);
+  assert.ok(done(f, "salute-next-to-a-statue-of-quoatlos"), `the statue's 3x3 at 1719,3155: ${f.messages}`);
+});
+
+test("near a loc by option: a prayer switched on beside an altar (Activate a prayer near an altar), not away from one", (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.PRAYER, 99);
+  skills.setCurrentLevel(core.Skill.PRAYER, 99);
+  const pray = (offset) => {
+    const at = f.player.getLocation();
+    const altar = new core.GameObject(core.ObjectIdentifiers.ALTAR, new core.Location(at.getX() + offset, at.getY(), 0), 10, 0, null);
+    core.ObjectManager.register(altar, true);
+    core.PrayerHandler.deactivatePrayers?.(f.player);
+    core.PrayerHandler.activatePrayerPrayerId(f.player, core.PrayerHandler.THICK_SKIN);
+    assert.ok(core.PrayerHandler.isActivated(f.player, core.PrayerHandler.THICK_SKIN), `on: ${f.messages}`);
+    core.ObjectManager.deregister(altar, true);
+    return done(f, "activate-a-prayer-near-an-altar");
+  };
+  assert.equal(pray(3), false, "3 tiles from the altar");
+  assert.equal(pray(1), true, "beside it, as recorded (RSProx 237/1098 tick 9770)");
+});
+
+test("wearing: something cooked with an apron on (Cook something with an apron); a golden apron, or none, is not", async (t) => {
+  const f = pactsCharacter(t);
+  const cook = async (apron) => {
+    f.player.getEquipment().setItem(core.Equipment.BODY_SLOT, apron ? new core.Item(item(apron)) : null);
+    f.player.getInventory().resetItems();
+    assert.equal(await cookShark(t, f), 1, `the real Cooking cooks it: ${f.messages}`);
+    return done(f, "cook-something-with-an-apron");
+  };
+  assert.equal(await cook(null), false, "no apron");
+  assert.equal(await cook("Golden apron"), false, "the Wiki: a golden apron does not work");
+  assert.equal(await cook("Brown apron"), true, "a brown apron (RSProx 237/1098 tick 15774)");
+  const g = pactsCharacter(t);
+  g.player.getEquipment().setItem(core.Equipment.BODY_SLOT, new core.Item(item("White apron")));
+  assert.equal(await cookShark(t, g), 1);
+  assert.ok(done(g, "cook-something-with-an-apron"), "a white apron");
+});
+
+test("chop-logs: any logs chopped (Chop Some Logs)", async (t) => {
+  const f = pactsCharacter(t);
+  assert.ok(!done(f, "chop-some-logs"));
+  assert.ok(await chop(t, f, 1666, 3136) > 0, `the real Woodcutting: ${f.messages}`);
+  assert.ok(done(f, "chop-some-logs"));
+});
+
+test("deed: the League Home Teleport landing, either home (Cast Home Teleport; RSProx 237/1098 tick 4444)", async (t) => {
+  for (const [opId, landTicks] of [[3, 24], [2, 4]]) {
+    const f = pactsCharacter(t);
+    PM.emitSpellCast({ player: f.player, spellName: "League Home Teleport", spellWidget: (218 << 16) | 5, spellItemId: -1, opId, handled: false });
+    for (let i = 0; i < landTicks - 1; i++) core.TaskManager.process();
+    assert.ok(!done(f, "cast-home-teleport"), `op ${opId}: not before the landing`);
+    for (let i = 0; i < 2; i++) core.TaskManager.process();
+    assert.ok(done(f, "cast-home-teleport"), `op ${opId}: landed at ${f.player.getLocation()}`);
+  }
+});
+
+test("deed: an unlit torch lit with a tinderbox (Light a Torch; RSProx 237/1098 tick 16024)", async (t) => {
+  const f = pactsCharacter(t);
+  f.player.getInventory().add(new core.Item(item("Tinderbox")), true);
+  f.player.getInventory().add(new core.Item(item("Unlit torch")), true);
+  await send(f, { type: "inventory_use_on", itemId: item("Tinderbox"), slot: 0, target: { kind: "inventory", slot: 1 } }, 2);
+  assert.equal(f.player.getInventory().getAmount(item("Lit torch")), 1, `the real LightSources lights it: ${f.messages}`);
+  assert.ok(done(f, "light-a-torch"));
+});
+
+test("deed: planks made at a sawmill (Turn any Logs Into a Plank; RSProx 237/1103 tick 485)", (t) => {
+  const f = pactsCharacter(t);
+  const Sawmill = require("../plugins/npcs/Sawmill.plugin.js")._test;
+  const oak = Sawmill.data().planks.find((plank) => plank.plank === item("Oak plank"));
+  f.player.getInventory().add(new core.Item(Sawmill.data().coins, 1000), true);
+  assert.equal(Sawmill.convert(f.player, 3101, oak, 1), 0, "no logs, no plank");
+  assert.ok(!done(f, "turn-any-logs-into-a-plank"));
+  f.player.getInventory().add(new core.Item(item("Oak logs")), true);
+  assert.equal(Sawmill.convert(f.player, 3101, oak, 1), 1);
+  assert.ok(done(f, "turn-any-logs-into-a-plank"));
+});
+
+test("deed and npc-op: a sitting caique pecks on the fourth tick (Pet a Caique); Xolo petted in Varlamore (Pet Xolo in Civitas)", async (t) => {
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const f = pactsCharacter(t);
+  const caique = npcBeside(t, f, "Caique", "pet");
+  await send(f, { type: "npc_option", index: caique.npc.getIndex(), clickType: caique.clickType }, 2);
+  assert.ok(!done(f, "pet-a-caique"), "not before the peck");
+  await ticks(f, 4);
+  assert.ok(done(f, "pet-a-caique"), `pecked (RSProx 237/1098 tick 27022): ${f.messages}`);
+  core.World.getNpcs().remove(caique.npc);
+  f.player.getPacketSender().sendInterfaceRemoval();
+  const xolo = npcBeside(t, f, "Xolo", "pet");
+  await send(f, { type: "npc_option", index: xolo.npc.getIndex(), clickType: xolo.clickType }, 3);
+  assert.ok(done(f, "pet-xolo-in-civitas"), `the real StrayDogs pets it: ${f.messages}`);
+});

@@ -1,6 +1,10 @@
 {
   "$comment": "Hand-maintained award triggers for league tasks, by league type and task id (the ids in the generated league-tasks.json), merged over the triggers the generator derived (this file wins). For a task the generator's name rules cannot map: a kill of an NPC the Wiki names differently, a quest whose task is not called \"Complete <quest>\". The kinds LeagueTasks understands are in docs/leagues.md (Tasks): kill { npcs: [names], count } (the kills of all of them added up), level { skill, level }, any-level { level, excluding }, level-up, total-level { level }, base-level { level }, combat-level { level }, quest { name }. Other plugins can also complete a task directly with the `league:complete-task` event.",
   "4": {
+    "cast-home-teleport": {"kind": "deed", "event": "magic:home-teleport-landed", "count": 1},
+    "chop-some-logs": {"kind": "chop-logs", "count": 1},
+    "light-a-torch": {"kind": "deed", "event": "light-sources:lit", "items": ["Lit torch"], "count": 1},
+    "turn-any-logs-into-a-plank": {"kind": "deed", "event": "sawmill:planks-made", "count": 1},
     "create-the-long-rope-shortcut-in-darkmeyer": {"kind": "deed", "event": "darkmeyer-wall:rope-attached"},
     "defeat-a-troll-in-asgarnia": {"kind": "kill", "npcs": ["Troll", "Mountain troll"], "count": 1, "area": 3},
     "make-some-flour": {"kind": "deed", "event": "windmill:flour-collected"},
@@ -9,6 +13,11 @@
     "open-30-grubby-chests": {"kind": "open-chest", "chests": ["Grubby Chest"], "count": 30}
   },
   "5": {
+    "cast-home-teleport": {"kind": "deed", "event": "magic:home-teleport-landed", "count": 1},
+    "chop-some-logs": {"kind": "chop-logs", "count": 1},
+    "light-a-torch": {"kind": "deed", "event": "light-sources:lit", "items": ["Lit torch"], "count": 1},
+    "pet-xolo-in-civitas": {"kind": "npc-op", "npcs": ["Xolo"], "option": "pet", "count": 1, "area": 21},
+    "turn-any-logs-into-a-plank": {"kind": "deed", "event": "sawmill:planks-made", "count": 1},
     "create-the-long-rope-shortcut-in-darkmeyer": {"kind": "deed", "event": "darkmeyer-wall:rope-attached"},
     "defeat-a-troll-in-asgarnia": {"kind": "kill", "npcs": ["Troll", "Mountain troll"], "count": 1, "area": 3},
     "make-some-flour": {"kind": "deed", "event": "windmill:flour-collected"},
@@ -18,6 +27,18 @@
     "open-50-zombie-pirate-lockers": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 50}
   },
   "6": {
+    "activate-a-prayer-near-an-altar": {"kind": "prayer", "any": true, "near": {"options": ["Pray-at", "Pray"], "distance": 2}, "count": 1},
+    "bow-near-a-quetzal": {"kind": "emote", "slots": [2], "near": {"npcs": ["Quetzal", "Renu"], "distance": 6}, "count": 1},
+    "cast-home-teleport": {"kind": "deed", "event": "magic:home-teleport-landed", "count": 1},
+    "chop-some-logs": {"kind": "chop-logs", "count": 1},
+    "cook-something-with-an-apron": {"kind": "cook", "wearing": ["Brown apron", "White apron"], "count": 1},
+    "cry-near-a-child": {"kind": "emote", "slots": [16], "near": {"npcs": ["Child"], "distance": 2}, "count": 1},
+    "dance-near-a-bard": {"kind": "emote", "slots": [12], "near": {"npcs": ["Bard"], "distance": 2}, "count": 1},
+    "light-a-torch": {"kind": "deed", "event": "light-sources:lit", "items": ["Lit torch"], "count": 1},
+    "pet-a-caique": {"kind": "deed", "event": "caique:pecked", "count": 1},
+    "pet-xolo-in-civitas": {"kind": "npc-op", "npcs": ["Xolo"], "option": "pet", "count": 1, "area": 21},
+    "salute-next-to-a-statue-of-quoatlos": {"kind": "emote", "slots": [21], "near": {"objects": ["Statue of Quoatlos"], "distance": 3}, "count": 1},
+    "turn-any-logs-into-a-plank": {"kind": "deed", "event": "sawmill:planks-made", "count": 1},
     "butter-a-potato": {"kind": "produce", "items": ["Potato with butter"], "count": 1},
     "create-the-long-rope-shortcut-in-darkmeyer": {"kind": "deed", "event": "darkmeyer-wall:rope-attached"},
     "defeat-a-troll-in-asgarnia": {"kind": "kill", "npcs": ["Troll", "Mountain troll"], "count": 1, "area": 3},

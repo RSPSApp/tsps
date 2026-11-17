@@ -6,7 +6,7 @@
  * box follows a tick later, then the player's "Ouch!".
  *
  * Only the sitting variants (varlamore_parrot_caique_rock_*) offer Pet; the flying ones have no
- * options. The Leagues task "Pet a Caique" isn't hooked up.
+ * options. The peck emits `caique:pecked` { player, npc }, the Leagues task "Pet a Caique".
  */
 const SEQUENCES = { player: "vmq4_human_caique_pet", bird: "vmq4_caique_peck" };
 const PECK_SOUND = 521;
@@ -52,6 +52,8 @@ function steps(core, player, npc) {
     },
     [PECK_TICKS]: () => {
       peck(core, player);
+      // `caique:pecked` { player, npc }: the league's "Pet a Caique" completes on the peck (rsprox 237/1098 tick 27022).
+      core.PluginManager?.emitCustomEvent?.("caique:pecked", { player, npc });
       setBusy(core, player, false);
       player.getMovementQueue().setBlockMovement(false);
     },

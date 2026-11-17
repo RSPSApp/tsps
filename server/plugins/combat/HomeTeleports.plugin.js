@@ -27,6 +27,8 @@ const ANIMATION_CATEGORY_VARP = 4559;
 const HOME_ANIMATION_CATEGORY = 4093;
 const HOME_ANIMATION_TOGGLES_VARP = 4560;
 const UNLOCKED_ATTRIBUTE = "home-teleport:animations-unlocked";
+/** `magic:home-teleport-landed` { player, to }: a home teleport arrived, whichever spellbook's or league's. */
+const HOME_TELEPORT_LANDED = "magic:home-teleport-landed";
 
 /**
  * The league scrolls (Read): picker bit (CS2 7758), unlock varbit, read animation, and the Wiki's
@@ -125,6 +127,8 @@ function castHomeTeleport(event) {
       return;
     }
     startHomeTeleport(core, player, destination, () => {
+      // The landing: the league's "Cast Home Teleport" completes here (rsprox 237/1098 tick 4444).
+      core.PluginManager?.emitCustomEvent?.(HOME_TELEPORT_LANDED, { player, to: destination });
       const minute = dateMinutes();
       player.setAttribute(LAST_HOME_TELEPORT_ATTRIBUTE, minute);
       player.getPacketSender().sendConfig(LAST_HOME_TELEPORT_VARP, clientMinute(minute));

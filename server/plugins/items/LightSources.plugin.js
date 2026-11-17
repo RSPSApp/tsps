@@ -98,6 +98,9 @@ function applyLight(player, item, source) {
   item.setId(source.lit);
   player.getInventory().refreshItems();
   if (source.message) player.sendMessage(source.message);
+  // `light-sources:lit` { player, itemId }: the lit item, on its tick (the league's "Light a Torch",
+  // rsprox 237/1098 tick 16024, the tick the tinderbox was used).
+  core.PluginManager?.emitCustomEvent?.("light-sources:lit", { player, itemId: source.lit });
 }
 
 function light(event) {

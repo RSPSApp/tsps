@@ -984,3 +984,17 @@ test("opening the Grubby Chest credits its league tasks, including the pact task
   assert.ok(completed(opener).includes("open-10-grubby-chests"), "ten chests");
   assert.ok(completed(opener).includes("open-25-grubby-chests"), "twenty-five chests");
 });
+
+test("the trigger overlay names only its league's own tasks, and maps the shared deeds in every league that has them (issue 6108)", () => {
+  const overlay = require("../plugins/modes/data/league-task-triggers.json");
+  for (const [type, entries] of Object.entries(overlay)) {
+    if (type === "$comment") continue;
+    const ids = new Set(catalog.leagues[type].tasks.map((task) => task.id));
+    for (const id of Object.keys(entries)) assert.ok(ids.has(id), `league ${type} has no task ${id}`);
+  }
+  for (const type of ["4", "5", "6"]) {
+    for (const id of ["cast-home-teleport", "chop-some-logs", "light-a-torch", "turn-any-logs-into-a-plank"]) {
+      assert.ok(overlay[type][id]?.kind, `league ${type}: ${id} is mapped`);
+    }
+  }
+});

@@ -297,3 +297,16 @@ test("combat XP against an NPC is scaled by its multiplier (the crab's 3.5 per d
   CombatFactory.rewardExp(attacker, hit);
   assert.deepEqual(xp, [["Hitpoints", 14], ["Strength", 42]], "12 damage: 14 Hitpoints, 42 Strength (3.5 each)");
 });
+
+test("the next mine is one draw among the others: a constant Math.random never loops (a test pinning it once hung the burrow)", (t) => {
+  const { pickSpot } = GemstoneCrab._test;
+  for (const value of [0, 0.5, 0.999999]) {
+    t.mock.method(Math, "random", () => value);
+    for (let not = 0; not < SPOTS.length; not++) {
+      const spot = pickSpot(not);
+      assert.notEqual(spot, not, `random ${value}, not ${not}`);
+      assert.ok(spot >= 0 && spot < SPOTS.length);
+    }
+    t.mock.restoreAll();
+  }
+});

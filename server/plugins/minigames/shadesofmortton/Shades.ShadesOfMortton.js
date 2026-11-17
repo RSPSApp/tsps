@@ -38,14 +38,16 @@ const isShadow = (npc) => pairs().has(npc?.getId?.());
 const fighting = (npc) => !!npc.getCombat?.()?.getTarget?.();
 
 /**
- * The shadows in their areas (data `shadowAreas`), from a region query: walking World.getNpcs()
- * steps through every NPC slot (65535), and until a player has been near, no shadow has spawned,
- * so the empty list asked again every tick.
+ * The shadows in their areas (data `shadowAreas`, widened by `shadowReach`, so a shadow is found
+ * wherever it wanders or is led in a fight), from a region query: walking World.getNpcs() steps
+ * through every NPC slot (65535) each time it is asked.
  */
 function findShadows() {
   const { World, Location } = Common.core;
+  const reach = Common.data.shadowReach;
   const found = [];
-  for (const [x0, y0, x1, y1, z] of Common.data.shadowAreas) {
+  for (const [ax0, ay0, ax1, ay1, z] of Common.data.shadowAreas) {
+    const [x0, y0, x1, y1] = [ax0 - reach, ay0 - reach, ax1 + reach, ay1 + reach];
     const cx = (x0 + x1 + 1) >> 1;
     const cy = (y0 + y1 + 1) >> 1;
     const radius = Math.max(cx - x0, x1 - cx, cy - y0, y1 - cy);
@@ -54,7 +56,19 @@ function findShadows() {
       if (isShadow(npc) && at.getX() >= x0 && at.getX() <= x1 && at.getY() >= y0 && at.getY() <= y1) found.push(npc);
     }
   }
-  return found.sort((a, b) => a.getIndex() - b.getIndex());
+  return found;
+}
+
+/**
+ * The shadows to watch from now on: those found, plus every shadow already watched that is still in
+ * the world (it is the same NPC wherever it has walked since), lowest index first as before.
+ */
+function refreshShadows() {
+  const next = new Set(findShadows());
+  for (const npc of shadows) {
+    if (npc?.isRegistered?.() !== false && isShadow(npc)) next.add(npc);
+  }
+  return [...next].sort((a, b) => a.getIndex() - b.getIndex());
 }
 
 /** The shadow becomes its shade where it stands. */
@@ -80,7 +94,7 @@ function hitTaken({ npc }) {
 /** Each tick: shadows that start a fight rise; shades left alone long enough sink. */
 function process() {
   tick++;
-  if (tick % REFRESH_TICKS === 0 || shadows.length === 0) shadows = findShadows();
+  if (tick % REFRESH_TICKS === 0 || shadows.length === 0) shadows = refreshShadows();
   for (const npc of shadows) {
     if (!npc?.isRegistered?.() && npc?.isRegistered) continue;
     if (!risen.has(npc)) {

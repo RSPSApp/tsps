@@ -9,8 +9,10 @@
     {"shadow": "shadeshadow_level6", "shade": "shade_level6", "remains": "shade_bones6"}
   ],
   "_shade": "Recorded (232/03119 [39]-[170]): a shadow rises into its shade, the same NPC, as it is hit or as it attacks (shade_rise), and sinks back to its shadow about 68 ticks after its last fight; its remains always drop (private 100 ticks, gone at 200).",
-  "_shadowAreas": "Where shadows are looked for: the two map regions that hold every shadow in data/definitions/npc-spawns.json (25 around Mort'ton, 76 in the Shade Catacombs), as [minX, minY, maxX, maxY, z]. Looked up by region rather than by walking every NPC slot.",
+  "_shadowAreas": "Where shadows are looked for: the two map regions that hold every shadow in data/definitions/npc-spawns.json (25 around Mort'ton, 76 in the Shade Catacombs), as [minX, minY, maxX, maxY, z], each widened on every side by shadowReach. Looked up by region rather than by walking every NPC slot.",
   "shadowAreas": [[3456, 3264, 3519, 3327, 0], [3456, 9664, 3519, 9727, 0]],
+  "_shadowReach": "How far from its spawn a shadow can stand: it wanders up to its spawn radius (NpcSpawnDefinitionLoader.DEFAULT_WANDER_RADIUS, 5: no shadow spawn sets its own) and in a fight it is walked home once it is more than its combat follow distance (NpcDefinition default 7) from spawn, one step past that at most. tests/shades-of-mortton.test.cjs checks this against both.",
+  "shadowReach": 8,
   "riseAnimation": 1288,
   "revertTicks": 68,
   "_zealot": "Wiki (Undead Zealot, Altar (Shade Catacombs)): opening any chest raises an Undead Zealot 1 time in 20 (Mod Ash), attackable only by the opener; it always drops bleached bones, which restore full Prayer, without experience, on the Altar of the Damned. No rsprox capture exists (NPC 10591/10592 return nothing). 10591 and 10592 are the page's two versions with identical data; which the game raises is not established.",

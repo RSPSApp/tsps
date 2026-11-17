@@ -40,6 +40,35 @@ const EDGEVILLE_DUNGEON_LANDING = { x: 3096, y: 9867, z: 0 };
 const VARROCK_MANHOLE = { x: 3237, y: 3458, z: 0 };
 const VARROCK_SEWER_LADDER = { x: 3237, y: 9858, z: 0 };
 
+const INTRO = "There's a large selection of books, the majority of which look fairly<br>old. Some very strange names... You pick one at random :";
+// The Wiki lists all eight titles; the recording differs on one capitalisation (see docs).
+const BOOKS = [
+  "101 Ways to Impress your Mates with Magic",
+  "The Dark Arts of Magical Wands",
+  "Fire, Earth and Water - What's it all about?",
+  "How to become the Ultimate Wizard of the Universe",
+  "The Life & Times of a Thingummywut by Traiborn the Wizard",
+  "Living with a Wizard Husband - A housewife's Story",
+  "So you think you're a Mage? Volume 28",
+  "Wind Strike for Beginners",
+];
+
+function searchBooks(event) {
+  const { location, objectId, player } = event;
+  // The same name is used by other bookcases, including the basement clue.
+  if (objectId !== CacheDefinitions.getLocId("fai_wiztower_bookcase") ||
+      !location || location.x < 3100 || location.x > 3119 || location.y < 3150 || location.y > 3169 ||
+      (location.z !== 0 && location.z !== 1)) return false;
+  const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
+  const title = BOOKS[Math.floor(Math.random() * BOOKS.length)];
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new StatementDialogue(0, INTRO),
+    new StatementDialogue(1, `'${title}'`),
+    new StatementDialogue(2, "Interesting..."),
+  ));
+  return true;
+}
+
 // Wizards' Tower basement
 const TOWER_LADDER = { x: 3104, y: 3162, z: 0 };
 const TOWER_BASEMENT_LADDER = { x: 3103, y: 9576, z: 0 };
@@ -309,6 +338,7 @@ module.exports = {
       "Climb-down": varrockClimbDownManhole,
     });
     api.onObjectInteraction("Ladder", { "Climb-up": varrockClimbUpToManhole });
+    api.onObjectInteraction("Bookcase", { Search: searchBooks });
     // Wizards tower basement
     api.onObjectInteraction("Ladder", {
       "Climb-down": wizardsTowerClimbDown,

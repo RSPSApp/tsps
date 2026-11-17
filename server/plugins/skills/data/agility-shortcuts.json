@@ -2185,8 +2185,8 @@
       "name": "Stile (Burthorpe)",
       "object": 3730,
       "level": 1,
-      "end": "You climb over the stile.",
-      "between": {"ends":[[2817,3561,0],[2817,3564,0]],"cross":[{"use":"climbOver","args":["to"]}]}
+      "note": "Tenzing's stile (1x2), rsprox local 1001676, 1001683 and 1001800 (5 crossings, all northbound): from 2817,3561 a forced step onto the stile (2817,3562), the next tick human_walk_style (839) and exact_move at cycles 30-94 to 2817,3563, busy for 3 ticks, no message",
+      "between": {"ends":[[2817,3561,0],[2817,3563,0]],"cross":[{"walk":[[2817,3562,0]]},{"move":"to","anim":"CLIMB_OVER","delay":30,"speed":[30,94],"ticks":3}]}
     },
     {
       "name": "Rocks (God Wars Dungeon path)",

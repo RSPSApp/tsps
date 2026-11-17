@@ -262,7 +262,8 @@ console.log("inventory shift-click drop passed");
     setPacketSocket(socket as any);
     const row: any = {uid:910 << 16 | 5, id:910 << 16 | 5, parentUid:910 << 16 | 5,
         groupId:910, fileId:-1, childIndex:45, itemId:-1, type:3,
-        actions:['Take',null,null,null,null,null,null,null,null,'Examine'], onOp:[7838]};
+        actions:['Take',null,null,null,null,null,null,null,null,'Examine'],
+        onOp:[7845,-2147483644,-2147483645,-2147483643,0]};
     let flags = 1026, details = 0, custom = 0;
     const manager: any = {meslayerContinueWidget:null, getWidgetFlags:()=>flags,
         getWidgetOpMask:()=>0, getWidgetByUid:()=>undefined};

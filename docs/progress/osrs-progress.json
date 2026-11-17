@@ -49544,6 +49544,8 @@
           "wiki": "https://oldschool.runescape.wiki/w/Skilling_pets",
           "implementedIn": [
             "server/plugins/npcs/Pets.plugin.js",
+            "server/plugins/npcs/pets/RockGolem.Pets.js",
+            "server/tests/rock-golem-forms.test.cjs",
             "server/plugins/skills/Fishing.plugin.js",
             "server/plugins/skills/Woodcutting.plugin.js",
             "server/plugins/skills/Mining.plugin.js",
@@ -49552,6 +49554,7 @@
             "client/game/menu/WorldMenuBuilder.ts"
           ],
           "devNotes": [
+            "Rock golem ore-use recolouring: inventory and own-follower use supports all 19 cache forms, including all granite sizes and rock reset; physical item identity survives pickup and save/login. Native real-object regression covers supported ores, cost, ownership, notes and legacy normalization. Successful ore cost is observed in retail video Wt4YeKDJhAA; exact response text/ticks and same-form behavior remain unrecorded, and reset cost follows the general one-item transformation rule.",
             "Main bce571cb3: #1458 chinchompa colours, #1459 the Giant squirrel, #1461 Tangleroot and #1463-#1466 Rift guardian colours, GOTR exclusion and the unlocked-colour chooser; #1460 a winning Mining roll takes the last slot over the ore.",
             "Main ece91aca2: #1451 the Beaver uses its real follower, and #1452 a winning roll takes the last slot over the log; #1456 the normal Rock Golem is awarded again.",
             "GIANT_SQUIRREL exists in SKILLING_PETS (chance 5000) but Agility only emits agility:lap while Pets subscribes to agility:success, so it can never roll; Hunter now emits hunter:success so the chinchompas are reachable, and Tangleroot stays dead until Farming lands.",

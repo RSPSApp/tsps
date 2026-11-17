@@ -169,9 +169,11 @@ const ZOMBIE = { cast: 1875, impact: 1905, rise: 13685, kind: "zombified" };
 export class ArceuusSpells {
     public static readonly WARD_UNTIL = "arceuus:ward-until";
     public static readonly DEATH_CHARGE_UNTIL = "arceuus:death-charge-until";
+    public static readonly DEATH_CHARGE_COOLDOWN_ATTRIBUTE = "arceuus:death-charge-cooldown";
     private static readonly DEATH_CHARGE_TOKEN = "arceuus:death-charge-token";
     public static readonly SHADOW_VEIL_UNTIL = "arceuus:shadow-veil-until";
     public static readonly MARK_UNTIL = "arceuus:mark-until";
+    public static readonly DARK_LURE_UNTIL = "arceuus:dark-lure-until";
     private static readonly CORRUPTION = "arceuus:corruption";
     private static readonly CORRUPTION_MARKED = "arceuus:corruption-marked";
     private static readonly CORRUPTION_COOLDOWN = "arceuus:corruption-cooldown";
@@ -221,7 +223,7 @@ export class ArceuusSpells {
             id: 15309, level: 80, experience: 90, runes: [rune(560), rune(565), rune(566)],
             animation: SELF_IMBUE, graphic: 1854,
             cooldown: {
-                attribute: "arceuus:death-charge-cooldown", duration: 60_000,
+                attribute: this.DEATH_CHARGE_COOLDOWN_ATTRIBUTE, duration: 60_000,
                 message: (player) => this.hasDeathCharge(player) ? DEATH_CHARGE_PENDING : DEATH_CHARGE_COOLDOWN,
             },
             effect: (player) => this.startDeathCharge(player),
@@ -336,6 +338,55 @@ export class ArceuusSpells {
 
     public static hasMark(player: Player): boolean {
         return Number(player.getAttribute(this.MARK_UNTIL) ?? 0) > World.getProcessCycle();
+    }
+
+    /**
+     * A respawn or the next login starts with no Arceuus effect or thrall. Death Charge is the
+     * exception: its active effect is spent, but its 60-second cooldown is a separate clock and
+     * must keep running. Leaving the cooldown and its token alone lets startDeathCharge's own
+     * expiry task clear the client indicator at the original deadline.
+     */
+    public static clearStatuses(player: Player): void {
+        for (const key of [
+            this.WARD_UNTIL,
+            this.DEATH_CHARGE_UNTIL,
+            this.SHADOW_VEIL_UNTIL,
+            this.MARK_UNTIL,
+            this.DARK_LURE_UNTIL,
+            this.CORRUPTION,
+            this.CORRUPTION_MARKED,
+            this.CORRUPTION_COOLDOWN,
+            "arceuus:ward-cooldown",
+            "arceuus:offering-until",
+            "arceuus:shadow-veil-cooldown",
+            "arceuus:vile-vigour-cooldown",
+        ]) {
+            player.setAttribute(key, null);
+        }
+        player.setAttribute(this.MARK_TOKEN, Number(player.getAttribute(this.MARK_TOKEN) ?? 0) + 1);
+        this.sendDeathChargeVarbit(player, DEATH_CHARGE_ACTIVE_VARBIT, 0);
+        ArceuusThralls.dismiss(player);
+    }
+
+    /**
+     * Login resync for a Death Charge cooldown whose expiry task ran while the owner was logged
+     * out: the client starts at zero, so send the remaining indicator and retire it at the same
+     * deadline. A cooldown that already expired sends zero.
+     */
+    public static syncDeathCharge(player: Player): void {
+        const until = Number(player.getAttribute(this.DEATH_CHARGE_COOLDOWN_ATTRIBUTE) ?? 0);
+        const remaining = until - World.getProcessCycle();
+        this.sendDeathChargeVarbit(player, DEATH_CHARGE_ACTIVE_VARBIT, this.hasDeathCharge(player) ? 1 : 0);
+        this.sendDeathChargeVarbit(player, DEATH_CHARGE_COOLDOWN_VARBIT, remaining > 0 ? 1 : 0);
+        if (remaining <= 0) return;
+        TaskManager.submit(new class extends Task {
+            constructor() { super(remaining, false); }
+            execute(): void {
+                this.stop();
+                if (!player.isRegistered() || Number(player.getAttribute(ArceuusSpells.DEATH_CHARGE_COOLDOWN_ATTRIBUTE) ?? 0) !== until) return;
+                ArceuusSpells.sendDeathChargeVarbit(player, DEATH_CHARGE_COOLDOWN_VARBIT, 0);
+            }
+        });
     }
 
     /**

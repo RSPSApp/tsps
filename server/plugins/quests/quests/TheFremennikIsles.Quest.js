@@ -743,6 +743,10 @@ module.exports = function registerTheFremennikIslesQuest(api) {
       : "facing-the-trolls-talking-to-bork";
   }
 
+  function requestBorkSupplies({ player }) {
+    return !!play(player, BORK_SIGMUNDSON, borkVariant(player));
+  }
+
   function taxVariant(player, npcId) {
     const stage = stageOf(player);
     if (npcId === ERIC) {
@@ -2000,6 +2004,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
   api.onNpcInteraction("Mawnis Burowgar", { "Talk-to": talkToMawnis });
   api.onNpcInteraction("Kjedelig Uppsen", { "Talk-to": talkToKjedelig });
   api.onNpcInteraction("Trogen Konungarde", { "Talk-to": talkToKjedelig });
+  api.onNpcInteraction("Bork Sigmundson", { "Request-supplies": requestBorkSupplies });
   api.onNpcInteraction(handleSpecialTalk);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);

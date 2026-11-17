@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-11",
+  "updated": "2026-11-16",
   "note": "Progress measures functional equivalence with OSRS through implementation tasks: done counts fully, in progress counts halfway, and to do counts zero. Automated test coverage is evidence, not a scoring requirement. Reconciled against tsps main 3e9ee2d67 on 11 November 2026, covering 1,355 merged PRs since the 6 November checkpoint 3b61a15a8. This sync credits the implemented portions of Clan Wars, Burthorpe Games Room, ranked PvP Arena, Trouble Brewing, Intelligence Gathering, Halloween, seasonal rares, Brutus and Maggot King. It also records Hunter Rumours, diary and League task updates, Sailing, bank-funded Grand Exchange offers, Curse of the Empty Lord, quest progression fixes, combat and interface work. Existing inventory, task scope and weights are retained. Only merged main changes are credited.",
   "schema": {
     "item": [
@@ -24178,7 +24178,7 @@
             "done",
             "done",
             "done",
-            "in-progress"
+            "done"
           ],
           "plugin": {
             "name": "HallowedSepulchre",
@@ -24201,7 +24201,8 @@
             "Floor mechanics/cleanup stays partial: Mysterious Stranger death retrieval, the Hallowed ring, tool-storage interface 666, ambient NPCs and clue/page tertiaries remain absent. Death is unsafe on OSRS; it is not a no-item-loss minigame.",
             "Main 82657e165: #1630 the Hallowed ring negates trap damage; its faster recovery, the Mysterious Stranger, tool storage and ambient NPCs remain.",
             "Main 3b61a15a8 (6 November 2026): #2472 Record successful activity rewards in the collection log. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4413 Hallowed Sepulchre: the Grand coffin's Agility route needs 66 Thieving. #3537 Allow Agility alternative for Grand Hallowed Coffin. #2901 Shorten Hallowed ring trap recovery."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4413 Hallowed Sepulchre: the Grand coffin's Agility route needs 66 Thieving. #3537 Allow Agility alternative for Grand Hallowed Coffin. #2901 Shorten Hallowed ring trap recovery.",
+            "2026-11-16, feat/hallowed-sepulchre-retrieval: a death inside a Sepulchre floor now leaves the lost items with the Mysterious Stranger in the lobby; his Collect opens the shared Item Retrieval Service interface and Take returns what fits, while a later unsafe death deletes the old lot (server/plugins/minigames/hallowedsepulchre/Retrieval.HallowedSepulchre.js; server/tests/hallowed-sepulchre-retrieval.test.cjs)."
           ],
           "taskDetails": [
             {

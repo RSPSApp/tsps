@@ -7,6 +7,8 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
+process.env.DISABLE_PLAYER_BOTS = "1";
+process.env.BROWSER_HOST = "1"; // No WorldAdmin listener in this full-registration fixture.
 require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
@@ -26,7 +28,8 @@ before(async () => {
 after(() => PM.emitServerShutdown({}));
 
 function actor(t) {
-  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const wire = [];
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: (packet) => { wire.push(Buffer.from(packet)); return true; }, close() {}, onData() {}, onError() {}, onClose() {} };
   const p = new Player(new PlayerSession(channel));
   p.setIndex(next++);
   p.setUsername("coxstore" + p.getIndex());
@@ -37,7 +40,7 @@ function actor(t) {
   const messages = [];
   t.mock.method(p.getPacketSender(), "sendMessage", (message) => { messages.push(message); return p.getPacketSender(); });
   t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p); });
-  return { p, inv: p.getInventory(), messages };
+  return { p, inv: p.getInventory(), messages, wire };
 }
 
 function preset(item) {
@@ -55,6 +58,129 @@ const Storage = require("../plugins/minigames/cox/Storage.ChambersOfXeric");
 const PRESET_TEXT = "Preset items cannot be used for this.";
 
 const Raid = require("../plugins/minigames/cox/RaidState.ChambersOfXeric");
+const Parties = require("../plugins/minigames/cox/Parties.ChambersOfXeric");
+const { InterfaceActionClickOpcode: Input } = require("../dist/net/packet/impl/InterfaceActionClickOpcode");
+const { encodeVarbit, encodeWidgetOpenSub } = require("../dist/net/protocol/ClientProtocol");
+const { SERVER_PACKET_LENGTHS } = require("../dist/net/protocol/ServerPackets");
+
+function packets(chunks) {
+  const bytes = Buffer.concat(chunks);
+  const result = [];
+  for (let offset = 0; offset < bytes.length;) {
+    const length = SERVER_PACKET_LENGTHS[bytes[offset]];
+    assert.notEqual(length, undefined, "known transport opcode");
+    const header = length >= 0 ? 1 : length === -1 ? 2 : 3;
+    const payload = length >= 0 ? length : length === -1 ? bytes[offset + 1] : bytes.readUInt16BE(offset + 1);
+    const end = offset + header + payload;
+    assert.ok(end <= bytes.length, "complete framed packet");
+    result.push(bytes.subarray(offset, end));
+    offset = end;
+  }
+  return result;
+}
+
+/** Controlled membership, with the actual Party/Raid registry and registered packet dispatcher. */
+function registeredStorage(t) {
+  const f = actor(t);
+  const party = Parties.create(f.p, { key: "coxmount" + f.p.getIndex() });
+  const raid = new Raid.Raid(party);
+  party.raid = raid;
+  raid.players.add(f.p);
+  raid.storageTier = 1;
+  f.p.setAttribute(Raid.ATTR_RAID, raid);
+  t.after(() => { f.p.setAttribute(Raid.ATTR_RAID, null); raid.players.clear(); raid.destroy("empty"); });
+  return { ...f, raid };
+}
+
+function click(f, group, child, slot = 0, op = 1) {
+  assert.equal(Input.handle(f.p, (group << 16) | child, op,
+    { groupId: group, childId: child, slot, opId: op, itemId: f.inv.getItems()[slot]?.getId() ?? -1 }), true);
+}
+
+test("private/shared storage mounts its cache side modal after its onLoad varbits, including close and reopen", async (t) => {
+  const f = registeredStorage(t);
+  const cache = core.CacheDefinitions;
+  const target = cache.getComponentId("toplevel_osrs_stretch:sidemodal");
+  const side = cache.getInterfaceId("raids_storage_side");
+  for (const privateView of [true, false, true]) {
+    f.wire.length = 0;
+    if (privateView) Storage.openPrivate(f.p, 30);
+    else Storage.openShared(f.p, f.raid);
+    f.p.getSession().flushPackets();
+    await Promise.resolve();
+    assert.deepEqual(f.p.getPacketSender().getSubInterfaceAt(target), { targetUid: target, groupId: side, type: 0 });
+    const frames = packets(f.wire);
+    const open = frames.findIndex((packet) => packet.equals(encodeWidgetOpenSub(target, side, 0)));
+    assert.ok(open >= 0, "real open_sub packet mounts the storage inventory and runs onLoad");
+    for (const [id, value] of [[3459, privateView ? 1 : 0], [5509, 0]]) {
+      const index = frames.findIndex((packet) => packet.equals(encodeVarbit(id, value)));
+      assert.ok(index >= 0 && index < open, "onLoad receives the correct private/shared and warning state");
+    }
+    f.p.getPacketSender().sendInterfaceRemoval();
+    f.p.getSession().flushPackets();
+    assert.equal(f.p.getPacketSender().getSubInterfaceAt(target), undefined);
+    assert.equal(f.p.getInterfaceId(), -1);
+  }
+});
+
+test("mounted private Store 1/5/10/All/X retain restricted instances, caps and once-per-bulk feedback", (t) => {
+  const f = registeredStorage(t);
+  Storage.openPrivate(f.p, 30);
+  const restricted = preset(new core.Item(I.DEATH_RUNE, 1000, { proof: { nested: "retained" } }));
+  const meta = structuredClone(restricted.getMeta());
+  f.inv.setItem(0, restricted);
+  for (const [op, quantity] of [[1, 1], [2, 5], [3, 10], [4, 40], [5, 7]]) {
+    f.inv.setItem(1, new core.Item(I.DEATH_RUNE, 40));
+    const before = stored(f, I.DEATH_RUNE);
+    click(f, 551, 1, 1, op);
+    if (op === 5) { assert.ok(f.p.getEnteredAmountAction()); f.p.getEnteredAmountAction().execute(quantity); f.p.setEnteredAmountAction(null); }
+    assert.equal(stored(f, I.DEATH_RUNE) - before, quantity);
+    assert.equal(f.inv.getItems()[1].getAmount(), op === 4 ? 0 : 40 - quantity);
+    click(f, 551, 1, 0, op);
+    if (op === 5) { f.p.getEnteredAmountAction().execute(7); f.p.setEnteredAmountAction(null); }
+    assert.equal(f.messages.filter((message) => message === PRESET_TEXT).length, op);
+    assert.equal(f.inv.getItems()[0], restricted);
+    assert.deepEqual(restricted.getMeta(), meta);
+  }
+  f.p.setAttribute("cox:private-storage", [{ id: I.DEATH_RUNE, amount: 2147483645 }]);
+  f.inv.setItem(1, new core.Item(I.DEATH_RUNE, 10));
+  click(f, 551, 1, 1, 4);
+  assert.equal(stored(f, I.DEATH_RUNE), 2147483647);
+  assert.equal(f.inv.getItems()[1].getAmount(), 8);
+  f.inv.setItem(2, preset(new core.Item(I.ABYSSAL_WHIP)));
+  click(f, 271, 10);
+  click(f, 271, 10);
+  assert.equal(f.messages.filter((message) => message === PRESET_TEXT).length, 7);
+  f.p.getPacketSender().sendInterfaceRemoval();
+  click(f, 551, 1, 1, 4);
+  assert.equal(f.inv.getItems()[1].getAmount(), 8, "closed side input cannot deposit");
+});
+
+test("mounted shared Donate operations isolate the raid and private storage; stale amount prompts refuse after close", (t) => {
+  const f = registeredStorage(t);
+  const other = registeredStorage(t);
+  f.p.setAttribute("cox:private-storage", [{ id: I.CAVE_WORMS, amount: 13 }]);
+  Storage.openShared(f.p, f.raid);
+  for (const [op, quantity] of [[1, 1], [2, 5], [3, 10], [4, 40], [5, 7]]) {
+    f.inv.setItem(0, new core.Item(I.CAVE_WORMS, 40));
+    click(f, 551, 1, 0, op);
+    if (op === 5) { f.p.getEnteredAmountAction().execute(quantity); f.p.setEnteredAmountAction(null); }
+  }
+  assert.equal(f.raid.sharedItems[0].amount, 63);
+  assert.equal(stored(f, I.CAVE_WORMS), 13);
+  assert.deepEqual(other.raid.sharedItems ?? [], []);
+  click(f, 271, 10);
+  assert.equal(f.raid.sharedItems[0].amount, 63, "private bulk button is refused in shared view");
+  click(f, 551, 1, 0, 5);
+  const pending = f.p.getEnteredAmountAction();
+  f.p.getPacketSender().sendInterfaceRemoval();
+  pending.execute(10);
+  assert.equal(f.raid.sharedItems[0].amount, 63);
+  Storage.openShared(f.p, f.raid);
+  f.p.setAttribute(Raid.ATTR_RAID, other.raid);
+  click(f, 551, 1, 0, 4);
+  assert.equal(f.raid.sharedItems[0].amount, 63, "a different raid cannot access the old view");
+});
 
 /** At a unit in a raid with the private storage open (a view counts only while its interface is open, in the raid). */
 function inStorage(t) {

@@ -49,6 +49,7 @@ const COMPONENT = {
   SIDE: { ITEMS: 1, DISMISS: 8 },
 };
 const SIDE_INTERFACE = 551;
+const MODAL = 0;
 const VARBIT = { SIDE_PRIVATE: 3459, WARNING_DISMISSED: 5509 };
 const MOUNT_UNIT = 30107;
 const PLANK = 21036;
@@ -218,6 +219,9 @@ function sendSide(player, privateView) {
   const sender = player.getPacketSender();
   sender.sendVarbit(VARBIT.SIDE_PRIVATE, privateView ? 1 : 0);
   sender.sendVarbit(VARBIT.WARNING_DISMISSED, player.getAttribute(ATTR_DISMISSED) ? 1 : 0);
+  // Its onLoad draws the inventory and Store operations using the state above.
+  const cache = Shared.core().CacheDefinitions;
+  sender.sendSubInterface(cache.getComponentId("toplevel_osrs_stretch:sidemodal"), cache.getInterfaceId("raids_storage_side"), MODAL);
   sender.sendInterfaceFlagsRange(uid(SIDE_INTERFACE, COMPONENT.SIDE.ITEMS), 0, 27,
     Shared.EVENT.OP1 | Shared.EVENT.OP2 | Shared.EVENT.OP3 | Shared.EVENT.OP4 | Shared.EVENT.OP5 | (1 << 10));
 }
@@ -229,7 +233,7 @@ function openPrivate(player, size) {
   const noSharedSpace = size === -1 || tierOf(Raid.raidOf(player)) === 0;
   if (size === -1) clearRaidItems(player);
   player.setAttribute(ATTR_VIEW, { kind: "private", size: size === -1 ? 120 : size, mount: size === -1 });
-  sender.sendInterfaceSet(Shared.INTERFACE.PRIVATE_STORAGE, SIDE_INTERFACE);
+  sender.sendInterface(Shared.INTERFACE.PRIVATE_STORAGE);
   sender.sendString(size === -1 ? "N/A" : String(size), uid(Shared.INTERFACE.PRIVATE_STORAGE, COMPONENT.PRIVATE.SIZE));
   sender.sendInterfaceDisplayState(uid(Shared.INTERFACE.PRIVATE_STORAGE, COMPONENT.PRIVATE.TO_SHARED), noSharedSpace);
   sender.sendInterfaceFlagsRange(uid(Shared.INTERFACE.PRIVATE_STORAGE, COMPONENT.PRIVATE.ITEMS), 0, Math.max(items.length, 1) + 120,
@@ -242,7 +246,7 @@ function openShared(player, raid) {
   const sender = player.getPacketSender();
   const tier = TIERS[tierOf(raid)];
   player.setAttribute(ATTR_VIEW, { kind: "shared", size: tier.shared, raid });
-  sender.sendInterfaceSet(Shared.INTERFACE.SHARED_STORAGE, SIDE_INTERFACE);
+  sender.sendInterface(Shared.INTERFACE.SHARED_STORAGE);
   sender.sendString(String(tier.shared), uid(Shared.INTERFACE.SHARED_STORAGE, COMPONENT.SHARED.SIZE));
   sender.sendInterfaceFlagsRange(uid(Shared.INTERFACE.SHARED_STORAGE, COMPONENT.SHARED.ITEMS), 0, tier.shared,
     Shared.EVENT.OP1 | Shared.EVENT.OP2 | Shared.EVENT.OP3 | Shared.EVENT.OP4 | Shared.EVENT.OP5 | (1 << 10));

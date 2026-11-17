@@ -37,6 +37,26 @@ function pairOf(npcId) {
 const isShadow = (npc) => pairs().has(npc?.getId?.());
 const fighting = (npc) => !!npc.getCombat?.()?.getTarget?.();
 
+/**
+ * The shadows in their areas (data `shadowAreas`), from a region query: walking World.getNpcs()
+ * steps through every NPC slot (65535), and until a player has been near, no shadow has spawned,
+ * so the empty list asked again every tick.
+ */
+function findShadows() {
+  const { World, Location } = Common.core;
+  const found = [];
+  for (const [x0, y0, x1, y1, z] of Common.data.shadowAreas) {
+    const cx = (x0 + x1 + 1) >> 1;
+    const cy = (y0 + y1 + 1) >> 1;
+    const radius = Math.max(cx - x0, x1 - cx, cy - y0, y1 - cy);
+    for (const npc of World.getNpcsNear?.(new Location(cx, cy, z), radius) ?? []) {
+      const at = npc.getLocation();
+      if (isShadow(npc) && at.getX() >= x0 && at.getX() <= x1 && at.getY() >= y0 && at.getY() <= y1) found.push(npc);
+    }
+  }
+  return found.sort((a, b) => a.getIndex() - b.getIndex());
+}
+
 /** The shadow becomes its shade where it stands. */
 function rise(npc) {
   if (risen.has(npc)) return;
@@ -60,7 +80,7 @@ function hitTaken({ npc }) {
 /** Each tick: shadows that start a fight rise; shades left alone long enough sink. */
 function process() {
   tick++;
-  if (tick % REFRESH_TICKS === 0 || shadows.length === 0) shadows = [...(Common.core.World.getNpcs?.() ?? [])].filter(isShadow);
+  if (tick % REFRESH_TICKS === 0 || shadows.length === 0) shadows = findShadows();
   for (const npc of shadows) {
     if (!npc?.isRegistered?.() && npc?.isRegistered) continue;
     if (!risen.has(npc)) {

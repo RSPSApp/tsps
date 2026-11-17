@@ -196,6 +196,24 @@ function location(tile) {
   return new Location(tile.x, tile.y, tile.z ?? TEMPLE.z);
 }
 
+const TEMPLE_CENTRE = { x: (TEMPLE.minX + TEMPLE.maxX + 1) >> 1, y: (TEMPLE.minY + TEMPLE.maxY + 1) >> 1 };
+const TEMPLE_RADIUS = Math.max(TEMPLE.maxX - TEMPLE_CENTRE.x, TEMPLE_CENTRE.x - TEMPLE.minX, TEMPLE.maxY - TEMPLE_CENTRE.y, TEMPLE_CENTRE.y - TEMPLE.minY);
+
+/**
+ * The temple's NPC with this id, or null. A region query over the temple: walking World.getNpcs()
+ * steps through every NPC slot (65535) and, until a player has been near the temple and its NPCs
+ * have spawned, found nothing every tick.
+ */
+function templeNpc(id) {
+  const { World } = core();
+  let found = null;
+  for (const npc of World.getNpcsNear(location(TEMPLE_CENTRE), TEMPLE_RADIUS)) {
+    if (npc.getId?.() !== id || !inTemple(npc.getLocation())) continue;
+    if (!found || npc.getIndex() < found.getIndex()) found = npc;
+  }
+  return found;
+}
+
 function inTemple(location) {
   return location.getZ() === TEMPLE.z
     && location.getX() >= TEMPLE.minX && location.getX() <= TEMPLE.maxX
@@ -409,6 +427,6 @@ module.exports = {
   MAX_ENERGY_PER_TYPE, MAX_ENERGY_TOTAL, REWARD_ENERGY, MINING_XP_CAP, HUD_PERIOD, RIFT_GUARDIAN_CAP,
   LOC, NPC, ITEM, STONES, NEW_GAME_ITEMS, GAME_ITEMS, VARBIT, VARP, INTERFACE, SCRIPT, OVERLAY_HUD_UID, OVERLAY_ATMOSPHERE_UID,
   loc, isLoc, npc, obj, seq, spotanim, iface, setVarbit, getVarbit, setVarp, openPortalEffect, clearPortalEffect,
-  location, inTemple, inGameSide, now, later, repeat, startAction, stopAction, statement, itemStatement, options, npcSays, spam, highlight,
+  location, inTemple, templeNpc, inGameSide, now, later, repeat, startAction, stopAction, statement, itemStatement, options, npcSays, spam, highlight,
   animate, graphic, damageNpc, prepareNpc, sound, runecraftLevel, addXp, questComplete, count, removeItems, formatNumber, random,
 };

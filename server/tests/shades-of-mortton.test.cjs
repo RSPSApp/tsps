@@ -811,3 +811,39 @@ test('a cremation key is asked as minigame:points (an answer is how many); coins
     Math.random = random;
   }
 });
+
+/** Runs fn with World.getNpcsNear answering from `npcs` (radius and plane honoured) and World.getNpcs() refused. */
+function withNpcsNear(World, npcs, fn) {
+  const { getNpcs, getNpcsNear } = World;
+  World.getNpcs = () => { throw new Error('walked every NPC slot'); };
+  World.getNpcsNear = (at, radius) => npcs.filter((npc) => npc.getLocation().getZ() === at.getZ()
+    && Math.max(Math.abs(npc.getLocation().getX() - at.getX()), Math.abs(npc.getLocation().getY() - at.getY())) <= radius);
+  try {
+    return fn();
+  } finally {
+    World.getNpcs = getNpcs;
+    World.getNpcsNear = getNpcsNear;
+  }
+}
+
+test("shadows are looked for in their two regions only, and those hold every shadow spawn", () => {
+  const spawns = require('../data/definitions/npc-spawns.json');
+  const ids = new Set(Common.data.shades.map(({ shadow }) => Common.npcId(shadow)));
+  const keys = new Set(Common.data.shades.map(({ shadow }) => shadow));
+  const shadowSpawns = spawns.filter((s) => ids.has(s.id) || keys.has(s.key));
+  assert.ok(shadowSpawns.length > 0);
+  const inArea = (x, y, z) => Common.data.shadowAreas.some(([x0, y0, x1, y1, az]) => az === z && x >= x0 && x <= x1 && y >= y0 && y <= y1);
+  for (const s of shadowSpawns) assert.ok(inArea(s.x, s.y, s.level ?? 0), `shadow spawn at ${s.x},${s.y},${s.level} is in a shadow area`);
+
+  const at = (shadow, x, y, index) => Object.assign(shadow, { getLocation: () => new Location(x, y, 0), getIndex: () => index });
+  const catacombs = at(fakeShadow(Common.npcId('shadeshadow_level3')), 3472, 9705, 7);
+  const elsewhere = at(fakeShadow(Common.npcId('shadeshadow_level3')), 3222, 3218, 3);
+  catacombs.target = {};
+  elsewhere.target = {};
+  Shades.watch([]);
+  withNpcsNear(core.World, [catacombs, elsewhere], () => Shades.process());
+  assert.equal(catacombs.transform, Common.npcId('shade_level3'), 'the catacombs shadow was found and rose to fight');
+  assert.equal(elsewhere.transform, null, 'one outside the areas is not watched');
+  Shades.risen.delete(catacombs);
+  Shades.watch([]);
+});

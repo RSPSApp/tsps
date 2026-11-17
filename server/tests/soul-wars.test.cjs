@@ -1691,3 +1691,31 @@ test("the barricade table gives the team's barricade item", () => {
   assert.equal(Supplies.take(p, table, 1), true);
   assert.equal(p.inventory.getAmount(Common.data.barricades.items[team]), 1);
 });
+
+/** Runs fn with World.getNpcsNear answering from `npcs` (radius and plane honoured) and World.getNpcs() refused. */
+function withNpcsNear(World, npcs, fn) {
+  const { getNpcs, getNpcsNear } = World;
+  World.getNpcs = () => { throw new Error('walked every NPC slot'); };
+  World.getNpcsNear = (at, radius) => npcs.filter((npc) => npc.getLocation().getZ() === at.getZ()
+    && Math.max(Math.abs(npc.getLocation().getX() - at.getX()), Math.abs(npc.getLocation().getY() - at.getY())) <= radius);
+  try {
+    return fn();
+  } finally {
+    World.getNpcs = getNpcs;
+    World.getNpcsNear = getNpcsNear;
+  }
+}
+
+test("the lobby's Nomad is found by a region query over the lobby and takes his transforming form", () => {
+  const nomad = (x, y, index) => {
+    const npc = { transform: -1, getId: () => 10528, getIndex: () => index, getLocation: () => new Location(x, y, 0),
+      setNpcTransformationId: (id) => { npc.transform = id; } };
+    return npc;
+  };
+  const lobby = nomad(2212, 2857, 5);
+  const away = nomad(2020, 5929, 1);
+  const found = withNpcsNear(Common.core.World, [away, lobby], () => Rewards.findNomad());
+  assert.equal(found, false, 'found: the task stops');
+  assert.equal(lobby.transform, 10555);
+  assert.equal(away.transform, -1);
+});

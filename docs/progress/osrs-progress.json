@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-16",
+  "updated": "2026-11-17",
   "note": "Progress measures functional equivalence with OSRS through implementation tasks: done counts fully, in progress counts halfway, and to do counts zero. Automated test coverage is evidence, not a scoring requirement. Reconciled against tsps main 3e9ee2d67 on 11 November 2026, covering 1,355 merged PRs since the 6 November checkpoint 3b61a15a8. This sync credits the implemented portions of Clan Wars, Burthorpe Games Room, ranked PvP Arena, Trouble Brewing, Intelligence Gathering, Halloween, seasonal rares, Brutus and Maggot King. It also records Hunter Rumours, diary and League task updates, Sailing, bank-funded Grand Exchange offers, Curse of the Empty Lord, quest progression fixes, combat and interface work. Existing inventory, task scope and weights are retained. Only merged main changes are credited.",
   "schema": {
     "item": [
@@ -46227,7 +46227,8 @@
             "Main 0a219d100 (2026-11-03): #1968 adds both Lizardman Canyon crossings to the shared shortcut runner with native-map approaches/landings and both directions. All four handholds work at level 1 without XP or favour gates; climb animation choice/duration remain explicitly unverified.",
             "Main 8403b60db (4 November 2026): #1977, #2043, #2211 — Course audit and River Lum stepping stones use current approach/movement handling; Brimhaven obstacle animations follow their recorded crossings.",
             "Main 3b61a15a8 (6 November 2026): #2248 fix: correct Falador rooftop paths and actor grounding; #2264 Agility: handle Al Kharid course failures; #2310 Agility: audit shortcut gates and animations; #2326 Bosses: add access and encounter setup; #2479 Match Wilderness Agility gate swaps and delayed sequence hand overrides; #2651 Finish the Shilo Village followup: cart, gate, Mosol Rei, Yanni, drops, rocks, bridge. (7 merged PRs touch the recorded implementation; highlights shown.) Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4093 Fix quest progression, temple repair, and bone shortbow combat. #2831 Dragon Slayer I: align with the revision 242 capture. #3212 fix: the Karamja Strong Tree crosses barehanded at 78 Agility."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4093 Fix quest progression, temple repair, and bone shortbow combat. #2831 Dragon Slayer I: align with the revision 242 capture. #3212 fix: the Karamja Strong Tree crosses barehanded at 78 Agility.",
+            "2026-11-17: corrected Wilderness ridge exit ordering from normal recording233/00451: end line and normal appearance at3918, south-door opening plus compact two-tile temporary WALK on the next tick, with cached run preference retained. Local recipe and generic movement-receipt/encoding owners are covered by real queued-input World regression and actual client-decoder checks. Entry52/exit1, zero XP and independent gate restoration retained. This does not claim every shortcut animation/timing is audited."
           ],
           "taskDetails": [
             {

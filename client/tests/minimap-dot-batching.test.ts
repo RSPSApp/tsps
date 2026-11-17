@@ -27,6 +27,7 @@ const gl: any = {
 const renderer: any = Object.assign(Object.create(MinimapRenderer.prototype), {
     gl, proj: new Float32Array(16), dotInstances: [], dotBuffer: new Float32Array(24),
     quadVerts: new Float32Array(16), mask: null,
+    nearestTextures: new WeakSet(), preparedPrograms: new Set(),
 });
 const a = { tex: {} as WebGLTexture, w: 4, h: 6 };
 const b = { tex: {} as WebGLTexture, w: 2, h: 2 };
@@ -64,3 +65,39 @@ assert.equal(draws.length, 4, "large groups stay one draw without a 16-bit index
 assert.equal(draws[3].count, 17000 * 6);
 assert.equal(renderer.dotInstances.length, 0);
 console.log("minimap dot batching tests passed");
+
+// GL state: a texture's sampling is set once, and a program's frame uniforms once per begin().
+{
+    const calls: string[] = [];
+    const counting: any = new Proxy({ TRIANGLES: 4, ARRAY_BUFFER: 34962, TEXTURE_2D: 3553, TEXTURE0: 33984, TEXTURE1: 33985 }, {
+        get: (target, name: string) => name in target ? target[name as keyof typeof target] : (..._args: unknown[]) => { calls.push(name); },
+    });
+    const r: any = Object.assign(Object.create(MinimapRenderer.prototype), {
+        gl: counting, proj: new Float32Array(16), dotInstances: [], dotBuffer: new Float32Array(24),
+        quadVerts: new Float32Array(16), mask: null,
+        nearestTextures: new WeakSet(), preparedPrograms: new Set(),
+        progMinimap: { name: "minimap" }, progOverlay: { name: "overlay" }, progSolid: { name: "solid" },
+    });
+    const tile = { tex: {} as WebGLTexture, w: 256, h: 256 };
+    const icon = { tex: {} as WebGLTexture, w: 9, h: 9 };
+    const maskTex = {} as WebGLTexture;
+    const count = (name: string) => calls.filter((c) => c === name).length;
+    const frame = () => {
+        r.begin(100, 100, 76, 0, 1, { tex: maskTex, x: 0, y: 0, width: 152, height: 152 });
+        for (let i = 0; i < 9; i++) r.drawTile(tile, i, i, 256);
+        for (let i = 0; i < 5; i++) r.drawOverlay(icon, i, i);
+        r.drawSolidRect(100, 100, 3, 3, [1, 1, 1, 1]);
+    };
+    frame();
+    assert.equal(count("texParameteri"), 12, "tile, icon and mask textures each get their 4 sampler params once");
+    assert.equal(count("drawElements"), 15, "every tile, icon and the marker still draws");
+    assert.equal(count("useProgram"), 15, "the program is still made current for every draw");
+    assert.equal(count("uniformMatrix4fv"), 3, "each program's projection is set once per frame");
+    assert.equal(count("uniform4f"), 3, "and its mask bounds");
+    calls.length = 0;
+    frame();
+    assert.equal(count("texParameteri"), 0, "known textures keep their sampling");
+    assert.equal(count("uniformMatrix4fv"), 3, "the next begin() sets the frame uniforms again");
+    assert.equal(count("bindTexture"), 14 * 2 + 1, "each textured draw binds its texture and the mask; the marker the mask");
+    console.log("minimap GL state test passed");
+}

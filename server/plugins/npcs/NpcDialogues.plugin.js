@@ -16,7 +16,8 @@
  * hand-outs, instead of a chat message, and `after` to run once the player continues past
  * that box. A statement box can also hold its continue for `box.holdTicks` while a scene
  * plays, then continue normally or, with `box.advance`, move on by itself; `box.delayTicks` closes
- * the chatbox and opens the box that many ticks later instead. A line's `pauseTicks`
+ * the chatbox and opens the box that many ticks later instead, and `box.pauseTicks` closes it once the
+ * box is continued and waits that many ticks before carrying on. A line's `pauseTicks`
  * closes the chatbox after it and waits that many ticks before the conversation carries on (a
  * scene between two lines). "npc-dialogue:start" plays a named variant on demand
  * and returns an optional request.cancel handle scoped to that playback's chain/chatbox.
@@ -1346,7 +1347,21 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
             }
             box.add(new ActionDialogue(boxIndex, { execute: () => {
               message.after?.();
-              run(rest, currentRecord);
+              // `box.pauseTicks`: once the box is continued the chatbox closes and the conversation
+              // waits that many ticks (an NPC eating what it was handed), as a line's `pauseTicks` does.
+              const pause = Number.isInteger(message.box?.pauseTicks) && message.box.pauseTicks > 0 ? message.box.pauseTicks : 0;
+              if (!pause) return run(rest, currentRecord);
+              const waiting = new ActionDialogue(0, { execute: () => {} }, true);
+              const idle = new DialogueChainBuilder();
+              idle.add(waiting);
+              const packets = player.getPacketSender();
+              const open = packets.getChatboxGroupId?.() ?? -1;
+              if (open >= 0) packets.closeInterface(open);
+              startChain(idle);
+              api.core.TaskManager.submit(new api.core.CountdownTask(player, pause, () => {
+                if (cancelled || manager.getCurrent?.() !== waiting) return;
+                run(rest, currentRecord);
+              }));
             } }));
             // `box.delayTicks`: the chatbox closes and the box opens that many ticks later, while a scene
             // the handler started plays out (an idle entry holds the conversation, as `pauseTicks` does).

@@ -229,6 +229,11 @@
     {"item": "lava_scale", "product": "lava_shard", "amount": [3, 6], "diaryBonus": ["wilderness", "hard"], "message": "You grind the lava dragon scale into {count} shards."},
     {"item": "dragon_bones_superior", "product": "crushed_dragon_bones", "message": "You grind down the superior dragon bones."},
     {"item": "nihil_shard", "product": "nihil_dust", "message": "You grind the nihil shard into dust."},
+    {"item": "tbwt_raw_karambwanji", "product": "tbwt_raw_karambwanji_paste", "message": "You grind the raw Karambwanji to form a sticky paste."},
+    {"item": "tbwt_quest_cooked_karambwanji", "product": "tbwt_cooked_karambwanji_paste", "message": "You grind the cooked Karambwanji to form a sticky paste."},
+    {"item": "tbwt_poorly_cooked_karambwan", "product": "tbwt_poisonous_karambwan_paste", "message": "You grind the cooked Karambwan to form a sticky paste."},
+    {"item": "tbwt_raw_karambwan", "product": "tbwt_raw_karambwan_paste", "message": "You grind the karambwan to form a sticky paste."},
+    {"item": "tbwt_cooked_karambwan", "product": "tbwt_cooked_karambwan_paste", "message": "You grind the cooked Karambwan to form a sticky paste."},
     {"item": "prif_crystal_shard", "product": "prif_crystal_shard_crushed", "amount": [10, 10], "quantityPrompt": "How many shards would you like to crush? (0 - {count})", "partialMessage": "You crush some of your crystal shards down to a powdery form.", "message": "You crush your crystal shards down to a powdery form."}
   ]
 }

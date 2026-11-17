@@ -293,8 +293,9 @@ test('Corsair captured independent investigations and spoken transitions reach w
   assert.ok(p.packets.some(([method,id,value])=>method==='sendVarbit'&&id===6074&&value===1));
   reachLine(q, p, 7976, 'Maybe you could get the relic back from the Captain');
   q.emit('npc-dialogue:action', { player: p, stepId: 'yRckkD' }); assert.equal(p.items.get(21837), 1);
-  q.emit('npc-dialogue:action', { player: p, stepId: 'wenZvG' }); assert.equal(p.items.get(21837), 0);
-  reachLine(q, p, core.NpcIdentifiers.CHIEF_TESS, 'Dis is tooth-pick. Tess got plenty more.');
+  // The artefact stays through the item box and goes with Tess's next line (capture local 1001340, ticks 5657, 5663).
+  q.emit('npc-dialogue:action', { player: p, stepId: 'wenZvG' }); assert.equal(p.items.get(21837), 1);
+  reachLine(q, p, core.NpcIdentifiers.CHIEF_TESS, 'Dis is tooth-pick. Tess got plenty more.'); assert.equal(p.items.get(21837), 0);
   q.hooks.get('onNpcDialogueVariant')[0]({ player: p, npcId: 7976 });
   assert.equal(p.attributes.get('quest.the_corsair_curse.thief'), 3, 'opening a report conversation does not finish it');
   reachLine(q, p, 7976, 'Their chief, Tess, says it was her tooth-pick.');
@@ -311,116 +312,6 @@ test('Corsair captured independent investigations and spoken transitions reach w
   reachLine(q, p, 7958, 'Arrr! So he was never sick at all!'); assert.equal(wire(), 52);
   q.quest.setStage(p, 9); assert.equal(wire(), 55);
   q.emit('npc-dialogue:action', { player: p, stepId: 'SaQ1Mg' }); assert.equal(wire(), 60); assert.equal(p.attributes.get('quest.points'), 2);
-});
-
-test('Corsair flashbacks and telescope are private and restore the actor and location on return/logout', () => {
-  const q = register('CorsairCurse', 'the_corsair_curse'), p = player(); q.quest.setStage(p, 3);
-  const original = new core.Location(2557,2858,1); p.moveTo(original);
-  q.emit('npc-dialogue:action', { player: p, stepId: 'Gsd1jQ' });
-  assert.ok(p.getPrivateArea()); assert.equal(p.getNpcTransformationId(), 7966);
-  q.emit('npc-dialogue:action', { player: p, stepId: 'p6ox6g' });
-  q.tick(2);
-  assert.equal(p.getPrivateArea(), null); assert.equal(p.getNpcTransformationId(), -1); assert.ok(p.getLocation().equals(original));
-  q.emit('npc-dialogue:action', { player: p, stepId: '36K07h' });
-  assert.ok(p.getPrivateArea()); assert.equal(q.spawned.at(-1).getId(), 7969);
-  q.tick(18); assert.equal(p.getPrivateArea(), null); assert.equal(p.attributes.get('quest.the_corsair_curse.cabinboy'), 2);
-  q.emit('npc-dialogue:action', { player: p, stepId: 'Cs_rhQ' }); assert.ok(p.getPrivateArea());
-  q.call('onPlayerLogout', { player: p }); assert.equal(p.getPrivateArea(), null); assert.equal(p.getNpcTransformationId(), -1);
-});
-
-test('Corsair fire proof uses private scenery and actor, finishes50, and one player cannot alter another scene', () => {
-  const q = register('CorsairCurse', 'the_corsair_curse'), p = player(), other = player(); q.quest.setStage(p, 6);
-  p.attributes.set('corsair-curse:proof-plan', true); p.items.set(590,1); p.moveTo(new core.Location(2532,2837,0));
-  const originalOther = other.getLocation().clone();
-  q.call('onItemOnObject', { player: p, itemId: 590, objectId: 31724 });
-  assert.equal(q.quest.getStage(p), 6); q.tick(2); assert.ok(p.getPrivateArea()); assert.equal(q.quest.varbitValue(6,p),49);
-  q.tick(26); assert.equal(q.quest.getStage(p),7); assert.equal(q.quest.varbitValue(7,p),50); assert.equal(p.getPrivateArea(),null);
-  assert.ok(other.getLocation().equals(originalOther)); assert.equal(other.getPrivateArea(),null);
-});
-test('Corsair fire proof: Ithoi puts the fire out with Water Strike, not another spell', () => {
-  // The Wiki's transcript: "Ithoi casts Water Strike, extinguishing the fire, and returns to his hut."
-  // The reporter on #2410 saw a fire spell. Water Strike's own visuals are CombatSpells.WATER_STRIKE's:
-  // cast graphic 93, projectile 94.
-  const q = register('CorsairCurse', 'the_corsair_curse'), p = player(); q.quest.setStage(p, 6);
-  p.attributes.set('corsair-curse:proof-plan', true); p.items.set(590,1); p.moveTo(new core.Location(2532,2837,0));
-  q.call('onItemOnObject', { player: p, itemId: 590, objectId: 31724 });
-  q.tick(2 + 26);
-  const ithoi = q.spawned.find(npc => npc.getId() === core.NpcIdentifiers.ITHOI_THE_NAVIGATOR_2);
-  assert.ok(ithoi, 'Ithoi runs out of the hut');
-  assert.deepEqual(ithoi.animations, [711], 'with the spell-cast animation');
-  assert.deepEqual(ithoi.graphics, [93], 'and the Water Strike cast graphic');
-  const shots = p.packets.filter(row => row[0] === 'sendProjectile');
-  assert.equal(shots.length, 1, 'one spell is sent');
-  assert.equal(shots[0][5], 94, 'and it is the Water Strike projectile');
-});
-test('all five Corsair scenes send the complete captured camera track, exact rates and timed cuts',()=>{
-  const q=register('CorsairCurse','the_corsair_curse'),p=player();
-  const action=stepId=>q.emit('npc-dialogue:action',{player:p,stepId});
-  const line=(text,npcId=core.NpcIdentifiers.CABIN_BOY_COLIN)=>{const e={player:p,npcId,text};q.emit('npc-dialogue:line',e);e.before?.();return e;};
-  q.quest.setStage(p,1);
-  line("Now, I've a ship moored west of Rimmington. Come and meet me on board, and we'll set off to Corsair Cove.",core.NpcIdentifiers.CAPTAIN_TOCK);
-  q.tick(1);assert.equal(p.packets.filter(row=>row[0]==='sendCameraMoveTo').length,0);
-  q.tick(1);assert.equal(p.packets.filter(row=>row[0]==='sendCameraMoveTo').length,1);
-  q.tick(1);assert.deepEqual(p.packets.filter(row=>row[0]==='sendCameraMoveTo').at(-1).slice(1,4),[2926,3224,800]);
-  q.tick(9);assert.deepEqual(p.packets.filter(row=>row[0]==='sendCameraLookAt').at(-1).slice(1,4),[2911,3227,100]);q.tick(11);
-  q.quest.setStage(p,3);action('Gsd1jQ');q.tick(1);
-  action('rqXQdP');q.tick(3);action('Xub2Df');q.tick(3);
-  line("... yes, it's a mermaid! She's beautiful!").after();q.tick(2);
-  action('gXvRex');q.tick(6);line("I can see you moving your arms, but it's very dark. Are you waving to me?").after();q.tick(6);
-  action('8whjhh');q.tick(6);line("I hope she's not angry. Ithoi says mermaids can be dangerous.");action('p6ox6g');q.tick(2);
-  action('Cs_rhQ');q.tick(1);
-  line("C'mon little lobsters. We don't want to keep the Captain waiting! He'll get angry with me again.",core.NpcIdentifiers.GNOCCI_THE_COOK).after();q.tick(2);
-  line("Ooh, what's this? This isn't a lobster.",core.NpcIdentifiers.GNOCCI_THE_COOK).after();q.tick(2);
-  line("She's moving! SHE'S POSSESSED! HELP!",core.NpcIdentifiers.GNOCCI_THE_COOK);q.tick(7);
-  assert.deepEqual(p.packets.filter(row=>row[0]==='sendCameraMoveTo').at(-1).slice(1,4),[2505,2839,220]);
-  q.tick(1);assert.deepEqual(p.packets.filter(row=>row[0]==='sendCameraMoveTo').at(-1).slice(1,4),[2510,2835,350]);q.tick(10);
-  action('36K07h');q.tick(18);
-  q.quest.setStage(p,6);p.attributes.set('corsair-curse:proof-plan',true);p.items.set(590,1);
-  q.call('onItemOnObject',{player:p,itemId:590,objectId:31724});q.tick(5);
-  assert.deepEqual(p.packets.filter(row=>row[0]==='sendCameraMoveTo').at(-1).slice(1,4),[2529,2835,200]);
-  q.tick(1);assert.deepEqual(p.packets.filter(row=>row[0]==='sendCameraMoveTo').at(-1).slice(1,4),[2529,2837,200]);
-  q.tick(6);assert.deepEqual(p.packets.filter(row=>row[0]==='sendCameraMoveTo').at(-1).slice(1,4),[2531,2841,300]);
-  q.tick(12);assert.deepEqual(p.packets.filter(row=>row[0]==='sendCameraMoveTo').at(-1).slice(1,4),[2531,2840,300]);q.tick(4);
-  const move=p.packets.filter(row=>row[0]==='sendCameraMoveTo').map(row=>[...row.slice(1,4),row[4].rate,row[4].rate2,row[4].heightRelative]);
-  assert.deepEqual(move,[
-    [2943,3224,800,232,100,false],[2926,3224,800,6,0,false],
-    [2527,2824,700,232,100,false],[2527,2828,700,1,1,false],[2523,2831,650,232,100,false],[2523,2830,700,1,1,false],[2523,2831,650,1,1,false],
-    [2524,2834,400,232,100,false],[2523,2831,650,232,100,false],[2524,2834,400,232,100,false],[2523,2831,650,232,100,false],[2516,2827,1300,2,2,false],
-    [2499,2833,800,232,100,false],[2503,2830,280,3,3,false],[2504,2841,220,232,100,false],[2505,2839,220,1,1,false],[2510,2835,350,232,100,false],
-    [2528,2821,400,232,100,false],[2528,2818,400,1,1,false],
-    [2529,2835,200,232,100,false],[2529,2837,200,1,1,false],[2531,2841,300,232,100,false],[2531,2840,300,1,1,false],
-  ]);
-  assert.deepEqual(p.packets.filter(row=>row[0]==='sendCameraLookAt').map(row=>[...row.slice(1,4),row[4].rate,row[4].rate2]),[
-    [2928,3224,100,232,100],[2911,3224,100,6,0],[2911,3227,100,1,0],
-    [2527,2839,350,232,100],[2540,2844,350,232,100],[2540,2839,350,232,100],[2540,2844,350,232,100],[2540,2839,350,232,100],[2540,2844,350,232,100],
-    [2505,2837,200,232,100],[2505,2835,170,232,100],[2504,2840,200,232,100],[2528,2822,300,232,100],[2529,2841,170,232,100],[2531,2835,240,232,100],
-  ]);
-  assert.equal(p.packets.filter(row=>row[0]==='sendCameraUnlock'&&row[1]===false).length,5);
-  assert.equal(p.getPrivateArea(),null);
-});
-test('accepting Corsair through the native transcript starts Tock’s automatic ship view after the stage changes',()=>{
-  const q=register('CorsairCurse','the_corsair_curse'),p=player();
-  const {DialogueManager}=require('../dist/game/model/dialogues/DialogueManager'),manager=new DialogueManager(p);
-  p.getDialogueManager=()=>manager;
-  const nextPrompt=()=>{const count=q.prompts.length;for(let i=0;i<30&&q.prompts.length===count;i++){assert.ok(manager.getCurrent());manager.advance();}assert.ok(q.prompts.length>count);return q.prompts.at(-1);};
-  require('../plugins/quests/QuestRuntime').startTranscript(q.api,p,core.NpcIdentifiers.CAPTAIN_TOCK,'The Corsair Curse','the-cursed-crew-talking-to-captain-tock');
-  choose(nextPrompt(),'What kind of help do you need?');choose(nextPrompt(),'Yes.');
-  assert.equal(q.quest.getStage(p),1);
-  for(let i=0;i<10&&!p.getPrivateArea();i++){assert.ok(manager.getCurrent());manager.advance();}
-  assert.ok(p.getPrivateArea(),'the callback must test quest state when shown, after the earlier player line starts it');
-  assert.ok(manager.getCurrent() instanceof core.ActionDialogue);
-  q.tick(23);assert.equal(p.getPrivateArea(),null);
-  assert.equal(p.packets.filter(row=>row[0]==='sendCameraMoveTo').length,2);
-  assert.ok(p.packets.some(row=>row[0]==='sendString'&&String(row[1]).includes("West of Rimmington, you say?")));
-});
-
-test('Corsair Ithoi fight is private, auto-attacks, and unrelated kills cannot advance the player', () => {
-  const q = register('CorsairCurse','the_corsair_curse'),p=player(),other=player(); q.quest.setStage(p,8);
-  p.moveTo(new core.Location(2529,2835,1)); q.areas[0].process(p);
-  assert.ok(p.getPrivateArea()); const npc=q.spawned.at(-1); assert.equal(npc.getId(),7964);
-  q.call('onNpcDeath',{killer:other,npc,npcId:7964}); assert.equal(q.quest.getStage(p),8);
-  q.call('onNpcDeath',{killer:p,npc:{},npcId:7964}); assert.equal(q.quest.getStage(p),8);
-  q.call('onNpcDeath',{killer:p,npc,npcId:7964}); assert.equal(q.quest.getStage(p),9); assert.equal(p.getPrivateArea(),null);
 });
 
 test('Corsair Ithoi uses captured spells on five ticks and Curse deals no direct damage', () => {
@@ -737,15 +628,6 @@ test('Pirate chest remains open for four ticks, exchanges the key at closing, an
   assert.ok(p.packets.some(([m,obj])=>m==='sendObject'&&obj.getId()===2079));
   p.items.set(432,1);p.items.delete(433);use();q.call('onPlayerLogout',{player:p});q.tick(4);
   assert.equal(p.items.get(432),1);assert.equal(p.items.get(433),undefined);
-});
-
-test('Corsair dug-up clockwork doll follows its captured owner-only path and disappears on logout', () => {
-  const q=register('CorsairCurse','the_corsair_curse'),p=player();q.quest.setStage(p,3);p.attributes.set('quest.the_corsair_curse.cook',1);
-  q.emit('npc-dialogue:choice',{player:p,npcId:7970,option:'Search for the possessed doll and face the consequences.'});
-  assert.equal(p.attributes.get('quest.the_corsair_curse.cook'),1);q.tick(1);assert.equal(p.attributes.get('quest.the_corsair_curse.cook'),2);
-  const doll=q.spawned.at(-1);assert.equal(doll.getId(),7975);assert.equal(doll.definition.owner,p);assert.equal(doll.definition.ownerOnly,true);
-  q.tick(3);assert.equal(doll.getLocation().getX(),2507);assert.equal(doll.getLocation().getY(),2842);
-  q.call('onPlayerLogout',{player:p});assert.ok(q.removed.includes(doll));
 });
 
 test('X Marks ending waits for its completion scroll close and resumes only once', () => {

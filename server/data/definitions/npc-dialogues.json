@@ -1302576,6 +1302576,16 @@
         {
           "type": "line",
           "speaker": "Captain Tock",
+          "text": "Ahoy, young [lad/lass].",
+          "speaker_ids": [
+            7956,
+            7957,
+            7958
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Captain Tock",
           "text": "Ahoy, young [lad/lass]. Might ye be able to help me, perhaps? I be in a spot of bother.",
           "speaker_ids": [
             7956,
@@ -1303566,10 +1303576,13 @@
                 {
                   "type": "line",
                   "speaker": "Chief Tess",
-                  "text": "Arsen says he's very sorry for stealing from you. Here it is...",
+                  "text": "He skinny man who climb down vine the other day, yah? He big fool. You see what he stole?",
                   "speaker_ids": [
                     7988
                   ]
+                },
+                {
+                  "player": "Arsen says he's very sorry for stealing from you. Here it is..."
                 },
                 {
                   "type": "message",
@@ -1304037,6 +1304050,16 @@
         },
         {
           "player": "I've looked through that telescope myself. That wasn't a mermaid. That was a wet ogre."
+        },
+        {
+          "type": "line",
+          "speaker": "Cabin Boy Colin",
+          "text": "What?",
+          "speaker_ids": [
+            7965,
+            7966,
+            7967
+          ]
         },
         {
           "type": "condition",
@@ -1305211,6 +1305234,16 @@
                   "type": "line",
                   "speaker": "Ithoi the Navigator",
                   "text": "Arrr? And what if I did? Can't an old sailor help his crew without interfering young land-lubbers making accusations?",
+                  "speaker_ids": [
+                    7961,
+                    7963,
+                    7964
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Ithoi the Navigator",
+                  "text": "Besides, if ye be sayin' I poisoned my crew, why would I do such a thing? Why would I poison 'em an' then pretend to be sick too?",
                   "speaker_ids": [
                     7961,
                     7963,

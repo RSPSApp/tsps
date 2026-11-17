@@ -64,15 +64,29 @@ test("Bork's amounts are the Wiki's ranges: 8-10 tuna, 2-4 of each potion", (t) 
   }
 });
 
-test("a supply that does not fit is not claimed, so it can be asked for again", (t) => {
-  t.mock.method(Math, "random", () => 0.99); // four potions
+test("Bork fills the remaining space once for each supply, without a later top-up", (t) => {
+  t.mock.method(Math, "random", () => 0.99);
+  for (const [step, id, bit] of [["1eVvoF", I.TUNA, 1], ["eJNB7e", I.STRENGTH_POTION_4_, 2], ["eCZJLI", I.PRAYER_POTION_3_, 4]]) {
+    const f = actor(t, 18);
+    f.inv.adds(I.LOGS, 25);
+    action(f, step);
+    assert.equal(f.inv.getAmount(id), 3, "all three available slots are filled");
+    assert.equal(f.p.getAttribute("quest.the_fremennik_isles.bork"), bit);
+    f.inv.deleteNumber(I.LOGS, 25);
+    action(f, step);
+    assert.equal(f.inv.getAmount(id), 3, "freeing room does not allow a second request");
+  }
+});
+
+test("a request with no inventory space still uses that supply request", (t) => {
   const f = actor(t, 18);
-  for (let slot = 0; slot < 25; slot++) f.inv.setItem(slot, new core.Item(I.LOGS, 1));
+  f.inv.adds(I.LOGS, 28);
   action(f, "eCZJLI");
-  assert.equal(f.inv.getAmount(I.PRAYER_POTION_3_), 0, "three free slots cannot take four potions");
-  f.inv.setItem(24, new core.Item(-1, 0));
+  assert.equal(f.inv.getAmount(I.PRAYER_POTION_3_), 0);
+  assert.equal(f.p.getAttribute("quest.the_fremennik_isles.bork"), 4);
+  f.inv.deleteNumber(I.LOGS, 28);
   action(f, "eCZJLI");
-  assert.equal(f.inv.getAmount(I.PRAYER_POTION_3_), 4);
+  assert.equal(f.inv.getAmount(I.PRAYER_POTION_3_), 0, "the Wiki allows only one request, even when no items fit");
 });
 
 test("the jester chest needs room for all four pieces before it gives any", (t) => {

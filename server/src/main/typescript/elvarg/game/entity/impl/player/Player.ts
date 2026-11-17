@@ -13,6 +13,8 @@ import { WeaponInterfaceManager } from "../../../content/combat/WeaponInterfaceM
 import { WeaponProfiles } from "../../../content/combat/WeaponProfile";
 import { PendingHit } from "../../../content/combat/hit/PendingHit";
 import { Autocasting } from "../../../content/combat/magic/Autocasting";
+import { ArceuusSpells } from "../../../content/combat/magic/ArceuusSpells";
+import { LunarSpells } from "../../../content/combat/magic/LunarSpells";
 import { SkillManager } from "../../../content/skill/SkillManager";
 import { ItemDefinition } from "../../../definition/ItemDefinition";
 import type { Item } from "../../../model/Item";
@@ -290,6 +292,9 @@ export class Player extends Mobile {
         WeaponInterfaceManager.assign(this);
         BonusManager.update(this);
         PrayerHandler.deactivatePrayers(this);
+        this.getVengeanceTimer().stop();
+        ArceuusSpells.clearStatuses(this);
+        LunarSpells.clearStatuses(this);
         this.getEquipment().refreshItems();
         this.getInventory().refreshItems();
         // Every level back to where it rests: the base, raised by a plugin's permanent boost
@@ -778,6 +783,8 @@ export class Player extends Mobile {
         TaskManager.cancelTasks(this);
         this.setHasVengeance(false);
         this.getVengeanceTimer().stop();
+        ArceuusSpells.clearStatuses(this);
+        LunarSpells.clearStatuses(this);
         if (this.getAttribute?.(ATTR_SKIP_PERSISTENCE) !== true) {
             GameConstants.PLAYER_PERSISTENCE.cancelRequestedSave(this);
             GameConstants.PLAYER_PERSISTENCE.save(this, "logout");

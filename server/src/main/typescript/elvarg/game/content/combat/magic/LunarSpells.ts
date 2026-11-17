@@ -114,6 +114,9 @@ const NPC_CONTACT_PENDING = new WeakSet<Player>();
 const MAGIC_IMBUE_TICKS = 21;
 /** When Magic Imbue may be cast again: its own clock, so Spellbook Swap ending the effect keeps the cooldown. */
 const MAGIC_IMBUE_READY_AT_ATTRIBUTE = "lunar:magic-imbue-ready-at";
+const MAGIC_IMBUE_UNTIL_ATTRIBUTE = "lunar:magic-imbue-until";
+const HEAL_GROUP_READY_AT_ATTRIBUTE = "lunar:heal-group-ready-at";
+const SPELLBOOK_SWAP_ATTRIBUTE = "lunar:spellbook-swap";
 /** Heal Group's cooldown: 90 s (Wiki). Heal Other's isn't settled on the Wiki, so it has none. */
 const HEAL_GROUP_COOLDOWN_TICKS = 150;
 /** Dream heals 1 Hitpoint every 20 s on its own timer (Wiki). */
@@ -383,7 +386,7 @@ export class LunarSpells {
      */
     private static castHealGroup(player: Player, spell: LunarSpell): boolean {
         const now = World.getProcessCycle();
-        if (Number(player.getAttribute("lunar:heal-group-ready-at") ?? 0) > now) {
+        if (Number(player.getAttribute(HEAL_GROUP_READY_AT_ATTRIBUTE) ?? 0) > now) {
             player.sendMessage("You can't cast Heal Group again yet.");
             return true;
         }
@@ -402,7 +405,7 @@ export class LunarSpells {
             player.setHitpoints(player.getHitpoints() - transferred);
             const share = Math.floor((transferred + 5) / injured.length);
             for (const target of injured) target.heal(share);
-            player.setAttribute("lunar:heal-group-ready-at", now + HEAL_GROUP_COOLDOWN_TICKS);
+            player.setAttribute(HEAL_GROUP_READY_AT_ATTRIBUTE, now + HEAL_GROUP_COOLDOWN_TICKS);
         });
     }
 
@@ -433,7 +436,7 @@ export class LunarSpells {
     private static castSwapTo(player: Player, spell: LunarSpell, book: MagicSpellbook): boolean {
         return spell.cast(player, () => {
             // Spellbook Swap ends Magic Imbue's effect (Wiki), not its 21-tick cooldown.
-            player.setAttribute("lunar:magic-imbue-until", null);
+            player.setAttribute(MAGIC_IMBUE_UNTIL_ATTRIBUTE, null);
             this.swapTo(player, book);
         });
     }
@@ -529,7 +532,7 @@ export class LunarSpells {
             return true;
         }
         return spell.cast(player, () => {
-            player.setAttribute("lunar:magic-imbue-until", now + MAGIC_IMBUE_TICKS);
+            player.setAttribute(MAGIC_IMBUE_UNTIL_ATTRIBUTE, now + MAGIC_IMBUE_TICKS);
             player.setAttribute(MAGIC_IMBUE_READY_AT_ATTRIBUTE, now + MAGIC_IMBUE_TICKS);
             player.sendMessage("You are charged to combine runes!");
         });
@@ -820,10 +823,21 @@ export class LunarSpells {
         return player.getAttribute("accept-aid") !== false;
     }
 
+    /**
+     * A respawn or the next login starts with no Lunar effect or cooldown. The task acceptance
+     * is explicit: no Lunar buff/timer survives death or logout.
+     */
+    public static clearStatuses(player: Player): void {
+        player.setAttribute(MAGIC_IMBUE_UNTIL_ATTRIBUTE, null);
+        player.setAttribute(MAGIC_IMBUE_READY_AT_ATTRIBUTE, null);
+        player.setAttribute(HEAL_GROUP_READY_AT_ATTRIBUTE, null);
+        player.setAttribute(SPELLBOOK_SWAP_ATTRIBUTE, null);
+    }
+
     public static expireSpellbookSwap(player: Player): void {
-        const swap: any = player.getAttribute("lunar:spellbook-swap");
+        const swap: any = player.getAttribute(SPELLBOOK_SWAP_ATTRIBUTE);
         if (swap && World.getProcessCycle() >= swap.expiresAt) {
-            player.setAttribute("lunar:spellbook-swap", null);
+            player.setAttribute(SPELLBOOK_SWAP_ATTRIBUTE, null);
             MagicSpellbook.changeSpellbook(player, MagicSpellbook.LUNAR, true);
         }
     }
@@ -862,7 +876,7 @@ export class LunarSpells {
 
     /** Two minutes on the chosen book for one spell, then back to Lunar (Wiki: Spellbook Swap). */
     private static swapTo(player: Player, book: MagicSpellbook): void {
-        player.setAttribute("lunar:spellbook-swap", { expiresAt: World.getProcessCycle() + 200 });
+        player.setAttribute(SPELLBOOK_SWAP_ATTRIBUTE, { expiresAt: World.getProcessCycle() + 200 });
         MagicSpellbook.changeSpellbook(player, book, true);
         player.sendMessage("You have 2 minutes before your spellbook changes back!");
     }

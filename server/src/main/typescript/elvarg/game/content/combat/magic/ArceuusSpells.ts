@@ -172,6 +172,7 @@ export class ArceuusSpells {
     private static readonly DEATH_CHARGE_TOKEN = "arceuus:death-charge-token";
     public static readonly SHADOW_VEIL_UNTIL = "arceuus:shadow-veil-until";
     public static readonly MARK_UNTIL = "arceuus:mark-until";
+    public static readonly DARK_LURE_UNTIL = "arceuus:dark-lure-until";
     private static readonly CORRUPTION = "arceuus:corruption";
     private static readonly CORRUPTION_MARKED = "arceuus:corruption-marked";
     private static readonly CORRUPTION_COOLDOWN = "arceuus:corruption-cooldown";
@@ -336,6 +337,35 @@ export class ArceuusSpells {
 
     public static hasMark(player: Player): boolean {
         return Number(player.getAttribute(this.MARK_UNTIL) ?? 0) > World.getProcessCycle();
+    }
+
+    /**
+     * A respawn or the next login starts with no Arceuus effect or cooldown. The task acceptance
+     * is explicit: no Arceuus timer or thrall survives death or logout. Incrementing the tokens
+     * retires the fade/expiry tasks that still hold the old state.
+     */
+    public static clearStatuses(player: Player): void {
+        for (const key of [
+            this.WARD_UNTIL,
+            this.DEATH_CHARGE_UNTIL,
+            this.SHADOW_VEIL_UNTIL,
+            this.MARK_UNTIL,
+            this.DARK_LURE_UNTIL,
+            this.CORRUPTION,
+            this.CORRUPTION_MARKED,
+            this.CORRUPTION_COOLDOWN,
+            "arceuus:ward-cooldown",
+            "arceuus:offering-until",
+            "arceuus:shadow-veil-cooldown",
+            "arceuus:vile-vigour-cooldown",
+        ]) {
+            player.setAttribute(key, null);
+        }
+        player.setAttribute(this.MARK_TOKEN, Number(player.getAttribute(this.MARK_TOKEN) ?? 0) + 1);
+        player.setAttribute(this.DEATH_CHARGE_TOKEN, Number(player.getAttribute(this.DEATH_CHARGE_TOKEN) ?? 0) + 1);
+        this.sendDeathChargeVarbit(player, DEATH_CHARGE_COOLDOWN_VARBIT, 0);
+        this.sendDeathChargeVarbit(player, DEATH_CHARGE_ACTIVE_VARBIT, 0);
+        ArceuusThralls.dismiss(player);
     }
 
     /**

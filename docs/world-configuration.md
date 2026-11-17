@@ -889,7 +889,6 @@ This table lists bundled plugins that have a description. The world config page 
 | `NpcDrops` | NpcDrops | npcs | yes | Rolls NPC drop tables from the Wiki-derived drop data, with subtables, tertiary drops and hand-edited overrides. |
 | `NpcRivalries` | NpcRivalries | npcs | yes | Makes opposing NPC factions, such as Shayzien soldiers against lizardmen and the God Wars armies, hunt and fight each other. (members only) |
 | `NpcSpawns` | NpcSpawns | npcs | yes | Registers the NPC spawn list and the map editor's custom spawn patch as definition sources. |
-| `OliStew` | OliStew | npcs | yes | Lets players give Oli in Civitas illa Fortis a bowl of stew, with his recorded reply. (members only) |
 | `Osten` | Osten | npcs | yes | Lets Osten recolour graceful pieces to the Kourend house colours for 15 marks of grace each, after each house's quest, and revert them for free. (members only) |
 | `Patchy` | Patchy | npcs | yes | Patchy's sewing interface on Mos Le'Harmless: Sew and Talk-to open it, and Confirm sews the picked costume piece for 500 coins. (members only) |
 | `Pellem` | Pellem | npcs | yes | Lets Pellem make mixed-hide armour for the transcript's fur and coin costs. (members only) |

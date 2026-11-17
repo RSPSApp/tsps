@@ -9,7 +9,7 @@ rsprox captures (rsprox.net recordings 1098 and 1105, revision 237, Leagues VI) 
 | Dairy Buffalo: Milk | `objects/DairyBuffalo.plugin.js` | `dairy-buffalo:milked` { player } |
 | Bird bath: Drink-from | `objects/BirdBath.plugin.js` | `bird-bath:drank` { player, outcome } |
 | Beautiful tree stump / log / rock: Admire | `objects/BeautifulScenery.plugin.js` | `scenery:admired` { player, object } |
-| Stew used on Oli | `npcs/OliStew.plugin.js` | `oli:fed-stew` { player, npc } |
+| Stew used on Oli | `skills/thieving/HouseRobberyCrew.Thieving.js` (already on main; the event is new) | `oli:fed-stew` { player, npc } |
 | Aldarin vineyard: grapevines and the grape barrel | `world/Vineyard.plugin.js` | `vineyard:barrel-handed-in` { player } |
 
 ## Dairy Buffalo
@@ -61,7 +61,7 @@ same piece a passing Vale Totems ent admires. That needs the ents walking betwee
 
 ## Oli and the stew
 
-Recording 1098 tick 15381 shows stew used on Oli (13318). On the arrival the stew leaves the inventory
+Stew on Oli was already handled by HouseRobberyCrew (the generated transcript's "giving Oli a bowl of stew" variant); this only adds the event. Recording 1098 tick 15381 shows stew used on Oli (13318). On the arrival the stew leaves the inventory
 and an item box shows it with "You give the stew to Oli and he gets it down in a flash.". The league
 task completes on that tick. The conversation then continues one line per click:
 

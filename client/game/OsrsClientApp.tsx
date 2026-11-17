@@ -1,3 +1,4 @@
+import { subscribeProtocolNotice, type ProtocolNotice } from "../network/serverConnection/protocolCompatibility";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { registerSerializer } from "threads";
@@ -100,6 +101,8 @@ if (typeof module !== "undefined" && module.hot) {
 
 function OsrsClientApp() {
     const [errorMessage, setErrorMessage] = useState<string>();
+    const [protocolNotice, setProtocolNotice] = useState<ProtocolNotice>();
+    useEffect(() => subscribeProtocolNotice(setProtocolNotice), []);
     const [osrsClient, setOsrsClient] = useState<OsrsClient>();
     const [storageWarnings, setStorageWarnings] = useState<string[]>([]);
     const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<BeforeInstallPromptEvent>();
@@ -670,6 +673,14 @@ function OsrsClientApp() {
 
     return (
         <div className={appClassName}>
+            {protocolNotice ? (
+                <div role={protocolNotice.kind === "error" ? "alert" : "status"}
+                    style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 10000,
+                        background: "#292015", color: "#ffdda0", padding: "8px 16px",
+                        fontSize: "0.9rem", lineHeight: 1.4, textAlign: "center" }}>
+                    {protocolNotice.message}
+                </div>
+            ) : null}
             {bannerWrapper}
             {content}
             {cacheEditor ? (

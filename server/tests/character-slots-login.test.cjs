@@ -224,15 +224,18 @@ test('a first login writes no account until the handshake, and sends no list wit
   assert.deepEqual(Accounts.charactersOf('zezima').map((c) => c.name), ['Zezima'], 'on disk');
 });
 
-test('a disabled plugin ignores its config and keeps the original welcome/login exchange', async (t) => {
+test('a disabled plugin keeps the legacy login exchange after the protocol announcement', async (t) => {
   assert.equal(Characters.enabled, false);
   PluginManager.createLoginExtension.mock.restore();
   assert.equal(PluginManager.loginExtensionFactory, undefined, 'no registration when the plugin is unloaded');
   t.mock.method(PluginManager, 'getPluginConfig', () => 6);
   const { channel, connection, response } = await connect('Solo', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
   assert.equal(response.success, true);
-  assert.deepEqual(channel.sent.map((b) => b[0]), [0, LOGIN_RESPONSE], 'no capability announcement or character list');
-  assert.equal(channel.sent[0].length, 9, 'the original fixed-size welcome');
+  assert.deepEqual(channel.sent.map((b) => b[0]), [6, 0, LOGIN_RESPONSE], 'no character capability or character list');
+  assert.deepEqual(JSON.parse(channel.sent[0].subarray(3).toString()), {
+    channel: 'protocol:version', data: { version: 1 },
+  });
+  assert.equal(channel.sent[1].length, 9, 'the original fixed-size welcome');
   const sent = channel.sent.length;
   connection.inject([
     { type: 'character_select', name: 'Solo' },
@@ -274,10 +277,13 @@ test('enabled slots advertise support before the unchanged welcome', async () =>
   const { channel } = await connect('Slots', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
   assert.equal(channel.sent[0][0], 6, 'existing plugin-message opcode');
   assert.deepEqual(JSON.parse(channel.sent[0].subarray(3).toString()), {
+    channel: 'protocol:version', data: { version: 1 },
+  });
+  assert.deepEqual(JSON.parse(channel.sent[1].subarray(3).toString()), {
     channel: 'characters:slots', data: { maxPerAccount: 3 },
   });
-  assert.equal(channel.sent[1][0], 0);
-  assert.equal(channel.sent[1].length, 9);
+  assert.equal(channel.sent[2][0], 0);
+  assert.equal(channel.sent[2].length, 9);
 });
 
 test('a brand-new name lists itself in memory and a closed connection leaves no account', async () => {

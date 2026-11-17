@@ -1,3 +1,5 @@
+import { ProtocolGreeting } from "./protocolCompatibility";
+import { decodeBatchedServerPackets } from "../packet/ServerBinaryDecoder";
 import { WS_SUPPRESS_RECONNECT_KEY, LOGIN_CONNECT_RETRY_DELAY_MS } from "./constants";
 import { clearLoginConnectRetryTimer } from "./connection/loginHelpers";
 import { initServerConnection } from "./connection/init";
@@ -154,12 +156,27 @@ export function forgetRememberedLogin(username: string, token: string): void {
     }
     socket.binaryType = "arraybuffer";
     const closeTimer = setTimeout(() => socket.close(), 5000);
-    socket.addEventListener("open", () => {
-        socket.send(encodeClientMessage({ type: "login_forget", payload: { username, token } }) as any);
-        // close() still delivers the queued packet before the closing handshake.
-        socket.close(1000, "login forget");
-        clearTimeout(closeTimer);
+    const greeting = new ProtocolGreeting();
+    socket.addEventListener("message", event => {
+        try {
+            const raw = event.data;
+            const batch = typeof raw === "string"
+                ? { messages: [JSON.parse(raw)], stalled: false }
+                : decodeBatchedServerPackets(raw);
+            for (const message of batch.messages) {
+                greeting.receive(message);
+                if (greeting.mismatch) { socket.close(4003, "protocol mismatch"); return; }
+                if (greeting.complete) {
+                    if (batch.stalled) { socket.close(); return; }
+                    socket.send(encodeClientMessage({ type: "login_forget", payload: { username, token } }) as any);
+                    socket.close(1000, "login forget");
+                    return;
+                }
+            }
+            if (batch.stalled) socket.close();
+        } catch { socket.close(); }
     });
+    socket.addEventListener("close", () => clearTimeout(closeTimer));
     socket.addEventListener("error", () => clearTimeout(closeTimer));
 }
 
@@ -182,6 +199,7 @@ export function sendLogout(): void {
  * Called by the client when logout is confirmed.
  */
 export function suppressReconnection(): void {
+    state.loginConnectAttemptId++;
     // Clear session credentials - user logged out intentionally
     state.hasLoggedIn = false;
     state.sessionUsername = null;

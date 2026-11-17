@@ -1129,7 +1129,7 @@ module.exports = function registerARuffSituationQuest(api) {
         "Stuffed dog.",
         () => craftStuffedDog(player, furId),
         "Small meat pouch.",
-        () => {}
+        () => sewMeatPouch(player, furId)
       );
       return;
     }
@@ -1141,6 +1141,11 @@ module.exports = function registerARuffSituationQuest(api) {
       "No.",
       () => {}
     );
+  }
+
+  /** The fox fur menu's other choice: Crafting sews the pouch as a needle on the fur would. */
+  function sewMeatPouch(player, furId) {
+    api.emitCustomEvent("crafting:sew-pouch", { player, furId, handled: false });
   }
 
   function craftStuffedDog(player, furId) {

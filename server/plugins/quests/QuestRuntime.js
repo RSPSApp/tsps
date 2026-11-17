@@ -104,6 +104,10 @@ const BOOK_TURN_GRAPHIC_HEIGHT = 92;
 const BOOK_READ_ANIMATION = 1350;
 /** busy: set while the book is open, cleared when it closes. */
 const BUSY_VARBIT = 12393;
+/** longscroll (625) and longscroll_setup (418): a scroll's title and its <br>-joined lines. */
+const LONGSCROLL_GROUP = 625;
+const LONGSCROLL_SETUP_SCRIPT = 418;
+const openScrolls = new WeakSet();
 const READING_ANIMATIONS = new Set([BOOK_READ_ANIMATION, BOOK_TURN_RIGHT.animation, BOOK_TURN_LEFT.animation]);
 // indexed_book (680): the two-page book with a contents page (RSProx capture of Atlax's Diary).
 const INDEXED_BOOK_GROUP = 680;
@@ -280,12 +284,15 @@ function questListAction({ player, slot, opId, action }) {
 
 /**
  * A journal line as live OSRS sends it: navy text, with each highlight returning to navy rather
- * than to the widget's black. Crossed-out lines and the red "QUEST COMPLETE!" keep their own.
+ * than to the widget's black. Crossed-out lines and the red "QUEST COMPLETE!" keep their own, and
+ * a line already opening on navy gets no second one: live never doubles it ("<col=000080><col=000080>"
+ * is in no RSProx journal; 235/3344's Mage Arena charge lines open on one navy tag).
  */
 function journalText(line) {
   const text = String(line ?? "");
   if (!text || text.startsWith("<str>") || text.includes("<col=ff0000>")) return text;
-  return JOURNAL_TEXT_COLOUR + text.replace(/<\/col>/g, JOURNAL_TEXT_COLOUR);
+  const opening = text.startsWith(JOURNAL_TEXT_COLOUR) ? "" : JOURNAL_TEXT_COLOUR;
+  return opening + text.replace(/<\/col>/g, JOURNAL_TEXT_COLOUR);
 }
 
 /**
@@ -400,6 +407,8 @@ const DEFAULT_REWARD_ORDER = ["xp", "item", "other"];
 
 function rewardLines(quest) {
   const lines = ["You are awarded:"];
+  // A quest whose scroll live words its own way (The Fremennik Trials: "2,800 XP each in ...").
+  if (Array.isArray(quest.rewardText)) return [...lines, ...quest.rewardText].slice(0, COMPLETED_LINE_COUNT);
   const points = quest.questPoints || 0;
   lines.push(`${points} Quest Point${points === 1 ? "" : "s"}`);
   const groups = {
@@ -509,9 +518,22 @@ function answerGetStage(request) {
 const QUEST_SHOP_VERSION = /\((?:(After|During|Before) )?([^()]+)\)$/;
 
 /** Case, a leading "The" and punctuation don't count: "Another Slice of H.A.M" is "Another Slice of H.A.M.". */
+const plainQuestName = (text) => String(text).toLowerCase().replace(/^the\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
+// Quests by plain name, rebuilt when one registers (quests are only ever added). Every
+// "quest:is-complete" question used to normalise every quest's name: about 5 s per minute of
+// logins with hundreds of players online. The first registered quest keeps a shared name.
+let questsByPlainName = new Map();
+let questsIndexed = 0;
 function questNamed(name) {
-  const plain = (text) => String(text).toLowerCase().replace(/^the\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
-  return quests.find((quest) => plain(quest.name) === plain(name));
+  if (questsIndexed !== quests.length) {
+    questsByPlainName = new Map();
+    for (const quest of quests) {
+      const key = plainQuestName(quest.name);
+      if (!questsByPlainName.has(key)) questsByPlainName.set(key, quest);
+    }
+    questsIndexed = quests.length;
+  }
+  return questsByPlainName.get(plainQuestName(name));
 }
 
 function questShopVersionApplies(name, player) {
@@ -538,6 +560,9 @@ function registerQuestWidgets(api) {
   api.onInterfaceActionButton(INDEXED_BOOK_BUTTONS, turnIndexedBookPage);
   api.onCustomEvent("interface:closed", ({ player, interfaceId }) => {
     if (interfaceId === BOOK_GROUP || interfaceId === INDEXED_BOOK_GROUP) closeBook(player);
+    if (interfaceId === LONGSCROLL_GROUP && openScrolls.delete(player)) {
+      player.getPacketSender().sendVarbit?.(BUSY_VARBIT, 0);
+    }
   });
 
   // "Read journal:" on a quest list row.
@@ -580,10 +605,36 @@ function registerQuestWidgets(api) {
  */
 function openBook(player, title, pages, onClose) {
   if (!pages.length) return;
+  closeOtherModal(player, BOOK_GROUP);
   openBooks.set(player, { title, pages, page: 0, onClose });
   player.getPacketSender().sendVarbit?.(BUSY_VARBIT, 1);
   readingAnimation(player, BOOK_READ_ANIMATION);
   showBookPage(player);
+}
+
+/**
+ * The cache's long scroll (625) with the given text lines, as live sends it for the Castle Drakan
+ * poem scroll (rsprox recording 4288, tick 3136): busy set, the modal background reset, the
+ * scroll, then its setup script. Closing it clears busy; no reading animation plays.
+ */
+function openLongScroll(player, title, lines) {
+  const packet = player.getPacketSender();
+  closeOtherModal(player, LONGSCROLL_GROUP);
+  openScrolls.add(player);
+  packet.sendVarbit?.(BUSY_VARBIT, 1);
+  packet.sendInterfaceScript(2524, [-1, -1]);
+  packet.sendInterface(LONGSCROLL_GROUP);
+  packet.sendClientScript(LONGSCROLL_SETUP_SCRIPT, title, lines.join("<br>"));
+}
+
+/**
+ * Item actions reach plugins before the inventory click closes the open modal, so a reader
+ * switching from a book to a scroll (or back) would get the old modal's busy 0 after the new
+ * busy 1. Close any other modal first, as live does.
+ */
+function closeOtherModal(player, group) {
+  const current = player.getInterfaceId?.() ?? -1;
+  if (current >= 0 && current !== group) player.getPacketSender().sendInterfaceRemoval?.();
 }
 
 /** Closes an open book and runs its reader callback, if it has one. */
@@ -763,7 +814,8 @@ function sendQuestVarps({ player }) {
  *
  * @param api  the plugin api
  * @param def  { key, name, varpId, varbitId, varbitValue, startedValue, completionValue, questPoints,
- *               xpRewards?, rewardItemId?, rewardItemLabel?, otherRewards?,
+ *               xpRewards?, rewardItemId?, rewardItemLabel?, otherRewards?, rewardText? (the scroll's lines after
+ *               "You are awarded:", in place of the generated ones),
  *               rewardOrder? (the scroll's groups after the points: "xp", "item", "other"),
  *               scrollItemId? (item id or function of player),
  *               buildJournal?(player, quest, { row }?), onReward?(player, quest),
@@ -836,13 +888,23 @@ function registerQuest(api, def) {
       if (def.onReward) def.onReward(player, quest, options);
       // A plain add would clamp at a capped stack; giveReward's forceAdd floors what does not fit.
       if (def.rewardItemId !== undefined) giveReward(player, def.rewardItemId, 1);
+      quest.announceCompletion(player, options);
+      // `options` as passed in: listeners can tell a played completion from a quest pack's (scroll: false).
+      api.emitCustomEvent?.("quest:completed", { player, key: def.key, quest, options });
+      return true;
+    },
+    /**
+     * The completion jingle, chat line and scroll on their own: a quest whose live stage and rewards
+     * land before its scroll (Fairytale II's lamp box) completes with `{ scroll: false, announce:
+     * false }` and calls this once the player continues. `options` as complete() takes them.
+     */
+    announceCompletion(player, options = {}) {
+      const points = Number(player.getAttribute(QUEST_POINTS_ATTRIBUTE)) || 0;
       if (options.scroll !== false) player.getPacketSender().sendJingle(def.completionJingleId ?? QUEST_COMPLETE_JINGLE, 0);
       if (options.announce !== false) {
-        player.sendMessage(`Congratulations, you've completed a quest: <col=${def.completionMessageColor ?? "081190"}>${def.name}</col>`);
+        player.sendMessage(`Congratulations, you've completed a quest: ${questLink(player, def.name)}`);
       }
       if (options.scroll !== false) showCompletedScroll(player, quest, points | 0);
-      api.emitCustomEvent?.("quest:completed", { player, key: def.key, quest });
-      return true;
     },
   };
   quests.push(quest);
@@ -979,9 +1041,34 @@ function giveReward(player, itemId, amount = 1) {
   else inventory.adds(itemId, amount);
 }
 
+const CHATBOX_TRANSPARENCY_VARBIT = 4608; // chatbox_transparency: 1 is the transparent background, anything else opaque
+
+/**
+ * A quest's name as the chat link live sends it in the start and completion messages: <col=081190> on an opaque
+ * chatbox and <col=0ab0ff> on a transparent one (ClientProtocol CHAT_HIGHLIGHTS.blu; the transcripts print chatbox_transparency 4608 beside each colour).
+ */
+function questLink(player, name) {
+  const sender = player.getPacketSender?.();
+  const transparent = typeof sender?.getVarbit === "function" && sender.getVarbit(CHATBOX_TRANSPARENCY_VARBIT) === 1;
+  // The plugin API always has resolveChatHighlights; a stand-in api for a test may not, so fall back to the built helper.
+  const resolve = coreApi?.resolveChatHighlights ?? require("../../dist/net/protocol/ClientProtocol").resolveChatHighlights;
+  return resolve(`@mes_hl_blu@${name}</col>`, transparent);
+}
+
+/**
+ * "You've started a new <kind>: <link>" with the link coloured for the player's chatbox. `kind` is the word the site
+ * already sends ("quest" by default, "miniquest" for a miniquest): the colour follows the chatbox, the wording is the site's.
+ */
+function questStartMessage(player, name, kind = "quest") {
+  return `You've started a new ${kind}: ${questLink(player, name)}`;
+}
+
 module.exports = {
+  questLink,
+  questStartMessage,
   rewardLines,
   openBook,
+  openLongScroll,
   bookPagesFromSpreads,
   openIndexedBook,
   journalWidgets,

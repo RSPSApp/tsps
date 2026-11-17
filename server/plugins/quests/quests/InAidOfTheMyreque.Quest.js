@@ -64,6 +64,8 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     GameObject,
     DialogueChainBuilder,
     ItemStatementDialogue,
+    TaskManager,
+    CountdownTask,
   } = api.core;
   const { registerQuest, startTranscript, refreshQuestList, openBook, bookPagesFromSpreads, giveReward } = require("../QuestRuntime");
   const LIBRARY_BOOKS = require("../data/in-aid-of-the-myreque-books.json");
@@ -467,6 +469,24 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     let count = player.getInventory().getAmount(RAW_MACKEREL_ITEM_ID);
     for (const id of CRATE_SNAIL_ITEM_IDS) count += player.getInventory().getAmount(id);
     return count;
+  }
+
+  /** Held or wielded: a pickaxe of any level (Mining's own list). */
+  function carriesPickaxe(player) {
+    const weapon = player.getEquipment().getItems()[Equipment.WEAPON_SLOT];
+    if (weapon && isPickaxe(weapon.getId())) return true;
+    return player.getInventory().getItems().some((item) => item && item.getId() > 0 && isPickaxe(item.getId()));
+  }
+
+  /**
+   * No usable pickaxe: one carried but above the player's level gets live's recorded Mining line
+   * (rsprox_transcripts/241/900102.txt; its "mine this rock" first sentence is the rock's, so only
+   * the second is used here); none at all keeps "You need a pickaxe to clear this rubble."
+   */
+  function sayNoPickaxe(player) {
+    player.sendMessage(carriesPickaxe(player)
+      ? "You do not have a pickaxe which you have the Mining level to use."
+      : "You need a pickaxe to clear this rubble.");
   }
 
   /** Any pickaxe the player can use, as Mining judges them (crystal, infernal, 3rd age... not only bronze to rune). */
@@ -1781,7 +1801,7 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
       return;
     }
     if (!hasPickaxe(player)) {
-      player.sendMessage("You need a pickaxe to clear this rubble.");
+      sayNoPickaxe(player);
       return;
     }
     player.sendMessage("You swing your pickaxe at the rubble...");
@@ -1796,7 +1816,7 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
       return;
     }
     if (!hasPickaxe(player)) {
-      player.sendMessage("You need a pickaxe to clear this rubble.");
+      sayNoPickaxe(player);
       return;
     }
     const index = RUBBLE_BASEMENT_IDS.indexOf(objectId);
@@ -1995,7 +2015,7 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     }
     if (objectId === BOOKCASE_OTHER_ID) {
       event.handled = true;
-      searchBookcase(player, [HISTORIES_ITEM_ID, MODERN_DAY_ITEM_ID]);
+      searchBookcase(player, [HISTORIES_ITEM_ID, MODERN_DAY_ITEM_ID], 1);
       return;
     }
     if (objectId === LIBRARY_TRAPDOOR_ID) {
@@ -2277,18 +2297,28 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
    * A library bookcase (rsprox.net recording 365 ticks 2918-2928 and 3876-3886): "You search the
    * bookcase...", then each of its books the player does not carry, each with its own objectbox; a
    * book that does not fit goes on the floor under the player. Carrying them all, only the search
-   * line is sent.
+   * line is sent. The books are given on the search tick; the Sleeping Seven bookcase opens its
+   * box on that tick too (t2923), the history bookcase one tick later (`boxDelayTicks`, t3878-3879).
    */
-  function searchBookcase(player, itemIds) {
+  function searchBookcase(player, itemIds, boxDelayTicks = 0) {
     player.sendMessage("You search the bookcase...");
     const found = itemIds.filter((itemId) => !held(player, itemId));
     if (!found.length) return;
     for (const itemId of found) giveReward(player, itemId, 1);
-    const chain = new DialogueChainBuilder();
-    found.forEach((itemId, index) =>
-      chain.add(new ItemStatementDialogue(index, itemId, `You find a book called ${BOOKS_BY_ITEM.get(itemId).title}.`))
-    );
-    player.getDialogueManager().startDialogues(chain);
+    const showBoxes = () => {
+      const chain = new DialogueChainBuilder();
+      found.forEach((itemId, index) =>
+        chain.add(new ItemStatementDialogue(index, itemId, `You find a book called ${BOOKS_BY_ITEM.get(itemId).title}.`))
+      );
+      player.getDialogueManager().startDialogues(chain);
+    };
+    if (boxDelayTicks <= 0) {
+      showBoxes();
+      return;
+    }
+    TaskManager.submit(new CountdownTask(player, boxDelayTicks, () => {
+      if (player.isRegistered?.() !== false) showBoxes();
+    }));
   }
 
   function handleItemAction(event) {

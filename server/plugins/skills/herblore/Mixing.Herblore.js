@@ -117,7 +117,10 @@ function chooseRecipe(player, recipes) {
     ? player.getSkillManager().getMaxLevel(Common.core.Skill.HERBLORE) : level) >= recipe.level);
   if (able.length === 0) {
     const lowest = known[0];
-    player.sendMessage((lowest.upgrade ? UPGRADE_LEVEL_MESSAGE : COMBINE_LEVEL_MESSAGE)(lowest.level));
+    // rsprox_transcripts/227/910269.txt tick 22640, 237/01098.txt: the combine refusal is a messagebox
+    // (229) with its type=mesbox chat line; the upgrade refusal is a game message (227/910306.txt).
+    if (lowest.upgrade) player.sendMessage(UPGRADE_LEVEL_MESSAGE(lowest.level));
+    else Common.mesbox(player, COMBINE_LEVEL_MESSAGE(lowest.level));
     return null;
   }
   const recipe = able.find((candidate) => hasIngredients(player.getInventory(), candidate));

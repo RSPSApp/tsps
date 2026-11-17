@@ -79,24 +79,25 @@ export class SkillManager {
         return 0;
     }
 
+    /**
+     * The level `experience` reaches. Every observer's view of every player asks this (its
+     * hitpoints) each tick, so it is a binary search over the table (a few steps, where a walk
+     * down from 99 took up to 98), and past 99's experience it is 99 at once (the curve used to be
+     * recomputed with Math.pow, up to 99 steps, only to arrive at 99 too). Below the table's
+     * first entry (negative experience) it answers 99, as it always has.
+     */
     static getLevelForExperience(experience: number): number {
-        if (experience <= SkillManager.EXPERIENCE_FOR_99) {
-            for (let j = 98; j >= 0; j--) {
-                if (SkillManager.EXP_ARRAY[j] <= experience) {
-                    return j + 1;
-                }
-            }
-        } else {
-            let points = 0, output = 0;
-            for (let lvl = 1; lvl <= 99; lvl++) {
-                points += Math.floor(lvl + 300.0 * Math.pow(2.0, lvl / 7.0));
-                output = Math.floor(points / 4);
-                if (output >= experience) {
-                    return lvl;
-                }
-            }
+        const table = SkillManager.EXP_ARRAY;
+        if (!(experience >= table[0]) || experience >= SkillManager.EXPERIENCE_FOR_99) {
+            return 99;
         }
-        return 99;
+        let low = 0, high = table.length - 1;
+        while (low < high) {
+            const middle = (low + high + 1) >> 1;
+            if (table[middle] <= experience) low = middle;
+            else high = middle - 1;
+        }
+        return low + 1;
     }
 
     static getMaxAchievingLevel(skill: Skill): number {

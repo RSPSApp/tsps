@@ -1,7 +1,7 @@
 // Run after `yarn build`: node --test tests/pouch-bank-fill-f2p.test.cjs
 // An essence pouch's Fill from the bank screen came through the bank's side-op event, which skips the free-world
 // item check the inventory's own Fill has. On a free world it filled a members pouch; now it is refused. Real engine:
-// every plugin loaded, a real Player, the bank's own Bank.INVENTORY_OP_EVENT.
+// every plugin loaded, a real Player, the bank's own Bank.INVENTORY_OP_EVENT, FreeToPlay's own can-use-item hook.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -44,17 +44,34 @@ function bankFill(f) {
 
 const BANK_FILL_OP = 9; // the pouch's bank-side Fill (Pouches.Runecrafting BANK_FILL_OP)
 
+test("a members world still fills the pouch from the bank screen", (t) => {
+  const f = crafter(t);
+  bankFill(f);
+  assert.ok(f.p.getInventory().getAmount(core.ItemIdentifiers.PURE_ESSENCE) < 5, "essence went into the pouch");
+});
+
+test("the bank screen's Fill asks the same can-use-item hooks as the inventory's Fill", (t) => {
+  const f = crafter(t);
+  const asked = [];
+  PM.createApi("PouchUseRefusal").onCanUseItem((event) => {
+    if (event.player !== f.p) return;
+    asked.push([event.itemId, event.action, event.option]);
+    event.allow = false;
+  });
+  const event = bankFill(f);
+  assert.equal(event.handled, true);
+  assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.PURE_ESSENCE), 5, "a refused pouch takes no essence");
+  assert.deepEqual(asked, [[core.ItemIdentifiers.SMALL_POUCH, "action", "Fill"]]);
+});
+
 test("a free world refuses the bank screen's Fill on an essence pouch", (t) => {
   t.mock.method(core.WorldDefinition, "isMembersWorld", () => false);
+  // A free world loads FreeToPlay, whose can-use-item hook answers (it registers nothing on a members world). Its
+  // hooks stay registered, so this test runs last.
+  require("../plugins/modes/FreeToPlay.plugin.js").register(PM.createApi("FreeToPlayTest"));
   const f = crafter(t);
   const event = bankFill(f);
   assert.equal(event.handled, true);
   assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.PURE_ESSENCE), 5, "no essence goes in");
   assert.ok(f.messages.includes("To use this item please login to a members' world."), f.messages.join(" | "));
-});
-
-test("a members world still fills the pouch from the bank screen", (t) => {
-  const f = crafter(t);
-  bankFill(f);
-  assert.ok(f.p.getInventory().getAmount(core.ItemIdentifiers.PURE_ESSENCE) < 5, "essence went into the pouch");
 });

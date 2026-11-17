@@ -6,13 +6,13 @@ const { test } = require('node:test');
 const RollCounts = require('../plugins/npcs/RollCounts.NpcDrops');
 const dump = require('../data/definitions/npc-drops.json');
 
-// This pins the import's 29 weighted rows (all herb) and the five unresolved-count ids (hydra, colossal_hydra, bloodthirsty_hydra,
+// This pins the import's 30 weighted rows (all herb; forgotten soul is the one the older import lacked) and the five unresolved-count ids (hydra, colossal_hydra, bloodthirsty_hydra,
 // eagle_ray, butterfly_ray); a re-import that changes them must update this file.
 const rows = Object.entries(dump.tables).flatMap(([id, table]) =>
     ['entries', 'tertiary'].flatMap(field => (table[field] ?? []).filter(entry => entry.roll_count_weights).map(entry => [id, entry])));
 
 test('every roll_count_weights row in the import is a valid herb row', () => {
-    assert.equal(rows.length, 29);
+    assert.equal(rows.length, 30);
     for (const [id, entry] of rows) {
         assert.equal(entry.shared_table, 'herb', id);
         assert.ok(RollCounts.validRollCounts(entry.roll_count_weights), id);

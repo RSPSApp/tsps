@@ -197,9 +197,10 @@ function channelAction(event) {
 function chat(event) {
   const { player, packet } = event;
   if (packet.type !== "clan_chat") return;
-  event.handled = true;
   const isGuest = packet.clanType === Core.LISTENED_CLAN;
+  // Other clan types are other content's (Group Ironman's group chat is clan type 1).
   if (!isGuest && packet.clanType !== Core.OWN_CLAN) return;
+  event.handled = true;
   const channel = isGuest ? Core.guestChannelOf(player) : Core.channelOf(player);
   if (!channel) {
     if (isGuest) player.getPacketSender().sendTypedMessage(GUEST_NOTICE_MESSAGE_TYPE, "You are not currently in a guest clan channel.");
@@ -215,7 +216,9 @@ function chat(event) {
     Core.sendNotice(player, "You are not a high enough rank to talk in this clan's channel.");
     return;
   }
-  const text = FriendsChatManager.cleanMessage(packet.text, MAX_MESSAGE_LENGTH);
+  // A leading "|" marks a Group Ironman group's line (its group chat sends one): the cache's chat
+  // filters (script 5501) and RuneLite file such a line under the group, so a clan's never has one.
+  const text = FriendsChatManager.cleanMessage(packet.text, MAX_MESSAGE_LENGTH)?.replace(/^[|\s]+/, "");
   if (!text || !FriendsChatManager.allowChat(player, text)) return;
   const line = (type) => core.encodeChatMessage("clan", text, player.getUsername(), channel.clan.name, player.getIndex(), type);
   const forMembers = line(CLAN_CHAT_MESSAGE_TYPE);
@@ -447,6 +450,7 @@ module.exports = {
     api.onCustomEvent("player:bootstrap-complete", login);
     api.onPlayerLogout(logout);
     api.onCustomEvent("clans:release-guest", releaseGuest);
+    api.onCustomEvent("clans:name-taken", Store.answerNameTaken);
     api.onSocialPacket(chat);
     api.onSocialPacket(channelAction);
     api.onInterfaceActionClick(clickYourClan);

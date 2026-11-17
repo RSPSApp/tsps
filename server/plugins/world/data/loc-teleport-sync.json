@@ -80,7 +80,12 @@
     ],
     "names": {
       "sailing_gangplank_shipyard": "In the shipyard; Sailing handles it.",
-      "ge_keldagrim_trapdoor": "The Keldagrim minecarts ride it (KeldagrimMinecarts.plugin.js), as recorded."
+      "ge_keldagrim_trapdoor": "The Keldagrim minecarts ride it (KeldagrimMinecarts.plugin.js), as recorded.",
+      "sw_tower_basement_trapdoor": "Only the way down into the Isle of Souls tower basement is captured; its exit ladder (40746) has no handler, so an entry would strand the player.",
+      "viking_warrior_ladder": "Only the way down is captured; its exit ladder (4188 at 2672,10099,2) has no handler, so an entry would strand the player.",
+      "ardougne_prison_entry": "Song of the Elves owns it (enterPrison); the one capture is the quest's prison-entry scene.",
+      "brimhaven_slayer_dragon_tunnel": "Into the Brimhaven Dungeon's Slayer-only metal dragon area (Wiki): only the way in is captured (local 1001569 left by teleport each time), and the area needs a Slayer task gate.",
+      "hellhound_cave_entrance_c_03": "Into Cerberus's lair, a boss area tsps has no plugin for; the one capture is a Leagues world's."
     },
     "patterns": [
       {"pattern": "^sailing_", "why": "Sailing content (boats, docks, the shipyard)."},
@@ -127,6 +132,10 @@
       "requires": [
         {"quest": "song_of_the_elves", "refuse": {"message": "You need to complete Song of the Elves to enter Prifddinas."}}
       ]},
+    {"name": "myarm_ladder", "x": 2831, "y": 10077, "z": 2, "source": "https://oldschool.runescape.wiki/w/Troll_ladder (It cannot be climbed before starting My Arm's Big Adventure); TSPS wording for the refusal",
+      "requires": [
+        {"questStarted": "my_arms_big_adventure", "refuse": {"message": "You need to have started My Arm's Big Adventure to climb onto the roof."}}
+      ]},
     {"name": "dorgesh_city_entrance_left", "source": "https://oldschool.runescape.wiki/w/Dorgesh-Kaan (It can only be accessed after completion of the Death to the Dorgeshuun quest); TSPS wording for the refusal",
       "requires": [
         {"quest": "death_to_the_dorgeshuun", "refuse": {"message": "You need to complete Death to the Dorgeshuun to enter Dorgesh-Kaan."}}
@@ -161,6 +170,6 @@
     {"name": "mm2_stronghold_fence_multi", "prompt": "Leave the Gnome Stronghold?", "options": ["Yes.", "Yes, and don't ask again.", "No."], "go": ["Yes.", "Yes, and don't ask again."], "answer": {"animTick": 1, "tick": 3}},
     {"name": "max_boat", "prompt": "Do you want to leave the island?", "options": ["Yes", "No"], "go": ["Yes"], "answer": {"animTick": 0, "tick": 2}},
     {"name": "qip_cook_ladder_middle", "prompt": "Climb up or down the ladder?", "options": ["Climb Up.", "Climb Down."], "go": ["Climb Up."], "ladder": {"Climb Down.": "down"}, "answer": {"animTick": 0, "tick": 1}},
-    {"name": "dagannoth_ladder_base_ext2", "prompt": "Climb up or down the ladder?", "options": ["Climb Up.", "Climb Down."], "go": ["Climb Down."], "ladder": {"Climb Up.": "up"}, "answer": {"animTick": 0, "tick": 1}}
+    {"name": "dagannoth_ladder_base_ext2", "op": 1, "prompt": "Climb up or down the ladder?", "options": ["Climb Up.", "Climb Down."], "go": ["Climb Down."], "ladder": {"Climb Up.": "up"}, "answer": {"animTick": 0, "tick": 1}}
   ]
 }

@@ -1,8 +1,9 @@
 /**
  * Item retrieval (Wiki): a death in The Nightmare's dream leaves what the player would drop with
  * Shura, in Phosani's with Sister Senga (whose message is as captured), returned for a flat 60,000
- * coins. Collect, or "Do you have any of my items?" in their transcripts, hands it back; an unsafe
- * death anywhere else first loses it.
+ * coins. Collect, or "Do you have any of my items?" in their transcripts, hands it back. Another
+ * unsafe death first loses it, in a dream too (Wiki: "Any unsafe death will delete all items left
+ * inside the deathbank"): a second dream death's keeper holds only that death's items.
  */
 const Common = require("./Common.Nightmare");
 const Dream = require("./Dream.Nightmare");
@@ -25,28 +26,42 @@ function metaOf(item) {
   return meta == null ? null : JSON.parse(JSON.stringify(meta));
 }
 
-/** A death in a dream: what would drop stays with its keeper. Elsewhere, an unsafe death loses it. */
+/**
+ * player -> the death (its position object, one per PlayerDeathTask.dropItems call) whose items the keeper
+ * holds now, so a death's later items join its own lot and only a new death loses the old one.
+ */
+const heldDeath = new WeakMap();
+
+/** An unsafe death loses what a keeper held from an earlier death. */
+function loseHeld(player, death) {
+  const held = heldItems(player);
+  if (!held || heldDeath.get(player) === death) return;
+  player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, null);
+  player.sendMessage(Common.data.retrieval.lost.replace("[holder]", HOLDERS[held.holder]));
+}
+
+/** A death in a dream: what would drop stays with its keeper, and an earlier lot is lost. Elsewhere, an unsafe death loses it. */
 function hold(event) {
   const { player, item } = event;
+  if (event.shouldDropItems) loseHeld(player, event.location);
   const dream = Dream.dreamOf(player);
-  if (!dream) {
-    const held = heldItems(player);
-    if (event.shouldDropItems && held) {
-      player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, null);
-      player.sendMessage(Common.data.retrieval.lost.replace("[holder]", HOLDERS[held.holder]));
-    }
-    return;
-  }
+  if (!dream) return;
+  heldDeath.set(player, event.location);
   if (!event.dropEligible) return;
   const holder = dream.phosani ? "senga" : "shura";
   const held = heldItems(player) ?? { holder, items: [] };
   held.holder = holder;
   held.items.push([item.getId(), item.getAmount(), metaOf(item)]);
-  // A new death's items are not paid for: the fee is due again, as with a gravestone's merge.
   held.paid = false;
   held.announce = true;
   player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, held);
   event.handled = true;
+}
+
+/** Once per death, also when it loses nothing: an unsafe death with no items still loses the held lot. */
+function deathDrops(event) {
+  loseHeld(event.player, event.location);
+  if (Dream.dreamOf(event.player)) heldDeath.set(event.player, event.location);
 }
 
 /** Said once the player wakes by the Pool (Dream.Nightmare). */
@@ -124,13 +139,27 @@ function openService(request) {
   collect(request.player, holder);
 }
 
+/**
+ * "group-ironman:wipe-tradeables" { player, lost(id, amount) }: a leaver who stays a ranked Group
+ * Ironman loses what Shura or Sister Senga holds that they lose (Wiki, Group Ironman Mode: "Items in an Item
+ * Retrieval Service").
+ */
+function wipeForGroupIronman({ player, lost }) {
+  const held = heldItems(player);
+  if (!held || typeof lost !== "function") return;
+  const left = held.items.filter(([id, amount]) => !lost(id, amount));
+  if (left.length !== held.items.length) player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, left.length > 0 ? { ...held, items: left } : null);
+}
+
 function attachRetrieval(api) {
   api.onCustomEvent("item-retrieval:items", retrievalItems);
+  api.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
   api.persistAttribute(Common.HELD_ITEMS_ATTRIBUTE);
   api.onPlayerDeathItemDrop(hold);
+  api.onPlayerDeathDrops(deathDrops);
   api.onNpcsInteraction(["Shura", "Sister Senga"], { Collect: collectOption });
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:action", openService);
 }
 
-module.exports = { attachRetrieval, announce, retrievalItems };
+module.exports = { attachRetrieval, announce, retrievalItems, wipeForGroupIronman };

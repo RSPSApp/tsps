@@ -108,12 +108,18 @@ function message(steps, casket = false) {
 }
 
 // The transcripts' name placeholder, as NpcDialogues fills it ("Thanks [player name]!").
-// Falo's "[Fremennik name]" is the player's name too, as Royal Trouble fills it.
-const PLAYER_NAME = /\[(?:player name|playername|player|Fremennik name)(\.?)\]|<player name>/gi;
+const PLAYER_NAME = /\[(?:player name|playername|player)(\.?)\]|<player name>/gi;
+// Falo's "[Fremennik name]": The Fremennik Trials' name ("fremennik-trials:name"), else the player's name.
+const FREMENNIK_NAME = /\[Fremennik name(\.?)\]/gi;
 
 function named(text, player) {
   const name = player.getDisplayName?.();
-  return name ? String(text).replace(PLAYER_NAME, (_, period) => `${name}${period ?? ""}`) : String(text);
+  const request = { player, name: null };
+  api?.emitCustomEvent?.("fremennik-trials:name", request);
+  const fremennik = request.name ?? name;
+  let out = String(text);
+  if (fremennik) out = out.replace(FREMENNIK_NAME, (_, period) => `${fremennik}${period ?? ""}`);
+  return name ? out.replace(PLAYER_NAME, (_, period) => `${name}${period ?? ""}`) : out;
 }
 
 /** Plays spoken lines, then `onEnd` (if any) once the player has continued past them. */

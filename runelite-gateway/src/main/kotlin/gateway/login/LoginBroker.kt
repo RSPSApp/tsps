@@ -67,6 +67,16 @@ class LoginBroker(
             System.setProperty("sun.net.httpserver.maxRspTime", "25")
         HttpServer.create(InetSocketAddress("127.0.0.1", port), 16)
     }
+    /**
+     * The JDK times maxReqTime from the moment it hands a request to the executor, and closes a
+     * request it has not finished reading by then without a reply. A worker can hold a login for
+     * 8 s + 12 s, so a request still queued this long before that limit is answered busy instead.
+     * Null when maxReqTime is off (zero or less).
+     */
+    private val queueWaitMillis =
+        (System.getProperty("sun.net.httpserver.maxReqTime")?.toLongOrNull() ?: 10L)
+            .takeIf { it > 0 }
+            ?.let { (it * 1000L - 2000L).coerceAtLeast(500L) }
 
     class Pending(
         val username: String,
@@ -127,6 +137,18 @@ class LoginBroker(
         server.executor = Executor { task ->
             try {
                 workers.execute(task)
+                if (queueWaitMillis != null)
+                    timer.schedule(
+                        {
+                            // Still queued: no worker started it, so the busy thread answers it.
+                            if (workers.remove(task))
+                                try {
+                                    overflow.execute(task)
+                                } catch (_: RejectedExecutionException) {}
+                        },
+                        queueWaitMillis,
+                        TimeUnit.MILLISECONDS,
+                    )
             } catch (_: RejectedExecutionException) {
                 overflow.execute(task)
             }

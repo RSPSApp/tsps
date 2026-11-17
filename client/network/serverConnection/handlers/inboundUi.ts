@@ -1,6 +1,7 @@
 import { getCustomDefinitionKey } from "../../../custom/definitions/CustomDefinitionStore";
 import { isDefinitionDataset, loadFromPayload } from "../../../common/gamemode/GamemodeContentStore";
 import { applyClanChannelDelta, applyClanSettingsDelta } from "../../../common/social/Clans";
+import { openClientUrl } from "../../../common/openUrl";
 import { ClientState } from "../../../game/ClientState";
 import {
     VARP_AREA_SOUNDS_VOLUME,
@@ -301,6 +302,15 @@ export function handleInboundUi(msg: any): boolean {
             if (g.__osrsClient && Number.isFinite(rate) && rate > 0) g.__osrsClient.hitpointsXpRate = rate;
             return true;
         }
+        if (datasets?.length === 1 && datasets[0].key === "hitpointsXpUnmultiplied") {
+            // Hitpoints XP paid without the rates (a league relic's bonus): not part of a predicted hit.
+            const experience = Number(datasets[0].rows?.[0]);
+            const g: any = (typeof window !== "undefined" ? window : globalThis) as any;
+            if (g.__osrsClient && Number.isFinite(experience) && experience > 0) {
+                g.__osrsClient.hitpointsXpUnmultiplied = (Number(g.__osrsClient.hitpointsXpUnmultiplied) || 0) + experience;
+            }
+            return true;
+        }
         try {
             const itemRevision = CustomItemRegistry.revision;
             const archiveKey = getDefinitionArchiveKey();
@@ -345,6 +355,11 @@ export function handleInboundUi(msg: any): boolean {
         state.lastSystemUpdate = { remainingCentis, receivedAtMs: Date.now() };
         // Start the native chatbox countdown; script 664 keeps it refreshed while active.
         markMiscTransmit();
+        return true;
+    }
+    if (msg.type === "url_open") {
+        // Only http(s) pages open; the browser's popup policy still applies.
+        openClientUrl(String(msg.payload?.url ?? ""));
         return true;
     }
     return false;

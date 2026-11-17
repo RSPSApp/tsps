@@ -13,6 +13,7 @@
 
 const Store = require("./Store.Grouping");
 const Members = require("./Members.Grouping");
+const Kinds = require("./Kinds.Grouping");
 
 const { MEMBER_CAP, ROLE } = Members;
 const GROUP_ATTRIBUTE = "grouping:group";
@@ -41,6 +42,8 @@ const MESSAGE = Object.freeze({
   KICK_SELF: "You can't remove yourself. Leave the group instead.",
   PROMOTE_SELF: "You are already the group leader.",
   CREATED: "You have formed a group. Invite players from the Find tab of ::group, or with ::group invite <name>.",
+  // A Group Ironman group is run from the Group Ironman tab and The Node (GroupIronman.plugin.js).
+  CREATED_IRONMAN: "You have created a group. Invite players with Apply, or with Invite in the Group Ironman tab.",
   LEFT: "You have left the group.",
   KICKED: "You have been removed from the group.",
   DISBANDED: "The group has been disbanded.",
@@ -98,8 +101,8 @@ function create(player, now = Date.now()) {
   const me = Members.identify(player);
   if (!me) return false;
   if (Store.groupOf(me.profile, me.account)) return tell(player, MESSAGE.ALREADY_IN_GROUP);
-  const group = Store.create(me.profile, me.account, now);
-  tell(player, MESSAGE.CREATED);
+  const group = Store.create(me.profile, me.account, now, Kinds.isGroupIronman(player));
+  tell(player, group.ironman ? MESSAGE.CREATED_IRONMAN : MESSAGE.CREATED);
   changed("created", group, me.account, null);
   return true;
 }
@@ -142,18 +145,22 @@ function invite(player, account, now = Date.now()) {
   // Crossed invitations: inviting someone whose group has invited you takes their invitation.
   if (theirs && free(group) && Store.invitationStands(theirs, me.account, now)) return join(player, me, theirs, now);
   if (!free(theirs)) return tell(player, `${name} is already in a group.`);
+  const ironman = group ? group.ironman === true : Kinds.isGroupIronman(player);
+  const unfit = Kinds.refusal(ironman, target) ?? Kinds.joinRefusal(group, target, player, "invite");
+  if (unfit) return tell(player, unfit);
   if (group && group.members.size >= MEMBER_CAP) return tell(player, MESSAGE.GROUP_FULL);
   if (group && Store.invitationStands(group, account, now)) {
     group.invites.set(account, now + INVITE_EXPIRY_MS);
     return tell(player, `You have already invited ${name}.`);
   }
   if (!group) {
-    group = Store.create(me.profile, me.account, now);
+    group = Store.create(me.profile, me.account, now, ironman);
     changed("created", group, me.account, null);
   }
   group.invites.set(account, now + INVITE_EXPIRY_MS);
   tell(player, `You invite ${name} to join your group.`);
-  tell(target, `${Members.nameOf(me.account)} has invited you to join their group. Type ::group to answer.`);
+  // A Group Ironman's invitation is the chat line live sends, which content draws ("invited").
+  if (!group.ironman) tell(target, `${Members.nameOf(me.account)} has invited you to join their group. Type ::group to answer.`);
   changed("invited", group, me.account, account);
   return true;
 }
@@ -175,6 +182,8 @@ function join(player, me, group, now) {
     return tell(player, MESSAGE.ALREADY_IN_GROUP);
   }
   if (!free(current)) return tell(player, MESSAGE.LEAVE_FIRST);
+  const unfit = Kinds.refusal(group.ironman, player) ?? Kinds.joinRefusal(group, player, null, "join");
+  if (unfit) return tell(player, unfit);
   const leader = Members.onlinePlayer(group.profile, group.leader);
   // Either side ignoring the other since the invitation went out voids it.
   if (player.getRelations().hasIgnore(group.leader) || leader?.getRelations().hasIgnore(me.account)) {
@@ -187,6 +196,8 @@ function join(player, me, group, now) {
     changed("invite-withdrawn", group, me.account, me.account);
     return tell(player, MESSAGE.TARGET_FULL);
   }
+  const kept = current ? Kinds.endRefusal(current, player) : null;
+  if (kept !== null) return tell(player, kept);
   if (current) dissolve(current, me.account);
   const withdrawn = Store.withdrawInvitations(me.profile, me.account).filter((other) => other !== group);
   Store.addMember(group, me.account, now);
@@ -233,6 +244,7 @@ function promote(player, account) {
   if (account === me.account) return tell(player, MESSAGE.PROMOTE_SELF);
   if (!group.members.has(account)) return tell(player, MESSAGE.NOT_A_MEMBER);
   const name = Members.nameOf(account);
+  if (Members.isLeaving(group, account)) return tell(player, `${name} is leaving the group.`);
   if (!Members.onlinePlayer(group.profile, account)) return tell(player, `${name} must be online to lead the group.`);
   Store.setLeader(group, account);
   tellGroup(group, `${name} is now the group leader.`);
@@ -253,10 +265,13 @@ function kick(player, account) {
   return true;
 }
 
-/** Hands the lead to the longest-serving member, one who is logged in when `online`; null if none. */
+/**
+ * Hands the lead to the longest-serving member who isn't leaving, one who is logged in when
+ * `online`; null if none.
+ */
 function handOver(group, online) {
   const successor = Store.byTenure(group)
-    .find((account) => !online || Store.isPresent(group.profile, account));
+    .find((account) => !Members.isLeaving(group, account) && (!online || Store.isPresent(group.profile, account)));
   if (successor === undefined) return null;
   Store.setLeader(group, successor);
   tellGroup(group, `${Members.nameOf(successor)} is now the group leader.`);
@@ -267,11 +282,14 @@ function leave(player) {
   const me = Members.identify(player);
   const group = me && Store.groupOf(me.profile, me.account);
   if (!group) return tell(player, MESSAGE.NOT_IN_GROUP);
-  tell(player, MESSAGE.LEFT);
   if (group.members.size === 1) {
+    const kept = Kinds.endRefusal(group, player);
+    if (kept !== null) return tell(player, kept);
+    tell(player, MESSAGE.LEFT);
     dissolve(group, me.account);
     return true;
   }
+  tell(player, MESSAGE.LEFT);
   if (group.leader === me.account) handOver(group, true) ?? handOver(group, false);
   Store.removeMember(group, me.account);
   tellGroup(group, `${Members.nameOf(me.account)} has left the group.`);
@@ -291,6 +309,8 @@ function disband(player) {
   const me = Members.identify(player);
   const group = ledGroup(player, me);
   if (!group) return false;
+  const kept = Kinds.endRefusal(group, player);
+  if (kept !== null) return tell(player, kept);
   tellGroup(group, MESSAGE.DISBANDED);
   dissolve(group, me.account);
   return true;
@@ -298,6 +318,6 @@ function disband(player) {
 
 module.exports = {
   GROUP_ATTRIBUTE, ROLE_ATTRIBUTE, CHANGED_EVENT, INVITE_EXPIRY_MS, INVITE_DELAY_SECONDS, MESSAGE, ROLE,
-  init, tell, mirror, changed, handOver, dissolve,
+  init, tell, tellGroup, mirror, changed, handOver, dissolve,
   create, invite, accept, decline, withdraw, promote, kick, leave, disband,
 };

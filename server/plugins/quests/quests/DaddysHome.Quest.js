@@ -30,16 +30,17 @@
  * Yarlo's Construction demonstration uses an isolated current-cache parlour approximation.
  * RSProx 3218 (rev 232) instead shows a different village-style room, which is not reproduced
  * here. The parlour furniture, builder/camera tiles and timing are not retail-room parity;
- * this change fixes the real Varrock house overlay. See docs/quests/daddys-home/README.md.
+ * this change fixes the real Varrock house overlay. See docs/daddys-home.md.
  * Nails bend per nail, with the captured "You accidentally bend a nail." message.
  */
+const Saws = require("../../items/Saws");
+
 module.exports = function registerDaddysHomeQuest(api) {
   const {
     ActionDialogue,
     Animation,
     DialogueChainBuilder,
     EndDialogue,
-    Equipment,
     Item,
     ItemDefinition,
     ItemIdentifiers: Items,
@@ -54,7 +55,7 @@ module.exports = function registerDaddysHomeQuest(api) {
     Task,
     TaskManager,
   } = api.core;
-  const { registerQuest, refreshQuestList, QUEST_POINTS_ATTRIBUTE, QUEST_POINTS_VARP } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, questStartMessage, QUEST_POINTS_ATTRIBUTE, QUEST_POINTS_VARP } = require("../QuestRuntime");
   // Set once a player who finished the miniquest before rev 242 has been given its new Quest Point.
   const QP_CREDITED_ATTRIBUTE = "daddys-home:quest-point-credited";
   const { createQuestScenes } = require("../QuestScenes");
@@ -134,7 +135,6 @@ module.exports = function registerDaddysHomeQuest(api) {
     [Items.DRAGON_NAILS, 0.15],
   ]);
 
-  const SAW_IDS = [Items.SAW, Items.CRYSTAL_SAW, Items.AMYS_SAW];
   const NAIL_IDS = [
     Items.DRAGON_NAILS,
     Items.RUNE_NAILS,
@@ -185,7 +185,7 @@ module.exports = function registerDaddysHomeQuest(api) {
     [Items.FALADOR_TELEPORT, 1],
   ];
 
-  const START_MESSAGE = "You've started a new quest: <col=081190>Daddy's Home</col>";
+  const startMessage = (player) => questStartMessage(player, "Daddy's Home");
 
   let quest;
   const Scenes = createQuestScenes(api, { onEnd: onCutsceneEnd, recoveryAttribute: LECTURE_EXIT_ATTRIBUTE });
@@ -197,12 +197,8 @@ module.exports = function registerDaddysHomeQuest(api) {
     const banks = player.getBanks?.() ?? (player.getBank ? [player.getBank()] : []);
     return banks.some((bank) => Number(bank?.getAmount?.(MARLOS_CRATE) ?? 0) > 0);
   };
-  const hasSaw = (player) => {
-    if (SAW_IDS.some((id) => has(player, id))) return true;
-    // Amy's saw is an off-hand item.
-    const offhand = player.getEquipment?.()?.getItems?.()[Equipment.SHIELD_SLOT];
-    return SAW_IDS.includes(offhand?.getId?.());
-  };
+  // Held or wielded, Amy's saw in either hand (items/Saws.js, the one rule for a saw).
+  const hasSaw = (player) => Saws.holdsSaw(api.core, player);
 
   function stateOf(player) {
     const saved = player.getAttribute(FURNITURE_ATTRIBUTE);
@@ -846,7 +842,7 @@ module.exports = function registerDaddysHomeQuest(api) {
     ], () => {
       if (quest.getStage(player) < STAGE_STARTED) {
         quest.setStage(player, STAGE_STARTED);
-        player.sendMessage(START_MESSAGE);
+        player.sendMessage(startMessage(player));
       }
     });
   }

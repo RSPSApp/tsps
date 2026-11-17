@@ -44494,6 +44494,8 @@
       "page": "Transcript:Shilo Village",
       "variants": [
         "starting-out-using-the-wampum-belt-on-trufitus",
+        "starting-out-talking-to-trufitus-with-the-wampum-belt",
+        "starting-out-talking-to-trufitus-without-the-wampum-belt",
         "starting-out-talking-to-trufitus-again",
         "starting-out-use-any-unrelated-item-on-trufitus",
         "visiting-ah-za-rhoon-talking-to-trufitus-after-visiting-ah-za-rhoon",
@@ -53473,6 +53475,7 @@
       "page": "Transcript:Shilo Village",
       "variants": [
         "starting-out-talking-to-mosol-rei",
+        "starting-out-search-broken-cart",
         "starting-out-talking-to-mosol-rei-after-getting-the-wampum-belt"
       ]
     }
@@ -56709,6 +56712,12 @@
       "variants": [
         "standard-dialogue"
       ]
+    },
+    {
+      "page": "Transcript:Fairytale I - Growing Pains",
+      "variants": [
+        "entering-zanaris-trying-to-talk-to-the-fairy-godfather-again"
+      ]
     }
   ],
   "5839": [
@@ -56716,12 +56725,6 @@
       "page": "Transcript:Fat Rocco",
       "variants": [
         "standard-dialogue"
-      ]
-    },
-    {
-      "page": "Transcript:Fairytale I - Growing Pains",
-      "variants": [
-        "entering-zanaris-trying-to-talk-to-the-fairy-godfather-again"
       ]
     }
   ],
@@ -78623,6 +78626,7 @@
       "page": "Transcript:Shilo Village",
       "variants": [
         "starting-out-talking-to-mosol-rei",
+        "starting-out-search-broken-cart",
         "starting-out-talking-to-mosol-rei-after-getting-the-wampum-belt"
       ]
     }
@@ -114916,6 +114920,7 @@
       "page": "Transcript:Oriana",
       "variants": [
         "standard-dialogue-initial-dialogue",
+        "standard-dialogue-without-50-thieving",
         "standard-dialogue-after-stealing-valuables-for-the-first-time",
         "standard-dialogue-subsequent-dialogue",
         "standard-dialogue-if-trading-valuables-to-oriana-after-starting",
@@ -114928,6 +114933,7 @@
       "page": "Transcript:Oriana",
       "variants": [
         "standard-dialogue-initial-dialogue",
+        "standard-dialogue-without-50-thieving",
         "standard-dialogue-after-stealing-valuables-for-the-first-time",
         "standard-dialogue-subsequent-dialogue",
         "standard-dialogue-if-trading-valuables-to-oriana-after-starting",
@@ -114980,6 +114986,7 @@
       "variants": [
         "standard-dialogue-initial-dialogue",
         "standard-dialogue-subsequent-dialogue",
+        "standard-dialogue-without-50-thieving",
         "overhead-dialogue-when-a-wealthy-citizen-is-about-to-re-enter-their-house"
       ]
     }
@@ -114990,6 +114997,7 @@
       "variants": [
         "standard-dialogue-initial-dialogue",
         "standard-dialogue-subsequent-dialogue",
+        "standard-dialogue-without-50-thieving",
         "overhead-dialogue-when-a-wealthy-citizen-is-about-to-re-enter-their-house"
       ]
     }
@@ -115000,6 +115008,7 @@
       "variants": [
         "standard-dialogue-initial-dialogue",
         "standard-dialogue-subsequent-dialogue",
+        "standard-dialogue-without-50-thieving",
         "overhead-dialogue-when-a-wealthy-citizen-is-about-to-re-enter-their-house"
       ]
     }
@@ -115010,6 +115019,7 @@
       "variants": [
         "standard-dialogue-initial-dialogue",
         "standard-dialogue-subsequent-dialogue",
+        "standard-dialogue-without-50-thieving",
         "overhead-dialogue-when-a-wealthy-citizen-is-about-to-re-enter-their-house",
         "giving-oli-a-bowl-of-stew"
       ]

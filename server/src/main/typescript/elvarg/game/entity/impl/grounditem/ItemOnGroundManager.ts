@@ -31,6 +31,11 @@ export class ItemOnGroundManager {
     // not aged this cycle (e.g. an NPC drop made by a task) still ages once more.
     private static finishedCycle = -1;
 
+    /** Whether this cycle's ground-item pass has run, so a stack added now is not aged again until the next. */
+    public static hasAgedCycle(cycle: number): boolean {
+        return this.finishedCycle === cycle;
+    }
+
     public static onRegionChange(player: Player): void {
         player.getPacketSender().sendGroundItems(
             World.getItems().filter((item) => this.canSee(player, item))
@@ -118,11 +123,13 @@ export class ItemOnGroundManager {
                 return;
         }
     }
-    public static register(item: ItemOnGround) {
+    /** `keepLifetime` leaves the stack's age as it is (a stack moved by {@link relocate}) instead of starting it now. */
+    public static register(item: ItemOnGround, keepLifetime = false) {
         const areaDelay = item.getPrivateArea()?.groundItemDespawnDelay?.();
         if (item.despawnDelay == null && areaDelay != null) item.setDespawnDelay(areaDelay);
-        // Check for merge with existing stackables..
-        if (item.getItem().getDefinition().isStackable()) {
+        // Check for merge with existing stackables.. A moved stack stays its own: a merge would restart the
+        // other stack's timer and could make an owner-only stack public.
+        if (!keepLifetime && item.getItem().getDefinition().isStackable()) {
             if (this.merge(item)) {
                 return;
             }
@@ -130,6 +137,7 @@ export class ItemOnGroundManager {
 
         // We didn't need to modify a previous item.
         // Simply register the given item to the world..
+        if (!keepLifetime) item.restartLifetime();
         World.getItems().push(item);
         ItemOnGroundManager.perform(item, OperationType.CREATE);
     }
@@ -183,7 +191,7 @@ export class ItemOnGroundManager {
                 item_.getItem().incrementAmountBy(item.getItem().getAmount());
                 if (recurring) item_.mergeRespawnAmount(item);
                 item_.setOldAmount(oldAmount);
-                item_.setTick(0);
+                item_.restartLifetime();
                 ItemOnGroundManager.perform(item_, OperationType.ALTER);
                 return true;
             }
@@ -378,6 +386,23 @@ export class ItemOnGroundManager {
         return i;
     }
 
+    /**
+     * Moves a floor stack to `position` (out of an instance that is closing) as the same stack: its owner,
+     * visibility, lifetime and the ticks it has already lain there carry over, so the move neither restarts
+     * its despawn nor its owner-only time (Wiki: Drops). It arrives as an ordinary stack in `privateArea`.
+     */
+    public static relocate(item: ItemOnGround, position: Location, privateArea: PrivateArea | null = null): ItemOnGround {
+        this.deregister(item);
+        const moved = new ItemOnGround(item.getState(), item.getOwner(), position, item.getItem(), item.getgoesGlobal(),
+            -1, privateArea, false, item.pickupReplacement);
+        moved.setDespawnDelay(item.getDespawnDelay());
+        moved.setEnabledOps(item.getEnabledOps());
+        moved.setTick(item.getTick());
+        moved.agedCycle = item.getAgedCycle();
+        this.register(moved, true);
+        return moved;
+    }
+
     public static registerNonGlobal(player: Player, item: Item) {
         this.registerNonGlobals(player, item, player.getLocation().clone());
     }
@@ -455,7 +480,9 @@ export class ItemOnGroundManager {
         return this.isOwner(player.getUsername(), item)
             || item.isStaticSpawn()
             || item.getOwner() == null
-            || (item.getItem().isTradeable() && item.getItem().isDropable());
+            // Wiki (Drops): once revealed, "anyone will be able to see (and take) the item if it is tradeable":
+            // between players, so a ring of dueling(3) or burnt meat too, not only Grand Exchange items.
+            || (item.getItem().isPlayerTradeable() && item.getItem().isDropable());
     }
 
     /** Picking up stays same-floor; telegrab may reach visible lower floors within its 10-tile range. */

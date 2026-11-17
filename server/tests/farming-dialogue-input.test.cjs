@@ -281,6 +281,16 @@ async function finishGardener(f) {
   assert.equal(f.p.getDialogueManager().getCurrent(), undefined, 'the source branch completes');
 }
 
+// Asked again, a gardener keeps the menu and the question (rsprox FairyTale1 ticks 275-281); after
+// the five, the others say the crops aren't failing (850-856).
+async function askedAgain(f, answer) {
+  await f.talk();
+  await gardenerChoice(f, GARDENER_QUESTION);
+  for (let n = 0; n < 10 && !(f.p.getDialogueManager().getCurrent()?.getText() ?? '').startsWith(answer); n++) await gardenerContinue(f);
+  assert.match(f.p.getDialogueManager().getCurrent()?.getText() ?? '', new RegExp(`^${answer}`));
+  f.p.closeInterruptibleInterfaces();
+}
+
 test('five native quest gardener conversations use the actual actor name and credit only a completed answer', async t => {
   const ids = [core.NpcIdentifiers.FRIZZY_SKERNIP, core.NpcIdentifiers.ELSTAN,
     core.NpcIdentifiers.HESKEL, core.NpcIdentifiers.DREVEN, core.NpcIdentifiers.TREZNOR];
@@ -302,24 +312,16 @@ test('five native quest gardener conversations use the actual actor name and cre
     assert.deepEqual(f.asked(), ids.slice(0, index + 1));
     assert.ok(f.names.length > 0);
     assert.deepEqual([...new Set(f.names)], [f.gardener.getCurrentDefinition(f.p).getName()]);
-    await f.talk();
-    assert.match(f.p.getDialogueManager().getCurrent()?.getText() ?? '', /^You don't have a sapling planted/,
-      `the completed gardener yields to Farming: ${JSON.stringify({ id, actions: f.gardener.getCurrentDefinition(f.p).getActions(), messages: f.messages })}`);
-    f.p.closeInterruptibleInterfaces();
-    assert.deepEqual(f.asked(), ids.slice(0, index + 1), 'repeated service access adds no duplicate');
+    await askedAgain(f, "I've already told you everything I suspect.");
+    assert.deepEqual(f.asked(), ids.slice(0, index + 1), 'asking again adds no duplicate');
   }
   f.setGardener(core.NpcIdentifiers.KRAGEN);
-  await f.talk();
-  assert.match(f.p.getDialogueManager().getCurrent().getText(), /^You don't have a sapling planted/,
-    'after five answers even an unasked gardener yields to Farming');
-  assert.deepEqual(f.asked(), ids);
+  await askedAgain(f, "I don't think the crops ARE failing");
+  assert.deepEqual(f.asked().slice(0, 5), ids, 'the five answers stay the ones counted');
   const restored = actor(t, 2435, 3415);
   const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
   PlayerSave.fromPlayer(f.p).applyToPlayer(restored.p);
-  assert.equal(restored.p.getAttribute(GARDENERS_ATTRIBUTE), ids.join(','), 'completed answers survive save/load');
-  await input(restored, { type: 'npc_option', index: f.gardener.getIndex(), clickType: 1 });
-  assert.match(restored.p.getDialogueManager().getCurrent().getText(), /^You don't have a sapling planted/);
-  restored.p.closeInterruptibleInterfaces();
+  assert.deepEqual(String(restored.p.getAttribute(GARDENERS_ATTRIBUTE)).split(',').slice(0, 5).map(Number), ids, 'completed answers survive save/load');
 });
 
 for (const name of ['TREZNOR', 'ELSTAN']) {

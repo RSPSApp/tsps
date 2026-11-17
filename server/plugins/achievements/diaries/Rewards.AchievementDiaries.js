@@ -54,10 +54,7 @@ function claimedHighestTier(player, diary) {
 
 /** Another copy is handed back only while the player owns none in the inventory, worn or bank. */
 function owns(player, itemId) {
-  const searchTab = pluginApi?.core?.Bank?.BANK_SEARCH_TAB_INDEX;
-  return player.getInventory().contains(itemId)
-    || (player.getEquipment?.().contains?.(itemId) ?? false)
-    || (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.contains?.(itemId));
+  return pluginApi.core.Bank.owns(player, itemId);
 }
 
 function giveAnotherCloak(player, diary) {

@@ -6,6 +6,8 @@ const { Server } = require("../../src/main/typescript/elvarg/Server");
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
 const { PlayerRights } = require("../../src/main/typescript/elvarg/game/model/rights/PlayerRights");
 const { PluginManager } = require("../../src/main/typescript/elvarg/plugins/PluginManager");
+// The owner's noclip flag, the same key the movement code reads (game/model/movement/Noclip.ts).
+const { NOCLIP_ATTRIBUTE } = require("../../src/main/typescript/elvarg/game/model/movement/Noclip");
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { MagicSpellbook } = require("../../src/main/typescript/elvarg/game/model/MagicSpellbook");
 const { WeaponInterfaceManager } = require("../../src/main/typescript/elvarg/game/content/combat/WeaponInterfaceManager");
@@ -871,6 +873,8 @@ function accountPunishmentCommand({ player, raw, parts }) {
   if (removing ? active : !active) {
     PlayerPunishment[command](name);
     player.sendMessage(`Player ${name} is now ${removing ? (mute ? "unmuted" : "unbanned") : status}.`);
+    // "account:banned" { name }: bans here are permanent; content may follow up (a Group Ironman group's prestige).
+    if (command === "ban") pluginApi?.emitCustomEvent("account:banned", { name });
     if (target && mute) target.sendMessage(removing ? "You have been unmuted." : "You have been muted.");
   } else {
     player.sendMessage(`Player ${name} ${removing ? `is not ${status}` : `is already ${status}`}.`);
@@ -964,6 +968,7 @@ let CombatFactory;
 let TaskManager;
 let RegionManager;
 let PlayerPunishment;
+let pluginApi;
 
 module.exports = {
   name: "AdminCommands",
@@ -976,6 +981,7 @@ module.exports = {
     TaskManager = api.getTaskManager();
     RegionManager = api.getRegionManager();
     PlayerPunishment = api.getPlayerPunishment();
+    pluginApi = api;
     api.registerCommand("tele", ({ player, parts }) => {
       if (parts.length < 3 || parts.length > 4) {
         player.sendMessage("Usage: ::tele x y [z]");
@@ -1455,11 +1461,13 @@ module.exports = {
       return true;
     }, PlayerRights.OWNER, "Show task count");
 
+    // Toggles the owner's noclip flag (NOCLIP_ATTRIBUTE; not persisted). No packet: PlayerSession.write is a no-op.
     api.registerCommand("noclip", ({ player }) => {
-      player.getPacketSender().sendEnableNoclip();
-      player.sendMessage("Noclip enabled.");
+      const enabling = player.getAttribute(NOCLIP_ATTRIBUTE) !== true;
+      player.setAttribute(NOCLIP_ATTRIBUTE, enabling);
+      player.sendMessage(enabling ? "Noclip enabled." : "Noclip disabled.");
       return true;
-    }, PlayerRights.OWNER, "Enable noclip");
+    }, PlayerRights.OWNER, "Toggle noclip");
 
     api.registerCommand("up", ({ player }) => {
       const current = player.getLocation();

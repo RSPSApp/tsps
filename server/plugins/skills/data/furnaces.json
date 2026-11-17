@@ -1,0 +1,4 @@
+{
+  "$comment": "Loc names that work as an ordinary furnace: Smelt (bars, molten glass, cannonballs), gold and silver jewellery, and the Desert Treasure II rings. Clay forge (Neitiznot), Volcanic Furnace (Mount Karuulm), Lava forge (Mor Ul Rek) and Ancient Furnace (Grimstone Dungeon) are furnaces under other names (OSRS Wiki: Furnace, Clay forge, Volcanic Furnace, Lava forge, Ancient Furnace). The Lovakite furnace smelts lovakite only and is not listed (docs/smithing.md).",
+  "names": ["Furnace", "Small furnace", "Clay forge", "Volcanic Furnace", "Lava forge", "Ancient Furnace"]
+}

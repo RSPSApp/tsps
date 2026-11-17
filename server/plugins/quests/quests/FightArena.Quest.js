@@ -16,10 +16,13 @@
  * 11 Bouncer defeated, 12 Servils freed / Khazard attacks, 13 Khazard
  * defeated, 14 complete, 15 complete (Khazard defeated).
  * Source: https://github.com/LostCityRS/Content/tree/65b754f768b79b941b21b2a1eb3b0d1ecae3cdfe/scripts/quests/quest_arena
- * Gaps: the cutscenes/camera moves and NPC pathing are not reproduced; the
- * arena's east-side pens cannot be opened (the cache map seals the cage
- * gates), so each fight spawns the beast on the open arena floor, as the
- * reference does when it releases one; the Khazard barman (1214) is indexed
+ * The cutscenes (Sammy's cell, Khazard after the ogre, the scorpion's and
+ * Bouncer's pens, Khazard after Bouncer) are fightarena/Scenes.FightArena.js,
+ * from the rev 241/242 recordings; each fight then starts on the real map at
+ * the tiles live's fight starts on (live plays the fights in a copy too).
+ * Gaps: the arena's east-side pens cannot be opened on the real map (the
+ * cache map seals the cage gates), so each fight's beast stands on the open
+ * arena floor, where live's leaves its pen; the Khazard barman (1214) is indexed
  * to the "Khazard Barman" page, whose flat transcript has no Khali-brew
  * option, so this plugin plays the Fight Arena barman branch directly
  * through startTranscript once the brew is known.
@@ -35,6 +38,7 @@ module.exports = function registerFightArenaQuest(api) {
     TaskManager,
   } = api.core;
   const { registerQuest, startTranscript, refreshQuestList } = require("../QuestRuntime");
+  const createFightArenaScenes = require("../fightarena/Scenes.FightArena");
 
   const VARP_FIGHT_ARENA = 17;
 
@@ -134,28 +138,30 @@ module.exports = function registerFightArenaQuest(api) {
 
   const PAGE = "Fight Arena";
   const START_HOOK = "quest:fight-arena:start";
-  // "Talking to Sammy Servil after getting the keys": steps 0-3 are the chat before the
-  // cutscene; the cell is unlocked from step 4 ("Alright, the coast is clear.").
+  // "Talking to Sammy Servil after getting the keys": live plays all of it from the keys on
+  // his door (rsprox_transcripts/241/911665.txt tick 7444), its cutscene from "A cutscene begins.".
   const SAMMY_FREED_VARIANT = "getting-the-keys-talking-to-sammy-servil-after-getting-the-keys";
-  const SAMMY_FREED_FIRST_STEP = 4;
   const KHAZARD_SCENE_DELAY_TICKS = 3;
 
-  // Cell / arena / jail tiles from the reference coords. The arena's east-side
-  // beast pens are sealed in the cache map, so the player only stands on the
-  // open floor west of them and the fight beasts are spawned there. The jail
-  // teleport lands inside Hengrad's cell (Quest Helper's cell zone); the old
-  // 2605,3141 tile is a wall in the cache and is outside the cell.
-  const JAIL_TILE = { x: 2599, y: 3143, z: 0 };
-  const ARENA_TILE = { x: 2603, y: 3156, z: 0 };
+  // Where each fight starts on the real map: the player's and the beast's tiles as live's fight
+  // starts them (rev 241 ticks 7511-7512, 7688-7689, 7742-7743, 7939-7940). The jail teleport lands
+  // in Hengrad's cell where live puts the player (7627); 2605,3141 is a wall outside the cell.
+  const JAIL_TILE = { x: 2598, y: 3143, z: 0 };
+  const OGRE_FIGHT_TILE = { x: 2605, y: 3153, z: 0 };
+  const ARENA_TILE = { x: 2604, y: 3155, z: 0 };
+  const KHAZARD_FIGHT_TILE = { x: 2601, y: 3156, z: 0 };
   // The arena's only door (loc 82) sits on this tile; it is the arena's
   // entrance/exit and the only placement of that loc in the cache.
   const ARENA_DOOR_TILE = { x: 2606, y: 3152, z: 0 };
-  const OGRE_TILE = { x: 2604, y: 3163, z: 0 };
-  const SCORPION_TILE = { x: 2603, y: 3161, z: 0 };
-  const BOUNCER_TILE = { x: 2604, y: 3165, z: 0 };
-  const GENERAL_KHAZARD_TILE = { x: 2603, y: 3164, z: 0 };
+  const OGRE_TILE = { x: 2602, y: 3165, z: 0 };
+  const SCORPION_TILE = { x: 2601, y: 3159, z: 0 };
+  const BOUNCER_TILE = { x: 2603, y: 3162, z: 0 };
+  const GENERAL_KHAZARD_TILE = { x: 2600, y: 3153, z: 0 };
 
   // npc-dialogue:action step ids from the transcript.
+  const CUTSCENE_BEGINS_ID = "xgLOXp";
+  const UNLOCK_CELL_ID = "-GpvYE";
+  const SAMMY_WALKS_OFF_ID = "YGE5n0";
   const BARMAN_BREW_MESSAGE_ID = "Dg8YuY";
   const HAND_BREW_MESSAGE_ID = "tRXEfT";
   const KEYS_GIVEN_MESSAGE_ID = "rUfSrN";
@@ -540,13 +546,47 @@ module.exports = function registerFightArenaQuest(api) {
    * the ogre already spawned.
    */
   function startOgreFight(player) {
-    if (quest.getStage(player) < STAGE_ENTERED_OGRE_FIGHT) {
-      quest.setStage(player, STAGE_ENTERED_OGRE_FIGHT);
-    }
-    teleport(player, ARENA_TILE);
+    enterOgreFight(player);
+    teleport(player, OGRE_FIGHT_TILE);
     const current = fightBeastByPlayer.get(player);
     if (current && current.getId?.() === NpcIdentifiers.KHAZARD_OGRE && current.isRegistered?.() !== false) return;
     spawnFightBeast(player, NpcIdentifiers.KHAZARD_OGRE, OGRE_TILE);
+  }
+
+  /** Stage 6, as the ogre hits Justin: the cell keys go with it (rev 241 tick 7509). */
+  function enterOgreFight(player) {
+    if (quest.getStage(player) >= STAGE_ENTERED_OGRE_FIGHT) return;
+    quest.setStage(player, STAGE_ENTERED_OGRE_FIGHT);
+    if (held(player, KHAZARD_CELL_KEYS)) player.getInventory().deleteNumber(KHAZARD_CELL_KEYS, 1);
+  }
+
+  /** A scene's end: the player, and the fight's beast, where live's fight starts. */
+  function startFight(player, kind) {
+    switch (kind) {
+      case "ogre":
+        return startOgreFight(player);
+      case "jail":
+        return teleport(player, JAIL_TILE);
+      case "scorpion":
+        teleport(player, ARENA_TILE);
+        if (quest.getStage(player) === STAGE_SENT_JAIL) spawnFightBeast(player, NpcIdentifiers.KHAZARD_SCORPION, SCORPION_TILE);
+        return;
+      case "bouncer":
+        teleport(player, ARENA_TILE);
+        if (quest.getStage(player) === STAGE_DEFEATED_SCORPION) spawnFightBeast(player, NpcIdentifiers.BOUNCER, BOUNCER_TILE);
+        return;
+      case "khazard":
+        teleport(player, KHAZARD_FIGHT_TILE);
+        if (quest.getStage(player) === STAGE_FREED_SERVILS) spawnGeneralKhazard(player);
+    }
+  }
+
+  function sentToJail(player) {
+    if (quest.getStage(player) < STAGE_SENT_JAIL) quest.setStage(player, STAGE_SENT_JAIL);
+  }
+
+  function khazardAttacks(player) {
+    if (quest.getStage(player) < STAGE_FREED_SERVILS) quest.setStage(player, STAGE_FREED_SERVILS);
   }
 
   /** Item hand-outs and teleports hidden in transcript message/action steps. */
@@ -594,15 +634,34 @@ module.exports = function registerFightArenaQuest(api) {
       event.end = true;
       return;
     }
+    // The cell cutscene's steps play its moments when it is up; without it (a fixture, or the
+    // conversation replayed outside the scene) they fall back to the plain moves below.
+    if (stepId === CUTSCENE_BEGINS_ID) {
+      event.handled = true;
+      if (quest.getStage(player) === STAGE_GIVEN_KHALI_BREW && held(player, KHAZARD_CELL_KEYS)) scenes.cellScene(player);
+      return;
+    }
+    if (stepId === UNLOCK_CELL_ID) {
+      event.handled = true;
+      scenes.unlockCell(player);
+      return;
+    }
+    if (stepId === SAMMY_WALKS_OFF_ID) {
+      event.handled = true;
+      scenes.sammyRuns(player);
+      return;
+    }
     if (stepId === FOLLOW_INTO_ARENA_ID) {
+      event.handled = true;
+      if (scenes.followSammy(player)) return;
       if (quest.getStage(player) < STAGE_DEFEATED_OGRE) startOgreFight(player);
       else teleport(player, ARENA_TILE);
-      event.handled = true;
       return;
     }
     if (stepId === OGRE_ATTACKS_ID) {
-      startOgreFight(player);
       event.handled = true;
+      if (scenes.ogreAttacks(player)) return;
+      startOgreFight(player);
       return;
     }
     if (stepId === OGRE_DEFEAT_JAIL_TELEPORT_ID) {
@@ -617,12 +676,17 @@ module.exports = function registerFightArenaQuest(api) {
       return;
     }
     if (stepId === JAIL_TELEPORT_ID) {
-      if (quest.getStage(player) < STAGE_SENT_JAIL) quest.setStage(player, STAGE_SENT_JAIL);
-      teleport(player, JAIL_TILE);
       event.handled = true;
+      if (scenes.takenToJail(player)) return;
+      sentToJail(player);
+      teleport(player, JAIL_TILE);
       return;
     }
     if (stepId === ARENA_TELEPORT_ID) {
+      if (quest.getStage(player) === STAGE_SENT_JAIL && scenes.scorpionScene(player)) {
+        event.handled = true;
+        return;
+      }
       teleport(player, ARENA_TILE);
       if (quest.getStage(player) >= STAGE_SENT_JAIL && quest.getStage(player) < STAGE_DEFEATED_SCORPION) {
         spawnFightBeast(player, NpcIdentifiers.KHAZARD_SCORPION, SCORPION_TILE);
@@ -648,9 +712,10 @@ module.exports = function registerFightArenaQuest(api) {
       return;
     }
     if (stepId === KHAZARD_ATTACKS_ID) {
-      if (quest.getStage(player) < STAGE_FREED_SERVILS) quest.setStage(player, STAGE_FREED_SERVILS);
-      spawnGeneralKhazard(player);
       event.handled = true;
+      if (scenes.khazardAttacks(player)) return;
+      khazardAttacks(player);
+      spawnGeneralKhazard(player);
     }
   }
 
@@ -761,10 +826,9 @@ module.exports = function registerFightArenaQuest(api) {
         return;
       }
       if (stage === STAGE_GIVEN_KHALI_BREW) {
-        // The wiki plays this as a cutscene with chatbox dialogue; the ogre fight
-        // starts from the transcript's own action steps.
-        startTranscript(api, player, NpcIdentifiers.SAMMY_SERVIL, PAGE, SAMMY_FREED_VARIANT,
-          (steps) => steps.slice(SAMMY_FREED_FIRST_STEP));
+        // The whole keys conversation, its cutscene from "A cutscene begins."; the ogre
+        // fight starts from the transcript's own action steps.
+        startTranscript(api, player, NpcIdentifiers.SAMMY_SERVIL, PAGE, SAMMY_FREED_VARIANT);
         return;
       }
       if (stage < STAGE_DEFEATED_BOUNCER) {
@@ -797,15 +861,18 @@ module.exports = function registerFightArenaQuest(api) {
     if (!player) return;
     const { npcId } = event;
     const stage = quest.getStage(player);
+    // Each kill plays its scene the tick the beast goes (rev 241 ticks 7568, 7723, 7892); the
+    // plain Khazard conversation is what is left without one.
     if (KHAZARD_OGRE_IDS.has(npcId) && stage >= STAGE_ENTERED_OGRE_FIGHT && stage < STAGE_DEFEATED_OGRE) {
       fightBeastByPlayer.delete(player);
       quest.setStage(player, STAGE_DEFEATED_OGRE);
-      playKhazardScene(player, "the-battles-upon-killing-the-khazard-ogre");
+      if (!scenes.ogreDied(player)) playKhazardScene(player, "the-battles-upon-killing-the-khazard-ogre");
       return;
     }
     if (KHAZARD_SCORPION_IDS.has(npcId) && stage >= STAGE_SENT_JAIL && stage < STAGE_DEFEATED_SCORPION) {
       fightBeastByPlayer.delete(player);
       quest.setStage(player, STAGE_DEFEATED_SCORPION);
+      if (scenes.scorpionDied(player)) return;
       playKhazardScene(player, "the-battles-upon-killing-the-scorpion",
         () => spawnFightBeast(player, NpcIdentifiers.BOUNCER, BOUNCER_TILE));
       return;
@@ -813,7 +880,7 @@ module.exports = function registerFightArenaQuest(api) {
     if (BOUNCER_IDS.has(npcId) && stage >= STAGE_DEFEATED_SCORPION && stage < STAGE_DEFEATED_BOUNCER) {
       fightBeastByPlayer.delete(player);
       quest.setStage(player, STAGE_DEFEATED_BOUNCER);
-      playKhazardScene(player, "the-battles-upon-killing-bouncer");
+      if (!scenes.bouncerDied(player)) playKhazardScene(player, "the-battles-upon-killing-bouncer");
       return;
     }
     if (GENERAL_KHAZARD_NPC_IDS.has(npcId) && stage >= STAGE_FREED_SERVILS && stage < STAGE_DEFEATED_KHAZARD) {
@@ -836,20 +903,39 @@ module.exports = function registerFightArenaQuest(api) {
     }
     if (stage >= STAGE_DEFEATED_SCORPION && stage < STAGE_DEFEATED_BOUNCER) {
       spawnFightBeast(player, NpcIdentifiers.BOUNCER, BOUNCER_TILE);
+      return;
     }
+    if (stage === STAGE_FREED_SERVILS) spawnGeneralKhazard(player);
   }
 
   function handleLogin({ player }) {
     restoreFight(player);
+    scenes.login(player);
     refreshQuestList(player);
   }
 
   function handleLogout({ player }) {
     if (player) {
+      scenes.logout(player);
       removeGeneralKhazard(player);
       removeFightBeast(player);
     }
   }
+
+  /** A line of a cutscene's conversation: its chathead, and a pen's release on its continue. */
+  function handleLine(event) {
+    if (event?.player) scenes.line(event);
+  }
+
+  const scenes = createFightArenaScenes(api, {
+    startFight,
+    ogreFight: enterOgreFight,
+    jailed: sentToJail,
+    khazardAttacks,
+    stage: (player) => quest.getStage(player),
+    STAGE_SENT_JAIL,
+    HENGRAD_NPC_ID: NpcIdentifiers.HENGRAD,
+  });
 
   quest = registerQuest(api, {
     key: "fight_arena",
@@ -873,6 +959,7 @@ module.exports = function registerFightArenaQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("door:toggle", handleDoorToggle);
   api.onNpcInteraction(handleNpcInteraction);
   api.onObjectInteraction(handleObjectInteraction);

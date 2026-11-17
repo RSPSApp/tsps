@@ -34,6 +34,7 @@ before(() => {
     onCustomEvent: (name, fn) => { (hooks.events[name] ??= []).push(fn); },
     onPlayerLogout: (fn) => { (hooks.logout ??= []).push(fn); },
     onPlayerLogin() {},
+    onItemAction() {},
     emitCustomEvent: (name, payload) => hooks.emitted.push([name, payload]),
     emitCanBank: () => true,
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ title, args }),

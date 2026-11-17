@@ -147,7 +147,7 @@ class FakeArea {
 }
 
 function createWorld() {
-  const world = { cycle: 0, tasks: [], npcs: [], objects: new Set(), removedObjects: [], hits: [], projectiles: 0, providers: new Map(), hooks: {}, random: 0 };
+  const world = { cycle: 0, tasks: [], npcs: [], objects: new Set(), removedObjects: [], hits: [], projectiles: 0, providers: new Map(), hooks: {}, random: 0, events: [] };
   const core = {
     World: { getProcessCycle: () => world.cycle },
     Location,
@@ -217,7 +217,7 @@ function createWorld() {
     registerNpcCombatMethodProvider: (ids, ctor) => { for (const id of [ids].flat()) world.providers.set(id, ctor); },
     persistAttribute: hook('persist'),
     sendMultiChatboxPrompt: (player, title, ...pairs) => { world.prompt = { title, pairs }; return true; },
-    emitCustomEvent: (name, event) => { if (name === 'diary:tokkul' && world.eliteKaramja) event.amount *= 2; },
+    emitCustomEvent: (name, event) => { world.events.push(name); if (name === 'diary:tokkul' && world.eliteKaramja) event.amount *= 2; },
   };
   for (const name of ['onNpcDialogueCondition', 'onCustomEvent', 'onObjectFirstClick', 'onObjectSecondClick', 'onObjectRoute', 'onPlayerLogin', 'onPlayerLogout', 'onPlayerProcess',
     'onPlayerBeforeDeath', 'onPlayerDeath', 'onShouldDropItemsOnDeath', 'onCanTeleport', 'onCanAttack', 'onNpcBeforeDeath', 'onCombatHitResolved',
@@ -521,6 +521,38 @@ test('TzKal-Zuk: the glyph shields, summons arrive on cue and his death wins the
   assert.equal(run.completions(player), 1);
   assert.equal(player.getAttribute(run.ATTR_WAVE), null);
   assert.equal(player.getLocation().getX(), 2495);
+});
+
+function winZuk(random) {
+  const { player, session } = startAt(69);
+  tick(player, 21);
+  world.random = random;
+  world.events.length = 0;
+  kill(session.zuk.zuk);
+  tick(player, 1 + 8);
+  world.random = 0;
+  return player;
+}
+
+test("Zuk's death is claimed from NpcDrops, so the dumped tz_kal_zuk table cannot roll Jal-Nib-Rek a second time", () => {
+  const zuk = require('../plugins/minigames/inferno/Zuk.Inferno');
+  assert.ok(world.hooks.onCustomEvent.includes(zuk.claimZukDrops), 'the plugin registers the claim');
+  const claim = { npcId: Npcs.TZKAL_ZUK, handled: false };
+  zuk.claimZukDrops(claim);
+  assert.equal(claim.handled, true);
+  const other = { npcId: Npcs.JALTOK_JAD, handled: false };
+  zuk.claimZukDrops(other);
+  assert.equal(other.handled, false, 'only Zuk is claimed');
+});
+
+test("the completion's own Jal-Nib-Rek roll is unchanged: 1 in 100, one npc-drops:roll when it hits", () => {
+  const lucky = winZuk(0);
+  assert.equal(lucky.items.get(Items.JAL_NIB_REK), 1);
+  assert.equal(world.events.filter((name) => name === 'npc-drops:roll').length, 1);
+  const unlucky = winZuk(1);
+  assert.equal(unlucky.items.get(Items.JAL_NIB_REK) ?? 0, 0);
+  assert.equal(world.events.filter((name) => name === 'npc-drops:roll').length, 0);
+  assert.equal(unlucky.items.get(Items.INFERNAL_CAPE), 1, 'the cape is still paid');
 });
 
 test('the Elite Karamja Diary doubles the TokKul a run pays', () => {

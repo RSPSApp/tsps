@@ -93,11 +93,11 @@ let candleShopId = null;
 
 const pending = new WeakMap();
 /**
- * Chest relock: the Wiki's 90 seconds, kept per account (by username) to stop repeat loot. Keyed by the
- * name, not the Player object, so logging out and back in does not reset it.
+ * Chest relock: the Wiki's 90 seconds ("these chests remain looted for 90 seconds before re-locking
+ * themselves"). The chest is one world loc, so the looted state is shared: once anyone loots it, every
+ * player finds it empty until it relocks, and logging out and back in does not reset it.
  */
-const chestLooted = new Map();
-const chestKey = (player) => String(player.getUsername?.() ?? "").toLowerCase();
+let chestRelockUntil = 0;
 const CHEST_RELOCK_MS = 90_000;
 
 function state(player) {
@@ -365,10 +365,7 @@ function hemensterChest(event) {
   if (!active(player)) return false;
   const at = event.object?.getLocation?.();
   if (!at || at.getX() !== HEMENSTER_CHEST.x || at.getY() !== HEMENSTER_CHEST.y || at.getZ() !== HEMENSTER_CHEST.z) return false;
-  // ponytail: per-player relock, not a shared object timer; enough to stop repeat loot here.
-  const relock = chestLooted.get(chestKey(player));
-  if (relock !== undefined && Date.now() >= relock) chestLooted.delete(chestKey(player));
-  if (Date.now() < (relock ?? 0)) {
+  if (Date.now() < chestRelockUntil) {
     player.sendMessage("The chest is empty.");
     return true;
   }
@@ -391,10 +388,7 @@ function hemensterChest(event) {
   inventory.adds(core.ItemIdentifiers.STEEL_ARROWTIPS, 5);
   inventory.adds(core.ItemIdentifiers.COINS, 20);
   player.getSkillManager().addExperiences(core.Skill.THIEVING, 150);
-  // Expired relocks of other accounts are dropped as new ones are set, so the map stays small.
-  const now = Date.now();
-  for (const [key, until] of chestLooted) if (until <= now) chestLooted.delete(key);
-  chestLooted.set(chestKey(player), now + CHEST_RELOCK_MS);
+  chestRelockUntil = Date.now() + CHEST_RELOCK_MS;
   credit(player, TASK.hemensterChest);
   return true;
 }
@@ -519,5 +513,6 @@ module.exports = {
     equipmentChanged, staminaMix, firemakingSuccess, pyreBuilt, resolveCandleShop, credit,
     setCandleShopId: (id) => { candleShopId = id; },
     resetCandleShop: () => { candleShopId = null; },
+    resetHemensterChest: () => { chestRelockUntil = 0; },
   },
 };

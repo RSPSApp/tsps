@@ -1,15 +1,16 @@
 import { CacheDefinitions } from "../../../game/cache/CacheDefinitions";
 import { PluginManager } from "../../../plugins/PluginManager";
+import { lazyRequire } from "../../../util/LazyRequire";
 
-const getInventoryCtor = () =>
+const getInventoryCtor = lazyRequire(() =>
   require("../../../game/model/container/impl/Inventory")
-    .Inventory as typeof import("../../../game/model/container/impl/Inventory").Inventory;
-const getEquipmentCtor = () =>
+    .Inventory as typeof import("../../../game/model/container/impl/Inventory").Inventory);
+const getEquipmentCtor = lazyRequire(() =>
   require("../../../game/model/container/impl/Equipment")
-    .Equipment as typeof import("../../../game/model/container/impl/Equipment").Equipment;
-const getEquipPacketListener = () =>
+    .Equipment as typeof import("../../../game/model/container/impl/Equipment").Equipment);
+const getEquipPacketListener = lazyRequire(() =>
   require("./EquipPacketListener")
-    .EquipPacketListener as typeof import("./EquipPacketListener").EquipPacketListener;
+    .EquipPacketListener as typeof import("./EquipPacketListener").EquipPacketListener);
 
 const DROP_OPTIONS = new Set(["drop", "destroy", "discard", "release"]);
 
@@ -37,6 +38,9 @@ export class ItemActionPacketListener {
   }
 
   public static handleAction(player: any, interfaceId: number, itemId: number, slot: number, clickType: number, option?: string): boolean {
+    // A teleport ignores every other inventory and worn option until it lands (Wiki, Animation stall:
+    // teleportation stalls the player, who cannot perform actions), not only the first one.
+    if (player?.isTeleportingReturn?.()) return true;
     if (PluginManager.emitCanUseItem(player, itemId, "action", option) === false) return true;
     // OSRS: an item action inside the inventory is a hard interruption. It clears the
     // current interaction (a queued walk-to op or a combat target) but leaves the walk

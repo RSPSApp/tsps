@@ -64,8 +64,8 @@
  * - the post-quest Elias variant is his Curse of Arrav desert-camp conversation
  *   and his post-quest NPC lives in that quest, so no DoV Elias is spawned after
  *   completion;
- * - Family Pest is not implemented here, so the "not completed" Dimintheis
- *   branches are always the ones answered;
+ * - the Dimintheis branches that depend on Family Pest read that quest's own state
+ *   (plugins/quests/quests/FamilyPest.Quest.js);
  * - prerequisites are enforced: 55 Smithing, 52 Hunter, Shield of Arrav with
  *   the Black Arm Gang, Temple of Ikov, Below Ice Mountain, Family Crest,
  *   Garden of Tranquillity, What Lies Below, Romeo & Juliet and Demon Slayer.
@@ -149,6 +149,7 @@ module.exports = function registerDefenderOfVarrockQuest(api) {
     "demon_slayer",
   ];
   const SHIELD_OF_ARRAV_KEY = "shield_of_arrav";
+  const FAMILY_PEST_KEY = "family_pest";
   const SHIELD_GANG_ATTRIBUTE = "shield-of-arrav.gang";
   const BLACK_ARM_GANG = 2;
 
@@ -1103,13 +1104,13 @@ module.exports = function registerDefenderOfVarrockQuest(api) {
         return descendant(player) !== "romeo";
       case "PKPnSn":
         return descendant(player) === "romeo";
-      // Family Pest is not implemented: the "not completed" branches always play.
+      // Dimintheis' Family Pest branches: "not completed" and "completed" (the quest is Family Pest's own).
       case "VhCg_L":
       case "9mJsd9":
-        return true;
+        return !questComplete(player, FAMILY_PEST_KEY);
       case "DkbWkx":
       case "QTK2JK":
-        return false;
+        return questComplete(player, FAMILY_PEST_KEY);
       default:
         return null;
     }

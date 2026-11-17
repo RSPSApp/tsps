@@ -24,7 +24,13 @@ before(async () => {
 });
 after(() => PM.emitServerShutdown({}));
 
-const take = (p) => PM.emitCustomEvent("npc-dialogue:action", { player: p, npcId: core.NpcIdentifiers.KOVAC, stepId: "BkbGGN", kind: "message" });
+const TAKE_TEXT = "You take a selection of bars and weapons from the crate.";
+const NO_ROOM_TEXT = "You will need 20 free inventory slots to take the items from the crate.";
+const take = (p) => {
+  const event = { player: p, npcId: core.NpcIdentifiers.KOVAC, stepId: "BkbGGN", kind: "message", text: TAKE_TEXT };
+  PM.emitCustomEvent("npc-dialogue:action", event);
+  return event;
+};
 
 test("gear taken off between the crate's room check and the take keeps the crate full", async (t) => {
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
@@ -38,9 +44,15 @@ test("gear taken off between the crate's room check and the take keeps the crate
   await c.dispatch([{ type: "widget_action", widgetId: (387 << 16) | 24, groupId: 387, childId: 24, buttonNum: 1 }]);
   c.processTurnPackets();
   assert.equal(inv.getFreeSlots(), 19, "the ring took a slot");
-  take(p);
+  const refused = take(p);
   assert.equal(inv.getAmount(I.BRONZE_BAR), 0, "nothing given into 19 slots");
+  // The box says the transcript's refusal (Ay3HYb), not that the items were taken.
+  assert.equal(refused.text, NO_ROOM_TEXT);
+  assert.deepEqual(refused.box, { statement: true }, "the refusal is a message box (229)");
   inv.delete(I.RING_OF_RECOIL, 1);
-  take(p);
+  const taken = take(p);
+  assert.equal(taken.text, TAKE_TEXT);
+  // rsprox 241/911416 tick 3395: objectbox_double with a bronze battleaxe and an iron bar.
+  assert.deepEqual(taken.box, { items: [I.BRONZE_BATTLEAXE, I.IRON_BAR] }, "the take is a two-item box");
   assert.deepEqual([inv.getAmount(I.BRONZE_BAR), inv.getAmount(I.IRON_BAR), inv.getAmount(I.IRON_PLATEBODY)], [8, 6, 1], "the crate is still there to take");
 });

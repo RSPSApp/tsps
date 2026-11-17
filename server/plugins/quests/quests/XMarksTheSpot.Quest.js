@@ -2,13 +2,14 @@
 module.exports = function registerXMarksTheSpotQuest(api) {
   const { giveReward } = require("../QuestRuntime");
   const { Animation, ItemIdentifiers, NpcIdentifiers, WorldDefinition, ItemStatementDialogue, DialogueChainBuilder } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, getRegisteredQuests } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, getRegisteredQuests, questStartMessage } = require("../QuestRuntime");
 
   const VEOS_NPC_ID = NpcIdentifiers.VEOS; // 8484, "veos_visible"
   const VEOS_POST_QUEST_NPC_ID = NpcIdentifiers.VEOS_4; // 10723, "veos_visible_amulet"
 
   const LUMBRIDGE_VISIBILITY = 12151;
   const SARIM_VISIBILITY = 12148;
+  const PISCARILIUS_VISIBILITY = 12146;
   const PREVIOUS_DISTANCE_VARBIT = 8064;
   const PREVIOUS_COORD_VARP = 3697;
   const CLUE_TEXT_INTERFACE = 203;
@@ -20,8 +21,9 @@ module.exports = function registerXMarksTheSpotQuest(api) {
   const VARP_X_MARKS = 2111; // "cluequest_main"
   const VARBIT_X_MARKS = 8063; // "cluequest", bits 0-5
   const ZEAH_VISITED_VARBIT = 4897; // "zeah_playerhasvisited"
-  // Cabin Boy Herbert (11126) shows at Port Sarim from akd 12 and Veos leaves (Wiki: Cabin Boy
-  // Herbert); captures at akd 150 have veos_sarim_vis 0 and no Veos there.
+  // The Wiki places Veos' departure at Fuggy's earthquake, when AKD reaches 12.
+  // Both dock Herbert parents show from 12; completed Sarim captures confirm Veos is gone.
+  // No recording establishes the midquest departure tick at Piscarilius.
   const AKD_KEY = "a_kingdom_divided";
   const AKD_HERBERT_STAGE = 12;
 
@@ -213,8 +215,16 @@ module.exports = function registerXMarksTheSpotQuest(api) {
   function ensureVeos(player) {
     const stage = quest.getStage(player);
     const sender = player.getPacketSender();
+    const departed = herbertTookOver(player);
     sender.sendVarbit(LUMBRIDGE_VISIBILITY, stage < STAGE_CASKET ? 2 : 0);
-    sender.sendVarbit(SARIM_VISIBILITY, herbertTookOver(player) ? 0 : stage >= STAGE_COMPLETE ? 1 : 3);
+    sender.sendVarbit(SARIM_VISIBILITY, departed ? 0 : stage >= STAGE_COMPLETE ? 1 : 3);
+    // Wiki: Veos wears the casket's amulet after X Marks the Spot. Parent 2147
+    // resolves 1 to the amulet form, 2 to the plain form, and 0 to no NPC.
+    sender.sendVarbit(PISCARILIUS_VISIBILITY, departed ? 0 : stage >= STAGE_COMPLETE ? 1 : 2);
+  }
+
+  function handleVisibilityStageChanged({ player, key }) {
+    if (player && (key === AKD_KEY || key === "x_marks_the_spot")) ensureVeos(player);
   }
 
   // ==========================================================================
@@ -345,7 +355,7 @@ module.exports = function registerXMarksTheSpotQuest(api) {
     if (request.text === "Sounds good, what should I do?" && quest.getStage(request.player) === 0) request.before = () => {
       request.player.setAttribute(ACCEPTED_ATTRIBUTE, 1);
       request.player.getPacketSender().sendVarbit(VARBIT_X_MARKS, 1);
-      request.player.sendMessage("You've started a new quest: <col=081190>X Marks the Spot</col>");
+      request.player.sendMessage(questStartMessage(request.player, "X Marks the Spot"));
     };
     if (request.text.startsWith("Take this scroll.") && quest.getStage(request.player) === 0) request.before = () => giveStartScroll(request.player);
     if (request.text.startsWith("You'll probably want a spade")) request.text = "You'll probably want a spade, I find they're pretty much always needed when it comes to hunting treasure. Check the general store if you don't have one.";
@@ -624,7 +634,5 @@ module.exports = function registerXMarksTheSpotQuest(api) {
   api.onItemAction("Antique lamp", { Rub: handleLampRub });
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
-  api.onCustomEvent("quest:stage-changed", ({ player, key }) => {
-    if (key === AKD_KEY && player) ensureVeos(player);
-  });
+  api.onCustomEvent("quest:stage-changed", handleVisibilityStageChanged);
 };

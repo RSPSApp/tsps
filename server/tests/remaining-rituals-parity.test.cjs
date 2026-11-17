@@ -106,6 +106,7 @@ function setup(pluginPath) {
   const equipment = { body: null, leg: null, weapon: null, hands: null, ammo: null };
   const levels = new Map(Object.values(core.Skill).map((skill) => [skill, 99]));
   let location = new core.Location(3432, 2929, 0);
+  let forceMovement = null;
   let area = null;
   const movement = { reset() { return this; }, setBlockMovement(value) { this.blocked = value; return this; } };
   const combat = { rangedWeapon: null, ammunition: null,
@@ -178,6 +179,8 @@ function setup(pluginPath) {
     }),
     getLocation: () => location,
     moveTo(value) { location = new core.Location(value.getX(), value.getY(), value.getZ()); },
+    getForceMovement: () => forceMovement,
+    setForceMovement(value) { forceMovement = value; return player; },
     getPrivateArea: () => area,
     setArea(value) { area = value; },
     getArea: () => area,
@@ -274,7 +277,9 @@ test('Spirits of the Elid follows native varbit stages, spawns/telegrabs its key
   assert.equal(h.inventory.get(I.TORN_ROBE), 1);
   assert.equal(h.inventory.get(I.TORN_ROBE_2), 1);
   for (const fn of h.hooks.custom.get('magic:telekinetic-grab') ?? []) fn({ player: h.player, itemId: 6792 });
-  assert.equal(h.quest.getStage(h.player), 25);
+  // The grab leaves 20; live advances to 25 at the rope descent's fade (227/01788 tick 5036), as the lasso-step test checks.
+  assert.equal(h.quest.getStage(h.player), 20);
+  h.quest.setStage(h.player, 25);
 
   h.equipment.body = I.ROBE_OF_ELIDINIS;
   h.equipment.leg = I.ROBE_OF_ELIDINIS_2;
@@ -752,12 +757,30 @@ test('Spirits of the Elid rope descent plays the captured camera, fade, tile and
   const h = setup('../plugins/quests/quests/SpiritsOfTheElid.Quest');
   const I = h.core.ItemIdentifiers, O = h.core.ObjectIdentifiers;
   h.give(I.ROPE, 1);
-  h.setLocation(3371, 3132);
+  // On the lasso tile (3371,3129) there is no step; the lasso's camera and fade come two ticks on (03019 571-573).
+  h.setLocation(3371, 3129);
+  const anims = [];
+  h.player.performAnimation = (animation) => anims.push(animation.getId());
+  // One world tick at a time: a task scheduled while a tick runs waits for the next.
+  const ticks = (count) => {
+    for (let i = 0; i < count; i++) {
+      for (const task of [...h.tasks]) {
+        if (--task.ticks > 0 || !h.tasks.includes(task)) continue;
+        h.tasks.splice(h.tasks.indexOf(task), 1);
+        task.run();
+      }
+    }
+  };
   h.itemOnObject(I.ROPE, O.ROOT_3);
+  assert.equal(h.cameras.length, 0, 'not yet');
+  ticks(2);
   assert.deepEqual(h.cameras[0], ['move', 3368, 3134, 1175, { rate: 1, rate2: 200 }]);
   assert.deepEqual(h.cameras[1], ['look', 3372, 3130, 25, { rate: 1, rate2: 200 }]);
+  assert.deepEqual(anims, [2910], 'the lasso with the camera (elid_rope_lasso)');
+  assert.equal(h.subInterfaces.some(([kind, , id]) => kind === 'open' && id === 174), false, 'the fade waits for the climb');
+  ticks(13);
+  assert.deepEqual(anims, [2910, 2909], 'then the climb (elid_climb_rope)');
   assert.ok(h.subInterfaces.some(([kind, uid, id]) => kind === 'open' && uid === (161 << 16) | 1 && id === 174));
-  h.runTasks(2);
   assert.equal(h.player.getLocation().getX(), 3349);
   assert.equal(h.player.getLocation().getY(), 9536);
   assert.ok(h.songs.includes(462), 'Spirits of the Elid theme plays');

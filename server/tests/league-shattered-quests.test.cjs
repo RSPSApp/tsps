@@ -42,13 +42,14 @@ before(async () => {
   QuestRuntime = require("../plugins/quests/QuestRuntime");
 });
 
-test("every pack's quests are registered quests, but Recipe for Disaster's subquests and two miniquests", () => {
+test("every pack's quests are registered quests, but Recipe for Disaster's subquests and Architectural Alliance", () => {
   const names = [...new Set(Object.values(data.packs).flatMap((pack) => pack.quests))];
   assert.deepEqual(names.filter((name) => !QuestRuntime.questNamed(name)).sort(), [
     "Architectural Alliance",
     "Freeing Awowogei", "Freeing Pirate Pete", "Freeing Sir Amik Varze", "Freeing Skrach Uglogwee",
-    "Freeing the Goblin generals", "Freeing the Mountain Dwarf", "The Frozen Door",
-  ], "the names docs/leagues.md and the data say are skipped");
+    "Freeing the Goblin generals", "Freeing the Mountain Dwarf",
+  ], "the names docs/leagues.md says are not quests here (the rescues complete through Recipe for Disaster)");
+  assert.equal(QuestRuntime.questNamed("The Frozen Door")?.name, "The Frozen Door", "Desert II's miniquest is a registered quest now");
   assert.equal(QuestRuntime.questNamed("Alfred Grimhand's Barcrawl")?.name, "Alfred Grimhand's Barcrawl", "now a quest");
   assert.equal(QuestRuntime.questNamed("Song of the Elves")?.name, "Song of the Elves", "Elf III's main quest");
   assert.equal(QuestRuntime.questNamed("Dragon Slayer II")?.name, "Dragon Slayer II", "Myths' main quest");
@@ -60,7 +61,7 @@ test("completing every pack hands out the final rewards but no experience item, 
   const opened = [];
   const sender = new Proxy({}, {
     get: (target, key) => key === "sendInterface" ? (group) => (opened.push(group), sender)
-      : key === "sendJingle" ? (...args) => (opened.push(["jingle", ...args]), sender) : () => sender,
+      : key === "sendJingle" ? (...args) => (opened.push(["jingle", ...args]), sender) : quiet(sender, key),
   });
   player.getPacketSender = () => sender;
   player.sendMessage = () => {};
@@ -82,11 +83,85 @@ test("completing every pack hands out the final rewards but no experience item, 
   assert.equal(player.getInventory().getFreeSlots(), 0, "the inventory filled up on the way");
 });
 
+test("a pack completes its part of Recipe for Disaster: the rescues it lists, a quest point each, no XP", () => {
+  const player = fresh("rfd-rescues");
+  const rescued = (rescue) => emit("recipe-for-disaster:rescue-status", { player, rescue }).complete;
+  const points = () => Number(player.getAttribute(QuestRuntime.QUEST_POINTS_ATTRIBUTE)) || 0;
+  Unlocks._test.completeQuests(player, "Pirate II");
+  assert.equal(QuestRuntime.questNamed("The Great Brain Robbery").isComplete(player), true);
+  assert.deepEqual(["pirate-pete", "skrach-uglogwee"].map(rescued), [true, true], "Pirate II's two rescues");
+  assert.deepEqual(["mountain-dwarf", "goblins", "sir-amik", "king-awowogei", "lumbridge-guide", "evil-dave"].map(rescued),
+    [false, false, false, false, false, false], "no other pack's");
+  const before = points();
+  Unlocks._test.completeQuests(player, "Gnome II");
+  assert.equal(rescued("king-awowogei"), true, "the table's \"Freeing Awowogei\" is King Awowogei's rescue");
+  Unlocks._test.completeQuests(player, "Dorgeshuun");
+  Unlocks._test.completeQuests(player, "Legends");
+  assert.deepEqual(["mountain-dwarf", "goblins", "sir-amik"].map(rescued), [true, true, true]);
+  assert.equal(QuestRuntime.questNamed("Recipe for Disaster").isComplete(player), false, "only part of it");
+  const again = points();
+  Unlocks._test.completeQuests(player, "Pirate II");
+  assert.equal(points(), again, "a rescue already done gives no second quest point");
+  assert.ok(again > before, "each rescue counts its quest point");
+});
+
+test("league:complete-quests completes a listed Recipe for Disaster rescue by its Wiki page name", () => {
+  const player = fresh("rfd-area");
+  Unlocks._test.completeNamedQuests({ player, quests: ["Recipe for Disaster/Freeing Pirate Pete", "Recipe for Disaster/Another Cook's Quest"] });
+  assert.equal(emit("recipe-for-disaster:rescue-status", { player, rescue: "pirate-pete" }).complete, true);
+  assert.equal(QuestRuntime.questNamed("Recipe for Disaster").getStage(player), 0, "Another Cook's Quest isn't a rescue: left out");
+  const { Skill } = core;
+  const skills = ["COOKING", "CRAFTING", "FISHING", "SMITHING"].map((name) => player.getSkillManager().getExperience(Skill[name]));
+  assert.deepEqual(skills, [0, 0, 0, 0], "none of Pirate Pete's 1,000 XP in four skills (the rescue's own reward)");
+});
+
+/** Per stub sender, the varbits sent (Recipe for Disaster counts its rescues back from them). */
+const sentVarbits = new WeakMap();
+
+/** A stub sender's method: sendVarbit / getVarbit keep the values, anything else does nothing. */
+function quiet(sender, key) {
+  if (!sentVarbits.has(sender)) sentVarbits.set(sender, new Map());
+  const varbits = sentVarbits.get(sender);
+  if (key === "sendVarbit") return (id, value) => (varbits.set(id, value), sender);
+  if (key === "getVarbit") return (id) => varbits.get(id) ?? 0;
+  return () => sender;
+}
+
+test("unlocking Herblore completes Druidic Ritual and sets the skill to 174 XP (Wiki /Unlocks footnote)", (t) => {
+  const { Skill } = core;
+  const HERBLORE = Skill.HERBLORE.getClientId();
+  const ritual = QuestRuntime.questNamed("Druidic Ritual");
+  // Unlocks' experience hook, as the plugin attaches it, on the real experience pipeline.
+  const hooks = PluginManager.canGainExperienceHooks;
+  const attached = hooks.length;
+  Unlocks(new Proxy({ core, onCanGainExperience: (handler) => hooks.push({ handler }) }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  t.after(() => { hooks.length = attached; });
+  const player = fresh("herblore-unlock");
+  const skills = player.getSkillManager();
+  Unlocks._test.unlock(player, 0, { skill: HERBLORE });
+  assert.deepEqual(Unlocks._test.unlocked(player).skills, [HERBLORE]);
+  assert.equal(ritual.isComplete(player), true, "Druidic Ritual auto-completes");
+  assert.equal(skills.getExperience(Skill.HERBLORE), 174, "174 XP, not the quest's own 250 on top");
+  assert.deepEqual([skills.getMaxLevel(Skill.HERBLORE), skills.getCurrentLevel(Skill.HERBLORE)], [3, 3], "level 3");
+
+  const done = fresh("herblore-done");
+  ritual.complete(done, { experience: false, scroll: false });
+  done.getSkillManager().setExperience(Skill.HERBLORE, 500).setMaxLevel(Skill.HERBLORE, 5).setCurrentLevels(Skill.HERBLORE, 5);
+  Unlocks._test.unlock(done, 0, { skill: HERBLORE });
+  assert.equal(done.getSkillManager().getExperience(Skill.HERBLORE), 500, "more XP than 174 is never lowered");
+  assert.equal(done.getSkillManager().getMaxLevel(Skill.HERBLORE), 5);
+
+  const other = fresh("cooking-unlock");
+  Unlocks._test.unlock(other, 0, { skill: Skill.COOKING.getClientId() });
+  assert.equal(ritual.isComplete(other), false, "another skill completes no quest");
+  assert.equal(other.getSkillManager().getExperience(Skill.HERBLORE), 0);
+});
+
 /** A real player whose packets go nowhere. */
 function fresh(name) {
   const player = new Player(null);
   player.setUsername(name);
-  const sender = new Proxy({}, { get: () => () => sender });
+  const sender = new Proxy({}, { get: (target, key) => quiet(sender, key) });
   player.getPacketSender = () => sender;
   player.sendMessage = () => {};
   return player;
@@ -168,7 +243,7 @@ test("a pack's quests pay no post-quest XP, even after a save and reload: Ellen'
 test("a character's own inventory is kept through a pack's completion", () => {
   const player = new Player(null);
   player.setUsername("own-items");
-  const sender = new Proxy({}, { get: () => () => sender });
+  const sender = new Proxy({}, { get: (target, key) => quiet(sender, key) });
   player.getPacketSender = () => sender;
   player.sendMessage = () => {};
   player.getInventory().adds(1351, 1);
@@ -183,7 +258,7 @@ test("a character's own inventory is kept through a pack's completion", () => {
 test("league:complete-quests: Demonic Pacts' area lists, requirements first, unknown names left out", () => {
   const player = new Player(null);
   player.setUsername("area-quests");
-  const sender = new Proxy({}, { get: () => () => sender });
+  const sender = new Proxy({}, { get: (target, key) => quiet(sender, key) });
   player.getPacketSender = () => sender;
   player.sendMessage = () => {};
   const order = [];
@@ -209,7 +284,7 @@ test("league:complete-quests: Demonic Pacts' area lists, requirements first, unk
 test("league:complete-quests gives none of the quests' experience: Varlamore's, as live starts a Demonic Pacts character", () => {
   const player = new Player(null);
   player.setUsername("varlamore-quests");
-  const sender = new Proxy({}, { get: () => () => sender });
+  const sender = new Proxy({}, { get: (target, key) => quiet(sender, key) });
   player.getPacketSender = () => sender;
   player.sendMessage = () => {};
   const varlamore = require("../plugins/modes/data/league-areas.json").leagues["6"].quests["21"];
@@ -227,13 +302,30 @@ test("league:complete-quests gives none of the quests' experience: Varlamore's, 
   hooks.length = attached;
 });
 
+// QuestRuntime's `experience: false` asks onReward to hold back the quest's XP; The Fremennik Trials' reward paid its
+// 2,812.4 XP in ten skills regardless. Without Unlocks' experience hook (as in the every-pack test above), so the
+// quest's own reward is what is checked.
+test("a pack's Fremennik Trials pays none of its own quest XP", () => {
+  const player = new Player(null);
+  player.setUsername("trials-pack");
+  const sender = new Proxy({}, { get: (target, key) => quiet(sender, key) });
+  player.getPacketSender = () => sender;
+  player.sendMessage = () => {};
+  const { Skill } = PluginManager.getCoreApi();
+  const skills = ["AGILITY", "ATTACK", "CRAFTING", "DEFENCE", "FISHING", "FLETCHING", "HITPOINTS", "STRENGTH", "THIEVING", "WOODCUTTING"];
+  const before = skills.map((name) => player.getSkillManager().getExperience(Skill[name]));
+  Unlocks._test.completeNamedQuests({ player, quests: ["The Fremennik Trials"] });
+  assert.equal(QuestRuntime.questNamed("The Fremennik Trials").isComplete(player), true);
+  assert.deepEqual(skills.map((name) => player.getSkillManager().getExperience(Skill[name])), before);
+});
+
 test("league:complete-quests with items: false: Demonic Pacts' start quests hand no item (live's new character holds only the starter kit, 237/01098)", () => {
   const startQuests = require("../plugins/modes/data/leagues.json").leagues["6"].startQuests;
   const named = (quests) => quests.map((name) => QuestRuntime.questNamed(name)).filter(Boolean);
   const fresh = (name) => {
     const player = new Player(null);
     player.setUsername(name);
-    const sender = new Proxy({}, { get: () => () => sender });
+    const sender = new Proxy({}, { get: (target, key) => quiet(sender, key) });
     player.getPacketSender = () => sender;
     player.sendMessage = () => {};
     return player;

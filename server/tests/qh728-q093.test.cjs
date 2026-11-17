@@ -121,7 +121,8 @@ function setup(completed = ['gertrudes_cat', 'ictlharins_little_helper'], option
     setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => packet,
     getInventory: () => inventoryApi,
-    getEquipment: () => ({ get: (slot) => equipment.get(slot) ?? null }),
+    getBanks: () => [], // an empty bank: Ali's purchase counts banked items
+    getEquipment: () => ({ get: (slot) => equipment.get(slot) ?? null, getAmount: (id) => [...equipment.values()].filter((item) => item?.getId?.() === id).length }),
     getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill, amount]) }),
     getLocation: () => location,
     moveTo(next) { location = next; },
@@ -528,9 +529,16 @@ test("the Port Sarim manhole: The Face turns the player away until Smokin' Joe s
     assert.deepEqual(down.transcripts, [], `stage ${stage}: no refusal`);
   }
 
-  // Varrock's pit has the same manhole loc; this gate is Port Sarim's tile only.
-  const h = setup();
+  // Varrock's pit has the same manhole loc; its own gate is Hooknosed Jack's, open from 14 (King Rat reported),
+  // so a player at 14-16 kept from Port Sarim can climb down there.
   const varrock = { getLocation: () => new core.Location(3267, 3400, 0) };
-  assert.equal(h.fire('ladders:climb', { object: varrock, objectId: 10321, clickType: 1 }).handled, false);
+  const early = setup();
+  early.quest.setStage(early.player, 13);
+  assert.equal(early.fire('ladders:climb', { player: early.player, object: varrock, objectId: 10321, clickType: 1 }).handled, true);
+  assert.deepEqual(early.transcripts.map(({ npcId, page, variant }) => ({ npcId, page, variant })),
+    [{ npcId: core.NpcIdentifiers.HOOKNOSED_JACK, page: 'Hooknosed Jack', variant: 'standard-dialogue-attempting-to-enter-the-rat-pits' }]);
+  const h = setup();
+  h.quest.setStage(h.player, 14);
+  assert.equal(h.fire('ladders:climb', { player: h.player, object: varrock, objectId: 10321, clickType: 1 }).handled, false);
   assert.deepEqual(h.transcripts, []);
 });

@@ -16,6 +16,7 @@
 const { rollDrops } = require("./Drops.Revenants");
 const { MALEDICTUS_ID, inCaves } = require("./Data.Revenants");
 const Avarice = require("./Avarice.Revenants");
+const Revenants = require("./Common.Revenants");
 
 const ID = MALEDICTUS_ID;
 const NAME = "Revenant maledictus";
@@ -271,13 +272,20 @@ function createMaledictus(api, core, { inCaves, surge }) {
     for (const watcher of watchers) watcher.sendMessage(line);
   }
 
+  /** The ground options NpcDrops gives a kill's loot ("npc-drops:ground-options": the Wiki's 200-tick tradeable lifetime). */
+  function lootOptions(player, itemId, area) {
+    const request = { player, itemId, area, options: {} };
+    api.emitCustomEvent("npc-drops:ground-options", request);
+    return request.options;
+  }
+
   function give(watchers, player, itemId, amount, noted = false) {
     const noteId = core.ItemDefinition.forId(itemId).getNoteId();
     const id = noted && noteId >= 0 ? noteId : itemId;
     const stackable = noted || core.ItemDefinition.forId(id).isStackable();
     const where = player.getLocation().clone();
-    if (stackable) core.ItemOnGroundManager.registerLocation(player, new core.Item(id, amount), where);
-    else for (let i = 0; i < amount; i++) core.ItemOnGroundManager.registerLocation(player, new core.Item(id, 1), where);
+    if (stackable) core.ItemOnGroundManager.registerLocation(player, new core.Item(id, amount), where, undefined, lootOptions(player, id));
+    else for (let i = 0; i < amount; i++) core.ItemOnGroundManager.registerLocation(player, new core.Item(id, 1), where, undefined, lootOptions(player, id));
     api.emitCustomEvent("collection-log:obtain", { player, itemId, amount });
     announce(watchers, player, itemId, amount);
   }
@@ -293,8 +301,9 @@ function createMaledictus(api, core, { inCaves, surge }) {
     const watchers = entries.map((e) => e.player);
     const [top, ...rest] = watchers;
     give(watchers, top, Math.random() < 0.5 ? EMBLEM : TOTEM, 1);
+    const boost = Revenants.dropBoost(top, NAME);
     for (let roll = 0; roll < 2; roll++) {
-      for (const drop of rollDrops({ npcId: 7940, combat: 135, skulled: top.isSkulled(), random: Math.random }).slice(1)) {
+      for (const drop of rollDrops({ npcId: 7940, combat: 135, skulled: top.isSkulled(), random: Math.random, boost }).slice(1)) {
         give(watchers, top, drop.itemId, drop.amount, drop.noted);
       }
     }

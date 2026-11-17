@@ -200,8 +200,8 @@ Not yet covered, and why:
 - Treat cauldron Check: the transcript describes the 2022 event's stored treats, but the Wiki
   item page says Check now shows the treats deposited by everyone and by the player. No
   transcript records that wording, so it is left out.
-- The Halloween scarecrow's Change (colour and expression) and its crows, and its plant,
-  dig-up and no-space lines (see below).
+- The Halloween scarecrow's plant, dig-up, no-space and Change lines, and its crows' idle
+  animation (see below).
 - Items from the years the annual event plugins implement (Christmas 2025, Halloween 2025
   and the chosen birthday event) are left to those plugins. The Easter 2026 plugin grants
   Archibald; his Interact and the Magic egg ball's Shake are covered above, and the
@@ -231,6 +231,15 @@ Placed decorations belong to Construction (`Decorations.Construction.js`, data i
   The Halloween 2024 update places it "just like the Wintumber Tree", so it uses the same flow,
   sequences and ticks. Only its garden refusal is recorded (rev 226 recording 1686); its other
   lines have no source and are left out, so its no-space and dig-up are silent.
+  Change: the Wiki says it is customised like the carved pumpkin head and crows can be invited
+  and shooed. Change offers Colour, Carve and Invite crows (Shoo crows while they perch); Colour
+  and Carve open the pumpkin head's native chooser on the scarecrow's head, and the pick redraws
+  it. The 63 looks and their crows variants are the cache's `hw24_scarecrow_<colour>_<face>[_crows]_poh`
+  in the order of `hw24_poh_scarecrow_small`'s multiloc (rev 226 recording 1686 gives the same
+  order for the event head). No recording shows this menu, so its wording is an inference (the
+  pumpkin head's own option names and the Wiki's crow caption) and no message is sent. The look
+  is drawn as that variant loc, not through the multiloc and `poh_hw24_scarecrow_active`, so the
+  crows have no idle animation (the multiloc carries `hw24_crow_group_idle`).
 - The recording sets `gublinch_tree_x/z/planted` (the scarecrow has `hw24_scarecrow_x/z/planted/rot`),
   so a planted decoration stays in the house. It is saved in `construction:holiday-decorations`
   as a tile of the house grid and drawn on every rebuild as an extra object with its clipping;
@@ -259,3 +268,28 @@ Placed decorations belong to Construction (`Decorations.Construction.js`, data i
   Hell cat ears' Revert turns them back into Cat ears (the option's name; not described).
 
 Tests: `node --test tests/holiday-placed-items.test.cjs` from `server/` after a build.
+
+## Redeem-code
+
+Diango's op5 Redeem-code runs meslayer_mode9 (script 110) with "Please enter your code." and
+-1, as rsprox captures show (recording 3200 tick 318-319, rev 232; local 1001332 tick 143,
+rev 240). The typed code comes back as resume_p_stringdialog; an unknown code gets the game
+message "That code was not recognised." on the next tick in both recordings (3200 tick 328,
+1001332 tick 154).
+
+The [OSRS Wiki: Diango](https://oldschool.runescape.wiki/w/Diango) lists four codes. Three
+are struck out (now unlocked by default) and are not recognised here. `v1r354cqu1r173und0`
+gives the Mystic cards ([Wiki](https://oldschool.runescape.wiki/w/Mystic_cards); cache
+`league_3_cardthrow`, enum 708 slot 174) and plays the Diango transcript's
+"Obtaining mystic cards" conversation (npc-dialogues.json variant
+`standard-dialogue-obtaining-mystic-cards`). The code also records the cards as unlocked, so a
+lost set comes back through Holiday-items.
+
+No recording redeems a valid code. These parts are ours:
+
+- Ours: the code is matched ignoring case and surrounding spaces.
+- Ours: the cards are added as the conversation starts.
+- Ours: redeeming again while a set is held, worn or banked gives nothing more. The
+  conversation still plays.
+- Ours: with a full inventory, only the unlock is recorded. The player gets the existing
+  "You've unlocked a holiday item: Mystic cards" line and can take the cards from Holiday-items.

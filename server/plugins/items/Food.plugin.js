@@ -352,6 +352,8 @@ function applyFood(player, food, random = Math.random, foodEvent = {}) {
   if (food.then) scheduleSecondHeal(player, food.then, foodEvent.itemId);
   const healMessage = food.healMessage === undefined ? HEAL_MESSAGE : food.healMessage;
   if (healed > 0 && healMessage) after.push(healMessage);
+  // A food whose heal line carries its taste says the taste alone when it heals nothing (cooked mystery meat).
+  else if (healed <= 0 && food.fullHealthMessage) after.push(food.fullHealthMessage);
   if (food.afterMessage) after.push(food.afterMessage);
   return after;
 }
@@ -394,14 +396,21 @@ function eat(event) {
   const hitpointsBefore = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS);
   const foodEvent = { player, itemId, hitpointsBefore, meta };
   const after = applyFood(player, food, Math.random, foodEvent);
-  // A food with `say` sends its eat line as a spam message and is spoken overhead on the same tick: the
-  // cup of tea's "You drink the tea." (type=spam) and "Aaah, nothing like a nice cuppa tea!" ([say]),
-  // rsprox_transcripts/237/01104.txt tick 1286 and 237/04101.txt:114871 (Wiki: the player exclaims it).
-  if (food.say) {
-    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, message);
-    player.forceChat(food.say);
-  } else player.sendMessage(message);
-  for (const line of after) player.sendMessage(line);
+  // The eat line and the lines after it (the heal line, kebab outcomes, drains) are spam messages, so the
+  // game filter hides them; refusals above stay game messages. rsprox.net index: the captured eat lines
+  // and "It heals some health." (38,575 sends) are type=spam, except the Araxyte venom sac's eat line
+  // (865 sends, all gamemessage), and the Bottle of wine's two lines (game, rec 20261111T225402-5ab63b4
+  // tick 26); both rows mark `"messageType": "game"`, and their lines after the eat line are game too.
+  // A food with `say` is also spoken overhead on the same tick: the cup of tea's "Aaah, nothing like a nice
+  // cuppa tea!" ([say]), rsprox_transcripts/237/01104.txt tick 1286 and 237/04101.txt:114871 (Wiki: the
+  // player exclaims it).
+  const sender = player.getPacketSender();
+  const send = food.messageType === "game"
+    ? line => player.sendMessage(line)
+    : line => sender.sendTypedMessage(core.ChatType.SPAM, line);
+  send(message);
+  if (food.say) player.forceChat(food.say);
+  for (const line of after) send(line);
   countBite(player);
   const heal = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS) - hitpointsBefore;
   // `heal` is what it healed (nothing at full health); `restores` what the food restores.

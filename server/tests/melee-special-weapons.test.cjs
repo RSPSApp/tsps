@@ -273,9 +273,9 @@ test("Dragon Hasta Unleash replaces the normal swing through real animation arbi
   assert.deepEqual(attacker.log.drains, [100], "Unleash consumes all available special energy");
 });
 
-test("Dragon Hasta Unleash scales accuracy 5% and damage 2.5% per 5% of energy spent", () => {
+test("Dragon Hasta Unleash scales accuracy 5% and damage 2.5% per whole 5% of energy spent", () => {
   const hasta = special("dragon_hasta");
-  for (const [energy, accuracy, damage] of [[100, 2, 1.5], [60, 1.6, 1.3], [5, 1.05, 1.025]]) {
+  for (const [energy, accuracy, damage] of [[100, 2, 1.5], [60, 1.6, 1.3], [5, 1.05, 1.025], [63, 1.6, 1.3], [99, 1.95, 1.475], [9, 1.05, 1.025]]) {
     const attacker = fakeFighter({ special: energy });
     attacker.getCombatSpecial = () => hasta;
     hasta.getCombatMethod().start(attacker, fakeTarget());

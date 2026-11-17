@@ -348,6 +348,11 @@ test("the transformation: Search calls Filliman to 3443,9738, the scene, 70 and 
   assert.equal(shown(f), null, "the chat closes for the show");
   const spoke = waitForChat(f, "Hmmm, good, the transformation is complete.");
   assert.equal(spoke - start, 3);
+  // Three druidicspirit_effect bursts (rsprox 226/01635, 241/911432, 242/911880): delay 40/35/30, height 128/64/0. The
+  // third used to read as (id, height, Priority): delay 0, height 30.
+  const bursts = f.calls.filter((c) => c.name === "sendGraphic" && c.args[0].getId() === 266)
+    .map((c) => [c.args[0].getDelay(), Number(c.args[0].getHeight())]);
+  assert.deepEqual(bursts, [[40, 128], [35, 64], [30, 0]]);
   assert.equal(stage(f), 70);
   assert.equal(filliman.getNpcTransformationId(), N.NATURE_SPIRIT, "he changes in place");
   assert.equal(shown(f)?.npcId, N.NATURE_SPIRIT, "the green chathead");
@@ -426,9 +431,24 @@ test("completion: the altar scene, 110 nine ticks after his line, the finished g
   const spirit = npcAt(f, [N.NATURE_SPIRIT]).at(-1);
   assert.deepEqual([spirit.getLocation().getX(), spirit.getLocation().getY()], [3441, 9736]);
   await until(f, "Many thanks my friend, you have completed your quest!");
+  const stars = [];
+  const send = core.Projectile.prototype.sendProjectile;
+  core.Projectile.prototype.sendProjectile = function recordStar() {
+    stars.push([this.start.getX(), this.start.getY(), this.getTiming().endCycleOffset]);
+    return send.call(this);
+  };
+  t.after(() => { core.Projectile.prototype.sendProjectile = send; });
   await continueLine(f);
   const start = f.tick;
-  ticks(f, 8);
+  ticks(f, 3);
+  // The middle star, from 3442,9737, lands at 106 in both recordings (241/911432.txt, 242/911884.txt).
+  assert.deepEqual(stars.find(([x, y]) => x === 3442 && y === 9737), [3442, 9737, 106]);
+  // Both grotto recordings (241/911432.txt:60898-60900, 242/911884.txt:8150-8152): the three
+  // druidicspirit_effect bursts go out at delay 106, heights 128/64/0.
+  const bursts = f.calls.filter((c) => c.name === "sendGraphic" && c.args[0].getId() === 266)
+    .map((c) => [c.args[0].getDelay(), Number(c.args[0].getHeight())]);
+  assert.deepEqual(bursts, [[106, 128], [106, 64], [106, 0]]);
+  ticks(f, 5);
   assert.equal(stage(f), 105);
   tick(f);
   assert.equal(stage(f), 110);

@@ -12,6 +12,8 @@ Pickpocketing is built from the OSRS Wiki: the [Thieving](https://oldschool.rune
 | `server/plugins/skills/thieving/Blackjacking.Thieving.js` | Pollnivnian bandit/thug lure, knockout and the shared pickpocket target event. |
 | `server/plugins/skills/thieving/Pickpocket.Thieving.js` | The pickpocket itself: checks, timing, success, loot, failure and the equipment effects. |
 | `server/plugins/skills/thieving/CoinPouch.Thieving.js` | Opening coin pouches ("Open-all" and "Open"). |
+| `server/plugins/skills/thieving/WealthyCitizens.Thieving.js` | Civitas illa Fortis's street urchin distractions of the Wealthy citizens, and the house key's dry streak. Lines, ticks and ids in `server/plugins/skills/data/wealthy-citizen-distractions.json`. |
+| `server/plugins/skills/thieving/HouseRobbery.Thieving.js`, `HouseRobberyCrew.Thieving.js` | Stealing valuables in Civitas illa Fortis: the owners, the locked doors, searching, the urchins' information and Oriana's trade-in ([stealing-valuables.md](stealing-valuables.md)). |
 
 ## Stalls
 
@@ -33,6 +35,10 @@ IDs and actions were checked in cache `osrs-241_2026-10-20` with `dump:loc`, `Ca
 Rsprox recording **3220** shows the tea attempt message, `human_pickuptable` and sound 2581 together, followed one tick later by the success message, one cup of tea, the empty stall and `marketthief_tea = 1`. Recording **1554** shows the same one-tick separation for bread, silver ore and an uncut sapphire, setting `marketthief_cake`, `marketthief_silver` and `marketthief_gem` respectively. Caught silver and gem attempts in 1554 show the attempt message and an owner warning, without a success animation, reward or an extra caught-stealing chat message. Silver attempts repeat on consecutive ticks before succeeding; failed attempts therefore do not start the success cooldown. The gem owner also catches a thief sharing his tile; the documented bakery safe spot is not a general owner exemption. The captures' XP deltas are not used to set reward amounts; the Wiki supplies those amounts.
 
 The attempt now faces the stall and checks its lookouts. On success it plays cache animation `human_pickuptable` (**832**, rather than pickpocket animation 881), with sound 2581. Loot, XP, the recorded success message, theft state and depletion follow on the next tick. Restocking counts from depletion. Attempts begun together can both complete; later clicks cannot steal from the empty stall. A full inventory at completion prevents both loot and XP.
+
+### Loot tracker
+
+rsprox captures (rev 241/242, local recordings 1001550 and 58 more, 12,498 thefts) show every theft from the Ardougne baker's stall (`cakethiefstall`, 11730) adding a loot tracker entry on the tick the item arrives: client script 7193 (the loc, the player's next loot tracker key, category 6, -1) and then 7194 (the loc, the same key, the item, 1), after the inventory update and before the XP (1001550 tick 3905). The key is the one every other entry counts with (`LootTracker.plugin.js`, "loot-tracker:add-loc"). A missed or caught attempt adds nothing. Other stalls send no entry in revisions that send it elsewhere: the Varrock tea stall (83 thefts, 1001438, rev 241), the Draynor seed stall (1002184, rev 242, in the same session as baker's stall entries) and the Civitas silk and baker's stalls (rev 237), so only `cakethiefstall` is tracked (`LOOT_TRACKED_STALLS`). The other Ardougne market stalls have no capture since the tracker was added, and aren't tracked.
 
 ### Merchant memory
 
@@ -63,10 +69,11 @@ Success is out of 256, at level 1 / level 99. A `*` marks a target whose page ha
 
 | Target | NPCs | Level | XP | Success | Stun damage | Coins per pouch | Requirement |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| [Man](https://oldschool.runescape.wiki/w/Man) | Man, Woman, Citizen | 1 | 8 | 180/240 | 1 | 3 |  |
+| [Man](https://oldschool.runescape.wiki/w/Man) | Man, Woman, Citizen, [Tourist](https://oldschool.runescape.wiki/w/Tourist), [Salvager](https://oldschool.runescape.wiki/w/Salvager) | 1 | 8 | 180/240 | 1 | 3 |  |
 | [Farmer](https://oldschool.runescape.wiki/w/Farmer) | Farmer | 10 | 14.5 | 150/240 | 1 | 9 |  |
 | [H.A.M. member](https://oldschool.runescape.wiki/w/H.A.M._Member) | H.A.M. Member | 15 | 22.2 | 135/239 | 1–3 | 1–21 |  |
 | [Workman](https://oldschool.runescape.wiki/w/Digsite_workman) | Digsite workman | 25 | 10.4 | 100/240* | 1 | – |  |
+| [Desert Phoenix](https://oldschool.runescape.wiki/w/Desert_Phoenix) | Desert Phoenix | 25 | 26 | 100/240* | 1 | – | one feather owned |
 | [Warrior](https://oldschool.runescape.wiki/w/Warrior_(Thieving)) | Warrior, Al Kharid warrior | 25 | 26 | 100/240 | 2 | 18 |  |
 | [Rogue](https://oldschool.runescape.wiki/w/Rogue) | Rogue | 32 | 36.5 | 75/240 | 2 | 25–40 |  |
 | [Cave goblin](https://oldschool.runescape.wiki/w/Cave_goblin_(Dorgesh-Kaan)) | Cave goblin | 36 | 40 | 75/240* | 1 | 10–50 | Death to the Dorgeshuun |
@@ -113,7 +120,8 @@ Every line below is a spam message (rsprox captures 335, 338, 339, 691, 2601, 30
 7. **Clue scrolls:** a clue is a scroll box once X Marks the Spot is complete. Rolling a tier the player already owns, carried or banked, gives nothing.
 8. **Master Farmer:** its herb seeds follow Farming level, as in the Wiki's calculator. Herb seeds are 48/1000 of its loot. Within that, ranarr, snapdragon and torstol share `(6 + min(85, Farming)) / 1000`, and guam gets 0.401 minus that.
 9. **Digsite workman:** "Steal-from" rather than "Pickpocket". After The Dig Site, coins are 4/11 and the animal skull no longer drops. His lines are game messages that trail off: "You attempt to pick the workman's pocket...", "You pick the workman's pocket...", then "You find a specimen brush." (3228), "You steal some rope." or "You steal a bucket." (90). His other loot has no captured line.
-10. **Names in the lines** (`messageName` and `messageNames` in the data file): "the Master Farmer", "Martin" for Martin the Master Gardener (95), "the man" and "the woman" for the two H.A.M. members (2540, 2541), "the Menaphite" for the thug and "the Bandit" in the Bandit Camp (1757, 1788, 1858).
+10. **Desert Phoenix:** "Grab-feather" rather than "Pickpocket"; it always gives one phoenix feather and 26 XP (Wiki: Desert Phoenix), never doubled by the rogue outfit, and no loot tracker entry (no script 7192 in rsprox recordings 3168 and local 1001607). Its lines are game messages: "You attempt to grab the phoenix's tail-feather." on arrival, then a tick later "You grab a tail-feather." with animation 881 and sound 2581 (1001607 tick 16731, 3168 ticks 212/510/514/519). While a feather is carried or banked the grab is refused at once with "You already have a phoenix tail-feather." (3168 ticks 434-439, 1001607 tick 16733; a dropped feather allows another grab, 3168 ticks 513/514). A failure (3168 tick 524, at 99 Thieving) sends "You fail to grab the feather.", sound 832 and the phoenix's "Squawk!"; a tick later the phoenix strikes (seq 6811, firebird_update_attack) and the player blocks under the stun graphic, with "You've been stunned!", sound 2727 and 1 damage on that same tick, not one tick after as on a hero. Ours: the success chart (the page has none, so the Warrior's), the level refusal line, the Rocky rate (the Warrior's), and 1 as the fixed stun damage from the one captured failure. The feather completes the Desert Diary's medium task (Desert.AchievementDiaries.js), as in 1001607 tick 16732.
+11. **Names in the lines** (`messageName` and `messageNames` in the data file): "the Master Farmer", "Martin" for Martin the Master Gardener (95), "the man" and "the woman" for the two H.A.M. members (2540, 2541), "the Menaphite" for the thug and "the Bandit" in the Bandit Camp (1757, 1788, 1858). Varlamore's citizens and tourists are "the man" or "the woman", never "the citizen" (1098: varlamore_citizen_rich_m_4, varlamore_citizen_rich_f_2, varlamore_tourist_m_1; 1102: varlamore_citizen_normal_f_4, aldarin_citizen_normal_m_2). `messageNamesByGameval` picks it from the NPC's gameval (`_m_` or `_f_`); Salvagers follow the same rule (Ours: never captured). The Tourist and Salvager Wiki pages give the Man's values: level 1, 8 XP, 180/240, 3 coins.
 
 ## Equipment and effects
 
@@ -161,7 +169,7 @@ Sources: [Blackjack](https://oldschool.runescape.wiki/w/Blackjack?action=raw), [
 
 ## Dorgesh-Kaan rich chests
 
-`plugins/skills/thieving/DorgeshKaanRichChest.Thieving.js`; tests in `server/tests/thieving-dorgesh-rich-chest.test.cjs`.
+`plugins/skills/thieving/DorgeshKaanChests.Thieving.js`; tests in `server/tests/thieving-dorgesh-rich-chest.test.cjs`.
 
 From the Wiki ([Chest (Dorgesh-Kaan Rich)](https://oldschool.runescape.wiki/w/Chest_(Dorgesh-Kaan_Rich))): 78 Thieving and a
 lockpick (or a hair clip), 650 experience a loot, the loot back after 300 seconds, one roll of 15 equal rows (uncut sapphire,
@@ -182,8 +190,34 @@ From the rsprox.net captures, ticks from the player's arrival beside the chest (
 | 506 | the chest full again (499 ticks after it emptied, both chests in 3197) |
 
 Ours: the level, lockpick and full-inventory refusals; an attempt cut short (moving, dying, the chest emptied by someone else
-before tick 4) gives nothing; with one free slot, the second of the elite pair of wire lands under the player. Open, and Pick-lock on an empty chest, aren't captured and aren't answered. The average chests
-(52 Thieving, three loot tables) aren't implemented.
+before tick 4) gives nothing; with one free slot, the second of the elite pair of wire lands under the player. Open, and Pick-lock on an empty chest, aren't captured and aren't answered.
+
+## Dorgesh-Kaan average chests
+
+The same module; tests in `server/tests/thieving-dorgesh-average-chest.test.cjs`.
+
+From the Wiki ([Chest (Dorgesh-Kaan Average)](https://oldschool.runescape.wiki/w/Chest_(Dorgesh-Kaan_Average))): 52 Thieving and a
+lockpick, 200 experience a loot, the loot back after 90 seconds, 17 chests over the three floors. Three tables:
+
+- normal chests: coins 1-250 (3/7), oil lantern, bullseye lantern, mining helmet, cave goblin wire (1/7 each);
+- Zanik's two chests (cache tiles 2743,5350,2 and 2746,5350,2): 23 rows of 1/23 (easy clue scroll, rope, mining helmet, frog-leather
+  body and chaps, oil and bullseye lanterns, newcomer map, bone bolts 1-89, Dorgeshuun crossbow, bone dagger, hammer, big bones,
+  the seven H.A.M. pieces, spade, bucket, cave goblin wire); the clue row is coins 1-250 when the player can't take another easy clue;
+- Oldak's chest (2706,5364,2): 20 rows of 1/20 (air, mind, water, earth, fire and body runes 10-19, cosmic, chaos and law 5-9, nature and
+  death 2-4, Dorgesh-kaan sphere, unpowered orb, cave goblin wire, empty light orb, light orb, air, water, earth and fire talismans).
+
+Cave goblin wire is two with the elite Lumbridge & Draynor Diary in every table. The Wiki's map draws the second floor 128 tiles
+north-east of the cache placements.
+
+From the user's local rsprox recordings (rev 227, Leagues V): 1000195-1000215, 29 loots of the ground-floor chests, show the rich
+chest's timeline with `dorgesh_average_chest_open` at tick 4 and `dorgesh_average_chest_closed_empty` 3 ticks later, 2,400 XP at
+Leagues' 12x, and the chest full again 149 ticks after it emptied (1000195 ticks 17138 -> 17287). Pick-lock on an emptied chest is
+"It looks like this chest has already been looted." (1000195 tick 17141); Open on a full chest is sound 2402 and "This chest is
+locked." (1000210 tick 38; answered in 1 of 7 Open clicks, the other six look cut short by the next click); too low a level (1000416 tick 11095, 41 Thieving) is "You attempt to pick the lock." (spam) and a message
+box "You are not a high enough level to pick this lock.", with no sound.
+
+Ours: the lockpick and full-inventory refusals (the rich chest's, a hair clip included), the level being the unboosted one, amounts in a range being
+uniform, and Open on an emptied chest not being answered.
 
 ## Isle of Souls Dungeon chest
 
@@ -209,17 +243,137 @@ The Thieving XP on the loot tick is 2,400, which is 150 at Leagues' 16x. Another
 an attempt without stopping it (91, 95). Every line is spam.
 
 Ours: a loot that does not fit is not given, though the XP is (the Wiki only says nothing comes with one free slot and
-two unstackable items); a medium clue the player cannot hold gives nothing; the level refusal is the stalls' line. The
-Dark Chest the dark key opens is not implemented.
+two unstackable items); a medium clue the player cannot hold gives nothing; the level refusal is the stalls' line.
+
+## Dark Chest
+
+`plugins/skills/thieving/DarkChest.Thieving.js`; tests in `server/tests/thieving-dark-chest.test.cjs`.
+
+The four Dark Chests (loc `sw_dungeon_key_chest_closed`, open `sw_dungeon_key_chest_open`) are in the Crumbling Tower
+basement, 1928-1930, 9446-9449. From the Wiki ([Dark Chest](https://oldschool.runescape.wiki/w/Dark_Chest)): Open needs
+a dark key and 28 Thieving ("You need a Thieving level of 28 to be able to open this chest."), uses the key, gives 1,500
+Thieving experience and one loot (three 1/600 pre-rolls, then the 26-row table out of 600; herbs, leathers and bones
+noted), and the chest slams shut for up to 10 damage.
+
+From the rsprox.net captures (recording 1842 and local 1000195, rev 227, Leagues V: 4 opens), ticks from the click on an
+adjacent chest:
+
+| Tick | Response |
+| ---: | --- |
+| 0 | `human_openchest` and sound 52 (both delay 10), "You use a key to unlock the chest.", varbit `busy` 1 |
+| 1 | "You steal some loot from the chest.", the key gone, the loot, the XP (24,000: 1,500 at Leagues' 16x), the chest open |
+| 2 | sound 51 (delay 15) |
+| 3 | "The chest slams shut on your hands.", a hit (6, 8, 9, 9) in the player's own hurt voice (518, 520; delay 20), the chest closed, `busy` 0 |
+
+Every line is spam.
+
+Ours: without a key the click gets the server's "Nothing interesting happens."; with no free slot the dungeon chest's
+"You don't have enough inventory space to take anything from the chest." (local 1000195) comes before the key is used;
+a pre-roll that hits replaces the main roll; the slam is 1 to 10, even. The chest's Check option is not handled: no
+capture or Wiki line shows it.
+
+## Lock-picking doors and chests (#5744)
+
+Reported: Lock-pick did nothing at the Wilderness pirates' hideout and magic axe hut doors, and Picklock did nothing at Aldarin's chests. All were cache locs with the option and no handler. Doors: `plugins/skills/thieving/LockedDoors.Thieving.js`, tests `server/tests/thieving-locked-doors.test.cjs`. Chests: `plugins/skills/thieving/PicklockChests.Thieving.js`, tests `server/tests/thieving-picklock-chests.test.cjs`.
+
+### Doors
+
+| Door | Loc | Thieving | XP | Lockpick |
+| --- | --- | --- | --- | --- |
+| [Magic axe hut](https://oldschool.runescape.wiki/w/Door_(Magic_axe_hut)) (3190,3957 and 3191,3963) | 11726 | 32 | 22.5 | yes |
+| [Pirates' Hideout](https://oldschool.runescape.wiki/w/Door_(Pirates%27_Hideout)) (3038,3956, 3041,3959, 3044,3956) | 11727 | 39 | 35 | yes |
+| [East Ardougne house](https://oldschool.runescape.wiki/w/Door_(East_Ardougne)), north wall (2674,3305) | 11719 | 1 | 3.8 | no |
+| East Ardougne house, south wall (2674,3304) | 11720 | 16 | 15 | no |
+| [Chaos Druid Tower](https://oldschool.runescape.wiki/w/Door_(Chaos_Druid_Tower)) (2565,3356) | 11723 | 46 | 37.5 | no |
+
+- **Wiki:** a failed pick is retried by clicking again; a door needs no picking from the inside (East Ardougne: it "will just open if attempted, displaying the message The door is already unlocked.", used for every door here). The Chaos Druid Tower door rolls a trap first (6% of maximum Hitpoints when it goes off, certain to be disarmed from level 58), then the lock.
+- **Charts** are the pages' own, as a roll out of 256 at two levels and linear between: hut 25 at level 1 and 176 at 99, hideout 13 and 88, East Ardougne south 33 and 251 (the page gives no chart for the north door, which uses the same one), Chaos Druid lock 9 and 76. They reproduce the pages' percentages (about 28.5% at 32 for the hut, 16.4% at 39 for the hideout, 15.6% at 46 for the tower).
+- **Doors.plugin:** 11726, 11727 and 11723 have no open loc in the cache, so they swing in place (`SELF_OPENING_DOOR_IDS`); the East Ardougne pair opens by the existing same-model rule.
+- **Ours (nothing captured; no recording touches these doors):** every message but the inside one, the pick animation (`human_pickuptable`, as Pyramid Plunder and the Forthos door), the unlock resolving on the click, the current (boostable) level, and Open from outside saying "The door is locked.".
+- **Not done:** the Ardougne Sewers gates (11721/11722, 31 Thieving, 25 XP), Ross' House (40178, 13 Thieving, 15 XP, a Hitpoints loss, a Mahogany Homes bypass), the H.A.M. Hideout jail door (5501, a retry ramp) and the Monkey Madness II door (28783, no Wiki page). Their pages give charts but not which side is "inside".
+
+### Chests
+
+The Aldarin villas' six chests (54773, open 54774), the Sailing pirate chests and the Lizardman Temple's three stone chests (34429, open 34430), all `Picklock`, none needing a lockpick:
+
+| Chest | Thieving | XP | Unlock at the two charted levels (no lockpick) |
+| --- | --- | --- | --- |
+| [Aldarin Villas](https://oldschool.runescape.wiki/w/Chest_(Aldarin_Villas)) | 36 | 200 | 21.5% at 36, 59% at 99 |
+| [Rusty](https://oldschool.runescape.wiki/w/Rusty_chest) (Dognose, Vatrachos) | 33 | 90 | 18.75% at 33, 60.9% at 99 |
+| [Tarnished](https://oldschool.runescape.wiki/w/Tarnished_chest) (Crown Jewel, Shimmering Atoll) | 54 | 122.5 | 32.4% at 54, 60.9% at 99 |
+| [Reinforced](https://oldschool.runescape.wiki/w/Reinforced_chest) (Ynysdail, Brittle Isle) | 76 | 182.5 | 46.1% at 76, 60.9% at 99 |
+| [Stone chest](https://oldschool.runescape.wiki/w/Stone_chest) (Lizardman Temple) | 64 | 280 | 31.25% at 64, 60.55% at 99 |
+
+A carried lockpick adds 25/256 to every chart (each page's with-lockpick chart sits that far above) and is never used up.
+
+- **Capture:** rsprox recording 1105 (rev 237, Leagues) holds 108 Aldarin loots at 1350,2947, all successes. The timeline is the Isle of Souls chest's: tick 0 `human_lockedchest` (537), sound 1243, "You attempt to picklock the chest."; 2 `human_openchest` (536), sound 52, "You manage to unlock the chest."; 3 "You steal some loot from the chest.", the loot, 200 XP (2,400 at Leagues' 12x) and the open chest (54774); 4 sound 51; 5 the chest closed. Every chest here uses it. A further 24 XP (2 at 12x) a tick after the loot is unexplained.
+- **Loot** is the Wiki's (Drop Rate Project): Aldarin a medium clue 1 in 90 then 60 rolls (coins 100-200/250-500/600-1,200, silver and gold bars, gems, spinach roll, blessed bone shards, eclipse red, the seed table); the pirate chests a Medallion fragment on Dognose (1 in 4, unless owned) and a clue, then 60 rolls; the temple 300 rolls (bolt tips, seeds, coins 20-260, Xerician fabric, lizardman fang, gems, a medium clue, Xeric's talisman (inert)). The pirate pages' rows add to 59, not 60; the weights are used as given.
+- **Failure:** "You fail to picklock the chest." with sound 2402 (the Isle of Souls chest's; Ours). The Aldarin chest teleports a share of failures (21.1% at 36 down to 7.03% at 99) to a tile beside the nearest of the villas' three wells (cache loc 46805); the Wiki shows the well on a map only, so the destination and the cast animation (the Isle of Souls trap's) are Ours. The pirate chests' and the temple's failure teleports are not implemented: the Wiki gives their share but no destination.
+- **Not done:** the Stranglewood stone chest (48766: no level, XP or loot on its page; a one-use trap teleport), the Ogre coffins (6848-6883: Zogre Flesh Eaters, with Thieving drain and disease) and Legends' Quest's Ancient Gate (3266/3268).
+
+## Wealthy citizens and the street urchins
+
+`plugins/skills/thieving/WealthyCitizens.Thieving.js`; tests in `server/tests/thieving-wealthy-citizens.test.cjs`.
+
+From the Wiki ([Wealthy citizen](https://oldschool.runescape.wiki/w/Wealthy_citizen)): Leo (in the Bazaar), Julia (east of
+it) and Aurelia (south of it) each distract a citizen at the same time, every 84 to 99 seconds. A player who saw the
+distraction start pickpockets that citizen automatically and always succeeds, until the citizen is no longer distracted.
+One who wasn't there (after a world hop, say) gets "Your hands are sweaty and keep dropping the items in the Citizen's
+pockets." The notice is "You notice an urchin distract a wealthy citizen nearby."
+
+From the rsprox captures (61 scenes in 18 recordings, among them 1695 and 2332 on normal worlds, 3273 on Grid Master, 1098-1108 on
+Leagues VI, and local 1001312, 1001568, 1001592 and 1001794 on rev 237-242 normal worlds), ticks from the urchins' opening line:
+
+| Tick | What happens |
+| --- | --- |
+| 0 | All three urchins say their opening line on the same tick. Players within 6 tiles of one get the notice (a `<col=a53fff>` game message) and synth sound 2119 with delay 30, once each. |
+| 2 | The nearest Wealthy citizen faces its urchin and walks up beside it. About half of them ask "What's all the commotion about?" |
+| 4, 8, 12, 16, 24, 28, 32, 36 | The urchin emotes (`emote_cry`, or the dancer's `emote_dance`/`emote_dance_spin`) and the citizen emotes (`emote_think`, or `emote_clap` for the dancer) with delay 30. |
+| 20 | The urchin's second line. |
+| 23 | The citizen's reply. |
+| 39 | The urchin's last line. The citizen does `emote_think` without a delay. |
+| 40 | The citizen stops facing the urchin, and the distraction is over. |
+| 41 | "That was strange." |
+
+The five scenes, as opening / second line / last line:
+
+- **Injured:** "My leg! Someone please!" / "It burns like an inferno!", "Gah! It hurts!" or "I think I've broken something!" / "Woah! My leg has healed!"
+- **Robbed:** "I've been robbed!" / "\*Sobbing\*" or "My parents are gonna be so mad!" / "Silly me! I had it in my pocket all along!"
+- **Crying:** "\*Sobbing\*" / "I can't stop crying!", "Wahhhh!" or "\*Sobbing\*" / "Oh you really brightened up my day!"
+- **Lost:** "Im so lost! Someone help!" / "I can't find my friends.", "I've lost my parents." or "I'm all alone!" / "I think I see my friends!"
+- **Dancing:** "Check out these moves!" / "I could do this all day!" or "Any tips?" / "I'm all danced out!"
+
+The citizen's reply on tick 23 comes from the same pool for every sad scene: "I hope you're okay.", "Oh gosh!",
+"That's awful!", "I'll keep you company for a moment." or "What can I do?". The dancer's admirers say "Who taught
+you to move like that?" or "I wish I had moves like that!". Scenes start 143 to 163 ticks apart (3273: 5759, 5902,
+6047, 6190, 6353, 6510, 6656, 6805), so the clock picks 140 to 165 (the Wiki's 84-99 s). A caught Wealthy citizen
+shouts "Get out of my pockets!" (8 of 8 failures).
+
+On Leagues VI and Grid Master the relic keeps pickpocketing every 2 ticks anyway, so the captures show the automatic
+cadence but not when it stops. The repeat here uses the same "thieving:done" `again` hook, and asks for the next attempt
+only while the distraction lasts past it.
+
+**The house key's dry streak.** Varbit `varlamore_thieving_house_key_drystreak` (9942) counts the successful pickpockets
+since the last house key. It never goes above 40, and in the captures 6 of its resets are at 40. A success at 40
+always gives the key, alone (the loot tracker lists only the key; 1104, 3273), and any key resets it to 0. It is
+saved per player and sent on login. Both recordings are on Leagues VI and Grid Master worlds: the cap may differ on
+normal worlds, but nothing in them points that way.
+
+Ours: each urchin's scene has its own witnesses (watching Leo doesn't count for Aurelia's citizen); no capture
+shows whether live keeps them per urchin or per world. The sweaty line is a red game message (the Wiki marks it red)
+and is sent only when the click becomes an attempt. The citizen's stand tile is the free side of the urchin nearest to it. Citizens farther than 10 tiles from an
+urchin aren't called. The notice radius is 6 tiles: one capture got it at 7 and two didn't. Every scene runs the full
+40 ticks; 3 of the 61 captured ones ended on tick 19, and nothing shows why. A player who missed the start gets the
+sweaty line and an ordinary attempt: the Wiki's "much slower" automatic pickpocketing for 15 seconds has no rate. A
+clue rolled at the cap keeps the clue, and the key waits for the next success.
 
 ## Not modelled
 
 - **Villagers after The Feud:** the quest retains its own tutorial lure and knockout; generic post-quest villagers are not implemented.
-- **Wealthy citizen:** the street urchin distraction, which lets them be pickpocketed repeatedly with one click.
 - **The Ardougne diary:** no diary system exists yet. Its effects would be +10% success (medium: in Ardougne; hard: everywhere), the gloves of silence becoming ineffective, and coin pouch limits of 56, 84 and 140.
 - **Location- or quest-only loot:** the Pirate's medallion fragment (The Onyx Crest only), the Pirate's very rare medium clue (no rate given), and the H.A.M. robe table during Death to the Dorgeshuun.
 - **The H.A.M. camp's failures:** "You feel slightly concussed from the blow.", "Your agility helps you partially avoid the blow." and "You're beaten unconscious and bundled out of the HAM Camp." (1723, Leagues V, and the Wiki). A failure here is the ordinary stun.
-- **The in-game loot tracker:** OSRS adds each pickpocket's loot to it (client script 7192, `loottracker_lootadd`).
+- **The in-game loot tracker beyond the baker's stall:** the Ardougne silk, fur, spice, gem and silver stalls aren't tracked: no capture since the tracker was added shows whether they are.
 
 ## Cache NPCs with a Pickpocket option that this doesn't cover
 

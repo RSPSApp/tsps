@@ -78,8 +78,9 @@ function prepare(farm) {
         settings.custom > MAX_AMOUNT
     )
         settings.custom = 0;
-    if (!Number.isInteger(settings.locks) || settings.locks < 0 || settings.locks > SLOT_MASK)
-        settings.locks = 0;
+    // An old vault-only lock mask (lockSettings moves a valid one to the bank's setting).
+    if ("locks" in settings && (!Number.isInteger(settings.locks) || settings.locks < 0 || settings.locks > SLOT_MASK))
+        delete settings.locks;
     settings.favourites = [...new Set((settings.favourites ?? []).filter(eligible))].slice(0, 8);
     const seen = new Set();
     farm.vaultOrder = Array.from({ length: CAPACITY }, (_, i) => {
@@ -96,6 +97,36 @@ function prepare(farm) {
         farm.vaultOrder[free] = id;
         seen.add(id);
     }
+}
+/**
+ * The deposit locks: one setting with the bank's (BankSettings, "bank:deposit-locks"), as both
+ * draw the same varbits. A vault's own old copy moves over once, if the bank's is still unset.
+ * Without BankSettings the vault keeps its own.
+ */
+function lockSettings(player, farm) {
+    const own = farm.vaultSettings;
+    const request = { player, settings: null };
+    core.PluginManager.emitCustomEvent("bank:deposit-locks", request);
+    if (!request.settings)
+        return { locks: own.locks ?? 0, ignoreLocks: !!own.ignoreLocks, showLockOps: !!own.showLockOps };
+    if (own.locks || own.ignoreLocks || own.showLockOps) {
+        const shared = request.settings;
+        const unset = !shared.locks && !shared.ignoreLocks && !shared.showLockOps;
+        const legacy = { locks: own.locks ?? 0, ignoreLocks: !!own.ignoreLocks, showLockOps: !!own.showLockOps };
+        delete own.locks;
+        delete own.ignoreLocks;
+        delete own.showLockOps;
+        if (unset) {
+            core.PluginManager.emitCustomEvent("bank:set-deposit-locks", { player, ...legacy });
+            return legacy;
+        }
+    }
+    return request.settings;
+}
+function setLockSettings(player, farm, change) {
+    const request = { player, ...change, handled: false };
+    core.PluginManager.emitCustomEvent("bank:set-deposit-locks", request);
+    if (!request.handled) Object.assign(farm.vaultSettings, change);
 }
 function sync(player) {
     const farm = Patches.farmFor(player),
@@ -126,17 +157,15 @@ function sync(player) {
     );
     sender.sendConfig(varp("selected_qty"), farm.vaultSettings.quantity);
     sender.sendConfig(varp("requested_qty"), farm.vaultSettings.custom);
-    sender.sendVarbit(
-        core.CacheDefinitions.getVarbitId("bank_side_slot_overview"),
-        farm.vaultSettings.locks,
-    );
+    const locks = lockSettings(player, farm);
+    sender.sendVarbit(core.CacheDefinitions.getVarbitId("bank_side_slot_overview"), locks.locks);
     sender.sendVarbit(
         core.CacheDefinitions.getVarbitId("bank_side_slot_ignoreinvlocks"),
-        farm.vaultSettings.ignoreLocks ? 1 : 0,
+        locks.ignoreLocks ? 1 : 0,
     );
     sender.sendVarbit(
         core.CacheDefinitions.getVarbitId("bank_side_slot_showop"),
-        farm.vaultSettings.showLockOps ? 1 : 0,
+        locks.showLockOps ? 1 : 0,
     );
     for (let i = 0; i < 8; i++) {
         const slot = farm.vaultOrder.indexOf(farm.vaultSettings.favourites[i]);
@@ -232,6 +261,14 @@ function guarded(player, session) {
 function refreshOpen(player) {
     if (current(player)) sync(player);
 }
+/** "group-ironman:wipe-tradeables" { player }: a leaver who stays a ranked Group Ironman loses the seeds in the seed vault (Wiki). */
+function wipeForGroupIronman({ player }) {
+    const farm = Patches.farmFor(player);
+    farm.vault = {};
+    farm.vaultOrder = undefined;
+    prepare(farm);
+    core.PluginManager.emitCustomEvent("persistence:save", { player, reason: "seed-vault" });
+}
 function changed(player) {
     player.getInventory().refreshItems();
     sync(player);
@@ -250,14 +287,10 @@ function deposit(player, session, requested, slot, expected, expectedId) {
     const balances = { ...farm.vault },
         order = [...farm.vaultOrder];
     let moved = 0;
+    const locks = lockSettings(player, farm);
     for (let i = 0; i < items.length; i++) {
         if (slot !== undefined && i !== slot) continue;
-        if (
-            slot === undefined &&
-            !farm.vaultSettings.ignoreLocks &&
-            farm.vaultSettings.locks & (1 << i)
-        )
-            continue;
+        if (slot === undefined && !locks.ignoreLocks && locks.locks & (1 << i)) continue;
         const item = items[i];
         if (!item || item.getId() <= 0 || item.getAmount() <= 0 || item.getMeta()) continue;
         const id = plain(item.getId());
@@ -325,15 +358,31 @@ function forget(farm, slot) {
     farm.vaultOrder[slot] = null;
     farm.vaultSettings.favourites = farm.vaultSettings.favourites.filter((entry) => entry !== id);
 }
+/**
+ * The bank's deposit-lock editor in the vault's popup, opened as the bank's is (DepositLocks.BankSettings,
+ * rsprox_transcripts/228/02249.txt tick 215): opensub, events on the slots 0-27 (OP1), then script 7784.
+ * ignorelocks and extraoptions transmit op 1 from the cache and Done has no op: script 614 answers
+ * resume_countdialog "0", which closes the editor (228/02249.txt tick 218).
+ */
 function lockPopup(player, session) {
-    session.popup = true;
     const sender = player.getPacketSender();
     sender.sendSubInterface(uid("seed_vault:popup"), group("bank_side_locks"), 0);
-    // Cache241 script7784 builds the existing bank-side lock editor in the supplied popup host.
-    sender.sendClientScript(7784, uid("seed_vault:popup"));
     sender.sendInterfaceFlagsRange(uid("bank_side_locks:slots"), 0, 27, 1 << 1);
-    for (const name of ["ignorelocks", "extraoptions", "done"])
-        sender.sendInterfaceFlagsRange(uid("bank_side_locks:" + name), -1, -1, 1 << 1);
+    sender.sendClientScript(7784, uid("seed_vault:popup"));
+    // Done's count answer closes it; an aborted prompt takes the editor down too.
+    const done = {
+        acceptsZero: true,
+        execute: () => closeLockPopup(player, session, done),
+        cancel: () => closeLockPopup(player, session, done),
+    };
+    session.popup = done;
+    player.setEnteredAmountAction(done);
+}
+function closeLockPopup(player, session, done) {
+    if (session.popup !== done) return;
+    session.popup = null;
+    if (player.getEnteredAmountAction?.() === done) player.setEnteredAmountAction(null);
+    if (current(player) === session) player.getPacketSender().closeSubInterface(uid("seed_vault:popup"));
 }
 function lockClick(player, session, buttonId, slot, action) {
     if (
@@ -342,20 +391,18 @@ function lockClick(player, session, buttonId, slot, action) {
         action !== 1
     )
         return;
-    const settings = session.farm.vaultSettings;
-    if (buttonId === uid("bank_side_locks:done")) {
-        session.popup = false;
-        player.getPacketSender().closeSubInterface(uid("seed_vault:popup"));
-        return;
-    }
+    const farm = session.farm;
+    const settings = lockSettings(player, farm);
     if (buttonId === uid("bank_side_locks:slots")) {
         if (settings.ignoreLocks || !Number.isInteger(slot) || slot < 0 || slot >= 28) return;
-        settings.locks ^= 1 << slot;
+        setLockSettings(player, farm, { locks: settings.locks ^ (1 << slot) });
     } else if (buttonId === uid("bank_side_locks:ignorelocks"))
-        settings.ignoreLocks = !settings.ignoreLocks;
-    else if (buttonId === uid("bank_side_locks:extraoptions"))
-        settings.showLockOps = !settings.showLockOps;
-    else return;
+        setLockSettings(player, farm, { ignoreLocks: !settings.ignoreLocks });
+    // bank_side_locks_extraoptions_op: the extra op only changes while the locks are on.
+    else if (buttonId === uid("bank_side_locks:extraoptions")) {
+        if (settings.ignoreLocks) return;
+        setLockSettings(player, farm, { showLockOps: !settings.showLockOps });
+    } else return;
     changed(player);
 }
 function click(event) {
@@ -377,16 +424,20 @@ function click(event) {
     if (buttonId === uid("seed_vault:search")) {
         // Script2865 owns local text input and filtering. Its search box replaced a count prompt,
         // which an abort would close too (script 138), so only the prompt's answer is dropped.
+        // The lock editor's clamp (script612, noclickthrough) covers Search, and a click there
+        // runs script4207, which hides the editor and answers 0: it closes as on Done.
+        if (session.popup) closeLockPopup(player, session, session.popup);
         player.setEnteredAmountAction(null);
+        return;
+    }
+    // The editor's own clicks keep Done's count answer waiting.
+    if (popup) {
+        lockClick(player, session, buttonId, slot, action);
         return;
     }
     player.getPacketSender().abortInputPrompt();
     const farm = session.farm,
         settings = farm.vaultSettings;
-    if (popup) {
-        lockClick(player, session, buttonId, slot, action);
-        return;
-    }
     if (main) {
         if (buttonId === uid("seed_vault:lock_menu")) {
             if (action === 1) lockPopup(player, session);
@@ -469,8 +520,9 @@ function click(event) {
     } else if (buttonId === uid("seed_vault_deposit:inv")) {
         if (!Number.isInteger(slot) || slot < 0 || slot >= player.getInventory().capacity()) return;
         if (action === 9) {
-            if (!settings.ignoreLocks && settings.showLockOps) {
-                settings.locks ^= 1 << slot;
+            const locks = lockSettings(player, session.farm);
+            if (!locks.ignoreLocks && locks.showLockOps) {
+                setLockSettings(player, session.farm, { locks: locks.locks ^ (1 << slot) });
                 changed(player);
             }
             return;
@@ -525,4 +577,4 @@ function drag(event) {
 function logout({ player }) {
     SESSIONS.delete(player);
 }
-Object.assign(module.exports, { open, click, drag, logout, eligible, held, refreshOpen });
+Object.assign(module.exports, { open, click, drag, logout, eligible, held, refreshOpen, wipeForGroupIronman });

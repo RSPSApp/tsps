@@ -28,6 +28,7 @@ import { MultiChatboxPrompt } from "../game/model/menu/MultiChatboxPrompt";
 import {
   PluginApi,
   PluginCanAttackEvent,
+  PluginCanAttackDecision,
   PluginCanDrinkEvent,
   PluginCanEatEvent,
   PluginCanEquipEvent,
@@ -137,6 +138,14 @@ import {
   PluginPlayerLogoutEvent,
   PluginSocialPacketEvent,
 } from "./PluginTypes";
+import { lazyRequire } from "../util/LazyRequire";
+
+// Game modules this file reaches lazily (they import the plugin manager); each resolved once.
+const getEquipmentClass = lazyRequire(() => require("../game/model/container/impl/Equipment").Equipment);
+const getNpcClass = lazyRequire(() => require("../game/entity/impl/npc/NPC").NPC);
+const getNpcSpawnLineage = lazyRequire(() => require("../game/entity/impl/npc/NpcSpawnLineage").NpcSpawnLineage);
+const getLocationClass = lazyRequire(() => require("../game/model/Location").Location);
+const getWorldClass = lazyRequire(() => require("../game/World").World);
 
 type PluginHook<T> = {
   pluginName: string;
@@ -267,6 +276,9 @@ export class PluginManager {
   public static readonly MAX_PLUGIN_DEPTH = 2;
   private static initialized = false;
   private static loadedPlugins: string[] = [];
+  /** The files whose register() succeeded, and the directory loadFromDirectory loaded them from. */
+  private static loadedPluginFiles = new Set<string>();
+  private static loadedDirectory: string | null = null;
   private static lastPersistenceOverride: string | null = null;
   private static loginExtensionFactory?: { pluginName: string; factory: (connection: PluginLoginConnection) => PluginLoginExtension | undefined };
   private static loginHooks: PluginHook<PluginPlayerLoginEvent>[] = [];
@@ -775,6 +787,7 @@ export class PluginManager {
     const acceptedDeclarations = PluginManager.checkConfigDeclarations(toLoad);
     PluginManager.loadPluginCandidatesWithDependencies(toLoad);
 
+    PluginManager.loadedDirectory = path.resolve(pluginDirectory);
     PluginManager.recordLoadedConfigDeclarations(acceptedDeclarations);
     PluginManager.warnAboutInvalidConfigValues(scopedSettings);
     PluginManager.emitCustomEvent("plugins:loaded", { names: new Set(PluginManager.loadedPlugins) });
@@ -968,7 +981,7 @@ export class PluginManager {
   public static itemActionSubOption(definition: any, event: PluginItemActionEvent): string | null {
     if (!definition || !Number.isInteger(event.subOpId) || (event.subOpId as number) <= 0) return null;
     const sub = (event.subOpId as number) - 1;
-    const { Equipment } = require("../game/model/container/impl/Equipment");
+    const Equipment = getEquipmentClass();
     let text: unknown;
     if (event.interfaceId === Equipment.INVENTORY_INTERFACE_ID) {
       const op = event.clickType - PluginManager.FIRST_WORN_OPTION_CLICK;
@@ -985,7 +998,7 @@ export class PluginManager {
 
   /** Inventory items have five options; an equipped item's worn options (params 451+) run past that. */
   private static maxItemActionClick(event: PluginItemActionEvent): number {
-    const { Equipment } = require("../game/model/container/impl/Equipment");
+    const Equipment = getEquipmentClass();
     return event.interfaceId === Equipment.INVENTORY_INTERFACE_ID ? PluginManager.MAX_WORN_OPTION_CLICK : 5;
   }
 
@@ -994,7 +1007,7 @@ export class PluginManager {
    * (a Slayer helmet's worn Check is its inventory Disassemble's slot), else an inventory one.
    */
   private static itemActionOption(definition: any, event: PluginItemActionEvent): string | null {
-    const { Equipment } = require("../game/model/container/impl/Equipment");
+    const Equipment = getEquipmentClass();
     if (event.interfaceId === Equipment.INVENTORY_INTERFACE_ID) {
       if (event.option) return event.option;
       const index = event.clickType - PluginManager.FIRST_WORN_OPTION_CLICK;
@@ -1036,10 +1049,10 @@ export class PluginManager {
     if (!Number.isFinite(id) || id < 0) {
       return null;
     }
-    const { NPC } = require("../game/entity/impl/npc/NPC");
-    const { NpcSpawnLineage } = require("../game/entity/impl/npc/NpcSpawnLineage");
-    const { Location } = require("../game/model/Location");
-    const { World } = require("../game/World");
+    const NPC = getNpcClass();
+    const NpcSpawnLineage = getNpcSpawnLineage();
+    const Location = getLocationClass();
+    const World = getWorldClass();
     const unique = typeof definition.unique === "string" && definition.unique.length > 0 ? definition.unique : null;
     if (unique !== null && NpcSpawnLineage.uniqueHolder(unique)) {
       console.warn(`[plugins] ${pluginName ?? "a plugin"} spawned unique NPC "${unique}" while it is live; refused`);
@@ -1087,7 +1100,7 @@ export class PluginManager {
       return;
     }
     (npc as any).__skipDefaultRespawn = true;
-    const { World } = require("../game/World");
+    const World = getWorldClass();
     const addQueue = World.getAddNPCQueue();
     const queued = addQueue.indexOf(npc);
     if (queued !== -1) {
@@ -1118,9 +1131,8 @@ export class PluginManager {
     eventName: PluginCustomEventName,
     payload: any
   ): void {
-    if (!isPluginCustomEventName(eventName)) {
-      return;
-    }
+    // onCustomEvent only registers well-formed names, so a name with no hooks (malformed or not)
+    // is a single map miss; validating the name with a regex on every emit cost more than that.
     const hooks = PluginManager.customEventHooks.get(eventName);
     if (!hooks?.length) {
       return;
@@ -1362,18 +1374,29 @@ export class PluginManager {
     target: any,
     method?: any
   ): boolean | null {
+    return PluginManager.emitCanAttackDecision(attacker, target, method).allow;
+  }
+
+  /** emitCanAttack with the refusing handler's `response` / `message` (PluginCanAttackEvent). */
+  public static emitCanAttackDecision(
+    attacker: any,
+    target: any,
+    method?: any
+  ): PluginCanAttackDecision {
     if (PluginManager.canAttackHooks.length === 0) {
-      return null;
+      return { allow: null };
     }
     const event: PluginCanAttackEvent = { attacker, target, method, allow: null };
     let allowed = false;
     for (const hook of PluginManager.canAttackHooks) {
       event.allow = null;
+      event.response = undefined;
+      event.message = undefined;
       PluginManager.executeHook(hook, event, "can_attack", "can_attack");
-      if (event.allow === false) return false;
+      if (event.allow === false) return { allow: false, response: event.response, message: event.message };
       if (event.allow === true) allowed = true;
     }
-    return allowed ? true : null;
+    return { allow: allowed ? true : null };
   }
 
   public static emitCanTeleport(player: any, wildernessLevelLimit: number = 20, destination?: any, spellName?: string): boolean | null {
@@ -1521,9 +1544,12 @@ export class PluginManager {
     return null;
   }
 
-  public static emitCanBankItem(player: any, item: any, { quiet = false }: { quiet?: boolean } = {}): boolean | null {
+  public static emitCanBankItem(
+    player: any, item: any,
+    { quiet = false, container, slot, bulk, emptyAll }: { quiet?: boolean; container?: any; slot?: number; bulk?: boolean; emptyAll?: boolean } = {},
+  ): boolean | null {
     if (PluginManager.canBankItemHooks.length === 0) return null;
-    const event: PluginCanBankItemEvent = { player, item, allow: null, quiet };
+    const event: PluginCanBankItemEvent = { player, item, allow: null, quiet, container, slot, bulk, emptyAll };
     for (const hook of PluginManager.canBankItemHooks) {
       PluginManager.executeHook(hook, event, "can_bank_item", "can_bank_item");
       if (event.allow !== null) return event.allow;
@@ -2313,6 +2339,16 @@ export class PluginManager {
       : (defaultValue as T);
   }
 
+  /**
+   * The plugin files the loader actually registered from `pluginDirectory` (resolved paths), or
+   * null when loadFromDirectory has not loaded that directory (the docs script, tests).
+   */
+  public static getLoadedPluginFiles(pluginDirectory: string): ReadonlySet<string> | null {
+    return PluginManager.loadedDirectory === path.resolve(pluginDirectory)
+      ? PluginManager.loadedPluginFiles
+      : null;
+  }
+
   /** Every option a loaded plugin (or the core) declares, keyed by pluginConfig key. */
   public static getConfigDeclarations(): Map<
     string,
@@ -2585,6 +2621,7 @@ export class PluginManager {
       } else {
         candidate.plugin.register(api);
         PluginManager.loadedPlugins.push(candidate.pluginName);
+        PluginManager.loadedPluginFiles.add(path.resolve(candidate.pluginPath));
       }
       return api;
     } catch (err) {
@@ -2620,6 +2657,7 @@ export class PluginManager {
       CombatMethod: require(`${combat}/method/CombatMethod`).CombatMethod,
       CombatSpecial: require(`${combat}/CombatSpecial`).CombatSpecial,
       CombatFactory: require(`${combat}/CombatFactory`).CombatFactory,
+      HitQueue: require(`${combat}/hit/HitQueue`).HitQueue,
       BonusManager: require(`${model}/equipment/BonusManager`).BonusManager,
       EquipmentRequirements: require(`${model}/equipment/EquipmentRequirements`).EquipmentRequirements,
       WeaponInterfaces: require(`${combat}/WeaponInterfaces`).WeaponInterfaces,
@@ -2771,6 +2809,8 @@ export class PluginManager {
       Music: require("../game/Music").Music,
       // world.json accessors (isMembersWorld, isMembersArea, WORLD_SPAWN, zone boundaries).
       WorldDefinition: require("../game/definition/WorldDefinition"),
+      // examineItem(player, itemId, amount): an item's examine line and its price, as the bank says them.
+      ExaminePrice: require("../game/content/ExaminePrice"),
       TeleportHandler: require(`${model}/teleportation/TeleportHandler`).TeleportHandler,
       TeleportType: require(`${model}/teleportation/TeleportType`).TeleportType,
       DialogueChainBuilder: require(`${model}/dialogues/builders/DialogueChainBuilder`).DialogueChainBuilder,
@@ -2780,6 +2820,7 @@ export class PluginManager {
       StatementDialogue: require(`${model}/dialogues/entries/impl/StatementDialogue`).StatementDialogue,
       ItemStatementDialogue: require(`${model}/dialogues/entries/impl/ItemStatementDialogue`).ItemStatementDialogue,
       DoubleItemStatementDialogue: require(`${model}/dialogues/entries/impl/DoubleItemStatementDialogue`).DoubleItemStatementDialogue,
+      GraphicStatementDialogue: require(`${model}/dialogues/entries/impl/GraphicStatementDialogue`).GraphicStatementDialogue,
       ActionDialogue: require(`${model}/dialogues/entries/impl/ActionDialogue`).ActionDialogue,
       EndDialogue: require(`${model}/dialogues/entries/impl/EndDialogue`).EndDialogue,
       CreationMenu: require(`${model}/menu/CreationMenu`).CreationMenu,
@@ -4639,8 +4680,7 @@ export class PluginManager {
       setWorldType: (type) => GameConstants.setWorldType(type),
       getActiveRegionSnapshot: () => {
         try {
-          const worldModule = require("../game/World");
-          const World = worldModule?.World;
+          const World = getWorldClass();
           return World?.getActiveRegionSnapshot?.() ?? {
             processCycle: 0,
             updatedAtMs: 0,
@@ -4662,28 +4702,28 @@ export class PluginManager {
           };
         }
       },
-      getWorld: () => require("../game/World").World,
-      getTaskManager: () => require("../game/task/TaskManager").TaskManager,
-      getRegionManager: () =>
-        require("../game/collision/RegionManager").RegionManager,
-      getCombatFactory: () =>
-        require("../game/content/combat/CombatFactory").CombatFactory,
-      getAreaManager: () =>
-        require("../game/model/areas/AreaManager").AreaManager,
-      getPrayerHandler: () =>
-        require("../game/content/PrayerHandler").PrayerHandler,
-      getBonusManager: () =>
-        require("../game/model/equipment/BonusManager").BonusManager,
-      getItemOnGroundManager: () =>
+      getWorld: getWorldClass,
+      getTaskManager: lazyRequire(() => require("../game/task/TaskManager").TaskManager),
+      getRegionManager: lazyRequire(() =>
+        require("../game/collision/RegionManager").RegionManager),
+      getCombatFactory: lazyRequire(() =>
+        require("../game/content/combat/CombatFactory").CombatFactory),
+      getAreaManager: lazyRequire(() =>
+        require("../game/model/areas/AreaManager").AreaManager),
+      getPrayerHandler: lazyRequire(() =>
+        require("../game/content/PrayerHandler").PrayerHandler),
+      getBonusManager: lazyRequire(() =>
+        require("../game/model/equipment/BonusManager").BonusManager),
+      getItemOnGroundManager: lazyRequire(() =>
         require("../game/entity/impl/grounditem/ItemOnGroundManager")
-          .ItemOnGroundManager,
-      getObjectManager: () =>
-        require("../game/entity/impl/object/ObjectManager").ObjectManager,
-      getServerPerf: () => require("../util/ServerPerf").ServerPerf,
-      getSkillManager: () =>
-        require("../game/content/skill/SkillManager").SkillManager,
-      getPlayerPunishment: () =>
-        require("../util/PlayerPunishment").PlayerPunishment,
+          .ItemOnGroundManager),
+      getObjectManager: lazyRequire(() =>
+        require("../game/entity/impl/object/ObjectManager").ObjectManager),
+      getServerPerf: lazyRequire(() => require("../util/ServerPerf").ServerPerf),
+      getSkillManager: lazyRequire(() =>
+        require("../game/content/skill/SkillManager").SkillManager),
+      getPlayerPunishment: lazyRequire(() =>
+        require("../util/PlayerPunishment").PlayerPunishment),
       emitCanEat: (player, itemId) => PluginManager.emitCanEat(player, itemId),
       emitCanDrink: (player, itemId) => PluginManager.emitCanDrink(player, itemId),
       emitCanBank: (player, source) => PluginManager.emitCanBank(player, source),
@@ -5069,7 +5109,36 @@ export class PluginManager {
         );
       }
     }
-    return false;
+    return PluginManager.splitSpellRuneSources(player, missingItems) !== null;
+  }
+
+  /**
+   * When no one source holds the whole shortfall, each rune may still come from a different one (fire runes from
+   * the rune pouch, nature runes from a charged Bryophyta's staff): the first source holding all of a rune pays
+   * that rune. Null when some rune has no such source. A single rune is never split between two sources.
+   */
+  private static splitSpellRuneSources(player: any, missingItems: any[]): Map<PluginSpellRuneSource, any[]> | null {
+    if (missingItems.length < 2 || PluginManager.spellRuneSources.length < 2) return null;
+    const shares = new Map<PluginSpellRuneSource, any[]>();
+    for (const item of missingItems) {
+      const entry = PluginManager.spellRuneSources.find((candidate) => {
+        try {
+          return candidate.source.check(player, [item]) === true;
+        } catch (err) {
+          console.error(`[plugins] spell rune source check failed (${candidate.pluginName})`, err);
+          return false;
+        }
+      });
+      if (!entry) return null;
+      const share = shares.get(entry.source) ?? [];
+      share.push(item);
+      shares.set(entry.source, share);
+    }
+    // Two runes on one source are checked together, so a share it can only pay one at a time is refused.
+    for (const [source, share] of shares) {
+      if (share.length > 1 && source.check(player, share) !== true) return null;
+    }
+    return shares;
   }
 
   /** Deducts the shortfall from the first source that can supply it, leaving the rest alone. */
@@ -5088,6 +5157,15 @@ export class PluginManager {
           `[plugins] spell rune source consume failed (${entry.pluginName})`,
           err
         );
+      }
+    }
+    const shares = PluginManager.splitSpellRuneSources(player, missingItems);
+    if (!shares) return;
+    for (const [source, share] of shares) {
+      try {
+        source.consume(player, share);
+      } catch (err) {
+        console.error("[plugins] spell rune source consume failed", err);
       }
     }
   }

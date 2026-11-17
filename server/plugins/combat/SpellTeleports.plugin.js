@@ -6,11 +6,16 @@ let pluginApi;
 const HOUSE_TABLET = "teleport to house";
 const HOUSE_TABLET_OPTIONS = new Set(["break", "inside", "outside"]);
 /**
- * The house tablet's Group option goes to a Group Ironman teammate's house (Wiki). This server has
- * no Ironman groups, so every player gets live's refusal: the line on the click tick, the tablet
- * kept and no teleport (rsprox.net capture 2919, tick 2179).
+ * The house tablet's Group option, like the spell's "Group: Choose" (op4) and "Group: Previous"
+ * (op5, client script magic_spellbook_modifyops), goes to a Group Ironman teammate's house
+ * (Update:Group Ironman Improvements): "teleports:group-house" { player, previous, pick, handled }
+ * asks content whose house (the Group Ironman plugin), and Construction says where it stands
+ * ("construction:group-house"). A player content doesn't answer for gets live's refusal: the line on
+ * the click tick, the tablet kept and no teleport (rsprox.net capture 2919, tick 2179).
  */
 const HOUSE_TABLET_GROUP = "group";
+const HOUSE_GROUP_CHOOSE_OP = 4;
+const HOUSE_GROUP_PREVIOUS_OP = 5;
 const NOT_IN_GROUP = "You are not in an Ironman Group.";
 /** A redirected house tablet (scroll of redirection) that finishes the Desert Diary's Pollnivneach task. */
 const POLLNIVNEACH_REDIRECT = "pollnivneach teleport";
@@ -234,7 +239,7 @@ function useTablet(event) {
     return;
   }
   if (option === "revert" && TABLETS.redirects[name]) return revertTablet(event);
-  if (name === HOUSE_TABLET && option === HOUSE_TABLET_GROUP) return refuseGroupHouse(event);
+  if (name === HOUSE_TABLET && option === HOUSE_TABLET_GROUP) return breakGroupTablet(event);
   const alternate = ALTERNATES.get(name);
   if (alternate && option === "toggle") return toggleDestination(event, alternate);
   const target = tabletDestination(event, name, option);
@@ -262,9 +267,40 @@ function useTablet(event) {
   pluginApi.sendMultiChatboxPrompt(player, title, yes, () => usable() && breakTablet(), no, () => {});
 }
 
-function refuseGroupHouse(event) {
+/**
+ * Asks whose house (`previous`: the one last visited) and calls `go(owner, destination)` with the
+ * owner's house portal, once Construction lets the player in; true when content answered.
+ */
+function groupHouse(player, previous, go) {
+  const request = {
+    player, previous, handled: false,
+    pick: (owner) => {
+      const house = { player, owner, destination: null, onArrival: null, refused: false };
+      pluginApi.emitCustomEvent("construction:group-house", house);
+      if (house.destination) go(house.destination, house.onArrival);
+    },
+  };
+  pluginApi.emitCustomEvent("teleports:group-house", request);
+  if (!request.handled) player.sendMessage(NOT_IN_GROUP);
+}
+
+/** The house tablet's Group: used up as Break uses it, on the way to the chosen house. */
+function breakGroupTablet(event) {
   event.handled = true;
-  event.player.sendMessage(NOT_IN_GROUP);
+  const { player, itemId } = event;
+  groupHouse(player, false, (destination, onArrival) => {
+    if (!player.getInventory().contains(itemId) || !core.TeleportHandler.checkReqs(player, destination)) return;
+    const useUp = () => player.getInventory().deleteNumber(itemId, 1);
+    core.TeleportHandler.confirm(player, destination,
+      () => core.TeleportHandler.teleport(player, destination, core.TeleportType.TELE_TAB, false, onArrival, useUp), 20, { item: itemId });
+  });
+}
+
+/** The spell's Group options: cast as the spell, landing at the house (arrival option "group"). */
+function castHouseGroup(event, name) {
+  event.handled = true;
+  groupHouse(event.player, event.opId === HOUSE_GROUP_PREVIOUS_OP,
+    (destination) => core.SpellTeleports.handleSelf(event.player, name, destination, "group"));
 }
 
 /** The clicked scroll in the inventory, as a "teleport-scroll:read" source. */
@@ -392,7 +428,8 @@ function castAlternate(event) {
 
 /**
  * Wiki (Standard spellbook): these teleports each require a quest's completion. The spells; the tablets are
- * QUEST_LOCKED_TABLETS. TSPS wording for the refusal: the retail line has not been established.
+ * QUEST_LOCKED_TABLETS. Recorded spell-click refusal: "You must have completed Twilight's Promise to use this spell."
+ * (rsprox_transcripts/226/01695.txt), the same shape as Pandemonium's (235/03448.txt).
  */
 const QUEST_LOCKED_SPELLS = new Map([
   ["kourend castle teleport", { key: "client_of_kourend", name: "Client of Kourend" }],
@@ -411,7 +448,11 @@ function questLockRefusal(player, name, action) {
   if (!locked) return null;
   const quest = { player, key: locked.key, complete: false };
   pluginApi.emitCustomEvent("quest:is-complete", quest);
-  if (!quest.complete) return `You need to complete ${locked.name} to ${action}.`;
+  if (!quest.complete) {
+    // The house portals' "direct this teleport" line is ours (no recording); the spell's is the recorded one.
+    if (action === "cast this spell") return `You must have completed ${locked.name} to use this spell.`;
+    return `You need to complete ${locked.name} to ${action}.`;
+  }
   if (locked.stage === undefined) return null;
   const stage = { player, key: locked.key, stage: null };
   pluginApi.emitCustomEvent("quest:get-stage", stage);
@@ -426,15 +467,24 @@ function questLockRefusal(player, name, action) {
 const QUEST_LOCKED_TABLETS = ["ardougne teleport", "kourend castle teleport", "civitas illa fortis teleport"];
 
 /**
+ * Tablets with no spell of their own that need a quest. Wiki (Volcanic mine teleport): Bone Voyage is required, and
+ * without it the tablet says "You need to have completed the Bone Voyage Quest to use this spell." (capital Q).
+ */
+const TABLET_QUEST_LOCKS = new Map([
+  ["volcanic mine teleport", { key: "bone_voyage", refusal: "You need to have completed the Bone Voyage Quest to use this spell." }],
+]);
+
+/**
  * The refusal for a quest-locked tablet, or null. Recorded: "You need to have completed the Plague City quest to use
  * this spell." (rsprox_transcripts/242/900268.txt) and the Twilight's Promise line (242/900261.txt), tablet kept.
  */
 function tabletQuestLock(player, name) {
-  if (!QUEST_LOCKED_TABLETS.includes(name)) return null;
-  const locked = QUEST_LOCKED_SPELLS.get(name);
+  const locked = TABLET_QUEST_LOCKS.get(name) ?? (QUEST_LOCKED_TABLETS.includes(name) ? QUEST_LOCKED_SPELLS.get(name) : null);
+  if (!locked) return null;
   const quest = { player, key: locked.key, complete: false };
   pluginApi.emitCustomEvent("quest:is-complete", quest);
-  return quest.complete ? null : `You need to have completed the ${locked.name} quest to use this spell.`;
+  if (quest.complete) return null;
+  return locked.refusal ?? `You need to have completed the ${locked.name} quest to use this spell.`;
 }
 
 /**
@@ -497,6 +547,11 @@ function castStandard(event, name) {
   if (!mayCastApeAtoll(event.player, name)) { event.handled = true; return; }
   if (name === HOUSE_TABLET && event.opId === HOUSE_OUTSIDE_OP && event.player.getSpellbook() === core.MagicSpellbook.NORMAL) {
     castHouseOutside(event, name);
+    return;
+  }
+  if (name === HOUSE_TABLET && [HOUSE_GROUP_CHOOSE_OP, HOUSE_GROUP_PREVIOUS_OP].includes(event.opId)
+    && event.player.getSpellbook() === core.MagicSpellbook.NORMAL) {
+    castHouseGroup(event, name);
     return;
   }
   const centre = standardCentre(name);

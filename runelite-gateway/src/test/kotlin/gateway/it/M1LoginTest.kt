@@ -21,7 +21,9 @@ class M1LoginTest {
     @Test
     fun `js5 serves the master index and groups with their index crcs`() {
         val client = LiveGateway.client()
-        assertArrayEquals(TestCache.clientCache.masterIndex(), client.js5(DiskStore.MASTER_ARCHIVE, DiskStore.MASTER_ARCHIVE))
+        // The master index request refreshes the served cache (a league world's content data comes on top).
+        val masterIndex = client.js5(DiskStore.MASTER_ARCHIVE, DiskStore.MASTER_ARCHIVE)
+        assertArrayEquals(gateway.servedCache.current.masterIndex(), masterIndex)
         val group = TestCache.cache.table(CONFIG_ARCHIVE).groups.getValue(VARBIT_GROUP)
         val container = client.js5(CONFIG_ARCHIVE, VARBIT_GROUP)
         assertEquals(group.crc, CRC32().apply { update(container) }.value.toInt())
@@ -30,7 +32,7 @@ class M1LoginTest {
     @Test
     fun `js5 serves the patched enums and the config index that lists them`() {
         val client = LiveGateway.client()
-        val clientCache = TestCache.clientCache
+        val clientCache = gateway.servedCache.refresh()
         assertArrayEquals(clientCache.container(CONFIG_ARCHIVE, ENUM_GROUP), client.js5(CONFIG_ARCHIVE, ENUM_GROUP))
         assertArrayEquals(
             clientCache.container(DiskStore.MASTER_ARCHIVE, CONFIG_ARCHIVE),

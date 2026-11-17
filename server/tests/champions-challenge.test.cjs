@@ -277,3 +277,62 @@ test("leaving the basement rescues a champion's scroll left on its floor", (t) =
   assert.deepEqual(removed, [scroll]);
   assert.equal(placed.length, 0);
 });
+
+test("the champions log opens 468 and draws the house owner's defeated champions", () => {
+  const sent = [];
+  const sender = {
+    sendInterface: (id) => { sent.push(["interface", id]); return sender; },
+    sendClientScript: (id, ...args) => { sent.push(["script", id, ...args]); return sender; },
+  };
+  const visitor = { ...player(), getPacketSender: () => sender };
+  const owner = player({ defeated: bitsOf("giant", "imp", "leon"), lamps: bitsOf("giant") });
+  const event = { player: visitor, owner, handled: false };
+  Rewards.openLog(event);
+  // rsprox 1001169/2905/2906: if_opensub champions_log (468), then runclientscript 1408 [bits].
+  assert.deepEqual(sent, [["interface", 468], ["script", 1408, bitsOf("giant", "imp", "leon")]]);
+  assert.equal(event.handled, true);
+
+  sent.length = 0;
+  Rewards.openLog({ player: { ...player(), getPacketSender: () => sender } });
+  assert.deepEqual(sent, [["interface", 468], ["script", 1408, 0]], "no owner: the reader's own log");
+});
+
+test("each champion's bit is its row in the log's name enum", () => {
+  // Cache enum 1470 (script 1409 crosses out row i when testbit(arg, i)), rev 242.
+  const ENUM_1470 = ["Earth Warrior Champion", "Ghoul Champion", "Giant Champion", "Goblin Champion",
+    "Hobgoblin Champion", "Imp Champion", "Jogre Champion", "Lesser Demon Champion",
+    "Skeleton Champion", "Zombies Champion", "Leon d'Cour"];
+  const keys = ["earthwarrior", "ghoul", "giant", "goblin", "hobgoblin", "imp", "jogre", "lesserdemon",
+    "skeleton", "zombie", "leon"];
+  assert.equal(Common.DATA.champions.length, ENUM_1470.length);
+  keys.forEach((key, row) => assert.equal(champion(key)?.bit, row, ENUM_1470[row]));
+});
+
+// With a full pack the scroll is moved out by the trapdoor as the same stack (Wiki: Drops): it keeps the time it
+// has already lain in the arena and its owner-only time, instead of a fresh 300 ticks and 100 more owner-only.
+test("a scroll moved out with a full pack keeps its ground timer", (t) => {
+  require("../dist/game/cache/CachePipeline").CachePipeline.initialize();
+  const { World } = require("../dist/game/World");
+  const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
+  const { State } = require("../dist/game/entity/impl/grounditem/ItemOnGround");
+  const { Item } = require("../dist/game/model/Item");
+  const { Location } = require("../dist/game/model/Location");
+  const items = World.getItems(), previous = items.splice(0), cycleBefore = World.getProcessCycle();
+  t.after(() => { items.splice(0, items.length, ...previous); World.processCycle = cycleBefore; initCore(); });
+  initCore({ World, ItemOnGroundManager, Item, Location });
+  const area = {};
+  const owner = { getUsername: () => "ChampionMover", getPrivateArea: () => area };
+  World.processCycle = 9000;
+  const scroll = ItemOnGroundManager.registerLocation(owner, new Item(6800, 1), new Location(3170, 9758, 0), area);
+  for (let i = 0; i < 40; i++) { World.processCycle++; ItemOnGroundManager.process(); }
+  const timing = scroll.getTiming();
+  const session = { area, player: { getInventory: () => ({ getFreeSlots: () => 0, adds() { throw new Error("pack is full"); } }) } };
+  Gallery.rescueScrolls(session);
+  const outside = World.getItems().filter((ground) => !ground.isPendingRemoval());
+  assert.equal(outside.length, 1);
+  const [x, y, z] = Common.DATA.tiles.outside;
+  assert.deepEqual([outside[0].getItem().getId(), outside[0].getPrivateArea(), outside[0].getPosition().getX(),
+    outside[0].getPosition().getY(), outside[0].getPosition().getZ() ?? 0], [6800, null, x, y, z ?? 0]);
+  assert.equal(outside[0].getState(), State.SEEN_BY_PLAYER);
+  assert.deepEqual(outside[0].getTiming(), timing, "the same despawn and public ticks");
+});

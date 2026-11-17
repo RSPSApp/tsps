@@ -1,0 +1,94 @@
+{
+  "$comment": "Island amenities built from their spaces (Wiki: Island amenity and each amenity's page: level, XP, materials; a hammer and a saw for all). Each site is one varbit by gameval: 0 shows the space (Build, Inspect), 1 the built amenity, and for a rowboat also its mainland twin (the _in multiloc, hidden at 0). Each site's loc is its base multiloc at the space. Built amenities work through the plugins that own their kind by name: a range (Cooking pot), Spinning wheel, Loom, Potter's wheel, Pottery oven, Anvil, Furnace, Bank chest (Bank, Collect), a water source (Water pump); rowboats are ferries routes (plugins/world/data/ferries.json, rowboat-*). Sangvesti's bank chest is the same amenity under its own loc (Wiki: Bank chest (amenity)); Wyrmscraig's chest pieces are not an amenity. Not captured: human_poh_build on the build, as the house's hotspots play it, and the messages are ours. {name} is the amenity with its article, {level} its level, {materials} its materials as text.",
+  "messages": {
+    "inspect": "You could build {name} here with level {level} Construction, a hammer, a saw, {materials}.",
+    "level": "You need a Construction level of {level} to build {name}.",
+    "tools": "You need a hammer and a saw to build {name}.",
+    "materials": "You need {materials} to build {name}.",
+    "built": "You build {name}."
+  },
+  "anim": "human_poh_build",
+  "amenities": {
+    "water_pump": {
+      "name": "a water pump", "level": 17, "xp": 21,
+      "materials": [["iron_bar", 2], ["bucket_empty", 1]], "materialsText": "2 iron bars and a bucket",
+      "sites": [
+        { "loc": "amenity_water_pump_vatrachos", "varbit": "amenity_water_pump_vatrachos" },
+        { "loc": "amenity_water_pump_onyx_crest", "varbit": "amenity_water_pump_onyx_crest" },
+        { "loc": "amenity_water_pump_laguna_aurorae", "varbit": "amenity_water_pump_laguna_aurorae" },
+        { "loc": "amenity_water_pump_sunbleak", "varbit": "amenity_water_pump_sunbleak" }
+      ]
+    },
+    "cooking_pot": {
+      "name": "a cooking pot", "level": 19, "xp": 23,
+      "materials": [["iron_bar", 2], ["logs", 2], ["tinderbox", 1]], "materialsText": "2 iron bars, 2 logs and a tinderbox",
+      "sites": [
+        { "loc": "amenity_cooking_pot_chinchompa", "varbit": "amenity_cooking_pot_chinchompa" },
+        { "loc": "amenity_cooking_pot_anglers", "varbit": "amenity_cooking_pot_anglers" },
+        { "loc": "amenity_cooking_pot_laguna_aurorae", "varbit": "amenity_cooking_pot_laguna_aurorae" },
+        { "loc": "amenity_cooking_pot_crown_jewel", "varbit": "amenity_cooking_pot_crown_jewel" },
+        { "loc": "amenity_cooking_pot_sunbleak", "varbit": "amenity_cooking_pot_sunbleak" }
+      ]
+    },
+    "spinning_wheel": {
+      "name": "a spinning wheel", "level": 24, "xp": 141,
+      "materials": [["iron_bar", 2], ["plank_oak", 2], ["ball_of_wool", 1]], "materialsText": "2 iron bars, 2 oak planks and a ball of wool",
+      "sites": [{ "loc": "amenity_spinning_wheel_anglers", "varbit": "amenity_spinning_wheel_anglers" }]
+    },
+    "potters_wheel": {
+      "name": "a potter's wheel", "level": 24, "xp": 141,
+      "materials": [["iron_bar", 2], ["plank_oak", 2], ["ball_of_wool", 1]], "materialsText": "2 iron bars, 2 oak planks and a ball of wool",
+      "sites": [{ "loc": "amenity_pottery_wheel_vatrachos", "varbit": "amenity_pottery_wheel_vatrachos" }]
+    },
+    "loom": {
+      "name": "a loom", "level": 31, "xp": 134,
+      "materials": [["iron_bar", 1], ["plank_oak", 2], ["rope", 1]], "materialsText": "an iron bar, 2 oak planks and a rope",
+      "sites": [{ "loc": "amenity_loom_laguna_aurorae", "varbit": "amenity_loom_laguna_aurorae" }]
+    },
+    "pottery_oven": {
+      "name": "a pottery oven", "level": 37, "xp": 87,
+      "materials": [["limestonebrick", 4], ["coal", 1], ["tinderbox", 1]], "materialsText": "4 limestone bricks, a coal and a tinderbox",
+      "sites": [{ "loc": "amenity_pottery_oven_vatrachos", "varbit": "amenity_pottery_oven_vatrachos" }]
+    },
+    "anvil": {
+      "name": "an anvil", "level": 43, "xp": 50,
+      "materials": [["iron_bar", 4], ["lead_bar", 4]], "materialsText": "4 iron bars and 4 lead bars",
+      "sites": [
+        { "loc": "amenity_anvil_charred_island", "varbit": "amenity_anvil_charred_island" },
+        { "loc": "amenity_anvil_buccaneers", "varbit": "amenity_anvil_buccaneers" }
+      ]
+    },
+    "rowboat": {
+      "name": "a rowboat", "level": 50, "xp": 1297,
+      "materials": [["plank_camphor", 8], ["swamppaste", 10]], "materialsText": "8 camphor planks and 10 swamp paste",
+      "sites": [
+        { "loc": "amenity_rowboat_vatrachos_out", "varbit": "amenity_rowboat_vatrachos" },
+        { "loc": "amenity_rowboat_anglers_out", "varbit": "amenity_rowboat_anglers" },
+        { "loc": "amenity_rowboat_soul_tear_out", "varbit": "amenity_rowboat_soul_tear" },
+        { "loc": "amenity_rowboat_ynysdail_out", "varbit": "amenity_rowboat_ynysdail" },
+        { "loc": "amenity_rowboat_buccaneers_out", "varbit": "amenity_rowboat_buccaneers" }
+      ]
+    },
+    "furnace": {
+      "name": "a furnace", "level": 56, "xp": 170,
+      "materials": [["steel_bar", 8], ["coal", 2], ["tinderbox", 1]], "materialsText": "8 steel bars, 2 coal and a tinderbox",
+      "sites": [
+        { "loc": "amenity_furnace_onyx_crest", "varbit": "amenity_furnace_onyx_crest" },
+        { "loc": "amenity_furnace_buccaneers", "varbit": "amenity_furnace_buccaneers" }
+      ]
+    },
+    "bank_chest": {
+      "name": "a bank chest", "level": 70, "xp": 1787,
+      "materials": [["plank_ironwood", 4], ["adamantite_bar", 2], ["cupronickel_bar", 2], ["tog_stone", 1]], "materialsText": "4 ironwood planks, 2 adamantite bars, 2 cupronickel bars and a magic stone",
+      "sites": [
+        { "loc": "amenity_bankchest_onyx_crest", "varbit": "amenity_bankchest_onyx_crest" },
+        { "loc": "amenity_bankchest_charred_island", "varbit": "amenity_bankchest_charred_island" },
+        { "loc": "amenity_bankchest_deepfin_1", "varbit": "amenity_bankchest_deepfin_1" },
+        { "loc": "amenity_bankchest_deepfin_2", "varbit": "amenity_bankchest_deepfin_2" },
+        { "loc": "amenity_bankchest_sunbleak", "varbit": "amenity_bankchest_sunbleak" },
+        { "loc": "amenity_bankchest_buccaneers", "varbit": "amenity_bankchest_buccaneers" },
+        { "loc": "amenity_bankchest_sangvesti", "varbit": "amenity_bankchest_sangvesti" }
+      ]
+    }
+  }
+}

@@ -21,6 +21,8 @@ let core;
 let Barrows;
 let diaryApi;
 let cleanupPlayer;
+let deathHook;
+let defeatedHook;
 const subjects = new Set();
 let originalError;
 let errors;
@@ -60,14 +62,27 @@ before(async () => {
   diaryApi.onCustomEvent("diary:is-complete", Diaries._test.onIsComplete);
   diaryApi.onCustomEvent("collection-log:obtain", (event) => event.player.collected?.push([event.itemId, event.amount]));
   diaryApi.onCustomEvent("barrows:chest-looted", (event) => { event.player.chestEvents = (event.player.chestEvents ?? 0) + 1; });
+  // Hook order as on the server: the Death's Office's first-grave arrival (deathsoffice loads before minigames).
+  diaryApi.onPlayerDeath((event) => {
+    if (!event.player.firstGrave || event.handled) return;
+    event.handled = true;
+    event.player.tookByDeathsOffice = true;
+  });
   Barrows.register(new Proxy({
     core,
     getWorld: () => core.World,
     getRegionManager: () => core.RegionManager,
     getTaskManager: () => core.TaskManager,
     onPlayerLogout: (fn) => { cleanupPlayer = fn; },
+    onPlayerDeath: (fn) => { deathHook = fn; },
+    onPlayerDefeated: (fn) => { defeatedHook = fn; },
     emitCustomEvent: (name, request) => diaryApi.emitCustomEvent(name, request),
+    // A menu is logged as [title, ...option texts] on its player.
+    sendMultiChatboxPrompt: (subject, title, ...rest) => (subject.prompts ??= []).push([title, ...rest.filter((entry) => typeof entry === "string")]),
   }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  // Barrows' own death hooks, into the real PluginManager after the Death's Office stand-in.
+  diaryApi.onPlayerDeath(deathHook);
+  diaryApi.onPlayerDefeated(defeatedHook);
 });
 
 function player() {
@@ -195,8 +210,12 @@ test("Barrows: the recorded crypt and search lines", () => {
   const subject = player();
   arrive(subject, AHRIM_MOUND);
   Barrows._test.dig({ player: subject });
+  // The line comes with the dig itself, before the plane change (226/01694 tick 8800, moved 8801).
+  assert.deepEqual(subject.sent.spam, ["You've broken into a crypt!"]);
+  assert.equal(subject.getLocation().getZ(), 0, "still on the mound when the line shows");
   for (let i = 0; i < 5 && subject.getLocation().getZ() === 0; i++) Barrows._test.processPlayer({ player: subject });
-  assert.ok(subject.sent.spam.includes("You've broken into a crypt!"), subject.sent.spam.join(" | "));
+  assert.equal(subject.getLocation().getZ(), 3, "then in the crypt");
+  assert.deepEqual(subject.sent.spam, ["You've broken into a crypt!"], "sent once, not again on the move");
   assert.ok(!subject.sent.messages.includes("You've found a crypt!"));
 
   const run = subject.getAttribute("barrows");
@@ -492,4 +511,207 @@ test("Barrows: an open tunnel door is walked through, not slid across", () => {
   assert.ok(subject.getLocation().equals(to), `walked to the far side (${subject.getLocation()})`);
   for (let i = 0; i < 3; i++) processPlayer({ player: subject });
   assert.equal(subject.hasFlag(IGNORE_CLIPPING_FLAG), false, "clipping back once across");
+});
+
+// ------------------------------------------------------------------ The strange old lockpick
+// User rsprox captures (revision 242.1): StrangeOldLockpickBarrows.bin ticks 52-68 and
+// BarrowsMiniQuest.bin ticks 543-704; Jagex's Darkmeyer news; the Wiki's Trivia line.
+const doorObject = (door) => ({ getId: () => door.id, getLocation: () => new Location(door.x, door.y, door.z) });
+
+/** A locked hallway's two doorways (one varbit, two ends), the player on the first one's near side. */
+function lockedHallway(subject) {
+  const { getTunnelMap, getRun, doorSides, processPlayer } = Barrows._test;
+  arrive(subject, CHEST_ROOM);
+  const run = getRun(subject);
+  const doors = getTunnelMap().doors;
+  const varbit = doors.map((entry) => entry.varbit).find((id) => !run.openDoors.includes(id));
+  // A doorway is two leaves side by side; the hallway's ends are its leaves three or more tiles apart.
+  const [first] = doors.filter((entry) => entry.varbit === varbit);
+  const second = doors.find((entry) => entry.varbit === varbit && Math.abs(entry.x - first.x) + Math.abs(entry.y - first.y) > 2);
+  assert.ok(first && second, "a hallway has a door at each end");
+  subject.setLocation(doorSides(first)[0].clone());
+  processPlayer({ player: subject });
+  return { run, varbit, first, second };
+}
+
+/** Finishes the crossing, then stands at the other end's door. */
+function crossTo(subject, door) {
+  const { doorSides, processPlayer } = Barrows._test;
+  for (let i = 0; i < 4; i++) processPlayer({ player: subject });
+  subject.setLocation(doorSides(door)[1].clone());
+  processPlayer({ player: subject });
+}
+
+const lockpick = (charges) => {
+  const item = new core.Item(charges === 50 ? core.ItemIdentifiers.STRANGE_OLD_LOCKPICK_FULL_ : core.ItemIdentifiers.STRANGE_OLD_LOCKPICK, 1);
+  if (charges !== 50) item.setMetaValue("barrows:lockpick-charges", charges);
+  return item;
+};
+const useOn = (subject, door, item) => Barrows._test.useLockpickOnDoor({ player: subject, object: doorObject(door), item, itemId: item.getId() });
+const inspect = (subject, item) => (Barrows._test.inspectLockpick({ player: subject, item }), subject.sent.messages.at(-1));
+
+test("Barrows: the lockpick used on a locked hallway's door opens it for a charge; its other door is free", () => {
+  const subject = player();
+  const { run, varbit, first, second } = lockedHallway(subject);
+  const pick = lockpick(50);
+  subject.getInventory().add(pick, false);
+  assert.equal(useOn(subject, first, subject.getInventory().get(0)), true);
+  const held = subject.getInventory().get(0);
+  // The full pick becomes the used one in its slot (BarrowsMiniQuest.bin tick 543).
+  assert.equal(held.getId(), core.ItemIdentifiers.STRANGE_OLD_LOCKPICK);
+  assert.equal(inspect(subject, held), "Your Strange old lockpick has 49 charges remaining.");
+  assert.ok(run.pickedDoors.includes(varbit), "the hallway stays open this layout");
+  assert.equal(subject.sent.varbits.get(varbit), 1, "the door varbit is untouched (StrangeOldLockpickBarrows.bin)");
+  assert.equal(subject.hasFlag(Barrows._test.IGNORE_CLIPPING_FLAG), true, "walking through the doorway (as Open does)");
+  assert.ok(!subject.sent.messages.includes("This door is locked."));
+  crossTo(subject, second);
+  assert.equal(useOn(subject, second, held), true);
+  assert.equal(inspect(subject, held), "Your Strange old lockpick has 49 charges remaining.", "no charge for the hallway's other door");
+});
+
+test("Barrows: a carried lockpick still opens a locked door's Open, once per hallway; none leaves it locked", () => {
+  const subject = player();
+  const { first, second } = lockedHallway(subject);
+  Barrows._test.useDoor(subject, first);
+  assert.deepEqual(subject.sent.messages.slice(-1), ["This door is locked."]);
+  subject.getInventory().add(lockpick(10), false);
+  Barrows._test.useDoor(subject, first);
+  assert.equal(inspect(subject, subject.getInventory().get(0)), "Your Strange old lockpick has 9 charges remaining.");
+  crossTo(subject, second);
+  Barrows._test.useDoor(subject, second);
+  assert.equal(inspect(subject, subject.getInventory().get(0)), "Your Strange old lockpick has 9 charges remaining.");
+});
+
+test("Barrows: the lockpick's last charge warns, keeps the charge through its hallway and crumbles as the tunnels are left unused", () => {
+  const subject = player();
+  const { first, second } = lockedHallway(subject);
+  subject.getInventory().add(lockpick(1), false);
+  assert.equal(useOn(subject, first, subject.getInventory().get(0)), true);
+  assert.equal(subject.sent.messages.at(-1), "The Strange old lockpick almost breaks, but seems in good enough shape for one more use.");
+  assert.equal(subject.getInventory().getAmount(core.ItemIdentifiers.STRANGE_OLD_LOCKPICK), 1, "kept for the way out");
+  crossTo(subject, second);
+  useOn(subject, second, subject.getInventory().get(0));
+  assert.ok(!subject.sent.messages.includes("This door is locked."), "the hallway's other door is free");
+  arrive(subject, SURFACE);
+  assert.equal(subject.getInventory().getAmount(core.ItemIdentifiers.STRANGE_OLD_LOCKPICK), 0, "teleporting out with the last charge unused, it still crumbles");
+});
+
+test("Barrows: after the warning the last charge opens the next locked hallway, and the pick crumbles (Wiki Trivia)", () => {
+  const subject = player();
+  const { getTunnelMap, doorSides, processPlayer } = Barrows._test;
+  const { run, varbit, first } = lockedHallway(subject);
+  subject.getInventory().add(lockpick(1), false);
+  useOn(subject, first, subject.getInventory().get(0));
+  assert.equal(subject.sent.messages.at(-1), "The Strange old lockpick almost breaks, but seems in good enough shape for one more use.");
+  assert.equal(inspect(subject, subject.getInventory().get(0)), "Your Strange old lockpick has 1 charges remaining.", "the warning keeps the charge");
+  for (let i = 0; i < 4; i++) processPlayer({ player: subject });
+  // A second hallway nobody has opened.
+  const other = getTunnelMap().doors.find((entry) => entry.varbit !== varbit && !run.openDoors.includes(entry.varbit));
+  assert.ok(other, "another locked hallway");
+  subject.setLocation(doorSides(other)[0].clone());
+  processPlayer({ player: subject });
+  const messages = subject.sent.messages.length;
+  assert.equal(useOn(subject, other, subject.getInventory().get(0)), true);
+  assert.deepEqual(subject.sent.messages.slice(messages), [], "neither locked nor warned again");
+  assert.ok(run.pickedDoors.includes(other.varbit), "it opens");
+  assert.equal(subject.getInventory().getAmount(core.ItemIdentifiers.STRANGE_OLD_LOCKPICK), 0, "the last charge used: it crumbles");
+  // With no pick left, a third locked hallway stays shut.
+  const third = getTunnelMap().doors.find((entry) => ![varbit, other.varbit].includes(entry.varbit) && !run.openDoors.includes(entry.varbit));
+  for (let i = 0; i < 4; i++) processPlayer({ player: subject });
+  subject.setLocation(doorSides(third)[0].clone());
+  processPlayer({ player: subject });
+  Barrows._test.useDoor(subject, third);
+  assert.equal(subject.sent.messages.at(-1), "This door is locked.");
+});
+
+test("Barrows: a death in the tunnels leaves them too: a warned pick crumbles, kept or dropped; an unwarned one, or a death outside, keeps it", () => {
+  const { crumbleWarnedLockpickOnDeath } = Barrows._test;
+  // The death's own order (PlayerDeath.ts): kept items back, emitPlayerDefeated, then emitPlayerDeath,
+  // all on the death tile, through the real PluginManager with Barrows' registered hooks.
+  const die = (subject) => {
+    PluginManager.emitPlayerDefeated(null, subject);
+    PluginManager.emitPlayerDeath({ player: subject, killer: null, itemsLost: true, handled: false });
+  };
+  const PICK = core.ItemIdentifiers.STRANGE_OLD_LOCKPICK;
+  const warnedPick = (subject, first) => {
+    subject.getInventory().add(lockpick(1), false);
+    useOn(subject, first, subject.getInventory().get(0));
+    assert.equal(subject.sent.messages.at(-1), "The Strange old lockpick almost breaks, but seems in good enough shape for one more use.");
+    return subject.getInventory().get(0);
+  };
+  // Kept (Protect Item): back in the inventory on the death tile as the death hook runs.
+  const kept = player();
+  warnedPick(kept, lockedHallway(kept).first);
+  die(kept);
+  assert.equal(kept.getInventory().getAmount(PICK), 0, "a kept warned pick crumbles");
+  // Dropped: it goes to neither the grave nor the floor.
+  const dropped = player();
+  const item = warnedPick(dropped, lockedHallway(dropped).first);
+  const drop = (subject, entry, extra = {}) => {
+    const event = { player: subject, killer: null, item: entry, kept: false, shouldDropItems: true, dropEligible: false,
+      suppressDefaultDrop: false, handled: false, extraDrops: [], ...extra };
+    crumbleWarnedLockpickOnDeath(event);
+    return event.handled;
+  };
+  assert.equal(drop(dropped, item), true, "a dropped warned pick crumbles");
+  assert.equal(drop(dropped, item, { kept: true }), false, "a kept one is left to the death hook");
+  assert.equal(drop(dropped, item, { shouldDropItems: false }), false, "a death that keeps everything keeps it");
+  // Not warned, or the death is not in the tunnels: untouched.
+  const fresh = player();
+  lockedHallway(fresh);
+  fresh.getInventory().add(lockpick(5), false);
+  assert.equal(drop(fresh, fresh.getInventory().get(0)), false);
+  die(fresh);
+  assert.equal(fresh.getInventory().getAmount(PICK), 1, "an unwarned pick survives");
+  const outside = player();
+  const warned = warnedPick(outside, lockedHallway(outside).first);
+  outside.setLocation(SURFACE.clone());
+  assert.equal(drop(outside, warned), false);
+  die(outside);
+  assert.equal(outside.getInventory().getAmount(PICK), 1, "a death out of the tunnels is not ours");
+  // A first-ever grave death: the Death's Office tutorial (Tutorial.DeathsOffice.js arriveAtDeath, registered
+  // before Barrows) takes the onPlayerDeath, so Barrows' death hook never runs. Its stand-in here takes it the same way.
+  const firstGrave = player();
+  warnedPick(firstGrave, lockedHallway(firstGrave).first);
+  firstGrave.firstGrave = true;
+  die(firstGrave);
+  assert.equal(firstGrave.tookByDeathsOffice, true, "the tutorial took the death");
+  assert.equal(firstGrave.getInventory().getAmount(PICK), 0, "a kept warned pick still crumbles");
+});
+
+test("Barrows: the lockpick on a door outside the tunnels, or another item on a door, is not ours", () => {
+  const subject = player();
+  const { first } = lockedHallway(subject);
+  const coins = new core.Item(core.ItemIdentifiers.COINS, 1);
+  assert.equal(Barrows._test.useLockpickOnDoor({ player: subject, object: doorObject(first), item: coins, itemId: coins.getId() }), false);
+  arrive(subject, SURFACE);
+  assert.equal(useOn(subject, first, lockpick(50)), false);
+});
+
+test("Barrows: condensed warnings put the tunnel line in the menu's title, with no box (StrangeOldLockpickBarrows.bin tick 23)", () => {
+  const subject = player();
+  arrive(subject, new Location(3557, 9703, 3));
+  const run = Barrows._test.getRun(subject);
+  subject.setAttribute(Barrows._test.WARNINGS_ATTRIBUTE, 1);
+  Barrows._test.searchCrypt(subject, run.tunnel);
+  assert.deepEqual(subject.prompts, [["You've found a hidden tunnel, do you want to enter?", "Yeah I'm fearless!", "No way, that looks scary!"]]);
+  assert.equal(subject.getDialogueManager().getCurrent?.() ?? null, null, "no message box first");
+});
+
+test("Barrows: a plugin can refuse a mound's Spade dig before it starts; off the mounds, or another spade, it can't", () => {
+  const subject = player();
+  let asked = 0;
+  const refuse = (request) => { if (request.player === subject) { asked++; request.blocked = true; } };
+  diaryApi.onCustomEvent("barrows:dig", refuse);
+  const onMound = { player: subject, itemId: core.ItemIdentifiers.SPADE, location: AHRIM_MOUND.clone(), refused: false };
+  Barrows._test.refuseMoundDig(onMound);
+  assert.equal(onMound.refused, true);
+  const offMound = { player: subject, itemId: core.ItemIdentifiers.SPADE, location: new Location(3548, 3290, 0), refused: false };
+  Barrows._test.refuseMoundDig(offMound);
+  assert.equal(offMound.refused, false);
+  // The mounds dig only with "Spade": another spade there is not refused in his name.
+  const eastfloor = { player: subject, itemId: core.ItemIdentifiers.EASTFLOOR_SPADE, location: AHRIM_MOUND.clone(), refused: false };
+  Barrows._test.refuseMoundDig(eastfloor);
+  assert.equal(eastfloor.refused, false);
+  assert.equal(asked, 1, "asked only for a brother's mound");
 });

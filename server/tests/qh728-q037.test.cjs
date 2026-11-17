@@ -5,6 +5,9 @@
 // src/main/java/com/questhelper/helpers/quests/fairytaleii/FairytaleII.java
 // at 06da90f982518a093f2fe1c9cfac5547fa7053d3.
 //
+// The stages follow the user's whole-quest rsprox capture FairyTale2 (rev 242.1); the real-player
+// capture test is fairytale-ii-capture.test.cjs.
+//
 // The route test starts at durable stage 0 and dispatches the plugin's
 // registered handlers. It fixture-sets only ordinary supplies/loot (vial of
 // water, pestle, a gorak claw after the registered kill, skills) and clears
@@ -73,7 +76,7 @@ function setup() {
     ...realCore,
     Misc: { ...realCore.Misc, randomInclusive: () => 1 },
     Item: realCore.Item,
-    TaskManager: { submit(task) { tasks.push(task); } },
+    TaskManager: { submit(task) { tasks.push(task); }, cancelTasks() {} },
   };
   const api = new Proxy({
     core,
@@ -292,6 +295,7 @@ test('fresh stage 0 follows the mandatory route and completes on the native varb
   const MARTIN = N.MARTIN_THE_MASTER_GARDENER;
   const NUFF = N.FAIRY_NUFF_2;
   const GODFATHER = N.FAIRY_GODFATHER_2;
+  const run = (count, from = h.tasks.length - 1) => { for (let n = 0; n < count; n++) h.tasks[from].execute(); };
 
   assert.equal(h.quest.getStage(h.player), 0);
   assert.equal(h.variant(MARTIN), 'starting-off-talking-to-martin');
@@ -315,37 +319,44 @@ test('fresh stage 0 follows the mandatory route and completes on the native varb
   assert.equal(h.quest.isStarted(h.player), true, 'accepting starts the quest');
   assert.equal(h.varbits.get(2326), 20);
 
-  // Search the right potion shelf: the certificate is added and the condition is one-shot.
-  assert.equal(h.objectAction('Potion shelves', 'Search', 2389, 4470).handled, true);
-  assert.equal(transcripts.at(-1).variant, 'locating-the-hideout-searching-for-nuff-s-certificate'.replace('-nuff-s-', '-fairy-nuff-s-'));
-  assert.equal(h.condition('RnasHV', NUFF), true);
-  h.conditionEvent('RnasHV', NUFF);
+  // The grotto's camera sweep ends at 30 (FairyTale2 283-306); the certificate is on the broken frame (318).
+  h.setLocation(2388, 4470, 0);
+  h.zoneEnter();
+  run(23);
+  assert.equal(h.quest.getStage(h.player), 30);
+  assert.equal(h.varbits.get(2339), 1);
+  assert.equal(h.objectAction('Healing certificate', 'Take', 2389, 4471).handled, true);
   assert.equal(h.inventory.get(I.NUFFS_CERTIFICATE), 1);
-  assert.equal(h.attrs.get('quest.fairytale-ii-cure-a-queen:certificate-taken'), 1);
-  h.conditionEvent('RnasHV', NUFF);
-  assert.equal(h.inventory.get(I.NUFFS_CERTIFICATE), 1, 'replayed condition does not duplicate the certificate');
+  assert.equal(h.varbits.get(2327), 2);
 
-  // Study, read the sign, then get the Godfather's permission.
+  // Study and the sign set their varbits only (365, 739); permission comes with the Godfather's line (511).
   assert.equal(h.itemAction(I.NUFFS_CERTIFICATE, 'Study').handled, true);
   assert.equal(h.quest.getStage(h.player), 30);
   assert.equal(h.varbits.get(2336), 1);
   h.objectAction('Rune temple sign', 'Read', 2409, 4369);
   assert.equal(h.varbits.get(2338), 4);
   assert.equal(h.variant(GODFATHER), 'starting-off-talking-to-the-fairy-godfather');
-  h.choice(GODFATHER, 'Yes, okay.');
+  const permission = h.fire('npc-dialogue:line', { npcId: GODFATHER,
+    step: { type: 'line', text: 'Eet does? Oh, sorry, must-a geeven yous da wrong-a scroll.' } });
+  assert.equal(h.quest.getStage(h.player), 30, 'not as the line is laid out');
+  permission.before();
   assert.equal(h.quest.getStage(h.player), 40);
   assert.equal(h.varbits.get(2328), 1);
   assert.equal(h.varbits.get(2329), 2);
 
-  // Enter the hideout, talk Nuff; the imported YO3q33 message (not the old unavailable id) advances.
+  // The hideout keeps 40 (846); Nuff's message brings Very Wise (45, 976), the promise 50 (1002).
   h.setLocation(2355, 4455, 0);
   h.zoneEnter();
-  assert.equal(h.quest.getStage(h.player), 45);
+  assert.equal(h.quest.getStage(h.player), 40);
   const intro = h.npcEvent(NUFF, 'Talk-to');
   assert.equal(intro.handled, true);
   assert.equal(transcripts.at(-1).variant, 'in-the-hideout-talking-to-fairy-nuff');
   const approaching = h.action('YO3q33', NUFF, 'message');
   assert.equal(approaching.handled, false, 'the real message is left for the dialogue runtime to display');
+  assert.equal(h.quest.getStage(h.player), 45);
+  const promise = h.fire('npc-dialogue:line', { npcId: NUFF,
+    step: { player: "That's easy I'll just pickpocket them off of him, I'm really good at that." } });
+  promise.before();
   assert.equal(h.quest.getStage(h.player), 50);
   assert.equal(h.varbits.get(1808), 2);
 
@@ -353,103 +364,85 @@ test('fresh stage 0 follows the mandatory route and completes on the native varb
   h.setFull(true);
   h.npcAction('Fairy Godfather', 'Pick-pocket', GODFATHER);
   assert.equal(transcripts.at(-1).variant, 'in-the-hideout-pickpocketing-the-secateurs');
-  h.conditionEvent('5dBfKL', GODFATHER);
-  assert.equal(h.messages.includes("You don't have enough inventory space."), false);
+  assert.equal(h.condition('5dBfKL', GODFATHER), true);
   assert.equal(h.inventory.get(I.QUEENS_SECATEURS_2) ?? 0, 0);
   assert.equal(h.quest.getStage(h.player), 50);
 
-  // Retry successfully; the registered condition hands over the secateurs.
+  // Retry successfully (the fixture's roll succeeds): 60, the secateurs and 47 Thieving XP (1603).
   h.setFull(false);
   h.npcAction('Fairy Godfather', 'Pick-pocket', GODFATHER);
-  h.conditionEvent('bx036-', GODFATHER);
+  assert.equal(h.condition('bx036-', GODFATHER), true);
   assert.equal(h.inventory.get(I.QUEENS_SECATEURS_2), 1);
   assert.equal(h.quest.getStage(h.player), 60);
+  assert.deepEqual(h.xp.at(-1), [h.core.Skill.THIEVING.getIndex(), 47]);
+  h.xp.length = 0;
 
   // Lost secateurs are recoverable while the hand-in is still pending.
   h.inventory.delete(I.QUEENS_SECATEURS_2);
   h.npcEvent(NUFF, 'Talk-to');
   assert.equal(transcripts.at(-1).variant, 'curing-the-queen-returning-to-fairy-nuff-after-losing-the-secateurs');
   h.npcAction('Fairy Godfather', 'Pick-pocket', GODFATHER);
-  h.conditionEvent('bx036-', GODFATHER);
   assert.equal(h.inventory.get(I.QUEENS_SECATEURS_2), 1);
+  h.xp.length = 0;
 
-  // Hand them to Nuff; the message consumes the item and opens the potion stage.
+  // Hand them to Nuff: their box, then 65 as it closes (1880-1882); her recipe's last line gives 70 (1915).
   h.npcEvent(NUFF, 'Talk-to');
   assert.equal(transcripts.at(-1).variant, 'curing-the-queen-bringing-fairy-nuff-the-secateurs');
-  h.action('j-qUAH', NUFF, 'message');
+  const hand = h.fire('npc-dialogue:action', { npcId: NUFF, stepId: 'j-qUAH', kind: 'message' });
+  assert.deepEqual(hand.box, { items: [I.QUEENS_SECATEURS_2] });
+  assert.equal(h.quest.getStage(h.player), 60);
+  hand.after();
   assert.equal(h.inventory.get(I.QUEENS_SECATEURS_2) ?? 0, 0);
   assert.equal(h.quest.getStage(h.player), 65);
+  assert.equal(h.varbits.get(1808), 1);
+  const recipe = h.fire('npc-dialogue:line', { npcId: NUFF,
+    step: { type: 'line', text: 'only way onto or off of their world is through the fairy rings.' } });
+  recipe.after();
+  assert.equal(h.quest.getStage(h.player), 70);
 
-  // Star plane, flower, gorak plane, claw and brewing all through registered handlers.
-  h.setLocation(2070, 4841, 0);
-  h.zoneEnter();
-  assert.equal(h.varbits.get(2330), 1);
+  // The star plane's field is an Area; the Gorak plane sets 2331 (2094) and a kill 2382 and the claws (2206).
   assert.equal(h.hooks.playerProcess.length, 0, 'flower processing is not a global player hook');
   assert.equal(h.hooks.areas.length, 1, 'flower processing is registered to an Area');
-  const starflowerArea = h.hooks.areas[0];
-  const starflowerBoundary = starflowerArea.getBoundaries()[0];
+  const starflowerBoundary = h.hooks.areas[0].getBoundaries()[0];
   assert.equal(starflowerBoundary.inside(new h.core.Location(2070, 4841, 0)), true);
   assert.equal(starflowerBoundary.inside(new h.core.Location(2070, 4841, 1)), false);
-  assert.equal(h.spawned.filter((npc) => npc.getId() === N.STARFLOWER_2 && npc.isRegistered()).length, 0,
-    'the starflowers do not appear immediately on first arrival');
-  h.fire('agent:advance-time', { ms: 60001, handledBy: [] });
-  starflowerArea.process(h.player);
-  const flower = h.spawned.find((npc) => npc.getId() === N.STARFLOWER_2 && npc.isRegistered());
-  assert.ok(flower);
-  assert.equal(h.npcEvent(N.STARFLOWER_2, 'Pick', flower).handled, true);
-  assert.equal(h.inventory.get(I.STAR_FLOWER), 1);
   h.setLocation(3040, 5340, 0);
   h.zoneEnter();
   assert.equal(h.varbits.get(2331), 1);
   h.npcDeath(N.GORAK);
   assert.equal(h.varbits.get(2382), 1);
   assert.equal(h.drops.at(-1).id, I.GORAK_CLAWS);
+  h.inventory.set(I.STAR_FLOWER, 1);
   h.inventory.set(I.GORAK_CLAWS, 1);
   h.inventory.set(I.VIAL_OF_WATER, 1);
   h.inventory.set(I.PESTLE_AND_MORTAR, 1);
-  h.itemOnItem(I.STAR_FLOWER, I.VIAL_OF_WATER);
-  assert.equal(h.inventory.get(I.STAR_FLOWER), 1, 'the ingredients are retained until Nuff explains the recipe');
-  assert.equal(h.inventory.get(I.VIAL_OF_WATER), 1);
-  assert.equal(h.inventory.get(I.MAGIC_ESSENCE_UNF_) ?? 0, 0);
-  h.setLocation(2355, 4455, 0);
-  h.npcEvent(NUFF, 'Talk-to');
-  assert.equal(transcripts.at(-1).variant, 'curing-the-queen-talking-to-fairy-nuff-after-visiting-the-cosmic-plane-and-gorak-plane');
-  assert.equal(h.quest.getStage(h.player), 65, 'visiting the planes alone does not complete Nuff’s recipe step');
-  const recipeLine = h.fire('npc-dialogue:line', {
-    npcId: NUFF,
-    text: "Yes, I'm on my way.",
-    step: { speaker: 'Fairy Nuff', text: "Yes, I'm on my way." },
-    pages: [{ page: 'Fairytale II - Cure a Queen', variants: ['curing-the-queen-talking-to-fairy-nuff-after-visiting-the-cosmic-plane-and-gorak-plane'] }],
-  });
-  assert.equal(typeof recipeLine.after, 'function', 'the final recipe line commits after Continue');
-  assert.equal(h.quest.getStage(h.player), 65);
-  recipeLine.after();
-  assert.equal(h.quest.getStage(h.player), 70);
-  assert.equal(h.attrs.get('quest.fairytale-ii-cure-a-queen:potion-recipe-taught'), 1);
   h.itemOnItem(I.STAR_FLOWER, I.VIAL_OF_WATER);
   assert.equal(h.inventory.get(I.MAGIC_ESSENCE_UNF_), 1);
   assert.equal(h.quest.getStage(h.player), 72);
   h.itemOnItem(I.PESTLE_AND_MORTAR, I.GORAK_CLAWS);
   assert.equal(h.inventory.get(I.GORAK_CLAW_POWDER), 1);
   h.itemOnItem(I.GORAK_CLAW_POWDER, I.MAGIC_ESSENCE_UNF_);
-  // Wiki (Magic essence): Magic essence(3), 130 Herblore XP.
+  // Wiki (Magic essence): Magic essence(3), 130 Herblore XP (2398).
   assert.equal(h.inventory.get(I.MAGIC_ESSENCE_4_) ?? 0, 0);
   assert.equal(h.inventory.get(I.MAGIC_ESSENCE_3_), 1);
   assert.deepEqual(h.xp.at(-1), [h.core.Skill.HERBLORE.getIndex(), 130]);
   h.xp.length = 0;
   assert.equal(h.quest.getStage(h.player), 73);
 
-  // Use the potion on the sleeping queen multi loc, then the imported reward/complete nodes.
-  h.setLocation(2354, 4455, 0);
+  // A dose on the sleeping Queen: 75, and 80 four ticks later (2415-2419); Nuff's talk then rewards.
+  h.setLocation(2351, 4456, 0);
   h.itemOnObject(I.MAGIC_ESSENCE_3_, 16316);
   assert.equal(h.inventory.get(I.MAGIC_ESSENCE_3_) ?? 0, 0);
   assert.equal(h.inventory.get(I.MAGIC_ESSENCE_2_), 1);
   assert.equal(h.quest.getStage(h.player), 75);
-  assert.equal(h.varbits.get(2326), 75);
-  assert.ok(h.spawned.some((npc) => npc.getId() === N.FAIRY_QUEEN_2));
-  h.action('SuXalx', N.FAIRY_QUEEN_2, 'message');
+  run(4);
+  assert.equal(h.quest.getStage(h.player), 80);
+  assert.equal(h.spawned.some((npc) => npc.getId() === N.FAIRY_QUEEN_2), false, 'the 2971 multinpc stands her up');
+  h.npcEvent(NUFF, 'Talk-to');
+  assert.equal(transcripts.at(-1).variant, 'curing-the-queen-after-using-the-magic-essence-potion-on-the-fairy-queen');
+  h.action('SuXalx', NUFF, 'message');
   assert.equal(h.inventory.get(I.ANTIQUE_LAMP_2), 1);
-  h.action('Vca-Ck', N.FAIRY_QUEEN_2);
+  h.action('Vca-Ck', NUFF);
   assert.equal(h.quest.getStage(h.player), 90);
   assert.equal(h.quest.isComplete(h.player), true);
   assert.equal(h.varbits.get(2326), 90, 'cache DB row 47 requires varbit 2326 >= 90');
@@ -457,7 +450,7 @@ test('fresh stage 0 follows the mandatory route and completes on the native varb
     [h.core.Skill.HERBLORE.getIndex(), 3500],
     [h.core.Skill.THIEVING.getIndex(), 2500],
   ]);
-  h.action('Vca-Ck', N.FAIRY_QUEEN_2);
+  h.action('Vca-Ck', NUFF);
   assert.equal(h.xp.length, 2, 'repeat completion does not award again');
   assert.equal(h.inventory.get(I.ANTIQUE_LAMP_2), 1);
 
@@ -477,13 +470,21 @@ test('legacy durable 80 saves migrate to the native completion value', () => {
   assert.equal(h.varbits.get(2326), 90);
   assert.equal(h.quest.isComplete(h.player), true);
   assert.equal(h.xp.length, 0, 'migration does not re-award');
+  // 80 is also the awake Queen before her reward (FairyTale2 2419-2532): the pour's mark keeps it.
+  const awake = setup();
+  awake.player.setAttribute(stageKey, 80);
+  awake.player.setAttribute('quest.fairytale-ii-cure-a-queen:queen-woke', 1);
+  awake.login();
+  assert.equal(awake.quest.getStage(awake.player), 80);
+  assert.equal(awake.quest.isComplete(awake.player), false);
 });
 
 test('full-bag reward branch stays pending until a slot is free', () => {
   const h = setup();
   const I = h.core.ItemIdentifiers;
   const QUEEN = h.core.NpcIdentifiers.FAIRY_QUEEN_2;
-  h.quest.setStage(h.player, 75);
+  h.player.setAttribute('quest.fairytale-ii-cure-a-queen:queen-woke', 1);
+  h.quest.setStage(h.player, 80);
   h.setFull(true);
   assert.equal(h.condition('-LSx7-', QUEEN), true);
   assert.equal(h.condition('e2I60y', QUEEN), false);
@@ -505,13 +506,19 @@ test('lost certificate is recoverable from the right shelf without a second copy
   const I = h.core.ItemIdentifiers;
   const NUFF = h.core.NpcIdentifiers.FAIRY_NUFF_2;
   h.quest.setStage(h.player, 30);
+  h.attrs.set('quest.fairytale-ii-cure-a-queen:certificate-taken', 1);
   h.inventory.delete(I.NUFFS_CERTIFICATE);
   h.objectAction('Potion shelves', 'Search', 2389, 4470);
   assert.equal(h.condition('RnasHV', NUFF), true);
-  h.conditionEvent('RnasHV', NUFF);
+  const copy = h.fire('npc-dialogue:action', { npcId: NUFF, stepId: 'Scnlfm', kind: 'message' });
+  assert.deepEqual(copy.box, { items: [I.NUFFS_CERTIFICATE] });
   assert.equal(h.inventory.get(I.NUFFS_CERTIFICATE), 1);
-  h.conditionEvent('RnasHV', NUFF);
+  h.action('Scnlfm', NUFF, 'message');
   assert.equal(h.inventory.get(I.NUFFS_CERTIFICATE), 1);
+  // With it held, every shelf is broken glass (FairyTale2 321-346).
+  h.objectAction('Potion shelves', 'Search', 2389, 4470);
+  assert.equal(h.condition('1E1huy', NUFF), true);
+  assert.deepEqual(h.fire('npc-dialogue:action', { npcId: NUFF, stepId: '4X0HGi', kind: 'message' }).box, { items: [I.BROKEN_GLASS_2] });
 });
 
 
@@ -529,7 +536,7 @@ test('canonical runner: Nuff intro message and pickpocket guard branches', () =>
   const rememberConditions = (h) => { activeCondition = h.hooks.conditions[0]; };
   try {
 
-  // Positive: YO3q33 is a real message, displays, and advances 40 -> 50.
+  // Positive: YO3q33 is a real message, displays, and advances 40 -> 45 (FairyTale2 976).
   const positive = setup();
   rememberConditions(positive);
   const positiveManager = new DialogueManager(positive.player);
@@ -538,7 +545,7 @@ test('canonical runner: Nuff intro message and pickpocket guard branches', () =>
   const introNode = canonicalNode('in-the-hideout-talking-to-fairy-nuff', 'YO3q33');
   assert.equal(realStartTranscript(positive.api, positive.player, N.FAIRY_NUFF_2, PAGE,
     'in-the-hideout-talking-to-fairy-nuff', () => [introNode]), true);
-  assert.equal(positive.quest.getStage(positive.player), 50);
+  assert.equal(positive.quest.getStage(positive.player), 45);
   assert.ok(positive.messages.some((line) => line.includes('You see a fairy approaching')),
     'the imported message is displayed rather than suppressed');
 
@@ -572,7 +579,7 @@ test('canonical runner: Nuff intro message and pickpocket guard branches', () =>
   assert.equal(full.inventory.get(full.core.ItemIdentifiers.QUEENS_SECATEURS_2) ?? 0, 0);
   assert.equal(full.quest.getStage(full.player), 50);
 
-  // Neighbouring success branch: the runner chooses bx036- and the guard hands over.
+  // Neighbouring success branch: the roll hands over (1603) and the runner chooses bx036-.
   const success = setup();
   rememberConditions(success);
   const successManager = new DialogueManager(success.player);
@@ -589,7 +596,7 @@ test('canonical runner: Nuff intro message and pickpocket guard branches', () =>
   }
 });
 
-test('the first room entry owns the pan until completion and retries after an exit', () => {
+test('the first room entry owns the pan until completion and does not replay', () => {
   const h = setup();
   h.quest.setStage(h.player, 20);
   h.login();
@@ -598,23 +605,23 @@ test('the first room entry owns the pan until completion and retries after an ex
   h.zoneEnter();
   assert.equal(h.tasks.length, 0, 'the approach corridor does not trigger the pan');
 
+  // The step in locks the player for the whole sweep (FairyTale2 283-306).
   h.setLocation(2388, 4470);
   h.zoneEnter();
   assert.equal(h.tasks.length, 1);
   assert.equal(h.movement.blocked, true);
-  h.hooks.zoneExits[0].fn({ player: h.player });
-  assert.equal(h.camera.at(-1), 'reset');
-  assert.equal(h.movement.blocked, false);
-  assert.equal(h.varbits.get(2339), 0);
-
   h.zoneEnter();
-  assert.equal(h.tasks.length, 2);
-  for (let tick = 0; tick < 9; tick++) h.tasks[1].execute();
+  assert.equal(h.tasks.length, 1, 'one sweep at a time');
+  for (let tick = 0; tick < 22; tick++) h.tasks[0].execute();
+  assert.equal(h.varbits.get(2339), 0);
+  assert.equal(h.movement.blocked, true);
+  h.tasks[0].execute();
   assert.equal(h.varbits.get(2339), 1);
+  assert.equal(h.quest.getStage(h.player), 30);
   assert.equal(h.camera.at(-1), 'reset');
   assert.equal(h.movement.blocked, false);
   h.login();
   h.zoneEnter();
   assert.equal(h.varbits.get(2339), 1);
-  assert.equal(h.tasks.length, 2, 'the completed pan does not replay');
+  assert.equal(h.tasks.length, 1, 'the completed pan does not replay');
 });

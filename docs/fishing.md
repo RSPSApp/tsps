@@ -21,6 +21,15 @@ minnows, karambwan vessels). Tests: `server/tests/fishing.test.cjs`.
   karambwanji messages (recordings 75, 83, 96, 792, 1102 and 1779). These are Leagues and Grid Master
   worlds, whose boosts change the speed, so only their messages and item changes are used.
 
+## Spot types
+
+A spot's tools come from its full cache option list (`SPOT_TOOLS_BY_OPTIONS`), or from its id when
+the same options mean different fish (`SPOT_TOOLS_BY_NPC`, which wins). "Net/Bait" is a small
+net/bait spot: [Fishing spot (small net, bait)](https://oldschool.runescape.wiki/w/Fishing_spot_(small_net,_bait))
+gives its options as "Small net/Net, Bait" and lists Lumbridge Swamp (1530) and the Isle of Souls
+(10513) among its locations. The cave "Net/Bait" spots (1499, 1500: frog spawn and cave eels) keep
+their own rows by id.
+
 ## Catch rolls
 
 - **Ticks per roll (Wiki):** small net (shrimps, anchovies), cage, harpoon and big net spots, and
@@ -31,6 +40,38 @@ minnows, karambwan vessels). Tests: `server/tests/fishing.test.cjs`.
 - **Chance:** the Wiki's skilling chart, low at level 1 to high at 99, out of 256. A tool's catch
   bonus scales both ends. Several fish on one spot roll highest first, and the first success is
   the catch (a big net rolls each on its own).
+
+## Barbarian rod instruction
+
+The [Barbarian Training](https://oldschool.runescape.wiki/w/Barbarian_Training) rod instruction
+unlocks leaping-fish catches before the fishing task or the whole miniquest is complete.
+`TOOLS.BARBARIAN_ROD` declares `unlock: "barbarian_rod"`; the shared requirements check asks
+`fishing:unlocked`, and BarbarianTraining answers from its existing saved `fishingRod` stage.
+No answer means locked. Other tools' quest requirements and the independent barehand lesson
+remain separate.
+
+Recording **237/01149, tick 8766** sets `brut_fishing_r` to 1 as Otto starts his final instruction
+reply. Selecting the topic or closing an earlier line grants nothing. The final reply requires
+an actual transcript and Otto still nearby. The first leaping catch advances 1 to 2; telling
+Otto advances it to 3. Each stage retains rod permission through the existing save and login
+varbit synchronization. The untaught refusal wording is implementation text, not captured text.
+
+`server/tests/barbarian-rod-native.test.cjs` exercises real players, containers, spots, native
+NPC/dialogue packets and the fishing task: interrupted instruction, the exact final-reply
+boundary, catch resources and XP, movement cancellation, queued-catch permission recheck,
+missing transcript/distance refusal and real save-codec/apply/login round trips. A separate
+disk regression uses native lesson/catch progression, real player logout cleanup, SQLite
+save/worker flush, closed and reopened stores, and loaded players' login hooks for stages
+0/1/2/3. It seeds gear and levels and controls catch RNG; these checks do not claim a rendered
+client or a full network login handshake.
+
+A separate slot26 live walkthrough on the shipped cache verified the rendered refusal,
+Otto's actual menu and Continue controls, early Escape interruption, stage1 while the final
+instruction reply was displayed, real rod animation/catches and stage2 retained after native
+logout and a real client login. Levels, rod, bait and starting location were seeded; NPC
+operations used the agent's decoded native packets while dialogue and logout/login controls
+used actual canvas pointer/keyboard input. This does not claim complete miniquest or
+free-world visual coverage.
 
 ## Karambwanji and karambwan
 

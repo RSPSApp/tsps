@@ -93,7 +93,9 @@ function requirementFor(entry, decisions) {
 
 /** The dialogue decided for a loc (`decisions.dialogues`), by tile or by name; null when there's none. */
 function dialogueFor(entry, decisions) {
+  // `op` limits a decision to the option that asked: a ladder's Climb asks, its Climb-up doesn't.
   return (decisions.dialogues ?? []).find((asked) => asked.name === entry.name
+    && (asked.op === undefined || asked.op === entry.op)
     && (asked.x === undefined || (asked.x === entry.x && asked.y === entry.y && (asked.z ?? 0) === entry.z))) ?? null;
 }
 

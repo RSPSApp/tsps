@@ -86,7 +86,7 @@ function distanceToFootprint(location, npc) {
 /** A map animation on a tile, for each of `players`. */
 function tileGraphic(players, location, id, delay = 0) {
   const { Graphic } = core;
-  for (const player of players) player.getPacketSender().sendGraphic(new Graphic(id, delay), location);
+  for (const player of players) player.getPacketSender().sendGraphic(Graphic.delayed(id, delay), location);
 }
 
 /** The Elysian spirit shield's 25% cut, 70% of the time (CombatConstants, as for any hit). */

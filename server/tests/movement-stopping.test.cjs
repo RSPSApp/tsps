@@ -24,6 +24,7 @@ const SPADE = 952;
 const actions = new Map();
 const fallbacks = new Map();
 
+const refusers = [];
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   RegionManager.init();
@@ -31,6 +32,8 @@ before(async () => {
   Spade.register({
     core: PluginManager.getCoreApi(),
     onItemAction: (name, named, options) => (options?.fallback ? fallbacks : actions).set(name, named),
+    // spade:before-dig: a listener may refuse the dig (refused) before it starts.
+    emitCustomEvent: (name, request) => { if (name === 'spade:before-dig') refusers.forEach((refuse) => refuse(request)); },
   });
 });
 
@@ -42,6 +45,7 @@ function digPlayer() {
     isPlayer: () => true,
     isPlayerBot: () => false,
     getAsPlayer() { return this; },
+    getLocation: () => new Location(3200, 3200, 0),
     getMovementQueue: () => ({ reset: () => { movement.resets++; } }),
     performAnimation: (animation) => animations.push(animation.getId()),
     getPacketSender: () => ({
@@ -51,9 +55,21 @@ function digPlayer() {
   return { player, movement, animations, sounds };
 }
 
-test('every spade registers the shared Dig handler and its nothing-found fallback', () => {
-  assert.deepEqual([...actions.keys()], ['Spade', 'Large spade', 'Eastfloor spade']);
-  assert.deepEqual([...fallbacks.keys()], ['Spade', 'Large spade', 'Eastfloor spade']);
+test('every digging spade registers the shared Dig handler and its nothing-found fallback', () => {
+  assert.deepEqual([...actions.keys()], ['Spade', 'Eastfloor spade']);
+  assert.deepEqual([...fallbacks.keys()], ['Spade', 'Eastfloor spade', 'Large spade']);
+});
+
+// Wiki (Large spade): it has a Dig option, but clicking it only gives this message.
+test('the Large spade cannot dig: no sequence or sound, only its refusal line', () => {
+  const { player, animations, sounds } = digPlayer();
+  const messages = [];
+  player.sendMessage = (message) => messages.push(message);
+  assert.equal(actions.has('Large spade'), false, 'no digging handler for the Large spade');
+  fallbacks.get('Large spade').Dig({ player, itemId: PluginManager.getCoreApi().ItemIdentifiers.LARGE_SPADE, slot: 0, clickType: 1, option: 'Dig', handled: false });
+  assert.deepEqual(animations, []);
+  assert.deepEqual(sounds, []);
+  assert.deepEqual(messages, ['Due to its sheer size, you just cannot angle it right to dig with it.']);
 });
 
 test('a Dig plays human_dig and its synth without clearing the walk', () => {
@@ -211,4 +227,15 @@ test('the inherited neutral area policy preserves ordinary and scripted queued N
     assert.ok(f.mobile.getLocation().equals(target)); assert.equal(f.queue.size(), 0);
     assert.equal(f.mobile.isScriptedMovement(), scripted, 'the generic policy never changes the script owner');
   }
+});
+
+test('a dig content refuses before it starts plays no sequence or sound and claims the click', (t) => {
+  const { player, animations, sounds } = digPlayer();
+  const refuse = (request) => { if (request.player === player) request.refused = true; };
+  refusers.push(refuse);
+  t.after(() => refusers.splice(refusers.indexOf(refuse), 1));
+  const event = { player, itemId: SPADE, slot: 0, clickType: 1, option: 'Dig', handled: false };
+  assert.equal(actions.get('Spade').Dig(event), true, 'claimed: no other dig, no nothing-found line');
+  assert.deepEqual(animations, []);
+  assert.deepEqual(sounds, []);
 });

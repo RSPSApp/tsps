@@ -61,12 +61,17 @@ const {
 let prompt = null;
 let dialogueVariant = null;
 const obtains = [];
+/** A test's own view of (and answer to) every event the restaurant emits. */
+let emitted = null;
 init({
   core: {
     ...core,
     PluginManager: { emitNpcDialogueVariant: () => dialogueVariant },
   },
-  emitCustomEvent: (name, event) => { if (name === "collection-log:obtain") obtains.push(event); },
+  emitCustomEvent: (name, event) => {
+    if (name === "collection-log:obtain") obtains.push(event);
+    emitted?.(name, event);
+  },
   sendMultiChatboxPrompt: (player, title, ...pairs) => {
     const options = [];
     for (let i = 0; i < pairs.length; i += 2) options.push({ text: pairs[i], pick: pairs[i + 1] });
@@ -200,6 +205,15 @@ test("only one order at a time: a second order is refused", () => {
   acceptOrder(cook, orderFor("hard", "Wingstone"));
   assert.equal(sessionOf(cook), first, "the original order stays");
   assert.equal(cook.inventory.getAmount(BOX), 1, "no second box");
+});
+
+test("an easy order starts on the clock line and a hard one on the long-way line (Wiki transcript)", () => {
+  const easy = player();
+  acceptOrder(easy, orderFor("easy", "Burkor"));
+  assert.deepEqual(dialogueTexts(easy), ["You'd better get a move on then. The clock is already running!"]);
+  const hard = player();
+  acceptOrder(hard, orderFor("hard", "Wingstone"));
+  assert.deepEqual(dialogueTexts(hard), ["You'd better get started, you have a long way to go..."]);
 });
 
 // --- Time limit
@@ -347,6 +361,49 @@ test("every 12 credits earns a reward token", () => {
   assert.equal(cook.inventory.getAmount(TOKEN), 2);
 });
 
+test("a hard delivery asks minigame:chance for the goggles and scarf and minigame:points for its credits", (t) => {
+  const asked = [];
+  emitted = (name, event) => { if (name.startsWith("minigame:")) asked.push([name, { ...event }]); };
+  t.after(() => { emitted = null; });
+  const item = DATA.items.hard[0];
+  const cook = player({ items: { [item.id]: 1 } });
+  acceptOrder(cook, orderFor("hard", "Captain Ninto", item));
+  deliverTo(cook, "Captain Ninto", item.id);
+  assert.deepEqual(asked.sort(([a], [b]) => a.localeCompare(b)), [
+    ["minigame:chance", { player: cook, minigame: "gnome-restaurant", kind: "unique", multiplier: 1 }],
+    ["minigame:points", { player: cook, minigame: "gnome-restaurant", points: DATA.tiers.hard.credits }],
+  ]);
+});
+
+test("credits answered over minigame:points are what the cook gets; unanswered they are the order's", (t) => {
+  let multiplier = 2;
+  emitted = (name, event) => { if (name === "minigame:points") event.points *= multiplier; };
+  t.after(() => { emitted = null; });
+  const cook = player();
+  awardCredits(cook, 3);
+  assert.equal(creditsOf(cook), 6);
+  multiplier = 1;
+  awardCredits(cook, 3);
+  assert.equal(creditsOf(cook), 9);
+});
+
+test("the unique multiplier raises the goggles and scarf at the other rows' expense; 1 is the Wiki's table", () => {
+  const entries = eligibleRewards("Captain Ninto");
+  assert.deepEqual(entries.filter((entry) => entry.unique).map((entry) => entry.items[0].name), ["Gnome goggles", "Gnome scarf"]);
+  const total = entries.reduce((sum, entry) => sum + entry.rate[0] / entry.rate[1], 0);
+  const unique = entries.filter((entry) => entry.unique).reduce((sum, entry) => sum + entry.rate[0] / entry.rate[1], 0);
+  for (let i = 0; i < 200; i++) {
+    const r = (i + 0.5) / 200;
+    assert.deepEqual(rollHardReward("Captain Ninto", () => r), rollHardReward("Captain Ninto", () => r, 1));
+  }
+  // Half again past the two unique rows: a common row at the Wiki's rates, the scarf at twice them.
+  const roll = () => (unique * 1.5) / total;
+  assert.equal(rollHardReward("Captain Ninto", roll).items[0].name, "Gnomeball");
+  assert.equal(rollHardReward("Captain Ninto", roll, 2).items[0].name, "Gnome scarf");
+  // Without unique rows nothing changes.
+  assert.deepEqual(rollHardReward("Wingstone", () => 0.42, 4), rollHardReward("Wingstone", () => 0.42));
+});
+
 // --- Every recipient in the data
 
 test("every recipient in the data accepts its ordered dish", () => {
@@ -376,6 +433,29 @@ test("rollOrder always lands on a recipient and item of the right tier", () => {
       const order = rollOrder(tier, () => Math.min(roll, 0.999999));
       assert.ok(names.has(order.npcName), `${tier} recipient ${order.npcName}`);
       assert.ok(ids.has(order.itemId), `${tier} item ${order.itemId}`);
+    }
+  }
+});
+
+test("rolls never pick a dish the gnome menus cannot make yet; every other dish still comes up", async () => {
+  const { UNBUILT_DISHES } = require("../plugins/minigames/gnomerestaurant/Orders.GnomeRestaurant");
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  await CachePipeline.initialize();
+  // What main can actually make: Gnome.Cooking's own finished dishes and every cooking.json product.
+  const cooking = require("../plugins/skills/data/cooking.json");
+  const names = [...require("../plugins/skills/cooking/Gnome.Cooking").PRODUCTS,
+    ...cooking.cookables.map((row) => row.cooked), ...cooking.recipes.map((row) => row.product)];
+  const makeable = new Set(names.map((name) => typeof name === "number" ? name : CacheDefinitions.getObjId(name)));
+  for (const tier of ["easy", "hard"]) {
+    const seen = new Set(), list = DATA.items[tier];
+    for (let index = 0; index < list.length * 4; index++) {
+      seen.add(rollOrder(tier, () => Math.min((index + 0.5) / (list.length * 4), 0.999999)).itemId);
+    }
+    for (const id of seen) assert.ok(makeable.has(id), `${tier}: ${list.find((item) => item.id === id).name} is rolled but cannot be made`);
+    for (const item of list) {
+      assert.equal(seen.has(item.id), !UNBUILT_DISHES.has(item.name), `${tier}: ${item.name} ${UNBUILT_DISHES.has(item.name) ? "is left out" : "still comes up"}`);
+      if (UNBUILT_DISHES.has(item.name)) assert.equal(makeable.has(item.id), false, `${item.name} can be made now: take it off UNBUILT_DISHES`);
     }
   }
 });
@@ -647,8 +727,11 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
     assert.notEqual(xpGate.allow, false); assert.equal(xpGate.multiplier, 1);
     assert.notEqual(p.getAttribute(core.SkillManager.XP_LOCKED_ATTRIBUTE), true);
     const recipes = {
-      half_baked_crunchy: { 0: [["toads_legs", 2]], 3: [["chocolate_bar", 2]] },
-      half_baked_batta: { 1: [["equa_leaves", 1], ["toads_legs", 1], ["cheese", 1]], 4: [["tomato", 1], ["cheese", 1]] },
+      half_baked_crunchy: { 0: [["toads_legs", 2]], 1: [["equa_leaves", 2]],
+        2: [["king_worm", 2], ["equa_leaves", 1]], 3: [["chocolate_bar", 2]] },
+      half_baked_batta: { 0: [["equa_leaves", 4], ["lime_chunks", 1], ["orange_chunks", 1], ["pineapple_chunks", 1]],
+        1: [["equa_leaves", 1], ["toads_legs", 1], ["cheese", 1]], 2: [["king_worm", 1], ["cheese", 1]],
+        3: [["tomato", 2], ["dwellberries", 1], ["onion", 1], ["cheese", 1], ["cabbage", 1]], 4: [["tomato", 1], ["cheese", 1]] },
       cocktail_shaker: { 0: [["pineapple", 1], ["lemon", 1], ["orange", 1]],
         1: [["pineapple", 2], ["lemon", 1], ["orange", 1]],
         2: [["vodka", 2], ["gin", 1], ["lime", 1], ["lemon", 1], ["orange", 1]],
@@ -673,7 +756,7 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
       const before = p.getInventory().getItems().map((item) => [item.getId(), item.getAmount(), item.getMeta()]);
       const xp = p.getSkillManager().getExperience(Skill.COOKING);
       await widget(p, clickId, 4, row);
-      await widget(p, clickId, 4, 0); // displayed fruit batta is outside this selected producer
+      await widget(p, clickId, 4, 99); // invalid choice must clear the prior supported selection
       await widget(p, createId, 9, undefined);
       assert.deepEqual(p.getInventory().getItems().map((item) => [item.getId(), item.getAmount(), item.getMeta()]), before,
         "unsupported selection clears the prior supported recipe without consumption");
@@ -733,6 +816,45 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
       assert.equal(MultiChatboxPrompt.getPending(p), null, `${option} offers no order`);
       currentNpc(p, junior, "First of all you will need some basic Gnome Cooking and Cocktail making training. Go and talk to my Father, Aluft Gianne snr. and Blurberry, if you haven't already, and they'll tell you what you need to do.");
       await drive(p, junior);
+    }
+  }
+  // These half-baked bases are controlled fixtures: the first raw bake's 30 XP
+  // is outside the totals below. Every second bake uses the real range path.
+  const easyDishes = [
+    ["half_baked_crunchy", 1, 9579, 9580, "gnome_spice", "spicy_crunchies", 42, [["equa_leaves", 2], ["gnome_spice", 1]]],
+    ["half_baked_crunchy", 2, 9583, 9584, "gnome_spice", "worm_crunchies", 44, [["king_worm", 2], ["equa_leaves", 1], ["gnome_spice", 1]]],
+    ["half_baked_batta", 0, 9478, 9479, "gnome_spice", "fruit_batta", 80, [["equa_leaves", 4], ["lime_chunks", 1], ["orange_chunks", 1], ["pineapple_chunks", 1]]],
+    ["half_baked_batta", 2, 9480, 9481, "equa_leaves", "worm_batta", 84, [["king_worm", 1], ["cheese", 1], ["gnome_spice", 1]]],
+    ["half_baked_batta", 3, 9485, 9486, "equa_leaves", "vegetable_batta", 86, [["tomato", 2], ["dwellberries", 1], ["onion", 1], ["cheese", 1], ["cabbage", 1]]],
+  ];
+  for (const [index, [base, row, half, baked, garnish, output, finishXp, ingredients]] of easyDishes.entries()) {
+    const p = actor(`easydish${index}`, 99), inv = p.getInventory(), beforeXp = p.getSkillManager().getExperience(Skill.COOKING);
+    inv.adds(obj(base), 1);
+    for (const [name, amount] of ingredients) inv.adds(obj(name), amount);
+    await prepare(p, base, "Prepare", row, half);
+    cook(p, half, baked);
+    assert.equal(inv.getAmount(half), 0);
+    assert.equal(inv.getAmount(obj(base === "half_baked_batta" ? "batta_tin" : "crunchy_tray")), 1, "range returns exactly one tin/tray");
+    if (!inv.getAmount(obj(garnish))) inv.adds(obj(garnish), 1);
+    const garnishSlot = slot(p, garnish), garnishItem = inv.getItems()[garnishSlot], garnishAmount = inv.getAmount(obj(garnish));
+    if (index % 2) use(p, garnish, baked); else use(p, baked, garnish);
+    assert.equal(inv.getAmount(obj(output)), 1); assert.equal(inv.getAmount(baked), 0);
+    assert.equal(inv.getAmount(obj(garnish)), garnishAmount - (garnish === "gnome_spice" ? 0 : 1));
+    if (garnish === "gnome_spice") assert.equal(inv.getItems()[garnishSlot], garnishItem, "the selected spice tool remains unchanged");
+    assert.equal(p.getSkillManager().getExperience(Skill.COOKING) - beforeXp, (base === "half_baked_batta" ? 40 : 30) + finishXp);
+    if (index === 0) {
+      // Controlled completed-training attributes and RNG choose this new dish;
+      // the actual offer/accept dialogue and item-on-NPC delivery remain real.
+      p.setAttribute("gnome-restaurant:tutorial-aluft", 6); p.setAttribute("gnome-restaurant:tutorial-blurberry", 6);
+      let draws = 0;
+      GnomeRestaurant._test.offerOrder(p, "easy", () => draws++ === 0 ? 2.5 / DATA.items.easy.length : 0);
+      await drive(p, junior, { title: "Take this order?", options: ["Easy-peasy! I'll get started.", "I don't think I can complete this one."], index: 1 });
+      assert.equal(sessionOf(p)?.itemId, obj(output)); assert.equal(sessionOf(p)?.npcName, "Burkor");
+      const customer = npc(N.BURKOR, "Burkor"), beforeCoins = inv.getAmount(COINS);
+      UseItemPacketListener.itemOnNpc(p, core.Inventory.INTERFACE_ID, customer.getIndex(), obj(output), slot(p, output));
+      for (let tick = 0; tick < 40 && sessionOf(p); tick++) World.process();
+      assert.equal(sessionOf(p), undefined); assert.equal(inv.getAmount(obj(output)), 0); assert.equal(inv.getAmount(BOX), 0);
+      assert.ok(inv.getAmount(COINS) > beforeCoins); assert.equal(inv.getAmount(obj("gnome_spice")), 1);
     }
   }
   // Drunk dragon: raw supplies are seeded; production uses the registered menu,

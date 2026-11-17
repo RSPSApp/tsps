@@ -3,7 +3,7 @@ const { hasKey } = require("../../items/KeyAvailability");
 module.exports = function registerShieldOfArravQuest(api) {
   const { giveReward } = require("../QuestRuntime");
   const { Location, Item, Area, Boundary, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, ItemStatementDialogue, DialogueChainBuilder, Animation, GameObject, TaskManager, CountdownTask } = api.core;
-  const { registerQuest, startTranscript, openBook } = require("../QuestRuntime");
+  const { registerQuest, startTranscript, openBook, questStartMessage } = require("../QuestRuntime");
   const { crossingFor } = require("../../objects/WallDoor.Doors");
 
   const VARP_SHIELD_OF_ARRAV = 145;
@@ -495,7 +495,7 @@ module.exports = function registerShieldOfArravQuest(api) {
   function startQuest(player) {
     if (quest.getStage(player) >= STAGE_STARTED) return;
     quest.setStage(player, STAGE_STARTED);
-    player.sendMessage("You've started a new quest: <col=0ab0ff>Shield of Arrav</col>");
+    player.sendMessage(questStartMessage(player, "Shield of Arrav"));
   }
 
   function handleStartHook({ player, hook }) {

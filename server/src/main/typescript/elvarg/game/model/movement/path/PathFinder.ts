@@ -4,6 +4,7 @@ import { RegionManager } from "../../../collision/RegionManager";
 import { Location } from "../../Location";
 import { PluginManager } from "../../../../plugins/PluginManager";
 import { RsmodRouteFinding } from "./RsmodRouteFinding";
+import { isNoclip } from "../Noclip";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -123,6 +124,34 @@ export class PathFinder {
                 blockingMask,
             });
         }
+    }
+
+    /**
+     * A noclip walk (#5630): ONE checkpoint at the destination, however far the click is. The movement queue steps towards
+     * it tile by tile (diagonal, then straight), and canWalkTo lets a flagged player's steps through collision. The route
+     * finder's 25-checkpoint cap (corners) does not apply here, so a click of any distance walks to its end.
+     */
+    private static applyStraightRoute(entity: Mobile, destX: number, destY: number): number {
+        entity.getMovementQueue().reset(false);
+        entity.getMovementQueue().lastDestX = destX;
+        entity.getMovementQueue().lastDestY = destY;
+
+        const height = entity.getLocation().getZ();
+        const regionBaseX = entity.getLocation().getRegionX() << 3;
+        const regionBaseY = entity.getLocation().getRegionY() << 3;
+        const here = entity.getLocation();
+        const arrived = here.getX() === destX && here.getY() === destY;
+
+        entity.getMovementQueue().setRoute(true, false);
+        entity
+            .getMovementQueue()
+            .setPathX(destX - regionBaseX)
+            .setPathY(destY - regionBaseY);
+        // One checkpoint at the destination: the movement queue steps towards it tile by tile (diagonal, then straight),
+        // and with noclip canWalkTo lets every one of those steps through, however far the click is.
+        if (!arrived) entity.getMovementQueue().addCheckpoint(new Location(destX, destY, height));
+        entity.getMovementQueue().syncDestinationFlagToRoute();
+        return arrived ? 0 : 1;
     }
 
     private static applyRsmodRoute(
@@ -415,6 +444,8 @@ export class PathFinder {
                 `calculateWalkRoute entity=player:${player.getAsPlayer().getUsername()} from=${player.getLocation().getX()},${player.getLocation().getY()},${player.getLocation().getZ()} to=${destX},${destY}`
             );
         }
+        // Owner noclip (#5630): this player's walk ignores collision; everyone else takes the route below.
+        if (isNoclip(player)) return PathFinder.applyStraightRoute(player, destX, destY);
         return PathFinder.applyRsmodRoute(player, destX, destY, {
             locShape: -1,
             moveNear: true,

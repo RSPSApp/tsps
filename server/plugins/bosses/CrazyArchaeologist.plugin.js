@@ -10,6 +10,13 @@ const QUOTES = [
 /** His transcript lines (data/definitions/npc-dialogues.json): the special's shout and his death. */
 const SPECIAL_SHOUT = "Rain of knowledge!";
 const DEATH_LINE = "Ow!";
+/**
+ * Set on him to the world tick a Rain of Knowledge book last landed on a player (a roll of 0 included:
+ * it is still a hit). Combat Achievement "I'd Rather Not Learn" ("without anyone being hit by his
+ * Rain of Knowledge attack") reads it: the books' damage is queued straight onto the player, so the
+ * fight log never sees it.
+ */
+const RAIN_HIT_ATTRIBUTE = "crazy-archaeologist:rain-hit-tick";
 
 const Attack = {
   SPECIAL_ATTACK: 0,
@@ -215,6 +222,7 @@ function combatClass(api) {
         const damage = Misc.getRandom(SPECIAL_MAX_HIT);
         for (const player of players) {
           if (coversTile(book, player.getLocation())) {
+            npc.setAttribute(RAIN_HIT_ATTRIBUTE, core.World.getProcessCycle());
             player
               .getCombat()
               .getHitQueue()
@@ -280,4 +288,5 @@ module.exports = {
     Attack, combatClass, scatterTiles, initialSpecialTiles, burstSpecialTiles, coversTile,
     SPECIAL_MAX_HIT, SPECIAL_SHOUT, DEATH_LINE,
   },
+  RAIN_HIT_ATTRIBUTE,
 };

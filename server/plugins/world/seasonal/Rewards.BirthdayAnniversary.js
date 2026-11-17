@@ -35,10 +35,12 @@ function grant(api, { player }) {
   api.emitCustomEvent("events:grant-reward", request);
   if (request.granted !== true) {
     // The completion is recorded but the progress is not (a rolled-back save): the rewards were
-    // already given, so settle the progress rather than leave Gary holding a second set.
+    // already given, so settle the progress rather than leave Gary holding a second set, and send
+    // Diango's unlock again as settle() does (the save may predate it).
     if (request.reason === "already-complete") {
       Progress.markRewarded(player);
       Progress.advance(api, player, "rewarding", "complete");
+      unlock(api, player);
     }
     return;
   }

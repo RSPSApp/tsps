@@ -65,11 +65,19 @@ Bold is captured; the rest are OpenRune's.
   - Deposit plays animation 832 and sound 2496.
   - A pay-dirt NPC (6564) appears at (3748, 5671) the next tick and moves one tile south each tick.
   - With both wheels jammed it still appears the next tick, then stays idle at (3748, 5671).
-  - 12 ticks after the deposit, varbit 5558 rose by the deposit, with "Some ore is ready to be collected from the sack." and sound 2739 (delay 30).
+  - 12 ticks after the deposit, varbit 5558 rose by the deposit, with "Some ore is ready to be collected from the sack." and sound 2739 (delay 30). When that batch filled the sack (5558 81 → 108, local 1002196), the line was "Some ore is ready to be collected from the sack. The sack is now full." (10 recordings).
+    - The Wiki (Motherlode Mine) quotes "Some ore is ready to be collected from the sack. It's getting full." for this moment, but no recording has it. The server uses the recorded line, because captures are the first-hand source for exact messages (`server/docs/agents/sources.md`). The Wiki's "getting full" may be mixed up with the full-sack hopper refusal below.
+  - Every hopper line is the pay-dirt objectbox (193, zoom 400), from local recordings 1000521, 1001618-1002202 (revisions 227-242). In 657 captured deposits:
+    - No pay-dirt: "You don't have any pay-dirt to put in the hopper." (1000521).
+    - The player's last batch still in the machine: "You've already got some pay-dirt in the machine.<br>You can put more in once the last batch comes out." Nothing is deposited and no animation plays (37 attempts, 31 with both wheels jammed, e.g. 1002095 ticks 16873-16952).
+    - The sack full: "The sack is getting full. You should empty it before<br>putting any more pay-dirt into the machine." Nothing is deposited (1002196).
+    - Both wheels jammed: the pay-dirt still goes in, with the animation and sound, then "The machine will need to be repaired before your pay-<br>dirt can be cleaned." (158 of 159 deposits on two jammed wheels; 1002095 tick 16863). With one wheel jammed, the deposit says nothing.
+    - Room for only part of the pay-dirt: what fits goes in, the rest stays in the inventory, and no line is shown (1000521 tick 232: sack 98, 10 of 11 deposited).
 - **The sack:**
   - Search took the 7 nuggets, then 26 ores into the free slots.
   - Varbit 5558 was updated twice (172 → 165 → 139).
   - Interface 193 (objectbox) showed pay-dirt with "You collect your ore from the sack." even though ore was left. It is built by script 2868, with the item at zoom 400. This is the new core `ItemStatementDialogue`.
+  - When the search empties the sack the objectbox says "You collect your ore from the sack.<br>The sack is now empty." (187 of 586 searches, 59 recordings).
 - **A rockfall:** it was gone 2 ticks after the swing. It came down again 78 ticks later as two falling rocks (projectile 645, from heights 1000 and 900, landing after 30 cycles), a splash (spotanim 305) and sound 360.
 - **The channel:**
   - Water overlays (10459) and small foams (2018) are spawned by the server. They are all re-sent every 3 ticks while a wheel turns, and a single jammed wheel leaves them as they are.

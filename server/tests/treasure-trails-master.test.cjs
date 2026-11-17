@@ -32,7 +32,7 @@ function fixture() {
   let position = new core.Location(3222, 3218, 0), chain, placed = 0;
   const items = Array(28).fill(null), worn = Array(14).fill(null);
   const inventory = {
-    getItems: () => items, getSlotForItemId: id => items.findIndex(i => i?.getId() === id), refreshItems() {}, setItem(slot, item) { items[slot] = item; return inventory; },
+    getItems: () => items, getAmount: id => items.reduce((sum, item) => sum + (item?.getId() === id ? item.getAmount() : 0), 0), getSlotForItemId: id => items.findIndex(i => i?.getId() === id), refreshItems() {}, setItem(slot, item) { items[slot] = item; return inventory; },
     getFreeSlots: () => items.filter(i => !i).length, isFull() { return this.getFreeSlots() === 0; },
     delete(id, amount) { while (amount > 0) { const slot = items.findIndex(i => i?.getId() === id); if (slot < 0) return; const take = Math.min(amount, items[slot].getAmount()); this.deleteAtSlot(slot, take); amount -= take; } },
     deleteAtSlot(slot, amount) { const item = items[slot]; if (!item) return; if (item.getAmount() <= amount) items[slot] = null; else item.setAmount(item.getAmount() - amount); },
@@ -413,16 +413,38 @@ test("the master casket opens, and an opted-in player's 10th master casket is a 
   } finally { Math.random = random; }
 });
 
+test("a master casket that becomes the Mimic still rolls its tertiaries: the Bloodhound goes to Pets", () => {
+  const f = fixture();
+  MimicShared.bind({ core });
+  f.api.onCustomEvent("treasure-trails:mimic-casket", MimicReward.fromCasket);
+  const bloodhound = require("../data/definitions/clue-caskets.json").tables.master.tertiary.find(row => row.name === "Bloodhound").item_id;
+  f.api.onCustomEvent("pets:definitions", request => { request.pets = [{ itemId: bloodhound }]; });
+  const awarded = [];
+  f.api.onCustomEvent("pets:award", request => awarded.push([request.itemId, request.source]));
+  const random = Math.random;
+  try {
+    Math.random = () => 0;
+    f.attributes.set("mimic:opted-in", true);
+    f.items[0] = new core.Item(I.REWARD_CASKET_MASTER_, 1);
+    assert.equal(Caskets.open(f.event()), true);
+    assert.equal(f.items[0].getId(), I.MIMIC);
+    assert.deepEqual(awarded, [[bloodhound, "treasure-trails:casket"]], "the 1/1,000 Bloodhound is rolled and awarded as a pet");
+    assert.equal(f.items.some(item => item?.getId() === bloodhound), false, "not handed over as an item");
+  } finally { Math.random = random; }
+});
+
 test("master STASH units need Construction 88, mahogany planks and a gold leaf", () => {
   const f = fixture();
   const units = [...Stash.stashes().values()].filter(unit => unit.tier === MASTER);
   assert.equal(units.length, 25);
   [[I.HAMMER, 1], [I.SAW, 1], [I.MAHOGANY_PLANK, 2], [I.STEEL_NAILS, 10]].forEach(([id, amount], slot) => { f.items[slot] = new core.Item(id, amount); });
   f.skills.level = 88;
-  const build = () => Stash.interact({ player: f.player, objectId: units[0].step.stash.locId, location: units[0].location, handled: false });
+  // The unit is built a tick after the click (227/01768.txt ticks 10836-10837).
+  const build = () => { Stash.interact({ player: f.player, objectId: units[0].step.stash.locId, location: units[0].location, handled: false }); core.TaskManager.process(); };
   build();
   assert.equal(f.attributes.get(Stash.BUILT_ATTRIBUTE), undefined, "no gold leaf, no unit");
-  assert.ok(f.sent.some(([name, text]) => name === "message" && /gold leaf/.test(text)));
+  // rsprox_transcripts/227/910308.txt: the one materials line, gold leaf included.
+  assert.ok(f.sent.some(([name, text]) => name === "message" && text === "You do not have the required materials to build a STASH unit here."));
   f.items[4] = new core.Item(I.GOLD_LEAF, 1);
   build();
   assert.deepEqual(f.attributes.get(Stash.BUILT_ATTRIBUTE), [units[0].step.stash.locId]);

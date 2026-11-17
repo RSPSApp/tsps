@@ -40,7 +40,7 @@ function harness({ realObjects = false } = {}) {
     onItemOnItem() {},
     onItemOnNpc() {},
     onItemAction() {},
-    onGroundItemPickup() {},
+    onGroundItemPickup(fn) { (events['ground-item-pickup'] ??= []).push(fn); },
     onPlayerProcess(fn) { (events['player:process'] ??= []).push(fn); },
     onPlayerLogin() {},
     onPlayerLogout() {},
@@ -1207,6 +1207,7 @@ test('Paterdomus fight is reached through the captured side trapdoor, cellar lad
       }
     },
     onRegionLoaded: noop, onObjectRoute: noop, onServerStartup: noop, onPlayerProcess: noop,
+    onPlayerLogin: noop,
     onItemOnObject: noop, persistAttribute: noop, registerArea: noop, sendMultiChatboxPrompt: () => true,
   };
   delete require.cache[require.resolve('../plugins/objects/Doors.plugin')];
@@ -1238,7 +1239,7 @@ test('Paterdomus fight is reached through the captured side trapdoor, cellar lad
     getLocation: () => position, moveTo: (to) => { position = to; },
     getAttribute: () => undefined, setAttribute: noop,
     getPacketSender: () => packets,
-    getMovementQueue: () => ({ isMovementBlocked: () => false, setBlockMovement() { return this; }, reset() { return this; } }),
+    getMovementQueue: () => ({ isMovementBlocked: () => false, setBlockMovement() { return this; }, reset() { return this; }, addSteps(to) { position = to; }, size: () => 0 }),
     isRegistered: () => true, getHitpoints: () => 99, performAnimation: noop,
     getSkillManager: () => ({ getTotalLevel: () => 2000 }),
     getEquipment: () => ({ contains: () => true }), getInventory: () => ({ contains: () => true }),
@@ -1271,7 +1272,7 @@ test('Paterdomus fight is reached through the captured side trapdoor, cellar lad
   //    rejected BFS showed. Opening the real double door through its registered handler is
   //    what frees the doorway, not any manual clip removal.
   const route = new RsmodRouteFinding((x, y, z, area) => RegionManager.getClipping(x, y, z, area));
-  const routeTo = (x, y) => route.findRoute({ level: 0, srcX: 3405, srcY: 3506, srcSize: 1,
+  const routeTo = (x, y) => route.findRoute({ level: 0, srcX: position.getX(), srcY: position.getY(), srcSize: 1,
     destX: x, destY: y, privateArea: null, moveNear: false });
   const monks = [[3418, 3491], [3415, 3486], [3414, 3490], [3409, 3488]];
   for (const [x, y] of monks) assert.equal(routeTo(x, y).success, false,
@@ -1281,7 +1282,10 @@ test('Paterdomus fight is reached through the captured side trapdoor, cellar lad
   assert.equal(click(3489, 3408, 3489, 'Open', 'Large door').handled, true);
   assert.equal(raw(3491, 3409, 3489)?.getId(), 3491, 'south leaf swings east into open loc 3491');
   assert.equal(raw(3492, 3409, 3488)?.getId(), 3492, 'north leaf swings east into open loc 3492');
-  assert.equal(RegionManager.getClipping(3408, 3489, 0, null), 0, 'the door handler clears the doorway tile');
+  assert.notEqual(RegionManager.getClipping(3408, 3489, 0, null), 0,
+    'the captured pass-through gate retains its invisible doorway blocker');
+  assert.deepEqual([position.getX(), position.getY()], [3409, 3489],
+    'Open queues the ordinary crossing onto the inside tile');
   for (const [x, y] of monks) {
     const path = routeTo(x, y);
     assert.equal(path.success, true, `open front door gives an ordinary route to ${x},${y}`);
@@ -2240,3 +2244,30 @@ test('a full inventory keeps the Sunspear and the amitire leaves to be taken, no
   assert.equal(p.items.get(I.AMITIRE_LEAVES), 1, 'with room the leaves are picked');
 });
 
+
+// rsprox 239/04288 tick 3124: the castle loads the dining room with the poem scroll (2337,7365) and mysterious jerky
+// (33802) at 2353,7362; the jerky is taken once (tick 3153) with no message.
+test('the castle dining room has the mysterious jerky with the poem scroll until it is picked up', () => {
+  const h = harness(), p = player('Jerky');
+  h.quest.setStage(p, 40);
+  p.attrs.set('quest.the_blood_moon_rises.castle-room', 2);
+  p.attrs.set('quest.the_blood_moon_rises.castle-floor', 1);
+  const ground = [];
+  h.api.getItemOnGroundManager = () => ({
+    registerLocation: (owner, item, tile) => ground.push([owner, item.getId(), tile.getX(), tile.getY(), tile.getZ()]),
+    getGroundItem: (_name, id, tile) => ground.some(([, gid, x, y, z]) => gid === id && x === tile.getX() && y === tile.getY() && z === tile.getZ()),
+  });
+  h.emit('player:login', { player: p });
+  const jerky = ground.filter(([, id]) => id === I.MYSTERIOUS_JERKY);
+  assert.deepEqual(jerky, [[p, I.MYSTERIOUS_JERKY, 2353, 7362, 0]], 'the jerky lies at 2353,7362');
+  assert.ok(ground.some(([, id, x, y]) => id === I.POEM_SCROLL && x === 2337 && y === 7365), 'with the poem scroll');
+  h.emit('player:login', { player: p });
+  assert.equal(ground.filter(([, id]) => id === I.MYSTERIOUS_JERKY).length, 1, 'not stacked while it lies there');
+
+  const messages = p.messages.length;
+  h.emit('ground-item-pickup', { player: p, groundItemId: I.MYSTERIOUS_JERKY, location: new core.Location(2353, 7362, 0) });
+  assert.equal(p.messages.length, messages, 'taken with no message');
+  ground.length = 0;
+  h.emit('player:login', { player: p });
+  assert.equal(ground.filter(([, id]) => id === I.MYSTERIOUS_JERKY).length, 0, 'once taken it does not come back');
+});

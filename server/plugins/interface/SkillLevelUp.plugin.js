@@ -296,8 +296,17 @@ function trackCombatLevel({ player }) {
  * (message, jingle, pop-up) waits until the conversation has closed, the tick after.
  */
 function showLevelUp(event) {
-  if (event.player.getDialogueManager?.()?.isActive?.()) return awaitDialogueEnd(event);
+  if (inConversation(event.player)) return awaitDialogueEnd(event);
   announceLevelUp(event);
+}
+
+/**
+ * A plugin's option menu (sendMultiChatboxPrompt) resets the dialogue chain that showed it, but the
+ * conversation is still open until the player picks an option (rsprox 3170 t281, rev 232: Ali's casket
+ * offer menu straight after the Force box line).
+ */
+function inConversation(player) {
+  return !!(player.getDialogueManager?.()?.isActive?.() || pluginApi.core.MultiChatboxPrompt?.getPending?.(player));
 }
 
 function awaitDialogueEnd(event) {
@@ -307,7 +316,7 @@ function awaitDialogueEnd(event) {
     constructor() { super(1, player); }
     execute() {
       if (!player.isRegistered()) return this.stop();
-      if (player.getDialogueManager().isActive()) return;
+      if (inConversation(player)) return;
       this.stop();
       announceLevelUp(event);
     }

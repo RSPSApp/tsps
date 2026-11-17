@@ -119,3 +119,14 @@ test('with vial smashing on, the last dose says it is finished before the smash'
     [ChatType.SPAM, 'You drink some of your attack potion.'], [ChatType.SPAM, 'You have finished your potion.'],
     [ChatType.SPAM, 'You quickly smash the empty vial using the trick a Barbarian taught you.']]);
 });
+
+// rsprox.net recs 433, 435 (rev 232) and 3034 (rev 231): Sanfew serum(4) sends both immunity lines,
+// then its drink line, then the doses left, already immune or not; from rev 237 (237/01149.txt,
+// 241/900122.txt) the game line "You're cured from disease." comes between the immunity lines.
+test('Sanfew serum: poison and disease immunity lines before the drink line', t => {
+  const expected = (left) => [
+    [ChatType.SPAM, "You're temporarily immunised against poison."], ['game', "You're cured from disease."], [ChatType.SPAM, "You've become immunised against disease."],
+    [ChatType.SPAM, 'You drink some of your Sanfew Serum.'], [ChatType.SPAM, left]];
+  assert.deepEqual(drinkItem(t, I.SANFEW_SERUM_4_), expected('You have 3 doses of potion left.'));
+  assert.deepEqual(drinkItem(t, I.SANFEW_SERUM_1__2), expected('You have finished your potion.'));
+});

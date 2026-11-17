@@ -23,6 +23,30 @@
  * Soul Wars and Emir's Arena imbued helmets keep their own copy of each colour and of the
  * imbued black mask. The Tztok, Vampyric and Tzkal colours come from Ghommal and Laidee
  * Gnonock and give back no head; the Radiant colour is made from the Oathplate one.
+ *
+ * Uncharge on a charged black mask, (1) to (10), asks "Remove the charges from this item?" and,
+ * on "Yes.", turns it into the plain black mask with an objectbox and sound 2672 (rsprox
+ * captures, docs/slayer.md). Black mask (i) and (1) (i) to (10) (i) Uncharge back to the same plain
+ * mask, charges kept, asked the same way, and give back what the imbue cost (Wiki, Black mask (i)).
+ * A mask the Nightmare Zone imbued (marked IMBUED_BY_NMZ_META, carried through a helmet and back)
+ * refunds its whole price in points. Any other (a scroll of imbuing, or one imbued before the mark
+ * existed) gives a scroll of imbuing back. No recording shows it, so the plain mask's prompt and
+ * sound are used and no line is sent. The Soul Wars and Emir's Arena ids aren't built.
+ *
+ * A black mask (i) a PvP death loses (to a player, in the Wilderness, not protected) loses its imbue:
+ * it drops for the killer as the plain mask, charges kept, and the victim gets the imbue back as
+ * the Uncharge does, points for a Nightmare Zone imbue, else a scroll of imbuing (Wiki, Black mask
+ * (i): "If lost on death in PvP situations, the mask will lose its imbued status, but the player
+ * will be reimbursed"). The Items Kept on Death preview shows it lost (`items:lost-to-pvp-killer`).
+ * A Slayer helmet or Slayer helmet (i), any colour, lost the same way drops for the killer as the plain
+ * black mask, the other parts are lost, and an imbued one's imbue is given back as the mask's is (Wiki,
+ * Items Kept on Death: "Dropped to the PKer as a black mask. The imbue cost is refunded to the victim.
+ * The other parts are lost."). A recolour's head goes back to the victim with the death's other
+ * untradeables ("The recolour item goes to the victim's gravestone"), except the Hooded and Oathplate
+ * heads, which that page's "Hooded, Radiant or Oathplate" row loses with the other parts.
+ * The Soul Wars Nomad's imbued masks and helmets (`sw_black_mask*`, `sw_slayer_helm_i*`) are lost the same way and
+ * refund their Zeal Tokens (`soul-wars:refund-imbue`; Wiki, Black mask (i): reimbursed the "Zeal Tokens"). The Emir's
+ * Arena ones keep today's handling: its imbue is not modelled, so there is nothing to refund.
  */
 const CRAFTING_LEVEL = 55;
 const MELEE_NUMERATOR = 7;
@@ -41,8 +65,30 @@ let PARTS = [];
 let IMBUE_SCROLLS = new Set();
 /** Black mask / Slayer helmet id -> its imbued id, filled at register. */
 let IMBUED_ITEMS = new Map();
+/** Black mask (1) to (10) ids, filled at register. */
+let CHARGED_MASK_IDS = new Set();
+/** The Soul Wars imbued black masks -> the plain mask each came from; built on first use (swMasks). */
+let SW_MASKS = null;
+/** The imbued black masks (the ids both imbues make) -> the plain mask each came from, filled at register. */
+let NMZ_IMBUED_MASKS = new Map();
+/** Item meta: this mask or helmet was imbued by the Nightmare Zone, so Uncharge refunds points. */
+const IMBUED_BY_NMZ_META = "slayer-helmet:nmz-imbued";
+
+/** Victim -> the imbues a PvP death took from their black masks, given back once the death returns kept items. */
+const pendingDeathRefunds = new WeakMap();
+/** Victim -> the recolour heads of the helmets a PvP death took, handed to the death's untradeables. */
+const pendingDeathHeads = new WeakMap();
+/** Recolours whose head a PvP death loses with the helmet's other parts (Wiki, Items Kept on Death). */
+const PVP_HEAD_LOST = new Set(["Hooded", "Oathplate", "Radiant"]);
 
 const COMBINE_SOUND = 2241;
+const UNCHARGE_SOUND = 2672;
+const UNCHARGE_TITLE = "Remove the charges from this item?";
+const UNCHARGED_TEXT = "You remove the charges from the item.";
+/** "Black mask (1)" to "Black mask (10)": the charged plain masks. */
+const CHARGED_MASK_NAMES = Array.from({ length: 10 }, (_, i) => `Black mask (${i + 1})`);
+/** "Black mask (i)" and "Black mask (1) (i)" to "Black mask (10) (i)" (the cache's names). */
+const IMBUED_MASK_NAMES = ["Black mask (i)", ...CHARGED_MASK_NAMES.map((name) => `${name} (i)`)];
 const LEARN_FIRST = "You must first learn how to do this from a Slayer Master.";
 const HELM_LOCKED = "You have not unlocked the ability to combine these items.";
 
@@ -294,11 +340,13 @@ function assemble(event) {
   const imbued = usingScroll || maskId(mask.getId()) === "imbued";
   const result = !imbued ? ItemIdentifiers.SLAYER_HELMET
     : usingScroll ? ItemIdentifiers.SLAYER_HELMET_I_ : imbuedHelmFor(mask.getId());
+  const nmzImbued = usingScroll ? null : nmzMark(mask);
   if (selectedMask) inventory.deleteAtSlot(selectedSlot, 1);
   else inventory.deleteNumber(mask.getId(), 1);
   for (const part of PARTS) inventory.deleteNumber(part, 1);
   if (usingScroll) inventory.deleteNumber(scrollOnUsed ? Number(usedItemId) : Number(usedWithItemId), 1);
-  inventory.adds(result, 1);
+  if (nmzImbued) inventory.add(new pluginApi.core.Item(result, 1, nmzImbued), false);
+  else inventory.adds(result, 1);
   inventory.refreshItems();
   pluginApi.emitCustomEvent("equipment:changed", { player });
   pluginApi.emitCustomEvent("league:complete-task", { player, id: "assemble-a-slayer-helm" });
@@ -372,8 +420,10 @@ function disassemble(event) {
     player.sendMessage("You don't have enough inventory space to disassemble the helmet.");
     return true;
   }
+  const nmzImbued = nmzMark(item);
   inventory.deleteNumber(item.getId(), 1);
-  inventory.adds(entry.mask, 1);
+  if (nmzImbued) inventory.add(new pluginApi.core.Item(entry.mask, 1, nmzImbued), false);
+  else inventory.adds(entry.mask, 1);
   for (const part of PARTS) inventory.adds(part, 1);
   if (head != null) inventory.adds(head, 1);
   inventory.refreshItems();
@@ -383,9 +433,251 @@ function disassemble(event) {
   return true;
 }
 
+/** Uncharge on a charged black mask: asks first, nothing changes until "Yes.". */
+function uncharge({ player, item }) {
+  if (!CHARGED_MASK_IDS.has(Number(item?.getId?.()))) return false;
+  const inventory = player.getInventory();
+  const slot = inventory.getItems().indexOf(item);
+  if (slot < 0) return false;
+  pluginApi.sendMultiChatboxPrompt(player, UNCHARGE_TITLE,
+    "Yes.", () => removeCharges(player, item, slot),
+    "No.", () => {});
+  return true;
+}
+
+/** Yes: only if the same charged mask is still in that slot. */
+function removeCharges(player, item, slot) {
+  const inventory = player.getInventory();
+  if (inventory.getItems()[slot] !== item || !CHARGED_MASK_IDS.has(Number(item.getId()))) return;
+  item.setId(ItemIdentifiers.BLACK_MASK);
+  inventory.refreshItems();
+  player.getPacketSender().sendSoundEffect(UNCHARGE_SOUND, 1, 0, 255);
+  const { DialogueChainBuilder, ItemStatementDialogue } = pluginApi.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new ItemStatementDialogue(0, ItemIdentifiers.BLACK_MASK, UNCHARGED_TEXT)));
+}
+
+/** The meta an item made from `item` keeps when its imbue was the Nightmare Zone's (null if not). */
+function nmzMark(item) {
+  return item?.getMetaValue?.(IMBUED_BY_NMZ_META) === true ? { [IMBUED_BY_NMZ_META]: true } : null;
+}
+
+/** "nightmare-zone:imbued": marks a black mask or Slayer helmet the Nightmare Zone just imbued. */
+function markNmzImbue({ item, imbuedItemId }) {
+  const id = Number(imbuedItemId);
+  if (!item || !(NMZ_IMBUED_MASKS.has(id) || helmetTable().byId.get(id)?.form?.helm === "slayer_helm_i")) return;
+  item.setMetaValue(IMBUED_BY_NMZ_META, true);
+}
+
+/** Uncharge on an imbued black mask: asks first, as the plain masks' Uncharge. */
+function unimbue({ player, item }) {
+  if (!NMZ_IMBUED_MASKS.has(Number(item?.getId?.()))) return false;
+  const inventory = player.getInventory();
+  const slot = inventory.getItems().indexOf(item);
+  if (slot < 0) return false;
+  pluginApi.sendMultiChatboxPrompt(player, UNCHARGE_TITLE,
+    "Yes.", () => removeImbue(player, item, slot),
+    "No.", () => {});
+  return true;
+}
+
+/**
+ * Yes: only if the same mask is still in that slot. A Nightmare Zone imbue is refunded in points
+ * first; any other gives its scroll of imbuing back, which needs room.
+ */
+function removeImbue(player, item, slot) {
+  const inventory = player.getInventory();
+  const base = NMZ_IMBUED_MASKS.get(Number(item.getId()));
+  if (inventory.getItems()[slot] !== item || base == null) return;
+  if (item.getMetaValue?.(IMBUED_BY_NMZ_META) === true) {
+    const request = { player, baseItemId: base, refunded: null };
+    pluginApi.emitCustomEvent("nightmare-zone:refund-imbue", request);
+    if (request.refunded == null) return;
+    const meta = { ...(item.getMeta?.() ?? {}) };
+    delete meta[IMBUED_BY_NMZ_META];
+    item.setMeta(Object.keys(meta).length ? meta : null);
+  } else {
+    const scroll = new pluginApi.core.Item(ItemIdentifiers.SCROLL_OF_IMBUING, 1);
+    if (inventory.getAddableAmount(scroll) < 1) return;
+    inventory.add(scroll, false);
+  }
+  item.setId(base);
+  inventory.refreshItems();
+  player.getPacketSender().sendSoundEffect(UNCHARGE_SOUND, 1, 0, 255);
+}
+
+/** As BrokenItems: a PvP death is one in the Wilderness to a player killer. */
+function isPvpDeath(player, killer) {
+  return killer != null && killer !== player && pluginApi.core.Wilderness.isIn(player) === true;
+}
+
+/** An imbued black mask a PvP death would take, imbue and all; preset copies were never paid for and stay as they are. */
+function losesImbueToKiller(item) {
+  if (!item || item.isPresetItem?.() === true || item.isUntradeable?.() === true) return false;
+  const id = Number(item.getId?.());
+  return NMZ_IMBUED_MASKS.has(id) || swMasks().has(id) || helmetLostToKiller(item) != null;
+}
+
+/** `sw_black_mask` and `sw_black_mask_1` to `_10` -> Black mask and Black mask (1) to (10). */
+function swMasks() {
+  if (SW_MASKS?.api === pluginApi) return SW_MASKS.map;
+  const map = new Map();
+  const plain = [ItemIdentifiers.BLACK_MASK, ...[...CHARGED_MASK_IDS]];
+  ["sw_black_mask", ...CHARGED_MASK_NAMES.map((_, i) => `sw_black_mask_${i + 1}`)].forEach((name, i) => {
+    const id = objId(name);
+    if (id != null && plain[i] != null) map.set(id, plain[i]);
+  });
+  SW_MASKS = { api: pluginApi, map };
+  return map;
+}
+
+/** The helmet forms a PvP death turns into a black mask: the plain, the scroll / Nightmare Zone and the Soul Wars imbued. */
+const PVP_DROPPED_HELM_FORMS = new Set(["slayer_helm", "slayer_helm_i", "sw_slayer_helm_i"]);
+
+/**
+ * A Slayer helmet a PvP death drops as a black mask: { imbued, base, head } (base: the plain helmet of its colour, the
+ * id a Nightmare Zone refund is priced by; head: the recolour item the victim gets back, or null), or null. Preset copies stay as they are, as the masks.
+ */
+function helmetLostToKiller(item) {
+  if (!item || item.isPresetItem?.() === true || item.isUntradeable?.() === true) return null;
+  const entry = helmetTable().byId.get(Number(item.getId?.()));
+  if (!entry || !PVP_DROPPED_HELM_FORMS.has(entry.form.helm)) return null;
+  const base = objId(entry.recolour ? entry.recolour.item("slayer_helm") : "slayer_helm");
+  const head = entry.recolour && !PVP_HEAD_LOST.has(entry.recolour.name) ? entry.recolour.headId ?? null : null;
+  const zeal = entry.form.helm === "sw_slayer_helm_i" ? Number(item.getId()) : null;
+  return { imbued: entry.form.helm !== "slayer_helm", base, head, zeal };
+}
+
+/**
+ * A Slayer helmet lost to a PvP death: the killer gets a plain black mask in its place (extraDrops, so core drops it
+ * for them), the helmet and its other parts are gone, its recolour head is owed back, and an imbued one's imbue is owed
+ * to the victim.
+ */
+function loseHelmetOnPvpDeath(event, helm) {
+  if (!Array.isArray(event.extraDrops)) return;
+  const { player, item } = event;
+  event.extraDrops.push(new pluginApi.core.Item(ItemIdentifiers.BLACK_MASK, 1));
+  event.handled = true;
+  if (helm.head != null) {
+    const heads = pendingDeathHeads.get(player) ?? [];
+    heads.push(helm.head);
+    pendingDeathHeads.set(player, heads);
+  }
+  if (!helm.imbued) return;
+  const owed = pendingDeathRefunds.get(player) ?? [];
+  owed.push({ base: helm.base, nmz: item.getMetaValue?.(IMBUED_BY_NMZ_META) === true, zeal: helm.zeal });
+  pendingDeathRefunds.set(player, owed);
+}
+
+/**
+ * `onPlayerDeathItemDrop`: an unprotected black mask (i) lost to a PvP death becomes the plain mask, which the death
+ * drops for the killer, and its imbue is owed to the victim.
+ */
+function loseImbueOnPvpDeath(event) {
+  const { player, killer, item } = event;
+  if (event.kept || event.shouldDropItems === false || !isPvpDeath(player, killer) || !losesImbueToKiller(item)) return;
+  const helm = helmetLostToKiller(item);
+  if (helm) {
+    loseHelmetOnPvpDeath(event, helm);
+    return;
+  }
+  const nmz = item.getMetaValue?.(IMBUED_BY_NMZ_META) === true;
+  if (nmz) {
+    const meta = { ...(item.getMeta?.() ?? {}) };
+    delete meta[IMBUED_BY_NMZ_META];
+    item.setMeta(Object.keys(meta).length ? meta : null);
+  }
+  const imbuedId = Number(item.getId());
+  const zeal = swMasks().has(imbuedId) ? imbuedId : null;
+  const base = NMZ_IMBUED_MASKS.get(imbuedId) ?? swMasks().get(imbuedId);
+  item.setId(base);
+  // Our cache marks Black mask (1)-(9) untradeable, so core would hand them back to the victim (a free uncharge);
+  // the Wiki (Black mask: Tradeable "Yes") and osrsreboxed-db list every charge level as tradeable, so drop it here.
+  if (!item.isTradeable() && Array.isArray(event.extraDrops)) {
+    event.extraDrops.push(item);
+    event.handled = true;
+  }
+  const owed = pendingDeathRefunds.get(player) ?? [];
+  owed.push({ base, nmz, zeal });
+  pendingDeathRefunds.set(player, owed);
+}
+
+/**
+ * `onPlayerDeathDrops`: the recolour heads the PvP death took off its helmets join its untradeables, which go where the
+ * death's other untradeables do (back to the victim, as a death with a killer makes no grave).
+ */
+function returnRecolourHeads({ player, untradeables }) {
+  const heads = pendingDeathHeads.get(player);
+  if (!heads) return;
+  pendingDeathHeads.delete(player);
+  if (!Array.isArray(untradeables)) return;
+  for (const head of heads) untradeables.push(new pluginApi.core.Item(head, 1));
+}
+
+/**
+ * "player:died" (after the kept items are back): the imbues a PvP death took. A Nightmare Zone imbue is refunded in
+ * points, a Soul Wars one in Zeal Tokens; any other, or one whose points would pass the cap (ours: the Wiki says
+ * nothing of the cap) or whose shop gives nothing back, as a scroll of imbuing (deliverScroll).
+ */
+function refundPvpDeathImbues({ player }) {
+  const owed = pendingDeathRefunds.get(player);
+  if (!owed) return;
+  pendingDeathRefunds.delete(player);
+  for (const { base, nmz, zeal } of owed) {
+    if (zeal != null) {
+      const request = { player, imbuedItemId: zeal, refunded: null };
+      pluginApi.emitCustomEvent("soul-wars:refund-imbue", request);
+      if (request.refunded != null) continue;
+    } else if (nmz) {
+      const request = { player, baseItemId: base, refunded: null };
+      pluginApi.emitCustomEvent("nightmare-zone:refund-imbue", request);
+      if (request.refunded != null) continue;
+    }
+    deliverScroll(player);
+  }
+}
+
+/**
+ * Ours (the Wiki doesn't say where it goes): the refunded scroll goes to the inventory, else the bank (none for an
+ * Ultimate Ironman), else on the floor where the victim stands a tick later, past the respawn's move, so it never
+ * lies on the death tile for the killer.
+ */
+function deliverScroll(player) {
+  const { Item, Bank, ItemOnGroundManager, TaskManager, Task } = pluginApi.core;
+  const id = ItemIdentifiers.SCROLL_OF_IMBUING;
+  const scroll = new Item(id, 1);
+  const inventory = player.getInventory();
+  if (inventory.getAddableAmount(scroll) >= 1) {
+    inventory.add(scroll);
+    return;
+  }
+  const mode = { player, mode: "none" };
+  pluginApi.emitCustomEvent("ironman:mode", mode);
+  if (mode.mode !== "ultimate") {
+    const bank = player.getBank(Bank.getTabForItem(player, id));
+    if (bank.getAddableAmount(scroll) >= 1) {
+      bank.add(scroll, false);
+      return;
+    }
+  }
+  TaskManager.submit(new (class extends Task {
+    constructor() { super(1, player, false); }
+    execute() {
+      this.stop();
+      if (player.isRegistered?.() === false) return;
+      ItemOnGroundManager.registerLocation(player, scroll, player.getLocation().clone());
+    }
+  })());
+}
+
+/** `items:lost-to-pvp-killer` { item, lost }: the Items Kept on Death preview of a PvP death. */
+function answerLostToPvpKiller(query) {
+  if (losesImbueToKiller(query?.item)) query.lost = true;
+}
+
 module.exports = {
   name: "SlayerHelmet",
-  description: "Adds the black mask and Slayer helmet: Slayer-task accuracy and damage boosts, assembling and disassembling, and imbuing with a scroll.",
+  description: "Adds the black mask and Slayer helmet: Slayer-task accuracy and damage boosts, assembling and disassembling, imbuing with a scroll, and uncharging a charged black mask.",
   members: true,
   register(api) {
     pluginApi = api;
@@ -397,6 +689,9 @@ module.exports = {
       ItemIdentifiers.SPINY_HELMET,
       ItemIdentifiers.ENCHANTED_GEM,
     ];
+    CHARGED_MASK_IDS = new Set([ItemIdentifiers.BLACK_MASK_1_, ItemIdentifiers.BLACK_MASK_2_, ItemIdentifiers.BLACK_MASK_3_,
+      ItemIdentifiers.BLACK_MASK_4_, ItemIdentifiers.BLACK_MASK_5_, ItemIdentifiers.BLACK_MASK_6_, ItemIdentifiers.BLACK_MASK_7_,
+      ItemIdentifiers.BLACK_MASK_8_, ItemIdentifiers.BLACK_MASK_9_, ItemIdentifiers.BLACK_MASK_10_]);
     IMBUE_SCROLLS = new Set([ItemIdentifiers.SCROLL_OF_IMBUING, ItemIdentifiers.SCROLL_OF_IMBUING_2]);
     IMBUED_ITEMS = new Map([
       [ItemIdentifiers.BLACK_MASK_10_, ItemIdentifiers.BLACK_MASK_10_I_],
@@ -412,6 +707,9 @@ module.exports = {
       [ItemIdentifiers.BLACK_MASK, ItemIdentifiers.BLACK_MASK_I_],
       [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.SLAYER_HELMET_I_],
     ]);
+    NMZ_IMBUED_MASKS = new Map([...IMBUED_ITEMS]
+      .filter(([plain]) => plain !== ItemIdentifiers.SLAYER_HELMET)
+      .map(([plain, imbued]) => [imbued, plain]));
     api.registerMeleeAttackAccuracyModifier(meleeBoost);
     api.registerMeleeHitModifier(meleeBoost);
     api.registerRangedAttackAccuracyModifier(rangedAccuracyBoost);
@@ -419,12 +717,19 @@ module.exports = {
     api.registerMagicAttackAccuracyModifier(magicBoost);
     api.registerMagicHitModifier(magicBoost);
     api.onCustomEvent("slayer:imbued-active", imbuedActive);
+    api.onCustomEvent("nightmare-zone:imbued", markNmzImbue);
     api.onItemOnItem(imbue, { noted: false });
     api.onItemOnItem(assemble, { noted: false });
     api.onItemOnItem(recolour, { noted: false });
     // Partner and Log aren't built; handling them keeps the worn click from taking the helmet off.
     const actions = { Disassemble: disassemble, Check: check, Partner: notBuilt, Log: notBuilt };
     for (const name of HELMET_NAMES) api.onItemAction(name, actions);
+    for (const name of CHARGED_MASK_NAMES) api.onItemAction(name, { Uncharge: uncharge });
+    for (const name of IMBUED_MASK_NAMES) api.onItemAction(name, { Uncharge: unimbue });
+    api.onPlayerDeathItemDrop(loseImbueOnPvpDeath);
+    api.onPlayerDeathDrops(returnRecolourHeads);
+    api.onCustomEvent("player:died", refundPvpDeathImbues);
+    api.onCustomEvent("items:lost-to-pvp-killer", answerLostToPvpKiller);
   },
-  _test: { slayerHeadwear, meleeBoost, rangedAccuracyBoost, rangedDamageBoost, magicBoost, imbue, assemble, recolour, disassemble, HELMET_NAMES, FORMS, RECOLOURS },
+  _test: { uncharge, unimbue, removeImbue, loseImbueOnPvpDeath, refundPvpDeathImbues, markNmzImbue, IMBUED_BY_NMZ_META, CHARGED_MASK_NAMES, IMBUED_MASK_NAMES, slayerHeadwear, meleeBoost, rangedAccuracyBoost, rangedDamageBoost, magicBoost, imbue, assemble, recolour, disassemble, HELMET_NAMES, FORMS, RECOLOURS },
 };

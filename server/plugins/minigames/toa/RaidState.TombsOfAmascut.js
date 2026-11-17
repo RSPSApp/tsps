@@ -1500,7 +1500,15 @@ function begin(leader) {
     Shared.statement(leader, `Your leader, ${lobby.leaderName}, must enter first.`);
     return null;
   }
+  // "group-pvm:can-start" / "group-pvm:started": content may refuse or follow who raids together.
+  const check = { players: [...lobby.players], activity: "the Tombs of Amascut", allowed: true, reason: null };
+  Shared.api().emitCustomEvent("group-pvm:can-start", check);
+  if (check.allowed === false) {
+    if (check.reason) leader.sendMessage(check.reason);
+    return null;
+  }
   const raid = new Raid(lobby, leader);
+  Shared.api().emitCustomEvent("group-pvm:started", { players: [...lobby.players], activity: "the Tombs of Amascut" });
   for (const member of raid.players) {
     if (member === leader) continue;
     member.sendMessage(`${Shared.displayName(leader)} has entered the Tombs of Amascut. Step inside to join ${Shared.pronoun(leader)}...`);

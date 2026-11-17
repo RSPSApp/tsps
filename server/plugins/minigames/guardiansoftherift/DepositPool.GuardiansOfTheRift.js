@@ -33,16 +33,25 @@ function depositRunes({ player, objectId }) {
   // deposit box, leprechaun and imp box do; the veto says why.
   if (Shared.api().emitCanBank?.(player, "guardians-of-the-rift-pool") === false) return true;
   let deposited = false;
+  let fullBank = null;
   inventory.getItems().forEach((item, slot) => {
     if (!item || item.getId() <= 0 || !isRune(item)) return;
+    // A rune the bank has no room for stays put without a message each: the bank's full line is sent once below.
+    const bank = player.getBank(Bank.getTabForItem(player, item.getId()));
+    if (!bank.canTake(item)) {
+      fullBank ??= bank;
+      return;
+    }
     const before = item.getAmount();
     Bank.deposit(player, item.getId(), slot, before, true);
     if ((inventory.getItems()[slot]?.getId() === item.getId() ? inventory.getItems()[slot].getAmount() : 0) < before) deposited = true;
   });
-  // Nothing moved (a full bank): the bank has said why, and the pool claims nothing.
-  if (!deposited) return true;
-  Shared.animate(player, "human_leverdown_walkmerge");
-  player.sendMessage("You deposit all of your runes into the pool.");
+  fullBank?.full();
+  if (deposited) Shared.animate(player, "human_leverdown_walkmerge");
+  // The pool only claims every rune when none stayed behind; otherwise the bank has said why.
+  if (deposited && !inventory.getItems().some((item) => item && item.getId() > 0 && isRune(item))) {
+    player.sendMessage("You deposit all of your runes into the pool.");
+  }
   return true;
 }
 

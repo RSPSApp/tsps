@@ -65,6 +65,8 @@ The soldiers drilling in Shayzien (the cache's `shayzien_exercise_*` NPCs) now s
 
 Issue #1706: the Blue Moon Inn's bartender and Aubury walked out from behind the counter and out of the shop, on the default `wanderRadius` 5. Live they stay within 2 and 3 tiles (44 and 32 recordings). The wander step (4 above) ran with `--only wander` on 4,282 recordings: **1,598 spawns** got a tighter radius, all NPCs that can't be attacked: shopkeepers and bartenders, citizens, workers, squires, Trader Crewmembers, butterflies, sheep and so on. A second run changes nothing.
 
+**The Prifddinas rabbit** (9118, the Elven rabbit cave) was set by hand to `wanderRadius` 7, wider than the default of 5. One recording (2026-11-15, live world 369, rev 242) watched it out of combat for 33 ticks after the player arrived. In that time it roamed the whole closed cave floor, x 3291–3300 and y 12574–12583, as far south as (3293, 12574). From its Wiki spawn at (3295, 12581), radius 5 stops at y 12576; radius 7 covers the floor, and the cave's walls bound the rest.
+
 **Not done yet:**
-- **wander ranges for monsters**, which need sightings that leave out their fights;
+- **wander ranges for monsters**, which need sightings that leave out their fights (the rabbit above is the one exception so far);
 - **ambient lines and animations**, which need a small feature to play them.

@@ -146,6 +146,7 @@ export class CustomXpDropsPlugin extends Plugin {
     protected async startUp(): Promise<void> {
         this.state.reset();
         this.gains.length = 0;
+        this.osrsClient.hitpointsXpUnmultiplied = 0;
         this.lastTarget = undefined;
         this.skillXp.fill(0);
         const getStatXp = this.osrsClient.cs2Vm?.context?.getStatXp;
@@ -220,13 +221,33 @@ export class CustomXpDropsPlugin extends Plugin {
         if (current) this.lastTarget = current;
         const target = current ?? this.lastTarget;
         const style = this.attackStyle();
-        for (const { skill, experience } of this.gains.splice(0)) {
-            if (skill === SkillId.Hitpoints && target) {
+        const gains = this.gains.splice(0);
+        const tagged = this.taggedHitpointsXp(gains);
+        gains.forEach(({ skill, experience }, i) => {
+            const hpXp = experience - tagged[i];
+            // Under 1 XP left is the rounding of a tagged gain, not a hit.
+            if (skill === SkillId.Hitpoints && target && hpXp >= 1) {
                 const modifier = target.type === "npc" ? this.xpModifiers.get(target.npcTypeId) ?? 1 : 1;
-                this.state.hits.push({ hpXp: experience, modifier, target: current, style });
+                this.state.hits.push({ hpXp, modifier, target: current, style });
             }
             this.state.queue.push({ skill, experience, style: this.prayerStyle(skill, style), target: current });
+        });
+    }
+
+    /**
+     * How much of each gain is Hitpoints XP the server tagged as paid without the rates (a league
+     * relic's bonus). The server adds it after the hit's own XP, so it is matched from the last
+     * Hitpoints gain back; the drop still shows all of it.
+     */
+    private taggedHitpointsXp(gains: readonly { skill: SkillId; experience: number }[]): number[] {
+        let left = Number(this.osrsClient.hitpointsXpUnmultiplied) || 0;
+        const tagged = gains.map(() => 0);
+        for (let i = gains.length - 1; i >= 0 && left > 0; i--) {
+            if (gains[i].skill !== SkillId.Hitpoints) continue;
+            tagged[i] = Math.min(left, gains[i].experience);
+            left -= tagged[i];
         }
+        return tagged;
     }
 
     /**
@@ -237,6 +258,8 @@ export class CustomXpDropsPlugin extends Plugin {
     onClientTick(): void {
         if (!this.isStarted()) return;
         this.queueGains();
+        // A tag comes in the same message as its gain: none outlives the tick that read them.
+        this.osrsClient.hitpointsXpUnmultiplied = 0;
         this.state.update(this.now(), this.tick, this.dropSettings());
     }
 

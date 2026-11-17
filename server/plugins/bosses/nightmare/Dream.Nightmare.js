@@ -217,6 +217,20 @@ function pullIn(player, dream) {
   });
 }
 
+/** The pet following the player (the Pets plugin's), if any. */
+const CURRENT_PET_ATTRIBUTE = "pets:current";
+
+/**
+ * Disturb with a pet following: refused in a message box, on arrival, before any warning
+ * (rsprox_transcripts/227/01757.txt:128888, tick 3914, a Tumeken's guardian following).
+ */
+function refusesPet(player) {
+  if (!player.getAttribute?.(CURRENT_PET_ATTRIBUTE)?.isRegistered?.()) return false;
+  const { DialogueChainBuilder, StatementDialogue } = Common.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, Common.data.entry.petRefused)));
+  return true;
+}
+
 /** "Yes, and don't ask again." remembers the answer (`skipKey`). */
 function confirm(player, warning, { question, options }, skipKey, proceed) {
   if (player.getAttribute(skipKey)) {
@@ -279,6 +293,7 @@ function disturb(event) {
   const { player, npc } = event;
   if (npc?.__nightmareFight) return require("./Fight.Nightmare").disturbBody(event);
   if (dreamOf(player)) return true;
+  if (refusesPet(player)) return true;
   if (shared && !shared.joinable()) {
     player.sendMessage(Common.data.entry.inProgress);
     return true;
@@ -290,6 +305,7 @@ function disturb(event) {
       player.sendMessage(entry.inProgress);
       return;
     }
+    if (shared && !mayJoin(player, [...shared.players])) return;
     if (!shared) {
       shared = new Dream(false);
       require("./Fight.Nightmare").open(shared);
@@ -310,6 +326,18 @@ function drinkFromPool(player) {
     require("./Fight.Nightmare").open(dream);
     pullIn(player, dream);
   });
+}
+
+/**
+ * "group-pvm:can-start" with the player walking in (`entrant`) and the dreamers: content may refuse
+ * (a Hardcore Group Ironman with players outside their group); the reason is said.
+ */
+function mayJoin(player, others) {
+  const check = { players: [player, ...others], entrant: player, activity: "The Nightmare", allowed: true, reason: null };
+  Common.api.emitCustomEvent("group-pvm:can-start", check);
+  if (check.allowed !== false) return true;
+  if (check.reason) player.sendMessage(check.reason);
+  return false;
 }
 
 /** The barriers: Pass-through once she sleeps, Escape during the fight (asked first). */

@@ -3,7 +3,7 @@ const CameraShake = require("../../interface/CameraShake.plugin");
 
 module.exports = function registerDemonSlayerQuest(api) {
   const { Item, Location, World, Area, PrivateArea, Boundary, Animation, Graphic, NpcDialogue, PlayerDialogue, DialogueChainBuilder, ActionDialogue, ForceMovement, ForceMovementTask, Task, TaskManager, StatementDialogue, ItemStatementDialogue, GameObject, ObjectManager, Music, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, startDialogue } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, startDialogue, questStartMessage } = require("../QuestRuntime");
 
   const ARIS_NPC_ID = NpcIdentifiers.ARIS;
   /** Aris' legacy cache id 5082 has no generated NpcIdentifiers member. */
@@ -217,7 +217,7 @@ module.exports = function registerDemonSlayerQuest(api) {
       if (mobile === this.owner) {
         mobile.setArea(null);
         if (this.vision) endVision(mobile);
-        else clearDemonEncounter(mobile);
+        else abandonDemonEncounter(mobile);
         setSceneControls(mobile, false);
         if (!this.vision) {
           mobile.getPacketSender().sendCameraReset();
@@ -729,7 +729,7 @@ module.exports = function registerDemonSlayerQuest(api) {
     if (quest.getStage(player) >= STAGE_STARTED) return;
     quest.setStage(player, STAGE_STARTED);
     sendIncantation(player);
-    player.sendMessage("You've started a new quest: <col=0ab0ff>Demon Slayer</col>");
+    player.sendMessage(questStartMessage(player, "Demon Slayer"));
   }
 
   /** The coin leaves as the player finishes saying "Okay, here you go." (capture 1723, 10369). */
@@ -1006,7 +1006,7 @@ module.exports = function registerDemonSlayerQuest(api) {
       // private scene reaches past the circle; a player outside it has already left. One inside
       // is put straight back in the circle, so the exit that clears the mark is the one seen.
       const inCircle = inDelrithZone(player.getLocation());
-      clearDemonEncounter(player);
+      abandonDemonEncounter(player);
       if (inCircle && delrithCircle) {
         delrithEscaped.add(player);
         delrithCircle.enter(player);
@@ -1129,6 +1129,21 @@ module.exports = function registerDemonSlayerQuest(api) {
       { player: ["Now what was that incantation again?"] },
       { exec: () => promptIncantation(player, npc, []) },
     ]);
+  }
+
+  /**
+   * The fight ended without a banishment (death, logout, the weakened Delrith slipping away). Whatever
+   * the scene had on the chatbox goes with it: its steps are cancelled with the encounter, so a word
+   * being spoken (a box with no Continue) or a stale prompt would stay open for good. The "summoning
+   * seen" and "wizards killed" varbits restart with the next attempt's cutscene.
+   */
+  function abandonDemonEncounter(player) {
+    const tracked = demonEncounters.get(player);
+    clearDemonEncounter(player);
+    if (!tracked || tracked.banished) return;
+    player.getDialogueManager().reset();
+    player.getPacketSender().sendInterfaceRemoval();
+    player.getPacketSender().sendVarbit(VARBIT_SUMMONING_SEEN, 0).sendVarbit(VARBIT_DARK_WIZARDS_KILLED, 0);
   }
 
   function clearDemonEncounter(player) {

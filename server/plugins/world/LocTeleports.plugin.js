@@ -3,7 +3,8 @@
  * close, played as live OSRS does (docs/loc-teleports.md):
  * - plugins/world/data/loc-teleports.json: where a loc placement takes the player
  *   (scripts/sync-loc-teleports.cjs writes it from the rsprox capture database);
- * - plugins/world/data/loc-swaps.json: trapdoors whose Open/Close swaps the loc for its other state,
+ * - plugins/world/data/loc-swaps.json: trapdoors and household drawers whose Open/Close swaps the loc
+ *   for its other state (and an open drawer's Search, which only answers "The drawers are empty."),
  *   and (`toggles`) per-player multiloc trapdoors whose Open/Close sets the varbit showing the other
  *   state, kept across logins (Evil Dave's cellar trapdoor).
  *
@@ -15,6 +16,7 @@
  * Gates (an entry's `requires`, decided in plugins/world/data/loc-teleport-sync.json) are checked in
  * order first: a total level, worn items (any one set), an item used on the loc once before (a
  * rope tied to the Elid crevice), a completed quest (`quest`: the Prifddinas gates, Dorgesh-Kaan's doors),
+ * a started quest (`questStarted`: the Troll Stronghold's roof ladder),
  * a skill level or a Slayer task (`skill`, `slayerTask`: Araxxor's lair). The first one the player lacks plays its refusal: a
  * game message, a message box, or an NPC's line.
  *
@@ -113,10 +115,11 @@ function fade(player, out) {
 
 /**
  * Runs `steps` (tick from the click -> actions) one tick at a time, with the player's movement
- * blocked until the last. Steps due on the click's own tick run now. Stops if the player leaves,
+ * blocked until the last (or from tick `release` on, when given: the overlay can close after the
+ * player may walk again). Steps due on the click's own tick run now. Stops if the player leaves,
  * dies or is moved off their tile before `holdUntil`.
  */
-function runSteps(player, steps, holdUntil) {
+function runSteps(player, steps, holdUntil, release = Infinity) {
   const { Task, TaskManager } = core;
   const movement = player.getMovementQueue();
   if (movement.isMovementBlocked()) return;
@@ -144,6 +147,7 @@ function runSteps(player, steps, holdUntil) {
         this.stop();
         return;
       }
+      if (tick >= release) movement.setBlockMovement(false);
       run();
       if (tick >= last) this.stop();
     }
@@ -166,15 +170,16 @@ function sayCrossed(player, { message, messageType }) {
   else player.sendMessage(message);
 }
 
-function animateAndSound(player, { anim, sound }) {
+/** `soundDelay`: the sound's client delay as captured (synth_sound delay), 0 when not given. */
+function animateAndSound(player, { anim, sound, soundDelay = 0 }) {
   if (anim !== undefined) player.performAnimation(new core.Animation(anim));
-  if (sound !== undefined) player.getPacketSender().sendSound(sound, 1, 0);
+  if (sound !== undefined) player.getPacketSender().sendSound(sound, 1, soundDelay);
 }
 
 /**
  * A loc teleport: animation and sound (and the fade out) on the animation's tick, the minimap
- * off a tick later, the move, then the fade back in a tick after it and the overlay closed two
- * ticks later.
+ * off a tick later, the move, then the fade back in a tick after it (`fadeInTicks` after it when
+ * given) and the overlay closed two ticks later.
  */
 function travel(player, entry, destination, answer = null) {
   const { steps, at } = schedule();
@@ -195,14 +200,19 @@ function travel(player, entry, destination, answer = null) {
       player, objectId: entry.id, location: { x: entry.x, y: entry.y, z: entry.z },
     });
   });
+  // With `fadeInTicks`, the player may walk again a tick after the fade back in, before the overlay closes
+  // (233/03234.txt: the lift's move on 301, fade in 303, the first run step 304, overlay closed 305).
+  let release = Infinity;
   if (entry.fade) {
-    at(moveTick + 1, () => {
+    const fadeInTick = moveTick + (entry.fadeInTicks ?? 1);
+    if (entry.fadeInTicks !== undefined) release = fadeInTick + 1;
+    at(fadeInTick, () => {
       player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, 0);
       fade(player, false);
     });
-    at(moveTick + 3, () => player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID));
+    at(fadeInTick + 2, () => player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID));
   }
-  runSteps(player, steps, moveTick);
+  runSteps(player, steps, moveTick, release);
 }
 
 /** Puts `id` in place of the loc, for everyone (the game sends it as a zone update). */
@@ -213,17 +223,34 @@ function replaceLoc(object, id) {
   ObjectManager.register(new GameObject(id, new Location(location.getX(), location.getY(), location.getZ()), object.getType(), object.getFace(), null), true);
 }
 
-/** A trapdoor's Open or Close: the message, the animation and sound, then the swap. */
+/**
+ * A trapdoor's or drawer's Open or Close: the message, the animation and sound, then the swap.
+ * A row without `becomes` (an open drawer's Search) only sends its message.
+ */
 function swapLoc(player, object, swap) {
   const { steps, at } = schedule();
   if (swap.message) at(fromClick(swap.messageTick ?? swap.tick), () => player.sendMessage(swap.message));
   at(fromClick(swap.animTick ?? swap.tick), () => animateAndSound(player, swap));
   const swapTick = fromClick(swap.tick);
-  at(swapTick, () => {
+  if (swap.becomes != null) at(swapTick, () => {
     // Someone else may have opened or closed it meanwhile.
     if (core.MapObjects.get(swap.id, object.getLocation(), object.getPrivateArea?.() ?? null) === object) replaceLoc(object, swap.becomes);
   });
   runSteps(player, steps, swapTick);
+}
+
+/**
+ * "loc-swaps:states": for an op that only sends its message (an open drawer's Search), adds the
+ * loc's other states (the closed drawer's id) to `request.states`. Ops that swap the loc (Close)
+ * add nothing, so they still reach this plugin.
+ */
+function answerStates(request) {
+  if (!request || !Array.isArray(request.states)) return;
+  const row = swaps.get(`${request.objectId}:${request.clickType}`);
+  if (!row || row.becomes != null) return;
+  for (const swap of swaps.values()) {
+    if (swap.id === request.objectId && swap.becomes != null && !request.states.includes(swap.becomes)) request.states.push(swap.becomes);
+  }
 }
 
 function toggled(player) {
@@ -273,6 +300,7 @@ function meets(player, entry, requirement) {
   if (requirement.tied !== undefined) return tied(player).includes(entry.name);
   if (requirement.varbit !== undefined) return player.getPacketSender().getVarbit(requirement.varbit) >= (requirement.atLeast ?? 1);
   if (requirement.quest !== undefined) return questComplete(player, requirement.quest);
+  if (requirement.questStarted !== undefined) return questStarted(player, requirement.questStarted);
   if (requirement.skill !== undefined) return player.getSkillManager().getCurrentLevel(core.Skill[requirement.skill.toUpperCase()]) >= requirement.atLeast;
   if (requirement.slayerTask !== undefined) return onSlayerTask(player, requirement.slayerTask);
   return true;
@@ -291,6 +319,13 @@ function questComplete(player, key) {
   const query = { player, key, complete: false };
   pluginApi.emitCustomEvent("quest:is-complete", query);
   return query.complete === true;
+}
+
+/** A quest the loc needs started (`{ questStarted: key }`), answered by the quest system. */
+function questStarted(player, key) {
+  const query = { player, key, started: false };
+  pluginApi.emitCustomEvent("quest:is-started", query);
+  return query.started === true;
 }
 
 /** The captured refusal: a game message, a message box, or an NPC's line. */
@@ -399,7 +434,11 @@ function play(player, object, clickType) {
       warn(player, object, entry, destination);
       return true;
     }
-    if (entry.ask) {
+    // "loc-teleports:ask" { player, object, objectId, ask }: content may skip the question (a house robbery's
+    // window after the warning whistle goes straight out).
+    const question = entry.ask ? { player, object, objectId: object.getId(), ask: true } : null;
+    if (question) pluginApi.emitCustomEvent("loc-teleports:ask", question);
+    if (question?.ask) {
       ask(player, object, entry, destination);
       return true;
     }
@@ -457,7 +496,7 @@ function claimDoorToggle(request) {
 
 module.exports = {
   name: "LocTeleports",
-  description: "Handles ladders, stairs, caves and holes with no other handler from captured data, plus opening and closing trapdoors, with level, item and quest gates.",
+  description: "Handles ladders, stairs, caves and holes with no other handler from captured data, plus opening and closing trapdoors and household drawers, with level, item and quest gates.",
   _test: { entryFor, destinationFor, play, useItemOnLoc, claimDoorToggle, get entries() { return entries; }, get swaps() { return swaps; }, get toggles() { return toggles; }, TOGGLED_ATTRIBUTE },
   register(api) {
     core = api.core;
@@ -475,5 +514,6 @@ module.exports = {
     api.onCustomEvent("ladders:climb", claimLadder);
     api.onCustomEvent("loc-teleports:captured", answerCaptured);
     api.onCustomEvent("door:toggle", claimDoorToggle);
+    api.onCustomEvent("loc-swaps:states", answerStates);
   },
 };

@@ -27,6 +27,7 @@ function registerSmithing() {
       if (name === "smithing:success") successEvents.push(request);
       if (name === "smithing:anvil-access") request.denied = denyAnvil;
       if (name === "quest:is-complete") request.complete = request.player.quests?.has(request.key) ?? false;
+      if (name === "smithing:unlocked" && request.player.barbarianTrained === true) request.allowed = true;
       for (const handler of events.get(name) ?? []) handler(request);
     },
     persistAttribute() {},
@@ -340,7 +341,7 @@ test("Smelt lists every bar, and smelts on the captured timing", () => {
   objects.get("Furnace").Smelt({ player });
   const menu = lastMenu(player);
   assert.equal(menu.getTitle(), "What would you like to smelt?");
-  assert.deepEqual(menu.getItems(), [I.BRONZE_BAR, I.BLURITE_BAR, I.IRON_BAR, I.SILVER_BAR, I.LEAD_BAR, I.STEEL_BAR,
+  assert.deepEqual(menu.getItems(), [I.BRONZE_BAR, I.LUNAR_BAR, I.BLURITE_BAR, I.IRON_BAR, I.SILVER_BAR, I.LEAD_BAR, I.STEEL_BAR,
     I.GOLD_BAR, I.MITHRIL_BAR, I.ADAMANTITE_BAR, I.CUPRONICKEL_BAR, I.RUNITE_BAR]);
   menu.execute(I.BRONZE_BAR, 2);
   ticks(1);
@@ -359,18 +360,34 @@ test("Smelt lists every bar, and smelts on the captured timing", () => {
 });
 
 
+test("lunar ore smelts to a lunar bar at level 1 for 6.2 XP (Wiki)", t => {
+  t.mock.method(Math, "random", () => 0);
+  const player = furnaceWith([[I.LUNAR_ORE, 1]]);
+  objects.get("Furnace").Smelt({ player });
+  const menu = lastMenu(player);
+  assert.ok(menu.getItems().includes(I.LUNAR_BAR), "the Smelt menu lists the lunar bar");
+  menu.execute(I.LUNAR_BAR, 1);
+  ticks(6);
+  assert.equal(player.items.get(I.LUNAR_ORE), 0);
+  assert.equal(player.items.get(I.LUNAR_BAR), 1);
+  assert.equal(player.xp, 6.2);
+  assert.ok(player.spam.includes("You smelt the magic ore in the furnace."));
+  assert.equal(player.spam.at(-1), "You retrieve a lunar bar.");
+});
+
 test("lead and cupronickel stay out of F2P furnace menus and direct starts", (t) => {
   t.mock.method(PluginManager.getCoreApi().WorldDefinition, "isMembersWorld", () => false);
-  const player = furnaceWith([[I.LEAD_ORE, 2], [I.NICKEL_ORE, 1], [I.COPPER_ORE, 2]]);
+  const player = furnaceWith([[I.LEAD_ORE, 2], [I.NICKEL_ORE, 1], [I.COPPER_ORE, 2], [I.LUNAR_ORE, 1]]);
   objects.get("Furnace").Smelt({ player });
   const listed = lastMenu(player).getItems();
-  assert.ok(!listed.includes(I.LEAD_BAR) && !listed.includes(I.CUPRONICKEL_BAR));
+  assert.ok(!listed.includes(I.LEAD_BAR) && !listed.includes(I.CUPRONICKEL_BAR) && !listed.includes(I.LUNAR_BAR));
   const Smelting = require("../plugins/skills/smithing/Smelting.Smithing");
   const Data = require("../plugins/skills/smithing/Data.Smithing");
-  for (const id of [I.LEAD_BAR, I.CUPRONICKEL_BAR]) {
+  for (const id of [I.LEAD_BAR, I.CUPRONICKEL_BAR, I.LUNAR_BAR]) {
     assert.equal(Smelting.startSmelting(player, Data.SMELTING_RECIPES.find((r) => r.barId === id), 1), false);
   }
   assert.equal(player.items.get(I.LEAD_ORE), 2);
+  assert.equal(player.items.get(I.LUNAR_ORE), 1);
   assert.equal(player.xp, 0);
 });
 
@@ -399,6 +416,25 @@ test("too low a level is a message box; impure iron is lost", (t) => {
   assert.equal(player.items.get(I.IRON_BAR) ?? 0, 0);
   assert.equal(player.spam.at(-1), "The ore is too impure and you fail to refine it.");
   assert.equal(player.xp, 0);
+});
+
+// Wiki (Furnace, Clay forge, Volcanic Furnace, Lava forge, Ancient Furnace): furnaces under other names.
+test("the Clay forge, Volcanic Furnace, Lava forge and Ancient Furnace smelt like any furnace", () => {
+  for (const name of ["Clay forge", "Volcanic Furnace", "Lava forge", "Ancient Furnace"]) {
+    assert.equal(typeof objects.get(name)?.Smelt, "function", `${name} has Smelt`);
+    const player = furnaceWith([[I.COPPER_ORE, 1], [I.TIN_ORE, 1]]);
+    objects.get(name).Smelt({ player });
+    assert.equal(lastMenu(player).getTitle(), "What would you like to smelt?", name);
+    lastMenu(player).execute(I.BRONZE_BAR, 1);
+    ticks(5);
+    assert.equal(player.items.get(I.BRONZE_BAR), 1, `${name} smelts the bar`);
+
+    const used = furnaceWith([[I.IRON_ORE, 2]]);
+    const event = { player: used, itemId: I.IRON_ORE, object: { getDefinition: () => ({ getName: () => name }) } };
+    itemOnObject(event);
+    assert.equal(event.handled, true, `ore used on the ${name}`);
+    assert.equal(lastMenu(used).getTitle(), "What would you like to smelt?");
+  }
 });
 
 test("ore used on a furnace opens the Smelt menu; sand opens molten glass", () => {
@@ -610,6 +646,33 @@ test("cannonballs pour from bars in an ammo mould after Dwarf Cannon", () => {
   assert.equal(double.xp, 34 * 3);
 });
 
+// Wiki (Ancient Furnace, Cannonball): "5 ticks per action instead of 10" at Grimstone's Ancient Furnace.
+test("the Ancient Furnace casts cannonballs every 5 ticks, by Smelt and by a bar used on it", () => {
+  const ancientId = CacheDefinitions.getLocId("grimstone_furnace");
+  assert.ok(ancientId > 0);
+  const ancient = { getId: () => ancientId, getDefinition: () => ({ getName: () => "Ancient Furnace" }) };
+  const player = furnaceWith([[I.STEEL_BAR, 4], [I.AMMO_MOULD, 1]]);
+  player.quests = new Set(["dwarf_cannon"]);
+  objects.get("Ancient Furnace").Smelt({ player, objectId: ancientId });
+  lastMenu(player).execute(I.STEEL_CANNONBALL, 3);
+  ticks(4);
+  assert.equal(player.items.get(I.STEEL_CANNONBALL) ?? 0, 0);
+  ticks(1);
+  assert.equal(player.items.get(I.STEEL_CANNONBALL), 4);
+  ticks(5);
+  assert.equal(player.items.get(I.STEEL_CANNONBALL), 8);
+  ticks(5);
+  assert.equal(player.items.get(I.STEEL_CANNONBALL), 12);
+  assert.equal(player.items.get(I.STEEL_BAR), 1);
+
+  const used = furnaceWith([[I.STEEL_BAR, 2], [I.AMMO_MOULD, 1]]);
+  used.quests = new Set(["dwarf_cannon"]);
+  itemOnObject({ player: used, itemId: I.STEEL_BAR, object: ancient, objectId: ancientId });
+  lastMenu(used).execute(I.STEEL_CANNONBALL, 2);
+  ticks(10);
+  assert.equal(used.items.get(I.STEEL_CANNONBALL), 8);
+});
+
 test("Shayzien armour from lovakite and keel parts after Pandemonium use the Wiki experience", () => {
   const lovakite = playerWith(I.LOVAKITE_BAR, 4);
   open(lovakite);
@@ -737,15 +800,35 @@ test("dragon sq shield halves are repaired at an anvil after the message boxes",
 
 test("a barbarian anvil makes spears and hastas from a bar and a log", () => {
   const player = playerWith(I.STEEL_BAR, 2);
-  player.items.set(I.WILLOW_LOGS, 2);
-  const barbarian = { getDefinition: () => ({ getName: () => "Barbarian anvil" }) };
+  player.barbarianTrained = true; // This recipe fixture explicitly answers the lesson service.
+  const core = PluginManager.getCoreApi();
+  Object.assign(player, { getLocation: () => new core.Location(2503, 3485, 0),
+    getTeleportSerial: () => 0, getArea: () => null, getPrivateArea: () => null });
+  const inventory = new core.Inventory(player);
+  player.getInventory = () => inventory;
+  for (const id of [I.HAMMER, I.STEEL_BAR, I.WILLOW_LOGS]) inventory.adds(id, 2);
+  core.RegionManager.init();
+  const barbarian = core.MapObjects.getObjectsAt(new core.Location(2502, 3485, 0), null)
+    .find(object => object.getId() === core.CacheDefinitions.getLocId("brut_anvil"));
+  assert.ok(barbarian);
   for (const handler of extraItemOnObject) handler({ player, itemId: I.STEEL_BAR, object: barbarian });
   assert.deepEqual(lastMenu(player).getItems(), [I.STEEL_SPEAR, I.STEEL_HASTA]);
   lastMenu(player).execute(I.STEEL_HASTA, 2);
   ticks(10);
-  assert.equal(player.items.get(I.STEEL_HASTA), 2);
-  assert.equal(player.items.get(I.WILLOW_LOGS), 0);
+  assert.equal(inventory.getAmount(I.STEEL_HASTA), 2);
+  assert.equal(inventory.getAmount(I.WILLOW_LOGS), 0);
   assert.equal(player.xp, 150);
+});
+
+test("barbarian smithing refuses an unanswered lesson service", () => {
+  const player = playerWith(I.STEEL_BAR, 2);
+  player.items.set(I.WILLOW_LOGS, 2);
+  const barbarian = { getDefinition: () => ({ getName: () => "Barbarian anvil" }) };
+  for (const handler of extraItemOnObject) handler({ player, itemId: I.STEEL_BAR, object: barbarian });
+  assert.equal(lastMenu(player), undefined);
+  ticks(5);
+  assert.equal(player.items.get(I.STEEL_BAR), 2);
+  assert.equal(player.xp, 0);
 });
 
 test("Smith with a draconic visage and anti-dragon shield makes an uncharged dragonfire shield", () => {
@@ -908,7 +991,18 @@ test("native furnace smelting admission and one-step cancellation", async t => {
   const core = PluginManager.getCoreApi();
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(3222, 3218);
-  PluginManager.emitServerStartup({});
+  // WorldAdmin must not bind the default gateway while this file exercises scoped native smithing.
+  const previousBrowserHost = process.env.BROWSER_HOST, originalError = console.error, startupErrors = [];
+  try {
+    process.env.BROWSER_HOST = "1";
+    console.error = (...args) => { startupErrors.push(args.map(String).join(" ")); originalError(...args); };
+    PluginManager.emitServerStartup({});
+  } finally {
+    console.error = originalError;
+    if (previousBrowserHost === undefined) delete process.env.BROWSER_HOST;
+    else process.env.BROWSER_HOST = previousBrowserHost;
+  }
+  assert.deepEqual(startupErrors, [], "native startup hooks must initialize without errors");
   t.after(() => PluginManager.emitServerShutdown({}));
   let index = 1710;
   for (const mode of ["stationary", "approach", "interrupt", "ore-approach"]) await t.test(mode, async t => {

@@ -2,8 +2,8 @@
 
 /**
  * Approval from working alongside the subjects on the islands (OSRS Wiki, Managing Miscellania):
- * +1 per coal mined, and a 50% chance of +1 per maple log or per tuna, lobster or
- * swordfish caught. Before the quest is complete, Throne of Miscellania counts these itself.
+ * +1 per coal mined, +2 per gem found while mining there, and a 50% chance of +1 per maple log
+ * or per tuna, lobster or swordfish caught. Before the quest is complete, Throne of Miscellania counts these itself.
  * Approval tops out at 127 (100%).
  *
  * Coal mined there is handed to Miner Magnus, who thanks the player (rsprox capture 1757, rev 227:
@@ -42,6 +42,12 @@ function onMined({ player, itemId }) {
   if (itemId === Common.items().COAL) raise(player, 1);
 }
 
+/** "mining:gem": the Wiki's "+2 per gem" for gems found mining the islands' coal. */
+function onGem({ player, itemId }) {
+  if (!eligible(player) || itemId == null) return;
+  raise(player, 2);
+}
+
 function onChopped({ player, logId }, random = Math.random) {
   if (!eligible(player) || logId !== Common.items().MAPLE_LOGS) return;
   if (random() < 0.5) raise(player, 1);
@@ -57,8 +63,9 @@ module.exports = function registerApproval(api) {
   Common.bind(api);
   api.onCustomEvent("mining:hand-over", handOverCoal);
   api.onCustomEvent("mining:success", onMined);
+  api.onCustomEvent("mining:gem", onGem);
   api.onCustomEvent("woodcutting:success", onChopped);
   api.onCustomEvent("fishing:success", onFished);
 };
 
-module.exports._test = { raise, handOverCoal, onMined, onChopped, onFished };
+module.exports._test = { raise, handOverCoal, onMined, onGem, onChopped, onFished };

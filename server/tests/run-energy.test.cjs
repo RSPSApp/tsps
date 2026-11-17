@@ -125,6 +125,60 @@ test("worn graceful's weight reduction applies to the drain, the packet and the 
   assert.equal(drainAt1(player), MovementQueue.runEnergyDrainUnits(subject(0, 1)), "drains as 0 kg");
 });
 
+// The run-orb packet carries the carried weight, so a weight change has to re-send it even when the
+// run energy itself is not moving. Before the fix, a full-energy player who banked an item kept the
+// old kg until they next ran or regenerated (issue 5952).
+const RUN_ENERGY_OPCODE = 81; // ServerPacketId.RUN_ENERGY (a const enum, erased at runtime)
+
+function captureFrames(player) {
+  const frames = [];
+  player.getSession = () => ({
+    sendClientPacket: (frame) => {
+      frames.push(frame);
+      return true;
+    },
+    write() {},
+    flush() {},
+  });
+  return frames;
+}
+
+const runEnergyFrames = (frames) => frames.filter((frame) => frame[0] === RUN_ENERGY_OPCODE);
+
+test("an inventory change re-sends the carried weight while run energy stays full", () => {
+  const { Item } = require("../dist/game/model/Item");
+  const player = cachePlayer();
+  const frames = captureFrames(player);
+  player.setRunEnergy(100);
+
+  frames.length = 0;
+  player.getInventory().addItem(new Item(1127, 1));
+  const added = runEnergyFrames(frames);
+  assert.equal(added.length, 1, "one run-energy packet follows the inventory change");
+  assert.equal(added[0].readInt16BE(5), player.getWeightKg(), "the packet carries the new weight");
+  assert.ok(player.getWeightKg() > 0);
+
+  frames.length = 0;
+  player.getInventory().delete(1127, 1);
+  const removed = runEnergyFrames(frames);
+  assert.equal(removed.length, 1, "one run-energy packet follows the removal");
+  assert.equal(removed[0].readInt16BE(5), player.getWeightKg(), "the packet carries the reduced weight");
+  assert.equal(player.getWeightKg(), 0);
+});
+
+test("an equipment change re-sends the carried weight while run energy stays full", () => {
+  const { Item } = require("../dist/game/model/Item");
+  const player = cachePlayer();
+  const frames = captureFrames(player);
+  player.setRunEnergy(100);
+
+  frames.length = 0;
+  player.getEquipment().add(new Item(11850, 1), true);
+  const worn = runEnergyFrames(frames);
+  assert.equal(worn.length, 1, "one run-energy packet follows the equipment change");
+  assert.equal(worn[0].readInt16BE(5), player.getWeightKg(), "the packet carries the worn weight");
+});
+
 test("a run tick that moves one tile is a walk: no drain, and energy still regenerates", () => {
   // rsprox captures: with Run on, 41,751 of 41,889 two-tile ticks lowered energy, while
   // 4,867 of 6,357 one-tile ticks raised it.

@@ -11,6 +11,7 @@
     "locs": {
       "winch": "hellhound_winch",
       "portcullis": "hellhound_iron_gate_active",
+      "flames": "hellhound_firewall",
       "caves": ["hellhound_cave_entrance_01", "hellhound_cave_entrance_02", "hellhound_cave_entrance_03"]
     },
     "seqs": {
@@ -43,6 +44,7 @@
       "outside": [1292, 1253],
       "spawn": [1238, 1250],
       "entry": [1240, 1226],
+      "flames": [[1239, 1242], [1240, 1242], [1241, 1242]],
       "bounds": [1224, 1256, 1225, 1270]
     },
     {
@@ -51,6 +53,7 @@
       "outside": [1309, 1269],
       "spawn": [1302, 1314],
       "entry": [1304, 1290],
+      "flames": [[1303, 1306], [1304, 1306], [1305, 1306]],
       "bounds": [1288, 1320, 1289, 1334]
     },
     {
@@ -59,9 +62,17 @@
       "outside": [1328, 1253],
       "spawn": [1366, 1250],
       "entry": [1368, 1226],
+      "flames": [[1367, 1242], [1368, 1242], [1369, 1242]],
       "bounds": [1352, 1384, 1225, 1270]
     }
   ],
+  "_flames": "The fire wall between the entrance and her (Flames, shape 10, rotation 3). rsprox captures 1000323/1000286/1000457 (rev 227) put it at 1303-1305,1306 in the north arena; the west and east tiles are the same offset from their entry (the three arenas are copies: portcullis and spawn sit at the same offsets).",
+  "fireWall": {
+    "shape": 10,
+    "rotation": 3,
+    "damage": 5,
+    "_damage": "rsprox Quick Pass at 1000323 tick 10567, 1000286 tick 432, 1000457 ticks 1797 and 2000: hit 5 on the tick the player steps across; Wiki: 5 damage each way"
+  },
   "caveExit": [2873, 9847, 0],
   "combat": {
     "maxHit": 23,

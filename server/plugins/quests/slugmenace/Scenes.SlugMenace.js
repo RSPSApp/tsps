@@ -21,17 +21,18 @@
  *   2340,5100 (550) on 2350,5097 (500), the fade in. The player's blow (seq 4841) at +6, the Prince's
  *   death (seq 4830, map_anim 796) at +9, his goo (loc 18434) with map_anim 793, projectile 794 at
  *   the player and sound 3035 at +13, map_anim 792 and the player stuck (seq 4826) at +14/+16. Hobb's
- *   lines from +20; the Mother Mallum (4796) comes from 2358,5080 to 2349,5089 as they start. After
- *   "By your command" Hobb teleports out (spotanim 342, seq 1816, sound 199). Savant's three
- *   attempts: spotanim 342, then 342 with sound 3031 twice, then the Queen's seq 4842 and the
- *   player's teleport (seq 1816, spotanim 342, sound 200); the fade, Falador Park at 2997,3377
- *   (slug2_main 12 as Savant speaks again) and the fade in.
+ *   lines from +20; the Mother Mallum (4796) comes from 2358,5080 to 2349,5084 as they start, and on
+ *   to 2349,5089 with her first line. After "By your command" Hobb teleports out (spotanim 342,
+ *   seq 1816, sound 199). Savant's three attempts: spotanim 342, then 342 with sound 3031 twice,
+ *   then the Queen's seq 4842 and the player's teleport (seq 1816, spotanim 342, sound 200); the
+ *   fade, Falador Park at 2997,3377 (slug2_main 12 as Savant speaks again) and the fade in.
  *
  * The words are the transcript's ("The Slug Menace" page): each scene plays the lines it needs.
  * Re-entering the fight after leaving it is Ours (no capture): the open-door copy with Hobb and
  * the Prince and the transcript's "Reentering the fight" lines.
  */
 const { createQuestScenes } = require("../QuestScenes");
+const CameraShake = require("../../interface/CameraShake.plugin");
 const { loadTranscripts, startTranscript } = require("../QuestRuntime");
 
 const PAGE = "The Slug Menace";
@@ -56,9 +57,11 @@ const CHURCH = {
 
 const DOOR = {
   name: "imposing-door",
-  sourceChunk: [2328 >> 3, 5080 >> 3],
-  size: 6,
-  bounds: [[2328, 2375, 5080, 5127, 0]],
+  // Live copies the 8x8 chunks from 2304,5056 for both scenes (rebuild_region at ticks 4592 and
+  // 4744): the Mother Mallum comes from 2358,5080, a smaller copy's bottom row.
+  sourceChunk: [2304 >> 3, 5056 >> 3],
+  size: 8,
+  bounds: [[2304, 2367, 5056, 5119, 0]],
   exit: [2350, 5098, 0],
   doorFx: 798, // slug2_door_fx_anim
   doorFxTile: [2351, 5093, 0],
@@ -100,6 +103,9 @@ const DEATH = {
   hobb: [2351, 5095, 0],
   queen: 4796, // slug2_the_slug_queen
   queenFrom: [2358, 5080, 0],
+  // Her captured walk: to 2349,5084 (ticks 4763-4771), north-west then west along the rock; on to
+  // 2349,5089 with her first line (4775-4779).
+  queenTurn: [2349, 5084, 0],
   queenTo: [2349, 5089, 0],
   queenNear: [2349, 5092, 0],
   blowSeq: 4841, // slug2_death_blow
@@ -335,7 +341,7 @@ module.exports = function createSlugMenaceScenes(api, { onChurchOpened, onChurch
       player.getPacketSender().sendObjectAnimation(object, new Animation(DOOR.doorSeq));
       sound(player, DOOR.rumble);
       sound(player, DOOR.bigDoor);
-      player.getPacketSender().sendCameraShake?.(0, 6, 0, 0);
+      CameraShake.send(player.getPacketSender(), "atmospheric", 0, 6, 0, 0);
     });
     Scenes.later(scene, at(DOOR.hobbIn), () => {
       player.getPacketSender().sendCameraReset?.();
@@ -494,7 +500,8 @@ module.exports = function createSlugMenaceScenes(api, { onChurchOpened, onChurch
         Scenes.later(scene, 2, () => { if (state.hobb) Scenes.removeActor(scene, state.hobb); state.hobb = null; });
         Scenes.later(scene, 3, () => Scenes.walk(state.queen, DEATH.queenNear));
         Scenes.later(scene, 4, () => {
-          Scenes.camera(player, [2349, 5100, 400], [2350, 5094, 300], { rate: 1, rate2: 1 });
+          // The look turns faster than the move drifts (rate2 10 against 1; tick 4789).
+          Scenes.camera(player, [2349, 5100, 400], [2350, 5094, 300], { rate: 1, rate2: 1 }, { rate: 1, rate2: 10 });
           deathPart(player, scene, 1);
         });
       },
@@ -535,10 +542,16 @@ module.exports = function createSlugMenaceScenes(api, { onChurchOpened, onChurch
     if (String(text).startsWith(DEATH_PARTS[0].prefix) && !state.queen) {
       return () => Scenes.later(scene, 1, () => {
         state.queen = Scenes.actor(scene, DEATH.queen, DEATH.queenFrom, [DEATH.playerAt[0], DEATH.playerAt[1]]);
-        Scenes.walk(state.queen, DEATH.queenTo);
+        // She stands a tick on her spawn tile, then steps (ticks 4762-4763).
+        Scenes.later(scene, 1, () => Scenes.walk(state.queen, DEATH.queenTurn));
       });
     }
-    if (String(text).startsWith("Calm yourself")) return () => jingle(player, DEATH.queenJingle);
+    if (String(text).startsWith("Calm yourself")) {
+      return () => {
+        jingle(player, DEATH.queenJingle);
+        Scenes.walk(state.queen, DEATH.queenTo);
+      };
+    }
     return null;
   }
 

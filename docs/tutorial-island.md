@@ -105,7 +105,8 @@ The tutorial's doors and gates never stay open.
    - bucket, pot, bread; and 25 coins in the bank.
 
    It also shows "Welcome to Old School RuneScape." and the "Welcome to Lumbridge!…" item box, and sets the progress to 1000.
-5. **Where you end up:** a world whose spawn isn't Lumbridge moves the player to its spawn.
+5. **Where you end up:** a world whose spawn isn't Lumbridge moves the player to its spawn. A mode can send them elsewhere (`tutorial-island:destination` { player, location, welcome }): a Group Ironman arrives on The Node.
+6. **A Group Ironman** leaves by the rowboat south of the Magic Instructor's house after the Ironman tutor, without the magic lessons (Wiki: Tutorial Island). Group Ironman asks `tutorial-island:leave` { player, handled }, which ends the tutorial at once (steps 4 and 5, so they arrive on The Node).
 
 **Ours:** the Gielinor Guide's first talk offers to skip the island. `TutorialIsland:allowSkip` set to false in world.json `pluginConfig` turns this off.
 

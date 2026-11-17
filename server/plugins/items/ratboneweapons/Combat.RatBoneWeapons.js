@@ -11,7 +11,7 @@ function onlyRats(event) {
   if (!attacker?.isPlayer?.() || !Common.wieldsRatBone(attacker.getAsPlayer())) return;
   if (Common.isRat(target)) return;
   event.allow = false;
-  attacker.getAsPlayer().sendMessage(Common.ONLY_RATS_MESSAGE);
+  event.message = Common.ONLY_RATS_MESSAGE;
 }
 
 /** Melee and ranged maximum hit: +10 with a rat bone weapon against a rat. */

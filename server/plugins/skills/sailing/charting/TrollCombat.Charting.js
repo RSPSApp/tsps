@@ -152,7 +152,7 @@ function rocksClass() {
       afterApplied(hit, () => {
         const target = hit.getTarget();
         target.clearPendingAction(); target.getCombat().reset();
-        target.performGraphic(new Graphic(CacheDefinitions.getSpotanimId("ice_barrage_impact"), 10, 0));
+        target.performGraphic(Graphic.delayed(CacheDefinitions.getSpotanimId("ice_barrage_impact"), 10));
         CombatFactory.freezeTicks(target, FREEZE_TICKS, null, this.npc, "ice");
       });
     }

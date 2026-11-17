@@ -12,9 +12,9 @@ function blockSkullAttack(event) {
   if (!attacker.getPacketSender().getVarbit(SKULL_PREVENTION_VARBIT)) return;
   if (!pluginApi.core.CombatFactory.wouldSkull(attacker, target)) return;
   event.allow = false;
-  // Only the attack the player chose says why; area-attack bystander checks
-  // (canAttackSecondaryTarget, which passes no method) skip them silently, once per click as live.
-  if (event.method) attacker.getPacketSender().sendMessage(SKULL_PREVENTION_MESSAGE);
+  // The core says it on the attack the player chose, once per click as live; area-attack
+  // bystander checks (canAttackSecondaryTarget) and passive checks stay silent.
+  event.message = SKULL_PREVENTION_MESSAGE;
 }
 
 module.exports = {

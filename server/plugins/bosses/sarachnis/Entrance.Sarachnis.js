@@ -3,10 +3,11 @@
  * - the dungeon webs (733) and the web before the tomb (34898 "Web", Slash/Peek): with
  *   Aranea boots the player wades through (11511 with the forced step, as captured);
  *   otherwise a slash weapon or knife slashes a way through (Wiki), or the way is refused;
- * - Peek on the tomb web counts the room ("...inside the crypt", captured for empty);
+ * - Peek on the tomb web counts the room in a game message (captured for none and one);
  * - the Thick Web (34858): from outside, Enter-crypt asks (public or rented), Quick-enter
- *   walks straight in (captured), Fight-privately rents at once; from inside the tomb every
- *   option on it just walks back out (inferred: live's own exit is the separate 34859 face).
+ *   crawls in with a message over two ticks (captured), Fight-privately rents at once;
+ *   from inside the tomb every option on it just walks back out (inferred: live's own exit
+ *   is the separate 34859 face).
  *   The way out (34859, Exit/Quick-Exit) steps back outside to (1842, 9913).
  * - a rented instance (Wiki: 25k from the bank, 12.5k with the hard Combat Achievement
  *   tier done) is a private lair with its own Sarachnis until the player leaves or logs out.
@@ -15,6 +16,13 @@ const Common = require("./Common.Sarachnis");
 const Lair = require("./Lair.Sarachnis");
 
 const COINS = 995;
+/** The chatbox busy flag live raises while the player crawls through the web (rsprox 3932). */
+const BUSY_VARBIT = 12393;
+/** Ticks from the crawl to the step inside (rsprox 3932). */
+const ENTER_TICKS = 2;
+const ENTER_MESSAGE = "You enter deeper into the ancient burial crypt.";
+/** Players part-way through the public crawl, so a second click doesn't start another. */
+const entering = new WeakSet();
 const THICK_WEB = "Thick Web";
 const WEB = "Web";
 
@@ -35,55 +43,104 @@ function isSarachnisWeb(event) {
   return isPeekWeb(event) || isDungeonWeb(event);
 }
 
-/** Step onto the web's tile with the wade (boots) or the cut (tool), as captured. */
-function passWeb(player, tile, anim) {
+/**
+ * Where the wade leaves the player, as recorded: the one-tile step onto the web's own tile,
+ * or for a wall web (type 0-3) the step across its face (face 0-3: west, north, east, south)
+ * when the player already stands on it. That second Slash is how the wall is crossed instead
+ * of moving to the tile they already occupy, matching the Wilderness wade.
+ */
+function wadeDestination(event) {
+  const { player, object } = event;
+  const web = event.location;
+  const from = player.getLocation();
+  if (from.getX() === web.x && from.getY() === web.y && Number(object?.getType?.() ?? 10) <= 3) {
+    const [ex, ey] = [[-1, 0], [0, 1], [1, 0], [0, -1]][object.getFace() & 3];
+    return { x: web.x + ex, y: web.y + ey, z: web.z ?? 0 };
+  }
+  return { x: web.x, y: web.y, z: web.z ?? 0 };
+}
+
+/** Step onto the web's tile, or across its face when already on it, with the wade (boots) or cut (tool). */
+function passWeb(event, anim) {
+  const { player } = event;
+  const destination = wadeDestination(event);
   const movement = player.getMovementQueue();
   movement.reset();
   movement.setBlockMovement(true);
   player.performAnimation(new core.Animation(anim));
   Common.later(1, () => {
     if (!player.isRegistered?.()) return;
-    player.moveTo(new core.Location(tile.x, tile.y, tile.z ?? 0));
+    player.moveTo(new core.Location(destination.x, destination.y, destination.z));
     movement.setBlockMovement(false);
   });
 }
 
-function slashWeb({ player, location, objectId }) {
+function slashWeb(event) {
+  const { player, objectId } = event;
   if (objectId !== Common.PEEK_WEB_ID && objectId !== Common.DUNGEON_WEB_ID) return false;
-  if (objectId === Common.DUNGEON_WEB_ID && !isDungeonWeb({ location, objectId })) return false;
+  if (objectId === Common.DUNGEON_WEB_ID && !isDungeonWeb(event)) return false;
   if (Common.wearsAraneaBoots(player)) {
-    passWeb(player, location, Common.ANIM.wade);
+    passWeb(event, Common.ANIM.wade);
     return true;
   }
   if (Common.hasSlashTool(player)) {
-    passWeb(player, location, Common.ANIM.slash);
+    passWeb(event, Common.ANIM.slash);
     return true;
   }
   player.sendMessage("You need a slash weapon or a knife to get through the dense web.");
   return true;
 }
 
-/** Captured empty; the headcount follows the other bosses' Peek lines (estimate). */
+/**
+ * A game message, as captured (rsprox 3926-3932): the empty line has no full stop, one
+ * player is "one adventurer ... crypt.". Ours: two or more use the digits, as the scrying
+ * pool's captured "You see N adventurers in the area." does.
+ */
 function peekText(count) {
   if (count === 0) return "You listen and hear no adventurers inside the crypt";
-  if (count === 1) return "You listen and hear 1 adventurer inside the crypt";
-  return `You listen and hear ${count} adventurers inside the crypt`;
+  if (count === 1) return "You listen and hear one adventurer inside the crypt.";
+  return `You listen and hear ${count} adventurers inside the crypt.`;
 }
 
 function peek({ player, objectId }) {
   if (objectId !== Common.PEEK_WEB_ID) return false;
-  const { DialogueChainBuilder, StatementDialogue } = core;
   const count = Lair.lair.getPlayers().filter((other) => Common.inLair(other.getLocation())).length;
-  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, peekText(count))));
+  player.sendMessage(peekText(count));
   return true;
 }
 
-/** Captured: Quick-enter walks in with no anim, sound or fade. The step goes through
- * the web itself, so it is a forced move like the wade (normal pathing stops at the web,
- * as live's own click-to walk does). From inside, the web lets out. */
+/**
+ * The public way in, as captured (rsprox 3932, ticks 21, 1572 and 5081, all three alike): on
+ * arrival a spam line, `busy` set, `human_machette_chop` facing south (face_angle 0) and no
+ * sound or fade; two ticks later `busy` clears and the player steps through to (1842, 9911).
+ * The step goes through the web itself, so it is a forced move like the wade (normal pathing
+ * stops at the web). Ours: live sends it as a one-tile walk; moveTo places the player there.
+ * From inside, the web lets out at once (inferred, as before).
+ */
 function enterPublic(player) {
-  player.getPacketSender().sendInterfaceRemoval();
-  player.moveTo(Common.location(Common.inLair(player.getLocation()) ? Common.OUTSIDE_TILE : Common.TELEPORT_TILE));
+  const sender = player.getPacketSender();
+  sender.sendInterfaceRemoval();
+  if (Common.inLair(player.getLocation())) {
+    player.moveTo(Common.location(Common.OUTSIDE_TILE));
+    return;
+  }
+  if (entering.has(player)) return;
+  entering.add(player);
+  const movement = player.getMovementQueue();
+  movement.reset();
+  movement.setBlockMovement(true);
+  sender.sendTypedMessage(core.ChatType.SPAM, ENTER_MESSAGE);
+  sender.sendVarbit(BUSY_VARBIT, 1);
+  const at = player.getLocation();
+  player.setPositionToFace(new core.Location(at.getX(), at.getY() - 1, at.getZ()));
+  player.performAnimation(new core.Animation(Common.ANIM.enterCrypt));
+  Common.later(ENTER_TICKS, () => {
+    entering.delete(player);
+    movement.setBlockMovement(false);
+    if (!player.isRegistered?.()) return;
+    sender.sendVarbit(BUSY_VARBIT, 0);
+    player.moveTo(Common.location(Common.TELEPORT_TILE));
+  });
 }
 
 function quickEnter({ player, objectId }) {
@@ -194,5 +251,5 @@ function attach(pluginApi) {
 
 module.exports = {
   attach,
-  _test: { slashWeb, peek, peekText, quickEnter, enterCrypt, fightPrivately, exit, rentInstance, bankCoins, takeBankFee, instanceFee, passWeb, isSarachnisWeb },
+  _test: { ENTER_MESSAGE, ENTER_TICKS, BUSY_VARBIT, enterPublic, slashWeb, peek, peekText, quickEnter, enterCrypt, fightPrivately, exit, rentInstance, bankCoins, takeBankFee, instanceFee, passWeb, wadeDestination, isSarachnisWeb },
 };

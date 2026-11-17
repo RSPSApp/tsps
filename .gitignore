@@ -98,6 +98,8 @@ client/tests/artifacts/
 server/data/definitions/world.local.json
 # The world config page token (WorldAdmin), when WORLD_ADMIN_TOKEN is unset
 server/data/definitions/world-admin.token
+server/data/definitions/bot-activities.local.json
+server/data/definitions/bot-activities.local.json.tmp
 /server/plugins/imported/
 
 # Local keys and build caches left by the renamed gateway and removed demo tools.

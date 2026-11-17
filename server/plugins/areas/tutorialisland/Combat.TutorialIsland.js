@@ -63,7 +63,7 @@ function onCanAttack(event) {
     const ranged = T.worn(attacker, Items.SHORTBOW);
     if (current < STEP.ATTACK_RAT) {
       event.allow = false;
-      attacker.sendMessage("Oi! Get away from there. Only enter the rat cage when I say so.");
+      event.message = "Oi! Get away from there. Only enter the rat cage when I say so.";
     } else if (current >= STEP.RAT_KILLED && current < STEP.COMBAT_LADDER && !ranged) {
       event.allow = false;
       T.showBoxes(attacker, [{ text: T.data.messages.ratAgain }]);
@@ -74,10 +74,10 @@ function onCanAttack(event) {
   } else if (targetId === IDS.CHICKEN) {
     if (current < STEP.CAST_WIND_STRIKE) {
       event.allow = false;
-      attacker.sendMessage("Cast the Wind Strike spell from your spellbook to fight the chicken.");
+      event.message = "Cast the Wind Strike spell from your spellbook to fight the chicken.";
     } else if (current >= STEP.WIND_STRIKE_CAST) {
       event.allow = false;
-      attacker.sendMessage("You've already done that. Perhaps you should move on.");
+      event.message = "You've already done that. Perhaps you should move on.";
     }
   }
 }

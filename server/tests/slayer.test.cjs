@@ -26,6 +26,7 @@ const Finishers = require("../plugins/skills/slayer/Finishers.Slayer");
 const Superiors = require("../plugins/skills/slayer/Superiors.Slayer");
 const Keys = require("../plugins/skills/slayer/Keys.Slayer");
 const Choice = require("../plugins/skills/slayer/Choice.Slayer");
+const Helper = require("../plugins/skills/slayer/Helper.Slayer");
 
 const core = PluginManager.getCoreApi();
 const handlers = { events: new Map(), death: [], canAttack: [] };
@@ -38,6 +39,10 @@ Slayer.register({
   core,
   persistAttribute: (key, initial) => persistedAttributes.set(key, initial),
   onPlayerLogin() {},
+  onPlayerLogout() {},
+  onPlayerDisconnect() {},
+  onPlayerMapSquareChange() {},
+  onServerStartup() {},
   onNpcDeath: (fn) => handlers.death.push(fn),
   onCanAttack: (fn) => handlers.canAttack.push(fn),
   onNpcInteraction() {},
@@ -214,6 +219,39 @@ test("Krystilia credits zombie pirate kills on both tasks only in the Wilderness
   }
 });
 
+// Crash Site Cavern demonic gorillas. The Wiki lists them under both Black Demons and Monkeys
+// ("Demonic gorillas count as monkeys and black demons for the progression of Slayer tasks").
+const DEMONIC_GORILLAS = [
+  core.NpcIdentifiers.DEMONIC_GORILLA,
+  core.NpcIdentifiers.DEMONIC_GORILLA_2,
+  core.NpcIdentifiers.DEMONIC_GORILLA_3,
+  core.NpcIdentifiers.DEMONIC_GORILLA_4,
+  core.NpcIdentifiers.DEMONIC_GORILLA_5,
+  core.NpcIdentifiers.DEMONIC_GORILLA_6,
+  core.NpcIdentifiers.DEMONIC_GORILLA_7,
+];
+
+test("demonic gorillas count for Black Demons as well as Monkeys", () => {
+  const blackDemons = taskId("Black Demons");
+  const monkeys = taskId("Monkeys");
+  for (const id of DEMONIC_GORILLAS) {
+    const name = CacheDefinitions.getNpc(id).name;
+    assert.equal(name, "Demonic gorilla");
+    assert.ok(Data.npcCountsFor(blackDemons, id, name), "variant " + id + " counts for Black Demons");
+    assert.ok(Data.npcCountsFor(monkeys, id, name), "variant " + id + " still counts for Monkeys");
+  }
+});
+
+test("a Black Demons assignment credits demonic gorilla kills with Slayer XP", () => {
+  const player = createPlayer();
+  giveTask(player, 5, "Black Demons", 10);
+  kill(player, npc(core.NpcIdentifiers.DEMONIC_GORILLA, { getX: () => 3200, getY: () => 3200, getZ: () => 0 }));
+  assert.equal(varp(player, "slayer_count"), 9, "the gorilla kill counts down the task");
+  assert.equal(player.xp.length, 1, "the gorilla kill awards Slayer XP");
+  assert.equal(player.xp[0][0], Skill.SLAYER);
+  assert.ok(player.xp[0][1] > 0);
+});
+
 test("an assignment sets the task varps and respects the Slayer level", () => {
   const player = createPlayer({ slayer: 1, combat: 126 });
   const result = Tasks.assign(player, master(3), () => 0.5);
@@ -256,6 +294,24 @@ test("Konar gives an area; her kills only count inside it", () => {
   assert.equal(varp(player, "slayer_count"), 5);
   kill(player, npcNamed("Bloodveld", at(1690, 10070))); // the Catacombs
   assert.equal(varp(player, "slayer_count"), 4);
+});
+
+test("Konar's Taverley Dungeon hellhounds count Cerberus in her lair, the task's listed alternative (Wiki: Konar quo Maten)", () => {
+  const CERBERUS = 5862; // cerberus_attacking, task param 31 (hellhounds)
+  const player = createPlayer();
+  giveTask(player, 8, "Hellhounds", 5);
+  const taverley = [...Data.get().areas.values()].find((area) => area.id === 6);
+  assert.match(taverley.text ?? taverley.name ?? "", /Taverley/);
+  player.getPacketSender().sendConfig(CacheDefinitions.getVarpId("slayer_area"), taverley.id);
+  const at = (x, y) => ({ getX: () => x, getY: () => y, getZ: () => 0 });
+  kill(player, npc(CERBERUS, at(1238, 1250))); // the west arena's spawn (bosses/data/cerberus.json)
+  assert.equal(varp(player, "slayer_count"), 4);
+  kill(player, npc(CERBERUS, at(1366, 1250))); // the east arena
+  assert.equal(varp(player, "slayer_count"), 3);
+  const karuulm = [...Data.get().areas.values()].find((area) => area.id === 3);
+  player.getPacketSender().sendConfig(CacheDefinitions.getVarpId("slayer_area"), karuulm.id);
+  kill(player, npc(CERBERUS, at(1238, 1250)));
+  assert.equal(varp(player, "slayer_count"), 3, "not on a Karuulm hellhound task");
 });
 
 test("every Konar task has spawns inside each of its areas", () => {
@@ -463,7 +519,8 @@ test("monsters with a Slayer level can't be attacked below it", () => {
   const event = { attacker: player, target: npcNamed("Abyssal demon"), allow: null };
   Combat.canAttack(event);
   assert.equal(event.allow, false);
-  assert.deepEqual(player.messages, ["You need a higher Slayer level to know how to wound this monster."]);
+  assert.equal(event.message, "You need a higher Slayer level to know how to wound this monster.");
+  assert.deepEqual(player.messages, [], "the core says it on the player's own attack, not the check (cannons, scanners)");
   const able = { attacker: createPlayer({ slayer: 85 }), target: npcNamed("Abyssal demon"), allow: null };
   Combat.canAttack(able);
   assert.equal(able.allow, null);
@@ -476,6 +533,104 @@ test("the gem's Check gives the task and the streak", () => {
   assert.equal(player.messages[0],
     "<col=ef1020>You're assigned to kill </col>bloodveld<col=ef1020>; only </col>44<col=ef1020> more to go.");
   assert.match(player.messages[1], /currently have a total of <\/col>20 points/);
+});
+
+/** The helper's packets, as sent: [kind, ...args]. */
+function recordHelper(player) {
+  const sent = [];
+  const sender = player.getPacketSender();
+  const helperVarbit = CacheDefinitions.getVarbitId("current_helper");
+  for (const name of ["sendSubInterface", "closeSubInterface", "sendClientScript"]) {
+    const original = sender[name].bind(sender);
+    sender[name] = (...args) => { sent.push([name, ...args]); return original(...args); };
+  }
+  const sendVarbit = sender.sendVarbit.bind(sender);
+  sender.sendVarbit = (id, value) => {
+    if (id === helperVarbit) sent.push(["current_helper", value]);
+    return sendVarbit(id, value);
+  };
+  return sent;
+}
+
+/** Runs the world's tasks for `ticks` ticks. */
+function runTicks(ticks) {
+  for (let tick = 0; tick < ticks; tick++) core.TaskManager.process();
+}
+
+const HELPER_CONTENT = (161 << 16) | 12; // toplevel_osrs_stretch:helper_content
+const HELPER_OPEN = [
+  ["current_helper", 3],
+  ["sendSubInterface", HELPER_CONTENT, 711, 1],
+  ["sendClientScript", 4689, HELPER_CONTENT, 3, 148, 308],
+  ["sendClientScript", 5317],
+];
+const HELPER_CLOSE = [["current_helper", 0], ["closeSubInterface", HELPER_CONTENT]];
+
+function clickGem(player, itemId, option) {
+  return PluginManager.emitItemAction({
+    player, interfaceId: 149 << 16, item: { getId: () => itemId, getAmount: () => 1 }, itemId, slot: 0,
+    clickType: option === "Activate" ? 1 : 2, option, handled: false,
+  });
+}
+
+test("rsprox 1002084 t127: the gem's Check gives the task lines, then opens the Slayer helper; Activate doesn't", () => {
+  for (const [itemId, name] of [[4155, "Enchanted gem"], [21270, "Eternal gem"]]) {
+    const player = createPlayer({ points: 172 });
+    giveTask(player, 3, "Bloodveld", 41);
+    const sent = recordHelper(player);
+    clickGem(player, itemId, "Activate");
+    assert.equal(player.messages.length, 2, `${name} Activate answers`);
+    assert.deepEqual(sent, [], `${name} Activate leaves the helper shut`);
+    clickGem(player, itemId, "Check");
+    assert.equal(player.messages.length, 4, `${name} Check answers`);
+    assert.match(player.messages[2], /You're assigned to kill <\/col>bloodveld/);
+    assert.deepEqual(sent, HELPER_OPEN, `${name} Check opens the helper`);
+    clickGem(player, itemId, "Check");
+    assert.deepEqual(sent, HELPER_OPEN, "a second Check while it shows sends nothing more");
+    Helper.close(player);
+  }
+});
+
+test("rsprox 1002067: the helper opens on assignment and task kills, and closes 501 ticks after it opened", () => {
+  const player = createPlayer();
+  const sent = recordHelper(player);
+  Tasks.assign(player, master(3), () => 0.5);
+  assert.deepEqual(sent, HELPER_OPEN, "t185: the assignment opens it");
+  const target = npcNamed("Hill Giant");
+  const taskKill = (extra = {}) => handlers.events.get("slayer:task-kill").forEach((fn) => fn({ player, npc: target, xp: 35, ...extra }));
+  runTicks(200);
+  taskKill();
+  runTicks(300);
+  assert.deepEqual(sent, HELPER_OPEN, "kills while it shows neither reopen nor extend it");
+  runTicks(1);
+  assert.deepEqual(sent, [...HELPER_OPEN, ...HELPER_CLOSE], "t686: closed 501 ticks after opening");
+  sent.length = 0;
+  taskKill();
+  assert.deepEqual(sent, HELPER_OPEN, "t789: the next task kill opens it again");
+  Helper.close(player);
+  sent.length = 0;
+  taskKill({ offTask: true });
+  assert.deepEqual(sent, [], "an off-task kill (no task) doesn't open it");
+});
+
+test("the helper's close survives content cancelling the player's own tasks", () => {
+  const player = createPlayer();
+  const sent = recordHelper(player);
+  Tasks.assign(player, master(3), () => 0.5);
+  core.TaskManager.cancelTasks(player);
+  runTicks(501);
+  assert.deepEqual(sent, [...HELPER_OPEN, ...HELPER_CLOSE]);
+  assert.equal(varbit(player, "current_helper"), 0);
+});
+
+test("the Settings' Slayer helper toggle keeps the helper shut", () => {
+  const player = createPlayer();
+  setVarbit(player, "slayer_helper_disabled", 1);
+  const sent = recordHelper(player);
+  assert.equal(Helper.open(player), false);
+  Tasks.assign(player, master(3), () => 0.5);
+  assert.deepEqual(sent, []);
+  assert.equal(varbit(player, "current_helper"), 0);
 });
 
 test("rewards: unlocks spend points and set their bit; cancel and block", () => {
@@ -1935,4 +2090,116 @@ test("registered Wilderness assignment and NPC death keep the first-four points 
   assert.equal(varbit(player, "slayer_tasks_completed"), 20);
   assert.ok(skills.getExperience(Skill.SLAYER) > beforeXp);
   assert.equal(varbit(player, "slayer_points"), 0, "the fourth Wilderness completion gives no points despite twenty standard completions");
+});
+
+test("elite diaries raise Nieve's/Steve's points to 15 and Konar's to 20, milestones included (Wiki: Slayer reward point)", (t) => {
+  const Diaries = require("../plugins/achievements/diaries/Data.AchievementDiaries");
+  const { onIsComplete } = require("../plugins/achievements/AchievementDiaries.plugin")._test;
+  const prior = handlers.events.get("diary:is-complete");
+  t.after(() => prior ? handlers.events.set("diary:is-complete", prior) : handlers.events.delete("diary:is-complete"));
+  handlers.events.set("diary:is-complete", [onIsComplete]);
+  useTestEvents();
+  /** Tasks done up to `tier` of each diary in `done` ({ western: "elite" }). */
+  const tasksFor = (done) => Object.fromEntries(Object.entries(done).map(([key, tier]) => {
+    const diary = Diaries.BY_KEY.get(key);
+    return [key, Diaries.TIERS.slice(0, Diaries.TIERS.indexOf(tier) + 1).flatMap((each) => diary.tiers[each].tasks.map((task) => task.key))];
+  }));
+  /** The points for one task from `masterId` that ends a streak of `streak`, with the diaries `done`. */
+  function points(masterId, streak, done = {}) {
+    const player = createPlayer();
+    player.setAttribute("achievement-diaries:tasks", tasksFor(done));
+    setVarbit(player, "slayer_tasks_completed", streak - 1);
+    giveTask(player, masterId, "Bloodveld", 1);
+    Tasks.complete(player, Tasks.current(player));
+    assert.equal(varbit(player, "slayer_tasks_completed"), streak);
+    return varbit(player, "slayer_points");
+  }
+  const NIEVE = 6, KONAR = 8, DURADEL = 5;
+  const milestones = [[5, 1], [10, 5], [50, 15], [100, 25], [250, 35], [1000, 50]];
+  for (const [streak, times] of milestones) {
+    assert.equal(points(NIEVE, streak), 12 * times, `Nieve, no diary, task ${streak}`);
+    assert.equal(points(NIEVE, streak, { western: "elite" }), 15 * times, `Nieve, elite Western, task ${streak}`);
+    assert.equal(points(KONAR, streak), 18 * times, `Konar, no diary, task ${streak}`);
+    assert.equal(points(KONAR, streak, { kourend: "elite" }), 20 * times, `Konar, elite Kourend, task ${streak}`);
+  }
+  // Only the elite tier of the master's own diary counts.
+  assert.equal(points(NIEVE, 5, { western: "hard" }), 12, "hard Western is not enough");
+  assert.equal(points(NIEVE, 5, { kourend: "elite" }), 12, "Kourend does not raise Nieve's");
+  assert.equal(points(KONAR, 5, { kourend: "hard" }), 18, "hard Kourend is not enough");
+  assert.equal(points(KONAR, 5, { western: "elite" }), 18, "Western does not raise Konar's");
+  assert.equal(points(DURADEL, 5, { western: "elite", kourend: "elite" }), 15, "Duradel has no diary bonus");
+  // Steve is Nieve's master id (6), so he pays the same.
+  assert.deepEqual(master(NIEVE).names, ["Nieve", "Steve"]);
+});
+
+/** Answers "combat-achievements:tier" for `player`: the first `claimed` tiers claimed, `met` for their points. */
+function withCombatAchievementTiers(player, claimed, met = true) {
+  const names = ["easy", "medium", "hard", "elite", "master", "grandmaster"];
+  const answer = (request) => {
+    if (request.player !== player) return;
+    const index = names.indexOf(String(request.tier).toLowerCase());
+    request.claimed = index >= 0 && index < claimed;
+    request.currentThresholdMet = met;
+  };
+  handlers.events.set("combat-achievements:tier", [...(handlers.events.get("combat-achievements:tier") ?? []), answer]);
+  return () => handlers.events.set("combat-achievements:tier", handlers.events.get("combat-achievements:tier").filter((fn) => fn !== answer));
+}
+
+test("Combat Achievement tiers raise the boss task cap by 5 a tier (Barrows 36 + 6), Wiki: Boss task", () => {
+  useTestEvents();
+  const player = createPlayer();
+  const [someBoss] = [...Data.get().bosses.keys()].filter((id) => id !== 17);
+  assert.deepEqual(Tasks.bossAmountRange(player, someBoss), { min: 3, max: 35 }, "no tiers: 3-35");
+  assert.deepEqual(Tasks.bossAmountRange(player, 17), { min: 3, max: 36 }, "Barrows: 3-36");
+  assert.deepEqual([...Data.get().bossNames].find(([id]) => id === 17)?.[1].has("Dharok the Wretched"), true, "17 is the Barrows brothers");
+  for (const [tiers, max, barrows] of [[1, 40, 42], [3, 50, 54], [6, 65, 72]]) {
+    const undo = withCombatAchievementTiers(player, tiers);
+    assert.deepEqual(Tasks.bossAmountRange(player, someBoss), { min: 3, max }, `${tiers} tiers`);
+    assert.deepEqual(Tasks.bossAmountRange(player, 17), { min: 3, max: barrows }, `${tiers} tiers, Barrows`);
+    assert.equal(Tasks.rollAmount(player, null, someBoss, () => 0.9999), max, "the roll reaches the raised cap");
+    undo();
+  }
+  const lapsed = withCombatAchievementTiers(player, 6, false);
+  assert.deepEqual(Tasks.bossAmountRange(player, someBoss), { min: 3, max: 35 }, "claimed but under the current threshold: no perk");
+  lapsed();
+});
+
+test("the Elite Combat Achievement tier makes superior Slayer monsters 1 in 150 (from 1 in 200)", () => {
+  useTestEvents();
+  Superiors.init({ core, emitCustomEvent: (name, payload) => { for (const fn of handlers.events.get(name) ?? []) fn(payload); } });
+  const player = createPlayer();
+  const bloodveld = npcNamed("Bloodveld");
+  // Read the rule the Slayer plugin builds, then stop the spawn itself.
+  const chances = [];
+  const watch = (rule) => {
+    if (rule.player !== player) return;
+    chances.push(rule.chance);
+    rule.unlocked = false;
+  };
+  handlers.events.set("slayer:superior-spawn", [...(handlers.events.get("slayer:superior-spawn") ?? []), watch]);
+  const roll = () => Superiors.taskKill({ player, npc: bloodveld }, () => 0);
+  roll();
+  for (const tiers of [3, 4, 6]) {
+    const undo = withCombatAchievementTiers(player, tiers);
+    roll();
+    undo();
+  }
+  const lapsed = withCombatAchievementTiers(player, 4, false);
+  roll();
+  lapsed();
+  handlers.events.set("slayer:superior-spawn", handlers.events.get("slayer:superior-spawn").filter((fn) => fn !== watch));
+  assert.deepEqual(chances, [200, 200, 150, 150, 200], "none, Hard, Elite, Grandmaster, Elite under its threshold");
+});
+
+test("the Dark Warriors' Fortress first floor is Wilderness, so Krystilia's task counts there (#5748)", () => {
+  const task = { taskId: taskId("Dark Warriors"), masterId: 7, area: null, bossId: 0 };
+  const upper = {
+    getId: () => core.NpcIdentifiers.DARK_WARRIOR,
+    getCurrentDefinition: () => ({ getName: () => "Dark warrior" }),
+    getLocation: () => new core.Location(3022, 3624, 1),
+  };
+  assert.equal(core.Wilderness.isInLocation(upper.getLocation()), true,
+    "the fortress's first floor is in the Wilderness");
+  assert.equal(Tasks.countsFor(task, upper, null), true,
+    "a fortress first-floor dark warrior counts for Krystilia's task");
 });

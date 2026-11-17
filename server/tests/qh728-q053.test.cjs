@@ -71,6 +71,7 @@ function setup() {
   const varbits = new Map();
   const configs = new Map();
   const messages = [];
+  const statements = [];
   const itemAmounts = new Map();
   const stackableItems = new Set([core.ItemIdentifiers.SHRUNK_OGLEROOT]);
   const xp = new Map();
@@ -125,6 +126,8 @@ function setup() {
     },
   }, { get(target, key) { return key in target ? target[key] : () => {}; } });
 
+  // The shrink-me-quick mix reads the Herblore skill's own level() and addXp(), which use the plugin api it was given.
+  require('../plugins/skills/herblore/Common.Herblore').init(api);
   require('../plugins/quests/quests/GrimTales.Quest')(api);
   const quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'grim_tales');
 
@@ -197,6 +200,7 @@ function setup() {
     moveTo(next) { location = next; },
     getUsername: () => 'qh728-q053',
     sendMessage: (message) => messages.push(message),
+    getDialogueManager: () => ({ startDialogues(chain) { statements.push(JSON.stringify(chain, (key, value) => value instanceof Map ? [...value.values()] : value)); } }),
     isRegistered: () => true,
   };
 
@@ -262,7 +266,7 @@ function setup() {
   };
 
   return {
-    quest, player, attributes, itemAmounts, varbits, configs, messages, prompts, spawned, registeredObjects,
+    quest, player, attributes, itemAmounts, varbits, configs, messages, statements, prompts, spawned, registeredObjects,
     otherPlayer,
     groundItems, xp, variant, condition, line, choice, action, object, onObject, onNpc, useItems,
     playNote,
@@ -270,6 +274,9 @@ function setup() {
     setLocation(x, y, z = 0) { location = new core.Location(x, y, z); },
     getLocation: () => location,
     setFull(value) { full = value; },
+    setHerbloreLevel(level) { skillLevels.set(core.Skill.HERBLORE.getIndex(), level); },
+    /** A "skills:level-boost" listener, as a league relic or a potion registers one (the real event Herblore's level() emits). */
+    boostLevels(boost) { api.onCustomEvent('skills:level-boost', (request) => { request.boost = (request.boost | 0) + boost; }); },
     setWeapon(item) { weapon = item; },
     give(id, amount = 1) { itemAmounts.set(id, (itemAmounts.get(id) ?? 0) + amount); },
     completeQuest(key) { completedQuests.add(key); },
@@ -643,7 +650,8 @@ test('Grim Tales destroyed-bean recovery selects the canonical receipt tail', ()
   assert.equal(choice?.variant, 'getting-sylas-magic-bean-returning-to-sylas');
   assert.equal(typeof choice?.select, 'function');
   const dialogue = require('../data/definitions/npc-dialogues.json')['Grim Tales'];
-  const selected = choice.select(dialogue.variants[choice.variant]);
+  // speaker_ids is derived identity metadata; this checks which steps are selected.
+  const selected = choice.select(dialogue.variants[choice.variant]).map(({ speaker_ids, ...step }) => step);
   assert.deepEqual(selected, [
     { type: 'line', speaker: 'Sylas', text: 'Here are the beans as promised.' },
     { type: 'action', action: 'receive', text: 'Magic beans', id: '4ncaBB' },
@@ -729,4 +737,84 @@ test('the actual cache piano parent opens the widget and exposes the solved sear
 
 after(() => {
   runtime.startTranscript = originalStartTranscript;
+});
+
+// Shrink-me-quick (Wiki): "requires a level of 52, and gives 6 experience when made", Herblore boostable.
+// The refusal line is the Herblore skill's combine message (not Wiki-sourced).
+const SHRINK_LEVEL_MESSAGE = 'You need a Herblore level of 52 to combine those.';
+const HERBLORE = core.Skill.HERBLORE.getIndex();
+const UNF_IDS = [I.TARROMIN_POTION_UNF_, I.TARROMIN_POTION_UNF__2];
+
+function shrinkFixture(level) {
+  const h = setup();
+  h.setHerbloreLevel(level);
+  h.give(I.SHRUNK_OGLEROOT, 1);
+  h.give(I.TARROMIN_POTION_UNF_, 1);
+  h.messages.length = 0;
+  return h;
+}
+
+test('shrink-me-quick at Herblore 51 unboosted is refused with nothing consumed and no XP', () => {
+  const h = shrinkFixture(51);
+  const event = h.useItems(I.TARROMIN_POTION_UNF_, I.SHRUNK_OGLEROOT);
+  assert.equal(event.handled, true, 'the quest handler still owns the pair, so Herblore never also answers');
+  assert.equal(h.itemAmounts.get(I.SHRUNK_OGLEROOT), 1);
+  assert.equal(h.itemAmounts.get(I.TARROMIN_POTION_UNF_), 1);
+  assert.equal(h.itemAmounts.get(I.SHRINK_ME_QUICK) ?? 0, 0);
+  assert.equal(h.xp.get(HERBLORE) ?? 0, 0);
+  // The Herblore skill's refusal: a messagebox (rsprox_transcripts/227/910269.txt tick 22640), not a chat line.
+  assert.deepEqual(h.messages, []);
+  assert.equal(h.statements.length, 1);
+  assert.ok(h.statements[0].includes(JSON.stringify(SHRINK_LEVEL_MESSAGE)), h.statements[0]);
+});
+
+test('shrink-me-quick at Herblore 51 with a real skills:level-boost of +1 is made, for 6 XP', () => {
+  const h = shrinkFixture(51);
+  h.boostLevels(1);
+  h.useItems(I.SHRUNK_OGLEROOT, I.TARROMIN_POTION_UNF_);
+  assert.equal(h.itemAmounts.get(I.SHRINK_ME_QUICK), 1);
+  assert.equal(h.itemAmounts.get(I.SHRUNK_OGLEROOT), 0);
+  assert.equal(h.itemAmounts.get(I.TARROMIN_POTION_UNF_), 0);
+  assert.equal(h.xp.get(HERBLORE), 6);
+  assert.equal(h.messages.length, 1, 'exactly one message');
+  assert.ok(!h.messages.includes(SHRINK_LEVEL_MESSAGE));
+});
+
+test('shrink-me-quick at Herblore 52 is made for 6 XP as passed to the skill manager (no rate asserted), once per mix', () => {
+  const h = shrinkFixture(52);
+  h.useItems(I.TARROMIN_POTION_UNF_, I.SHRUNK_OGLEROOT);
+  assert.equal(h.itemAmounts.get(I.SHRINK_ME_QUICK), 1);
+  assert.equal(h.xp.get(HERBLORE), 6);
+  assert.equal(h.messages.length, 1);
+  // The ingredients are gone: using the pair again does nothing and awards nothing more.
+  h.messages.length = 0;
+  const again = h.useItems(I.TARROMIN_POTION_UNF_, I.SHRUNK_OGLEROOT);
+  assert.equal(again.handled, true);
+  assert.equal(h.itemAmounts.get(I.SHRINK_ME_QUICK), 1);
+  assert.equal(h.xp.get(HERBLORE), 6, 'no double award');
+  assert.deepEqual(h.messages, []);
+});
+
+test('shrink-me-quick accepts both tarromin potion (unf) ids', () => {
+  for (const unf of UNF_IDS) {
+    const h = setup();
+    h.setHerbloreLevel(52);
+    h.give(I.SHRUNK_OGLEROOT, 1);
+    h.give(unf, 1);
+    h.useItems(unf, I.SHRUNK_OGLEROOT);
+    assert.equal(h.itemAmounts.get(I.SHRINK_ME_QUICK), 1, `unf id ${unf}`);
+    assert.equal(h.xp.get(HERBLORE), 6, `unf id ${unf}`);
+  }
+});
+
+test('shrink-me-quick with a missing ingredient at Herblore 1 is a silent no-op: nothing made, no XP, no message', () => {
+  const h = setup();
+  h.setHerbloreLevel(1);
+  h.give(I.TARROMIN_POTION_UNF_, 1);
+  const event = h.useItems(I.TARROMIN_POTION_UNF_, I.SHRUNK_OGLEROOT);
+  assert.equal(event.handled, true);
+  assert.equal(h.itemAmounts.get(I.SHRINK_ME_QUICK) ?? 0, 0);
+  assert.equal(h.itemAmounts.get(I.TARROMIN_POTION_UNF_), 1);
+  assert.equal(h.xp.get(HERBLORE) ?? 0, 0);
+  assert.deepEqual(h.messages, []);
 });

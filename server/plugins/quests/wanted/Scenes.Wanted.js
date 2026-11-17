@@ -432,9 +432,10 @@ module.exports = function createWantedScenes(api, hooks) {
     const here = player.getLocation();
     if (event.hold) hold(player);
     if (event.solusAnim !== undefined && npc) npc.performAnimation(new Animation(event.solusAnim));
-    if (event.solusGfx && npc) npc.performGraphic(new Graphic(...event.solusGfx));
+    // [id, delay, height]: delayed() reads them as given (the constructor read [78, 20, 0]'s 0 as a Priority).
+    if (event.solusGfx && npc) npc.performGraphic(Graphic.delayed(...event.solusGfx));
     if (event.playerAnim !== undefined) player.performAnimation(new Animation(event.playerAnim));
-    if (event.playerGfx) player.performGraphic(new Graphic(...event.playerGfx));
+    if (event.playerGfx) player.performGraphic(Graphic.delayed(...event.playerGfx));
     if (event.sound) sender.sendSound(event.sound[0], 1, event.sound[1]);
     if (event.areaSound) sender.sendAreaSound(event.areaSound[0], here.getX(), here.getY(), here.getZ(), 1, 0, event.areaSound[1]);
     if (event.solusSound && npc) {

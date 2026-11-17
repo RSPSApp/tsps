@@ -43,14 +43,20 @@ top, and an Overlay section for the canvas boxes and the stats tab option.
 ## Saving
 
 Trackers are saved for each account every minute and when the client closes, in config group
-`xpTracker` under `rsprofile.<account>.state`, in RuneLite's XpSave shape. They are restored
+`xpTracker` under `rsprofile.<account>.state` (on a Deadman, Leagues, tournament or PvP Arena
+world, `rsprofile.<account>.<type>.state`), in RuneLite's XpSave shape. They are restored
 at the next login if "Save between sessions" is on. Experience gained while logged out is not
 counted as session experience. Reset All clears the save.
+
+As in RuneLite, a change of account or of world type (RuneLite's XpWorldType: Deadman, Leagues,
+tournament or PvP Arena, from the selected world's flags) starts the trackers over.
 
 ## Differences from RuneLite
 
 - The Wise Old Man option and the RuneLite XP API update are left out; both are online
   services for real accounts.
-- RuneLite also starts over when you change world type (Deadman, Leagues, Tournament). This
-  client has no runtime world type, so only a change of account starts over.
-- RuneLite keys saves by its RS profile; here the profile is the logged-in player's name.
+- RuneLite keys saves by its RS profile; here the profile is the logged-in player's name and,
+  off a normal world, its XpWorldType. RuneLite's profile types are finer (beta worlds and each
+  league have their own).
+- The world type is the flags of the world selected on the login screen. A WebRTC world reports
+  none, so it counts as a normal world.

@@ -110,6 +110,28 @@ captured value except the two where it changes.
 | Three Times the Thrashing | Three kills within 3 seconds (5 ticks). |
 | Rapid Reload | Accurate crossbow or ballista hits on three different demons within 3 seconds (5 ticks). |
 
+## Tormented synapse weapons
+
+`plugins/quests/wgs/Rewards.WhileGuthixSleeps.js`. Levels, the hammer and the XP (730 the first
+time, 73 after; the staff also 13 Smithing) are the Wiki's (Tormented synapse). The rest is from
+rsprox.net recordings 3315 (ticks 438-1776), 3333 (ticks 11847-12149) and 3314 (tick 486), rev 235.
+
+| Action | Live | Source |
+| --- | --- | --- |
+| Inspect | A player line (chat_right): before reading Duradel's notes "I'm not sure what to do with this... Maybe I could ask one of the heroes that confronted Lucien for some ideas." (chatquiz3); after, "Duradel's notes mentioned creating a weapon out of demon parts... Maybe I should try it with this." (chatquiz2). | capture |
+| On a magic longbow (u) | `stringing_magic_longbow` (6689) at once; 5 ticks later sound 4545 and an objectbox with the Scorching bow: "You string the synapse onto the bow. ..." | capture |
+| On an anvil with a battlestaff and an iron bar | `human_smithing` (898) at +0 and +3; at +6 sound 4545 and an objectbox with the Purging staff: "You hammer the metal onto the battlestaff's tip, forming a brazier. ..." | capture |
+| On an anvil with an Arclight | The same animation and timing, then the Emberlight objectbox: "The synapse writhes as you hammer it into the sword, ..." | capture |
+| On an anvil, battlestaff but no iron bar | Objectbox with an iron bar: "You need an iron bar to do that." | capture |
+| On an anvil with neither | Objectbox with the synapse: "You require either a battlestaff and an iron bar or Arclight to make a weapon out of this." | capture |
+| On an Arclight | objectbox_double (synapse, Arclight): "You try to attach the synapse to the sword. The blade sizzles for a moment, but the synapse just slides off it again." | capture |
+| On a battlestaff | "Nothing interesting happens." (sent by the plugin: item-on-item has no default line) | capture |
+
+Ours: the refusals for unread notes, a missing hammer, low levels and Emberlight's charges, and
+the menu when both an Arclight and a battlestaff are carried. Live takes the bow and the staff's
+battlestaff and iron bar at the click; ours takes them with the synapse at the result, so a
+walk-away keeps them.
+
 ## Not done
 
 - A melee demon that can't reach its target switching to range is built but untested.

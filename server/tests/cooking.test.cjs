@@ -446,6 +446,55 @@ test("the pizza steps have the captured lines; a topping gives its XP", () => {
   assert.deepEqual(p.xp, [45]);
 });
 
+test("butter on a baked potato: the captured line two ticks after the use, 40 XP (recording 1105)", () => {
+  const p = maker(39, [[obj("potato_baked"), 1], [obj("pot_of_butter"), 1]]);
+  assert.equal(useItems(p, "potato_baked", "pot_of_butter").handled, true);
+  assert.equal(p.sent.menu, null, "one potato makes without a menu");
+  ticks(1); assert.equal(p.getInventory().getAmount(obj("potato_butter")), 0);
+  ticks(1);
+  assert.equal(p.getInventory().getAmount(obj("potato_butter")), 1);
+  assert.equal(p.getInventory().getAmount(obj("potato_baked")), 0);
+  assert.equal(p.getInventory().getAmount(obj("pot_of_butter")), 0);
+  assert.deepEqual(p.sent.spam.map(([, text]) => text), ["You add the butter to the potato."]);
+  assert.deepEqual(p.xp, [40]);
+  assert.deepEqual(p.effects, [], "no animation");
+});
+
+test("not garlic butter butters a potato too; several open the how-many menu and go every 2 ticks", () => {
+  const p = maker(39, [[obj("potato_baked"), 3], [obj("pot_of_not_garlic_butter"), 3]]);
+  useItems(p, "pot_of_not_garlic_butter", "potato_baked");
+  assert.equal(p.sent.menu.getTitle(), "How many do you wish to make?");
+  assert.deepEqual(p.sent.menu.getItems(), [obj("potato_butter")]);
+  p.sent.menu.execute(obj("potato_butter"), 3);
+  const made = () => p.getInventory().getAmount(obj("potato_butter"));
+  ticks(2); assert.equal(made(), 1);
+  ticks(1); assert.equal(made(), 1);
+  ticks(1); assert.equal(made(), 2);
+  ticks(2); assert.equal(made(), 3);
+});
+
+test("potato toppings: the Wiki's levels and XP; the bowl toppings give the bowl back", () => {
+  const toppings = [
+    ["cheese", "potato_cheese", 47, 40, false],
+    ["bowl_chilli+carne", "potato_chilli+carne", 41, 15, true],
+    ["bowl_egg+tomato", "potato_egg+tomato", 51, 45, true],
+    ["bowl_mushroom+onion", "potato_mushroom+onion", 64, 55, true],
+    ["bowl_tuna+sweetcorn", "potato_tuna+sweetcorn", 68, 10, true],
+  ];
+  for (const [topping, product, level, xp, bowl] of toppings) {
+    const low = maker(level - 1, [[obj("potato_butter"), 1], [obj(topping), 1]]);
+    useItems(low, topping, "potato_butter"); ticks(2);
+    assert.equal(low.getInventory().getAmount(obj(product)), 0, `${product} needs ${level}`);
+    assert.match(statementText(low.sent.statements[0]), new RegExp(`Cooking level of ${level} `));
+    const p = maker(level, [[obj("potato_butter"), 1], [obj(topping), 1]]);
+    useItems(p, "potato_butter", topping); ticks(2);
+    assert.equal(p.getInventory().getAmount(obj(product)), 1, product);
+    assert.equal(p.getInventory().getAmount(obj("potato_butter")), 0);
+    assert.equal(p.getInventory().getAmount(obj("bowl_empty")), bowl ? 1 : 0, `${product} bowl`);
+    assert.deepEqual(p.xp, [xp], product);
+  }
+});
+
 test("wine: a jug every 2 ticks with the captured animation, graphic and sound; the line on the last", () => {
   const Wine = Cooking._test.wine;
   const p = maker(99, [[obj("grapes"), 2], [obj("jug_water"), 2]]);
@@ -632,6 +681,52 @@ test("wine's success chance is the Wiki's: about 60% at 35, sure at 68; stacks r
 
 // Native cache, Player/inventory, named cooker dispatch and the registered cooking
 // task consume the same canonical row used by range menus and gathering plugins.
+test('Gnome cooker accepts native item use and Cook like an ordinary range', async t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { UseItemPacketListener } = require('../dist/net/packet/impl/UseItemPacketListener');
+  const players = [], tasks = new Set(), errors = [];
+  const previousSubmit = core.TaskManager.submit, previousError = console.error;
+  core.TaskManager.submit = function(task, ...args) { tasks.add(task); return previousSubmit.call(this, task, ...args); };
+  console.error = (...args) => { errors.push(args.map(String).join(' ')); previousError(...args); };
+  t.after(() => {
+    try {
+      for (const p of players) if (p.isRegistered()) core.World.getPlayers().removes(p);
+      for (const task of tasks) if (task.isRunning()) task.stop();
+      core.World.process();
+    } finally { core.TaskManager.submit = previousSubmit; console.error = previousError; }
+    assert.deepEqual(errors, [], 'no required gameplay/cleanup hook errors');
+  });
+  Cooking._test.activeSessions.clear(); // retire the legacy recording fixtures above
+  Cooking.register(PluginManager.createApi('NativeGnomeCooking'));
+  const priorRunner = submittedCookingTasks.find(task => Number.isInteger(task.cycle));
+  if (priorRunner) { tasks.add(priorRunner); core.TaskManager.submit(priorRunner); }
+  core.RegionManager.init();
+  const cookerId = core.CacheDefinitions.getLocId('aluft_gnome_cooker');
+  const cooker = core.MapObjects.get(cookerId, new core.Location(2447, 3510, 1), null);
+  const ordinary = core.MapObjects.get(core.CacheDefinitions.getLocId('range'), new core.Location(2482, 3479, 1), null);
+  assert.ok(cooker); assert.equal(cooker.getDefinition().getName(), 'Gnome cooker');
+  assert.ok(ordinary); assert.equal(ordinary.getDefinition().getName(), 'Range');
+  for (const [object, mode] of [[ordinary, 'use'], [cooker, 'use'], [cooker, 'Cook']]) await t.test(`${object.getDefinition().getName()} ${mode}`, async () => {
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel), p = new Player(session); session.setPlayer(p);
+    const client = new ClientConnection(channel); client.player = p;
+    p.setUsername('cookalias' + players.length); p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
+    p.setAttribute('bot-skip-persistence', true); p.setLocation(object.getLocation().clone().add(object === ordinary ? -1 : 1, 0));
+    players.push(p); assert.equal(core.World.getPlayers().add(p), true); p.needsPlacement = false;
+    p.getSkillManager().setExperiences(core.Skill.COOKING, core.SkillManager.getExperienceForLevel(99), false);
+    p.getSkillManager().setMaxLevel(core.Skill.COOKING, 99); p.getSkillManager().setCurrentLevels(core.Skill.COOKING, 99);
+    p.getInventory().adds(9579, 1); const beforeXp = p.getSkillManager().getExperience(core.Skill.COOKING), at = object.getLocation();
+    if (mode === 'use') UseItemPacketListener.itemOnObject(p, core.Inventory.INTERFACE_ID, object.getId(), 9579, 0, at.getX(), at.getY());
+    else { await client.dispatch([{ type: 'object_option', id: object.getId(), x: at.getX(), y: at.getY(), clickType: 1 }]); client.processTurnPackets(); }
+    for (let tick = 0; tick < 20 && p.getInventory().getAmount(9580) === 0; tick++) core.World.process();
+    assert.equal(p.getInventory().getAmount(9580), 1, 'native path produced the unfinished dish');
+    assert.equal(p.getInventory().getAmount(9579), 0); assert.equal(p.getInventory().getAmount(obj('crunchy_tray')), 1);
+    assert.equal(p.getSkillManager().getExperience(core.Skill.COOKING), beforeXp, 'second bake gives no XP');
+  });
+});
+
 test('Brutus t-bone steaks cook on native ranges and fires with the correct level, products and XP', async t => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { PlayerSession } = require('../dist/net/PlayerSession');

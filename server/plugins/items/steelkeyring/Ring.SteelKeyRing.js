@@ -2,6 +2,7 @@
 
 const Warning = require("../../interface/ValueWarning");
 const KEYS_ATTRIBUTE = "steel-key-ring:keys";
+const RECEIVED_ATTRIBUTE = "steel-key-ring:received";
 const SETUP_SCRIPT = 861; // rev242 script861; keytotal and native remove/previous/next callbacks
 const HIGHLIGHT_MODEL = 5623; // favour_keyring's highlighted key
 // Recorded UI text: rsprox 1702 rev226.1, ticks1635–1650; optional fields override UI name and highlighted model only.
@@ -26,6 +27,8 @@ let core;
 const selections = new WeakMap();
 
 function ringId() { return core.ItemIdentifiers.STEEL_KEY_RING; }
+// Only the actual quest producer records receipt.
+function received({ player }) { player.setAttribute(RECEIVED_ATTRIBUTE, true); }
 function carried(player) { return player.getInventory().getAmount(ringId()) > 0; }
 function banked(player) {
   return (player.getBanks() ?? []).some((bank, tab) => tab !== core.Bank.BANK_SEARCH_TAB_INDEX && (bank?.getAmount(ringId()) ?? 0) > 0);
@@ -143,6 +146,7 @@ function destroyPrompt(event) {
 module.exports = function attach(pluginApi) {
   api = pluginApi; core = api.core;
   api.persistAttribute(KEYS_ATTRIBUTE, []);
+  api.persistAttribute(RECEIVED_ATTRIBUTE, false);
   api.onItemAction("Steel key ring", { "Check-keys": open });
   api.onItemOnItem(use, { noted: false });
   api.onInterfaceActionClick(click);
@@ -150,6 +154,7 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("item:discarded", discarded);
   api.onCustomEvent("destroy-item:prompt", destroyPrompt);
   api.onCustomEvent("steel-key-ring:contains", contains);
+  api.onCustomEvent("steel-key-ring:received", received);
   api.onShouldKeepItemOnDeath(keepOnDeath);
   api.onPlayerLogin(login);
   api.onPlayerLogout(logout);

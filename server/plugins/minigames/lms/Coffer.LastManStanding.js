@@ -158,11 +158,17 @@ function claim({ player }) {
   return true;
 }
 
+/** "group-ironman:wipe-tradeables" { player }: a leaver who stays a ranked Group Ironman loses the coins in the coffer (Wiki). */
+function wipeForGroupIronman({ player }) {
+  Profile.setCoffer(player, 0);
+}
+
 function attachCoffer(api) {
   api.persistAttribute(Common.ATTRIBUTES.winnings, 0);
+  api.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
   api.persistAttribute(Common.ATTRIBUTES.freeHighStakes, false);
   api.onObjectFirstClick([Common.locId("br_coffer")], use);
   api.onObjectFirstClick([Common.locId("br_reward_chest")], claim);
 }
 
-module.exports = { attachCoffer, use, menu, withdraw, claim, canPay, pay, award, grantFreeEntry, freeEntry };
+module.exports = { attachCoffer, use, menu, withdraw, claim, canPay, pay, award, grantFreeEntry, freeEntry, wipeForGroupIronman };

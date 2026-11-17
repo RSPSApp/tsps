@@ -1,0 +1,163 @@
+/**
+ * Shows a warning screen for whatever leads into its area, and remembers it per player.
+ *
+ * Content asks with `api.emitCustomEvent("warning-screen:show", { player, warning, proceed, stayOut, texts })`:
+ * - a warning toggled off (7) is skipped: `proceed()` runs at once;
+ * - otherwise the screen opens (toplevel_mainmodal_open 2524 [-1, -1], then the interface), counting
+ *   the showing up to 6. From then on it shows its "Don't ask me this again" checkbox, which toggles
+ *   it off (7) and back (6) while it is open;
+ * - a question's Yes (17) closes it and runs `proceed()`; No (18), Close (12) or closing it any
+ *   other way (walking off) runs `stayOut()`;
+ * - the two notices (Icy Path Area, Death Plateau) only inform: they open and `proceed()` runs;
+ * - `texts` ({ component: text }) rewrites the screen's lines once it is open, as live does with
+ *   if_settext where one screen serves several entrances (the mole hill's 568:14/17/18).
+ * The event comes back `handled` when this plugin answered it; content that sees it unhandled
+ * (this plugin off) carries on as if warned.
+ *
+ * As captured: Shantay Pass (docs/shantay-pass.md), the Lumbridge cellar hole and the Observatory
+ * stairs count their varbit up to 6; the fairy ring's warning sets its varbit on Confirm.
+ */
+const Shared = require("./Shared.WarningScreens");
+
+const SCRIPT_MAINMODAL_OPEN = 2524; // toplevel_mainmodal_open
+const CLOSE = 12; // cws_close
+const YES = 17; // warn1
+const NO = 18; // warn2
+const QUESTION_TOGGLE = 20;
+const QUESTION_TOGGLE_LAYER = 21;
+const NOTICE_TOGGLE = 18;
+const NOTICE_TOGGLE_LAYER = 19;
+
+const STRONGHOLD = 4; // Stronghold of Security Ladders
+const SHANTAY_PASS = 10;
+
+/** Each player's open warning: { entry, proceed, stayOut }. */
+const pending = new WeakMap();
+
+const toggleOf = (entry) => (entry.notice ? NOTICE_TOGGLE : QUESTION_TOGGLE);
+const toggleLayerOf = (entry) => (entry.notice ? NOTICE_TOGGLE_LAYER : QUESTION_TOGGLE_LAYER);
+
+/** Opens the warning's screen, counting the showing, then any text the entrance rewrites. */
+function open(player, entry, texts) {
+  const shown = Shared.state(player, entry.warning);
+  const sender = player.getPacketSender();
+  if (entry.varbit !== null && shown >= Shared.SHOWN_ENOUGH) {
+    sender.sendInterfaceDisplayState((entry.interfaceId << 16) | toggleLayerOf(entry), false);
+  } else if (entry.varbit !== null) {
+    Shared.setState(player, entry.warning, shown + 1);
+  }
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
+  sender.sendInterface(entry.interfaceId);
+  for (const [child, text] of Object.entries(texts ?? {})) sender.sendString(String(text), (entry.interfaceId << 16) | Number(child));
+}
+
+/** "warning-screen:show": the warning, or straight on when it is off. */
+function show(event) {
+  const { player, warning } = event;
+  const entry = Shared.all().get(Number(warning));
+  if (!player || !entry || entry.interfaceId === null) return;
+  event.handled = true;
+  const proceed = typeof event.proceed === "function" ? event.proceed : () => {};
+  const stayOut = typeof event.stayOut === "function" ? event.stayOut : () => {};
+  if (Shared.state(player, entry.warning) >= Shared.OFF) {
+    proceed();
+    return;
+  }
+  open(player, entry, event.texts);
+  if (entry.notice) {
+    proceed();
+    return;
+  }
+  pending.set(player, { entry, proceed, stayOut });
+}
+
+/** "warning-screen:is-on": whether the warning would still show (content that only needs to know). */
+function isOn(event) {
+  const entry = Shared.all().get(Number(event.warning));
+  if (!event.player || !entry) return;
+  event.on = Shared.state(event.player, entry.warning) < Shared.OFF;
+}
+
+/** The screen's checkbox: off (7) and back on (6), once it has been shown often enough. */
+function toggle(player, entry) {
+  const shown = Shared.state(player, entry.warning);
+  if (entry.varbit === null || shown < Shared.SHOWN_ENOUGH) return;
+  const off = shown !== Shared.OFF;
+  Shared.setState(player, entry.warning, off ? Shared.OFF : Shared.SHOWN_ENOUGH);
+  player.sendMessage(off ? Shared.SCREEN_TOGGLED_OFF_MESSAGE : Shared.SCREEN_TOGGLED_ON_MESSAGE);
+}
+
+function click(event) {
+  const buttonId = Number(event.buttonId ?? 0);
+  const entry = Shared.byInterface(event.groupId ?? (buttonId >>> 16));
+  if (!entry) return;
+  const child = event.childId ?? (buttonId & 0xffff);
+  const { player } = event;
+  if (child === toggleOf(entry)) {
+    event.handled = true;
+    toggle(player, entry);
+    return;
+  }
+  const answer = !entry.notice && (child === YES || child === NO) ? child : child === CLOSE ? CLOSE : null;
+  if (answer === null) return;
+  event.handled = true;
+  const open = pending.get(player);
+  pending.delete(player);
+  player.getPacketSender().sendInterfaceRemoval();
+  if (open?.entry !== entry) return;
+  if (answer === YES) open.proceed();
+  else open.stayOut();
+}
+
+function closed({ player, interfaceId }) {
+  const open = pending.get(player);
+  if (open?.entry.interfaceId !== interfaceId) return;
+  pending.delete(player);
+  open.stayOut();
+}
+
+/**
+ * A count saved where the warning used to keep it, as a state of this one. Only Shantay Pass kept
+ * live's 7 for off; the Stronghold counted to 15 and kept its off apart.
+ */
+function legacyState(player, warning) {
+  if (warning === STRONGHOLD && player.getAttribute(Shared.LEGACY_STRONGHOLD_OFF_ATTRIBUTE) === true) return Shared.OFF;
+  const key = Shared.LEGACY_ATTRIBUTES[warning];
+  const saved = key ? Number(player.getAttribute(key)) : 0;
+  if (!Number.isFinite(saved)) return 0;
+  return Math.max(0, Math.min(warning === SHANTAY_PASS ? Shared.OFF : Shared.SHOWN_ENOUGH, Math.floor(saved)));
+}
+
+/** Login: carries any old count over once, then gives the client every warning's state. */
+function login({ player }) {
+  for (const entry of Shared.all().values()) {
+    let value = Shared.state(player, entry.warning);
+    const legacy = legacyState(player, entry.warning);
+    if (legacy > value) {
+      value = legacy;
+      player.setAttribute(Shared.stateAttribute(entry.warning), value);
+    }
+    if (Shared.LEGACY_ATTRIBUTES[entry.warning]) player.setAttribute(Shared.LEGACY_ATTRIBUTES[entry.warning], 0);
+    if (entry.warning === STRONGHOLD) player.setAttribute(Shared.LEGACY_STRONGHOLD_OFF_ATTRIBUTE, false);
+    if (value > 0 && entry.varbit !== null) player.getPacketSender().sendVarbit(entry.varbit, value);
+  }
+}
+
+function persist(api) {
+  // Every warning number, cache or not: registration may come before the cache is read.
+  for (let warning = 1; warning <= Shared.HIGHEST_WARNING; warning++) api.persistAttribute(Shared.stateAttribute(warning), 0);
+  for (const key of Object.values(Shared.LEGACY_ATTRIBUTES)) api.persistAttribute(key, 0);
+  api.persistAttribute(Shared.LEGACY_STRONGHOLD_OFF_ATTRIBUTE, false);
+}
+
+module.exports = function attach(api) {
+  persist(api);
+  api.onCustomEvent("warning-screen:show", show);
+  api.onCustomEvent("warning-screen:is-on", isOn);
+  api.onInterfaceActionClick(click);
+  api.onCustomEvent("interface:closed", closed);
+  api.onPlayerLogin(login);
+};
+module.exports.show = show;
+module.exports.click = click;
+module.exports.login = login;

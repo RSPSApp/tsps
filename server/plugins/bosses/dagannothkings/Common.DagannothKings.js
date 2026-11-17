@@ -74,7 +74,7 @@ const HIT_DELAY = Object.freeze({
 });
 /** Wiki max hits; the engine rolls the definition's (identical) values. */
 const MAX_HIT = Object.freeze({ ...DATA.combat.maxHit });
-/** Wiki: 150-tick (90s) respawn, 5-tick deaths (ReasonPS agrees on deathTicks). */
+/** Wiki: 150-tick (90s) respawn. Deaths take 2 ticks from the animation to the loot (rsprox captures: 633 deaths, rec 89 tick 5348). */
 const RESPAWN_TICKS = DATA.combat.respawnTicks;
 const DEATH_TICKS = DATA.combat.deathTicks;
 /** Spinolyp: 60% ranged (poisonous), 40% magic (prayer drain) - ReasonPS rates. */

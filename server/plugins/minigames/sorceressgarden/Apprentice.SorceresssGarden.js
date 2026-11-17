@@ -21,13 +21,15 @@
  * 110 on the player, area sounds 127 and 126), and three ticks after that the player lands
  * on (2912, 5474).
  *
- * The gates (12617 winter, 12639 autumn, 12719 spring, 11987 summer) are already walkable
- * in the cache, so opening one only checks the level; a low-level player who walks through
- * anyway is turned back by the maze's Area.postEnter. Entry is checked against the current
- * (boosted) Thieving level, per the Wiki.
+ * The gates (12617 winter, 12639 autumn, 12719 spring, 11987 summer) have blocked wall edges.
+ * Captures 227/01863 and 227/01843 show entry from the gate tile: busy for one server turn,
+ * then instant placement one tile into the maze with synth 71; the gate remains visible. A
+ * low-level player who got through another way is turned back by the maze's Area.postEnter. Entry
+ * is checked against the current (boosted) Thieving level, per the Wiki.
  */
 
 const Gardens = require("./Gardens.SorceresssGarden");
+const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 
 const {
   APPRENTICE_TILE,
@@ -62,6 +64,8 @@ const VARIANT = Object.freeze({
 const LANDING = Object.freeze({ x: 2912, y: 5474 });
 const CURSE = Object.freeze({ CAST: 108, PROJECTILE: 109, IMPACT: 110, SOUND_CAST: 127, SOUND_IMPACT: 126 });
 const GATE_IDS = Object.values(SEASONS).map((season) => season.gateId);
+/** The entry sound in captures 227/01863 and 227/01843 (cache synth_71). */
+const GATE_SOUND = 71;
 
 let api;
 let core;
@@ -199,6 +203,21 @@ function teleportByApprentice(event) {
   teleportIn(player, npc);
 }
 
+/** Only entry is recorded; routing to the gate tile belongs to MovementQueue. */
+function gateEntry({ x, y, face }, at) {
+  if (at.getX() !== x || at.getY() !== y || at.getZ() !== PLANE) return null;
+  if (face === 0) return [x - 1, y];
+  if (face === 2) return [x + 1, y];
+  if (face === 1) return [x, y + 1];
+  return [x, y - 1];
+}
+
+function crossGate(player, gate) {
+  const destination = gateEntry(gate, player.getLocation());
+  if (!destination || ObstacleRunner.isBusy(player)) return;
+  ObstacleRunner.run({ player }, [{ wait: 1 }, { tele: destination }, { sound: GATE_SOUND }], { busyVarbit: true });
+}
+
 function openGate(event) {
   const season = seasonForGate(event.objectId);
   if (!season) return false;
@@ -206,7 +225,7 @@ function openGate(event) {
     event.player.sendMessage(`You need a Thieving level of ${season.level} to enter this garden.`);
     return;
   }
-  event.player.sendMessage("You open the gate.");
+  if (event.object) crossGate(event.player, season.gate);
 }
 
 function drinkFromFountain(event) {
@@ -217,6 +236,7 @@ function drinkFromFountain(event) {
 module.exports = function registerApprentice(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
+  ObstacleRunner.init(pluginApi);
   api.persistAttribute(TELEPORTED_ATTRIBUTE);
   api.persistAttribute(OSMAN_HELPED_ATTRIBUTE, false);
   api.onCustomEvent("sorceress-s-garden:osman-help-status", osmanHelpStatus);
@@ -252,6 +272,7 @@ module.exports._test = {
   handleAction,
   teleportByApprentice,
   openGate,
+  gateEntry,
   drinkFromFountain,
   _setApi(value) {
     api = value;

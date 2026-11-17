@@ -26,7 +26,7 @@ function hasIngredients(inventory, recipe) {
   return recipe.ingredients.every(({ id, count }) => inventory.getAmount(id) >= count);
 }
 
-/** Room for what one item gives back: the dough, its pot and the emptied container need a slot more than flour and water. */
+/** Inventory slots one make frees by using up this ingredient. */
 function freedSlots(inventory, ingredient) {
   const held = inventory.getAmount(ingredient.id);
   if (held <= 0) return 0;
@@ -36,6 +36,7 @@ function freedSlots(inventory, ingredient) {
   return Math.min(ingredient.count, held);
 }
 
+/** Room for what one item gives back: the dough, its pot and the emptied container need a slot more than flour and water. */
 function hasRoom(inventory, recipe) {
   const freed = recipe.ingredients.reduce((slots, ingredient) => slots + freedSlots(inventory, ingredient), 0);
   return inventory.getFreeSlots() >= 1 + recipe.returns.length - freed;

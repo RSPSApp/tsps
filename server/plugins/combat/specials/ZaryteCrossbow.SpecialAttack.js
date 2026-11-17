@@ -6,7 +6,7 @@ module.exports = function registerZaryteCrossbowSpecialAttack(api) {
   const EVOKE_ACCURACY_MULTIPLIER = 2;
   const ANIMATION = new Animation(9166);
   const SPECIAL_PROJECTILE = 1995;
-  const SHOT = { delay: 41, speed: 75, startHeight: 44, endHeight: 36.5, angle: 5, progress: 11 };
+  const SHOT = { delay: 41, speed: 75, startHeight: 44, endHeight: 36.5, angle: 5, progress: 72 };
 
   class ZaryteCrossbowCombatMethod extends RangedCombatMethod {
     hits(character, target) {
@@ -36,7 +36,7 @@ module.exports = function registerZaryteCrossbowSpecialAttack(api) {
       Sounds.sendSound(character, Sound.SHOOT_CROSSBOW);
 
       // Evoke flies its own zcb_specialattack spotanim on a flat path, as Armadyl Eye does:
-      // rsprox_transcripts/227/01752.txt shows 1995, start 41, end 75, angle 5, heights 44->36.
+      // rsprox_transcripts/227/01752.txt shows 1995, start 41, end 75, angle 5, progress 72, heights 44->36.
       const distance = CombatPosition.projectileDistance(character, target);
       Projectile.createProjectile(
         character,

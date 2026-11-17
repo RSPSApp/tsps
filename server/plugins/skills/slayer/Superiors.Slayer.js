@@ -89,13 +89,18 @@ function isSuperior(npc) {
   return superiorNames.has(npcName(npc).toLowerCase());
 }
 
+/** Wiki, Combat Achievements: the Elite tier makes superiors 1 in 150 (from 1 in 200). */
+const ELITE_CHANCE = 150;
+
 /**
  * Whether and how often a task kill brings its superior: Bigger and Badder's bit and the data's
- * 1 in 200, which plugins change on "slayer:superior-spawn" { player, npc, unlocked, chance }
- * (a league's tier passive unlocks it and makes them 1 in 50); the toggle-off always holds.
+ * 1 in 200 (1 in 150 with the Elite Combat Achievement rewards), which plugins change on
+ * "slayer:superior-spawn" { player, npc, unlocked, chance } (a league's tier passive unlocks it
+ * and makes them 1 in 50); the toggle-off always holds.
  */
 function spawnRule(player, npc) {
-  const rule = { player, npc, unlocked: Tasks.hasUnlockBit(player, DATA.unlockBit), chance: DATA.chance };
+  const chance = Tasks.combatAchievementClaimed(player, "Elite") ? Math.min(DATA.chance, ELITE_CHANCE) : DATA.chance;
+  const rule = { player, npc, unlocked: Tasks.hasUnlockBit(player, DATA.unlockBit), chance };
   api.emitCustomEvent("slayer:superior-spawn", rule);
   if (State.varbit(player, "slayer_toggleoff_superiormobs") === 1) rule.unlocked = false;
   return rule;

@@ -34,7 +34,13 @@ The gateway reads its ports from the root `.env`, the same block `scripts/wt` wr
 in slot N) and `WEBSOCKET_PORT`. It serves JS5 from the cache in `server/target.txt`, with the
 few files the official client gets changed listed in
 [`ClientCachePatches`](src/main/kotlin/gateway/cache/ClientCachePatches.kt): enum 850 suggests no
-world in the Grouping tab, since a tsps server is one world.
+world in the Grouping tab, since a tsps server is one world. On a league world it also serves the
+content data tsps sends the browser client in GAMEMODE_DATA, which the official client can't take:
+the league's task list, relic catalog, area unlock thresholds, and for older leagues the rank
+thresholds and tutorial pages ([`ContentPatches`](src/main/kotlin/gateway/cache/ContentPatches.kt)).
+It reads them from tsps's `/api/league-content` when a client starts loading the cache, so a tsps
+restart into another league needs no gateway restart; overrides that match the cache (Demonic
+Pacts) change nothing. The startup log and each change print a `JS5:` line with what was patched.
 
 The login key is generated on first start into `runelite-gateway/keys/rsa.txt` (not committed). Startup
 prints its modulus for the RSProx target.
@@ -75,7 +81,10 @@ serves the jav_config and world list RSProx needs on its own port.
 
    Both `WEBSOCKET_PORT` (HTTP) and `GATEWAY_PORT` (game) must be reachable.
 3. In RSProx, pick the target and RuneLite as the client, and launch it. Log in with a tsps
-   account; unknown names are created, as in the browser.
+   account; unknown names are created, as in the browser. After Existing User the client shows
+   "The move is almost here" about Jagex Accounts; click Login (or press Enter) for the
+   username and password box. The notice is part of the revision-242 client and shows for every
+   username/password login, so the server can't turn it off.
 
 Restart `yarn gateway` after pulling gateway changes. tsps restarts itself on server changes,
 which logs everyone out.
@@ -108,7 +117,7 @@ What helped most in fixing the gateway, roughly in order:
 | --- | --- |
 | `config` | `.env` and `server/target.txt` |
 | `crypto` | the login RSA key |
-| `cache` | dat2/idx reader, containers, reference tables, the JS5 master index; `ClientCache` is the cache as JS5 serves it, with `ClientCachePatches` |
+| `cache` | dat2/idx reader, containers, reference tables, the JS5 master index; `ClientCache` is the cache as JS5 serves it, with `ClientCachePatches` and tsps's own sprites (`CustomSprites`, from `server/data/sprites/<id>-<name>.png`), and `ServedCache` adds tsps's league content (`ContentPatches`) |
 | `net` | rsprot's network service: JS5 from the cache, login, the 242 codecs |
 | `tsps` | the tsps WebSocket and its wire format |
 | `session` | per-player state; `GatewaySession` bridges one client to tsps; `EntityWorld` is its rsprot player/NPC/world-entity world |

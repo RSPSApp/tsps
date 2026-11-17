@@ -32,11 +32,14 @@ before(async () => {
   Mounted.attachMountedItems(api);
 });
 
-function visit(t, option, label) {
+const UNLOCKS = { Lithkren: "digsite-pendant:lithkren-unlocked", "Fossil Island": "digsite-pendant:fossil-island-unlocked" };
+
+function visit(t, option, label, unlocked = true) {
   const statements = [];
   const teleports = [];
   const player = {
     getDialogueManager: () => ({ startDialogues: (chain) => statements.push(chain) }),
+    getAttribute: (key) => (unlocked && key === UNLOCKS[option] ? true : undefined),
     sendMessage() {},
   };
   t.mock.method(House, "houseFor", () => ({ owner: player }));
@@ -57,4 +60,20 @@ test("the mounted pendant's Lithkren needs Dragon Slayer II and Fossil Island ne
     done.delete(key);
   }
   assert.equal(visit(t, "Digsite", "poh_amulet_dig_digsite").teleports.length, 1, "the Digsite needs nothing");
+});
+
+test("as the worn pendant, the mounted one needs the Strange Machine unlocks too (Wiki: Strange Machine)", (t) => {
+  done.add("dragon_slayer_ii");
+  done.add("bone_voyage");
+  try {
+    for (const [option, loc] of [["Lithkren", "poh_amulet_dig_lithkren"], ["Fossil Island", "poh_amulet_dig_fossil"]]) {
+      const locked = visit(t, option, loc, false);
+      assert.equal(locked.teleports.length, 0, `${option}: refused before its machine`);
+      assert.equal(locked.statements.length, 1, `${option}: the refusal box`);
+      assert.equal(visit(t, option, loc, true).teleports.length, 1, `${option}: teleports once unlocked`);
+    }
+  } finally {
+    done.delete("dragon_slayer_ii");
+    done.delete("bone_voyage");
+  }
 });

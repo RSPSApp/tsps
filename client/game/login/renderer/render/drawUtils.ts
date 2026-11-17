@@ -40,6 +40,7 @@ function logoFor(host: LoginRendererHost, worldFlags: number) {
 }
 
 export function drawLogoToCtx(host: LoginRendererHost, ctx: RenderContext, worldFlags = 0): void {
+        if (host.showClientLogo === false) return;
 
         const drawLogo = (ctx: RenderContext) => {
             const logoY = 18;
@@ -53,7 +54,7 @@ export function drawLogoToCtx(host: LoginRendererHost, ctx: RenderContext, world
                 ctx.drawImage(host.logoImage, logoX, logoY);
             }
         };
-        if (!host.titleBackgroundImage || !host.titleBackgroundFromCache) {
+        if (!host.titleBackgroundImage || !host.titleBackgroundFromCache || host.customTitleBackgroundImage) {
             withContentTransform(host, ctx, drawLogo);
             return;
         }

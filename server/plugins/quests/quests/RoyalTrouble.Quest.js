@@ -931,6 +931,13 @@ module.exports = function registerRoyalTroubleQuest(api) {
     }
   }
 
+  /** The Fremennik name from The Fremennik Trials (its "fremennik-trials:name" event), else the display name. */
+  function fremennikName(player) {
+    const request = { player, name: null };
+    api.emitCustomEvent("fremennik-trials:name", request);
+    return request.name ?? player.getDisplayName?.() ?? "";
+  }
+
   function handleDialogueLine(event) {
     const { player, text } = event;
     if (!player || typeof text !== "string") return;
@@ -938,7 +945,7 @@ module.exports = function registerRoyalTroubleQuest(api) {
       !event.text.includes("[dear/dear friend]") && !event.text.includes("[dear/[Fremennik name]]")) {
       return;
     }
-    const name = player.getDisplayName?.() ?? "";
+    const name = fremennikName(player);
     let line = event.text.split("[dear/[Fremennik name]]").join(married(player) ? "dear" : name);
     line = line.split("[Fremennik name]").join(name);
     line = line.split("[dear/dear friend]").join(married(player) ? "dear" : "dear friend");

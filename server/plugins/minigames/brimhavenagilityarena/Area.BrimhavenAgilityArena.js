@@ -118,7 +118,7 @@ function animateFloorSpikes({ player, core, pos }) {
 
 function animatePressurePad({ player, core, pos }, delay) {
   player.getPacketSender().sendGlobalGraphic(
-    new core.Graphic(PRESSURE_PAD_GRAPHIC, delay),
+    core.Graphic.delayed(PRESSURE_PAD_GRAPHIC, delay),
     new core.Location(pos.x, pos.y, pos.z),
   );
 }

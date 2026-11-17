@@ -294,6 +294,17 @@ test('fresh stage 0 is gated by A Taste of Hope, and early object interactions a
   assert.equal(early.items.get(I.RANIS_HEAD) ?? 0, 0);
 });
 
+test("Amy's saw takes Ranis' head like any saw (items/Saws.js)", () => {
+  const h = harness();
+  const p = makePlayer();
+  h.quest.setStage(p, 10);
+  p.items.set(I.AMYS_SAW, 1);
+  const coffin = h.fireObject(42532, 'Search', p);
+  assert.equal(coffin.handled, true);
+  assert.equal(p.messages.includes("You need a saw to remove Ranis' head."), false, p.messages.join(' | '));
+  assert.equal(p.items.get(I.RANIS_HEAD) ?? 0, 1, "the head is recovered with Amy's saw");
+});
+
 test('registered mandatory handlers carry a fixture-started route to completion', () => {
   const h = harness();
   const p = makePlayer();

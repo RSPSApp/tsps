@@ -195,6 +195,28 @@ function sellerLine(event) {
   else if (master.hoodLine && event.text === master.hoodLine && ownsCape(event.player, master.cape)) giveHood(event.player, master.cape);
 }
 
+/**
+ * A master whose own dialogue is written by another plugin (Captain Harlan's, in Mudfoot's Big
+ * Adventure) asks for the sale or a new hood with these events: `{ player, skill }`, skill being
+ * the cape's skill key ("DEFENCE"). The cape still needs 99 in the skill; nothing is said when
+ * the sale can't go ahead, as the Wiki transcript has no line for it.
+ */
+function capeOfSkill(skill) {
+  return Capes.CAPES.find((cape) => cape.skillKey === skill) ?? null;
+}
+
+function buyCape(event) {
+  const cape = capeOfSkill(event?.skill);
+  if (!cape || !event.player || !mastered(event.player, cape)) return;
+  event.sold = sell(event.player, cape);
+}
+
+function reissueHood(event) {
+  const cape = capeOfSkill(event?.skill);
+  if (!cape || !event.player || !ownsCape(event.player, cape)) return;
+  giveHood(event.player, cape);
+}
+
 function syncSailingVarbit({ player }) {
   const id = Capes.core.CacheDefinitions.getVarbitId(SAILING_PURCHASED_VARBIT);
   if (Number.isInteger(id)) player.getPacketSender().sendVarbit(id, player.getAttribute(SAILING_PURCHASED_ATTRIBUTE) === true ? 1 : 0);
@@ -269,10 +291,12 @@ module.exports = function attachSellers(api) {
   api.onNpcDialogueCondition(sellerCondition);
   api.onCustomEvent("npc-dialogue:action", sellerAction);
   api.onCustomEvent("npc-dialogue:line", sellerLine);
+  api.onCustomEvent("skillcapes:buy", buyCape);
+  api.onCustomEvent("skillcapes:hood", reissueHood);
   api.onCanShop(openSkillcapeShop);
   api.onCustomEvent("shop:buy-limit", limitCapePurchase);
   api.onCustomEvent("shop:purchase", hoodWithCape);
   api.onPlayerLogin(syncSailingVarbit);
 };
 
-module.exports._test = { MASTERS, SHOP_MASTERS, SHOP_CAPES, CONDITIONS, sellerVariant, sellerCondition, sellerAction, sellerLine, sell, hasRoom, capeFor, shopCopies, openSkillcapeShop, limitCapePurchase };
+module.exports._test = { MASTERS, SHOP_MASTERS, SHOP_CAPES, CONDITIONS, sellerVariant, sellerCondition, sellerAction, sellerLine, buyCape, reissueHood, sell, hasRoom, capeFor, shopCopies, openSkillcapeShop, limitCapePurchase };

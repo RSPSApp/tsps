@@ -2,7 +2,7 @@ import fs = require("fs");
 import path = require("path");
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 import { GameConstants } from "../../../GameConstants";
-import { NpcDefinition } from "../../NpcDefinition";
+import { NpcDefinition, NpcProjectileArc } from "../../NpcDefinition";
 import { DefinitionLoader } from "../DefinitionLoader";
 import { CombatType } from "../../../content/combat/CombatType";
 
@@ -50,6 +50,8 @@ type CombatAnimation = {
     projectile?: number;
     /** The spotanim the npc plays on its own tick when it fires a ranged shot (an arrow drawn on a bow). */
     launchGraphic?: number;
+    /** Its ranged shot's recorded flight, where it differs from the shared NPC arrow flight. */
+    projectileArc?: { startHeight?: number; endHeight?: number; angle?: number; progress?: number };
     /** Ticks from the death animation to the death itself; 2 when absent. */
     deathTicks?: number;
     /** Ticks from removal to respawn; 25 when absent, 0 to disable. */
@@ -72,6 +74,8 @@ const ATTACK_WORDS = new Set([
 /** Combat style words: an attack, unless the name also stands or moves (`top_spider_ranged_idle`). */
 const STYLE_WORDS = new Set(["melee", "ranged", "range", "magic", "mage"]);
 const MOTION_WORDS = new Set(["idle", "ready", "walk", "run", "stand", "standing"]);
+/** An observed entrance or movement is not evidence for an otherwise missing combat role. */
+const NON_COMBAT_WORDS = new Set([...MOTION_WORDS, "tele", "teleport", "appear", "disappear", "spawn"]);
 
 const animationWords = (name: string) => name.split("_").map((word) => word.replace(/\d+$/, "")).filter(Boolean);
 
@@ -145,6 +149,39 @@ type CapturedAnimations = {
     seen?: Record<string, [number, number, number, number]>;
 };
 
+/** One NPC's row in npc-captured-death-ticks.json: its death animation and the ticks live keeps it after. */
+type CapturedDeath = { seq?: number; ticks?: number; seen?: number };
+
+/** Captured NPCs that must agree on a death animation's timing before it is lent to NPCs never captured. */
+const DEATH_SEQUENCE_MIN_NPCS = 2;
+
+/**
+ * Ticks from the death animation to the removal for each death animation, where every captured NPC
+ * that plays it (at least DEATH_SEQUENCE_MIN_NPCS) agrees. NPCs sharing an animation mostly share
+ * the timing in captures, but not always (War Guild cyclopes 2, other giants 4), so a split one
+ * lends none.
+ */
+function deathTicksBySequence(captured: Record<string, CapturedDeath>): Map<number, number> {
+    const seen = new Map<number, Set<number>>();
+    const npcs = new Map<number, number>();
+    for (const entry of Object.values(captured)) {
+        if (!Number.isInteger(entry?.seq) || !isDeathTicks(entry?.ticks)) continue;
+        const seq = entry.seq as number;
+        if (!seen.has(seq)) seen.set(seq, new Set());
+        seen.get(seq)!.add(entry.ticks as number);
+        npcs.set(seq, (npcs.get(seq) ?? 0) + 1);
+    }
+    const result = new Map<number, number>();
+    for (const [seq, ticks] of seen) {
+        if (ticks.size === 1 && (npcs.get(seq) ?? 0) >= DEATH_SEQUENCE_MIN_NPCS) result.set(seq, [...ticks][0]);
+    }
+    return result;
+}
+
+function isDeathTicks(value: unknown): value is number {
+    return Number.isInteger(value) && (value as number) >= 1;
+}
+
 /**
  * Hits an NPC must take in captures before it counts as having no block animation, when at least
  * half of them show no animation (an NPC that blocks leaves under a third unanswered).
@@ -180,6 +217,9 @@ function capturedRoles(entry: CapturedAnimations): NonNullable<CombatAnimation["
 
 const normalizeName = (value?: string) => (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 
+/** Custom NPC attack types the editor accepts that name an element, not a combat style: they resolve to melee. */
+const ELEMENT_ONLY_ATTACK_TYPES = new Set(["fire", "water", "earth", "air", "dragonfire"]);
+
 /** Dump attack_type tokens that mean "this thing can hit you in melee". */
 const MELEE_ATTACK_TYPES = new Set(["stab", "slash", "crush", "melee"]);
 
@@ -196,6 +236,10 @@ export class NpcDefinitionLoader extends DefinitionLoader {
         if (["crush", "slash", "stab", "melee", "ranged", "magic", "fire", "water", "earth", "air", "dragonfire"].includes(style)) {
             target.attackType = NpcDefinitionLoader.resolveAttackType([style]);
             target.attackStyle = style;
+            if (ELEMENT_ONLY_ATTACK_TYPES.has(style)) {
+                // Accepted as before, but no combat method reads it: the NPC still attacks in melee.
+                console.warn(`[npc-definitions] custom npc ${id}: attackType "${style}" has no combat style of its own; it attacks in melee (use "magic" or "ranged")`);
+            }
         }
     }
 
@@ -277,6 +321,16 @@ export class NpcDefinitionLoader extends DefinitionLoader {
     }
 
     /** Status rules have one canonical source, independent of combat-stat snapshots. */
+    /** A `projectileArc` entry with its finite numbers only; null when it gives none. */
+    public static projectileArc(source: any): NpcProjectileArc | null {
+        if (!source || typeof source !== "object") return null;
+        const arc: Record<string, number> = {};
+        for (const key of ["startHeight", "endHeight", "angle", "progress"]) {
+            if (Number.isFinite(source[key])) arc[key] = source[key];
+        }
+        return Object.keys(arc).length ? Object.freeze(arc) as NpcProjectileArc : null;
+    }
+
     public static applyStatusImmunities(definition: NpcDefinition, cacheName: string, source: any): void {
         if (!source || typeof source.name !== "string" || normalizeName(source.name) !== normalizeName(cacheName)) return;
         Object.assign(definition, {
@@ -288,6 +342,20 @@ export class NpcDefinitionLoader extends DefinitionLoader {
         });
     }
 
+    /** Every labelled max hit the Wiki lists (npc-max-hits.json), name-guarded like the status rules. */
+    public static applyMaxHits(definition: NpcDefinition, cacheName: string, source: any): void {
+        if (!source || typeof source.name !== "string" || normalizeName(source.name) !== normalizeName(cacheName)) return;
+        if (!Array.isArray(source.max_hits)) return;
+        const maxHits = source.max_hits
+            .filter((entry: any) => entry && typeof entry.value === "string")
+            .map((entry: any) => Object.freeze({
+                value: entry.value,
+                label: typeof entry.label === "string" ? entry.label : null,
+                maxHit: Number.isInteger(entry.max_hit) ? entry.max_hit : null,
+            }));
+        Object.assign(definition, { maxHits: Object.freeze(maxHits) });
+    }
+
     load(): boolean {
         NpcDefinition.definitions.clear();
         const directory = path.resolve(GameConstants.DEFINITIONS_DIRECTORY);
@@ -297,6 +365,9 @@ export class NpcDefinitionLoader extends DefinitionLoader {
         const statusSource = this.readOptional(directory, "npc-status-immunities.json");
         if (statusSource && statusSource.schema_version !== 1) throw new Error("Unsupported NPC status immunity schema");
         const statusImmunities = statusSource?.npcs ?? {};
+        const maxHitSource = this.readOptional(directory, "npc-max-hits.json");
+        if (maxHitSource?.npcs && maxHitSource.schema_version !== 1) throw new Error("Unsupported NPC max hit schema");
+        const maxHits = maxHitSource?.npcs ?? {};
         const animationFile = this.read(directory, "npc-combat-defs.json");
         const observedAnimations = this.read(directory, "npc-animations.json") as Record<string, number[]>;
         const animations: Record<string, CombatAnimation> = {};
@@ -307,15 +378,23 @@ export class NpcDefinitionLoader extends DefinitionLoader {
         }
         const projectiles: Record<string, number> = {};
         const launchGraphics: Record<string, number> = {};
+        const projectileArcs: Record<string, NpcProjectileArc> = {};
         for (const [id, entry] of Object.entries((animationFile.npcs ?? {}) as Record<string, CombatAnimation>)) {
             if (entry?.anims) animations[id] = entry;
             if (Number.isInteger(entry?.projectile)) projectiles[id] = entry.projectile as number;
             if (Number.isInteger(entry?.launchGraphic)) launchGraphics[id] = entry.launchGraphic as number;
+            const arc = NpcDefinitionLoader.projectileArc(entry?.projectileArc);
+            if (arc) projectileArcs[id] = arc;
         }
         // Only hand-made entries stop the guess below; captures leave a role open when they do not settle it.
         const configuredAnimationIds = new Set(Object.keys(animations));
         // Animations seen in live captures fill what a hand-made entry leaves out.
         const captured = this.readOptional(directory, "npc-captured-animations.json")?.npcs ?? {};
+        // How long live keeps each NPC after its death animation (rsprox captures).
+        const capturedDeaths = (this.readOptional(directory, "npc-captured-death-ticks.json")?.npcs ?? {}) as Record<string, CapturedDeath>;
+        const deathTicksBySeq = deathTicksBySequence(capturedDeaths);
+        let capturedDeathTicks = 0;
+        let sequenceDeathTicks = 0;
         let capturedAnimations = 0;
         for (const [id, entry] of Object.entries(captured as Record<string, CapturedAnimations>)) {
             const roles = capturedRoles(entry ?? {});
@@ -361,7 +440,11 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             inferredAnimations += Object.keys(inferred).length;
             if (!configuredAnimationIds.has(npcId)) {
                 // A named animation never fills another role: a death is not guessed as an attack.
-                const ids = Array.from(new Set(observed.filter((id) => Number.isInteger(id) && id >= 0 && !namedRoles.has(id))));
+                const ids = Array.from(new Set(observed.filter((id) => {
+                    if (!Number.isInteger(id) || id < 0 || namedRoles.has(id)) return false;
+                    const name = CacheDefinitions.getSeqName(id);
+                    return !name || !animationWords(name).some((word) => NON_COMBAT_WORDS.has(word));
+                })));
                 const indexes = ids.map((_, index) => index);
                 const preferences: Record<CombatAnimationRole, number[]> = {
                     attack: ids.length <= 2 ? indexes : [1, ...indexes.filter((index) => index !== 1)],
@@ -400,10 +483,13 @@ export class NpcDefinitionLoader extends DefinitionLoader {
         const ids = new Set([
             ...Object.keys(monsters),
             ...Object.keys(statusImmunities),
+            ...Object.keys(maxHits),
             ...Object.keys(animationFile.npcs ?? {}),
             ...Object.keys(animations), ...Object.keys(observedAnimations),
             ...Object.keys(projectiles),
             ...Object.keys(launchGraphics),
+            ...Object.keys(projectileArcs),
+            ...Object.keys(capturedDeaths),
         ]);
         let applied = 0;
         let mismatched = 0;
@@ -457,6 +543,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             }
 
             NpcDefinitionLoader.applyStatusImmunities(definition, cached.name, statusImmunities[key]);
+            NpcDefinitionLoader.applyMaxHits(definition, cached.name, maxHits[key]);
 
             if (Number.isInteger(projectiles[key])) {
                 definition.projectileId = projectiles[key];
@@ -464,6 +551,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             if (Number.isInteger(launchGraphics[key])) {
                 definition.launchGraphicId = launchGraphics[key];
             }
+            if (projectileArcs[key]) definition.projectileArc = projectileArcs[key];
 
             const respawn = animationFile.npcs?.[key]?.respawn;
             if (Number.isInteger(respawn) && respawn >= 0) definition.setRespawn(respawn);
@@ -479,14 +567,26 @@ export class NpcDefinitionLoader extends DefinitionLoader {
                     deathAnim: animation.anims?.death ?? definition.getDeathAnim(),
                     spawnAnim: animation.anims?.spawn ?? definition.getSpawnAnim(),
                     deathSound: animation.sounds?.death ?? definition.getDeathSound(),
-                    deathTicks: Number.isInteger(animation.deathTicks) ? animation.deathTicks : definition.getDeathTicks(),
                 });
+            }
+            // A hand-set deathTicks wins, then this NPC's captured timing, then the timing every
+            // captured NPC with its death animation shares; 2 otherwise.
+            const configuredDeathTicks = animationFile.npcs?.[key]?.deathTicks;
+            const capturedDeath = capturedDeaths[key];
+            if (isDeathTicks(configuredDeathTicks)) {
+                definition.deathTicks = configuredDeathTicks;
+            } else if (isDeathTicks(capturedDeath?.ticks)) {
+                definition.deathTicks = capturedDeath.ticks;
+                capturedDeathTicks++;
+            } else if (deathTicksBySeq.has(definition.getDeathAnim())) {
+                definition.deathTicks = deathTicksBySeq.get(definition.getDeathAnim());
+                if (definition.deathTicks !== 2) sequenceDeathTicks++;
             }
             NpcDefinitionLoader.applyCustomCombat(id, definition, animationFile.npcs?.[key]);
         }
         (mismatched > 0 ? console.warn : console.debug)(
             `[npc-definitions] cache-backed; configured stats applied=${applied}, mismatched=${mismatched}, ` +
-            `service animations captured=${capturedAnimations}, inferred=${inferredAnimations} (by name=${namedAnimations}), guessed=${guessedAnimations}, by family=${familyAnimations}`
+            `service animations captured=${capturedAnimations}, inferred=${inferredAnimations} (by name=${namedAnimations}), guessed=${guessedAnimations}, by family=${familyAnimations}; death ticks captured=${capturedDeathTicks}, by death animation=${sequenceDeathTicks}`
         );
         return true;
     }

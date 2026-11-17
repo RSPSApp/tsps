@@ -185,7 +185,7 @@ function show(player, found, trophy) {
 function mount(player, found, trophy) {
   const { display } = found;
   if (trophy.display !== display.type) return player.sendMessage("That doesn't go on this display.");
-  if (player.getSkillManager().getCurrentLevel(Skill.CONSTRUCTION) < trophy.level) {
+  if (mountLevel(player) < trophy.level) {
     return player.sendMessage(`You need a Construction level of ${trophy.level} to mount that.`);
   }
   if (!trophy.locs[display.tier]) {
@@ -199,6 +199,15 @@ function mount(player, found, trophy) {
     "No", () => install(player, found, trophy, false)));
 }
 
+/**
+ * The level a trophy mounts at: the furniture build level, with the crystal saw's +3 ("construction:level-boost").
+ * The trophy rows are furniture costing planks and nails (cache material_cost), a saw-and-hammer build (Wiki,
+ * Crystal saw). Decision approved 2026-11-15.
+ */
+function mountLevel(player) {
+  return House.furnitureLevel(player, null);
+}
+
 function combatOffer(player, trophy, then) {
   closeMenu(player);
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
@@ -210,7 +219,11 @@ function combatOffer(player, trophy, then) {
 function install(player, found, trophy, withCombat) {
   const { house } = found;
   if (House.houseFor(player) !== house || !player.getInventory().contains(trophy.item)) return;
+  // The combat prompt waits on the player: the saw may have been dropped meanwhile.
+  if (mountLevel(player) < trophy.level) return player.sendMessage(`You need a Construction level of ${trophy.level} to mount that.`);
   player.getInventory().delete(trophy.item, 1);
+  // Wiki (Crystal saw): a charge goes only on a piece the boost was needed for.
+  if (House.constructionLevel(player) < trophy.level) api.emitCustomEvent("construction:level-boost-used", { player, buildable: null });
   for (const [skill, amount] of Object.entries(trophy.experience)) {
     if (skill === "combat") {
       if (withCombat) for (const [name, xp] of Object.entries(amount)) player.getSkillManager().addExperiences(Skill[name], xp);
@@ -284,4 +297,4 @@ function attachTrophies(api) {
   api.onCustomEvent("interface:close", ({ player }) => openFor.delete(player));
 }
 
-Object.assign(module.exports, { attachTrophies, refreshDisplays, MOUNTED_ATTRIBUTE, _test: { talkTo, talkToKqHead, byKey } });
+Object.assign(module.exports, { attachTrophies, refreshDisplays, MOUNTED_ATTRIBUTE, _test: { talkTo, talkToKqHead, byKey, mount, install } });

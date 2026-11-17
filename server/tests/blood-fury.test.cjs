@@ -17,6 +17,7 @@ const BloodFury = require("../plugins/items/AmuletOfBloodFury.plugin");
 const itemOnItem = new Map();
 const itemActions = new Map();
 let itemAction;
+const customEvents = new Map();
 let combatHitResolved;
 
 const baseMethod = new CombatMethod();
@@ -26,6 +27,7 @@ baseMethod.handleAfterHitEffects = () => {};
 const core = {
   CombatType, CombatMethod, Equipment, ItemIdentifiers, Misc,
   Flag: require("../dist/game/model/Flag").Flag,
+  Graphic: require("../dist/game/model/Graphic").Graphic,
   BonusManager: { update() {} }, CombatFactory: { MELEE_COMBAT: baseMethod },
   DialogueChainBuilder: require("../dist/game/model/dialogues/builders/DialogueChainBuilder").DialogueChainBuilder,
   OptionDialogue: require("../dist/game/model/dialogues/entries/impl/OptionDialogue").OptionDialogue,
@@ -44,7 +46,7 @@ BloodFury.register({
     else itemActions.set(name, actions);
   },
   registerCombatMethodResolver() {},
-  onCustomEvent() {},
+  onCustomEvent: (name, handler) => customEvents.set(name, handler),
   onCombatHitResolved: (handler) => { combatHitResolved = handler; },
 });
 
@@ -220,7 +222,7 @@ for (const change of ["remove amulet", "remove shard", "replace amulet", "change
 }
 
 // Mirrors PendingHit's hitsplats: each one reports the HP it actually removes once it lands.
-function resolvedAttack(player, damages, type = CombatType.MELEE) {
+function resolvedAttack(player, damages, type = CombatType.MELEE, target = { performGraphic() {} }) {
   const hits = damages.map(damage => {
     const observers = [];
     return {
@@ -231,13 +233,12 @@ function resolvedAttack(player, damages, type = CombatType.MELEE) {
   });
   const hit = {
     getAttacker: () => player,
+    getTarget: () => target,
     getCombatType: () => type,
     getHits: () => hits,
   };
-  // The ordinary melee method constructs PendingHits with itself, so dispatch its
-  // after-hit callback, then the resolved-hit event as CombatFactory.executeHit does.
-  baseMethod.handleAfterHitEffects(hit);
-  combatHitResolved?.({ attacker: player, hit });
+  // CombatFactory.addPendingHit emits "combat:hit-queued" on the attack's tick.
+  customEvents.get("combat:hit-queued")({ player, target, hit });
   return hits;
 }
 
@@ -314,7 +315,7 @@ test("Check and Revert still operate through the named item actions", () => {
   const event = { player, item: amulet, itemId: amulet.getId(), interfaceId: Equipment.INVENTORY_INTERFACE_ID };
   if (itemActions.has("Amulet of blood fury")) itemActions.get("Amulet of blood fury").Check(event);
   else itemAction({ ...event, clickType: 2 });
-  assert.equal(player.messages.at(-1), "Your amulet has 23,456 charges left.");
+  assert.equal(player.messages.at(-1), "Your Amulet of blood fury will work for 23,456 more hits.");
   if (itemActions.has("Amulet of blood fury")) itemActions.get("Amulet of blood fury").Revert(event);
   else itemAction({ ...event, clickType: 3 });
   assert.equal(amulet.getId(), ItemIdentifiers.AMULET_OF_FURY);
@@ -354,8 +355,7 @@ test("melee healing counts only HP lost on landing, not damage queued before a s
       getCombatType: () => CombatType.MELEE,
       getHits: () => [attack],
     };
-    baseMethod.handleAfterHitEffects(hit);
-    combatHitResolved({ attacker: player, hit });
+    customEvents.get("combat:hit-queued")({ player, target, hit });
     queue.addPendingDamage([attack]);
     queue.process(1);
     assert.equal(target.hp, 0, "the earlier hit leaves 1 HP and the 20 hit removes only that");
@@ -365,4 +365,161 @@ test("melee healing counts only HP lost on landing, not damage queued before a s
     Misc.getRandom = originalRandom;
     CombatFactory.handleRedemption = originalRedemption;
   }
+});
+
+test("every 500th charge spent counts the remaining hits down in chat", () => {
+  const player = createPlayer();
+  const amulet = new Item(ItemIdentifiers.AMULET_OF_BLOOD_FURY, 1, { "blood-fury": { charges: 7002 } });
+  player.equipment.set(Equipment.AMULET_SLOT, amulet);
+  const originalRandom = Misc.getRandom;
+  try {
+    Misc.getRandom = () => 1;
+    resolvedAttack(player, [5]);
+    assert.equal(player.messages.length, 0, "7,001 is not a step");
+    resolvedAttack(player, [5]);
+    assert.deepEqual(player.messages, ["Your Amulet of blood fury can perform 7,000 more hits."]);
+    resolvedAttack(player, [5]);
+    assert.equal(player.messages.length, 1);
+    amulet.setMetaValue("blood-fury", { charges: 502 });
+    resolvedAttack(player, [5, 0, 7, 9]);
+    assert.equal(charges(amulet), 499);
+    assert.equal(player.messages.at(-1), "Your Amulet of blood fury can perform 500 more hits.",
+      "a multi-hit attack still announces the step it passes");
+    amulet.setMetaValue("blood-fury", { charges: 1 });
+    resolvedAttack(player, [5]);
+    assert.equal(player.messages.filter(text => /can perform 0 /.test(text)).length, 0);
+    assert.match(player.messages.at(-1), /run out of charges/);
+  } finally { Misc.getRandom = originalRandom; }
+});
+
+test("the proc shows sanguinesti_staff_heal on the target with the attack, even with nothing to heal", () => {
+  const player = createPlayer();
+  const amulet = new Item(ItemIdentifiers.AMULET_OF_BLOOD_FURY, 1, { "blood-fury": { charges: 50 } });
+  player.equipment.set(Equipment.AMULET_SLOT, amulet);
+  const graphics = [];
+  const target = { performGraphic: (graphic) => graphics.push(graphic) };
+  const originalRandom = Misc.getRandom;
+  try {
+    Misc.getRandom = () => 1;
+    resolvedAttack(player, [20], CombatType.MELEE, target).forEach(hit => hit.land(20));
+    assert.equal(graphics.length, 0, "no proc, no graphic");
+    Misc.getRandom = () => 0;
+    resolvedAttack(player, [0], CombatType.MELEE, target);
+    assert.equal(graphics.length, 0, "a zero hit never procs");
+    const [landing] = resolvedAttack(player, [20], CombatType.MELEE, target);
+    assert.equal(graphics.length, 1, "shown with the attack, before the hitsplat");
+    assert.equal(graphics[0].getId(), 1542);
+    assert.equal(graphics[0].getHeight(), 92);
+    assert.equal(graphics[0].getDelay(), 0);
+    landing.land(0);
+    assert.equal(player.healed, 0);
+  } finally { Misc.getRandom = originalRandom; }
+});
+
+test("a multi-hit attack shows the proc graphic once", () => {
+  const player = createPlayer();
+  const amulet = new Item(ItemIdentifiers.AMULET_OF_BLOOD_FURY, 1, { "blood-fury": { charges: 50 } });
+  player.equipment.set(Equipment.AMULET_SLOT, amulet);
+  const graphics = [];
+  const originalRandom = Misc.getRandom;
+  try {
+    Misc.getRandom = () => 0;
+    const hits = resolvedAttack(player, [10, 20, 30], CombatType.MELEE, { performGraphic: (g) => graphics.push(g) });
+    assert.equal(graphics.length, 1);
+    hits.forEach(hit => hit.land(hit.getDamage()));
+    assert.equal(player.healed, 3 + 6 + 9, "every proc'ing hitsplat still heals");
+  } finally { Misc.getRandom = originalRandom; }
+});
+
+test("CombatFactory.addPendingHit runs the effect on the attack tick, after protection, a tick before an NPC's hitsplat", () => {
+  const { CombatFactory } = require("../dist/game/content/combat/CombatFactory");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { World } = require("../dist/game/World");
+  const { HitDamage } = require("../dist/game/content/combat/hit/HitDamage");
+  const { HitMask } = require("../dist/game/content/combat/hit/HitMask");
+  const player = createPlayer();
+  Object.assign(player, { isPlayer: () => true, isNpc: () => false, getAsPlayer: () => player });
+  const amulet = new Item(ItemIdentifiers.AMULET_OF_BLOOD_FURY, 1, { "blood-fury": { charges: 7001 } });
+  player.equipment.set(Equipment.AMULET_SLOT, amulet);
+  const scheduled = [];
+  const graphics = [];
+  const npc = {
+    getHitpoints: () => 50, isUntargetable: () => false, isNeedsPlacement: () => false,
+    isPlayer: () => false, isNpc: () => true,
+    performGraphic: (graphic) => graphics.push(graphic),
+    getCombat: () => ({ getHitQueue: () => ({ addPendingHit: (hit, cycle) => scheduled.push(cycle) }) }),
+  };
+  let capped = false;
+  const damage = new HitDamage(15, HitMask.RED);
+  const qHit = {
+    getAttacker: () => player, getTarget: () => npc, getCombatType: () => CombatType.MELEE,
+    getHits: () => [damage], getDelay: () => 0, rewardsExperience: () => false,
+    getProtectionType: () => undefined,
+    capDamageToBudget() { capped = true; },
+  };
+  const saved = PluginManager.customEventHooks;
+  PluginManager.customEventHooks = new Map([["combat:hit-queued", [{
+    pluginName: "AmuletOfBloodFury",
+    handler: (event) => { assert.ok(capped, "damage is final first"); customEvents.get("combat:hit-queued")(event); },
+  }]]]);
+  const originalRandom = Misc.getRandom;
+  try {
+    Misc.getRandom = () => 0;
+    const now = World.getProcessCycle();
+    CombatFactory.addPendingHit(qHit);
+    assert.equal(charges(amulet), 7000);
+    assert.deepEqual(player.messages, ["Your Amulet of blood fury can perform 7,000 more hits."]);
+    assert.equal(graphics.length, 1, "the proc graphic goes with the swing");
+    assert.deepEqual(scheduled, [now + 1], "the NPC's hitsplat comes the next cycle");
+    assert.equal(player.healed, 0, "the heal waits for the hitsplat");
+  } finally {
+    Misc.getRandom = originalRandom;
+    PluginManager.customEventHooks = saved;
+  }
+});
+
+test("a hit an impact hook zeroes gives its charge back on resolution; a landed one keeps it spent", () => {
+  const player = createPlayer();
+  Object.assign(player, { getAsPlayer: () => player });
+  const amulet = new Item(ItemIdentifiers.AMULET_OF_BLOOD_FURY, 1, { "blood-fury": { charges: 100 } });
+  player.equipment.set(Equipment.AMULET_SLOT, amulet);
+  const originalRandom = Misc.getRandom;
+  try {
+    Misc.getRandom = () => 1;
+    const damages = [20, 30];
+    const hits = damages.map((value, i) => ({ getDamage: () => damages[i], onApplied() { return this; } }));
+    const hit = { getAttacker: () => player, getTarget: () => ({}), getCombatType: () => CombatType.MELEE, getHits: () => hits };
+    customEvents.get("combat:hit-queued")({ player, target: {}, hit });
+    assert.equal(charges(amulet), 98);
+    damages[0] = 0; // e.g. Horror from the Deep's mother on the wrong style
+    combatHitResolved({ attacker: player, hit });
+    assert.equal(charges(amulet), 99, "only the zeroed hit is refunded");
+    combatHitResolved({ attacker: player, hit });
+    assert.equal(charges(amulet), 99, "never refunded twice");
+    customEvents.get("combat:hit-queued")({ player, target: {}, hit: { ...hit, getHits: () => [hits[1]] } });
+    player.equipment.set(Equipment.AMULET_SLOT, null);
+    damages[1] = 0;
+    combatHitResolved({ attacker: player, hit });
+    assert.equal(charges(amulet), 98, "no refund once the amulet is taken off");
+  } finally { Misc.getRandom = originalRandom; }
+});
+
+test("a zeroed hit that spent the last charge restores the amulet of blood fury", () => {
+  const player = createPlayer();
+  Object.assign(player, { getAsPlayer: () => player });
+  const amulet = new Item(ItemIdentifiers.AMULET_OF_BLOOD_FURY, 1, { "blood-fury": { charges: 1 } });
+  player.equipment.set(Equipment.AMULET_SLOT, amulet);
+  const originalRandom = Misc.getRandom;
+  try {
+    Misc.getRandom = () => 1;
+    let damage = 5;
+    const hits = [{ getDamage: () => damage, onApplied() { return this; } }];
+    const hit = { getAttacker: () => player, getTarget: () => ({}), getCombatType: () => CombatType.MELEE, getHits: () => hits };
+    customEvents.get("combat:hit-queued")({ player, target: {}, hit });
+    assert.equal(amulet.getId(), ItemIdentifiers.AMULET_OF_FURY);
+    damage = 0;
+    combatHitResolved({ attacker: player, hit });
+    assert.equal(amulet.getId(), ItemIdentifiers.AMULET_OF_BLOOD_FURY);
+    assert.equal(charges(amulet), 1);
+  } finally { Misc.getRandom = originalRandom; }
 });

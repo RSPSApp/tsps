@@ -78,7 +78,7 @@ function inBox(location, [minX, maxX, minY, maxY]) {
 
 function tileGraphic(player, location, id, delay = 0) {
   if (id == null) return;
-  player.getPacketSender().sendGraphic(new core.Graphic(id, delay), location);
+  player.getPacketSender().sendGraphic(core.Graphic.delayed(id, delay), location);
 }
 
 function hurtPlayer(player, amount) {
@@ -123,7 +123,21 @@ function onTask(player) {
   return request.onTask === true;
 }
 
+/** The trails of the elite clues held whose step is this gryphon (Wiki: Clue scroll (elite) - Their bane awaits). */
+function clueStepTokens(player) {
+  const request = { player, npcId: ids.npcs.boss, holds: false, tokens: [] };
+  api.emitCustomEvent("treasure-trails:holds-kill-step", request);
+  return request.holds === true ? request.tokens.filter((token) => typeof token === "string" && token) : [];
+}
+
+function holdsClueStep(player) {
+  const request = { player, npcId: ids.npcs.boss, holds: false };
+  api.emitCustomEvent("treasure-trails:holds-kill-step", request);
+  return request.holds === true;
+}
+
 module.exports = {
+  holdsClueStep, clueStepTokens,
   init, later, toLocation, randomInt, chebyshev, distanceToNpc, inBox, tileGraphic, hurtPlayer, message,
   wornWeight, wearingShield, questComplete, onTask, KILLS_ATTRIBUTE,
   get api() { return api; },

@@ -1,0 +1,327 @@
+"use strict";
+
+/**
+ * Contact!'s dungeon traps under Sophanem (plane 2): four floor-spike traps ("Trap", Evade,
+ * contact_spiketrap_floor 20271) and six spear traps ("Trap", Disable, contact_speartrap 20272).
+ * Every trap is four locs (yarn dump:loc 20271,20272). The spike locs are the 2x2 of floor a
+ * player sets off; the spear locs line both walls, and the 2x2 between them is the floor.
+ *
+ * Recorded (rsprox rec 3015, rev 231; rec 101, rev 227, a Leagues V world):
+ * - Stepping onto a trap's floor, the tick after: "You accidentally set off a trap!", the player
+ *   says "Ouch!", all four locs play their release (spikes agilityarena_floorspikes_activate 1111,
+ *   synth 1383; spears speartrap_release 459, synth 1394), and a tick later a hit with the
+ *   player's hurt sound, or, while the player is still moving, the tick after they stop (2338 to
+ *   2341 across a crossing; rec 101 7978 to 7979 mid-run). It went off every time it was stepped on.
+ * - Rec 3015's hits: 19 at 97 hitpoints (set off at tick 1253), 18 at 87 (2128), 16 at 69 (2137),
+ *   15 at 55 (2338, the hit at 2341) and 18 at 80 (4714): the Wiki's (Contact!/Quick guide) "10% of
+ *   current hitpoints, rounded down, plus 10 damage". Rec 101's two were 2 below it (17 at 99, 15 at
+ *   77), perhaps a Leagues effect; the Wiki formula is kept.
+ * - Evade/Disable: "You successfully evade the trap." / "You successfully disable the trap." with
+ *   synth 2387 on the arrival tick, and the player walks (walk pace) across the trap to the tile
+ *   beyond it, without setting it off (rec 3015 ticks 2252, 3027, 3347, 4993, 5924, 5985). From on
+ *   the floor (after setting it off) the walk leaves it towards the clicked loc (tick 2339), or,
+ *   level with it, by the nearer edge (tick 4815).
+ * - A failed Disable (rec 101 tick 7904): "You fail to disable the trap!", "Ouch!", the four
+ *   locs' release and its synth on the arrival tick (no 2387), the same walk across, and the hit
+ *   the tick after the last step (7907, three steps on), at Thieving 53. The only recorded failure,
+ *   and from Leagues: the main game (rec 3015, 99 Agility and Thieving) has 8/8 successes; one of
+ *   the eleven recorded attempts failed (rec 3015's eight, rec 101's at 7872, 7903 and 7978).
+ * - Wiki (Contact!, Traps; Mod Ash, 15 July 2020, "around 83-84 should do it, for both"): at 84
+ *   Agility an Evade, and at 84 Thieving a Disable, no longer risks the trap.
+ *
+ * Ours (not captured): the failure chance below level 84 (no source gives one; 1 in 10, as
+ *   recorded), and the level read as the current (boosted) one; the spike
+ * trap's failure line ("You fail to evade the trap!", by analogy with the spear trap's); a walk that
+ * keeps going past HIT_WAIT_LIMIT ticks still gets the hit; the spike trap at 2138,4408 crossed
+ * east-west like the three recorded ones.
+ */
+
+const PLANE = 2;
+const SPIKE = "spike";
+const SPEAR = "spear";
+/** axis: the direction a player crosses the trap in. locs: where its four locs stand. */
+const TRAPS = [
+  spikes(2138, 4408),
+  spikes(2148, 4403),
+  spikes(2158, 4403),
+  spikes(2169, 4356),
+  spears({ minX: 2120, maxX: 2121, minY: 4401, maxY: 4402 }, "y", [[2119, 4401], [2119, 4402], [2121, 4401], [2121, 4402]]),
+  spears({ minX: 2128, maxX: 2129, minY: 4377, maxY: 4378 }, "y", [[2127, 4377], [2127, 4378], [2129, 4377], [2129, 4378]]),
+  spears({ minX: 2152, maxX: 2153, minY: 4373, maxY: 4374 }, "x", [[2152, 4372], [2153, 4372], [2152, 4374], [2153, 4374]]),
+  spears({ minX: 2155, maxX: 2156, minY: 4377, maxY: 4378 }, "x", [[2155, 4376], [2156, 4376], [2155, 4378], [2156, 4378]]),
+  spears({ minX: 2165, maxX: 2166, minY: 4378, maxY: 4379 }, "y", [[2164, 4378], [2164, 4379], [2166, 4378], [2166, 4379]]),
+  spears({ minX: 2169, maxX: 2170, minY: 4388, maxY: 4389 }, "y", [[2168, 4388], [2168, 4389], [2170, 4388], [2170, 4389]]),
+];
+
+function spikes(x, y) {
+  return {
+    name: `spikes-${x}-${y}`, kind: SPIKE, gameval: "contact_spiketrap_floor", axis: "x",
+    minX: x, maxX: x + 1, minY: y, maxY: y + 1,
+    locs: [[x, y], [x, y + 1], [x + 1, y], [x + 1, y + 1]],
+  };
+}
+
+function spears(floor, axis, locs) {
+  return { name: `spears-${floor.minX}-${floor.minY}`, kind: SPEAR, gameval: "contact_speartrap", axis, ...floor, locs };
+}
+
+const MESSAGES = {
+  setOff: "You accidentally set off a trap!",
+  [SPIKE]: "You successfully evade the trap.",
+  [SPEAR]: "You successfully disable the trap.",
+};
+const FAIL_MESSAGES = {
+  [SPIKE]: "You fail to evade the trap!",
+  [SPEAR]: "You fail to disable the trap!",
+};
+/** Ours: below SAFE_LEVEL no source gives a chance; one of the eleven recorded attempts failed (in Leagues V). */
+const FAIL_CHANCE = 0.1;
+/** Wiki (Contact!, Traps): at 84 Agility (Evade) or 84 Thieving (Disable) the trap is no risk. */
+const SAFE_LEVEL = 84;
+let random = Math.random;
+const SAY = "Ouch!";
+const PASS_SOUND = 2387;
+const RELEASE = {
+  [SPIKE]: { animation: 1111, sound: 1383 }, // agilityarena_floorspikes_activate
+  [SPEAR]: { animation: 459, sound: 1394 }, // speartrap_release
+};
+/**
+ * Ticks after the step onto the floor: the message and release, then the earliest hit. The hit waits
+ * while the player still has steps to take, landing as they stop (rec 3015: set off 2338, crossing
+ * 2339-2340, hit 2341; rec 101: set off mid-run at 7978, hit 7979).
+ */
+const SET_OFF_AT = 1;
+const HIT_AT = 2;
+/** Ours: a walk that never ends (a long chase) still gets the hit after this many ticks. */
+const HIT_WAIT_LIMIT = 30;
+/** Set by Evade/Disable: { trap, cycle, on, to }. The walk must step on within CROSSING_START_TICKS. */
+const CROSSING_ATTRIBUTE = "contact:trap-crossing";
+const CROSSING_START_TICKS = 2;
+
+const PlayerHitSounds = require("../../combat/PlayerHitSounds.plugin");
+
+let core;
+/**
+ * Players whose set-off is still to come: { queued }. An Evade/Disable clicked meanwhile runs the
+ * tick after the set-off (rec 3015: set off at tick 2338, the evade at 2339).
+ */
+const pendingSetOff = new WeakMap();
+/**
+ * The cycle each player's last set-off fired on: an Evade whose route arrives that tick waits one
+ * too (rec 3015: click 2337, set off and arrival 2338, the evade 2339).
+ */
+const setOffCycle = new WeakMap();
+/** Players with such a waiting Evade/Disable: the set-off's hit waits for the walk it starts (hit 2341). */
+const passWaiting = new WeakSet();
+/**
+ * The cycle each player last clicked a trap loc (its route starts then). A click sent on the set-off
+ * tick itself acts two ticks after it, after the hit (rec 101: click and set-off 7978, hit 7979, the
+ * line and walk 7980), where a route arriving that tick acts on the next (rec 3015 above).
+ */
+const clickCycle = new WeakMap();
+
+function trapAt(x, y, z) {
+  if (z !== PLANE) return null;
+  return TRAPS.find((t) => x >= t.minX && x <= t.maxX && y >= t.minY && y <= t.maxY) ?? null;
+}
+
+function trapOf(kind, x, y, z) {
+  if (z !== PLANE) return null;
+  return TRAPS.find((t) => t.kind === kind && t.locs.some(([lx, ly]) => lx === x && ly === y)) ?? null;
+}
+
+/** Wiki (Contact!/Quick guide), matching every recorded hit: 10% of current hitpoints + 10. */
+function trapDamage(hitpoints) {
+  return Math.floor(Math.max(0, hitpoints) / 10) + 10;
+}
+
+function later(ticks, action) {
+  core.TaskManager.submit(new (class extends core.Task {
+    constructor() { super(ticks, undefined, false); }
+    execute() { this.stop(); action(); }
+  })());
+}
+
+/**
+ * The tile beyond the trap, along its axis, level with the player. From off the floor, the far
+ * side; from on it, towards the clicked loc, or (level with it) out by the nearer edge.
+ */
+function farSide(trap, at, loc) {
+  const horizontal = trap.axis === "x";
+  const p = horizontal ? at.getX() : at.getY();
+  const min = horizontal ? trap.minX : trap.minY;
+  const max = horizontal ? trap.maxX : trap.maxY;
+  let dir;
+  if (p < min) dir = 1;
+  else if (p > max) dir = -1;
+  else {
+    const l = horizontal ? loc[0] : loc[1];
+    dir = l !== p ? Math.sign(l - p) : (p - min <= max - p ? -1 : 1);
+  }
+  const along = dir > 0 ? max + 1 : min - 1;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  return horizontal
+    ? new core.Location(along, clamp(at.getY(), trap.minY, trap.maxY), at.getZ())
+    : new core.Location(clamp(at.getX(), trap.minX, trap.maxX), along, at.getZ());
+}
+
+function crossing(player) {
+  const state = player.getAttribute(CROSSING_ATTRIBUTE);
+  if (!state) return null;
+  if (state.on || core.World.getProcessCycle() - state.cycle <= CROSSING_START_TICKS) return state;
+  player.setAttribute(CROSSING_ATTRIBUTE, null);
+  return null;
+}
+
+function pass(player, trap, loc) {
+  if (!player.isRegistered() || player.getHitpoints() <= 0) return;
+  const live = crossing(player);
+  if (live) {
+    // A second click mid-crossing replaced the walk: carry on to the same tile (Ours: no capture
+    // of a re-click, so no second line or sound).
+    player.getMovementQueue().requestWalk(new core.Location(live.to.x, live.to.y, live.to.z), false);
+    return;
+  }
+  const failed = canFail(player, trap) && random() < FAIL_CHANCE;
+  const at = player.getLocation();
+  const on = trapAt(at.getX(), at.getY(), at.getZ()) === trap;
+  const target = farSide(trap, at, loc);
+  if (failed) {
+    // Rec 101 tick 7904: the line, Ouch! and the release with the first step, the hit the tick
+    // after the last.
+    player.sendMessage(FAIL_MESSAGES[trap.kind]);
+    player.forceChat(SAY);
+    release(player, trap);
+    const steps = Math.max(Math.abs(target.getX() - at.getX()), Math.abs(target.getY() - at.getY()));
+    later(steps, () => hit(player));
+  } else {
+    player.sendMessage(MESSAGES[trap.kind]);
+    player.getPacketSender().sendSound(PASS_SOUND, 255, 0);
+  }
+  const to = { x: target.getX(), y: target.getY(), z: target.getZ() };
+  player.setAttribute(CROSSING_ATTRIBUTE, { trap: trap.name, cycle: core.World.getProcessCycle(), on, to });
+  player.getMovementQueue().requestWalk(target, false);
+}
+
+function canFail(player, trap) {
+  const skill = trap.kind === SPIKE ? core.Skill.AGILITY : core.Skill.THIEVING;
+  return player.getSkillManager().getCurrentLevel(skill) < SAFE_LEVEL;
+}
+
+function hit(player) {
+  if (!player.isRegistered() || player.getHitpoints() <= 0) return;
+  const damage = new core.HitDamage(trapDamage(player.getHitpoints()), core.HitMask.RED).onApplied((taken) => {
+    if (taken > 0) PlayerHitSounds.playOwnHurtSound(player);
+  });
+  player.getCombat().getHitQueue().addPendingDamage([damage]);
+}
+
+function clickTrap(kind, event) {
+  const { player, object } = event;
+  const location = object?.getLocation?.() ?? event.location;
+  if (!player || !location) return false;
+  const x = location.getX();
+  const y = location.getY();
+  const trap = trapOf(kind, x, y, location.getZ());
+  if (!trap) return false;
+  const pending = pendingSetOff.get(player);
+  if (pending) pending.queued.push(() => pass(player, trap, [x, y]));
+  else if (setOffCycle.get(player) === core.World.getProcessCycle() && clickCycle.get(player) === core.World.getProcessCycle()) {
+    later(2, () => pass(player, trap, [x, y]));
+  }
+  else if (setOffCycle.get(player) === core.World.getProcessCycle()) {
+    passWaiting.add(player);
+    later(1, () => {
+      passWaiting.delete(player);
+      pass(player, trap, [x, y]);
+    });
+  }
+  else pass(player, trap, [x, y]);
+  return true;
+}
+
+/** Object route hook: notes when a trap loc is clicked (it never changes the route). */
+function noteTrapClick({ player, object }) {
+  const at = object?.getLocation?.();
+  if (!player || !at || at.getZ() !== PLANE) return;
+  if (trapOf(SPIKE, at.getX(), at.getY(), at.getZ()) || trapOf(SPEAR, at.getX(), at.getY(), at.getZ())) {
+    clickCycle.set(player, core.World.getProcessCycle());
+  }
+}
+
+function release(player, trap) {
+  const { Animation, CacheDefinitions, Location, MapObjects } = core;
+  const id = CacheDefinitions.getLocId(trap.gameval);
+  const { animation, sound } = RELEASE[trap.kind];
+  const viewers = [player, ...player.getLocalPlayers()];
+  for (const [x, y] of trap.locs) {
+    const loc = MapObjects.get(id, new Location(x, y, PLANE), null);
+    if (!loc) continue;
+    for (const viewer of viewers) viewer.getPacketSender().sendObjectAnimation(loc, new Animation(animation));
+  }
+  player.getPacketSender().sendSound(sound, 255, 0);
+}
+
+function stillOn(player, trap) {
+  const at = player.getLocation();
+  return player.isRegistered() && player.getHitpoints() > 0 && trapAt(at.getX(), at.getY(), at.getZ()) === trap;
+}
+
+function setOff(player, trap) {
+  const pending = pendingSetOff.get(player) ?? { queued: [] };
+  pendingSetOff.set(player, pending);
+  later(SET_OFF_AT, () => {
+    if (pendingSetOff.get(player) === pending) pendingSetOff.delete(player);
+    if (pending.queued.length) later(1, () => pending.queued.forEach((run) => run()));
+    if (!stillOn(player, trap)) return;
+    setOffCycle.set(player, core.World.getProcessCycle());
+    player.sendMessage(MESSAGES.setOff);
+    player.forceChat(SAY);
+    release(player, trap);
+    later(HIT_AT - SET_OFF_AT, () => hitWhenStill(player, HIT_WAIT_LIMIT));
+  });
+}
+
+/** The set-off's hit, on the first tick the player has no step left to take (tasks run before movement). */
+function hitWhenStill(player, waitsLeft) {
+  if (waitsLeft > 0 && player.isRegistered() && (passWaiting.has(player) || player.getMovementQueue().size() > 0)) {
+    later(1, () => hitWhenStill(player, waitsLeft - 1));
+    return;
+  }
+  hit(player);
+}
+
+function enterTrap({ player }) {
+  const at = player.getLocation();
+  const trap = trapAt(at.getX(), at.getY(), at.getZ());
+  if (!trap) return;
+  const state = crossing(player);
+  if (state?.trap === trap.name) {
+    state.on = true;
+    return;
+  }
+  setOff(player, trap);
+}
+
+function leaveTrap({ player }) {
+  player.setAttribute(CROSSING_ATTRIBUTE, null);
+}
+
+module.exports = function registerContactTraps(api) {
+  core = api.core;
+  api.onObjectInteraction("Trap", {
+    Evade: (event) => clickTrap(SPIKE, event),
+    Disable: (event) => clickTrap(SPEAR, event),
+  });
+  api.onObjectRoute(noteTrapClick);
+  for (const t of TRAPS) {
+    const zone = { minX: t.minX, maxX: t.maxX, minY: t.minY, maxY: t.maxY, levels: [PLANE] };
+    api.onZoneEnter(zone, enterTrap);
+    api.onZoneExit(zone, leaveTrap);
+  }
+};
+
+module.exports._test = {
+  TRAPS, trapAt, trapOf, trapDamage, farSide, FAIL_CHANCE, SAFE_LEVEL,
+  setRandom(fn) { random = fn ?? Math.random; },
+};

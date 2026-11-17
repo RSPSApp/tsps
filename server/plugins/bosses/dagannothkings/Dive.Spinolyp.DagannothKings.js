@@ -97,8 +97,8 @@ function denyWater(event) {
   const { attacker, target } = event;
   if (!attacker?.isPlayer?.() || !target?.isNpc?.()) return;
   if (!Common.isSubmerged(target)) return;
-  attacker.sendMessage("You can't attack this npc.");
   event.allow = false;
+  event.message = "You can't attack this npc.";
 }
 
 /** ReasonPS: dive on unblocked damage taken (1/3). */

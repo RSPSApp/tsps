@@ -64,3 +64,23 @@ test("NPC loot without a kill (a pickpocket) is script 7192 per item under the p
   hooks["loot-tracker:add-npc"]({ player, npcId: 3106, items: [] });
   assert.deepEqual(scripts, [[7197, 22, 1, 5, -1], [7192, 5730, 2, 5318, 3], [7192, 5730, 2, 5096, 1], [7192, 3106, 3, 22521, 1]]);
 });
+
+test("loc loot (a stall) is script 7193 with the loc, a key and its category, then 7194 per item, from the same count", () => {
+  const { hooks, player, scripts } = fixture();
+  // rsprox 1001517 (rev 241): a herb patch's 7197 took 9363 and the next tin rock's 7193 9364.
+  hooks["loot-tracker:add"]({ player, source: 38, category: 11, items: [] });
+  hooks["loot-tracker:add-loc"]({ player, locId: 11730, category: 6, items: [[1891, 1]] });
+  hooks["loot-tracker:add-npc"]({ player, npcId: 3106, items: [[995, 3]] });
+  assert.deepEqual(scripts, [[7197, 38, 1, 11, -1], [7193, 11730, 2, 6, -1], [7194, 11730, 2, 1891, 1], [7192, 3106, 3, 995, 3]]);
+});
+
+test("loc loot with nothing found, or without a player, loc or category, sends nothing and takes no key", () => {
+  const { hooks, player, scripts, attributes } = fixture();
+  hooks["loot-tracker:add-loc"]({ player, locId: 11730, category: 6, items: [] });
+  hooks["loot-tracker:add-loc"]({ player, locId: 11730, category: 6, items: [[1891, 0]] });
+  hooks["loot-tracker:add-loc"]({ player, category: 6, items: [[1891, 1]] });
+  hooks["loot-tracker:add-loc"]({ player, locId: 11730, items: [[1891, 1]] });
+  hooks["loot-tracker:add-loc"]({ locId: 11730, category: 6, items: [[1891, 1]] });
+  assert.deepEqual(scripts, []);
+  assert.equal(attributes.get("loot-tracker:next-key"), undefined);
+});

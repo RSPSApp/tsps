@@ -85,6 +85,8 @@ export type ShopServerPayload =
           buyMode?: number;
           sellMode?: number;
           stock: ShopStockEntryMessage[];
+          /** The live shop inventory id the stock is shown under (an infinite shop's draws no counts); 516 when absent. */
+          inventoryId?: number;
       }
     | {
           kind: "slot";
@@ -154,6 +156,7 @@ export type ShopWindowState = {
     buyMode: number;
     sellMode: number;
     stock: ShopStockEntryMessage[];
+    inventoryId?: number;
 };
 
 export type TradeOfferEntryMessage = {

@@ -29,6 +29,8 @@ runtime.startTranscript = (api, player, npcId, page, variant) => {
   return true;
 };
 const register = require('../plugins/quests/quests/ObservatoryQuest.Quest');
+// The stairs' warning is the WarningScreens plugin's (cws_warning_9, 560).
+const attachWarningScreens = require('../plugins/world/warningscreens/Screens.WarningScreens');
 
 const N = core.NpcIdentifiers;
 const I = core.ItemIdentifiers;
@@ -223,6 +225,7 @@ function setup({ realWire = false, realTranscript = false } = {}) {
   const saved = runtime.startTranscript;
   if (realTranscript) runtime.startTranscript = originalStartTranscript;
   try { register(api); } finally { runtime.startTranscript = saved; }
+  attachWarningScreens(api);
   const quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'observatory_quest');
 
   const variant = (npcId) => {

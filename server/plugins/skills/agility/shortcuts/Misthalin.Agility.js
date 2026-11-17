@@ -21,7 +21,7 @@ module.exports = {
       const southward = pos.y >= pivot;
       return [
         { sound: 2489 },
-        { msg: "You try to squeeze past." },
+        { msg: { spam: "You try to squeeze past." } },
         {
           move: [obj.x, southward ? obj.y - 1 : obj.y + 1],
           anim: southward ? ShortcutAnim.JUTTING_WALL_LEFT : ShortcutAnim.JUTTING_WALL_RIGHT,

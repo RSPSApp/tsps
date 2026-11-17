@@ -14,6 +14,7 @@ const { DuelState } = require("../dist/game/content/Duelling");
 const DuelArena = require("../plugins/minigames/DuelArena.plugin");
 
 let core;
+let harnessApi;
 const hooks = {};
 const custom = {};
 const emitted = [];
@@ -32,6 +33,7 @@ before(async () => {
       custom[name]?.(payload);
     },
   }, { get: (target, key) => (key in target ? target[key] : on(String(key))) });
+  harnessApi = api;
   // DuelArena first: this harness keeps one handler per core hook, and the Ironman rules below
   // must be the ones that answer.
   DuelArena.register(api);
@@ -224,6 +226,18 @@ test("attacking an npc someone else damaged warns once about kill credit", () =>
   assert.deepEqual(iron.messages, ["As an Ironman, you might not receive kill-credit for this monster."]);
 });
 
+test("a rule for every mode says \"As an Ironman\" to each of them, as the cache's own lines tell Group and Ultimate Ironmen", () => {
+  for (const mode of ["group", "group-hardcore", "group-unranked", "ultimate"]) {
+    const player = account(`plain-${mode}`, mode);
+    const shop = { player, available: 4, original: 0, limit: 4, message: null };
+    custom["shop:buy-limit"](shop);
+    assert.equal(shop.message, "As an Ironman, you can only buy the shop's own stock.");
+    const stake = { player, allow: true, message: null };
+    custom["duelarena:can-stake"](stake);
+    assert.equal(stake.message, "As an Ironman, you cannot take part in a staked duel.");
+  }
+});
+
 test("shops sell an Ironman only their own stock", () => {
   const iron = account("iron", "ironman");
   const stocked = { player: iron, available: 15, original: 10, limit: 15, message: null };
@@ -239,7 +253,7 @@ test("shops sell an Ironman only their own stock", () => {
 
 test("Ironmen may only place single-bond buy offers", () => {
   assert.equal(typeof custom["ge:offer-confirmed"], "function", "Ironman offer listener is registered");
-  for (const mode of ["ironman", "ultimate", "hardcore"]) {
+  for (const mode of ["ironman", "ultimate", "hardcore", "group"]) {
     const player = account(`ge-${mode}`, mode);
     for (const [itemId, sell, quantity, allowed] of [
       [core.ItemIdentifiers.OLD_SCHOOL_BOND, false, 1, true],
@@ -252,7 +266,7 @@ test("Ironmen may only place single-bond buy offers", () => {
       const request = { player, itemId, sell, quantity, accepted: true };
       custom["ge:offer-confirmed"](request);
       assert.equal(request.accepted, allowed, `${mode}: ${itemId}/${sell}/${quantity}`);
-      assert.deepEqual(player.messages, allowed ? [] : ["Ironmen can only buy one bond per Grand Exchange offer."]);
+      assert.deepEqual(player.messages, allowed ? [] : ["As an Ironman, you can only buy one bond per Grand Exchange offer."]);
     }
     const priorVeto = { player, itemId: core.ItemIdentifiers.OLD_SCHOOL_BOND, sell: false, quantity: 1, accepted: false };
     custom["ge:offer-confirmed"](priorVeto);
@@ -295,7 +309,7 @@ test("a Hardcore Ironman's dangerous death makes them a standard Ironman; a safe
   assert.equal(hcim.getAttribute("ironman:mode"), "ironman");
   assert.deepEqual([hcim.varbits.get(1777), hcim.varbits.get(5403), hcim.varbits.get(1776)], [1, 1, 1]);
   assert.ok(hcim.varbits.get(5405) > 8000, "the downgrade date in days since 27 Feb 2002");
-  assert.deepEqual(hcim.messages, ["You have fallen as a Hardcore Ironman. You are now a standard Ironman."]);
+  assert.deepEqual(hcim.messages, ["You have fallen as a Hardcore Ironman, your Hardcore status has been revoked."]);
 });
 
 test("an Ironman gets no combat experience from fighting players", () => {
@@ -309,6 +323,17 @@ test("an Ironman gets no combat experience from fighting players", () => {
   const cooking = { player: iron, skill: core.Skill.COOKING, experience: 40, allow: null };
   hooks.onCanGainExperience(cooking);
   assert.equal(cooking.allow, null);
+});
+
+test("a Group Ironman gets an eighth of the combat experience from fighting players (Wiki)", () => {
+  const gim = account("gim", "group");
+  const target = account("pker");
+  target.isPlayer = () => true;
+  gim.getCombat = () => ({ getTarget: () => target });
+  const event = { player: gim, skill: core.Skill.STRENGTH, experience: 40, allow: null, multiplier: 1 };
+  hooks.onCanGainExperience(event);
+  assert.equal(event.allow, null);
+  assert.equal(event.multiplier, 1 / 8);
 });
 
 test("loot from a player an Ironman kills is registered to the fallen player, out of the Ironman's reach", () => {
@@ -632,6 +657,111 @@ test("Ironmen use GE only for single-bond buys, with safe collection", async t =
     await selectBuy(f, I.OLD_SCHOOL_BOND); await confirm(f);
     assert.equal(placed(f).length, 1, "legal purchase after PIN");
   });
+});
+
+// --- Group Ironman ------------------------------------------------------------------------------
+
+/** Stands in for the Grouping plugin: `groups` lists each Group Ironman group's login names. */
+function groupsOf(groups) {
+  // Earlier tests load every plugin through the PluginManager, which points the Ironman units at it.
+  require("../plugins/modes/ironman/Common.Ironman").init(harnessApi);
+  custom["grouping:same-group"] = (query) => {
+    const name = (who) => (typeof who === "string" ? who : who.getUsername()).toLowerCase();
+    const found = groups.find((members) => members.includes(name(query.player)));
+    query.same = Boolean(found?.includes(name(query.other)));
+    query.ironman = query.same;
+  };
+}
+
+test("::ironman group makes a Group Ironman: varbit 1777 = 4, the Group storage chests and icon 41", () => {
+  const gim = account("gim", "group");
+  assert.equal(gim.getAttribute("ironman:mode"), "group");
+  assert.equal(gim.varbits.get(1777), 4, "the cache's enum 859: 4 is Group Ironman");
+  assert.equal(gim.varbits.get(13677), 2, "bank_chest_access 2 shows the Group storage chests");
+  const icon = { player: gim, icon: null };
+  custom["account:chat-icon"](icon);
+  assert.equal(icon.icon, 41);
+  const query = { player: gim, mode: "none" };
+  custom["ironman:mode"](query);
+  assert.deepEqual([query.mode, query.label], ["group", "Group Ironman"]);
+  hooks["command:ironman"]({ player: gim, parts: ["ironman", "none"] });
+  assert.equal(gim.varbits.get(13677), 0, "a regular account sees the stools again");
+});
+
+test("Group Ironmen trade with their group mates; anyone else is told the Wiki's line", () => {
+  const gim = account("gim", "group");
+  const mate = account("mate", "group");
+  const stranger = account("stranger", "group");
+  const main = account("main");
+  groupsOf([["gim", "mate"], ["stranger"]]);
+  const request = (player, target) => {
+    const event = { player, target, handled: false };
+    hooks.onTradeRequest(event);
+    const window = { player, target, allow: null };
+    hooks.onCanTrade(window);
+    return [event.handled, window.allow];
+  };
+  assert.deepEqual(request(gim, mate), [false, null]);
+  assert.deepEqual(request(mate, gim), [false, null]);
+  assert.deepEqual(gim.messages, []);
+
+  assert.deepEqual(request(gim, stranger), [true, false]);
+  assert.equal(gim.messages[0], "You are a Group Ironman. You can only trade members of your group.");
+  assert.deepEqual(request(main, gim), [true, false]);
+  assert.equal(main.messages[0], "gim is a Group Ironman. He can only trade members of their group.");
+  const iron = account("iron", "ironman");
+  groupsOf([["gim", "iron"]]);
+  assert.deepEqual(request(gim, iron), [true, false], "a standard Ironman is never a group mate");
+});
+
+test("a Group Ironman takes group mates' drops and loot from kills only group mates helped with", () => {
+  const gim = account("gim", "group");
+  const mate = account("mate", "group");
+  const helper = account("helper");
+  groupsOf([["gim", "mate"]]);
+  const pick = (owner) => {
+    const event = { player: gim, groundItem: { getOwner: () => owner }, handled: false };
+    hooks.onGroundItemPickup(event);
+    return event.handled;
+  };
+  assert.equal(pick("mate"), false, "a group mate's drop");
+  assert.equal(pick("helper"), true, "anyone else's still isn't theirs");
+
+  const mates = { player: gim, drops: [{ id: 995 }], damagers: [gim, mate] };
+  custom["npc-drops:roll"](mates);
+  assert.equal(mates.drops.length, 1);
+  const mixed = { player: gim, drops: [{ id: 995 }], damagers: [gim, mate, helper] };
+  custom["npc-drops:roll"](mixed);
+  assert.deepEqual(mixed.drops, [], "an outsider's help still means no loot");
+
+  gim.isPlayer = () => true;
+  gim.messages.length = 0;
+  const npc = { isNpc: () => true, getCombat: () => ({ getRecentDamagers: () => [mate] }) };
+  hooks.onCanAttack({ attacker: gim, target: npc, allow: null });
+  assert.deepEqual(gim.messages, [], "no kill-credit warning for a group mate's damage");
+});
+
+test("a Group Ironman can loot a group mate they kill in the Wilderness", () => {
+  const gim = account("gim", "group");
+  const mate = account("mate", "group");
+  const outsider = account("outsider");
+  groupsOf([["gim", "mate"]]);
+  const drop = (fallen) => {
+    const event = { player: fallen, killer: gim, item: { id: 4151 }, location: {}, dropEligible: true, suppressDefaultDrop: false, handled: false };
+    const manager = core.ItemOnGroundManager;
+    const original = manager.registerLocation;
+    manager.registerLocation = () => {};
+    try {
+      hooks.onPlayerDeathItemDrop(event);
+    } finally {
+      manager.registerLocation = original;
+    }
+    const owner = { player: fallen, killer: gim, owner: gim };
+    custom["player-death:loot-owner"](owner);
+    return [event.suppressDefaultDrop, owner.owner === gim];
+  };
+  assert.deepEqual(drop(mate), [false, true]);
+  assert.deepEqual(drop(outsider), [true, false]);
 });
 
 test('new mainland characters choose an account type without enabling Tutorial Island',async t=>{

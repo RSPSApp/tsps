@@ -74,6 +74,8 @@ const MESSAGE = {
   DESTROY_QUESTION: "Are you sure you want to destroy the bag?",
   DESTROY_FULL: "If you destroy it, the contents will be lost.",
   DESTROY_EMPTY: "The bag is empty. Are you sure you want to destroy it?",
+  ALREADY_OWNED: "You already have a looting bag.",
+  NO_TELEGRAB: "You can't telegrab a looting bag.",
 };
 const pendingDeaths = new WeakMap();
 const depositing = new WeakSet();
@@ -87,6 +89,16 @@ const bagItems = (bag) => (bag?.getMetaValue?.(BAG_DATA) ?? []).filter((item) =>
 );
 const setBagItems = (bag, items) => bag.setMetaValue(BAG_DATA, items);
 const bagFor = (player) => player.getInventory().getValidItems().find(isBag);
+
+/** "group-ironman:wipe-tradeables" { player }: a leaver who stays a ranked Group Ironman loses what is in a looting bag (Wiki); the bag stays. Every bag, carried or banked. */
+function wipeForGroupIronman({ player }) {
+  const containers = [player.getInventory(), ...(player.getBanks?.() ?? [])].filter(Boolean);
+  for (const container of containers) {
+    for (const item of container.getItems()) {
+      if (isBag(item) && bagItems(item).length) setBagItems(item, []);
+    }
+  }
+}
 const itemKey = (item) => `${item.getId()}:${JSON.stringify(item.getMeta?.() ?? null)}`;
 const entryKey = (entry) => `${entry.id}:${JSON.stringify(entry.meta ?? null)}`;
 const isStackable = (id) => ItemDefinition.forId(id).isStackable();
@@ -387,6 +399,35 @@ function destroyBag(event) {
   event.handled = true;
 }
 
+/**
+ * Wiki: "Only one looting bag can be in a player's possession at a time" - carried or banked, open
+ * or closed (the Agility dispenser's bag goes only to a player without one "in their inventory or
+ * bank"). The bank's search tab only mirrors the other tabs.
+ */
+function ownsBag(player) {
+  const banks = (player.getBanks?.() ?? []).filter((bank, tab) => bank && tab !== core.Bank.BANK_SEARCH_TAB_INDEX);
+  return [player.getInventory(), ...banks].some((container) => container.getValidItems().some(isBag));
+}
+
+/** "looting-bag:owned" `{ player, owned }`: whether the player already has a bag, for what hands one out. */
+function answerOwned(request) {
+  if (request?.player && ownsBag(request.player)) request.owned = true;
+}
+
+/** A second bag stays on the floor. */
+function refuseSecondBag(event) {
+  if (event.allow === false || !isBag(event.groundItem?.getItem?.()) || !ownsBag(event.player)) return;
+  event.allow = false;
+  event.player.sendMessage(MESSAGE.ALREADY_OWNED);
+}
+
+/** Wiki: the bag "cannot be picked up with Telekinetic Grab". Refused at the cast, before any runes go. */
+function refuseTelegrab(event) {
+  if (event.allow === false || !isBag(event.groundItem?.getItem?.())) return;
+  event.allow = false;
+  event.player.sendMessage(MESSAGE.NO_TELEGRAB);
+}
+
 /** An open bag in the Wilderness takes what is picked up, unless it is a supply the player keeps out. */
 function pickUp(event) {
   const { player } = event;
@@ -408,6 +449,32 @@ function pickUp(event) {
 function bankViewing(player) {
   const { Bank } = core;
   return Bank.isOpen(player) && player.getPacketSender().getVarbit(Bank.VIEW_CONTAINER_VARBIT) === BANK_VIEW;
+}
+
+/** The bag's contents each player's client was last sent for the bank, slot by slot. */
+const sentToBank = new WeakMap();
+
+/**
+ * Bank.REFRESHED_EVENT: the bank's inventory panel gives the bag its "View" op only while the
+ * client holds something in inv looting_bag (bankside script 296 looks through it before it builds
+ * each slot's ops, 297); without it the bag has the Deposit ops alone and nothing can be taken out.
+ * So the contents go out with the bank's own items, whenever they differ from what was last sent:
+ * on opening, when the bag is withdrawn, and emptied once the bag is gone.
+ */
+function syncBankContents({ player }) {
+  if (!core.Bank.isOpen(player)) return;
+  const bag = bagFor(player);
+  const items = bag ? bagItems(bag) : [];
+  const signature = items.map((entry) => `${entry.id}x${entry.amount}`).join(",");
+  if (sentToBank.get(player) === signature) return;
+  sentToBank.set(player, signature);
+  player.getPacketSender().sendInventory(BAG_INVENTORY, BAG_SIZE, items, core.Bank.MAIN_INTERFACE_ID);
+}
+
+/** Bank.OPENED_EVENT: a newly opened bank is always told, whatever an earlier one was sent. */
+function bankOpened({ player }) {
+  sentToBank.delete(player);
+  syncBankContents({ player });
 }
 
 function bankComponents() {
@@ -597,10 +664,16 @@ module.exports = {
     api.onPlayerLogin(sendSettings);
     api.onCustomEvent("storage:contents", answerContents);
     api.onCustomEvent("looting-bag:store", storeLoot);
+    api.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
     api.onCustomEvent("destroy-item:prompt", destroyPrompt);
     api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, viewInBank);
     api.onCustomEvent("bank:empty-containers", emptyContainers);
+    api.onCustomEvent(core.Bank.OPENED_EVENT, bankOpened);
+    api.onCustomEvent(core.Bank.REFRESHED_EVENT, syncBankContents);
     api.onGroundItemPickup(pickUp);
+    api.onCustomEvent("ground-items:take", refuseSecondBag);
+    api.onCustomEvent("magic:can-telekinetic-grab", refuseTelegrab);
+    api.onCustomEvent("looting-bag:owned", answerOwned);
     api.onItemOnItem(useItemOnBag);
     api.onItemAction("Looting bag", { Open: openBag, Close: closeBag, Check: checkBag, Deposit: depositOption, Settings: settings });
     api.onItemDropPolicy(destroyBag);
@@ -610,5 +683,5 @@ module.exports = {
     api.onPlayerDeathItemDrop(dropOnDeath);
     api.onPlayerDefeated(giveToKiller);
   },
-  _test: { bagItems, canStore, isBag, store, storeLoot, depositChoices, room, valueText, settings, settingClicked, sendSettings, STORE_ALL_ATTRIBUTE, SKIP_SUPPLIES_ATTRIBUTE },
+  _test: { bagItems, canStore, isBag, ownsBag, store, storeLoot, depositChoices, room, valueText, settings, settingClicked, sendSettings, STORE_ALL_ATTRIBUTE, SKIP_SUPPLIES_ATTRIBUTE },
 };

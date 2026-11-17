@@ -97,6 +97,9 @@ class Game {
     this.collapsing = false;
     this.warned = false;
     this.rocks = new Map();
+    /** The boulders the team's size puts in the channels (central, then west, then east). */
+    this.boulders = [];
+    /** The central boulder, kept for the recorded behaviour and older callers. */
     this.boulder = null;
     /** Locs placed over the cache map, by "x,y,z,type". */
     this.placed = new Map();

@@ -8,7 +8,23 @@ import type { HelperNpc, HelperWidget, ReadonlyClientSnapshot } from "./QuestHel
 import { hintArrow } from "../../HintArrow";
 const MAX_WIDGETS = 12000;
 
-export function collectWidgetTree(node: WidgetNode, manager: WidgetManager, emitted = new Set<WidgetNode>()): HelperWidget {
+/** One widget a walk read, kept to tell on the next tick whether anything the walk saw changed. */
+type WalkedWidget = {
+    node: WidgetNode;
+    out: HelperWidget;
+    rawHidden: boolean | undefined;
+    children: WidgetNode["children"];
+    /** The dynamic children array's slots as walked, and which of them the walk took. */
+    slots?: (WidgetNode | null)[];
+    taken?: boolean[];
+};
+type WidgetWalk = { structureVersion: number; widgets: HelperWidget[]; walked: WalkedWidget[] };
+const lastWalk = new WeakMap<WidgetManager, WidgetWalk>();
+
+const isDynamicChildOf = (child: WidgetNode | null | undefined, parent: WidgetNode): boolean =>
+    !!child && child.parentUid === parent.uid && ((child.childIndex ?? -1) >= 0 || child.fileId === -1);
+
+export function collectWidgetTree(node: WidgetNode, manager: WidgetManager, emitted = new Set<WidgetNode>(), walked?: WalkedWidget[]): HelperWidget {
     const path = new Set<WidgetNode>();
     let count = 0;
     const visit = (current: WidgetNode): HelperWidget | null => {
@@ -21,10 +37,10 @@ export function collectWidgetTree(node: WidgetNode, manager: WidgetManager, emit
             const staticChildren = manager.getStaticChildrenByParentUid(current.uid);
             // Preserve the native sparse runtime array. The manager's dense accessor
             // intentionally strips null slots and IF1 references for rendering.
-            const dynamicChildren = Array.from(current.children ?? [], child => child &&
-                child.parentUid === current.uid && ((child.childIndex ?? -1) >= 0 || child.fileId === -1)
-                ? visit(child) : null);
-            return {
+            const slots = current.children ? Array.from(current.children, child => child ?? null) : undefined;
+            const taken = slots?.map(child => isDynamicChildOf(child, current));
+            const dynamicChildren = (slots ?? []).map((child, i) => taken![i] ? visit(child!) : null);
+            const out: HelperWidget = {
                 id: current.id ?? current.uid, runtimeId: current.uid, index: current.childIndex ?? -1,
                 parentId: current.parentUid, fileId:current.fileId, groupId:current.groupId, originalX: current.rawX, originalY: current.rawY,
                 originalWidth: current.rawWidth, originalHeight: current.rawHeight,
@@ -37,10 +53,64 @@ export function collectWidgetTree(node: WidgetNode, manager: WidgetManager, emit
                 staticChildren: staticChildren.map(visit), dynamicChildren,
                 nestedChildren: mounted ? manager.getAllGroupRoots(mounted.group).map(visit) : [],
             };
+            walked?.push({ node: current, out, rawHidden: current.hidden, children: current.children, slots, taken });
+            return out;
         } finally { path.delete(current); }
     };
     return visit(node)!;
 }
+/**
+ * Whether every widget the last walk read still reads the same. The shape (groups, mounts,
+ * static children, registered widgets) is covered by WidgetManager.structureVersion; the fields
+ * are compared here directly, since scripts, packets, layout and plugins all write them.
+ */
+function walkStillHolds(walk: WidgetWalk, manager: WidgetManager): boolean {
+    if (walk.structureVersion !== manager.structureVersion) return false;
+    for (const { node: n, out: o, rawHidden, children, slots, taken } of walk.walked) {
+        // Any hidden flag in the tree feeds isEffectivelyHidden of everything under it.
+        if (n.hidden !== rawHidden || n.children !== children) return false;
+        if (slots) {
+            const now = n.children!;
+            if (now.length !== slots.length) return false;
+            for (let i = 0; i < slots.length; i++) {
+                const child = now[i] ?? null;
+                if (child !== slots[i] || isDynamicChildOf(child, n) !== taken![i]) return false;
+            }
+        }
+        const b = o.bounds!;
+        if (o.id !== (n.id ?? n.uid) || o.runtimeId !== n.uid || o.index !== (n.childIndex ?? -1) || o.parentId !== n.parentUid
+            || o.fileId !== n.fileId || o.groupId !== n.groupId || o.originalX !== n.rawX || o.originalY !== n.rawY
+            || o.originalWidth !== n.rawWidth || o.originalHeight !== n.rawHeight || o.animationId !== (n.sequenceId ?? n.modelAnim)
+            || o.modelId !== n.modelId || o.name !== (n.opBase ?? n.dataText) || o.spriteId !== n.spriteId || o.type !== n.type
+            || o.text !== n.text || b.x !== (n._absX ?? n.x) || b.y !== (n._absY ?? n.y) || b.width !== (n._absWidth ?? n.width)
+            || b.height !== (n._absHeight ?? n.height) || o.itemId !== n.itemId || o.itemQuantity !== (n.itemQuantity ?? n.itemAmount))
+            return false;
+    }
+    return true;
+}
+
+/**
+ * The loaded widget tree. While nothing the last walk read has changed, the same array comes
+ * back, so its reuse digest is not recomputed either (SnapshotReuse.prepare).
+ */
+export function collectHelperWidgets(manager: WidgetManager): HelperWidget[] {
+    const previous = lastWalk.get(manager);
+    // A manager without the counter (test doubles) is walked every time.
+    const cacheable = typeof manager.structureVersion === "number";
+    if (cacheable && previous && walkStillHolds(previous, manager)) return previous.widgets;
+    const groups = new Set([manager.rootInterface, ...[...manager.interfaceParents.values()].map(parent => parent.group)]);
+    const visited = new Set<WidgetNode>();
+    const widgets: HelperWidget[] = [];
+    const walked: WalkedWidget[] = [];
+    for (const group of groups)
+        for (const root of manager.getAllGroupRoots(group))
+            if (!visited.has(root))
+                widgets.push(collectWidgetTree(root, manager, visited, walked));
+    // Read after the walk: getAllGroupRoots may fill its cache on the way, which is no change.
+    if (cacheable) lastWalk.set(manager, { structureVersion: manager.structureVersion, widgets, walked });
+    return widgets;
+}
+
 export function collectHelperNpc(client: OsrsClient, index: number): HelperNpc {
     const ecs = client.npcEcs;
     const id = baseNpcTypeId(ecs.getNpcTypeId(index));
@@ -96,14 +166,7 @@ export function collectQuestHelperSnapshot(client: OsrsClient, tick: number, sce
         throw new Error("NPC snapshot exceeds the safety bound."); npcs.push(collectHelperNpc(client, index)); });
     const objects = collectHelperSceneObjects(client, scene);
     const itemSlots = (inventory: OsrsClient["inventory"]) => inventory.getSlots().filter(slot => slot.itemId >= 0 && slot.quantity > 0).map(slot => ({ id: slot.itemId, quantity: slot.quantity, slot: slot.slot }));
-    const manager = client.widgetManager;
-    const groups = new Set([manager.rootInterface, ...[...manager.interfaceParents.values()].map(parent => parent.group)]);
-    const visited = new Set<WidgetNode>();
-    const widgets: HelperWidget[] = [];
-    for (const group of groups)
-        for (const root of manager.getAllGroupRoots(group))
-            if (!visited.has(root))
-                widgets.push(collectWidgetTree(root, manager, visited));
+    const widgets = collectHelperWidgets(client.widgetManager);
     const gender=client.playerEcs.getAppearance?.(playerIndex)?.gender;
     return { hintArrowNpcIndex:hintArrow.type===1?hintArrow.npcId:-1, varps, varbits, varbitDefinitions, gender, inventory: itemSlots(client.inventory), equipment: itemSlots(client.equipment), bank: itemSlots(client.lastKnownBank), localPlayer: { index:client.controlledPlayerServerId, name: client.localPlayerName, gender, x: tile.tileX, y: tile.tileY, plane: client.playerEcs.getLevel(playerIndex), animation: client.playerEcs.getAnimActionSeqId(playerIndex), poseAnimation: client.playerEcs.getAnimMovementSeqId(playerIndex), orientation: client.playerEcs.getRotation(playerIndex), interactingIndex: client.playerEcs.getInteractionIndex(playerIndex) }, skills, npcs, objects, groundItems: client.groundItems.getAllStacks().map(item => ({ id: item.itemId, quantity: item.quantity, x: item.tile.x, y: item.tile.y, plane: item.tile.level })), widgets, baseX: scene.baseX, baseY: scene.baseY, plane: scene.plane, tick, instanceTemplateChunks: scene.instanceTemplateChunks ? scene.instanceTemplateChunks.map(plane => plane.map(row => [...row])) : undefined };
 }

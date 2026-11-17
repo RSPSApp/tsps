@@ -199,6 +199,11 @@ export class Item {
         return !this.isUntradeable() && this.getDefinition().isTradeable();
     }
 
+    /** Tradeable between players (the Wiki's "tradeable"), Grand Exchange or not: see ItemDefinition.isPlayerTradeable. */
+    public isPlayerTradeable(): boolean {
+        return !this.isUntradeable() && this.getDefinition().isPlayerTradeable();
+    }
+
     public isSellable(): boolean {
         return !this.isUntradeable() && this.getDefinition().isSellable();
     }

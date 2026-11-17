@@ -37,6 +37,9 @@ module.exports = function registerElementalWorkshopIQuest(api) {
   // EW2 stage 6 = both schematics taken, crane claw not made yet.
   const EW2_MACHINERY_STAGE = 6;
   const EW2_JIG_ATTRIBUTE = "quest.elemental_workshop_ii.jig";
+  const EW2_FLAGS_ATTRIBUTE = "quest.elemental_workshop_ii.flags";
+  /** EW2's FLAG_CRANE_SCHEMATIC_TAKEN. */
+  const EW2_CRANE_SCHEMATIC_TAKEN = 1 << 5;
 
   const BIT = {
     readBook: 1 << 1,
@@ -131,10 +134,23 @@ module.exports = function registerElementalWorkshopIQuest(api) {
 
   /** EW2's crane-claw leg: its workbench must win the metal bar handoff. */
   function ew2NeedsCraneClaw(player) {
-    if (questStage(player, EW2_KEY) !== EW2_MACHINERY_STAGE) return false;
+    const stage = questStage(player, EW2_KEY);
+    // Stage 5 (hatch open) is still part of the schematics leg: the crane schematic can be
+    // taken before the lever one advances the stage, and using metal then must offer the claw
+    // rather than consume the bar as an EW I shield (issue #5739).
+    if (stage < 1 || stage > EW2_MACHINERY_STAGE) return false;
     if (has(player, ItemIdentifiers.CRANE_CLAW)) return false;
     const jig = Number(player.getAttribute(EW2_JIG_ATTRIBUTE)) || 0;
-    return ((jig >> 7) & 3) === 0;
+    if (((jig >> 7) & 3) !== 0) return false;
+    const flags = Number(player.getAttribute(EW2_FLAGS_ATTRIBUTE)) || 0;
+    return (flags & EW2_CRANE_SCHEMATIC_TAKEN) !== 0 || has(player, ItemIdentifiers.CRANE_SCHEMATIC);
+  }
+
+  function ew2CanMakeElementalHelmet(player) {
+    if (!has(player, ItemIdentifiers.BEATEN_BOOK)) return false;
+    const request = { player, key: EW2_KEY, complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
   }
 
   function setBit(player, bit, enabled = true) {
@@ -375,10 +391,9 @@ module.exports = function registerElementalWorkshopIQuest(api) {
       return;
     }
     if (objectId === WORKBENCH && itemId === ItemIdentifiers.ELEMENTAL_METAL) {
-      // EW2's crane claw is made from the same bar on the same workbench. Yield only
-      // while EW2 is on its schematics stage, still needs the claw and the crane is
-      // un-repaired, so its registered handler (and choice) runs.
-      if (ew2NeedsCraneClaw(player)) return;
+      // EW2 owns the unfinished claw choice and completed players following the
+      // beaten book's elemental helmet recipe; all other bars keep the EW I shield path.
+      if (ew2NeedsCraneClaw(player) || ew2CanMakeElementalHelmet(player)) return;
       if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < 20) {
         player.sendMessage("You need level 20 Smithing to work elemental metal.");
       } else if (!has(player, ItemIdentifiers.HAMMER)) {

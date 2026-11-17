@@ -4,14 +4,17 @@ import { NPC } from '../../entity/impl/npc/NPC';
 import { Mobile } from '../../entity/impl/Mobile';
 import { Location } from '../Location';
 import { PluginManager } from '../../../plugins/PluginManager';
+import { PluginContext } from '../../../plugins/PluginContext';
 
 export abstract class Area {
     private boundaries: Boundary[];
     private npcs: { [key: number]: NPC } = {};
     private players: { [key: number]: Player } = {};
     private playerBots: { [key: number]: any } = {};
-    /** Set by api.registerArea; pluginperf reports this area's methods under it. */
-    public pluginName: string | null = null;
+    /** The plugin whose code built this area (as a Task records it), so an instance area a plugin enters
+     * directly without api.registerArea still runs its hooks as that plugin; api.registerArea sets it too.
+     * pluginperf reports this area's methods under it. */
+    public pluginName: string | null = PluginContext.current();
 
     constructor(boundaries?: Boundary[]) {
         this.boundaries = boundaries;
@@ -84,6 +87,11 @@ export abstract class Area {
         return null;
     }
 
+    /** Asked only of the target's area before a new freeze. Only false vetoes; neutral/true keep canonical checks. */
+    canFreeze(target: Mobile, source: Mobile | null): boolean | null {
+        return null;
+    }
+
     /** Explicitly allows or refuses spell targeting, including non-combat puzzle NPCs. */
     canCastOnNpc(player: Player, npc: NPC, spell: any): boolean | null {
         return null;
@@ -117,6 +125,16 @@ export abstract class Area {
      * combat-level and tolerance checks).
      */
     npcAggression(player: Player, npc: NPC): boolean | null {
+        return null;
+    }
+
+    /**
+     * An area may make a native aggressive towards `player` although its definition does not say so (the
+     * Ape Atoll creatures in human form). `aggressive` passes the definition's aggression flag; `ignoreCombatLevel`
+     * also lifts the combat-level gate (isAggressiveTo). The tolerance timer and the aggression range always
+     * still apply. null (the default for every area) changes nothing.
+     */
+    npcAggressionOverride(player: Player, npc: NPC): { aggressive: boolean; ignoreCombatLevel?: boolean } | null {
         return null;
     }
 

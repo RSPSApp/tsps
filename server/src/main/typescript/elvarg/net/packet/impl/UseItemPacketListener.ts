@@ -1,3 +1,4 @@
+import { ObjectDefinition } from "../../../game/definition/ObjectDefinition";
 import { MapObjects } from "../../../game/entity/impl/object/MapObjects";
 import { World } from "../../../game/World";
 import { Location } from "../../../game/model/Location";
@@ -24,6 +25,14 @@ export class UseItemPacketListener {
     if (!usedItem || !usedWithItem || !this.canUse(player, usedItem.getId(), usedWithItem.getId())) {
       return;
     }
+
+    // Using one inventory item on another is an inventory item interaction, so it is a hard
+    // interruption like the item options (osrs-docs: Entity Interactions - Interruptions): a chop,
+    // a fishing spot or a queued walk-to ends before the use starts its own action (rsprox
+    // captures: local 1000464 ticks 1057, 1278, 7250, logs used on a banker's note mid-chop, no
+    // log follows and the player clicks the tree again; 83, 86, 89, a knife on logs mid-chop). An
+    // item used on its own slot is dropped by live, chop and all (local 1000464, tick 474).
+    if (usedItemSlot !== usedWithSlot) player.clearPendingAction?.();
 
     PluginManager.emitItemOnItem({
       player,
@@ -63,6 +72,8 @@ export class UseItemPacketListener {
 
     const useItem = () => {
       if (!MapObjects.stillStands(player, objectId, objectLocation, object)) return;
+      // The item was checked at the click; dropped, banked or moved during the walk, the use is gone.
+      if (player.getInventory().getItems()[itemSlot]?.getId() !== itemId) return;
       player.getMovementQueue().reset();
       player.getMovementQueue().walkToReset();
       player.setPositionToFace(object.getLocation());
@@ -70,6 +81,7 @@ export class UseItemPacketListener {
       const handled = PluginManager.emitItemOnObject({
         player,
         object,
+        definition: ObjectDefinition.forPlayer(object.getId(), player) ?? undefined,
         objectId: object.getId(),
         item,
         itemId,

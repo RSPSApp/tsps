@@ -659,3 +659,75 @@ test('a save from before the varbits keeps its progress', (t) => {
   assert.equal(lastVarbit(p, STATE.VARBIT.BOW), 7);
   assert.equal(lastVarbit(p, 217), 4);
 });
+
+for (const [falls, energy, stamina] of [[false, 5000, false], [true, 5000, false], [false, 200, false], [false, 0, false], [false, 500, false], [true, 5000, true]]) {
+  test(`rock jumps spend exactly five percent once: fall=${falls}, energy=${energy}, stamina=${stamina}`, (t) => {
+    Shipwreck._test.setFallRoll(() => falls);
+    t.after(() => Shipwreck._test.setFallRoll(() => Math.random() < 0.1));
+    const p = actor(t, { x: 3604, y: 3550, stage: 4 });
+    p.getSkillManager().setCurrentLevel(core.Skill.AGILITY, 25, false);
+    p.setRunEnergyUnits(energy);
+    if (stamina) p.setAttribute('potions:stamina:end', Date.now() + 120000);
+    const debits = [], sent = [];
+    const add = p.addRunEnergyUnits.bind(p), send = p.getPacketSender().sendRunEnergy.bind(p.getPacketSender());
+    t.mock.method(p, 'addRunEnergyUnits', (units) => { if (units < 0) debits.push(units); return add(units); });
+    t.mock.method(p.getPacketSender(), 'sendRunEnergy', () => { sent.push(p.getRunEnergyUnits()); return send(); });
+    const jump = () => Shipwreck.jumpToRock({ player: p, location: { x: 3604, y: 3550, z: 0 } });
+    assert.equal(jump(), true);
+    assert.equal(p.getRunEnergyUnits(), Math.max(0, energy - 500), 'charged on the actual leap, not after landing');
+    assert.equal(sent[0], Math.max(0, energy - 500), 'the client sees the debit immediately');
+    jump(); // an input while the actual obstacle owns the player cannot spend again
+    assert.deepEqual(debits, [-500]);
+    tick(6);
+    assert.equal(p.getLocation().getX(), 3602);
+    assert.deepEqual(debits, [-500], 'completion/fall never spends twice');
+  });
+}
+
+test('rock jumps do not debit a refused or canceled approach', (t) => {
+  const p = actor(t, { x: 3606, y: 3550, stage: 4 });
+  p.setRunEnergyUnits(5000);
+  p.getSkillManager().setCurrentLevel(core.Skill.AGILITY, 24, false);
+  const event = { player: p, location: { x: 3604, y: 3550, z: 0 } };
+  assert.equal(Shipwreck.jumpToRock(event), true);
+  assert.equal(p.getRunEnergyUnits(), 5000);
+  p.getSkillManager().setCurrentLevel(core.Skill.AGILITY, 25, false);
+  assert.equal(Shipwreck.jumpToRock(event), true);
+  assert.equal(p.getRunEnergyUnits(), 5000, 'walking to take-off is not a jump yet');
+  core.TaskManager.cancelTasks(p);
+  assert.equal(p.getRunEnergyUnits(), 5000, 'real task cancellation before take-off is free');
+  assert.equal(p.getAttribute('agility.obstacle'), null);
+});
+
+for (const startX of [3606, 3604]) {
+  test(`rock jump normal logout preserves cancellation and committed debit from ${startX}`, (t) => {
+    Shipwreck._test.setFallRoll(() => false);
+    t.after(() => Shipwreck._test.setFallRoll(() => Math.random() < 0.1));
+    const p = actor(t, { x: startX, y: 3550, stage: 4 });
+    p.getSkillManager().setCurrentLevel(core.Skill.AGILITY, 25, false);
+    p.setRunEnergyUnits(5000);
+    Shipwreck.jumpToRock({ player: p, location: { x: 3604, y: 3550, z: 0 } });
+    PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
+    // Existing quest logout handlers cancel player-key tasks before Agility fast-forward.
+    assert.equal(p.getLocation().getX(), startX === 3606 ? 3605 : 3604);
+    assert.equal(p.getRunEnergyUnits(), startX === 3606 ? 5000 : 4500);
+    assert.equal(p.getAttribute('agility.obstacle'), null);
+    PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
+    assert.equal(p.getRunEnergyUnits(), startX === 3606 ? 5000 : 4500);
+  });
+}
+
+for (const startX of [3606, 3604]) {
+  test(`rock jump explicit forced landing completes its five-percent debit once from ${startX}`, (t) => {
+    const p = actor(t, { x: startX, y: 3550, stage: 4 });
+    p.getSkillManager().setCurrentLevel(core.Skill.AGILITY, 25, false);
+    p.setRunEnergyUnits(5000);
+    Shipwreck.jumpToRock({ player: p, location: { x: 3604, y: 3550, z: 0 } });
+    const runner = require('../plugins/skills/agility/ObstacleRunner.Agility');
+    runner.completeNow(p);
+    assert.equal(p.getLocation().getX(), 3602);
+    assert.equal(p.getRunEnergyUnits(), 4500);
+    runner.completeNow(p);
+    assert.equal(p.getRunEnergyUnits(), 4500);
+  });
+}

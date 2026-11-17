@@ -219,13 +219,19 @@ function actor(t, x = 3222, y = 3218) {
   assert.equal(core.World.getPlayers().add(p), true);
   const connection = new ClientConnection(channel); connection.player = p;
   session.setTurnPacketProcessor(() => connection.processTurnPackets());
-  const views = []; streams.set(p, views);
+  const views = [], wire = []; streams.set(p, views);
+  const send = session.sendClientPacket.bind(session);
+  session.sendClientPacket = frame => {
+    if (Buffer.isBuffer(frame) && frame[0] === 20 && session.playerSyncState?.updateBlocks?.length)
+      wire.push({ tick: core.World.getProcessCycle(), frame: Buffer.from(frame), blocks: session.playerSyncState.updateBlocks.map(block => Buffer.from(block)) });
+    return send(frame);
+  };
   t.after(() => {
     core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex());
     if (p.isRegistered()) core.World.getPlayers().remove(p);
     core.World.refreshActiveRegions();
   });
-  return { p, session, connection, views };
+  return { p, session, connection, views, wire };
 }
 function schedule(player, action) {
   const task = new core.Task(1, player);
@@ -348,4 +354,21 @@ test('codec keeps ordinary walking/running defaults and gives reset-path127 prec
   assert.equal(walkOverride.movement.opcode, 2); assert.equal(walkOverride.block.temporaryType, 1);
   assert.equal(walkOverride.state.movementTypes.get(1), 2);
   assert.equal(encode(2, { temporaryMovementType: 1, resetPath: true }).block.temporaryType, 127);
+});
+
+test('partial-waypoint traversal records successful one-tile progress within a two-tile budget', async t => {
+  const { run } = require('../plugins/skills/agility/ObstacleRunner.Agility');
+  for (const opted of [false, true]) await t.test(opted ? 'explicit RUN traversal' : 'unchanged default traversal', t => {
+    const f = actor(t); turn(); turn(); const x = f.p.getLocation().getX(), y = f.p.getLocation().getY();
+    schedule(f.p, () => run({ player: f.p, core }, [{
+      walk: [[x + 1, y], [x + 3, y]], tilesPerTick: 2,
+      ...(opted ? { traversalType: 2 } : {}),
+    }], { agility: true }));
+    turn(); const wire = f.wire.find(row => row.tick === core.World.getProcessCycle()); assert.ok(wire);
+    assert.deepEqual(wire.frame.subarray(15, 15 + wire.frame.readUInt16BE(13)), Buffer.concat(wire.blocks));
+    assert.deepEqual([f.p.getLocation().getX(), f.p.getLocation().getY()], [x + 1, y]);
+    assert.equal(readMovement(wire.blocks[0]).opcode, 1, 'one-tile geometry stays one-tile');
+    const block = wire.blocks[1] ? readBlock(wire.blocks[1]) : {};
+    assert.equal(block.temporaryType, opted ? 2 : undefined, 'the successful waypoint pass owns its explicit traversal');
+  });
 });

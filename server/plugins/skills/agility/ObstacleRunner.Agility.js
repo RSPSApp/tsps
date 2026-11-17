@@ -259,7 +259,7 @@ function createObstacleTask(Task) {
           if (stepped >= this.walkTilesPerTick) { this.recordWalkTraversal(stepped); return; }
           continue;
         }
-        if (stepped > 0) return;
+        if (stepped > 0) { this.recordWalkTraversal(stepped); return; }
         this.walkPath.shift();
       }
       this.walkPath = null;

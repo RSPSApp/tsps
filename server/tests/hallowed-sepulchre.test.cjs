@@ -39,6 +39,7 @@ before(async () => {
     onNpcsInteraction() {},
     onInterfaceActionClick() {},
     onInterfaceActionButton() {},
+    onCustomEvent() {},
     onPlayerDeathDrops() {},
     onObjectRoute: (handler) => { hooks.route = handler; },
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),

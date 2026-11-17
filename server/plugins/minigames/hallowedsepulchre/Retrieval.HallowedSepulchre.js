@@ -5,8 +5,9 @@
  * A later unsafe death deletes the old lot.
  *
  * The interface and record format are the same as Torfinn's (Retrieval.Vorkath.js): items are
- * stacks with their metadata, and Take moves what fits. Unlike Torfinn there is no fee, so the
- * interface opens paid and Take works at once.
+ * stacks with their metadata, and Take moves what fits. The Item Retrieval Service charges the
+ * Stranger's 25,000-coin fee (Wiki) through the shared `gravestones:pay-fee` contract; cache
+ * enum 1753 gives his unpaid/paid if1 states 29/30.
  */
 const Tools = require("./Tools.HallowedSepulchre");
 const Run = require("./Run.HallowedSepulchre");
@@ -14,15 +15,19 @@ const Run = require("./Run.HallowedSepulchre");
 const ATTR = "hallowed-sepulchre:retrieval";
 const OWNER = "hallowed-sepulchre";
 const MAX_STACK = 2147483647;
+const FEE = 25000;
 const INV = 525;
 const SLOTS = 120;
-const IF1 = { paid: 6, empty: -1 };
+/** Enum 1753: the Stranger's own unpaid/paid if1 states (29/30), not Torfinn's 5/6. */
+const IF1 = { unpaid: 29, paid: 30, empty: -1 };
+const PAID_SCRIPT = 3478;
 const MODAL = 0;
 const MAIN_MODAL_OPEN = 2524;
 const TAKE_OP = 2;
 const EXAMINE_OP = 10;
 const EVENTS = (1 << 2) | (1 << 9) | (1 << 10);
 const EMPTY_LINE = "I do not have anything for you. If I did have any of your items, but you died before collecting them, they'll now be lost.";
+const CANNOT_PAY = "You don't have enough coins with you or in your bank to pay the fee.";
 
 let api = null;
 let core = null;
@@ -79,7 +84,7 @@ function deathDrops(event) {
   const lost = records([...event.items, ...event.untradeables]);
   event.items.length = 0;
   event.untradeables.length = 0;
-  setHeld(player, { items: lost });
+  setHeld(player, { items: lost, paid: false });
 }
 
 function isOpen(player) {
@@ -108,12 +113,30 @@ function open(player) {
   const sender = player.getPacketSender();
   sender.sendInterfaceRemoval();
   sender.sendConfig(VARP.if2, 0);
-  sender.sendConfig(VARP.if1, IF1.paid);
+  sender.sendConfig(VARP.if1, lot.paid ? IF1.paid : IF1.unpaid);
   sender.sendInventory(INV, SLOTS, lot.items);
   sender.sendInterfaceScript(MAIN_MODAL_OPEN, [-1, -1]);
   sender.sendSubInterface(COMPONENT.mainModal, COMPONENT.items >>> 16, MODAL);
   sender.sendInterfaceFlagsRange(COMPONENT.items, 0, SLOTS - 1, EVENTS);
   sender.sendString(summary(lot.items), COMPONENT.discard);
+}
+
+/** Pays the 25,000 coins through the shared gravestones fee contract; payment stays on the lot. */
+function pay(player, lot) {
+  const request = { player, amount: FEE, office: false, source: null, message: null };
+  api.emitCustomEvent("gravestones:pay-fee", request);
+  if (!request.source) {
+    player.sendMessage(CANNOT_PAY);
+    return false;
+  }
+  if (request.message) player.sendMessage(request.message);
+  lot.paid = true;
+  setHeld(player, lot);
+  const sender = player.getPacketSender();
+  sender.sendConfig(VARP.if1, IF1.paid);
+  sendContents(player, lot);
+  sender.sendInterfaceScript(PAID_SCRIPT, [FEE, 0]);
+  return true;
 }
 
 /** Moves as much of `entry` as fits; returns whether any moved. */
@@ -145,7 +168,8 @@ function button({ player }) {
   if (!isOpen(player)) return;
   const lot = held(player);
   if (!lot) return false;
-  takeAll(player, lot);
+  if (!lot.paid) pay(player, lot);
+  else takeAll(player, lot);
 }
 
 function clickItem(event) {
@@ -161,6 +185,10 @@ function clickItem(event) {
     return;
   }
   if (op !== TAKE_OP) return;
+  if (!lot.paid) {
+    pay(player, lot);
+    return;
+  }
   takeEntry(player, entry);
   finishTaking(player, lot);
 }
@@ -178,6 +206,22 @@ function collect({ player, npc, definition }) {
   return true;
 }
 
+/** Generic read-only view of what the Stranger holds (clue capacity and the like). */
+function retrievalItems(request) {
+  for (const { id, amount } of held(request.player)?.items ?? []) request.items.push({ itemId: id, amount });
+}
+
+/**
+ * "group-ironman:wipe-tradeables" { player, lost(id, amount) }: a leaver who stays a ranked
+ * Group Ironman loses what the Stranger holds that they lose (Wiki, Group Ironman Mode).
+ */
+function wipeForGroupIronman({ player, lost }) {
+  const lot = held(player);
+  if (!lot || typeof lost !== "function") return;
+  const left = lot.items.filter((entry) => !(entry && lost(entry.id, entry.amount)));
+  if (left.length !== lot.items.length) setHeld(player, { ...lot, items: left });
+}
+
 function attachRetrieval(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
@@ -193,6 +237,11 @@ function attachRetrieval(pluginApi) {
   pluginApi.onNpcsInteraction(["Mysterious Stranger"], { Collect: collect });
   pluginApi.onInterfaceActionButton(COMPONENT.button, button);
   pluginApi.onInterfaceActionButton(COMPONENT.items, clickItem);
+  pluginApi.onCustomEvent("item-retrieval:items", retrievalItems);
+  pluginApi.onCustomEvent("group-ironman:wipe-tradeables", wipeForGroupIronman);
 }
 
-module.exports = { attachRetrieval, held, open, collect, button, clickItem, deathDrops, inside, ATTR };
+module.exports = {
+  attachRetrieval, held, open, collect, button, clickItem, deathDrops, inside,
+  pay, retrievalItems, wipeForGroupIronman, FEE, ATTR,
+};

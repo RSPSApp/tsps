@@ -80,22 +80,42 @@ test("room for it all takes the prize", (t) => {
 });
 
 test("a native chest take displays the captured coin objectbox and Continue closes it", async t => {
-  const f = gamesActor(t), scene = gamesHouse(f);
+  const owner = gamesActor(t), f = gamesActor(t), scene = gamesHouse(owner);
+  scene.house.enter(f.p);
   const chest = scene.house.furnitureEntries().find(entry => entry.furniture.buildableKey === "OAK_PRIZE_CHEST").furniture;
   const object = scene.house.furnitureObjects.find(candidate => {
     const at = candidate.getLocation();
     return scene.house.getFurnitureAt({ x: at.getX(), y: at.getY(), z: at.getZ() }, candidate.getId(), candidate.getType()) === chest;
   });
   const at = object.getLocation();
+  const nearby = gamesActor(t), outside = gamesActor(t), upstairs = gamesActor(t);
+  scene.house.enter(nearby.p); scene.house.enter(upstairs.p);
+  nearby.p.moveTo(new core.Location(at.getX() + 2, at.getY(), at.getZ()));
+  outside.p.moveTo(new core.Location(at.getX(), at.getY(), at.getZ()));
+  upstairs.p.moveTo(new core.Location(at.getX(), at.getY(), at.getZ() + 1));
+  const sounds = new Map();
+  for (const actor of [f, nearby, outside, upstairs]) {
+    const calls = []; sounds.set(actor, calls);
+    const sender = actor.p.getPacketSender(), send = sender.sendAreaSound.bind(sender);
+    t.mock.method(sender, "sendAreaSound", (...args) => { calls.push(args); return send(...args); });
+  }
   f.p.moveTo(new core.Location(at.getX() - 1, at.getY(), at.getZ()));
   f.p.setNeedsPlacement(false);
   const key = require("../plugins/skills/construction/Ids.Construction").obj("poh_prize_key");
+  const clickChest = async () => {
+    await f.connection.dispatch([{ type: "object_option", id: object.getId(), x: at.getX(), y: at.getY(), clickType: 1 }]);
+    f.connection.processTurnPackets();
+    for (let n = 0; n < 6; n++) {
+      f.p.getMovementQueue().process(); core.TaskManager.processWalkTo(f.p.getIndex()); gameTicks(1);
+    }
+  };
+  await clickChest();
+  assert.equal(scene.house.save.prize, 1000);
+  assert.equal(f.p.getInventory().getAmount(I.COINS), 0);
+  assert.notEqual(f.p.getAnimation()?.getId(), 8778, "a guest without a key gets no opening pose");
+  for (const calls of sounds.values()) assert.deepEqual(calls, []);
   f.p.getInventory().adds(key, 1);
-  await f.connection.dispatch([{ type: "object_option", id: object.getId(), x: at.getX(), y: at.getY(), clickType: 1 }]);
-  f.connection.processTurnPackets();
-  for (let n = 0; n < 6 && scene.house.save.prize > 0; n++) {
-    f.p.getMovementQueue().process(); core.TaskManager.processWalkTo(f.p.getIndex()); gameTicks(1);
-  }
+  await clickChest();
   assert.equal(scene.house.save.prize, 0);
   assert.equal(f.p.getInventory().getAmount(I.COINS), 1000);
   assert.equal(f.p.getInventory().getAmount(key), 0);
@@ -103,9 +123,20 @@ test("a native chest take displays the captured coin objectbox and Continue clos
   assert.ok(dialogue instanceof core.ItemStatementDialogue);
   assert.equal(dialogue.getItemId(), core.CacheDefinitions.getObjId("coins_100"));
   assert.equal(dialogue.getText(), "You take the prize.");
+  assert.equal(f.p.getAnimation()?.getId(), 8778, "captured opening pose survives the objectbox presentation");
+  const expectedSound = [[52, at.getX(), at.getY(), at.getZ(), 1, undefined, 5, undefined]];
+  assert.deepEqual(sounds.get(f), expectedSound);
+  assert.deepEqual(sounds.get(nearby), expectedSound, "nearby house occupant receives the chest-position sound");
+  assert.deepEqual(sounds.get(outside), [], "same coordinates outside the private house hear nothing");
+  assert.deepEqual(sounds.get(upstairs), [], "another plane hears nothing");
   await f.connection.dispatch([{ type: "dialogue_continue", widgetId: (193 << 16) | 0, childIndex: 0 }]);
   f.connection.processTurnPackets();
   assert.equal(f.p.getDialogueManager().getCurrent(), undefined);
+  f.p.performAnimation(new core.Animation(-1));
+  await clickChest();
+  assert.notEqual(f.p.getAnimation()?.getId(), 8778, "reopening without a key does not play successful feedback");
+  assert.deepEqual(sounds.get(f), expectedSound);
+  assert.deepEqual(sounds.get(nearby), expectedSound);
 });
 
 // Registered games-room entry and real house/menu/task lifecycle. The house and equipment are

@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, DialogueChainBuilder, Inventory, Item, ItemIdentifiers, ItemStatementDialogue, StatementDialogue } = require("./Core.Construction");
+const { api, Animation, DialogueChainBuilder, Inventory, Item, ItemIdentifiers, ItemStatementDialogue, Sounds, StatementDialogue } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 
@@ -14,6 +14,10 @@ const COINS = ItemIdentifiers.COINS;
 const PRIZE_MODEL = Ids.obj("coins_100");
 const PRIZE_KEY = Ids.obj("poh_prize_key");
 const KEY_SOUND = 933;
+// rsprox229/02745 tick126: human_openheavychest and chest_open at the chest, range5.
+const OPEN_ANIMATION = 8778;
+const OPEN_SOUND = 52;
+const OPEN_SOUND_RANGE = 5;
 const CHEST_LIMITS = { OAK_PRIZE_CHEST: 20000, TEAK_PRIZE_CHEST: 50000, MAHOGANY_PRIZE_CHEST: 100000 };
 const GAME_NAMES = {
   darts: "the winner of the darts game",
@@ -84,6 +88,9 @@ function open(event) {
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new ItemStatementDialogue(0, PRIZE_MODEL, "You take the prize.")
   ));
+  player.performAnimation(new Animation(OPEN_ANIMATION));
+  Sounds.playAreaSound({ soundId: OPEN_SOUND, x: event.location.x, y: event.location.y,
+    level: event.location.z, loops: 1, radius: OPEN_SOUND_RANGE, source: player });
   return true;
 }
 

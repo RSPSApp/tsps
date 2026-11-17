@@ -346,9 +346,9 @@ test('LOTG early route walks 2 -> 4 -> 6 -> 8 -> 10 through Zanik, Grubfoot and 
   h.action(p, N.OLDAK, '8mebE2');
   assert.equal(h.quest.getStage(p), 10);
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2617, 9797]);
+  // The cave entrance (loc 2, mcannoncave) is LocTeleports' captured crawl to (2620, 9797), not this quest's.
   p.moveTo(new core.Location(2624, 3393, 0));
-  object(h, p, 2);
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2617, 9797], 'cave entrance enters the real goblin cave');
+  assert.equal(object(h, p, 2).handled, undefined, 'the quest leaves the cave entrance to LocTeleports');
 });
 
 test('LOTG potion needs no equipment and the temple route reaches freed Zanik', () => {

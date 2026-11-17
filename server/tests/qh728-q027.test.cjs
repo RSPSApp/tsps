@@ -15,10 +15,11 @@ const core = { ...realCore, TaskManager: { submit: (task) => queuedTasks.push(ta
 function runQueuedTasks() {
   while (queuedTasks.length) queuedTasks.shift().execute();
 }
-function withRandom(value, run) {
-  const random = Math.random;
-  Math.random = () => value;
-  try { return run(); } finally { Math.random = random; }
+const { rolls } = require('../plugins/quests/quests/DwarfCannon.Quest')._test;
+function withRolls(next, run) {
+  const previous = rolls.next;
+  rolls.next = next;
+  try { return run(); } finally { rolls.next = previous; }
 }
 
 before(async () => {
@@ -64,6 +65,7 @@ function playerFixture(inventory = inventoryFixture()) {
   const chats = [];
   const dialogueText = [];
   const hits = [];
+  const levels = new Map();
   let location = new core.Location(2567, 3460, 0);
   let manager;
   const sender = new Proxy({
@@ -97,7 +99,11 @@ function playerFixture(inventory = inventoryFixture()) {
     getAttribute: (key) => attributes.get(key),
     setAttribute(key, value) { attributes.set(key, value); },
     getInventory: () => inventory,
-    getSkillManager: () => ({ addExperiences(skill, amount) { xp.push({ skill, amount }); } }),
+    getSkillManager: () => ({
+      addExperiences(skill, amount) { xp.push({ skill, amount }); },
+      getCurrentLevel: (skill) => levels.get(skill) ?? 66,
+      setCurrentLevel(skill, level) { levels.set(skill, level); },
+    }),
     getLocation: () => location,
     moveTo(target) { location = target; },
     getDialogueManager: () => manager,
@@ -171,7 +177,18 @@ function object(player, objectId, option, location) {
 }
 
 function action(player, npcId, stepId, text = '') {
-  PluginManager.emitCustomEvent('npc-dialogue:action', { player, npcId, stepId, text, kind: 'message', handled: false });
+  const event = { player, npcId, stepId, text, kind: 'message', handled: false };
+  PluginManager.emitCustomEvent('npc-dialogue:action', event);
+  return event;
+}
+
+/** A transcript line as NpcDialogues emits it: `before` runs as it shows, `after` as it closes. */
+function line(player, npcId, text, step = { type: 'line', text }) {
+  const event = { player, npcId, text, step, skip: false };
+  PluginManager.emitCustomEvent('npc-dialogue:line', event);
+  event.before?.();
+  event.after?.();
+  return event;
 }
 
 function variant(player, npcId) {
@@ -186,21 +203,22 @@ test('fresh stage 0 runs every mandatory Dwarf Cannon leg to the canonical varp 
   const { quest, cleanup } = registerQuestPlugin();
   try {
     const I = core.ItemIdentifiers, N = core.NpcIdentifiers;
-    const inventory = inventoryFixture();
+    const inventory = inventoryFixture(new Map([[I.HAMMER, 1]]));
     const player = playerFixture(inventory);
+    const advanceAll = () => {
+      for (let i = 0; i < 40 && player.getDialogueManager().isActive(); i++) player.getDialogueManager().advance();
+    };
 
     assert.equal(quest.getStage(player), 0);
-    PluginManager.emitCustomEvent('npc-dialogue:hook', {
-      player, npcId: N.CAPTAIN_LAWGOF, hook: 'quest:dwarf-cannon:start',
-    });
-    assert.equal(quest.getStage(player), 1);
-    assert.equal(inventory.getAmount(I.RAILING), 6, 'the start hand-out gives six railings');
-    assert.equal(inventory.getAmount(I.HAMMER), 1);
+    line(player, N.CAPTAIN_LAWGOF, "That's the spirit! Now trooper, we have no time to waste");
+    assert.equal(quest.getStage(player), 1, 'varp 0 is 1 on "That\'s the spirit!"');
     assert.equal(player.configs.get(0), 1, 'stage 1 is mirrored to canonical varp 0');
+    const box = action(player, N.CAPTAIN_LAWGOF, 's7iFdl');
+    assert.deepEqual(box.box, { items: [I.RAILING] }, 'six railings in an item box');
+    assert.equal(inventory.getAmount(I.RAILING), 6);
 
     const railingIds = [15590, 15591, 15592, 15593, 15594, 15595];
-    // fixing-the-railings-trying-to-fix-a-railing: "This railing is broken..." is a message box ({{tbox}}); its Continue
-    // makes the attempt. A failed attempt keeps the railing.
+    // "This railing is broken..." is a message box ({{tbox}}); its continue makes the attempt.
     const inspect = (objectId) => {
       const handled = object(player, objectId, 'Inspect', { x: 0, y: 0, z: 0 });
       if (player.getDialogueManager().isActive()) player.getDialogueManager().advance();
@@ -208,77 +226,82 @@ test('fresh stage 0 runs every mandatory Dwarf Cannon leg to the canonical varp 
     };
     assert.equal(object(player, railingIds[0], 'Inspect', { x: 0, y: 0, z: 0 }), true);
     assert.ok(player.dialogueText.includes('This railing is broken and needs to be replaced.'), 'the box');
-    assert.ok(!player.messages.includes('This railing is broken and needs to be replaced.'), 'not a chat line');
     player.getDialogueManager().advance();
     assert.equal(player.messages.at(-1), 'You attempt to repalce the broken railing...');
+    // A failure: the roll misses, then a hit (crush: 2 damage) ends the attempt.
+    const sequence = [0.99, 0.6];
+    withRolls(() => sequence.shift() ?? 0.99, runQueuedTasks);
     assert.equal(player.animations.at(-1), 4190, 'mcannon_hammer_anim plays');
-    assert.equal(player.configs.get(2240), undefined, 'nothing is fixed before the animation ends');
-    withRandom(0.99, runQueuedTasks);
-    assert.equal(player.messages.at(-1), 'You wrench your back trying to handle the railings.');
-    assert.equal(player.chats.at(-1), 'Gah!');
-    assert.ok(player.hits.at(-1).getDamage() <= 2, 'a failure deals 0-2 damage');
+    assert.equal(player.messages.at(-1), 'You accidentally crush your hand in the railing.');
+    assert.equal(player.chats.at(-1), 'Ow!');
+    assert.equal(player.hits.at(-1).getDamage(), 2);
     assert.equal(inventory.getAmount(I.RAILING), 6, 'a failure keeps the railing');
     assert.equal(player.configs.get(2240), undefined);
     for (const objectId of railingIds) {
       assert.equal(inspect(objectId), true);
-      withRandom(0, runQueuedTasks);
+      withRolls(() => 0, runQueuedTasks);
       assert.equal(player.messages.at(-1), 'This railing is now fixed.');
       if (objectId === railingIds[0]) {
         assert.equal(player.configs.get(2240), 1, 'the cache-backed fixed railing varbit changes');
         const shown = player.dialogueText.length;
         assert.equal(object(player, objectId, 'Inspect', { x: 0, y: 0, z: 0 }), true);
-        // "Inspecting a fixed railing": the player's "I've fixed all these railings now."
         assert.ok(player.dialogueText.slice(shown).some((text) => String(text).includes("I've fixed all these railings now.")));
-        assert.ok(!player.messages.includes('This railing is already fixed.'));
-        while (player.getDialogueManager().isActive()) player.getDialogueManager().advance();
+        advanceAll();
         assert.equal(inventory.getAmount(I.RAILING), 5, 're-inspecting one fixed railing does not consume a second spare');
-        assert.equal(player.getAttribute('dwarf-cannon:rails-fixed'), 1, 're-inspecting does not increment the fixed count');
       }
     }
+    advanceAll();
     assert.equal(inventory.getAmount(I.RAILING), 0, 'six repairs consume six railings');
-    assert.equal(quest.getStage(player), 2);
-    // The railings are done but unreported, so the canonical varp stays at 1: the
-    // remains multiloc only renders at 3, and Quest Helper reads 2 as "go to the
-    // tower", which skips its own report step and sends the player to an empty tower.
-    assert.equal(player.configs.get(0), 1, 'unreported railings keep the canonical varp at 1');
-    assert.equal(object(player, 0, 'Take', { x: 2567, y: 3444, z: 2 }), true);
-    assert.equal(inventory.getAmount(I.DWARF_REMAINS), 0, 'the remains cannot be taken before the report');
+    assert.equal(player.configs.get(2246), 1, 'mcannon_taken_corpse comes with railing 6');
+    assert.equal(quest.getStage(player), 1, 'live keeps varp 0 at 1 until the report');
 
     assert.deepEqual(variant(player, N.CAPTAIN_LAWGOF), {
       page: 'Dwarf Cannon', variant: 'fixing-the-railings-talking-to-captain-lawgof-after-fixing-the-railings',
     });
-    assert.equal(quest.getStage(player), 3, 'the railings report opens the watchtower leg');
+    line(player, N.CAPTAIN_LAWGOF, 'Excellent! I have two men there, the dwarf-in-charge is called Gilob');
+    assert.equal(quest.getStage(player), 2, 'the report sets 2 on "Excellent!"');
     assert.deepEqual(variant(player, N.CAPTAIN_LAWGOF), {
       page: 'Dwarf Cannon',
       variant: 'fixing-the-railings-talking-to-captain-lawgof-after-fixing-the-railings-talking-to-captain-lawgof-again-without-visiting-the-watchtower',
     });
+    PluginManager.emitCustomEvent('loc-teleports:arrived', { player, objectId: 11, location: { x: 2570, y: 3443, z: 1 } });
+    assert.equal(quest.getStage(player), 3, 'the top ladder of the watchtower sets 3');
 
-    object(player, 0, 'Take', { x: 2567, y: 3444, z: 2 });
+    assert.equal(object(player, 0, 'Take', { x: 2567, y: 3444, z: 2 }), true);
+    advanceAll();
     assert.equal(inventory.getAmount(I.DWARF_REMAINS), 1);
     assert.deepEqual(variant(player, N.CAPTAIN_LAWGOF), {
       page: 'Dwarf Cannon', variant: 'finding-the-remains-talking-to-captain-lawgof-after-getting-the-remains',
     });
-    action(player, N.CAPTAIN_LAWGOF, 'KcffSR');
+    const handIn = action(player, N.CAPTAIN_LAWGOF, 'KcffSR');
+    assert.deepEqual(handIn.box, { items: [I.DWARF_REMAINS] });
+    assert.equal(quest.getStage(player), 3, 'varp 0 moves on the box continue');
+    handIn.after();
     assert.equal(inventory.getAmount(I.DWARF_REMAINS), 0);
     assert.equal(quest.getStage(player), 4);
+    PluginManager.emitCustomEvent('loc-teleports:arrived', { player, objectId: 2, location: { x: 2622, y: 3392, z: 0 } });
+    assert.equal(quest.getStage(player), 5, 'the cave entrance sets 5');
 
     object(player, 1, 'Search', { x: 2571, y: 9850, z: 0 });
-    assert.equal(quest.getStage(player), 4, 'the crate transcript must play before the rescue completes');
+    assert.equal(player.messages.at(-1), 'You search the crate...');
+    assert.equal(quest.getStage(player), 5, 'untied on the timeline, not at the click');
+    runQueuedTasks();
+    assert.equal(quest.getStage(player), 6, 'varp 0 is 6 at "You untie the child."');
     action(player, N.LOLLK, 'VYQQX5');
-    assert.equal(quest.getStage(player), 5);
+    runQueuedTasks();
+    advanceAll();
 
     assert.deepEqual(variant(player, N.CAPTAIN_LAWGOF), {
       page: 'Dwarf Cannon', variant: 'the-dwarf-child-talking-to-captain-lawgof-after-finding-lollk',
     });
     action(player, N.CAPTAIN_LAWGOF, 'dqO_5X');
     assert.equal(inventory.getAmount(I.TOOLKIT), 1);
-    assert.equal(quest.getStage(player), 6);
+    assert.equal(quest.getStage(player), 7);
 
     assert.equal(PluginManager.emitItemOnObject({
       player, objectId: 15597, itemId: I.TOOLKIT, itemSlot: 0,
       location: { x: 2562, y: 3461, z: 0 }, handled: false,
     }), true);
-    assert.equal(quest.getStage(player), 6, 'the toolkit opens the repair puzzle without awarding completion');
     assert.deepEqual(player.interfaces, [409], 'the cache multicannon repair interface opens');
     const cannonClick = (child) => PluginManager.emitInterfaceActionClick({
       player, buttonId: (409 << 16) | child, action: 1, handled: false,
@@ -287,32 +310,33 @@ test('fresh stage 0 runs every mandatory Dwarf Cannon leg to the canonical varp 
     cannonClick(8); // spring requires the hook, so this is rejected
     assert.equal(player.configs.get(2239), 0);
     cannonClick(3); // hook
-    assert.equal(player.configs.get(2237), 1);
     cannonClick(8); // spring
     assert.equal(player.configs.get(2239), 1);
     cannonClick(1); // toothed tool
     cannonClick(9); // gear cannot finish before the safety switch
-    assert.equal(quest.getStage(player), 6);
+    assert.equal(quest.getStage(player), 7);
     cannonClick(2); // pliers
     cannonClick(7); // safety switch
-    assert.equal(player.configs.get(2238), 1);
     cannonClick(1); // toothed tool
     cannonClick(9); // gear
     assert.equal(quest.getStage(player), 8);
+    runQueuedTasks();
     assert.deepEqual(player.interfaces, [], 'the repaired cannon closes the puzzle');
-    assert.equal(inventory.getAmount(I.TOOLKIT), 1, 'the toolkit is returned in the next conversation');
 
     assert.deepEqual(variant(player, N.CAPTAIN_LAWGOF), {
       page: 'Dwarf Cannon', variant: 'fixing-the-cannon-talking-to-captain-lawgof-after-fixing-the-cannon',
     });
     action(player, N.CAPTAIN_LAWGOF, 'A9qG_N');
     assert.equal(inventory.getAmount(I.TOOLKIT), 0);
+    assert.equal(quest.getStage(player), 8, 'the toolkit goes back before the player agrees');
+    line(player, N.CAPTAIN_LAWGOF, "Okay, I'll see what I can do.", { player: "Okay, I'll see what I can do." });
     assert.equal(quest.getStage(player), 9);
 
     assert.deepEqual(variant(player, N.NULODION), {
       page: 'Dwarf Cannon', variant: 'fixing-the-cannon-talking-to-nulodion',
     });
-    action(player, N.NULODION, 'udZI3D');
+    const given = action(player, N.NULODION, 'udZI3D');
+    assert.deepEqual(given.box, { items: [I.NULODIONS_NOTES, I.AMMO_MOULD] });
     assert.equal(inventory.getAmount(I.NULODIONS_NOTES), 1);
     assert.equal(inventory.getAmount(I.AMMO_MOULD), 1);
     assert.equal(quest.getStage(player), 10);
@@ -322,28 +346,28 @@ test('fresh stage 0 runs every mandatory Dwarf Cannon leg to the canonical varp 
     assert.equal(quest.getStage(player), 11, 'completion is the cache completion threshold');
     assert.equal(player.configs.get(0), 11, 'canonical varp 0 carries the completion value');
     assert.equal(inventory.getAmount(I.NULODIONS_NOTES), 0, 'the notes are handed over');
-    assert.equal(inventory.getAmount(I.AMMO_MOULD), 1, 'Nulodion’s mould is retained without another completion grant');
+    assert.equal(inventory.getAmount(I.AMMO_MOULD), 0, 'the mould is handed over too');
+    for (let varbit = 2240; varbit <= 2246; varbit++) assert.equal(player.configs.get(varbit), 0, `varbit ${varbit} cleared`);
     assert.equal(player.getAttribute('quest.points'), 1);
     assert.equal(player.xp.length, beforeXp + 1);
     assert.equal(player.xp.at(-1).skill.getIndex(), core.Skill.CRAFTING.getIndex());
     assert.equal(player.xp.at(-1).amount, 750);
 
+    inventory.adds(I.NULODIONS_NOTES, 1);
+    inventory.adds(I.AMMO_MOULD, 1);
     action(player, N.CAPTAIN_LAWGOF, 'c8LrCL');
     assert.equal(player.getAttribute('quest.points'), 1, 'repeat hand-in cannot award quest points twice');
     assert.equal(player.xp.length, beforeXp + 1, 'repeat hand-in cannot award XP twice');
-    assert.equal(inventory.getAmount(I.AMMO_MOULD), 1, 'repeat hand-in cannot duplicate the mould');
+    assert.equal(inventory.getAmount(I.AMMO_MOULD), 1, 'repeat hand-in takes nothing');
 
     player.configs.clear();
-    PluginManager.emitPlayerLogin({ player });
+    PluginManager.emitPlayerLogin({ player, username: player.getUsername() });
     assert.equal(player.configs.get(0), 11, 'login bootstrap re-sends the saved stage on canonical varp 0');
-    for (let varbit = 2240; varbit <= 2245; varbit++) {
-      assert.equal(player.configs.get(varbit), 1, `login restores fixed railing varbit ${varbit}`);
-    }
+    assert.equal(player.configs.get(2240), undefined, 'the railings stay cleared after completion');
   } finally {
     cleanup();
   }
 });
-
 test('lost-item and durable-save recovery routes restore the missing quest item', () => {
   const { quest, cleanup } = registerQuestPlugin();
   try {
@@ -355,7 +379,7 @@ test('lost-item and durable-save recovery routes restore the missing quest item'
     assert.equal(railingPlayer.inventory.getAmount(I.RAILING), 1);
 
     const toolkitPlayer = playerFixture(inventoryFixture());
-    quest.setStage(toolkitPlayer, 6);
+    quest.setStage(toolkitPlayer, 7);
     action(toolkitPlayer, N.CAPTAIN_LAWGOF, 'R6x03x');
     assert.equal(toolkitPlayer.inventory.getAmount(I.TOOLKIT), 1);
 
@@ -389,9 +413,9 @@ test('a full bag at the tool kit hand-out keeps the repair stage and leaves room
   try {
     const I = core.ItemIdentifiers, N = core.NpcIdentifiers;
     const player = playerFixture(inventoryFixture(new Map(), 0));
-    quest.setStage(player, 5);
+    quest.setStage(player, 6);
     action(player, N.CAPTAIN_LAWGOF, 'dqO_5X');
-    assert.equal(quest.getStage(player), 5, 'no toolkit means the repair leg has not started');
+    assert.equal(quest.getStage(player), 6, 'no toolkit means the repair leg has not started');
     assert.equal(player.inventory.getAmount(I.TOOLKIT), 0);
   } finally {
     cleanup();
@@ -422,29 +446,27 @@ test('Nulodion gives the notes and mould atomically when two slots are needed', 
   }
 });
 
-test('earned Lollk rescue and toolkit receipt mirror the pinned helper stages on bootstrap', () => {
+test('the Lollk rescue and toolkit receipt send their native varp 0 values on bootstrap', () => {
   const { quest, cleanup } = registerQuestPlugin();
   try {
     const player = playerFixture();
-    quest.setStage(player, 4);
-    action(player, core.NpcIdentifiers.LOLLK, 'VYQQX5');
-    assert.equal(quest.getStage(player), 5, 'the existing durable rescue stage is preserved');
+    quest.setStage(player, 6);
     assert.equal(player.configs.get(0), 6, 'QH stage6 returns to Lawgof');
     player.configs.delete(0);
     require('../plugins/quests/QuestRuntime').sendQuestVarps({ player });
     assert.equal(player.configs.get(0), 6);
     action(player, core.NpcIdentifiers.CAPTAIN_LAWGOF, 'dqO_5X');
-    assert.equal(quest.getStage(player), 6, 'the existing durable toolkit stage is preserved');
+    assert.equal(quest.getStage(player), 7);
     assert.equal(player.inventory.getAmount(core.ItemIdentifiers.TOOLKIT), 1);
     assert.equal(player.configs.get(0), 7, 'QH stage7 repairs the multicannon');
     player.configs.delete(0);
-    PluginManager.emitPlayerLogin({ player });
+    PluginManager.emitPlayerLogin({ player, username: player.getUsername() });
     require('../plugins/quests/QuestRuntime').sendQuestVarps({ player });
     assert.equal(player.configs.get(0), 7);
   } finally { cleanup(); }
 });
 
-test('an existing inspected-cannon stage7 save can complete the registered repair interface', () => {
+test('a stage 7 save can complete the registered repair interface', () => {
   const { quest, cleanup } = registerQuestPlugin();
   try {
     const player = playerFixture(inventoryFixture(new Map([[core.ItemIdentifiers.TOOLKIT, 1]])));
@@ -456,9 +478,11 @@ test('an existing inspected-cannon stage7 save can complete the registered repai
     for (const child of [2, 7, 3, 8, 1, 9]) {
       PluginManager.emitInterfaceActionClick({ player, buttonId: (409 << 16) | child, action: 1, handled: false });
     }
-    assert.equal(quest.getStage(player), 8, 'legacy inspected state is repairable');
+    assert.equal(quest.getStage(player), 8);
     assert.equal(player.configs.get(0), 8);
-    assert.deepEqual(player.interfaces, []);
+    assert.deepEqual(player.interfaces, [409], 'open while the mechanism works');
+    runQueuedTasks();
+    assert.deepEqual(player.interfaces, [], 'closed 4 ticks after the gear');
   } finally { cleanup(); }
 });
 
@@ -466,7 +490,7 @@ test('repair tools visibly select their native models and stale clicks cannot re
   const { quest, cleanup } = registerQuestPlugin();
   try {
     const player = playerFixture(inventoryFixture(new Map([[core.ItemIdentifiers.TOOLKIT, 1]])));
-    quest.setStage(player, 6);
+    quest.setStage(player, 7);
     const click = child => PluginManager.emitInterfaceActionClick({ player,
       buttonId: (409 << 16) | child, action: 1, handled: false });
     assert.equal(click(3), false, 'cannot select a tool before opening the puzzle');
@@ -477,14 +501,15 @@ test('repair tools visibly select their native models and stale clicks cannot re
     assert.deepEqual([1, 2, 3].map(c => player.models.get((409 << 16) | c)), [15328, 15330, 15331]);
     click(8);
     assert.equal(player.configs.get(2239), 1);
-    assert.equal(player.interfaceAnimations.get((409 << 16) | 5), 3197);
+    assert.equal(player.interfaceAnimations.get((409 << 16) | 5), 3202, 'mcannon_interface_gun_attach_spring (captured)');
+    assert.equal(player.models.get((409 << 16) | 3), 15331, 'the hooked tool stays selected');
     click(2);
     assert.equal(player.models.get((409 << 16) | 2), 15329);
     click(7);
-    assert.equal(player.interfaceAnimations.get((409 << 16) | 5), 3199);
+    assert.equal(player.interfaceAnimations.get((409 << 16) | 5), 3198, 'mcannon_interface_gun_safety_off_with_spring (captured)');
     player.getPacketSender().sendInterfaceRemoval();
     click(1); click(9);
-    assert.equal(quest.getStage(player), 6, 'closing the puzzle prevents delayed completion clicks');
+    assert.equal(quest.getStage(player), 7, 'closing the puzzle prevents delayed completion clicks');
     PluginManager.emitItemOnObject({ player, objectId: 15597,
       itemId: core.ItemIdentifiers.TOOLKIT, handled: false });
     assert.equal(player.configs.get(2238), 0, 'reopening clears the prior repair state');

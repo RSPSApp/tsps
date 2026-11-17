@@ -302,32 +302,46 @@ async function route() {
     }
     for (const railing of RAILINGS) {
       const { varbit } = railing;
-      // The repair succeeds at random (50%, unverified); a failure costs a hit and a retry.
+      // The repair succeeds by Crafting level (Wiki "Railing": 24-59%); a hit ends an attempt, a stat drain swings again.
       for (let attempt = 1; ; attempt += 1) {
+        if ((await observe({ varbits: [varbit] })).varbitValues[varbit] === 1) break; // a resumed run
         if (attempt > 12) fail(`railing ${railing.id} not fixed after 12 attempts`);
         await call("object_option", { player, id: railing.id, x: railing.x, y: railing.y, option: "Inspect" });
+        // "This railing is broken and needs to be replaced." is a message box; its continue makes the attempt.
+        // (A finished attempt can leave its action entry as the open "dialogue", so wait for the box itself.)
+        for (let tick = 0; (await call("dialogue", { player }, { allowError: true }))?.kind !== "statement"; tick += 1) {
+          if (tick >= 40) fail(`no box for railing ${railing.id}`);
+          await call("wait_ticks", { player, ticks: 1 });
+        }
+        // A tick for the box to reach the chatbox, as a client's click would.
+        await call("wait_ticks", { player, ticks: 1 });
+        await call("dialogue_continue", { player }, { allowError: true });
         const after = await waitFor(`railing ${railing.id} attempt`, (o) => o.varbitValues[varbit] === 1 || (o.messages ?? []).some((m) => /tired|cut yourself|crush|wrench/.test(m)), 40, { varbits: [varbit] });
         if (after.varbitValues[varbit] === 1) break;
       }
       if ((await call("dialogue", { player }, { allowError: true }))?.kind) await playDialogue();
     }
-    await expectStage(2);
+    // Live keeps varp 0 at 1 until the report.
+    await expectStage(1);
   });
 
   await step("3 report the railings to Lawgof", async () => {
     await helperSays("Captain Lawgof");
     await talkTo("Captain Lawgof");
-    await expectStage(3);
+    await expectStage(2);
   });
 
   await step("4 take the remains from the watchtower", async () => {
     await helperSays("remains");
     // The tile south of the remains is inside the top floor; north of them is outside the tower.
     await travel({ x: REMAINS.x, y: REMAINS.y - 1, z: REMAINS.z });
+    // The top ladder sets varp 0 to 3, where the remains show.
+    await expectStage(3);
     await call("object_option", { player, id: REMAINS.id, x: REMAINS.x, y: REMAINS.y, option: "Take" });
-    await waitFor("the dwarf remains", (o) => count(o, ITEM.DWARF_REMAINS) === 1, 10);
+    // The player's line comes first; the remains are taken as it closes.
     await waitForDialogue("taking the remains");
     await playDialogue();
+    await waitFor("the dwarf remains", (o) => count(o, ITEM.DWARF_REMAINS) === 1, 10);
   });
 
   await step("5 return the remains to Lawgof", async () => {
@@ -345,7 +359,7 @@ async function route() {
     await call("object_option", { player, id: CRATE.id, x: CRATE.x, y: CRATE.y, option: "Search" });
     await waitForDialogue("the crate containing Lollk");
     await playDialogue();
-    await expectStage(5, 6);
+    await expectStage(6);
   });
 
   await step("7 leave the cave by the mud pile", async () => {
@@ -358,7 +372,7 @@ async function route() {
     await helperSays("Captain Lawgof");
     await travel(LAWGOF_TILE);
     await talkTo("Captain Lawgof");
-    await expectStage(6, 7);
+    await expectStage(7);
     if (count(await observe(), ITEM.TOOLKIT) !== 1) fail("no toolkit");
   });
 
@@ -451,7 +465,8 @@ async function route() {
       notes: count(after, ITEM.NULODIONS_NOTES), ammoMould: count(after, ITEM.AMMO_MOULD), closed: !close.error,
     };
     const r = report.rewards;
-    if (r.questPoints !== 1 || r.craftingXp !== 750 || r.notes !== 0 || r.ammoMould !== 1) fail("rewards are wrong", r);
+    // Lawgof takes the notes and the mould (Wiki "Ammo mould"; rsprox local 1001565).
+    if (r.questPoints !== 1 || r.craftingXp !== 750 || r.notes !== 0 || r.ammoMould !== 0) fail("rewards are wrong", r);
     const h = await call("quest_helper", { player, quest: QUEST });
     if (!h.complete || h.helperStatus !== "complete") fail(`after completion: complete ${h.complete}, helper ${h.helperStatus}`);
   });
@@ -471,7 +486,7 @@ async function route() {
     await call("login", { username: player, password });
     const after = await observe();
     const same = after.varpValues[VARP_STAGE] === 11 && after.varpValues[VARP_QUEST_POINTS] === before.varpValues[VARP_QUEST_POINTS]
-      && after.skills.Crafting.xp === before.skills.Crafting.xp && count(after, ITEM.AMMO_MOULD) === 1;
+      && after.skills.Crafting.xp === before.skills.Crafting.xp;
     if (!same) fail("state changed across the relog", { before: before.varpValues, after: after.varpValues });
     await expectStage(11);
   });

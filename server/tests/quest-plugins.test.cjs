@@ -18824,7 +18824,9 @@ test('boot and map exchanges happen together and cannot strand a cancelled dialo
   const I = api.core.ItemIdentifiers, { DUNSTAN, TENZING } = api.core.NpcIdentifiers;
   const act = (npcId, stepId) => handlers.custom.get('npc-dialogue:action').forEach(h => h({ player, npcId, kind: 'message', stepId }));
   quest.setStage(player,73);items.set(I.CLIMBING_BOOTS,1);items.set(I.IRON_BAR,1);
-  act(DUNSTAN,'V1M373');assert.equal(items.get(I.CLIMBING_BOOTS),1,'cancelling before reward retains materials');
+  // The swap happens on the "You give Dunstan..." box itself (rsprox local 1001800 tick 25101): cancelling after it
+  // keeps the spiked boots, and the later hand-out lines do not take or give again.
+  act(DUNSTAN,'V1M373');assert.equal(items.get(I.CLIMBING_BOOTS),0);assert.equal(items.get(I.SPIKED_BOOTS),1,'one step, nothing stranded');
   act(DUNSTAN,'1TFYaK');act(DUNSTAN,'WryBLk');
   assert.equal(items.get(I.CLIMBING_BOOTS),0);assert.equal(items.get(I.IRON_BAR),0);assert.equal(items.get(I.SPIKED_BOOTS),1);
   items.set(I.BREAD,10);items.set(I.TROUT,10);

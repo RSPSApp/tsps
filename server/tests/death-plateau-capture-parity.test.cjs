@@ -298,8 +298,10 @@ test("the Death Plateau notice (warning 24) opens on the first step into the tra
 test("Tenzing's stile: a step onto it, then human_walk_style over it at cycles 30-94, no message", () => {
   const stile = require("../plugins/skills/data/agility-shortcuts.json").shortcuts.find((shortcut) => shortcut.object === 3730);
   assert.ok(stile, "Stile (Burthorpe)");
-  assert.deepEqual(stile.between.ends, [[2817, 3561, 0], [2817, 3563, 0]]);
-  assert.deepEqual(stile.between.cross, [{ walk: [[2817, 3562, 0]] }, { move: "to", anim: "CLIMB_OVER", delay: 30, speed: [30, 94], ticks: 3 }]);
+  // Behaviour both ways: tests/agility.test.cjs "Tenzing's stile".
+  assert.deepEqual(stile.between.ends, [[2817, 3561, 0], [2817, 3564, 0]]);
+  assert.deepEqual(stile.between.via, [[2817, 3562, 0], [2817, 3563, 0]]);
+  assert.deepEqual(stile.between.cross[1], { move: "via1", anim: "CLIMB_OVER", delay: 30, speed: [30, 94], ticks: 3 });
   assert.equal(stile.end, undefined);
 });
 
@@ -330,6 +332,8 @@ test("a hand-out's item comes with its box, not a continue later (the lost map, 
         return find(steps) ?? [];
       });
     assert.ok(a.log.some((e) => e.name === "sendChatboxInterface" && e.args[0] === 11), "objectbox_double");
+    assert.deepEqual(a.log.filter((e) => e.name === "sendMessage").map((e) => e.args[0]),
+      ["You give Dunstan an iron bar and the climbing boots.", "Dunstan has given you the spiked boots."], "both chat lines with the first box (tick 25101)");
     assert.equal(a.player.getInventory().getAmount(core.ItemIdentifiers.SPIKED_BOOTS), 1);
     assert.equal(a.player.getInventory().getAmount(core.ItemIdentifiers.IRON_BAR), 0);
   });

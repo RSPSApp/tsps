@@ -2185,8 +2185,8 @@
       "name": "Stile (Burthorpe)",
       "object": 3730,
       "level": 1,
-      "note": "Tenzing's stile (1x2), rsprox local 1001676, 1001683 and 1001800 (5 crossings, all northbound): from 2817,3561 a forced step onto the stile (2817,3562), the next tick human_walk_style (839) and exact_move at cycles 30-94 to 2817,3563, busy for 3 ticks, no message",
-      "between": {"ends":[[2817,3561,0],[2817,3563,0]],"cross":[{"walk":[[2817,3562,0]]},{"move":"to","anim":"CLIMB_OVER","delay":30,"speed":[30,94],"ticks":3}]}
+      "note": "Tenzing's stile (1x2, both tiles blocked), rsprox local 1001676, 1001683 and 1001800 (5 crossings, all northbound): from 2817,3561 a forced step onto the stile (2817,3562), the next tick human_walk_style (839) and exact_move at cycles 30-94 to 2817,3563, and when the 3 busy ticks end a step off it to 2817,3564 (1001800 tick 25275); no message. Ours: southbound is the same mirrored (no capture)",
+      "between": {"ends":[[2817,3561,0],[2817,3564,0]],"via":[[2817,3562,0],[2817,3563,0]],"cross":[{"walk":["via0"]},{"move":"via1","anim":"CLIMB_OVER","delay":30,"speed":[30,94],"ticks":3},{"walk":["to"]}]}
     },
     {
       "name": "Rocks (God Wars Dungeon path)",

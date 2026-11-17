@@ -553,7 +553,7 @@ module.exports = function registerDeathPlateauQuest(api) {
    */
   function boxes() {
     const I = ItemIdentifiers;
-    const box = (items, chat = true) => ({ items, chat });
+    const box = (items, chat = true, also = []) => ({ items, chat, also });
     const statement = (chat) => ({ statement: true, chat });
     return new Map([
       ["V7kRZ2", statement(false)], ["iNb2x7", statement(false)], ["fFxxw6", statement(false)],
@@ -567,9 +567,10 @@ module.exports = function registerDeathPlateauQuest(api) {
       ["abx6jE", box([I.COMBINATION])],
       ["aZ5-DY", box([I.CLIMBING_BOOTS])], ["gUxInm", box([I.CLIMBING_BOOTS])],
       ["KZG0PG", box([I.CERTIFICATE_2])], ["VuuQKK", box([I.CERTIFICATE_2])], ["jmuuX8", box([I.CERTIFICATE_2])],
-      ["kH8gZk", box([I.IRON_BAR, I.CLIMBING_BOOTS])], ["V1M373", box([I.IRON_BAR, I.CLIMBING_BOOTS])],
-      ["AuWfYt", box([I.SPIKED_BOOTS])], ["1TFYaK", box([I.SPIKED_BOOTS])],
-      ["_ZbFCb", box([I.SPIKED_BOOTS])], ["JM8S8J", box([I.TROUT, I.BREAD])],
+      // Live sends both chat lines of these two-box hand-overs with the first box (ticks 25101, 25206).
+      ["kH8gZk", box([I.IRON_BAR, I.CLIMBING_BOOTS], true, [SPIKED_BOOTS_LINE])], ["V1M373", box([I.IRON_BAR, I.CLIMBING_BOOTS], true, [SPIKED_BOOTS_LINE])],
+      ["AuWfYt", box([I.SPIKED_BOOTS], false)], ["1TFYaK", box([I.SPIKED_BOOTS], false)],
+      ["_ZbFCb", box([I.SPIKED_BOOTS], true, [SUPPLIES_LINE])], ["JM8S8J", box([I.TROUT, I.BREAD], false)],
       ["yDYvE0", box([I.SECRET_WAY_MAP])], ["U16B4S", box([I.SECRET_WAY_MAP])],
       ["sdE5c5", box([I.SECRET_WAY_MAP])], ["Q2Uby4", box([I.SECRET_WAY_MAP])],
       ["liaDgz", box([I.COMBINATION])],
@@ -579,6 +580,8 @@ module.exports = function registerDeathPlateauQuest(api) {
   const BOX_TWIN_IDS = new Set(["w48gvR", "MCFkmH", "UxKTZP", "SCpELj", "QDcqJB", "MBm6Sz", "wAz_jn", "stq6Oo",
     "hYvfps", "FG69_B", "KY-HIs", "lDkvvH", "MKP0WU", "WryBLk", "MtULDz", "TgL2Wy", "7xljsT", "xJt9eP", "M5RtpC"]);
   let BOXES;
+  const SPIKED_BOOTS_LINE = "Dunstan has given you the spiked boots.";
+  const SUPPLIES_LINE = "You give Tenzing the loaves of bread and the cooked trout.";
 
   const PAGE = "Death Plateau";
   const WEAKNESS_VARIANT = "finding-the-combination-talking-to-harold-after-learning-his-weakness";
@@ -639,7 +642,7 @@ module.exports = function registerDeathPlateauQuest(api) {
     const shown = BOXES.get(request.stepId);
     if (shown) {
       request.box = shown.statement ? { statement: true } : { items: shown.items };
-      if (shown.chat) request.player.sendMessage(String(request.text ?? ""));
+      if (shown.chat) [request.text, ...shown.also].forEach((line) => request.player.sendMessage(String(line ?? "")));
       return;
     }
     if (!BOX_TWIN_IDS.has(request.stepId)) return;

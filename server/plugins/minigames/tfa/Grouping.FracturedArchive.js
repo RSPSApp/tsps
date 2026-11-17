@@ -17,6 +17,7 @@
 
 const Shared = require("./Shared.FracturedArchive");
 const Parties = require("./Parties.FracturedArchive");
+const Records = require("./Records.FracturedArchive");
 
 const { SCRIPT } = Shared;
 const { RIGHTS } = Parties;
@@ -42,8 +43,6 @@ const ATTR = {
   TAB: "fractured-archive:details-tab",
   /** The list's Friends/Clan Only filter (varbit 16380, which the row script reads). */
   FRIENDS_FILTER: "fractured-archive:friends-filter",
-  /** Completions, shown on the details screen (saved; phase 1 has no completion yet). */
-  COMPLETIONS: "fractured-archive:completions",
 };
 
 // ---------------------------------------------------------------- the lobby overlay
@@ -97,8 +96,9 @@ function isViewing(player, party) {
   return player.getAttribute(ATTR.VIEWING) === party.id;
 }
 
+/** Completions, shown on the details screen: the overall count the Alliance records keep. */
 function completionsOf(player) {
-  return Number(player.getAttribute(ATTR.COMPLETIONS)) || 0;
+  return Records.completionsOf(player);
 }
 
 /** A row: the eight names (leader first), members, preferred size and completions, mode, age. */
@@ -407,7 +407,6 @@ function inspectBoard({ player }) {
 
 module.exports = function registerGrouping(api) {
   Shared.bind(api);
-  api.persistAttribute(ATTR.COMPLETIONS, 0);
   api.persistAttribute(ATTR.FRIENDS_FILTER, false);
   api.onPlayerLogin(sendFilter);
   api.onServerStartup(announceActivity);

@@ -173,18 +173,18 @@ class TightropeRoom extends Raid.Room {
   }
 
   /** ::coxclear: the barrier is dispelled by whoever asked. */
+  /** ::coxclear: dispelled as if with the keystone, which a full inventory couldn't take. */
   devFinish(player) {
-    if (!Shared.has(player, KEYSTONE)) Shared.give(player, KEYSTONE);
-    this.dispel(player);
+    this.dispel(player, false);
   }
 
-  dispel(player) {
+  dispel(player, needsKeystone = true) {
     if (!this.barrier) return;
-    if (!Shared.has(player, KEYSTONE)) {
+    if (needsKeystone && !Shared.has(player, KEYSTONE)) {
       player.sendMessage("You're going to need a magical keystone to dispel this barrier.");
       return;
     }
-    player.getInventory().delete(KEYSTONE, 1);
+    if (needsKeystone) player.getInventory().delete(KEYSTONE, 1);
     Shared.animate(player, 832);
     Shared.sound(player, 1657);
     player.sendMessage("Your keystone glows as it is absorbed into the barrier, which disperses.");

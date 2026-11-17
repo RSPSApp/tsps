@@ -169,3 +169,36 @@ test("the Living record inspect text is the Wiki transcript and uses the cache t
   assert.equal(Records.claimRequirement(core.ItemIdentifiers.LIVING_RECORD_TIER_2_), 500);
   assert.equal(Records.claimRequirement(core.ItemIdentifiers.LIVING_RECORD_TIER_1_), 100);
 });
+
+test("the party details show the completions the Alliance records keep", (t) => {
+  const Grouping = require("../plugins/minigames/tfa/Grouping.FracturedArchive");
+  const { player } = actor(t);
+  setCompletions(player, 7);
+  const fields = Grouping.memberLine(player).split("|");
+  // name|combat|attack|strength|ranged|magic|defence|hitpoints|prayer|completions|practice
+  assert.equal(fields[9], "7");
+});
+
+test("Bork's flat armour comes off the roll, so a blow at his last hitpoints still kills", () => {
+  const Bork = require("../plugins/minigames/tfa/Bork.FracturedArchive");
+  const npc = (hitpoints, max) => ({ getHitpoints: () => hitpoints, getMaxHitpoints: () => max });
+  const room = Object.create(Bork.BorkRoom.prototype);
+  room.bork = npc(5, 1820);
+  room.smork = npc(720, 720);
+  room.bork.__tfaRoom = room;
+  room.smork.__tfaRoom = room;
+  room.stunned = false;
+  room.smorkDead = false;
+  const roll = (target, amount, combatType = core.CombatType.MELEE) => {
+    const damage = new core.HitDamage(amount, core.HitMask.RED);
+    PM.emitCombatHitDamage({ attacker: { isPlayer: () => true }, target, combatType, hit: null, damage, accurate: true });
+    return damage.getDamage();
+  };
+  // 20 rolled on Bork with 5 left: 8 armour comes off the 20, leaving a lethal 12 for the cap.
+  assert.equal(roll(room.bork, 20), 12);
+  assert.equal(roll(room.bork, 20, core.CombatType.MAGIC), 18);
+  assert.equal(roll(room.bork, 6), 0);
+  assert.equal(roll(room.smork, 3), 1);
+  room.stunned = true;
+  assert.equal(roll(room.bork, 3), 3);
+});

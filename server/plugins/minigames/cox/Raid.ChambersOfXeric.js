@@ -252,6 +252,16 @@ function roomNpcHit(event) {
   event.npc?.__coxRoom?.modifyHit(event.npc, event.hit);
 }
 
+/** A hitsplat rolled against a raid NPC: its resistance applies before the hitpoints cap (Room.resistance). */
+function roomNpcRolledHit({ target, hit, damage }) {
+  const room = target?.__coxRoom;
+  if (!room || room.raid.destroyed || !hit || !damage) return;
+  const factor = room.resistance(target, hit);
+  if (factor === 1) return;
+  damage.setDamage(Math.floor(damage.getDamage() * factor));
+  hit.rolledResistance = true;
+}
+
 module.exports = function registerCoxRaid(api) {
   Shared.bind(api);
   api.persistAttribute(Shared.ATTR.INSIDE);
@@ -270,6 +280,7 @@ module.exports = function registerCoxRaid(api) {
   api.onNpcDeath(roomNpcDied);
   api.onNpcBeforeDeath(roomNpcDying);
   api.onNpcHitModify(roomNpcHit);
+  api.onCombatHitDamage(roomNpcRolledHit);
   api.onCustomEvent("npc-drops:location", publicDrops);
 };
 
@@ -279,3 +290,4 @@ module.exports.climbRope = climbRope;
 module.exports.startRaid = startRaid;
 module.exports.damagePoints = damagePoints;
 module.exports.returnOnLogin = returnOnLogin;
+module.exports.roomNpcRolledHit = roomNpcRolledHit;

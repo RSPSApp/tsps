@@ -1,0 +1,21 @@
+{
+  "$comment": "Bosses whose kill is counted only by Combat Achievements' NPC-death count (plugins/achievements/combatachievements/Kills.CombatAchievements.js) and whose own plugin says nothing. Live OSRS tells the player \"Your <boss> kill count is: N.\" on every kill (Wiki, each boss's page). Keys are the dying NPC's name; values the Combat Achievements monster whose count is told. A boss whose plugin tells its own count (Zulrah, Cerberus, the GWD generals, Nex, Muspah, ...) must not be listed here.",
+  "monsters": {
+    "Vorkath": "Vorkath",
+    "Kraken": "Kraken",
+    "Thermonuclear smoke devil": "Thermonuclear Smoke Devil",
+    "Corporeal Beast": "Corporeal Beast",
+    "Kalphite Queen": "Kalphite Queen",
+    "Dagannoth Rex": "DK: Rex",
+    "Dagannoth Prime": "DK: Prime",
+    "Dagannoth Supreme": "DK: Supreme",
+    "Sarachnis": "Sarachnis",
+    "Giant Mole": "Giant Mole",
+    "King Black Dragon": "King Black Dragon",
+    "Chaos Elemental": "Chaos Elemental",
+    "Chaos Fanatic": "Chaos Fanatic",
+    "Scorpia": "Scorpia",
+    "Crazy archaeologist": "Crazy Archaeologist",
+    "Deranged archaeologist": "Deranged Archaeologist"
+  }
+}

@@ -15,6 +15,8 @@ const WASNT_EVEN_CLOSE_HITPOINTS = 50;
 const SPEED_RUNNER_SECONDS = 65 * 60;
 const PLAYING_WITH_JADS_SECONDS = 30;
 
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
+
 const runs = new WeakMap();
 let api;
 
@@ -86,7 +88,10 @@ function finish(player, won, completions) {
   runs.delete(player);
   if (!won) return;
   const complete = (task) => api.emitCustomEvent("combat-achievements:complete", { player, task });
-  api.emitCustomEvent("combat-achievements:kill", { player, monster: "TzKal-Zuk", count: completions });
+  api.emitCustomEvent("combat-achievements:kill", {
+    player, monster: "TzKal-Zuk", count: completions,
+    announce: (total) => sendBossKillCount(player, `Your TzKal-Zuk kill count is: <col=ff0000>${total}</col>.`),
+  });
   if (!run) return;
   if ((tick() - run.startTick) * 0.6 < SPEED_RUNNER_SECONDS) complete("Inferno Speed-Runner");
   if (!run.dug) complete("The Floor Is Lava");

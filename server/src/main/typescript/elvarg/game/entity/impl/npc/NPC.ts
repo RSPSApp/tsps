@@ -379,8 +379,13 @@ export class NPC extends Mobile {
             // "combat:no-regen": a boss whose fight has phases it can't be hit in (Vet'ion's hounds)
             // keeps its damage. The damage clock includes untagged hits; lastAttack also
             // preserves existing boss scripts that explicitly reset that clock to hold healing.
-            if (this.hitpoints > 0 && !this.hitpointsLocked && !this.hasFlag("combat:no-regen") && ((this.getCombat().getLastDamage().hasElapsed(20000) && this.getCombat().getLastAttack().hasElapsed(20000))
-                || this.movementCoordinator.getCoordinateState() == CoordinateState.RETREATING)) {
+            // An NPC still fighting someone (it has a combat target) doesn't regenerate just because
+            // nobody hit it for 20 seconds: TzTok-Jad kept healing while players killed his healers.
+            // Walking home after losing its target still restores it.
+            const retreating = this.movementCoordinator.getCoordinateState() == CoordinateState.RETREATING;
+            const stillFighting = this.getCombat().getTarget() != null;
+            if (this.hitpoints > 0 && !this.hitpointsLocked && !this.hasFlag("combat:no-regen") && (retreating
+                || (!stillFighting && this.getCombat().getLastDamage().hasElapsed(20000) && this.getCombat().getLastAttack().hasElapsed(20000)))) {
                 const max = this.getMaxHitpoints();
                 if (max > this.hitpoints) {
                     // OSRS hitpoints are integers. Floor the 10% step and the stored value so

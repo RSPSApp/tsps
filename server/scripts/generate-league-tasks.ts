@@ -790,6 +790,7 @@ const PLACE_DEFS: PlaceDef[] = [
   { key: "mage-arena-bank", names: ["Mage Arena bank", "Mage Arena"], page: "Mage_Arena_bank", server: { rects: [[2526, 4705, 2546, 4730]], from: "the Mage Arena bank cave's room" }, spawns: ["Gundai#1600"] },
   // The Citharede Abbey (the Giants' Plateau, east of Al Kharid): the abbey and its cabbage field
   // round the page's own pin (it has no polygon).
+  { key: "citharede-abbey", names: ["Citharede Abbey"], page: "Citharede_Abbey", server: { rects: [[3402, 3171, 3423, 3188]], from: "the abbey and its cabbage field" } },
   // Subjects' location lines (issue 6108's follow-ups): where the task's rocks, trees, sand pits and
   // bank chest stand, three tiles round each pin, and Puro-Puro's map square. Three, not two: a pin is
   // its object's south-west tile, and a 3x3 one (Shayzien's yews) has its north and east sides three off;
@@ -802,7 +803,6 @@ const PLACE_DEFS: PlaceDef[] = [
   { key: "sunset-coast-sand-pit", names: ["Sunset Coast sand pit"], page: "Sand_pit", locLines: { pages: ["Sand_pit"], location: "Sunset Coast", pad: 3 } },
   { key: "lands-end-bank-chest", names: ["Land's End bank chest"], page: "Bank_chest", locLines: { pages: ["Bank_chest"], location: "Land's End", pad: 3 } },
   { key: "puro-puro", names: ["Puro-Puro"], page: "Baby_impling", locLines: { pages: ["Baby_impling"], location: "Puro Puro", square: true } },
-  { key: "citharede-abbey", names: ["Citharede Abbey"], page: "Citharede_Abbey", server: { rects: [[3402, 3171, 3423, 3188]], from: "the abbey and its cabbage field" } },
 ];
 
 /** The places' saved Wiki pages (`--from <dir>/places`, `--save`), read before the triggers are derived. */

@@ -448,6 +448,32 @@ test("deed: a plugin's own event of the deed (Worship the Ectofuntus; Fill a Lar
   assert.ok(done(rc, "fill-a-large-pouch"));
 });
 
+test("producing a toxic blowpipe awards its task once on the empty crafted result", async (t) => {
+  const f = pactsCharacter(t);
+  const inventory = f.player.getInventory();
+  f.player.getSkillManager().setMaxLevel(core.Skill.FLETCHING, 78);
+  f.player.getSkillManager().setCurrentLevel(core.Skill.FLETCHING, 78);
+  inventory.add(new core.Item(item("Chisel")), true);
+  inventory.add(new core.Item(item("Tanzanite fang")), true);
+  assert.ok(!done(f, "craft-a-toxic-blowpipe"));
+  const craft = () => send(f, {
+    type: "inventory_use_on", itemId: item("Chisel"), slot: inventory.getSlotForItemId(item("Chisel")),
+    target: { kind: "inventory", slot: inventory.getSlotForItemId(item("Tanzanite fang")) },
+  }, 2);
+  await craft();
+  assert.equal(inventory.getAmount(item("Tanzanite fang")), 0);
+  assert.equal(inventory.getAmount(item("Toxic blowpipe (empty)")), 1);
+  assert.ok(done(f, "craft-a-toxic-blowpipe"));
+  const points = { player: f.player, points: 0 };
+  PM.emitCustomEvent("league:points", points);
+  const firstPoints = points.points;
+  inventory.add(new core.Item(item("Tanzanite fang")), true);
+  await craft();
+  assert.equal(inventory.getAmount(item("Toxic blowpipe (empty)")), 2);
+  PM.emitCustomEvent("league:points", points);
+  assert.equal(points.points, firstPoints, "a second craft does not award duplicate points");
+});
+
 test("deed: the heart invigorated, darts loaded, the looting bag opened, a prayer scroll read", async (t) => {
   const f = pactsCharacter(t);
   const inventory = f.player.getInventory();

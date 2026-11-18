@@ -1,6 +1,9 @@
 {
   "$comment": "Hand-maintained award triggers for league tasks, by league type and task id (the ids in the generated league-tasks.json), merged over the triggers the generator derived (this file wins). For a task the generator's name rules cannot map: a kill of an NPC the Wiki names differently, a quest whose task is not called \"Complete <quest>\". The kinds LeagueTasks understands are in docs/leagues.md (Tasks): kill { npcs: [names], count } (the kills of all of them added up), level { skill, level }, any-level { level, excluding }, level-up, total-level { level }, base-level { level }, combat-level { level }, quest { name }. Other plugins can also complete a task directly with the `league:complete-task` event.",
   "4": {
+    "move-your-house-to-pollnivneach": {"kind": "deed", "event": "construction:house-moved", "where": {"location": "Pollnivneach"}, "count": 1},
+    "move-your-house-to-rellekka": {"kind": "deed", "event": "construction:house-moved", "where": {"location": "Rellekka"}, "count": 1},
+    "move-your-house-to-taverley": {"kind": "deed", "event": "construction:house-moved", "where": {"location": "Taverley"}, "count": 1},
     "build-a-demonic-throne": {"kind": "deed", "event": "construction:furniture-built", "where": {"key": "DEMONIC_THRONE"}, "count": 1},
     "build-a-gilded-altar": {"kind": "deed", "event": "construction:furniture-built", "where": {"key": "GILDED_ALTAR"}, "count": 1},
     "build-a-mahogany-portal": {"kind": "deed", "event": "construction:furniture-built", "where": {"key": "MAHOGANY_PORTAL_FRAME"}, "count": 1},

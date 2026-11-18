@@ -2836,7 +2836,10 @@ test("house deeds: furniture by its buildable through the real build, and the ho
     assert.ok(done(f, id), key);
   }
   const emit = (name, payload = {}) => PM.emitCustomEvent(name, { player, ...payload });
-  emit("construction:house-bought");
+  // Daddy's Home's free house, through House's real "construction:grant-house", counts as bought.
+  const grant = { player, granted: false };
+  PM.emitCustomEvent("construction:grant-house", grant);
+  assert.equal(grant.granted, true, "a first house");
   assert.ok(done(f, "purchase-a-player-owned-house"));
   emit("poh:entered", { location: player.getLocation() });
   assert.ok(done(f, "enter-your-player-owned-house"));

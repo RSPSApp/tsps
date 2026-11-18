@@ -2043,8 +2043,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   and the barrel.
 - **Player-owned house and altar deeds**, from Construction's and BoneAltars' events:
   - The estate agents: `construction:house-bought` { player }; `construction:house-moved` { player, location }
-    with the town's name, `where` "Yanille" or "Prifddinas"; the existing `construction:house-redecorated`.
-  - Entering: the existing `poh:entered`. Rooms: `construction:room-built` { player, room } from the viewer, a
+    with the town's name, `where` the task's town (Yanille, Prifddinas; league 4's Taverley, Pollnivneach, Rellekka); the existing `construction:house-redecorated`.
+  - Daddy's Home's free house (`construction:grant-house`) also sends `construction:house-bought`.
+  - Entering: the existing `poh:entered`, now also sent by a teleport into the house (location null). Rooms: `construction:room-built` { player, room } from the viewer, a
     door hotspot or a staircase (not a move).
   - Furniture: `construction:furniture-built` now carries `key` (the buildable) and `hotspot` flat, `where` key:
     OAK_LARDER, MAHOGANY_PORTAL_FRAME, GILDED_ALTAR, DEMONIC_THRONE, LUMBRIDGE_LANDSCAPE. Ours: the Lumbridge

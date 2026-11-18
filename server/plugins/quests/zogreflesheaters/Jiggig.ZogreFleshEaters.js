@@ -163,6 +163,40 @@ module.exports = function attachJiggig(api, ctx) {
     ctx.startTranscript(player, ctx.GRISH_NPC_ID, ROOM_VARIANT);
   }
 
+  /** The camera's owner for each player watching the scene; it ends the scene once, however it ends. */
+  const roomScenes = new Map();
+
+  /**
+   * Plays the camera path tick by tick while the scene's box is up. Continue ends it as live does
+   * (cam_reset, tick 436); an interrupted box (Escape, another interface), leaving the room or
+   * logging out ends it too, with the camera reset, so it never stays on the coffin.
+   */
+  function startRoomCamera(player) {
+    endRoomScene(player);
+    const scene = { tick: 0, task: null };
+    const manager = player.getDialogueManager();
+    scene.task = new (class extends api.core.Task {
+      execute() {
+        if (roomScenes.get(player) !== scene) return this.stop();
+        if (!player.isRegistered?.() || !manager.isActive()) return endRoomScene(player);
+        scene.tick++;
+        const step = ROOM_CAMERA.find(([tick]) => tick === scene.tick);
+        if (step) camera(player, step[1], step[2]);
+      }
+    })(1, player, false);
+    roomScenes.set(player, scene);
+    camera(player, ROOM_CAMERA[0][1], ROOM_CAMERA[0][2]);
+    TaskManager.submit(scene.task);
+  }
+
+  function endRoomScene(player) {
+    const scene = roomScenes.get(player);
+    if (!scene) return;
+    roomScenes.delete(player);
+    scene.task?.stop();
+    player.getPacketSender().sendCameraReset();
+  }
+
   /** The scene's two message steps: the chat line first, then the held box (tick 417). */
   function roomMessage(event) {
     if (event.stepId === ROOM_CHAT_STEP) {
@@ -173,18 +207,19 @@ module.exports = function attachJiggig(api, ctx) {
     const { player } = event;
     const chat = ctx.messageText(ROOM_VARIANT, ROOM_CHAT_STEP);
     if (chat) player.sendMessage(chat);
-    for (const [tick, move, look] of ROOM_CAMERA) {
-      if (tick === 0) camera(player, move, look);
-      else later(player, tick, () => camera(player, move, look));
-    }
+    startRoomCamera(player);
     event.box = { statement: true, holdTicks: ROOM_BOX_HOLD_TICKS };
-    event.after = () => player.getPacketSender().sendCameraReset();
+    event.after = () => endRoomScene(player);
     return true;
   }
 
   class NorthWestRoom extends api.core.Area {
     postEnter(mobile) {
       if (mobile?.isPlayer?.()) playRoomScene(mobile);
+    }
+
+    postLeave(mobile) {
+      if (mobile?.isPlayer?.()) endRoomScene(mobile);
     }
   }
 
@@ -195,5 +230,5 @@ module.exports = function attachJiggig(api, ctx) {
     api.onObjectInteraction("Crushed barricade", { "Climb-over": climbOver });
   }
 
-  return { register, crush, useStairs, roomMessage, barricadeValue, CRUSH_STEP_ID };
+  return { register, crush, useStairs, roomMessage, endRoomScene, barricadeValue, CRUSH_STEP_ID };
 };

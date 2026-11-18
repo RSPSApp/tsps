@@ -223,6 +223,29 @@ test("the north-west room plays its scene once: the chat line, the box held 17 t
   assert.equal(camera.length, 0, "only once");
 });
 
+test("an interrupted room scene still gives the camera back: Escape, or walking out (review of b965f638a)", async (t) => {
+  for (const interrupt of ["escape", "leave"]) {
+    const f = actor(t, { at: [2449, 9462, 2], stage: S.BARRICADE });
+    const camera = [];
+    let resets = 0;
+    const sender = f.player.getPacketSender();
+    const move = sender.sendCameraMoveTo.bind(sender);
+    sender.sendCameraMoveTo = (x, y, ...rest) => { camera.push(f.tick); return move(x, y, ...rest); };
+    const resetCamera = sender.sendCameraReset.bind(sender);
+    sender.sendCameraReset = () => { resets++; return resetCamera(); };
+    f.player.moveTo(new h.core.Location(2447, 9462, 2));
+    for (let i = 0; i < 5 && group(f) !== MESBOX; i++) h.tick(f);
+    h.ticks(f, 4);
+    assert.ok(camera.length >= 2, `${interrupt}: the scene's camera started`);
+    if (interrupt === "escape") await h.dispatch(f, { type: "interface_close" });
+    else { f.player.moveTo(new h.core.Location(2450, 9462, 2)); h.tick(f); }
+    const after = camera.length;
+    h.ticks(f, 16);
+    assert.ok(resets >= 1, `${interrupt}: the camera is reset`);
+    assert.equal(camera.length, after, `${interrupt}: no camera moves after it`);
+  }
+});
+
 // ------------------------------------------------------------------ The tomb
 
 test("the skeleton: a smoke puff, the zombie a tick later with its line and 503 = 1; its death 503 = 2 (ticks 442-489)", async (t) => {

@@ -1179,6 +1179,7 @@ module.exports = function registerZogreFleshEatersQuest(api) {
 
   function handleLogout({ player }) {
     tomb.forget(player);
+    jiggig.endRoomScene(player);
   }
 
   function handleStageChanged({ player, key }) {

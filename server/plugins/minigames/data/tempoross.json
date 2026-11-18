@@ -23,8 +23,8 @@
     "$bossCentre": "where the captures aim cannon fire and cast the torrent from: the middle of its 9x9",
     "bossCentre": [3047, 2849],
     "wavePush": {
-      "tiles": 3,
-      "$comment": "Wiki (Tempoross): the wave pushes untethered players 'a few tiles away', and not while they stand between the ammunition crates. No capture gives the exact count or direction, so three tiles straight away from bossCentre is ours."
+      "tiles": 5,
+      "$comment": "Rev 241/242 captures (911514, 911544, 911548, 911784, 911817): an untethered hit teleports the player up to five tiles along the eight-way octant away from the boss base (3043,2845), stopping at the first blocked tile, with human_knockdown_loop (7211) and facing the boss. Wiki (Tempoross): the wave pushes untethered players 'a few tiles away', and not while they stand between the ammunition crates."
     },
     "spiritPools": [[3046, 2843], [3046, 2853]],
     "spotSites": {

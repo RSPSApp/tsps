@@ -8,6 +8,8 @@
  *   (300) and sound 4038; +4 the hosts: "Tempoross is drawing in water, prepare yourselves!";
  *   +13 the hit: tethered players get "...the rope keeps you securely upright as the wave washes
  *   over you.", Tempoross is 10572 again with seq 8897, water splashes (1843) leave debris.
+ *   Rev 241/242 captures (911514, 911544, 911548, 911784, 911817) also show untethered hits:
+ *   the wave slams them down (teleport, `human_knockdown_loop`, facing the boss) away from it.
  * - lightning: "A strong wind blows as clouds roll in..." (red), a cloud shadow (41006) and
  *   sound 2186 under each strike; clouds grow at +6, charge at +11, Tempoross casts
  *   (`fsb_lightening_cast`) at +13, the clouds strike at +15 (NPC 10581,
@@ -41,9 +43,12 @@ const FIRE_SIZE = 2;
 const MAX_SPREADS = 2;
 const SPREAD_STEPS = [[2, 0], [-2, 0], [0, 2], [0, -2]];
 
-/** Step and ForceMovement direction ids for a cardinal step (they are not the same numbering). */
-const STEP_DIRECTION = { "0,1": 1, "-1,0": 3, "1,0": 4, "0,-1": 6 };
-const FORCE_DIRECTION = { "0,1": 0, "1,0": 1, "0,-1": 2, "-1,0": 3 };
+/** RegionManager.canMoveIsBlocked's direction ids for one-tile steps (0 north-west .. 7 south-east). */
+const STEP_DIRECTION = {
+  "0,1": 1, "1,1": 2, "1,0": 4, "1,-1": 7, "0,-1": 6, "-1,-1": 5, "-1,0": 3, "-1,1": 0,
+};
+/** tan(22.5°): how far off a cardinal a step may be before it counts as diagonal. */
+const OCTANT_EDGE = 1 / Math.tan(Math.PI / 8);
 
 /**
  * The tiles between the two ammunition crates on each ship: the Wiki says a player stood there is
@@ -69,42 +74,55 @@ const BETWEEN_CRATES = (() => {
 const betweenCrates = (location) => BETWEEN_CRATES.has(`${location.getX()},${location.getY()}`);
 
 /**
- * Pushes an untethered player up to `wavePush.tiles` straight away from Tempoross, stopping at
- * anything in the way. Ours: the Wiki says only "a few tiles away", and no capture fixes the
- * count or direction; away from the wave's source is the reading used here.
+ * Knocks an untethered player down: the rev 241/242 captures show a same-tick relocation (not a
+ * walk) up to `wavePush.tiles` along the eight-way octant away from the boss base, with
+ * `human_knockdown_loop` and the player facing the boss. A player already at an edge stays put and
+ * still plays the animation. The Wiki adds the ammunition-crate exemption.
  */
 function wavePush(player) {
   const destination = pushDestination(player);
   if (!destination) return false;
-  const { ForceMovement, ForceMovementTask, TaskManager, Location } = Shared.core();
-  const here = player.getLocation();
-  const at = destination.location;
-  const offset = new Location(at.getX() - here.getX(), at.getY() - here.getY());
-  TaskManager.submit(new ForceMovementTask(player, 1, new ForceMovement(here.clone(), offset, 0, 30, destination.facing, -1)));
+  const { Location } = Shared.core();
+  const [bossX, bossY] = DATA.cove.boss;
+  player.getMovementQueue().reset();
+  if (!destination.location.equals(player.getLocation())) player.moveTo(destination.location);
+  player.setPositionToFace(new Location(bossX, bossY, player.getLocation().getZ()));
+  Shared.animate(player, ANIM.KNOCKDOWN);
   return true;
 }
 
-/** Where the wave would put `player`, or null when it does not move them. `facing` is the boss side. */
+/**
+ * Where the wave would put `player`, or null between the crates (the Wiki says they are not
+ * pushed). The direction is the octant of the player minus the boss base, and the walk stops at
+ * the first blocked tile; a player with nowhere to go gets their own tile back.
+ */
 function pushDestination(player) {
   const { RegionManager, Location } = Shared.core();
   const here = player.getLocation();
   if (betweenCrates(here)) return null;
-  const [centreX, centreY] = DATA.cove.bossCentre;
-  const dx = here.getX() - centreX;
-  const dy = here.getY() - centreY;
+  const [baseX, baseY] = DATA.cove.boss;
+  const dx = here.getX() - baseX;
+  const dy = here.getY() - baseY;
   if (dx === 0 && dy === 0) return null;
-  const horizontal = Math.abs(dx) >= Math.abs(dy);
-  const stepX = horizontal ? (Math.sign(dx) || 1) : 0;
-  const stepY = horizontal ? 0 : (Math.sign(dy) || 1);
+  const [stepX, stepY] = octantStep(dx, dy);
   const direction = STEP_DIRECTION[`${stepX},${stepY}`];
-  const facing = FORCE_DIRECTION[`${-stepX},${-stepY}`];
   let at = here.clone();
   for (let step = 0; step < DATA.cove.wavePush.tiles; step++) {
     if (!RegionManager.canMoveIsBlocked(at, direction, player.getPrivateArea())) break;
     at = new Location(at.getX() + stepX, at.getY() + stepY, at.getZ());
   }
-  if (at.equals(here)) return null;
-  return { location: at, facing };
+  return { location: at };
+}
+
+/** The nearest of the eight compass steps to a vector, diagonals included (the captures' push). */
+function octantStep(dx, dy) {
+  const x = Math.abs(dx);
+  const y = Math.abs(dy);
+  const stepX = Math.sign(dx);
+  const stepY = Math.sign(dy);
+  if (x > y * OCTANT_EDGE) return [stepX, 0];
+  if (y > x * OCTANT_EDGE) return [0, stepY];
+  return [stepX, stepY];
 }
 
 class Attacks {
@@ -207,8 +225,9 @@ class Attacks {
       }
       player.getPacketSender().sendClientScript(SCRIPT.WAVE_HIDE, F.waveOverlayHide);
       Shared.stopAction(player);
+      player.sendMessage("...the wave slams into you, knocking you to the ground.");
       wavePush(player);
-      loseItems(player, "wave");
+      loseItems(player, "waves");
     });
     fight.tethers.breakSites();
     this.waves += 1;

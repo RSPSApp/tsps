@@ -17,32 +17,43 @@ before(async () => {
 
 function playerAt(x, y, z = 0) {
   const location = new Location(x, y, z);
-  return {
+  const player = {
+    location,
+    moved: [],
+    faces: [],
+    animations: [],
     getLocation: () => location,
     getPrivateArea: () => null,
     isRegistered: () => true,
     getCombat: () => ({ reset() {} }),
     getMovementQueue: () => ({ reset() {} }),
-    setForceMovement() {},
+    moveTo: (to) => {
+      player.moved.push(to);
+      player.location = to;
+    },
+    setPositionToFace: (at) => player.faces.push(at),
+    performAnimation: (animation) => player.animations.push(animation),
   };
+  return player;
 }
 
-test("the wave pushes away from Tempoross, up to three tiles", (t) => {
-  t.mock.method(RegionManager, "canMoveIsBlocked", () => true);
-  const west = pushDestination(playerAt(3040, 2849));
-  assert.deepEqual([west.location.getX(), west.location.getY()], [3037, 2849]);
-  assert.equal(west.facing, 1, "faces east, back at Tempoross");
+const at = (destination) => [destination.location.getX(), destination.location.getY()];
 
-  const south = pushDestination(playerAt(3050, 2835));
-  assert.deepEqual([south.location.getX(), south.location.getY()], [3050, 2832]);
-  assert.equal(south.facing, 0, "faces north, back at Tempoross");
+test("the wave knocks players up to five tiles along the eight-way octant from the boss base", (t) => {
+  t.mock.method(RegionManager, "canMoveIsBlocked", () => true);
+
+  const north = pushDestination(playerAt(3045, 2867));
+  assert.deepEqual(at(north), [3045, 2872], "straight north, five tiles");
+
+  const west = pushDestination(playerAt(3040, 2849));
+  assert.deepEqual(at(west), [3035, 2854], "the west side goes diagonally north-west");
 });
 
 test("the push stops at the first blocked tile", (t) => {
   let calls = 0;
-  t.mock.method(RegionManager, "canMoveIsBlocked", () => ++calls === 1);
-  const pushed = pushDestination(playerAt(3040, 2849));
-  assert.deepEqual([pushed.location.getX(), pushed.location.getY()], [3039, 2849]);
+  t.mock.method(RegionManager, "canMoveIsBlocked", () => ++calls <= 4);
+  const pushed = pushDestination(playerAt(3037, 2849));
+  assert.deepEqual(at(pushed), [3033, 2853], "the recorded four-tile north-west knock");
 });
 
 test("a player between the ammunition crates is not pushed", () => {
@@ -52,18 +63,31 @@ test("a player between the ammunition crates is not pushed", () => {
   assert.equal(pushDestination(playerAt(3038, 2849)), null);
 });
 
-test("no push when the player is on the boss centre or has nowhere to go", (t) => {
-  assert.equal(pushDestination(playerAt(3047, 2849)), null);
-  t.mock.method(RegionManager, "canMoveIsBlocked", () => false);
-  assert.equal(pushDestination(playerAt(3040, 2849)), null);
+test("no push from the boss base", () => {
+  assert.equal(pushDestination(playerAt(3043, 2845)), null);
 });
 
-test("a pushed player gets a force movement instead of staying put", (t) => {
+test("a pushed player is teleported, knocked down and turned to the boss", (t) => {
   t.mock.method(RegionManager, "canMoveIsBlocked", () => true);
   const submitted = [];
   t.mock.method(PluginManager.getCoreApi().TaskManager, "submit", (task) => submitted.push(task));
   const player = playerAt(3040, 2849);
   assert.equal(wavePush(player), true);
-  assert.equal(submitted.length, 1);
-  assert.equal(player.getLocation().getX(), 3040, "the task moves them, not this call");
+  assert.equal(submitted.length, 0, "the capture shows a teleport, not a force movement");
+  assert.deepEqual(player.moved.map((to) => [to.getX(), to.getY()]), [[3035, 2854]]);
+  assert.equal(player.animations.at(-1).id, 7211, "human_knockdown_loop");
+  assert.deepEqual(
+    [player.faces.at(-1).getX(), player.faces.at(-1).getY()],
+    [3043, 2845],
+    "facing the boss base",
+  );
+});
+
+test("a player at the edge stays put but is still knocked down", (t) => {
+  t.mock.method(RegionManager, "canMoveIsBlocked", () => false);
+  const player = playerAt(3045, 2872);
+  assert.equal(wavePush(player), true);
+  assert.equal(player.moved.length, 0);
+  assert.equal(player.animations.at(-1).id, 7211);
+  assert.deepEqual([player.faces.at(-1).getX(), player.faces.at(-1).getY()], [3043, 2845]);
 });

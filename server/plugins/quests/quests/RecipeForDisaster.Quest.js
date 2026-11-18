@@ -538,7 +538,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       "sir-amik": 64,
       "king-awowogei": 128,
     }[rescue];
-    if (player && flag !== undefined) event.complete = hasFlag(player, flag);
+    // A finished quest means every rescue, as the subquest stage readers above already treat it.
+    if (player && flag !== undefined) event.complete = quest.isComplete(player) || hasFlag(player, flag);
   }
   /**
    * A rescue by its Wiki name: "Recipe for Disaster/Freeing Pirate Pete", "Freeing Pirate Pete", or

@@ -2,6 +2,13 @@ import { DIRECTION_TO_ORIENTATION } from "../../common/Direction";
 import { BitStream } from "./BitStream";
 import { readForcedMovement } from "./ForcedMovementReader";
 import type { ForcedMovementUpdate, HealthBarUpdate, HitsplatUpdate } from "./PlayerSyncTypes";
+import type { NpcTypeCustomisation } from "../../custom/npcs/NpcModelOverrideRegistry";
+
+/** TYPE_CUSTOMISATION (0x40000)'s leading flags: which fields follow. */
+const TYPE_MODELS = 0x1;
+const TYPE_RECOLOURS = 0x2;
+const TYPE_NAME = 0x4;
+const TYPE_COMBAT_LEVEL = 0x8;
 
 export type NpcSpotAnimUpdate = {
     slot: number;
@@ -41,6 +48,11 @@ export type NpcUpdateBlock = {
     faceTile?: { x: number; y: number };
     /** Body-model slot overrides (OSRS npc model customisation); an empty list resets them. */
     modelCustomisation?: Array<{ slot: number; modelId: number }>;
+    /**
+     * This NPC's type as the server changed it (OSRS npc body customisation, name and level
+     * change): a whole model list, recolours, name and combat level. No fields resets it.
+     */
+    typeCustomisation?: NpcTypeCustomisation;
     /** Stand / walk / turn sequence overrides (slots 0 idle, 1 walk, 2 turn left, 3 turn right); empty resets them. */
     baseAnimations?: Array<{ slot: number; seqId: number }>;
     /** A fade of its model: transparency `from` (-1: its current) to `to` (0 opaque, 255 invisible). */
@@ -72,7 +84,7 @@ export type NpcInfoFrame = {
  * - Only decodes the subset of update blocks that our server currently emits:
  *   FACE_ENTITY (0x8), HIT_MASK (0x20), COLOR_OVERRIDE (0x100), SPOTANIM2 (0x20000), SEQUENCE (0x10),
  *   HEAD_ICONS (0x200), EXACT_MOVE (0x400), FACE_TILE (0x800), MODEL_CUSTOMISATION (0x1000),
- *   BASE_ANIMATIONS (0x2000), TRANSPARENCY (0x8000).
+ *   BASE_ANIMATIONS (0x2000), TRANSPARENCY (0x8000), TYPE_CUSTOMISATION (0x40000).
  */
 export class NpcUpdateDecoder {
     private npcIndices: number[] = [];
@@ -443,6 +455,30 @@ export class NpcUpdateDecoder {
                     from: from === 0xffff ? -1 : from & 0xff,
                     to,
                 };
+            }
+
+            // TYPE_CUSTOMISATION (0x40000): flags, then a whole model list, recolour pairs, a name
+            // and a combat level, each when flagged. No flags resets the customisation.
+            if ((mask & 0x40000) !== 0) {
+                const flags = stream.readUnsignedByte() | 0;
+                const custom: NpcTypeCustomisation = {};
+                if ((flags & TYPE_MODELS) !== 0) {
+                    const count = stream.readUnsignedByte() | 0;
+                    custom.models = [];
+                    for (let i = 0; i < count; i++) custom.models.push(stream.readUnsignedShortBE() | 0);
+                }
+                if ((flags & TYPE_RECOLOURS) !== 0) {
+                    const count = stream.readUnsignedByte() | 0;
+                    custom.recolours = [];
+                    for (let i = 0; i < count; i++) {
+                        const from = stream.readUnsignedShortBE() | 0;
+                        const to = stream.readUnsignedShortBE() | 0;
+                        custom.recolours.push({ from, to });
+                    }
+                }
+                if ((flags & TYPE_NAME) !== 0) custom.name = stream.readStringCp1252NullTerminated();
+                if ((flags & TYPE_COMBAT_LEVEL) !== 0) custom.combatLevel = stream.readUnsignedShortBE() | 0;
+                block.typeCustomisation = custom;
             }
 
             if (Object.keys(block).length > 0) {

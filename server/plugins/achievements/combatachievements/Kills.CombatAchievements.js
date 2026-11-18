@@ -83,6 +83,7 @@ function npcName(npc) {
 }
 
 function onNpcDeath(event) {
+  if (event?.npc?.getAttribute?.("echo-boss:encounter")) return;
   if (event?.npc?.getMaxHitpoints?.() === 1) return;
   const player = event?.killer;
   if (!player?.isPlayer?.() && !player?.getPacketSender) return;

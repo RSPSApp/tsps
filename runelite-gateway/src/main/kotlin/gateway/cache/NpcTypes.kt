@@ -5,14 +5,18 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Logger
 
 /**
- * An NPC type's body models, for model customisation: tsps sends per-slot overrides and the
- * OSRS block carries the whole list.
+ * An NPC type's body models and recolour sources, for model customisation: tsps sends per-slot
+ * overrides or a whole type customisation, and the OSRS block carries the whole model list and
+ * one destination colour per source colour of the type.
  *
  * The opcode table follows the browser client's NpcType decoder for old school revision 241;
  * every opcode is consumed, since the models (opcode 1, or 61 with int ids) can come anywhere.
  */
 class NpcTypes(private val cache: Cache) {
-    private val models = ConcurrentHashMap<Int, List<Int>>()
+    /** A type's body models and the source colours of its recolours (opcode 40). */
+    class Body(val models: List<Int>, val recolourSources: List<Int>)
+
+    private val bodies = ConcurrentHashMap<Int, Body>()
 
     /** Every NPC's config, split out of its group once. */
     private val files: Map<Int, ByteArray> by lazy { cache.files(CONFIG_ARCHIVE, NPC_GROUP) }
@@ -21,29 +25,35 @@ class NpcTypes(private val cache: Cache) {
     val ids: Set<Int> get() = files.keys
 
     /** The type's body models; empty when it has none or its config can't be read. */
-    fun models(id: Int): List<Int> = models.computeIfAbsent(id, ::load)
+    fun models(id: Int): List<Int> = body(id).models
 
-    private fun load(id: Int): List<Int> {
-        val data = files[id] ?: return emptyList()
+    /** The colours the type recolours, in its order; empty when it has none. */
+    fun recolourSources(id: Int): List<Int> = body(id).recolourSources
+
+    private fun body(id: Int): Body = bodies.computeIfAbsent(id, ::load)
+
+    private fun load(id: Int): Body {
+        val data = files[id] ?: return EMPTY
         return try {
             decode(ByteBuffer.wrap(data))
         } catch (e: RuntimeException) {
             log.warning("npc $id: ${e.message}")
-            emptyList()
+            EMPTY
         }
     }
 
     /** [id]'s models, throwing when its config doesn't decode to its last byte. */
-    internal fun decodeStrict(id: Int): List<Int> = decode(ByteBuffer.wrap(files.getValue(id)))
+    internal fun decodeStrict(id: Int): List<Int> = decode(ByteBuffer.wrap(files.getValue(id))).models
 
     /** Reads the whole config, so a bad table shows up as an error rather than wrong models. */
-    private fun decode(buffer: ByteBuffer): List<Int> {
+    private fun decode(buffer: ByteBuffer): Body {
         var models = emptyList<Int>()
+        var recolourSources = emptyList<Int>()
         while (true) {
             when (val opcode = buffer.u8()) {
                 0 -> {
                     check(!buffer.hasRemaining()) { "${buffer.remaining()} bytes after the end" }
-                    return models
+                    return Body(models, recolourSources)
                 }
                 1 -> models = List(buffer.u8()) { buffer.u16() }
                 61 -> models = List(buffer.u8()) { buffer.int }
@@ -55,7 +65,11 @@ class NpcTypes(private val cache: Cache) {
                 in 170..175 -> buffer.skip(2)
                 17, 115, 117, 134 -> buffer.skip(8)
                 in 30..34, in 150..154 -> buffer.string()
-                40, 41 -> buffer.skip(buffer.u8() * 4)
+                40 -> {
+                    val count = buffer.u8()
+                    recolourSources = List(count) { buffer.u16().also { buffer.skip(2) } }
+                }
+                41 -> buffer.skip(buffer.u8() * 4)
                 60 -> buffer.skip(buffer.u8() * 2)
                 62 -> buffer.skip(buffer.u8() * 4)
                 93, 99, 107, 109, 111, 112, 122, 123, 130, 141, 143, 145, 147, 158, 159, 161, 162 -> Unit
@@ -106,6 +120,7 @@ class NpcTypes(private val cache: Cache) {
     private companion object {
         const val CONFIG_ARCHIVE = 2
         const val NPC_GROUP = 9
+        val EMPTY = Body(emptyList(), emptyList())
         val log: Logger = Logger.getLogger(NpcTypes::class.java.name)
 
         fun ByteBuffer.u8() = get().toInt() and 0xFF

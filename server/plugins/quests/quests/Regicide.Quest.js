@@ -16,8 +16,8 @@
  * Source: LostCityRS/Content quest_regicide (varp/regicide_quest stages, item
  * and object ids). Gaps: the Regicide NPCs are not in npc-spawns.json, so the
  * King's Messenger is owner-spawned on login, only once Underground Pass is
- * complete and Regicide has not started, while the rest must be spawned by
- * content/admin tools; the Isafdar traps, the Tyras
+ * complete and Regicide has not started, and Idris (then Morvran and Essyllt)
+ * owner-spawn in Isafdar at stage 2; the Isafdar traps, the Tyras
  * guard fight and the fractionalising still minigame are not simulated (a
  * crossing advances the guard stage and a barrel of coal tar on the still gives
  * naphtha directly); Arianwyn is met by talking to him rather than a zone
@@ -193,6 +193,11 @@ module.exports = function registerRegicideQuest(api) {
 
   let quest;
   const messengerByPlayer = new Map();
+  /** player -> the owner-only scouts currently out for them (Idris, then Morvran and Essyllt). */
+  const scoutsByPlayer = new Map();
+  /** Isafdar between the well's exit (2312,3216) and Iorwerth Camp, where a stage-2 player meets Idris. */
+  const ISAFDAR_SCOUT_BOUNDS = { minX: 2180, maxX: 2330, minY: 3130, maxY: 3260 };
+  const SCOUTS_LEAVE_TICKS = 50;
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const give = (player, itemId, amount = 1) => player.getInventory().adds(itemId, amount);
@@ -365,8 +370,14 @@ module.exports = function registerRegicideQuest(api) {
       return regicideVariant("committing-regicide-talking-to-lord-iorwerth-again");
     }
     if (npcId === NpcIdentifiers.ELF_TRACKER) {
-      if (stage === STAGE_SPOKEN_IORWERTH) {
+      if (stage === STAGE_SPOKEN_SCOUTS) {
         return regicideVariant("entering-isafdar-talking-to-the-elf-tracker-before-iorwerth");
+      }
+      // Sent by Iorwerth: the tracker asks for proof and refuses, the stage Iorwerth's pendant
+      // answers. Nothing else sets "tracker refused", so this must, or the quest stops at 4.
+      if (stage === STAGE_SPOKEN_IORWERTH) {
+        quest.setStage(player, STAGE_SPOKEN_TRACKER);
+        return regicideVariant("tracking-tyras-camp-speaking-with-the-elf-tracker");
       }
       if (stage === STAGE_SPOKEN_TRACKER) {
         return held(player, CRYSTAL_PENDANT)
@@ -469,7 +480,10 @@ module.exports = function registerRegicideQuest(api) {
       return;
     }
     if (stepId === SCOUTS_KILL_IDRIS_ACTION_ID) {
-      if (quest.getStage(player) < STAGE_SPOKEN_SCOUTS) quest.setStage(player, STAGE_SPOKEN_SCOUTS);
+      if (quest.getStage(player) < STAGE_SPOKEN_SCOUTS) {
+        quest.setStage(player, STAGE_SPOKEN_SCOUTS);
+        scoutsKillIdris(player);
+      }
       event.handled = true;
       return;
     }
@@ -832,6 +846,7 @@ module.exports = function registerRegicideQuest(api) {
         ? new Location(2312, 3216, 0) // Isafdar, by the Arandar pass
         : new Location(2343, 9622, 0); // underground, Iban's temple side
     player.moveTo(destination);
+    ensureIdris(player, destination);
   }
 
   function passArandarGate(event) {
@@ -1052,6 +1067,52 @@ module.exports = function registerRegicideQuest(api) {
     messengerByPlayer.delete(player);
   }
 
+  /**
+   * Isafdar's scouts. Wiki (Regicide/Quick guide): out of the well, "run west through the forest and
+   * talk to Idris when he spawns"; the transcript then has Morvran and Essyllt appear and kill him
+   * (action Ru0gbO). None of the three is a world spawn, so without these the quest stopped at
+   * stage 2. Idris appears a few tiles west of a stage-2 player arriving in the forest.
+   */
+  function scoutsInIsafdar(location) {
+    const x = location.getX(), y = location.getY();
+    return location.getZ() === 0 && x >= ISAFDAR_SCOUT_BOUNDS.minX && x <= ISAFDAR_SCOUT_BOUNDS.maxX
+      && y >= ISAFDAR_SCOUT_BOUNDS.minY && y <= ISAFDAR_SCOUT_BOUNDS.maxY;
+  }
+
+  function spawnScout(player, id, at, dx, dy) {
+    return api.spawnNpc({
+      id, x: at.getX() + dx, y: at.getY() + dy, z: at.getZ(), wanderRadius: 0, owner: player, ownerOnly: true,
+    });
+  }
+
+  function removeScouts(player) {
+    for (const npc of scoutsByPlayer.get(player) ?? []) api.removeNpc(npc);
+    scoutsByPlayer.delete(player);
+  }
+
+  function ensureIdris(player, at = player.getLocation()) {
+    if (!player || player.isPlayerBot?.() === true) return;
+    if (quest.getStage(player) !== STAGE_SPOKEN_LATHAS || scoutsByPlayer.has(player)) return;
+    if (!scoutsInIsafdar(at)) return;
+    const idris = spawnScout(player, NpcIdentifiers.IDRIS, at, -3, 0);
+    if (idris) scoutsByPlayer.set(player, [idris]);
+  }
+
+  /** Morvran and Essyllt arrive and kill Idris; they leave a while after the briefing. */
+  function scoutsKillIdris(player) {
+    removeScouts(player);
+    const at = player.getLocation();
+    const scouts = [
+      spawnScout(player, NpcIdentifiers.MORVRAN, at, -1, 1),
+      spawnScout(player, NpcIdentifiers.ESSYLLT, at, -1, -1),
+    ].filter(Boolean);
+    scoutsByPlayer.set(player, scouts);
+    const { CountdownTask, TaskManager } = api.core;
+    TaskManager.submit(new CountdownTask(scouts, SCOUTS_LEAVE_TICKS, () => {
+      if (scoutsByPlayer.get(player) === scouts) removeScouts(player);
+    }));
+  }
+
   function undergroundPassComplete(player) {
     const undergroundPass = getRegisteredQuests().find((entry) => entry.key === "underground_pass");
     return Boolean(undergroundPass && undergroundPass.isComplete(player));
@@ -1076,12 +1137,15 @@ module.exports = function registerRegicideQuest(api) {
   }
 
   function handleLogout({ player }) {
-    if (player) removeMessenger(player);
+    if (!player) return;
+    removeMessenger(player);
+    removeScouts(player);
   }
 
   function handleLogin({ player }) {
     refreshQuestList(player);
     ensureMessenger(player);
+    ensureIdris(player);
   }
 
   api.persistAttribute(GUARD_BRIBED_ATTRIBUTE);

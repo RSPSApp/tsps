@@ -67,11 +67,11 @@ const duskForms = () => [ids.npcs.duskPhase1, ids.npcs.duskToPhase2, ids.npcs.du
 const dawnForms = () => [ids.npcs.dawnPhase1, ids.npcs.dawnFlying, ids.npcs.dawnPhase3, ids.npcs.dawnDeath];
 
 function isDusk(npc) {
-  return Boolean(npc && ids) && duskForms().includes(npc.getId?.());
+  return Boolean(npc && ids) && (npc.__ggRole === "dusk" || duskForms().includes(npc.getId?.()));
 }
 
 function isDawn(npc) {
-  return Boolean(npc && ids) && dawnForms().includes(npc.getId?.());
+  return Boolean(npc && ids) && (npc.__ggRole === "dawn" || dawnForms().includes(npc.getId?.()));
 }
 
 function chebyshev(a, b) {

@@ -109,6 +109,18 @@ class MysticsRoom extends Raid.Room {
       }
     }
     if (this.mystics.some((other) => other !== npc && other.isRegistered() && other.getHitpoints() > 0)) return;
+    this.openPortals();
+  }
+
+  /** ::coxclear: the mystics go and the portals come, as after the last one dies. */
+  devFinish() {
+    this.cleanup();
+    this.openPortals();
+  }
+
+  /** rsprox captures: the start, middle and end portals appear as the last mystic dies. */
+  openPortals() {
+    if (this.completed) return;
     this.completed = true;
     const { GameObject, ObjectManager } = Shared.core();
     if (this.mark) ObjectManager.deregister(this.mark, true);

@@ -72,7 +72,7 @@ test("a vat hand-crushes raw mushrooms one-for-one and refunds powder", (t) => {
   assert.equal(h.p.getInventory().getAmount(items.arder), 0, "all three raw mushrooms were hand-crushed");
   vatAction(h, "Check");
   assert.ok(h.packets.some((packet) => packet[0] === "sendString" && packet[1].includes("Arder powder:  3 / 6")));
-  assert.ok(h.messages.includes("You crush some arder mushroom into to the vat with your hands."));
+  assert.ok(h.spam.includes("You crush some arder mushroom into to the vat with your hands."));
   vatAction(h, "Empty");
   assert.equal(h.p.getInventory().getAmount(items.arderPowder), 3, "hand-crushing does not use the pestle's Herblore yield");
   assert.equal(h.p.getInventory().getAmount(items.arder), 0);
@@ -106,7 +106,7 @@ test("normal-world preparation feedback and mushroom repetition use the captured
   t.mock.method(h.p, "performAnimation", (animation) => animations.push(animation.getId()));
   h.move([resources.arder[0] + 1, resources.arder[1]]);
   h.Prep.pick(session, "arder");
-  assert.ok(h.messages.includes("You pick a mushroom."));
+  assert.ok(h.spam.includes("You pick a mushroom."));
   assert.ok(animations.includes(h.core.CacheDefinitions.getSeqId("picking_low")));
   h.step(3);
   assert.equal(h.p.getInventory().getAmount(items.arder), 2, "picking continues after three ticks");
@@ -116,7 +116,7 @@ test("normal-world preparation feedback and mushroom repetition use the captured
 
   h.add(items.pestle);
   h.Prep.grind({ player: h.p, usedItemId: items.pestle, usedWithItemId: items.arder });
-  assert.ok(h.messages.includes("You grind the mushroom into dust."));
+  assert.ok(h.spam.includes("You grind the mushroom into dust."));
   assert.ok(animations.includes(h.core.CacheDefinitions.getSeqId("human_herbing_grind")));
   const tile = resources.vats[0];
   h.move([tile[0], tile[1] - 1]);

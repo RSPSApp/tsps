@@ -90,6 +90,7 @@ function fakeNpc(id, x, y) {
     getCombat: () => ({
       setAttackDelay: (t) => { npc.attackDelay = t; },
       attack: (t) => { npc.target = t; },
+      getLastAttack: () => ({ reset: () => { npc.lastAttackResets = (npc.lastAttackResets ?? 0) + 1; } }),
       getTarget: () => npc.fighting ?? npc.target,
     }),
   };

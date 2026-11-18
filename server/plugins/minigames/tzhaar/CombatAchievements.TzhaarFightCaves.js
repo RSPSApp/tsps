@@ -8,10 +8,14 @@
  * watched from its start, so only its completion counts.
  */
 
+const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
+
 const runs = new WeakMap();
 let api;
 
 const PROTECTION = { MELEE: "PROTECT_FROM_MELEE", RANGED: "PROTECT_FROM_MISSILES", MAGIC: "PROTECT_FROM_MAGIC" };
+// CombatType is a numeric enum: its name is CombatType[value].
+const typeName = (hit) => api.core.CombatType[hit?.getCombatType?.()];
 const SPEED = [["Fight Caves Speed-Chaser", 30 * 60], ["Fight Caves Speed-Runner", 26 * 60 + 30]];
 
 const tick = () => api.core.World.getProcessCycle();
@@ -36,7 +40,7 @@ function tickRun(player) {
 
 function dealt({ player, hit }) {
   const run = runs.get(player);
-  if (run && String(hit?.getCombatType?.()) !== "MELEE") run.nonMelee = true;
+  if (run && typeName(hit) !== "MELEE") run.nonMelee = true;
 }
 
 function hitResolved({ attacker, target, hit }) {
@@ -45,7 +49,7 @@ function hitResolved({ attacker, target, hit }) {
   const name = npcName(attacker);
   if (name === "Tz-Kih") run.kihAttacked = true;
   if (name === "TzTok-Jad" && hit.getTotalDamage() > 0 && target.getHitpoints() > 0) {
-    const prayer = api.core.PrayerHandler[PROTECTION[String(hit.getCombatType())]];
+    const prayer = api.core.PrayerHandler[PROTECTION[typeName(hit)]];
     if (!api.core.PrayerHandler.isActivated(target, prayer)) run.jadHitUnprayed = true;
   }
 }
@@ -62,12 +66,17 @@ function jadHealed(player) {
   if (run) run.jadHealed = true;
 }
 
+// Wiki (TzTok-Jad): the kill-count line follows the win, as for other bosses.
+function announceKill(player, total) {
+  sendBossKillCount(player, `Your TzTok-Jad kill count is: <col=ff0000>${total}</col>.`);
+}
+
 function finish(player, wonJad) {
   const run = runs.get(player);
   runs.delete(player);
   if (!wonJad) return;
   const complete = (task) => api.emitCustomEvent("combat-achievements:complete", { player, task });
-  api.emitCustomEvent("combat-achievements:kill", { player, monster: "TzTok-Jad" });
+  api.emitCustomEvent("combat-achievements:kill", { player, monster: "TzTok-Jad", announce: (total) => announceKill(player, total) });
   if (!run) return;
   const seconds = (tick() - run.startTick) * 0.6;
   for (const [task, limit] of SPEED) if (seconds < limit) complete(task);

@@ -213,8 +213,24 @@ class GuardiansRoom extends Raid.Room {
     if (!this.guardians.includes(npc)) return;
     const attacker = hit.getAttacker?.();
     const factor = attacker?.isPlayer?.() && !npc.__coxCrumbled ? pickaxeFactor(attacker.getAsPlayer()) : 0;
+    // A pickaxe's scaling is already on the rolled hitsplats (Room.resistance); no pickaxe, nothing.
+    if (factor > 0 && hit.rolledResistance) return;
     for (const part of hit.getHits()) part.setDamage(Math.floor(part.getDamage() * factor));
     hit.updateTotalDamage();
+  }
+
+  resistance(npc, hit) {
+    const attacker = hit.getAttacker?.();
+    if (!this.guardians.includes(npc) || npc.__coxCrumbled || !attacker?.isPlayer?.()) return 1;
+    return pickaxeFactor(attacker.getAsPlayer()) || 1;
+  }
+
+  /** ::coxclear: the guardians go and the gap opens at once. */
+  devFinish() {
+    this.completed = true;
+    for (const blocker of this.blockers) Shared.core().ObjectManager.deregister(blocker, true);
+    this.blockers = [];
+    this.cleanup();
   }
 
   /** They crumble (836) and 2 ticks later turn to their remains (id + 2); both down, the gap opens 3 ticks on. */

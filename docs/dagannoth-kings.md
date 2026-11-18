@@ -113,8 +113,15 @@ the Area; none of the kings become tolerant (Wiki). Spinolyps use the engine's
 default aggression.
 - **Death:** 2856, loot and removal 2 ticks later (`deathTicks: 2`; rsprox captures, 633 deaths, e.g. rec 89 ticks 5348-5350), respawn 150 ticks later
 (`respawn: 150`, Wiki's 90s), at the world spawns.
-- **Boss HUD:** interface 303 per king (varp 1683, varbits 6099/6100, script 2887 as
-captured), shown while fighting a player, hidden on the death or on leaving.
+- **Boss HUD:** none for the normal kings: rsprox 1856 (rev 227) and 3433 (rev 235), 252 normal king
+spawns (attacked in 3433), never set varp 1683 or boss mode. Rec 89 is a Leagues V Echo fight, where the bar shows
+(interface 303 per king, varp 1683, varbits 6099/6100, script 2887), opened on Supreme at the
+orb's Yes and following the king fought; only the Echo kings show it ([echo-bosses.md](echo-bosses.md)).
+The cache names the normal kings' HUD "Dagannoth Kings (Echo)" (npc param 510), so the standard health
+overlay ("Show normal health overlay") titles a normal king that way too: the client's script 2103 reads
+param 510, then the npc's name. Left as the cache has it (no capture shows live's overlay on a normal
+king). The kings are the only boss here whose param 510 says "(Echo)": Dawn, Dusk, Cerberus and the
+others have none (their name shows), Hunllef and Amoxliatl their own name.
 - **Loot:** the standard `dagannoth_prime/rex/supreme` tables in
 `data/definitions/npc-drops.json` (bones + hide always, rings/daxe 1/128,
 pets 1/5000).

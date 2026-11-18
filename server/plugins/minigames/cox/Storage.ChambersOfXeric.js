@@ -49,6 +49,7 @@ const COMPONENT = {
   SIDE: { ITEMS: 1, DISMISS: 8 },
 };
 const SIDE_INTERFACE = 551;
+const MODAL = 0;
 const VARBIT = { SIDE_PRIVATE: 3459, WARNING_DISMISSED: 5509 };
 const MOUNT_UNIT = 30107;
 const PLANK = 21036;
@@ -85,6 +86,7 @@ const SHARED_ITEM_SET = new Set(SHARED_ITEMS);
 const ATTR_PRIVATE = "cox:private-storage";
 const ATTR_DISMISSED = "cox:storage-warning-dismissed";
 const ATTR_VIEW = "cox:storage-view";
+const BANK_PIN_FEATURE = "cox-mountain-storage";
 
 const uid = (group, component) => (group << 16) | component;
 
@@ -196,6 +198,27 @@ function tierOf(raid) {
 
 // ---------------------------------------------------------------- the interfaces
 
+/** Wiki update, 26 January 2017: Quidamortem's private unit requires Bank PIN entry. */
+function mountPinLocked(player) {
+  const session = player.getSession();
+  const at = player.getLocation().clone();
+  const area = player.getPrivateArea();
+  const raid = Raid.raidOf(player);
+  const request = {
+    player,
+    feature: BANK_PIN_FEATURE,
+    resume: () => {
+      // Unlocking only reopens this recovery view; never replay an old transfer or overwrite another UI.
+      if (!player.isRegistered() || player.getHitpoints() <= 0 || player.getSession() !== session
+        || !player.getLocation().equals(at) || player.getPrivateArea() !== area || Raid.raidOf(player) !== raid
+        || player.getInterfaceId() !== -1) return;
+      openPrivate(player, -1);
+    },
+  };
+  Shared.api().emitCustomEvent("bank-pin:guard", request);
+  return request.locked === true;
+}
+
 /** What the player has open: { kind: "private" | "shared", size, raid }. */
 /**
  * The storage the player has open: only while its interface is open, and the raid's own storage only inside the raid
@@ -209,7 +232,7 @@ function viewOf(player) {
   const raid = Raid.raidOf(player);
   const open = player.getInterfaceId?.() === expected
     && (view.mount || (raid != null && (view.kind !== "shared" || view.raid === raid)));
-  if (open) return view;
+  if (open && !(view.mount && mountPinLocked(player))) return view;
   player.setAttribute(ATTR_VIEW, null);
   return null;
 }
@@ -218,18 +241,22 @@ function sendSide(player, privateView) {
   const sender = player.getPacketSender();
   sender.sendVarbit(VARBIT.SIDE_PRIVATE, privateView ? 1 : 0);
   sender.sendVarbit(VARBIT.WARNING_DISMISSED, player.getAttribute(ATTR_DISMISSED) ? 1 : 0);
+  // Its onLoad draws the inventory and Store operations using the state above.
+  const cache = Shared.core().CacheDefinitions;
+  sender.sendSubInterface(cache.getComponentId("toplevel_osrs_stretch:sidemodal"), cache.getInterfaceId("raids_storage_side"), MODAL);
   sender.sendInterfaceFlagsRange(uid(SIDE_INTERFACE, COMPONENT.SIDE.ITEMS), 0, 27,
     Shared.EVENT.OP1 | Shared.EVENT.OP2 | Shared.EVENT.OP3 | Shared.EVENT.OP4 | Shared.EVENT.OP5 | (1 << 10));
 }
 
 /** The private storage; `size` -1 is the mountain's unit (withdraw only, no shared button). */
 function openPrivate(player, size) {
+  if (size === -1 && mountPinLocked(player)) return;
   const sender = player.getPacketSender();
   const items = privateItems(player);
   const noSharedSpace = size === -1 || tierOf(Raid.raidOf(player)) === 0;
   if (size === -1) clearRaidItems(player);
   player.setAttribute(ATTR_VIEW, { kind: "private", size: size === -1 ? 120 : size, mount: size === -1 });
-  sender.sendInterfaceSet(Shared.INTERFACE.PRIVATE_STORAGE, SIDE_INTERFACE);
+  sender.sendInterface(Shared.INTERFACE.PRIVATE_STORAGE);
   sender.sendString(size === -1 ? "N/A" : String(size), uid(Shared.INTERFACE.PRIVATE_STORAGE, COMPONENT.PRIVATE.SIZE));
   sender.sendInterfaceDisplayState(uid(Shared.INTERFACE.PRIVATE_STORAGE, COMPONENT.PRIVATE.TO_SHARED), noSharedSpace);
   sender.sendInterfaceFlagsRange(uid(Shared.INTERFACE.PRIVATE_STORAGE, COMPONENT.PRIVATE.ITEMS), 0, Math.max(items.length, 1) + 120,
@@ -242,7 +269,7 @@ function openShared(player, raid) {
   const sender = player.getPacketSender();
   const tier = TIERS[tierOf(raid)];
   player.setAttribute(ATTR_VIEW, { kind: "shared", size: tier.shared, raid });
-  sender.sendInterfaceSet(Shared.INTERFACE.SHARED_STORAGE, SIDE_INTERFACE);
+  sender.sendInterface(Shared.INTERFACE.SHARED_STORAGE);
   sender.sendString(String(tier.shared), uid(Shared.INTERFACE.SHARED_STORAGE, COMPONENT.SHARED.SIZE));
   sender.sendInterfaceFlagsRange(uid(Shared.INTERFACE.SHARED_STORAGE, COMPONENT.SHARED.ITEMS), 0, tier.shared,
     Shared.EVENT.OP1 | Shared.EVENT.OP2 | Shared.EVENT.OP3 | Shared.EVENT.OP4 | Shared.EVENT.OP5 | (1 << 10));
@@ -285,7 +312,7 @@ function isUltimateIronman(player) {
   return query.mode === "ultimate";
 }
 
-function deposit(player, slot, amount) {
+function deposit(player, slot, amount, bulkFeedback = null) {
   const view = viewOf(player);
   if (!view || view.mount) {
     if (view?.mount) player.sendMessage("You can't store items now.");
@@ -309,7 +336,8 @@ function deposit(player, slot, amount) {
   }
   const store = view.kind === "private" ? privateItems(player) : sharedStore(view.raid);
   if (restricted(item)) {
-    player.sendMessage(PRESET_TEXT);
+    if (!bulkFeedback?.presetWarned) player.sendMessage(PRESET_TEXT);
+    if (bulkFeedback) bulkFeedback.presetWarned = true;
     return;
   }
   const stored = stacks(id) ? depositStack(inventory, store, view.size, slot, amount) : depositEach(inventory, store, view.size, slot, amount);
@@ -426,8 +454,9 @@ function depositOrBankAll({ player }) {
   const view = privateView(player);
   if (!view) return true;
   if (!view.mount) {
+    const bulkFeedback = { presetWarned: false };
     player.getInventory().getItems().forEach((item, slot) => {
-      if (item && item.getId() >= 0) deposit(player, slot, item.getAmount());
+      if (item && item.getId() >= 0) deposit(player, slot, item.getAmount(), bulkFeedback);
     });
     return true;
   }

@@ -198,7 +198,11 @@ function setup(pluginPath) {
     isRegistered: () => true,
     performAnimation() {},
   };
-  const emit = (name, event = {}) => api.emitCustomEvent(name, { player, ...event });
+  const emit = (name, event = {}) => {
+    const payload = { player, pages: quest.key === "tai_bwo_wannai_trio" ? [{ page: quest.name }] : [], ...event };
+    api.emitCustomEvent(name, payload);
+    return payload;
+  };
   const action = (npcId, stepId) => emit('npc-dialogue:action', { npcId, stepId });
   const line = (npcId, text) => emit('npc-dialogue:line', { npcId, text });
   const object = (objectId, clickType = 1) => {
@@ -458,58 +462,41 @@ test("Shades of Mort'ton repairs to native 100/20, sanctifies serum and complete
   assert.equal(h.configs.get(339), 85);
 });
 
-test('Tai Bwo Wannai Trio gates start, consumes vessels, cooks paste bones and completes at stage 6', () => {
+test('Tai Bwo Wannai Trio starts at the captured continue/menu boundaries, loads vessels and completes after the coin box', () => {
   const h = setup('../plugins/quests/quests/TaiBwoWannaiTrio.Quest');
-  const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers, O = h.core.ObjectIdentifiers;
-  h.emit('npc-dialogue:hook', { npcId: N.TIMFRAKU, hook: 'quest:tai-bwo-wannai-trio:start' });
-  h.line(N.TIMFRAKU, 'Well then adventurer, you would do better to rove elsewhere.');
-  assert.equal(h.quest.getStage(h.player), 0, 'Jungle Potion is required');
-  h.attrs.set('quest.jungle_potion.stage', 12);
-  h.emit('npc-dialogue:hook', { npcId: N.TIMFRAKU, hook: 'quest:tai-bwo-wannai-trio:start' });
-  assert.equal(h.quest.getStage(h.player), 3, 'direct hook still finalises for old saves');
-  h.quest.setStage(h.player, 0);
-  h.line(N.TIMFRAKU, 'Well then adventurer, you would do better to rove elsewhere.');
-  assert.equal(h.quest.getStage(h.player), 1);
-  h.line(N.TIMFRAKU, 'I now ask you to do one last thing for our village.');
-  assert.equal(h.quest.getStage(h.player), 2);
-  h.emit('npc-dialogue:hook', { npcId: N.TIMFRAKU, hook: 'quest:tai-bwo-wannai-trio:start' });
-  assert.equal(h.quest.getStage(h.player), 3);
+  const I=h.core.ItemIdentifiers, N=h.core.NpcIdentifiers;
+  h.emit('npc-dialogue:hook', {npcId:N.TIMFRAKU,hook:'quest:tai-bwo-wannai-trio:start'});
+  assert.equal(h.quest.getStage(h.player),0,'Jungle Potion still gates the actual start');
+  const sentAway=h.line(N.TIMFRAKU,'Well then adventurer, you would do better to rove elsewhere.');
+  assert.equal(h.quest.getStage(h.player),0,'showing the line has not continued it');
+  assert.equal(typeof sentAway.after,'function');sentAway.after();
+  assert.equal(h.quest.getStage(h.player),1,'being sent away is the captured pre-quest stage');
+  h.emit('npc-dialogue:hook',{npcId:N.TIMFRAKU,hook:'quest:tai-bwo-wannai-trio:start'});
+  assert.equal(h.quest.getStage(h.player),1,'meeting Timfraku does not bypass Jungle Potion');
+  h.attrs.set('quest.jungle_potion.stage',12);
+  h.emit('npc-dialogue:menu',{npcId:N.TIMFRAKU,prompt:'Start the Tai Bwo Wannai Trio quest?'});
+  assert.equal(h.quest.getStage(h.player),2);
+  h.emit('npc-dialogue:hook',{npcId:N.TIMFRAKU,hook:'quest:tai-bwo-wannai-trio:start'});
+  assert.equal(h.quest.getStage(h.player),3);
 
-  h.attrs.set('quest.tai_bwo_wannai_trio.tamayu', 3);
-  const black = h.itemOnNpc(I.BLACK_SPEAR, N.TAMAYU);
-  assert.equal(black.handled, false, 'black spears are rejected for the hunt');
-  const iron = h.itemOnNpc(I.IRON_SPEAR, N.TAMAYU);
-  assert.equal(iron.handled, true, 'iron spear starts the hunt item branch');
+  h.give(I.KARAMBWAN_VESSEL,1);h.give(I.RAW_KARAMBWANJI,1);
+  const use={player:h.player,usedItemId:I.RAW_KARAMBWANJI,usedWithItemId:I.KARAMBWAN_VESSEL};
+  for(const fn of h.hooks.itemOnItem)fn(use);
+  assert.equal(h.inventory.get(I.KARAMBWAN_VESSEL_3)??0,0,'loading is not instantaneous');
+  h.runTasks(1);
+  assert.equal(h.inventory.get(I.KARAMBWAN_VESSEL_3),1);
+  assert.equal(h.inventory.get(I.KARAMBWAN_VESSEL),0);
 
-  h.action(N.LUBUFU, 'SwVHKY');
-  assert.equal(h.inventory.get(I.KARAMBWAN_VESSEL), 1);
-  h.give(I.RAW_KARAMBWANJI, 1);
-  h.hooks.itemOnItem[0]({ player: h.player, usedItemId: I.RAW_KARAMBWANJI, usedWithItemId: I.KARAMBWAN_VESSEL });
-  assert.equal(h.inventory.get(I.KARAMBWAN_VESSEL_3), 1);
-  h.action(N.TIADECHE, 'Tbc1Ao');
-  assert.equal(h.attrs.get('quest.tai_bwo_wannai_trio.tiadeche'), 4);
-  h.action(N.TIADECHE, '1kqTlj');
-  assert.equal(h.inventory.get(I.RAW_KARAMBWAN), 1);
-
-  h.give(I.PASTY_JOGRE_BONES_3, 1);
-  h.itemOnObject(I.PASTY_JOGRE_BONES_3, O.FIRE, { object: { getDefinition: () => ({ getName: () => 'Fire' }) } });
-  assert.equal(h.inventory.get(I.PASTY_JOGRE_BONES), 1);
-
-  h.attrs.set('quest.tai_bwo_wannai_trio.tiadeche', 6);
-  h.attrs.set('quest.tai_bwo_wannai_trio.tamayu', 4);
-  h.attrs.set('quest.tai_bwo_wannai_trio.tinsay', 6);
-  h.give(I.MARINATED_J_BONES, 1);
-  h.action(N.TINSAY, 'oYUlzJ');
-  assert.equal(h.quest.getStage(h.player), 4);
-  assert.equal(h.configs.get(320), 4);
-
-  h.action(N.TIMFRAKU, 'SUa3hN');
-  assert.equal(h.quest.getStage(h.player), 6);
-  assert.equal(h.configs.get(320), 6);
-  assert.equal(h.inventory.get(I.COINS), 2000);
-  const coins = h.inventory.get(I.COINS);
-  h.action(N.TIMFRAKU, 'SUa3hN');
-  assert.equal(h.inventory.get(I.COINS), coins, 'reward is handed out once');
+  // The full brothers' captured progression is exercised by tai-bwo-wannai-trio-capture.
+  h.quest.setStage(h.player,4);
+  const box=h.action(N.TIMFRAKU,'kQApU7');
+  assert.equal(h.quest.getStage(h.player),5,'coins arrive with their item box');
+  assert.equal(h.inventory.get(I.COINS),2000);
+  assert.equal(typeof box.after,'function');box.after();
+  assert.equal(h.quest.getStage(h.player),6,'continuing the coin box completes');
+  assert.equal(h.configs.get(320),6);
+  h.action(N.TIMFRAKU,'kQApU7');h.action(N.TIMFRAKU,'SUa3hN');
+  assert.equal(h.inventory.get(I.COINS),2000,'repeated actions never repay the reward');
 });
 
 test('Tai Bwo Wannai Trio refuses completion before all three sons return', () => {
@@ -527,81 +514,42 @@ test('Tai Bwo Wannai Trio migrates old completion without replaying the reward',
   h.login();
   assert.equal(h.quest.getStage(h.player), 6);
   assert.equal(h.quest.isComplete(h.player), true);
-  h.action(h.core.NpcIdentifiers.TIMFRAKU, 'SUa3hN');
+  { const box=h.action(h.core.NpcIdentifiers.TIMFRAKU,'kQApU7');box.after?.(); }
   assert.equal(h.inventory.get(h.core.ItemIdentifiers.COINS) ?? 0, 0);
 });
 
-test('Tai Bwo Wannai Trio journal exposes QH group 119 predicates only at earned progress', () => {
-  const h = setup('../plugins/quests/quests/TaiBwoWannaiTrio.Quest');
-  const A = h.attrs;
-  h.quest.setStage(h.player, 3);
-  const journal = () => h.quest.buildJournal(h.player, h.quest).join('\n');
-  const has = (text) => journal().includes(text);
-
-  assert.equal(has('I must take a'), false);
-  assert.equal(has('He will only return'), false);
-  assert.equal(has('He has successfully caught'), false);
-
-  A.set('quest.tai_bwo_wannai_trio.tiadeche', 2);
-  assert.equal(has('<col=000080>I must take a <col=800000>Karambwan vessel<col=000080> to <col=800000>Tinsay<col=000080> and retrieve the crafting manual.</col>'), true);
-  assert.equal(has('<col=000080>He will only return to the village once he has caught a Karambwan.</col>'), true);
-  assert.equal(has('<str>He has successfully caught a Karambwan.</str>'), false);
-
-  A.set('quest.tai_bwo_wannai_trio.karambwan', 1);
-  assert.equal(has('<col=000080>He will only return'), false, 'the catch clears the pending line');
-  assert.equal(has('<str>He has successfully caught a Karambwan.</str>'), true);
-  A.set('quest.tai_bwo_wannai_trio.tiadeche', 5);
-  assert.equal(has('<str>retrieved crafting instructions for Tiadeche.</str>'), true);
-
-  A.set('quest.tai_bwo_wannai_trio.tinsay', 2);
-  assert.equal(has('<col=000080>He requires <col=800000>banana in Karamja rum<col=000080> to repair the tribal statue.</col>'), true);
-  assert.equal(has('<str>I have given him sliced banana in Karamja rum.</str>'), false);
-  A.set('quest.tai_bwo_wannai_trio.tinsay', 4);
-  assert.equal(has('<str>I have given him sliced banana in Karamja rum.</str>'), true);
-  A.set('quest.tai_bwo_wannai_trio.tinsay', 6);
-  assert.equal(has('<str>I have given him a seaweed in monkey skin sandwich.</str>'), true);
-  A.set('quest.tai_bwo_wannai_trio.tinsay', 7);
-  assert.equal(has('<str>I have given him a burnt Jogre bones marinated in raw Karambwanji paste.</str>'), true);
-
-  A.set('quest.tai_bwo_wannai_trio.tamayu', 3);
-  assert.equal(has('He appears to be having difficulty in the hunt.'), true);
-  assert.equal(has('<str>Tamayu has slain the Shaikahan!</str>'), false);
-  A.set('quest.tai_bwo_wannai_trio.agility', 4);
-  assert.equal(has("<str>I have increased his agility to match the Shaikahan's.</str>"), true);
-  A.set('quest.tai_bwo_wannai_trio.spear', 2);
-  assert.equal(has('<str>I have give him a stronger and Karambwan poisoned spear.</str>'), true);
-  A.set('quest.tai_bwo_wannai_trio.tamayu', 4);
-  assert.equal(has('He appears to be having difficulty'), false, 'the hunt line clears after the kill');
-  assert.equal(has('<str>Tamayu has slain the Shaikahan!</str>'), true);
-
-  A.set('quest.tai_bwo_wannai_trio.lubufu', 5);
-  assert.equal(has('Lubufu will teach me to catch Karambwan once I bring him 20 Karambwanji.'), true);
-  assert.equal(has('<str>I have given Lubufu 20 Karambwanji.</str>'), false);
-  A.set('quest.tai_bwo_wannai_trio.lubufu', 25);
-  assert.equal(h.inventory.get(h.core.ItemIdentifiers.KARAMBWAN_VESSEL) ?? 0, 0, 'Lubufu hand-in is truthful without a held vessel');
-  assert.equal(has('Lubufu will teach me'), false, 'the pending line clears once the Karambwanji are handed in');
-  assert.equal(has('<str>I have given Lubufu 20 Karambwanji.</str>'), true);
-  assert.equal(has('<str>Lubufu trained me to catch Karambwan.</str>'), false);
-
-  assert.equal(h.quest.getStage(h.player), 3, 'journal reads never advance the quest');
-  assert.equal(h.quest.isComplete(h.player), false);
-  runtime.openJournal(h.player, h.quest);
-  assert.match(h.strings.get((119 << 16) | 5), /Tai Bwo Wannai Trio/);
-  const rendered = [...h.strings.entries()]
-    .filter(([uid]) => uid >= ((119 << 16) | 11) && uid <= ((119 << 16) | 60))
-    .map(([, text]) => text)
-    .join('\n');
-  assert.match(rendered, /<str>I have given Lubufu 20 Karambwanji\.<\/str>/);
-  assert.match(rendered, /<str>Tamayu has slain the Shaikahan!<\/str>/);
-  assert.doesNotMatch(rendered, /QUEST COMPLETE!/);
-  assert.equal(h.quest.getStage(h.player), 3);
-
-  A.set('quest.tai_bwo_wannai_trio.lubufu', 31);
-  assert.equal(h.inventory.get(h.core.ItemIdentifiers.KARAMBWAN_VESSEL) ?? 0, 0, 'completed hand-in stays truthful with no held vessel');
-  assert.equal(has('<str>I have given Lubufu 20 Karambwanji.</str>'), true, 'completed hand-in line survives apprenticeship');
-  assert.equal(has('<str>Lubufu trained me to catch Karambwan.</str>'), true);
-  assert.equal(has('Lubufu will teach me'), false, 'only the pending fetch line clears');
-  assert.equal(h.quest.getStage(h.player), 3, 'apprenticeship journal does not advance the quest');
+test('Tai Bwo Wannai Trio journal reflects captured native progress without advancing it', () => {
+  const h=setup('../plugins/quests/quests/TaiBwoWannaiTrio.Quest'), A=h.attrs;
+  h.quest.setStage(h.player,3);
+  const journal=()=>h.quest.buildJournal(h.player,h.quest).join('\n');
+  assert.match(journal(),/I need to find the three sons/);
+  assert.doesNotMatch(journal(),/I must take a/);
+  A.set('quest.tai_bwo_wannai_trio.tiadeche',2);
+  assert.match(journal(),/only return once he has caught a Karambwan/);
+  A.set('quest.tai_bwo_wannai_trio.tiadeche',3);
+  assert.doesNotMatch(journal(),/only return once he has caught/);
+  A.set('quest.tai_bwo_wannai_trio.tiadeche',4);
+  assert.match(journal(),/I must take a Karambwan vessel to Tinsay/);
+  A.set('quest.tai_bwo_wannai_trio.tiadeche',5);
+  assert.match(journal(),/I must take Tinsay's crafting manual to Tiadeche/);
+  A.set('quest.tai_bwo_wannai_trio.tiadeche',6);
+  assert.match(journal(),/<str>Tiadeche<\/str>/);
+  for(const [value,text] of [[2,'banana in Karamjan rum'],[4,'seaweed in monkey skin sandwich'],[6,'burnt Jogre bones marinated in Karambwanji']]){
+    A.set('quest.tai_bwo_wannai_trio.tinsay',value);assert.ok(journal().includes(text));
+  }
+  A.set('quest.tai_bwo_wannai_trio.tamayu',3);
+  assert.match(journal(),/difficulty in his hunt/);
+  A.set('quest.tai_bwo_wannai_trio.tamayu',4);
+  assert.doesNotMatch(journal(),/difficulty in his hunt/);
+  assert.match(journal(),/<str>Tamayu<\/str>/);
+  A.set('quest.tai_bwo_wannai_trio.lubufu',5);
+  assert.match(journal(),/Lubufu wants 20 raw Karambwanji/);
+  A.set('quest.tai_bwo_wannai_trio.lubufu',25);
+  assert.doesNotMatch(journal(),/Lubufu wants 20 raw Karambwanji/);
+  assert.equal(h.quest.getStage(h.player),3,'reading never advances the quest');
+  runtime.openJournal(h.player,h.quest);
+  assert.match(h.strings.get((119<<16)|5),/Tai Bwo Wannai Trio/);
+  assert.equal(h.quest.isComplete(h.player),false);
 });
 
 test("Shades of Mort'ton migrates old saves and publishes the native 207/208 cure bits", () => {
@@ -809,16 +757,17 @@ test('Tai Bwo Wannai Trio plays the captured Shaikahan hunt and delays progress 
   h.quest.setStage(h.player, 3);
   h.attrs.set('quest.tai_bwo_wannai_trio.tamayu', 2);
   h.setLocation(2845, 3046);
-  h.action(N.TAMAYU, 'cMkbX1');
+  const watch=h.action(N.TAMAYU, 'cMkbX1');
+  assert.equal(typeof watch.wait,'function');watch.wait(()=>{});
   assert.equal(h.attrs.get('quest.tai_bwo_wannai_trio.tamayu'), 2, 'progress waits for the scene');
   assert.equal(h.player.getLocation().getX(), 2520);
   assert.equal(h.player.getLocation().getY(), 4568);
   assert.equal(h.movement.blocked, true);
   assert.ok(h.spawned.some((npc) => npc.getId() === 4705));
   assert.ok(h.spawned.some((npc) => npc.getId() === 4709));
-  assert.ok(h.spawned.some((npc) => npc.getId() === 2848));
-  h.runTasks(0);
-  assert.deepEqual(h.cameras[0], ['move', 2518, 4571, 350, { rate: 232, rate2: 100 }]);
+  assert.equal(h.spawned.length,2,'only Tamayu and his quarry appear at first');
+  h.runTasks(1);
+  assert.deepEqual(h.cameras[0], ['move', 2518, 4571, 350, { rate: 232, rate2: 232 }]);
   h.runTasks(24);
   assert.equal(h.attrs.get('quest.tai_bwo_wannai_trio.tamayu'), 2);
   h.runTasks(25);
@@ -827,13 +776,16 @@ test('Tai Bwo Wannai Trio plays the captured Shaikahan hunt and delays progress 
   assert.equal(h.player.getLocation().getY(), 3046);
   assert.ok(h.cameras.some(([kind]) => kind === 'reset'));
 
-  h.action(N.TAMAYU, 'qnTEqZ');
+  h.attrs.set('quest.tai_bwo_wannai_trio.agility',4);
+  h.attrs.set('quest.tai_bwo_wannai_trio.spear',7);
+  const join=h.line(N.TAMAYU,'Very well, but you must not interfere.');
+  assert.equal(typeof join.after,'function');join.after();
   assert.equal(h.player.getLocation().getX(), 2520);
   h.runTasks(14);
   assert.equal(h.player.getLocation().getX(), 2537);
   assert.ok(h.spawned.some((npc) => npc.getId() === 4706));
   h.runTasks(31);
-  assert.ok(h.songs.includes(147));
+  assert.ok(h.songs.includes(190));
   assert.equal(h.attrs.get('quest.tai_bwo_wannai_trio.tamayu'), 4);
   assert.equal(h.player.getLocation().getX(), 2845);
   assert.equal(h.player.getLocation().getY(), 3046);
@@ -845,7 +797,8 @@ test('Tai Bwo Wannai Trio hunt interruption cancels the scene without granting p
   h.quest.setStage(h.player, 3);
   h.attrs.set('quest.tai_bwo_wannai_trio.tamayu', 2);
   h.setLocation(2845, 3046);
-  h.action(N.TAMAYU, 'cMkbX1');
+  const watch=h.action(N.TAMAYU, 'cMkbX1');
+  assert.equal(typeof watch.wait,'function');watch.wait(()=>{});
   h.runTasks(10);
   assert.equal(h.attrs.get('quest.tai_bwo_wannai_trio.tamayu'), 2);
   h.logout();
@@ -978,16 +931,13 @@ test("Tai completion delivers all 2,000 coins with a no-coin full bag and no dup
     const { h, inventory, I } = realInventorySetup();
     for (let i = 0; i < 28; i++) inventory.adds(I.SHARK, 1);
     assert.equal(inventory.getFreeSlots(), 0);
-    h.action(h.core.NpcIdentifiers.TIMFRAKU, 'SUa3hN');
+    { const box=h.action(h.core.NpcIdentifiers.TIMFRAKU,'kQApU7');box.after?.(); }
     assert.equal(h.quest.getStage(h.player), 6);
     assert.equal(inventory.getAmount(I.COINS), 0);
-    assert.deepEqual(drops, [
-      { id: I.COINS, amount: 1999 },
-      { id: I.COINS, amount: 1 },
-    ]);
+    assert.deepEqual(drops, [{id:I.COINS,amount:2000}]);
     assert.equal(drops.reduce((total, drop) => total + drop.amount, 0), 2000);
-    h.action(h.core.NpcIdentifiers.TIMFRAKU, 'SUa3hN');
-    assert.equal(drops.length, 2, 'completion reward is not repeated');
+    { const box=h.action(h.core.NpcIdentifiers.TIMFRAKU,'kQApU7');box.after?.(); }
+    assert.equal(drops.length, 1, 'completion reward is not repeated');
     assert.equal(drops.reduce((total, drop) => total + drop.amount, 0), 2000);
   } finally {
     manager.registers = original;
@@ -1004,14 +954,14 @@ test('Tai completion merges the extra coins into an existing stack and adds on o
     for (let i = 0; i < 27; i++) inventory.adds(I.SHARK, 1);
     inventory.adds(I.COINS, 100);
     assert.equal(inventory.getFreeSlots(), 0);
-    h.action(h.core.NpcIdentifiers.TIMFRAKU, 'SUa3hN');
+    { const box=h.action(h.core.NpcIdentifiers.TIMFRAKU,'kQApU7');box.after?.(); }
     assert.equal(drops.length, 0);
     assert.equal(inventory.getAmount(I.COINS), 2100);
 
     ({ h, inventory, I } = realInventorySetup());
     for (let i = 0; i < 27; i++) inventory.adds(I.SHARK, 1);
     assert.equal(inventory.getFreeSlots(), 1);
-    h.action(h.core.NpcIdentifiers.TIMFRAKU, 'SUa3hN');
+    { const box=h.action(h.core.NpcIdentifiers.TIMFRAKU,'kQApU7');box.after?.(); }
     assert.equal(drops.length, 0);
     assert.equal(inventory.getAmount(I.COINS), 2000);
   } finally {

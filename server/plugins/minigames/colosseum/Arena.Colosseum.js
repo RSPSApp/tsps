@@ -83,6 +83,16 @@ function dieInRun(event) {
   event.player.moveTo(Shared.loc(Shared.LOBBY_RESPAWN));
 }
 
+/**
+ * The death animation has started: whatever moves the player out next is that death. A first death that loses items
+ * goes to Death's Office (its death hook can answer before dieInRun), and leaving the arena that way was ended as a
+ * teleport: the run's Glory and the death on the scoreboard were lost.
+ */
+function dyingInRun({ player }) {
+  const run = Run.runOf(player);
+  if (run) run.dying = true;
+}
+
 /** Logged out inside (a crash, or the server stopping mid-run): the run is gone, back to the lobby. */
 function returnToLobby({ player }) {
   if (Run.runOf(player)) return;
@@ -111,6 +121,7 @@ module.exports = function registerColosseumArena(api) {
   api.onInterfaceActionButton(CONFIRM_BUTTON, confirm);
   api.onCustomEvent("gravestones:grave-location", graveInLobby);
   api.onPlayerDeath(dieInRun);
+  api.onCustomEvent("player:dying", dyingInRun);
   api.onPlayerLogin(returnToLobby);
   api.onCanAttack(ownRunOnly);
 };
@@ -118,3 +129,4 @@ module.exports = function registerColosseumArena(api) {
 module.exports.pickModifier = pickModifier;
 module.exports.confirm = confirm;
 module.exports.dieInRun = dieInRun;
+module.exports.dyingInRun = dyingInRun;

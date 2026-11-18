@@ -2062,7 +2062,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   - Anvil smithing's `smithing:success` now names `metal` ("runite") and the slot's `label`; "Smith a Runite
     Item" excludes, with a deed's new `notWhere`, what each league's row names: rune dart tips, arrowtips,
     nails, bolts (unf) and javelin tips in Demonic Pacts, dart tips, arrowtips and bolts in Trailblazer
-    Reloaded (Raging Echoes' row names none). Furnace jewellery's `crafting:made` now names `bar` ("Silver
+    Reloaded, rune nails in Raging Echoes (its Wiki row: "Rune nails do not work"; the generated catalogue
+    doesn't carry that note). Furnace jewellery's `crafting:made` now names `bar` ("Silver
     bar", 20 of them).
   - Existing: `farming:protected`; `firemaking:success` of red, green, blue, white or purple logs; `produce` of
     100 empty light orbs (Ours: glassblown, not filled), 100 pies of any kind, and a mith grapple.

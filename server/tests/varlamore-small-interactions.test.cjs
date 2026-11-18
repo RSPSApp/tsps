@@ -69,7 +69,8 @@ test("bird bath: No closes the menu; a bowl, jug, bucket or vial used on it says
   assert.equal(p.getAnimation()?.getId() === core.CacheDefinitions.getSeqId("poh_pool_drink_silent"), false, "no drink");
   core.RegionManager.loadMapFiles(1555, 3170);
   const bath = core.MapObjects.getObjectsAt(new core.Location(1555, 3170, 0), null).find((object) => object.getDefinition()?.getName() === "Bird bath");
-  const event = { player: p, itemId: core.ItemIdentifiers.BOWL, object: bath, objectId: bath.getId(), handled: false };
+  const at = bath.getLocation();
+  const event = { player: p, itemId: core.ItemIdentifiers.BOWL, object: bath, objectId: bath.getId(), location: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false };
   PM.emitItemOnObject(event);
   assert.ok(messages.includes(BirdBath.NOT_ENOUGH_WATER), messages.join(" | "));
 });

@@ -2018,7 +2018,7 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   tile of its footprint, same plane and instance). The Demonic Pacts tasks the generator could not
   word-map are in the overlay (issue 6108). The distances are fitted to rsprox.net recording 1098
   (rev 237, Leagues VI), the only one that completes them; the Wiki gives none:
-  - "Cry near a child" (Cry, slot 16): completed 2 tiles from a child (tick 14398); distance 2.
+  - "Cry near a child" (Cry, slot 16): cried 2 tiles from a child at tick 14398, the task at 14399; distance 2.
   - "Dance near a bard" (Dance, slot 12): no task 3 tiles from the Avium Savannah bards (tick 25550),
     completed 1 tile from one (25555); distance 2.
   - "Bow near a quetzal" (Bow, slot 2): completed 2 tiles from Civitas' quetzal (spawn 13355, a
@@ -2079,8 +2079,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   - `construction:jester-won` { player } (Jacky Jester); `deaths-office:coffer-sacrificed` { player, itemId,
     amount, value }; `scaly-dragonhide:scraped` { player }; `abyssal-sire:font-consumed` { player, itemId }.
   - `herblore:extra-dose` { player, itemId }: a recipe's 3-dose potion that came out 4-dose.
-  - Anvil smithing's `smithing:success` now names `metal` ("runite"); furnace jewellery's `crafting:made` now
-    names `bar` ("Silver bar", 20 of them).
+  - Anvil smithing's `smithing:success` now names `metal` ("runite") and the slot's `label`; "Smith a Runite
+    Item" excludes, with a deed's new `notWhere`, what each league's row names: rune dart tips, arrowtips,
+    nails, bolts (unf) and javelin tips in Demonic Pacts, dart tips, arrowtips and bolts in Trailblazer
+    Reloaded (Raging Echoes' row names none). Furnace jewellery's `crafting:made` now names `bar` ("Silver
+    bar", 20 of them).
   - Existing: `farming:protected`; `firemaking:success` of red, green, blue, white or purple logs; `produce` of
     100 empty light orbs (Ours: glassblown, not filled), 100 pies of any kind, and a mith grapple.
 - **Player-owned house and altar deeds**, from Construction's and BoneAltars' events:
@@ -2116,7 +2119,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   - Castle Wars: the existing `castlewars:player-result`, `where` result "win".
   - The Fishing Trawler: `fishing-trawler:completed` { player } on docking back in port.
   - The Fountain of Heroes: `jewellery:recharged` { player, site, piece } once per kind of piece charged,
-    `where` site "heroes" and piece "glory" or "glory_trimmed".
+    `where` site "heroes" and piece "glory" or "glory_trimmed" (piece is undefined for rings of wealth, whose
+    table entry has no key; no trigger reads it).
   - Taverley Dungeon: `taverley-dungeon:key-door` { player, key } when a locked door's key lets the player
     through, `where` key "DUSTY_KEY".
   - The Blast Furnace: `blast-furnace:bars-taken` { player, itemId, amount } from the dispenser, by bar, summed.
@@ -2132,7 +2136,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
       new `sum` field (a shiny object is 14);
     - house keys: `pickpocket-loot` of the wealthy citizen's "House keys". `pickpocket-loot` now reads the new
       `thieving:looted` (the loot as given), so the 40th dry pick's key counts;
-    - an urchin paid: HouseRobberyCrew's new `house-robbery:informed`.
+    - an urchin paid: HouseRobberyCrew's new `house-robbery:informed`, on a paid Yes only (a Gladiator's free word
+      sends nothing, as the task names paying).
   - The Arceuus Library's books: `arceuus-library:book-handed-in`.
   - The Chambers of Xeric completions: credited kills of the CoX plugin's "Chambers of Xeric" and "CM:
     Chambers of Xeric".
@@ -2175,7 +2180,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   - `prayer-bonus { min }`: the worn items' prayer bonus at least that, as BonusManager sums it
     (checked with the equip kinds). Used by "Reach a Prayer Bonus of 15 / 30".
   - `hit { min, spells?, weapons? }`: one hit of at least `min` a player lands on an NPC, from
-    `onCombatHitResolved`. Used by "deal at least 66 damage ... using elemental spells" (the 20 Strike to
+    `onCombatHitResolved`, as its hitsplat shows it: capped at the hitpoints left after the damage queued
+    ahead of it the same tick. Used by "deal at least 66 damage ... using elemental spells" (the 20 Strike to
     Surge spells) and "Hit 150 damage or more with the Keris Partisan" (25979, as "Defeat a Kalphite
     with the Keris Partisan" names it).
   - `ca-boss { monsters }`: the Wiki task rows' groups of Combat Achievement monsters (below).

@@ -10,8 +10,8 @@
  * Karamja").
  *
  * The last pineapple leaves `pineapple_plant_no_pineapples` (1413), placed bare on these tiles in
- * recordings 75, 549, 1104, 1710 and 1851 (1851 tick 17595: all five Karamja plants bare); it has no
- * Pick. In 1710 a bare plant at 2760,3157 went straight back to the full one (1413 at tick 6301,
+ * recordings 75, 549, 1104, 1710 and 1851 (1851 tick 17595: all five Karamja plants bare). The cache
+ * gives it Pick too, but no recording shows the answer, so it does nothing here (Ours). In 1710 a bare plant at 2760,3157 went straight back to the full one (1413 at tick 6301,
  * 1408 at 6334).
  *
  * Ours (nothing times the regrowth): a bare plant is full again REGROW_TICKS after its last pick; a
@@ -73,7 +73,8 @@ function pick({ player, object }) {
   const tile = key(object.getLocation());
   player.setPositionToFace(object.getLocation());
   core.TaskManager.submit(new core.CountdownTask(player, PICK_TICKS, () => {
-    const entry = plants.get(tile) ?? { stage: 0, object, base: object, task: null };
+    // An untracked plant starts from the stage clicked (the map places only the full 1408).
+    const entry = plants.get(tile) ?? { stage, object, base: object, task: null };
     // Someone else's pick got there first: this stage is gone.
     if (entry.stage !== stage || (entry.object ?? null) !== object || !player.isRegistered()) return;
     if (player.getInventory().getFreeSlots() <= 0) {

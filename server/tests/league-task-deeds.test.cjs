@@ -3085,6 +3085,13 @@ test("Shear an Alpaca: the real Shear, without shears refused, the wool two tick
   ticks(f, 2);
   assert.equal(npc.getNpcTransformationId?.() ?? -1, -1, "its wool back 50 ticks after it turned sheared (1105)");
   assert.equal(npc.getId(), woolly);
+  // A full pack refuses, even one holding wool (wool doesn't stack).
+  while (!inventory.isFull()) inventory.add(new core.Item(core.ItemIdentifiers.WOOL), true);
+  const wool = inventory.getAmount(core.ItemIdentifiers.WOOL);
+  await send(f, { type: "npc_option", index: npc.getIndex(), clickType }, 4);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.WOOL), wool, "no wool lost or gained");
+  assert.ok(f.messages.includes("You don't have enough inventory space to hold the wool."));
+  assert.equal(npc.getNpcTransformationId?.() ?? -1, -1, "still woolly");
 });
 
 test("Pick a Pineapple on Karamja: the real Pick takes the plant a stage down, and it grows back a stage at a time", async (t) => {

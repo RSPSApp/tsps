@@ -7,7 +7,8 @@
  *   - then (1 to 3 ticks on) the player plays human_shearing, synth 761 (delay 10) plays, the
  *     alpaca faces the player and busy goes 0 -> 1;
  *   - two ticks later "You shear the alpaca and get some wool.", +1 wool, the alpaca turns into its
- *     sheared form (varlamore_alpaca_sheared_1 / _2) and busy goes 1 -> 0; a tick later it looks away;
+ *     sheared form (varlamore_alpaca_sheared_1 / _2) and busy goes 1 -> 0; a tick later it looks away
+ *     (Ours: its facing isn't reset here);
  *   - fifty ticks after it turns sheared it is back to its woolly form (1105: index 4283 sheared at
  *     2051, back at 2101; 4269 at 2057 and 2107).
  * The sheared forms have no Shear option (cache), so they need no line of their own.

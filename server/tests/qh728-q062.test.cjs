@@ -253,7 +253,7 @@ test('fresh stage 0 reaches cache completion 105 through the placed route', () =
 
   h.interact(p, O.WOODEN_DOORS_8, { x: 3509, y: 3447, z: 0 });
   assert.equal(stage(h, p), 55, 'surface doors enter the cave without skipping to the hideout');
-  assert.deepEqual(p.moves.at(-1), [3500, 9812, 0]);
+  assert.deepEqual(p.moves.at(-1), [3500, 9811, 0], 'surface doors land on the walkable tunnel approach');
   h.interact(p, O.CAVE_ENTRANCE_27, { x: 3505, y: 9831, z: 0 });
   assert.equal(stage(h, p), 60, 'hidden cave entrance enters the hideout');
   assert.deepEqual(p.moves.at(-1), [3505, 9832, 0]);

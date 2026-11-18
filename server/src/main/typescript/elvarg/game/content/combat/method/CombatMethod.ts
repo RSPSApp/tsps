@@ -55,6 +55,11 @@ export abstract class CombatMethod {
         return true;
     }
 
+    /** Whether an NPC may step off an overlapping target while using this method. */
+    public canStepOffOverlappingTarget(_character: Mobile): boolean {
+        return true;
+    }
+
     public attackSpeed(character: Mobile): number {
         return character.getBaseAttackSpeed();
     }

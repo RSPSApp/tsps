@@ -691,6 +691,10 @@ function defineCombatMethod() {
       return phase === "feeding" || phase === "enraged" ? RANGED_DISTANCE : 1;
     }
 
+    canStepOffOverlappingTarget(character) {
+      return closesIn(stateOf(character).phase);
+    }
+
     attackSpeed(character) {
       return stateOf(character).phase === "feeding" ? between(FEEDING_ATTACK_SPEEDS) : ATTACK_SPEED;
     }

@@ -932,7 +932,7 @@ export class Combat {
             (state.target.getFollowing?.() != null ||
                 TaskManager.hasActiveTask(state.target.getIndex?.(), "MovementTask") ||
                 TaskManager.wasTaskActiveThisCycle(state.target.getIndex?.(), "MovementTask"));
-        if (targetBusy) return;
+        if (targetBusy || state.method.canStepOffOverlappingTarget(this.character) === false) return;
 
         const size = Math.max(1, this.character.getSize() | 0);
         if (size <= 1) {

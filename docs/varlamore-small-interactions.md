@@ -16,7 +16,7 @@ rsprox captures (rsprox.net recordings 1098 and 1105, revision 237, Leagues VI) 
 
 The Dairy Buffalo is a loc at Ortus Farm (52576) and at Kastori (57212). Its name carries a colour tag.
 
-Recording 1098 tick 14560 shows the Milk, 2 ticks after the arrival. All of these happen on that one tick:
+Recording 1098 has the Milk clicked at tick 14560, the arrival at 14569 and its effects at 14571, 2 ticks after the arrival. All of these happen on that one tick:
 - the player plays `milk_buffalo`;
 - synth 372 plays;
 - the spam line "You milk the buffalo." appears;
@@ -111,7 +111,7 @@ Ours and recorded differences (besides the two above):
   server picks from every Pick grapevine of the three vineyards and sends no position varbit.
 - **Check on a partly filled barrel** uses our own line. Pick on a ripe vine with no barrel says "You don't
   have anything to put those grapes in." (1098 tick 16266, before the first barrel).
-- **When the vines refresh**: live ripened one new vine on the tick the barrel filled (1098 tick 16588),
+- **When the vines refresh**: live ripened one new vine the tick after the barrel filled (1098: full message and busy cleared at 16587, the new ripe position at 16588),
   and the other three at the hand-in. The Wiki says they refresh only after the turn-in, which this
   server follows.
 

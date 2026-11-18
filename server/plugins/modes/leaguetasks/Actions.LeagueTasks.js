@@ -835,7 +835,9 @@ function didDeed(name, event) {
   const tasks = (indexOf(type).deeds.get(name) ?? []).filter((task) => (!task.trigger.items || task.trigger.items.some((each) => key(each) === key(itemName(event.itemId))))
     // `atLeast`: the event's fields at least those values ("26 herbs at the same time").
     && Object.entries(task.trigger.atLeast ?? {}).every(([field, value]) => Number(event[field]) >= Number(value))
-    && Object.entries(task.trigger.where ?? {}).every(([field, value]) => (Array.isArray(value) ? value : [value]).some((each) => String(event[field]).toLowerCase() === String(each).toLowerCase())));
+    && Object.entries(task.trigger.where ?? {}).every(([field, value]) => (Array.isArray(value) ? value : [value]).some((each) => String(event[field]).toLowerCase() === String(each).toLowerCase()))
+    // `notWhere`: none of those values ("Smith a Runite Item": rune dart tips and the like don't count).
+    && Object.entries(task.trigger.notWhere ?? {}).every(([field, value]) => !(Array.isArray(value) ? value : [value]).some((each) => String(event[field]).toLowerCase() === String(each).toLowerCase())));
   // `sum`: the event's field adds that much ("Steal 25 Valuables": a shiny object is 14), else one per event.
   const summed = tasks.filter((task) => task.trigger.sum);
   countTasks(player, type, tasks.filter((task) => !task.trigger.sum));
@@ -856,8 +858,12 @@ function hitLanded({ attacker, target, hit }) {
   const tasks = indexOf(type).events.get("hit");
   if (!tasks?.length) return;
   // As the hitsplat shows it: the roll, but no more than the target had left (Mobile.decrementHealth
-  // caps it later; overkill on a 5-hitpoint goblin is no 66).
-  const damage = Math.min(Number(hit?.getTotalDamage?.()) || 0, Math.max(0, Number(target.getHitpoints?.()) || 0));
+  // caps it later; overkill on a 5-hitpoint goblin is no 66). This hit is already queued when the
+  // hook runs (CombatFactory.applyResolvedHitDamage), so only the rest of the queue lands before it.
+  const rolled = Number(hit?.getTotalDamage?.()) || 0;
+  const queued = Number(target.getCombat?.()?.getHitQueue?.()?.getQueuedDamage?.()) || 0;
+  const ahead = Math.max(0, queued - rolled);
+  const damage = Math.min(rolled, Math.max(0, (Number(target.getHitpoints?.()) || 0) - ahead));
   const spell = spellName(hit?.getSpell?.());
   const weapon = player.getEquipment?.().getItems?.()[Common.core.Equipment.WEAPON_SLOT]?.getId?.();
   countTasks(player, type, tasks.filter((task) => damage >= Number(task.trigger.min)

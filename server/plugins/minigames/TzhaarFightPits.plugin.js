@@ -255,6 +255,13 @@ function pitCanAttack(event) {
   event.allow = state.phase === "active" && state.participants.has(attacker) && state.participants.has(target);
 }
 
+function describeSafePvp(event) {
+  const { attacker, target } = event;
+  if (state.phase === "active" && state.participants.has(attacker) && state.participants.has(target)
+    && !attacker.getPrivateArea() && !target.getPrivateArea()
+    && inside(attacker, ARENA) && inside(target, ARENA)) event.safe = true;
+}
+
 // TzHaar-Mej-Kah's transcript asks these two prose conditions before offering the toggle.
 function fightPitXpEnabled({ player, npcId, text }) {
   if (npcId !== core.NpcIdentifiers.TZHAAR_MEJ_KAH) return null;
@@ -367,6 +374,7 @@ module.exports = {
     pluginApi.onShouldDropItemsOnDeath(keepItemsInPit);
     pluginApi.onCanAttack(pitCanAttack);
     pluginApi.onCustomEvent("bounty-hunter:weapon-area", allowBountyHunterWeapons);
+    pluginApi.onCustomEvent("combat:safe-pvp", describeSafePvp);
     pluginApi.onCustomEvent("presets:can-use", noPresetsInPits);
     pluginApi.onPlayerLogout(dropChampionSkull);
     pluginApi.onPlayerLogout(leaveArenaOnLogout);

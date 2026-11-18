@@ -53,3 +53,67 @@ test('entity area sounds respect overlapping rooms and optional recipient exclus
   assert.deepEqual(attacker.packets,[encodeSound(Sound.SHOOT_ARROW.getId(),{loops:1,delay:0})]);
   for(const a of all.filter(a=>a!==attacker))assert.deepEqual(a.packets,[],'ordinary synth sound remains private');
 });
+
+const { PluginManager } = require('../dist/plugins/PluginManager');
+const { CombatSpecial } = require('../dist/game/content/combat/CombatSpecial');
+const { TaskManager } = require('../dist/game/task/TaskManager');
+const { Equipment } = require('../dist/game/model/container/impl/Equipment');
+const { Item } = require('../dist/game/model/Item');
+const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
+for (const plugin of ['DragonAxe', 'DragonPickaxe']) {
+  require(`../plugins/combat/specials/${plugin}.SpecialAttack`)({
+    core: PluginManager.getCoreApi(), registerCombatSpecial: CombatSpecial.register,
+  });
+}
+
+for (const [name, weaponId, soundId] of [
+  ['Lumber Up', ItemIdentifiers.DRAGON_AXE, 2531],
+  ['Rock Knocker', ItemIdentifiers.DRAGON_PICKAXE, 2655],
+]) {
+  test(`${name} actual special sound stays in the source private area and public world`, t => {
+    const room = new PrivateArea(), otherRoom = new PrivateArea();
+    const actors = [];
+    function actor(name, area) {
+      const frames = [];
+      const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+        send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+      const session = new PlayerSession(channel), p = new Player(session);
+      p.setUsername(name); p.setAttribute('bot-skip-persistence', true);
+      session.sendClientPacket = frame => { frames.push(frame); return true; };
+      assert.equal(World.getPlayers().add(p), true, 'real world registry allocates the player index and runs login');
+      p.setLocation(new Location(3200, 3200, 0));
+      if (area) area.add(p);
+      actors.push({ p, frames });
+      return actors.at(-1);
+    }
+    t.after(() => {
+      for (const { p } of actors) {
+        TaskManager.cancelTasks(p);
+        World.getPlayers().removes(p);
+      }
+    });
+    const source = actor('toolsource', room), same = actor('toolsame', room);
+    const other = actor('toolother', otherRoom), publicPlayer = actor('toolpublic', null);
+    source.p.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(weaponId, 1));
+    CombatSpecial.assign(source.p);
+    const expected = encodeSound(soundId, { x: 3200, y: 3200, level: 0, loops: 1, delay: 0, radius: 1, attenuation: 0 });
+    const sounds = a => a.frames.filter(frame => frame[0] === expected[0]);
+    const reset = () => { for (const a of actors) a.frames.length = 0; source.p.setSpecialPercentage(100); };
+    reset();
+    CombatSpecial.activate(source.p);
+    assert.deepEqual(sounds(source), [expected]);
+    assert.deepEqual(sounds(same), [expected]);
+    assert.deepEqual(sounds(other), [], 'same tile in another private room must not hear the tool special');
+    assert.deepEqual(sounds(publicPlayer), [], 'same tile in the public world must not hear the private special');
+    room.remove(source.p);
+    reset();
+    CombatSpecial.activate(source.p);
+    assert.deepEqual(sounds(source), [expected]);
+    assert.deepEqual(sounds(publicPlayer), [expected], 'null-area source still reaches nearby public players');
+    assert.deepEqual(sounds(same), []);
+    assert.deepEqual(sounds(other), []);
+    reset();
+    Sounds.playAreaSound({ soundId, x: 3200, y: 3200, level: 0, loops: 1, delay: 0, radius: 1 });
+    for (const a of actors) assert.deepEqual(sounds(a), [expected], 'explicit source-less global policy is unchanged');
+  });
+}

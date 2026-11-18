@@ -587,6 +587,7 @@ function watchNoLeavePlaces(api) {
 }
 
 function npcDeath(event) {
+  if (event?.npc?.getAttribute?.("echo-boss:encounter")) return;
   const player = event?.killer;
   if (!player?.isPlayer?.() && !player?.getPacketSender) return;
   const type = Common.leagueOf(player);

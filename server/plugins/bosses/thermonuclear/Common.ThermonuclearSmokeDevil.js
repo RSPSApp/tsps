@@ -58,7 +58,7 @@ function within(bounds, at) {
 const inLair = (at) => within(LAIR, at);
 
 function isBoss(npc) {
-  return npc?.getId?.() === BOSS_ID;
+  return npc?.getId?.() === BOSS_ID || Boolean(npc?.__thermonuclearEchoSession);
 }
 
 /** Whether the player's Slayer task is smoke devils (the boss can only be fought on one, Wiki). */

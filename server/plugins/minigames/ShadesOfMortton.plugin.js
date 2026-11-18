@@ -11,6 +11,7 @@
 const Common = require("./shadesofmortton/Common.ShadesOfMortton");
 const Shades = require("./shadesofmortton/Shades.ShadesOfMortton");
 const Catacombs = require("./shadesofmortton/Catacombs.ShadesOfMortton");
+const Rewards = require("./shadesofmortton/Rewards.ShadesOfMortton");
 const Pyres = require("./shadesofmortton/Pyres.ShadesOfMortton");
 
 module.exports = {
@@ -21,6 +22,7 @@ module.exports = {
     Common.init(api);
     Shades.attachShades(api);
     Catacombs.attachCatacombs(api);
+    Rewards.attachRewards(api);
     Pyres.attachPyres(api);
   },
 };

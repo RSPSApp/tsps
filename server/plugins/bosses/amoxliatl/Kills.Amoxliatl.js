@@ -24,6 +24,15 @@ function bossDeath(event) {
   const fight = event.npc?.__amoxliatlFight;
   if (!fight || fight.stopped) return;
   const { session, player } = fight;
+  if (session.echoToken) {
+    if (session.echoCompleted) return;
+    session.echoCompleted = true;
+    Common.api.emitCustomEvent("echo-boss:completed", { player, boss: "amoxliatl", token: session.echoToken, npcs: [event.npc], location: Common.core.Projectile.centreOf(event.npc) });
+    fight.hideHud();
+    fight.stop();
+    // Keep the exit available, but never respawn a second boss in this session.
+    return;
+  }
   if (session.quest) {
     fight.hideHud();
     session.end();

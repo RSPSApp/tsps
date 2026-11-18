@@ -351,6 +351,14 @@ function fillLine(request) {
   const streak = State.varbit(request.player, "slayer_tasks_completed");
   // Turael's offer names both streaks (rsprox: "standard task streak of 1 ... Wilderness task streak of 13").
   const wildernessStreak = State.varbit(request.player, "slayer_wilderness_tasks_completed");
+  // Ours: the transcript only has the standard-task line; replacing a Krystilia task resets the
+  // Wilderness streak instead (Wiki, Slayer reward point), so the line names the two the other way round.
+  const wildernessTask = task != null && Data.get().masters.get(task.masterId)?.wilderness === true;
+  if (wildernessTask) {
+    request.text = request.text.replace(
+      /reset your standard task streak of \[task streak amount\]\. Is that okay\? It won't affect your Wilderness task streak of \[task streak amount\]\./,
+      `reset your Wilderness task streak of ${wildernessStreak}. Is that okay? It won't affect your standard task streak of ${streak}.`);
+  }
   request.text = request.text
     .replace(/Wilderness task streak of \[task streak amount\]/g, `Wilderness task streak of ${wildernessStreak}`)
     .replace(/\[task streak amount\]/g, String(streak))
@@ -512,10 +520,15 @@ function findOption(steps, text) {
   return null;
 }
 
-/** Turael/Aya replace a task from another master's list; the standard streak resets (Wiki). */
+/**
+ * Turael/Aya replace a task from another master's list; the held task's streak resets (Wiki, Slayer
+ * reward point: changing a Krystilia task "will only reset your Wilderness Slayer task streak").
+ */
 function replaceTask(player, master) {
+  const held = Tasks.current(player);
+  const wilderness = held != null && Data.get().masters.get(held.masterId)?.wilderness === true;
   Tasks.clear(player);
-  State.setVarbit(player, "slayer_tasks_completed", 0);
+  State.setVarbit(player, wilderness ? "slayer_wilderness_tasks_completed" : "slayer_tasks_completed", 0);
   // Null when content offers a choice instead (the caller shows it).
   if (offersChoice(player, master)) return null;
   const result = Tasks.assign(player, master);
@@ -606,6 +619,7 @@ module.exports = {
   attach,
   assignmentLine,
   answerCondition,
+  fillLine,
   dialogueVariant,
   replaceTask,
 };

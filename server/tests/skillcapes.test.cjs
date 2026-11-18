@@ -417,6 +417,10 @@ test("the max cape and Agility cape swap to their worn ids and back", () => {
   normalise({ player: p });
   assert.equal(p.getEquipment().getItems()[core.Equipment.CAPE_SLOT].getId(), obj("skillcape_max_worn"));
   assert.equal(p.getInventory().contains(obj("skillcape_agility")), true);
+  // Deposit worn banks the inventory cape, so it fills its placeholder rather than landing as a new item.
+  const worn = p.getEquipment().getItems()[core.Equipment.CAPE_SLOT];
+  WornVariants._test.bankAsItem({ player: p, item: worn });
+  assert.equal(worn.getId(), obj("skillcape_max"));
 });
 
 test("combining needs the max hood, and makes the combined cape and hood", () => {

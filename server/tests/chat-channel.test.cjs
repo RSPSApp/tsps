@@ -219,6 +219,16 @@ test('the rejoin at login shows the join messages', () => {
   assert.match(member.texts(), /Now talking in chat-channel Blur/);
 });
 
+test('login to a vanished channel shows only the missing-channel refusal', () => {
+  const member = player('Member');
+  member.getRelations().setFriendsChatLastOwner('Missing');
+  Manager.onLogin(member);
+  assert.match(member.texts(), /The channel you tried to join does not exist\./);
+  assert.doesNotMatch(member.texts(), /Attempting to join chat-channel/);
+  assert.equal(Manager.channelOf(member), null);
+  assert.equal(member.getRelations().getFriendsChatLastOwner(), 'Missing');
+});
+
 test('a system channel is joined by its name, wins over an account of that name and has no owner', () => {
   // Live (rev 242): the Grouping tab's Shooting Stars channel, owner "osrs star cc", kick rank General.
   // The cache writes the name with no-break spaces; a typed one has ordinary spaces or underscores.

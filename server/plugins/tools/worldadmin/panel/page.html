@@ -372,13 +372,14 @@
   }
 
   function pluginInstalled(result) {
-    flash("info", result.name + " v" + result.version + " installed. Restart the server to load it.", 5000);
+    flash("info", result.name + " v" + result.version + " installed. " +
+      (state.data.offlinePluginEditing ? "It will load on the next start." : "Restart the server to load it."), 5000);
     return load(true);
   }
 
   async function installPlugin(plugin, button) {
     if (readOnly() || busy()) {
-      flash("warn", "Wait until the server is online and idle to install a plugin.");
+      flash("warn", "Wait for the current server operation to finish.");
       return;
     }
     button.disabled = true;
@@ -428,7 +429,10 @@
     });
   }
 
-  function readOnly() { return !!(state.data && (state.data.layers.localError || (state.data.serverStatus && state.data.serverStatus !== "online"))); }
+  function readOnly() {
+    return !!(state.data && (state.data.layers.localError ||
+      (state.data.serverStatus && state.data.serverStatus !== "online" && !state.data.offlinePluginEditing)));
+  }
 
   // The editors run on the dev client of the machine the server is on (http://localhost:<PORT>),
   // so a link to one only works where this page is open on that machine too. On a hosted world's
@@ -682,14 +686,15 @@
     var status = document.getElementById("footer-status");
     var count = editCount();
     var mode = state.data ? state.data.mode : "manual";
-    save.textContent = mode === "manual" ? "Save (takes effect next restart)" : "Save and restart";
+    save.textContent = state.data?.offlinePluginEditing ? "Save (takes effect on start)"
+      : mode === "manual" ? "Save (takes effect next restart)" : "Save and restart";
     var invalid = anyInvalid();
     save.disabled = !state.data || readOnly() || busy() || count === 0 || invalid;
     discard.disabled = count === 0 && !invalid;
     document.querySelectorAll(".host-bot-map-button").forEach(function (button) { button.disabled = !state.data || readOnly() || busy(); });
     if (!state.data) status.textContent = "";
-    else if (state.data.serverStatus && state.data.serverStatus !== "online") status.textContent = "Start the server to edit settings and plugins.";
-    else if (readOnly()) status.textContent = "Read only: world.local.json does not parse.";
+    else if (state.data.layers.localError) status.textContent = "Read only: world.local.json does not parse.";
+    else if (readOnly()) status.textContent = "Settings are unavailable while the server changes state.";
     else if (invalid) status.textContent = "Fix the highlighted values before saving.";
     else if (busy()) status.textContent = "A restart is pending.";
     else status.textContent = count === 0 ? "No unsaved edits." : count + (count === 1 ? " unsaved edit." : " unsaved edits.");
@@ -1040,7 +1045,8 @@
     var countdown = d.mode !== "manual" && players > 0 && d.countdown && d.countdown.available !== false;
     document.getElementById("seconds-wrap").hidden = !countdown;
     var note;
-    if (d.mode === "manual") note = "Apply writes world.local.json now. Restart the server by hand for it to take effect.";
+    if (d.offlinePluginEditing) note = "Apply writes world.local.json now. Changes take effect on the next server start.";
+    else if (d.mode === "manual") note = "Apply writes world.local.json now. Restart the server by hand for it to take effect.";
     else if (countdown) note = players + (players === 1 ? " player is" : " players are") + " online: Apply starts the world update countdown. The file is written when it ends; Cancel leaves it unchanged.";
     else if (players > 0) note = "Countdown unavailable (GameUpdate is off): Apply restarts immediately.";
     else note = "Nobody is online: Apply saves, writes world.local.json and restarts the server now.";
@@ -1086,7 +1092,9 @@
       if (res.status === 200 && b.applied === "written") {
         dialog.close();
         state.edits = { world: {}, plugins: {}, pluginConfig: {} };
-        flash("info", "world.local.json written. Restart the server for the change to take effect.");
+        flash("info", state.data.offlinePluginEditing
+          ? "world.local.json written. Changes take effect on the next server start."
+          : "world.local.json written. Restart the server for the change to take effect.");
         load(true);
       } else if (res.status === 202 && b.applied === "countdown") {
         dialog.close();

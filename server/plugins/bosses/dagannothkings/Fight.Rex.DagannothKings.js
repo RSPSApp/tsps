@@ -26,8 +26,8 @@ function methodClass() {
       return 1;
     }
 
-    attackSpeed() {
-      return Common.ATTACK_SPEED;
+    attackSpeed(character) {
+      return character?.__echoKings ? character.getCurrentDefinition().getAttackSpeed() : Common.ATTACK_SPEED;
     }
 
     start(character, target) {

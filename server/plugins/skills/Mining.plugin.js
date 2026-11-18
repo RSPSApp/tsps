@@ -1082,7 +1082,7 @@ function inventoryBlocks(player, oreId) {
 
 /** An open container takes the ore first ("storage:gather"); the rest goes to the inventory. */
 function giveOre(player, oreId, amount, xp = 0) {
-  const request = { player, itemId: oreId, amount, stored: 0, skill: Skill.MINING, xp };
+  const request = { player, itemId: oreId, amount, stored: 0, skill: Skill.MINING, xp: xp * ProspectorOutfit.xpMultiplier(player) };
   pluginApi.emitCustomEvent("storage:gather", request);
   // `stored` counts requested units even if a listener transforms or doubles output.
   const stored = Number.isFinite(request.stored) ? Math.max(0, Math.min(amount, request.stored)) : 0;
@@ -1096,7 +1096,7 @@ function giveOre(player, oreId, amount, xp = 0) {
 
 /** Storage resolves first; a winning pet can take room reserved for the remaining ore. */
 function prepareOre(player, oreId, amount, xp) {
-  const request = { player, itemId: oreId, amount, stored: 0, skill: Skill.MINING, xp };
+  const request = { player, itemId: oreId, amount, stored: 0, skill: Skill.MINING, xp: xp * ProspectorOutfit.xpMultiplier(player) };
   pluginApi.emitCustomEvent("storage:gather", request);
   return amount > request.stored ? new pluginApi.core.Item(oreId, amount - request.stored) : null;
 }

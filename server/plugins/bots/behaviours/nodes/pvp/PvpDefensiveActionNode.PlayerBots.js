@@ -12,6 +12,8 @@ const { applyGeneratedPvpLoadout } = require("../../policies/PvpLoadoutPolicy.Pl
 const { getEnabledWildernessHotspots, createHotspotAnchorLocation } = require("../../pvp/WildernessHotspotRegistry.PlayerBots");
 const { isFoodItem } = require("../../../../items/Food.plugin");
 
+const RETREAT_TELEPORT_CHANCE_CONFIG = "PlayerBots:retreatTeleportChance";
+const DEFAULT_RETREAT_TELEPORT_CHANCE = 25;
 const RETREAT_STEP_TILES = 12;
 const RETREAT_TELEPORT_LEVEL = 20;
 // A retreating bot runs before it teleports. The grace window is what gives the player
@@ -41,7 +43,11 @@ class PvpDefensiveActionNode {
     this.api?.emitCustomEvent?.("player-bots:pvp-defensive-action", request);
     if (request.result) return request.result;
     if (!pvp.retreat && this.shouldRetreat(player)) {
+      const configuredChance = this.api?.getPluginConfig?.(RETREAT_TELEPORT_CHANCE_CONFIG);
+      const chance = Number.isInteger(configuredChance) && configuredChance >= 0 && configuredChance <= 100
+        ? configuredChance : DEFAULT_RETREAT_TELEPORT_CHANCE;
       pvp.retreat = {
+        tryTeleport: Math.random() * 100 < chance,
         autoRetaliate: player.autoRetaliateReturn(),
         teleportStarted: false,
         runUntilMs: Number(nowMs ?? 0) + RETREAT_RUN_GRACE_MS,
@@ -110,7 +116,7 @@ class PvpDefensiveActionNode {
       ? Wilderness.levelAt(location.getX(), location.getY()) : 0;
     const teleblocked = !combat.getTeleblockTimer().finished();
     const runGraceElapsed = Number(nowMs ?? 0) >= Number(retreat.runUntilMs ?? 0);
-    if (level < RETREAT_TELEPORT_LEVEL && !teleblocked && runGraceElapsed) {
+    if (retreat.tryTeleport && level < RETREAT_TELEPORT_LEVEL && !teleblocked && runGraceElapsed) {
       if (!retreat.destination) {
         const hotspots = getEnabledWildernessHotspots().filter((hotspot) =>
           location.getDistance(createHotspotAnchorLocation(hotspot)) > RETREAT_STEP_TILES
@@ -149,7 +155,7 @@ class PvpDefensiveActionNode {
       });
       return running;
     }
-    // Run below the teleport limit; while blocked at lower levels, flee the pursuer.
+    // Run below the teleport limit in deep Wilderness. At lower levels, flee the pursuer.
     const attackerLocation = (combat.getAttacker() ?? target)?.getLocation();
     const dx = attackerLocation ? Math.sign(location.getX() - attackerLocation.getX()) : 1;
     const dy = attackerLocation ? Math.sign(location.getY() - attackerLocation.getY()) : 0;
@@ -178,4 +184,6 @@ class PvpDefensiveActionNode {
 
 module.exports = {
   PvpDefensiveActionNode,
+  RETREAT_TELEPORT_CHANCE_CONFIG,
+  DEFAULT_RETREAT_TELEPORT_CHANCE,
 };

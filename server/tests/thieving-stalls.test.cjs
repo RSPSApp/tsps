@@ -122,6 +122,8 @@ test('silver, spice and wine grant loot/XP and restock at their Wiki intervals',
         assert.equal(who.items.length, 1);
         assert.deepEqual(who.xp, [xp]);
         assert.deepEqual(events.slice(-3).map((event) => event[0]), ['thieving:success', 'thieving:deplete-stall', 'thieving:done']);
+        // The stall's own loc id: two Spice stalls share a name and an area (a league task names Civitas').
+        assert.equal(events.at(-3)[1].objectId, id, `${name}: the stall's loc id`);
         assert.equal(objects.at(-1)[1].getId(), emptyStallId(stallObject));
         assert.equal(objects.at(-1)[1].getFace(), stallObject.getFace());
         click(who, stallObject, name); // Stale queued clicks cannot bypass depletion.

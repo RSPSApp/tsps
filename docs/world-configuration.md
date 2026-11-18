@@ -727,6 +727,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `NeitiznotFaceguard` | NeitiznotFaceguard | items | yes | Handles the Basilisk jaw: Olaf the Bard's story, then attaching it to a Helm of Neitiznot to make the faceguard, and dismantling it again. (members only) |
 | `NeverKeptOnDeath` | NeverKeptOnDeath | items | yes | Destroys the items that are never kept on death (the clue box, League trophies, the Chronicle, items with no ground state) on an unsafe death, instead of keeping, dropping or graving them. (members only) |
 | `NightmareStaffOrbs` | NightmareStaffOrbs | items | yes | Adds the Harmonised, Eldritch and Volatile orbs to the Nightmare staff, and dismantles the Eldritch and Volatile staves back into the staff and orb. (members only) |
+| `NoxiousHalberd` | NoxiousHalberd | items | yes | Combine the noxious point, blade, and pommel into the noxious halberd. (members only) |
 | `Obligator` | Obligator | items | yes | Adds the Obligator chain mace's multi-roll Thrust with reach behind the target and single-target Smash, plus charging with shards and runes. (members only) |
 | `OilLights` | OilLights | items | yes | Handles oil lamps and lanterns: assembling them, distilling lamp oil at the Rimmington still, lighting with a tinderbox and extinguishing them. (members only) |
 | `OpenableItems` | OpenableItems | items | yes | Gives the Open option on item packs, caskets, oysters, gem bags, sacks and similar items that hand over fixed or random contents. |

@@ -2239,3 +2239,101 @@ test("deeds: a buffalo milked, a bird bath drunk from, scenery admired, stew giv
   Vineyard.handIn(f.player);
   assert.ok(done(f, "fill-a-grape-barrel-for-the-foreman"));
 });
+
+// ---- the second batch of Demonic Pacts mappings (after issue 6108) ----------------------------------
+
+/** A cache NPC id by its name. */
+function npcId(name) {
+  const id = [...Array(20000).keys()].find((each) => core.CacheDefinitions.getNpc(each)?.name === name);
+  assert.ok(id !== undefined, `no NPC ${name}`);
+  return id;
+}
+
+test("batch 2: hunter catches, area produce, snelms, ammo, stall thefts and shooting stars count for their tasks", async (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const at = (x, y) => { player.moveTo(new core.Location(x, y, 0)); player.needsPlacement = false; };
+  const hunt = (name) => PM.emitCustomEvent("hunter:success", { player, npcId: npcId(name), method: "test" });
+  const made = (name, amount = 1) => PM.emitCustomEvent("skills:produced", { player, itemId: item(name), amount, kind: "make" });
+
+  hunt("Copper longtail");
+  assert.ok(done(f, "snare-a-bird"), "a snared bird");
+  for (let i = 0; i < 18; i++) hunt("Tropical wagtail");
+  assert.ok(!done(f, "snare-a-bird-20-times"), "19 birds");
+  hunt("Crimson swift"); // in Civitas: no Feldip Hills task
+  assert.ok(done(f, "snare-a-bird-20-times"), "20 birds");
+  assert.ok(!done(f, "catch-a-crimson-swift-in-the-feldip-hills"), "not in Kandarin");
+  hunt("Sunlight Moth");
+  assert.ok(!done(f, "catch-a-butterfly"), "a moth is no butterfly");
+  hunt("Ruby harvest");
+  assert.ok(done(f, "catch-a-butterfly"));
+  hunt("Tecu salamander");
+  assert.ok(done(f, "catch-a-swamp-lizard-or-salamander"));
+  hunt("Sabre-toothed kyatt");
+  assert.ok(done(f, "trap-a-sabre-toothed-kyatt"));
+
+  made("Broken bark snelm");
+  assert.ok(done(f, "craft-a-snelm"), "the broken bark snelm is a snelm too");
+  made("Broad bolts", 10);
+  assert.ok(done(f, "fletch-some-broad-arrows-or-bolts"));
+  made("Rune brutal", 150);
+  made("Rune brutal", 50);
+  assert.ok(done(f, "make-200-brutal-rune-arrows"));
+
+  PM.emitCustomEvent("thieving:success", { player, method: "stall", stall: "Spice stall", itemId: item("Spice"), objectId: 58105 });
+  assert.ok(!done(f, "steal-from-the-fortis-spice-stall"), "Port Roberts' spice stall, also in Varlamore");
+  PM.emitCustomEvent("thieving:success", { player, method: "stall", stall: "Spice stall", itemId: item("Spice"), objectId: 51936 });
+  assert.ok(done(f, "steal-from-the-fortis-spice-stall"), "the spice stall in Civitas");
+  PM.emitCustomEvent("thieving:success", { player, method: "stall", stall: "Fish stall", itemId: item("Raw salmon") });
+  assert.ok(done(f, "steal-a-fish"));
+
+  PM.emitCustomEvent("shooting-stars:mined", { player, size: 7 });
+  assert.ok(done(f, "mine-a-shooting-star"));
+  assert.ok(!done(f, "mine-a-size-8-shooting-star"), "size 7");
+  PM.emitCustomEvent("shooting-stars:mined", { player, size: 9 });
+  assert.ok(done(f, "mine-a-size-8-shooting-star"), "size 9");
+
+  // Tirannwn, Kandarin and Kourend unlocked, then the deeds there.
+  player.setAttribute("league:areas", [21, 7, 4, 20]);
+  at(2200, 3200); // Tirannwn (Lletya's woods)
+  // The real Cooking: raw rabbit on a fire is a Cooked rabbit (the server's only rabbit recipe).
+  const fire = new core.GameObject(core.ObjectIdentifiers.FIRE, new core.Location(2201, 3200, 0), 10, 0, null);
+  core.ObjectManager.register(fire, true);
+  t.after(() => core.ObjectManager.deregister(fire, true));
+  core.RegionManager.loadMapFiles(2200, 3200);
+  player.getInventory().resetItems();
+  player.getInventory().add(new core.Item(item("Raw rabbit")), true);
+  player.getSkillManager().setMaxLevel(core.Skill.COOKING, 99);
+  player.getSkillManager().setCurrentLevel(core.Skill.COOKING, 99); // past the rabbit's burn level
+  await send(f, { type: "item_on_object", itemId: item("Raw rabbit"), slot: 0, widgetId: 149 << 16, objectId: fire.getId(), x: 2201, y: 3200 }, 10);
+  assert.equal(player.getInventory().getAmount(item("Cooked rabbit")), 1, `cooked: ${f.messages}`);
+  assert.ok(done(f, "cook-a-rabbit-in-tirannwn"), `cooked in Tirannwn at ${player.getLocation()}`);
+  for (let i = 0; i < 25; i++) PM.emitCustomEvent("mining:success", { player, itemId: item("Gold ore") });
+  assert.ok(done(f, "mine-25-gold-rocks-in-tirannwn"));
+  at(2550, 2910); // the Feldip Hills
+  hunt("Spined larupia");
+  assert.ok(done(f, "trap-a-spined-larupia-in-the-feldip-hills"), `Kandarin at ${player.getLocation()}`);
+  at(1750, 3600); // Hosidius
+  PM.emitCustomEvent("thieving:success", { player, method: "stall", stall: "Fruit Stall", itemId: item("Cooking apple") });
+  assert.ok(!done(f, "steal-a-golovanova-fruit-top"), "an apple");
+  PM.emitCustomEvent("thieving:success", { player, method: "stall", stall: "Fruit Stall", itemId: item("Golovanova fruit top") });
+  assert.ok(done(f, "steal-a-golovanova-fruit-top"), `Kourend at ${player.getLocation()}`);
+});
+
+test("batch 2: Deadeye and Mystic Vigour, Eagle Eye's and Mystic Might's slots with their scrolls read (PrayerHandler)", (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const P = core.PrayerHandler;
+  const skills = player.getSkillManager();
+  skills.setMaxLevel(core.Skill.PRAYER, 99);
+  skills.setCurrentLevel(core.Skill.PRAYER, 99);
+  P.activatePrayerPrayerId(player, P.EAGLE_EYE);
+  assert.ok(!done(f, "activate-deadeye"), "plain Eagle Eye");
+  P.deactivatePrayers(player);
+  player.setAttribute(P.DEADEYE_UNLOCKED_ATTRIBUTE, true);
+  player.setAttribute(P.MYSTIC_VIGOUR_UNLOCKED_ATTRIBUTE, true);
+  P.activatePrayerPrayerId(player, P.EAGLE_EYE);
+  assert.ok(done(f, "activate-deadeye"), `Deadeye: ${f.messages}`);
+  P.activatePrayerPrayerId(player, P.MYSTIC_MIGHT);
+  assert.ok(done(f, "activate-mystic-vigour"), `Mystic Vigour: ${f.messages}`);
+});

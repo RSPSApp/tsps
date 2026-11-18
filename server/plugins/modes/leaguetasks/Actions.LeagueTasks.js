@@ -32,8 +32,8 @@
  *   combat cast) or `magic:item-spell-cast` { spell } (an alchemy), named
  *   by the server's own spell registries (CombatSpells, EffectSpells: ICE_BURST is Ice Burst,
  *   LOW_ALCHEMY Low Level Alchemy).
- * - `steal { stalls, items?, count }`: a theft from one of the stalls (by its loc name), of one of
- *   the items if listed, `thieving:success` { method: "stall", stall, itemId }.
+ * - `steal { stalls, items?, objectIds?, count }`: a theft from one of the stalls (by its loc name; by
+ *   its cache id too where `objectIds` names one), of one of the items if listed, `thieving:success` { method: "stall", stall, itemId, objectId }.
  * - `pick { plants, count }`: a field's crop picked (by the plant: Wheat for its grain),
  *   `world:picked` { plant }; `pick-each { plants: { plant: count } }`: each of them that many.
  * - `obtain { items, count }`: the named items obtained from any source that reports one - a logged
@@ -408,14 +408,17 @@ function hunted({ player, npcId }) {
   if (player) count(player, "hunt", npcName(npcId));
 }
 
-function stole({ player, method, target, stall, itemId }) {
+function stole({ player, method, target, stall, itemId, objectId }) {
   if (!player) return;
   if (method === "pickpocket") count(player, "pickpocket", target);
   if (method !== "stall") return;
   const type = Common.leagueOf(player);
   if (type === null) return;
   const stolen = key(itemName(itemId));
+  // `objectIds`: that stall only, where another of the same name stands in the same area (Civitas' and
+  // Port Roberts' Spice stalls are both in Varlamore).
   const tasks = indexOf(type).steal.filter((task) => task.trigger.stalls.some((each) => key(each) === key(stall))
+    && (!task.trigger.objectIds || task.trigger.objectIds.includes(Number(objectId)))
     && (!task.trigger.items || task.trigger.items.some((each) => key(each) === stolen)));
   countTasks(player, type, tasks);
 }
@@ -835,6 +838,11 @@ function prayed({ player, prayerId }) {
   if (!player) return;
   const name = Common.core.PrayerData?.prayerData?.get?.(prayerId)?.name;
   if (name) count(player, "prayer", name);
+  // A slot the player's prayer scroll upgraded is that prayer too (Deadeye in Eagle Eye's, Mystic Vigour
+  // in Mystic Might's; PrayerHandler's own reading of the scrolls).
+  const handler = Common.core.PrayerHandler;
+  if (prayerId === handler?.EAGLE_EYE && handler.deadeyeActive?.(player)) count(player, "prayer", "Deadeye");
+  if (prayerId === handler?.MYSTIC_MIGHT && handler.mysticVigourActive?.(player)) count(player, "prayer", "Mystic Vigour");
   // `prayer { any: true }`: whichever prayer it is ("Activate a prayer near an altar").
   const type = Common.leagueOf(player);
   if (type !== null) countTasks(player, type, indexOf(type).prayerAny);

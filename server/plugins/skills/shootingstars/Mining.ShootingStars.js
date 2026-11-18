@@ -149,7 +149,7 @@ function countDownBonus(player) {
   else if (left % DATA.mining.bonusMessageEvery === 0) player.sendMessage(bonusLeftMessage(left));
 }
 
-function giveDust(player) {
+function giveDust(player, star) {
   const { core } = Common;
   const bonus = Common.bonusDust(player) > 0;
   const award = { player, minigame: "shooting-stars", points: bonus ? 2 : 1 };
@@ -165,12 +165,15 @@ function giveDust(player) {
   player.getSkillManager().addExperiences(core.Skill.MINING, base * xp.multiplier);
   if (bonus) countDownBonus(player);
   Common.api.emitCustomEvent("mining:success", { player, skill: core.Skill.MINING, petBase: DATA.mining.petBase });
+  // `shooting-stars:mined` { player, size }: stardust mined from a star of that size (the league's "Mine a
+  // Shooting Star", and "Mine a Shooting Star which is either size 8 or 9").
+  Common.api.emitCustomEvent("shooting-stars:mined", { player, size: star?.size ?? null });
 }
 
 function attempt(player, session, random) {
   player.performAnimation(swingAnimation(session.pickaxe));
   if (Rewards.rollGemTable(player, random)) return;
-  if (random() * 100 < dustChance(Common.rollMiningLevel(player))) giveDust(player);
+  if (random() * 100 < dustChance(Common.rollMiningLevel(player))) giveDust(player, session.star);
 }
 
 function stillMining(player, session) {

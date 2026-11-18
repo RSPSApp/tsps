@@ -199,6 +199,10 @@ function monsterNamed(name) {
   return byName.get(key) ?? byName.get(articleSwapped(key)) ?? null;
 }
 const monsterForNpc = (npcName) => load().monstersByNpcName.get(String(npcName).toLowerCase()) ?? null;
+/** The collection log page a monster's kills count for, when it differs from the monster's name. */
+const collectionLogPage = (monsterName) => MONSTERS_DATA.collectionLog[monsterName] ?? null;
+/** Every monster-name -> collection-log-page override, for the log's category counts. */
+const collectionLogPages = () => MONSTERS_DATA.collectionLog;
 const bossList = () => load().bossList;
 const totalPoints = () => load().tiers.at(-1).threshold;
 
@@ -208,5 +212,5 @@ module.exports = function attachData(api) {
 
 Object.assign(module.exports, {
   TYPE, TASK_VARPS, TIER_VARBITS, POINTS_VARBIT,
-  load, tasks, task, taskNamed, tiers, monsters, monsterNamed, monsterForNpc, bossList, totalPoints, killCountTarget,
+  load, tasks, task, taskNamed, tiers, monsters, monsterNamed, monsterForNpc, collectionLogPage, collectionLogPages, bossList, totalPoints, killCountTarget,
 });

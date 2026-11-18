@@ -29083,7 +29083,8 @@
             "The four Desert Treasure II bosses: Vardorvis, Duke Sucellus, the Leviathan and the Whisperer.",
             "Main sync 8795bc4c2 (through PR #973): all four normal post-quest encounters are implemented — Vardorvis (#637), the Leviathan (#892/#894), Duke Sucellus and the Whisperer (#973) — with site/instance access, attacks, kill records, drops and Combat Achievement hooks; ForgottenFourRewards.plugin.js adds ordered reward state.",
             "Remaining: awakened entry is disabled for the Leviathan and unavailable for Duke/Whisperer/Vardorvis; Vardorvis awakened loot/perfect kills/stat-drain immunity and some Duke/Whisperer/Leviathan balance values stay provisional or unverified. Normal-mode encounters are functional.",
-            "Main through #1012 retains partial credit for Awakened modes: PRs #987/#991/#996/#998 fix normal Leviathan late volleys, Whisperer pursuit/reflection and Duke pending strikes. Normal-mode fixes do not complete missing Awakened entry, mechanics or reward parity."
+            "Main through #1012 retains partial credit for Awakened modes: PRs #987/#991/#996/#998 fix normal Leviathan late volleys, Whisperer pursuit/reflection and Duke pending strikes. Normal-mode fixes do not complete missing Awakened entry, mechanics or reward parity.",
+            "2026-11-17, feat/vardorvis-awakened: Vardorvis' awakened fight is enabled (the awakener's orb is consumed) and now rolls the tradeable unique table at 3/136, is immune to stat drains and gives no Slayer task credit. Verified by server/tests/vardorvis-awakened.test.cjs and docs/vardorvis.md. The awakened entry stays disabled for the Leviathan and unavailable for Duke/Whisperer, so the Ancient blood ornament kit (last of the four awakened kills) is still out; Vardorvis perfect kills, Budget Cutter and Axe Enthusiast also remain."
           ],
           "taskDetails": [
             {
@@ -31418,7 +31419,7 @@
           "name": "Tempoross",
           "tasks": [
             "done",
-            "in-progress",
+            "done",
             "done",
             "done"
           ],
@@ -31453,7 +31454,8 @@
             "Attacks stay in progress: the wave's push for untethered players is missing and several wave/fire/lightning numbers are Wiki-derived. Reward-item perks (tome of water, infernal harpoon at the cove) remain follow-ups.",
             "Main 281766303 (2 November 2026): #1701/#1727 correct animations, colour, regeneration, instance locs and the captured surface/enrage transitions. Existing remaining mechanics retain partial credit.",
             "Main 3b61a15a8 (6 November 2026): #2488 Fix Tempoross fire dousing, attacks and cannon feedback; #2694 Tempoross: fill buckets one a tick, close a cut-short wave, shorten the torrent stun; #2696 Tempoross: play the torrent stun stars at head height; #2705 Award the usable sapphire bracelet from Tempoross caskets. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4226 Settings: dialogues, messages and switches follow their All Settings rows. #3961 Tempoross: reward loot lines on spam, soaked pages red, as recorded. #3957 Tempoross: '(new personal best).' on the points line, as recorded. 8 merged PRs changed recorded implementation files for this entry."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4226 Settings: dialogues, messages and switches follow their All Settings rows. #3961 Tempoross: reward loot lines on spam, soaked pages red, as recorded. #3957 Tempoross: '(new personal best).' on the points line, as recorded. 8 merged PRs changed recorded implementation files for this entry.",
+            "2026-11-17, feat/tempoross-wave-push: an untethered player hit by a wave is knocked down: a same-tick teleport up to five tiles along the eight-way octant away from the boss base (3043,2845), stopping at the first blocked tile, with human_knockdown_loop (7211) and facing the boss, as rev 241/242 captures show. A player stood between the ammunition crates is not pushed (Wiki), a player at an edge stays put but still plays the animation, and tethered players are unaffected. The loss line ends 'to the waves.' Verified by server/tests/tempoross-wave-push.test.cjs. Attacks and phases are complete; reward-item perks (tome of water, infernal harpoon at the cove), harpoon specials, Combat Achievements and the Spirit Angler stats board remain separate follow-ups."
           ],
           "taskDetails": [
             {
@@ -48820,7 +48822,8 @@
             "Remaining: other raid chests, clue caskets, unconnected reward sources, non-Barrows opened/completed counters and the Combat Achievements button. Those gaps keep progression and count coverage in progress.",
             "Main 8403b60db (4 November 2026): #1990, #2077 — Lost Property unlocks and Theatre vault loot/category counts reach the collection log. Other unconnected reward sources and counters remain partial.",
             "Main 3b61a15a8 (6 November 2026): #2472 Record successful activity rewards in the collection log; #2478 Credit supported Morytania Diary gameplay tasks; #2490 Credit supported Kourend and Kebos Diary gameplay tasks; #2516 Show native CoX and ToA collection-log mode counts; #2576 Make the custom Character Summary explicitly opt in; #2639 Add the Rogue Trader miniquest. (13 merged PRs touch the recorded implementation; highlights shown.) Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4092 Collection log: count a shared item in one tab only."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4092 Collection log: count a shared item in one tab only.",
+            "2026-11-17, feat/collection-log-counters: category counts now come from the content's own record. Every boss page with a Combat Achievement monster shows that count; a shared page fills each line in cache script 2735's order (Dagannoth Supreme/Prime/Rex, Corrupted/normal Gauntlet, Nightmare/Phosani's Nightmare), and the Wilderness pairs show the singles boss's own count first and the main boss's Combat Achievement count second. data/monsters.json's collectionLog names handle Barrows Chests, The Fight Caves and The Inferno; the raid pages stay with their own plugins, and Last Man Standing shows games played, wins and kills. Castle Wars has no count line in the cache and Soul Wars' only line is spoils of war, so neither is answered. Verified by server/tests/collection-log-category-counts.test.cjs and docs/collection-log.md. Remaining: the other minigames' opened/completed counters and the per-item collection_item_* varbits."
           ],
           "taskDetails": [
             {

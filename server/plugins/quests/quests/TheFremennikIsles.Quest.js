@@ -1501,10 +1501,27 @@ module.exports = function registerTheFremennikIslesQuest(api) {
   /** The NPCs whose lines carry this quest's blanks; "[amount]" is common to other pages. */
   // The cache names King Sorvott (npc 1897) "King Gjuki Sorvott IV"; the event's definition is the NPC talked to.
   const BLANK_SPEAKERS = new Set(["King Sorvott IV", "King Gjuki Sorvott IV", "Thorkel Silkbeard", "Mawnis Burowgar"]);
+  const CATSPEAK_AMULET_IDS = new Set([
+    ItemIdentifiers.CATSPEAK_AMULET,
+    ItemIdentifiers.CATSPEAK_AMULET_E_,
+    ItemIdentifiers.CATSPEAK_AMULET_2,
+    ItemIdentifiers.CATSPEAK_AMULET_E__2,
+  ]);
 
   function handleLine(event) {
     const { text } = event;
     const value = String(text ?? "");
+    if (event.step?.speaker_ids?.includes(NpcIdentifiers.HRH_HRAFN)) {
+      const translation = value.match(/^(.*?)\s+\((.+)\)$/);
+      if (translation) {
+        const ability = { player: event.player, understands: false };
+        api.emitCustomEvent("catspeak:can-understand", ability);
+        const understands = CATSPEAK_AMULET_IDS.has(equipped(event.player, Equipment.AMULET_SLOT))
+          || ability.understands;
+        event.text = understands ? translation[2] : translation[1];
+      }
+      return;
+    }
     if (!BLANK_SPEAKERS.has(event.definition?.getName?.())) return;
     if (
       value.includes("[six/seven/eight]") ||

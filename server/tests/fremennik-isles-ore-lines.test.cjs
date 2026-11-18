@@ -152,3 +152,54 @@ test("the Troll King bridge message fills its bare X with the trolls still to ki
   assert.deepEqual(sent, ["You have 7 more trolls to kill before you can kill the Troll King."]);
   assert.equal(event.step.text, text, "the shared transcript step is left as it was");
 });
+
+test("Hrafn's translation requires a worn catspeak amulet or the Sphinx's catspeak grant", (t) => {
+  const raw = require("../data/definitions/npc-dialogues.json")["The Fremennik Isles"]
+    .variants["starting-off-talking-to-king-sorvott-iv"];
+  const catLine = raw.find(step => step.speaker_ids?.includes(core.NpcIdentifiers.HRH_HRAFN));
+  const original = catLine.text;
+  const [, sounds, translation] = original.match(/^(.*?)\s+\((.+)\)$/);
+  const amulets = [
+    core.ItemIdentifiers.CATSPEAK_AMULET,
+    core.ItemIdentifiers.CATSPEAK_AMULET_E_,
+    core.ItemIdentifiers.CATSPEAK_AMULET_2,
+    core.ItemIdentifiers.CATSPEAK_AMULET_E__2,
+  ];
+  const cases = [
+    { name: "no catspeak", expected: sounds },
+    { name: "carried amulet", carried: amulets[0], expected: sounds },
+    ...amulets.map(worn => ({ name: `worn ${worn}`, worn, expected: translation })),
+    { name: "before the Sphinx grants catspeak", ds2Stage: 7, dreamProgress: 1, expected: sounds },
+    { name: "immediately after the Sphinx grants catspeak", ds2Stage: 7, dreamProgress: 1, sphinxGrant: true, expected: translation },
+    ...[8, 9, 10, 11, 12, 13, 14].map(ds2Stage => ({ name: `Dragon Slayer II stage ${ds2Stage}`, ds2Stage, expected: translation })),
+  ];
+  for (const { name, carried, worn, ds2Stage, dreamProgress, sphinxGrant, expected } of cases) {
+    const p = actor(t, { stage: 1, mining: 1 });
+    if (carried) p.getInventory().adds(carried, 1);
+    if (worn) p.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(worn, 1));
+    if (ds2Stage) {
+      const ds2 = QuestRuntime.questNamed("Dragon Slayer II");
+      ds2.setStage(p, ds2Stage);
+      if (dreamProgress) p.setAttribute("dragon-slayer-ii:dream-progress", dreamProgress);
+      if (sphinxGrant) {
+        const grant = { player: p, npcId: core.NpcIdentifiers.SPHINX,
+          stepId: "dragon-slayer-ii:sphinx-dream-complete", handled: false };
+        PM.emitCustomEvent("npc-dialogue:action", grant);
+        assert.equal(grant.handled, true);
+        assert.equal(ds2.getStage(p), 7);
+        assert.equal(p.getAttribute("dragon-slayer-ii:dream-progress"), 2);
+      }
+    }
+    const api = { core, emitCustomEvent: (eventName, event) => PM.emitCustomEvent(eventName, event) };
+    assert.equal(QuestRuntime.startTranscript(api, p, KING_SORVOTT, "The Fremennik Isles",
+      "starting-off-talking-to-king-sorvott-iv"), true);
+    p.getDialogueManager().advance();
+    const cat = p.getDialogueManager().getCurrent();
+    assert.equal(cat.getNpcId(), core.NpcIdentifiers.HRH_HRAFN, `${name}: cat chathead`);
+    assert.equal(cat.getText(), expected, name);
+    p.getDialogueManager().advance();
+    assert.equal(p.getDialogueManager().getCurrent().getNpcId(), core.NpcIdentifiers.GUARD_32,
+      `${name}: the quest guard retains its own chathead`);
+  }
+  assert.equal(catLine.text, original, "each player selects speech without modifying the shared transcript");
+});

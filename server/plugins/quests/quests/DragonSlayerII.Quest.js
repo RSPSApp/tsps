@@ -506,6 +506,12 @@ module.exports = function registerDragonSlayerII(api) {
   }
 
   const stage = (p) => quest.getStage(p);
+  function answerCatspeak(event) {
+    const progress = stage(event.player);
+    if (progress >= S.KEYS || progress === S.DREAM && Number(event.player.getAttribute(ATTR_DREAM_PROGRESS)) >= 2) {
+      event.understands = true;
+    }
+  }
   const advance = (p, value) => { if (stage(p) < value) quest.setStage(p, value); };
   const has = (p, id, amount = 1) => p.getInventory().getAmount(id) >= amount;
   function give(p, id, amount = 1) {
@@ -2717,6 +2723,7 @@ module.exports = function registerDragonSlayerII(api) {
   api.persistAttribute(ATTR_VAULT_SCENE_ACTIVE); api.persistAttribute(ATTR_VAULT_SCENE_COMPLETE);
   api.persistAttribute(ATTR_AIVAS_DIARY_FOUND);
   api.persistAttribute(ATTR_DREAM_PROGRESS);
+  api.onCustomEvent("catspeak:can-understand", answerCatspeak);
   api.persistAttribute(ATTR_MAP_FOUND); api.persistAttribute(ATTR_MAP_HANDED_IN); api.persistAttribute(ATTR_MAP_SOLVED); api.persistAttribute(ATTR_MAP_INTRODUCED);
   api.persistAttribute(ATTR_MAP_POSITIONS); api.persistAttribute(ATTR_MAP_ROTATIONS);
   api.persistAttribute(ATTR_MAP_PUZZLE_READY);

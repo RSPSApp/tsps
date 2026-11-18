@@ -24,7 +24,7 @@ const STREAKS = [["Krakan't Hurt Me", 25], ["Ten-tacles", 50], ["One Hundred Ten
 
 /** Private room -> Map(player -> Kraken kills in it). */
 const roomKills = new WeakMap();
-/** Private room -> Map(tentacle spawn tile -> the player who last killed the tentacle there). */
+/** Private room -> Map(tentacle spawn tile -> { player, npc }: the last kill there and its tentacle). */
 const roomTentacleKills = new WeakMap();
 /** The same, for the open cove. */
 let publicTentacleKills = new Map();
@@ -37,11 +37,15 @@ function tentacleKillsOf(npc) {
   return roomTentacleKills.get(room);
 }
 
-/** Whether a tentacle, or its whirlpool, is back on `tile` in `area`. */
-function respawned(area, tile) {
+/**
+ * Whether a tentacle, or its whirlpool, other than the `killed` one is back on `tile` in `area`.
+ * A respawn is a new NPC, so this asks whether one is in the world, not whether it is still
+ * alive: the Kraken's death zeroes the surviving tentacles (Respawn.Kraken.js) before this runs.
+ */
+function respawned(area, tile, killed) {
   const { TENTACLE, TENTACLE_WHIRLPOOL } = Shared.ids();
   for (const other of Shared.core().World.getNpcs() ?? []) {
-    if (!other?.isNpc?.() || !Shared.alive(other)) continue;
+    if (!other?.isNpc?.() || other === killed || !other.isRegistered?.()) continue;
     if (other.getId?.() !== TENTACLE && other.getId?.() !== TENTACLE_WHIRLPOOL) continue;
     if ((other.getPrivateArea?.() ?? null) === area && tileKey(other) === tile) return true;
   }
@@ -72,13 +76,13 @@ function tentacleDied(event) {
   const { npc } = event;
   const player = playerKiller(event);
   if (!player || npc?.getId?.() !== Shared.ids().TENTACLE) return;
-  tentacleKillsOf(npc).set(tileKey(npc), player);
+  tentacleKillsOf(npc).set(tileKey(npc), { player, npc });
 }
 
 /** How many tentacles `player` killed that are still dead. */
 function deadTentaclesKilledBy(player, kills, area) {
   let count = 0;
-  for (const [tile, killer] of kills) if (killer === player && !respawned(area, tile)) count++;
+  for (const [tile, kill] of kills) if (kill.player === player && !respawned(area, tile, kill.npc)) count++;
   return count;
 }
 

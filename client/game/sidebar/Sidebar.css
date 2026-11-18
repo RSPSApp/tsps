@@ -177,7 +177,7 @@
 
 .rl-sidebar-toggle {
     position: absolute;
-    top: 44px; /* RuneLite: below the logout button; here below the FPS counter */
+    top: 20px; /* Below logout, above the minimap edge. */
     right: 5px;
     width: 10px;
     height: 20px;

@@ -314,8 +314,10 @@ export class ArceuusSpells {
             player.sendMessage("You cannot summon a Thrall during PvP combat.");
             return true;
         }
+        // Wiki (Book of the Dead, Resurrection spells): the book counts equipped or in the inventory.
+        const hasBookOfTheDead = player.getEquipment().contains(25818) || player.getInventory().contains(25818);
         if (thrallPrayerCost > 0 && key.startsWith("resurrect ") &&
-            (!player.getEquipment().contains(25818) || player.getSkillManager().getCurrentLevel(Skill.PRAYER) < thrallPrayerCost)) {
+            (!hasBookOfTheDead || player.getSkillManager().getCurrentLevel(Skill.PRAYER) < thrallPrayerCost)) {
             player.sendMessage("You need the Book of the dead and enough Prayer points to summon that Thrall.");
             return true;
         }

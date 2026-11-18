@@ -20,14 +20,14 @@ const Slayer = require('../plugins/skills/slayer/Equipment.Slayer');
 const {CacheDefinitions} = require('../dist/game/cache/CacheDefinitions');
 const CHATBOX_TRANSPARENCY = 4608;
 
-function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin',id=-1,attackHook=null}={}) {
+function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin',id=-1,attackHook=null,book='worn'}={}) {
   const tasks=[],actors=[],shown=[],attributes=new Map(),runes=new Map([[558,100],[556,100],[560,100],[557,100],[565,100],[554,100],[564,100]]);
   const p={magic,prayer:100,registered:true,messages:[],transparent:0,animations:[],graphics:[],isNpc:()=>false,isPlayer:()=>true,isRegistered:()=>p.registered,
     performAnimation:animation=>p.animations.push(animation.getId()),performGraphic:graphic=>p.graphics.push(graphic.getId()),
     getLocation:()=>new Location(3200,3200,0),getAttribute:k=>attributes.get(k),setAttribute:(k,v)=>attributes.set(k,v),
     getPacketSender:()=>({sendVarbit(){},getVarbit:id=>(id===CHATBOX_TRANSPARENCY?p.transparent:0)}),sendMessage:m=>p.messages.push(m),getSpellbook:()=>MagicSpellbook.ARCEUUS,
-    getEquipment:()=>({contains:id=>id===25818,containsAllItem:()=>true}),
-    getInventory:()=>({getAmount:id=>runes.get(id)??0,deletes:item=>runes.set(item.getId(),runes.get(item.getId())-item.getAmount())}),
+    getEquipment:()=>({contains:id=>book==='worn'&&id===25818,containsAllItem:()=>true}),
+    getInventory:()=>({contains:id=>book==='inventory'&&id===25818,getAmount:id=>runes.get(id)??0,deletes:item=>runes.set(item.getId(),runes.get(item.getId())-item.getAmount())}),
     getSkillManager:()=>({getCurrentLevel:s=>s===Skill.PRAYER?p.prayer:p.magic,
       decreaseCurrentLevel:(_s,n)=>{p.prayer-=n;},addExperiences(){}}),
     getCombat:()=>({getTarget:()=>target,getAttacker:()=>null,reset(){},setCastSpell(){}})};
@@ -160,6 +160,19 @@ test('all resurrection spells share a ten-second cooldown and rejection spends n
     assert.equal(f.actors.length,i+1);assert.equal(f.p.prayer,prayer-(i%3+1)*2);
     assert.equal(f.attributes.get('arceuus:thrall-until'),until+period);
   }
+});
+
+// Wiki (Book of the Dead; Resurrection spells): the book is needed "equipped or in the player's inventory" (issue 6194).
+test('resurrection spells cast with the Book of the Dead worn or in the inventory, and refuse without it',t=>{
+  for(const book of ['worn','inventory']){
+    const f=fixture(t,{book});World.processCycle=100;
+    ArceuusSpells.handleSpell(f.p,'Resurrect lesser ghost');
+    assert.equal(f.actors.length,1,book);assert.equal(f.p.prayer,98,book);assert.deepEqual(f.p.messages,[],book);
+  }
+  const f=fixture(t,{book:'none'});World.processCycle=100;const runes=[...f.runes];
+  ArceuusSpells.handleSpell(f.p,'Resurrect lesser ghost');
+  assert.equal(f.actors.length,0);assert.equal(f.p.prayer,100);assert.deepEqual([...f.runes],runes);
+  assert.deepEqual(f.p.messages,['You need the Book of the dead and enough Prayer points to summon that Thrall.']);
 });
 
 test('only claimed Master rewards double the current-Magic duration, snapshotted for each summon',t=>{

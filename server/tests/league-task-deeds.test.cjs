@@ -2093,7 +2093,7 @@ test("near a loc by option: a prayer switched on beside an altar (Activate a pra
 test("wearing: something cooked with an apron on (Cook something with an apron); a golden apron, or none, is not", async (t) => {
   const f = pactsCharacter(t);
   const cook = async (apron) => {
-    f.player.getEquipment().setItem(core.Equipment.BODY_SLOT, apron ? new core.Item(item(apron)) : null);
+    f.player.getEquipment().setItem(core.Equipment.BODY_SLOT, new core.Item(apron ? item(apron) : -1));
     f.player.getInventory().resetItems();
     assert.equal(await cookShark(t, f), 1, `the real Cooking cooks it: ${f.messages}`);
     return done(f, "cook-something-with-an-apron");

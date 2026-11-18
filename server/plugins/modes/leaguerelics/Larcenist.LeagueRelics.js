@@ -1,6 +1,6 @@
 /**
  * Larcenist (https://oldschool.runescape.wiki/w/Demonic_Pacts_League/Relics), Demonic Pacts' tier 5
- * relic: every pickpocket succeeds, the coin pouch limit is ten times as high, pickpockets and
+ * relic: every Thieving action succeeds, the coin pouch limit is ten times as high, pickpockets and
  * stall thefts repeat themselves, stalls never run out for the relic's owner, and what both give
  * is noted and multiplied by 10 (coins as ten pouches; an item that neither stacks nor notes, and
  * a clue, once: as the other Thieving relics). No guard (nor the stall's owner, whose shout sends
@@ -25,6 +25,11 @@ function pickpocketTarget(request) {
 
 function loot(request) {
   if (active(request.player)) request.loot = Common.multipliedLoot(request.loot, effect.lootMultiplier);
+}
+
+/** Override only the chart roll; eligibility and other refusals stay with the stall. */
+function succeeds(request) {
+  if (active(request.player)) request.success = true;
 }
 
 function again(request) {
@@ -59,6 +64,7 @@ module.exports = function attach(api) {
   effect = Common.data.effects.larcenist;
   api.onCustomEvent("thieving:pickpocket-target", pickpocketTarget);
   api.onCustomEvent("thieving:loot", loot);
+  api.onCustomEvent("thieving:stall-roll", succeeds);
   api.onCustomEvent("thieving:done", again);
   api.onCustomEvent("thieving:deplete-stall", keepStall);
   api.onCustomEvent("thieving:stall-reward", stallLoot);

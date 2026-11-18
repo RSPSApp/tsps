@@ -588,6 +588,15 @@ test("Larcenist: newly delivered notes leave older plain and preset copies untou
   assert.equal(inventory.getAmount(Common.noted(I.STEEL_SCIMITAR)), 10);
 });
 
+test("Larcenist: losing stall chart rolls succeed only for the active relic", () => {
+  const who = cases(LARCENIST);
+  assert.equal(emit("thieving:stall-roll", { player: who.relic, object: {}, success: false }).success, true);
+  for (const player of others(who)) {
+    assert.equal(emit("thieving:stall-roll", { player, object: {}, success: false }).success, false);
+    assert.equal(emit("thieving:stall-roll", { player, object: {}, success: true }).success, true);
+  }
+});
+
 // The real stall producer and real relic listener share this fixture's event bus.
 for (const config of [
   {label:'three stackable bolts', item:'BRONZE_BOLTS', roll:0, expected:30},
@@ -677,14 +686,15 @@ for (const name of ["Magic Stall", "Scimitar Stall"]) test(`Larcenist stall exce
   const player = character("stall-exception", "league", LARCENIST);
   player.setIndex(1621); player.setAttribute("bot-skip-persistence", true);
   player.getSkillManager().setCurrentLevel(Skill.THIEVING, 99);
-  const interactions = new Map(), api = skillApi(), gains = [];
+  const interactions = new Map(), rolls = [], api = skillApi({ "thieving:stall-roll": request => rolls.push(request) }), gains = [];
   api.onObjectInteraction = (label, actions) => interactions.set(label, actions);
   const Stalls = require("../plugins/skills/thieving/Stalls.Thieving"); Stalls(api);
   const object = new core.GameObject(name === "Magic Stall" ? core.ObjectIdentifiers.MAGIC_STALL : core.ObjectIdentifiers.SCIMITAR_STALL,
     new Location(3200, 3201), 10, 0, null);
   const skills = player.getSkillManager(), add = skills.addExperiences.bind(skills);
   t.mock.method(skills, "addExperiences", (skill, amount) => { if (skill === Skill.THIEVING) gains.push(amount); return add(skill, amount); });
-  t.mock.method(Math, "random", () => 0);
+  let randoms = 0;
+  t.mock.method(Math, "random", () => randoms++ === 0 ? 0.99 : 0);
   t.after(() => {
     Stalls._test.logout({ player }); for (const task of api.tasks) task.stop();
     for (const id of [object.getId(), Stalls._test.emptyStallId(object)]) {
@@ -695,6 +705,7 @@ for (const name of ["Magic Stall", "Scimitar Stall"]) test(`Larcenist stall exce
   interactions.get(name)["Steal from"](event);
   assert.equal(event.handled, true);
   api.tasks[0].execute();
+  assert.equal(rolls.length, 1, "one chart request before the complete reward");
   const id = name === "Magic Stall" ? I.AIR_RUNE : I.IRON_SCIMITAR;
   assert.equal(player.getInventory().getAmount(id), 1, "excluded stall reward is neither multiplied nor noted");
   if (name === "Scimitar Stall") assert.equal(player.getInventory().getAmount(Common.noted(id)), 0);

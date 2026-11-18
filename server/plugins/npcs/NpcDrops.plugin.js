@@ -736,9 +736,10 @@ function sourceName(npc, npcId) {
 /**
  * What makes this kill's drops likelier, asked once per roll: plugins answer npc-drops:chance
  * { player, npc, npcId, source, rules } by pushing { pattern, multiplier } rules matched against
- * each entry's name (a league's boosted drops). `source` is the NPC's name, or what a
- * npc-drops:roll-table request named. Unlike the tertiary rules these reach every entry: the
- * pre-roll, the main roll, the separate rolls and the tertiary drops.
+ * each entry's name (a league's boosted drops), or against an ordered reward stage's key when the
+ * row is a whole stage (an awakened boss's rarer unique table). `source` is the NPC's name, or
+ * what a npc-drops:roll-table request named. Unlike the tertiary rules these reach every entry:
+ * the pre-roll, the main roll, the separate rolls and the tertiary drops.
  */
 function chanceRules(player, npc, source) {
   const rules = [];
@@ -771,12 +772,17 @@ function tertiaryRules(player, npc) {
   return rules;
 }
 
-/** The product of the rules whose pattern matches the entry's name (tertiary rules, chance rules). */
+/**
+ * The product of the rules whose pattern matches the entry's name (tertiary rules, chance rules).
+ * An ordered reward stage has no name, so its key is matched instead: a plugin can make a whole
+ * stage likelier (the awakened Forgotten Four's 3/136 unique table).
+ */
 function rulesMultiplier(entry, rules) {
   let multiplier = 1;
   let floor = 0;
+  const label = entry.name || entry.key || "";
   for (const rule of rules) {
-    if (!rule.pattern.test(entry.name || "")) continue;
+    if (!rule.pattern.test(label)) continue;
     if (Number.isFinite(rule.multiplier)) multiplier *= rule.multiplier;
     // At least 1 in `outOf`: the multiplier that brings this entry's weight/out_of up to it.
     if (rule.outOf > 0) floor = Math.max(floor, Number(entry.out_of) / ((Number.isInteger(entry.weight) ? entry.weight : 1) * rule.outOf));

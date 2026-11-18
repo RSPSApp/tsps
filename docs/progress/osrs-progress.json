@@ -29076,7 +29076,8 @@
             "The four Desert Treasure II bosses: Vardorvis, Duke Sucellus, the Leviathan and the Whisperer.",
             "Main sync 8795bc4c2 (through PR #973): all four normal post-quest encounters are implemented — Vardorvis (#637), the Leviathan (#892/#894), Duke Sucellus and the Whisperer (#973) — with site/instance access, attacks, kill records, drops and Combat Achievement hooks; ForgottenFourRewards.plugin.js adds ordered reward state.",
             "Remaining: awakened entry is disabled for the Leviathan and unavailable for Duke/Whisperer/Vardorvis; Vardorvis awakened loot/perfect kills/stat-drain immunity and some Duke/Whisperer/Leviathan balance values stay provisional or unverified. Normal-mode encounters are functional.",
-            "Main through #1012 retains partial credit for Awakened modes: PRs #987/#991/#996/#998 fix normal Leviathan late volleys, Whisperer pursuit/reflection and Duke pending strikes. Normal-mode fixes do not complete missing Awakened entry, mechanics or reward parity."
+            "Main through #1012 retains partial credit for Awakened modes: PRs #987/#991/#996/#998 fix normal Leviathan late volleys, Whisperer pursuit/reflection and Duke pending strikes. Normal-mode fixes do not complete missing Awakened entry, mechanics or reward parity.",
+            "2026-11-17, feat/vardorvis-awakened: Vardorvis' awakened fight is enabled (the awakener's orb is consumed) and now rolls the tradeable unique table at 3/136, is immune to stat drains and gives no Slayer task credit. Verified by server/tests/vardorvis-awakened.test.cjs and docs/vardorvis.md. The awakened entry stays disabled for the Leviathan and unavailable for Duke/Whisperer, so the Ancient blood ornament kit (last of the four awakened kills) is still out; Vardorvis perfect kills, Budget Cutter and Axe Enthusiast also remain."
           ],
           "taskDetails": [
             {

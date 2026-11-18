@@ -47,6 +47,8 @@ function knifeOnHide(event) {
   inventory.add(scales, false);
   inventory.refreshItems();
   player.sendMessage(SCRAPED);
+  // `scaly-dragonhide:scraped` { player } (a league's "Scrape some blue dragonhide").
+  pluginApi.emitCustomEvent("scaly-dragonhide:scraped", { player });
 }
 
 module.exports = {

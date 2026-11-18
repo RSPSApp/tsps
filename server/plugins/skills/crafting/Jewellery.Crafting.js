@@ -122,7 +122,8 @@ function craftFurnaceProduct(player, product) {
   for (const id of product.extra) inventory.deleteNumber(id, 1);
   inventory.addItem(output);
   Shared.addCraftingXp(player, product.xp);
-  Shared.getApi().emitCustomEvent("crafting:made", { player, itemId: product.itemId, furnace: true });
+  // `bar`: the bar's name, "Silver bar" (a league's "Craft 20 Silver items using Silver Bars").
+  Shared.getApi().emitCustomEvent("crafting:made", { player, itemId: product.itemId, furnace: true, bar: Shared.getCore().ItemDefinition.forId(product.bar)?.getName?.() ?? null });
   Shared.produced(player, product.itemId, product.amount, product.xp, "jewellery", [[product.bar, 1], ...product.extra.map((id) => [id, 1])]);
   return true;
 }

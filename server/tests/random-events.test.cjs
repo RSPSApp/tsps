@@ -719,7 +719,10 @@ test('Sandwich tray validates owner, selection and open interface, with a wrong 
   // The Wiki transcript's line for the wrong food; no reward and she leaves.
   const greedy = h.player(), npc4 = h.spawn(greedy, 1, 0);
   h.hooks['Sandwich lady']['Talk-to']({ player: greedy, npc: npc4 }); openOptions(h, greedy);
+  const cross = [];
+  h.api.onCustomEvent('random-events:sandwich-lady-cross', (event) => cross.push(event.player));
   trayClick(h, greedy, 10730); assert.deepEqual(greedy.rewards, []); assert.equal(greedy.interfaceId, -1);
+  assert.deepEqual(cross, [greedy], "random-events:sandwich-lady-cross, for the wrong food only (a league's task)");
   assert.deepEqual(npcLines(greedy), ["Hey, I didn't say you could have that!"]);
   leaves(h, greedy); assert.equal(npc4.removed, true);
   // Live: a pie that doesn't fit is placed on the ground for three hours.
@@ -926,9 +929,12 @@ test('Jekyll selects the highest clean herb and all fourteen exchanges work with
     assert.equal(h.prompts.at(-1).title, 'Select an option');
     assert.deepEqual(h.prompts.at(-1).options.map(option => option.label), ['Here you are.', 'No, I need it myself.']);
     const yes = h.prompts.at(-1).options[0].cb;
+    const traded = [];
+    h.api.onCustomEvent('random-events:jekyll-traded', (event) => { if (event.player === p) traded.push(event.herbId); });
     yes(); assert.deepEqual(npcLines(p), ['Here you are.']); assert.deepEqual(p.rewards, []);
     openOptions(h, p);
     assert.deepEqual(p.rewards, [potionId]);
+    assert.deepEqual(traded, [herbId], "random-events:jekyll-traded with the potion (rsprox 560)");
     assert.deepEqual(npcLines(p), ['Thank you so much! Here, take this potion in return.']);
     yes(); openOptions(h, p); assert.deepEqual(p.rewards, [potionId], 'only once');
     leaves(h, p); assert.equal(npc.removed, true);

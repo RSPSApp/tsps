@@ -764,10 +764,13 @@ function rolling(lands, body) {
 }
 
 test("a worn amulet of chemistry sometimes gives a potion one dose more and spends a charge", () => {
+  const extra = [];
+  hooks.customEvents.set("herblore:extra-dose", [...(hooks.customEvents.get("herblore:extra-dose") ?? []), (event) => extra.push(event.itemId)]);
   rolling(true, () => {
     const who = player([["ranarrvial"], ["snape_grass"]], 38, { amulet: "amulet_of_chemistry" });
     use(who, "snape_grass", "ranarrvial");
     assert.equal(who.inv.count("4doseprayerrestore"), 1);
+    assert.equal(extra.length, 1, "herblore:extra-dose for the 4-dose one (a league's 4 dose potion task)");
     assert.equal(who.inv.count("3doseprayerrestore"), 0);
     assert.equal(who.sent.xp, 87.5, "the extra dose gives no extra XP");
     assert.deepEqual(who.sent.spam, ["You mix the snape grass into your potion.", `${FOUR_DOSE_SPAM} It has 4 charges left.`]);
@@ -778,6 +781,7 @@ test("a worn amulet of chemistry sometimes gives a potion one dose more and spen
     use(who, "snape_grass", "ranarrvial");
     assert.equal(who.inv.count("3doseprayerrestore"), 1);
     assert.equal(who.getAttribute(CHARGES), undefined);
+    assert.equal(extra.length, 1, "no extra dose, no event");
   });
   rolling(true, () => {
     const bare = player([["ranarrvial"], ["snape_grass"]], 38);

@@ -521,6 +521,8 @@ function chooseSandwich(event) {
   if (event.action !== TRAY_SELECT_ACTION || !active?.trayOpen || active.definition.kind !== "sandwich" ||
       player.getInterfaceId() !== TRAY_GROUP || !valid(active, player)) return;
   if (active.trayOrder[index] !== active.foodIndex) {
+    // `random-events:sandwich-lady-cross` { player }: the wrong food taken ("Make the Sandwich lady quite cross").
+    api.emitCustomEvent("random-events:sandwich-lady-cross", { player });
     leave(active);
     Flow.chat(api, { player, npcId: active.npc.getId(), lines: ["Hey, I didn't say you could have that!"] });
     return;

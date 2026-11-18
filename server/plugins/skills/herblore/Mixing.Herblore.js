@@ -64,6 +64,12 @@ function makeOne(player, recipe) {
   Common.spam(player, message(recipe));
   Common.addXp(player, recipe.xp);
   Common.api.emitCustomEvent("herblore:made", { player, itemId: mix.productId, mix });
+  // `herblore:extra-dose` { player, itemId }: a recipe's 3-dose potion that came out 4-dose (the amulet of chemistry,
+  // a league relic): "Make a 4 dose potion that was originally supposed to be a 3 dose potion".
+  const dose = (id) => /\((\d)\)$/.exec(Common.core.ItemDefinition.forId(id)?.getName?.() ?? "")?.[1];
+  if (mix.productId !== recipe.productId && dose(recipe.productId) === "3" && dose(mix.productId) === "4") {
+    Common.api.emitCustomEvent("herblore:extra-dose", { player, itemId: mix.productId });
+  }
   Common.api.emitCustomEvent("skills:produced", { player, skill: Common.core.Skill.HERBLORE, itemId: mix.productId, amount: 1, xp: recipe.xp, kind: "mix" });
   // A "herblore:made" listener may end the batch after this potion (an amulet of chemistry that crumbled, set to stop).
   return mix.stop !== true;

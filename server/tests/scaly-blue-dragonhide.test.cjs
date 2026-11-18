@@ -13,12 +13,16 @@ let hook;
 let nearBank;
 /** "chest" when the only bank in reach is a bank chest: the shared query then answers only if chests count. */
 let bankKind = "booth";
+const scraped = [];
 
 function pluginApi() {
   return new Proxy({
     core,
     onItemOnItem(...args) { hook = { names: args.filter((arg) => typeof arg === "string"), fn: args.find((arg) => typeof arg === "function"), filter: args.at(-1) }; },
-    emitCustomEvent(name, query) { if (name === "league:near-bank") query.near = nearBank && (bankKind !== "chest" || query.chests !== false); },
+    emitCustomEvent(name, query) {
+      if (name === "league:near-bank") query.near = nearBank && (bankKind !== "chest" || query.chests !== false);
+      if (name === "scaly-dragonhide:scraped") scraped.push(query.player);
+    },
   }, { get: (target, key) => (key in target ? target[key] : () => {}) });
 }
 
@@ -78,6 +82,7 @@ test("in a bank the first hide becomes 50 noted scales in its slot (rsprox 10003
   assert.deepEqual(slot(f, 18), [I().SCALY_BLUE_DRAGONHIDE, 1]);
   assert.equal(f.inventory.getAmount(I().SCALY_BLUE_DRAGONHIDE), 4);
   assert.deepEqual(f.messages, [SCRAPED]);
+  assert.equal(scraped.filter((who) => who === f.player || who === f).length, 1, "scaly-dragonhide:scraped, once (a league's scrape task)");
 });
 
 test("the next hide's scales join the stack and free its slot (rsprox 1000380 t4996)", (t) => {

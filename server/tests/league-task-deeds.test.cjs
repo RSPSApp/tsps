@@ -2887,3 +2887,43 @@ test("deed: bones used on the real Chaos Temple altar (Sacrifice some Bones / Dr
   await use("Dragon bones");
   assert.ok(done(f, "sacrifice-some-dragon-bones-at-the-chaos-temple"));
 });
+
+// ---- deeds reported by their content: General (issue 6108 follow-ups) ----
+
+test("General deeds through their events: Slayer, random events, Jacky Jester, Death's Coffer, hides, the Font, potions, smithing, silver", (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const emit = (name, payload = {}) => PM.emitCustomEvent(name, { player, ...payload });
+  emit("slayer:on-task-kill", { npcName: "Greater abyssal demon" });
+  assert.ok(!done(f, "slay-an-abyssal-demon"), "a greater abyssal demon");
+  emit("slayer:on-task-kill", { npcName: "Abyssal demon" });
+  assert.ok(done(f, "slay-an-abyssal-demon"));
+  for (let i = 0; i < 247; i++) emit("slayer:on-task-kill", { npcName: "Cow" });
+  assert.ok(!done(f, "slay-250-creatures"), "249 on task");
+  emit("slayer:on-task-kill", { npcName: "Cow" });
+  assert.ok(done(f, "slay-250-creatures"));
+  for (const [event, id] of [["random-events:jekyll-traded", "trade-a-herb-with-jekyll"], ["random-events:sandwich-lady-cross", "upset-the-sandwich-lady"],
+    ["construction:jester-won", "beat-jacky-jester"], ["deaths-office:coffer-sacrificed", "sacrifice-something-to-death-s-coffer"],
+    ["scaly-dragonhide:scraped", "scrape-some-blue-dragonhide"], ["abyssal-sire:font-consumed", "offer-an-unsired-to-the-font-of-consumption"],
+    ["herblore:extra-dose", "make-a-4-dose-potion"], ["farming:protected", "protect-your-crops"]]) {
+    emit(event, {});
+    assert.ok(done(f, id), event);
+  }
+  emit("random-events:completed", { event: "maze" });
+  assert.ok(!done(f, "complete-the-postie-pete-random-event"), "the maze");
+  emit("random-events:completed", { event: "eviltwin" });
+  assert.ok(done(f, "complete-the-postie-pete-random-event"));
+  emit("smithing:success", { metal: "adamantite", itemId: 1 });
+  assert.ok(!done(f, "smith-a-rune-item"), "adamant");
+  emit("smithing:success", { metal: "runite", itemId: 1 });
+  assert.ok(done(f, "smith-a-rune-item"));
+  for (let i = 0; i < 19; i++) emit("crafting:made", { bar: "Silver bar", itemId: 1 });
+  emit("crafting:made", { bar: "Gold bar", itemId: 1 });
+  assert.ok(!done(f, "craft-20-silver-items"), "19 silver and a gold");
+  emit("crafting:made", { bar: "Silver bar", itemId: 1 });
+  assert.ok(done(f, "craft-20-silver-items"));
+  emit("firemaking:success", { skill: core.Skill.FIREMAKING, itemId: item("Logs") });
+  assert.ok(!done(f, "burn-some-coloured-logs"), "plain logs");
+  emit("firemaking:success", { skill: core.Skill.FIREMAKING, itemId: item("Purple logs") });
+  assert.ok(done(f, "burn-some-coloured-logs"));
+});

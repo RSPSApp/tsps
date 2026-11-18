@@ -198,6 +198,8 @@ function confirm({ player }) {
   }
   takePlain(inventory, itemId, count, slot);
   inventory.refreshItems();
+  // `deaths-office:coffer-sacrificed` { player, itemId, amount, value } (a league's "Sacrifice something to Death's Coffer").
+  Common.api().emitCustomEvent("deaths-office:coffer-sacrificed", { player, itemId, amount: count, value: total });
   setVarp(player, "if1", Common.state(player).coffer);
   clearSelection(player);
   Common.sound(player, SACRIFICE_SOUND);

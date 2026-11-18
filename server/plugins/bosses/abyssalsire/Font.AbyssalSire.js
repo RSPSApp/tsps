@@ -71,6 +71,8 @@ function useUnsired(event) {
     const drops = [{ itemId: reward, amount: 1 }];
     Common.api.emitCustomEvent("npc-drops:roll", { player, drops });
     for (const drop of drops) player.getInventory().adds(drop.itemId, drop.amount);
+    // `abyssal-sire:font-consumed` { player, itemId } (a league's "Offer an Unsired to the Font of Consumption").
+    Common.api.emitCustomEvent("abyssal-sire:font-consumed", { player, itemId: reward });
     objectBox(player, reward, font.rewardText);
   });
   return true;

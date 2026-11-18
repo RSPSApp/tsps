@@ -504,6 +504,9 @@ function npcKilled({ killer, npc }) {
   // Superiors.Slayer.js may spawn a superior, or zero this for a superior's own XP.
   const kill = { player, npc, xp: hitpoints };
   api.emitCustomEvent("slayer:task-kill", kill);
+  // `slayer:on-task-kill` { player, npcName }: a kill that counts for the player's own task (not an always-on-task
+  // kill without one), the NPC's name flat for triggers ("Slay 250 creatures", "Kill an Abyssal Demon on task").
+  api.emitCustomEvent("slayer:on-task-kill", { player, npcName: npcName(npc) });
   // Mortimer's Slayer XP modifier counts superiors too (Wiki).
   // The Morytania Diary adds to a kill in the Slayer Tower (MorytaniaDiary.Slayer.js).
   const boost = modifierBoost(task, MODIFIER.XP) * MorytaniaDiary.boost(player, npc);

@@ -2041,6 +2041,20 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
   Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
   and the barrel.
+- **General deeds**, from their content's events:
+  - Slayer: `slayer:on-task-kill` { player, npcName } for a kill that counts for the player's own task (250 of
+    them; an "Abyssal demon" by name).
+  - Random events: `random-events:jekyll-traded` { player, herbId } on Dr Jekyll's trade (rsprox.net 560);
+    `random-events:sandwich-lady-cross` { player } when the wrong food is taken ("Hey, I didn't say you could
+    have that!"; Ours: that is what makes her cross); Postie Pete is the existing `random-events:completed`
+    kind "eviltwin".
+  - `construction:jester-won` { player } (Jacky Jester); `deaths-office:coffer-sacrificed` { player, itemId,
+    amount, value }; `scaly-dragonhide:scraped` { player }; `abyssal-sire:font-consumed` { player, itemId }.
+  - `herblore:extra-dose` { player, itemId }: a recipe's 3-dose potion that came out 4-dose.
+  - Anvil smithing's `smithing:success` now names `metal` ("runite"); furnace jewellery's `crafting:made` now
+    names `bar` ("Silver bar", 20 of them).
+  - Existing: `farming:protected`; `firemaking:success` of red, green, blue, white or purple logs; `produce` of
+    100 empty light orbs (Ours: glassblown, not filled), 100 pies of any kind, and a mith grapple.
 - **Player-owned house and altar deeds**, from Construction's and BoneAltars' events:
   - The estate agents: `construction:house-bought` { player }; `construction:house-moved` { player, location }
     with the town's name, `where` the task's town (Yanille, Prifddinas; league 4's Taverley, Pollnivneach, Rellekka); the existing `construction:house-redecorated`.

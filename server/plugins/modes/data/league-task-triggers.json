@@ -151,7 +151,7 @@
     "scrape-some-blue-dragonhide": {"kind": "deed", "event": "scaly-dragonhide:scraped", "count": 1},
     "slay-250-creatures": {"kind": "deed", "event": "slayer:on-task-kill", "count": 250},
     "slay-an-abyssal-demon": {"kind": "deed", "event": "slayer:on-task-kill", "where": {"npcName": "Abyssal demon"}, "count": 1},
-    "smith-a-rune-item": {"kind": "deed", "event": "smithing:success", "where": {"metal": "runite"}, "count": 1},
+    "smith-a-rune-item": {"kind": "deed", "event": "smithing:success", "where": {"metal": "runite"}, "notWhere": {"label": ["Nails"]}, "count": 1},
     "trade-a-herb-with-jekyll": {"kind": "deed", "event": "random-events:jekyll-traded", "count": 1},
     "build-a-demonic-throne": {"kind": "deed", "event": "construction:furniture-built", "where": {"key": "DEMONIC_THRONE"}, "count": 1},
     "build-a-gilded-altar": {"kind": "deed", "event": "construction:furniture-built", "where": {"key": "GILDED_ALTAR"}, "count": 1},

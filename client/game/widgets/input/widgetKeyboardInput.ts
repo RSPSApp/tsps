@@ -57,6 +57,9 @@ export function processConstructionKeyboardInput(
     return false;
 }
 
+/** Varc MESLAYERMODE (VarClientID): the chatbox input mode, 0 when no prompt is open. */
+const VARC_MESLAYERMODE = 5;
+
 export function processWidgetKeyboardInput(
     deps: WidgetInputControllerDeps,
     frame: WidgetInputFrame,
@@ -76,8 +79,12 @@ export function processWidgetKeyboardInput(
             deps.getPendingInputDialogAction() !== null ||
             deps.getPendingTradeQuantityAction() !== null
         );
+        // A chatbox prompt the server opened (Enter amount, Enter name, a text answer: VarC
+        // MESLAYERMODE is not 0) takes the keys, not a custom window's search box behind it.
+        const chatboxPromptOpen = (deps.getVarManager().getVarcInt(VARC_MESLAYERMODE) | 0) !== 0;
         const customInterfaceSearchHandled =
-            !dialogActive && deps.getCustomInterfaces().handleSearchKeyEvents(input.keyEvents);
+            !dialogActive && !chatboxPromptOpen &&
+            deps.getCustomInterfaces().handleSearchKeyEvents(input.keyEvents);
 
         // Process keyboard input for active dialog before widget handlers
         if (dialogActive) {

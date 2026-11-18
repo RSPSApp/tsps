@@ -61,5 +61,32 @@ Rules for both:
   reopens it: a root change (Play on the welcome screen, after an open right at login)
   mounts it again with its rows, tab, query and selection, and nothing needs resending.
 
+Optional extras, all off unless declared (a client that predates them ignores the keys and
+draws the plain list):
+
+- `list.stripeColors: [even, odd]` colours each row's background by its place in the list
+  (a zebra list that stays correct while scrolling and filtering).
+- `list.detailStart` + `list.detailLabel` add a second text component per slot (a bold name
+  over a plain description), filled like `itemLabel`. `list.rowParts` lists more per-slot
+  components (lines, bevels) that move and hide with their row, keeping their own offset.
+- `list.nameTarget: true` names a row by its `name` in the right-click menu ("Buy Shark")
+  when the label shows something else (a price).
+- `list.headerSpan: { fontId, color, lineColor, height, fillColor }` gives each header a
+  whole grid row, its title centred across the view (a shop's "Magic" section).
+- `list.jumpComponents` are buttons that scroll to the nth header. `list.jumpLit` lights the
+  clicked one at once (plates shown/hidden, text through `textTemplate`), and
+  `list.jumpClearsQuery` clears a typed search first.
+- Rows with `searchOnly: true` appear only while a query is typed (other markets' items).
+- `search.focusOnOpen: false` opens with the placeholder showing until the box is clicked.
+- `overlay: true` declares a non-modal panel (mounted beside other interfaces); it keeps no
+  list state, so it leaves the open modal alone. Its `hotkeys: { gate?, keys: [{ key,
+  component }] }` click a component's op 1 while `gate` is visible, and
+  `dockBesideSidePanel: true` keeps it against the side panel on the resizable frames.
+- A hover preview needs no option: a widget's `onMouseOver`/`onMouseLeave` can run cache
+  script 69 (`if_sethide`).
+
+None of these touch the cache: they are client code reading server JSON, so cache and OSRS
+updates leave them alone.
+
 Adding an interface of this kind should need no client change. If it does, the missing
 capability belongs in the runtime as a declared option, not in a feature-specific module.

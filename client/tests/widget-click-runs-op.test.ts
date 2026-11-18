@@ -6,9 +6,14 @@ import assert from "node:assert/strict";
 
 import { processWidgetClickInput } from "../game/widgets/input/widgetClickInput";
 
+const customClicks: [number, number][] = [];
+
 function click(widget: any, beneath: any[] = []): string[] {
     const fired: string[] = [];
     const deps = {
+        getCustomInterfaces: () => ({
+            handleWidgetClick: (groupId: number, childId: number) => { customClicks.push([groupId, childId]); return false; },
+        }),
         getCs2Vm: () => ({
             invokeEventHandler: (target: any, eventType: string) => {
                 fired.push(target.name ? `${target.name}.${eventType}` : eventType);
@@ -91,5 +96,11 @@ assert.deepEqual(click(face, [container]), ["face.onClick", "container.onOp"]);
 assert.deepEqual(click(face), ["face.onClick"], "with nothing beneath offering an op, the press alone");
 const pressOnly = button({ name: "press", childIndex: 2, eventHandlers: { onClick: {} } });
 assert.deepEqual(click(pressOnly, [container]), ["press.onClick", "container.onOp"], "a face without onOp too");
+
+// A left-click tells the custom-interface runtime what it hit, as the menu path already did, so a
+// declared search box focuses (and anything else blurs it) from a plain click too.
+customClicks.length = 0;
+click(button({ actions: ["Search"], eventHandlers: { onOp: {} } }));
+assert.deepEqual(customClicks, [[647, 3]], "the top widget under a left-click reaches the runtime, ids as the menu path reads them");
 
 console.log("widget click runs op passed");

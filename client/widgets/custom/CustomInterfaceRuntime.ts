@@ -2,6 +2,7 @@ import { getCustomInterface } from "../../common/gamemode/GamemodeContentStore";
 import { IndexType } from "../../rs/cache/IndexType";
 import { markWidgetInteractionDirty } from "../WidgetInteraction";
 import type { WidgetManager } from "../WidgetManager";
+import { sendWidgetAction } from "../../network/ServerConnection";
 
 /**
  * Server-declared behaviour for a custom widget group: a search box, a virtual list of
@@ -14,6 +15,20 @@ import type { WidgetManager } from "../WidgetManager";
  */
 export type CustomInterfaceDeclaration = {
     groupId: number;
+    /**
+     * A non-modal panel (mounted beside other interfaces, e.g. in a viewport overlay layer). It
+     * keeps no search or list state, so opening it leaves the open modal's state alone; only
+     * `hotkeys` and `dockBesideSidePanel` apply to it. (A hover preview needs no client code:
+     * a widget's `onMouseOver`/`onMouseLeave` can run cache script 69, `if_sethide`.)
+     */
+    overlay?: boolean;
+    /** A key (`event.key`, e.g. "F1") clicks a component's op 1, while `gate` (if any) is not hidden. */
+    hotkeys?: { gate?: number; keys: Array<{ key: string; component: number }> };
+    /**
+     * On the resizable frames, the overlay's root (a right-anchored layer, `xPositionMode` 2)
+     * moves so its right edge touches the side panel's left edge. The fixed frame keeps `rawX`.
+     */
+    dockBesideSidePanel?: boolean;
     search?: {
         /** Text component the typed query is rendered into. */
         inputComponent: number;
@@ -24,6 +39,8 @@ export type CustomInterfaceDeclaration = {
         maxLength?: number;
         /** Shown when the query is empty and the box is not focused. */
         placeholder?: string;
+        /** False leaves the field unfocused (showing its placeholder) until it is clicked. */
+        focusOnOpen?: boolean;
         caret?: string;
         /** "%s" is replaced with the typed text. */
         textTemplate?: string;
@@ -61,6 +78,17 @@ export type CustomInterfaceDeclaration = {
         labelBaseY?: number;
         /** "%name", "%id" and "%detail" are replaced per row. */
         itemLabel?: string;
+        /**
+         * A second text component per slot, drawn over the label in its own font (a bold name
+         * over a plain description): `detailStart + slot`, filled from `detailLabel` the way
+         * `itemLabel` fills the label, and moved with the row.
+         */
+        detailStart?: number;
+        detailLabel?: string;
+        /** Row fills by the row's place in the list, not its slot: [even, odd], a zebra list. */
+        stripeColors?: [number, number];
+        /** More components per slot (`start + slot`) that move and hide with the row: lines, bevels. */
+        rowParts?: number[];
         /** The label of a header row; "%name" is replaced. */
         headerLabel?: string;
         /** Clicking a row sends its id to the server as the action's slot. */
@@ -78,6 +106,26 @@ export type CustomInterfaceDeclaration = {
         };
         /** Text lists have no inventory item associated with each row. */
         textOnly?: boolean;
+        /**
+         * The right-click menu names a row by its `name` ("Buy Shark") rather than by its
+         * label text, for lists whose label shows something else (a shop slot showing its price).
+         */
+        nameTarget?: boolean;
+        /**
+         * In a grid, a header takes a whole row of its own: its title is centred across the
+         * view in this font and colour, over a line of `lineColor`.
+         */
+        headerSpan?: { fontId?: number; color?: number; lineColor?: number; height?: number; fillColor?: number };
+        /** Buttons that scroll the list to its sections: the nth one to the nth header. */
+        jumpComponents?: number[];
+        /**
+         * Lights the clicked jump button at once instead of a tick later, when the server's
+         * own update lands: the nth plate is shown and the others hidden, and the nth
+         * button's text is wrapped in `textTemplate` (`%s` is the plain text).
+         */
+        jumpLit?: { components: number[]; textTemplate?: string };
+        /** A jump button clears the typed query first, so it jumps within the whole list. */
+        jumpClearsQuery?: boolean;
     };
     /**
      * Containers that scroll their own children. The rows are part of the definition, so
@@ -134,6 +182,8 @@ export type CustomInterfaceRow = {
     terms?: string;
     /** A section title: not clickable, and kept only while a row under it matches. */
     header?: boolean;
+    /** Shown only while a query is typed: a search reaches it, browsing does not. */
+    searchOnly?: boolean;
     /** Text for the declared select panel, by name; server markup is kept. */
     panel?: Record<string, string>;
 };
@@ -146,6 +196,7 @@ function toRow(row: any): CustomInterfaceRow {
         detail: typeof row.detail === "string" ? row.detail : undefined,
         terms: typeof row.terms === "string" ? row.terms : undefined,
         header: row.header === true,
+        searchOnly: row.searchOnly === true || undefined,
         panel: row.panel && typeof row.panel === "object"
             ? Object.fromEntries(
                   Object.entries(row.panel).filter(([, value]) => typeof value === "string"),
@@ -164,6 +215,7 @@ export function filterRows(rows: CustomInterfaceRow[], query: string): CustomInt
             header = row;
             continue;
         }
+        if (row.searchOnly && !term) continue;
         const text = `${row.name} ${row.terms ?? ""}`.toLowerCase();
         if (!text.includes(term)) continue;
         if (header) {
@@ -171,6 +223,25 @@ export function filterRows(rows: CustomInterfaceRow[], query: string): CustomInt
             header = undefined;
         }
         result.push(row);
+    }
+    return result;
+}
+
+/**
+ * Gives each header a grid row of its own: the row before it is filled out with blanks, and
+ * blanks follow the header. A blank is a header with no name.
+ */
+export function spanHeaders(rows: CustomInterfaceRow[], columns: number): CustomInterfaceRow[] {
+    const blank: CustomInterfaceRow = { id: 0, name: "", header: true };
+    const result: CustomInterfaceRow[] = [];
+    for (const row of rows) {
+        if (row.header) {
+            while (result.length % columns) result.push(blank);
+            result.push(row);
+            while (result.length % columns) result.push(blank);
+        } else {
+            result.push(row);
+        }
     }
     return result;
 }
@@ -206,6 +277,8 @@ export type CustomInterfaceRuntimeDeps = {
         phase: "pre" | "post" | "run_script",
     ) => void;
     fetchContent: (path: string) => Promise<unknown>;
+    /** Sends a hotkey's click; defaults to the server connection. */
+    sendWidgetAction?: typeof sendWidgetAction;
 };
 
 function sanitize(value: string | undefined): string {
@@ -236,6 +309,10 @@ export class CustomInterfaceRuntime {
     /** Row shown in each list slot, for clickable lists. */
     private slotRows: (CustomInterfaceRow | undefined)[] = [];
     private labelActions = new Map<number, unknown>();
+    /** Per slot, the label's and background's own shape, for when a spanning header leaves the slot. */
+    private slotShapes = new Map<number, Array<Record<string, any>>>();
+    /** Each row part's own y inside its row, read once from the definition. */
+    private rowPartOffsets = new WeakMap<object, number>();
     private selectedRowId: number | undefined;
     private catalog = new Map<number, CustomInterfaceRow>();
     private dataParts: CustomInterfaceRow[][] = [];
@@ -251,6 +328,8 @@ export class CustomInterfaceRuntime {
      * that re-mount takes this back instead of starting empty.
      */
     private parked?: { groupId: number; state: ParkedInterfaceState };
+    /** Open overlay panels by group. */
+    private overlays = new Map<number, { declaration: CustomInterfaceDeclaration; rawX?: number }>();
 
     constructor(private readonly deps: CustomInterfaceRuntimeDeps) {}
 
@@ -267,11 +346,16 @@ export class CustomInterfaceRuntime {
         if (!declaration) {
             return false;
         }
+        if (declaration.overlay) {
+            this.overlays.set(groupId | 0, { declaration });
+            this.tickOverlays();
+            return true;
+        }
         const parked = remount && this.parked?.groupId === (groupId | 0) ? this.parked.state : undefined;
         this.parked = undefined;
         this.reset();
         this.declaration = declaration;
-        this.focused = !!declaration.search;
+        this.focused = !!declaration.search && declaration.search.focusOnOpen !== false;
         if (parked) {
             Object.assign(this, parked);
             this.applyData();
@@ -291,6 +375,7 @@ export class CustomInterfaceRuntime {
     }
 
     onInterfaceClosed(groupId: number): void {
+        if (this.overlays.delete(groupId | 0)) return;
         if (((this.declaration?.groupId ?? -1) | 0) === (groupId | 0)) {
             const { focused, query, dataParts, tabLayouts, activeTab, selectedRowId, labelActions } = this;
             const state = { focused, query, dataParts, tabLayouts, activeTab, selectedRowId, labelActions };
@@ -315,11 +400,15 @@ export class CustomInterfaceRuntime {
             } catch {
                 rows = [];
             }
+            const sectionBefore = this.sourceRows[0];
             this.dataParts[part] = rows;
             this.applyData();
             // New data for the same list (a favourite toggled) keeps the scroll; a new query
-            // starts from the top.
-            this.scheduleFetch(false);
+            // starts from the top. So does a sectioned list whose first section changed: that
+            // is another list, not the same one refreshed.
+            const sectionNow = this.sourceRows[0];
+            const otherList = !!sectionBefore?.header && !!sectionNow?.header && sectionBefore.name !== sectionNow.name;
+            this.scheduleFetch(otherList);
             if (this.selectedRowId !== undefined) this.applySelection(this.selectedRowId);
             return true;
         }
@@ -372,11 +461,20 @@ export class CustomInterfaceRuntime {
         return undefined;
     }
 
-    /** A widget op was sent: a declared tab switches its list now, not a tick later. */
+    /** A widget op was sent: a declared tab switches its list, and a jump button scrolls it, now, not a tick later. */
     handleWidgetOp(groupId: number, childId: number): void {
         const declaration = this.declaration;
-        const tabs = declaration?.tabs;
-        if (!tabs || (groupId | 0) !== (declaration!.groupId | 0)) return;
+        if (!declaration || (groupId | 0) !== (declaration.groupId | 0)) return;
+        const jump = declaration.list?.jumpComponents?.indexOf(childId | 0) ?? -1;
+        if (jump >= 0 && declaration.list?.jumpClearsQuery && this.query) {
+            this.query = "";
+            this.setFocus(false);
+            this.syncInput();
+            this.scheduleFetch(false);
+        }
+        this.jumpToSection(jump);
+        const tabs = declaration.tabs;
+        if (!tabs) return;
         const index = [tabs.components, tabs.labelComponents].reduce(
             (found, components) => (found >= 0 ? found : components.indexOf(childId | 0)),
             -1,
@@ -507,6 +605,77 @@ export class CustomInterfaceRuntime {
         return false;
     }
 
+    /**
+     * Where each row of the list starts, and after the last one where the list ends. Rows are
+     * `rowHeight` tall, except a spanning header given a height of its own.
+     */
+    private rowTops(): number[] {
+        if (this.topsOf === this.rows) return this.tops;
+        const list = this.declaration?.list;
+        const columns = Math.max(1, list?.columns ?? 1);
+        const rowHeight = list?.rowHeight ?? 0;
+        const headerHeight = list?.headerSpan?.height ?? rowHeight;
+        const tops = [0];
+        for (let at = 0; at < this.rows.length; at += columns) {
+            tops.push(tops[tops.length - 1] + (this.rows[at]?.header ? headerHeight : rowHeight));
+        }
+        this.topsOf = this.rows;
+        this.tops = tops;
+        return tops;
+    }
+
+    private rowTop(row: number): number {
+        const tops = this.rowTops();
+        const last = tops.length - 1;
+        return row <= last ? tops[Math.max(0, row)] : tops[last] + (row - last) * (this.declaration?.list?.rowHeight ?? 0);
+    }
+
+    /** The row drawn at this scroll position. */
+    private rowAt(y: number): number {
+        const tops = this.rowTops();
+        let row = 0;
+        while (row + 1 < tops.length - 1 && tops[row + 1] <= y) row++;
+        return row;
+    }
+
+    /** Scrolls the list so its nth header is the top row. */
+    private jumpToSection(section: number): void {
+        const list = this.declaration?.list;
+        const view = list ? this.widget(list.viewComponent) : undefined;
+        if (!list || !view || section < 0) return;
+        const headers = this.rows.flatMap((row, index) => (row.header && row.name ? [index] : []));
+        const index = headers[section];
+        if (index === undefined) return;
+        this.lightJump(section);
+        const top = this.rowTop(Math.floor(index / Math.max(1, list.columns)));
+        view.scrollY = Math.max(0, Math.min(top, (view.scrollHeight | 0) - (view.height | 0)));
+        this.deps.widgetManager.invalidateScroll(view);
+        this.refreshVisibleSlots();
+        this.refreshScrollbar();
+    }
+
+    private lightJump(section: number): void {
+        const list = this.declaration?.list;
+        const lit = list?.jumpLit;
+        if (!list || !lit) return;
+        lit.components.forEach((component, index) => {
+            const plate = this.widget(component);
+            const hidden = index !== section;
+            if (plate && (!!plate.hidden !== hidden || !!plate.isHidden !== hidden)) {
+                plate.hidden = hidden;
+                plate.isHidden = hidden;
+                this.deps.widgetManager.invalidateWidget(plate, "custom-interface-jump");
+            }
+            const label = lit.textTemplate ? this.widget(list.jumpComponents?.[index] ?? -1) : undefined;
+            if (!label) return;
+            const plain = String(label.text ?? "").replace(/<\/?col(?:=[0-9a-f]+)?>/gi, "");
+            const text = hidden ? plain : lit.textTemplate!.replace("%s", plain);
+            if (label.text === text) return;
+            label.text = text;
+            this.deps.widgetManager.invalidateWidgetRender(label);
+        });
+    }
+
     handleSearchKeyEvents(keyEvents: Array<{ keyTyped: number; keyPressed: number }>): boolean {
         const search = this.declaration?.search;
         if (!search || !this.focused) {
@@ -556,7 +725,65 @@ export class CustomInterfaceRuntime {
         return true;
     }
 
+    /**
+     * A declared hotkey of an open overlay panel: sends its component's op 1 and returns true,
+     * so the key does nothing else (an F-key would otherwise switch the side panel).
+     */
+    handleHotkey(event: KeyboardEvent): boolean {
+        if (event.repeat || event.ctrlKey || event.altKey || event.metaKey) return false;
+        const manager = this.deps.widgetManager;
+        for (const [groupId, { declaration }] of this.overlays) {
+            const hotkeys = declaration.hotkeys;
+            const entry = hotkeys?.keys.find((candidate) => candidate.key === event.key);
+            if (!hotkeys || !entry) continue;
+            const at = (component: number) => manager.getWidgetByUid(((groupId & 0xffff) << 16) | (component & 0xffff));
+            const gate = hotkeys.gate === undefined ? undefined : at(hotkeys.gate);
+            if (gate?.hidden || gate?.isHidden) continue;
+            const target = at(entry.component);
+            if (!target || target.hidden || target.isHidden) continue;
+            (this.deps.sendWidgetAction ?? sendWidgetAction)({ widgetId: target.uid | 0, groupId, childId: entry.component, opId: 1 });
+            return true;
+        }
+        return false;
+    }
+
+    /** Side panel per resizable frame (RuneLite's Viewport widgets). */
+    private static readonly SIDE_PANELS: Record<number, number> = {
+        161: (161 << 16) | 73, // resizable classic: ToplevelOsrsStretch.SIDE_CONTAINER
+        164: (164 << 16) | 70, // resizable modern: ToplevelPreEoc.SIDE_BACKGROUND
+    };
+
+    private dockBesideSidePanel(groupId: number, overlay: { rawX?: number }): void {
+        const manager = this.deps.widgetManager;
+        const root = manager.getWidgetByUid((groupId & 0xffff) << 16) as any;
+        if (!root) return;
+        overlay.rawX ??= root.rawX | 0;
+        const sideUid = CustomInterfaceRuntime.SIDE_PANELS[manager.rootInterface as number];
+        const side = sideUid === undefined ? undefined : (manager.getWidgetByUid(sideUid) as any);
+        const containerUid = manager.getInterfaceParentContainerUid(groupId);
+        const container = containerUid == null ? undefined : (manager.getWidgetByUid(containerUid) as any);
+        let rawX = overlay.rawX;
+        if (side && container && !side.hidden && !side.isHidden &&
+            typeof side._absLogicalX === "number" && typeof container._absLogicalX === "number") {
+            // The overlay layer clips its children, so the root can't pass its right edge (164
+            // ends it at the minimap column, a few pixels short of the side panel).
+            rawX = Math.max(0, (container._absLogicalX + (container.width | 0)) - side._absLogicalX);
+        }
+        if ((root.rawX | 0) === rawX) return;
+        root.rawX = rawX;
+        if (container) root.x = ((container.width | 0) - (root.width | 0) - rawX) | 0;
+        manager.invalidateWidget(root, "custom-interface-dock");
+    }
+
+    /** Keeps each open side panel docked. */
+    private tickOverlays(): void {
+        for (const [groupId, overlay] of this.overlays) {
+            if (overlay.declaration.dockBesideSidePanel) this.dockBesideSidePanel(groupId, overlay);
+        }
+    }
+
     tick(): void {
+        if (this.overlays.size) this.tickOverlays();
         if (!this.declaration || !this.isAttached()) {
             return;
         }
@@ -675,6 +902,8 @@ export class CustomInterfaceRuntime {
         const query = this.query;
         if (search.dataComponent !== undefined) {
             this.rows = filterRows(this.sourceRows, query);
+            const list = this.declaration?.list;
+            if (list?.headerSpan) this.rows = spanHeaders(this.rows, Math.max(1, list.columns));
             this.total = this.rows.filter((row) => !row.header).length;
             this.version++;
             this.renderRows(resetScroll);
@@ -733,6 +962,9 @@ export class CustomInterfaceRuntime {
         }
     }
 
+    private topsOf: unknown;
+    private tops: number[] = [0];
+
     private renderRows(resetScroll: boolean): void {
         const declaration = this.declaration;
         if (!declaration || !this.isAttached()) {
@@ -748,11 +980,12 @@ export class CustomInterfaceRuntime {
 
         const totalRows = Math.max(1, Math.ceil(this.rows.length / Math.max(1, list.columns)));
         const viewHeight = Math.max(0, view.height | 0);
-        const scrollHeight = Math.max(viewHeight, totalRows * list.rowHeight);
+        const scrollHeight = Math.max(viewHeight, this.rowTop(totalRows));
         view.scrollWidth = Math.max(0, view.width | 0);
         view.scrollHeight = scrollHeight;
         const maxScrollY = Math.max(0, scrollHeight - viewHeight);
         view.scrollY = resetScroll ? 0 : Math.min(Math.max(0, view.scrollY | 0), maxScrollY);
+        this.deps.widgetManager.invalidateScroll(view);
 
         this.visibleStartRow = -1;
         this.renderedVersion = -1;
@@ -797,7 +1030,7 @@ export class CustomInterfaceRuntime {
             return;
         }
 
-        const startRow = Math.max(0, Math.floor(Math.max(0, view.scrollY | 0) / list.rowHeight));
+        const startRow = this.rowAt(Math.max(0, view.scrollY | 0));
         if (!force && startRow === this.visibleStartRow && this.renderedVersion === this.version) {
             return;
         }
@@ -810,7 +1043,9 @@ export class CustomInterfaceRuntime {
             const poolRow = Math.floor(slot / list.columns);
             const column = slot % list.columns;
             const resultRow = startRow + poolRow;
-            const row = this.rows[resultRow * list.columns + column];
+            const found = this.rows[resultRow * list.columns + column];
+            // A blank beside a spanning header shows nothing.
+            const row = found?.header && !found.name ? undefined : found;
             const background = this.widget(list.backgroundStart + slot);
             const icon = this.widget(list.iconStart + slot);
             const text = list.labelStart === undefined ? icon : this.widget(list.labelStart + slot);
@@ -819,14 +1054,15 @@ export class CustomInterfaceRuntime {
             }
             this.slotRows[slot] = row;
 
-            const backgroundY = (list.backgroundBaseY ?? 0) + resultRow * list.rowHeight;
-            const iconY = (list.iconBaseY ?? 0) + resultRow * list.rowHeight;
+            const rowY = this.rowTop(resultRow);
+            const backgroundY = (list.backgroundBaseY ?? 0) + rowY;
+            const iconY = (list.iconBaseY ?? 0) + rowY;
             background.rawY = backgroundY;
             background.y = backgroundY;
             icon.rawY = iconY;
             icon.y = iconY;
             if (text !== icon) {
-                const labelY = (list.labelBaseY ?? 0) + resultRow * list.rowHeight;
+                const labelY = (list.labelBaseY ?? 0) + rowY;
                 text.rawY = labelY;
                 text.y = labelY;
             }
@@ -859,6 +1095,41 @@ export class CustomInterfaceRuntime {
                       .replace("%name", sanitize(row.name))
                       .replace("%id", String(row.id | 0))
                       .replace("%detail", sanitize(row.detail));
+            if (list.stripeColors && row && !row.header) {
+                background.color = list.stripeColors[resultRow & 1];
+            }
+            const moved = [
+                ...(list.detailStart === undefined ? [] : [this.widget(list.detailStart + slot)]),
+                ...(list.rowParts ?? []).map((start) => this.widget(start + slot)),
+            ].filter(Boolean);
+            for (const part of moved) {
+                if (!this.rowPartOffsets.has(part)) this.rowPartOffsets.set(part, part.rawY | 0);
+                const partY = this.rowPartOffsets.get(part)! + rowY;
+                part.rawY = partY;
+                part.y = partY;
+                part.hidden = hidden || !!row?.header;
+                part.isHidden = part.hidden;
+                markWidgetInteractionDirty(part);
+                this.deps.widgetManager.invalidateWidgetRender(part);
+            }
+            if (list.detailStart !== undefined) {
+                const detail = this.widget(list.detailStart + slot);
+                if (detail) {
+                    detail.text = !row || row.header
+                        ? ""
+                        : (list.detailLabel ?? "")
+                              .replace("%name", sanitize(row.name))
+                              .replace("%id", String(row.id | 0))
+                              .replace("%detail", sanitize(row.detail));
+                }
+            }
+            if (list.headerSpan && text !== icon) {
+                // With a fill, the title's own background is the band and the blank beside it
+                // draws the band's lines.
+                const lines = list.headerSpan.fillColor !== undefined && column === 1 && !!found?.header && !found.name;
+                this.styleSpanningHeader(slot, !!row?.header, view, background, text, resultRow, lines);
+            }
+            if (list.nameTarget) text.opBase = row && !row.header ? `<col=ff9040>${sanitize(row.name)}</col>` : "";
             if (list.clickable) {
                 // A header is a title, not a destination: it offers no ops.
                 if (!this.labelActions.has(slot)) this.labelActions.set(slot, text.actions);
@@ -876,6 +1147,42 @@ export class CustomInterfaceRuntime {
         }
 
         this.deps.widgetManager.invalidateScroll(view);
+    }
+
+    /**
+     * A spanning header's label covers the row, centred, and its background is the line under
+     * it; an item row gets the slot's own label and background shape back.
+     */
+    private styleSpanningHeader(slot: number, header: boolean, view: any, background: any, text: any, resultRow: number, lines = false): void {
+        const list = this.declaration!.list!;
+        const span = list.headerSpan!;
+        const fields = ["rawX", "x", "rawWidth", "width", "rawHeight", "height", "xTextAlignment", "yTextAlignment", "textColor", "color", "fontId", "opacity", "filled"] as const;
+        let saved = this.slotShapes.get(slot);
+        if (!saved) {
+            saved = [text, background].map((widget) => Object.fromEntries(fields.map((field) => [field, widget[field]])));
+            this.slotShapes.set(slot, saved);
+        }
+        Object.assign(text, saved[0]);
+        Object.assign(background, saved[1]);
+        if (!header && !lines) return;
+        const width = view.width | 0;
+        const rowHeight = span.height ?? list.rowHeight;
+        // A line above and below the title: an outline wider than the view, so its sides are
+        // clipped away. The list's first title sits against the top edge of the view.
+        const first = resultRow === 0;
+        const top = this.rowTop(resultRow) + (first ? 0 : 5);
+        const band = rowHeight - (first ? 6 : 9);
+        const filled = span.fillColor !== undefined && !lines;
+        if (!lines) Object.assign(text, { rawY: top, y: top, rawHeight: band, height: band });
+        if (!lines) Object.assign(text, {
+            rawX: 0, x: 0, rawWidth: width, width, xTextAlignment: 1, yTextAlignment: 1,
+            textColor: span.color ?? text.textColor, color: span.color ?? text.color, fontId: span.fontId ?? text.fontId,
+        });
+        Object.assign(background, {
+            rawX: -1, x: -1, rawWidth: width + 2, width: width + 2, rawY: top, y: top,
+            rawHeight: band, height: band, filled,
+            color: filled ? span.fillColor : span.lineColor ?? 0x000000, opacity: 0, hidden: false, isHidden: false,
+        });
     }
 
     private resolveScrollbarGraphicId(token: string): number {

@@ -1335,6 +1335,12 @@ export class OsrsClient {
                     event.stopImmediatePropagation();
                     return;
                 }
+                // An open custom panel's declared hotkeys (e.g. F1-F6) come before the side-panel keys.
+                if (this.isLoggedIn() && this.customInterfaces?.handleHotkey(event)) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    return;
+                }
                 this.handleSidePanelHotkey(event);
             },
             true,

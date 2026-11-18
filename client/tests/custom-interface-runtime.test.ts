@@ -5,7 +5,7 @@ import {
     loadFromPayload,
     setCustomInterface,
 } from "../common/gamemode/GamemodeContentStore";
-import { CustomInterfaceRuntime } from "../widgets/custom/CustomInterfaceRuntime";
+import { CustomInterfaceRuntime, filterRows, spanHeaders } from "../widgets/custom/CustomInterfaceRuntime";
 
 // A server-declared interface: one search box, a 2x2 grid of result slots, status text.
 const GROUP_ID = 30002;
@@ -101,11 +101,13 @@ let requestedUrl = "";
 };
 
 const scripts: number[] = [];
+const sent: any[] = [];
 const runtime = new CustomInterfaceRuntime({
     widgetManager,
     getCacheSystem: () => undefined,
     runWidgetScopedClientScript: (_uid, scriptId) => scripts.push(scriptId),
     fetchContent: async (path) => (await fetch(`http://localhost:43594${path}`)).json(),
+    sendWidgetAction: (action) => sent.push(action),
 });
 
 // A group with no declaration is not ours to drive.
@@ -464,6 +466,101 @@ async function main(): Promise<void> {
     }
     runtime.onInterfaceClosed(SCROLL_GROUP);
 
+    // Search-only rows (other markets' items) appear only while a query is typed.
+    const marketRows = [
+        { id: 900, name: "Melee", header: true },
+        { id: 1, name: "Rune sword" },
+        { id: 901, name: "Vote", header: true, searchOnly: true },
+        { id: 2, name: "Rune pouch", searchOnly: true },
+    ];
+    assert.deepEqual(filterRows(marketRows, "").map((row) => row.id), [900, 1], "browsing hides search-only rows");
+    assert.deepEqual(filterRows(marketRows, "rune").map((row) => row.id), [900, 1, 901, 2], "a search reaches them");
+
+    // Optional list extras: zebra stripes, a second text line, parts that ride with the row,
+    // menu names, section jump buttons and full-width headers. All off unless declared.
+    const EXTRA_GROUP = 30120;
+    const extraUid = (component: number) => (EXTRA_GROUP << 16) | component;
+    setCustomInterface({
+        groupId: EXTRA_GROUP,
+        widgets: [{ uid: extraUid(0), parentUid: -1 }],
+        search: { inputComponent: 1, dataComponent: 2, focusOnOpen: false, placeholder: "Search..." },
+        list: {
+            viewComponent: 3, slotCount: 4, columns: 1, rowHeight: 20,
+            iconStart: 10, labelStart: 20, backgroundStart: 30, itemLabel: "<b>%name</b>",
+            detailStart: 40, detailLabel: "%detail", rowParts: [50],
+            stripeColors: [0x111111, 0x222222], nameTarget: true, textOnly: true,
+            jumpComponents: [60, 61], jumpLit: { components: [70, 71], textTemplate: "<col=ffffff>%s</col>" },
+            jumpClearsQuery: true,
+        },
+    });
+    for (const component of [1, 2, 3, 10, 11, 12, 13, 20, 21, 22, 23, 30, 31, 32, 33, 40, 41, 42, 43, 50, 51, 52, 53, 60, 61, 70, 71]) {
+        widgets.set(extraUid(component), { uid: extraUid(component), width: 200, height: 40, scrollY: 0, rawY: component >= 50 && component < 60 ? 18 : 0 });
+    }
+    widgets.get(extraUid(60)).text = "Melee";
+    widgets.get(extraUid(61)).text = "Magic";
+    assert.equal(runtime.onInterfaceOpened(EXTRA_GROUP), true);
+    assert.equal(runtime.isSearchFocused(), false, "focusOnOpen: false opens unfocused");
+    assert.equal(widgets.get(extraUid(1)).text, "Search...", "so the placeholder shows");
+    runtime.handleSetText(extraUid(2), JSON.stringify([
+        { id: 900, name: "Melee", header: true },
+        { id: 1, name: "Rune sword", detail: "Sharp" },
+        { id: 2, name: "Rune axe", detail: "Chops" },
+        { id: 901, name: "Magic", header: true },
+        { id: 3, name: "Rune staff", detail: "Zaps" },
+        { id: 4, name: "Air rune", detail: "Light" },
+        { id: 5, name: "Fire rune", detail: "Hot" },
+    ]));
+    assert.equal(widgets.get(extraUid(31)).color, 0x222222, "row 1 takes the odd stripe");
+    assert.equal(widgets.get(extraUid(32)).color, 0x111111, "row 2 takes the even stripe");
+    assert.equal(widgets.get(extraUid(41)).text, "Sharp", "the detail line fills from detailLabel");
+    assert.equal(widgets.get(extraUid(40)).text, "", "a header has no detail line");
+    assert.equal(widgets.get(extraUid(52)).rawY, 18 + 40, "a row part keeps its own offset inside the row");
+    assert.equal(widgets.get(extraUid(50)).hidden, true, "row parts hide on a header");
+    assert.equal(widgets.get(extraUid(21)).opBase, "<col=ff9040>Rune sword</col>", "nameTarget names the row in menus");
+    runtime.handleWidgetOp(EXTRA_GROUP, 61);
+    assert.equal(widgets.get(extraUid(3)).scrollY, 60, "the second jump button scrolls to the second header");
+    assert.equal(!!widgets.get(extraUid(71)).hidden, false, "its plate lights at once");
+    assert.equal(widgets.get(extraUid(70)).hidden, true, "and the other plate goes dark");
+    assert.equal(widgets.get(extraUid(61)).text, "<col=ffffff>Magic</col>", "its text takes the lit template");
+    runtime.handleWidgetClick(EXTRA_GROUP, 1);
+    type("axe");
+    runtime.handleWidgetOp(EXTRA_GROUP, 60);
+    assert.equal(runtime.isSearchFocused(), false, "jumpClearsQuery drops the query and the focus");
+    assert.equal(widgets.get(extraUid(1)).text, "Search...");
+    assert.equal(widgets.get(extraUid(61)).text, "Magic", "an unlit button goes back to plain text");
+    runtime.onInterfaceClosed(EXTRA_GROUP);
+
+    // headerSpan gives each header a whole grid row; spanHeaders pads the rows for it.
+    const grid = spanHeaders([
+        { id: 900, name: "Melee", header: true },
+        { id: 1, name: "a" }, { id: 2, name: "b" }, { id: 3, name: "c" },
+        { id: 901, name: "Magic", header: true },
+        { id: 4, name: "d" },
+    ], 2);
+    assert.deepEqual(grid.map((row) => row.name), ["Melee", "", "a", "b", "c", "", "Magic", "", "d"],
+        "headers sit alone on their row, blanks fill around them");
+
+    // An overlay panel keeps no list state, and its hotkeys click its components.
+    const OVERLAY_GROUP = 30130;
+    const overlayUid = (component: number) => (OVERLAY_GROUP << 16) | component;
+    setCustomInterface({
+        groupId: OVERLAY_GROUP,
+        widgets: [{ uid: overlayUid(0), parentUid: -1 }],
+        overlay: true,
+        hotkeys: { gate: 5, keys: [{ key: "F1", component: 6 }] },
+    });
+    widgets.set(overlayUid(5), { uid: overlayUid(5) });
+    widgets.set(overlayUid(6), { uid: overlayUid(6) });
+    assert.equal(runtime.onInterfaceOpened(OVERLAY_GROUP), true);
+    const key = (name: string) => ({ key: name, repeat: false, ctrlKey: false, altKey: false, metaKey: false }) as any;
+    assert.equal(runtime.handleHotkey(key("F2")), false, "undeclared keys pass through");
+    assert.equal(runtime.handleHotkey(key("F1")), true, "a declared key is taken");
+    assert.deepEqual(sent.map((action) => [action.childId, action.opId]), [[6, 1]], "and clicks op 1");
+    widgets.get(overlayUid(5)).hidden = true;
+    assert.equal(runtime.handleHotkey(key("F1")), false, "a hidden gate turns the hotkeys off");
+    runtime.onInterfaceClosed(OVERLAY_GROUP);
+    widgets.get(overlayUid(5)).hidden = false;
+    assert.equal(runtime.handleHotkey(key("F1")), false, "a closed overlay has no hotkeys");
     console.log("custom-interface-runtime.test.ts: all tests passed");
 }
 

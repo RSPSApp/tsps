@@ -58,6 +58,16 @@ function guardianDeath({ npc, killer }) {
   fight?.stop();
   // Unless the bell has started another fight since.
   if (roof) Common.later(2, () => { if (roof.fight === fight) roof.clearGuardians(); });
+  if (roof?.echo) {
+    // Once per roof: the Guardians' normal loot, then EchoBosses adds the Echo equipment roll.
+    // No kill count or personal best: those belong to the ordinary encounter.
+    if (!roof.echo.token) return;
+    if (killer === roof.player) rollDrops(roof.player, npc);
+    Common.api.emitCustomEvent("echo-boss:completed", { player: roof.player, boss: "grotesque-guardians", token: roof.echo.token,
+      npcs: [roof.dawn, roof.dusk], location: npc.getLocation() });
+    roof.echo.token = null;
+    return;
+  }
   const player = killer?.isPlayer?.() ? killer : null;
   if (!player?.isRegistered?.()) return;
   const own = (Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1;
@@ -80,6 +90,7 @@ function guardianDeath({ npc, killer }) {
 
 /** "slayer:task-kill": Dusk's Slayer experience is the pair's (Wiki). */
 function slayerXp(kill) {
+  if (kill?.npc?.__ggRoof?.echo) { kill.xp = 0; return; }
   if (Common.isDusk(kill?.npc)) kill.xp = Common.data.kill.slayerXp;
 }
 

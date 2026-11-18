@@ -226,6 +226,21 @@ test('a throwing removal hook cannot corrupt list size or leak its slot', () => 
   assert.equal(next.getIndex(), 1, 'the freed slot is reused');
 });
 
+test('a list that holds freed slots gives them out again only after releaseHeldSlots (issue 6113)', () => {
+  const list = new MobileList(8, undefined, undefined, { holdFreedSlots: true });
+  const gone = stubMobile();
+  assert.equal(list.add(gone), true);
+  const index = gone.getIndex();
+  list.remove(gone);
+  const sameCycle = stubMobile();
+  assert.equal(list.add(sameCycle), true);
+  assert.notEqual(sameCycle.getIndex(), index, 'a slot freed this cycle is not handed to a new mobile');
+  list.releaseHeldSlots();
+  const nextCycle = stubMobile();
+  assert.equal(list.add(nextCycle), true);
+  assert.equal(nextCycle.getIndex(), index, 'released, the lowest free slot is reused');
+});
+
 for (const failureAt of ['onAdd', 'onAdded']) {
   test(`registration rollback preserves list and position state when ${failureAt} throws`, () => {
     const positions = new Set();

@@ -81,3 +81,97 @@ test('an uncharged staff is handed out charged; items without charges are left a
   assert.equal(plain.handled, false);
   assert.equal(plain.item.getMeta?.() ?? null, null);
 });
+
+const path = require('node:path');
+const Eye = require('../plugins/items/EyeOfAyak.plugin');
+const { Player } = require('../dist/game/entity/impl/player/Player');
+const { PlayerSession } = require('../dist/net/PlayerSession');
+const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+const Json = require('../plugins/persistence/JsonPlayerPersistence.plugin');
+const { EquipPacketListener } = require('../dist/net/packet/impl/EquipPacketListener');
+const { ItemActionPacketListener } = require('../dist/net/packet/impl/ItemActionPacketListener');
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  Eye.register(PluginManager.createApi('AyakFillRegression'));
+  Json.register(PluginManager.createApi('AyakFillPersistence'));
+});
+
+function actor(t) {
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setUsername('ayakfill'); p.setAttribute('bot-skip-persistence', true);
+  assert.equal(core.World.getPlayers().add(p), true);
+  p.setLocation(new core.Location(3200, 3200, 0));
+  p.getSkillManager().setMaxLevels(core.Skill.MAGIC, 99, false).setCurrentLevels(core.Skill.MAGIC, 99, false);
+  t.after(() => { core.TaskManager.cancelTasks(p); core.World.getPlayers().removes(p); });
+  return p;
+}
+
+function action(p, item, option) {
+  return ItemActionPacketListener.handleAction(p, core.Inventory.INTERFACE_ID, item.getId(),
+    p.getInventory().getItems().indexOf(item), core.CacheDefinitions.getItem(item.getId()).inventoryActions.indexOf(option) + 1, option);
+}
+
+for (const material of [undefined, 'runes', 'tears']) {
+  test(`Eye fill event initializes/preserves ${material ?? 'missing'} material across Check, cast and refund`, t => {
+    const p = actor(t), item = new core.Item(material ? core.ItemIdentifiers.EYE_OF_AYAK : core.ItemIdentifiers.EYE_OF_AYAK_UNCHARGED_, 1);
+    item.setMetaValue('test:origin', 'kept'); item.setMetaValue(core.Item.PRESET_META, true);
+    if (material) {
+      item.setMetaValue(Eye._test.MATERIAL_KEY, material);
+      item.setMetaValue(Eye._test.CHARGES_KEY, 12);
+    }
+    p.getInventory().setItem(0, item);
+    const event = { player: p, item, handled: false };
+    PluginManager.emitCustomEvent('item:fill-charges', event);
+    const expectedMaterial = material ?? 'runes';
+    assert.equal(event.handled, true);
+    assert.equal(item.getId(), core.ItemIdentifiers.EYE_OF_AYAK);
+    assert.equal(Eye._test.staff.chargesOf(item), 50000);
+    assert.equal(item.getMetaValue(Eye._test.MATERIAL_KEY), expectedMaterial);
+    const messages = [], originalSend = p.sendMessage.bind(p);
+    p.sendMessage = text => { messages.push(text); return originalSend(text); };
+    assert.equal(action(p, item, 'Check'), true);
+    assert.match(messages.at(-1), new RegExp(`charged with ${expectedMaterial === 'tears' ? 'demon tears' : 'runes'}.*50,000 charges`));
+    EquipPacketListener.equip(p, item.getId(), 0, core.Inventory.INTERFACE_ID);
+    const worn = p.getEquipment().get(core.Equipment.WEAPON_SLOT);
+    assert.notEqual(worn, item);
+    assert.equal(worn.getMetaValue(Eye._test.MATERIAL_KEY), expectedMaterial);
+    const target = new core.NPC(core.NpcIdentifiers.MAN, new core.Location(3201, 3200, 0));
+    const method = core.CombatFactory.getMethod(p);
+    assert.ok(method instanceof core.MagicCombatMethod);
+    assert.equal(method.canAttack(p, target), true); method.start(p, target);
+    assert.equal(method.hits(p, target).length, 1);
+    assert.equal(Eye._test.staff.chargesOf(worn), 49999);
+    assert.equal(worn.getMetaValue(Eye._test.MATERIAL_KEY), expectedMaterial);
+    assert.equal(worn.getMetaValue('test:origin'), 'kept');
+    assert.equal(worn.isPresetItem(), true);
+    const codec = new Json.JsonPlayerPersistence();
+    const record = JSON.parse(JSON.stringify(PlayerSave.fromPlayer(p), codec.replacer.bind(codec)), codec.reviver.bind(codec));
+    const loaded = actor(t); codec.hydratePlayerSave(record).applyToPlayer(loaded);
+    loaded.setAttribute('bot-skip-persistence', true);
+    const reloaded = loaded.getEquipment().get(core.Equipment.WEAPON_SLOT);
+    assert.equal(reloaded.getMetaValue(Eye._test.MATERIAL_KEY), expectedMaterial);
+    assert.equal(Eye._test.staff.chargesOf(reloaded), 49999);
+    assert.equal(reloaded.isPresetItem(), true);
+    EquipPacketListener.unequip(loaded, core.Equipment.WEAPON_SLOT);
+    assert.equal(action(loaded, reloaded, 'Uncharge'), true);
+    assert.equal(loaded.getDialogueManager().handleResume((219 << 16) | 1, 1), true);
+    assert.equal(reloaded.getId(), core.ItemIdentifiers.EYE_OF_AYAK_UNCHARGED_);
+    assert.equal(reloaded.getMetaValue(Eye._test.MATERIAL_KEY), undefined);
+    assert.equal(Eye._test.staff.chargesOf(reloaded), 0);
+    assert.equal(loaded.getInventory().getAmount(core.ItemIdentifiers.DEATH_RUNE), expectedMaterial === 'runes' ? 99998 : 0);
+    assert.equal(loaded.getInventory().getAmount(core.ItemIdentifiers.CHAOS_RUNE), expectedMaterial === 'runes' ? 49999 : 0);
+    assert.equal(loaded.getInventory().getAmount(core.ItemIdentifiers.DEMON_TEAR), expectedMaterial === 'tears' ? 49999 : 0);
+    assert.equal(reloaded.getMetaValue('test:origin'), 'kept');
+  });
+}
+
+test('Eye fill handler leaves an unrelated item and its metadata alone', t => {
+  const p = actor(t), item = new core.Item(core.ItemIdentifiers.LOGS, 1, { 'test:origin': 'kept' });
+  const event = { player: p, item, handled: false };
+  PluginManager.emitCustomEvent('item:fill-charges', event);
+  assert.equal(event.handled, false);
+  assert.equal(item.getId(), core.ItemIdentifiers.LOGS);
+  assert.deepEqual(item.getMeta(), { 'test:origin': 'kept' });
+});

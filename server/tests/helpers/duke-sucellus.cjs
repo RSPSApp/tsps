@@ -14,7 +14,7 @@ require('../../plugins/bosses/dukesucellus/Records.DukeSucellus').resetWorld();
   const C=require('../../plugins/bosses/dukesucellus/Common.DukeSucellus');
   const Site=require('../../plugins/bosses/dukesucellus/Site.DukeSucellus');
   const Prep=require('../../plugins/bosses/dukesucellus/Preparation.DukeSucellus');
-  const hooks=new Map(), custom=new Map(), tasks=[], spawned=[], packets=[], messages=[], emitted=[];
+  const hooks=new Map(), custom=new Map(), tasks=[], spawned=[], packets=[], messages=[], spam=[], emitted=[];
   const namedObjects = new Map(), genericObjects = [];
   const p=new Player(null); p.setUsername('duke-regression');p.setIndex(1);
   const mounted=new Map();
@@ -22,6 +22,7 @@ require('../../plugins/bosses/dukesucellus/Records.DukeSucellus').resetWorld();
     if(name==='isSubInterfaceOpen')return [...mounted.values()].includes(args[0]);
     if(name==='sendSubInterface')mounted.set(args[0],args[1]);
     if(name==='closeSubInterface')mounted.delete(args[0]);
+    if(name==='sendTypedMessage')spam.push(args[1]);
     packets.push([name,...args]); return sender;
   }});
   p.getPacketSender=()=>sender; p.sendMessage=text=>messages.push(text);
@@ -72,7 +73,7 @@ require('../../plugins/bosses/dukesucellus/Records.DukeSucellus').resetWorld();
   t.after(()=>{C.sessionOf(p)?.end();for(const task of tasks)task.stop();
     for(const queue of [core.World.getAddNPCQueue(),core.World.getRemoveNPCQueue()])
       for(let i=queue.length-1;i>=0;i--)if(spawned.includes(queue[i]))queue.splice(i,1);});
-  return {core,C,Site,Prep,api,p,enter,move,step,add,dispatch,interact,packets,messages,emitted,
+  return {core,C,Site,Prep,api,p,enter,move,step,add,dispatch,interact,packets,messages,spam,emitted,
     get session(){return C.sessionOf(p);},get fight(){return C.sessionOf(p)?.fight;}};
 }
 module.exports={initialize,harness,get core(){return core;}};

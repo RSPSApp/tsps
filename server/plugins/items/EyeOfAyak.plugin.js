@@ -316,6 +316,13 @@ function dismantleIntoTears(player, item) {
   player.sendMessage(`You dismantle the Eye of Ayak into ${format(DISMANTLE_TEARS)} demon tears.`);
 }
 
+/** Supplied charges use the existing rune refund default unless their material is already explicit. */
+function fillCharges(event) {
+  if (!staff.isStaff(event.item?.getId?.())) return;
+  staff.fillCharges(event);
+  if (!materialOf(event.item)) event.item.setMetaValue(MATERIAL_KEY, RUNES);
+}
+
 function equipmentChanged({ player }) {
   syncWornCharges(player);
 }
@@ -334,7 +341,7 @@ module.exports = {
     core = pluginApi.core;
     staff = defineEye();
     pluginApi.registerCombatMethodResolver(staff.resolver);
-    pluginApi.onCustomEvent("item:fill-charges", staff.fillCharges);
+    pluginApi.onCustomEvent("item:fill-charges", fillCharges);
     pluginApi.onCustomEvent("powered-staff:spell", staff.answerSpell);
     pluginApi.onItemAction("Eye of Ayak", { Check: checkCharges, Uncharge: uncharge });
     pluginApi.onItemAction("Eye of Ayak (uncharged)", { Charge: chargeOption, Dismantle: dismantle });

@@ -10,12 +10,17 @@ const PROJECTILE = { RANGE: 1639, MAGIC: 1640, VINES: 1642 };
 /** 234/03282: the Hespori cave's Exit lands here, west of the cave (1232,3728 was inside its footprint), and Enter there. */
 const EXIT = new core.Location(1230, 3730, 0);
 const ENTRY = new core.Location(1242, 10082, 0);
+const ECHO_LOOT_ATTRIBUTE = "farming:echo-hespori-loot";
+const ECHO_INSIDE_ATTRIBUTE = "farming:echo-hespori-inside";
+const ECHO_FIGHTS = new Map();
+let api = null;
 class HesporiArea extends core.PrivateArea {
     constructor() { super([new core.Boundary(1216, 1279, 10048, 10111, 0)]); }
     isMulti() { return true; }
     process(mobile) { if (mobile.isPlayer?.()) hesporiProcess({ player: mobile.getAsPlayer() }); }
     postLeave(mobile, logout) {
-        if (mobile.isPlayer?.()) hesporiLogout({ player: mobile.getAsPlayer() });
+        if (logout && mobile.isPlayer?.() && ECHO_FIGHTS.has(mobile.getAsPlayer())) mobile.setLocation(EXIT.clone());
+        if (mobile.isPlayer?.()) hesporiLogout({ player: mobile.getAsPlayer(), logout });
         super.postLeave(mobile, logout);
     }
     canAttack(attacker, target) {
@@ -206,7 +211,10 @@ class HesporiCombat extends core.CombatMethod {
         return Array.from({ length: ranged ? 2 : 1 }, (_, index) => {
             const hit = new core.PendingHit(npc, target, this, 2 + index);
             const prayer = target.getPrayerActive()[ranged ? core.PrayerHandler.PROTECT_FROM_MISSILES : core.PrayerHandler.PROTECT_FROM_MAGIC];
-            const damage = hit.isAccurate() ? Math.floor(Math.random() * (ranged ? 9 : 15)) : 0;
+            // Echo Wiki specifies magic 52; the normal ranged cap (8), prayer caps
+            // and double-spore attack remain explicit normal-mechanics placeholders.
+            const maximum = !ranged && NPC_FIGHTS.get(npc)?.echoToken ? npc.getCurrentDefinition().getMaxHit() : ranged ? 8 : 14;
+            const damage = hit.isAccurate() ? Math.floor(Math.random() * (maximum + 1)) : 0;
             // Wiki: Protect from Missiles caps each spore at 2 (8+8 -> 2+2) and Protect from
             // Magic caps the wave at 3; it is a cap, not a quarter of the roll.
             const capped = prayer ? Math.min(damage, ranged ? 2 : 3) : damage;
@@ -272,6 +280,18 @@ function keepQuestHesporiEngaged(fight) {
     fight.boss.getCombat().getLastAttack().reset();
     return true;
 }
+/** Drops as the patch hands them out: a drop the table gives noted, as its note. */
+function harvestItems(drops) {
+    return drops.map(({ itemId, amount, noted }) => ({
+        itemId: noted && core.CacheDefinitions.getItem(itemId).note >= 0 ? core.CacheDefinitions.getItem(itemId).note : itemId,
+        amount,
+    }));
+}
+/** Adds to an Echo Hespori's saved harvest (separate from the crop and Arno's retrieval). */
+function addEchoHarvest(player, drops) {
+    player.setAttribute(ECHO_LOOT_ATTRIBUTE, [...(player.getAttribute(ECHO_LOOT_ATTRIBUTE) ?? []), ...harvestItems(drops)]);
+    core.GameConstants.PLAYER_PERSISTENCE.requestSave(player, "echo-hespori-harvest");
+}
 function hesporiLoot(event) {
     const fight = NPC_FIGHTS.get(event.npc);
     if (!fight || fight.boss !== event.npc) return;
@@ -284,10 +304,9 @@ function hesporiLoot(event) {
     const anima = ["Attas seed", "Iasor seed", "Kronos seed"].map(Data.itemId);
     const loot = event.drops.filter((d) => !anima.includes(d.itemId) && d.itemId !== Data.itemId("Tangleroot"));
     loot.push({ itemId: anima[Math.floor(Math.random() * anima.length)], amount: 1 + Math.floor(Math.random() * 2) });
-    Patches.stateFor(fight.player, fight.patch).hesporiLoot = loot.map(({ itemId, amount, noted }) => ({
-        itemId: noted && core.CacheDefinitions.getItem(itemId).note >= 0 ? core.CacheDefinitions.getItem(itemId).note : itemId,
-        amount,
-    }));
+    // An Echo Hespori's harvest is saved apart from the crop; the patch is never touched.
+    if (fight.echoToken) { addEchoHarvest(fight.player, loot); return; }
+    Patches.stateFor(fight.player, fight.patch).hesporiLoot = harvestItems(loot);
     Patches.stateFor(fight.player, fight.patch).hesporiFight = false;
     releaseVines(fight);
     for (const flower of fight.flowers) core.World.getRemoveNPCQueue().push(flower);
@@ -347,20 +366,46 @@ function finishQuestHespori(fight) {
 }
 function questHesporiDeath({ npc }) {
     const fight = NPC_FIGHTS.get(npc);
+    if (fight?.echoToken && fight.boss === npc) {
+        if (fight.completed || fight.ended) return;
+        fight.completed = true;
+        releaseVines(fight);
+        for (const flower of fight.flowers) core.World.getRemoveNPCQueue().push(flower);
+        fight.flowers = [];
+        api.emitCustomEvent("echo-boss:completed", { player: fight.player, boss: "hespori", token: fight.echoToken, npcs: [npc],
+            // The Echo equipment roll (EchoBosses), saved with the normal harvest hesporiLoot added.
+            deliver: drops => {
+                addEchoHarvest(fight.player, drops);
+                Patches.syncPatch(fight.player, fight.patch);
+                fight.player.sendMessage("The Echo Hespori is defeated. Clear the patch to harvest your rewards.");
+            } });
+        return;
+    }
     if (fight?.quest && fight.boss === npc) finishQuestHespori(fight);
 }
-function hesporiLogout({ player }) {
+function hesporiLogout({ player, logout = false }) {
     cancelWarning({ player });
     const fight = FIGHTS.get(player);
     if (!fight) return;
-    if (!fight.quest) Patches.stateFor(player, fight.patch).hesporiFight = false;
+    if (!fight.quest && !fight.echoToken) Patches.stateFor(player, fight.patch).hesporiFight = false;
     releaseVines(fight);
-    for (const npc of [fight.boss, ...fight.flowers]) core.World.getRemoveNPCQueue().push(npc);
+    for (const npc of [fight.boss, ...fight.flowers]) if (npc) core.World.getRemoveNPCQueue().push(npc);
     FIGHTS.delete(player);
+    if (fight.echoToken) {
+        if (logout) player.setLocation(EXIT.clone());
+        fight.ended = true;
+        ECHO_FIGHTS.delete(player);
+        player.setAttribute(ECHO_INSIDE_ATTRIBUTE, null);
+        player.getCombat().reset();
+        player.getCombat().getHitQueue().clear();
+        for (const npc of [fight.boss, ...fight.flowers]) { npc?.getCombat().reset(); npc?.getCombat().getHitQueue().clear(); }
+        api.emitCustomEvent("echo-boss:release", { player, token: fight.echoToken });
+        Patches.syncPatch(player, fight.patch);
+    }
 }
 function hesporiDeathDrop(event) {
     const fight = FIGHTS.get(event.player);
-    if (!fight || fight.quest || !event.dropEligible) return;
+    if (!fight || fight.quest || fight.echoToken || !event.dropEligible) return;
     const farm = Patches.farmFor(event.player);
     if (!fight.deathCaptured) { farm.deathbank = []; farm.deathbankPaid = false; fight.deathCaptured = true; }
     farm.deathbank.push({ id: event.item.getId(), amount: event.item.getAmount(), meta: core.Item.cloneMeta(event.item.getMeta()) });
@@ -369,6 +414,7 @@ function hesporiDeathDrop(event) {
 }
 function hesporiPlayerDeath(event) {
     const fight = FIGHTS.get(event.player);
+    if (fight?.echoToken) { hesporiLogout(event); return; }
     // Item capture precedes this hook. An unsafe death without lost items still
     // destroys the previous retrieval; preserve only this death's newly stored items.
     if (!fight?.deathCaptured && (core.PluginManager.emitShouldDropItemsOnDeath(event.player, event.killer) ?? true)) {
@@ -438,5 +484,88 @@ function enterCave(player) {
     area.enter(player);
     player.moveTo(ENTRY.clone());
 }
+
+/** Echo placeholder: normal flowers, attacks, prayer caps and vines with Echo stats.
+ * Echo-specific mechanics are not implemented. No seed, Farming XP, crop mutation or
+ * Arno retrieval replacement occurs; earned harvest loot is saved independently.
+ */
+function startEcho(request) {
+    if (request.boss !== "hespori" || request.handled) return;
+    request.handled = true;
+    const { player } = request;
+    if (FIGHTS.has(player)) return;
+    const claim = { player, boss: "hespori", token: null };
+    api.emitCustomEvent("echo-boss:claim", claim);
+    if (!claim.token) return;
+    const patch = Data.CACHE.patches.find(p => p.type === "HESPORI");
+    const area = new HesporiArea();
+    const fight = { player, patch, area, echoToken: claim.token, variant: "echo", boss: null,
+        flowers: [], phase: 0, attacks: 0, vinesUntil: 0, escapeClicks: 0 };
+    try {
+        area.enter(player);
+        player.moveTo(HARVEST_TILE.clone());
+        FIGHTS.set(player, fight);
+        ECHO_FIGHTS.set(player, fight);
+        player.setAttribute(ECHO_INSIDE_ATTRIBUTE, true);
+        if (!(player.getAttribute(ECHO_LOOT_ATTRIBUTE) ?? []).length) {
+            fight.boss = spawn(fight, core.NpcIdentifiers.HESPORI, patch.x, patch.y);
+            const configure = { player, boss: "hespori", role: "boss", npc: fight.boss, token: claim.token, configured: false };
+            api.emitCustomEvent("echo-boss:configure", configure);
+            if (!configure.configured) throw new Error("Echo Hespori could not be configured");
+            fight.maxHitpoints = fight.boss.getMaxHitpoints();
+            fight.boss.setAttribute(core.CombatFactory.RECOIL_IMMUNE_ATTRIBUTE, true);
+            fight.boss.performAnimation(new core.Animation(ANIMATION.SPAWN));
+            flowers(fight);
+            fight.boss.getCombat().attack(player);
+        } else fight.completed = true;
+        Patches.syncPatch(player, patch);
+    } catch (error) {
+        hesporiLogout({ player });
+        api.emitCustomEvent("echo-boss:release", { player, token: claim.token });
+        player.moveTo(EXIT.clone());
+        player.sendMessage("The Echo encounter could not be started.");
+    }
+}
+
+function echoPatchValue(player, patch) {
+    const fight = ECHO_FIGHTS.get(player);
+    return patch.type === "HESPORI" && fight ? (fight.completed ? 8 : 9) : null;
+}
+
+function echoPatchInteraction(event) {
+    const fight = ECHO_FIGHTS.get(event.player);
+    if (!fight || event.location.x !== fight.patch.x || event.location.y !== fight.patch.y) return;
+    event.handled = true;
+    if (!fight.completed) return;
+    const { player } = event;
+    if (!Patches.requireTool(player, "Spade", "You need a spade to clear a farming patch.")) return;
+    const pending = player.getAttribute(ECHO_LOOT_ATTRIBUTE) ?? [];
+    while (pending.length) {
+        const drop = pending[0];
+        if (!Patches.give(player, drop.itemId, drop.amount)) break;
+        pending.shift();
+    }
+    player.setAttribute(ECHO_LOOT_ATTRIBUTE, pending);
+    core.GameConstants.PLAYER_PERSISTENCE.requestSave(player, "echo-hespori-harvest");
+    if (pending.length) player.sendMessage("Make room in your inventory to harvest the remaining Echo rewards.");
+    else player.sendMessage("You harvest the Echo Hespori's rewards. Your ordinary crop is unchanged.");
+}
+
+function echoLogin({ player }) {
+    if (!player.getAttribute(ECHO_INSIDE_ATTRIBUTE)) return;
+    player.setAttribute(ECHO_INSIDE_ATTRIBUTE, null);
+    player.moveTo(EXIT.clone());
+}
+function echoShutdown() { for (const player of [...ECHO_FIGHTS.keys()]) hesporiLogout({ player, logout: true }); }
+function attachEcho(pluginApi) {
+    api = pluginApi;
+    api.persistAttribute(ECHO_LOOT_ATTRIBUTE, []);
+    api.persistAttribute(ECHO_INSIDE_ATTRIBUTE);
+    api.onCustomEvent("echo-boss:start", startEcho);
+    api.onPlayerLogin(echoLogin);
+    api.onServerShutdown(echoShutdown);
+}
+
+Object.assign(module.exports, { attachEcho, echoPatchValue, echoPatchInteraction, startEcho });
 
 Object.assign(module.exports, { formatFightTicks, VINES_MESSAGE, warningInterfaceChanged, reentryAction, questHesporiDeath, challengeHespori, harvestHespori, HesporiCombat, hesporiHitRoll, hesporiCanAttack, hesporiHit, hesporiDamage, hesporiInput, hesporiProcess, keepQuestHesporiEngaged, hesporiLoot, hesporiLogout, hesporiDeathDrop, hesporiPlayerDeath, hesporiNpc, hesporiCave, wipeForGroupIronman });

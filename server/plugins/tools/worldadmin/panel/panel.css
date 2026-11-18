@@ -463,6 +463,15 @@ label.host-setting.host-switch-field { cursor: pointer; }
 .host-page .host-browser-plugins button.info-button {
   height: 1.5em; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: none;
 }
+.host-page .host-browser-plugins button.plugin-delete {
+  display: inline-grid; place-items: center;
+  width: 28px; height: 28px; min-height: 28px; padding: 0;
+  border: 0; background: transparent; color: var(--muted);
+  font-size: 18px; line-height: 1;
+}
+.host-page .host-browser-plugins button.plugin-delete:hover:not(:disabled) {
+  background: var(--error-bg); color: var(--error);
+}
 .host-page .host-browser-plugins button.link { height: auto; }
 @media (max-width: 860px) {
   .host-page:has(.host-browser-plugins:not([hidden])) { height: 100dvh; min-height: 0; overflow: hidden; }

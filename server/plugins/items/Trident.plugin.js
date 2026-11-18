@@ -155,10 +155,27 @@ function venom(hit) {
 
 function chargeUsed(recipe) {
   return (player, staff, left) => {
+    if (recipe.fullChargedIds.has(staff.getId())) {
+      const unchargedId = recipe.staff.unchargedByCharged.get(staff.getId());
+      staff.setId(recipe.staff.chargedByUncharged.get(unchargedId));
+      refreshTridentState(player, staff);
+    }
     if (left > 0 && left % WARNING_EVERY === 0) {
       player.sendMessage(`Your ${recipe.look.name} has ${left.toLocaleString("en-US")} charges left.`);
     }
   };
+}
+
+/** Wiki: built-in charges work in safe minigames, but not dangerous PvP. */
+function canAttack(player, target) {
+  if (target?.isPlayer?.() && (core.Wilderness.isIn(player) || core.Wilderness.isIn(target))) {
+    const context = { attacker: player, target, safe: false };
+    api.emitCustomEvent("combat:safe-pvp", context);
+    if (context.safe === true) return true;
+    player.sendMessage("You can't use your trident's built-in spell in dangerous PvP.");
+    return false;
+  }
+  return true;
 }
 
 function staffConfig(recipe) {
@@ -171,6 +188,7 @@ function staffConfig(recipe) {
     attackSpeed: ATTACK_SPEED,
     range: ATTACK_RANGE,
     levelRequired: recipe.levelRequired,
+    canAttack,
     spell: look(recipe),
     hitDelay: (attacker, target) => ticksFor(projectileEnd(attacker, target)),
     impact: impact(recipe),

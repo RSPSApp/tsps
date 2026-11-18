@@ -66,7 +66,7 @@ function player({ level = 99, full = false, area = null } = {}) {
         getPacketSender: () => ({ sendVarbit: (id, value) => varbits.push([id, value]), sendSound: (...args) => sounds.push(args), sendTypedMessage: (type, message) => { messages.push(message); if (type === core.ChatType.SPAM) spam.push(message); } }),
         getSkillManager: () => ({ getCurrentLevel: () => level, addExperiences: (_skill, amount) => xp.push(amount) }),
         getClickDelay: () => ({ elapsedTime: () => true, reset() {} }),
-        getInventory: () => ({ isFull: () => full, full: () => messages.push('full'), addItem: (item) => items.push(item) }),
+        getInventory: () => ({ isFull: () => full, getAddableAmount: (item) => full ? 0 : item.getAmount(), full: () => messages.push('full'), addItem: (item) => items.push(item) }),
         getLocation: () => new core.Location(3200, 3200), getPrivateArea: () => area,
         setPositionToFace() {}, performAnimation: (animation) => animations.push(animation), sendMessage: (message) => messages.push(message),
     };
@@ -747,7 +747,7 @@ test('the tea stall gives the noteable cup of tea', () => {
 test("the Ardougne baker's stall puts each theft in the loot tracker (category 6) after the item, before the XP; other stalls don't", () => {
     const who = player(), stallObject = object(O.BAKERS_STALL);
     const added = [];
-    who.getInventory = () => ({ isFull: () => false, full() {}, addItem: (item) => { who.items.push(item); added.push('item'); } });
+    who.getInventory = () => ({ isFull: () => false, getAddableAmount: (item) => item.getAmount(), full() {}, addItem: (item) => { who.items.push(item); added.push('item'); } });
     who.getSkillManager = () => ({ getCurrentLevel: () => 99, addExperiences: (_skill, amount) => { who.xp.push(amount); added.push('xp'); } });
     const emit = testApi.emitCustomEvent;
     click(who, stallObject, "Baker's stall");

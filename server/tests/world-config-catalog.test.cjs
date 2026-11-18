@@ -105,11 +105,14 @@ test('the catalog is cached per layers hash', () => {
   }
 });
 
-test('imported source is listed from its manifest until the runtime loads it', () => {
+test('an imported manifest exposes settings before the runtime loads its source', () => {
   const entry = 'imported/welcome/Welcome.plugin.js';
   const dir = fixture({
     [entry]: plugin('Welcome'),
-    'imported/welcome/plugin.json': JSON.stringify({ format: 1, id: 'welcome', name: 'Welcome', version: '1.0.0', description: 'Uploaded welcome message.' }),
+    'imported/welcome/plugin.json': JSON.stringify({
+      format: 1, id: 'welcome', name: 'Welcome', version: '1.0.0', description: 'Uploaded welcome message.',
+      config: { 'Welcome:opt': { ...OPT, default: false }, 'Welcome:broken': { type: 'enum' } },
+    }),
   });
   const file = require.resolve(path.join(dir, entry));
   try {
@@ -118,12 +121,14 @@ test('imported source is listed from its manifest until the runtime loads it', (
     assert.equal(first.plugins[0].awaitingLoad, true);
     assert.equal(first.plugins[0].packageId, 'welcome');
     assert.equal(first.plugins[0].loaded, false);
+    const offlineOptions = first.options.filter(option => option.owner === 'Welcome');
+    assert.deepEqual(offlineOptions.map(option => [option.key, option.decl.default]), [['Welcome:opt', false]]);
     assert.equal(require.cache[file], undefined);
     require(file);
     WorldConfigCatalog.invalidate();
     const loaded = WorldConfigCatalog.build(dir, layers());
     assert.equal(loaded.plugins[0].loaded, true);
-    assert.ok(loaded.options.some(option => option.owner === 'Welcome'));
+    assert.equal(loaded.options.find(option => option.owner === 'Welcome').decl.default, true);
   } finally {
     delete require.cache[file];
     fs.rmSync(dir, { recursive: true, force: true });

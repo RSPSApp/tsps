@@ -76,6 +76,11 @@ const NETWORK_PERF_LOG_INTERVAL_MS = 10000;
 const WS_CLOSE_BACKPRESSURE = 1013;
 const WS_CLOSE_SEND_FAILURE = 1011;
 
+/** The centre zone of a 104-tile scene whose base (8-aligned, in tiles) is `sceneBase`. */
+export function sceneCentreZone(sceneBase: number): number {
+  return (sceneBase >> 3) + 6;
+}
+
 /**
  * The map rebuild a changed scene needs: `region` draws a templated instance from its palette,
  * `normal` the cache map. A plain private area is drawn from the cache map without one, unless
@@ -497,9 +502,21 @@ export class PlayerSession {
       || this.replayedPrivateArea !== privateArea
       || this.replayedSceneVersion !== sceneVersion
     ));
+    if (rebuild) {
+      // A rebuild centres the whole scene on the player, as live's does, so the base moves on both
+      // axes with it. The base above moves one axis at a time; a rebuild for one axis (or for a new
+      // instance palette) used to leave the other axis's base where it was while the client was sent
+      // a scene centred on the player. A client that builds only the 104x104 scene it is sent (the
+      // official client, through the RuneLite gateway) was then up to five zones off the scene the
+      // next rebuild is judged against, and the player walked off it onto black (Chambers of Xeric).
+      this.sceneBaseX = Math.max(0, (sceneTile.x - 48) & ~7);
+      this.sceneBaseY = Math.max(0, (sceneTile.y - 48) & ~7);
+    }
+    const sceneZoneX = sceneCentreZone(this.sceneBaseX);
+    const sceneZoneY = sceneCentreZone(this.sceneBaseY);
     if (rebuild && !(rebuild === "region"
-      ? this.sendClientPacket(templated!.encodeScene(sceneTile.x >> 3, sceneTile.y >> 3))
-      : this.sendRebuildNormal(sceneTile.x >> 3, sceneTile.y >> 3, this.replayedPrivateArea != null))) {
+      ? this.sendClientPacket(templated!.encodeScene(sceneZoneX, sceneZoneY))
+      : this.sendRebuildNormal(sceneZoneX, sceneZoneY, this.replayedPrivateArea != null))) {
       return;
     }
     const replacementWindowChanged = !this.hasReplayedScene
@@ -582,6 +599,7 @@ export class PlayerSession {
             : undefined),
           crawl: npc.isCrawling?.() || undefined,
           modelCustomisation: npc.getModelCustomisationForUpdate?.() ?? undefined,
+          typeCustomisation: npc.getTypeCustomisationForUpdate?.() ?? undefined,
           baseAnimations: npc.getBaseAnimationsForUpdate?.() ?? undefined,
           transparency: npc.getTransparency?.() ?? undefined,
           tint: npc.getTint?.() ?? undefined,

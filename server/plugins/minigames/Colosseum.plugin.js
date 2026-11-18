@@ -19,5 +19,6 @@ module.exports = {
     require("./colosseum/Scoreboard.Colosseum")(api);
     require("./colosseum/Commands.Colosseum")(api);
     require("./colosseum/CombatAchievements.Colosseum")(api);
+    require("./colosseum/QuiverExchange.Colosseum")(api);
   },
 };

@@ -33,6 +33,11 @@ function loot(request) {
   if (active(request.player)) request.loot = Common.multipliedLoot(request.loot, crowd(request.player, request.npc));
 }
 
+/** Chart-based stalls ask before their failed roll can return. Other stall refusals stay with the producer. */
+function succeeds(request) {
+  if (active(request.player)) request.success = true;
+}
+
 function again(request) {
   if (active(request.player)) request.again = true;
 }
@@ -45,6 +50,7 @@ module.exports = function attach(api) {
   effect = Common.data.effects.dodgyDeals;
   api.onCustomEvent("thieving:pickpocket-target", pickpocketTarget);
   api.onCustomEvent("thieving:loot", loot);
+  api.onCustomEvent("thieving:stall-roll", succeeds);
   api.onCustomEvent("thieving:done", again);
   api.onCustomEvent("thieving:deplete-stall", keepStall);
 };

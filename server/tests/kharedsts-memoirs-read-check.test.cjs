@@ -28,6 +28,33 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   core = PluginManager.getCoreApi();
   Travel.register(PluginManager.createApi("KharedstsMemoirsReadCheckTest"));
+  require("../plugins/quests/quests/DepthsOfDespair.Quest")(PluginManager.createApi("MemoirsHosidiusPageTest"));
+});
+
+test("Hosidius page uses the recorded objectbox through real inventory use, once in either direction", (t) => {
+  const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
+  for (const reverse of [false, true]) {
+    const { player, sent } = actor(t);
+    const inventory = player.getInventory();
+    inventory.setItem(0, new core.Item(MEMOIRS, 1));
+    inventory.setItem(1, new core.Item(core.ItemIdentifiers.LUNCH_BY_THE_LANCALLIUMS, 1));
+    UseItemPacketListener.itemOnItem(player, reverse ? 0 : 1, reverse ? 1 : 0);
+    assert.equal(inventory.getAmount(core.ItemIdentifiers.LUNCH_BY_THE_LANCALLIUMS), 0);
+    assert.equal(player.getAttribute("depths-of-despair:memoir-page-added"), 1);
+    assert.equal(Travel._test.memoirCharges(player, inventory.getItems()[0]), 20);
+    const box = player.getDialogueManager().getCurrent();
+    assert.ok(box instanceof core.ItemStatementDialogue, "capture 241/911547 tick134 opens objectbox193");
+    assert.equal(box.getItemId(), core.ItemIdentifiers.LUNCH_BY_THE_LANCALLIUMS);
+    assert.equal(box.getText(), "You add an entry to Kharedst's Memoirs.");
+    assert.deepEqual(sent.items, [[OBJECTBOX_ITEM, core.ItemIdentifiers.LUNCH_BY_THE_LANCALLIUMS]]);
+    assert.deepEqual(sent.mesboxes, ["You add an entry to Kharedst's Memoirs."]);
+    player.getDialogueManager().reset();
+    inventory.setItem(1, new core.Item(core.ItemIdentifiers.LUNCH_BY_THE_LANCALLIUMS, 1));
+    UseItemPacketListener.itemOnItem(player, 1, 0);
+    assert.equal(inventory.getAmount(core.ItemIdentifiers.LUNCH_BY_THE_LANCALLIUMS), 1, "a repeated page stays in inventory");
+    assert.equal(sent.mesboxes.length, 1, "the success box is not repeated");
+    assert.equal(Travel._test.memoirCharges(player, inventory.getItems()[0]), 20);
+  }
 });
 
 function actor(t) {

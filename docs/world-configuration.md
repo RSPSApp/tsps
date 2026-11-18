@@ -799,7 +799,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `BlastFurnace` | BlastFurnace | minigames | yes | Adds the Blast Furnace: smelting ore on the conveyor and collecting bars from the dispenser. (members only) |
 | `BountyHunter` | BountyHunter | minigames | yes | Adds Bounty Hunter in Daimon's Crater, with the shared crater state split into units for each part of the minigame. (members only) |
 | `BrimhavenAgilityArena` | BrimhavenAgilityArena | minigames | yes | Adds the Brimhaven Agility Arena: pay Cap'n Izzy, cross the obstacles and tag the marked pillar for arena tickets and vouchers. (members only) |
-| `Camdozaal` | Camdozaal | minigames | yes | Adds Camdozaal fishing, barronite crushing, shard storage and Exchange charms, and the timed vault. |
+| `Camdozaal` | Camdozaal | minigames | yes | Adds Camdozaal fishing, barronite crushing, shard storage and Exchange charms, Ramarno's item exchanges, pickaxe barrels, and the timed vault. |
 | `CastleWars` | CastleWars | minigames | yes | Adds the Castle Wars team minigame, with its shared match state and one unit for each part of the game. |
 | `ChambersOfXeric` | ChambersOfXeric | minigames | yes | Adds the Chambers of Xeric raid: the Mount Quidamortem party board, random or Challenge Mode chamber layouts and the rooms. (members only) |
 | `ChampionsChallenge` | ChampionsChallenge | minigames | yes | Adds the Champions' Challenge: Larxus and the champions' scrolls, the ten champions in the Guild basement, Leon d'Cour and the Chest of Champions. (members only) |
@@ -865,7 +865,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Bartenders` | Bartenders | npcs | yes | Makes the Blue Moon Inn, Dancing Donkey, Sheared Ram and Dragon Inn bartenders take coins and hand over a beer or Greenman's ale. |
 | `BasiliskKnights` | BasiliskKnights | npcs | yes | Basilisk Knight combat: walks into melee range, then melee or magic beside the player; magic from where it can't step closer, at the player's attack speed (4 ticks at the fastest), with the captured cast. (members only) |
 | `Caique` | Caique | npcs | yes | Lets players pet the sitting caiques of Kastori and the Tlati Rainforest, which peck back for 1 damage with the captured animations. (members only) |
-| `CamdozaalGolems` | CamdozaalGolems | npcs | yes | Lets players Awaken golem rubble in the Ruins of Camdozaal, turning it into a Chaos Golem to fight with its drop table. (members only) |
+| `CamdozaalGolems` | CamdozaalGolems | npcs | yes | Lets players Awaken golem rubble in the Ruins of Camdozaal into Flawed, Mind, Body or (members) Chaos golems, which disintegrate if left behind. |
 | `CanifisCitizens` | CanifisCitizens | npcs | yes | Turns Canifis citizens into werewolves when a player attacks them without a Wolfbane, keeping their remaining health. (members only) |
 | `CivilianCats` | CivilianCats | npcs | yes | West Ardougne civilians buy adult, overgrown, wily, lazy and hell cats for 100 Death runes (200 after the Ardougne easy diary) when the cat is used on them; Talk-to offers the price. (members only) |
 | `DemonicGorillas` | DemonicGorillas | npcs | yes | Adds the Crash Site Cavern's demonic and tortured gorillas: style changes after misses, protection prayers, boulders and anti-safespot rules. (members only) |

@@ -145,7 +145,12 @@ here; this is an approximation, not the exact OSRS formula.
   "Tempoross is drawing in water, prepare yourselves!"; +2 script 4068 (300); +13 the wave hits:
   tethered players get "...the rope keeps you securely upright as the wave washes over you."
   and 10 points, Tempoross is 10572 again with seq `fsb_spawn`, water splashes (1843) and debris
-  locs 41292-41295 appear. Untethering sends script 4069 (60). If Tempoross submerges before
+  locs 41292-41295 appear. Untethered players are knocked down: "...the wave slams into you,
+  knocking you to the ground.", a same-tick teleport up to five tiles along the eight-way octant
+  away from the boss base (3043,2845), stopping at the first blocked tile, with
+  `human_knockdown_loop` (7211) and facing the boss; a player already at an edge stays put but
+  still plays the animation, and the loss line ends "to the waves." (rev 241/242 captures).
+  Untethering sends script 4069 (60). If Tempoross submerges before
   the hit, there is no hit, but everyone still gets 4069 so the overlay closes (no capture of
   that case).
 - **Lightning:** "A strong wind blows as clouds roll in..." (red); a cloud's shadow
@@ -235,8 +240,9 @@ cooks half the catch, so their fishing is quicker than on a normal world:
 
 ## Not captured (ours, from the Wiki's descriptions)
 
-- **An untethered player hit by a wave:** they lose one tool and 1-3 harpoonfish, with the fire's
-  message format ("You lose ... to the wave."). The Wiki's push of a few tiles is not done.
+- **An untethered player hit by a wave:** they lose one tool and 1-3 harpoonfish; how many fish
+  is ours, and the loss line follows the captured "to the waves." A player stood between the
+  ammunition crates is not pushed (Wiki), though they still lose items.
 - **Fires:** a fire takes one tool and 1-3 harpoonfish every 2 ticks; how many fish is ours.
 - **Lightning:** 4-8 strikes, half of them near players, on tiles a player can reach (flood
   fill from the west ship); a cloud NPC is spawned over each strike for its animations.
@@ -268,4 +274,3 @@ cooks half the catch, so their fishing is quicker than on a normal world:
 - Harpoon special attacks.
 - Combat achievements, the Spirit Angler stats board, the Retired sailor's exchange, the hosts'
   Talk-to variants in the cove.
-- The wave's push for untethered players.

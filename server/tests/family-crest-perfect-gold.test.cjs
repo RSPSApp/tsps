@@ -217,7 +217,12 @@ test("Witchaven levers are personal and the six-pull solution permanently unlock
     PM.emitPlayerLogout({ player: second.p });
   });
   const O = core.ObjectIdentifiers;
+  const leverMessages = [];
+  const leverSounds = [];
+  t.mock.method(first.p.getPacketSender(), "sendMessage", (message) => leverMessages.push(message));
+  t.mock.method(first.p.getPacketSender(), "sendSoundEffect", (id) => leverSounds.push(id));
   const pull = (id, x, y) => {
+    const soundsBefore = leverSounds.length;
     first.p.setLocation(new core.Location(x, y - 1, 0));
     const object = core.MapObjects.getPrivateArea(first.p, id, new core.Location(x, y, 0));
     assert.ok(object, "lever's current visible form resolves");
@@ -225,6 +230,11 @@ test("Witchaven levers are personal and the six-pull solution permanently unlock
       clickType: 1, location: { x, y, z: 0 }, handled: false };
     PM.emitObjectInteraction(event);
     assert.ok(event.handled);
+    const raised = [O.LEVER_11, O.LEVER_13, O.LEVER_15].includes(id);
+    assert.equal(first.p.getAnimation().getId(), raised ? 2139 : 2140);
+    assert.equal(leverMessages.at(-1), `The lever is now ${raised ? "up" : "down"}.`);
+    assert.equal(leverSounds.length, soundsBefore + 1);
+    assert.equal(leverSounds.at(-1), 2400);
   };
   const gate = (player) => {
     const event = { player, objectId: O.DOOR_76, handled: false };

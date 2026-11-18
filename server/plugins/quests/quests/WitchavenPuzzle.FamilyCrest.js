@@ -2,6 +2,7 @@
 
 const LEVERS_ATTRIBUTE = "family-crest:witchaven-levers";
 const UNLOCKED_ATTRIBUTE = "family-crest:perfect-gold-unlocked";
+const LEVER_SOUND_ID = 2400; // Witchaven lever, retail capture 242/912170.
 const leverObjects = new WeakMap();
 let api;
 let core;
@@ -48,8 +49,11 @@ function pullLever(event) {
   event.player.setAttribute(LEVERS_ATTRIBUTE, bits);
   // The permanent unlock is the final arrangement in the Wiki's six-pull solution.
   if ((bits & 6) === 4) event.player.setAttribute(UNLOCKED_ATTRIBUTE, true);
-  const sequence = core.CacheDefinitions.getSeqId("human_pull_lever");
+  const direction = (bits & lever.bit) !== 0 ? "up" : "down";
+  const sequence = core.CacheDefinitions.getSeqId(`macro_lever_switch_${direction}`);
   if (sequence != null) event.player.performAnimation(new core.Animation(sequence));
+  core.Sounds.sendSound(event.player, new core.Sound(LEVER_SOUND_ID, 1, 0, 0));
+  event.player.sendMessage(`The lever is now ${direction}.`);
   showLevers(event);
 }
 

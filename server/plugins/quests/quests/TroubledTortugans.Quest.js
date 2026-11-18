@@ -941,12 +941,11 @@ module.exports = function registerTroubledTortugansQuest(api) {
     if (npc) caveGryphonByPlayer.set(player, npc);
   }
 
-  function spawnShellbane(player) {
+  function spawnShellbane(player, onboard = aboard(player)) {
     const existing = shellbaneByPlayer.get(player);
     if (existing?.isRegistered?.()) return existing;
     // Capture 3456 fights the Shellbane from the moored boat's deck, not from
     // the island tile, so it spawns next to the player aboard.
-    const onboard = aboard(player);
     const location = player.getLocation();
     const npc = api.spawnNpc({
       id: SHELLBANE_NPC_ID,
@@ -1051,13 +1050,18 @@ module.exports = function registerTroubledTortugansQuest(api) {
     if (stage === STAGE_PEARL_ARRIVED &&
       distanceFrom(tile, LITTLE_PEARL_MOORING) <= 40) {
       const boss = shellbaneByPlayer.get(player);
-      if (boss?.isRegistered?.()) {
-        const hitpoints = boss.getHitpoints?.();
+      const hitpoints = boss?.getHitpoints();
+      if (hitpoints > 0) {
         detachFromArea(boss);
         api.removeNpc(boss);
         shellbaneByPlayer.delete(player);
-        const moved = spawnShellbane(player);
-        if (moved && Number.isFinite(hitpoints)) moved.setHitpoints?.(hitpoints);
+        // The leave event can arrive before the player's boarded varbit and coordinates change.
+        const moved = spawnShellbane(player, false);
+        if (moved) {
+          moved.setHitpoints(hitpoints);
+          // A new NPC would otherwise regenerate the carried damage immediately.
+          moved.getCombat().getLastDamage().reset();
+        }
         scheduleShellbaneSpecials(player);
       }
     }

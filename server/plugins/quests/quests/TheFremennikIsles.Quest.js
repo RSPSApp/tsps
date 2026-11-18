@@ -1514,8 +1514,10 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     if (event.step?.speaker_ids?.includes(NpcIdentifiers.HRH_HRAFN)) {
       const translation = value.match(/^(.*?)\s+\((.+)\)$/);
       if (translation) {
+        const ability = { player: event.player, understands: false };
+        api.emitCustomEvent("catspeak:can-understand", ability);
         const understands = CATSPEAK_AMULET_IDS.has(equipped(event.player, Equipment.AMULET_SLOT))
-          || questIsComplete(event.player, "dragon_slayer_ii");
+          || ability.understands;
         event.text = understands ? translation[2] : translation[1];
       }
       return;

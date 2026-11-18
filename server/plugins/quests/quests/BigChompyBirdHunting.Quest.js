@@ -472,13 +472,13 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     sender.sendSound(SPIT_ROAST_SOUND, 255, EFFECT_DELAY);
     sender.sendSound(SPIT_ROAST_SOUND, 255, EFFECT_DELAY);
     hold(player);
-    const finish = () => {
+    const finish = ({ loggingOut = false } = {}) => {
       if (cooking.get(player) !== finish) return false;
       cooking.delete(player);
       release(player);
       // The seasonings must still be there when the chompy comes off (Ours: without them the raw chompy comes back).
       if (!wanted.every(({ item }) => has(player, item))) {
-        player.getInventory().adds(RAW_CHOMPY, 1);
+        refundRawChompy(player, loggingOut);
         sender.sendVarbit(VARBIT_SPIT_ROASTER, 0);
         return false;
       }
@@ -503,6 +503,27 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
       itemBox(player, SEASONED_CHOMPY,
         `You use the ${rantz}, ${fycie} and the ${bugs} with the chompy bird to make a seasoned chompy.`);
     });
+  }
+
+  /**
+   * The raw chompy back from a roast that lost its seasonings, never lost (review on #6201): the pack if it
+   * fits, else the player's tile, or the bank when logging out (the tile then if the bank can't take it).
+   * Ours: no capture shows a roast without its seasonings.
+   */
+  function refundRawChompy(player, loggingOut) {
+    const raw = new Item(RAW_CHOMPY, 1);
+    if (player.getInventory().getAddableAmount(raw) >= 1) {
+      player.getInventory().adds(RAW_CHOMPY, 1);
+      return;
+    }
+    if (loggingOut) {
+      const { Bank } = api.core;
+      const bank = Bank && player.getBank?.(Bank.getTabForItem(player, RAW_CHOMPY));
+      const before = bank?.getAmount?.(RAW_CHOMPY) ?? 0;
+      bank?.add?.(new Item(RAW_CHOMPY, 1), false);
+      if ((bank?.getAmount?.(RAW_CHOMPY) ?? 0) > before) return;
+    }
+    api.core.ItemOnGroundManager.registerLocation(player, raw, player.getLocation().clone());
   }
 
   /** Inflate on a swamp toad (or filled bellows used on one), and Pluck on a carcass. */
@@ -1138,7 +1159,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     inflatingBy.delete(player);
     cancelDemonstration(player);
     // A roast in progress finishes rather than eating the raw chompy.
-    cooking.get(player)?.();
+    cooking.get(player)?.({ loggingOut: true });
     hunt.cleanup(player);
   }
 

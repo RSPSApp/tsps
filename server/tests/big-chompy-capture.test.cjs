@@ -509,3 +509,31 @@ test("bellows from a chest someone else opened still move stage 15 to 20 (review
   assert.equal(stage(f), 20);
   h.ticks(f, 101);
 });
+
+for (const loggingOut of [false, true]) {
+  test(`a roast that lost a seasoning never loses the raw chompy, even into a full pack${loggingOut ? " at logout" : ""} (#6201 review)`, async (t) => {
+    const f = actor(t, { stage: 55, tile: BY_SPIT, items: [[I.RAW_CHOMPY, 1], [I.ONION, 1], [I.TOMATO, 1], [I.EQUA_LEAVES, 1]],
+      attributes: {
+        "big-chompy-bird-hunting:rantz-ingredient": I.ONION,
+        "big-chompy-bird-hunting:fycie-ingredient": I.TOMATO,
+        "big-chompy-bird-hunting:bugs-ingredient": I.EQUA_LEAVES,
+      } });
+    const inventory = f.player.getInventory();
+    while (inventory.getFreeSlots() > 0) inventory.add(new core.Item(I.RAKE, 1), false);
+    await h.dispatch(f, { type: "item_on_object", objectId: 6895, x: SPIT[0], y: SPIT[1], itemId: I.RAW_CHOMPY,
+      slot: inventory.getItems().findIndex((item) => item?.getId?.() === I.RAW_CHOMPY), widgetId: 149 << 16 });
+    for (let i = 0; i < 6 && !messages(f).includes("You carefully place the chompy bird on the spit-roast."); i++) h.tick(f);
+    assert.equal(amount(f, I.RAW_CHOMPY), 0, "the bird is on the spit");
+    inventory.deleteNumber(I.ONION, 1);
+    while (inventory.getFreeSlots() > 0) inventory.add(new core.Item(I.RAKE, 1), false);
+    const onGround = () => core.ItemOnGroundManager.ownedBy(f.player.getUsername())
+      .filter((g) => g.getItem().getId() === I.RAW_CHOMPY).length;
+    const banked = () => f.player.getBank(core.Bank.getTabForItem(f.player, I.RAW_CHOMPY)).getAmount(I.RAW_CHOMPY);
+    if (loggingOut) h.PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+    else h.ticks(f, 6);
+    assert.equal(amount(f, I.SEASONED_CHOMPY), 0);
+    assert.equal(amount(f, I.RAW_CHOMPY) + onGround() + banked(), 1, "the raw chompy is somewhere the player can get it");
+    if (loggingOut) assert.equal(banked(), 1, "banked at logout");
+    else assert.equal(onGround(), 1, "on the player's tile");
+  });
+}

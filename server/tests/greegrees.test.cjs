@@ -188,6 +188,27 @@ test("leaving by logging out keeps the greegree on", () => {
   assert.equal(player.worn[core.Equipment.WEAPON_SLOT].getId(), KARAMJAN);
 });
 
+test("the Tchiki nut cave keeps the greegree on through the course hole and exit", () => {
+  const player = createPlayer([2756, 2731, 0]);
+  login(player);
+  assert.equal(wield(player, SMALL_NINJA), true);
+
+  for (const tile of [[3020, 5457, 0], [3025, 5457, 0], [2757, 2734, 0]]) {
+    const location = new Location(...tile);
+    assert.ok(area.getBoundaries().some(boundary => boundary.inside(location)), tile.join(","));
+    player.moveTo(location);
+    area.postLeave(player, false);
+    assert.equal(player.worn[core.Equipment.WEAPON_SLOT].getId(), SMALL_NINJA);
+    assert.equal(form(player), "small-ninja-monkey");
+  }
+
+  for (const tile of [[3020, 5457, 1], [3028, 5457, 0]]) {
+    const location = new Location(...tile);
+    assert.equal(Greegrees._test.canTransformAt(location), false, tile.join(","));
+    assert.equal(area.getBoundaries().some(boundary => boundary.inside(location)), false);
+  }
+});
+
 test("the island, its dungeons and the zoo pen are the places it works", () => {
   const { canTransformAt } = Greegrees._test;
   for (const tile of [MARIM, [2798, 2798, 1], [2808, 9200, 0], ZOO]) {

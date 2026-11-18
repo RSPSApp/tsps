@@ -79,6 +79,8 @@ const WRENCHED_MESSAGE = "The Monkey Greegree wrenches itself from your hand as 
 /** Ape Atoll's two map squares by two, every plane, and the dungeons under it; the zoo pen. */
 const APE_ATOLL = { minX: 2688, maxX: 2815, minY: 2688, maxY: 2815 };
 const APE_ATOLL_DUNGEONS = { minX: 2688, maxX: 2815, minY: 9088, maxY: 9215 };
+// The Ape Atoll course hole leads to this separately mapped Recipe for Disaster room.
+const TCHIKI_NUT_CAVE = { minX: 3018, maxX: 3027, minY: 5454, maxY: 5460, planes: [0] };
 const ARDOUGNE_ZOO = { minX: 2594, maxX: 2612, minY: 3272, maxY: 3286, planes: [0] };
 const PLANES = [0, 1, 2, 3];
 
@@ -128,7 +130,8 @@ function within(location, zone) {
 
 /** Where Zooknock's magic reaches. */
 function canTransformAt(location) {
-  return within(location, APE_ATOLL) || within(location, APE_ATOLL_DUNGEONS) || within(location, ARDOUGNE_ZOO);
+  return within(location, APE_ATOLL) || within(location, APE_ATOLL_DUNGEONS)
+    || within(location, TCHIKI_NUT_CAVE) || within(location, ARDOUGNE_ZOO);
 }
 
 function boundaries() {
@@ -137,6 +140,7 @@ function boundaries() {
   return [
     ...PLANES.map((z) => zone(APE_ATOLL, z)),
     ...PLANES.map((z) => zone(APE_ATOLL_DUNGEONS, z)),
+    ...TCHIKI_NUT_CAVE.planes.map((z) => zone(TCHIKI_NUT_CAVE, z)),
     ...ARDOUGNE_ZOO.planes.map((z) => zone(ARDOUGNE_ZOO, z)),
   ];
 }

@@ -385,3 +385,12 @@ test('the quantity prompt gives only what the backpack holds, whatever number is
   assert.equal(inventory.getFreeSlots(), 0, 'filled, and no more than the free slots');
   assert.equal(inventory.getAmount(ItemIdentifiers.GOLDSMITH_GAUNTLETS) <= 28, true);
 });
+
+test("the Family Pest payment does not raise Caleb's gauntlet conversion fee", (t) => {
+  const player = makePlayer(t);
+  player.getInventory().adds(api.core.ItemIdentifiers.COINS, 25000);
+  const condition = { player, npcId: api.core.NpcIdentifiers.CALEB_2,
+    text: "If the player does not have enough coins:", stepId: "q5UCcC" };
+  assert.equal(PluginManager.emitNpcDialogueCondition(condition), false);
+  assert.equal(PluginManager.emitNpcDialogueCondition({ ...condition, npcId: DIMINTHEIS }), true);
+});

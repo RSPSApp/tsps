@@ -436,6 +436,27 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // across, from the low side to the high side or back, along their own row. crossDelay holds the
   // opener that many ticks after the opening sound before the gate opens and they cross.
   PASS_THROUGH_GATES = Object.freeze([
+    // Witchaven's puzzle doors keep their clipped threshold while each permitted
+    // player crosses. Explicit placements also identify a temporarily open leaf.
+    ...[
+      [O.DOOR_73, 2719, 9671, 1, null, 9672],
+      [O.DOOR_75, 2722, 9671, 1, null, 9672],
+      [O.DOOR_76, 2727, 9690, 2, 2728, null],
+      [O.DOOR_77, 2723, 9711, 3, null, 9711],
+    ].map(([id, x, y, face, crossX, crossY]) => {
+      const [dx, dy] = [[-1, 0], [0, 1], [1, 0], [0, -1]][face];
+      return Object.freeze({
+        closed: [[id, x, y, 0, face]],
+        opened: [
+          [NAMELESS_DOOR_LEAF_IDS.INVISWALL, x, y, 0, face],
+          [id, x + dx, y + dy, 0, (face + 1) & 3],
+        ],
+        crossX, crossY,
+        walkOver: true,
+        closeTicks: 2,
+        openSoundId: 62,
+      });
+    }),
     // Zanaris market's eastbound and southbound entrances. Keep the wall clipped
     // while the opener crosses so a second player cannot follow through unpaid.
     Object.freeze({

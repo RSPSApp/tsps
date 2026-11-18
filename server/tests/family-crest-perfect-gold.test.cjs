@@ -208,3 +208,52 @@ test("the ore-yield listener changes only a Witchaven gold rock's gold ore, and 
   PM.emitCustomEvent("mining:ore-yield", bare);
   assert.deepEqual([bare.oreId, bare.amount, bare.spend], [I.GOLD_ORE, 1, null], "a request without the rock changes nothing and does not throw");
 });
+
+test("Witchaven levers are personal and the six-pull solution permanently unlocks only that player", (t) => {
+  const first = actor(t, { at: [2722, 9709] });
+  const second = actor(t, { at: [2727, 9690] });
+  t.after(() => {
+    PM.emitPlayerLogout({ player: first.p });
+    PM.emitPlayerLogout({ player: second.p });
+  });
+  const O = core.ObjectIdentifiers;
+  const leverMessages = [];
+  const leverSounds = [];
+  t.mock.method(first.p.getPacketSender(), "sendMessage", (message) => leverMessages.push(message));
+  t.mock.method(first.p.getPacketSender(), "sendSoundEffect", (id) => leverSounds.push(id));
+  const pull = (id, x, y) => {
+    const soundsBefore = leverSounds.length;
+    first.p.setLocation(new core.Location(x, y - 1, 0));
+    const object = core.MapObjects.getPrivateArea(first.p, id, new core.Location(x, y, 0));
+    assert.ok(object, "lever's current visible form resolves");
+    const event = { player: first.p, object, objectId: id, definition: ObjectDefinition.forId(id),
+      clickType: 1, location: { x, y, z: 0 }, handled: false };
+    PM.emitObjectInteraction(event);
+    assert.ok(event.handled);
+    const raised = [O.LEVER_11, O.LEVER_13, O.LEVER_15].includes(id);
+    assert.equal(first.p.getAnimation().getId(), raised ? 2139 : 2140);
+    assert.equal(leverMessages.at(-1), `The lever is now ${raised ? "up" : "down"}.`);
+    assert.equal(leverSounds.length, soundsBefore + 1);
+    assert.equal(leverSounds.at(-1), 2400);
+  };
+  const gate = (player) => {
+    const event = { player, objectId: O.DOOR_76, handled: false };
+    PM.emitCustomEvent("door:toggle", event);
+    return event;
+  };
+  assert.ok(gate(first.p).handled, "gold door starts locked");
+  pull(O.LEVER_11, 2722, 9710);
+  assert.equal(first.p.getAttribute("family-crest:witchaven-levers"), 1);
+  assert.equal(second.p.getAttribute("family-crest:witchaven-levers") ?? 0, 0);
+  pull(O.LEVER_13, 2724, 9669);
+  pull(O.LEVER_12, 2722, 9710);
+  pull(O.LEVER_15, 2722, 9718);
+  assert.ok(gate(first.p).handled, "north inner alone does not bypass the south lever");
+  pull(O.LEVER_11, 2722, 9710);
+  pull(O.LEVER_14, 2724, 9669);
+  assert.equal(first.p.getAttribute("family-crest:perfect-gold-unlocked"), true);
+  assert.equal(gate(first.p).handled, false);
+  assert.ok(gate(second.p).handled, "another player must solve the puzzle independently");
+  pull(O.LEVER_16, 2722, 9718);
+  assert.equal(gate(first.p).handled, false, "later lever changes preserve the permanent unlock");
+});

@@ -283,7 +283,8 @@ function pullLever({ player }) {
 }
 
 /** The lever offers balloons or a knight dance; opening or cancelling costs nothing. */
-function leverMenu({ player }) {
+function leverMenu({ player, location }) {
+  if (location.x < ROOM.minX || location.x > ROOM.maxX || location.y < ROOM.minY || location.y > ROOM.maxY || location.z !== 0) return false;
   api.sendMultiChatboxPrompt(player, "Select an option",
     "Balloon Bonanza (1,000 coins)", () => pullLever({ player }),
     "Nightly Dance (500 coins)", () => Knights.start(player),

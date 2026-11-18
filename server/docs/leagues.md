@@ -2051,7 +2051,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   - Castle Wars: the existing `castlewars:player-result`, `where` result "win".
   - The Fishing Trawler: `fishing-trawler:completed` { player } on docking back in port.
   - The Fountain of Heroes: `jewellery:recharged` { player, site, piece } once per kind of piece charged,
-    `where` site "heroes" and piece "glory" or "glory_trimmed".
+    `where` site "heroes" and piece "glory" or "glory_trimmed" (piece is undefined for rings of wealth, whose
+    table entry has no key; no trigger reads it).
   - Taverley Dungeon: `taverley-dungeon:key-door` { player, key } when a locked door's key lets the player
     through, `where` key "DUSTY_KEY".
   - The Blast Furnace: `blast-furnace:bars-taken` { player, itemId, amount } from the dispenser, by bar, summed.

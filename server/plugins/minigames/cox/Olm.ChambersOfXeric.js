@@ -1252,12 +1252,10 @@ class OlmRoom extends Raid.Room {
       hit.updateTotalDamage();
       return;
     }
-    const { CombatType } = Shared.core();
-    const type = hit.getCombatType?.();
     const attacker = hit.getAttacker?.()?.isPlayer?.() ? hit.getAttacker().getAsPlayer() : null;
-    let factor = 1;
-    if (npc === this.head) factor = type === CombatType.MAGIC ? 1 / 3 : 1;
-    else if (npc === this.leftClaw) {
+    // A third against some styles: already taken off the rolled hitsplats (Room.resistance).
+    let factor = hit.rolledResistance ? 1 : this.resistance(npc, hit);
+    if (npc === this.leftClaw) {
       if (npc.__coxClenched) {
         if (this.isLastPhase()) {
           // The infinity sign: the damage heals it.
@@ -1269,8 +1267,8 @@ class OlmRoom extends Raid.Room {
         }
         factor = 0;
         attacker?.sendMessage("The Great Olm is currently protecting its left claw! You cannot see a way to attack it successfully.");
-      } else if (type === CombatType.MAGIC || type === CombatType.RANGED) factor = 1 / 3;
-    } else if (npc === this.rightClaw) factor = type === CombatType.RANGED ? 1 / 3 : 1;
+      }
+    }
     if (factor !== 1) {
       for (const part of hit.getHits()) part.setDamage(Math.floor(part.getDamage() * factor));
       hit.updateTotalDamage();
@@ -1280,6 +1278,17 @@ class OlmRoom extends Raid.Room {
       else if (npc === this.rightClaw) this.clawHitAt.right = this.raid.ticks;
     }
     if (npc === this.leftClaw && !npc.__coxClenched) this.checkClench(npc, hit.getTotalDamage());
+  }
+
+  /** A third from magic on the head, magic and ranged on the left claw, ranged on the right. */
+  resistance(npc, hit) {
+    if (!npc.__coxOlm || npc.__coxDown || (npc === this.leftClaw && npc.__coxClenched)) return 1;
+    const { CombatType } = Shared.core();
+    const type = hit.getCombatType?.();
+    if (npc === this.head) return type === CombatType.MAGIC ? 1 / 3 : 1;
+    if (npc === this.leftClaw) return type === CombatType.MAGIC || type === CombatType.RANGED ? 1 / 3 : 1;
+    if (npc === this.rightClaw) return type === CombatType.RANGED ? 1 / 3 : 1;
+    return 1;
   }
 
   /** Wiki (Mod Ash): a hit of at least 1/20 of its base health makes it clench. */

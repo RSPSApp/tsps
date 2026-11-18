@@ -104,9 +104,11 @@ claims carry over like this:
    player save. The world file stays the rollback guard and the `stock` counter, and is still
    written before anything is given.
 3. **Claim through the helper only for `perAccount: 1` rows with no `stock`.** Write the world
-   record first, then call `events:grant-reward` with the same completion key and the row's item.
-   If it returns `granted: false` (`no-space`, `already-complete`, `inactive`), restore the previous
-   world record. Rows with `perAccount` above 1 or a `stock` cap stay on this plugin's own records,
+   record first, then emit `events:grant-reward` with
+   `{ player, eventKey: row.event, completion: "seasonal-rares-<row key>", rewards: [{ itemId: row.id, amount: 1 }] }`.
+   Read `granted` from that request after the event. If `granted` is `false`, restore the previous
+   world record for any rejection reason (for example `no-space`, `already-complete` or `inactive`).
+   Rows with `perAccount` above 1 or a `stock` cap stay on this plugin's own records,
    because the helper cannot count.
 4. **Leave the old records.** `seasonal-rares:claims` and the world file are still read (the larger
    count wins), so an account whose login import has not run yet still cannot claim again.

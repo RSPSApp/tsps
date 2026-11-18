@@ -97,6 +97,8 @@ function fakeApi() {
         hooks.dialogues.push(payload.variant);
         payload.handled = true;
       }
+      if (name === 'pets:owns') payload.owns = hooks.ownsPet === true;
+      if (name === 'pets:award') (hooks.petsAwarded ??= []).push(payload.itemId);
     },
     spawnNpc: ({ id, x, y }) => {
       const npc = fakeNpc(id, x, y);
@@ -1020,6 +1022,19 @@ test('forfeiting between waves brings out the chest; teleporting out loses it al
   ticks(3);
   assert.equal(away.player.location, before, 'not pulled back to the lobby');
   assert.equal(Shared.gloryOf(away.player), 0, 'no Glory for a teleport');
+
+  // A first death goes to Death's Office, whose death hook answers before the arena's: leaving that way is a death.
+  const first = runWith({}, 'FirstDeath');
+  first.run.completeWave();
+  const glory = first.run.glory;
+  hooks.custom['player:dying'].forEach((handler) => handler({ player: first.player }));
+  const taken = first.player.damage.length;
+  first.run.hurt(8);
+  assert.equal(first.player.damage.length, taken, 'nothing more lands on a dying player (it landed after the respawn)');
+  first.run.area.postLeave(first.player, false);
+  assert.equal(first.run.stage, 'ended');
+  assert.equal(Shared.gloryOf(first.player), glory, "a death keeps the run's Glory");
+  assert.equal(first.player.getAttribute(Scoreboard.ATTR.DEATHS), 1, 'the death is counted');
 });
 
 test('rewards chest supports captured item withdrawals and bank-all (rsprox 4117 and 1227)', () => {
@@ -1374,4 +1389,53 @@ test('native Minotaur healing uses the arena visibility and eligibility rules', 
     pulse();
     assert.equal(target.getHitpoints(), 220);
   });
+});
+
+test('a spare uncharged quiver used on Minimus trades for 4,000 splinters or a 1/200 Smol Heredit gamble', (t) => {
+  const Exchange = require('../plugins/minigames/colosseum/QuiverExchange.Colosseum');
+  Shared.bind(fakeApi());
+  const I = PluginManager.getCoreApi().ItemIdentifiers;
+  const bag = new Map();
+  const player = {
+    getInventory: () => ({
+      contains: (id) => (bag.get(id) ?? 0) > 0,
+      getAmount: (id) => bag.get(id) ?? 0,
+      deleteNumber: (id, n) => bag.set(id, (bag.get(id) ?? 0) - n),
+      adds: (id, n) => bag.set(id, (bag.get(id) ?? 0) + n),
+      refreshItems() {},
+    }),
+  };
+  const use = (itemId) => {
+    const event = { player, npcId: Shared.NPC.MINIMUS_LOBBY, itemId, handled: false };
+    Exchange.useQuiverOnMinimus(event);
+    return event.handled;
+  };
+  const choose = (option) => Exchange.chose({ player, npcId: Shared.NPC.MINIMUS_LOBBY, option });
+  const ask = (stepId) => Exchange.answer({ player, npcId: Shared.NPC.MINIMUS_LOBBY, stepId });
+
+  assert.equal(use(I.BLESSED_DIZANAS_QUIVER), true);
+  assert.equal(hooks.dialogues.at(-1), Exchange.VARIANT.REFUSE, 'only spare uncharged quivers');
+
+  bag.set(I.DIZANAS_QUIVER_UNCHARGED_, 1);
+  assert.equal(use(I.DIZANAS_QUIVER_UNCHARGED_), true);
+  assert.equal(hooks.dialogues.at(-1), Exchange.VARIANT.OFFER);
+  choose('Yes, exchange Dizana\'s quiver for 4,000 Sunfire splinters?');
+  assert.equal(bag.get(I.DIZANAS_QUIVER_UNCHARGED_), 0);
+  assert.equal(bag.get(I.SUNFIRE_SPLINTERS), 4000);
+  assert.equal(ask('mejTXJ'), true);
+  assert.equal(ask('dgiQD4'), false);
+
+  bag.set(I.DIZANAS_QUIVER_UNCHARGED_, 1);
+  use(I.DIZANAS_QUIVER_UNCHARGED_);
+  t.mock.method(Math, 'random', () => 0);
+  choose('Yes, gamble for a Smol Heredit?');
+  assert.equal(bag.get(I.DIZANAS_QUIVER_UNCHARGED_), 0);
+  assert.deepEqual(hooks.petsAwarded, [I.SMOL_HEREDIT]);
+  assert.equal(ask('0LFF3m'), true);
+
+  hooks.ownsPet = true;
+  bag.set(I.DIZANAS_QUIVER_UNCHARGED_, 1);
+  use(I.DIZANAS_QUIVER_UNCHARGED_);
+  assert.equal(hooks.dialogues.at(-1), Exchange.VARIANT.OFFER_HAS_PET, 'with the pet, only the splinters');
+  hooks.ownsPet = false;
 });

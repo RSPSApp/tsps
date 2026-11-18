@@ -57,11 +57,22 @@ function isBoss(npcId) {
   return Number.isInteger(Common.core.CacheDefinitions.getNpc(npcId)?.params?.get?.(statistics().bossParam));
 }
 
-function npcDeath({ killer, npcId }) {
+function npcDeath({ killer, npcId, npc }) {
+  if (npc?.getAttribute?.("echo-boss:encounter")) return;
   if (!killer?.isPlayer?.()) return;
   const player = killer.getAsPlayer?.() ?? killer;
   add(player, "npcsKilled");
   if (isBoss(npcId)) add(player, "bossesKilled");
+}
+
+/** An Echo encounter contributes once, regardless of how many phased/paired NPCs died. */
+function echoStatistics({ player, total }) {
+  if (!Common.isLeagueProfile(player) || !Number.isSafeInteger(total) || total < 0) return;
+  const previous = Number(counters(player).echoBossesKilled) || 0;
+  if (total < previous) return;
+  add(player,"npcsKilled",total-previous);
+  add(player,"bossesKilled",total-previous);
+  set(player,"echoBossesKilled",total);
 }
 
 /** Damage dealt to an NPC and the highest hit, from what each hitsplat took off it once it landed. */
@@ -133,6 +144,7 @@ module.exports = function attach(api) {
   api.persistAttribute(STATISTICS_ATTRIBUTE, {});
   api.onCustomEvent("league:login", login);
   api.onCustomEvent("league:statistics", answer);
+  api.onCustomEvent("league:echo-statistics", echoStatistics);
   api.onNpcDeath(npcDeath);
   api.onCombatHitResolved(hitResolved);
   api.onPlayerDeath(playerDeath);

@@ -1742,6 +1742,17 @@ export class MovementQueue {
         return !stoodAtClick || MapObjects.stillStands(this.player, id, location, object, true);
     }
 
+    /**
+     * A target that can no longer be interacted with. An NPC counts only while it is dying: some
+     * are held at 0 hitpoints on purpose until the player finishes them with an item (a gargoyle's
+     * rock hammer, a rockslug's bag of salt, Dusk and Dawn), so 0 hitpoints alone must not refuse
+     * the click. Combat still refuses to attack a 0-hitpoint target on its own checks.
+     */
+    private static isDeadTarget(entity: Mobile): boolean {
+        if (entity.isNpc?.()) return (entity as NPC).isDyingFunction?.() === true;
+        return entity.getHitpoints() <= 0;
+    }
+
     /** The type an NPC shows now (its transform, else its own id); -1 for players. */
     private static npcType(entity: Mobile): number {
         if (!entity?.isNpc?.()) return -1;
@@ -1750,7 +1761,7 @@ export class MovementQueue {
     }
 
     private isInteractionTargetValid(entity: Mobile): boolean {
-        if (!entity || !entity.isRegistered() || entity.getHitpoints() <= 0 ||
+        if (!entity || !entity.isRegistered() || MovementQueue.isDeadTarget(entity) ||
             entity.getPrivateArea() !== this.player.getPrivateArea() ||
             entity.getLocation().getZ() !== this.player.getLocation().getZ()) return false;
         const owner = entity.isNpc?.() ? (entity as NPC).getOwner?.() : null;

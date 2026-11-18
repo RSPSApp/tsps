@@ -139,7 +139,6 @@ function createArea(arena) {
 function turnWinch({ player, location }) {
   const arena = arenaOfWinch(location);
   if (!arena) return false;
-  if (!mayEnter(player, arena)) return true;
   // The menu's No comes later, so it asks for the task again.
   const entry = { player, boss: "cerberus", enter: () => mayEnter(player, arena) && player.moveTo(Common.toLocation(arena.def.entry)), handled: false };
   Common.api.emitCustomEvent("echo-boss:entry", entry);

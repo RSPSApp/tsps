@@ -45,3 +45,44 @@ test("special breath maxima match the Wiki table", () => {
 });
 
 // The lair-entry diary credit is covered, with the real Ladders path, in kbd-lair-arrival.test.cjs.
+
+test('Echo KBD is the normal dragon in a private lair, configured once, cleaning pending hits', () => {
+  const hooks={}, events=[], spawned=[], providers=[];
+  class PrivateArea {
+    constructor() { this.entities=[]; }
+    add(npc) { this.entities.push(npc); }
+    enter(player) { player.area=this; }
+    destroy() { this.destroyed=true; }
+    postLeave() {}
+  }
+  const makeCombat=()=>({reset(){this.resetCount=(this.resetCount??0)+1;},getHitQueue(){return {clear:()=>{this.cleared=true;}};}});
+  const api=new Proxy({
+    core:{PrivateArea,Boundary:class{},Location:class{constructor(...args){this.args=args;}},CombatMethod:class{},CombatType:{MAGIC:1,MELEE:2},NpcIdentifiers:{KING_BLACK_DRAGON:239,KING_BLACK_DRAGON_2:2642,KING_BLACK_DRAGON_3:6502},Projectile:{centreOf:n=>n}},
+    getPrayerHandler:()=>({}),getCombatFactory:()=>({}),
+    registerNpcCombatMethodProvider:(ids,method)=>providers.push(method),
+    onCustomEvent:(name,fn)=>{hooks[name]=fn;},onNpcDeath:fn=>{hooks.death=fn;},
+    onPlayerLogout:fn=>{hooks.logout=fn;},
+    spawnNpc:(options)=>{const combat=makeCombat();const npc={id:options.id,getCombat:()=>combat};spawned.push(npc);return npc;},
+    emitCustomEvent:(name,event)=>{events.push(name);if(name==='echo-boss:configure')event.configured=true;if(name==='echo-boss:claim')event.token='session-'+spawned.length;},
+  },{get:(obj,key)=>obj[key]??(()=>{})});
+  require('../plugins/bosses/KingBlackDragon.plugin').register(api);
+  const normalProviders=providers.length;
+  const makePlayer=()=>{const combat=makeCombat();return {setAttribute(){},moveTo(){},getCombat:()=>combat,sendMessage(){}};};
+  const a=makePlayer(), b=makePlayer();
+  hooks['echo-boss:start']({player:a,boss:'king-black-dragon'});
+  hooks['echo-boss:start']({player:a,boss:'king-black-dragon'});
+  hooks['echo-boss:start']({player:b,boss:'king-black-dragon'});
+  assert.equal(spawned.length,2,'duplicate entry cannot spawn another dragon');
+  assert.notEqual(a.area,b.area);
+  assert.deepEqual(spawned.map(npc=>npc.id),[239,239],'the normal King Black Dragon');
+  assert.equal(providers.length,normalProviders,'Echo adds no controller of its own');
+  assert.equal(events.filter(e=>e==='echo-boss:configure').length,2);
+  hooks.death({npc:spawned[0]});hooks.death({npc:spawned[0]});
+  assert.equal(events.filter(e=>e==='echo-boss:completed').length,1);
+  hooks.logout({player:a});hooks.logout({player:a});
+  assert.equal(a.getCombat().cleared,true);
+  assert.equal(spawned[0].getCombat().cleared,true);
+  assert.equal(a.area.destroyed,true);
+  hooks.logout({player:b});
+  assert.equal(events.filter(e=>e==='echo-boss:release').length,2);
+});

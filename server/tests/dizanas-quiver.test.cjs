@@ -43,6 +43,7 @@ function fakePlayer({ cape = I.DIZANAS_QUIVER, weapon = I.TWISTED_BOW, ammo = nu
       if (left > 0) carried.set(id, left); else carried.delete(id);
     },
     getItems: () => [...carried].map(([id, amount]) => new Item(id, amount)),
+    deleteAtSlot(slot, amount) { inventory.deleteNumber([...carried.keys()][slot], amount); },
     refreshItems() {},
   };
   const sentStrings = [];
@@ -160,6 +161,29 @@ test('only arrows and bolts go in, and only of the type already there', () => {
   click(mixed, 2);
   assert.deepEqual(Quiver.stored(mixed), { id: I.RUNE_ARROW, amount: 10 }, 'swapped');
   assert.equal(mixed.worn[Equipment.AMMUNITION_SLOT].getId(), I.DRAGON_ARROW);
+});
+
+test('wielding the arrows the quiver holds adds them to it; the worn ammo stays on', () => {
+  const player = fakePlayer({ ammo: [I.RUNE_ARROW, 100] });
+  click(player, 2); // Fill: 100 rune arrows into the quiver
+  player.worn[Equipment.AMMUNITION_SLOT] = new Item(I.AMETHYST_ARROW, 50);
+  player.carried.set(I.RUNE_ARROW, 30);
+  assert.equal(PluginManager.emitCanEquip(player, Equipment.AMMUNITION_SLOT, new Item(I.RUNE_ARROW, 30)), false, 'the equip is taken');
+  assert.deepEqual(Quiver.stored(player), { id: I.RUNE_ARROW, amount: 130 });
+  assert.equal(player.carried.has(I.RUNE_ARROW), false);
+  assert.equal(player.worn[Equipment.AMMUNITION_SLOT].getId(), I.AMETHYST_ARROW, 'the amethyst arrows stay worn');
+
+  // Other arrows, or the worn ammo's own kind, equip as usual.
+  player.carried.set(I.DRAGON_ARROW, 5);
+  assert.equal(PluginManager.emitCanEquip(player, Equipment.AMMUNITION_SLOT, new Item(I.DRAGON_ARROW, 5)), null);
+  player.carried.set(I.AMETHYST_ARROW, 5);
+  assert.equal(PluginManager.emitCanEquip(player, Equipment.AMMUNITION_SLOT, new Item(I.AMETHYST_ARROW, 5)), null);
+  // A rule check of an item not carried as that stack (a preset's) is left alone.
+  assert.equal(PluginManager.emitCanEquip(player, Equipment.AMMUNITION_SLOT, new Item(I.RUNE_ARROW, 7)), null);
+  // Swap still wears the stored ammo: its own can-equip check is not taken for a wield.
+  click(player, 2);
+  assert.equal(player.worn[Equipment.AMMUNITION_SLOT].getId(), I.RUNE_ARROW);
+  assert.deepEqual(Quiver.stored(player), { id: I.AMETHYST_ARROW, amount: 50 });
 });
 
 test('Quiver-Remove puts the ammo in the inventory', () => {

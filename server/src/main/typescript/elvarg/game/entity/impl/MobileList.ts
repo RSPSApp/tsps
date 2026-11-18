@@ -25,6 +25,10 @@ class SlotMinHeap {
         }
     }
 
+    get size(): number {
+        return this.heap.length;
+    }
+
     shift(): number | undefined {
         if (this.heap.length === 0) return undefined;
         const top = this.heap[0];
@@ -55,11 +59,20 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
     private size: number;
     private onAdded?: (mobile: E) => void;
     private onRemoved?: (mobile: E) => void;
+    /**
+     * Slots freed this cycle, when the list holds them (`holdFreedSlots`): they go back to the free
+     * heap at {@link releaseHeldSlots}, once every observer's update has sent the removal. Handed
+     * straight to a mobile added the same cycle, the slot would reach a client as a removal and an
+     * add of one index in one frame, which the RuneLite gateway (like OSRS for a jump or a type
+     * change) takes as the old mobile changing, so it kept the old one's state (issue 6113).
+     */
+    private heldSlots: number[] | null;
 
-    constructor(capacity: number, onAdded?: (mobile: E) => void, onRemoved?: (mobile: E) => void) {
+    constructor(capacity: number, onAdded?: (mobile: E) => void, onRemoved?: (mobile: E) => void, { holdFreedSlots = false } = {}) {
         this.capacity = ++capacity;
         this.onAdded = onAdded;
         this.onRemoved = onRemoved;
+        this.heldSlots = holdFreedSlots ? [] : null;
         // Pre-fill with null so iteration skips empty slots cleanly.
         this.characters = new Array(capacity).fill(null as any);
         this.size = 0;
@@ -131,7 +144,7 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
         if (e.isRegistered() && this.characters[e.getIndex()] != null) {
             e.setRegistered(false);
             this.characters[e.getIndex()] = null;
-            this.slotQueue.push(e.getIndex());
+            this.freeSlot(e.getIndex());
             try {
                 this.onRemoved?.(e);
                 e.onRemove();
@@ -143,6 +156,26 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
             return true;
         }
         return false;
+    }
+
+    private freeSlot(index: number): void {
+        if (this.heldSlots) this.heldSlots.push(index);
+        else this.slotQueue.push(index);
+    }
+
+    /** The slots freed since the last call become free for new mobiles (World calls it at the end of a cycle). */
+    public releaseHeldSlots(): void {
+        if (!this.heldSlots?.length) return;
+        for (const index of this.heldSlots) this.slotQueue.push(index);
+        this.heldSlots.length = 0;
+    }
+
+    /**
+     * No slot is free now, only held ones: an add that fails for it can succeed once they are
+     * released, so a queue should keep it rather than drop it.
+     */
+    public waitingOnHeldSlots(): boolean {
+        return this.slotQueue.size === 0 && (this.heldSlots?.length ?? 0) > 0;
     }
 
     public contains(e: E): boolean {
@@ -217,7 +250,7 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
         if (item.isRegistered() && this.characters[item.getIndex()] != null) {
             item.setRegistered(false);
             this.characters[item.getIndex()] = null as any;
-            this.slotQueue.push(item.getIndex());
+            this.freeSlot(item.getIndex());
             try {
                 this.onRemoved?.(item);
                 item.onRemove();

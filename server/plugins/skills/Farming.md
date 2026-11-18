@@ -477,3 +477,24 @@ curing a crop; recordings 3254 and 3262 show a Pyromancer using a similarly name
 sequence. They are not used to infer Cure Plant's animation, graphics, timing,
 sounds or interface packet order. Those details remain unverified against live
 OSRS; no claim of complete visual or timing parity is made.
+# Leagues VI Echo Hespori placeholder
+
+The orb's Echo branch starts a seedless private fight without accessing the
+ordinary patch's growth, harvest XP, planted seed or pending crop rewards. It
+reuses the normal Hespori combat controller (four flowers, proportional HP phases,
+double ranged spores, magic wave, normal prayer caps and vines). Its separate Echo
+profile supplies 900 HP and magic maximum 52. The Wiki does not specify a ranged
+cap applicable to this placeholder; the normal ranged maximum 8 remains. Echo
+special mechanics are deliberately unimplemented (docs/echo-bosses.md).
+
+Completion routes normal-table and Echo rewards through the central Echo service
+into a separately saved `farming:echo-hespori-loot` harvest. Clearing the patch in
+the Echo instance collects those rewards; full inventories retain them and a
+later Echo entry restores the harvest without spawning or rewarding another boss.
+Only the private client's patch appearance changes. No Farming XP, ordinary
+Hespori KC/PB/Combat Achievement, crop mutation, or Arno retrieval replacement is
+performed. Death uses ordinary death handling and preserves existing Arno items.
+Departure/logout/death/shutdown cancel actors, vines and pending hits; reconnect
+recovers outside. The private harvest remains saved until collected.
+
+Source: [Echo Hespori](https://oldschool.runescape.wiki/w/Hespori_(Echo)).

@@ -387,7 +387,7 @@ test("the echo orb menu's later No asks for the task again before going in", () 
     held = null;
     onTaskAnswer = () => false;
     Lair.turnWinch({ player: fakePlayer(1292, 1254), location: { x: 1291, y: 1254, z: 0 } });
-    assert.equal(held, null, 'off task the menu is never asked for');
+    assert.equal(held?.boss, 'cerberus', 'Echo entry can be offered off-task; its No still checks the normal task gate');
   } finally {
     delete events['echo-boss:entry'];
   }

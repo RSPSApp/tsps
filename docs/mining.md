@@ -278,6 +278,12 @@ restored the single sandstone save. The current [Mining enhancers](https://oldsc
 [Lead rocks](https://oldschool.runescape.wiki/w/Lead_rocks) and [Sunstone rocks](https://oldschool.runescape.wiki/w/Sunstone_rocks)
 pages cover the later rock entries. As elsewhere on this page, this is the source contract, not an in-game test result.
 
+**Expert mining gloves** come from Belona in the Mining Guild ([Wiki](https://oldschool.runescape.wiki/w/Expert_mining_gloves)):
+her "Can you combine my mining gloves?" option takes a pair of Mining gloves, a pair of Superior mining gloves and a
+fee of 40 unidentified minerals. `plugins/areas/MiningGuild.plugin.js` answers the transcript's three prose
+conditions (no gloves, fewer than 40 minerals, everything) and its "receive" step. Only gloves in the
+inventory count (ours: the Wiki does not say whether worn gloves do). No rsprox capture covers the combine.
+
 ## Varrock armour and extra ore
 
 On members worlds the worn armour has a 10% extra-ore roll on the ordinary metal rocks supported here:

@@ -142,7 +142,7 @@ test('Arceuus and Lunar tablets land where their spells do; Ape Atoll is the Arc
 });
 
 // Wiki maps (each a 2-tile square): Key master teleport 1310,1250 (next to the Key Master in Cerberus' Lair),
-// Wilderness crabs teleport 3352,3782, Nardah teleport 3419,2917 (recorded arrival 3421,2917: 227/01862.txt).
+// Wilderness crabs teleport 3352,3782, Nardah teleport 3419,2917.
 test('the Key master, Wilderness crabs and Nardah scrolls land where the Wiki maps them', () => {
     diaries = new Set();
     assertLanding(use('key master teleport', 'teleport').tile, [1310, 1250, 0]);

@@ -1248046,6 +1248046,7 @@
                     },
                     {
                       "text": "Trufitus sent me.",
+                      "condition": "If the player has completed Jungle Potion:",
                       "steps": [
                         {
                           "player": "Trufitus sent me."
@@ -1248073,17 +1248074,17 @@
                           "player": "Yes, I helped Trufitus gather ingredients for a commune potion."
                         },
                         {
-                          "type": "message",
-                          "text": "Timfraku appears to concentrate very deeply.",
-                          "id": "EF66WH"
-                        },
-                        {
                           "type": "line",
                           "speaker": "Timfraku",
                           "text": "Then it must be true.",
                           "speaker_ids": [
                             4698
                           ]
+                        },
+                        {
+                          "type": "message",
+                          "text": "Timfraku appears to concentrate very deeply.",
+                          "id": "dgX3n1"
                         },
                         {
                           "type": "line",
@@ -1248188,7 +1248189,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "above",
-                                  "id": "SNHWKk"
+                                  "id": "_33pND"
                                 }
                               ]
                             },
@@ -1248208,11 +1248209,11 @@
                                 },
                                 {
                                   "type": "jump",
-                                  "id": "VD0Tsg",
+                                  "id": "Xtvct9",
                                   "steps": [
                                     {
                                       "type": "call",
-                                      "branch": "jump-4575f08f2ae82915"
+                                      "branch": "jump-c59bd45b1858246b"
                                     }
                                   ]
                                 }
@@ -1248228,15 +1248229,8 @@
                                       "text": "What do you do here?",
                                       "steps": [
                                         {
-                                          "player": "What do you do here?"
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Timfraku",
-                                          "text": "It should be clear to anyone that I am the chief of Tai Bwo Wannai. I ensure that things run smoothly in this village.",
-                                          "speaker_ids": [
-                                            4698
-                                          ]
+                                          "type": "call",
+                                          "branch": "Jj73i6"
                                         }
                                       ]
                                     },
@@ -1248265,7 +1248259,7 @@
                                         {
                                           "type": "jump",
                                           "reference": "initial",
-                                          "id": "LzrTMZ"
+                                          "id": "-ULDwl"
                                         }
                                       ]
                                     },
@@ -1248290,10 +1248284,10 @@
                                             {
                                               "type": "jump",
                                               "reference": "initial",
-                                              "id": "kq9R0D"
+                                              "id": "V1MGaD"
                                             }
                                           ],
-                                          "id": "8HTLn-"
+                                          "id": "0vRZC4"
                                         },
                                         {
                                           "type": "condition",
@@ -1248301,10 +1248295,10 @@
                                           "steps": [
                                             {
                                               "type": "missing",
-                                              "id": "lhpbH_"
+                                              "id": "YQ0G0n"
                                             }
                                           ],
-                                          "id": "MKal2j"
+                                          "id": "xNYAnZ"
                                         }
                                       ]
                                     },
@@ -1248322,8 +1248316,169 @@
                             }
                           ]
                         }
-                      ]
+                      ],
+                      "id": "vLy_sA"
+                    },
+                    {
+                      "text": "Ask about Village.",
+                      "condition": "If the player has completed Jungle Potion:",
+                      "steps": [
+                        {
+                          "type": "choice",
+                          "options": [
+                            {
+                              "text": "What do you do here?",
+                              "steps": [
+                                {
+                                  "type": "call",
+                                  "branch": "Jj73i6"
+                                }
+                              ]
+                            },
+                            {
+                              "text": "Is there anything interesting to do here?",
+                              "steps": [
+                                {
+                                  "player": "Is there anything interesting to do here?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Timfraku",
+                                  "text": "Yes Bwana, plenty of interesting things to do. Firstly you could make an effort to tidy the place up a little. Equip yourself with a machete and start cutting down the jungle that seems to be growing all around here.",
+                                  "speaker_ids": [
+                                    4698
+                                  ]
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Timfraku",
+                                  "text": "Go and have a chat with Murcaily for information, he's tending the hardwood grove to the east of here.",
+                                  "speaker_ids": [
+                                    4698
+                                  ]
+                                },
+                                {
+                                  "type": "jump",
+                                  "reference": "initial",
+                                  "id": "scUKbB"
+                                }
+                              ]
+                            },
+                            {
+                              "text": "I've been doing some work around the village.",
+                              "steps": [
+                                {
+                                  "player": "I've been doing some work around the village."
+                                },
+                                {
+                                  "type": "condition",
+                                  "text": "If the player has not been doing the Tai Bwo Wannai Cleanup tasks:",
+                                  "steps": [
+                                    {
+                                      "type": "line",
+                                      "speaker": "Timfraku",
+                                      "text": "That's good Bwana, I would hate to think that you were just being lazy while you're in my kingdom!",
+                                      "speaker_ids": [
+                                        4698
+                                      ]
+                                    },
+                                    {
+                                      "type": "jump",
+                                      "reference": "initial",
+                                      "id": "OqKzQV"
+                                    }
+                                  ],
+                                  "id": "zn1npS"
+                                },
+                                {
+                                  "type": "condition",
+                                  "text": "If the player has completed at least one task from the Tai Bwo Wannai Cleanup task list:",
+                                  "steps": [
+                                    {
+                                      "type": "missing",
+                                      "id": "sK1hzg"
+                                    }
+                                  ],
+                                  "id": "rR-Pf3"
+                                }
+                              ]
+                            },
+                            {
+                              "text": "Ok, thanks.",
+                              "steps": [
+                                {
+                                  "player": "Ok, thanks."
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ],
+                      "id": "eM-kRy"
                     }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "starting-off-talking-to-timfraku-again-before-jungle-potion": [
+        {
+          "type": "line",
+          "speaker": "Timfraku",
+          "text": "You again! Only a fool would ignore my instructions.",
+          "speaker_ids": [
+            4698
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Well there's a simple explanation for that...",
+              "steps": [
+                {
+                  "player": "Well there's a simple explanation for that..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Timfraku",
+                  "text": "I said: begone!",
+                  "speaker_ids": [
+                    4698
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Not so much ignore as disregard...",
+              "steps": [
+                {
+                  "player": "Not so much ignore as disregard..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Timfraku",
+                  "text": "I said: begone!",
+                  "speaker_ids": [
+                    4698
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "What instructions??",
+              "steps": [
+                {
+                  "player": "What instructions??"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Timfraku",
+                  "text": "I said: begone!",
+                  "speaker_ids": [
+                    4698
                   ]
                 }
               ]
@@ -1248957,6 +1249112,11 @@
               ]
             },
             {
+              "type": "message",
+              "text": "Tiadeche attempts to use the Karambwan vessel.",
+              "id": "zu0rzm"
+            },
+            {
               "type": "line",
               "speaker": "Tiadeche",
               "text": "Bwana! I cannot believe my eyes!",
@@ -1249091,6 +1249251,59 @@
             }
           ],
           "id": "GczJaQ"
+        }
+      ],
+      "talking-to-tiadeche-talking-to-tiadeche-after-he-traps-a-karambwan": [
+        {
+          "player": "Can we return to the village now?"
+        },
+        {
+          "type": "line",
+          "speaker": "Tiadeche",
+          "text": "I cannot return just yet. We witness the change of a turning tide. The secrets of the Karambwan are to be unlocked!",
+          "speaker_ids": [
+            4699,
+            4700
+          ]
+        },
+        {
+          "player": "..."
+        },
+        {
+          "type": "line",
+          "speaker": "Tiadeche",
+          "text": "Before I return, I must ask you to do one thing.",
+          "speaker_ids": [
+            4699,
+            4700
+          ]
+        },
+        {
+          "player": "And that is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Tiadeche",
+          "text": "Take a Karambwan vessel to my brother Tinsay. He is the academic amongst us. Tell him I have asked him to study it so that we may craft more of its type.",
+          "speaker_ids": [
+            4699,
+            4700
+          ]
+        },
+        {
+          "player": "Can I have the vessel back then?"
+        },
+        {
+          "type": "line",
+          "speaker": "Tiadeche",
+          "text": "I need this to practice with. Why don't you craft another one?",
+          "speaker_ids": [
+            4699,
+            4700
+          ]
+        },
+        {
+          "player": "I ... never mind."
         }
       ],
       "talking-to-tiadeche-subsequent-dialogue-with-tiadeche": [
@@ -1250148,6 +1250361,9 @@
               "text": "Who are you?",
               "steps": [
                 {
+                  "player": "Who are you?"
+                },
+                {
                   "type": "line",
                   "speaker": "Lubufu",
                   "text": "I am Lubufu - the only fisherman who knows the secret of the Karambwan!",
@@ -1250390,9 +1250606,143 @@
                           ]
                         },
                         {
-                          "type": "jump",
-                          "reference": "initial",
-                          "id": "auL-Ml"
+                          "type": "choice",
+                          "options": [
+                            {
+                              "text": "What do you do with your Karambwan?",
+                              "steps": [
+                                {
+                                  "player": "What do you do with your Karambwan?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Lubufu",
+                                  "text": "I eat what I need and sell the rest to the Shrimp and Parrot restaurant.",
+                                  "speaker_ids": [
+                                    4707
+                                  ]
+                                },
+                                {
+                                  "player": "Where is the Shrimp and Parrot?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Lubufu",
+                                  "text": "You don't know anything do you? Just north of here, in Brimhaven!",
+                                  "speaker_ids": [
+                                    4707
+                                  ]
+                                },
+                                {
+                                  "type": "jump",
+                                  "reference": "initial",
+                                  "id": "Ld2ZTN"
+                                }
+                              ]
+                            },
+                            {
+                              "text": "How old are you?",
+                              "steps": [
+                                {
+                                  "type": "jump",
+                                  "reference": "above",
+                                  "id": "IA2obs"
+                                }
+                              ]
+                            },
+                            {
+                              "text": "What do you use for bait?",
+                              "steps": [
+                                {
+                                  "player": "What do you use for bait?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Lubufu",
+                                  "text": "That is part of the secret! Why would I tell you?",
+                                  "speaker_ids": [
+                                    4707
+                                  ]
+                                },
+                                {
+                                  "type": "jump",
+                                  "reference": "initial",
+                                  "id": "Qkk-po"
+                                }
+                              ]
+                            },
+                            {
+                              "text": "I could help collect the bait.",
+                              "condition": "If the player has asked Lubufu what he does with his Karambwan:",
+                              "steps": [
+                                {
+                                  "player": "I could help collect the bait."
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Lubufu",
+                                  "text": "And why would you help me?",
+                                  "speaker_ids": [
+                                    4707
+                                  ]
+                                },
+                                {
+                                  "type": "choice",
+                                  "options": [
+                                    {
+                                      "text": "You sound like you could do with the help.",
+                                      "steps": [
+                                        {
+                                          "type": "call",
+                                          "branch": "I-DR-N"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "text": "You sound like you need help.",
+                                      "steps": [
+                                        {
+                                          "type": "call",
+                                          "branch": "vlDeRw"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "text": "I enjoy collecting meaningless items for people.",
+                                      "steps": [
+                                        {
+                                          "type": "call",
+                                          "branch": "Ahpu8-"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "text": "You're right. I don't want to help.",
+                                      "steps": [
+                                        {
+                                          "player": "You're right. I don't want to help."
+                                        },
+                                        {
+                                          "type": "line",
+                                          "speaker": "Lubufu",
+                                          "text": "I didn't for one moment think you did.",
+                                          "speaker_ids": [
+                                            4707
+                                          ]
+                                        },
+                                        {
+                                          "type": "jump",
+                                          "reference": "initial",
+                                          "id": "zJdXUJ"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ],
+                              "id": "3QGeFs"
+                            }
+                          ]
                         }
                       ]
                     },
@@ -1250476,83 +1250826,8 @@
                                       "text": "You sound like you could do with the help.",
                                       "steps": [
                                         {
-                                          "player": "You sound like you could do with the help."
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Lubufu",
-                                          "text": "Well perhaps you're right. It's nigh time I could do with some help after all.",
-                                          "speaker_ids": [
-                                            4707
-                                          ]
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Lubufu",
-                                          "text": "I have a fair amount of bait left over since last time I collected some, but I will be needing more shortly.",
-                                          "speaker_ids": [
-                                            4707
-                                          ]
-                                        },
-                                        {
-                                          "player": "Ok. Where can I find the bait? I don't even know what it is!"
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Lubufu",
-                                          "text": "Patience. I have kept the nature of the Karambwan a closely guarded secret. There is nobody alive who knows more about them than I do. Furthermore, there is nobody alive who even knows how they feed.",
-                                          "speaker_ids": [
-                                            4707
-                                          ]
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Lubufu",
-                                          "text": "You must therefore understand that what I am about to tell you is given in complete trust, and that you are to tell nobody else.",
-                                          "speaker_ids": [
-                                            4707
-                                          ]
-                                        },
-                                        {
-                                          "player": "I understand."
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Lubufu",
-                                          "text": "Very well. The Karambwan are a form of octopus native to our island of Karamja. They feed solely on Karambwanji, a brightly coloured fish which also inhabits the coastal waters surrounding the island.",
-                                          "speaker_ids": [
-                                            4707
-                                          ]
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Lubufu",
-                                          "text": "Karambwanji congregate in coastal shoals near the Holy Lake. You will find it easiest to fish for them there.",
-                                          "speaker_ids": [
-                                            4707
-                                          ]
-                                        },
-                                        {
-                                          "player": "Where is the Holy Lake?"
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Lubufu",
-                                          "text": "Just to the south of Tai Bwo Wannai Village. I'm sure you've met the locals already.",
-                                          "speaker_ids": [
-                                            4707
-                                          ]
-                                        },
-                                        {
-                                          "player": "And what do I use to fish for the bait?"
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Lubufu",
-                                          "text": "Any small net will do. Return here as soon as you have caught 20 Karambwanji.",
-                                          "speaker_ids": [
-                                            4707
-                                          ]
+                                          "type": "call",
+                                          "branch": "I-DR-N"
                                         }
                                       ]
                                     },
@@ -1250560,15 +1250835,8 @@
                                       "text": "You sound like you need help.",
                                       "steps": [
                                         {
-                                          "player": "You sound like you need help."
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Lubufu",
-                                          "text": "How dare you say such a thing! Be off with you!",
-                                          "speaker_ids": [
-                                            4707
-                                          ]
+                                          "type": "call",
+                                          "branch": "vlDeRw"
                                         }
                                       ]
                                     },
@@ -1250576,15 +1250844,8 @@
                                       "text": "I enjoy collecting meaningless items for people.",
                                       "steps": [
                                         {
-                                          "player": "I enjoy collecting meaningless items for people."
-                                        },
-                                        {
-                                          "type": "line",
-                                          "speaker": "Lubufu",
-                                          "text": "Meaningless? You know nothing of the Karambwan! Now leave!",
-                                          "speaker_ids": [
-                                            4707
-                                          ]
+                                          "type": "call",
+                                          "branch": "Ahpu8-"
                                         }
                                       ]
                                     },
@@ -1250616,256 +1250877,256 @@
                           ]
                         }
                       ]
-                    },
-                    {
-                      "text": "Talk about Karambwan...",
-                      "steps": [
-                        {
-                          "type": "choice",
-                          "options": [
-                            {
-                              "text": "What is a Karambwan?",
-                              "steps": [
-                                {
-                                  "player": "What is a Karambwan?"
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Lubufu",
-                                  "text": "A species of octopus native to the island which I and I alone know how to catch.",
-                                  "speaker_ids": [
-                                    4707
-                                  ]
-                                },
-                                {
-                                  "type": "jump",
-                                  "reference": "initial",
-                                  "id": "xf7iWq"
-                                }
-                              ]
-                            },
-                            {
-                              "text": "What do you do with your Karambwan?",
-                              "steps": [
-                                {
-                                  "player": "What do you do with your Karambwan?"
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Lubufu",
-                                  "text": "I eat what I need and sell the rest to the Shrimp and Parrot restaurant.",
-                                  "speaker_ids": [
-                                    4707
-                                  ]
-                                },
-                                {
-                                  "player": "Where is the Shrimp and Parrot?"
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Lubufu",
-                                  "text": "You don't know anything do you? Just north of here, in Brimhaven!",
-                                  "speaker_ids": [
-                                    4707
-                                  ]
-                                },
-                                {
-                                  "type": "jump",
-                                  "reference": "initial",
-                                  "id": "R2qE9Y"
-                                }
-                              ]
-                            },
-                            {
-                              "text": "What do you use for bait?",
-                              "steps": [
-                                {
-                                  "player": "What do you use for bait?"
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Lubufu",
-                                  "text": "That is part of the secret! Why would I tell you?",
-                                  "speaker_ids": [
-                                    4707
-                                  ]
-                                },
-                                {
-                                  "type": "jump",
-                                  "reference": "initial",
-                                  "id": "go7qiO"
-                                }
-                              ]
-                            },
-                            {
-                              "text": "What does Karambwan taste like?",
-                              "steps": [
-                                {
-                                  "player": "What does Karambwan taste like?"
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Lubufu",
-                                  "text": "That depends entirely on how it is cooked...",
-                                  "speaker_ids": [
-                                    4707
-                                  ]
-                                },
-                                {
-                                  "player": "What do you mean?"
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Lubufu",
-                                  "text": "Novicely cooked Karambwan is often poisonous to large mammals such as humans. If you buy some and cook it, be careful.",
-                                  "speaker_ids": [
-                                    4707
-                                  ]
-                                },
-                                {
-                                  "type": "jump",
-                                  "reference": "initial",
-                                  "id": "A9gQ5a"
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "text": "Talk about something else...",
-                      "steps": [
-                        {
-                          "type": "choice",
-                          "options": [
-                            {
-                              "text": "I have come for your soul.",
-                              "steps": [
-                                {
-                                  "player": "I have come for your soul."
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Lubufu",
-                                  "text": "Well you've wasted your time. My soul is long gone, along with my compassion.",
-                                  "speaker_ids": [
-                                    4707
-                                  ]
-                                },
-                                {
-                                  "type": "jump",
-                                  "reference": "previous",
-                                  "id": "mBVdKs"
-                                }
-                              ]
-                            },
-                            {
-                              "text": "I'm with the Fishing Guild Anti-Monopoly Department.",
-                              "steps": [
-                                {
-                                  "player": "I'm from the Fishing Guild Anti-Monopoly Department."
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Lubufu",
-                                  "text": "And I'm from the Island Karamja. What do you want?",
-                                  "speaker_ids": [
-                                    4707
-                                  ]
-                                },
-                                {
-                                  "player": "We demand that you hand over the secret of the Karambwan."
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Lubufu",
-                                  "text": "Erm ... no.",
-                                  "speaker_ids": [
-                                    4707
-                                  ]
-                                },
-                                {
-                                  "player": "Oh, ok then. It was worth a try."
-                                },
-                                {
-                                  "type": "jump",
-                                  "reference": "previous",
-                                  "id": "gEtGde"
-                                }
-                              ]
-                            },
-                            {
-                              "text": "Do you have any spare monkey skin lying around?",
-                              "steps": [
-                                {
-                                  "player": "Do you have any spare monkey skin lying around?"
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Lubufu",
-                                  "text": "Funny you should say that...",
-                                  "speaker_ids": [
-                                    4707
-                                  ]
-                                },
-                                {
-                                  "player": "Why's that? Do you have any?"
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Lubufu",
-                                  "text": "Well, people have been asking me for monkey skins all day!",
-                                  "speaker_ids": [
-                                    4707
-                                  ]
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Lubufu",
-                                  "text": "But no, I'm out of monkey skin.",
-                                  "speaker_ids": [
-                                    4707
-                                  ]
-                                },
-                                {
-                                  "type": "jump",
-                                  "reference": "previous",
-                                  "id": "zddKBz"
-                                }
-                              ]
-                            },
-                            {
-                              "text": "I've heard something about an accident.",
-                              "steps": [
-                                {
-                                  "player": "I've heard something about an accident."
-                                },
-                                {
-                                  "type": "line",
-                                  "speaker": "Lubufu",
-                                  "text": "You will want to ask one of the tribesmen. I don't usually talk about it.",
-                                  "speaker_ids": [
-                                    4707
-                                  ]
-                                },
-                                {
-                                  "type": "jump",
-                                  "reference": "previous",
-                                  "id": "Qgjf6L"
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "text": "Leave"
                     }
                   ]
                 }
               ]
+            },
+            {
+              "text": "Talk about Karambwan...",
+              "steps": [
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "What is a Karambwan?",
+                      "steps": [
+                        {
+                          "player": "What is a Karambwan?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Lubufu",
+                          "text": "A species of octopus native to the island which I and I alone know how to catch.",
+                          "speaker_ids": [
+                            4707
+                          ]
+                        },
+                        {
+                          "type": "jump",
+                          "reference": "initial",
+                          "id": "VMU0tk"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "What do you do with your Karambwan?",
+                      "steps": [
+                        {
+                          "player": "What do you do with your Karambwan?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Lubufu",
+                          "text": "I eat what I need and sell the rest to the Shrimp and Parrot restaurant.",
+                          "speaker_ids": [
+                            4707
+                          ]
+                        },
+                        {
+                          "player": "Where is the Shrimp and Parrot?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Lubufu",
+                          "text": "You don't know anything do you? Just north of here, in Brimhaven!",
+                          "speaker_ids": [
+                            4707
+                          ]
+                        },
+                        {
+                          "type": "jump",
+                          "reference": "initial",
+                          "id": "eZQWb3"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "What do you use for bait?",
+                      "steps": [
+                        {
+                          "player": "What do you use for bait?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Lubufu",
+                          "text": "That is part of the secret! Why would I tell you?",
+                          "speaker_ids": [
+                            4707
+                          ]
+                        },
+                        {
+                          "type": "jump",
+                          "reference": "initial",
+                          "id": "0iFacG"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "What does Karambwan taste like?",
+                      "steps": [
+                        {
+                          "player": "What does Karambwan taste like?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Lubufu",
+                          "text": "That depends entirely on how it is cooked...",
+                          "speaker_ids": [
+                            4707
+                          ]
+                        },
+                        {
+                          "player": "What do you mean?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Lubufu",
+                          "text": "Novicely cooked Karambwan is often poisonous to large mammals such as humans. If you buy some and cook it, be careful.",
+                          "speaker_ids": [
+                            4707
+                          ]
+                        },
+                        {
+                          "type": "jump",
+                          "reference": "initial",
+                          "id": "X_JbzA"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Talk about something else...",
+              "steps": [
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "I have come for your soul.",
+                      "steps": [
+                        {
+                          "player": "I have come for your soul."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Lubufu",
+                          "text": "Well you've wasted your time. My soul is long gone, along with my compassion.",
+                          "speaker_ids": [
+                            4707
+                          ]
+                        },
+                        {
+                          "type": "jump",
+                          "reference": "previous",
+                          "id": "MgB832"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "I'm with the Fishing Guild Anti-Monopoly Department.",
+                      "steps": [
+                        {
+                          "player": "I'm from the Fishing Guild Anti-Monopoly Department."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Lubufu",
+                          "text": "And I'm from the Island Karamja. What do you want?",
+                          "speaker_ids": [
+                            4707
+                          ]
+                        },
+                        {
+                          "player": "We demand that you hand over the secret of the Karambwan."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Lubufu",
+                          "text": "Erm ... no.",
+                          "speaker_ids": [
+                            4707
+                          ]
+                        },
+                        {
+                          "player": "Oh, ok then. It was worth a try."
+                        },
+                        {
+                          "type": "jump",
+                          "reference": "previous",
+                          "id": "UCfFOq"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Do you have any spare monkey skin lying around?",
+                      "steps": [
+                        {
+                          "player": "Do you have any spare monkey skin lying around?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Lubufu",
+                          "text": "Funny you should say that...",
+                          "speaker_ids": [
+                            4707
+                          ]
+                        },
+                        {
+                          "player": "Why's that? Do you have any?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Lubufu",
+                          "text": "Well, people have been asking me for monkey skins all day!",
+                          "speaker_ids": [
+                            4707
+                          ]
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Lubufu",
+                          "text": "But no, I'm out of monkey skin.",
+                          "speaker_ids": [
+                            4707
+                          ]
+                        },
+                        {
+                          "type": "jump",
+                          "reference": "previous",
+                          "id": "DsBo1_"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "I've heard something about an accident.",
+                      "steps": [
+                        {
+                          "player": "I've heard something about an accident."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Lubufu",
+                          "text": "You will want to ask one of the tribesmen. I don't usually talk about it.",
+                          "speaker_ids": [
+                            4707
+                          ]
+                        },
+                        {
+                          "type": "jump",
+                          "reference": "previous",
+                          "id": "tqynoP"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Leave"
             }
           ]
         }
@@ -1251049,12 +1251310,27 @@
                   ]
                 },
                 {
+                  "type": "condition",
+                  "text": "If the player has asked Lubufu what he uses to catch Karambwan fewer than three times:",
+                  "steps": [
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "NHjou8"
+                },
+                {
                   "type": "line",
                   "speaker": "Lubufu",
                   "text": "My, you're keen aren't you?",
                   "speaker_ids": [
                     4707
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "Lubufu appears to think for a moment.",
+                  "id": "5v1T3t"
                 },
                 {
                   "type": "line",
@@ -1253546,6 +1253822,99 @@
           ]
         },
         {
+          "type": "choice",
+          "options": [
+            {
+              "text": "What do you do here?",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "Jj73i6"
+                }
+              ]
+            },
+            {
+              "text": "Is there anything interesting to do here?",
+              "steps": [
+                {
+                  "player": "Is there anything interesting to do here?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Timfraku",
+                  "text": "Yes Bwana, plenty of interesting things to do. Firstly you could make an effort to tidy the place up a little. Equip yourself with a machete and start cutting down the jungle that seems to be growing all around here.",
+                  "speaker_ids": [
+                    4698
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Timfraku",
+                  "text": "Go and have a chat with Murcaily for information, he's tending the hardwood grove to the east of here.",
+                  "speaker_ids": [
+                    4698
+                  ]
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "N-BWHX"
+                }
+              ]
+            },
+            {
+              "text": "I've been doing some work around the village.",
+              "steps": [
+                {
+                  "player": "I've been doing some work around the village."
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has not been doing the Tai Bwo Wannai Cleanup tasks:",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Timfraku",
+                      "text": "That's good Bwana, I would hate to think that you were just being lazy while you're in my kingdom!",
+                      "speaker_ids": [
+                        4698
+                      ]
+                    },
+                    {
+                      "type": "jump",
+                      "reference": "initial",
+                      "id": "4m8SwV"
+                    }
+                  ],
+                  "id": "fFb-gR"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has completed at least one task from the Tai Bwo Wannai Cleanup task list:",
+                  "steps": [
+                    {
+                      "type": "missing",
+                      "id": "PfL9pX"
+                    }
+                  ],
+                  "id": "z6UDqv"
+                }
+              ]
+            },
+            {
+              "text": "Ok, thanks.",
+              "steps": [
+                {
+                  "player": "Ok, thanks."
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            }
+          ]
+        },
+        {
           "type": "message",
           "text": "Congratulations, you have completed a quest: Tai Bwo Wannai Trio",
           "styled": "Congratulations, you have completed a quest: <col=000080>Tai Bwo Wannai Trio</col>",
@@ -1254004,6 +1254373,7 @@
             },
             {
               "text": "Trufitus sent me.",
+              "condition": "If the player has completed Jungle Potion:",
               "steps": [
                 {
                   "player": "Trufitus sent me."
@@ -1254031,17 +1254401,17 @@
                   "player": "Yes, I helped Trufitus gather ingredients for a commune potion."
                 },
                 {
-                  "type": "message",
-                  "text": "Timfraku appears to concentrate very deeply.",
-                  "id": "EF66WH"
-                },
-                {
                   "type": "line",
                   "speaker": "Timfraku",
                   "text": "Then it must be true.",
                   "speaker_ids": [
                     4698
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "Timfraku appears to concentrate very deeply.",
+                  "id": "dgX3n1"
                 },
                 {
                   "type": "line",
@@ -1254152,7 +1254522,7 @@
                         {
                           "type": "jump",
                           "reference": "above",
-                          "id": "SNHWKk"
+                          "id": "_33pND"
                         }
                       ]
                     },
@@ -1254172,11 +1254542,11 @@
                         },
                         {
                           "type": "jump",
-                          "id": "VD0Tsg",
+                          "id": "Xtvct9",
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "jump-4575f08f2ae82915"
+                              "branch": "jump-c59bd45b1858246b"
                             }
                           ]
                         }
@@ -1254229,7 +1254599,7 @@
                                 {
                                   "type": "jump",
                                   "reference": "initial",
-                                  "id": "LzrTMZ"
+                                  "id": "-ULDwl"
                                 }
                               ]
                             },
@@ -1254254,10 +1254624,10 @@
                                     {
                                       "type": "jump",
                                       "reference": "initial",
-                                      "id": "kq9R0D"
+                                      "id": "V1MGaD"
                                     }
                                   ],
-                                  "id": "8HTLn-"
+                                  "id": "0vRZC4"
                                 },
                                 {
                                   "type": "condition",
@@ -1254265,10 +1254635,10 @@
                                   "steps": [
                                     {
                                       "type": "missing",
-                                      "id": "lhpbH_"
+                                      "id": "YQ0G0n"
                                     }
                                   ],
-                                  "id": "MKal2j"
+                                  "id": "xNYAnZ"
                                 }
                               ]
                             },
@@ -1254289,12 +1254659,120 @@
                     }
                   ]
                 }
-              ]
+              ],
+              "id": "vLy_sA"
+            },
+            {
+              "text": "Ask about Village.",
+              "condition": "If the player has completed Jungle Potion:",
+              "steps": [
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "What do you do here?",
+                      "steps": [
+                        {
+                          "player": "What do you do here?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Timfraku",
+                          "text": "It should be clear to anyone that I am the chief of Tai Bwo Wannai. I ensure that things run smoothly in this village.",
+                          "speaker_ids": [
+                            4698
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Is there anything interesting to do here?",
+                      "steps": [
+                        {
+                          "player": "Is there anything interesting to do here?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Timfraku",
+                          "text": "Yes Bwana, plenty of interesting things to do. Firstly you could make an effort to tidy the place up a little. Equip yourself with a machete and start cutting down the jungle that seems to be growing all around here.",
+                          "speaker_ids": [
+                            4698
+                          ]
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Timfraku",
+                          "text": "Go and have a chat with Murcaily for information, he's tending the hardwood grove to the east of here.",
+                          "speaker_ids": [
+                            4698
+                          ]
+                        },
+                        {
+                          "type": "jump",
+                          "reference": "initial",
+                          "id": "scUKbB"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "I've been doing some work around the village.",
+                      "steps": [
+                        {
+                          "player": "I've been doing some work around the village."
+                        },
+                        {
+                          "type": "condition",
+                          "text": "If the player has not been doing the Tai Bwo Wannai Cleanup tasks:",
+                          "steps": [
+                            {
+                              "type": "line",
+                              "speaker": "Timfraku",
+                              "text": "That's good Bwana, I would hate to think that you were just being lazy while you're in my kingdom!",
+                              "speaker_ids": [
+                                4698
+                              ]
+                            },
+                            {
+                              "type": "jump",
+                              "reference": "initial",
+                              "id": "OqKzQV"
+                            }
+                          ],
+                          "id": "zn1npS"
+                        },
+                        {
+                          "type": "condition",
+                          "text": "If the player has completed at least one task from the Tai Bwo Wannai Cleanup task list:",
+                          "steps": [
+                            {
+                              "type": "missing",
+                              "id": "sK1hzg"
+                            }
+                          ],
+                          "id": "rR-Pf3"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Ok, thanks.",
+                      "steps": [
+                        {
+                          "player": "Ok, thanks."
+                        },
+                        {
+                          "type": "end"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "id": "eM-kRy"
             }
           ]
         }
       ],
-      "jump-4575f08f2ae82915": [
+      "jump-c59bd45b1858246b": [
         {
           "player": "And what is that?"
         },
@@ -1254581,6 +1255059,126 @@
         },
         {
           "type": "end"
+        }
+      ],
+      "Jj73i6": [
+        {
+          "player": "What do you do here?"
+        },
+        {
+          "type": "line",
+          "speaker": "Timfraku",
+          "text": "It should be clear to anyone that I am the chief of Tai Bwo Wannai. I ensure that things run smoothly in this village.",
+          "speaker_ids": [
+            4698
+          ]
+        }
+      ],
+      "I-DR-N": [
+        {
+          "player": "You sound like you could do with the help."
+        },
+        {
+          "type": "line",
+          "speaker": "Lubufu",
+          "text": "Well perhaps you're right. It's nigh time I could do with some help after all.",
+          "speaker_ids": [
+            4707
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Lubufu",
+          "text": "I have a fair amount of bait left over since last time I collected some, but I will be needing more shortly.",
+          "speaker_ids": [
+            4707
+          ]
+        },
+        {
+          "player": "Ok. Where can I find the bait? I don't even know what it is!"
+        },
+        {
+          "type": "line",
+          "speaker": "Lubufu",
+          "text": "Patience. I have kept the nature of the Karambwan a closely guarded secret. There is nobody alive who knows more about them than I do. Furthermore, there is nobody alive who even knows how they feed.",
+          "speaker_ids": [
+            4707
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Lubufu",
+          "text": "You must therefore understand that what I am about to tell you is given in complete trust, and that you are to tell nobody else.",
+          "speaker_ids": [
+            4707
+          ]
+        },
+        {
+          "player": "I understand."
+        },
+        {
+          "type": "line",
+          "speaker": "Lubufu",
+          "text": "Very well. The Karambwan are a form of octopus native to our island of Karamja. They feed solely on Karambwanji, a brightly coloured fish which also inhabits the coastal waters surrounding the island.",
+          "speaker_ids": [
+            4707
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Lubufu",
+          "text": "Karambwanji congregate in coastal shoals near the Holy Lake. You will find it easiest to fish for them there.",
+          "speaker_ids": [
+            4707
+          ]
+        },
+        {
+          "player": "Where is the Holy Lake?"
+        },
+        {
+          "type": "line",
+          "speaker": "Lubufu",
+          "text": "Just to the south of Tai Bwo Wannai Village. I'm sure you've met the locals already.",
+          "speaker_ids": [
+            4707
+          ]
+        },
+        {
+          "player": "And what do I use to fish for the bait?"
+        },
+        {
+          "type": "line",
+          "speaker": "Lubufu",
+          "text": "Any small net will do. Return here as soon as you have caught 20 Karambwanji.",
+          "speaker_ids": [
+            4707
+          ]
+        }
+      ],
+      "vlDeRw": [
+        {
+          "player": "You sound like you need help."
+        },
+        {
+          "type": "line",
+          "speaker": "Lubufu",
+          "text": "How dare you say such a thing! Be off with you!",
+          "speaker_ids": [
+            4707
+          ]
+        }
+      ],
+      "Ahpu8-": [
+        {
+          "player": "I enjoy collecting meaningless items for people."
+        },
+        {
+          "type": "line",
+          "speaker": "Lubufu",
+          "text": "Meaningless? You know nothing of the Karambwan! Now leave!",
+          "speaker_ids": [
+            4707
+          ]
         }
       ],
       "lSbvTf": [

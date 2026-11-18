@@ -1,0 +1,1269 @@
+{
+  "bosses": {
+    "amoxliatl": {
+      "normal_sources": [
+        "Amoxliatl#Drops"
+      ],
+      "profiles": {
+        "boss": {
+          "aggressive": true,
+          "attack_bonus": 0,
+          "attack_level": 0,
+          "attack_magic": 160,
+          "attack_ranged": 0,
+          "attack_speed": 8,
+          "attack_type": [
+            "magic"
+          ],
+          "attributes": [
+            "spectral"
+          ],
+          "category": [
+            "lesser nagua"
+          ],
+          "combat_level": 328,
+          "defence_crush": 40,
+          "defence_level": 80,
+          "defence_magic": 20,
+          "defence_ranged_heavy": 40,
+          "defence_ranged_light": 40,
+          "defence_ranged_standard": 40,
+          "defence_slash": 100,
+          "defence_stab": 100,
+          "elemental_weakness_percent": 30,
+          "elemental_weakness_type": 4,
+          "examine": "A powerful frost nagua.",
+          "freeze_resistance": 100,
+          "hitpoints": 650,
+          "immune_poison": true,
+          "immune_venom": true,
+          "incomplete": false,
+          "magic_bonus": 15,
+          "magic_level": 240,
+          "max_hit": 93,
+          "max_hits": [
+            {
+              "label": null,
+              "max_hit": 93,
+              "value": "93"
+            }
+          ],
+          "members": true,
+          "name": "Amoxliatl",
+          "poisonous": false,
+          "ranged_bonus": 0,
+          "ranged_level": 0,
+          "release_date": "2026-04-15",
+          "size": 3,
+          "slayer_level": 48,
+          "slayer_masters": [
+            "chaeldar",
+            "konar"
+          ],
+          "slayer_monster": true,
+          "slayer_xp": 682.5,
+          "source_id": "override13685",
+          "source_page": "Amoxliatl (Echo)",
+          "source_version": null,
+          "strength_bonus": 0,
+          "strength_level": 0,
+          "venomous": false,
+          "wiki_name": "Amoxliatl (Echo)",
+          "wiki_url": "https://oldschool.runescape.wiki/w/Amoxliatl_(Echo)"
+        }
+      },
+      "unique_table": {
+        "entries": [
+          {
+            "item_id": 33243,
+            "name": "Infernal tecpatl",
+            "notes": [
+              "In addition to having a 1/30 chance to drop, players will '''always''' receive the tecpatl on their 60th kill if they haven't received one yet."
+            ],
+            "out_of": 30,
+            "quantity": [
+              1,
+              1
+            ],
+            "rarity": 0.0333333,
+            "weight": 1
+          }
+        ],
+        "label": "Drops",
+        "main_max_roll": 30,
+        "table_id": "amoxliatl_echo",
+        "table_name": "Amoxliatl (Echo) Drops",
+        "tertiary": [],
+        "wiki_page": "Amoxliatl (Echo)"
+      },
+      "uniques": [
+        {
+          "guarantee": 60,
+          "itemId": 33243,
+          "rate": 30
+        }
+      ]
+    },
+    "cerberus": {
+      "normal_sources": [
+        "Cerberus#Drops"
+      ],
+      "profiles": {
+        "boss": {
+          "aggressive": true,
+          "attack_bonus": 50,
+          "attack_level": 275,
+          "attack_magic": 50,
+          "attack_ranged": 50,
+          "attack_speed": 6,
+          "attack_type": [
+            "stab",
+            "ranged",
+            "magic"
+          ],
+          "attributes": [
+            "demon"
+          ],
+          "category": [
+            "hellhounds",
+            "bosses"
+          ],
+          "combat_level": 477,
+          "defence_crush": 25,
+          "defence_level": 115,
+          "defence_magic": 70,
+          "defence_ranged_heavy": 70,
+          "defence_ranged_light": 70,
+          "defence_ranged_standard": 70,
+          "defence_slash": 100,
+          "defence_stab": 50,
+          "elemental_weakness_percent": 40,
+          "elemental_weakness_type": 2,
+          "examine": "A three-headed gigantic hound. Guardian of the River of Souls.",
+          "freeze_resistance": 0,
+          "hitpoints": 1620,
+          "immune_poison": true,
+          "immune_venom": true,
+          "incomplete": false,
+          "magic_bonus": 0,
+          "magic_level": 275,
+          "max_hit": 79,
+          "max_hits": [
+            {
+              "label": null,
+              "max_hit": 79,
+              "value": "79"
+            }
+          ],
+          "members": true,
+          "name": "Cerberus",
+          "poisonous": false,
+          "ranged_bonus": 0,
+          "ranged_level": 275,
+          "release_date": "2024-11-27",
+          "size": 5,
+          "slayer_level": 91,
+          "slayer_masters": [
+            "vannaka",
+            "chaeldar",
+            "konar",
+            "nieve",
+            "duradel"
+          ],
+          "slayer_monster": true,
+          "slayer_xp": 2106.0,
+          "source_id": "15612",
+          "source_page": "Cerberus (Echo)",
+          "source_version": null,
+          "strength_bonus": 0,
+          "strength_level": 275,
+          "venomous": false,
+          "wiki_name": "Cerberus (Echo)",
+          "wiki_url": "https://oldschool.runescape.wiki/w/Cerberus_(Echo)"
+        }
+      },
+      "unique_table": {
+        "entries": [
+          {
+            "item_id": 33249,
+            "name": "Fang of the hound",
+            "notes": [
+              "In addition to having a 1/25 chance to drop, players will '''always''' receive the fang of the hound on their 50th Cerberus (Echo) kill if they haven't received one yet."
+            ],
+            "out_of": 25,
+            "quantity": [
+              1,
+              1
+            ],
+            "rarity": 0.04,
+            "weight": 1
+          }
+        ],
+        "label": "Drops",
+        "main_max_roll": 25,
+        "table_id": "cerberus_echo",
+        "table_name": "Cerberus (Echo) Drops",
+        "tertiary": [],
+        "wiki_page": "Cerberus (Echo)"
+      },
+      "uniques": [
+        {
+          "guarantee": 50,
+          "itemId": 33249,
+          "rate": 25
+        }
+      ]
+    },
+    "corrupted-hunllef": {
+      "normal_sources": [
+        "Reward Chest (The Gauntlet)#Corrupted Gauntlet Completed"
+      ],
+      "profiles": {
+        "boss": {
+          "aggressive": true,
+          "attack_bonus": 90,
+          "attack_level": 300,
+          "attack_magic": 90,
+          "attack_ranged": 90,
+          "attack_speed": 4,
+          "attack_type": [
+            "ranged",
+            "magic"
+          ],
+          "attributes": [],
+          "category": [],
+          "combat_level": 1117,
+          "defence_crush": 20,
+          "defence_level": 259,
+          "defence_magic": 20,
+          "defence_ranged_heavy": 20,
+          "defence_ranged_light": 20,
+          "defence_ranged_standard": 20,
+          "defence_slash": 20,
+          "defence_stab": 20,
+          "elemental_weakness_percent": 0,
+          "elemental_weakness_type": 0,
+          "examine": "A deadly predator formed from crystal.",
+          "freeze_resistance": 0,
+          "hitpoints": 1100,
+          "immune_poison": true,
+          "immune_venom": true,
+          "incomplete": true,
+          "magic_bonus": 112,
+          "magic_level": 264,
+          "max_hit": 85,
+          "max_hits": [
+            {
+              "label": null,
+              "max_hit": 85,
+              "value": "85"
+            }
+          ],
+          "members": true,
+          "name": "Corrupted Hunllef",
+          "poisonous": false,
+          "ranged_bonus": 112,
+          "ranged_level": 276,
+          "release_date": "2024-11-27",
+          "size": 5,
+          "slayer_level": null,
+          "slayer_masters": [],
+          "slayer_monster": false,
+          "slayer_xp": null,
+          "source_id": "override9037",
+          "source_page": "Corrupted Hunllef (Echo)",
+          "source_version": null,
+          "strength_bonus": 112,
+          "strength_level": 300,
+          "venomous": false,
+          "wiki_name": "Corrupted Hunllef (Echo)",
+          "wiki_url": "https://oldschool.runescape.wiki/w/Corrupted_Hunllef_(Echo)"
+        }
+      },
+      "unique_table": {
+        "entries": [
+          {
+            "item_id": 30384,
+            "name": "Crystal blessing",
+            "notes": [
+              "In addition to having a 1/15 chance to drop, players will '''always''' receive a crystal blessing on their 30th Corrupted Hunllef (Echo) kill if they haven't received one yet."
+            ],
+            "out_of": 15,
+            "quantity": [
+              1,
+              1
+            ],
+            "rarity": 0.0666667,
+            "weight": 1
+          }
+        ],
+        "label": "Drops",
+        "main_max_roll": 15,
+        "table_id": "corrupted_hunllef_echo",
+        "table_name": "Corrupted Hunllef (Echo) Drops",
+        "tertiary": [],
+        "wiki_page": "Corrupted Hunllef (Echo)"
+      },
+      "uniques": [
+        {
+          "guarantee": 30,
+          "itemId": 30384,
+          "rate": 15
+        }
+      ]
+    },
+    "dagannoth-kings": {
+      "normal_sources": [
+        "Dagannoth Prime#Drops",
+        "Dagannoth Rex#Drops",
+        "Dagannoth Supreme#Drops"
+      ],
+      "profiles": {
+        "prime": {
+          "aggressive": true,
+          "attack_bonus": 0,
+          "attack_level": 255,
+          "attack_magic": 0,
+          "attack_ranged": 0,
+          "attack_speed": 5,
+          "attack_type": [
+            "magic"
+          ],
+          "attributes": [],
+          "category": [
+            "bosses",
+            "dagannoth"
+          ],
+          "combat_level": 454,
+          "defence_crush": 100,
+          "defence_level": 255,
+          "defence_magic": 100,
+          "defence_ranged_heavy": 10,
+          "defence_ranged_light": 10,
+          "defence_ranged_standard": 10,
+          "defence_slash": 100,
+          "defence_stab": 100,
+          "elemental_weakness_percent": 0,
+          "elemental_weakness_type": 0,
+          "examine": "A legendary dagannoth king, rumoured to fly on the North winds.",
+          "freeze_resistance": 0,
+          "hitpoints": 1800,
+          "immune_poison": false,
+          "immune_venom": true,
+          "incomplete": true,
+          "magic_bonus": 0,
+          "magic_level": 400,
+          "max_hit": null,
+          "max_hits": [
+            {
+              "label": null,
+              "max_hit": null,
+              "value": "49+"
+            }
+          ],
+          "members": true,
+          "name": "Dagannoth Prime",
+          "poisonous": false,
+          "ranged_bonus": 0,
+          "ranged_level": 0,
+          "release_date": "2024-11-27",
+          "size": 3,
+          "slayer_level": 1,
+          "slayer_masters": [
+            "vannaka",
+            "chaeldar",
+            "konar",
+            "nieve",
+            "duradel"
+          ],
+          "slayer_monster": true,
+          "slayer_xp": 727.0,
+          "source_id": "override2266",
+          "source_page": "Dagannoth Prime (Echo)",
+          "source_version": null,
+          "strength_bonus": 0,
+          "strength_level": 255,
+          "venomous": false,
+          "wiki_name": "Dagannoth Prime (Echo)",
+          "wiki_url": "https://oldschool.runescape.wiki/w/Dagannoth_Prime_(Echo)"
+        },
+        "rex": {
+          "aggressive": true,
+          "attack_bonus": 0,
+          "attack_level": 400,
+          "attack_magic": 0,
+          "attack_ranged": 0,
+          "attack_speed": 5,
+          "attack_type": [
+            "slash"
+          ],
+          "attributes": [],
+          "category": [
+            "bosses",
+            "dagannoth"
+          ],
+          "combat_level": 454,
+          "defence_crush": 100,
+          "defence_level": 255,
+          "defence_magic": 10,
+          "defence_ranged_heavy": 100,
+          "defence_ranged_light": 100,
+          "defence_ranged_standard": 100,
+          "defence_slash": 100,
+          "defence_stab": 100,
+          "elemental_weakness_percent": 0,
+          "elemental_weakness_type": 0,
+          "examine": "Firstborn of the legendary dagannoth kings.",
+          "freeze_resistance": 0,
+          "hitpoints": 1800,
+          "immune_poison": false,
+          "immune_venom": true,
+          "incomplete": true,
+          "magic_bonus": 0,
+          "magic_level": 0,
+          "max_hit": null,
+          "max_hits": [
+            {
+              "label": null,
+              "max_hit": null,
+              "value": "48+"
+            }
+          ],
+          "members": true,
+          "name": "Dagannoth Rex",
+          "poisonous": false,
+          "ranged_bonus": 0,
+          "ranged_level": 255,
+          "release_date": "2024-11-27",
+          "size": 3,
+          "slayer_level": 1,
+          "slayer_masters": [
+            "vannaka",
+            "chaeldar",
+            "konar",
+            "nieve",
+            "duradel"
+          ],
+          "slayer_monster": true,
+          "slayer_xp": 727.0,
+          "source_id": "override2267",
+          "source_page": "Dagannoth Rex (Echo)",
+          "source_version": null,
+          "strength_bonus": 0,
+          "strength_level": 400,
+          "venomous": false,
+          "wiki_name": "Dagannoth Rex (Echo)",
+          "wiki_url": "https://oldschool.runescape.wiki/w/Dagannoth_Rex_(Echo)"
+        },
+        "supreme": {
+          "aggressive": true,
+          "attack_bonus": 0,
+          "attack_level": 255,
+          "attack_magic": 0,
+          "attack_ranged": 0,
+          "attack_speed": 5,
+          "attack_type": [
+            "ranged"
+          ],
+          "attributes": [],
+          "category": [
+            "bosses",
+            "dagannoth"
+          ],
+          "combat_level": 681,
+          "defence_crush": 10,
+          "defence_level": 255,
+          "defence_magic": 100,
+          "defence_ranged_heavy": 150,
+          "defence_ranged_light": 150,
+          "defence_ranged_standard": 150,
+          "defence_slash": 10,
+          "defence_stab": 10,
+          "elemental_weakness_percent": 0,
+          "elemental_weakness_type": 0,
+          "examine": "The dagannoth king responsible for the death of the Bukalla.",
+          "freeze_resistance": 0,
+          "hitpoints": 1800,
+          "immune_poison": false,
+          "immune_venom": true,
+          "incomplete": true,
+          "magic_bonus": 0,
+          "magic_level": 255,
+          "max_hit": 26,
+          "max_hits": [
+            {
+              "label": null,
+              "max_hit": 26,
+              "value": "26"
+            }
+          ],
+          "members": true,
+          "name": "Dagannoth Supreme",
+          "poisonous": false,
+          "ranged_bonus": 0,
+          "ranged_level": 550,
+          "release_date": "2024-11-27",
+          "size": 3,
+          "slayer_level": 1,
+          "slayer_masters": [
+            "vannaka",
+            "chaeldar",
+            "konar",
+            "nieve",
+            "duradel"
+          ],
+          "slayer_monster": true,
+          "slayer_xp": 1020.0,
+          "source_id": "override2265",
+          "source_page": "Dagannoth Supreme (Echo)",
+          "source_version": null,
+          "strength_bonus": 0,
+          "strength_level": 128,
+          "venomous": false,
+          "wiki_name": "Dagannoth Supreme (Echo)",
+          "wiki_url": "https://oldschool.runescape.wiki/w/Dagannoth_Supreme_(Echo)"
+        }
+      },
+      "unique_table": {
+        "entries": [
+          {
+            "item_id": 33247,
+            "name": "V's helm",
+            "notes": [
+              "In addition to having a 1/25 chance to drop, players will '''always''' receive V's helm on their 50th Dagannoth Kings (Echo) kill if they haven't received one yet."
+            ],
+            "out_of": 25,
+            "quantity": [
+              1,
+              1
+            ],
+            "rarity": 0.04,
+            "weight": 1
+          }
+        ],
+        "label": "Drops",
+        "main_max_roll": 25,
+        "table_id": "dagannoth_kings_echo",
+        "table_name": "Dagannoth Kings (Echo) Drops",
+        "tertiary": [],
+        "wiki_page": "Dagannoth Kings (Echo)"
+      },
+      "uniques": [
+        {
+          "guarantee": 50,
+          "itemId": 33247,
+          "rate": 25
+        }
+      ]
+    },
+    "grotesque-guardians": {
+      "normal_sources": [
+        "Grotesque Guardians#Drops"
+      ],
+      "profiles": {
+        "dawn": {
+          "aggressive": true,
+          "attack_bonus": 0,
+          "attack_level": 140,
+          "attack_magic": 0,
+          "attack_ranged": 0,
+          "attack_speed": 6,
+          "attack_type": [
+            "slash"
+          ],
+          "attributes": [],
+          "category": [
+            "gargoyles",
+            "bosses"
+          ],
+          "combat_level": 228,
+          "defence_crush": 0,
+          "defence_level": 100,
+          "defence_magic": 80,
+          "defence_ranged_heavy": 0,
+          "defence_ranged_light": 0,
+          "defence_ranged_standard": 0,
+          "defence_slash": 0,
+          "defence_stab": 0,
+          "elemental_weakness_percent": 70,
+          "elemental_weakness_type": 3,
+          "examine": "The Guardian of Dawn, she's alive!",
+          "freeze_resistance": 0,
+          "hitpoints": 450,
+          "immune_poison": true,
+          "immune_venom": true,
+          "incomplete": true,
+          "magic_bonus": 0,
+          "magic_level": 100,
+          "max_hit": 12,
+          "max_hits": [
+            {
+              "label": null,
+              "max_hit": 12,
+              "value": "12"
+            }
+          ],
+          "members": true,
+          "name": "Dawn",
+          "poisonous": false,
+          "ranged_bonus": 0,
+          "ranged_level": 140,
+          "release_date": "2024-11-27",
+          "size": 4,
+          "slayer_level": null,
+          "slayer_masters": [],
+          "slayer_monster": false,
+          "slayer_xp": null,
+          "source_id": "override7852",
+          "source_page": "Dawn (Echo)",
+          "source_version": null,
+          "strength_bonus": 0,
+          "strength_level": 140,
+          "venomous": false,
+          "wiki_name": "Dawn (Echo)",
+          "wiki_url": "https://oldschool.runescape.wiki/w/Dawn_(Echo)"
+        },
+        "dusk": {
+          "aggressive": true,
+          "attack_bonus": 0,
+          "attack_level": 345,
+          "attack_magic": 0,
+          "attack_ranged": 0,
+          "attack_speed": 6,
+          "attack_type": [
+            "slash"
+          ],
+          "attributes": [],
+          "category": [
+            "bosses",
+            "gargoyles"
+          ],
+          "combat_level": 656,
+          "defence_crush": 0,
+          "defence_level": 187,
+          "defence_magic": 0,
+          "defence_ranged_heavy": 0,
+          "defence_ranged_light": 0,
+          "defence_ranged_standard": 0,
+          "defence_slash": 0,
+          "defence_stab": 0,
+          "elemental_weakness_percent": 40,
+          "elemental_weakness_type": 3,
+          "examine": "The Guardian of Dusk, he's alive!",
+          "freeze_resistance": 0,
+          "hitpoints": 1080,
+          "immune_poison": true,
+          "immune_venom": true,
+          "incomplete": true,
+          "magic_bonus": 0,
+          "magic_level": 262,
+          "max_hit": 32,
+          "max_hits": [
+            {
+              "label": "flame cone",
+              "max_hit": 32,
+              "value": "32"
+            },
+            {
+              "label": "ranged orbs",
+              "max_hit": null,
+              "value": "21 x 2"
+            },
+            {
+              "label": "flame wall",
+              "max_hit": null,
+              "value": "20 x 4"
+            },
+            {
+              "label": "trample",
+              "max_hit": 32,
+              "value": "32"
+            }
+          ],
+          "members": true,
+          "name": "Dusk",
+          "poisonous": false,
+          "ranged_bonus": 0,
+          "ranged_level": 387,
+          "release_date": "2024-11-27",
+          "size": 6,
+          "slayer_level": null,
+          "slayer_masters": [],
+          "slayer_monster": false,
+          "slayer_xp": null,
+          "source_id": "override7888",
+          "source_page": "Dusk (Echo)",
+          "source_version": null,
+          "strength_bonus": 0,
+          "strength_level": 287,
+          "venomous": false,
+          "wiki_name": "Dusk (Echo)",
+          "wiki_url": "https://oldschool.runescape.wiki/w/Dusk_(Echo)"
+        }
+      },
+      "unique_table": {
+        "entries": [
+          {
+            "item_id": 33255,
+            "name": "Lithic sceptre",
+            "notes": [
+              "In addition to having a 1/25 chance to drop, players will '''always''' receive the sceptre on their 50th Grotesque Guardians (Echo) kill if they haven't received one yet."
+            ],
+            "out_of": 25,
+            "quantity": [
+              1,
+              1
+            ],
+            "rarity": 0.04,
+            "weight": 1
+          }
+        ],
+        "label": "Drops",
+        "main_max_roll": 25,
+        "table_id": "grotesque_guardians_echo",
+        "table_name": "Grotesque Guardians (Echo) Drops",
+        "tertiary": [],
+        "wiki_page": "Grotesque Guardians (Echo)"
+      },
+      "uniques": [
+        {
+          "guarantee": 50,
+          "itemId": 33255,
+          "rate": 25
+        }
+      ]
+    },
+    "hespori": {
+      "normal_sources": [
+        "Hespori#Drops"
+      ],
+      "profiles": {
+        "boss": {
+          "aggressive": true,
+          "attack_bonus": 0,
+          "attack_level": 1,
+          "attack_magic": 150,
+          "attack_ranged": 150,
+          "attack_speed": 6,
+          "attack_type": [
+            "ranged",
+            "magic"
+          ],
+          "attributes": [],
+          "category": [],
+          "combat_level": 426,
+          "defence_crush": 60,
+          "defence_level": 120,
+          "defence_magic": 80,
+          "defence_ranged_heavy": 80,
+          "defence_ranged_light": 80,
+          "defence_ranged_standard": 80,
+          "defence_slash": 20,
+          "defence_stab": 60,
+          "elemental_weakness_percent": 100,
+          "elemental_weakness_type": 4,
+          "examine": "A big angry plant.",
+          "freeze_resistance": 100,
+          "hitpoints": 900,
+          "immune_poison": true,
+          "immune_venom": true,
+          "incomplete": true,
+          "magic_bonus": 0,
+          "magic_level": 250,
+          "max_hit": 52,
+          "max_hits": [
+            {
+              "label": "Magic",
+              "max_hit": 52,
+              "value": "52"
+            }
+          ],
+          "members": true,
+          "name": "Hespori",
+          "poisonous": true,
+          "ranged_bonus": 0,
+          "ranged_level": 200,
+          "release_date": "2024-11-27",
+          "size": null,
+          "slayer_level": null,
+          "slayer_masters": [],
+          "slayer_monster": false,
+          "slayer_xp": null,
+          "source_id": "override8583",
+          "source_page": "Hespori (Echo)",
+          "source_version": null,
+          "strength_bonus": 0,
+          "strength_level": 1,
+          "venomous": false,
+          "wiki_name": "Hespori (Echo)",
+          "wiki_url": "https://oldschool.runescape.wiki/w/Hespori_(Echo)"
+        }
+      },
+      "unique_table": {
+        "entries": [
+          {
+            "item_id": 33245,
+            "name": "Nature's recurve",
+            "notes": [
+              "In addition to having a 1/15 chance to drop, players will '''always''' receive the nature's recurve on their 30th Hespori (Echo) kill if they haven't received one yet."
+            ],
+            "out_of": 15,
+            "quantity": [
+              1,
+              1
+            ],
+            "rarity": 0.0666667,
+            "weight": 1
+          }
+        ],
+        "label": "Drops",
+        "main_max_roll": 15,
+        "table_id": "hespori_echo",
+        "table_name": "Hespori (Echo) Drops",
+        "tertiary": [],
+        "wiki_page": "Hespori (Echo)"
+      },
+      "uniques": [
+        {
+          "guarantee": 30,
+          "itemId": 33245,
+          "rate": 15
+        }
+      ]
+    },
+    "kalphite-queen": {
+      "normal_sources": [
+        "Kalphite Queen#Drops"
+      ],
+      "profiles": {
+        "air": {
+          "aggressive": true,
+          "attack_bonus": 0,
+          "attack_level": 375,
+          "attack_magic": 0,
+          "attack_ranged": 0,
+          "attack_speed": 4,
+          "attack_type": [
+            "ranged",
+            "magic"
+          ],
+          "attributes": [
+            "kalphite"
+          ],
+          "category": [
+            "kalphite",
+            "bosses"
+          ],
+          "combat_level": 748,
+          "defence_crush": 50,
+          "defence_level": 300,
+          "defence_magic": 10,
+          "defence_ranged_heavy": 10,
+          "defence_ranged_light": 10,
+          "defence_ranged_standard": 10,
+          "defence_slash": 50,
+          "defence_stab": 50,
+          "elemental_weakness_percent": 0,
+          "elemental_weakness_type": 0,
+          "examine": "I don't think insect repellent will work...",
+          "freeze_resistance": 0,
+          "hitpoints": 561,
+          "immune_poison": false,
+          "immune_venom": true,
+          "incomplete": true,
+          "magic_bonus": 0,
+          "magic_level": 165,
+          "max_hit": 38,
+          "max_hits": [
+            {
+              "label": "melee",
+              "max_hit": 38,
+              "value": "38"
+            },
+            {
+              "label": "ranged",
+              "max_hit": 35,
+              "value": "35"
+            },
+            {
+              "label": "magic",
+              "max_hit": 49,
+              "value": "49"
+            }
+          ],
+          "members": true,
+          "name": "Kalphite Queen",
+          "poisonous": false,
+          "ranged_bonus": 0,
+          "ranged_level": 1,
+          "release_date": "2024-11-27",
+          "size": 5,
+          "slayer_level": 1,
+          "slayer_masters": [
+            "turael",
+            "spria",
+            "mazchna",
+            "vannaka",
+            "chaeldar",
+            "konar",
+            "nieve",
+            "duradel"
+          ],
+          "slayer_monster": true,
+          "slayer_xp": 856.8,
+          "source_id": "15617",
+          "source_page": "Kalphite Queen (Echo)",
+          "source_version": "2",
+          "strength_bonus": 0,
+          "strength_level": 375,
+          "venomous": false,
+          "wiki_name": "Kalphite Queen (Echo) (Airborne)",
+          "wiki_url": "https://oldschool.runescape.wiki/w/Kalphite_Queen_(Echo)#Airborne"
+        },
+        "ground": {
+          "aggressive": true,
+          "attack_bonus": 0,
+          "attack_level": 375,
+          "attack_magic": 0,
+          "attack_ranged": 0,
+          "attack_speed": 4,
+          "attack_type": [
+            "melee",
+            "ranged",
+            "magic"
+          ],
+          "attributes": [
+            "kalphite"
+          ],
+          "category": [
+            "kalphite",
+            "bosses"
+          ],
+          "combat_level": 499,
+          "defence_crush": 10,
+          "defence_level": 300,
+          "defence_magic": 65,
+          "defence_ranged_heavy": 65,
+          "defence_ranged_light": 65,
+          "defence_ranged_standard": 65,
+          "defence_slash": 50,
+          "defence_stab": 50,
+          "elemental_weakness_percent": 0,
+          "elemental_weakness_type": 0,
+          "examine": "I don't think insect repellent will work...",
+          "freeze_resistance": 0,
+          "hitpoints": 561,
+          "immune_poison": false,
+          "immune_venom": true,
+          "incomplete": true,
+          "magic_bonus": 0,
+          "magic_level": 165,
+          "max_hit": 38,
+          "max_hits": [
+            {
+              "label": "melee",
+              "max_hit": 38,
+              "value": "38"
+            },
+            {
+              "label": "ranged",
+              "max_hit": 35,
+              "value": "35"
+            },
+            {
+              "label": "magic",
+              "max_hit": 49,
+              "value": "49"
+            }
+          ],
+          "members": true,
+          "name": "Kalphite Queen",
+          "poisonous": false,
+          "ranged_bonus": 0,
+          "ranged_level": 1,
+          "release_date": "2024-11-27",
+          "size": 5,
+          "slayer_level": 1,
+          "slayer_masters": [
+            "turael",
+            "spria",
+            "mazchna",
+            "vannaka",
+            "chaeldar",
+            "konar",
+            "nieve",
+            "duradel"
+          ],
+          "slayer_monster": true,
+          "slayer_xp": 856.8,
+          "source_id": "15616",
+          "source_page": "Kalphite Queen (Echo)",
+          "source_version": "1",
+          "strength_bonus": 0,
+          "strength_level": 375,
+          "venomous": false,
+          "wiki_name": "Kalphite Queen (Echo) (Crawling)",
+          "wiki_url": "https://oldschool.runescape.wiki/w/Kalphite_Queen_(Echo)#Crawling"
+        }
+      },
+      "unique_table": {
+        "entries": [
+          {
+            "item_id": 30373,
+            "name": "Drygore blowpipe (empty)",
+            "notes": [
+              "In addition to having a 1/20 chance to drop, players will '''always''' receive a drygore blowpipe on their 40th Kalphite Queen (Echo) kill if they haven't received one yet."
+            ],
+            "out_of": 20,
+            "quantity": [
+              1,
+              1
+            ],
+            "rarity": 0.05,
+            "weight": 1
+          }
+        ],
+        "label": "Drops",
+        "main_max_roll": 20,
+        "table_id": "kalphite_queen_echo",
+        "table_name": "Kalphite Queen (Echo) Drops",
+        "tertiary": [],
+        "wiki_page": "Kalphite Queen (Echo)"
+      },
+      "uniques": [
+        {
+          "guarantee": 40,
+          "itemId": 30373,
+          "rate": 20
+        }
+      ]
+    },
+    "king-black-dragon": {
+      "normal_sources": [
+        "King Black Dragon#Drops"
+      ],
+      "profiles": {
+        "boss": {
+          "aggressive": true,
+          "attack_bonus": 0,
+          "attack_level": 300,
+          "attack_magic": 0,
+          "attack_ranged": 0,
+          "attack_speed": 4,
+          "attack_type": [
+            "dragonfire"
+          ],
+          "attributes": [
+            "dragon",
+            "fiery"
+          ],
+          "category": [
+            "black dragons",
+            "bosses"
+          ],
+          "combat_level": 414,
+          "defence_crush": 90,
+          "defence_level": 300,
+          "defence_magic": 80,
+          "defence_ranged_heavy": 50,
+          "defence_ranged_light": 70,
+          "defence_ranged_standard": 70,
+          "defence_slash": 90,
+          "defence_stab": 60,
+          "elemental_weakness_percent": 50,
+          "elemental_weakness_type": 2,
+          "examine": "One of the biggest, meanest dragons around.",
+          "freeze_resistance": 0,
+          "hitpoints": 840,
+          "immune_poison": false,
+          "immune_venom": false,
+          "incomplete": false,
+          "magic_bonus": 0,
+          "magic_level": 252,
+          "max_hit": null,
+          "max_hits": [],
+          "members": true,
+          "name": "King Black Dragon",
+          "poisonous": false,
+          "ranged_bonus": 0,
+          "ranged_level": 1,
+          "release_date": "2024-11-27",
+          "size": 5,
+          "slayer_level": null,
+          "slayer_masters": [],
+          "slayer_monster": false,
+          "slayer_xp": null,
+          "source_id": null,
+          "source_page": "King Black Dragon (Echo)",
+          "source_version": null,
+          "strength_bonus": 0,
+          "strength_level": 300,
+          "venomous": true,
+          "wiki_name": "King Black Dragon (Echo)",
+          "wiki_url": "https://oldschool.runescape.wiki/w/King_Black_Dragon_(Echo)"
+        }
+      },
+      "unique_table": {
+        "entries": [
+          {
+            "item_id": 33251,
+            "name": "King's barrage",
+            "notes": [
+              "In addition to having a 1/25 chance to drop, players will '''always''' receive a King's Barrage on their 50th King Black Dragon (Echo) kill if they haven't received one yet."
+            ],
+            "out_of": 25,
+            "quantity": [
+              1,
+              1
+            ],
+            "rarity": 0.04,
+            "weight": 1
+          }
+        ],
+        "label": "Drops",
+        "main_max_roll": 25,
+        "table_id": "king_black_dragon_echo",
+        "table_name": "King Black Dragon (Echo) Drops",
+        "tertiary": [],
+        "wiki_page": "King Black Dragon (Echo)"
+      },
+      "uniques": [
+        {
+          "guarantee": 50,
+          "itemId": 33251,
+          "rate": 25
+        }
+      ]
+    },
+    "thermonuclear-smoke-devil": {
+      "normal_sources": [
+        "Thermonuclear smoke devil#Drops"
+      ],
+      "profiles": {
+        "boss": {
+          "aggressive": true,
+          "attack_bonus": 0,
+          "attack_level": 230,
+          "attack_magic": 0,
+          "attack_ranged": 0,
+          "attack_speed": 2,
+          "attack_type": [
+            "ranged",
+            "magic"
+          ],
+          "attributes": [],
+          "category": [
+            "bosses",
+            "smoke devils"
+          ],
+          "combat_level": 602,
+          "defence_crush": 9,
+          "defence_level": 324,
+          "defence_magic": 800,
+          "defence_ranged_heavy": 90,
+          "defence_ranged_light": 90,
+          "defence_ranged_standard": 90,
+          "defence_slash": 4,
+          "defence_stab": 11,
+          "elemental_weakness_percent": 20,
+          "elemental_weakness_type": 1,
+          "examine": "Woah.",
+          "freeze_resistance": 0,
+          "hitpoints": 1200,
+          "immune_poison": true,
+          "immune_venom": true,
+          "incomplete": true,
+          "magic_bonus": 0,
+          "magic_level": 15,
+          "max_hit": 51,
+          "max_hits": [
+            {
+              "label": "Magic/Ranged",
+              "max_hit": 51,
+              "value": "51"
+            },
+            {
+              "label": "Charge attack",
+              "max_hit": null,
+              "value": "99+"
+            }
+          ],
+          "members": true,
+          "name": "Thermonuclear smoke devil",
+          "poisonous": false,
+          "ranged_bonus": 0,
+          "ranged_level": 387,
+          "release_date": "2024-11-27",
+          "size": 3,
+          "slayer_level": 93,
+          "slayer_masters": [
+            "konar",
+            "nieve",
+            "duradel"
+          ],
+          "slayer_monster": true,
+          "slayer_xp": 1200.0,
+          "source_id": "override499",
+          "source_page": "Thermonuclear smoke devil (Echo)",
+          "source_version": null,
+          "strength_bonus": 0,
+          "strength_level": 220,
+          "venomous": false,
+          "wiki_name": "Thermonuclear smoke devil (Echo)",
+          "wiki_url": "https://oldschool.runescape.wiki/w/Thermonuclear_smoke_devil_(Echo)"
+        }
+      },
+      "unique_table": {
+        "entries": [
+          {
+            "item_id": 30371,
+            "name": "Devil's element",
+            "notes": [
+              "In addition to having a 1/25 chance to drop, players will '''always''' receive both items on their 50th Thermonuclear smoke devil (Echo) kill if they haven't received one yet."
+            ],
+            "out_of": 25,
+            "quantity": [
+              1,
+              1
+            ],
+            "rarity": 0.04,
+            "weight": 1
+          },
+          {
+            "item_id": 33253,
+            "name": "Shadowflame quadrant",
+            "notes": [
+              "In addition to having a 1/25 chance to drop, players will '''always''' receive both items on their 50th Thermonuclear smoke devil (Echo) kill if they haven't received one yet."
+            ],
+            "out_of": 25,
+            "quantity": [
+              1,
+              1
+            ],
+            "rarity": 0.04,
+            "weight": 1
+          }
+        ],
+        "label": "Drops",
+        "main_max_roll": 25,
+        "table_id": "thermonuclearsmokedevil_echo",
+        "table_name": "Thermonuclear smoke devil (Echo) Drops",
+        "tertiary": [],
+        "wiki_page": "Thermonuclear smoke devil (Echo)"
+      },
+      "uniques": [
+        {
+          "guarantee": 50,
+          "itemId": 30371,
+          "rate": 25
+        },
+        {
+          "guarantee": 50,
+          "itemId": 33253,
+          "rate": 25
+        }
+      ]
+    }
+  },
+  "schema_version": 1
+}

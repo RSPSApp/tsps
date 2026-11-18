@@ -200,9 +200,12 @@ Kebbit-Monkfish (15155-15159), one at each diving task's spot (none were in `npc
   riddle of several answers.
 - Right (any order): the box `The mermaid, satisfied with your answer, escorts you to the bottom
   of the sea. You take some depth readings from your diving equipment and note down the
-  interesting local flora and fauna.`, her dive animation (13191), sounds 10797 and 10798, the
-  screen fading out; it fades back in 8 ticks later, and 2 after that the charting (175 XP) and
-  `There you go. Hope the dive got you everything you needed!`
+  interesting local flora and fauna.`, initially without a Continue button, her dive animation
+  (13191), sounds 10797 and 10798, and the screen fading out. The minimap turns off one tick
+  later; 8 ticks after the dive starts the screen fades back in and the minimap returns. Two
+  ticks later the fade closes, the charting completes (175 XP) and the same box returns with
+  Continue. Continuing that box brings her line
+  `There you go. Hope the dive got you everything you needed!` (235/00944).
 
 **Chartin' Charles McAtless** (rsprox 948): his multinpc (15151) shows Get-training (1554) once
 `sailing_charting_tutor_met` is set. "Can you offer me some training?": `Charles takes your

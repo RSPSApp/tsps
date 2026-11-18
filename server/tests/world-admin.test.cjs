@@ -376,7 +376,10 @@ test("plugin ZIPs can be deleted and re-imported, with access and package checks
   const upload = (body, headers = {}) => request(port, {
     method: "POST", path: "/api/plugins/import", headers: { "Content-Type": "application/zip", ...headers }, body,
   });
-  const manifest = { format: 1, id: "welcome", name: "Welcome", version: "1.0.0", description: "Greets players" };
+  const manifest = {
+    format: 1, id: "welcome", name: "Welcome", version: "1.0.0", description: "Greets players",
+    config: { "Welcome:message": { type: "string", label: "Message", help: "Shown at login.", default: "Welcome!" } },
+  };
   const makeZip = (source, filename = "Welcome.plugin.js") => {
     const zip = new AdmZip();
     zip.addFile("plugin.json", Buffer.from(JSON.stringify(manifest)));

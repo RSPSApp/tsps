@@ -430,11 +430,22 @@ class VasaRoom extends Raid.Room {
         factor = 0;
         attacker?.sendMessage("The crystal is currently invulerable to damage.");
       } else if (hit.getCombatType?.() === CombatType.RANGED) factor = 0;
-      else if (hit.getCombatType?.() === CombatType.MAGIC) factor = 1 / 3;
+      else if (!hit.rolledResistance) factor = this.resistance(npc, hit);
     } else return;
     if (factor === 1) return;
     for (const part of hit.getHits()) part.setDamage(Math.floor(part.getDamage() * factor));
     hit.updateTotalDamage();
+  }
+
+  /** ::coxclear: he falls as he would (the fire and the exit crystals go), then the rest goes. */
+  devFinish() {
+    if (this.state !== "dead" && this.vasa) this.onNpcDeath(this.vasa, null);
+    Shared.later(this.raid, 8, () => this.cleanup());
+  }
+
+  /** A crystal takes a third from magic, off the rolled hitsplats (Room.resistance). */
+  resistance(npc, hit) {
+    return this.crystals.includes(npc) && hit.getCombatType?.() === Shared.core().CombatType.MAGIC ? 1 / 3 : 1;
   }
 
   onNpcDeath(npc, killer) {

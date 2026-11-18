@@ -32,6 +32,7 @@ function cerberusDeath({ npc, killer }) {
   if (fight?.arena?.fight === fight) fight.arena.fight = null;
   // Her fire wall goes as she despawns (rsprox 1000323 tick 10468, 1000286 tick 622).
   if (fight?.arena) FireWall.clear(fight.arena);
+  if (npc.__echoCerberus) return;
   const player = killer?.isPlayer?.() ? killer : null;
   if (!player?.isRegistered?.()) return;
   const own = (Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1;

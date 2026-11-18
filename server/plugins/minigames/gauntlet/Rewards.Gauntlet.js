@@ -120,8 +120,8 @@ function sendChest(player) {
   player.getPacketSender().sendVarbit(Shared.VARBIT.REWARD, waitingReward(player) ? 1 : 0);
 }
 
-function setReward(player, mode, kind) {
-  player.setAttribute(ATTR_REWARD, kind ? { mode, kind } : null);
+function setReward(player, mode, kind, echoDrops = null) {
+  player.setAttribute(ATTR_REWARD, kind ? { mode, kind, ...(echoDrops ? { echo: true, echoDrops } : {}) } : null);
   sendChest(player);
 }
 
@@ -144,11 +144,12 @@ function openChest(player, random = Math.random) {
   }
   const { Item, ItemDefinition } = Shared.core();
   const items = rollReward(reward, ownsItem(player, ID.GAUNTLET_CAPE), random);
+  if (reward.echo && Array.isArray(reward.echoDrops)) items.push(...reward.echoDrops.map(drop => ({ ...drop, id: drop.id ?? drop.itemId })));
   setReward(player, null, null);
   player.sendMessage("You open the chest.");
   // Pets turns a rolled Youngllef into a follower/backpack item and removes it here; a completed
   // Corrupted Gauntlet names its boss as the source (league echo orbs).
-  const source = reward.kind === "completed" && reward.mode === "corrupted" ? "Corrupted Hunllef" : undefined;
+  const source = !reward.echo && reward.kind === "completed" && reward.mode === "corrupted" ? "Corrupted Hunllef" : undefined;
   Shared.api().emitCustomEvent("npc-drops:roll", { player, drops: items, source });
   for (const reward of items) {
     const noteId = reward.noted ? ItemDefinition.forId(reward.id)?.getNoteId?.() ?? -1 : -1;

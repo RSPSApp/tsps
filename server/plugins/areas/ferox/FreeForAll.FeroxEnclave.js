@@ -45,6 +45,7 @@ const SAFE_ZONE_NOTICE_TICKS = 5;
 const savedSkulls = new WeakMap();
 const lastSafeZoneNotice = new WeakMap();
 let meteorTick = 0;
+let arena = null;
 
 /** Ours (not captured); attack checks repeat while pursuing, so at most every 3 seconds. */
 function tellSafeZone(player) {
@@ -169,6 +170,13 @@ function allowBountyHunterWeapons(event) {
   }
 }
 
+function describeSafePvp(event) {
+  const { attacker, target } = event;
+  if (arena && attacker?.getArea?.() === arena && target?.getArea?.() === arena
+    && !attacker.getPrivateArea() && !target.getPrivateArea()
+    && inFightingArea(attacker.getLocation()) && inFightingArea(target.getLocation())) event.safe = true;
+}
+
 /** Safe: nothing is dropped; the skull is kept through the death reset (Wiki). */
 function keepItems(event) {
   if (!inArena(event.player?.getLocation?.())) return;
@@ -226,12 +234,14 @@ module.exports = function attachFreeForAll(api) {
   const FreeForAllArena = defineArena();
   api.persistAttribute(IN_FFA_ATTRIBUTE);
   api.persistAttribute(XP_DISABLE_ATTRIBUTE);
-  api.registerArea(new FreeForAllArena([new api.core.Boundary(AREA.minX, AREA.maxX, AREA.minY, AREA.maxY, 0)]));
+  arena = new FreeForAllArena([new api.core.Boundary(AREA.minX, AREA.maxX, AREA.minY, AREA.maxY, 0)]);
+  api.registerArea(arena);
   api.onObjectInteraction("Free-for-all portal", { Enter: enter, "Disable-XP": toggleXp });
   api.onObjectInteraction("Portal", { Exit: exit });
   api.onObjectFirstClick([MYSTERIOUS_PORTAL], mysteriousPortal);
   api.onCanGainExperience(blockXp);
   api.onCustomEvent("bounty-hunter:weapon-area", allowBountyHunterWeapons);
+  api.onCustomEvent("combat:safe-pvp", describeSafePvp);
   api.onShouldDropItemsOnDeath(keepItems);
   api.onPlayerDeath(respawn);
   api.onPlayerLogin(sendXpSetting);

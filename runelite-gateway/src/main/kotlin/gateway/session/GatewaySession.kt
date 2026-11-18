@@ -261,9 +261,18 @@ class GatewaySession(
             TspsServerPacket.CHAT_MESSAGE -> onChat(TspsChatMessage.decode(packet))
             TspsServerPacket.PLAYER_OPTION -> {
                 val reader = packet.reader()
-                val slot = reader.u8()
+                val op = PlayerOps.toClient(reader.u8())
                 val priority = reader.u8() != 0
-                send(SetPlayerOp(PlayerOps.toClient(slot), priority, reader.utf8().ifEmpty { null }))
+                val text = reader.utf8().ifEmpty { null }
+                if (op == ATTACK_OP) {
+                    // Minigames own this slot (Duel Arena's Challenge/Attack, Castle Wars...), but
+                    // their "clear it" must not wipe the wilderness Attack the gateway adds.
+                    serverAttackOp = text
+                    serverAttackPriority = priority
+                    sendAttackOp()
+                } else {
+                    send(SetPlayerOp(op, priority, text))
+                }
             }
             TspsServerPacket.REBUILD_NORMAL -> onRebuild(MapRebuild.normal(packet))
             TspsServerPacket.REBUILD_REGION -> onRebuild(MapRebuild.region(packet))
@@ -296,17 +305,34 @@ class GatewaySession(
         }
     }
 
-    private var attackShown = false
+    private var inWilderness = false
+    /** What tsps last put in the attack slot itself (null: nothing, or cleared). */
+    private var serverAttackOp: String? = null
+    private var serverAttackPriority = false
+    /** What the client was last told for the attack slot, so it's only sent on a change. */
+    private var sentAttackOp: Pair<String?, Boolean>? = null
 
     /**
      * The browser offers Attack on players while the wilderness varbit is set; tsps only sends
      * PLAYER_OPTION for other options, so the gateway follows the varbit itself.
      */
     private fun attackOption() {
-        val inWilderness = varps.getVarbit(IN_WILDERNESS_VARBIT) == 1
-        if (inWilderness == attackShown) return
-        attackShown = inWilderness
-        send(SetPlayerOp(ATTACK_OP, true, if (inWilderness) "Attack" else null))
+        val now = varps.getVarbit(IN_WILDERNESS_VARBIT) == 1
+        if (now == inWilderness) return
+        inWilderness = now
+        sendAttackOp()
+    }
+
+    /** The attack slot: a minigame's own option when tsps set one, else Attack in the wilderness. */
+    private fun sendAttackOp() {
+        val wanted = when {
+            serverAttackOp != null -> serverAttackOp to serverAttackPriority
+            inWilderness -> "Attack" to true
+            else -> null to false
+        }
+        if (wanted == sentAttackOp) return
+        sentAttackOp = wanted
+        send(SetPlayerOp(ATTACK_OP, wanted.second, wanted.first))
     }
 
     private fun onRebuild(rebuild: MapRebuild) {

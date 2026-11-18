@@ -723,10 +723,11 @@ rule from the Wiki's Shattered Relics pages. They draw only for league type 3 (v
   server's, said once per boss every few seconds.
 
 Not yet: Barbarian Assault's honour points and the Rogues' Den safe, which this server
-doesn't have; Rune Escape, which needs the Ourania Altar this server doesn't have; Plank
+doesn't have; Rune Escape's fragment effect (the Ourania Altar itself is implemented); Plank
 Stretcher outside a house build, as Mahogany Homes; the ranged weapons' own charges, which
 no hook reports; the league's waystone objects themselves (only the portable one's teleports
-are here); The Alchemist's jugs of wine (no wine making here). Fishing has no clue bottles of
+are here); The Alchemist's wine batching (wine making exists, but its `make` loop is not among
+the set's supported `cook` activities). Fishing has no clue bottles of
 its own, so Message In A Bottle reaches only Hunter's aerial fishing and drift nets for bottles.
 A listed fragment can also be dragged onto a slot (no recording; the cache's drag scripts):
 each fragment's icon gets DEPTH1, a slot's fragment (735:36) and its frame (735:35) DRAGTARGET,
@@ -1045,8 +1046,9 @@ Animal Wrangler's Hunter and cooking ones) do not.
   pottery, gems, glassblowing, spinning), and a 25% chance of the same product again, banked with
   its XP (`skills:produced`; only when the bank has room). "All at once" is up to 28 a cycle, the
   inventory's slots: ours. Molten glass, smelted at a furnace, is Crafting and not on either
-  list. Not here: jugs of wine (no wine making in this server); Guardians of the Rift's essence is
-  not a Crafting loop here, so the Wiki's exclusion holds.
+  list. Wine making and fermentation are implemented, but the wine-making `make` loop is not
+  batched by this relic's `cook` activity. Guardians of the Rift's essence is not a Crafting loop
+  here, so the Wiki's exclusion holds.
 - **Production Master** (Raging Echoes tier 5): the same list all at once, plus arrow shafts,
   headless arrows, arrows, bolts and gem-tipped bolts, and darts (10 times the usual a cycle,
   Wiki; darts and bolts by default fletch in one click, and that click makes 10 too), and amethyst

@@ -14,6 +14,24 @@ class ActorBlocksTest {
     }
 
     @Test
+    fun `an npc type customisation reads its flagged fields`() {
+        // tsps writeTypeCustomisation: flags, u8 count + u16 models, u8 count + u16 from/to pairs,
+        // a null-terminated name, a u16 level (live's Echo Hunllef, rsprox 1158).
+        val name = "Corrupted Hunllef (Echo)".toByteArray(Charsets.ISO_8859_1).map { it.toInt() and 0xFF }
+        val bytes = (listOf(0x0F, 1, 60373 shr 8, 60373 and 0xFF, 1, 0, 10, 0, 20) + name + listOf(0, 1117 shr 8, 1117 and 0xFF))
+            .map { it.toByte() }.toByteArray()
+        val custom = ActorBlocks.typeCustomisation(BlockReader(bytes))
+        assertEquals(listOf(60373), custom.models)
+        assertEquals(listOf(10 to 20), custom.recolours)
+        assertEquals("Corrupted Hunllef (Echo)", custom.name)
+        assertEquals(1117, custom.combatLevel)
+
+        val nameOnly = ActorBlocks.typeCustomisation(BlockReader((listOf(0x04) + name + listOf(0)).map { it.toByte() }.toByteArray()))
+        assertEquals(listOf(null, null, null), listOf(nameOnly.models, nameOnly.recolours, nameOnly.combatLevel), "only the flagged fields")
+        assertEquals(true, ActorBlocks.typeCustomisation(BlockReader(byteArrayOf(0))).isReset, "no flags resets")
+    }
+
+    @Test
     fun `a chat style reads its pattern colours`() {
         val style = ChatStyle.read(gateway.tsps.TspsReader(byteArrayOf(14, 2, 3, 4)))!!
         assertEquals(14 to 2, style.colour to style.effect)

@@ -276,10 +276,6 @@ function logLoot(player, loot) {
   for (const { id, amount } of loot.entries) Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: id, amount });
 }
 
-/**
- * Up to `amount` of an entry into the inventory (bulky drops noted, as the other raids' chests
- * give them) or the bank (unnoted); how many moved.
- */
 /** Unclaimed loot neither the bank nor the inventory could take, kept for the next login rather than deleted. */
 const HELD_ATTRIBUTE = "tfa:unclaimed-held";
 /** Not captured (inferred). */
@@ -327,6 +323,10 @@ function deliverHeld({ player }) {
     : deliveredMessage(result));
 }
 
+/**
+ * Up to `amount` of an entry into the inventory (bulky drops noted, as the other raids' chests
+ * give them) or the bank (unnoted); how many moved.
+ */
 function move(player, entry, amount, destination, quiet = false) {
   const { Item, ItemDefinition, Bank } = Shared.core();
   const wanted = Math.max(0, Math.min(entry.amount, amount));

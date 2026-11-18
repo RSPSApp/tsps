@@ -38,6 +38,8 @@ const RUNEDAY_VARBIT = 9535;
 
 const ITEMS_ATTRIBUTE = "clog.items";
 const COUNTS_ATTRIBUTE = "clog.counts";
+/** A category's second and third counters by struct ({ struct: [second, third] }), where no plugin answers them. */
+const EXTRA_COUNTS_ATTRIBUTE = "clog.extra-counts";
 const RECENT_ATTRIBUTE = "clog.recent";
 const NOTIFY_ATTRIBUTE = "collection-log:notifications";
 
@@ -69,9 +71,11 @@ function uniqueCount(player, inTab = null) {
 function categoryCounts(player, category) {
   const request = { player, category: category.name, struct: category.struct, count: null };
   pluginApi?.emitCustomEvent("collection-log:category-count", request);
+  const stored = player.getAttribute(EXTRA_COUNTS_ATTRIBUTE)?.[category.struct];
   return [
     Number.isFinite(request.count) ? request.count : Number(counts(player)[category.struct]) || 0,
-    ...[0, 1].map((index) => Number.isFinite(request.extraCounts?.[index]) ? request.extraCounts[index] : 0),
+    ...[0, 1].map((index) => Number.isFinite(request.extraCounts?.[index]) ? request.extraCounts[index]
+      : Number(Array.isArray(stored) ? stored[index] : 0) || 0),
   ];
 }
 
@@ -239,6 +243,7 @@ module.exports = function attachProgress(api) {
   core = api.core;
   api.persistAttribute(ITEMS_ATTRIBUTE, {});
   api.persistAttribute(COUNTS_ATTRIBUTE, {});
+  api.persistAttribute(EXTRA_COUNTS_ATTRIBUTE, {});
   api.persistAttribute(RECENT_ATTRIBUTE, []);
   api.persistAttribute(NOTIFY_ATTRIBUTE, NOTIFY_DEFAULT);
   api.onPlayerLogin(restore);

@@ -34,6 +34,7 @@ import { sendPlayerOption, sendWorldEntityOption } from "../../../network/server
 import { flushPackets } from "../../../network/packet";
 import { createTextureArray } from "../../../picogl/PicoTexture";
 import { RS_TO_RADIANS } from "../../../rs/MathConstants";
+import { baseNpcTypeId } from "../../../custom/npcs/NpcModelOverrideRegistry";
 import { CollisionFlag } from "../../../common/CollisionFlag";
 import { VARBIT_IN_WILDERNESS, VARBIT_TRADE_OPTION_DISABLED } from "../../../common/vars";
 import {
@@ -679,7 +680,17 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                 if (npcIds.has(sid)) return;
                 npcIds.add(sid);
 
+                // The pick carries the cache type; a server type customisation (an Echo boss's
+                // name and level) lives on the NPC's synthetic ECS type for that same base. The
+                // menu shows the customised type under the cache id: its options, examine and
+                // packets name the real NPC.
+                const ecsTypeId = npcEcs.getNpcTypeId(ecsId) | 0;
+                const baseId = baseNpcTypeId(npcTypeId | 0);
                 let npcType = host.osrsClient.npcTypeLoader.load(npcTypeId | 0);
+                if (ecsTypeId !== baseId && baseNpcTypeId(ecsTypeId) === baseId) {
+                    const custom = host.osrsClient.npcTypeLoader.load(ecsTypeId);
+                    npcType = Object.assign(Object.create(Object.getPrototypeOf(custom)), custom, { id: baseId });
+                }
                 if (npcType.transforms) {
                     const transformed = npcType.transform(
                         host.osrsClient.varManager,

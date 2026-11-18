@@ -11,7 +11,8 @@
  *   up to 350, 1 in 50 above.
  * - Monsters with a Slayer level requirement: the chance is 20% higher. Larran's key: another
  *   15% inside the Wilderness Slayer Cave.
- * - A superior Slayer monster on such a task always drops the key.
+ * - A superior Slayer monster on a Konar task always drops a brimstone key. On a Krystilia
+ *   task it guarantees a Larran's key only inside the Wilderness Slayer Cave.
  *
  * The key lands with the kill's loot, on "slayer:task-kill" (Tasks.Slayer.js), which is only
  * sent for kills that count: Konar's in her area, Krystilia's in the Wilderness.

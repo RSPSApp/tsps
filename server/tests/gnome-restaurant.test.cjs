@@ -788,6 +788,23 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
   }
   async function cut(p, fruit, choice, output) {
     use(p, "knife", fruit);
+    if (fruit === "pineapple") {
+      // RSProx 227/01858: pineapple uses skillmulti; the other fruit still
+      // use the two-option prompt. Select one fruit through the real packet.
+      const { CREATION_MENU_GROUP_ID, CREATION_MENU_FIRST_ITEM_COMPONENT } = require("../dist/net/packet/PacketSender");
+      const menu = p.getCreationMenu();
+      assert.ok(menu, "pineapple opens its native creation menu");
+      assert.equal(MultiChatboxPrompt.getPending(p), null);
+      const index = menu.getItems().indexOf(obj(output));
+      assert.ok(index >= 0, "requested cut is offered");
+      const before = p.getInventory().getAmount(obj(output));
+      await clients.get(p).dispatch([{ type: "dialogue_continue",
+        widgetId: (CREATION_MENU_GROUP_ID << 16) | (CREATION_MENU_FIRST_ITEM_COMPONENT + index), childIndex: 1 }]);
+      clients.get(p).processTurnPackets();
+      for (let tick = 0; tick < 10 && p.getInventory().getAmount(obj(output)) === before; tick++) World.process();
+      assert.equal(p.getInventory().getAmount(obj(output)), before + 1);
+      return;
+    }
     const prompt = MultiChatboxPrompt.getPending(p);
     assert.ok(prompt); assert.equal(p.getPacketSender().isChatboxInterface(219), true);
     assert.equal(prompt.title, "How would you like to cut the fruit?");

@@ -39,7 +39,7 @@ module.exports = function registerSlugMenaceQuest(api) {
     TaskManager,
   } = api.core;
   const { loadTranscripts, refreshQuestList, registerQuest, startTranscript } = require("../QuestRuntime");
-  const { buildLines } = require("../slugmenace/Journal.SlugMenace");
+  const { buildLines, NOT_STARTED_LINES } = require("../slugmenace/Journal.SlugMenace");
   const createPagePuzzle = require("../slugmenace/Puzzle.SlugMenace");
   const createSlugMenaceScenes = require("../slugmenace/Scenes.SlugMenace");
 
@@ -1416,6 +1416,7 @@ module.exports = function registerSlugMenaceQuest(api) {
 
   function buildJournal(player, questHandle) {
     const current = questHandle.getStage(player);
+    if (current < STAGE_STARTED) return [...NOT_STARTED_LINES];
     const used = usedRunes(player);
     const rune = (id) => RUNES.find((entry) => `rune-${entry.name}` === id);
     const shown = {

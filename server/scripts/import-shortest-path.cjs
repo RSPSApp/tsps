@@ -138,14 +138,24 @@ function applyCorrections(transports, input) {
   const updates = [];
   const validTile = (value) => Array.isArray(value) && value.length === 3 && value.every(Number.isInteger);
   for (const correction of input.corrections) {
-    if (!exactKeys(correction, ["table", "from", "to", "menu", "id", "expectedQuest", "quest"])
+    if (correction === null || typeof correction !== "object" || Array.isArray(correction)) {
+      throw new Error("Malformed transport correction");
+    }
+    const duration = Object.hasOwn(correction, "ticks");
+    const field = duration ? "ticks" : "quests";
+    const expected = duration ? correction.expectedTicks : correction.expectedQuest;
+    const replacement = duration ? correction.ticks : correction.quest;
+    const keys = duration ? ["expectedTicks", "ticks"] : ["expectedQuest", "quest"];
+    if (!exactKeys(correction, ["table", "from", "to", "menu", "id", ...keys])
         || !FILES.includes(`${correction.table}.tsv`)
         || !validTile(correction.from) || !validTile(correction.to)
         || typeof correction.menu !== "string" || !correction.menu.trim()
         || !Number.isInteger(correction.id)
-        || !(correction.expectedQuest === null || (typeof correction.expectedQuest === "string" && correction.expectedQuest.trim()))
-        || typeof correction.quest !== "string" || !correction.quest.trim()
-        || correction.quest === correction.expectedQuest) {
+        || (duration
+          ? !Number.isInteger(expected) || expected < 1 || !Number.isInteger(replacement) || replacement < 1
+          : !(expected === null || (typeof expected === "string" && expected.trim()))
+            || typeof replacement !== "string" || !replacement.trim())
+        || replacement === expected) {
       throw new Error("Malformed transport correction");
     }
     const selection = JSON.stringify([correction.table, correction.from, correction.to, correction.menu, correction.id]);
@@ -154,14 +164,14 @@ function applyCorrections(transports, input) {
     const matches = (transports[correction.table] || []).filter((row) =>
       JSON.stringify(row.slice(0, 4)) === JSON.stringify([correction.from, correction.to, correction.menu, correction.id]));
     if (matches.length !== 1) throw new Error(`Transport correction requires exactly one match; found ${matches.length}`);
-    if ((matches[0][COLUMNS.indexOf("quests")] ?? null) !== correction.expectedQuest) {
-      throw new Error("Stale transport correction: expected quest differs");
+    if ((matches[0][COLUMNS.indexOf(field)] ?? null) !== expected) {
+      throw new Error(`Stale transport correction: expected ${field} differs`);
     }
-    updates.push([matches[0], correction.quest]);
+    updates.push([matches[0], COLUMNS.indexOf(field), replacement]);
   }
-  for (const [row, quest] of updates) {
-    while (row.length <= COLUMNS.indexOf("quests")) row.push(null);
-    row[COLUMNS.indexOf("quests")] = quest;
+  for (const [row, column, value] of updates) {
+    while (row.length <= column) row.push(null);
+    row[column] = value;
   }
 }
 

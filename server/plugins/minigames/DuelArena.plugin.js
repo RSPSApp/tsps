@@ -802,6 +802,16 @@ function canUnequip(event) {
 function shouldDrop(event) {
   if (event.player.getDueling().inDuel() || pendingSafeDeaths.has(event.player)) event.shouldDrop = false;
 }
+function describeSafePvp(event) {
+  const { attacker, target } = event;
+  const session = sessions.get(attacker);
+  if (session?.stage === "fight" && sessions.get(target) === session
+    && session.players.includes(attacker) && session.players.includes(target)
+    && !attacker.getPrivateArea() && !target.getPrivateArea()
+    && ARENA.inside(attacker.getLocation()) && ARENA.inside(target.getLocation())
+    && attacker.getDueling().getState() === DuelState.IN_DUEL && target.getDueling().getState() === DuelState.IN_DUEL
+    && attacker.getDueling().getInteract() === target && target.getDueling().getInteract() === attacker) event.safe = true;
+}
 function canAttack(event) {
   const a = event.attacker.getAsPlayer?.();
   const b = event.target.getAsPlayer?.();
@@ -845,6 +855,7 @@ module.exports = {
     api.onPlayerLogout(disconnect);
     api.onPlayerDeath(handleDeath);
     api.onCustomEvent("pvp:count-stats", excludePvpStats);
+    api.onCustomEvent("combat:safe-pvp", describeSafePvp);
     api.onShouldDropItemsOnDeath(shouldDrop);
     api.onCanAttack(canAttack);
     api.onCanTeleport(preventDuringDuel);

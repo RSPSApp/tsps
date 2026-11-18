@@ -205,6 +205,15 @@ function allowBountyHunterWeapons(event) {
     && event.target.getPrivateArea() === game.area) event.allowed = true;
 }
 
+function describeSafePvp(event) {
+  const { attacker, target } = event;
+  const game = Match.gameOf(attacker);
+  if (game && !game.over && Match.gameOf(target) === game
+    && game.area.contains(attacker.getLocation()) && game.area.contains(target.getLocation())
+    && attacker.getArea() === game.area && target.getArea() === game.area
+    && attacker.getPrivateArea() === game.area && target.getPrivateArea() === game.area) event.safe = true;
+}
+
 function attachLobby(api) {
   const [x0, y0, x1, y1] = Common.data.lobby.bounds;
   lobbyArea = new (lobbyAreaClass())([new Common.core.Boundary(x0, x1, y0, y1, 0)]);
@@ -214,6 +223,7 @@ function attachLobby(api) {
   api.onObjectInteraction("Barrier", { Pass: barrier });
   api.onPlayerLogout(forget);
   api.onCustomEvent("bounty-hunter:weapon-area", allowBountyHunterWeapons);
+  api.onCustomEvent("combat:safe-pvp", describeSafePvp);
   Common.every(tick);
 }
 

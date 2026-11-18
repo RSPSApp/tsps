@@ -1,6 +1,13 @@
 {
   "$comment": "Hand-maintained award triggers for league tasks, by league type and task id (the ids in the generated league-tasks.json), merged over the triggers the generator derived (this file wins). For a task the generator's name rules cannot map: a kill of an NPC the Wiki names differently, a quest whose task is not called \"Complete <quest>\". The kinds LeagueTasks understands are in docs/leagues.md (Tasks): kill { npcs: [names], count } (the kills of all of them added up), level { skill, level }, any-level { level, excluding }, level-up, total-level { level }, base-level { level }, combat-level { level }, quest { name }. Other plugins can also complete a task directly with the `league:complete-task` event.",
   "4": {
+    "cut-a-cactus-in-the-kharidian-desert": {"kind": "deed", "event": "waterskins:cactus-cut", "count": 1},
+    "dismantle-a-zulrah-scale-unique": {"kind": "deed", "event": "zulrah:unique-dismantled", "count": 1},
+    "imbue-a-god-cape": {"kind": "deed", "event": "mage-arena:cape-imbued", "count": 1},
+    "obtain-an-ecumenical-key": {"kind": "obtain", "items": ["Ecumenical key"], "source": "drop", "count": 1},
+    "pickpocket-a-bandit-in-the-bandit-camp": {"kind": "deed", "event": "thieving:success", "where": {"method": "pickpocket", "target": "bandit"}, "count": 1},
+    "pickpocket-a-vyre-50-times": {"kind": "deed", "event": "thieving:success", "where": {"method": "pickpocket", "target": "vyre"}, "count": 50},
+    "pickpocket-an-elf-50-times": {"kind": "deed", "event": "thieving:success", "where": {"method": "pickpocket", "target": "elf"}, "count": 50},
     "plant-100-bologano-seeds": {"kind": "deed", "event": "tithe-farm:planted", "where": {"crop": "Bologano"}, "count": 100},
     "plant-100-golovanova-seeds": {"kind": "deed", "event": "tithe-farm:planted", "where": {"crop": "Golovanova"}, "count": 100},
     "plant-100-logavano-seeds": {"kind": "deed", "event": "tithe-farm:planted", "where": {"crop": "Logavano"}, "count": 100},
@@ -113,6 +120,13 @@
     "open-30-grubby-chests": {"kind": "open-chest", "chests": ["Grubby Chest"], "count": 30}
   },
   "5": {
+    "dismantle-a-zulrah-scale-unique": {"kind": "deed", "event": "zulrah:unique-dismantled", "count": 1},
+    "have-drew-create-500-buckets": {"kind": "deed", "event": "desert-quarry:claimed", "atLeast": {"amount": 500}, "count": 1},
+    "imbue-a-god-cape": {"kind": "deed", "event": "mage-arena:cape-imbued", "count": 1},
+    "obtain-an-ecumenical-key": {"kind": "obtain", "items": ["Ecumenical key"], "source": "drop", "count": 1},
+    "pickpocket-a-bandit-in-the-bandit-camp": {"kind": "deed", "event": "thieving:success", "where": {"method": "pickpocket", "target": "bandit"}, "count": 1},
+    "pickpocket-a-vyre-50-times": {"kind": "deed", "event": "thieving:success", "where": {"method": "pickpocket", "target": "vyre"}, "count": 50},
+    "pickpocket-an-elf-50-times": {"kind": "deed", "event": "thieving:success", "where": {"method": "pickpocket", "target": "elf"}, "count": 50},
     "complete-tzhaar-ket-rak-s-fifth-challenge": {"kind": "deed", "event": "tzhaar-ket-rak:challenge-completed", "where": {"number": 5}, "count": 1},
     "complete-tzhaar-ket-rak-s-first-challenge": {"kind": "deed", "event": "tzhaar-ket-rak:challenge-completed", "where": {"number": 1}, "count": 1},
     "complete-tzhaar-ket-rak-s-fourth-challenge": {"kind": "deed", "event": "tzhaar-ket-rak:challenge-completed", "where": {"number": 4}, "count": 1},
@@ -273,6 +287,15 @@
     "open-50-zombie-pirate-lockers": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 50}
   },
   "6": {
+    "cut-a-cactus-in-the-kharidian-desert": {"kind": "deed", "event": "waterskins:cactus-cut", "count": 1},
+    "dismantle-a-zulrah-scale-unique": {"kind": "deed", "event": "zulrah:unique-dismantled", "count": 1},
+    "have-drew-create-500-buckets": {"kind": "deed", "event": "desert-quarry:claimed", "atLeast": {"amount": 500}, "count": 1},
+    "fully-charge-a-bracelet-of-ethereum": {"kind": "deed", "event": "revenants:bracelet-full", "count": 1},
+    "imbue-a-god-cape": {"kind": "deed", "event": "mage-arena:cape-imbued", "count": 1},
+    "obtain-an-ecumenical-key": {"kind": "obtain", "items": ["Ecumenical key"], "source": "drop", "count": 1},
+    "pickpocket-a-bandit-in-the-bandit-camp": {"kind": "deed", "event": "thieving:success", "where": {"method": "pickpocket", "target": "bandit"}, "count": 1},
+    "pickpocket-a-vyre-50-times": {"kind": "deed", "event": "thieving:success", "where": {"method": "pickpocket", "target": "vyre"}, "count": 50},
+    "pickpocket-an-elf-50-times": {"kind": "deed", "event": "thieving:success", "where": {"method": "pickpocket", "target": "elf"}, "count": 50},
     "attach-a-theatre-of-blood-ornament-kit": {"kind": "deed", "event": "ornament-kits:applied", "where": {"kit": ["Sanguine ornament kit", "Holy ornament kit"]}, "count": 1},
     "complete-tzhaar-ket-rak-s-fifth-challenge": {"kind": "deed", "event": "tzhaar-ket-rak:challenge-completed", "where": {"number": 5}, "count": 1},
     "complete-tzhaar-ket-rak-s-first-challenge": {"kind": "deed", "event": "tzhaar-ket-rak:challenge-completed", "where": {"number": 1}, "count": 1},

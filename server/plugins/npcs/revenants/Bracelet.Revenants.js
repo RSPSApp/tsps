@@ -41,6 +41,11 @@ function setCharges(item, amount) {
   item.setMetaValue(CHARGES_META_KEY, amount > 0 ? amount : undefined);
 }
 
+/** `revenants:bracelet-full` { player }: ether took a bracelet to its 16,000 (a league's "Fully charge"). */
+function charged(player, item, before) {
+  if (before < MAX_CHARGES && charges(item) >= MAX_CHARGES) pluginApi?.emitCustomEvent?.("revenants:bracelet-full", { player });
+}
+
 function wornBracelet(player) {
   const item = player.getEquipment?.()?.getItems?.()[HANDS_SLOT];
   const id = item?.getId?.();
@@ -74,7 +79,9 @@ function absorbEther(player, amount) {
   if (!item || !absorbing(player)) return amount;
   const taken = Math.min(amount, MAX_CHARGES - charges(item));
   if (taken <= 0) return amount;
-  setCharges(item, charges(item) + taken);
+  const before = charges(item);
+  setCharges(item, before + taken);
+  charged(player, item, before);
   refresh(player);
   return amount - taken;
 }
@@ -91,7 +98,9 @@ function chargeWithEther(event) {
     return;
   }
   player.getInventory().delete(ITEMS.ETHER, taken);
-  setCharges(bracelet, charges(bracelet) + taken);
+  const before = charges(bracelet);
+  setCharges(bracelet, before + taken);
+  charged(player, bracelet, before);
   refresh(player);
   player.sendMessage(chargesMessage(player, bracelet));
 }
@@ -156,7 +165,10 @@ function braceletDeathDrop(event) {
   event.handled = true;
 }
 
+let pluginApi = null;
+
 module.exports = function attachBracelet(api) {
+  pluginApi = api;
   api.persistAttribute(ABSORB_ATTRIBUTE);
   api.onItemOnItem("Revenant ether", "Bracelet of ethereum", chargeWithEther);
   api.onItemOnItem("Revenant ether", "Bracelet of ethereum (uncharged)", chargeWithEther);

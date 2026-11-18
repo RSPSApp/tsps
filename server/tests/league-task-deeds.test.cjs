@@ -3050,3 +3050,32 @@ test("Kourend and Karamja deeds through their events: TzHaar-Ket-Rak, the Infern
   emit("ornament-kits:applied", { kit: "Holy ornament kit" });
   assert.ok(done(f, "attach-a-theatre-of-blood-ornament-kit"));
 });
+
+// ---- deeds reported by their content: the Wilderness and leftovers (issue 6108 follow-ups) ----
+
+test("Wilderness and leftover deeds through their events: the key, the bracelet, god capes, pickpockets, Drew, the cactus, the blowpipe", (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const emit = (name, payload = {}) => PM.emitCustomEvent(name, { player, ...payload });
+  emit("npc-drops:roll", { drops: [{ itemId: item("Ecumenical key"), amount: 1 }] });
+  assert.ok(done(f, "obtain-an-ecumenical-key"));
+  for (const [event, id] of [["revenants:bracelet-full", "fully-charge-a-bracelet-of-ethereum"], ["mage-arena:cape-imbued", "imbue-a-god-cape"],
+    ["waterskins:cactus-cut", "cut-a-cactus-in-the-kharidian-desert"], ["zulrah:unique-dismantled", "dismantle-a-zulrah-scale-unique"]]) {
+    emit(event, {});
+    assert.ok(done(f, id), event);
+  }
+  for (let i = 0; i < 49; i++) emit("thieving:success", { method: "pickpocket", target: "vyre" });
+  emit("thieving:success", { method: "stall", target: "vyre" });
+  assert.ok(!done(f, "pickpocket-a-vyre-50-times"), "49 and a stall");
+  emit("thieving:success", { method: "pickpocket", target: "vyre" });
+  assert.ok(done(f, "pickpocket-a-vyre-50-times") && !done(f, "pickpocket-an-elf-50-times"));
+  // The "bandit" target is the desert Bandit Camp's own (pickpocketing.json lists its npc ids only).
+  emit("thieving:success", { method: "pickpocket", target: "bandit" });
+  assert.ok(done(f, "pickpocket-a-bandit-in-the-bandit-camp"));
+  // Drew: 500 buckets claimed in one go; 499 and then 1 don't add up to it.
+  emit("desert-quarry:claimed", { amount: 499 });
+  emit("desert-quarry:claimed", { amount: 1 });
+  assert.ok(!done(f, "have-drew-create-500-buckets"), "499 and 1");
+  emit("desert-quarry:claimed", { amount: 500 });
+  assert.ok(done(f, "have-drew-create-500-buckets"));
+});

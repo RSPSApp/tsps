@@ -24,6 +24,7 @@ before(() => {
     onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
     onObjectInteraction: (name, actions) => { hooks.objects[name] = actions; },
     onItemOnObject: (fn) => { hooks.itemOnObject = fn; },
+    emitCustomEvent: (name, payload) => { if (name === 'desert-quarry:claimed') claimed.push([payload.player, payload.amount]); },
     sendMultiChatboxPrompt: (player, title, ...pairs) => { player.menus.push(pairs.filter((x) => typeof x === 'string')); player.menu = pairs; return true; },
   };
   Quarry = require('../plugins/areas/DesertQuarry.plugin');
@@ -68,6 +69,8 @@ function player() {
 const drew = () => ({ getId: () => core.CacheDefinitions.getNpcId('grinder_drew') });
 const grinder = () => ({ getId: () => core.CacheDefinitions.getLocId('grinder_machine') });
 const op = (p, option) => hooks.npcs.Drew[option]({ player: p, npc: drew() });
+
+const claimed = [];
 
 test('the grinder takes every piece at once: 1kg 1, 2kg 2, 5kg 4, 10kg 8 buckets (232/03162: 2 medium, 2 large, 1 small -> 26)', () => {
   const p = player();
@@ -147,6 +150,8 @@ test('Claim Sand: noted buckets of sand at 50 coins each, as many as the sand, b
   assert.equal(p.inventory.getAmount(995), 796138 - 642 * 50);
   assert.equal(p.getAttribute(Quarry.BUCKETS_ATTRIBUTE), 1000 - 642);
   assert.equal(p.getAttribute(Quarry.SAND_ATTRIBUTE), 0);
+  // desert-quarry:claimed per claim with the buckets given; the refused and zero claims send nothing (a league's Drew task).
+  assert.deepEqual(claimed.filter(([who]) => who === p).map(([, amount]) => amount), [1, 641]);
 });
 
 test('Check, and Talk-to: the recorded lines, the menu, and Yes leading to the claim', () => {

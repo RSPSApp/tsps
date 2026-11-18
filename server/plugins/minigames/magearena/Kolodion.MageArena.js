@@ -218,6 +218,8 @@ function imbue(action, follower) {
   inventory.delete(cape, 1);
   inventory.adds(follower.imbuedId, 1);
   action.box = { items: [follower.imbuedId] };
+  // `mage-arena:cape-imbued` { player, itemId } (a league's "Imbue a god cape").
+  api.emitCustomEvent?.("mage-arena:cape-imbued", { player, itemId: follower.imbuedId });
   if (MageArenaII.stageOf(player) === STAGE.ALL_REMAINS) {
     // The live run clears every component and completes on the first imbue (235/03344).
     MageArenaII.setComponents(player, 0);

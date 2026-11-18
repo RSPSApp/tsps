@@ -127,6 +127,9 @@ function claimSand(player) {
     inventory.refreshItems();
     setBuckets(player, buckets(player) - given);
     setSand(player, sand(player) - given);
+    // `desert-quarry:claimed` { player, amount }: buckets of sand claimed in one go (a league's "Have Drew create
+    // 500 buckets"; the Raging Echoes Wiki row adds "All buckets of sand must be claimed in one go").
+    api.emitCustomEvent?.("desert-quarry:claimed", { player, amount: given });
     talk(player, [["happy2", text("claimed")]]);
   });
 }

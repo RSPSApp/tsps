@@ -89,3 +89,24 @@ test("runes joining stacks already in a full bank still go, and then the pool cl
   assert.equal(p.getBank(0).getAmount(core.ItemIdentifiers.NATURE_RUNE), 41);
   assert.deepEqual(messages, [ALL]);
 });
+
+test("Deposit-runes respects inventory slot locks until the locks are disabled", (t) => {
+  const { p, messages } = runecrafter(t, null);
+  const I = core.ItemIdentifiers;
+  const inventory = p.getInventory();
+  inventory.add(new core.Item(I.AIR_RUNE, 30), false);
+  p.setAttribute("bank-settings:deposit-locks", 1);
+  Pool._test.depositRunes({ player: p, objectId: pool });
+  assert.equal(inventory.forSlot(0).getId(), I.NATURE_RUNE);
+  assert.equal(inventory.forSlot(0).getAmount(), 40);
+  assert.equal(p.getBank(0).getAmount(I.NATURE_RUNE), 0);
+  assert.equal(inventory.getAmount(I.AIR_RUNE), 0);
+  assert.equal(p.getBank(0).getAmount(I.AIR_RUNE), 30);
+  assert.ok(!messages.includes(ALL), "the pool does not claim all runes while a locked stack remains");
+
+  p.setAttribute("bank-settings:deposit-locks-off", 1);
+  Pool._test.depositRunes({ player: p, objectId: pool });
+  assert.equal(inventory.getAmount(I.NATURE_RUNE), 0);
+  assert.equal(p.getBank(0).getAmount(I.NATURE_RUNE), 40);
+  assert.equal(messages.at(-1), ALL);
+});

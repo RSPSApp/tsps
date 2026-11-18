@@ -129,3 +129,31 @@ test("hits coming in during the crossing are queued until the player lands; the 
   assert.ok(player.getHitpoints() < before, "the fall hurts");
   assert.equal(player.getCombat().isAnimationStalled(), false, "the stall ends with the fall");
 });
+
+test("an attack's hit held by the crossing still keeps the crosser from logging out, and lands after", (t) => {
+  const { PendingHit } = require("../dist/game/content/combat/hit/PendingHit");
+  const { CombatFactory } = require("../dist/game/content/combat/CombatFactory");
+  const previousCycle = World.processCycle;
+  t.after(() => { World.processCycle = previousCycle; });
+  const random = Math.random;
+  t.after(() => { Math.random = random; });
+  Math.random = () => 0;
+  const player = actor(t, 3002, 3945);
+  const attacker = actor(t, 3003, 3945);
+  const queue = player.getCombat().getHitQueue();
+  const landed = t.mock.method(CombatFactory, "executeHit", () => {});
+
+  walkOnLog(player);
+  tick(player);
+  assert.equal(player.logoutRefusal(), null, "not in combat before the attack");
+  queue.addPendingHit(new PendingHit(attacker, player, CombatFactory.MELEE_COMBAT, 0), World.getProcessCycle() + 1);
+  for (let ticks = 0; player.getAttribute("agility.obstacle") != null; ticks++) {
+    assert.ok(ticks < 20, "the crossing ends");
+    tick(player);
+    if (player.getAttribute("agility.obstacle") == null) break;
+    assert.equal(landed.mock.callCount(), 0, "the attack's hit waits while crossing");
+    assert.notEqual(player.logoutRefusal(), null, "a held hit still refuses the logout");
+  }
+  tick(player);
+  assert.equal(landed.mock.callCount(), 1, "the hit lands once across");
+});

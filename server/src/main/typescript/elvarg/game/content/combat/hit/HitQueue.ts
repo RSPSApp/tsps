@@ -62,6 +62,17 @@ export class HitQueue {
             ? this.character.getCombat().getIncomingHitCycle()
             : -1;
         const stalled = hold > currentCycle;
+        if (stalled) {
+            // A held hit still keeps its target from logging out (Combat.markHeldHit), as a landed one would.
+            for (const { hit, revealCycle } of this.pendingHits) {
+                if (revealCycle > currentCycle) break;
+                const attacker = hit.getAttacker();
+                if (hit.getTarget() === character && attacker != null && attacker !== character &&
+                    attacker.hasFlag?.(CombatFactory.BYSTANDER_FLAG) !== true) {
+                    character.getCombat().markHeldHit(attacker);
+                }
+            }
+        }
         while (
             !stalled &&
             this.pendingHits.length > 0 &&

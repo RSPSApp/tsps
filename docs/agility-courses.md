@@ -151,7 +151,8 @@ Shayzien's shared obstacles leave the advanced varbit alone (1632).
   once they're free (the engine's held stall input). Hits coming in from others are queued and
   land after the obstacle (Wiki: "Hits are usually queued up on the player, and received only
   after the action is complete"); an obstacle's own fall damage has no source and lands as it
-  plays. Issue 6237: an Attack click on the Wilderness log used to start the fight mid-crossing.
+  plays. A held hit still starts the 16-tick logout timer as it comes due (`Combat.markHeldHit`),
+  so an attacked player can't log out on the obstacle before it lands (ours: the Wiki doesn't say). Issue 6237: an Attack click on the Wilderness log used to start the fight mid-crossing.
 - **Run energy:** each completed rooftop obstacle restores 1.5% (150 of 10,000), measured in the
   main-game captures 339 (72 Agility) and 3154 (99 Agility); the server keeps whole percent, so the
   half carries to the next obstacle. The Wiki's pages say 1-2% and "around 2%". Varrock's clothes

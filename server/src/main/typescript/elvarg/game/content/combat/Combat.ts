@@ -831,6 +831,15 @@ export class Combat {
         if (attacker?.isPlayer()) this.lastAttackedByPlayerCycle = World.getProcessCycle();
         this.applyAttacker(attacker);
     }
+    /**
+     * A hit from `attacker` came due but a full stall is holding it (HitQueue). It still counts as
+     * being in combat for the logout timer, or an obstacle would let the target log out before
+     * the hit lands; the attacker, retaliation and the rest wait for the hit itself.
+     */
+    public markHeldHit(attacker: Mobile): void {
+        this.lastAttackedCycle = World.getProcessCycle();
+        if (attacker.isPlayer()) this.lastAttackedByPlayerCycle = World.getProcessCycle();
+    }
     /** Ticks since a player last hit this character, or Infinity when none has. */
     public ticksSinceAttackedByPlayer(): number {
         return this.lastAttackedByPlayerCycle < 0 ? Infinity : World.getProcessCycle() - this.lastAttackedByPlayerCycle;

@@ -59,7 +59,7 @@ test('hits due during a full animation stall are kept until it releases', () => 
     target.isPlayer = () => true;
     target.isUntargetable = () => false;
     const RELEASE = 7; // the cycle the stalled player is free again
-    target.getCombat = () => ({ getIncomingHitCycle: () => RELEASE });
+    target.getCombat = () => ({ getIncomingHitCycle: () => RELEASE, markHeldHit() {} });
 
     const attacker = { isRegistered: () => true, getHitpoints: () => 50 };
     const swing = (damage) => ({
@@ -181,7 +181,7 @@ test('a stall that begins after a hit is queued still holds that hit', () => {
     target.isPlayer = () => true;
     target.isUntargetable = () => false;
     let hold = -1; // nothing holds the player the moment the shot is loosed
-    target.getCombat = () => ({ getIncomingHitCycle: () => hold });
+    target.getCombat = () => ({ getIncomingHitCycle: () => hold, markHeldHit() {} });
 
     const landed = [];
     const executeHit = CombatFactory.executeHit;
@@ -213,7 +213,7 @@ test('stopping the animation early releases the hits it was holding', () => {
     target.isPlayer = () => true;
     target.isUntargetable = () => false;
     let hold = 12; // a full stall through cycle 12 at the moment the hit is queued
-    target.getCombat = () => ({ getIncomingHitCycle: () => hold });
+    target.getCombat = () => ({ getIncomingHitCycle: () => hold, markHeldHit() {} });
 
     const landed = [];
     const executeHit = CombatFactory.executeHit;
@@ -245,7 +245,7 @@ test('clearIncoming during a stalled drain also drops the held hits', () => {
     const target = buildTarget(100);
     target.isPlayer = () => true;
     target.getAsPlayer = () => ({ getHitpoints: () => 0 });
-    target.getCombat = () => ({ getIncomingHitCycle: () => 9 });
+    target.getCombat = () => ({ getIncomingHitCycle: () => 9, markHeldHit() {} });
     const other = { isRegistered: () => true };
     const queue = new HitQueue(target);
     const own = new HitDamage(5, HitMask.GREEN);

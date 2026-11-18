@@ -2945,3 +2945,23 @@ test("General deeds through their events: Slayer, random events, Jacky Jester, D
   emit("firemaking:success", { skill: core.Skill.FIREMAKING, itemId: item("Purple logs") });
   assert.ok(done(f, "burn-some-coloured-logs"));
 });
+
+// ---- deeds reported by their content: Forestry (issue 6108 follow-ups) ----
+
+test("Forestry deeds through their events: roots, entlings, the leprechaun, and each event completed by its kind", (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const emit = (name, payload = {}) => PM.emitCustomEvent(name, { player, ...payload });
+  emit("forestry:root-chopped", { kind: "roots" });
+  assert.ok(done(f, "chop-some-rising-roots"));
+  emit("forestry:entling-pruned");
+  assert.ok(done(f, "give-an-entling-a-haircut"));
+  emit("forestry:leprechaun-banked");
+  assert.ok(done(f, "have-a-leprechaun-send-something-to-the-bank"));
+  emit("forestry:event-completed", { event: "flowering" });
+  assert.ok(done(f, "complete-the-flowering-bush-event") && !done(f, "complete-the-ritual-forestry-event"));
+  for (const [kind, id] of [["pheasant", "complete-the-pheasant-forestry-event"], ["ritual", "complete-the-ritual-forestry-event"], ["sapling", "complete-the-struggling-sapling-event"]]) {
+    emit("forestry:event-completed", { event: kind });
+    assert.ok(done(f, id), kind);
+  }
+});

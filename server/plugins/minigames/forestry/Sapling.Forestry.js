@@ -313,6 +313,7 @@ function gifts(event) {
     Common.award(player, Common.data.leaves[leaves], amount);
     player.sendMessage(Common.message("leaves", { amount, leaves }));
     Common.xp(player, "WOODCUTTING", Common.level(player, "WOODCUTTING") * sapling.bonusXpPerLevel * (average / 100));
+    Common.api.emitCustomEvent("forestry:event-completed", { player, event: "sapling" });
   }
 }
 

@@ -169,6 +169,8 @@ function award(player, { event, kind }) {
   }
   Common.xp(player, "WOODCUTTING", Common.level(player, "WOODCUTTING") * R().xpPerLevel[kind]);
   Common.bark(player, rootReward(player, kind));
+  // `forestry:root-chopped` { player, kind }: a good chop's reward (a league's "Chop some Rising Roots").
+  Common.api.emitCustomEvent("forestry:root-chopped", { player, kind });
 }
 
 /** The axe anim every four ticks while the root stands and the player stays put; bark the tick after a good chop. */

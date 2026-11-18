@@ -46,7 +46,7 @@ before(() => {
       if (typeof name === 'string') for (const [op, fn] of Object.entries(actions)) (hooks.items ??= new Map()).set(`${name}:${op}`, fn);
     },
     onPlayerLogin() {},
-    emitCustomEvent: (name, payload) => lootTracker.get(name)?.(payload),
+    emitCustomEvent: (name, payload) => { forestryEvents.push([name, payload]); return lootTracker.get(name)?.(payload); },
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ title, args }),
   };
   const Woodcutting = require('../plugins/skills/Woodcutting.plugin');
@@ -164,6 +164,8 @@ function alwaysFruit(body) {
   }
 }
 
+const forestryEvents = [];
+
 test('flowering: eight bushes and a pair; pollen collected, then applied and taken back over two ticks', () => {
   const p = fakePlayer({ level: 80 });
   const event = startEvent('flowering', [p]);
@@ -267,6 +269,8 @@ test('flowering: pairs close every 70 ticks; a pollinated bush fruits, goes and 
   ticks(1);
   assert.ok(bark(p) > before, 'the lump the tick after that');
   assert.ok(p.inventory.getAmount(464) >= 1 && p.inventory.getAmount(464) <= 8, 'strange fruit');
+  // forestry:event-completed with the gift (a league's "Complete the Flowering Bush event").
+  assert.equal(forestryEvents.filter(([name, e]) => name === 'forestry:event-completed' && e.player === p && e.event === 'flowering').length, 1);
 }));
 
 test('flowering: the pair open at the end closes with it, so its exchanges count', () => alwaysFruit(() => {
@@ -390,6 +394,8 @@ test("Prune's menu, then the end at 199: haircuts three ticks on, the gift the t
     prune(p, entling, op);
   }
   assert.equal(first.pruned && second.pruned, true);
+  // forestry:entling-pruned per wanted cut (a league's haircut task).
+  assert.equal(forestryEvents.filter(([name, e]) => name === 'forestry:entling-pruned' && e.player === p).length, 4, "the menu's Back and three Prune- options");
   ticks(199 - 6 - 1);
   assert.equal(Entlings.events.has(event), true);
   ticks(1);

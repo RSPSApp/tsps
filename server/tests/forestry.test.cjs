@@ -37,7 +37,7 @@ before(() => {
       (hooks.logins ??= []).push(fn);
       hooks.login = (event) => hooks.logins.forEach((handler) => handler(event));
     },
-    emitCustomEvent() {},
+    emitCustomEvent(name, payload) { forestryEvents.push([name, payload]); },
   };
   Woodcutting = require('../plugins/skills/Woodcutting.plugin');
   Woodcutting.isWoodcuttingActive = (player) => chopping.has(player);
@@ -144,6 +144,8 @@ function startEvent(kind, players) {
 }
 
 // ------------------------------------------------------------------ spawns
+
+const forestryEvents = [];
 
 test('an event needs an eligible tree, a kit, enough chopping, and none nearby; it comes the tick after a log', () => {
   const p = fakePlayer({ kit: false });
@@ -346,6 +348,7 @@ test('saved: the thriving sapling, then bark, leaves and bonus XP; the tree back
   assert.equal(Spawns.active.has(event), false);
   ticks(1);
   assert.ok(p.messages.some((m) => /^You've been awarded <col=3366ff>(1[89]\d|200) Anima-infused bark<\/col>\.$/.test(m)), 'the lump for 100%');
+  assert.ok(forestryEvents.some(([name, e]) => name === 'forestry:event-completed' && e.player === p && e.event === 'sapling'), 'forestry:event-completed "sapling"');
   // Wiki: "20 leaves of a random tier" (recorded: a willow sapling gave yew leaves, 227/00083.txt:365537).
   const LEAF_IDS = { 'Leaves': 6020, 'Oak leaves': 6022, 'Willow leaves': 6024, 'Maple leaves': 6028, 'Yew leaves': 6026, 'Magic leaves': 6030 };
   const awarded = p.messages.map((m) => m.match(/^You've been awarded <col=3366ff>(\d+)<\/col> piles of <col=3366ff>([A-Za-z ]+)<\/col>\.$/)).find(Boolean);
@@ -488,6 +491,7 @@ test('chopping a root: the swing, the anim again 2 ticks on and every 4, bark th
     ticks(1);
     assert.equal(p.spam.filter((m) => m.includes('Anima-infused bark')).length, 2);
     assert.equal(Roots.sessions.has(p), true, 'still chopping');
+    assert.equal(forestryEvents.filter(([name, e]) => name === 'forestry:root-chopped' && e.player === p).length, 2, 'one per bark (a league task)');
   } finally {
     Math.random = random;
   }

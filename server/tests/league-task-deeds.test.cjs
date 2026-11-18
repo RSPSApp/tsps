@@ -2018,7 +2018,7 @@ test("near: an emote by a child, bard or quetzal counts within the recorded dist
   core.RegionManager.loadMapFiles(1666, 3136);
   const f = pactsCharacter(t);
   const cases = [
-    // Cry: completed 2 tiles from a child (tick 14398).
+    // Cry: 2 tiles from a child (RSProx 237/1098: cried at tick 14398, the task at 14399).
     { id: "cry-near-a-child", slot: 16, npc: "Child", near: 2, far: 3 },
     // Dance: none 3 tiles from the bards (tick 25550), completed 1 tile away (25555).
     { id: "dance-near-a-bard", slot: 12, npc: "Bard", near: 1, far: 3 },
@@ -2178,7 +2178,7 @@ test("deeds: a buffalo milked, a bird bath drunk from, scenery admired, stew giv
   const go = (x, y) => { f.player.moveTo(new core.Location(x, y, 0)); f.player.needsPlacement = false; core.RegionManager.loadMapFiles(x, y); };
   const objectAt = (x, y, name) => core.MapObjects.getObjectsAt(new core.Location(x, y, 0), null).find((object) => object.getDefinition()?.getName() === name);
 
-  // Milk a Buffalo: a Dairy Buffalo, two ticks after the arrival (RSProx 237/1098 tick 14560).
+  // Milk a Buffalo: a Dairy Buffalo, two ticks after the arrival (RSProx 237/1098: clicked 14560, arrived 14569, effects 14571).
   go(1587, 3118);
   const dairy = new core.GameObject(52576, new core.Location(1588, 3118, 0), 10, 0, null);
   core.ObjectManager.register(dairy, true);

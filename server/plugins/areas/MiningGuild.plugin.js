@@ -55,6 +55,7 @@ const SUPERIOR_MINING_GLOVES = 21345;
 const EXPERT_MINING_GLOVES = 21392;
 const COMBINE_FEE = 40;
 let core;
+let pluginApi;
 let membersArea = null;
 
 function inMembersArea(location) {
@@ -164,6 +165,8 @@ function combineGloves(event) {
   inventory.delete(SUPERIOR_MINING_GLOVES, 1);
   inventory.delete(MINERAL_ITEM, COMBINE_FEE);
   inventory.adds(EXPERT_MINING_GLOVES, 1);
+  // They fill their slot in the collection log's Other > Miscellaneous page (the cache's category).
+  pluginApi.emitCustomEvent("collection-log:obtain", { player, itemId: EXPERT_MINING_GLOVES, amount: 1 });
 }
 
 /** The branches carry no action of their own, so the choice itself flips the toggle. */
@@ -193,6 +196,7 @@ module.exports = {
   _test: { mineralsEnabled, setMinerals, toggleMinerals, answerMineralCondition, chooseMinerals, combineGloves, rollMinerals, inMembersArea, MINERALS_ATTRIBUTE, MINERAL_ITEM },
   register(api) {
     core = api.core;
+    pluginApi = api;
     api.persistAttribute(MINERALS_ATTRIBUTE, true);
     api.onCustomEvent("ladders:climb", guardLadder);
     api.onCustomEvent("door:toggle", useDoor);

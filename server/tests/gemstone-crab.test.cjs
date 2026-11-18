@@ -232,12 +232,15 @@ test("the burrow messages go to the players at its mine, not the whole world", (
   const here = player("here", x - 1, y);
   const edgeville = player("edgeville", 3093, 3493);
   zone(hooks.zonesEnter).handler({ player: here });
+  const witnessed = [];
+  events.onCustomEvent("gemstone-crab:burrowed", (event) => witnessed.push(event.player));
   state.damage.set("here", 5);
   state.endsAt = state.tick;
   withRandom(0.99, () => { for (let t = 0; t < 3; t++) tick(); });
   assert.ok(here.messages.includes("The gemstone crab burrows away, leaving a piece of its shell behind."));
   assert.ok(here.messages.includes("The top crab crusher was here!"));
   assert.deepEqual(edgeville.messages, [], "nothing for a player elsewhere");
+  assert.deepEqual(witnessed, [here], "gemstone-crab:burrowed for those at its mine (a league's task)");
   zone(hooks.zonesExit).handler({ player: here });
 });
 

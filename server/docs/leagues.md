@@ -2043,6 +2043,15 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
   Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
   and the barrel.
+- **Varlamore deeds**, from their content's events:
+  - Quetzals: `quetzals:flown` { player, site } on landing (Renu's and Primio's flights, not the whistle's
+    teleport); `quetzals:site-built` { player, site, all } (all: every site that needs building is built);
+    `quetzals:whistle-crafted` { player, itemId }.
+  - `smithing:calcified-crushed` { player, itemId } per deposit; `fletching:spool-filled` { player, added,
+    stored } (`atLeast` stored 10,000); `hunter:barehand-caught` { player, name }, `where` "moonlight moth".
+  - Achilka: Ferries' existing `ferries:arrived`, `where` route varla-kastori, -tal-teklan or -gloomthorn.
+  - `gemstone-crab:burrowed` { player } for each player at its mine when it burrows.
+  - The Cam Torum beard: Makeover's existing `makeover:applied` with type 1 (facial hair), `near` Sonalo.
 - **Forestry deeds**, from the Forestry events' own rewards:
   - `forestry:root-chopped` { player, kind } on a rising root's bark; `forestry:entling-pruned` { player } on a
     cut an entling wanted; `forestry:leprechaun-banked` { player } when the leprechaun banked something.

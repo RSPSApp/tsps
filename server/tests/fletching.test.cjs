@@ -31,6 +31,7 @@ function fakeApi() {
     onItemAction(name, actions) { hooks.itemActions[name] = actions; },
     onCustomEvent(name, handler) { (hooks.events[name] ??= []).push(handler); },
     emitCustomEvent(name, event) {
+      if (name === "fletching:spool-filled") spoolFills.push(event);
       if (name === "quest:is-started") event.started = answers.started.has(event.key);
       if (name === "quest:is-complete") event.complete = answers.complete.has(event.key);
       if (name === "slayer:has-unlock") event.unlocked = answers.unlocks.has(event.name);
@@ -111,6 +112,8 @@ beforeEach(() => {
   answers.unlocks.clear();
   diaryTasks.length = 0;
 });
+
+const spoolFills = [];
 
 test("every recipe resolves to cache items, animations and varbits", () => {
   for (const recipe of Shared.getRecipes()) {
@@ -385,6 +388,7 @@ test("the bow string spool stores strings on the account and strings bows from t
   use(p, "BOW_STRING", "BOW_STRING_SPOOL");
   assert.equal(p.count("BOW_STRING"), 0);
   assert.equal(p.getAttribute(Spool.CHARGES_ATTRIBUTE), 3);
+  assert.deepEqual(spoolFills.filter((e) => e.player === p).map((e) => [e.added, e.stored]), [[3, 3]], "fletching:spool-filled (a league's spool tasks)");
 
   use(p, "BOW_STRING_SPOOL", "MAGIC_LONGBOW_U_");
   p.menu().execute(I.MAGIC_LONGBOW, 28);
@@ -397,6 +401,8 @@ test("the bow string spool stores strings on the account and strings bows from t
   p.getInventory().addItem(new core.Item(I.BOW_STRING, 1));
   hooks.events["crafting:spun"].forEach((handler) => handler({ player: p, itemId: I.BOW_STRING, amount: 1 }));
   assert.equal(p.getAttribute(Spool.CHARGES_ATTRIBUTE), 2);
+  // A spun string stored sends spool-filled too; the refused spin (nothing in the pack) didn't.
+  assert.deepEqual(spoolFills.filter((e) => e.player === p).map((e) => [e.added, e.stored]), [[3, 3], [1, 2]]);
 });
 
 test("an empty spool on an unstrung bow does nothing", () => {

@@ -81,6 +81,9 @@ function finish(player, site) {
   for (const { id, amount } of materials()) inventory.delete(id, amount);
   inventory.refreshItems?.();
   Common.markBuilt(player, site);
+  // `quetzals:site-built` { player, site, all }: all is every site that has to be built now built ("Build all").
+  const all = Common.landingSites().filter((each) => !each.autoUnlocked && Common.SITE_VARBITS[each.id]).every((each) => Common.siteBuilt(player, each));
+  Common.api.emitCustomEvent("quetzals:site-built", { player, site: site.name, all });
   const varbit = Common.SITE_VARBITS[site.id];
   if (varbit) Common.setVarbits(player, { [varbit]: appearance(player) });
   Common.box(player, Common.message("built"));

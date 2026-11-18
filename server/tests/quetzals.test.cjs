@@ -79,6 +79,7 @@ const api = {
   onCustomEvent: (name, handler) => hooks.events.set(name, [...(hooks.events.get(name) ?? []), handler]),
   onNpcDialogueCondition: (handler) => hooks.conditions.push(handler),
   emitCustomEvent: (name, request) => {
+    quetzalEvents.push([name, request]);
     if (name === "quest:is-complete") request.complete = completeQuests.has(request.key);
     if (name === "hunter:rumours-completed") request.completed = rumours;
     if (name === "npc-dialogue:start") {
@@ -210,6 +211,8 @@ before(async () => {
   Quetzals.register(api);
 });
 
+const quetzalEvents = [];
+
 test("the maps' icons are <menu>:icons (874:12, 949:12) and a site is usable by client script 5015", () => {
   assert.equal(icons("quetzal_menu"), (874 << 16) | 12);
   assert.equal(icons("quetzalwhistle_menu"), (949 << 16) | 12);
@@ -274,6 +277,10 @@ test("Build needs Twilight's Promise and the materials, then marks the site buil
   assert.equal(builder.getInventory().getAmount(obj("softclay")), 0);
   assert.deepEqual(builder.sent.boxes, ["You build a quetzal landing site."]);
   assert.equal(builder.blocked, false);
+  // quetzals:site-built once, not yet all of them (a league's landing-site tasks).
+  const built = quetzalEvents.filter(([name, e]) => name === "quetzals:site-built" && e.player === builder);
+  assert.equal(built.length, 1);
+  assert.equal(built[0][1].all, false);
   assert.ok(Object.values(builder.getAttribute(Common.VARPS_ATTRIBUTE)).includes(1 << camTorum.id), "saved for relog");
   completeQuests = new Set();
 });
@@ -392,6 +399,7 @@ test("Craft makes a basic whistle from willow logs and upgrades keep the charges
   player.getInventory().add(new Item(knife, 1));
   itemHook("Basic quetzal whistle blueprint", "Craft")({ player, itemId: obj("hg_whistle_blueprint_1") });
   assert.equal(player.sent.messages.at(-1), "You craft yourself a basic quetzal whistle.");
+  assert.ok(quetzalEvents.some(([name, e]) => name === "quetzals:whistle-crafted" && e.player === player), "quetzals:whistle-crafted (a league's task)");
   assert.equal(player.getInventory().contains(obj("hg_quetzalwhistle_basic")), true);
   assert.equal(player.getInventory().contains(obj("willow_logs")), false);
 

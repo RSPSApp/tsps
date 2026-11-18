@@ -177,6 +177,8 @@ function announceBurrow(burrow) {
     for (const player of inArea[burrow.spot]) player.sendMessage(text);
   };
   tell("The gemstone crab burrows away, leaving a piece of its shell behind.");
+  // `gemstone-crab:burrowed` { player }: each player at its mine sees it go ("Witness the gemstone crab burrow away").
+  for (const player of inArea[burrow.spot]) pluginApi.emitCustomEvent("gemstone-crab:burrowed", { player });
   const names = burrow.top.slice(0, 3);
   if (names.length === 1) tell(`The top crab crusher was ${names[0]}!`);
   else if (names.length === 2) tell(`The top two crab crushers were ${names[0]} & ${names[1]}!`);

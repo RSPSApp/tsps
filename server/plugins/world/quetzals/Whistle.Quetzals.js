@@ -232,6 +232,8 @@ function craft(event) {
   inventory.add(new Common.core.Item(made.id, 1), true);
   inventory.refreshItems?.();
   setCharges(player, made, charges);
+  // `quetzals:whistle-crafted` { player, itemId } (a league's "Create a Quetzal Whistle").
+  Common.api.emitCustomEvent("quetzals:whistle-crafted", { player, itemId: made.id });
   player.sendMessage(blueprint.made);
   return true;
 }

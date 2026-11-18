@@ -67,6 +67,8 @@ test("a deposit used on an anvil smashes one every 3 ticks until none are left, 
   Math.random = () => 0.5; // shards, 10 a deposit
   const player = playerWith(3);
   t.after(() => { player.setRegistered(false); core.TaskManager.cancelTasks(player.getIndex()); });
+  const crushed = [];
+  PluginManager.createApi("CalcifiedCrushedTest").onCustomEvent("smithing:calcified-crushed", (event) => { if (event.player === player) crushed.push(event); });
   assert.equal(use(player, anvil()), true, "the deposit is handled");
 
   core.TaskManager.process();
@@ -92,6 +94,7 @@ test("a deposit used on an anvil smashes one every 3 ticks until none are left, 
   core.TaskManager.process();
   assert.equal(shards(player), 30, "nothing more is crushed");
   assert.equal(smithingXp(player), 3);
+  assert.equal(crushed.length, 3, "smithing:calcified-crushed per deposit (a league's task)");
 });
 
 test("three deposits in four give 5-15 shards, the rest a calcified moth", (t) => {

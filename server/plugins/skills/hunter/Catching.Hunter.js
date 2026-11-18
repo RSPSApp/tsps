@@ -207,6 +207,8 @@ function catchBarehanded(player, npc, npcId, def, name) {
   if (graphic != null) player.performGraphic(new H.core.Graphic(graphic, RELEASE_DELAY, RELEASE_HEIGHT));
   player.getPacketSender().sendSound(RELEASE_SOUND, 1, RELEASE_DELAY);
   player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, `You catch and release the ${name}.`);
+  // `hunter:barehand-caught` { player, name }: "moonlight moth" (a league's "Catch a moonlight moth bare-handed").
+  H.api.emitCustomEvent("hunter:barehand-caught", { player, name });
   xp(player, def.handsXp, "butterfly", npcId);
   freed(player, def);
   hide(npc, RELEASED_TICKS + 10, RELEASED_TICKS);

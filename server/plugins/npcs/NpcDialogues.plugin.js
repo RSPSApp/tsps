@@ -25,7 +25,9 @@
  * with versions emits "npc-dialogue:shop" ({ player, npcId, target, shops, shop }) to pick one.
  * A counted random ({type: "random", count, non_repeating: true}) emits "npc-dialogue:draw" ({ player, npc, npcId,
  * definition, draw, count, text, question }) before each draw: `question` is the first spoken line of the drawn
- * alternative before the ordinal placeholder is filled.
+ * alternative before the ordinal placeholder is filled. A plain random emits "npc-dialogue:random" ({ player, npc,
+ * npcId, definition, options, index }) before it plays: a plugin can set `index` to the alternative this player
+ * always gets (an ogre's chosen seasoning).
  */
 const fs = require("fs");
 const path = require("path");
@@ -1441,7 +1443,12 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           if (Number.isInteger(step.count) && step.count > 1 && step.non_repeating === true) {
             return countedRandom.start(step, options, rest, currentRecord);
           }
-          const index = Math.floor(Math.random() * options.length);
+          // "npc-dialogue:random" lets a plugin pick the alternative (`index`) a player is always given:
+          // the wiki's "Dialogue 1 / Dialogue 2" for what differs from player to player, not per talk.
+          const draw = { player, npc: event.npc, npcId, definition, options, index: Math.floor(Math.random() * options.length) };
+          api.emitCustomEvent("npc-dialogue:random", draw);
+          const index = Number.isInteger(draw.index) && draw.index >= 0 && draw.index < options.length
+            ? draw.index : Math.floor(Math.random() * options.length);
           const option = options[index];
           if (option.hook) return unavailable();
           // The record lets an "above" jump see the other random alternatives

@@ -94,6 +94,11 @@ export class NPCDeathTask extends Task {
         this.remove();
     }
 
+    /** Whether the npc is still in the world (its remains can be taken out early by a plugin). */
+    public isNpcRegistered(): boolean {
+        return this.npc.isRegistered();
+    }
+
     /** Takes the npc out of the world and queues its respawn. */
     public remove(respawnTicks?: number): void {
         const skipDefaultRespawn = (this.npc as any).__skipDefaultRespawn === true;
@@ -125,6 +130,8 @@ class NPCRemainsTask extends Task {
 
     public execute(): void {
         this.stop();
+        // A plugin may have taken its remains out of the world already (a plucked chompy carcass).
+        if (!this.death.isNpcRegistered()) return;
         this.death.remove(this.respawnTicks);
     }
 }

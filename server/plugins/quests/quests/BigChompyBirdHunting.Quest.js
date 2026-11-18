@@ -1,23 +1,26 @@
 /**
  * Big Chompy Bird Hunting (members).
  *
- * The words come from the "Big Chompy Bird Hunting" transcript page; Rantz, Fycie
- * and Bugs are indexed, so this plugin supplies the by-stage variant selector, the
- * prose-condition answers, the start hook (granting the quest start), the ogre-arrow
- * hand-in (MSG "Rantz takes six ogre arrows off you.") and the seasoned-chompy
- * completion action. The xrsps stage machine (varp 293) and its kill counter
- * (varp 294) are ported here.
+ * The words come from the "Big Chompy Bird Hunting" transcript page; Rantz, Fycie and Bugs are
+ * indexed, so this plugin supplies the by-stage variant selector, the prose-condition answers, the
+ * start hook, the hand-ins and the quest's own interactions. The stage varp is 293 (chompybird) and
+ * the kill counter varp 294.
  *
- * The child shops, arrow fletching, cave/chest, bellows/toad bait, chompy
- * kill/pluck, ingredient order and spit-roast cooking are wired below as quest-local
- * interaction hooks. Arrow fletching itself is owned by the Fletching plugin.
+ * Flow, timings, ids and the lines played at each stage follow the user's rev 242 whole-quest capture
+ * (docs/quests/big-chompy-bird-hunting/README.md, which lists the capture facts with their ticks); the
+ * Wiki (quest page, Transcript:Big Chompy Bird Hunting, Bloated toad, Chompy bird, Locked Ogre chest)
+ * where the capture is silent or disagrees.
  *
- * Revision 241 spawns Rantz as the nameless parent 1470; interaction events carry the
- * varbit-resolved content id 14793 (NpcIdentifiers.RANTZ), so both are accepted
- * alongside the historical 4855-4857 ids.
+ * Units: Hunt.BigChompyBirdHunting.js (bait, birds, carcasses), Chest.BigChompyBirdHunting.js (the
+ * rock-weighted chest). Arrow fletching is the Fletching plugin's, Suck on swamp bubbles is
+ * SwampBubbles', the cave entrance and exits are world/data/loc-teleports.json rows.
+ *
+ * Revision 241+ spawns Rantz as the nameless parent 1470; interaction events carry the varbit-resolved
+ * content id 14793 / 14794, so all are accepted alongside the historical 4855-4857 ids.
  */
 module.exports = function registerBigChompyBirdHuntingQuest(api) {
-  const { Skill, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Skill, Item, ItemIdentifiers, NpcIdentifiers, Animation, Graphic, Location, TaskManager, CountdownTask,
+    ItemStatementDialogue, Sounds } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Big Chompy Bird Hunting";
@@ -27,6 +30,9 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
 
   const VARP_CHOMPY_BIRD = 293;
   const VARP_CHOMPY_KILLS = 294;
+  const VARBIT_SPIT_ROASTER = 1770;
+  const VARBIT_CURRENT_HINT_ARROW = 14192;
+  const HINT_ARROW_SET = 7;
 
   const STAGE_STARTED = 5;
   const STAGE_GIVEN_ARROWS = 10;
@@ -55,14 +61,14 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   const FYCIE_FEATHERS_MESSAGE_ID = "EA27SG";
   const FYCIE_FEATHER_PRICE = 50;
   const FYCIE_FEATHER_AMOUNT = 25;
-  /** "You show the bloated toad to Rantz. He nods with approval." */
-  const SHOW_TOAD_MESSAGE_ID = "rAqfRS";
+  /** "You show the bloated toad to Rantz. He nods with approval." (Talk-to and the toad used on him). */
+  const SHOW_TOAD_MESSAGE_IDS = new Set(["rAqfRS", "z8j7q8"]);
   /** "Congratulations! Quest complete!" in handing-the-chompy-to-rantz. */
   const COMPLETE_ACTION_ID = "cmDp4e";
 
   /** Rantz has more than one cache id but all reach the same transcript pages. */
   const RANTZ_NPC_IDS = new Set([1470, NpcIdentifiers.RANTZ, NpcIdentifiers.RANTZ_2, NpcIdentifiers.RANTZ_3,
-    NpcIdentifiers.RANTZ_4, NpcIdentifiers.RANTZ_5]);
+    NpcIdentifiers.RANTZ_4, NpcIdentifiers.RANTZ_5, 14794]);
   const FYCIE_NPC_ID = NpcIdentifiers.FYCIE;
   const BUGS_NPC_IDS = new Set([NpcIdentifiers.BUGS, NpcIdentifiers.BUGS_2]);
 
@@ -76,17 +82,15 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   const OGRE_BELLOWS_3 = ItemIdentifiers.OGRE_BELLOWS_3_;
   const OGRE_BELLOWS_2 = ItemIdentifiers.OGRE_BELLOWS_2_;
   const OGRE_BELLOWS_1 = ItemIdentifiers.OGRE_BELLOWS_1_;
-  const BELLOWS_STATES = [OGRE_BELLOWS, OGRE_BELLOWS_1, OGRE_BELLOWS_2, OGRE_BELLOWS_3];
+  /** Wiki (Chompy bird): an ogre bow or comp ogre bow, with ogre arrows or brutal arrows. */
+  const CHOMPY_BOWS = new Set([OGRE_BOW, ItemIdentifiers.COMP_OGRE_BOW]);
+  const CHOMPY_ARROWS = new Set([OGRE_ARROW, ItemIdentifiers.BRONZE_BRUTAL, ItemIdentifiers.IRON_BRUTAL,
+    ItemIdentifiers.STEEL_BRUTAL, ItemIdentifiers.BLACK_BRUTAL, ItemIdentifiers.MITHRIL_BRUTAL,
+    ItemIdentifiers.ADAMANT_BRUTAL, ItemIdentifiers.RUNE_BRUTAL]);
 
-  const SWAMP_BUBBLE = ObjectIdentifiers.SWAMP_BUBBLES;
-  const SWAMP_BUBBLE_2 = ObjectIdentifiers.SWAMP_BUBBLES_2;
-  // The cave entrance (3379) and the left exit (3381) are captured loc teleports
-  // (world/data/loc-teleports.json, rantzogrecaveentrance/rantzogrecaveexitl). The right
-  // exit beside it (3380 at 2646,9377) was never captured; it lands where 3381 does, but at
-  // once (3381 moves a tick after arriving; 3380's own timing is unknown).
-  const CAVE_EXIT_RIGHT = ObjectIdentifiers.CAVE_EXIT_8;
-  const LOCKED_CHEST = ObjectIdentifiers.LOCKED_OGRE_CHEST;
-  const OPEN_CHEST = ObjectIdentifiers.UNLOCKED_OGRE_CHEST;
+  const BELLOWS_STATES = [OGRE_BELLOWS, OGRE_BELLOWS_1, OGRE_BELLOWS_2, OGRE_BELLOWS_3];
+  const SWAMP_BUBBLE = api.core.ObjectIdentifiers.SWAMP_BUBBLES;
+  const SWAMP_BUBBLE_2 = api.core.ObjectIdentifiers.SWAMP_BUBBLES_2;
   // MULTI_CHOMPYBIRD_SPITROAST_ENTITY has no generated ObjectIdentifiers entry.
   const CHOMPY_SPIT_ROAST = 6895;
 
@@ -94,12 +98,55 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   const CHOMPY_BIRD = NpcIdentifiers.CHOMPY_BIRD;
   const DEAD_CHOMPY = NpcIdentifiers.CHOMPY_BIRD_2;
 
-  const FIRST_HUNTS = new WeakMap();
-  const FIRST_CHOMPY = new WeakSet();
-  const BAIT_HINT_PLAYERS = new WeakSet();
-  const HUNT_WAIT_TICKS = 5;
-  const HUNT_SHOT_TICKS = 2;
-  const HUNT_SETTLE_TICKS = 3;
+  // Animations, graphics and sounds from the capture (README).
+  const INFLATE_ANIMATION = 1026;
+  const BELLOWS_GRAPHIC = 241;
+  const BELLOWS_SOUND = 1455;
+  const TOAD_INFLATE_ANIMATION = 1019;
+  const EFFECT_DELAY = 30;
+  const BELLOWS_GRAPHIC_HEIGHT = 64;
+  const PLACE_ANIMATION = 827;
+  const PLUCK_ANIMATION = 827;
+  const PLUCK_SOUND = 2581;
+  const COOK_ANIMATION = 896;
+  const COOKED_ANIMATION = 832;
+  const SPIT_ROAST_SOUND = 1456;
+  const RANTZ_SHOOT_ANIMATION = 1025;
+  const RANTZ_ARROW_LAUNCH = 243;
+  const RANTZ_ARROW_LAUNCH_HEIGHT = 96;
+  const RANTZ_ARROW_TRAVEL = 242;
+  const RANTZ_BOW_SOUND = 1452;
+  const RANTZ_BOW_SOUND_RANGE = 10;
+
+  /** After the toad is clicked: four ticks to the toad in the pack (ticks 721-725). */
+  const INFLATE_TICKS = 4;
+  /** After plucking starts: two ticks to the drop (1346-1348). */
+  const PLUCK_TICKS = 2;
+  /** Each spit-roast step two ticks apart (1472, 1474, 1476). */
+  const COOK_STEP_TICKS = 2;
+  /** The demonstration from the bird landing (992): 35 at +11, Rantz speaks at +17, shoots at +19, misses at +22. */
+  const DEMO_STAGE_TICKS = 11;
+  const DEMO_SPEAK_TICKS = 6;
+  const DEMO_SHOOT_TICKS = 2;
+  const DEMO_MISS_TICKS = 3;
+  /** Ours: the stage still moves on if the bird never finishes eating (the capture's ate 4 ticks after the miss). */
+  const DEMO_FALLBACK_TICKS = 8;
+  /** The clearing's hint arrow lasts 50 ticks (786-836). */
+  const BAIT_HINT_TICKS = 50;
+  const MAX_BLOATED_TOADS = 3;
+  const ESCAPED_TOAD_TICKS = 100;
+  const ESCAPED_TOAD_WANDER = 3;
+  const PLUCK_HUNTER_XP = 30;
+
+  const BAIT_HINT_TILE = { x: 2636, y: 2966, z: 0, height: 32 };
+  const BAIT_CAMERA_LOOK = { x: 2636, y: 2966, height: 25, rate: 7 };
+  const BAIT_CAMERA_MOVE = { x: 2639, y: 2956, height: 900, rate: 2 };
+  const SPIT_ROAST_TILE = { x: 2630, y: 2990, z: 0 };
+  const BOW_RECLAIM_COST = 500;
+  const RECLAIM_COIN_STEPS = new Set(["BmgmUE", "Zlt_Rt"]);
+  const BUGS_COIN_STEPS = new Set(["71iNkU", "4Q95fX"]);
+  const FYCIE_COIN_STEPS = new Set(["CMSJar", "GMF66H"]);
+
   // Ogre bow show/hat trade uses the bow's kill marks; thresholds and item ids
   // come from cache examines 2978-2995 (Ogre Bowman 30 ... Expert Dragon Archer 4000).
   const CHOMPY_HATS = [
@@ -122,14 +169,6 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     { label: "expert ogre dragon archer", kills: 3000, item: 2994 },
     { label: "expert dragon archer", kills: 4000, item: 2995 },
   ].sort((a, b) => b.label.length - a.label.length);
-  // Where live puts a player walking out of 3381 (rev 242 capture, from 2647,9378).
-  const CAVE_SURFACE = { x: 2629, y: 2997, z: 0 };
-  const TOAD_CLEARING = { x: 2635, y: 2966, z: 0 };
-  const SPIT_ROAST_TILE = { x: 2630, y: 2990, z: 0 };
-  const BOW_RECLAIM_COST = 500;
-  const RECLAIM_COIN_STEPS = new Set(["BmgmUE", "Zlt_Rt"]);
-  const BUGS_COIN_STEPS = new Set(["71iNkU", "4Q95fX"]);
-  const FYCIE_COIN_STEPS = new Set(["CMSJar", "GMF66H"]);
 
   const RANTZ_INGREDIENT_ATTRIBUTE = "big-chompy-bird-hunting:rantz-ingredient";
   const BUGS_INGREDIENT_ATTRIBUTE = "big-chompy-bird-hunting:bugs-ingredient";
@@ -139,6 +178,32 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   const CHOMPY_KILLS_ATTRIBUTE = "big-chompy-bird-hunting:chompy-kills";
   const HATS_CLAIMED_ATTRIBUTE = "big-chompy-bird-hunting:hats-claimed";
 
+  /**
+   * Each ogre's seasoning: one of a pair, the same every time they are asked (the capture's Rantz says
+   * Onion three times, Bugs equa leaves and Fycie tomato twice each; Wiki: "It's different from player
+   * to player"). `name` is how the transcript writes it in the refusal and the cooked line.
+   */
+  const SEASONINGS = {
+    rantz: { attribute: RANTZ_INGREDIENT_ATTRIBUTE, choices: [
+      { item: ItemIdentifiers.ONION, name: "onion" }, { item: ItemIdentifiers.POTATO, name: "potato" }] },
+    fycie: { attribute: FYCIE_INGREDIENT_ATTRIBUTE, choices: [
+      { item: ItemIdentifiers.TOMATO, name: "tomato" }, { item: ItemIdentifiers.DOOGLE_LEAVES, name: "doogle leaves" }] },
+    bugs: { attribute: BUGS_INGREDIENT_ATTRIBUTE, choices: [
+      { item: ItemIdentifiers.EQUA_LEAVES, name: "equa leaves" }, { item: ItemIdentifiers.CABBAGE, name: "cabbage" }] },
+  };
+
+  /** The item each captured message box shows (README; the capture draws them in objectbox 193). */
+  const MESSAGE_BOX_ITEMS = [
+    [/^The ogre shows you a huge but crude bow/, OGRE_BOW],
+    [/^Rantz takes six ogre arrows off you\./, OGRE_ARROW],
+    [/^You show Rantz the ogre arrow\./, OGRE_ARROW],
+    [/^You show the bloated toad to Rantz/, BLOATED_TOAD],
+    [/^Rantz hands over an ogre bow\./, OGRE_BOW],
+    [/^You show Rantz the freshly plucked chompy carcass\./, RAW_CHOMPY],
+    [/^You hand over the cooked chompy bird to Rantz\./, SEASONED_CHOMPY],
+    [/^You show Rantz the marks on your bow\./, OGRE_BOW],
+  ];
+
   const page = (p, variant) => ({ page: p, variant });
   const has = (player, itemId, quantity = 1) => player.getInventory().getAmount(itemId) >= quantity;
   const freeSlots = (player) => player.getInventory().getFreeSlots?.() ?? 0;
@@ -147,7 +212,6 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   const hasEquipped = (player, itemId) =>
     (player.getEquipment?.()?.getItems?.() ?? []).some((item) => item?.getId?.() === itemId);
   const hasBow = (player) => has(player, OGRE_BOW) || hasEquipped(player, OGRE_BOW);
-  const ingredient = (player, key) => Number(player.getAttribute(key)) || 0;
   const chompyKills = (player) => Number(player.getAttribute(CHOMPY_KILLS_ATTRIBUTE)) || 0;
   const hatsClaimed = (player) => Number(player.getAttribute(HATS_CLAIMED_ATTRIBUTE)) || 0;
   const hatClaimed = (player, index) => (hatsClaimed(player) & (1 << index)) !== 0;
@@ -159,25 +223,49 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     const value = String(text ?? "").toLowerCase();
     return CHOMPY_HATS.find((hat) => value.includes(hat.label));
   };
-  const setIngredient = (player, key, itemId) => {
-    if (itemId) player.setAttribute(key, itemId);
-  };
-  /** How each seasoning is named in the transcript's "Remember what the Ogre family wanted?" line. */
-  const INGREDIENT_NAMES = new Map([
-    [ItemIdentifiers.POTATO, "potato"],
-    [ItemIdentifiers.ONION, "onion"],
-    [ItemIdentifiers.TOMATO, "tomato"],
-    [ItemIdentifiers.DOOGLE_LEAVES, "doogle leaves"],
-    [ItemIdentifiers.CABBAGE, "cabbage"],
-    [ItemIdentifiers.EQUA_LEAVES, "equa leaves"],
-  ]);
   const actionFor = (event) => String(event.option ?? event.definition?.getActions?.()?.[event.clickType - 1] ?? "").toLowerCase();
+  /** An item box the chat holds until it is continued, as the capture's objectbox (193). */
+  const itemBox = (player, itemId, text) => player.getDialogueManager().startDialogues(
+    new api.core.DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)));
+  const dropId = (drop) => drop?.itemId ?? drop?.getId?.() ?? drop?.id;
+  const dropAmount = (drop) => drop?.amount ?? drop?.getAmount?.() ?? 1;
+  /**
+   * The capture shows the player busy (varbit 12393) through the inflate, the pluck and the roast. Ours: one of
+   * them runs at a time and a second such click while it plays does nothing; the player is not otherwise held.
+   */
+  const acting = new WeakSet();
+  const isActing = (player) => acting.has(player);
+  const hold = (player) => acting.add(player);
+  const release = (player) => acting.delete(player);
+  const later = (player, ticks, run) => TaskManager.submit(new CountdownTask(player, ticks, () => {
+    if (player.isRegistered?.() !== false) run();
+  }));
 
   let quest;
   const hunt = require("./Hunt.BigChompyBirdHunting")(api, {
     onAttracted: handleAttracted,
-    onBaitExpired: handleBaitExpired,
+    onBaitEaten: handleBaitEaten,
+    onBirdLeft: handleBirdLeft,
   });
+  const chest = require("./Chest.BigChompyBirdHunting")(api, {
+    stageOf: (player) => quest.getStage(player),
+    onLifted: (player) => {
+      if (quest.getStage(player) === STAGE_KIDS_EXPLAINED_TOADS) quest.setStage(player, STAGE_BELLOWS_TAKEN);
+    },
+  });
+
+  /** The seasoning `who` wants: rolled once per player, then kept. */
+  function seasoning(player, who) {
+    const { attribute, choices } = SEASONINGS[who];
+    const stored = Number(player.getAttribute(attribute)) || 0;
+    const known = choices.find((choice) => choice.item === stored);
+    if (known) return known;
+    const rolled = choices[Math.floor(Math.random() * choices.length)];
+    player.setAttribute(attribute, rolled.item);
+    return rolled;
+  }
+  const ogreOf = (npcId) => RANTZ_NPC_IDS.has(npcId) ? "rantz" : BUGS_NPC_IDS.has(npcId) ? "bugs"
+    : npcId === FYCIE_NPC_ID ? "fycie" : null;
 
   function buildJournal(player, questHandle) {
     const stage = questHandle.getStage(player);
@@ -201,12 +289,12 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
 
   function grantReward(player) {
     const skills = player.getSkillManager();
-    skills.addExperiences(Skill.FLETCHING, 262);
     skills.addExperiences(Skill.COOKING, 1470);
     skills.addExperiences(Skill.RANGED, 735);
+    skills.addExperiences(Skill.FLETCHING, 262);
   }
 
-  /** Which transcript variant the clicked NPC plays, by quest stage. */
+  /** Which transcript variant the clicked NPC plays, by quest stage (capture ticks in the README). */
   function selectVariant({ npcId, player }) {
     const stage = quest.getStage(player);
 
@@ -214,16 +302,17 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
       if (stage >= STAGE_COMPLETE) return page(RANTZ_PAGE, "after-big-chompy-bird-hunting");
       if (stage >= STAGE_CHOMPY_COOKED) return page(PAGE, "handing-the-chompy-to-rantz-or-trying-to-cook-another-raw-chompy");
       if (stage >= STAGE_TOLD_TO_COOK) return page(PAGE, "talking-to-rantz-with-a-raw-chompy-talking-to-rantz-again-before-cooking-the-chompy");
+      if (stage >= STAGE_KILLED_CHOMPY && has(player, RAW_CHOMPY)) return page(PAGE, "talking-to-rantz-with-a-raw-chompy");
       if (stage >= STAGE_GIVEN_BOW) {
-        if (has(player, RAW_CHOMPY)) return page(PAGE, "talking-to-rantz-with-a-raw-chompy");
         if (stage < STAGE_KILLED_CHOMPY && !hasBow(player)) {
           return page(PAGE, "talking-to-rantz-after-he-failed-reclaiming-a-lost-bow");
         }
         return page(PAGE, "talking-to-rantz-after-he-failed-talking-to-rantz-before-hunting-the-chompy");
       }
       if (stage >= STAGE_RANTZ_MISSED) return page(PAGE, "talking-to-rantz-after-he-failed");
+      // The bait is down (30) and while Rantz shoots (35): ticks 894, 1010.
+      if (stage >= STAGE_WAITING_CHOMPY) return page(PAGE, "placing-the-bloated-toad-talking-to-rantz-after-placing-the-toad");
       if (stage === STAGE_SHOWN_TOAD) return page(PAGE, "returning-to-rantz-with-the-bloated-toad-talking-to-rantz-again");
-      if (stage >= STAGE_SHOWN_TOAD) return page(PAGE, "successfully-attracting-a-chompy-after-the-chompy-eats-the-toad");
       if (stage >= STAGE_KIDS_EXPLAINED_TOADS) {
         return page(PAGE, has(player, BLOATED_TOAD)
           ? "returning-to-rantz-with-the-bloated-toad"
@@ -238,32 +327,25 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
       return page(PAGE, "starting-off");
     }
 
-    if (npcId === FYCIE_NPC_ID) {
-      if (stage >= STAGE_COMPLETE) return page(FYCIE_PAGE, "after-big-chompy-bird-hunting");
-      if (stage >= STAGE_TOLD_TO_COOK) return page(PAGE, "talking-to-rantz-with-a-raw-chompy-getting-the-ingredient-order-from-fycie");
-      if (stage >= STAGE_KIDS_EXPLAINED_TOADS) return page(PAGE, "returning-to-rantz-with-the-bloated-toad-talking-to-fycie");
-      if (stage >= STAGE_GIVEN_ARROWS) return page(PAGE, "using-ogre-arrows-made-by-the-player-on-rantz-talking-to-fycie");
-      if (stage >= STAGE_STARTED) {
+    const kid = npcId === FYCIE_NPC_ID ? "fycie" : BUGS_NPC_IDS.has(npcId) ? "bugs" : null;
+    if (!kid) return null;
+    if (stage >= STAGE_COMPLETE) return page(kid === "fycie" ? FYCIE_PAGE : BUGS_PAGE, "after-big-chompy-bird-hunting");
+    if (stage >= STAGE_CHOMPY_COOKED) return page(PAGE, `cooking-the-chompy-talking-to-${kid}`);
+    if (stage >= STAGE_TOLD_TO_COOK) return page(PAGE, `talking-to-rantz-with-a-raw-chompy-getting-the-ingredient-order-from-${kid}`);
+    // Until the toad is shown both ask about the "fatsy toadies" (ticks 628, 638 at 15 and 657 at 20);
+    // from then on they send the player back to Rantz (1150, 1154 at 45).
+    if (stage >= STAGE_SHOWN_TOAD) return page(PAGE, `returning-to-rantz-with-the-bloated-toad-talking-to-${kid}`);
+    if (stage >= STAGE_GIVEN_ARROWS) return page(PAGE, `using-ogre-arrows-made-by-the-player-on-rantz-talking-to-${kid}`);
+    if (stage >= STAGE_STARTED) {
+      if (kid === "fycie") {
         return page(PAGE, player.getAttribute(FYCIE_FEATHERS_ATTRIBUTE)
           ? "starting-off-talking-to-fycie-talking-to-fycie-after-buying-her-feathers"
           : "starting-off-talking-to-fycie");
       }
-      return null;
+      return page(PAGE, player.getAttribute(BUGS_TOOLS_ATTRIBUTE)
+        ? "starting-off-talking-to-bugs-without-a-chisel-and-knife-talking-to-bugs-after-buying-his-chisel-and-knife"
+        : "starting-off-talking-to-bugs-without-a-chisel-and-knife");
     }
-
-    if (BUGS_NPC_IDS.has(npcId)) {
-      if (stage >= STAGE_COMPLETE) return page(BUGS_PAGE, "after-big-chompy-bird-hunting");
-      if (stage >= STAGE_TOLD_TO_COOK) return page(PAGE, "talking-to-rantz-with-a-raw-chompy-getting-the-ingredient-order-from-bugs");
-      if (stage >= STAGE_KIDS_EXPLAINED_TOADS) return page(PAGE, "returning-to-rantz-with-the-bloated-toad-talking-to-bugs");
-      if (stage >= STAGE_GIVEN_ARROWS) return page(PAGE, "using-ogre-arrows-made-by-the-player-on-rantz-talking-to-bugs");
-      if (stage >= STAGE_STARTED) {
-        return page(PAGE, player.getAttribute(BUGS_TOOLS_ATTRIBUTE)
-          ? "starting-off-talking-to-bugs-without-a-chisel-and-knife-talking-to-bugs-after-buying-his-chisel-and-knife"
-          : "starting-off-talking-to-bugs-without-a-chisel-and-knife");
-      }
-      return null;
-    }
-
     return null;
   }
 
@@ -327,7 +409,11 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     if (quest.getStage(player) < STAGE_STARTED) quest.setStage(player, STAGE_STARTED);
   }
 
-  /** Bellows on swamp bubbles, and raw chompy on Rantz's spit-roast. */
+  /**
+   * Bellows on swamp bubbles (Wiki: Ogre bellows, "use the bellows on the swamp bubbles to fill them without
+   * delay"; Suck is SwampBubbles'), and the raw chompy on Rantz's spit-roast. Ours: the use's two lines (no
+   * capture uses the bellows on the bubbles).
+   */
   function handleItemOnObject(event) {
     const { player, objectId } = event;
     const itemId = event.itemId ?? event.item?.getId?.();
@@ -346,140 +432,227 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     }
     if (objectId === CHOMPY_SPIT_ROAST && itemId === RAW_CHOMPY) {
       const location = event.location ?? event.object?.getLocation?.();
-      if (location && (location.x !== SPIT_ROAST_TILE.x || location.y !== SPIT_ROAST_TILE.y)) return;
+      const x = location?.getX?.() ?? location?.x, y = location?.getY?.() ?? location?.y;
+      if (location && (x !== SPIT_ROAST_TILE.x || y !== SPIT_ROAST_TILE.y)) return;
       cookChompy(event);
     }
   }
 
-  /** Cook only once Rantz and both children have named their ingredient. */
+  const cooking = new WeakMap();
+
+  /**
+   * The capture's spit-roast (ticks 1472-1476): "You carefully place the chompy bird on the spit-roast.",
+   * the roaster varbit 1, human_cooking and two spit_roast sounds, the raw chompy gone; two ticks later
+   * "You add the other ingredients and cook the food." with the varbit at 2; two more and "Eventually the
+   * chompy is cooked.", the varbit back to 0, human_pickuptable, the seasonings swapped for the seasoned
+   * chompy and an item box naming them (Rantz's, Fycie's, Bugs's, as the transcript's template orders them).
+   */
   function cookChompy(event) {
     const { player } = event;
     const stage = quest.getStage(player);
     if (stage < STAGE_TOLD_TO_COOK || quest.isComplete(player)) return;
     if (stage >= STAGE_CHOMPY_COOKED && has(player, SEASONED_CHOMPY)) return;
-    if (!has(player, RAW_CHOMPY)) return;
+    if (!has(player, RAW_CHOMPY) || cooking.has(player)) return;
     event.handled = true;
-    const wanted = [
-      ingredient(player, RANTZ_INGREDIENT_ATTRIBUTE),
-      ingredient(player, BUGS_INGREDIENT_ATTRIBUTE),
-      ingredient(player, FYCIE_INGREDIENT_ATTRIBUTE),
-    ];
-    if (wanted.some((id) => !id)) {
-      player.sendMessage("Ask Rantz, Bugs and Fycie what they want with their chompy first.");
-      return;
-    }
-    if (!wanted.every((id) => has(player, id))) {
-      // Both lines of the transcript's refusal (npc-dialogues, "…without-the-requested-ingredients").
-      // The second is a template there — "[potato/onion]" and friends are the Wiki's either/or
-      // notation for the random pairs — so it is filled from what the family actually asked for,
-      // in the transcript's order: Rantz, then Fycie, then Bugs.
+    if (isActing(player)) return;
+    const wanted = [seasoning(player, "rantz"), seasoning(player, "fycie"), seasoning(player, "bugs")];
+    if (!wanted.every(({ item }) => has(player, item))) {
+      // Both lines of the transcript's refusal ("…without-the-requested-ingredients"); the second is a
+      // template there ("[potato/onion]" is the Wiki's either/or), filled with what this player was given.
       player.sendMessage("You don't have all the ingredients yet to cook the chompy bird for the ogre family.");
-      const [rantz, bugs, fycie] = wanted.map((id) => INGREDIENT_NAMES.get(id));
-      player.sendMessage(`Remember what the Ogre family wanted? Rantz wanted ${rantz}. ` +
-        `Fycie wanted ${fycie}. Bugs wanted ${bugs}.`);
+      const [rantz, fycie, bugs] = wanted.map(({ name }) => name);
+      player.sendMessage(`Remember what the Ogre family wanted? Rantz wanted ${rantz}. Fycie wanted ${fycie}. Bugs wanted ${bugs}.`);
       return;
     }
     player.getInventory().deleteNumber(RAW_CHOMPY, 1);
-    for (const id of wanted) player.getInventory().deleteNumber(id, 1);
-    player.getInventory().adds(SEASONED_CHOMPY, 1);
-    if (stage < STAGE_CHOMPY_COOKED) quest.setStage(player, STAGE_CHOMPY_COOKED);
-    player.sendMessage("You add the other ingredients and cook the food.");
+    const sender = player.getPacketSender();
+    sender.sendVarbit(VARBIT_SPIT_ROASTER, 1);
+    player.sendMessage("You carefully place the chompy bird on the spit-roast.");
+    player.performAnimation(new Animation(COOK_ANIMATION));
+    sender.sendSound(SPIT_ROAST_SOUND, 255, EFFECT_DELAY);
+    sender.sendSound(SPIT_ROAST_SOUND, 255, EFFECT_DELAY);
+    hold(player);
+    const finish = ({ loggingOut = false } = {}) => {
+      if (cooking.get(player) !== finish) return false;
+      cooking.delete(player);
+      release(player);
+      // The seasonings must still be there when the chompy comes off (Ours: without them the raw chompy comes back).
+      if (!wanted.every(({ item }) => has(player, item))) {
+        refundRawChompy(player, loggingOut);
+        sender.sendVarbit(VARBIT_SPIT_ROASTER, 0);
+        return false;
+      }
+      for (const { item } of wanted) player.getInventory().deleteNumber(item, 1);
+      player.getInventory().adds(SEASONED_CHOMPY, 1);
+      if (quest.getStage(player) < STAGE_CHOMPY_COOKED) quest.setStage(player, STAGE_CHOMPY_COOKED);
+      sender.sendVarbit(VARBIT_SPIT_ROASTER, 0);
+      return true;
+    };
+    cooking.set(player, finish);
+    later(player, COOK_STEP_TICKS, () => {
+      player.sendMessage("You add the other ingredients and cook the food.");
+      sender.sendVarbit(VARBIT_SPIT_ROASTER, 2);
+      player.performAnimation(new Animation(COOK_ANIMATION));
+    });
+    later(player, COOK_STEP_TICKS * 2, () => {
+      if (cooking.get(player) !== finish) return;
+      if (!finish()) return;
+      player.sendMessage("Eventually the chompy is cooked.");
+      player.performAnimation(new Animation(COOKED_ANIMATION));
+      const [rantz, fycie, bugs] = wanted.map(({ name }) => name);
+      itemBox(player, SEASONED_CHOMPY,
+        `You use the ${rantz}, ${fycie} and the ${bugs} with the chompy bird to make a seasoned chompy.`);
+    });
   }
 
-  /** The right cave exit and the ogre chest. */
-  function handleObjectInteraction(event) {
-    const { player, objectId } = event;
-    if (objectId === CAVE_EXIT_RIGHT) {
-      event.handled = true;
-      player.moveTo(new api.core.Location(CAVE_SURFACE.x, CAVE_SURFACE.y, CAVE_SURFACE.z));
+  /**
+   * The raw chompy back from a roast that lost its seasonings, never lost (review on #6201): the pack if it
+   * fits, else the player's tile, or the bank when logging out (the tile then if the bank can't take it).
+   * Ours: no capture shows a roast without its seasonings.
+   */
+  function refundRawChompy(player, loggingOut) {
+    const raw = new Item(RAW_CHOMPY, 1);
+    if (player.getInventory().getAddableAmount(raw) >= 1) {
+      player.getInventory().adds(RAW_CHOMPY, 1);
       return;
     }
-    if (objectId !== LOCKED_CHEST && objectId !== OPEN_CHEST) return;
-    const stage = quest.getStage(player);
-    if (stage < STAGE_KIDS_EXPLAINED_TOADS) return;
-    event.handled = true;
-    if (BELLOWS_STATES.some((id) => has(player, id))) {
-      player.sendMessage("You already have some ogre bellows.");
-      return;
+    if (loggingOut) {
+      const { Bank } = api.core;
+      const bank = Bank && player.getBank?.(Bank.getTabForItem(player, RAW_CHOMPY));
+      const before = bank?.getAmount?.(RAW_CHOMPY) ?? 0;
+      bank?.add?.(new Item(RAW_CHOMPY, 1), false);
+      if ((bank?.getAmount?.(RAW_CHOMPY) ?? 0) > before) return;
     }
-    player.getInventory().adds(OGRE_BELLOWS, 1);
-    player.sendMessage("You take a pair of bellows.");
-    if (stage < STAGE_BELLOWS_TAKEN) quest.setStage(player, STAGE_BELLOWS_TAKEN);
+    api.core.ItemOnGroundManager.registerLocation(player, raw, player.getLocation().clone());
   }
 
-  /** Inflate a swamp toad and pluck the dead chompy. */
+  /** Inflate on a swamp toad (or filled bellows used on one), and Pluck on a carcass. */
   function handleNpcInteraction(event) {
-    const npcId = event.npcId ?? event.npc?.getId?.();
+    const npc = event.npc;
+    const npcId = event.npcId ?? npc?.getId?.();
     const action = actionFor(event);
     if (npcId === SWAMP_TOAD && action.includes("inflate")) {
       inflateToad(event);
       return;
     }
-    if (npcId === DEAD_CHOMPY && action.includes("pluck")) pluckChompy(event);
+    if ((npcId === DEAD_CHOMPY || hunt.ownsCarcass(event.player, npc)) && action.includes("pluck")) pluckChompy(event);
   }
 
+  const inflating = new WeakSet();
+  /** The toad each player is inflating, so a logout mid-inflate frees it for everyone else. */
+  const inflatingBy = new WeakMap();
+
+  /**
+   * The capture's inflate (ticks 719-725, 1238-1248): on arrival "Come here toady!", the bellows
+   * animation and graphic and sound 1455 (30 client cycles late), the toad's own inflate animation
+   * 1019 and "You manage to catch the toad and inflate it with the swamp gas."; four ticks later the
+   * toad is gone, the bellows one load lighter and "You add the bloated toad to your inventory.". With
+   * three bloated toads already (Wiki: "You can only carry a maximum of three"), one escapes first:
+   * "One of your bloated toads manages to escape." and a swamp toad hops out with "Ribbitt!".
+   */
   function inflateToad(event) {
-    const { player } = event;
-    if (quest.getStage(player) < STAGE_BELLOWS_TAKEN) return;
-    const bellowsState = [OGRE_BELLOWS_3, OGRE_BELLOWS_2, OGRE_BELLOWS_1].find((id) => has(player, id));
-    if (bellowsState === undefined) {
-      player.sendMessage("You need ogre bellows filled with swamp gas.");
+    const { player, npc } = event;
+    if (!npc?.isRegistered?.() || inflating.has(npc)) return;
+    if (isActing(player)) {
       event.handled = true;
       return;
     }
-    if (freeSlots(player) <= 0) {
-      player.sendMessage("You need an empty inventory slot for the bloated toad.");
-      event.handled = true;
-      return;
-    }
-    const nextState = bellowsState === OGRE_BELLOWS_3 ? OGRE_BELLOWS_2
-      : bellowsState === OGRE_BELLOWS_2 ? OGRE_BELLOWS_1 : OGRE_BELLOWS;
-    player.getInventory().deleteNumber(bellowsState, 1);
-    player.getInventory().adds(nextState, 1);
-    player.getInventory().adds(BLOATED_TOAD, 1);
-    api.removeNpc(event.npc);
-    player.sendMessage("You manage to catch the toad and inflate it with the swamp gas.");
+    const bellowsState = [OGRE_BELLOWS_1, OGRE_BELLOWS_2, OGRE_BELLOWS_3].find((id) => has(player, id));
+    // Ours: without filled bellows (or before the quest gives them) nothing happens, as for any other use.
+    if (bellowsState === undefined) return;
     event.handled = true;
+    const escapes = player.getInventory().getAmount(BLOATED_TOAD) >= MAX_BLOATED_TOADS;
+    // Ours: the old full-pack refusal, kept (no capture inflates with a full pack).
+    if (!escapes && freeSlots(player) <= 0) {
+      player.sendMessage("You need an empty inventory slot for the bloated toad.");
+      return;
+    }
+    if (escapes) {
+      const slot = player.getInventory().getItems().findIndex((item) => item?.getId?.() === BLOATED_TOAD);
+      if (slot >= 0) player.getInventory().deleteAtSlot(slot);
+      player.sendMessage("One of your bloated toads manages to escape.");
+      const at = npc.getLocation();
+      const escaped = api.spawnNpc({ id: SWAMP_TOAD, x: at.getX(), y: at.getY(), z: at.getZ(), wanderRadius: ESCAPED_TOAD_WANDER });
+      escaped?.forceChat?.("Ribbitt!");
+      // Ours: the escaped toad hops off after a while rather than adding to the swamp for good.
+      if (escaped) TaskManager.submit(new CountdownTask(escaped, ESCAPED_TOAD_TICKS, () => api.removeNpc(escaped)));
+    }
+    inflating.add(npc);
+    inflatingBy.set(player, npc);
+    hold(player);
+    player.setPositionToFace?.(npc.getLocation());
+    npc.setPositionToFace?.(player.getLocation());
+    player.forceChat("Come here toady!");
+    player.performAnimation(new Animation(INFLATE_ANIMATION, EFFECT_DELAY));
+    player.performGraphic(new Graphic(BELLOWS_GRAPHIC, EFFECT_DELAY, BELLOWS_GRAPHIC_HEIGHT));
+    npc.performAnimation(new Animation(TOAD_INFLATE_ANIMATION, EFFECT_DELAY));
+    player.getPacketSender().sendSound(BELLOWS_SOUND, 255, EFFECT_DELAY);
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You manage to catch the toad and inflate it with the swamp gas.");
+    later(player, INFLATE_TICKS, () => {
+      inflating.delete(npc);
+      inflatingBy.delete(player);
+      release(player);
+      const state = [OGRE_BELLOWS_1, OGRE_BELLOWS_2, OGRE_BELLOWS_3].find((id) => has(player, id));
+      if (state === undefined || !npc.isRegistered() || freeSlots(player) <= 0
+          || player.getInventory().getAmount(BLOATED_TOAD) >= MAX_BLOATED_TOADS) return;
+      const nextState = state === OGRE_BELLOWS_3 ? OGRE_BELLOWS_2 : state === OGRE_BELLOWS_2 ? OGRE_BELLOWS_1 : OGRE_BELLOWS;
+      const slot = player.getInventory().getItems().findIndex((item) => item?.getId?.() === state);
+      player.getInventory().setItem(slot, new Item(nextState, 1));
+      player.getInventory().adds(BLOATED_TOAD, 1);
+      player.getInventory().refreshItems();
+      // The swamp comes back to life: the toad respawns as one killed would.
+      const respawn = npc.getDefinition?.()?.getRespawn?.() ?? 0;
+      api.removeNpc(npc);
+      if (respawn > 0) TaskManager.submit(new api.core.NPCRespawnTask(npc, respawn));
+      player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You add the bloated toad to your inventory.");
+    });
   }
 
+  /**
+   * The capture's pluck (ticks 1344-1348): on arrival "You start plucking the chompy bird.",
+   * human_pickupfloor and sound 2581; two ticks later the carcass is gone, the raw chompy and the bones
+   * are on its tile, the feathers in the pack (15 there; Wiki: 10-30) and 30 Hunter XP (Wiki: Chompy bird).
+   * Ours: feathers that don't fit in the pack land with the rest.
+   */
   function pluckChompy(event) {
     const { player, npc } = event;
-    if (quest.getStage(player) < STAGE_KILLED_CHOMPY) return;
     event.handled = true;
     if (!player.isRegistered() || player.busy() || !hunt.ownsCarcass(player, npc) ||
-        !npc?.isRegistered() || npc.getOwner() !== player ||
+        !npc?.isRegistered() || npc.getOwner() !== player || npc.getAttribute?.("chompy:plucking") || isActing(player) ||
         npc.getPrivateArea() !== player.getPrivateArea() ||
         !player.getLocation().isWithinDistance(npc.getLocation(), 1)) return;
-    if (freeSlots(player) <= 0) {
-      player.sendMessage("You need an empty inventory slot to pluck the chompy.");
-      return;
-    }
-    player.getInventory().adds(RAW_CHOMPY, 1);
-    hunt.forgetCarcass(npc);
-    npc.getPrivateArea()?.detach(npc);
-    api.removeNpc(event.npc);
-    player.sendMessage("You pluck the chompy bird.");
-    api.emitCustomEvent("chompy:plucked", { player, npc });
-  }
-
-  function spawnCarcass(player, location, area) {
-    const npc = api.spawnNpc({
-      id: DEAD_CHOMPY, x: location.x, y: location.y, z: location.z ?? 0,
-      wanderRadius: 0, owner: player,
+    npc.setAttribute?.("chompy:plucking", true);
+    hold(player);
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You start plucking the chompy bird.");
+    player.performAnimation(new Animation(PLUCK_ANIMATION));
+    player.getPacketSender().sendSound(PLUCK_SOUND);
+    later(player, PLUCK_TICKS, () => {
+      release(player);
+      if (!npc.isRegistered() || !hunt.ownsCarcass(player, npc)) return;
+      const at = npc.getLocation().clone();
+      hunt.forgetCarcass(npc);
+      npc.getPrivateArea()?.detach(npc);
+      api.removeNpc(npc);
+      // The bird's generated drop table (bones, raw chompy, 10-30 feathers) without the chick, which
+      // the pets unit rolls on "chompy:plucked". The feathers go in the pack, the rest on the carcass's tile.
+      const drops = [];
+      api.emitCustomEvent("npc-drops:roll-table", { player, npc, npcId: CHOMPY_BIRD, drops,
+        entryFilter: (entry) => entry.item_id !== ItemIdentifiers.CHOMPY_CHICK });
+      const packed = drops.filter((drop) => dropId(drop) === ItemIdentifiers.FEATHER
+        && player.getInventory().getAddableAmount(new Item(dropId(drop), dropAmount(drop))) >= dropAmount(drop));
+      for (const drop of packed) player.getInventory().add(new Item(dropId(drop), dropAmount(drop)));
+      api.emitCustomEvent("npc-drops:place", { player, drops: drops.filter((drop) => !packed.includes(drop)), location: at, npcId: CHOMPY_BIRD });
+      if (packed.length) api.emitCustomEvent("npc-drops:report", { player, npcId: CHOMPY_BIRD, drops: packed });
+      player.getSkillManager().addExperiences(Skill.HUNTER, PLUCK_HUNTER_XP);
+      api.emitCustomEvent("chompy:plucked", { player, npc });
     });
-    if (!npc) return null;
-    if (area) area.add(npc);
-    else npc.setArea(null);
-    hunt.trackCarcass(npc, player);
-    return npc;
   }
 
-  function camera(player, move, look) {
-    const sender = player.getPacketSender?.();
-    if (!sender) return;
-    const options = { rate: 232, rate2: 100, heightRelative: false };
-    if (move) sender.sendCameraMoveTo?.(move[0], move[1], move[2], options);
-    if (look) sender.sendCameraLookAt?.(look[0], look[1], look[2], options);
+  function hint(player, show) {
+    const sender = player.getPacketSender();
+    sender.sendVarbit(VARBIT_CURRENT_HINT_ARROW, show ? HINT_ARROW_SET : 0);
+    sender.clearHintArrow();
+    return sender;
   }
 
   function nearbyRantz(player) {
@@ -488,76 +661,90 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     return [...near].find((npc) => RANTZ_NPC_IDS.has(npc?.getId?.()));
   }
 
-  /**
-   * Ends Rantz's claim on the demonstration bird. The bird is not removed: it stays the player's
-   * hunted chompy and can be killed with the ogre bow if it is still there when the bow is given
-   * (Wiki: "If you're quick getting the bow, the already spawned chompy bird can be killed").
-   */
-  function releaseDemonstrationChompy(player) {
-    const hunt = FIRST_HUNTS.get(player);
-    if (!hunt?.npc) return;
-    FIRST_CHOMPY.delete(hunt.npc);
-    hunt.npc = null;
+  /** The demonstration bird Rantz shoots at, and the player it was called down for. */
+  const demonstrations = new Map();
+
+  function cancelDemonstration(player) {
+    const demo = demonstrations.get(player);
+    if (!demo) return;
+    demonstrations.delete(player);
+    TaskManager.cancelTasks(demo.key);
   }
 
-  function cancelFirstHunt(player) {
-    const hunt = FIRST_HUNTS.get(player);
-    if (hunt) api.core.TaskManager.cancelTasks(hunt.key);
-    releaseDemonstrationChompy(player);
-    FIRST_HUNTS.delete(player);
-    player.getPacketSender?.().sendCameraReset?.();
-  }
-
-  /** The demonstration starts only after a bait actually attracts a bird. */
-  function startFirstHunt(player, npc) {
-    if (FIRST_HUNTS.has(player)) return;
-    const key = {};
-    const hunt = { key, npc };
-    FIRST_HUNTS.set(player, hunt);
-    FIRST_CHOMPY.add(npc);
-    npc.forceChat?.("Sqwirk!");
-    quest.setStage(player, STAGE_WAITING_CHOMPY);
-    const at = npc.getLocation();
-    camera(player, [at.getX() + 9, at.getY() + 9, 400], [at.getX(), at.getY(), 100]);
-    player.sendMessage("A chompy swoops down!");
-    api.core.TaskManager.submit(new api.core.CountdownTask(key, HUNT_WAIT_TICKS, () => {
-      if (FIRST_HUNTS.get(player) !== hunt || quest.getStage(player) !== STAGE_WAITING_CHOMPY) return;
-      quest.setStage(player, STAGE_CHOMPY_MISSED);
-      const rantz = nearbyRantz(player);
-      rantz?.forceChat?.("Hey, dere's da chompy, I's gonna shoot it.");
-      player.sendMessage("Rantz: Hey, dere's da chompy, I's gonna shoot it.");
-      camera(player, null, [at.getX(), at.getY(), 100]);
-      api.core.TaskManager.submit(new api.core.CountdownTask(key, HUNT_SHOT_TICKS, () => {
-        if (FIRST_HUNTS.get(player) !== hunt || quest.getStage(player) !== STAGE_CHOMPY_MISSED) return;
-        player.sendMessage("Rantz keeps missing the chompy bird...");
-        rantz?.forceChat?.("Grrr...de'ese arrows are rubbish.");
-        releaseDemonstrationChompy(player);
-        player.getPacketSender?.().sendCameraReset?.();
-        api.core.TaskManager.submit(new api.core.CountdownTask(key, HUNT_SETTLE_TICKS, () => {
-          if (FIRST_HUNTS.get(player) !== hunt) return;
-          if (player.isRegistered?.() === false || quest.getStage(player) !== STAGE_CHOMPY_MISSED) {
-            FIRST_HUNTS.delete(player);
-            return;
-          }
-          FIRST_HUNTS.delete(player);
-          quest.setStage(player, STAGE_RANTZ_MISSED);
-          player.sendMessage("Rantz: Grrr...de'ese arrows are rubbish.");
-        }));
-      }));
+  /** The demonstration step needs this many ticks after the landing tick (each delay counts from the last). */
+  function demoStep(demo, ticks, run) {
+    TaskManager.submit(new CountdownTask(demo.key, ticks, () => {
+      if (demonstrations.get(demo.player) === demo && demo.player.isRegistered?.() !== false) run();
     }));
+  }
+
+  /**
+   * The capture's demonstration (ticks 992-1018), from the bird landing: the quest moves to 35 eleven ticks
+   * later; six more and Rantz says "Hey, dere's da chompy, I's gonna shoot it." (overhead and in chat); two more
+   * and he shoots (ogre_longbow, the ogre arrow launch at height 96, sound 1452 range 10, the ogre arrow at the
+   * bird); three more and "Rantz keeps missing the chompy bird..." with his "Grrr...de'ese arrows are rubbish.".
+   * The bird eats the bait meanwhile and the quest moves to 40 as the bait goes. No camera moves.
+   */
+  function startDemonstration(player, npc) {
+    if (demonstrations.has(player)) return;
+    const demo = { key: {}, player, npc };
+    demonstrations.set(player, demo);
+    demoStep(demo, DEMO_STAGE_TICKS, () => {
+      if (quest.getStage(player) === STAGE_WAITING_CHOMPY) quest.setStage(player, STAGE_CHOMPY_MISSED);
+      demoStep(demo, DEMO_SPEAK_TICKS, () => {
+        const rantz = nearbyRantz(player);
+        rantz?.forceChat?.("Hey, dere's da chompy, I's gonna shoot it.");
+        player.sendMessage("Rantz: Hey, dere's da chompy, I's gonna shoot it.");
+        demoStep(demo, DEMO_SHOOT_TICKS, () => {
+          if (rantz?.isRegistered?.() && npc.isRegistered()) rantzShoots(rantz, npc);
+          demoStep(demo, DEMO_MISS_TICKS, () => {
+            player.sendMessage("Rantz keeps missing the chompy bird...");
+            player.sendMessage("Rantz: Grrr...de'ese arrows are rubbish.");
+            rantz?.forceChat?.("Grrr...de'ese arrows are rubbish.");
+            demoStep(demo, DEMO_FALLBACK_TICKS, () => demonstrationOver(player));
+          });
+        });
+      });
+    });
+  }
+
+  function rantzShoots(rantz, npc) {
+    rantz.setPositionToFace?.(npc.getLocation());
+    rantz.performAnimation(new Animation(RANTZ_SHOOT_ANIMATION));
+    rantz.performGraphic(new Graphic(RANTZ_ARROW_LAUNCH, 0, RANTZ_ARROW_LAUNCH_HEIGHT));
+    const at = rantz.getLocation();
+    Sounds.playAreaSound({ soundId: RANTZ_BOW_SOUND, x: at.getX(), y: at.getY(), level: at.getZ(),
+      radius: RANTZ_BOW_SOUND_RANGE, source: rantz });
+    // Captured flight: client cycles 41 -> 116, heights 155 -> 146 on the wire (quarter units here), angle 5.
+    api.core.Projectile.createProjectile(rantz, npc, RANTZ_ARROW_TRAVEL, 41, 116, 38.75, 36.5)
+      .withAngle(5).withProgress(11).sendProjectile();
+  }
+
+  function demonstrationOver(player) {
+    if (!demonstrations.has(player)) return;
+    cancelDemonstration(player);
+    const stage = quest.getStage(player);
+    if (stage === STAGE_CHOMPY_MISSED || stage === STAGE_WAITING_CHOMPY) quest.setStage(player, STAGE_RANTZ_MISSED);
   }
 
   function handleAttracted({ player, npc }) {
     const stage = quest.getStage(player);
-    if (stage >= STAGE_SHOWN_TOAD && stage < STAGE_RANTZ_MISSED
-        && player.getPrivateArea() === npc.getPrivateArea()
-        && player.getLocation().isWithinDistance(npc.getLocation(), 32)) startFirstHunt(player, npc);
+    if (stage === STAGE_WAITING_CHOMPY && player.getPrivateArea() === npc.getPrivateArea()) {
+      startDemonstration(player, npc);
+      return;
+    }
+    // The hunt's bird gets the hint arrow while the quest asks for it (tick 1323; cleared at the kill, 1339).
+    if (stage === STAGE_GIVEN_BOW) hint(player, true).sendEntityHint(npc);
   }
 
-  function handleBaitExpired({ player, remaining }) {
-    if (remaining === 0 && quest.getStage(player) === STAGE_WAITING_CHOMPY && !FIRST_HUNTS.has(player)) {
-      quest.setStage(player, STAGE_SHOWN_TOAD);
-    }
+  function handleBaitEaten({ player, npc }) {
+    const demo = demonstrations.get(player);
+    if (demo?.npc === npc && quest.getStage(player) === STAGE_CHOMPY_MISSED) demonstrationOver(player);
+  }
+
+  /** Ours: the arrow comes off a bird that flies away unkilled (no capture shows that). */
+  function handleBirdLeft({ player }) {
+    if (quest.getStage(player) === STAGE_GIVEN_BOW) hint(player, false);
   }
 
   function incrementChompyKills(player) {
@@ -584,53 +771,83 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     api.emitCustomEvent?.("big-chompy-bird-hunting:hat-claimed", { player, hat: hat.label, kills: chompyKills(player) });
   }
 
-  /** Chompys can only be hurt with the ogre bow and ogre arrows. */
+  /**
+   * Chompys can only be hurt with an ogre bow or comp ogre bow and ogre or brutal arrows; the refusals are
+   * the Wiki's (Transcript:Chompy bird). Ours: before Rantz lends the bow the bird can't be attacked, silently.
+   */
   function handleCanAttack(event) {
     const { attacker, target } = event;
     if (!attacker?.isPlayer?.()) return;
-    if (hunt.isLeaving(target)) {
+    if (hunt.isLeaving(target) || hunt.ownsCarcass(attacker, target)) {
       event.allow = false;
-      return;
-    }
-    if (FIRST_CHOMPY.has(target)) {
-      event.allow = false;
-      event.message = "Rantz is shooting this chompy.";
       return;
     }
     if (!hunt.ownsBird(attacker, target)) return;
     if (quest.getStage(attacker) < STAGE_GIVEN_BOW) {
       event.allow = false;
-      event.message = "Talk to Rantz about the ogre bow first.";
       return;
     }
-    const { Equipment } = api.core;
+    const { Equipment, CombatType } = api.core;
     const equipment = attacker.getEquipment?.();
-    const weapon = equipment?.get?.(Equipment.WEAPON_SLOT)?.getId?.();
+    const weapon = equipment?.get?.(Equipment.WEAPON_SLOT)?.getId?.() ?? -1;
     const arrows = equipment?.get?.(Equipment.AMMUNITION_SLOT)?.getId?.();
-    if (weapon !== OGRE_BOW || arrows !== OGRE_ARROW) {
+    const type = event.method?.type?.();
+    if (type === CombatType?.MAGIC) {
       event.allow = false;
-      event.message = "Chompys can only be hurt with an ogre bow and ogre arrows.";
+      event.message = "Magic simply won't affect this beast!";
+    } else if (weapon <= 0) {
+      event.allow = false;
+      event.message = "You'll need a weapon to try and attack this beast.";
+    } else if (type === CombatType?.MELEE) {
+      event.allow = false;
+      event.message = "The Chompy Bird is too quick for your melee weapon.";
+    } else if (!CHOMPY_BOWS.has(weapon) || !CHOMPY_ARROWS.has(arrows)) {
+      event.allow = false;
+      event.message = "Your ranged weapon isn't powerful enough to hurt the Chompy bird.";
     }
   }
 
-  /** The hunted chompy leaves a pluckable carcass for the player who killed it. */
+  /**
+   * The hunted chompy becomes its carcass where it fell (capture tick 1339: chompy_update_death and the
+   * transformation to 1476 on one tick, the quest at 50 and the hint arrow cleared). Wiki: the carcass
+   * lasts two minutes; after the quest each kill is "You scratch a notch on your bow for the chompy bird kill.".
+   */
   function handleNpcDeath(event) {
     const npcId = event.npcId ?? event.npc?.getId?.();
     if (npcId !== CHOMPY_BIRD) return;
     const player = event.killer;
-    if (!player?.isPlayer?.()) return;
-    if (!hunt.ownsBird(player, event.npc)) return;
+    if (!player?.isPlayer?.() || !hunt.ownsBird(player, event.npc)) return;
     hunt.removeBird(event.npc);
     const stage = quest.getStage(player);
-    const location = event.location ?? event.npc?.getLocation?.();
-    if (stage >= STAGE_GIVEN_BOW && stage < STAGE_KILLED_CHOMPY) quest.setStage(player, STAGE_KILLED_CHOMPY);
-    else if (stage < STAGE_KILLED_CHOMPY && !quest.isComplete(player)) return;
-    if (quest.isComplete(player)) incrementChompyKills(player);
-    if (location) spawnCarcass(player, location, event.npc.getPrivateArea());
-    player.sendMessage("You killed the chompy bird.");
+    if (stage >= STAGE_GIVEN_BOW && stage < STAGE_KILLED_CHOMPY) {
+      quest.setStage(player, STAGE_KILLED_CHOMPY);
+      hint(player, false);
+    }
+    if (quest.isComplete(player)) {
+      incrementChompyKills(player);
+      player.sendMessage("You scratch a notch on your bow for the chompy bird kill.");
+    }
+    const npc = event.npc;
+    event.remains = { ticks: hunt.CARCASS_TICKS + 1, respawnTicks: 0 };
+    npc.setNpcTransformationId(DEAD_CHOMPY);
+    // Clicks from a distance need hitpoints above 0 to walk to it (Araxxor's corpse does the same).
+    npc.setHitpoints?.(1);
+    hunt.trackCarcass(npc, player);
   }
 
-  /** Cache Drop places bait; Release / Release All let the toads escape instead. */
+  /**
+   * A hunted bird drops nothing when it dies (capture tick 1339): its loot comes from the pluck. The kill still
+   * rolls the chick (Wiki: Chompy chick), through the pets unit.
+   */
+  function handleDropClaim(claim) {
+    const { killer, npc } = claim;
+    if (claim.npcId !== CHOMPY_BIRD || !killer?.isPlayer?.()) return;
+    if (!hunt.ownsBird(killer, npc) && !hunt.ownsCarcass(killer, npc)) return;
+    claim.handled = true;
+    api.emitCustomEvent("chompy:killed", { player: killer, npc });
+  }
+
+  /** Drop places bait; Release / Release All let the toads escape instead. */
   function handleItemAction(event) {
     const option = String(event.option ?? "").toLowerCase();
     if (event.itemId !== BLOATED_TOAD) return;
@@ -649,87 +866,190 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
       return;
     }
     if (option !== "drop") return;
-    const stage = quest.getStage(event.player);
-    if (stage < STAGE_SHOWN_TOAD) {
-      event.player.sendMessage("You should ask Rantz where to place this toad.");
-      event.handled = true;
-      return;
-    }
+    const { player } = event;
+    const stage = quest.getStage(player);
     event.handled = true;
-    if (stage >= STAGE_KILLED_CHOMPY && !quest.isComplete(event.player)) {
-      const hasQuestChompy = has(event.player, RAW_CHOMPY) || has(event.player, SEASONED_CHOMPY)
-        || hunt.hasCarcass(event.player);
-      if (hasQuestChompy) {
-        event.player.sendMessage("You have no reason to place another toad right now.");
-        return;
-      }
-    }
-    if (stage >= STAGE_RANTZ_MISSED && stage < STAGE_GIVEN_BOW) {
-      event.player.sendMessage("Talk to Rantz about the ogre bow first.");
+    if (stage < STAGE_SHOWN_TOAD) {
+      player.sendMessage("You're not sure where Rantz told you to place the bloated toad. You decide to wait and ask him where to place it.");
       return;
     }
-    if (event.player.getInventory().getAmount(BLOATED_TOAD) <= 0) return;
-    if (!hunt.place(event.player)) return;
-    event.player.getInventory().deleteNumber(BLOATED_TOAD, 1);
-    event.player.sendMessage("You place the bloated toad on the ground.");
-    if (stage === STAGE_SHOWN_TOAD) quest.setStage(event.player, STAGE_WAITING_CHOMPY);
+    if (player.getInventory().getAmount(BLOATED_TOAD) <= 0) return;
+    if (!hunt.place(player)) return;
+    player.getInventory().deleteNumber(BLOATED_TOAD, 1);
+    player.performAnimation(new Animation(PLACE_ANIMATION));
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You carefully place the bloated toad bait.");
+    if (stage === STAGE_SHOWN_TOAD) quest.setStage(player, STAGE_WAITING_CHOMPY);
   }
 
-  /** QH uses the ogre arrows on Rantz; that route has its own hand-in message. */
+  /** The hats branch of Rantz's post-quest page: the "Can I have a hat please?" answer, past his "show me" line. */
+  function hatClaimSteps(steps) {
+    const menu = steps.find((step) => step.type === "choice");
+    const ask = menu?.options?.find((option) => option.text === "Can I have a hat please?");
+    const shown = ask?.steps?.find((step) => step.type === "condition" && /has an ogre bow/i.test(step.text));
+    return shown ? [shown] : null;
+  }
+
+  /** Items used on Rantz: arrows, the bloated toad, the ogre bow, the raw and cooked chompy. */
   function handleItemOnNpc(event) {
     const npcId = event.npcId ?? event.target?.getId?.();
+    if (npcId === SWAMP_TOAD && [OGRE_BELLOWS_1, OGRE_BELLOWS_2, OGRE_BELLOWS_3].includes(event.itemId)) {
+      inflateToad({ ...event, npc: event.npc ?? event.target });
+      if (inflating.has(event.npc ?? event.target)) event.handled = true;
+      return;
+    }
     if (!RANTZ_NPC_IDS.has(npcId)) return;
-    const stage = quest.getStage(event.player);
-    if (quest.isComplete(event.player) && COOKED_CHOMPY_IDS.includes(event.itemId)) {
-      event.player.getInventory().deleteNumber(event.itemId, 1);
+    const { player } = event;
+    const stage = quest.getStage(player);
+    const play = (variant, from = PAGE) => {
       event.handled = true;
-      startTranscript(api, event.player, npcId, RANTZ_PAGE, "giving-rantz-a-cooked-chompy");
+      startTranscript(api, player, npcId, from, variant);
+    };
+    if (quest.isComplete(player) && COOKED_CHOMPY_IDS.includes(event.itemId)) {
+      player.getInventory().deleteNumber(event.itemId, 1);
+      play("giving-rantz-a-cooked-chompy", RANTZ_PAGE);
+      return;
+    }
+    if (event.itemId === OGRE_BOW) {
+      if (quest.isComplete(player)) {
+        // The capture's bow on Rantz after the quest (tick 1643): straight to "You show Rantz the marks on your bow.".
+        const request = { player, npc: event.target, npcId, variant: page(RANTZ_PAGE, "after-big-chompy-bird-hunting"),
+          select: hatClaimSteps };
+        api.emitCustomEvent("npc-dialogue:start", request);
+        if (request.handled) event.handled = true;
+      } else if (stage >= STAGE_RANTZ_MISSED && stage < STAGE_KILLED_CHOMPY) {
+        play("talking-to-rantz-after-he-failed-using-the-ogre-bow-on-rantz");
+      }
+      return;
+    }
+    if (event.itemId === BLOATED_TOAD) {
+      // Tick 826 at 25: "You show the bloated toad to Rantz." and his "...Is you's gonna stick da chompy?".
+      if (stage === STAGE_BELLOWS_TAKEN) play("returning-to-rantz-with-the-bloated-toad-using-the-bloated-toad-on-rantz");
+      else if (stage >= STAGE_SHOWN_TOAD && stage < STAGE_COMPLETE) {
+        play("returning-to-rantz-with-the-bloated-toad-using-the-bloated-toad-on-rantz-using-another-toad-on-rantz");
+      }
+      return;
+    }
+    if (event.itemId === RAW_CHOMPY) {
+      if (stage === STAGE_KILLED_CHOMPY) play("talking-to-rantz-with-a-raw-chompy-using-a-raw-chompy-on-rantz");
+      else if (stage === STAGE_TOLD_TO_COOK) play("talking-to-rantz-with-a-raw-chompy-talking-to-rantz-again-before-cooking-the-chompy");
       return;
     }
     if (event.itemId !== OGRE_ARROW) return;
     if (stage < STAGE_STARTED) return;
     const variant = stage >= STAGE_GIVEN_ARROWS
       ? "using-ogre-arrows-made-by-the-player-on-rantz-using-ogre-arrows-on-rantz-after-giving-him-some-already"
-      : has(event.player, OGRE_ARROW, 6)
+      : has(player, OGRE_ARROW, 6)
         ? "using-ogre-arrows-made-by-the-player-on-rantz"
         : "starting-off-using-less-than-6-ogre-arrows-on-rantz";
-    event.handled = true;
-    startTranscript(api, event.player, npcId, PAGE, variant);
+    play(variant);
   }
 
-  /** Ask the key question, then show the bloated toad to move on. */
-  function handleDialogueChoice({ player, npcId, option }) {
-    if (!RANTZ_NPC_IDS.has(npcId) || quest.getStage(player) !== STAGE_GIVEN_ARROWS) return;
-    if (String(option ?? "").includes("How do we make the chompys come?")) {
-      quest.setStage(player, STAGE_KIDS_EXPLAINED_TOADS);
-    }
+  /** The bait clearing: hint arrow, camera pan, both released as live does (ticks 786, 809, 836). */
+  function showBaitClearing(player) {
+    const sender = hint(player, true);
+    sender.sendCameraLookAt(BAIT_CAMERA_LOOK.x, BAIT_CAMERA_LOOK.y, BAIT_CAMERA_LOOK.height,
+      { rate: BAIT_CAMERA_LOOK.rate, rate2: BAIT_CAMERA_LOOK.rate, heightRelative: false });
+    sender.sendCameraMoveTo(BAIT_CAMERA_MOVE.x, BAIT_CAMERA_MOVE.y, BAIT_CAMERA_MOVE.height,
+      { rate: BAIT_CAMERA_MOVE.rate, rate2: BAIT_CAMERA_MOVE.rate, heightRelative: false });
+    sender.sendPositionalHint(new Location(BAIT_HINT_TILE.x, BAIT_HINT_TILE.y, BAIT_HINT_TILE.z), 2, BAIT_HINT_TILE.height);
+    const shown = {};
+    baitHints.set(player, shown);
+    later(player, BAIT_HINT_TICKS, () => {
+      if (baitHints.get(player) !== shown) return;
+      baitHints.delete(player);
+      hint(player, false);
+    });
   }
+  const baitHints = new WeakMap();
 
-  /** Record what Rantz/Bugs/Fycie ask for as their dialogue is played. */
-  function handleDialogueLine({ player, npcId, text }) {
+  /**
+   * Stage moves the capture makes on lines (ticks 580, 779, 1373), Rantz's seasoning line, and the bait
+   * clearing's camera and arrow on his "Over 'dere creature" line.
+   */
+  function handleDialogueLine(event) {
+    const { player, npcId, text } = event;
+    if (!RANTZ_NPC_IDS.has(npcId)) return;
     const stage = quest.getStage(player);
-    const value = String(text ?? "").toLowerCase();
-    // Rantz names his ingredient twice: in the cooking request when the raw chompy is shown
-    // (stage 50), and again in the "again before cooking" page (stage 55+), where the pair is
-    // rolled fresh. Record whichever he said last, or the player is told "Potato" and the cook
-    // still demands the "Onion" recorded earlier, which is the one combination that works (#3807).
-    if (RANTZ_NPC_IDS.has(npcId) && stage >= STAGE_KILLED_CHOMPY && stage < STAGE_CHOMPY_COOKED) {
-      if (value.includes("wants onion")) setIngredient(player, RANTZ_INGREDIENT_ATTRIBUTE, ItemIdentifiers.ONION);
-      else if (value.includes("wants potato")) setIngredient(player, RANTZ_INGREDIENT_ATTRIBUTE, ItemIdentifiers.POTATO);
-      // Advance only once Rantz has named his ingredient, so closing the dialogue
-      // before this line leaves stage 50 and replays the full cooking request.
-      if (value.includes("particular about our chompy yumms")) quest.setStage(player, STAGE_TOLD_TO_COOK);
-      return;
+    const value = String(text ?? "");
+    if (stage === STAGE_GIVEN_ARROWS && value.startsWith("Dey's fussie eaters just like Rantz.")) {
+      event.before = () => {
+        if (quest.getStage(player) === STAGE_GIVEN_ARROWS) quest.setStage(player, STAGE_KIDS_EXPLAINED_TOADS);
+      };
+    } else if (stage === STAGE_BELLOWS_TAKEN && value.startsWith("Yes, I have a 'fatsy toady' for you")) {
+      event.before = () => {
+        if (quest.getStage(player) === STAGE_BELLOWS_TAKEN && has(player, BLOATED_TOAD)) quest.setStage(player, STAGE_SHOWN_TOAD);
+      };
+    } else if (value.startsWith("Over 'dere creature, put da toadies over der!")) {
+      event.before = () => showBaitClearing(player);
+      event.after = () => player.getPacketSender().sendCameraReset();
+    } else if (stage === STAGE_KILLED_CHOMPY && value.startsWith("Okay's now you's needs to cook da chompy!")) {
+      event.before = () => {
+        if (quest.getStage(player) === STAGE_KILLED_CHOMPY) quest.setStage(player, STAGE_TOLD_TO_COOK);
+      };
+    } else if (value.startsWith("But's we's particular about our chompy yumms.")) {
+      // The first request names Onion in the transcript; this player's pick is the one said.
+      const wanted = seasoning(player, "rantz");
+      loadSeasoningLines(player, npcId);
+      event.text = seasoningLines.get(wanted.item) ?? value;
     }
-    if (BUGS_NPC_IDS.has(npcId) && stage >= STAGE_TOLD_TO_COOK && stage < STAGE_CHOMPY_COOKED) {
-      if (value.includes("equa leaves")) setIngredient(player, BUGS_INGREDIENT_ATTRIBUTE, ItemIdentifiers.EQUA_LEAVES);
-      else if (value.includes("cabbage")) setIngredient(player, BUGS_INGREDIENT_ATTRIBUTE, ItemIdentifiers.CABBAGE);
-      return;
-    }
-    if (npcId === FYCIE_NPC_ID && stage >= STAGE_TOLD_TO_COOK && stage < STAGE_CHOMPY_COOKED) {
-      if (value.includes("tomato")) setIngredient(player, FYCIE_INGREDIENT_ATTRIBUTE, ItemIdentifiers.TOMATO);
-      else if (value.includes("doogle leaves")) setIngredient(player, FYCIE_INGREDIENT_ATTRIBUTE, ItemIdentifiers.DOOGLE_LEAVES);
-    }
+  }
+
+  /** Rantz's two seasoning lines, read once from the transcript's again-before-cooking random. */
+  const seasoningLines = new Map();
+  function loadSeasoningLines(player, npcId) {
+    if (seasoningLines.size) return;
+    const harvest = (steps) => {
+      for (const option of steps.find((step) => step.type === "random")?.options ?? []) {
+        const line = option.steps?.find((step) => step.type === "line")?.text;
+        const choice = SEASONINGS.rantz.choices.find(({ name }) => new RegExp(`wants ${name}`, "i").test(String(line)));
+        if (choice) seasoningLines.set(choice.item, line);
+      }
+      return [];
+    };
+    api.emitCustomEvent("npc-dialogue:start", { player, npcId, select: harvest,
+      variant: page(PAGE, "talking-to-rantz-with-a-raw-chompy-talking-to-rantz-again-before-cooking-the-chompy") });
+  }
+
+  /** The ogres' random seasoning lines play this player's pick. */
+  function handleRandom(draw) {
+    const who = ogreOf(draw.npcId);
+    if (!who || quest.getStage(draw.player) < STAGE_KILLED_CHOMPY) return;
+    const wanted = seasoning(draw.player, who);
+    const index = draw.options.findIndex((option) => JSON.stringify(option.steps ?? []).toLowerCase()
+      .includes(`wants ${wanted.name}`) || JSON.stringify(option.steps ?? []).toLowerCase().includes(`have ${wanted.name}`));
+    if (index >= 0) draw.index = index;
+  }
+
+  /**
+   * Rantz's post-quest menus as the capture shows them (ticks 1528-1537): the first one is "What are the hats
+   * like?", "Can you show me the hats please?", "How many chompies do I have to stick?", "Can I have a hat
+   * please?", "Ok, thanks."; after "What are the hats like?" the other one is "How many chompies...", "How do
+   * I get a hat?", "Can I have a hat please?", "Can you show me the hats please?", "Ok, thanks."; after "How
+   * many..." the first again. The transcript lists all of them in one menu.
+   */
+  function handleMenu(notice) {
+    if (!RANTZ_NPC_IDS.has(notice.npcId) || quest.getStage(notice.player) < STAGE_COMPLETE) return;
+    const all = notice.options ?? [];
+    const byText = (text, which = 0) => all.filter((option) => option.text === text)[which];
+    if (!byText("Can I have a hat please?") || !byText("Can you show me the hats please?")) return;
+    // The capture's "What are the hats like?" answer is the transcript's second one (colons, not dots).
+    const like = byText("What are the hats like?", 1) ?? byText("What are the hats like?");
+    const first = [like, byText("Can you show me the hats please?"), byText("How many chompies do I have to stick?"),
+      byText("Can I have a hat please?"), byText("Ok, thanks.")].filter(Boolean);
+    const other = [byText("How many chompies do I have to stick?"), byText("How do I get a hat?"),
+      byText("Can I have a hat please?"), byText("Can you show me the hats please?"), byText("Ok, thanks.")].filter(Boolean);
+    notice.options = notice.via === "other" && notice.chosen === "What are the hats like?" ? other : first;
+  }
+
+  /** The item each captured message box shows, and the arrow hand-in's chat echo (tick 543). */
+  function messageBox(event) {
+    const text = String(event.text ?? "");
+    const entry = MESSAGE_BOX_ITEMS.find(([pattern]) => pattern.test(text));
+    const hat = /^((?:expert )?(?:ogre )?[a-z ]+?) hat\. \d+ feather/i.exec(text);
+    const hatItem = hat && CHOMPY_HATS.find((candidate) => candidate.label === hat[1].toLowerCase())?.item;
+    const item = entry?.[1] ?? hatItem;
+    if (item) event.box = { items: [item] };
+    if (TAKE_ARROWS_MESSAGE_IDS.has(event.stepId)) event.after = () => event.player.sendMessage(text);
   }
 
   function buyBugsTools(player) {
@@ -752,6 +1072,8 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   /** The transcript's item hand-outs and hand-ins. */
   function handleAction(event) {
     const { player, npcId, stepId, text } = event;
+    const ours = RANTZ_NPC_IDS.has(npcId) || npcId === FYCIE_NPC_ID || BUGS_NPC_IDS.has(npcId);
+    if (ours && event.kind === "message") messageBox(event);
     if (RANTZ_NPC_IDS.has(npcId) && /this is the hat for/i.test(String(text ?? ""))) {
       grantHat(player, text);
       return;
@@ -772,7 +1094,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
       quest.setStage(player, STAGE_GIVEN_ARROWS);
       return;
     }
-    if (stepId === SHOW_TOAD_MESSAGE_ID) {
+    if (SHOW_TOAD_MESSAGE_IDS.has(stepId)) {
       const stage = quest.getStage(player);
       if (stage < STAGE_BELLOWS_TAKEN || stage >= STAGE_SHOWN_TOAD || !has(player, BLOATED_TOAD)) return;
       quest.setStage(player, STAGE_SHOWN_TOAD);
@@ -784,6 +1106,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
       if (!hasBow(player)) {
         if (freeSlots(player) <= 0) {
           event.handled = true;
+          event.box = null;
           player.sendMessage("You need an empty inventory slot for the ogre bow.");
           return;
         }
@@ -813,36 +1136,30 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     }
   }
 
+  /** Before the quest, the ogre bow's Check kills (Wiki: Ogre bow; capture ticks 1089, 1358). */
+  function checkKills(event) {
+    if (quest.isComplete(event.player)) return false;
+    // The capture breaks the line between the two sentences (ticks 1089, 1358).
+    event.player.sendMessage("You've scratched up no kills yet!<br>You've got to complete the quest first!");
+    return true;
+  }
+
   function handleLogin({ player }) {
-    // Placed bait and the demonstration are transient; interrupted saves need a retry.
-    const stage = quest.getStage(player);
-    if (stage === STAGE_WAITING_CHOMPY || stage === STAGE_CHOMPY_MISSED) quest.setStage(player, STAGE_SHOWN_TOAD);
+    // The demonstration is transient: a save made while Rantz shoots goes back to the bait being down.
+    if (quest.getStage(player) === STAGE_CHOMPY_MISSED) quest.setStage(player, STAGE_WAITING_CHOMPY);
     player.getPacketSender?.().sendConfig?.(VARP_CHOMPY_KILLS, chompyKills(player));
     refreshQuestList(player);
   }
 
-  // Later login hooks (including Temple of the Eye) reset the hint channel.
-  // Restore this quest's saved placement marker after all of those hooks.
-  function handleBootstrap({ player }) {
-    syncBaitHint(player);
-  }
-
-  function syncBaitHint(player) {
-    if (quest.getStage(player) === STAGE_SHOWN_TOAD) {
-      player.getPacketSender().sendPositionalHint(new api.core.Location(TOAD_CLEARING.x, TOAD_CLEARING.y, TOAD_CLEARING.z));
-      BAIT_HINT_PLAYERS.add(player);
-    } else if (BAIT_HINT_PLAYERS.delete(player)) {
-      player.getPacketSender().clearHintArrow();
-    }
-  }
-
-  function handleStageChanged({ player, key }) {
-    if (key === "big_chompy_bird_hunting") syncBaitHint(player);
-  }
-
   function handleLogout({ player }) {
-    BAIT_HINT_PLAYERS.delete(player);
-    cancelFirstHunt(player);
+    baitHints.delete(player);
+    release(player);
+    const toad = inflatingBy.get(player);
+    if (toad) inflating.delete(toad);
+    inflatingBy.delete(player);
+    cancelDemonstration(player);
+    // A roast in progress finishes rather than eating the raw chompy.
+    cooking.get(player)?.({ loggingOut: true });
     hunt.cleanup(player);
   }
 
@@ -863,16 +1180,17 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
+    // The capture's scroll (tick 1513): Cooking, Ranged, Fletching, "An Ogre Bow", "Ability to make Ogre Arrows".
     xpRewards: [
-      { skillId: Skill.FLETCHING.getIndex(), amount: 262, label: "Fletching" },
       { skillId: Skill.COOKING.getIndex(), amount: 1470, label: "Cooking" },
       { skillId: Skill.RANGED.getIndex(), amount: 735, label: "Ranged" },
+      { skillId: Skill.FLETCHING.getIndex(), amount: 262, label: "Fletching" },
     ],
     // The bow is handed over by Rantz at the hunt step, not added again at completion;
     // the completion scroll still shows it as the quest's item reward.
     scrollItemId: OGRE_BOW,
-    rewardItemLabel: "An ogre bow",
-    otherRewards: ["Ability to hunt chompy birds", "Chompy bird hats from Rantz"],
+    rewardItemLabel: "An Ogre Bow",
+    otherRewards: ["Ability to make Ogre Arrows"],
     buildJournal,
     onReward: grantReward,
   });
@@ -881,16 +1199,18 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
-  api.onCustomEvent("npc-dialogue:choice", handleDialogueChoice);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
-  api.onCustomEvent("quest:stage-changed", handleStageChanged);
-  api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
+  api.onCustomEvent("npc-dialogue:random", handleRandom);
+  api.onCustomEvent("npc-dialogue:menu", handleMenu);
   api.onItemOnObject(handleItemOnObject);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemAction(handleItemAction);
-  api.onObjectInteraction(handleObjectInteraction);
+  api.onItemAction("Ogre bow", { "Check kills": checkKills, Check: checkKills });
+  api.onObjectInteraction("Locked Ogre chest", { Unlock: chest.unlock });
+  api.onObjectInteraction("Unlocked Ogre chest", { Search: chest.search });
   api.onNpcInteraction(handleNpcInteraction);
   api.onNpcDeath(handleNpcDeath);
+  api.onCustomEvent("npc-drops:claim", handleDropClaim);
   api.onCanAttack(handleCanAttack);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);

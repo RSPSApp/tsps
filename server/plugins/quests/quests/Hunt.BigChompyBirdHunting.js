@@ -1,12 +1,31 @@
-/** Tick-owned Chompy bait/birds. Mechanics: OSRS Wiki Bloated toad / Chompy bird. */
+/**
+ * Tick-owned Chompy bait/birds. Mechanics: OSRS Wiki Bloated toad / Chompy bird. Timings and the
+ * overhead lines are from the user's rev 242 Big Chompy Bird Hunting capture
+ * (docs/quests/big-chompy-bird-hunting/README.md):
+ * - a bird lands with chompy_update_fly_down and "Sqwirk!" (ticks 992, 1323);
+ * - at its bait it says "Sqwark!" with sound 1453, two ticks later plays chompy_update_attack, two more and
+ *   the bait says "!!Croak!!" as the bird says "Gobble!", and the next tick the bait is gone (ticks 1013-1018);
+ * - a bird that is not killed flies off with chompy_update_fly_up (30 client cycles late) and "Rawk!" (1098);
+ * - a bait bursts with chompy_toad_exploding (30 cycles late) and toad_burst (1457, range 5) (943, 1367).
+ */
 module.exports = function createChompyHunt(api, callbacks = {}) {
-  const { Location, Animation, Graphic, HitDamage, HitMask, RegionManager, World, Task, TaskManager, CacheDefinitions, NpcIdentifiers } = api.core;
+  const { Location, Animation, Graphic, HitDamage, HitMask, RegionManager, World, Task, TaskManager, CacheDefinitions, NpcIdentifiers, Sounds } = api.core;
   const ROLL_INTERVAL = 25;
   const BAIT_LIFETIME = 100;
   const BIRD_LIFETIME = 100;
   const CARCASS_LIFETIME = 200;
   const MIN_LANDING_DISTANCE = 3;
   const MAX_LANDING_DISTANCE = 10;
+  /** From the bird reaching its bait: attack anim at +2, the bait's "!!Croak!!" at +4, the bait gone at +5. */
+  const EAT_ATTACK_TICK = 2;
+  const EAT_CROAK_TICK = 4;
+  const EAT_DONE_TICK = 5;
+  const SQUAWK_SOUND = 1453;
+  const BURST_SOUND = 1457;
+  const BURST_SOUND_RANGE = 5;
+  const EFFECT_DELAY = 30;
+  /** Transcript:Big Chompy Bird Hunting, "standing next to the bloated toad when it explodes" (no capture stood there). */
+  const BURST_MESSAGE = "You're hit by bits of exploding toad!";
   const LEAVING_FLAG = "chompy-hunt:leaving";
   const BLOCKED_LANDING = RegionManager.BLOCKED_MASK;
   const baits = new Map(), birds = new Map(), carcasses = new Map(), departures = new Map();
@@ -21,6 +40,7 @@ module.exports = function createChompyHunt(api, callbacks = {}) {
     return { id, ticks: Math.max(1, Math.ceil(cycles / 30)) };
   }
   const landing = sequence("chompy_update_fly_down"), leaving = sequence("chompy_update_fly_up");
+  const eating = sequence("chompy_update_attack");
   const burstGraphic = CacheDefinitions.getSpotanimId("chompy_toad_exploding");
   if (burstGraphic == null) throw new Error("Missing Chompy toad burst graphic");
 
@@ -78,24 +98,24 @@ module.exports = function createChompyHunt(api, callbacks = {}) {
     return 0;
   }
 
-  function attract(bait) {
-    const at = landingTile(bait);
-    if (!at) return false;
-    const npc = spawn(NpcIdentifiers.CHOMPY_BIRD, at, bait.player, bait.area);
-    if (!npc) return false;
-    const arrived = [npc];
-    birds.set(npc, { npc, player: bait.player, area: bait.area, bait, age: 0 });
+  function land(bait, at) {
+    const npc = at && spawn(NpcIdentifiers.CHOMPY_BIRD, at, bait.player, bait.area);
+    if (!npc) return null;
+    birds.set(npc, { npc, player: bait.player, area: bait.area, bait, age: 0, eating: -1 });
     npc.performAnimation(new Animation(landing.id));
+    npc.forceChat("Sqwirk!");
+    return npc;
+  }
+
+  function attract(bait) {
+    const first = land(bait, landingTile(bait));
+    if (!first) return false;
+    const arrived = [first];
     bait.attracted = true;
     const chance = doubleChance(bait.player);
     if (chance === 1 || (chance > 0 && Math.random() < chance)) {
-      const secondTile = landingTile(bait);
-      const second = secondTile && spawn(NpcIdentifiers.CHOMPY_BIRD, secondTile, bait.player, bait.area);
-      if (second) {
-        birds.set(second, { npc: second, player: bait.player, area: bait.area, bait, age: 0 });
-        second.performAnimation(new Animation(landing.id));
-        arrived.push(second);
-      }
+      const second = land(bait, landingTile(bait));
+      if (second) arrived.push(second);
     }
     for (const bird of arrived) callbacks.onAttracted?.({ player: bait.player, npc: bird, bait: bait.npc });
     return true;
@@ -106,17 +126,20 @@ module.exports = function createChompyHunt(api, callbacks = {}) {
     removeActor(bait.npc);
     if (burst) {
       const player = bait.player;
+      Sounds.playAreaSound({ soundId: BURST_SOUND, x: bait.at.getX(), y: bait.at.getY(), level: bait.at.getZ(),
+        radius: BURST_SOUND_RANGE, source: bait.npc });
       if (player.isRegistered() && player.getPrivateArea() === bait.area && player.getLocation().isWithinDistance(bait.at, 16)) {
-        player.getPacketSender().sendGraphic(new Graphic(burstGraphic), bait.at);
+        player.getPacketSender().sendGraphic(new Graphic(burstGraphic, EFFECT_DELAY), bait.at);
         // The burst cannot kill: damage is clamped to leave the owner at 1 HP, and skipped at 1 HP.
         const damage = player.getLocation().isWithinDistance(bait.at, 1)
           ? Math.min(1 + Math.floor(Math.random() * 2), player.getHitpoints() - 1) : 0;
         if (damage >= 1) {
           player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.RED)]);
+          player.sendMessage(BURST_MESSAGE);
         }
       }
     }
-    callbacks.onBaitExpired?.({ player: bait.player, attracted: bait.attracted,
+    callbacks.onBaitExpired?.({ player: bait.player, attracted: bait.attracted, eaten: bait.eaten === true,
       remaining: [...baits.values()].filter(other => other.player === bait.player).length });
   }
 
@@ -125,6 +148,7 @@ module.exports = function createChompyHunt(api, callbacks = {}) {
   function ownsCarcass(player, npc) { return carcasses.get(npc)?.player === player; }
   function hasCarcass(player) { return [...carcasses.values()].some(corpse => corpse.player === player && corpse.npc.isRegistered()); }
   function forgetCarcass(npc) { carcasses.delete(npc); }
+  /** `npc` is the killed bird itself, now its carcass (the death's remains keep it in the world). */
   function trackCarcass(npc, player) {
     carcasses.set(npc, { npc, player, area: npc.getPrivateArea(), age: 0 });
     ensureTask();
@@ -135,8 +159,40 @@ module.exports = function createChompyHunt(api, callbacks = {}) {
     bird.npc.setFlag(LEAVING_FLAG);
     bird.npc.getMovementQueue().reset();
     bird.npc.getCombat().reset();
-    bird.npc.performAnimation(new Animation(leaving.id));
+    bird.npc.performAnimation(new Animation(leaving.id, EFFECT_DELAY));
+    bird.npc.forceChat("Rawk!");
     departures.set(bird.npc, { npc: bird.npc, player: bird.player, area: bird.area, age: 0 });
+    callbacks.onBirdLeft?.({ player: bird.player, npc: bird.npc });
+  }
+
+  /** The bird at its bait: "Sqwark!", the peck, the bait's "!!Croak!!" and "Gobble!", then the bait is gone. */
+  function eat(bird) {
+    const bait = bird.bait;
+    if (bird.eating < 0) {
+      bird.eating = 0;
+      bird.npc.getMovementQueue().reset();
+      bird.npc.setPositionToFace?.(bait.at);
+      bird.npc.forceChat("Sqwark!");
+      Sounds.playAreaSound({ soundId: SQUAWK_SOUND, x: bird.npc.getLocation().getX(), y: bird.npc.getLocation().getY(),
+        level: bird.npc.getLocation().getZ(), radius: BURST_SOUND_RANGE, source: bird.npc });
+      return;
+    }
+    // The bait burst or another bird ate it first: this one gives up.
+    if (!baits.has(bait.npc)) {
+      bird.eating = -1;
+      return;
+    }
+    bird.eating++;
+    if (bird.eating === EAT_ATTACK_TICK) bird.npc.performAnimation(new Animation(eating.id));
+    else if (bird.eating === EAT_CROAK_TICK) {
+      bait.npc.forceChat("!!Croak!!");
+      bird.npc.forceChat("Gobble!");
+    } else if (bird.eating >= EAT_DONE_TICK) {
+      bait.eaten = true;
+      removeBait(bait);
+      bird.eating = -1;
+      callbacks.onBaitEaten?.({ player: bird.player, npc: bird.npc });
+    }
   }
 
   function tick() {
@@ -161,8 +217,11 @@ module.exports = function createChompyHunt(api, callbacks = {}) {
         continue; // retain identity until the actual death hook transfers ownership
       } else if (++bird.age >= BIRD_LIFETIME) {
         leave(bird);
+      } else if (bird.eating >= 0) {
+        if (bird.npc.getCombat().getAttacker()) bird.eating = -1;
+        else eat(bird);
       } else if (bird.age >= landing.ticks && baits.has(bird.bait.npc) && !bird.npc.getCombat().getAttacker()) {
-        if (bird.npc.getLocation().isWithinDistance(bird.bait.at, 1)) removeBait(bird.bait);
+        if (bird.npc.getLocation().isWithinDistance(bird.bait.at, 1)) eat(bird);
         else if (!bird.npc.getMovementQueue().getDestination()) {
           api.core.PathFinder.calculateWalkRoute(bird.npc, bird.bait.at.getX(), bird.bait.at.getY());
         }
@@ -223,6 +282,6 @@ module.exports = function createChompyHunt(api, callbacks = {}) {
     task?.stop();
     task = null;
   }
-  return { place, ownsBird, removeBird, ownsCarcass, hasCarcass, trackCarcass, forgetCarcass, cleanup, shutdown,
+  return { CARCASS_TICKS: CARCASS_LIFETIME, place, ownsBird, removeBird, ownsCarcass, hasCarcass, trackCarcass, forgetCarcass, cleanup, shutdown,
     isLeaving: npc => npc?.hasFlag?.(LEAVING_FLAG) === true };
 };

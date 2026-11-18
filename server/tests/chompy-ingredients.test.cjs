@@ -1,9 +1,10 @@
 // Run after `yarn build`: node --test tests/chompy-ingredients.test.cjs
 //
 // Big Chompy Bird Hunting's seasoned chompy takes one ingredient from each of Rantz, Bugs and
-// Fycie, and the ogre family names them from the transcript's random pairs (#3807). Whatever a
-// talker says last is what the cook must accept: Rantz names his again on the "talk to him once
-// more before cooking" page, and that page rolls the onion/potato pair afresh.
+// Fycie, each one of the transcript's pairs (#3807). Each ogre's pick is the player's own and stays
+// the same however often they are asked (the user's rev 242 capture: Onion three times, equa leaves
+// and tomato twice each; Wiki: "It's different from player to player"), so every combination of the
+// pairs must cook, and the refusal names this player's three.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -18,15 +19,10 @@ const { PlayerSession } = require("../dist/net/PlayerSession");
 const { Location } = require("../dist/game/model/Location");
 const { Item } = require("../dist/game/model/Item");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
-const { NpcIdentifiers } = require("../dist/util/NpcIdentifiers");
 
 const PAGE = "Big Chompy Bird Hunting";
 const SPIT_ROAST = 6895;
-const STAGE_KILLED_CHOMPY = 50;
 const STAGE_TOLD_TO_COOK = 55;
-const RANTZ = NpcIdentifiers.RANTZ;
-const BUGS = NpcIdentifiers.BUGS;
-const FYCIE = NpcIdentifiers.FYCIE;
 
 let core, emit, listeners, quest, itemOnObject;
 
@@ -92,8 +88,14 @@ function makePlayer() {
   return player;
 }
 
-function say(player, npcId, variant, needle) {
-  emit("npc-dialogue:line", { player, npcId, text: line(variant, needle) });
+const RANTZ_KEY = "big-chompy-bird-hunting:rantz-ingredient";
+const BUGS_KEY = "big-chompy-bird-hunting:bugs-ingredient";
+const FYCIE_KEY = "big-chompy-bird-hunting:fycie-ingredient";
+
+function picks(player, rantz, bugs, fycie) {
+  player.setAttribute(RANTZ_KEY, rantz);
+  player.setAttribute(BUGS_KEY, bugs);
+  player.setAttribute(FYCIE_KEY, fycie);
 }
 
 function cook(player) {
@@ -105,50 +107,39 @@ function cook(player) {
     handled: false,
   };
   itemOnObject(event);
+  // The roast's three steps are two ticks apart (capture ticks 1472-1476).
+  for (let i = 0; i < 5; i++) core.TaskManager.process();
   return event;
 }
 
-// Rantz's pair and the children's pairs, as the transcript's pages hold them.
-const RANTZ_OPTIONS = [
-  ["onion", RANTZ_AGAIN, "wants onion", ItemIdentifiers.ONION],
-  ["potato", RANTZ_AGAIN, "wants potato", ItemIdentifiers.POTATO],
-];
-const BUGS_OPTIONS = [
-  ["equa-leaves", BUGS_PAGE, "equa leaves", ItemIdentifiers.EQUA_LEAVES],
-  ["cabbage", BUGS_PAGE, "cabbage", ItemIdentifiers.CABBAGE],
-];
-const FYCIE_OPTIONS = [
-  ["tomato", FYCIE_PAGE, "tomato", ItemIdentifiers.TOMATO],
-  ["doogle-leaves", FYCIE_PAGE, "doogle leaves", ItemIdentifiers.DOOGLE_LEAVES],
-];
+const RANTZ_OPTIONS = [["onion", ItemIdentifiers.ONION], ["potato", ItemIdentifiers.POTATO]];
+const BUGS_OPTIONS = [["equa-leaves", ItemIdentifiers.EQUA_LEAVES], ["cabbage", ItemIdentifiers.CABBAGE]];
+const FYCIE_OPTIONS = [["tomato", ItemIdentifiers.TOMATO], ["doogle-leaves", ItemIdentifiers.DOOGLE_LEAVES]];
 
-for (const [rantzLabel, rantzPage, rantzNeedle, rantzItem] of RANTZ_OPTIONS) {
-  for (const [bugsLabel, bugsPage, bugsNeedle, bugsItem] of BUGS_OPTIONS) {
-    for (const [fycieLabel, fyciePage, fycieNeedle, fycieItem] of FYCIE_OPTIONS) {
+test("the transcript holds every seasoning the plugin can pick", () => {
+  line(RANTZ_AGAIN, "wants onion");
+  line(RANTZ_AGAIN, "wants potato");
+  line(BUGS_PAGE, "equa leaves");
+  line(BUGS_PAGE, "cabbage");
+  line(FYCIE_PAGE, "tomato");
+  line(FYCIE_PAGE, "doogle leaves");
+});
+
+for (const [rantzLabel, rantzItem] of RANTZ_OPTIONS) {
+  for (const [bugsLabel, bugsItem] of BUGS_OPTIONS) {
+    for (const [fycieLabel, fycieItem] of FYCIE_OPTIONS) {
       test(`a seasoned chompy with ${rantzLabel}, ${bugsLabel} and ${fycieLabel} cooks (#3807)`, () => {
         const player = makePlayer();
-        quest.setStage(player, STAGE_KILLED_CHOMPY);
-        // The real flow: the player kills and plucks the chompy (stage 50) and shows it to Rantz,
-        // who names his ingredient and moves the quest on to cooking, then names it again on the
-        // page the player sees if they come back before cooking — which rolls the pair afresh.
-        // The last thing he says is what the cook has to accept.
-        say(player, RANTZ, "talking-to-rantz-with-a-raw-chompy", "wants onion");
-        assert.equal(quest.getStage(player), STAGE_TOLD_TO_COOK, "showing the raw chompy starts the cook");
-        say(player, RANTZ, rantzPage, rantzNeedle);
-        say(player, BUGS, bugsPage, bugsNeedle);
-        say(player, FYCIE, fyciePage, fycieNeedle);
-        assert.equal(player.getAttribute("big-chompy-bird-hunting:rantz-ingredient"), rantzItem,
-          `${rantzLabel} is what he said last`);
-        assert.equal(player.getAttribute("big-chompy-bird-hunting:bugs-ingredient"), bugsItem, bugsLabel);
-        assert.equal(player.getAttribute("big-chompy-bird-hunting:fycie-ingredient"), fycieItem, fycieLabel);
+        quest.setStage(player, STAGE_TOLD_TO_COOK);
+        picks(player, rantzItem, bugsItem, fycieItem);
         for (const id of [ItemIdentifiers.RAW_CHOMPY, rantzItem, bugsItem, fycieItem]) {
           player.getInventory().add(new Item(id, 1));
         }
-
         const event = cook(player);
         assert.equal(event.handled, true, "the spit-roast claims the use");
         assert.equal(player.getInventory().getAmount(ItemIdentifiers.SEASONED_CHOMPY), 1, "a seasoned chompy");
         assert.equal(player.getInventory().getAmount(ItemIdentifiers.RAW_CHOMPY), 0, "the raw chompy is gone");
+        for (const id of [rantzItem, bugsItem, fycieItem]) assert.equal(player.getInventory().getAmount(id), 0);
         player.setRegistered(false);
       });
     }
@@ -156,21 +147,18 @@ for (const [rantzLabel, rantzPage, rantzNeedle, rantzItem] of RANTZ_OPTIONS) {
 }
 
 // The transcript's refusal is two messages: the flat refusal, then the reminder that names what
-// each of them asked for — Rantz, then Fycie, then Bugs, with the recorded seasoning in place of
+// each of them asked for — Rantz, then Fycie, then Bugs, with the player's seasoning in place of
 // the data's "[potato/onion]" placeholders.
 for (const [label, rantz, bugs, fycie, reminder] of [
-  ["potato/cabbage/tomato", "wants potato", "cabbage", "tomato",
+  ["potato/cabbage/tomato", ItemIdentifiers.POTATO, ItemIdentifiers.CABBAGE, ItemIdentifiers.TOMATO,
     "Remember what the Ogre family wanted? Rantz wanted potato. Fycie wanted tomato. Bugs wanted cabbage."],
-  ["onion/equa/doogle", "wants onion", "equa leaves", "doogle leaves",
+  ["onion/equa/doogle", ItemIdentifiers.ONION, ItemIdentifiers.EQUA_LEAVES, ItemIdentifiers.DOOGLE_LEAVES,
     "Remember what the Ogre family wanted? Rantz wanted onion. Fycie wanted doogle leaves. Bugs wanted equa leaves."],
 ]) {
   test(`a missing ${label} ingredient is refused with both of the transcript's lines`, () => {
     const player = makePlayer();
     quest.setStage(player, STAGE_TOLD_TO_COOK);
-    say(player, RANTZ, RANTZ_AGAIN, rantz);
-    say(player, BUGS, BUGS_PAGE, bugs);
-    say(player, FYCIE, FYCIE_PAGE, fycie);
-    // Nothing of the trio is carried, so the cook refuses and names all three.
+    picks(player, rantz, bugs, fycie);
     const messages = [];
     player.sendMessage = (message) => messages.push(String(message));
     player.getInventory().add(new Item(ItemIdentifiers.RAW_CHOMPY, 1));
@@ -190,9 +178,7 @@ for (const [label, rantz, bugs, fycie, reminder] of [
 test("an onion where he asked for a potato is refused and the reminder names the potato", () => {
   const player = makePlayer();
   quest.setStage(player, STAGE_TOLD_TO_COOK);
-  say(player, RANTZ, RANTZ_AGAIN, "wants potato");
-  say(player, BUGS, BUGS_PAGE, "cabbage");
-  say(player, FYCIE, FYCIE_PAGE, "tomato");
+  picks(player, ItemIdentifiers.POTATO, ItemIdentifiers.CABBAGE, ItemIdentifiers.TOMATO);
   const messages = [];
   player.sendMessage = (message) => messages.push(String(message));
   for (const id of [ItemIdentifiers.RAW_CHOMPY, ItemIdentifiers.ONION, ItemIdentifiers.CABBAGE, ItemIdentifiers.TOMATO]) {
@@ -201,6 +187,19 @@ test("an onion where he asked for a potato is refused and the reminder names the
   const event = cook(player);
   assert.equal(event.handled, true);
   assert.equal(player.getInventory().getAmount(ItemIdentifiers.SEASONED_CHOMPY), 0, "nothing is cooked");
-  assert.ok(messages.at(-1).includes("Rantz wanted potato."), "the earlier onion does not stand in for the potato");
+  assert.ok(messages.at(-1).includes("Rantz wanted potato."), "the onion does not stand in for the potato");
+  player.setRegistered(false);
+});
+
+test("a player who never asked still has picks, rolled once and kept", () => {
+  const player = makePlayer();
+  quest.setStage(player, STAGE_TOLD_TO_COOK);
+  player.sendMessage = () => {};
+  player.getInventory().add(new Item(ItemIdentifiers.RAW_CHOMPY, 1));
+  cook(player);
+  const first = [RANTZ_KEY, BUGS_KEY, FYCIE_KEY].map((key) => player.getAttribute(key));
+  assert.ok(first.every((id) => Number(id) > 0), "each ogre has a seasoning");
+  cook(player);
+  assert.deepEqual([RANTZ_KEY, BUGS_KEY, FYCIE_KEY].map((key) => player.getAttribute(key)), first);
   player.setRegistered(false);
 });

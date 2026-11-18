@@ -275,11 +275,17 @@ the tile it was clicked from (`loc-teleports.test.cjs`).
 
 **Decisions:** the Brimhaven Dungeon's metal dragon crevice (30198) is skipped: it leads into the
 Slayer-only area (Wiki), and the one recording (local 1001569) only crosses in, leaving by teleport,
-so an entry would be one-way and strand the player. The Isle of Souls tower basement ladder (40745) and the Fremennik
-warrior ladder (4187) are skipped for the same reason: only the way down is captured, and their exit
-ladders (40746, 4188) have no handler. The Ardougne prison staircase (35791) is Song of the Elves'
+so an entry would be one-way and strand the player. The Fremennik warrior ladder (4187) is skipped for the
+same reason: only the way down is captured, and its exit ladder (4188) has no handler. The Ardougne prison staircase (35791) is Song of the Elves'
 (`enterPrison`); its one capture is the quest's prison-entry scene. The Taverley Dungeon cave into Cerberus's lair is skipped (`skip.names`): the lair is
 a boss area tsps has no plugin for, and the one capture is a Leagues world's.
+
+**Isle of Souls tower basement (#5838):** the Crumbling Tower's ladder down (40745 at 2131,2994) is
+taken from its one capture (local 1000195, Leagues V, rev 227): clicked from 2132,2994, the climb
+(827) two ticks after arriving and the move to 1940,9451 on tick 3. No capture climbs the exit
+ladder (40746 at 1941,9451), and the [Wiki](https://oldschool.runescape.wiki/w/Crumbling_Tower)
+doesn't say where it lands. Ours: it lands on 2132,2994, where the climb down was clicked from,
+with the commonest captured ladder Climb-up timing (828 on tick 2, the move on tick 3).
 
 **Sync fix:** a dialogue decision now takes an `op`. The Waterbirth iron ladder's "Climb up or down
 the ladder?" was decided for its Climb option, and the sync attached it to the ladder's direct
@@ -367,9 +373,10 @@ No new animation or sound is claimed for the uncaptured platforms.
 
 The cave entrance (36556, 4x4 at 3269,6047) and the Steps out (36215, 3x2 at 3301,12455) had no
 handler, so clicking Enter did nothing. `prif_mine_entrance` and `prif_mine_exit` now fade between
-them. Capture 1105 shows the Enter click, the fade (client script 948) and a rebuild into the
-mine map; it has no capture of the Steps. Both landings are inferred, not captured: the mine side
-is 3302,12454 and the surface side is 3271,6051, the tiles the agent `transports.json` uses.
+them. Capture 237/01105 shows arrival at 3271,6051 on tick 12697, the fade (client script 948)
+on tick 12700 and the inbound landing at 3302,12454 on tick 12702, five ticks after arrival.
+It has no capture of the Steps: the return landing at 3271,6051, from the agent
+`transports.json`, and its two-tick timing remain inferred.
 
 ## Elven rabbit cave
 

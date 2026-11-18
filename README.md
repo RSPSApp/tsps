@@ -67,6 +67,28 @@ Set `"name": "My World"` in `server/data/definitions/world.local.json` to choose
 
 Run `yarn start`. Your world appears in the World list once it registers. Keep the token private.
 
+### Browser client compatibility
+
+The server announces its explicit wire protocol version before the existing welcome packet.
+The browser client accepts a matching version and refuses a known mismatch before sending
+login credentials. Worlds with no valid announcement remain accessible with a compatibility
+warning; their version is unknown, even if they otherwise resemble a version 1 world.
+Compatibility notices stay within the game area and disappear after three seconds. To hide
+them, open Configuration → RSPS.app and turn off **Show protocol compatibility notices**.
+This changes only the display; known mismatches still block login and explain the error.
+The wire protocol version describes the compiled client/server packet format, not the OSRS
+cache revision or an editable supported-version list. A mismatch notice shows both versions.
+Existing clients can ignore the announcement on the existing plugin-message channel.
+
+For an incompatible browser game wire change, increment the positive integer
+`WIRE_PROTOCOL_VERSION` in both
+`server/src/main/typescript/elvarg/net/protocol/WireProtocolVersion.ts` and
+`client/network/serverConnection/protocolCompatibility.ts`, then rebuild and deploy both
+packages. The focused server protocol test checks that the mirrored values agree. Source,
+comments, gameplay changes and cache revisions alone do not change the protocol version.
+The constants stay inside each package so the server's standalone build layout is preserved.
+The optional native gateway retains its existing login behavior and ignores this announcement.
+
 ## Links
 
 - [Discord](https://discord.com/invite/TCTDGVzejn) — questions, help and development chat

@@ -3,39 +3,39 @@
 const S = require("./Shared.Camdozaal");
 const FORGE_NAMES = new Set(["bim_ruins_wallkit_sacred_forge_multi", "bim_ruins_wallkit_sacred_forge_op", "bim_ruins_wallkit_sacred_forge"]);
 const openAt = new WeakMap();
+/** Synth sounds from rsprox 2026-11-17: a refused purchase, and the Boost bought. */
+const REFUSED_SOUND = 2277;
+const BOUGHT_SOUND = 4974;
 
 function forge(event) {
   const ids = [...FORGE_NAMES].map(name => S.core().CacheDefinitions.getLocId(name));
   return ids.includes(event.objectId) && S.inRuins(event.player);
 }
+// Fuel, Check and Empty follow rsprox 2026-11-17 (rev 242.1): Fuel and Empty ask for an
+// amount (clientscript 108) naming the stored total, then report the result.
 function fuel(event) {
   const { player } = event;
   if (!forge(event)) return false;
   if (!S.gate(player)) return;
-  const amount = Math.min(S.shards(player), S.MAX_SHARDS - S.stored(player));
-  if (!amount) return player.sendMessage("You have no barronite shards to add, or the forge is full.");
-  player.getInventory().deleteNumber(S.obj("camdozaal_barronite_shard"), amount);
-  S.setStored(player, S.stored(player) + amount);
-  player.sendMessage(`You add ${amount} barronite shards to the Sacred Forge.`);
-  S.save(player);
+  if (!S.shards(player)) return player.sendMessage("You have no Barronite shards to deposit.");
+  S.askAmount(player, `How many Barronite shards would you like to deposit?<br>${S.format(S.stored(player))} stored.`, count => {
+    const amount = S.store(player, count);
+    if (amount) player.sendMessage(`You stored ${S.format(amount)} Barronite shards in the Sacred Forge.`);
+  });
 }
 function check(event) {
   const { player } = event;
   if (!forge(event)) return false;
-  if (S.gate(player)) player.sendMessage(`You have ${S.stored(player)} barronite shards stored in the Sacred Forge.`);
+  if (S.gate(player)) player.sendMessage(`You currently have ${S.format(S.stored(player))} Barronite shards stored`);
 }
 function empty(event) {
   const { player } = event;
   if (!forge(event)) return false;
   if (!S.gate(player)) return;
-  const inventory = player.getInventory();
-  const amount = Math.min(S.stored(player), S.MAX_SHARDS - S.shards(player));
-  if (!amount) return player.sendMessage("You have no barronite shards to withdraw.");
-  const id = S.obj("camdozaal_barronite_shard");
-  if (inventory.getFreeSlots() === 0 && !inventory.contains(id)) return player.sendMessage("You don't have enough inventory space.");
-  inventory.adds(id, amount);
-  S.setStored(player, S.stored(player) - amount);
-  S.save(player);
+  if (!S.stored(player)) return player.sendMessage("You have no Barronite shards to withdraw.");
+  S.askAmount(player, `How many Barronite shards would you like to withdraw?<br>${S.format(S.stored(player))} stored.`, count => {
+    if (S.withdraw(player, count)) player.sendMessage(`You have ${S.format(S.stored(player))} Barronite shards left in the Sacred Forge.`);
+  });
 }
 function useShard(event) {
   if (event.handled || event.itemId !== S.obj("camdozaal_barronite_shard") || !forge(event)) return;
@@ -60,9 +60,13 @@ function buy(event) {
   if (index < 5 && S.purchased(player, index)) return player.sendMessage("That buff is already active.");
   if (index === 5 && S.boostTicks(player) > 0) return player.sendMessage("Your boost is already active.");
   const buff = S.BUFFS[index];
-  if (!S.pay(player, buff.cost)) return player.sendMessage("You don't have enough barronite shards.");
+  if (!S.pay(player, buff.cost)) {
+    player.getPacketSender().sendSound(REFUSED_SOUND, 1, 0);
+    return player.sendMessage("You cannot afford that buff at this time.");
+  }
   if (index < 5) player.setAttribute(S.BUFFS_ATTRIBUTE, S.flags(player) | (1 << index));
   else player.setAttribute(S.BOOST_ATTRIBUTE, Date.now() + 60 * 60 * 1000);
+  player.getPacketSender().sendSound(BOUGHT_SOUND, 1, 0);
   S.sync(player);
   S.save(player);
 }
@@ -70,7 +74,9 @@ function closed({ player, interfaceId }) { if (interfaceId === S.SHOP) openAt.de
 function login({ player }) { S.sync(player); }
 function logout({ player }) { openAt.delete(player); }
 
-module.exports = function attach(api) {
+module.exports = attach;
+module.exports.open = open;
+function attach(api) {
   api.persistAttribute(S.STORED_ATTRIBUTE, 0);
   api.persistAttribute(S.BUFFS_ATTRIBUTE, 0);
   api.persistAttribute(S.BOOST_ATTRIBUTE, 0);
@@ -86,4 +92,4 @@ module.exports = function attach(api) {
   api.onInterfaceActionButton((S.SHOP << 16) | 10, buy);
   api.onInterfaceActionButton((S.SHOP << 16) | 12, buy);
   api.onCustomEvent("interface:closed", closed);
-};
+}

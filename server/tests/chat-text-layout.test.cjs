@@ -46,3 +46,18 @@ test("plugins get it through api.core", () => {
   const { PluginManager } = require("../dist/plugins/PluginManager");
   assert.equal(PluginManager.getCoreApi().ChatTextLayout, ChatTextLayout);
 });
+
+test("a colour open at a line break starts the next line again, as live sends it", () => {
+  // Client of Kourend's possessed Veos (rsprox local 1001998 tick 2121): live opens <col=000080> on
+  // each of the three lines; a page is a new chatbox, so it gets the tag too.
+  const live = "<col=000080>Now, time to release this mind back to consciousness...<br><col=000080>Don't worry, I'll make sure he rewards you. After all,<br><col=000080>you've been very useful to me...";
+  const text = "<col=000080>Now, time to release this mind back to consciousness... Don't worry, I'll make sure he rewards you. After all, you've been very useful to me...</col>";
+  assert.deepEqual(ChatTextLayout.pages(text), [`${live.split("<br>").join(" ")}</col>`]);
+  const long = `<col=000080>${"Knowledge can be a curse. ".repeat(14).trim()}</col> Plain.`;
+  const pages = ChatTextLayout.pages(long);
+  assert.ok(pages.length > 1);
+  assert.ok(pages[1].startsWith("<col=000080>"), pages[1]);
+  // Closed colours stay as written.
+  assert.deepEqual(ChatTextLayout.pages("<col=0000ff>Your wish has been granted!</col><br>You have been awarded 500 Slayer experience!"),
+    ["<col=0000ff>Your wish has been granted!</col><br>You have been awarded 500 Slayer experience!"]);
+});

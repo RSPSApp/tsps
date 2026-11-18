@@ -9,5 +9,6 @@ module.exports = {
   register(api) {
     require("./warningscreens/Screens.WarningScreens")(api);
     require("./warningscreens/Doomsayer.WarningScreens")(api);
+    require("./warningscreens/DeathPlateau.WarningScreens")(api);
   },
 };

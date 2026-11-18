@@ -10149,8 +10149,9 @@ test('Desert Treasure II opens Lassar from Ramarno and Prescott, then gates the 
     assert.equal(transcripts.at(-1), 'the-whisperer-talking-to-ramarno');
     choiceHooks[0]({ player, option: 'Have you seen any archeologists around here?' });
     assert.equal(attrs.get('desert-treasure-ii:lassar').ramarno, true, 'the player’s actual dialogue choice advances the Lassar introduction');
-    assert.equal(varbits.get(15126), 2);
-    assert.deepEqual(spawnedNpcs[0], { id: core.NpcIdentifiers.PRESCOTT, x: 2975, y: 5794, z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
+    assert.equal(varbits.get(15126), 2, 'value 2 shows the world Helena and Prescott multinpcs (3579/6149)');
+    assert.equal(spawnedNpcs.some((npc) => npc.id === core.NpcIdentifiers.PRESCOTT), false,
+      'Prescott is the world spawn, not a private copy');
     const sinkholeRoute = { player, object: { getLocation: () => ({ getX: () => 2922, getY: () => 5827, getZ: () => 0 }) }, objectId: 49477, definition: { id: 48196 }, clickType: 1, destination: null };
     objectRouteHooks.find(h=>h.name==='routeLassarSinkhole')(sinkholeRoute);
     assert.deepEqual(sinkholeRoute.destination, { x: 2922, y: 5826, z: 0 },
@@ -18824,7 +18825,9 @@ test('boot and map exchanges happen together and cannot strand a cancelled dialo
   const I = api.core.ItemIdentifiers, { DUNSTAN, TENZING } = api.core.NpcIdentifiers;
   const act = (npcId, stepId) => handlers.custom.get('npc-dialogue:action').forEach(h => h({ player, npcId, kind: 'message', stepId }));
   quest.setStage(player,73);items.set(I.CLIMBING_BOOTS,1);items.set(I.IRON_BAR,1);
-  act(DUNSTAN,'V1M373');assert.equal(items.get(I.CLIMBING_BOOTS),1,'cancelling before reward retains materials');
+  // The swap happens on the "You give Dunstan..." box itself (rsprox local 1001800 tick 25101): cancelling after it
+  // keeps the spiked boots, and the later hand-out lines do not take or give again.
+  act(DUNSTAN,'V1M373');assert.equal(items.get(I.CLIMBING_BOOTS),0);assert.equal(items.get(I.SPIKED_BOOTS),1,'one step, nothing stranded');
   act(DUNSTAN,'1TFYaK');act(DUNSTAN,'WryBLk');
   assert.equal(items.get(I.CLIMBING_BOOTS),0);assert.equal(items.get(I.IRON_BAR),0);assert.equal(items.get(I.SPIKED_BOOTS),1);
   items.set(I.BREAD,10);items.set(I.TROUT,10);

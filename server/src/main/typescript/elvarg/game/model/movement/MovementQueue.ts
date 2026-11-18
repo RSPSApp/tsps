@@ -717,7 +717,7 @@ export class MovementQueue {
         ) {
             return false;
         }
-        if (this.isDynamicallyOccupied(next)) {
+        if (this.isDynamicallyOccupied(next, source)) {
             return false;
         }
         // The "full" flag is collision like a wall's: a diagonal step needs both tiles it
@@ -738,8 +738,9 @@ export class MovementQueue {
 
     /**
      * Occupancy the static clipping map cannot know about. The NPC flag is set and
-     * checked by NPCs only; players pass over it (and clear it in OSRS, which is
-     * the entity-stacking mechanic) - osrs-docs: Entity Collision, NPC flag
+     * checked by NPCs only; players pass over it and clear it, as does an NPC stepping
+     * off a tile another still stands on (World.clearedNpcFlags: the entity-stacking
+     * mechanic) - osrs-docs: Entity Collision, NPC flag
      * "Checked by: all NPCs but the excluded NPCs". Only the separate "full" flag
      * (NPC.BLOCKS_PLAYERS_FLAG: the Agility Pyramid's blocks) blocks players; they keep
      * their path and step on once it moves.
@@ -749,15 +750,17 @@ export class MovementQueue {
      * and need both, so one flag covers it; split canWalkThroughNPCs() if an NPC
      * ever needs to pass NPCs but not players.
      */
-    private isDynamicallyOccupied(next: Location): boolean {
+    private isDynamicallyOccupied(next: Location, source: Location | null = null): boolean {
         const size = this.character.getSize();
         const privateArea = this.character.getPrivateArea();
         if (this.character.isNpc() && !(this.character as NPC).canWalkThroughNPCs()) {
-            if (World.isNpcOccupyingTile(next, this.character as NPC, size, privateArea)) {
+            // Only the tiles the step enters: a large NPC's next footprint overlaps its current one,
+            // and whatever stands under that overlap doesn't stop it (World.coversTile, issue 6116).
+            if (World.isNpcOccupyingTile(next, this.character as NPC, size, privateArea, true, source)) {
                 return true;
             }
             const ignored = this.ignoredOccupant?.isPlayer() ? this.ignoredOccupant.getAsPlayer() : null;
-            if (World.isPlayerOccupyingTile(next, ignored, size, privateArea, true)) {
+            if (World.isPlayerOccupyingTile(next, ignored, size, privateArea, true, source)) {
                 return true;
             }
         } else if (this.character.isPlayer() && World.isPlayerBlockingNpcOnTile(next, size, privateArea)) {
@@ -797,7 +800,7 @@ export class MovementQueue {
                 this.character.getSize(),
                 this.character.getSize(),
                 this.character.getPrivateArea()
-            ) && this.isDynamicallyOccupied(next)) {
+            ) && this.isDynamicallyOccupied(next, source)) {
                 this.blockedByDynamicOccupancy = true;
             }
         }
@@ -1739,6 +1742,17 @@ export class MovementQueue {
         return !stoodAtClick || MapObjects.stillStands(this.player, id, location, object, true);
     }
 
+    /**
+     * A target that can no longer be interacted with. An NPC counts only while it is dying: some
+     * are held at 0 hitpoints on purpose until the player finishes them with an item (a gargoyle's
+     * rock hammer, a rockslug's bag of salt, Dusk and Dawn), so 0 hitpoints alone must not refuse
+     * the click. Combat still refuses to attack a 0-hitpoint target on its own checks.
+     */
+    private static isDeadTarget(entity: Mobile): boolean {
+        if (entity.isNpc?.()) return (entity as NPC).isDyingFunction?.() === true;
+        return entity.getHitpoints() <= 0;
+    }
+
     /** The type an NPC shows now (its transform, else its own id); -1 for players. */
     private static npcType(entity: Mobile): number {
         if (!entity?.isNpc?.()) return -1;
@@ -1747,7 +1761,7 @@ export class MovementQueue {
     }
 
     private isInteractionTargetValid(entity: Mobile): boolean {
-        if (!entity || !entity.isRegistered() || entity.getHitpoints() <= 0 ||
+        if (!entity || !entity.isRegistered() || MovementQueue.isDeadTarget(entity) ||
             entity.getPrivateArea() !== this.player.getPrivateArea() ||
             entity.getLocation().getZ() !== this.player.getLocation().getZ()) return false;
         const owner = entity.isNpc?.() ? (entity as NPC).getOwner?.() : null;

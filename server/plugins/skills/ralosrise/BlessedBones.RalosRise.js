@@ -28,6 +28,13 @@ function breakOne(player, itemId) {
   const inventory = player.getInventory();
   const slot = inventory.getSlotForItemId(itemId);
   if (!row || slot < 0 || inventory.getAmount(ids.chisel) <= 0) return false;
+  // Plan after consuming the bone so its freed slot can hold a new shard stack.
+  const preview = new core.Inventory(player).setItems(inventory.getCopiedItems());
+  preview.deleteAtSlot(slot, 1, false);
+  if (preview.getAddableAmount(new core.Item(ids.shard, row.shards)) < row.shards) {
+    inventory.full();
+    return false;
+  }
   lastBreak.set(player, core.World.getProcessCycle());
   inventory.deleteAtSlot(slot, 1);
   inventory.add(new core.Item(ids.shard, row.shards), true);

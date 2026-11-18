@@ -1717,6 +1717,7 @@
             {
               "type": "message",
               "text": "You need 2-12 more free inventory slots to receive your Christmas event rewards.",
+              "styled": "You need <col=ff0000>2-12</col> more free inventory slots to receive your Christmas event rewards.",
               "id": "V0Ww8s"
             },
             {
@@ -1732,6 +1733,7 @@
             {
               "type": "message",
               "text": "You need 1 more free inventory slot to receive your Christmas event rewards.",
+              "styled": "You need <col=ff0000>1</col> more free inventory slot to receive your Christmas event rewards.",
               "id": "fiWwXq"
             }
           ],
@@ -7135,6 +7137,7 @@
             {
               "type": "message",
               "text": "You need [1-5] free inventory [slots/slot] to receive your Easter event rewards.",
+              "styled": "You need <col=ff0000>[1-5]</col> free inventory [slots/slot] to receive your Easter event rewards.",
               "id": "5HBUaN"
             },
             {
@@ -7199,6 +7202,7 @@
         {
           "type": "message",
           "text": "You've completed the Easter event: One glum bunny",
+          "styled": "You've completed the Easter event: <col=0ab0ff>One glum bunny</col>",
           "id": "20tvB-"
         },
         {
@@ -8986,6 +8990,7 @@
                         {
                           "type": "message",
                           "text": "You need [1-9] free inventory [slot/slots] to receive your Halloween event rewards.",
+                          "styled": "You need <col=ff0000>[1-9]</col> free inventory [slot/slots] to receive your Halloween event rewards.",
                           "id": "sIAJwR"
                         },
                         {
@@ -9005,6 +9010,7 @@
                     {
                       "type": "message",
                       "text": "You've completed the Halloween event: Spook-a-thon Decoration Contest",
+                      "styled": "You've completed the Halloween event: <col=0ab0ff>Spook-a-thon Decoration Contest</col>",
                       "id": "LqbtJm"
                     }
                   ],
@@ -9306,6 +9312,7 @@
                 {
                   "type": "message",
                   "text": "You need [1-9] free inventory [slot/slots] to receive your Halloween event rewards.",
+                  "styled": "You need <col=ff0000>[1-9]</col> free inventory [slot/slots] to receive your Halloween event rewards.",
                   "id": "sIAJwR"
                 },
                 {
@@ -9325,6 +9332,7 @@
             {
               "type": "message",
               "text": "You've completed the Halloween event: Spook-a-thon Decoration Contest",
+              "styled": "You've completed the Halloween event: <col=0ab0ff>Spook-a-thon Decoration Contest</col>",
               "id": "LqbtJm"
             }
           ],
@@ -9349,6 +9357,7 @@
             {
               "type": "message",
               "text": "You need [1-9] free inventory [slot/slots] to receive your Halloween event rewards.",
+              "styled": "You need <col=ff0000>[1-9]</col> free inventory [slot/slots] to receive your Halloween event rewards.",
               "id": "sIAJwR"
             },
             {
@@ -9368,6 +9377,7 @@
         {
           "type": "message",
           "text": "You've completed the Halloween event: Spook-a-thon Decoration Contest",
+          "styled": "You've completed the Halloween event: <col=0ab0ff>Spook-a-thon Decoration Contest</col>",
           "id": "LqbtJm"
         }
       ],
@@ -9476,7 +9486,8 @@
                 {
                   "type": "line",
                   "speaker": "Easter Bunny",
-                  "text": "--The Easter Bunny winks at you.--"
+                  "text": "--The Easter Bunny winks at you.--",
+                  "styled": "<col=0000b2>--The Easter Bunny winks at you.--</col>"
                 },
                 {
                   "type": "line",
@@ -10211,6 +10222,7 @@
           "type": "line",
           "speaker": "Archibald",
           "text": "--Archibald appears to whisper something intangible to the Easter Bunny.--",
+          "styled": "<col=0000b2>--Archibald appears to whisper something intangible to the Easter Bunny.--</col>",
           "speaker_ids": [
             15586,
             15587,
@@ -10237,6 +10249,7 @@
           "type": "line",
           "speaker": "Archibald",
           "text": "--Archibald nods to the Easter Bunny.--",
+          "styled": "<col=0000b2>--Archibald nods to the Easter Bunny.--</col>",
           "speaker_ids": [
             15586,
             15587,
@@ -10271,6 +10284,7 @@
             {
               "type": "message",
               "text": "You need [1/2] more free inventory [slot/slots] to receive your Easter event rewards.",
+              "styled": "You need [<col=ff0000>1</col>/<col=ff0000>2</col>] more free inventory [slot/slots] to receive your Easter event rewards.",
               "id": "aKCOUt"
             },
             {
@@ -10442,6 +10456,7 @@
             {
               "type": "message",
               "text": "You need [1/2] more free inventory [slot/slots] to receive your Easter event rewards.",
+              "styled": "You need [<col=ff0000>1</col>/<col=ff0000>2</col>] more free inventory [slot/slots] to receive your Easter event rewards.",
               "id": "aKCOUt"
             },
             {
@@ -13656,6 +13671,7 @@
         {
           "type": "message",
           "text": "The ritual uses full screen flashing effects that may affect some players.",
+          "styled": "The ritual uses <col=7f0000>full screen flashing effects</col> that may affect some players.",
           "id": "lKYbv1"
         },
         {
@@ -13763,6 +13779,7 @@
             {
               "type": "message",
               "text": "You need [number] more free inventory slots to receive your Birthday event rewards.",
+              "styled": "You need <col=ff0000>[number]</col> more free inventory slots to receive your Birthday event rewards.",
               "id": "YBX0JZ"
             }
           ],

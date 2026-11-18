@@ -6,6 +6,7 @@
 //   inferno/Run.Inferno.js       a run: arena, waves, rocky supports, Jads, rewards
 //   inferno/Zuk.Inferno.js       wave 69
 //   inferno/Entry.Inferno.js     TzHaar-Ket-Keh's fire cape, the chasm and the exit
+//   inferno/CapeExchange.Inferno.js  TzHaar-Ket-Keh's infernal cape gamble for Jal-Nib-Rek
 const registerInfernoMonsters = require("./inferno/Monsters.Inferno");
 const run = require("./inferno/Run.Inferno");
 const zuk = require("./inferno/Zuk.Inferno");
@@ -34,14 +35,19 @@ module.exports = {
     api.onObjectSecondClick(Objects.CAVE_EXIT_22, entry.quickExit);
     api.onPlayerLogin(entry.syncEntrance);
     api.onPlayerLogin(run.resumeRun);
+    api.onPlayerLogout(entry.fallLogout);
     api.onPlayerLogout(run.runLogout);
     api.onPlayerProcess(run.processRun);
     require("./inferno/CombatAchievements.Inferno")(api);
     require("./inferno/EscapeCrystal.Inferno")(api);
+    require("./inferno/CapeExchange.Inferno")(api);
     api.onPlayerBeforeDeath(run.defeatedLine);
+    // Before runDeath, which marks the death handled.
+    api.onPlayerDeath(entry.fallDeath);
     api.onPlayerDeath(run.runDeath);
     api.onShouldDropItemsOnDeath(run.keepItemsInRun);
     api.onCanTeleport(run.noTeleportOut);
+    api.onCanTeleport(entry.noTeleportMidFall);
     api.onCanAttack(run.guardPassives);
     api.onNpcBeforeDeath(run.supportsCollapse);
     api.onCombatHitResolved(zuk.provoke);

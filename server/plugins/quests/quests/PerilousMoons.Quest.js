@@ -1631,6 +1631,11 @@ module.exports = function registerPerilousMoonsQuest(api) {
       return;
     }
     player.moveTo(new Location(CAM_TORUM_LANDING.x, CAM_TORUM_LANDING.y, CAM_TORUM_LANDING.z));
+    handleCamTorumArrival({ player });
+  }
+
+  /** In Cam Torum once the city is open: through the surface entrance, or a calcified moth ("cam-torum:arrived"). */
+  function handleCamTorumArrival({ player }) {
     if (stageOf(player) === STAGE_CITY_OPEN) quest.setStage(player, STAGE_IN_CITY);
     syncNpcs(player);
   }
@@ -2199,6 +2204,7 @@ module.exports = function registerPerilousMoonsQuest(api) {
   api.onCustomEvent("moons-of-peril:can-enter", handleCanEnter);
   api.onCustomEvent("moons-of-peril:killed", handleMoonKilled);
   api.onCustomEvent("moons-of-peril:camps-open", handleCampsOpen);
+  api.onCustomEvent("cam-torum:arrived", handleCamTorumArrival);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
 };

@@ -43,7 +43,19 @@ const MINERAL_FOUND = "You find some minerals while you mine.";
 // The Wiki gives Belona's dialogue lines but not the game message her right-click option prints.
 const MINERALS_ON = "You will now receive unidentified minerals when you mine here.";
 const MINERALS_OFF = "You will no longer receive unidentified minerals when you mine here.";
+/**
+ * Belona's "Can you combine my mining gloves?" (https://oldschool.runescape.wiki/w/Expert_mining_gloves,
+ * https://oldschool.runescape.wiki/w/Belona): Mining gloves and Superior mining gloves, for a fee of 40
+ * unidentified minerals, become Expert mining gloves. The transcript guards the hand-over with prose
+ * conditions and a "receive" action, answered here. Ours: only gloves in the inventory count
+ * (her line asks the player to bring them; no source covers worn gloves). No capture covers it.
+ */
+const MINING_GLOVES = 21343;
+const SUPERIOR_MINING_GLOVES = 21345;
+const EXPERT_MINING_GLOVES = 21392;
+const COMBINE_FEE = 40;
 let core;
+let pluginApi;
 let membersArea = null;
 
 function inMembersArea(location) {
@@ -116,13 +128,45 @@ function toggleMinerals({ player }) {
   return true;
 }
 
-/** The two dialogue branches are guarded by wiki prose; answer them from the toggle. */
+function hasGloves(player) {
+  const inventory = player.getInventory();
+  return inventory.contains(MINING_GLOVES) && inventory.contains(SUPERIOR_MINING_GLOVES);
+}
+
+function hasFee(player) {
+  return player.getInventory().getAmount(MINERAL_ITEM) >= COMBINE_FEE;
+}
+
+/** Belona's dialogue branches are guarded by wiki prose; answer them from the toggle and the inventory. */
 function answerMineralCondition({ npcId, player, text }) {
   if (npcId !== BELONA) return null;
   const value = String(text).toLowerCase();
   if (value.includes("currently receiving unidentified minerals")) return mineralsEnabled(player);
   if (value.includes("currently not receiving unidentified minerals")) return !mineralsEnabled(player);
+  // The three combine branches, in the transcript's order: no gloves, too few minerals, everything.
+  if (value.includes("does not have all the items needed to create expert mining gloves")) return !hasGloves(player);
+  if (value.includes("does not enough unidentified minerals")) return hasGloves(player) && !hasFee(player);
+  if (value.includes("has all the items needed to create expert mining gloves")) return hasGloves(player) && hasFee(player);
   return null;
+}
+
+/** The "receive" step of the combine branch: both pairs and the fee become Expert mining gloves. */
+function combineGloves(event) {
+  const { player, npcId, action, text } = event;
+  if (npcId !== BELONA || action !== "receive" || !/expert mining gloves/i.test(String(text ?? ""))) return;
+  event.handled = true;
+  // Checked again: the inventory may have changed since the condition was answered.
+  if (!hasGloves(player) || !hasFee(player)) {
+    event.end = true;
+    return;
+  }
+  const inventory = player.getInventory();
+  inventory.delete(MINING_GLOVES, 1);
+  inventory.delete(SUPERIOR_MINING_GLOVES, 1);
+  inventory.delete(MINERAL_ITEM, COMBINE_FEE);
+  inventory.adds(EXPERT_MINING_GLOVES, 1);
+  // They fill their slot in the collection log's Other > Miscellaneous page (the cache's category).
+  pluginApi.emitCustomEvent("collection-log:obtain", { player, itemId: EXPERT_MINING_GLOVES, amount: 1 });
 }
 
 /** The branches carry no action of their own, so the choice itself flips the toggle. */
@@ -148,10 +192,11 @@ function rollMinerals({ player, itemId, location }) {
 
 module.exports = {
   name: "MiningGuild",
-  description: "Mining Guild entry needs 60 Mining; its members' area gives an invisible +7 Mining level, halves rock respawn times and rolls unidentified minerals.",
-  _test: { mineralsEnabled, setMinerals, toggleMinerals, answerMineralCondition, chooseMinerals, rollMinerals, inMembersArea, MINERALS_ATTRIBUTE, MINERAL_ITEM },
+  description: "Mining Guild entry needs 60 Mining; its members' area gives an invisible +7 Mining level, halves rock respawn times and rolls unidentified minerals; Belona combines mining gloves into Expert mining gloves.",
+  _test: { mineralsEnabled, setMinerals, toggleMinerals, answerMineralCondition, chooseMinerals, combineGloves, rollMinerals, inMembersArea, MINERALS_ATTRIBUTE, MINERAL_ITEM },
   register(api) {
     core = api.core;
+    pluginApi = api;
     api.persistAttribute(MINERALS_ATTRIBUTE, true);
     api.onCustomEvent("ladders:climb", guardLadder);
     api.onCustomEvent("door:toggle", useDoor);
@@ -161,5 +206,6 @@ module.exports = {
     api.onNpcInteraction("Belona", { "Toggle-minerals": toggleMinerals });
     api.onNpcDialogueCondition(answerMineralCondition);
     api.onCustomEvent("npc-dialogue:choice", chooseMinerals);
+    api.onCustomEvent("npc-dialogue:action", combineGloves);
   },
 };

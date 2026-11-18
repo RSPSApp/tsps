@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "corrections": [
+    {
+      "table": "transports",
+      "from": [3317, 9602, 0],
+      "to": [2747, 5374, 0],
+      "menu": "Open Door",
+      "id": 6919,
+      "expectedQuest": null,
+      "quest": "Death to the Dorgeshuun"
+    },
+    {
+      "table": "transports",
+      "from": [3318, 9602, 0],
+      "to": [2748, 5374, 0],
+      "menu": "Open Door",
+      "id": 6919,
+      "expectedQuest": null,
+      "quest": "Death to the Dorgeshuun"
+    },
+    {
+      "table": "agility_shortcuts",
+      "from": [3142, 3513, 0],
+      "to": [3137, 3516, 0],
+      "menu": "Climb-into Underwall tunnel",
+      "id": 16530,
+      "expectedTicks": 7,
+      "ticks": 4
+    },
+    {
+      "table": "agility_shortcuts",
+      "from": [3137, 3516, 0],
+      "to": [3142, 3513, 0],
+      "menu": "Climb-into Underwall tunnel",
+      "id": 16529,
+      "expectedTicks": 7,
+      "ticks": 4
+    }
+  ]
+}

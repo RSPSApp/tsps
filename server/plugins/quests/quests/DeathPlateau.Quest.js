@@ -7,10 +7,12 @@
  * the item hand-outs keyed off transcript message ids, and the final map +
  * combination hand-in that completes the quest.
  *
- * Stages (varp 314): 10 started, 20 spoken to Eohric, 30 met Harold, 40 learned his weakness,
+ * Stages (saved): 10 started, 20 spoken to Eohric, 30 met Harold, 40 learned his weakness,
  * 50 given ale, 55 IOU, 60 read combination, 65 equipment room unlocked,
  * 70 Saba, 72 climbing boots, 73 met Dunstan, 75 spiked boots, 77 map, 78 scouted,
- * 80 complete.
+ * 80 complete. Varp 314 (death_equiproom) only ever takes 0, 10, 20, 30, 40, 50, 55, 60, 70
+ * and 80 live (rsprox local 1001800 and 1001683, whole quest): every saved stage from 65
+ * (the balls placed) to 78 is sent as 70, so the client and Quest Helper see live's value.
  *
  * shortcut: the optional Transcendent archer detour is not wired.
  */
@@ -46,6 +48,9 @@ module.exports = function registerDeathPlateauQuest(api) {
   const STAGE_MAP = 77;
   const STAGE_SCOUTED = 78;
   const STAGE_COMPLETE = 80;
+  /** Live's varp value from the balls placed until the quest is done (see the header). */
+  const WIRE_EQUIPMENT_ROOM = 70;
+  const wireStage = (stage) => (stage >= STAGE_ROOM && stage < STAGE_COMPLETE ? WIRE_EQUIPMENT_ROOM : stage);
 
   const BREAD_ITEM_ID = ItemIdentifiers.BREAD;
   const TROUT_ITEM_ID = ItemIdentifiers.TROUT;
@@ -73,6 +78,8 @@ module.exports = function registerDeathPlateauQuest(api) {
   const PUZZLE_BOUNDS = new Boundary(2893, 2896, 3561, 3565, 0);
   // Wiki: continue east past the second goat. Quest Helper marks the endpoint at 2865,3609.
   const SCOUT_BOUNDS = new Boundary(2864, 2870, 3608, 3612, 0);
+  const SCOUTED_MESSAGES = ["You can see that there are no trolls on the secret path.", "You should go and speak to Denulth."];
+  const UNLOCK_SOUND = 1473; // unlock_and_move
   const COMBINATION_ITEM_ID = ItemIdentifiers.COMBINATION;
   const COMBINATION_SCROLL = "messagescroll_handwriting";
   const COMBINATION_LINES = [
@@ -103,9 +110,11 @@ module.exports = function registerDeathPlateauQuest(api) {
 
   /** Transcript message ids that hand the player a key item (the dump repeats each line). */
   const GIVE_IOU_IDS = new Set(["4p9H2-", "MBm6Sz", "mhKulF", "wAz_jn", "23tpMt", "mUS50D"]);
-  const GIVE_MAP_IDS = new Set(["yDYvE0", "MtULDz", "TgL2Wy"]);
+  // Each hand-out acts on its item box (the first of a box/chat pair), so the item arrives with the box.
+  const GIVE_MAP_IDS = new Set(["yDYvE0", "U16B4S", "MtULDz", "TgL2Wy"]);
   const GIVE_CLIMBING_BOOTS_IDS = new Set(["aZ5-DY", "FG69_B", "gUxInm"]);
-  const GIVE_SPIKED_BOOTS_IDS = new Set(["AuWfYt", "MKP0WU", "1TFYaK", "WryBLk"]);
+  // From "You give Dunstan an iron bar and the climbing boots." on: live swaps them on that box's tick (rsprox local 1001800 tick 25101).
+  const GIVE_SPIKED_BOOTS_IDS = new Set(["kH8gZk", "V1M373", "AuWfYt", "MKP0WU", "1TFYaK", "WryBLk"]);
   const GIVE_CERTIFICATE_IDS = new Set(["KZG0PG", "VuuQKK"]);
 
   /** Hand-over lines that consume what the transcript says the player gives. */
@@ -124,6 +133,18 @@ module.exports = function registerDeathPlateauQuest(api) {
   const GAMBLE_GROUP = CacheDefinitions.getInterfaceId("death_dice");
   const GAMBLE_FINISH_VARIANT = "finding-the-combination-finishing-a-gamble";
   const gambles = new WeakMap();
+  const HAROLD_PILE_VARP = 261; // if1
+  const PLAYER_PILE_VARP = 262; // if2
+  /** Coins' stack models (2, 3, 4, 5, 25, 100, 250, 1000, 10000): 101 coins is pile 7, as live sends it. */
+  const COIN_PILE_THRESHOLDS = [2, 3, 4, 5, 25, 100, 250, 1000, 10000];
+  const DICE_TICKS = 3;
+  const DICE_SOUND = 1475; // dice_shake
+  const MAINMODAL_OPEN_SCRIPT = 2524; // toplevel_mainmodal_open
+  // Jingles: "Bad Roll" 93 (rsprox local 1001800 tick 24375); "Lucky Win" 94 (Wiki: Lucky Win (Death Plateau), cacheid).
+  const LOSE_JINGLE = 93;
+  const WIN_JINGLE = 94;
+  // Ours: "It's a draw!" (no capture or Wiki line for a tie).
+  const RESULT_TEXT = { win: "You win!", lose: "You lose!", draw: "It's a draw!" };
   const TENZING_SUPPLY_AMOUNT = 10;
 
   let quest;
@@ -179,30 +200,58 @@ module.exports = function registerDeathPlateauQuest(api) {
     const amount = gamble.amount;
     if (amount < 1 || amount > GAMBLE_MAXIMUM || !held(player, COINS_ITEM_ID, amount)) return;
     player.getPacketSender().sendInterfaceRemoval();
-    gamble.phase = "roll";
+    gamble.phase = "harold";
     gamble.bank = gambleBank(player);
     gamble.drunk = player.getAttribute(DRUNK_ATTRIBUTE) === true;
     gamble.harold = [rollDie(), rollDie()];
     // Harold's warning: leaving after his first roll forfeits the stake.
     player.getInventory().deleteNumber(COINS_ITEM_ID, amount);
     player.setAttribute(GAMBLE_BANK_ATTRIBUTE, gamble.bank + amount);
+    // rsprox local 1001800 ticks 24357-24366 (and 1001683): both coin piles by varps if1/if2, the four dice idle,
+    // Roll and Continue hidden, the names and stakes, then Harold's dice a die every 3 ticks with dice_shake,
+    // and Roll 3 ticks after his second.
     const sender = player.getPacketSender();
-    sender.sendInterface(GAMBLE_GROUP);
-    sender.sendString(player.getDisplayName(), gambleComponent("playername"));
-    sender.sendString(String(amount), gambleComponent("player_stake"));
-    sender.sendString(String(amount), gambleComponent("harold_stake"));
-    for (const side of ["harold", "player"]) {
-      for (let pile = 1; pile <= 10; pile++) sender.sendInterfaceDisplayState(gambleComponent(`${side}_gold${pile}`), pile !== 1);
-      sender.sendItemOnInterfaces(gambleComponent(`${side}_gold1`), COINS_ITEM_ID, amount);
-      sender.sendInterfaceAngle(gambleComponent(`${side}_gold1`), 149, 1698, 445);
+    sender.sendConfig(HAROLD_PILE_VARP, coinPile(amount));
+    sender.sendConfig(PLAYER_PILE_VARP, coinPile(amount));
+    sender.sendString("Harold rolls...", gambleComponent("result"));
+    for (const dice of ["harold_dice1", "harold_dice2", "player_dice1", "player_dice2"]) {
+      sender.sendInterfaceAnimation(gambleComponent(dice), CacheDefinitions.getSeqId("dice_idle"));
     }
-    sender.sendInterfaceDisplayState(gambleComponent("result"), true);
+    sender.sendInterfaceDisplayState(gambleComponent("roll"), true);
     sender.sendInterfaceDisplayState(gambleComponent("continue"), true);
-    sender.sendInterfaceDisplayState(gambleComponent("roll"), false);
-    for (let die = 1; die <= 2; die++) {
-      sender.sendInterfaceAnimation(gambleComponent(`harold_dice${die}`), CacheDefinitions.getSeqId(`dice_roll_${gamble.harold[die - 1]}`));
-      sender.sendInterfaceAnimation(gambleComponent(`player_dice${die}`), CacheDefinitions.getSeqId("dice_idle"));
-    }
+    sender.sendString(player.getDisplayName(), gambleComponent("playername"));
+    sender.sendString(String(amount), gambleComponent("harold_stake"));
+    sender.sendString(String(amount), gambleComponent("player_stake"));
+    sender.sendInterfaceScript(MAINMODAL_OPEN_SCRIPT, [-1, -1]);
+    sender.sendInterface(GAMBLE_GROUP);
+    rollDice(player, gamble, "harold", gamble.harold, () => {
+      gamble.phase = "roll";
+      sender.sendInterfaceDisplayState(gambleComponent("roll"), false);
+      sender.sendString("Your roll...", gambleComponent("result"));
+    });
+  }
+
+  /** One side's two dice, DICE_TICKS apart with dice_shake, then `done` DICE_TICKS after the second. */
+  function rollDice(player, gamble, side, dice, done) {
+    const { TaskManager, CountdownTask } = api.core;
+    const sender = player.getPacketSender();
+    const still = () => gambles.get(player) === gamble && player.getInterfaceId() === GAMBLE_GROUP;
+    const throwDie = (die) => {
+      sender.sendInterfaceAnimation(gambleComponent(`${side}_dice${die}`), CacheDefinitions.getSeqId(`dice_roll_${dice[die - 1]}`));
+      sender.sendSound(DICE_SOUND, 1, 0);
+    };
+    const at = (ticks, action) => TaskManager.submit(new CountdownTask(player, ticks, () => { if (still()) action(); }));
+    // Harold throws his first die DICE_TICKS after the interface opens; the player's lands on the Roll click.
+    const first = side === "harold" ? DICE_TICKS : 0;
+    if (first) at(first, () => throwDie(1));
+    else throwDie(1);
+    at(first + DICE_TICKS, () => throwDie(2));
+    at(first + DICE_TICKS * 2, done);
+  }
+
+  /** The coin pile model the dice interface shows for a stake: if1/if2 pick death_gamble_*_gold1-10. */
+  function coinPile(amount) {
+    return 1 + COIN_PILE_THRESHOLDS.filter((threshold) => amount >= threshold).length;
   }
 
   const rollDie = () => Math.floor(Math.random() * 6) + 1;
@@ -217,7 +266,7 @@ module.exports = function registerDeathPlateauQuest(api) {
     const gamble = gambles.get(player);
     if (!gamble || player.getInterfaceId() !== GAMBLE_GROUP || !canGamble(player) || !atGamble(player, gamble)) return;
     if (roll && gamble.phase === "roll") {
-      gamble.phase = "result";
+      gamble.phase = "player";
       const dice = [rollDie(), rollDie()];
       const total = dice[0] + dice[1], opponent = gamble.harold[0] + gamble.harold[1];
       // shortcut: no OSRS tie capture is available; refund equal totals until verified.
@@ -231,11 +280,16 @@ module.exports = function registerDeathPlateauQuest(api) {
       }
       if (gamble.outOfMoney) player.setAttribute(GAMBLE_IOU_ATTRIBUTE, true);
       const sender = player.getPacketSender();
-      for (let die = 1; die <= 2; die++) sender.sendInterfaceAnimation(gambleComponent(`player_dice${die}`), CacheDefinitions.getSeqId(`dice_roll_${dice[die - 1]}`));
-      sender.sendString(gamble.draw ? "It's a draw!" : gamble.won ? "You win!" : "You lose!", gambleComponent("result"));
-      sender.sendInterfaceDisplayState(gambleComponent("result"), false);
       sender.sendInterfaceDisplayState(gambleComponent("roll"), true);
-      sender.sendInterfaceDisplayState(gambleComponent("continue"), false);
+      // Ticks 24369-24375: the player's dice as Harold's, then Continue with the dice's own verdict and its jingle.
+      // A drunk Harold still pays out on "You lose!" (both recordings, 101 coins): he can't count.
+      const shown = total > opponent ? "win" : total < opponent ? "lose" : "draw";
+      rollDice(player, gamble, "player", dice, () => {
+        gamble.phase = "result";
+        sender.sendInterfaceDisplayState(gambleComponent("continue"), false);
+        sender.sendString(RESULT_TEXT[shown], gambleComponent("result"));
+        if (shown !== "draw") sender.sendJingle(shown === "win" ? WIN_JINGLE : LOSE_JINGLE);
+      });
     } else if (next && gamble.phase === "result") {
       gamble.phase = "outro";
       player.getPacketSender().sendInterfaceRemoval();
@@ -490,8 +544,125 @@ module.exports = function registerDeathPlateauQuest(api) {
     if (quest.getStage(player) < STAGE_STARTED) quest.setStage(player, STAGE_STARTED);
   }
 
-  /** Transcript message hand-outs and the final hand-in. */
+  /**
+   * The transcript's message steps as live shows them (rsprox local 1001800, the whole quest): every hand-over is
+   * an item box (objectbox 193, objectbox_double 11) and the knocks and Harold's drunken count a message box
+   * (229), the Wiki's {{tbox}}. The chat line ({{mes}}) goes out with the box, so its twin step right after is
+   * not sent again. Live also sends the line to chat for the singles marked `chat` (ticks 25023, 25089, 25206,
+   * 24809); "some of your winnings" is the box alone (tick 24394).
+   */
+  function boxes() {
+    const I = ItemIdentifiers;
+    const box = (items, chat = true, also = []) => ({ items, chat, also });
+    const statement = (chat) => ({ statement: true, chat });
+    return new Map([
+      ["V7kRZ2", statement(false)], ["iNb2x7", statement(false)], ["fFxxw6", statement(false)],
+      ["_ELP6x", box([I.ASGARNIAN_ALE])], ["7gOtrA", box([I.ASGARNIAN_ALE])],
+      ["VZS4Rq", box([I.BLURBERRY_SPECIAL])],
+      ["yRPY5M", box([I.COINS])], ["cDHDvP", box([I.COINS])], ["11H3eu", box([I.COINS])],
+      ["3zkB8U", box([I.COINS], false)], ["qkdQJ5", box([I.COINS], false)],
+      ["4p9H2-", box([I.IOU])], ["mhKulF", box([I.IOU])], ["mUS50D", box([I.IOU])],
+      ["23tpMt", box([I.COMBINATION])],
+      ["Xi5--z", statement(true)],
+      ["abx6jE", box([I.COMBINATION])],
+      ["aZ5-DY", box([I.CLIMBING_BOOTS])], ["gUxInm", box([I.CLIMBING_BOOTS])],
+      ["KZG0PG", box([I.CERTIFICATE_2])], ["VuuQKK", box([I.CERTIFICATE_2])], ["jmuuX8", box([I.CERTIFICATE_2])],
+      // Live sends both chat lines of these two-box hand-overs with the first box (ticks 25101, 25206).
+      ["kH8gZk", box([I.IRON_BAR, I.CLIMBING_BOOTS], true, [SPIKED_BOOTS_LINE])], ["V1M373", box([I.IRON_BAR, I.CLIMBING_BOOTS], true, [SPIKED_BOOTS_LINE])],
+      ["AuWfYt", box([I.SPIKED_BOOTS], false)], ["1TFYaK", box([I.SPIKED_BOOTS], false)],
+      ["_ZbFCb", box([I.SPIKED_BOOTS], true, [SUPPLIES_LINE])], ["JM8S8J", box([I.TROUT, I.BREAD], false)],
+      ["yDYvE0", box([I.SECRET_WAY_MAP])], ["U16B4S", box([I.SECRET_WAY_MAP])],
+      ["sdE5c5", box([I.SECRET_WAY_MAP])], ["Q2Uby4", box([I.SECRET_WAY_MAP])],
+      ["liaDgz", box([I.COMBINATION])],
+    ]);
+  }
+  /** The {{mes}} twin of each box above: already sent with the box. */
+  const BOX_TWIN_IDS = new Set(["w48gvR", "MCFkmH", "UxKTZP", "SCpELj", "QDcqJB", "MBm6Sz", "wAz_jn", "stq6Oo",
+    "hYvfps", "FG69_B", "KY-HIs", "lDkvvH", "MKP0WU", "WryBLk", "MtULDz", "TgL2Wy", "7xljsT", "xJt9eP", "M5RtpC"]);
+  let BOXES;
+  const SPIKED_BOOTS_LINE = "Dunstan has given you the spiked boots.";
+  const SUPPLIES_LINE = "You give Tenzing the loaves of bread and the cooked trout.";
+
+  const PAGE = "Death Plateau";
+  const WEAKNESS_VARIANT = "finding-the-combination-talking-to-harold-after-learning-his-weakness";
+  const EAT_ANIMATION = 829; // human_eat
+  const STUNNED_GRAPHIC = 80; // stunned
+  const STUNNED_HEIGHT = 124;
+  /**
+   * Harold drinks once the player continues past the hand-over box, then speaks (ticks after that continue).
+   * Ale, rsprox local 1001800 ticks 24266-24271: human_eat at +2, "Arrh. That hit the spot!" at +5. Blurberry,
+   * ticks 24311-24321: human_eat at +1, his overhead "Wow!" at +4, the stunned spotanim at height 124 at +7,
+   * "Now THAT hit the spot!" at +10. Keyed by the twin step that follows each box.
+   */
+  const DRINK_SCENES = new Map([
+    ["w48gvR", { eat: 2, resume: 5 }],
+    ["MCFkmH", { eat: 1, wow: 4, stunned: 7, resume: 10 }],
+  ]);
+
+  /** The steps that follow step `id` in its own list, wherever it is nested. */
+  function stepsAfter(steps, id) {
+    if (!Array.isArray(steps)) return null;
+    const index = steps.findIndex((step) => step?.id === id);
+    if (index >= 0) return steps.slice(index + 1);
+    for (const step of steps) {
+      const found = stepsAfter(step?.steps, id)
+        ?? (step?.options ?? []).reduce((hit, option) => hit ?? stepsAfter(option.steps, id), null);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  /** Holds the conversation while Harold drinks, then plays the rest of the branch (see DRINK_SCENES). */
+  function drinkScene(request, scene) {
+    const { player, npc } = request;
+    const { DialogueChainBuilder, ActionDialogue, TaskManager, CountdownTask, Animation, Graphic } = api.core;
+    const manager = player.getDialogueManager();
+    const waiting = new ActionDialogue(0, { execute: () => {} }, true);
+    // The box closes on its continue, as live (ticks 24267, 24311); the idle entry holds the chain meanwhile.
+    const sender = player.getPacketSender();
+    const open = sender.getChatboxGroupId?.() ?? -1;
+    if (open >= 0) sender.closeInterface(open);
+    manager.startDialogues(new DialogueChainBuilder().add(waiting));
+    const still = () => manager.getCurrent?.() === waiting;
+    const at = (ticks, action) => TaskManager.submit(new CountdownTask(player, ticks, () => { if (still()) action(); }));
+    if (npc) {
+      at(scene.eat, () => npc.performAnimation(new Animation(EAT_ANIMATION)));
+      if (scene.wow) at(scene.wow, () => npc.forceChat("Wow!"));
+      if (scene.stunned) at(scene.stunned, () => npc.performGraphic(Graphic.atHeight(STUNNED_GRAPHIC, STUNNED_HEIGHT)));
+    }
+    at(scene.resume, () => startTranscript(api, player, HAROLD_NPC_ID, PAGE, WEAKNESS_VARIANT,
+      (steps) => (stepsAfter(steps, request.stepId) ?? []).filter((step) => step.presentation !== "overhead"), npc));
+  }
+
+  /** How the page's message steps show (see boxes), and Harold's drinks. */
+  function presentMessage(request) {
+    if (request.kind !== "message" || request.end || request.handled) return;
+    if (!request.pages?.some(({ page }) => page === PAGE)) return;
+    BOXES ??= boxes();
+    const shown = BOXES.get(request.stepId);
+    if (shown) {
+      request.box = shown.statement ? { statement: true } : { items: shown.items };
+      if (shown.chat) [request.text, ...shown.also].forEach((line) => request.player.sendMessage(String(line ?? "")));
+      return;
+    }
+    if (!BOX_TWIN_IDS.has(request.stepId)) return;
+    request.handled = true;
+    const scene = DRINK_SCENES.get(request.stepId);
+    if (scene && request.npcId === HAROLD_NPC_ID) drinkScene(request, scene);
+  }
+
   function handleAction(request) {
+    handleQuestAction(request);
+    presentMessage(request);
+  }
+
+  /** Lines: Tenzing letting the player in. */
+  function handleLine(request) {
+    letInAtTenzingsDoor(request);
+  }
+
+  /** Transcript message hand-outs and the final hand-in. */
+  function handleQuestAction(request) {
     const { player, npcId, stepId, step, action, target, kind } = request;
 
     if (npcId === HAROLD_NPC_ID && step?.type === "input") {
@@ -636,7 +807,7 @@ module.exports = function registerDeathPlateauQuest(api) {
     const select = event.itemId === ASGARNIAN_ALE_ITEM_ID ? undefined : steps => steps
       .filter(step => step.type === "choice")
       .flatMap(step => step.options.find(option => option.text === "Can I buy you a drink?")?.steps ?? []);
-    event.handled = startTranscript(api, event.player, HAROLD_NPC_ID, "Death Plateau", variant, select);
+    event.handled = startTranscript(api, event.player, HAROLD_NPC_ID, "Death Plateau", variant, select, event.target ?? null);
   }
 
   function mechanismKey(location) {
@@ -675,8 +846,11 @@ module.exports = function registerDeathPlateauQuest(api) {
     player.setAttribute(PUZZLE_ATTRIBUTE, balls);
     syncPuzzle(player);
     if (quest.getStage(player) === STAGE_COMBINATION && Object.keys(balls).length === BALL_SOLUTION.size && [...BALL_SOLUTION].every(([position, id]) => balls[position] === id)) {
-      quest.setStage(player, STAGE_ROOM);
+      // rsprox local 1001800 tick 24537: on the tick the fifth ball lands, the message, varp 314 60->70
+      // and unlock_and_move (1473).
       player.sendMessage("The equipment room door has unlocked.");
+      quest.setStage(player, STAGE_ROOM);
+      player.getPacketSender().sendSound(UNLOCK_SOUND, 1, 0);
     }
   }
 
@@ -705,6 +879,8 @@ module.exports = function registerDeathPlateauQuest(api) {
   function scoutPath(player) {
     if (quest.getStage(player) < STAGE_BOOTS || quest.getStage(player) >= STAGE_SCOUTED || !hasMap(player) || !SCOUT_BOUNDS.inside(player.getLocation())) return;
     quest.setStage(player, STAGE_SCOUTED);
+    // rsprox local 1001800 tick 25337: these two lines reach chat with the player's own line.
+    SCOUTED_MESSAGES.forEach((message) => player.sendMessage(message));
     startTranscript(api, player, TENZING_NPC_ID, "Death Plateau", "new-route-up-death-plateau-walking-far-enough-up-the-death-plateau-trail");
   }
 
@@ -723,12 +899,21 @@ module.exports = function registerDeathPlateauQuest(api) {
   }
 
   const HAROLD_DOOR_TILE = { x: 2906, y: 3543, z: 1 };
-  const HAROLD_KNOCK_SOUND = 1735;
+  const KNOCK_SOUND = 1735; // knock_knock
+  const TENZING_DOOR_ID = ObjectIdentifiers.DOOR_113; // death_sherpa_door
+  /** The door's east edge: a player at this x or beyond is outside. */
+  const TENZING_DOOR_CROSS_X = 2823;
+  const TENZING_COME_IN = "Oh...OK. You'd better come in then.";
+  const tenzingsDoor = new WeakMap();
 
   function guardQuestDoors(request) {
     if (request.objectId === EQUIPMENT_DOOR_ID && quest.getStage(request.player) < STAGE_ROOM) {
       request.player.sendMessage("The equipment room door is locked. I should read the combination and arrange the stone balls.");
       request.handled = true;
+      return;
+    }
+    if (request.objectId === TENZING_DOOR_ID) {
+      knockOnTenzingsDoor(request);
       return;
     }
     if (request.objectId !== HAROLD_DOOR_ID) return;
@@ -746,11 +931,43 @@ module.exports = function registerDeathPlateauQuest(api) {
     // "Entering Harold's room": the knock box (with synth 1735), "Harold: Come in!", then in (233/03247.txt:4659-4744).
     request.handled = true;
     const { object } = request;
-    player.getPacketSender().sendSound(HAROLD_KNOCK_SOUND, 1, 0);
+    player.getPacketSender().sendSound(KNOCK_SOUND, 1, 0);
     player.getDialogueManager().startDialogues(new DialogueChainBuilder()
       .add(new StatementDialogue(0, "You knock on the door."))
       .add(new NpcDialogue(1, HAROLD_NPC_ID, "Come in!"))
       .add(new ActionDialogue(2, { execute: () => api.emitCustomEvent("door:open", { player, object, handled: false }) })));
+  }
+
+  /**
+   * Tenzing's front door from outside, before he has given the player his boots: the knock box (with
+   * synth 1735) and his reply; after Saba he lets the player in, and the door opens on the last line's
+   * continue (rsprox local 1001800 ticks 24722-24737). Once they have met, or leaving, it just opens
+   * (tick 25196). Before Saba the Wiki's "No milk today!" ends it with the door shut.
+   */
+  function knockOnTenzingsDoor(request) {
+    const { player, object } = request;
+    if (player.getLocation().getX() < TENZING_DOOR_CROSS_X || quest.getStage(player) >= STAGE_CLIMBING_BOOTS) return;
+    request.handled = true;
+    const comeIn = quest.getStage(player) >= STAGE_SABA;
+    if (comeIn) tenzingsDoor.set(player, object);
+    else tenzingsDoor.delete(player);
+    player.getPacketSender().sendSound(KNOCK_SOUND, 1, 0);
+    startTranscript(api, player, TENZING_NPC_ID, "Death Plateau", comeIn
+      ? "new-route-up-death-plateau-opening-tenzing-s-door-after-talking-to-saba"
+      : "new-route-up-death-plateau-opening-tenzing-s-door-before-talking-to-saba");
+  }
+
+  /** Tenzing's "You'd better come in then." opens his door once the player continues past it. */
+  function letInAtTenzingsDoor(request) {
+    if (request.npcId !== TENZING_NPC_ID || request.text !== TENZING_COME_IN) return;
+    const object = tenzingsDoor.get(request.player);
+    if (!object) return;
+    const { player } = request;
+    request.after = () => {
+      if (tenzingsDoor.get(player) !== object) return;
+      tenzingsDoor.delete(player);
+      api.emitCustomEvent("door:open", { player, object, handled: false });
+    };
   }
 
   function walkQuestStairs(request) {
@@ -774,6 +991,7 @@ module.exports = function registerDeathPlateauQuest(api) {
     varpId: VARP_DEATH_PLATEAU,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
+    varpValue: wireStage,
     questPoints: 1,
     xpRewards: [{ skillId: Skill.ATTACK.getIndex(), amount: 3000, label: "Attack" }],
     rewardItemId: ItemIdentifiers.STEEL_CLAWS,
@@ -804,6 +1022,7 @@ module.exports = function registerDeathPlateauQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onInterfaceActionClick(gambleClick);
   api.onCustomEvent("interface:closed", closeGamble);
   api.onCustomEvent("door:toggle", guardQuestDoors);

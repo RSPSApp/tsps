@@ -64,8 +64,11 @@ const LAYOUT = {
   smork: { x: 4190, y: 5598, z: 0 },
   arena: { minX: 4184, maxX: 4198, minY: 5591, maxY: 5607, z: 0 },
 };
-const BORK_HP = { 2: 1500, 3: 2180, 4: 2810 };
-const SMORK_HP = { 2: 600, 3: 870, 4: 1120 };
+/** Wiki (Strategies), after the duo buff: Bork 1,820 / 2,180 / 2,810 ..., the Smorks to 2,130 for eight. */
+const BORK_HP = { 2: 1820, 3: 2180, 4: 2810 };
+const SMORK_HP = { 2: 720, 3: 870, 4: 1120, 5: 1370, 6: 1630 };
+/** Bork remembers his last four targets and switches to someone else (Wiki). */
+const TARGET_MEMORY = 4;
 const EXTRA_COLOURS = [9312, 22784, 31104];
 
 const TIME = {
@@ -99,9 +102,13 @@ const TIME = {
   BURN_HITS: 5,
 };
 const FLIGHT = [150, 120, 90, 90];
-const ARMOUR = { BORK: 10, BORK_MAGIC: 2, SMORK: 2 };
+/**
+ * Flat armour (Wiki): Bork's 8 against melee and ranged rises 2 for each quarter of the Smorks'
+ * health taken, to 14; 2 against magic; the Smorks' 2.
+ */
+const ARMOUR = { BORK: 8, BORK_STEP: 2, BORK_MAX: 14, BORK_MAGIC: 2, SMORK: 2 };
 
-const DAMAGE = { GONG: 30, VOLLEY: 25, NAPALM: 35, NAPALM_ON_BORK: 50, OIL: [6, 7], BURN: 2, BOMB: 40, SHOCKWAVE: 35 };
+const DAMAGE = { GONG: 30, VOLLEY: 25, NAPALM: 35, NAPALM_ON_BORK: [25, 30], OIL: [6, 7], BURN: 2, BOMB: 40, SHOCKWAVE: 35 };
 
 const LINES = {
   napalm: ["Burny gloop!", "Fireeeeeeeeee!", "Hot stuff!"],
@@ -176,6 +183,16 @@ class BorkRoom extends Raid.Room {
   setTarget(player) {
     this.target = player ?? null;
     this.bork.setMobileInteraction(this.target);
+    if (this.target) this.recentTargets = [this.target, ...(this.recentTargets ?? []).filter((p) => p !== this.target)].slice(0, TARGET_MEMORY);
+  }
+
+  /** Someone he hasn't smashed lately (Wiki: he remembers his last four), else the longest ago. */
+  nextTarget() {
+    const fighters = this.fighters();
+    const recent = this.recentTargets ?? [];
+    const fresh = fighters.filter((p) => !recent.includes(p));
+    if (fresh.length) return Shared.randomOf(fresh);
+    return [...recent].reverse().find((p) => fighters.includes(p)) ?? Shared.randomOf(fighters);
   }
 
   /** He follows his target, a tile a tick, until he is beside them (captured). */
@@ -311,7 +328,7 @@ class BorkRoom extends Raid.Room {
       const p = Shared.standingOn(player);
       if (tiles.some((tile) => tile.x === p.x && tile.y === p.y)) Shared.damageNow(player, Shared.random(Math.floor(DAMAGE.NAPALM / 2), DAMAGE.NAPALM));
     }
-    if (!this.borkDead && tiles.some((tile) => Shared.distanceTo(this.bork, tile) === 0)) Shared.damage(this.bork, Shared.random(Math.floor(DAMAGE.NAPALM_ON_BORK / 2), DAMAGE.NAPALM_ON_BORK));
+    if (!this.borkDead && tiles.some((tile) => Shared.distanceTo(this.bork, tile) === 0)) Shared.damage(this.bork, Shared.random(...DAMAGE.NAPALM_ON_BORK));
     this.later(1, () => this.spill(tiles));
   }
 
@@ -431,7 +448,7 @@ class BorkRoom extends Raid.Room {
       });
       this.later(TIME.RETARGET, () => {
         if (this.borkDead) return;
-        this.setTarget(Shared.randomOf(this.fighters()));
+        this.setTarget(this.nextTarget());
         if (this.target) this.bork.forceChat(`Bork smash ${Shared.displayName(this.target)} now.`);
       });
       this.later(TIME.GONG_RESUMES, () => {
@@ -506,15 +523,27 @@ class BorkRoom extends Raid.Room {
 
   // ---------------------------------------------------------------- damage and deaths
 
-  /** Flat armour: Bork 10 (none while dazed; 2 against magic), the Smorks 2 (Wiki). */
-  modifyHit(npc, hit) {
+  /** Bork's armour against melee and ranged: 8, +2 per quarter of the Smorks' health gone, to 14 (Wiki). */
+  borkArmour() {
+    const max = Math.max(1, this.smork.getMaxHitpoints());
+    const lost = this.smorkDead ? 1 : 1 - this.smork.getHitpoints() / max;
+    return Math.min(ARMOUR.BORK_MAX, ARMOUR.BORK + ARMOUR.BORK_STEP * Math.floor(lost * 4));
+  }
+
+  /**
+   * Flat armour: Bork's (none while dazed; 2 against magic), the Smorks 2 (Wiki). It comes off
+   * each rolled hitsplat as it is rolled, before the roll is capped to their hitpoints: taken off
+   * at impact, a capped killing blow on one with no more hitpoints than his armour came to 0, so
+   * he could never die.
+   */
+  rollDamage(event) {
+    const { target: npc, damage } = event;
     let armour = 0;
     const { CombatType } = Shared.core();
-    if (npc === this.bork) armour = this.stunned ? 0 : hit.getCombatType?.() === CombatType.MAGIC ? ARMOUR.BORK_MAGIC : ARMOUR.BORK;
+    if (npc === this.bork) armour = this.stunned ? 0 : event.combatType === CombatType.MAGIC ? ARMOUR.BORK_MAGIC : this.borkArmour();
     else if (npc === this.smork) armour = ARMOUR.SMORK;
-    if (armour <= 0) return;
-    for (const part of hit.getHits?.() ?? []) part.setDamage(Math.max(0, part.getDamage() - armour));
-    hit.updateTotalDamage?.();
+    if (armour <= 0 || !damage) return;
+    damage.setDamage(Math.max(0, damage.getDamage() - armour));
   }
 
   /** Dazed, melee on Bork always lands (Wiki). */
@@ -667,10 +696,17 @@ function hitRoll(event) {
   roomOf(event.attacker)?.hitRoll(event);
 }
 
+/** A hitsplat rolled on Bork or the Smorks: their flat armour (BorkRoom.rollDamage). */
+function hitDamage(event) {
+  const room = event.target?.__tfaRoom;
+  if (room instanceof BorkRoom) room.rollDamage(event);
+}
+
 module.exports = function registerBork(api) {
   Shared.bind(api);
   Raid.registerRoom("BORK", BorkRoom);
   api.onCombatHitRoll(hitRoll);
+  api.onCombatHitDamage(hitDamage);
 };
 
 Object.assign(module.exports, { BorkRoom, LAYOUT, BORK_HP, SMORK_HP, TIME, DAMAGE, splash, inArena });

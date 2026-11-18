@@ -514,6 +514,58 @@ test("Turael replaces another master's task and resets the streak", () => {
   assert.equal(varbit(player, "slayer_master"), 1);
 });
 
+test("Turael replacing a Krystilia task resets only the Wilderness streak (Wiki, Slayer reward point)", () => {
+  const player = createPlayer();
+  setVarbit(player, "slayer_tasks_completed", 12);
+  setVarbit(player, "slayer_wilderness_tasks_completed", 7);
+  giveTask(player, 7, "Black Demons", 100);
+  const offer = "If you do get a new one, you will reset your standard task streak of [task streak amount]. Is that okay? It won't affect your Wilderness task streak of [task streak amount].";
+  const line = { player, definition: { getName: () => "Turael" }, text: offer };
+  Masters.fillLine(line);
+  assert.equal(line.text, "If you do get a new one, you will reset your Wilderness task streak of 7. Is that okay? It won't affect your standard task streak of 12.");
+  assert.match(Masters.replaceTask(player, master(1)), /^Your new task is to kill/);
+  assert.equal(varbit(player, "slayer_wilderness_tasks_completed"), 0);
+  assert.equal(varbit(player, "slayer_tasks_completed"), 12);
+});
+
+test("Nieve and Konar give more points with their elite diaries (Wiki, Slayer reward point)", (t) => {
+  const prior = handlers.events.get("diary:is-complete");
+  let elite = null;
+  handlers.events.set("diary:is-complete", [(request) => {
+    if (request.diary === elite && request.tier === "elite") request.complete = true;
+  }]);
+  t.after(() => prior ? handlers.events.set("diary:is-complete", prior) : handlers.events.delete("diary:is-complete"));
+  for (const [masterId, diary, plain, boosted] of [[6, "western", 12, 15], [8, "kourend", 18, 20]]) {
+    for (const [done, points] of [[null, plain], [diary, boosted]]) {
+      elite = done;
+      const player = createPlayer();
+      setVarbit(player, "slayer_tasks_completed", 4);
+      assert.ok(Tasks.assign(player, master(masterId)).line);
+      Tasks.complete(player, Tasks.current(player));
+      assert.equal(varbit(player, "slayer_points"), points, `master ${masterId}, ${done ?? "no"} elite diary`);
+    }
+  }
+});
+
+test("Double Trouble: Dusk's death counts two kills towards the task (Wiki, Slayer Rewards)", () => {
+  let duskId = -1;
+  for (let id = 0; id < CacheDefinitions.getCounts().npcs && duskId < 0; id++) {
+    if (CacheDefinitions.getNpc(id)?.name === "Dusk" && Data.npcCountsFor(taskId("Gargoyles"), id, "Dusk")) duskId = id;
+  }
+  assert.ok(duskId >= 0, "a Dusk counts for Gargoyles");
+  const dusk = npc(duskId, { getX: () => 1700, getY: () => 4570, getZ: () => 0 });
+  const player = createPlayer();
+  giveTask(player, 5, "Gargoyles", 10);
+  kill(player, dusk);
+  assert.equal(varp(player, "slayer_count"), 9, "one kill without the unlock");
+  const doubleTrouble = [...Data.get().unlocks.values()].find((entry) => entry.name === "Double Trouble");
+  Rewards.setUnlockBit(player, doubleTrouble.bit, true);
+  kill(player, dusk);
+  assert.equal(varp(player, "slayer_count"), 7, "two kills with Double Trouble");
+  kill(player, npcNamed("Gargoyle"));
+  assert.equal(varp(player, "slayer_count"), 6, "a gargoyle still counts one");
+});
+
 test("monsters with a Slayer level can't be attacked below it", () => {
   const player = createPlayer({ slayer: 84 });
   const event = { attacker: player, target: npcNamed("Abyssal demon"), allow: null };

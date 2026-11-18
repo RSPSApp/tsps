@@ -38,7 +38,8 @@ function pullLeverA() {
   const player = {
     getAttribute: (key) => attributes.get(key) ?? 0,
     setAttribute: (key, value) => attributes.set(key, value),
-    getPacketSender: () => ({ sendConfig: (varp, value) => configs.push({ varp, value }) }),
+    // The lever also plays its recorded sounds; only the varps matter here.
+    getPacketSender: () => ({ sendConfig: (varp, value) => configs.push({ varp, value }), sendSoundEffect: () => {} }),
     // Inside the basement's bounds, so the lever/door visuals are published too.
     getLocation: () => ({ getX: () => 3115, getY: () => 9755, getZ: () => 0 }),
     performAnimation: () => {},

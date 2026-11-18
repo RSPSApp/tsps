@@ -135,8 +135,6 @@ module.exports = function registerDesertTreasureII(api) {
     sucellus: ghorrockProgress,
     whisperer: (player) => lassarProgress(player.getAttribute(LASSAR) ?? {}),
   };
-  // A chapter's varbit value. Before the chapters open it is 0; a placed medallion, the finale
-  // and completion read the chapter's done value (post-quest logins: 56/48/70/50, rsprox 3285).
   /** "desert-treasure-ii:boss-defeated" { player, boss: chapter key }: whether the quest's fight is won. */
   function answerBossDefeated(request) {
     const chapter = CHAPTERS[request?.boss];
@@ -144,6 +142,8 @@ module.exports = function registerDesertTreasureII(api) {
     if (chapterValue(request.player, request.boss) >= chapter.killed) request.defeated = true;
   }
 
+  // A chapter's varbit value. Before the chapters open it is 0; a placed medallion, the finale
+  // and completion read the chapter's done value (post-quest logins: 56/48/70/50, rsprox 3285).
   function chapterValue(player, key) {
     const s = stage(player);
     const chapter = CHAPTERS[key];
@@ -4039,7 +4039,6 @@ module.exports = function registerDesertTreasureII(api) {
         state = { ...state, inShadow: false, whispererStarted: false };
       }
       setLassar(p, state);
-      ensurePrescott(p);
     }
     // Logging out of Ghorrock Prison leaves the player at its exit (instanceExit); only a
     // login there resumes the prison, since another chapter may be in progress elsewhere.
@@ -7904,14 +7903,6 @@ module.exports = function registerDesertTreasureII(api) {
     return true;
   }
 
-  function ensurePrescott(p) {
-    if (!inChapter(p, "whisperer") || !(p.getAttribute(LASSAR) ?? {}).ramarno) return null;
-    let owned = spawned.get(p);
-    if (!owned) spawned.set(p, owned = {});
-    if (owned.prescott?.isRegistered?.()) return owned.prescott;
-    owned.prescott = api.spawnNpc({ id: N.PRESCOTT, x: 2975, y: 5794, z: 0, wanderRadius: 0, owner: p, ownerOnly: true });
-    return owned.prescott;
-  }
 
   function ensureLassarKetla(p) {
     let owned = spawned.get(p);
@@ -8439,8 +8430,8 @@ module.exports = function registerDesertTreasureII(api) {
     // when the player actually chooses the archaeologist question.
     if (!inChapter(p, "whisperer") || option !== "Have you seen any archeologists around here?") return;
     const state = p.getAttribute(LASSAR) ?? {};
+    // Varbit 15126 reaching 2 shows the world's Helena and Prescott (cache multinpcs 3579/6149).
     if (!state.ramarno) setLassar(p, { ...state, ramarno: true });
-    ensurePrescott(p);
   }
 
   function handleLassarObject(event, visibleId, option) {

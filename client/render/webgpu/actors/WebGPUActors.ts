@@ -440,7 +440,9 @@ export class WebGPUActors {
         const world = this.world;
         if (!world) return;
         this.shadow = shadow;
-        for (const key of Object.keys(this.stats) as (keyof typeof this.stats)[]) this.stats[key] = 0;
+        const stats = this.stats;
+        stats.npcCandidates = stats.npcBoundsTests = stats.npcsCulled = 0;
+        stats.playerCandidates = stats.playerBoundsTests = stats.playersCulled = 0;
         const deltaSec =
             this.lastUpdateTimeSec >= 0 ? Math.min(1, Math.max(0, timeSec - this.lastUpdateTimeSec)) : 0;
         this.lastUpdateTimeSec = timeSec;

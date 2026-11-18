@@ -262,6 +262,8 @@ class Room {
       npc.setFlag?.("interaction:keep");
       // Its hitpoints are the room's to keep (the Guardian's shield and health).
       npc.setFlag?.("combat:no-regen");
+      // Players don't block a boss's walk: it steps through and over them, as OSRS's do.
+      npc.setFlag?.("movement:walk-through-entities");
     }
     this.area.add(npc);
     this.npcs.add(npc);

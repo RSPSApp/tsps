@@ -75,7 +75,7 @@ test("normal-world gaze warning and successful avoidance retain their captured c
   h.fight.gaze();
   assert.ok(h.messages.includes("<col=6800bf>Duke Sucellus turns his gaze upon you..."));
   h.step(5);
-  assert.ok(h.messages.includes("<col=06600c>You manage to avoid Duke Sucellus' gaze."));
+  assert.ok(h.spam.includes("<col=06600c>You manage to avoid Duke Sucellus' gaze."));
   assert.equal(h.p.getHitpoints(), 99);
 });
 
@@ -146,7 +146,7 @@ test("gaze failure feedback precedes the normal-mode bounded damage by one tick"
   t.mock.method(Math, "random", () => 0.5);
   h.fight.gaze();
   h.step(5);
-  assert.ok(h.messages.includes("You failed to avoid Duke Sucellus' gaze."));
+  assert.ok(h.spam.includes("<col=ff3045>You failed to avoid Duke Sucellus' gaze."));
   assert.equal(h.p.getHitpoints(), 99);
   h.step();
   assert.ok(h.p.getHitpoints() < 99);

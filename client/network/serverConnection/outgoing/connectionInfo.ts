@@ -1,3 +1,5 @@
+import { clearLoginConnectRetryTimer } from "../connection/loginHelpers";
+import { resetProtocolCompatibility } from "../protocolCompatibility";
 import { send } from "../connection/send";
 import { getBrowserHostWorldConfig } from "../../../config/clientEnv";
 import { state } from "../state";
@@ -28,9 +30,29 @@ export function setServerUrl(url: string, webRtcConfig?: WebRtcConnectionConfig 
             webRtcConfig = browserHostWorld;
         }
     }
-    const config = webRtcConfig ?? undefined;
+    applyServerUrl(url, webRtcConfig ?? undefined, false);
+}
+
+function applyServerUrl(url: string, config: WebRtcConnectionConfig | undefined, preserveLogin: boolean): void {
     const changed = state.lastUrl !== url
         || JSON.stringify(state.webRtcConfig) !== JSON.stringify(config);
+    if (changed) {
+        clearLoginConnectRetryTimer();
+        if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
+        state.reconnectTimer = null;
+        state.isReconnecting = false;
+        state.reconnectAttempts = 0;
+        state.loginOnWelcome = null;
+        state.lastWelcome = undefined;
+        resetProtocolCompatibility();
+        if (!preserveLogin) {
+            state.loginConnectAttemptId++;
+            state.sessionUsername = null;
+            state.sessionPassword = null;
+            state.sessionLoginFlags = 0;
+            state.hasLoggedIn = false;
+        }
+    }
     if (changed && state.socket) {
         const previous = state.socket;
         state.socket = null;
@@ -49,7 +71,7 @@ export async function resolveServerTransport(): Promise<boolean> {
     if (state.webRtcConfig !== config || state.lastUrl !== url) return false;
     const world = worlds.find((entry) => entry.worldId === config.worldId);
     if (world?.transport === "websocket") {
-        setServerUrl(`${world.secure ? "wss" : "ws"}://${world.address}`, null);
+        applyServerUrl(`${world.secure ? "wss" : "ws"}://${world.address}`, undefined, true);
     }
     return true;
 }

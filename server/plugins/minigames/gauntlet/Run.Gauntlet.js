@@ -200,6 +200,7 @@ function blockTeleports(event) {
  */
 function recoverOnLogin({ player }) {
   Run.sendCompletionVarp(player);
+  if (require("./Echo.Gauntlet").recover(player)) return;
   if (!player.getAttribute(Run.ATTR_RUN) || Run.runOf(player)) return;
   player.setAttribute(Run.ATTR_RUN, null);
   Shared.clearItems(player);

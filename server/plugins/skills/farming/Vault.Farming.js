@@ -1,7 +1,6 @@
 const core = require("./Core.Farming");
 const Patches = require("./Patches.Farming");
 const Data = require("./Data.Farming");
-const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 // Cache241: scripts2813/2820 read inventories93/626 and seed-category obj param709.
 const CAPACITY = 104;
@@ -489,7 +488,7 @@ function click(event) {
             displayed = count ? id : core.CacheDefinitions.getItem(id).placeholder;
         if (itemId > 0 && itemId !== displayed) return;
         if (action === 10) {
-            examineItem(player, id, count);
+            core.examineItem(player, id, count);
             return;
         }
         if (!count) {
@@ -530,7 +529,7 @@ function click(event) {
         const item = player.getInventory().forSlot(slot);
         if (!item || item.getId() <= 0 || (itemId > 0 && itemId !== item.getId())) return;
         if (action === 10) {
-            examineItem(player, item.getId(), item.getAmount());
+            core.examineItem(player, item.getId(), item.getAmount());
             return;
         }
         const originalId = item.getId();

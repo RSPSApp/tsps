@@ -146,8 +146,9 @@
         "rarity_raw": "8/128"
       },
       {
-        "shared_table": "talisman",
+        "location_talisman": true,
         "name": "Talisman",
+        "quantity_raw": "1",
         "rarity_raw": "3/128"
       },
       {

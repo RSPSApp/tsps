@@ -441,7 +441,7 @@ export class Trading {
     }
 
     private static canOffer(item: Item): boolean {
-        if (item.isTradeable()) return true;
+        if (item.isPlayerTradeable()) return true;
         if (item.isUntradeable()) return false;
 
         const request = { item, allowed: false };

@@ -38,6 +38,7 @@ ItemDefinition.forId = (id) => {
     getGrandExchangeValue: () => def.ge ?? def.value,
     getGuidePrice: () => def.guide ?? def.ge ?? def.value,
     isTradeable: () => true,
+    isPlayerTradeable: () => true,
     isNoted: () => false,
   };
 };
@@ -70,6 +71,9 @@ function createPlayer(name, index) {
     getSession: () => ({ sendClientPacket: (packet) => packets.push(packet) > 0 }),
     getPacketSender: () => sender,
     sendMessage: (message) => messages.push(message),
+    getRunEnergyUnits: () => 10000,
+    isRunningReturn: () => false,
+    getWeightKg: () => 0,
     getStatus: () => status,
     setStatus: (next) => { status = next; },
     getInterfaceId: () => interfaceId,
@@ -474,6 +478,7 @@ test('native trades preserve confirmation, settle once and still cancel through 
   const core = PluginManager.getCoreApi();
   require('../plugins/interface/Trading.plugin').register(PluginManager.createApi('NativeTrade'));
   t.mock.method(ItemDefinition, 'forId', cacheDefinitionForId);
+  require('../plugins/items/ItemDefinitionLoader.plugin').register(PluginManager.createApi('TradeItemDefinitions'));
   let clock = 1000, serial = 0;
   t.mock.method(performance, 'now', () => clock);
   const saves = [], previousPersistence = GameConstants.PLAYER_PERSISTENCE;
@@ -487,7 +492,7 @@ test('native trades preserve confirmation, settle once and still cancel through 
       send: frame => { frames.push(Buffer.from(frame)); return true; },
       close() {}, onData() {}, onClose() {}, onError() {} };
     const session = new PlayerSession(channel), player = new Player(session); session.setPlayer(player);
-    player.setUsername('native-trade-' + serial++); player.setIndex(serial); player.setRegistered(true);
+    player.setUsername('tradetest' + serial++); player.setIndex(serial); player.setRegistered(true);
     player.setNeedsPlacement(false);
     const connection = new ClientConnection(channel); connection.player = player;
     test.after(() => { core.TaskManager.cancelTasks(player); player.setRegistered(false); session.flushPackets(); });
@@ -543,6 +548,84 @@ test('native trades preserve confirmation, settle once and still cancel through 
     assert.equal(saves.length, before + 2, 'late accept/decline never settles twice');
     assert.deepEqual([count(a, COINS), count(b, LOBSTER), count(b, COINS)], [200, 3, 300]);
   });
+  await t.test('a source-untradeable lure pack bought from the real shop cannot enter a native trade', async test => {
+    const { ShopManager } = require('../dist/game/model/container/shop/ShopManager');
+    const { ShopDefinition } = require('../dist/game/definition/ShopDefinition');
+    const { ShopDefinitionLoader } = require('../dist/game/definition/loader/impl/ShopDefinitionLoader');
+    assert.equal(new ShopDefinitionLoader().load(), true);
+    ShopManager.initialize(); ShopManager.registerItemCurrency(core.ItemIdentifiers.MOLCH_PEARL);
+    const pair = [actor(test), actor(test)], [giver, receiver] = pair.map(f => f.player);
+    giver.getInventory().adds(core.ItemIdentifiers.MOLCH_PEARL, 10);
+    ShopManager.open(giver, 1425);
+    ShopManager.handleWidgetAction(giver, { groupId: ShopManager.MAIN_INTERFACE_ID, childId: 16,
+      buttonNum: 0, option: 'Buy 1', slot: ShopDefinition.forId(1425).getOriginalStock().findIndex(item => item.id === 34065) + 1,
+      itemId: 34065 });
+    assert.equal(count(giver, 34065), 1, 'normal Alry purchase produces the pack');
+    const slot = giver.getInventory().getSlotForItemId(34065);
+    assert.equal(giver.getInventory().getItems()[slot].getMeta(), null, 'shop output has no synthetic instance lock');
+    giver.getPacketSender().sendInterfaceRemoval();
+    giver.getTrading().requestTrade(receiver); receiver.getTrading().requestTrade(giver);
+    await action(pair[0], 0, slot, 1, 34065);
+    assert.equal(giver.getTrading().getContainer().getAmount(34065), 0, 'exact Wiki source No prevents the transfer');
+    assert.equal(count(giver, 34065), 1);
+    await action(pair[0], 3); ended(pair);
+  });
+  await t.test('non-GE items retain charge variants and per-instance metadata across native trade transitions', async test => {
+    const pair = [actor(test), actor(test)];
+    const [giver, receiver] = pair.map(f => f.player);
+    const inventory = giver.getInventory();
+    const entries = [new Item(8903, 1, { 'test:instance': 'first' }),
+      new Item(8903, 1, { 'test:instance': 'second' }),
+      new Item(8903, 1, { untradeable: true }), new Item(8919, 1),
+      new Item(2554, 1), new Item(2566, 1), new Item(2146, 1), new Item(11784, 1)];
+    entries.forEach((item, slot) => inventory.setItem(slot, item));
+    const snapshot = container => container.getValidItems().map(item =>
+      JSON.stringify([item.getId(), item.getAmount(), item.getMeta()])).sort();
+    const original = snapshot(inventory);
+    function open() {
+      // Request throttling is irrelevant to transfers: reopen the real trade sessions directly.
+      giver.getTrading().setInteract(receiver); receiver.getTrading().setInteract(giver);
+      giver.getTrading().initiateTrade(); receiver.getTrading().initiateTrade();
+    }
+    open();
+    await action(pair[0], 0, 0, 28, 8903);
+    assert.equal(giver.getTrading().getContainer().getAmount(8903), 2,
+      'player-tradeable charged masks enter escrow while their explicit untradeable copy stays');
+    assert.equal(count(giver, 8903), 1);
+    await action(pair[0], 1, 0, 1, 8903);
+    assert.equal(giver.getTrading().getContainer().getAmount(8903), 1, 'native remove returns one instance');
+    await action(pair[0], 3); ended(pair);
+    assert.deepEqual(snapshot(inventory), original, 'remove plus decline preserves every instance');
+    for (const cancelAtConfirm of [true, false]) {
+      open();
+      for (const id of [8903, 8919, 2554, 2566, 2146, 11784]) {
+        const slot = inventory.getItems().findIndex(item => item.getId() === id && !item.isUntradeable());
+        await action(pair[0], 0, slot, 28, id);
+      }
+      // An Offer-All starting on the forbidden copy must not offer that copy or bypass its refusal.
+      assert.equal(count(giver, 8903), 1);
+      assert.equal(giver.getTrading().getContainer().getAmount(11784), 0, 'imbued masks stay untradeable');
+      for (const id of [8919, 2554, 2566, 2146]) {
+        assert.equal(giver.getTrading().getContainer().getAmount(id), 1);
+        assert.equal(ItemDefinition.forId(id).isTradeable(), false, 'Exchange policy is unchanged');
+      }
+      for (const f of pair) await action(f, 2);
+      assert.equal(giver.getTrading().getState(), TradeState.CONFIRM_SCREEN);
+      if (cancelAtConfirm) {
+        await action(pair[1], 5); ended(pair);
+        assert.deepEqual(snapshot(inventory), original, 'confirmation cancel preserves charge and metadata identity');
+      } else {
+        const expected = snapshot(giver.getTrading().getContainer());
+        const before = saves.length;
+        await action(pair[0], 4); assert.equal(saves.length, before);
+        await action(pair[1], 4); ended(pair);
+        assert.deepEqual(snapshot(receiver.getInventory()), expected, 'recipient receives exact escrow instances');
+        assert.deepEqual(snapshot(inventory), original.filter(text => { const [id, , meta] = JSON.parse(text); return meta?.untradeable || id === 11784; }));
+        await action(pair[1], 4);
+        assert.equal(saves.length, before + 2, 'late confirmation cannot settle twice');
+      }
+    }
+  });
   await t.test('Shield of Arrav handover items can be traded directly', async test => {
     require('../plugins/quests/quests/ShieldOfArrav.Quest')(PluginManager.createApi('ShieldOfArravTrade'));
     const { WEAPON_STORE_KEY: key, WEAPON_STORE_KEY_2: note, PHOENIX_CROSSBOW: crossbow,
@@ -581,6 +664,46 @@ test('native trades preserve confirmation, settle once and still cancel through 
     for (const id of [key, note, crossbow, left, right]) {
       assert.equal(ItemDefinition.forId(id).isTradeable(), false, 'the cache trade flag stays false');
     }
+  });
+  await t.test('native non-GE trading retains ironman and real group membership guards', async test => {
+    const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+    const Common = require('../plugins/modes/ironman/Common.Ironman');
+    const Members = require('../plugins/interface/grouping/Members.Grouping');
+    const Kinds = require('../plugins/interface/grouping/Kinds.Grouping');
+    const Store = require('../plugins/interface/grouping/Store.Grouping');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trade-groups-'));
+    const previousFile = process.env[Store.FILE_ENV];
+    process.env[Store.FILE_ENV] = path.join(dir, 'groups.json'); Store.reset();
+    test.after(() => {
+      Store.reset();
+      if (previousFile === undefined) delete process.env[Store.FILE_ENV]; else process.env[Store.FILE_ENV] = previousFile;
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+    const api = PluginManager.createApi('TradeModeGuard');
+    Common.init(api); Members.init(api); Kinds.init(api);
+    require('../plugins/modes/ironman/Trading.Ironman')(api);
+    api.onCustomEvent('grouping:same-group', Kinds.answerSameGroup);
+    const pair = [actor(test), actor(test)], [a, b] = pair.map(f => f.player);
+    a.getInventory().setItem(0, new Item(8903, 1, { 'test:instance': 'mode' }));
+    a.setAttribute(Common.MODE_ATTRIBUTE, 'ironman');
+    a.getTrading().requestTrade(b);
+    assert.equal(a.getTrading().getState(), TradeState.NONE, 'ordinary ironman cannot request a trade');
+    a.setAttribute(Common.MODE_ATTRIBUTE, 'group'); b.setAttribute(Common.MODE_ATTRIBUTE, 'group');
+    a.getTrading().requestTrade(b);
+    assert.equal(a.getTrading().getState(), TradeState.NONE, 'GIM outsiders cannot trade');
+    const group = Store.create(a.getProfile(), core.Misc.stringToLongBigInt(a.getUsername()), Date.now(), true);
+    Store.addMember(group, core.Misc.stringToLongBigInt(b.getUsername()), Date.now());
+    a.getTrading().requestTrade(b); b.getTrading().requestTrade(a);
+    await action(pair[0], 0, 0, 1, 8903);
+    assert.equal(a.getTrading().getContainer().getAmount(8903), 1, 'same-group GIM can offer non-GE items');
+    for (const f of pair) await action(f, 2);
+    assert.equal(a.getTrading().getState(), TradeState.CONFIRM_SCREEN);
+    // Controlled state change models an account restriction appearing while confirmation is open.
+    b.setAttribute(Common.MODE_ATTRIBUTE, 'ironman');
+    await action(pair[0], 4); ended(pair);
+    assert.equal(count(a, 8903), 1, 'mode recheck returns the charged mask');
+    assert.deepEqual(a.getInventory().getValidItems()[0].getMeta(), { 'test:instance': 'mode' });
+    assert.equal(count(b, 8903), 0);
   });
   for (const stage of ['offer', 'confirm']) for (const cancel of ['decline', 'interface-close']) {
     await t.test(stage + ' ' + cancel + ' returns offers and closes both sessions', async test => {

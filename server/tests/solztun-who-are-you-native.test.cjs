@@ -57,7 +57,8 @@ function harness(t, coins) {
       const pending = MultiChatboxPrompt.getPending(player);
       if (pending) return pending.options;
       if (!player.getDialogueManager().isActive()) return null;
-      if (text()) said.push(text());
+      // Words only: the spirit's lines keep the Wiki's blue (<col=000080>) on every wrapped line.
+      if (text()) said.push(text().replace(/<\/?col(?:=[0-9a-f]{6})?>/gi, ''));
       await send({ type: 'dialogue_continue', widgetId: (group() << 16) | (group() === 229 ? 4 : 5), childIndex: -1 });
     }
     return null;

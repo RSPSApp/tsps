@@ -676,6 +676,8 @@ test("Demonic Pacts: Varlamore to start, Misthalin shut but Zanaris and the Abys
   assert.equal(open(3222, 3218).area, MISTHALIN, "Lumbridge is Misthalin's");
   assert.equal(query("league:areas", { player: pacts }).next?.tasks, 80, "the cache's own thresholds");
   assert.equal(areaAt(2412, 4434, { league: 6 }), null, "Zanaris is open from everywhere");
+  assert.equal(areaAt(2591, 4319, { league: 6 }), null, "Puro-Puro is open from everywhere");
+  assert.equal(areaAt(2591, 4319, { league: 5 }), MISTHALIN, "Puro-Puro remains in Misthalin for earlier leagues");
   assert.equal(areaAt(3040, 4839, { league: 6 }), null, "and the Abyss");
   assert.equal(areaAt(2412, 4434, { league: 5 }), MISTHALIN, "Raging Echoes keeps them Misthalin's");
   assert.equal(areaAt(1150, 3420, { league: 6 }), VARLAMORE, "the Stranglewood counts as Varlamore");

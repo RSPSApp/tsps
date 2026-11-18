@@ -96,3 +96,23 @@ test('live has no bird snare ground spawn on the loc\'s tile, only the loc', () 
   const onTile = spawns.filter(s => s.location.x === 2167 && s.location.y === 2981 && s.location.z === 0);
   assert.deepEqual(onTile, []);
 });
+
+test("Hunter Guild roots require a knife and stop at three carried logs", t => {
+  const { p, messages } = actor(t);
+  const { ROOTS_59, ROOTS_60 } = core.ObjectIdentifiers;
+  const { KNIFE, LOGS } = core.ItemIdentifiers;
+  const inventory = p.getInventory();
+  assert.equal(core.ObjectDefinition.forId(ROOTS_59).getInteractions()[0], "Take-log");
+  assert.equal(Supplies.takeRootLog({ player: p, objectId: ROOTS_60 }), false);
+  Supplies.takeRootLog({ player: p, objectId: ROOTS_59 });
+  tick();
+  assert.equal(inventory.getAmount(LOGS), 0);
+  assert.match(messages.at(-1), /need a knife/);
+  inventory.adds(KNIFE, 1);
+  for (let click = 0; click < 4; click++) {
+    Supplies.takeRootLog({ player: p, objectId: ROOTS_59 });
+    tick();
+  }
+  assert.equal(inventory.getAmount(LOGS), 3);
+  assert.match(messages.at(-1), /stability of the cavern/);
+});

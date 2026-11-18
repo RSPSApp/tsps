@@ -4,7 +4,7 @@ import gateway.tsps.TspsWriter
 
 /**
  * tsps's loc, ground-item and targeted ops (ClientProtocol.ts `decodeClientPacket`), each with
- * its own field order and byte transforms. Ctrl bytes are read and ignored by tsps; 0 is sent.
+ * its own field order and byte transforms. Ctrl bytes preserve the client's per-click run inversion.
  */
 object WorldOps {
     private val LOC_OPCODES = intArrayOf(96, 28, 42, 38, 51)
@@ -23,14 +23,14 @@ object WorldOps {
     private const val INVENTORY_MOVE = 242
     private const val USE_ON_INVENTORY = 4
 
-    fun loc(op: Int, id: Int, x: Int, z: Int): ByteArray {
+    fun loc(op: Int, id: Int, x: Int, z: Int, controlKey: Boolean = false): ByteArray {
         val w = TspsWriter()
         when (op) {
-            1 -> w.u16Add(x).u16le(z).u8Neg(0).u16AddLE(id)
-            2 -> w.u16AddLE(x).u16AddLE(z).u8Sub(0).u16(id)
-            3 -> w.u16le(z).u16le(id).u16AddLE(x).u8Sub(0)
-            4 -> w.u16Add(x).u16le(id).u16Add(z).u8Neg(0)
-            5 -> w.u16(x).u8Add(0).u16Add(z).u16Add(id)
+            1 -> w.u16Add(x).u16le(z).u8Neg(if (controlKey) 1 else 0).u16AddLE(id)
+            2 -> w.u16AddLE(x).u16AddLE(z).u8Sub(if (controlKey) 1 else 0).u16(id)
+            3 -> w.u16le(z).u16le(id).u16AddLE(x).u8Sub(if (controlKey) 1 else 0)
+            4 -> w.u16Add(x).u16le(id).u16Add(z).u8Neg(if (controlKey) 1 else 0)
+            5 -> w.u16(x).u8Add(if (controlKey) 1 else 0).u16Add(z).u16Add(id)
             else -> throw IllegalArgumentException("loc op $op")
         }
         return w.fixed(LOC_OPCODES[op - 1])
@@ -38,14 +38,14 @@ object WorldOps {
 
     fun examineLoc(id: Int): ByteArray = TspsWriter().u16AddLE(id).fixed(EXAMINE_LOC)
 
-    fun obj(op: Int, id: Int, x: Int, z: Int): ByteArray {
+    fun obj(op: Int, id: Int, x: Int, z: Int, controlKey: Boolean = false): ByteArray {
         val w = TspsWriter()
         when (op) {
-            1 -> w.u8Sub(0).u16le(z).u16Add(id).u16Add(x)
-            2 -> w.u16Add(x).u16le(z).u16(id).u8(0)
-            3 -> w.u16le(id).u16Add(x).u16AddLE(z).u8Sub(0)
-            4 -> w.u16AddLE(id).u16AddLE(z).u8Neg(0).u16Add(x)
-            5 -> w.u16Add(id).u16le(x).u16le(z).u8Sub(0)
+            1 -> w.u8Sub(if (controlKey) 1 else 0).u16le(z).u16Add(id).u16Add(x)
+            2 -> w.u16Add(x).u16le(z).u16(id).u8(if (controlKey) 1 else 0)
+            3 -> w.u16le(id).u16Add(x).u16AddLE(z).u8Sub(if (controlKey) 1 else 0)
+            4 -> w.u16AddLE(id).u16AddLE(z).u8Neg(if (controlKey) 1 else 0).u16Add(x)
+            5 -> w.u16Add(id).u16le(x).u16le(z).u8Sub(if (controlKey) 1 else 0)
             else -> throw IllegalArgumentException("obj op $op")
         }
         return w.fixed(OBJ_OPCODES[op - 1])
@@ -54,43 +54,43 @@ object WorldOps {
     fun examineObj(id: Int, x: Int, z: Int): ByteArray = TspsWriter().u16(id).u16le(z).u16le(x).fixed(EXAMINE_OBJ)
 
     /** A spell (or other component) on a loc. */
-    fun spellOnLoc(id: Int, x: Int, z: Int, component: Int, sub: Int, obj: Int): ByteArray =
-        TspsWriter().u16AddLE(z).u16Add(id).u16Add(sub).i32le(component).u16(x).u16le(obj).u8Neg(0).fixed(OPLOC_T)
+    fun spellOnLoc(id: Int, x: Int, z: Int, component: Int, sub: Int, obj: Int, controlKey: Boolean = false): ByteArray =
+        TspsWriter().u16AddLE(z).u16Add(id).u16Add(sub).i32le(component).u16(x).u16le(obj).u8Neg(if (controlKey) 1 else 0).fixed(OPLOC_T)
 
-    fun itemOnLoc(id: Int, x: Int, z: Int, component: Int, slot: Int, item: Int): ByteArray =
-        TspsWriter().u16AddLE(slot).u16Add(id).i32le(component).u8Sub(0).u16le(x).u16(z).u16AddLE(item).fixed(OPLOC_U)
+    fun itemOnLoc(id: Int, x: Int, z: Int, component: Int, slot: Int, item: Int, controlKey: Boolean = false): ByteArray =
+        TspsWriter().u16AddLE(slot).u16Add(id).i32le(component).u8Sub(if (controlKey) 1 else 0).u16le(x).u16(z).u16AddLE(item).fixed(OPLOC_U)
 
-    fun spellOnObj(id: Int, x: Int, z: Int, component: Int, sub: Int, obj: Int): ByteArray =
-        TspsWriter().i32le(component).u16Add(sub).u16Add(id).u16AddLE(x).u16(z).u8(0).u16AddLE(obj).fixed(OPOBJ_T)
+    fun spellOnObj(id: Int, x: Int, z: Int, component: Int, sub: Int, obj: Int, controlKey: Boolean = false): ByteArray =
+        TspsWriter().i32le(component).u16Add(sub).u16Add(id).u16AddLE(x).u16(z).u8(if (controlKey) 1 else 0).u16AddLE(obj).fixed(OPOBJ_T)
 
-    fun itemOnObj(id: Int, x: Int, z: Int, component: Int, slot: Int, item: Int): ByteArray =
-        TspsWriter().u16AddLE(id).u16Add(z).i32me(component).u16Add(x).u16AddLE(slot).u8Sub(0).u16le(item).fixed(OPOBJ_U)
+    fun itemOnObj(id: Int, x: Int, z: Int, component: Int, slot: Int, item: Int, controlKey: Boolean = false): ByteArray =
+        TspsWriter().u16AddLE(id).u16Add(z).i32me(component).u16Add(x).u16AddLE(slot).u8Sub(if (controlKey) 1 else 0).u16le(item).fixed(OPOBJ_U)
 
-    fun spellOnNpc(index: Int, component: Int, sub: Int, obj: Int): ByteArray =
-        TspsWriter().u16(index).i32le(component).u16(sub).u16Add(obj).u8Add(0).fixed(OPNPC_T)
+    fun spellOnNpc(index: Int, component: Int, sub: Int, obj: Int, controlKey: Boolean = false): ByteArray =
+        TspsWriter().u16(index).i32le(component).u16(sub).u16Add(obj).u8Add(if (controlKey) 1 else 0).fixed(OPNPC_T)
 
-    fun itemOnNpc(index: Int, component: Int, slot: Int, item: Int): ByteArray =
-        TspsWriter().u16AddLE(slot).u8(0).i32me(component).u16le(item).u16AddLE(index).fixed(OPNPC_U)
+    fun itemOnNpc(index: Int, component: Int, slot: Int, item: Int, controlKey: Boolean = false): ByteArray =
+        TspsWriter().u16AddLE(slot).u8(if (controlKey) 1 else 0).i32me(component).u16le(item).u16AddLE(index).fixed(OPNPC_U)
 
-    fun spellOnPlayer(index: Int, component: Int, sub: Int, obj: Int): ByteArray =
-        TspsWriter().u8Neg(0).u16le(obj).u16le(sub).i32ime(component).u16le(index).fixed(OPPLAYER_T)
+    fun spellOnPlayer(index: Int, component: Int, sub: Int, obj: Int, controlKey: Boolean = false): ByteArray =
+        TspsWriter().u8Neg(if (controlKey) 1 else 0).u16le(obj).u16le(sub).i32ime(component).u16le(index).fixed(OPPLAYER_T)
 
-    fun itemOnPlayer(index: Int, component: Int, slot: Int, item: Int): ByteArray =
-        TspsWriter().u16AddLE(index).u16AddLE(item).u16Add(slot).i32(component).u8Add(0).fixed(OPPLAYER_U)
+    fun itemOnPlayer(index: Int, component: Int, slot: Int, item: Int, controlKey: Boolean = false): ByteArray =
+        TspsWriter().u16AddLE(index).u16AddLE(item).u16Add(slot).i32(component).u8Add(if (controlKey) 1 else 0).fixed(OPPLAYER_U)
 
     private val WORLD_ENTITY_OPCODES = intArrayOf(220, 221, 222, 223, 224)
     private const val WORLD_MAP_CLICK = 105
     private const val TELEPORT = 212
 
     /** OPWORLDENTITY1-5: a boat's ops. */
-    fun worldEntity(op: Int, index: Int): ByteArray {
+    fun worldEntity(op: Int, index: Int, controlKey: Boolean = false): ByteArray {
         val w = TspsWriter()
         when (op) {
-            1 -> w.u16le(index).u8Sub(0)
-            2 -> w.u16Add(index).u8Add(0)
-            3 -> w.u16(index).u8Neg(0)
-            4 -> w.u8Sub(0).u16(index)
-            5 -> w.u8Add(0).u16le(index)
+            1 -> w.u16le(index).u8Sub(if (controlKey) 1 else 0)
+            2 -> w.u16Add(index).u8Add(if (controlKey) 1 else 0)
+            3 -> w.u16(index).u8Neg(if (controlKey) 1 else 0)
+            4 -> w.u8Sub(if (controlKey) 1 else 0).u16(index)
+            5 -> w.u8Add(if (controlKey) 1 else 0).u16le(index)
             else -> throw IllegalArgumentException("world entity op $op")
         }
         return w.fixed(WORLD_ENTITY_OPCODES[op - 1])

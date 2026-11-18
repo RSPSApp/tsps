@@ -173,30 +173,32 @@ object TspsClientPacket {
     private val NPC_OP_OPCODES = intArrayOf(76, 12, 34, 70, 57)
     const val EXAMINE_NPC = 9
 
-    /** OPPLAYER1-8. tsps reads the ctrl byte and ignores it. */
-    fun playerOp(op: Int, index: Int): ByteArray {
+    /** OPPLAYER1-8. Preserve Ctrl for the server's per-click run inversion. */
+    fun playerOp(op: Int, index: Int, controlKey: Boolean = false): ByteArray {
+        val ctrl = if (controlKey) 1 else 0
         val writer = TspsWriter()
         when (op) {
-            1, 3 -> writer.u8Sub(0).u16(index)
-            2 -> writer.u8(0).u16(index)
-            4, 6 -> writer.u16(index).u8Neg(0)
-            5 -> writer.u16AddLE(index).u8Sub(0)
-            7 -> writer.u16Add(index).u8Sub(0)
-            8 -> writer.u8(0).u16Add(index)
+            1, 3 -> writer.u8Sub(ctrl).u16(index)
+            2 -> writer.u8(ctrl).u16(index)
+            4, 6 -> writer.u16(index).u8Neg(ctrl)
+            5 -> writer.u16AddLE(index).u8Sub(ctrl)
+            7 -> writer.u16Add(index).u8Sub(ctrl)
+            8 -> writer.u8(ctrl).u16Add(index)
             else -> throw IllegalArgumentException("player op $op")
         }
         return writer.fixed(PLAYER_OP_OPCODES[op - 1])
     }
 
     /** OPNPC1-5. */
-    fun npcOp(op: Int, index: Int): ByteArray {
+    fun npcOp(op: Int, index: Int, controlKey: Boolean = false): ByteArray {
+        val ctrl = if (controlKey) 1 else 0
         val writer = TspsWriter()
         when (op) {
-            1 -> writer.u8(0).u16AddLE(index)
-            2 -> writer.u16AddLE(index).u8(0)
-            3 -> writer.u16Add(index).u8Neg(0)
-            4 -> writer.u8Neg(0).u16le(index)
-            5 -> writer.u8Add(0).u16le(index)
+            1 -> writer.u8(ctrl).u16AddLE(index)
+            2 -> writer.u16AddLE(index).u8(ctrl)
+            3 -> writer.u16Add(index).u8Neg(ctrl)
+            4 -> writer.u8Neg(ctrl).u16le(index)
+            5 -> writer.u8Add(ctrl).u16le(index)
             else -> throw IllegalArgumentException("npc op $op")
         }
         return writer.fixed(NPC_OP_OPCODES[op - 1])

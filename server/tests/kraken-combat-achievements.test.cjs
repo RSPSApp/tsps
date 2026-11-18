@@ -66,6 +66,11 @@ function fight(area = null) {
   return { boss: npc(IDS.KRAKEN, area), tentacles: TENTACLE_TILES.map((tile) => npc(IDS.ENORMOUS_TENTACLE, area, tile)) };
 }
 
+/** The four tentacles surfaced while the Kraken is still a whirlpool. */
+function tentaclesBeforeWaking(area = null) {
+  return TENTACLE_TILES.map((tile) => npc(IDS.ENORMOUS_TENTACLE, area, tile));
+}
+
 before(async () => {
   // The task names are the cache's.
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -103,14 +108,35 @@ test("three tentacles, or one killed twice, is not all four", () => {
   assert.deepEqual(completed, []);
 });
 
-test("a tentacle killed while the Kraken is down comes back, so it does not count", () => {
+test("Unnecessary Optimisation: all four tentacles before waking the Kraken, then the Kraken", () => {
+  // Wiki (Unnecessary Optimisation): the tentacles may be killed before the Kraken is woken.
   const qunai = player("Qunai");
-  const early = npc(IDS.ENORMOUS_TENTACLE, null, TENTACLE_TILES[0]);
-  kill(early, qunai);
-  const { boss, tentacles } = fight();
-  for (const tentacle of tentacles.slice(1)) kill(tentacle, qunai);
-  kill(boss, qunai);
+  for (const tentacle of tentaclesBeforeWaking()) kill(tentacle, qunai);
+  kill(npc(IDS.KRAKEN, null), qunai);
+  assert.deepEqual(completed, [["Qunai", "Unnecessary Optimisation"]]);
+});
+
+test("a tentacle killed before waking stops counting once it respawns", () => {
+  const qunai = player("Qunai");
+  const early = tentaclesBeforeWaking();
+  for (const tentacle of early) kill(tentacle, qunai);
+  // The first one's respawn timer runs out before the Kraken dies: its whirlpool is back.
+  npc(IDS.WHIRLPOOL_3, null, TENTACLE_TILES[0]);
+  kill(npc(IDS.KRAKEN, null), qunai);
   assert.deepEqual(completed, []);
+});
+
+test("killing the respawned tentacle counts again; the last to kill a tentacle has it", () => {
+  const qunai = player("Qunai");
+  const other = player("Other");
+  for (const tentacle of tentaclesBeforeWaking()) kill(tentacle, qunai);
+  const back = npc(IDS.ENORMOUS_TENTACLE, null, TENTACLE_TILES[0]);
+  kill(back, other);
+  kill(npc(IDS.KRAKEN, null), qunai);
+  assert.deepEqual(completed, [], "Other killed the first tentacle last");
+  for (const tentacle of tentaclesBeforeWaking()) kill(tentacle, qunai);
+  kill(npc(IDS.KRAKEN, null), qunai);
+  assert.deepEqual(completed, [["Qunai", "Unnecessary Optimisation"]]);
 });
 
 test("the tentacles that die with the Kraken do not carry into the next fight", () => {

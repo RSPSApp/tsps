@@ -81,7 +81,7 @@ The Kraken's five tasks (cache task structs):
 | Task | Tier | How it finishes |
 |---|---|---|
 | Kraken Adept | Hard | 20 kills, from the kill count. |
-| Unnecessary Optimisation | Hard | Kill four different tentacles while the Kraken is up, then kill it. A tentacle killed while the Kraken is down comes back as its whirlpool, so it doesn't count; neither do the tentacles that die with the Kraken. |
+| Unnecessary Optimisation | Hard | Kill all four tentacles, then the Kraken. They may die before it is woken, as the Wiki allows. A tentacle killed while the Kraken is down respawns as its whirlpool on its own timer, and stops counting once it is back. Each tentacle counts for whoever killed it last. The tentacles that die with the Kraken respawn with it, so they never carry into the next fight. |
 | Krakan't Hurt Me | Hard | 25 kills in one private room. |
 | Ten-tacles | Elite | 50 kills in one private room. |
 | One Hundred Tentacles | Master | 100 kills in one private room. |

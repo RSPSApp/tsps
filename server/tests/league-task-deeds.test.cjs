@@ -3032,3 +3032,36 @@ test("Kourend and Karamja deeds through their events: TzHaar-Ket-Rak, the Infern
   emit("ornament-kits:applied", { kit: "Holy ornament kit" });
   assert.ok(done(f, "attach-a-theatre-of-blood-ornament-kit"));
 });
+
+// ---- deeds reported by their content: the Wilderness and leftovers (issue 6108 follow-ups) ----
+
+test("Wilderness and leftover deeds through their events: the key, the bracelet, god capes, pickpockets, Drew, the cactus, the blowpipe", (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const emit = (name, payload = {}) => PM.emitCustomEvent(name, { player, ...payload });
+  emit("npc-drops:roll", { drops: [{ itemId: item("Ecumenical key"), amount: 1 }] });
+  assert.ok(done(f, "obtain-an-ecumenical-key"));
+  for (const [event, id] of [["revenants:bracelet-full", "fully-charge-a-bracelet-of-ethereum"], ["mage-arena:cape-imbued", "imbue-a-god-cape"],
+    ["waterskins:cactus-cut", "cut-a-cactus-in-the-kharidian-desert"], ["zulrah:unique-dismantled", "dismantle-a-zulrah-scale-unique"]]) {
+    emit(event, {});
+    assert.ok(done(f, id), event);
+  }
+  for (let i = 0; i < 49; i++) emit("thieving:success", { method: "pickpocket", target: "vyre" });
+  emit("thieving:success", { method: "stall", target: "vyre" });
+  assert.ok(!done(f, "pickpocket-a-vyre-50-times"), "49 and a stall");
+  emit("thieving:success", { method: "pickpocket", target: "vyre" });
+  assert.ok(done(f, "pickpocket-a-vyre-50-times") && !done(f, "pickpocket-an-elf-50-times"));
+  // A bandit counts outside the Wilderness only (its bandits share the name).
+  const here = player.getLocation();
+  player.setAttribute("league:areas", [21, 11]);
+  player.setLocation(new core.Location(3036, 3700, 0));
+  emit("thieving:success", { method: "pickpocket", target: "bandit" });
+  assert.ok(!done(f, "pickpocket-a-bandit-in-the-bandit-camp"), "a Wilderness bandit");
+  player.setLocation(here);
+  emit("thieving:success", { method: "pickpocket", target: "bandit" });
+  assert.ok(done(f, "pickpocket-a-bandit-in-the-bandit-camp"));
+  emit("desert-quarry:ground", { amount: 499 });
+  assert.ok(!done(f, "have-drew-create-500-buckets"));
+  emit("desert-quarry:ground", { amount: 1 });
+  assert.ok(done(f, "have-drew-create-500-buckets"));
+});

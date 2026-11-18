@@ -152,6 +152,8 @@ function grind(player) {
   }
   inventory.refreshItems();
   setSand(player, sand(player) + ground);
+  // `desert-quarry:ground` { player, amount }: buckets of sand ground (a league's "Have Drew create 500 buckets").
+  if (ground > 0) api.emitCustomEvent?.("desert-quarry:ground", { player, amount: ground });
   player.sendMessage(text("ground", { sand: amount(sand(player)) }));
 }
 

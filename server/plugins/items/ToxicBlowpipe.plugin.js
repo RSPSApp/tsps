@@ -551,6 +551,8 @@ function dismantleBlowpipe({ player, item, slot }) {
     inventory.setItem(slot, scales);
     inventory.refreshItems();
   }
+  // `zulrah:unique-dismantled` { player, itemId } (a league's "Dismantle a Zulrah scale unique for 20,000 scales").
+  pluginApi?.emitCustomEvent?.("zulrah:unique-dismantled", { player, itemId: item?.getId?.() ?? null });
   return true;
 }
 

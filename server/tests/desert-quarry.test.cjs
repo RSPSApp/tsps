@@ -24,6 +24,7 @@ before(() => {
     onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
     onObjectInteraction: (name, actions) => { hooks.objects[name] = actions; },
     onItemOnObject: (fn) => { hooks.itemOnObject = fn; },
+    emitCustomEvent: (name, payload) => { if (name === 'desert-quarry:ground') ground.push([payload.player, payload.amount]); },
     sendMultiChatboxPrompt: (player, title, ...pairs) => { player.menus.push(pairs.filter((x) => typeof x === 'string')); player.menu = pairs; return true; },
   };
   Quarry = require('../plugins/areas/DesertQuarry.plugin');
@@ -69,6 +70,8 @@ const drew = () => ({ getId: () => core.CacheDefinitions.getNpcId('grinder_drew'
 const grinder = () => ({ getId: () => core.CacheDefinitions.getLocId('grinder_machine') });
 const op = (p, option) => hooks.npcs.Drew[option]({ player: p, npc: drew() });
 
+const ground = [];
+
 test('the grinder takes every piece at once: 1kg 1, 2kg 2, 5kg 4, 10kg 8 buckets (232/03162: 2 medium, 2 large, 1 small -> 26)', () => {
   const p = player();
   hooks.objects.Grinder.Deposit({ player: p, object: grinder() });
@@ -85,6 +88,8 @@ test('the grinder takes every piece at once: 1kg 1, 2kg 2, 5kg 4, 10kg 8 buckets
   p.inventory.add(new core.Item(obj('enakh_sandstone_medium'), 2));
   hooks.itemOnObject({ player: p, object: grinder(), item: {}, itemId: obj('enakh_sandstone_tiny'), handled: false });
   assert.equal(p.messages.at(-1), 'The grinder is holding enough sandstone for 50 buckets of sand.');
+  // desert-quarry:ground per grind with the buckets it added, none for the empty one (a league's Drew task).
+  assert.deepEqual(ground.filter(([who]) => who === p).map(([, amount]) => amount), [26, 24]);
 });
 
 test("noted sandstone on the grinder gets Drew's refusal and stays", () => {

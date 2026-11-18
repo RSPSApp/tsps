@@ -111,9 +111,12 @@ test("Dismantle turns the empty pipe into 20,000 Zulrah's scales in its own slot
   const f = actor(t);
   f.inv.setItem(0, new core.Item(I.COINS, 5));
   f.inv.setItem(3, new core.Item(I.TOXIC_BLOWPIPE_EMPTY_, 1));
+  const dismantled = [];
+  PM.createApi("ZulrahDismantleTest").onCustomEvent("zulrah:unique-dismantled", (event) => dismantled.push(event.itemId));
   await option(f, 3, "Dismantle");
   assert.equal(f.inv.getItems()[3]?.getId(), I.ZULRAHS_SCALES);
   assert.equal(f.inv.getItems()[3]?.getAmount(), 20000);
+  assert.deepEqual(dismantled, [I.TOXIC_BLOWPIPE_EMPTY_], "zulrah:unique-dismantled (a league's task)");
   assert.equal(f.inv.getAmount(I.TOXIC_BLOWPIPE_EMPTY_), 0);
 });
 

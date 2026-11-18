@@ -2043,6 +2043,14 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
   Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
   and the barrel.
+- **Wilderness and leftover deeds**, from their content's events:
+  - The ecumenical key: `obtain` of a dropped "Ecumenical key" (Keys.GodWars adds it to the drop).
+  - `revenants:bracelet-full` { player } when ether takes the bracelet to 16,000; `mage-arena:cape-imbued`
+    { player, itemId } on Kolodion's imbue.
+  - Pickpockets by the Thieving target group: `thieving:success` `where` method "pickpocket" and target "vyre"
+    or "elf" (50 each), or "bandit" `outside` the Wilderness surface, whose bandits share the name (ours).
+  - `desert-quarry:ground` { player, amount } summed to 500; `waterskins:cactus-cut` { player } on every cut
+    (Ours: watered or not); `zulrah:unique-dismantled` { player, itemId } on the blowpipe's Dismantle.
 - **Kourend and Karamja deeds**, from their content's events:
   - TzHaar-Ket-Rak: `tzhaar-ket-rak:challenge-completed` { player, number } as the last Jad falls (`where`
     number 1-6); `tzhaar-ket-rak:infinite-ended` { player, kills } (`atLeast` 18 for "6,6,6").

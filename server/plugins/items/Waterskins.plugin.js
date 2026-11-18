@@ -81,6 +81,8 @@ function finishCut(player, cactus, dryId, animation) {
   player.performAnimation(new core.Animation(animation));
   player.getPacketSender().sendSoundEffect(CUT_SOUND, 1, 15);
   dryCactus(cactus, dryId);
+  // `waterskins:cactus-cut` { player } on every cut, watered or not (a league's "Cut a Cactus in the Kharidian Desert").
+  api.emitCustomEvent?.("waterskins:cactus-cut", { player });
   const skills = player.getSkillManager();
   if (Math.random() >= cutChance(skills.getCurrentLevel(Skill.WOODCUTTING))) {
     player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You fail to cut the cactus correctly and it gives no water this time.");

@@ -47,8 +47,11 @@ const SPREAD_STEPS = [[2, 0], [-2, 0], [0, 2], [0, -2]];
 const STEP_DIRECTION = {
   "0,1": 1, "1,1": 2, "1,0": 4, "1,-1": 7, "0,-1": 6, "-1,-1": 5, "-1,0": 3, "-1,1": 0,
 };
-/** tan(22.5°): how far off a cardinal a step may be before it counts as diagonal. */
-const OCTANT_EDGE = 1 / Math.tan(Math.PI / 8);
+/**
+ * A cardinal step needs one component more than twice the other. The recordings show (5,-11) and
+ * (-5,-11) going straight south (241/911548.txt, 242/911784.txt) and (-8,4) staying diagonal.
+ */
+const OCTANT_EDGE = 2;
 
 /**
  * The tiles between the two ammunition crates on each ship: the Wiki says a player stood there is
@@ -78,31 +81,36 @@ const betweenCrates = (location) => BETWEEN_CRATES.has(`${location.getX()},${loc
  * walk) up to `wavePush.tiles` along the eight-way octant away from the boss base, with
  * `human_knockdown_loop` and the player facing the boss. A player already at an edge stays put and
  * still plays the animation. The Wiki adds the ammunition-crate exemption.
+ *
+ * The cove is a template instance: `DATA.cove` holds template tiles, while the player and the
+ * collision walk are in instance tiles. Compare in template space and move in instance space.
  */
-function wavePush(player) {
-  const destination = pushDestination(player);
-  if (!destination) return false;
-  const { Location } = Shared.core();
+function wavePush(player, cove = coveOf(player)) {
+  const destination = pushDestination(player, cove);
+  if (!destination || !cove) return false;
   const [bossX, bossY] = DATA.cove.boss;
   player.getMovementQueue().reset();
   if (!destination.location.equals(player.getLocation())) player.moveTo(destination.location);
-  player.setPositionToFace(new Location(bossX, bossY, player.getLocation().getZ()));
+  player.setPositionToFace(cove.tile([bossX, bossY, player.getLocation().getZ()]));
   Shared.animate(player, ANIM.KNOCKDOWN);
   return true;
 }
 
 /**
  * Where the wave would put `player`, or null between the crates (the Wiki says they are not
- * pushed). The direction is the octant of the player minus the boss base, and the walk stops at
- * the first blocked tile; a player with nowhere to go gets their own tile back.
+ * pushed). The direction is the octant of the player's template tile minus the boss base, and the
+ * walk stops at the first blocked instance tile; a player with nowhere to go gets their own tile
+ * back.
  */
-function pushDestination(player) {
+function pushDestination(player, cove = coveOf(player)) {
+  if (!cove) return null;
   const { RegionManager, Location } = Shared.core();
   const here = player.getLocation();
-  if (betweenCrates(here)) return null;
+  const [templateX, templateY, templateZ] = cove.templateTile(here);
+  if (betweenCrates(new Location(templateX, templateY, templateZ))) return null;
   const [baseX, baseY] = DATA.cove.boss;
-  const dx = here.getX() - baseX;
-  const dy = here.getY() - baseY;
+  const dx = templateX - baseX;
+  const dy = templateY - baseY;
   if (dx === 0 && dy === 0) return null;
   const [stepX, stepY] = octantStep(dx, dy);
   const direction = STEP_DIRECTION[`${stepX},${stepY}`];

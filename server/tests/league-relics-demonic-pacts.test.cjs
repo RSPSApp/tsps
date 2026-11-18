@@ -53,6 +53,7 @@ let Unlock;
 const hooks = {};
 const custom = {};
 const itemActions = new Map();
+const npcActions = new Map();
 /** Chatbox menus sent: { player, title, entries: [[label, action], ...] }. */
 const prompts = [];
 const realRandom = Math.random;
@@ -87,6 +88,7 @@ before(async () => {
     registerRestingLevelModifier: (modifier) => require("../dist/game/content/skill/SkillManager").SkillManager.registerRestingLevelModifier(modifier),
     registerRangedAmmoHandler() {},
     onItemAction: (name, actions) => itemActions.set(name, { ...itemActions.get(name), ...actions }),
+    onNpcInteraction: (name, actions) => npcActions.set(name, { ...npcActions.get(name), ...actions }),
     sendMultiChatboxPrompt: (player, title, ...flat) => {
       const entries = [];
       for (let index = 0; index < flat.length; index += 2) entries.push([flat[index], flat[index + 1]]);
@@ -148,6 +150,39 @@ function character(name, profile, picks = {}, leagueType = DP) {
   hooks.onPlayerLogin({ player, username: name, isNewAccount: false, profile });
   return Object.assign(player, { sent });
 }
+
+test("Leagues Tutor hands out missing starter supplies and relics through either claim option", () => {
+  const player = character("supplies", "league", FRIENDLY_FORAGER);
+  const inventory = player.getInventory();
+  const manager = player.getDialogueManager();
+  const cache = core.CacheDefinitions;
+  const npcId = cache.getNpcId("league_6_tutor");
+  const beginner = cache.getObjId("beginner_device");
+  const master = cache.getObjId("master_device");
+  assert.equal(new Set([I.DRAMEN_STAFF, I.SPADE, I.IMPLING_JAR, beginner, master]).size, 5);
+  assert.ok(Number.isInteger(beginner) && Number.isInteger(master));
+  const [relic] = Unlock.grantedItems(Common.relic(DP, 1, 2));
+  const collect = npcActions.get("Leagues Tutor")["Collect-items"];
+  const clickAndContinue = () => {
+    assert.equal(collect({ player, npcId }), true);
+    manager.advance();
+    return manager.getCurrent().getText();
+  };
+
+  player.getBank(0).adds(I.DRAMEN_STAFF, 1);
+  inventory.adds(I.BUCKET, 28);
+  assert.match(clickAndContinue(), /enough inventory space/);
+  inventory.delete(I.BUCKET, 2);
+  assert.match(clickAndContinue(), /receive some items/);
+  assert.deepEqual([I.SPADE, I.IMPLING_JAR, beginner, master, relic].map((id) => inventory.getAmount(id)), [1, 1, 0, 0, 0]);
+  inventory.delete(I.BUCKET, 3);
+  const claim = emit("npc-dialogue:action", { player, npcId, text: "Player receives missing items" });
+  assert.equal(claim.handled, true);
+  assert.deepEqual([I.DRAMEN_STAFF, I.SPADE, I.IMPLING_JAR, beginner, master, relic].map((id) => inventory.getAmount(id)), [0, 1, 1, 1, 1, 1]);
+  assert.match(clickAndContinue(), /no League items/);
+  assert.equal(collect({ player: character("normal", "main"), npcId }), false);
+  assert.equal(collect({ player, npcId: core.NpcIdentifiers.LEAGUES_TUTOR_2 }), false);
+});
 
 /** The owner, a Demonic Pacts character without it, a Raging Echoes character with the same slots, a main character. */
 function cases(picks) {

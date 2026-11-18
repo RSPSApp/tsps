@@ -88,6 +88,8 @@ function fill(player) {
     return;
   }
   setCharges(player, charges(player) + added);
+  // `fletching:spool-filled` { player, added, stored } (a league's "Store some / 10,000 bowstrings in a spool").
+  Shared.getApi().emitCustomEvent("fletching:spool-filled", { player, added, stored: charges(player) });
   player.sendMessage(`You add ${added} bow string${added === 1 ? "" : "s"} to the spool. It now holds ${charges(player)}.`);
 }
 

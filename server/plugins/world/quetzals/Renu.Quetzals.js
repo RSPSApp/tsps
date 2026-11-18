@@ -95,6 +95,8 @@ function fly(player, site, { recordDestination = true, onLand } = {}) {
     [MINIMAP_TICKS]: () => Common.minimap(player, true),
     [LAND_TICKS]: () => {
       player.moveTo(new Common.core.Location(site.x, site.y, site.z));
+      // `quetzals:flown` { player, site }: a landing by quetzal, Renu's or Primio's (a league's quetzal travel task).
+      Common.api.emitCustomEvent("quetzals:flown", { player, site: site.name });
       onLand?.();
     },
     [FADE_IN_TICKS]: () => {

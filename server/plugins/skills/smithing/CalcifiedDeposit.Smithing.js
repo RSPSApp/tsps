@@ -51,6 +51,8 @@ function crushOne(player, random) {
   inventory.add(output, true);
   player.performAnimation(Common.hammering());
   player.getSkillManager().addExperiences(Core.Skill.SMITHING, XP);
+  // `smithing:calcified-crushed` { player, itemId } (a league's "Break down 10 calcified deposits").
+  Core.api.emitCustomEvent("smithing:calcified-crushed", { player, itemId: loot.itemId });
   return true;
 }
 

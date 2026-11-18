@@ -2947,3 +2947,45 @@ test("Forestry deeds through their events: roots, entlings, the leprechaun, and 
     assert.ok(done(f, id), kind);
   }
 });
+
+// ---- deeds reported by their content: Varlamore (issue 6108 follow-ups) ----
+
+test("Varlamore deeds through their events: quetzals, deposits, the spool, the moth, Achilka, the crab, the Cam Torum beard", (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const emit = (name, payload = {}) => PM.emitCustomEvent(name, { player, ...payload });
+  emit("quetzals:flown", { site: "Civitas illa Fortis" });
+  assert.ok(done(f, "travel-using-the-quetzal-transport-system"));
+  emit("quetzals:site-built", { site: "Cam Torum", all: false });
+  assert.ok(done(f, "build-a-quetzal-landing-site") && !done(f, "build-all-quetzal-landing-sites"));
+  emit("quetzals:site-built", { site: "Salvager Overlook", all: true });
+  assert.ok(done(f, "build-all-quetzal-landing-sites"));
+  for (let i = 0; i < 9; i++) emit("smithing:calcified-crushed", { itemId: 1 });
+  assert.ok(!done(f, "break-down-10-calcified-deposits"), "nine");
+  emit("smithing:calcified-crushed", { itemId: 1 });
+  assert.ok(done(f, "break-down-10-calcified-deposits"));
+  emit("fletching:spool-filled", { added: 9999, stored: 9999 });
+  assert.ok(done(f, "store-some-bowstrings-inside-a-bowstring-spool") && !done(f, "store-10k-bowstrings-inside-a-bowstring-spool"));
+  emit("fletching:spool-filled", { added: 1, stored: 10000 });
+  assert.ok(done(f, "store-10k-bowstrings-inside-a-bowstring-spool"));
+  emit("hunter:barehand-caught", { name: "sunlight moth" });
+  assert.ok(!done(f, "catch-a-moonlight-moth-bare-handed"), "a sunlight moth");
+  emit("hunter:barehand-caught", { name: "moonlight moth" });
+  assert.ok(done(f, "catch-a-moonlight-moth-bare-handed"));
+  emit("ferries:arrived", { route: "slepe" });
+  assert.ok(!done(f, "travel-in-achilka-s-boat"), "Andras's boat");
+  emit("ferries:arrived", { route: "varla-tal-teklan" });
+  assert.ok(done(f, "travel-in-achilka-s-boat"));
+  emit("quetzals:whistle-crafted", { itemId: 1 });
+  assert.ok(done(f, "create-a-quetzal-whistle"));
+  emit("gemstone-crab:burrowed");
+  assert.ok(done(f, "witness-the-gemstone-crab-burrow-away"));
+  // The beard: a facial-hair makeover beside Sonalo (Cam Torum's barber); a haircut, or far from her, is no task.
+  emit("makeover:applied", { type: 1 });
+  assert.ok(!done(f, "trim-your-beard-in-cam-torum"), "nowhere near Sonalo");
+  const { npc } = npcBeside(t, f, "Sonalo", "talk-to");
+  emit("makeover:applied", { type: 0 });
+  assert.ok(!done(f, "trim-your-beard-in-cam-torum"), "a haircut");
+  emit("makeover:applied", { type: 1 });
+  assert.ok(done(f, "trim-your-beard-in-cam-torum"), String(npc.getLocation()));
+});

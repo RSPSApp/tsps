@@ -11,7 +11,7 @@ const core = PluginManager.getCoreApi(), I = core.ItemIdentifiers;
 before(async()=>{
   await core.CachePipeline.initialize(path.resolve(__dirname,'..'));
   C.H.core=core;C.H.data=require('../plugins/skills/hunter/Data.Hunter').build(core);
-  C.H.api={emitCustomEvent(){}};
+  C.H.api={emitCustomEvent(name,payload){if(name==='hunter:barehand-caught')barehanded.push(payload);}};
 });
 function fixture(t,net=I.BUTTERFLY_NET,jar=false){
   const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
@@ -44,6 +44,8 @@ for(const net of [I.BUTTERFLY_NET,I.MAGIC_BUTTERFLY_NET]){
     assert.equal(f.p.getInventory().getAmount(I.RUBY_HARVEST),1);assert.deepEqual(f.xp,[24]);
   });
 }
+const barehanded=[];
+
 test('hands15 still reject, while hands25 keep native catch/release text and XP',t=>{
   const f=fixture(t,null);f.catchNpc();
   assert.deepEqual(f.messages,['You need a Hunter level of at least 25 to catch this butterfly barehanded.']);
@@ -51,6 +53,8 @@ test('hands15 still reject, while hands25 keep native catch/release text and XP'
   f.messages.length=0;f.p.getSkillManager().setMaxLevel(core.Skill.HUNTER,25).setCurrentLevels(core.Skill.HUNTER,25);
   f.catchNpc();
   assert.deepEqual(f.messages,['You catch and release the ruby harvest butterfly.']);assert.deepEqual(f.xp,[44]);
+  // hunter:barehand-caught with the creature's name (a league's moonlight moth task reads it).
+  assert.deepEqual(barehanded.filter(e=>e.player===f.p).map(e=>e.name),['ruby harvest butterfly']);
 });
 test('removing the net before the delayed catch preserves cancellation and no reward',t=>{
   const f=fixture(t);f.catchNpc();f.p.getEquipment().set(core.Equipment.WEAPON_SLOT,new core.Item(-1,0));f.finish();

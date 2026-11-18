@@ -106,6 +106,9 @@
     "open-30-grubby-chests": {"kind": "open-chest", "chests": ["Grubby Chest"], "count": 30}
   },
   "5": {
+    "create-a-quetzal-whistle": {"kind": "deed", "event": "quetzals:whistle-crafted", "count": 1},
+    "build-a-quetzal-landing-site": {"kind": "deed", "event": "quetzals:site-built", "count": 1},
+    "travel-using-the-quetzal-transport-system": {"kind": "deed", "event": "quetzals:flown", "count": 1},
     "chop-some-rising-roots": {"kind": "deed", "event": "forestry:root-chopped", "count": 1},
     "complete-the-flowering-bush-event": {"kind": "deed", "event": "forestry:event-completed", "where": {"event": "flowering"}, "count": 1},
     "complete-the-pheasant-forestry-event": {"kind": "deed", "event": "forestry:event-completed", "where": {"event": "pheasant"}, "count": 1},
@@ -245,6 +248,17 @@
     "open-50-zombie-pirate-lockers": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 50}
   },
   "6": {
+    "create-a-quetzal-whistle": {"kind": "deed", "event": "quetzals:whistle-crafted", "count": 1},
+    "break-down-10-calcified-deposits": {"kind": "deed", "event": "smithing:calcified-crushed", "count": 10},
+    "build-a-quetzal-landing-site": {"kind": "deed", "event": "quetzals:site-built", "count": 1},
+    "build-all-quetzal-landing-sites": {"kind": "deed", "event": "quetzals:site-built", "where": {"all": true}, "count": 1},
+    "catch-a-moonlight-moth-bare-handed": {"kind": "deed", "event": "hunter:barehand-caught", "where": {"name": "moonlight moth"}, "count": 1},
+    "store-10k-bowstrings-inside-a-bowstring-spool": {"kind": "deed", "event": "fletching:spool-filled", "atLeast": {"stored": 10000}, "count": 1},
+    "store-some-bowstrings-inside-a-bowstring-spool": {"kind": "deed", "event": "fletching:spool-filled", "count": 1},
+    "travel-in-achilka-s-boat": {"kind": "deed", "event": "ferries:arrived", "where": {"route": ["varla-kastori", "varla-tal-teklan", "varla-gloomthorn"]}, "count": 1},
+    "travel-using-the-quetzal-transport-system": {"kind": "deed", "event": "quetzals:flown", "count": 1},
+    "trim-your-beard-in-cam-torum": {"kind": "deed", "event": "makeover:applied", "where": {"type": 1}, "near": {"npcs": ["Sonalo"], "distance": 4}, "count": 1},
+    "witness-the-gemstone-crab-burrow-away": {"kind": "deed", "event": "gemstone-crab:burrowed", "count": 1},
     "chop-some-rising-roots": {"kind": "deed", "event": "forestry:root-chopped", "count": 1},
     "complete-the-flowering-bush-event": {"kind": "deed", "event": "forestry:event-completed", "where": {"event": "flowering"}, "count": 1},
     "complete-the-pheasant-forestry-event": {"kind": "deed", "event": "forestry:event-completed", "where": {"event": "pheasant"}, "count": 1},

@@ -114,3 +114,20 @@ Ours and recorded differences (besides the two above):
 - **When the vines refresh**: live ripened one new vine on the tick the barrel filled (1098 tick 16588),
   and the other three at the hand-in. The Wiki says they refresh only after the turn-in, which this
   server follows.
+
+## Alpaca
+
+Varlamore's shearable alpacas (`varlamore_alpaca_1` 12986 and `_2` 12988; Wiki: Ortus Farm and the
+Quetzacalli Gorge) take Shear with shears in the inventory. Recording 1105 (rev 237, ten shears) shows:
+- on the arrival the player faces the alpaca;
+- then the player plays `human_shearing`, synth 761 plays (delay 10), the alpaca faces the player and
+  `busy` goes 0 to 1;
+- two ticks later "You shear the alpaca and get some wool.", +1 wool, the alpaca turns into
+  `varlamore_alpaca_sheared_1` / `_2` and `busy` goes back to 0; a tick later it looks away;
+- fifty ticks after the shear it is woolly again (index 4283: sheared at tick 2051, back at 2101).
+
+The sheared forms have no Shear option. Ours: without shears, the sheep's captured "You need a set of
+shears to do this."; with no room, the sheep's "You don't have enough inventory space to hold the
+wool.". The shear starts on the arrival (recorded 1 to 3 ticks on). `alpaca:sheared` { player } comes
+with the wool (the league's "Shear an Alpaca").
+

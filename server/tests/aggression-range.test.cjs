@@ -557,6 +557,19 @@ test("in multi-combat, every hunter in range engages the player on the same tick
   assert.equal(third.getCombat().getTarget(), s.player, "nor does the third");
 });
 
+test("Catacombs multicombat excludes the brutal black dragon corner", (t) => {
+  const start = new core.Location(1614, 10091, 0);
+  const { player } = scene(t, { playerAt: start });
+  assert.equal(AreaManager.inMulti(player), false, "the brutal black dragon room is single-combat");
+
+  player.setLocation(new core.Location(1639, 10066, 0));
+  assert.equal(AreaManager.inMulti(player), true, "the tile just south of the exception is multicombat");
+  player.setLocation(new core.Location(1639, 10067, 0));
+  assert.equal(AreaManager.inMulti(player), false, "the northern exception starts on the next row");
+  player.setLocation(new core.Location(1640, 10067, 0));
+  assert.equal(AreaManager.inMulti(player), true, "the exception ends at the next column east");
+});
+
 test("in single-combat, only one hunter engages the player", (t) => {
   const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
   const s = scene(t, { spawn: at(0, 2) });

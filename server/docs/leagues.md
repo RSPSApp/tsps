@@ -2045,8 +2045,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   - `forestry:root-chopped` { player, kind } on a rising root's bark; `forestry:entling-pruned` { player } on a
     cut an entling wanted; `forestry:leprechaun-banked` { player } when the leprechaun banked something.
   - `forestry:event-completed` { player, event }, `where` event: "flowering" and "sapling" with their gifts,
-    "ritual" for a player with a step done, "pheasant" on an eligible egg handed in (Ours: the event pays per
-    egg and has no end reward).
+    "ritual" for a player with a step done, "pheasant" at the event's end for each player who handed in an
+    eligible egg (Ours: the Wiki's end bonus of Woodcutting XP and bark isn't paid yet).
 - **General deeds**, from their content's events:
   - Slayer: `slayer:on-task-kill` { player, npcName } for a kill that counts for the player's own task (250 of
     them; an "Abyssal demon" by name).

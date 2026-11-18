@@ -199,9 +199,8 @@ test('the hand-in pays bark and XP; ineligible pays 1 XP; the end at 200 ticks',
   assert.equal(xp(p, 'Thieving'), 40);
   assert.equal(bark(late), 0);
   assert.equal(xp(late, 'Woodcutting'), 1);
-  // Ours: an eligible hand-in completes the event for a league task; an ineligible one doesn't.
-  const completed = forestryEvents.filter(([name, e]) => name === 'forestry:event-completed' && e.event === 'pheasant').map(([, e]) => e.player);
-  assert.ok(completed.includes(p) && !completed.includes(late));
+  const completed = () => forestryEvents.filter(([name, e]) => name === 'forestry:event-completed' && e.event === 'pheasant').map(([, e]) => e.player);
+  assert.deepEqual(completed(), [], 'not on the hand-in');
 
   hooks.npcs.get('Freaky Forester:Talk-to')({ player: p, npc: event.forester });
   assert.deepEqual(lines(p.chats.at(-1)), ["Hello, what's going on?", `Hey, ${p.getUsername()}, can you help me with some pheasants?`]);
@@ -210,6 +209,8 @@ test('the hand-in pays bark and XP; ineligible pays 1 XP; the end at 200 ticks',
   ticks(1);
   assert.equal(Pheasant.events.has(event), false);
   assert.equal(Spawns.active.has(event), false);
+  // forestry:event-completed at the end, for the eligible player who handed in (a league's pheasant task).
+  assert.deepEqual(completed(), [p]);
 });
 
 // ------------------------------------------------------------------ poachers
@@ -427,6 +428,7 @@ test('the ritual end pays the gift', () => {
   assert.ok(p.messages.includes("You've been awarded <col=3366ff>143 Anima-infused bark</col>."));
   assert.ok(bark(p) >= 143 + 8 * 20);
   assert.equal(Math.round(xp(p, 'Woodcutting')), 8 * (2 * 80 + 60) + (2 * 8 * 80 + 55));
+  assert.ok(forestryEvents.some(([name, e]) => name === 'forestry:event-completed' && e.player === p && e.event === 'ritual'), 'forestry:event-completed "ritual"');
 });
 
 test('Talk-to: chatquiz1 / chathap2 heads; "Sure, How can I help?" goes straight to her explanation', () => {

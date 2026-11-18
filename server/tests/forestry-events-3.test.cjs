@@ -394,6 +394,8 @@ test("Prune's menu, then the end at 199: haircuts three ticks on, the gift the t
     prune(p, entling, op);
   }
   assert.equal(first.pruned && second.pruned, true);
+  // forestry:entling-pruned per wanted cut (a league's haircut task).
+  assert.equal(forestryEvents.filter(([name, e]) => name === 'forestry:entling-pruned' && e.player === p).length, 4, "the menu's Back and three Prune- options");
   ticks(199 - 6 - 1);
   assert.equal(Entlings.events.has(event), true);
   ticks(1);

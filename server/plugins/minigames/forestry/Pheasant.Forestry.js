@@ -96,6 +96,9 @@ function end(event) {
     Common.tileGraphic(nest.at, P().graphics.spawn);
   }
   for (const player of new Set([...event.site.participants, ...event.eggTakers, ...Common.nearbyPlayers(event.site.location, 15)])) dropEggs(player);
+  // `forestry:event-completed` at the end, for each player who handed in an eligible egg ("Complete the Pheasant
+  // event"). Ours: the Wiki's end bonus (Woodcutting XP and bark by activity) isn't paid yet; the hand-ins are.
+  for (const player of event.handedIn ?? []) Common.api.emitCustomEvent("forestry:event-completed", { player, event: "pheasant" });
   Spawns.ended(event);
 }
 
@@ -197,8 +200,7 @@ function handIn(event, player) {
   Common.xp(player, "WOODCUTTING", Common.level(player, "WOODCUTTING") * (low + Math.random() * (high - low)));
   Common.xp(player, "THIEVING", Common.level(player, "THIEVING") * xp.thieving);
   Common.bark(player, eggBark());
-  // Ours: an egg handed in completes the event for the player (the pheasant event pays per egg, with no end reward).
-  Common.api.emitCustomEvent("forestry:event-completed", { player, event: "pheasant" });
+  (event.handedIn ??= new Set()).add(player);
 }
 
 /** Recorded: his greeting and the menu, or the hand-in when the player has an egg. */

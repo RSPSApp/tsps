@@ -246,6 +246,30 @@ test("an interrupted room scene still gives the camera back: Escape, or walking 
   }
 });
 
+test("another dialogue replacing the room scene gives the camera back and is left open (review of 4ecfe2890)", async (t) => {
+  const f = actor(t, { at: [2449, 9462, 2], stage: S.SITHIK, items: [[I.BLACK_PRISM]] });
+  const camera = [];
+  let resets = 0;
+  const sender = f.player.getPacketSender();
+  const move = sender.sendCameraMoveTo.bind(sender);
+  sender.sendCameraMoveTo = (x, y, ...rest) => { camera.push(f.tick); return move(x, y, ...rest); };
+  const resetCamera = sender.sendCameraReset.bind(sender);
+  sender.sendCameraReset = () => { resets++; return resetCamera(); };
+  f.player.moveTo(new h.core.Location(2447, 9462, 2));
+  for (let i = 0; i < 5 && group(f) !== MESBOX; i++) h.tick(f);
+  h.ticks(f, 3);
+  const slot = f.player.getInventory().getItems().findIndex((item) => item?.getId() === I.BLACK_PRISM);
+  await f.connection.dispatch([{ type: "inventory_action", slot, itemId: I.BLACK_PRISM, widgetId: 149 << 16, option: "Look-at" }]);
+  h.tick(f);
+  assert.equal(group(f), OBJECTBOX, "the prism's box replaced the scene");
+  const after = camera.length;
+  h.ticks(f, 16);
+  assert.ok(resets >= 1, "the camera is reset");
+  assert.equal(camera.length, after, "no camera moves behind the prism's box");
+  assert.equal(group(f), OBJECTBOX, "the prism's box is left open");
+  assert.ok(h.shown(f)?.text.startsWith("It looks like a smokey black gem"), "and not advanced");
+});
+
 // ------------------------------------------------------------------ The tomb
 
 test("the skeleton: a smoke puff, the zombie a tick later with its line and 503 = 1; its death 503 = 2 (ticks 442-489)", async (t) => {

@@ -160,7 +160,9 @@ module.exports = function attachJiggig(api, ctx) {
     player.setAttribute(ATTRIBUTES.CUT_SCENE, true);
     ctx.sync(player);
     player.getMovementQueue().reset();
-    ctx.startTranscript(player, ctx.GRISH_NPC_ID, ROOM_VARIANT);
+    // Scoped playback: every chain of the scene shares one owner, so the camera knows when another
+    // dialogue has replaced it (review of 4ecfe2890).
+    ctx.startTranscript(player, ctx.GRISH_NPC_ID, ROOM_VARIANT, { scoped: true });
   }
 
   /** The camera's owner for each player watching the scene; it ends the scene once, however it ends. */
@@ -168,17 +170,20 @@ module.exports = function attachJiggig(api, ctx) {
 
   /**
    * Plays the camera path tick by tick while the scene's box is up. Continue ends it as live does
-   * (cam_reset, tick 436); an interrupted box (Escape, another interface), leaving the room or
-   * logging out ends it too, with the camera reset, so it never stays on the coffin.
+   * (cam_reset, tick 436); an interrupted box (Escape, another interface, another dialogue taking the
+   * chatbox), leaving the room or logging out ends it too, with the camera reset, so it never stays on
+   * the coffin. A replacing dialogue is left as it is: only the camera is given back.
    */
   function startRoomCamera(player) {
     endRoomScene(player);
-    const scene = { tick: 0, task: null };
     const manager = player.getDialogueManager();
+    // Called from the scene's own chain, so its owner is the one in place now.
+    const scene = { tick: 0, task: null, owner: manager.getOwner() ?? null };
     scene.task = new (class extends api.core.Task {
       execute() {
         if (roomScenes.get(player) !== scene) return this.stop();
-        if (!player.isRegistered?.() || !manager.isActive()) return endRoomScene(player);
+        const owner = manager.getOwner();
+        if (!player.isRegistered?.() || !owner || owner !== scene.owner) return endRoomScene(player);
         scene.tick++;
         const step = ROOM_CAMERA.find(([tick]) => tick === scene.tick);
         if (step) camera(player, step[1], step[2]);

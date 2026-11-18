@@ -275,7 +275,8 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   const ctx = {
     quest: () => quest,
     sync: syncAuxiliaryState,
-    startTranscript: (player, npcId, variant) => startTranscript(api, player, npcId, PAGE, variant),
+    startTranscript: (player, npcId, variant, options) =>
+      startTranscript(api, player, npcId, PAGE, variant, undefined, null, options),
     messageText, has, flag, progress, setProgress, freeSlots, prismSearchValue, questComplete, items,
     GRISH_NPC_ID, SKELETON_ATTRIBUTE, INNKEEPER_MUG_ATTRIBUTE, LIFT_CHANCE,
     skeletonSearched,

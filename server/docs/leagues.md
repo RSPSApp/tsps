@@ -2043,6 +2043,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
   Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
   and the barrel.
+- **Small content built for its task**: the Alpaca's Shear (`alpaca:sheared`, docs/varlamore-small-interactions.md)
+  and Karamja's pineapple plants (`world:picked` of a Pineapple, docs/karamja-pineapple-plants.md).
 - **Wilderness and leftover deeds**, from their content's events:
   - The ecumenical key: `obtain` of a dropped "Ecumenical key" (Keys.GodWars adds it to the drop).
   - `revenants:bracelet-full` { player } when ether takes the bracelet to 16,000; `mage-arena:cape-imbued`

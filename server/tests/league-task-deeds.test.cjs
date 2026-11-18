@@ -3079,3 +3079,61 @@ test("Wilderness and leftover deeds through their events: the key, the bracelet,
   emit("desert-quarry:claimed", { amount: 500 });
   assert.ok(done(f, "have-drew-create-500-buckets"));
 });
+
+// ---- small content built for its task: the Alpaca and Karamja's pineapples (issue 6108) ----
+
+test("Shear an Alpaca: the real Shear, without shears refused, the wool two ticks on, the sheared form back after 50 (rsprox 1105)", async (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const inventory = player.getInventory();
+  const { npc, clickType } = npcBeside(t, f, "Alpaca", "shear");
+  const woolly = npc.getId();
+  await send(f, { type: "npc_option", index: npc.getIndex(), clickType }, 4);
+  assert.ok(f.messages.includes("You need a set of shears to do this."), f.messages.join(" | "));
+  assert.ok(!done(f, "shear-an-alpaca"));
+  inventory.add(new core.Item(core.ItemIdentifiers.SHEARS), true);
+  await send(f, { type: "npc_option", index: npc.getIndex(), clickType }, 4);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.WOOL), 1, f.messages.join(" | "));
+  assert.ok(f.messages.includes("You shear the alpaca and get some wool."));
+  assert.ok(done(f, "shear-an-alpaca"));
+  assert.notEqual(npc.getNpcTransformationId?.() ?? -1, -1, "sheared");
+  // send ran 4 ticks: the shear landed 2 ticks in, so 2 of the 50 have passed.
+  ticks(f, 47);
+  assert.notEqual(npc.getNpcTransformationId?.() ?? -1, -1, "still sheared 49 ticks on");
+  ticks(f, 2);
+  assert.equal(npc.getNpcTransformationId?.() ?? -1, -1, "its wool back 50 ticks after it turned sheared (1105)");
+  assert.equal(npc.getId(), woolly);
+  // A full pack refuses, even one holding wool (wool doesn't stack).
+  while (!inventory.isFull()) inventory.add(new core.Item(core.ItemIdentifiers.WOOL), true);
+  const wool = inventory.getAmount(core.ItemIdentifiers.WOOL);
+  await send(f, { type: "npc_option", index: npc.getIndex(), clickType }, 4);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.WOOL), wool, "no wool lost or gained");
+  assert.ok(f.messages.includes("You don't have enough inventory space to hold the wool."));
+  assert.equal(npc.getNpcTransformationId?.() ?? -1, -1, "still woolly");
+});
+
+test("Pick a Pineapple on Karamja: the real Pick takes the plant a stage down, and it grows back a stage at a time", async (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const Pineapple = require("../plugins/objects/PineapplePlant.plugin")._test;
+  const plant = await objectOption(t, f, 1408, "Pick", 3);
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.PINEAPPLE), 1, f.messages.join(" | "));
+  assert.ok(done(f, "pick-a-pineapple-on-karamja"));
+  const entry = Pineapple.plants.get(`${plant.getLocation().getX()},${plant.getLocation().getY()},${plant.getLocation().getZ()}`);
+  assert.equal(entry.object.getId(), 1409, "four left (rsprox: pineapple_plant -> pineapple_plant_four)");
+  t.after(() => { entry.task?.stop(); Pineapple.plants.clear(); });
+  ticks(f, Pineapple.REGROW_TICKS + 1);
+  assert.equal(Pineapple.plants.size, 0, "back to the full plant");
+  // Picked bare: the recorded pineapple_plant_no_pineapples (1413), then straight back to the full plant.
+  let current = plant;
+  for (let i = 0; i < 5; i++) {
+    player.getInventory().resetItems();
+    current = Pineapple.plants.get(`${plant.getLocation().getX()},${plant.getLocation().getY()},${plant.getLocation().getZ()}`)?.object ?? plant;
+    Pineapple.pick({ player, object: current });
+    ticks(f, 1);
+  }
+  const bare = Pineapple.plants.get(`${plant.getLocation().getX()},${plant.getLocation().getY()},${plant.getLocation().getZ()}`);
+  assert.equal(bare.object.getId(), 1413, "bare");
+  ticks(f, Pineapple.REGROW_TICKS + 1);
+  assert.equal(Pineapple.plants.size, 0, "full again in one step");
+});

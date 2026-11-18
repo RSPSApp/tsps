@@ -434,6 +434,8 @@ test('killing every Jad completes it: the lines at once, then outside with the T
       "You've unlocked TzHaar-Ket-Rak's Second Challenge.",
     ]);
     assert.equal(Common.completions(player, 1), 1, 'counted as the last Jad falls');
+    assert.deepEqual(events.filter(([name, e]) => name === 'tzhaar-ket-rak:challenge-completed' && e.player === player).map(([, e]) => e.number), [1],
+      "tzhaar-ket-rak:challenge-completed with the challenge's number (a league's TzHaar-Ket-Rak tasks)");
     assert.equal(player.getInventory().amount(core.ItemIdentifiers.TOKKUL), 0, 'paid outside');
     cycle += Common.data.endTicks;
     tick(challenge);

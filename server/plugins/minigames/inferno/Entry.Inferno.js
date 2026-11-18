@@ -52,6 +52,8 @@ function handOverCape(event) {
   }
   player.getInventory().delete(core.ItemIdentifiers.FIRE_CAPE, 1);
   player.setAttribute(ATTR_SACRIFICED, true);
+  // `inferno:cape-sacrificed` { player } (a league's "Sacrifice a Fire Cape to access the Inferno").
+  api.emitCustomEvent("inferno:cape-sacrificed", { player });
   showEntrance(player);
 }
 

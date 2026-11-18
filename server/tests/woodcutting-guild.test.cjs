@@ -324,6 +324,7 @@ test("as captured: an egg on the shrine becomes a seed nest, with the offering c
     ]);
     assert.ok(player.log.includes("xp Prayer 100") && player.log.includes("anim 3705") && player.log.includes("sound 3047"));
     assert.equal(sent.length, 2);
+    assert.deepEqual(events.filter((e) => e.name === "woodcutting:shrine-offered" && e.player === player).map((e) => e.count), [1, 2], "woodcutting:shrine-offered per egg (a league's task)");
   } finally {
     core.Projectile.prototype.sendProjectile = send;
   }

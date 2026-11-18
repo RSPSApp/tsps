@@ -28,6 +28,8 @@ const GRACEFUL_BASES = new Set([11850, 11852, 11854, 11856, 11858, 11860]);
 const PRESET_TEXT = "Preset items cannot be used for this.";
 
 /** Preset (and other untradeable or unbankable) copies keep their restrictions; a refunded kit would not. */
+let pluginApi = null;
+
 function restricted(item) {
   const Item = core.Item;
   return !!item && (item.isPresetItem?.() === true
@@ -144,6 +146,8 @@ function applyKit(event) {
   refresh(player);
   player.sendMessage(`You apply the ${match.entry.name.toLowerCase()}.`);
   event.handled = true;
+  // `ornament-kits:applied` { player, kit, result }: the kit's name ("Sanguine ornament kit") and the new item.
+  pluginApi?.emitCustomEvent?.("ornament-kits:applied", { player, kit: match.entry.name, result: baseItem.getId() });
 }
 
 function cleanDye(event) {
@@ -220,6 +224,7 @@ module.exports = {
   description: "Lets ornament kits and colour recolours be applied to their base items and reverted, with refunds where the Wiki says the kit is returned.",
   _test: { loadKits: () => loadKits(), findEntry, applyKit, revertItem },
   register(api) {
+    pluginApi = api;
     core = api.core;
     const I = core.ItemIdentifiers;
     core.Barrows.registerVariantStages(I.AHRIMS_HOOD, [

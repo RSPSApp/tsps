@@ -2989,3 +2989,46 @@ test("Varlamore deeds through their events: quetzals, deposits, the spool, the m
   emit("makeover:applied", { type: 1 });
   assert.ok(done(f, "trim-your-beard-in-cam-torum"), String(npc.getLocation()));
 });
+
+// ---- deeds reported by their content: Kourend and Karamja (issue 6108 follow-ups) ----
+
+test("Kourend and Karamja deeds through their events: TzHaar-Ket-Rak, the Inferno cape, Saniboch, the crane, artefacts, Tithe Farm, the shrine, grapes, saltpetre, ToB kits", (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const emit = (name, payload = {}) => PM.emitCustomEvent(name, { player, ...payload });
+  emit("tzhaar-ket-rak:challenge-completed", { number: 2 });
+  assert.ok(done(f, "complete-tzhaar-ket-rak-s-second-challenge") && !done(f, "complete-tzhaar-ket-rak-s-first-challenge"));
+  emit("tzhaar-ket-rak:infinite-ended", { kills: 17 });
+  assert.ok(!done(f, "defeat-6-6-6-unbound-jal-tok-jad"), "17 Jads");
+  emit("tzhaar-ket-rak:infinite-ended", { kills: 18 });
+  assert.ok(done(f, "defeat-6-6-6-unbound-jal-tok-jad"));
+  for (const [event, id] of [["inferno:cape-sacrificed", "sacrifice-a-fire-cape-to-access-the-inferno"], ["brimhaven-dungeon:permanent-access", "pay-saniboch-for-permanent-access"],
+    ["piscarilius-crane:repaired", "repair-a-fishing-crane"], ["stealing-artefacts:handed-in", "steal-1-artefact"], ["woodcutting:shrine-offered", "offer-an-egg-to-a-shrine"]]) {
+    emit(event, {});
+    assert.ok(done(f, id), event);
+  }
+  for (let i = 0; i < 13; i++) emit("stealing-artefacts:handed-in", {});
+  assert.ok(!done(f, "steal-15-artefacts"), "14");
+  emit("stealing-artefacts:handed-in", {});
+  assert.ok(done(f, "steal-15-artefacts"));
+  for (let i = 0; i < 99; i++) emit("tithe-farm:planted", { crop: "Bologano" });
+  emit("tithe-farm:planted", { crop: "Golovanova" });
+  assert.ok(!done(f, "plant-100-bologano-seeds") && !done(f, "plant-100-golovanova-seeds"), "99 bologano and a golovanova");
+  emit("tithe-farm:planted", { crop: "Bologano" });
+  assert.ok(done(f, "plant-100-bologano-seeds"));
+  emit("omnishop:purchase", { itemId: item("Seed box") });
+  assert.ok(done(f, "purchase-a-seed-box"));
+  emit("farming:harvested", { itemId: item("Grapes"), amount: 30 });
+  emit("farming:harvested", { itemId: item("Zamorak's grapes"), amount: 24 });
+  assert.ok(!done(f, "harvest-25-zamorak-s-grapes"), "24 of them, and plain grapes");
+  emit("farming:harvested", { itemId: item("Zamorak's grapes"), amount: 1 });
+  assert.ok(done(f, "harvest-25-zamorak-s-grapes"));
+  emit("mining:saltpetre", { amount: 24 });
+  assert.ok(!done(f, "dig-25-saltpetre"));
+  emit("mining:saltpetre", { amount: 1 });
+  assert.ok(done(f, "dig-25-saltpetre"));
+  emit("ornament-kits:applied", { kit: "Rune defender ornament kit" });
+  assert.ok(!done(f, "attach-a-theatre-of-blood-ornament-kit"), "another kit");
+  emit("ornament-kits:applied", { kit: "Holy ornament kit" });
+  assert.ok(done(f, "attach-a-theatre-of-blood-ornament-kit"));
+});

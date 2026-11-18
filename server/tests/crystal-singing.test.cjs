@@ -19,12 +19,14 @@ const tasks = [];
 const prompts = [];
 const objects = new Map();
 const itemOnObject = [];
+const emitted = [];
 let songComplete = true;
 let diaryComplete = true;
 const api = {
   core: { ...core, TaskManager: { submit: (task) => tasks.push(task) } },
   persistAttribute() {},
   emitCustomEvent: (name, payload) => {
+    emitted.push([name, payload]);
     if (name === "quest:is-complete") payload.complete = songComplete;
     if (name === "diary:is-complete") payload.complete = diaryComplete;
   },
@@ -104,6 +106,9 @@ test("each recipe sings one product from exactly its materials, XP in Smithing a
     for (const [itemId] of materials) assert.equal(player.inventory.get(itemId), 0, product);
     assert.deepEqual(player.xp, [[Skill.SMITHING, xp], [Skill.CRAFTING, xp]], product);
     assert.deepEqual(player.sounds, [8]);
+    // What was sung, for a league's "Craft a Piece of Crystal Armour".
+    const sung = emitted.filter(([name]) => name === "crystal-singing:sung").at(-1)?.[1];
+    assert.deepEqual([sung?.itemId, sung?.amount], [I[product], 1], product);
   }
 });
 

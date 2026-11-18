@@ -163,6 +163,9 @@ function sing(player, productId, amount) {
   for (const { itemId, amount: need } of recipe.needs) inventory.delete(itemId, need * made);
   for (let index = 0; index < made; index++) inventory.adds(productId, 1);
   inventory.refreshItems();
+  // `crystal-singing:sung` { player, itemId, amount }: what the singing bowl made (the league's "Craft a Piece of
+  // Crystal Armour"). Not "skills:produced", which production relics would double.
+  api.emitCustomEvent("crystal-singing:sung", { player, itemId: productId, amount: made });
   const sequence = core.CacheDefinitions?.getSeqId?.(SINGING_SEQUENCE);
   if (sequence != null) player.performAnimation(new core.Animation(sequence));
   player.getPacketSender().sendSound(SINGING_SOUND, 1, 0);

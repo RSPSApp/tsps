@@ -2042,6 +2042,31 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
   Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
   and the barrel.
+- **Spells and item teleports**, each from its own content's event:
+  - Moonclan Teleport: `spell:teleport-arrival`, which LunarSpells already sends for its teleports.
+  - Spellbook Swap: `cast` on LunarSpell's new `magic:lunar-cast` { player, name }. It is sent for every
+    Lunar spell cast through `LunarSpell.cast`, except the teleports, which have their arrival. Spells that
+    pay per item (Bake Pie, String Jewellery, Plank Make) don't send it.
+  - Fertile Soil: Farming's `farming:spell-fertilized` { spell: "fertile soil" }.
+  - Degrime "26 herbs at the same time": ArceuusUtilities' new `magic:degrimed` { player, herbs }, with a
+    `deed` `atLeast { herbs: 26 }`.
+  - Xeric's talisman to Xeric's Honour: `xerics-talisman:teleported` { destination: "honour" }.
+  - The Calcified Moth: `cam-torum:arrived`.
+  - The Giantsoul amulet to the Royal Titans: its new `giantsoul-amulet:teleported` { lair: "branda and
+    eldric" } on the landing.
+  - Icy Basalt to Weiss: BasaltTeleports' new `basalt:teleported` { itemId } on the landing.
+  - The teleport anchoring scroll: TeleportAnchoringScroll's new `teleport-anchoring:learnt` { player } when
+    the scroll is absorbed, not when Read opens the question (a Cancel, or a player who already knows it,
+    is no use of it).
+  - Crafting runes: a combination rune (Mist, Dust, Mud, Smoke, Steam, Lava), and 200 / 2500 essence
+    whatever the rune. That is the new `rc-essence` kind, counting `runecrafting:success`'s `rolls` (a
+    combination craft its `runeAmount`, the essence it bound).
+  - The churn's butter: `produce`.
+  - A piece of Crystal armour: CrystalSinging's new `crystal-singing:sung` { itemId, amount }. It is not
+    `skills:produced`, which production relics would double.
+  - Claws of Guthix, Flames of Zamorak and Saradomin Strike: `cast`, with a new `outside { rects, z }`
+    condition. Its box is the Mage Arena as `Spells.MageArena.js` bounds it (3089-3117 x 3921-3946, plane 0),
+    since a player's first casts are the arena's 100 before the spells work outside it.
 - **More conditions** (`Actions.LeagueTasks.js`, `Triggers.LeagueTasks.js`):
   - `resetOn { event, items?, npcs? }` on a counted trigger: that event starts its count again.
     - "Cook 5 pieces of food in a row without burning them" is `cook` reset by `cooking:burnt`.

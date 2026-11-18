@@ -119,7 +119,8 @@ function attach(api) {
     TeleportHandler.confirm(player, destination, () => {
       if (!inventory.contains(itemId)) return;
       inventory.deleteNumber(itemId, 1);
-      TeleportHandler.teleport(player, destination, type, false);
+      // `basalt:teleported` { player, itemId } on the landing (the league's "Use some Icy Basalt to teleport to Weiss").
+      TeleportHandler.teleport(player, destination, type, false, () => api.emitCustomEvent("basalt:teleported", { player, itemId }));
     }, 20, { item: itemId });
     return true;
   }

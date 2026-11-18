@@ -32,7 +32,12 @@ function completed({ run, player, reason }) {
   const api = Shared.api();
   const complete = (task) => api.emitCustomEvent("combat-achievements:complete", { player, task });
   const tasks = TASKS[run.mode];
-  api.emitCustomEvent("combat-achievements:kill", { player, monster: MONSTER[run.mode], count: Run.statsOf(player).completions[run.mode] });
+  // An Echo run (Leagues) is a Corrupted Hunllef kill for Combat Achievements and League tasks (the
+  // Wiki; rsprox.net 1158: Echo kills complete "Corrupted Gauntlet Master" and "Complete the
+  // Corrupted Gauntlet 50 Times") without being a Corrupted completion, so it adds one kill instead
+  // of carrying the completion count.
+  if (run.echo) api.emitCustomEvent("combat-achievements:kill", { player, monster: MONSTER[run.mode] });
+  else api.emitCustomEvent("combat-achievements:kill", { player, monster: MONSTER[run.mode], count: Run.statsOf(player).completions[run.mode] });
   const seconds = (Shared.core().World.getProcessCycle() - run.startCycle) * 0.6;
   for (const [task, limit] of tasks.speed) if (seconds < limit) complete(task);
   const fight = run.hunllef;
@@ -40,6 +45,8 @@ function completed({ run, player, reason }) {
     if (fight.taken.offPrayer === 0) complete(tasks.noOffPrayer);
     if (fight.taken.offPrayer === 0 && fight.taken.avoidable === 0 && fight.wrongStyleHits === 0) complete(tasks.perfect);
   }
+  // The rest judge the preparation and kit, which an Echo run skips and supplies.
+  if (run.echo) return;
   if (run.made.armour === 0) complete(tasks.noArmour);
   if (run.made.egniol === 0) complete(tasks.noEgniol);
   if (run.made.attunedWeapons <= 1) complete(tasks.oneAttuned);

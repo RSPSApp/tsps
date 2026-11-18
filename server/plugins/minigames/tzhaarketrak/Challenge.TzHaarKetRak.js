@@ -175,6 +175,9 @@ class Challenge {
         continue;
       }
       if (entry.npc.getCombat().getTarget() !== player) entry.npc.getCombat().attack(player);
+      // The engine refills an NPC not hit for 20 seconds by a tenth a tick, fighting or not: a Jad
+      // left alone while the others (or its healers) were fought was back to full in a few ticks.
+      entry.npc.getCombat().getLastAttack().reset();
       this.tendHealers(entry);
     }
     if (this.infinite) {

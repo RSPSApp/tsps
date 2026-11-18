@@ -203,4 +203,15 @@ function buildLines(state) {
   return out;
 }
 
-module.exports = { buildLines, SECTIONS };
+/**
+ * Before the quest: the line the quest list's overview reads its start sentence from. The capture
+ * starts after the quest did, so the wording follows the Wiki's start point ("Speak to Sir Tiffy
+ * Cashien in Falador Park") in the usual journal form. It starts with the sentence itself, not a
+ * colour tag, so QuestRuntime's start-sentence match finds it.
+ */
+const NOT_STARTED_LINES = [
+  `I can start this quest by speaking to ${red("Sir Tiffy Cashien")} in`,
+  `${red("Falador Park")}.`,
+];
+
+module.exports = { buildLines, SECTIONS, NOT_STARTED_LINES };

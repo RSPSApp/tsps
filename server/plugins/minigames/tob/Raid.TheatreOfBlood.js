@@ -131,6 +131,20 @@ function roomModifiesHit(event) {
   event.npc?.__tobRoom?.modifyHit?.(event.npc, event.hit);
 }
 
+/**
+ * A room's resistance (Bloat's half while it walks) on each rolled hitsplat, before it is capped at
+ * the NPC's hitpoints, as OSRS does: halved after the cap, a hit on 1 hitpoint is 0 and it can't die.
+ * The hit is marked `rolledResistance` so the room's modifyHit doesn't apply it again.
+ */
+function roomResistsRolledHit({ target, hit, damage }) {
+  const room = target?.__tobRoom;
+  if (!room || room.destroyed || !hit || !damage) return;
+  const factor = room.resistance?.(target, hit) ?? 1;
+  if (factor === 1) return;
+  damage.setDamage(Math.floor(damage.getDamage() * factor));
+  hit.rolledResistance = true;
+}
+
 /** Some NPCs' hitpoints running out is the room's to handle: Verzik's phases, falling supports. */
 function roomHoldsOn(event) {
   if (event.npc?.__tobRoom?.holdsOn?.(event.npc)) event.preventDeath = true;
@@ -204,6 +218,7 @@ module.exports = function registerTheatreRaid(api) {
   api.onPlayerLogin(returnAfterLogout);
   api.onPlayerDealtDamage(trackDamage);
   api.onNpcHitModify(roomModifiesHit);
+  api.onCombatHitDamage(roomResistsRolledHit);
   api.onNpcBeforeDeath(roomHoldsOn);
 };
 

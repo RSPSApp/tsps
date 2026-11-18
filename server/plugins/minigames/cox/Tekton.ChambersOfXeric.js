@@ -68,6 +68,8 @@ const TIMING = { PULSE: 4, RISE: 2, FIRST_SWING: 3, FIRST_SWING_ENRAGED: 2, SWIN
 /** His size in tiles, and how near someone must be on a pulse to wake him. */
 const SIZE = 4;
 const WAKE_RANGE = 4;
+/** Wiki (Tekton): magic does a fifth of its damage. */
+const MAGIC_FACTOR = 0.2;
 /** Wiki (Tekton): his stats recover 1 per 15 ticks. */
 const STAT_RESTORE_TICKS = 15;
 /** How long he repairs: 12, 15, 18 or 21 ticks. */
@@ -396,7 +398,7 @@ class TektonRoom extends Raid.Room {
     const type = hit.getCombatType?.();
     const fighter = hit.getAttacker?.();
     if (fighter?.isPlayer?.()) this.fought.add(fighter.getAsPlayer());
-    let factor = type === CombatType.RANGED ? 0 : type === CombatType.MAGIC ? 0.2 : 1;
+    let factor = type === CombatType.RANGED ? 0 : type === CombatType.MAGIC && !hit.rolledResistance ? MAGIC_FACTOR : 1;
     if (npc.getNpcTransformationId() === FORM.ANVIL) {
       factor = 0;
       const attacker = hit.getAttacker?.();
@@ -405,6 +407,11 @@ class TektonRoom extends Raid.Room {
     if (factor === 1) return;
     for (const part of hit.getHits()) part.setDamage(Math.floor(part.getDamage() * factor));
     hit.updateTotalDamage();
+  }
+
+  /** Magic's fifth, on the rolled hitsplats (Room.resistance); ranged and the anvil stay with modifyHit. */
+  resistance(npc, hit) {
+    return npc === this.tekton && hit.getCombatType?.() === Shared.core().CombatType.MAGIC ? MAGIC_FACTOR : 1;
   }
 
   /** He is gone: the supplies' message and the room's Combat Achievements. */

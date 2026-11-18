@@ -32,6 +32,8 @@ before(async () => {
   const logoutFns = [];
   const api = {
     core,
+    persistAttribute() {},
+    onItemAction: (name, actions) => { for (const [op, fn] of Object.entries(actions)) chain(hooks.objects, name + ':' + op, fn); },
     onObjectInteraction: (name, actions) => { for (const [op, fn] of Object.entries(actions)) chain(hooks.objects, `${name}:${op}`, fn); },
     onNpcHitModify: (fn) => hooks.npcHit.push(fn),
     onNpcDeath: (fn) => hooks.npcDeath.push(fn),
@@ -89,7 +91,9 @@ function container(capacity = 28) {
 
 function fakePlayer(at = new Location(3485, 3321, 0)) {
   const p = {
-    location: at, messages: [], pages: [], inventory: container(),
+    location: at, messages: [], pages: [], inventory: container(), attributes: new Map(), banks: [],
+    getAttribute: k => p.attributes.get(k), setAttribute: (k,v) => p.attributes.set(k,v),
+    getBank: tab => p.banks[tab], getEquipment: () => ({getItems: () => [], getAmount: () => 0}),
     getLocation: () => p.location, moveTo(l) { p.location = l; },
     getInventory: () => p.inventory, sendMessage: (m) => p.messages.push(m), performAnimation() {},
     getPacketSender: () => ({ sendSound() {}, sendInterfaceRemoval() {} }),
@@ -903,4 +907,191 @@ test("a real shadow that walked out of its spawn region is still found, and rise
     for (let i = 0; i < 100; i++) Shades.process();
     assert.equal(home.getId(), Common.npcId('shade_level1'), 'it is kept on the list across refreshes and rises');
   } finally { endHome(); Shades.watch([]); }
+});
+
+// Silver rewards: confirmed item set/mechanics; unconditional rates are explicitly
+// provisional because the Wiki's listed probabilities sum to > 1 (see docs).
+const Rewards = require('../plugins/minigames/shadesofmortton/Rewards.ShadesOfMortton');
+function sequence(values) {
+  let index = 0;
+  return () => { assert.ok(index < values.length, 'unexpected RNG draw'); return values[index++]; };
+}
+function silverRoll(p, values, colour = 'bloodred') {
+  return Rewards.rollSilver(p, colour, sequence(values));
+}
+
+test('silver tables contain every confirmed main item, resolved from cache, with no unreachable tail', () => {
+  const expected = [1245,1259,4580,1289,1391,1345,1371,1317,1301,1333,1303,
+    1125,1085,1147,1111,1073,1091,1199,1123,1183,1121,1113,
+    3470,12851,1643,1731,560,565,3678,1515,1513,2722].sort((a,b)=>a-b);
+  for (const colour of ['bloodred','brown','crimson','black','purple']) {
+    const rows = Rewards.mainRows(colour, false, true);
+    assert.deepEqual(rows.map(r=>r.id).sort((a,b)=>a-b),expected);
+    const total = rows.reduce((s,r)=>s+r.weight,0);
+    assert.ok(Math.abs(total-152)<1e-9);
+    let start = 0;
+    for (const row of rows) {
+      const result = silverRoll(fakePlayer(), [0.99,0.99,(start+row.weight/2)/total,0],colour);
+      assert.equal(result.id,row.id,core.ItemDefinition.forId(row.id).getName());
+      assert.equal(result.amount,row.min);
+      start += row.weight;
+    }
+  }
+});
+
+test('silver colours increase fine-cloth weight and decrease both noted log weights', () => {
+  const cloth=Common.objId('fine_cloth'),yew=Common.objId('yew_logs'),magic=Common.objId('magic_logs');
+  for (const [i,colour] of ['bloodred','brown','crimson','black','purple'].entries()) {
+    for(const wealth of [false,true]){
+      const rows=Rewards.mainRows(colour,wealth,true),q=Math.min(4,i+(wealth?2:0));
+      assert.equal(rows.find(r=>r.id===cloth).weight,16+q);
+      assert.ok(Math.abs(rows.find(r=>r.id===yew).weight-3*(5-q)/5)<1e-9);
+      assert.ok(Math.abs(rows.find(r=>r.id===magic).weight-2*(5-q)/5)<1e-9);
+      assert.ok(rows.filter(r=>[yew,magic].includes(r.id)).every(r=>r.noted));
+    }
+  }
+});
+
+test('all charged/uncharged and imbued wealth rings count only when worn', () => {
+  for (const id of [2572,11980,11982,11984,11986,11988,12785,20786,20787,20788,20789,20790]) {
+    const p=fakePlayer();p.inventory.add(new core.Item(id,1));
+    assert.equal(Rewards.wearingWealth(p),false);
+    const items=[];items[core.Equipment.RING_SLOT]=new core.Item(id,1);
+    p.getEquipment=()=>({getItems:()=>items,getAmount:()=>0});
+    assert.equal(Rewards.wearingWealth(p),true);
+  }
+});
+
+test('locks are the first gate, colour-specific, and wealth improves the gate', () => {
+  const colours=['bloodred','brown','crimson','black','purple'];
+  for(const [i,colour] of colours.entries())for(const wealth of [false,true]){
+    const p=fakePlayer();
+    if(wealth){const items=[];items[core.Equipment.RING_SLOT]=new core.Item(2572,1);p.getEquipment=()=>({getItems:()=>items});}
+    const odds=63-i-(wealth?2:0);
+    assert.equal(silverRoll(p,[(1-1e-6)/odds],colour).id,Common.objId('shades_lock_silver'));
+    assert.notEqual(silverRoll(p,[1/odds,0.99,0,0],colour).id,Common.objId('shades_lock_silver'));
+  }
+});
+
+test('scroll gate chooses the first book, then the corresponding runescroll after receipt', () => {
+  for (const [i,book] of Rewards.BOOKS.entries()) {
+    const p=fakePlayer(),value=i===0?0:0.999;
+    const first=silverRoll(p,[0.99,0,value]);
+    assert.equal(first.id,Common.objId(book.book));
+    assert.equal(first.receivedAttribute,book.received);
+    assert.equal(p.getAttribute(book.received),undefined,'a roll is not a receipt');
+    p.setAttribute(book.received,true);
+    assert.equal(silverRoll(p,[0.99,0,value]).id,Common.objId(book.scroll));
+    p.setAttribute(book.received,false);
+    p.banks[1]=container();p.banks[1].add(new core.Item(Common.objId(book.book),1));
+    assert.equal(silverRoll(p,[0.99,0,value]).id,Common.objId(book.scroll),'existing bank book');
+  }
+});
+
+test('clue capacity excludes the hard clue weight and resolves accepted rewards into boxes', () => {
+  const emit=Common.api.emitCustomEvent;
+  try {
+    Common.api.emitCustomEvent=(name,q)=>{
+      if(name==='treasure-trails:can-receive')q.allowed=false;
+      else emit(name,q);
+    };
+    assert.notEqual(silverRoll(fakePlayer(),[0.99,0.99,84/150,0]).id,2722);
+    Common.api.emitCustomEvent=(name,q)=>{
+      if(name==='treasure-trails:can-receive')q.allowed=true;
+      if(name==='treasure-trails:clue-item')q.itemId=core.ItemIdentifiers.SCROLL_BOX_HARD_;
+    };
+    const rows=Rewards.mainRows('bloodred',false,true),i=rows.findIndex(r=>r.id===2722);
+    const before=rows.slice(0,i).reduce((s,r)=>s+r.weight,0);
+    assert.equal(silverRoll(fakePlayer(),[0.99,0.99,(before+1)/152,0]).id,core.ItemIdentifiers.SCROLL_BOX_HARD_);
+    assert.ok(!Rewards.mainRows('bloodred',false,false).some(r=>r.id===2722));
+  } finally {Common.api.emitCustomEvent=emit;}
+});
+
+test('Flamtaer bag replaces paste only when absent from inventory, equipment and every bank tab', () => {
+  const id=Common.objId('flamtaer_bag'),p=fakePlayer();
+  assert.equal(Rewards.rollSecondary(p,()=>0).id,id);
+  assert.equal(Rewards.rollSecondary(p,()=>0.5),null);
+  p.banks[2]=container();p.banks[2].add(new core.Item(id,0));
+  assert.equal(Rewards.rollSecondary(p,()=>0).id,id,'zero placeholders are not bags');
+  p.banks[2].add(new core.Item(id,1));
+  assert.equal(Rewards.rollSecondary(p,()=>0),null);
+  p.banks=[];p.inventory.add(new core.Item(id,1));
+  assert.equal(Rewards.rollSecondary(p,()=>0),null);
+});
+
+test('a successful silver chest consumes one matching key and logs locks and bag rewards', (t) => {
+  const p=fakePlayer(),book=Rewards.BOOKS[0],bag=Common.objId('flamtaer_bag');
+  p.inventory.add(new core.Item(key('silver','bloodred'),1));
+  t.mock.method(Math,'random',()=>0); // locks gate
+  const chest=loc('shadechest_silver_bloodred',3461,9694);
+  hooks.objects.get('Silver Chest:Open')({player:p,object:chest});
+  assert.equal(p.inventory.getAmount(key('silver','bloodred')),0);
+  assert.equal(p.inventory.getAmount(Common.objId('shades_lock_silver')),1);
+  assert.equal(p.inventory.getAmount(bag),1);
+  assert.equal(p.inventory.getAmount(Common.objId('swamppaste')),0);
+  assert.ok(hooks.events.emitted.some(([n,q])=>n==='collection-log:obtain'&&q.player===p&&q.itemId===bag));
+  Catacombs.forgetZealots({player:p});
+});
+
+test('a failed silver opening keeps its key and first-book eligibility', (t) => {
+  const p=fakePlayer(),book=Rewards.BOOKS[0];
+  p.inventory=container(1);p.inventory.add(new core.Item(key('silver','bloodred'),1));
+  // lock miss, scroll hit, swamp book; coin roll; paste; bag hit.
+  t.mock.method(Math,'random',sequence([0.99,0,0,0,0,0]));
+  hooks.objects.get('Silver Chest:Open')({player:p,object:loc('shadechest_silver_bloodred',3461,9694)});
+  assert.equal(p.inventory.getAmount(key('silver','bloodred')),1);
+  assert.equal(p.getAttribute(book.received),undefined);
+  assert.equal(p.inventory.getAmount(Common.objId(book.book)),0);
+  assert.equal(p.messages.at(-1),Common.message('noRoom'));
+});
+
+test('each first book awards its scroll once, with capacity and stale-item checks', () => {
+  for(const book of Rewards.BOOKS){
+    const p=fakePlayer(),id=Common.objId(book.book),scroll=Common.objId(book.scroll);
+    const read=hooks.objects.get(core.ItemDefinition.forId(id).getName()+':Read');
+    read({player:p,itemId:id,handled:false});
+    assert.equal(p.inventory.getAmount(scroll),0,'not held');
+    p.inventory=container(1);p.inventory.add(new core.Item(id,1));
+    read({player:p,itemId:id,handled:false});
+    assert.equal(p.getAttribute(book.read),undefined,'full inventory keeps eligibility');
+    p.inventory=container();p.inventory.add(new core.Item(id,1));
+    read({player:p,itemId:id,handled:false});read({player:p,itemId:id,handled:false});
+    assert.equal(p.inventory.getAmount(scroll),1);
+    assert.equal(p.inventory.getAmount(id),1,'book remains');
+    assert.equal(p.getAttribute(book.received),true);
+  }
+});
+
+test('receiving the first silver book commits its persisted receipt only after delivery', (t) => {
+  const p=fakePlayer(),book=Rewards.BOOKS[0];
+  p.inventory.add(new core.Item(key('silver','bloodred'),1));
+  // Lock miss; scroll gate hit; swamp book; coin amount; paste amount; bag miss; zealot miss.
+  t.mock.method(Math,'random',sequence([0.99,0,0,0,0,0.99,0.99]));
+  hooks.objects.get('Silver Chest:Open')({player:p,object:loc('shadechest_silver_bloodred',3461,9694)});
+  assert.equal(p.inventory.getAmount(key('silver','bloodred')),0);
+  assert.equal(p.inventory.getAmount(Common.objId(book.book)),1);
+  assert.equal(p.getAttribute(book.received),true);
+  assert.equal(p.inventory.getAmount(Common.objId('swamppaste')),25);
+});
+
+test('silver chest noted logs deliver notes and calculate coins using the unnoted value', (t) => {
+  const p=fakePlayer();p.inventory.add(new core.Item(key('silver','bloodred'),1));
+  const rows=Rewards.mainRows('bloodred',false,true),id=Common.objId('yew_logs'),index=rows.findIndex(r=>r.id===id);
+  const before=rows.slice(0,index).reduce((s,r)=>s+r.weight,0);
+  t.mock.method(Math,'random',sequence([0.99,0.99,(before+1)/152,0.999,0,0,0.99,0.99]));
+  hooks.objects.get('Silver Chest:Open')({player:p,object:loc('shadechest_silver_bloodred',3461,9694)});
+  assert.equal(p.inventory.getAmount(core.ItemDefinition.forId(id).getNoteId()),10);
+  assert.equal(p.inventory.getAmount(id),0);
+  const worth=Common.core.CacheDefinitions.getItem(id).price*10;
+  assert.equal(p.inventory.getAmount(995),Math.max(0,Math.floor((3600-worth)/3)));
+});
+
+test('silver scroll gates reflect every colour and the worn wealth modifier', () => {
+  for(const [i,colour] of ['bloodred','brown','crimson','black','purple'].entries())for(const wealth of [false,true]){
+    const p=fakePlayer();
+    if(wealth){const items=[];items[core.Equipment.RING_SLOT]=new core.Item(2572,1);p.getEquipment=()=>({getItems:()=>items});}
+    const odds=76-i-(wealth?2:0);
+    assert.equal(silverRoll(p,[0.99,(1-1e-6)/odds,0],colour).id,Common.objId('shades_swamp_diary'));
+    assert.notEqual(silverRoll(p,[0.99,1/odds,0,0],colour).id,Common.objId('shades_swamp_diary'));
+  }
 });

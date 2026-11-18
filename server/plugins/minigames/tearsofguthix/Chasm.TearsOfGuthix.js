@@ -1,62 +1,120 @@
 "use strict";
 
-// Wiki: Tears of Guthix, "The Light Creatures" and "The Bowl". Cache: tog_light_creature_op,
-// tog_player_float_across (2048), tog_climb_slope_down (2050), south rocks 6672.
-const FLOAT_ACROSS = 2048;
-const CLIMB_DOWN = 2050;
-const CREATURE_RANGE = 10;
-const ROCK_SIDE = [3229, 9505];
-const JUNA_SIDE = [3241, 9498];
-let core;
+/**
+ * The Chasm of Tears' light creatures: nine of them drift over the chasm, a tile a tick.
+ *
+ * rsprox captures (local 1001964 and 1002071, rev 242): nine tog_light_creature (401) are in the
+ * chasm, each the cache multinpc that varbit 451 (tog_juna_bowl) turns into the inert
+ * tog_light_creature_noop (5434) before the quest and the Attract-able tog_light_creature_op
+ * (5435) once Juna has asked for the bowl. They float over the clipped pool (x 3211-3237,
+ * y 9505-9529) one tile a tick: of 1,001 consecutive recorded steps 76% kept their heading, 13%
+ * turned 45 degrees, 4% 90, 5% 135 and 3% turned back.
+ *
+ * Ours: the drift is a random walk fitted to those step counts, inside those bounds. The nine
+ * spawns (data/definitions/npc-spawns.json) stand on the tiles the first recording first saw
+ * them on, as the cache places none. The crossing (TearsOfGuthix.Quest.js) takes a creature over with
+ * setScriptedMovement(true) and hands it back when it is done; a scripted creature is left alone.
+ */
 
-function isCrossingCreature(npc) {
-  const at = npc.getLocation();
-  return npc.getId() === core.NpcIdentifiers.LIGHT_CREATURE_4 && at.getZ() === 2 &&
-    at.getX() >= 3224 && at.getX() <= 3226 && at.getY() >= 9516 && at.getY() <= 9518;
-}
+const CHASM_PLANE = 2;
+/** Far enough from the chasm's middle to find every spawn in BOUNDS. */
+const SEARCH_RADIUS = 20;
+const BOUNDS = { x0: 3211, x1: 3237, y0: 9505, y1: 9529 };
+/** The eight headings, clockwise from north. */
+const HEADINGS = [[0, 1], [1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1]];
+/** Turns (in 45-degree steps) by their share of the recorded consecutive steps. */
+const TURNS = [[0, 764], [1, 63], [-1, 69], [2, 12], [-2, 24], [3, 28], [-3, 14], [4, 27]];
+const TURN_TOTAL = TURNS.reduce((sum, [, weight]) => sum + weight, 0);
+/** Ours: the share of ticks a creature holds still (the recorded walks pause now and then). */
+const PAUSE_CHANCE = 0.08;
+const LIGHT_CREATURE_GAMEVAL = "tog_light_creature";
 
-function routeCreature(event) {
-  if (!isCrossingCreature(event.npc)) return;
-  event.range = CREATURE_RANGE;
-  event.ignoreProjectileClip = true;
-}
+let api;
+/** The chasm's creatures, each with its heading. */
+const creatures = new Map();
+let random = Math.random;
 
-function carry(player, destination, animation, ticks) {
-  const { ForceMovement, ForceMovementTask, Location, TaskManager } = core;
-  const start = player.getLocation().clone();
-  const dx = destination[0] - start.getX(), dy = destination[1] - start.getY();
-  const direction = Math.abs(dx) > Math.abs(dy) ? dx > 0 ? 1 : 3 : dy > 0 ? 0 : 2;
-  // shortcut: the landing is a connected cache floor and duration is estimated; refine from a live capture.
-  TaskManager.submit(new ForceMovementTask(player, ticks,
-    new ForceMovement(start, new Location(dx, dy), 0, ticks * 30, direction, animation)));
-}
+const inside = (x, y) => x >= BOUNDS.x0 && x <= BOUNDS.x1 && y >= BOUNDS.y0 && y <= BOUNDS.y1;
 
-function attract({ player, npc }) {
-  if (!isCrossingCreature(npc)) return false;
-  if (!player.getInventory().contains(core.ItemIdentifiers.SAPPHIRE_LANTERN_3)) {
-    player.sendMessage("You need a lit sapphire lantern to attract the creature.");
-    return true;
+function pickTurn() {
+  let roll = random() * TURN_TOTAL;
+  for (const [turn, weight] of TURNS) {
+    roll -= weight;
+    if (roll < 0) return turn;
   }
-  carry(player, ROCK_SIDE, FLOAT_ACROSS, 6);
-  player.sendMessage("The light creature carries you across the chasm.");
-  return true;
+  return 0;
 }
 
-function useLantern(event) {
-  if (event.itemId !== core.ItemIdentifiers.SAPPHIRE_LANTERN_3 || !isCrossingCreature(event.target)) return;
-  event.handled = attract({ player: event.player, npc: event.target });
+/** The heading index pointing from a tile towards the middle of the chasm. */
+function headingInward(x, y) {
+  const dx = Math.sign((BOUNDS.x0 + BOUNDS.x1) / 2 - x);
+  const dy = Math.sign((BOUNDS.y0 + BOUNDS.y1) / 2 - y);
+  const index = HEADINGS.findIndex(([hx, hy]) => hx === dx && hy === dy);
+  return index < 0 ? 0 : index;
 }
 
-function climbRocks({ player, objectId }) {
-  if (objectId !== core.ObjectIdentifiers.ROCKS_27) return false;
-  carry(player, JUNA_SIDE, CLIMB_DOWN, 2);
-  return true;
+/** One creature's tick: hold still, or step one tile on its (possibly turned) heading. */
+function drift(npc, state) {
+  if (npc.isScriptedMovement?.() || random() < PAUSE_CHANCE) return;
+  const at = npc.getLocation();
+  let heading = (state.heading + pickTurn() + HEADINGS.length) % HEADINGS.length;
+  let [dx, dy] = HEADINGS[heading];
+  if (!inside(at.getX() + dx, at.getY() + dy)) {
+    heading = headingInward(at.getX(), at.getY());
+    [dx, dy] = HEADINGS[heading];
+  }
+  state.heading = heading;
+  // The pool is clipped, so a glide (a tile in one tick, as a walk shows) rather than a path.
+  npc.exactMove(new api.core.Location(at.getX() + dx, at.getY() + dy, at.getZ()));
 }
 
-module.exports = function registerChasm(api) {
-  core = api.core;
-  api.onNpcInteraction("Light creature", { Attract: attract });
-  api.onNpcRoute(routeCreature);
-  api.onItemOnNpc(useLantern, { noted: false });
-  api.onObjectInteraction("Rocks", { Climb: climbRocks });
+/** The world's spawns of the creature on the chasm floor, found once they are in the world. */
+function gather() {
+  const { Location, World, CacheDefinitions } = api.core;
+  const id = CacheDefinitions.getNpcId(LIGHT_CREATURE_GAMEVAL);
+  const middle = new Location((BOUNDS.x0 + BOUNDS.x1) >> 1, (BOUNDS.y0 + BOUNDS.y1) >> 1, CHASM_PLANE);
+  for (const npc of World.getNpcsNear(middle, SEARCH_RADIUS, null)) {
+    const at = npc.getLocation();
+    if (npc.getId() !== id || at.getZ() !== CHASM_PLANE || !inside(at.getX(), at.getY()) || creatures.has(npc)) continue;
+    creatures.set(npc, { heading: Math.floor(random() * HEADINGS.length) });
+  }
+}
+
+function driftAll() {
+  if (creatures.size === 0) gather();
+  for (const [npc, state] of creatures) {
+    if (npc.isRegistered?.() === false) {
+      creatures.delete(npc);
+      continue;
+    }
+    drift(npc, state);
+  }
+}
+
+/** Points a creature the crossing hands back along a heading (north after a landing, as recorded). */
+function setHeading(npc, dx, dy) {
+  const state = creatures.get(npc);
+  const index = HEADINGS.findIndex(([hx, hy]) => hx === Math.sign(dx) && hy === Math.sign(dy));
+  if (state && index >= 0) state.heading = index;
+}
+
+function start() {
+  const { Task, TaskManager } = api.core;
+  const key = {};
+  TaskManager.submit(new (class extends Task {
+    constructor() { super(1, key, false); }
+    execute() { driftAll(); }
+  })());
+}
+
+module.exports = function registerChasm(pluginApi) {
+  api = pluginApi;
+  api.onServerStartup(start);
 };
+
+Object.assign(module.exports, {
+  BOUNDS,
+  setHeading,
+  isChasmCreature: (npc) => creatures.has(npc),
+  _test: { drift, driftAll, gather, creatures, setRandom: (fn) => { random = fn; }, setApi: (value) => { api = value; } },
+});

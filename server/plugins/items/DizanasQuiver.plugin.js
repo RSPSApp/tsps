@@ -86,6 +86,8 @@ const QUIVER_NAMES = [
 ];
 
 let pluginApi = null;
+/** Set while this plugin asks the can-equip rules itself, so wieldIntoQuiver does not answer. */
+let askingEquipRules = false;
 
 function core() {
   return pluginApi.core;
@@ -400,7 +402,12 @@ function canWear(player, ammo) {
     player.sendMessage(EquipmentRequirements.message(unmet, `your ${name(ammo.id)}`));
     return false;
   }
-  return PluginManager.emitCanEquip(player, core().Equipment.AMMUNITION_SLOT, item) !== false;
+  askingEquipRules = true;
+  try {
+    return PluginManager.emitCanEquip(player, core().Equipment.AMMUNITION_SLOT, item) !== false;
+  } finally {
+    askingEquipRules = false;
+  }
 }
 
 /** Moves the stored ammo to the inventory; true when any moved. */
@@ -713,6 +720,44 @@ function pickupIntoQuiver(event) {
   });
 }
 
+/**
+ * Wielding arrows or bolts the worn quiver already holds adds them to its stack, unless the
+ * ammo slot holds the same item (the equip stacks there), so the worn ammo stays on and the
+ * same ammo never sits in both slots. The equip's own level checks have already passed; the
+ * other can-equip rules (duels, F2P) are asked before the ammo moves.
+ */
+function wieldIntoQuiver(event) {
+  const { player, slot, item } = event;
+  if (askingEquipRules || slot !== core().Equipment.AMMUNITION_SLOT || !wornQuiver(player)) return;
+  const ammo = stored(player);
+  const id = item?.getId?.() ?? -1;
+  if (!ammo || ammo.id !== id || wornAmmo(player)?.getId?.() === id) return;
+  const plain = (stack) => Object.keys(stack.getMeta?.() ?? {}).length === 0
+    && !stack.isPresetItem?.() && !stack.isUntradeable?.() && !stack.isUnbankable?.();
+  if (!plain(item)) return;
+  // The equip is of a whole inventory stack; a rule check of some other item (a preset's) is left alone.
+  const inventory = player.getInventory();
+  const from = inventory.getItems().findIndex((held) => held && held.getId() === id && held.getAmount() === item.getAmount() && plain(held));
+  if (from < 0) return;
+  askingEquipRules = true;
+  let allowed;
+  try {
+    allowed = PluginManager.emitCanEquip(player, slot, item) !== false;
+  } finally {
+    askingEquipRules = false;
+  }
+  event.allow = false;
+  if (!allowed) return;
+  const moved = Math.min(inventory.getItems()[from].getAmount(), MAX_AMOUNT - ammo.amount);
+  if (moved <= 0) {
+    player.sendMessage("Your quiver cannot hold any more of that ammunition.");
+    return;
+  }
+  inventory.deleteAtSlot(from, moved, false);
+  inventory.refreshItems();
+  store(player, { id, amount: ammo.amount + moved }, true);
+}
+
 function login({ player }) {
   sendSlot(player);
 }
@@ -727,6 +772,7 @@ module.exports = {
     api.persistAttribute(AVA_ATTRIBUTE, 0);
     api.onPlayerLogin(login);
     api.onGroundItemPickup(pickupIntoQuiver);
+    api.onCanEquip(wieldIntoQuiver);
     api.onInterfaceActionClick(slotClicked);
     api.onItemOnItem(itemOnItem, { noted: false });
     api.onCombatHitResolved(spendCharge);
@@ -750,5 +796,5 @@ module.exports = {
   stored,
   firedAmmunition,
   slotClicked,
-  _test: { stageOf, idFor, itemCharges, blessingProgress, chargeWithSplinters, uncharge, blessAtShrine, upgradeWithAva, avaRecovery, hasSunfire, quiverBonuses, spendCharge, shouldKeepQuiver, deathItemDrop, openQuiver, renderOpen, activeAmmoId, brokenIdFor, pickupIntoQuiver },
+  _test: { stageOf, idFor, itemCharges, blessingProgress, chargeWithSplinters, uncharge, blessAtShrine, upgradeWithAva, avaRecovery, hasSunfire, quiverBonuses, spendCharge, shouldKeepQuiver, deathItemDrop, openQuiver, renderOpen, activeAmmoId, brokenIdFor, pickupIntoQuiver, wieldIntoQuiver },
 };

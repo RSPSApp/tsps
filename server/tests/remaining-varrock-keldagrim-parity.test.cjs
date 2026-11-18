@@ -1122,14 +1122,22 @@ test('Defender of Varrock invasion camera resets on logout and the cutscene resu
   h.tick(1);
   const resets = () => p.log.filter(row => row[0] === 'sendCameraReset').length;
   const before = resets();
-  h.hooks.onPlayerLogout[0]({ player: p });
+  h.hooks.onPlayerLogout.forEach(handler => handler({ player: p }));
   assert.equal(resets(), before + 1, 'logging out cannot leave the scene camera locked');
   assert.equal(h.quest.getStage(p), 50);
-  h.hooks.onPlayerLogin[0]({ player: p });
+  h.hooks.onPlayerLogin.forEach(handler => handler({ player: p }));
   const dimintheis = h.npcActions.get('Dimintheis')['Talk-to'];
   dimintheis({ player: p, npcId: N.DIMINTHEIS });
-  h.action(p, N.DIMINTHEIS, '8eNIjz');
+  const cameraMoves = () => p.log.filter(row => row[0] === 'sendCameraMoveTo');
+  const beforeResume = cameraMoves().length;
+  h.action(p, N.DIMINTHEIS, '8eNIJz');
+  p.manager.reset();
+  h.tick(1);
+  assert.equal(cameraMoves().length, beforeResume + 1, 'resuming starts the invasion camera again');
+  assert.deepEqual(cameraMoves().at(-1).slice(1, 3), [3925, 4938], 'the resumed scene starts at its first cut');
   assert.equal(h.quest.getStage(p), 50, 'the interrupted cutscene restarts without skipping the stage');
+  while (p.manager.getCurrent()) p.manager.advance();
+  assert.equal(h.quest.getStage(p), 52, 'the resumed scene reaches its victory stage');
 });
 
 test('Defender and Curse of Arrav share the placed trapdoor without skipping the key route', () => {

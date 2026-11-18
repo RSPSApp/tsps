@@ -63,7 +63,7 @@ function withExtraDose(productId) {
 }
 
 /**
- * The doses the brew came out with: recordings 4211 and 4213 only show 3-dose mixes made 4-dose
+ * The doses the brew came out with: recording 4213 shows 3-dose mixes made 4-dose
  * ("...create a 4-dose potion."); a 1- or 2-dose input names its own count (Ours: the Wiki's
  * Mechanics give the extra dose for any input under 4, and no message for it). Haemostatic
  * dressing, which has no dose family, comes as 4.

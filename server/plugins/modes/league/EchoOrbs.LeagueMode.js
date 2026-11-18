@@ -19,6 +19,7 @@ const Common = require("./Common.LeagueMode");
 
 /** Kills of each boss since its orb last dropped, by the data's boss key. */
 const KILLS_ATTRIBUTE = "league:echo-orb-kills";
+const ENCOUNTER_ATTRIBUTE = "echo-boss:encounter";
 
 let data = null;
 let api = null;
@@ -84,7 +85,7 @@ function addOrb(player, boss, drops, random) {
 /** npc-drops:add { player, npc, npcId, drops }: a regional boss's kill. */
 function killDrop(event) {
   const { player, npc, drops } = event ?? {};
-  if (!player || !npc || !Array.isArray(drops) || !inEchoLeague(player)) return;
+  if (!player || !npc || npc.getAttribute?.(ENCOUNTER_ATTRIBUTE) || event.echo || !Array.isArray(drops) || !inEchoLeague(player)) return;
   const boss = bossFor(event);
   if (boss) addOrb(player, boss, drops);
 }
@@ -92,20 +93,18 @@ function killDrop(event) {
 /** npc-drops:roll { player, source, drops } from a roller without an NPC (the Gauntlet's reward chest). */
 function sourceDrop(event) {
   const { player, npc, source, drops } = event ?? {};
-  if (!player || npc || !source || !Array.isArray(drops) || !inEchoLeague(player)) return;
+  if (!player || npc || event.echo || !source || !Array.isArray(drops) || !inEchoLeague(player)) return;
   const boss = bossFor({ source });
   if (boss) addOrb(player, boss, drops);
 }
 
-/**
- * The echo fight itself. Ours: echo bosses are not implemented, so this answers false and the
- * player stays outside with "Nothing interesting happens."; an echo fight starts here, and
- * answers true once it has taken the player in.
- */
+/** Named owning boss plugins validate their entrance and start the isolated encounter. */
 function startEchoFight(player, boss) {
-  void player;
-  void boss;
-  return false;
+  const orb = orbOf(boss);
+  if (!orb || !inEchoLeague(player) || !player.getInventory().contains(orbItemId(orb))) return false;
+  const request = { player, boss, handled: false };
+  api.emitCustomEvent("echo-boss:start", request);
+  return request.handled;
 }
 
 function answerYes(player, boss) {
@@ -128,12 +127,22 @@ function entryPrompt(event) {
   if (!orb || !inEchoLeague(player) || !player.getInventory().contains(orbItemId(orb))) return;
   const { yes, no } = load().messages;
   const origin = player.getLocation().clone();
+  const privateArea = player.getPrivateArea?.();
+  let answered = false;
+  const canAnswer = () => !answered && stillAt(player, origin) && player.getPrivateArea?.() === privateArea;
   // No: the usual entry, as without an orb (decided; live's answer is not recorded). The entrance's
   // `enter` checks its own rules again; here, the player is still where the menu opened.
   const answerNo = () => {
-    if (stillAt(player, origin)) enter();
+    if (!canAnswer()) return;
+    answered = true;
+    enter();
   };
-  const shown = api.sendMultiChatboxPrompt(player, orb.title, yes, () => answerYes(player, boss), no, answerNo);
+  const accept = () => {
+    if (!canAnswer()) return;
+    answered = true;
+    if (inEchoLeague(player) && player.getInventory().contains(orbItemId(orb))) answerYes(player, boss);
+  };
+  const shown = api.sendMultiChatboxPrompt(player, orb.title, yes, accept, no, answerNo);
   if (shown !== false) event.handled = true;
 }
 

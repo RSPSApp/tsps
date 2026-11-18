@@ -64,6 +64,22 @@ const ROOM_REMOVAL_WARNING = "<col=800000>Warning:<col=000000> If you remove thi
 const LEFT_CLICK_DELAY_TICKS = 2;
 const PAUSEBUTTON = 1, OP1 = 1 << 1, OP10 = 1 << 10, DEPTH5 = 5 << 17, DRAG_TARGET = 1 << 20;
 
+const ALTERNATE_DIARIES = new Map([[151, ["varrock", ["medium", "hard", "elite"]]],
+  [154, ["kandarin", ["hard", "elite"]]], [156, ["ardougne", ["hard", "elite"]]]]);
+
+/** Match the viewer's reward checks in client script 2664, including higher tiers. */
+function available(player, id, slots) {
+  const diary = ALTERNATE_DIARIES.get(id);
+  if (!diary) return true;
+  const base = [...destinations().values()].find(destination => destination.alternate === id);
+  if (!base || !slots.includes(base.id)) return false;
+  return diary[1].some(tier => {
+    const request = { player, diary: diary[0], tier, claimed: false };
+    api.emitCustomEvent("diary:is-reward-claimed", request);
+    return request.claimed;
+  });
+}
+
 let destinationsById = null;
 
 /** Every destination from the cache, with where the spell lands. */
@@ -114,6 +130,7 @@ function sendState(player, slots, left, varbits, leftVarbit) {
 }
 
 function teleportTo(player, house, id) {
+  if (!available(player, id, stateOf(player).slots)) return;
   const destination = destinations().get(id);
   player.getPacketSender().sendInterfaceRemoval();
   if (!destination?.tile) return player.sendMessage("That destination isn't available yet.");
@@ -140,6 +157,7 @@ function scryTo(player, house, id) {
 }
 
 function pick(player, session, id) {
+  if (!available(player, id, stateOf(player, session.furniture).slots)) return;
   if (scryMode(player)) scryTo(player, session.house, id);
   else teleportTo(player, session.house, id);
 }
@@ -155,7 +173,8 @@ function teleport(event) {
   const player = event.player;
   const state = stateOf(player, found.furniture);
   if (!state.left) return openMenu(player, found), true;
-  player.setPositionToFace(event.location);
+  if (!available(player, state.left, state.slots)) return true;
+  player.setPositionToFace(new Location(event.location.x, event.location.y, event.location.z));
   TaskManager.submit(new CountdownTask(player.getIndex(), LEFT_CLICK_DELAY_TICKS, () => {
     if (House.houseFor(player) !== found.house) return;
     player.getPacketSender().sendVarbit(NEXUS_ID, found.tier.id);
@@ -229,8 +248,12 @@ function menuClick(event, session) {
     const id = stateOf(player, session.furniture).slots[sub];
     if (id) pick(player, session, id);
   } else if (event.childId === ALT_ROWS || event.childId === ALT_KEYS) {
-    const alternate = ALTERNATES[sub];
-    if (alternate) pick(player, session, alternate[0]);
+    // Client script 2674 allocates alternate rows in configured slot order, retaining
+    // hidden placeholders for locked choices (rather than compacting eligible rows).
+    const alternates = stateOf(player, session.furniture).slots
+      .map(id => destinations().get(id)?.alternate).filter(id => id != null);
+    const alternate = alternates[sub];
+    if (alternate) pick(player, session, alternate);
   } else if (event.childId === NEXUS_MODEL) {
     if (scryMode(player)) scryTo(player, session.house, null);
   } else if (event.childId === OPTIONS_LAYER && (sub === TELEPORT_MODE || sub === SCRY_MODE)) {
@@ -247,7 +270,7 @@ function configClick(event, session) {
     session.left = 0;
   } else if (event.childId === LEFT_CLICK_OPTIONS) {
     const base = [...destinations().values()].find(data => data.id === session.left || data.alternate === session.left);
-    if (base && (event.slot ?? event.action) === 3 && base.alternate) session.left = base.alternate;
+    if (base && (event.slot ?? event.action) === 3 && base.alternate && available(player, base.alternate, session.slots)) session.left = base.alternate;
     else if (base && (event.slot ?? event.action) === 2) session.left = base.id;
   } else if (event.childId === DONE) {
     return doneClicked(player, session);
@@ -278,6 +301,7 @@ function done(player, session) {
     player.getPacketSender().sendInterfaceRemoval();
     return;
   }
+  if (!available(player, session.left, session.slots)) return;
   const added = session.slots.filter(id => !stateOf(player, session.furniture).slots.includes(id));
   for (const id of added) {
     const destination = destinations().get(id);

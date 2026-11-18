@@ -73,6 +73,8 @@ function buyHouse(event) {
   saved.location = 1;
   saved.style = 0;
   saveHouse(event.player);
+  // `construction:house-bought` { player } (a league's "Purchase a Player Owned House").
+  api.emitCustomEvent("construction:house-bought", { player: event.player });
   say(event, "Thank you. Go through the Rimmington house portal and you will find your house ready for you to start building in it.", () => giveGuide(event));
 }
 
@@ -301,6 +303,10 @@ function finishChange(event, kind, choice, lines) {
       && Math.abs(agent.getY() - VARROCK_ESTATE_AGENT.y) <= 4) {
       api.emitCustomEvent("diary:task", { player, diary: "varrock", task: VARROCK_FANCY_STONE_TASK });
     }
+  }
+  if (kind === "location") {
+    // `construction:house-moved` { player, location }: the new town's name ("Yanille", "Prifddinas").
+    api.emitCustomEvent("construction:house-moved", { player, location: choice.name });
   }
   if (kind === "style") {
     api.emitCustomEvent("construction:house-redecorated", {

@@ -218,6 +218,8 @@ test("a house altar keeps offering every 4 ticks until that bone runs out, and b
   Math.random = () => 0.99;
   const house = houseWith("GILDED_ALTAR", 2);
   const player = housePlayer(house, ["bones", "big_bones", "bones", "bones"]);
+  const offered = [];
+  api.onCustomEvent("bone-altars:offered", (event) => { if (event.player === player) offered.push([event.itemId, event.site, event.burners]); });
   useOnHouseAltar(player, "bones");
   assert.equal(player.sent.xp.length, 1, "the first offering is immediate");
   runTicks(3);
@@ -231,6 +233,9 @@ test("a house altar keeps offering every 4 ticks until that bone runs out, and b
   assert.equal(player.sent.animations, 3);
   assert.deepEqual(player.inventory, [CacheDefinitions.getObjId("big_bones")], "other bones are left alone");
   assert.equal(submitted[0].isRunning(), false);
+  // bone-altars:offered, one a bone, with the altar and the burners lit at that offering.
+  const bones = CacheDefinitions.getObjId("bones");
+  assert.deepEqual(offered, [[bones, "GILDED_ALTAR", 2], [bones, "GILDED_ALTAR", 0], [bones, "GILDED_ALTAR", 0]]);
 });
 
 test("using a bone again offers at once instead of waiting for the loop", () => {

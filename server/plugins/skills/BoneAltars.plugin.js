@@ -132,6 +132,10 @@ function offer(player, object, altar, boneId, bone, cost = 1) {
   // Experience first: a level-up pop-up resets the player's animation, and this offering's
   // animation still plays over it.
   player.getSkillManager().addExperiences(core.Skill.PRAYER, blessing.experience);
+  // `bone-altars:offered` { player, itemId, site, burners }: one bone offered. site is the data altar's loc
+  // ("chaosaltar") or a house altar's buildable ("GILDED_ALTAR"), burners the house's lit burners (a league's
+  // Chaos Temple and gilded altar tasks).
+  api.emitCustomEvent("bone-altars:offered", { player, itemId: boneId, site: blessing.site ?? altar.loc ?? null, burners: blessing.burners ?? 0 });
   const tile = graphicTile(player, object);
   const { seq, spotanim } = resolved();
   player.setPositionToFace(tile);

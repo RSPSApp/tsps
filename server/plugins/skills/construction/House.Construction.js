@@ -925,6 +925,8 @@ function buildRoom(player, viewer, reopenViewer = true) {
     if (problem) return Menu.refuse(player, problem);
     player.getInventory().delete(COINS_ID, room.cost);
     house.placeRoom(target, room, rotation);
+    // `construction:room-built` { player, room }: a new room paid for (a league's "Build a room"), not a move.
+    api.emitCustomEvent("construction:room-built", { player, room: room.key ?? room.name ?? null });
   }
   rebuildRooms(player, house, reopenViewer ? () => openHouseViewer(player) : undefined);
 }
@@ -1560,7 +1562,8 @@ function completeFurniture(player, house, target, buildable, materials) {
   }
   GardenPlants.complete(player, buildable);
   house.setFurniture(target, buildable);
-  api.emitCustomEvent("construction:furniture-built", { player, buildable });
+  // `key` and `hotspot` flat, for triggers that match a field ("OAK_LARDER" on a kitchen's hotspot).
+  api.emitCustomEvent("construction:furniture-built", { player, buildable, key: buildable.key, hotspot: target.hotspotKey });
   // Keyed to the house, so a click straight after the build doesn't cancel the redraw.
   TaskManager.submit(new CountdownTask(house, 1, () => {
     if (houseFor(player) === house) rebuildHouse(player, house);

@@ -1,6 +1,6 @@
 "use strict";
 
-const { Animation, Equipment, ItemDefinition, Location, Skill, Task, TaskManager, World } = require("./Core.Construction");
+const { api, Animation, Equipment, ItemDefinition, Location, Skill, Task, TaskManager, World } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 const Prizes = require("./Prizes.Construction");
@@ -153,6 +153,8 @@ function fire(player, house, furniture, kind, target) {
         const score = kind.score(player.getSkillManager().getCurrentLevel(Skill.RANGED));
         entry.score += score;
         if (score > 0) {
+          // `construction:ranging-hit` { player, game, score }: "hoop", "darts" or "archery" (a league's hoop task).
+          api.emitCustomEvent("construction:ranging-hit", { player, game: kind.game, score });
           player.getPacketSender().sendSound(kind.hitSound, 0, 0);
           if (furniture.displayObjectId !== kind.hitLoc) {
             furniture.displayObjectId = kind.hitLoc;

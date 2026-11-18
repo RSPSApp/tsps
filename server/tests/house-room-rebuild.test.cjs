@@ -159,7 +159,10 @@ test("Build from the door hotspot takes the coins behind the loading screen and 
     const rebuild = house.rebuild.bind(house);
     house.rebuild = (...args) => { rebuilds++; return rebuild(...args); };
     player.sent = [];
+    const built = [];
+    api.onCustomEvent("construction:room-built", (event) => { if (event.player === player) built.push(event.room); });
     build();
+    assert.deepEqual(built, ["PARLOUR"], "construction:room-built, once (a league's Build a room)");
     assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.COINS), 0, "paid on the click");
     assert.equal(house.getRoom(PARLOUR_SPOT)?.roomKey, "PARLOUR");
     assert.equal(rebuilds, 0, "not rebuilt on the click tick");

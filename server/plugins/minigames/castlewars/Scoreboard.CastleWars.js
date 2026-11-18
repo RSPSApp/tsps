@@ -108,12 +108,6 @@ function viewStats(event) {
   return true;
 }
 
-/** The collection log's "Castle Wars" page counts the reader's games played. */
-function collectionLogCount(request) {
-  if (request?.category !== "Castle Wars" || !request.player || Number.isFinite(request.count)) return;
-  request.count = count(request.player.getAttribute(GAMES_ATTRIBUTE));
-}
-
 function attachScoreboard(api) {
   core = api.core;
   api.persistAttribute(GAMES_ATTRIBUTE, 0);
@@ -121,12 +115,11 @@ function attachScoreboard(api) {
   api.persistAttribute(LOSSES_ATTRIBUTE, 0);
   api.onCustomEvent("castlewars:player-result", playerResult);
   api.onCustomEvent("castlewars:game-won", gameWon);
-  api.onCustomEvent("collection-log:category-count", collectionLogCount);
   api.onObjectInteraction("Scoreboard", { View: view, "View Stats": viewStats });
 }
 
 module.exports = {
-  attachScoreboard, playerResult, gameWon, view, viewStats, statsText, collectionLogCount,
+  attachScoreboard, playerResult, gameWon, view, viewStats, statsText,
   SCOREBOARD_LOC, INTERFACE_NAME, TOTAL_COMPONENT, GAMES_ATTRIBUTE, WINS_ATTRIBUTE, LOSSES_ATTRIBUTE,
   /** Tests: read and write the teams' wins at `file` instead, from scratch. */
   _useFile(file) { FILE = file; world = null; },

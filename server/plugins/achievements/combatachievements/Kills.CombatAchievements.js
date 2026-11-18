@@ -26,6 +26,7 @@
  */
 const Data = require("./Data.CombatAchievements");
 const Progress = require("./Progress.CombatAchievements");
+const Wilderness = require("../../bosses/wildernessbosses/Common.WildernessBosses");
 const LEGACY_KEYS = require("./data/legacy-monster-keys.json").names;
 
 const KILLS_ATTRIBUTE = "combat-achievements:kills";
@@ -123,8 +124,8 @@ let logCategories = null;
 
 /**
  * Collection log category key -> the monsters whose kills its page counts. A category named after
- * one monster answers with that monster; a shared page (Dagannoth Kings, The Gauntlet) sums its
- * monsters, and data/monsters.json's collectionLog names the pages whose names differ.
+ * one monster answers with that monster; shared pages are laid out by PAGE_COUNTERS below, and
+ * data/monsters.json's collectionLog names name the pages whose names differ.
  */
 function collectionLogCategories() {
   if (logCategories) return logCategories;
@@ -147,20 +148,75 @@ function collectionLogCategories() {
 }
 
 /**
+ * Pages with more than one count line, in cache script 2735's order: the first monster fills
+ * `count`, the rest `extraCounts`. The script labels them itself (Dagannoth Supreme/Prime/Rex,
+ * Corrupted/Normal Gauntlet, Nightmare/Phosani's Nightmare).
+ */
+const PAGE_COUNTERS = {
+  "Dagannoth Kings": ["DK: Supreme", "DK: Prime", "DK: Rex"],
+  "The Gauntlet": ["Corrupted Hunllef", "Crystalline Hunllef"],
+  "The Nightmare": ["Nightmare, The", "Phosani's Nightmare"],
+};
+
+/**
+ * The Wilderness pairs: cache script 2735 puts the singles boss on the first line and the main
+ * boss on the second. The singles' kills live in the Wilderness bosses plugin, not Combat
+ * Achievements.
+ */
+const WILDERNESS_PAIRS = {
+  "Callisto and Artio": "Callisto",
+  "Venenatis and Spindel": "Venenatis",
+  "Vet'ion and Calvar'ion": "Vet'ion",
+};
+
+let pageCounters = null;
+let wildernessPairs = null;
+
+function countedPages() {
+  pageCounters ??= new Map(Object.entries(PAGE_COUNTERS).map(([page, monsters]) => [logKey(page), monsters]));
+  return pageCounters;
+}
+
+function wildernessPairMain(key) {
+  wildernessPairs ??= new Map(Object.entries(WILDERNESS_PAIRS).map(([page, monster]) => [logKey(page), monster]));
+  return wildernessPairs.get(key);
+}
+
+/** A page named after one monster answers with it; a shared page must be in PAGE_COUNTERS. */
+function singlePageMonster(key) {
+  const names = collectionLogCategories().get(key);
+  return names && names.size === 1 ? [...names] : null;
+}
+
+/**
  * "collection-log:category-count" { player, category }: the log's boss page shows the monster's
  * kill count. Content that keeps its own count answers first; only a page nobody else answered
- * is filled here, from the Combat Achievements count the boss page already shows.
+ * is filled here, from the Combat Achievements count the boss page already shows. A shared page
+ * fills each of its lines in the order cache script 2735 reads them.
  */
 function onCollectionLogCount(request) {
   if (!request?.player || typeof request.category !== "string" || Number.isFinite(request.count)) return;
-  const names = collectionLogCategories().get(logKey(request.category));
-  if (!names) return;
-  let total = 0;
-  for (const name of names) {
-    const monster = Data.monsterNamed(name);
-    if (monster) total += killCount(request.player, monster);
+  const key = logKey(request.category);
+  const mainName = wildernessPairMain(key);
+  if (mainName) {
+    const main = Data.monsterNamed(mainName);
+    const single = Wilderness.LAIRS.find((lair) => lair.killVarp && lair.monster === mainName);
+    if (!main || !single) return;
+    const kills = request.player.getAttribute(Wilderness.KILLS_ATTRIBUTE) ?? {};
+    request.count = Number(kills[single.key]) || 0;
+    request.extraCounts = [killCount(request.player, main)];
+    return;
   }
-  request.count = total;
+  const monsters = countedPages().get(key) ?? singlePageMonster(key);
+  if (!monsters) return;
+  const [first, ...extra] = monsters;
+  const monster = Data.monsterNamed(first);
+  if (!monster) return;
+  request.count = killCount(request.player, monster);
+  request.extraCounts = extra.map((name) => {
+    const other = Data.monsterNamed(name);
+    return other ? killCount(request.player, other) : 0;
+  });
 }
 
 /** At login: catch up with the counts plugins keep, send every count, finish what they reach. */

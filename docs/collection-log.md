@@ -19,17 +19,23 @@ The collection log lives in `server/plugins/achievements/collectionlog/`. What i
 - **Reward shops:** successful purchases of original stock in the shops listed in `plugins/achievements/collectionlog/data/reward-shops.json` log their trackable items through `shop:purchase`. General-store resale and unrelated shops do not grant collection credit. The event reports the quantity actually paid for and delivered.
 
 A category's **count** (the "Zulrah kills: 1" line) is the content's own record. Boss pages take the
-Combat Achievement kill count (`combat-achievements:kills`, the same number the boss page shows),
-summing a page shared by several monsters (Dagannoth Kings, The Nightmare, The Gauntlet) and
-honouring `data/monsters.json`'s `collectionLog` names for pages whose names differ (Barrows
-Chests, Callisto and Artio, The Fight Caves, The Inferno, the raids' modes). Castle Wars, Soul Wars
-and Last Man Standing count the reader's games played from their own saved counters. Content that
-keeps a different count answers first through `collection-log:category-count`, so the plugin's own
-value wins (Barrows, CoX, ToB, ToA, Zulrah, the Kalphite Queen, Guardians of the Rift, clue tiers).
+Combat Achievement kill count (`combat-achievements:kills`, the same number the boss page shows).
+A page shared by several monsters fills each of its lines in the order cache script 2735 reads
+them: Dagannoth Supreme/Prime/Rex, the Corrupted and normal Gauntlet, and the Nightmare and
+Phosani's Nightmare. `data/monsters.json`'s `collectionLog` names handle pages whose names differ
+from the monster's (Barrows Chests, The Fight Caves, The Inferno). The Wilderness pairs put the
+singles boss's own count (Artio, Spindel, Calvar'ion) on the first line and the main boss's Combat
+Achievement count on the second. The raids' pages are answered by their own plugins, which keep
+the per-mode counts. Last Man Standing counts the reader's games played from its own saved
+counter (the cache's first line); Castle Wars has no count line (script 2735 has no case for
+struct 514), and Soul Wars' only line is "Spoils of war opened", which nothing tracks yet. Content
+that keeps a different count answers first through `collection-log:category-count`, so the plugin's
+own value wins (Barrows, CoX, ToB, ToA, Zulrah, the Kalphite Queen, Guardians of the Rift, clue
+tiers).
 
 - **The log's own tally** (`clog.counts`) is the fallback for a category nobody answers for.
-- **Still absent:** pages whose content has no Combat Achievement monster yet (Dagannoth Kings, The
-  Mad Angel), the other minigames' completion counts, and the per-item `collection_item_*` varbits.
+- **Still absent:** the other minigames' "opened" and "completed" counters (including Soul Wars'
+  spoils of war), and the per-item `collection_item_*` varbits.
 
 From another plugin:
 
@@ -119,7 +125,7 @@ A boss category's **Combat Achievements button** (621:21) closes the log and ope
 - **`current_runeday` from the side journal's summary tab**, which live also sends; that tab is not part of the log.
 - **The per-item varbits** OSRS sends at login for a few items (`collection_item_*`, e.g. Zulrah's scales) and the `collection_other_*_completed` flags.
 - **Loot that doesn't go through `npc-drops:roll` yet:** additional reward sources, raids chests and clue caskets. Each needs a `collection-log:obtain` in a follow-up; unimplemented content has no acquisition route yet.
-- **The remaining "opened" and "completed" counts:** boss pages and Castle Wars, Soul Wars and Last
-  Man Standing now answer (see "A category's count" above), but the other minigames' completion
-  counters, Dagannoth Kings and The Mad Angel (no Combat Achievement monster) still fall back to
-  the log's own tally.
+- **The remaining "opened" and "completed" counts:** boss pages (including Dagannoth Kings and The
+  Mad Angel) and Last Man Standing's games played now answer (see "A category's count" above), but
+  the other minigames' counters, including Soul Wars' spoils of war, still fall back to the log's
+  own tally.

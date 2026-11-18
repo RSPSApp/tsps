@@ -353,6 +353,26 @@ test("the stand: the plinth box, Slash Bash a tick after its Continue; his death
   assert.equal(count(f, I.OGRE_ARTEFACT), 0, "his drop table leaves the artefact");
 });
 
+test("the stand gives no second artefact while Slash Bash's drop still lies there or one is banked", async (t) => {
+  const f = actor(t, { at: [2482, 9445, 0], stage: S.KILLED });
+  const dropped = h.core.ItemOnGroundManager.registerLocation(f.player, new h.core.Item(I.OGRE_ARTEFACT, 1), new h.core.Location(2480, 9445, 0));
+  t.after(() => h.core.ItemOnGroundManager.deregister(dropped));
+  await h.dispatch(f, { type: "object_option", id: 6897, x: 2483, y: 9445, clickType: 1 });
+  await until(f, "You search the plinth...");
+  await h.continueLine(f);
+  h.ticks(f, 2);
+  assert.equal(count(f, I.OGRE_ARTEFACT), 0, "the floor's artefact counts");
+  assert.ok(messages(f).includes("You find nothing in particular."));
+  h.core.ItemOnGroundManager.deregister(dropped);
+  f.player.getBank(0).add(new h.core.Item(I.OGRE_ARTEFACT, 1), false);
+  f.messages.length = 0;
+  await h.dispatch(f, { type: "object_option", id: 6897, x: 2483, y: 9445, clickType: 1 });
+  await until(f, "You search the plinth...");
+  await h.continueLine(f);
+  h.ticks(f, 2);
+  assert.equal(count(f, I.OGRE_ARTEFACT), 0, "a banked one counts");
+});
+
 // ------------------------------------------------------------------ Yanille and Jiggig
 
 test("Zavistic buys the black prism for 2000 once Sithik has had the potion (ticks 1750-1760)", async (t) => {

@@ -244,6 +244,14 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     );
   }
 
+  function artefactOwned(player) {
+    if (has(player, OGRE_ARTEFACT)) return true;
+    if (typeof player.getBanks === "function" && api.core.Bank.owns(player, OGRE_ARTEFACT)) return true;
+    const username = player.getUsername();
+    return api.core.World.getItems().some((ground) =>
+      ground.getItem().getId() === OGRE_ARTEFACT && ground.getOwner?.() === username);
+  }
+
   /** The balm last used on Uglug Nar: his boxes show it and he buys that one (ticks 765, 3190-3196). */
   const balmUsed = new WeakMap();
 
@@ -465,10 +473,12 @@ module.exports = function registerZogreFleshEatersQuest(api) {
       // he buys, tick 3194). Ours: the cure counts as known from Sithik's answer (stage 8) on.
       case "2cRVYa":
         return quest.getStage(player) < STAGE_PERMANENT_SPELL;
+      // The stand hands over another artefact only while none is held, banked or left on the floor:
+      // Slash Bash drops it (capture tick 2650), so it can still lie there unclaimed.
       case "qO0PC_":
-        return has(player, OGRE_ARTEFACT);
+        return artefactOwned(player);
       case "1KSrVG":
-        return !has(player, OGRE_ARTEFACT);
+        return !artefactOwned(player);
       default:
         return null;
     }

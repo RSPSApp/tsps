@@ -96,6 +96,9 @@ function convert(player, npcId, plank, amount) {
   }
   if (shortOfCoins) say(player, npcId, messages.noCoins.replace("{cost}", String(plank.cost)));
   if (made > 0) {
+    // `sawmill:planks-made` { player, npcId, itemId, amount }: the planks of one choice, on its tick (the
+    // league's "Turn any Logs Into a Plank" completes there, rsprox 237/1103 tick 485).
+    api.emitCustomEvent("sawmill:planks-made", { player, npcId, itemId: plank.plank, amount: made });
     const floor = api.getItemOnGroundManager(), location = player.getLocation().clone(), area = player.getPrivateArea();
     if (!floor.getGroundItem(null, core.ItemIdentifiers.SAWDUST, location, area)) {
       const dust = new core.ItemOnGround(core.GroundItemState.SEEN_BY_EVERYONE, undefined, location,

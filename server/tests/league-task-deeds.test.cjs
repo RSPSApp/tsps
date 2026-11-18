@@ -14,6 +14,7 @@ const { GameConstants } = require("../dist/game/GameConstants");
 
 let core;
 let next = 1700;
+const BirdBath = require("../plugins/objects/BirdBath.plugin.js")._test;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -1992,4 +1993,249 @@ test("deed: a teleport with the Eternal teleport crystal (Use an Elven Teleport 
   await ticks(f, 6);
   assert.equal(f.player.getLocation().getY() > 6000, true, `the toggled left-click goes to Prifddinas: ${f.player.getLocation()}`);
   assert.ok(done(f, "use-an-elven-teleport-crystal"), "the arrival counts");
+});
+
+// ---- issue 6108: the Demonic Pacts tasks the generator left without a trigger ----------------------
+
+/** An NPC of the cache name at an offset from the player (its south-west tile there). */
+function npcAt(t, f, name, dx, dy) {
+  const id = [...Array(20000).keys()].find((each) => core.CacheDefinitions.getNpc(each)?.name === name);
+  const at = f.player.getLocation();
+  const npc = core.NPC.create(id, new core.Location(at.getX() + dx, at.getY() + dy, at.getZ()));
+  core.World.getNpcs().add(npc);
+  t.after(() => core.World.getNpcs().remove(npc));
+  return npc;
+}
+
+/** The emote tab's slot, clicked (Bow 2, Dance 12, Cry 16, Salute 21: the slots RSProx 237/1098 clicks). */
+async function emote(f, slot) {
+  await ticks(f, 1); // whatever the login opens next (the league's screens), then closed
+  f.player.getPacketSender().sendInterfaceRemoval();
+  await send(f, { type: "widget_action", widgetId: (216 << 16) | 2, groupId: 216, childId: 2, slot, itemId: -1, buttonNum: 1 }, 1);
+}
+
+test("near: an emote by a child, bard or quetzal counts within the recorded distance, a farther one not (RSProx 237/1098)", async (t) => {
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const f = pactsCharacter(t);
+  const cases = [
+    // Cry: 2 tiles from a child (RSProx 237/1098: cried at tick 14398, the task at 14399).
+    { id: "cry-near-a-child", slot: 16, npc: "Child", near: 2, far: 3 },
+    // Dance: none 3 tiles from the bards (tick 25550), completed 1 tile away (25555).
+    { id: "dance-near-a-bard", slot: 12, npc: "Bard", near: 1, far: 3 },
+  ];
+  for (const each of cases) {
+    const npc = npcAt(t, f, each.npc, each.far, 0);
+    await emote(f, each.slot);
+    assert.equal(f.player.getAnimation()?.getId() > 0, true, `the real Emotes plays it: ${f.messages}`);
+    assert.ok(!done(f, each.id), `${each.id}: ${each.far} tiles is too far`);
+    const at = f.player.getLocation();
+    npc.moveTo(new core.Location(at.getX() + each.near, at.getY(), at.getZ()));
+    await emote(f, 0); // Yes: another emote is none
+    assert.ok(!done(f, each.id), `${each.id}: another emote`);
+    await emote(f, each.slot);
+    assert.ok(done(f, each.id), `${each.id}: ${each.near} tiles`);
+    core.World.getNpcs().remove(npc);
+  }
+});
+
+test("near, in Varlamore only: a cry beside a child in Yama's Lair is no Varlamore task", async (t) => {
+  const f = pactsCharacter(t, [1503, 5602, 0]);
+  npcAt(t, f, "Child", 1, 0);
+  await emote(f, 16);
+  assert.equal(f.player.getAnimation()?.getId() > 0, true, `cried: ${f.messages}`);
+  assert.ok(!done(f, "cry-near-a-child"), "area 21, as the task's region");
+});
+
+test("near a multinpc: Bow beside Civitas' quetzal, Renu's unnamed spawn 13355, 2 tiles from its footprint (RSProx 237/1098 tick 14440)", async (t) => {
+  core.RegionManager.loadMapFiles(1696, 3139);
+  const f = pactsCharacter(t, [1696, 3138, 0]);
+  const renu = core.NPC.create(13355, new core.Location(1696, 3141, 0));
+  core.World.getNpcs().add(renu);
+  t.after(() => core.World.getNpcs().remove(renu));
+  await emote(f, 2);
+  assert.ok(!done(f, "bow-near-a-quetzal"), "3 tiles off");
+  f.player.moveTo(new core.Location(1696, 3139, 0)); // the recorded tile
+  f.player.needsPlacement = false;
+  await emote(f, 2);
+  assert.ok(done(f, "bow-near-a-quetzal"), `bowed 2 tiles from it: ${f.messages}`);
+});
+
+test("near a loc: Salute next to Civitas' statue of Quoatlos, 3 tiles from its footprint as recorded (RSProx 237/1098 tick 15055)", async (t) => {
+  core.RegionManager.loadMapFiles(1719, 3155);
+  const f = pactsCharacter(t, [1718, 3161, 0]);
+  await emote(f, 21);
+  assert.ok(!done(f, "salute-next-to-a-statue-of-quoatlos"), "4 tiles off");
+  f.player.moveTo(new core.Location(1718, 3160, 0));
+  f.player.needsPlacement = false;
+  await emote(f, 21);
+  assert.ok(done(f, "salute-next-to-a-statue-of-quoatlos"), `the statue's 3x3 at 1719,3155: ${f.messages}`);
+});
+
+test("near a loc by option: a prayer switched on beside an altar (Activate a prayer near an altar), not away from one", (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.PRAYER, 99);
+  skills.setCurrentLevel(core.Skill.PRAYER, 99);
+  const pray = (offset) => {
+    const at = f.player.getLocation();
+    const altar = new core.GameObject(core.ObjectIdentifiers.ALTAR, new core.Location(at.getX() + offset, at.getY(), 0), 10, 0, null);
+    core.ObjectManager.register(altar, true);
+    core.PrayerHandler.deactivatePrayers?.(f.player);
+    core.PrayerHandler.activatePrayerPrayerId(f.player, core.PrayerHandler.THICK_SKIN);
+    assert.ok(core.PrayerHandler.isActivated(f.player, core.PrayerHandler.THICK_SKIN), `on: ${f.messages}`);
+    core.ObjectManager.deregister(altar, true);
+    return done(f, "activate-a-prayer-near-an-altar");
+  };
+  assert.equal(pray(3), false, "3 tiles from the altar");
+  assert.equal(pray(1), true, "beside it, as recorded (RSProx 237/1098 tick 9770)");
+});
+
+test("wearing: something cooked with an apron on (Cook something with an apron); a golden apron, or none, is not", async (t) => {
+  const f = pactsCharacter(t);
+  const cook = async (apron) => {
+    f.player.getEquipment().setItem(core.Equipment.BODY_SLOT, new core.Item(apron ? item(apron) : -1));
+    f.player.getInventory().resetItems();
+    assert.equal(await cookShark(t, f), 1, `the real Cooking cooks it: ${f.messages}`);
+    return done(f, "cook-something-with-an-apron");
+  };
+  assert.equal(await cook(null), false, "no apron");
+  assert.equal(await cook("Golden apron"), false, "the Wiki: a golden apron does not work");
+  assert.equal(await cook("Brown apron"), true, "a brown apron (RSProx 237/1098 tick 15774)");
+  const g = pactsCharacter(t);
+  g.player.getEquipment().setItem(core.Equipment.BODY_SLOT, new core.Item(item("White apron")));
+  assert.equal(await cookShark(t, g), 1);
+  assert.ok(done(g, "cook-something-with-an-apron"), "a white apron");
+});
+
+test("wearing: written as a list or as { items }, both read the same", async (t) => {
+  const Common = require("../plugins/modes/leaguetasks/Common.LeagueTasks");
+  const task = Common.catalog(6).tasks.find((each) => each.id === "cook-something-with-an-apron");
+  const list = task.trigger.wearing;
+  t.after(() => { task.trigger.wearing = list; });
+  task.trigger.wearing = { items: list };
+  const f = pactsCharacter(t);
+  f.player.getEquipment().setItem(core.Equipment.BODY_SLOT, new core.Item(item("White apron")));
+  assert.equal(await cookShark(t, f), 1);
+  assert.ok(done(f, "cook-something-with-an-apron"));
+});
+
+test("chop-logs: any logs chopped (Chop Some Logs)", async (t) => {
+  const f = pactsCharacter(t);
+  assert.ok(!done(f, "chop-some-logs"));
+  assert.ok(await chop(t, f, 1666, 3136) > 0, `the real Woodcutting: ${f.messages}`);
+  assert.ok(done(f, "chop-some-logs"));
+});
+
+test("deed: the League Home Teleport landing, either home (Cast Home Teleport; RSProx 237/1098 tick 4444)", async (t) => {
+  for (const [opId, landTicks] of [[3, 24], [2, 4]]) {
+    const f = pactsCharacter(t);
+    PM.emitSpellCast({ player: f.player, spellName: "League Home Teleport", spellWidget: (218 << 16) | 5, spellItemId: -1, opId, handled: false });
+    for (let i = 0; i < landTicks - 1; i++) core.TaskManager.process();
+    assert.ok(!done(f, "cast-home-teleport"), `op ${opId}: not before the landing`);
+    for (let i = 0; i < 2; i++) core.TaskManager.process();
+    assert.ok(done(f, "cast-home-teleport"), `op ${opId}: landed at ${f.player.getLocation()}`);
+  }
+});
+
+test("deed: an unlit torch lit with a tinderbox (Light a Torch; RSProx 237/1098 tick 16024)", async (t) => {
+  const f = pactsCharacter(t);
+  f.player.getInventory().add(new core.Item(item("Tinderbox")), true);
+  f.player.getInventory().add(new core.Item(item("Unlit torch")), true);
+  await send(f, { type: "inventory_use_on", itemId: item("Tinderbox"), slot: 0, target: { kind: "inventory", slot: 1 } }, 2);
+  assert.equal(f.player.getInventory().getAmount(item("Lit torch")), 1, `the real LightSources lights it: ${f.messages}`);
+  assert.ok(done(f, "light-a-torch"));
+});
+
+test("deed: planks made at a sawmill (Turn any Logs Into a Plank; RSProx 237/1103 tick 485)", (t) => {
+  const f = pactsCharacter(t);
+  const Sawmill = require("../plugins/npcs/Sawmill.plugin.js")._test;
+  const oak = Sawmill.data().planks.find((plank) => plank.plank === item("Oak plank"));
+  f.player.getInventory().add(new core.Item(Sawmill.data().coins, 1000), true);
+  assert.equal(Sawmill.convert(f.player, 3101, oak, 1), 0, "no logs, no plank");
+  assert.ok(!done(f, "turn-any-logs-into-a-plank"));
+  f.player.getInventory().add(new core.Item(item("Oak logs")), true);
+  assert.equal(Sawmill.convert(f.player, 3101, oak, 1), 1);
+  assert.ok(done(f, "turn-any-logs-into-a-plank"));
+});
+
+test("deed and npc-op: a sitting caique pecks on the fourth tick (Pet a Caique); Xolo petted in Varlamore (Pet Xolo in Civitas)", async (t) => {
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const f = pactsCharacter(t);
+  const caique = npcBeside(t, f, "Caique", "pet");
+  await send(f, { type: "npc_option", index: caique.npc.getIndex(), clickType: caique.clickType }, 2);
+  assert.ok(!done(f, "pet-a-caique"), "not before the peck");
+  await ticks(f, 4);
+  assert.ok(done(f, "pet-a-caique"), `pecked (RSProx 237/1098 tick 27022): ${f.messages}`);
+  core.World.getNpcs().remove(caique.npc);
+  f.player.getPacketSender().sendInterfaceRemoval();
+  const xolo = npcBeside(t, f, "Xolo", "pet");
+  await send(f, { type: "npc_option", index: xolo.npc.getIndex(), clickType: xolo.clickType }, 3);
+  assert.ok(done(f, "pet-xolo-in-civitas"), `the real StrayDogs pets it: ${f.messages}`);
+});
+
+test("deeds: a buffalo milked, a bird bath drunk from, scenery admired, stew given to Oli, a full barrel handed in (the Varlamore tasks of issue 6108)", async (t) => {
+  const f = pactsCharacter(t);
+  const go = (x, y) => { f.player.moveTo(new core.Location(x, y, 0)); f.player.needsPlacement = false; core.RegionManager.loadMapFiles(x, y); };
+  const objectAt = (x, y, name) => core.MapObjects.getObjectsAt(new core.Location(x, y, 0), null).find((object) => object.getDefinition()?.getName() === name);
+
+  // Milk a Buffalo: a Dairy Buffalo, two ticks after the arrival (RSProx 237/1098: clicked 14560, arrived 14569, effects 14571).
+  go(1587, 3118);
+  const dairy = new core.GameObject(52576, new core.Location(1588, 3118, 0), 10, 0, null);
+  core.ObjectManager.register(dairy, true);
+  t.after(() => core.ObjectManager.deregister(dairy, true));
+  f.player.getInventory().add(new core.Item(item("Bucket")), true);
+  await send(f, { type: "object_option", id: 52576, x: 1588, y: 3118, action: "Milk" }, 1);
+  assert.ok(!done(f, "milk-a-buffalo"), "not before the milking");
+  await ticks(f, 6);
+  assert.equal(f.player.getInventory().getAmount(item("Bucket of milk")), 1, `milked: ${f.messages} ${f.player.getLocation()}`);
+  assert.ok(done(f, "milk-a-buffalo"));
+
+  // Drink from a bird bath: Yes, then the outcome two ticks on (1098 tick 14897).
+  go(1556, 3170);
+  const bath = objectAt(1555, 3170, "Bird bath");
+  assert.ok(bath, "the bird bath west of Civitas");
+  f.player.getPacketSender().sendInterfaceRemoval();
+  BirdBath.drinkFrom({ player: f.player, object: bath });
+  for (let i = 0; i < 2; i++) core.TaskManager.process(); // the question two ticks on (1098 tick 14893)
+  const menu = f.player.getDialogueManager().getCurrent();
+  assert.equal(menu?.constructor?.name, "OptionDialogue", "Drink from the bird bath? Yes. / No.");
+  menu.execute(1);
+  assert.ok(!done(f, "drink-from-a-bird-bath"), "not on the Yes");
+  t.mock.method(Math, "random", () => 0.99); // the poison outcome, as recorded
+  for (let i = 0; i < 3; i++) core.TaskManager.process();
+  t.mock.restoreAll();
+  assert.ok(done(f, "drink-from-a-bird-bath"), `drank: ${f.messages}`);
+  assert.ok(f.messages.includes("You have been poisoned!"), f.messages.join(" | "));
+  assert.equal(f.player.getDialogueManager().getCurrent()?.getText?.() ?? f.player.getDialogueManager().getCurrent()?.text, "Eugh! I don't feel too good...");
+
+  // Admire some beautiful scenery: the Auburn Valley's beautiful rock at 1438,3330 (1098 tick 16910).
+  f.player.getPacketSender().sendInterfaceRemoval();
+  f.player.getDialogueManager().reset();
+  go(1437, 3331);
+  const rock = objectAt(1438, 3330, "Beautiful rock");
+  assert.ok(rock, "the beautiful rock");
+  await send(f, { type: "object_option", id: rock.getId(), x: 1438, y: 3330, action: "Admire" }, 6);
+  assert.ok(done(f, "admire-some-beautiful-scenery"), `admired: ${f.messages}`);
+
+  // Give Oli some Stew: on the arrival, with the item box (1098 tick 15383).
+  go(1653, 3103);
+  const oli = core.NPC.create(13318, new core.Location(1654, 3103, 0));
+  core.World.getNpcs().add(oli);
+  t.after(() => core.World.getNpcs().remove(oli));
+  f.player.getInventory().resetItems();
+  f.player.getInventory().setItem(0, new core.Item(item("Stew"), 1));
+  await send(f, { type: "item_on_npc", targetIndex: oli.getIndex(), itemId: item("Stew"), slot: 0, widgetId: 149 << 16 }, 4);
+  assert.equal(f.player.getInventory().getAmount(item("Stew")), 0, `Oli eats it: ${f.messages}`);
+  assert.ok(done(f, "give-oli-some-stew"));
+
+  // Fill a Grape Barrel for the Foreman: on the payment (1098 tick 16598; the whole flow is in
+  // vineyard-foreman-barrel.test.cjs).
+  const Vineyard = require("../plugins/world/Vineyard.plugin.js")._test;
+  f.player.getInventory().add(new core.Item(item("Grape barrel")), true);
+  f.player.setAttribute(Vineyard.GRAPES_ATTRIBUTE, 3);
+  Vineyard.handIn(f.player);
+  assert.ok(!done(f, "fill-a-grape-barrel-for-the-foreman"), "a barrel short of full pays nothing");
+  f.player.setAttribute(Vineyard.GRAPES_ATTRIBUTE, 4);
+  Vineyard.handIn(f.player);
+  assert.ok(done(f, "fill-a-grape-barrel-for-the-foreman"));
 });

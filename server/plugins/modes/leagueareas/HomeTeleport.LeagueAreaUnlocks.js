@@ -35,7 +35,7 @@ function civitas(player, type, home) {
   const target = near(home.civitas);
   if (!allowed(player, target)) return;
   Common.core.TeleportHandler.confirm(player, target, () => {
-    if (!inCombat(player)) startHomeTeleport(Common.core, player, target, null, castOf(Common.league(type).teleportCast));
+    if (!inCombat(player)) startHomeTeleport(Common.core, player, target, () => landed(player, target), castOf(Common.league(type).teleportCast));
   });
 }
 
@@ -74,10 +74,19 @@ function throughPortal(player, home, target) {
       player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
       player.moveTo(target);
       core.PluginManager?.emitCustomEvent?.("teleport:landed", { player, from: start, fromInstance: false, to: target });
+      landed(player, target);
       player.performAnimation(new core.Animation(land));
       player.performGraphic(new core.Graphic(landGraphic, 0, landGraphicHeight));
     }
   })());
+}
+
+/**
+ * A home teleport arrived (`magic:home-teleport-landed`, as HomeTeleports emits it): "Cast Home
+ * Teleport" completes on the landing tick, as rsprox 237/1098 tick 4444 shows for Yama's portal.
+ */
+function landed(player, to) {
+  Common.core.PluginManager?.emitCustomEvent?.("magic:home-teleport-landed", { player, to });
 }
 
 function go(player, type, home, where) {

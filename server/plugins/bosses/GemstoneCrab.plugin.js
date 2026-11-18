@@ -127,10 +127,11 @@ function locate(request) {
   if (SPOTS[spot]) request.tile = [...SPOTS[spot].exit, 0];
 }
 
+/** A random mine other than `not` (any, with one mine): one draw among the others, never a re-roll loop. */
 function pickSpot(not) {
-  let spot;
-  do spot = Math.floor(Math.random() * SPOTS.length); while (spot === not && SPOTS.length > 1);
-  return spot;
+  const others = SPOTS.map((_spot, index) => index).filter((index) => index !== not);
+  const choices = others.length ? others : [0];
+  return choices[Math.min(choices.length - 1, Math.floor(Math.random() * choices.length))];
 }
 
 function spawnCrab() {
@@ -478,7 +479,7 @@ module.exports = {
   name: "GemstoneCrab",
   description: "The Gemstone Crab world boss in the Tlati Rainforest: a ten-minute timer that burrows between three mines and leaves a shell to mine for gems.",
   members: true,
-  _test: { state, tick, attack, inReach, rollGem, spawnCrab, startBurrow, topDealers, recordDamage, locate, SPOTS },
+  _test: { state, tick, attack, inReach, rollGem, spawnCrab, startBurrow, topDealers, recordDamage, locate, pickSpot, SPOTS },
   register(api) {
     pluginApi = api;
     ItemOnGroundManager = api.getItemOnGroundManager();

@@ -2008,6 +2008,40 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   lists the kill tasks it could not map. To map more: add a kind (a trigger kind is a few lines in Triggers.LeagueTasks),
   a rule in the generator, or an entry in the overlay; or have the plugin that knows the deed emit
   `league:complete-task`. Everything else in the catalog is visible and counts once mapped.
+- **Conditions** on any counted deed trigger (`Actions.LeagueTasks.js`, `conditionsMet`):
+  `wearing: [items]` (or `{ items }`), one of the items worn as the deed happens ("Cook something with an
+  apron": a Brown or White apron; the Wiki: a Golden apron does not work), and `near { npcs?,
+  objects?, options?, distance }`, an NPC or loc of one of the names, or a loc offering one of the
+  options (an altar's `Pray-at`; "near an altar" takes `Pray-at` and `Pray`, so a god statue,
+  shrine or statuette with Pray counts too, ours), within `distance` tiles of the player (Chebyshev, to the nearest
+  tile of its footprint, same plane and instance). The Demonic Pacts tasks the generator could not
+  word-map are in the overlay (issue 6108). The distances are fitted to rsprox.net recording 1098
+  (rev 237, Leagues VI), the only one that completes them; the Wiki gives none:
+  - "Cry near a child" (Cry, slot 16): cried 2 tiles from a child at tick 14398, the task at 14399; distance 2.
+  - "Dance near a bard" (Dance, slot 12): no task 3 tiles from the Avium Savannah bards (tick 25550),
+    completed 1 tile from one (25555); distance 2.
+  - "Bow near a quetzal" (Bow, slot 2): completed 2 tiles from Civitas' quetzal (spawn 13355, a
+    size-3 multinpc with no name of its own, whose forms are Renu; tick 14440); distance 2. A
+    multinpc matches by the form the player sees and by its forms' names.
+  - "Salute next to a statue of Quoatlos" (Salute, slot 21): completed 3 tiles from the Grand
+    Museum statue's 3x3 footprint at 1719,3155 (tick 15055); distance 3.
+  - "Activate a prayer near an altar": completed beside the altar at 1225,3103 (tick 9770);
+    distance 2 is ours (the nearest the other tasks use).
+  The other mapped deeds, each on the tick the recordings show: "Cast Home Teleport" on the landing
+  (`magic:home-teleport-landed` { player, to }, from the standard home teleports and the league's
+  own, 1098 tick 4444), "Light a Torch" as the torch lights (LightSources' `light-sources:lit`
+  { player, itemId }, 1098 tick 16024), "Turn any Logs Into a Plank" on the sawmill choice
+  (`sawmill:planks-made` { player, npcId, itemId, amount }, 1103 tick 485), "Chop Some Logs" on the
+  log (1098 tick 11083), "Pet a Caique" on the peck (`caique:pecked` { player, npc }, 1098 tick
+  27022) and "Pet Xolo in Civitas" on the Pet (`npc-op`, in Varlamore, area 21: the catalog names no
+  Civitas place, so the Xolo of Aldarin, 1354,2951, counts too; 1098 tick 14824). The four Varlamore
+  emote tasks also count only in Varlamore (area 21), as their region says: a "Child" stands in many
+  towns. Leagues 4 and 5 share the first four of these tasks and take the
+  same triggers. Five more are the content's own `deed` events (docs/varlamore-small-interactions.md):
+  "Milk a Buffalo" (`dairy-buffalo:milked`), "Drink from a bird bath" (`bird-bath:drank`), "Admire
+  some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
+  Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
+  and the barrel.
 - **Deeds** (`Actions.LeagueTasks.js`) listen to the events the skills already emit, counted per
   task in `league:task-progress` (task id -> count) until done (a trigger with an `area` counts
   only deeds done on its map there, where the player stands, `league:area-at`; a potion counts by
@@ -2074,6 +2108,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   "on normal or hard mode 25 times"; the server's raid sends normal and entry),
   `emote { slots, count }` from the emotes plugin's `player:emote` (by the tab's slot; "Use the
   Fortis Salute emote", named as its locked emotes are in `emotes.json`),
+  `chop-logs { count }` from Woodcutting's `woodcutting:success` (any item named "... logs" given:
+  "Chop Some Logs"), `cook { count }` from Cooking's `skills:produced` of kind `cook` (anything
+  cooked on a fire or range), `prayer { any: true }` (whichever prayer is switched on),
   `take { items, source, count }` from ItemOnGroundManager's `ground-items:taken` (a ground item
   picked up, "pickup", or telegrabbed, "telegrab": "Pick up 10 White berries in Tirannwn", "Telegrab
   a Bloody bracer in Slepe"; a field's crop is a pick),

@@ -96,7 +96,16 @@
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
+ * - `chop-logs { count }`: any logs chopped (`woodcutting:success` giving an item named "... logs");
+ *   `cook { count }`: anything cooked on a fire or range (`skills:produced` of kind "cook").
+ *   `prayer { any: true }` takes whichever prayer is switched on.
+ *
  * - `enter { place }`: the player inside one of the catalog's named places (its boxes, zones).
+ *
+ * Any counted trigger may add `wearing { items }` (one of them worn as the deed happens) and
+ * `near { npcs?, objects?, options?, distance }` (an NPC or loc of one of the names, or a loc with
+ * one of the options, that close to its footprint): "Cook something with an apron", "Cry near a
+ * child".
  *
  * A trigger with an `area` counts only deeds done there (`league:area-at`, the player's tile), one
  * with a `place` only inside that place's bounds.
@@ -126,7 +135,7 @@ function add(map, name, task) {
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { enter: new Map(), deeds: new Map(), rifts: [], equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map(), events: new Map(), prayer: new Map(), obtain: new Map(), obtainAll: [] };
+  const entry = { enter: new Map(), deeds: new Map(), rifts: [], equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [], checkHealth: new Map(), events: new Map(), prayer: new Map(), prayerAny: [], obtain: new Map(), obtainAll: [] };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (trigger?.kind === "enter") entry.enter.set(trigger.place, (entry.enter.get(trigger.place) ?? []).concat(task));
@@ -150,6 +159,7 @@ function indexOf(type) {
     else if (trigger?.kind === "obtain-all") entry.obtainAll.push(task);
     else if (trigger?.kind === "deed") entry.deeds.set(trigger.event, (entry.deeds.get(trigger.event) ?? []).concat(task));
     else if (EVENT_KINDS.has(trigger?.kind)) add(entry.events, trigger.kind, task);
+    else if (trigger?.kind === "prayer" && trigger.any) entry.prayerAny.push(task);
     else if (trigger?.kind === "prayer") for (const prayer of trigger.prayers ?? []) add(entry.prayer, prayer, task);
     else if (trigger?.kind === "check-health") {
       for (const cropType of trigger.types ?? []) add(entry.checkHealth, `type:${cropType}`, task);
@@ -178,7 +188,7 @@ function count(player, kind, name, amount = 1) {
 function countTasks(player, type, tasks, amount = 1) {
   if (!tasks?.length) return;
   const done = new Set(Common.completedIds(player));
-  const open = tasks.filter((task) => !done.has(task.id) && inArea(player, type, task));
+  const open = tasks.filter((task) => !done.has(task.id) && inArea(player, type, task) && conditionsMet(player, task));
   if (!open.length) return;
   const progress = { ...progressOf(player) };
   const reached = [];
@@ -207,6 +217,77 @@ function inArea(player, type, task) {
   const query = { x: at.getX(), y: at.getY(), league: type, area: null };
   Common.api.emitCustomEvent("league:area-at", query);
   return query.area === task.trigger.area;
+}
+
+/**
+ * A trigger's own conditions on the player as the deed happens:
+ * - `wearing: [items]` (or `{ items }`): one of the items worn (by name), "Cook something with an apron
+ *   equipped";
+ * - `near { npcs?, objects?, options?, distance }`: an NPC or a loc of one of the names (or a loc
+ *   offering one of the menu options: an altar's "Pray-at") within `distance` tiles (Chebyshev, to
+ *   the nearest tile of its footprint) on the player's plane and instance: "Cry near a child",
+ *   "Activate a prayer near an altar".
+ */
+function conditionsMet(player, task) {
+  const { near } = task.trigger;
+  // `wearing: [items]`, or `wearing: { items }` as other kinds name their lists.
+  const wearing = Array.isArray(task.trigger.wearing) ? task.trigger.wearing : task.trigger.wearing?.items;
+  if (wearing && !wearing.some((unit) => wornUnit(wornIndexOf(player), unit))) return false;
+  if (near && !isNear(player, near)) return false;
+  return true;
+}
+
+/** The largest NPC or loc side a `near` search reaches out for (their tile is the south-west one). */
+const LARGEST_SIDE = 5;
+
+function isNear(player, { npcs, objects, options, distance }) {
+  const at = player.getLocation?.();
+  if (!at) return false;
+  const reach = Number(distance) || 0;
+  const area = player.getPrivateArea?.() ?? null;
+  if (npcs?.length) {
+    const names = new Set(npcs.map(key));
+    for (const npc of Common.core.World.getNpcsNear(at, reach + LARGEST_SIDE, area)) {
+      if (!npcNamesOf(npc, player).some((name) => names.has(key(name))) || npc.getLocation().getZ() !== at.getZ()) continue;
+      if (npcFootprintDistance(npc, at) <= reach) return true;
+    }
+  }
+  if (objects?.length || options?.length) {
+    const names = new Set((objects ?? []).map(key));
+    const ops = new Set((options ?? []).map(key));
+    const matches = (definition) => names.has(key(definition?.getName?.()))
+      || (ops.size > 0 && (definition?.getActions?.() ?? []).some((action) => action && ops.has(key(action))));
+    const { MapObjects, Location } = Common.core;
+    for (let dx = -(reach + LARGEST_SIDE); dx <= reach; dx++) {
+      for (let dy = -(reach + LARGEST_SIDE); dy <= reach; dy++) {
+        const tile = new Location(at.getX() + dx, at.getY() + dy, at.getZ());
+        for (const object of MapObjects.getObjectsAt(tile, area) ?? []) {
+          if (matches(object.getDefinition?.()) && object.footprintDistance(at) <= reach) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * The names an NPC goes by for this player: the form it shows them (a multinpc resolved by their
+ * vars), its own, and every one of a multinpc's forms' (Civitas' quetzal is spawn
+ * 13355, unnamed, whose forms include Renu; RSProx 237/1098 tick 14440 shows it as Renu's form).
+ */
+function npcNamesOf(npc, player) {
+  const names = [npc.getCurrentDefinition?.(player)?.getName?.(), npcName(npc.getId())];
+  for (const child of Common.core.CacheDefinitions.getNpc(npc.getId())?.transforms ?? []) {
+    if (Number.isInteger(child) && child >= 0) names.push(npcName(child));
+  }
+  return names.filter((name) => name && name !== "null");
+}
+
+function npcFootprintDistance(npc, at) {
+  const origin = npc.getLocation();
+  const size = Math.max(1, Number(npc.size?.()) || 1);
+  const gap = (point, start) => Math.max(0, start - point, point - (start + size - 1));
+  return Math.max(gap(at.getX(), origin.getX()), gap(at.getY(), origin.getY()));
 }
 
 function itemName(id) {
@@ -647,6 +728,10 @@ const EVENT_KINDS = new Map([
     && (event.loot ?? []).some((entry) => trigger.items.some((each) => key(each) === key(itemName(Number(entry?.id ?? entry?.itemId)))))],
   ["take", (trigger, event) => trigger.source === event.source && trigger.items.some((each) => key(each) === key(itemName(event.itemId)))],
   ["emote", (trigger, event) => trigger.slots.includes(Number(event.slot))],
+  // Any logs chopped ("Chop any kind of logs"): a woodcutting success that gave logs, by the item's name.
+  ["chop-logs", (_trigger, event) => Number(event.logAmount ?? 1) > 0 && /\blogs$/i.test(itemName(event.logId) ?? "")],
+  // Something cooked on a fire or range (Cooking's `skills:produced` of kind "cook"), whatever it is.
+  ["cook", (_trigger, event) => event.skill === Common.core.Skill.COOKING && event.kind === "cook"],
   ["tob", (trigger, event) => trigger.modes.includes(event.mode)],
   ["teleport", (trigger, event) => trigger.spells.includes(String(event.name ?? "").toLowerCase())],
   ["bank", () => true],
@@ -747,8 +832,12 @@ function riftClosed({ player, rifts }) {
 }
 
 function prayed({ player, prayerId }) {
+  if (!player) return;
   const name = Common.core.PrayerData?.prayerData?.get?.(prayerId)?.name;
-  if (player && name) count(player, "prayer", name);
+  if (name) count(player, "prayer", name);
+  // `prayer { any: true }`: whichever prayer it is ("Activate a prayer near an altar").
+  const type = Common.leagueOf(player);
+  if (type !== null) countTasks(player, type, indexOf(type).prayerAny);
 }
 
 function lapped({ player, course, count: laps }) {
@@ -799,6 +888,8 @@ module.exports = function attach(api) {
   api.onCustomEvent("guardians-of-the-rift:rift-closed", riftClosed);
   api.onCustomEvent("tob:completed", onEvent("tob"));
   api.onCustomEvent("player:emote", onEvent("emote"));
+  api.onCustomEvent("woodcutting:success", onEvent("chop-logs"));
+  api.onCustomEvent("skills:produced", onEvent("cook"));
   api.onCustomEvent("ground-items:taken", onEvent("take"));
   api.onCustomEvent("thieving:loot", onEvent("pickpocket-loot"));
   api.onCustomEvent("woodcutting:nest-drop", onEvent("bird-nest"));

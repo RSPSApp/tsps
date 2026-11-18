@@ -929,8 +929,11 @@ This table lists bundled plugins that have a description. The world config page 
 | `BananaTree` | BananaTree | objects | yes | Wild banana trees on Musa Point and Ape Atoll: Pick takes a banana and empties the tree stage by stage, regrowing after five minutes. |
 | `BankBooths` | BankBooths | objects | yes | Opens the bank from bank booths, bank chests and Banker NPCs, and handles the bank tab and settings buttons. |
 | `BankDepositBooth` | BankDepositBooth | objects | yes | Opens the bank deposit box from the Deposit option and handles its deposit buttons and items used on it. |
+| `BeautifulScenery` | BeautifulScenery | objects | yes | Lets players admire the Auburn Valley's beautiful scenery (sitting down to it). (members only) |
 | `BerryBushes` | BerryBushes | objects | yes | Wild redberry and cadava bushes near Varrock: Pick-from takes a berry, and bushes regrow one berry at a time. |
+| `BirdBath` | BirdBath | objects | yes | Lets players drink from Civitas illa Fortis' bird baths, with the transcript's four random outcomes. (members only) |
 | `Chests` | Chests | objects | yes | Generic household chests: Open and Shut swap between the closed and open locs, and searching an open one finds nothing. |
+| `DairyBuffalo` | DairyBuffalo | objects | yes | Lets players milk Varlamore's Dairy Buffalo into an empty bucket, as captured. (members only) |
 | `DairyCow` | DairyCow | objects | yes | Dairy cows: Milk fills an empty bucket, and Steal-cowbell is a 15 Thieving action unlocked once Cold War is started. |
 | `Doors` | Doors | objects | yes | Opens and closes doors, gates and double doors, swapping between closed and open locs, with route handling and reapplied state on region load. |
 | `FarmingShed` | FarmingShed | objects | yes | Borrow a rake and spade from the Lumbridge Swamp shed. |
@@ -1044,7 +1047,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `SpiritTrees` | SpiritTrees | world | yes | Spirit tree network: the location menu, travel, talk-to and last-destination, with trees you cannot use greyed out. (members only) |
 | `TableItems` | TableItems | world | yes | Using a tradeable item on a table places it there, visible to others after 60 seconds and despawning after 10 minutes. |
 | `TarSwampMushroom` | TarSwampMushroom | world | yes | Fossil Island's Tar Swamp rubber cap mushroom: Jump on throws the player to the mud pit, softened by 9 bittercaps (Fill). (members only) |
-| `Vineyard` | Vineyard | world | yes | Aldarin's vineyard foreman hands out the grape barrel. (members only) |
+| `Vineyard` | Vineyard | world | yes | Aldarin's vineyard: the foreman's grape barrel, picking four sparkling ripe grapevines into it, and the full barrel's payment. (members only) |
 | `WarningScreens` | WarningScreens | world | yes | Warning screens before dangerous areas, counted per player and toggled off after enough showings, and the Lumbridge Doomsayer who turns them back on. |
 | `WaterSources` | WaterSources | world | yes | Using an empty jug, vial, bucket, bowl, cup, fishbowl or waterskin on a fountain, sink, well, pump or tap fills them one per tick. |
 <!-- world-config:generated:end -->

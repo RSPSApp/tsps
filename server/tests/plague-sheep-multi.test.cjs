@@ -11,6 +11,7 @@ const path = require("node:path");
 const { before, after, test } = require("node:test");
 // The bots rewrite their tracked object index on load, and nothing here needs them.
 process.env.DISABLE_PLAYER_BOTS = "1";
+process.env.BROWSER_HOST = "1";
 require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
@@ -210,6 +211,7 @@ test("Sheep Herder: each sheep standing in the world can be prodded into the pen
     const penned = f.spawned.at(-1);
     assert.deepEqual([penned?.getLocation().getX(), penned?.getLocation().getY()], pen, `${world}: in its pen tile`);
     assert.equal(npc.isRegistered(), true, `${world}: the world's sheep stays for other players`);
+    assert.equal(npc.isScriptedMovement(), false, 'penning releases the shared sheep');
   }
 });
 
@@ -238,6 +240,7 @@ test("Sheep Herder: a world sheep needs the suit, the prod and the stage, and on
     await prod(f, npc);
     assert.equal(progress(f, 0), 0, `not penned: ${JSON.stringify(options)}`);
     assert.ok(f.messages.some((message) => expected.test(message)), `told: ${f.messages}`);
+    assert.equal(npc.isScriptedMovement(), false, 'refused prod takes no movement ownership');
   }
 
   const f = herder(t);
@@ -346,11 +349,9 @@ for (const spawn of worldSheepSpawns) {
   test(`Sheep Herder: prod world sheep ${spawn.id} at its spawn ${spawn.x},${spawn.y}`, async (t) => {
     const f = herder(t);
     core.RegionManager.loadMapFiles(spawn.x, spawn.y);
-    const npc = core.NPC.create(spawn.id, new core.Location(spawn.x, spawn.y, spawn.level));
-    // Isolate the prod from random wandering; terrain, mobility and packet routing stay real.
-    npc.getMovementCoordinator().setRadius(0);
-    core.World.getNpcs().add(npc);
-    t.after(() => core.World.getNpcs().remove(npc));
+    const npc = productionSheep(t, spawn);
+    // Suppress random wandering only; retain production home/radius/retreat AI.
+    t.mock.method(Math, 'random', () => 0.99);
     const at = npc.getLocation().clone();
     const step = [[0, -1], [1, 0], [-1, 0], [0, 1]].find(([dx, dy]) =>
       npc.getMovementQueue().canWalkTo(at.transform(dx, dy))
@@ -359,7 +360,7 @@ for (const spawn of worldSheepSpawns) {
     f.p.setLocation(at.transform(-step[0], -step[1]));
     await f.c.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: 1 }]);
     f.c.processTurnPackets();
-    // Observe the prod before the ordinary wander coordinator can walk it home again.
+    // Consume the interaction's prod in the following NPC phase, as World does.
     for (let i = 0; i < 6 && npc.getLocation().equals(at); i++) tick(f, npc, 1);
     t.diagnostic(`step ${step}; messages ${f.messages}; facing ${f.p.getFacingDirection()?.getX()},${f.p.getFacingDirection()?.getY()}; mobility ${npc.getMovementQueue().getMobility().canMove()}`);
     assert.ok(!f.messages.includes('The sheep has nowhere to go.'), `open tile refused: ${f.messages}`);
@@ -367,3 +368,111 @@ for (const spawn of worldSheepSpawns) {
       [spawn.x + step[0], spawn.y + step[1]], 'one ordinary collision-checked prod step');
   });
 }
+
+function productionSheep(t, spawn) {
+  const { NpcSpawnDefinitionLoader: Loader } = require('../dist/game/definition/loader/impl/NpcSpawnDefinitionLoader');
+  const loader = new Loader();
+  const sources = loader.loadSources('npc_spawns');
+  assert.equal(sources.failures, 0);
+  const row = sources.sources.flatMap(source => source.definitions.map(raw => ({ raw, source: source.name })))
+    .find(({ raw }) => raw.id === spawn.id && raw.x === spawn.x && raw.y === spawn.y);
+  assert.ok(row, 'production provider contains this spawn');
+  const definition = loader.toDefinition(row.raw, row.source);
+  core.RegionManager.loadMapFiles(spawn.x, spawn.y);
+  assert.ok(Loader.spawn(definition));
+  const npc = core.World.getNpcs().search(entry => entry.getId() === spawn.id
+    && entry.getSpawnPosition().equals(definition.getPosition()));
+  assert.ok(npc);
+  assert.equal(npc.getMovementCoordinator().getRadius(), definition.getRadius());
+  t.after(() => core.World.getNpcs().remove(npc));
+  return npc;
+}
+
+async function promptProd(f, npc, dx = 1, dy = 0) {
+  const at = npc.getLocation().clone();
+  f.p.setLocation(at.transform(-dx, -dy));
+  f.p.needsPlacement = false;
+  await f.c.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: 1 }]);
+  f.c.processTurnPackets();
+  core.TaskManager.process();
+  assert.equal(npc.getMovementQueue().size(), 1, 'native input queued one prod');
+  npc.process();
+  f.p.getMovementQueue().process();
+  core.TaskManager.processWalkTo(f.p.getIndex());
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()],
+    [at.getX() + dx, at.getY() + dy], 'NPC phase preserves the requested prod');
+}
+
+for (const spawn of worldSheepSpawns.filter(row => row.id === 6181 || row.id === 6182)) {
+  test(`Sheep Herder: prompt prods escape production radius at ${spawn.x},${spawn.y}`, async t => {
+    const f = herder(t);
+    const npc = productionSheep(t, spawn);
+    t.mock.method(Math, 'random', () => 0.99);
+    const home = npc.getSpawnPosition().clone();
+    const radius = npc.getMovementCoordinator().getRadius();
+    const direction = [[1, 0], [0, -1], [-1, 0], [0, 1]].find(([dx, dy]) =>
+      Array.from({ length: 8 }, (_, i) => home.transform(i * dx, i * dy))
+        .every(at => core.RegionManager.canMovestart(at, at.transform(dx, dy), 1, 1, null)));
+    assert.ok(direction, 'eight clear production terrain steps');
+    for (let i = 0; i < 8; i++) {
+      await promptProd(f, npc, ...direction);
+      tick(f, npc, 1); // >10 total cycles; every new prod refreshes the window.
+    }
+    assert.ok(npc.isScriptedMovement());
+    assert.equal(npc.getMovementCoordinator().getRadius(), radius);
+    assert.ok(npc.getSpawnPosition().equals(home));
+    f.p.setLocation(npc.getLocation().transform(0, 3));
+    tick(f, npc, 10);
+    assert.equal(npc.isScriptedMovement(), false, 'idle restores ordinary movement');
+    assert.equal(npc.getMovementCoordinator().getCoordinateState(), 1, 'ordinary return resumes');
+    assert.ok(npc.getLocation().getDistance(home) < 8, 'returns toward original home');
+  });
+}
+
+test('Sheep Herder: shared prods transfer logout cleanup and cancellation restores prior state', async t => {
+  const first = herder(t);
+  const second = herder(t);
+  const npc = productionSheep(t, { id: 6181, x: 2561, y: 3388 });
+  t.mock.method(Math, 'random', () => 0.99);
+  await promptProd(first, npc);
+  first.p.setLocation(npc.getLocation().transform(0, 3));
+  await promptProd(second, npc);
+  PM.emitPlayerLogout({ player: first.p, username: first.p.getUsername() });
+  assert.ok(npc.isScriptedMovement(), 'earlier herder logout cannot release latest prod');
+  PM.emitPlayerLogout({ player: second.p, username: second.p.getUsername() });
+  assert.equal(npc.isScriptedMovement(), false, 'latest herder logout releases');
+  npc.setScriptedMovement(true);
+  await promptProd(second, npc);
+  core.TaskManager.cancelTasks(npc);
+  assert.equal(npc.isScriptedMovement(), true, 'external cancellation restores original flag');
+  npc.setScriptedMovement(false);
+  await promptProd(second, npc);
+  core.TaskManager.cancelTasks(npc);
+  assert.equal(npc.isScriptedMovement(), false);
+  await promptProd(second, npc);
+  core.World.getNpcs().remove(npc);
+  core.TaskManager.process();
+  assert.equal(npc.isScriptedMovement(), false, 'removed sheep releases');
+});
+
+test('Sheep Herder: blocked or foreign private prods cannot start or refresh movement ownership', async t => {
+  const f = herder(t);
+  const other = herder(t);
+  const npc = productionSheep(t, { id: 6181, x: 2561, y: 3388 });
+  t.mock.method(Math, 'random', () => 0.99);
+  await promptProd(f, npc);
+  t.mock.method(npc.getMovementQueue(), 'canWalk', () => false);
+  await prod(f, npc);
+  assert.ok(f.messages.includes('The sheep has nowhere to go.'));
+  tick(f, npc, 4);
+  assert.equal(npc.isScriptedMovement(), false, 'blocked prod did not refresh idle window');
+  await prod(f, npc);
+  assert.equal(npc.isScriptedMovement(), false, 'blocked prod cannot start a window');
+  PM.emitPlayerLogin({ player: f.p, username: f.p.getUsername() });
+  const own = f.spawned.find(entry => entry.getId() === 3986);
+  assert.ok(own);
+  other.p.setLocation(own.getLocation().transform(-1, 0));
+  await prod(other, own);
+  assert.equal(own.isScriptedMovement(), false, 'another player cannot drive private sheep');
+  assert.equal(progress(other, 0), 0);
+});

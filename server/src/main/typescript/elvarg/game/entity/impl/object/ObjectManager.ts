@@ -270,6 +270,10 @@ export class ObjectManager {
                 continue;
             }
             RegionManager.removeObjectClipping(removed);
+            // A fresh scene still needs to remove the cached loc before adding a different shared loc.
+            if (!removed.getPrivateArea() && !ObjectManager.sameObjectIdentity(removed, object)) {
+                continue;
+            }
             World.getRemovedObjects().splice(index, 1);
             // It takes a removed map object's place (a door closed again): removing it later must
             // hide that spot on scene reloads, as for the original.

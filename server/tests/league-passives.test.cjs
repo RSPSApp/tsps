@@ -552,3 +552,24 @@ test("boosted drops: the minigames' own rare finds (minigame:chance), by their B
   assert.equal(Plunder.sceptreMultiplier(character("ppmain", "main")), 1);
   assert.equal(Plunder.sceptreMultiplier(character("pp8", "league", 8)), 5);
 });
+
+
+test("Demonic Pacts master access bypasses only the master's levels", () => {
+  const Tasks = require("../plugins/skills/slayer/Tasks.Slayer");
+  Tasks.init({ core, emitCustomEvent(name, request) {
+    for (const handler of custom[name] ?? []) handler(request);
+  } });
+  const master = { combat: 70, slayer: 50 };
+  const league = character("lowpacts", "league", 0, 6);
+  assert.equal(Tasks.meetsMaster(league, master), true, "a starting Demonic Pacts character can use its master");
+  for (const [profile, type] of [["main", 6], ["league", 4], ["league", 5]]) {
+    const ordinary = character("lowother", profile, 0, type);
+    assert.equal(Tasks.meetsMaster(ordinary, master), false, `${profile}/${type} keeps master requirements`);
+    for (const skill of [core.Skill.ATTACK, core.Skill.STRENGTH, core.Skill.DEFENCE, core.Skill.HITPOINTS]) {
+      ordinary.getSkillManager().setLevel(skill, 99);
+    }
+    assert.equal(Tasks.meetsMaster(ordinary, master), false, "combat alone does not bypass Slayer");
+    ordinary.getSkillManager().setLevel(core.Skill.SLAYER, 50);
+    assert.equal(Tasks.meetsMaster(ordinary, master), true, "meeting both requirements still works");
+  }
+});

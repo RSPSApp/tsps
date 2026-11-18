@@ -68,10 +68,11 @@ export class WorldConfigCatalog {
         WorldConfigCatalog.cache = null;
     }
 
-    public static build(pluginDirectory: string, layers: WorldConfigLayers): WorldConfigCatalogData {
+    public static build(pluginDirectory: string, layers: WorldConfigLayers, importedOnly = false): WorldConfigCatalogData {
         const running = PluginManager.getLoadedPluginFiles(pluginDirectory);
         const key = [
             pluginDirectory,
+            importedOnly,
             running ? `loaded:${running.size}` : "rule",
             layers.localHash,
             crypto.createHash("sha256").update(JSON.stringify(layers.shipped)).digest("hex"),
@@ -79,12 +80,12 @@ export class WorldConfigCatalog {
         if (WorldConfigCatalog.cache?.key === key) {
             return WorldConfigCatalog.cache.data;
         }
-        const data = WorldConfigCatalog.compute(pluginDirectory, layers);
+        const data = WorldConfigCatalog.compute(pluginDirectory, layers, importedOnly);
         WorldConfigCatalog.cache = { key, data };
         return data;
     }
 
-    private static compute(pluginDirectory: string, layers: WorldConfigLayers): WorldConfigCatalogData {
+    private static compute(pluginDirectory: string, layers: WorldConfigLayers, importedOnly: boolean): WorldConfigCatalogData {
         const merged = mergeWorldConfig(layers.shipped, layers.local);
         let parsedSwitches: ReturnType<typeof PluginManager.parsePluginSwitches>;
         try {
@@ -104,10 +105,13 @@ export class WorldConfigCatalog {
         const localPlugins = Array.isArray(layers.shipped.disabledPlugins) ? {} : plainObject(layers.local.plugins);
 
         const found: { plugin: CatalogPlugin; module: PluginModule; file: string }[] = [];
-        for (const file of PluginManager.discoverPluginFiles(pluginDirectory, PluginManager.MAX_PLUGIN_DEPTH)) {
+        const files = fs.existsSync(pluginDirectory)
+            ? PluginManager.discoverPluginFiles(pluginDirectory, PluginManager.MAX_PLUGIN_DEPTH) : [];
+        for (const file of files) {
             const relative = path.relative(pluginDirectory, file).split(path.sep);
             const fileName = pluginNameFromFile(file);
             const importedPackage = relative[0] === "imported";
+            if (importedOnly && !importedPackage) continue;
             let awaitingLoad = false;
             let packageId: string | undefined;
             let module: PluginModule;
@@ -130,7 +134,11 @@ export class WorldConfigCatalog {
                         if (!manifest) continue;
                         // Only the server's startup loader may execute an imported ZIP's source.
                         awaitingLoad = true;
-                        module = { name: fileName, description: manifest.description, register() {} };
+                        module = {
+                            name: fileName, description: manifest.description,
+                            config: packageId ? manifest.config : undefined,
+                            register() {},
+                        };
                     }
                 }
             } catch (err) {

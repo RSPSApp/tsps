@@ -1082,6 +1082,8 @@ module.exports = {
   LIGHTABLE_LOGS_BY_ID,
   isFiremakingBow,
   lightingSuccessChance,
+  // Tai Bwo Wannai Trio's jogre bones are lit on the same tiles as logs.
+  canLightFireAt,
   firemakingXpMultiplier,
   rollFireLifetimeTicks,
   createCampfireTicks,

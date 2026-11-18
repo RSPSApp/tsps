@@ -299,3 +299,55 @@ test("offhand activation keeps charges and weapon state on refusals", async (t) 
     }
   }
 });
+
+const { encodeVarp } = require('../dist/net/protocol/ClientProtocol');
+function registeredRefusalPlayer(t, weaponId) {
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const session = new PlayerSession(channel), player = new Player(session), frames = [];
+  player.setUsername('orbrefusal'); player.setAttribute('bot-skip-persistence', true);
+  session.sendClientPacket = frame => { frames.push(Buffer.from(frame)); return true; };
+  assert.equal(core.World.getPlayers().add(player), true, 'real world lifecycle allocates the player index');
+  player.setNeedsPlacement(false);
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(weaponId, 1));
+  WeaponInterfaceManager.assign(player);
+  const connection = new ClientConnection(channel); connection.player = player;
+  t.after(() => { core.TaskManager.cancelTasks(player); core.World.getPlayers().removes(player); });
+  return { player, connection, frames };
+}
+
+for (const active of [false, true]) {
+  test(`duel refusal republishes authoritative orb state ${active} without changing the queued special`, async t => {
+    const { player, connection, frames } = registeredRefusalPlayer(t, WEAPON_ID);
+    player.getDueling().setState(DuelState.IN_DUEL);
+    player.getDueling().getRules()[DuelRule.NO_SPECIAL_ATTACKS.getButtonId()] = true;
+    player.setSpecialActivated(active);
+    const assigned = player.getCombatSpecial(), weapon = player.getEquipment().get(core.Equipment.WEAPON_SLOT);
+    for (const name of SPECIAL_ORB_COMPONENTS) {
+      frames.length = 0;
+      await connection.dispatch(decodeClientPackets(buttonFrame(core.CacheDefinitions.getComponentId(name))), true);
+      assert.ok(frames.some(frame => frame.equals(encodeVarp(301, active ? 1 : 0))), 'the native prediction receives authoritative varp301');
+      assert.equal(player.isSpecialActivated(), active);
+      assert.equal(player.getSpecialPercentage(), 100);
+      assert.equal(player.getCombatSpecial(), assigned);
+      assert.equal(player.getEquipment().get(core.Equipment.WEAPON_SLOT), weapon);
+    }
+  });
+}
+
+test('utility insufficient-energy refusal resets each native orb prediction without spending or boosting', async t => {
+  const { player, connection, frames } = registeredRefusalPlayer(t, ItemIdentifiers.DRAGON_AXE);
+  player.setSpecialPercentage(99);
+  const skill = player.getSkillManager(), before = skill.getCurrentLevel(core.Skill.WOODCUTTING);
+  const weapon = player.getEquipment().get(core.Equipment.WEAPON_SLOT), assigned = player.getCombatSpecial();
+  for (const name of SPECIAL_ORB_COMPONENTS) {
+    frames.length = 0;
+    await connection.dispatch(decodeClientPackets(buttonFrame(core.CacheDefinitions.getComponentId(name))), true);
+    assert.ok(frames.some(frame => frame.equals(encodeVarp(301, 0))), 'refused utility sends authoritative unselected state');
+    assert.equal(player.isSpecialActivated(), false);
+    assert.equal(player.getSpecialPercentage(), 99);
+    assert.equal(skill.getCurrentLevel(core.Skill.WOODCUTTING), before);
+    assert.equal(player.getEquipment().get(core.Equipment.WEAPON_SLOT), weapon);
+    assert.equal(player.getCombatSpecial(), assigned);
+  }
+});

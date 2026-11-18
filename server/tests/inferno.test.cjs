@@ -248,7 +248,7 @@ function createWorld() {
   };
   for (const name of ['onNpcDialogueCondition', 'onCustomEvent', 'onObjectFirstClick', 'onObjectSecondClick', 'onObjectRoute', 'onPlayerLogin', 'onPlayerLogout', 'onPlayerProcess',
     'onPlayerBeforeDeath', 'onPlayerDeath', 'onShouldDropItemsOnDeath', 'onCanTeleport', 'onCanAttack', 'onNpcBeforeDeath', 'onCombatHitResolved',
-    'onPlayerDealtDamage', 'onNpcDeath',
+    'onPlayerDealtDamage', 'onNpcDeath', 'onNpcInteraction', 'onItemOnNpc',
     'registerCommand']) {
     api[name] = hook(name);
   }
@@ -727,6 +727,30 @@ test('TzHaar-Ket-Keh takes the fire cape and opens the chasm', () => {
   assert.equal(player.items.get(Items.FIRE_CAPE), 0);
   assert.equal(ask('If the player has sacrificed a fire cape:'), true);
   assert.equal(player.varbits.get(ENTRANCE_VARBIT), 2);
+});
+
+test('TzHaar-Ket-Keh gambles a spare infernal cape for Jal-Nib-Rek, 1/100, taking the cape either way (Wiki)', () => {
+  const exchange = require('../plugins/minigames/inferno/CapeExchange.Inferno');
+  const definition = { getName: () => 'TzHaar-Ket-Keh' };
+  const player = new FakePlayer();
+  const ask = (stepId, text = '') => exchange.answer({ player, definition, stepId, text });
+  assert.equal(ask(undefined, 'If the player has an infernal cape in their inventory:'), false);
+  player.inventory.adds(Items.INFERNAL_CAPE, 2);
+  assert.equal(ask(undefined, 'If the player has an infernal cape in their inventory:'), true);
+  const option = "Yes, I accept that I won't get my cape back.";
+  world.random = 1;
+  exchange.chose({ player, definition, option });
+  assert.equal(player.items.get(Items.INFERNAL_CAPE), 1, 'the cape goes on a miss');
+  assert.equal(ask('9NLiKz'), true);
+  assert.equal(ask('Nl1UrI'), false);
+  world.random = 0;
+  exchange.chose({ player, definition, option });
+  assert.equal(player.items.get(Items.INFERNAL_CAPE), 0, 'and on a win');
+  assert.equal(ask('Nl1UrI'), true);
+  const noCape = { player, definition, option };
+  exchange.chose(noCape);
+  assert.equal(noCape.end, true, 'no cape, no roll');
+  assert.equal(exchange.PET_CHANCE, 100);
 });
 
 test('ranged and magic hits are rolled on impact, so the prayer up then is the one that counts', () => {

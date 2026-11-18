@@ -312,6 +312,26 @@ test("the warrior prays Protect from Melee four ticks after his first hit, with 
   assert.equal(magic.parts[0].getDamage(), 3, "magic is not");
 });
 
+test("the warrior's kill: the follower does not take the dying warrior's NPC index (issue 6113)", async (t) => {
+  const f = at(t, [3239, 3200, 0], { stage: 22, vis: 2 });
+  await talkTo(f, one(f, NPC.WARRIOR_GRAVEYARD));
+  H.ticks(f, 3);
+  const warrior = one(f, NPC.WARRIOR_COMBAT);
+  const parts = [new core.HitDamage(3, core.HitMask.RED)];
+  H.PM.emitNpcHitModify(warrior, { getAttacker: () => f.player, getCombatType: () => core.CombatType.MAGIC, getHits: () => parts, updateTotalDamage() {} });
+  H.ticks(f, 6);
+  assert.equal(warrior.getPrayerActive()[core.PrayerHandler.PROTECT_FROM_MELEE], true);
+  const warriorIndex = warrior.getIndex();
+  warrior.setHitpoints(0);
+  H.ticks(f, 2);
+  assert.ok(!inCopy(f));
+  assert.equal(quest().getStage(f.player), 26);
+  assert.equal(warrior.isRegistered(), false);
+  // The same index removed and added in one frame reads as the warrior turning into Mudfoot (RuneLite
+  // gateway): its death pose and Protect from Melee stayed on him.
+  assert.notEqual(one(f, NPC.FOLLOWER_SPEAR).getIndex(), warriorIndex);
+});
+
 test("the report: Mudfoot departs (30) and Harlan pays four lamps and 500 coins at 32 [1262-1332]", async (t) => {
   const f = at(t, [3218, 3239, 0], { stage: 28, vis: 2 });
   const harlan = harlanAt(f);

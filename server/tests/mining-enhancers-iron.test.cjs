@@ -48,6 +48,104 @@ function miningCancellationTurn(f) {
   core.TaskManager.processWalkTo(f.p.getIndex());
 }
 
+// Exercise the actual Mining task, storage listeners and relic XP consumer together.
+for (const config of [
+  {label:'no outfit control', multiplier:1},
+  {label:'full outfit banked', multiplier:1.025, full:true},
+  {label:'helmet only', multiplier:1.004, helmet:true},
+  {label:'bank toggle off', multiplier:1.025, full:true, toggleOff:true},
+  {label:'full bank inventory fallback', multiplier:1.025, full:true, fullBank:true},
+  {label:'only base ore fits', multiplier:1.025, full:true, fullBank:true, slots:1},
+  {label:'Varrock armour bonus and jacket substitution', multiplier:1.025, full:true, armour:true},
+  {label:'open coal bag retains base ore', multiplier:1.025, full:true, coal:true},
+]) test(`Endless Harvest Mining outfit XP: ${config.label}`, async t=>{
+  const x=1666,y=3136,f=actor(t,x,y),p=f.p,I=core.ItemIdentifiers,E=core.Equipment;
+  p.setAttribute('bot-skip-persistence',true);
+  p.setProfile('league'); p.setAttribute('league:type',6); p.setAttribute('league:relics',{0:1});
+  p.setAttribute('league:areas',[21]);
+  PM.emitPlayerLogin({player:p,username:p.getUsername(),isNewAccount:false,profile:'league'});
+  p.setLocation(new core.Location(x,y,0)); p.needsPlacement=false;
+  assert.equal(require('../plugins/modes/leagueareas/Regions.LeagueAreaUnlocks').isOpenAt(6,p,p.getLocation()),true);
+  const active={player:p,relic:'endless-harvest'}; PM.emitCustomEvent('league:has-relic',active); assert.equal(active.active,true);
+  if(config.toggleOff) {
+    const row=core.CacheDefinitions.getDbRow(core.CacheDefinitions.getDbRowId('league_relic_endless_harvest_toggle_bank'));
+    const bit=core.CacheDefinitions.getDbColumn(row.tableId,'toggle_bit');
+    p.setAttribute('league:relic-toggles',1<<row.int(bit,-1));
+  }
+  const skills=p.getSkillManager();
+  skills.setMaxLevel(core.Skill.MINING,99); skills.setCurrentLevel(core.Skill.MINING,99);
+  skills.setExperience(core.Skill.MINING,core.SkillManager.getExperienceForLevel(99));
+  p.getInventory().add(new core.Item(I.RUNE_PICKAXE),false);
+  if(config.full||config.helmet) p.getEquipment().setItem(E.HEAD_SLOT,new core.Item(I.PROSPECTOR_HELMET));
+  if(config.full) {
+    p.getEquipment().setItem(E.BODY_SLOT,new core.Item(config.armour?I.VARROCK_ARMOUR_4:I.PROSPECTOR_JACKET));
+    p.getEquipment().setItem(E.LEG_SLOT,new core.Item(I.PROSPECTOR_LEGS));
+    p.getEquipment().setItem(E.FEET_SLOT,new core.Item(I.PROSPECTOR_BOOTS));
+  }
+  const oreId=config.coal?I.COAL:I.IRON_ORE, baseXp=config.coal?50:35;
+  const storage=require('../plugins/items/storage/Common.StorageItems');
+  if(config.coal) p.getInventory().add(new core.Item(I.OPEN_COAL_BAG),false);
+  const bank=p.getBank(core.Bank.getTabForItem(p,oreId));
+  if(config.fullBank) {
+    // Distinct real cache items fill the real bank; no capacity method is mocked.
+    for(let id=0;bank.getFreeSlots()>0&&id<core.CacheDefinitions.getCounts().items;id++) {
+      const d=core.CacheDefinitions.getItem(id);
+      if(id!==oreId&&d.name&&d.name!=='null'&&d.noteTemplate<0&&d.placeholderTemplate<0) bank.add(new core.Item(id),false);
+    }
+    assert.equal(bank.getFreeSlots(),0); assert.equal(bank.contains(oreId),false);
+  }
+  if(config.slots!==undefined) {
+    while(p.getInventory().getFreeSlots()>config.slots) p.getInventory().add(new core.Item(I.RAKE),false);
+    assert.equal(p.getInventory().getFreeSlots(),config.slots);
+  }
+  const at=new core.Location(x+1,y,0), rockId=config.coal?core.CacheDefinitions.getLocId('coalrock2'):core.CacheDefinitions.getLocId('ironrock2');
+  const rock=new core.GameObject(rockId,at,10,0,null);
+  core.ObjectManager.register(rock,true);
+  t.after(()=>{
+    for(const task of [...core.TaskManager.activeTasks,...core.TaskManager.pendingTasks.toArray()]) if(task.originalRockObject===rock)task.stop();
+    const current=core.MapObjects.get(rockId,at,null); if(current===rock)core.ObjectManager.deregister(rock,true);
+  });
+  core.TaskManager.process();
+  const task=core.TaskManager.activeTasks.find(task=>task.constructor.name==='MiningTask'); assert.ok(task);
+  const execute=task.execute.bind(task);
+  t.mock.method(task,'execute',()=>{
+    const saved=Math.random;
+    try {
+      Math.random=()=>{const stack=new Error().stack; return /\bat rollAttempt \(/.test(stack)||config.armour&&/VarrockArmour\.Mining\.js/.test(stack)?0.01:0.99;};
+      return execute();
+    } finally {Math.random=saved;}
+  });
+  const gains=[],payloads=[],addXp=skills.addExperiences.bind(skills),emit=PM.emitCustomEvent.bind(PM);
+  let successes=0;
+  t.mock.method(skills,'addExperiences',(skill,amount)=>{if(skill===core.Skill.MINING)gains.push(amount);return addXp(skill,amount);});
+  t.mock.method(PM,'emitCustomEvent',(name,request)=>{
+    const result=emit(name,request);
+    if(request?.player===p) {
+      if(name==='mining:success')successes++;
+      if(name==='storage:gather'&&request.itemId===oreId)payloads.push(request.xp);
+    }
+    return result;
+  });
+  const start=skills.getExperience(core.Skill.MINING);
+  await f.c.dispatch([{type:'object_option',id:rockId,x:x+1,y,action:'Mine'}]);
+  for(let i=0;i<90&&successes===0;i++) miningCancellationTurn(f);
+  assert.equal(successes,1,'one actual base gather, without recursive relic gathers');
+  const logical=config.armour?2:1, duplicate=config.slots===1?0:logical;
+  const each=baseXp*config.multiplier;
+  assert.deepEqual(gains,Array(logical+duplicate).fill(each),'only delivered duplicates earn their matching outfit XP');
+  assert.deepEqual(payloads,Array(logical).fill(each),'both base and enhancer storage requests carry outfit-adjusted XP');
+  const bag=config.coal?storage.total(p,storage.FAMILIES.get('coal-bag')):0;
+  assert.equal(bag,config.coal?1:0,'open container keeps its base resource');
+  const banked=!config.fullBank&&!config.toggleOff;
+  assert.equal(bank.getAmount(oreId),banked?logical+duplicate-bag:0);
+  assert.equal(p.getInventory().getAmount(oreId),banked?0:logical+duplicate-bag);
+  assert.equal(p.getAttribute('mining:ores-mined'),logical,'duplicates do not run enhancer/counter logic again');
+  const rate=PM.emitCanGainExperience(p,core.Skill.MINING,baseXp);
+  const {GameConstants}=require('../dist/game/GameConstants');
+  assert.ok(Math.abs(skills.getExperience(core.Skill.MINING)-start-each*(logical+duplicate)*rate.multiplier*GameConstants.EXPERIENCE_MULTIPLIER)<1,'real XP receives the league/world rates exactly once');
+  assert.equal([...core.World.getItems()].filter(item=>item.getOwner()===p.getUsername()&&item.getItem().getId()===oreId).length,0);
+});
+
 // Ordinary iron has independent armour, Mining cape and charged-ring rolls.
 // These expectations cover only iron, with real equipment and plugin listeners.
 const configurations = [];

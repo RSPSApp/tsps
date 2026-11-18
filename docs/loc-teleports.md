@@ -373,9 +373,10 @@ No new animation or sound is claimed for the uncaptured platforms.
 
 The cave entrance (36556, 4x4 at 3269,6047) and the Steps out (36215, 3x2 at 3301,12455) had no
 handler, so clicking Enter did nothing. `prif_mine_entrance` and `prif_mine_exit` now fade between
-them. Capture 1105 shows the Enter click, the fade (client script 948) and a rebuild into the
-mine map; it has no capture of the Steps. Both landings are inferred, not captured: the mine side
-is 3302,12454 and the surface side is 3271,6051, the tiles the agent `transports.json` uses.
+them. Capture 237/01105 shows arrival at 3271,6051 on tick 12697, the fade (client script 948)
+on tick 12700 and the inbound landing at 3302,12454 on tick 12702, five ticks after arrival.
+It has no capture of the Steps: the return landing at 3271,6051, from the agent
+`transports.json`, and its two-tick timing remain inferred.
 
 ## Elven rabbit cave
 

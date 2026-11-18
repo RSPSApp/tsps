@@ -24,6 +24,7 @@ import { GameConstants } from "../../../GameConstants";
 import { Animation } from "../../../model/Animation";
 import { PluginManager } from "../../../../plugins/PluginManager";
 import type { NpcSpawnLineage } from "./NpcSpawnLineage";
+import type { NpcTypeCustomisationView } from "../../../../net/protocol/ClientProtocol";
 
 /**
  * A headbar besides the hitpoints one, for this tick's update: `fill` to `endFill` (in the
@@ -128,7 +129,7 @@ export class NPC extends Mobile {
     private movementCoordinator: NPCMovementCoordinator = new NPCMovementCoordinator(this);
     private hitpoints: number;
     private maxHitpointsOverride = -1;
-    private combatOverride: { stats?: number[]; maxHit?: number } | null = null;
+    private combatOverride: { stats?: number[]; maxHit?: number; attackSpeed?: number } | null = null;
     private combatOverrideViews: Map<NpcDefinition, NpcDefinition> | null = null;
     /** Multiplies this NPC's attack and defence rolls (raid scaling); 1 leaves them alone. */
     private rollFactor = 1;
@@ -156,6 +157,13 @@ export class NPC extends Mobile {
     private baseAnimations: { slot: number; seqId: number }[] | undefined = undefined;
     private baseAnimationsResetUntil = 0;
     private modelCustomisationResetUntil = 0;
+    /**
+     * This NPC's type as every viewer sees it (OSRS npc body customisation, name change and level
+     * change): its whole model list, recolours, name and combat level. Sent like the model
+     * customisation: with every update while set, then a reset ({}) for a few ticks.
+     */
+    private typeCustomisation: NpcTypeCustomisationView | undefined = undefined;
+    private typeCustomisationResetUntil = 0;
     private isDying: boolean;
     private owner: Player;
     private ownerOnly: boolean = false;
@@ -379,8 +387,13 @@ export class NPC extends Mobile {
             // "combat:no-regen": a boss whose fight has phases it can't be hit in (Vet'ion's hounds)
             // keeps its damage. The damage clock includes untagged hits; lastAttack also
             // preserves existing boss scripts that explicitly reset that clock to hold healing.
-            if (this.hitpoints > 0 && !this.hitpointsLocked && !this.hasFlag("combat:no-regen") && ((this.getCombat().getLastDamage().hasElapsed(20000) && this.getCombat().getLastAttack().hasElapsed(20000))
-                || this.movementCoordinator.getCoordinateState() == CoordinateState.RETREATING)) {
+            // An NPC still fighting someone (it has a combat target) doesn't regenerate just because
+            // nobody hit it for 20 seconds: TzTok-Jad kept healing while players killed his healers.
+            // Walking home after losing its target still restores it.
+            const retreating = this.movementCoordinator.getCoordinateState() == CoordinateState.RETREATING;
+            const stillFighting = this.getCombat().getTarget() != null;
+            if (this.hitpoints > 0 && !this.hitpointsLocked && !this.hasFlag("combat:no-regen") && (retreating
+                || (!stillFighting && this.getCombat().getLastDamage().hasElapsed(20000) && this.getCombat().getLastAttack().hasElapsed(20000)))) {
                 const max = this.getMaxHitpoints();
                 if (max > this.hitpoints) {
                     // OSRS hitpoints are integers. Floor the 10% step and the stored value so
@@ -472,11 +485,13 @@ export class NPC extends Mobile {
     }
 
     /**
-     * Gives this one NPC its own combat stats (NpcDefinition.getStats layout) and/or max hit,
-     * e.g. a raid scaling its monsters by party; null restores the definition's.
+     * Gives this one NPC its own combat stats (NpcDefinition.getStats layout), max hit and/or
+     * attack speed, e.g. a raid scaling its monsters by party; null restores the definition's.
      */
-    public setCombatOverride(override: { stats?: number[]; maxHit?: number } | null): NPC {
-        this.combatOverride = override ? { stats: override.stats ? [...override.stats] : undefined, maxHit: override.maxHit } : null;
+    public setCombatOverride(override: { stats?: number[]; maxHit?: number; attackSpeed?: number } | null): NPC {
+        this.combatOverride = override
+            ? { stats: override.stats ? [...override.stats] : undefined, maxHit: override.maxHit, attackSpeed: override.attackSpeed }
+            : null;
         this.combatOverrideViews = null;
         return this;
     }
@@ -486,10 +501,11 @@ export class NPC extends Mobile {
         if (!this.combatOverride || !definition) return definition;
         let view = this.combatOverrideViews?.get(definition);
         if (!view) {
-            const { stats, maxHit } = this.combatOverride;
+            const { stats, maxHit, attackSpeed } = this.combatOverride;
             view = Object.create(definition) as NpcDefinition;
             if (stats) view.getStats = () => stats;
             if (maxHit != null) view.getMaxHit = () => maxHit;
+            if (attackSpeed != null) view.getAttackSpeed = () => attackSpeed;
             (this.combatOverrideViews ??= new Map()).set(definition, view);
         }
         return view;
@@ -852,6 +868,38 @@ export class NPC extends Mobile {
             return undefined;
         }
         return this.baseAnimations;
+    }
+
+    /**
+     * Changes this NPC's type for every viewer, e.g. a Leagues Echo boss: the normal boss with
+     * another model list, no recolours, its own name and combat level. Omitted fields keep the
+     * type's; null resets everything.
+     */
+    public setTypeCustomisation(customisation: NpcTypeCustomisationView | null): NPC {
+        if (!customisation || !Object.values(customisation).some((value) => value !== undefined)) {
+            this.typeCustomisation = {};
+            this.typeCustomisationResetUntil = World.getProcessCycle() + 5;
+            return this;
+        }
+        const { models, recolours, name, combatLevel } = customisation;
+        this.typeCustomisation = {
+            ...(models ? { models: models.map((model) => model | 0) } : {}),
+            ...(recolours ? { recolours: recolours.map(({ from, to }) => ({ from: from | 0, to: to | 0 })) } : {}),
+            ...(name !== undefined ? { name: String(name) } : {}),
+            ...(combatLevel !== undefined ? { combatLevel: combatLevel | 0 } : {}),
+        };
+        this.typeCustomisationResetUntil = 0;
+        return this;
+    }
+
+    /** The type customisation to send this update, or undefined when there is none (or a reset expired). */
+    public getTypeCustomisationForUpdate(): NpcTypeCustomisationView | undefined {
+        if (this.typeCustomisation === undefined) return undefined;
+        if (Object.keys(this.typeCustomisation).length === 0 && World.getProcessCycle() > this.typeCustomisationResetUntil) {
+            this.typeCustomisation = undefined;
+            return undefined;
+        }
+        return this.typeCustomisation;
     }
 
     /** The customisation to send this update, or undefined when there is none (or a reset expired). */

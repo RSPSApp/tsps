@@ -29,7 +29,9 @@ const WAVE_DELAY_TICKS = 8;
 const ZUK_WAVE_DELAY_TICKS = 2;
 const EXIT_DELAY_TICKS = 8;
 const COMPLETION_TOKKUL = 16440;
+// Wiki (Jal-nib-rek): 1/100 for a completion, 1/75 when TzKal-Zuk is the Slayer task.
 const PET_CHANCE = 100;
+const PET_CHANCE_ON_TASK = 75;
 // Tokkul for a failed run is half the hitpoints of every creature in the waves cleared.
 const FAILED_RUN_TOKKUL_SHARE = 0.5;
 
@@ -379,6 +381,9 @@ function tendWave(session) {
       const id = npc.getId();
       const target = npc.getCombat().getTarget();
       const idle = !target || target.getHitpoints() <= 0 || !target.isRegistered();
+      // The engine refills an NPC not hit for 20 seconds by a tenth a tick, fighting or not (a Jad
+      // left alone while its healers are dealt with). A creature still fighting is in combat.
+      if (!idle) npc.getCombat().getLastAttack().reset();
       if (idle && id !== Npcs.JAL_NIB && id !== Npcs.TZKAL_ZUK && !npc.__infernoDigging) npc.getCombat().attack(session.player);
       continue;
     }
@@ -557,7 +562,11 @@ function processRun({ player }) {
   tendJads(session);
   CombatAchievements.tick(player, session.wave);
   if (session.zuk) {
-    if (zuk.tend(session)) session.exitAt = now + EXIT_DELAY_TICKS;
+    if (zuk.tend(session)) {
+      session.exitAt = now + EXIT_DELAY_TICKS;
+      // Asked as he falls: his death can finish the Slayer task before the run pays out.
+      session.petChance = petChance(player);
+    }
     return;
   }
   if (session.nextWaveAt === -1 && session.npcs.size === 0) {
@@ -590,6 +599,12 @@ function failedRunTokkul(wavesCleared) {
   return Math.floor(total * FAILED_RUN_TOKKUL_SHARE);
 }
 
+function petChance(player) {
+  const request = { player, npcId: core.NpcIdentifiers.TZKAL_ZUK, location: tile(CENTRE), onTask: false };
+  api.emitCustomEvent("slayer:on-task", request);
+  return request.onTask === true ? PET_CHANCE_ON_TASK : PET_CHANCE;
+}
+
 // Ends the run outside, by TzHaar-Ket-Keh.
 function finishRun(player, wavesCleared, won) {
   const { ItemIdentifiers: Items } = core;
@@ -614,7 +629,7 @@ function finishRun(player, wavesCleared, won) {
     api.emitCustomEvent("collection-log:obtain", { player, itemId: Items.INFERNAL_CAPE, amount: 1 });
     const completionTokkul = tokkulFor(player, COMPLETION_TOKKUL);
     give(player, Items.TOKKUL, completionTokkul);
-    if (core.Misc.getRandom(PET_CHANCE - 1) === 0) {
+    if (core.Misc.getRandom((session?.petChance ?? petChance(player)) - 1) === 0) {
       // Pets awards it as a follower (or backpack item on a duplicate) and removes it
       // from the array; without the Pets plugin it still lands as an item.
       const drops = [{ itemId: Items.JAL_NIB_REK, amount: 1 }];

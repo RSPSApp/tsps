@@ -17,6 +17,8 @@ function scene() {
     deleteAtSlot(slot, amount) { const id = slots()[slot].getId(); assert.ok(counts.get(id) >= amount); counts.set(id, counts.get(id) - amount); },
     getFreeSlots: () => p.full ? 0 : 28 - items.length,
     adds: (id, amount) => counts.set(id, (counts.get(id) ?? 0) + amount),
+    getAddableAmount: item => (counts.get(item.getId()) ?? 0) > 0 || !p.full ? item.getAmount() : 0,
+    addItem: item => counts.set(item.getId(), (counts.get(item.getId()) ?? 0) + item.getAmount()),
     containsNumber: id => (counts.get(id) ?? 0) > 0,
     deleteNumber(id, amount) { assert.ok((counts.get(id) ?? 0) >= amount); counts.set(id, counts.get(id) - amount); },
   };

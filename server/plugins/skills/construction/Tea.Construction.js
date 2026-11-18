@@ -23,6 +23,7 @@ const TEA_COOKING_LEVEL = 20;
 // the chain; rsprox_transcripts/229/00269.txt shows the 52 Cooking XP drop right after "You pour the water into the teapot."
 const TEA_COOKING_XP = 52;
 const BOIL_SOUND = 935;
+const POUR_SOUND = 2583; // pour_tea, rsprox229/00269 tick3917
 const BOIL_TICKS = 8;
 // Stove furniture -> its loc with a kettle on (poh_stove_<n>_kettle); the plain firepit has none.
 const KETTLE_LOCS = Object.fromEntries(Object.entries({
@@ -117,6 +118,7 @@ function brew(event) {
       swap(player, HOT_KETTLE, KETTLE);
       swap(player, set.leaves, set.pots[3]);
       player.sendMessage("You pour the water into the teapot.");
+      player.getPacketSender().sendSound(POUR_SOUND, 0, 0);
       player.getSkillManager().addExperiences(Skill.COOKING, TEA_COOKING_XP);
       done = true;
     } else if (has(HOT_KETTLE) && has(set.empty)) {

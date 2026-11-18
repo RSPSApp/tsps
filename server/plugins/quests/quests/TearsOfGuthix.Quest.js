@@ -11,27 +11,27 @@
  * make the bowl, 2 complete. Stage changes write the varbit, never the whole
  * varp, because the minigame's stories/counters are sibling varbits (452+).
  *
- * Flow: talk to Juna (43 Quest Points) -> the start hook sets stage 1 -> mine
- * Magical rocks (20 Mining, pickaxe) -> chisel the Magic stone into a Stone bowl
- * -> talk to Juna with the bowl ("returning-with-a-stone-bowl") -> the completion
- * action takes the bowl and completes (1 QP, 1000 Crafting XP, minigame access).
+ * Flow: talk to Juna (43 Quest Points); the first time she goes straight into her introduction ->
+ * "Okay..." / "Yes." checks the requirements -> the camera pan step sets stage 1 -> cross the chasm
+ * on a light creature with the lit sapphire lantern -> mine Magical rocks (20 Mining, pickaxe) ->
+ * chisel the Magic stone into a Stone bowl -> climb back up the south rocks and talk to Juna with
+ * the bowl ("returning-with-a-stone-bowl") -> the completion action takes the bowl and completes
+ * (1 QP, 1000 Crafting XP, minigame access).
+ *
+ * The timings, messages, animations and sounds come from two rev 242 rsprox recordings of the
+ * whole quest (local 1001964 and 1002071; see docs/quests/tears-of-guthix/README.md) and sit with
+ * the constants that use them.
  *
  * The minigame after the quest (Juna's eligibility, the cave and the tears) is
- * plugins/minigames/TearsOfGuthix.plugin.js. This file routes Juna's loc to her
- * transcripts, keeps varbit 451 (her multiloc: "Story" appears once the quest is
- * done) in step with the stage, and plays the random story she is told, out of the
- * stories for quests the player has completed.
+ * plugins/minigames/TearsOfGuthix.plugin.js, and the chasm's drifting light creatures are its
+ * Chasm.TearsOfGuthix.js. This file routes Juna's loc to her transcripts, keeps varbit 451 (her
+ * multiloc: "Story" appears once the quest is done) in step with the stage, and plays the random
+ * story she is told, out of the stories for quests the player has completed.
  *
  * Source: https://github.com/GregHib/void/blob/2b8e267836a8469757c73694ea4d57f2f1c28458/game/src/main/kotlin/content/area/misthalin/lumbridge/swamp/chams_of_tears/Juna.kt
- * (plus quest/member/tears_of_guthix/TearsOfGuthix.kt).
- *
- * The quest-side light-creature crossing and south-shelf rock climb are handled here.
- * The minigame plugin supplies the cave, eligibility, timer, bowl and tear streams.
- * Gaps: the surface Dark hole's rope entry belongs to shared world travel. The
- * recordings pin the message, 2046/2047, the landings and the timing (float-up
- * six or seven ticks after the answer, float-down max(|dx|,|dy|) + 5 ticks
- * later). Temple of Ikov does
- * not track the Lucien choice, so both Lucien story conditions answer false.
+ * (plus quest/member/tears_of_guthix/TearsOfGuthix.kt) for the refusal lines the recordings do
+ * not cover. Temple of Ikov does not track the Lucien choice, so both Lucien story conditions
+ * answer false. The surface Dark hole's rope entry belongs to shared world travel.
  *
  * Chasm of Tears (cache region 12948, plane 2), from the cache and the shared
  * world data:
@@ -42,25 +42,21 @@
  *   with the player and the Talk-to handler matches her resolved name. (NPC
  *   5785 also exists but the shared spawn has it a floor up and the cache
  *   gives that NPC no menu option; Juna is talked to as the loc.)
- * - The pool between the ledges remains clipped. The Quest Helper lantern target
- *   is 3228,9518,2; the cache light creatures (id 5435, the only light creature
- *   spawned in the chasm) occupy 3224-3226,9516-9518. Their only cache option is
- *   Attract, so both that option and using the lit lantern on them use the
- *   quest-scoped eight-tile reach and projectile-clip exception to route to a
- *   valid shore tile without entering the pool. The handler sends the recorded
- *   attract line, waits six or seven ticks for the creature, floats the player
- *   up (2046), glides them across with a straight-line force movement and lands
- *   on the far side (3224,9504 from the north; 3224,9530 from the south) with
- *   float-down (2047) max(|dx|,|dy|) + 5 ticks after the float-up.
+ * - The pool between the ledges is clipped. The light creatures float over it;
+ *   both the Attract option and the lantern use reach one from the ledge
+ *   (LIGHT_CREATURE_USE_RANGE, projectile clip ignored), and the crossing
+ *   lands on the far side (3224,9504 from the north; 3224,9530 from the south).
  * - The chasm's rocks (6672 on the south shelf, 6673 by the north ledge) move
- *   the player to the tile beyond the rock (rock x ± 1), not a teleport between
- *   the ledges.
+ *   the player to the tile beyond the rock (rock x +- 1); 6672 only goes down.
  */
 module.exports = function registerTearsOfGuthixQuest(api) {
-  const { Animation, ForceMovement, ForceMovementTask, Skill, ItemIdentifiers, NpcIdentifiers,
+  const { Animation, ForceMovement, Skill, ItemIdentifiers, NpcIdentifiers,
     ObjectIdentifiers, Location, Task, TaskManager } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, getRegisteredQuests, loadTranscripts } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, getRegisteredQuests, loadTranscripts,
+    questStartMessage } = require("../QuestRuntime");
   const mining = require("../../skills/Mining.plugin.js");
+  const Chasm = require("../../minigames/tearsofguthix/Chasm.TearsOfGuthix");
+  const Juna = require("../../minigames/tearsofguthix/Juna.TearsOfGuthix");
 
   const JUNA_NPC_ID = NpcIdentifiers.JUNA;
   const PAGE = "Tears of Guthix";
@@ -88,40 +84,78 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   const JUNA_LOC_NAME = "<col=ffff00>Juna</col>";
   /** tog_juna_bowl: the quest stage as Juna's multiloc reads it (bits 0-1 of varp 449). */
   const JUNA_BOWL_VARBIT = 451;
-  const LIGHT_CREATURE_NPC_ID = NpcIdentifiers.LIGHT_CREATURE_4; // 5435, the Chasm of Tears spawn
-  /** The two chasm slopes: 6672 on the south shelf, 6673 by the north ledge. */
-  const CHASM_ROCK_IDS = new Set([ObjectIdentifiers.ROCKS_27, ObjectIdentifiers.ROCKS_28]);
+  /**
+   * The chasm's light creatures are tog_light_creature (401), which varbit 451 shows as the
+   * Attract-able 5435 from stage 1: interaction events carry that resolved id.
+   */
+  const LIGHT_CREATURE_NPC_ID = NpcIdentifiers.LIGHT_CREATURE_4;
+  /** The two chasm slopes: 6672 (tog_climbing_rocks_down) on the south shelf, 6673 (tog_climbing_rocks_up) by the north ledge. */
+  const SOUTH_ROCKS_ID = ObjectIdentifiers.ROCKS_27;
+  const CHASM_ROCK_IDS = new Set([SOUTH_ROCKS_ID, ObjectIdentifiers.ROCKS_28]);
+  /**
+   * rsprox local 1001964/1002071 and 1696/1698: the climb moves the player at once to the tile
+   * beyond the rock (rock x +-1) with an exact move from the tile they left over 100 client cycles,
+   * facing west, and climbing_loop (2454, 5 loops). Going east (down the slope) it is
+   * tog_climb_slope_down (2050) two ticks after the player's last step (1001964 ticks 19353 ->
+   * 19355, 19637 -> 19639); going west, up 6673, tog_climb_slope_up (2049) one tick after (19482
+   * -> 19483). 6672 only goes down: from its east side the player turns to it and gets the
+   * message a tick after the last step (1696 tick 326). The interaction itself runs a tick after
+   * the last step here, so the delays below count from it.
+   */
+  const CLIMB_DOWN_ANIMATION = 2050;
+  const CLIMB_UP_ANIMATION = 2049;
+  const CLIMB_DOWN_DELAY_TICKS = 1;
+  const CLIMB_UP_DELAY_TICKS = 0;
+  const CLIMB_CYCLES = 100;
+  const CLIMBING_LOOP_SOUND = 2454;
+  const CLIMBING_LOOP_COUNT = 5;
+  const TOO_UNEVEN_MESSAGE = "You could climb down here, but it is too uneven to climb up.";
+  /** ForceMovement directions (PlayerSession: 0 north, 1 east, 2 south, 3 west). */
+  const FACE_NORTH = 0;
+  const FACE_SOUTH = 2;
+  const FACE_WEST = 3;
+  const TICK_CYCLES = 30;
   /** Recorded landings: the magical-rock shelf, and the north edge by the creature spawns. */
   const ROCK_SIDE_LANDING = [3224, 9504, 2];
   const JUNA_SIDE_LANDING = [3224, 9530, 2];
 
-  /** The cache ledge is eight tiles from the nearest 5435 spawn at the north edge. */
+  const CHASM_PLANE = 2;
+  /** Ours: how far from a creature the lantern reaches (the recordings used it from five tiles). */
   const LIGHT_CREATURE_USE_RANGE = 8;
-  const LIGHT_CREATURE_TILE_BOUNDS = { x0: 3224, x1: 3226, y0: 9516, y1: 9518, z: 2 };
   /** South of this y is the magical-rock shelf; north of it is the Juna-side ledge. */
   const CHASM_MIDDLE_Y = 9515;
   /**
-   * rsprox 242/911949: the answer at tick 19492, float-up (2046) at 19499 and float-down (2047)
-   * at 19527; 242/912056 waits six ticks instead. The float lasts max(|dx|,|dy|) + 5 ticks (28
-   * from y 9527, 30 from y 9529). The force-movement animation is left 0 so the 2046/2047 pose
-   * is what the client receives.
+   * The approach (rsprox local 1001964 tick 19492, 1002071 tick 5774): with the attract line the
+   * creature comes one tile a tick onto the player's tile, diagonally until in line and then
+   * straight (1001964: 3228,9522 to 3231,9527 from the next tick; 1002071: 3234,9524 to 3231,9529),
+   * and the player floats up two ticks after it arrives. Ours: a creature that has not arrived in
+   * 20 ticks gives up. With no creature to come (a second player's crossing) the float waits the
+   * seven ticks 1001964 took in all.
    */
+  const TOG_FLOAT_AFTER_ARRIVAL_TICKS = 2;
+  const LIGHT_CREATURE_APPROACH_LIMIT = 20;
   const TOG_FLOAT_DELAY_TICKS = 7;
+  /**
+   * The float (both recordings): tog_player_float_up (2046) with a still exact move of 50 cycles
+   * facing south; from the fourth tick the player moves a tile a tick (four tiles straight south,
+   * then diagonally until in line with the landing, then straight: 1001964 3231,9527 to 9523,
+   * 3224,9516, 3224,9504 at tick 19525), and tog_player_float_down (2047) two ticks after the last
+   * step, when the float has lasted the path's length + 5 ticks (28 from y 9527, 30 from 9529).
+   * The player can move again the tick after.
+   */
   const TOG_FLOAT_UP_ANIMATION = 2046;
   const TOG_FLOAT_DOWN_ANIMATION = 2047;
+  const TOG_FLOAT_HOLD_CYCLES = 50;
   const TOG_FLOAT_POSE_TICKS = 5;
+  const TOG_CARRY_FIRST_STEP_TICK = 4;
   /**
-   * The creature carries the player (242/911949 and 242/912056 agree): on the float-up tick it
-   * jumps to the tile south-west of the player, plays light_creature_grow and becomes
+   * The creature carries the player (1001964 and 1002071 agree): on the float-up tick it telejumps
+   * to the tile south-west of the player, plays light_creature_grow and becomes
    * tog_light_creature_transition, with synth light_creature_up; the next tick it becomes
-   * tog_light_creature_carrying. From the fourth tick it moves one tile a tick to the tile
-   * south-west of the landing: four tiles straight south, then diagonally until it is in line,
-   * then straight on (911949: 3230,9526 to 9522, 3223,9515, 3223,9503; 912056: 3230,9528 to 9524,
-   * 3223,9517, then south). On the float-down tick it plays light_creature_shrink with synth
-   * light_creature_down. The next tick it is the plain creature again and hops two tiles
-   * north-east (3223,9503 to 3225,9505), then walks one tile a tick, straight north until it is in
-   * line with its spawn and diagonally after (911949: 3225,9505 to 9517, then 3224,9518 and
-   * 3223,9519; 912056: 3225,9505 to 9514).
+   * tog_light_creature_carrying, and from the fourth tick it moves a tile a tick under the player,
+   * a tile south-west of them. On the float-down tick it plays light_creature_shrink with synth
+   * light_creature_down. The next tick it is the plain creature again, hops two tiles north-east
+   * (3223,9503 to 3225,9505) and drifts off north.
    */
   const LIGHT_CREATURE_GROW_ANIMATION = "light_creature_grow";
   const LIGHT_CREATURE_SHRINK_ANIMATION = "light_creature_shrink";
@@ -129,18 +163,49 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   const LIGHT_CREATURE_CARRYING_NPC = "tog_light_creature_carrying";
   const LIGHT_CREATURE_UP_SOUND = 1799; // light_creature_up
   const LIGHT_CREATURE_DOWN_SOUND = 1792; // light_creature_down
-  const LIGHT_CREATURE_FIRST_STEP_TICK = 4;
   const LIGHT_CREATURE_STRAIGHT_STEPS = 4;
   const LIGHT_CREATURE_RELEASE_HOP = 2;
   const ATTRACT_MESSAGE = "The light creature is attracted to your beam and comes towards you...";
   const NO_LANTERN_MESSAGE = "You don't have anything to attract the light creature with.";
 
+  /**
+   * Mining the magical rocks (rsprox local 1001964 tick 19605, 1002071 tick 5812): a tick after
+   * the last step (when the interaction runs here), "You swing your pick at the rock." with the
+   * pickaxe's animation; five ticks later the stone, "You manage to mine some stone." and the
+   * animation stops. No Mining XP.
+   */
+  const MINE_SWING_DELAY_TICKS = 0;
+  const MINE_STONE_DELAY_TICKS = 5;
+  const MINE_SWING_MESSAGE = "You swing your pick at the rock.";
+  const MINE_STONE_MESSAGE = "You manage to mine some stone.";
+  /** The chisel on the stone (1001964 tick 19618): human_opalcutting and synth chisel on the same tick. */
+  const CHISEL_ANIMATION = "human_opalcutting";
+  const CHISEL_SOUND = 2586;
+
   const START_HOOK = "quest:tears-of-guthix:start";
   const COMPLETE_ACTION_ID = "BitWHU";
+  /**
+   * "The camera pans south ..." (between "But first you will need to make a bowl" and "There is a
+   * cave on the south side"). Live starts the quest here, not at "Yes." (1001964 tick 19454:
+   * varbit 451 0 -> 1, the start message and cam_moveto 3232,9507 height 700 rates 5/3 with the
+   * line), and resets the camera when the conversation closes after "Mine some stone ..." (19473).
+   */
+  const CAMERA_PAN_STEP_ID = "ZFn96I";
+  const CAMERA_PAN = { x: 3232, y: 9507, height: 700, rate: 5, rate2: 3 };
+  const LAST_START_LINE = "Mine some stone from that cave, make it into a bowl, and bring it to me, and then I will let you catch the Tears.";
+  /**
+   * Juna's first Talk-to goes straight to "A story?" with no opening menu, and her introduction's
+   * last line sets varbit 452 (1001964 ticks 19369-19407, 1002071 ticks 5699-5719); once she has
+   * introduced herself the menu shows (every later recorded Talk-to).
+   */
+  const STORY_OPTION = "A story?";
+  const INTRO_LAST_LINE = "Then you can drink of the power of balance, which will make you stronger in whatever area you are weakest.";
   /** "(A random story is selected from below.)" in the quest, and Juna's own "List of stories". */
   const RANDOM_STORY_STEP_IDS = new Set(["s6cYli", "nBzoOC"]);
   /** Juna's "You tell Juna some stories of your adventures." box, which the export lost. */
   const TELL_STORIES_STEP_ID = "0upJBS";
+  /** The quest's own copy of it is a statement box with its continue (1001964 tick 19414). */
+  const QUEST_TELL_STORIES_STEP_ID = "zK1Z1j";
   const TELL_STORIES_MESSAGE = "You tell Juna some stories of your adventures.";
   const RANDOM_STORIES_VARIANT = "starting-off-random-stories";
 
@@ -148,10 +213,14 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   const SIDE_HAZEEL = 1;
 
   let quest;
-  /** Players with a crossing already waiting or in flight, so a second click does not chain one. */
-  const crossings = new WeakSet();
-  /** Light creatures carrying a player now; a second player crosses without one. */
+  /** Players with a crossing coming or in flight ({ key, destination, carrying }), so a second click does not chain one. */
+  const crossings = new WeakMap();
+  /** Light creatures coming for or carrying a player now; a second player crosses without one. */
   const carriers = new WeakSet();
+  /** Players whose camera the start pan holds. */
+  const panned = new WeakSet();
+  /** Each player's magical-rock swing (its task key), so a new click replaces it. */
+  const swings = new WeakMap();
 
   const has = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
 
@@ -298,22 +367,69 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     }
   }
 
-  function handleStartHook({ player, npcId, hook }) {
-    if (npcId !== JUNA_NPC_ID || hook !== START_HOOK) return;
+  /** "Yes." to "Start the Tears of Guthix quest?": a player who cannot start it hears no story. */
+  function handleStartHook(hook) {
+    const { player, npcId } = hook;
+    if (npcId !== JUNA_NPC_ID || hook.hook !== START_HOOK) return;
     if (quest.getStage(player) !== STAGE_NOT_STARTED) return;
     if (questPoints(player) < MIN_QUEST_POINTS) {
       player.sendMessage(`You need at least ${MIN_QUEST_POINTS} Quest Points to start this quest.`);
+      hook.end = true;
       return;
     }
     if (missingStartSkillRequirements(player).length > 0) {
       notifyStartSkillRequirements(player);
-      return;
+      hook.end = true;
     }
+  }
+
+  /** The camera pan (CAMERA_PAN_STEP_ID): the quest starts here, with the start message and the pan. */
+  function startQuest(player) {
+    if (quest.getStage(player) !== STAGE_NOT_STARTED) return;
+    if (questPoints(player) < MIN_QUEST_POINTS || missingStartSkillRequirements(player).length > 0) return;
     quest.setStage(player, STAGE_STONE_BOWL);
+    player.sendMessage(questStartMessage(player, quest.name));
+    player.getPacketSender().sendCameraMoveTo(CAMERA_PAN.x, CAMERA_PAN.y, CAMERA_PAN.height,
+      { rate: CAMERA_PAN.rate, rate2: CAMERA_PAN.rate2, heightRelative: false });
+    panned.add(player);
+    // Ours: a conversation that closes early (walked away) gives the camera back too.
+    TaskManager.submit(new (class extends Task {
+      constructor() { super(1, player, false); }
+      execute() {
+        if (!panned.has(player)) return this.stop();
+        if (player.getDialogueManager?.()?.isActive?.() === true) return;
+        this.stop();
+        resetCamera(player);
+      }
+    })());
+  }
+
+  function resetCamera(player) {
+    if (!panned.delete(player)) return;
+    player.getPacketSender().sendCameraReset();
+  }
+
+  /**
+   * Juna's lines: her introduction's last line marks it heard, and the quest's last start line
+   * gives the camera back once the player continues past it.
+   */
+  function handleJunaLine(request) {
+    if (request.npcId !== JUNA_NPC_ID) return;
+    const { player } = request;
+    if (request.text === INTRO_LAST_LINE && !Juna.introHeard(player)) {
+      request.after = () => Juna.markIntroHeard(player);
+    } else if (request.text === LAST_START_LINE) {
+      request.after = () => resetCamera(player);
+    }
   }
 
   /** "Congratulations! Quest complete!" from the returning-with-a-stone-bowl variant. */
   function handleAction(event) {
+    if (event.npcId === JUNA_NPC_ID && event.stepId === CAMERA_PAN_STEP_ID) {
+      startQuest(event.player);
+      event.handled = true;
+      return;
+    }
     if (event.stepId !== COMPLETE_ACTION_ID || event.npcId !== JUNA_NPC_ID) return;
     const { player } = event;
     if (quest.getStage(player) !== STAGE_STONE_BOWL || !hasBowl(player)) return;
@@ -348,9 +464,56 @@ module.exports = function registerTearsOfGuthixQuest(api) {
       player.sendMessage("You need a free inventory space to mine the stone.");
       return;
     }
-    player.performAnimation(pickaxe.animation);
-    player.getInventory().adds(MAGIC_STONE_ITEM_ID, 1);
-    player.sendMessage("You manage to mine a piece of magic stone.");
+    swingAtRock(player, pickaxe);
+  }
+
+  /** The mining and chisel lines are spam-type (filterable) in both recordings (1001964 ticks 19608-19618). */
+  function spam(player, text) {
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, text);
+  }
+
+  /** An inventory action or an attack replaces the swing, as it does any mining. */
+  function interruptSwing({ player }) {
+    const key = swings.get(player);
+    if (!key) return;
+    swings.delete(player);
+    TaskManager.cancelTasks(key);
+  }
+
+  /** The swing and the stone, timed as recorded (MINE_SWING_DELAY_TICKS); moving off stops it. */
+  function swingAtRock(player, pickaxe) {
+    const previous = swings.get(player);
+    if (previous) TaskManager.cancelTasks(previous);
+    const key = {};
+    swings.set(player, key);
+    const at = player.getLocation().clone();
+    const swing = () => {
+      spam(player, MINE_SWING_MESSAGE);
+      player.performAnimation(pickaxe.animation);
+    };
+    if (MINE_SWING_DELAY_TICKS === 0) swing();
+    let tick = 0;
+    TaskManager.submit(new (class extends Task {
+      constructor() { super(1, key, false); }
+      execute() {
+        tick++;
+        if (player.isRegistered?.() === false || !player.getLocation().equals(at) || swings.get(player) !== key) {
+          this.stop();
+          return;
+        }
+        if (tick === MINE_SWING_DELAY_TICKS) {
+          swing();
+          return;
+        }
+        if (tick < MINE_SWING_DELAY_TICKS + MINE_STONE_DELAY_TICKS) return;
+        this.stop();
+        swings.delete(player);
+        player.performAnimation(new Animation(-1));
+        if (has(player, MAGIC_STONE_ITEM_ID) || player.getInventory().isFull()) return;
+        player.getInventory().adds(MAGIC_STONE_ITEM_ID, 1);
+        spam(player, MINE_STONE_MESSAGE);
+      }
+    })());
   }
 
   /** Chisel a magic stone into a bowl once Juna has asked for one. */
@@ -370,7 +533,9 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     }
     player.getInventory().deleteNumber(MAGIC_STONE_ITEM_ID, 1);
     player.getInventory().adds(STONE_BOWL_ITEM_ID, 1);
-    player.sendMessage("You make a stone bowl.");
+    spam(player, "You make a stone bowl.");
+    player.performAnimation(new Animation(api.core.CacheDefinitions.getSeqId(CHISEL_ANIMATION)));
+    player.getPacketSender().sendSound(CHISEL_SOUND, 1, 0);
   }
 
   /** Using a magic stone on Juna has its own wiki variant. */
@@ -390,118 +555,174 @@ module.exports = function registerTearsOfGuthixQuest(api) {
       return true;
     }
     if (crossings.has(player)) return true;
-    crossings.add(player);
     const southSide = player.getLocation().getY() <= CHASM_MIDDLE_Y;
     const destination = southSide ? JUNA_SIDE_LANDING : ROCK_SIDE_LANDING;
     const start = player.getLocation().clone();
+    const key = {};
+    const carrier = canCarry(creature) ? creature : null;
+    crossings.set(player, { key, destination, carrying: false, carrier });
     player.sendMessage(ATTRACT_MESSAGE);
-    // The creature approaches for six or seven ticks, then the player floats up and glides
-    // across; a player who walked away before the float is left alone.
+    if (carrier) {
+      carriers.add(carrier);
+      carrier.setScriptedMovement(true);
+      carrier.getMovementQueue?.().reset();
+    }
+    // A player who walks away before the float is left alone, and the creature drifts off again.
+    const abandon = () => {
+      TaskManager.cancelTasks(key);
+      crossings.delete(player);
+      if (carrier) releaseCreature(carrier, false);
+    };
+    let arrivedTick = carrier ? -1 : 0;
+    let tick = 0;
     TaskManager.submit(new (class extends Task {
-      constructor() { super(TOG_FLOAT_DELAY_TICKS, player, false); }
+      constructor() { super(1, key, false); }
       execute() {
-        this.stop();
-        if (!player.getLocation().equals(start)) {
-          crossings.delete(player);
+        tick++;
+        if (player.isRegistered?.() === false || !player.getLocation().equals(start)) {
+          this.stop();
+          abandon();
           return;
         }
-        player.performAnimation(new Animation(TOG_FLOAT_UP_ANIMATION));
-        const from = player.getLocation().clone();
-        const dx = destination[0] - from.getX();
-        const dy = destination[1] - from.getY();
-        const floatTicks = Math.max(Math.abs(dx), Math.abs(dy)) + TOG_FLOAT_POSE_TICKS;
-        const carrier = startCarrying(creature, player, from, destination, floatTicks);
-        const direction = Math.abs(dx) > Math.abs(dy) ? dx > 0 ? 1 : 3 : dy > 0 ? 0 : 2;
-        TaskManager.submit(new ForceMovementTask(player, floatTicks,
-          new ForceMovement(from, new Location(dx, dy), 0, floatTicks * 30, direction, 0)));
-        TaskManager.submit(new (class extends Task {
-          constructor() { super(floatTicks, player, false); }
-          execute() {
+        // The creature comes a tile a tick onto the player's tile (diagonally until in line).
+        if (arrivedTick < 0) {
+          const at = carrier.getLocation();
+          const dx = Math.sign(start.getX() - at.getX());
+          const dy = Math.sign(start.getY() - at.getY());
+          // Live sends each tile as an in-place teleport (1001964 ticks 19493-19497), which telejump keeps in view.
+          if (dx || dy) carrier.telejump(new Location(at.getX() + dx, at.getY() + dy, at.getZ()));
+          if (carrier.getLocation().getX() === start.getX() && carrier.getLocation().getY() === start.getY()) arrivedTick = tick;
+          if (tick > LIGHT_CREATURE_APPROACH_LIMIT) {
             this.stop();
-            player.performAnimation(new Animation(TOG_FLOAT_DOWN_ANIMATION));
-            crossings.delete(player);
-            if (carrier) carrier.land();
+            abandon();
           }
-        })());
+          return;
+        }
+        const waited = carrier ? tick - arrivedTick : tick;
+        if (waited < (carrier ? TOG_FLOAT_AFTER_ARRIVAL_TICKS : TOG_FLOAT_DELAY_TICKS)) return;
+        this.stop();
+        carry(player, carrier, start, destination);
       }
     })());
     return true;
   }
 
+  /** A live creature that is not already carrying or coming for someone; a second player crosses without one. */
+  function canCarry(creature) {
+    return !!creature && typeof creature.setNpcTransformationId === "function" && !carriers.has(creature) &&
+      creature.isScriptedMovement?.() !== true;
+  }
+
   /**
-   * The light creature's side of the crossing (see LIGHT_CREATURE_GROW_ANIMATION). Only a live
-   * NPC that is not already carrying someone takes part; returns its landing hook, or null.
+   * The tiles the player passes, one a tick: four straight on y first, then diagonally until in
+   * line with the landing, then straight on (both recordings; see TOG_CARRY_FIRST_STEP_TICK).
    */
-  function startCarrying(creature, player, from, destination, floatTicks) {
-    if (!creature || typeof creature.setNpcTransformationId !== "function" || carriers.has(creature)) return null;
-    const cache = api.core.CacheDefinitions;
-    carriers.add(creature);
-    creature.setScriptedMovement?.(true);
-    creature.getMovementQueue?.().reset();
+  function carryPath(from, destination) {
+    const path = [];
+    let x = from.getX();
+    let y = from.getY();
+    while (x !== destination[0] || y !== destination[1]) {
+      const stepY = Math.sign(destination[1] - y);
+      const stepX = path.length < LIGHT_CREATURE_STRAIGHT_STEPS && stepY !== 0 ? 0 : Math.sign(destination[0] - x);
+      x += stepX;
+      y += stepY;
+      path.push([x, y]);
+    }
+    return path;
+  }
+
+  /** The float: up, across a tile a tick with the creature beneath, and down (see the constants). */
+  function carry(player, carrier, from, destination) {
+    const crossing = crossings.get(player);
+    if (!crossing) return;
+    crossing.carrying = true;
+    const { key } = crossing;
     const z = from.getZ();
-    creature.moveTo(new Location(from.getX() - 1, from.getY() - 1, z));
-    creature.performAnimation(new Animation(cache.getSeqId(LIGHT_CREATURE_GROW_ANIMATION)));
-    creature.setNpcTransformationId(cache.getNpcId(LIGHT_CREATURE_TRANSITION_NPC));
-    player.getPacketSender().sendSound(LIGHT_CREATURE_UP_SOUND, 1, 0);
-    const target = [destination[0] - 1, destination[1] - 1];
-    const key = {};
-    // Back to the plain creature, which returns one tile a tick to its spawn by the north ledge.
-    // After a landing it first hops two tiles north-east (911949: 3223,9503 to 3225,9505).
-    const release = (hop) => {
-      creature.setNpcTransformationId(-1);
-      if (hop) {
-        const at = creature.getLocation();
-        creature.moveTo(new Location(at.getX() + LIGHT_CREATURE_RELEASE_HOP, at.getY() + LIGHT_CREATURE_RELEASE_HOP, z));
-      }
-      const home = creature.getSpawnPosition?.();
-      let steps = 0;
-      TaskManager.submit(new (class extends Task {
-        constructor() { super(1, key, false); }
-        execute() {
-          const at = creature.getLocation();
-          const dx = home ? home.getX() - at.getX() : 0;
-          const dy = home ? home.getY() - at.getY() : 0;
-          // Straight on y until it is in line with its spawn, then diagonally (911949).
-          const stepX = Math.abs(dy) > Math.abs(dx) ? 0 : Math.sign(dx);
-          const stepY = Math.sign(dy);
-          if ((!stepX && !stepY) || ++steps > 64) {
-            this.stop();
-            creature.setScriptedMovement?.(false);
-            carriers.delete(creature);
-            return;
-          }
-          creature.moveTo(new Location(at.getX() + stepX, at.getY() + stepY, z));
-        }
-      })());
-    };
+    const path = carryPath(from, destination);
+    const floatTicks = path.length + TOG_FLOAT_POSE_TICKS;
+    const movement = player.getMovementQueue();
+    movement.reset();
+    movement.setBlockMovement(true);
+    player.performAnimation(new Animation(TOG_FLOAT_UP_ANIMATION));
+    // Live sends a still exact move with the float (to1 = to2 = the player's tile, 50 cycles, facing south).
+    // Ours: the unrecorded northbound float (from the shelf) faces north.
+    const facing = destination[1] > from.getY() ? FACE_NORTH : FACE_SOUTH;
+    player.setForceMovement(new ForceMovement(from.clone(), new Location(0, 0), 0, TOG_FLOAT_HOLD_CYCLES, facing, 0));
+    if (carrier) {
+      const cache = api.core.CacheDefinitions;
+      carrier.telejump(new Location(from.getX() - 1, from.getY() - 1, z));
+      carrier.performAnimation(new Animation(cache.getSeqId(LIGHT_CREATURE_GROW_ANIMATION)));
+      carrier.setNpcTransformationId(cache.getNpcId(LIGHT_CREATURE_TRANSITION_NPC));
+      player.getPacketSender().sendSound(LIGHT_CREATURE_UP_SOUND, 1, 0);
+    }
     let tick = 0;
-    // The player's own tasks (the landing) end with a logout; this one then lets the creature go.
+    let expected = from.clone();
     TaskManager.submit(new (class extends Task {
       constructor() { super(1, key, false); }
       execute() {
         tick++;
-        if (player.isRegistered?.() === false || tick > floatTicks + 1) { this.stop(); release(false); return; }
-        if (tick === 1) creature.setNpcTransformationId(cache.getNpcId(LIGHT_CREATURE_CARRYING_NPC));
-        if (tick < LIGHT_CREATURE_FIRST_STEP_TICK) return;
-        const at = creature.getLocation();
-        const stepY = Math.sign(target[1] - at.getY());
-        // Four tiles straight on y first, as both recordings do, then the diagonal leg.
-        const straight = tick - LIGHT_CREATURE_FIRST_STEP_TICK < LIGHT_CREATURE_STRAIGHT_STEPS && stepY !== 0;
-        const stepX = straight ? 0 : Math.sign(target[0] - at.getX());
-        if (stepX || stepY) creature.moveTo(new Location(at.getX() + stepX, at.getY() + stepY, z));
+        // Gone, or taken elsewhere mid-float (a teleport): the float ends where they are.
+        if (player.isRegistered?.() === false || !player.getLocation().equals(expected)) {
+          this.stop();
+          crossings.delete(player);
+          player.setForceMovement(null);
+          movement.setBlockMovement(false);
+          if (carrier) releaseCreature(carrier, false);
+          return;
+        }
+        if (tick === 1) {
+          player.setForceMovement(null);
+          if (carrier) carrier.setNpcTransformationId(api.core.CacheDefinitions.getNpcId(LIGHT_CREATURE_CARRYING_NPC));
+        }
+        const step = path[tick - TOG_CARRY_FIRST_STEP_TICK];
+        if (step) {
+          const at = player.getLocation().clone();
+          const next = new Location(step[0], step[1], z);
+          player.moveTo(next);
+          expected = next;
+          player.setForceMovement(new ForceMovement(at, new Location(step[0] - at.getX(), step[1] - at.getY()), 0,
+            TICK_CYCLES, facing, 0));
+          if (carrier) carrier.telejump(new Location(step[0] - 1, step[1] - 1, z));
+        } else if (tick > TOG_CARRY_FIRST_STEP_TICK) {
+          player.setForceMovement(null);
+        }
+        if (tick === floatTicks) {
+          player.performAnimation(new Animation(TOG_FLOAT_DOWN_ANIMATION));
+          if (carrier) {
+            carrier.performAnimation(new Animation(api.core.CacheDefinitions.getSeqId(LIGHT_CREATURE_SHRINK_ANIMATION)));
+            player.getPacketSender().sendSound(LIGHT_CREATURE_DOWN_SOUND, 1, 0);
+          }
+          return;
+        }
+        if (tick > floatTicks) {
+          this.stop();
+          movement.setBlockMovement(false);
+          crossings.delete(player);
+          if (carrier) releaseCreature(carrier, true);
+        }
       }
     })());
-    return {
-      land() {
-        TaskManager.cancelTasks(key);
-        creature.performAnimation(new Animation(cache.getSeqId(LIGHT_CREATURE_SHRINK_ANIMATION)));
-        player.getPacketSender().sendSound(LIGHT_CREATURE_DOWN_SOUND, 1, 0);
-        TaskManager.submit(new (class extends Task {
-          constructor() { super(1, key, false); }
-          execute() { this.stop(); release(true); }
-        })());
-      },
+  }
+
+  /**
+   * Back to the plain creature, which drifts again (Chasm.TearsOfGuthix.js). After a landing it
+   * first hops two tiles north-east, still the carrying creature, and is the plain one heading
+   * north the tick after (1001964 ticks 19528 and 19529: 3223,9503 to 3225,9505, then north).
+   */
+  function releaseCreature(creature, landed) {
+    const free = () => {
+      creature.setNpcTransformationId(-1);
+      creature.setScriptedMovement(false);
+      carriers.delete(creature);
     };
+    if (!landed) return free();
+    const at = creature.getLocation();
+    // Ours: after the unrecorded northbound landing the hop is mirrored (south-east), back into the chasm.
+    const north = at.getY() + LIGHT_CREATURE_RELEASE_HOP > Chasm.BOUNDS.y1;
+    const hopY = north ? -LIGHT_CREATURE_RELEASE_HOP : LIGHT_CREATURE_RELEASE_HOP;
+    creature.telejump(new Location(at.getX() + LIGHT_CREATURE_RELEASE_HOP, at.getY() + hopY, at.getZ()));
+    Chasm.setHeading(creature, 0, north ? -1 : 1);
+    TaskManager.submit(new api.core.CountdownTask(creature, 1, free));
   }
 
   /** The cache's only light-creature option is Attract; it does what the lantern use does. */
@@ -525,9 +746,9 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     const x = location?.getX?.() ?? location?.x;
     const y = location?.getY?.() ?? location?.y;
     const z = location?.getZ?.() ?? location?.z;
-    return Number(z) === LIGHT_CREATURE_TILE_BOUNDS.z &&
-      Number(x) >= LIGHT_CREATURE_TILE_BOUNDS.x0 && Number(x) <= LIGHT_CREATURE_TILE_BOUNDS.x1 &&
-      Number(y) >= LIGHT_CREATURE_TILE_BOUNDS.y0 && Number(y) <= LIGHT_CREATURE_TILE_BOUNDS.y1;
+    const bounds = Chasm.BOUNDS;
+    return Number(z) === CHASM_PLANE &&
+      Number(x) >= bounds.x0 && Number(x) <= bounds.x1 && Number(y) >= bounds.y0 && Number(y) <= bounds.y1;
   }
 
   /** Both the lantern use and the Attract option target the creature from the ledge. */
@@ -557,9 +778,42 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     const rockX = rock.getX?.() ?? rock.x;
     const rockY = rock.getY?.() ?? rock.y;
     const rockZ = rock.getZ?.() ?? rock.z;
-    const playerX = event.player.getLocation().getX();
+    const { player } = event;
+    const from = player.getLocation().clone();
+    const east = from.getX() < rockX;
     event.handled = true;
-    event.player.moveTo(new Location(rockX + (playerX < rockX ? 1 : -1), rockY, rockZ));
+    if (!east && event.objectId === SOUTH_ROCKS_ID) {
+      later(player, CLIMB_UP_DELAY_TICKS, () => {
+        player.setPositionToFace(new Location(rockX, rockY, rockZ));
+        player.sendMessage(TOO_UNEVEN_MESSAGE);
+      });
+      return;
+    }
+    const to = new Location(rockX + (east ? 1 : -1), rockY, rockZ);
+    player.getMovementQueue().reset();
+    later(player, east ? CLIMB_DOWN_DELAY_TICKS : CLIMB_UP_DELAY_TICKS, () => {
+      if (!player.getLocation().equals(from)) return;
+      climbOver(player, from, to, east ? CLIMB_DOWN_ANIMATION : CLIMB_UP_ANIMATION);
+    });
+  }
+
+  /** Runs `action` now for 0 ticks, else that many ticks later. */
+  function later(player, ticks, action) {
+    if (ticks <= 0) return action();
+    TaskManager.submit(new api.core.CountdownTask(player, ticks, action));
+  }
+
+  /** On the far tile at once, sliding there from `from` as the recorded exact move does. */
+  function climbOver(player, from, to, animation) {
+    const slide = new ForceMovement(from, new Location(to.getX() - from.getX(), to.getY() - from.getY()), 0,
+      CLIMB_CYCLES, FACE_WEST, animation);
+    player.moveTo(to);
+    player.setForceMovement(slide);
+    player.performAnimation(new Animation(animation));
+    player.getPacketSender().sendSoundEffect(CLIMBING_LOOP_SOUND, CLIMBING_LOOP_COUNT, 0);
+    TaskManager.submit(new api.core.CountdownTask(player, 1, () => {
+      if (player.getForceMovement() === slide) player.setForceMovement(null);
+    }));
   }
 
   /**
@@ -569,11 +823,21 @@ module.exports = function registerTearsOfGuthixQuest(api) {
    * lines stay unplayed for someone who cannot start the quest.
    */
   function talkToJuna({ player }) {
-    if (quest.getStage(player) === STAGE_NOT_STARTED && questPoints(player) < MIN_QUEST_POINTS) {
+    const stage = quest.getStage(player);
+    if (stage === STAGE_NOT_STARTED && questPoints(player) < MIN_QUEST_POINTS) {
       player.sendMessage(`You need at least ${MIN_QUEST_POINTS} Quest Points to start this quest.`);
       return;
     }
-    api.emitCustomEvent("npc-dialogue:start", { player, npcId: JUNA_NPC_ID });
+    const firstMeeting = stage === STAGE_NOT_STARTED && !Juna.introHeard(player);
+    api.emitCustomEvent("npc-dialogue:start", { player, npcId: JUNA_NPC_ID, ...(firstMeeting ? { select: introduction } : {}) });
+  }
+
+  /** The first meeting: her opening line, then the "A story?" branch without the menu before it. */
+  function introduction(steps) {
+    const menu = steps.find((step) => step.type === "choice");
+    const story = menu?.options?.find((option) => option.text === STORY_OPTION);
+    if (!story?.steps?.length) return steps;
+    return [...steps.slice(0, steps.indexOf(menu)), ...story.steps];
   }
 
   /** "If Animal Magnetism is completed:" guards each of the stories Juna can be told. */
@@ -592,6 +856,10 @@ module.exports = function registerTearsOfGuthixQuest(api) {
       event.handled = true;
       return;
     }
+    if (event.stepId === QUEST_TELL_STORIES_STEP_ID && event.kind === "message") {
+      event.box = { statement: true };
+      return;
+    }
     if (!RANDOM_STORY_STEP_IDS.has(event.stepId)) return;
     const stories = loadTranscripts(api)?.[PAGE]?.variants?.[RANDOM_STORIES_VARIANT];
     event.steps = Array.isArray(stories) ? stories : [];
@@ -602,8 +870,16 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     refreshQuestList(player);
   }
 
+  /** A player who logs out mid-float is saved on the far side, not over the pool. */
   function handleLogout({ player }) {
+    const crossing = crossings.get(player);
     crossings.delete(player);
+    if (!crossing) return;
+    TaskManager.cancelTasks(crossing.key);
+    player.setForceMovement(null);
+    player.getMovementQueue().setBlockMovement(false);
+    if (crossing.carrier) releaseCreature(crossing.carrier, false);
+    if (crossing.carrying) player.setLocation(new Location(...crossing.destination));
   }
 
   quest = registerQuest(api, {
@@ -616,6 +892,8 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     questPoints: 1,
     xpRewards: [{ skillId: Skill.CRAFTING.getIndex(), amount: 1000, label: "Crafting" }],
     otherRewards: ["Access to the Tears of Guthix"],
+    // The scroll shows the bowl (1001964 tick 19677: questscroll:quest_model tog_bowl).
+    scrollItemId: STONE_BOWL_ITEM_ID,
     buildJournal,
     onReward: grantReward,
   });
@@ -631,8 +909,11 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   api.onNpcRoute(routeLanternToLightCreature);
   api.onObjectInteraction(climbTogRocks);
   api.onCustomEvent("npc-dialogue:action", handleStoryActions);
+  api.onCustomEvent("npc-dialogue:line", handleJunaLine);
   api.onObjectInteraction(JUNA_LOC_NAME, { "Talk-to": talkToJuna });
   api.onObjectInteraction("Magical rocks", { Mine: mineMagicStone });
+  api.onCustomEvent("player:interaction-cleared", interruptSwing);
+  api.persistAttribute(Juna.INTRO_ATTRIBUTE, false);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
 };

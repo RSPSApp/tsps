@@ -1,5 +1,6 @@
 {
   "cookables": [
+    {"raw":6006,"cooked":6008,"burnt":6008,"level":1,"xp":0,"stopBurn":1,"name":"barley","rangeOnly":true,"members":true,"message":"You cook the barley into barley malt."},
     {"raw":"seaweed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"seaweed","article":"some","message":"You burn the weed to soda ash."},
     {"raw":"raw_beef","cooked":"cooked_meat","burnt":"burnt_meat","level":1,"xp":30,"chance":{"fire":[128,512],"range":[128,512],"lumbridge":[138,532]},"name":"meat","message":"You cook a piece of meat."},
     {"raw":"raw_rat_meat","cooked":"cooked_meat","burnt":"burnt_meat","level":1,"xp":30,"chance":{"fire":[128,512],"range":[128,512],"lumbridge":[138,532]},"name":"meat","message":"You cook a piece of meat."},

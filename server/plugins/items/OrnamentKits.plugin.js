@@ -27,9 +27,9 @@ const GRACEFUL_BASES = new Set([11850, 11852, 11854, 11856, 11858, 11860]);
 
 const PRESET_TEXT = "Preset items cannot be used for this.";
 
-/** Preset (and other untradeable or unbankable) copies keep their restrictions; a refunded kit would not. */
 let pluginApi = null;
 
+/** Preset (and other untradeable or unbankable) copies keep their restrictions; a refunded kit would not. */
 function restricted(item) {
   const Item = core.Item;
   return !!item && (item.isPresetItem?.() === true

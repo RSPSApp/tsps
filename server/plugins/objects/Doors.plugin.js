@@ -436,6 +436,34 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // across, from the low side to the high side or back, along their own row. crossDelay holds the
   // opener that many ticks after the opening sound before the gate opens and they cross.
   PASS_THROUGH_GATES = Object.freeze([
+    // Zanaris market's eastbound and southbound entrances. Keep the wall clipped
+    // while the opener crosses so a second player cannot follow through unpaid.
+    Object.freeze({
+      closed: [[O.MAGIC_DOOR_2, 2469, 4438, 0, 2], [O.MAGIC_DOOR_4, 2469, 4437, 0, 2]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2469, 4438, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2469, 4437, 0, 2],
+        [O.MAGIC_DOOR_3, 2470, 4438, 0, 1],
+        [O.MAGIC_DOOR_5, 2470, 4437, 0, 3],
+      ],
+      crossX: 2470,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
+    Object.freeze({
+      closed: [[O.MAGIC_DOOR_2, 2466, 4434, 0, 3], [O.MAGIC_DOOR_4, 2465, 4434, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2466, 4434, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2465, 4434, 0, 3],
+        [O.MAGIC_DOOR_3, 2466, 4433, 0, 2],
+        [O.MAGIC_DOOR_5, 2465, 4433, 0, 0],
+      ],
+      crossY: 4434,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
     // Lucien's house: the maintainer's review5926064464 cites 242/912207 ticks13005–13007
     // and 232/03233 ticks944–946: a blocker stays at the entrance while the opener walks
     // across, and the closed door returns two ticks later (not an ordinary shared opening).

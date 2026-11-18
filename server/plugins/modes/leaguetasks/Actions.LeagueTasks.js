@@ -6,6 +6,7 @@
  *   entry that is a list takes any of its items), `equip-any-set { sets }` every piece of one of the
  *   sets, on
  *   `equipment:changed` (every worn-items refresh) and at login.
+ * - `prayer-bonus { min }`: the worn items' prayer bonus at least that, checked as equip kinds are.
  * - `equip-each { items, any? }`: every one of the items worn at some point, `any` any one of them
  *   completing alone (the ones sharing a slot - five godswords, six god books - cannot be worn at
  *   once, so they are collected over time); `equip-count { items, count }`: that many different ones
@@ -101,6 +102,11 @@
  *   `prayer { any: true }` takes whichever prayer is switched on.
  *
  * - `enter { place }`: the player inside one of the catalog's named places (its boxes, zones).
+ *
+ * Any counted trigger may add `resetOn { event, items?, npcs? }`: that event (its `itemId` one of the
+ * items, its pickpocket `target` one of the NPCs, if named) starts the count again: "Cook 5 pieces of food
+ * in a row without burning them" (`cooking:burnt`), "10 times in a row without failing"
+ * (`thieving:failure`).
  *
  * Any counted trigger may add `wearing { items }` (one of them worn as the deed happens) and
  * `near { npcs?, objects?, options?, distance }` (an NPC or loc of one of the names, or a loc with
@@ -303,7 +309,7 @@ function objectName(id) {
 }
 
 /** The kinds awarded by what is worn (see the head), all checked on `equipment:changed` and at login. */
-const EQUIP_KINDS = new Set(["equip", "equip-all", "equip-any-set", "equip-each", "equip-count"]);
+const EQUIP_KINDS = new Set(["equip", "equip-all", "equip-any-set", "equip-each", "equip-count", "prayer-bonus"]);
 
 /** What the player wears, by item name (`key`) and by cache id: a unit a trigger names. */
 function wornIndexOf(player) {
@@ -352,6 +358,14 @@ function checkWorn(player) {
   for (const task of tasks) {
     if (done.has(task.id) || !inArea(player, type, task)) continue;
     const { kind, items, sets, count } = task.trigger;
+    if (kind === "prayer-bonus") {
+      // "Equip enough items to reach a Prayer bonus of 15": the worn items' prayer bonus, as the
+      // equipment screen shows it (BonusManager's own sum, its providers' extras too).
+      const { BonusManager } = Common.core;
+      BonusManager.update(player);
+      if (Number(player.getBonusManager().getOtherBonus()[BonusManager.PRAYER]) >= Number(task.trigger.min)) Complete.complete(player, task.id, type);
+      continue;
+    }
     if (kind === "equip-any-set") {
       // Every piece of one of the sets, worn at once (Void Knight's three helms share a top and robe).
       if (sets.some((set) => set.every((unit) => wornUnit(worn, unit)))) Complete.complete(player, task.id, type);
@@ -736,6 +750,8 @@ const EVENT_KINDS = new Map([
   // Something cooked on a fire or range (Cooking's `skills:produced` of kind "cook"), whatever it is.
   ["cook", (_trigger, event) => event.skill === Common.core.Skill.COOKING && event.kind === "cook"],
   ["tob", (trigger, event) => trigger.modes.includes(event.mode)],
+  // Counted by hitLanded from the hit-resolved hook, not a custom event; listed so indexOf files it.
+  ["hit", () => false],
   ["teleport", (trigger, event) => trigger.spells.includes(String(event.name ?? "").toLowerCase())],
   ["bank", () => true],
   ["shortcut", (trigger, event) => trigger.shortcuts.includes(event.shortcut)],
@@ -809,6 +825,54 @@ function didDeed(name, event) {
   const tasks = (indexOf(type).deeds.get(name) ?? []).filter((task) => (!task.trigger.items || task.trigger.items.some((each) => key(each) === key(itemName(event.itemId))))
     && Object.entries(task.trigger.where ?? {}).every(([field, value]) => (Array.isArray(value) ? value : [value]).some((each) => String(event[field]).toLowerCase() === String(each).toLowerCase())));
   countTasks(player, type, tasks);
+}
+
+/**
+ * `hit { min, spells?, weapons? }`: one hit a player lands on an NPC of at least `min` damage (its total,
+ * as the hitsplats show it), with one of the spells (by the `cast` kind's names) or wielding one of the
+ * weapons (cache ids) if named: "In a single hit deal at least 66 damage ... using elemental spells",
+ * "Hit 150 damage or more with the Keris Partisan".
+ */
+function hitLanded({ attacker, target, hit }) {
+  if (!attacker?.isPlayer?.() || !target?.isNpc?.()) return;
+  const player = attacker.getAsPlayer?.() ?? attacker;
+  const type = Common.leagueOf(player);
+  if (type === null) return;
+  const tasks = indexOf(type).events.get("hit");
+  if (!tasks?.length) return;
+  // As the hitsplat shows it: the roll, but no more than the target had left (Mobile.decrementHealth
+  // caps it later; overkill on a 5-hitpoint goblin is no 66). This hit is already queued when the
+  // hook runs (CombatFactory.applyResolvedHitDamage), so only the rest of the queue lands before it.
+  const rolled = Number(hit?.getTotalDamage?.()) || 0;
+  const queued = Number(target.getCombat?.()?.getHitQueue?.()?.getQueuedDamage?.()) || 0;
+  const ahead = Math.max(0, queued - rolled);
+  const damage = Math.min(rolled, Math.max(0, (Number(target.getHitpoints?.()) || 0) - ahead));
+  const spell = spellName(hit?.getSpell?.());
+  const weapon = player.getEquipment?.().getItems?.()[Common.core.Equipment.WEAPON_SLOT]?.getId?.();
+  countTasks(player, type, tasks.filter((task) => damage >= Number(task.trigger.min)
+    && (!task.trigger.spells || task.trigger.spells.includes(spell))
+    && (!task.trigger.weapons || task.trigger.weapons.includes(weapon))));
+}
+
+/** `resetOn`: the task's progress starts again on that event (a burn, a failed pick). */
+function resetOn(name, event) {
+  const player = event?.player;
+  const type = player ? Common.leagueOf(player) : null;
+  if (type === null) return;
+  const progress = progressOf(player);
+  const reset = Common.catalog(type).tasks.filter((task) => task.trigger?.resetOn?.event === name && progress[task.id] !== undefined
+    && (!task.trigger.resetOn.items || task.trigger.resetOn.items.some((each) => key(each) === key(itemName(event.itemId))))
+    && (!task.trigger.resetOn.npcs || task.trigger.resetOn.npcs.some((each) => key(each) === key(event.target))));
+  if (!reset.length) return;
+  const kept = { ...progress };
+  for (const task of reset) delete kept[task.id];
+  player.setAttribute(PROGRESS_ATTRIBUTE, kept);
+}
+
+function watchResets(api) {
+  const named = new Set();
+  for (const type of Common.types()) for (const task of Common.catalog(type).tasks) if (task.trigger?.resetOn?.event) named.add(task.trigger.resetOn.event);
+  for (const name of named) api.onCustomEvent(name, (event) => resetOn(name, event));
 }
 
 /** The events some league's deed task names, each listened to. */
@@ -896,6 +960,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("guardians-of-the-rift:rift-closed", riftClosed);
   api.onCustomEvent("tob:completed", onEvent("tob"));
   api.onCustomEvent("player:emote", onEvent("emote"));
+  api.onCombatHitResolved?.(hitLanded);
   api.onCustomEvent("woodcutting:success", onEvent("chop-logs"));
   api.onCustomEvent("skills:produced", onEvent("cook"));
   api.onCustomEvent("ground-items:taken", onEvent("take"));
@@ -951,6 +1016,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("colosseum:glory", colosseumGlory);
   watchPlaces(api);
   watchDeeds(api);
+  watchResets(api);
 };
 
 module.exports.PROGRESS_ATTRIBUTE = PROGRESS_ATTRIBUTE;

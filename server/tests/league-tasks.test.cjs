@@ -1023,3 +1023,15 @@ test("the trigger overlay's NPC and item names are the cache's (a misspelt name 
     }
   }
 });
+
+test("the overlay's Combat Achievement monsters are enum 3970's names", () => {
+  const overlay = require("../plugins/modes/data/league-task-triggers.json");
+  const names = new Set([...CacheDefinitions.getEnumValues(3970)].map(([, name]) => String(name).toLowerCase()));
+  for (const [type, entries] of Object.entries(overlay)) {
+    if (type === "$comment") continue;
+    for (const [id, trigger] of Object.entries(entries)) {
+      if (trigger.kind !== "ca-boss") continue;
+      for (const monster of trigger.monsters ?? [trigger.monster]) assert.ok(names.has(String(monster).toLowerCase()), `${type}/${id}: ${monster}`);
+    }
+  }
+});

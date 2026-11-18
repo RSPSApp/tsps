@@ -2042,6 +2042,25 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
   Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
   and the barrel.
+- **More conditions** (`Actions.LeagueTasks.js`, `Triggers.LeagueTasks.js`):
+  - `resetOn { event, items?, npcs? }` on a counted trigger: that event starts its count again.
+    - "Cook 5 pieces of food in a row without burning them" is `cook` reset by `cooking:burnt`.
+    - "Cook 20 Karambwans in a row" is the Cooked karambwan reset by a Burnt karambwan.
+    - "Successfully pickpocket a regular Citizen 10 times in a row" is the man table's picks reset by
+      Pickpocket's new `thieving:failure` { player, method, target, npcId }. That event is sent on every
+      failed pick, a Shadow Veil save too. Ours: Varlamore's Citizens share the man table, so men and
+      women count too, as the generated "Pickpocket a Citizen" already does.
+  - `prayer-bonus { min }`: the worn items' prayer bonus at least that, as BonusManager sums it
+    (checked with the equip kinds). Used by "Reach a Prayer Bonus of 15 / 30".
+  - `hit { min, spells?, weapons? }`: one hit of at least `min` a player lands on an NPC, from
+    `onCombatHitResolved`, as its hitsplat shows it: capped at the hitpoints left after the damage queued
+    ahead of it the same tick. Used by "deal at least 66 damage ... using elemental spells" (the 20 Strike to
+    Surge spells) and "Hit 150 damage or more with the Keris Partisan" (25979, as "Defeat a Kalphite
+    with the Keris Partisan" names it).
+  - `ca-boss { monsters }`: the Wiki task rows' groups of Combat Achievement monsters (below).
+  Not yet: the solo kills ("Royal Titans without any other player joining", "Nex in a private
+  instance"), the timed runs (Prifddinas lap 1:10, Corrupted Gauntlet 4:30, Sepulchre 6:30) and "Vorkath
+  15 times without leaving". Each needs its encounter's own event first.
 - **Places from location lines** (`generate-league-tasks.ts`, `PLACE_DEFS` with `locLines`): a task
   whose place is where its subject stands takes the subject pages' own location lines for bounds. The
   `{{LocLine}}` / `{{ObjectLocLine}}` pins whose `location` links the place, three tiles round each (a pin
@@ -2368,8 +2387,12 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
 - **Combat Achievements**: `ca-tier { tier }` ("Combat Achievements Easy Tier", the plugin's
   `combat-achievements:tier`), `ca-count { count, type? }` ("100 Combat Achievements", "Complete
   5 Speed Tasks"), `ca-bosses { count }` ("Complete all tasks for 3 bosses") and `ca-boss
-  { monster }` ("Kraken Combat Achievements": a monster of enum 3970, the plugin's list; a group
-  such as "all three Dagannoth Kings" is left unmapped), from the plugin's new
+  { monster }` or `{ monsters }` ("Kraken Combat Achievements": a monster of enum 3970, the plugin's list;
+  a group every one of them, as the Wiki's task row names it: "all three Dagannoth Kings" are DK: Prime,
+  Rex and Supreme, "the Gauntlet & Corrupted Gauntlet" both Hunllefs, Chambers of Xeric "Normal mode and
+  Challenge mode", Theatre of Blood and Tombs of Amascut their three modes, Godwars Dungeon "including
+  Nex" its five bosses; the single-monster rows the generator could not word, such as "for the Kalphite
+  Queen", are in the overlay), from the plugin's new
   `combat-achievements:summary` { player } -> completed, speed, monsters, checked on
   `combat-achievements:completed` and at login. "Within the areas you have unlocked" is not
   checked.

@@ -56,6 +56,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 let runePouchAnswer = null;
 /** The client loot tracker entries content asked for ("loot-tracker:add-npc"). */
 const tracked = [];
+const failures = [];
 Thieving.register({
     core: { ...PluginManager.getCoreApi(), CombatFactory: combat, TaskManager: { submit: (task) => { task.setRunning(true); submitted.push(task); } } },
     onCustomEvent: () => {},
@@ -68,6 +69,7 @@ Thieving.register({
     onItemAction: () => {},
     emitCustomEvent: (name, request) => {
         if (name === 'thieving:success') log.push(name);
+        if (name === 'thieving:failure') failures.push(request);
         if (name === 'loot-tracker:add-npc') tracked.push({ npcId: request.npcId, items: request.items, at: log.length });
         if (name === 'thieving:done' && repeatAgain) request.again = true;
         if (name === 'thieving:pickpocket-target') pickpocketTargetAnswer?.(request);
@@ -398,7 +400,9 @@ test('Master Farmer loot also follows the success message', (t) => {
 });
 
 test('a failure, as captured on a hero: the message and line, then the strike and stun, then the stun message and damage', (t) => {
+    failures.length = 0;
     const { click, ticks } = attempt(t, { random: 0.99 });
+    assert.deepEqual(failures.map((event) => [event.method, event.target]), [['pickpocket', 'man']], 'thieving:failure, for a league streak');
     assert.deepEqual(click, ["spam: You attempt to pick the man's pocket."]);
     assert.deepEqual(ticks, [
         ["spam: You fail to pick the man's pocket.", "npc: What do you think you're doing?"],

@@ -2622,3 +2622,129 @@ test("Varlamore and Kourend deeds: Colosseum waves, Mixology buys, Stealing Valu
   emit("doom:delve-defeated", { level: 9 });
   assert.ok(done(f, "complete-1-deep-delve"), "level 8 or above");
 });
+
+// ---- deeds reported by their content: Asgarnia, Kandarin and Fremennik (issue 6108 follow-ups) ---
+
+test("Asgarnia, Kandarin and Fremennik deeds through their plugins: lockbox, glory, dusty key, Blast Furnace, Trawler, Barbarian Assault, kegs, shot put, Gnomeball", async (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const inventory = player.getInventory();
+
+  // Camdozaal: the real Open on an Ornate lockbox (a Simple one is no task). Two items carry each name; the
+  // lockboxes are their gamevals.
+  const open = async (gameval) => {
+    const id = core.CacheDefinitions.getObjId(gameval);
+    inventory.add(new core.Item(id), true);
+    await send(f, { type: "inventory_action", slot: inventory.getSlotForItemId(id), itemId: id, widgetId: 149 << 16, option: "Open", optionIndex: 1 }, 4);
+    return inventory.getAmount(id);
+  };
+  assert.equal(await open("camdozaal_vault_chest_low"), 0, `the real simple lockbox opens: ${f.messages}`);
+  assert.ok(!done(f, "open-an-ornate-lockbox"), "a simple lockbox");
+  assert.equal(await open("camdozaal_vault_chest_high"), 0, `the real ornate lockbox opens: ${f.messages}`);
+  assert.ok(done(f, "open-an-ornate-lockbox"));
+  inventory.resetItems().refreshItems();
+
+  // The Heroes' Guild: an uncharged glory used on the Fountain of Heroes.
+  const fountain = core.ObjectIdentifiers.FOUNTAIN_OF_HEROES;
+  const heroes = require("../plugins/quests/QuestRuntime").questNamed("Heroes' Quest"); // the fountain's requirement
+  heroes.setStage(player, heroes.completionValue);
+  const at = player.getLocation();
+  const object = new core.GameObject(fountain, new core.Location(at.getX() + 1, at.getY(), at.getZ()), 10, 0, null);
+  core.ObjectManager.register(object, true);
+  t.after(() => { try { core.ObjectManager.deregister(object, true); } catch { /* gone */ } });
+  const { AMULET_OF_GLORY: glory, AMULET_OF_GLORY_4_: glory4 } = core.ItemIdentifiers;
+  inventory.add(new core.Item(glory), true);
+  await send(f, { type: "item_on_object", itemId: glory, slot: inventory.getSlotForItemId(glory), widgetId: 149 << 16, objectId: fountain, x: at.getX() + 1, y: at.getY() }, 6);
+  assert.equal(inventory.getAmount(glory4), 1, `the real fountain charges it: ${f.messages}`);
+  assert.ok(done(f, "charge-an-amulet-of-glory-in-the-heroes-guild"));
+  core.ObjectManager.deregister(object, true);
+  inventory.resetItems().refreshItems();
+
+  // The Blast Furnace dispenser: bars taken count by their metal, summed.
+  const Furnace = require("../plugins/minigames/blastfurnace/Furnace.BlastFurnace")._test;
+  const mithril = item("Mithril bar");
+  Furnace.stateOf(player).bars[mithril] = 100;
+  for (let i = 0; i < 4; i++) {
+    Furnace.take(player, mithril, 25);
+    assert.equal(inventory.getAmount(mithril), 25, `the real dispenser hands over 25: ${f.messages}`);
+    if (i < 3) assert.ok(!done(f, "blast-furnace-100-mithril-bars"), `${(i + 1) * 25} bars`);
+    inventory.resetItems().refreshItems();
+  }
+  assert.ok(done(f, "blast-furnace-100-mithril-bars") && !done(f, "blast-furnace-100-runite-bars"));
+
+  // The Fishing Trawler: a trip back in port.
+  require("../plugins/minigames/fishingtrawler/Sea.FishingTrawler").dock({ contribution: new Map() }, [player]);
+  assert.ok(done(f, "complete-a-fishing-trawler-game"));
+
+  // Barbarian Assault: the upgrade to level 5 in a role (4 is no task).
+  const Points = require("../plugins/minigames/barbarianassault/Points.BarbarianAssault");
+  Points.setLevel(player, "collector", 3);
+  Points.setPoints(player, "collector", 5000);
+  assert.ok(Points.upgradeRole(player, "collector"));
+  assert.ok(!done(f, "reach-level-5-in-any-barbarian-assault-role"), "level 4");
+  assert.ok(Points.upgradeRole(player, "collector"));
+  assert.ok(done(f, "reach-level-5-in-any-barbarian-assault-role"));
+
+  // The Warriors' Guild: kegs picked up one by one in Jimmy's room, the fifth completes.
+  const Kegs = require("../plugins/areas/warriors-guild/Kegs.WarriorsGuild")._test;
+  player.setAttribute("league:areas", [21, 3]); // Varlamore and Asgarnia
+  player.setLocation(new core.Location(2865, 3540, 1));
+  for (const [index, keg] of [15669, 15670, 15671, 15672, 15673].entries()) {
+    if (index === 4) assert.ok(!done(f, "balance-5-barrels-on-your-head"), "four kegs");
+    Kegs.pickUpKeg({ player, objectId: keg });
+    ticks(f, 3);
+  }
+  assert.ok(done(f, "balance-5-barrels-on-your-head"), `five kegs: ${f.messages}`);
+
+  // The shot put: a landed throw of 12 yards or more (11 is no task).
+  const ShotPut = require("../plugins/areas/warriors-guild/ShotPut.WarriorsGuild")._test;
+  const lane = ShotPut.lanes()[0];
+  ShotPut.landShot(player, lane, 11, 100, player.getLocation());
+  assert.ok(!done(f, "throw-a-shot-put-12-yards"), "11 yards");
+  ShotPut.landShot(player, lane, 12, 100, player.getLocation());
+  assert.ok(done(f, "throw-a-shot-put-12-yards"));
+
+  // Gnomeball: a goal.
+  require("../plugins/minigames/gnomeball/Pitch.GnomeBall").scoreGoal(player, { goals: 0 });
+  assert.ok(done(f, "score-a-goal-in-gnomeball"));
+});
+
+test("deed: the dusty key's gate opened through the real door (Unlock a gate in Taverley Dungeon using the Dusty Key)", async (t) => {
+  core.RegionManager.loadMapFiles(2923, 9803);
+  const f = pactsCharacter(t);
+  f.player.setAttribute("league:areas", [21, 3]); // Varlamore and Asgarnia
+  f.player.moveTo(new core.Location(2923, 9803, 0)); // beside the gate
+  f.player.needsPlacement = false;
+  await objectOption(t, f, core.ObjectIdentifiers.GATE_57, "Open", 4);
+  assert.ok(!done(f, "unlock-a-gate-in-taverley-dungeon"), `no key: ${f.messages}`);
+  f.player.getInventory().add(new core.Item(core.ItemIdentifiers.DUSTY_KEY), true);
+  await objectOption(t, f, core.ObjectIdentifiers.GATE_57, "Open", 4);
+  assert.ok(done(f, "unlock-a-gate-in-taverley-dungeon"), f.messages.join(" | "));
+});
+
+test("Asgarnia, Kandarin and Fremennik deeds through their events: minnows, Castle Wars, the dusty key, the pyre ship, barehanded sharks", (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const emit = (name, payload = {}) => PM.emitCustomEvent(name, { player, ...payload });
+  for (let i = 0; i < 24; i++) emit("minnows:traded", { amount: 40 });
+  assert.ok(!done(f, "trade-in-1000-minnows"), "960 minnows");
+  emit("minnows:traded", { amount: 40 });
+  assert.ok(done(f, "trade-in-1000-minnows"));
+  emit("castlewars:player-result", { result: "loss" });
+  emit("castlewars:player-result", { result: "tie" });
+  assert.ok(!done(f, "win-a-game-of-castle-wars"));
+  emit("castlewars:player-result", { result: "win" });
+  assert.ok(done(f, "win-a-game-of-castle-wars"));
+  emit("taverley-dungeon:key-door", { key: "JAIL_KEY" });
+  assert.ok(!done(f, "unlock-a-gate-in-taverley-dungeon"), "the jail door");
+  emit("taverley-dungeon:key-door", { key: "DUSTY_KEY" });
+  assert.ok(done(f, "unlock-a-gate-in-taverley-dungeon"));
+  emit("barbarian-pyre:lit", { logsId: item("Logs") });
+  assert.ok(done(f, "light-a-pyre-ship"));
+  emit("fishing:success", { skill: core.Skill.FISHING, itemId: item("Raw shark"), barehand: false });
+  assert.ok(!done(f, "barehand-catch-a-shark"), "a harpooned shark");
+  emit("fishing:success", { skill: core.Skill.FISHING, itemId: item("Raw tuna"), barehand: true });
+  assert.ok(!done(f, "barehand-catch-a-shark"), "a barehanded tuna");
+  emit("fishing:success", { skill: core.Skill.FISHING, itemId: item("Raw shark"), barehand: true });
+  assert.ok(done(f, "barehand-catch-a-shark"));
+});

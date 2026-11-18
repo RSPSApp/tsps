@@ -28,6 +28,8 @@ function open({ player, itemId }) {
   player.getInventory().deleteNumber(itemId, 1);
   for (const item of loot) player.getInventory().forceAdd(player, item);
   player.sendMessage("You open the lockbox and find some treasure.");
+  // `camdozaal:lockbox-opened` { player, itemId } (a league's "Open an Ornate Lockbox").
+  S.pluginApi().emitCustomEvent("camdozaal:lockbox-opened", { player, itemId });
 }
 module.exports = function attach(api) {
   api.onItemAction("Simple lockbox", { Open: open });

@@ -2043,6 +2043,22 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
   Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
   and the barrel.
+- **Asgarnia, Kandarin and Fremennik deeds**, from their content's events (all new but Castle Wars' and Fishing's):
+  - The Warriors' Guild: `warriors-guild:shot-put` { player, distance } on a landed throw (`atLeast` 12), and
+    `warriors-guild:kegs-balanced` { player, kegs } as each keg goes on the head (`atLeast` 5).
+  - `gnomeball:goal` { player } on a goal; Kylie's `minnows:traded` { player, amount }, summed to 1,000.
+  - Barbarian Assault: `barbarian-assault:role-levelled` { player, role, level } on an upgrade (`atLeast` 5).
+  - Castle Wars: the existing `castlewars:player-result`, `where` result "win".
+  - The Fishing Trawler: `fishing-trawler:completed` { player } on docking back in port.
+  - The Fountain of Heroes: `jewellery:recharged` { player, site, piece } once per kind of piece charged,
+    `where` site "heroes" and piece "glory" or "glory_trimmed" (piece is undefined for rings of wealth, whose
+    table entry has no key; no trigger reads it).
+  - Taverley Dungeon: `taverley-dungeon:key-door` { player, key } when a locked door's key lets the player
+    through, `where` key "DUSTY_KEY".
+  - The Blast Furnace: `blast-furnace:bars-taken` { player, itemId, amount } from the dispenser, by bar, summed.
+  - Camdozaal: `camdozaal:lockbox-opened` { player, itemId }, the Ornate lockbox.
+  - The pyre ship: `barbarian-pyre:lit` { player, logsId } on lighting it.
+  - Barehanded sharks: Fishing's `fishing:success`, `where` barehand true.
 - **Varlamore and Kourend deeds**, from their content's events:
   - Fortis Colosseum waves: Run's new `colosseum:wave-completed` { player, wave }, with `atLeast` wave 1
     and wave 12.

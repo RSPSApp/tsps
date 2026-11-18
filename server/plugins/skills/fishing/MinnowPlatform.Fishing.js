@@ -250,6 +250,8 @@ function exchangeMinnows(player) {
       }
       inventory.deleteNumber(I.MINNOW, cost);
       inventory.addItem(output);
+      // `minnows:traded` { player, amount }: minnows handed to Kylie (a league's "Trade in 1000 Minnows").
+      api.emitCustomEvent("minnows:traded", { player, amount: cost });
     },
   });
   player.getPacketSender().sendEnterAmountPrompt("How many sharks would you like?");

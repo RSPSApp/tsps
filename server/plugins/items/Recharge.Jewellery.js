@@ -83,6 +83,7 @@ function rechargeAtFountain(api, event) {
   let eternal = false;
   let changed = false;
   let recharged = false;
+  const pieces = new Set();
   for (const container of [player.getInventory(), player.getEquipment()]) {
     for (const item of container.getItems()) {
       const entry = rechargeableEntry(core, table, item, site);
@@ -98,6 +99,7 @@ function rechargeAtFountain(api, event) {
         item.setId(entry.noted ? core.ItemDefinition.forId(chargedId).getNoteId() : chargedId);
       }
       changed = true;
+      pieces.add(entry.piece.key);
       if (site === "totem" && (entry.piece.key === "skills" || entry.piece.key === "combat")) recharged = true;
     }
     container.refreshItems();
@@ -109,6 +111,9 @@ function rechargeAtFountain(api, event) {
   api.getBonusManager().update(player);
   player.getUpdateFlag().flag(core.Flag.APPEARANCE);
   if (recharged) api.emitCustomEvent("diary:task", { player, diary: "ardougne", task: ARDOUGNE_HARD_TASK });
+  // `jewellery:recharged` { player, site, piece }: once per kind of piece charged ("Charge an Amulet of Glory at
+  // the Fountain of Heroes"); site is "heroes", "totem" or "rune", piece the jewellery table's key ("glory").
+  for (const piece of pieces) api.emitCustomEvent("jewellery:recharged", { player, site, piece });
   player.sendMessage(eternal
     ? "The power of the fountain is transferred into an amulet of eternal glory. It will now have unlimited charges."
     : site === "totem"

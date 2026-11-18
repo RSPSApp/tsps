@@ -74,6 +74,8 @@ function upgradeRole(player, role) {
   addPoints(player, role, -cost);
   setLevel(player, role, level(player, role) + 1);
   player.sendMessage(`Your ${data.ROLE_LABEL[role]} level is now ${level(player, role)}.`);
+  // `barbarian-assault:role-levelled` { player, role, level } (a league's "Reach level 5 in any role").
+  api?.emitCustomEvent("barbarian-assault:role-levelled", { player, role, level: level(player, role) });
   return true;
 }
 

@@ -145,6 +145,8 @@ function landShot(player, lane, distance, power, landing) {
   player.getSkillManager().addExperiences(Guild.core.Skill.STRENGTH, power * 0.7);
   Guild.credit(player, lane.tokens + distance);
   Guild.npcSays(player, lane.ref, `Well done. You threw the shot ${distance} yard${distance === 1 ? "" : "s"}!`);
+  // `warriors-guild:shot-put` { player, distance }: a throw landed (a league's "Throw a Shot Put 12 yards").
+  Guild.emit("warriors-guild:shot-put", { player, distance });
 }
 
 /** The landed shot is guild property. */
@@ -181,4 +183,4 @@ module.exports = function attachShotPut(pluginApi) {
   api.onItemOnItem("Ashes", "Pestle and mortar", grindAshes);
   api.onItemAction("Ground ashes", { "Dust-hands": dustHands });
 };
-module.exports._test = { throwPower, throwDistance, STYLES };
+module.exports._test = { throwPower, throwDistance, STYLES, landShot, lanes: () => LANES };

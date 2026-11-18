@@ -2,9 +2,8 @@
  * The Leagues Tutor's Collect-items (a cache-read league with a `tutor`, Demonic Pacts), as recorded
  * (237/01098, 1107): the player asks "Do I have any League items to collect?" (chatquiz1); on
  * Continue the item box "You receive some items from the Tutor." and the items into the inventory.
- * What is owed: each item the character's relics hand out (the Reloaded pick's too) that it owns
- * none of, carried, worn or banked; as many as the inventory takes. Ours (unrecorded): the lines
- * when nothing is owed and when the inventory is too full for the rest.
+ * The Tutor offers missing starter supplies and items from chosen relics (including Reloaded).
+ * Carried, equipped and banked items count as owned. The Talk-to transcript uses the same handover.
  */
 const Common = require("./Common.LeagueRelics");
 const Unlock = require("./Unlock.LeagueRelics");
@@ -22,20 +21,20 @@ function owns(player, itemId) {
   return Common.core.Bank.owns(player, itemId);
 }
 
-/** The relic items the character owns none of, each once. */
+/** Starter supplies and relic items the character owns none of, each once. */
 function owed(player, type) {
-  const ids = heldRelics(player, type).flatMap((relic) => Unlock.grantedItems(relic));
+  const supplies = Common.cacheLeague(type)?.tutor?.starterSupplies ?? [];
+  const ids = supplies.map((name) => Common.core.CacheDefinitions.getObjId(name)).filter(Number.isInteger);
+  ids.push(...heldRelics(player, type).flatMap((relic) => Unlock.grantedItems(relic)));
   return [...new Set(ids)].filter((id) => !owns(player, id));
 }
 
 /** Hands over what fits, then the recorded item box, or ours when nothing is owed. */
-function handOver(player, type) {
+function handOver(player, type, npcId) {
   const items = owed(player, type);
-  const { DialogueChainBuilder, NpcDialogue, StatementDialogue, ItemStatementDialogue, CacheDefinitions } = Common.core;
+  const { DialogueChainBuilder, NpcDialogue, StatementDialogue, ItemStatementDialogue } = Common.core;
   const manager = player.getDialogueManager();
   if (items.length === 0) {
-    const tutor = player.getInteractingMobile?.();
-    const npcId = tutor?.getId?.() ?? CacheDefinitions.getNpcId("league_6_tutor");
     manager.startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, npcId, Common.message("collectNothing", {}, type))));
     return;
   }
@@ -54,20 +53,35 @@ function handOver(player, type) {
   if (given.length < items.length) player.sendMessage(Common.message("collectFull", {}, type));
 }
 
-/** Collect-items: the recorded question, then the items on Continue. */
-function collectItems({ player }) {
+function tutorLeague(player, npcId) {
   const type = Common.leagueOf(player);
-  if (type === null || !Common.cacheLeague(type)?.tutor) return false;
+  const tutor = Common.cacheLeague(type)?.tutor;
+  return tutor && npcId === Common.core.CacheDefinitions.getNpcId(tutor.npc) ? type : null;
+}
+
+/** Collect-items: the recorded question, then the items on Continue. */
+function collectItems({ player, npcId }) {
+  const type = tutorLeague(player, npcId);
+  if (type === null) return false;
   const { DialogueChainBuilder, PlayerDialogue, ActionDialogue, CacheDefinitions } = Common.core;
   const chathead = CacheDefinitions.getSeqId("chatquiz1") ?? undefined;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder()
     .add(new PlayerDialogue(0, Common.message("collectAsk", {}, type), chathead))
-    .add(new ActionDialogue(1, { execute: () => handOver(player, type) })));
+    .add(new ActionDialogue(1, { execute: () => handOver(player, type, npcId) })));
   return true;
+}
+
+function collectFromDialogue(event) {
+  if (event.text !== "Player receives missing items") return;
+  const type = tutorLeague(event.player, event.npcId);
+  if (type === null) return;
+  event.handled = true;
+  handOver(event.player, type, event.npcId);
 }
 
 module.exports = function attach(api) {
   api.onNpcInteraction("Leagues Tutor", { "Collect-items": collectItems });
+  api.onCustomEvent("npc-dialogue:action", collectFromDialogue);
 };
 
 Object.assign(module.exports, { owed });

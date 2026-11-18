@@ -2,8 +2,8 @@
 
 /**
  * Varlamore's Dairy Buffalo (a scenery loc at Ortus Farm and Kastori; Wiki: Dairy Buffalo): Milk
- * fills an empty bucket with milk. RSProx 237/1098 tick 14560, two ticks after the arrival, all on
- * one tick: the player plays milk_buffalo, synth 372 plays, "You milk the buffalo." (spam) and the
+ * fills an empty bucket with milk. RSProx 237/1098: clicked at tick 14560, arrived 14569, and at 14571,
+ * two ticks after the arrival, all on one tick: the player plays milk_buffalo, synth 372 plays, "You milk the buffalo." (spam) and the
  * empty bucket becomes a bucket of milk. Emits `dairy-buffalo:milked` { player } on that tick (the
  * league's "Milk a Buffalo" completes there).
  *

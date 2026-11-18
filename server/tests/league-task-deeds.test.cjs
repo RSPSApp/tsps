@@ -2337,3 +2337,60 @@ test("batch 2: Deadeye and Mystic Vigour, Eagle Eye's and Mystic Might's slots w
   P.activatePrayerPrayerId(player, P.MYSTIC_MIGHT);
   assert.ok(done(f, "activate-mystic-vigour"), `Mystic Vigour: ${f.messages}`);
 });
+
+// ---- named places from subjects' location lines (issue 6108 follow-ups) ---------------------------
+
+test("places from location lines: the Stonecutter Outpost's rocks, Tlati's trees, the Shayzien yews, the Forsaken Tower's magic trees, two sand pits, Land's End's bank chest and Puro-Puro", async (t) => {
+  const f = pactsCharacter(t, [1666, 3136, 0], [21, 20, 8, 1]);
+  const { player } = f;
+  const at = (x, y) => { player.moveTo(new core.Location(x, y, 0)); player.needsPlacement = false; };
+  const mined = (name) => PM.emitCustomEvent("mining:success", { player, itemId: item(name) });
+  const chopped = (name) => PM.emitCustomEvent("woodcutting:success", { player, logId: item(name), logAmount: 1 });
+
+  // Coal: Civitas is no Stonecutter Outpost; beside its coal rocks (1732,2948, Coal rocks' location line) it is.
+  mined("Coal");
+  assert.ok(!done(f, "mine-some-coal-from-stonecutter-outpost"), "coal mined in Civitas");
+  at(1733, 2948);
+  mined("Coal");
+  assert.ok(done(f, "mine-some-coal-from-stonecutter-outpost"), `the outpost at ${player.getLocation()}`);
+  for (let i = 0; i < 20; i++) mined("Mithril ore");
+  assert.ok(done(f, "mine-20-mithril-ore-in-the-stonecutter-outpost"));
+
+  at(1666, 3136);
+  chopped("Teak logs");
+  assert.ok(!done(f, "chop-a-tree-in-the-tlati-rainforest"), "a teak chopped in Civitas");
+  at(1256, 3005); // beside a Tlati Rainforest teak (Teak tree's location line)
+  chopped("Teak logs");
+  assert.ok(done(f, "chop-a-tree-in-the-tlati-rainforest"));
+
+  at(1486, 3598); // a Shayzien yew
+  for (let i = 0; i < 15; i++) chopped("Yew logs");
+  assert.ok(done(f, "chop-15-yew-logs-in-shayzien"));
+  at(1373, 3819); // a Forsaken Tower magic tree
+  chopped("Magic logs");
+  assert.ok(done(f, "chop-a-magic-log-at-the-forsaken-tower"));
+
+  at(1520, 3001); // the Sunset Coast's sand pit
+  PM.emitCustomEvent("sand-pit:filled", { player });
+  assert.ok(done(f, "fill-a-bucket-with-sand-at-the-sunset-coast"));
+  at(2667, 3708); // Rellekka's
+  for (let i = 0; i < 19; i++) PM.emitCustomEvent("sand-pit:filled", { player });
+  assert.ok(!done(f, "fill-up-20-buckets-of-sand-in-rellekka"), "19 buckets");
+  PM.emitCustomEvent("sand-pit:filled", { player });
+  assert.ok(done(f, "fill-up-20-buckets-of-sand-in-rellekka"));
+
+  // Puro-Puro: its map square, the server's own bounds too (Catching.Hunter's inPuroPuro). The hunt there is
+  // the same path as the others; the test can't stand a player inside, as Impetuous Impulses sends back
+  // anyone not let in through its entrance.
+  const Common = require("../plugins/modes/leaguetasks/Common.LeagueTasks");
+  assert.equal(Common.inPlace("puro-puro", 2590, 4320), true);
+  assert.equal(Common.inPlace("puro-puro", 2624, 4320), false);
+  assert.equal(Common.catalog(6).byId.get("catch-50-implings-in-puro-puro").trigger.place, "puro-puro");
+
+  // Land's End: a Bank chest (Use, as the cache's 19051 there) beside its location line's tile.
+  core.RegionManager.loadMapFiles(1513, 3421);
+  at(1512, 3421);
+  await objectOption(t, f, 19051, "Use", 3);
+  assert.ok(done(f, "bank-at-land-s-end"), `the Land's End bank chest: ${f.messages}`);
+
+});

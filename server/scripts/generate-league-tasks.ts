@@ -704,6 +704,12 @@ type Rect = [number, number, number, number];
  *   wall), its doors and gates shut: a guild's rooms; for an island in open sea (`bbox`) the box
  *   around it, the sea between being no ground;
  *   a fill that reaches `cap` tiles has leaked out and fails the run.
+ * - `locLines`: the tiles round the location lines (`{{LocLine}}` / `{{ObjectLocLine}}` pins) of
+ *   subject pages whose `location` links the place: the Coal and Mithril rocks pages' "Stonecutter
+ *   Outpost" lines are where that outpost's rocks stand, `pad` tiles each way (the player beside one),
+ *   or with `square` the whole map squares they are in (Puro-Puro, an area of its own). A place of
+ *   this kind is named for its subject ("Stonecutter Outpost rocks"), so the phrase rules never take it
+ *   for the whole town: the trigger overlay names it by key, and its bounds are written like any other.
  * Every place must hold one of its page's map points ({{Map}} pins and centres), or, for a page
  * whose points are its entrance only (a dungeon), every spawn of `spawns` (npc-spawns.json,
  * "Name#id").
@@ -712,6 +718,7 @@ interface PlaceDef {
   key: string; names: string[]; page: string;
   wikiPolygon?: true; slayerArea?: string; server?: { rects?: Rect[]; polygon?: Array<[number, number]>; from: string }; flood?: { from?: [number, number, number]; centre?: true; cap: number; bbox?: true };
   spawns?: string[];
+  locLines?: { pages: string[]; location: string; pad?: number; square?: true };
 }
 interface Place { name: string; page: string; source: string; rects: Rect[] }
 /** A place is at most this many boxes: each is a zone the runtime watches every tick (docs/leagues.md, Tasks). */
@@ -784,6 +791,18 @@ const PLACE_DEFS: PlaceDef[] = [
   // The Citharede Abbey (the Giants' Plateau, east of Al Kharid): the abbey and its cabbage field
   // round the page's own pin (it has no polygon).
   { key: "citharede-abbey", names: ["Citharede Abbey"], page: "Citharede_Abbey", server: { rects: [[3402, 3171, 3423, 3188]], from: "the abbey and its cabbage field" } },
+  // Subjects' location lines (issue 6108's follow-ups): where the task's rocks, trees, sand pits and
+  // bank chest stand, three tiles round each pin, and Puro-Puro's map square. Three, not two: a pin is
+  // its object's south-west tile, and a 3x3 one (Shayzien's yews) has its north and east sides three off;
+  // the Sunset Coast pit's pin is a tile south of the pit (the cache's 1519,3001).
+  { key: "stonecutter-outpost-rocks", names: ["Stonecutter Outpost rocks"], page: "Coal_rocks", locLines: { pages: ["Coal_rocks", "Mithril_rocks"], location: "Stonecutter Outpost", pad: 3 } },
+  { key: "tlati-rainforest-trees", names: ["Tlati Rainforest trees"], page: "Teak_tree", locLines: { pages: ["Teak_tree", "Mahogany_tree"], location: "Tlati Rainforest", pad: 3 } },
+  { key: "shayzien-yew-trees", names: ["Shayzien yew trees"], page: "Yew_tree", locLines: { pages: ["Yew_tree"], location: "Shayzien", pad: 3 } },
+  { key: "forsaken-tower-magic-trees", names: ["Forsaken Tower magic trees"], page: "Magic_tree", locLines: { pages: ["Magic_tree"], location: "The Forsaken Tower (location)", pad: 3 } },
+  { key: "rellekka-sand-pit", names: ["Rellekka sand pit"], page: "Sand_pit", locLines: { pages: ["Sand_pit"], location: "Rellekka", pad: 3 } },
+  { key: "sunset-coast-sand-pit", names: ["Sunset Coast sand pit"], page: "Sand_pit", locLines: { pages: ["Sand_pit"], location: "Sunset Coast", pad: 3 } },
+  { key: "lands-end-bank-chest", names: ["Land's End bank chest"], page: "Bank_chest", locLines: { pages: ["Bank_chest"], location: "Land's End", pad: 3 } },
+  { key: "puro-puro", names: ["Puro-Puro"], page: "Baby_impling", locLines: { pages: ["Baby_impling"], location: "Puro Puro", square: true } },
 ];
 
 /** The places' saved Wiki pages (`--from <dir>/places`, `--save`), read before the triggers are derived. */
@@ -813,6 +832,26 @@ function mapPoints(wikitext: string): Array<[number, number]> {
     }
   }
   return points;
+}
+
+/**
+ * The pins of a page's location lines whose `location` links `location` (`[[Stonecutter Outpost]]`,
+ * `North [[Tlati Rainforest]]`, `[[The Forsaken Tower (location)]]`).
+ */
+function locationPins(wikitext: string, location: string): Array<[number, number]> {
+  const lines = wikitext.replace(/\{\{((?:Object)?LocLine)[ \t]*\r?\n/g, "{{$1");
+  const pins: Array<[number, number]> = [];
+  for (const args of ["ObjectLocLine", "LocLine"].flatMap((template) => templateCalls(lines, template))) {
+    const where = args.find((arg) => /^\s*location\s*=/.test(arg)) ?? "";
+    const links = [...where.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)].map((link) => link[1].trim().toLowerCase());
+    if (!links.includes(location.toLowerCase())) continue;
+    // Pins as "x:1805,y:9501" or a bare "1486,3598".
+    for (const arg of args) {
+      const pair = /^\s*(?:x:)?(\d{3,5}),(?:y:)?(\d{3,5})\s*$/.exec(arg);
+      if (pair) pins.push([Number(pair[1]), Number(pair[2])]);
+    }
+  }
+  return pins;
 }
 
 /** The page's polygon outline (`{{Map|...|mtype=polygon|x,y|...}}`), its vertices in order. */
@@ -972,6 +1011,13 @@ function resolvePlaces() {
       Object.assign(place, { rects, source: `Slayer area ${def.slayerArea}` });
     } else if (def.server) {
       Object.assign(place, { rects: def.server.rects ?? polygonRects(def.server.polygon!), source: def.server.from });
+    } else if (def.locLines) {
+      const pins = def.locLines.pages.flatMap((page) => locationPins(placePages.get(page) ?? "", def.locLines!.location));
+      if (!pins.length) throw new Error(`place ${def.key}: no location line of ${def.locLines.location} on ${def.locLines.pages.join(", ")}`);
+      const pad = def.locLines.pad ?? 0;
+      const boxes = pins.map(([x, y]): Rect => (def.locLines!.square ? [x & ~63, y & ~63, (x & ~63) + 63, (y & ~63) + 63] : [x - pad, y - pad, x + pad, y + pad]));
+      const rects = [...new Map(boxes.map((box) => [box.join(","), box])).values()].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      Object.assign(place, { rects, source: `${def.locLines.pages.join(" and ")}'s ${def.locLines.location} location lines${def.locLines.square ? ", their map squares" : `, ${pad} tiles round each`}` });
     } else if (def.flood) {
       const middle = (axis: 0 | 1) => Math.floor(points.reduce((sum, point) => sum + point[axis], 0) / points.length);
       const from = def.flood.from ?? (!points.length ? null : def.flood.centre ? [middle(0), middle(1), 0] as [number, number, number] : [points[0][0], points[0][1], 0] as [number, number, number]);
@@ -987,7 +1033,8 @@ function resolvePlaces() {
         const out = tiles.find(([x, y]) => !placeHolds(place, x, y));
         if (out) throw new Error(`place ${def.key}: ${spec} spawns at ${out.join(",")}, outside it`);
       }
-    } else if (!points.some(([x, y]) => placeHolds(place, x, y))) {
+    } else if (!def.locLines && !points.some(([x, y]) => placeHolds(place, x, y))) {
+      // (A location-line place is built round its own pins, so it holds them by construction.)
       throw new Error(`place ${def.key}: none of ${def.page}'s map points (${points.map((p) => p.join(",")).join(" ") || "none"}) is inside it`);
     }
     if (!place.rects.length || place.rects.length > MAX_PLACE_RECTS) throw new Error(`place ${def.key}: ${place.rects.length} boxes (1 to ${MAX_PLACE_RECTS})`);
@@ -2739,7 +2786,7 @@ async function main() {
     }
     eras.set(league, era);
   }
-  for (const page of new Set(PLACE_DEFS.map((def) => def.page))) placePages.set(page, await placePageOf(page, options));
+  for (const page of new Set(PLACE_DEFS.flatMap((def) => [def.page, ...(def.locLines?.pages ?? [])]))) placePages.set(page, await placePageOf(page, options));
   // The homes of the monsters the kill tasks name before a place, by lower-cased page title.
   const homePages = [...new Set(LEAGUES.flatMap((league) => homePagesOf(rawPages.get(league)!)))].sort();
   for (const page of homePages) names.homes!.set(page.toLowerCase(), homesOf(await wikiPageOf("npcs", page, options)));
@@ -2883,7 +2930,11 @@ async function main() {
   }
 
   // The places the triggers name, by key: their bounds and where those come from (docs/leagues.md, Tasks).
-  const named = new Set(Object.values(output.leagues as Record<string, { tasks: Task[] }>).flatMap((league) => league.tasks.map((task) => task.trigger?.place)).filter((key): key is string => typeof key === "string"));
+  // The hand-maintained overlay's triggers name places too (a subject's location-line place, by key).
+  const overlay = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../plugins/modes/data/league-task-triggers.json"), "utf8"));
+  const overlayPlaces = Object.entries(overlay).filter(([type]) => type !== "$comment").flatMap(([, entries]) => Object.values(entries as Record<string, Trigger>).map((trigger) => trigger.place));
+  const named = new Set([...Object.values(output.leagues as Record<string, { tasks: Task[] }>).flatMap((league) => league.tasks.map((task) => task.trigger?.place)), ...overlayPlaces].filter((key): key is string => typeof key === "string"));
+  for (const key of named) if (!places.has(key)) throw new Error(`a trigger names place ${key}, which no PLACE_DEFS row defines`);
   output.places = Object.fromEntries([...named].sort().map((key) => [key, places.get(key)]));
   if (options.unmapped) fs.writeFileSync(options.unmapped, unmappedRows.join("\n") + "\n");
   const text = serialise(output);

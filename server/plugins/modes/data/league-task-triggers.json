@@ -1,6 +1,9 @@
 {
   "$comment": "Hand-maintained award triggers for league tasks, by league type and task id (the ids in the generated league-tasks.json), merged over the triggers the generator derived (this file wins). For a task the generator's name rules cannot map: a kill of an NPC the Wiki names differently, a quest whose task is not called \"Complete <quest>\". The kinds LeagueTasks understands are in docs/leagues.md (Tasks): kill { npcs: [names], count } (the kills of all of them added up), level { skill, level }, any-level { level, excluding }, level-up, total-level { level }, base-level { level }, combat-level { level }, quest { name }. Other plugins can also complete a task directly with the `league:complete-task` event.",
   "4": {
+    "catch-200-implings-in-puro-puro": {"kind": "hunt", "npcs": ["Baby impling", "Young impling", "Gourmet impling", "Earth impling", "Essence impling", "Eclectic impling", "Nature impling", "Magpie impling", "Ninja impling", "Crystal impling", "Dragon impling", "Lucky impling"], "count": 200, "place": "puro-puro"},
+    "catch-50-implings-in-puro-puro": {"kind": "hunt", "npcs": ["Baby impling", "Young impling", "Gourmet impling", "Earth impling", "Essence impling", "Eclectic impling", "Nature impling", "Magpie impling", "Ninja impling", "Crystal impling", "Dragon impling", "Lucky impling"], "count": 50, "place": "puro-puro"},
+    "chop-a-magic-log-at-the-forsaken-tower": {"kind": "produce", "items": ["Magic logs"], "count": 1, "place": "forsaken-tower-magic-trees"},
     "catch-a-butterfly": {"kind": "hunt", "npcs": ["Ruby harvest", "Sapphire glacialis", "Snowy knight", "Black warlock"], "count": 1},
     "catch-a-crimson-swift-in-the-feldip-hills": {"kind": "hunt", "npcs": ["Crimson swift"], "count": 1, "area": 4},
     "catch-a-swamp-lizard-or-salamander": {"kind": "hunt", "npcs": ["Swamp lizard", "Orange salamander", "Red salamander", "Black salamander", "Tecu salamander"], "count": 1},
@@ -23,6 +26,11 @@
     "open-30-grubby-chests": {"kind": "open-chest", "chests": ["Grubby Chest"], "count": 30}
   },
   "5": {
+    "bank-at-land-s-end": {"kind": "bank", "count": 1, "place": "lands-end-bank-chest"},
+    "catch-50-implings-in-puro-puro": {"kind": "hunt", "npcs": ["Baby impling", "Young impling", "Gourmet impling", "Earth impling", "Essence impling", "Eclectic impling", "Nature impling", "Magpie impling", "Ninja impling", "Crystal impling", "Dragon impling", "Lucky impling"], "count": 50, "place": "puro-puro"},
+    "chop-15-yew-logs-in-shayzien": {"kind": "produce", "items": ["Yew logs"], "count": 15, "place": "shayzien-yew-trees"},
+    "fill-up-20-buckets-of-sand-in-rellekka": {"kind": "deed", "event": "sand-pit:filled", "count": 20, "place": "rellekka-sand-pit"},
+    "mine-20-mithril-ore-in-the-stonecutter-outpost": {"kind": "produce", "items": ["Mithril ore"], "count": 20, "place": "stonecutter-outpost-rocks"},
     "catch-a-crimson-swift-in-the-feldip-hills": {"kind": "hunt", "npcs": ["Crimson swift"], "count": 1, "area": 4},
     "catch-a-swamp-lizard-or-salamander": {"kind": "hunt", "npcs": ["Swamp lizard", "Orange salamander", "Red salamander", "Black salamander", "Tecu salamander"], "count": 1},
     "cook-a-rabbit-in-tirannwn": {"kind": "produce", "items": ["Cooked rabbit", "Roast rabbit"], "count": 1, "area": 7},
@@ -53,6 +61,16 @@
     "open-50-zombie-pirate-lockers": {"kind": "open-chest", "chests": ["Zombie Pirate's Locker"], "count": 50}
   },
   "6": {
+    "bank-at-land-s-end": {"kind": "bank", "count": 1, "place": "lands-end-bank-chest"},
+    "catch-200-implings-in-puro-puro": {"kind": "hunt", "npcs": ["Baby impling", "Young impling", "Gourmet impling", "Earth impling", "Essence impling", "Eclectic impling", "Nature impling", "Magpie impling", "Ninja impling", "Crystal impling", "Dragon impling", "Lucky impling"], "count": 200, "place": "puro-puro"},
+    "catch-50-implings-in-puro-puro": {"kind": "hunt", "npcs": ["Baby impling", "Young impling", "Gourmet impling", "Earth impling", "Essence impling", "Eclectic impling", "Nature impling", "Magpie impling", "Ninja impling", "Crystal impling", "Dragon impling", "Lucky impling"], "count": 50, "place": "puro-puro"},
+    "chop-15-yew-logs-in-shayzien": {"kind": "produce", "items": ["Yew logs"], "count": 15, "place": "shayzien-yew-trees"},
+    "chop-a-magic-log-at-the-forsaken-tower": {"kind": "produce", "items": ["Magic logs"], "count": 1, "place": "forsaken-tower-magic-trees"},
+    "chop-a-tree-in-the-tlati-rainforest": {"kind": "chop-logs", "count": 1, "place": "tlati-rainforest-trees"},
+    "fill-a-bucket-with-sand-at-the-sunset-coast": {"kind": "deed", "event": "sand-pit:filled", "count": 1, "place": "sunset-coast-sand-pit"},
+    "fill-up-20-buckets-of-sand-in-rellekka": {"kind": "deed", "event": "sand-pit:filled", "count": 20, "place": "rellekka-sand-pit"},
+    "mine-20-mithril-ore-in-the-stonecutter-outpost": {"kind": "produce", "items": ["Mithril ore"], "count": 20, "place": "stonecutter-outpost-rocks"},
+    "mine-some-coal-from-stonecutter-outpost": {"kind": "produce", "items": ["Coal"], "count": 1, "place": "stonecutter-outpost-rocks"},
     "activate-deadeye": {"kind": "prayer", "prayers": ["Deadeye"], "count": 1},
     "activate-mystic-vigour": {"kind": "prayer", "prayers": ["Mystic Vigour"], "count": 1},
     "catch-a-butterfly": {"kind": "hunt", "npcs": ["Ruby harvest", "Sapphire glacialis", "Snowy knight", "Black warlock"], "count": 1},

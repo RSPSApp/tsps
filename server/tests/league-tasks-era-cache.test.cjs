@@ -74,3 +74,17 @@ test("the Wiki's corrections the captures bear out: no kiteshield or crozier, Wa
   assert.equal(snape.place, "waterbirth-island");
   assert.ok(catalog.places["waterbirth-island"].rects.some(([x1, y1, x2, y2]) => x1 <= 2553 && 2553 <= x2 && y1 <= 3754 && 3754 <= y2));
 });
+
+test("the location-line places are their subjects' own pins: the Stonecutter Outpost's coal and mithril rocks, Puro-Puro's map square", () => {
+  const { places } = catalog;
+  const holds = (key, x, y) => places[key].rects.some(([a, b, c, d]) => x >= a && x <= c && y >= b && y <= d);
+  assert.match(places["stonecutter-outpost-rocks"].source, /Coal_rocks and Mithril_rocks's Stonecutter Outpost location lines/);
+  assert.ok(holds("stonecutter-outpost-rocks", 1732, 2948), "beside a listed coal rock");
+  assert.ok(!holds("stonecutter-outpost-rocks", 1666, 3136), "not Civitas");
+  assert.deepEqual(places["puro-puro"].rects, [[2560, 4288, 2623, 4351]], "Puro-Puro's map square");
+  // Every open tile beside the object, not just beside the pin: a 3x3 yew's north and east sides, the
+  // Sunset Coast pit's north side (its pin is a tile south of the pit).
+  assert.ok(holds("shayzien-yew-trees", 1550, 3548) && holds("shayzien-yew-trees", 1552, 3546), "a 3x3 yew's far sides");
+  assert.ok(holds("sunset-coast-sand-pit", 1519, 3003) && holds("sunset-coast-sand-pit", 1520, 3003), "the pit's north side");
+  for (const key of ["tlati-rainforest-trees", "shayzien-yew-trees", "forsaken-tower-magic-trees", "rellekka-sand-pit", "sunset-coast-sand-pit", "lands-end-bank-chest"]) assert.ok(places[key]?.rects.length > 0, key);
+});

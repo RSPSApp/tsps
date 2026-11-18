@@ -1046,8 +1046,8 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       return;
     }
     oil.setId(SACRED_OIL_ITEM_IDS[SACRED_OIL_ITEM_IDS.length - remaining] ?? ItemIdentifiers.VIAL);
-    log.setId(recipe.product);
-    inventory.refreshItems();
+    inventory.deleteAtSlot(logSlot, 1, false);
+    inventory.add(new api.core.Item(recipe.product, 1, log.getMeta()), true);
     player.getSkillManager().addExperiences(Skill.FIREMAKING, recipe.doses * PYRE_XP_PER_DOSE);
     player.sendMessage("You use the sacred oil on the logs and get pyre logs.");
     if (quest.getStage(player) < STAGE_CREATED_PYRE_LOGS) {

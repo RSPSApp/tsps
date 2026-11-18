@@ -427,24 +427,39 @@ test("Shades of Mort'ton repairs to native 100/20, sanctifies serum and complete
   assert.equal(h.inventory.get(I.SERUM_208_4_), 1);
   assert.ok((h.configs.get(340) & 128) !== 0, 'sanctifying 207 sets made_perm_serum bit 7');
 
-  h.give(I.SACRED_OIL_4_, 5);
+  const inventory = new Inventory(h.player);
+  h.player.getInventory = () => inventory;
+  const oilSlot = 8, logSlot = 22;
+  function preparePyreLogs(logId, oilFirst) {
+    const oil = new h.core.Item(I.SACRED_OIL_4_, 1);
+    const log = new h.core.Item(logId, 1);
+    inventory.setItem(oilSlot, oil);
+    inventory.setItem(logSlot, log);
+    const [usedItem, usedWithItem, usedItemSlot, usedWithItemSlot] =
+      oilFirst ? [oil, log, oilSlot, logSlot] : [log, oil, logSlot, oilSlot];
+    h.hooks.itemOnItem[0]({
+      player: h.player, usedItem, usedWithItem, usedItemSlot, usedWithItemSlot,
+      usedItemId: usedItem.getId(), usedWithItemId: usedWithItem.getId(),
+    });
+  }
   const xpBefore = h.xp.length;
-  h.hooks.itemOnItem[0]({ player: h.player, usedItemId: I.SACRED_OIL_4_, usedWithItemId: I.MAGIC_LOGS });
+  preparePyreLogs(I.MAGIC_LOGS, true);
   assert.equal(h.quest.getStage(h.player), 70);
+  assert.equal(inventory.forSlot(0).getId(), I.MAGIC_PYRE_LOGS, 'output occupies the first free slot');
+  assert.equal(inventory.forSlot(oilSlot).getId(), I.VIAL);
+  assert.equal(inventory.forSlot(logSlot).getId(), -1, 'the selected log slot is cleared');
   // Wiki (Pyre logs): magic pyre logs take 4 doses, at 5 Firemaking XP a dose.
   assert.deepEqual(h.xp.slice(xpBefore).map(({ skill, amount }) => [skill.getName?.() ?? String(skill), amount]), [["Firemaking", 20]]);
   // Wiki (Pyre logs): the other woods the funeral pyres burn, each made into its own pyre logs.
-  h.give(I.SACRED_OIL_4_, 6);
   for (const [logs, product, doses] of [
     [I.ARCTIC_PINE_LOGS, I.ARCTIC_PYRE_LOGS, 2], [I.TEAK_LOGS, I.TEAK_PYRE_LOGS, 3], [I.MAHOGANY_LOGS, I.MAHOGANY_PYRE_LOGS, 3],
     [I.CAMPHOR_LOGS, I.CAMPHOR_PYRE_LOGS, 4], [I.IRONWOOD_LOGS, I.IRONWOOD_PYRE_LOGS, 4],
     [I.REDWOOD_LOGS, I.REDWOOD_PYRE_LOGS, 4], [I.ROSEWOOD_LOGS, I.ROSEWOOD_PYRE_LOGS, 4],
   ]) {
-    h.give(logs, 1);
     const xpAt = h.xp.length;
-    h.hooks.itemOnItem[0]({ player: h.player, usedItemId: logs, usedWithItemId: I.SACRED_OIL_4_ });
-    assert.equal(h.inventory.get(logs), 0, `log ${logs} is used`);
-    assert.equal(h.inventory.get(product), 1, `pyre logs ${product} are made`);
+    preparePyreLogs(logs, false);
+    assert.equal(inventory.getAmount(logs), 0, `log ${logs} is used`);
+    assert.equal(inventory.getAmount(product), 1, `pyre logs ${product} are made`);
     assert.deepEqual(h.xp.slice(xpAt).map(({ amount }) => amount), [doses * 5]);
   }
   // The funeral pyres are the minigame's (ShadesOfMortton.plugin.js): it tells the quest.

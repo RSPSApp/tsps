@@ -100,11 +100,16 @@ test("a page with no Combat Achievement monster is not answered", () => {
   assert.equal(request.extraCounts, undefined);
 });
 
-test("Last Man Standing counts its games played", () => {
-  const lms = player({ "last-man-standing:games": 3 });
+test("Last Man Standing counts its games played, wins and kills", () => {
+  const lms = player({
+    "last-man-standing:games": 3,
+    "last-man-standing:wins": 2,
+    "last-man-standing:kills": 5,
+  });
   const request = { player: lms, category: "Last Man Standing", count: null };
   LMS.collectionLogCount(request);
   assert.equal(request.count, 3);
+  assert.deepEqual(request.extraCounts, [2, 5]);
 });
 
 test("a minigame page another plugin already answered is left alone", () => {

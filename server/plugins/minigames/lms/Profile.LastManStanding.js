@@ -86,10 +86,17 @@ function login({ player }) {
   if (coffer(player)) Common.varbit(player, "br_coffer", Math.floor(coffer(player) / 1000));
 }
 
-/** The collection log's "Last Man Standing" page counts the reader's games played. */
+/**
+ * The collection log's "Last Man Standing" page counts the reader's games played, wins and kills
+ * (struct 1720's three lines, in that order).
+ */
 function collectionLogCount(request) {
   if (request?.category !== "Last Man Standing" || !request.player || Number.isFinite(request.count)) return;
   request.count = Common.number(request.player, Common.ATTRIBUTES.games);
+  request.extraCounts = [
+    Common.number(request.player, Common.ATTRIBUTES.wins),
+    Common.number(request.player, Common.ATTRIBUTES.kills),
+  ];
 }
 
 function attachProfile(api) {

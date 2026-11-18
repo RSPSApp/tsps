@@ -9,6 +9,7 @@ const path = require("node:path");
 const { before, after, test } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+const { ShopDefinitionLoader } = require("../dist/game/definition/loader/impl/ShopDefinitionLoader");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
@@ -27,7 +28,6 @@ before(async () => {
   core.RegionManager.init();
   PM.emitServerStartup({});
   ({ ShopManager } = require("../dist/game/model/container/shop/ShopManager"));
-  const { ShopDefinitionLoader } = require("../dist/game/definition/loader/impl/ShopDefinitionLoader");
   assert.equal(new ShopDefinitionLoader().load(), true, "the server's shops");
 });
 after(() => PM.emitServerShutdown({}));
@@ -116,4 +116,39 @@ test("the hook is the league's: a character of no league keeps nothing", (t) => 
   const asked = { player: league, shopId: SHOP, itemId: onyx(), amount: 1, keep: false };
   PM.emitCustomEvent("shop:keep-stock", asked);
   assert.equal(asked.keep, true);
+});
+
+test("Demonic Pacts adds its shop stock at the published quantities and normal prices", (t) => {
+  const getConfig = PM.getPluginConfig.bind(PM);
+  let leagueType = 6;
+  t.mock.method(PM, "getPluginConfig", (key, fallback) => key === "league:type" ? leagueType : getConfig(key, fallback));
+  const I = core.ItemIdentifiers;
+  const shops = [
+    ["Fortis Blacksmith", [
+      [I.BRONZE_DAGGER, 5, 10], [I.IRON_DAGGER, 3, 35], [I.STEEL_DAGGER, 2, 125],
+      [I.BRONZE_HALBERD, 5, 80], [I.IRON_HALBERD, 3, 280], [I.STEEL_HALBERD, 2, 1000],
+    ]],
+    ["Arcuani's Archery Supplies", [[I.BRONZE_KNIFE, 2000, 1], [I.IRON_KNIFE, 1000, 3], [I.STEEL_KNIFE, 800, 11]]],
+    ["Slayer Equipment (shop)", [[I.ELEMENTAL_SHIELD, 50, 20], [I.ANTI_DRAGON_SHIELD, 50, 20]]],
+  ];
+  const league = character(t, "league");
+  const main = character(t, "main");
+  const loader = new ShopDefinitionLoader();
+  for (const type of [6, 5, 0]) {
+    leagueType = type;
+    assert.equal(loader.load(), true);
+    ShopManager.reload();
+    const player = type === 0 ? main : league;
+    for (const [name, rows] of shops) {
+      const shop = core.ShopDefinition.all().find((definition) => definition.getName() === name);
+      assert.ok(shop, name);
+      assert.equal(ShopManager.open(player, shop.getId()), true);
+      const wanted = new Set(rows.map(([itemId]) => itemId));
+      const entries = ShopManager.getOpenShop(player).stock
+        .filter(({ itemId }) => wanted.has(itemId))
+        .map(({ itemId, amount, price }) => [itemId, amount, price]);
+      assert.deepEqual(entries, type === 6 ? rows : [], name);
+      ShopManager.close(player);
+    }
+  }
 });

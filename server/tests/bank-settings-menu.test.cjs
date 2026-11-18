@@ -491,6 +491,32 @@ test("Deposit inventory leaves locked slots (and their stacks) in the inventory;
   assert.deepEqual(f.messages, [], "a locked slot is skipped quietly");
 });
 
+test("the deposit box's native Lock-slot operation toggles occupied and empty slots", (t) => {
+  const f = banker(t);
+  f.p.getPacketSender().sendInterfaceRemoval();
+  PM.emitCustomEvent("bank:open-deposit-box", { player: f.p });
+  f.p.setAttribute("bank-settings:deposit-lock-ops", 1);
+  f.p.getInventory().adds(core.ItemIdentifiers.AIR_RUNE, 50);
+  const widgetId = core.CacheDefinitions.getComponentId("bank_depositbox:inventory");
+  const packet = { widgetId, groupId: widgetId >>> 16, childId: widgetId & 0xffff, buttonNum: 10, slot: 0 };
+  const click = () => {
+    const event = { player: f.p, packet, handled: false };
+    PM.emitCustomEvent("player:widget-action", event);
+    return event.handled;
+  };
+  assert.equal(click(), true);
+  assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 1);
+  f.p.getInventory().resetItems();
+  assert.equal(click(), true);
+  assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 0);
+  f.p.setAttribute("bank-settings:deposit-locks-off", 1);
+  assert.equal(click(), false, "disabled locks leave op 10 to Examine");
+  assert.equal(f.p.getAttribute("bank-settings:deposit-locks"), 0);
+  f.p.setAttribute("bank-settings:deposit-locks-off", 0);
+  f.p.getPacketSender().sendInterfaceRemoval();
+  assert.equal(click(), false, "a closed deposit box cannot change locks");
+});
+
 test("Deposit worn items is not locked, and the inventory's Lock-slot op (shown with the extra option) flips a slot, empty ones too", (t) => {
   const { ItemIdentifiers } = core;
   const f = banker(t, (p) => {

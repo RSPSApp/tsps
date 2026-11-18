@@ -60,6 +60,8 @@ function lookup() {
         isOpen: (player) => player.getInterfaceId?.() === depositBox,
       },
     ],
+    depositBox,
+    depositInventory: component("bank_depositbox:inventory"),
     editor: CacheDefinitions.getInterfaceId("bank_side_locks"),
     slots: component("bank_side_locks:slots"),
     ignore: component("bank_side_locks:ignorelocks"),
@@ -163,11 +165,13 @@ function widgetAction(event) {
     else if (packet.widgetId === known.extra && !current.ignoreLocks) update(player, { showLockOps: !current.showLockOps });
     return;
   }
-  // bankside_drawitem gives op 10 to Lock-slot / Unlock-slot (empty locked slots too) while the op is shown.
-  if (packet.groupId === core.Bank.SIDE_INTERFACE_ID && packet.childId === core.Bank.SIDE_ITEMS_CHILD
-    && packet.buttonNum === LOCK_OP && Number.isInteger(packet.slot)) {
+  // The bank and deposit box use op 10 for Lock-slot / Unlock-slot, including empty locked slots.
+  const bankInventory = packet.groupId === core.Bank.SIDE_INTERFACE_ID
+    && packet.childId === core.Bank.SIDE_ITEMS_CHILD && core.Bank.isOpen(player);
+  const depositInventory = packet.widgetId === known.depositInventory && player.getInterfaceId?.() === known.depositBox;
+  if ((bankInventory || depositInventory) && packet.buttonNum === LOCK_OP && Number.isInteger(packet.slot)) {
     const current = settings(player);
-    if (current.ignoreLocks || !current.showLockOps || !core.Bank.isOpen(player)) return;
+    if (current.ignoreLocks || !current.showLockOps) return;
     event.handled = true;
     toggleSlot(player, packet.slot);
   }

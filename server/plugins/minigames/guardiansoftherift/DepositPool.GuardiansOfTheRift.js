@@ -36,6 +36,7 @@ function depositRunes({ player, objectId }) {
   let fullBank = null;
   inventory.getItems().forEach((item, slot) => {
     if (!item || item.getId() <= 0 || !isRune(item)) return;
+    if (Shared.api().emitCanBankItem(player, item, { container: inventory, slot, bulk: true }) === false) return;
     // A rune the bank has no room for stays put without a message each: the bank's full line is sent once below.
     const bank = player.getBank(Bank.getTabForItem(player, item.getId()));
     if (!bank.canTake(item)) {

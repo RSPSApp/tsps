@@ -2052,7 +2052,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
       new `sum` field (a shiny object is 14);
     - house keys: `pickpocket-loot` of the wealthy citizen's "House keys". `pickpocket-loot` now reads the new
       `thieving:looted` (the loot as given), so the 40th dry pick's key counts;
-    - an urchin paid: HouseRobberyCrew's new `house-robbery:informed`.
+    - an urchin paid: HouseRobberyCrew's new `house-robbery:informed`, on a paid Yes only (a Gladiator's free word
+      sends nothing, as the task names paying).
   - The Arceuus Library's books: `arceuus-library:book-handed-in`.
   - The Chambers of Xeric completions: credited kills of the CoX plugin's "Chambers of Xeric" and "CM:
     Chambers of Xeric".

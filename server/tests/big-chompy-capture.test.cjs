@@ -492,3 +492,20 @@ test("a logout mid-inflate leaves the toad free for the next player (review)", a
   h.ticks(g, 6);
   assert.equal(amount(g, I.BLOATED_TOAD), 1);
 });
+
+test("bellows from a chest someone else opened still move stage 15 to 20 (review)", async (t) => {
+  const opener = actor(t, { stage: 65, tile: BY_CHEST });
+  await withRandom(0, () => h.clickObject(opener, core.ObjectIdentifiers.LOCKED_OGRE_CHEST, CHEST));
+  h.ticks(opener, 3);
+  const f = actor(t, { stage: 15, tile: BY_CHEST });
+  const menus = [];
+  const sender = f.player.getPacketSender();
+  const send = sender.sendCreationMenu.bind(sender);
+  sender.sendCreationMenu = (menu) => { menus.push(menu); return send(menu); };
+  await h.clickObject(f, core.ObjectIdentifiers.UNLOCKED_OGRE_CHEST, CHEST);
+  h.ticks(f, 2);
+  assert.equal(menus.length, 1);
+  (menus[0].getAction?.() ?? menus[0].action).execute(I.OGRE_BELLOWS, 1);
+  assert.equal(stage(f), 20);
+  h.ticks(f, 101);
+});

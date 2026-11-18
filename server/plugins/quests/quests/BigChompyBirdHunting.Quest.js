@@ -230,8 +230,8 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   const dropId = (drop) => drop?.itemId ?? drop?.getId?.() ?? drop?.id;
   const dropAmount = (drop) => drop?.amount ?? drop?.getAmount?.() ?? 1;
   /**
-   * The capture holds the player (varbit busy, 12393) through the inflate, the pluck and the roast; one runs at a
-   * time and a second click while it plays does nothing.
+   * The capture shows the player busy (varbit 12393) through the inflate, the pluck and the roast. Ours: one of
+   * them runs at a time and a second such click while it plays does nothing; the player is not otherwise held.
    */
   const acting = new WeakSet();
   const isActing = (player) => acting.has(player);

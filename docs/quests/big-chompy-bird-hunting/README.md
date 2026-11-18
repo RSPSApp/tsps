@@ -61,6 +61,9 @@ outside the repo. `server/tests/big-chompy-capture.test.cjs` checks these agains
 
 ### Ours (no source)
 
+- The chest lift, inflate, pluck and roast run one at a time (a second click does nothing); the player is not
+  otherwise held, though the capture shows them busy.
+- Taking bellows from a chest someone else opened still moves stage 15 to 20.
 - The chest locks again 100 ticks after it is opened (Wiki: "it may lock again"); Unlock before stage 15 says
   "Nothing interesting happens."; using bellows on the bubbles keeps its old two lines.
 - The demonstration moves on to 40 eight ticks after Rantz's miss if the bird never reaches the bait.

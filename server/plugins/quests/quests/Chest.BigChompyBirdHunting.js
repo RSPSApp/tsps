@@ -56,12 +56,12 @@ module.exports = function createChompyChest(api, { stageOf, onLifted }) {
     }));
   }
 
+  /** One loc_add_change, as the capture sends it (tick 646), not a removal and an add. */
   function swap(object, id) {
     const at = object.getLocation();
-    ObjectManager.deregister(object, true);
     const next = new GameObject(id, new Location(at.getX(), at.getY(), at.getZ()), object.getType(), object.getFace(),
       object.getPrivateArea?.() ?? null);
-    ObjectManager.register(next, true);
+    ObjectManager.replaceInPlace(object, next);
     return next;
   }
 
@@ -117,6 +117,8 @@ module.exports = function createChompyChest(api, { stageOf, onLifted }) {
   }
 
   function take(player, amount) {
+    // Bellows from a chest someone else opened still count as this player's step (main's Search set it).
+    onLifted(player);
     const count = Math.min(Math.max(1, Math.trunc(amount) || 1), player.getInventory().getFreeSlots());
     if (count <= 0) {
       player.sendMessage(NO_SPACE);

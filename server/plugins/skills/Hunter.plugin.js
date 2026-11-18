@@ -79,6 +79,7 @@ module.exports = {
       api.onObjectInteraction(name, { Check: Traps.check, Retrieve: Traps.check, Dismantle: Runtime.dismantle, Deactivate: Traps.dismantle, Reset: Traps.reset, Investigate: Traps.investigate, "Set-trap": Traps.build, Trap: Traps.build });
     api.onObjectInteraction("Pit", { Trap: Runtime.pitBuild });
     api.onObjectInteraction(Supplies.NAME, { Take: Supplies.take });
+    api.onObjectInteraction("Roots", { "Take-log": Supplies.takeRootLog });
     api.onObjectInteraction("Spiked pit", { Jump: Pitfalls.jump, Dismantle: Traps.dismantle });
     for (const name of ["Burrow", "Bush", "Plant", "Snow drift", "Disturbed sand", "Tunnel", "Hollow log", "Cactus", "Rockslide", "Jungle plant", "Rock", "Mushroom", "Smelly mushroom", "Muddy patch", "Seaweed", "Driftwood"])
       api.onObjectInteraction(name, { Inspect: Runtime.inspect, Search: Runtime.inspect, Attack: Runtime.attack });

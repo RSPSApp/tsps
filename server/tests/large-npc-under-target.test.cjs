@@ -15,6 +15,8 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
+const Fight = require("../plugins/bosses/scurrius/Fight.Scurrius");
+const Scurrius = require("../plugins/bosses/scurrius/Common.Scurrius");
 
 // Open ground in the Wilderness where a 4x4 can step every way (checked with RegionManager.canMovestart).
 const FIELD = [3104, 3588];
@@ -37,7 +39,7 @@ before(async () => {
 after(() => PM.emitServerShutdown({}));
 
 function fight(t, npcId, { underAt = [0, 0], npcAt = FIELD } = {}) {
-  let cycle = 5000;
+  let cycle = 5000 + next * 100;
   t.mock.method(core.World, "getProcessCycle", () => cycle);
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const p = new Player(new PlayerSession(channel));
@@ -140,3 +142,23 @@ test("a 1x1 NPC on the player's tile still steps aside a tile, then attacks", (t
   assert.equal(f.under(), false, "it stepped aside");
   assert.ok(f.hits.length > 0);
 });
+
+
+for (const [mode, id, y] of [["public", Scurrius.PUBLIC_ID, 3588], ["private", Scurrius.SOLO_ID, 3606]]) {
+  for (const [index, phase] of ["combat", "between", "feeding", "enraged"].entries()) {
+    test(`Scurrius (${mode}) responds to an overlapping target according to his ${phase} phase`, (t) => {
+      const f = fight(t, id, { underAt: [1, 1], npcAt: [3124 + index * 6, y] });
+      Fight.stateOf(f.npc).phase = phase;
+      const start = f.at();
+      assert.ok(f.under());
+      f.tick();
+      if (phase === "feeding" || phase === "enraged") {
+        assert.deepEqual(f.at(), start, "he keeps his place");
+        assert.ok(f.under());
+        assert.deepEqual(f.hits, [], "standard reach still excludes an overlapping target");
+      } else {
+        assert.notDeepEqual(f.at(), start, "he starts stepping off the overlapping target");
+      }
+    });
+  }
+}

@@ -309,6 +309,8 @@ test("searching: the first search sets 28-32 rolls and its line; every 3 ticks a
   assert.equal(thief.xp, 1 + 45);
   tick(3 * 27);
   assert.equal(thief.items.get(id.valuable()), 28, "level 80: every roll lands, 28 of them");
+  const stole = emitted.filter(([name, payload]) => name === "house-robbery:stole" && payload.player === thief);
+  assert.equal(stole.reduce((sum, [, payload]) => sum + payload.amount, 0), 28, "house-robbery:stole adds up to what was taken (a league's valuables tasks)");
   assert.equal(tasks.filter((t) => t.isRunning()).length, 0, "and the search stops at 0");
 });
 

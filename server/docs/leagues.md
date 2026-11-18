@@ -182,6 +182,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `minigame:chance` | the Motherlode Mine (`golden-nugget`), Hunter's drift nets and the Volcanic Mine (`fossil-island` `fossil`); the Fishing Trawler (`angler-outfit`), the Hallowed Sepulchre (`ring-of-endurance`), Pyramid Plunder (`pharaohs-sceptre`), Tai Bwo Wannai Cleanup (`gout-tuber`) and aerial fishing (`golden-tench`), which the league answers through `MINIGAME_FINDS`; also asked, with nothing in a league answering: the Hallowed Sepulchre's `strange-lockpick` and the Gnome Restaurant's hard tip (`unique`: the goggles and scarf rows) | `{ player, minigame, kind, multiplier }`: the find `multiplier` times as likely (below 1 counts as 1) |
 | `big-chompy-bird-hunting:kill-credit` | Big Chompy Bird Hunting's kill count | `{ player, kills }` a chompy kill counts for |
 | `thieving:pickpocket-target` (extended) | Thieving | now with `chanceBonus` (a percent more success, stacking as the gloves of silence do) and `painless` (a stun without the damage) |
+| `thieving:looted` | Thieving | `{ player, npc, target, loot }` after the loot is handed over, as given (every `thieving:loot` change applied); `pickpocket-loot` tasks count it |
 | `thieving:loot` (extended) | Thieving | now with `multiplier`, applied with the rogue outfit's doubling as the loot is handed over |
 | `prayer:bury` (extended) | Prayer | now scatters demonic ashes too (never for the bonecrusher's `crushed`) |
 | `teleport:landed` | core `TeleportHandler`, as a teleport lands; the home teleport, fairy rings, spirit trees and Wilderness obelisks, which move the player themselves | `{ player, from, fromInstance, to }`: where it began, whether in an instance, and where it landed |
@@ -2042,6 +2043,23 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
   Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
   and the barrel.
+- **Varlamore and Kourend deeds**, from their content's events:
+  - Fortis Colosseum waves: Run's new `colosseum:wave-completed` { player, wave }, with `atLeast` wave 1
+    and wave 12.
+  - Mixology's Reagent pouch and Chugging barrel: Omnishop's `omnishop:purchase`, by item.
+  - Stealing Valuables:
+    - valuables taken: HouseRobbery's new `house-robbery:stole` { player, amount }, counted with a deed's
+      new `sum` field (a shiny object is 14);
+    - house keys: `pickpocket-loot` of the wealthy citizen's "House keys". `pickpocket-loot` now reads the new
+      `thieving:looted` (the loot as given), so the 40th dry pick's key counts;
+    - an urchin paid: HouseRobberyCrew's new `house-robbery:informed`, on a paid Yes only (a Gladiator's free word
+      sends nothing, as the task names paying).
+  - The Arceuus Library's books: `arceuus-library:book-handed-in`.
+  - The Chambers of Xeric completions: credited kills of the CoX plugin's "Chambers of Xeric" and "CM:
+    Chambers of Xeric".
+  - Doom of Mokhaiotl at delve level 8 or deeper: the new `doom:delve-defeated` { player, level }, with
+    `atLeast` level 8.
+  - The Garden of Death: `quest`.
 - **Spells and item teleports**, each from its own content's event:
   - Moonclan Teleport: `spell:teleport-arrival`, which LunarSpells already sends for its teleports.
   - Spellbook Swap: `cast` on LunarSpell's new `magic:lunar-cast` { player, name }. It is sent for every

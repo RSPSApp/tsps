@@ -380,6 +380,9 @@ function succeed(player, npc, target, name, npcId) {
   // RuneLite snapshots the inventory when it sees the success message.
   say(player, target, target.successLine ?? `You pick ${name}'s pocket.`);
   const given = giveLoot(player, target, loot.loot, Math.random, loot.multiplier);
+  // `thieving:looted` { player, npc, target, loot }: the loot as handed over, after every "thieving:loot" listener
+  // has changed it (a wealthy citizen's dry-streak key, a relic's doubling).
+  pluginApi.emitCustomEvent("thieving:looted", { player, npc, target: target.name, loot: given.map((item) => ({ id: item.id, amount: item.amount })) });
   for (const item of given) {
     const line = lootLine(target, item);
     if (line) say(player, target, line);

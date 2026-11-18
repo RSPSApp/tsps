@@ -76,7 +76,7 @@
  *   `tob { modes, count }` (`tob:completed`, a raid of one of the modes), `emote { slots, count }`
  *   (`player:emote`, by the emote tab's slot), `take { items, source, count }` (`ground-items:taken`,
  *   picked up by hand, "pickup", or by Telekinetic Grab, "telegrab"), `pickpocket-loot { npcs, items,
- *   count }` (`thieving:loot`, the pocket's loot holding one of the items), `bird-nest { count }`
+ *   count }` (`thieving:looted`, the loot handed over holding one of the items), `bird-nest { count }`
  *   (`woodcutting:nest-drop`, a nest from a tree), `buy { items, shops, count }` (`shop:purchase`, that
  *   item bought from one of those shops, by their names), `alch { coins, count }`
  *   (`magic:alchemy-completed`, an alchemy paying at least that many coins), `bank { place, count }`
@@ -836,7 +836,10 @@ function didDeed(name, event) {
     // `atLeast`: the event's fields at least those values ("26 herbs at the same time").
     && Object.entries(task.trigger.atLeast ?? {}).every(([field, value]) => Number(event[field]) >= Number(value))
     && Object.entries(task.trigger.where ?? {}).every(([field, value]) => (Array.isArray(value) ? value : [value]).some((each) => String(event[field]).toLowerCase() === String(each).toLowerCase())));
-  countTasks(player, type, tasks);
+  // `sum`: the event's field adds that much ("Steal 25 Valuables": a shiny object is 14), else one per event.
+  const summed = tasks.filter((task) => task.trigger.sum);
+  countTasks(player, type, tasks.filter((task) => !task.trigger.sum));
+  for (const task of summed) countTasks(player, type, [task], Math.max(0, Number(event[task.trigger.sum]) || 0));
 }
 
 /**
@@ -976,7 +979,8 @@ module.exports = function attach(api) {
   api.onCustomEvent("woodcutting:success", onEvent("chop-logs"));
   api.onCustomEvent("skills:produced", onEvent("cook"));
   api.onCustomEvent("ground-items:taken", onEvent("take"));
-  api.onCustomEvent("thieving:loot", onEvent("pickpocket-loot"));
+  // The loot as given, not as rolled: "thieving:loot" listeners may still replace it (the 40-pick house key).
+  api.onCustomEvent("thieving:looted", onEvent("pickpocket-loot"));
   api.onCustomEvent("woodcutting:nest-drop", onEvent("bird-nest"));
   api.onCustomEvent("shop:purchase", onEvent("buy"));
   api.onCustomEvent("magic:alchemy-completed", onEvent("alch"));

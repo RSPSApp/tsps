@@ -393,6 +393,21 @@ test("pickpocket-loot: an item in the pocket's loot (Pickpocket a Diamond From a
   assert.ok(done(f, "pickpocket-a-diamond-from-a-tzhaar"));
 });
 
+test("pickpocket-loot counts the loot as given: the wealthy citizen's 40th dry pick is the house key (Steal a House Key)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.THIEVING, 99);
+  skills.setCurrentLevel(core.Skill.THIEVING, 99);
+  f.player.setAttribute(require("../plugins/skills/thieving/WealthyCitizens.Thieving")._test.KEY_DRY_STREAK_ATTRIBUTE, 40);
+  const { npc, clickType } = npcBeside(t, f, "Wealthy citizen", "pickpocket");
+  // The success roll, then middling rolls (no clue): coins, which the dry streak swaps for the key.
+  const rolls = [0];
+  t.mock.method(Math, "random", () => (new Error().stack.includes("Pickpocket.Thieving") ? rolls.shift() ?? 0.5 : 0.5));
+  await send(f, { type: "npc_option", index: npc.getIndex(), clickType }, 6);
+  assert.equal(f.player.getInventory().getAmount(item("House keys")), 1, `the real Thieving gives the key: ${f.messages}`);
+  assert.ok(done(f, "steal-a-house-key"));
+});
+
 test("shortcut: an agility shortcut crossed, by its name (Take a Shortcut Across the Shilo Village River)", async (t) => {
   core.RegionManager.loadMapFiles(2863, 2971);
   const f = pactsCharacter(t);
@@ -2563,4 +2578,47 @@ test("deed: the teleport anchoring scroll absorbed through its real Read and Yes
   manager.getCurrent().execute(1);
   assert.equal(f.player.getInventory().getAmount(item("Teleport anchoring scroll")), 0, "the scroll is used up");
   assert.ok(done(f, "use-a-teleport-anchoring-scroll"), f.messages.join(" | "));
+});
+
+// ---- deeds reported by their content: Varlamore and Kourend (issue 6108 follow-ups) -------------
+
+test("Varlamore and Kourend deeds: Colosseum waves, Mixology buys, Stealing Valuables, the library, the Chambers of Xeric, deep delves", (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const emit = (name, payload = {}) => PM.emitCustomEvent(name, { player, ...payload });
+
+  emit("colosseum:wave-completed", { wave: 1 });
+  assert.ok(done(f, "complete-wave-1-of-fortis-colosseum"));
+  emit("colosseum:wave-completed", { wave: 11 });
+  assert.ok(!done(f, "complete-wave-12-of-fortis-colosseum"), "wave 11");
+  emit("colosseum:wave-completed", { wave: 12 });
+  assert.ok(done(f, "complete-wave-12-of-fortis-colosseum"));
+
+  emit("omnishop:purchase", { shop: "mixology_rewards", itemId: 29996 });
+  assert.ok(done(f, "purchase-the-reagents-pouch"));
+  assert.ok(!done(f, "purchase-the-chugging-barrel"));
+  emit("omnishop:purchase", { shop: "mixology_rewards", itemId: 30000 });
+  assert.ok(done(f, "purchase-the-chugging-barrel"));
+
+  emit("house-robbery:stole", { amount: 14 }); // a shiny object
+  emit("house-robbery:stole", { amount: 10 });
+  assert.ok(!done(f, "steal-25-valuables"), "24 valuables");
+  emit("house-robbery:stole", { amount: 1 });
+  assert.ok(done(f, "steal-25-valuables"), "25");
+  emit("thieving:looted", { method: "pickpocket", target: "wealthy citizen", loot: [{ id: 995, amount: 85 }] });
+  assert.ok(!done(f, "steal-a-house-key"), "coins");
+  emit("thieving:looted", { method: "pickpocket", target: "wealthy citizen", loot: [{ id: 29325, amount: 1 }] });
+  assert.ok(done(f, "steal-a-house-key"));
+  emit("house-robbery:informed", { npcId: 13318 });
+  assert.ok(done(f, "pay-an-urchin-for-information"));
+
+  for (let i = 0; i < 10; i++) emit("arceuus-library:book-handed-in");
+  assert.ok(done(f, "turn-in-1-library-book") && done(f, "turn-in-10-library-books") && !done(f, "turn-in-50-library-books"));
+
+  emit("combat-achievements:kill", { monster: "CM: Chambers of Xeric", count: 7 });
+  assert.ok(done(f, "1-chambers-of-xeric"), "a Challenge Mode completion counts once");
+  emit("doom:delve-defeated", { level: 7 });
+  assert.ok(!done(f, "complete-1-deep-delve"), "delve level 7");
+  emit("doom:delve-defeated", { level: 9 });
+  assert.ok(done(f, "complete-1-deep-delve"), "level 8 or above");
 });

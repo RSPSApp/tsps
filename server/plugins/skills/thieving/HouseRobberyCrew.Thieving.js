@@ -205,7 +205,12 @@ function onChoice(choice) {
   const { player, npcId: id, option } = choice;
   if (!urchinIds().has(id)) return;
   if (option === "Yes." || option === "Yes, don't ask me again.") {
-    if (!gladiator(player)) player.getInventory().delete(itemId("valuable"), Math.min(DATA.info.cost, holding(player, "valuable")));
+    if (!gladiator(player)) {
+      player.getInventory().delete(itemId("valuable"), Math.min(DATA.info.cost, holding(player, "valuable")));
+      // `house-robbery:informed` { player, npcId }: an urchin paid for the house (a league's "Pay an Urchin for
+      // Information"); a Gladiator's free word pays nothing, so it isn't sent.
+      pluginApi.emitCustomEvent("house-robbery:informed", { player, npcId: id });
+    }
     const state = houseState();
     if (state.house && state.status !== "vacant") tellHouse(player, state.house);
     return;

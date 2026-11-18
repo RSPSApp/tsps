@@ -133,14 +133,34 @@ test("a paid lookup: 15 valuables for the next house to go (rsprox 1105 tick 108
   talkTo(a);
   await a.choose("I could do with some information on houses.");
   assert.ok(said(a, "Hello. A fine day for stealing, wouldn't you say?"));
+  const informed = [];
+  PM.createApi("UrchinInformedTest").onCustomEvent("house-robbery:informed", (event) => { if (event.player === a.p) informed.push(event); });
   const menu = await a.choose("Yes.");
   assert.deepEqual(menu.options, ["Yes.", "Yes, don't ask me again.", "No."]);
   assert.equal(a.count(VALUABLE()), 5);
+  assert.equal(informed.length, 1, "house-robbery:informed on the paid Yes (rsprox 1105 tick 10840)");
   await a.choose("Yes please.");
   await a.playToEnd();
   assert.ok(said(a, "I hear that <col=990000>Victor</col> might be leaving his house soon."), JSON.stringify(a.lines));
   assert.ok(said(a, "His house is west of here."));
   assert.equal(a.p.getAttribute(Crew._test.LAST_CHECKED_ATTRIBUTE), 2);
+});
+
+test("a Gladiator's Yes is free: nothing taken and no house-robbery:informed (a league's task names paying)", async () => {
+  const a = actor(LUCIA(), { items: [[KEY(), 1], [VALUABLE(), 20]] });
+  const api = PM.createApi("UrchinGladiatorTest");
+  api.onCustomEvent("colosseum:has-rank", (request) => { if (request.player === a.p) request.reached = true; });
+  const informed = [];
+  api.onCustomEvent("house-robbery:informed", (event) => { if (event.player === a.p) informed.push(event); });
+  Crew._test.onChoice({ player: a.p, npcId: a.npcId, option: "Yes." });
+  assert.equal(a.count(VALUABLE()), 20, "nothing taken from a Gladiator");
+  assert.deepEqual(informed, []);
+  // The same Yes from someone who isn't one pays and is informed.
+  const b = actor(LUCIA(), { items: [[KEY(), 1], [VALUABLE(), 20]] });
+  PM.createApi("UrchinPaidTest").onCustomEvent("house-robbery:informed", (event) => { if (event.player === b.p) informed.push(event); });
+  Crew._test.onChoice({ player: b.p, npcId: b.npcId, option: "Yes." });
+  assert.equal(b.count(VALUABLE()), 5);
+  assert.equal(informed.length, 1);
 });
 
 test("asked again about the same vacant house: 'Already forgotten?' only", async () => {

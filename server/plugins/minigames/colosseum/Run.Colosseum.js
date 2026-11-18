@@ -354,6 +354,8 @@ class ColosseumRun {
     Rewards.waveCompleted(this);
     Hazards.waveEnded(this);
     Effects.waveCompleted(this);
+    // `colosseum:wave-completed` { player, wave }: the wave just cleared (a league's "Complete Wave 1 / 12").
+    Shared.api().emitCustomEvent("colosseum:wave-completed", { player: this.player, wave: this.wave });
     if (this.wave >= Shared.FINAL_WAVE) {
       this.defeatedSol();
       return;

@@ -2927,6 +2927,14 @@ test("General deeds through their events: Slayer, random events, Jacky Jester, D
   assert.ok(!done(f, "smith-a-rune-item"), "rune ammunition and nails");
   emit("smithing:success", { metal: "runite", label: "Platebody", itemId: 1 });
   assert.ok(done(f, "smith-a-rune-item"));
+  // Raging Echoes' row: "Rune nails do not work" (and nothing else is excluded there).
+  const echoes = pactsCharacter(t);
+  echoes.player.setAttribute("league:type", 5);
+  const echo = (payload) => PM.emitCustomEvent("smithing:success", { player: echoes.player, ...payload });
+  echo({ metal: "runite", label: "Nails", itemId: 1 });
+  assert.ok(!done(echoes, "smith-a-rune-item"), "rune nails in Raging Echoes");
+  echo({ metal: "runite", label: "Dart tips", itemId: 1 });
+  assert.ok(done(echoes, "smith-a-rune-item"), "dart tips count there");
   for (let i = 0; i < 19; i++) emit("crafting:made", { bar: "Silver bar", itemId: 1 });
   emit("crafting:made", { bar: "Gold bar", itemId: 1 });
   assert.ok(!done(f, "craft-20-silver-items"), "19 silver and a gold");

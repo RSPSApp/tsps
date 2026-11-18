@@ -122,7 +122,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
 
   const ROPE_BRIDGE_ID = ObjectIdentifiers.ROPE_BRIDGE; // 5002, Cross
   const BRIDGE_TREE_PARENT_ID = 5003; // multi-loc resolved to 26248/26249 by varbit 3928
-  const SURFACE_DOORS_ID = ObjectIdentifiers.WOODEN_DOORS_8; // 5061, doors in the earth north of Curpile
+  const SURFACE_DOOR_IDS = new Set([ObjectIdentifiers.WOODEN_DOORS_7, ObjectIdentifiers.WOODEN_DOORS_8]);
   const CAVE_ENTRANCE_ID = ObjectIdentifiers.CAVE_ENTRANCE_27; // 5046, hidden cave entrance
   const BROKEN_BRIDGE_IDS = new Set([
     ObjectIdentifiers.BROKEN_ROPE_BRIDGE_2, // 26244
@@ -162,7 +162,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const SOUTH_BANK = { x: 3502, y: 3425 };
   const TAVERN_LADDER_ID = ObjectIdentifiers.LADDER_54; // 5054
   const TAVERN_TRAPDOOR_ID = ObjectIdentifiers.TRAPDOOR_23; // 5055
-  const HIDEOUT_DOOR_IDS = new Set([
+  const HIDEOUT_EXIT_DOOR_IDS = new Set([
     ObjectIdentifiers.WOODEN_DOORS_3, // 5056
     ObjectIdentifiers.WOODEN_DOORS_4, // 5057
   ]);
@@ -868,7 +868,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       player.sendMessage("There seems to be a strange combination on the door. It would take ages to work it out.");
       return;
     }
-    player.moveTo(new api.core.Location(3500, 9812, 0));
+    player.moveTo(new api.core.Location(3500, 9811, 0));
     player.sendMessage("You push open the doors and descend into the cave.");
   }
 
@@ -918,7 +918,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     const { player, objectId } = event;
     if (!player) return;
     const stage = quest.getStage(player);
-    if (objectId === SURFACE_DOORS_ID) {
+    if (SURFACE_DOOR_IDS.has(objectId)) {
       enterSurfaceDoors(event);
       return;
     }
@@ -971,15 +971,14 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       player.sendMessage("You open the trapdoor and find yourself in the inn basement.");
       return;
     }
-    if (HIDEOUT_DOOR_IDS.has(objectId)) {
+    if (HIDEOUT_EXIT_DOOR_IDS.has(objectId)) {
       event.handled = true;
       if (stage < STAGE_ANSWERED_QUESTIONS) {
         player.sendMessage("There seems to be a strange combination on the door. It would take ages to work it out.");
         return;
       }
-      if (stage === STAGE_ANSWERED_QUESTIONS) quest.setStage(player, STAGE_ENTERED_HIDEOUT);
-      player.moveTo(new api.core.Location(3500, 9812, 0));
-      player.sendMessage("You push open the heavy doors and descend towards the hideout.");
+      player.moveTo(new api.core.Location(3509, 3449, 0));
+      player.sendMessage("You push open the doors and climb back out.");
       return;
     }
     if (objectId === MORT_TON_BOAT_ID) {

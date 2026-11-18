@@ -52,6 +52,8 @@
  *   a short standalone line is sent. The library books' text is from rsprox.net
  *   recording 365 (data/in-aid-of-the-myreque-books.json).
  */
+const { crossingFor } = require("../../objects/WallDoor.Doors");
+
 module.exports = function registerInAidOfTheMyrequeQuest(api) {
   const {
     Skill,
@@ -1784,17 +1786,6 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
   // Object interactions
   // ---------------------------------------------------------------------------
 
-  function stepThrough(player, location) {
-    const current = player.getLocation();
-    const dx = current.getX() - location.x;
-    const dy = current.getY() - location.y;
-    const destination =
-      Math.abs(dx) >= Math.abs(dy)
-        ? new Location(location.x - (dx >= 0 ? 1 : -1), location.y, current.getZ())
-        : new Location(location.x, location.y - (dy >= 0 ? 1 : -1), current.getZ());
-    player.moveTo(destination);
-  }
-
   function mineEntranceRubble(player) {
     if (quest.getStage(player) < STAGE_TOLD_INN) {
       player.sendMessage("You should find out whether the townspeople want you here first.");
@@ -1895,7 +1886,11 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     }
     if (objectId === BROKEN_WALL_INN_ID) {
       event.handled = true;
-      stepThrough(player, location);
+      const crossing = crossingFor(event.object, player.getLocation());
+      if (crossing) {
+        const { x, y, z } = crossing.destination;
+        player.moveTo(new Location(x, y, z));
+      }
       return;
     }
     if (objectId === RUBBLE_ENTRANCE_ID) {

@@ -75,6 +75,16 @@ function boxTrapsUnlocked(player) {
   return questStage(player, "eagles_peak") >= EAGLES_PEAK_BOX_TRAP_STAGE;
 }
 
+function groundTileOccupied(player, kind, location) {
+  const area = player.getPrivateArea();
+  if (H.core.RegionManager.blocked(location, area)) return true;
+  if (kind === "box") {
+    return H.core.ObjectManager.objectsAt(location).some(object => object.getPrivateArea() === area
+      && !object.getOwner() && (object.getType() === 10 || object.getType() === 22));
+  }
+  return H.core.MapObjects.getType(location, 10, area) || H.core.MapObjects.getType(location, 22, area);
+}
+
 function canLay(player, kind, location, base, ground) {
   const def = H.data.traps[kind];
   const pit = kind === "pit" && base ? H.data.creatures.find(c => c.trap === "pit"
@@ -85,9 +95,7 @@ function canLay(player, kind, location, base, ground) {
   const count = def.max ? traps.filter(t => t.kind === kind).length : traps.filter(t => !H.data.traps[t.kind].max).length;
   const max = limit(player, kind);
   if (count >= max) { player.sendMessage(`You may set up only ${max === 1 ? "one trap" : `${max} traps`} at a time at your Hunter level.`); return false; }
-  if (base ? !H.core.MapObjects.exists(base) || find(base) :
-    H.core.MapObjects.getType(location, 10, player.getPrivateArea()) || H.core.MapObjects.getType(location, 22, player.getPrivateArea())
-    || H.core.RegionManager.blocked(location, player.getPrivateArea())) {
+  if (base ? !H.core.MapObjects.exists(base) || find(base) : groundTileOccupied(player, kind, location)) {
     player.sendMessage("You can't set up a trap here."); return false;
   }
   if (kind === "monkey" && (!hasTool(player, H.core.ItemIdentifiers.KRUK_MONKEY_GREEGREE) || !questComplete(player, "monkey_madness_ii"))) {

@@ -20,7 +20,7 @@ before(async () => {
   // Isolate placement physics and the world's NPC/sound fan-out; actor, inventory, timers and trap logic are real.
   H.core = { ...core,
     MapObjects: { getType: () => null }, RegionManager: { blocked: () => false },
-    ObjectManager: { register() {}, deregister() {} },
+    ObjectManager: { register() {}, deregister() {}, objectsAt: () => [] },
     ItemOnGroundManager: { registerLocation(_player, item, location) {
       return { getItem: () => item, getLocation: () => location, isPendingRemoval: () => false };
     }, deregister() {} },
@@ -60,6 +60,31 @@ function layTrap(p, kind, item) {
   p.setLocation(trap.location.clone().add(0, -1));
   return trap;
 }
+
+test('box traps can stand on walkable scenery and still reject an occupied or blocked tile', t => {
+  const { p } = actor(t);
+  const itemId = core.ItemIdentifiers.BOX_TRAP;
+  const at = p.getLocation().clone();
+  const scenery = new core.GameObject(core.ObjectIdentifiers.FERN, at, 10, 0, null).markMapOriginal();
+  t.mock.method(H.core.MapObjects, 'getType', (_at, type) => type === 10 ? scenery : null);
+  const box = layTrap(p, 'box', itemId);
+  assert.ok(box.location.equals(at));
+  t.mock.method(H.core.ObjectManager, 'objectsAt', location => location.equals(at) ? box.objects : []);
+
+  const { p: other, messages } = actor(t);
+  other.getInventory().adds(itemId, 1);
+  const attempt = () => {
+    Traps.activate({ player: other, itemId });
+    tick(); tick();
+    assert.equal(messages.at(-1), "You can't set up a trap here.");
+    assert.equal(other.getInventory().getAmount(itemId), 1);
+    assert.equal(H.traps.size, 1);
+  };
+  attempt();
+  other.setLocation(at.clone().add(1, 0));
+  t.mock.method(H.core.RegionManager, 'blocked', () => true);
+  attempt();
+});
 
 function prey(npcId, at) {
   return { getId: () => npcId, getLocation: () => at, getPrivateArea: () => null, isRegistered: () => true, isVisible: () => true,

@@ -2915,7 +2915,10 @@ test("General deeds through their events: Slayer, random events, Jacky Jester, D
   assert.ok(done(f, "complete-the-postie-pete-random-event"));
   emit("smithing:success", { metal: "adamantite", itemId: 1 });
   assert.ok(!done(f, "smith-a-rune-item"), "adamant");
-  emit("smithing:success", { metal: "runite", itemId: 1 });
+  // Demonic Pacts' row: rune dart tips, arrowtips, nails, bolts (unf) and javelin tips don't count.
+  for (const label of ["Dart tips", "Arrowtips", "Nails", "Bolts", "Javelin tips"]) emit("smithing:success", { metal: "runite", label, itemId: 1 });
+  assert.ok(!done(f, "smith-a-rune-item"), "rune ammunition and nails");
+  emit("smithing:success", { metal: "runite", label: "Platebody", itemId: 1 });
   assert.ok(done(f, "smith-a-rune-item"));
   for (let i = 0; i < 19; i++) emit("crafting:made", { bar: "Silver bar", itemId: 1 });
   emit("crafting:made", { bar: "Gold bar", itemId: 1 });

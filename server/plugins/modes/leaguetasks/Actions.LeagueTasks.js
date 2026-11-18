@@ -835,7 +835,9 @@ function didDeed(name, event) {
   const tasks = (indexOf(type).deeds.get(name) ?? []).filter((task) => (!task.trigger.items || task.trigger.items.some((each) => key(each) === key(itemName(event.itemId))))
     // `atLeast`: the event's fields at least those values ("26 herbs at the same time").
     && Object.entries(task.trigger.atLeast ?? {}).every(([field, value]) => Number(event[field]) >= Number(value))
-    && Object.entries(task.trigger.where ?? {}).every(([field, value]) => (Array.isArray(value) ? value : [value]).some((each) => String(event[field]).toLowerCase() === String(each).toLowerCase())));
+    && Object.entries(task.trigger.where ?? {}).every(([field, value]) => (Array.isArray(value) ? value : [value]).some((each) => String(event[field]).toLowerCase() === String(each).toLowerCase()))
+    // `notWhere`: none of those values ("Smith a Runite Item": rune dart tips and the like don't count).
+    && Object.entries(task.trigger.notWhere ?? {}).every(([field, value]) => !(Array.isArray(value) ? value : [value]).some((each) => String(event[field]).toLowerCase() === String(each).toLowerCase())));
   // `sum`: the event's field adds that much ("Steal 25 Valuables": a shiny object is 14), else one per event.
   const summed = tasks.filter((task) => task.trigger.sum);
   countTasks(player, type, tasks.filter((task) => !task.trigger.sum));

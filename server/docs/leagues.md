@@ -2053,8 +2053,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   - `construction:jester-won` { player } (Jacky Jester); `deaths-office:coffer-sacrificed` { player, itemId,
     amount, value }; `scaly-dragonhide:scraped` { player }; `abyssal-sire:font-consumed` { player, itemId }.
   - `herblore:extra-dose` { player, itemId }: a recipe's 3-dose potion that came out 4-dose.
-  - Anvil smithing's `smithing:success` now names `metal` ("runite"); furnace jewellery's `crafting:made` now
-    names `bar` ("Silver bar", 20 of them).
+  - Anvil smithing's `smithing:success` now names `metal` ("runite") and the slot's `label`; "Smith a Runite
+    Item" excludes, with a deed's new `notWhere`, what each league's row names: rune dart tips, arrowtips,
+    nails, bolts (unf) and javelin tips in Demonic Pacts, dart tips, arrowtips and bolts in Trailblazer
+    Reloaded (Raging Echoes' row names none). Furnace jewellery's `crafting:made` now names `bar` ("Silver
+    bar", 20 of them).
   - Existing: `farming:protected`; `firemaking:success` of red, green, blue, white or purple logs; `produce` of
     100 empty light orbs (Ours: glassblown, not filled), 100 pies of any kind, and a mith grapple.
 - **Player-owned house and altar deeds**, from Construction's and BoneAltars' events:

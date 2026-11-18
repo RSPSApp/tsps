@@ -293,19 +293,35 @@ export class LoginRenderer implements LoginRendererHost {
         this.customTitleBackgroundImage = undefined;
         const controller = new AbortController();
         this.titleBackgroundRequest = controller;
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        const aborted = new Promise<undefined>(resolve => {
+            controller.signal.addEventListener("abort", () => resolve(undefined), { once: true });
+        });
         try {
-            const appearance = await fetchLoginScreenAppearance(controller.signal);
+            const appearance = await Promise.race([
+                fetchLoginScreenAppearance(controller.signal),
+                aborted,
+            ]);
             if (!appearance || controller.signal.aborted) return;
+            const jpg = appearance.jpg;
+            if (typeof jpg === "string" && jpg.length <= 956_000) {
+                const bytes = Uint8Array.from(atob(jpg), char => char.charCodeAt(0));
+                const image = await Promise.race([
+                    createImageBitmap(new Blob([bytes], { type: "image/jpeg" })).then(image => {
+                        if (controller.signal.aborted) image.close();
+                        else return image;
+                    }),
+                    aborted,
+                ]);
+                if (!image) return;
+                this.customTitleBackgroundImage = image;
+            }
             this.showLoginFlames = appearance.showFlames !== false;
             this.showClientLogo = appearance.showLogo !== false;
-            const jpg = appearance.jpg;
-            if (typeof jpg !== "string" || jpg.length > 956_000) return;
-            const bytes = Uint8Array.from(atob(jpg), char => char.charCodeAt(0));
-            const image = await createImageBitmap(new Blob([bytes], { type: "image/jpeg" }));
-            if (controller.signal.aborted) image.close();
-            else this.customTitleBackgroundImage = image;
         } catch (error) {
             if (!controller.signal.aborted) console.debug("[LoginRenderer] World background unavailable", error);
+        } finally {
+            clearTimeout(timeout);
         }
     }
 

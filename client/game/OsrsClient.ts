@@ -5772,8 +5772,25 @@ export class OsrsClient {
 
     // URL/search params are not supported
 
-    init(): void {
+    /** Resolve the selected world's appearance alongside the cache download. */
+    prepareLoginScreen(): Promise<void> {
+        setServerUrl(
+            `${this.loginState.serverSecure ? "wss" : "ws"}://${this.loginState.serverAddress}`,
+            this.loginState.serverTransport === "webrtc" &&
+                this.loginState.serverSignalUrl &&
+                this.loginState.serverWorldId
+                ? {
+                      signalUrl: this.loginState.serverSignalUrl,
+                      worldId: this.loginState.serverWorldId,
+                      iceServers: this.loginState.serverIceServers,
+                  }
+                : null,
+        );
         void this.loginState.refreshServerName();
+        return this.loginRenderer.refreshClientBackground();
+    }
+
+    init(): void {
         // Initialize default controlled player if not set by server
         if (this.controlledPlayerServerId === -1) {
             this.controlledPlayerServerId = 0; // Default server ID
@@ -5882,19 +5899,6 @@ export class OsrsClient {
             try {
                 this.inputManager.flushInput();
             } catch {}
-            // Apply persisted server URL so sendLogin connects to the right place
-            setServerUrl(
-                `${this.loginState.serverSecure ? "wss" : "ws"}://${this.loginState.serverAddress}`,
-                this.loginState.serverTransport === "webrtc" &&
-                    this.loginState.serverSignalUrl &&
-                    this.loginState.serverWorldId
-                    ? {
-                          signalUrl: this.loginState.serverSignalUrl,
-                          worldId: this.loginState.serverWorldId,
-                          iceServers: this.loginState.serverIceServers,
-                      }
-                    : null,
-            );
         }
 
         if (newState === GameState.CONNECTING) {
@@ -5914,7 +5918,6 @@ export class OsrsClient {
         this.stateMachine.transition(newState, true);
 
         if (newState === GameState.LOGIN_SCREEN) {
-            void this.loginRenderer.refreshClientBackground();
             if (!this.loginState.titleMusicDisabled) this.scheduleLoginMusicStart(100);
         }
 

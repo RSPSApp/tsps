@@ -325,6 +325,7 @@ function OsrsClientApp() {
                 // No cache yet - will be initialized after download
             );
             clientToDispose = client;
+            const loginAppearanceReady = client.prepareLoginScreen();
 
             // Set OsrsClient immediately so GameContainer can render the login overlay
             setOsrsClient(client);
@@ -373,6 +374,10 @@ function OsrsClientApp() {
                 rendererCheckTimer = setTimeout(checkRenderer, 100);
             });
 
+            if (disposed) return;
+
+            // Keep default title art and flames offscreen until appearance resolves or times out.
+            await loginAppearanceReady;
             if (disposed) return;
 
             // ========== Initialize cache and finalize OsrsClient ==========

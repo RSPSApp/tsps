@@ -283,6 +283,8 @@ her "Can you combine my mining gloves?" option takes a pair of Mining gloves, a 
 fee of 40 unidentified minerals. `plugins/areas/MiningGuild.plugin.js` answers the transcript's three prose
 conditions (no gloves, fewer than 40 minerals, everything) and its "receive" step. Only gloves in the
 inventory count (ours: the Wiki does not say whether worn gloves do). No rsprox capture covers the combine.
+The Expert mining gloves then fill their slot in the collection log's Other > Miscellaneous page (the cache's
+category), as the Mineral Exchange's purchases already do for the other two pairs.
 
 ## Varrock armour and extra ore
 

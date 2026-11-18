@@ -146,12 +146,19 @@ test('ordinary shards-on-forge conserves shards in personal storage', async t =>
   assert.equal(f.player.getInventory().getAmount(id), 1000);
   assert.equal(Number(f.player.getAttribute('camdozaal:stored-shards')) || 0, 0);
   await useItem(f, id, row);
+  await answerAmount(f, 1000);
   assert.equal(Number(f.player.getAttribute('camdozaal:stored-shards')) || 0, 1000,
     'ordinary Sacred Forge use stores shards');
   assert.equal(f.player.getInventory().getAmount(id), 0);
 });
 
 function ticks(count) { for (let i = 0; i < count; i++) core.World.process(); }
+/** Answers the open chatbox amount prompt through the decoded resume_countdialog. */
+async function answerAmount(f, amount) {
+  assert.ok(f.player.getEnteredAmountAction(), 'an amount prompt is open');
+  await f.connection.dispatch([{ type: 'dialogue_amount', amount }]);
+  ticks(1);
+}
 function skill(player, name, level) {
   player.getSkillManager().setMaxLevel(core.Skill[name], level).setCurrentLevel(core.Skill[name], level);
 }
@@ -178,14 +185,31 @@ test('forge Fuel/Check/Empty conserves carried and saved balance', async t => {
   const f = actor(t), id = obj('camdozaal_barronite_shard');
   f.player.getInventory().adds(id, 600);
   const row = locate(/^bim_ruins_wallkit_sacred_forge_multi$/);
+  const messages = [], send = f.player.sendMessage;
+  f.player.sendMessage = function(text) { messages.push(text); return send.call(this, text); };
+  // Wording and prompts from rsprox 2026-11-17 (rev 242.1).
   await clickObject(f, row, 'Fuel');
-  assert.equal(f.player.getInventory().getAmount(id), 0);
+  await answerAmount(f, 1111111111);
+  assert.equal(f.player.getInventory().getAmount(id), 0, 'an oversized answer stores what is carried');
   assert.equal(f.player.getAttribute('camdozaal:stored-shards'), 600);
   await clickObject(f, row, 'Check');
   assert.equal(f.player.getAttribute('camdozaal:stored-shards'), 600);
+  await clickObject(f, row, 'Fuel');
   await clickObject(f, row, 'Empty');
+  await answerAmount(f, 100);
+  assert.equal(f.player.getInventory().getAmount(id), 100);
+  assert.equal(f.player.getAttribute('camdozaal:stored-shards'), 500);
+  await clickObject(f, row, 'Empty');
+  await answerAmount(f, 500);
   assert.equal(f.player.getInventory().getAmount(id), 600);
   assert.equal(Number(f.player.getAttribute('camdozaal:stored-shards')) || 0, 0);
+  assert.deepEqual(messages.filter(text => /Barronite/.test(text)), [
+    'You stored 600 Barronite shards in the Sacred Forge.',
+    'You currently have 600 Barronite shards stored',
+    'You have no Barronite shards to deposit.',
+    'You have 500 Barronite shards left in the Sacred Forge.',
+    'You have 0 Barronite shards left in the Sacred Forge.',
+  ]);
 });
 
 test('forge intro refusal preserves shards and reports why', async t => {
@@ -236,18 +260,29 @@ test('fish preparation requires knife and grants cooking then prayer at the prop
   f.player.getInventory().adds(core.ItemIdentifiers.KNIFE, 1);
   const cookXp = f.player.getSkillManager().getExperience(core.Skill.COOKING);
   await useItem(f, raw, preparation);
-  assert.equal(f.player.getInventory().getAmount(raw), 1, 'preparation has a tick boundary');
+  // rsprox 2026-11-17 19:59: prepared 3 ticks after the click, offered 1 tick after.
   ticks(2);
+  assert.equal(f.player.getInventory().getAmount(raw), 1, 'preparation has a tick boundary');
+  ticks(1);
   const row = require('../plugins/skills/data/cooking.json').cookables.find(row => row.name === 'guppy');
   const prepared = obj(row.cooked);
   assert.equal(f.player.getInventory().getAmount(raw), 0);
   assert.equal(f.player.getInventory().getAmount(prepared), 1);
   assert.equal(f.player.getSkillManager().getExperience(core.Skill.COOKING), cookXp + row.xp);
   const prayerXp = f.player.getSkillManager().getExperience(core.Skill.PRAYER);
-  await useItem(f, prepared, altar);
-  assert.equal(f.player.getInventory().getAmount(prepared), 1);
-  ticks(2);
+  const graphics = [], sender = f.player.getPacketSender(), global = sender.sendGlobalGraphic;
+  sender.sendGlobalGraphic = function(graphic, at) { graphics.push({ graphic, at }); return global.call(this, graphic, at); };
+  try {
+    await useItem(f, prepared, altar);
+    assert.equal(f.player.getInventory().getAmount(prepared), 1);
+    ticks(1);
+  } finally { sender.sendGlobalGraphic = global; }
   assert.equal(f.player.getInventory().getAmount(prepared), 0);
+  // rsprox 2026-11-17 19:59: MapAnim camdozaal_fish_offering_<fish>, height 100, on the player's tile.
+  assert.equal(graphics.length, 1);
+  assert.equal(graphics[0].graphic.id, core.CacheDefinitions.getSpotanimId('camdozaal_fish_offering_guppy'));
+  assert.equal(graphics[0].graphic.height, 100);
+  assert.ok(graphics[0].at.equals(f.player.getLocation()));
   assert.equal(f.player.getSkillManager().getExperience(core.Skill.PRAYER), prayerXp + 4);
 });
 
@@ -802,7 +837,7 @@ test('permanent preparation buff permits guppy ruin below36 and guarantees succe
     f.player.getInventory().adds(core.ItemIdentifiers.KNIFE, 1);
     f.player.getInventory().adds(raw, 1);
     const random = Math.random;
-    try { Math.random = () => 0.999; await useItem(f, raw, preparation); ticks(2); }
+    try { Math.random = () => 0.999; await useItem(f, raw, preparation); ticks(3); }
     finally { Math.random = random; }
     assert.equal(f.player.getInventory().getAmount(raw), 0);
     assert.equal(f.player.getInventory().getAmount(prepared), level === 36 ? 1 : 0);
@@ -884,32 +919,169 @@ test('actual members Area owner processes Boost countdown and every published wa
   } finally { f.player.sendMessage = send; }
 });
 
-test('shared public Area lifecycle preserves ordinary golem awakening and departure restoration', async t => {
-  const f = actor(t), id = core.CacheDefinitions.getNpcId('camdozaal_golem_chaos_rock');
-  const spawn = require('../data/definitions/npc-spawns.json').find(row => row.id === id);
+async function rubbleActor(f, t, gameval, which = 0) {
+  const id = core.CacheDefinitions.getNpcId(gameval);
+  const spawn = require('../data/definitions/npc-spawns.json').filter(row => row.id === id)[which];
   assert.ok(spawn);
   const npc = PM.spawnNpc({ id, x: spawn.x, y: spawn.y, z: spawn.level ?? 0, wanderRadius: 0 });
   assert.ok(npc);
   t.after(() => { if (npc.isRegistered()) core.World.getRemoveNPCQueue().push(npc); ticks(1); });
   ticks(1);
-  const index = npc.getIndex(), originalHp = npc.getHitpoints();
   let reached = false;
-  for (const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+  for (const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1],[-1,1],[2,0],[0,2]]) {
     const tile = new core.Location(spawn.x + dx, spawn.y + dy, spawn.level ?? 0);
     if (core.RegionManager.blocked(tile, null)) continue;
     f.player.moveTo(tile);
     if (core.PathFinder.reachedEntity(f.player, npc)) { reached = true; break; }
   }
   assert.equal(reached, true); ticks(3);
-  assert.equal(f.player.getArea().getName(), 'CamdozaalGolemArea');
+  return { npc, id, spawn };
+}
+async function awaken(f, npc) {
   const op = npc.getCurrentDefinition(f.player).getActions().indexOf('Awaken') + 1;
   assert.ok(op > 0);
-  await f.connection.dispatch([{ type: 'npc_option', index, clickType: op }]); ticks(1);
-  assert.equal(npc.getId(), core.CacheDefinitions.getNpcId('camdozaal_golem_chaos'));
+  await f.connection.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: op }]);
+}
+
+test('rubble never wanders: every golem rubble spawn is pinned to its captured tile', () => {
+  const ids = ['flawed', 'mind', 'body', 'chaos'].map(kind => core.CacheDefinitions.getNpcId(`camdozaal_golem_${kind}_rock`));
+  const rows = require('../data/definitions/npc-spawns.json').filter(row => ids.includes(row.id));
+  assert.equal(rows.length, 27);
+  assert.ok(rows.every(row => row.wanderRadius === 0));
+});
+
+test('awakened rubble rises into its golem after four ticks and attacks the player who woke it', async t => {
+  const f = actor(t);
+  const { npc, id } = await rubbleActor(f, t, 'camdozaal_golem_flawed_rock');
+  assert.equal(f.player.getArea().getName(), 'CamdozaalGolemArea');
+  await awaken(f, npc); ticks(1);
+  // rsprox 2026-11-17: ancient_guardian_awaken on the rubble, the golem form 4 ticks later.
+  assert.equal(npc.getId(), id, 'still rubble while it rises');
   assert.equal(npc.getOwner(), f.player);
-  f.player.moveTo(new core.Location(3222, 3218, 0)); ticks(3);
-  assert.equal(npc.getId(), id, 'existing golem postLeave restores rubble');
-  assert.equal(npc.getIndex(), index, 'same registered world slot retained');
-  assert.equal(npc.getOwner(), null);
-  assert.equal(npc.getHitpoints(), originalHp);
+  ticks(4);
+  assert.equal(npc.getId(), core.CacheDefinitions.getNpcId('camdozaal_golem_flawed'));
+  assert.equal(npc.getMaxHitpoints(), core.NpcDefinition.forId(npc.getId()).getHitpoints(), 'the golem form takes its own hitpoints');
+  assert.equal(npc.getCombat().getTarget(), f.player, 'the golem goes for whoever woke it');
+});
+
+test('a second awakening is refused while the player has a golem awake', async t => {
+  const f = actor(t);
+  const first = await rubbleActor(f, t, 'camdozaal_golem_mind_rock');
+  await awaken(f, first.npc); ticks(1);
+  const messages = [], send = f.player.sendMessage;
+  f.player.sendMessage = function(text) { messages.push(text); return send.call(this, text); };
+  const second = await rubbleActor(f, t, 'camdozaal_golem_mind_rock', 1);
+  await awaken(f, second.npc); ticks(2);
+  assert.equal(second.npc.getId(), second.id, 'the second rubble stays rubble');
+  assert.ok(!second.npc.getOwner(), 'and stays unowned');
+  assert.ok(messages.includes("You're already in combat with a golem. There's no time to awaken another."));
+});
+
+test('a golem left far behind disintegrates without loot', async t => {
+  const f = actor(t);
+  const { npc, spawn } = await rubbleActor(f, t, 'camdozaal_golem_body_rock');
+  await awaken(f, npc); ticks(6);
+  assert.equal(npc.getId(), core.CacheDefinitions.getNpcId('camdozaal_golem_body'));
+  f.player.moveTo(new core.Location(2960, 5805, 0)); ticks(2);
+  assert.equal(f.player.getArea().getName(), 'CamdozaalGolemArea', 'still inside the ruins');
+  ticks(10);
+  assert.equal(npc.isRegistered(), false, 'the abandoned golem is gone');
+  const loot = [...core.World.getItems()].filter(item => item.getPosition?.().getX?.() === spawn.x || item.getOwner() === f.player.getUsername());
+  assert.deepEqual(loot, [], 'nothing drops');
+});
+
+/**
+ * Plays the open conversation through decoded chat input, as the agent MCP answers it:
+ * Continue, a menu option by text, or an amount, taking `script` answers in order.
+ * Returns every line shown.
+ */
+async function converse(f, script = []) {
+  const { MultiChatboxPrompt, ActionDialogue } = core;
+  const answers = [...script], lines = [];
+  for (let step = 0; step < 80; step++) {
+    const sender = f.player.getPacketSender();
+    if (f.player.getEnteredAmountAction()) {
+      await f.connection.dispatch([{ type: 'dialogue_amount', amount: answers.shift() }]);
+    } else if (MultiChatboxPrompt.getPending(f.player)) {
+      const { options } = MultiChatboxPrompt.getPending(f.player);
+      const index = options.indexOf(answers.shift());
+      assert.ok(index >= 0, `scripted option among ${options.join(' | ')}`);
+      await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: index + 1 }]);
+    } else {
+      const entry = f.player.getDialogueManager().getCurrent();
+      if (!entry) break;
+      if (!(entry instanceof ActionDialogue)) {
+        lines.push(entry.getText?.());
+        await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: sender.getChatboxGroupId() << 16, childIndex: -1 }]);
+      } else if (f.player.getInterfaceId() === 685) break;
+    }
+    ticks(1);
+  }
+  return lines;
+}
+async function useOnRamarno(f, npc, itemId) {
+  const slot = f.player.getInventory().getItems().findIndex(item => item?.getId() === itemId);
+  assert.ok(slot >= 0);
+  await f.connection.dispatch([{ type: 'item_on_npc', targetIndex: npc.getIndex(), itemId, slot, widgetId: Inventory.INTERFACE_ID }]);
+  for (let i = 0; i < 10 && !f.player.getDialogueManager().isActive(); i++) ticks(1);
+  assert.ok(f.player.getDialogueManager().isActive(), 'the item conversation starts');
+}
+
+test('shards used on Ramarno go into the forge, then his Shard Exchange opens', async t => {
+  const f = actor(t), shards = obj('camdozaal_barronite_shard');
+  const npc = await ramarnoActor(f, t);
+  f.player.getInventory().adds(shards, 300);
+  f.player.setAttribute('camdozaal:stored-shards', 1000);
+  await useOnRamarno(f, npc, shards);
+  const lines = await converse(f, ['Yes.', 250]);
+  assert.ok(lines.includes('Ramarno adds the Barronite shards to the Sacred Forge.'));
+  assert.equal(f.player.getAttribute('camdozaal:stored-shards'), 1250);
+  assert.equal(f.player.getInventory().getAmount(shards), 50);
+  assert.equal(f.player.getInterfaceId(), 685, 'the Exchange opens at the end of the conversation');
+});
+
+test('Ramarno builds the mace from all three pieces and 1,500 shards, then smelts it into the forge', async t => {
+  const f = actor(t), shards = obj('camdozaal_barronite_shard');
+  const [head, handle, guard] = ['barronite_mace_1', 'barronite_mace_2', 'barronite_mace_3'].map(obj);
+  const npc = await ramarnoActor(f, t);
+  f.player.getInventory().adds(head, 1);
+  f.player.getInventory().adds(handle, 1);
+  f.player.getInventory().adds(shards, 600);
+  f.player.setAttribute('camdozaal:stored-shards', 1000);
+  await useOnRamarno(f, npc, handle);
+  let lines = await converse(f, ['Construct the weapon.']);
+  assert.ok(lines.includes('You need a Barronite guard and 1500 barronite shards.'), 'the missing piece is named');
+  assert.equal(f.player.getInventory().contains(obj('barronite_mace')), false);
+  f.player.getInventory().adds(guard, 1);
+  await useOnRamarno(f, npc, guard);
+  lines = await converse(f, ['Construct the weapon.']);
+  assert.ok(lines.includes('Ramarno hands you the Barronite Mace.'));
+  assert.equal(f.player.getInventory().getAmount(obj('barronite_mace')), 1);
+  for (const piece of [head, handle, guard]) assert.equal(f.player.getInventory().contains(piece), false);
+  assert.equal(f.player.getInventory().getAmount(shards) + f.player.getAttribute('camdozaal:stored-shards'), 100,
+    'carried shards pay first, then stored');
+  await useOnRamarno(f, npc, obj('barronite_mace'));
+  await converse(f, ['Yes.', 'Yes.', 'Yes.']);
+  assert.equal(f.player.getInventory().contains(obj('barronite_mace')), false);
+  assert.equal(f.player.getAttribute('camdozaal:stored-shards'), 600, 'the 500 smelted shards went into the forge');
+});
+
+test('a pickaxe barrel hands out a bronze pickaxe only to a player carrying none', async t => {
+  const f = actor(t), bronze = core.ItemIdentifiers.BRONZE_PICKAXE;
+  const row = locate(/^camdozaal_pickaxe_barrel$/);
+  const messages = [], send = f.player.sendMessage;
+  f.player.sendMessage = function(text) { messages.push(text); return send.call(this, text); };
+  await clickObject(f, row, 'Take-pickaxe');
+  assert.equal(f.player.getInventory().getAmount(bronze), 1);
+  assert.equal(f.player.getDialogueManager().getCurrent()?.getText?.(), 'You take a pickaxe from the barrel.');
+  f.player.getDialogueManager().reset();
+  f.player.getInventory().deleteNumber(bronze, 1);
+  f.player.getInventory().adds(core.ItemIdentifiers.RUNE_PICKAXE, 1);
+  await clickObject(f, row, 'Take-pickaxe');
+  assert.equal(f.player.getInventory().getAmount(bronze), 0, 'any carried pickaxe refuses');
+  assert.equal(messages.at(-1), 'You already have a pickaxe. Best leave these ones here in case someone else needs one.');
+  f.player.getInventory().deleteNumber(core.ItemIdentifiers.RUNE_PICKAXE, 1);
+  f.player.getInventory().adds(obj('camdozaal_barronite_deposit'), f.player.getInventory().getFreeSlots());
+  await clickObject(f, row, 'Take-pickaxe');
+  assert.equal(f.player.getInventory().getAmount(bronze), 0, 'a full inventory takes nothing');
 });

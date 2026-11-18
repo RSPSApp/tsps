@@ -118,6 +118,8 @@ const ANIM = {
   DOUSE: 2771,
   /** Cache `human_stunned`: the generic stun the torrent's zap leaves a loader in. */
   STUNNED: 848,
+  /** Cache `human_knockdown_loop`: the wave's knockdown, as the rev 241/242 captures show it. */
+  KNOCKDOWN: 7211,
   CANNON_FIRING: 8871,
   CANNON_FIRING_MIRROR: 8872,
   BOSS_TIDAL_WAVE: 8902,

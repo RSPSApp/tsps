@@ -110,7 +110,7 @@ function deployRoutineBots({ runtime, brainRegistry, core, activityId, count, ov
   const spawned = [];
   const failures = [];
   for (let index = 0; index < count; index += 1) {
-    const bot = runtime.spawnPvpBot(spawnLocation, { mode: activity.mode });
+    const bot = runtime.spawnPvpBot(spawnLocation, { mode: activity.mode, activity: "developer" });
     if (!bot) {
       failures.push(`Bot ${index + 1}: spawn capacity or name allocation failed.`);
       continue;

@@ -107,3 +107,106 @@ test('registered activity deployment rejects excessive requests and bad coordina
   assert.equal(deployRegisteredBots({ runtime: { entriesByUsername: new Map() }, launcher, count: 1, location: { x: -1, y: 3200, z: 0 } }).status, 400);
   assert.equal(calls, 0);
 });
+
+test('routine deployment uses the real developer activity spawn policy', async (t) => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-deploy-policy-'));
+  const environment = {
+    BROWSER_HOST: '1',
+    TSPS_ACCOUNTS_FILE: path.join(scratch, 'accounts.json'),
+    BOT_FILE_LOG_WRITES_ENABLED: '0',
+    BOT_RUNTIME_TELEMETRY_ENABLED: '0',
+  };
+  const previousEnvironment = Object.fromEntries(Object.keys(environment).map(key => [key, process.env[key]]));
+  Object.assign(process.env, environment);
+  t.after(() => {
+    for (const [key, value] of Object.entries(previousEnvironment)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    for (const file of ['routine.json', 'accounts.json']) fs.rmSync(path.join(scratch, file), { force: true });
+    fs.rmdirSync(scratch);
+  });
+
+  const { Server } = require('../dist/Server');
+  Server.installProductionPathResolver();
+  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize();
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { ItemIds } = require('../dist/util/IdEnums');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { getActiveBotRuntime, setActiveBotRuntime } = require('../plugins/bots/runtime/RuntimeRegistry.PlayerBots');
+  const { createBotActivityRegistry } = require('../plugins/bots/brain/ActivityRegistry.PlayerBots');
+  const { configureBrainActivities } = require('../plugins/bots/brain/BrainActivities.PlayerBots');
+  const { deployRoutineBots } = require('../plugins/bots/runtime/Deploy.PlayerBots');
+  const previousConfig = PluginManager.pluginConfigCache;
+  PluginManager.pluginConfigCache = { 'PlayerBots:allowedActivities': ['developer'], 'PlayerBots:ai': { enabled: false } };
+  const api = PluginManager.createApi('PlayerBots');
+  require('../plugins/bots/PlayerBots.plugin').register(api);
+  const { runtime, brainRegistry } = getActiveBotRuntime();
+  t.after(() => {
+    PluginManager.pluginConfigCache = { 'PlayerBots:allowedActivities': ['developer'] };
+    for (const entry of [...runtime.entries]) {
+      const bot = entry.player;
+      runtime.disableControllerForPlayer(bot);
+      runtime.handleDisconnect(bot);
+      for (const queue of [api.core.World.getAddPlayerQueue(), api.core.World.getRemovePlayerQueue()]) {
+        const index = queue.indexOf(bot);
+        if (index !== -1) queue.splice(index, 1);
+      }
+      api.core.TaskManager.cancelTasks(bot);
+      api.core.TaskManager.cancelTasks(bot.getIndex());
+      bot.setRegistered(false);
+    }
+    api.core.TaskManager.cancelTasks(api.core.Task.DEFAULT_KEY);
+    assert.equal(runtime.entriesByUsername.size, 0);
+    assert.equal(runtime.entries.length, 0);
+    configureBrainActivities();
+    setActiveBotRuntime(null, null);
+    PluginManager.pluginConfigCache = previousConfig;
+  });
+
+  const activityId = 'custom_developer_policy';
+  const editorPath = path.join(scratch, 'routine.json');
+  fs.writeFileSync(editorPath, JSON.stringify([{
+    id: activityId, repeat: false, graph: {
+      nodes: [
+        { id: 'start', kind: 'start', x: 0, y: 0, setup: { location: null, skills: {}, inventory: [{ slot: 0, id: ItemIds.COINS, amount: 50 }], equipment: [] } },
+        { id: 'end', kind: 'end', x: 200, y: 0 },
+      ],
+      edges: [{ from: 'start', port: 'next', to: 'end' }],
+    },
+  }]));
+  const registry = createBotActivityRegistry({ api, editorPath, world: { core: api.core } });
+  const activity = registry.byId.get(activityId);
+  assert.ok(activity);
+  brainRegistry.byId.set(activityId, activity);
+  brainRegistry.activities.push(activity);
+  const deploy = () => deployRoutineBots({ runtime, brainRegistry, core: api.core, activityId, count: 1 });
+
+  await t.test('developer-only worlds permit routines without permitting world population', () => {
+    assert.equal(runtime.spawnPvpBot(new api.core.Location(3222, 3218)), false);
+    const result = deploy();
+    assert.equal(result.ok, true);
+    assert.equal(result.spawned.length, 1);
+    const entry = runtime.entriesByUsername.get(result.spawned[0]);
+    assert.ok(entry.player instanceof Player);
+    assert.equal(entry.player.isPlayerBot(), true);
+    assert.equal(entry.adminDeployedActivityId, activityId);
+    assert.equal(entry.brain.isRunningActivity(activityId), true);
+    assert.equal(entry.player.getInventory().getAmount(ItemIds.COINS), 50);
+    assert.ok(api.core.World.getAddPlayerQueue().includes(entry.player));
+  });
+
+  await t.test('allowing world population does not permit developer routine deployment', () => {
+    PluginManager.pluginConfigCache = { 'PlayerBots:allowedActivities': ['world'], 'PlayerBots:ai': { enabled: false } };
+    const beforeEntries = [...runtime.entriesByUsername.entries()];
+    const beforeQueue = [...api.core.World.getAddPlayerQueue()];
+    const result = deploy();
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 409);
+    assert.deepEqual([...runtime.entriesByUsername.entries()], beforeEntries);
+    assert.deepEqual(api.core.World.getAddPlayerQueue(), beforeQueue);
+  });
+});

@@ -9,11 +9,17 @@
  * Emits "world:picked" { player, itemId, plant } as Pickable does (a league's "Pick a Pineapple on
  * Karamja").
  *
- * Ours (no recording picks the last stage or times the regrowth): the one-pineapple plant picked
- * goes until it regrows; each picked plant grows back one stage every REGROW_TICKS; a full pack
- * gets Pickable's "Your inventory is too full to hold any more.".
+ * The last pineapple leaves `pineapple_plant_no_pineapples` (1413), placed bare on these tiles in
+ * recordings 75, 549, 1104, 1710 and 1851 (1851 tick 17595: all five Karamja plants bare); it has no
+ * Pick. In 1710 a bare plant at 2760,3157 went straight back to the full one (1413 at tick 6301,
+ * 1408 at 6334).
+ *
+ * Ours (nothing times the regrowth): a bare plant is full again REGROW_TICKS after its last pick; a
+ * part-picked one grows back a stage every REGROW_TICKS; a full pack gets Pickable's "Your
+ * inventory is too full to hold any more.".
  */
 const STAGES = [1408, 1409, 1410, 1411, 1412];
+const BARE = 1413;
 const PICK_TICKS = 1;
 const PICK_SOUND = 2581;
 const REGROW_TICKS = 100;
@@ -32,12 +38,9 @@ function place(entry, stage) {
   const { core } = api;
   if (entry.object) core.ObjectManager.deregister(entry.object, true);
   entry.stage = stage;
-  if (stage >= STAGES.length) {
-    entry.object = null;
-    return;
-  }
   const { base } = entry;
-  entry.object = new core.GameObject(STAGES[stage], base.getLocation().clone(), base.getType(), base.getFace(), base.getPrivateArea());
+  const id = stage >= STAGES.length ? BARE : STAGES[stage];
+  entry.object = new core.GameObject(id, base.getLocation().clone(), base.getType(), base.getFace(), base.getPrivateArea());
   core.ObjectManager.register(entry.object, true);
 }
 
@@ -45,7 +48,8 @@ function place(entry, stage) {
 function regrow(tile, entry) {
   const { core } = api;
   entry.task = new core.CountdownTask(entry, REGROW_TICKS, () => {
-    const back = entry.stage - 1;
+    // A bare plant comes back full (1710); a part-picked one a stage at a time (1102).
+    const back = entry.stage >= STAGES.length ? 0 : entry.stage - 1;
     if (back <= 0) {
       if (entry.object) core.ObjectManager.deregister(entry.object, true);
       core.ObjectManager.register(entry.base, true);

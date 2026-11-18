@@ -8,9 +8,13 @@ the arrival, giving synth 2581, "You pick a pineapple." (spam), +1 pineapple, an
 down (`pineapple_plant` to `_four`). Recording 1102 shows plants climbing back up a stage at a time
 (`_two` to `_three` to `_four`).
 
-Ours, as no recording picks the last stage or times the regrowth:
-- the one-pineapple plant, picked, goes until it regrows;
-- each picked plant grows back one stage every 100 ticks, to the full plant;
+The last pineapple leaves `pineapple_plant_no_pineapples` (1413), the bare plant placed on these tiles in
+recordings 75, 549, 1104, 1710 and 1851 (1851 tick 17595: all five Karamja plants bare). In 1710 a bare
+plant at 2760,3157 went straight back to the full one (1413 at tick 6301, 1408 at 6334).
+
+Ours, as nothing times the regrowth:
+- a bare plant is full again 100 ticks after its last pick;
+- a part-picked one grows back one stage every 100 ticks;
 - a full inventory gets Pickable's "Your inventory is too full to hold any more.".
 
 A pick sends "world:picked" { player, itemId, plant } as Pickable's crops do (the league's "Pick a

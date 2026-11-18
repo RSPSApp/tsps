@@ -124,7 +124,7 @@ Quetzacalli Gorge) take Shear with shears in the inventory. Recording 1105 (rev 
   `busy` goes 0 to 1;
 - two ticks later "You shear the alpaca and get some wool.", +1 wool, the alpaca turns into
   `varlamore_alpaca_sheared_1` / `_2` and `busy` goes back to 0; a tick later it looks away;
-- fifty ticks after the shear it is woolly again (index 4283: sheared at tick 2051, back at 2101).
+- fifty ticks after it turns sheared it is woolly again (index 4283: sheared at tick 2051, back at 2101).
 
 Spawns: `npc-spawns.json` had Ortus Farm's seven alpacas and the Quetzacalli Gorge's one as 14534, an
 Alpaca with no options; 1105 shows `varlamore_alpaca_1` / `_2` on those tiles (index 4265 at 1560,3117,

@@ -3079,8 +3079,11 @@ test("Shear an Alpaca: the real Shear, without shears refused, the wool two tick
   assert.ok(f.messages.includes("You shear the alpaca and get some wool."));
   assert.ok(done(f, "shear-an-alpaca"));
   assert.notEqual(npc.getNpcTransformationId?.() ?? -1, -1, "sheared");
-  ticks(f, 50);
-  assert.equal(npc.getNpcTransformationId?.() ?? -1, -1, "its wool back 50 ticks after the shear");
+  // send ran 4 ticks: the shear landed 2 ticks in, so 2 of the 50 have passed.
+  ticks(f, 47);
+  assert.notEqual(npc.getNpcTransformationId?.() ?? -1, -1, "still sheared 49 ticks on");
+  ticks(f, 2);
+  assert.equal(npc.getNpcTransformationId?.() ?? -1, -1, "its wool back 50 ticks after it turned sheared (1105)");
   assert.equal(npc.getId(), woolly);
 });
 
@@ -3096,4 +3099,16 @@ test("Pick a Pineapple on Karamja: the real Pick takes the plant a stage down, a
   t.after(() => { entry.task?.stop(); Pineapple.plants.clear(); });
   ticks(f, Pineapple.REGROW_TICKS + 1);
   assert.equal(Pineapple.plants.size, 0, "back to the full plant");
+  // Picked bare: the recorded pineapple_plant_no_pineapples (1413), then straight back to the full plant.
+  let current = plant;
+  for (let i = 0; i < 5; i++) {
+    player.getInventory().resetItems();
+    current = Pineapple.plants.get(`${plant.getLocation().getX()},${plant.getLocation().getY()},${plant.getLocation().getZ()}`)?.object ?? plant;
+    Pineapple.pick({ player, object: current });
+    ticks(f, 1);
+  }
+  const bare = Pineapple.plants.get(`${plant.getLocation().getX()},${plant.getLocation().getY()},${plant.getLocation().getZ()}`);
+  assert.equal(bare.object.getId(), 1413, "bare");
+  ticks(f, Pineapple.REGROW_TICKS + 1);
+  assert.equal(Pineapple.plants.size, 0, "full again in one step");
 });

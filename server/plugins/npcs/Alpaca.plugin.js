@@ -8,8 +8,8 @@
  *     alpaca faces the player and busy goes 0 -> 1;
  *   - two ticks later "You shear the alpaca and get some wool.", +1 wool, the alpaca turns into its
  *     sheared form (varlamore_alpaca_sheared_1 / _2) and busy goes 1 -> 0; a tick later it looks away;
- *   - fifty ticks after the shear it is back to its woolly form (1105: index 4283 sheared at 2051,
- *     back at 2101; 4269 at 2057 and 2107).
+ *   - fifty ticks after it turns sheared it is back to its woolly form (1105: index 4283 sheared at
+ *     2051, back at 2101; 4269 at 2057 and 2107).
  * The sheared forms have no Shear option (cache), so they need no line of their own.
  * Emits `alpaca:sheared` { player } with the wool (a league's "Shear an Alpaca").
  *
@@ -52,7 +52,8 @@ function shear({ player, npc }) {
     player.sendMessage(NO_SHEARS);
     return true;
   }
-  if (inventory.getFreeSlots() <= 0 && !inventory.contains(core.ItemIdentifiers.WOOL)) {
+  // Wool doesn't stack: a full pack has no room, whatever it holds.
+  if (inventory.isFull()) {
     player.sendMessage(NO_ROOM);
     return true;
   }
@@ -68,7 +69,7 @@ function shear({ player, npc }) {
       shorn.delete(npc);
       return;
     }
-    if (inventory.getFreeSlots() <= 0 && !inventory.contains(core.ItemIdentifiers.WOOL)) {
+    if (inventory.isFull()) {
       shorn.delete(npc);
       player.sendMessage(NO_ROOM);
       return;
@@ -77,7 +78,8 @@ function shear({ player, npc }) {
     inventory.adds(core.ItemIdentifiers.WOOL, 1);
     npc.setNpcTransformationId(sheared);
     api.emitCustomEvent("alpaca:sheared", { player });
-    core.TaskManager.submit(new core.CountdownTask(npc, REGROW_TICKS - SHEAR_TICKS, () => {
+    // 1105: woolly again 50 ticks after the sheared form appears (index 4283: 2051 -> 2101).
+    core.TaskManager.submit(new core.CountdownTask(npc, REGROW_TICKS, () => {
       shorn.delete(npc);
       if (npc.isRegistered()) npc.setNpcTransformationId(-1);
     }));

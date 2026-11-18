@@ -171,7 +171,7 @@ module.exports = function registerFamilyPestQuest(api) {
     const key = whoIs(npcId);
     if (!key) return null;
     const value = String(text).toLowerCase();
-    if (value.includes("does not have enough coins")) return player.getInventory().getAmount(ItemIdentifiers.COINS) < PAYMENT;
+    if (key === "dimintheis" && value.includes("does not have enough coins")) return player.getInventory().getAmount(ItemIdentifiers.COINS) < PAYMENT;
     if (value.includes("is not the last brother")) return !isLastBrother(player, key);
     if (value.includes("is the last brother")) return isLastBrother(player, key);
     if (value.includes("first time the player has talked to")) return objectAttribute(player, RECEIVED_ATTRIBUTE)[key] !== true;

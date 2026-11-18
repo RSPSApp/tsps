@@ -13,12 +13,11 @@
  * transitions driven by the transcript's choice/condition/message steps. Chronozon's
  * four Blast spells print the wiki weakening message and Chronozon cannot die (he
  * returns to full health) until the killer has landed all four. The first gauntlet
- * enchantment is free, later changes cost 25,000 coins. The Witchaven lever/doors
- * puzzle (aux varp 149) is not wired.
+ * enchantment is free, later changes cost 25,000 coins.
  */
 module.exports = function registerFamilyCrestQuest(api) {
   const { Skill, CombatType, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, questNamed } = require("../QuestRuntime");
 
   const PAGE = "Family Crest";
 
@@ -313,8 +312,27 @@ module.exports = function registerFamilyCrestQuest(api) {
     }
     player.getInventory().deleteNumber(event.itemId, 1);
     quest.setStage(player, STAGE_CURED_JOHNATHON);
-    player.sendMessage("Johnathon drinks the potion and is completely cured.");
+    startTranscript(api, player, event.npcId ?? event.target.getId(), PAGE, "johnathon-using-an-antipoison-on-johnathon");
     event.handled = true;
+  }
+
+  function gauntletsOption(event) {
+    if (!quest.isComplete(event.player)) return;
+    const brother = CALEB_NPC_IDS.has(event.npcId) ? "Caleb"
+      : AVAN_NPC_IDS.has(event.npcId) ? "Avan"
+      : JOHNATHON_NPC_IDS.has(event.npcId) ? "Johnathon" : null;
+    if (!brother) return;
+    const pestComplete = questNamed("Family Pest")?.isComplete(event.player);
+    const selected = pestComplete
+      ? page(brother, "standard-dialogue-after-completing-family-pest")
+      : gauntletPage(event.player, brother, `post-quest-dialogue-talking-to-${brother.toLowerCase()}-after-the-quest`);
+    event.handled = startTranscript(api, event.player, event.npcId, selected.page, selected.variant,
+      selected.page === PAGE ? undefined : (steps) => {
+        const questMenu = steps.find((step) => step.type === "choice");
+        const service = questMenu?.options.find((option) => option.text === "Gauntlets")?.steps ?? steps;
+        const menu = service.find((step) => step.type === "choice");
+        return menu?.options.find((option) => option.text === "Can you change my gauntlets for me?")?.steps ?? service;
+      });
   }
 
   /** Wiki (Gold rocks, Witchaven version): the gold rocks of the Witchaven Dungeon. */
@@ -492,6 +510,9 @@ module.exports = function registerFamilyCrestQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnNpc(handleItemOnNpc);
+  api.onNpcInteraction("Caleb", { Gauntlets: gauntletsOption });
+  api.onNpcInteraction("Avan", { Gauntlets: gauntletsOption });
+  api.onNpcInteraction("Johnathon", { Gauntlets: gauntletsOption });
   api.onObjectInteraction(handleObjectInteraction);
   api.onCustomEvent("mining:ore-yield", handleOreYield);
   api.onNpcHitModify(handleNpcHitModify);
@@ -499,4 +520,5 @@ module.exports = function registerFamilyCrestQuest(api) {
   api.onNpcBeforeDeath(keepChronozonUp);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
+  require("./WitchavenPuzzle.FamilyCrest").attach(api);
 };

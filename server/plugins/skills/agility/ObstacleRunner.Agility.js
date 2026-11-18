@@ -430,6 +430,8 @@ function closeFade(player) {
 }
 
 function lock(player, task) {
+  // A run that replaces an agility run takes over its release, so it lets go of that run's stall.
+  if (player.getAttribute(BUSY_ATTRIBUTE)?.agility && !task.agility) player.getCombat().releaseFullStall();
   player.setAttribute(BUSY_ATTRIBUTE, task);
   player.getMovementQueue().reset();
   player.getMovementQueue().setBlockMovement(true);

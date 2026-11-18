@@ -2053,7 +2053,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   - `prayer-bonus { min }`: the worn items' prayer bonus at least that, as BonusManager sums it
     (checked with the equip kinds). Used by "Reach a Prayer Bonus of 15 / 30".
   - `hit { min, spells?, weapons? }`: one hit of at least `min` a player lands on an NPC, from
-    `onCombatHitResolved`. Used by "deal at least 66 damage ... using elemental spells" (the 20 Strike to
+    `onCombatHitResolved`, as its hitsplat shows it: capped at the hitpoints left after the damage queued
+    ahead of it the same tick. Used by "deal at least 66 damage ... using elemental spells" (the 20 Strike to
     Surge spells) and "Hit 150 damage or more with the Keris Partisan" (25979, as "Defeat a Kalphite
     with the Keris Partisan" names it).
   - `ca-boss { monsters }`: the Wiki task rows' groups of Combat Achievement monsters (below).

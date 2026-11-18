@@ -2015,7 +2015,7 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   tile of its footprint, same plane and instance). The Demonic Pacts tasks the generator could not
   word-map are in the overlay (issue 6108). The distances are fitted to rsprox.net recording 1098
   (rev 237, Leagues VI), the only one that completes them; the Wiki gives none:
-  - "Cry near a child" (Cry, slot 16): completed 2 tiles from a child (tick 14398); distance 2.
+  - "Cry near a child" (Cry, slot 16): cried 2 tiles from a child at tick 14398, the task at 14399; distance 2.
   - "Dance near a bard" (Dance, slot 12): no task 3 tiles from the Avium Savannah bards (tick 25550),
     completed 1 tile from one (25555); distance 2.
   - "Bow near a quetzal" (Bow, slot 2): completed 2 tiles from Civitas' quetzal (spawn 13355, a

@@ -414,10 +414,6 @@ module.exports = function registerSheepHerderQuest(api) {
     location.getX() >= PEN_BOUNDS.minX && location.getX() <= PEN_BOUNDS.maxX
       && location.getY() >= PEN_BOUNDS.minY && location.getY() <= PEN_BOUNDS.maxY;
 
-  const inFarm = (location) =>
-    location.getX() >= FARM_ZONE.minX && location.getX() <= FARM_ZONE.maxX
-      && location.getY() >= FARM_ZONE.minY && location.getY() <= FARM_ZONE.maxY;
-
   /** One collision-checked tile for a prod: the way the player faces, else a nearby open tile. */
   function prodStep(player, npc, sheep) {
     const at = npc.getLocation();
@@ -433,7 +429,8 @@ module.exports = function registerSheepHerderQuest(api) {
 
     const stepTo = (dx, dy) => {
       const target = new api.core.Location(at.getX() + dx, at.getY() + dy, at.getZ());
-      if (!inFarm(target)) return null;
+      // FARM_ZONE triggers private spawns; the world's blue/yellow sheep start
+      // outside it. Their prods still use the ordinary movement collision check.
       // The west gate is the pen's only opening: only a step through a gate tile
       // enters the pen. A sheep beside the fence cannot be penned through it.
       const fromGate = GATE_TILES.has(`${at.getX()},${at.getY()}`);

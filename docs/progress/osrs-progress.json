@@ -7106,7 +7106,8 @@
             "Transcript page is \"Sheep Herder\"; the four sheep need distinct NPC ids/spawns and herd-path handling (there is no generic herding system yet).",
             "West Ardougne access is gated by Plague City, so the start check should read that quest's varp once implemented.",
             "Main 3b61a15a8 (6 November 2026): #2631 Let the plague sheep standing in the world be prodded. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3484 Sheep Herder: grant the 1,000 Hunter experience the reward now includes."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3484 Sheep Herder: grant the 1,000 Hunter experience the reward now includes.",
+            "2026-11-18: #6219 removes the private-spawn area restriction from prodding world sheep, allowing blue and yellow sheep to move from their configured spawn patches while retaining collision and west-gate checks. Native packet regression cases in server/tests/plague-sheep-multi.test.cjs cover all 12 configured world-sheep spawns. Wiki: https://oldschool.runescape.wiki/w/Sheep_Herder. This does not establish complete herding timing or client-rendering parity."
           ],
           "taskDetails": [
             {

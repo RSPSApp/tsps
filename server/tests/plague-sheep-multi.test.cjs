@@ -74,6 +74,7 @@ function actor(t) {
   c.player = p;
   t.after(() => {
     PM.emitPlayerLogout({ player: p, username: p.getUsername() });
+    core.World.unregisterPlayerPosition(p);
     p.setRegistered(false);
     core.TaskManager.cancelTasks(p.getIndex());
   });
@@ -106,8 +107,8 @@ function place(f, id) {
   return npc;
 }
 
-function tick(f, npc) {
-  for (let i = 0; i < 6; i++) {
+function tick(f, npc, cycles = 6) {
+  for (let i = 0; i < cycles; i++) {
     core.TaskManager.process();
     if (npc?.isRegistered()) npc.process();
     // Player sync clears this each tick; a moveTo leaves the player busy until it does.
@@ -337,3 +338,32 @@ test("Mourning's End: the fixed device re-dyes a world sheep, which then shows d
   assert.equal(npc.getContentId(fresh.p), DYED_RED, "it now shows dyed");
   assert.ok(!npc.getCurrentDefinition(fresh.p).getActions()[0], "with no Prod");
 });
+
+// Keep the production spawn tiles: moving every colour to HOME hid #6219.
+const worldSheepSpawns = require('../data/definitions/npc-spawns.json')
+  .filter((spawn) => SHEEP.some(([id]) => id === spawn.id));
+for (const spawn of worldSheepSpawns) {
+  test(`Sheep Herder: prod world sheep ${spawn.id} at its spawn ${spawn.x},${spawn.y}`, async (t) => {
+    const f = herder(t);
+    core.RegionManager.loadMapFiles(spawn.x, spawn.y);
+    const npc = core.NPC.create(spawn.id, new core.Location(spawn.x, spawn.y, spawn.level));
+    // Isolate the prod from random wandering; terrain, mobility and packet routing stay real.
+    npc.getMovementCoordinator().setRadius(0);
+    core.World.getNpcs().add(npc);
+    t.after(() => core.World.getNpcs().remove(npc));
+    const at = npc.getLocation().clone();
+    const step = [[0, -1], [1, 0], [-1, 0], [0, 1]].find(([dx, dy]) =>
+      npc.getMovementQueue().canWalkTo(at.transform(dx, dy))
+      && core.RegionManager.canMovestart(at, at.transform(-dx, -dy), 1, 1, null));
+    assert.ok(step, 'control: open terrain for the sheep and adjacent actor');
+    f.p.setLocation(at.transform(-step[0], -step[1]));
+    await f.c.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: 1 }]);
+    f.c.processTurnPackets();
+    // Observe the prod before the ordinary wander coordinator can walk it home again.
+    for (let i = 0; i < 6 && npc.getLocation().equals(at); i++) tick(f, npc, 1);
+    t.diagnostic(`step ${step}; messages ${f.messages}; facing ${f.p.getFacingDirection()?.getX()},${f.p.getFacingDirection()?.getY()}; mobility ${npc.getMovementQueue().getMobility().canMove()}`);
+    assert.ok(!f.messages.includes('The sheep has nowhere to go.'), `open tile refused: ${f.messages}`);
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()],
+      [spawn.x + step[0], spawn.y + step[1]], 'one ordinary collision-checked prod step');
+  });
+}

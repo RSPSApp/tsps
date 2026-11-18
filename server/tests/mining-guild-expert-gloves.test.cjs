@@ -29,12 +29,14 @@ const COMBINED = "There you go. I've combined your gloves into some Expert minin
 let core;
 let index = 3600;
 const cleanups = [];
+const logged = [];
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   core = PM.getCoreApi();
   require("../plugins/npcs/NpcDialogues.plugin").register(PM.createApi("BelonaDialogue"));
   require("../plugins/areas/MiningGuild.plugin").register(PM.createApi("BelonaMiningGuild"));
+  PM.createApi("CollectionLogWatch").onCustomEvent("collection-log:obtain", (event) => logged.push(event));
 });
 
 afterEach(() => {
@@ -94,6 +96,9 @@ test("both pairs and 40 minerals: Belona combines them into Expert mining gloves
   assert.equal(amount(f, MINING_GLOVES), 0);
   assert.equal(amount(f, SUPERIOR_MINING_GLOVES), 0);
   assert.equal(amount(f, MINERALS), 15, "the fee is 40 minerals");
+  const mine = logged.filter((event) => event.player === f.p);
+  assert.deepEqual(mine.map((event) => [event.itemId, event.amount]), [[EXPERT_MINING_GLOVES, 1]],
+    "the Expert mining gloves fill their collection log slot once");
 });
 
 test("both pairs but 39 minerals: her not-enough line, nothing taken", async () => {
@@ -104,6 +109,7 @@ test("both pairs but 39 minerals: her not-enough line, nothing taken", async () 
   assert.equal(amount(f, EXPERT_MINING_GLOVES), 0);
   assert.equal(amount(f, MINING_GLOVES), 1);
   assert.equal(amount(f, MINERALS), 39);
+  assert.equal(logged.some((event) => event.player === f.p), false, "nothing is logged without the gloves");
 });
 
 test("one pair missing: her no-gloves line, nothing taken", async () => {

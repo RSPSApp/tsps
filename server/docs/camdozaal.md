@@ -5,6 +5,88 @@ net fishing, fish preparation/offering and the timed vault. Below Ice Mountain
 continues to own its quest, entrance and Ramarno introduction; Defender of Varrock
 and Desert Treasure II retain their separate quest interactions.
 
+## Inhabitants, golems and the altar
+
+Source: an RSProx recording of 2026-11-17 (revision 242.1), a visit to the ruins
+after Below Ice Mountain and Desert Treasure II: Ramarno's conversation and
+Exchange, Helena, Prescott, the forge, three Flawed Golem fights and the altar.
+
+**Spawns** (`npc-spawns.json`):
+- Helena and Prescott are the cache multinpcs `dt2_camdozaal_archaeologist_1/2`
+  (3579/6149) at the dig site, centred on their captured roaming boxes (Helena
+  2969-2973, 5796-5800; Prescott 2971-2975, 5793-5797), radius 2. Varbit 15126
+  (Desert Treasure II's Whisperer chapter, sent on login) shows them from 2 to 48,
+  so they appear once Ramarno has pointed the player to them and stay after the
+  chapter. DT2 no longer spawns its own private Prescott.
+- Ramarno never moves in the capture; both of his spawns have radius 0.
+- All 27 golem rubble rows have radius 0: rubble never moves (it wandered before).
+
+**Golems** (`plugins/npcs/CamdozaalGolems.plugin.js`). Every rubble can be awakened:
+Flawed, Mind and Body golems on any world, Chaos golems on members worlds. Awaken
+plays `ancient_guardian_awaken` (8944); 4 ticks later the same NPC slot becomes the
+golem, with its own hitpoints, and attacks the player who woke it. It dies with
+`ancient_guardian_death` (8943) and the rubble is back on its tile 29 ticks after
+the death (capture: death 400, rubble 429; measured the same here). Only one golem
+per player. A golem whose player walks more than 16 tiles away, leaves the ruins or
+logs out disintegrates: it dies with no killer, so nothing drops, and respawns as rubble.
+
+**Ramarno** (`camdozaal/Ramarno.Camdozaal.js`) plays the Wiki transcript variants for
+items used on him and supplies their effects by step id: shards go into the forge
+(amount prompt), then the Exchange opens; head, handle and guard plus 1,500 shards
+make the mace; pieces smelt for 100 shards, the mace and the Imcando hammer for 500,
+the broken hammer for 350, each optionally straight into the forge; 1,250 shards
+repair the broken hammer; relics, deposits and the redberry pie (taken) get his lines.
+"Yes please." in Talk-to opens the Exchange, as captured. Helena's post-quest
+condition is answered by the same introduction check as the forge.
+
+**Pickaxe barrels** (`camdozaal/Barrels.Camdozaal.js`): the five cache barrels
+(`camdozaal_pickaxe_barrel`, Take-pickaxe) give a bronze pickaxe with the reach
+animation (832) and an item box, "You take a pickaxe from the barrel.", as captured;
+with any pickaxe Mining knows in the inventory (the Wiki's condition) they answer
+"You already have a pickaxe. Best leave these ones here in case someone else needs
+one." They never run out. The full-inventory wording is not captured.
+
+**Preparation Tables** (`camdozaal/Fish.Camdozaal.js`), the two at 2935,5774 and
+2935,5769 (Wiki: Preparation Table, Guppy): Prepare-fish, or a raw fish on a table,
+needs a knife and the (boostable) Cooking level of the fish (7/20/33/46, catfish
+members-only), giving 12/23/31/43 XP or a ruined fish. No-ruin levels and the
+Preparation buff are under the probability estimates below.
+
+A second RSProx recording (2026-11-17 19:59, one raw tetra prepared and then offered,
+the player standing still) gives the presentation and first-fish timing:
+- **Table:** nothing plays on the click; 3 ticks later the fish is done with
+  `human_cooking` (896), synth 1261 and the spam-filter line "You successfully prepare
+  the Tetra." (the prepared item's name).
+- **Altar:** 1 tick after the click, `human_bone_sacrifice` (3705), synth 958, the
+  Prayer XP and the fish gone, plus a map graphic on the player's tile: the fish's
+  own `camdozaal_fish_offering_<fish>` (1849 for the tetra), height 100, delay 0,
+  which draws the fish rising in purple light (the Wiki's offering gif; seen in a
+  headless client capture). There is no message.
+- Later fish follow the Wiki's intervals, 4 ticks at the table and 3 at the altar
+  (one fish was recorded, so these are not captured). The Wiki's 2-tick first action
+  disagrees with the recording; the recording is used.
+
+Not captured: the ruin line ("You accidentally ruin the Tetra.") and the low-level
+refusal are TSPS wording.
+
+**Captured wording.** Exchange refusal "You cannot afford that buff at this time."
+with synth 2277, a purchase synth 4974. Forge Fuel and Empty ask "How many Barronite
+shards would you like to deposit/withdraw?<br>N stored." and answer "You stored N
+Barronite shards in the Sacred Forge." / "You have N Barronite shards left in the
+Sacred Forge."; Check says "You currently have N Barronite shards stored"; Fuel with
+none carried says "You have no Barronite shards to deposit." The altar and both
+tables say "You have no suitable fish to prepare." with nothing to use.
+
+**Not captured** (kept as estimates or cache-named): the walk-away distance; the
+F2P refusal for Chaos rubble; Empty with nothing stored. Only the tetra's graphic
+was recorded; the guppy, cavefish and catfish use their cache-named counterparts
+(1847, 1848, 1850).
+
+**Known differences.** Live Prescott's conversation opens with the player's
+"Hello there.", which the generated transcript lacks. Live menus drop the topic just
+asked (Ramarno's "Tell me more about..." list); the transcript engine shows the full
+list. Both come from generated data or the shared engine and are left for there.
+
 ## Rules and sources
 
 Primary Wiki raw pages inspected for this work:

@@ -60,6 +60,37 @@ function setStored(player, value) {
 function save(player) { api.emitCustomEvent("persistence:save", { player, reason: "camdozaal" }); }
 function shards(player) { return player.getInventory().getAmount(obj("camdozaal_barronite_shard")); }
 
+function format(amount) { return Number(amount).toLocaleString("en-US"); }
+/** The chatbox amount prompt; a zero or empty answer still calls back, with 0. */
+function askAmount(player, prompt, then) {
+  player.setEnteredAmountAction({ acceptsZero: true, execute: count => then(Math.max(0, Math.floor(Number(count) || 0))) });
+  player.getPacketSender().sendEnterAmountPrompt(prompt);
+}
+/** Moves up to `count` carried shards into the forge; returns how many moved. */
+function store(player, count) {
+  const amount = Math.min(Math.max(0, Math.floor(Number(count) || 0)), shards(player), MAX_SHARDS - stored(player));
+  if (amount <= 0) return 0;
+  player.getInventory().deleteNumber(obj("camdozaal_barronite_shard"), amount);
+  setStored(player, stored(player) + amount);
+  save(player);
+  return amount;
+}
+/** Moves up to `count` stored shards into the inventory; returns how many moved. */
+function withdraw(player, count) {
+  const inventory = player.getInventory();
+  const id = obj("camdozaal_barronite_shard");
+  const amount = Math.min(Math.max(0, Math.floor(Number(count) || 0)), stored(player), MAX_SHARDS - shards(player));
+  if (amount <= 0) return 0;
+  if (inventory.getFreeSlots() === 0 && !inventory.contains(id)) {
+    player.sendMessage("You don't have enough inventory space.");
+    return 0;
+  }
+  inventory.adds(id, amount);
+  setStored(player, stored(player) - amount);
+  save(player);
+  return amount;
+}
+
 /** Exchange accepts carried and stored shards; vault admission uses stored shards alone. */
 function pay(player, amount, storedOnly = false) {
   if (!Number.isSafeInteger(amount) || amount <= 0) return false;
@@ -72,4 +103,5 @@ function pay(player, amount, storedOnly = false) {
 }
 
 module.exports = { bind, core, pluginApi, obj, STORED_ATTRIBUTE, BUFFS_ATTRIBUTE, BOOST_ATTRIBUTE,
-  MAX_SHARDS, SHOP, BUFFS, stored, flags, purchased, boostTicks, inRuins, questComplete, unlocked, gate, sync, setStored, save, shards, pay };
+  MAX_SHARDS, SHOP, BUFFS, stored, flags, purchased, boostTicks, inRuins, questComplete, unlocked, gate, sync, setStored, save, shards, pay,
+  format, askAmount, store, withdraw };

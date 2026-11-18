@@ -169,13 +169,20 @@ Vardorvis is counted by event (`data/monsters.json` countedByEvent), so the kill
   - The open-world post-quest Vardorvis (12223) becomes the statue the capture shows there, `vardorvis_base` (12427, direction north-west, no wander). Before, a live, fightable boss stood outside any instance.
   - A "Large Tendril" spawn at 1123,3417, a fight NPC taken from the Wiki's location list, is removed.
 
+## Awakened
+
+The awakened kill follows the same fight with the Wiki's awakened values, plus three rules:
+
+- **Unique table:** the tradeable unique stage rolls at 3/136 instead of 1/136 (Wiki: "3/136 for awakened variant"). `Fight.Vardorvis.js` answers `npc-drops:chance` with a `tradeable_uniques` stage rule ×3; the rule matches an ordered stage by its key, not an item name.
+- **Stat drains:** the awakened spawn is immune (`boss.setStatDrainImmune(awakened)`), as the Wiki says and as the Leviathan already does.
+- **Slayer:** an awakened kill gives no task credit (Wiki, 3 August 2023 update: "Slayer tasks no longer apply to the Awakened version"). `slayer:target-eligible` answers false for the awakened fight, which also keeps its equipment task bonuses off.
+
+The Ancient blood ornament kit is still not in yet: the Wiki drops it only when Vardorvis is defeated in the awakened encounter **last of the four**, and the other three awakened modes are not enabled.
+
 ## Not in yet
 
 - **Loot quantities:** the Wiki writes Vardorvis' standard drops as `quantity=130,195`, the normal amount and the perfect kill's. osrsreboxed-db's drop dumper drops the comma, so `npc-drops.json` holds 130195 coal. The same happens for the other three DT2 bosses. It needs fixing in the dumper (`_parse_quantity`), then a fresh dump.
-- **Awakened loot:** the 3/136 unique roll, and the ancient blood ornament kit.
 - **Perfect kills** (50% more standard loot, Perfect Vardorvis), Budget Cutter and Axe Enthusiast.
-- **Slayer tasks shouldn't count awakened kills** (Wiki).
-- **Awakened's immunity to stat drains** (Wiki).
 - **Quick-escape:** has no capture. It takes the same way out as Leave.
 
 ## Testing

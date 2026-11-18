@@ -246,13 +246,11 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   const GOLEM_CORRIDOR_TILE = new Location(3365, 9544, 0);
   // Lake side of the ancestral door, used once the channels are clear.
   const LAKE_ENTRY_TILE = new Location(3347, 9563, 0);
-  // South side of the lake door, where the last channel sends the player.
-  const LAKE_DOOR_APPROACH_TILE = new Location(3354, 9559, 0);
   const DUNGEON_EXIT_TILES = [
     new Location(3349, 9557, 0),
     new Location(3347, 9563, 0),
   ];
-  const WATERFALL_SURFACE_TILE = new Location(3369, 3131, 0);
+  const WATERFALL_SURFACE_TILE = ROOT_LASSO_TILE;
   const CREVICE_SURFACE_TILE = new Location(3374, 2903, 0);
   const CREVICE_FLOOR_TILE = new Location(3373, 9306, 0);
   const CREVICE_DOOR_NORTH_TILE = new Location(3371, 9316, 0);
@@ -287,12 +285,11 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   const BLACK_GOLEM_ROOM = {
     golemNpcId: BLACK_GOLEM_NPC_ID,
     doorId: ObjectIdentifiers.DOOR_245, // 10419
-    // The door at (3372,9556) has no reachable neighbour on the cache collision
-    // map, so the click is routed from here (3363,9556, verified reachable) and
-    // never walks; see handleObjectRoute.
-    approach: new Location(3363, 9556, 0),
+    // The old north-west pocket is disconnected from the corridor. Keep the
+    // guardian and return tile on its reachable south approach.
+    approach: new Location(3370, 9553, 0),
     inside: new Location(3375, 9555, 0),
-    spawn: new Location(3362, 9556, 0),
+    spawn: new Location(3371, 9553, 0),
     channelTiles: [
       new Location(3376, 9554, 0),
       new Location(3376, 9555, 0),
@@ -1144,6 +1141,13 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   }
 
   function useAncestralDoor(player) {
+    const source = doorClickSource.get(player);
+    doorClickSource.delete(player);
+    const clickY = source?.y ?? player.getLocation().getY();
+    if (clickY >= 9544) {
+      player.moveTo(DUNGEON_ENTRY_TILE);
+      return;
+    }
     if (!hasKey(api, player, ANCESTRAL_KEY_ITEM_ID)) {
       player.sendMessage("The door is locked.");
       return;
@@ -1224,7 +1228,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     if (!hasChannelSkill(player, room)) return;
     setBit(player, room.channelBit);
     startTranscript(api, player, room.golemNpcId, PAGE, room.channelVariant);
-    moveToNextChannel(player);
+    player.moveTo(room.approach);
   }
 
   function handleChannelClear(event) {
@@ -1282,16 +1286,6 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     method.start(player, npc);
     clearChannel(player, room);
     return true;
-  }
-
-  /**
-   * The cache map's dungeon is a set of disconnected pockets, so clearing a
-   * channel walks the player onward to the next door (or the lake door) as the
-   * wiki's "go through the remaining door" would.
-   */
-  function moveToNextChannel(player) {
-    const next = ROOMS.find((room) => !hasBit(player, room.channelBit));
-    player.moveTo(next ? next.approach : LAKE_DOOR_APPROACH_TILE);
   }
 
   function hasChannelSkill(player, room) {

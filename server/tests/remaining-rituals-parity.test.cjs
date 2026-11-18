@@ -1156,3 +1156,36 @@ test("Shades repair fans out between real world players and preserves personal s
   assert.equal(quest.getStage(b.player), 55, 'a shared 100 percent does not grant observer quest credit');
   assert.equal(b.configs.get(345), 0);
 });
+
+test('Spirits dungeon doors and cleared channels leave a route back outside', () => {
+  const h = setup('../plugins/quests/quests/SpiritsOfTheElid.Quest');
+  const O = h.core.ObjectIdentifiers, I = h.core.ItemIdentifiers;
+  const at = () => [h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()];
+  h.quest.setStage(h.player, 27);
+  h.setLocation(3370, 9553);
+  h.emit('door:toggle', { objectId: O.DOOR_245 });
+  const black = h.spawned.find((npc) => npc.getId() === h.core.NpcIdentifiers.BLACK_GOLEM);
+  assert.ok(black, 'the north-eastern door creates its guardian');
+  assert.deepEqual([black.def.x, black.def.y, black.def.z], [3371, 9553, 0], 'the guardian stays on the reachable corridor side');
+  h.equipment.body = I.ROBE_OF_ELIDINIS;
+  h.equipment.leg = I.ROBE_OF_ELIDINIS_2;
+  h.give(I.ANCESTRAL_KEY, 1);
+  h.give(I.BALLAD, 1);
+
+  h.setLocation(3349, 9536);
+  h.emit('door:toggle', { objectId: O.DOOR_250 });
+  assert.deepEqual(at(), [3365, 9544, 0], 'enter the corridor through the ancestral doors');
+  h.emit('door:toggle', { objectId: O.DOOR_250 });
+  assert.deepEqual(at(), [3349, 9536, 0], 'the inner side returns to the entrance');
+
+  for (const fn of h.hooks.npcDeaths) fn({ killer: h.player, npcId: h.core.NpcIdentifiers.WHITE_GOLEM });
+  h.setLocation(3365, 9538);
+  h.object(10399);
+  assert.equal(h.varbits.get(1450), 1);
+  assert.deepEqual(at(), [3365, 9544, 0], 'clearing the southern channel returns outside its own door');
+  for (const fn of h.hooks.objects) fn({
+    player: h.player, objectId: O.CAVE_EXIT_18, clickType: 1,
+    definition: { getActions: () => ['Leave'] }, location: h.player.getLocation(),
+  });
+  assert.deepEqual(at(), [3371, 3129, 0], 'the root transport returns to its bank approach');
+});

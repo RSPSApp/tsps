@@ -4039,7 +4039,6 @@ module.exports = function registerDesertTreasureII(api) {
         state = { ...state, inShadow: false, whispererStarted: false };
       }
       setLassar(p, state);
-      ensurePrescott(p);
     }
     // Logging out of Ghorrock Prison leaves the player at its exit (instanceExit); only a
     // login there resumes the prison, since another chapter may be in progress elsewhere.
@@ -7904,14 +7903,6 @@ module.exports = function registerDesertTreasureII(api) {
     return true;
   }
 
-  function ensurePrescott(p) {
-    if (!inChapter(p, "whisperer") || !(p.getAttribute(LASSAR) ?? {}).ramarno) return null;
-    let owned = spawned.get(p);
-    if (!owned) spawned.set(p, owned = {});
-    if (owned.prescott?.isRegistered?.()) return owned.prescott;
-    owned.prescott = api.spawnNpc({ id: N.PRESCOTT, x: 2975, y: 5794, z: 0, wanderRadius: 0, owner: p, ownerOnly: true });
-    return owned.prescott;
-  }
 
   function ensureLassarKetla(p) {
     let owned = spawned.get(p);
@@ -8439,8 +8430,8 @@ module.exports = function registerDesertTreasureII(api) {
     // when the player actually chooses the archaeologist question.
     if (!inChapter(p, "whisperer") || option !== "Have you seen any archeologists around here?") return;
     const state = p.getAttribute(LASSAR) ?? {};
+    // Varbit 15126 reaching 2 shows the world's Helena and Prescott (cache multinpcs 3579/6149).
     if (!state.ramarno) setLassar(p, { ...state, ramarno: true });
-    ensurePrescott(p);
   }
 
   function handleLassarObject(event, visibleId, option) {

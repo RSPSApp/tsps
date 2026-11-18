@@ -244,6 +244,8 @@ function grantHouse(request) {
   request.player.setAttribute(HOUSE_ATTRIBUTE, house);
   syncHouseOptions(request.player);
   request.granted = true;
+  // Daddy's Home's free house counts as one bought (Wiki: leagues 4 and 5 take "1,000 coins or Daddy's Home").
+  api.emitCustomEvent("construction:house-bought", { player: request.player, granted: true });
 }
 
 /** Refusals before entering your own house: guests or a follower in the way, or a locked Bank PIN. */
@@ -398,6 +400,9 @@ function teleportIntoHouse(player, buildingMode, landing = null) {
   if (tile) player.moveTo(tile);
   showHouseLoading(player, { sound: false, jingle: houseFor(player).save });
   loadHouse(player, { 2: () => hideHouseLoading(player) });
+  // A teleport into the house is an entry too; no portal, so `location` is null (the Kebos diary's
+  // Hosidius-portal task stays the portal's).
+  api.emitCustomEvent("poh:entered", { player, location: null });
 }
 
 function hasFollower(player) {
@@ -925,6 +930,8 @@ function buildRoom(player, viewer, reopenViewer = true) {
     if (problem) return Menu.refuse(player, problem);
     player.getInventory().delete(COINS_ID, room.cost);
     house.placeRoom(target, room, rotation);
+    // `construction:room-built` { player, room }: a new room paid for (a league's "Build a room"), not a move.
+    api.emitCustomEvent("construction:room-built", { player, room: room.key ?? room.name ?? null });
   }
   rebuildRooms(player, house, reopenViewer ? () => openHouseViewer(player) : undefined);
 }
@@ -1560,7 +1567,8 @@ function completeFurniture(player, house, target, buildable, materials) {
   }
   GardenPlants.complete(player, buildable);
   house.setFurniture(target, buildable);
-  api.emitCustomEvent("construction:furniture-built", { player, buildable });
+  // `key` and `hotspot` flat, for triggers that match a field ("OAK_LARDER" on a kitchen's hotspot).
+  api.emitCustomEvent("construction:furniture-built", { player, buildable, key: buildable.key, hotspot: target.hotspotKey });
   // Keyed to the house, so a click straight after the build doesn't cancel the redraw.
   TaskManager.submit(new CountdownTask(house, 1, () => {
     if (houseFor(player) === house) rebuildHouse(player, house);

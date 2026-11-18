@@ -2826,3 +2826,71 @@ test("Morytania deeds through their events: the Taxidermist, bark runescrolls, S
   emit("sorceress-garden:juice-handed-in", { season: "summer", amount: 1 });
   assert.ok(done(f, "turn-in-50-summer-sq-irkjuices-to-osman"));
 });
+
+// ---- deeds reported by their content: the player-owned house and the Chaos Temple (issue 6108 follow-ups) ----
+
+test("house deeds: furniture by its buildable through the real build, and the house's own events", (t) => {
+  const f = pactsCharacter(t);
+  const { player } = f;
+  const House = require("../plugins/skills/construction/House.Construction");
+  const Data = require("../plugins/skills/construction/Data.Construction");
+  const build = (key) => House.completeFurniture(player, { setFurniture() {} }, { hotspotKey: "TEST" }, Data.BUILDABLE_BY_KEY.get(key), new Map());
+  build("OAK_ALTAR");
+  assert.ok(!done(f, "build-a-gilded-altar"), "an oak altar");
+  for (const [key, id] of [["OAK_LARDER", "build-an-oak-larder"], ["MAHOGANY_PORTAL_FRAME", "build-a-mahogany-portal"], ["GILDED_ALTAR", "build-a-gilded-altar"],
+    ["DEMONIC_THRONE", "build-a-demonic-throne"], ["LUMBRIDGE_LANDSCAPE", "hang-a-painting-of-a-watermill"]]) {
+    build(key);
+    assert.ok(done(f, id), key);
+  }
+  const emit = (name, payload = {}) => PM.emitCustomEvent(name, { player, ...payload });
+  // Daddy's Home's free house, through House's real "construction:grant-house", counts as bought.
+  const grant = { player, granted: false };
+  PM.emitCustomEvent("construction:grant-house", grant);
+  assert.equal(grant.granted, true, "a first house");
+  assert.ok(done(f, "purchase-a-player-owned-house"));
+  emit("poh:entered", { location: player.getLocation() });
+  assert.ok(done(f, "enter-your-player-owned-house"));
+  emit("construction:room-built", { room: "PARLOUR" });
+  assert.ok(done(f, "build-a-room-in-your-player-owned-house"));
+  emit("construction:house-redecorated", { style: "Fancy stone" });
+  assert.ok(done(f, "redecorate-your-player-owned-house"));
+  emit("construction:house-moved", { location: "Yanille" });
+  assert.ok(done(f, "move-your-house-to-yanille") && !done(f, "move-your-house-to-prifddinas"));
+  emit("construction:house-moved", { location: "Prifddinas" });
+  assert.ok(done(f, "move-your-house-to-prifddinas"));
+  emit("construction:ranging-hit", { game: "darts", score: 5 });
+  assert.ok(!done(f, "land-a-hoop-on-a-stick"), "a dart");
+  emit("construction:ranging-hit", { game: "hoop", score: 5 });
+  assert.ok(done(f, "land-a-hoop-on-a-stick"));
+  const dagannoth = item("Dagannoth bones");
+  emit("bone-altars:offered", { itemId: dagannoth, site: "GILDED_ALTAR", burners: 1 });
+  emit("bone-altars:offered", { itemId: dagannoth, site: "MARBLE_ALTAR", burners: 2 });
+  emit("bone-altars:offered", { itemId: item("Bones"), site: "GILDED_ALTAR", burners: 2 });
+  assert.ok(!done(f, "sacrifice-a-dagannoth-bone-on-a-gilded-altar"), "one burner; a marble altar; plain bones");
+  emit("bone-altars:offered", { itemId: dagannoth, site: "GILDED_ALTAR", burners: 2 });
+  assert.ok(done(f, "sacrifice-a-dagannoth-bone-on-a-gilded-altar"));
+});
+
+test("deed: bones used on the real Chaos Temple altar (Sacrifice some Bones / Dragon Bones at the Western Chaos Temple)", async (t) => {
+  core.RegionManager.loadMapFiles(2947, 3820);
+  const f = pactsCharacter(t);
+  f.player.setAttribute("league:areas", [21, 11]); // Varlamore and the Wilderness
+  f.player.moveTo(new core.Location(2948, 3820, 0));
+  f.player.needsPlacement = false;
+  const altarId = core.CacheDefinitions.getLocId("chaosaltar");
+  const altar = new core.GameObject(altarId, new core.Location(2947, 3820, 0), 10, 0, null);
+  core.ObjectManager.register(altar, true);
+  t.after(() => { try { core.ObjectManager.deregister(altar, true); } catch { /* gone */ } });
+  const inventory = f.player.getInventory();
+  const use = async (name) => {
+    inventory.add(new core.Item(item(name)), true);
+    await send(f, { type: "item_on_object", itemId: item(name), slot: inventory.getSlotForItemId(item(name)), widgetId: 149 << 16, objectId: altarId, x: 2947, y: 3820 }, 4);
+  };
+  await use("Big bones");
+  assert.ok(!done(f, "sacrifice-some-bones-at-the-chaos-temple"), `big bones: ${f.messages}`);
+  await use("Bones");
+  assert.ok(done(f, "sacrifice-some-bones-at-the-chaos-temple"), f.messages.join(" | "));
+  assert.ok(!done(f, "sacrifice-some-dragon-bones-at-the-chaos-temple"));
+  await use("Dragon bones");
+  assert.ok(done(f, "sacrifice-some-dragon-bones-at-the-chaos-temple"));
+});

@@ -81,7 +81,7 @@ function houseBlessing(player, house, event) {
     const multiplier = furniture && ALTAR_BONUS[furniture.buildableKey];
     if (!multiplier) return null;
     const lit = litBurners(house, event.location);
-    return { experience: bone.xp * (multiplier + lit * 0.5), message: OFFERING_MESSAGES[lit] };
+    return { experience: bone.xp * (multiplier + lit * 0.5), message: OFFERING_MESSAGES[lit], burners: lit, site: furniture.buildableKey };
   };
 }
 

@@ -2043,6 +2043,19 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
   Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
   and the barrel.
+- **Player-owned house and altar deeds**, from Construction's and BoneAltars' events:
+  - The estate agents: `construction:house-bought` { player }; `construction:house-moved` { player, location }
+    with the town's name, `where` the task's town (Yanille, Prifddinas; league 4's Taverley, Pollnivneach, Rellekka); the existing `construction:house-redecorated`.
+  - Daddy's Home's free house (`construction:grant-house`) also sends `construction:house-bought`.
+  - Entering: the existing `poh:entered`, now also sent by a teleport into the house (location null). Rooms: `construction:room-built` { player, room } from the viewer, a
+    door hotspot or a staircase (not a move).
+  - Furniture: `construction:furniture-built` now carries `key` (the buildable) and `hotspot` flat, `where` key:
+    OAK_LARDER, MAHOGANY_PORTAL_FRAME, GILDED_ALTAR, DEMONIC_THRONE, LUMBRIDGE_LANDSCAPE. Ours: the Lumbridge
+    landscape is the task's "Painting of Lumbridge Watermill".
+  - The games room: `construction:ranging-hit` { player, game, score } on a scoring shot, `where` game "hoop".
+  - Altars: BoneAltars' `bone-altars:offered` { player, itemId, site, burners } per bone offered; site is the
+    data altar's loc ("chaosaltar", the Western Chaos Temple) or a house altar's buildable ("GILDED_ALTAR", with
+    `atLeast` 2 burners for the dagannoth bone).
 - **Morytania and Desert deeds**, from their content's events:
   - The Sorceress's Garden: `sorceress-garden:picked` { player, season } on a sq'irk picked, `where` season;
     `sorceress-garden:juice-handed-in` { player, season, amount } on a glass given to Osman or Selim. The winter

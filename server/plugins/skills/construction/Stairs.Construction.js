@@ -154,6 +154,8 @@ function buildRoomThrough(player, house, room, furniture, next, template) {
   House.useMaterials(player, staircase, House.getBuildMaterials(player, house, target, staircase));
   player.getInventory().delete(COINS, template.cost);
   house.setFurniture(target, staircase);
+  // `construction:room-built` { player, room }, as a room built from the viewer or a door sends it.
+  api.emitCustomEvent("construction:room-built", { player, room: template.key });
   player.getSkillManager().addExperiences(Skill.CONSTRUCTION, CarpenterOutfit.withBonus(player, staircase.experience));
   House.rebuildHouse(player, house);
 }

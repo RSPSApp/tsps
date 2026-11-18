@@ -225,6 +225,8 @@ function rangingStrings(values) {
 test("failed equipment does not join an existing game or block its winner", async t => {
   const owner = gamesActor(t), guest = gamesActor(t), scene = gamesHouse(owner);
   scene.house.enter(guest.p);
+  const hits = [];
+  PM.createApi("RangingHitTest").onCustomEvent("construction:ranging-hit", (event) => { if (event.player === owner.p) hits.push(event); });
   equipDarts(owner);
   shootAt(owner, scene); await chooseGamePrompt(owner, "No"); gameTicks(3);
   shootAt(guest, scene);
@@ -232,6 +234,8 @@ test("failed equipment does not join an existing game or block its winner", asyn
   for (let shot = 1; shot < 10; shot++) { shootAt(owner, scene); gameTicks(3); }
   assert.ok(owner.strings.some(value => value.text === "Winner!"), "the valid player completes all ten shots");
   assert.equal(guest.strings.some(value => value.text === "Winner!"), false);
+  // construction:ranging-hit, once per scoring shot (a league's hoop task reads `game`).
+  assert.ok(hits.length >= 1 && hits.length <= 10 && hits.every((hit) => hit.game === "darts" && hit.score > 0), JSON.stringify(hits.map((hit) => [hit.game, hit.score])));
 });
 
 test("failed and dismissed starts do not reserve a game or its prize", async t => {

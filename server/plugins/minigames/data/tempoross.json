@@ -22,6 +22,10 @@
     "boss": [3043, 2845],
     "$bossCentre": "where the captures aim cannon fire and cast the torrent from: the middle of its 9x9",
     "bossCentre": [3047, 2849],
+    "wavePush": {
+      "tiles": 3,
+      "$comment": "Wiki (Tempoross): the wave pushes untethered players 'a few tiles away', and not while they stand between the ammunition crates. No capture gives the exact count or direction, so three tiles straight away from bossCentre is ours."
+    },
     "spiritPools": [[3046, 2843], [3046, 2853]],
     "spotSites": {
       "north": [[3037, 2868], [3038, 2868], [3048, 2873], [3051, 2866], [3051, 2867]],

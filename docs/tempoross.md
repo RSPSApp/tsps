@@ -236,7 +236,10 @@ cooks half the catch, so their fishing is quicker than on a normal world:
 ## Not captured (ours, from the Wiki's descriptions)
 
 - **An untethered player hit by a wave:** they lose one tool and 1-3 harpoonfish, with the fire's
-  message format ("You lose ... to the wave."). The Wiki's push of a few tiles is not done.
+  message format ("You lose ... to the wave."), and the wave pushes them up to three tiles
+  straight away from Tempoross, stopping at anything in the way. Ours: the Wiki says only "a few
+  tiles away" and no capture fixes the count or direction; a player stood between the ammunition
+  crates is not pushed (Wiki), though they still lose items.
 - **Fires:** a fire takes one tool and 1-3 harpoonfish every 2 ticks; how many fish is ours.
 - **Lightning:** 4-8 strikes, half of them near players, on tiles a player can reach (flood
   fill from the west ship); a cloud NPC is spawned over each strike for its animations.
@@ -268,4 +271,4 @@ cooks half the catch, so their fishing is quicker than on a normal world:
 - Harpoon special attacks.
 - Combat achievements, the Spirit Angler stats board, the Retired sailor's exchange, the hosts'
   Talk-to variants in the cove.
-- The wave's push for untethered players.
+- The wave's exact push (count and direction are ours; see the attacks note above).

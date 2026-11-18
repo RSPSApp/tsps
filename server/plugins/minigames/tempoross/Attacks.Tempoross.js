@@ -41,6 +41,72 @@ const FIRE_SIZE = 2;
 const MAX_SPREADS = 2;
 const SPREAD_STEPS = [[2, 0], [-2, 0], [0, 2], [0, -2]];
 
+/** Step and ForceMovement direction ids for a cardinal step (they are not the same numbering). */
+const STEP_DIRECTION = { "0,1": 1, "-1,0": 3, "1,0": 4, "0,-1": 6 };
+const FORCE_DIRECTION = { "0,1": 0, "1,0": 1, "0,-1": 2, "-1,0": 3 };
+
+/**
+ * The tiles between the two ammunition crates on each ship: the Wiki says a player stood there is
+ * not pushed, though the wave still takes items. Derived from the crates' own tiles.
+ */
+const BETWEEN_CRATES = (() => {
+  const byShip = new Map();
+  for (const crate of DATA.cove.crates) {
+    const [x, y] = crate.tile;
+    if (!byShip.has(x)) byShip.set(x, []);
+    byShip.get(x).push(y);
+  }
+  const tiles = new Set();
+  for (const [x, ys] of byShip) {
+    ys.sort((a, b) => a - b);
+    for (let i = 0; i < ys.length - 1; i++) {
+      if (ys[i + 1] - ys[i] === 2) tiles.add(`${x},${ys[i] + 1}`);
+    }
+  }
+  return tiles;
+})();
+
+const betweenCrates = (location) => BETWEEN_CRATES.has(`${location.getX()},${location.getY()}`);
+
+/**
+ * Pushes an untethered player up to `wavePush.tiles` straight away from Tempoross, stopping at
+ * anything in the way. Ours: the Wiki says only "a few tiles away", and no capture fixes the
+ * count or direction; away from the wave's source is the reading used here.
+ */
+function wavePush(player) {
+  const destination = pushDestination(player);
+  if (!destination) return false;
+  const { ForceMovement, ForceMovementTask, TaskManager, Location } = Shared.core();
+  const here = player.getLocation();
+  const at = destination.location;
+  const offset = new Location(at.getX() - here.getX(), at.getY() - here.getY());
+  TaskManager.submit(new ForceMovementTask(player, 1, new ForceMovement(here.clone(), offset, 0, 30, destination.facing, -1)));
+  return true;
+}
+
+/** Where the wave would put `player`, or null when it does not move them. `facing` is the boss side. */
+function pushDestination(player) {
+  const { RegionManager, Location } = Shared.core();
+  const here = player.getLocation();
+  if (betweenCrates(here)) return null;
+  const [centreX, centreY] = DATA.cove.bossCentre;
+  const dx = here.getX() - centreX;
+  const dy = here.getY() - centreY;
+  if (dx === 0 && dy === 0) return null;
+  const horizontal = Math.abs(dx) >= Math.abs(dy);
+  const stepX = horizontal ? (Math.sign(dx) || 1) : 0;
+  const stepY = horizontal ? 0 : (Math.sign(dy) || 1);
+  const direction = STEP_DIRECTION[`${stepX},${stepY}`];
+  const facing = FORCE_DIRECTION[`${-stepX},${-stepY}`];
+  let at = here.clone();
+  for (let step = 0; step < DATA.cove.wavePush.tiles; step++) {
+    if (!RegionManager.canMoveIsBlocked(at, direction, player.getPrivateArea())) break;
+    at = new Location(at.getX() + stepX, at.getY() + stepY, at.getZ());
+  }
+  if (at.equals(here)) return null;
+  return { location: at, facing };
+}
+
 class Attacks {
   constructor(fight) {
     this.fight = fight;
@@ -141,6 +207,7 @@ class Attacks {
       }
       player.getPacketSender().sendClientScript(SCRIPT.WAVE_HIDE, F.waveOverlayHide);
       Shared.stopAction(player);
+      wavePush(player);
       loseItems(player, "wave");
     });
     fight.tethers.breakSites();
@@ -433,4 +500,4 @@ function attachAttacks(api) {
   api.onItemOnNpc(waterOnFire);
 }
 
-module.exports = { Attacks, attachAttacks, loseItems };
+module.exports = { Attacks, attachAttacks, loseItems, wavePush, pushDestination, betweenCrates, BETWEEN_CRATES };

@@ -70,6 +70,7 @@ function makeHarness(pluginFile, levels = {}, extraPlugins = []) {
         isPlayer: () => false, isNpc: () => true, getAsNpc: () => npc,
         getArea: () => area, setArea(value) { area = value; },
         getHitpoints: () => hitpoints, setHitpoints(value) { hitpoints = value; },
+        getCombat: () => ({ getLastDamage: () => ({ reset() { npc.damageClockReset = true; } }) }),
         getLocation: () => tile, moveTo(value) { tile = value; },
         setNpcTransformationId(id) { npc.transformedId = id; },
         performAnimation(animation) { npc.animation = animation; },
@@ -892,16 +893,17 @@ test('Troubled Tortugans keeps the Pearl fight going when leaving the deck mid-f
   assert.ok(deckBoss);
   deckBoss.setHitpoints(40);
 
-  h.varbits.set(19136, 0);
   h.sailing.boats[0].location = { kind: 'docked', dock: 'the_little_pearl' };
-  h.player.moveTo(new h.core.Location(3354, 2215, 0));
-  h.emit('sailing:left', { reason: 'disembark' });
+  h.player.moveTo(new h.core.Location(10116, 9604, 0));
+  // The leave event can reach the quest before the boarded varbit clears and before landing.
+  h.emit('sailing:left', { reason: 'disembark', boat: { worldTile: () => ({ x: 3354, y: 2216, level: 0 }) } });
   assert.ok(h.removed.includes(deckBoss), 'the deck copy is removed');
   const landBoss = h.spawned.filter((npc) => npc.getId() === N.SHELLBANE_GRYPHON_2).at(-1);
   assert.notEqual(landBoss, deckBoss);
   assert.deepEqual([landBoss.getLocation().getX(), landBoss.getLocation().getY()], [3356, 2208],
     'the island fallback uses the captured Shellbane tile');
   assert.equal(landBoss.getHitpoints(), 40, 'earned damage is preserved across the deck change');
+  assert.equal(landBoss.damageClockReset, true, 'normal regeneration waits after the transfer');
 });
 
 test('Prying Times owns Steve only after Pandemonium, so the captured start menu is reachable', () => {

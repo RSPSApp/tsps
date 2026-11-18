@@ -264,6 +264,8 @@ test("anvil timing, messages and the last-made varbits follow the captures", () 
   ticks(1);
   assert.equal(player.items.get(I.STEEL_DART_TIP), 10);
   assert.equal(player.spam.at(-1), "You hammer the steel and make ten dart tips.");
+  assert.equal(successEvents.at(-1)?.metal, "steel", "smithing:success names the bar's metal (a league's runite item task)");
+  assert.equal(successEvents.at(-1)?.label, "Dart tips", "and the anvil slot's label (rune dart tips don't count)");
   assert.equal(player.animation, CacheDefinitions.getSeqId("human_smithing"));
   assert.equal(player.animationDelay, 15);
   ticks(4);

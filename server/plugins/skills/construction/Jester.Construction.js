@@ -1,7 +1,7 @@
 "use strict";
 
 const {
-  Animation, CountdownTask, DialogueChainBuilder, Graphic, Location, NpcDialogue, OptionDialogue,
+  api, Animation, CountdownTask, DialogueChainBuilder, Graphic, Location, NpcDialogue, OptionDialogue,
   PluginManager, RegionManager, Task, TaskManager,
 } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
@@ -115,6 +115,8 @@ function copied({ player, sequence }) {
   if (score < WIN) return player.sendMessage(`You copy the jester. (${score}/${WIN})`);
   for (const occupant of house.getPlayers()) occupant.sendMessage(`${player.getDisplayName()} has copied the jester ten times and wins!`);
   Prizes.award(house, "mime", player);
+  // `construction:jester-won` { player }: ten copies first (a league's "Beat Jacky Jester").
+  api.emitCustomEvent("construction:jester-won", { player });
   end(house, show);
 }
 

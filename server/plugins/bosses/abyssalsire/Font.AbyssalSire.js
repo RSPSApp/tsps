@@ -68,6 +68,9 @@ function useUnsired(event) {
     if (!player.isRegistered() || !player.getInventory().contains(ItemIdentifiers.UNSIRED)) return;
     const reward = roll(player);
     player.getInventory().delete(ItemIdentifiers.UNSIRED, 1);
+    // `abyssal-sire:font-consumed` { player, itemId } (a league's "Offer an Unsired to the Font of Consumption"):
+    // before the drop roll, as rsprox 1762 has the task line ahead of the collection log's.
+    Common.api.emitCustomEvent("abyssal-sire:font-consumed", { player, itemId: reward });
     const drops = [{ itemId: reward, amount: 1 }];
     Common.api.emitCustomEvent("npc-drops:roll", { player, drops });
     for (const drop of drops) player.getInventory().adds(drop.itemId, drop.amount);

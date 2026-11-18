@@ -290,10 +290,14 @@ test("Konar gives an area; her kills only count inside it", () => {
   const catacombs = [...Data.get().areas.values()].find((area) => area.id === 1);
   player.getPacketSender().sendConfig(CacheDefinitions.getVarpId("slayer_area"), catacombs.id);
   const at = (x, y) => ({ getX: () => x, getY: () => y, getZ: () => 0 });
+  const onTask = [];
+  handlers.events.set("slayer:on-task-kill", [...(handlers.events.get("slayer:on-task-kill") ?? []), (event) => { if (event.player === player) onTask.push(event.npcName); }]);
   kill(player, npcNamed("Bloodveld", at(3420, 3560))); // the Slayer Tower
   assert.equal(varp(player, "slayer_count"), 5);
   kill(player, npcNamed("Bloodveld", at(1690, 10070))); // the Catacombs
   assert.equal(varp(player, "slayer_count"), 4);
+  // slayer:on-task-kill: only the kill that counted for the task, by name (a league's on-task kill tasks).
+  assert.deepEqual(onTask, ["Bloodveld"]);
 });
 
 test("Konar's Taverley Dungeon hellhounds count Cerberus in her lair, the task's listed alternative (Wiki: Konar quo Maten)", () => {

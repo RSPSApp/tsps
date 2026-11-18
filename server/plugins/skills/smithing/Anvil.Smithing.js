@@ -144,7 +144,8 @@ function smithOnce(player, product, provenance) {
     ...(provenance ? { stationObjectId: provenance.stationObjectId, location: provenance.location } : {}),
   };
   Core.api.emitCustomEvent("smithing:success", {
-    player, skill: Core.Skill.SMITHING, itemId: product.itemId, amount: product.amount, ...action,
+    // `metal`: the bar's metal, "runite"; `label`: the anvil slot's ("Dart tips") (a league's "Smith a Runite Item").
+    player, skill: Core.Skill.SMITHING, itemId: product.itemId, amount: product.amount, metal: product.metal, label: product.label, ...action,
     ...(provenance ? { source: "anvil", objectId: provenance.stationObjectId } : {}),
   });
   Core.api.emitCustomEvent("skills:produced", { player, skill: Core.Skill.SMITHING, itemId: product.itemId, amount: product.amount, xp: product.xp, kind: "smith", ...action });

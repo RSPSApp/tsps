@@ -74,7 +74,11 @@ function talk(api, active, { valid, serve }) {
     if (!current()) { close(); return; }
     // The herb moved during the dialogue: nothing to hand over, so he gives the spare potion.
     if (inventory.get(slot) !== herb || herb.getId() !== herbId || herb.getAmount() !== 1) { spare(); return; }
-    if (serve(active, [potionId], { slot, item: herb })) say(THANKS, THANKS_EXPRESSION);
+    if (serve(active, [potionId], { slot, item: herb })) {
+      // `random-events:jekyll-traded` { player, herbId }: the herb for his potion (rsprox 560: the task on the trade).
+      api.emitCustomEvent("random-events:jekyll-traded", { player, herbId });
+      say(THANKS, THANKS_EXPRESSION);
+    }
   };
   Flow.chat(api, { player, npcId, lines: [{ text: askLine(name), expression: ASK_EXPRESSION }],
     options: [["Here you are.", () => reply("Here you are.", trade)],

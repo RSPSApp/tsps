@@ -88,7 +88,9 @@ function makeOne(player, recipe, itemId, station) {
   player.performAnimation(barbarianHammering(player));
   player.sendMessage(`You make ${/^[aeiou]/i.test(Core.ItemDefinition.forId(itemId).getName()) ? "an" : "a"} ${Core.ItemDefinition.forId(itemId).getName()}.`);
   player.getSkillManager().addExperiences(Core.Skill.SMITHING, recipe.xp);
-  Core.api.emitCustomEvent("smithing:success", { player, skill: Core.Skill.SMITHING, itemId, source: "barbarian-anvil",
+  // `metal` as the anvil's: the bar's name without " bar", lower-cased ("runite").
+  const metal = String(Core.ItemDefinition.forId(recipe.barId).getName() ?? "").replace(/ bar$/i, "").toLowerCase();
+  Core.api.emitCustomEvent("smithing:success", { player, skill: Core.Skill.SMITHING, itemId, metal, source: "barbarian-anvil",
     objectId: station.objectId, location: { x: station.location.getX(), y: station.location.getY(), z: station.location.getZ() } });
   return true;
 }

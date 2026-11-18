@@ -161,6 +161,8 @@ function prune(player, event, entling, area) {
     Common.later(1, () => Common.track(player, entlings.npcs.entling, [[Common.data.items.bark, Common.bark(player, amount)]]));
     Common.xp(player, "WOODCUTTING", entlings.xp.woodcutting * Common.level(player, "WOODCUTTING"));
     Common.xp(player, "FLETCHING", entlings.xp.fletching * Common.level(player, "FLETCHING"));
+    // `forestry:entling-pruned` { player }: a cut the entling wanted (a league's "Give an entling a haircut").
+    Common.api.emitCustomEvent("forestry:entling-pruned", { player });
   } else {
     Common.xp(player, "WOODCUTTING", 1);
   }

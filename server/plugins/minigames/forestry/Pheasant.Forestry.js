@@ -197,6 +197,8 @@ function handIn(event, player) {
   Common.xp(player, "WOODCUTTING", Common.level(player, "WOODCUTTING") * (low + Math.random() * (high - low)));
   Common.xp(player, "THIEVING", Common.level(player, "THIEVING") * xp.thieving);
   Common.bark(player, eggBark());
+  // Ours: an egg handed in completes the event for the player (the pheasant event pays per egg, with no end reward).
+  Common.api.emitCustomEvent("forestry:event-completed", { player, event: "pheasant" });
 }
 
 /** Recorded: his greeting and the menu, or the hand-in when the player has an egg. */

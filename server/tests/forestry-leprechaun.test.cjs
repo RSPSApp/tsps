@@ -264,6 +264,8 @@ test('Deposit: the recorded menu; banking all for a chopper, the deposit box, no
   assert.deepEqual(deposited, [1519], 'resources only: the logs');
   menu.args[1]();
   assert.deepEqual(deposited, [1519, 1519, 1359], 'all of it');
+  // forestry:leprechaun-banked once per banking that moved something (a league's leprechaun task).
+  assert.equal(hooks.emitted.filter(([name, e]) => name === 'forestry:leprechaun-banked' && e.player === p).length, 2);
   assert.deepEqual(p.anims, [], 'no animation for options 1 and 2');
   menu.args[7]();
   assert.deepEqual(hooks.emitted.at(-1)[0], 'bank:open-deposit-box');

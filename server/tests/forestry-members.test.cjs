@@ -33,7 +33,7 @@ before(() => {
     onPlayerLogout() {},
     onItemAction() {},
     onPlayerLogin() {},
-    emitCustomEvent() {},
+    emitCustomEvent(name, payload) { forestryEvents.push([name, payload]); },
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push(args),
   };
   const Woodcutting = require('../plugins/skills/Woodcutting.plugin');
@@ -125,6 +125,8 @@ function retrieve(player, nest) {
   return hooks.objects.get('Pheasant Nest:Retrieve-egg')({ player, object: nest.object });
 }
 
+const forestryEvents = [];
+
 test('pheasants: the forester, three birds on four nests; the egg the tick after the reach, one at a time', () => {
   const p = fakePlayer();
   const event = startEvent('pheasant', [p]);
@@ -197,6 +199,9 @@ test('the hand-in pays bark and XP; ineligible pays 1 XP; the end at 200 ticks',
   assert.equal(xp(p, 'Thieving'), 40);
   assert.equal(bark(late), 0);
   assert.equal(xp(late, 'Woodcutting'), 1);
+  // Ours: an eligible hand-in completes the event for a league task; an ineligible one doesn't.
+  const completed = forestryEvents.filter(([name, e]) => name === 'forestry:event-completed' && e.event === 'pheasant').map(([, e]) => e.player);
+  assert.ok(completed.includes(p) && !completed.includes(late));
 
   hooks.npcs.get('Freaky Forester:Talk-to')({ player: p, npc: event.forester });
   assert.deepEqual(lines(p.chats.at(-1)), ["Hello, what's going on?", `Hey, ${p.getUsername()}, can you help me with some pheasants?`]);

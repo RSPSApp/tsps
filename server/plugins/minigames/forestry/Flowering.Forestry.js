@@ -166,6 +166,8 @@ function gifts(event, fruiting) {
     Common.bark(player, Math.max(1, Math.round(collected * (low + Math.random() * (high - low)))), true);
     Common.give(player, flowering.fruit, Common.randomInt(...flowering.fruitAmount));
     Common.xp(player, "WOODCUTTING", flowering.xp.fruitPerLevel * Common.level(player, "WOODCUTTING") * fruiting);
+    // `forestry:event-completed` { player, event }: the event's own reward paid ("Complete the Flowering Bush event").
+    Common.api.emitCustomEvent("forestry:event-completed", { player, event: "flowering" });
   }
 }
 

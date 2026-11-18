@@ -140,6 +140,7 @@ function end(event) {
     Common.sound(player, ritual.sounds.done);
     Common.bark(player, Math.round(ritual.lumpPerStep * steps), true);
     Common.xp(player, "WOODCUTTING", ritual.xp.perLevel * steps * Common.level(player, "WOODCUTTING") + ritual.xp.bonusPlus);
+    if (steps > 0) Common.api.emitCustomEvent("forestry:event-completed", { player, event: "ritual" });
   }
   Spawns.ended(event);
 }

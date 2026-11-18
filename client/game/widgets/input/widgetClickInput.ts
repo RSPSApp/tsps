@@ -71,7 +71,7 @@ export function processWidgetClickInput(
             // A custom window's search box: a left-click on it focuses it and a click anywhere
             // else blurs it, as the right-click menu path does (WidgetActionRouter).
             const topHit = clickHits[clickHits.length - 1];
-            deps.getCustomInterfaces?.()?.handleWidgetClick(
+            deps.getCustomInterfaces?.()?.handleWidgetClick?.(
                 topHit ? ((topHit.groupId ?? topHit.uid >>> 16) | 0) : -1,
                 !topHit ? -1
                     : topHit.fileId != null && topHit.fileId >= 0 ? topHit.fileId | 0

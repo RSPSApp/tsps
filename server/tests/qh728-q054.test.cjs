@@ -83,7 +83,7 @@ function harness(options = {}) {
       npcs.push(npc); return npc;
     },
     removeNpc(npc) { npc.removed = true; },
-  }, { get: (target, key) => target[key] ?? ((...args) => (hooks[key] ??= []).push(args.find(x => typeof x === 'function'))) });
+  }, { get: (target, key) => target[key] ?? ((...args) => { const fn = args.find(x => typeof x === "function"); if (fn) (hooks[key] ??= []).push(fn); }) });
   const pluginPath = require.resolve('../plugins/quests/quests/HandInTheSand.Quest');
   delete require.cache[pluginPath];
   if (starts) {

@@ -1599399,6 +1599399,14 @@
                           ]
                         },
                         {
+                          "type": "line",
+                          "speaker": "Grish",
+                          "text": "Dem zogries commin from da under dirt and us is lost for da Jiggie jig place.",
+                          "speaker_ids": [
+                            860
+                          ]
+                        },
+                        {
                           "type": "jump",
                           "reference": "previous",
                           "id": "OC4FQ_"
@@ -1599609,7 +1599617,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-f7a0c9b9f6e6e01e"
+                      "branch": "jump-9d2a8d137309bd0c"
                     }
                   ]
                 }
@@ -1600642,6 +1600650,60 @@
           "text": "Yes, you've already showed me that, bring it to me when you've resolved the problems at Jiggig and I'll see what I can do.",
           "speaker_ids": [
             881
+          ]
+        }
+      ],
+      "investigating-b-vahn-use-the-black-prism-on-zavistic-rarve-after-giving-sithik-the-potion": [
+        {
+          "type": "message",
+          "text": "You show the black prism to Zavistic.",
+          "id": "-NVx0S"
+        },
+        {
+          "type": "line",
+          "speaker": "Zavistic Rarve",
+          "text": "Ah yes, I remember saying something about a reward didn't I? Well, I can offer you 2000 coins for it as it stands, but I know that Yanni Salika in Shilo Village would offer you more than twice as much.",
+          "speaker_ids": [
+            881
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Zavistic Rarve",
+          "text": "What would you like to do?",
+          "speaker_ids": [
+            881
+          ]
+        },
+        {
+          "type": "choice",
+          "prompt": "Who would you like to sell the prism to?",
+          "options": [
+            {
+              "text": "Sell it to Zavistic for 2000",
+              "steps": [
+                {
+                  "player": "I'll sell it to you for 2000 coins!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Zavistic Rarve",
+                  "text": "Very well my friend.",
+                  "speaker_ids": [
+                    881
+                  ]
+                },
+                {
+                  "type": "message",
+                  "text": "You sell the black prism for 2000 coins.",
+                  "id": "AsiW7f"
+                }
+              ]
+            },
+            {
+              "text": "Take it to Yanni for a greater reward.",
+              "steps": []
+            }
           ]
         }
       ],
@@ -1601765,7 +1601827,104 @@
                       "id": "wsqayT"
                     },
                     {
-                      "text": "I want to ask about the Magic Guild."
+                      "text": "I want to ask about the Magic Guild.",
+                      "steps": [
+                        {
+                          "player": "I want to ask about the Magic Guild."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Zavistic Rarve",
+                          "text": "Sure, go ahead, ask away.",
+                          "speaker_ids": [
+                            881
+                          ]
+                        },
+                        {
+                          "type": "choice",
+                          "options": [
+                            {
+                              "text": "What is there to do in the Wizards' Guild?",
+                              "steps": [
+                                {
+                                  "player": "What is there to do in the Wizards' Guild?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Zavistic Rarve",
+                                  "text": "This is the finest wizards' establishment in the land. We have magic portals to the other towers of wizardry around Gielinor. We have a particularly wide collection of runes in our rune shop. We sell some of the finest",
+                                  "speaker_ids": [
+                                    881
+                                  ]
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Zavistic Rarve",
+                                  "text": "mage robes in the land and we have a training area full of zombies for you to practice your magic on.",
+                                  "speaker_ids": [
+                                    881
+                                  ]
+                                },
+                                {
+                                  "type": "jump",
+                                  "reference": "previous",
+                                  "id": "1WbdlU"
+                                }
+                              ]
+                            },
+                            {
+                              "text": "What are the requirements to get in the Wizards' Guild?",
+                              "steps": [
+                                {
+                                  "player": "What are the requirements to get in the Wizards' Guild?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Zavistic Rarve",
+                                  "text": "You need a magic level of 66, the high magic energy level is too dangerous for anyone below that level.",
+                                  "speaker_ids": [
+                                    881
+                                  ]
+                                },
+                                {
+                                  "type": "jump",
+                                  "reference": "previous",
+                                  "id": "knmkgS"
+                                }
+                              ]
+                            },
+                            {
+                              "text": "What do you do in the Guild?",
+                              "steps": [
+                                {
+                                  "player": "What do you do in the Guild?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Zavistic Rarve",
+                                  "text": "I'm the Grand Secretary for the Wizards' Guild, I have lots of correspondence to keep up with, as well as attending to the discipline of the more problematic guild members.",
+                                  "speaker_ids": [
+                                    881
+                                  ]
+                                },
+                                {
+                                  "type": "jump",
+                                  "reference": "previous",
+                                  "id": "2E9s7o"
+                                }
+                              ]
+                            },
+                            {
+                              "text": "Ok, thanks.",
+                              "steps": [
+                                {
+                                  "player": "Ok, thanks."
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
                     },
                     {
                       "text": "Sorry, I have to go.",
@@ -1601861,7 +1602020,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-647c48079f05cb4c"
+                      "branch": "jump-6de9cc2ef9ec93f6"
                     }
                   ]
                 }
@@ -1601876,7 +1602035,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-c32be3b939e9710e"
+                      "branch": "jump-10943086d6d7a7bc"
                     }
                   ]
                 }
@@ -1601891,7 +1602050,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-f79c408503fedf1e"
+                      "branch": "jump-c070b02c93fe231d"
                     }
                   ]
                 }
@@ -1602538,6 +1602697,35 @@
         },
         {
           "player": "Hey, here you go! I brought you some of the potion which should cure the disease. You said that you would buy some from me."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not learned how to cure the disease:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Uglug Nar",
+              "text": "Where you's get dis from creatures...it's not sniffing big fresh? Did's yous creatures makes dis?",
+              "speaker_ids": [
+                861
+              ]
+            },
+            {
+              "player": "Well, not exactly...no."
+            },
+            {
+              "type": "line",
+              "speaker": "Uglug Nar",
+              "text": "Mee's not taking da risky wiv dis un, yous make me's da right glug glug when yous found out to make it.",
+              "speaker_ids": [
+                861
+              ]
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "2cRVYa"
         },
         {
           "type": "line",
@@ -1603352,6 +1603540,14 @@
                   ]
                 },
                 {
+                  "type": "line",
+                  "speaker": "Grish",
+                  "text": "Dem zogries commin from da under dirt and us is lost for da Jiggie jig place.",
+                  "speaker_ids": [
+                    860
+                  ]
+                },
+                {
                   "type": "jump",
                   "reference": "previous",
                   "id": "OC4FQ_"
@@ -1603580,7 +1603776,7 @@
           "type": "end"
         }
       ],
-      "jump-f7a0c9b9f6e6e01e": [
+      "jump-9d2a8d137309bd0c": [
         {
           "player": "What are Zogres?"
         },
@@ -1603588,6 +1603784,14 @@
           "type": "line",
           "speaker": "Grish",
           "text": "Da Zogres are da bigun nasties wiv da sickies, deys old pals of Grish but deys jig in Jiggig when dey's full home is deep in da dirt, dey's is not da same dead'uns like was before.",
+          "speaker_ids": [
+            860
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Grish",
+          "text": "Dem zogries commin from da under dirt and us is lost for da Jiggie jig place.",
           "speaker_ids": [
             860
           ]
@@ -1604195,7 +1604399,7 @@
           "id": "oBTnmc"
         }
       ],
-      "jump-647c48079f05cb4c": [
+      "jump-6de9cc2ef9ec93f6": [
         {
           "player": "What is there to do in the Wizards' Guild?"
         },
@@ -1604218,10 +1604422,10 @@
         {
           "type": "jump",
           "reference": "previous",
-          "id": "T5ffS_"
+          "id": "1WbdlU"
         }
       ],
-      "jump-c32be3b939e9710e": [
+      "jump-10943086d6d7a7bc": [
         {
           "player": "What are the requirements to get in the Wizards' Guild?"
         },
@@ -1604236,10 +1604440,10 @@
         {
           "type": "jump",
           "reference": "previous",
-          "id": "9bZm5a"
+          "id": "knmkgS"
         }
       ],
-      "jump-f79c408503fedf1e": [
+      "jump-c070b02c93fe231d": [
         {
           "player": "What do you do in the Guild?"
         },
@@ -1604254,7 +1604458,7 @@
         {
           "type": "jump",
           "reference": "previous",
-          "id": "AL7rLQ"
+          "id": "2E9s7o"
         }
       ],
       "jump-fa89593c256e9d49": [

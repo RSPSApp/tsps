@@ -3051,17 +3051,13 @@ test("Wilderness and leftover deeds through their events: the key, the bracelet,
   assert.ok(!done(f, "pickpocket-a-vyre-50-times"), "49 and a stall");
   emit("thieving:success", { method: "pickpocket", target: "vyre" });
   assert.ok(done(f, "pickpocket-a-vyre-50-times") && !done(f, "pickpocket-an-elf-50-times"));
-  // A bandit counts outside the Wilderness only (its bandits share the name).
-  const here = player.getLocation();
-  player.setAttribute("league:areas", [21, 11]);
-  player.setLocation(new core.Location(3036, 3700, 0));
-  emit("thieving:success", { method: "pickpocket", target: "bandit" });
-  assert.ok(!done(f, "pickpocket-a-bandit-in-the-bandit-camp"), "a Wilderness bandit");
-  player.setLocation(here);
+  // The "bandit" target is the desert Bandit Camp's own (pickpocketing.json lists its npc ids only).
   emit("thieving:success", { method: "pickpocket", target: "bandit" });
   assert.ok(done(f, "pickpocket-a-bandit-in-the-bandit-camp"));
-  emit("desert-quarry:ground", { amount: 499 });
-  assert.ok(!done(f, "have-drew-create-500-buckets"));
-  emit("desert-quarry:ground", { amount: 1 });
+  // Drew: 500 buckets claimed in one go; 499 and then 1 don't add up to it.
+  emit("desert-quarry:claimed", { amount: 499 });
+  emit("desert-quarry:claimed", { amount: 1 });
+  assert.ok(!done(f, "have-drew-create-500-buckets"), "499 and 1");
+  emit("desert-quarry:claimed", { amount: 500 });
   assert.ok(done(f, "have-drew-create-500-buckets"));
 });

@@ -2048,8 +2048,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   - `revenants:bracelet-full` { player } when ether takes the bracelet to 16,000; `mage-arena:cape-imbued`
     { player, itemId } on Kolodion's imbue.
   - Pickpockets by the Thieving target group: `thieving:success` `where` method "pickpocket" and target "vyre"
-    or "elf" (50 each), or "bandit" `outside` the Wilderness surface, whose bandits share the name (ours).
-  - `desert-quarry:ground` { player, amount } summed to 500; `waterskins:cactus-cut` { player } on every cut
+    or "elf" (50 each), or "bandit" (the desert Bandit Camp's, the target's only npc ids).
+  - `desert-quarry:claimed` { player, amount } on Drew's claim, `atLeast` 500 in one claim (the Raging Echoes
+    Wiki row: "All buckets of sand must be claimed in one go"); `waterskins:cactus-cut` { player } on every cut
     (Ours: watered or not); `zulrah:unique-dismantled` { player, itemId } on the blowpipe's Dismantle.
 - **Kourend and Karamja deeds**, from their content's events:
   - TzHaar-Ket-Rak: `tzhaar-ket-rak:challenge-completed` { player, number } as the last Jad falls (`where`

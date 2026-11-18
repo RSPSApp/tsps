@@ -1,10 +1,11 @@
 // Run after `yarn build`: node --test tests/free-claims-room.test.cjs
 //
 // A reward that doesn't fit must not be lost. The Overseer's bludgeon, Bardur's bought shield and the Staff of
-// Armadyl wait for room. Tamayu's spear, Lubufu's vessel and Bardur's charmed shield go to the floor, as their
+// Armadyl wait for room (physical staff pickup is covered in npc-dialogue-event-entrypoints).
+// Tamayu's spear, Lubufu's vessel and Bardur's charmed shield go to the floor, as their
 // steps can't run twice.
 //
-// Native fixture. Bardur, Tamayu, Lubufu, the Guardian and Lucien are registered NPCs through real npc_option
+// Native fixture. Bardur, Tamayu, Lubufu and the Guardian are registered NPCs through real npc_option
 // and their real transcripts, answered through ClientConnection.dispatch; the charmed shield is picked up by a
 // real ground_item_action. The Overseer goes through his object hook with a stand-in definition, since his object
 // isn't in the fixture's map, and the walk-off is a real move packet. Quest state is set directly. No client ran.
@@ -58,9 +59,6 @@ const BECOME_APPRENTICE = [/use to catch Karambwan/, /^Yes!$/];
 const IKOV_SIDE = "quest.temple_of_ikov.side";
 const IKOV_SIDE_LUCIEN = 2;
 const IKOV_FIRE_WARRIOR_KILLED = 60;
-const IKOV_HAS_STAFF = 70;
-const NOT_YET = "No, not yet.";
-const TAKES_STAFF = "You take the Staff of Armadyl.";
 
 let core;
 let I;
@@ -392,7 +390,7 @@ test("Tamayu: on a full inventory the spear lands at your feet, with the XP paid
   assert.equal(xp(f, core.Skill.ATTACK) - start, paid, "a later talk doesn't pay it again");
 });
 
-test("Tamayu: levelling from his XP step ends the transcript there, with one spear and the XP once", async (t) => {
+test("Tamayu: level-ups wait for his transcript to end, with one spear and the XP once", async (t) => {
   const f = tamayu(t, { levels: true });
   const skills = f.p.getSkillManager();
   const startLevel = skills.getMaxLevel(core.Skill.ATTACK);
@@ -419,7 +417,9 @@ test("Tamayu: levelling from his XP step ends the transcript there, with one spe
 
   assert.ok(levelled > startLevel, "the XP levelled Attack");
   assert.equal(popup, LEVEL_UP_POPUP, "the level-up pop-up is up");
-  assert.equal(heardRest, false, "and his lines after the XP step didn't play");
+  // SkillLevelUp.awaitDialogueEnd deliberately queues popups until a live
+  // conversation finishes. The quest tail must play, then the popup may open.
+  assert.equal(heardRest, true, "his reward dialogue finishes before the queued level-up");
   assert.ok(paidFirst > 0, "he paid XP");
   assert.equal(spearFirst, 1, "the spear came anyway");
   assert.equal(f.p.getAttribute(TAMAYU_KEY), TAMAYU_CLAIMED, "claimed");
@@ -463,46 +463,28 @@ function ikov(t) {
 }
 
 const talkGuardian = (f) => talk(f, core.NpcIdentifiers.GUARDIAN_OF_ARMADYL);
-const talkLucien = (f) => talk(f, core.NpcIdentifiers.LUCIEN_4, [/Yes! Here it is/]);
 
-test("Temple of Ikov: with room the Staff goes to Lucien and the quest completes", async (t) => {
+// Physical staff acquisition, real Guardian death/permission and private-house
+// Lucien hand-in are covered by npc-dialogue-event-entrypoints.test.cjs.
+// The old free-claim shortcut must not be restored to make these cases green.
+test("Temple of Ikov: Guardian dialogue does not grant the staff or advance a legacy Lucien-side save", async (t) => {
   const f = ikov(t);
   await talkGuardian(f);
-  assert.equal(amount(f, I.STAFF_OF_ARMADYL), 1, "the staff");
-  assert.equal(quest("temple_of_ikov").getStage(f.p), IKOV_HAS_STAFF, "stage");
-  await talkLucien(f);
-  assert.equal(quest("temple_of_ikov").isComplete(f.p), true, "complete");
-  assert.equal(amount(f, I.STAFF_OF_ARMADYL), 0, "he took it");
+  assert.equal(amount(f, I.STAFF_OF_ARMADYL), 0);
+  assert.equal(quest("temple_of_ikov").getStage(f.p), IKOV_FIRE_WARRIOR_KILLED);
+  assert.equal(quest("temple_of_ikov").isComplete(f.p), false);
+  assert.equal(floor(f, I.STAFF_OF_ARMADYL), null);
 });
 
-test("Temple of Ikov: a full inventory leaves the Staff there, and talking again takes it to Lucien", async (t) => {
-  const q = quest("temple_of_ikov");
+test("Temple of Ikov: freeing inventory space does not turn Guardian dialogue into a staff claim", async (t) => {
   const f = ikov(t);
   fill(f);
   await talkGuardian(f);
-  const dropped = floor(f, I.STAFF_OF_ARMADYL) !== null;
-  const stage = q.getStage(f.p);
-  const told = [...f.messages];
-
-  // Walks on either way, so the run shows what happens to a player who lost the staff.
+  assert.equal(amount(f, I.STAFF_OF_ARMADYL), 0);
+  assert.equal(floor(f, I.STAFF_OF_ARMADYL), null);
   freeOne(f);
-  f.lines.length = 0;
   await talkGuardian(f);
-  const retry = [...f.lines];
-  const carried = amount(f, I.STAFF_OF_ARMADYL);
-  f.lines.length = 0;
-  await talkLucien(f);
-  const toLucien = [...f.lines];
-  const complete = q.isComplete(f.p);
-  t.diagnostic(`on floor ${dropped}; stage ${stage}; told "${told.join(" / ")}"; Guardian again "${retry.join(" / ")}"; `
-    + `carried ${carried}; Lucien "${toLucien.join(" / ")}"; complete ${complete}`);
-
-  assert.equal(stage, IKOV_FIRE_WARRIOR_KILLED, "the stage waits");
-  assert.equal(dropped, false, "the Staff isn't on the floor, where it would despawn");
-  assert.ok(told.includes(NO_SPACE), `the player is told: ${told}`);
-  assert.ok(!told.includes(TAKES_STAFF), "and isn't told they took it");
-  assert.equal(carried, 1, "talking again with room takes it");
-  assert.ok(!toLucien.includes(NOT_YET), "Lucien isn't told not yet");
-  assert.equal(complete, true, "complete");
-  assert.equal(amount(f, I.STAFF_OF_ARMADYL), 0, "he took it");
+  assert.equal(amount(f, I.STAFF_OF_ARMADYL), 0);
+  assert.equal(quest("temple_of_ikov").getStage(f.p), IKOV_FIRE_WARRIOR_KILLED);
+  assert.equal(quest("temple_of_ikov").isComplete(f.p), false);
 });

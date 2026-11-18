@@ -490,6 +490,8 @@ test("Corner Cutter: sure agility, two laps and 25% more a lap, 10,000 coins wit
 
 test("Dodgy Deals: sure thieving, loot noted and multiplied by the crowd of the same name, tripled pouches, repeats, stalls that never run out", () => {
   const who = cases(DODGY_DEALS, 5);
+  // The repeat hook distinguishes Scimitar Stall from ordinary stalls.
+  const stall = { getDefinition: () => ({ getName: () => "Baker's stall" }) };
   const target = { name: "Man", low: 50, high: 240, xp: 8 };
   const picked = emit("thieving:pickpocket-target", { player: who.relic, target, unconscious: false, alwaysSucceeds: false, pouchLimit: 28 });
   assert.deepEqual([picked.alwaysSucceeds, picked.pouchLimit], [true, 84]);
@@ -506,14 +508,14 @@ test("Dodgy Deals: sure thieving, loot noted and multiplied by the crowd of the 
   ], "three men within 5 tiles whatever their ids (not the far one, the woman or the dead one): three times, noted; a clue and an unnotable item once");
   assert.deepEqual(emit("thieving:loot", { player: who.relic, npc: null, target: "Man", loot: [{ id: I.LOGS, amount: 2 }] }).loot, [{ id: notedLogs, amount: 2 }], "no NPC: a crowd of one");
   assert.equal(emit("thieving:done", { player: who.relic, kind: "pickpocket", npc: man, succeeded: true, again: false }).again, true);
-  assert.equal(emit("thieving:done", { player: who.relic, kind: "stall", object: {}, succeeded: true, again: false }).again, true);
-  assert.equal(emit("thieving:deplete-stall", { player: who.relic, object: {}, handled: false }).handled, true);
+  assert.equal(emit("thieving:done", { player: who.relic, kind: "stall", object: stall, succeeded: true, again: false }).again, true);
+  assert.equal(emit("thieving:deplete-stall", { player: who.relic, object: stall, handled: false }).handled, true);
   for (const player of others(who)) {
     const usual = emit("thieving:pickpocket-target", { player, target, unconscious: false, alwaysSucceeds: false, pouchLimit: 28 });
     assert.deepEqual([usual.alwaysSucceeds, usual.pouchLimit], [false, 28], `${player.getUsername()} as usual`);
     assert.deepEqual(emit("thieving:loot", { player, npc: man, target: "Man", loot: [{ id: I.LOGS, amount: 2 }] }).loot, [{ id: I.LOGS, amount: 2 }]);
-    assert.equal(emit("thieving:done", { player, kind: "stall", object: {}, succeeded: true, again: false }).again, false);
-    assert.equal(emit("thieving:deplete-stall", { player, object: {}, handled: false }).handled, false);
+    assert.equal(emit("thieving:done", { player, kind: "stall", object: stall, succeeded: true, again: false }).again, false);
+    assert.equal(emit("thieving:deplete-stall", { player, object: stall, handled: false }).handled, false);
   }
   for (const player of [who.without, who.main]) {
     assert.equal(emit("thieving:done", { player, kind: "pickpocket", npc: man, succeeded: true, again: false }).again, false, "the other league's slot repeats pickpockets too");

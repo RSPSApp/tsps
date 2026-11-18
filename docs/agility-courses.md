@@ -144,6 +144,18 @@ Shayzien's shared obstacles leave the advanced varbit alone (1632).
 
 - **Busy:** an obstacle sets the client's `BUSY` varbit (12393) to 1 as it starts and back to 0 as
   it ends (rsprox 1788, 1885).
+- **Full stall:** every course obstacle and shortcut (an `agility` run of the runner) holds the
+  player in a full stall from its first tick until they land or the fall ends (Wiki: Animation
+  stall, "most agility actions, such as the log balance in the Wilderness agility course"). The
+  player can't attack, eat, walk or click anything else meanwhile, and those clicks are dropped, not
+  run after the landing: in rsprox 241/1001438 the next Draynor tightrope, clicked four times during
+  the first (ticks 19815-19818, busy 19814-19823), only starts on a fresh click at 19828. A timed
+  stall (an emote's) holds the last click instead. Hits coming in from others are queued and land
+  after the obstacle (Wiki: "Hits are usually queued up on the player, and received only after the
+  action is complete"); an obstacle's own fall damage has no source and lands as it plays. A held
+  hit still starts the 16-tick logout timer as it comes due (`Combat.markHeldHit`), so an attacked
+  player can't log out on the obstacle before it lands (ours: the Wiki doesn't say). Issue 6237: an
+  Attack click on the Wilderness log used to start the fight mid-crossing.
 - **Run energy:** each completed rooftop obstacle restores 1.5% (150 of 10,000), measured in the
   main-game captures 339 (72 Agility) and 3154 (99 Agility); the server keeps whole percent, so the
   half carries to the next obstacle. The Wiki's pages say 1-2% and "around 2%". Varrock's clothes

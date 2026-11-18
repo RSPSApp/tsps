@@ -67,7 +67,11 @@ function player({ agility = 50, coins = 0, hitpoints = 99, x = 2804, y = 9590, z
       setCurrentLevel: (skill, level) => { if (skill === Skill.AGILITY) p.agility = level; },
     }),
     getHitpoints: () => hitpoints,
-    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => p.hits.push(hits[0]) }) }),
+    getCombat: () => ({
+      getHitQueue: () => ({ addPendingDamage: (hits) => p.hits.push(hits[0]) }),
+      holdFullStall: (holdsHits) => { p.stall = { holdsHits }; },
+      releaseFullStall: () => { p.stall = null; },
+    }),
     isRegistered: () => true,
     setSkillAnimation() {},
     getUpdateFlag: () => ({ flag() {} }),

@@ -430,10 +430,16 @@ function closeFade(player) {
 }
 
 function lock(player, task) {
+  // A run that replaces an agility run takes over its release, so it lets go of that run's stall.
+  if (player.getAttribute(BUSY_ATTRIBUTE)?.agility && !task.agility) player.getCombat().releaseFullStall();
   player.setAttribute(BUSY_ATTRIBUTE, task);
   player.getMovementQueue().reset();
   player.getMovementQueue().setBlockMovement(true);
   if (task.busyVarbit) player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
+  // Wiki: Animation stall. An agility obstacle is a full stall: the player can't act (attack,
+  // eat, walk or click anything else; those clicks are dropped, rsprox 241/1001438) and the hits
+  // coming in are queued until it's done. A fall's own damage has no source, so it still lands.
+  if (task.agility) player.getCombat().holdFullStall(true);
 }
 
 function release(player, keepAnimation = false) {
@@ -442,6 +448,7 @@ function release(player, keepAnimation = false) {
   player.setAttribute(BUSY_ATTRIBUTE, null);
   player.getMovementQueue().setBlockMovement(false);
   if (task.busyVarbit) player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+  if (task.agility) player.getCombat().releaseFullStall();
   // A fade step's overlay closes as the run ends, cut short or not (rsprox 4001: with BUSY's clear).
   if (task.fadeOverlay) closeFade(player);
   if (player.getForceMovement() != null) {
@@ -458,7 +465,7 @@ function release(player, keepAnimation = false) {
  * `onFinish(completed)` fires once; `completed` is false if the player died or left.
  * `busyVarbit` sets the client's BUSY varbit for the run (Agility course obstacles).
  * `agility` marks the run as crossing an Agility obstacle, which pauses run energy recovery
- * (see `isCrossingAgilityObstacle`).
+ * (see `isCrossingAgilityObstacle`) and holds the player in a full stall (see `lock`).
  * `keepAnimation` lets a successful delayed pose finish after movement unlocks; cancellation resets it.
  */
 function run(context, steps, { render = null, onFinish = null, busyVarbit = false, keepAnimation = false, agility = false } = {}) {

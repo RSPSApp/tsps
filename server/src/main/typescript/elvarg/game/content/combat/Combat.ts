@@ -259,8 +259,32 @@ export class Combat {
         };
     }
 
+    /**
+     * A full stall content holds open until it lets go, for actions whose length isn't known up
+     * front (an agility obstacle: Wiki, Animation stall, "most agility actions, such as the log
+     * balance in the Wilderness agility course"). Unlike a timed stall's, the clicks made during it
+     * are dropped, not held for its end (rsprox 241/1001438 ticks 19815-19828: the next tightrope,
+     * clicked four times during the first, waits for a fresh click after the landing). With
+     * `holdsHits` the hits coming in wait until `releaseFullStall`.
+     */
+    private heldStall: { holdsHits: boolean } | null = null;
+
+    public holdFullStall(holdsHits: boolean): void {
+        this.heldStall = { holdsHits };
+    }
+
+    public releaseFullStall(): void {
+        this.heldStall = null;
+    }
+
+    /** Whether a content-held full stall is on, so a click made now is dropped (see `holdFullStall`). */
+    public isHeldStall(): boolean {
+        return this.heldStall != null;
+    }
+
     /** Ticks before this character may act again; only a full stall holds them at all. */
     public getAnimationStallTicks(): number {
+        if (this.heldStall != null) return Number.MAX_SAFE_INTEGER;
         const stall = this.animationStall;
         if (stall == null || stall.kind !== "full" || stall.untilCycle <= World.getProcessCycle()) return 0;
         return stall.untilCycle - World.getProcessCycle();
@@ -277,6 +301,7 @@ export class Combat {
      * stops holding anything from that tick.
      */
     public getIncomingHitCycle(): number {
+        if (this.heldStall?.holdsHits) return Number.MAX_SAFE_INTEGER;
         const stall = this.animationStall;
         if (stall == null || !stall.holdsHits || stall.untilCycle <= World.getProcessCycle()) return -1;
         return stall.untilCycle;
@@ -812,6 +837,15 @@ export class Combat {
         this.lastAttackedCycle = attacker ? World.getProcessCycle() : -1;
         if (attacker?.isPlayer()) this.lastAttackedByPlayerCycle = World.getProcessCycle();
         this.applyAttacker(attacker);
+    }
+    /**
+     * A hit from `attacker` came due but a full stall is holding it (HitQueue). It still counts as
+     * being in combat for the logout timer, or an obstacle would let the target log out before
+     * the hit lands; the attacker, retaliation and the rest wait for the hit itself.
+     */
+    public markHeldHit(attacker: Mobile): void {
+        this.lastAttackedCycle = World.getProcessCycle();
+        if (attacker.isPlayer()) this.lastAttackedByPlayerCycle = World.getProcessCycle();
     }
     /** Ticks since a player last hit this character, or Infinity when none has. */
     public ticksSinceAttackedByPlayer(): number {

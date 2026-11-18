@@ -145,10 +145,15 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
       sendObjectAnimation() {},
       sendGlobalGraphic: (graphic, at) => { (state.tileGraphics ??= []).push([graphic.id, graphic.delay, at.getX(), at.getY(), at.getZ()]); },
     }),
-    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => {
-      state.hits++;
-      (state.damage ??= []).push(...damage.map((hit) => hit.getDamage()));
-    } }) }),
+    getCombat: () => ({
+      getHitQueue: () => ({ addPendingDamage: (damage) => {
+        state.hits++;
+        (state.damage ??= []).push(...damage.map((hit) => hit.getDamage()));
+      } }),
+      // An agility run is a full stall that holds incoming hits (Combat.holdFullStall).
+      holdFullStall: (holdsHits) => { state.stall = { holdsHits }; },
+      releaseFullStall: () => { state.stall = null; },
+    }),
     getInventory: () => ({
       isFull: () => false,
       addItem() {},
@@ -383,6 +388,7 @@ test("every shortcut plays out from either side without leaving the player locke
         operate(player, objectId, [x, y, z]);
         assert.equal(player.getAttribute("agility.obstacle") ?? null, null);
         assert.equal(player.state.blocked, false);
+        assert.equal(player.state.stall ?? null, null, "the full stall ends with the shortcut");
       }
     }
   } finally {

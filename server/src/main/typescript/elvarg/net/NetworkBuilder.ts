@@ -692,7 +692,9 @@ export class ClientConnection {
           // Wiki: Animation stall. A full stall does not let the player perform actions, so the
           // click is held rather than dropped and runs on the tick the animation ends. The last
           // one made during the lock is the one kept, as the client only ever has one queued.
-          this.stalledInput = packet;
+          // A content-held stall (an agility obstacle) drops it instead, as live does (rsprox
+          // 241/1001438 ticks 19815-19828).
+          if (!this.player.getCombat().isHeldStall()) this.stalledInput = packet;
           continue;
         }
         if (this.player.getStatus() === PlayerStatus.TRADING) continue;

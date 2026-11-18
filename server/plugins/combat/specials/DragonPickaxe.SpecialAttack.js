@@ -54,6 +54,7 @@ module.exports = function registerDragonPickaxeSpecialAttack(api) {
       character.performAnimation(PICKAXE_ANIMATIONS.get(weaponId));
       const location = character.getLocation();
       Sounds.playAreaSound({
+        source: character,
         soundId: ROCK_KNOCKER_SOUND,
         x: location.getX(),
         y: location.getY(),

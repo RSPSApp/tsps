@@ -111,3 +111,21 @@ grave).
 `node --test tests/amoxliatl.test.cjs tests/amoxliatl-scoreboard.test.cjs`
 
 Developer commands: `::amoxliatl` (outside her door), `::amoxliatlhp <hitpoints>`, `::amoxliatlspecial <icicle|ice>` (her next attack). `::quest heart of darkness complete` opens the door.
+# Leagues VI Echo placeholder
+
+The Echo orb's Yes branch creates a separate private chamber with the normal
+Amoxliatl and her normal fight controller. EchoBosses gives that instance the Wiki
+Echo profile (650 HP, Magic 240, maximum magic hit 93, eight-tick attacks) and the cache's
+Echo model (her leagues_echo_bosses row). Normal and quest Amoxliatl definitions remain
+unchanged ([echo-bosses.md](echo-bosses.md)). The normal spikes, icy pools, alternating
+Icicle Crash/Unstable Ice, movement and protection logic remain in use. Their
+normal hazard and special-hit values are intentional placeholders: this is not
+an implementation of Echo-specific mechanics.
+
+The central Echo service validates VI/orb ownership and owns the encounter identity.
+Her normal loot drops as from a normal kill, and the service adds the Echo unique roll once. A completed Echo does not
+respawn, award ordinary Amoxliatl kill count/personal bests, or judge normal Combat
+Achievements. Departure, death, logout and shutdown cancel the fight and pending
+damage. Delayed entry and spawning revalidate the session and carried orb.
+
+Source: [Echo Amoxliatl](https://oldschool.runescape.wiki/w/Amoxliatl_(Echo)).

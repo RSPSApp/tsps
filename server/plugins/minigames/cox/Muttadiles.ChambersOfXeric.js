@@ -56,6 +56,8 @@ const Monsters = require("./Monsters.ChambersOfXeric");
 const Achievements = require("./CombatAchievements.ChambersOfXeric");
 
 const NPC = { SUBMERGED: 7561, SMALL: 7562, LARGE: 7563, TREE: 7564 };
+/** The cache's name for NPC 7564, colour tags and all: name hooks match it exactly. */
+const MEAT_TREE_NAME = "<col=00ffff>Meat tree</col>";
 const OBJECT = { TENDRILS: 29767, ROCKS: 30012, FELLED_TREE: 30013 };
 const BASE = { SUBMERGED_MAGIC: 23, SMALL_RANGED: 30, LARGE_RANGED: 45, MAGIC: 23 };
 const ANIM = { EMERGE: 7423, BITE: 7420, RANGED: 7421, MAGIC: 7422, STOMP: 7424 };
@@ -437,7 +439,7 @@ module.exports = function registerCoxMuttadiles(api) {
   Shared.bind(api);
   api.registerNpcCombatMethodProvider([NPC.SUBMERGED, NPC.SMALL, NPC.LARGE], muttadileCombat(api), { singleton: true });
   Shared.onObjectIds(api, [OBJECT.TENDRILS], passTendrils);
-  api.onNpcInteraction("Meat tree", { Cut: cutTree });
+  api.onNpcInteraction(MEAT_TREE_NAME, { Cut: cutTree });
 };
 
 Object.assign(module.exports, { MuttadileRoom, chopChance, chopDamage });

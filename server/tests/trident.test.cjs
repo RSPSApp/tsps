@@ -133,3 +133,271 @@ test("named inventory actions expose Charge, Check, and Uncharge", () => {
   assert.equal(typeof actions.get("Trident of the Swamp").Check, "function");
   assert.equal(typeof actions.get("Trident of the Swamp").Uncharge, "function");
 });
+
+const path = require("node:path");
+const { before } = require("node:test");
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { PlayerSession } = require("../dist/net/PlayerSession");
+const { EquipPacketListener } = require("../dist/net/packet/impl/EquipPacketListener");
+const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+const core = PluginManager.getCoreApi();
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  Trident.register(PluginManager.createApi("TridentFullIdRegression"));
+  require("../plugins/persistence/JsonPlayerPersistence.plugin").register(PluginManager.createApi("TridentPersistenceRegression"));
+  PluginManager.createApi("TridentChargePreservation").onCustomEvent("combat:consume-charge", event => {
+    if (event.player.getAttribute("test:spare-trident-charge") === true) event.skip = true;
+  });
+});
+
+function realActor(t) {
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setUsername("tridentcast"); p.setAttribute("bot-skip-persistence", true);
+  assert.equal(core.World.getPlayers().add(p), true);
+  p.setLocation(new core.Location(3200, 3200, 0));
+  p.getSkillManager().setMaxLevels(core.Skill.MAGIC, 99, false).setCurrentLevels(core.Skill.MAGIC, 99, false);
+  t.after(() => { core.TaskManager.cancelTasks(p); core.World.getPlayers().removes(p); });
+  return p;
+}
+
+function saveLoad(t, p) {
+  const codec = new JsonPlayerPersistence();
+  const record = JSON.parse(JSON.stringify(PlayerSave.fromPlayer(p), codec.replacer.bind(codec)), codec.reviver.bind(codec));
+  const loaded = realActor(t);
+  codec.hydratePlayerSave(record).applyToPlayer(loaded);
+  loaded.setAttribute("bot-skip-persistence", true);
+  return loaded;
+}
+
+for (const [fullId, chargedId] of [
+  [ItemIdentifiers.TRIDENT_OF_THE_SEAS_FULL_, ItemIdentifiers.TRIDENT_OF_THE_SEAS],
+  [ItemIdentifiers.TRIDENT_OF_THE_SEAS_FULL_O_, ItemIdentifiers.TRIDENT_OF_THE_SEAS_O_],
+]) {
+  test(`full trident ${fullId} becomes ${chargedId} only after a real charge spend and survives equipment/save transitions`, t => {
+    const p = realActor(t), inventory = p.getInventory();
+    const original = new Item(fullId, 1, { "test:origin": "kept", [Item.PRESET_META]: true });
+    const untouched = new Item(fullId, 1);
+    inventory.setItem(0, original); inventory.setItem(1, untouched);
+    assert.equal(Trident._test.getCharges(original), 2500);
+    assert.equal(original.getId(), fullId, "checking the inventory copy does not normalize its ID");
+    EquipPacketListener.equip(p, fullId, 0, core.Inventory.INTERFACE_ID);
+    const staff = p.getEquipment().get(core.Equipment.WEAPON_SLOT);
+    assert.notEqual(staff, original, "real equip transfers a metadata-preserving copy");
+    assert.equal(staff.getId(), fullId);
+    const npc = new core.NPC(core.NpcIdentifiers.MAN, new core.Location(3201, 3200, 0));
+    const method = core.CombatFactory.getMethod(p);
+    assert.ok(method instanceof core.MagicCombatMethod, "production resolver chooses the built-in magic method");
+    assert.equal(staff.getId(), fullId, "resolving/seeding full charges does not normalize before spending");
+    assert.equal(Trident._test.getCharges(staff), 2500);
+    p.setAttribute("test:spare-trident-charge", true);
+    assert.equal(method.canAttack(p, npc), true);
+    assert.equal(staff.getId(), fullId, "a genuinely spared cast keeps the full variant");
+    assert.equal(Trident._test.getCharges(staff), 2500);
+    p.setAttribute("test:spare-trident-charge", false);
+    assert.equal(method.canAttack(p, npc), true, "actual powered-staff canAttack spends its charge");
+    method.start(p, npc);
+    assert.equal(method.hits(p, npc).length, 1, "the native spell produces a real PendingHit");
+    assert.equal(staff.getId(), chargedId);
+    assert.equal(Trident._test.getCharges(staff), 2499);
+    assert.equal(staff.getMetaValue("test:origin"), "kept");
+    assert.equal(staff.isPresetItem(), true);
+    assert.equal(p.getEquipment().get(core.Equipment.WEAPON_SLOT), staff);
+    assert.equal(untouched.getId(), fullId, "the independent inventory copy stays full");
+    assert.equal(Trident._test.getCharges(untouched), 2500);
+    const loaded = saveLoad(t, p), loadedStaff = loaded.getEquipment().get(core.Equipment.WEAPON_SLOT);
+    assert.equal(loadedStaff.getId(), chargedId);
+    assert.equal(Trident._test.getCharges(loadedStaff), 2499);
+    assert.equal(loadedStaff.getMetaValue("test:origin"), "kept");
+    assert.equal(loadedStaff.isPresetItem(), true);
+    assert.ok(core.CombatFactory.getMethod(loaded) instanceof core.MagicCombatMethod);
+    assert.equal(Trident._test.getCharges(loadedStaff), 2499, "re-resolving after load does not refill it");
+    EquipPacketListener.unequip(loaded, core.Equipment.WEAPON_SLOT);
+    const returned = loaded.getInventory().getItems().find(item => item.getId() === chargedId);
+    assert.ok(returned, "real unequip returns the partially charged ID to inventory");
+    assert.equal(Trident._test.getCharges(returned), 2499);
+    assert.equal(returned.getMetaValue("test:origin"), "kept");
+  });
+}
+
+let castleWarsGame;
+let wildernessRegistered = false;
+function registerWilderness() {
+  if (wildernessRegistered) return;
+  require("../plugins/areas/Wilderness.plugin").register(PluginManager.createApi("TridentWildernessRegression"));
+  PluginManager.emitServerStartup({});
+  wildernessRegistered = true;
+}
+function safeCastleWarsGame() {
+  if (!castleWarsGame) {
+    const api = PluginManager.createApi("TridentSafePvpRegression");
+    castleWarsGame = require("../plugins/minigames/castlewars/Game.CastleWars")(api);
+    require("../plugins/minigames/castlewars/Areas.CastleWars")(api, castleWarsGame);
+  }
+  return castleWarsGame;
+}
+
+test("every charged trident refuses dangerous PvP before spending, but still casts on Wilderness NPCs and safe Castle Wars opponents", t => {
+  // Removing the Trident permission guard must spend a charge in the forbidden Wilderness case.
+  const { AreaManager } = require("../dist/game/model/areas/AreaManager");
+  const { CanAttackResponse } = require("../dist/game/content/combat/CombatFactory");
+  registerWilderness();
+  const game = safeCastleWarsGame();
+  const teams = Object.keys(game.data.TEAM_DATA);
+  const ids = ItemIdentifiers;
+  const variants = [
+    ids.TRIDENT_OF_THE_SEAS_FULL_, ids.TRIDENT_OF_THE_SEAS_FULL_O_,
+    ids.TRIDENT_OF_THE_SEAS, ids.TRIDENT_OF_THE_SEAS_O_,
+    ids.TRIDENT_OF_THE_SEAS_E_, ids.TRIDENT_OF_THE_SEAS_E_O_,
+    ids.TRIDENT_OF_THE_SWAMP, ids.TRIDENT_OF_THE_SWAMP_O_,
+    ids.TRIDENT_OF_THE_SWAMP_E_, ids.TRIDENT_OF_THE_SWAMP_E_O_,
+  ];
+  for (const id of variants) {
+    const p = realActor(t), opponent = realActor(t);
+    for (const [actor, x] of [[p, 3200], [opponent, 3201]]) {
+      actor.setLocation(new core.Location(x, 3700));
+      actor.setNeedsPlacement(false);
+      actor.getSkillManager().setMaxLevels(core.Skill.HITPOINTS, 99, false).setCurrentLevels(core.Skill.HITPOINTS, 99, false);
+      AreaManager.process(actor);
+      assert.equal(actor.getArea()?.constructor.name, "WildernessArea");
+    }
+    const full = id === ids.TRIDENT_OF_THE_SEAS_FULL_ || id === ids.TRIDENT_OF_THE_SEAS_FULL_O_;
+    p.getInventory().setItem(0, new Item(id, 1, {
+      "test:origin": "kept", ...(full ? {} : { "trident-charges": 12 }),
+    }));
+    EquipPacketListener.equip(p, id, 0, core.Inventory.INTERFACE_ID);
+    const staff = p.getEquipment().get(core.Equipment.WEAPON_SLOT);
+    const charges = full ? 2500 : 12;
+    const method = core.CombatFactory.getMethod(p);
+    assert.equal(core.CombatFactory.canAttackPermission(p, opponent, false, method), CanAttackResponse.CAN_ATTACK,
+      `${id}: the real Wilderness area otherwise permits these opponents`);
+    assert.equal(core.CombatFactory.canAttack(p, method, opponent), CanAttackResponse.COMBAT_METHOD_NOT_ALLOWED,
+      `${id}: built-in spell refuses dangerous PvP`);
+    assert.equal(staff.getId(), id);
+    assert.equal(Trident._test.getCharges(staff), charges);
+    assert.equal(opponent.getCombat().getHitQueue().isEmpty(), true);
+
+    const npc = new core.NPC(core.NpcIdentifiers.MAN, new core.Location(3201, 3700));
+    assert.equal(core.World.getNpcs().add(npc), true);
+    t.after(() => { core.TaskManager.cancelTasks(npc); core.World.getNpcs().removes(npc); });
+    npc.setNeedsPlacement(false);
+    AreaManager.process(npc);
+    assert.equal(core.CombatFactory.canAttack(p, method, npc), CanAttackResponse.CAN_ATTACK,
+      `${id}: Wilderness NPC remains attackable`);
+    assert.equal(Trident._test.getCharges(staff), charges - 1);
+
+    p.setLocation(new core.Location(2395, 3110));
+    opponent.setLocation(new core.Location(2396, 3110));
+    game.setTeamId(p, teams[0]); game.setTeamId(opponent, teams[1]);
+    p.setArea(game.gameArea); opponent.setArea(game.gameArea);
+    assert.equal(core.CombatFactory.canAttack(p, method, opponent), CanAttackResponse.CAN_ATTACK,
+      `${id}: real Castle Wars opposing-team policy preserves safe PvP`);
+    method.start(p, opponent);
+    const hit = method.hits(p, opponent)[0];
+    assert.ok(hit instanceof core.PendingHit);
+    core.CombatFactory.addPendingHit(hit);
+    assert.equal(opponent.getCombat().getHitQueue().isEmpty(), false);
+    assert.equal(Trident._test.getCharges(staff), charges - 2);
+    assert.equal(staff.getMetaValue("test:origin"), "kept");
+  }
+});
+
+test("global PvP Castle Wars remains safe while outdoor combat stays dangerous", t => {
+  // The published ground-only guard fails the global-world cast in this actual active game.
+  const { AreaManager } = require("../dist/game/model/areas/AreaManager");
+  const { WORLD_ZONE_BOUNDARIES } = require("../dist/game/definition/WorldDefinition");
+  const { CanAttackResponse: R } = require("../dist/game/content/combat/CombatFactory");
+  registerWilderness();
+  const game = safeCastleWarsGame(), teams = Object.keys(game.data.TEAM_DATA);
+  const p = realActor(t), other = realActor(t);
+  const globalPvp = new core.Boundary(0, 0x3fff, 0, 0x3fff, 0);
+  t.after(() => {
+    const index = WORLD_ZONE_BOUNDARIES.pvp.indexOf(globalPvp);
+    if (index >= 0) WORLD_ZONE_BOUNDARIES.pvp.splice(index, 1);
+    game.endGame();
+    for (const key of [game.data.START_TASK_KEY, game.data.END_TASK_KEY]) core.TaskManager.cancelTasks(key);
+    for (const actor of [p, other]) {
+      if (actor.getArea()?.hasMember(actor)) actor.getArea().leave(actor, false);
+      actor.setArea(null);
+    }
+  });
+  for (const [actor, team] of [[p, teams[0]], [other, teams[1]]]) {
+    actor.getSkillManager().setMaxLevels(core.Skill.HITPOINTS, 99, false).setCurrentLevels(core.Skill.HITPOINTS, 99, false);
+    actor.setLocation(game.getTeamData(team).waitingRoom.clone());
+    AreaManager.process(actor);
+    assert.equal(actor.getArea(), game.waitingAreas[team]);
+    assert.equal(game.getTeamId(actor), team);
+  }
+  assert.equal(game.getPhase(), game.PHASE.STARTING);
+  for (let tick = 0; tick <= Math.ceil(game.data.START_COUNTDOWN_SECONDS / 0.6); tick++) core.TaskManager.process();
+  assert.equal(game.getPhase(), game.PHASE.ACTIVE);
+  for (const [actor, x] of [[p, 2395], [other, 2396]]) {
+    actor.setLocation(new core.Location(x, 3110));
+    actor.setNeedsPlacement(false);
+    AreaManager.process(actor);
+    assert.equal(actor.getArea(), game.gameArea);
+    assert.equal(game.gameArea.hasMember(actor), true);
+  }
+  for (const id of [ItemIdentifiers.TRIDENT_OF_THE_SEAS_FULL_, ItemIdentifiers.TRIDENT_OF_THE_SEAS_FULL_O_,
+    ItemIdentifiers.TRIDENT_OF_THE_SEAS, ItemIdentifiers.TRIDENT_OF_THE_SEAS_O_,
+    ItemIdentifiers.TRIDENT_OF_THE_SEAS_E_, ItemIdentifiers.TRIDENT_OF_THE_SEAS_E_O_,
+    ItemIdentifiers.TRIDENT_OF_THE_SWAMP, ItemIdentifiers.TRIDENT_OF_THE_SWAMP_O_,
+    ItemIdentifiers.TRIDENT_OF_THE_SWAMP_E_, ItemIdentifiers.TRIDENT_OF_THE_SWAMP_E_O_]) {
+    const full = id === ItemIdentifiers.TRIDENT_OF_THE_SEAS_FULL_ || id === ItemIdentifiers.TRIDENT_OF_THE_SEAS_FULL_O_;
+    p.getInventory().setItem(0, new Item(id, 1, { "test:origin": "kept", ...(full ? {} : { "trident-charges": 12 }) }));
+    EquipPacketListener.equip(p, id, 0, core.Inventory.INTERFACE_ID);
+    const staff = p.getEquipment().get(core.Equipment.WEAPON_SLOT), method = core.CombatFactory.getMethod(p);
+    const charges = full ? 2500 : 12;
+    assert.equal(core.CombatFactory.canAttack(p, method, other), R.CAN_ATTACK, `${id}: normal-world active safe game`);
+    assert.equal(Trident._test.getCharges(staff), charges - 1);
+    WORLD_ZONE_BOUNDARIES.pvp.push(globalPvp);
+    try {
+      assert.equal(core.Wilderness.isIn(p), true);
+      assert.equal(core.CombatFactory.canAttackPermission(p, other, false, method), R.CAN_ATTACK);
+      assert.equal(core.CombatFactory.canAttack(p, method, other), R.CAN_ATTACK, `${id}: global-world active safe game`);
+      assert.equal(Trident._test.getCharges(staff), charges - 2);
+      assert.equal(staff.getMetaValue("test:origin"), "kept");
+      if (full) assert.equal(staff.getId(), id === ItemIdentifiers.TRIDENT_OF_THE_SEAS_FULL_
+        ? ItemIdentifiers.TRIDENT_OF_THE_SEAS : ItemIdentifiers.TRIDENT_OF_THE_SEAS_O_);
+      method.start(p, other);
+      const hit = method.hits(p, other)[0];
+      assert.ok(hit instanceof core.PendingHit);
+      core.CombatFactory.addPendingHit(hit);
+      assert.equal(other.getCombat().getHitQueue().isEmpty(), false);
+      other.getCombat().getHitQueue().clear();
+      method.finished(p);
+    } finally {
+      WORLD_ZONE_BOUNDARIES.pvp.splice(WORLD_ZONE_BOUNDARIES.pvp.indexOf(globalPvp), 1);
+    }
+  }
+  const outside = realActor(t), opponent = realActor(t);
+  for (const [actor, x] of [[outside, 3200], [opponent, 3201]]) {
+    actor.setLocation(new core.Location(x, 3200));
+    actor.setNeedsPlacement(false);
+    actor.getSkillManager().setMaxLevels(core.Skill.HITPOINTS, 99, false).setCurrentLevels(core.Skill.HITPOINTS, 99, false);
+  }
+  outside.getInventory().setItem(0, new Item(ItemIdentifiers.TRIDENT_OF_THE_SEAS_FULL_, 1, { "test:origin": "kept" }));
+  EquipPacketListener.equip(outside, ItemIdentifiers.TRIDENT_OF_THE_SEAS_FULL_, 0, core.Inventory.INTERFACE_ID);
+  const staff = outside.getEquipment().get(core.Equipment.WEAPON_SLOT), method = core.CombatFactory.getMethod(outside);
+  let consumeCalls = 0;
+  PluginManager.createApi("TridentGlobalChargeRefusal").onCustomEvent("combat:consume-charge", event => {
+    if (event.player === outside) { consumeCalls++; event.skip = true; event.extra = 5; }
+  });
+  WORLD_ZONE_BOUNDARIES.pvp.push(globalPvp);
+  // Startup registers the broad area from the world's current zones, after specific areas.
+  PluginManager.emitServerStartup({});
+  AreaManager.process(outside); AreaManager.process(opponent);
+  assert.equal(core.CombatFactory.canAttackPermission(outside, opponent, false, method), R.CAN_ATTACK);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    assert.equal(core.CombatFactory.canAttack(outside, method, opponent), R.COMBAT_METHOD_NOT_ALLOWED);
+  }
+  assert.equal(consumeCalls, 0, "dangerous outdoor refusals never invoke charge-preservation hooks");
+  assert.equal(staff.getId(), ItemIdentifiers.TRIDENT_OF_THE_SEAS_FULL_);
+  assert.equal(Trident._test.getCharges(staff), 2500);
+  assert.equal(staff.getMetaValue("test:origin"), "kept");
+  assert.equal(outside.getCombat().getCastSpell(), null);
+  assert.equal(opponent.getCombat().getHitQueue().isEmpty(), true);
+});

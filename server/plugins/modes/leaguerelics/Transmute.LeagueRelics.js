@@ -128,15 +128,24 @@ function plan(player, item, productId) {
   const held = stack ? item.getAmount() : plainAmount(inventory, itemId);
   const amount = Math.min(effect.perCast, held);
   if (stack && Toggles.on(player, effect.bankToggle) && Common.bankHasRoom(player, unnoted(productId))) {
-    return { stack, amount, bank: true };
+    const bank = player.getBank(core.Bank.getTabForItem(player, unnoted(productId)));
+    if (bank.getAddableAmount(new core.Item(unnoted(productId), amount)) >= amount) {
+      return { stack, amount, bank: true };
+    }
   }
   // Loose: the cast empties the slots it takes before the products go in, so all of them held
   // (10 or fewer) always fit; more held than one cast takes needs a free slot for each product.
   // A stack's product is plain, so it merges only into a plain stack of it (a preset stack of the
   // same id does not count), or takes a free slot.
-  const room = stack
-    ? amount === held || inventory.getAddableAmount(new core.Item(productId, amount)) >= amount
-    : amount === held || inventory.getFreeSlots() >= amount;
+  let room;
+  if (stack) {
+    // Reclaim the selected input slot, but still respect a matching product stack's cap.
+    const preview = new core.Inventory(player).setItems(inventory.getCopiedItems());
+    preview.deleteAtSlot(inventory.getItems().indexOf(item), amount, false);
+    room = preview.getAddableAmount(new core.Item(productId, amount)) >= amount;
+  } else {
+    room = amount === held || inventory.getFreeSlots() >= amount;
+  }
   return room ? { stack, amount, bank: false } : null;
 }
 

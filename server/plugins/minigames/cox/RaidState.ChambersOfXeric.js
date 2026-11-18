@@ -137,6 +137,17 @@ class Room {
   /** A hit about to land on one of the room's NPCs; change its damage here. */
   modifyHit() {}
 
+  /**
+   * A resistance (a fraction of the damage, or a weakness above 1) one of the room's NPCs has to a
+   * hit, applied to each rolled hitsplat before it is capped at the NPC's hitpoints, as OSRS does.
+   * Applied at the impact instead, a third of a hit capped at 2 hitpoints is 0 and the NPC can't
+   * die. Return 1 where nothing applies; immunities (0) stay with modifyHit, decided as the hit lands.
+   * A hit it changed has `rolledResistance` set, so modifyHit leaves its damage alone.
+   */
+  resistance() {
+    return 1;
+  }
+
   /** The room's raiders: players standing in it. */
   raiders() {
     return [...this.raid.players].filter((player) => this.raid.roomAt(player.getLocation()) === this);

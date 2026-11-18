@@ -488,15 +488,16 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     return Number(player.getAttribute(BORK_ATTRIBUTE)) || 0;
   }
 
-  /** One of Bork's three supplies, once each (his menu stays up until all three are claimed), and only if it fits. */
+  /** Wiki: one request per supply, filling only the available inventory space. */
   function claimBorkSupply(player, bit, itemId, amount) {
     if (borkFlags(player) & bit) return;
     const inventory = player.getInventory();
-    if ((inventory.getFreeSlots?.() ?? amount) < amount) {
+    const granted = inventory.getAddableAmount(new Item(itemId, amount));
+    if (granted > 0) {
+      inventory.adds(itemId, granted);
+    } else {
       inventory.full?.();
-      return;
     }
-    inventory.adds(itemId, amount);
     setFlag(player, BORK_ATTRIBUTE, bit);
   }
 
@@ -740,6 +741,10 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     return borkFlags(player) === (BORK_FOOD | BORK_STRENGTH | BORK_PRAYER)
       ? "facing-the-trolls-talking-to-bork-after-claiming-all-supplies"
       : "facing-the-trolls-talking-to-bork";
+  }
+
+  function requestBorkSupplies({ player }) {
+    return !!play(player, BORK_SIGMUNDSON, borkVariant(player));
   }
 
   function taxVariant(player, npcId) {
@@ -1999,6 +2004,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
   api.onNpcInteraction("Mawnis Burowgar", { "Talk-to": talkToMawnis });
   api.onNpcInteraction("Kjedelig Uppsen", { "Talk-to": talkToKjedelig });
   api.onNpcInteraction("Trogen Konungarde", { "Talk-to": talkToKjedelig });
+  api.onNpcInteraction("Bork Sigmundson", { "Request-supplies": requestBorkSupplies });
   api.onNpcInteraction(handleSpecialTalk);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);

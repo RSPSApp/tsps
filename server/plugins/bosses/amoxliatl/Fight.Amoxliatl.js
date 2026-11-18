@@ -96,7 +96,7 @@ class Fight {
   }
 
   start() {
-    const { spawn, npcs, hud } = Common.data;
+    const { spawn, hud } = Common.data;
     const { Animation } = this.core;
     this.boss.performAnimation(new Animation(spawn.anim));
     this.boss.forceChat(spawn.say);
@@ -105,7 +105,7 @@ class Fight {
     this.hudShown = true;
     this.shownHp = this.boss.getHitpoints();
     Common.api.emitCustomEvent("boss-hud:show", {
-      player: this.player, npcId: npcs.boss, current: this.shownHp, maximum: this.boss.getDefinition().getHitpoints(), colours: hud.colours,
+      player: this.player, npcId: this.boss.getId(), current: this.shownHp, maximum: this.boss.getMaxHitpoints(), colours: hud.colours,
     });
     this.boss.getCombat().attack(this.player);
     this.boss.getCombat().setAttackDelay(spawn.firstAttackTicks);

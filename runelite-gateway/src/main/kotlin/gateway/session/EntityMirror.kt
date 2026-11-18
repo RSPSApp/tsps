@@ -128,6 +128,29 @@ class EntityMirror(
     }
 
     /**
+     * tsps's type customisation (an Echo boss) as OSRS's body customisation, name change and level
+     * change, as live sends an Echo (rsprox 1158/1161). OSRS recolours are one destination per
+     * source colour of the type: a source tsps doesn't name maps to itself, so an empty tsps list
+     * clears the type's recolours. A customisation without fields resets all three.
+     */
+    private fun applyTypeCustomisation(info: NpcAvatarExtendedInfo, type: Int, custom: ActorBlock.TypeCustomisation) {
+        if (custom.isReset) {
+            info.resetBodyCustomisations()
+            info.setNameChange(null)
+            info.setCombatLevelChange(-1)
+            return
+        }
+        if (custom.models != null || custom.recolours != null) {
+            val destinations = custom.recolours?.let { pairs ->
+                npcTypes.recolourSources(type).map { source -> pairs.firstOrNull { it.first == source }?.second ?: source }
+            } ?: emptyList()
+            info.setBodyCustomisation(custom.models ?: npcTypes.models(type), destinations, emptyList())
+        }
+        custom.name?.let(info::setNameChange)
+        custom.combatLevel?.let(info::setCombatLevelChange)
+    }
+
+    /**
      * The other players are full rsprot observers too, so each tick computes info packets for
      * them that only their own sessions would send; release those so rsprot doesn't report them.
      */
@@ -184,6 +207,7 @@ class EntityMirror(
 
     private fun applyNpc(info: NpcAvatarExtendedInfo, block: ActorBlock, type: Int) {
         block.modelCustomisation?.let { applyModelCustomisation(info, type, it) }
+        block.typeCustomisation?.let { applyTypeCustomisation(info, type, it) }
         block.tint?.let { info.setTinting(it.start, it.end, it.hue, it.saturation, it.lightness, it.weight) }
         block.forcedChat?.let(info::setSay)
         block.faceEntity?.let(info::setFacePathingEntity)

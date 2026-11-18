@@ -30,9 +30,13 @@ function onTask(player, npc) {
 }
 
 function wearsGhostspeak(player) {
-  const { Equipment, ItemIdentifiers } = api.core;
-  const amulet = player.getEquipment?.()?.get?.(Equipment.AMULET_SLOT)?.getId?.();
-  return amulet === ItemIdentifiers.GHOSTSPEAK_AMULET || amulet === ItemIdentifiers.GHOSTSPEAK_AMULET_2;
+  const { Equipment, ItemIdentifiers: I } = api.core;
+  const equipment = player.getEquipment?.();
+  const amulet = equipment?.get?.(Equipment.AMULET_SLOT)?.getId?.();
+  const legs = equipment?.get?.(Equipment.LEG_SLOT)?.getId?.();
+  // Wiki (Ghostspeak amulet): worn Morytania legs 2 or better replace the amulet here.
+  return amulet === I.GHOSTSPEAK_AMULET || amulet === I.GHOSTSPEAK_AMULET_2
+    || [I.MORYTANIA_LEGS_2, I.MORYTANIA_LEGS_3, I.MORYTANIA_LEGS_4].includes(legs);
 }
 
 /** Buggie's refusal: the game message, then his line (Wiki: Entomologist; Transcript:Entomologist). */

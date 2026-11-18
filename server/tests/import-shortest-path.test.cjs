@@ -1,7 +1,8 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { applyCorrections, generate } = require('../scripts/import-shortest-path.cjs');
-const input = require('../scripts/shortest-path-corrections.json');
+const allInput = require('../scripts/shortest-path-corrections.json');
+const input = { ...allInput, corrections: allInput.corrections.filter((c) => 'quest' in c) };
 const clone = (value) => JSON.parse(JSON.stringify(value));
 function rows() {
   return { transports: input.corrections.map((c) => [c.from, c.to, c.menu, c.id, null, null, null, null, null, 1]) };
@@ -71,5 +72,71 @@ test('malformed schema and selectors are rejected', () => {
 test('immutable source references reject moving branches before reading source', () => {
   for (const ref of ['main', 'HEAD', '65314c0', '--all', '']) {
     assert.throws(() => generate('unused', ref), /full immutable commit SHA/);
+  }
+});
+
+const durationInput = { ...allInput, corrections: allInput.corrections.filter((c) => 'ticks' in c) };
+function durationRows() {
+  return { agility_shortcuts: durationInput.corrections.map((c) =>
+    [c.from, c.to, c.menu, c.id, '21 Agility', null, null, null, null, 7]) };
+}
+
+test('GE duration corrections change only the two matched costs', () => {
+  const data = durationRows();
+  const expected = clone(data);
+  for (const row of expected.agility_shortcuts) row[9] = 4;
+  applyCorrections(data, durationInput);
+  assert.deepEqual(data, expected);
+});
+
+test('duration corrections reject stale, missing, ambiguous and invalid inputs atomically', () => {
+  for (const mutate of [
+    (data) => { data.agility_shortcuts[1][9] = 6; },
+    (data) => data.agility_shortcuts.pop(),
+    (data) => data.agility_shortcuts.push(clone(data.agility_shortcuts[1])),
+  ]) {
+    const data = durationRows();
+    mutate(data);
+    const before = clone(data);
+    assert.throws(() => applyCorrections(data, durationInput), /Stale|exactly one match/);
+    assert.deepEqual(data, before);
+  }
+  for (const field of ['ticks', 'expectedTicks']) {
+    for (const value of [null, 0, -1, 1.5, '4']) {
+      const invalid = clone(durationInput);
+      invalid.corrections[1][field] = value;
+      const data = durationRows();
+      assert.throws(() => applyCorrections(data, invalid), /Malformed/);
+      assert.deepEqual(data, durationRows());
+    }
+  }
+  for (const mutation of [
+    (c) => { c.ticks = c.expectedTicks; },
+    (c) => { c.quest = 'A quest'; },
+    (c) => { delete c.expectedTicks; },
+  ]) {
+    const invalid = clone(durationInput);
+    mutation(invalid.corrections[1]);
+    assert.throws(() => applyCorrections(durationRows(), invalid), /Malformed/);
+  }
+});
+
+test('the production planner charges four ticks for both generated GE crossings', () => {
+  const { planTravel, indexTransports, key, BLOCKED } = require('../plugins/agent/mcp/TravelRoutes.AgentMcp');
+  const generated = require('../plugins/agent/data/transports.json');
+  const byOrigin = indexTransports(generated);
+  for (const correction of durationInput.corrections) {
+    const [x, y, z] = correction.from;
+    const [tx, ty, tz] = correction.to;
+    const route = planTravel({
+      from: { x, y, z }, to: { x: tx, y: ty, z: tz }, goalReach: 0,
+      getFlag: () => BLOCKED,
+      transportsAt: (x, y, z) => byOrigin.get(key(x, y, z)) ?? [],
+      usable: (transport) => transport.id === correction.id,
+    });
+    assert.ok(route);
+    assert.equal(route.cost, 4);
+    assert.equal(route.steps.length, 2);
+    assert.equal(route.steps[1].via.id, correction.id);
   }
 });

@@ -1,6 +1,6 @@
 /**
  * Larcenist (https://oldschool.runescape.wiki/w/Demonic_Pacts_League/Relics), Demonic Pacts' tier 5
- * relic: every pickpocket succeeds, the coin pouch limit is ten times as high, pickpockets and
+ * relic: every Thieving action succeeds, the coin pouch limit is ten times as high, pickpockets and
  * stall thefts repeat themselves, stalls never run out for the relic's owner, and what both give
  * is noted and multiplied by 10 (coins as ten pouches; an item that neither stacks nor notes, and
  * a clue, once: as the other Thieving relics). No guard (nor the stall's owner, whose shout sends
@@ -10,7 +10,6 @@
  * Not here: the tenfold Varlamore house valuables (house thieving is not on the server).
  */
 const Common = require("./Common.LeagueRelics");
-const { plainAmount, takePlain } = require("../../items/PoweredStaff");
 
 let effect;
 
@@ -28,7 +27,13 @@ function loot(request) {
   if (active(request.player)) request.loot = Common.multipliedLoot(request.loot, effect.lootMultiplier);
 }
 
+/** Override only the chart roll; eligibility and other refusals stay with the stall. */
+function succeeds(request) {
+  if (active(request.player)) request.success = true;
+}
+
 function again(request) {
+  if (request.kind === "stall" && request.object?.getDefinition()?.getName() === "Scimitar Stall") return;
   if (active(request.player)) request.again = true;
 }
 
@@ -36,20 +41,19 @@ function keepStall(request) {
   if (active(request.player)) request.handled = true;
 }
 
-/** The stall's item, just handed over, comes noted and ten times over. */
-function stallLoot({ player, method, itemId }) {
-  if (method !== "stall" || !Number.isInteger(itemId) || !active(player) || !Common.multipliable(itemId)) return;
+/** Deliver the complete noted bundle before plain-item capacity can truncate it. */
+function stallLoot(request) {
+  const { player, stall, itemId, amount } = request;
+  // The Wiki excludes Magic's multiplier and Scimitar's multiplier/noting/auto-steal.
+  if (request.handled || stall === "Magic Stall" || stall === "Scimitar Stall"
+      || !Number.isInteger(itemId) || !Number.isSafeInteger(amount) || amount <= 0
+      || !active(player) || !Common.multipliable(itemId)) return;
+  const { Item } = Common.core;
   const inventory = player.getInventory();
-  // The stolen copy is plain: by id, a preset copy held earlier in the pack would be taken in its place.
-  if (plainAmount(inventory, itemId) <= 0) return;
-  const noted = Common.noted(itemId);
-  const amount = effect.lootMultiplier;
-  if (noted === itemId) {
-    inventory.adds(itemId, amount - 1);
-    return;
-  }
-  takePlain(inventory, itemId, 1);
-  inventory.adds(noted, amount);
+  const output = new Item(Common.noted(itemId), amount * effect.lootMultiplier);
+  if (inventory.getAddableAmount(output) < output.getAmount()) return inventory.full();
+  inventory.addItem(output);
+  request.handled = true;
 }
 
 function unseen(watch) {
@@ -60,8 +64,9 @@ module.exports = function attach(api) {
   effect = Common.data.effects.larcenist;
   api.onCustomEvent("thieving:pickpocket-target", pickpocketTarget);
   api.onCustomEvent("thieving:loot", loot);
+  api.onCustomEvent("thieving:stall-roll", succeeds);
   api.onCustomEvent("thieving:done", again);
   api.onCustomEvent("thieving:deplete-stall", keepStall);
-  api.onCustomEvent("thieving:success", stallLoot);
+  api.onCustomEvent("thieving:stall-reward", stallLoot);
   api.onCustomEvent("thieving:stall-watch", unseen);
 };

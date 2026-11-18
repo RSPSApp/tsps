@@ -139,3 +139,22 @@ test('the quest guardian ends its chamber without regular loot, kill counts, per
   assert.ok(ended && hidden);
   assert.deepEqual(emitted, [{ name: 'amoxliatl:quest-defeated', payload: { player: actor } }]);
 });
+
+test('Echo completes once without normal kill, best-time, achievement or respawn credit', () => {
+  let death;
+  require('../plugins/bosses/amoxliatl/Kills.Amoxliatl')({
+    persistAttribute() {}, onNpcBeforeDeath() {}, onNpcDeath(handler) { death = handler; },
+    onCustomEvent() {}, onPlayerLogin() {},
+  });
+  Common.init({core:{ Projectile:{centreOf:()=>({x:1,y:2,z:0})} },emitCustomEvent:(name,payload)=>emitted.push({name,payload})});
+  emitted.length=0;
+  const session={echoToken:'echo-amox'};
+  const fight={stopped:false,player:{},session,hideHud(){},stop(){this.stopped=true;}};
+  const npc={__amoxliatlFight:fight};
+  death({npc}); death({npc});
+  assert.equal(emitted.length,1);
+  assert.equal(emitted[0].name,'echo-boss:completed');
+  assert.equal(emitted[0].payload.token,'echo-amox');
+  assert.deepEqual(emitted[0].payload.npcs,[npc]);
+  assert.equal(session.echoCompleted,true);
+});

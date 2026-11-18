@@ -291,6 +291,7 @@ export class CombatSpecial {
         }
 
         if (player.getDueling().inDuel() && player.getDueling().getRules()[DuelRule.NO_SPECIAL_ATTACKS.getButtonId()]) {
+            CombatSpecial.updateBar(player);
             return;
         }
 
@@ -385,6 +386,7 @@ export class CombatSpecial {
         const drainAmount = spec.getDrainAmountForWeaponId(equippedWeaponId);
         if (!CombatSpecial.affordable(player, spec, drainAmount)) {
             player.sendMessage("You don't have enough power left.");
+            CombatSpecial.updateBar(player);
             return;
         }
 

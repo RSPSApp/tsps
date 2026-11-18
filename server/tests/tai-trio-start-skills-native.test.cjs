@@ -11,6 +11,7 @@ const { PlayerSession } = require('../dist/net/PlayerSession');
 const { ClientConnection } = require('../dist/net/NetworkBuilder');
 const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
 let core, nextIndex = 5100;
+const SENT_AWAY_MENU = ["Why should I leave?", "Right, I'm going then."];
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   core = PM.getCoreApi(); PM.loadFromDirectory(path.resolve(__dirname, '../plugins')); PM.emitServerStartup({});
@@ -65,6 +66,8 @@ function actor(t, lowSkill, jungleComplete = true) {
   const druidic = quest('druidic_ritual'); druidic.setStage(player, druidic.completionValue);
   assert.equal(completeQuery(player, 'druidic_ritual'), true);
   const jungle = quest('jungle_potion');
+  // Only once Jungle Potion is complete does Timfraku hear "Trufitus sent me." (RSProx capture JunglePotion,
+  // revision 242.1, ticks 534-575; the transcript's "If the player has completed Jungle Potion:").
   if (jungleComplete) jungle.setStage(player, jungle.completionValue);
   assert.equal(completeQuery(player, 'jungle_potion'), jungleComplete);
   assert.equal(quest('tai_bwo_wannai_trio').getStage(player), 0);
@@ -76,6 +79,8 @@ function actor(t, lowSkill, jungleComplete = true) {
 async function advance(f) {
   assert.ok(f.player.getDialogueManager().getCurrent(), 'active generated dialogue');
   const group = f.player.getPacketSender().getChatboxGroupId();
+  // A scripted pause ("Timfraku appears to concentrate very deeply."): the chatbox is closed while it waits.
+  if (group < 0) { core.TaskManager.process(); return; }
   // 193 objectbox continues on its universe component (193:0), as live does.
   const child = ({ 231: 5, 217: 5, 229: 4, 193: 0 })[group];
   assert.notEqual(child, undefined, `known dialogue group ${group}`);
@@ -102,6 +107,10 @@ async function startTrio(f, yes, jungleComplete = true) {
       assert.equal(quest('tai_bwo_wannai_trio').isStarted(f.player), false);
       await choose(f, prompt, yes ? 'Yes.' : 'No.'); return;
     }
+    if (!jungleComplete && SENT_AWAY_MENU.every(option => prompt.options.includes(option))) {
+      assert.deepEqual(prompt.options, SENT_AWAY_MENU, 'no "Trufitus sent me." before Jungle Potion');
+      await choose(f, prompt, "Right, I'm going then."); return;
+    }
     const options = ['I am a roving adventurer.', 'Trufitus sent me.', 'Your gratitude is all I deserve.'];
     const wanted = options.find(option => prompt.options.includes(option));
     assert.ok(wanted, `unexpected Timfraku menu: ${JSON.stringify(prompt.options)}`);
@@ -127,7 +136,9 @@ test('No keeps the generated conversation at pre-start stage 2', async t => {
 });
 test('missing Jungle Potion keeps the quest unstarted', async t => {
   const f = actor(t, undefined, false); await startTrio(f, true, false);
-  assert.equal(quest('tai_bwo_wannai_trio').getStage(f.player), 0);
+  // Sent away, as live: tbwt_main 1, not started (JunglePotion ticks 534-544).
+  assert.equal(quest('tai_bwo_wannai_trio').getStage(f.player), 1);
+  assert.equal(quest('tai_bwo_wannai_trio').isStarted(f.player), false);
   assert.equal(completeQuery(f.player, 'jungle_potion'), false);
 });
 test('registered Trufitus hand-in completes Jungle Potion', async t => {

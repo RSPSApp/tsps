@@ -18,5 +18,6 @@ module.exports = {
     Roof.attach(api);
     Combat.attach(api);
     Kills.attach(api);
+    require("./grotesqueguardians/Echo.GrotesqueGuardians")(api);
   },
 };

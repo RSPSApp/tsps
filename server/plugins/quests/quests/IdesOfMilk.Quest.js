@@ -151,7 +151,8 @@ module.exports = function registerIdesOfMilkQuest(api) {
 
   class BullArena extends PrivateArea {
     constructor(player) {
-      super([new Boundary(3240, 3268, 3265, 3301, 0)]);
+      // The southern fence is below the two troughs, with a walkable tile between them at 3259, 3255.
+      super([new Boundary(3240, 3268, 3255, 3301, 0)]);
       this.player = player;
       this.bull = null;
       this.demonic = false;

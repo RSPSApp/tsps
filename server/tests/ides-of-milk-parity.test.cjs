@@ -424,12 +424,23 @@ test('charge dashes four tiles on its facing axis and allows a two-tile sidestep
   }
 });
 
+test('the private cow field reaches the south fence between the two food troughs', () => {
+  const { arena } = fight(22);
+  const safeSpot = new core.Location(3259, 3255, 0);
+  const outside = safeSpot.transform(0, -1);
+
+  assert.equal(core.RegionManager.canMove(3259, 3257, 3259, 3255, 0, 1, 1, arena), true);
+  assert.equal(core.RegionManager.canMove(3259, 3255, 3259, 3254, 0, 1, 1, arena), false);
+  assert.ok(arena.getBoundaries().some(boundary => boundary.inside(safeSpot)));
+  assert.ok(arena.getBoundaries().every(boundary => !boundary.inside(outside)));
+});
+
 test('Brutus rejects charges whose swept 3x3 body would hit the real arena fences', () => {
   for (const [label, at, target] of [
     ['east fence', [3261, 3287], [3264, 3288]],
     ['north pen fence', [3262, 3291], [3263, 3294]],
     ['diagonal west fence', [3244, 3285], [3243, 3286]],
-    ['southern instance edge', [3260, 3267], [3261, 3266]],
+    ['southern fence', [3254, 3258], [3255, 3257]],
   ]) {
     const { h, p, npc, arena, method } = fight();
     npc.moveTo(new core.Location(...at, 0)); p.moveTo(new core.Location(...target, 0));

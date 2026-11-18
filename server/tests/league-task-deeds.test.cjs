@@ -2093,7 +2093,7 @@ test("near a loc by option: a prayer switched on beside an altar (Activate a pra
 test("wearing: something cooked with an apron on (Cook something with an apron); a golden apron, or none, is not", async (t) => {
   const f = pactsCharacter(t);
   const cook = async (apron) => {
-    f.player.getEquipment().setItem(core.Equipment.BODY_SLOT, apron ? new core.Item(item(apron)) : null);
+    f.player.getEquipment().setItem(core.Equipment.BODY_SLOT, new core.Item(apron ? item(apron) : -1));
     f.player.getInventory().resetItems();
     assert.equal(await cookShark(t, f), 1, `the real Cooking cooks it: ${f.messages}`);
     return done(f, "cook-something-with-an-apron");
@@ -2460,6 +2460,13 @@ test("hit: one hit of 66 with an elemental spell, 150 with the Keris Partisan, t
   target.setHitpoints(5);
   land(66, core.CombatSpells.WATER_WAVE);
   assert.ok(!done(f, "deal-66-damage-with-an-elemental-spell"), "a 66 roll on 5 hitpoints is a 5 hitsplat");
+  // 70 hitpoints with a 60 already queued this tick: a second 66 shows as 10.
+  target.setHitpoints(70);
+  const queue = target.getCombat().getHitQueue();
+  queue.addPendingDamage([new core.HitDamage(60, core.HitMask.RED), new core.HitDamage(66, core.HitMask.RED)]);
+  land(66, core.CombatSpells.WATER_WAVE);
+  assert.ok(!done(f, "deal-66-damage-with-an-elemental-spell"), "a 66 behind a queued 60 on 70 hitpoints is a 10 hitsplat");
+  queue.pendingDamage.length = 0; // the queued hits never land in this test (no tick runs)
   target.setHitpoints(300);
   land(65, core.CombatSpells.FIRE_SURGE);
   assert.ok(!done(f, "deal-66-damage-with-an-elemental-spell"), "65");

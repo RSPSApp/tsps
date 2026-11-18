@@ -2043,6 +2043,17 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   some beautiful scenery" (`scenery:admired`), "Give Oli some Stew" (`oli:fed-stew`) and "Fill a
   Grape Barrel for the Foreman" (`vineyard:barrel-handed-in`); Raging Echoes shares the buffalo, Oli
   and the barrel.
+- **Kourend and Karamja deeds**, from their content's events:
+  - TzHaar-Ket-Rak: `tzhaar-ket-rak:challenge-completed` { player, number } as the last Jad falls (`where`
+    number 1-6); `tzhaar-ket-rak:infinite-ended` { player, kills } (`atLeast` 18 for "6,6,6").
+  - `inferno:cape-sacrificed` { player } on TzHaar-Ket-Keh's hand-over; `brimhaven-dungeon:permanent-access`
+    { player } on Saniboch's 1,000,000 coins.
+  - Existing: `piscarilius-crane:repaired`; `stealing-artefacts:handed-in` (1, and 15 for "Steal 15 Artefacts",
+    whose Wiki description says 10: Ours, the name and id); `mining:saltpetre` summed; `farming:harvested` of
+    Zamorak's grapes summed; Omnishop's `omnishop:purchase` of a Seed box.
+  - `tithe-farm:planted` { player, crop } (`where` crop: Golovanova, Bologano, Logavano);
+    `woodcutting:shrine-offered` { player, count }; `ornament-kits:applied` { player, kit, result } (`where`
+    kit "Sanguine ornament kit" or "Holy ornament kit").
 - **Varlamore deeds**, from their content's events:
   - Quetzals: `quetzals:flown` { player, site } on landing (Renu's and Primio's flights, not the whistle's
     teleport); `quetzals:site-built` { player, site, all } (all: every site that needs building is built);

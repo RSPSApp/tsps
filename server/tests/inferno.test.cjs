@@ -723,8 +723,10 @@ test('TzHaar-Ket-Keh takes the fire cape and opens the chasm', () => {
   const handOver = { player, definition, stepId: '9TOkei', handled: false };
   entry.handOverCape(handOver);
   assert.equal(player.items.get(Items.FIRE_CAPE), 1, 'the action announcement is not the hand-over');
+  const before = world.events.filter((name) => name === 'inferno:cape-sacrificed').length;
   entry.handOverCape({ ...handOver, kind: 'message' });
   assert.equal(player.items.get(Items.FIRE_CAPE), 0);
+  assert.equal(world.events.filter((name) => name === 'inferno:cape-sacrificed').length, before + 1, "inferno:cape-sacrificed (a league's task)");
   assert.equal(ask('If the player has sacrificed a fire cape:'), true);
   assert.equal(player.varbits.get(ENTRANCE_VARBIT), 2);
 });

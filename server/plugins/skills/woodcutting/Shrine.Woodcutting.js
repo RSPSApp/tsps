@@ -10,6 +10,7 @@ const GuildData = require("./GuildData.Woodcutting");
 const OFFERINGS_ATTRIBUTE = "woodcutting-guild:shrine-offerings";
 
 let core = null;
+let pluginApi = null;
 let SHRINE = null;
 
 /** One of the four evil chicken pieces at 1/1200 each, otherwise the seed nest. */
@@ -30,6 +31,8 @@ function offerEgg(event) {
   player.getSkillManager().addExperiences(core.Skill.PRAYER, SHRINE.xp);
   const count = (Number(player.getAttribute(OFFERINGS_ATTRIBUTE)) || 0) + 1;
   player.setAttribute(OFFERINGS_ATTRIBUTE, count);
+  // `woodcutting:shrine-offered` { player, count } (a league's "Offer an egg to a shrine in the woodcutting guild").
+  pluginApi?.emitCustomEvent?.("woodcutting:shrine-offered", { player, count });
   player.sendMessage(SHRINE.messages.offer);
   player.sendMessage(count === 1 ? SHRINE.messages.countOne : SHRINE.messages.count.replace("{count}", String(count)));
   player.performAnimation(new core.Animation(SHRINE.anim));
@@ -45,6 +48,7 @@ function offerEgg(event) {
 
 function attach(api) {
   core = api.core;
+  pluginApi = api;
   SHRINE = GuildData.load(core).shrine;
   api.persistAttribute(OFFERINGS_ATTRIBUTE);
   api.onItemOnObject("Bird's egg", "Shrine", offerEgg);

@@ -21,6 +21,7 @@ function itemOnItem(event) {
   for (const handler of itemOnItemHandlers) if (!event.handled) handler(event);
 }
 let itemAction = null;
+const kitEvents = [];
 OrnamentKits.register({
   core: {
     GameConstants: { DEFINITIONS_DIRECTORY: path.join(__dirname, "..", "data", "definitions") },
@@ -29,6 +30,7 @@ OrnamentKits.register({
     Item: require("../dist/game/model/Item").Item,
   },
   onItemOnItem: (handler) => { itemOnItemHandlers.push(handler); },
+  emitCustomEvent: (name, payload) => kitEvents.push([name, payload]),
   onItemAction: (handler) => { itemAction = handler; },
   onCustomEvent() {},
   log() {},
@@ -135,6 +137,8 @@ test("using a kit consumes it, transforms the base item and refreshes containers
   assert.deepEqual(defender.getMeta(), { barrows: { remaining: 500 } }, "degradation meta survives");
   assert.equal(items.filter(item => item.getId() > 0).length, 1, "the kit is consumed");
   assert.match(player.messages[0], /apply the rune defender ornament kit/);
+  assert.deepEqual(kitEvents.filter(([name, e]) => name === "ornament-kits:applied" && e.player === player).map(([, e]) => [e.kit, e.result]),
+    [["Rune defender ornament kit", 23230]], "ornament-kits:applied (a league's ToB kit task reads the kit's name)");
   assert.ok(player.getInventoryRefreshes() > 0);
   assert.ok(player.getEquipmentRefreshes() > 0);
 });

@@ -120,8 +120,11 @@ function clickEntrance(p) {
 
 test("Pay with 1,000,000 coins or more: the recorded three-way menu; permanent access opens the entrance", (t) => {
   const { p } = visitor(t, 1000000);
+  const permanent = [];
+  PluginManager.createApi("BrimhavenPermanentTest").onCustomEvent("brimhaven-dungeon:permanent-access", (event) => { if (event.player === p) permanent.push(event); });
   payNpc(p);
   const seen = drive(p, ["Pay 1,000,000 coins for permanent access"]);
+  assert.equal(permanent.length, 1, "brimhaven-dungeon:permanent-access on the payment (a league's Saniboch task)");
   assert.deepEqual(seen[0].options, ["Pay 875 coins to enter once", "Pay 1,000,000 coins for permanent access", "Cancel"]);
   assert.deepEqual(lines(seen), [
     "You give Saniboch 1,000,000 coins for permanent access to the dungeon.",

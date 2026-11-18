@@ -87,6 +87,8 @@ function lastJadDown(player, challenge) {
   player.setAttribute(Common.completionsAttribute(number), count);
   if (firstSixth) player.setAttribute(Common.PET_UNLOCK_ATTRIBUTE, true);
   player.setAttribute(Common.LAST_COMPLETED_ATTRIBUTE, number);
+  // `tzhaar-ket-rak:challenge-completed` { player, number }: 1-6 (a league's "Complete TzHaar-Ket-Rak's first challenge").
+  api.emitCustomEvent("tzhaar-ket-rak:challenge-completed", { player, number });
   const times = bestTimes(player);
   const ticks = challenge.elapsedTicks();
   const best = !(Number(times[number]) > 0) || ticks < Number(times[number]);
@@ -129,6 +131,8 @@ function completed(player, challenge, { logout = false } = {}) {
 function infiniteEnded(player, challenge, { logout }) {
   const { data } = Common;
   const kills = challenge.kills;
+  // `tzhaar-ket-rak:infinite-ended` { player, kills } (a league's "Defeat 18 Unbound Jal-tok Jads").
+  if (kills > 0) Common.api.emitCustomEvent("tzhaar-ket-rak:infinite-ended", { player, kills });
   if (challenge.startTick !== -1) {
     const previous = Number(player.getAttribute(Common.INFINITE_BEST_ATTRIBUTE)) || 0;
     const time = Common.formatCentis(challenge.elapsedTicks());

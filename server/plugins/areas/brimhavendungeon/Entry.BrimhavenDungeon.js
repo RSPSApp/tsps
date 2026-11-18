@@ -105,6 +105,8 @@ function pay(player, fee, attribute) {
   player.setAttribute(attribute, true);
   if (attribute === PERMANENT_ATTRIBUTE) player.setAttribute(ENTRY_PAID_ATTRIBUTE, false);
   syncVarbits(player);
+  // `brimhaven-dungeon:permanent-access` { player } (a league's "Pay Saniboch for Permanent Access").
+  if (attribute === PERMANENT_ATTRIBUTE) pluginApi?.emitCustomEvent("brimhaven-dungeon:permanent-access", { player });
   return true;
 }
 

@@ -1371,9 +1371,9 @@ progress in `league:mastery-progress`.
   judged on `onNpcDeath` by the NPC's name, combat level or Slayer level. As captured
   (227/00075) a point flips its `league_combat_mastery_point_unlock_N` varbit (11585-11594),
   raises `points_earned` (11584) and `points_to_spend` (11583) and shows the green game message.
-  **No Echo boss is fought here** (the orbs and their entrance prompt are, see Echo orbs below,
-  but Yes is a placeholder), so those three points come only from `::mastery point`; the data
-  marks them `_missing`.
+  The [Echo encounters](../../docs/echo-bosses.md) are available. The three Raging Echoes mastery
+  challenges for distinct Echo kills are still marked `_missing` and only available through
+  `::mastery point`.
 - **The interface, as captured.** The league side panel's mastery button (656:32) opens
   `league_combat_mastery` (311) as the main modal with `if_setevents` on its clickzones (311:36,
   0-18), menu frame (311:78, 10-18) and style tabs (311:73, 0-26), then runs 3186 on the panel's
@@ -1469,15 +1469,16 @@ asks with a full pack), the King Black Dragon's ladder down, Hespori's cave in t
 and Amoxliatl's door. A league character carrying that boss's orb (Wiki: in the inventory; not
 used up) gets the captured menu, "Fight the Echo of the Thermonuclear Smoke Devil?" /
 "Fight the Echo of the Hunllef?" with "Yes." and "No.": No goes in as without the orb, Yes calls
-`startEchoFight(player, boss)`, which answers false until echo bosses exist, and the player stays
-outside with "Nothing interesting happens.".
+`startEchoFight(player, boss)`, which asks the boss's plugin to start its private Echo encounter.
+The player keeps their orb. See [Echo bosses](../../docs/echo-bosses.md) for the current encounters
+and remaining combat differences.
 
 #### Ours (echo orbs)
 
 - The menu titles of the seven bosses with no capture follow the captured pattern
   (`titleOurs` in the data).
-- No continues the normal entry; Yes is the placeholder message and leaves the player outside.
-  No comes later than the click, so it goes in only while the player is still on the tile the menu
+- No continues the normal entry. The answer comes later than the click, so normal entry proceeds
+  only while the player is still on the tile the menu
   opened on, logged in and alive, and each entrance asks its own rules again (the winch's and the
   Roof Entrance's task, the Kings' Slayer task, the Queen's rope still tied, Amoxliatl's quest and
   open chamber), with the usual refusal and without asking about the orb a second time.

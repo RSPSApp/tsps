@@ -204,6 +204,8 @@ function sellTops(request) {
   }
   player.getInventory().deleteNumber(Common.ids().item.pyramidTop, tops);
   player.getInventory().addItem(new (Common.getCore().Item)(Common.ids().item.coins, coins));
+  // `pyramid-plunder:pyramid-tops-sold` { player, amount } (a league's "Turn in a Pyramid Top to Simon Templeton").
+  Common.getApi().emitCustomEvent("pyramid-plunder:pyramid-tops-sold", { player, amount: tops });
   advanceStage(player, STAGE.SOLD);
   request.text = `You hand over the artefact(s) and Simon hands you ${coins} coins.`;
   request.box = { statement: true };

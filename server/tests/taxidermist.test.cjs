@@ -121,6 +121,8 @@ test("a kurask head: her remark and price, then Yes please takes 6,000 coins and
   put(player, 0, ids.coins, 10000);
   put(player, 5, ids.kurask);
   const head = at(player, 5);
+  const stuffed = [];
+  PluginManager.createApi("TaxidermistStuffedTest").onCustomEvent("taxidermist:stuffed", (event) => { if (event.player === player) stuffed.push(event.itemId); });
   assert.equal(useOn(player, 5), true);
   assert.deepEqual(spoken(player), ["A kurask? Splendid! Look at those horns!", "I can preserve that for you for 6,000 coins."]);
   assert.deepEqual(menu(player)?.options, ["Yes please", "No thanks"]);
@@ -133,6 +135,7 @@ test("a kurask head: her remark and price, then Yes please takes 6,000 coins and
   assert.equal(at(player, 5), head, "the same item, in the same slot");
   assert.equal(head.getId(), ids.kuraskStuffed);
   assert.equal(coins(player), 4000);
+  assert.deepEqual(stuffed, [ids.kuraskStuffed], "taxidermist:stuffed, once, with the swap (a league's Taxidermist task)");
 });
 
 test("No thanks keeps the head and the coins", (t) => {

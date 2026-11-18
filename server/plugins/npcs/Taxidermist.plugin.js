@@ -175,6 +175,8 @@ function stuff(player, offer) {
   inventory.deleteNumber(coinsId, trophy.price);
   item.setId(trophy.stuffed);
   inventory.refreshItems();
+  // `taxidermist:stuffed` { player, itemId }: the stuffed trophy (a league's "Have the Taxidermist stuff something").
+  api.emitCustomEvent("taxidermist:stuffed", { player, itemId: trophy.stuffed });
 }
 
 /** Unstuff: a chat menu naming the re-stuffing price, then the head goes back into the trophy's slot. */

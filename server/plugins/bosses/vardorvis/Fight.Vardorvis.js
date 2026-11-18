@@ -36,6 +36,8 @@ class Fight {
     this.boss = boss;
     this.awakened = session.awakened;
     this.stats = Common.data.boss[this.awakened ? "awakened" : "normal"];
+    // Wiki: the awakened encounter is immune to stat drains.
+    boss.setStatDrainImmune?.(this.awakened);
     this.tick = 0;
     this.events = [];
     this.engaged = false;
@@ -358,6 +360,22 @@ function combatClass() {
 
 const fightOf = (npc) => npc?.__vardorvisFight ?? null;
 
+/** The ordered reward chain's unique stage: 1/136 normally, 3/136 awakened (Wiki, Vardorvis). */
+const UNIQUE_STAGE = "tradeable_uniques";
+const AWAKENED_UNIQUE_MULTIPLIER = 3;
+
+/** npc-drops:chance: an awakened kill rolls the tradeable unique table three times as often. */
+function dropChance({ npc, rules }) {
+  const fight = fightOf(npc);
+  if (!fight?.awakened || !Array.isArray(rules)) return;
+  rules.push({ pattern: new RegExp(`^${UNIQUE_STAGE}$`), multiplier: AWAKENED_UNIQUE_MULTIPLIER });
+}
+
+/** slayer:target-eligible: Wiki, "Slayer tasks no longer apply to the Awakened version". */
+function slayerEligible(request) {
+  if (fightOf(request?.npc)?.awakened) request.eligible = false;
+}
+
 /** The first hit to land on him starts the fight; his slashes heal him half of what they take. */
 function hitResolved({ attacker, target, hit }) {
   const fight = fightOf(target);
@@ -393,6 +411,8 @@ function attachFight(api) {
   api.onNpcBeforeDeath(beforeDeath);
   api.onNpcDeath(onDeath);
   api.onCustomEvent("npc-drops:context", dropContext);
+  api.onCustomEvent("npc-drops:chance", dropChance);
+  api.onCustomEvent("slayer:target-eligible", slayerEligible);
   api.onPlayerLogin(sendAwakenedKillCount);
 }
 
@@ -401,4 +421,4 @@ function sendAwakenedKillCount({ player }) {
   if (kills > 0) player.getPacketSender().sendConfig(Common.data.kill.awakenedKillCountVarp, kills);
 }
 
-module.exports = { attachFight, spawnBoss, Fight };
+module.exports = { attachFight, spawnBoss, Fight, dropChance, slayerEligible, UNIQUE_STAGE, AWAKENED_UNIQUE_MULTIPLIER };

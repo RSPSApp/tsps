@@ -136,6 +136,25 @@ function toggleRecoil({ player, item }) {
   void item;
 }
 
+/** rsprox 237/01150: inventory op 7 opens chatmenu before a choice changes recoil. */
+function recoilSettings({ player, item }) {
+  const ringId = item?.getId?.();
+  const owned = () => item?.getId?.() === ringId && recoilIds.has(ringId)
+    && (player.getInventory().getItems().includes(item)
+      || player.getEquipment().get(core.Equipment.RING_SLOT) === item);
+  if (!owned()) return false;
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
+    new core.OptionDialogue(0, {
+      executeOption(option) {
+        player.getPacketSender().sendInterfaceRemoval();
+        if (!owned()) return;
+        if (Number(option) === 1) toggleRecoil({ player, item });
+        else if (Number(option) === 2) discharge({ player, item });
+      },
+    }, "Toggle recoil effect", "Discard recoil charges", "Cancel").setTitle("Select an option"),
+  ));
+}
+
 function discharge({ player, item }) {
   item.setId(baseByRecoil.get(item.getId()) ?? item.getId());
   setCharges(item, undefined);
@@ -157,8 +176,8 @@ function attach(api) {
   recoilIds = new Set(baseByRecoil.keys());
   api.persistAttribute(DISABLED_ATTRIBUTE, false);
   api.onCombatHitResolved(onHitResolved);
-  api.onItemAction("Ring of suffering (r)", { Check: checkCharges, "Recoil settings": toggleRecoil, "Recoil Settings": toggleRecoil, Discharge: discharge });
-  api.onItemAction("Ring of suffering (ri)", { Check: checkCharges, "Recoil settings": toggleRecoil, "Recoil Settings": toggleRecoil, Discharge: discharge });
+  api.onItemAction("Ring of suffering (r)", { Check: checkCharges, "Recoil settings": recoilSettings, "Recoil Settings": recoilSettings, Discharge: discharge });
+  api.onItemAction("Ring of suffering (ri)", { Check: checkCharges, "Recoil settings": recoilSettings, "Recoil Settings": recoilSettings, Discharge: discharge });
   api.onItemOnItem("Ring of recoil", "Ring of suffering", chargeRing);
   api.onItemOnItem("Ring of recoil", "Ring of suffering (i)", chargeRing);
   api.onItemOnItem("Ring of recoil", "Ring of suffering (r)", chargeRing);

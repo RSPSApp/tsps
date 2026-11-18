@@ -74,6 +74,23 @@ The boss-room membership boundary has not been established here. The cove's
 attack hook checks the player's Kraken task; the existing Slayer combat checks
 also apply.
 
+## Combat Achievements
+
+The Kraken's five tasks (cache task structs):
+
+| Task | Tier | How it finishes |
+|---|---|---|
+| Kraken Adept | Hard | 20 kills, from the kill count. |
+| Unnecessary Optimisation | Hard | Kill all four tentacles, then the Kraken. They may die before it is woken, as the Wiki allows. A tentacle killed while the Kraken is down respawns as its whirlpool on its own timer, and stops counting once it is back. Each tentacle counts for whoever killed it last. The tentacles that die with the Kraken respawn with it, so they never carry into the next fight. |
+| Krakan't Hurt Me | Hard | 25 kills in one private room. |
+| Ten-tacles | Elite | 50 kills in one private room. |
+| One Hundred Tentacles | Master | 100 kills in one private room. |
+
+The streaks count the Kraken kills in the room you rented. The room closes when you leave it,
+whether you walk out, teleport, die or log out, and a new rental starts at 0. Kills in the
+open cove don't count. `plugins/bosses/kraken/CombatAchievements.Kraken.js`, tested by
+`server/tests/kraken-combat-achievements.test.cjs`.
+
 ## To verify
 
 `::teleports` Bosses tab now lists Kraken (lands inside the cove at (2280, 10016), by the

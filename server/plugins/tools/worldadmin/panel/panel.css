@@ -330,6 +330,8 @@ span.host-template-trigger-icon { display: grid; width: 24px; height: 24px; }
   .plugin-delete { width: 28px; min-height: 28px; padding: 0; font-size: 19px; line-height: 1; }
   .plugin-delete:hover:not(:disabled) { color: var(--error); }
   .plugin-options { margin-inline-start: 18px; border-inline-start: 1px solid var(--line); }
+  .plugin-options > summary { padding: 8px 16px 10px; color: var(--muted); font-size: 13px; cursor: pointer; }
+  .plugin-options > summary:hover, .plugin-options > summary:focus-visible { color: var(--accent); }
   .plugin-options > .row { padding-inline-start: 16px; }
   .row.inactive .label, .row.inactive .help { color: var(--off); }
   .label { font-size: 14px; font-weight: 500; color: var(--text); }

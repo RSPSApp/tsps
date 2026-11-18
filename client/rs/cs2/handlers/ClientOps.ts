@@ -15,6 +15,7 @@ import { VARBIT_ROOF_REMOVAL } from "../../../common/vars";
 import { MenuTargetType } from "../../MenuEntry";
 import { chatHistory } from "../ChatHistory";
 import { getHoverTarget, getInteractionCanvases, minMenuSnapshot, type MinMenuSnapshot } from "../minimenu";
+import { getRootRenderTransform } from "../../../widgets/menu/utils";
 import { Opcodes } from "../Opcodes";
 import type { HandlerContext, HandlerMap } from "./HandlerTypes";
 import { locHighlightKey, type ModelHighlightManager } from "../../../game/highlights/ModelHighlightManager";
@@ -758,33 +759,32 @@ export function registerClientOps(handlers: HandlerMap): void {
 
     // === Mouse position ===
     // returns mouse position in widget-logical coordinates.
-    // InputManager coordinates are in canvas-buffer space; divide by the UI
-    // render scale so CS2 scripts see positions matching the widget layout.
-    handlers.set(Opcodes.MOUSE_GETX, (ctx) => {
-        const osrsClient = (ctx.widgetManager as any)?.osrsClient;
-        const mouseX = osrsClient?.inputManager?.mouseX;
-        if (typeof mouseX !== "number") {
-            ctx.pushInt(-1);
-            return;
+    // InputManager coordinates are in canvas-buffer space. CS2 scripts (the mouseover
+    // tooltip, drag previews) want widget-layout space. Fixed mode letterboxes the gameframe
+    // (a scale plus an offset, recorded on the root by fitWidgetToBounds), so the pointer goes
+    // back through that transform, as widget clicks and menus already do. Without one, the
+    // buffer-to-layout ratio.
+    const mouseLayoutPosition = (ctx: any, axis: "x" | "y"): number => {
+        const widgetManager = ctx.widgetManager as any;
+        const osrsClient = widgetManager?.osrsClient;
+        const mouse = axis === "x" ? osrsClient?.inputManager?.mouseX : osrsClient?.inputManager?.mouseY;
+        if (typeof mouse !== "number") return -1;
+        const root = widgetManager?.getAllGroupRoots?.(widgetManager.rootInterface)?.[0];
+        const recorded = Number(axis === "x" ? root?.__widgetRenderScaleX : root?.__widgetRenderScaleY);
+        if (Number.isFinite(recorded) && recorded > 0) {
+            const transform = getRootRenderTransform(root);
+            return axis === "x"
+                ? Math.floor((mouse - transform.offsetX) / transform.scaleX)
+                : Math.floor((mouse - transform.offsetY) / transform.scaleY);
         }
-        const layoutW = ctx.widgetManager?.canvasWidth ?? 0;
-        const bufW: number = osrsClient?.renderer?.canvas?.width ?? layoutW;
-        const scale = layoutW > 0 && bufW > 0 ? bufW / layoutW : 1;
-        ctx.pushInt(scale > 1 ? Math.round(mouseX / scale) : mouseX | 0);
-    });
-
-    handlers.set(Opcodes.MOUSE_GETY, (ctx) => {
-        const osrsClient = (ctx.widgetManager as any)?.osrsClient;
-        const mouseY = osrsClient?.inputManager?.mouseY;
-        if (typeof mouseY !== "number") {
-            ctx.pushInt(-1);
-            return;
-        }
-        const layoutH = ctx.widgetManager?.canvasHeight ?? 0;
-        const bufH: number = osrsClient?.renderer?.canvas?.height ?? layoutH;
-        const scale = layoutH > 0 && bufH > 0 ? bufH / layoutH : 1;
-        ctx.pushInt(scale > 1 ? Math.round(mouseY / scale) : mouseY | 0);
-    });
+        const layout = (axis === "x" ? widgetManager?.canvasWidth : widgetManager?.canvasHeight) ?? 0;
+        const canvas = osrsClient?.renderer?.canvas;
+        const buffer: number = (axis === "x" ? canvas?.width : canvas?.height) ?? layout;
+        const scale = layout > 0 && buffer > 0 ? buffer / layout : 1;
+        return scale > 1 ? Math.round(mouse / scale) : mouse | 0;
+    };
+    handlers.set(Opcodes.MOUSE_GETX, (ctx) => ctx.pushInt(mouseLayoutPosition(ctx, "x")));
+    handlers.set(Opcodes.MOUSE_GETY, (ctx) => ctx.pushInt(mouseLayoutPosition(ctx, "y")));
 
     const consumeHighlightSetup = (ctx: any) => {
         ctx.intStackSize -= 5;

@@ -30,6 +30,7 @@ module.exports = function registerDragonAxeSpecialAttack(api) {
       character.performGraphic(CRYSTAL_AXES.includes(weaponId) ? CRYSTAL_SWOOSH : SWOOSH);
       const location = character.getLocation();
       Sounds.playAreaSound({
+        source: character,
         soundId: Sound.DRAGON_AXE_SPECIAL.getId(),
         x: location.getX(),
         y: location.getY(),

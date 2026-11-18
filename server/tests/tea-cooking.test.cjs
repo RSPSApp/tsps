@@ -28,7 +28,9 @@ after(() => PM.emitServerShutdown({}));
 function actor(t, level) {
   const channel = {kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
   const p = new Player(new PlayerSession(channel)), conn = new ClientConnection(channel); conn.player = p;
-  const messages=[]; const send=p.sendMessage.bind(p); t.mock.method(p,'sendMessage',m=>{messages.push(m); return send(m);});
+  const messages=[], sounds=[]; const send=p.sendMessage.bind(p); t.mock.method(p,'sendMessage',m=>{messages.push(m); return send(m);});
+  const sound=p.getPacketSender().sendSound.bind(p.getPacketSender());
+  t.mock.method(p.getPacketSender(),'sendSound',(...args)=>{sounds.push(args); return sound(...args);});
   let house; const errors=[], warnings=[], warn=console.warn.bind(console);
   t.mock.method(console,'error',(...args)=>errors.push(args));
   t.mock.method(console,'warn',(...args)=>{if(String(args[0]).includes('[plugins]')) warnings.push(args); else warn(...args);});
@@ -64,7 +66,7 @@ function actor(t, level) {
     assert.ok(obj,key); return obj;
   }
 
-  return {p,conn,house,object,messages};
+  return {p,conn,house,object,messages,sounds};
 }
 function action(f,key,name) {
   const object=f.object(key), at=object.getLocation(), id=object.getId(); f.p.moveTo(new core.Location(at.getX()-1,at.getY(),at.getZ())); f.p.setNeedsPlacement(false);
@@ -108,15 +110,23 @@ test('hot kettle into leaf pot: 20 succeeds before 19 refuses',async t=>{
   const sm=low.p.getSkillManager(); sm.setMaxLevels(core.Skill.COOKING,19,false).setExperiences(core.Skill.COOKING,core.SkillManager.getExperienceForLevel(19),false).setCurrentLevel(core.Skill.COOKING,19,false);
   assert.equal(sm.getMaxLevel(core.Skill.COOKING),19); assert.equal(sm.getCurrentLevel(core.Skill.COOKING),19); assert.equal(sm.getExperience(core.Skill.COOKING),core.SkillManager.getExperienceForLevel(19));
   coherent(low,19); const before=l.getItems().map(i=>i && [i.getId(),i.getAmount()]); low.messages.length=0; await pair(low,7691,7700); assert.deepEqual(l.getItems().map(i=>i && [i.getId(),i.getAmount()]),before); assert.ok(!low.messages.includes('You pour the water into the teapot.')); assert.deepEqual(low.messages,['You need a Cooking level of 20 to make tea.']); assert.equal(l.getAmount(7691),1); assert.equal(l.getAmount(7700),1); assert.equal(l.getAmount(7692),0);
+  assert.equal(low.sounds.some(([id])=>id===2583),false,'low Cooking emits no pour sound');
 });
 for (const level of [19,20]) test(`hot kettle on an empty pot preserves missing-leaves behavior at ${level}`,async t=>{
   const f=actor(t,level); await supplies(f); const inv=f.p.getInventory(); coherent(f,level); const before=inv.getItems().map(i=>i && [i.getId(),i.getAmount()]); f.messages.length=0; await pair(f,7691,7702); assert.deepEqual(inv.getItems().map(i=>i && [i.getId(),i.getAmount()]),before); assert.ok(f.messages.includes('You should add tea leaves to the teapot first.'));
   assert.equal(inv.getAmount(7691),1); assert.equal(inv.getAmount(7702),1); assert.equal(inv.getAmount(7692),0);
+  assert.equal(f.sounds.some(([id])=>id===2583),false,'missing leaves emit no pour sound');
 });
 test('pouring the hot water onto the leaves gives 52 Cooking XP, and no other step gives any',async t=>{
   const {GameConstants}=require('../dist/game/GameConstants');
   const f=actor(t,20); await supplies(f); const sm=f.p.getSkillManager(), inv=f.p.getInventory(), start=sm.getExperience(core.Skill.COOKING);
+  f.sounds.length=0;
   await pair(f,7738,7702); assert.equal(sm.getExperience(core.Skill.COOKING),start);
+  assert.deepEqual(f.sounds,[]);
   await pair(f,7691,7700); assert.equal(inv.getAmount(7692),1);
+  assert.deepEqual(f.sounds,[[2583,0,0]],'capture229/00269 tick3917 plays pour_tea once');
+  assert.equal(sm.getExperience(core.Skill.COOKING),start+52*GameConstants.EXPERIENCE_MULTIPLIER);
+  await pair(f,7688,7692);
+  assert.deepEqual(f.sounds,[[2583,0,0]],'an empty kettle cannot pour again');
   assert.equal(sm.getExperience(core.Skill.COOKING),start+52*GameConstants.EXPERIENCE_MULTIPLIER);
 });

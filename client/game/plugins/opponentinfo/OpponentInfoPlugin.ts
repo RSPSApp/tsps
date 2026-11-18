@@ -16,6 +16,7 @@ import { overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
 import type { SimpleMenuEntry } from "../../../ui/menu/MenuEngine";
 import { drawTextGL } from "../../../widgets/components/TextRenderer";
 import type { OsrsClient } from "../../OsrsClient";
+import { baseNpcTypeId } from "../../../custom/npcs/NpcModelOverrideRegistry";
 import type {
     ClientPlugin,
     HealthBarEvent,
@@ -277,7 +278,9 @@ export class OpponentInfoPlugin extends Plugin implements ClientPlugin {
         if (vars.getVarbit(disabled) !== 0) return false;
         const hudNpc = vars.getVarp(HPBAR_HUD_NPC);
         const type = this.npcType(opponent.serverId);
-        return hudNpc !== -1 && !!type && (hudNpc === type.base.id || hudNpc === type.transformed?.id);
+        // The HUD names the cache npc; a customised one (an Echo boss) renders a synthetic type for it.
+        const ids = [type?.base.id, type?.transformed?.id].filter((id): id is number => id !== undefined).map(baseNpcTypeId);
+        return hudNpc !== -1 && !!type && ids.includes(hudNpc);
     }
 
     private viewport(): any {

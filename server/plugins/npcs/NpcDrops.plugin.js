@@ -1261,9 +1261,7 @@ function placeDrops(player, drops, location, placement = {}) {
     if (CURRENCY_IDS.has(drop.itemId) && isWearingRingOfWealth(player) && autoCollectCurrencies(player)) {
       // Into the pack up to the stack cap; anything past it drops to the ground as it would without the ring.
       const inventory = player.getInventory();
-      const collected = typeof inventory.getAddableAmount === "function"
-        ? inventory.getAddableAmount(new Item(drop.itemId, amount))
-        : (inventory.contains(drop.itemId) || inventory.getFreeSlots() > 0 ? amount : 0);
+      const collected = inventory.getAddableAmount(new Item(drop.itemId, amount));
       if (collected > 0) inventory.adds(drop.itemId, collected);
       amount -= collected;
       if (amount <= 0) continue;

@@ -105,7 +105,8 @@ function actor(t, kind, { rescued = false, full = false } = {}) {
   assert.equal(quest.isComplete(p), full);
   const check = { player: p, rescue: 'king-awowogei', complete: false };
   PM.emitCustomEvent('recipe-for-disaster:rescue-status', check);
-  assert.equal(check.complete, rescued);
+  // A completed Recipe for Disaster counts as every rescue done, flags or not (legacy saves).
+  assert.equal(check.complete, rescued || full);
   const portalAt = new core.Location(2542, 3097, 0);
   p.moveTo(new core.Location(2542, 3096, 0)); p.setNeedsPlacement(false);
   const portal = new GameObject(yanillePortal, portalAt, 10, 2, null);

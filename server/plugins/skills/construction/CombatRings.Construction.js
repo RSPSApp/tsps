@@ -271,11 +271,20 @@ function allowBountyHunterWeapons(event) {
   if (from?.ring === RINGS.COMBAT_RING && sameFight(from, to)) event.allowed = true;
 }
 
+function describeSafePvp(event) {
+  const { attacker, target } = event;
+  const house = House.houseFor(attacker);
+  if (house && !house.isDestroyed() && House.houseFor(target) === house
+    && attacker.getArea() === house && target.getArea() === house
+    && canFight(attacker, target, house)) event.safe = true;
+}
+
 function attachCombatRings(api) {
   api.onObjectInteraction("Boxing ring", { "Climb-over": climbOver });
   api.onObjectInteraction("Fencing ring", { "Climb-over": climbOver });
   api.onObjectInteraction("Combat ring", { "Climb-over": climbOver });
   api.onCustomEvent("bounty-hunter:weapon-area", allowBountyHunterWeapons);
+  api.onCustomEvent("combat:safe-pvp", describeSafePvp);
   api.onObjectInteraction("Magic barrier", { "Walk-through": climbOver });
   api.onObjectInteraction("Glove Rack", { Search: searchRack });
   api.onObjectInteraction("Weapons Rack", { Search: searchRack });

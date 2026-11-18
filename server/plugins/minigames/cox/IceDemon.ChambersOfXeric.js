@@ -352,16 +352,34 @@ class IceDemonRoom extends Raid.Room {
     const attacker = hit.getAttacker?.();
     if (!attacker?.isPlayer?.()) return;
     const player = attacker.getAsPlayer();
-    const spell = player.getCombat().getPreviousCast?.() ?? player.getCombat().getSelectedSpell?.();
+    const { factor, fire } = this.hitFactor(player, hit);
+    if (!hit.rolledResistance) {
+      for (const part of hit.getHits()) part.setDamage(Math.floor(part.getDamage() * factor));
+      hit.updateTotalDamage();
+    }
+    if (hit.getTotalDamage() >= npc.getHitpoints()) this.fireFinisher = fire ? player : null;
+  }
+
+  /** The same, on the rolled hitsplats (Room.resistance): a third, so its last hitpoints can still go. */
+  resistance(npc, hit) {
+    const attacker = hit.getAttacker?.();
+    if (npc !== this.demon || !attacker?.isPlayer?.()) return 1;
+    return this.hitFactor(attacker.getAsPlayer(), hit, true).factor;
+  }
+
+  /** As it's rolled the spell is the one being cast; as it lands, the one just cast. */
+  hitFactor(player, hit, rolling = false) {
+    const combat = player.getCombat();
+    const spell = hit.getSpell?.() ?? (rolling
+      ? combat.getSelectedSpell?.() ?? combat.getPreviousCast?.()
+      : combat.getPreviousCast?.() ?? combat.getSelectedSpell?.());
     const magic = hit.getCombatType?.() === Shared.core().CombatType.MAGIC;
     const weapon = player.getEquipment().getItems()[Shared.core().Equipment.WEAPON_SLOT]?.getId?.();
     const fire = magic && isFireSpell(spell);
     let factor = 1 / 3;
     if (fire) factor = 2.5;
     else if (magic ? isDemonbaneSpell(spell) : DEMONBANE.has(weapon)) factor = 1;
-    for (const part of hit.getHits()) part.setDamage(Math.floor(part.getDamage() * factor));
-    hit.updateTotalDamage();
-    if (hit.getTotalDamage() >= npc.getHitpoints()) this.fireFinisher = fire ? player : null;
+    return { factor, fire };
   }
 
   /** A hit from the demon on a raider: remembered for Cryo No More. */

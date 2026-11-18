@@ -106,7 +106,12 @@ const DAMAGE = {
   MELEE: 35,
   MELEE_PRAYED: 0.5,
   VINE: 20,
-  VINE_PRAYED: 0.5,
+  /** Protect from Melee caps a tendril at 11 (Wiki). */
+  VINE_PRAYED: 0.55,
+  /** A mushroom bursting 2 tiles away (Wiki: 3-4). */
+  MUSHROOM_SPLASH: [3, 4],
+  /** A battery's overflow, or a full charge on the ground, takes at most this share of its health (Wiki). */
+  BATTERY_HEALTH_SHARE: 0.15,
   POISON: 10,
   BEAM: 43,
   BEAM_ABSORBED: 20,
@@ -115,9 +120,10 @@ const DAMAGE = {
 /**
  * Hitpoints by party size (captured with 2-5 players): the shield, the batteries, and the
  * health pool on the ground, always twice the shield. A battery's break takes 40% of the shield.
+ * Solo and duo got 10% more after release (Wiki: 610 for two); the duo battery follows (estimate).
  */
-const SHIELD = { 2: 550, 3: 800, 4: 1030, 5: 1260 };
-const BATTERY = { 2: 180, 3: 250, 4: 330, 5: 400 };
+const SHIELD = { 2: 610, 3: 800, 4: 1030, 5: 1260 };
+const BATTERY = { 2: 200, 3: 250, 4: 330, 5: 400 };
 const BATTERY_SHARE = 0.4;
 const SWOOP_FROM = 7;
 const SWOOP_LAND = 3;
@@ -137,6 +143,14 @@ const CAMERA_SHAKE_TICKS = 3;
 const RANGED_PROJECTILE = { delay: 48, end: 116, angle: 127, progress: 0, startHeight: 0, endHeight: 0 };
 
 const PHASE = { INERT: "inert", WAKING: "waking", FLYING: "flying", LANDING: "landing", GROUNDED: "grounded", DEAD: "dead" };
+
+/** Whether a player's weapon is a halberd, which reaches the Guardian in the air (Wiki). */
+function wieldsHalberd(player) {
+  const { Equipment, CacheDefinitions } = Shared.core();
+  const weapon = player?.getEquipment?.()?.getItems?.()[Equipment.WEAPON_SLOT];
+  const name = weapon && weapon.getId() > 0 ? CacheDefinitions.getItem(weapon.getId())?.name : null;
+  return /halberd/i.test(String(name ?? ""));
+}
 
 class GuardianRoom extends Raid.Room {
   onBuild() {
@@ -368,6 +382,11 @@ class GuardianRoom extends Raid.Room {
       CombatFactory.poisonEntity(player, DAMAGE.POISON * 5);
       Shared.damage(player, DAMAGE.POISON, "GREEN");
     }
+    // Two tiles out, the burst still catches you for a little (Wiki).
+    for (const player of this.fighters()) {
+      if (players.includes(player) || player.getLocation().getZ() !== mushroom.tile.z) continue;
+      if (Shared.distanceTo(player, mushroom.tile) === MUSHROOM_REACH + 1) Shared.damage(player, Shared.random(...DAMAGE.MUSHROOM_SPLASH));
+    }
     const object = mushroom.object;
     this.later(TIME.MUSHROOM_GONE, () => this.removeObject(object));
   }
@@ -401,7 +420,8 @@ class GuardianRoom extends Raid.Room {
   canAttack(attacker, target, method) {
     if (target !== this.guardian || !attacker?.isPlayer?.()) return null;
     if (this.phase === PHASE.INERT || this.phase === PHASE.WAKING || this.phase === PHASE.DEAD) return false;
-    if (this.phase === PHASE.FLYING && method?.type?.() === Shared.core().CombatType.MELEE) {
+    // A halberd's reach gets to it in the air (Wiki); other melee doesn't.
+    if (this.phase === PHASE.FLYING && method?.type?.() === Shared.core().CombatType.MELEE && !wieldsHalberd(attacker)) {
       attacker.sendMessage("It's flying too high to hit using melee.");
       return false;
     }
@@ -597,12 +617,18 @@ class GuardianRoom extends Raid.Room {
     this.batteriesBroken++;
     const second = this.batteriesBroken >= 2;
     this.later(TIME.BATTERY_DAMAGE, () => {
+      const healthCap = Math.floor(this.maxHealth * DAMAGE.BATTERY_HEALTH_SHARE);
+      // On the ground for good, a full charge takes 15% of its health (Wiki).
+      if (this.phase === PHASE.GROUNDED && this.final) {
+        Shared.damage(this.guardian, Math.min(this.guardian.getHitpoints(), healthCap), "YELLOW");
+        return;
+      }
       if (this.phase !== PHASE.FLYING) return;
       // The second break grounds it at once: the rest of the shield goes, and as much again
-      // from its health (captured: 612 to 524, 342 to 274, 801 to 581).
+      // from its health, up to 15% of it (captured: 612 to 524, 342 to 274, 801 to 581; Wiki).
       if (second) {
         const rest = this.guardian.getHitpoints();
-        this.health = Math.max(1, this.health - rest);
+        this.health = Math.max(1, this.health - Math.min(rest, healthCap));
         Shared.damage(this.guardian, rest, "YELLOW");
         return;
       }

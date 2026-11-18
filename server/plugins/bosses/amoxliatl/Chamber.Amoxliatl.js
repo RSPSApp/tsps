@@ -66,9 +66,13 @@ function areaClass() {
 }
 
 class Session {
-  constructor(player, quest = false) {
+  constructor(player, quest = false, echoToken = null) {
     this.player = player;
     this.quest = quest;
+    // Echo deliberately reuses the normal fight, ice and attack ordering. Echo specials
+    // are not implemented until their mechanics have been captured.
+    this.variant = echoToken ? "echo" : "normal";
+    this.echoToken = echoToken;
     this.area = new (areaClass())();
     this.area.session = this;
     const { sourceChunkX, sourceChunkY, chunks } = Common.data.instance;
@@ -115,11 +119,24 @@ class Session {
   /** She rises on her platform and the fight begins (Fight.Amoxliatl). */
   spawnBoss() {
     if (this.ended || this.boss) return;
+    if (this.echoToken && !validateEcho(this.player, this.echoToken)) { this.failEntry(); return; }
     const { npcs, spawn } = Common.data;
     const boss = this.spawn(this.quest ? npcs.quest : npcs.boss, spawn.tile, Common.core.Direction[spawn.direction].getId());
-    if (!boss) return;
+    if (!boss) { this.failEntry(); return; }
+    if (this.echoToken) {
+      // The normal Amoxliatl, given the Echo profile by EchoBosses (the Wiki's Echo is an
+      // override of her own id, with no separate appearance).
+      const configure = { player: this.player, boss: "amoxliatl", role: "boss", npc: boss, token: this.echoToken, configured: false };
+      Common.api.emitCustomEvent("echo-boss:configure", configure);
+      if (!configure.configured) { this.failEntry(); return; }
+    }
     this.boss = boss;
     require("./Fight.Amoxliatl").begin(this, boss);
+  }
+
+  failEntry() {
+    if (this.player.getArea() === this.area) this.player.moveTo(Common.toLocation(Common.data.door.outside));
+    this.end();
   }
 
   end() {
@@ -127,6 +144,13 @@ class Session {
     this.ended = true;
     sessions.delete(this.player);
     this.fight?.stop();
+    if (this.echoToken) {
+      this.player.getCombat().reset();
+      this.player.getCombat().getHitQueue().clear();
+      this.boss?.getCombat().reset();
+      this.boss?.getCombat().getHitQueue().clear();
+    }
+    if (this.echoToken) Common.api.emitCustomEvent("echo-boss:release", { player: this.player, token: this.echoToken });
     this.player.setAttribute(Common.INSIDE_ATTRIBUTE, null);
     if (!this.area.isDestroyed()) this.area.destroy();
   }
@@ -149,14 +173,25 @@ function passThrough({ player, objectId }) {
   return true;
 }
 
-function enterChamber(player) {
+function enterChamber(player, echoToken = null) {
   // The menu's No comes later: the door's own rule is asked again.
-  if (sessionOf(player) || !questComplete(player)) return;
-  const session = new Session(player);
+  if (sessionOf(player) || !questComplete(player)) {
+    if (echoToken) Common.api.emitCustomEvent("echo-boss:release", { player, token: echoToken });
+    return;
+  }
+  const origin = player.getLocation().clone();
+  let session;
+  try { session = new Session(player, false, echoToken); }
+  catch (error) {
+    if (echoToken) Common.api.emitCustomEvent("echo-boss:release", { player, token: echoToken });
+    player.sendMessage("The encounter could not be started.");
+    return;
+  }
   sessions.set(player, session);
   player.getMovementQueue().reset();
   Common.travel(player, () => {
     if (session.ended) return;
+    if (echoToken && (!validateEcho(player, echoToken) || !questComplete(player) || !player.getLocation().equals(origin) || player.getHitpoints() <= 0)) { session.end(); return; }
     const { arrival, arrivalFace, music, spawn } = Common.data;
     session.area.enter(player);
     player.moveTo(session.tile(arrival));
@@ -168,6 +203,29 @@ function enterChamber(player) {
     Common.later(spawn.afterArrivalTicks, () => session.spawnBoss());
   });
 }
+
+function startEcho(request) {
+  if (request.boss !== "amoxliatl" || request.handled) return;
+  request.handled = true;
+  if (sessionOf(request.player) || !questComplete(request.player)) return;
+  const claim = { player: request.player, boss: request.boss, token: null };
+  Common.api.emitCustomEvent("echo-boss:claim", claim);
+  if (claim.token) enterChamber(request.player, claim.token);
+}
+
+function validateEcho(player, token) {
+  const request = { player, boss: "amoxliatl", token, valid: false };
+  Common.api.emitCustomEvent("echo-boss:validate", request);
+  return request.valid === true;
+}
+function logout({ player }) {
+  const session = sessionOf(player);
+  if (!session) return;
+  if (player.getArea() === session.area) player.setLocation(Common.toLocation(Common.data.door.outside));
+  session.end();
+}
+function playerDeath({ player }) { sessionOf(player)?.end(); }
+function shutdown() { for (const session of [...sessions.values()]) logout({ player: session.player }); }
 
 /** The quest reuses the same chamber and hazards with the cache's 400-HP guardian. */
 function questFight(request) {
@@ -233,6 +291,10 @@ function attachChamber(api) {
   api.onPlayerLogin(recoverOnLogin);
   api.onCustomEvent("gravestones:grave-location", graveOutside);
   api.onCustomEvent('amoxliatl:quest-fight', questFight);
+  api.onCustomEvent("echo-boss:start", startEcho);
+  api.onPlayerLogout(logout);
+  api.onPlayerDeath(playerDeath);
+  api.onServerShutdown(shutdown);
   api.onObjectInteraction("Door", { "Pass-through": passThrough });
   api.onObjectInteraction("Ice blockage", { Exit: exit, "Quick-exit": quickExit });
 }

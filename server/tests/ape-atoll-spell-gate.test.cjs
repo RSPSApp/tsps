@@ -38,7 +38,8 @@ test('saved Awowogei rescue unlocks the normal spell without completing full RFD
  const f=actor(t,{rescues:128});rescue(f,true);assert.equal(f.q.isComplete(f.p),false);const messages=[],send=f.p.sendMessage.bind(f.p);t.mock.method(f.p,'sendMessage',(...args)=>{messages.push(args[0]);return send(...args);});await cast(f);assert.equal(messages.includes('You must free King Awowogei before casting this spell.'),false,'the completed rescue does not receive the refusal');assert.deepEqual(inventory(f),[0,0,0,0]);arrive(f);
 });
 test('full RFD completion remains eligible on a legacy save without rescue bits',async t=>{
- const f=actor(t,{full:true});rescue(f,false);await cast(f);assert.deepEqual(inventory(f),[0,0,0,0]);arrive(f);
+ // A completed quest counts as every rescue done, even without the per-rescue flags.
+ const f=actor(t,{full:true});rescue(f,true);await cast(f);assert.deepEqual(inventory(f),[0,0,0,0]);arrive(f);
 });
 test('completed rescue still requires Magic level 64',async t=>{
  const f=actor(t,{rescues:128,level:63});rescue(f,true);const before=inventory(f);await cast(f);for(let i=0;i<8;i++)tick();assert.deepEqual(inventory(f),before);assert.deepEqual([f.p.getLocation().getX(),f.p.getLocation().getY()],[3200,3200]);

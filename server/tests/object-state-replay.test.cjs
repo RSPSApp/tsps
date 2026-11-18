@@ -238,3 +238,69 @@ test("generic chest Open, Search and Shut use shared object state", () => {
     for (const object of [...ObjectManager.objectsAt(at)]) ObjectManager.deregister(object, true);
   }
 });
+
+test("logging in beside the open Varrock manhole replaces its closed cache placement", () => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { encodeLocAddChange, encodeLocDel } = require("../dist/net/protocol/ClientProtocol");
+  const [x, y, z] = [3237, 3458, 0];
+  const tile = new Location(x, y, z);
+  const closedId = 881;
+  const openId = 882;
+  RegionManager.loadMapFiles(x, y);
+  const closed = MapObjects.get(closedId, tile.clone(), null);
+  assert.ok(closed?.isMapOriginal());
+  const shape = closed.getType();
+  const face = closed.getFace();
+  require("../plugins/areas/Misthalin.plugin").register(PluginManager.createApi("Misthalin"));
+  const interact = (object, option, player) => {
+    const clickType = object.getDefinition().getInteractions().indexOf(option) + 1;
+    assert.ok(clickType > 0, option);
+    assert.ok(PluginManager.emitObjectInteraction({
+      player, object, objectId: object.getId(), clickType, location: { x, y, z },
+    }));
+  };
+  const opener = { getPrivateArea: () => null, performAnimation() {} };
+  function loginFrames() {
+    const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel);
+    const player = new Player(session);
+    session.setPlayer(player);
+    player.setUsername("manholereplay");
+    player.setLocation(new Location(x - 1, y, z));
+    player.needsPlacement = false;
+    assert.ok(World.getPlayers().add(player));
+    const frames = [];
+    session.sendClientPacket = (frame) => { frames.push(frame); return true; };
+    try {
+      session.flushClient(1);
+    } finally {
+      World.getPlayers().remove(player);
+    }
+    return frames;
+  }
+
+  try {
+    interact(closed, "Open", opener);
+    assert.ok(MapObjects.get(openId, tile.clone(), null));
+    assert.equal(MapObjects.get(closedId, tile.clone(), null), null);
+    const removal = encodeLocDel(x, y, z, shape, face);
+    const addition = encodeLocAddChange(openId, x, y, z, shape, face);
+    const frames = loginFrames();
+    const removeAt = frames.findIndex((frame) => frame.equals(removal));
+    const addAt = frames.findIndex((frame) => frame.equals(addition));
+    assert.ok(removeAt >= 0 && addAt > removeAt, "remove the closed cache placement before adding the open manhole");
+
+    assert.ok(RegionManager.reloadRegion(RegionManager.regionIdForTile(x, y)));
+    const open = MapObjects.get(openId, tile.clone(), null);
+    assert.ok(open, "the open manhole remains interactive after the map reloads");
+    assert.equal(MapObjects.get(closedId, tile.clone(), null), null);
+    interact(open, "Close", opener);
+    assert.ok(MapObjects.get(closedId, tile.clone(), null));
+    assert.ok(!loginFrames().some((frame) => frame.equals(removal) || frame.equals(addition)), "a fresh scene keeps the closed manhole");
+  } finally {
+    const open = MapObjects.get(openId, tile.clone(), null);
+    if (open) ObjectManager.deregister(open, true);
+    if (!MapObjects.get(closedId, tile.clone(), null)) ObjectManager.register(closed, true);
+  }
+});

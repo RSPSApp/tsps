@@ -856,8 +856,12 @@ function hitLanded({ attacker, target, hit }) {
   const tasks = indexOf(type).events.get("hit");
   if (!tasks?.length) return;
   // As the hitsplat shows it: the roll, but no more than the target had left (Mobile.decrementHealth
-  // caps it later; overkill on a 5-hitpoint goblin is no 66).
-  const damage = Math.min(Number(hit?.getTotalDamage?.()) || 0, Math.max(0, Number(target.getHitpoints?.()) || 0));
+  // caps it later; overkill on a 5-hitpoint goblin is no 66). This hit is already queued when the
+  // hook runs (CombatFactory.applyResolvedHitDamage), so only the rest of the queue lands before it.
+  const rolled = Number(hit?.getTotalDamage?.()) || 0;
+  const queued = Number(target.getCombat?.()?.getHitQueue?.()?.getQueuedDamage?.()) || 0;
+  const ahead = Math.max(0, queued - rolled);
+  const damage = Math.min(rolled, Math.max(0, (Number(target.getHitpoints?.()) || 0) - ahead));
   const spell = spellName(hit?.getSpell?.());
   const weapon = player.getEquipment?.().getItems?.()[Common.core.Equipment.WEAPON_SLOT]?.getId?.();
   countTasks(player, type, tasks.filter((task) => damage >= Number(task.trigger.min)

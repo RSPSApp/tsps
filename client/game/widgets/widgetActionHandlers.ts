@@ -19,7 +19,7 @@ import type { WidgetManager } from "../../widgets/WidgetManager";
 import { isWidgetUseTarget } from "../../widgets/WidgetFlags";
 import { ClientState } from "../ClientState";
 import { createSelectedSpellOnWidgetPacket } from "../selectedSpellPackets";
-import { resolveWidgetIdentifiers, type WidgetActionEvent } from "./widgetActionPayload";
+import { inferWidgetOpId, resolveWidgetIdentifiers, type WidgetActionEvent } from "./widgetActionPayload";
 import { closeOpenModal } from "./input/widgetKeyboardInput";
 import { spellWidgetChildSlot } from "./SpellSelectionController";
 
@@ -301,9 +301,9 @@ export function handleWidgetActionTargeting(
             widgetId: ((groupId & 0xffff) << 16) | (childId & 0xffff),
             groupId: groupId | 0,
             childId: childId | 0,
-            option: "Cast",
+            option: event.option || "Cast",
             target: event.target || event.widget.name || event.widget.opBase || "",
-            opId: 1,
+            opId: event.opIndex || inferWidgetOpId(event.widget, event.option) || 1,
         });
         return true;
     }

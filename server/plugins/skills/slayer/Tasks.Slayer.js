@@ -250,7 +250,9 @@ function bossChoices(player, master = null) {
 function meetsMaster(player, master) {
   const skills = player.getSkillManager();
   const combat = skills.getCombatLevel() >= master.combat || hasSlayerCape(player, false);
-  return combat && skills.getMaxLevel(core.Skill.SLAYER) >= master.slayer;
+  const request = { player, master, allowed: combat && skills.getMaxLevel(core.Skill.SLAYER) >= master.slayer };
+  api.emitCustomEvent("slayer:master-access", request);
+  return request.allowed;
 }
 
 // --- Assigning

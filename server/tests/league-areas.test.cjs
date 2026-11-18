@@ -1485,3 +1485,16 @@ test("real league two-step run stops at the sourced intra-square Misthalin edge"
   assert.equal(movement.isMovings(), false);
   assert.equal(movement.size(), 0);
 });
+
+test("Demonic Pacts still excludes Slayer monsters in locked areas", () => {
+  const previous = worldLeague;
+  worldLeague = 6;
+  const player = character("slayerareas");
+  worldLeague = previous;
+  assert.deepEqual(player.getAttribute("league:areas"), [VARLAMORE]);
+  const available = (id, npcId) => query("slayer:task-available", {
+    player, task: { id }, available: true, counts: (id) => id === npcId,
+  }).available;
+  assert.equal(available(-624201, core.NpcIdentifiers.ABYSSAL_DEMON_3), false, "locked-area monsters stay unavailable");
+  assert.equal(available(-624202, core.NpcIdentifiers.IMP_2), true, "starting-area monsters stay available");
+});

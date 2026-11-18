@@ -57,6 +57,11 @@ function minigamePoints(request) {
   if (multiplier) request.points = Math.floor(request.points * multiplier);
 }
 
+/** Demonic Pacts' starting master is Chaeldar: master levels do not gate assignments. Task requirements still apply. */
+function slayerMasterAccess(request) {
+  if (request?.player && Common.leagueOf(request.player) === 6) request.allowed = true;
+}
+
 /** `slayer:task-reward` { player, master, freeTasks, multiplier }: 5x task points, from the first task. */
 function slayerTaskReward(request) {
   const slayer = request?.player ? passive(request.player, "slayer") : null;
@@ -84,6 +89,7 @@ module.exports = function attach(api) {
   api.registerRunEnergyDrainModifier(runEnergyDrain);
   api.onCanGainExperience(combatExperience);
   api.onCustomEvent("minigame:points", minigamePoints);
+  api.onCustomEvent("slayer:master-access", slayerMasterAccess);
   api.onCustomEvent("slayer:task-reward", slayerTaskReward);
   api.onCustomEvent("slayer:superior-spawn", superiorSpawn);
   api.onCustomEvent("treasure-trails:scroll-boxes", scrollBoxes);

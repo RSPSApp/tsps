@@ -481,6 +481,12 @@ class PestControlMatchArea extends PrivateArea {
     super.postLeave(mobile, logout);
   }
 
+  npcAggression(player, npc) {
+    // A splatter, or a ravager with a gate or barricade still to break, doesn't hunt players.
+    if (npc.__pcType === "splatter" || (npc.__pcType === "ravager" && npc.__pcStructure)) return false;
+    return undefined;
+  }
+
   process(mobile) {
     this.match.processOnce();
     if (mobile.isNpc?.()) {
@@ -773,12 +779,18 @@ class PestControlMatch {
   }
 
   processStructurePest(npc, type) {
-    npc.getCombat().reset();
     let structure = npc.__pcStructure;
     if (!structure || structure.damage >= structure.maxDamage) {
       structure = this.closestStandingStructure(npc);
       npc.__pcStructure = structure;
     }
+    // Wiki (Ravager): attacked, it keeps tearing at a nearby gate or barricade before it fights back.
+    // While one stands it neither retaliates nor hunts (npcAggression below), so only this route moves
+    // it: a hit re-arming its target walked it one step toward the attacker every other tick.
+    const fightsBack = type === "ravager" && !structure;
+    npc.setFlag("combat:no-retaliate", !fightsBack);
+    if (fightsBack) return;
+    npc.getCombat().reset();
     if (!structure) return;
     const distance = npc.getLocation().getDistance(structure.object.getLocation());
     if (distance > 1) {

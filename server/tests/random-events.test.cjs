@@ -712,15 +712,16 @@ test('Sandwich tray validates owner, selection and open interface, with a wrong 
   h.random(0); trayClick(h, p, 10726); trayClick(h, p, 10726);
   assert.deepEqual(p.rewards, [I.STALE_BAGUETTE]); assert.equal(p.interfaceId, -1);
   assert.deepEqual(npcLines(p), ['Hope that fills you up!']);
+  const cross = [];
+  h.api.onCustomEvent('random-events:sandwich-lady-cross', (event) => cross.push(event.player));
   const normal = h.player(), npc2 = h.spawn(normal, 1, 0);
   h.hooks['Sandwich lady']['Talk-to']({ player: normal, npc: npc2 }); openOptions(h, normal);
   h.random(1 / 64); trayClick(h, normal, 10726);
   assert.deepEqual(normal.rewards, [I.BAGUETTE]);
+  assert.deepEqual(cross, [], "the right food makes her no cross");
   // The Wiki transcript's line for the wrong food; no reward and she leaves.
   const greedy = h.player(), npc4 = h.spawn(greedy, 1, 0);
   h.hooks['Sandwich lady']['Talk-to']({ player: greedy, npc: npc4 }); openOptions(h, greedy);
-  const cross = [];
-  h.api.onCustomEvent('random-events:sandwich-lady-cross', (event) => cross.push(event.player));
   trayClick(h, greedy, 10730); assert.deepEqual(greedy.rewards, []); assert.equal(greedy.interfaceId, -1);
   assert.deepEqual(cross, [greedy], "random-events:sandwich-lady-cross, for the wrong food only (a league's task)");
   assert.deepEqual(npcLines(greedy), ["Hey, I didn't say you could have that!"]);

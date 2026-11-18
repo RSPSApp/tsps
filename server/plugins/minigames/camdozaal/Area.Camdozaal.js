@@ -35,8 +35,8 @@ function createArea() {
   }
   return new Camdozaal([new Boundary(2897, 3047, 5757, 5869, 0)]);
 }
-// The pre-existing members golem Area owns this same public rectangle first.
-// It publishes its lifecycle; the standalone Area above remains the F2P fallback.
+// The CamdozaalGolems Area owns this same public rectangle first, on every world.
+// It publishes its lifecycle; the standalone Area above is the fallback while that plugin is disabled.
 function processExistingArea({ player }) { processBoost(player); }
 function enterExistingArea({ player }) { previousBoost.set(player, S.boostTicks(player)); S.sync(player); }
 function leaveExistingArea({ player }) { previousBoost.delete(player); }

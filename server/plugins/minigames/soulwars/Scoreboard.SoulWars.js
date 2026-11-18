@@ -110,14 +110,21 @@ function view(event) {
   return true;
 }
 
+/** The collection log's "Soul Wars" page counts the reader's games played. */
+function collectionLogCount(request) {
+  if (request?.category !== "Soul Wars" || !request.player || Number.isFinite(request.count)) return;
+  request.count = Common.getVarp(request.player, "total_games");
+}
+
 function attachScoreboard(api) {
   Match.onStart(gameStarted);
   Match.onEnd(gameEnded);
+  api.onCustomEvent("collection-log:category-count", collectionLogCount);
   api.onObjectInteraction("Scoreboard", { View: view });
 }
 
 module.exports = {
-  attachScoreboard, gameStarted, playerKilled, avatarKilled, gameEnded, view, text,
+  attachScoreboard, gameStarted, playerKilled, avatarKilled, gameEnded, view, text, collectionLogCount,
   SCOREBOARD_LOC, INTERFACE_NAME, TEXT_COMPONENT,
   /** Tests: read and write the world's records at `file` instead, from scratch. */
   _useFile(file) { FILE = file; world = null; },

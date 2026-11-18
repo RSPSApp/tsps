@@ -32,6 +32,7 @@ before(() => {
   const api = {
     core: PluginManager.getCoreApi(),
     onObjectInteraction: (name, actions) => { (hooks.objects[name] ??= []).push(actions); },
+    onCustomEvent: () => {},
   };
   Common.init(api);
   Scoreboard.attachScoreboard(api);

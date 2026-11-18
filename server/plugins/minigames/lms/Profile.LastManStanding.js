@@ -86,6 +86,12 @@ function login({ player }) {
   if (coffer(player)) Common.varbit(player, "br_coffer", Math.floor(coffer(player) / 1000));
 }
 
+/** The collection log's "Last Man Standing" page counts the reader's games played. */
+function collectionLogCount(request) {
+  if (request?.category !== "Last Man Standing" || !request.player || Number.isFinite(request.count)) return;
+  request.count = Common.number(request.player, Common.ATTRIBUTES.games);
+}
+
 function attachProfile(api) {
   const { ATTRIBUTES } = Common;
   api.persistAttribute(ATTRIBUTES.tutorial, false);
@@ -96,11 +102,13 @@ function attachProfile(api) {
   api.persistAttribute(ATTRIBUTES.preferredBuild, 0);
   api.persistAttribute(ATTRIBUTES.loadouts, null);
   api.persistAttribute(ATTRIBUTES.coffer, 0);
+  api.onCustomEvent("collection-log:category-count", collectionLogCount);
   api.onPlayerLogin(login);
 }
 
 module.exports = {
   attachProfile,
+  collectionLogCount,
   tutorialDone,
   finishTutorial,
   setRank,

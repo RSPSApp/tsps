@@ -18,6 +18,19 @@ The collection log lives in `server/plugins/achievements/collectionlog/`. What i
 - **Barrows:** each chest's rolled loot is logged once, even when it overflows onto the ground. The category's chest count comes from Barrows' existing saved tally.
 - **Reward shops:** successful purchases of original stock in the shops listed in `plugins/achievements/collectionlog/data/reward-shops.json` log their trackable items through `shop:purchase`. General-store resale and unrelated shops do not grant collection credit. The event reports the quantity actually paid for and delivered.
 
+A category's **count** (the "Zulrah kills: 1" line) is the content's own record. Boss pages take the
+Combat Achievement kill count (`combat-achievements:kills`, the same number the boss page shows),
+summing a page shared by several monsters (Dagannoth Kings, The Nightmare, The Gauntlet) and
+honouring `data/monsters.json`'s `collectionLog` names for pages whose names differ (Barrows
+Chests, Callisto and Artio, The Fight Caves, The Inferno, the raids' modes). Castle Wars, Soul Wars
+and Last Man Standing count the reader's games played from their own saved counters. Content that
+keeps a different count answers first through `collection-log:category-count`, so the plugin's own
+value wins (Barrows, CoX, ToB, ToA, Zulrah, the Kalphite Queen, Guardians of the Rift, clue tiers).
+
+- **The log's own tally** (`clog.counts`) is the fallback for a category nobody answers for.
+- **Still absent:** pages whose content has no Combat Achievement monster yet (Dagannoth Kings, The
+  Mad Angel), the other minigames' completion counts, and the per-item `collection_item_*` varbits.
+
 From another plugin:
 
 ```js
@@ -106,4 +119,7 @@ A boss category's **Combat Achievements button** (621:21) closes the log and ope
 - **`current_runeday` from the side journal's summary tab**, which live also sends; that tab is not part of the log.
 - **The per-item varbits** OSRS sends at login for a few items (`collection_item_*`, e.g. Zulrah's scales) and the `collection_other_*_completed` flags.
 - **Loot that doesn't go through `npc-drops:roll` yet:** additional reward sources, raids chests and clue caskets. Each needs a `collection-log:obtain` in a follow-up; unimplemented content has no acquisition route yet.
-- **"Opened" and "completed" counts** for chests and minigames; they come with those follow-ups.
+- **The remaining "opened" and "completed" counts:** boss pages and Castle Wars, Soul Wars and Last
+  Man Standing now answer (see "A category's count" above), but the other minigames' completion
+  counters, Dagannoth Kings and The Mad Angel (no Combat Achievement monster) still fall back to
+  the log's own tally.

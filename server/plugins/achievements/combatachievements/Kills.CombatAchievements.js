@@ -109,6 +109,60 @@ function onCount(request) {
   request.total = killCount(request.player, monster);
 }
 
+/** A category's name as its monster keys compare: "Nightmare, The" and "The Nightmare" are one. */
+function logKey(name) {
+  return String(name)
+    .toLowerCase()
+    .replace(/, the$/, "")
+    .replace(/^the /, "")
+    .replace(/'/g, "")
+    .trim();
+}
+
+let logCategories = null;
+
+/**
+ * Collection log category key -> the monsters whose kills its page counts. A category named after
+ * one monster answers with that monster; a shared page (Dagannoth Kings, The Gauntlet) sums its
+ * monsters, and data/monsters.json's collectionLog names the pages whose names differ.
+ */
+function collectionLogCategories() {
+  if (logCategories) return logCategories;
+  logCategories = new Map();
+  const add = (category, monster) => {
+    const key = logKey(category);
+    if (!key) return;
+    if (!logCategories.has(key)) logCategories.set(key, new Set());
+    logCategories.get(key).add(monster);
+  };
+  const monsters = [...Data.monsters().values()];
+  for (const monster of monsters) add(monster.name, monster.name);
+  // data/monsters.json's names are hand-written: compare them without the article or apostrophes.
+  const byKey = new Map(monsters.map((monster) => [logKey(monster.name), monster.name]));
+  for (const [name, page] of Object.entries(Data.collectionLogPages())) {
+    const canonical = byKey.get(logKey(name));
+    if (canonical) add(page, canonical);
+  }
+  return logCategories;
+}
+
+/**
+ * "collection-log:category-count" { player, category }: the log's boss page shows the monster's
+ * kill count. Content that keeps its own count answers first; only a page nobody else answered
+ * is filled here, from the Combat Achievements count the boss page already shows.
+ */
+function onCollectionLogCount(request) {
+  if (!request?.player || typeof request.category !== "string" || Number.isFinite(request.count)) return;
+  const names = collectionLogCategories().get(logKey(request.category));
+  if (!names) return;
+  let total = 0;
+  for (const name of names) {
+    const monster = Data.monsterNamed(name);
+    if (monster) total += killCount(request.player, monster);
+  }
+  request.count = total;
+}
+
 /** At login: catch up with the counts plugins keep, send every count, finish what they reach. */
 function restore(player) {
   const request = { player, counts: {}, exact: {} };
@@ -144,6 +198,7 @@ module.exports = function attachKills(api) {
   api.onNpcDeath(onNpcDeath);
   api.onCustomEvent("combat-achievements:kill", onKill);
   api.onCustomEvent("combat-achievements:count", onCount);
+  api.onCustomEvent("collection-log:category-count", onCollectionLogCount);
 };
 
-Object.assign(module.exports, { KILLS_ATTRIBUTE, counts, killCount, setCount, addKill, checkTasks, onNpcDeath, onKill, onCount, restore, reset });
+Object.assign(module.exports, { KILLS_ATTRIBUTE, counts, killCount, setCount, addKill, checkTasks, onNpcDeath, onKill, onCount, onCollectionLogCount, collectionLogCategories, logKey, restore, reset });

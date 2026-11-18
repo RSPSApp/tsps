@@ -36,5 +36,6 @@ module.exports = {
     Area.attach(api);
     Entrance.attach(api);
     Hud.attach(api);
+    require("./dagannothkings/Echo.DagannothKings")(api);
   },
 };

@@ -152,6 +152,15 @@ class ShamansRoom extends Raid.Room {
     this.blockerClip(true);
   }
 
+  /** ::coxclear: the shamans, tendrils and the exit's blockers go at once, their clipping with them. */
+  devFinish() {
+    this.completed = true;
+    this.blockerClip(false);
+    this.tendrils.forEach((tendril) => Shared.core().ObjectManager.deregister(tendril, true));
+    this.cleanup();
+    this.clearExit();
+  }
+
   blockerClip(on) {
     const { RegionManager } = Shared.core();
     for (const blocker of this.blockers) {

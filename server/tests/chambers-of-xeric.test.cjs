@@ -691,6 +691,28 @@ test('a Challenge Mode raid loads every room without errors', () => {
   ticks(8);
   assert.equal(ice.stage, 'fighting');
   assert.equal(demon.getNpcTransformationId(), 7585);
+  // Its third comes off the rolled hitsplat, before the hitpoints cap: at 2 hitpoints a ranged hit of
+  // 30 still kills (taken off after the cap, 2 / 3 was 0 and the demon couldn't die).
+  const { CombatType } = PluginManager.getCoreApi();
+  leader.getCombat = () => ({ getPreviousCast: () => null, getSelectedSpell: () => null });
+  leader.getEquipment = () => ({ getItems: () => [] });
+  const rolledHit = (value) => {
+    const damage = { value, getDamage() { return this.value; }, setDamage(v) { this.value = v; } };
+    const hit = {
+      getAttacker: () => leader, getCombatType: () => CombatType.RANGED, getSpell: () => null,
+      getHits: () => [damage], updateTotalDamage() {}, getTotalDamage: () => damage.value,
+    };
+    return { damage, hit };
+  };
+  const rolled = rolledHit(30);
+  RaidUnit.roomNpcRolledHit({ target: demon, hit: rolled.hit, damage: rolled.damage });
+  assert.equal(rolled.damage.value, 10, 'a third of the roll');
+  assert.equal(rolled.hit.rolledResistance, true);
+  ice.modifyHit(demon, rolled.hit);
+  assert.equal(rolled.damage.value, 10, 'not taken off again as it lands');
+  const unrolled = rolledHit(30);
+  ice.modifyHit(demon, unrolled.hit);
+  assert.equal(unrolled.damage.value, 10, 'a hitsplat nothing rolled still lands as a third');
   // rsprox captures: Vasa's special runs 13 ticks from 7409 to lighting his next crystal.
   const vasa = raid.rooms.find((room) => room.key === 'VASA_NISTIRIO');
   vasa.vasa.isRegistered = () => true;

@@ -43,11 +43,11 @@ spotanim (`sp_attack_glow_arrow_launch`, 250) in slot 1 at height 96, and fires 
 249 (`sp_attack_glow_arrow_travel`) instead of the arrow's own: launched at 41, landing at
 46 + 5 per tile, heights 40.75/36.5, angle 15, progress 11. The arrow's usual draw graphic
 is not shown. Sources: the draw (animation 426 with spotanim 250 in slot 1, height 96) is
-in RSProx captures 1698 (an NPC archer, with sound 2536 that tick) and 2967; the projectile
-timing (start 41, end 46 + 5 per tile, angle 15, progress 11, heights 163/146) is in capture
-4031. The RuneLite spotanim names come from `SpotanimID`.
+in RSProx captures 226/01698 (an NPC archer, with sound 2536 that tick) and 230/02967
+(also an NPC archer); the projectile timing (start 41, end 46 + 5 per tile, angle 15,
+progress 11, heights 163/146) is in 237/04031. The RuneLite spotanim names come from `SpotanimID`.
 
-No capture shows a player firing a magic longbow or comp bow Powershot: the 250 + 426 pairing
-was seen on NPC archers and on other players' bows that were not identified as magic
-longbows. The special-attack toggle, the real attack animation and the weapon itself have
-not been compared against a recording.
+None of these cited captures identifies a player firing a magic longbow or comp bow
+Powershot. The 250 + 426 draw pairing is recorded on NPC archers; 237/04031 supplies
+projectile timing without identifying the firing weapon. The special-attack toggle,
+the real attack animation and the weapon itself have not been compared against a recording.

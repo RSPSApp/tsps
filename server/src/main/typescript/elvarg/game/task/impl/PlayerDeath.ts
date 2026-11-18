@@ -100,6 +100,13 @@ export class PlayerDeathTask extends Task {
                     // Energy isn't restored, but the restore timer starts over on the respawn tick
                     // (rsprox captures: docs/special-attack-energy.md).
                     CombatSpecial.restartRestoreTimer(this.player, CombatSpecial.restoreDelayTicks(this.player));
+                    // Hits still on their way (queued during the death animation, delayed projectiles,
+                    // the rest of a multi-hit special) and the player's own pending damage (a poison
+                    // tick) belong to the life that just ended: dropped, they can't land after the
+                    // respawn. clearIncoming also cancels deferred hits by bumping the queue generation.
+                    const hitQueue = this.player.getCombat?.()?.getHitQueue?.();
+                    hitQueue?.clearIncoming();
+                    hitQueue?.clear();
 
                     // If the player lost items, the ones a death keeps come back.
                     if (this.loseItems) {

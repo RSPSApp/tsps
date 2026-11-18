@@ -204,7 +204,6 @@ class FriendsChatManager {
         this.refreshFriendWatchers(player.getLongUsername(), player);
         const lastOwner = player.getRelations().getFriendsChatLastOwner();
         if (lastOwner) {
-            this.notification(player, "Attempting to join chat-channel...");
             this.join(player, lastOwner, true, { rejoin: true });
         }
     }
@@ -506,6 +505,8 @@ class FriendsChatManager {
                 this.notification(player, "The channel you tried to join does not exist.");
             return false;
         }
+        if (rejoin)
+            this.notification(player, "Attempting to join chat-channel...");
         const memberName = accountName(player.getUsername());
         const rank = this.memberRank(profile, player);
         const privileged = rank === FriendsChatRank.JagexModerator;
@@ -651,7 +652,7 @@ class FriendsChatManager {
     static setOwnChannelName(player, rawName) {
         const name = channelName(rawName);
         if (!name) {
-            this.notification(player, "Chat-channel names must contain 1 to 12 valid characters.");
+            this.notification(player, "Invalid chat-channel name entered!");
             return;
         }
         if (this.setupIsLive(player)) {

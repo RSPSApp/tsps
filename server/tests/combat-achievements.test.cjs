@@ -291,6 +291,17 @@ test("one-hit echoes sharing a boss name cannot award its kill or speed achievem
   assert.equal(Progress.isComplete(player, task.id), true);
 });
 
+test('Echo encounter forms cannot award ordinary boss kill counts or fight-condition achievements', () => {
+  const player=createPlayer(),monster=Data.monsterNamed('Fragment of Seren');
+  player.getFightType=()=>({getBonusType:()=>0});player.getEquipment=()=>({getItems:()=>[]});
+  const npc={isNpc:()=>true,isPlayer:()=>false,getId:()=>8917,getHitpoints:()=>0,getMaxHitpoints:()=>1000,
+    getAttribute:key=>key==='echo-boss:encounter'?{boss:'fixture',token:'token'}:null,
+    getCurrentDefinition:()=>({getName:()=>monster.name})};
+  Fights.onDealt({player,target:npc,hit:{getCombatType:()=> 'MAGIC',getTotalDamage:()=>1000}});
+  Kills.onNpcDeath({killer:player,npc});Fights.onNpcDeath({killer:player,npc});
+  assert.equal(Kills.killCount(player,monster),0);
+});
+
 test("fights: a rule reads how the monster died", () => {
   const player = createPlayer();
   player.prayers = new Set([18]);
@@ -477,6 +488,27 @@ test("the Gauntlet: a completed run's count, time and the Hunllef fight decide i
   assert.equal(Progress.isComplete(player, named("Defence Doesn't Matter").id), true);
   assert.equal(Progress.isComplete(player, named("Egniol Diet").id), false, "made an egniol");
   assert.equal(Progress.isComplete(player, named("Wolf Puncher").id), false, "two attuned weapons");
+});
+
+test("an Echo Hunllef run adds a Corrupted Hunllef kill without being a completion (rsprox.net 1158)", () => {
+  const GauntletShared = require("../plugins/minigames/gauntlet/Shared.Gauntlet");
+  const Unit = require("../plugins/minigames/gauntlet/CombatAchievements.Gauntlet");
+  GauntletShared.bind(fakeApi);
+  const player = createPlayer();
+  player.getEquipment = () => ({ contains: () => true });
+  player.getAttribute = ((get) => (key) => (key === "gauntlet:stats" ? { completions: { corrupted: 9 } } : get(key)))(player.getAttribute);
+  processCycle = 2000;
+  const fight = { taken: { offPrayer: 1, avoidable: 0 }, wrongStyleHits: 0 };
+  Unit.completed({ run: { mode: "corrupted", startCycle: 0, made: { armour: 1, attunedWeapons: 2, egniol: 1 }, hunllef: fight }, player, reason: "completed" });
+  const hunllef = Data.monsterNamed("Corrupted Hunllef");
+  assert.equal(Kills.killCount(player, hunllef), 9, "nine normal completions");
+  // Live: the tenth kill, an Echo one, completes Corrupted Gauntlet Master while the completions stay 9.
+  const echo = { mode: "corrupted", echo: { token: "t" }, startCycle: 1900, made: { armour: 0, attunedWeapons: 0, egniol: 0 }, hunllef: fight };
+  Unit.completed({ run: echo, player, reason: "completed" });
+  assert.equal(Kills.killCount(player, hunllef), 10, "one more kill, not the completion count");
+  assert.equal(Progress.isComplete(player, named("Corrupted Gauntlet Master").id), true);
+  assert.equal(Progress.isComplete(player, named("Corrupted Warrior").id), false, "the supplied kit's perfected armour isn't judged");
+  assert.equal(Progress.isComplete(player, named("Egniol Diet II").id), false, "preparation isn't judged");
 });
 
 test("the Fight Caves: a watched run's facts decide its tasks", () => {

@@ -364,12 +364,21 @@ function allowBountyHunterWeapons(event) {
   if (event.attacker?.getArea?.() === game.gameArea && event.target?.getArea?.() === game.gameArea) event.allowed = true;
 }
 
+/** A fact about these opponents' protected game, never permission to start combat. */
+function describeSafePvp(event) {
+  if (event.attacker?.getArea?.() !== game.gameArea || event.target?.getArea?.() !== game.gameArea) return;
+  if (!game.inGameBounds(event.attacker.getLocation()) || !game.inGameBounds(event.target.getLocation())) return;
+  const team = game.getTeamId(event.attacker), other = game.getTeamId(event.target);
+  if (game.getTeamData(team) && game.getTeamData(other) && team !== other) event.safe = true;
+}
+
 module.exports = function attachCastleWarsAreas(api, castleWars) {
   game = castleWars;
   core = api.core;
   data = castleWars.data;
   registerAreas(api);
   api.onCustomEvent("bounty-hunter:weapon-area", allowBountyHunterWeapons);
+  api.onCustomEvent("combat:safe-pvp", describeSafePvp);
   api.onCustomEvent("player:death-bones", preventBonesOnDeath);
   api.onServerStartup(setUpCastle);
   api.onPlayerLogin(restoreLoginInsideCastleWars);

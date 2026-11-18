@@ -109,11 +109,18 @@ class BloatRoom extends Raid.Room {
     if (state.asleep) {
       state.hitWhileAsleep = true;
     } else {
-      for (const part of hit.getHits?.() ?? []) part.setDamage(Math.floor(part.getDamage() / 2));
-      hit.updateTotalDamage?.();
+      if (!hit.rolledResistance) {
+        for (const part of hit.getHits?.() ?? []) part.setDamage(Math.floor(part.getDamage() / 2));
+        hit.updateTotalDamage?.();
+      }
       if (npc.getHitpoints() / Math.max(1, npc.getMaxHitpoints()) < 0.4) state.running = !state.running;
     }
     if (!this.killingBlow && npc.getHitpoints() > 0 && hit.getTotalDamage?.() >= npc.getHitpoints()) this.killingBlow = this.judgeBlow(hit);
+  }
+
+  /** The walking half, taken off the rolled hitsplats (Raid.roomResistsRolledHit) so its last hitpoint can go. */
+  resistance(npc) {
+    return npc === this.bloat && this.state && !this.state.asleep ? 1 / 2 : 1;
   }
 
   /** Who landed the kill, and whether as a crystal halberd's special attack (a special's own method). */

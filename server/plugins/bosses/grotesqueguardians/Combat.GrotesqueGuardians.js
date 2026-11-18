@@ -119,7 +119,7 @@ function methods() {
       }
       if (distance <= 1) {
         npc.performAnimation(new Animation(ids.seqs.dawnSlash));
-        this.plan = [{ style: "melee", delay: 0, max: dawn.meleeMax }];
+        this.plan = [{ style: "melee", delay: 0, max: npc.__ggRoof?.echo ? npc.getCurrentDefinition().getMaxHit() : dawn.meleeMax }];
         return;
       }
       npc.performAnimation(new Animation(ids.seqs.dawnRanged));
@@ -134,8 +134,8 @@ function methods() {
       return 8;
     }
 
-    attackSpeed() {
-      return dawn.attackSpeed;
+    attackSpeed(character) {
+      return character?.__ggRoof?.echo ? character.getCurrentDefinition().getAttackSpeed() : dawn.attackSpeed;
     }
 
     type() {
@@ -199,8 +199,8 @@ function methods() {
       return character?.getAsNpc?.()?.__ggFight?.phase === 4 ? 8 : 1;
     }
 
-    attackSpeed() {
-      return dusk.attackSpeed;
+    attackSpeed(character) {
+      return character?.__ggRoof?.echo ? character.getCurrentDefinition().getAttackSpeed() : dusk.attackSpeed;
     }
 
     type() {

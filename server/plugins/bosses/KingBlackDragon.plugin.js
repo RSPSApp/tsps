@@ -109,6 +109,84 @@ let core = null;
 let Location, Misc, PendingHit, Projectile, CombatEquipment;
 let PrayerHandler;
 let CombatFactory;
+const ECHO_BOSS = "king-black-dragon";
+const ECHO_INSIDE_ATTRIBUTE = "king-black-dragon:echo-inside";
+const echoSessions = new Map();
+
+/** Echo placeholder: the normal King Black Dragon with its breath tables, protection and
+ * effects; no Echo specials. Wiki does not specify an applicable Echo breath cap, so the normal
+ * 65/50 tables remain. EchoBosses gives this instance the Echo HP, stats and attack speed. */
+function startEcho(request) {
+  if (request.boss !== ECHO_BOSS || request.handled) return;
+  request.handled = true;
+  const { player } = request;
+  if (echoSessions.has(player)) return;
+  const claim = { player, boss: ECHO_BOSS, token: null };
+  api.emitCustomEvent("echo-boss:claim", claim);
+  if (!claim.token) return;
+  const session = { player, token: claim.token, variant: "echo", role: "boss", npc: null, ended: false };
+  echoSessions.set(player, session);
+  try {
+    const { PrivateArea, Boundary } = core;
+    session.area = new (class extends PrivateArea {
+      constructor() { super([new Boundary(2240, 2303, 4672, 4735, 0)]); }
+      isMulti() { return true; }
+      postLeave(mobile, logout) {
+        if (mobile === player) {
+          if (logout) player.setLocation(new Location(...KING_BLACK_DRAGON_LADDER));
+          endEcho(session);
+        }
+        super.postLeave(mobile, logout);
+      }
+    })();
+    session.npc = api.spawnNpc({ id: core.NpcIdentifiers.KING_BLACK_DRAGON, x: 2269, y: 4697, z: 0, owner: player, ownerOnly: true, wanderRadius: 0 });
+    if (!session.npc) throw new Error("Echo KBD spawn failed");
+    session.npc.__skipDefaultRespawn = true;
+    session.npc.__kbdEchoSession = session;
+    session.area.add(session.npc);
+    const configure = { player, boss: ECHO_BOSS, role: "boss", npc: session.npc, token: session.token, configured: false };
+    api.emitCustomEvent("echo-boss:configure", configure);
+    if (!configure.configured) throw new Error("Echo KBD could not be configured");
+    session.area.enter(player);
+    player.moveTo(new Location(...KING_BLACK_DRAGON_LAIR));
+    player.setAttribute(ECHO_INSIDE_ATTRIBUTE, true);
+  } catch (error) {
+    endEcho(session);
+    player.sendMessage("The Echo encounter could not be started.");
+  }
+}
+
+function endEcho(session) {
+  if (!session || session.ended) return;
+  session.ended = true;
+  echoSessions.delete(session.player);
+  session.player.setAttribute(ECHO_INSIDE_ATTRIBUTE, null);
+  session.player.getCombat().reset();
+  session.player.getCombat().getHitQueue().clear();
+  session.npc?.getCombat().reset();
+  session.npc?.getCombat().getHitQueue().clear();
+  session.area?.destroy();
+  api.emitCustomEvent("echo-boss:release", { player: session.player, token: session.token });
+}
+
+function echoDeath({ npc }) {
+  const session = npc?.__kbdEchoSession;
+  if (!session || session.ended || session.completed) return;
+  session.completed = true;
+  api.emitCustomEvent("echo-boss:completed", { player: session.player, boss: ECHO_BOSS, token: session.token, npcs: [npc], location: Projectile.centreOf(npc) });
+}
+function echoLogout({ player }) {
+  const session = echoSessions.get(player);
+  if (session) player.setLocation?.(new Location(...KING_BLACK_DRAGON_LADDER));
+  endEcho(session);
+}
+function echoPlayerDeath({ player }) { endEcho(echoSessions.get(player)); }
+function echoShutdown() { for (const session of [...echoSessions.values()]) echoLogout({ player: session.player }); }
+function echoLogin({ player }) {
+  if (!player.getAttribute(ECHO_INSIDE_ATTRIBUTE)) return;
+  player.setAttribute(ECHO_INSIDE_ATTRIBUTE, null);
+  player.moveTo(new Location(...KING_BLACK_DRAGON_LADDER));
+}
 
 /** Down to the lair; a league character carrying the echo orb is asked first ("echo-boss:entry"). */
 function climbDownToLair({ player }) {
@@ -281,6 +359,13 @@ module.exports = {
     );
     pluginApi.onObjectFirstClick(KBD_LADDER_DOWN_OBJECT_ID, climbDownToLair);
     pluginApi.onObjectFirstClick(KBD_LAIR_LEVER_OBJECT_ID, pullLairLever);
+    pluginApi.persistAttribute(ECHO_INSIDE_ATTRIBUTE);
+    pluginApi.onCustomEvent("echo-boss:start", startEcho);
+    pluginApi.onNpcDeath(echoDeath);
+    pluginApi.onPlayerLogout(echoLogout);
+    pluginApi.onPlayerDeath(echoPlayerDeath);
+    pluginApi.onPlayerLogin(echoLogin);
+    pluginApi.onServerShutdown(echoShutdown);
   },
   _test: { breathMax, FIERY_BREATH_MAX, SPECIAL_BREATH_MAX, DragonfireProtectionTier },
 };

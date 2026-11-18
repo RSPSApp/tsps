@@ -45,12 +45,13 @@ function combatClass() {
     const distance = Common.distanceToFootprint(target.getLocation(), npc);
     const delay = hitDelay(style, distance);
     const id = style === "magic" ? ids.spotanims.magic : ids.spotanims.ranged;
-    new Projectile(Projectile.centreOf(npc), target.getLocation(), target, id, 20, delay * 30, 60, 31, null).sendProjectile();
+    new Projectile(Projectile.centreOf(npc), target.getLocation(), target, id, 20, delay * 30, 60, 31, npc.getPrivateArea?.() ?? null).sendProjectile();
     return delay;
   }
 
-  function capped(hit) {
-    hit.setTotalDamage(Math.min(combat.maxHit, hit.getTotalDamage()));
+  function capped(hit, npc) {
+    const max = npc?.__echoCerberus ? npc.getCurrentDefinition().getMaxHit() : combat.maxHit;
+    hit.setTotalDamage(Math.min(max, hit.getTotalDamage()));
     return hit;
   }
 
@@ -60,7 +61,7 @@ function combatClass() {
       const hits = [];
       for (const { style, delay } of this.plan) {
         this.style = style;
-        hits.push(capped(new PendingHit(character, target, this, delay)));
+        hits.push(capped(new PendingHit(character, target, this, delay), character));
       }
       this.style = this.plan[0]?.style ?? null;
       return hits;
@@ -114,7 +115,7 @@ function combatClass() {
         const delay = style === "ranged" ? shoot(npc, target, "ranged") : 0;
         const method = new CerberusCombat();
         method.style = style;
-        Common.core.CombatFactory.addPendingHit(capped(new PendingHit(npc, target, method, delay)));
+        Common.core.CombatFactory.addPendingHit(capped(new PendingHit(npc, target, method, delay), npc));
       };
       Common.later(spacing, () => follow("ranged"));
       Common.later(spacing * 2, () => follow("melee"));
@@ -125,8 +126,8 @@ function combatClass() {
       return combat.attackDistance;
     }
 
-    attackSpeed() {
-      return combat.attackSpeed;
+    attackSpeed(character) {
+      return character?.__echoCerberus ? character.getCurrentDefinition().getAttackSpeed() : combat.attackSpeed;
     }
 
     type() {

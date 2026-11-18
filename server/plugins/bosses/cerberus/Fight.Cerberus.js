@@ -139,6 +139,7 @@ class Fight {
       const tile = base.transform(dx, dy);
       const npc = Common.api.spawnNpc({ id, x: tile.getX(), y: tile.getY(), z: tile.getZ(), wanderRadius: 0 });
       if (!npc) return;
+      if (this.arena.privateArea) this.arena.privateArea.add(npc);
       this.life.soulsSummoned += 1;
       npc.__skipDefaultRespawn = true;
       npc.getMovementQueue().setBlockMovement(true);
@@ -224,7 +225,7 @@ function soulAttack(soul) {
   const prayers = Common.api.getPrayerHandler();
   soul.prayed = prayers.isActivated(soul.target, prayers[SOUL_PRAYER[soul.kind]]);
   const projectile = soul.kind === "ranged" ? ids.spotanims.ranged : soul.kind === "magic" ? ids.spotanims.magic : ids.spotanims.soulMelee;
-  new Projectile(Projectile.centreOf(soul.npc), soul.target.getLocation(), soul.target, projectile, 0, 30, 40, 31, null).sendProjectile();
+  new Projectile(Projectile.centreOf(soul.npc), soul.target.getLocation(), soul.target, projectile, 0, 30, 40, 31, soul.npc.getPrivateArea?.() ?? null).sendProjectile();
 }
 
 /** A soul's hit: 30, or 30 prayer drained when its style is prayed against. */

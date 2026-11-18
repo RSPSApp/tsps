@@ -262,8 +262,10 @@ export class Combat {
     /**
      * A full stall content holds open until it lets go, for actions whose length isn't known up
      * front (an agility obstacle: Wiki, Animation stall, "most agility actions, such as the log
-     * balance in the Wilderness agility course"). Clicks wait like any full stall's, and with
-     * `holdsHits` so do the hits coming in, until `releaseFullStall`.
+     * balance in the Wilderness agility course"). Unlike a timed stall's, the clicks made during it
+     * are dropped, not held for its end (rsprox 241/1001438 ticks 19815-19828: the next tightrope,
+     * clicked four times during the first, waits for a fresh click after the landing). With
+     * `holdsHits` the hits coming in wait until `releaseFullStall`.
      */
     private heldStall: { holdsHits: boolean } | null = null;
 
@@ -273,6 +275,11 @@ export class Combat {
 
     public releaseFullStall(): void {
         this.heldStall = null;
+    }
+
+    /** Whether a content-held full stall is on, so a click made now is dropped (see `holdFullStall`). */
+    public isHeldStall(): boolean {
+        return this.heldStall != null;
     }
 
     /** Ticks before this character may act again; only a full stall holds them at all. */

@@ -435,8 +435,8 @@ function lock(player, task) {
   player.getMovementQueue().setBlockMovement(true);
   if (task.busyVarbit) player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
   // Wiki: Animation stall. An agility obstacle is a full stall: the player can't act (attack,
-  // eat, walk or click anything else; the last click waits for the landing) and the hits coming
-  // in are queued until it's done. A fall's own damage has no source, so it still lands.
+  // eat, walk or click anything else; those clicks are dropped, rsprox 241/1001438) and the hits
+  // coming in are queued until it's done. A fall's own damage has no source, so it still lands.
   if (task.agility) player.getCombat().holdFullStall(true);
 }
 

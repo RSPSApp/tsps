@@ -1,7 +1,9 @@
 // Run after `yarn build`: node --test tests/agility-full-stall.test.cjs
 // Issue 6237: an agility obstacle is a full stall (Wiki: Animation stall, "most agility actions,
 // such as the log balance in the Wilderness agility course"). The player can't act until they land:
-// clicks wait (the last one runs on the landing) and the hits coming in are queued until then.
+// clicks made meanwhile are dropped (rsprox 241/1001438 ticks 19815-19828: the next tightrope,
+// clicked during the first, needs a fresh click after the landing) and the hits coming in are
+// queued until then.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
@@ -55,7 +57,7 @@ function walkOnLog(player) {
   assert.notEqual(player.getAttribute("agility.obstacle"), null, "the crossing has started");
 }
 
-test("crossing the Wilderness log holds clicks, and an Attack click waits for the landing (#6237)", async (t) => {
+test("crossing the Wilderness log drops clicks: an Attack or a walk made on it never runs (#6237)", async (t) => {
   const previousCycle = World.processCycle;
   t.after(() => { World.processCycle = previousCycle; });
   const random = Math.random;
@@ -67,6 +69,8 @@ test("crossing the Wilderness log holds clicks, and an Attack click waits for th
   t.mock.method(World.getPlayers(), "get", (index) => (index === target.getIndex() ? target : undefined));
   const attacks = [];
   t.mock.method(player.getCombat(), "attack", (other) => attacks.push(other));
+  const walks = [];
+  t.mock.method(player.getMovementQueue(), "requestWalk", (destination) => walks.push([destination.getX(), destination.getY()]));
   const connection = new ClientConnection(channel());
   connection.player = player;
   async function send(packets) {
@@ -80,17 +84,21 @@ test("crossing the Wilderness log holds clicks, and an Attack click waits for th
   tick(player);
   assert.equal(player.getCombat().isAnimationStalled(), true, "the crossing is a full stall");
   await send([{ type: "player_option", index: target.getIndex(), option: 1 }]);
+  tick(player);
+  await send([{ type: "move", worldX: 2994, worldY: 3950, modifierFlags: 0, run: false }]);
   assert.deepEqual(attacks, [], "no attack starts on the log");
   for (let ticks = 0; player.getAttribute("agility.obstacle") != null; ticks++) {
     assert.ok(ticks < 20, "the crossing ends");
     tick(player);
     connection.processTurnPackets();
-    if (player.getAttribute("agility.obstacle") != null) assert.deepEqual(attacks, [], "still crossing");
   }
   assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2994, 3945], "landed across the log");
   assert.equal(player.getCombat().isAnimationStalled(), false, "free once landed");
-  connection.processTurnPackets();
-  assert.deepEqual(attacks, [target], "the held Attack click runs once the player is across");
+  for (let i = 0; i < 3; i++) { tick(player); connection.processTurnPackets(); }
+  assert.deepEqual(attacks, [], "the Attack clicked on the log is dropped, not run after the landing");
+  assert.deepEqual(walks, [], "and so is the walk");
+  await send([{ type: "player_option", index: target.getIndex(), option: 1 }]);
+  assert.deepEqual(attacks, [target], "a fresh click once across attacks");
 });
 
 test("hits coming in during the crossing are queued until the player lands; the obstacle's own fall still hurts", (t) => {

@@ -111,7 +111,7 @@ test('a walk click made during an animation stall runs when the stall releases',
     getAttribute: () => undefined,
     getStatus: () => PlayerStatus.NONE,
     getArea: () => null,
-    getCombat: () => ({ isAnimationStalled: () => stalled, reset() {} }),
+    getCombat: () => ({ isAnimationStalled: () => stalled, isHeldStall: () => false, reset() {} }),
     getMovementQueue: () => ({
       requestWalk: (destination) => walks.push(`${destination.getX()},${destination.getY()}`),
       getMobility: () => ({ canMove: () => true }),

@@ -8,7 +8,7 @@
  * "You take [number] pairs of bellows.".
  *
  * The user's rev 242 capture (docs/quests/big-chompy-bird-hunting/README.md) for the timing:
- * - a tick after arriving, human_pickuptable (832) and "Humph!" (ticks 645, 1739, 1747);
+ * - human_pickuptable (832) and "Humph!" as the click is handled (tick 1747, clicked from beside the chest);
  * - success a tick later: the message, the second overhead line and the loc swap to 3378 (646, 1748);
  *   the quest moves from 15 to 20 on that tick (646);
  * - failure: "You strain to lift the huge rock off the chest..." a tick later, two ticks after that
@@ -74,24 +74,22 @@ module.exports = function createChompyChest(api, { stageOf, onLifted }) {
     // One lift at a time (the capture holds the player through it, ticks 645-646 and 1739-1742).
     if (lifting.has(player)) return true;
     lifting.add(player);
-    later(player, 1, () => {
-      player.performAnimation(new Animation(LIFT_ANIMATION));
-      player.forceChat("Humph!");
-      const skills = player.getSkillManager();
-      if (Math.random() < liftChance(skills.getCurrentLevel(Skill.STRENGTH))) {
-        later(player, 1, () => {
-          lifting.delete(player);
-          lifted(player, object);
-        });
-        return;
-      }
-      later(player, 1, () => player.sendMessage(STRAIN));
-      later(player, 3, () => {
-        player.sendMessage(TOO_HEAVY);
-        player.forceChat("Arrgghhhhh!");
+    player.performAnimation(new Animation(LIFT_ANIMATION));
+    player.forceChat("Humph!");
+    const skills = player.getSkillManager();
+    if (Math.random() < liftChance(skills.getCurrentLevel(Skill.STRENGTH))) {
+      later(player, 1, () => {
         lifting.delete(player);
-        skills.setCurrentLevel(Skill.STRENGTH, Math.max(0, skills.getCurrentLevel(Skill.STRENGTH) - 1));
+        lifted(player, object);
       });
+      return true;
+    }
+    later(player, 1, () => player.sendMessage(STRAIN));
+    later(player, 3, () => {
+      player.sendMessage(TOO_HEAVY);
+      player.forceChat("Arrgghhhhh!");
+      lifting.delete(player);
+      skills.setCurrentLevel(Skill.STRENGTH, Math.max(0, skills.getCurrentLevel(Skill.STRENGTH) - 1));
     });
     return true;
   }

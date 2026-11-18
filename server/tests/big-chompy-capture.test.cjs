@@ -480,3 +480,15 @@ test("one lift at a time: a second Unlock while the first plays rolls nothing mo
   assert.equal(messages(f).filter((m) => m === "You strain to lift the huge rock off the chest...").length, 1);
   assert.equal(f.player.getSkillManager().getCurrentLevel(core.Skill.STRENGTH), before - 1);
 });
+
+test("a logout mid-inflate leaves the toad free for the next player (review)", async (t) => {
+  const f = actor(t, { stage: 45, items: [[I.OGRE_BELLOWS_3_, 1]], tile: BY_TOAD });
+  const toad = h.spawn(f, N.SWAMP_TOAD, TOAD_AT);
+  await h.dispatch(f, { type: "npc_option", index: toad.getIndex(), clickType: 1 });
+  h.ticks(f, 1);
+  h.PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  const g = actor(t, { stage: 45, items: [[I.OGRE_BELLOWS_3_, 1]], tile: BY_TOAD });
+  await h.dispatch(g, { type: "npc_option", index: toad.getIndex(), clickType: 1 });
+  h.ticks(g, 6);
+  assert.equal(amount(g, I.BLOATED_TOAD), 1);
+});

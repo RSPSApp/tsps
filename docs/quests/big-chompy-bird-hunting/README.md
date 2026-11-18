@@ -32,7 +32,7 @@ outside the repo. `server/tests/big-chompy-capture.test.cjs` checks these agains
 | 541-543 | Arrows: 293 = 10 with the item box "Rantz takes six ogre arrows off you." (ogre arrow), the same line in chat after it. |
 | 580 | 293 = 15 on Rantz's second answer to "How do we make the chompys come?" ("Dey's fussie eaters..."). |
 | 628-657 | Fycie and Bugs at 15 and 20: "Rantz said that you play with the 'fatsy toadies'..." and their answers. |
-| 645-651 | Chest Unlock: human_pickuptable (832) and "Humph!" a tick after arriving; the next tick "You manage to lift the huge rock off the chest.", "I guess this is what an ogre would call a locked chest.", loc 3377 -> 3378, 293 = 20. Search: human_openchest (536), skillmulti mode 23 "How many would you like to take?" (max = free slots), then the item box "You take a pair of bellows." |
+| 645-651 | Chest Unlock: human_pickuptable (832) and "Humph!" as the click is handled (1747, from beside the chest); the next tick "You manage to lift the huge rock off the chest.", "I guess this is what an ogre would call a locked chest.", loc 3377 -> 3378, 293 = 20. Search: human_openchest (536), skillmulti mode 23 "How many would you like to take?" (max = free slots), then the item box "You take a pair of bellows." |
 | 1739-1753 | A failed lift: "You strain to lift the huge rock off the chest...", two ticks later "... but it's just too heavy for you.<br>The experience has left you feeling temporarily weakened.", "Arrgghhhhh!", Strength 59 -> 58. Then "You take 8 pairs of bellows." |
 | 712-725 | Suck: "You collect some gas from the swamp." (SwampBubbles). Inflate on arrival: "Come here toady!", human_chompybird_ogrebellows (1026) + spotanim 241 + sound 1455 (30 cycles late), the toad's chompy_toad_inflate (1019), "You manage to catch the toad and inflate it with the swamp gas."; four ticks later "You add the bloated toad to your inventory.", bellows (3) -> (2), the toad gone. |
 | 1238-1248 | With three bloated toads: "One of your bloated toads manages to escape.", one toad leaves the pack and a swamp toad appears saying "Ribbitt!". |
@@ -65,6 +65,8 @@ outside the repo. `server/tests/big-chompy-capture.test.cjs` checks these agains
   "Nothing interesting happens."; using bellows on the bubbles keeps its old two lines.
 - The demonstration moves on to 40 eight ticks after Rantz's miss if the bird never reaches the bait.
 - The hunting hint arrow is cleared if the bird flies off unkilled.
+- A bait bursting next to the player says "You're hit by bits of exploding toad!" (the Wiki transcript's line; no
+  capture stood beside a burst).
 - An escaped bloated toad's swamp toad leaves again after 100 ticks; inflating with a full pack (and fewer than
   three toads) keeps the old "You need an empty inventory slot for the bloated toad.".
 - Rantz's first seasoning line is rewritten to the player's own pick (the transcript's stage-50 page always says

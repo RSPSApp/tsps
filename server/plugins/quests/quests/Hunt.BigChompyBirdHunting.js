@@ -24,6 +24,7 @@ module.exports = function createChompyHunt(api, callbacks = {}) {
   const BURST_SOUND = 1457;
   const BURST_SOUND_RANGE = 5;
   const EFFECT_DELAY = 30;
+  /** Transcript:Big Chompy Bird Hunting, "standing next to the bloated toad when it explodes" (no capture stood there). */
   const BURST_MESSAGE = "You're hit by bits of exploding toad!";
   const LEAVING_FLAG = "chompy-hunt:leaving";
   const BLOCKED_LANDING = RegionManager.BLOCKED_MASK;

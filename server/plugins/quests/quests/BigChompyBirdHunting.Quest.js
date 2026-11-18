@@ -518,6 +518,8 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   }
 
   const inflating = new WeakSet();
+  /** The toad each player is inflating, so a logout mid-inflate frees it for everyone else. */
+  const inflatingBy = new WeakMap();
 
   /**
    * The capture's inflate (ticks 719-725, 1238-1248): on arrival "Come here toady!", the bellows
@@ -555,6 +557,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
       if (escaped) TaskManager.submit(new CountdownTask(escaped, ESCAPED_TOAD_TICKS, () => api.removeNpc(escaped)));
     }
     inflating.add(npc);
+    inflatingBy.set(player, npc);
     hold(player);
     player.setPositionToFace?.(npc.getLocation());
     npc.setPositionToFace?.(player.getLocation());
@@ -566,6 +569,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You manage to catch the toad and inflate it with the swamp gas.");
     later(player, INFLATE_TICKS, () => {
       inflating.delete(npc);
+      inflatingBy.delete(player);
       release(player);
       const state = [OGRE_BELLOWS_1, OGRE_BELLOWS_2, OGRE_BELLOWS_3].find((id) => has(player, id));
       if (state === undefined || !npc.isRegistered() || freeSlots(player) <= 0
@@ -1129,6 +1133,9 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   function handleLogout({ player }) {
     baitHints.delete(player);
     release(player);
+    const toad = inflatingBy.get(player);
+    if (toad) inflating.delete(toad);
+    inflatingBy.delete(player);
     cancelDemonstration(player);
     // A roast in progress finishes rather than eating the raw chompy.
     cooking.get(player)?.();

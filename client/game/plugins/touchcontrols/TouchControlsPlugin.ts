@@ -124,7 +124,10 @@ function detectTouchDevice(): boolean {
     // ?touch=1 forces the joystick on for desktop testing; ?touch=0 hides it on a phone.
     if (params.get("touch") === "0") return false;
     if (params.get("touch") === "1") return true;
-    return (navigator.maxTouchPoints ?? 0) > 0 || "ontouchstart" in window;
+    // A laptop may have a touchscreen while its primary input remains a mouse.
+    return typeof window.matchMedia === "function"
+        && window.matchMedia("(pointer: coarse)").matches
+        && window.matchMedia("(hover: none)").matches;
 }
 
 /**

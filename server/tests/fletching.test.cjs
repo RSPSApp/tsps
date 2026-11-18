@@ -401,6 +401,8 @@ test("the bow string spool stores strings on the account and strings bows from t
   p.getInventory().addItem(new core.Item(I.BOW_STRING, 1));
   hooks.events["crafting:spun"].forEach((handler) => handler({ player: p, itemId: I.BOW_STRING, amount: 1 }));
   assert.equal(p.getAttribute(Spool.CHARGES_ATTRIBUTE), 2);
+  // A spun string stored sends spool-filled too; the refused spin (nothing in the pack) didn't.
+  assert.deepEqual(spoolFills.filter((e) => e.player === p).map((e) => [e.added, e.stored]), [[3, 3], [1, 2]]);
 });
 
 test("an empty spool on an unstrung bow does nothing", () => {

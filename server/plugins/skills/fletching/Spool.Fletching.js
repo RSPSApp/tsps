@@ -161,6 +161,8 @@ function absorbSpun(event) {
   if (stored <= 0) return;
   player.getInventory().deleteNumber(bowStringId, stored);
   setCharges(player, charges(player) + stored);
+  // Spun strings are stored as hand-filled ones are (`fletching:spool-filled`).
+  Shared.getApi().emitCustomEvent("fletching:spool-filled", { player, added: stored, stored: charges(player) });
 }
 
 function login({ player }) {

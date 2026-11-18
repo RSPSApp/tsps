@@ -259,8 +259,25 @@ export class Combat {
         };
     }
 
+    /**
+     * A full stall content holds open until it lets go, for actions whose length isn't known up
+     * front (an agility obstacle: Wiki, Animation stall, "most agility actions, such as the log
+     * balance in the Wilderness agility course"). Clicks wait like any full stall's, and with
+     * `holdsHits` so do the hits coming in, until `releaseFullStall`.
+     */
+    private heldStall: { holdsHits: boolean } | null = null;
+
+    public holdFullStall(holdsHits: boolean): void {
+        this.heldStall = { holdsHits };
+    }
+
+    public releaseFullStall(): void {
+        this.heldStall = null;
+    }
+
     /** Ticks before this character may act again; only a full stall holds them at all. */
     public getAnimationStallTicks(): number {
+        if (this.heldStall != null) return Number.MAX_SAFE_INTEGER;
         const stall = this.animationStall;
         if (stall == null || stall.kind !== "full" || stall.untilCycle <= World.getProcessCycle()) return 0;
         return stall.untilCycle - World.getProcessCycle();
@@ -277,6 +294,7 @@ export class Combat {
      * stops holding anything from that tick.
      */
     public getIncomingHitCycle(): number {
+        if (this.heldStall?.holdsHits) return Number.MAX_SAFE_INTEGER;
         const stall = this.animationStall;
         if (stall == null || !stall.holdsHits || stall.untilCycle <= World.getProcessCycle()) return -1;
         return stall.untilCycle;

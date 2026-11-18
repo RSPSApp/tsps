@@ -455,6 +455,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `FossilIslandUnderwater` | FossilIslandUnderwater | areas | yes | Fossil Island rowboats and the sea floor dive, with an oxygen bar that drowns players lacking a fishbowl helmet and diving apparatus. (members only) |
 | `FossilStorage` | FossilStorage | areas | yes | Fossil Island Museum Camp's fossil storage crates and the cleaning bench that cleans unidentified fossils. (members only) |
 | `GrandTree` | GrandTree | areas | yes | Opens and shuts the Grand Tree's front doors and walks the player through, as captured. (members only) |
+| `GrimstoneDungeon` | GrimstoneDungeon | areas | yes | Travel between Grimstone and its dungeon. (members only) |
 | `HouseOnTheHillChest` | HouseOnTheHillChest | areas | yes | Fossil Island's House on the Hill stone chest: numulites for the ten Fossil Island Notes, or a clunk or a spike. (members only) |
 | `KalphiteCave` | KalphiteCave | areas | yes | Makes the Kalphite Cave multi-combat and lets only players on a kalphite Slayer task attack its kalphites, with Buggie warning the rest off. (members only) |
 | `Karamja` | Karamja | areas | yes | Karamja volcano access: the rocks, cave entrance and climbing rope between the surface and the TzHaar city. |
@@ -720,6 +721,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `LithkrenVaultNotes` | LithkrenVaultNotes | items | yes | Lithkren Vault notes: Inspect the vault's machinery, incubators and stone crate for the seven old notes, Read them, and combine all seven into the Lithkren vault notes book. (members only) |
 | `LootKeys` | LootKeys | items | yes | Adds Wilderness loot keys dropped by player kills, which hold the victim's loot until opened at the loot chest, with the settings and unlock interface. |
 | `LootingBag` | LootingBag | items | yes | Adds the looting bag: items go in only in the Wilderness, come out at a bank, and are lost on death, with Deposit, Check and settings. (members only) |
+| `MagicShortbowScroll` | MagicShortbowScroll | items | yes | Imbue a magic shortbow by using a magic shortbow scroll on it. (members only) |
 | `MasterScrollBook` | MasterScrollBook | items | yes | Adds the Master scroll book: stores 20 kinds of teleport scroll (up to 1000 each), reads them from interface 597 or as the default Teleport. (members only) |
 | `MeiyerditchTattyNote` | MeiyerditchTattyNote | items | yes | Searching the skeleton by the true Blood Altar ruins in the Meiyerditch Laboratories gives the tatty note, which can be read. (members only) |
 | `MithrilSeeds` | MithrilSeeds | items | yes | Lets players plant mithril seeds to grow random flowers that can be picked, and removes the flower after a short time. (members only) |
@@ -954,6 +956,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `SwampBubbles` | SwampBubbles | objects | yes | Lets players Suck on swamp bubbles to fill their ogre bellows with swamp gas, as in Big Chompy Bird Hunting. (members only) |
 | `WildernessDitch` | WildernessDitch | objects | yes | Crossing the Wilderness Ditch with the jump animation and sound, landing three tiles on, in and out of the Wilderness. |
 | `Windmill` | Windmill | objects | yes | Windmill milling: fill the hopper with grain, operate the controls and empty the flour bin into a pot, as in Cook's Assistant. |
+| `ZanarisMarket` | ZanarisMarket | objects | yes | Charges the Gatekeeper's diamond toll when entering the Zanaris market. (members only) |
 | `Autosave` | Autosave | persistence | yes | Saves every online player every few minutes, spreading the saves over ticks so a mass login does not stall the server. |
 | `IndexedDbPlayerPersistence` | IndexedDbPlayerPersistence | persistence | yes | Stores player saves and hashed passwords in the browser's IndexedDB when the server runs inside a browser host. Does nothing elsewhere. |
 | `JsonPlayerPersistence` | JsonPlayerPersistence | persistence | yes | Saves each character as a JSON file under data/saves/characters. Skipped when the server runs inside a browser host. |

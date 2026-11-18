@@ -229,6 +229,14 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     new api.core.DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)));
   const dropId = (drop) => drop?.itemId ?? drop?.getId?.() ?? drop?.id;
   const dropAmount = (drop) => drop?.amount ?? drop?.getAmount?.() ?? 1;
+  /**
+   * The capture holds the player (varbit busy, 12393) through the inflate, the pluck and the roast; one runs at a
+   * time and a second click while it plays does nothing.
+   */
+  const acting = new WeakSet();
+  const isActing = (player) => acting.has(player);
+  const hold = (player) => acting.add(player);
+  const release = (player) => acting.delete(player);
   const later = (player, ticks, run) => TaskManager.submit(new CountdownTask(player, ticks, () => {
     if (player.isRegistered?.() !== false) run();
   }));
@@ -446,6 +454,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     if (stage >= STAGE_CHOMPY_COOKED && has(player, SEASONED_CHOMPY)) return;
     if (!has(player, RAW_CHOMPY) || cooking.has(player)) return;
     event.handled = true;
+    if (isActing(player)) return;
     const wanted = [seasoning(player, "rantz"), seasoning(player, "fycie"), seasoning(player, "bugs")];
     if (!wanted.every(({ item }) => has(player, item))) {
       // Both lines of the transcript's refusal ("…without-the-requested-ingredients"); the second is a
@@ -462,13 +471,22 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     player.performAnimation(new Animation(COOK_ANIMATION));
     sender.sendSound(SPIT_ROAST_SOUND, 255, EFFECT_DELAY);
     sender.sendSound(SPIT_ROAST_SOUND, 255, EFFECT_DELAY);
+    hold(player);
     const finish = () => {
-      if (cooking.get(player) !== finish) return;
+      if (cooking.get(player) !== finish) return false;
       cooking.delete(player);
+      release(player);
+      // The seasonings must still be there when the chompy comes off (Ours: without them the raw chompy comes back).
+      if (!wanted.every(({ item }) => has(player, item))) {
+        player.getInventory().adds(RAW_CHOMPY, 1);
+        sender.sendVarbit(VARBIT_SPIT_ROASTER, 0);
+        return false;
+      }
       for (const { item } of wanted) player.getInventory().deleteNumber(item, 1);
       player.getInventory().adds(SEASONED_CHOMPY, 1);
       if (quest.getStage(player) < STAGE_CHOMPY_COOKED) quest.setStage(player, STAGE_CHOMPY_COOKED);
       sender.sendVarbit(VARBIT_SPIT_ROASTER, 0);
+      return true;
     };
     cooking.set(player, finish);
     later(player, COOK_STEP_TICKS, () => {
@@ -478,8 +496,8 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     });
     later(player, COOK_STEP_TICKS * 2, () => {
       if (cooking.get(player) !== finish) return;
+      if (!finish()) return;
       player.sendMessage("Eventually the chompy is cooked.");
-      finish();
       player.performAnimation(new Animation(COOKED_ANIMATION));
       const [rantz, fycie, bugs] = wanted.map(({ name }) => name);
       itemBox(player, SEASONED_CHOMPY,
@@ -512,6 +530,10 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   function inflateToad(event) {
     const { player, npc } = event;
     if (!npc?.isRegistered?.() || inflating.has(npc)) return;
+    if (isActing(player)) {
+      event.handled = true;
+      return;
+    }
     const bellowsState = [OGRE_BELLOWS_1, OGRE_BELLOWS_2, OGRE_BELLOWS_3].find((id) => has(player, id));
     // Ours: without filled bellows (or before the quest gives them) nothing happens, as for any other use.
     if (bellowsState === undefined) return;
@@ -533,6 +555,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
       if (escaped) TaskManager.submit(new CountdownTask(escaped, ESCAPED_TOAD_TICKS, () => api.removeNpc(escaped)));
     }
     inflating.add(npc);
+    hold(player);
     player.setPositionToFace?.(npc.getLocation());
     npc.setPositionToFace?.(player.getLocation());
     player.forceChat("Come here toady!");
@@ -543,8 +566,10 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You manage to catch the toad and inflate it with the swamp gas.");
     later(player, INFLATE_TICKS, () => {
       inflating.delete(npc);
+      release(player);
       const state = [OGRE_BELLOWS_1, OGRE_BELLOWS_2, OGRE_BELLOWS_3].find((id) => has(player, id));
-      if (state === undefined || !npc.isRegistered() || freeSlots(player) <= 0) return;
+      if (state === undefined || !npc.isRegistered() || freeSlots(player) <= 0
+          || player.getInventory().getAmount(BLOATED_TOAD) >= MAX_BLOATED_TOADS) return;
       const nextState = state === OGRE_BELLOWS_3 ? OGRE_BELLOWS_2 : state === OGRE_BELLOWS_2 ? OGRE_BELLOWS_1 : OGRE_BELLOWS;
       const slot = player.getInventory().getItems().findIndex((item) => item?.getId?.() === state);
       player.getInventory().setItem(slot, new Item(nextState, 1));
@@ -568,14 +593,16 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     const { player, npc } = event;
     event.handled = true;
     if (!player.isRegistered() || player.busy() || !hunt.ownsCarcass(player, npc) ||
-        !npc?.isRegistered() || npc.getOwner() !== player || npc.getAttribute?.("chompy:plucking") ||
+        !npc?.isRegistered() || npc.getOwner() !== player || npc.getAttribute?.("chompy:plucking") || isActing(player) ||
         npc.getPrivateArea() !== player.getPrivateArea() ||
         !player.getLocation().isWithinDistance(npc.getLocation(), 1)) return;
     npc.setAttribute?.("chompy:plucking", true);
+    hold(player);
     player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You start plucking the chompy bird.");
     player.performAnimation(new Animation(PLUCK_ANIMATION));
     player.getPacketSender().sendSound(PLUCK_SOUND);
     later(player, PLUCK_TICKS, () => {
+      release(player);
       if (!npc.isRegistered() || !hunt.ownsCarcass(player, npc)) return;
       const at = npc.getLocation().clone();
       hunt.forgetCarcass(npc);
@@ -1087,7 +1114,8 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   /** Before the quest, the ogre bow's Check kills (Wiki: Ogre bow; capture ticks 1089, 1358). */
   function checkKills(event) {
     if (quest.isComplete(event.player)) return false;
-    event.player.sendMessage("You've scratched up no kills yet! You've got to complete the quest first!");
+    // The capture breaks the line between the two sentences (ticks 1089, 1358).
+    event.player.sendMessage("You've scratched up no kills yet!<br>You've got to complete the quest first!");
     return true;
   }
 
@@ -1100,6 +1128,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
 
   function handleLogout({ player }) {
     baitHints.delete(player);
+    release(player);
     cancelDemonstration(player);
     // A roast in progress finishes rather than eating the raw chompy.
     cooking.get(player)?.();

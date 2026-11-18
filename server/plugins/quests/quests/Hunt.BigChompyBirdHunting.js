@@ -176,6 +176,11 @@ module.exports = function createChompyHunt(api, callbacks = {}) {
         level: bird.npc.getLocation().getZ(), radius: BURST_SOUND_RANGE, source: bird.npc });
       return;
     }
+    // The bait burst or another bird ate it first: this one gives up.
+    if (!baits.has(bait.npc)) {
+      bird.eating = -1;
+      return;
+    }
     bird.eating++;
     if (bird.eating === EAT_ATTACK_TICK) bird.npc.performAnimation(new Animation(eating.id));
     else if (bird.eating === EAT_CROAK_TICK) {

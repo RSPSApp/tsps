@@ -175,7 +175,9 @@ test("the chest: Humph!, the lift, the open chest and 20 (645-646); its Search a
   assert.ok(messages(f).includes("You manage to lift the huge rock off the chest."));
   assert.ok(f.animations.some((a) => a.id === 832));
   assert.equal(stage(f), 20);
-  assert.ok(core.ObjectManager.exists(core.ObjectIdentifiers.UNLOCKED_OGRE_CHEST, tile), "the chest is open");
+  const chestIds = () => core.ObjectManager.objectsAt(tile).map((object) => object.getId());
+  assert.ok(chestIds().includes(core.ObjectIdentifiers.UNLOCKED_OGRE_CHEST), "the chest is open");
+  assert.ok(!chestIds().includes(core.ObjectIdentifiers.LOCKED_OGRE_CHEST));
   const menus = [];
   const sender = f.player.getPacketSender();
   const send = sender.sendCreationMenu.bind(sender);
@@ -189,7 +191,7 @@ test("the chest: Humph!, the lift, the open chest and 20 (645-646); its Search a
   assert.equal(amount(f, I.OGRE_BELLOWS), Math.min(8, free));
   assert.equal(h.shown(f)?.text, "You take 8 pairs of bellows.");
   h.ticks(f, 101);
-  assert.ok(core.ObjectManager.exists(core.ObjectIdentifiers.LOCKED_OGRE_CHEST, tile), "and locks again (ours)");
+  assert.deepEqual(chestIds(), [core.ObjectIdentifiers.LOCKED_OGRE_CHEST], "and locks again (ours)");
 });
 
 test("a failed lift: the strain, too heavy, Arrgghhhhh! and Strength down by 1 (1739-1742)", async (t) => {
@@ -332,7 +334,7 @@ test("the completion scroll is the capture's (1513)", (t) => {
 test("the ogre bow's Check kills before the quest is done (1089)", async (t) => {
   const f = actor(t, { stage: 45, items: [[I.OGRE_BOW, 1]] });
   await itemOp(f, I.OGRE_BOW, "Check kills");
-  assert.ok(messages(f).includes("You've scratched up no kills yet! You've got to complete the quest first!"));
+  assert.ok(messages(f).includes("You've scratched up no kills yet!<br>You've got to complete the quest first!"));
 });
 
 test("items on Rantz: the bloated toad at 25 (826) and the ogre bow at 45 (1081)", async (t) => {
@@ -437,4 +439,44 @@ test("stage 0 to 65 with real clicks: start, arrows, chest, toads, demonstration
   assert.equal(xp(core.Skill.COOKING) - cooking, 1470);
   assert.equal(xp(core.Skill.RANGED) - ranged, 735);
   assert.equal(xp(core.Skill.FLETCHING) - fletching, 262);
+});
+
+test("the roast gives nothing if the seasonings leave the pack while it cooks (review)", async (t) => {
+  const f = actor(t, { stage: 55, tile: BY_SPIT, items: [[I.RAW_CHOMPY, 1], [I.ONION, 1], [I.TOMATO, 1], [I.EQUA_LEAVES, 1]],
+    attributes: {
+      "big-chompy-bird-hunting:rantz-ingredient": I.ONION,
+      "big-chompy-bird-hunting:fycie-ingredient": I.TOMATO,
+      "big-chompy-bird-hunting:bugs-ingredient": I.EQUA_LEAVES,
+    } });
+  await h.dispatch(f, { type: "item_on_object", objectId: 6895, x: SPIT[0], y: SPIT[1], itemId: I.RAW_CHOMPY, slot: 0, widgetId: 149 << 16 });
+  for (let i = 0; i < 6 && !messages(f).includes("You carefully place the chompy bird on the spit-roast."); i++) h.tick(f);
+  f.player.getInventory().deleteNumber(I.ONION, 1);
+  h.ticks(f, 6);
+  assert.equal(amount(f, I.SEASONED_CHOMPY), 0);
+  assert.equal(amount(f, I.RAW_CHOMPY), 1, "the raw chompy comes back");
+  assert.equal(stage(f), 55);
+  assert.equal(varbit(f, VARBIT_ROASTER), 0);
+});
+
+test("one inflate at a time: two toads clicked a tick apart can't pass the three-toad cap (review)", async (t) => {
+  const f = actor(t, { stage: 45, items: [[I.OGRE_BELLOWS_3_, 1], [I.BLOATED_TOAD, 1], [I.BLOATED_TOAD, 1]], tile: BY_TOAD });
+  const first = h.spawn(f, N.SWAMP_TOAD, TOAD_AT);
+  const second = h.spawn(f, N.SWAMP_TOAD, [2597, 2963, 0]);
+  await h.dispatch(f, { type: "npc_option", index: first.getIndex(), clickType: 1 });
+  await h.dispatch(f, { type: "npc_option", index: second.getIndex(), clickType: 1 });
+  h.ticks(f, 8);
+  assert.ok(amount(f, I.BLOATED_TOAD) <= 3, `toads ${amount(f, I.BLOATED_TOAD)}`);
+});
+
+test("one lift at a time: a second Unlock while the first plays rolls nothing more (review)", async (t) => {
+  const f = actor(t, { stage: 65, tile: BY_CHEST });
+  const before = f.player.getSkillManager().getCurrentLevel(core.Skill.STRENGTH);
+  await withRandom(0.999, async () => {
+    const click = { type: "object_option", id: core.ObjectIdentifiers.LOCKED_OGRE_CHEST, x: CHEST[0], y: CHEST[1], clickType: 1 };
+    await h.dispatch(f, click);
+    await h.dispatch(f, click);
+    h.ticks(f, 6);
+  });
+  assert.equal(messages(f).filter((m) => m === "You strain to lift the huge rock off the chest...").length, 1);
+  assert.equal(f.player.getSkillManager().getCurrentLevel(core.Skill.STRENGTH), before - 1);
 });

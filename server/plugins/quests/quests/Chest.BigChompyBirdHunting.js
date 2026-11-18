@@ -35,6 +35,8 @@ module.exports = function createChompyChest(api, { stageOf, onLifted }) {
   const LIFT_LOW = 30;
   const LIFT_HIGH = 254;
   const RELOCK_TICKS = 100;
+  /** Players mid-lift: the capture holds the player until the lift's last line. */
+  const lifting = new WeakSet();
   const TAKE_MENU_MODE = 23;
   const TAKE_PROMPT = "How many would you like to take?";
   const NO_SPACE = "Rantz stores ogre bellows in here, but you don't have space to hold any.";
@@ -69,18 +71,25 @@ module.exports = function createChompyChest(api, { stageOf, onLifted }) {
       player.sendMessage("Nothing interesting happens.");
       return true;
     }
+    // One lift at a time (the capture holds the player through it, ticks 645-646 and 1739-1742).
+    if (lifting.has(player)) return true;
+    lifting.add(player);
     later(player, 1, () => {
       player.performAnimation(new Animation(LIFT_ANIMATION));
       player.forceChat("Humph!");
       const skills = player.getSkillManager();
       if (Math.random() < liftChance(skills.getCurrentLevel(Skill.STRENGTH))) {
-        later(player, 1, () => lifted(player, object));
+        later(player, 1, () => {
+          lifting.delete(player);
+          lifted(player, object);
+        });
         return;
       }
       later(player, 1, () => player.sendMessage(STRAIN));
       later(player, 3, () => {
         player.sendMessage(TOO_HEAVY);
         player.forceChat("Arrgghhhhh!");
+        lifting.delete(player);
         skills.setCurrentLevel(Skill.STRENGTH, Math.max(0, skills.getCurrentLevel(Skill.STRENGTH) - 1));
       });
     });

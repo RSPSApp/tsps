@@ -1,60 +1,49 @@
 /**
  * Zogre Flesh Eaters (members).
  *
- * The words come from the "Zogre Flesh Eaters" transcript page plus the indexed
- * "Grish", "Zavistic Rarve", "Sithik Ints", "Irwin Feaselbaum", "Uglug Nar" and
- * "Bartender (Dragon Inn)" pages; this plugin supplies the variant selector for
- * the quest NPCs, the prose-condition answers, the start/complete actions, the
- * item hand-outs and the tomb gameplay (lectern, skeleton, coffin, plinth).
+ * The words come from the "Zogre Flesh Eaters" transcript page plus the indexed "Grish",
+ * "Zavistic Rarve", "Sithik Ints", "Irwin Feaselbaum", "Uglug Nar", "Ogre guard (Jiggig)" and
+ * "Bartender (Dragon Inn)" pages; this plugin supplies the variant selector for the quest NPCs,
+ * the prose-condition answers, the start/complete actions and the item hand-outs. The places
+ * play as the revision 242 capture does (rsprox ZogreFleshEaters.bin, a whole run of the quest;
+ * docs/quests/zogre-flesh-eaters/README.md): Jiggig (the barricade, the stairs and the
+ * north-west room's scene) in ../zogreflesheaters/Jiggig, the tomb (the skeleton, the coffin, the
+ * stone doors, the stand and Slash Bash) in Tomb, how each message step shows in Boxes, the
+ * journal in Journal and the native varbits in State.
  *
- * Stages (varbit 487, parent varp 455, bits 0-4): 0 unstarted, 2 investigate (started), 3 barricade smashed,
- * 4 sithik (evidence turned in / potion received), 6 potion (tea poisoned),
- * 8 permanent_spell (Sithik transformed), 10 given_key, 12 killed_slash_bash,
- * 14 complete. The coffin/evidence sub-progress (0..5) and the one-shot flags
- * live in persisted "quest.zogre_flesh_eaters.*" attributes.
+ * Stages (varbit 487): 0 unstarted, 2 investigate (started), 3 barricade crushed, 4 Sithik
+ * (evidence turned in / potion received), 6 potion (tea poisoned), 8 permanent_spell (Sithik's
+ * answer), 10 given_key, 12 killed_slash_bash, 14 complete; the cache's completion threshold is 14.
+ * The coffin/evidence sub-progress (0..5, varbit 488) and the one-shot flags live in persisted
+ * "quest.zogre_flesh_eaters.*" / "zogre-flesh-eaters:*" attributes, sent as their thzfe_* varbits.
  *
  * Historical implementation attribution: https://github.com/GregHib/void/blob/2b8e267836a8469757c73694ea4d57f2f1c28458/game/src/main/kotlin/content/quest/member/ogre/ZogreFleshEaters.kt
- * Current wire and dialogue bindings are checked against Quest Helper, the OSRS
- * Wiki transcript and cache: varbit 487, with cache completion threshold 14.
- *
- * Gaps: the Jiggig cutscene camera and the blackened-area entry event are not
- * played; the cup of tea is a ground item, so pouring is wired through
- * item-on-ground-item (plus a raw 4838 object fallback); Relicym's balm mixing
- * and brutal-arrow fletching are not reproduced (only the reward unlocks);
- * Slash Bash is spawned owner-only with no disease/despawn simulation; the
- * "grows weary" flee/despawn message is not triggered; the black-prism 2,000
- * coin sale to Zavistic is not wired.
- *
- * Jiggig access: ClimbLinks cannot pair the Jiggig staircases (the map pairs
- * (2485,3042,0) with (2478,9437,2), and (2443,9417,2) with (2443,9417,0), all
- * outside its search), so the four stair clicks get explicit destinations here.
- * The guard's crush swaps the mapped Barricade locs for Crushed barricades
- * (Climb-over) and the climb teleports over the wall; a stage-3 login re-crushes
- * after a restart. The locked Ogre stone doors are removed (unlocked) once the
- * player has the gate key.
  */
 module.exports = function registerZogreFleshEatersQuest(api) {
   const { Skill, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
+  const { VARBITS, STAGES, ATTRIBUTES } = require("../zogreflesheaters/State.ZogreFleshEaters");
 
   const PAGE = "Zogre Flesh Eaters";
 
-  const VARBIT_ZOGRE_FLESH_EATERS = 487;
-  const STAGE_STARTED = 2;
-  const STAGE_BARRICADE = 3;
-  const STAGE_SITHIK = 4;
-  const STAGE_POTION = 6;
-  const STAGE_PERMANENT_SPELL = 8;
-  const STAGE_GIVEN_KEY = 10;
-  const STAGE_KILLED_SLASH_BASH = 12;
-  const STAGE_COMPLETE = 14;
+  const VARBIT_ZOGRE_FLESH_EATERS = VARBITS.QUEST;
+  const STAGE_STARTED = STAGES.STARTED;
+  const STAGE_BARRICADE = STAGES.BARRICADE;
+  const STAGE_SITHIK = STAGES.SITHIK;
+  const STAGE_POTION = STAGES.POTION;
+  const STAGE_PERMANENT_SPELL = STAGES.PERMANENT_SPELL;
+  const STAGE_GIVEN_KEY = STAGES.GIVEN_KEY;
+  const STAGE_KILLED_SLASH_BASH = STAGES.KILLED_SLASH_BASH;
+  const STAGE_COMPLETE = STAGES.COMPLETE;
 
   const GRISH_NPC_ID = NpcIdentifiers.GRISH;
   const UGLUG_NAR_NPC_ID = NpcIdentifiers.UGLUG_NAR;
-  const OGRE_GUARD_NPC_IDS = new Set([NpcIdentifiers.OGRE_GUARD, NpcIdentifiers.OGRE_GUARD_2]);
+  /** The barricade guard; 865 is the coffin guard, with his own page (capture ticks 59-79). */
+  const BARRICADE_GUARD_NPC_ID = NpcIdentifiers.OGRE_GUARD;
+  const COFFIN_GUARD_NPC_ID = NpcIdentifiers.OGRE_GUARD_2;
+  const OGRE_GUARD_PAGE = "Ogre guard (Jiggig)";
   const ZOMBIE_NPC_ID = NpcIdentifiers.ZOMBIE_44;
   const ZAVISTIC_RARVE_NPC_ID = NpcIdentifiers.ZAVISTIC_RARVE;
-  const SLASH_BASH_NPC_ID = NpcIdentifiers.SLASH_BASH;
   const SITHIK_NPC_ID = NpcIdentifiers.SITHIK_INTS;
   const SITHIK_NPC_IDS = new Set([NpcIdentifiers.SITHIK_INTS, NpcIdentifiers.SITHIK_INTS_2]);
   const IRWIN_FEASELBAUM_NPC_ID = NpcIdentifiers.IRWIN_FEASELBAUM;
@@ -65,64 +54,19 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   ]);
   const IRWIN_PAGE = "Irwin Feaselbaum";
 
-  const OGRE_COFFIN_IDS = new Set([
-    ObjectIdentifiers.OGRE_COFFIN,
-    ObjectIdentifiers.OGRE_COFFIN_2,
-    6843, // ponytail: unnamed coffin base, no ObjectIdentifiers entry
-  ]);
-  const OGRE_TOMB_DOOR_IDS = new Set([
-    ObjectIdentifiers.OGRE_STONE_DOOR,
-    ObjectIdentifiers.OGRE_STONE_DOOR_2,
-  ]);
   const SITHIK_BED_IDS = new Set([
     ObjectIdentifiers.SITHIK_INTS,
     ObjectIdentifiers.SITHIK_INTS_2,
-    6887, // ponytail: unnamed bed entity, no ObjectIdentifiers entry
+    6887, // zogre_sithik_bed_entity: the multiloc on 495, no ObjectIdentifiers entry
   ]);
   const BROKEN_LECTERN_ID = ObjectIdentifiers.BROKEN_LECTERN;
   const OUTDOOR_BELL_ID = ObjectIdentifiers.BELL_2;
   const SITHIKS_DRAWERS_ID = ObjectIdentifiers.DRAWERS_11;
   const SITHIKS_CUPBOARD_ID = ObjectIdentifiers.CUPBOARD_30;
   const SITHIKS_WARDROBE_ID = ObjectIdentifiers.WARDROBE_7;
-  const OGRE_SKELETON_ID = ObjectIdentifiers.SKELETON_8;
-  const OGRE_STAND_ID = ObjectIdentifiers.STAND;
-  const CUP_OF_TEA_OBJECT_ID = 4838; // ponytail: no ObjectIdentifiers entry, ground object fallback
-
-  const CRUSHED_BARRICADE_ID = ObjectIdentifiers.CRUSHED_BARRICADE;
-  const CRUSHED_BARRICADE_ID_2 = ObjectIdentifiers.CRUSHED_BARRICADE_2;
-  const CRUSHED_BARRICADE_IDS = new Set([CRUSHED_BARRICADE_ID, CRUSHED_BARRICADE_ID_2]);
-  /** The mapped Jiggig barricade line: five locs (four named Barricade, two nameless) per row. */
-  const JIGGIG_BARRICADE = [
-    { id: 6858, x: 2456, y: 3044, face: 1 },
-    { id: 6856, x: 2456, y: 3045, face: 3 },
-    { id: 6856, x: 2456, y: 3046, face: 3 },
-    { id: 6856, x: 2456, y: 3047, face: 3 },
-    { id: 6878, x: 2456, y: 3048, face: 3 },
-    { id: 6879, x: 2456, y: 3049, face: 3 },
-    { id: 6856, x: 2456, y: 3050, face: 3 },
-    { id: 6856, x: 2456, y: 3051, face: 3 },
-    { id: 6857, x: 2456, y: 3052, face: 3 },
-    { id: 6858, x: 2458, y: 3046, face: 1 },
-    { id: 6856, x: 2458, y: 3047, face: 3 },
-    { id: 6856, x: 2458, y: 3048, face: 3 },
-    { id: 6856, x: 2458, y: 3049, face: 3 },
-    { id: 6857, x: 2458, y: 3050, face: 3 },
-  ];
-
-  /** Stair placements whose other end ClimbLinks cannot pair, with OSRS destinations. */
-  const JIGGIG_STAIRS = [
-    { id: 6841, x: 2485, y: 3042, z: 0, option: "climb-down", to: { x: 2477, y: 9436, z: 2 } },
-    { id: 6842, x: 2478, y: 9437, z: 2, option: "climb-up", to: { x: 2484, y: 3041, z: 0 } },
-    { id: 6841, x: 2443, y: 9417, z: 2, option: "climb-down", to: { x: 2446, y: 9418, z: 0 } },
-    { id: 6842, x: 2443, y: 9417, z: 0, option: "climb-up", to: { x: 2442, y: 9417, z: 2 } },
-  ];
-
-  const OGRE_DOOR_LEAVES = [
-    { id: ObjectIdentifiers.OGRE_STONE_DOOR, x: 2440, y: 9426 },
-    { id: ObjectIdentifiers.OGRE_STONE_DOOR_2, x: 2441, y: 9426 },
-    { id: ObjectIdentifiers.OGRE_STONE_DOOR, x: 2441, y: 9433 },
-    { id: ObjectIdentifiers.OGRE_STONE_DOOR_2, x: 2442, y: 9433 },
-  ];
+  const CUP_OF_TEA_OBJECT_ID = 4838; // zogre_cup_of_tea_sithix: no ObjectIdentifiers entry, ground object fallback
+  /** Sithik's ladder down (laddertop2 at 2597,3107,1): going down it after the tea transforms him (tick 1558). */
+  const SITHIK_LADDER = { id: ObjectIdentifiers.LADDER_193, x: 2597, y: 3107, z: 1 };
 
   const TORN_PAGE = ItemIdentifiers.TORN_PAGE;
   const BLACK_PRISM = ItemIdentifiers.BLACK_PRISM;
@@ -143,18 +87,25 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   const CHARCOAL = ItemIdentifiers.CHARCOAL;
   const KNIFE = ItemIdentifiers.KNIFE;
   const ROTTEN_FOOD = ItemIdentifiers.ROTTEN_FOOD;
-  const ZOGRE_BONES = ItemIdentifiers.ZOGRE_BONES;
-  const OURG_BONES = ItemIdentifiers.OURG_BONES;
   const COOKED_CHOMPY = ItemIdentifiers.COOKED_CHOMPY;
   const SUPER_RESTORE_3 = ItemIdentifiers.SUPER_RESTORE_3_;
   const COINS = ItemIdentifiers.COINS;
+  /** The prism's price (capture tick 1760). */
+  const PRISM_PRICE = 2000;
+  const POUR_SEQ = 832;
+  const POUR_SOUND = 1955;
+  const LECTERN_SEARCH_SEQ = 827;
 
-  const BALM_ITEM_IDS = [
-    ItemIdentifiers.RELICYMS_BALM_4_,
-    ItemIdentifiers.RELICYMS_BALM_3_,
-    ItemIdentifiers.RELICYMS_BALM_2_,
-    ItemIdentifiers.RELICYMS_BALM_1_,
-  ];
+  /** Uglug Nar's coins by the dose of the balm (the Wiki: 1000, 650, 300 or 100; 650 for a 3-dose, tick 3196). */
+  const BALM_PRICES = new Map([
+    [ItemIdentifiers.RELICYMS_BALM_4_, 1000],
+    [ItemIdentifiers.RELICYMS_BALM_3_, 650],
+    [ItemIdentifiers.RELICYMS_BALM_2_, 300],
+    [ItemIdentifiers.RELICYMS_BALM_1_, 100],
+  ]);
+  const BALM_ITEM_IDS = [...BALM_PRICES.keys()];
+  /** Ours: the lid's chance; the capture lifts it on the sixth try (ticks 591-662), the Wiki says "a couple of tries". */
+  const LIFT_CHANCE = 0.5;
 
   const SEARCH_ATTRIBUTE = "quest.zogre_flesh_eaters.search";
   const DECLINED_ATTRIBUTE = "quest.zogre_flesh_eaters.declined";
@@ -196,8 +147,6 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   let quest;
   let liftRoll = null;
   let paintRoll = null;
-  const slashBashByPlayer = new Map();
-  const zombieByPlayer = new Map();
 
   const has = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const give = (player, itemId, amount = 1) => player.getInventory().adds(itemId, amount);
@@ -214,21 +163,32 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     syncAuxiliaryState(player);
   }
 
-  const VARBIT_SEARCH_STATUS = 488; // THZFE_PRISMSEARCH
-  const VARBIT_SKELETON = 503; // THZFE_BRENTLE_SKELE
+  /** The thzfe_* flags kept as attributes. 498 (thzfe_makecuredisease) is not sent: the capture asks
+   * Sithik about the disease and tells Grish of the cure without it changing (ticks 1604, 2263). */
   const AUXILIARY_FLAGS = [
-    [489, INNKEEPER_MUG_ATTRIBUTE], [490, INNKEEPER_PORTRAIT_ATTRIBUTE],
-    [491, NECRO_SHOWN_ATTRIBUTE], [492, HAM_SHOWN_ATTRIBUTE],
-    [493, TANKARD_SHOWN_ATTRIBUTE], [494, PORTRAIT_SHOWN_ATTRIBUTE],
-    [495, TRANSFORMED_ATTRIBUTE], [498, MAKE_CURE_ATTRIBUTE],
-    [499, MAKE_BRUTAL_ATTRIBUTE], [500, MAKE_BOW_ATTRIBUTE],
+    [VARBITS.INNKEEPER_MUG, INNKEEPER_MUG_ATTRIBUTE], [VARBITS.INNKEEPER_PORTRAIT, INNKEEPER_PORTRAIT_ATTRIBUTE],
+    [VARBITS.SHOWN_NECRO_BOOK, NECRO_SHOWN_ATTRIBUTE], [VARBITS.SHOWN_HAM_BOOK, HAM_SHOWN_ATTRIBUTE],
+    [VARBITS.SHOWN_TANKARD, TANKARD_SHOWN_ATTRIBUTE], [VARBITS.SHOWN_PORTRAIT, PORTRAIT_SHOWN_ATTRIBUTE],
+    [VARBITS.MAKE_BRUTAL_ARROW, MAKE_BRUTAL_ATTRIBUTE], [VARBITS.MAKE_COMP_OGRE_BOW, MAKE_BOW_ATTRIBUTE],
+    [VARBITS.SOLD_BALM, SOLD_BALM_ATTRIBUTE], [VARBITS.PRISM_SOLD, ATTRIBUTES.PRISM_SOLD],
+    [VARBITS.CUT_SCENE, ATTRIBUTES.CUT_SCENE],
   ];
+
+  const prismSearchValue = (player) => (flag(player, ASKED_LOOK_ATTRIBUTE) ? 5 : progress(player));
+
+  /** 495: Sithik an ogre once the tea has worked, a man again from Grish's key on (tick 2328). */
+  function transformedValue(player) {
+    if (!flag(player, TRANSFORMED_ATTRIBUTE)) return 0;
+    return quest.getStage(player) >= STAGE_GIVEN_KEY ? 2 : 1;
+  }
 
   function syncAuxiliaryState(player) {
     const sender = player.getPacketSender();
     for (const [id, attribute] of AUXILIARY_FLAGS) sender.sendVarbit(id, flag(player, attribute) ? 1 : 0);
-    sender.sendVarbit(VARBIT_SEARCH_STATUS, flag(player, ASKED_LOOK_ATTRIBUTE) ? 5 : progress(player));
-    sender.sendVarbit(VARBIT_SKELETON, Number(player.getAttribute(SKELETON_ATTRIBUTE)) || 0);
+    sender.sendVarbit(VARBITS.PRISM_SEARCH, prismSearchValue(player));
+    sender.sendVarbit(VARBITS.BRENTLE_SKELETON, Number(player.getAttribute(SKELETON_ATTRIBUTE)) || 0);
+    sender.sendVarbit(VARBITS.SITHIK_TRANSFORMED, transformedValue(player));
+    if (quest) sender.sendVarbit(VARBITS.BLOCKING_BARRICADE, jiggig.barricadeValue(player));
   }
 
   function handleBootstrapComplete({ player }) {
@@ -250,18 +210,29 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   }
 
   function otherQuestStage(player, key) {
-    return Number(player.getAttribute(`quest.${key}.stage`)) || 0;
+    const request = { player, key, stage: undefined };
+    api.emitCustomEvent("quest:get-stage", request);
+    return Number(request.stage ?? player.getAttribute(`quest.${key}.stage`)) || 0;
   }
 
-  /** Jungle Potion (12) and Big Chompy Bird Hunting (65) plus the journal skills. */
+  /** Whether another quest is complete, by its own completion value (QuestRuntime's quest:is-complete). */
+  function questComplete(player, key) {
+    const request = { player, key, complete: undefined };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
+  }
+
+  /**
+   * The Wiki's requirements: Big Chompy Bird Hunting and Jungle Potion, 4 Smithing and 8 Herblore
+   * (boostable) and 30 Ranged (not boostable). Fletching is not one: the Wiki asks 30 Fletching only
+   * to make the comp ogre bow (issue 4410).
+   */
   function requirementsMet(player) {
     const skills = player.getSkillManager();
-    if (skills.getCurrentLevel(Skill.RANGED) < 30) return false;
-    if (skills.getCurrentLevel(Skill.FLETCHING) < 30) return false;
-    if (skills.getCurrentLevel(Skill.SMITHING) < 4) return false;
-    if (skills.getCurrentLevel(Skill.HERBLORE) < 8) return false;
-    return otherQuestStage(player, "jungle_potion") >= 12
-      && otherQuestStage(player, "big_chompy_bird_hunting") >= 65;
+    const boostable = (skill, level) => Math.max(skills.getCurrentLevel(skill), skills.getMaxLevel(skill)) >= level;
+    if (skills.getMaxLevel(Skill.RANGED) < 30) return false;
+    if (!boostable(Skill.SMITHING, 4) || !boostable(Skill.HERBLORE, 8)) return false;
+    return questComplete(player, "jungle_potion") && questComplete(player, "big_chompy_bird_hunting");
   }
 
   function allEvidence(player) {
@@ -273,13 +244,56 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     );
   }
 
-  function consumeBalm(player) {
-    for (const itemId of BALM_ITEM_IDS) {
-      if (has(player, itemId)) {
-        take(player, itemId);
+  function artefactOwned(player) {
+    if (has(player, OGRE_ARTEFACT)) return true;
+    if (typeof player.getBanks === "function" && api.core.Bank.owns(player, OGRE_ARTEFACT)) return true;
+    const username = player.getUsername();
+    return api.core.World.getItems().some((ground) =>
+      ground.getItem().getId() === OGRE_ARTEFACT && ground.getOwner?.() === username);
+  }
+
+  /** The balm last used on Uglug Nar: his boxes show it and he buys that one (ticks 765, 3190-3196). */
+  const balmUsed = new WeakMap();
+
+  /** The transcript's text of a message step, so a scripted scene shows the Wiki's own words. */
+  function messageText(variant, stepId) {
+    let found = null;
+    const walk = (node) => {
+      if (found || !node || typeof node !== "object") return;
+      if (Array.isArray(node)) return node.forEach(walk);
+      if (node.id === stepId && typeof node.text === "string") {
+        found = node.text;
         return;
       }
+      for (const value of Object.values(node)) walk(value);
+    };
+    walk(loadTranscripts(api)?.[PAGE]?.variants?.[variant]);
+    return found;
+  }
+
+  const items = { BLACK_PRISM, OGRE_GATE_KEY, OGRE_ARTEFACT, STRANGE_POTION, TORN_PAGE };
+  const ctx = {
+    quest: () => quest,
+    sync: syncAuxiliaryState,
+    startTranscript: (player, npcId, variant, options) =>
+      startTranscript(api, player, npcId, PAGE, variant, undefined, null, options),
+    messageText, has, flag, progress, setProgress, freeSlots, prismSearchValue, questComplete, items,
+    GRISH_NPC_ID, SKELETON_ATTRIBUTE, INNKEEPER_MUG_ATTRIBUTE, LIFT_CHANCE,
+    skeletonSearched,
+  };
+  const boxes = require("../zogreflesheaters/Boxes.ZogreFleshEaters")(api);
+  const jiggig = require("../zogreflesheaters/Jiggig.ZogreFleshEaters")(api, ctx);
+  const tomb = require("../zogreflesheaters/Tomb.ZogreFleshEaters")(api, ctx);
+  const journal = require("../zogreflesheaters/Journal.ZogreFleshEaters")(ctx);
+
+  /** The corpse once the zombie is dead (tick 495); Ours: a backpack again if both it and the tankard are gone. */
+  function skeletonSearched(player) {
+    if (quest.getStage(player) >= STAGE_SITHIK || has(player, RUINED_BACKPACK) || has(player, DRAGON_INN_TANKARD)) {
+      player.sendMessage("You find nothing on the corpse.");
+      return;
     }
+    give(player, RUINED_BACKPACK);
+    player.sendMessage("You find a backpack on the corpse.");
   }
 
   // ==========================================================================
@@ -328,9 +342,6 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   function sithikVariant(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_STARTED) return null;
-    if (!flag(player, TRANSFORMED_ATTRIBUTE) && stage === STAGE_POTION && flag(player, POTION_USED_ATTRIBUTE)) {
-      setFlag(player, TRANSFORMED_ATTRIBUTE);
-    }
     if (flag(player, TRANSFORMED_ATTRIBUTE)) {
       return stage >= STAGE_PERMANENT_SPELL
         ? "investigating-b-vahn-talking-to-ogre-sithik-again"
@@ -345,9 +356,12 @@ module.exports = function registerZogreFleshEatersQuest(api) {
 
   function selectVariant({ npcId, player }) {
     if (npcId === GRISH_NPC_ID) return grishVariant(player);
-    if (OGRE_GUARD_NPC_IDS.has(npcId)) {
-      return quest.getStage(player) === STAGE_STARTED ? "getting-started-talking-to-the-ogre-guard" : null;
+    if (npcId === BARRICADE_GUARD_NPC_ID) {
+      const stage = quest.getStage(player);
+      if (stage >= STAGE_BARRICADE) return { page: OGRE_GUARD_PAGE, variant: "standard-dialogue-barricade-guard" };
+      return stage === STAGE_STARTED ? "getting-started-talking-to-the-ogre-guard" : null;
     }
+    if (npcId === COFFIN_GUARD_NPC_ID) return { page: OGRE_GUARD_PAGE, variant: "standard-dialogue-level-76-ogre-guard" };
     if (npcId === ZOMBIE_NPC_ID) {
       return quest.getStage(player) >= STAGE_STARTED ? "entering-jiggig-talking-to-the-zombie" : null;
     }
@@ -456,17 +470,23 @@ module.exports = function registerZogreFleshEatersQuest(api) {
         return !has(player, OGRE_GATE_KEY) && !flag(player, DOOR_LEAVING_ATTRIBUTE);
       case "_u1zNb":
         return flag(player, DOOR_LEAVING_ATTRIBUTE);
+      // Uglug Nar's refusal before the cure is known (capture ticks 765-771, at stage 3; post-quest
+      // he buys, tick 3194). Ours: the cure counts as known from Sithik's answer (stage 8) on.
+      case "2cRVYa":
+        return quest.getStage(player) < STAGE_PERMANENT_SPELL;
+      // The stand hands over another artefact only while none is held, banked or left on the floor:
+      // Slash Bash drops it (capture tick 2650), so it can still lie there unclaimed.
       case "qO0PC_":
-        return has(player, OGRE_ARTEFACT);
+        return artefactOwned(player);
       case "1KSrVG":
-        return !has(player, OGRE_ARTEFACT);
+        return !artefactOwned(player);
       default:
         return null;
     }
   }
 
   function answerCondition({ player, npcId, text, stepId }) {
-    if (!SITHIK_NPC_IDS.has(npcId) && !OGRE_GUARD_NPC_IDS.has(npcId) && ![GRISH_NPC_ID, ZOMBIE_NPC_ID, UGLUG_NAR_NPC_ID, ZAVISTIC_RARVE_NPC_ID].includes(npcId)) return null;
+    if (!SITHIK_NPC_IDS.has(npcId) && ![BARRICADE_GUARD_NPC_ID, GRISH_NPC_ID, ZOMBIE_NPC_ID, UGLUG_NAR_NPC_ID, ZAVISTIC_RARVE_NPC_ID].includes(npcId)) return null;
     const byId = conditionByStepId(player, stepId);
     if (byId !== null) return byId;
     const value = String(text).toLowerCase();
@@ -562,12 +582,15 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     }
   }
 
-  function handleMessageStep(player, stepId) {
+  function handleMessageStep(player, stepId, event) {
     switch (stepId) {
       // Only showing both clues sends the player to Sithik (Wiki Transcript:Zogre_Flesh_Eaters); the prism alone
       // (CEI1zE) or the page alone (WX1Eih) ends with "...going back to search a bit more" and sets nothing.
       case "thEwXi":
         setProgress(player, 4);
+        return;
+      case "EHO98y":
+        if (event?.box) event.box.pauseTicks = 1;
         return;
       case "tFIOsZ":
         setFlag(player, NECRO_SHOWN_ATTRIBUTE);
@@ -658,15 +681,32 @@ module.exports = function registerZogreFleshEatersQuest(api) {
         return;
       case "-5TCGA":
         if (!has(player, BOOK_OF_PORTRAITURE)) give(player, BOOK_OF_PORTRAITURE);
+        player.setAttribute(ATTRIBUTES.PORTRAITURE_FOUND, true);
         return;
       case "UZ09e5":
         if (!has(player, BOOK_OF_H_A_M)) give(player, BOOK_OF_H_A_M);
+        player.setAttribute(ATTRIBUTES.HAM_FOUND, true);
         return;
       case "3joCI-":
         if (!has(player, NECROMANCY_BOOK)) give(player, NECROMANCY_BOOK);
+        player.setAttribute(ATTRIBUTES.NECRO_FOUND, true);
         return;
       case "VIcEvT":
+        if (event?.box) event.box.delayTicks = 2;
         if (!has(player, TORN_PAGE)) give(player, TORN_PAGE);
+        player.setAttribute(ATTRIBUTES.PAGE_FOUND, true);
+        return;
+      // The coffin's first search counts once its second box shows (capture tick 547).
+      case "2jEw3h":
+        setProgress(player, 1);
+        return;
+      // The prism sold to Zavistic (tick 1760).
+      case "AsiW7f":
+        if (has(player, BLACK_PRISM) && !flag(player, ATTRIBUTES.PRISM_SOLD)) {
+          take(player, BLACK_PRISM);
+          give(player, COINS, PRISM_PRICE);
+          setFlag(player, ATTRIBUTES.PRISM_SOLD);
+        }
         return;
       case "6ce-Aa":
       case "j2cFmu":
@@ -685,8 +725,10 @@ module.exports = function registerZogreFleshEatersQuest(api) {
         return;
       case "JRpLrN":
         if (!flag(player, SOLD_BALM_ATTRIBUTE)) {
-          consumeBalm(player);
-          give(player, COINS, 650);
+          const balm = balmUsed.get(player) ?? BALM_ITEM_IDS.find((itemId) => has(player, itemId));
+          if (balm === undefined || !has(player, balm)) return;
+          take(player, balm);
+          give(player, COINS, BALM_PRICES.get(balm));
           setFlag(player, SOLD_BALM_ATTRIBUTE);
         }
         return;
@@ -699,29 +741,31 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     const { player, stepId } = event;
     if (!player || !stepId) return;
     if (event.kind === "message") {
-      handleMessageStep(player, stepId);
+      if (jiggig.roomMessage(event)) return;
+      boxes.applyBox(event, balmUsed.get(player));
+      handleMessageStep(player, stepId, event);
       return;
     }
     switch (stepId) {
-      case "izwjnR":
-        if (quest.getStage(player) < STAGE_BARRICADE) quest.setStage(player, STAGE_BARRICADE);
-        crushBarricade();
-        event.handled = true;
+      case jiggig.CRUSH_STEP_ID:
+        jiggig.crush(event);
         return;
       case "yn-UXu":
+        // The artefact and the key go as Grish takes the artefacts (tick 2812).
         if (quest.getStage(player) >= STAGE_KILLED_SLASH_BASH && has(player, OGRE_ARTEFACT)) {
           take(player, OGRE_ARTEFACT);
+          takeAll(player, OGRE_GATE_KEY);
           quest.complete(player);
           event.handled = true;
           event.end = true;
         }
         return;
       case "1NqRbI":
-        spawnSlashBash(player);
+        tomb.spawnSlashBash(player);
         event.handled = true;
         return;
-      case "VHXgZ8":
-        spawnBrentleZombie(player);
+      case "fBKMF2":
+        // "A cutscene begins.": the scene's camera starts with its box (Jiggig.roomMessage).
         event.handled = true;
         return;
       default:
@@ -761,7 +805,10 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     if (npcId === ZAVISTIC_RARVE_NPC_ID) {
       if (quest.getStage(player) < STAGE_STARTED) return null;
       if (itemId === BLACK_PRISM) {
-        return "investigating-b-vahn-use-the-black-prism-on-zavistic-rarve-after-he-has-already-it";
+        // Once Sithik has had the potion Zavistic buys the prism (capture ticks 1750-1760).
+        return quest.getStage(player) >= STAGE_POTION && !flag(player, ATTRIBUTES.PRISM_SOLD)
+          ? "investigating-b-vahn-use-the-black-prism-on-zavistic-rarve-after-giving-sithik-the-potion"
+          : "investigating-b-vahn-use-the-black-prism-on-zavistic-rarve-after-he-has-already-it";
       }
       if (itemId === TORN_PAGE) return "investigating-b-vahn-use-the-torn-page-on-zavistic-rarve";
       if (itemId === SITHIK_PORTRAIT_BAD) return "investigating-b-vahn-using-the-bad-portrait-on-zavistic-rarve";
@@ -813,6 +860,7 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     }
     if (npcId === UGLUG_NAR_NPC_ID) {
       if (!BALM_ITEM_IDS.includes(itemId)) return null;
+      balmUsed.set(player, itemId);
       return flag(player, SOLD_BALM_ATTRIBUTE)
         ? { page: "Uglug Nar", variant: "after-zogre-flesh-eaters" }
         : "defeating-the-zogres-use-relicym-s-balm-on-uglug-nar";
@@ -851,6 +899,9 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     }
     take(player, STRANGE_POTION);
     if (!has(player, SAMPLE_BOTTLE)) give(player, SAMPLE_BOTTLE);
+    // human_pickuptable and drip_poison as the potion goes in (capture tick 1537).
+    player.performAnimation(new api.core.Animation(POUR_SEQ));
+    player.getPacketSender().sendSound(POUR_SOUND, 1, 0);
     setFlag(player, POTION_USED_ATTRIBUTE);
     if (quest.getStage(player) < STAGE_POTION) quest.setStage(player, STAGE_POTION);
     startTranscript(api, player, SITHIK_NPC_ID, PAGE, "investigating-b-vahn-using-strange-potion-on-cup-of-tea");
@@ -858,14 +909,9 @@ module.exports = function registerZogreFleshEatersQuest(api) {
 
   function handleItemOnObject(event) {
     const { player, itemId, objectId } = event;
-    if (OGRE_COFFIN_IDS.has(objectId) && itemId === KNIFE) {
+    if (objectId === tomb.NORTH_WEST_COFFIN_ID && itemId === KNIFE) {
       event.handled = true;
-      if (progress(player) !== 1) {
-        player.sendMessage("Nothing interesting happens.");
-        return;
-      }
-      setProgress(player, 2);
-      startTranscript(api, player, GRISH_NPC_ID, PAGE, "entering-jiggig-use-knife-on-ogre-coffin");
+      tomb.knifeOnCoffin(player);
       return;
     }
     if (SITHIK_BED_IDS.has(objectId) && itemId === PAPYRUS) {
@@ -885,85 +931,27 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     pourPotion(event.player);
   }
 
-  // ==========================================================================
-  // Jiggig access: barricade, stairs and the locked ogre stone doors
-  // ==========================================================================
-
-  let barricadeCrushed = false;
-
   /**
-   * The guard's crush turns the mapped Barricade locs into Crushed barricades
-   * (Climb-over; the two null-named locs in the same row are part of the line).
-   * One loc change per tile, replacing the original in place: registering the
-   * replacement and then despawning the original sent the removal last, which
-   * erased the crushed barricade on the client until the next scene load (the
-   * relog workaround players reported).
+   * The Wiki: "Go down the ladder and back up to Sithik, and you will find that he has turned into
+   * an ogre." The capture sets 495 the tick after the player is down (ticks 1557-1558).
    */
-  function crushBarricade() {
-    if (barricadeCrushed) return;
-    barricadeCrushed = true;
-    const { GameObject, ObjectManager, MapObjects, Location } = api.core;
-    for (const tile of JIGGIG_BARRICADE) {
-      const location = new Location(tile.x, tile.y, 0);
-      const crushedId = tile.x === 2458 ? CRUSHED_BARRICADE_ID_2 : CRUSHED_BARRICADE_ID;
-      const crushed = new GameObject(crushedId, location.clone(), 10, tile.face, null);
-      const original = MapObjects.get(tile.id, location, null);
-      if (original) ObjectManager.replaceInPlace(original, crushed);
-      else ObjectManager.register(crushed, true);
-    }
-  }
-
-  /** Climb over the crushed line: land on the far side, nudging along the row if blocked. */
-  function climbOverBarricade(event) {
-    const { player, location } = event;
-    if (!location || location.z !== 0) return;
-    const overEast = player.getLocation().getX() < location.x;
-    const targetX = overEast ? 2459 : 2453;
-    const target = freeTileNear(targetX, player.getLocation().getY(), 0, player);
-    if (target) player.moveTo(target);
-  }
-
-  function freeTileNear(x, y, z, player) {
-    const { Location, RegionManager } = api.core;
-    const privateArea = player.getPrivateArea?.() ?? null;
-    for (const dy of [0, 1, -1, 2, -2, 3, -3]) {
-      const tile = new Location(x, y + dy, z);
-      if (!RegionManager.blocked(tile, privateArea)) return tile;
-    }
-    return null;
-  }
-
-  /** The four Jiggig stair clicks ClimbLinks cannot pair, with explicit destinations. */
-  function useJiggigStairs(event) {
-    const { player, objectId, location } = event;
-    if (!location) return false;
-    const stair = JIGGIG_STAIRS.find(
-      (entry) => entry.id === objectId && entry.x === location.x && entry.y === location.y && entry.z === location.z
-    );
-    if (!stair) return false;
-    event.handled = true;
-    api.emitCustomEvent(stair.option === "climb-up" ? "ladders:climbUp" : "ladders:climbDown", {
-      player,
-      destination: new api.core.Location(stair.to.x, stair.to.y, stair.to.z),
-      handled: false,
-    });
-    return true;
-  }
-
-  /** Ogre stone door: play the transcript, then swing the pair open once the key is held. */
-  function openOgreStoneDoor(event) {
-    const { player, location } = event;
-    if (!location) return;
-    player.setAttribute(DOOR_LEAVING_ATTRIBUTE, player.getLocation().getY() < location.y);
-    startTranscript(api, player, GRISH_NPC_ID, PAGE, "defeating-the-zogres-open-ogre-stone-door");
-    player.setAttribute(DOOR_LEAVING_ATTRIBUTE, false);
-    if (!has(player, OGRE_GATE_KEY) || quest.getStage(player) < STAGE_GIVEN_KEY) return;
-    const { ObjectManager, MapObjects, Location } = api.core;
-    for (const leaf of OGRE_DOOR_LEAVES) {
-      if (leaf.y !== location.y) continue;
-      const door = MapObjects.get(leaf.id, new Location(leaf.x, leaf.y, location.z), null);
-      if (door) ObjectManager.deregister(door, true);
-    }
+  function climbDownFromSithik(request) {
+    const { player, objectId } = request;
+    const location = request.object?.getLocation?.();
+    if (objectId !== SITHIK_LADDER.id || !player || !location) return;
+    if (location.getX() !== SITHIK_LADDER.x || location.getY() !== SITHIK_LADDER.y || location.getZ() !== SITHIK_LADDER.z) return;
+    if (!flag(player, POTION_USED_ATTRIBUTE) || flag(player, TRANSFORMED_ATTRIBUTE)) return;
+    const { CountdownTask, TaskManager } = api.core;
+    let ticks = 0;
+    const wait = () => {
+      if (!player.isRegistered?.()) return;
+      if (player.getLocation().getZ() !== SITHIK_LADDER.z) {
+        TaskManager.submit(new CountdownTask(player, 1, () => setFlag(player, TRANSFORMED_ATTRIBUTE)));
+        return;
+      }
+      if (++ticks < 10) TaskManager.submit(new CountdownTask(player, 1, wait));
+    };
+    TaskManager.submit(new CountdownTask(player, 1, wait));
   }
 
   // ==========================================================================
@@ -1123,14 +1111,8 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     if (!player) return;
     const op = objectOp(event);
 
-    if (CRUSHED_BARRICADE_IDS.has(objectId)) {
-      if (op !== "climb-over") return;
-      event.handled = true;
-      climbOverBarricade(event);
-      return;
-    }
-
-    if (useJiggigStairs(event)) return;
+    if (jiggig.useStairs(event)) return;
+    if (tomb.objectInteraction(event, op)) return;
 
     if (objectId === BROKEN_LECTERN_ID) {
       if (op !== "search") return;
@@ -1143,55 +1125,9 @@ module.exports = function registerZogreFleshEatersQuest(api) {
         player.sendMessage("You find nothing here this time.");
         return;
       }
+      // human_pickupfloor with "You search the broken down lectern.", the page's box two ticks on (ticks 521-523).
+      player.performAnimation(new api.core.Animation(LECTERN_SEARCH_SEQ));
       startTranscript(api, player, GRISH_NPC_ID, PAGE, "entering-jiggig-search-broken-lecturn");
-      return;
-    }
-
-    if (objectId === OGRE_SKELETON_ID) {
-      if (op !== "search") return;
-      event.handled = true;
-      const state = Number(player.getAttribute(SKELETON_ATTRIBUTE)) || 0;
-      if (state >= 2) {
-        if (
-          quest.getStage(player) >= STAGE_SITHIK ||
-          has(player, RUINED_BACKPACK) ||
-          has(player, DRAGON_INN_TANKARD)
-        ) {
-          player.sendMessage("You find nothing on the corpse.");
-          return;
-        }
-        give(player, RUINED_BACKPACK);
-        player.sendMessage("You find a backpack on the corpse.");
-        return;
-      }
-      if (zombieByPlayer.has(player)) {
-        player.sendMessage("You're in mortal danger, you don't have time to search!");
-        return;
-      }
-      player.setAttribute(SKELETON_ATTRIBUTE, 1);
-      syncAuxiliaryState(player);
-      startTranscript(api, player, GRISH_NPC_ID, PAGE, "entering-jiggig-search-skeleton");
-      return;
-    }
-
-    if (OGRE_COFFIN_IDS.has(objectId)) {
-      if (op !== "search") return;
-      event.handled = true;
-      const state = progress(player);
-      if (state >= 3) {
-        if (has(player, BLACK_PRISM)) {
-          player.sendMessage("You find nothing inside this time.");
-          return;
-        }
-        startTranscript(api, player, GRISH_NPC_ID, PAGE, "entering-jiggig-search-the-ogre-coffin-after-it-is-opened");
-        return;
-      }
-      if (state === 2) {
-        startTranscript(api, player, GRISH_NPC_ID, PAGE, "entering-jiggig-search-ogre-coffin-after-unlocking-it");
-        return;
-      }
-      setProgress(player, 1);
-      startTranscript(api, player, GRISH_NPC_ID, PAGE, "entering-jiggig-search-ogre-coffin");
       return;
     }
 
@@ -1215,37 +1151,6 @@ module.exports = function registerZogreFleshEatersQuest(api) {
       return;
     }
 
-    if (OGRE_TOMB_DOOR_IDS.has(objectId)) {
-      if (op !== "open") return;
-      event.handled = true;
-      openOgreStoneDoor(event);
-      return;
-    }
-
-    if (objectId === OGRE_STAND_ID) {
-      if (op !== "search") return;
-      event.handled = true;
-      if (slashBashByPlayer.has(player)) {
-        player.sendMessage("You're in mortal danger, you don't have time to search!");
-        return;
-      }
-      const stage = quest.getStage(player);
-      if (stage >= STAGE_KILLED_SLASH_BASH) {
-        if (!has(player, OGRE_ARTEFACT)) {
-          startTranscript(api, player, GRISH_NPC_ID, PAGE, "defeating-the-zogres-search-stand-search-the-stand-again");
-        } else {
-          player.sendMessage("You find nothing in particular.");
-        }
-        return;
-      }
-      if (stage >= STAGE_GIVEN_KEY) {
-        startTranscript(api, player, GRISH_NPC_ID, PAGE, "defeating-the-zogres-search-stand");
-        return;
-      }
-      player.sendMessage("You find nothing in particular.");
-      return;
-    }
-
     if (SITHIK_BED_IDS.has(objectId)) {
       if (op !== "talk-to") return;
       event.handled = true;
@@ -1261,156 +1166,25 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   }
 
   // ==========================================================================
-  // Spawns and deaths
-  // ==========================================================================
-
-  function spawnSlashBash(player) {
-    if (slashBashByPlayer.has(player)) return;
-    const npc = api.spawnNpc({
-      id: SLASH_BASH_NPC_ID,
-      x: 2477,
-      y: 9444,
-      z: 0,
-      owner: player,
-      ownerOnly: true,
-    });
-    if (npc) slashBashByPlayer.set(player, npc);
-  }
-
-  function spawnBrentleZombie(player) {
-    if (zombieByPlayer.has(player)) return;
-    const npc = api.spawnNpc({
-      id: ZOMBIE_NPC_ID,
-      x: 2442,
-      y: 9458,
-      z: 2,
-      owner: player,
-      ownerOnly: true,
-    });
-    if (npc) zombieByPlayer.set(player, npc);
-  }
-
-  function handleNpcDeath(event) {
-    const player = event.killer ?? event.player;
-    if (!player) return;
-    if (event.npcId === SLASH_BASH_NPC_ID) {
-      slashBashByPlayer.delete(player);
-      if (quest.getStage(player) < STAGE_KILLED_SLASH_BASH) {
-        quest.setStage(player, STAGE_KILLED_SLASH_BASH);
-      }
-      if (!has(player, OGRE_ARTEFACT)) give(player, OGRE_ARTEFACT);
-      return;
-    }
-    if (event.npcId === ZOMBIE_NPC_ID && event.npc
-      && event.npc === zombieByPlayer.get(player)) {
-      zombieByPlayer.delete(player);
-      player.setAttribute(SKELETON_ATTRIBUTE, 2);
-      syncAuxiliaryState(player);
-    }
-  }
-
-  // ==========================================================================
-  // Journal
-  // ==========================================================================
-
-  function buildJournal(player, questHandle) {
-    const stage = questHandle.getStage(player);
-    if (stage >= STAGE_COMPLETE) {
-      return [
-        "<str>Grish asked me to find out why the Zogres had appeared at</str>",
-        "<str>Jiggig. I found that the wizard Sithik Ints was responsible,</str>",
-        "<str>but the necromantic spell could not be removed.</str>",
-        "<str>I recovered the ogre artefacts so Grish can move the</str>",
-        "<str>ceremonial grounds.</str>",
-        "",
-        "<col=ff0000>QUEST COMPLETE!</col>",
-      ];
-    }
-    if (stage >= STAGE_KILLED_SLASH_BASH) {
-      return has(player, OGRE_ARTEFACT)
-        ? ["<str>I defeated Slash Bash.</str>", "I have the <col=800000>ogre artefact</col>; I should take it to Grish."]
-        : ["<str>I defeated Slash Bash.</str>", "I lost the artefact; searching the <col=800000>stand</col> may find another."];
-    }
-    if (stage >= STAGE_GIVEN_KEY) {
-      return [
-        "<str>Sithik admitted the spell is permanent.</str>",
-        "Grish gave me the <col=800000>ogre gate key</col>.",
-        "I should search the tomb for the <col=800000>ogre artefacts</col>.",
-      ];
-    }
-    if (stage >= STAGE_PERMANENT_SPELL) {
-      return [
-        "<str>Sithik told me the curse cannot be removed.</str>",
-        "I should tell <col=800000>Grish</col> what I have learned.",
-      ];
-    }
-    if (stage >= STAGE_POTION) {
-      return [
-        "<str>I poured Zavistic's potion into Sithik's tea.</str>",
-        "I should check on <col=800000>Sithik</col> and see what happened.",
-      ];
-    }
-    if (stage >= STAGE_SITHIK) {
-      return has(player, STRANGE_POTION)
-        ? ["<str>Zavistic gave me a strange potion for Sithik.</str>", "I should pour it into <col=800000>Sithik's cup of tea</col>."]
-        : ["<str>Zavistic gave me a strange potion, but I lost it.</str>", "I should ask <col=800000>Zavistic Rarve</col> for another."];
-    }
-    if (stage >= STAGE_BARRICADE) {
-      const lines = [
-        "<str>An ogre guard smashed the barricade for me.</str>",
-        "I should explore the tomb under Jiggig:",
-      ];
-      const search = progress(player);
-      if (search >= 4) lines.push("I have shown the <col=800000>prism</col> and the <col=800000>torn page</col> to the wizards.");
-      else if (search >= 3) lines.push("I recovered a <col=800000>black prism</col> and a <col=800000>torn page</col> from the tomb.");
-      else if (search >= 1) lines.push("I have searched the coffin; the lock looks like it could be forced.");
-      else lines.push("Search the <col=800000>lectern</col> and the <col=800000>skeleton</col> for clues.");
-      return lines;
-    }
-    if (stage >= STAGE_STARTED) {
-      return [
-        "Grish asked me to learn why the <col=800000>Zogres</col> have",
-        "appeared at <col=800000>Jiggig</col> and to deal with them.",
-        "I need to get past the <col=800000>ogre guard</col>.",
-      ];
-    }
-    const lines = [
-      "I can start this quest by speaking to <col=800000>Grish</col>",
-      "at <col=800000>Jiggig</col>, south of Castle Wars.",
-      "",
-      "To start this quest I must complete:",
-    ];
-    lines.push(otherQuestStage(player, "jungle_potion") >= 12 ? "<str>Jungle Potion</str>" : "Jungle Potion");
-    lines.push(
-      otherQuestStage(player, "big_chompy_bird_hunting") >= 65
-        ? "<str>Big Chompy Bird Hunting</str>"
-        : "Big Chompy Bird Hunting"
-    );
-    lines.push("", "It would help if I had 30 Ranged, 30 Fletching, 4 Smithing and 8 Herblore.");
-    return lines;
-  }
-
-  // ==========================================================================
   // Registration
   // ==========================================================================
 
   for (const attribute of PERSISTED_ATTRIBUTES) api.persistAttribute(attribute);
-
-  function grantReward(player) {
-    give(player, OURG_BONES, 2);
-    give(player, ZOGRE_BONES, 2);
-    const skills = player.getSkillManager();
-    skills.addExperiences(Skill.FLETCHING, 2000);
-    skills.addExperiences(Skill.RANGED, 2000);
-    skills.addExperiences(Skill.HERBLORE, 2000);
-  }
+  for (const attribute of Object.values(ATTRIBUTES)) api.persistAttribute(attribute, false);
 
   function handleLogin({ player }) {
+    tomb.forget(player);
     syncAuxiliaryState(player);
-    slashBashByPlayer.delete(player);
-    zombieByPlayer.delete(player);
-    if (quest.getStage(player) >= STAGE_BARRICADE) crushBarricade();
     refreshQuestList(player);
+  }
+
+  function handleLogout({ player }) {
+    tomb.forget(player);
+    jiggig.endRoomScene(player);
+  }
+
+  function handleStageChanged({ player, key }) {
+    if (key === "zogre_flesh_eaters") syncAuxiliaryState(player);
   }
 
   quest = registerQuest(api, {
@@ -1420,22 +1194,27 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
+    // The scroll's lines and model as the capture shows them (tick 2815); Slash Bash's own drop
+    // table leaves the 3 ourg and 2 zogre bones the Wiki lists, so the quest gives no items itself.
     xpRewards: [
-      { skillId: Skill.FLETCHING.getIndex(), amount: 2000, label: "Fletching" },
       { skillId: Skill.RANGED.getIndex(), amount: 2000, label: "Ranged" },
+      { skillId: Skill.FLETCHING.getIndex(), amount: 2000, label: "Fletching" },
       { skillId: Skill.HERBLORE.getIndex(), amount: 2000, label: "Herblore" },
     ],
-    rewardItemId: OURG_BONES,
-    rewardItemLabel: "3 Ourg bones and 2 Zogre bones",
-    otherRewards: [
-      "Ability to make Relicym's balm",
-      "Ability to fletch comp ogre bows and brutal arrows",
-      "Uglug Nar's shop",
-    ],
-    buildJournal,
+    scrollItemId: OGRE_ARTEFACT,
+    otherRewards: ["Ability to make Relicym's Balm", "Ability to make Brutal Arrows"],
+    buildJournal: journal.buildJournal,
     onReward: grantReward,
   });
 
+  function grantReward(player) {
+    const skills = player.getSkillManager();
+    skills.addExperiences(Skill.RANGED, 2000);
+    skills.addExperiences(Skill.FLETCHING, 2000);
+    skills.addExperiences(Skill.HERBLORE, 2000);
+  }
+
+  jiggig.register();
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcInteraction("Zavistic Rarve", { "Talk-to": talkToZavistic });
   api.onNpcDialogueCondition(answerCondition);
@@ -1444,7 +1223,9 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   api.persistAttribute(INNKEEPER_PORTRAIT_ATTRIBUTE, false);
   api.persistAttribute(MAKE_BOW_ATTRIBUTE, false);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrapComplete);
+  api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("ladders:climb", climbDownFromSithik);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onItemAction(handleItemAction);
@@ -1452,6 +1233,7 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemOnGroundItem(handleItemOnGroundItem);
   api.onObjectInteraction(handleObjectInteraction);
-  api.onNpcDeath(handleNpcDeath);
+  api.onNpcDeath(tomb.handleNpcDeath);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
 };

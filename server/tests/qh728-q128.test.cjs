@@ -80,7 +80,7 @@ function makePlayer(attrs = new Map()) {
     getFrameUpdater: () => null,
     getPrivateArea: () => null,
     getUsername: () => 'qh728-q128', getDisplayName: () => 'qh728-q128',
-    getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill, amount]) }),
+    getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill, amount]), getCurrentLevel: () => 99, getMaxLevel: () => 99 }),
     sendMessage: text => messages.push(text),
     isRegistered: () => true,
   };
@@ -176,6 +176,12 @@ function registerRealRunner() {
       }
     },
   });
+  // The prerequisites' own plugins are not loaded here: answer quest:is-complete from their saved
+  // stages at their completion values, as QuestRuntime does for registered quests.
+  api.onCustomEvent('quest:is-complete', (request) => {
+    const done = { jungle_potion: 12, big_chompy_bird_hunting: 65 }[request.key];
+    if (done !== undefined) request.complete = (Number(request.player.getAttribute(`quest.${request.key}.stage`)) || 0) >= done;
+  });
   require('../plugins/quests/quests/ZogreFleshEaters.Quest')(api);
   const quest = runtime.getRegisteredQuests().findLast(entry => entry.key === KEY);
   const apiForRunner = {
@@ -239,6 +245,7 @@ function runnerPlayer({ ranged = 99 } = {}) {
     getDialogueManager: () => p.manager,
     getSkillManager: () => ({
       getCurrentLevel: skill => (skill === core.Skill.RANGED ? ranged : 99),
+      getMaxLevel: skill => (skill === core.Skill.RANGED ? ranged : 99),
       addExperiences: (skill, amount) => xp.push([skill, amount]),
     }),
     getLocation: () => new core.Location(2447, 3049, 0),
@@ -343,11 +350,12 @@ test('the imported Zavistic lost-potion message restores the strange potion once
   assert.equal(p.items.get(core.ItemIdentifiers.STRANGE_POTION), 1, 'a held potion is not duplicated');
 });
 
-test('the final Grish hand-in consumes the artefact, sends varbit 487=14 and grants the rewards once', () => {
+test('the final Grish hand-in takes the artefact and the key, sends varbit 487=14 and grants the rewards once', () => {
   const h = harness();
   const p = makePlayer();
   p.setStage(STAGE_KILLED_SLASH_BASH);
   p.items.set(core.ItemIdentifiers.OGRE_ARTEFACT, 1);
+  p.items.set(core.ItemIdentifiers.OGRE_GATE_KEY, 1);
 
   const event = h.dispatch('npc-dialogue:action', {
     player: p, npcId: core.NpcIdentifiers.GRISH, stepId: 'yn-UXu', kind: 'action', handled: false,
@@ -359,11 +367,13 @@ test('the final Grish hand-in consumes the artefact, sends varbit 487=14 and gra
   assert.equal(p.packets.some(([method, id]) => method === 'sendConfig' && id === VARBIT_ZOGRE), false,
     'the quest no longer writes varp 487');
   assert.equal(p.items.get(core.ItemIdentifiers.OGRE_ARTEFACT) ?? 0, 0, 'the artefact is handed in');
-  assert.equal(p.items.get(core.ItemIdentifiers.OURG_BONES), 3, 'three ourg bones (two + scroll reward)');
-  assert.equal(p.items.get(core.ItemIdentifiers.ZOGRE_BONES), 2, 'two zogre bones');
+  assert.equal(p.items.get(core.ItemIdentifiers.OGRE_GATE_KEY) ?? 0, 0, 'the key goes with it (capture tick 2812)');
+  // Slash Bash's drop table leaves the bones; the scroll gives none (capture tick 2815).
+  assert.equal(p.items.get(core.ItemIdentifiers.OURG_BONES) ?? 0, 0, 'no ourg bones from the scroll');
+  assert.equal(p.items.get(core.ItemIdentifiers.ZOGRE_BONES) ?? 0, 0, 'no zogre bones from the scroll');
   assert.deepEqual(p.xp, [
-    [core.Skill.FLETCHING, 2000],
     [core.Skill.RANGED, 2000],
+    [core.Skill.FLETCHING, 2000],
     [core.Skill.HERBLORE, 2000],
   ]);
 });
@@ -418,7 +428,7 @@ test('real runner: the Grish start route reaches luhaXl and hands out the food a
     assert.equal(h.quest.getStage(p), STAGE_STARTED);
     assert.equal(p.items.get(core.ItemIdentifiers.COOKED_CHOMPY), 3);
     assert.equal(p.items.get(core.ItemIdentifiers.SUPER_RESTORE_3_), 2);
-    assert.ok(p.messages.includes('Grish hands you some food and two potions.'));
+    assert.ok(p.log.some(entry => entry.includes('Grish hands you some food and two potions.')), 'the hand-out box (capture tick 260)');
     assert.equal(p.varbits.get(VARBIT_ZOGRE), STAGE_STARTED);
   } finally {
     h.cleanup();
@@ -481,7 +491,7 @@ test('real runner: Zavistic gives a lost potion through _QKSlE but the held-poti
     runtime.startTranscript(h.api, lost, core.NpcIdentifiers.ZAVISTIC_RARVE, 'Zogre Flesh Eaters', variant);
     drain(lost);
     assert.equal(lost.items.get(core.ItemIdentifiers.STRANGE_POTION), 1);
-    assert.ok(lost.messages.includes('Zavistic hands you a bottle of strange potion.'));
+    assert.ok(lost.log.some(entry => entry.includes('Zavistic hands you a bottle of strange potion.')), 'the potion box (capture tick 1506)');
     assert.equal(h.quest.getStage(lost), STAGE_SITHIK);
 
     const held = runnerPlayer();
@@ -490,7 +500,7 @@ test('real runner: Zavistic gives a lost potion through _QKSlE but the held-poti
     runtime.startTranscript(h.api, held, core.NpcIdentifiers.ZAVISTIC_RARVE, 'Zogre Flesh Eaters', variant);
     advanceToPrompt(held);
     assert.equal(held.items.get(core.ItemIdentifiers.STRANGE_POTION), 1);
-    assert.equal(held.messages.includes('Zavistic hands you a bottle of strange potion.'), false);
+    assert.equal(held.log.some(entry => entry.includes('Zavistic hands you a bottle of strange potion.')), false);
   } finally {
     h.cleanup();
   }
@@ -515,7 +525,8 @@ test('q128 earned partial auxiliary events replay with actual cache sibling pres
   const names={ thzfe_brentle_skele:503, thzfe_prismsearch:488, thzfe_innkeepermugshown:489,
     thzfe_innkeeperportraitshown:490,thzfe_shownnecrobook:491,thzfe_shownhambook:492,
     thzfe_showntankard:493,thzfe_shownsignedportrait:494,thzfe_sithik_transformed:495,
-    thzfe_makecuredisease:498,thzfe_makebrutalarrow:499,thzfe_makecompozogrebow:500 };
+    thzfe_makecuredisease:498,thzfe_makebrutalarrow:499,thzfe_makecompozogrebow:500,
+    thzfe_blocking_barricade:496,thzfe_sold_balm:502,thzfe_prismsold:504,thzfe_cut_scene:505 };
   for(const[name,id]of Object.entries(names)) assert.equal(CacheDefinitions.getVarbitId(name),id);
   const message=stepId=>h.dispatch('npc-dialogue:action',{player:p,stepId,kind:'message'});
   h.dispatch('npc-dialogue:condition',{player:p,stepId:'ddiH2D'});
@@ -541,17 +552,4 @@ test('q128 earned partial auxiliary events replay with actual cache sibling pres
   assert.equal(h.quest.getStage(p),stage);assert.deepEqual([...p.items],items);assert.deepEqual(p.xp,xp);
 });
 
-
-test('q128 only the tracked Brentle zombie death earns the skeleton defeat flag', () => {
-  const h=harness(), p=runnerPlayer();
-  h.dispatch('npc-dialogue:action',{player:p,stepId:'VHXgZ8',kind:'action'});
-  const npc=h.spawned.at(-1), npcId=core.NpcIdentifiers.ZOMBIE_44;
-  for(const foreign of [undefined,{getId:()=>npcId}]) {
-    for(const death of h.deaths) death({killer:p,npcId,npc:foreign});
-    assert.equal(p.varbits.get(503)??0,0);
-  }
-  for(const death of h.deaths) death({killer:p,npcId,npc});
-  assert.equal(p.varbits.get(503),2);
-  p.varbits.clear();h.dispatch('player:bootstrap-complete',{player:p});
-  assert.equal(p.varbits.get(503),2);
-});
+// The Brentle zombie's spawn and death flag moved to the skeleton search: tests/zogre-flesh-eaters-capture.test.cjs.

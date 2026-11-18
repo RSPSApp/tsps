@@ -300,7 +300,9 @@ const groundAmount = (f, id) => onGround(f, id)?.getItem().getAmount() ?? 0;
 function qualifiedForGrish(t) {
   const f = actor(t);
   const skills = f.p.getSkillManager();
-  for (const [skill, level] of [[core.Skill.RANGED, 30], [core.Skill.FLETCHING, 30], [core.Skill.SMITHING, 4], [core.Skill.HERBLORE, 8]]) {
+  // The Wiki's requirements: 30 Ranged (not boostable, so its base level), 4 Smithing and 8 Herblore.
+  for (const [skill, level] of [[core.Skill.RANGED, 30], [core.Skill.SMITHING, 4], [core.Skill.HERBLORE, 8]]) {
+    skills.setMaxLevels(skill, level);
     skills.setCurrentLevel(skill, level, false);
   }
   f.p.setAttribute("quest.jungle_potion.stage", 12);

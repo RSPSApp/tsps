@@ -168,46 +168,46 @@ class Upstream(
             is UpdatePlayerModel -> message.design(identKitCount)?.let { send(message.toTsps(it)) } ?: UpdatePlayerModel.logUnknown(message)
             is OpWorldEntity -> {
                 val index = worldEntityIndex(message.index)
-                if (message.op in 1..5 && index != null) send(WorldOps.worldEntity(message.op, index)) else DropCounter.up(message)
+                if (message.op in 1..5 && index != null) send(WorldOps.worldEntity(message.op, index, message.controlKey)) else DropCounter.up(message)
             }
             is ClickWorldMap -> send(WorldOps.worldMapClick(message.level, message.x, message.z))
             is Teleport -> send(WorldOps.teleport(message.level, message.x, message.z))
-            is OpPlayer -> send(TspsClientPacket.playerOp(PlayerOps.toTsps(message.op), message.index))
-            is OpNpcV2 -> if (message.op in 1..5) send(TspsClientPacket.npcOp(message.op, message.index)) else DropCounter.up(message)
+            is OpPlayer -> send(TspsClientPacket.playerOp(PlayerOps.toTsps(message.op), message.index, message.controlKey))
+            is OpNpcV2 -> if (message.op in 1..5) send(TspsClientPacket.npcOp(message.op, message.index, message.controlKey)) else DropCounter.up(message)
             is OpNpc6 -> send(TspsClientPacket.examineNpc(message.id))
             // Revision 242 added V3 (OPLOC*_V3, OPLOC6_V2, OPLOCT_V2) with three-byte loc ids; the live
             // client sends those, and the V1/V2 forms decode the same fields.
-            is OpLocV2 -> if (message.op in 1..5) send(WorldOps.loc(message.op, message.id, message.x, message.z)) else DropCounter.up(message)
-            is OpLocV3 -> if (message.op in 1..5) send(WorldOps.loc(message.op, message.id, message.x, message.z)) else DropCounter.up(message)
+            is OpLocV2 -> if (message.op in 1..5) send(WorldOps.loc(message.op, message.id, message.x, message.z, message.controlKey)) else DropCounter.up(message)
+            is OpLocV3 -> if (message.op in 1..5) send(WorldOps.loc(message.op, message.id, message.x, message.z, message.controlKey)) else DropCounter.up(message)
             is OpLoc6V1 -> send(WorldOps.examineLoc(message.id))
             is OpLoc6V2 -> send(WorldOps.examineLoc(message.id))
-            is OpObjV2 -> if (message.op in 1..5) send(WorldOps.obj(message.op, message.id, message.x, message.z)) else DropCounter.up(message)
+            is OpObjV2 -> if (message.op in 1..5) send(WorldOps.obj(message.op, message.id, message.x, message.z, message.controlKey)) else DropCounter.up(message)
             is OpObj6 -> send(WorldOps.examineObj(message.id, message.x, message.z))
             // OSRS sends item use and spells as one `T` packet; tsps has one for each.
-            is OpLocTV1 -> send(locT(message.id, message.x, message.z, message.selectedCombinedId, message.selectedSub, message.selectedObj))
-            is OpLocTV2 -> send(locT(message.id, message.x, message.z, message.selectedCombinedId, message.selectedSub, message.selectedObj))
+            is OpLocTV1 -> send(locT(message.id, message.x, message.z, message.selectedCombinedId, message.selectedSub, message.selectedObj, message.controlKey))
+            is OpLocTV2 -> send(locT(message.id, message.x, message.z, message.selectedCombinedId, message.selectedSub, message.selectedObj, message.controlKey))
             is OpObjT ->
                 send(
                     if (message.selectedCombinedId == INVENTORY) {
-                        WorldOps.itemOnObj(message.id, message.x, message.z, message.selectedCombinedId, message.selectedSub, message.selectedObj)
+                        WorldOps.itemOnObj(message.id, message.x, message.z, message.selectedCombinedId, message.selectedSub, message.selectedObj, message.controlKey)
                     } else {
-                        WorldOps.spellOnObj(message.id, message.x, message.z, message.selectedCombinedId, message.selectedSub, message.selectedObj)
+                        WorldOps.spellOnObj(message.id, message.x, message.z, message.selectedCombinedId, message.selectedSub, message.selectedObj, message.controlKey)
                     },
                 )
             is OpNpcT ->
                 send(
                     if (message.selectedCombinedId == INVENTORY) {
-                        WorldOps.itemOnNpc(message.index, message.selectedCombinedId, message.selectedSub, message.selectedObj)
+                        WorldOps.itemOnNpc(message.index, message.selectedCombinedId, message.selectedSub, message.selectedObj, message.controlKey)
                     } else {
-                        WorldOps.spellOnNpc(message.index, message.selectedCombinedId, message.selectedSub, message.selectedObj)
+                        WorldOps.spellOnNpc(message.index, message.selectedCombinedId, message.selectedSub, message.selectedObj, message.controlKey)
                     },
                 )
             is OpPlayerT ->
                 send(
                     if (message.selectedCombinedId == INVENTORY) {
-                        WorldOps.itemOnPlayer(message.index, message.selectedCombinedId, message.selectedSub, message.selectedObj)
+                        WorldOps.itemOnPlayer(message.index, message.selectedCombinedId, message.selectedSub, message.selectedObj, message.controlKey)
                     } else {
-                        WorldOps.spellOnPlayer(message.index, message.selectedCombinedId, message.selectedSub, message.selectedObj)
+                        WorldOps.spellOnPlayer(message.index, message.selectedCombinedId, message.selectedSub, message.selectedObj, message.controlKey)
                     },
                 )
             else -> DropCounter.up(message)
@@ -215,11 +215,11 @@ class Upstream(
     }
 
     /** OSRS sends item use and spells on a loc as one `T` packet; tsps has one for each. */
-    private fun locT(id: Int, x: Int, z: Int, selectedCombinedId: Int, selectedSub: Int, selectedObj: Int) =
+    private fun locT(id: Int, x: Int, z: Int, selectedCombinedId: Int, selectedSub: Int, selectedObj: Int, controlKey: Boolean) =
         if (selectedCombinedId == INVENTORY) {
-            WorldOps.itemOnLoc(id, x, z, selectedCombinedId, selectedSub, selectedObj)
+            WorldOps.itemOnLoc(id, x, z, selectedCombinedId, selectedSub, selectedObj, controlKey)
         } else {
-            WorldOps.spellOnLoc(id, x, z, selectedCombinedId, selectedSub, selectedObj)
+            WorldOps.spellOnLoc(id, x, z, selectedCombinedId, selectedSub, selectedObj, controlKey)
         }
 
     /** FRIENDS_CHAT_ACTION: one packet for the friend, ignore and friends-chat actions. */

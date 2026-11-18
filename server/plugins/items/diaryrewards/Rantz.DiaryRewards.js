@@ -13,10 +13,10 @@
  * His lines are the Wiki transcript in npc-dialogues.json, three variants played as they are: the
  * hand-out ("Hav' da stabbies..."), no inventory space ("No space 'uman...") and already claimed
  * today ("You's already claimed da stabbies today..."). No RSProx capture or index row has a
- * Claim-arrows click, so the rest is inferred. Ours: the arrows are given as the hand-out line starts,
- * with no animation or other message; the day resets at 00:00 UTC, as the other diary allowances do;
- * without any Western Provinces tier, Claim-arrows answers with a game message of our own (neither the
- * Wiki nor the transcript says what Rantz does then).
+ * Claim-arrows click with a diary tier, so the rest is inferred. Ours: the arrows are given as the hand-out
+ * line starts, with no animation or other message; the day resets at 00:00 UTC, as the other diary
+ * allowances do. Without any Western Provinces tier, Claim-arrows answers with the game message the user's
+ * rev 242 Big Chompy Bird Hunting capture shows (tick 1072, during the quest).
  */
 const Rewards = require("./Common.DiaryRewards");
 const Progress = require("../../achievements/diaries/Progress.AchievementDiaries");
@@ -29,8 +29,8 @@ const VARIANTS = {
   noRoom: `${PREFIX}if-the-player-has-no-inventory-space`,
   claimed: `${PREFIX}trying-to-claim-arrows-after-having-claimed-them`,
 };
-/** Ours: neither the Wiki nor the transcript has Rantz's answer without a diary tier. */
-const NO_DIARY = "You need to complete the easy Western Provinces Diary to claim free ogre arrows from Rantz.";
+/** Without a diary tier (the user's rev 242 Big Chompy Bird Hunting capture, tick 1072). */
+const NO_DIARY = "You need to complete the easy, medium, hard or elite tier of the Western Diary to use this feature.";
 
 let pluginApi;
 let core;

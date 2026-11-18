@@ -50,8 +50,18 @@ function player(items = [], attrs = [], levels = {}) {
       getFreeSlots: () => p.inventoryFull ? 0 : 28,
       getAddableAmount: item => p.inventoryFull && !(inventory.get(item.getId()) > 0) ? 0
         : Math.min(item.getAmount(), 0x7fffffff - (inventory.get(item.getId()) ?? 0)),
-      getItems: () => [],
+      getItems: () => [...inventory].filter(([, n]) => n > 0).map(([id, n]) => new core.Item(id, n)),
       getValidItems: () => [],
+      setItem: (slot, item) => {
+        const old = [...inventory].filter(([, n]) => n > 0)[slot];
+        if (old) inventory.set(old[0], old[1] - 1);
+        inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount());
+      },
+      deleteAtSlot: (slot) => {
+        const old = [...inventory].filter(([, n]) => n > 0)[slot];
+        if (old) inventory.set(old[0], old[1] - 1);
+      },
+      refreshItems: noop,
       adds: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) + amount),
       forceAdd: (item) => inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()),
       deleteNumber: (id, amount) => inventory.set(id, Math.max(0, (inventory.get(id) ?? 0) - amount)),
@@ -62,6 +72,7 @@ function player(items = [], attrs = [], levels = {}) {
       getCurrentLevel: () => 99,
       getMaxLevel: skill => levels[skill.getIndex()] ?? 99,
       getCombatLevel: () => 3,
+      setCurrentLevel: noop,
       addExperiences: (skill, amount) => p.xp.push([skill.getIndex(), amount]),
     }),
     getPacketSender: () => packet,
@@ -76,6 +87,8 @@ function player(items = [], attrs = [], levels = {}) {
     messages: [],
     sendMessage(message) { p.messages.push(message); },
     performAnimation: noop,
+    performGraphic: noop,
+    forceChat: noop,
     isPlayer: () => true,
     isNpc: () => false,
     isRegistered: () => true,
@@ -193,7 +206,7 @@ const PAGE = 'Big Chompy Bird Hunting';
 // Revision 241: spawned parent 1470 resolves to content id 14793 (NpcIdentifiers.RANTZ).
 const RANTZ = core.NpcIdentifiers.RANTZ;
 
-test('the captured cave entrance and left exit are loc teleports; the quest only takes the right exit', () => {
+test('the captured cave entrance and both exits are loc teleports', () => {
   const { RegionManager } = require(root + '/dist/game/collision/RegionManager');
   const { MapObjects } = require(root + '/dist/game/entity/impl/object/MapObjects');
   const { RsmodRouteFinding } = require(root + '/dist/game/model/movement/path/RsmodRouteFinding');
@@ -215,24 +228,21 @@ test('the captured cave entrance and left exit are loc teleports; the quest only
   const right = MapObjects.get(O.CAVE_EXIT_8, new core.Location(2646, 9377, 0), null);
   assert.ok(right, 'paired cache loc 3380 is placed at 2646,9377');
 
-  // Live (rev 242 capture): Enter from 2629,2997 lands on 2647,9378; Walk through 3381 from
-  // there lands back on 2629,2997. LocTeleports plays both, at every quest stage.
+  // Live (rev 242 capture): Enter from 2629,2997 lands on 2647,9378; Walk through 3381 or 3380
+  // from there lands back on 2629,2997 (ticks 1759-1765 for 3380). LocTeleports plays all three.
   const entry = (id) => teleports.find(loc => loc.id === id);
   assert.deepEqual(entry(O.CAVE_ENTRANCE_18).to, [2647, 9378, 0]);
   assert.deepEqual(entry(O.CAVE_EXIT_9).to, [2629, 2997, 0]);
+  assert.deepEqual(entry(O.CAVE_EXIT_8).to, [2629, 2997, 0]);
+  assert.equal(entry(O.CAVE_EXIT_9).message, 'You walk back out of the darkness of the cave into daylight.');
   for (const stage of [0, 15, 20]) {
-    for (const [object, option] of [[entrance, 'Enter'], [left, 'Walk through']]) {
+    for (const [object, option] of [[entrance, 'Enter'], [left, 'Walk through'], [right, 'Walk through']]) {
       const p = player();
       quest.setStage(p, stage);
       const event = { player: p, object, objectId: object.getId(), clickType: 1, option, handled: false };
       PluginManager.emitObjectInteraction(event);
       assert.equal(p.moves.length, 0, `stage ${stage}: the quest leaves ${object.getId()} to LocTeleports`);
     }
-    const p = player();
-    quest.setStage(p, stage);
-    const event = { player: p, object: right, objectId: right.getId(), clickType: 1, option: 'Walk through', handled: false };
-    assert.equal(PluginManager.emitObjectInteraction(event), true, `stage ${stage}: the right exit 3380 is handled`);
-    assert.deepEqual(p.moves.at(-1), [2629, 2997, 0], 'the right exit lands where the captured left exit does');
   }
   assert.equal(RegionManager.blocked(new core.Location(2629, 2997, 0), null), false, 'exit landing is walkable');
   assert.equal(RegionManager.blocked(new core.Location(2647, 9378, 0), null), false, 'entrance landing is walkable');
@@ -299,179 +309,7 @@ test('Talk-to arrow hand-in still consumes six arrows and advances to stage 10',
   assert.equal(p.items.get(core.ItemIdentifiers.OGRE_ARROW) ?? 0, 0, 'the Talk-to route consumes the same six arrows');
 });
 
-test('stage 0 to completion: cave, bellows, toads, bow, chompy, ingredients and hand-in', () => {
-  const h = questHarness();
-  const { api, hooks, spawned, removed, quest } = h;
-  const p = dialoguePlayer();
-  const I = core.ItemIdentifiers;
-  const O = core.ObjectIdentifiers;
-  const variantFor = (player, npcId) => {
-    const choice = hooks.onNpcDialogueVariant.map(fn => fn({ player, npcId })).find(Boolean);
-    assert.ok(choice, `no variant for ${npcId}`);
-    return choice;
-  };
-  const play = (player, npcId) => {
-    const choice = variantFor(player, npcId);
-    assert.equal(runtime.startTranscript(api, player, npcId, choice.page, choice.variant), true);
-  };
-  const reset = () => { p.manager.reset(); p.prompt = null; };
-
-  withConditions(hooks, () => {
-    play(p, RANTZ);
-    continueToMenu(p);
-    choose(p, 'Yes.');
-    assert.equal(quest.getStage(p), 5, 'start');
-    reset();
-
-    p.items.set(I.OGRE_ARROW, 6);
-    hooks.onItemOnNpc[0]({ player: p, npcId: RANTZ, itemId: I.OGRE_ARROW, handled: false });
-    continueUntil(p, () => quest.getStage(p) === 10);
-    assert.equal(p.items.get(I.OGRE_ARROW), 0, 'six arrows handed in');
-    reset();
-
-    play(p, RANTZ);
-    continueToMenu(p);
-    choose(p, 'How do we make the chompys come?');
-    assert.equal(quest.getStage(p), 15, 'asking the key question advances to the cave leg');
-    reset();
-
-    const enter = { player: p, objectId: O.CAVE_ENTRANCE_18, clickType: 1, option: 'Enter', handled: false };
-    hooks.onObjectInteraction[0](enter);
-    assert.equal(enter.handled, false, 'the cave entrance is a loc teleport (loc-teleports.json), not the quest\'s');
-
-    const chest = { player: p, objectId: O.LOCKED_OGRE_CHEST, clickType: 1, option: 'Unlock', handled: false };
-    hooks.onObjectInteraction[0](chest);
-    assert.equal(chest.handled, true);
-    assert.equal(p.items.get(I.OGRE_BELLOWS), 1, 'took empty bellows');
-    assert.equal(quest.getStage(p), 20);
-
-    const fill = { player: p, objectId: O.SWAMP_BUBBLES, itemId: I.OGRE_BELLOWS, handled: false };
-    hooks.onItemOnObject[0](fill);
-    assert.equal(fill.handled, true);
-    assert.equal(p.items.get(I.OGRE_BELLOWS_3_), 1, 'bellows filled');
-
-    const inflate = () => {
-      const event = { player: p, npcId: core.NpcIdentifiers.SWAMP_TOAD, clickType: 1,
-        npc: { getId: () => core.NpcIdentifiers.SWAMP_TOAD }, definition: { getActions: () => ['Inflate'] }, handled: false };
-      hooks.onNpcInteraction[0](event);
-      assert.equal(event.handled, true);
-    };
-    inflate();
-    inflate();
-    assert.equal(p.items.get(I.BLOATED_TOAD), 2, 'two bloated toads');
-    assert.equal(p.items.get(I.OGRE_BELLOWS_1_), 1, 'bellows consumed two charges');
-
-    play(p, RANTZ);
-    continueUntil(p, () => quest.getStage(p) === 25);
-    assert.equal(quest.getStage(p), 25, 'showing the toad tells you where to place it');
-    reset();
-    p.moveTo(new core.Location(2635, 2966)); // fixture travel; real cave routing is checked separately
-
-    hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Drop', handled: false });
-    assert.equal(quest.getStage(p), 30, 'first toad places the bait and waits for a chompy');
-    assert.equal(p.items.get(I.BLOATED_TOAD), 1);
-    assert.equal(spawned.at(-1).id, core.NpcIdentifiers.BLOATED_TOAD, 'Drop places a real bait actor');
-    tickTasks(h, 25);
-    const firstChompy = spawned.at(-1);
-    assert.equal(firstChompy.id, core.NpcIdentifiers.CHOMPY_BIRD, 'the first chompy arrives');
-    assert.ok(p.camera.some(entry => entry[0] === 'move'), 'the scene pans to the clearing');
-    tickTasks(h, 5);
-    assert.equal(quest.getStage(p), 35, 'Rantz takes his shot');
-    assert.ok(h.sceneChat.includes("Hey, dere's da chompy, I's gonna shoot it."));
-    tickTasks(h, 2);
-    assert.ok(!removed.includes(firstChompy), 'Rantz missing does not prematurely delete the bird');
-    tickTasks(h, 3);
-    assert.equal(quest.getStage(p), 40, 'the missed shot leads to the bow conversation');
-    assert.ok(h.sceneChat.includes("Grrr...de'ese arrows are rubbish."));
-
-    play(p, RANTZ);
-    continueToMenu(p);
-    choose(p, 'Come on, let me have a go...');
-    continueToMenu(p);
-    choose(p, "I'm actually quite strong... please let me try.");
-    continueUntil(p, () => quest.getStage(p) === 45);
-    assert.equal(p.items.get(I.OGRE_BOW), 1, 'Rantz hands over the ogre bow');
-    reset();
-
-    p.moveTo(new core.Location(2636, 2966));
-    hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Drop', handled: false });
-    tickTasks(h, 25);
-    assert.equal(spawned.at(-1).id, core.NpcIdentifiers.CHOMPY_BIRD, 'second toad attracts a chompy');
-    assert.equal(p.items.get(I.BLOATED_TOAD), 0);
-
-    const chompy = spawned.at(-1);
-    const denied = { attacker: p, target: chompy, allow: null };
-    hooks.onCanAttack[0](denied);
-    assert.equal(denied.allow, false, 'a chompy cannot be hit without the bow and arrows');
-    p.equipped.set(core.Equipment.WEAPON_SLOT, { getId: () => I.OGRE_BOW });
-    p.equipped.set(core.Equipment.AMMUNITION_SLOT, { getId: () => I.OGRE_ARROW });
-    const allowed = { attacker: p, target: chompy, allow: null };
-    hooks.onCanAttack[0](allowed);
-    assert.notEqual(allowed.allow, false, 'bow and ogre arrows allow the attack');
-
-    hooks.onNpcDeath[0]({ killer: p, npcId: core.NpcIdentifiers.CHOMPY_BIRD, npc: chompy,
-      location: { x: 2635, y: 2966, z: 0 } });
-    assert.equal(quest.getStage(p), 50, 'killing the chompy advances the hunt');
-    const dead = spawned.at(-1);
-    assert.equal(dead.id, core.NpcIdentifiers.CHOMPY_BIRD_2, 'a pluckable carcass remains');
-
-    const pluck = { player: p, npcId: core.NpcIdentifiers.CHOMPY_BIRD_2, clickType: 4, npc: dead,
-      definition: { getActions: () => [null, null, null, 'Pluck', null] }, handled: false };
-    p.moveTo(new core.Location(2634, 2966, 0));
-    hooks.onNpcInteraction[0](pluck);
-    assert.equal(pluck.handled, true);
-    assert.equal(p.items.get(I.RAW_CHOMPY), 1);
-    assert.ok(removed.includes(dead));
-
-    play(p, RANTZ);
-    continueUntil(p, () => quest.getStage(p) === 55);
-    assert.equal(quest.getStage(p), 55, 'Rantz explains cooking and asks for his ingredient');
-    reset();
-
-    play(p, core.NpcIdentifiers.BUGS);
-    advanceUntil(p, () => Boolean(p.getAttribute('big-chompy-bird-hunting:bugs-ingredient')));
-    const bugsIngredient = p.getAttribute('big-chompy-bird-hunting:bugs-ingredient');
-    assert.ok([I.EQUA_LEAVES, I.CABBAGE].includes(bugsIngredient), 'Bugs names equa leaves or cabbage');
-    reset();
-
-    play(p, core.NpcIdentifiers.FYCIE);
-    advanceUntil(p, () => Boolean(p.getAttribute('big-chompy-bird-hunting:fycie-ingredient')));
-    const fycieIngredient = p.getAttribute('big-chompy-bird-hunting:fycie-ingredient');
-    assert.ok([I.TOMATO, I.DOOGLE_LEAVES].includes(fycieIngredient), 'Fycie names tomato or doogle leaves');
-    reset();
-
-    const rantzIngredient = p.getAttribute('big-chompy-bird-hunting:rantz-ingredient');
-    for (const id of [rantzIngredient, bugsIngredient, fycieIngredient]) {
-      p.items.set(id, (p.items.get(id) ?? 0) + 1);
-    }
-    const cook = { player: p, objectId: 6895, itemId: I.RAW_CHOMPY,
-      location: { x: 2630, y: 2990, z: 0 }, handled: false };
-    hooks.onItemOnObject[0](cook);
-    assert.equal(cook.handled, true);
-    assert.equal(quest.getStage(p), 60);
-    assert.equal(p.items.get(I.RAW_CHOMPY), 0);
-    assert.equal(p.items.get(I.SEASONED_CHOMPY), 1);
-    for (const id of [rantzIngredient, bugsIngredient, fycieIngredient]) assert.equal(p.items.get(id), 0);
-
-    play(p, RANTZ);
-    continueUntil(p, () => quest.getStage(p) === 65);
-    assert.equal(quest.isComplete(p), true);
-    assert.equal(p.items.get(I.SEASONED_CHOMPY), 0, 'seasoned chompy handed over');
-    assert.equal(p.items.get(I.OGRE_BOW), 1, 'the bow is not duplicated at completion');
-    assert.equal(p.getAttribute('quest.points'), 2);
-    assert.deepEqual(p.xp, [[core.Skill.FLETCHING.getIndex(), 262], [core.Skill.COOKING.getIndex(), 1470],
-      [core.Skill.RANGED.getIndex(), 735]]);
-
-    const xpBefore = p.xp.length;
-    (hooks['npc-dialogue:action'] ?? []).forEach(fn => fn({ player: p, npcId: RANTZ, stepId: 'cmDp4e', handled: false }));
-    assert.equal(quest.getStage(p), 65, 'repeat completion action is a no-op');
-    assert.equal(p.items.get(I.OGRE_BOW), 1);
-    assert.equal(p.xp.length, xpBefore);
-
-    hooks.onPlayerLogin[0]({ player: p, username: 'QH q006' });
-    assert.equal(quest.getStage(p), 65, 'stage survives the login refresh hook');
-  });
-});
+// The stage 0 to 65 route is played with real objects in big-chompy-capture.test.cjs.
 
 test('lost ogre bow is reclaimable for coins, and never granted without them', () => {
   const I = core.ItemIdentifiers;
@@ -583,7 +421,7 @@ test('bow reward contract: u_dBhh grants one bow and completion grants no second
   const h = questHarness();
   assert.equal(h.quest.rewardItemId, undefined, 'completion must not use rewardItemId for the bow');
   assert.equal(h.quest.scrollItemId, I.OGRE_BOW, 'the completion scroll still shows the bow');
-  assert.equal(h.quest.rewardItemLabel, 'An ogre bow');
+  assert.equal(h.quest.rewardItemLabel, 'An Ogre Bow', 'the capture scroll (tick 1513)');
 
   const p = dialoguePlayer();
   h.quest.setStage(p, 40);
@@ -633,8 +471,6 @@ test('post-quest hat trade grants one threshold hat and cooked chompy hand-in is
   withConditions(h.hooks, () => {
     playRantz();
     continueToMenu(p);
-    choose(p, 'More...');
-    continueToMenu(p);
     choose(p, 'Can I have a hat please?');
     advanceUntil(p, () => p.items.get(2978) === 1);
   });
@@ -646,8 +482,6 @@ test('post-quest hat trade grants one threshold hat and cooked chompy hand-in is
   p.prompt = null;
   withConditions(h.hooks, () => {
     playRantz();
-    continueToMenu(p);
-    choose(p, 'More...');
     continueToMenu(p);
     choose(p, 'Can I have a hat please?');
     advanceUntil(p, () => !p.manager.getCurrent());
@@ -671,7 +505,9 @@ test('post-quest hat trade grants one threshold hat and cooked chompy hand-in is
   h.hooks.onNpcDeath[0]({ killer: p, npcId: core.NpcIdentifiers.CHOMPY_BIRD, npc: postQuestChompy,
     location: { x: 2635, y: 2966, z: 0 } });
   assert.equal(p.getAttribute('big-chompy-bird-hunting:chompy-kills'), 31, 'post-quest kill increments the hat counter');
-  assert.equal(h.spawned.at(-1).id, core.NpcIdentifiers.CHOMPY_BIRD_2, 'post-quest carcass remains pluckable');
+  assert.ok(p.messages.includes('You scratch a notch on your bow for the chompy bird kill.'), 'Wiki: Chompy bird');
+  assert.equal(postQuestChompy.getNpcTransformationId(), core.NpcIdentifiers.CHOMPY_BIRD_2,
+    'post-quest carcass is the bird itself, pluckable where it fell');
 });
 
 function playBowDialogue(h, p) {
@@ -739,45 +575,45 @@ test('full inventory cannot lose the bow, reclaim coins, a toad charge or a carc
     const event = { player: toad, npcId: core.NpcIdentifiers.SWAMP_TOAD, clickType: 1, npc,
       definition: { getActions: () => ['Inflate'] }, handled: false };
     toadHarness.hooks.onNpcInteraction[0](event);
+    toadHarness.tasks.length && tickTasks(toadHarness, 4);
     return event;
   };
-  const firstToad = { getId: () => core.NpcIdentifiers.SWAMP_TOAD };
+  const spawnToad = () => toadHarness.api.spawnNpc({ id: core.NpcIdentifiers.SWAMP_TOAD, x: 2596, y: 2962, wanderRadius: 0 });
+  const firstToad = spawnToad();
   const blocked = inflate(firstToad);
   assert.equal(blocked.handled, true);
   assert.equal(toad.items.get(I.OGRE_BELLOWS_3_), 1, 'charge is retained on a full bag');
   assert.equal(toad.items.get(I.BLOATED_TOAD) ?? 0, 0);
   assert.ok(!toadHarness.removed.includes(firstToad), 'the toad stays in the world');
   toad.inventoryFull = false;
-  const secondToad = { getId: () => core.NpcIdentifiers.SWAMP_TOAD };
+  const secondToad = spawnToad();
   const allowed = inflate(secondToad);
   assert.equal(allowed.handled, true);
   assert.equal(toad.items.get(I.OGRE_BELLOWS_2_), 1);
   assert.equal(toad.items.get(I.BLOATED_TOAD), 1);
   assert.ok(toadHarness.removed.includes(secondToad));
 
+  // A pluck drops the raw chompy on the floor (capture tick 1348), so a full bag does not keep the carcass.
   const pluckHarness = questHarness();
   const pluck = dialoguePlayer([[I.BLOATED_TOAD, 1]]);
   pluckHarness.quest.setStage(pluck, 50);
   pluck.moveTo(new core.Location(2634, 2966, 0));
   dropToad(pluckHarness, pluck);
+  const bird = pluckHarness.spawned.at(-1);
   pluckHarness.hooks.onNpcDeath[0]({ killer: pluck, npcId: core.NpcIdentifiers.CHOMPY_BIRD,
-    npc: pluckHarness.spawned.at(-1), location: { x: 2635, y: 2966, z: 0 } });
+    npc: bird, location: { x: 2635, y: 2966, z: 0 } });
   pluck.inventoryFull = true;
-  const pluckAt = (npc) => {
-    const event = { player: pluck, npcId: core.NpcIdentifiers.CHOMPY_BIRD_2, clickType: 4, npc,
-      definition: { getActions: () => [null, null, null, 'Pluck', null] }, handled: false };
-    pluckHarness.hooks.onNpcInteraction[0](event);
-    return event;
-  };
-  const firstCarcass = pluckHarness.spawned.at(-1);
-  const blockedPluck = pluckAt(firstCarcass);
-  assert.equal(blockedPluck.handled, true);
-  assert.equal(pluck.items.get(I.RAW_CHOMPY) ?? 0, 0);
-  assert.ok(!pluckHarness.removed.includes(firstCarcass), 'carcass remains when the raw chompy cannot fit');
-  pluck.inventoryFull = false;
-  pluckAt(firstCarcass);
-  assert.equal(pluck.items.get(I.RAW_CHOMPY), 1);
-  assert.ok(pluckHarness.removed.includes(firstCarcass));
+  pluck.moveTo(new core.Location(bird.getLocation().getX(), bird.getLocation().getY() + 1, 0));
+  const plucked = [];
+  (pluckHarness.hooks['chompy:plucked'] ??= []).push((event) => plucked.push(event.npc));
+  const event = { player: pluck, npcId: core.NpcIdentifiers.CHOMPY_BIRD_2, clickType: 4, npc: bird,
+    definition: { getActions: () => [null, null, null, 'Pluck', null] }, handled: false };
+  pluckHarness.hooks.onNpcInteraction[0](event);
+  assert.equal(event.handled, true);
+  tickTasks(pluckHarness, 2);
+  assert.ok(pluckHarness.removed.includes(bird), 'the carcass is plucked with a full bag');
+  assert.deepEqual(plucked, [bird]);
+  assert.ok(pluck.xp.some(([skill, amount]) => skill === core.Skill.HUNTER.getIndex() && amount === 30), '30 Hunter XP');
 });
 
 test('concurrent bait preserves prior birds and raw/seasoned loss can be recovered', () => {
@@ -805,13 +641,13 @@ test('concurrent bait preserves prior birds and raw/seasoned loss can be recover
   assert.equal(recoveryChompy.id, core.NpcIdentifiers.CHOMPY_BIRD);
   rawHarness.hooks.onNpcDeath[0]({ killer: raw, npcId: core.NpcIdentifiers.CHOMPY_BIRD, npc: recoveryChompy,
     location: { x: 2635, y: 2966, z: 0 } });
-  const recoveryCarcass = rawHarness.spawned.at(-1);
-  assert.equal(recoveryCarcass.id, core.NpcIdentifiers.CHOMPY_BIRD_2);
-  const pluck = { player: raw, npcId: core.NpcIdentifiers.CHOMPY_BIRD_2, clickType: 4, npc: recoveryCarcass,
+  assert.equal(recoveryChompy.getNpcTransformationId(), core.NpcIdentifiers.CHOMPY_BIRD_2, 'the bird is its carcass');
+  const pluck = { player: raw, npcId: core.NpcIdentifiers.CHOMPY_BIRD_2, clickType: 4, npc: recoveryChompy,
     definition: { getActions: () => [null, null, null, 'Pluck', null] }, handled: false };
-  raw.moveTo(new core.Location(2634, 2966, 0));
+  raw.moveTo(new core.Location(recoveryChompy.getLocation().getX(), recoveryChompy.getLocation().getY() + 1, 0));
   rawHarness.hooks.onNpcInteraction[0](pluck);
-  assert.equal(raw.items.get(I.RAW_CHOMPY), 1, 'raw chompy is recovered');
+  tickTasks(rawHarness, 2);
+  assert.ok(rawHarness.removed.includes(recoveryChompy), 'a replacement carcass is plucked');
 
   const cookHarness = questHarness();
   const cook = dialoguePlayer([[I.RAW_CHOMPY, 1], [I.ONION, 1], [I.EQUA_LEAVES, 1], [I.TOMATO, 1]]);
@@ -823,6 +659,7 @@ test('concurrent bait preserves prior birds and raw/seasoned loss can be recover
     location: { x: 2630, y: 2990, z: 0 }, handled: false };
   cookHarness.hooks.onItemOnObject[0](cookEvent);
   assert.equal(cookEvent.handled, true);
+  tickTasks(cookHarness, 4);
   assert.equal(cook.items.get(I.SEASONED_CHOMPY), 1, 'a lost seasoned chompy can be re-cooked');
   assert.equal(cookHarness.quest.getStage(cook), 60);
 });
@@ -851,15 +688,21 @@ function dropToad(h, p) {
 
 // Source handler-contract test: fixture stage/items, real timer/task interleavings.
 test('first-hunt timers are identity-bound, cancellable and cannot write after logout', () => {
+  // The capture's demonstration from the landing (ticks 992-1018): 35 at +11, Rantz speaks at +17, shoots at
+  // +19, misses at +22; here the bird can't walk to the bait, so the quest moves on 8 ticks after the miss.
   const I = core.ItemIdentifiers;
   const success = questHarness();
   const settled = dialoguePlayer([[I.BLOATED_TOAD, 1]]);
   success.quest.setStage(settled, 25);
   dropToad(success, settled);
-  tickTasks(success, 5);
+  assert.equal(success.quest.getStage(settled), 30);
+  tickTasks(success, 11);
   assert.equal(success.quest.getStage(settled), 35);
-  tickTasks(success, 2);
-  tickTasks(success, 3);
+  tickTasks(success, 6);
+  assert.ok(settled.messages.includes("Rantz: Hey, dere's da chompy, I's gonna shoot it."));
+  tickTasks(success, 5);
+  assert.ok(settled.messages.includes('Rantz keeps missing the chompy bird...'));
+  tickTasks(success, 8);
   assert.equal(success.quest.getStage(settled), 40, 'logged-in settlement reaches stage 40');
   success.hooks.onPlayerLogout[0]({ player: settled });
 
@@ -867,33 +710,30 @@ test('first-hunt timers are identity-bound, cancellable and cannot write after l
   const gone = dialoguePlayer([[I.BLOATED_TOAD, 1]]);
   logout.quest.setStage(gone, 25);
   dropToad(logout, gone);
-  tickTasks(logout, 5);
-  tickTasks(logout, 2);
+  tickTasks(logout, 13);
   assert.equal(logout.quest.getStage(gone), 35);
   logout.hooks.onPlayerLogout[0]({ player: gone });
   gone.isRegistered = () => false;
-  tickTasks(logout, 10);
-  assert.equal(logout.quest.getStage(gone), 35, 'logout cancels the settle before it writes');
-  assert.ok(logout.tasks.every(task => !task.isRunning()), 'no first-hunt timer remains running');
+  tickTasks(logout, 30);
+  assert.equal(logout.quest.getStage(gone), 35, 'logout cancels the demonstration before it writes');
 
   const detached = questHarness();
   const unregistered = dialoguePlayer([[I.BLOATED_TOAD, 1]]);
   detached.quest.setStage(unregistered, 25);
   dropToad(detached, unregistered);
-  tickTasks(detached, 5);
-  tickTasks(detached, 2);
+  tickTasks(detached, 13);
   unregistered.isRegistered = () => false;
-  tickTasks(detached, 5);
+  tickTasks(detached, 30);
   assert.equal(detached.quest.getStage(unregistered), 35, 'detached player is not advanced');
 
   const replaced = questHarness();
   const again = dialoguePlayer([[I.BLOATED_TOAD, 2]]);
   replaced.quest.setStage(again, 25);
   dropToad(replaced, again);
-  tickTasks(replaced, 5);
-  tickTasks(replaced, 2);
+  tickTasks(replaced, 13);
   again.moveTo(new core.Location(2636, 2966));
   dropToad(replaced, again);
+  tickTasks(replaced, 30);
   assert.equal(replaced.quest.getStage(again), 40, 'later bait cannot restart the running demonstration');
   assert.equal(again.messages.filter(text => text.includes("Hey, dere's da chompy")).length, 1);
 });

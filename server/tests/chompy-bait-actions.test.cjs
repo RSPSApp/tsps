@@ -98,8 +98,9 @@ test("Rantz's real dialogue sends the bait hint and Drop clears it", async t => 
   assert.match(quest.buildJournal(f.player, quest).join(" "), /^Drop a /);
   const hint = f.hints.find(([name]) => name === "sendPositionalHint");
   assert.ok(hint, "the actual transcript must produce a native hint packet");
-  assert.deepEqual([hint[1].getX(), hint[1].getY()], [2635, 2966]);
-  await inventory(f, "Drop");
+  // The capture's arrow (tick 786): 2636,2966, gone 50 ticks later (836), before any bait is down.
+  assert.deepEqual([hint[1].getX(), hint[1].getY()], [2636, 2966]);
+  for (let i = 0; i < 50; i++) core.TaskManager.process();
   assert.ok(f.hints.some(([name]) => name === "clearHintArrow"));
 });
 
@@ -116,7 +117,8 @@ test("Release and Release All free toads without starting a hunt", async t => {
 });
 
 test("Drop refusals keep the item and post-bow Drop still attracts a huntable chompy", async t => {
-  for (const stage of [20, 40]) {
+  // Before Rantz shows where the bait goes (transcript: "You're not sure where Rantz told you...").
+  for (const stage of [20]) {
     const f = actor(t, stage);
     await inventory(f, "Drop");
     assert.equal(quest.getStage(f.player), stage);
@@ -146,7 +148,7 @@ test("Release works before the placement instructions and preserves other slots"
   assert.equal(birds(f).length, 0);
 });
 
-test("saved placement progress restores the hint on login and repeats the placement dialogue", t => {
+test("saved placement progress repeats the placement dialogue after login", t => {
   const f = actor(t);
   const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
   const saved = PlayerSave.fromPlayer(f.player);
@@ -155,18 +157,12 @@ test("saved placement progress restores the hint on login and repeats the placem
   PM.emitPlayerLogin({ player: restored.player, username: restored.player.getUsername() });
   PM.emitCustomEvent("player:bootstrap-complete", { player: restored.player });
   assert.equal(quest.getStage(restored.player), 25);
-  assert.equal(restored.hints.at(-1)?.[0], "sendPositionalHint",
-    "the hint must survive later login hooks, including Temple of the Eye's arrow reset");
+  // Rantz's line draws the arrow again (capture tick 786); a login alone does not.
   const variant = PM.emitNpcDialogueVariant({ player: restored.player, npcId: core.NpcIdentifiers.RANTZ });
   assert.equal(variant.variant, "returning-to-rantz-with-the-bloated-toad-talking-to-rantz-again");
-  restored.hints.length = 0;
-  quest.setStage(restored.player, 40);
-  assert.deepEqual(restored.hints, [["clearHintArrow"]]);
-  quest.setStage(restored.player, 45);
-  assert.equal(restored.hints.length, 1, "later stages do not clear another system's arrow again");
 });
 
-test("native repeated Drop preserves the second toad and failed bait restores the quest hint", async t => {
+test("native repeated Drop preserves the second toad and a failed bait leaves the quest waiting", async t => {
   const f = actor(t, 25, 2);
   await inventory(f, "Drop");
   await inventory(f, "Drop", 1);
@@ -174,16 +170,15 @@ test("native repeated Drop preserves the second toad and failed bait restores th
   t.mock.method(Math, "random", () => 0.2);
   for (let i = 0; i < 100; i++) core.TaskManager.process();
   assert.equal(birds(f).length, 0);
-  assert.equal(quest.getStage(f.player), 25);
-  assert.equal(f.hints.at(-1)?.[0], "sendPositionalHint");
+  // The capture's first bait burst unanswered (tick 943) and the quest stayed at 30.
+  assert.equal(quest.getStage(f.player), 30);
 });
 
-test("login recovers interrupted waiting and demonstration stages to placement", t => {
+test("login keeps the bait-down stage and takes an interrupted demonstration back to it", t => {
   for (const stage of [30, 35]) {
     const f = actor(t, stage, 0);
     PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername() });
     PM.emitCustomEvent("player:bootstrap-complete", { player: f.player });
-    assert.equal(quest.getStage(f.player), 25);
-    assert.equal(f.hints.at(-1)?.[0], "sendPositionalHint");
+    assert.equal(quest.getStage(f.player), 30);
   }
 });

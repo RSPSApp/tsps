@@ -35,6 +35,9 @@ function actor(t,claimed=false){
 }
 const chick=()=>core.ItemIdentifiers.CHOMPY_CHICK;
 const raw=()=>core.ItemIdentifiers.RAW_CHOMPY;
+// A pluck drops the raw chompy on the carcass's tile (Big Chompy Bird Hunting capture tick 1348), so it is counted there.
+const rawOnGround=f=>core.ItemOnGroundManager.ownedBy(f.p.getUsername()).filter(g=>g.getItem().getId()===raw()).reduce((n,g)=>n+g.getItem().getAmount(),0);
+const isCorpse=n=>n?.getNpcTransformationId?.()===core.NpcIdentifiers.CHOMPY_BIRD_2;
 function award(f){PM.emitCustomEvent("npc-drops:roll",{player:f.p,drops:[{itemId:chick(),amount:1}]});}
 async function hunt(t,f,win=false){
   const offset=nextBaitTile++;
@@ -49,11 +52,11 @@ async function hunt(t,f,win=false){
   for(let tick=0;tick<25;tick++)core.TaskManager.process();
   const npc=[...core.World.getNpcs()].find(n=>n?.getId?.()===core.NpcIdentifiers.CHOMPY_BIRD&&n.getOwner()===f.p&&!previousBirds.has(n));
   assert.ok(npc,"real quest-spawned hunted Chompy");
-  const previousCorpses=new Set([...core.World.getNpcs()].filter(n=>n?.getId?.()===core.NpcIdentifiers.CHOMPY_BIRD_2&&n.getOwner()===f.p));
+  const previousCorpses=new Set([...core.World.getNpcs()].filter(n=>isCorpse(n)&&n.getOwner()===f.p));
   t.mock.method(Math,"random",()=>win?0:0.999999);
-  PM.emitNpcDeath({npc,npcId:npc.getId(),killer:f.p,location:npc.getLocation(),damagers:[f.p]});
-  core.World.getNpcs().remove(npc);
-  const corpse=[...core.World.getNpcs()].find(n=>n?.getId?.()===core.NpcIdentifiers.CHOMPY_BIRD_2&&n.getOwner()===f.p&&!previousCorpses.has(n));
+  // The bird becomes its carcass where it fell (capture tick 1339), so the corpse is the same NPC.
+  PM.emitNpcDeath({npc,npcId:npc.getId(),killer:f.p,location:npc.getLocation(),damagers:[f.p],remains:null});
+  const corpse=[...core.World.getNpcs()].find(n=>isCorpse(n)&&n.getOwner()===f.p&&!previousCorpses.has(n));
   assert.ok(corpse,"real quest-created owned corpse");return corpse;
 }
 async function pluck(f,corpse){
@@ -64,7 +67,7 @@ async function pluck(f,corpse){
     core.TaskManager.processWalkTo(f.p.getIndex());
   }
 }
-function directPluck(f,corpse){PM.emitNpcInteraction({player:f.p,npc:corpse,npcId:corpse.getId(),definition:corpse.getDefinition(),clickType:4,handled:false});}
+function directPluck(f,corpse){PM.emitNpcInteraction({player:f.p,npc:corpse,npcId:core.NpcIdentifiers.CHOMPY_BIRD_2,definition:corpse.getCurrentDefinition(),clickType:4,handled:false});}
 test("canonical claimed elite reward authorizes the pet; the old synthetic flag does not",t=>{
   const denied=actor(t);denied.p.setAttribute("achievement-diary:western-provinces:elite",true);award(denied);
   assert.equal(denied.p.getInventory().getAmount(chick()),0);
@@ -84,33 +87,33 @@ test("the existing kill roll awards once from the generated pet entry",async t=>
 test("a successful pluck rolls only the configured chick entry, once per corpse",async t=>{
   const f=actor(t,true),corpse=await hunt(t,f);
   const emit=PM.emitCustomEvent.bind(PM),rolls=[];
-  t.mock.method(PM,"emitCustomEvent",(name,r)=>{if(name==="npc-drops:roll-table")rolls.push(r);return emit(name,r);});
+  // The pluck's own loot roll leaves the chick out; only the pet's roll admits it.
+  t.mock.method(PM,"emitCustomEvent",(name,r)=>{if(name==="npc-drops:roll-table"&&r.entryFilter?.({item_id:chick()}))rolls.push(r);return emit(name,r);});
   t.mock.method(Math,"random",()=>0);
   await pluck(f,corpse);
-  assert.equal(f.p.getInventory().getAmount(raw()),1);
+  assert.equal(rawOnGround(f),1);
   assert.equal(f.p.getInventory().getAmount(chick()),1);
   assert.equal(rolls.length,1);
   assert.equal(rolls[0].entryFilter({item_id:chick()}),true);
   assert.equal(rolls[0].entryFilter({item_id:raw()}),false);
-  directPluck(f,corpse);assert.equal(rolls.length,1);assert.equal(f.p.getInventory().getAmount(raw()),1);
+  directPluck(f,corpse);assert.equal(rolls.length,1);assert.equal(rawOnGround(f),1);
 });
 test("a nonwinning configured pluck roll grants meat but no pet",async t=>{
   const f=actor(t,true),corpse=await hunt(t,f);await pluck(f,corpse);
-  assert.equal(f.p.getInventory().getAmount(raw()),1);assert.equal(f.p.getInventory().getAmount(chick()),0);
+  assert.equal(rawOnGround(f),1);assert.equal(f.p.getInventory().getAmount(chick()),0);
 });
 test("an unclaimed player plucks normally without making a pet table roll",async t=>{
   const f=actor(t),corpse=await hunt(t,f);let rolls=0;const emit=PM.emitCustomEvent.bind(PM);
-  t.mock.method(PM,"emitCustomEvent",(name,r)=>{if(name==="npc-drops:roll-table")rolls++;return emit(name,r);});
+  t.mock.method(PM,"emitCustomEvent",(name,r)=>{if(name==="npc-drops:roll-table"&&r.entryFilter?.({item_id:chick()}))rolls++;return emit(name,r);});
   t.mock.method(Math,"random",()=>0);await pluck(f,corpse);
-  assert.equal(f.p.getInventory().getAmount(raw()),1);assert.equal(rolls,0);assert.equal(f.p.getInventory().getAmount(chick()),0);
+  assert.equal(rawOnGround(f),1);assert.equal(rolls,0);assert.equal(f.p.getInventory().getAmount(chick()),0);
 });
-test("full inventory preserves the corpse for retry; last-slot pet is insured with a follower",async t=>{
+test("a full inventory still plucks: the loot lands on the floor and a won pet is insured with a follower",async t=>{
   const f=actor(t,true),corpse=await hunt(t,f),inv=f.p.getInventory();
   while(inv.getFreeSlots())inv.add(new core.Item(core.ItemIdentifiers.RAKE),false);
   t.mock.method(Math,"random",()=>0);await pluck(f,corpse);
-  assert.equal(inv.getAmount(raw()),0);assert.equal(corpse.isRegistered(),true);
-  inv.deleteAtSlot(27);await pluck(f,corpse);
-  assert.equal(inv.getAmount(raw()),1);assert.equal(inv.getAmount(chick()),0);
+  assert.equal(corpse.isRegistered(),false);assert.equal(rawOnGround(f),1);
+  assert.equal(inv.getAmount(chick()),0);
   assert.ok(Pets.__internals.getOwnedPetItems(f.p).includes(chick()));
 });
 test("foreign, distant, different-plane, dead and unregistered plucks do not consume a corpse",async t=>{
@@ -120,7 +123,7 @@ test("foreign, distant, different-plane, dead and unregistered plucks do not con
     if(mode==="plane")f.p.setLocation(new core.Location(2634,2966,1));
     if(mode==="dead")f.p.setHitpoints(0);
     if(mode==="unregistered")f.p.setRegistered(false);
-    directPluck(f,corpse);assert.equal(f.p.getInventory().getAmount(raw()),0,mode);assert.equal(corpse.isRegistered(),true,mode);
+    directPluck(f,corpse);assert.equal(rawOnGround(f),0,mode);assert.equal(corpse.isRegistered(),true,mode);
   }
 });
 test("kill plus pluck retains normal duplicate policy and saved ownership",async t=>{
@@ -145,8 +148,8 @@ test("pet eligibility rejects unknown pets and malformed diary metadata",t=>{
 test("several kills retain every owned corpse and each can be plucked once",async t=>{
   const f=actor(t,true),a=await hunt(t,f),b=await hunt(t,f);
   assert.notEqual(a,b);t.mock.method(Math,"random",()=>0);
-  await pluck(f,a);assert.equal(f.p.getInventory().getAmount(raw()),1);
-  await pluck(f,b);assert.equal(f.p.getInventory().getAmount(raw()),2);
+  await pluck(f,a);assert.equal(rawOnGround(f),1);
+  await pluck(f,b);assert.equal(rawOnGround(f),2);
   assert.equal(f.p.getInventory().getAmount(chick()),1);
-  directPluck(f,a);directPluck(f,b);assert.equal(f.p.getInventory().getAmount(raw()),2);
+  directPluck(f,a);directPluck(f,b);assert.equal(rawOnGround(f),2);
 });

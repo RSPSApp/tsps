@@ -105,7 +105,9 @@ test("without a Western Provinces tier Claim-arrows gives nothing", (t) => {
   assert.equal(spoken(player), "");
   assert.equal(held(player), 0);
   assert.equal(arrowsVarbit(player), 0);
-  assert.ok(messages.some((m) => /Western Provinces Diary/.test(m)), JSON.stringify(messages));
+  // The user's rev 242 Big Chompy Bird Hunting capture, tick 1072.
+  assert.ok(messages.includes("You need to complete the easy, medium, hard or elite tier of the Western Diary to use this feature."),
+    JSON.stringify(messages));
 });
 
 for (const [tier, amount] of Object.entries(AMOUNTS)) {

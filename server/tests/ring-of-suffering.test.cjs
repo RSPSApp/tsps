@@ -253,7 +253,7 @@ test("spending or discarding old saved charges clears the legacy key", () => {
 });
 
 
-test("named inventory and worn hooks retain Check and recoil toggles", () => {
+test("named inventory and worn hooks open settings before changing recoil", () => {
   const f = chargingFixture(ItemIds.RING_OF_SUFFERING_R_, false, 80);
   const messages = [];
   f.player.sendMessage = message => messages.push(message);
@@ -267,11 +267,50 @@ test("named inventory and worn hooks retain Check and recoil toggles", () => {
   // rsprox: "Your ring currently has N recoil charges remaining. The recoil effect is currently enabled."
   assert.equal(messages.pop(), "Your ring currently has 80 recoil charges remaining. The recoil effect is currently enabled.");
   click(3214, 5, "recoil settings");
+  const menu = f.player.getDialogueManager().getCurrent();
+  assert.deepEqual(menu.getOptions(), ["Toggle recoil effect", "Discard recoil charges", "Cancel"]);
+  assert.equal(menu.getTitle(), "Select an option");
+  assert.equal(f.player.getAttribute("ring-of-suffering:recoil-disabled"), undefined);
+  menu.execute(1);
   assert.equal(messages.pop(), "You disable the recoil effect of your ring.");
   assert.equal(f.player.getAttribute("ring-of-suffering:recoil-disabled"), true);
+  f.player.getInventory().setItem(0, new core.Item(-1));
+  f.player.getEquipment().set(core.Equipment.RING_SLOT, f.ring);
   click(core.Equipment.INVENTORY_INTERFACE_ID, 2, "Check");
   assert.equal(messages.pop(), "Your ring currently has 80 recoil charges remaining. The recoil effect is currently disabled.");
   click(core.Equipment.INVENTORY_INTERFACE_ID, 3, "Recoil Settings");
+  f.player.getDialogueManager().getCurrent().execute(1);
   assert.equal(f.player.getAttribute("ring-of-suffering:recoil-disabled"), false);
   assert.equal(RingOfSuffering._test.charges(f.ring), 80);
+});
+
+test("settings cancellation and stale ring selections preserve state and charges", () => {
+  for (const change of ["cancel", "removed", "replaced", "depleted"]) {
+    const f = chargingFixture(ItemIds.RING_OF_SUFFERING_R_, false, 80);
+    PluginManager.emitItemAction({player:f.player,item:f.ring,itemId:f.ring.getId(),slot:0,interfaceId:3214,option:"Recoil settings",clickType:5,handled:false});
+    const menu = f.player.getDialogueManager().getCurrent();
+    if (change === "removed") f.player.getInventory().setItem(0,new core.Item(-1));
+    if (change === "replaced") f.player.getInventory().setItem(0,f.ring.clone());
+    if (change === "depleted") f.ring.setId(ItemIds.RING_OF_SUFFERING);
+    menu.execute(change === "cancel" ? 3 : 1);
+    assert.notEqual(f.player.getAttribute("ring-of-suffering:recoil-disabled"), true, change);
+    assert.equal(RingOfSuffering._test.charges(f.ring),80,change);
+  }
+});
+
+test("Discard from settings clears only the selected owned ring and preserves preset metadata", () => {
+  for (const [charged,base] of [[ItemIds.RING_OF_SUFFERING_R_,ItemIds.RING_OF_SUFFERING],[ItemIds.RING_OF_SUFFERING_RI_,ItemIds.RING_OF_SUFFERING_I_]]) {
+    const f = chargingFixture(charged,false,80);
+    f.ring.setMetaValue(core.Item.PRESET_META,true);
+    const other = f.ring.clone();
+    f.player.getInventory().setItem(2,other);
+    PluginManager.emitItemAction({player:f.player,item:f.ring,itemId:charged,slot:0,interfaceId:3214,option:"Recoil settings",clickType:5,handled:false});
+    assert.equal(RingOfSuffering._test.charges(f.ring),80);
+    f.player.getDialogueManager().getCurrent().execute(2);
+    assert.equal(f.ring.getId(),base);
+    assert.equal(RingOfSuffering._test.charges(f.ring),0);
+    assert.equal(f.ring.isPresetItem(),true);
+    assert.equal(RingOfSuffering._test.charges(other),80);
+    assert.equal(other.getId(),charged);
+  }
 });

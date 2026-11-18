@@ -39,7 +39,7 @@ async function main() {
     console.log("Widget dispatch preserves implicit ops, dynamic children, target verbs and cancellation");
 
     // An IF1 close button closes the open modal the way Esc does: one IF_CLOSE, never a button click.
-    const { handleWidgetActionCloseButton } = await import("../game/widgets/widgetActionHandlers");
+    const { handleWidgetActionCloseButton, handleWidgetActionTargeting } = await import("../game/widgets/widgetActionHandlers");
     const { getPacketWriter, ClientPacket } = await import("../network/packet");
     const writer = getPacketWriter();
     const addNode = writer.addNode;
@@ -60,6 +60,24 @@ async function main() {
             assert.equal(handleWidgetActionCloseButton(deps, { widget } as any), false, "only IF1 buttonType 3 closes");
         }
         assert.deepEqual(sent, []);
+
+        const spell = {
+            uid: (218 << 16) | 5, groupId: 218, fileId: 5,
+            name: "League Home Teleport", targetVerb: "Cast", spriteId: 1,
+            actions: ["Cast", "Yama", "Civitas"],
+        };
+        const spellDeps: any = { getWidgetTargetMask: () => 0 };
+        for (const [option, opIndex, packet] of [
+            ["Cast", 1, ClientPacket.IF_BUTTON1],
+            ["Yama", 2, ClientPacket.IF_BUTTON2],
+            ["Civitas", 3, ClientPacket.IF_BUTTON3],
+            ["Yama", undefined, ClientPacket.IF_BUTTON2],
+            [undefined, undefined, ClientPacket.IF_BUTTON1],
+        ] as const) {
+            sent.length = 0;
+            assert.equal(handleWidgetActionTargeting(spellDeps, { widget: spell, option, opIndex }, 218, 5), true);
+            assert.deepEqual(sent, [packet], `the self-cast spell keeps ${option ?? "the primary cast"}`);
+        }
     } finally {
         writer.addNode = addNode;
     }

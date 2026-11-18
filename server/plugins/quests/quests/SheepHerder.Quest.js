@@ -127,6 +127,47 @@ module.exports = function registerSheepHerderQuest(api) {
 
   let quest;
   const sheepByPlayer = new Map();
+  // Prompt prods own movement; idle sheep resume their unchanged world home/radius.
+  // Ten ticks tolerates following the sheep between clicks, but is not a retail timeout claim.
+  const PROD_IDLE_TICKS = 10;
+  const activeProds = new Map();
+
+  function releaseProd(npc) {
+    activeProds.get(npc)?.task.stop();
+  }
+
+  function holdProd(player, npc) {
+    const active = activeProds.get(npc);
+    if (active) {
+      active.player = player;
+      active.remaining = PROD_IDLE_TICKS;
+      return;
+    }
+    const task = new Task(1, npc);
+    const state = { player, remaining: PROD_IDLE_TICKS, scripted: npc.isScriptedMovement(), task };
+    const stop = task.stop.bind(task);
+    task.stop = () => {
+      stop();
+      if (activeProds.get(npc) !== state) return;
+      activeProds.delete(npc);
+      npc.setScriptedMovement(state.scripted);
+    };
+    task.execute = () => {
+      if (!npc.isRegistered() || !state.player.isRegistered()
+          || quest.getStage(state.player) !== STAGE_DISPOSING || --state.remaining <= 0) task.stop();
+    };
+    activeProds.set(npc, state);
+    npc.setScriptedMovement(true);
+    TaskManager.submit(task);
+  }
+
+  function releasePlayerProds(player) {
+    for (const [npc, state] of activeProds) if (state.player === player) releaseProd(npc);
+  }
+
+  function handleShutdown() {
+    for (const npc of activeProds.keys()) releaseProd(npc);
+  }
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
 
@@ -398,6 +439,7 @@ module.exports = function registerSheepHerderQuest(api) {
   }
 
   function clearSheep(player) {
+    releasePlayerProds(player);
     const tracked = sheepByPlayer.get(player);
     if (tracked) for (const npc of tracked.values()) api.removeNpc(npc);
     sheepByPlayer.delete(player);
@@ -414,10 +456,6 @@ module.exports = function registerSheepHerderQuest(api) {
     location.getX() >= PEN_BOUNDS.minX && location.getX() <= PEN_BOUNDS.maxX
       && location.getY() >= PEN_BOUNDS.minY && location.getY() <= PEN_BOUNDS.maxY;
 
-  const inFarm = (location) =>
-    location.getX() >= FARM_ZONE.minX && location.getX() <= FARM_ZONE.maxX
-      && location.getY() >= FARM_ZONE.minY && location.getY() <= FARM_ZONE.maxY;
-
   /** One collision-checked tile for a prod: the way the player faces, else a nearby open tile. */
   function prodStep(player, npc, sheep) {
     const at = npc.getLocation();
@@ -433,7 +471,8 @@ module.exports = function registerSheepHerderQuest(api) {
 
     const stepTo = (dx, dy) => {
       const target = new api.core.Location(at.getX() + dx, at.getY() + dy, at.getZ());
-      if (!inFarm(target)) return null;
+      // FARM_ZONE triggers private spawns; the world's blue/yellow sheep start
+      // outside it. Their prods still use the ordinary movement collision check.
       // The west gate is the pen's only opening: only a step through a gate tile
       // enters the pen. A sheep beside the fence cannot be penned through it.
       const fromGate = GATE_TILES.has(`${at.getX()},${at.getY()}`);
@@ -462,6 +501,7 @@ module.exports = function registerSheepHerderQuest(api) {
   }
 
   function penSheep(player, index, npc) {
+    releaseProd(npc);
     setProgress(player, index, 1);
     if (isWorldSheep(npc)) {
       // The shared sheep is other players' to herd too: send it back to its start,
@@ -542,6 +582,7 @@ module.exports = function registerSheepHerderQuest(api) {
       penSheep(player, index, event.npc);
       return;
     }
+    holdProd(player, event.npc);
     event.npc.getMovementQueue?.()?.walkStep?.(step.dx, step.dy);
   }
 
@@ -635,4 +676,5 @@ module.exports = function registerSheepHerderQuest(api) {
   api.onZoneEnter(FARM_ZONE, handleZoneEnter);
   api.onPlayerLogout(handleLogout);
   api.onPlayerLogin(handleLogin);
+  api.onServerShutdown(handleShutdown);
 };

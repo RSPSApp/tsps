@@ -1465,6 +1465,49 @@ test('EOG Brimstail counts a banked crystal saw or seed: no second seed to hand 
   assert.equal(condition({ player: none, npcId: brimstail, text }), true, 'none owned: Brimstail offers one');
 });
 
+test('EOG Brimstail replacement discs become available after all carried discs are dropped', () => {
+  const h = harness('EyesOfGlouphrie');
+  const p = player();
+  const condition = h.hooks.onNpcDialogueCondition.find((fn) => fn.name === 'answerCondition');
+  const action = (player) => h.emit('npc-dialogue:action', {
+    player, npcId: N.BRIMSTAIL_2, stepId: 'zghUpW', handled: false,
+  });
+  const eligible = () => condition({
+    player: p,
+    npcId: N.BRIMSTAIL_2,
+    text: 'If the player has not received the three extra discs from Brimstail:',
+    stepId: 'r8Ly0u',
+  });
+  const discIds = [
+    ...Array.from({ length: 28 }, (_, index) => 9597 + index),
+  ];
+
+  assert.equal(eligible(), true, 'the first extra-disc award is available');
+  action(p);
+  assert.deepEqual([p.items.get(9611), p.items.get(9614), p.items.get(9608)], [1, 1, 1]);
+  assert.equal(eligible(), false, 'holding the discs does not duplicate the bundle');
+
+  for (const id of discIds) p.items.delete(id); // the guide says to drop the discs before asking again
+  assert.equal(eligible(), true, 'the cache dialogue condition reopens after the carried discs are dropped');
+  action(p);
+  assert.deepEqual([p.items.get(9611), p.items.get(9614), p.items.get(9608)], [1, 1, 1]);
+
+  let freeSlots = 2;
+  p.getInventory = () => ({
+    getAmount: (id) => p.items.get(id) ?? 0,
+    getFreeSlots: () => freeSlots,
+    adds: (id, amount = 1) => p.items.set(id, (p.items.get(id) ?? 0) + amount),
+  });
+  for (const id of discIds) p.items.delete(id);
+  assert.equal(eligible(), true, 'recovery remains available when the bag is full');
+  action(p);
+  assert.equal(p.items.has(9611), false, 'a full bag receives no partial bundle');
+  freeSlots = 3;
+  action(p);
+  assert.deepEqual([p.items.get(9611), p.items.get(9614), p.items.get(9608)], [1, 1, 1],
+    'the award can be retried after making three slots');
+});
+
 test('Eyes machine map locs keep their stage transform and login varbit in step', () => {
   const h = harness('EyesOfGlouphrie');
   const p = player();

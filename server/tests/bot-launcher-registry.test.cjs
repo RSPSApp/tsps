@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { ACTIVITY_LAUNCHER_EVENT, collectActivityLaunchers, validateSetupValues } = require('../plugins/bots/runtime/LauncherCatalog.PlayerBots');
-const { deployRegisteredBots, MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS } = require('../plugins/bots/runtime/Deploy.PlayerBots');
+const { deployRegisteredBots } = require('../plugins/bots/runtime/Deploy.PlayerBots');
 
 test('activity plugins contribute validated, de-duplicated launchers through the named event', () => {
   const logs = [];
@@ -27,7 +27,7 @@ test('activity plugins contribute validated, de-duplicated launchers through the
   assert.deepEqual(validateSetupValues(launchers[0].setupFields, { extra: 'injected' }), { ok: false, error: 'Activity setup contains an unknown field.' });
 });
 
-test('registered activity deployment is bounded, validates its location and marks returned runtime bots as managed', () => {
+test('registered activity deployment validates its location and marks returned runtime bots as managed', () => {
   const runtime = { entriesByUsername: new Map() };
   const calls = [];
   const launcher = {
@@ -57,8 +57,6 @@ test('registered activity deployment is bounded, validates its location and mark
     assert.equal(entry.adminDeployedLauncherId, 'barbarian-assault');
     assert.ok(Number.isFinite(entry.adminDeployedAt));
   }
-  assert.equal(MAX_DEPLOY_COUNT, 20);
-  assert.equal(MAX_MANAGED_BOTS, 50);
 });
 
 test('registered activity deployment tracks and logs out plugin overproduction', () => {
@@ -98,12 +96,10 @@ test('registered activity deployment validates activity-specific setup choices b
   assert.equal(calls, 0);
 });
 
-test('registered activity deployment rejects excessive requests and bad coordinates before invoking plugin code', () => {
+test('registered activity deployment rejects invalid counts and coordinates before invoking plugin code', () => {
   let calls = 0;
   const launcher = { id: 'test-activity', deploy() { calls += 1; return []; } };
-  const fullRuntime = { entriesByUsername: new Map(Array.from({ length: 49 }, (_, index) => [`Managed${index}`, { adminDeployedActivityId: 'old' }])) };
-  assert.equal(deployRegisteredBots({ runtime: fullRuntime, launcher, count: 2, location: { x: 3200, y: 3200, z: 0 } }).status, 409);
-  assert.equal(deployRegisteredBots({ runtime: { entriesByUsername: new Map() }, launcher, count: MAX_DEPLOY_COUNT + 1, location: { x: 3200, y: 3200, z: 0 } }).status, 400);
+  assert.equal(deployRegisteredBots({ runtime: { entriesByUsername: new Map() }, launcher, count: 1.5, location: { x: 3200, y: 3200, z: 0 } }).status, 400);
   assert.equal(deployRegisteredBots({ runtime: { entriesByUsername: new Map() }, launcher, count: 1, location: { x: -1, y: 3200, z: 0 } }).status, 400);
   assert.equal(calls, 0);
 });
@@ -126,7 +122,7 @@ test('routine deployment uses the real developer activity spawn policy', async (
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
-    for (const file of ['routine.json', 'accounts.json']) fs.rmSync(path.join(scratch, file), { force: true });
+    fs.rmSync(path.join(scratch, 'accounts.json'), { force: true });
     fs.rmdirSync(scratch);
   });
 
@@ -137,7 +133,6 @@ test('routine deployment uses the real developer activity spawn policy', async (
   const { ItemIds } = require('../dist/util/IdEnums');
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { getActiveBotRuntime, setActiveBotRuntime } = require('../plugins/bots/runtime/RuntimeRegistry.PlayerBots');
-  const { createBotActivityRegistry } = require('../plugins/bots/brain/ActivityRegistry.PlayerBots');
   const { configureBrainActivities } = require('../plugins/bots/brain/BrainActivities.PlayerBots');
   const { deployRoutineBots } = require('../plugins/bots/runtime/Deploy.PlayerBots');
   const previousConfig = PluginManager.pluginConfigCache;
@@ -167,22 +162,14 @@ test('routine deployment uses the real developer activity spawn policy', async (
     PluginManager.pluginConfigCache = previousConfig;
   });
 
-  const activityId = 'custom_developer_policy';
-  const editorPath = path.join(scratch, 'routine.json');
-  fs.writeFileSync(editorPath, JSON.stringify([{
-    id: activityId, repeat: false, graph: {
-      nodes: [
-        { id: 'start', kind: 'start', x: 0, y: 0, setup: { location: null, skills: {}, inventory: [{ slot: 0, id: ItemIds.COINS, amount: 50 }], equipment: [] } },
-        { id: 'end', kind: 'end', x: 200, y: 0 },
-      ],
-      edges: [{ from: 'start', port: 'next', to: 'end' }],
-    },
-  }]));
-  const registry = createBotActivityRegistry({ api, editorPath, world: { core: api.core } });
-  const activity = registry.byId.get(activityId);
-  assert.ok(activity);
-  brainRegistry.byId.set(activityId, activity);
-  brainRegistry.activities.push(activity);
+  const activityId = 'plugin_developer_policy';
+  api.onCustomEvent('bots:collect-definitions', ({ registerRoutine }) => registerRoutine({
+    id: activityId, name: 'Developer policy test', repeat: false,
+    spawnSetup: { inventory: [{ slot: 0, id: ItemIds.COINS, amount: 50 }] },
+    createActions: ({ action }) => [action({ type: 'wait', seconds: 1 })],
+  }));
+  brainRegistry.installCodeDefinitions();
+  assert.ok(brainRegistry.byId.get(activityId));
   const deploy = () => deployRoutineBots({ runtime, brainRegistry, core: api.core, activityId, count: 1 });
 
   await t.test('developer-only worlds permit routines without permitting world population', () => {

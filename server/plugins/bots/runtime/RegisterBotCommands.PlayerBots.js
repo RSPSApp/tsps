@@ -143,8 +143,9 @@ function registerBotCommands(options) {
     const loc = setup?.location;
     const spawn = loc ? new core.Location(loc.x, loc.y, loc.z) : player.getLocation();
     const bot = runtime.spawnPvpBot(spawn, {
-      mode: activity?.mode ?? normalizedBehavior,
+      mode: activity?.usesPvpEngine ? behaviorMode.PVP : activity?.mode ?? normalizedBehavior,
       activity: "developer",
+      activationId: activity?.id?.startsWith("custom_") ? activity.id : undefined,
     });
     if (!bot) {
       player.sendMessage("Unable to spawn a bot right now.");

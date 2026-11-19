@@ -28,7 +28,7 @@ let lobbyArea = null;
 const source = { players: () => lobbyArea?.getPlayers?.() ?? [] };
 let countdown = null;
 /** Bots (when a world seeds them): who they are, and filling the queue. */
-const bots = { isBot: () => false, seed: () => {} };
+const bots = { isBot: () => false, seed: () => {}, filterWaiting: players => players, fit: players => players, team: () => null };
 
 /** The Wiki's 20, or a world's own (never under 2: a game needs both sides). */
 function minPlayers() {
@@ -145,7 +145,7 @@ function closeHud(player) {
 function tick() {
   const min = minPlayers();
   bots.seed(waitingPlayers(), min, source.players());
-  const queued = waitingPlayers();
+  const queued = bots.filterWaiting(waitingPlayers());
   if (!Match.current && queued.length >= min && countdown === null) countdown = Common.data.countdownTicks;
   if (countdown !== null && (queued.length < min || Match.current)) countdown = null;
   if (countdown !== null) {
@@ -154,14 +154,14 @@ function tick() {
     if (countdown <= 0) {
       countdown = null;
       // Whatever they've put on or picked up while waiting is checked again (a cape would be lost).
-      const ready = queued.filter((player) => {
+      const ready = bots.fit(queued.filter((player) => {
         const refused = bots.isBot(player) ? null : refusal(player);
         if (refused) player.sendMessage(refused);
         return !refused;
-      });
+      }));
       if (ready.length >= min) {
         for (const player of ready) closeHud(player);
-        new Match.Game(ready).start();
+        new Match.Game(ready, bots.team).start();
       }
     }
   }

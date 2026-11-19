@@ -278,16 +278,17 @@ test("the panel links to the map and cache editors on this worktree's client por
   assert.match(page.text, /function updateToolLink\(id, href, flag\)/);
 });
 
-test("legacy bot editor links open the shared panel behind authentication", async (t) => {
+test("retired editor links open the Bots panel behind authentication", async (t) => {
   const { port } = await start(t);
-  for (const path of ["/bot-editor", "/bot-graph"]) {
+  for (const path of ["/bot-editor", "/bot-graph", "/bot-workflows"]) {
     assert.equal((await request(port, { path })).status, 401);
     const result = await request(port, { path, headers: auth });
     assert.equal(result.status, 302);
-    assert.equal(result.headers.location, "/?view=bots&edit=1");
+    assert.equal(result.headers.location, "/?view=bots");
   }
   const page = await request(port, { path: "/", headers: auth });
   assert.match(page.text, /id="tab-bots" aria-controls="panel-bots"/);
+  assert.doesNotMatch(page.text, /id="bot-editor-link"/);
 });
 
 test("the editor links show only where the page is open on this machine, not on a hosted world's domain", () => {

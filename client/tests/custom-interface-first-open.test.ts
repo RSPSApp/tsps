@@ -101,8 +101,9 @@ client.customInterfaces = new CustomInterfaceRuntime({
     widgetManager: wm, getCacheSystem: () => undefined, runWidgetScopedClientScript() {}, fetchContent: async () => ({}),
 });
 let deliver: (definition: unknown) => void = () => assert.fail("no definition was requested");
+let expectedFetch = GROUP;
 const fetchInterfaceDefinition = (groupId: number) => {
-    assert.equal(groupId, GROUP);
+    assert.equal(groupId, expectedFetch);
     return new Promise((resolve) => { deliver = resolve; });
 };
 const handle = new Function("fetchInterfaceDefinition", "setCustomInterface", "markWidgetsLoaded", "markWidgetInteractionDirty",
@@ -168,6 +169,47 @@ async function main() {
             status: "Nothing to show here.", rows: [],
             tabs: ["<col=ffffff>Mine</col>", "<col=ffd27f>All</col>"], input: "|",
         }, "a new open does not take back the previous one's rows");
+
+        // An already-connected client can still hold the previous bot widget groups.
+        // New tab data must not land in either of the previous tab layouts.
+        const botLayout = require("../../server/plugins/bots/interface/Layout.Bots.PlayerBots");
+        for (const oldGroupId of [30100, 30101, 30102, 30104, 30105]) {
+            const old = rootGroup(oldGroupId, [20, 21, 22, 23]);
+            assert.equal(setCustomInterface(old), true);
+        }
+        expectedFetch = botLayout.GROUP_ID;
+        send(encodeWidgetOpenSub(MAIN_MODAL, expectedFetch, 0));
+        send(encodeWidgetSetText(botLayout.uid(botLayout.BROWSER_COMPONENT.DATA), JSON.stringify([{id: 1, name: "Pest Control"}])));
+        send(encodeWidgetSetText(botLayout.uid(botLayout.BROWSER_COMPONENT.LAYOUT), JSON.stringify({active: 2, tabs: [[], [], [1]]})));
+        deliver(botLayout.buildBrowserInterface());
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.equal(wm.getSubInterface(MAIN_MODAL)?.group, botLayout.GROUP_ID);
+        const tabs = botLayout.BROWSER_COMPONENT.TAB_LABEL_START;
+        assert.equal(wm.getWidgetByUid(botLayout.uid(tabs))?.text, "<col=ffd27f>Saved</col>");
+        assert.equal(wm.getWidgetByUid(botLayout.uid(tabs + 1))?.text, "<col=ffd27f>Routines</col>");
+        assert.equal(wm.getWidgetByUid(botLayout.uid(tabs + 2))?.text, "<col=ffffff>Deployment plans</col>");
+        assert.equal(wm.getWidgetByUid(botLayout.uid(tabs + 3)), undefined);
+
+        assert.equal(wm.getWidgetByUid(botLayout.uid(botLayout.BROWSER_COMPONENT.DEPLOY_LABEL))?.text, "Deploy");
+
+        expectedFetch = botLayout.PLAN_GROUP_ID;
+        const planUid = botLayout.planUid;
+        const plan = botLayout.PLAN_COMPONENT;
+        const lastRow = botLayout.planRows.at(-1);
+        const contentHeight = botLayout.planRows.length * botLayout.PLAN_ROW_HEIGHT;
+        send(encodeWidgetOpenSub(MAIN_MODAL, expectedFetch, 0));
+        send(encodeWidgetSetText(planUid(plan.TITLE), "Example plan"));
+        send(encodeWidgetSetText(planUid(plan.CONTENT_HEIGHT), String(contentHeight)));
+        send(encodeWidgetSetText(planUid(lastRow.count), "2"));
+        deliver(botLayout.buildPlanInterface());
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.equal(wm.getSubInterface(MAIN_MODAL)?.group, botLayout.PLAN_GROUP_ID);
+        assert.equal(wm.getWidgetByUid(planUid(plan.TITLE))?.text, "Example plan");
+        assert.equal(wm.getWidgetByUid(planUid(plan.DEPLOY_LABEL))?.text, "Deploy plan");
+        client.customInterfaces.tick();
+        assert.equal(wm.getWidgetByUid(planUid(plan.VIEW))?.scrollHeight, contentHeight);
+        assert.equal(wm.getWidgetByUid(planUid(plan.SCROLLBAR))?.scrollBarTargetUid, planUid(plan.VIEW));
+        assert.equal(wm.getWidgetByUid(planUid(lastRow.count))?.text, "2");
     } finally {
         console.log = log;
     }

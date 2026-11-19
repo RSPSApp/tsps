@@ -32,6 +32,12 @@ Server
 
 # AI bots roster (plugins/bots/ai/AiBotRoster.js)
 data/saves/ai-bots.json
+data/saves/bot-activation.json
+data/saves/bot-activation.json.tmp
+data/saves/bot-deployment-plans.json
+data/saves/bot-deployment-plans.json.tmp
+data/saves/bot-routine-setups.json
+data/saves/bot-routine-setups.json.tmp
 data/saves/colosseum-scoreboard.json
 data/saves/araxxor-scoreboard.json
 # Every boss/minigame scoreboard keeps its world records here (and a .tmp while saving).

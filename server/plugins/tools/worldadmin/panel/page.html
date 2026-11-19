@@ -9,6 +9,7 @@
 <link rel="icon" type="image/svg+xml" href="/panel/favicon.svg">
 <link rel="stylesheet" href="/panel/panel.css">
 <script src="/panel/panel.js"></script>
+<script type="module" src="/panel/bot-management.js"></script>
 <style>
   @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url("/panel/fonts/plex-sans-400.woff2") format("woff2"); }
   @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 500; font-display: swap; src: url("/panel/fonts/plex-sans-500.woff2") format("woff2"); }
@@ -565,7 +566,6 @@
   });
   var playersPanel;
   var botsPanel;
-  var openBotEditor = new URLSearchParams(location.search).get("edit") === "1";
   var serverOnline = false;
   function selectTab(tab) {
     if (tab !== state.tab) document.querySelector("main").scrollTop = 0;
@@ -588,7 +588,7 @@
       playersPanel.refresh();
     }
     if (tab === "bots") {
-      botsPanel ||= window.LocalPanelComponents.botsPanel(document.getElementById("panel-bots"), api, flash, openBotEditor);
+      botsPanel ||= window.LocalPanelComponents.botsPanel(document.getElementById("panel-bots"), api, flash);
     }
     botsPanel?.(tab === "bots", serverOnline);
     if (tab === "plugins" && document.getElementById("plugins-installed")) pluginPanel.selectPluginView(state.pluginView);

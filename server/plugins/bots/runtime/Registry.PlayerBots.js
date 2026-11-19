@@ -545,6 +545,7 @@ function createBotRegistry(options) {
       api: botApi,
       // The Wilderness roamers, hotspots and regional bots are the world's own population.
       activity: plan.activity ?? "world",
+      activationId: plan.activationId,
       loadPersistence: persistent,
       saveRandomizedAppearance: false,
     });
@@ -644,7 +645,7 @@ function createBotRegistry(options) {
 
   function spawnRegionalWildernessBot(plan) {
     return spawnWildernessBot(
-      plan,
+      { ...plan, activationId: "wilderness-regional" },
       wildernessRegionalAssignments,
       {
         regionKey: plan.regionKey,
@@ -655,7 +656,7 @@ function createBotRegistry(options) {
 
   function spawnHotspotWildernessBot(plan) {
     return spawnWildernessBot(
-      plan,
+      { ...plan, activationId: "wilderness-hotspots" },
       wildernessHotspotAssignments,
       {
         hotspotId: plan.hotspotId ?? null,
@@ -1234,6 +1235,17 @@ function createBotRegistry(options) {
     playerBotUsernames,
     entries,
     entriesByUsername,
+    get activationDefaults() {
+      return {
+        world: botCount > 0,
+        "wilderness-regional": wildernessRoamerBotCount > 0,
+        "wilderness-hotspots": wildernessRoamerBotCount > 0 && buildPersistentHotspotPlans().length > 0,
+      };
+    },
+    reconcileActivation(id) {
+      if (id === "wilderness-regional") reconcileRegionalWildernessBots();
+      if (id === "wilderness-hotspots") reconcilePersistentHotspotBots();
+    },
     getSpawnedCount: () => spawned,
     hasControllerForUsername,
     hasControllerForPlayer,
@@ -1258,6 +1270,7 @@ function createBotRegistry(options) {
         spawnLocation: location,
         mode: options.mode ?? null,
         activity: options.activity,
+        activationId: options.activationId,
         persistent: options.persistent === true,
         pvpMetadata: options.pvpMetadata,
       });

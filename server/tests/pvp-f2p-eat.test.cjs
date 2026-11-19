@@ -30,7 +30,7 @@ before(async () => {
     },
   } };
   Food.register({
-    core, persistAttribute() {}, onPlayerLogin() {},
+    core, persistAttribute() {}, onPlayerLogin() {}, onCustomEvent() {},
     onItemAction: handler => { eatFood = handler; },
     emitCanEat: player => player.canEat !== false,
     emitCustomEvent() {},
@@ -102,7 +102,7 @@ function buildHarness(comboEatChance = 0, profileId = 'standard') {
       refreshItems: () => {},
     }),
     getTimers: () => timers,
-    getPacketSender: () => ({ sendInterfaceRemoval() {}, sendConfig() {}, sendRunEnergy() {} }),
+    getPacketSender: () => ({ sendInterfaceRemoval() {}, sendConfig() {}, sendRunEnergy() {}, sendTypedMessage() {} }),
     performAnimation: () => {},
     setHitpoints: value => { hp = value; },
     // Purple sweets also restore run energy (ConsumableEffects.restoreRunEnergy, since 4b1eb224c).

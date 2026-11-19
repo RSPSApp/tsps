@@ -207,7 +207,7 @@ function startBotSites(options = {}) {
       location = new Location(anchor.x, anchor.y, anchor.z ?? 0);
     }
 
-    const bot = runtime.spawnPvpBot(location, { mode: activity.mode, activity: "world" });
+    const bot = runtime.spawnPvpBot(location, { mode: activity.mode, activity: "world", activationId: "world-sites" });
     if (!bot) {
       return false;
     }

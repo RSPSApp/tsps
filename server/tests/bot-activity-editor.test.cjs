@@ -63,21 +63,6 @@ test('wait action uses elapsed brain time and resets when stopped', () => {
   assert.equal(wait.update(ctx), 'running');
 });
 
-test('graph supports switch conditions and validates their data', () => {
-  const graph = { nodes: [
-    { id: 'start', kind: 'start', x: 0, y: 0 },
-    { id: 'switch', kind: 'switch', x: 200, y: 0, cases: [
-      { skill: { id: 'woodcutting', min: 30, max: 99 } }, { inventoryFull: true },
-    ] },
-    { id: 'a', kind: 'end', x: 400, y: -100 }, { id: 'b', kind: 'end', x: 400, y: 0 }, { id: 'fallback', kind: 'end', x: 400, y: 100 },
-  ], edges: [
-    { from: 'start', port: 'next', to: 'switch' }, { from: 'switch', port: 'case_0', to: 'a' }, { from: 'switch', port: 'case_1', to: 'b' }, { from: 'switch', port: 'default', to: 'fallback' },
-  ] };
-  const [saved] = validateActivities([{ id: 'custom_switch', repeat: false, graph }]);
-  assert.equal(saved.graph.nodes[1].cases[0].skill.min, 30);
-  assert.throws(() => validateActivities([{ id: 'custom_bad_condition', repeat: false, graph: { ...graph, nodes: graph.nodes.map(node => node.id === 'switch' ? { ...node, cases: [{ skill: { id: 'bogus', min: 1, max: 2 } }, { inventoryFull: true }] } : node) } }]), /Skill condition/);
-});
-
 test('tree and rock blocks accept exactly one explicit loc or a preset', () => {
   const tree = { type: 'interactObject', catalog: 'tree', tier: 'oak', objectIds: [1281] };
   const activity = { id: 'custom_tree', repeat: true, actions: [tree] };
@@ -127,23 +112,6 @@ test('conditional item branches are validated and retained', () => {
   const [activity] = validateActivities([{ id: 'custom_conditional', repeat: false, actions: [condition] }]);
   assert.deepEqual(activity.actions[0], condition);
   assert.throws(() => validateActivities([{ id: 'custom_conditional', repeat: false, actions: [{ ...condition, then: { type: 'if' } }] }]), /invalid parameters/);
-});
-
-test('switch normalization accepts five valid cases during import and save', () => {
-  const cases = [10, 20, 30, 40, 50].map(healthPercentBelow => ({ healthPercentBelow }));
-  const nodes = [
-    { id: 'start', kind: 'start', x: 0, y: 0 },
-    { id: 'switch', kind: 'switch', cases, x: 100, y: 0 },
-    ...cases.map((_, index) => ({ id: `case_${index}`, kind: 'end', x: 300, y: index * 80 })),
-    { id: 'fallback', kind: 'end', x: 300, y: 500 },
-  ];
-  const edges = [
-    { from: 'start', port: 'next', to: 'switch' },
-    ...cases.map((_, index) => ({ from: 'switch', port: `case_${index}`, to: `case_${index}` })),
-    { from: 'switch', port: 'default', to: 'fallback' },
-  ];
-  const [saved] = validateActivities([{ id: 'custom_five_switch_cases', repeat: false, graph: { nodes, edges } }]);
-  assert.deepEqual(saved.graph.nodes.find(node => node.id === 'switch').cases, cases);
 });
 
 test('rejects invalid IDs, duplicates and invalid actions', () => {

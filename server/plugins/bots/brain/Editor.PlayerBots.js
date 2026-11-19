@@ -6,104 +6,18 @@ const path = require("node:path");
 const FILE = path.join(process.cwd(), "data", "definitions", "bot-activities.local.json");
 
 const SKILL_NAMES = new Set(['attack','defence','strength','hitpoints','ranged','prayer','magic','cooking','woodcutting','fletching','fishing','firemaking','crafting','smithing','mining','herblore','agility','thieving','slayer','farming','runecrafting','hunter','construction','sailing']);
-function cleanCondition(condition, depth = 0) {
-  if (!condition || typeof condition !== "object" || Array.isArray(condition) || depth > 3 || Object.keys(condition).length !== 1) throw new Error("Choose one supported condition.");
-  if (condition.and || condition.or) {
-    const key = condition.and ? "and" : "or", rules = condition[key];
-    if (!Array.isArray(rules) || rules.length < 1 || rules.length > 8) throw new Error(`${key.toUpperCase()} needs 1–8 conditions.`);
-    return { [key]: rules.map(rule => cleanCondition(rule, depth + 1)) };
-  }
-  if (condition.not) return { not: cleanCondition(condition.not, depth + 1) };
-  if (condition.hasItem) {
-    const { id, present, min } = condition.hasItem;
-    const legacyMinimum = present === undefined && Number.isInteger(min) && min >= 1 && min <= 2147483647;
-    if (!Number.isInteger(id) || id <= 0 || (present !== undefined && typeof present !== "boolean") ||
-        (min !== undefined && (!legacyMinimum || present !== undefined))) {
-      throw new Error("Item condition needs a valid item and a true/false presence choice.");
-    }
-    // Normalize older quantity-based item tests to a presence test for the simpler editor UI.
-    return { hasItem: { id, present: present ?? true } };
-  }
-  if (condition.skill) {
-    const { id, min = 1, max = 99 } = condition.skill;
-    if (!SKILL_NAMES.has(id) || !Number.isInteger(min) || !Number.isInteger(max) || min < 1 || max > 99 || min > max) throw new Error("Skill condition needs a skill and valid level range (1–99).");
-    return { skill: { id, min, max } };
-  }
-  if (condition.inventoryFull === true) return { inventoryFull: true };
-  if (condition.inCombat === true) return { inCombat: true };
-  if (condition.healthPercentBelow !== undefined) {
-    const percent = condition.healthPercentBelow;
-    if (!Number.isInteger(percent) || percent < 1 || percent > 99) throw new Error("Health threshold must be a percentage from 1–99.");
-    return { healthPercentBelow: percent };
-  }
-  if (condition.inArea) {
-    const { minX, maxX, minY, maxY, z } = condition.inArea;
-    if (![minX,maxX,minY,maxY,z].every(Number.isInteger) || minX<0 || maxX>16383 || minY<0 || maxY>16383 || minX>maxX || minY>maxY || z<0 || z>3) throw new Error("Area condition needs valid coordinate bounds and plane.");
-    return { inArea: { minX,maxX,minY,maxY,z } };
-  }
-  throw new Error("Choose a supported condition: item, skill, inventory full, combat, health, area, AND, OR, or NOT.");
-}
+const isGraph = activity => activity?.graph !== undefined || activity?.subroutines !== undefined;
 
 function validateActivities(value) {
   if (!Array.isArray(value) || value.length > 100) throw new Error("Expected at most 100 activities.");
   const ids = new Set();
   return value.map((activity) => {
     if (!activity || typeof activity !== "object" || Array.isArray(activity)) throw new Error("Invalid activity.");
+    if (isGraph(activity)) throw new Error("Graph routines are no longer supported.");
     const { id, repeat, actions } = activity;
     if (typeof id !== "string" || !/^custom_[a-z0-9_]{1,48}$/.test(id) || ids.has(id)) throw new Error("IDs must be unique and start with custom_, followed by lowercase letters, numbers or underscores.");
     ids.add(id);
     if (typeof repeat !== "boolean") throw new Error(`${id}: choose repeat.`);
-    if (activity.graph !== undefined) {
-      const { validateGraph } = require("./Graph.PlayerBots");
-      validateGraph(activity.graph);
-      const graph = {
-        nodes: activity.graph.nodes.map(node => {
-          if (!Number.isFinite(node.x) || !Number.isFinite(node.y) || Math.abs(node.x) > 20000 || Math.abs(node.y) > 20000) throw new Error(`${id}: invalid node position.`);
-          const base = { id: node.id, kind: node.kind, x: node.x, y: node.y };
-          if (node.kind === "start") {
-            const setup = node.setup ?? { location: null, skills: {}, inventory: [], equipment: [] };
-            const loc = setup.location;
-            if (loc !== null && (!loc || ![loc.x, loc.y, loc.z].every(Number.isInteger) || loc.x < 0 || loc.x > 16383 || loc.y < 0 || loc.y > 16383 || loc.z < 0 || loc.z > 3)) throw new Error(`${id}: invalid spawn location.`);
-            const skills = setup.skills;
-            const names = ['attack','defence','strength','hitpoints','ranged','prayer','magic','cooking','woodcutting','fletching','fishing','firemaking','crafting','smithing','mining','herblore','agility','thieving','slayer','farming','runecrafting','hunter','construction','sailing'];
-            if (!skills || typeof skills !== 'object' || Array.isArray(skills) || Object.entries(skills).some(([name,level]) => !names.includes(name) || !Number.isInteger(level) || level < 1 || level > 99)) throw new Error(`${id}: invalid skill levels.`);
-            const checkItems = (items, slots) => Array.isArray(items) && items.length <= slots.length && items.every(item => item && slots.includes(item.slot) && Number.isInteger(item.id) && item.id > 0 && Number.isInteger(item.amount) && item.amount > 0 && item.amount <= 2147483647) && new Set(items.map(item => item.slot)).size === items.length;
-            if (!checkItems(setup.inventory, Array.from({length:28},(_,i)=>i)) || !checkItems(setup.equipment, [0,1,2,3,4,5,7,9,10,12,13])) throw new Error(`${id}: invalid starting items or duplicate slots.`);
-            base.setup = { location: loc, skills: { ...skills }, inventory: setup.inventory.map(v=>({slot:v.slot,id:v.id,amount:v.amount})), equipment: setup.equipment.map(v=>({slot:v.slot,id:v.id,amount:v.amount})) };
-          }
-          if (node.kind === "action") {
-            const inner = validateActivities([{ id: "custom_node", repeat: false, actions: [node.action] }])[0].actions[0];
-            if (inner.type === "if") throw new Error("Use an If node for branching.");
-            base.action = inner;
-          }
-          if (node.kind === "if" || node.kind === "interrupt") base.condition = cleanCondition(node.condition);
-          if (node.kind === "interrupt") {
-            const priority = node.priority ?? 0;
-            if (!Number.isInteger(priority) || priority < 0 || priority > 100) throw new Error(`${id}: event trigger priority must be 0–100.`);
-            base.priority = priority;
-          }
-          if (node.kind === "switch") {
-            base.cases = node.cases.map(condition => cleanCondition(condition));
-          }
-          if (node.kind === "agent") {
-            const prompt = typeof node.prompt === "string" ? node.prompt.trim() : "";
-            if (!prompt || prompt.length > 500 || !Array.isArray(node.choices) || node.choices.length < 2 || node.choices.length > 8) throw new Error(`${id}: AI agent needs a prompt and 2–8 routes.`);
-            const labels = new Set();
-            base.prompt = prompt;
-            base.choices = node.choices.map(choice => {
-              const label = typeof choice?.label === "string" ? choice.label.trim() : "";
-              const description = typeof choice?.description === "string" ? choice.description.trim() : "";
-              if (!label || label.length > 40 || labels.has(label.toLowerCase()) || description.length > 200) throw new Error(`${id}: AI agent routes need unique labels (1–40 characters) and descriptions up to 200 characters.`);
-              labels.add(label.toLowerCase());
-              return { label, description };
-            });
-          }
-          return base;
-        }),
-        edges: activity.graph.edges.map(edge => ({ from: edge.from, port: edge.port, to: edge.to })),
-      };
-      return { id, mode: id, manual: true, repeat, graph, actions: [] };
-    }
     if (!Array.isArray(actions) || !actions.length || actions.length > 50) throw new Error(`${id}: choose repeat and 1–50 actions.`);
     const clean = actions.map((action, index) => {
       const fail = () => { throw new Error(`${id}, action ${index + 1}: invalid parameters.`); };
@@ -178,9 +92,14 @@ function validateActivities(value) {
   });
 }
 
-function readActivities(file = FILE) {
-  try { return validateActivities(JSON.parse(fs.readFileSync(file, "utf8"))); }
-  catch (error) { if (error.code === "ENOENT") return []; throw error; }
+function readActivities(file = FILE, log) {
+  try {
+    const saved = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!Array.isArray(saved) || saved.length > 100) throw new Error("Expected at most 100 activities.");
+    const ids = saved.filter(isGraph).map(activity => activity.id);
+    if (ids.length) log?.("bot_graph_routines_skipped", { ids });
+    return validateActivities(saved.filter(activity => !isGraph(activity)));
+  } catch (error) { if (error.code === "ENOENT") return []; throw error; }
 }
 
 module.exports = { FILE, validateActivities, readActivities };

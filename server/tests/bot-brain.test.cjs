@@ -1933,41 +1933,15 @@ test('editor activities compile in the real registry without becoming site activ
     assert.equal(activity.manual, true);
     assert.equal(activity.actions[0].id, 'walkTo');
     assert.equal(activity.actions[1].id, 'if');
-    fs.writeFileSync(editorPath, JSON.stringify([{ id: 'custom_graph', repeat: false, graph: { nodes: [{ id: 'start', kind: 'start', x: 0, y: 0 }, { id: 'check', kind: 'if', x: 200, y: 0, condition: { hasItem: { id: 1511, min: 1 } } }, { id: 'drop', kind: 'action', x: 400, y: 0, action: { type: 'dropItems', itemIds: [1511] } }, { id: 'end', kind: 'end', x: 600, y: 0 }], edges: [{ from: 'start', port: 'next', to: 'check' }, { from: 'check', port: 'true', to: 'drop' }, { from: 'check', port: 'false', to: 'end' }, { from: 'drop', port: 'next', to: 'end' }] } }]));
-    const graphRegistry = createBotActivityRegistry({ editorPath, world: { core: PluginManager.getCoreApi() } });
-    const graphActivity = graphRegistry.byId.get('custom_graph');
-    assert.equal(graphActivity.actions[0].id, 'graph');
-    assert.equal(graphActivity.oneShot, true);
-    assert.deepEqual(graphActivity.spawnSetup, { location: null, skills: {}, inventory: [], equipment: [] });
-    const presenceGraph = present => ({
-      nodes: [
-        { id: 'start', kind: 'start', x: 0, y: 0 },
-        { id: 'check', kind: 'if', x: 100, y: 0, condition: { hasItem: { id: 1511, present } } },
-        { id: 'match', kind: 'end', x: 200, y: 0 },
-        { id: 'no_match', kind: 'end', x: 200, y: 100 },
-      ],
-      edges: [
-        { from: 'start', port: 'next', to: 'check' },
-        { from: 'check', port: 'true', to: 'match' },
-        { from: 'check', port: 'false', to: 'no_match' },
-      ],
-    });
-    fs.writeFileSync(editorPath, JSON.stringify([
-      { id: 'custom_has_logs', repeat: false, graph: presenceGraph(true) },
-      { id: 'custom_no_logs', repeat: false, graph: presenceGraph(false) },
-    ]));
-    const presenceRegistry = createBotActivityRegistry({ editorPath, world: { core: PluginManager.getCoreApi() } });
-    const routeFor = (id, amount) => {
-      const action = presenceRegistry.byId.get(id).actions[0];
-      const ctx = { player: { getInventory: () => ({ getAmount: () => amount }) }, brain: {} };
-      assert.equal(action.update(ctx), 'running');
-      assert.equal(action.update(ctx), 'running');
-      return action.describe(ctx);
-    };
-    assert.equal(routeFor('custom_has_logs', 2), 'end: match');
-    assert.equal(routeFor('custom_has_logs', 0), 'end: no_match');
-    assert.equal(routeFor('custom_no_logs', 0), 'end: match');
-    assert.equal(routeFor('custom_no_logs', 1), 'end: no_match');
+    const flat = JSON.parse(fs.readFileSync(editorPath, 'utf8'));
+    const graph = { id: 'custom_graph', repeat: false, graph: { nodes: [], edges: [] } };
+    fs.writeFileSync(editorPath, JSON.stringify([...flat, graph]));
+    const logs = [];
+    const compatible = createBotActivityRegistry({ editorPath, world: { core: PluginManager.getCoreApi() }, api: { log: (...args) => logs.push(args) } });
+    assert.equal(compatible.byId.has('custom_graph'), false);
+    assert.equal(compatible.byId.has('custom_walk'), true);
+    assert.deepEqual(logs.find(([event]) => event === 'bot_graph_routines_skipped')?.[1], { ids: ['custom_graph'] });
+    assert.deepEqual(JSON.parse(fs.readFileSync(editorPath, 'utf8')).at(-1), graph);
     assert.ok(registry.sites.every(site => !site.activities.some(entry => entry.id === 'custom_walk')));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -2945,42 +2919,6 @@ test('wait begins a fresh interval after an interrupted action resumes', (t) => 
   assert.equal(wait.update({ player, nowMs: 5000 }), 'running', 'time spent in recovery does not count toward the wait');
   assert.equal(wait.update({ player, nowMs: 9999 }), 'running');
   assert.equal(wait.update({ player, nowMs: 10000 }), 'success');
-});
-
-test('a repeating BotBrain graph gives each Wait visit its full duration', (t) => {
-  const { createWaitAction } = require('../plugins/bots/brain/actions/Wait.PlayerBots');
-  const { createGraphAction } = require('../plugins/bots/brain/Graph.PlayerBots');
-  const player = nativeFollowCombatPlayer(t, 'wait-loop', new Location(3200, 3200));
-  const graph = { nodes: [
-    { id: 'start', kind: 'start' },
-    { id: 'wait_five', kind: 'action', action: { type: 'wait', seconds: 5 } },
-    { id: 'wait_ten', kind: 'action', action: { type: 'wait', seconds: 10 } },
-    { id: 'end', kind: 'end' },
-  ], edges: [
-    { from: 'start', port: 'next', to: 'wait_five' },
-    { from: 'wait_five', port: 'next', to: 'wait_ten' },
-    { from: 'wait_ten', port: 'next', to: 'end' },
-  ] };
-  let waitFiveVisits = 0, repeatedWaitResult = null;
-  const run = createGraphAction(graph, spec => {
-    const wait = createWaitAction(spec);
-    if (spec.seconds !== 5) return wait;
-    return { ...wait, update(ctx) {
-      const result = wait.update(ctx);
-      if (++waitFiveVisits >= 3) repeatedWaitResult = result;
-      return result;
-    }, stop: ctx => wait.stop(ctx) };
-  }, () => ({ check: () => false }));
-  const brain = new BotBrain({ player, registry: fakeRegistry(), activity: { id: 'custom_wait_loop', repeat: true, actions: [run] }, nowMs: 0 });
-  t.after(() => brain.reset());
-  brain.tick(0); brain.tick(1); brain.tick(2); brain.tick(5002);
-  brain.tick(5003); brain.tick(15003); brain.tick(15004);
-  brain.tick(15005); brain.tick(15006);
-  assert.equal(repeatedWaitResult, 'running', 'the second visit must not inherit elapsed time from the other graph node');
-  brain.tick(20005);
-  assert.equal(repeatedWaitResult, 'running');
-  brain.tick(20006);
-  assert.equal(repeatedWaitResult, 'success');
 });
 
 test('a teleblocked recruit walks a segmented route after a distant owner teleport', (t) => {

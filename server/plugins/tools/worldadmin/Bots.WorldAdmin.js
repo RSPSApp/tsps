@@ -2,13 +2,26 @@
 
 const { createRequestHandler, HttpError, readJson, send } = require("./Http.WorldAdmin");
 const { originAllowed } = require("./Access.WorldAdmin");
-const { botEditorRoutes } = require("./BotEditor.WorldAdmin");
 const { getActiveBotRuntime } = require("../../bots/runtime/RuntimeRegistry.PlayerBots");
 const { trackControlSession, untrackControlSession } = require("../../bots/runtime/Control.PlayerBots");
-const { deployRoutineBots, MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS, DEFAULT_LOCATION, DEFAULT_SPAWN_SETUP } = require("../../bots/runtime/Deploy.PlayerBots");
+const { deployRoutineBots, managedBotCount, MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS, DEFAULT_LOCATION } = require("../../bots/runtime/Deploy.PlayerBots");
+const { routineNames, matchRoutineIds } = require("../../bots/runtime/RoutineCatalog.PlayerBots");
+const { listRoutineDeployments: activityList, groupRoutines } = require("../../bots/runtime/RoutineDeployments.PlayerBots");
+const { validateRoutineOverrides } = require("../../bots/runtime/DeploymentOverrides.PlayerBots");
+const { readAvailablePlans, deployPlan, applyPlanOverrides } = require("../../bots/runtime/DeploymentPlans.PlayerBots");
+const { planFiles } = require("./PlanFiles.WorldAdmin");
+const { deployRoster: deployTeamRoster } = require("../../bots/runtime/Roster.PlayerBots");
+const { ACTIVATION_ATTRIBUTE } = require("../../bots/runtime/Activation.PlayerBots");
+const { activationGet, activationPost } = require("./Activation.WorldAdmin");
 const { itemIconDataUri } = require("./ItemIcons.WorldAdmin");
 const viewersByOwner = new Map();
 const USERNAME = /^[a-z0-9][a-z0-9 _-]{0,19}$/i;
+const nativeRoutines = new Map(Object.entries({
+  ...matchRoutineIds,
+  "last-man-standing": "lms_match",
+  "bounty-hunter": "bounty_hunter_match",
+  "duel-arena": "duel_arena_match",
+}));
 
 function snapshotItems(container) {
   return (container?.getItems?.() ?? []).flatMap((item, slot) => {
@@ -18,12 +31,16 @@ function snapshotItems(container) {
   });
 }
 
-function snapshotBot(entry, core, nowMs) {
+function snapshotBot(entry, core, nowMs, brainRegistry, watchable) {
   const bot = entry?.player;
   if (!bot?.isPlayerBot?.()) return null;
   const username = bot.getUsername?.() ?? "";
   const state = username ? entry.state : null;
   const brain = entry.brain;
+  const source = bot.getAttribute?.(ACTIVATION_ATTRIBUTE) ?? entry.adminDeployedActivityId;
+  const routineId = brain?.rootActivityId ?? nativeRoutines.get(source) ?? entry.adminDeployedActivityId ?? state?.mode ?? null;
+  const activity = brainRegistry?.byId?.get(routineId);
+  const label = activity?.name ?? (Object.hasOwn(routineNames, routineId) ? routineNames[routineId] : activity?.id ?? null);
   const frame = brain?.frames?.at?.(-1) ?? null;
   const step = frame?.action?.() ?? null;
   let action = null;
@@ -47,8 +64,11 @@ function snapshotBot(entry, core, nowMs) {
     username,
     displayName: bot.getDisplayName?.() ?? username,
     activityId: entry.adminDeployedActivityId ?? brain?.rootActivityId ?? state?.mode ?? null,
+    routineId,
+    routineName: label,
+    watchable,
     managed: typeof entry.adminDeployedActivityId === "string",
-    status: entry.spectating ? "watching" : !brain ? "idle" : brain.stopped ? "completed" : frame?.state ?? "running",
+    status: entry.spectating ? "watching" : !brain ? "online" : brain.stopped ? "completed" : frame?.state ?? "running",
     watchedBy: entry.spectatorOwner ?? null,
     location: loc ? { x: loc.getX(), y: loc.getY(), z: loc.getZ() } : null,
     hitpoints: bot.getHitpoints?.() ?? skills?.getCurrentLevel?.(core.Skill.HITPOINTS) ?? 0,
@@ -66,18 +86,17 @@ function snapshotBot(entry, core, nowMs) {
   };
 }
 
-function monitoredBots(runtime, core) {
+function monitoredBots(runtime, core, world, brainRegistry) {
   const nowMs = Date.now();
-  return [...(runtime?.entriesByUsername?.values?.() ?? [])]
-    .map(entry => snapshotBot(entry, core, nowMs))
-    .filter(Boolean)
-    .sort((a, b) => a.username.localeCompare(b.username));
-}
-
-function activityList(brainRegistry) {
-  return (brainRegistry?.activities ?? []).filter(activity =>
-    activity.manual === true && activity.id.startsWith("custom_"))
-    .map(activity => ({ id: activity.id, repeat: activity.repeat, setup: activity.spawnSetup ?? DEFAULT_SPAWN_SETUP, usesAiAgent: activity.usesAiAgent === true }));
+  const bots = [];
+  const leaving = new Set(world.getRemovePlayerQueue());
+  world.getPlayers()?.forEach(player => {
+    if (!player?.isPlayerBot?.() || leaving.has(player)) return;
+    const entry = runtime?.entriesByUsername?.get(player.getUsername());
+    const tracked = entry?.player === player;
+    bots.push(snapshotBot(tracked ? entry : { player }, core, nowMs, brainRegistry, tracked));
+  });
+  return bots.sort((a, b) => a.username.localeCompare(b.username));
 }
 
 function onlineViewers(api) {
@@ -98,35 +117,47 @@ function sendSnapshot(response, api) {
   const { runtime, brainRegistry } = getActiveBotRuntime();
   if (!runtime) throw new HttpError(503, "The bot runtime is not running.");
   const port = Number(process.env.PORT || 3000);
-  const bots = monitoredBots(runtime, api.core);
+  const bots = monitoredBots(runtime, api.core, api.getWorld(), brainRegistry);
+  const activities = activityList(brainRegistry);
   send(response, 200, {
     bots,
-    activities: activityList(brainRegistry),
+    activities,
+    routineGroups: groupRoutines(activities),
     viewers: onlineViewers(api),
     clientUrl: `http://localhost:${port}`,
     defaultLocation: DEFAULT_LOCATION,
     maxDeployCount: MAX_DEPLOY_COUNT,
     maxManagedCount: MAX_MANAGED_BOTS,
-    managedCount: bots.filter(bot => bot.managed).length,
-    aiAgentAvailable: brainRegistry?.aiAgentAvailable === true,
+    managedCount: managedBotCount(runtime),
   });
 }
 
 function deploy(request, response, api) {
   const { runtime, brainRegistry } = getActiveBotRuntime();
   return readJson(request).then(body => {
+    let overrides;
+    try {
+      if (Object.hasOwn(body, "location")) throw new Error("Use overrides.location to set a spawn location.");
+      overrides = validateRoutineOverrides(brainRegistry?.byId?.get(body.activityId), body.overrides);
+    } catch (error) { throw new HttpError(400, error.message); }
     const result = deployRoutineBots({
       runtime,
       brainRegistry,
       core: api.core,
       activityId: body.activityId,
       count: body.count,
-      overrides: body.overrides && typeof body.overrides === "object" ? body.overrides : {},
-      fallbackLocation: body.location ?? DEFAULT_LOCATION,
+      overrides,
     });
     if (!result.ok) throw new HttpError(result.status, result.error);
     send(response, 200, { activityId: result.activityId, requested: result.requested, spawned: result.spawned, failures: result.failures });
   });
+}
+
+async function deployRoster(request, response, api) {
+  const body = await readJson(request);
+  const result = deployTeamRoster({ api, ...getActiveBotRuntime() }, body?.mode, body?.teams);
+  if (!result.ok) throw new HttpError(result.status, result.error);
+  send(response, 200, result);
 }
 
 async function watch(request, response, api) {
@@ -198,13 +229,44 @@ async function botRoutes(request, response, url, api) {
     send(response, 200, { id, src });
     return true;
   }
+  if (url.pathname === "/api/bots/item-search") {
+    if (request.method !== "GET") throw new HttpError(405, "Method not allowed");
+    const text = (url.searchParams.get("text") ?? "").trim();
+    if (!text || text.length > 100) throw new HttpError(400, "Enter 1–100 characters to search.");
+    try {
+      const query = new URLSearchParams({ kind: "item", text, limit: "20" });
+      const result = await fetch(`http://127.0.0.1:${Number(process.env.WEBSOCKET_PORT || 43594)}/api/cache-search?${query}`, { signal: AbortSignal.timeout(5000) });
+      if (!result.ok) throw new Error("Cache search unavailable.");
+      send(response, 200, await result.json());
+    } catch { throw new HttpError(503, "Item search needs the game server and CacheEditorCatalog plugin running."); }
+    return true;
+  }
   if (url.pathname === "/api/bots") {
     if (request.method !== "GET") throw new HttpError(405, "Method not allowed");
     sendSnapshot(response, api);
     return true;
   }
+  if (url.pathname === "/api/bots/activation" && request.method === "GET") {
+    activationGet(response, api);
+    return true;
+  }
+  if (await planFiles(request, response, url, getActiveBotRuntime().brainRegistry)) return true;
   const actions = {
     "/api/bots/deploy": deploy,
+    "/api/bots/plans/deploy": async (request, response) => {
+      const body = await readJson(request);
+      const active = getActiveBotRuntime();
+      const plan = readAvailablePlans(active.brainRegistry?.deploymentPlans).find(item => item.id === body?.id);
+      if (!plan) throw new HttpError(404, "That saved deployment plan does not exist.");
+      let launch;
+      try { launch = applyPlanOverrides(plan, body.rows); } catch (error) { throw new HttpError(400, error.message); }
+      const result = deployPlan({ api, ...active }, launch);
+      if (!result.ok) throw new HttpError(result.status, result.error);
+      const spawnedCount = Array.isArray(result.spawned) ? result.spawned.length : Object.values(result.spawned ?? {}).flat().length;
+      send(response, 200, { ...result, spawnedCount });
+    },
+    "/api/bots/activation": activationPost,
+    "/api/bots/team-roster": deployRoster,
     "/api/bots/watch": watch,
     "/api/bots/unwatch": unwatch,
     "/api/bots/despawn": despawn,
@@ -220,12 +282,10 @@ async function botRoutes(request, response, url, api) {
 function browserBotHandler(api, token, port) {
   return createRequestHandler({ token, loopback: true, port }, {
     async dispatch(request, response, url) {
-      if (url.pathname !== "/api/bot-editor" &&
-          await botEditorRoutes(request, response, url)) return true;
       if (await botRoutes(request, response, url, api)) return true;
       throw new HttpError(404, "Not found");
     },
   }, []);
 }
 
-module.exports = { botRoutes, browserBotHandler, _test: { activityList, monitoredBots, onlineViewers, MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS, DEFAULT_LOCATION } };
+module.exports = { botRoutes, browserBotHandler, _test: { activityList, monitoredBots, onlineViewers, DEFAULT_LOCATION } };

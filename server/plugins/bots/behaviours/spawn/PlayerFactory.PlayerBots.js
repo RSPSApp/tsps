@@ -7,6 +7,8 @@ const { PlayerSave } = require("../../../../src/main/typescript/elvarg/game/enti
 const { Misc } = require("../../../../src/main/typescript/elvarg/util/Misc");
 const { PluginManager } = require("../../../../src/main/typescript/elvarg/plugins/PluginManager");
 
+const { ACTIVATION_ATTRIBUTE, canSpawn } = require("../../runtime/Activation.PlayerBots");
+
 const ALLOWED_ACTIVITIES_CONFIG = "PlayerBots:allowedActivities";
 let warnedAllowedActivities = false;
 
@@ -88,7 +90,8 @@ function botActivityAllowed(activity) {
 }
 
 function createBotPlayer(username, spawn, options = {}) {
-  if (!botActivityAllowed(options.activity)) return null;
+  const activationId = options.activationId ?? options.activity;
+  if (!botActivityAllowed(options.activity) || !canSpawn(activationId)) return null;
   const loadPersistence = options.loadPersistence !== false;
   const saveRandomizedAppearance = options.saveRandomizedAppearance !== false;
   const World = options.api.getWorld();
@@ -102,6 +105,7 @@ function createBotPlayer(username, spawn, options = {}) {
   const session = new BotPlayerSession();
   const bot = new Player(session, spawn.clone());
   bot.setUsername(username);
+  if (activationId) bot.setAttribute(ACTIVATION_ATTRIBUTE, activationId);
   bot.setLongUsername(Misc.stringToLongBigInt(username));
   bot.setHostAddress("bot");
   bot.setAutoRetaliate(false);

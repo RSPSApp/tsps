@@ -104,7 +104,7 @@ function areaClass() {
 }
 
 class Game {
-  constructor(players) {
+  constructor(players, teamPreference = () => null) {
     this.area = new (areaClass())(this);
     this.teams = new Map();
     this.members = { blue: new Set(), red: new Set() };
@@ -115,20 +115,34 @@ class Game {
     this.over = false;
     this.npcs = new Set();
     this.barricades = new Set();
-    this.balance(players);
+    this.balance(players, teamPreference);
   }
 
   /** Teams by combat level: strongest first, each to the smaller side, else the weaker one. */
-  balance(players) {
+  balance(players, teamPreference = () => null) {
     const combat = (player) => player.getSkillManager().getCombatLevel?.() ?? 3;
     const sorted = [...players].sort((a, b) => combat(b) - combat(a));
     const strength = { blue: 0, red: 0 };
+    const counts = { blue: 0, red: 0 };
+    const assigned = new Map();
+    const assign = (player, side) => {
+      assigned.set(player, side);
+      counts[side]++;
+      strength[side] += combat(player);
+    };
     for (const player of sorted) {
-      const { blue, red } = this.members;
-      const side = blue.size !== red.size ? (blue.size < red.size ? "blue" : "red") : (strength.blue <= strength.red ? "blue" : "red");
+      const side = teamPreference(player);
+      if (side === "blue" || side === "red") assign(player, side);
+    }
+    for (const player of sorted) {
+      if (assigned.has(player)) continue;
+      const { blue, red } = counts;
+      assign(player, blue !== red ? (blue < red ? "blue" : "red") : (strength.blue <= strength.red ? "blue" : "red"));
+    }
+    for (const player of sorted) {
+      const side = assigned.get(player);
       this.members[side].add(player);
       this.teams.set(player, side);
-      strength[side] += combat(player);
     }
     this.starters = { blue: this.members.blue.size, red: this.members.red.size };
   }

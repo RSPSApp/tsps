@@ -540,8 +540,11 @@ module.exports = function tower(shared) {
 
   function stairs(event) {
     const { player, objectId } = event;
-    if (!active(player) || !STAIRS.includes(objectId)) return false;
+    if (!STAIRS.includes(objectId)) return false;
     event.handled = true;
+    // Outside a trial (a player already left on the static upper floors, issue 6267) the
+    // stairs still lead out to the lobby tile the trial exit uses.
+    if (!active(player)) { stopFollowing(player); player.moveTo(new Location(1637, 3221, 0)); return true; }
     leave(player); return true;
   }
 

@@ -1284,6 +1284,24 @@ test('HOD ruins require all levers and icons in the random mural order, then awa
   h.quest.complete(p); assert.equal(p.xp.length, 4);
 });
 
+test('HOD the tower staircase never climbs to the static upper floor, and its Exit leads out outside a trial (issue 6267)', () => {
+  const climb = (h, p, value) => { h.quest.setStage(p, value); p.manager.reset(); p.text = ''; const event = { player: p, objectId: 54369 }; h.emit('ladders:climb', event); return event; };
+  for (const [value, text] of [[0, "Hey you! You're not allowed up there."], [24, "Hey you! You're not allowed up there."],
+    [46, "You don't need to be going up there. You've already completed your trials."],
+    [74, "You've already completed the trials so have no need to go back up there."], [76, "You've already completed the trials so have no need to go back up there."]]) {
+    const { h, p } = hod(); p.moveTo(new core.Location(1636, 3223, 0));
+    const event = climb(h, p, value); h.tick(4);
+    assert.equal(event.handled, true, `stage ${value}: the quest claims the staircase before the generic Ladders climb`);
+    if (value >= 74) assert.deepEqual(p.messages, [text], `stage ${value}`); else assert.equal(p.text, text, `stage ${value}`);
+    assert.equal(p.getLocation().getZ(), 0);
+  }
+  for (const [id, z] of [[54370, 1], [54371, 2]]) for (const option of ['Exit', 'Quick-exit']) {
+    const { h, p, action } = hod(); h.quest.setStage(p, 76); p.moveTo(new core.Location(1636, 3223, z));
+    assert.equal(action('Staircase', option, id), true);
+    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [1637, 3221, 0], `${option} on ${id}`);
+  }
+});
+
 test('HOD the private ruins restore their mining blockage and damaging traps on relog', () => {
   const { h, p } = hod(); p.attrs.set('the-heart-of-darkness:stage-version', 1);
   h.quest.setStage(p, 58); p.moveTo(new core.Location(1693, 9633, 2));

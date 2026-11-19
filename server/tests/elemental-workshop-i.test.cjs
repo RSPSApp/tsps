@@ -436,3 +436,23 @@ test('mining while another elemental attacks the miner gives the rock its second
   ticks(2);
   assert.deepEqual(said, ["I told you... Ge'roff us!"], 'Transcript:Earth elemental');
 });
+
+test('logging out mid-smelt or mid-pour finishes the step instead of losing what it took', (t) => {
+  const p = actor(t, { stage: BIT.book | BIT.stairs | BIT.water | BIT.bellows | BIT.air | BIT.fire, items: [[I.ELEMENTAL_ORE], [I.ELEMENTAL_ORE], [I.COAL, 4]] });
+  place(p, 2724, 9875);
+  use(p, I.ELEMENTAL_ORE, 3410, 2725, 9874);
+  use(p, I.ELEMENTAL_ORE, 3410, 2725, 9874);
+  assert.equal(p.messages.filter((m) => m.startsWith('You need four heaps of coal')).length, 0, 'a second click mid-smelt is ignored');
+  assert.equal(amount(p, I.ELEMENTAL_ORE), 1, 'and takes nothing');
+  PM.emitPlayerLogout({ player: p, username: p.getUsername() });
+  core.TaskManager.cancelTasks(p);
+  assert.equal(amount(p, I.ELEMENTAL_METAL), 1, 'the bar is in the saved inventory');
+  assert.equal(amount(p, I.COAL), 0);
+
+  const cold = actor(t, { stage: BIT.book | BIT.stairs, items: [[I.A_STONE_BOWL_2]] });
+  place(cold, 2724, 9875);
+  use(cold, I.A_STONE_BOWL_2, 3410, 2725, 9874);
+  PM.emitPlayerLogout({ player: cold, username: cold.getUsername() });
+  core.TaskManager.cancelTasks(cold);
+  assert.ok(stage(cold) & BIT.fire, 'the furnace the lava went into is lit');
+});

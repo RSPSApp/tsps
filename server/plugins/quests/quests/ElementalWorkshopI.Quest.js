@@ -229,6 +229,25 @@ module.exports = function registerElementalWorkshopIQuest(api) {
     }));
   }
 
+  /** Steps that took their inputs on the click (the pour, the smelt): finished on logout, not lost. */
+  const pendingFinish = new WeakMap();
+
+  function finishLater(player, ticks, finish) {
+    pendingFinish.set(player, finish);
+    later(player, ticks, () => {
+      if (pendingFinish.get(player) !== finish) return;
+      pendingFinish.delete(player);
+      finish();
+    });
+  }
+
+  function finishOnLogout({ player }) {
+    const finish = pendingFinish.get(player);
+    if (!finish) return;
+    pendingFinish.delete(player);
+    finish();
+  }
+
   function write(player, value) {
     quest.setStage(player, value | 0);
     syncMachine(player);
@@ -580,11 +599,11 @@ module.exports = function registerElementalWorkshopIQuest(api) {
   }
 
   function pourLava(player) {
+    if (working.has(player)) return;
     if (hasBit(player, BIT.fire)) {
       player.sendMessage(MSG.furnaceAlreadyLit);
       return;
     }
-    if (working.has(player)) return;
     const slot = player.getInventory().getSlotForItemId(I.A_STONE_BOWL_2);
     if (slot < 0) return;
     player.getInventory().setItem(slot, new (api.core.Item)(I.A_STONE_BOWL, 1));
@@ -592,7 +611,7 @@ module.exports = function registerElementalWorkshopIQuest(api) {
     player.sendMessage(MSG.lavaPoured);
     sound(player, SOUND.lavaPour);
     working.add(player);
-    later(player, FURNACE_LIGHT_TICKS, () => {
+    finishLater(player, FURNACE_LIGHT_TICKS, () => {
       working.delete(player);
       if (hasBit(player, BIT.fire)) return;
       setBit(player, BIT.fire);
@@ -601,6 +620,7 @@ module.exports = function registerElementalWorkshopIQuest(api) {
   }
 
   function smeltOre(player) {
+    if (working.has(player)) return;
     if (!hasBit(player, BIT.waterSwitch) || !hasBit(player, BIT.bellowsSwitch)) {
       player.sendMessage(MSG.furnaceUnpowered);
       return;
@@ -613,13 +633,12 @@ module.exports = function registerElementalWorkshopIQuest(api) {
       player.sendMessage(MSG.smeltLevel);
       return;
     }
-    if (working.has(player)) return;
     player.getInventory().deleteNumber(I.ELEMENTAL_ORE, 1);
     player.getInventory().deleteNumber(I.COAL, 4);
     animate(player, ANIM.furnace);
     player.sendMessage(MSG.oreIn);
     working.add(player);
-    later(player, SMELT_TICKS, () => {
+    finishLater(player, SMELT_TICKS, () => {
       working.delete(player);
       animate(player, ANIM.furnace);
       player.getInventory().adds(I.ELEMENTAL_METAL, 1);
@@ -950,6 +969,7 @@ module.exports = function registerElementalWorkshopIQuest(api) {
   api.onNpcInteraction(handleNpcInteraction);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(finishOnLogout);
 
   return { _test: { BIT, MSG, awakeRocks, rockTick, BOOK_PAGES } };
 };

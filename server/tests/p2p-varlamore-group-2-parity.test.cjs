@@ -1295,10 +1295,10 @@ test('HOD the tower staircase never climbs to the static upper floor, and its Ex
     if (value >= 74) assert.deepEqual(p.messages, [text], `stage ${value}`); else assert.equal(p.text, text, `stage ${value}`);
     assert.equal(p.getLocation().getZ(), 0);
   }
-  for (const [id, z] of [[54370, 1], [54371, 2]]) for (const option of ['Exit', 'Quick-exit']) {
-    const { h, p, action } = hod(); h.quest.setStage(p, 76); p.moveTo(new core.Location(1636, 3223, z));
+  for (const value of [50, 76]) for (const [id, z] of [[54370, 1], [54371, 2]]) for (const option of ['Exit', 'Quick-exit']) {
+    const { h, p, action } = hod(); h.quest.setStage(p, value); p.moveTo(new core.Location(1636, 3223, z));
     assert.equal(action('Staircase', option, id), true);
-    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [1637, 3221, 0], `${option} on ${id}`);
+    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [1637, 3221, 0], `stage ${value}: ${option} on ${id}`);
   }
 });
 

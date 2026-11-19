@@ -39,6 +39,8 @@ module.exports = function tower(shared) {
   const shuffled = values => { const result = [...values]; for (let i = result.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [result[i], result[j]] = [result[j], result[i]]; } return result; };
   const active = player => Scenes.get(player)?.name === 'tower' ? Scenes.get(player) : null;
   const locks = new WeakMap();
+  /** Where every way out of the tower lands: the trial exit's tile in the lobby. */
+  const LOBBY = new Location(1637, 3221, 0);
 
   function state(player) {
     let value = player.getAttribute(STATE_ATTRIBUTE);
@@ -534,7 +536,7 @@ module.exports = function tower(shared) {
   function leave(player) {
     locks.delete(player);
     Scenes.end(player, false);
-    player.moveTo(new Location(1637, 3221, 0));
+    player.moveTo(LOBBY.clone());
     player.getPacketSender().sendInterfaceRemoval();
   }
 
@@ -544,13 +546,13 @@ module.exports = function tower(shared) {
     event.handled = true;
     // Outside a trial (a player already left on the static upper floors, issue 6267) the
     // stairs still lead out to the lobby tile the trial exit uses.
-    if (!active(player)) { stopFollowing(player); player.moveTo(new Location(1637, 3221, 0)); return true; }
+    if (!active(player)) { stopFollowing(player); player.moveTo(LOBBY.clone()); return true; }
     leave(player); return true;
   }
 
   function logout(player) {
     locks.delete(player);
-    if (player.getLocation().getX() >= 1632 && player.getLocation().getX() <= 1649 && player.getLocation().getY() >= 3214 && player.getLocation().getY() <= 3229 && player.getLocation().getZ() > 0) player.moveTo(new Location(1637, 3221, 0));
+    if (player.getLocation().getX() >= 1632 && player.getLocation().getX() <= 1649 && player.getLocation().getY() >= 3214 && player.getLocation().getY() <= 3229 && player.getLocation().getZ() > 0) player.moveTo(LOBBY.clone());
   }
 
   function register() {

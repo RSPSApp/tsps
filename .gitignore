@@ -106,3 +106,7 @@ server/data/definitions/bot-activities.local.json.tmp
 /gateway/
 /tools/runelite-gateway/
 /tools/runelite-client/
+
+# Shared web client release build outputs
+.github/scripts/client-release/node_modules/
+.github/scripts/client-release/releases/

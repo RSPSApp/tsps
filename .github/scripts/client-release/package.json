@@ -1,0 +1,12 @@
+{
+  "name": "rsps-client-release",
+  "private": true,
+  "scripts": {
+    "test": "node --test release-web.test.mjs release-version.test.mjs",
+    "build:web": "node build-web.mjs",
+    "release:web": "node release-web.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.6"
+  }
+}

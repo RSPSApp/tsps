@@ -57,6 +57,7 @@
     "1262": {"name": "Ram", "anims": {"attack": 5338, "block": 5337, "death": 5336}, "sounds": {"death": 758}},
     "1263": {"name": "Ram", "anims": {"attack": 5338, "block": 5337, "death": 5336}, "sounds": {"death": 758}},
     "1264": {"name": "Ram", "anims": {"attack": 5338, "block": 5337, "death": 5336}, "sounds": {"death": 758}},
+    "1368": {"name": "Elemental rock", "respawn": 4},
     "1679": {"name": "Crypt rat", "anims": {"attack": 240, "block": 241, "death": 243}, "sounds": {"death": 512}},
     "1680": {"name": "Giant crypt rat", "anims": {"attack": 4933, "block": 4934, "death": 4935}, "sounds": {"death": 512}},
     "1681": {"name": "Giant crypt rat", "anims": {"attack": 4933, "block": 4934, "death": 4935}, "sounds": {"death": 512}},

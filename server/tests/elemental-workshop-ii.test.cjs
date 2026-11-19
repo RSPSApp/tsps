@@ -531,6 +531,14 @@ test('a bench job stops when the player walks away, loses the hammer or the book
   ticks(5);
   assert.equal(amount(preset, I.ELEMENTAL_HELMET), 0, 'a preset bar is never worked');
 
+  // Capture 1446-1454: the product goes to the first free slot, not necessarily the bar's.
+  const gap = start([[I.COINS, 1], [I.ELEMENTAL_METAL], [I.BEATEN_BOOK], [I.HAMMER]]);
+  gap.getInventory().deleteAtSlot(0, 1);
+  use(gap, I.ELEMENTAL_METAL, 3402, bench);
+  ticks(4);
+  assert.equal(gap.getInventory().getItems()[0].getId(), I.ELEMENTAL_HELMET, 'into the free slot before the bar');
+  assert.equal(gap.getInventory().getItems()[1].getId(), -1, 'the bar\'s slot empties');
+
   const ok = start([[I.ELEMENTAL_METAL], [I.BEATEN_BOOK], [I.HAMMER]]);
   const slot = ok.getInventory().getItems().findIndex((it) => it && it.getId() === I.ELEMENTAL_METAL);
   use(ok, I.ELEMENTAL_METAL, 3402, bench);

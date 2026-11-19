@@ -43,7 +43,7 @@ the other `elemental_quest_2_*` varbits on varps 896/897, saved as they are. Sav
 | Gantry stairs 18610/18611 | seq 828 (reach), two ticks later across the stairs a plane up or down (511-517, 592-598) |
 | Schematic crate (18711) | chatmenu "There are two schematics here..." Crane schematic/Lever schematic, objectbox "You take a copy of the schematic drawing." (221-224). Crane schematic Read: messagebox (229); lever schematic: interface 466 (1340) |
 | Crates 18612-18619 | game messages "You find a small cog." / "You find a medium-sized cog." / "You find a pipe." / "You find a big cog." / "It's empty." (604-633) |
-| Workbench, bar + slashed book + crane schematic | skillmulti 270 "What would you like to smith?" Elemental shield / Crane claw (460); claw: seq 896 + sound 2721, the claw in the bar's slot, +20 XP (470-473) |
+| Workbench, bar + slashed book + crane schematic | skillmulti 270 "What would you like to smith?" Elemental shield / Crane claw (460); claw: seq 896 + sound 2721, the bar taken and the claw in the first free slot, +20 XP (470-473) |
 | Raise/lower lever 18622 | seq 4909 + the lever's 4904 + sound 2400; a tick later fire_pos and the crane's loc anim (4887/4888/4889/4890) and sound 3169; the new crane loc three ticks after that (498-502). Raising off the track lifts the cart's cold bar or leaves the hot one, the new load shown at once and the anim a tick later (737-744, 789-794); resting in the lava heats it (761) |
 | Rotate lever 18621 | anim 4892, sound 3170, over the lava <-> over the track (750-754, 772-776) |
 | Claw on the lowered crane | fire_state 1, objectbox "You replace the broken claw.", sound 3179 (505) |
@@ -70,7 +70,8 @@ the other `elemental_quest_2_*` varbits on varps 896/897, saved as they are. Sav
 - The book's first line has a semicolon in the recording (tick 71).
 - The claw line: the recording has "...from the schematic, you make an elemental claw." (473); the Wiki has no comma.
 - The helmet line: the recording has "...you make a mind helmet." (1454); the Wiki has "...an elemental mind helm.".
-- The mind shield came three ticks after the choice (1468-1471); the Wiki gives 4 ticks for the mind shield and helmet.
+- The claw and the mind shield came three ticks after the choice (470-473, 1468-1471); the Wiki gives 4 ticks for the crane claw, the mind shield and the mind helmet.
+- The bench's product goes to the first free slot (the helmet at 1454 into slot 8, freed at 1446, while the bar came from slot 9).
 
 ## Not modelled
 

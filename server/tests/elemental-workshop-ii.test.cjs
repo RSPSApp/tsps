@@ -470,6 +470,16 @@ test('the workbench menu: shield or claw with the crane schematic, mind shield o
   done.getCreationMenu().execute(I.MIND_SHIELD, 1);
   ticks(4);
   assert.equal(amount(done, I.MIND_SHIELD), 1);
+
+  // Wiki (Mind shield): only after the quest; mid-quest the slashed book alone gives no recipe.
+  const early = actor(t, { items: [[I.PRIMED_MIND_BAR], [I.SLASHED_BOOK], [I.HAMMER]] });
+  ew('elemental_workshop_ii').setStage(early, 10);
+  place(early, 2718, 9887, 0);
+  use(early, I.PRIMED_MIND_BAR, 3402, new core.Location(2717, 9887, 0));
+  ticks(4);
+  assert.equal(amount(early, I.MIND_SHIELD), 0);
+  assert.equal(amount(early, I.PRIMED_MIND_BAR), 1, 'the quest\'s bar is kept');
+  assert.equal(text(early), 'This workbench is too complicated. You need instructions to follow.');
 });
 
 test('an old save converts once to live\'s stages and the varbit save', (t) => {
@@ -525,5 +535,5 @@ test('a bench job stops when the player walks away, loses the hammer or the book
   const slot = ok.getInventory().getItems().findIndex((it) => it && it.getId() === I.ELEMENTAL_METAL);
   use(ok, I.ELEMENTAL_METAL, 3402, bench);
   ticks(4);
-  assert.equal(ok.getInventory().getItems()[slot].getId(), I.ELEMENTAL_HELMET, 'the helmet takes the bar\'s slot (Wiki: 4 ticks)');
+  assert.equal(ok.getInventory().getItems()[slot].getId(), I.ELEMENTAL_HELMET, 'the helmet goes to the first free slot, here the bar\'s (Wiki: 4 ticks)');
 });

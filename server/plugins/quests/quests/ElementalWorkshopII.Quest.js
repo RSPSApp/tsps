@@ -1218,16 +1218,17 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     player.getMovementQueue().reset().setBlockMovement(true);
     Scenes.camera(player, [1957, 5143, 500], [1959, 5146, 300], { rate: 100, rate2: 100 });
     steps(player, [
+      // Tick 1371: on the chair in the same tick as the slide onto it.
       [1, () => {
+        player.moveTo(seat);
         player.setForceMovement(new ForceMovement(beside, toSeat, 0, 20, 1, ANIM.chair));
         animate(player, ANIM.chair);
         sound(player, SOUND.mindControl);
       }],
       [2, () => {
+        player.setForceMovement(null);
         player.performGraphic(new Graphic(CHAIR_SPOTANIM));
         removeLoc(player, HAT_TILE, HAT_IDS);
-        player.setForceMovement(null);
-        player.moveTo(seat);
       }],
       [3, () => { locAnim(player, GUN_TILE, EXTRACTOR_GUN_IDS, ANIM.gun); sound(player, SOUND.zap); }],
       [7, () => {
@@ -1237,8 +1238,9 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
         player.getSkillManager().setCurrentLevel(Skill.MAGIC, Math.max(0, magic - MAGIC_DRAIN), true);
       }],
       [8, () => setLoc(player, HAT_TILE, HAT_IDS, EXTRACTOR_HAT, 10, 1)],
-      [9, () => player.setForceMovement(new ForceMovement(seat, toBeside, 0, 30, 1, -1))],
-      [10, () => { player.setForceMovement(null); player.moveTo(beside); }],
+      // Tick 1379: back off in the same tick as the slide.
+      [9, () => { player.moveTo(beside); player.setForceMovement(new ForceMovement(seat, toBeside, 0, 30, 1, -1)); }],
+      [10, () => player.setForceMovement(null)],
       [11, () => {
         player.sendMessage(line("into-the-workshop-making-the-mind-bar"));
         player.getPacketSender().sendCameraReset();
@@ -1284,7 +1286,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
       if (done && has(player, BEATEN_BOOK)) list.push({ product: I.ELEMENTAL_HELMET, bar: ELEMENTAL_METAL, level: 20, xp: XP.helmet, kind: "helmet" });
     }
     if (has(player, MIND_BAR)) {
-      if (has(player, I.SLASHED_BOOK) && (done || !has(player, BEATEN_BOOK))) {
+      if (done && has(player, I.SLASHED_BOOK)) { // Wiki (Mind shield): needs the quest done; the capture offers it only then (1464)
         list.push({ product: I.MIND_SHIELD, bar: MIND_BAR, level: MIND_SMITHING_LEVEL, xp: XP.mindShield, kind: "mindShield" });
       }
       if (has(player, BEATEN_BOOK)) list.push({ product: I.MIND_HELMET, bar: MIND_BAR, level: MIND_SMITHING_LEVEL, xp: XP.mindHelmet, kind: "mindHelmet" });
@@ -1328,7 +1330,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     return false;
   }
 
-  /** Each item: the hammering at once, the product in the bar's slot four ticks later (Wiki), then the next. */
+  /** Each item: the hammering at once, the bar taken and the product given four ticks later (Wiki), then the next. */
   function startCrafting(player, recipe, amount, preferredSlot) {
     if (!craftLevelOk(player, recipe)) return;
     const start = player.getLocation().clone();
@@ -1355,8 +1357,9 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
       if (!stillThere()) { if (crafting.get(player) === job) crafting.delete(player); return false; }
       if (n % CRAFT_TICKS !== 0) return true;
       if (!plain(slot)) { crafting.delete(player); return false; }
-      inventory.setItem(slot, new Item(recipe.product, 1));
-      inventory.refreshItems();
+      // Live takes the bar and gives the product to the first free slot (ticks 1446-1454: slot 8, the bar in 9).
+      inventory.deleteAtSlot(slot, 1);
+      inventory.adds(recipe.product, 1);
       player.getSkillManager().addExperiences(Skill.SMITHING, recipe.xp);
       crafted(player, recipe);
       job.left--;

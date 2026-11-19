@@ -48,7 +48,8 @@ const XPDROPS_SETUP_DROPDOWNS = new Map([
   [58, 4722], // speed
   [59, 8120], // fake drops
 ].map(([component, varbit]) => [(XPDROPS_SETUP_INTERFACE_ID << 16) | component, varbit]));
-const XPDROPS_SETUP_MAX_ROW = 31;
+// CS2 1032 uses value 31 for Most recent, at dynamic child 31 + 1.
+const XPDROPS_SETUP_MAX_ROW = 32;
 // The varps behind them, saved as whole values: the browser transmits them, the official client
 // only reports the row it chose.
 const XPDROPS_SETUP_ATTRIBUTE = "settings:xpdrops-setup";

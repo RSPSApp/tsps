@@ -412,4 +412,26 @@ test("closing and reopening the real mounted cache group drops its prior repeat 
     release(); key(27, "Escape"); process(); assert.equal(packets.length, 2);
 });
 
+test("an open chatbox prompt keeps its keys from a focused custom-interface search", () => {
+    const original = deps.getCustomInterfaces;
+    let searchCalls = 0;
+    deps.getCustomInterfaces = () => ({ ...original(), handleSearchKeyEvents: () => { searchCalls++; return true; } });
+    const varManager = vm.context.varManager;
+    const before = varManager.getVarcInt(5);
+    try {
+        input.onFrameEnd(); cycle++;
+        varManager.setVarcInt(5, 0);
+        key(65, "a"); process();
+        assert.equal(searchCalls, 1, "with no prompt open the custom search takes typed keys");
+        input.onFrameEnd(); cycle++;
+        varManager.setVarcInt(5, 7);
+        key(66, "b"); process();
+        assert.equal(searchCalls, 1, "VarC 5 (MESLAYERMODE) set: the prompt gets the keys");
+    } finally {
+        varManager.setVarcInt(5, before);
+        deps.getCustomInterfaces = original;
+        input.onFrameEnd(); cycle++;
+    }
+});
+
 test.after(() => { writer.addNode = originalAddNode; });

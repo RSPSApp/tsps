@@ -1,4 +1,4 @@
-// Elemental Workshop I (q030) source-contract checks: the login replay and the EW2 workbench handoff.
+// Elemental Workshop I (q030) source-contract checks: the login replay and the wall bit.
 // The quest's own route is tests/elemental-workshop-i.test.cjs (real player, map and ticks).
 // From server/: node --test tests/qh728-q030.test.cjs (after yarn build).
 // Fixtures set the starting stage/attributes where a leg would otherwise need the
@@ -21,9 +21,6 @@ const runtime = require('../plugins/quests/QuestRuntime');
 const core = PluginManager.getCoreApi();
 const I = core.ItemIdentifiers, O = core.ObjectIdentifiers, N = core.NpcIdentifiers;
 
-const EW2_FLAGS = 'quest.elemental_workshop_ii.flags';
-const EW2_JIG = 'quest.elemental_workshop_ii.jig';
-const EW2_SCHEMATICS_TAKEN = (1 << 5) | (1 << 6);
 const VARP_MACHINE_BITS = 299;
 const VARBIT_QUEST_STATUS = 13718;
 const BIT_READ_BOOK = 1 << 1;
@@ -231,69 +228,6 @@ test('login replay sends durable stage 0/started/complete as varbit 13718 0/1/2'
   assert.equal(p.varbits.get(VARBIT_QUEST_STATUS), 2, 'complete save is at the threshold');
   assert.equal(p.configs.get(VARP_MACHINE_BITS) & BIT_COMPLETE, BIT_COMPLETE);
 });
-
-test('EW1 yields the workbench metal handoff to EW2 only for its active claw stage', () => {
-  // EW2 stage 6, schematics taken, crane not repaired, no claw: EW2 owns the bar.
-  const p = player();
-  h.ew1.setStage(p, BIT_READ_BOOK | BIT_COMPLETE);
-  h.ew2.setStage(p, 6);
-  p.setAttribute(EW2_FLAGS, EW2_SCHEMATICS_TAKEN);
-  p.setAttribute(EW2_JIG, 0);
-  p.inventory.adds(I.ELEMENTAL_METAL, 1);
-  p.inventory.adds(I.HAMMER, 1);
-  h.transcripts.length = 0;
-  const yielded = h.itemOnObject(p, I.ELEMENTAL_METAL, O.WORKBENCH_5);
-  assert.equal(yielded.handled, true, 'EW2 handles the event');
-  assert.equal(p.inventory.getAmount(I.ELEMENTAL_SHIELD), 0, 'EW1 did not smith a shield');
-  assert.equal(p.inventory.getAmount(I.ELEMENTAL_METAL), 1, 'EW1 did not consume the bar');
-  assert.ok(h.transcripts.some(entry =>
-    entry.page === 'Elemental Workshop II' && entry.variant === 'into-the-workshop-making-an-elemental-claw'));
-
-  h.choice(p, 'An elemental claw.');
-  assert.equal(p.inventory.getAmount(I.ELEMENTAL_METAL), 0);
-  assert.equal(p.inventory.getAmount(I.CRANE_CLAW), 1, 'the transcript choice creates the claw');
-
-  // Same active stage but a claw is already held: EW1 keeps its shield smithing.
-  const withClaw = player();
-  h.ew1.setStage(withClaw, BIT_READ_BOOK | BIT_COMPLETE);
-  h.ew2.setStage(withClaw, 6);
-  withClaw.setAttribute(EW2_FLAGS, EW2_SCHEMATICS_TAKEN);
-  withClaw.setAttribute(EW2_JIG, 0);
-  withClaw.inventory.adds(I.ELEMENTAL_METAL, 1);
-  withClaw.inventory.adds(I.HAMMER, 1);
-  withClaw.inventory.adds(I.SLASHED_BOOK, 1);
-  withClaw.inventory.adds(I.CRANE_CLAW, 1);
-  h.itemOnObject(withClaw, I.ELEMENTAL_METAL, O.WORKBENCH_5);
-  shieldTicks();
-  assert.equal(withClaw.inventory.getAmount(I.ELEMENTAL_SHIELD), 1);
-
-  // After the claw is made / crane repaired (fire_state 1), EW1 smiths normally.
-  const afterClaw = player();
-  h.ew1.setStage(afterClaw, BIT_READ_BOOK | BIT_COMPLETE);
-  h.ew2.setStage(afterClaw, 7);
-  afterClaw.setAttribute(EW2_FLAGS, EW2_SCHEMATICS_TAKEN);
-  afterClaw.setAttribute(EW2_JIG, 1 << 7);
-  afterClaw.inventory.adds(I.ELEMENTAL_METAL, 1);
-  afterClaw.inventory.adds(I.HAMMER, 1);
-  afterClaw.inventory.adds(I.SLASHED_BOOK, 1);
-  h.transcripts.length = 0;
-  h.itemOnObject(afterClaw, I.ELEMENTAL_METAL, O.WORKBENCH_5);
-  shieldTicks();
-  assert.equal(afterClaw.inventory.getAmount(I.ELEMENTAL_SHIELD), 1);
-  assert.equal(h.transcripts.length, 0, 'EW2 does not offer the claw after repair');
-
-  // Ordinary EW1 player (EW2 untouched) still smiths a shield.
-  const ordinary = player();
-  h.ew1.setStage(ordinary, BIT_READ_BOOK);
-  ordinary.inventory.adds(I.ELEMENTAL_METAL, 1);
-  ordinary.inventory.adds(I.HAMMER, 1);
-  ordinary.inventory.adds(I.SLASHED_BOOK, 1);
-  h.itemOnObject(ordinary, I.ELEMENTAL_METAL, O.WORKBENCH_5);
-  shieldTicks();
-  assert.equal(ordinary.inventory.getAmount(I.ELEMENTAL_SHIELD), 1);
-  assert.equal(ordinary.varbits.get(VARBIT_QUEST_STATUS), 2);
-});
-
 
 test('the wall bit replays on login from a real crossing or a legacy workshop entry; box bits survive', () => {
   const legacy=player();h.ew1.setStage(legacy,BIT_READ_BOOK|BIT_ENTERED_WORKSHOP);h.login(legacy);

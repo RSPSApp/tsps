@@ -379,6 +379,7 @@ test('the workbench makes the shield in the bar\'s slot four ticks on and comple
   assert.equal(p.getSkillManager().getExperience(core.Skill.SMITHING) - smith, 5020, '5,000 reward + 20 for the shield');
   assert.equal(p.getSkillManager().getExperience(core.Skill.CRAFTING) - craft, 5000);
 
+  ticks(1); // the completion scroll opens a tick after the completion
   p.getPacketSender().sendInterfaceRemoval();
   p.getInventory().adds(I.ELEMENTAL_METAL, 1);
   use(p, I.ELEMENTAL_METAL, O.WORKBENCH_5, 2717, 9887);

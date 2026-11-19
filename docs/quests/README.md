@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-197 quests · ✅ passed: 26 · ⚠️ passed with issues: 20 · 🔄 in progress: 10 · ❌ failed: 1 · 🔁 needs recheck: 43 · untested: 97
+197 quests · ✅ passed: 26 · ⚠️ passed with issues: 20 · 🔄 in progress: 11 · ❌ failed: 1 · 🔁 needs recheck: 43 · untested: 96
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -60,7 +60,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Eadgar's Ruse](eadgars-ruse/README.md) | untested |  |  |  |  |
 | Eagles' Peak | untested |  |  |  |  |
 | [Elemental Workshop I](elemental-workshop-i/README.md) | ✅ passed | 2026-11-19 | agent | claude-opus-5-5 |  |
-| [Elemental Workshop II](elemental-workshop-ii/README.md) | untested |  |  |  |  |
+| [Elemental Workshop II](elemental-workshop-ii/README.md) | 🔄 in progress | 2026-11-19 | agent | claude-opus-5-5 |  |
 | [Enakhra's Lament](enakhras-lament/README.md) | untested |  |  |  |  |
 | Enlightened Journey | untested |  |  |  |  |
 | Enter the Abyss | untested |  |  |  |  |

@@ -20,7 +20,7 @@ module.exports = function registerElementalWorkshopIQuest(api) {
     Equipment, BonusManager, ObjectManager, GameObject, TaskManager, CountdownTask, DialogueChainBuilder,
     OptionDialogue, StatementDialogue, ItemStatementDialogue, PlayerDialogue, Bank,
   } = api.core;
-  const { registerQuest, refreshQuestList, openBook, bookPagesFromSpreads, questStartMessage, loadTranscripts } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, openBook, bookPagesFromSpreads, questStartMessage, loadTranscripts, giveReward } = require("../QuestRuntime");
 
   const VARP_MACHINE_BITS = 299;
   const VARBIT_QUEST_STATUS = 13718;
@@ -647,7 +647,9 @@ module.exports = function registerElementalWorkshopIQuest(api) {
     finishLater(player, SMELT_TICKS, () => {
       working.delete(player);
       animate(player, ANIM.furnace);
-      player.getInventory().adds(I.ELEMENTAL_METAL, 1);
+      // The ore and coal went in six ticks ago: a bag filled meanwhile gets the bar on the floor
+      // (Ours: no source shows a full bag here), never loses it.
+      giveReward(player, I.ELEMENTAL_METAL, 1);
       player.getSkillManager().addExperiences(Skill.SMITHING, SMELT_XP);
       player.sendMessage(MSG.barOut);
     });

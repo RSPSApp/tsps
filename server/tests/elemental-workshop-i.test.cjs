@@ -456,3 +456,13 @@ test('logging out mid-smelt or mid-pour finishes the step instead of losing what
   core.TaskManager.cancelTasks(cold);
   assert.ok(stage(cold) & BIT.fire, 'the furnace the lava went into is lit');
 });
+
+test('a bag filled during the smelt gets the bar on the floor, not lost', (t) => {
+  const p = actor(t, { stage: BIT.book | BIT.stairs | BIT.water | BIT.bellows | BIT.air | BIT.fire, items: [[I.ELEMENTAL_ORE], [I.COAL, 4]] });
+  place(p, 2724, 9875);
+  use(p, I.ELEMENTAL_ORE, 3410, 2725, 9874);
+  while (p.getInventory().getFreeSlots() > 0) p.getInventory().adds(I.ASHES, 1);
+  ticks(6);
+  assert.equal(amount(p, I.ELEMENTAL_METAL), 0);
+  assert.ok(core.ItemOnGroundManager.getGroundItem(p.getUsername(), I.ELEMENTAL_METAL, p.getLocation(), null), 'the bar is under the player');
+});

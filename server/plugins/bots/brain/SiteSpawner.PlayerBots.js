@@ -227,13 +227,14 @@ function startBotSites(options = {}) {
 
   function start() {
     // Round-robin over the sites so they all fill in together, paced a few per tick.
+    const capacity = api.core.World.getPlayers().capacityReturn() - 1;
     const sites = registry.sites
       .filter((site) => site.enabled)
-      .map((site) => ({ site, requested: Math.max(0, Math.floor(Number(site.count ?? 0))), spawned: 0 }));
+      .map((site) => ({ site, requested: Math.min(capacity, Math.max(0, Math.floor(Number(site.count ?? 0)) || 0)), spawned: 0 }));
     const jobs = [];
-    for (let index = 0; sites.some((entry) => index < entry.requested); index++) {
+    for (let index = 0; jobs.length < capacity && sites.some((entry) => index < entry.requested); index++) {
       for (const entry of sites) {
-        if (index < entry.requested) {
+        if (index < entry.requested && jobs.length < capacity) {
           jobs.push(() => {
             if (spawn(entry.site, index)) entry.spawned++;
           });

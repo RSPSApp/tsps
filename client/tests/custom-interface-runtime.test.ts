@@ -540,6 +540,44 @@ async function main(): Promise<void> {
     assert.deepEqual(grid.map((row) => row.name), ["Melee", "", "a", "b", "c", "", "Magic", "", "d"],
         "headers sit alone on their row, blanks fill around them");
 
+    // Header shapes belong to widgets, even when another interface reuses the same slot.
+    for (const [groupId, width] of [[30121, 100], [30122, 250]]) {
+        const rowUid = (component: number) => (groupId << 16) | component;
+        setCustomInterface({
+            groupId,
+            widgets: [{ uid: rowUid(0), parentUid: -1 }],
+            search: { inputComponent: 1, dataComponent: 2 },
+            list: {
+                viewComponent: 3, slotCount: 1, columns: 1, rowHeight: 20,
+                iconStart: 10, labelStart: 20, backgroundStart: 30,
+                headerSpan: {}, stripeColors: [0x111111, 0x222222],
+            },
+        });
+        for (const component of [1, 2, 3, 10, 20, 30]) {
+            widgets.set(rowUid(component), {
+                uid: rowUid(component), width, rawWidth: width, height: 20, rawHeight: 20,
+                rawY: 0, scrollY: 0, color: 0x999999,
+            });
+        }
+        assert.equal(runtime.onInterfaceOpened(groupId), true);
+        runtime.handleSetText(rowUid(2), JSON.stringify([
+            { id: 900, name: "Section", header: true },
+            { id: 1, name: "Item" },
+            { id: 2, name: "Other item" },
+        ]));
+        const view = widgets.get(rowUid(3));
+        for (const row of [1, 2]) {
+            view.scrollY = row * 20;
+            runtime.tick();
+            assert.equal(widgets.get(rowUid(20)).width, width, "a recycled label restores this interface's width");
+            assert.equal(widgets.get(rowUid(30)).width, width, "a recycled background restores this interface's width");
+            assert.equal(widgets.get(rowUid(20)).height, 20, "the header height is restored for item rows");
+            assert.equal(widgets.get(rowUid(30)).color, row % 2 ? 0x222222 : 0x111111,
+                "stripes survive restoring the header shape and follow the scrolled row");
+        }
+        runtime.onInterfaceClosed(groupId);
+    }
+
     // An overlay panel keeps no list state, and its hotkeys click its components.
     const OVERLAY_GROUP = 30130;
     const overlayUid = (component: number) => (OVERLAY_GROUP << 16) | component;

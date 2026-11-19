@@ -309,8 +309,8 @@ export class CustomInterfaceRuntime {
     /** Row shown in each list slot, for clickable lists. */
     private slotRows: (CustomInterfaceRow | undefined)[] = [];
     private labelActions = new Map<number, unknown>();
-    /** Per slot, the label's and background's own shape, for when a spanning header leaves the slot. */
-    private slotShapes = new Map<number, Array<Record<string, any>>>();
+    /** The label's and background's own shape, for when a spanning header leaves the slot. */
+    private slotShapes = new WeakMap<object, Array<Record<string, any>>>();
     /** Each row part's own y inside its row, read once from the definition. */
     private rowPartOffsets = new WeakMap<object, number>();
     private selectedRowId: number | undefined;
@@ -1095,9 +1095,6 @@ export class CustomInterfaceRuntime {
                       .replace("%name", sanitize(row.name))
                       .replace("%id", String(row.id | 0))
                       .replace("%detail", sanitize(row.detail));
-            if (list.stripeColors && row && !row.header) {
-                background.color = list.stripeColors[resultRow & 1];
-            }
             const moved = [
                 ...(list.detailStart === undefined ? [] : [this.widget(list.detailStart + slot)]),
                 ...(list.rowParts ?? []).map((start) => this.widget(start + slot)),
@@ -1127,7 +1124,10 @@ export class CustomInterfaceRuntime {
                 // With a fill, the title's own background is the band and the blank beside it
                 // draws the band's lines.
                 const lines = list.headerSpan.fillColor !== undefined && column === 1 && !!found?.header && !found.name;
-                this.styleSpanningHeader(slot, !!row?.header, view, background, text, resultRow, lines);
+                this.styleSpanningHeader(!!row?.header, view, background, text, resultRow, lines);
+            }
+            if (list.stripeColors && row && !row.header) {
+                background.color = list.stripeColors[resultRow & 1];
             }
             if (list.nameTarget) text.opBase = row && !row.header ? `<col=ff9040>${sanitize(row.name)}</col>` : "";
             if (list.clickable) {
@@ -1153,14 +1153,14 @@ export class CustomInterfaceRuntime {
      * A spanning header's label covers the row, centred, and its background is the line under
      * it; an item row gets the slot's own label and background shape back.
      */
-    private styleSpanningHeader(slot: number, header: boolean, view: any, background: any, text: any, resultRow: number, lines = false): void {
+    private styleSpanningHeader(header: boolean, view: any, background: any, text: any, resultRow: number, lines = false): void {
         const list = this.declaration!.list!;
         const span = list.headerSpan!;
         const fields = ["rawX", "x", "rawWidth", "width", "rawHeight", "height", "xTextAlignment", "yTextAlignment", "textColor", "color", "fontId", "opacity", "filled"] as const;
-        let saved = this.slotShapes.get(slot);
+        let saved = this.slotShapes.get(text);
         if (!saved) {
             saved = [text, background].map((widget) => Object.fromEntries(fields.map((field) => [field, widget[field]])));
-            this.slotShapes.set(slot, saved);
+            this.slotShapes.set(text, saved);
         }
         Object.assign(text, saved[0]);
         Object.assign(background, saved[1]);

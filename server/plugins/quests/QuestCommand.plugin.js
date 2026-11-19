@@ -2,6 +2,7 @@
  * ::quest - an admin command to look at or set a player's quest progress, for testing
  * quest-gated content without playing the quest.
  *
+ *   ::quest all [complete]     complete every registered quest without opening every completion scroll
  *   ::quest <name>             show the quest's stage
  *   ::quest <name> complete    complete it as the quest itself does (rewards, points, scroll)
  *   ::quest <name> reset       back to not started
@@ -13,7 +14,7 @@
 const QuestRuntime = require("./QuestRuntime");
 const { PlayerRights } = require("../../src/main/typescript/elvarg/game/model/rights/PlayerRights");
 
-const USAGE = "Usage: ::quest <name> [complete|reset|<stage>]";
+const USAGE = "Usage: ::quest all [complete] | ::quest <name> [complete|reset|<stage>]";
 
 function normalise(text) {
   return String(text).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -47,6 +48,28 @@ function describe(player, quest) {
   return `${quest.name}: stage ${quest.getStage(player)} (${state}; completes at ${quest.completionValue ?? 2}).`;
 }
 
+function completeAllQuests(player) {
+  let completed = 0;
+  let alreadyComplete = 0;
+  const errors = [];
+
+  for (const quest of QuestRuntime.getRegisteredQuests()) {
+    try {
+      if (quest.complete(player, { scroll: false, announce: false })) completed++;
+      else alreadyComplete++;
+    } catch (error) {
+      errors.push(quest.name);
+      console.error(`[quest command] completing ${quest.name} (${quest.key}) failed:`, error);
+    }
+  }
+
+  player.sendMessage(`Quest completion: ${completed} completed, ${alreadyComplete} already complete, ${errors.length} errors.`);
+  if (errors.length) {
+    const names = errors.slice(0, 5).join(", ");
+    player.sendMessage(`Completion errors: ${names}${errors.length > 5 ? `, and ${errors.length - 5} more` : ""}.`);
+  }
+}
+
 function questCommand({ player, parts }) {
   const args = parts.slice(1);
   const last = String(args.at(-1) ?? "").toLowerCase();
@@ -54,6 +77,10 @@ function questCommand({ player, parts }) {
   const name = (action ? args.slice(0, -1) : args).join(" ");
   if (!name) {
     player.sendMessage(USAGE);
+    return true;
+  }
+  if (normalise(name) === "all" && (action === null || action === "complete")) {
+    completeAllQuests(player);
     return true;
   }
   const matches = findQuests(name);
@@ -79,7 +106,7 @@ module.exports = {
   name: "QuestCommand",
   description: "Adds the admin ::quest command to show, set, complete or reset a player's quest stage, for testing quest-gated content.",
   register(api) {
-    api.registerCommand("quest", questCommand, PlayerRights.ADMINISTRATOR, "Show or set a quest's progress: ::quest <name> [complete|reset|<stage>]");
+    api.registerCommand("quest", questCommand, PlayerRights.ADMINISTRATOR, "Complete all quests or show, set, complete or reset one quest: ::quest all");
   },
   _test: { questCommand, findQuests },
 };

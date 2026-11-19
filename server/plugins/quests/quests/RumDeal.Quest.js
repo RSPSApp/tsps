@@ -278,15 +278,6 @@ module.exports = function registerRumDealQuest(api) {
     quest.setStage(player, STAGES.STARTED);
   }
 
-  /** The lift menu and what follows it: the Pirate Pete page's island branch after its offer line. */
-  function playLiftMenu(player, npc) {
-    startTranscript(api, player, NPCS.PETE, PETE_PAGE, "standard-dialogue", (steps) => {
-      const island = steps.find((step) => step.type === "condition" && /on braindeath island/i.test(String(step.text ?? "")));
-      const menu = island?.steps?.findIndex((step) => step.type === "choice") ?? -1;
-      return menu >= 0 ? island.steps.slice(menu) : [];
-    }, npc);
-  }
-
   const cutsceneLines = () => (loadTranscripts(api)?.[PAGE]?.variants?.["setting-out-cutscene-1"] ?? [])
     .map((step) => step.text ?? step.npc ?? step.player).filter((text) => typeof text === "string");
 
@@ -306,12 +297,6 @@ module.exports = function registerRumDealQuest(api) {
       // The blow, cutscene 1 and the meeting (tick 268 on). The transcript's own knock-out steps follow
       // this line; the scene takes the chat over, so they don't play.
       if (stage === STAGES.AGREED && !knockedOut(player)) request.after = () => scenes.knockOut(player, cutsceneLines(), startMeeting);
-      return;
-    }
-    if (npcId === NPCS.PETE && !isPlayer && text.startsWith("Nope. It's Braindeath island or nothing.")) {
-      // The dock branch ends "{{tact|continue}}": it carries on into the lift menu the island branch
-      // holds (Okay! / Not now / ...), which the dump leaves unresolved. Play that menu from the page.
-      request.after = () => playLiftMenu(player, request.npc);
       return;
     }
     if (npcId === NPCS.BRAINDEATH) return braindeathLine(request, player, text, stage, isPlayer);

@@ -140,8 +140,8 @@ meaning isn't known.
 - "You must be a Level 40 Fisherman to fish here." though the quest needs 50 Fishing (not captured).
 - On Port Phasmatys' dock the Wiki has "Well, possibly, but could I go to Mos Le'Harmless instead?" and
   Pete's answer before the lift menu; the capture goes straight from "Want a lift to Braindeath Island?"
-  to the menu (tick 3104). The plugin plays the Wiki's lines, then the menu the dock branch's
-  "continue" leads to (it is held in the island branch, which the dump leaves unresolved).
+  to the menu (tick 3104). The Wiki's lines play, then the menu the dock branch's "continue" leads to
+  (osrsreboxed-db's navigation anchor points it at the menu the island branch holds).
 
 ## Ours
 

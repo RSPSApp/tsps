@@ -185,3 +185,15 @@ test('leaving the fight puts the fires out and the casts start over on return', 
   s.tickTo(1);
   assert.equal(s.animations.length, 2);
 });
+
+test('the fight task survives TaskManager.cancelTasks(player) and a restart revives a stopped one', () => {
+  const s = setup();
+  s.fires.start(s.player, s.npc);
+  const task = s.tasks[0];
+  assert.notEqual(task.key, s.player, 'not keyed to the player');
+  task.stop(); // as if cancelled anyway
+  s.tickTo(1);
+  s.fires.start(s.player, s.npc); // the stage respawn with the same Damien restarts it
+  s.tickTo(28);
+  assert.equal(s.animations.length, 1);
+});

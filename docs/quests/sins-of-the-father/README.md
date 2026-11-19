@@ -50,7 +50,8 @@ rsprox captures: the user's local 1000270 (rev 227, ticks 6281-6344), rsprox.net
   attacking again. Wiki: the fires reduce the damage dealt to him and he becomes "increasingly
   resistant"; he can still be killed with one burning.
 - **Stamp-out:** `human_stamp` (794) on arrival, a tick later `sound_area 1446` at the fire and the
-  loc is gone (`invisible_type8_nonblocking`).
+  loc is gone (`invisible_type8_nonblocking`). Recorded difference: we remove the loc instead of sending
+  `invisible_type8_nonblocking` (1637 ticks 4977, 5013); the tile looks the same.
 - **Death:** Damien's removal clears the fires still burning (1000270 tick 6344).
 - **Ours:** a cast every 30 ticks, the first 28 ticks after the fight starts; leaving the fight
   (more than 15 tiles from Damien, or off his floor) puts the fires out and the count starts over

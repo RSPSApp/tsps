@@ -142,13 +142,15 @@ module.exports = function createDamienFires(api) {
 
   /** Damien (the fight NPC) is up for `player`; his casts start counting from now. */
   function start(player, npc) {
-    if (fights.get(player)?.npc === npc) return;
+    const existing = fights.get(player);
+    if (existing?.npc === npc && existing.task?.isRunning()) return;
     stop(player);
     const fight = { npc, ticks: 0, fires: new Map(), casts: [], warn: false, task: null };
     fights.set(player, fight);
+    // Keyed to the fight, not the player: plugins that cancel a player's tasks must not end it.
     fight.task = new (class extends Task {
       constructor() {
-        super(1, player, false);
+        super(1, fight, false);
       }
 
       execute() {

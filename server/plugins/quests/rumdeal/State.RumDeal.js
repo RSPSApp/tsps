@@ -39,11 +39,11 @@ const VARBITS = Object.freeze({
   PATCH: 1366, // deal_farming: the blindweed patch multiloc 10096
 });
 
-/** Saved per-player state. The keys predate the kebab-case rule and stay for old saves. */
+/** Saved per-player state. The "quest.rum_deal.*" keys predate the kebab-case rule and stay for old saves. */
 const ATTRIBUTES = Object.freeze({
   KNOCKED_OUT: "quest.rum_deal.intro", // 1 once Pete has knocked the player out
   WEEDS: "quest.rum_deal.weeded", // how far the patch is raked: 0 (weeds) to 3 (weeded)
-  WEEDS_AT: "quest.rum_deal.weeds-at", // when that last changed, for the weeds growing back
+  WEEDS_AT: "rum-deal:weeds-at", // when that last changed, for the weeds growing back
   PLANTED: "quest.rum_deal.planted", // when the seed went in, 0 for none
   SLUGLINGS: "quest.rum_deal.slugs",
   KARAMTHULHU: "quest.rum_deal.karam",

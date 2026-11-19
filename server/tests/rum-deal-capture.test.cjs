@@ -249,7 +249,7 @@ test("each brewer is the Wiki's numbered brewer the capture heard, before and af
 
 // ------------------------------------------------------------------ The blindweed patch
 
-test("raking: a stage, a weed and 4 XP every four ticks, then the seed's line 3 ticks after it goes in (ticks 817-845)", async (t) => {
+test("raking: a stage, a weed and 4 XP a swing, a swing every four ticks (ours: no misses), then the seed's line 3 ticks after it goes in (ticks 817-845)", async (t) => {
   const f = actor(t, { at: [2162, 5068, 0], stage: S.SEEDS, items: [[I.RAKE], [I.BLINDWEED_SEED]] });
   await clickObject(f, 10096, [2162, 5069], 2);
   assert.deepEqual(messages(f).slice(-1), ["This is a blindweed patch. The soil has not been treated. The patch needs weeding."], "tick 805");
@@ -295,7 +295,7 @@ test("grown on the next farming tick; Pick gives the blindweed, 45 XP and stage 
 
 test("an empty patch's weeds grow back a stage each farming tick (ticks 1659, 2168, 2653)", async (t) => {
   const tick = Math.floor(Date.now() / FIVE_MINUTES) * FIVE_MINUTES;
-  const f = actor(t, { at: [2162, 5068, 0], stage: S.GROWN, attributes: { "quest.rum_deal.weeded": 3, "quest.rum_deal.weeds-at": tick - 2 * FIVE_MINUTES + 1000 } });
+  const f = actor(t, { at: [2162, 5068, 0], stage: S.GROWN, attributes: { "quest.rum_deal.weeded": 3, "rum-deal:weeds-at": tick - 2 * FIVE_MINUTES + 1000 } });
   await clickObject(f, 10096, [2162, 5069], 2);
   assert.equal(varbits(f, V.PATCH).at(-1), 1, "two farming ticks later only one stage is left raked");
   assert.equal(messages(f).at(-1), "This is a blindweed patch. The soil has not been treated. The patch needs weeding.");
@@ -607,7 +607,13 @@ test("Pete's lifts: the blow, the fade, the far dock and his excuse, each way (t
   assert.ok(f.animations.some((a) => a.id === 401));
   const pete = h.spawn(f, N.PETE, [3680, 3537, 0]);
   const back = await play(f, () => h.talk(f, pete), ["Okay!"]);
-  assert.equal(back[2], "Pirate Pete: Want a lift to Braindeath Island?");
+  // The Wiki's dock branch (the capture goes straight to the menu, tick 3104: a recorded difference).
+  assert.deepEqual(back.slice(2, 6), [
+    "Pirate Pete: Want a lift to Braindeath Island?",
+    "PLAYER: Well, possibly, but could I go to Mos Le'Harmless instead?",
+    "Pirate Pete: Nope. It's Braindeath island or nothing. Interested?",
+    "MENU[Select an option]: Okay!|Not now|Why do I get a headache every time I see you?|Are you any relation to Party Pete?",
+  ]);
   assert.deepEqual(at(f), [2162, 5114, 1]);
 });
 

@@ -86,8 +86,9 @@ meaning isn't known.
   overlay (295) at +7; down with the fade out at +24, the player back at +26, "Are they..." at +27.
 - **The brewers** are numbered as the Wiki's transcripts by NPC id: 627 is Brewer 2, 628 is 3, 629 is 8,
   630 is 7, 631 is 5, 632 is 6, 633 is 4, 634 is 1, before the quest (510-574) and after it (2883-2946).
-- **The blindweed patch** (805-1174): Inspect is a game message; a rake on the patch raises 1366 by one
-  every 4 ticks with seq 2273, sound 2442, a weed and 4 Farming XP; the seed goes at once with seq 2291
+- **The blindweed patch** (805-1174): Inspect is a game message; a rake on the patch swings every 4
+  ticks (seq 2273, sound 2442) and a swing raises 1366 by one with a weed and 4 Farming XP (821, 829,
+  833; the swing at 825 took nothing); the seed goes at once with seq 2291
   and sound 2432, and 3 ticks later "You plant a seed in the blindweed patch." (spam), 1366 = 4 and 20
   XP; it grows on the next farming tick with "I wonder how my Blindweed is coming along..."; Pick plays
   seq 2292 and sound 2437 and gives the blindweed, 45 XP and 1366 = 3 three ticks later; inspected then,
@@ -138,13 +139,14 @@ meaning isn't known.
 - "You pressurise the asserted sea creatures." (the capture: "assorted").
 - "You must be a Level 40 Fisherman to fish here." though the quest needs 50 Fishing (not captured).
 - On Port Phasmatys' dock the Wiki has "Well, possibly, but could I go to Mos Le'Harmless instead?" and
-  Pete's answer before the menu; the capture goes straight from "Want a lift to Braindeath Island?" to
-  the menu, and the Wiki's "continue" from that branch has nowhere to go, so the plugin plays the
-  capture's order.
+  Pete's answer before the lift menu; the capture goes straight from "Want a lift to Braindeath Island?"
+  to the menu (tick 3104). The plugin plays the Wiki's lines, then the menu the dock branch's
+  "continue" leads to (it is held in the island branch, which the dump leaves unresolved).
 
 ## Ours
 
 - The Karamthulhu is a third of the catches (the capture: one in six).
+- Every rake swing takes a stage (the capture misses one; the odds aren't known).
 - The farming ticks are on a five-minute grid from the epoch, with no per-account offset.
 - Partly raked patches inspect as "needs weeding"; the grown patch is the Wiki's line without "(Crop)".
 - A full backpack loses the raked weed; the seed needs a weeded patch ("This patch needs weeding first.").

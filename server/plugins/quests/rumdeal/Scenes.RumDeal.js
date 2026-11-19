@@ -33,7 +33,7 @@ const FLOURISH_SPOTANIM = 465;
 const TITLE_OVERLAY = 295; // rum_deal_title
 const OVERLAY_HUD_UID = (161 << 16) | 8; // toplevel overlay_hud (164:8 in the capture's layout)
 const MESSAGEBOX_TEXT_UID = (229 << 16) | 3; // messagebox:text
-const SCENE_EXIT_ATTRIBUTE = "quest.rum_deal.scene-exit";
+const SCENE_EXIT_ATTRIBUTE = "rum-deal:scene-exit";
 
 /** The brewery's top floor copied for the knock-out (the capture's rebuild: chunks 267-271, 637-639, plane 1). */
 const BREWERY = Object.freeze({ sourceChunk: [267, 637], size: 5 });
@@ -104,13 +104,14 @@ module.exports = function rumDealScenes(api, ctx) {
     if (playing.has(player)) return;
     const state = { scene: null };
     playing.set(player, state);
-    player.setAttribute(ATTRIBUTES.KNOCKED_OUT, 1);
     closeChat(player);
     Scenes.controls(player, true);
     knock(player);
     Scenes.later(player, 2, () => Scenes.fade(player, true));
     Scenes.later(player, 6, () => {
       if (playing.get(player) !== state) return;
+      // Knocked out once the copy opens: a logout before it leaves Pete's "Hello again!" talk to replay.
+      player.setAttribute(ATTRIBUTES.KNOCKED_OUT, 1);
       state.scene = Scenes.open(player, "cutscene 1", BREWERY_BOUNDS, {}, { instance: BREWERY, at: [2142, 5105, 1], exit: [...TILES.WAKE] });
       Scenes.controls(player, true, true);
       Scenes.hideTabs(player);

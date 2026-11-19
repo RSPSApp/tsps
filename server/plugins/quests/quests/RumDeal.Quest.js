@@ -218,9 +218,9 @@ module.exports = function registerRumDealQuest(api) {
     const has = (itemId) => player.getInventory().getAmount(itemId) > 0;
     if (value.includes("one or more levels less")) return !skillsMet(player);
     if (value.includes("second thoughts")) return quest.getStage(player) >= STAGES.STARTED && !quest.isComplete(player);
-    // Pete's lifts: one offer at each end (the capture at Port Phasmatys, tick 3101; on the island, 3008).
-    if (value.includes("dock north of port phasmatys")) return false;
-    if (value.includes("on braindeath island")) return true;
+    // Pete's lifts: the Wiki's dock branch at Port Phasmatys, its island branch on the island.
+    if (value.includes("dock north of port phasmatys")) return !onIsland(player);
+    if (value.includes("on braindeath island")) return onIsland(player);
     if (value.includes("ring of charos")) return value.includes("not wearing") ? !wearingCharos(player) : wearingCharos(player);
     if (value.includes("tinderbox")) return value.includes("not have") ? !has(TINDERBOX) : has(TINDERBOX);
     if (value.includes("lost the blindweed seed")) return !has(I.BLINDWEED_SEED);
@@ -278,6 +278,15 @@ module.exports = function registerRumDealQuest(api) {
     quest.setStage(player, STAGES.STARTED);
   }
 
+  /** The lift menu and what follows it: the Pirate Pete page's island branch after its offer line. */
+  function playLiftMenu(player, npc) {
+    startTranscript(api, player, NPCS.PETE, PETE_PAGE, "standard-dialogue", (steps) => {
+      const island = steps.find((step) => step.type === "condition" && /on braindeath island/i.test(String(step.text ?? "")));
+      const menu = island?.steps?.findIndex((step) => step.type === "choice") ?? -1;
+      return menu >= 0 ? island.steps.slice(menu) : [];
+    }, npc);
+  }
+
   const cutsceneLines = () => (loadTranscripts(api)?.[PAGE]?.variants?.["setting-out-cutscene-1"] ?? [])
     .map((step) => step.text ?? step.npc ?? step.player).filter((text) => typeof text === "string");
 
@@ -299,9 +308,10 @@ module.exports = function registerRumDealQuest(api) {
       if (stage === STAGES.AGREED && !knockedOut(player)) request.after = () => scenes.knockOut(player, cutsceneLines(), startMeeting);
       return;
     }
-    if (npcId === NPCS.PETE && !isPlayer && text === "Want a lift to Port Phasmatys?" && !onIsland(player)) {
-      // On the dock the offer is the other way (the Wiki's dock line; the capture, tick 3104).
-      request.text = "Want a lift to Braindeath Island?";
+    if (npcId === NPCS.PETE && !isPlayer && text.startsWith("Nope. It's Braindeath island or nothing.")) {
+      // The dock branch ends "{{tact|continue}}": it carries on into the lift menu the island branch
+      // holds (Okay! / Not now / ...), which the dump leaves unresolved. Play that menu from the page.
+      request.after = () => playLiftMenu(player, request.npc);
       return;
     }
     if (npcId === NPCS.BRAINDEATH) return braindeathLine(request, player, text, stage, isPlayer);

@@ -2,8 +2,9 @@
  * The blindweed patch (multiloc 10096 on varbit 1366, children 10097-10102) as the revision 242
  * capture plays it (RumDeal.bin; docs/quests/rum-deal/README.md "The blindweed patch"):
  *
- * - Rake (a rake used on it): seq 2273 with sound 2442 at once, then every 4 ticks one stage off
- *   (1366 = 1, 2, 3), a weed and 4 Farming XP each, the swing repeated until it is weeded (ticks 817-833).
+ * - Rake (a rake used on it): seq 2273 with sound 2442 at once and every 4 ticks after, one stage off
+ *   (1366 = 1, 2, 3) with a weed and 4 Farming XP on most swings, until it is weeded (ticks 817-833: the
+ *   swing at 825 took nothing). Ours: every swing takes a stage (the odds of a miss aren't known).
  * - The seed: seq 2291 and sound 2432, the seed gone at once; 3 ticks later "You plant a seed in the
  *   blindweed patch." (spam), 1366 = 4 and 20 Farming XP (842-845).
  * - It grows on the next five-minute farming tick (1366 = 5, "I wonder how my Blindweed is coming

@@ -5,17 +5,17 @@ on:
         branches: [main]
         paths:
             - 'client/**'
-            - 'desktop/build-web.mjs'
-            - 'desktop/release*.mjs'
-            - 'desktop/package*.json'
+            - '.github/scripts/client-release/build-web.mjs'
+            - '.github/scripts/client-release/release*.mjs'
+            - '.github/scripts/client-release/package*.json'
             - '.github/workflows/client-release.yml'
     pull_request:
         branches: [main]
         paths:
             - 'client/**'
-            - 'desktop/build-web.mjs'
-            - 'desktop/release*.mjs'
-            - 'desktop/package*.json'
+            - '.github/scripts/client-release/build-web.mjs'
+            - '.github/scripts/client-release/release*.mjs'
+            - '.github/scripts/client-release/package*.json'
             - '.github/workflows/client-release.yml'
     workflow_dispatch:
         inputs:
@@ -52,12 +52,12 @@ jobs:
                   yarn --cwd server install --immutable
                   yarn --cwd client install --immutable
                   yarn --cwd server ensure-cache
-                  npm ci --prefix desktop
+                  npm ci --prefix .github/scripts/client-release
             - name: Check and build the shared client
               run: |
                   yarn --cwd client typecheck
-                  npm --prefix desktop test
-                  npm --prefix desktop run build:web
+                  npm --prefix .github/scripts/client-release test
+                  npm --prefix .github/scripts/client-release run build:web
               env:
                   CI: 'false'
             - uses: actions/upload-artifact@v4
@@ -80,14 +80,14 @@ jobs:
                   persist-credentials: false
                   sparse-checkout-cone-mode: false
                   sparse-checkout: |
-                      /desktop/package.json
-                      /desktop/package-lock.json
-                      /desktop/release-web.mjs
-                      /desktop/release-version.mjs
+                      /.github/scripts/client-release/package.json
+                      /.github/scripts/client-release/package-lock.json
+                      /.github/scripts/client-release/release-web.mjs
+                      /.github/scripts/client-release/release-version.mjs
             - uses: actions/setup-node@v4
               with:
                   node-version: 24
-            - run: npm ci --prefix desktop
+            - run: npm ci --prefix .github/scripts/client-release
             - uses: actions/download-artifact@v4
               with:
                   name: client-web
@@ -99,13 +99,13 @@ jobs:
                   REQUESTED_VERSION: ${{ inputs.version }}
               run: |
                   gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[].tag_name' > "$RUNNER_TEMP/client-release-tags"
-                  version=$(node desktop/release-version.mjs < "$RUNNER_TEMP/client-release-tags")
+                  version=$(node .github/scripts/client-release/release-version.mjs < "$RUNNER_TEMP/client-release-tags")
                   echo "CLIENT_VERSION=$version" >> "$GITHUB_ENV"
             - name: Sign web client release
               env:
                   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.CLIENT_UPDATE_SIGNING_KEY }}
                   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.CLIENT_UPDATE_SIGNING_KEY_PASSWORD }}
-              run: npm --prefix desktop run release:web -- "$CLIENT_VERSION" "https://github.com/$GITHUB_REPOSITORY/releases/download/client-v$CLIENT_VERSION/"
+              run: npm --prefix .github/scripts/client-release run release:web -- "$CLIENT_VERSION" "https://github.com/$GITHUB_REPOSITORY/releases/download/client-v$CLIENT_VERSION/"
             - name: Publish complete release
               env:
                   GH_TOKEN: ${{ github.token }}
@@ -113,6 +113,6 @@ jobs:
                   CLIENT_COMMIT: ${{ github.sha }}
               run: |
                   tag="client-v$CLIENT_VERSION"
-                  gh release create "$tag" --draft --target "$CLIENT_COMMIT" --title "Web client $CLIENT_VERSION" --notes "Signed web client bundle from $CLIENT_COMMIT. The installed desktop wrapper and server profiles are retained."
-                  gh release upload "$tag" "desktop/releases/client/client-$CLIENT_VERSION.tar.gz" desktop/releases/client/manifest.json desktop/releases/client/manifest.json.minisig
+                  gh release create "$tag" --draft --target "$CLIENT_COMMIT" --title "Web client $CLIENT_VERSION" --notes "Signed web client bundle from $CLIENT_COMMIT. Shared web client assets; native installers are distributed separately."
+                  gh release upload "$tag" ".github/scripts/client-release/releases/client/client-$CLIENT_VERSION.tar.gz" .github/scripts/client-release/releases/client/manifest.json .github/scripts/client-release/releases/client/manifest.json.minisig
                   gh release edit "$tag" --draft=false --latest

@@ -1,7 +1,7 @@
 # Shared web client releases
 
-The **Client release** workflow builds and publishes one shared web bundle for all
-desktop clients. It does not generate Mac installers or require Apple credentials.
+The **Client release** workflow builds and publishes shared web-client bundles.
+It does not build desktop applications, generate installers or require Apple credentials.
 
 Pushes to `main` that change the client or release tooling publish automatically.
 Merged PRs are covered by that push; closing an unmerged PR does not publish.
@@ -43,9 +43,9 @@ version (currently `0.1.1`); raise it when updated web files require new native 
 ## Local checks and packaging
 
 ```
-npm ci --prefix desktop
-npm test --prefix desktop
-npm run build:web --prefix desktop
+npm ci --prefix .github/scripts/client-release
+npm test --prefix .github/scripts/client-release
+npm run build:web --prefix .github/scripts/client-release
 ```
 
 After building, package and sign locally with a matching private key outside the
@@ -53,9 +53,9 @@ repo:
 
 ```
 export TAURI_SIGNING_PRIVATE_KEY_PATH=/path/to/private.key
-npm --prefix desktop run release:web -- 0.1.2 https://example.com/client-v0.1.2/
+npm --prefix .github/scripts/client-release run release:web -- 0.1.2 https://example.com/client-v0.1.2/
 ```
 
-Output is under `desktop/releases/client/`: `client-<version>.tar.gz`,
+Output is under `.github/scripts/client-release/releases/client/`: `client-<version>.tar.gz`,
 `manifest.json`, and `manifest.json.minisig`. Tauri's wrapped `.sig` is also retained
 locally, but the updater consumes the raw `.minisig` detached signature.

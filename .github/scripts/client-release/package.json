@@ -1,5 +1,5 @@
 {
-  "name": "rsps-desktop",
+  "name": "rsps-client-release",
   "private": true,
   "scripts": {
     "test": "node --test release-web.test.mjs release-version.test.mjs",

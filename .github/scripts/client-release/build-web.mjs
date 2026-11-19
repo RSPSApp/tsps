@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const result = spawnSync("yarn", ["build"], {
-    cwd: fileURLToPath(new URL("../client/", import.meta.url)),
+    cwd: fileURLToPath(new URL("../../../client/", import.meta.url)),
     env: {
         ...process.env,
         PUBLIC_URL: "/",

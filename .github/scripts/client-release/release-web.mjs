@@ -4,7 +4,7 @@ import { lstatSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSyn
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const desktop = dirname(fileURLToPath(import.meta.url));
+const tooling = dirname(fileURLToPath(import.meta.url));
 const excluded = new Set(["caches", "desktop-updates", "desktop-startup.html", "desktop-icon.png"]);
 
 export function packageWebRelease(dist, out, version, baseUrl) {
@@ -47,8 +47,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const [version, baseUrl] = process.argv.slice(2);
     if (!version || !baseUrl) throw new Error("Usage: npm run release:web -- <version> <release-base-url/>");
     if (!process.env.TAURI_SIGNING_PRIVATE_KEY && !process.env.TAURI_SIGNING_PRIVATE_KEY_PATH) throw new Error("Set TAURI_SIGNING_PRIVATE_KEY_PATH (local key file) or TAURI_SIGNING_PRIVATE_KEY (CI secret)");
-    const release = packageWebRelease(resolve(desktop, "../client/build"), resolve(desktop, "releases/client"), version, baseUrl);
-    const signed = spawnSync(resolve(desktop, "node_modules/.bin/tauri"), ["signer", "sign", "--app-version", version, release.manifestPath], {
+    const release = packageWebRelease(resolve(tooling, "../../../client/build"), resolve(tooling, "releases/client"), version, baseUrl);
+    const signed = spawnSync(resolve(tooling, "node_modules/.bin/tauri"), ["signer", "sign", "--app-version", version, release.manifestPath], {
         env: { ...process.env, TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "" }, encoding: "utf8",
     });
     if (signed.error) throw signed.error;

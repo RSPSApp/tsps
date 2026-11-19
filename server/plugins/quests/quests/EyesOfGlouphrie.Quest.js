@@ -444,6 +444,9 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
         : "assassination-talking-to-brimstail-after-activating-the-machine";
     }
     if (stage >= STAGE_PANEL_UNLOCKED) {
+      if (!hasAnyCrystalDisc(player)) {
+        return "the-anti-illusion-machine-talking-to-brimstail-again-before-unlocking-the-machine";
+      }
       return "the-anti-illusion-machine-talking-to-brimstail-after-unlocking-the-machine-s-front-panel";
     }
     if (stage >= STAGE_REPAIR_REPORTED) {

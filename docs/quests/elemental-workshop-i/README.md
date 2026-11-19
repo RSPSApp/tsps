@@ -44,8 +44,8 @@ the run doesn't take (full inventory, missing materials, levers out of order, wo
 | Full bowl on furnace | "You empty the lava into the furnace.", the empty bowl back, sound 1538 (411); four ticks later "The furnace bursts to life.", varbit 2062=1 (415) |
 | Elemental rock (1368) Mine | the rock's emerge seq 4865 on arrival (436); two ticks later it says "Grr... Ge'roff us!" and is the level 35 earth elemental 1367, the same NPC (438). No player animation |
 | Earth elemental death | seq 4870 (466); Rock (1480) and elemental ore on its tile, owned (471); a rock again after (476) |
-| Ore on furnace, 4 coal | seq 899, "You place the elemental ore and four heaps of coal into the furnace.", ore and coal gone (500); four ticks later seq 899, the bar, 8 Smithing XP, "You retrieve a bar of elemental metal." (504) |
-| Bar on workbench (3402) | seq 896 and sound 2721 (515); three ticks later the shield in the bar's slot, "Following the instructions in the book, you make an elemental shield.", varbits 2067=1 and 13718=2, the completion; 20 Smithing XP with the 5,000 (518) |
+| Ore on furnace, 4 coal | seq 899, "You place the elemental ore and four heaps of coal into the furnace.", ore and coal gone (500); four ticks later seq 899, the bar, 8 Smithing XP, "You retrieve a bar of elemental metal." (504). **Recorded difference:** the Wiki (Elemental metal) gives 6 ticks, which the plugin uses |
+| Bar on workbench (3402) | seq 896 and sound 2721 (515); the shield in the bar's slot four ticks after the arrival (514 -> 518; the Wiki's 4 ticks), "Following the instructions in the book, you make an elemental shield.", varbits 2067=1 and 13718=2, the completion; 20 Smithing XP with the 5,000 (518) |
 | Quest journal, started | "<str>I have found a battered book in a house in Seers' Village.", "<str>It tells of magic ore and a workshop created to fashion it.", "", "Where is this workshop and how do I get in?" (53) |
 | Completion scroll | shield model 2890; "1 Quest Point", "5,000 Crafting XP", "5,000 Smithing XP", "Ability to make Elemental", "Shields" (518) |
 

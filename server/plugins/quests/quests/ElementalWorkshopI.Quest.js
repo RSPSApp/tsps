@@ -194,12 +194,18 @@ module.exports = function registerElementalWorkshopIQuest(api) {
   const VALVE_TICKS = 3;
   /** Lava poured: the furnace lights four ticks later (411 -> 415). */
   const FURNACE_LIGHT_TICKS = 4;
-  /** Ore in: the bar comes out four ticks later (500 -> 504). */
-  const SMELT_TICKS = 4;
+  /**
+   * Ore in: the bar comes out six ticks later (Wiki, Elemental metal: 6 ticks). Recorded
+   * difference: the capture has it four ticks later (500 -> 504).
+   */
+  const SMELT_TICKS = 6;
   /** Trough: the bowl fills two ticks after the scoop (397 -> 399). */
   const FILL_TICKS = 2;
-  /** Workbench: the shield is made three ticks after the hammering starts (515 -> 518). */
-  const SHIELD_TICKS = 3;
+  /**
+   * Workbench: the shield is made four ticks after the use (Wiki, Elemental shield: 4 ticks); the
+   * capture's arrival on 514 to the shield on 518 agrees, its hammering starting on 515.
+   */
+  const SHIELD_TICKS = 4;
   /** Stairs: the player lands a tick after the click (203 -> 204, 232 -> 233). */
   const STAIRS_TICKS = 1;
   /** Mined rock: it rises with the emerge animation and becomes the elemental two ticks later (436 -> 438). */

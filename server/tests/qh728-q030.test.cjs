@@ -30,8 +30,8 @@ const BIT_READ_BOOK = 1 << 1;
 const BIT_ENTERED_WORKSHOP = 1 << 13;
 const BIT_COMPLETE = 1 << 20;
 const noop = () => {};
-/** EW I makes the shield three ticks after the hammering starts. */
-const shieldTicks = () => { for (let i = 0; i < 3; i++) core.TaskManager.process(); };
+/** EW I makes the shield four ticks after the use. */
+const shieldTicks = () => { for (let i = 0; i < 4; i++) core.TaskManager.process(); };
 let h;
 
 before(async () => {

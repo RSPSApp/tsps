@@ -192,7 +192,7 @@ assert.equal(calls,1,'decoded target reached registered consumer');
 assert.equal(handled,true,'registered consumer handled actual furnace');
 }finally{PM.emitItemOnObject=original;
 }
-for(let i=0;i<4;i++)core.World.process();assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.SMITHING),f.current);
+for(let i=0;i<6;i++)core.World.process();assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.SMITHING),f.current);
 assert.equal(player.getSkillManager().getMaxLevel(core.Skill.SMITHING),f.base);
 if(f.denied)assert.equal(player.getSkillManager().getExperience(core.Skill.SMITHING),f.smithXP);
 assert.deepEqual(otherItems(player),beforeOthers);

@@ -309,7 +309,7 @@ test('bellows and the air lever, with the leather crate', (t) => {
   assert.deepEqual(p.messages.slice(-1), ['The bellows stop pumping air.']);
 });
 
-test('lava lights the furnace; the ore smelts four ticks later for 8 XP', (t) => {
+test('lava lights the furnace; the ore smelts six ticks later for 8 XP', (t) => {
   const p = actor(t, { stage: BIT.book | BIT.stairs | BIT.water | BIT.bellows | BIT.air, items: [[I.ELEMENTAL_ORE], [I.COAL, 4], [I.TINDERBOX]] });
   place(p, 2724, 9893);
   op(p, O.BOXES_5, 2724, 9894, 'Search');
@@ -342,15 +342,15 @@ test('lava lights the furnace; the ore smelts four ticks later for 8 XP', (t) =>
   assert.deepEqual(p.messages.slice(-1), ['You place the elemental ore and four heaps of coal into the furnace.']);
   assert.equal(amount(p, I.ELEMENTAL_ORE), 0);
   assert.equal(amount(p, I.COAL), 0);
-  ticks(3);
+  ticks(5);
   assert.equal(amount(p, I.ELEMENTAL_METAL), 0, 'not yet');
   ticks(1);
-  assert.equal(amount(p, I.ELEMENTAL_METAL), 1);
+  assert.equal(amount(p, I.ELEMENTAL_METAL), 1, 'Wiki: six ticks');
   assert.deepEqual(p.messages.slice(-1), ['You retrieve a bar of elemental metal.']);
   assert.equal(p.getSkillManager().getExperience(core.Skill.SMITHING) - xp, 8);
 });
 
-test('the workbench makes the shield in the bar\'s slot three ticks on and completes the quest once', (t) => {
+test('the workbench makes the shield in the bar\'s slot four ticks on and completes the quest once', (t) => {
   const done = BIT.book | BIT.key | BIT.stairs | BIT.water | BIT.bellows | BIT.air | BIT.fire;
   const p = actor(t, { stage: done, items: [[I.ELEMENTAL_METAL]] });
   place(p, 2718, 9887);
@@ -367,7 +367,7 @@ test('the workbench makes the shield in the bar\'s slot three ticks on and compl
   const craft = p.getSkillManager().getExperience(core.Skill.CRAFTING);
   use(p, I.ELEMENTAL_METAL, O.WORKBENCH_5, 2717, 9887);
   assert.equal(p.getAnimation()?.getId(), 896);
-  ticks(2);
+  ticks(3);
   assert.equal(amount(p, I.ELEMENTAL_SHIELD), 0, 'not yet');
   ticks(1);
   assert.equal(p.getInventory().getItems()[barSlot].getId(), I.ELEMENTAL_SHIELD, 'the shield takes the bar\'s slot');
@@ -382,7 +382,7 @@ test('the workbench makes the shield in the bar\'s slot three ticks on and compl
   p.getPacketSender().sendInterfaceRemoval();
   p.getInventory().adds(I.ELEMENTAL_METAL, 1);
   use(p, I.ELEMENTAL_METAL, O.WORKBENCH_5, 2717, 9887);
-  ticks(3);
+  ticks(4);
   assert.equal(amount(p, I.ELEMENTAL_SHIELD), 2);
   assert.equal(p.getSkillManager().getExperience(core.Skill.SMITHING) - smith, 5040, 'only the shield XP again');
 });

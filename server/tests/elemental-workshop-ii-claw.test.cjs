@@ -92,8 +92,8 @@ test("without the crane schematic EW I still makes its shield", (t) => {
   const p = player(t, { stage: 5, craneSchematic: false });
   assert.equal(useMetal(p), true);
   assert.equal(core.MultiChatboxPrompt.getPending(p), null, "no claw choice without the schematic");
-  // EW I makes the shield three ticks after the hammering starts.
-  for (let i = 0; i < 3; i++) core.TaskManager.process();
+  // EW I makes the shield four ticks after the use.
+  for (let i = 0; i < 4; i++) core.TaskManager.process();
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.ELEMENTAL_METAL), 0);
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.ELEMENTAL_SHIELD), 1, "the EW I shield path is unchanged");
 });

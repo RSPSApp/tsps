@@ -1,5 +1,7 @@
 import { randomUUID } from "crypto";
+import { EventEmitter } from "events";
 import { IncomingMessage, ServerResponse } from "http";
+import { WebSocket } from "ws";
 import { BinaryChannel, MAX_GAME_MESSAGE_BYTES } from "./BinaryChannel";
 
 const POLL_TIMEOUT_MS = 10_000;
@@ -12,9 +14,71 @@ const RETRY_MS = 15_000;
 const ABANDON_MS = 2 * 60_000;
 
 export const BROWSER_HOST_BRIDGE_HTML = `<!doctype html><meta charset="utf-8"><script>
+let sharedStream;
+function sharedGameSocket(url) {
+  if (!sharedStream || sharedStream.socket.readyState >= 2) {
+    const endpoint = new URL("/browser-host/stream", url);
+    const socket = new WebSocket(endpoint);
+    socket.binaryType = "arraybuffer";
+    const state = { socket, sessions: new Map(), nextId: 0 };
+    sharedStream = state;
+    socket.onopen = () => { for (const session of state.sessions.values()) session.attach(); };
+    socket.onmessage = (event) => {
+      if (typeof event.data === "string") {
+        let message;
+        try { message = JSON.parse(event.data); } catch { socket.close(); return; }
+        const session = state.sessions.get(message.id);
+        if (!session) return;
+        if (message.type === "open") { session.readyState = 1; session.onopen?.(); }
+        else if (message.type === "data") session.onmessage?.({ data: message.data });
+        else if (message.type === "close") session.finish(message.code, message.reason);
+      } else if (event.data instanceof ArrayBuffer && event.data.byteLength >= 8 && event.data.byteLength <= ${MAX_GAME_MESSAGE_BYTES + 8}) {
+        const id = new DataView(event.data).getUint32(0);
+        state.sessions.get(id)?.onmessage?.({ data: event.data.slice(4) });
+      } else socket.close();
+    };
+    socket.onerror = () => socket.close();
+    socket.onclose = () => {
+      if (sharedStream === state) sharedStream = undefined;
+      for (const session of [...state.sessions.values()]) session.finish(1006, "shared stream disconnected");
+    };
+  }
+  const state = sharedStream;
+  const id = ++state.nextId;
+  const sessionId = url.pathname.split("/")[3];
+  const session = {
+    readyState: 0,
+    attach() { if (state.sessions.has(id)) state.socket.send(JSON.stringify({ type: "attach", id, sessionId })); },
+    send(data) {
+      if (state.socket.readyState !== 1) { session.finish(1006, "shared stream unavailable"); throw new TypeError("Shared stream unavailable"); }
+      if (typeof data === "string") state.socket.send(JSON.stringify({ type: "data", id, data }));
+      else {
+        const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+        const frame = new Uint8Array(bytes.byteLength + 4);
+        new DataView(frame.buffer).setUint32(0, id);
+        frame.set(bytes, 4);
+        state.socket.send(frame);
+      }
+    },
+    finish(code, reason) {
+      if (session.readyState === 3) return;
+      session.readyState = 3;
+      state.sessions.delete(id);
+      session.onclose?.({ code, reason });
+      if (state.sessions.size === 0 && state.socket.readyState < 2) state.socket.close();
+    },
+    close() {
+      if (state.socket.readyState === 1) state.socket.send(JSON.stringify({ type: "detach", id }));
+      session.finish(1006, "local stream closed");
+    },
+  };
+  state.sessions.set(id, session);
+  if (state.socket.readyState === 1) queueMicrotask(() => session.attach());
+  return session;
+}
+
 addEventListener("message", function connect(event) {
   if (event.data !== "browser-host-connect" || !event.ports[0]) return;
-  removeEventListener("message", connect);
   const port = event.ports[0];
   let sessionId;
   let closed = false;
@@ -24,14 +88,17 @@ addEventListener("message", function connect(event) {
   const outbox = [];
   let sending = false;
   let contentRequests = 0;
-  // The host pauses polling while its peer drains slowly, so unsent frames stay
-  // queued on the server, where outbound backpressure can see them.
+  // A slow peer pauses delivery, leaving unsent frames on the server where
+  // outbound backpressure can see them.
   let paused;
   let resumePoll;
-  // Sends carry a sequence number and polls ack the last batch they got, so
-  // the server can drop repeated sends and repeat a batch whose poll was lost.
+  // Both transports share sequences, so HTTP can recover an interrupted stream
+  // without repeating player actions or losing server output.
   let sendSeq = 0;
   let ack = 0;
+  let stream;
+  let streamFrame;
+  let pendingSend;
   const retrying = async (request) => {
     const deadline = Date.now() + ${RETRY_MS};
     for (let delay = 250; ; delay = Math.min(delay * 2, 2000)) {
@@ -68,6 +135,7 @@ addEventListener("message", function connect(event) {
   const fail = (error) => {
     if (closed) return;
     closed = true;
+    stream?.close();
     port.postMessage({ type: "error", message: error?.message || "WebContainer HTTP bridge failed" });
     if (sessionId) fetch("/browser-host/session/" + sessionId, { method: "DELETE", keepalive: true }).catch(() => {});
   };
@@ -81,13 +149,73 @@ addEventListener("message", function connect(event) {
       return;
     }
     if (!response.ok) throw new Error("WebContainer HTTP poll failed: " + response.status);
+    const seq = Number(response.headers.get("X-Seq"));
+    // The preview proxy can return its HTML error page with status 200.
+    if (response.headers.get("Content-Type") !== "application/octet-stream" || seq !== ack + 1) {
+      throw new TypeError("Invalid WebContainer HTTP poll response");
+    }
     const data = await response.arrayBuffer();
-    ack = Number(response.headers.get("X-Seq"));
+    ack = seq;
     if (data.byteLength) port.postMessage({ type: "message", data }, [data]);
   };
   const poll = async () => {
     while (!closed) await (paused || retrying(pollOnce));
   };
+  const flushStream = () => {
+    if (closed || paused || !streamFrame || !stream) return;
+    const { seq, data } = streamFrame;
+    streamFrame = undefined;
+    if (seq > ack) {
+      if (seq !== ack + 1) throw new Error("WebContainer stream sequence gap");
+      port.postMessage({ type: "message", data }, [data]);
+      ack = seq;
+    }
+    stream.send(String(ack));
+  };
+  const dropStream = (socket) => {
+    if (stream !== socket) return;
+    stream = undefined;
+    streamFrame = undefined;
+    pendingSend?.reject(new TypeError("WebContainer stream disconnected"));
+    pendingSend = undefined;
+    if (!closed) poll().catch(fail);
+  };
+  const openStream = () => new Promise((resolve) => {
+    if (typeof WebSocket !== "function") return resolve(false);
+    const url = new URL("/browser-host/session/" + sessionId + "/stream", location.href);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    const socket = sharedGameSocket(url);
+    socket.binaryType = "arraybuffer";
+    const timeout = setTimeout(() => { socket.close(); resolve(false); }, 1000);
+    socket.onopen = () => { clearTimeout(timeout); stream = socket; resolve(true); };
+    socket.onerror = () => socket.close();
+    socket.onclose = (event) => {
+      clearTimeout(timeout);
+      resolve(false);
+      if (stream !== socket) return;
+      if (!closed && event.code === 1000) {
+        closed = true;
+        port.postMessage({ type: "close", message: event.reason || "game session closed" });
+      }
+      dropStream(socket);
+    };
+    socket.onmessage = (event) => {
+      if (stream !== socket || closed) return;
+      if (typeof event.data === "string") {
+        if (pendingSend && event.data === String(pendingSend.seq)) {
+          pendingSend.resolve();
+          pendingSend = undefined;
+        }
+      } else {
+        if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 4 || event.data.byteLength > ${MAX_GAME_MESSAGE_BYTES + 4}) {
+          fail(new Error("Invalid WebContainer stream frame"));
+          return;
+        }
+        streamFrame = { seq: new DataView(event.data).getUint32(0), data: event.data.slice(4) };
+        try { flushStream(); } catch (error) { fail(error); }
+      }
+    };
+  });
   const sendOutbox = async () => {
     sending = true;
     try {
@@ -107,8 +235,25 @@ addEventListener("message", function connect(event) {
         // A retry repeats the same batch and seq, so the server can drop a duplicate.
         const seq = ++sendSeq;
         await retrying(async () => {
+          if (stream?.readyState === 1) {
+            const socket = stream;
+            const frame = new Uint8Array(body.byteLength + 4);
+            new DataView(frame.buffer).setUint32(0, seq);
+            frame.set(body, 4);
+            await new Promise((resolve, reject) => {
+              const timeout = setTimeout(() => { dropStream(socket); socket.close(); }, 1000);
+              pendingSend = {
+                seq,
+                resolve: () => { clearTimeout(timeout); resolve(); },
+                reject: (error) => { clearTimeout(timeout); reject(error); },
+              };
+              socket.send(frame);
+            });
+            return;
+          }
           const response = await fetch("/browser-host/session/" + sessionId + "/send?seq=" + seq, { method: "POST", body });
           if (!response.ok) throw new Error("WebContainer HTTP send failed: " + response.status);
+          if (response.status !== 204) throw new TypeError("Invalid WebContainer HTTP send response");
         });
         port.postMessage({ type: "sent", bytes });
       }
@@ -128,8 +273,10 @@ addEventListener("message", function connect(event) {
     } else if (event.data?.type === "resume") {
       paused = undefined;
       resumePoll?.();
+      try { flushStream(); } catch (error) { fail(error); }
     } else if (event.data?.type === "close") {
       closed = true;
+      stream?.close();
       fetch("/browser-host/session/" + sessionId, { method: "DELETE", keepalive: true })
         .catch(() => {})
         .finally(() => port.postMessage({ type: "close" }));
@@ -139,12 +286,16 @@ addEventListener("message", function connect(event) {
   fetch("/browser-host/session", { method: "POST" }).then(async (response) => {
     if (!response.ok) throw new Error("WebContainer HTTP session failed: " + response.status);
     sessionId = await response.text();
+    const streaming = await openStream();
     port.postMessage({ type: "open" });
-    return poll();
+    if (!streaming) return poll();
   }).catch(fail);
 });
+parent.postMessage({ type: "browser-host-ready", multiplex: true }, "*");
 parent.postMessage("browser-host-ready", "*");
 </script>`;
+
+type GameStream = Pick<WebSocket, "send" | "close" | "terminate"> & EventEmitter & { readonly readyState: number };
 
 type CloseHandler = (code?: number, reason?: Buffer | string) => void;
 
@@ -167,6 +318,8 @@ export class BrowserHostHttpChannel implements BinaryChannel {
   private sentSeq = 0;
   private receivedSeq = 0;
   private lastPollAt = 0;
+  private stream?: GameStream;
+  private streamSentSeq = -1;
 
   public get bufferedAmount(): number {
     return this.queuedBytes;
@@ -198,6 +351,8 @@ export class BrowserHostHttpChannel implements BinaryChannel {
   }
 
   public attachPoll(response: ServerResponse, ack: number): void {
+    this.stream?.close(1001, "switching to HTTP polling");
+    this.stream = undefined;
     const gap = Date.now() - this.lastPollAt;
     if (this.lastPollAt && gap > RETRY_MS) console.info(`[browser-host] poll resumed after ${Math.round(gap / 1000)}s`);
     this.lastPollAt = Date.now();
@@ -223,6 +378,41 @@ export class BrowserHostHttpChannel implements BinaryChannel {
     this.flushPoll();
   }
 
+  public attachStream(socket: GameStream): void {
+    this.stream?.close(1001, "stream replaced");
+    this.stream = socket;
+    this.streamSentSeq = -1;
+    clearTimeout(this.abandonTimeout);
+    this.finishPoll(204);
+    socket.on("message", (raw, binary) => {
+      if (this.stream !== socket) return;
+      if (!binary) {
+        if (raw.toString() === String(this.sentSeq)) {
+          this.unacked = undefined;
+          this.flushPoll();
+        }
+      } else {
+        const frame = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer);
+        if (frame.length < 4 || frame.length > MAX_GAME_MESSAGE_BYTES + 4) {
+          socket.close(1009, "invalid game stream frame");
+          return;
+        }
+        const seq = frame.readUInt32BE(0);
+        this.receive(frame.subarray(4), seq);
+        if (socket.readyState === WebSocket.OPEN) socket.send(String(seq));
+      }
+    });
+    socket.on("error", () => socket.terminate());
+    socket.on("close", () => {
+      if (this.stream !== socket) return;
+      this.stream = undefined;
+      if (this.closed) return;
+      this.abandonTimeout = setTimeout(() => this.close(1001, "no stream or poll for 120s"), ABANDON_MS);
+      this.abandonTimeout.unref?.();
+    });
+    this.flushPoll();
+  }
+
   public close(code?: number, reason?: string): void {
     if (this.closed) return;
     this.closed = true;
@@ -230,7 +420,7 @@ export class BrowserHostHttpChannel implements BinaryChannel {
     this.closeReason = (reason || "closed by the game server").replace(/[^\x20-\x7e]/g, "?");
     console.info(`[browser-host] game session closed: ${this.closeReason}`);
     clearTimeout(this.abandonTimeout);
-    if (this.queued.length > 0) this.flushPoll();
+    if (this.stream || this.queued.length > 0) this.flushPoll();
     else this.finishPoll(410);
     for (const handler of this.closeHandlers) handler(code, reason);
   }
@@ -256,7 +446,11 @@ export class BrowserHostHttpChannel implements BinaryChannel {
   }
 
   private flushPoll(): void {
-    if (!this.poll || (!this.unacked && this.queued.length === 0)) return;
+    if (this.stream && this.isDrained()) {
+      this.stream.close(1000, this.closeReason.slice(0, 123));
+      return;
+    }
+    if ((!this.poll && !this.stream) || (!this.unacked && this.queued.length === 0)) return;
     if (!this.unacked) {
       const frames: Buffer[] = [];
       let bytes = 0;
@@ -269,7 +463,13 @@ export class BrowserHostHttpChannel implements BinaryChannel {
       this.unacked = Buffer.concat(frames, bytes);
       this.sentSeq++;
     }
-    this.finishPoll(200, this.unacked);
+    if (this.stream) {
+      if (this.streamSentSeq === this.sentSeq || this.stream.readyState !== WebSocket.OPEN) return;
+      const header = Buffer.alloc(4);
+      header.writeUInt32BE(this.sentSeq);
+      this.streamSentSeq = this.sentSeq;
+      this.stream.send(Buffer.concat([header, this.unacked]));
+    } else this.finishPoll(200, this.unacked);
   }
 
   private finishPoll(status: number, body?: Buffer): void {
@@ -294,10 +494,76 @@ export class BrowserHostHttpChannel implements BinaryChannel {
   }
 }
 
+class SharedGameStream extends EventEmitter {
+  public readyState: number = WebSocket.OPEN;
+  constructor(private readonly socket: WebSocket, private readonly id: number, private readonly release: () => void) { super(); }
+
+  public send(data: Buffer | string): void {
+    if (this.readyState !== WebSocket.OPEN) return;
+    if (typeof data === "string") this.socket.send(JSON.stringify({ type: "data", id: this.id, data }));
+    else {
+      const header = Buffer.alloc(4);
+      header.writeUInt32BE(this.id);
+      this.socket.send(Buffer.concat([header, data]));
+    }
+  }
+
+  public close(code = 1000, reason = ""): void {
+    if (this.readyState === WebSocket.CLOSED) return;
+    if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: "close", id: this.id, code, reason }));
+    this.disconnect();
+  }
+
+  public terminate(): void { this.close(1006, "logical stream disconnected"); }
+
+  public disconnect(): void {
+    if (this.readyState === WebSocket.CLOSED) return;
+    this.readyState = WebSocket.CLOSED;
+    this.release();
+    this.emit("close");
+  }
+}
+
 export class BrowserHostHttpBridge {
   private readonly sessions = new Map<string, BrowserHostHttpChannel>();
 
   constructor(private readonly accept: (channel: BinaryChannel) => void) {}
+
+  public attachStream(socket: WebSocket, request: IncomingMessage): void {
+    if (request.url === "/browser-host/stream") {
+      const streams = new Map<number, SharedGameStream>();
+      socket.on("message", (raw, binary) => {
+        const frame = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer);
+        if (binary) {
+          if (frame.length < 8 || frame.length > MAX_GAME_MESSAGE_BYTES + 8) { socket.close(1009, "invalid shared game frame"); return; }
+          streams.get(frame.readUInt32BE(0))?.emit("message", frame.subarray(4), true);
+          return;
+        }
+        if (frame.length > 4096) { socket.close(1009, "invalid stream control"); return; }
+        let message;
+        try { message = JSON.parse(frame.toString()); } catch { socket.close(1008, "invalid stream control"); return; }
+        if (!Number.isInteger(message?.id) || message.id < 1 || message.id > 0xffffffff) { socket.close(1008, "invalid stream id"); return; }
+        if (message.type === "attach") {
+          const channel = typeof message.sessionId === "string" && this.sessions.get(message.sessionId);
+          if (!channel || streams.has(message.id)) { socket.send(JSON.stringify({ type: "close", id: message.id, code: 1008, reason: "unknown game session" })); return; }
+          const stream = new SharedGameStream(socket, message.id, () => streams.delete(message.id));
+          streams.set(message.id, stream);
+          socket.send(JSON.stringify({ type: "open", id: message.id }));
+          channel.attachStream(stream);
+        } else if (message.type === "data" && typeof message.data === "string" && /^\d{1,10}$/.test(message.data)) {
+          streams.get(message.id)?.emit("message", Buffer.from(message.data), false);
+        } else if (message.type === "detach") streams.get(message.id)?.disconnect();
+        else socket.close(1008, "invalid stream control");
+      });
+      socket.on("close", () => { for (const stream of [...streams.values()]) stream.disconnect(); });
+      socket.on("error", () => socket.terminate());
+      return;
+    }
+    const match = /^\/browser-host\/session\/([0-9a-f-]+)\/stream$/.exec(request.url ?? "");
+    const channel = match && this.sessions.get(match[1]);
+    if (channel) channel.attachStream(socket);
+    else socket.close(1008, "unknown game session");
+  }
 
   public handle(request: IncomingMessage, response: ServerResponse): boolean {
     if (request.method === "POST" && request.url === "/browser-host/session") {

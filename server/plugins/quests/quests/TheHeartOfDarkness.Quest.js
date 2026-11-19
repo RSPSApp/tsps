@@ -681,8 +681,14 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
     if (id !== TOWER_STAIRS_ID) return false;
     const { player } = event;
     const current = stage(player);
-    if (current < S.CALLED || current >= S.COMPLETE) return false;
+    // The upper floors exist only as the trial instance on live (rec 1695: Climb-up rebuilds
+    // the region), so the generic Ladders climb must never take this staircase: it left the
+    // player on the static first floor, whose Exit only answers inside a trial (issue 6267).
+    // Wiki (Tower of Ascension): "The upper floors of the tower are no longer accessible
+    // after the quest is complete."
     event.handled = true;
+    // Ours: before Janus calls the player there is no recorded response; reuse his
+    // "not allowed up there" line from before the trials were explained.
     if (current < S.TRIALS_EXPLAINED) {
       play(player, NPC.JANUS, V.JANUS_STAIRS_EARLY);
       return true;

@@ -1,0 +1,118 @@
+name: Client release
+
+on:
+    push:
+        branches: [main]
+        paths:
+            - 'client/**'
+            - 'desktop/build-web.mjs'
+            - 'desktop/release*.mjs'
+            - 'desktop/package*.json'
+            - '.github/workflows/client-release.yml'
+    pull_request:
+        branches: [main]
+        paths:
+            - 'client/**'
+            - 'desktop/build-web.mjs'
+            - 'desktop/release*.mjs'
+            - 'desktop/package*.json'
+            - '.github/workflows/client-release.yml'
+    workflow_dispatch:
+        inputs:
+            version:
+                description: 'Optional version for a major/minor release, e.g. 1.3.0; blank increments patch'
+                required: false
+                type: string
+
+permissions:
+    contents: read
+
+concurrency:
+    group: client-release-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+    cancel-in-progress: false
+
+jobs:
+    build:
+        if: github.repository == 'RSPSApp/tsps'
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+            - run: corepack enable
+            - uses: actions/cache@v4
+              with:
+                  path: server/caches
+                  key: osrs-cache-${{ hashFiles('server/target.txt') }}
+            - name: Install and prepare cache
+              run: |
+                  yarn --cwd server install --immutable
+                  yarn --cwd client install --immutable
+                  yarn --cwd server ensure-cache
+                  npm ci --prefix desktop
+            - name: Check and build the shared client
+              run: |
+                  yarn --cwd client typecheck
+                  npm --prefix desktop test
+                  npm --prefix desktop run build:web
+              env:
+                  CI: 'false'
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: client-web
+                  path: client/build
+                  retention-days: 1
+
+    publish:
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        needs: build
+        runs-on: ubuntu-latest
+        environment: production
+        permissions:
+            contents: write
+        steps:
+            # Keep build code and signing credentials in separate jobs, as in deploy.yml.
+            - uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+                  sparse-checkout-cone-mode: false
+                  sparse-checkout: |
+                      /desktop/package.json
+                      /desktop/package-lock.json
+                      /desktop/release-web.mjs
+                      /desktop/release-version.mjs
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+            - run: npm ci --prefix desktop
+            - uses: actions/download-artifact@v4
+              with:
+                  name: client-web
+                  path: client/build
+            - name: Choose release version
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  REQUESTED_VERSION: ${{ inputs.version }}
+              run: |
+                  gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[].tag_name' > "$RUNNER_TEMP/client-release-tags"
+                  version=$(node desktop/release-version.mjs < "$RUNNER_TEMP/client-release-tags")
+                  echo "CLIENT_VERSION=$version" >> "$GITHUB_ENV"
+            - name: Sign web client release
+              env:
+                  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.CLIENT_UPDATE_SIGNING_KEY }}
+                  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.CLIENT_UPDATE_SIGNING_KEY_PASSWORD }}
+              run: npm --prefix desktop run release:web -- "$CLIENT_VERSION" "https://github.com/$GITHUB_REPOSITORY/releases/download/client-v$CLIENT_VERSION/"
+            - name: Publish complete release
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  CLIENT_COMMIT: ${{ github.sha }}
+              run: |
+                  tag="client-v$CLIENT_VERSION"
+                  gh release create "$tag" --draft --target "$CLIENT_COMMIT" --title "Web client $CLIENT_VERSION" --notes "Signed web client bundle from $CLIENT_COMMIT. The installed desktop wrapper and server profiles are retained."
+                  gh release upload "$tag" "desktop/releases/client/client-$CLIENT_VERSION.tar.gz" desktop/releases/client/manifest.json desktop/releases/client/manifest.json.minisig
+                  gh release edit "$tag" --draft=false --latest

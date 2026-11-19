@@ -106,3 +106,7 @@ server/data/definitions/bot-activities.local.json.tmp
 /gateway/
 /tools/runelite-gateway/
 /tools/runelite-client/
+
+# Shared desktop update bundle build outputs
+desktop/node_modules/
+desktop/releases/

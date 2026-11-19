@@ -227,6 +227,10 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     return (bits(player) & bit) !== 0;
   }
 
+  function hasAnyCrystalDisc(player) {
+    return [...DISC_VALUE_BY_ITEM.keys()].some((itemId) => held(player, itemId));
+  }
+
   function setBit(player, bit) {
     player.setAttribute(BITS_ATTRIBUTE, bits(player) | bit);
   }
@@ -309,7 +313,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   }
 
   function ensureExtraDiscs(player) {
-    if (hasBit(player, BIT_EXTRA_DISCS)) return;
+    if (hasBit(player, BIT_EXTRA_DISCS) && hasAnyCrystalDisc(player)) return;
     if (player.getInventory().getFreeSlots() < 3) {
       player.sendMessage("You need three free inventory slots.");
       return;
@@ -440,6 +444,9 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
         : "assassination-talking-to-brimstail-after-activating-the-machine";
     }
     if (stage >= STAGE_PANEL_UNLOCKED) {
+      if (!hasAnyCrystalDisc(player)) {
+        return "the-anti-illusion-machine-talking-to-brimstail-again-before-unlocking-the-machine";
+      }
       return "the-anti-illusion-machine-talking-to-brimstail-after-unlocking-the-machine-s-front-panel";
     }
     if (stage >= STAGE_REPAIR_REPORTED) {
@@ -520,7 +527,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
       case "HXYWYK": // has a bucket of sap
         return held(player, BUCKET_OF_SAP_ITEM_ID);
       case "r8Ly0u": // has not received the three extra discs
-        return !hasBit(player, BIT_EXTRA_DISCS);
+        return !hasBit(player, BIT_EXTRA_DISCS) || !hasAnyCrystalDisc(player);
       case "cHfg5Y": // progressed far enough into Monkey Madness I
         return false;
       case "b8Zhn0": // hasn't progressed far enough into Monkey Madness I

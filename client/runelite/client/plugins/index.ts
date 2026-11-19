@@ -1,3 +1,4 @@
+import { PingGrapherPlugin } from "../../../game/plugins/pinggrapher/PingGrapherPlugin";
 import { CharactersPlugin } from "../../../game/plugins/characters/CharactersPlugin";
 import { AnimationSmoothingConfig } from "../../../game/plugins/animationsmoothing/AnimationSmoothingConfig";
 import { BugReportPlugin } from "../../../game/plugins/bugreport/BugReportPlugin";
@@ -123,6 +124,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     StatusBarsPlugin,
     BoostsPlugin,
     RegenMeterPlugin,
+    PingGrapherPlugin,
     RunEnergyPlugin,
     TickCounterPlugin,
     IdleNotifierPlugin,

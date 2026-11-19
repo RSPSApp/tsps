@@ -656,6 +656,42 @@ test('XP drops setup: a dropdown row sets its varbit to the row - 1 (script 1036
   assert.equal(next.varps.get(XPDROPS_VARP), varp);
 });
 
+test('native XP setup enables the Most recent row on both skill dropdowns', () => {
+  const { buttons } = registered();
+  const player = varpPlayer({ native: true });
+  buttons.get((160 << 16) | 6)({ player, opId: 2 });
+  // Cache CS2 1032 creates Most recent at dynamic child 31 + 1, not 31.
+  for (const child of [54, 55]) {
+    assert.ok(player.flags.some(([uid, from, to, flags]) =>
+      uid === ((XPDROPS_SETUP << 16) | child) && from <= 32 && to >= 32 && (flags & 2) !== 0
+    ), 'the native client must transmit op1 on row 32 of dropdown ' + child);
+  }
+});
+
+test('native XP counter and progress Most recent choices survive a serialized save and relog', () => {
+  const { buttons, logins } = registered();
+  const player = varpPlayer({ native: true });
+  // Preserve the existing position while the counter/progress fields change.
+  player.getPacketSender().sendVarbit(4692, 2);
+  for (const [child, varbit] of [[54, 4697], [55, 4698]]) {
+    const buttonId = (XPDROPS_SETUP << 16) | child;
+    const choose = buttons.get(buttonId);
+    assert.equal(choose({ player, buttonId, slot: 32 }), true, 'Most recent row is accepted');
+    const def = CacheDefinitions.getVarbit(varbit);
+    assert.equal((player.varps.get(def.baseVar) >>> def.startBit) & 31, 31);
+    assert.equal(choose({ player, buttonId, slot: 33 }), false, 'past the five-bit value range');
+  }
+  const saved = JSON.parse(JSON.stringify(player.getAttribute('settings:xpdrops-setup')));
+  const next = varpPlayer({ native: true });
+  next.setAttribute('settings:xpdrops-setup', saved);
+  logins.forEach((login) => login({ player: next }));
+  assert.equal(next.varps.get(XPDROPS_VARP), player.varps.get(XPDROPS_VARP),
+    'the signed packed varp, including the progress field high bit, survives');
+  assert.equal(next.varps.get(XPDROPS_VARP) & 3, 2, 'position stays unchanged');
+  assert.equal((next.varps.get(XPDROPS_VARP) >>> 22) & 31, 31, 'counter follows most recent skill');
+  assert.equal((next.varps.get(XPDROPS_VARP) >>> 27) & 31, 31, 'progress follows most recent skill');
+});
+
 test('XP drops setup: the browser transmits the whole varp, which is kept and echoed', () => {
   const { events, logins } = registered();
   const player = varpPlayer();

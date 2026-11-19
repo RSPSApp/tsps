@@ -343,18 +343,14 @@ test("Elnock's Exchange: a shop_frame slot selects ii_elnex, Confirm trades it",
   assert.equal(p.varbits.get(elnock.SELECTED_VARBIT), 2, "only the offers' own slots select");
 });
 
-test("Trade runs toplevel_mainmodal_open [-1, -1] after the Exchange opens (issue 6268)", () => {
+test("Trade runs toplevel_mainmodal_open [-1, -1] just before the Exchange opens (issue 6268)", () => {
   const p = player();
   plugin._test.elnock.openExchange({ player: p });
-  const names = p.packets.map(([name]) => name);
-  const opened = names.indexOf("sendInterface");
+  const opened = p.packets.findIndex(([name]) => name === "sendInterface");
   assert.deepEqual(p.packets[opened], ["sendInterface", 540]);
-  const script = p.packets.findIndex(([name, id]) => name === "sendInterfaceScript" && id === 2524);
-  assert.ok(script > opened, "captured: the script follows the modal and its setevents");
-  assert.deepEqual(p.packets[script][2], [-1, -1], "resets a previous modal's background/size");
-  const background = p.packets.findIndex(([name, id]) => name === "sendInterfaceScript" && id === 917);
-  assert.ok(background >= 0 && background < opened, "the background is reset before the open resizes the modal");
-  assert.deepEqual(p.packets[background][2], [-1, -1]);
+  assert.deepEqual(p.packets[opened - 1], ["sendInterfaceScript", 2524, [-1, -1]],
+    "captured: 2524 directly before if_opensub, so the open's resize sees the default background");
+  assert.equal(p.packets.filter(([name]) => name === "sendInterfaceScript").length, 1);
 });
 
 test("Puro-Puro roaming implings start invisible, show after two minutes and are replaced when caught", (t) => {

@@ -131,7 +131,7 @@ function fancyRejuvenation(event) { return drinkFromPool(event, 3); }
 
 module.exports = {
   name: "RejuvenationPool",
-  description: "The player-owned house restoration, revitalisation, rejuvenation, fancy and ornate pools, which restore stats when drunk from.",
+  description: "The player-owned house restoration, revitalisation, rejuvenation, fancy and ornate pools (and their frozen and fiery variants), which restore stats when drunk from.",
   register(api) {
     TaskManager = api.getTaskManager();
     pluginApi = api;
@@ -140,5 +140,10 @@ module.exports = {
     api.onObjectInteraction("Pool of Rejuvenation", { Drink: rejuvenation });
     api.onObjectInteraction("Fancy pool of Rejuvenation", { Drink: fancyRejuvenation });
     api.onObjectInteraction("Ornate pool of Rejuvenation", { Drink: drinkFromPool });
+    // Themed variants (frozen = Christmas decorations, fiery = cosmetic ornate upgrade) keep the base pool's effect.
+    api.onObjectInteraction("Frozen Pool of Rejuvenation", { Drink: rejuvenation });
+    api.onObjectInteraction("Frozen fancy pool of Rejuvenation", { Drink: fancyRejuvenation });
+    api.onObjectInteraction("Frozen ornate pool of Rejuvenation", { Drink: drinkFromPool });
+    api.onObjectInteraction("Fiery Ornate Pool of Rejuvenation", { Drink: drinkFromPool });
   },
 };

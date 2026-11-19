@@ -55,9 +55,11 @@ function player({ hunter = 17, boost = 0, strength = 1, items = {} } = {}) {
     setLocation: (destination) => { p.location = destination; },
     performAnimation() {},
     varbits: new Map(),
+    packets: [],
     getPacketSender() {
       const sender = new Proxy({}, {
         get: (_target, name) => (...args) => {
+          p.packets.push([name, ...args]);
           if (name === "sendVarbit") p.varbits.set(args[0], args[1]);
           return sender;
         },
@@ -341,6 +343,19 @@ test("Elnock's Exchange: a shop_frame slot selects ii_elnex, Confirm trades it",
   assert.equal(p.varbits.get(elnock.SELECTED_VARBIT), 2, "only the offers' own slots select");
 });
 
+test("Trade runs toplevel_mainmodal_open [-1, -1] after the Exchange opens (issue 6268)", () => {
+  const p = player();
+  plugin._test.elnock.openExchange({ player: p });
+  const names = p.packets.map(([name]) => name);
+  const opened = names.indexOf("sendInterface");
+  assert.deepEqual(p.packets[opened], ["sendInterface", 540]);
+  const script = p.packets.findIndex(([name, id]) => name === "sendInterfaceScript" && id === 2524);
+  assert.ok(script > opened, "captured: the script follows the modal and its setevents");
+  assert.deepEqual(p.packets[script][2], [-1, -1], "resets a previous modal's background/size");
+  const background = p.packets.findIndex(([name, id]) => name === "sendInterfaceScript" && id === 917);
+  assert.ok(background >= 0 && background < opened, "the background is reset before the open resizes the modal");
+  assert.deepEqual(p.packets[background][2], [-1, -1]);
+});
 
 test("Puro-Puro roaming implings start invisible, show after two minutes and are replaced when caught", (t) => {
   const roaming = plugin._test.roaming;

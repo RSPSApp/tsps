@@ -49,6 +49,20 @@ The Bank PIN guards Exchange and Quick-withdraw (the Wiki files Elnock Inquisito
 protection"; feature `elnock-storage`, the bank's keypad title). A locked PIN asks first; the right
 PIN reruns the option only if the player is still within 2 tiles of him.
 
+## Elnock's Exchange
+
+`Elnock.ImpetuousImpulses.js`: Trade (op 3) opens Elnock's Exchange (540).
+
+From rsprox captures (rev 227/237: 95, 1104, local 1000175, 1000195, 1000332, 1000410), on the
+same tick: `ii_elnex` (3729) 0, the modal, OP1 on shop_frame slots 0, 3, 6 and 9 and on confirm
+slot 9, then script 2524 `toplevel_mainmodal_open` (-1, -1).
+
+Ours (issue 6268): script 917 `toplevel_mainmodal_background` (-1, -1) before the open. The
+client resizes the main modal from those varcs (`toplevel_subchange` -> `toplevel_resize`) while it
+opens the Exchange, before 2524 arrives, so a previous modal's (-1, -3) or (-1, -2), from a shop or
+the Forestry kit, stretched the first open. No capture shows live sending 917 here; live sends it
+before the Forestry kit and Elnock's storage.
+
 ## Anchovy oil and imp repellent
 
 From rsprox captures, recording 468 (rev 233), and the Wiki ("Anchovy oil", "Anchovy paste").

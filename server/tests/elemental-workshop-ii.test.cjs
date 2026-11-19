@@ -545,3 +545,33 @@ test('a bench job stops when the player walks away, loses the hammer or the book
   ticks(4);
   assert.equal(ok.getInventory().getItems()[slot].getId(), I.ELEMENTAL_HELMET, 'the helmet goes to the first free slot, here the bar\'s (Wiki: 4 ticks)');
 });
+
+test('the press strikes only a jig that is under it by then; replacement cogs come back after the quest', (t) => {
+  const early = onFloor(t);
+  const bits = (5 << 16) | (13 << 20) | (6 << 24) | (2 << 9) | (1 << 12) | (1 << 6);
+  early.setAttribute('quest.elemental_workshop_ii.varp896', bits >>> 0);
+  pull(early, 18620, 1953, 5151, 1);
+  ticks(3); // the cart is on its way, far from the press
+  pull(early, 18640, 1950, 5153, 2);
+  assert.equal(varbit(early, V.JIG_STATE), 0, 'not flattened in transit');
+  assert.equal(text(early), 'You pull the lever but nothing happens. Maybe the jig needs to be under the press first.');
+  close(early);
+
+  const late = onFloor(t);
+  late.setAttribute('quest.elemental_workshop_ii.varp896', bits >>> 0);
+  pull(late, 18620, 1953, 5151, 1);
+  ticks(12); // two steps out, as live pulled it (ticks 1091-1093)
+  placeAt(late, 1951, 5153, 2);
+  op(late, 18640, at(late, 1950, 5153, 2), 'Pull');
+  ticks(2);
+  assert.equal(varbit(late, V.JIG_STATE), 3, 'flattened as the cart arrives');
+
+  // After the quest: a cog taken back off its pin and lost comes back from its crate (the small cog in box 1 here).
+  const done = onFloor(t);
+  ew('elemental_workshop_ii').setStage(done, 11);
+  done.setAttribute('quest.elemental_workshop_ii.crates', 0 | (1 << 3) | (2 << 6) | (3 << 9) | (1 << 12));
+  placeAt(done, 1951, 5149, 2);
+  op(done, 18612, at(done, 1951, 5148, 2), 'Search');
+  assert.equal(amount(done, I.SMALL_COG), 1);
+  assert.ok(done.messages.includes('You find a small cog.'));
+});

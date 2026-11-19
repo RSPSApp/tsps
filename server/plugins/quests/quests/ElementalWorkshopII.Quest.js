@@ -673,7 +673,8 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
   function searchCrate(player, objectId) {
     const index = CRATE_INDEX.get(objectId);
     const slot = crateMap(player).indexOf(index);
-    if (slot < 0 || quest.isComplete(player) || !crateItemNeeded(player, slot)) {
+    // After the quest too: a cog taken back off its pin and lost must come back, or no more bars can be primed.
+    if (slot < 0 || !crateItemNeeded(player, slot)) {
       player.sendMessage(line("into-the-workshop-searching-crates", 0));
       return;
     }
@@ -789,6 +790,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     const to = (from + 1) % 4;
     const start = STOP_INDEX[from];
     const end = STOP_INDEX[to] === 0 ? CART_PATH.length : STOP_INDEX[to];
+    fl.cartStepsLeft = end - start;
     everyTick(player, (n) => {
       if (n === 1) {
         setMachine(player, VARBIT.JIG_POS, to);
@@ -796,6 +798,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
       }
       const [x, y] = CART_PATH[(start + n) % CART_PATH.length];
       if (fl.cart?.isRegistered?.()) fl.cart.moveTo(tile(player, [x, y, 2]));
+      fl.cartStepsLeft = end - (start + n);
       if (start + n < end) return true;
       fl.cartMoving = false;
       return false;
@@ -927,11 +930,21 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     const reply = (variant) => later(player, 1, () => messageBox(player, line(variant)));
     if (pipes(player).length < 3) return reply("into-the-workshop-puling-the-press-lever-while-it-is-broken");
     if (!pipesSolved(player)) return reply("into-the-workshop-pulling-the-press-lever-with-the-junction-pipes-not-correctly-connected");
-    if (machineValue(player, VARBIT.JIG_POS) !== CART_STOP.PRESS) return reply("into-the-workshop-pulling-the-press-lever-at-the-wrong-time");
+    // The hammer falls two ticks after the pull: the jig has to be under it by then. Live pulled while the
+    // cart was two steps out and flattened the bar as it arrived (ticks 1091-1093).
+    const arrivesInTime = () => machineValue(player, VARBIT.JIG_POS) === CART_STOP.PRESS && (!fl.cartMoving || (fl.cartStepsLeft ?? 0) <= 2);
+    if (!arrivesInTime()) return reply("into-the-workshop-pulling-the-press-lever-at-the-wrong-time");
     fl.pressBusy = true;
     steps(player, [
       [1, () => setLoc(player, HAMMER_TILE, HAMMER_IDS, 18644, 10, 0)],
       [2, () => {
+        if (fl.cartMoving || machineValue(player, VARBIT.JIG_POS) !== CART_STOP.PRESS) {
+          // Ours: the cart left or isn't in yet; nothing is struck.
+          removeLoc(player, HAMMER_TILE, HAMMER_IDS);
+          fl.pressBusy = false;
+          messageBox(player, line("into-the-workshop-pulling-the-press-lever-at-the-wrong-time"));
+          return;
+        }
         const jig = machineValue(player, VARBIT.JIG_STATE);
         let text;
         if (jig === JIG.HOT) {

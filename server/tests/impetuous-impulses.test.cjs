@@ -55,9 +55,11 @@ function player({ hunter = 17, boost = 0, strength = 1, items = {} } = {}) {
     setLocation: (destination) => { p.location = destination; },
     performAnimation() {},
     varbits: new Map(),
+    packets: [],
     getPacketSender() {
       const sender = new Proxy({}, {
         get: (_target, name) => (...args) => {
+          p.packets.push([name, ...args]);
           if (name === "sendVarbit") p.varbits.set(args[0], args[1]);
           return sender;
         },
@@ -341,6 +343,15 @@ test("Elnock's Exchange: a shop_frame slot selects ii_elnex, Confirm trades it",
   assert.equal(p.varbits.get(elnock.SELECTED_VARBIT), 2, "only the offers' own slots select");
 });
 
+test("Trade runs toplevel_mainmodal_open [-1, -1] just before the Exchange opens (issue 6268)", () => {
+  const p = player();
+  plugin._test.elnock.openExchange({ player: p });
+  const opened = p.packets.findIndex(([name]) => name === "sendInterface");
+  assert.deepEqual(p.packets[opened], ["sendInterface", 540]);
+  assert.deepEqual(p.packets[opened - 1], ["sendInterfaceScript", 2524, [-1, -1]],
+    "captured: 2524 directly before if_opensub, so the open's resize sees the default background");
+  assert.equal(p.packets.filter(([name]) => name === "sendInterfaceScript").length, 1);
+});
 
 test("Puro-Puro roaming implings start invisible, show after two minutes and are replaced when caught", (t) => {
   const roaming = plugin._test.roaming;

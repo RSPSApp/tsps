@@ -1,1326 +1,698 @@
 /**
- * Rum Deal (members).
+ * Rum Deal (members), aligned with a whole run of the quest on live: the user's RSProx capture
+ * RumDeal.bin (revision 242.1; docs/quests/rum-deal/README.md, with every capture fact the plugin
+ * relies on and the recording's ticks). The words are the Wiki's: the "Rum Deal" transcript (with the
+ * lines it lacks added from the capture in osrsreboxed-db's capture-sources.json), and the Pirate Pete,
+ * 50% Luke, Captain Braindeath, Brewer, Davey and Captain Donnie pages for the start, the gate and
+ * everything after the quest.
  *
- * The words come from the "Rum Deal" transcript page; this plugin selects the
- * variant for Pirate Pete, Captain Braindeath, 50% Luke, Davey, Captain Donnie,
- * the zombie protesters/swabs and the brewers (all indexed), answers the prose
- * conditions, runs the start (the page has no quest hook, so the knock-out
- * action and the "Keep the money" choice start it), the zombie-pirate 'rum'
- * brewing (blindweed patch -> intake hopper -> stagnant water -> sluglings/
- * Karamthulhu -> pressure barrel -> possessed brewing controls -> fever spider),
- * the Holy Wrench blessing, the Evil Spirit fight and the completion action.
+ * The units in plugins/quests/rumdeal/: State (stages, varbits, ids), Journal, Patch (the blindweed
+ * patch), Brewery (hopper, barrel and lever, controls and the Evil Spirit, tap, lake, squid spot) and
+ * Scenes (the knock-out with cutscene 1, the window, Davey's blessing, the brew, Pete's lifts).
  *
- * Stages (varp 600, real OSRS stage map): 1 agreed to help Pete, 2 knocked out
- * on the island, 3 met Braindeath (no room for seed), 4 given seeds, 5 grown
- * blindweed, 6 shown blindweed, 7 blindweed added, 8 fetch water, 9 water
- * collected, 10 water added, 11 catch creatures, 12 pressurised, 13 bless
- * wrench, 14 spirit banished, 15 kill spider, 16 spider added, 17 collect
- * swill, 18 told Donnie, 19 complete.
- *
- * Source: https://github.com/GregHib/void/blob/2b8e267836a8469757c73694ea4d57f2f1c28458/game/src/main/kotlin/content/quest/member/rum_deal/RumDeal.kt
- * (stage map + dialogue from data/quest/members/rum_deal/rum_deal.varps.toml and
- * data/area/morytania/braindeath_island/*). Rewards per the OSRS Wiki: 2 Quest
- * points, 7,000 Prayer/Fishing/Farming XP and the Holy wrench.
- *
- * Gaps: the intro cutscene is a knockout teleport plus the cutscene-1/meeting
- * transcript (no camera change); the grow-cutscene is text/state only, while the
- * slugling roll loops the cache's deal_bowl_fish animation with a catch every five
- * ticks (Void's 1/3 Karamthulhu split) and stops on movement, lost gear or a full
- * inventory rather than using the skill's success charts; the blindweed growth is a flat 60s timer instead of the real
- * farming tick cycle, and its patch stage rides varbit 1366 (children 10097-10102,
- * grown = 10102); the client only resolves that transform when it builds the scene,
- * so every stage change also sends a per-player loc swap of the child; the bailing
- * bucket named in the issue belongs to Fishing
- * Trawler, not this quest (the reference uses a plain bucket); 50% Luke and the
- * gate are handled by NPC dialogue + a one-tile pass-through rather than the
- * reference's object swap; zombie swabs only play the six insult variants
- * (roam-away/re-intimidate are not fired); the Fishing spot uses NPC 635 (the
- * only spot spawned on Braindeath Island in this cache).
+ * Rewards (the capture's scroll, tick 2813; the Wiki): 2 Quest points, 7,000 Prayer, Fishing and
+ * Farming XP and the holy wrench Davey has already blessed.
  */
 module.exports = function registerRumDealQuest(api) {
-  const {
-    Animation,
-    Equipment,
-    ItemIdentifiers,
-    NpcIdentifiers,
-    ObjectIdentifiers,
-    Skill,
-  } = api.core;
+  const { DialogueChainBuilder, Equipment, ItemIdentifiers: I, Skill, StatementDialogue } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
+  const { STAGES, VARP_QUEST, VARBITS, ATTRIBUTES, PAGE, NPCS, BREWER_NUMBER, TILES } = require("../rumdeal/State.RumDeal");
+  const { journal } = require("../rumdeal/Journal.RumDeal");
 
-  const PAGE = "Rum Deal";
-  const VARP_RUM_DEAL = 600; // real OSRS varp, unused in this repo
+  const PETE_PAGE = "Pirate Pete";
+  const LUKE_PAGE = "50% Luke";
+  const SLAYER_GLOVES = new Set([I.SLAYER_GLOVES, I.SLAYER_GLOVES_2]);
+  const RINGS_OF_CHAROS = new Set([4202, 6465]); // Ring of charos, Ring of charos (a)
+  const TINDERBOX = I.TINDERBOX;
+  const GATE = 10172;
+  const SWABS = new Set(NPCS.SWABS);
+  const PROTESTERS = new Set(NPCS.PROTESTERS);
+  const BREWERS = new Set(NPCS.BREWERS);
+  const DIALOGUE_NPCS = new Set([
+    NPCS.PETE, NPCS.ISLAND_PETE, NPCS.BRAINDEATH, NPCS.LUKE, NPCS.DAVEY, NPCS.DONNIE, ...SWABS, ...PROTESTERS, ...BREWERS,
+  ]);
+  /** Braindeath Island's box (the quest's NPCs and locs), and Port Phasmatys's dock where Pete waits. */
+  const onIsland = (player) => {
+    const at = player.getLocation();
+    return at.getX() >= 2100 && at.getX() <= 2200 && at.getY() >= 5050 && at.getY() <= 5170;
+  };
 
-  const STAGE_STARTED = 1;
-  const STAGE_KNOCKED_OUT = 2;
-  const STAGE_MET_BRAINDEATH = 3;
-  const STAGE_GIVEN_SEEDS = 4;
-  const STAGE_GROWN_BLINDWEED = 5;
-  const STAGE_SHOW_BLINDWEED = 6;
-  const STAGE_BLINDWEED_ADDED = 7;
-  const STAGE_FETCH_WATER = 8;
-  const STAGE_COLLECTED_WATER = 9;
-  const STAGE_WATER_ADDED = 10;
-  const STAGE_CATCH_CREATURES = 11;
-  const STAGE_PRESSURISED = 12;
-  const STAGE_BLESS_WRENCH = 13;
-  const STAGE_SPIRIT_BANISHED = 14;
-  const STAGE_KILL_SPIDER = 15;
-  const STAGE_SPIDER_ADDED = 16;
-  const STAGE_COLLECT_SWILL = 17;
-  const STAGE_TOLD_DONNIE = 18;
-  const STAGE_COMPLETE = 19;
-
-  const BLINDWEED_SEED = ItemIdentifiers.BLINDWEED_SEED; // 6710
-  const BLINDWEED = ItemIdentifiers.BLINDWEED; // 6711
-  const STAGNANT_WATER = ItemIdentifiers.BUCKET_OF_WATER_3; // 6712 (stagnant)
-  const WRENCH = ItemIdentifiers.WRENCH; // 6713
-  const HOLY_WRENCH = ItemIdentifiers.HOLY_WRENCH; // 6714
-  const SLUGLINGS = ItemIdentifiers.SLUGLINGS; // 6715
-  const KARAMTHULHU = ItemIdentifiers.KARAMTHULHU; // 6716
-  const FEVER_SPIDER_BODY = ItemIdentifiers.FEVER_SPIDER_BODY; // 6718
-  const UNSANITARY_SWILL = ItemIdentifiers.UNSANITARY_SWILL; // 6719
-  const BUCKET = ItemIdentifiers.BUCKET; // 1925
-  const FISHBOWL = ItemIdentifiers.FISHBOWL; // 6668
-  const BIG_FISHING_NET = ItemIdentifiers.BIG_FISHING_NET; // 305
-  const FISHBOWL_AND_NET = ItemIdentifiers.FISHBOWL_AND_NET; // 6673
-  const RAKE = ItemIdentifiers.RAKE; // 5341
-  const WEEDS = ItemIdentifiers.WEEDS; // 6055
-  const SEED_DIBBER = ItemIdentifiers.SEED_DIBBER; // 5343
-  const WATERING_CAN = ItemIdentifiers.WATERING_CAN; // 5331
-  const SLAYER_GLOVES = ItemIdentifiers.SLAYER_GLOVES; // 6708
-
-  const PETE_NPC_IDS = new Set([
-    NpcIdentifiers.PIRATE_PETE, // 601
-    NpcIdentifiers.PIRATE_PETE_2, // 602
-    NpcIdentifiers.PIRATE_PETE_3, // 3389
-    NpcIdentifiers.PIRATE_PETE_4, // 4814
-    NpcIdentifiers.PIRATE_PETE_5, // 4816
-  ]);
-  const BRAINDEATH_NPC_ID = NpcIdentifiers.CAPTAIN_BRAINDEATH; // 603
-  const LUKE_NPC_ID = NpcIdentifiers._50_LUKE; // 604
-  const DAVEY_NPC_ID = NpcIdentifiers.DAVEY; // 605
-  const DONNIE_NPC_ID = NpcIdentifiers.CAPTAIN_DONNIE; // 606
-  const PROTESTER_NPC_IDS = new Set([
-    NpcIdentifiers.ZOMBIE_PROTESTER, // 607
-    NpcIdentifiers.ZOMBIE_PROTESTER_2, // 608
-    NpcIdentifiers.ZOMBIE_PROTESTER_3, // 609
-    NpcIdentifiers.ZOMBIE_PROTESTER_4, // 610
-    NpcIdentifiers.ZOMBIE_PROTESTER_5, // 611
-    NpcIdentifiers.ZOMBIE_PROTESTER_6, // 612
-  ]);
-  const SWAB_NPC_IDS = new Set([
-    NpcIdentifiers.ZOMBIE_SWAB, // 619
-    NpcIdentifiers.ZOMBIE_SWAB_2, // 620
-    NpcIdentifiers.ZOMBIE_SWAB_3, // 621
-    NpcIdentifiers.ZOMBIE_SWAB_4, // 622
-    NpcIdentifiers.ZOMBIE_SWAB_5, // 623
-    NpcIdentifiers.ZOMBIE_SWAB_6, // 624
-  ]);
-  const BREWER_NPC_IDS = new Set([
-    NpcIdentifiers.BREWER, // 627
-    NpcIdentifiers.BREWER_2, // 628
-    NpcIdentifiers.BREWER_3, // 629
-    NpcIdentifiers.BREWER_4, // 630
-    NpcIdentifiers.BREWER_5, // 631
-    NpcIdentifiers.BREWER_6, // 632
-    NpcIdentifiers.BREWER_7, // 633
-    NpcIdentifiers.BREWER_8, // 634
-  ]);
-
-  /** NPCs whose transcripts this plugin owns; dialogue conditions from anyone else are not ours. */
-  const DIALOGUE_NPC_IDS = new Set([
-    ...PETE_NPC_IDS,
-    BRAINDEATH_NPC_ID,
-    LUKE_NPC_ID,
-    DAVEY_NPC_ID,
-    DONNIE_NPC_ID,
-    ...PROTESTER_NPC_IDS,
-    ...SWAB_NPC_IDS,
-    ...BREWER_NPC_IDS,
-  ]);
-  const EVIL_SPIRIT_NPC_ID = NpcIdentifiers.EVIL_SPIRIT; // 625
-  const FEVER_SPIDER_NPC_ID = NpcIdentifiers.FEVER_SPIDER; // 626
-  const FISHING_SPOT_NPC_ID = NpcIdentifiers.FISHING_SPOT; // 635, only spawned on Braindeath
-  const FISHING_ANIMATION = 2813; // deal_bowl_fish
-  const FISHING_INTERVAL_TICKS = 5;
-  const fishingSessions = new Map();
-
-  const INTAKE_HOPPER_OBJECT_ID = ObjectIdentifiers.HOPPER_2; // 10170
-  const PRESSURE_BARREL_OBJECT_ID = ObjectIdentifiers.PRESSURE_BARREL; // 10171
-  // The map places the unnamed multi-loc root (varbit 1354 resolves to the children);
-  // the object click carries the root id, so both the root and the children are accepted.
-  const PRESSURE_LEVER_ROOT_OBJECT_ID = 10164;
-  const PRESSURE_LEVER_OBJECT_IDS = new Set([
-    PRESSURE_LEVER_ROOT_OBJECT_ID,
-    ObjectIdentifiers.PRESSURE_LEVER, // 10165
-    ObjectIdentifiers.PRESSURE_LEVER_2, // 10166
-  ]);
-  const STAGNANT_LAKE_OBJECT_ID = ObjectIdentifiers.STAGNANT_LAKE; // 10105
-  const OUTPUT_TAP_OBJECT_ID = ObjectIdentifiers.OUTPUT_TAP; // 10148
-  // Same multi-loc root miss as the lever: 10104 (varbit 1355) is what the map places
-  // and what item-on-object reports; 10142-10144 are the children it resolves to.
-  const BREWING_CONTROL_ROOT_OBJECT_ID = 10104;
-  const BREWING_CONTROL_OBJECT_IDS = new Set([
-    BREWING_CONTROL_ROOT_OBJECT_ID,
-    ObjectIdentifiers.BREWING_CONTROL, // 10142
-    ObjectIdentifiers.BREWING_CONTROL_2, // 10143
-    ObjectIdentifiers.BREWING_CONTROL_3, // 10144
-  ]);
-  const TOOL_CUPBOARD_OBJECT_IDS = new Set([
-    ObjectIdentifiers.CUPBOARD_34, // 10162
-    ObjectIdentifiers.OPEN_CUPBOARD_4, // 10163
-  ]);
-  // The map places the unnamed multi-loc root 10096 (its resolved variant is "Blindweed
-  // Patch"); the cache has no name for the root, so ObjectIdentifiers has no constant.
-  // Varbit 1366 picks the stage: 0 weeds, 3 raked, 4 growing, 5 fully grown (the only
-  // child with a Pick option, 10102). Values mirror Quest Helper's DEAL_FARMING. The client only resolves the transform when it
-  // builds the scene, so stage changes also send a per-player loc swap of the child.
-  const PATCH_VARBIT = 1366;
-  const PATCH_CHILDREN = [10097, 10098, 10099, 10100, 10101, 10102];
-  const PATCH_TILE = { x: 2162, y: 5069, z: 0 };
-  const PATCH_SHAPE = 10;
-  const PATCH_ROTATION = 1;
-  const BLINDWEED_PATCH_ROOT_OBJECT_ID = 10096;
-  const BLINDWEED_PATCH_OBJECT_IDS = new Set([
-    BLINDWEED_PATCH_ROOT_OBJECT_ID,
-    ObjectIdentifiers.BLINDWEED_PATCH, // 10097
-    ObjectIdentifiers.BLINDWEED_PATCH_2, // 10098
-    ObjectIdentifiers.BLINDWEED_PATCH_3, // 10099
-    ObjectIdentifiers.BLINDWEED_PATCH_4, // 10100
-    ObjectIdentifiers.BLINDWEED_PATCH_5, // 10101
-    ObjectIdentifiers.BLINDWEED_PATCH_6, // 10102
-  ]);
-  const TRASHED_PATCH_OBJECT_ID = ObjectIdentifiers.TRASHED_PATCH; // 10103
-  const GATE_OBJECT_IDS = new Set([
-    ObjectIdentifiers.GATE_96, // 10172
-    ObjectIdentifiers.GATE_104, // 11771
-  ]);
-  // The player is knocked out at Pete's dock and wakes in front of Braindeath.
-  const WAKE_TILE = { x: 2144, y: 5108, z: 1 };
-  // The south brewery stair (10137 at 2153,5109 z1) pairs with a Climb-up stair two
-  // tiles west (10136 at 2151,5109 z0), which ClimbLinks' landing search misses.
-  const SOUTH_STAIR_OBJECT_ID = ObjectIdentifiers.WOODEN_STAIR_2; // 10137
-  const SOUTH_STAIR_TILE = { x: 2153, y: 5109, z: 1 };
-  const SOUTH_STAIR_LANDING = { x: 2153, y: 5110, z: 0 };
-
-  const INTRO_ATTRIBUTE = "quest.rum_deal.intro";
-  const WEEDED_ATTRIBUTE = "quest.rum_deal.weeded";
-  const PLANTED_ATTRIBUTE = "quest.rum_deal.planted";
-  const SLUGLINGS_ATTRIBUTE = "quest.rum_deal.slugs";
-  const KARAMTHULHU_ATTRIBUTE = "quest.rum_deal.karam";
-  const SPIRIT_ATTRIBUTE = "quest.rum_deal.spirit";
-
-  // ponytail: flat growth timer; swap to the Farming plugin's tick data if the
-  // patch ever needs real growth stages.
-  const BLINDWEED_GROWTH_MS = 60000;
-
-  const START_HOOK = "quest:rum-deal:start";
-  const CUPBOARD_VARIANT = "getting-your-beer-ings-searching-the-basement-cupboard-for-farming-supplies";
+  const REQUIRED_SKILLS = [
+    [Skill.FARMING, 40], [Skill.FISHING, 50], [Skill.PRAYER, 47], [Skill.CRAFTING, 42], [Skill.SLAYER, 42],
+  ];
 
   let quest;
-  const spirits = new Map();
+  const intimidated = new WeakMap();
+  const gateRequests = new Map();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
-
-  function freeSlots(player) {
+  const freeSlots = (player) => {
     const inventory = player.getInventory();
-    return typeof inventory.getFreeSlots === "function"
-      ? inventory.getFreeSlots()
-      : inventory.isFull()
-        ? 0
-        : 28;
-  }
-
+    return typeof inventory.getFreeSlots === "function" ? inventory.getFreeSlots() : inventory.isFull() ? 0 : 28;
+  };
   const hasFreeSlot = (player) => freeSlots(player) > 0;
   const level = (player, skill) => player.getSkillManager().getCurrentLevel(skill);
+  const giveIfMissing = (player, itemId) => {
+    if (!held(player, itemId) && hasFreeSlot(player)) player.getInventory().adds(itemId, 1);
+  };
+  const statement = (player, text) => player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
+  /** Holds the player still for `ticks`, as the capture's busy actions do. */
+  function hold(player, ticks) {
+    const queue = player.getMovementQueue();
+    queue.reset();
+    queue.setBlockMovement(true);
+    const generation = queue.getBlockMovementGeneration?.();
+    api.getTaskManager().submit(new api.core.CountdownTask(player, ticks, () => {
+      if (generation === undefined || queue.getBlockMovementGeneration() === generation) queue.setBlockMovement(false);
+    }));
+  }
+
+  /** The varbits the stage implies (the brewing controls, the drunk pirates) and the barrel's. */
+  function syncVarbits(player) {
+    const stage = quest.getStage(player);
+    const sender = player.getPacketSender();
+    const hopper = stage >= STAGES.COLLECT_SWILL ? 2
+      : stage === STAGES.PRESSURISED || stage === STAGES.BLESS_WRENCH ? 1 : 0;
+    sender.sendVarbit(VARBITS.MULTI_HOPPER, hopper);
+    for (const varbit of VARBITS.PIRATES) sender.sendVarbit(varbit, stage >= STAGES.TOLD_DONNIE ? 1 : 0);
+    brewery.showBarrel(player);
+  }
+
+  const ctx = { quest: () => quest, held, hasFreeSlot, level, statement, hold, syncVarbits };
+  const patch = require("../rumdeal/Patch.RumDeal")(api, ctx);
+  const brewery = require("../rumdeal/Brewery.RumDeal")(api, ctx);
+  const scenes = require("../rumdeal/Scenes.RumDeal")(api, ctx);
 
   function questIsComplete(player, key) {
     const request = { player, key, complete: undefined };
     api.emitCustomEvent("quest:is-complete", request);
     return request.complete === true;
   }
-
-  const REQUIRED_SKILLS = [
-    [Skill.FARMING, 40], [Skill.FISHING, 50], [Skill.PRAYER, 47],
-    [Skill.CRAFTING, 42], [Skill.SLAYER, 42],
-  ];
-
-  function meetsRequirements(player) {
-    return (
-      REQUIRED_SKILLS.every(([skill, required]) => level(player, skill) >= required) &&
-      questIsComplete(player, "zogre_flesh_eaters") &&
-      questIsComplete(player, "priest_in_peril")
-    );
-  }
+  const questsDone = (player) => questIsComplete(player, "zogre_flesh_eaters") && questIsComplete(player, "priest_in_peril");
+  const skillsMet = (player) => REQUIRED_SKILLS.every(([skill, required]) => level(player, skill) >= required);
+  const meetsRequirements = (player) => skillsMet(player) && questsDone(player);
 
   function notifyRequirements(player) {
     for (const [skill, required] of REQUIRED_SKILLS) {
-      if (level(player, skill) < required) {
-        player.sendMessage(`You need ${required} ${skill.getName()} to start this quest.`);
+      if (level(player, skill) < required) player.sendMessage(`You need ${required} ${skill.getName()} to start this quest.`);
+    }
+    if (!questIsComplete(player, "zogre_flesh_eaters")) player.sendMessage("You must complete Zogre Flesh Eaters to start this quest.");
+    if (!questIsComplete(player, "priest_in_peril")) player.sendMessage("You must complete Priest in Peril to start this quest.");
+  }
+
+  const wearingSlayerGloves = (player) => SLAYER_GLOVES.has(player.getEquipment().get(Equipment.HANDS_SLOT)?.getId?.());
+  const wearingCharos = (player) => RINGS_OF_CHAROS.has(player.getEquipment().get(Equipment.RING_SLOT)?.getId?.());
+  const knockedOut = (player) => Number(player.getAttribute(ATTRIBUTES.KNOCKED_OUT)) === 1;
+
+  function findNpc(id, [x, y, z], range = 12) {
+    let best = null;
+    for (const npc of api.core.World.getNpcs()) {
+      if (!npc || npc.getId() !== id) continue;
+      const at = npc.getLocation();
+      if (at.getZ() !== z || Math.abs(at.getX() - x) > range || Math.abs(at.getY() - y) > range) continue;
+      best = npc;
+    }
+    return best;
+  }
+
+  // ------------------------------------------------------------------ which conversation plays
+
+  function selectVariant({ npcId, player }) {
+    if (!DIALOGUE_NPCS.has(npcId)) return null;
+    const stage = quest.getStage(player);
+    const complete = quest.isComplete(player);
+    if (npcId === NPCS.PETE) {
+      // The requirements are checked on "Yes." (the repo's start rule), so everyone hears the offer.
+      if (stage === 0) return "setting-out-talking-to-pirate-pete";
+      if (stage === STAGES.STARTED) return "setting-out-talking-to-pirate-pete-talking-to-pete-again";
+      if (stage === STAGES.AGREED && !knockedOut(player)) {
+        return { page: PETE_PAGE, variant: "starting-rum-deal-talking-to-pirate-after-asking-him-for-a-reward" };
       }
+      return { page: PETE_PAGE, variant: "standard-dialogue" };
     }
-    if (!questIsComplete(player, "zogre_flesh_eaters")) {
-      player.sendMessage("You must complete Zogre Flesh Eaters to start this quest.");
+    if (npcId === NPCS.ISLAND_PETE) return { page: PETE_PAGE, variant: "standard-dialogue" };
+    if (npcId === NPCS.BRAINDEATH) return braindeathVariant(player, stage, complete);
+    if (npcId === NPCS.LUKE) return { page: LUKE_PAGE, variant: "standard-dialogue" };
+    if (npcId === NPCS.DAVEY) {
+      if (complete) {
+        return { page: "Davey", variant: ownsHolyWrench(player) ? "after-rum-deal" : "after-rum-deal-without-a-holy-wrench-in-the-inventory-or-bank" };
+      }
+      if (stage >= STAGES.BLESS_WRENCH) {
+        // A wrench is blessed every time (the capture blesses a second one, tick 2266).
+        return held(player, I.HOLY_WRENCH) && !held(player, I.WRENCH)
+          ? "evil-spirit-talking-to-davey-after-getting-the-holy-wrench"
+          : "evil-spirit-talking-to-davey";
+      }
+      return "getting-your-beer-ings-talking-to-davey";
     }
-    if (!questIsComplete(player, "priest_in_peril")) {
-      player.sendMessage("You must complete Priest in Peril to start this quest.");
+    if (npcId === NPCS.DONNIE) {
+      if (complete) return { page: "Captain Donnie", variant: "standard-dialogue-after-rum-deal" };
+      if (held(player, I.UNSANITARY_SWILL)) {
+        if (stage === STAGES.COLLECT_SWILL) return "dissolving-the-protest-talking-to-captain-donnie";
+        if (stage === STAGES.TOLD_DONNIE) return "dissolving-the-protest-talking-to-captain-donnie-again-while-having-rum-with-you";
+      }
+      return "getting-your-beer-ings-talking-to-captain-donnie";
+    }
+    if (PROTESTERS.has(npcId)) {
+      return stage >= STAGES.TOLD_DONNIE
+        ? { page: "Zombie protester", variant: "standard-dialogue" }
+        : "getting-your-beer-ings-talking-to-zombie-protesters";
+    }
+    if (SWABS.has(npcId)) return "getting-your-beer-ings-trying-to-talk-to-zombie-swabs";
+    if (BREWERS.has(npcId)) {
+      const number = BREWER_NUMBER[npcId];
+      return complete
+        ? { page: "Brewer", variant: `standard-dialogue-after-rum-deal-brewer-${number}` }
+        : `getting-your-beer-ings-talking-to-brewers-around-the-facility-brewer-${number}`;
+    }
+    return null;
+  }
+
+  function braindeathVariant(player, stage, complete) {
+    if (complete) return { page: "Captain Braindeath", variant: "standard-dialogue-after-rum-deal" };
+    switch (stage) {
+      case STAGES.AGREED:
+      case STAGES.MET_BRAINDEATH:
+        // Only reached on the island: the knock-out's meeting, played again if it was cut short.
+        return stage === STAGES.AGREED ? "setting-out-meeting-captain-braindeath" : "getting-your-beer-ings-talking-to-captain-braindeath-again";
+      case STAGES.GIVEN_SEEDS: return "getting-your-beer-ings-talking-to-captain-braindeath-again";
+      case STAGES.GROWN_BLINDWEED:
+        return held(player, I.BLINDWEED)
+          ? "brewing-rum-talking-to-captain-braindeath-after-getting-blindweed"
+          : "brewing-rum-if-the-player-has-lost-the-blindweed";
+      case STAGES.SHOWN_BLINDWEED: return "brewing-rum-before-putting-blindweed-in-the-hopper";
+      case STAGES.BLINDWEED_ADDED: return "stagnant-water-talking-to-captain-braindeath-after-using-blindweed-on-the-hopper";
+      case STAGES.FETCH_WATER: return "stagnant-water-talking-to-captain-braindeath-again-before-getting-stagnant-water";
+      case STAGES.COLLECTED_WATER: return "stagnant-water-talking-to-captain-braindeath-before-pouring-in-the-stagnant-in-the-hopper";
+      case STAGES.WATER_ADDED: return "sluglings-talking-to-captain-braindeath-after-using-the-water-on-the-hopper";
+      case STAGES.CATCH_CREATURES: return "sluglings-talking-to-captain-braindeath-again-before-catching-the-sluglings";
+      case STAGES.PRESSURISED: return "evil-spirit-talking-to-captain-braindeath-after-filling-the-pressure-barrel";
+      case STAGES.BLESS_WRENCH:
+        return held(player, I.HOLY_WRENCH)
+          ? "evil-spirit-talking-to-captain-braindeath-with-the-holy-wrench"
+          : "evil-spirit-talking-to-captain-braindeath-again";
+      case STAGES.SPIRIT_BANISHED: return "fever-spider-talking-to-captain-braindeath-after-killing-the-evil-spirit";
+      case STAGES.KILL_SPIDER: return "fever-spider-talking-to-captain-braindeath-again-before-getting-the-spider-corpse";
+      case STAGES.SPIDER_ADDED: return "dissolving-the-protest-talking-to-captain-braindeath-after-using-the-spider-carcass-on-the-hopper";
+      case STAGES.COLLECT_SWILL: return "dissolving-the-protest-talking-to-captain-braindeath-before-talking-to-captain-donnie";
+      case STAGES.TOLD_DONNIE: return "dissolving-the-protest-talking-to-captain-braindeath-after-talking-to-captain-donnie";
+      default: return null;
     }
   }
 
-  function wearingSlayerGloves(player) {
-    return player.getEquipment().get(Equipment.HANDS_SLOT)?.getId?.() === SLAYER_GLOVES;
+  /** The Wiki's Davey: "Without a holy wrench in the inventory or bank". */
+  function ownsHolyWrench(player) {
+    if (held(player, I.HOLY_WRENCH)) return true;
+    const bank = player.getBank?.(0);
+    if (typeof player.getBanks === "function") {
+      return player.getBanks().some((tab) => tab?.getAmount?.(I.HOLY_WRENCH) > 0);
+    }
+    return bank?.getAmount?.(I.HOLY_WRENCH) > 0;
   }
 
-  function plantedAt(player) {
-    return Number(player.getAttribute(PLANTED_ATTRIBUTE)) || 0;
+  // ------------------------------------------------------------------ the Wiki's prose conditions
+
+  function answerCondition({ player, npcId, text }) {
+    if (!DIALOGUE_NPCS.has(npcId)) return null;
+    const value = String(text ?? "").toLowerCase();
+    const has = (itemId) => player.getInventory().getAmount(itemId) > 0;
+    if (value.includes("one or more levels less")) return !skillsMet(player);
+    if (value.includes("second thoughts")) return quest.getStage(player) >= STAGES.STARTED && !quest.isComplete(player);
+    // Pete's lifts: one offer at each end (the capture at Port Phasmatys, tick 3101; on the island, 3008).
+    if (value.includes("dock north of port phasmatys")) return false;
+    if (value.includes("on braindeath island")) return true;
+    if (value.includes("ring of charos")) return value.includes("not wearing") ? !wearingCharos(player) : wearingCharos(player);
+    if (value.includes("tinderbox")) return value.includes("not have") ? !has(TINDERBOX) : has(TINDERBOX);
+    if (value.includes("lost the blindweed seed")) return !has(I.BLINDWEED_SEED);
+    if (value.includes("free inventory space") || value.includes("inventory space") || value.includes("room in their inventory")) {
+      const negative = value.includes("no inventory") || value.includes("no free") || value.includes("does not have")
+        || value.includes("doesn't have") || value.includes("don't have");
+      return negative ? !hasFreeSlot(player) : hasFreeSlot(player);
+    }
+    if (value.includes("lost the blindweed") || value.includes("loses the blindweed")) return !has(I.BLINDWEED);
+    if (value.includes("already has a rake")) return has(I.RAKE);
+    if (value.includes("already has a seed dibber")) return has(I.SEED_DIBBER);
+    if (value.includes("already has a watering can")) return has(I.WATERING_CAN);
+    if (value.includes("already has all the tools")) return has(I.RAKE) && has(I.SEED_DIBBER) && has(I.WATERING_CAN);
+    if (value.includes("not planted the seed")) return !patch.planted(player);
+    if (value.includes("already planted the seed")) return patch.planted(player);
+    if (value.includes("not have level 40 farming")) return level(player, Skill.FARMING) < 40;
+    if (value.includes("has level 40 farming")) return level(player, Skill.FARMING) >= 40;
+    if (value.includes("lost the bucket of water")) return !has(I.BUCKET_OF_WATER_3);
+    if (value.includes("completed sea slug")) return questIsComplete(player, "sea_slug");
+    if (value.includes("fishbowl and net")) return !has(I.FISHBOWL_AND_NET);
+    if (value.includes("lost the wrench") || value.includes("without the wrench")) return !has(I.WRENCH) && !has(I.HOLY_WRENCH);
+    if (value.includes("47 prayer")) return level(player, Skill.PRAYER) < 47;
+    if (value.includes("not wearing slayer gloves")) return !wearingSlayerGloves(player);
+    if (value.includes("wearing slayer gloves")) return wearingSlayerGloves(player);
+    if (value.includes("gotten 'rum'")) return !has(I.UNSANITARY_SWILL);
+    if (value.includes("empty bucket")) {
+      const negative = value.includes("doesn't have") || value.includes("does not have");
+      return negative ? !has(I.BUCKET) : has(I.BUCKET);
+    }
+    return null;
   }
 
-  function weededPatch(player) {
-    return Number(player.getAttribute(WEEDED_ATTRIBUTE)) === 1;
+  // ------------------------------------------------------------------ menus, lines and actions
+
+  /** Agreeing to fight Barrelor is stage 2 (capture tick 242); "Yes." starts it through its hook (175). */
+  function handleChoice(event) {
+    const { player, npcId, option } = event;
+    if (npcId !== NPCS.PETE) return;
+    const text = String(option ?? "");
+    const stage = quest.getStage(player);
+    if (stage === STAGES.STARTED && (text === "Of course, I fear no demon!" || text === "Because I came to offer to help.")) {
+      quest.setStage(player, STAGES.AGREED);
+    }
   }
 
-  function blindweedGrown(player) {
-    const planted = plantedAt(player);
-    return planted > 0 && Date.now() - planted >= BLINDWEED_GROWTH_MS;
+  /** "Yes." on "Start the Rum Deal quest?" carries the dump's start hook: the requirements, then stage 1. */
+  function handleHook(event) {
+    const { player, npcId, hook } = event;
+    if (npcId !== NPCS.PETE || hook !== "quest:rum-deal:start" || quest.getStage(player) !== 0) return;
+    if (!meetsRequirements(player)) {
+      event.end = true;
+      notifyRequirements(player);
+      return;
+    }
+    quest.setStage(player, STAGES.STARTED);
   }
 
-  function introPlayed(player) {
-    return Boolean(Number(player.getAttribute(INTRO_ATTRIBUTE)) || 0);
+  const cutsceneLines = () => (loadTranscripts(api)?.[PAGE]?.variants?.["setting-out-cutscene-1"] ?? [])
+    .map((step) => step.text ?? step.npc ?? step.player).filter((text) => typeof text === "string");
+
+  function startMeeting(player) {
+    const braindeath = findNpc(NPCS.BRAINDEATH, [2144, 5109, 1]);
+    startTranscript(api, player, NPCS.BRAINDEATH, PAGE, "setting-out-meeting-captain-braindeath", undefined, braindeath);
   }
 
-  function giveIfMissing(player, itemId) {
-    if (!held(player, itemId) && hasFreeSlot(player)) player.getInventory().adds(itemId, 1);
+  /** Stage changes and hand-outs on the lines that carry them, as the capture sets them. */
+  function handleLine(request) {
+    const { player, npcId } = request;
+    if (!player || !DIALOGUE_NPCS.has(npcId)) return;
+    const text = String(request.text ?? "");
+    const stage = quest.getStage(player);
+    const isPlayer = typeof request.step?.player === "string";
+    if (npcId === NPCS.PETE && isPlayer && text === "What diversion?") {
+      // The blow, cutscene 1 and the meeting (tick 268 on). The transcript's own knock-out steps follow
+      // this line; the scene takes the chat over, so they don't play.
+      if (stage === STAGES.AGREED && !knockedOut(player)) request.after = () => scenes.knockOut(player, cutsceneLines(), startMeeting);
+      return;
+    }
+    if (npcId === NPCS.PETE && !isPlayer && text === "Want a lift to Port Phasmatys?" && !onIsland(player)) {
+      // On the dock the offer is the other way (the Wiki's dock line; the capture, tick 3104).
+      request.text = "Want a lift to Braindeath Island?";
+      return;
+    }
+    if (npcId === NPCS.BRAINDEATH) return braindeathLine(request, player, text, stage, isPlayer);
+    if (npcId === NPCS.DONNIE && !isPlayer) {
+      if (stage === STAGES.COLLECT_SWILL && text === "Hand it over or I'll run ye through!") {
+        request.after = () => {
+          if (quest.getStage(player) !== STAGES.COLLECT_SWILL) return;
+          if (held(player, I.UNSANITARY_SWILL)) player.getInventory().deleteNumber(I.UNSANITARY_SWILL, 1);
+          quest.setStage(player, STAGES.TOLD_DONNIE);
+          syncVarbits(player);
+        };
+      } else if (stage === STAGES.TOLD_DONNIE && text.startsWith("If it isn't in my belly")) {
+        request.after = () => { if (held(player, I.UNSANITARY_SWILL)) player.getInventory().deleteNumber(I.UNSANITARY_SWILL, 1); };
+      }
+      return;
+    }
+    if (npcId === NPCS.LUKE) {
+      const gate = gateRequests.get(player);
+      if (!gate) return;
+      // The gate opens with Luke's "Where?" and when his north-side warning is continued (ticks 1467, 1579).
+      if (gate.side === "south" && !isPlayer && text === "Where?") request.before = () => openGate(player);
+      else if (gate.side === "north" && text === "So get yerself back in here, or yer for it!") request.after = () => openGate(player);
+    }
   }
 
-  function requiredItemLine(player, skill, amount, label) {
-    return level(player, skill) >= amount
-      ? `<str>${label}</str>`
-      : `<col=800000>${label}</col>`;
+  function braindeathLine(request, player, text, stage, isPlayer) {
+    if (isPlayer) {
+      if (stage === STAGES.BLINDWEED_ADDED && text === "When is it ever...") {
+        request.after = () => { if (quest.getStage(player) === STAGES.BLINDWEED_ADDED) quest.setStage(player, STAGES.FETCH_WATER); };
+      }
+      return;
+    }
+    if (text.includes("I'll give ye the seed you'll need") && stage <= STAGES.MET_BRAINDEATH) {
+      // Tick 455: both stages and the seed as the line shows.
+      if (hasFreeSlot(player)) {
+        giveIfMissing(player, I.BLINDWEED_SEED);
+        quest.setStage(player, STAGES.MET_BRAINDEATH);
+        quest.setStage(player, STAGES.GIVEN_SEEDS);
+      } else if (stage < STAGES.MET_BRAINDEATH) {
+        quest.setStage(player, STAGES.MET_BRAINDEATH);
+      }
+      return;
+    }
+    if (stage === STAGES.GROWN_BLINDWEED && (text.startsWith("Splendid,") || text === "Here, I've been savin' some fer an emergency.")) {
+      // Tick 1210: the lost blindweed's replacement and stage 6 as the line shows.
+      if (!text.startsWith("Splendid,")) giveIfMissing(player, I.BLINDWEED);
+      quest.setStage(player, STAGES.SHOWN_BLINDWEED);
+      return;
+    }
+    if (stage === STAGES.SHOWN_BLINDWEED && text.includes("savin' a little fer an emergency")) {
+      giveIfMissing(player, I.BLINDWEED);
+      return;
+    }
+    if (stage === STAGES.WATER_ADDED && (text === "Here. Ye'll need this to catch them." || text === "Pity ye ain't got any free space to carry one.")) {
+      // Tick 1726: the fishbowl and net and stage 11 as the line shows.
+      if (text.startsWith("Here.")) giveIfMissing(player, I.FISHBOWL_AND_NET);
+      quest.setStage(player, STAGES.CATCH_CREATURES);
+      return;
+    }
+    if (stage === STAGES.PRESSURISED && text === "Give the controls a couple of belts with this wrench.") {
+      giveIfMissing(player, I.WRENCH); // tick 2067
+      quest.setStage(player, STAGES.BLESS_WRENCH);
+      return;
+    }
+    if (stage === STAGES.SPIRIT_BANISHED
+      && (text.startsWith("I see yer already wearin' some Slayer Gloves") || text.startsWith("These Fever Spiders carry a nasty disease"))) {
+      request.after = () => { if (quest.getStage(player) === STAGES.SPIRIT_BANISHED) quest.setStage(player, STAGES.KILL_SPIDER); };
+      return;
+    }
+    if (stage === STAGES.SPIDER_ADDED && text === "Took us a lot of dissolvin' to work that one out.") {
+      request.after = () => {
+        if (quest.getStage(player) !== STAGES.SPIDER_ADDED) return;
+        quest.setStage(player, STAGES.COLLECT_SWILL);
+        syncVarbits(player);
+      };
+    }
   }
+
+  const WINDOW_BOX = /^The capt(?:ia|ai)n points out of the window/;
+  /** The basement cupboard's boxes: what each one hands over. */
+  const CUPBOARD_TAKES = new Map([
+    ["You take an old rake.", [I.RAKE]],
+    ["You take an old seed dibber.", [I.SEED_DIBBER]],
+    ["You take an old watering can.", [I.WATERING_CAN]],
+    ["You help yourself to what you need.", [I.RAKE, I.SEED_DIBBER, I.WATERING_CAN]],
+  ]);
+
+  /** Transcript actions and message boxes the plugin plays itself or hands items out on. */
+  function handleAction(event) {
+    const { player, npcId } = event;
+    if (!player || !DIALOGUE_NPCS.has(npcId)) return;
+    const text = String(event.text ?? "");
+    const stage = quest.getStage(player);
+    if (event.kind === "message") {
+      // The window's box is shown by the scene, held while it plays.
+      if (npcId === NPCS.BRAINDEATH && WINDOW_BOX.test(text)) event.handled = true;
+      for (const itemId of CUPBOARD_TAKES.get(text) ?? []) giveIfMissing(player, itemId);
+      return;
+    }
+    if (npcId === NPCS.BRAINDEATH) {
+      if (text === "Cutscene begins") {
+        const box = (loadTranscripts(api)?.[PAGE]?.variants?.["setting-out-meeting-captain-braindeath"] ?? [])
+          .find((step) => WINDOW_BOX.test(String(step.text ?? "")))?.text ?? "The captian points out of the window....";
+        event.wait = (resume) => scenes.windowScene(player, box, resume);
+      } else if (text === "Cutscene ends") {
+        event.handled = true;
+      } else if (text === "(The player is handed another seed.)") {
+        event.handled = true;
+        giveIfMissing(player, I.BLINDWEED_SEED);
+        if (stage === STAGES.MET_BRAINDEATH && held(player, I.BLINDWEED_SEED)) quest.setStage(player, STAGES.GIVEN_SEEDS);
+      } else if (text === "another blindweed") {
+        event.handled = true;
+        giveIfMissing(player, I.BLINDWEED);
+      } else if (text.startsWith("(The player is given an empty bucket.")) {
+        event.handled = true;
+        giveIfMissing(player, I.BUCKET);
+      } else if (text === "The brewing control starts to rumble.") {
+        event.wait = (resume) => scenes.brew(player, resume);
+      } else if (text === "Congratulations! Quest complete!" && stage === STAGES.TOLD_DONNIE) {
+        quest.complete(player);
+        event.handled = true;
+        event.end = true;
+      }
+      return;
+    }
+    if (npcId === NPCS.DAVEY) {
+      if (text.startsWith("Davey cheers.")) {
+        event.wait = (resume) => scenes.blessing(player, event.npc, () => blessWrench(player), resume);
+      } else if (event.action === "receive" && text === "holy wrench") {
+        // After the quest: Davey's kept wrench, when there is room (the Wiki's no-room branch ends before this).
+        event.handled = true;
+        if (hasFreeSlot(player)) player.getInventory().adds(I.HOLY_WRENCH, 1);
+      }
+      return;
+    }
+    if (npcId !== NPCS.PETE && npcId !== NPCS.ISLAND_PETE) return;
+    if (text === "Pirate Pete hits the player on the head.") {
+      event.handled = true;
+      scenes.hit(player);
+    } else if (text.startsWith("Fades to black, player appears on")) {
+      const to = onIsland(player) ? TILES.PORT_PHASMATYS : TILES.ISLAND_DOCK;
+      event.wait = (resume) => scenes.lift(player, to, resume);
+    }
+  }
+
+  function blessWrench(player) {
+    if (!held(player, I.WRENCH)) return;
+    player.getInventory().deleteNumber(I.WRENCH, 1);
+    player.getInventory().adds(I.HOLY_WRENCH, 1);
+  }
+
+  /** Condition branches that hand an item over (the transcript has no action for them). */
+  function handleCondition({ player, npcId, text }) {
+    if (!player || npcId !== NPCS.BRAINDEATH) return;
+    const value = String(text ?? "").toLowerCase();
+    const stage = quest.getStage(player);
+    if (!hasFreeSlot(player)) return;
+    // The lost wrench comes with "Arr! I'd get more work out of a minty flavoured brick!" (tick 2088).
+    if (value.includes("lost the wrench") && stage === STAGES.BLESS_WRENCH) giveIfMissing(player, I.WRENCH);
+    if (value.includes("lost the bucket of water") && stage === STAGES.COLLECTED_WATER) giveIfMissing(player, I.BUCKET_OF_WATER_3);
+    if (value.includes("fishbowl and net") && stage === STAGES.CATCH_CREATURES) giveIfMissing(player, I.FISHBOWL_AND_NET);
+  }
+
+  // ------------------------------------------------------------------ items on NPCs
+
+  function handleItemOnNpc(event) {
+    const { player, itemId, target } = event;
+    const npcId = event.npcId ?? target?.getId?.();
+    if (!player || npcId !== NPCS.BRAINDEATH) return;
+    const stage = quest.getStage(player);
+    const play = (variant) => {
+      event.handled = true;
+      startTranscript(api, player, NPCS.BRAINDEATH, PAGE, variant, undefined, target);
+    };
+    if (itemId === I.SLUGLINGS) return play("sluglings-using-sluglings-on-captain-braindeath");
+    if (itemId === I.KARAMTHULHU) return play("sluglings-using-karamthultu-on-captain-braindeath");
+    if (itemId === I.FEVER_SPIDER_BODY) return play("fever-spider-using-the-spider-corpse-on-captain-braindeath");
+    if (itemId === I.BLINDWEED_SEED && stage === STAGES.GIVEN_SEEDS) {
+      return play("getting-your-beer-ings-talking-to-captain-braindeath-again-using-the-blindweed-seed-on-captain-braindeath");
+    }
+    if (itemId === I.BUCKET_OF_WATER_3 && stage === STAGES.COLLECTED_WATER) {
+      return play("stagnant-water-talking-to-captain-braindeath-before-pouring-in-the-stagnant-in-the-hopper-using-the-bucket-of-stagnant-water-on-captain-braindeath");
+    }
+    if (itemId === I.HOLY_WRENCH && stage === STAGES.BLESS_WRENCH) return play("evil-spirit-using-the-holy-wrench-on-captain-braindeath");
+  }
+
+  // ------------------------------------------------------------------ objects
+
+  function handleItemOnObject(event) {
+    const { player, itemId, objectId } = event;
+    if (!player) return;
+    if (objectId === brewery.HOPPER) return brewery.hopper(event);
+    if (objectId === brewery.BARREL) return brewery.stuffBarrel(event);
+    if (objectId === brewery.STAGNANT_LAKE && itemId === I.BUCKET) return brewery.scoopLake(event);
+    if (objectId === brewery.OUTPUT_TAP && itemId === I.BUCKET) return brewery.turnTap(event);
+    if (brewery.CONTROL_IDS.has(objectId)) return brewery.smiteControls(event);
+    if (PATCH_IDS.has(objectId) && itemId === I.RAKE) return patch.rake(event);
+    if (PATCH_IDS.has(objectId) && itemId === I.BLINDWEED_SEED) return patch.plant(event);
+    if (objectId === TRASHED_PATCH && itemId === I.RAKE) {
+      event.handled = true;
+      player.sendMessage("You will probably have a hard time raking that.");
+    }
+  }
+
+  const PATCH_IDS = new Set([10096, ...patch.CHILDREN]);
+  const TRASHED_PATCH = 10103;
+
+  function handleObjectInteraction(event) {
+    const { player, objectId, clickType } = event;
+    if (!player) return;
+    if (brewery.LEVER_IDS.has(objectId)) return brewery.pullLever(event);
+    if (objectId === brewery.BARREL && clickType === 2) return brewery.countBarrel(event);
+    if (objectId === brewery.OUTPUT_TAP) return brewery.turnTap(event);
+    if (objectId === TRASHED_PATCH) {
+      event.handled = true;
+      player.sendMessage("The soil here is too poor to farm on.");
+      return;
+    }
+    if (PATCH_IDS.has(objectId)) {
+      // Op 1 is Pick on the grown child only; op 2 is Inspect.
+      if (clickType === 1) patch.pick(event);
+      else patch.inspect(event);
+      return;
+    }
+    if (objectId === CUPBOARD_IDS[0] || objectId === CUPBOARD_IDS[1]) {
+      event.handled = true;
+      startTranscript(api, player, NPCS.BRAINDEATH, PAGE, "getting-your-beer-ings-searching-the-basement-cupboard-for-farming-supplies");
+    }
+  }
+  const CUPBOARD_IDS = [10162, 10163];
+
+  // ------------------------------------------------------------------ 50% Luke's gate
+
+  /**
+   * The gate north of the compound (10172 at 2120,5098): Luke stops the player before the water step
+   * (the Wiki), and from then on is distracted going north and shouts coming back, the gate opening
+   * as the capture shows (ticks 1456-1469, 1570-1581) and in recording 3034 after the quest.
+   */
+  function guardGate(request) {
+    const { player, objectId, location, object } = request;
+    if (objectId !== GATE || !location || location.x !== TILES.GATE[0] || location.y !== TILES.GATE[1]) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGES.STARTED) return;
+    request.handled = true;
+    const luke = findNpc(NPCS.LUKE, TILES.GATE);
+    const south = player.getLocation().getY() <= location.y;
+    if (stage < STAGES.FETCH_WATER && !quest.isComplete(player)) {
+      gateRequests.delete(player);
+      startTranscript(api, player, NPCS.LUKE, PAGE, "getting-your-beer-ings-trying-to-sneak-past-50-luke-too-early", undefined, luke);
+      return;
+    }
+    gateRequests.set(player, { side: south ? "south" : "north", object });
+    startTranscript(api, player, NPCS.LUKE, LUKE_PAGE,
+      south ? "using-the-gate-near-50-luke-from-the-south-side" : "using-the-gate-near-50-luke-from-the-north-side", undefined, luke);
+  }
+
+  function openGate(player) {
+    const gate = gateRequests.get(player);
+    gateRequests.delete(player);
+    if (gate?.object) api.emitCustomEvent("door:open", { player, object: gate.object, handled: false });
+  }
+
+  // ------------------------------------------------------------------ NPCs: swabs, the squid spot, deaths, drops
+
+  function handleNpcInteraction(event) {
+    const { player, npcId, npc, clickType } = event;
+    if (npcId === NPCS.FISHING_SPOT && onIsland(player)) return brewery.fish(event);
+    if (SWABS.has(npcId) && clickType === 3) return intimidate(event, player, npc, npcId);
+  }
+
+  /** Intimidate: the Wiki's insult for each swab, once per swab. */
+  function intimidate(event, player, npc, npcId) {
+    event.handled = true;
+    let done = intimidated.get(player);
+    if (!done) intimidated.set(player, done = new WeakSet());
+    if (npc && done.has(npc)) {
+      player.sendMessage("I don't think he will be causing any more trouble.");
+      return;
+    }
+    if (npc) done.add(npc);
+    startTranscript(api, player, npcId, PAGE, `blinding-the-weed-intimidating-the-zombie-swabs-zombie-swab-${npcId - NPCS.SWABS[0] + 1}`, undefined, npc);
+  }
+
+  function handleNpcDeath({ killer, npcId, npc }) {
+    if (npcId === NPCS.EVIL_SPIRIT) brewery.spiritDied(killer, npc);
+  }
+
+  /** The Fever spider body: "only dropped during Rum Deal" (the Wiki; the capture's drop at tick 2435). */
+  function questDrop(request) {
+    if (request.itemId !== I.FEVER_SPIDER_BODY || request.npcId !== NPCS.FEVER_SPIDER || !request.player) return;
+    const stage = quest.getStage(request.player);
+    request.allowed = stage >= STAGES.STARTED && !quest.isComplete(request.player);
+  }
+
+  // ------------------------------------------------------------------ the fishbowl and net
+
+  function handleItemOnItem(event) {
+    const { player, usedItemId, usedWithItemId } = event;
+    const pair = [usedItemId, usedWithItemId];
+    if (!pair.includes(I.EMPTY_FISHBOWL) || !pair.includes(I.BIG_FISHING_NET)) return;
+    if (!held(player, I.EMPTY_FISHBOWL) || !held(player, I.BIG_FISHING_NET)) return;
+    event.handled = true;
+    player.getInventory().deleteNumber(I.EMPTY_FISHBOWL, 1);
+    player.getInventory().deleteNumber(I.BIG_FISHING_NET, 1);
+    player.getInventory().adds(I.FISHBOWL_AND_NET, 1);
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You wrap the net around the empty bowl."); // tick 1797
+  }
+
+  function unwrapFishbowl({ player }) {
+    if (!held(player, I.FISHBOWL_AND_NET)) return;
+    if (!hasFreeSlot(player)) {
+      player.sendMessage("You do not have enough space to unwrap the net from the fishbowl.");
+      return;
+    }
+    player.getInventory().deleteNumber(I.FISHBOWL_AND_NET, 1);
+    player.getInventory().adds(I.EMPTY_FISHBOWL, 1);
+    player.getInventory().adds(I.BIG_FISHING_NET, 1);
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "You unwrap the net from the fishbowl."); // tick 1793
+  }
+
+  // ------------------------------------------------------------------ journal, login, rewards
 
   function buildJournal(player, questHandle) {
     const stage = questHandle.getStage(player);
     if (stage <= 0) {
+      const line = (skill, amount, label) => (level(player, skill) >= amount ? `<str>${label}</str>` : `<col=800000>${label}</col>`);
       return [
         "I can start this quest by speaking to <col=800000>Pirate Pete</col>",
         "in <col=800000>Port Phasmatys</col>.",
         "",
         "To complete this quest I need:",
-        requiredItemLine(player, Skill.FARMING, 40, "40 Farming"),
-        requiredItemLine(player, Skill.FISHING, 50, "50 Fishing"),
-        requiredItemLine(player, Skill.PRAYER, 47, "47 Prayer"),
-        requiredItemLine(player, Skill.CRAFTING, 42, "42 Crafting"),
-        requiredItemLine(player, Skill.SLAYER, 42, "42 Slayer"),
+        line(Skill.FARMING, 40, "40 Farming"),
+        line(Skill.FISHING, 50, "50 Fishing"),
+        line(Skill.PRAYER, 47, "47 Prayer"),
+        line(Skill.CRAFTING, 42, "42 Crafting"),
+        line(Skill.SLAYER, 42, "42 Slayer"),
         "To have completed <col=800000>Zogre Flesh Eaters</col>.",
+        "To have completed <col=800000>Priest in Peril</col>.",
         "To be able to defeat a level 150 monster.",
       ];
     }
-    if (stage >= STAGE_COMPLETE) {
-      return [
-        "<str>I spoke to Pirate Pete and agreed to find his family sword.</str>",
-        "<str>I helped Captain Braindeath brew a batch of 'rum' for the</str>",
-        "<str>zombie pirates, banished the Evil Spirit from the brewing</str>",
-        "<str>controls and got Captain Donnie drunk.</str>",
-        "",
-        "<str>Braindeath decided to stay on the island and keep the</str>",
-        "<str>pirates drunk. I was rewarded with the Holy wrench.</str>",
-        "",
-        "<col=ff0000>QUEST COMPLETE!</col>",
-      ];
-    }
-    if (stage >= STAGE_TOLD_DONNIE) {
-      return [
-        "I have spoken to <col=800000>Captain Donnie</col> and learned of",
-        "<col=800000>Rabid Jack</col>. I should tell Captain Braindeath.",
-      ];
-    }
-    if (stage >= STAGE_COLLECT_SWILL) {
-      return [
-        "I have added the Fever Spider body to the hopper and the",
-        "vat is full of 'rum'. I should fill my bucket from the",
-        "<col=800000>Output Tap</col> and take it to <col=800000>Captain Donnie</col>.",
-      ];
-    }
-    if (stage >= STAGE_SPIDER_ADDED) {
-      return ["I have added the Fever Spider body; I should speak to Captain Braindeath."];
-    }
-    if (stage >= STAGE_KILL_SPIDER) {
-      return [
-        "I must kill a <col=800000>Fever Spider</col> (wearing Slayer gloves)",
-        "and cram its body into the <col=800000>Intake Hopper</col>.",
-      ];
-    }
-    if (stage >= STAGE_SPIRIT_BANISHED) {
-      return ["I banished the Evil Spirit; Captain Braindeath wants one more ingredient."];
-    }
-    if (stage >= STAGE_BLESS_WRENCH) {
-      return held(player, HOLY_WRENCH)
-        ? ["I have the <col=800000>Holy Wrench</col>; I should strike the Brewing Controls."]
-        : ["I should get my <col=800000>Wrench</col> blessed by one of the brewers."];
-    }
-    if (stage >= STAGE_PRESSURISED) {
-      return [
-        "I have pressurised the sea creatures. The brewing equipment",
-        "is possessed; Captain Braindeath gave me a wrench to sort it out.",
-      ];
-    }
-    if (stage >= STAGE_CATCH_CREATURES) {
-      return [
-        "I must fish five sea creatures (Sluglings/Karamthulhu) with the",
-        "fishbowl and big net, stuff them into the <col=800000>Pressure Barrel</col>",
-        "in the attic and pressurise them.",
-      ];
-    }
-    if (stage >= STAGE_WATER_ADDED) {
-      return ["I poured the water into the hopper; Captain Braindeath wants more ingredients."];
-    }
-    if (stage >= STAGE_COLLECTED_WATER) {
-      return ["I have the stagnant water; I should pour it into the Intake Hopper."];
-    }
-    if (stage >= STAGE_FETCH_WATER) {
-      return [
-        "I must get past <col=800000>50% Luke</col> and fetch a bucket of",
-        "stagnant water from the lake on the volcano to the north.",
-      ];
-    }
-    if (stage >= STAGE_BLINDWEED_ADDED) {
-      return ["I added the Blindweed to the hopper; I should speak to Captain Braindeath."];
-    }
-    if (stage >= STAGE_SHOW_BLINDWEED) {
-      return ["I should shove my <col=800000>Blindweed</col> into the <col=800000>Intake Hopper</col>."];
-    }
-    if (stage >= STAGE_GROWN_BLINDWEED) {
-      return held(player, BLINDWEED)
-        ? ["I have grown some Blindweed; I should show it to Captain Braindeath."]
-        : ["I lost my Blindweed; Captain Braindeath may have some put aside."];
-    }
-    if (stage >= STAGE_GIVEN_SEEDS) {
-      return [
-        "I must grow some <col=800000>Blindweed</col> in the patch outside.",
-        "Captain Braindeath said to intimidate the Zombie swabs guarding it.",
-      ];
-    }
-    if (stage >= STAGE_MET_BRAINDEATH) {
-      return ["Captain Braindeath tried to give me a Blindweed seed, but I had no room."];
-    }
-    if (stage >= STAGE_KNOCKED_OUT) {
-      return ["Pirate Pete knocked me out and had me taken to Braindeath Island."];
-    }
-    return ["I agreed to help <col=800000>Pirate Pete</col> find his family sword."];
+    return journal(stage, { planted: patch.planted(player), holyWrench: held(player, I.HOLY_WRENCH) });
   }
 
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.PRAYER, 7000);
     player.getSkillManager().addExperiences(Skill.FISHING, 7000);
     player.getSkillManager().addExperiences(Skill.FARMING, 7000);
-    player.setAttribute(PLANTED_ATTRIBUTE, 0);
-    player.setAttribute(SLUGLINGS_ATTRIBUTE, 0);
-    player.setAttribute(KARAMTHULHU_ATTRIBUTE, 0);
-    player.setAttribute(SPIRIT_ATTRIBUTE, 0);
-    clearSpirit(player);
-  }
-
-  /** Which transcript variant each speaker plays, by quest stage. */
-  function selectVariant({ npcId, player }) {
-    const stage = quest.getStage(player);
-    if (PETE_NPC_IDS.has(npcId)) {
-      return stage >= STAGE_STARTED
-        ? "setting-out-talking-to-pirate-pete-talking-to-pete-again"
-        : "setting-out-talking-to-pirate-pete";
-    }
-    if (npcId === BRAINDEATH_NPC_ID) {
-      if (stage < STAGE_KNOCKED_OUT) return null;
-      if (stage === STAGE_KNOCKED_OUT) {
-        return introPlayed(player)
-          ? "setting-out-meeting-captain-braindeath"
-          : "setting-out-cutscene-1";
-      }
-      if (stage <= STAGE_MET_BRAINDEATH) return "setting-out-meeting-captain-braindeath";
-      if (stage === STAGE_GIVEN_SEEDS) {
-        return "getting-your-beer-ings-talking-to-captain-braindeath-again";
-      }
-      if (stage === STAGE_GROWN_BLINDWEED) {
-        return held(player, BLINDWEED)
-          ? "brewing-rum-talking-to-captain-braindeath-after-getting-blindweed"
-          : "brewing-rum-if-the-player-has-lost-the-blindweed";
-      }
-      if (stage === STAGE_SHOW_BLINDWEED) return "brewing-rum-before-putting-blindweed-in-the-hopper";
-      if (stage === STAGE_BLINDWEED_ADDED) {
-        return "stagnant-water-talking-to-captain-braindeath-after-using-blindweed-on-the-hopper";
-      }
-      if (stage === STAGE_FETCH_WATER) {
-        return "stagnant-water-talking-to-captain-braindeath-again-before-getting-stagnant-water";
-      }
-      if (stage === STAGE_COLLECTED_WATER) {
-        return "stagnant-water-talking-to-captain-braindeath-before-pouring-in-the-stagnant-in-the-hopper";
-      }
-      if (stage === STAGE_WATER_ADDED) {
-        return "sluglings-talking-to-captain-braindeath-after-using-the-water-on-the-hopper";
-      }
-      if (stage === STAGE_CATCH_CREATURES) {
-        return "sluglings-talking-to-captain-braindeath-again-before-catching-the-sluglings";
-      }
-      if (stage === STAGE_PRESSURISED) {
-        return "evil-spirit-talking-to-captain-braindeath-after-filling-the-pressure-barrel";
-      }
-      if (stage === STAGE_BLESS_WRENCH) {
-        return held(player, HOLY_WRENCH)
-          ? "evil-spirit-talking-to-captain-braindeath-with-the-holy-wrench"
-          : "evil-spirit-talking-to-captain-braindeath-again";
-      }
-      if (stage === STAGE_SPIRIT_BANISHED) {
-        return "fever-spider-talking-to-captain-braindeath-after-killing-the-evil-spirit";
-      }
-      if (stage === STAGE_KILL_SPIDER) {
-        return "fever-spider-talking-to-captain-braindeath-again-before-getting-the-spider-corpse";
-      }
-      if (stage === STAGE_SPIDER_ADDED) {
-        return "dissolving-the-protest-talking-to-captain-braindeath-after-using-the-spider-carcass-on-the-hopper";
-      }
-      if (stage === STAGE_COLLECT_SWILL) {
-        return "dissolving-the-protest-talking-to-captain-braindeath-before-talking-to-captain-donnie";
-      }
-      if (stage === STAGE_TOLD_DONNIE) {
-        return "dissolving-the-protest-talking-to-captain-braindeath-after-talking-to-captain-donnie";
-      }
-      return null;
-    }
-    if (npcId === LUKE_NPC_ID) {
-      if (stage >= STAGE_COLLECTED_WATER) return "stagnant-water-returning-through-the-gate";
-      if (stage >= STAGE_FETCH_WATER) return "stagnant-water-sneaking-past-50-luke";
-      return "getting-your-beer-ings-trying-to-sneak-past-50-luke-too-early";
-    }
-    if (npcId === DAVEY_NPC_ID) {
-      if (stage >= STAGE_BLESS_WRENCH && held(player, HOLY_WRENCH)) {
-        return "evil-spirit-talking-to-davey-after-getting-the-holy-wrench";
-      }
-      if (stage >= STAGE_BLESS_WRENCH) return "evil-spirit-talking-to-davey";
-      return "getting-your-beer-ings-talking-to-davey";
-    }
-    if (npcId === DONNIE_NPC_ID) {
-      if (stage >= STAGE_TOLD_DONNIE) {
-        return "dissolving-the-protest-talking-to-captain-donnie-again-while-having-rum-with-you";
-      }
-      if (stage >= STAGE_COLLECT_SWILL && held(player, UNSANITARY_SWILL)) {
-        return "dissolving-the-protest-talking-to-captain-donnie";
-      }
-      return "getting-your-beer-ings-talking-to-captain-donnie";
-    }
-    if (PROTESTER_NPC_IDS.has(npcId)) {
-      return "getting-your-beer-ings-talking-to-zombie-protesters";
-    }
-    if (SWAB_NPC_IDS.has(npcId)) {
-      return `blinding-the-weed-intimidating-the-zombie-swabs-zombie-swab-${(quest.getStage(player) % 6) + 1}`;
-    }
-    if (BREWER_NPC_IDS.has(npcId)) {
-      return `getting-your-beer-ings-talking-to-brewers-around-the-facility-brewer-${((npcId - NpcIdentifiers.BREWER) % 8) + 1}`;
-    }
-    return null;
-  }
-
-  /**
-   * Answer the page's prose conditions for this plugin's own NPCs. Called for
-   * every condition on the page, so every branch is handled and nothing throws
-   * on a missing inventory method.
-   */
-  function answerCondition({ player, npcId, text }) {
-    if (!DIALOGUE_NPC_IDS.has(npcId)) return null;
-    const value = String(text ?? "").toLowerCase();
-    const inventory = player.getInventory();
-    const has = (itemId) => inventory.getAmount(itemId) > 0;
-    if (value.includes("one or more levels less")) return !meetsRequirements(player);
-    if (value.includes("second thoughts")) {
-      return quest.getStage(player) >= STAGE_STARTED && !quest.isComplete(player);
-    }
-    if (value.includes("lost the blindweed seed")) return !has(BLINDWEED_SEED);
-    if (
-      value.includes("free inventory space") ||
-      value.includes("inventory space") ||
-      value.includes("room in their inventory")
-    ) {
-      const negative =
-        value.includes("no inventory") ||
-        value.includes("no free") ||
-        value.includes("does not have") ||
-        value.includes("doesn't have") ||
-        value.includes("don't have");
-      return negative ? !hasFreeSlot(player) : hasFreeSlot(player);
-    }
-    if (value.includes("lost the blindweed") || value.includes("loses the blindweed")) {
-      return !has(BLINDWEED);
-    }
-    if (value.includes("already has a rake")) return has(RAKE);
-    if (value.includes("already has a seed dibber")) return has(SEED_DIBBER);
-    if (value.includes("already has a watering can")) return has(WATERING_CAN);
-    if (value.includes("already has all the tools")) {
-      return has(RAKE) && has(SEED_DIBBER) && has(WATERING_CAN);
-    }
-    if (value.includes("not planted the seed")) return plantedAt(player) === 0;
-    if (value.includes("already planted the seed")) return plantedAt(player) !== 0;
-    if (value.includes("not have level 40 farming")) return level(player, Skill.FARMING) < 40;
-    if (value.includes("has level 40 farming")) return level(player, Skill.FARMING) >= 40;
-    if (value.includes("lost the bucket of water")) return !has(STAGNANT_WATER);
-    if (value.includes("completed sea slug")) {
-      return (Number(player.getAttribute("quest.sea_slug.stage")) || 0) >= 12;
-    }
-    if (value.includes("fishbowl and net")) return !has(FISHBOWL_AND_NET);
-    if (value.includes("lost the wrench")) return !has(WRENCH) && !has(HOLY_WRENCH);
-    if (value.includes("without the wrench")) return !has(WRENCH) && !has(HOLY_WRENCH);
-    if (value.includes("47 prayer")) return level(player, Skill.PRAYER) < 47;
-    if (value.includes("not wearing slayer gloves")) return !wearingSlayerGloves(player);
-    if (value.includes("wearing slayer gloves")) return wearingSlayerGloves(player);
-    if (value.includes("gotten 'rum'")) return !has(UNSANITARY_SWILL);
-    if (value.includes("empty bucket")) {
-      const negative = value.includes("doesn't have") || value.includes("does not have");
-      return negative ? !has(BUCKET) : has(BUCKET);
-    }
-    return null;
-  }
-
-  /** The "Keep the money" choice on Pirate Pete's start menu accepts the quest. */
-  function handleChoice(event) {
-    const { player, npcId, option } = event;
-    if (!PETE_NPC_IDS.has(npcId) || quest.getStage(player) !== 0) return;
-    if (String(option).toLowerCase().includes("keep the money")) {
-      if (!meetsRequirements(player)) {
-        event.end = true;
-        notifyRequirements(player);
-        return;
-      }
-      quest.setStage(player, STAGE_STARTED);
-    }
-  }
-
-  function handleHook(event) {
-    const { player, npcId, hook } = event;
-    if (!PETE_NPC_IDS.has(npcId) || hook !== START_HOOK) return;
-    if (quest.getStage(player) < STAGE_STARTED) {
-      if (!meetsRequirements(player)) {
-        event.end = true;
-        notifyRequirements(player);
-        return;
-      }
-      quest.setStage(player, STAGE_STARTED);
-    }
-  }
-
-  /** Dialogue action/message steps: stage transitions and message-step hand-outs. */
-  function handleAction(event) {
-    const { player, npcId, stepId } = event;
-    if (!player || !stepId) return;
-    // Message steps print themselves; do not set handled on those, or the
-    // default sendMessage is suppressed.
-    switch (stepId) {
-      case "XU0tPW": // Pirate Pete knocks the player out
-        if (quest.getStage(player) < STAGE_KNOCKED_OUT) quest.setStage(player, STAGE_KNOCKED_OUT);
-        event.handled = true;
-        return;
-      case "ZTlTFa": // cutscene 1 begins: the player wakes on Braindeath Island
-        if (PETE_NPC_IDS.has(npcId) && !quest.isComplete(player)) {
-          player.moveTo(new api.core.Location(WAKE_TILE.x, WAKE_TILE.y, WAKE_TILE.z));
-        }
-        event.handled = true;
-        return;
-      case "3cIEz2": { // cutscene 1 ends; the meeting conversation continues below
-        event.handled = true;
-        if (npcId !== BRAINDEATH_NPC_ID) return;
-        player.setAttribute(INTRO_ATTRIBUTE, 1);
-        // The wiki transcript says "dialogue continues below", so play the meeting
-        // variant in this same conversation instead of making the player talk again.
-        const meeting = loadTranscripts(api)?.[PAGE]?.variants?.["setting-out-meeting-captain-braindeath"];
-        if (Array.isArray(meeting)) event.steps = meeting;
-        return;
-      }
-      case "c5zoBJ": // another blindweed seed
-        giveIfMissing(player, BLINDWEED_SEED);
-        event.handled = true;
-        return;
-      case "vALbPI": // another blindweed
-        giveIfMissing(player, BLINDWEED);
-        event.handled = true;
-        return;
-      case "tiEDJT": // empty bucket
-        giveIfMissing(player, BUCKET);
-        event.handled = true;
-        return;
-      case "NVQ0oi": // cupboard: take a rake
-        giveIfMissing(player, RAKE);
-        return;
-      case "YTdGv2": // cupboard: take a seed dibber
-        giveIfMissing(player, SEED_DIBBER);
-        return;
-      case "KPb5Bu": // cupboard: take a watering can
-        giveIfMissing(player, WATERING_CAN);
-        return;
-      case "GtypMi": // cupboard: take whatever is missing
-        giveIfMissing(player, RAKE);
-        giveIfMissing(player, SEED_DIBBER);
-        giveIfMissing(player, WATERING_CAN);
-        return;
-      case "JGzwnf": // Davey blesses the wrench
-        if (held(player, WRENCH)) {
-          player.getInventory().deleteNumber(WRENCH, 1);
-          if (!held(player, HOLY_WRENCH)) player.getInventory().adds(HOLY_WRENCH, 1);
-        }
-        event.handled = true;
-        return;
-      case "jG2mdt": // output tap: receive unsanitary swill
-        if (quest.getStage(player) === STAGE_COLLECT_SWILL && held(player, BUCKET)) {
-          player.getInventory().deleteNumber(BUCKET, 1);
-          if (!held(player, UNSANITARY_SWILL)) player.getInventory().adds(UNSANITARY_SWILL, 1);
-        }
-        event.handled = true;
-        return;
-      case "YrOgJF": // brewing control rumbles; the vat is ready
-        if (quest.getStage(player) === STAGE_SPIDER_ADDED) {
-          quest.setStage(player, STAGE_COLLECT_SWILL);
-          giveIfMissing(player, BUCKET);
-        }
-        return;
-      case "fVhhrc": // Captain Donnie drinks the 'rum'
-        if (quest.getStage(player) === STAGE_COLLECT_SWILL) {
-          if (held(player, UNSANITARY_SWILL)) player.getInventory().deleteNumber(UNSANITARY_SWILL, 1);
-          quest.setStage(player, STAGE_TOLD_DONNIE);
-        }
-        return;
-      case "8lDSvO": // Congratulations! Quest complete!
-        if (!quest.isComplete(player)) {
-          quest.complete(player);
-          event.handled = true;
-          event.end = true;
-        }
-        return;
-      default:
-        return;
-    }
-  }
-
-  /** Condition branches that hand an item over (the transcript has no action id). */
-  function handleCondition({ player, stepId }) {
-    if (!player || !stepId) return;
-    switch (stepId) {
-      case "fpIHBF": // lost seed, has inventory space
-        giveIfMissing(player, BLINDWEED_SEED);
-        return;
-      case "10SD9l": // lost blindweed, has inventory space
-        giveIfMissing(player, BLINDWEED);
-        return;
-      case "NF2-Cx": // lost wrench, has inventory space
-        giveIfMissing(player, WRENCH);
-        return;
-      case "3l4uRi": // fetch water, no bucket
-        if (quest.getStage(player) === STAGE_FETCH_WATER) giveIfMissing(player, BUCKET);
-        return;
-      case "rI6fDF": // lost the bucket of water
-        if (quest.getStage(player) === STAGE_COLLECTED_WATER) giveIfMissing(player, STAGNANT_WATER);
-        return;
-      case "WUSdZp": // catch creatures, no fishbowl and net
-        if (quest.getStage(player) === STAGE_CATCH_CREATURES) giveIfMissing(player, FISHBOWL_AND_NET);
-        return;
-      case "at2XLU": // water added, no free space for the fishbowl
-        if (quest.getStage(player) === STAGE_WATER_ADDED && !quest.isComplete(player)) {
-          quest.setStage(player, STAGE_CATCH_CREATURES);
-          // A generic inventory condition in another plugin can answer this branch
-          // true even when the player has space; hand the fishbowl over anyway.
-          if (hasFreeSlot(player)) giveIfMissing(player, FISHBOWL_AND_NET);
-        }
-        return;
-      case "Sy3jOe": // water added, fishbowl and net handed over
-        if (quest.getStage(player) === STAGE_WATER_ADDED && !quest.isComplete(player)) {
-          quest.setStage(player, STAGE_CATCH_CREATURES);
-          giveIfMissing(player, FISHBOWL_AND_NET);
-        }
-        return;
-      default:
-        return;
-    }
-  }
-
-  /** Stage transitions keyed off the lines that carry them (no action id). */
-  function handleDialogueLine(event) {
-    const { player, npcId, text } = event;
-    if (!player || npcId !== BRAINDEATH_NPC_ID) return;
-    const value = String(text ?? "").toLowerCase();
-    if (value.includes("try hecklin'")) {
-      if (hasFreeSlot(player)) {
-        giveIfMissing(player, BLINDWEED_SEED);
-        if (quest.getStage(player) < STAGE_GIVEN_SEEDS) quest.setStage(player, STAGE_GIVEN_SEEDS);
-      } else if (quest.getStage(player) < STAGE_MET_BRAINDEATH) {
-        quest.setStage(player, STAGE_MET_BRAINDEATH);
-      }
-      return;
-    }
-    if (value.includes("splendid") && quest.getStage(player) === STAGE_GROWN_BLINDWEED) {
-      quest.setStage(player, STAGE_SHOW_BLINDWEED);
-      return;
-    }
-    if (value.includes("savin' some fer an emergency")) {
-      giveIfMissing(player, BLINDWEED);
-      if (quest.getStage(player) === STAGE_GROWN_BLINDWEED) {
-        quest.setStage(player, STAGE_SHOW_BLINDWEED);
-      }
-      return;
-    }
-    // At the "before the hopper" stage the lost-blindweed line words it "a little",
-    // and the hand-out has no action id of its own.
-    if (value.includes("savin' a little fer an emergency")) {
-      if (quest.getStage(player) === STAGE_SHOW_BLINDWEED) giveIfMissing(player, BLINDWEED);
-      return;
-    }
-    // A bucket dropped after the spider step is replaced here; the earlier
-    // hand-out only runs during the "control starts to rumble" action.
-    if (value.includes("ferget the 'rum'") && quest.getStage(player) === STAGE_COLLECT_SWILL) {
-      giveIfMissing(player, BUCKET);
-      return;
-    }
-    if (value.includes("shoved the blindweed into the mix") && quest.getStage(player) === STAGE_BLINDWEED_ADDED) {
-      quest.setStage(player, STAGE_FETCH_WATER);
-      return;
-    }
-    if (value.includes("give the controls a couple of belts") && quest.getStage(player) === STAGE_PRESSURISED) {
-      quest.setStage(player, STAGE_BLESS_WRENCH);
-      giveIfMissing(player, WRENCH);
-      return;
-    }
-    if (value.includes("we need the body of a diseased fever spider") && quest.getStage(player) === STAGE_SPIRIT_BANISHED) {
-      quest.setStage(player, STAGE_KILL_SPIDER);
-    }
-  }
-
-  /** Blindweed / stagnant water / fever spider body into the Intake Hopper. */
-  function handleItemOnObject(event) {
-    const { player, itemId, objectId } = event;
-    if (!player) return;
-    if (objectId === INTAKE_HOPPER_OBJECT_ID) {
-      const stage = quest.getStage(player);
-      if (itemId === BLINDWEED && stage === STAGE_SHOW_BLINDWEED) {
-        event.handled = true;
-        player.getInventory().deleteNumber(BLINDWEED, 1);
-        quest.setStage(player, STAGE_BLINDWEED_ADDED);
-        player.sendMessage("You stuff the Blindweed into the Hopper.");
-        return;
-      }
-      if (itemId === STAGNANT_WATER && stage === STAGE_COLLECTED_WATER) {
-        event.handled = true;
-        player.getInventory().deleteNumber(STAGNANT_WATER, 1);
-        player.getInventory().adds(BUCKET, 1);
-        quest.setStage(player, STAGE_WATER_ADDED);
-        player.sendMessage("You dump the water into the hopper.");
-        return;
-      }
-      if (itemId === FEVER_SPIDER_BODY && stage === STAGE_KILL_SPIDER) {
-        event.handled = true;
-        player.getInventory().deleteNumber(FEVER_SPIDER_BODY, 1);
-        quest.setStage(player, STAGE_SPIDER_ADDED);
-        player.sendMessage("You cram the diseased Fever Spider body into the hopper.");
-        return;
-      }
-      if (stage >= STAGE_STARTED && !quest.isComplete(player)) {
-        event.handled = true;
-        player.sendMessage("Nothing interesting happens.");
-      }
-      return;
-    }
-    if (objectId === PRESSURE_BARREL_OBJECT_ID) {
-      stuffSeaCreature(event);
-      return;
-    }
-    if (objectId === STAGNANT_LAKE_OBJECT_ID) {
-      if (itemId !== BUCKET) return;
-      event.handled = true;
-      if (quest.getStage(player) !== STAGE_FETCH_WATER) {
-        player.sendMessage("Nothing interesting happens.");
-        return;
-      }
-      player.getInventory().deleteNumber(BUCKET, 1);
-      player.getInventory().adds(STAGNANT_WATER, 1);
-      quest.setStage(player, STAGE_COLLECTED_WATER);
-      player.sendMessage("You scoop up a bucket of stagnant water.");
-      return;
-    }
-    if (objectId === OUTPUT_TAP_OBJECT_ID) {
-      if (itemId !== BUCKET) return;
-      fillSwill(player, event, "The vat is empty.");
-      return;
-    }
-    if (BREWING_CONTROL_OBJECT_IDS.has(objectId)) {
-      smiteControls(event);
-      return;
-    }
-    if (BLINDWEED_PATCH_OBJECT_IDS.has(objectId) && itemId === RAKE) {
-      rakeBlindweedPatch(event);
-      return;
-    }
-    if (BLINDWEED_PATCH_OBJECT_IDS.has(objectId) && itemId === BLINDWEED_SEED) {
-      plantBlindweed(event);
-    }
-  }
-
-  /** The patch object carries no Rake option, so the rake is used on it directly. */
-  function rakeBlindweedPatch(event) {
-    const { player } = event;
-    event.handled = true;
-    if (plantedAt(player) !== 0) {
-      player.sendMessage("This patch already has something growing in it.");
-      return;
-    }
-    if (weededPatch(player)) {
-      player.sendMessage("This patch doesn't need weeding right now.");
-      return;
-    }
-    player.setAttribute(WEEDED_ATTRIBUTE, 1);
-    setPatchStage(player, 3);
-    player.performAnimation(new Animation(2273));
-    player.getInventory().adds(WEEDS, 1);
-    player.getSkillManager().addExperiences(Skill.FARMING, 4);
-    player.sendMessage("You rake the weeds from the patch.");
-  }
-
-  /** The patch child (and the client's model) follows varbit 1366. */
-  function syncPatchStage(player) {
-    const stage = plantedAt(player) === 0
-      ? (weededPatch(player) ? 3 : 0)
-      : (blindweedGrown(player) ? 5 : 4);
-    setPatchStage(player, stage);
-  }
-
-  /**
-   * Sets the varbit (for the server's action resolution and the next scene build) and
-   * swaps the child on this player's client, which does not re-resolve a multi-loc on a
-   * varbit change by itself.
-   */
-  function setPatchStage(player, stage) {
-    player.getPacketSender().sendVarbit(PATCH_VARBIT, stage);
-    const location = new api.core.Location(PATCH_TILE.x, PATCH_TILE.y, PATCH_TILE.z);
-    if (!player.getSession?.()?.isTileInScene?.(location.getX(), location.getY(), location.getZ())) return;
-    const sender = player.getPacketSender();
-    sender.sendObjectRemoval(new api.core.GameObject(PATCH_CHILDREN[0], location, PATCH_SHAPE, PATCH_ROTATION, null));
-    sender.sendObject(new api.core.GameObject(PATCH_CHILDREN[stage], location, PATCH_SHAPE, PATCH_ROTATION, null));
-  }
-
-  /** Flips the patch to its grown stage when the flat growth timer elapses. */
-  function growBlindweed(player) {
-    api.getTaskManager().submit(new (class extends api.core.Task {
-      constructor() {
-        super(Math.ceil(BLINDWEED_GROWTH_MS / 600), player);
-      }
-      execute() {
-        // The task's delay is the growth timer, so it is grown when this runs; checking
-        // the clock here raced the timer and left the patch on its planting stage.
-        if (player.isRegistered() && plantedAt(player) !== 0) {
-          setPatchStage(player, 5);
-        }
-        this.stop();
-      }
-    })());
-  }
-
-  function stuffSeaCreature(event) {
-    const { player, itemId } = event;
-    if (itemId !== SLUGLINGS && itemId !== KARAMTHULHU) return;
-    event.handled = true;
-    if (quest.getStage(player) !== STAGE_CATCH_CREATURES) {
-      if (!quest.isComplete(player)) player.sendMessage("Nothing interesting happens.");
-      return;
-    }
-    const slugs = Number(player.getAttribute(SLUGLINGS_ATTRIBUTE)) || 0;
-    const karam = Number(player.getAttribute(KARAMTHULHU_ATTRIBUTE)) || 0;
-    if (slugs + karam >= 5) {
-      player.sendMessage("You don't think you can stuff any more Sluglings in there.");
-      return;
-    }
-    const name = itemId === SLUGLINGS ? "Sluglings" : "Karamthultu";
-    player.getInventory().deleteNumber(itemId, 1);
-    if (itemId === SLUGLINGS) player.setAttribute(SLUGLINGS_ATTRIBUTE, slugs + 1);
-    else player.setAttribute(KARAMTHULHU_ATTRIBUTE, karam + 1);
-    player.sendMessage(`You stuff the squirming ${name} into the barrel.`);
-  }
-
-  function pullPressureLever(event) {
-    const { player } = event;
-    event.handled = true;
-    if (quest.getStage(player) !== STAGE_CATCH_CREATURES) return;
-    const slugs = Number(player.getAttribute(SLUGLINGS_ATTRIBUTE)) || 0;
-    const karam = Number(player.getAttribute(KARAMTHULHU_ATTRIBUTE)) || 0;
-    if (slugs + karam < 5) {
-      player.sendMessage("You do not yet have five sea creatures in the barrel!");
-      return;
-    }
-    player.setAttribute(SLUGLINGS_ATTRIBUTE, 0);
-    player.setAttribute(KARAMTHULHU_ATTRIBUTE, 0);
-    quest.setStage(player, STAGE_PRESSURISED);
-    player.sendMessage("You pressurise the assorted sea creatures.");
-  }
-
-  function fillSwill(player, event, emptyMessage) {
-    event.handled = true;
-    const stage = quest.getStage(player);
-    if (stage >= STAGE_TOLD_DONNIE) {
-      player.sendMessage("You thankfully have no need to do that any more.");
-      return;
-    }
-    if (stage !== STAGE_COLLECT_SWILL) {
-      player.sendMessage(emptyMessage);
-      return;
-    }
-    if (!held(player, BUCKET)) {
-      player.sendMessage("Nothing interesting happens.");
-      return;
-    }
-    player.getInventory().deleteNumber(BUCKET, 1);
-    player.getInventory().adds(UNSANITARY_SWILL, 1);
-    player.sendMessage("You carefully fill the bucket with the foul-smelling swill.");
-  }
-
-  function smiteControls(event) {
-    const { player, itemId } = event;
-    if (itemId !== WRENCH && itemId !== HOLY_WRENCH) return;
-    event.handled = true;
-    if (quest.getStage(player) !== STAGE_BLESS_WRENCH) {
-      player.sendMessage("Nothing interesting happens.");
-      return;
-    }
-    if (itemId === WRENCH) {
-      player.sendMessage("Well, it seems that this wrench is just not holy enough to work. You should go and get it blessed.");
-      return;
-    }
-    if (Number(player.getAttribute(SPIRIT_ATTRIBUTE)) === 1) {
-      player.sendMessage("The Evil Spirit has already manifested!");
-      return;
-    }
-    player.sendMessage("You raise your wrench on high and smite the controls mightily!");
-    player.sendMessage("The Evil Spirit is forced from the controls!");
-    player.setAttribute(SPIRIT_ATTRIBUTE, 1);
-    const spirit = api.spawnNpc({
-      id: EVIL_SPIRIT_NPC_ID,
-      x: 2144,
-      y: 5102,
-      z: 1,
-      wanderRadius: 3,
-      owner: player,
-      ownerOnly: true,
-    });
-    if (spirit) spirits.set(player, spirit);
-  }
-
-  function plantBlindweed(event) {
-    const { player } = event;
-    event.handled = true;
-    if (plantedAt(player) !== 0) {
-      player.sendMessage("This patch already has something growing in it.");
-      return;
-    }
-    if (!weededPatch(player)) {
-      player.sendMessage("You need to rake the weeds out first.");
-      return;
-    }
-    if (level(player, Skill.FARMING) < 40) {
-      player.sendMessage("You must be a Level 40 Farmer to plant those.");
-      return;
-    }
-    player.getInventory().deleteNumber(BLINDWEED_SEED, 1);
-    player.setAttribute(PLANTED_ATTRIBUTE, Date.now());
-    setPatchStage(player, 4);
-    growBlindweed(player);
-    player.sendMessage("You plant a seed in the blindweed patch.");
-  }
-
-  /** Inspect reports the patch state; it never picks, so a grown patch is read, not harvested. */
-  function inspectPatch(event) {
-    const { player } = event;
-    event.handled = true;
-    syncPatchStage(player);
-    if (plantedAt(player) === 0) {
-      player.sendMessage(weededPatch(player)
-        ? "This is a blindweed patch. The soil has not been treated."
-        : "This is a blindweed patch. The soil has not been treated. The patch needs weeding.");
-      return;
-    }
-    if (!blindweedGrown(player)) {
-      player.sendMessage("This is a blindweed patch. The soil has not been treated. The patch has something growing in it.");
-      return;
-    }
-    player.sendMessage("This is a blindweed patch. The soil has not been treated. The patch is fully grown.");
-  }
-
-  function harvestPatch(event) {
-    const { player } = event;
-    event.handled = true;
-    if (plantedAt(player) === 0) {
-      player.sendMessage("This is a blindweed patch. The soil has not been treated. The patch needs weeding.");
-      return;
-    }
-    if (!blindweedGrown(player)) {
-      player.sendMessage("This is a blindweed patch. The soil has not been treated. The patch has something growing in it.");
-      return;
-    }
-    if (!hasFreeSlot(player)) {
-      player.sendMessage("You do not have any free space for the Blindweed.");
-      return;
-    }
-    player.setAttribute(PLANTED_ATTRIBUTE, 0);
-    player.setAttribute(WEEDED_ATTRIBUTE, 0);
-    setPatchStage(player, 0);
-    player.getInventory().adds(BLINDWEED, 1);
-    if (quest.getStage(player) === STAGE_GIVEN_SEEDS) quest.setStage(player, STAGE_GROWN_BLINDWEED);
-    player.sendMessage("You pick the Blindweed.");
-  }
-
-  function clearSpirit(player) {
-    const spirit = spirits.get(player);
-    if (spirit) api.removeNpc(spirit);
-    spirits.delete(player);
-  }
-
-  /** Evil Spirit death banishes it; a Fever Spider drops its body. */
-  function handleNpcDeath({ killer, npcId }) {
-    if (!killer) return;
-    if (npcId === EVIL_SPIRIT_NPC_ID) {
-      killer.setAttribute(SPIRIT_ATTRIBUTE, 0);
-      clearSpirit(killer);
-      if (quest.getStage(killer) === STAGE_BLESS_WRENCH) {
-        quest.setStage(killer, STAGE_SPIRIT_BANISHED);
-        killer.sendMessage("You have banished the Evil Spirit!");
-      }
-      return;
-    }
-    if (npcId === FEVER_SPIDER_NPC_ID && quest.getStage(killer) === STAGE_KILL_SPIDER) {
-      if (!held(killer, FEVER_SPIDER_BODY) && hasFreeSlot(killer)) {
-        killer.getInventory().adds(FEVER_SPIDER_BODY, 1);
-        killer.sendMessage("You take the fever spider's body.");
-      }
-    }
-  }
-
-  /** The squid fishing spot shares NPC 635 with every other spot in the cache. */
-  function handleNpcInteraction(event) {
-    if (event.npcId !== FISHING_SPOT_NPC_ID) return;
-    const { player } = event;
-    if (quest.getStage(player) !== STAGE_CATCH_CREATURES) return;
-    event.handled = true;
-    if (!held(player, FISHBOWL_AND_NET)) {
-      player.sendMessage("You do not have the correct equipment to fish here.");
-      return;
-    }
-    if (level(player, Skill.FISHING) < 50) {
-      player.sendMessage("You must be a Level 40 Fisherman to fish here.");
-      return;
-    }
-    if (!hasFreeSlot(player)) {
-      player.sendMessage("You do not have any free space for anything that you will catch!");
-      return;
-    }
-    startFishing(player, event.npc);
-  }
-
-  /** The bowl-and-net action loops (seq 2813 deal_bowl_fish); a catch lands every interval. */
-  function startFishing(player, npc) {
-    stopFishing(player);
-    player.sendMessage("You dunk the bowl in the water...");
-    player.performAnimation(new Animation(FISHING_ANIMATION));
-    const session = {
-      npcIndex: npc.getIndex(),
-      npcId: npc.getId(),
-      spotX: npc.getLocation().getX(),
-      spotY: npc.getLocation().getY(),
-      task: null,
-    };
-    session.task = new (class extends api.core.Task {
-      constructor() {
-        super(FISHING_INTERVAL_TICKS, player);
-      }
-      execute() {
-        if (!stillFishing(player, session)) {
-          stopFishing(player);
-          this.stop();
-          return;
-        }
-        player.performAnimation(new Animation(FISHING_ANIMATION));
-        if (Math.random() < 1 / 3) {
-          player.getInventory().adds(KARAMTHULHU, 1);
-          player.sendMessage("...and you catch a Karamthulhu!");
-        } else {
-          player.getInventory().adds(SLUGLINGS, 1);
-          player.sendMessage("...and you catch some Sluglings!");
-        }
-        if (!hasFreeSlot(player)) stopFishing(player);
-      }
-    })();
-    fishingSessions.set(player, session);
-    api.getTaskManager().submit(session.task);
-  }
-
-  /** Movement, a lost bowl/net or a moved spot ends the action, as any fishing does. */
-  function stillFishing(player, session) {
-    if (!player.isRegistered() || player.getHitpoints() <= 0) return false;
-    if (quest.getStage(player) !== STAGE_CATCH_CREATURES) return false;
-    if (!held(player, FISHBOWL_AND_NET)) return false;
-    if (player.getMovementQueue?.()?.size?.() > 0 || player.getForceMovement?.() != null) return false;
-    const npc = api.getWorld?.()?.getNpcs?.()?.get?.(session.npcIndex);
-    if (!npc || npc.getId() !== session.npcId ||
-        npc.getLocation().getX() !== session.spotX || npc.getLocation().getY() !== session.spotY) return false;
-    return player.getLocation().isWithinDistance(npc.getLocation(), 2);
-  }
-
-  function stopFishing(player) {
-    const session = fishingSessions.get(player);
-    if (!session) return;
-    fishingSessions.delete(player);
-    session.task?.stop();
-  }
-
-  function handleItemOnNpc(event) {
-    const { player, itemId, target } = event;
-    if (!player || (event.npcId ?? target?.getId?.()) !== BRAINDEATH_NPC_ID) return;
-    event.handled = true;
-    if (itemId === SLUGLINGS) {
-      startTranscript(api, player, BRAINDEATH_NPC_ID, PAGE, "sluglings-using-sluglings-on-captain-braindeath");
-      return;
-    }
-    if (itemId === KARAMTHULHU) {
-      startTranscript(api, player, BRAINDEATH_NPC_ID, PAGE, "sluglings-using-karamthultu-on-captain-braindeath");
-      return;
-    }
-    if (itemId === FEVER_SPIDER_BODY) {
-      startTranscript(api, player, BRAINDEATH_NPC_ID, PAGE, "fever-spider-using-the-spider-corpse-on-captain-braindeath");
-      return;
-    }
-    event.handled = false;
-  }
-
-  function handleItemOnItem(event) {
-    const { player, usedItemId, usedWithItemId } = event;
-    const fb = usedItemId === FISHBOWL || usedWithItemId === FISHBOWL;
-    const net = usedItemId === BIG_FISHING_NET || usedWithItemId === BIG_FISHING_NET;
-    if (!fb || !net) return;
-    if (!held(player, FISHBOWL) || !held(player, BIG_FISHING_NET)) return;
-    player.getInventory().deleteNumber(FISHBOWL, 1);
-    player.getInventory().deleteNumber(BIG_FISHING_NET, 1);
-    player.getInventory().adds(FISHBOWL_AND_NET, 1);
-    player.sendMessage("You wrap the net around the empty bowl.");
-    event.handled = true;
-  }
-
-  function unwrapFishbowl({ player }) {
-    if (!held(player, FISHBOWL_AND_NET)) return;
-    if (!hasFreeSlot(player)) {
-      player.sendMessage("You do not have enough space to unwrap the net from the fishbowl.");
-      return;
-    }
-    player.getInventory().deleteNumber(FISHBOWL_AND_NET, 1);
-    player.getInventory().adds(FISHBOWL, 1);
-    player.getInventory().adds(BIG_FISHING_NET, 1);
-    player.sendMessage("You unwrap the net from the fishbowl.");
-  }
-
-  function handleObjectInteraction(event) {
-    const { player, objectId } = event;
-    if (!player) return;
-    if (PRESSURE_LEVER_OBJECT_IDS.has(objectId)) {
-      pullPressureLever(event);
-      return;
-    }
-    if (TOOL_CUPBOARD_OBJECT_IDS.has(objectId)) {
-      event.handled = true;
-      startTranscript(api, player, BRAINDEATH_NPC_ID, PAGE, CUPBOARD_VARIANT);
-      return;
-    }
-    if (BLINDWEED_PATCH_OBJECT_IDS.has(objectId)) {
-      // The map can place the unnamed multi-loc root (10096), whose own definition
-      // has no actions; resolve its varbit child before deciding Inspect vs Pick.
-      const actionDefinition = event.definition?.getInteractions?.()?.some(Boolean)
-        ? event.definition
-        : api.core.ObjectDefinition?.forPlayer?.(objectId, player) ?? event.definition;
-      const interactions = actionDefinition?.getInteractions?.() ?? [];
-      if (interactions[event.clickType - 1]?.toLowerCase() === "inspect") inspectPatch(event);
-      else harvestPatch(event);
-      return;
-    }
-    if (objectId === TRASHED_PATCH_OBJECT_ID) {
-      event.handled = true;
-      player.sendMessage("The soil here is too poor to farm on.");
-      return;
-    }
-    if (objectId === OUTPUT_TAP_OBJECT_ID) {
-      fillSwill(player, event, "Nothing interesting happens.");
-      return;
-    }
-    if (GATE_OBJECT_IDS.has(objectId)) {
-      useGate(event);
-      return;
-    }
-    if (objectId === SOUTH_STAIR_OBJECT_ID) {
-      climbSouthStair(event);
-    }
-  }
-
-  /**
-   * The map pairs the south brewery stair (10137) with a Climb-up stair two tiles
-   * west, which ClimbLinks' landing search misses; send the explicit destination
-   * through the Ladders climb so the climb animation still plays.
-   */
-  function climbSouthStair(event) {
-    const { player, location } = event;
-    if (!location || location.x !== SOUTH_STAIR_TILE.x || location.y !== SOUTH_STAIR_TILE.y) return;
-    event.handled = true;
-    api.emitCustomEvent("ladders:climbDown", {
-      player,
-      destination: new api.core.Location(SOUTH_STAIR_LANDING.x, SOUTH_STAIR_LANDING.y, SOUTH_STAIR_LANDING.z),
-      handled: false,
-    });
-  }
-
-  /**
-   * One-tile pass-through; the Luke conversation variants carry the words.
-   * ponytail: no gate object swap, the core door stays as mapped.
-   */
-  function useGate(event) {
-    const { player, location } = event;
-    if (!location) return;
-    const stage = quest.getStage(player);
-    if (stage < STAGE_FETCH_WATER || quest.isComplete(player)) return;
-    event.handled = true;
-    const north = player.getLocation().getY() <= location.y;
-    player.moveTo(new api.core.Location(location.x, location.y + (north ? 1 : -1), location.z));
+    player.setAttribute(ATTRIBUTES.SLUGLINGS, 0);
+    player.setAttribute(ATTRIBUTES.KARAMTHULHU, 0);
+    brewery.stop(player);
   }
 
   function handleLogin({ player }) {
     refreshQuestList(player);
-    // Relog after raking/planting: show the stage the saved state says the patch is in.
-    if (weededPatch(player) || plantedAt(player) !== 0) syncPatchStage(player);
+    if (Number(player.getAttribute(ATTRIBUTES.SPIRIT)) === 1) player.setAttribute(ATTRIBUTES.SPIRIT, 0);
+    if (quest.getStage(player) > 0) syncVarbits(player);
+    if (Number(player.getAttribute(ATTRIBUTES.WEEDS)) > 0 || patch.planted(player)) patch.sync(player);
   }
 
   function handleLogout({ player }) {
     if (!player) return;
-    clearSpirit(player);
-    stopFishing(player);
+    brewery.stop(player);
+    patch.stop(player);
+    scenes.stop(player);
+    gateRequests.delete(player);
   }
 
-  api.persistAttribute(INTRO_ATTRIBUTE);
-  api.persistAttribute(WEEDED_ATTRIBUTE);
-  api.persistAttribute(PLANTED_ATTRIBUTE);
-  api.persistAttribute(SLUGLINGS_ATTRIBUTE);
-  api.persistAttribute(KARAMTHULHU_ATTRIBUTE);
-  api.persistAttribute(SPIRIT_ATTRIBUTE);
+  api.persistAttribute(ATTRIBUTES.KNOCKED_OUT, 0);
+  api.persistAttribute(ATTRIBUTES.WEEDS, 0);
+  api.persistAttribute(ATTRIBUTES.WEEDS_AT, 0);
+  api.persistAttribute(ATTRIBUTES.PLANTED, 0);
+  api.persistAttribute(ATTRIBUTES.SLUGLINGS, 0);
+  api.persistAttribute(ATTRIBUTES.KARAMTHULHU, 0);
+  api.persistAttribute(ATTRIBUTES.SPIRIT, 0);
 
   quest = registerQuest(api, {
     key: "rum_deal",
     name: "Rum Deal",
-    varpId: VARP_RUM_DEAL,
-    startedValue: STAGE_STARTED,
-    completionValue: STAGE_COMPLETE,
+    varpId: VARP_QUEST,
+    startedValue: STAGES.STARTED,
+    completionValue: STAGES.COMPLETE,
     questPoints: 2,
     xpRewards: [
       { skillId: Skill.PRAYER.getIndex(), amount: 7000, label: "Prayer" },
       { skillId: Skill.FISHING.getIndex(), amount: 7000, label: "Fishing" },
       { skillId: Skill.FARMING.getIndex(), amount: 7000, label: "Farming" },
     ],
-    // Davey's blessing already hands over the holy wrench; the completion must not
-    // grant a second one. The scroll still shows it via scrollItemId.
-    scrollItemId: ItemIdentifiers.HOLY_WRENCH,
-    rewardItemLabel: "A holy wrench",
-    otherRewards: ["Access to Braindeath Island"],
+    // Davey's blessing already hands over the holy wrench; the scroll shows it (tick 2813).
+    scrollItemId: I.HOLY_WRENCH,
+    rewardItemLabel: "A Holy Wrench",
     buildJournal,
     onReward: grantReward,
   });
@@ -1329,9 +701,11 @@ module.exports = function registerRumDealQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:hook", handleHook);
+  api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
-  api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
+  api.onCustomEvent("door:toggle", guardGate);
+  api.onCustomEvent("npc-drops:quest-item", questDrop);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
@@ -1339,6 +713,7 @@ module.exports = function registerRumDealQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onNpcInteraction(handleNpcInteraction);
   api.onNpcDeath(handleNpcDeath);
+  api.onCustomEvent("agent:advance-time", patch.advanceTime);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
 };

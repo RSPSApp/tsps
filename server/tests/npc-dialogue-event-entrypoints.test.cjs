@@ -2804,7 +2804,8 @@ const REJECTED_START_ROUTES = [
   { page: 'Meat and Greet', key: 'meat_and_greet', npc: 'EMELIO', quests: ['children_of_the_sun'], route: ['Yes.'] },
   { page: 'The Curse of Arrav', key: 'curse_of_arrav', npc: 'ELIAS_WHITE', skills: true, quests: ['defender_of_varrock', 'troll_romance'], route: ['Yes.'] },
 ];
-const RUM_START_ROUTE = { npc: 'PIRATE_PETE', route: ['Yes!', 'Of course, I fear no demon!', 'Nonsense! Keep the money!'] };
+// Rum Deal's start prompt is "Start the Rum Deal quest?" with "Yes." (the Pirate Pete page and the rev 242 capture).
+const RUM_START_ROUTE = { npc: 'PIRATE_PETE', route: ['Yes.'] };
 const registeredQuest = key => require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(quest => quest.key === key);
 const carriedItems = player => player.getInventory().getItems().filter(item => item.getId() >= 0).map(item => [item.getId(), item.getAmount(), item.getMeta()]);
 function completePrerequisites(player, keys) {
@@ -2873,10 +2874,8 @@ for (const mode of ['missing quests', 'skills only', 'drained skills']) test(`Ru
   // Rum's existing predicate reads current levels: boosting passes, draining fails.
   startSkillLevels(f.player, mode === 'drained skills' ? 1 : 99, 99);
   completePrerequisites(f.player, ['zogre_flesh_eaters', 'priest_in_peril']);
-  await followNativeStartRoute(f, RUM_START_ROUTE);
-  assert.equal(registeredQuest('rum_deal').getStage(f.player), 1);
-  for (let n = 0; n < 8 && registeredQuest('rum_deal').getStage(f.player) < 2; n++) await nextLine(f);
-  assert.equal(registeredQuest('rum_deal').getStage(f.player), 2, 'an eligible acceptance retains the canonical knockout');
+  await followNativeStartRoute(f, { ...RUM_START_ROUTE, route: [...RUM_START_ROUTE.route, 'Of course, I fear no demon!'] });
+  assert.equal(registeredQuest('rum_deal').getStage(f.player), 2, 'an eligible acceptance starts it and agreeing to the fight is stage 2');
 });
 
 test('Rum Deal alternate source hook refuses without playing its accepted tail', async t => {
@@ -2888,12 +2887,13 @@ test('Rum Deal alternate source hook refuses without playing its accepted tail',
   await assertRejectedStart(f, 'rum_deal', items);
 });
 
+// Rum Deal's "Yes." carries the dump's start hook (quest:rum-deal:start), so the refusal is on the hook.
 test('a refused choice preserves replacement UI opened by its owning handler', async t => {
-  const f = fixture(t), hooks = PM.customEventHooks.get('npc-dialogue:choice'), start = hooks.length;
+  const f = fixture(t), hooks = PM.customEventHooks.get('npc-dialogue:hook'), start = hooks.length;
   t.after(() => hooks.splice(start));
   let replacement, refused;
-  PM.createApi('RefusedChoiceReplacement').onCustomEvent('npc-dialogue:choice', event => {
-    if (event.player !== f.player || event.option !== 'Nonsense! Keep the money!') return;
+  PM.createApi('RefusedChoiceReplacement').onCustomEvent('npc-dialogue:hook', event => {
+    if (event.player !== f.player || event.hook !== 'quest:rum-deal:start') return;
     refused = event.end === true;
     replacement = request(f.player, f.npc);
   });

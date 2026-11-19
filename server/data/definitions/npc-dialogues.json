@@ -1049633,9 +1049633,10 @@
         },
         {
           "type": "choice",
+          "prompt": "Start the Rum Deal quest?",
           "options": [
             {
-              "text": "Yes!",
+              "text": "Yes.",
               "steps": [
                 {
                   "player": "Yes! Your uncorroborated sob story has touched my heart. When do we set off?"
@@ -1049689,6 +1049690,18 @@
                   ]
                 },
                 {
+                  "type": "line",
+                  "speaker": "Pirate Pete",
+                  "text": "Yes, the mighty, fearsome, tall, deadly, oaken, round demon Barrelor the Destroyer.",
+                  "speaker_ids": [
+                    601,
+                    602,
+                    3389,
+                    4814,
+                    4816
+                  ]
+                },
+                {
                   "player": "Barrelor?"
                 },
                 {
@@ -1049707,6 +1049720,18 @@
                   "type": "line",
                   "speaker": "Pirate Pete",
                   "text": "Barrelor is an awesome opponent, and to reclaim my family sword you will need to defeat him, for he guards it within the deadly Trapped Pit of Barrelor.",
+                  "speaker_ids": [
+                    601,
+                    602,
+                    3389,
+                    4814,
+                    4816
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Pirate Pete",
+                  "text": "Wanna give it a shot?",
                   "speaker_ids": [
                     601,
                     602,
@@ -1049787,7 +1049812,7 @@
                                 {
                                   "type": "action",
                                   "text": "Pirate Pete catches the player off guard and knocks them out with a bottle.",
-                                  "id": "XU0tPW"
+                                  "id": "NDjT_d"
                                 },
                                 {
                                   "player": "Ow!",
@@ -1049796,7 +1049821,7 @@
                                 {
                                   "type": "action",
                                   "text": "(Cutscene 1 begins.)",
-                                  "id": "ZTlTFa"
+                                  "id": "TjAxeZ"
                                 }
                               ]
                             },
@@ -1049882,7 +1049907,9 @@
                     }
                   ]
                 }
-              ]
+              ],
+              "hook": "quest:rum-deal:start",
+              "quest": "Rum Deal"
             },
             {
               "text": "No.",
@@ -1050020,7 +1050047,7 @@
                               "steps": [
                                 {
                                   "type": "call",
-                                  "branch": "jump-707704611b9b7b0f"
+                                  "branch": "jump-205027e3c4c71ad0"
                                 }
                               ]
                             }
@@ -1050035,7 +1050062,7 @@
                               "steps": [
                                 {
                                   "type": "call",
-                                  "branch": "jump-a0e05d61b731ad22"
+                                  "branch": "jump-4b1c41e000948a05"
                                 }
                               ]
                             }
@@ -1050256,6 +1050283,14 @@
           ]
         },
         {
+          "type": "line",
+          "speaker": "Captain Braindeath",
+          "text": "When ye arrived ye took a nasty knock to the head, so ye probably don't remember agreein' to help us out. But I swear to ye that ye did.",
+          "speaker_ids": [
+            603
+          ]
+        },
+        {
           "player": "Okay... I'll buy that. It sounds like something I would do."
         },
         {
@@ -1050292,6 +1050327,14 @@
           "type": "line",
           "speaker": "Captain Braindeath",
           "text": "With my crew of sturdy, upright pirate brewers, we sail the seven seas, distributing cheap 'alcohol' to all and sundry.",
+          "speaker_ids": [
+            603
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Captain Braindeath",
+          "text": "Well, fer a price, at any rate.",
           "speaker_ids": [
             603
           ]
@@ -1050359,6 +1050402,14 @@
           "type": "line",
           "speaker": "Captain Braindeath",
           "text": "Day and night they seek to break our will with their chantin', and their singin' and their passive resistance!",
+          "speaker_ids": [
+            603
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Captain Braindeath",
+          "text": "Seems they lost their fightin' spirit after the first few days. Now most of them just protest all the time.",
           "speaker_ids": [
             603
           ]
@@ -1052672,6 +1052723,27 @@
           ]
         }
       ],
+      "stagnant-water-talking-to-captain-braindeath-before-pouring-in-the-stagnant-in-the-hopper-using-the-bucket-of-stagnant-water-on-captain-braindeath": [
+        {
+          "player": "What exactly do you want me to do with this?"
+        },
+        {
+          "type": "line",
+          "speaker": "Captain Braindeath",
+          "text": "I want ye to go pour that bucket into yonder hopper.",
+          "speaker_ids": [
+            603
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Captain Braindeath",
+          "text": "Take yer time, lad, we're only bein' besieged by zombies.",
+          "speaker_ids": [
+            603
+          ]
+        }
+      ],
       "stagnant-water-using-bucket-of-water-in-the-hopper": [
         {
           "type": "message",
@@ -1052716,7 +1052788,15 @@
         {
           "type": "line",
           "speaker": "Captain Braindeath",
-          "text": "'Cos, [lad/lass] they're one of our super-secret ingredients! Yer not too susceptible to mind control are ye [lad/lass]?",
+          "text": "'Cos, [lad/lass] they're one of our super-secret ingredients!",
+          "speaker_ids": [
+            603
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Captain Braindeath",
+          "text": "Yer not too susceptible to mind control are ye [lad/lass]?",
           "speaker_ids": [
             603
           ]
@@ -1054239,7 +1054319,7 @@
       ]
     },
     "branches": {
-      "jump-707704611b9b7b0f": [
+      "jump-205027e3c4c71ad0": [
         {
           "player": "Nonsense! Keep the money! I will dispose of this evil half-brother of yours and leave you what little money is left to feed your family."
         },
@@ -1054261,7 +1054341,7 @@
         {
           "type": "action",
           "text": "Pirate Pete catches the player off guard and knocks them out with a bottle.",
-          "id": "XU0tPW"
+          "id": "NDjT_d"
         },
         {
           "player": "Ow!",
@@ -1054270,10 +1054350,10 @@
         {
           "type": "action",
           "text": "(Cutscene 1 begins.)",
-          "id": "ZTlTFa"
+          "id": "TjAxeZ"
         }
       ],
-      "jump-a0e05d61b731ad22": [
+      "jump-4b1c41e000948a05": [
         {
           "player": "Great, I'll take the cash in used coins please."
         },

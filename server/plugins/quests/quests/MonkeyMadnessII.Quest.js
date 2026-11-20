@@ -1758,6 +1758,12 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       hold.execute = () => {
         // Gone (logged out): nothing more to show.
         if (!player.isRegistered()) return void hold.stop();
+        // Dying: the death owns the movement block and the animation now; only busy is cleared.
+        if (player.isDyingReturn()) {
+          released = true;
+          sender.sendVarbit(CacheDefinitions.getVarbitId(BUSY_VARBIT), 0);
+          return void hold.stop();
+        }
         ticks++;
         if (ticks === SEED_POD_UNFOLD_AFTER) {
           player.performAnimation(new Animation(CacheDefinitions.getSeqId(SEED_POD_SEQ_REVERSE), Priority.HIGH));

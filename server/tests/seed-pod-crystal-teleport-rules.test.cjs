@@ -132,6 +132,21 @@ test("cancelling the player's own tasks mid-hold does not leave them frozen", as
   assert.deepEqual(f.messages, ["The Royal seed pod teleports you to the Grand Tree."]);
 });
 
+test("dying during the hold: no reset, no release and no seed pod line", async (t) => {
+  const f = actor(t, SHALLOW, core.ItemIdentifiers.ROYAL_SEED_POD);
+  const slot = f.p.getInventory().getSlotForItemId(core.ItemIdentifiers.ROYAL_SEED_POD);
+  await f.conn.dispatch([{ type: "inventory_action", slot, itemId: core.ItemIdentifiers.ROYAL_SEED_POD, widgetId: 3214, option: "Commune" }]);
+  f.conn.processTurnPackets();
+  for (let i = 0; i < 5; i++) core.TaskManager.process();
+  t.mock.method(f.p, "isDyingReturn", () => true);
+  const resets = [];
+  t.mock.method(f.p, "performAnimation", (a) => { resets.push(a?.getId?.()); });
+  for (let i = 0; i < 3; i++) core.TaskManager.process();
+  assert.equal(f.p.getMovementQueue().isMovementBlocked(), true, "the death keeps the block");
+  assert.deepEqual(resets, [], "the death animation is not cut");
+  assert.deepEqual(f.messages, []);
+});
+
 test("the royal seed pod is refused above level 30 Wilderness", async (t) => {
   const f = actor(t, DEEP, core.ItemIdentifiers.ROYAL_SEED_POD);
   f.p.setWildernessLevel(40);

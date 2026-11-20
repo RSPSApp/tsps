@@ -5,6 +5,9 @@ on:
         branches: [main]
         paths:
             - 'client/**'
+            # Client imports shared rules and generates interface assets from server plugins.
+            - 'server/**'
+            - 'scripts/run-with-env.mjs'
             - '.github/scripts/client-release/build-web.mjs'
             - '.github/scripts/client-release/release*.mjs'
             - '.github/scripts/client-release/package*.json'
@@ -13,6 +16,8 @@ on:
         branches: [main]
         paths:
             - 'client/**'
+            - 'server/**'
+            - 'scripts/run-with-env.mjs'
             - '.github/scripts/client-release/build-web.mjs'
             - '.github/scripts/client-release/release*.mjs'
             - '.github/scripts/client-release/package*.json'

@@ -1,6 +1,6 @@
 // Run after `yarn build`: node --test tests/varlamore-drinks.test.cjs
 //
-// Varlamore wines, ales and liquor had a Drink op that did nothing. They drink like the other bar
+// Varlamore wines, ales (Trapper's tipple included) and liquor had a Drink op that did nothing. They drink like the other bar
 // drinks through Potions.plugin.js, clicked as the inventory widget op the cache gives "Drink".
 //
 // rsprox capture (rsprox.net 4101, tick 1138, Blackbird red at 99s): human_eat, sound 2401, "You drink
@@ -209,6 +209,23 @@ test("Sun-shine: heals 5, Strength +(1 + 5%), Attack -4", async t => {
   assert.equal(level(f, "ATTACK"), 66);
   assert.equal(f.p.getHitpoints(), 85);
   assert.deepEqual(f.spam, ["You drink the Sunshine.", "It's got quite the kick to it!"]);
+});
+
+test("Trapper's tipple: heals 1, Hunter +2, Strength -1, Attack -2, nothing left", async t => {
+  assert.equal(I.TRAPPERS_TIPPLE, 29277);
+  assert.equal(core.CacheDefinitions.getItem(29277).name, "Trapper's tipple");
+  const f = actor(t, { attack: 80, strength: 90, levels: { HUNTER: 60 } });
+  f.inv.setItem(3, new core.Item(I.TRAPPERS_TIPPLE, 1));
+  await drink(f, 3);
+  assert.equal(slotId(f, 3), NOTHING);
+  assert.equal(level(f, "HUNTER"), 62);
+  assert.equal(level(f, "STRENGTH"), 89);
+  assert.equal(level(f, "ATTACK"), 78);
+  assert.equal(f.p.getHitpoints(), 81);
+  assert.deepEqual(f.spam, ["You drink the Trapper's Tipple and feel ready to catch some creatures.",
+    "You feel less able to fight said creatures."]);
+  assert.deepEqual(f.game, []);
+  assert.deepEqual(f.animations, [829]);
 });
 
 test("a second wine waits for the drink delay", async t => {

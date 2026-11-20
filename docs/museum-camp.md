@@ -52,3 +52,8 @@ From rsprox captures 73, local 1000187, 1000189 and 1000410 (rev 227, Leagues V 
   it gives the full amount.
 - The order of the checks (level, tinderbox, hammer, materials) is ours beyond the recorded
   tinderbox-before-materials.
+- The personally built spinning wheel uses the existing one-tile, clear-line approach contract
+  for Spin and material-on-wheel input. Its placed parent (31431 at 3732, 3823, rotation 3)
+  otherwise turns the built child's (30934) ordinary access mask toward blocked scenery.
+  This is a local integration choice; no recording establishes a retail approach tile.
+  Construction costs, personal built state, map collision and the shared spinning recipe are unchanged.

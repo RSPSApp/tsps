@@ -2,6 +2,8 @@
 //
 // Fossil Island's Museum Camp improvements against the Wiki (Museum Camp) and rsprox captures 73,
 // local 1000187, 1000189 and 1000410 (rev 227), with a real Player, Inventory and skills.
+process.env.BROWSER_HOST = '1';
+process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
 const { test, before } = require('node:test');
 
@@ -189,4 +191,114 @@ test('a build task cancelled before its tick (a cutscene, a bot) does not block 
   assert.equal(has(p, 'plank_oak'), 4, 'nothing built');
   build(p, 'Broken Spinning Wheel', 'Build on', 'fossil_spinning_wheel');
   assert.equal(p.lines.at(-1), 'You build the spinning wheel.');
+});
+
+// Real placed map object, movement, registered consumers and queued creation-menu input.
+// Only the actors/channel and bounded world-phase scheduler are fixtures.
+test('the personally built camp wheel is reachable and spins through ordinary object input', async (t) => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { ObjectActionPacketListener } = require('../dist/net/packet/impl/ObjectActionPacketListener');
+  const { CREATION_MENU_GROUP_ID, CREATION_MENU_FIRST_ITEM_COMPONENT } = require('../dist/net/packet/PacketSender');
+  const Shared = require('../plugins/skills/crafting/Shared.Crafting');
+  Camp.register(PluginManager.createApi('MuseumCamp'));
+  require('../plugins/skills/Crafting.plugin').register(PluginManager.createApi('Crafting'));
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3732, 3823);
+  const wheel = core.MapObjects.get(31431, new core.Location(3732, 3823), null);
+  assert.ok(wheel, 'the actual placed parent');
+  assert.equal(wheel.getType(), 10);
+  assert.equal(wheel.getFace(), 3);
+  const actors = [];
+  t.after(() => {
+    for (const p of actors) {
+      Shared.stopCrafting(p);
+      p.closeInterruptibleInterfaces();
+      p.setRegistered(false);
+      TaskManager.cancelTasks(p);
+      TaskManager.cancelTasks(p.getIndex());
+      p.getMovementQueue().reset();
+      p.getMovementQueue().walkToReset();
+    }
+  });
+  function actor() {
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const p = new Player(new PlayerSession(channel)).setUsername('campwheel' + nextIndex).setIndex(++nextIndex);
+    p.setRegistered(true);
+    p.setNeedsPlacement(false);
+    p.setLocation(new core.Location(3731, 3822));
+    p.getSkillManager().setCurrentLevel(core.Skill.CONSTRUCTION, 28, false);
+    const c = new ClientConnection(channel);
+    c.player = p;
+    actors.push(p);
+    return { p, c };
+  }
+  function turn(p, c) {
+    p.resetUpdating();
+    core.World.processCycle++;
+    TaskManager.process();
+    c.processTurnPackets();
+    const q = p.getMovementQueue();
+    q.beginCycle();
+    q.processEntityPursuit();
+    if (q.hasPendingWork()) q.process();
+    TaskManager.processWalkTo(p.getIndex());
+  }
+  const { p, c } = actor(), inv = p.getInventory();
+  give(p, 'hammer'); give(p, 'plank_oak', 4); give(p, 'nails', 5);
+  const initialXp = xp(p);
+  new ObjectActionPacketListener().executeAction(p, 31431, 3732, 3823, 0, 'Build on');
+  for (let i = 0; i < 20 && !p.getAttribute(Camp.BUILT_ATTRIBUTE)?.includes('spinning-wheel'); i++) turn(p, c);
+  assert.deepEqual(p.getAttribute(Camp.BUILT_ATTRIBUTE), ['spinning-wheel']);
+  assert.equal(has(p, 'plank_oak'), 0); assert.equal(has(p, 'nails'), 0);
+  assert.equal(has(p, 'hammer'), 1); assert.equal(xp(p) - initialXp, 1000);
+  const built = core.ObjectDefinition.forPlayer(31431, p);
+  assert.equal(built.id, 30934); assert.equal(built.getBlockingMask(), 27);
+  assert.equal(core.RegionManager.getClipping(3733, 3823, 0, null), 131328, 'east approach is blocked');
+  give(p, 'wool', 2);
+  new ObjectActionPacketListener().executeAction(p, 31431, 3732, 3823, 0, 'Spin');
+  for (let i = 0; i < 20 && !p.getCreationMenu(); i++) turn(p, c);
+  assert.ok(p.getCreationMenu(), 'Spin must reach the personally built placed wheel');
+  assert.ok(p.getLocation().getDistance(wheel.getLocation()) <= 1, 'an accessible adjacent approach');
+  const child = p.getCreationMenu().getItems().indexOf(core.ItemIds.BALL_OF_WOOL);
+  assert.ok(child >= 0);
+  const craftXp = p.getSkillManager().getExperience(core.Skill.CRAFTING);
+  await c.dispatch([{ type: 'dialogue_continue', widgetId: (CREATION_MENU_GROUP_ID << 16) |
+    (CREATION_MENU_FIRST_ITEM_COMPONENT + child), childIndex: 1 }]);
+  for (let i = 0; i < 6; i++) turn(p, c);
+  assert.equal(inv.getAmount(core.ItemIds.BALL_OF_WOOL), 1);
+  assert.equal(has(p, 'wool'), 1);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.CRAFTING) - craftXp, 2, 'integer XP getter for the existing 2.5 XP recipe');
+  assert.equal(p.getSkillManager().getSkills().getExperiences()[core.Skill.CRAFTING.getIndex()], 2.5, 'stored recipe XP retains its fraction');
+  // The other ordinary entry point must use the same approach, without bypassing movement.
+  p.setLocation(new core.Location(3731, 3823));
+  await c.dispatch([{ type: 'item_on_object', objectId: 31431, x: 3732, y: 3823,
+    itemId: core.ItemIds.WOOL, slot: inv.getSlotForItemId(core.ItemIds.WOOL), widgetId: 149 << 16 }]);
+  for (let i = 0; i < 8 && !p.getCreationMenu(); i++) turn(p, c);
+  assert.ok(p.getCreationMenu(), 'carried wool on the built wheel also reaches its real menu');
+  const nextChild = p.getCreationMenu().getItems().indexOf(core.ItemIds.BALL_OF_WOOL);
+  await c.dispatch([{ type: 'dialogue_continue', widgetId: (CREATION_MENU_GROUP_ID << 16) |
+    (CREATION_MENU_FIRST_ITEM_COMPONENT + nextChild), childIndex: 1 }]);
+  turn(p, c);
+  p.clearPendingAction();
+  for (let i = 0; i < 6; i++) turn(p, c);
+  assert.equal(has(p, 'wool'), 1, 'cancelling the real crafting session consumes nothing');
+  assert.equal(inv.getAmount(core.ItemIds.BALL_OF_WOOL), 1);
+  const other = actor(); give(other.p, 'wool');
+  assert.notEqual(core.ObjectDefinition.forPlayer(31431, other.p).id, 30934, 'construction stays personal');
+  new ObjectActionPacketListener().executeAction(other.p, 31431, 3732, 3823, 0, 'Spin');
+  for (let i = 0; i < 8; i++) turn(other.p, other.c);
+  assert.ok(!other.p.getCreationMenu());
+  assert.equal(has(other.p, 'wool'), 1);
+  for (const [subject, object, definition] of [
+    [other.p, wheel, core.ObjectDefinition.forPlayer(31431, other.p)],
+    [p, { getId: () => 1 }, built],
+    [p, wheel, { getName: () => 'Broken Spinning Wheel' }],
+  ]) {
+    const event = { player: subject, object, objectId: object.getId(), definition };
+    PluginManager.emitObjectRoute(event);
+    assert.equal(event.approachRange, undefined, 'unbuilt and other object routes retain ordinary reach');
+  }
 });

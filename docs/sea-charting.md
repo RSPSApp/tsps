@@ -178,8 +178,9 @@ captured tiles). Collect-data is used from the deck.
   `This station can be used to record weather patterns. To find where to record the data, first
   use the wind measurements to see which direction the wind is moving, then use those
   measurements to work out where it isn't` and `blowing.`, each also in the chat. The text is
-  paged by `ChatTextLayout`, which breaks it where live did. The filled station's Inspect isn't
-  recorded and has no handler.
+  paged by `ChatTextLayout`, which breaks it where live did. The filled station's Inspect is only
+  recorded as repeat clicks during Take-reading's completion (rsprox 940, 944, 948), so its own
+  response is unknown and it has no handler.
 
 **Drink crates** (rsprox, 24 recordings): a sealed crate (59283, sent with the zone, shape 10,
 rotation 0) on each drink task's tile, Pry-open from the deck.

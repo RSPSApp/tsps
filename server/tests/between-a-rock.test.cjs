@@ -400,6 +400,16 @@ test("stage 70: Talk-to asks his question again; stage 80 comes with his schemat
   assert.equal(H.shown(f)?.text, "What did you want me to find again?", "still looking (tick 2140)");
 });
 
+test("the schematics puzzle runs toplevel_mainmodal_background (0, 0) directly before it opens, so it is sized and centred afresh (tick 2698)", async (t) => {
+  const f = H.actor(t, { stage: 80, items: [ITEMS.base, ITEMS.schematic1, ITEMS.schematic2, ITEMS.schematic3], at: [2862, 9877, 0] });
+  const t0 = f.calls.length;
+  await H.itemOption(f, ITEMS.schematic1, "Assemble");
+  const calls = f.calls.slice(t0);
+  const opened = calls.findIndex((call) => call.name === "sendInterface" && call.args[0] === Schematics.resolveIds().group);
+  assert.ok(opened > 0, "the puzzle opens");
+  assert.deepEqual([calls[opened - 1].name, ...calls[opened - 1].args], ["sendInterfaceScript", 917, [0, 0]]);
+});
+
 test("after the quest Khorvak and the Dwarven Engineer say their own things (tick 6113)", async (t) => {
   const f = H.actor(t, { stage: 100, at: [2863, 9876, 0] });
   const khorvak = H.spawn(f, KHORVAK, [2862, 9876, 0]);

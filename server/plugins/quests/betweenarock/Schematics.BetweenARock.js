@@ -19,6 +19,13 @@ const CONTROL = "dwarf_rock_schematics_control";
 const SELECT_VARPS = [261, 262, 263]; // if1-if3
 const SHOW_VARPS = [264, 265, 266]; // if4-if6
 const BUSY_VARBIT = 12393;
+/**
+ * toplevel_mainmodal_background (917): the capture runs it with (0, 0) directly before the modal opens
+ * (tick 2698). The open's toplevel_resize sizes and places the main modal from the background varcs it
+ * sets; without it the puzzle took the previous modal's, and opened off centre (issue 4266).
+ */
+const MAINMODAL_BACKGROUND_SCRIPT = 917;
+const MAINMODAL_BACKGROUND = [0, 0];
 const SIDE_MODAL = "toplevel_osrs_stretch:sidemodal";
 /** Synth sounds paper_move and paper_turn, as the capture names them (the cache has no synth gamevals here). */
 const MOVE_SOUND = 1412;
@@ -102,6 +109,7 @@ function openPuzzle(player) {
   state.selected.forEach((value, index) => out.sendConfig(SELECT_VARPS[index], value ? 1 : 0));
   state.shown.forEach((value, index) => out.sendConfig(SHOW_VARPS[index], value ? 1 : 0));
   out.sendVarbit(BUSY_VARBIT, 1);
+  out.sendInterfaceScript(MAINMODAL_BACKGROUND_SCRIPT, MAINMODAL_BACKGROUND);
   out.sendInterface(found.group);
   out.sendSubInterface(found.side, found.control, 0);
   state.shown.forEach((value, index) => out.sendInterfaceDisplayState(found.shown[index], !value));

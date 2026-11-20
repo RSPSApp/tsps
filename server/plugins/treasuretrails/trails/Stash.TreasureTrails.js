@@ -257,6 +257,16 @@ function noticeboard(event) {
   return true;
 }
 
+/**
+ * View on the S.T.A.S.H chart built in a house's study (poh_wallchart_4, a Construction wall chart)
+ * opens the same chart as the noticeboard (rsprox.net rec 2804, rev 229, ticks 5337-5338 and 5664:
+ * hh_inv, toplevel_mainmodal_open, hidey_holes, hidey_build). Its Remove is build mode's.
+ */
+function viewChart(event) {
+  readNoticeboard(event.player);
+  return true;
+}
+
 function restore({ player }) {
   for (const locId of built(player)) {
     const unit = stashes().get(locId);
@@ -271,6 +281,7 @@ module.exports = function attachStash(pluginApi) {
   api.persistAttribute(BUILT_ATTRIBUTE, []);
   api.persistAttribute(STORED_ATTRIBUTE, {});
   api.onBeforeObjectInteraction(interact);
+  api.onObjectInteraction("S.T.A.S.H chart", { View: viewChart });
   api.onPlayerLogin(restore);
   // "treasure-trails:stashes" { list }: every STASH unit, built or not, as { tier, location } (a league relic's clue compass).
   api.onCustomEvent("treasure-trails:stashes", (request) => {
@@ -279,4 +290,4 @@ module.exports = function attachStash(pluginApi) {
   });
 };
 
-Object.assign(module.exports, { BUILT_ATTRIBUTE, STORED_ATTRIBUTE, stashes, interact, restore, noticeboard, readNoticeboard });
+Object.assign(module.exports, { BUILT_ATTRIBUTE, STORED_ATTRIBUTE, stashes, interact, restore, noticeboard, readNoticeboard, viewChart });

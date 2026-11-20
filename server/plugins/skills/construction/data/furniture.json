@@ -263,6 +263,7 @@
   {"key": "ALCHEMICAL_CHART", "experience": 30, "menuRowId": 5787, "buildAnimationId": 3684, "objectIds": [13662], "materials": []},
   {"key": "ASTRONOMICAL_CHART", "experience": 45, "menuRowId": 5788, "buildAnimationId": 3684, "objectIds": [13663], "materials": []},
   {"key": "INFERNAL_CHART", "experience": 60, "menuRowId": 5789, "buildAnimationId": 3684, "objectIds": [13664], "materials": []},
+  {"key": "STASH_CHART", "experience": 16, "menuRowId": 5790, "buildAnimationId": 3684, "objectIds": [41434], "materials": []},
   {"key": "WOODEN_TELESCOPE", "experience": 121, "menuRowId": 5791, "buildAnimationId": 3676, "objectIds": [13656], "materials": []},
   {"key": "TEAK_TELESCOPE", "experience": 181, "menuRowId": 5792, "buildAnimationId": 3676, "objectIds": [13657], "materials": []},
   {"key": "MAHOGANY_TELESCOPE", "experience": 580, "menuRowId": 5793, "buildAnimationId": 3676, "objectIds": [13658], "materials": []},

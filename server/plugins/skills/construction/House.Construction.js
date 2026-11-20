@@ -1597,8 +1597,11 @@ function materialName(material) {
 }
 
 function furnitureCreationText(buildable) {
-  // The build menu shows the cache's own name ("Crude wooden chair|Plank: 2<br>Nails: 2<br><br>").
-  const name = buildable.name ?? formatBuildable(buildable);
+  // The build menu shows the cache's own name ("Crude wooden chair|Plank: 2<br>Nails: 2<br><br>"),
+  // sentence-cased: rows "Spice Rack", "Oak Telescope" and "S.T.A.S.H chart" are sent as "Spice rack",
+  // "Oak telescope" and "S.t.a.s.h chart" (rsprox.net recs 271 and 2804, rev 229).
+  const full = buildable.name ?? formatBuildable(buildable);
+  const name = full.charAt(0).toUpperCase() + full.slice(1).toLowerCase();
   const materials = buildable.materials.slice(0, 4).map((material) => `${materialName(material)}: ${material.amount.toLocaleString()}`);
   // Four lines whatever the count: "Oak chair|Oak plank: 2<br><br><br>" (rsprox captures, rev 229).
   return `${name}|${[...materials, "", "", "", ""].slice(0, 4).join("<br>")}`;

@@ -442,6 +442,8 @@ rules:
     Seven units are in both enums. The script reads those only from `hh_inv`, so their bits stay
     clear: two of them (50739, 34953) are on bits the script reads as 29032 and 29057 filled.
   - `hh_inv` is tied to the board and stops transmitting when it closes.
+- **The S.T.A.S.H chart** built in a house's study (`poh_wallchart_4`, View) opens the same chart
+  the same way (rec 2804 ticks 5337-5338 and 5664); its Remove is build mode's.
 
   Three master units' outfits here differ in size from their `hh_inv` ranges (29043: 3 items, 4
   slots; 29045: 4 items, 5 slots; 29050: 2 items, 1 slot), so the clue data may be missing or

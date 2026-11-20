@@ -19,3 +19,7 @@ counted from the click:
 
 The player stays held from the landing until tick 8 (busy is still 1). Synth 469 plays on the click
 and again on the landing in recording 4042 only; the other recordings have no sound for it.
+
+Ours: only movement is held between the landing and tick 8. Clicks, eating and talking still go
+through (no recording tries one during the hold); an animation started then is cut by the tick 8
+reset.

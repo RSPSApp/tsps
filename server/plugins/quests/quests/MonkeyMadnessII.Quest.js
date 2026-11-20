@@ -1742,33 +1742,42 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       { sound: new Sound(SEED_POD_SOUND, 1, 0, 0) });
   }
 
-  /** After `ticks` ticks, unless the player has gone (the task is keyed to them). */
-  function afterTicks(player, ticks, run) {
-    const task = new api.core.Task(ticks, player, false);
-    task.execute = () => {
-      task.stop();
-      run();
-    };
-    api.core.TaskManager.submit(task);
-  }
-
-  /** Varbit busy stays set, and the player held, from the click until the pod has folded away on tick 8. */
+  /**
+   * Varbit busy stays set, and the player held, from the click until the pod has folded away on tick 8. One task owns
+   * the hold, keyed to its own object rather than the player (another system's TaskManager.cancelTasks(player) must not
+   * strand them), and its stop() always frees the player.
+   */
   function seedPodTeleport(player) {
-    const { Animation, Graphic, Priority, CacheDefinitions } = api.core;
+    const { Animation, Graphic, Priority, CacheDefinitions, Task, TaskManager } = api.core;
     const sender = player.getPacketSender();
     TeleportHandler.teleport(player, SEED_POD_LANDING.clone(), seedPodTeleportType(), false, () => {
       player.getMovementQueue().setBlockMovement(true).reset();
       sender.sendSound(SEED_POD_SOUND, 1, 0);
-      afterTicks(player, SEED_POD_UNFOLD_AFTER, () => {
-        player.performAnimation(new Animation(CacheDefinitions.getSeqId(SEED_POD_SEQ_REVERSE), Priority.HIGH));
-        player.performGraphic(new Graphic(CacheDefinitions.getSpotanimId(SEED_POD_SPOTANIM_REVERSE)));
-      });
-      afterTicks(player, SEED_POD_RELEASE_AFTER, () => {
-        player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+      const hold = new Task(1, {}, false);
+      let ticks = 0, released = false;
+      hold.execute = () => {
+        // Gone (logged out): nothing more to show.
+        if (!player.isRegistered()) return void hold.stop();
+        ticks++;
+        if (ticks === SEED_POD_UNFOLD_AFTER) {
+          player.performAnimation(new Animation(CacheDefinitions.getSeqId(SEED_POD_SEQ_REVERSE), Priority.HIGH));
+          player.performGraphic(new Graphic(CacheDefinitions.getSpotanimId(SEED_POD_SPOTANIM_REVERSE)));
+        }
+        if (ticks >= SEED_POD_RELEASE_AFTER) {
+          player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+          hold.stop();
+          player.sendMessage(SEED_POD_MESSAGE);
+        }
+      };
+      const stop = hold.stop.bind(hold);
+      hold.stop = () => {
+        stop();
+        if (released) return;
+        released = true;
         player.getMovementQueue().setBlockMovement(false);
         sender.sendVarbit(CacheDefinitions.getVarbitId(BUSY_VARBIT), 0);
-        player.sendMessage(SEED_POD_MESSAGE);
-      });
+      };
+      TaskManager.submit(hold);
     });
     sender.sendVarbit(CacheDefinitions.getVarbitId(BUSY_VARBIT), 1);
   }

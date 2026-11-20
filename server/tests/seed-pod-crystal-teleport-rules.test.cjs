@@ -119,6 +119,19 @@ test("the player is held until the pod has folded away", async (t) => {
   assert.equal(f.p.getMovementQueue().isMovementBlocked(), false, "free on tick 8");
 });
 
+test("cancelling the player's own tasks mid-hold does not leave them frozen", async (t) => {
+  const f = actor(t, SHALLOW, core.ItemIdentifiers.ROYAL_SEED_POD);
+  const slot = f.p.getInventory().getSlotForItemId(core.ItemIdentifiers.ROYAL_SEED_POD);
+  await f.conn.dispatch([{ type: "inventory_action", slot, itemId: core.ItemIdentifiers.ROYAL_SEED_POD, widgetId: 3214, option: "Commune" }]);
+  f.conn.processTurnPackets();
+  for (let i = 0; i < 5; i++) core.TaskManager.process();
+  assert.equal(f.p.getMovementQueue().isMovementBlocked(), true, "held on tick 5");
+  core.TaskManager.cancelTasks(f.p);
+  for (let i = 0; i < 5; i++) core.TaskManager.process();
+  assert.equal(f.p.getMovementQueue().isMovementBlocked(), false);
+  assert.deepEqual(f.messages, ["The Royal seed pod teleports you to the Grand Tree."]);
+});
+
 test("the royal seed pod is refused above level 30 Wilderness", async (t) => {
   const f = actor(t, DEEP, core.ItemIdentifiers.ROYAL_SEED_POD);
   f.p.setWildernessLevel(40);

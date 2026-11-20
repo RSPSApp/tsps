@@ -329,6 +329,14 @@ Using a pet on menagerie furniture stores it; the pet house's View lists the sto
 2013) lets them roam the menagerie outside building mode. Stored pets count as owned
 (`pets:held-elsewhere`).
 
+The Pet list's Read opens `poh_petlist` (210) as rsprox captures 2581, 2777, 2782, 2793 and
+3121 send it: script 2524 (-1, -1), the modal, Examine (op10) on list slots 0 to the last slot
+of enum 985, and script 647 with one green "Owned" or red "Not owned" cell per slot, each
+followed by `|`. A slot is Owned when the reader owns that pet (`pets:owns`, the insurance
+record): recording 2581's nine Owned slots are exactly its nine `pet_insurance_*` bits, with
+nothing stored in the menagerie. Examine sends the pet's examine for owned and unowned slots
+alike (2581: "A tiny frost nagua." on the unowned Moxi, slot 61).
+
 ### Dungeon and throne room
 
 - **Guards and guardians** stand in for their furniture as NPCs outside building mode and come

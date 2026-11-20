@@ -95,6 +95,22 @@ and Grish is told of the cure (2263), so the plugin no longer sends it.
 - **Completion**: the scroll shows the artefact (4818) and "1 Quest Point, 2,000 Ranged XP, 2,000
   Fletching XP, 2,000 Herblore XP, Ability to make Relicym's Balm, Ability to make Brutal Arrows"
   (2815). The bones are Slash Bash's drop, not a quest reward (the plugin gave 2 more of each).
+- **Sithik's chathead**: the ogre head (884, `zogre_sithik_ogre`) on every line while 495 is 1 (1567-1611), the
+  man (883) before the tea and again once Grish has the key.
+- **Slash Bash's attacks** (`SlashBash.ZogreFleshEaters.js`): the crush (`ogre_attack` 359, hit the same tick)
+  only next to the player (2440, 2488, 2494); otherwise `ogre_breath` (2101) with the `flob` projectile (397:
+  41 to 51 + 5 a tile from his centre, 163 -> 146, angle 15, progress 11) and area sound 1452 (range 10), the hit
+  2 ticks later at every range (2446 -> 2448, 2500 -> 2502). He breathes next to the player too (2470-2482). The
+  Wiki: safespotting east of the stand makes him use only ranged. How hits on him are scaled is in
+  [docs/zogres.md](../../zogres.md).
+- **What the quest teaches** (issue 6283): Relicym's balm (`herblore:unlocked` "relicyms_balm") once Sithik has
+  told the cure, brutal arrows (`fletching:taught` "brutal_arrows") once he has explained them (499, 1600), the comp
+  ogre bow ("comp_ogre_bow") once Grish has (500, 2246); each also after the quest. The Wiki: "Partial completion of
+  Zogre Flesh Eaters" for the balm and the bow, and "Sithik Ints teaches you how to make them" for the arrows.
+- **Knife on achey logs** (after the quest, 3253-3255 and 3492-3495): one log opens the menu "How many logs do you
+  wish to fletch?" with "Ogre arrow shafts" and "Unstrung composite bow"; the bow without wolf bones is the message
+  box "You need wolf bones and achey tree logs to make the composite ogre bow."; with them, `human_fletching` on the
+  choice and "You carefully cut the wood into a composite ogre bow." with the bow 2 ticks later.
 - **Uglug Nar**: before the cure is known he turns the balm down (765-771); after, he buys the dose used
   (650 coins for a 3-dose, 3196; the Wiki's 1,000/650/300/100 by dose).
 - **The journal**: the two captured pages (777, 1158) are `tests/fixtures/zogre-flesh-eaters-journal.json`.
@@ -119,6 +135,12 @@ and Grish is told of the cure (2263), so the plugin no longer sends it.
   returns to the first menu, so the offer only follows "What do you mean sickies?".
 - The pages of the journal before the barricade and from the evidence hand-in on (not captured).
 - The ogre coffins' Pick-lock; the smoke puffs as the zombie and Slash Bash die (491, 2650).
+- Ours: Slash Bash's even chance between crush and breath while next to the player.
+- Slash Bash's crush and hit sounds (synth 914 and 917 in the capture): NPC combat sounds come from the
+  rsprox.net-mined `npc-combat-sounds.json`, which has no entry for him.
+- Making the balm is not captured (the capture buys it): its lines, "You put the Rogue's Purse into the vial of
+  water.", "You mix the snake weed into your potion." and "You mix the rogue's purse into your potion.", are ours,
+  in the shape of the other Herblore lines. The rogue's purse potion's refusal before the cure is the Wiki's.
 
 ## Runs
 
@@ -127,6 +149,13 @@ and Grish is told of the cure (2263), so the plugin no longer sends it.
 - **Source:** the capture above; targeted tests `tests/zogre-flesh-eaters-capture.test.cjs` and
   `tests/qh728-q128.test.cjs`.
 - **PRs:** issue [#4410](https://github.com/RSPSApp/tsps/issues/4410).
+
+### 2026-11-20 · agent · claude-opus-5-5
+
+- **Source:** the same capture (ticks 1567-1611, 2440-2642, 3253-3255, 3492-3495) and the Wiki pages Relicym's
+  balm, Comp ogre bow, Brutal arrows, Zogre, Skogre and Slash Bash.
+- **Tests:** `tests/zogre-flesh-eaters-capture.test.cjs`, `tests/fletching.test.cjs`, `tests/herblore.test.cjs`.
+- **PRs:** issue [#6283](https://github.com/RSPSApp/tsps/issues/6283).
 
 ### date not recorded · agent · model not recorded
 

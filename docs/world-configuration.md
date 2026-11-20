@@ -929,6 +929,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Wyrms` | Wyrms | npcs | yes | Wyrm and wyrmling combat: melee when the target is adjacent, magic from range, with separate max hits per style. (members only) |
 | `Wyson` | Wyson | npcs | yes | Wyson the gardener sells woad leaves through his dialogue: 15 coins for one leaf, 20 coins for two. |
 | `Zahur` | Zahur | npcs | yes | Zahur in Nardah makes unfinished potions from clean herbs and vials of water or blood for 200 coins each, after the hard Desert Diary or with a Herblore cape. (members only) |
+| `Zogres` | Zogres | npcs | yes | Zogres, skogres and Slash Bash take a quarter of most damage, half from Crumble Undead and full from brutal arrows. (members only) |
 | `ZombiePirates` | ZombiePirates | npcs | yes | Picks the Medium Wilderness Diary drop table for Chaos Temple zombie pirates once the player has completed that diary. (members only) |
 | `AlKharidGate` | AlKharidGate | objects | yes | Al Kharid toll gate: Border Guard dialogue and a 10 coin toll before Prince Ali Rescue, free passage after it. |
 | `Altars` | Altars | objects | yes | Altar actions: pray to restore Prayer points, switch spellbooks at Ancient, Lunar and Dark altars, and the Chaos, Nature, Guthix and Occult altars. |
@@ -949,7 +950,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Levers` | Levers | objects | yes | The Wilderness teleport levers (Edgeville, East Ardougne, the Deserted Keep and Mage Arena bank), with the Wilderness warning and a shared lever teleport event. |
 | `Pickable` | Pickable | objects | yes | Picking wheat, potatoes, onions, cabbages, sweetcorn, flax and nettles from the fields, with respawn timers and nettle stings. |
 | `PineapplePlant` | PineapplePlant | objects | yes | Lets players pick Karamja's wild pineapple plants, a stage at a time, as captured; picked plants grow back a stage at a time. (members only) |
-| `RejuvenationPool` | RejuvenationPool | objects | yes | The player-owned house restoration, revitalisation, rejuvenation, fancy and ornate pools, which restore stats when drunk from. |
+| `RejuvenationPool` | RejuvenationPool | objects | yes | The player-owned house restoration, revitalisation, rejuvenation, fancy and ornate pools (and their frozen and fiery variants), which restore stats when drunk from. |
 | `RottenTomatoCrate` | RottenTomatoCrate | objects | yes | Opens Pelters' Veg Stall, the rotten tomato shop, from the crates by the pillories in Varrock, Seers' Village, Yanille and Hosidius. (members only) |
 | `ScenerySearch` | ScenerySearch | objects | yes | Searching haystacks and hay bales, which can hide a needle or prick you, plain crates and boxes, which hold nothing, and the Icyene Graveyard's mud mound, dug with a spade. |
 | `Signposts` | Signposts | objects | yes | Reading the guide signposts near Lumbridge, Draynor and Falador, opening the compass interface and moving the camera as the client expects. |

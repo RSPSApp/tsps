@@ -141,10 +141,15 @@ function resolveRecipe(entry) {
     sound: recipe.sound ? sound(recipe.sound) : null,
     message: recipe.message ?? null,
     missingTool: recipe.missingTool ?? null,
+    // A recipe that stays in its menu without all its materials says this when chosen (capture
+    // ZogreFleshEaters.bin tick 3255: the comp ogre bow without wolf bones).
+    missingMessage: recipe.missingMessage ?? null,
+    label: recipe.label ?? null,
     instantVarbit: recipe.instantVarbit ?? null,
     maxSets: recipe.maxSets ?? CREATION_ALL_SENTINEL,
     quest: recipe.quest ? { key: recipe.quest[0], state: recipe.quest[1] } : null,
     unlock: recipe.unlock ?? null,
+    taught: recipe.taught ?? null,
     menu,
   };
 }
@@ -236,11 +241,27 @@ function hasSlayerUnlock(player, name) {
   return request.unlocked === true;
 }
 
-/** Quest and Slayer unlocks the recipe needs (the Wiki's recipe notes). */
+/**
+ * Whether content has taught the player a recipe ("fletching:taught" { player, name, taught }: Zogre
+ * Flesh Eaters answers "brutal_arrows" and "comp_ogre_bow"). No answer does not lock it.
+ */
+function isTaught(player, name) {
+  const request = { player, name, taught: null };
+  api.emitCustomEvent("fletching:taught", request);
+  return request.taught !== false;
+}
+
+/** Quest, taught and Slayer unlocks the recipe needs (the Wiki's recipe notes). */
 function unlocked(player, recipe) {
   if (recipe.quest && !questState(player, recipe.quest)) return false;
+  if (recipe.taught && !isTaught(player, recipe.taught)) return false;
   if (recipe.unlock && !hasSlayerUnlock(player, recipe.unlock)) return false;
   return true;
+}
+
+function mesbox(player, text) {
+  const { DialogueChainBuilder, StatementDialogue } = core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
 }
 
 /** Preset (and other untradeable or unbankable) copies keep their restrictions, so they never convert. */
@@ -525,6 +546,10 @@ function startFletching(player, recipe, requested, via, provenance) {
     return;
   }
   const available = batchesAvailable(player, recipe);
+  if (available <= 0 && recipe.missingMessage) {
+    mesbox(player, recipe.missingMessage);
+    return;
+  }
   if (available <= 0 || !Number.isInteger(requested) || requested <= 0) return;
   const batches = Math.min(requested === CREATION_ALL_SENTINEL ? available : Math.min(requested, available), recipe.maxSets);
   stopFletching(player);
@@ -544,6 +569,9 @@ function openMenu(player, choices, via, provenance) {
   const byOutput = new Map(choices.map((recipe) => [recipe.outputId, recipe]));
   const maxAmount = Math.max(...choices.map((recipe) => Math.min(batchesAvailable(player, recipe), recipe.maxSets)), 1);
   const { title, mode } = choices[0].menu;
+  const labels = choices.some((recipe) => recipe.label)
+    ? { labels: choices.map((recipe) => recipe.label ?? core.ItemDefinition.forId(recipe.outputId).getName()) }
+    : {};
   player.getPacketSender().sendCreationMenu(new core.CreationMenu(
     formatMessage(title, choices[0].amount),
     choices.map((recipe) => recipe.outputId),
@@ -553,7 +581,7 @@ function openMenu(player, choices, via, provenance) {
         if (recipe) startFletching(player, recipe, amount, via, provenance);
       },
     },
-    { maxAmount: Math.min(maxAmount, CREATION_ALL_SENTINEL), ...(mode != null ? { mode } : {}) }
+    { maxAmount: Math.min(maxAmount, CREATION_ALL_SENTINEL), ...labels, ...(mode != null ? { mode } : {}) }
   ));
 }
 
@@ -592,7 +620,11 @@ function handlePair(player, usedId, usedWithId) {
     player.sendMessage(missingToolMessage(missing));
     return true;
   }
-  const usable = choices.filter((recipe) => hasTools(player, recipe) && batchesAvailable(player, recipe) > 0);
+  // A recipe with a `missingMessage` stays offered without its other materials, as live keeps the comp ogre bow
+  // next to the shafts (capture ZogreFleshEaters.bin tick 3254), while something in the menu can be made.
+  const makeable = choices.filter((recipe) => hasTools(player, recipe) && batchesAvailable(player, recipe) > 0);
+  const usable = makeable.length === 0 ? makeable
+    : choices.filter((recipe) => hasTools(player, recipe) && (batchesAvailable(player, recipe) > 0 || recipe.missingMessage));
   // An empty spool on an unstrung bow does nothing at all, not even "Nothing interesting happens."
   if (usable.length === 0) {
     const everyCopy = (inventory, id) => inventory.getAmount(id);

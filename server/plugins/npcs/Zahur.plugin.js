@@ -102,8 +102,8 @@ function bases() {
   return [core.ItemIdentifiers.VIAL_OF_WATER, core.CacheDefinitions.getObjId("vial_blood")];
 }
 
-function unfinishedFor(herbId, baseId) {
-  const request = { herbId, baseId, potion: null };
+function unfinishedFor(player, herbId, baseId) {
+  const request = { herbId, baseId, player, potion: null };
   api.emitCustomEvent("herblore:unfinished", request);
   return request.potion;
 }
@@ -124,7 +124,7 @@ function herbsCarried(player) {
     if (herbs.has(herbId)) continue;
     const potions = new Map();
     for (const baseId of bases()) {
-      const potion = unfinishedFor(herbId, baseId);
+      const potion = unfinishedFor(player, herbId, baseId);
       if (potion) potions.set(baseId, potion);
     }
     if (potions.size) herbs.set(herbId, { potions, unnoted: inventory.getAmount(herbId), noted: inventory.getAmount(notedOf(herbId)) });

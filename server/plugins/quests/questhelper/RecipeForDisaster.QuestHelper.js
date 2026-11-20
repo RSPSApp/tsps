@@ -353,7 +353,7 @@ function createRfdRenderer({core, getQuests}) {
           if(state&16)return step('skrach-return','Board the ogre boat from Karamja after cooking the chompy. Bring a cooked chompy; continue the return dialogue, then speak to Rantz.',[npc([4858,6261]),item(I.COOKED_CHOMPY)]);
           return step('skrach-chompy','Talk to Rantz after hollowing the boat. Travel to Karamja, use an iron spit on a raw chompy and cook it on a beach fire to signal the return boat.',[rantz(),npc([4858,4859,6260,6261]),item(I.RAW_CHOMPY),item(I.IRON_SPIT)]);
         }
-        if(has(I.RAW_JUBBLY))return step('skrach-cook-jubbly','Cook the raw jubbly on the ogre spit roast. If it burns, hunt another; use the cooked jubbly on Skrach at the council.',[item(I.RAW_JUBBLY),object(O.OGRE_SPIT_ROAST_4,2632,2985)]);
+        if(has(I.RAW_JUBBLY))return step('skrach-cook-jubbly','Cook the raw jubbly on the ogre spit roast. If it burns, hunt another; use the cooked jubbly on Skrach at the council.',[item(I.RAW_JUBBLY),object(6895,2630,2990)]);
         const ground=(request.snapshot?.groundItems||[]).find(i=>i.id===I.RAW_JUBBLY&&i.quantity>0&&i.plane===plane);
         if(ground)return step('skrach-loot','Pick up the raw jubbly meat, then cook it on the ogre spit roast.',[{kind:'item',id:I.RAW_JUBBLY,x:ground.x,y:ground.y,plane:ground.plane}]);
         const bird=(request.snapshot?.npcs||[]).find(n=>[N.JUBBLY_BIRD,N.JUBBLY_BIRD_2,N.JUBBLY_BIRD_3].includes(n.id)&&n.plane===plane);

@@ -73,6 +73,34 @@ test("success at the fourth boundary is processed before the bait bursts", t => 
   assert.ok(core.RegionManager.canProjectileAttackBounds(origin, bird.getLocation(), 1, 1, 1, 1, null));
 });
 
+test("#6281: a bird never lands on the sea off Rantz's coast", t => {
+  const f = setup(t);
+  // 3 tiles from the shore east of Rantz: the sea there is water overlay with no collision.
+  const at = new core.Location(2637, 2980, 0);
+  let pick = 0;
+  t.mock.method(Math, "random", () => pick);
+  const landed = [];
+  for (let i = 0; i < 50; i++) {
+    f.player.setLocation(at);
+    assert.ok(f.hunt.place(f.player));
+    pick = 0;
+    tick(24);
+    // The 25th tick rolls (0 succeeds) and then picks a landing tile spread across the candidates.
+    let calls = 0;
+    t.mock.method(Math, "random", () => (calls++ === 0 ? 0 : i / 50));
+    tick(1);
+    const bird = birds(f)[0];
+    assert.ok(bird, "pick " + i + " lands a bird");
+    landed.push(bird.getLocation());
+    f.hunt.cleanup(f.player);
+    t.mock.method(Math, "random", () => pick);
+  }
+  for (const loc of landed) {
+    assert.equal(core.RegionManager.isWater(loc), false, `bird landed on water at ${loc.getX()},${loc.getY()}`);
+  }
+  assert.ok(landed.some(loc => loc.getX() >= 2638), "landings still use the shore east of the bait");
+});
+
 test("successful bait stops rolling and concurrent bait keeps its own birth tick and bird", t => {
   const f = setup(t);
   t.mock.method(Math, "random", () => 0);

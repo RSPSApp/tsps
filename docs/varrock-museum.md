@@ -1,5 +1,31 @@
 # Varrock Museum: Historian Minas's reports
 
+## Cleaning-area entrance
+
+`server/plugins/areas/MuseumEntrance.plugin.js` guards the cleaning-area gate at
+(3261,3446). A members-world player who has completed The Dig Site receives the
+canonical Museum guard Welcome and Yes/No choice on their first admission after
+login. Yes opens the gate and walks them through; subsequent entries in that login
+are direct. Leaving is free. The guard remains loaded on free worlds to refuse entry
+even when the members-only Museum activity is filtered out.
+
+The words and first-login distinction come from the [Museum guard
+transcript](https://oldschool.runescape.wiki/w/Transcript:Museum_guard), already imported
+without generated-data changes. RSProx recordings [1702](https://rsprox.net/download/1702)
+(revision 226, normal world, ticks 4066–4069) and [1704](https://rsprox.net/download/1704)
+(revision 227, Leagues, ticks 450–453) show the shared world swap: closed gate
+24536 at (3261,3446), shape 0/face 1, becomes actionless barrier 24564 there and
+the same gate at (3261,3447), shape 0/face 0, then restores three ticks later.
+The active revision-242 cache gamevals are `vm_barrier_guard_gate` and `vm_invisbarrier`.
+
+Those recordings observe someone else's gate opening from a distance: they establish
+the scenery and restore time, not the opener's dialogue, crossing, or audio. Crossing
+uses the existing checked-player-only pass-through gate movement and default gate
+sound; its exact retail movement/audio timing remains unverified.
+`server/tests/museum-entrance-native.test.cjs` exercises real map clipping, native
+object/dialogue packets and World turns for entry, No, repeat entry, logout reset,
+incomplete/free-world refusals, free exit, stale choices and a blocked bystander.
+
 Historian Minas pays Kudos for completed quests. Choose "I have some information which might be
 of use in your displays." and he hears every unreported quest in one conversation: 5 Kudos each,
 10 for Curse of the Empty Lord, and an antique lamp for five of them.

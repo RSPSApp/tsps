@@ -438,6 +438,18 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // across, from the low side to the high side or back, along their own row. crossDelay holds the
   // opener that many ticks after the opening sound before the gate opens and they cross.
   PASS_THROUGH_GATES = Object.freeze([
+    // Museum cleaning gate: captures 1702 (rev226) and 1704 (rev227) show this shared
+    // swap and three-tick restore; MuseumEntrance owns the admission check.
+    Object.freeze({
+      closed: [[core.CacheDefinitions.getLocId("vm_barrier_guard_gate"), 3261, 3446, 0, 1]],
+      opened: [
+        [core.CacheDefinitions.getLocId("vm_invisbarrier"), 3261, 3446, 0, 1],
+        [core.CacheDefinitions.getLocId("vm_barrier_guard_gate"), 3261, 3447, 0, 0],
+      ],
+      crossY: 3447,
+      walkOver: true,
+      closeTicks: 3,
+    }),
     // Witchaven's puzzle doors keep their clipped threshold while each permitted
     // player crosses. Explicit placements also identify a temporarily open leaf.
     ...[

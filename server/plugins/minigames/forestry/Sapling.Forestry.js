@@ -317,19 +317,18 @@ function combination(event, mulch) {
 
 /** The plaque's 11 lines, as recorded. */
 function plaqueLines(event, player) {
-  const { value } = S().plaque;
   const seen = event.feedback?.get(player);
   const block = (title, fed) => fed
-    ? [`<u>${title}</u>`, `Nutritional value: <col=${value}>${fed.percent}%</col>`, combination(event, fed.mulch)]
+    ? [Common.message(title), Common.message("plaqueValue", { percent: fed.percent }), combination(event, fed.mulch)]
     // Ours: no recording inspects before the player's first feed; the block stays blank.
     : ["", "", ""];
   return [
     "",
-    `Sapling Nutrition: <col=${value}>${nutritionShown(event)}%</col>`,
+    Common.message("plaqueNutrition", { percent: nutritionShown(event) }),
     "",
-    ...block("Best Combination", seen?.best),
+    ...block("plaqueBest", seen?.best),
     "",
-    ...block("Last Combination", seen?.last),
+    ...block("plaqueLast", seen?.last),
     "",
   ];
 }

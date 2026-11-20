@@ -55,7 +55,10 @@ const TIED_ATTRIBUTE = "loc-teleports:tied";
 const WARNINGS_OFF_ATTRIBUTE = "loc-teleports:warnings-off";
 /** Toggled trapdoor varbits a player has changed, by varbit name -> value; sent again at login. */
 const TOGGLED_ATTRIBUTE = "loc-teleports:toggled";
-/** A warning screen's Yes: the move on the click's own tick (rsprox 91, local 1000243/1000283). */
+/**
+ * A warning screen's Yes: the move on the click's own tick (rsprox 91, local 1000243/1000283), for a loc
+ * with no animation or fade. An entry with either gives its captured `warningAnswer` ticks instead.
+ */
 const WARNING_SCREEN_ANSWER = Object.freeze({ animTick: 0, tick: 0 });
 /** The handler runs one tick after the arrival the captured ticks count from. */
 const HANDLER_TICK = 1;
@@ -443,7 +446,7 @@ function play(player, object, clickType) {
       const start = player.getLocation().clone();
       const proceed = (answered) => {
         if (!player.getLocation().equals(start)) return;
-        travel(player, entry, destination, answered ? WARNING_SCREEN_ANSWER : null);
+        travel(player, entry, destination, answered ? entry.warningAnswer ?? WARNING_SCREEN_ANSWER : null);
       };
       const screen = { player, warning: entry.warningScreen, handled: false };
       // Turned off, the screen proceeds at once, inside the event: the entry's own timing then.

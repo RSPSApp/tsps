@@ -6038,6 +6038,7 @@
             "docs/quests/pirates-treasure/README.md"
           ],
           "devNotes": [
+            "2026-11-20: Follow-up to #6313 applies the Wiki's carried Karamjan rum431 teleport spill rule to mainland and intra-Karamja journeys as well as leaving Karamja. Actual TeleportHandler/World-tick regressions include a bottle retrieved from Wydin's placed crate, all carried bottles lost only on landing, refused/cancelled casts, banked and shipped cargo retention, other rum item3164 unaffected, and existing customs/boat controls. Twelve selected tests pass. This does not duplicate the shared door lifetime fix merged in #6386 or claim a new native/retail capture; task statuses and broader quest scope stay unchanged. Sources: https://oldschool.runescape.wiki/w/Karamjan_rum and https://oldschool.runescape.wiki/w/Pirate%27s_Treasure.",
             "Fully implemented in PiratesTreasure.plugin.js: registerQuest key pirates_treasure, varp 71, employment/banana/rum attributes and the crate/chest/dig handlers.",
             "Gaps noted in the plugin: Frank carrying the key/message/note variants, the attacking gardener during the dig (needs a spawn), and banana/apron sources.",
             "The custom-officer rum confiscation is keyed off step ids JN4f2Q/pUSUQY/et2BjU/CO6KKg/pNZxTm.",

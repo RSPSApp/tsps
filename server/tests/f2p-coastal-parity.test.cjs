@@ -538,17 +538,19 @@ test('as captured (rev 242): rum carried to the customs officer is taken as the 
   assert.equal(poor.items.get(431), 1);
 });
 
-test("Wiki (Karamjan rum): teleporting off Karamja breaks the rum, as the rev 242 capture's house teleport did", () => {
+test("Wiki (Karamjan rum): any completed teleport breaks carried rum", () => {
   const q = register('PiratesTreasure', 'pirates_treasure'), p = player();
   const landed = (from, to) => q.emit('teleport:landed', { player: p, from: new core.Location(...from, 0), to: new core.Location(...to, 0) });
   p.items.set(431, 2);
   landed([2926, 3143], [2930, 3150]);
-  assert.equal(p.items.get(431), 2, 'within Karamja the rum is safe');
+  assert.equal(p.items.get(431), 0, 'within Karamja also breaks carried rum');
+  p.items.set(431, 2);
   landed([3029, 3217], [3213, 3424]);
-  assert.equal(p.items.get(431), 2, 'from the mainland the rum is safe');
+  assert.equal(p.items.get(431), 0, 'after Port Sarim retrieval teleport still breaks carried rum');
+  p.items.set(431, 2);
   landed([2926, 3143], [2953, 3224]);
   assert.equal(p.items.get(431), 0);
-  assert.deepEqual(p.messages, ['Your Karamjan rum gets broken and spilled.']);
+  assert.deepEqual(p.messages, Array(3).fill('Your Karamjan rum gets broken and spilled.'));
 });
 
 test('the customs officer lets worn Karamja gloves pass for half the fare, as the Pay-fare transcript says', () => {

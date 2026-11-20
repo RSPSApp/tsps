@@ -962,6 +962,61 @@ test("the Draynor River Lum stone: two stepping-stone jumps 3 ticks apart, the o
   }
 });
 
+test("Brimhaven Dungeon's lava stepping stones: the captured lines, seven jumps two ticks apart, BUSY, and the way back (rsprox local 1000195, 1000283; 90, 552)", () => {
+  const random = Math.random;
+  try {
+    Math.random = () => 0;
+    const south = [[2649, 9561], [2649, 9560], [2648, 9560], [2647, 9560], [2647, 9559], [2647, 9558], [2647, 9557]];
+    for (const [objectId, objectTile, start, path] of [
+      [21738, [2649, 9561, 0], [2649, 9562, 0], south],
+      [21739, [2647, 9558, 0], [2647, 9557, 0], [...south.slice(0, -1).reverse(), [2649, 9562]]],
+    ]) {
+      const player = createPlayer(...start, 12);
+      const ticks = timeline(player, objectId, objectTile);
+      const jumps = ticksWith(ticks, (entry) => entry.animations.includes(741));
+      assert.deepEqual(jumps, [2, 4, 6, 8, 10, 12, 14], `${objectId}: the first jump two ticks after reaching the stones, then every two ticks`);
+      for (const at of jumps) assert.deepEqual(ticks[at].sounds, [2461], "synth 2461 with each jump");
+      assert.deepEqual(ticks[2].messages, ["You carefully start crossing the stepping stones..."], "the start line with the first jump");
+      assert.deepEqual(ticks[15].messages, ["...You safely cross to the other side."], "the end line the tick after the last jump");
+      assert.equal(ticks[15].xp, 7.5);
+      assert.equal(ticks.length, 16);
+      assert.deepEqual(tileOf(player), path.at(-1).concat(0));
+      assert.deepEqual(player.state.spam, ["You carefully start crossing the stepping stones...", "...You safely cross to the other side."]);
+      assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393), [[12393, 1], [12393, 0]], "BUSY on, then off as it ends");
+    }
+  } finally {
+    Math.random = random;
+  }
+});
+
+test("Brimhaven Dungeon's lava stepping stones: a fall after the third jump lands on the north bank, hurt, with no XP (rsprox local 1000433)", () => {
+  const random = Math.random;
+  try {
+    Math.random = () => 0.999;
+    const player = createPlayer(2649, 9562, 0, 12);
+    const ticks = timeline(player, 21738, [2649, 9561, 0]);
+    assert.deepEqual(ticksWith(ticks, (entry) => entry.animations.includes(741)), [2, 4, 6], "three jumps");
+    assert.deepEqual(ticks[8].animations, [764], "the slip two ticks after the third jump");
+    assert.deepEqual(ticks[8].messages, ["...You lose your footing and fall into the lava."]);
+    assert.deepEqual(ticks[8].sounds, [2493]);
+    assert.ok(ticks[10].moved, "landed two ticks after the slip");
+    assert.deepEqual(ticks[10].sounds, [2412]);
+    assert.equal(ticks.length, 11, "BUSY clears with the landing");
+    assert.deepEqual(tileOf(player), [2648, 9562, 0]);
+    assert.equal(player.state.hits, 1);
+    assert.equal(player.state.xp, 0);
+    assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393), [[12393, 1], [12393, 0]]);
+    // The way back from the south has no capture of a fall, so it never falls.
+    Math.random = () => 0.999;
+    const back = createPlayer(2647, 9557, 0, 1);
+    timeline(back, 21739, [2647, 9558, 0]);
+    assert.deepEqual(tileOf(back), [2649, 9562, 0]);
+    assert.equal(back.state.hits, 0);
+  } finally {
+    Math.random = random;
+  }
+});
+
 test("a crossing's via tiles are walked in travel order, both ways", () => {
   const [crossing] = build({
     name: "Test stones", object: ObjectIds.STILE, level: 1,

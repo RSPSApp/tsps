@@ -1,5 +1,10 @@
 const { Anim } = require("../Constants.Agility");
-const { hops, between, ShortcutAnim } = require("./Builders.Agility");
+const { hops, between, ordered, ShortcutAnim } = require("./Builders.Agility");
+
+/** The lava stepping stones' jump, and their fall's slip and landing (rsprox 1000195, 1000433). */
+const LAVA_STONE_SOUND = 2461;
+const LAVA_FALL_SOUND = 2493;
+const LAVA_LANDING_SOUND = 2412;
 
 /** Tiles across a channel, from one end to the other. */
 function channelLength(from, to) {
@@ -56,6 +61,56 @@ module.exports = {
       { tele: to },
     ],
   }),
+
+  /**
+   * Brimhaven Dungeon's lava stepping stones, west of the entrance (Wiki: 12 Agility from the
+   * north, none from the south; 7.5 XP). rsprox captures (rev 227: local 1000195, 1000283,
+   * 1000433, 90, 91, 552): two ticks after the player reaches the stones, the start line with the
+   * first jump, then one jump a stone two ticks apart (human_spot_jump, cycles 15-30, synth 2461
+   * each); the end line and the XP the tick after the last. Only the north-to-south way and one
+   * fall (1000433, tick 17786) were captured: two ticks after the third jump the slip and its line
+   * (synth 2493, ten loops), facing north, and two ticks later the player lands on the north bank
+   * at `landing`, hit, with synth 2412.
+   * Ours: the fall's chance and damage (the Wiki says only that it is "quite rare" and "a low
+   * amount of damage"): the chance is the Wilderness course stones', and a tenth of the current
+   * hitpoints gives the captured 7 at 77. The way back from the south has no capture; it mirrors
+   * this one and doesn't fail.
+   */
+  brimhavenLavaStones: ({ ends, via, landing = null, failHop = 3 }) => {
+    const path = (context) => {
+      const forward = ordered(context.pos, ends)[0] === ends[0];
+      return forward ? [...via, ends[1]] : [...via].reverse().concat([ends[0]]);
+    };
+    const jumps = (tiles) => [
+      { wait: 2 },
+      { msg: { spam: "You carefully start crossing the stepping stones..." } },
+      ...tiles.flatMap((tile, index) => [
+        ...(index > 0 ? [{ wait: 1 }] : []),
+        { sound: LAVA_STONE_SOUND },
+        { move: tile, anim: Anim.JUMP, speed: [15, 30] },
+      ]),
+    ];
+    return {
+      route: (context) => ordered(context.pos, ends)[0],
+      steps: (context) => jumps(path(context)),
+      end: { spam: "...You safely cross to the other side." },
+      // The chance is the entry's `fail` (low/high); only an entry with a `landing` falls.
+      ...(landing ? { fail: {
+        steps: (context) => [
+          ...jumps(path(context).slice(0, failHop)),
+          { wait: 1 },
+          { anim: Anim.BALANCE_FALL },
+          { faceDir: "north" },
+          { msg: { spam: "...You lose your footing and fall into the lava." } },
+          { sound: LAVA_FALL_SOUND, loops: 10 },
+          { wait: 2 },
+          { tele: landing },
+          { hit: { percent: 10 } },
+          { sound: LAVA_LANDING_SOUND },
+        ],
+      } } : {}),
+    };
+  },
 
   /** Karamja: the vines between the north and south of the island. */
   karamjaVines: ({ splitY, north, south }) => ({

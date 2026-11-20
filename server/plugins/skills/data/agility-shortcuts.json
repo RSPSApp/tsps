@@ -1083,13 +1083,16 @@
       "at": [2649,9561,0],
       "level": 12,
       "xp": 7.5,
-      "between": {
+      "busy": true,
+      "fail": {"low":180,"high":250},
+      "unverified": "the fall's chance (the Wilderness course stones') and damage (a tenth of current hitpoints: the captured 7); no Wiki values",
+      "script": "brimhavenLavaStones",
+      "params": {
         "ends": [[2649,9562,0],[2647,9557,0]],
         "via": [[2649,9561],[2649,9560],[2648,9560],[2647,9560],[2647,9559],[2647,9558]],
-        "cross": [
-          {"use":"hops","args":["...via","to"]}
-        ]
-      }
+        "landing": [2648,9562,0]
+      },
+      "note": "rsprox captures local 1000195, 1000283, 1000433 (fall), 90, 91, 552"
     },
     {
       "name": "Stepping stones (Western Brimhaven Dungeon)",
@@ -1097,12 +1100,12 @@
       "at": [2647,9558,0],
       "level": 1,
       "xp": 7.5,
-      "between": {
+      "busy": true,
+      "unverified": "this way (south to north) mirrors the captured north-to-south crossing, without a fall",
+      "script": "brimhavenLavaStones",
+      "params": {
         "ends": [[2649,9562,0],[2647,9557,0]],
-        "via": [[2649,9561],[2649,9560],[2648,9560],[2647,9560],[2647,9559],[2647,9558]],
-        "cross": [
-          {"use":"hops","args":["...via","to"]}
-        ]
+        "via": [[2649,9561],[2649,9560],[2648,9560],[2647,9560],[2647,9559],[2647,9558]]
       }
     },
     {

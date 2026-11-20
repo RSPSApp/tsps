@@ -103,6 +103,7 @@ module.exports = function createMyrequeHideout(api, { Scenes, quest, stages, onK
   }
 
   function open(player) {
+    if (!player.isRegistered?.()) return; // logged out during the fade: the thanks line plays again on the next talk
     if (quest.getStage(player) < stages.DELIVERED_WEAPONS) quest.setStage(player, stages.DELIVERED_WEAPONS);
     const scene = Scenes.open(player, SCENE, ROOM_BOUNDS, { canTeleport: () => (scene.fighting ? null : false) }, {
       instance: { sourceChunk: SOURCE_CHUNK },

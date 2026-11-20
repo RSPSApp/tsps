@@ -486,3 +486,24 @@ test('arriving in the hideout at stage 55 (a save from before the doors set 60) 
   assert.equal(quest().getStage(p), 60);
   assert.equal(lines[1], 'Hey! Who are you and why are you here?');
 });
+
+test('a hand-in whose chat is closed at "You give the weapons to Veliaf." still reaches the cutscene on the next talk', async (t) => {
+  const p = actor(t, 65, 3506, 9837);
+  giveWeapons(p); metAll(p);
+  login(p);
+  const start = () => PM.emitCustomEvent('npc-dialogue:start', {
+    player: p, npcId: core.NpcIdentifiers.VELIAF_HURTZ_2,
+    variant: { page: PAGE, variant: 'myreque-hideout-speaking-to-veliaf-after-introduced-to-other-members' }, exact: true,
+  });
+  let closed = false;
+  await converse(p, start, ["Let's talk about the weapons."], {
+    maxTicks: 20,
+    onTick: (n, lines) => { if (!closed && lines.includes('You give the weapons to Veliaf.')) { closed = true; p.getDialogueManager().reset(); p.getPacketSender().sendInterfaceRemoval(); } },
+  });
+  assert.equal(quest().getStage(p), 67);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.STEEL_LONGSWORD), 0);
+  const again = await converse(p, start, ["Let's talk about the weapons."], { maxTicks: 60, idleTicks: 16 });
+  assert.ok(!again.some((l) => l.includes("don't have suitable weapons")), JSON.stringify(again.slice(0, 8)));
+  assert.ok(quest().getStage(p) >= 70, `the cutscene starts: stage ${quest().getStage(p)}`);
+  core.TaskManager.cancelTasks(p);
+});

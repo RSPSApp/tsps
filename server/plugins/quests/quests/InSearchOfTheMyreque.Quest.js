@@ -379,6 +379,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (stage >= STAGE_MET_VELIAF && stage < STAGE_WEAPONS_ACCEPTED && allMembersMet(player)) {
       lines.push("I should hand the weapons over to Veliaf.");
     }
+    if (stage === STAGE_WEAPONS_ACCEPTED) lines.push("I gave the weapons to Veliaf.");
     if (stage >= STAGE_HELLHOUND_SUMMONED && stage < STAGE_KILLED_HELLHOUND) {
       lines.push("Vanstrom summoned a Skeleton Hellhound! I must kill it.");
     }
@@ -554,8 +555,10 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       }
       return metFlag(player, flag);
     }
-    if (value.includes("does not have the weapons")) return !hasAllWeapons(player);
-    if (value.includes("does have the weapons")) return hasAllWeapons(player);
+    // Once handed over (stage 67) Veliaf has them: a hand-in whose chat was closed at the item box still reaches the cutscene.
+    const handedOver = quest.getStage(player) >= STAGE_WEAPONS_ACCEPTED;
+    if (value.includes("does not have the weapons")) return !handedOver && !hasAllWeapons(player);
+    if (value.includes("does have the weapons")) return handedOver || hasAllWeapons(player);
     return null;
   }
 

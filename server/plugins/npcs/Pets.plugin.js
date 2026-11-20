@@ -75,8 +75,9 @@ const PETS = [
     // The awakened-kill death gate has no whisperer attribute to read, so the death emote stays in the cycle.
     emote: [10234, 10254, 10253, 10262] },
   { enumName: "BUTCH", petId: NpcIdentifiers.BUTCH_2, houseNpcId: NpcIdentifiers.BUTCH, morphId: 0, itemId: 28248, dialogue: -1,
-    // Vardorvis: melee, spawn, entangle, dash, then the death emote after an awakened kill.
-    emote: [10340, 10345, 10342, 10341, { anim: 10347, unlock: { attribute: "vardorvis:awakened-kills", min: 1 } }] },
+    // Vardorvis: melee, spawn, entangle (start then end; the loop between is skipped), dash, then
+    // the death emote after an awakened kill.
+    emote: [10340, 10345, { anim: 10342, then: { anim: 10344, delay: 2 } }, 10341, { anim: 10347, unlock: { attribute: "vardorvis:awakened-kills", min: 1 } }] },
   { enumName: "BARON", petId: NpcIdentifiers.BARON_2, houseNpcId: NpcIdentifiers.BARON, morphId: 0, itemId: 28250, dialogue: -1 },
   { enumName: "LILVIATHAN", petId: NpcIdentifiers.LILVIATHAN_2, houseNpcId: NpcIdentifiers.LILVIATHAN, morphId: 0, itemId: 28252, dialogue: -1 },
   // Araxxor: coagulated venom metamorphoses Nid into Rax (Wiki).
@@ -103,10 +104,11 @@ const PETS = [
   { enumName: "ELIDINIS_DAMAGED_GUARDIAN", petId: 11851, morphId: 0, itemId: 27352, dialogue: -1 },
   // The Fractured Archive: Orion and Orion (robed) share one family and collection log slot.
   { enumName: "ORION", petId: NpcIdentifiers.ORION, houseNpcId: NpcIdentifiers.ORION_3, morphId: NpcIdentifiers.ORION_2, itemId: ItemIdentifiers.ORION, familyItemId: ItemIdentifiers.ORION, dialogue: -1,
-    // Ocellus: melee, smoke (basic projectile) and untether (unleash).
-    emote: [14842, 14850, 14857] },
+    // Ocellus: melee, smoke (the noloop projectile; _start loops forever) and untether, whose
+    // unleash_in rise must be followed by unleash_out or the pet snaps back to the ground.
+    emote: [14842, 14853, { anim: 14857, then: { anim: 14861, delay: 2 } }] },
   { enumName: "ORION_ROBED", petId: NpcIdentifiers.ORION_2, houseNpcId: NpcIdentifiers.ORION_4, morphId: NpcIdentifiers.ORION, itemId: ItemIdentifiers.ORION_3, familyItemId: ItemIdentifiers.ORION, dialogue: -1,
-    emote: [14842, 14850, 14857] },
+    emote: [14842, 14853, { anim: 14857, then: { anim: 14861, delay: 2 } }] },
   { enumName: "SMOL_HEREDIT", petId: NpcIdentifiers.SMOL_HEREDIT_2, morphId: 0, itemId: 28960, dialogue: -1, mainDrop: true },
   { enumName: "NEXLING", petId: NpcIdentifiers.NEXLING_2, houseNpcId: NpcIdentifiers.NEXLING, morphId: 0, itemId: 26348, dialogue: -1 },
   { enumName: "VORKI", petId: NpcIdentifiers.VORKI_2, houseNpcId: NpcIdentifiers.VORKI, morphId: 0, itemId: 21992, dialogue: -1 },
@@ -2030,8 +2032,21 @@ function interact(player, npc, action = "Interact") {
 function petEmoteStep(player, pet, index) {
   const step = pet.emote[index % pet.emote.length];
   if (typeof step === "number") return step;
+  if (!step.unlock) return step.anim;
   const value = Number(player.getAttribute(step.unlock.attribute)) || 0;
   return value >= (step.unlock.min ?? 1) ? step.anim : null;
+}
+
+/** Plays a two-part emote's second half (Orion's unleash_out after the unleash_in rise). */
+function schedulePetEmoteFollowUp(npc, then) {
+  if (!TaskClass || typeof TaskManagerRef?.submit !== "function") return;
+  TaskManagerRef.submit(new (class extends TaskClass {
+    constructor() { super(then.delay, npc, false); }
+    execute() {
+      this.stop();
+      if (npc.isRegistered?.() !== false) npc.performAnimation(new Animation(then.anim));
+    }
+  })());
 }
 
 /** The follower's "Emote" option: play the next boss animation in the pet's cycle, on a cooldown. */
@@ -2050,6 +2065,8 @@ function handlePetEmote(player, npc, pet) {
     state.index = (state.index + 1) % sequence.length;
     if (anim == null) continue;
     npc.performAnimation(new Animation(anim));
+    const then = sequence[(state.index + sequence.length - 1) % sequence.length]?.then;
+    if (then) schedulePetEmoteFollowUp(npc, then);
     state.tick = now;
     break;
   }

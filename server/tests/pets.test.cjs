@@ -803,3 +803,16 @@ test("the other quest and activity pet sources stay explicit and single", () => 
   const kitten = Pets.__internals.PET_BY_ITEM_ID.get(1555);
   assert.equal(Pets.__internals.catInfoOf(kitten).stage, "kitten", "Gertrude's kitten starts the growth clock");
 });
+
+test("Orion's emotes never use a looping or one-sided Ocellus animation", () => {
+  const player = createPlayer();
+  const npc = createPetNpc(player, NpcIdentifiers.ORION);
+  for (const enumName of ["ORION", "ORION_ROBED"]) {
+    const orion = Pets.__internals.PETS.find((p) => p.enumName === enumName);
+    // 14850 is basic_projectile_start (loops forever); 14853 is its noloop twin.
+    assert.deepEqual([0, 1, 2].map((i) => Pets.__internals.petEmoteStep(player, orion, i)), [14842, 14853, 14857]);
+    // unleash_in (14857) rises; unleash_out (14861) must follow or the pet snaps back down.
+    assert.deepEqual(orion.emote[2].then, { anim: 14861, delay: 2 });
+  }
+  assert.ok(npc);
+});

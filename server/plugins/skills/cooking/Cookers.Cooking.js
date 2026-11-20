@@ -115,24 +115,29 @@ const HOUSE_RANGE_NAMES = new Set(["Small oven", "Large oven", "Steel range", "F
 // islands' amenity, The Pandemonium's pot), as is Fossil Island's built one (fossil_range_built).
 const RANGE_OBJECT_NAMES = new Set(["Cooking range", "Range", "Gnome cooker", "Stove", "Oven", "Clay oven", "Clay Oven", "Cooking pot"]);
 const COOKABLE_OBJECT_NAMES = new Set([...RANGE_OBJECT_NAMES, ...HOUSE_RANGE_NAMES, ...FIRE_OBJECT_NAMES]);
-// Names that are cookers only with their Cook option. The op-less "Cooking pot"s (fireplacecookingpot
-// 26180, qip_sheep_shearer_fireplacecookingpot 12969, fai_varrock_shanty_cookingpot 7483) stay out:
-// live cooks on 26180 as a fire (rsprox 240/911358 tick 1197-1201, human_firecooking), not a range.
+// Names that are cookers only with their Cook option. The op-less "Cooking pot"s are not ranges:
+// live cooks on fireplacecookingpot 26180 as a fire (FIRE_LOC_IDS below). The other op-less ones
+// (qip_sheep_shearer_fireplacecookingpot 12969, fai_varrock_shanty_cookingpot 7483) have no capture
+// and stay out.
 const COOK_OPTION_ONLY_NAMES = new Set(["Cooking pot"]);
 // Wiki (Fireplace): "The fireplace can be used like a camping fire to cook any meat, fish, or
 // seafood and carries the same burn rate as a regular fire", and it cannot cook range food. These
 // are the lit, option-less fireplaces of its infobox; live cooks raw shrimps on 24969 in Draynor
 // Village with human_firecooking (rsprox capture 1001621 tick 627-637). Misthalin Mystery's riddle
 // fireplace (30136 unlit, 30137 Search) stays out. Many other locs share the name "Fireplace" (unlit
-// ones, quest props), so these go by id.
-const FIREPLACE_IDS = new Set([
+// ones, quest props), so these go by id. The op-less cooking pot over the Lumbridge farmhouse
+// fireplace (fireplacecookingpot 26180, 3225,3290) cooks the same way: the how-many menu,
+// human_firecooking, and one raw beef cooks without the range's Sinew choice (rsprox captures
+// 911358 tick 1197-1201 and local 1001342 tick 1197-1231).
+const FIRE_LOC_IDS = new Set([
   4618, 4650, 5165, 7185, 8712, 10058, 10824, 17640, 17641, 17642, 17643, 21795, 24969, 24970, 26179, 30138,
+  26180,
 ]);
 
-/** Whether this loc cooks as a fire: a fire by name, or a lit fireplace. */
+/** Whether this loc cooks as a fire: a fire by name, a lit fireplace or the farmhouse pot. */
 function isFire(definition) {
   if (!definition) return false;
-  return FIRE_OBJECT_NAMES.has(definition.getName()) || FIREPLACE_IDS.has(definition.id);
+  return FIRE_OBJECT_NAMES.has(definition.getName()) || FIRE_LOC_IDS.has(definition.id);
 }
 
 /** The cook animation: human_firecooking on a fire (or `name` a fire's) or the house's stoves. */
@@ -178,7 +183,7 @@ function diaryComplete(player, tier) {
 function onRange(objectId) {
   if (objectId === undefined) return false;
   const name = Common.core.CacheDefinitions.getObject(objectId)?.name;
-  return !!name && !FIRE_OBJECT_NAMES.has(name) && !FIREPLACE_IDS.has(objectId);
+  return !!name && !FIRE_OBJECT_NAMES.has(name) && !FIRE_LOC_IDS.has(objectId);
 }
 
 /** The cooker kind a session gives; without one, the object's ("range" when there is no object either). */
@@ -692,8 +697,8 @@ function isCookingActive(player) {
 function isCooker(definition) {
   const actions = definition.getInteractions() ?? [];
   const name = definition.getName();
+  if (FIRE_LOC_IDS.has(definition.id)) return true;
   if (COOK_OPTION_ONLY_NAMES.has(name)) return actions.includes("Cook");
-  if (FIREPLACE_IDS.has(definition.id)) return true;
   // A Forester's Campfire has no Cook action; food is used on it directly.
   return COOKABLE_OBJECT_NAMES.has(name)
     && (!actions.some(Boolean) || actions.includes("Cook") || FIRE_OBJECT_NAMES.has(name));
@@ -802,7 +807,7 @@ function attachCookers(api) {
 }
 
 module.exports = Object.assign(attachCookers, {
-  isCookingActive, isCooker, isFire, canCookFood, COOKABLE_OBJECT_NAMES, FIRE_OBJECT_NAMES, FIREPLACE_IDS,
+  isCookingActive, isCooker, isFire, canCookFood, COOKABLE_OBJECT_NAMES, FIRE_OBJECT_NAMES, FIRE_LOC_IDS,
   _test: {
     startCooking, offerCook, cookOne, isSuccess, successChance, stopBurnLevel, successMessage, burnMessage, cookAnimationFor,
     cookableFor, canCook, activeSessions, handleCook, handleCookClick,

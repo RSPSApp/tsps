@@ -269,6 +269,13 @@ test("a lit fireplace cooks like a fire (Wiki: Fireplace; rsprox capture 1001621
   assert.equal(beef.sent.menu, null, "one raw beef cooks straight away, without the range's Sinew choice");
   Cooking._test.activeSessions.clear();
 
+  // The op-less pot over the Lumbridge farmhouse fireplace cooks as a fire too (captures 911358, 1001342).
+  const pot = core.ObjectDefinition.forId(core.CacheDefinitions.getLocId("fireplacecookingpot"));
+  assert.equal(pot.getName(), "Cooking pot");
+  assert.equal(Cooking.isCooker(pot), true);
+  assert.equal(Cooking.isFire(pot), true);
+  assert.equal(Cooking.isCooker(core.ObjectDefinition.forId(core.CacheDefinitions.getLocId("fai_varrock_shanty_cookingpot"))), false);
+
   // Misthalin Mystery's riddle fireplace and the unlit ones stay out.
   for (const other of [30136, 30137, 9441, 61732]) assert.equal(Cooking.isCooker(core.ObjectDefinition.forId(other)), false, String(other));
 });

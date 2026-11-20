@@ -90,7 +90,12 @@ highest). Every charted food stops burning by 150 on every cooker.
   then `human_firecooking`, sound 2577 and the usual shrimp lines and burn. The ids are the
   Wiki infobox's lit ones (4618, 4650, 5165, 7185, 8712, 10058, 10824, 17640-17643, 21795,
   24969, 24970, 26179, 30138); Misthalin Mystery's riddle fireplace (30136/30137) is not one.
-  Other locs named "Fireplace" (unlit, quest props, house fireplaces) are not cookers.
+  Other locs named "Fireplace" (unlit, quest props, house fireplaces) are not cookers. The
+  op-less "Cooking pot" over the Lumbridge farmhouse fireplace (`fireplacecookingpot` 26180,
+  3225,3290) is a fire too: rsprox captures 911358 (tick 1197-1201) and local 1001342 (rev 240,
+  tick 1197-1231) show the menu, `human_firecooking`, "You cook some chicken.", and one raw beef
+  cooking at once with no Sinew choice. The other op-less pots (12969, 7483) are not captured and
+  are not cookers.
 - **Lines** (spam channel). "You successfully cook a shark." / "an anglerfish" / "some shrimps"
   for most fish; "You cook a bass.", "You manage to cook a tuna.", "You cook the rabbit.", "You
   cook a piece of meat.", "You cook the thin snail.", "You successfully bake some bread.", and for

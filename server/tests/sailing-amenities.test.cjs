@@ -169,9 +169,12 @@ test('a built cooking pot is a range: food used on it or Cook cooks as at a rang
   assert.equal(Cookers.isCooker(ObjectDefinition.forPlayer(pot, built)), true);
   assert.equal(Cookers.isCooker(ObjectDefinition.forPlayer(pot, unbuilt)), false, 'the space is not a cooker');
   assert.equal(Cookers.isCooker(ObjectDefinition.forId(loc('pandemonium_cooking_pot'))), true, "The Pandemonium's pot too");
-  // The op-less decorative pots are not ranges (live cooks on fireplacecookingpot as a fire: rsprox 240/911358).
+  // The op-less decorative pots are not ranges: live cooks on fireplacecookingpot as a fire (rsprox
+  // 240/911358), and the two uncaptured ones are not cookers.
   for (const name of ['fireplacecookingpot', 'qip_sheep_shearer_fireplacecookingpot', 'fai_varrock_shanty_cookingpot']) {
     assert.equal(ObjectDefinition.forId(loc(name)).getName(), 'Cooking pot', name);
-    assert.equal(Cookers.isCooker(ObjectDefinition.forId(loc(name))), false, name);
+    const fire = name === 'fireplacecookingpot';
+    assert.equal(Cookers.isCooker(ObjectDefinition.forId(loc(name))), fire, name);
+    assert.equal(Cookers.isFire(ObjectDefinition.forId(loc(name))), fire, name);
   }
 });

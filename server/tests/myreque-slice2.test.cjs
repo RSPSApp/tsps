@@ -79,13 +79,23 @@ const runtime = require('../plugins/quests/QuestRuntime');
 const questHandle = () => runtime.getRegisteredQuests().find((q) => q.name === 'In Search of the Myreque');
 const resolvedAt6269 = (p) => CacheDefinitions.resolveNpc(6269, { getVarbit: (id) => p.getPacketSender().getVarbit(id), getVarp: () => 0 }).name;
 
-test('the weapons hand-over moves the stage to 70 and varbit 396 to 1: the pub shows the plain Stranger, not Vanstrom', (t) => {
-  const p = actor(t, WEAPONS_ACCEPTED);
+test('the weapons hand-over moves the stage to 67; the cutscene that follows moves it to 70 and varbit 396 to 1: the pub shows the plain Stranger', (t) => {
+  // Revision-242 capture: 67 with "You give the weapons to Veliaf." (tick 1295), 70 and varbit 396 as the cutscene starts (1301).
+  const p = actor(t, MET_VELIAF);
   const { ItemIdentifiers: I } = core;
   assert.equal(p.getPacketSender().getVarbit(396), 0);
   assert.equal(resolvedAt6269(p), 'Vanstrom Klause');
   for (const [item, amount] of [[I.STEEL_LONGSWORD, 1], [I.STEEL_SHORTSWORD, 2], [I.STEEL_DAGGER, 1], [I.STEEL_MACE, 1], [I.STEEL_WARHAMMER, 1]]) p.getInventory().adds(item, amount);
-  PM.emitCustomEvent('npc-dialogue:condition', { player: p, npcId: core.NpcIdentifiers.VELIAF_HURTZ_2, text: 'x', stepId: 'VLPyT3' });
+  const message = { player: p, npcId: core.NpcIdentifiers.VELIAF_HURTZ_2, text: 'You give the weapons to Veliaf.', stepId: 'OVBQEv', kind: 'message', handled: false };
+  PM.emitCustomEvent('npc-dialogue:action', message);
+  assert.equal(p.getAttribute(STAGE), WEAPONS_ACCEPTED);
+  assert.equal(p.getInventory().getAmount(I.STEEL_LONGSWORD), 0, 'the weapons go');
+  assert.equal(p.getPacketSender().getVarbit(396), 0, 'Vanstrom is still in the pub');
+  const thanks = { player: p, npcId: core.NpcIdentifiers.VELIAF_HURTZ_2, text: 'These weapons look great! Many thanks.', skip: false };
+  PM.emitCustomEvent('npc-dialogue:line', thanks);
+  assert.equal(thanks.pauseTicks, 9);
+  thanks.after();
+  for (let i = 0; i < 3; i++) core.TaskManager.process();
   assert.equal(p.getAttribute(STAGE), DELIVERED_WEAPONS);
   assert.equal(p.getPacketSender().getVarbit(396), 1);
   assert.equal(resolvedAt6269(p), 'Stranger');
@@ -151,7 +161,11 @@ test('the first-time branch that itself moves the stage (the fifth member, Velia
   const p = actor(t, 85);
   const veliaf = core.NpcIdentifiers.VELIAF_HURTZ_2;
   assert.equal(ask(p, veliaf, 'If first time speaking:'), true);
-  firstTimeBranch(p, veliaf, 'a8YEIJ'); // sets stage 85 -> 90, which clears the note, then notes this conversation
+  firstTimeBranch(p, veliaf, 'a8YEIJ');
+  // The branch's own "That's very useful. Thanks." moves the stage 85 -> 90 (capture tick 1502); the note survives it.
+  const thanks = { player: p, npcId: veliaf, text: "That's very useful. Thanks.", skip: false };
+  PM.emitCustomEvent('npc-dialogue:line', thanks);
+  thanks.after(); // the player continues past it
   assert.equal(p.getAttribute(STAGE), 90);
   assert.equal(ask(p, veliaf, 'If speaking again:'), false);
 });

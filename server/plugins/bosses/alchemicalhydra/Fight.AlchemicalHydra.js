@@ -120,6 +120,8 @@ class Fight {
     this.fire = null;
     /** Tiles on fire, until the blockers go. */
     this.flames = [];
+    /** Only arrived graphics can catch a player stepping onto their tile. */
+    this.activeFlames = new Set();
     this.blockedUntil = 0;
     this.trackers = [];
     /** Player -> { since, hits }: a burn from the fire. */
@@ -462,6 +464,8 @@ class Fight {
   unblock() {
     this.blockedUntil = 0;
     this.flames = [];
+    this.activeFlames.clear();
+    Common.core.TaskManager.cancelTasks?.(this);
     this.npc.removeFlag?.(BLOCKS_PLAYERS_FLAG());
     this.showBlockers(Common.ids.locs.nonblocking);
     this.blockedAt = null;
@@ -539,8 +543,7 @@ class Fight {
           flight.withProgress?.(0);
           flight.sendProjectile();
         }
-        Common.tileGraphic(players, tile, Common.ids.spotanims.fire, delay);
-        this.flames.push(tile);
+        this.flame(tile, delay);
       });
       if (row[0]) Common.areaSound(players, "fire", row[0], delay, k === 0 ? Common.data.sounds.fire.firstRange : undefined);
     }
@@ -561,19 +564,42 @@ class Fight {
     flight.withAngle?.(0);
     flight.withProgress?.(0);
     flight.sendProjectile();
-    Common.tileGraphic(players, start, Common.ids.spotanims.fire, fire.firstDelay);
+    this.flame(start, fire.firstDelay);
     Common.areaSound(players, "trackingFire", start, fire.firstDelay);
-    this.flames.push(start);
     const tracker = { x: start.getX(), y: start.getY(), until: this.tickCount + fire.trackTicks, target };
     this.trackers.push(tracker);
-    if (target && sameTile(start, target.getLocation())) this.scorch(target);
+  }
+
+  /** Activate on the graphic's arrival, before that tick's Player hit queue drains. */
+  flame(tile, delay) {
+    Common.tileGraphic(this.lair.players(), tile, Common.ids.spotanims.fire, delay);
+    this.flames.push(tile);
+    const fight = this;
+    const { Task, TaskManager } = Common.core;
+    TaskManager.submit(new (class extends Task {
+      constructor() {
+        super(Math.max(1, Math.ceil(delay / 30)), fight, false);
+      }
+      execute() {
+        this.stop();
+        if (fight.stopped || fight.npc.__hydraFight !== fight || fight.npc.isRegistered?.() === false || fight.npc.getHitpoints() <= 0 || fight.npc.isDyingFunction?.() || !fight.flames.includes(tile)) return;
+        fight.activeFlames.add(tile);
+        for (const player of fight.lair.players()) {
+          const at = player.getLocation();
+          if (player.isRegistered?.() === false || player.getHitpoints?.() <= 0 || !fight.lair.contains(at) || at.getZ() !== tile.getZ() || !sameTile(tile, at)) continue;
+          // Keep the existing burn clock: later area damage drains on the following turn.
+          fight.lastTiles.set(player, at);
+          fight.scorch(player);
+        }
+      }
+    })());
   }
 
   tickFire(players) {
     const { fire } = Common.data;
     this.tickSpecial(players);
     // The tracking fire: a tile a tick toward the player, two when they are further than two off
-    // (Wiki: "faster the further away they are"); it hits on reaching their tile.
+    // (Wiki: "faster the further away they are"); its delayed flame catches on arrival.
     const left = [];
     for (const tracker of this.trackers) {
       const target = tracker.target;
@@ -586,10 +612,8 @@ class Fight {
         tracker.y += Math.sign(at.getY() - tracker.y);
         const tile = new Common.core.Location(tracker.x, tracker.y, at.getZ());
         const delay = 60 + 15 * s;
-        Common.tileGraphic(players, tile, Common.ids.spotanims.fire, delay);
+        this.flame(tile, delay);
         Common.areaSound(players, "trackingFire", tile, delay);
-        this.flames.push(tile);
-        if (sameTile(tile, at)) this.scorch(target);
       }
       left.push(tracker);
     }
@@ -601,7 +625,7 @@ class Fight {
         const before = this.lastTiles.get(player);
         this.lastTiles.set(player, tile);
         if (before && sameTile(before, tile)) continue;
-        if (this.flames.some((flame) => sameTile(flame, tile)) && !this.trackers.some((t) => t.x === tile.getX() && t.y === tile.getY())) this.scorch(player);
+        if (this.flames.some((flame) => this.activeFlames.has(flame) && sameTile(flame, tile)) && !this.trackers.some((t) => t.x === tile.getX() && t.y === tile.getY())) this.scorch(player);
       }
     }
     for (const [player, burn] of this.burns) {
@@ -666,6 +690,9 @@ class Fight {
   // --- The end
 
   clear() {
+    Common.core.TaskManager.cancelTasks?.(this);
+    this.flames = [];
+    this.activeFlames.clear();
     this.pools = [];
     this.currents = [];
     this.waitingCurrents = [];

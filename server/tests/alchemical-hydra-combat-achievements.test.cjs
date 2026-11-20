@@ -162,15 +162,26 @@ test('lightning: a current reaching the player fails Lightning Lure', () => {
 });
 
 test("fire: breathing it fails The Flame Skipper; its tracking flame or burn fails Don't Flame Me", () => {
+  tasks = [];
   const player = fakePlayer();
   const npc = fakeHydra();
   const hydra = new Fight.Fight(fakeLair(player), npc);
+  const step = () => {
+    const pending = tasks;
+    tasks = [];
+    for (const task of pending) {
+      task.setRunning(true);
+      if (task.tick()) tasks.push(task);
+    }
+    hydra.tickCount += 1;
+    hydra.tickFire([player]);
+  };
   hydra.breatheFire(player);
   assert.equal(rules['The Flame Skipper'](fightOf(npc, player)), true, 'no wall yet');
-  for (let i = 0; i < 3; i++) { hydra.tickCount += 1; hydra.tickFire([player]); }
+  for (let i = 0; i < 3; i++) step();
   assert.equal(rules['The Flame Skipper'](fightOf(npc, player)), false, 'the first wall');
   assert.equal(rules["Don't Flame Me"](fightOf(npc, player)), true, 'not hit yet');
-  for (let i = 0; i < 30; i++) { hydra.tickCount += 1; hydra.tickFire([player]); }
+  for (let i = 0; i < 30; i++) step();
   assert.ok(player.damage.length > 0);
   assert.equal(rules["Don't Flame Me"](fightOf(npc, player)), false);
 });

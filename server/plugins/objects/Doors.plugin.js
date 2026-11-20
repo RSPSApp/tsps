@@ -9,6 +9,7 @@ let core;
 const DOOR_AUTO_CLOSE_TICKS = 500;
 /** MovementQueue.IGNORE_CLIPPING_FLAG: the flagged mobile's steps go on whatever the map blocks. */
 const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
+const WALK_OVER_ATTRIBUTE = "doors:walk-over-prior-clipping";
 /** A walkOver opener keeps the flag until they are across, and no longer than this. */
 const WALK_OVER_MAX_TICKS = 2;
 
@@ -2156,9 +2157,17 @@ const WALKING_OVER = new WeakMap();
 
 function endWalkOver(player, token) {
   const state = WALKING_OVER.get(player);
-  if (!state || (token && state.token !== token)) return;
+  if (token && state?.token !== token) return;
+  const previous = state ? state.previous : player.getAttribute(WALK_OVER_ATTRIBUTE);
+  if (!state && typeof previous !== "boolean") return;
   WALKING_OVER.delete(player);
-  if (!state.previous) player.removeFlag?.(IGNORE_CLIPPING_FLAG);
+  state?.task.stop();
+  player.setAttribute(WALK_OVER_ATTRIBUTE, null);
+  if (previous === false) player.removeFlag?.(IGNORE_CLIPPING_FLAG);
+}
+
+function settleWalkOver({ player }) {
+  endWalkOver(player);
 }
 
 /**
@@ -2169,18 +2178,22 @@ function endWalkOver(player, token) {
 function walkOverGate(player, destination) {
   endWalkOver(player);
   const token = {};
-  WALKING_OVER.set(player, { token, previous: player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true });
+  const previous = player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true;
+  const task = new core.Task(1, false);
+  WALKING_OVER.set(player, { token, previous, task });
+  // An autosave during the borrowed step must be recoverable without clearing unrelated flags.
+  player.setAttribute(WALK_OVER_ATTRIBUTE, previous);
   player.setFlag?.(IGNORE_CLIPPING_FLAG, true);
   const queue = player.getMovementQueue();
   queue.reset();
   queue.addSteps(destination);
   let ticks = WALK_OVER_MAX_TICKS;
-  const task = new core.Task(1, false);
   task.execute = () => {
+    if (WALKING_OVER.get(player)?.token !== token) { task.stop(); return; }
     const here = player.getLocation();
     const across = here.getX() === destination.getX() && here.getY() === destination.getY();
-    if (across || --ticks <= 0 || (queue.size?.() ?? 0) === 0) {
-      task.stop();
+    if (!player.isRegistered() || player.getHitpoints() <= 0
+      || across || --ticks <= 0 || (queue.size?.() ?? 0) === 0) {
       endWalkOver(player, token);
     }
   };
@@ -2414,6 +2427,10 @@ module.exports = {
     api.onServerStartup(registerWallDoorRoutes);
     api.onCustomEvent("door:open", requestDoorOpen);
     api.onCustomEvent("door:state", readDoorState);
+    api.persistAttribute(WALK_OVER_ATTRIBUTE, null);
+    api.onPlayerLogout(settleWalkOver);
+    api.onPlayerDeath(settleWalkOver);
+    api.onPlayerLogin(settleWalkOver);
   },
   __internals: { OPEN_OBJECT_STATES, RUNTIME_DOUBLE_DOOR_RECORDS },
 };

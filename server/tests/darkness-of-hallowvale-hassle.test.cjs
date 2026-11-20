@@ -229,6 +229,21 @@ test("leaving Meiyerditch with the menu open ends the encounter: no tithe elsewh
   assert.equal(p.getMovementQueue().isMovementBlocked?.() ?? false, false);
 });
 
+test("a logout while the vyre takes off still returns it to its flying form (the takeoff is the NPC's, not the player's)", (t) => {
+  const { p } = player(t, "hassletakeoff", STAGE.SENT_BACK);
+  const { npc } = vyrewatch(t, 3729, [3610, 3186, 0]);
+  notice(p, 2);
+  tick(14);
+  choose(p, "Okay, have a bite. (Offer a blood tithe).");
+  let ticks = 0;
+  while (ticks < 40 && npc.getNpcTransformationId() !== 3725) { tick(1); ticks++; } // 3729's takeoff form
+  assert.ok(ticks < 40, "the vyre reaches its takeoff form");
+  PM.emitPlayerLogout({ player: p, username: p.getUsername() });
+  p.setRegistered(false);
+  tick(5);
+  assert.equal(npc.getNpcTransformationId(), -1);
+});
+
 test("a failed distraction is a tithe; a vyre still busy with the player says so on Talk-to", (t) => {
   const { p, seen } = player(t, "hassledodge", STAGE.SKETCHING);
   p.getSkillManager().setCurrentLevel?.(core.Skill.THIEVING, 1);

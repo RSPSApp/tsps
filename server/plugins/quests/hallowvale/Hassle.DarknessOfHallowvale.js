@@ -573,11 +573,13 @@ module.exports = function attachHassle(context) {
     }
     npc.setNpcTransformationId(encounter.form.takeoff);
     common.anim(npc, SEQ.TAKEOFF);
-    common.later(player, T.TAKEOFF_FORM, () => {
+    // Keyed on the NPC, not the player: a logout during the takeoff must not leave the world vyre
+    // transformed and scripted (loggedOut has no encounter left to reset it).
+    core.TaskManager.submit(new core.CountdownTask({ npc, unit: "darkness-of-hallowvale:takeoff" }, T.TAKEOFF_FORM, () => {
       if (engaged.has(npc)) return;
       npc.setNpcTransformationId(-1);
       npc.setScriptedMovement?.(false);
-    });
+    }));
   }
 
   // ---------------------------------------------------------------------------

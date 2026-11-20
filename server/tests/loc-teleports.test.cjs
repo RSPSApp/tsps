@@ -1798,3 +1798,61 @@ test("a dialogue decided for one option doesn't ask on the loc's other options",
   assert.equal(climbUp.ask, undefined);
   assert.deepEqual(climbUp.to, [2544, 3741, 0]);
 });
+
+test("the Waterbirth cave entrance shows warning screen 1 first, and Yes goes in on its click (rsprox 86, 91, 1768, local 1000243)", () => {
+  const attachScreens = require("../plugins/world/warningscreens/Screens.WarningScreens");
+  const screenClicks = [];
+  const screensApi = PluginManager.createApi("WaterbirthWarningScreens");
+  attachScreens({
+    persistAttribute() {},
+    onCustomEvent: (name, handler) => screensApi.onCustomEvent(name, handler),
+    onInterfaceActionClick: (handler) => screenClicks.push(handler),
+    onPlayerLogin() {},
+  });
+  const where = (visit) => { const at = visit.player.getLocation(); return [at.getX(), at.getY(), at.getZ()]; };
+  const cave = locAt(8929, 2519, 3738, 0);
+  assert.equal(CacheDefinitions.getObject(8929).actions[0], "Enter");
+  assert.equal(CacheDefinitions.getVarbitId("cws_warning_1"), 3851);
+  const entrant = () => {
+    const visit = explorer([2523, 3739, 0]);
+    visit.opened = [];
+    const sender = visit.player.getPacketSender();
+    const watched = new Proxy(sender, {
+      get: (target, key) => (key === "sendInterface" ? (id) => (visit.opened.push(id), watched) : target[key]),
+    });
+    visit.player.getPacketSender = () => watched;
+    return visit;
+  };
+  const enter = (visit) => {
+    const request = { player: visit.player, object: cave, objectId: 8929, clickType: 1, handled: false };
+    hooks.object(request);
+    return request.handled;
+  };
+  const answer = (visit, childId) => screenClicks.forEach((handler) => handler({ player: visit.player, groupId: 574, childId }));
+
+  // Captured: the screen (574) opens on the arrival's handler tick and nothing moves until Yes.
+  const wary = entrant();
+  assert.equal(enter(wary), true, "the cave entrance takes the click");
+  assert.deepEqual(wary.opened, [574], "cws_warning_1 opens");
+  assert.equal(wary.player.getAttribute("warning-screens:warning-1"), 1, "the showing is counted (0->1)");
+  runTicks(wary, 4);
+  assert.deepEqual(where(wary), [2523, 3739, 0], "nobody goes in while the warning is open");
+  answer(wary, 18);
+  runTicks(wary, 4);
+  assert.deepEqual(where(wary), [2523, 3739, 0], "No stays outside");
+  enter(wary);
+  assert.equal(wary.player.getAttribute("warning-screens:warning-1"), 2, "1->2, as captured");
+  answer(wary, 17);
+  assert.deepEqual(where(wary), [2442, 10146, 0], "Yes goes in on its own tick (91, 1000243)");
+
+  // Turned off (7, from the screen's checkbox or the Doomsayer): Enter goes straight in on the entry's tick.
+  const bold = entrant();
+  bold.player.setAttribute("warning-screens:warning-1", 7);
+  enter(bold);
+  assert.deepEqual(bold.opened, [], "no screen once it is off");
+  runTicks(bold, 1);
+  assert.deepEqual(where(bold), [2523, 3739, 0]);
+  runTicks(bold, 1);
+  assert.deepEqual(where(bold), [2442, 10146, 0], "in on the captured tick");
+  assert.equal(data.locs.filter((loc) => loc.warningScreen !== undefined).every((loc) => Number.isInteger(loc.warningScreen)), true);
+});

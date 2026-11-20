@@ -100,6 +100,20 @@ function fixture(t, name) {
   return { player, house, furniture, object, location, inventory: player.getInventory(), seen: watch(player) };
 }
 
+/** The loc drawn on the display's tile now. */
+function drawn(f) {
+  return f.house.furnitureObjects.find(object => {
+    const at = object.getLocation();
+    return at.getX() === f.location.x && at.getY() === f.location.y && at.getZ() === f.location.z;
+  })?.getId();
+}
+
+/** The display as saved on the owner, as a logout would write it. */
+function savedDisplay(f) {
+  const saved = JSON.parse(JSON.stringify(f.player.getAttribute("construction:house")));
+  return Object.values(saved.rooms[1][4][6].furnitureByLocation).find(entry => entry.hotspotKey === "BOSS_LAIR_DISPLAY");
+}
+
 /** The loc the display shows now. */
 const shown = (f) => f.furniture.displayObjectId ?? f.object.getId();
 
@@ -151,17 +165,18 @@ test("picking a stored lair reaches into the display, and the lair shows a tick 
   click(f, "Configure");
   pick(f.player, HYDRA_ROW + 1);
   assert.deepEqual(f.seen.animations, [832]); // human_pickuptable
-  assert.equal(f.furniture.displayObjectId, undefined);
+  // The choice is saved with the house at once; the display is redrawn with it a tick later.
+  assert.equal(savedDisplay(f).displayObjectId, loc("poh_display_hydra"));
+  assert.equal(drawn(f), f.object.getId());
   TaskManager.process();
-  assert.equal(f.furniture.displayObjectId, loc("poh_display_hydra"));
+  assert.equal(drawn(f), loc("poh_display_hydra"));
   assert.equal(f.house.getFurnitureAt(f.location, loc("poh_display_hydra"), f.object.getType()), f.furniture);
-  // It is saved with the house, and Empty takes it back to the blank display.
-  const saved = JSON.parse(JSON.stringify(f.player.getAttribute("construction:house")));
-  assert.ok(Object.values(saved.rooms[1][4][6].furnitureByLocation).some(entry => entry.displayObjectId === loc("poh_display_hydra")));
+  // Empty takes it back to the blank display.
   click(f, "Configure");
   pick(f.player, 0);
+  assert.equal(savedDisplay(f).displayObjectId, undefined);
   TaskManager.process();
-  assert.equal(f.furniture.displayObjectId, undefined);
+  assert.equal(drawn(f), f.object.getId());
 });
 
 test("a lair without its jar is refused in a message box, then the menu comes back", (t) => {
@@ -224,7 +239,23 @@ test("withdrawing the shown lair's jar closes the storage and empties the displa
   assert.equal(f.inventory.getAmount(JAR_OF_CHEMICALS), 1);
   assert.notEqual(f.player.getInterfaceId(), Storage.MAIN);
   assert.deepEqual(f.seen.animations, [832]);
-  assert.equal(f.furniture.displayObjectId, loc("poh_display_hydra"));
+  assert.equal(savedDisplay(f).displayObjectId, undefined);
   TaskManager.process();
-  assert.equal(f.furniture.displayObjectId, undefined);
+  assert.equal(drawn(f), f.object.getId());
+});
+
+test("logging out before the display empties still saves it empty", (t) => {
+  const f = fixture(t, "lairlogout");
+  f.furniture.storage = { [JAR_OF_CHEMICALS]: 1 };
+  click(f, "Configure");
+  pick(f.player, HYDRA_ROW + 1);
+  TaskManager.process();
+  assert.equal(drawn(f), loc("poh_display_hydra"));
+  click(f, "Jars");
+  const items = core.CacheDefinitions.getComponentId("poh_costumes:items");
+  PluginManager.emitInterfaceActionClick({ player: f.player, buttonId: items, action: 1, opId: 1, slot: rowSlot(HYDRA_ROW), itemId: JAR_OF_CHEMICALS, handled: false });
+  // Logout cancels the player's tasks before the redraw runs; the saved display is already blank.
+  TaskManager.cancelTasks(f.player.getIndex());
+  assert.equal(f.inventory.getAmount(JAR_OF_CHEMICALS), 1);
+  assert.equal(savedDisplay(f).displayObjectId, undefined);
 });

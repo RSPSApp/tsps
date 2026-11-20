@@ -69,27 +69,31 @@ function stillThere(house, furniture, player) {
     && house.furnitureEntries().some(entry => entry.furniture === furniture);
 }
 
-/** The reach, its sound and, a tick later, the lair (`index`, -1 for blank) on the display. */
+/**
+ * The reach and its sound; the lair (`index`, -1 for blank) is chosen and saved now, and the
+ * display is redrawn with it a tick later. Saving first means a logout before that tick (which
+ * cancels the task) can't leave the house pointing at a jar that is already back in the bag.
+ */
 function reachAndShow(player, house, furniture, index) {
   player.performAnimation(new Animation(REACH));
   const at = player.getLocation();
   Sounds.playAreaSound({ soundId: REACH_SOUND, x: at.getX(), y: at.getY(), level: at.getZ(), loops: 1,
     delay: REACH_SOUND_DELAY, radius: REACH_SOUND_RANGE, source: player });
+  select(house, furniture, index);
   TaskManager.submit(new class extends Task {
     constructor() { super(CHANGE_TICKS, player, false); }
     execute() {
       this.stop();
       if (house.isDestroyed() || !house.furnitureEntries().some(entry => entry.furniture === furniture)) return;
-      show(house, furniture, index);
+      house.redrawFurniture();
     }
   }());
 }
 
-function show(house, furniture, index) {
+function select(house, furniture, index) {
   if (index >= 0) furniture.displayObjectId = LAIRS[index].loc;
   else delete furniture.displayObjectId;
   house.owner.setAttribute(Data.HOUSE_ATTRIBUTE, house.save);
-  house.redrawFurniture();
 }
 
 function menuLabels(furniture) {

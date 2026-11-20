@@ -27614,7 +27614,8 @@
             "Final-form kills use the canonical Hydra loot table, ring-piece drops, kill records, Slayer credit and the shared pet path. Focused tests cover access, phase/vent state, specials, rewards and exit/death cleanup.",
             "The tracker previously described four vents and changing ranged/magic weaknesses; corrected to three vents, four forms and attack-style switching. Some tiles, hazard timing and damage values remain calibrated rather than recording-verified.",
             "Main 8403b60db (4 November 2026): #1960 — The merged Wiki/recording audit corrects the relevant fight behavior; findings, sources and remaining inferred values are listed in docs/audits/boss-fights*.md. Existing access/fidelity gaps are not promoted by attack-specific fixes.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4344 Poison sources: pass severity (hit x 5) to poisonEntity. #4226 Settings: dialogues, messages and switches follow their All Settings rows."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4344 Poison sources: pass severity (hit x 5) to poisonEntity. #4226 Settings: dialogues, messages and switches follow their All Settings rows.",
+            "Access: the rocks into the lair (34548) are climbable, as recorded (rsprox 1521, local 1000143 and others): a two-tile climb-over on the player's column, no requirement; script karuulmHydraRocks in server/plugins/skills/agility/shortcuts/Kourend.Agility.js. Live's instance at the rocks is not reproduced; the Alchemical door makes the private chamber."
           ],
           "taskDetails": [
             {

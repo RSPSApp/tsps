@@ -396,6 +396,11 @@ module.exports = function registerFallenFromGraceQuest(api) {
     return player.getInventory().getAmount(itemId) > 0;
   }
 
+  /** Carried, worn or banked (placeholders own nothing). */
+  function ownsLetter(player) {
+    return api.core.Bank?.owns ? api.core.Bank.owns(player, FINAL_LETTER_ITEM_ID) : held(player, FINAL_LETTER_ITEM_ID);
+  }
+
   function freeSlots(player) {
     return player.getInventory().getFreeSlots();
   }
@@ -793,7 +798,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
         return;
       case BODY_FOUND_MESSAGE_ID:
         if (quest.getStage(player) !== STAGE_ANGEL_DEAD) return;
-        if (!held(player, FINAL_LETTER_ITEM_ID)) give(player, FINAL_LETTER_ITEM_ID);
+        if (!ownsLetter(player)) give(player, FINAL_LETTER_ITEM_ID);
         setFlag(player, FLAG_FOUND_BODY);
         sound(player, FIND_SOUND); // P2 tick 434
         return;
@@ -1026,7 +1031,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
     const stage = quest.getStage(player);
     if (stage < STAGE_ANGEL_DEAD || quest.isComplete(player)) return false;
     event.handled = true;
-    const first = stage === STAGE_ANGEL_DEAD && (!hasFlag(player, FLAG_FOUND_BODY) || !held(player, FINAL_LETTER_ITEM_ID));
+    const first = stage === STAGE_ANGEL_DEAD && (!hasFlag(player, FLAG_FOUND_BODY) || !ownsLetter(player));
     speak(player, CORMAC_NPC_ID, first
       ? "entering-ardeaglais-inspecting-keenan-s-body"
       : "entering-ardeaglais-inspecting-keenan-s-body-again");
@@ -1214,7 +1219,8 @@ module.exports = function registerFallenFromGraceQuest(api) {
 
   const GOLEM_NPC_IDS = new Set([BROKEN_GOLEM_NPC_ID, NpcIdentifiers.POWERED_GOLEM]);
   const BROKEN_DOWN_GOLEM_MULTI_ID = 16320; // broken_down_golem, the multi-NPC base (no name, no identifier)
-  const GOLEM_NORTH_TILE = new Location(2573, 8649, 0); // the captured front (P2 tick 249)
+  const GOLEM_CAVERN_TILE = new Location(2573, 8649, 0); // the captured front, cavern side (P2 tick 249)
+  const golemPassing = new WeakSet();
 
   function handleGolemInvestigate(event) {
     const { player, npcId } = event;
@@ -1224,8 +1230,11 @@ module.exports = function registerFallenFromGraceQuest(api) {
       // Ours (not recorded): once powered, the golem lets the player back through, so a player who
       // died, teleported or logged out mid-fade can return to the basement and the cathedral.
       event.handled = true;
-      const north = player.getLocation().getY() < CREVICE_WALL_Y;
-      fadeTravel(player, GOLEM_FADE, () => player.moveTo(north ? GOLEM_PASSAGE_TILE : GOLEM_NORTH_TILE));
+      if (golemPassing.has(player)) return true;
+      golemPassing.add(player);
+      later(player, GOLEM_FADE.closeTicks, () => golemPassing.delete(player));
+      const cavernSide = player.getLocation().getY() < CREVICE_WALL_Y;
+      fadeTravel(player, GOLEM_FADE, () => player.moveTo(cavernSide ? GOLEM_PASSAGE_TILE : GOLEM_CAVERN_TILE));
       return true;
     }
     if (stage < STAGE_TROLLS || stage >= STAGE_GOLEM_POWERED) return false;

@@ -145,13 +145,13 @@ function createQuestLockpicking(api, { activePins, target, onSolved, maxAttempts
       onSolved(player);
       return;
     }
-    const feedback = lockpickFeedback(amount, state.code);
     if (state.attempt + 1 >= maxAttempts) {
       cancel(player);
       player.getPacketSender().sendInterfaceRemoval();
       onExhausted?.(player);
       return;
     }
+    const feedback = lockpickFeedback(amount, state.code);
     if (Number.isInteger(failSound)) player.getPacketSender().sendSoundEffect?.(failSound, 1, 0);
     player.sendMessage("That didn't seem to work.");
     reopen(player, state, state.attempt + 1, amount, feedback);

@@ -685,6 +685,10 @@ module.exports = function registerCabinFeverQuest(api) {
     ownedLocs.delete(player);
   }
 
+  function handleLogout({ player }) {
+    clearOwnedLocs(player, true);
+  }
+
   /** Plays a wiki variant from the Cabin Fever page (object/state driven). */
   function playVariant(player, variant) {
     startTranscript(api, player, BILL_SHIP, PAGE, variant);
@@ -2569,6 +2573,7 @@ module.exports = function registerCabinFeverQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
   api.onRegionLoaded(handleRegionLoaded);
   api.onActiveRegionsUpdated(handleActiveRegionsUpdated);
   api.onCustomEvent("player:bootstrap-complete", restoreVarps);

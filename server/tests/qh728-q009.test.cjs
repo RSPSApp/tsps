@@ -4,6 +4,8 @@
 // through the same npc-dialogue:action hook the dialogue runtime uses.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+process.env.BROWSER_HOST = '1';
+process.env.DISABLE_PLAYER_BOTS = '1';
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 
@@ -16,6 +18,127 @@ const { HitQueue } = require('../dist/game/content/combat/hit/HitQueue');
 const runtime = require('../plugins/quests/QuestRuntime');
 const core = PluginManager.getCoreApi();
 const groundItemDefinitions = require('../data/definitions/ground-items.json');
+
+test('Cabin Fever ordinary logout releases real session-owned lockers and swing ropes', async t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  core.RegionManager.init();
+  require('../plugins/quests/quests/CabinFever.Quest')(PluginManager.createApi('CabinLogoutRegression'));
+  const quest = runtime.getRegisteredQuests().findLast(entry => entry.key === 'cabin_fever');
+  const actors = [];
+  let cycle = 0;
+  t.mock.method(core.World, 'getProcessCycle', () => cycle);
+  function login(name) {
+    let connected = true;
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => connected,
+      send: () => true, close() { connected = false; }, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel), p = new Player(session);
+    session.setPlayer(p);
+    p.setUsername(name);
+    p.setAttribute('bot-skip-persistence', true);
+    p.setLocation(new core.Location(1814, 4831, 0));
+    // Isolate account loading; registration, logout hooks and global removal stay real.
+    t.mock.method(p, 'onAdd', () => {});
+    core.World.getPlayers().add(p);
+    for (const skill of core.Skill.values()) {
+      p.getSkillManager().setMaxLevels(skill, 99, false).setCurrentLevels(skill, 99, false);
+    }
+    p.setHitpoints(99);
+    quest.setStage(p, 3);
+    actors.push(p);
+    return p;
+  }
+  function ticks(count) {
+    for (let i = 0; i < count; i++) { cycle++; core.TaskManager.process(); }
+  }
+  const owned = p => core.World.getObjects().filter(object => object.getOwner() === p);
+  function open(p, id) {
+    const object = new core.GameObject(id, new core.Location(1814, 4832, 0), 10, 3, null);
+    assert.equal(PluginManager.emitObjectInteraction({ player: p, object, objectId: id,
+      clickType: 1, option: 'Open', handled: false }), true);
+  }
+  function logout(p) {
+    const index = p.getIndex();
+    p.requestLogout();
+    core.World.process();
+    assert.equal(p.isRegistered(), false, 'ordinary logout completed');
+    assert.equal(core.World.getPlayers().get(index), null, 'old session detached globally');
+  }
+  t.after(() => {
+    for (const p of actors) {
+      if (p.isRegistered()) logout(p);
+      for (const object of owned(p)) core.ObjectManager.deregister(object, true);
+      core.TaskManager.cancelTasks(p);
+      core.TaskManager.cancelTasks(p.getIndex());
+      core.World.unregisterPlayerPosition(p);
+    }
+  });
+  await t.test('a pending locker open is cancelled before its object appears', () => {
+    const p = login('cabinlogoutpending');
+    const index = p.getIndex();
+    // Submit the open after this tick's task admission, before normal logout removal.
+    core.TaskManager.submit(new core.CountdownTask(p, 1, () => {
+      open(p, 11246);
+      assert.equal(owned(p).length, 0);
+      p.requestLogout();
+    }));
+    core.World.process();
+    assert.equal(p.isRegistered(), false);
+    assert.equal(core.World.getPlayers().get(index), null);
+    ticks(3);
+    assert.equal(owned(p).length, 0);
+  });
+  await t.test('same-name new sessions release both open locker forms without restoring map packets', () => {
+    const sessions = [], objects = [];
+    for (const [closedId, openId] of [[11246, 11247], [11248, 11249]]) {
+      const p = login('cabinlogoutrepeat');
+      assert.ok(sessions.every(previous => previous !== p), 'new Player identity each session');
+      sessions.push(p);
+      open(p, closedId);
+      ticks(2);
+      const [object] = owned(p);
+      assert.equal(object.getId(), openId);
+      assert.ok(core.ObjectManager.objectsAt(object.getLocation()).includes(object));
+      objects.push(object);
+      const mapRestores = t.mock.method(p.getPacketSender(), 'sendObject', () => {});
+      logout(p);
+      assert.equal(mapRestores.mock.callCount(), 0, 'logout cleanup is quiet');
+    }
+    assert.equal(sessions.flatMap(owned).length, 0, 'no old Player remains rooted by an owned locker');
+    for (const object of objects) {
+      assert.equal(core.ObjectManager.objectsAt(object.getLocation()).includes(object), false);
+    }
+  });
+  await t.test('spawned swing rope is removed while saved landing still recovers a new Player', () => {
+    const p = login('cabinlogoutrope');
+    p.setLocation(new core.Location(1816, 4830, 2));
+    p.getInventory().adds(core.ItemIdentifiers.ROPE, 1);
+    t.mock.method(Math, 'random', () => 0.99);
+    assert.equal(PluginManager.emitItemOnObject({ player: p, itemId: core.ItemIdentifiers.ROPE,
+      objectId: 11292, object: new core.GameObject(11292, p.getLocation().clone(), 10, 0, null),
+      handled: false }), true);
+    ticks(8);
+    const [rope] = owned(p);
+    assert.equal(rope.getId(), 11311, 'actual scheduled swing rope appeared');
+    const landing = [1822, 4830, 1];
+    assert.deepEqual(p.getAttribute('quest.cabin_fever.swing_landing'), landing);
+    logout(p);
+    assert.deepEqual(p.getAttribute('quest.cabin_fever.swing_landing'), landing, 'logout retains durable recovery');
+    const save = PlayerSave.fromPlayer(p), next = login(p.getUsername());
+    save.applyToPlayer(next);
+    PluginManager.emitCustomEvent('player:bootstrap-complete', { player: next });
+    next.setNeedsPlacement(false);
+    assert.deepEqual([next.getLocation().getX(), next.getLocation().getY(), next.getLocation().getZ()], landing);
+    assert.equal(next.getAttribute('quest.cabin_fever.swing_landing'), null);
+    assert.equal(next.getPacketSender().getVarbit(1740), 0);
+    assert.equal(next.getMovementQueue().getMobility().canMove(), true);
+    ticks(30);
+    assert.equal(owned(p).length, 0, 'cancelled swing leaves no old-session rope');
+    assert.equal(core.ObjectManager.objectsAt(rope.getLocation()).includes(rope), false);
+    logout(next);
+  });
+});
 
 const transcripts = [];
 runtime.startTranscript = (_api, player, npcId, page, variant, select) => {

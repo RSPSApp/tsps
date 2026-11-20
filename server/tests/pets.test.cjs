@@ -379,6 +379,30 @@ test("an awakened Vardorvis kill unlocks Butch's death emote in the cycle", () =
   assert.equal(npc.animations.at(-1), 10347);
 });
 
+test("Wisp's death emote needs its owner's awakened Whisperer kill, preserving the ordinary cycle", () => {
+  const wisp = Pets.__internals.PETS.find((pet) => pet.enumName === "WISP");
+  const locked = createPlayer();
+  locked.setAttribute("whisperer:kills", 100);
+  locked.setAttribute("vardorvis:awakened-kills", 1);
+  const lockedNpc = createPetNpc(locked, NpcIdentifiers.WISP_2);
+  for (let i = 0; i < 4; i++) {
+    assert.equal(Pets.__internals.handlePetEmote(locked, lockedNpc, wisp), true);
+    processCycle += 8;
+  }
+  assert.deepEqual(lockedNpc.animations, [10234, 10254, 10253, 10234], "normal or another boss's kills do not unlock death");
+
+  // No awakened Whisperer completion producer exists yet: this is a controlled earned-state fixture.
+  const earned = createPlayer();
+  earned.setAttribute("whisperer:awakened-kills", 1);
+  const earnedNpc = createPetNpc(earned, NpcIdentifiers.WISP_2);
+  for (let i = 0; i < 5; i++) {
+    assert.equal(Pets.__internals.handlePetEmote(earned, earnedNpc, wisp), true);
+    processCycle += 8;
+  }
+  assert.deepEqual(earnedNpc.animations, [10234, 10254, 10253, 10262, 10234]);
+  assert.equal(Pets.__internals.petEmoteStep(locked, wisp, 3), null, "another owner's completion cannot unlock it");
+});
+
 test("a normal logout and login rebuilds exactly one follower from the item", () => {
   const player = createPlayer();
   player.setAttribute("pets:current", undefined);

@@ -55,6 +55,11 @@ const MAX_XP = 200000000;
 // RSProx229/2783 and239/4288: locked Lil' Zik Metamorphosis, on arrival.
 const SANGUINE_DUST_UNLOCK = {permanent: true, name: "sanguine dust",
   message: "You need to earn sanguine dust from the Theatre of Blood Challenge Mode to do that."};
+// Pets whose cached options include "Emote" cycle through their boss's own animations (Wiki:
+// Butch, Wisp, Yami, Orion, Gull). The cycle and cooldown live on the follower NPC instance,
+// so re-summoning resets them the way OSRS's re-summoned follower does.
+const PET_EMOTE_COOLDOWN_TICKS = 8; // "several seconds" (0.6s a tick); no exact figure captured.
+const PET_EMOTE_WAIT_MESSAGE = "You must wait a moment before your pet can do another emote.";
 let pluginApi = null;
 /** world.json pluginConfig: how many times likelier every skilling pet roll is (1, the default, is OSRS). */
 const SKILLING_PET_MULTIPLIER_CONFIG = "Pets:skillingPetMultiplier";
@@ -66,8 +71,14 @@ let ItemDefinitionClass = null;
 const CAT_TASK_KEY = new WeakMap();
 
 const PETS = [
-  { enumName: "WISP", petId: NpcIdentifiers.WISP_2, houseNpcId: NpcIdentifiers.WISP, morphId: 0, itemId: 28246, dialogue: -1 },
-  { enumName: "BUTCH", petId: NpcIdentifiers.BUTCH_2, houseNpcId: NpcIdentifiers.BUTCH, morphId: 0, itemId: 28248, dialogue: -1 },
+  { enumName: "WISP", petId: NpcIdentifiers.WISP_2, houseNpcId: NpcIdentifiers.WISP, morphId: 0, itemId: 28246, dialogue: -1,
+    // Whisperer: melee, bind (summon leeches), special (screech, pet form) and death (pet form).
+    // The awakened-kill death gate has no whisperer attribute to read, so the death emote stays in the cycle.
+    emote: [10234, 10254, 10253, 10262] },
+  { enumName: "BUTCH", petId: NpcIdentifiers.BUTCH_2, houseNpcId: NpcIdentifiers.BUTCH, morphId: 0, itemId: 28248, dialogue: -1,
+    // Vardorvis: melee, spawn, entangle (start then end; the loop between is skipped), dash, then
+    // the death emote after an awakened kill.
+    emote: [10340, 10345, { anim: 10342, then: { anim: 10344, delay: 2 } }, 10341, { anim: 10347, unlock: { attribute: "vardorvis:awakened-kills", min: 1 } }] },
   { enumName: "BARON", petId: NpcIdentifiers.BARON_2, houseNpcId: NpcIdentifiers.BARON, morphId: 0, itemId: 28250, dialogue: -1 },
   { enumName: "LILVIATHAN", petId: NpcIdentifiers.LILVIATHAN_2, houseNpcId: NpcIdentifiers.LILVIATHAN, morphId: 0, itemId: 28252, dialogue: -1 },
   // Araxxor: coagulated venom metamorphoses Nid into Rax (Wiki).
@@ -93,8 +104,12 @@ const PETS = [
   { enumName: "TUMEKENS_DAMAGED_GUARDIAN", petId: 11850, morphId: 0, itemId: 27352, dialogue: -1 },
   { enumName: "ELIDINIS_DAMAGED_GUARDIAN", petId: 11851, morphId: 0, itemId: 27352, dialogue: -1 },
   // The Fractured Archive: Orion and Orion (robed) share one family and collection log slot.
-  { enumName: "ORION", petId: NpcIdentifiers.ORION, houseNpcId: NpcIdentifiers.ORION_3, morphId: NpcIdentifiers.ORION_2, itemId: ItemIdentifiers.ORION, familyItemId: ItemIdentifiers.ORION, dialogue: -1 },
-  { enumName: "ORION_ROBED", petId: NpcIdentifiers.ORION_2, houseNpcId: NpcIdentifiers.ORION_4, morphId: NpcIdentifiers.ORION, itemId: ItemIdentifiers.ORION_3, familyItemId: ItemIdentifiers.ORION, dialogue: -1 },
+  { enumName: "ORION", petId: NpcIdentifiers.ORION, houseNpcId: NpcIdentifiers.ORION_3, morphId: NpcIdentifiers.ORION_2, itemId: ItemIdentifiers.ORION, familyItemId: ItemIdentifiers.ORION, dialogue: -1,
+    // Ocellus: melee, smoke (the noloop projectile; _start loops forever) and untether, whose
+    // unleash_in rise must be followed by unleash_out or the pet snaps back to the ground.
+    emote: [14842, 14853, { anim: 14857, then: { anim: 14861, delay: 2 } }] },
+  { enumName: "ORION_ROBED", petId: NpcIdentifiers.ORION_2, houseNpcId: NpcIdentifiers.ORION_4, morphId: NpcIdentifiers.ORION, itemId: ItemIdentifiers.ORION_3, familyItemId: ItemIdentifiers.ORION, dialogue: -1,
+    emote: [14842, 14853, { anim: 14857, then: { anim: 14861, delay: 2 } }] },
   { enumName: "SMOL_HEREDIT", petId: NpcIdentifiers.SMOL_HEREDIT_2, morphId: 0, itemId: 28960, dialogue: -1, mainDrop: true },
   { enumName: "NEXLING", petId: NpcIdentifiers.NEXLING_2, houseNpcId: NpcIdentifiers.NEXLING, morphId: 0, itemId: 26348, dialogue: -1 },
   { enumName: "VORKI", petId: NpcIdentifiers.VORKI_2, houseNpcId: NpcIdentifiers.VORKI, morphId: 0, itemId: 21992, dialogue: -1 },
@@ -218,12 +233,16 @@ const PETS = [
   { enumName: "MOXI", petId: NpcIdentifiers.MOXI_2, morphId: 0, itemId: 30154, dialogue: -1 },
   { enumName: "BRAN", petId: NpcIdentifiers.BRAN_2, morphId: 12595, itemId: 30622, dialogue: -1 },
   { enumName: "RIC", petId: 12595, morphId: NpcIdentifiers.BRAN_2, itemId: 30622, dialogue: -1 },
-  { enumName: "YAMI", petId: NpcIdentifiers.YAMI_2, morphId: 0, itemId: 30888, dialogue: -1 },
+  { enumName: "YAMI", petId: NpcIdentifiers.YAMI_2, morphId: 0, itemId: 30888, dialogue: -1,
+    // Yama: stomp, melee, ranged/magic, axe-spin (the cache's portal swing) and the standing idle.
+    emote: [12148, 12146, 12144, 12147, 12153] },
   { enumName: "DOM", petId: NpcIdentifiers.DOM_2, morphId: 0, itemId: 31130, dialogue: -1 },
   // The follower Gulldamar look: 14931 carries the Metamorph option live.
-  { enumName: "GULL", petId: NpcIdentifiers.GULL_7, morphId: 14932, itemId: 31285, dialogue: -1 },
+  { enumName: "GULL", petId: NpcIdentifiers.GULL_7, morphId: 14932, itemId: 31285, dialogue: -1,
+    emote: [12588] }, // The gryphon chick's own attack (Wiki: a single emote).
   { enumName: "GULLIVER", petId: 14932, morphId: NpcIdentifiers.GULL_7, itemId: 31285, dialogue: -1,
-    morphUnlock: { attribute: "pets:gull-fed", path: [], min: 50, name: "to feed Gull 50 raw or cooked fish" } },
+    morphUnlock: { attribute: "pets:gull-fed", path: [], min: 50, name: "to feed Gull 50 raw or cooked fish" },
+    emote: [12552] }, // The gryphon boss's melee attack (Wiki: a single emote).
   // Beef, Maggot marquess, Mr McGroot and Aggy: the base NPC is the world follower (`isFollower`)
   // and the `_2` id is the menagerie copy, the reverse of the older pet pairs (cache 241).
   { enumName: "BEEF", petId: NpcIdentifiers.BEEF, houseNpcId: NpcIdentifiers.BEEF_2, morphId: 0, itemId: ItemIdentifiers.BEEF, dialogue: -1 },
@@ -2002,6 +2021,51 @@ function interact(player, npc, action = "Interact") {
   return true;
 }
 
+/** The animation for one pet emote step, or null when its unlock (an awakened-kill death emote) is not met. */
+function petEmoteStep(player, pet, index) {
+  const step = pet.emote[index % pet.emote.length];
+  if (typeof step === "number") return step;
+  if (!step.unlock) return step.anim;
+  const value = Number(player.getAttribute(step.unlock.attribute)) || 0;
+  return value >= (step.unlock.min ?? 1) ? step.anim : null;
+}
+
+/** Plays a two-part emote's second half (Orion's unleash_out after the unleash_in rise). */
+function schedulePetEmoteFollowUp(npc, then) {
+  if (!TaskClass || typeof TaskManagerRef?.submit !== "function") return;
+  TaskManagerRef.submit(new (class extends TaskClass {
+    constructor() { super(then.delay, npc, false); }
+    execute() {
+      this.stop();
+      if (npc.isRegistered?.() !== false) npc.performAnimation(new Animation(then.anim));
+    }
+  })());
+}
+
+/** The follower's "Emote" option: play the next boss animation in the pet's cycle, on a cooldown. */
+function handlePetEmote(player, npc, pet) {
+  const sequence = pet?.emote;
+  if (!Array.isArray(sequence) || sequence.length === 0) return false;
+  const state = npc.__petEmote || (npc.__petEmote = { tick: -PET_EMOTE_COOLDOWN_TICKS, index: 0 });
+  const now = World.getProcessCycle();
+  if (now - state.tick < PET_EMOTE_COOLDOWN_TICKS) {
+    player.sendMessage(PET_EMOTE_WAIT_MESSAGE);
+    return true;
+  }
+  // Advance past steps the player has not unlocked yet (the awakened-kill death emote).
+  for (let i = 0; i < sequence.length; i++) {
+    const anim = petEmoteStep(player, pet, state.index);
+    state.index = (state.index + 1) % sequence.length;
+    if (anim == null) continue;
+    npc.performAnimation(new Animation(anim));
+    const then = sequence[(state.index + sequence.length - 1) % sequence.length]?.then;
+    if (then) schedulePetEmoteFollowUp(npc, then);
+    state.tick = now;
+    break;
+  }
+  return true;
+}
+
 /** Which pet action a click maps to, from the NPC's cached options, then the click index. */
 function handlePetClick(event) {
   if (!event?.player || !event.npc || !getPetByNpcId(event.npcId)) {
@@ -2024,6 +2088,9 @@ function handlePetClick(event) {
   if (lower === "chase") {
     const pet = getPetByNpcId(event.npcId);
     return catInfoOf(pet) ? chaseVermin(event.player, event.npc, pet) : false;
+  }
+  if (lower === "emote") {
+    return handlePetEmote(event.player, event.npc, getPetByNpcId(event.npcId));
   }
   if (action) return false;
   // The client injects Talk-to/Metamorphosis/Pick-up on pet definitions that predate them.
@@ -2367,6 +2434,8 @@ module.exports = {
     pickup,
     drop,
     handlePetClick,
+    handlePetEmote,
+    petEmoteStep,
     awardPet,
     getOwnedPetItems,
     catInfoOf,

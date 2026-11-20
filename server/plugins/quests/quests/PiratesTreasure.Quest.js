@@ -84,8 +84,6 @@ module.exports = function registerPiratesTreasureQuest(api) {
   /** The half fare for worn Karamja gloves, both ways (the customs officer's Pay-fare transcript; Wiki, Seaman Lorris). */
   const GLOVES_FARE = 15;
   const GARDENER_SHOUT = "First moles, now this! Take this, vandal!";
-  /** Karamja's surface map squares [minX, minY, maxX, maxY], as the Karamja league area bounds them (KaramjaDiary.AchievementDiaries.js). */
-  const KARAMJA_SQUARES = [[42, 44, 46, 47], [42, 48, 45, 49], [46, 49, 46, 49], [42, 50, 44, 50], [44, 51, 44, 51]];
   const RUM_SPILLED = "Your Karamjan rum gets broken and spilled.";
   /** Gerrant's hooked apron (piratetreasure_apron), taken as a white apron (data/definitions/ground-items.json). */
   const HOOKED_APRON_ITEM_ID = 7957;
@@ -787,17 +785,12 @@ module.exports = function registerPiratesTreasureQuest(api) {
     return true;
   }
 
-  function onKaramja(location) {
-    const x = location.getX() >> 6, y = location.getY() >> 6;
-    return KARAMJA_SQUARES.some(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1);
-  }
-
   /**
-   * Wiki (Karamjan rum; the transcript's "If the player teleports out using any spell or teleport
-   * item"): teleporting off Karamja breaks the rum, as captured on landing (rev 242 capture, tick 390).
+   * Wiki (Karamjan rum and Pirate's Treasure): carried rum breaks on any teleport, including after
+   * retrieval from Wydin's Port Sarim crate. The captured house teleport spills on landing (tick 390).
    */
   function spillRumOnTeleport({ player, from, to }) {
-    if (!from || !to || !onKaramja(from) || onKaramja(to)) return;
+    if (!player || !from || !to) return;
     const rum = player.getInventory().getAmount(RUM_ITEM_ID);
     if (rum <= 0) return;
     player.getInventory().deleteNumber(RUM_ITEM_ID, rum);

@@ -90,6 +90,8 @@ type ReachOptions = {
 type FindRouteOptions = ReachOptions & {
   moveNear?: boolean;
   maxWaypoints?: number;
+  /** Retreat may continue in segments when home is outside this local search. */
+  allowPartialRoute?: boolean;
 };
 
 function rotateDimensions(angle: number, a: number, b: number): number {
@@ -149,6 +151,7 @@ export class RsmodRouteFinding {
       locAngle = 0,
       locShape = -1,
       moveNear = true,
+      allowPartialRoute = false,
       blockAccessFlags = 0,
       // Real OSRS/RSMod caps an extracted path at 25 checkpoints - a
       // longer route stops at the 25th and needs a fresh click to continue.
@@ -209,7 +212,10 @@ export class RsmodRouteFinding {
         rotateDimensions(locAngle, destWidth, destLength),
         rotateDimensions(locAngle, destLength, destWidth)
       );
-      if (!foundApproachPoint) {
+      const outsideSearch = localDestX < 0 || localDestY < 0
+        || localDestX >= SEARCH_MAP_SIZE || localDestY >= SEARCH_MAP_SIZE;
+      if (!foundApproachPoint && !(allowPartialRoute && outsideSearch && locShape === -1
+        && destWidth === 1 && destLength === 1 && this.findPartialApproachPoint(localDestX, localDestY))) {
         return { waypoints: [], alternative: false, success: false, endX: srcX, endY: srcY };
       }
     }
@@ -785,6 +791,29 @@ export class RsmodRouteFinding {
       }
     }
     return false;
+  }
+
+  /** Use only searched, reachable tiles and require progress towards the distant home. */
+  private findPartialApproachPoint(localDestX: number, localDestY: number): boolean {
+    const source = SEARCH_MAP_SIZE >> 1;
+    let lowestCost = (localDestX - source) ** 2 + (localDestY - source) ** 2;
+    let pathLength = MAX_ALTERNATIVE_ROUTE_SEEK_RANGE;
+    let found = false;
+    for (let x = 0; x < SEARCH_MAP_SIZE; x++) {
+      for (let y = 0; y < SEARCH_MAP_SIZE; y++) {
+        const distance = this.distanceAt(x, y);
+        if (distance >= MAX_ALTERNATIVE_ROUTE_SEEK_RANGE) continue;
+        const cost = (localDestX - x) ** 2 + (localDestY - y) ** 2;
+        if (cost < lowestCost || (found && cost === lowestCost && distance < pathLength)) {
+          this.currLocalX = x;
+          this.currLocalY = y;
+          lowestCost = cost;
+          pathLength = distance;
+          found = true;
+        }
+      }
+    }
+    return found;
   }
 
   private findClosestApproachPoint(

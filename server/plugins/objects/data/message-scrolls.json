@@ -1,0 +1,56 @@
+{
+  "_comment": "Locs whose Read opens the plain message scroll (messagescroll, 220): every line component messcroll1-15 is written, blanks too, in this order, as recorded (rsprox captures cited per entry). readRange: read from up to that many tiles with a clear line, as the Signposts plugin does; without it the player walks up to the loc.",
+  "scrolls": [
+    {
+      "locs": [
+        "fai_falador_noticeboard",
+        "fai_falador_noticeboard2"
+      ],
+      "where": "Falador east bank (both boards), Falador west bank and their Kourend copies",
+      "recordings": "rsprox 241/1001398 tick 254; 233/03237 ticks 1269 (fai_falador_noticeboard2), 1280, 1473 and 1484 (fai_falador_noticeboard)",
+      "readRange": 5,
+      "_readRange": "Read from where the player stands: 233/03237 read both boards without moving, from 3012,3357 (3 tiles from 24099 at 3009,3356, 5 from 24098 at 3017,3358), the scroll opening that tick (the next at t1473). 241/1001398 walked in from 3003,3365 and read at 3011,3357. Further than 5 is not recorded.",
+      "lines": [
+        "",
+        "",
+        "If you're worried about someone stealing items from your",
+        "bank, why not protect yourself with a Bank PIN?",
+        "",
+        "A Bank PIN is a four-digit number. It's like a password that",
+        "protects your bank account. If you set one, you'll be asked to",
+        "enter it before you can take items out of the bank.",
+        "",
+        "If you're interested, speak to the bankers and ask about Bank",
+        "PINs.",
+        "",
+        "But remember, KEEP YOUR PIN SECRET!",
+        "",
+        ""
+      ]
+    },
+    {
+      "locs": [
+        "fai_varrock_combat_scroll1_mirror"
+      ],
+      "where": "Varrock, on the wall at 3254,3438",
+      "recordings": "rsprox 240/1001336 tick 3727, 232/03220 (walked up to it each time, including from 3 tiles away)",
+      "lines": [
+        "",
+        "",
+        "",
+        "",
+        "A Beginner's Guide to Killing Things",
+        "by Ali Morrisane",
+        "",
+        "Step 1: Choose your target.",
+        "Step 2: Hit it.",
+        "Step 3: Go to Step 2.",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    }
+  ]
+}

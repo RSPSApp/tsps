@@ -205,9 +205,17 @@ function cannonLines() {
     .filter((step) => typeof step.player === "string" || step.type === "line");
 }
 
+/**
+ * toplevel_mainmodal_open (2524): the capture runs it with (0, 0) directly before dwarf_rock_cannon opens
+ * (tick 3253), so the open's toplevel_resize lays the modal out from these background values rather than
+ * the previous modal's (issue 4266).
+ */
+const MAINMODAL_OPEN_SCRIPT = 2524;
+const MAINMODAL_OPEN = [0, 0];
+
 function openCannon(player) {
   const found = resolve();
-  player.getPacketSender().sendInterface(found.cannon.group);
+  player.getPacketSender().sendInterfaceScript(MAINMODAL_OPEN_SCRIPT, MAINMODAL_OPEN).sendInterface(found.cannon.group);
 }
 
 /** The zoomed head: the player's (`npc` false) or Dondakan's, with the line. */

@@ -22,7 +22,7 @@ export type CustomInterfaceDeclaration = {
      * a widget's `onMouseOver`/`onMouseLeave` can run cache script 69, `if_sethide`.)
      */
     overlay?: boolean;
-    /** A key (`event.key`, e.g. "F1") clicks a component's op 1, while `gate` (if any) is not hidden. */
+    /** A key (`event.key`, e.g. "F1") clicks a visible component's op 1, while `gate` (if any) is visible. */
     hotkeys?: { gate?: number; keys: Array<{ key: string; component: number }> };
     /**
      * On the resizable frames, the overlay's root (a right-anchored layer, `xPositionMode` 2)
@@ -738,9 +738,10 @@ export class CustomInterfaceRuntime {
             if (!hotkeys || !entry) continue;
             const at = (component: number) => manager.getWidgetByUid(((groupId & 0xffff) << 16) | (component & 0xffff));
             const gate = hotkeys.gate === undefined ? undefined : at(hotkeys.gate);
-            if (gate?.hidden || gate?.isHidden) continue;
+            if (hotkeys.gate !== undefined &&
+                (!gate || gate.hidden || gate.isHidden || manager.isEffectivelyHidden(gate.uid))) continue;
             const target = at(entry.component);
-            if (!target || target.hidden || target.isHidden) continue;
+            if (!target || target.hidden || target.isHidden || manager.isEffectivelyHidden(target.uid)) continue;
             (this.deps.sendWidgetAction ?? sendWidgetAction)({ widgetId: target.uid | 0, groupId, childId: entry.component, opId: 1 });
             return true;
         }

@@ -32,10 +32,6 @@ Nothing changes in the inventory.
 | Heart of Ithell | 936 (ticks 5134, 15957) |
 | Vyre noble top, legs and shoes (unscented) | 1637 (ticks 4660-4661, one after another; each box replaced the last) |
 | Vorkath's head | 2628 (tick 1084) |
-| Broken compass | 960 (tick 1434), 908 (tick 12712) |
-| Mouldy doll | 968 (tick 8636), 3848 (tick 3375), 3911 (tick 19025), 4295 (tick 16207) |
-| Rusty coin | 960 (tick 1430) |
-| Smashed mirror | 958 (tick 20754), 960 (tick 1426), 4292 (tick 27973) |
 | Sailors' amulet (inert) | 3837 (ticks 7890, 8004) |
 
 Vorkath's head has one recording. Whether its line changes once a head has been used on Ava's
@@ -50,4 +46,5 @@ on the Isle evidence (quest varbits), the broken zombie axe (its line names the 
 torn master clue parts (Combine), the Mastering Mixology potions (quality) and the DT2 quartz (Leagues
 recordings only). The abyssal needle (Leagues V rec 1840), the ancient icon, the berserker and ultor
 icons and the ultor vestige (Grid Master recs 821, 3329, 3432) were recorded only on Leagues and
-event worlds, so they are left out too.
+event worlds, so they are left out too. The salvaging relics' Inspect belongs to the museum
+(`server/plugins/world/museum/SalvagingRelics.Museum.js`), not this table.

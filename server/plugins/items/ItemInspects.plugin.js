@@ -20,7 +20,7 @@ function inspect({ player, itemId }) {
 
 module.exports = {
   name: "ItemInspects",
-  description: "Inspect on the sailing keys and shipbuilding parts (stormy, fetid and serrated keys, barrel stand, bottled storm, captured wind mote, Heart of Ithell, the three Barracuda Trial fabric rolls), the unscented vyre noble disguise, Vorkath's head, the four salvaging relics (broken compass, mouldy doll, rusty coin, smashed mirror) and the inert sailors' amulet shows the item's line in an object box.",
+  description: "Inspect on the sailing keys and shipbuilding parts (stormy, fetid and serrated keys, barrel stand, bottled storm, captured wind mote, Heart of Ithell, the three Barracuda Trial fabric rolls), the unscented vyre noble disguise, Vorkath's head and the inert sailors' amulet shows the item's line in an object box.",
   members: true,
   _test: { INSPECTS, inspect },
   register(api) {

@@ -5,8 +5,8 @@
  *
  * Wiki (Drake): a drake attacks with "Ranged" and "Ranged melee", both up to 15; its normal ranged
  * attacks are blocked by Protect from Missiles, and it "can perform melee attacks when players stand
- * diagonally from them". The swing is listed as a ranged style, so it is typed ranged here too (ours:
- * no source says which prayer blocks it); it only changes the animation and the hit's timing.
+ * diagonally from them". Wiki (Ranged melee): such an attack rolls against the target's ranged defence
+ * but Protect from Melee blocks it, so the swing is a melee hit that rolls ranged accuracy.
  * The rsprox capture of recording 3014 gives the animations, the projectile, the sounds and the hit
  * delays: from range only the shot, beside the player either (ticks 221 and 225).
  */
@@ -87,8 +87,17 @@ function method() {
       this.melee = false;
     }
 
-    /** Both styles are ranged attacks: the Wiki lists the swing as "Ranged melee" (its prayer is ours). */
+    /** The swing is "Ranged melee" (Wiki): a melee hit, so Protect from Melee blocks it; the shot is ranged. */
     type() {
+      return this.melee ? CombatType.MELEE : CombatType.RANGED;
+    }
+
+    /** Both styles roll ranged accuracy against ranged defence (Wiki: Ranged melee). */
+    accuracyAttackType() {
+      return CombatType.RANGED;
+    }
+
+    accuracyDefenceType() {
       return CombatType.RANGED;
     }
 
@@ -119,7 +128,7 @@ function method() {
 
 module.exports = {
   name: "Drakes",
-  description: "Drake combat: a ranged shot from range, a ranged shot or a 'ranged melee' swing beside the player (diagonals too), both blocked by Protect from Missiles, with the captured animations, projectile and sounds.",
+  description: "Drake combat: a ranged shot from range, a ranged shot or a 'ranged melee' swing beside the player (diagonals too), the shot blocked by Protect from Missiles and the swing by Protect from Melee, with the captured animations, projectile and sounds.",
   members: true,
   register(pluginApi) {
     api = pluginApi;

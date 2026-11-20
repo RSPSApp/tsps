@@ -8,6 +8,8 @@ Drake combat (Mount Karuulm's Karuulm Slayer Dungeon, 84 Slayer). Implemented in
 - OSRS Wiki, [Drake](https://oldschool.runescape.wiki/w/Drake): attack styles Ranged and
   "Ranged melee", max hit 15 each, attack speed 4; "normal ranged attacks" are blocked by
   Protect from Missiles; drakes melee from a diagonal as well.
+- OSRS Wiki, [Ranged melee](https://oldschool.runescape.wiki/w/Ranged_melee): such attacks roll
+  against ranged defence but are blocked by Protect from Melee, not Protect from Missiles.
 - rsprox captures, recording 3014 (rev 231, ticks 217-229): three shots and one swing against a
   player south of a drake.
 
@@ -19,6 +21,7 @@ Drake combat (Mount Karuulm's Karuulm Slayer Dungeon, 84 Slayer). Implemented in
 | Sounds at the attack | 4136 (delay 5), 1965 (delay 20) | 4130 |
 | Projectile | `drake_range_proj` 1636: start 44, end 57 + 3 a tile, heights 80/90 as sent, angle 10, progress 128 | none |
 | Hit | 2 ticks after the attack (at 2, 6 and 7 tiles) | the same tick |
+| Prayer (Wiki) | Protect from Missiles | Protect from Melee (ranged accuracy and defence) |
 
 - The shot starts one tile from the drake's centre toward the player (its head): 1311,10236 for a
   drake at 1308,10235. The landing cycle counts tiles from there (63 at 2, 75 at 6, 78 at 7).
@@ -27,8 +30,6 @@ Drake combat (Mount Karuulm's Karuulm Slayer Dungeon, 84 Slayer). Implemented in
 
 ## Choices ("Ours")
 
-- The swing is typed ranged (accuracy, defence and Protect from Missiles), as the Wiki lists it
-  as the "Ranged melee" style. No source says which prayer blocks it.
 - Beside the player (an edge or a corner) the swing is picked half the time. One capture shows
   one of each.
 - The shot's reach is core's NPC ranged reach (6). No source states it.

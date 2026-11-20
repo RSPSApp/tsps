@@ -130,7 +130,7 @@ test("from range the drake only shoots: captured animation, projectile, sounds, 
   assert.deepEqual(sounds, [[4136, 5], [1965, 20]]);
 });
 
-test("beside the player it shoots or swings; the swing is still a ranged attack, its hit the same tick", () => {
+test("beside the player it shoots or swings; the swing is ranged melee (Protect from Melee, ranged accuracy), its hit the same tick", () => {
   const npc = drake();
   const target = player(1313, 10234); // diagonal
 
@@ -138,7 +138,9 @@ test("beside the player it shoots or swings; the swing is still a ranged attack,
   const swing = new providers[0].ctor();
   swing.start(npc, target);
   const [melee] = swing.hits(npc, target);
-  assert.equal(melee.type, real.CombatType.RANGED);
+  assert.equal(melee.type, real.CombatType.MELEE);
+  assert.equal(swing.accuracyAttackType(real.CombatType.MELEE), real.CombatType.RANGED);
+  assert.equal(swing.accuracyDefenceType(real.CombatType.MELEE), real.CombatType.RANGED);
   assert.equal(melee.delay, 0);
   assert.deepEqual(npc.shown, ["anim 8275"]);
   assert.equal(sent.length, 0);
@@ -150,6 +152,7 @@ test("beside the player it shoots or swings; the swing is still a ranged attack,
   shot.start(npc, target);
   const [ranged] = shot.hits(npc, target);
   assert.equal(ranged.type, real.CombatType.RANGED);
+  assert.equal(shot.accuracyDefenceType(real.CombatType.RANGED), real.CombatType.RANGED);
   assert.equal(ranged.delay, 2);
   assert.equal(sent.length, 1);
   assert.deepEqual(sounds, [[4136, 5], [1965, 20]]);

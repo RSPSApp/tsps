@@ -397,26 +397,6 @@ test("a completion-gated metamorphosis is denied until the activity is completed
   assert.equal(npc.transformed, NpcIdentifiers.CORRUPTED_YOUNGLLEF_2);
 });
 
-test("a phoenix needs the right firelighter and consumes it", () => {
-  const player = createPlayer();
-  const npc = createPetNpc(player, NpcIdentifiers.PHOENIX_2);
-  player.setAttribute("pets:current", npc);
-
-  assert.equal(Pets.__internals.morph(player, npc), true);
-  assert.equal(npc.transformed, undefined);
-  assert.match(player.messages.at(-1), /blue firelighter/);
-
-  player.inventory.push(ItemIdentifiers.BLUE_FIRELIGHTER);
-  assert.equal(Pets.__internals.morph(player, npc), true);
-  assert.equal(npc.transformed, NpcIdentifiers.PHOENIX_7);
-  assert.deepEqual(player.inventory, []);
-
-  player.inventory.push(ItemIdentifiers.PURPLE_FIRELIGHTER);
-  assert.equal(Pets.__internals.morph(player, npc), true);
-  assert.equal(npc.transformed, NpcIdentifiers.PHOENIX_7);
-  assert.match(player.messages.at(-1), /green firelighter/);
-});
-
 test("Bran and Ric are free metamorphosis forms", () => {
   const player = createPlayer();
   const npc = createPetNpc(player, NpcIdentifiers.BRAN_2);

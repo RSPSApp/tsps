@@ -28,6 +28,7 @@ const Beaver = require("./pets/Beaver.Pets");
 const GiantSquirrel = require("./pets/GiantSquirrel.Pets");
 const Rocky = require("./pets/Rocky.Pets");
 const RockGolem = require("./pets/RockGolem.Pets");
+const Phoenix = require("./pets/Phoenix.Pets");
 
 const CURRENT_PET_ATTRIBUTE = "pets:current";
 /** The item of the follower the player logged out with; re-summoned on login. */
@@ -234,17 +235,9 @@ const PETS = [
     requiredDiaryReward: { diary: "western", tier: "elite" } },
   { enumName: "BLOODHOUND", petId: NpcIdentifiers.BLOODHOUND_2, morphId: 0, itemId: 19730, dialogue: -1 },
 
-  // Wintertodt's reward cart (followers are 7370, as in live captures). The four colour
-  // forms (3081-3084) each need their firelighter; the Wiki colour order is used.
-  { enumName: "PHOENIX", petId: NpcIdentifiers.PHOENIX_2, morphId: NpcIdentifiers.PHOENIX_7, itemId: 20693, dialogue: -1 },
-  { enumName: "PHOENIX_BLUE", petId: NpcIdentifiers.PHOENIX_7, morphId: NpcIdentifiers.PHOENIX_8, itemId: 20693, dialogue: -1,
-    morphUnlock: { itemId: ItemIdentifiers.BLUE_FIRELIGHTER, consume: true, name: "a blue firelighter" } },
-  { enumName: "PHOENIX_GREEN", petId: NpcIdentifiers.PHOENIX_8, morphId: NpcIdentifiers.PHOENIX_9, itemId: 20693, dialogue: -1,
-    morphUnlock: { itemId: ItemIdentifiers.GREEN_FIRELIGHTER, consume: true, name: "a green firelighter" } },
-  { enumName: "PHOENIX_PURPLE", petId: NpcIdentifiers.PHOENIX_9, morphId: NpcIdentifiers.PHOENIX_10, itemId: 20693, dialogue: -1,
-    morphUnlock: { itemId: ItemIdentifiers.PURPLE_FIRELIGHTER, consume: true, name: "a purple firelighter" } },
-  { enumName: "PHOENIX_WHITE", petId: NpcIdentifiers.PHOENIX_10, morphId: NpcIdentifiers.PHOENIX_2, itemId: 20693, dialogue: -1,
-    morphUnlock: { itemId: ItemIdentifiers.WHITE_FIRELIGHTER, consume: true, name: "a white firelighter" } },
+  // Wintertodt's reward cart (followers are 7370, as in live captures). Each colour is its own item
+  // and follower, unlocked with 250 firelighters (pets/Phoenix.Pets.js adds them).
+  { enumName: "PHOENIX", petId: NpcIdentifiers.PHOENIX_2, houseNpcId: NpcIdentifiers.PHOENIX, morphId: 0, itemId: 20693, familyItemId: 20693, dialogue: -1 },
   { enumName: "HERON", petId: 6722, morphId: 10636, itemId: 13320, dialogue: -1, skill: Skill.FISHING, chance: 5000 },
   { enumName: "GREAT_BLUE_HERON", petId: 10636, morphId: 6722, itemId: 13320, dialogue: -1, skill: Skill.FISHING, chance: 5000, morphUnlock: { itemId: ItemIdentifiers.SPIRIT_FLAKES, permanent: true, name: "spirit flakes" } },
   {
@@ -2243,6 +2236,15 @@ function addRockGolemForms({ CacheDefinitions }) {
   }
 }
 
+/** The phoenix's colours, each its own item and follower (pets/Phoenix.Pets.js). */
+function addPhoenixForms({ CacheDefinitions }) {
+  for (const pet of Phoenix.rows(PET_BY_NAME.get("PHOENIX"), CacheDefinitions)) {
+    if (PET_BY_ID.has(pet.petId) || PET_BY_ITEM_ID.has(pet.itemId)) continue;
+    PETS.push(pet); PET_BY_ID.set(pet.petId, pet); PET_BY_NAME.set(pet.enumName, pet); PET_BY_ITEM_ID.set(pet.itemId, pet);
+    if (Number.isInteger(pet.houseNpcId)) PET_BY_HOUSE_ID.set(pet.houseNpcId, pet);
+  }
+}
+
 /** The player's own active follower, free to change form now. */
 function isOwnFollower(player, npc) {
   return player?.getAttribute?.(CURRENT_PET_ATTRIBUTE) === npc && npc?.getOwner?.() === player
@@ -2293,6 +2295,7 @@ module.exports = {
     addGiantSquirrelForms(api.core);
     addRockyForms(api.core);
     addRockGolemForms(api.core);
+    addPhoenixForms(api.core);
     addExtensionPets(api);
     api.persistAttribute(OWNED_ATTRIBUTE);
     api.persistAttribute(LAST_PET_ATTRIBUTE);
@@ -2337,6 +2340,7 @@ module.exports = {
     GiantSquirrel.attach(api, {getPetForItemId, recordOwnership, setStoredVariant, transformFollower, isOwnFollower});
     Rocky.attach(api, {transformFollower, isOwnFollower});
     RockGolem.attach(api, {recordOwnership, setStoredVariant, transformFollower, isOwnFollower});
+    Phoenix.attach(api, {getPetForItemId, recordOwnership, setStoredVariant, transformFollower, isOwnFollower});
     TombsOfAmascut.attach(api, {world: World, currentAttribute: CURRENT_PET_ATTRIBUTE, activeAttribute: ACTIVE_PET_ATTRIBUTE,
       lastAttribute: LAST_PET_ATTRIBUTE, getPetByNpcId, setStoredVariant});
 

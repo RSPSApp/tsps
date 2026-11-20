@@ -199,6 +199,13 @@ class Fight {
     this.npc.setNpcTransformationId(transitions[from]);
     this.npc.performAnimation(new Common.core.Animation(ids.seqs.phaseOut[from]));
     const ticks = PHASES()[from].transitionTicks;
+    // It holds still while it changes (rsprox: no step in 872 transition ticks), and the player's
+    // attack ends quietly: their next needs a click (425 of 426), the refusal answering only clicks.
+    this.npc.getMovementQueue?.().reset?.();
+    this.npc.setScriptedMovement?.(true);
+    for (const player of this.lair.players()) {
+      if (player.getCombat?.().getTarget?.() === this.npc) player.getCombat().reset?.();
+    }
     this.transitionUntil = this.tickCount + ticks;
     // The Wiki: the lightning dissipates, and a fire special in progress ends; its fires stay.
     this.currents = [];
@@ -211,6 +218,7 @@ class Fight {
     this.empowered = false;
     Common.later(ticks, () => {
       if (this.stopped) return;
+      if (!this.fire) this.npc.setScriptedMovement?.(false);
       this.npc.setNpcTransformationId(Common.phaseForms()[this.phase]);
       this.npc.performAnimation(new Common.core.Animation(ids.seqs.phaseIn[from]));
       const { firstAttackAfterSpawn, firstEnragedAttackAfterSpawn } = Common.data.combat;
@@ -425,7 +433,6 @@ class Fight {
 
   /** The flame special: it walks to the centre first (Wiki), holding its attacks. */
   startFire(target) {
-    this.life.fireBreaths += 1;
     this.fire = { stage: "walk", target, since: this.tickCount };
     this.npc.setScriptedMovement?.(true);
     // A player in its way doesn't stop it; one left under it is pushed out (Wiki).
@@ -434,10 +441,7 @@ class Fight {
 
   /** The special from the moment it stands in the centre (also run directly by the tests). */
   breatheFire(target) {
-    if (!this.fire) {
-      this.life.fireBreaths += 1;
-      this.npc.setScriptedMovement?.(true);
-    }
+    if (!this.fire) this.npc.setScriptedMovement?.(true);
     this.fire = { stage: "breath", target, since: this.tickCount, diagonal: this.diagonalTo(target.getLocation()) };
     this.block();
   }
@@ -635,7 +639,11 @@ class Fight {
     const { target, diagonal } = special;
     const [first, second] = SIDES[diagonal];
     if (k === 1) for (const player of players) stun(player);
-    else if (k === fire.specialEvery) this.breath(first);
+    else if (k === fire.specialEvery) {
+      // The Flame Skipper counts a wall breathed, not a walk a phase change cut short.
+      this.life.fireBreaths += 1;
+      this.breath(first);
+    }
     else if (k === fire.specialEvery * 2) this.breath(second);
     else if (k === fire.specialEvery * 3) this.trackingFire(diagonal, target);
     // Combat swings the tick after it lets go, so it lets go a tick early.

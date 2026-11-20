@@ -166,7 +166,9 @@ test("fire: breathing it fails The Flame Skipper; its tracking flame or burn fai
   const npc = fakeHydra();
   const hydra = new Fight.Fight(fakeLair(player), npc);
   hydra.breatheFire(player);
-  assert.equal(rules['The Flame Skipper'](fightOf(npc, player)), false);
+  assert.equal(rules['The Flame Skipper'](fightOf(npc, player)), true, 'no wall yet');
+  for (let i = 0; i < 3; i++) { hydra.tickCount += 1; hydra.tickFire([player]); }
+  assert.equal(rules['The Flame Skipper'](fightOf(npc, player)), false, 'the first wall');
   assert.equal(rules["Don't Flame Me"](fightOf(npc, player)), true, 'not hit yet');
   for (let i = 0; i < 30; i++) { hydra.tickCount += 1; hydra.tickFire([player]); }
   assert.ok(player.damage.length > 0);

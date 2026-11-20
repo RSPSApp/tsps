@@ -176,7 +176,8 @@ test('issue 6284, the real combat cycle: from the door it attacks and steps in t
       npc.process();
       path.push(`${npc.getLocation().getX()},${npc.getLocation().getY()}`);
     }
-    // rsprox 1000143 t245-248: (1363,10264) with the first attack, then a tile a tick to 4 off.
+    // rsprox 1000143 t245-247: (1363,10264) with the first attack, then a tile a tick; the stop at 4
+    // off is the recordings' distance counts (docs/alchemical-hydra.md), the player moving at t247.
     assert.deepEqual(path.slice(0, 5), ['1363,10264', '1362,10263', '1361,10262', '1360,10261', '1360,10261']);
     assert.equal(attacks[0], 5001, 'it attacks on the tick it starts walking');
   } finally {
@@ -527,6 +528,34 @@ test('fire: the next attack 12 ticks after the last breath, the blockers gone 56
   assert.equal(npc.flags.has(core.NPC.BLOCKS_PLAYERS_FLAG), false);
   assert.equal(fight.firesBurning(), false);
   assert.equal(player.sent.filter((s) => s.loc === Common.ids.locs.nonblocking).length, 36);
+  fight.stop();
+});
+
+test('it holds still through a form change, ending the player\'s attack quietly; a walk cut short counts no wall', () => {
+  const player = fakePlayer();
+  let target = null;
+  player.getCombat = () => ({ getTarget: () => target, reset: () => { target = null; }, getHitQueue: () => ({ addPendingDamage: () => {} }) });
+  const npc = fakeHydra(549);
+  let resets = 0;
+  const queue = npc.getMovementQueue();
+  npc.getMovementQueue = () => ({ ...queue, reset: () => { resets += 1; } });
+  const fight = new Fight(fakeLair(player), npc);
+  fight.phase = 1;
+  target = npc;
+  tasks = [];
+  fight.checkPhase();
+  assert.equal(npc.scripted, true, 'held still');
+  assert.equal(resets, 1);
+  assert.equal(target, null, 'the player\'s attack ended');
+  assert.deepEqual(player.messages, [], 'no refusal without a click');
+  flush();
+  assert.equal(npc.scripted, false, 'free again with the next form');
+  fight.tickCount = fight.transitionUntil;
+  npc.hitpoints = 274;
+  fight.startFire(player);
+  fight.checkPhase();
+  assert.equal(require('../plugins/bosses/alchemicalhydra/Fight.AlchemicalHydra').lifeOf(npc).fireBreaths, 0, 'The Flame Skipper: no wall was breathed');
+  tasks = [];
   fight.stop();
 });
 

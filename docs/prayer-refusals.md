@@ -12,7 +12,7 @@ rsprox captures (rsprox.net and the user's own recordings, cited by id):
 |---|---|---|
 | Rigour not learnt | You need a `<col=000080>Prayer</col>` level of 74, a `<col=000080>Defence</col>` level of 70, and to have learnt the prayer in order to use `<col=000080>Rigour</col>`. | 227/1000311, 227/1000340, 237/01107 (Prayer 72, Defence 60) |
 | Augury not learnt | ... level of 77, a ... Defence ... level of 70, and to have learnt the prayer in order to use ... Augury ... | local 1001226 ticks 4308-4318 (Prayer 93) |
-| Preserve not learnt | You need a `<col=000080>Prayer</col>` level of 55 and to have learnt the prayer in order to use `<col=000080>Preserve</col>`. | local 1001221 (rev 230); 228/02246 and 02270 read "level of 55, and" |
+| Preserve not learnt | You need a `<col=000080>Prayer</col>` level of 55 and to have learnt the prayer in order to use `<col=000080>Preserve</col>`. | local 1001221 (rev 230); 227/1000262, 227/1000273, 228/02246 and 228/02270 read "level of 55, and" |
 | Learnt, below the Prayer level | You need a `<col=000080>Prayer</col>` level of 74 to use `<col=000080>Rigour</col>`. (77 / Augury the same) | 228/02246 (Prayer 70) |
 | Chivalry / Piety locked | see [knight-waves.md](knight-waves.md) | |
 

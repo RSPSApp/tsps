@@ -3552,8 +3552,9 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (!player || event.npcId !== NpcIdentifiers.BIG_SNAKE || stage(player) < STAGE_OPENING_COMPLETE
       || hasFlag(player, 128)) return;
     player.setAttribute(AWOWOGEI_STATE_ATTRIBUTE, awowogeiState(player) | AWOWOGEI_SNAKE_FOUND);
-    // A fresh corpse starts unstuffed even if an earlier one was partly filled.
-    player.setAttribute(AWOWOGEI_STUFFING_ATTRIBUTE, 0);
+    // A spare corpse must not erase filling already consumed by an owned corpse.
+    // Only replacement of a lost corpse starts preparation again.
+    if (!owns(player, ItemIdentifiers.SNAKE_CORPSE)) player.setAttribute(AWOWOGEI_STUFFING_ATTRIBUTE, 0);
     syncAwowogeiQuestVarbits(player);
     if (hasSpace(player)) player.getInventory().adds(ItemIdentifiers.SNAKE_CORPSE, 1);
     else {

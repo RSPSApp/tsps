@@ -108,3 +108,16 @@ test("a stage set from outside (::quest) brings the varbits to that stage, both 
   assert.equal(sent.get(VARBIT.STORE_WALL), 0, "a jump back clears what the earlier stage had not set");
   assert.equal(ObjectDefinition.forPlayer(ROOF_MULTILOC, p)?.id, 12782);
 });
+
+test("an old save at 390 that already crafted the rod (the old plugin stayed at 390) migrates to live's 400", (t) => {
+  const made = player(t, "inaidold390rod");
+  made.p.setAttribute(STAGE_ATTRIBUTE, 390);
+  made.p.getBank(0).add(new core.Item(core.ItemIdentifiers.SILVTHRILL_ROD_2, 1));
+  login(made.p);
+  assert.equal(quest().getStage(made.p), 400);
+
+  const mould = player(t, "inaidold390");
+  mould.p.setAttribute(STAGE_ATTRIBUTE, 390);
+  login(mould.p);
+  assert.equal(quest().getStage(mould.p), 390, "no rod yet: still the mould step");
+});

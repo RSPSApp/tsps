@@ -359,7 +359,7 @@ test("the crate accepts raw snails and cooked snail meat together, and fills to 
   assert.equal(amount(p, I.CRATE), 1, "still the 7630 crate");
 });
 
-test("a lost crate is replaced, empty, by Aurel's 'What should I do now?' and is not duplicated", (t) => {
+test("a lost crate is replaced by Aurel's 'What should I do now?', its packed stock kept, and is not duplicated", (t) => {
   const { p, spawn } = actor(t, STAGE.CRATE_GIVEN, BURGH_STORE, { vars: { [VARBIT.CRATE_AXES]: 10 } });
   p.setAttribute("in-aid-of-the-myreque:crate-food", 1);
   const aurel = spawn(N.AUREL, [3516, 3238, 0]);
@@ -367,8 +367,8 @@ test("a lost crate is replaced, empty, by Aurel's 'What should I do now?' and is
   until(p, "What should I do now?");
   choose(p, "What should I do now?");
   finish(p);
-  assert.equal(amount(p, I.CRATE), 1, "an empty crate again");
-  assert.equal(varbit(p, VARBIT.CRATE_AXES), 0, "the lost crate's stock is gone with it");
+  assert.equal(amount(p, I.CRATE), 1, "a crate again");
+  assert.equal(varbit(p, VARBIT.CRATE_AXES), 10, "what was packed stays packed (varbits 1991-1993, not the item)");
   assert.equal(stageOf(p), STAGE.CRATE_GIVEN, "the stage does not change");
   p.getDialogueManager().reset();
   talk(p, aurel);
@@ -376,6 +376,14 @@ test("a lost crate is replaced, empty, by Aurel's 'What should I do now?' and is
   choose(p, "What should I do now?");
   finish(p);
   assert.equal(amount(p, I.CRATE), 1, "a held crate is not duplicated");
+  p.getInventory().deleteNumber(I.CRATE, 1);
+  p.getBank(0).add(new core.Item(I.CRATE, 1));
+  p.getDialogueManager().reset();
+  talk(p, aurel);
+  until(p, "What should I do now?");
+  choose(p, "What should I do now?");
+  finish(p);
+  assert.equal(amount(p, I.CRATE), 0, "a banked crate is not duplicated either");
 });
 
 // ---------------------------------------------------------------------------

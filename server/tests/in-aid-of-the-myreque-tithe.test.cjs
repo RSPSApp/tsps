@@ -439,3 +439,25 @@ test("a logout between the fire (220) and the castle scene leaves the tithe set 
   assert.equal(saved(player, VARBIT.VAMPYRE_AGGRESSION), 1);
   assert.deepEqual(fightNpcs(player), []);
 });
+
+test("a fight re-challenged after a mid-fight save (250, 1999 = 2) starts from nothing", (t) => {
+  const f = actor(t, STAGE.VELIAF_ARRIVED, 3514, 3240, {
+    [VARBIT.GADDERANKS_CHAT]: 1, [VARBIT.JUVINATE_CHAT]: 1, [VARBIT.VILLAGER_CHAT]: 1, [VARBIT.JUVINATE_DEATHS]: 2,
+  });
+  const gadderanks = f.spawn(6218, 3515, 3241);
+  assert.equal(talk(f.player, gadderanks), true);
+  continueUntilHeld(f.player);
+  for (let i = 0; i < 12 && fightNpcs(f.player).length === 0; i++) { cont(f.player); tick(1); }
+  tick(2);
+  assert.ok(fightNpcs(f.player).length > 0, "the fight copy");
+  assert.equal(saved(f.player, VARBIT.JUVINATE_DEATHS), 0);
+  assert.equal(stageOf(f.player), STAGE.FIGHT);
+});
+
+test("a login at 220 with no castle scene playing (a save mid-scene) sets the tithe up", (t) => {
+  const { player } = actor(t, STAGE.FURNACE_LIT, 3526, 3209, { [VARBIT.FURNACE]: 3 });
+  PM.emitPlayerLogin({ player, username: player.getUsername() });
+  assert.equal(stageOf(player), STAGE.GADDERANKS);
+  assert.equal(saved(player, VARBIT.BLOOD_TITHE), 1);
+  assert.equal(saved(player, VARBIT.VAMPYRE_AGGRESSION), 1);
+});

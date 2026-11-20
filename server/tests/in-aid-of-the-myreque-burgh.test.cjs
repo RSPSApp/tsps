@@ -542,3 +542,12 @@ test("the rubble pile's Search: the plaster and scroll come back (full bag: thro
   assert.equal(lastText(seen, OBJBOX), "You find a scroll with some interesting writing on it.");
   assert.equal(p.getInventory().getAmount(I.DUSTY_SCROLL), 1);
 });
+
+test("the gate's step over the inviswall gives collision back as soon as the opener is across, not on a timer", (t) => {
+  const { p } = player(t, 60, {}, { x: 3484, y: 3244, z: 0 });
+  click(p, GATE_R, "Open", { x: 3484, y: 3244, z: 0 });
+  assert.ok(p.hasFlag("movement:ignore-clipping"));
+  p.setLocation(new core.Location(3484, 3243, 0)); // across (live t445 -> t446)
+  tick(1);
+  assert.equal(p.hasFlag("movement:ignore-clipping"), false, "collision back on arrival");
+});

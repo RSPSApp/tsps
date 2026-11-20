@@ -295,7 +295,7 @@ and its units in `server/plugins/quests/inaid/`.
 - Aurel's Trade from 110-169: his line q11mmS as an NPC chat (not captured). From 170 it falls through to the generic shop handling.
 - Partial crate Search text (eNm9WM blanks filled with the remaining counts; the food named as asked), "You need another N ... to fill this crate.", "You add a ... to the crate.", and "You've already filled the crate with ...": transcript wording, not captured.
 - A full bag when Aurel hands out the crate: "You don't have enough inventory space." and the stage stays at 160.
-- A lost crate: asking Aurel again at 165 (IWXcv-) gives a new, emptied crate.
+- A lost crate: asking Aurel again at 165 (IWXcv-) gives a new crate when the player has none anywhere; what was packed stays packed (varbits 1991-1993).
 - Aurel's greetings: tg-CGu at 160, otUEZ9 at 165, _npW-_ at 140-159, 4l7-ER from 170. "I'd like to help fix up the town." is hidden from 160 (captured at 160 only).
 - Citizens handled 110-219 by name: Florin, Vasile, Razvan, Luminata, Elisabeta, Teodor, Gabriela, Cornelius, Luscion, Sergiu, Sorin, Ileana, Radu, Valeria, Grigore, Emilia, Simona, Calin, Nicoleta, Mihail. The variant is chosen by stage: after-inn below 140, store citizens 140-169, bank citizens 170-199, furnace citizens 200-219.
 - Inspecting the fuelled furnace (1980=2) falls through to Tithe.
@@ -303,6 +303,7 @@ and its units in `server/plugins/quests/inaid/`.
 
 ### Tithe
 
+- Ours: stage 220 with no castle scene playing (a logout before it opened, or a save taken during it) resolves as a scene cut short: 230, varbit 1981 = 1 and 15488 = 1, at logout or the next login.
 - Ours: Veliaf's shout chance (1 in 4 per 4-tick cycle; the capture shows 6 in ~24 cycles), picked at random from the five captured lines.
 - Ours: Veliaf's hitpoints are locked (he takes hits, never falls); he targets the first living juvinate.
 - Ours: leaving the copy resets 1999 to 0 and a 250 back to 240; talking to Gadderanks (4483) at 240-259 replays the challenge into a new copy; at 260-279 it reopens the copy with the wounded Gadderanks and Veliaf (no fades).
@@ -315,6 +316,7 @@ and its units in `server/plugins/quests/inaid/`.
 
 ### Escort
 
+- Ours: a won ambush cut short by a logout before Ivan's arrival is saved outside Paterdomus (3432,3484) and counts as Ivan delivered (315), his thanks unplayed.
 - Route 1 (Canifis) is not captured: Ours: its message follows route 2's ("You decide to take route 1."), 2001=2, the same swamp copy with two level 75 juvinates 4442 (Wiki: two level 75), escape at 2 deaths, seqs 3559/3560.
 - Ivan's hitpoints/heal: the capture shows none. Ours: eats below half his max HP, each bite heals a quarter of max; at 0 HP he leaves like the no-food case. (Ivan 4441 currently gets the engine's default 40 HP.)
 - Which juvinates engage: Ours: one on the player, one on Ivan, the others wander and take a fallen one's place.

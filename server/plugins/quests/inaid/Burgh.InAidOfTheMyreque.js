@@ -281,13 +281,15 @@ module.exports = function attachBurgh(context) {
       const florin = florinNear(player);
       if (!florin) return;
       throwFood(player, florin);
-      watch.wait = PELT.every - 1;
     };
     core.TaskManager.submit(task);
   }
 
   /** One throw (t270): Florin's side, the projectile, the splash and sounds, the 0 hit when it lands. */
   function throwFood(player, florin) {
+    // Any throw (the watcher's or the locked gate's) starts the next 10-tick wait (t270, t280, t290).
+    const watch = watchers.get(player);
+    if (watch) watch.wait = PELT.every - 1;
     const from = florin.getLocation(), to = player.getLocation().clone();
     const distance = Math.max(Math.abs(from.getX() - to.getX()), Math.abs(from.getY() - to.getY()));
     const end = PELT.base + PELT.perTile * distance;
@@ -350,16 +352,39 @@ module.exports = function attachBurgh(context) {
     for (const leaf of add) core.ObjectManager.register(wallLoc(leaf), true);
   }
 
-  /** The opener's one step across, over the inviswall (as Doors' walk-over gates). */
+  /** Players stepping across the gate: whether they had the clipping flag before (restored on arrival). */
+  const steppingThrough = new WeakMap();
+
+  function endStep(player) {
+    if (!steppingThrough.has(player)) return;
+    if (!steppingThrough.get(player)) player.removeFlag?.(IGNORE_CLIPPING_FLAG);
+    steppingThrough.delete(player);
+  }
+
+  /**
+   * The opener's one step across, over the inviswall. As Doors' walkOverGate, collision comes back as
+   * soon as the step is done (or stops), not on a timer, so no other walk is made without it.
+   */
   function stepThroughGate(player, x) {
+    endStep(player);
     const here = player.getLocation();
     const destination = new Location(x, here.getY() >= GATE_TILES.y ? GATE_TILES.y - 1 : GATE_TILES.y, 0);
-    const hadFlag = player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true;
+    steppingThrough.set(player, player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true);
     player.setFlag?.(IGNORE_CLIPPING_FLAG, true);
     const queue = player.getMovementQueue();
     queue.reset();
     queue.addSteps(destination);
-    common.later(player, GATE_OPEN_TICKS, (p) => { if (!hadFlag) p.removeFlag?.(IGNORE_CLIPPING_FLAG); });
+    let ticks = GATE_OPEN_TICKS + 1;
+    const task = new core.Task(1, false);
+    task.execute = () => {
+      const now = player.getLocation();
+      const across = now.getX() === destination.getX() && now.getY() === destination.getY();
+      if (across || --ticks <= 0 || (queue.size?.() ?? 0) === 0 || player.isRegistered?.() === false) {
+        task.stop();
+        endStep(player);
+      }
+    };
+    core.TaskManager.submit(task);
   }
 
   function openGate(player, x) {
@@ -668,14 +693,20 @@ module.exports = function attachBurgh(context) {
     const start = player.getLocation().clone();
     common.message(player, LIVE_TEXT.swing);
     player.performAnimation(pickaxe.animation);
+    // Live swings again the tick before each step (t819 swing, t821 / t824 / t827 swings, steps t822 / t825 / t828).
+    const swingThenStep = (p) => {
+      common.later(p, MINE_STEP_TICKS - 1, (q) => {
+        if (stillActing(q, token, start) && Scenes.get(q) === scene && entry.object) q.performAnimation(pickaxe.animation);
+      });
+      common.later(p, MINE_STEP_TICKS, next);
+    };
     const next = (p) => {
       if (!stillActing(p, token, start) || Scenes.get(p) !== scene || !entry.object) return;
       setRubbleStep(scene, entry, entry.step + 1);
       common.sound(p, MINE_ORE);
       p.getSkillManager().addExperiences(Skill.MINING, RUBBLE_MINING_XP);
       if (entry.step < RUBBLE_STEPS.length - 1) {
-        p.performAnimation(pickaxe.animation);
-        common.later(p, MINE_STEP_TICKS, next);
+        swingThenStep(p);
         return;
       }
       p.performAnimation(core.Animation.DEFAULT_RESET_ANIMATION ?? new core.Animation(-1));
@@ -686,7 +717,7 @@ module.exports = function attachBurgh(context) {
         common.message(p, TEXT.mined());
       }
     };
-    common.later(player, MINE_STEP_TICKS, next);
+    swingThenStep(player);
     return true;
   }
 

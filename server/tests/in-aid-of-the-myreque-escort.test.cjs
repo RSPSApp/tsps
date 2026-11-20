@@ -405,9 +405,10 @@ test("ambush with no food: deaths count in 2000 with a mist each; at two Ivan gi
   ticks(f, 10);
   assert.equal(ownedNpcs(f, 4435).length, 0, "the mist fades");
   kill(second);
-  assert.equal(vb(f, VB.DEATHS), 2);
-  assert.equal(ownedNpcs(f, 4441).length, 0, "Ivan leaves");
+  assert.equal(vb(f, VB.DEATHS), 2, "2000 = 2 (t3624)");
+  assert.equal(ownedNpcs(f, 4441).length, 1, "Ivan is still there on the death's tick");
   tick(f);
+  assert.equal(ownedNpcs(f, 4441).length, 0, "Ivan leaves the tick after (t3625)");
   assert.ok(shown(f).text.startsWith("I'm getting badly beaten up here"));
   assert.equal(shown(f).npcId, 4440);
   assert.equal(stage(f), 310);
@@ -559,4 +560,17 @@ test("the arrival Ivan outside Paterdomus goes with a logout; a walked-off thank
   assert.ok(shown(f).text.startsWith("Many thanks for bringing me safely to the temple."), "his thanks again, not 'Excuse me.'");
   PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
   assert.equal(ivan.isRegistered(), false, "no orphaned owner-only Ivan");
+});
+
+test("a won ambush survives a logout before Ivan's arrival: saved outside Paterdomus, Ivan delivered", async (t) => {
+  const f = actor(t, { stage: 310, vars: { [VB.FOOD]: 8 } });
+  await startRoute2(f);
+  ticks(f, 2);
+  for (const juvinate of juvinates(f).slice(0, 3)) kill(juvinate);
+  tick(f);
+  assert.equal(shown(f).text, "You manage to escape from the rest of the vampyre juvinates and continue on your journey.");
+  f.player.onLogout(); // the production logout callback
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [3432, 3484], "not back in Mort Myre");
+  assert.equal(stage(f), 315);
+  assert.equal(vb(f, VB.HIDEOUT), 1);
 });

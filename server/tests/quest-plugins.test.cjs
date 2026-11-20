@@ -6345,7 +6345,8 @@ test('Blood Moon stage 90 Veliaf dialogue takes precedence over completed Myrequ
   }
   assert.deepEqual(results, [false, false, true],
     'Sins and the inactive refinery defer, then Blood Moon claims Veliaf before completed In Aid');
-  assert.equal(registered.at(-1)(event), true, 'the completed In Aid handler would otherwise take the same talk');
+  // Completed In Aid of the Myreque no longer claims the Canifis hideout's Veliaf (5048): its post-quest
+  // talk is the Burgh hideout's Veliaf (9489), as live has him after the quest.
   assert.ok(started.length > 0);
 });
 

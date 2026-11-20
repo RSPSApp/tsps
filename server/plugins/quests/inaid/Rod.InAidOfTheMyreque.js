@@ -33,7 +33,7 @@ module.exports = function attachRod(context) {
   const TOMB_BOARDS = 12772; // burgh_ivandis_tombdoor_board_multiloc (1983: 0 Wooden boards 12773, 1 none)
   const TOMB_ENTRANCE = O.CAVE_ENTRANCE_47; // 12770 burgh_ivandis_tomb_entrance
   const COFFIN = O.COFFIN_16; // 12802 burgh_ancient_coffin
-  const SALVE_WELL = 3485; // priestperil_well under Paterdomus
+  const SALVE_WELL = O.WELL_6; // 3485 priestperil_well under Paterdomus
 
   const SLEEPING_SEVEN = I.THE_SLEEPING_SEVEN; // 7633
   const HISTORIES = I.HISTORIES_OF_THE_HALLOWLAND; // 7634
@@ -44,14 +44,14 @@ module.exports = function attachRod(context) {
   const ENCHANTED_ROD = I.SILVTHRILL_ROD_3; // 7638 burgh_rod_command2
   const ROD_OF_IVANDIS = I.ROD_OF_IVANDIS_10_; // 7639 burgh_rod_command_final_10
   /** The Rod of Ivandis at any charge (10 down to 1). */
-  const ROD_OF_IVANDIS_IDS = [7639, 7640, 7641, 7642, 7643, 7644, 7645, 7646, 7647, 7648];
+  const ROD_OF_IVANDIS_IDS = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((charges) => I[`ROD_OF_IVANDIS_${charges}_`]); // 7639-7648
   const ROPE = I.ROPE; // 954
 
   /** myq5_veliaf_burgh_hideout 8277 shows as this one (varbit 10352 = 0). */
   const VELIAF = N.VELIAF_HURTZ_3; // 9489
   /** The Burgh hideout's Radigad 8283 and Polmafi 8286 (varbit 7255). */
-  const RADIGAD = 9551;
-  const POLMAFI = 9554;
+  const RADIGAD = N.RADIGAD_PONFIT_2; // 9551
+  const POLMAFI = N.POLMAFI_FERDYGRIS_2; // 9554
 
   // --- Live's animations, spotanims, sounds and timings (capture)
 

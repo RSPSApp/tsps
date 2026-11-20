@@ -480,11 +480,13 @@ module.exports = function attachStore(context) {
     }
   }
 
-  /** "Asking again" with no crate on you: Aurel's crate again, emptied (Ours: no capture of a lost crate). */
+  /**
+   * "Asking again" with no crate anywhere (Ours: no capture of a lost crate): Aurel's crate again. What
+   * was packed stays packed, since it lives in varbits 1991-1993, not in the item; a banked crate is kept.
+   */
   function onChosen({ player, stepId }) {
-    if (stepId !== "IWXcv-" || !player || stage(player) !== STAGE.CRATE_GIVEN || common.held(player, CRATE)) return;
-    if (common.freeSlots(player) < 1) return;
-    for (const part of crateParts(player)) state.set(player, part.varbit, 0);
+    if (stepId !== "IWXcv-" || !player || stage(player) !== STAGE.CRATE_GIVEN) return;
+    if (api.core.Bank.owns(player, CRATE) || common.freeSlots(player) < 1) return;
     player.getInventory().add(new Item(CRATE, 1));
   }
 

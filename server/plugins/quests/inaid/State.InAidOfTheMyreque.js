@@ -235,7 +235,9 @@ function createState(api, getQuest) {
     const old = stage(player);
     if (old <= 0) return false;
     const bits = Number(player.getAttribute(LEGACY.bits)) || 0;
-    const mapped = migratedStage(old, bits);
+    let mapped = migratedStage(old, bits);
+    // The old plugin stayed at 390 once the rod was crafted; live's 400 is "rod made".
+    if (mapped === STAGE.MOULD && api.core.Bank.owns(player, api.core.ItemIdentifiers.SILVTHRILL_ROD_2)) mapped = STAGE.ROD_MADE;
     const next = { ...impliedVarbits(mapped), ...vars(player) };
     if (old === 210) next[VARBIT.FURNACE] = 2;
     if (old >= 290 && mapped < STAGE.HIDEOUT_TALK) next[VARBIT.BLOOD_TITHE] = 3;

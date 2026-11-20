@@ -87,6 +87,7 @@ const FIGHT = Object.freeze({
   door: { x: 3514, y: 3238, type: 0, face: 1 },
   blocker: { x: 3514, y: 3239, type: 0, face: 0 },
   veliafSpawn: [3514, 3237], veliafFace: [3514, 3238], // north, t2420
+  veliafWalk: [3514, 3238], // t2421: one step north as the door opens
   veliafSteps: [[3514, 3239], [3514, 3240]], // t2422, t2424
 });
 
@@ -349,6 +350,12 @@ module.exports = function attachTithe(context) {
 
   /** `aftermath`: Ours, a copy re-entered after leaving at 260 holds the wounded Gadderanks and Veliaf only. */
   function openFight(player, aftermath) {
+    if (!aftermath) {
+      // A new fight starts from nothing, even after a save taken mid-fight (an autosave or a
+      // shutdown, which don't run the logout that resets it).
+      if (varbit(player, VARBIT.JUVINATE_DEATHS)) state.set(player, VARBIT.JUVINATE_DEATHS, 0);
+      if (stage(player) === STAGE.VELIAF_ARRIVED) state.setStage(player, STAGE.FIGHT);
+    }
     const scene = Scenes.open(player, "store-fight", FIGHT.bounds, {
       multi: true, musicTrack: MUSIC_VAMPYRE_ASSAULT, canTeleport: () => null, npcAggression: () => null,
     }, { instance: { sourceChunk: FIGHT.sourceChunk }, at: FIGHT.at, exit: FIGHT.exit });
@@ -452,6 +459,7 @@ module.exports = function attachTithe(context) {
     veliaf.setScriptedMovement?.(true);
     veliaf.setHitpointsLocked?.(true); // Ours: he takes hits but never falls
     Scenes.later(scene, 1, () => { // t2421
+      Scenes.walk(veliaf, [...FIGHT.veliafWalk, 0]);
       veliaf.forceChat(veliafArrivalLine());
       removeLoc(fight, fight.door);
       removeLoc(fight, fight.blocker);
@@ -813,10 +821,18 @@ module.exports = function attachTithe(context) {
     if (!player) return;
     Scenes.cancel(player);
     lighting.delete(player);
-    if (stage(player) === STAGE.FURNACE_LIT && !Scenes.get(player)) {
-      startTithe(player);
-      state.set(player, VARBIT.VAMPYRE_AGGRESSION, 1);
-    }
+    resolveUnplayedCastle(player);
+  }
+
+  /** 220 with no castle scene playing (a save taken mid-scene, a logout before it opened): as a scene cut short. */
+  function resolveUnplayedCastle(player) {
+    if (stage(player) !== STAGE.FURNACE_LIT || Scenes.get(player)) return;
+    startTithe(player);
+    state.set(player, VARBIT.VAMPYRE_AGGRESSION, 1);
+  }
+
+  function handleLogin({ player }) {
+    if (player) resolveUnplayedCastle(player);
   }
 
   // ---------------------------------------------------------------------------
@@ -825,6 +841,7 @@ module.exports = function attachTithe(context) {
 
   api.onItemOnObject("Tinderbox", "Repaired furnace", useTinderboxOnFurnace);
   api.onPlayerLogout(handleLogout);
+  api.onPlayerLogin(handleLogin);
   api.onObjectInteraction("Repaired furnace", { Inspect: inspectFuelledFurnace });
   api.onObjectInteraction("Door", { Escape: escapeDoor, "Quick-escape": escapeDoor });
   api.onNpcInteraction("Gadderanks", { "Talk-to": talkGadderanks });

@@ -610,13 +610,14 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     return x >= 3560 && x <= 3690 && y >= 3150 && y <= 3405;
   }
 
-  /** In Aid of the Myreque must be complete before this quest can start. */
+  /** Whether this Veliaf talk follows In Aid of the Myreque's completion scroll straight on (its Rod unit answers). */
   function continuingFromInAid(player) {
     const request = { player, continuing: false };
     api.emitCustomEvent("in-aid-of-the-myreque:continuing", request);
     return request.continuing === true;
   }
 
+  /** In Aid of the Myreque must be complete before this quest can start. */
   function inAidComplete(player) {
     const request = { player, key: "in_aid_of_the_myreque", complete: null };
     api.emitCustomEvent("quest:is-complete", request);

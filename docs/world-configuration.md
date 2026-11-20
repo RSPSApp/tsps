@@ -607,6 +607,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Grouping` | Grouping | interface | yes | Player groups of up to five with their own chat-channel, and the Grouping tab's activity chat-channels: ::group to form, invite, accept, promote, kick, leave or disband, kept across logins. A Group Ironman's group takes only Group Ironmen and keeps leavers for seven days. |
 | `IgnoreList` | IgnoreList | interface | yes | Reserved for the ignore list. Nothing is attached yet because the client does not send add or remove actions. |
 | `ItemsKeptOnDeath` | ItemsKeptOnDeath | interface | yes | Items Kept on Death screen showing what you would keep or lose, with skull, Protect Item, PvP and Wilderness level toggles. |
+| `KillLog` | KillLog | interface | yes | The Boss Kill Log: each boss's kill count and the player's resettable streak, opened from the ring of wealth and the POH adventure log. (members only) |
 | `LoginTips` | LoginTips | interface | yes | Sends a 'Did you know?' tip after the login greeting, following the All Settings row that turns them off. |
 | `MaxHitThreshold` | MaxHitThreshold | interface | yes | Settings option for the lowest damage that shows a max hit hitsplat. |
 | `MaxHitsInterface` | MaxHitsInterface | interface | yes | Adds the ::maxhits command, an interface of live melee, ranged and per-spell max hits for the player's current gear and levels. |

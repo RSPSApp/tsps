@@ -57,7 +57,10 @@ export function processConstructionKeyboardInput(
     return false;
 }
 
-/** Varc MESLAYERMODE (VarClientID): the chatbox input mode, 0 when no prompt is open. */
+/**
+ * Varc MESLAYERMODE (VarClientID): the chatbox input mode, 0 when no prompt is open. Every prompt
+ * mode is positive; before any prompt has been opened the varc is unset, which reads -1 here.
+ */
 const VARC_MESLAYERMODE = 5;
 
 export function processWidgetKeyboardInput(
@@ -80,8 +83,9 @@ export function processWidgetKeyboardInput(
             deps.getPendingTradeQuantityAction() !== null
         );
         // A chatbox prompt the server opened (Enter amount, Enter name, a text answer: VarC
-        // MESLAYERMODE is not 0) takes the keys, not a custom window's search box behind it.
-        const chatboxPromptOpen = (deps.getVarManager().getVarcInt(VARC_MESLAYERMODE) | 0) !== 0;
+        // MESLAYERMODE is set to a mode) takes the keys, not a custom window's search box behind it.
+        // Unset (-1 here, until a prompt first opens) is no prompt: a search box takes them.
+        const chatboxPromptOpen = (deps.getVarManager().getVarcInt(VARC_MESLAYERMODE) | 0) > 0;
         const customInterfaceSearchHandled =
             !dialogActive && !chatboxPromptOpen &&
             deps.getCustomInterfaces().handleSearchKeyEvents(input.keyEvents);

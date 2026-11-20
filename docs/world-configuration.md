@@ -934,7 +934,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `VikingShouters` | VikingShouters | npcs | yes | The Jatizso and Neitiznot watchtower guards chant their islands' names, and Watch-shouting shows their recorded insult round with its camera. (members only) |
 | `WizardJalarast` | WizardJalarast | npcs | yes | Wizard Jalarast at the Wizards' Tower makes splitbark armour: Trade opens the purchase menu, and each piece takes its bark, fine cloth and coins. (members only) |
 | `Wyrms` | Wyrms | npcs | yes | Wyrm and wyrmling combat: melee when the target is adjacent, magic from range, with separate max hits per style. (members only) |
-| `Wyson` | Wyson | npcs | yes | Wyson the gardener sells woad leaves through his dialogue: 15 coins for one leaf, 20 coins for two. |
+| `Wyson` | Wyson | npcs | yes | Wyson the gardener sells woad leaves through his dialogue (15 coins for one leaf, 20 coins for two) and trades mole claws and skins for bird nests. |
 | `Zahur` | Zahur | npcs | yes | Zahur in Nardah makes unfinished potions from clean herbs and vials of water or blood for 200 coins each, after the hard Desert Diary or with a Herblore cape. (members only) |
 | `Zogres` | Zogres | npcs | yes | Zogres, skogres and Slash Bash take a quarter of most damage, half from Crumble Undead and full from brutal arrows. (members only) |
 | `ZombiePirates` | ZombiePirates | npcs | yes | Picks the Medium Wilderness Diary drop table for Chaos Temple zombie pirates once the player has completed that diary. (members only) |

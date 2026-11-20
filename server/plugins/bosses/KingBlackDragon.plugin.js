@@ -1,10 +1,17 @@
-// Lava Maze ladder (3017, 3849) leads straight into the lair; the lair's lever (2271, 4680)
-// sends the player back to the tile north of that ladder.
-const KBD_LADDER_DOWN_OBJECT_ID = 18987;
-const KBD_LAIR_LEVER_OBJECT_ID = 1817;
+// The way in (Wiki: King Black Dragon Lair, Lava Maze Dungeon): the Lava Maze ladder (3017, 3849)
+// leads down to a small poison spider room, whose lever (3067, 10253) teleports into the lair. The
+// lair's lever (2271, 4680) teleports back beside the spider room's lever, and that room's ladder
+// (3069, 10256) climbs back up to the Lava Maze. Landing tiles as the Shortest Path plugin's
+// transports record them; no rsprox capture shows these locs (docs/king-black-dragon.md).
+const KBD_LADDER_DOWN_OBJECT_ID = 18987; // wildymirrorladdertop1
+const KBD_LADDER_UP_OBJECT_ID = 18988; // wildymirrorladder1
+const KBD_ENTRANCE_LEVER_OBJECT_ID = 1816; // dragonkinginlever
+const KBD_LAIR_LEVER_OBJECT_ID = 1817; // dragonkingoutlever
 
 const KING_BLACK_DRAGON_LAIR = [2271, 4680, 0];
-const KING_BLACK_DRAGON_LADDER = [3017, 3850, 0];
+const SPIDER_ROOM_LADDER_LANDING = [3069, 10255, 0];
+const SPIDER_ROOM_LEVER_LANDING = [3067, 10254, 0];
+const LAVA_MAZE_LADDER_LANDING = [3016, 3849, 0];
 
 const { DragonfireProtectionTier, emitDragonfireBreath, getDragonfireProtectionTier, sendDragonfireMessages } = require("../combat/DragonfireProtection");
 
@@ -133,7 +140,7 @@ function startEcho(request) {
       isMulti() { return true; }
       postLeave(mobile, logout) {
         if (mobile === player) {
-          if (logout) player.setLocation(new Location(...KING_BLACK_DRAGON_LADDER));
+          if (logout) player.setLocation(new Location(...SPIDER_ROOM_LEVER_LANDING));
           endEcho(session);
         }
         super.postLeave(mobile, logout);
@@ -177,7 +184,7 @@ function echoDeath({ npc }) {
 }
 function echoLogout({ player }) {
   const session = echoSessions.get(player);
-  if (session) player.setLocation?.(new Location(...KING_BLACK_DRAGON_LADDER));
+  if (session) player.setLocation?.(new Location(...SPIDER_ROOM_LEVER_LANDING));
   endEcho(session);
 }
 function echoPlayerDeath({ player }) { endEcho(echoSessions.get(player)); }
@@ -185,30 +192,44 @@ function echoShutdown() { for (const session of [...echoSessions.values()]) echo
 function echoLogin({ player }) {
   if (!player.getAttribute(ECHO_INSIDE_ATTRIBUTE)) return;
   player.setAttribute(ECHO_INSIDE_ATTRIBUTE, null);
-  player.moveTo(new Location(...KING_BLACK_DRAGON_LADDER));
+  player.moveTo(new Location(...SPIDER_ROOM_LEVER_LANDING));
 }
 
-/** Down to the lair; a league character carrying the echo orb is asked first ("echo-boss:entry"). */
-function climbDownToLair({ player }) {
-  const entry = { player, boss: "king-black-dragon", enter: () => climbDown(player), handled: false };
+/** The Lava Maze ladder: down to the spider room, not into the lair. */
+function climbDownToSpiderRoom({ player }) {
+  api.emitCustomEvent("ladders:climbDown", { player, destination: new Location(...SPIDER_ROOM_LADDER_LANDING) });
+  return true;
+}
+
+/** The spider room's ladder: back up to the Lava Maze. */
+function climbUpToLavaMaze({ player }) {
+  api.emitCustomEvent("ladders:climbUp", { player, destination: new Location(...LAVA_MAZE_LADDER_LANDING) });
+  return true;
+}
+
+/**
+ * The spider room's lever into the lair; a league character carrying the echo orb is asked first
+ * ("echo-boss:entry"). Its Commune and Private options are not implemented.
+ */
+function pullEntranceLever({ player }) {
+  const entry = { player, boss: "king-black-dragon", enter: () => teleportIntoLair(player), handled: false };
   api.emitCustomEvent("echo-boss:entry", entry);
   if (!entry.handled) entry.enter();
   return true;
 }
 
-function climbDown(player) {
-  const [x, y, z] = KING_BLACK_DRAGON_LAIR;
-  api.emitCustomEvent("ladders:climbDown", {
+function teleportIntoLair(player) {
+  api.emitCustomEvent("lever:teleport", {
     player,
-    destination: new Location(x, y, z),
-    // The easy Wilderness Diary's "Enter the King Black Dragon's lair.", once the climb has landed.
+    destination: new Location(...KING_BLACK_DRAGON_LAIR),
+    // The easy Wilderness Diary's "Enter the King Black Dragon's lair.", once the teleport has landed.
     onArrival: () => api.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "enter-the-king-black-dragon-s-lair" }),
   });
 }
 
+/** The lair's lever, back out beside the spider room's lever. */
 function pullLairLever({ player }) {
-  const [x, y, z] = KING_BLACK_DRAGON_LADDER;
-  api.emitCustomEvent("lever:teleport", { player, destination: new Location(x, y, z) });
+  api.emitCustomEvent("lever:teleport", { player, destination: new Location(...SPIDER_ROOM_LEVER_LANDING) });
   return true;
 }
 
@@ -349,7 +370,7 @@ function combatClass(pluginApi) {
 
 module.exports = {
   name: "KingBlackDragon",
-  description: "The King Black Dragon: the Lava Maze ladder and lair lever, and the fight with dragonfire checked against antifire protection.",
+  description: "The King Black Dragon: the Lava Maze ladder, the spider room's lever into the lair and the lair's lever out, and the fight with dragonfire checked against antifire protection.",
   members: true,
   register(pluginApi) {
     const { NpcIdentifiers } = pluginApi.core;
@@ -357,7 +378,9 @@ module.exports = {
       [NpcIdentifiers.KING_BLACK_DRAGON, NpcIdentifiers.KING_BLACK_DRAGON_2, NpcIdentifiers.KING_BLACK_DRAGON_3],
       combatClass(pluginApi),
     );
-    pluginApi.onObjectFirstClick(KBD_LADDER_DOWN_OBJECT_ID, climbDownToLair);
+    pluginApi.onObjectFirstClick(KBD_LADDER_DOWN_OBJECT_ID, climbDownToSpiderRoom);
+    pluginApi.onObjectFirstClick(KBD_LADDER_UP_OBJECT_ID, climbUpToLavaMaze);
+    pluginApi.onObjectFirstClick(KBD_ENTRANCE_LEVER_OBJECT_ID, pullEntranceLever);
     pluginApi.onObjectFirstClick(KBD_LAIR_LEVER_OBJECT_ID, pullLairLever);
     pluginApi.persistAttribute(ECHO_INSIDE_ATTRIBUTE);
     pluginApi.onCustomEvent("echo-boss:start", startEcho);

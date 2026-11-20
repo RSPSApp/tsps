@@ -1465,7 +1465,7 @@ Each boss's own entrance emits `echo-boss:entry` `{ player, boss, enter, handled
 it lets the player in: the Iron Winch's Turn (after its task check), the Queen's roped tunnel,
 the Kings' ladder (Standard and Slayer), the smoke devil's crevice going in, the Roof Entrance
 (after its key and task checks), the Corrupted Gauntlet's entrance (before its checks, as live
-asks with a full pack), the King Black Dragon's ladder down, Hespori's cave in the Farming Guild
+asks with a full pack), the King Black Dragon's lever in the spider room, Hespori's cave in the Farming Guild
 and Amoxliatl's door. A league character carrying that boss's orb (Wiki: in the inventory; not
 used up) gets the captured menu, "Fight the Echo of the Thermonuclear Smoke Devil?" /
 "Fight the Echo of the Hunllef?" with "Yes." and "No.": No goes in as without the orb, Yes calls

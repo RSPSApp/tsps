@@ -517,7 +517,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Hueycoatl` | Hueycoatl | bosses | yes | The Hueycoatl in the Darkfrost, Varlamore: a public or private fight with five body segments, Rain Fire, pillars, the half-health shield and a final phase. (members only) |
 | `KalphiteQueen` | KalphiteQueen | bosses | yes | The Kalphite Queen fight, run entirely from its encounter unit. (members only) |
 | `KillCountMessages` | KillCountMessages | bosses | yes | Tells the kill count on a kill for bosses whose count is kept only by Combat Achievements. (members only) |
-| `KingBlackDragon` | KingBlackDragon | bosses | yes | The King Black Dragon: the Lava Maze ladder and lair lever, and the fight with dragonfire checked against antifire protection. (members only) |
+| `KingBlackDragon` | KingBlackDragon | bosses | yes | The King Black Dragon: the Lava Maze ladder, the spider room's lever into the lair and the lair's lever out, and the fight with dragonfire checked against antifire protection. (members only) |
 | `Kraken` | Kraken | bosses | yes | The Kraken and cave krakens in Kraken Cove: disturb the whirlpool to surface them, four tentacles beside the boss, and Magic-only damage. (members only) |
 | `Leviathan` | Leviathan | bosses | yes | The Leviathan: its site, the fight and the rewards. (members only) |
 | `MadAngel` | MadAngel | bosses | yes | The Mad Angel in Ardeaglais on Wyrmscraig: the cathedral doors and pew, a private cathedral, the fight and the kill. (members only) |

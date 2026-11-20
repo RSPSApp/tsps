@@ -317,6 +317,8 @@ module.exports = {
 
     api.onPlayerDeathItemDrop((event) => removeImbueOnDeath(event, itemOnGroundManager));
     api.onCustomEvent("items:lost-to-pvp-killer", answerLostToPvpKiller);
+    require("./JewelleryPlaceholders")(api, [false, true].map(imbued =>
+      [...CHARGED_RINGS].filter(([, state]) => Boolean(state.imbued) === imbued).map(([id]) => id)));
   },
   isWearingRingOfWealth,
   isWearingImbuedRingOfWealth,

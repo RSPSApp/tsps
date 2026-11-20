@@ -886,6 +886,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Gertrude` | Gertrude | npcs | yes | Lets players buy another kitten from Gertrude after her quest for 100 coins and pick its colour, if wearing an activated Ring of Charos. (members only) |
 | `Hans` | Hans | npcs | yes | Lets Hans in Lumbridge tell players how long they have played, completing the Lumbridge diary task for it. |
 | `HoopSnake` | HoopSnake | npcs | yes | Fossil Island's Hoop Snakes: stun one with a blunt attack, pick it up, then roll or release it. (members only) |
+| `Imps` | Imps | npcs | yes | Imps teleport away in a puff of smoke, when hit and every 30-120 seconds. |
 | `Killerwatt` | Killerwatt | npcs | yes | Makes Killerwatts hit hard unless the player wears insulated boots, rerolling their hits to max 6 with the boots on and 15 without. (members only) |
 | `LostProperty` | LostProperty | npcs | yes | Adds the Lost Property shop of Perdu and Chris, which sells back quest and diary rewards only to players who have unlocked them. |
 | `LumbridgeGuide` | LumbridgeGuide | npcs | yes | Picks the Lumbridge Guide's dialogue depending on whether the player has lost their Amulet of the Eye. |
@@ -949,7 +950,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Levers` | Levers | objects | yes | The Wilderness teleport levers (Edgeville, East Ardougne, the Deserted Keep and Mage Arena bank), with the Wilderness warning and a shared lever teleport event. |
 | `Pickable` | Pickable | objects | yes | Picking wheat, potatoes, onions, cabbages, sweetcorn, flax and nettles from the fields, with respawn timers and nettle stings. |
 | `PineapplePlant` | PineapplePlant | objects | yes | Lets players pick Karamja's wild pineapple plants, a stage at a time, as captured; picked plants grow back a stage at a time. (members only) |
-| `RejuvenationPool` | RejuvenationPool | objects | yes | The player-owned house restoration, revitalisation, rejuvenation, fancy and ornate pools, which restore stats when drunk from. |
+| `RejuvenationPool` | RejuvenationPool | objects | yes | The player-owned house restoration, revitalisation, rejuvenation, fancy and ornate pools (and their frozen and fiery variants), which restore stats when drunk from. |
 | `RottenTomatoCrate` | RottenTomatoCrate | objects | yes | Opens Pelters' Veg Stall, the rotten tomato shop, from the crates by the pillories in Varrock, Seers' Village, Yanille and Hosidius. (members only) |
 | `ScenerySearch` | ScenerySearch | objects | yes | Searching haystacks and hay bales, which can hide a needle or prick you, plain crates and boxes, which hold nothing, and the Icyene Graveyard's mud mound, dug with a spade. |
 | `Signposts` | Signposts | objects | yes | Reading the guide signposts near Lumbridge, Draynor and Falador, opening the compass interface and moving the camera as the client expects. |

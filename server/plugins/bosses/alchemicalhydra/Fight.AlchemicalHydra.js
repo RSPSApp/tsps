@@ -213,7 +213,6 @@ class Fight {
     this.currents = [];
     this.waitingCurrents = [];
     this.lightningSpreadsAt = null;
-    this.endFireSpecial();
     this.phase = from + 1;
     this.attacks = 0;
     this.shielded = this.phase < 3;

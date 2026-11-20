@@ -152,13 +152,16 @@ function preciseTiming(player) {
   return Number.isInteger(id) && player?.getPacketSender?.()?.getVarbit?.(id) === 1;
 }
 
-/** A fight duration as shown: m:ss (whole seconds), or m:ss.cc with precise timing on. */
+/** A fight duration as shown: m:ss (to the nearest second), or m:ss.cc with precise timing on. */
 function formatTicks(ticks, precise = true) {
+  const pad = (value) => String(value).padStart(2, "0");
+  if (!precise) {
+    // Rounded to the second (rsprox: 150 of 155 kills; 176 ticks, 105.6 s, shows 1:46).
+    const total = Math.round(ticks * 0.6);
+    return `${Math.floor(total / 60)}:${pad(total % 60)}`;
+  }
   const centis = Math.round(ticks * 60);
-  const minutes = Math.floor(centis / 6000);
-  const seconds = Math.floor((centis % 6000) / 100);
-  const time = `${minutes}:${String(seconds).padStart(2, "0")}`;
-  return precise ? `${time}.${String(centis % 100).padStart(2, "0")}` : time;
+  return `${Math.floor(centis / 6000)}:${pad(Math.floor((centis % 6000) / 100))}.${pad(centis % 100)}`;
 }
 
 module.exports = {

@@ -666,6 +666,8 @@ test('the kill: its fight stops, it stays 2 more ticks, then the fight duration 
   ]);
   // The next, slower kill against that best; with precise timing on, hundredths and no full stop.
   assert.equal(Kills.fightDuration(player, 110), 'Fight duration: <col=ff0000>1:06</col>. Personal best: 1:00.');
+  // To the nearest second: 176 ticks (105.6 s) is 1:46 (rsprox 1000480 t8419-8595), 186 is 1:52.
+  assert.deepEqual([Common.formatTicks(176, false), Common.formatTicks(186, false), Common.formatTicks(176, true)], ['1:46', '1:52', '1:45.60']);
   const kill = { npc, xp: 1100 };
   Kills.slayerXp(kill);
   assert.equal(kill.xp, 1320);

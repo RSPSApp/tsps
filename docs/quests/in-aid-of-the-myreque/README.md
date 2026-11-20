@@ -255,7 +255,7 @@ and its units in `server/plugins/quests/inaid/`.
 ### Escort
 
 - Ivan's eating message: Wiki "just had too eat", live "just had to eat" (t3950). Implemented the Wiki's.
-- Ivan's flee: Wiki says he leaves when his health is too low or he runs out of food; live left at the second juvinate death with no food (t3624-3625). Implemented both: below half HP with no food (Wiki), and the capture's route-2 rule (2 deaths, 2005=0).
+- Ivan's flee: the Wiki permits either route without supplying him if he is protected. The capture's first attempt ended at the second juvinate death with no food (t3624-3625), but his hitpoints were not recorded; this is not a kill-count rule. Failure follows the health watcher (below half HP with no food) or his defeat, so a healthy Ivan can continue without supplies. The exact health threshold remains an implementation approximation below.
 - The legs' thanks: the transcript's template has "wear it"; live says "wear them" for the legs (t3399). Implemented live's (placeholder filling).
 
 ### Rod

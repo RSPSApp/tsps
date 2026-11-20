@@ -186,6 +186,40 @@ test('routine deployment uses the real developer activity spawn policy', async (
     assert.ok(api.core.World.getAddPlayerQueue().includes(entry.player));
   });
 
+  await t.test('the production ::bot command respects and stamps a code routine activation ID', t => {
+    const { activation, ACTIVATION_ATTRIBUTE, createActivationStore } = require('../plugins/bots/runtime/Activation.PlayerBots');
+    const file = path.join(scratch, 'activation.json');
+    const store = createActivationStore(file);
+    t.after(() => fs.rmSync(file, { force: true }));
+    t.mock.method(activation, 'allowed', store.allowed);
+    const messages = [];
+    const player = { getRights: () => api.core.PlayerRights.DEVELOPER, getLocation: () => new api.core.Location(3222, 3218), sendMessage: text => messages.push(text) };
+    const command = () => PluginManager.emitCommand({ player, raw: `bot ${activityId}`, base: 'bot', parts: ['bot', activityId], handled: false });
+    const before = new Set(runtime.entriesByUsername.keys());
+
+    store.set(activityId, false);
+    assert.equal(command(), true);
+    assert.deepEqual(new Set(runtime.entriesByUsername.keys()), before);
+    assert.match(messages.at(-1), /Unable to spawn/);
+
+    store.set(activityId, true);
+    assert.equal(command(), true);
+    const [entry] = [...runtime.entriesByUsername.entries()].filter(([name]) => !before.has(name)).map(([, value]) => value);
+    assert.equal(entry.player.getAttribute(ACTIVATION_ATTRIBUTE), activityId);
+    assert.equal(entry.brain.isRunningActivity(activityId), true);
+
+    const { updateDeployment } = require('../plugins/tools/worldadmin/Activation.WorldAdmin');
+    const update = enabled => updateDeployment(api, runtime, brainRegistry, { id: activityId, enabled }, store);
+    assert.ok(update(false).stopped > 0);
+    const world = api.getWorld();
+    assert.ok(world.getRemovePlayerQueue().includes(entry.player));
+    assert.ok(world.getAddPlayerQueue().includes(entry.player));
+    const replacement = update(true);
+    assert.equal(replacement.notice, null);
+    assert.equal(replacement.spawned.length, 1);
+    assert.notEqual(replacement.spawned[0], entry.player.getUsername());
+  });
+
   await t.test('allowing world population does not permit developer routine deployment', () => {
     PluginManager.pluginConfigCache = { 'PlayerBots:allowedActivities': ['world'], 'PlayerBots:ai': { enabled: false } };
     const beforeEntries = [...runtime.entriesByUsername.entries()];

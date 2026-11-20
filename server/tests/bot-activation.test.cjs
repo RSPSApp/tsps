@@ -53,6 +53,18 @@ test('an enabled proximity deployment can have zero bots in world; disabling is 
   assert.deepEqual(row.online, []);
 });
 
+test('re-enabling before the tick replaces pending bots already queued for logout', t => {
+  const h = harness(t);
+  h.online.length = 0;
+  const id = 'custom_smith';
+  assert.equal(h.update({ id, enabled: true, count: 1 }).count, 1);
+  assert.deepEqual(h.requested, [], 'a pending bot already satisfies the target');
+  assert.equal(h.update({ id, enabled: false }).stopped, 1);
+  assert.equal(h.pending.length, 1, 'logout has not drained the add queue yet');
+  assert.deepEqual(h.update({ id, enabled: true }).spawned, ['New']);
+  assert.deepEqual(h.requested, [1]);
+});
+
 test('enable restores the configured deployment count and counts bots pending registration', t => {
   const h = harness(t);
   assert.deepEqual(h.update({ id: 'custom_smith', enabled: true }).spawned, []);

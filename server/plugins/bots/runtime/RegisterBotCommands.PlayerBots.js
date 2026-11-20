@@ -13,6 +13,7 @@ const {
 const { registerBotControlCommands } = require("./Control.PlayerBots");
 const { validateSpawnSetup, applySpawnSetup } = require("./SpawnSetup.PlayerBots");
 const { registerBotsInterface } = require("../interface/Bots.PlayerBots");
+const { isDeployableRoutine } = require("./RoutineCatalog.PlayerBots");
 
 function registerBotCommands(options) {
   registerBotControlCommands(options);
@@ -145,7 +146,7 @@ function registerBotCommands(options) {
     const bot = runtime.spawnPvpBot(spawn, {
       mode: activity?.usesPvpEngine ? behaviorMode.PVP : activity?.mode ?? normalizedBehavior,
       activity: "developer",
-      activationId: activity?.id?.startsWith("custom_") ? activity.id : undefined,
+      activationId: isDeployableRoutine(activity) ? activity.id : undefined,
     });
     if (!bot) {
       player.sendMessage("Unable to spawn a bot right now.");

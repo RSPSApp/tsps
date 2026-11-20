@@ -102,8 +102,10 @@ function updateDeployment(api, runtime, brainRegistry, body, store = activation,
   if (Array.isArray(allowed) && !allowed.includes("developer")) throw new HttpError(403, "This world does not allow developer bot deployments.");
   store.set(id, true, want);
   const online = onlineByDeployment(api, runtime).get(id)?.length ?? 0;
-  // Pending real spawn registrations count too, so double-clicks don't duplicate a deployment.
-  const pending = api.getWorld().getAddPlayerQueue().filter(bot => !bot.isRegistered() && bot.getAttribute(ACTIVATION_ATTRIBUTE) === id).length;
+  // Count pending registrations to avoid duplicates, but not bots deactivation already queued for logout.
+  const world = api.getWorld();
+  const leaving = new Set(world.getRemovePlayerQueue());
+  const pending = world.getAddPlayerQueue().filter(bot => !leaving.has(bot) && !bot.isRegistered() && bot.getAttribute(ACTIVATION_ATTRIBUTE) === id).length;
   const missing = want - online - pending;
   const result = missing > 0 ? deploy({ runtime, brainRegistry, core: api.core, activityId: id, count: missing }) : null;
   return { id, enabled, count: want, spawned: result?.spawned ?? [], notice: result && !result.ok ? result.error : null };

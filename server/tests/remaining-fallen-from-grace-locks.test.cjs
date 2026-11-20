@@ -145,6 +145,7 @@ test('cathedral door asks first, then the real 5-pin 811 with a new code per ope
   const random = Math.random;
   try {
     h.quest.setStage(p, 18);
+    p.getLocation = () => new core.Location(2541, 2215, 0); // inside the doors, as recorded
     const request = { player: p, objectId: 62368, handled: false };
     for (const fn of h.hooks.custom.get('madangel:cathedral-door') ?? []) fn(request);
     assert.equal(request.handled, true);

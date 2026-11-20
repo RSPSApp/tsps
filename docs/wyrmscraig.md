@@ -106,7 +106,8 @@ Grace's ([its doc](quests/fallen-from-grace/README.md)).
 - **The death animation** (14448) plays for 7 ticks (`deathTicks` in `npc-combat-defs.json`). Whatever special it was in is called off at its last hitpoint.
 - **Then, together:** "Your Mad Angel kill count is: N." (varp 5712), "Fight duration: … Personal best: …" (or "(new personal best)"), the drop, and the corpse (16308). 4 ticks later the HUD fades out, and 4 after that it is cleared, as captured.
 - **The drop** is the Wiki's table (`npc-drops.json`), with four corrections in `NpcDrops`:
-  - the sunstone crystal stays on its 100% table (the Wiki's; Fallen From Grace's kill dropped it);
+  - the sunstone crystal stays on its 100% table but only drops when owed: no bank chest built and
+    none owned (Wiki; Fallen From Grace answers `npc-drops:quest-item`);
   - the Ardeaglais teleport's pre-roll is 1/25;
   - a supply batch (16/150) is sharks or yellowfins, each with a prayer potion(2) and a super combat potion(1).
   - the super combat potions(3), raw monkfish, emeralds and sapphires are noted, as the Wiki marks them (the export lost every "(noted)").

@@ -75,7 +75,8 @@ function setup() {
     getPacketSender: () => sender, sendMessage: (text) => messages.push(text),
     getInventory: () => ({
       getAmount: (id) => items.get(id) ?? 0, getFreeSlots: () => 20, isFull: () => false,
-      contains: (id) => (items.get(id) ?? 0) > 0, getItems: () => [...items].filter(([, n]) => n > 0).map(([id, n]) => new core.Item(id, n)),
+      contains: (id) => (items.get(id) ?? 0) > 0,
+      getValidItems: () => [...items].filter(([, n]) => n > 0).map(([id, n]) => new core.Item(id, n)), getItems: () => [...items].filter(([, n]) => n > 0).map(([id, n]) => new core.Item(id, n)),
       adds: (id, amount = 1) => items.set(id, (items.get(id) ?? 0) + amount),
       deleteNumber: (id, amount = 1) => items.set(id, Math.max(0, (items.get(id) ?? 0) - amount)),
     }),
@@ -215,7 +216,10 @@ test('the basement stairs with the key: the hatch, then the real cathedral at 25
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2540, 2214]);
   assert.equal(p.items.get(I.DULL_SUNSTONE_CORE), 0, 'the dull core goes with it (tick 292)');
 
-  // Later climbs go straight up, without the hatch again.
+  // A second click during the fade is ignored; later climbs go straight up, without the hatch again.
+  h.custom('ladders:climb', { player: p, objectId: 62255, handled: false });
+  assert.equal(p.messages.filter((text) => text.startsWith('You unlock a hatch')).length, 1);
+  runTicks(3);
   h.quest.setStage(p, 18);
   p.setLocationForTest(new core.Location(2575, 8657, 0));
   p.messages.length = 0;
@@ -280,4 +284,32 @@ test('the monolith: the notebook in an item box at stage 4 (P1 tick 156), then m
   assert.equal(p.items.get(I.SUNSTONE), 1);
   assert.deepEqual(p.messages.slice(-1), ['You manage to mine some sunstone.']);
   assert.ok(p.log.includes('sound 3600'));
+});
+
+test('a troll killed before Mortimer\'s request still counts; the call comes with his request', () => {
+  const h = setup(), p = h.p;
+  h.quest.setStage(p, 9);
+  for (const { zone, fn } of h.hooks.zones) if (zone.minY >= 8500) fn({ player: p });
+  const [mortimer, ...trolls] = h.hooks.spawned;
+  assert.equal(trolls.length, 3, 'the trolls are there on arrival (P2 tick 42)');
+  const kill = (npc) => { npc.getLocation = () => new core.Location(2591, 8609, 0); for (const fn of h.hooks.deaths) fn({ npc, killer: p }); };
+  for (const troll of trolls) kill(troll);
+  assert.equal(flags(p) & (1 << 9), 0, 'not before he has asked');
+  h.play(16294, 'the-way-under-ardeaglais-meeting-mortimer');
+  h.advance((entry) => textOf(entry).startsWith('It was those three nearby trolls'));
+  assert.equal(h.quest.getStage(p), 11);
+  assert.equal(flags(p) & (1 << 9), 1 << 9, 'all three already dead');
+  assert.deepEqual(mortimer.said, ['Hey! Come give me a hand over here.']);
+});
+
+test('the Mad Angel\'s sunstone crystal drops only when one is owed (Wiki: no bank chest built, none owned)', () => {
+  const h = setup(), p = h.p;
+  const ask = () => h.custom('npc-drops:quest-item', { player: p, itemId: I.SUNSTONE_CRYSTAL, allowed: undefined }).allowed;
+  assert.equal(ask(), true);
+  p.items.set(I.SUNSTONE_CRYSTAL, 1);
+  assert.equal(ask(), false, 'one is carried');
+  p.items.set(I.SUNSTONE_CRYSTAL, 0);
+  p.sender.getVarbit = (id) => (id === 15774 ? 1 : 0);
+  assert.equal(ask(), false, 'the bank chest is built');
+  assert.equal(h.custom('npc-drops:quest-item', { player: p, itemId: 995, allowed: undefined }).allowed, undefined, 'other rows are left alone');
 });

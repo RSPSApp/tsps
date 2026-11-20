@@ -230,6 +230,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
   const DOOR_LEAVE = "Leave them.";
   const DOOR_PICKED = "You successfully pick the lock, only to see it crumble away in your hands.";
   const DOOR_LOCK_CODES = 6 ** 5; // five pins, six positions each
+  const CATHEDRAL_DOOR_OUTSIDE_X = 2542; // the door tiles are x 2541 (inside) and 2542 (outside)
   // The basement stairs with the key (P2 ticks 288-295): the message, the hatch's sound, the fade
   // and the move into the cathedral 2 ticks after it starts.
   const HATCH_MESSAGE = "You unlock a hatch at the top of the staircase and climb up into the cathedral.";
@@ -545,7 +546,11 @@ module.exports = function registerFallenFromGraceQuest(api) {
         if (quest.getStage(player) === STAGE_MURIEL_HAT) quest.setStage(player, STAGE_CORMAC_PLAN);
       };
     } else if (stage === STAGE_CAVERN && lineIs(event, MORTIMER_CUTSCENE_SPAWN.id, "It was those three nearby trolls")) {
-      beforeLine(event, () => quest.getStage(player) === STAGE_CAVERN && quest.setStage(player, STAGE_TROLLS));
+      beforeLine(event, () => {
+        if (quest.getStage(player) !== STAGE_CAVERN) return;
+        quest.setStage(player, STAGE_TROLLS);
+        if ((Number(player.getAttribute(TROLL_KILLS_ATTRIBUTE)) || 0) >= TROLLS_TO_KILL) trollsDone(player);
+      });
     } else if (lineIs(event, MORTIMER_CUTSCENE_SPAWN.id, "Hmm... a noble cause.")) {
       beforeLine(event, () => setFlag(player, FLAG_MORTIMER_INTRO));
     }
@@ -1053,7 +1058,9 @@ module.exports = function registerFallenFromGraceQuest(api) {
     if (quest.isComplete(player) || hasFlag(player, FLAG_CATHEDRAL_OPENED)) return false;
     const stage = quest.getStage(player);
     event.handled = true;
-    if (stage < STAGE_CATHEDRAL) {
+    // The lock is picked from inside ("Exit the cathedral by searching the lock", Wiki).
+    const outside = player.getLocation().getX() >= CATHEDRAL_DOOR_OUTSIDE_X;
+    if (stage < STAGE_CATHEDRAL || outside) {
       speak(player, CORMAC_NPC_ID, "the-way-under-ardeaglais-attempting-to-open-the-cathedral-door");
       return true;
     }
@@ -1432,17 +1439,38 @@ module.exports = function registerFallenFromGraceQuest(api) {
     if (!killer?.isPlayer?.()) return;
     const contentId = npc.getContentId?.(killer) ?? npc.getId();
     if (!TROLL_NPC_IDS.has(contentId)) return;
-    if (quest.getStage(killer) !== STAGE_TROLLS || hasFlag(killer, FLAG_TROLLS_KILLED)) return;
-    if (!inZone(npc.getLocation(), CAVERN_ZONE)) return;
     const scene = cavernScenes.get(killer);
     if (scene) scene.trolls = scene.trolls.filter((troll) => troll !== npc);
+    const stage = quest.getStage(killer);
+    if ((stage !== STAGE_CAVERN && stage !== STAGE_TROLLS) || hasFlag(killer, FLAG_TROLLS_KILLED)) return;
+    if (!inZone(npc.getLocation(), CAVERN_ZONE)) return;
     const kills = (Number(killer.getAttribute(TROLL_KILLS_ATTRIBUTE)) || 0) + 1;
     killer.setAttribute(TROLL_KILLS_ATTRIBUTE, kills);
-    if (kills < TROLLS_TO_KILL) return;
-    // P2 tick 151: the flag, the game message and Mortimer's shout, together.
-    setFlag(killer, FLAG_TROLLS_KILLED);
-    killer.sendMessage(TROLLS_KILLED_MESSAGE);
-    scene?.mortimer?.forceChat?.(TROLLS_KILLED_SHOUT);
+    // Before his request the kills only count; the call comes once he has asked (ours, not recorded).
+    if (kills >= TROLLS_TO_KILL && stage === STAGE_TROLLS) trollsDone(killer);
+  }
+
+  /** P2 tick 151: the flag, the game message and Mortimer's shout, together. */
+  function trollsDone(player) {
+    setFlag(player, FLAG_TROLLS_KILLED);
+    player.sendMessage(TROLLS_KILLED_MESSAGE);
+    cavernScenes.get(player)?.mortimer?.forceChat?.(TROLLS_KILLED_SHOUT);
+  }
+
+  /**
+   * The Mad Angel's sunstone crystal (Wiki, Mad Angel): "always drops if the bank chest is not built
+   * and a crystal is not already owned". Owned is carried, worn or banked.
+   */
+  function ownsCrystal(player) {
+    const banks = (player.getBanks?.() ?? []).filter((bank, tab) => bank && tab !== api.core.Bank?.BANK_SEARCH_TAB_INDEX);
+    return [player.getInventory(), player.getEquipment?.(), ...banks].filter(Boolean)
+      .some((container) => (container.getValidItems?.() ?? []).some((item) => item?.getId?.() === SUNSTONE_CRYSTAL_ITEM_ID));
+  }
+
+  function answerCrystalDrop(request) {
+    if (request?.itemId !== SUNSTONE_CRYSTAL_ITEM_ID || !request.player) return;
+    const built = request.player.getPacketSender().getVarbit?.(WYRMS_BANK_CHEST_VARBIT) === 1;
+    request.allowed = !built && !ownsCrystal(request.player);
   }
 
   // ==========================================================================
@@ -1467,6 +1495,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
     if (!cavernSceneActive(player) || !inZone(player.getLocation(), CAVERN_ZONE)) return null;
     let scene = cavernScenes.get(player);
     if (!scene) {
+      // Live adds the trolls with Mortimer on arrival (P2 tick 42); a kill before his request counts.
       scene = { mortimer: spawnPrivate(player, MORTIMER_CUTSCENE_SPAWN, 0), trolls: [] };
       cavernScenes.set(player, scene);
       if (!hasFlag(player, FLAG_TROLLS_KILLED)) {
@@ -1520,7 +1549,12 @@ module.exports = function registerFallenFromGraceQuest(api) {
    * 2540,2214 two ticks later, the fade back a tick after that. The first time, the key unlocks
    * the hatch (its message and sound, flag 15766), the dull core goes (tick 292) and it is stage 16.
    */
+  const climbingStairs = new WeakSet();
+
   function climbIntoCathedral(player, firstTime) {
+    if (climbingStairs.has(player)) return;
+    climbingStairs.add(player);
+    later(player, STAIRS_FADE.closeTicks, () => climbingStairs.delete(player));
     if (firstTime) {
       if (held(player, STAIRCASE_KEY_ITEM_ID)) player.getInventory().deleteNumber(STAIRCASE_KEY_ITEM_ID, 1);
       setFlag(player, FLAG_KEY_USED);
@@ -1543,7 +1577,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
     if (quest.isComplete(player) || stage < STAGE_GOLEM_POWERED) return;
     event.handled = true;
     if (stage >= STAGE_CATHEDRAL || hasFlag(player, FLAG_KEY_USED)) {
-      climbIntoCathedral(player, stage === STAGE_GOLEM_POWERED);
+      climbIntoCathedral(player, !hasFlag(player, FLAG_KEY_USED));
       return;
     }
     if (!held(player, STAIRCASE_KEY_ITEM_ID)) {
@@ -1780,6 +1814,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
   api.onCustomEvent("madangel:cathedral-door", handleCathedralDoor);
   api.onCustomEvent("madangel:instance-variant", answerMadAngelVariant);
   api.onCustomEvent("madangel:pew-climb", answerPewClimb);
+  api.onCustomEvent("npc-drops:quest-item", answerCrystalDrop);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleShortcutItem, { noted: false });

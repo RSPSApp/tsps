@@ -57,8 +57,13 @@ this table follow them; where the Wiki states a value it wins.
   "as the player steps towards it" (both fall on tick 322).
 - The 255-hitpoint enrage is the Wiki walkthrough's; the quest angel's other attack values stay the
   post-quest angel's (the Wiki gives none).
-- The door can be picked from stage 16 (the transcript's choice has no stage); the recording only
-  shows it after the kill.
+- The door can be picked from inside from stage 16 (the transcript's choice has no stage); the
+  recording only shows it after the kill. From outside it stays "firmly locked" (Wiki: "Exit the
+  cathedral by searching the lock").
+- Trolls killed before Mortimer's request (they are there on arrival) count; his call comes with
+  the request. Not recorded.
+- The Mad Angel's sunstone crystal drops only when owed (Wiki: "always drops if the bank chest is
+  not built and a crystal is not already owned"; owned = carried, worn or banked).
 - Going back into the cathedral at stages 18-19 shows the dead angel and the climbable pew; not
   recorded.
 - The hat pan leaves out `cam_rotateto` (pitch 2, yaw 240 over 600 cycles), which our packets lack.

@@ -193,7 +193,11 @@ test("as captured: the Mad Angel door is claimed by Fallen From Grace until its 
     .filter((quest) => quest.key === "fallen_from_grace").at(-1);
   const door = namedObjects.get("Cathedral door").Open;
 
-  const locked = createPlayer({ x: 2542, y: 2215 });
+  const outside = createPlayer({ x: 2542, y: 2215 });
+  ffg.setStage(outside, 18);
+  assert.equal(door({ player: outside, objectId: 62368 }), true);
+  assert.equal(outside.prompt, undefined, "from outside it is just locked (Wiki: the lock is picked to exit)");
+  const locked = createPlayer({ x: 2541, y: 2215 });
   ffg.setStage(locked, 18);
   const random = Math.random;
   Math.random = () => 7152.5 / 7776; // the captured second 811 session's code
@@ -205,7 +209,7 @@ test("as captured: the Mad Angel door is claimed by Fallen From Grace until its 
   assert.ok(locked.log.some((line) => line.startsWith("script 6994")), 'the 811 renderer runs');
   assert.ok(locked.amountAction, 'the real amount callback is armed');
   assert.equal(locked.log.some((line) => line.startsWith("anim 4282")), false, "FFG claims the first pick, no movement");
-  assert.equal(locked.getLocation().getX(), 2542);
+  assert.equal(locked.getLocation().getX(), 2541);
   locked.amountAction.execute(7152); // captured second 811 session, P2 tick 621
   assert.ok(locked.getDialogueManager().getCurrent()?.getText?.().includes("successfully pick the lock"));
   assert.ok(locked.getAttribute('quest.fallen_from_grace.flags') & (1 << 7), 'CATHEDRAL_OPENED set by the lock');
@@ -213,7 +217,7 @@ test("as captured: the Mad Angel door is claimed by Fallen From Grace until its 
   assert.equal(door({ player: locked, objectId: 62368 }), true);
   assert.ok(locked.log.some((line) => line.startsWith("anim 4282")), "the opened door falls through to MadAngel");
   runTicks(1);
-  assert.notEqual(locked.getLocation().getX(), 2542, "the default door movement runs once FFG releases it");
+  assert.notEqual(locked.getLocation().getX(), 2541, "the default door movement runs once FFG releases it");
 
   const finished = createPlayer({ x: 2542, y: 2215 });
   ffg.setStage(finished, 20);
@@ -248,6 +252,13 @@ test("the drop table, corrected: the sunstone crystal always, a 1/25 teleport, t
   const entries = table.entries;
   const crystal = entries.find((entry) => entry.item_id === 34032);
   assert.ok(crystal?.always, "the sunstone crystal is on the 100% table (Wiki; dropped by the quest's kill, rsprox P2 tick 431)");
+  const { player, rollTable } = { player: createPlayer(), rollTable: NpcDrops.__internals.rollTable };
+  customHooks.set("npc-drops:quest-item", [(request) => { if (request.itemId === 34032) request.allowed = false; }]);
+  try {
+    for (let i = 0; i < 20; i++) assert.equal(rollTable(table, player).some((drop) => drop.itemId === 34032), false, "not owed: Fallen From Grace says no");
+  } finally {
+    customHooks.delete("npc-drops:quest-item");
+  }
   assert.equal(entries.find((entry) => entry.item_id === 34033).out_of, 25);
   const main = entries.filter((entry) => !entry.always && !entry.pre_roll && Number.isInteger(entry.weight)).reduce((sum, entry) => sum + entry.weight, 0);
   assert.equal(main, 150);

@@ -126,6 +126,9 @@ function setup(completed = []) {
     varps: new Map(),
     varbits: new Map(),
     sendConfig(id, value) { packet.varps.set(id, value); return packet; },
+    openInterface: -1,
+    sendInterface(id) { packet.openInterface = id; return packet; },
+    sendInterfaceRemoval() { packet.openInterface = -1; return packet; },
     getVarp(id) { return packet.varps.get(id) ?? 0; },
     // Varbits live in their base varp, as PacketSender keeps them, so a varp restore restores them.
     sendVarbit(id, value) {
@@ -166,6 +169,7 @@ function setup(completed = []) {
       addExperiences() {},
     }),
     getLocation: () => location,
+    getInterfaceId: () => packet.openInterface,
     moveTo(next) { location = next; },
     getDialogueManager: () => ({ isActive: () => false }),
     isRegistered: () => true,
@@ -245,6 +249,7 @@ function setup(completed = []) {
       }
     }
   };
+  const closeInterface = () => packet.sendInterfaceRemoval();
   const button = (id) => hooks.buttons.get(id)?.({ player, buttonId: id, action: 1 });
   /** Opens a locker, then searches the open one, as live's two clicks do. */
   const openLocker = (closedId, openId) => {
@@ -272,7 +277,7 @@ function setup(completed = []) {
       runtime.sendQuestVarps({ player });
       emit('player:bootstrap-complete', {});
     },
-    count, varbit, varp, stage, lastTranscript, button, openLocker, ownedLocs, messages, animations,
+    count, varbit, varp, stage, lastTranscript, button, openLocker, closeInterface, ownedLocs, messages, animations,
     setFullInventory: (value) => { full = value; },
     emitCustom: (name, event) => { for (const handler of custom.get(name) ?? []) handler(event); },
   };
@@ -448,6 +453,8 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
     }
     assert.equal(h.varbit(1759), 3);
     assert.equal(h.varbit(1760), 3);
+    assert.equal(h.varp(655), 50, 'live holds the last hole three ticks (1193 -> 1196)');
+    h.advance(3);
     assert.equal(h.varp(655), 60, 'the last hole moves the varp before Bill is told');
     assert.equal(h.count(I.REPAIR_PLANK_2), 0);
     assert.equal(h.count(I.TACKS), 0);
@@ -493,7 +500,7 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
     // Replace the cannon barrel: the broken one comes off, then the new one goes on.
     h.openLocker(O.GUN_LOCKER, GUN_LOCKER_OPEN);
     h.button(GUN.FUSE);
-    assert.equal(h.messages.at(-1), "You don't need any Fuse right now.");
+    assert.equal(h.messages.at(-1), 'You do not need any fuse right now.');
     h.button(GUN.BARREL);
     assert.equal(h.count(I.CANNON_BARREL), 1);
     h.object(CANNON, 'Repair');
@@ -601,6 +608,41 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
   } finally {
     Math.random = originalRandom;
   }
+});
+
+test('locker buttons answer only while their modal is open, and the repair kit stops at what is needed', () => {
+  const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+  const I = core.ItemIdentifiers;
+  const O = core.ObjectIdentifiers;
+  h.quest.setStage(h.player, 3);
+  h.button(REPAIR.ROPE);
+  h.button(GUN.FUSE);
+  assert.equal(h.count(I.ROPE), 0, 'no modal, no rope');
+  assert.equal(h.count(I.FUSE), 0, 'no modal, no fuse');
+  h.openLocker(O.GUN_LOCKER, GUN_LOCKER_OPEN);
+  h.button(REPAIR.ROPE);
+  assert.equal(h.count(I.ROPE), 0, 'the gun locker\'s modal does not answer the repair locker\'s buttons');
+  h.closeInterface();
+
+  h.openLocker(O.REPAIR_LOCKER, REPAIR_LOCKER_OPEN);
+  for (let press = 0; press < 6; press++) h.button(REPAIR.ROPE);
+  assert.equal(h.count(I.ROPE), 4, 'four ropes, two per round trip (the Wiki)');
+  assert.equal(h.messages.at(-1), 'You already have enough Rope.');
+  h.quest.setStage(h.player, 4);
+  for (let press = 0; press < 3; press++) h.button(REPAIR.HAMMER);
+  for (let press = 0; press < 5; press++) h.button(REPAIR.TACKS);
+  for (let press = 0; press < 5; press++) h.button(REPAIR.PASTE);
+  assert.equal(h.count(I.HAMMER), 1);
+  assert.equal(h.count(I.TACKS), 30, 'ten tacks for each of the three holes');
+  assert.equal(h.count(I.SWAMP_PASTE), 3, 'one paste for each of the three holes');
+  assert.equal(h.messages.at(-1), 'You already have enough Swamp Paste.');
+  h.player.getPacketSender().sendVarbit(1751, 2); // one hole done
+  h.player.getInventory().deleteNumber(I.TACKS, 30);
+  h.player.getInventory().deleteNumber(I.SWAMP_PASTE, 3);
+  for (let press = 0; press < 5; press++) h.button(REPAIR.TACKS);
+  for (let press = 0; press < 5; press++) h.button(REPAIR.PASTE);
+  assert.equal(h.count(I.TACKS), 20, 'only the open holes\' tacks');
+  assert.equal(h.count(I.SWAMP_PASTE), 2, 'only the open holes\' paste');
 });
 
 test('a fall from the rope swing lands in the sea with no run energy, then on the other ship', () => {
@@ -1139,4 +1181,15 @@ test('the port-ship Bill fix runs when the ship region is activated, once', () =
   h.hooks.regionLoaded.forEach((handler) => handler({ regionId: 14902 }));
   assert.equal(h.hooks.removedNpcs.includes(broken), true, 'the broken row is removed on region load');
   assert.equal(h.hooks.spawnedNpcs.length, 0, 'an existing 4014 nearby is reused');
+});
+
+test('a logout mid-swing leaves no rope tied to the sail', () => {
+  const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+  h.quest.setStage(h.player, 3);
+  h.player.getPacketSender().sendVarbit(1740, 1);
+  h.player.getPacketSender().sendVarbit(1764, 1);
+  h.player.setAttribute('quest.cabin_fever.var657', h.player.getPacketSender().getVarp(657));
+  h.relog();
+  assert.equal(h.varbit(1740), 0);
+  assert.equal(h.varbit(1764), 0);
 });

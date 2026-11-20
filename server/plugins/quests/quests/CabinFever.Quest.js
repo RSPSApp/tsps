@@ -289,10 +289,10 @@ module.exports = function registerCabinFeverQuest(api) {
   /** toplevel_mainmodal_open as live sends it before both lockers. */
   const MAINMODAL_OPEN_SCRIPT = 2524;
   const MAINMODAL_OPEN_ARGS = [12433572, 125];
-  const REPAIR_LOCKER_OPEN = 11247; // fever_repair_locker_open: Search, Close
-  const GUN_LOCKER_OPEN = 11249; // fever_weapons_locker_open: Search, Close
-  const BROKEN_CANNON = 7146; // fever_broken_cannon, the barrel removed from the cannon
-  const SWING_ROPE_LOC = 11311; // fever_swing_rope, hangs from the yardarm during a swing
+  const REPAIR_LOCKER_OPEN = ObjectIdentifiers.REPAIR_LOCKER_2; // 11247 fever_repair_locker_open: Search, Close
+  const GUN_LOCKER_OPEN = ObjectIdentifiers.GUN_LOCKER_2; // 11249 fever_weapons_locker_open: Search, Close
+  const BROKEN_CANNON = ItemIdentifiers.BROKEN_CANNON; // 7146, the barrel removed from the cannon
+  const SWING_ROPE_LOC = ObjectIdentifiers.ROPE_11; // 11311 fever_swing_rope, hangs from the yardarm during a swing
 
   const STAGE_STARTED = 1;
   const STAGE_SAILING = 2;
@@ -1300,16 +1300,36 @@ module.exports = function registerCabinFeverQuest(api) {
   }
 
   /** quest_fever_repair_locker (502): rope, hammer, tacks, planks and swamp paste (ticks 792-796, 1130-1152). */
-  function repairLockerButton(player, buttonId) {
-    if (!lockerStage(player)) return;
+  /**
+   * The Wiki: "When you have enough resources, a message in the chat interface will say so, if you
+   * try to get more than is needed." Live's only recorded cap is the planks' (tick 1141); the
+   * others follow it (Ours: their wording). Rope stops at the Wiki's four (two per round trip),
+   * the hammer at one, tacks and paste at what the open holes still need.
+   */
+  function enough(player, itemId, have, limit, name) {
+    if (player.getInventory().getAmount(itemId) + have < limit) return false;
+    player.sendMessage(`You already have enough ${name}.`);
+    return true;
+  }
+
+  function holesNeeding(player, below) {
+    return [VARBIT_HOLE_1, VARBIT_HOLE_2, VARBIT_HOLE_3].filter((id) => varbitValue(player, id) < below).length;
+  }
+
+  function repairLockerButton(event) {
+    const { player, buttonId } = event;
+    if (!player || player.getInterfaceId?.() !== REPAIR_LOCKER_INTERFACE || !lockerStage(player)) return;
     switch (buttonId) {
       case REPAIR_BUTTON.ROPE:
+        if (enough(player, ROPE, player.getInventory().getAmount(CF_ROPE), 4, "Rope")) return;
         take(player, ROPE, 1, "You take a coil of rope.");
         return;
       case REPAIR_BUTTON.HAMMER:
+        if (enough(player, HAMMER, 0, 1, "Hammers")) return;
         take(player, HAMMER, 1, "You take a hammer.");
         return;
       case REPAIR_BUTTON.TACKS:
+        if (enough(player, TACKS, 0, Math.max(1, holesNeeding(player, 1) * 10), "Tacks")) return;
         take(player, TACKS, 10, "You take a handful of tacks.");
         return;
       case REPAIR_BUTTON.PLANKS: {
@@ -1323,6 +1343,7 @@ module.exports = function registerCabinFeverQuest(api) {
         return;
       }
       case REPAIR_BUTTON.SWAMP_PASTE:
+        if (enough(player, SWAMP_PASTE, 0, Math.max(1, holesNeeding(player, 2)), "Swamp Paste")) return;
         take(player, SWAMP_PASTE, 1, "You take a load of swamp paste.");
         return;
       default:
@@ -1336,15 +1357,16 @@ module.exports = function registerCabinFeverQuest(api) {
 
   /**
    * quest_fever_gun_locker (501). Each button gives one item at the stage that uses it (ticks 816,
-   * 1761, 1855-1862, 1993-1996, 2014-2016); otherwise the Wiki's "You don't need [a Ramrod/a cannon
-   * ball/a canister/any Fuse] right now.", or live's "You do not need a canister round right now."
-   * while sinking the ship (tick 1997).
+   * 1761, 1855-1862, 1993-1996, 2014-2016); otherwise "You do not need ... right now.", the Wiki
+   * guide's and live's wording (tick 1997; the transcript has "You don't need").
    */
-  function gunLockerButton(player, buttonId) {
-    if (!lockerStage(player)) return;
+  function gunLockerButton(event) {
+    const { player, buttonId } = event;
+    if (!player || player.getInterfaceId?.() !== GUN_LOCKER_INTERFACE || !lockerStage(player)) return;
     const stage = quest.getStage(player);
     const firing = stage === STAGE_FIRE || stage === STAGE_SINK;
-    const refuse = (what) => player.sendMessage(`You don't need ${what} right now.`);
+    // The Wiki guide's "You do not need a [item name] right now.", as live words it (tick 1997).
+    const refuse = (what) => player.sendMessage(`You do not need ${what} right now.`);
     switch (buttonId) {
       case GUN_BUTTON.BARREL:
         // Ours: the Wiki and the capture only show the barrel taken while the cannon is broken.
@@ -1356,14 +1378,14 @@ module.exports = function registerCabinFeverQuest(api) {
         return;
       case GUN_BUTTON.FUSE:
         if (stage === STAGE_FIX_CANNON) {
-          refuse("any Fuse");
+          refuse("any fuse");
           return;
         }
         take(player, FUSE, 1, "You take some fuse.");
         return;
       case GUN_BUTTON.RAMROD:
         if (!firing) {
-          refuse("a Ramrod");
+          refuse("a ramrod");
           return;
         }
         take(player, RAMROD, 1, "You take a Ramrod.");
@@ -1374,7 +1396,7 @@ module.exports = function registerCabinFeverQuest(api) {
           return;
         }
         if (stage !== STAGE_FIRE) {
-          refuse("a canister");
+          refuse("a canister round");
           return;
         }
         take(player, CANISTER_ALT, 1, "You take a canister round.");
@@ -1907,10 +1929,11 @@ module.exports = function registerCabinFeverQuest(api) {
     setVarbitValue(player, holeVarbit, 2);
     syncHoleCounters(player);
     playVariant(player, "sort-out-the-leaks-patching-up-a-hole");
-    // Capture tick 1170: the reach and cf_smear_paste; the last hole moves varp 655 to 60 (1193).
+    // Capture tick 1170: the reach and cf_smear_paste. The last hole moves varp 655 to 60 three
+    // ticks after its paste (1193 -> 1196).
     animate(player, ANIM.REACH);
     sound(player, SOUND.SMEAR_PASTE);
-    syncQuestVarp(player);
+    if (holesFixed(player)) later(player, 3, () => syncQuestVarp(player));
     return true;
   }
 
@@ -2324,6 +2347,9 @@ module.exports = function registerCabinFeverQuest(api) {
       // objective-done step (40/60/80/100/120) from the restored state.
       syncQuestVarp(player);
     }
+    // A swing cut short by a logout leaves no rope tied to the sail.
+    sender.sendVarbit(SWINGS.over.varbit, 0);
+    sender.sendVarbit(SWINGS.back.varbit, 0);
     // Logging out respawns the plundered containers (wiki).
     sender.sendVarbit(VARBIT_CRATE, 0);
     sender.sendVarbit(VARBIT_CHEST, 0);
@@ -2471,10 +2497,8 @@ module.exports = function registerCabinFeverQuest(api) {
     Search: delegateObjectInteraction,
     Close: delegateObjectInteraction,
   });
-  api.onInterfaceActionButton(Object.values(REPAIR_BUTTON), ({ player, buttonId, id, componentId }) =>
-    repairLockerButton(player, buttonId ?? componentId ?? id));
-  api.onInterfaceActionButton(Object.values(GUN_BUTTON), ({ player, buttonId, id, componentId }) =>
-    gunLockerButton(player, buttonId ?? componentId ?? id));
+  api.onInterfaceActionButton(Object.values(REPAIR_BUTTON), repairLockerButton);
+  api.onInterfaceActionButton(Object.values(GUN_BUTTON), gunLockerButton);
   api.onObjectInteraction("Powder Barrel", { "Take-powder": delegateObjectInteraction });
   api.onObjectInteraction("Barrel", {
     Ransack: delegateObjectInteraction,

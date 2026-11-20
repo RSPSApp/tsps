@@ -111,18 +111,24 @@ function presets(f, ...entries) {
 
 // ------------------------------------------------------------------ Sanguinesti staff
 
+/** Blood runes on the staff ask how many charges first (rsprox local 1001250); type more than it offers. */
+async function chargeSang(f, from, to) {
+  await useOn(f, from, to);
+  f.p.getEnteredAmountAction()?.execute(1_000_000);
+}
+
 test("Sanguinesti: preset blood runes do not charge it", async (t) => {
   const control = actor(t);
   put(control, item(I.BLOOD_RUNE, 200), 0);
   put(control, item(I.SANGUINESTI_STAFF_UNCHARGED_), STAFF);
-  await useOn(control, 0, STAFF);
+  await chargeSang(control, 0, STAFF);
   assert.equal(Sang._test.chargesOf(control.inv.getItems()[STAFF]), 100, "control: charged");
   assert.equal(plainOf(control, I.BLOOD_RUNE), 0, "control: the runes went");
 
   const f = actor(t);
   presets(f, [I.BLOOD_RUNE, 300]);
   put(f, item(I.SANGUINESTI_STAFF_UNCHARGED_), STAFF);
-  await useOn(f, 0, STAFF);
+  await chargeSang(f, 0, STAFF);
   assert.equal(Sang._test.chargesOf(f.inv.getItems()[STAFF]), 0, "no charges");
   assert.equal(presetOf(f, I.BLOOD_RUNE), 300, "nothing taken");
   assert.ok(f.messages.includes(PRESET_TEXT), "says why");
@@ -137,12 +143,12 @@ test("Sanguinesti: with both stacks, the plain runes pay and a click on the pres
     return f;
   };
   const plainClick = setup();
-  await useOn(plainClick, 5, STAFF);
+  await chargeSang(plainClick, 5, STAFF);
   assert.equal(Sang._test.chargesOf(plainClick.inv.getItems()[STAFF]), 100, "charged from the plain stack");
   assert.deepEqual([plainOf(plainClick, I.BLOOD_RUNE), presetOf(plainClick, I.BLOOD_RUNE)], [0, 300]);
 
   const presetClick = setup();
-  await useOn(presetClick, 0, STAFF);
+  await chargeSang(presetClick, 0, STAFF);
   assert.equal(Sang._test.chargesOf(presetClick.inv.getItems()[STAFF]), 0, "no charges");
   assert.deepEqual([plainOf(presetClick, I.BLOOD_RUNE), presetOf(presetClick, I.BLOOD_RUNE)], [200, 300]);
   assert.ok(presetClick.messages.includes(PRESET_TEXT), "says why");

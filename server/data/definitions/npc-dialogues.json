@@ -1133574,53 +1133574,49 @@
                   "id": "9lHYJ-"
                 },
                 {
-                  "type": "choice",
-                  "options": [
+                  "type": "condition",
+                  "text": "If the player is  wearing  either a Hard hat or Carpenter's helmet:",
+                  "steps": [
                     {
-                      "text": "If the player is  wearing  either a Hard hat or Carpenter's helmet:",
-                      "steps": [
+                      "npc": "Mind your head..."
+                    },
+                    {
+                      "npc": "That said, that hat'll be protecting you pretty well. Looks like a good one!"
+                    },
+                    {
+                      "player": "Safety first, and all that. But where's your..."
+                    },
+                    {
+                      "npc": "You look like you could use a cup of tea. How about it?"
+                    },
+                    {
+                      "type": "choice",
+                      "options": [
                         {
-                          "npc": "Mind your head..."
-                        },
-                        {
-                          "npc": "That said, that hat'll be protecting you pretty well. Looks like a good one!"
-                        },
-                        {
-                          "player": "Safety first, and all that. But where's your..."
-                        },
-                        {
-                          "npc": "You look like you could use a cup of tea. How about it?"
-                        },
-                        {
-                          "type": "choice",
-                          "options": [
+                          "text": "Yes please!",
+                          "steps": [
                             {
-                              "text": "Yes please!",
+                              "type": "jump",
+                              "id": "GBQYCf",
                               "steps": [
                                 {
-                                  "type": "jump",
-                                  "id": "-mLf6K",
-                                  "steps": [
-                                    {
-                                      "type": "call",
-                                      "branch": "jump-6345efc538d61280"
-                                    }
-                                  ]
+                                  "type": "call",
+                                  "branch": "jump-6345efc538d61280"
                                 }
                               ]
-                            },
+                            }
+                          ]
+                        },
+                        {
+                          "text": "No, thank you.",
+                          "steps": [
                             {
-                              "text": "No, thank you.",
+                              "type": "jump",
+                              "id": "YjAJ9m",
                               "steps": [
                                 {
-                                  "type": "jump",
-                                  "id": "bAnP31",
-                                  "steps": [
-                                    {
-                                      "type": "call",
-                                      "branch": "jump-6b5d568b987baa9f"
-                                    }
-                                  ]
+                                  "type": "call",
+                                  "branch": "jump-6b5d568b987baa9f"
                                 }
                               ]
                             }
@@ -1133628,7 +1133624,8 @@
                         }
                       ]
                     }
-                  ]
+                  ],
+                  "id": "FN2l-O"
                 }
               ]
             },
@@ -1560512,7 +1560509,7 @@
         },
         {
           "type": "condition",
-          "id": "wgs-sketch-lost",
+          "text": "If the player does not have the sketch",
           "steps": [
             {
               "type": "message",
@@ -1560520,7 +1560517,7 @@
               "id": "IcllDi"
             }
           ],
-          "text": "If the player does not have the sketch"
+          "id": "wgs-sketch-lost"
         },
         {
           "type": "line",
@@ -1583675,18 +1583672,15 @@
                   "npc": "Certainly, what would you like me to make?"
                 },
                 {
-                  "type": "choice",
-                  "options": [
+                  "type": "condition",
+                  "text": "If the player is on a non-members world:",
+                  "steps": [
                     {
-                      "text": "If the player is on a non-members world:",
-                      "steps": [
-                        {
-                          "type": "call",
-                          "branch": "OLcdCz"
-                        }
-                      ]
+                      "type": "call",
+                      "branch": "OLcdCz"
                     }
-                  ]
+                  ],
+                  "id": "XWbB_O"
                 },
                 {
                   "type": "action",

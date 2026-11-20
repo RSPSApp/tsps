@@ -599,7 +599,7 @@ function placeAdvert(player) {
   Menu.refuse(player, Menu.messageBox(`Your house is now being advertised on the noticeboard for the next ${ADVERT_MINUTES} minutes. If your house is closed or you log off, your advert will be removed.`));
 }
 
-/** The exit portal's advert option. Ours: nothing is said when there was no advert. */
+/** Takes the player's advert down after Yes on "Remove your advert?" (board or exit portal). */
 function removeAdvertisement({ player }) {
   if (endAdvert(player)) player.sendMessage("Your house is no longer being advertised.");
   return true;

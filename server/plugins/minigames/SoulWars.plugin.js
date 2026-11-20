@@ -38,7 +38,8 @@ module.exports = {
       help: "Development aid: fills the lobby with bots. Leave off so production lobbies are players only.",
     },
     "SoulWars:minPlayers": {
-      type: "number", label: "Players needed to start", defaultText: "20, as on the Wiki", integer: true, min: 2,
+      // The world has 2048 usable player slots; the lobby also reads its capacity at runtime.
+      type: "number", label: "Players needed to start", defaultText: "20, as on the Wiki", integer: true, min: 2, max: 2048,
       help: "Lowest number of players a game needs. Never under 2, since both teams need a player.",
     },
   },

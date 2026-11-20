@@ -164,7 +164,7 @@ export class MovementQueue {
         }
         // Owner noclip (#5630): a flagged player's own step ignores collision; everyone else is checked below.
         if (isNoclip(this.character)) return true;
-        return RegionManager.canMovestart(this.character.getLocation(), this.character.getLocation().transform(deltaX, deltaY), this.character.getSize(), this.character.getSize(), this.character.getPrivateArea());
+        return RegionManager.canMovestart(this.character.getLocation(), this.character.getLocation().transform(deltaX, deltaY), this.character.getSize(), this.character.getSize(), this.character.getWalkClipArea());
     }
 
     /**
@@ -712,7 +712,7 @@ export class MovementQueue {
                     next,
                     this.character.getSize(),
                     this.character.getSize(),
-                    this.character.getPrivateArea()
+                    this.character.getWalkClipArea()
                 ))
         ) {
             return false;
@@ -799,7 +799,7 @@ export class MovementQueue {
                 next,
                 this.character.getSize(),
                 this.character.getSize(),
-                this.character.getPrivateArea()
+                this.character.getWalkClipArea()
             ) && this.isDynamicallyOccupied(next, source)) {
                 this.blockedByDynamicOccupancy = true;
             }
@@ -1033,7 +1033,7 @@ export class MovementQueue {
         // do not re-route; this avoids jittering too close/too far while idle.
         if (followerDistance <= 1 && !leaderMoving && followerDistance !== 0) {
             if (!RegionManager.canMovestart(this.character.getLocation(), following.getLocation(),
-                this.character.getSize(), this.character.getSize(), this.character.getPrivateArea())) {
+                this.character.getSize(), this.character.getSize(), this.character.getWalkClipArea())) {
                 this.notifyFollowBlocked(following, "blocked-adjacent");
             }
             return;

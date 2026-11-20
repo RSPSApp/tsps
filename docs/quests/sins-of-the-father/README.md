@@ -30,6 +30,37 @@ compared and one login mismatch was fixed.
   removed from `syncVisuals`; login now leaves the cache default in place. Covered by
   `server/tests/sins-qh-actions.test.cjs`.
 
+- **fixed** (2026-11-19) Damien Leucurte's magical fires were missing: the fight had no fires
+  and nothing handled `myq5_damien_fire_small` (loc 37996, "Magical Fire", Stamp-out). Now
+  `server/plugins/quests/quests/Fires.SinsOfTheFather.js`. Covered by
+  `server/tests/sins-damien-fires.test.cjs` and `server/tests/sins-qh-actions.test.cjs`.
+
+## Damien's magical fires
+
+rsprox captures: the user's local 1000270 (rev 227, ticks 6281-6344), rsprox.net 102 (ticks
+3534-3629) and 1637 (ticks 4940-5064).
+
+- **Cast:** Damien (`myq5_damien_combat`, 9564) faces the fire's tile and plays
+  `human_castenfeeble` (728); two ticks later `myq5_damien_fire_small` appears there (shape 10,
+  any rotation) with `sound_area 2596`. The cast takes one of his 5-tick attack turns.
+- **Cadence:** fires at +15/+45 (1000270), +30/+60 (102) and +30/+70/+110 (1637) ticks after he
+  turns hostile: 30 or 40 ticks apart. Tiles used: (3717-3722, 3355-3360, 1).
+- **Effect:** `Your attacks seem to have reduced effect on Damien.` once per fire, as the
+  player's next attack lands; 102 has no message because the player stamped the fire before
+  attacking again. Wiki: the fires reduce the damage dealt to him and he becomes "increasingly
+  resistant"; he can still be killed with one burning.
+- **Stamp-out:** `human_stamp` (794) on arrival, a tick later `sound_area 1446` at the fire and the
+  loc is gone (`invisible_type8_nonblocking`). Recorded difference: we remove the loc instead of sending
+  `invisible_type8_nonblocking` (1637 ticks 4977, 5013); the tile looks the same.
+- **Death:** Damien's removal clears the fires still burning (1000270 tick 6344).
+- **Ours:** a cast every 30 ticks, the first 28 ticks after the fight starts; leaving the fight
+  (more than 15 tiles from Damien, or off his floor) puts the fires out and the count starts over
+  on return; a free tile from the recorded area; 20% less player damage per burning fire (no source gives a figure; hits with one
+  fire burning averaged about 80% of those without in 1000270). The cast does not yet replace
+  Damien's attack on that turn. Not added: the big fire at (3722, 3357, 1)
+  (`myq5_damien_fire_noop` 37994 before the fight, `myq5_damien_fire` 37995 from it, with
+  Escape/Quick-escape options nobody recorded).
+
 ## Runs
 
 ### 2026-11-03 — capture/source audit

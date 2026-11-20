@@ -1,5 +1,6 @@
 // #5693: repairing a Myreque bridge rung walks the player onto the repaired rung (rsprox_transcripts/231/00366.txt
-// tick 6822), so the next rung is within reach. Real walk-to-object route from the landing; run after `yarn build`.
+// tick 6822; the revision-242 playthrough in docs/in-search-of-the-myreque.md: three ticks after the click), so the next
+// rung is within reach. Real walk-to-object route from the landing; run after `yarn build`.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { before, after, test } = require('node:test');
@@ -81,7 +82,7 @@ test('repairing the three rungs one after another walks the player along the bri
     assert.deepEqual(at(p), [3502, y, 0], `the player stands on the repaired rung at ${y}`);
   }
   assert.ok(!p.messages.includes("I can't reach that!"), p.messages.join('|'));
-  assert.ok(p.messages.includes('The rope bridge is now fully repaired.'));
+  assert.deepEqual(p.messages, Array(3).fill('You repair a section of the bridge.'), 'one message per rung, as live sends it');
   assert.equal(p.getInventory().getAmount(I.PLANK), 0);
 });
 

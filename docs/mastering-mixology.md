@@ -114,3 +114,11 @@ What happens when every stored potion is refused was not captured; no swig, soun
 - **Never saved:** crystal dust (divine potions). Serum 207 has no recipe here yet.
 - **Not captured:** the live recordings that wear the goggles (rev 237, Leagues) only show the equip itself; the saving is server-side and silent, so its rules come from the Wiki page alone.
 - **Assumed:** the goggles page names weapon poison++ only; weapon poison and weapon poison+ count here as any other secondary ("most potions").
+
+## Outfit styles (Change)
+
+`Outfit.Mixology.js`, data in `outfitStyles` of `plugins/minigames/data/mastering-mixology.json`. The prescription goggles, Alchemist labcoat and Alchemist pants each have a second look (the goggles focused or unfocused, the labcoat and pants with an apron: Wiki, Alchemist's outfit). The gloves have no Change option in the cache.
+
+- **Captured** (rsprox recording 4210, rev 238, Leagues world): inventory Change swaps the piece for its other look in the same slot (`mm_alchemist_hat` <-> `mm_alchemist_hat_alt`, tick 1995; labcoat ticks 2387 and 2400; pants ticks 2402 and 2404), with the game message "You adjust the style of your <name>." and synth sound 2238 (equip_fun), on the click's tick. Nothing else changes.
+- **Inventory only:** the cache gives no worn Change option, and the Wiki's goggles page says the change is made in the inventory.
+- Both goggle looks keep the secondary saving (see Prescription goggles above).

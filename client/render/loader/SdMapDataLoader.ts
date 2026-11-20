@@ -1011,6 +1011,11 @@ function addLocAnimationFrames(
     };
 }
 
+/** A loc type's own default sequence: its seq, else the first of its random ones, else -1. */
+function defaultLocSequence(locType: LocType): number {
+    return locType.seqId !== -1 ? locType.seqId : locType.randomSeqIds?.[0] ?? -1;
+}
+
 export function addLocEntities(
     centerLocHeightWithSize: boolean,
     locModelLoader: LocModelLoader,
@@ -1045,19 +1050,25 @@ export function addLocEntities(
 
         let animatedEntity = entity;
         if (locType.transforms) {
+            const parent = locType;
             const transformed = locType.transform(varManager, locModelLoader.locTypeLoader);
             if (!transformed) {
                 continue;
             }
             locType = transformed;
-            // The selected variant owns the default animation, not the map's parent.
+            // The selected variant's own default animation plays when it has one (the Tree Gnome
+            // orbs' completed form); a variant without one plays the map parent's, as the
+            // OSRS client animates a multiloc with its parent's sequence. Every Runecrafting
+            // ruins keeps its pulsing glow (seq 2714) on the parent only, as do 2,300 other
+            // variants (fireplaces, fire pits, braziers, torches, barriers, portals): taking the
+            // variant's alone left the ruins' dome solid and banded and their flames still.
             // A LOC_ANIM override (including -1) remains authoritative even when its
             // numeric id happens to equal that parent's default.
-            const defaultSequence = locType.seqId !== -1
-                ? locType.seqId : locType.randomSeqIds?.[0] ?? -1;
+            const variantSequence = defaultLocSequence(locType);
+            const ownSequence = variantSequence !== -1;
             animatedEntity = new LocEntity(id, type, rotation, entity.level, tileX, tileY,
-                entity.seqOverride ?? defaultSequence,
-                entity.seqRandomStartOverride ?? locType.seqRandomStart,
+                entity.seqOverride ?? (ownSequence ? variantSequence : defaultLocSequence(parent)),
+                entity.seqRandomStartOverride ?? (ownSequence ? locType : parent).seqRandomStart,
                 entity.seqOverride, entity.seqRandomStartOverride);
         }
 

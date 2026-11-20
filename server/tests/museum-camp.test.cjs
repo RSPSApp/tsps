@@ -1,0 +1,192 @@
+// Run after `yarn build`: node --test tests/museum-camp.test.cjs
+//
+// Fossil Island's Museum Camp improvements against the Wiki (Museum Camp) and rsprox captures 73,
+// local 1000187, 1000189 and 1000410 (rev 227), with a real Player, Inventory and skills.
+const assert = require('node:assert/strict');
+const { test, before } = require('node:test');
+
+const { Server } = require('../dist/Server');
+Server.installProductionPathResolver();
+
+const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+const { PluginManager } = require('../dist/plugins/PluginManager');
+const { TaskManager } = require('../dist/game/task/TaskManager');
+
+let Camp, core;
+const hooks = {};
+
+before(() => {
+  CachePipeline.initialize();
+  core = PluginManager.getCoreApi();
+  const api = new Proxy({
+    core,
+    onObjectInteraction: (name, actions) => { hooks[name] = actions; },
+    onPlayerLogin: (fn) => { hooks.login = fn; },
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) });
+  Camp = require('../plugins/areas/MuseumCamp.plugin');
+  Camp.register(api);
+});
+
+const obj = (name) => core.CacheDefinitions.getObjId(name);
+const varbit = (name) => core.CacheDefinitions.getVarbitId(name);
+const loc = (name) => ({ getId: () => core.CacheDefinitions.getLocId(name) });
+const has = (p, name) => p.getInventory().getAmount(obj(name));
+
+let nextIndex = 950;
+function player(t, level = 99) {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const p = new Player(null);
+  p.lines = [];
+  p.boxes = [];
+  p.anims = [];
+  t.mock.method(p, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+  t.mock.method(p.getInventory(), 'refreshItems', () => p.getInventory());
+  t.mock.method(p, 'sendMessage', (m) => p.lines.push(m));
+  t.mock.method(p, 'performAnimation', (a) => p.anims.push(a.getId()));
+  t.mock.method(p, 'getDialogueManager', () => ({ startDialogues: (b) => { for (const d of b.getDialogues().values()) p.boxes.push(d.getText?.()); } }));
+  p.setIndex(++nextIndex);
+  p.setRegistered(true);
+  t.after(() => p.setRegistered(false));
+  p.getSkillManager().setCurrentLevel(core.Skill.CONSTRUCTION, level, false);
+  return p;
+}
+
+const give = (p, name, n = 1) => p.getInventory().add(new core.Item(obj(name), n));
+
+/** Build, then let the build tick pass. */
+function build(p, name, option, locName) {
+  const result = hooks[name][option]({ player: p, object: loc(locName) });
+  TaskManager.process();
+  TaskManager.process();
+  return result;
+}
+
+const xp = (p) => p.getSkillManager().getExperience(core.Skill.CONSTRUCTION);
+
+test('the spinning wheel: 4 oak planks and 5 nails with a hammer at 28 Construction, 1,000 XP (Wiki; recorded line and varbit)', (t) => {
+  const p = player(t);
+  give(p, 'hammer');
+  give(p, 'plank_oak', 4);
+  give(p, 'nails_iron', 5);
+  const before = xp(p);
+  assert.equal(hooks['Broken Spinning Wheel']['Build on']({ player: p, object: loc('fossil_spinning_wheel') }), true);
+  assert.deepEqual(p.anims, [core.CacheDefinitions.getSeqId('human_poh_build')], 'the build animation at once');
+  assert.equal(has(p, 'plank_oak'), 4, 'the materials go the tick after');
+  TaskManager.process();
+  TaskManager.process();
+  assert.equal(p.lines.at(-1), 'You build the spinning wheel.');
+  assert.equal(has(p, 'plank_oak'), 0);
+  assert.equal(has(p, 'nails_iron'), 0);
+  assert.equal(has(p, 'hammer'), 1, 'the hammer is kept');
+  assert.equal(p.getPacketSender().getVarp(core.CacheDefinitions.getVarbit(varbit('fossil_spinning_wheel')).baseVar) & 16, 16, 'fossil_spinning_wheel (bit 4 of varp 1632, read by fossil_camp)');
+  assert.equal(xp(p) - before, 1000);
+  assert.deepEqual(p.getAttribute(Camp.BUILT_ATTRIBUTE), ['spinning-wheel']);
+});
+
+test('every improvement takes its Wiki level, materials and experience', (t) => {
+  for (const b of Camp.DATA.builds) {
+    const p = player(t, b.level);
+    give(p, 'hammer');
+    for (const [name] of b.tools) give(p, name);
+    for (const [name, amount] of b.materials) give(p, name, amount);
+    if (b.nails) give(p, 'nails', b.nails);
+    const before = xp(p);
+    build(p, b.name, b.option, b.loc);
+    assert.equal(p.lines.at(-1), b.built, b.key);
+    for (const [name] of b.materials) assert.equal(has(p, name), 0, `${b.key}: ${name} used`);
+    for (const [name] of b.tools) assert.equal(has(p, name), 1, `${b.key}: ${name} kept`);
+    assert.equal(has(p, 'nails'), 0, `${b.key}: nails used`);
+    assert.equal(xp(p) - before, b.xp, b.key);
+  }
+  const expected = { 'bank-chest': [21, 250], well: [22, 500], 'cooking-pot': [24, 800], 'spinning-wheel': [28, 1000], loom: [29, 1000] };
+  assert.deepEqual(Object.fromEntries(Camp.DATA.builds.map((b) => [b.key, [b.level, b.xp]])), expected);
+});
+
+test('below the level: the recorded line, as a game message and in a message box; nothing used', (t) => {
+  const p = player(t, 27);
+  give(p, 'hammer');
+  give(p, 'plank_oak', 4);
+  give(p, 'nails', 5);
+  build(p, 'Broken Spinning Wheel', 'Build on', 'fossil_spinning_wheel');
+  assert.deepEqual(p.lines, ['You need at least level 28 Construction to build that.']);
+  assert.deepEqual(p.boxes, ['You need at least level 28 Construction to build that.']);
+  assert.equal(has(p, 'plank_oak'), 4);
+  assert.deepEqual(p.anims, []);
+});
+
+test('the cooking pot asks for a tinderbox first, then lists what is missing in the recorded order', (t) => {
+  const p = player(t);
+  give(p, 'hammer');
+  build(p, 'Fire pit', 'Build on', 'fossil_range');
+  assert.equal(p.lines.at(-1), 'You need a tinderbox to build the cooking pot.');
+  give(p, 'tinderbox');
+  build(p, 'Fire pit', 'Build on', 'fossil_range');
+  assert.equal(p.lines.at(-1), 'You need 1 x Iron bar, 2 x Logs, 3 x Soft clay to build that.');
+  assert.equal(p.boxes.at(-1), p.lines.at(-1));
+  give(p, 'iron_bar');
+  give(p, 'softclay', 3);
+  build(p, 'Fire pit', 'Build on', 'fossil_range');
+  assert.equal(p.lines.at(-1), 'You need 2 x Logs to build that.');
+  give(p, 'logs', 2);
+  build(p, 'Fire pit', 'Build on', 'fossil_range');
+  assert.equal(p.lines.at(-1), 'You build the cooking pot.');
+  assert.equal(has(p, 'tinderbox'), 1);
+});
+
+test('the well lists its oak planks, bucket and rope as recorded', (t) => {
+  const p = player(t);
+  give(p, 'hammer');
+  give(p, 'nails', 5);
+  build(p, 'Ring of Stones', 'Build on', 'fossil_well');
+  assert.equal(p.lines.at(-1), 'You need 2 x Oak plank, 1 x Bucket, 1 x Rope to build that.');
+  give(p, 'plank_oak', 2);
+  build(p, 'Ring of Stones', 'Build on', 'fossil_well');
+  assert.equal(p.lines.at(-1), 'You need 1 x Bucket, 1 x Rope to build that.');
+});
+
+test('a hammer is needed; an Imcando hammer counts', (t) => {
+  const p = player(t);
+  give(p, 'plank_oak', 4);
+  give(p, 'nails', 5);
+  build(p, 'Broken Spinning Wheel', 'Build on', 'fossil_spinning_wheel');
+  assert.equal(p.lines.at(-1), 'You need a hammer to build that.');
+  give(p, 'imcando_hammer');
+  build(p, 'Broken Spinning Wheel', 'Build on', 'fossil_spinning_wheel');
+  assert.equal(p.lines.at(-1), 'You build the spinning wheel.');
+});
+
+test('built improvements stay built: no second build, and their varbits are sent at login', (t) => {
+  const p = player(t);
+  give(p, 'hammer');
+  give(p, 'plank_oak', 8);
+  give(p, 'nails', 10);
+  build(p, 'Broken Spinning Wheel', 'Build on', 'fossil_spinning_wheel');
+  build(p, 'Broken Spinning Wheel', 'Build on', 'fossil_spinning_wheel');
+  assert.equal(has(p, 'plank_oak'), 4, 'built once');
+  const fresh = player(t);
+  fresh.setAttribute(Camp.BUILT_ATTRIBUTE, ['well', 'loom']);
+  const sent = new Map();
+  t.mock.method(fresh.getPacketSender(), 'sendVarbit', (id, v) => { sent.set(id, v); return fresh.getPacketSender(); });
+  hooks.login({ player: fresh });
+  assert.deepEqual([...sent], [[varbit('fossil_well'), 1], [varbit('fossil_loom'), 1]]);
+});
+
+test('Build is only for the camp locs, not other locs of the same name', (t) => {
+  const p = player(t);
+  assert.equal(hooks['Ring of Stones']['Build on']({ player: p, object: { getId: () => 1 } }), false);
+  assert.deepEqual(p.lines, []);
+});
+
+test('a build task cancelled before its tick (a cutscene, a bot) does not block later builds', (t) => {
+  const p = player(t);
+  give(p, 'hammer');
+  give(p, 'plank_oak', 4);
+  give(p, 'nails', 5);
+  hooks['Broken Spinning Wheel']['Build on']({ player: p, object: loc('fossil_spinning_wheel') });
+  TaskManager.cancelTasks(p);
+  TaskManager.process();
+  TaskManager.process();
+  assert.equal(has(p, 'plank_oak'), 4, 'nothing built');
+  build(p, 'Broken Spinning Wheel', 'Build on', 'fossil_spinning_wheel');
+  assert.equal(p.lines.at(-1), 'You build the spinning wheel.');
+});

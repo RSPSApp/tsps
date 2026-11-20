@@ -62,11 +62,10 @@ function imbuedSlayerActive(entity) {
  * Whether the player's attack counts as demonbane: a demonbane weapon above, or a demonbane
  * spell (Wiki: Demonbane weapons). Read by content where demonbane matters beyond its bonus.
  */
-function isDemonbaneAttack(player) {
+function isDemonbaneAttack(player, spell = player?.getCombat?.()?.getSelectedSpell?.()) {
   const weapon = weaponName(player);
   if (DEMONIC_PACTS_ONLY.has(weapon)) return !!pluginApi && inDemonicPacts(pluginApi, player);
   if (MELEE_PERCENT.has(weapon) || RANGED_PERCENT.has(weapon)) return true;
-  const spell = player?.getCombat?.()?.getSelectedSpell?.();
   return spell?.demonbane === true;
 }
 

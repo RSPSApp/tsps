@@ -68,6 +68,7 @@ Jewellery.register({
   onItemOnObject: (handler) => { itemOnObjectHandlers.push(handler); },
   onPlayerLogin: (handler) => { loginHandler = handler; },
   onSpellCast() {},
+  onCustomEvent() {},
   emitCustomEvent: (name, payload) => {
     customEvents.push([name, payload]);
     if (name === "colosseum:has-rank" && payload.rank === "Hero") payload.reached = colosseumHeroes.has(payload.player);

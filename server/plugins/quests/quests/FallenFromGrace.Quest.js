@@ -7,21 +7,23 @@
  * interactions.
  *
  * Stages (varp 5715 "ffg_primary", varbit 15759 "ffg", bits 0-6), as live sends them
- * and as Quest Helper's loadSteps keys on them: 0 not started, 2 started (Cormac),
- * 3 told to see Muriel, 4 followed the trail, 5 found the notebook, 6 found the hat,
- * 8 Cormac explained the Mad Angel, 9 met Mortimer in the cavern, 11 three trolls dead,
- * 13 investigated the golem, 14 took the dull core, 15 powered the golem,
- * 16 climbed into the cathedral, 18 Mad Angel dead, 19 inspected Keenan's body / read the
- * letter, 20 complete.
+ * (rsprox captures "Fallen From Grace" P1 and P2, the user's own) and as Quest Helper's
+ * loadSteps keys on them: 0 not started, 2 started (Cormac's Yes), 3 sent to Muriel (Cormac's
+ * last line, P1 tick 107), 4 Muriel pointed at the monolith (P1 tick 129), 5 found the notebook,
+ * 6 found the hat, 8 Cormac explained the Mad Angel (P1 tick 358), 9 sailed into the cavern,
+ * 11 Mortimer asked for the three trolls (P2 tick 57; the kills are flag 15769, tick 151),
+ * 13 rocks cleared (tick 167), 14 took the dull core, 15 powered the golem, 16 climbed into the
+ * cathedral (tick 292), 18 Mad Angel dead (tick 431), 19 read Elessia's letter (tick 449), 20
+ * complete.
  *
  * The values are pinned by the cache's own multilocs, which read varbit 15759 directly:
  * ffg_dust shows 5-9 (the trail after the notebook), ffg_fake_rocks_1/2 clear at 12+,
  * slayer_master_mortimer and the powered golem appear at 12+/15+, ffg_corpse_keenan and
- * mad_angel_cathedral show 16-19, and 20 is the finished state the Wyrmscraig plugin's
- * OpenAccess used to fake (and still forces 20 until the shared patch in the report is applied). The per-step flags live in the sibling varbits 15760-15773
- * (ffg_met_cormac .. ffg_found_body) and are mirrored from a persisted bitfield.
+ * mad_angel_cathedral show 16-19, and 20 is the finished state. The per-step flags live in the
+ * sibling varbits 15760-15773 (ffg_met_cormac .. ffg_found_body) and are mirrored from a
+ * persisted bitfield.
  *
- * Source: https://oldschool.runescape.wiki/w/Fallen_From_Grace and
+ * Source: the captures above, https://oldschool.runescape.wiki/w/Fallen_From_Grace and
  * https://oldschool.runescape.wiki/w/Fallen_From_Grace/Quick_guide
  * Rewards per the wiki: 2 Quest points, 10,000 Crafting, 12,500 Sailing, 5,000 Mining and
  * 5,000 Runecraft XP; the final letter is taken back on completion.
@@ -30,34 +32,35 @@
  * enforced when the start option is chosen, because the wiki's start choice carries no
  * condition step to answer.
  *
- * Gaps/approximations:
- * - The cathedral fight uses the MadAngel plugin's per-player Ardeaglais instance, opened
- *   from the basement stairs: the world's ffg multi-NPC (16320 -> 16321/16322 and
- *   16313 -> 16315/16314) has no Attack option on the quest angel, so the player wakes the
- *   dormant instance angel as in the post-quest encounter. The decorative world angel
- *   stays for stages 16-19, as the cache's multiloc dictates.
- * - The cathedral chest uses the captured interface 811: five pin clicks then Confirm
- *   (811:15), with the captured per-attempt setup and a failed attempt reopening the next
- *   one. The front door answers "attempting to leave" while the angel lives and is a single
- *   successful pick after it dies (no separate 811 session on the door).
- * - The south cave opening requires a raft or skiff and disembarks through the real
- *   Sailing `wyrmscraig_cave` port; a sloop is refused (the wrong-ship split in the
- *   Discord recording).
- * - The large hat and worn journal are registered per player as private ground items
- *   while the quest is in progress; private floor items despawn after ~5 minutes, so
- *   leaving and re-entering the area re-ensures them (as does logging in). The
- *   pre-start "Someone's left their hat here" flavour is therefore not shown.
- * - The monolith's Inspect is folded into its only cache option, Mine; the first Mine
- *   after Muriel plays the inspect transcript and hands over the notebook.
- * - The "three nearby trolls" are counted among the cavern's generic mountain trolls
- *   (id 936) near Mortimer rather than dedicated quest spawns.
- * - The book/note/letter "Read" actions print a one-line summary of the wiki text rather
- *   than the full multi-page interface.
+ * As captured:
+ * - The transcript's message steps show as message or item boxes (objectbox with the notebook,
+ *   the dull core, the key and the letter; the chest's double box), with the scenes around them:
+ *   the hat's camera pan, the rockfall cleared behind a fade and a move to 2590,8613, the golem
+ *   moving aside behind a fade.
+ * - The cavern (stages 9-11): disembarking there starts Mortimer's greeting, and the trolls are
+ *   the quest's own three (16330-16332). Live puts the player in a private copy of the cavern
+ *   for this; ours spawns the cutscene Mortimer (16294) and the trolls for the player alone.
+ * - The basement stairs, with the key, unlock the hatch and put the player in the real cathedral
+ *   (2540,2214); the broken pew asks "Climb over the pew?" and leads to the Mad Angel's private
+ *   cathedral (the MadAngel plugin), where the quest's angel wakes by itself.
+ * - The front door's lock is the 5-pin 811 puzzle, its combination new each time it is opened
+ *   (Wiki: "The combination to the lock changes each attempt"; P2 sessions solve to 2306 and
+ *   7152). Once picked, the door opens as it does for everyone (MadAngel).
+ * - Keenan's body hands over Elessia's letter; reading it (the long scroll) is stage 19.
+ *
+ * Gaps/approximations ("Ours"):
+ * - The large hat and worn journal are registered per player as private ground items while the
+ *   quest is in progress; the pre-start "Someone's left their hat here" flavour is not shown.
+ * - The monolith's Inspect is folded into its only cache option, Mine; the first Mine after
+ *   Muriel plays the inspect transcript and hands over the notebook.
+ * - The scrawled notebook, golem primer, warning note and observations still print a one-line
+ *   summary: only the notebook's first spread is captured.
+ * - The hat's camera pan leaves out cam_rotateto (pitch 2, yaw 240), which our packets lack.
  */
 module.exports = function registerFallenFromGraceQuest(api) {
   const { CountdownTask, Item, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill, TaskManager } =
     api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, openLongScroll } = require("../QuestRuntime");
   const { createQuestLockpicking } = require("../QuestLockpicking");
   const { createDirectionalLock } = require("../QuestPuzzleLocks");
   const mining = require("../../skills/Mining.plugin.js");
@@ -65,7 +68,6 @@ module.exports = function registerFallenFromGraceQuest(api) {
   const { BoatManager } = require("../../../src/main/typescript/elvarg/game/content/sailing/BoatManager");
   const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
   const WyrmscraigAgility = require("../../skills/agility/shortcuts/Wyrmscraig.Agility");
-  const MadAngelCommon = require("../../bosses/madangel/Common.MadAngel");
   const MadAngelInstance = require("../../bosses/madangel/Instance.MadAngel");
 
   const STAGE_VERSION_ATTRIBUTE = "fallen-from-grace:stage-version";
@@ -94,7 +96,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
   const STAGE_CORMAC_PLAN = 8;
   const STAGE_CORMAC_BYPASS = 8;
   const STAGE_CAVERN = 9;
-  const STAGE_TROLLS = 11;
+  const STAGE_TROLLS = 11; // Mortimer asked for the trolls; their deaths are FLAG_TROLLS_KILLED
   const STAGE_GOLEM = 13;
   const STAGE_CORE = 14;
   const STAGE_GOLEM_POWERED = 15;
@@ -138,6 +140,22 @@ module.exports = function registerFallenFromGraceQuest(api) {
 
   const TROLL_KILLS_ATTRIBUTE = "quest.fallen_from_grace.troll-kills";
   const TROLLS_TO_KILL = 3;
+  // The cavern's quest NPCs as live adds them on arrival (P2 tick 42): the cutscene Mortimer behind
+  // the rockfall facing west, and the three trolls facing south.
+  const MORTIMER_CUTSCENE_SPAWN = { id: NpcIdentifiers.MORTIMER_2, x: 2601, y: 8608, face: 3 }; // 16294
+  const TROLL_SPAWNS = [
+    { id: NpcIdentifiers.MOUNTAIN_TROLL_9, x: 2593, y: 8604, face: 6 }, // ffg_troll_1, 16330
+    { id: NpcIdentifiers.MOUNTAIN_TROLL_10, x: 2591, y: 8610, face: 6 }, // ffg_troll_2, 16331
+    { id: NpcIdentifiers.MOUNTAIN_TROLL_11, x: 2588, y: 8609, face: 6 }, // ffg_troll_3, 16332
+  ];
+  const TROLL_WANDER_RADIUS = 2; // Ours: not captured
+  const TROLLS_KILLED_MESSAGE = "You notice the skeleton calling you over.";
+  const TROLLS_KILLED_SHOUT = "Hey! Come give me a hand over here.";
+  // Rocks cleared (P2 ticks 162-172): the pick-up animation and the fade, the box held 5 ticks,
+  // then the player is at 2590,8613 beside the real Mortimer.
+  const ROCKS_CLEARED_TILE = new Location(2590, 8613, 0);
+  const ROCKS_CLEARED_ANIMATION = 827;
+  const ROCKS_CLEARED_FADE = { moveTicks: 5, inTicks: 5, closeTicks: 10 };
 
   const CORMAC_NPC_ID = NpcIdentifiers.CORMAC; // 16318
   const MURIEL_NPC_ID = NpcIdentifiers.MURIEL; // 16319
@@ -146,8 +164,8 @@ module.exports = function registerFallenFromGraceQuest(api) {
     NpcIdentifiers.MORTIMER_2, // 16294
   ]);
   const BROKEN_GOLEM_NPC_ID = NpcIdentifiers.BROKEN_GOLEM; // 16321
+  // The quest's own trolls (ffg_troll_1-3); the cavern's generic mountain trolls don't count.
   const TROLL_NPC_IDS = new Set([
-    NpcIdentifiers.MOUNTAIN_TROLL, // 936, the cavern's generic trolls
     NpcIdentifiers.MOUNTAIN_TROLL_9, // 16330
     NpcIdentifiers.MOUNTAIN_TROLL_10, // 16331
     NpcIdentifiers.MOUNTAIN_TROLL_11, // 16332
@@ -206,6 +224,57 @@ module.exports = function registerFallenFromGraceQuest(api) {
   const CAVE_OPENING_SOUND = 10747;
   const CAVE_OPENING_CLOSE_TICKS = 5;
   const CATHEDRAL_DOOR_OBJECT_IDS = new Set([62368, 62369]);
+  // The door's question (P2 tick 473) and its success box (tick 622).
+  const DOOR_QUESTION = "You attempt to open the doors, but they appear to be locked.";
+  const DOOR_PICK = "Try to pick the lock.";
+  const DOOR_LEAVE = "Leave them.";
+  const DOOR_PICKED = "You successfully pick the lock, only to see it crumble away in your hands.";
+  const DOOR_LOCK_CODES = 6 ** 5; // five pins, six positions each
+  // P2: the first session ends with its 7th wrong guess (tick 566); the Wiki's fail line is shown
+  // (the recording closes it silently). The question, each wrong guess and the success play 2402/2402/2419.
+  const DOOR_LOCK_ATTEMPTS = 7;
+  const DOOR_FAILED = "Your fingers go numb from fiddling with the lock. You'll need to try again.";
+  const DOOR_SOUND = 2402;
+  const DOOR_PICKED_SOUND = 2419;
+  const CATHEDRAL_DOOR_OUTSIDE_X = 2542; // the door tiles are x 2541 (inside) and 2542 (outside)
+  // The basement stairs with the key (P2 ticks 288-295): the message, the hatch's sound, the fade
+  // and the move into the cathedral 2 ticks after it starts.
+  const HATCH_MESSAGE = "You unlock a hatch at the top of the staircase and climb up into the cathedral.";
+  const HATCH_SOUND = 2419;
+  const CATHEDRAL_TILE = new Location(2540, 2214, 0);
+  const STAIRS_FADE = { moveTicks: 2, inTicks: 3, closeTicks: 5 };
+  // The golem moving aside (P2 ticks 247-252): the fade, the move at +2, the box held 3 ticks.
+  const GOLEM_FADE = { moveTicks: 2, inTicks: 3, closeTicks: 5 };
+  // Item boxes and their sounds, as captured.
+  const FIND_SOUND = 2582; // the notebook (P1 tick 156) and the dull core (P2 tick 235)
+  const GOLEM_INSPECT_ANIMATION = 14473; // tol_player_rummage01_walkmerge
+  const CHEST_OPEN_ANIMATION = 536;
+  const CHEST_OPEN_SOUND = 2419;
+  const CORE_BREAK_SOUNDS = [2381, 2119];
+  // Mining the monolith (P1 ticks 168-181) and chiselling the sunstone (tick 186).
+  const MONOLITH_SWING_MESSAGE = "You swing your pick at the monolith.";
+  const MONOLITH_MINED_MESSAGE = "You manage to mine some sunstone.";
+  const MONOLITH_FULL_MESSAGE = "Your inventory is too full to hold any more sunstone.";
+  const MONOLITH_MINE_TICKS = 11; // the one captured swing to sunstone; Ours: no success roll
+  const MONOLITH_MINED_SOUND = 3600;
+  const MONOLITH_FULL_SOUND = 2277;
+  const CHISEL_ANIMATION = 7202;
+  const CHISEL_SOUND = 1553;
+  // The hat (P1 ticks 247-274): a think emote and a camera pan from the hat to the cathedral,
+  // the box held without its continue for 23 ticks.
+  const HAT_THINK_ANIMATION = 857;
+  const HAT_HOLD_TICKS = 23;
+  const HAT_CAMERA_SCRIPT = 7917;
+  // Elessia's final letter, read on the long scroll (P2 tick 449).
+  const FINAL_LETTER_TEXT = [
+    "After all these years, I thought I had maybe finally mastered this illness. This hunger.",
+    "",
+    "I was a fool. I have been a fool for so long now, and enough is finally enough. To the people of this island: know that you will be plagued no longer by my madness. The death of this boy will be the last. In my place, I leave this golem. Be careful around it, for it is unrefined and temperamental. A pyrophoroi I am not. However, in time, and with some work, I hope you will be able to use it. Let it defend you in a way I never could.",
+    "",
+    "No words will ever make up for what I have done, but know that I will spend the rest of may days trying to earn forgiveness. May Saradomin guide you all.",
+    "",
+    "Dame Elessia",
+  ];
   const CREVICE_OBJECT_ID = ObjectIdentifiers.CREVICE_57; // 62257 Squeeze-through
   // ffg_corpse_keenan (no identifier: the raw multi-loc is named "null" and resolves to
   // BODY_3 62375); interactions carry the raw id.
@@ -272,6 +341,10 @@ module.exports = function registerFallenFromGraceQuest(api) {
 
   // Action/message step ids.
   const MONOLITH_TAKE_MESSAGE_ID = "3Vr-5r";
+  const HAT_MESSAGE_ID = "-Z42qk";
+  const GOLEM_INSPECT_MESSAGE_ID = "Xt_i1J";
+  const GOLEM_CORE_MESSAGE_ID = "tVIYxb";
+  const GOLEM_POWERED_MESSAGE_ID = "RaMntH";
   const CHEST_FOUND_BOTH_MESSAGE_ID = "F1HVbQ";
   const CHEST_FOUND_CORE_ONLY_MESSAGE_ID = "-XoYUm";
   const CHEST_FOUND_BOOK_MESSAGE_ID = "R8mrvW";
@@ -281,24 +354,12 @@ module.exports = function registerFallenFromGraceQuest(api) {
   const BODY_FOUND_MESSAGE_ID = "r_JYqP";
   const CORMAC_CRYSTAL_MESSAGE_ID = "IjKWK4";
   const QUEST_COMPLETE_ACTION_ID = "gYcOjH";
-  const OUR_MESSAGE_IDS = new Set([
-    MONOLITH_TAKE_MESSAGE_ID,
-    CHEST_FOUND_BOTH_MESSAGE_ID,
-    CHEST_FOUND_CORE_ONLY_MESSAGE_ID,
-    CHEST_FOUND_BOOK_MESSAGE_ID,
-    CHEST_FOUND_CORE_MESSAGE_ID,
-    CORE_BROKEN_MESSAGE_ID,
-    ROCKS_CLEARED_MESSAGE_ID,
-    BODY_FOUND_MESSAGE_ID,
-    CORMAC_CRYSTAL_MESSAGE_ID,
-  ]);
 
   const READ_MESSAGES = new Map([
     [SCRAWLED_NOTEBOOK_ITEM_ID, "An almost scientific observation on sunstone: Keenan felt the monolith was watching him."],
     [GOLEM_PRIMER_ITEM_ID, "A dusty primer on crafting golems out of sunstone."],
     [WARNING_NOTE_ITEM_ID, "Elessia had herself imprisoned in the cathedral. A substitution cipher is scrawled on the back."],
     [OBSERVATIONS_ITEM_ID, "A delicate book on Elessia, the Mad Angel who once led the first settlers here."],
-    [FINAL_LETTER_ITEM_ID, "Elessia's final letter: she has left the island and left a golem in her place."],
   ]);
 
   let quest;
@@ -333,6 +394,11 @@ module.exports = function registerFallenFromGraceQuest(api) {
 
   function held(player, itemId) {
     return player.getInventory().getAmount(itemId) > 0;
+  }
+
+  /** Carried, worn or banked (placeholders own nothing). */
+  function ownsLetter(player) {
+    return api.core.Bank?.owns ? api.core.Bank.owns(player, FINAL_LETTER_ITEM_ID) : held(player, FINAL_LETTER_ITEM_ID);
   }
 
   function freeSlots(player) {
@@ -385,6 +451,11 @@ module.exports = function registerFallenFromGraceQuest(api) {
     startTranscript(api, player, npcId, PAGE, variant);
   }
 
+  /** As `speak`, with the NPC in the world that says it (for its facing and overhead lines). */
+  function speakWith(player, npc, npcId, variant) {
+    startTranscript(api, player, npcId, PAGE, variant, undefined, npc);
+  }
+
   // ==========================================================================
   // Dialogue selection
   // ==========================================================================
@@ -398,14 +469,11 @@ module.exports = function registerFallenFromGraceQuest(api) {
       setFlag(player, FLAG_MET_CORMAC);
       return "starting-the-quest-talking-to-cormac";
     }
-    if (stage <= STAGE_STARTED) return "starting-the-quest-talking-to-cormac-after-starting-the-quest";
+    if (stage <= STAGE_MURIEL) return "starting-the-quest-talking-to-cormac-after-starting-the-quest";
     if (stage <= STAGE_TRAIL) return "following-the-trail-talking-to-cormac-after-muriel";
     if (stage <= STAGE_NOTEBOOK) return "following-the-trail-talking-to-cormac-after-finding-the-notebook";
-    if (stage <= STAGE_MURIEL_HAT) {
-      // The hat leads Cormac to explain the Mad Angel; the plan is now known.
-      quest.setStage(player, STAGE_CORMAC_PLAN);
-      return "the-way-under-ardeaglais-talking-to-cormac";
-    }
+    // The hat leads Cormac to explain the Mad Angel; stage 8 comes after his last line (handleLine).
+    if (stage <= STAGE_MURIEL_HAT) return "the-way-under-ardeaglais-talking-to-cormac";
     if (stage <= STAGE_CORMAC_BYPASS) {
       if (stage === STAGE_CORMAC_PLAN) {
         setFlag(player, FLAG_CORMAC_BYPASS);
@@ -428,14 +496,8 @@ module.exports = function registerFallenFromGraceQuest(api) {
       return { page: "Muriel", variant: "after-completion-of-fallen-from-grace" };
     }
     if (stage === 0) return { page: "Muriel", variant: "before-starting-fallen-from-grace" };
-    if (stage <= STAGE_STARTED) {
-      quest.setStage(player, STAGE_MURIEL);
-      return "following-the-trail-talking-to-muriel";
-    }
-    if (stage <= STAGE_MURIEL) {
-      quest.setStage(player, STAGE_TRAIL);
-      return "following-the-trail-talking-to-muriel-again";
-    }
+    // Stage 4 comes with her "Thank you..." (handleLine).
+    if (stage <= STAGE_MURIEL) return "following-the-trail-talking-to-muriel";
     if (stage <= STAGE_TRAIL) return "following-the-trail-talking-to-muriel-again";
     if (stage <= STAGE_NOTEBOOK) return "following-the-trail-talking-to-muriel-after-finding-the-notebook";
     if (!hasFlag(player, FLAG_MURIEL_HAT)) {
@@ -450,17 +512,59 @@ module.exports = function registerFallenFromGraceQuest(api) {
   }
 
   function mortimerVariant(player, stage) {
-    if (stage === STAGE_CAVERN) {
-      if (!hasFlag(player, FLAG_MORTIMER_INTRO)) {
-        setFlag(player, FLAG_MORTIMER_INTRO);
-        return "the-way-under-ardeaglais-meeting-mortimer";
-      }
-      return "the-way-under-ardeaglais-talking-to-mortimer-before-killing-the-trolls";
-    }
+    // Stage 11 comes with his "It was those three nearby trolls..." (handleLine).
+    if (stage === STAGE_CAVERN) return "the-way-under-ardeaglais-meeting-mortimer";
     if (stage === STAGE_TROLLS) {
-      return "the-way-under-ardeaglais-talking-to-mortimer-after-killing-the-trolls";
+      return hasFlag(player, FLAG_TROLLS_KILLED)
+        ? "the-way-under-ardeaglais-talking-to-mortimer-after-killing-the-trolls"
+        : "the-way-under-ardeaglais-talking-to-mortimer-before-killing-the-trolls";
     }
     return { page: "Mortimer", variant: "standard-dialogue" };
+  }
+
+  // ==========================================================================
+  // Lines that move the quest on, as live does (the stage goes with the line shown)
+  // ==========================================================================
+
+  function lineIs(event, npcId, text) {
+    if (event.npcId !== npcId && !(npcId === MORTIMER_CUTSCENE_SPAWN.id && MORTIMER_NPC_IDS.has(event.npcId))) return false;
+    if (!(event.pages ?? []).some((entry) => entry?.page === PAGE)) return false;
+    const said = typeof event.step?.player === "string" ? event.step.player : event.step?.text;
+    return typeof said === "string" && said.startsWith(text);
+  }
+
+  function beforeLine(event, action) {
+    const previous = event.before;
+    event.before = () => {
+      previous?.();
+      action();
+    };
+  }
+
+  function handleLine(event) {
+    const { player } = event;
+    if (!player) return;
+    const stage = quest.getStage(player);
+    if (stage === STAGE_STARTED && lineIs(event, CORMAC_NPC_ID, "I'll head over there right away.")) {
+      beforeLine(event, () => quest.getStage(player) === STAGE_STARTED && quest.setStage(player, STAGE_MURIEL));
+    } else if (stage >= STAGE_STARTED && stage <= STAGE_MURIEL && lineIs(event, MURIEL_NPC_ID, "Thank you...")) {
+      beforeLine(event, () => quest.getStage(player) <= STAGE_MURIEL && quest.setStage(player, STAGE_TRAIL));
+    } else if (stage === STAGE_MURIEL_HAT && lineIs(event, CORMAC_NPC_ID, "Wonderful. I'll be sure to take care then.")) {
+      // P1 tick 358: stage 8 as the menu after this line opens.
+      const previous = event.after;
+      event.after = () => {
+        previous?.();
+        if (quest.getStage(player) === STAGE_MURIEL_HAT) quest.setStage(player, STAGE_CORMAC_PLAN);
+      };
+    } else if (stage === STAGE_CAVERN && lineIs(event, MORTIMER_CUTSCENE_SPAWN.id, "It was those three nearby trolls")) {
+      beforeLine(event, () => {
+        if (quest.getStage(player) !== STAGE_CAVERN) return;
+        quest.setStage(player, STAGE_TROLLS);
+        if ((Number(player.getAttribute(TROLL_KILLS_ATTRIBUTE)) || 0) >= TROLLS_TO_KILL) trollsDone(player);
+      });
+    } else if (lineIs(event, MORTIMER_CUTSCENE_SPAWN.id, "Hmm... a noble cause.")) {
+      beforeLine(event, () => setFlag(player, FLAG_MORTIMER_INTRO));
+    }
   }
 
   function selectVariant({ npcId, player }) {
@@ -568,9 +672,72 @@ module.exports = function registerFallenFromGraceQuest(api) {
   }
 
   /**
-   * Message/action side effects. Message steps are left unhandled so the wiki line
-   * still prints; only the final quest-complete action takes over the chatbox.
+   * How each of the page's message steps shows: live sends these as message boxes, or as item
+   * boxes for what the player is handed (rsprox P1/P2). Steps not captured follow the same rule.
    */
+  const ITEM_BOXES = new Map([
+    [MONOLITH_TAKE_MESSAGE_ID, [SCRAWLED_NOTEBOOK_ITEM_ID]], // P1 tick 156
+    [GOLEM_CORE_MESSAGE_ID, [DULL_SUNSTONE_CORE_ITEM_ID]], // P2 tick 235
+    [CHEST_FOUND_BOTH_MESSAGE_ID, [GOLEM_PRIMER_ITEM_ID, ANCIENT_SUNSTONE_CORE_ITEM_ID]], // P2 tick 266
+    [CORE_BROKEN_MESSAGE_ID, [STAIRCASE_KEY_ITEM_ID]], // P2 tick 282
+    [BODY_FOUND_MESSAGE_ID, [FINAL_LETTER_ITEM_ID]], // P2 tick 434
+    [CHEST_FOUND_CORE_ONLY_MESSAGE_ID, [ANCIENT_SUNSTONE_CORE_ITEM_ID]],
+    [CHEST_FOUND_BOOK_MESSAGE_ID, [GOLEM_PRIMER_ITEM_ID]],
+    [CHEST_FOUND_CORE_MESSAGE_ID, [ANCIENT_SUNSTONE_CORE_ITEM_ID]],
+  ]);
+  const STATEMENT_BOX_IDS = new Set([
+    HAT_MESSAGE_ID, ROCKS_CLEARED_MESSAGE_ID, GOLEM_INSPECT_MESSAGE_ID, GOLEM_POWERED_MESSAGE_ID, // captured
+    "QRj9vV", "8N1rQd", "cHwvUs", "IJq4d1", "UwU9Hg", "dEeYXC", "bmYCrG", "zdm8vH", "cdH5sl",
+    "XW8zb-", "7MaB9w", "4ktLGT", "bBCyvL", "EhmqRf", "kZQcaM", "OrQnCO",
+  ]);
+
+  function boxFor(event) {
+    const items = ITEM_BOXES.get(event.stepId);
+    if (items) event.box = { ...(event.box ?? {}), items };
+    else if (STATEMENT_BOX_IDS.has(event.stepId)) event.box = { ...(event.box ?? {}), statement: true };
+  }
+
+  function sound(player, id, delay = 0) {
+    player.getPacketSender().sendSoundEffect(id, 1, delay);
+  }
+
+  // The quest's fades (P2 ticks 162-172, 247-252, 290-295): fade_overlay (174) with script 948
+  // over 50 cycles, out then back in; busy and the minimap off while it is dark.
+  const FADE_UID = (161 << 16) | 1;
+  const FADE_OVERLAY = 174;
+  const FADE_SCRIPT = 948;
+  const FADE_CYCLES = 50;
+  const BUSY_VARBIT = 12393;
+  const MINIMAP_STATE_VARBIT = 6719;
+
+  function fade(player, out) {
+    player.getPacketSender().sendSubInterface(FADE_UID, FADE_OVERLAY, 1, {
+      postScripts: [{ scriptId: FADE_SCRIPT, args: out ? [0, 255, 0, 0, FADE_CYCLES] : [0, 0, 0, 255, FADE_CYCLES] }],
+    });
+  }
+
+  /** Fades out, runs `move` `moveTicks` later, fades back in at `inTicks` and closes at `closeTicks`. */
+  function fadeTravel(player, { moveTicks, inTicks, closeTicks }, move) {
+    const out = player.getPacketSender();
+    const key = {};
+    const here = () => player.isRegistered?.() !== false;
+    out.sendVarbit(BUSY_VARBIT, 1);
+    fade(player, true);
+    later(key, 1, () => here() && out.sendVarbit(MINIMAP_STATE_VARBIT, 2));
+    later(key, moveTicks, () => here() && move());
+    later(key, inTicks, () => {
+      if (!here()) return;
+      out.sendVarbit(MINIMAP_STATE_VARBIT, 0);
+      fade(player, false);
+    });
+    later(key, closeTicks, () => {
+      if (!here()) return;
+      out.sendVarbit(BUSY_VARBIT, 0);
+      out.closeSubInterface(FADE_UID);
+    });
+  }
+
+  /** Message/action side effects; the quest-complete action takes over the chatbox. */
   function handleDialogueAction(event) {
     const { player, stepId } = event;
     if (stepId === QUEST_COMPLETE_ACTION_ID) {
@@ -580,15 +747,30 @@ module.exports = function registerFallenFromGraceQuest(api) {
       quest.complete(player);
       return;
     }
-    if (!OUR_MESSAGE_IDS.has(stepId)) return;
+    if (event.kind !== "message") return;
+    if ((event.pages ?? []).some((entry) => entry?.page === PAGE)) boxFor(event);
     switch (stepId) {
       case MONOLITH_TAKE_MESSAGE_ID:
         if (quest.getStage(player) < STAGE_MURIEL || quest.getStage(player) > STAGE_TRAIL) return;
         if (player.getInventory().isFull()) return;
         if (give(player, SCRAWLED_NOTEBOOK_ITEM_ID)) {
-          setFlag(player, FLAG_KEENANS_BOOK);
           quest.setStage(player, STAGE_NOTEBOOK);
+          sound(player, FIND_SOUND);
         }
+        return;
+      case HAT_MESSAGE_ID:
+        hatScene(player, event);
+        return;
+      case GOLEM_INSPECT_MESSAGE_ID:
+        player.performAnimation(new api.core.Animation(GOLEM_INSPECT_ANIMATION));
+        return;
+      case GOLEM_CORE_MESSAGE_ID:
+        sound(player, FIND_SOUND);
+        return;
+      case GOLEM_POWERED_MESSAGE_ID:
+        // The golem moves aside behind a fade and the player is through (P2 ticks 247-252).
+        event.box = { ...event.box, holdTicks: GOLEM_FADE.inTicks };
+        fadeTravel(player, GOLEM_FADE, () => player.moveTo(GOLEM_PASSAGE_TILE));
         return;
       case CHEST_FOUND_BOTH_MESSAGE_ID:
         give(player, ANCIENT_SUNSTONE_CORE_ITEM_ID);
@@ -609,22 +791,62 @@ module.exports = function registerFallenFromGraceQuest(api) {
         return;
       case CORE_BROKEN_MESSAGE_ID:
         give(player, STAIRCASE_KEY_ITEM_ID);
+        for (const id of CORE_BREAK_SOUNDS) sound(player, id);
         return;
       case ROCKS_CLEARED_MESSAGE_ID:
-        setFlag(player, FLAG_TROLLS_KILLED);
-        if (quest.getStage(player) === STAGE_TROLLS) quest.setStage(player, STAGE_GOLEM);
+        clearRockfall(player, event);
         return;
       case BODY_FOUND_MESSAGE_ID:
         if (quest.getStage(player) !== STAGE_ANGEL_DEAD) return;
-        give(player, FINAL_LETTER_ITEM_ID);
+        if (!ownsLetter(player)) give(player, FINAL_LETTER_ITEM_ID);
         setFlag(player, FLAG_FOUND_BODY);
-        quest.setStage(player, STAGE_BODY);
+        sound(player, FIND_SOUND); // P2 tick 434
         return;
       case CORMAC_CRYSTAL_MESSAGE_ID:
         give(player, SUNSTONE_CRYSTAL_ITEM_ID);
         return;
       default:
     }
+  }
+
+  /**
+   * The hat's scene (P1 ticks 247-274): the think emote and the camera moved over the hat, then
+   * pulled up and back towards the cathedral while the box holds its continue for 23 ticks; the
+   * camera comes back once the player continues.
+   */
+  function hatScene(player, event) {
+    const out = player.getPacketSender();
+    player.performAnimation(new api.core.Animation(HAT_THINK_ANIMATION));
+    out.sendCameraUnlock(true);
+    out.sendClientScript(HAT_CAMERA_SCRIPT);
+    out.sendCameraMoveTo(2558, 2193, 250, { rate: 232, rate2: 100 });
+    out.sendCameraLookAt(2556, 2198, 150, { rate: 232, rate2: 100 });
+    later(player, 3, () => player.isRegistered?.() !== false
+      && out.sendCameraMoveTo(2558, 2193, 1400, { cycles: 600, easing: "ease_out_sine", ignoreTerrain: true }));
+    event.box = { ...event.box, holdTicks: HAT_HOLD_TICKS };
+    const previous = event.after;
+    event.after = () => {
+      previous?.();
+      out.sendClientScript(HAT_CAMERA_SCRIPT);
+      out.sendCameraUnlock(false);
+      out.sendCameraReset();
+    };
+  }
+
+  /**
+   * The rockfall (P2 ticks 162-172): the pick-up animation and the fade out with the box held, and
+   * 5 ticks later the player is beside the real Mortimer at stage 13 as the fade comes back.
+   */
+  function clearRockfall(player, event) {
+    if (quest.getStage(player) !== STAGE_TROLLS || !hasFlag(player, FLAG_TROLLS_KILLED)) return;
+    player.performAnimation(new api.core.Animation(ROCKS_CLEARED_ANIMATION));
+    event.box = { ...event.box, holdTicks: ROCKS_CLEARED_FADE.inTicks };
+    fadeTravel(player, ROCKS_CLEARED_FADE, () => {
+      if (quest.getStage(player) !== STAGE_TROLLS) return;
+      quest.setStage(player, STAGE_GOLEM);
+      removeCavernScene(player);
+      player.moveTo(ROCKS_CLEARED_TILE);
+    });
   }
 
   // ==========================================================================
@@ -652,11 +874,45 @@ module.exports = function registerFallenFromGraceQuest(api) {
       player.sendMessage("You need a pickaxe to mine the monolith.");
       return true;
     }
-    player.performAnimation(pickaxe.animation);
-    if (!give(player, SUNSTONE_ITEM_ID)) return true;
-    player.sendMessage("You chip a piece of sunstone from the monolith.");
-    if (stage === STAGE_NOTEBOOK) quest.setStage(player, STAGE_SUNSTONE);
+    if (player.getInventory().isFull()) {
+      monolithFull(player);
+      return true;
+    }
+    mineMonolith(player, pickaxe);
     return true;
+  }
+
+  const miningKeys = new WeakMap();
+
+  function monolithFull(player) {
+    sound(player, MONOLITH_FULL_SOUND);
+    player.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder()
+      .add(new api.core.StatementDialogue(0, MONOLITH_FULL_MESSAGE)));
+  }
+
+  /**
+   * As captured (P1 ticks 168-181): "You swing your pick at the monolith.", the pickaxe swung at
+   * +0, +2, +5 and +8, and the sunstone 11 ticks in with sound 3600. A full pack then shows the
+   * captured "too full" box. Moving away stops it.
+   */
+  function mineMonolith(player, pickaxe) {
+    const key = {};
+    miningKeys.set(player, key);
+    const from = player.getLocation();
+    const still = () => miningKeys.get(player) === key && player.isRegistered?.() !== false
+      && player.getLocation().equals?.(from) !== false;
+    player.sendMessage(MONOLITH_SWING_MESSAGE);
+    player.performAnimation(pickaxe.animation);
+    for (const tick of [2, 5, 8]) later(key, tick, () => still() && player.performAnimation(pickaxe.animation));
+    later(key, MONOLITH_MINE_TICKS, () => {
+      if (!still()) return;
+      miningKeys.delete(player);
+      player.performAnimation(pickaxe.animation);
+      if (!give(player, SUNSTONE_ITEM_ID)) return;
+      player.sendMessage(MONOLITH_MINED_MESSAGE);
+      sound(player, MONOLITH_MINED_SOUND);
+      if (player.getInventory().isFull()) later(key, 1, () => player.isRegistered?.() !== false && monolithFull(player));
+    });
   }
 
   function handleTent(event) {
@@ -692,16 +948,22 @@ module.exports = function registerFallenFromGraceQuest(api) {
     if (!questActive(player) || quest.getStage(player) < STAGE_GOLEM_POWERED) return;
     if (hasFlag(player, FLAG_CHEST_UNLOCKED)) return;
     setFlag(player, FLAG_CHEST_UNLOCKED);
-    player.sendMessage("You successfully pick the lock.");
+    // As captured (P2 tick 265): the chest opened with its sounds, then the find box.
+    player.performAnimation(new api.core.Animation(CHEST_OPEN_ANIMATION, 10));
+    sound(player, CHEST_OPEN_SOUND);
+    sound(player, 52, 10);
+    sound(player, 51, 45);
     speak(player, CORMAC_NPC_ID, "entering-ardeaglais-unlocking-the-chest");
   }
 
   function unlockCathedralDoor(player) {
     player.getPacketSender().sendInterfaceRemoval();
-    if (!questActive(player) || quest.getStage(player) < STAGE_ANGEL_DEAD) return;
+    if (!questActive(player) || quest.getStage(player) < STAGE_CATHEDRAL) return;
     if (hasFlag(player, FLAG_CATHEDRAL_OPENED)) return;
     setFlag(player, FLAG_CATHEDRAL_OPENED);
-    player.sendMessage("You successfully pick the lock, only to see it crumble away in your hands.");
+    sound(player, DOOR_PICKED_SOUND);
+    player.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder()
+      .add(new api.core.StatementDialogue(0, DOOR_PICKED)));
   }
 
   const ChestLock = createDirectionalLock(api, {
@@ -709,10 +971,15 @@ module.exports = function registerFallenFromGraceQuest(api) {
     onSolved: unlockChest,
   });
 
+  // A new combination each time the lock is opened (P2: 2306, then 7152 solved at tick 621).
   const DoorLockpicking = createQuestLockpicking(api, {
     activePins: 5,
-    target: 7152, // captured cathedral-door success, P2 tick 621
+    target: () => Math.floor(Math.random() * DOOR_LOCK_CODES),
     onSolved: unlockCathedralDoor,
+    maxAttempts: DOOR_LOCK_ATTEMPTS,
+    failSound: DOOR_SOUND,
+    onExhausted: (player) => player.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder()
+      .add(new api.core.StatementDialogue(0, DOOR_FAILED))),
   });
 
   function handleChest(event) {
@@ -754,19 +1021,20 @@ module.exports = function registerFallenFromGraceQuest(api) {
     return true;
   }
 
+  /**
+   * Keenan's body (P2 tick 434): the first look hands over Elessia's letter (stage stays 18; reading
+   * it is 19). Ours: a player at 18 who no longer has the letter gets the first look again.
+   */
   function handleBody(event) {
     const { player, objectId } = event;
     if (objectId !== CATHEDRAL_CORPSE_OBJECT_ID) return false;
     const stage = quest.getStage(player);
     if (stage < STAGE_ANGEL_DEAD || quest.isComplete(player)) return false;
     event.handled = true;
-    speak(
-      player,
-      CORMAC_NPC_ID,
-      stage === STAGE_ANGEL_DEAD && !hasFlag(player, FLAG_FOUND_BODY)
-        ? "entering-ardeaglais-inspecting-keenan-s-body"
-        : "entering-ardeaglais-inspecting-keenan-s-body-again"
-    );
+    const first = stage === STAGE_ANGEL_DEAD && (!hasFlag(player, FLAG_FOUND_BODY) || !ownsLetter(player));
+    speak(player, CORMAC_NPC_ID, first
+      ? "entering-ardeaglais-inspecting-keenan-s-body"
+      : "entering-ardeaglais-inspecting-keenan-s-body-again");
     return true;
   }
 
@@ -795,23 +1063,34 @@ module.exports = function registerFallenFromGraceQuest(api) {
     return true;
   }
 
-  /** The cathedral's front door is locked until the angel is defeated and the body read. */
+  /**
+   * The cathedral's front doors until the quest is done. From outside, before the player is in, the
+   * Wiki's "firmly locked" box; from inside (stage 16+), the captured question (P2 tick 473) and
+   * the 811 lock. Once picked they open as they do for everyone (the MadAngel plugin).
+   * Ours: the lock can be picked before the angel is dead (the transcript's choice has no stage).
+   */
   function handleCathedralDoor(event) {
     const { player, objectId } = event;
     if (!CATHEDRAL_DOOR_OBJECT_IDS.has(objectId)) return false;
+    if (quest.isComplete(player) || hasFlag(player, FLAG_CATHEDRAL_OPENED)) return false;
     const stage = quest.getStage(player);
-    if (!questActive(player) || stage < STAGE_CATHEDRAL) return false;
-    if (stage < STAGE_ANGEL_DEAD) {
-      event.handled = true;
-      speak(player, CORMAC_NPC_ID, "entering-ardeaglais-attempting-to-leave-the-cathedral");
+    event.handled = true;
+    // The lock is picked from inside ("Exit the cathedral by searching the lock", Wiki).
+    const outside = player.getLocation().getX() >= CATHEDRAL_DOOR_OUTSIDE_X;
+    // Ours: someone inside before stage 16 (only possible on older builds) is let out.
+    if (!outside && stage < STAGE_CATHEDRAL) {
+      event.handled = false;
+      return false;
+    }
+    if (stage < STAGE_CATHEDRAL || outside) {
+      speak(player, CORMAC_NPC_ID, "the-way-under-ardeaglais-attempting-to-open-the-cathedral-door");
       return true;
     }
-    if (!hasFlag(player, FLAG_CATHEDRAL_OPENED)) {
-      event.handled = true;
-      openDoorLock(player);
-      return true;
-    }
-    return false;
+    player.getMovementQueue?.()?.reset?.();
+    sound(player, DOOR_SOUND);
+    api.sendMultiChatboxPrompt(player, DOOR_QUESTION, DOOR_PICK, () => openDoorLock(player),
+      DOOR_LEAVE, () => player.getPacketSender().sendInterfaceRemoval());
+    return true;
   }
 
   function shortcutCleared(player) {
@@ -907,10 +1186,13 @@ module.exports = function registerFallenFromGraceQuest(api) {
         player.sendMessage("You need a Crafting level of 60 to make a sunstone core.");
         return true;
       }
+      // As captured (P1 tick 186): the message, animation 7202 and sound 1553.
       player.getInventory().deleteNumber(SUNSTONE_ITEM_ID, 1);
       player.getInventory().adds(SUNSTONE_CORE_ITEM_ID, 1);
       player.getSkillManager().addExperiences(Skill.CRAFTING, 10);
-      player.sendMessage("You chisel the sunstone into a core.");
+      player.performAnimation(new api.core.Animation(CHISEL_ANIMATION));
+      sound(player, CHISEL_SOUND);
+      player.sendMessage("You chisel the sunstone into a sunstone core.");
       return true;
     }
     if (other === ANCIENT_SUNSTONE_CORE_ITEM_ID && held(player, ANCIENT_SUNSTONE_CORE_ITEM_ID)) {
@@ -930,16 +1212,31 @@ module.exports = function registerFallenFromGraceQuest(api) {
     player.getInventory().deleteNumber(SUNSTONE_CORE_ITEM_ID, 1);
     quest.setStage(player, STAGE_GOLEM_POWERED);
     ensureBasementItems(player);
+    // Its box moves the player through the opened passage behind a fade (GOLEM_POWERED_MESSAGE_ID).
     speak(player, CORMAC_NPC_ID, "entering-ardeaglais-putting-a-new-core-in-the-golem");
-    // The captured activation moves the player through the opened passage.
-    player.moveTo(GOLEM_PASSAGE_TILE);
     return true;
   }
 
+  const GOLEM_NPC_IDS = new Set([BROKEN_GOLEM_NPC_ID, NpcIdentifiers.POWERED_GOLEM]);
+  const BROKEN_DOWN_GOLEM_MULTI_ID = 16320; // broken_down_golem, the multi-NPC base (no name, no identifier)
+  const GOLEM_CAVERN_TILE = new Location(2573, 8649, 0); // the captured front, cavern side (P2 tick 249)
+  const golemPassing = new WeakSet();
+
   function handleGolemInvestigate(event) {
     const { player, npcId } = event;
-    if (npcId !== BROKEN_GOLEM_NPC_ID) return false;
+    if (!GOLEM_NPC_IDS.has(npcId) && npcId !== BROKEN_DOWN_GOLEM_MULTI_ID) return false;
     const stage = quest.getStage(player);
+    if (questActive(player) && stage >= STAGE_GOLEM_POWERED) {
+      // Ours (not recorded): once powered, the golem lets the player back through, so a player who
+      // died, teleported or logged out mid-fade can return to the basement and the cathedral.
+      event.handled = true;
+      if (golemPassing.has(player)) return true;
+      golemPassing.add(player);
+      later(player, GOLEM_FADE.closeTicks, () => golemPassing.delete(player));
+      const cavernSide = player.getLocation().getY() < CREVICE_WALL_Y;
+      fadeTravel(player, GOLEM_FADE, () => player.moveTo(cavernSide ? GOLEM_PASSAGE_TILE : GOLEM_CAVERN_TILE));
+      return true;
+    }
     if (stage < STAGE_TROLLS || stage >= STAGE_GOLEM_POWERED) return false;
     event.handled = true;
     speak(
@@ -974,12 +1271,27 @@ module.exports = function registerFallenFromGraceQuest(api) {
       breakOpenAncientCore(player);
       return true;
     }
+    if (action === "read" && itemId === FINAL_LETTER_ITEM_ID) {
+      event.handled = true;
+      readFinalLetter(player);
+      return true;
+    }
+    if (action === "read" && itemId === SCRAWLED_NOTEBOOK_ITEM_ID) {
+      // As captured (P1 tick 161), the first read sets ffg_keenans_book (15762).
+      setFlag(player, FLAG_KEENANS_BOOK);
+    }
     if (action === "read" && READ_MESSAGES.has(itemId)) {
       event.handled = true;
       player.sendMessage(READ_MESSAGES.get(itemId));
       return true;
     }
     return false;
+  }
+
+  /** Elessia's letter on the long scroll (P2 tick 449); the first read at stage 18 is stage 19. */
+  function readFinalLetter(player) {
+    if (quest.getStage(player) === STAGE_ANGEL_DEAD) quest.setStage(player, STAGE_BODY);
+    openLongScroll(player, "", FINAL_LETTER_TEXT);
   }
 
   // ==========================================================================
@@ -991,7 +1303,8 @@ module.exports = function registerFallenFromGraceQuest(api) {
       player.sendMessage("Someone's left their hat here. How odd.");
       return;
     }
-    if (quest.getStage(player) < STAGE_HAT) {
+    // The dust trail to it shows from stage 5 (ffg_dust); before the notebook it is just a hat.
+    if (quest.getStage(player) === STAGE_NOTEBOOK) {
       quest.setStage(player, STAGE_HAT);
       speak(player, CORMAC_NPC_ID, "following-the-trail-investigating-the-large-hat");
       return;
@@ -1130,12 +1443,18 @@ module.exports = function registerFallenFromGraceQuest(api) {
     if (player) startCavernApproachWatch(player);
   }
 
-  function handleSailingLeft({ player }) {
-    if (player) stopCavernApproachWatch(player);
+  /** Disembarking at the cavern's gangplank: the player is on its landing a tick later (P2 tick 42). */
+  function handleSailingLeft({ player, reason }) {
+    if (!player) return;
+    stopCavernApproachWatch(player);
+    if (reason !== "disembark" || quest.getStage(player) !== STAGE_CAVERN) return;
+    later(player, 1, () => player.isRegistered?.() !== false && handleCavernLanding(player));
   }
 
   function handleLogout({ player }) {
-    if (player) stopCavernApproachWatch(player);
+    if (!player) return;
+    stopCavernApproachWatch(player);
+    removeCavernScene(player);
   }
 
   // ==========================================================================
@@ -1149,7 +1468,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
     const session = npc.__madAngel;
     if (session) {
       const player = session.player;
-      if (player && quest.getStage(player) === STAGE_CATHEDRAL) {
+      if (player && session.variant === "quest" && quest.getStage(player) === STAGE_CATHEDRAL) {
         quest.setStage(player, STAGE_ANGEL_DEAD);
       }
       return;
@@ -1159,31 +1478,137 @@ module.exports = function registerFallenFromGraceQuest(api) {
     if (!killer?.isPlayer?.()) return;
     const contentId = npc.getContentId?.(killer) ?? npc.getId();
     if (!TROLL_NPC_IDS.has(contentId)) return;
-    if (quest.getStage(killer) !== STAGE_CAVERN) return;
+    const scene = cavernScenes.get(killer);
+    if (scene) scene.trolls = scene.trolls.filter((troll) => troll !== npc);
+    const stage = quest.getStage(killer);
+    if ((stage !== STAGE_CAVERN && stage !== STAGE_TROLLS) || hasFlag(killer, FLAG_TROLLS_KILLED)) return;
     if (!inZone(npc.getLocation(), CAVERN_ZONE)) return;
     const kills = (Number(killer.getAttribute(TROLL_KILLS_ATTRIBUTE)) || 0) + 1;
     killer.setAttribute(TROLL_KILLS_ATTRIBUTE, kills);
-    if (kills < TROLLS_TO_KILL) return;
-    setFlag(killer, FLAG_TROLLS_KILLED);
-    quest.setStage(killer, STAGE_TROLLS);
-    speak(killer, NpcIdentifiers.MORTIMER, "the-way-under-ardeaglais-upon-killing-the-trolls");
+    // Before his request the kills only count; the call comes once he has asked (ours, not recorded).
+    if (kills >= TROLLS_TO_KILL && stage === STAGE_TROLLS) trollsDone(killer);
+  }
+
+  /** P2 tick 151: the flag, the game message and Mortimer's shout, together. */
+  function trollsDone(player) {
+    setFlag(player, FLAG_TROLLS_KILLED);
+    player.sendMessage(TROLLS_KILLED_MESSAGE);
+    cavernScenes.get(player)?.mortimer?.forceChat?.(TROLLS_KILLED_SHOUT);
+  }
+
+  /**
+   * The Mad Angel's sunstone crystal (Wiki, Mad Angel): "always drops if the bank chest is not built
+   * and a crystal is not already owned". Owned is carried, worn or banked.
+   */
+  function ownsCrystal(player) {
+    if (api.core.Bank?.owns) return api.core.Bank.owns(player, SUNSTONE_CRYSTAL_ITEM_ID);
+    return [player.getInventory(), player.getEquipment?.()].filter(Boolean)
+      .some((container) => (container.getValidItems?.() ?? []).some((item) => item?.getId?.() === SUNSTONE_CRYSTAL_ITEM_ID && item.getAmount?.() > 0));
+  }
+
+  function answerCrystalDrop(request) {
+    if (request?.itemId !== SUNSTONE_CRYSTAL_ITEM_ID || !request.player) return;
+    const built = request.player.getPacketSender().getVarbit?.(WYRMS_BANK_CHEST_VARBIT) === 1;
+    request.allowed = !built && !ownsCrystal(request.player);
+  }
+
+  // ==========================================================================
+  // The cavern before the rockfall is cleared (stages 9-11)
+  // ==========================================================================
+
+  /** Per player: the cutscene Mortimer and the quest's trolls, spawned for them alone. */
+  const cavernScenes = new Map();
+
+  function cavernSceneActive(player) {
+    const stage = quest.getStage(player);
+    return questActive(player) && (stage === STAGE_CAVERN || stage === STAGE_TROLLS);
+  }
+
+  function spawnPrivate(player, spawn, wanderRadius) {
+    return api.spawnNpc({
+      id: spawn.id, x: spawn.x, y: spawn.y, z: 0, face: spawn.face, wanderRadius, owner: player, ownerOnly: true,
+    });
+  }
+
+  function ensureCavernScene(player) {
+    if (!cavernSceneActive(player) || !inZone(player.getLocation(), CAVERN_ZONE)) return null;
+    let scene = cavernScenes.get(player);
+    if (!scene) {
+      // Live adds the trolls with Mortimer on arrival (P2 tick 42); a kill before his request counts.
+      scene = { mortimer: spawnPrivate(player, MORTIMER_CUTSCENE_SPAWN, 0), trolls: [] };
+      cavernScenes.set(player, scene);
+      if (!hasFlag(player, FLAG_TROLLS_KILLED)) {
+        const left = Math.max(0, TROLLS_TO_KILL - (Number(player.getAttribute(TROLL_KILLS_ATTRIBUTE)) || 0));
+        scene.trolls = TROLL_SPAWNS.slice(TROLLS_TO_KILL - left)
+          .map((spawn) => spawnPrivate(player, spawn, TROLL_WANDER_RADIUS)).filter(Boolean);
+      }
+    }
+    return scene;
+  }
+
+  function removeCavernScene(player) {
+    const scene = cavernScenes.get(player);
+    if (!scene) return;
+    cavernScenes.delete(player);
+    for (const npc of [scene.mortimer, ...scene.trolls]) if (npc) api.removeNpc(npc);
+  }
+
+  /**
+   * Landing in the cavern at stage 9 (P2 ticks 41-43): Mortimer calls the player over as the
+   * disembark's fade ends.
+   */
+  function handleCavernLanding(player) {
+    if (quest.getStage(player) !== STAGE_CAVERN || !inZone(player.getLocation(), CAVERN_ZONE)) return;
+    const scene = ensureCavernScene(player);
+    speakWith(player, scene?.mortimer ?? null, MORTIMER_CUTSCENE_SPAWN.id, "the-way-under-ardeaglais-meeting-mortimer");
   }
 
   // ==========================================================================
   // Stairs, zones and login
   // ==========================================================================
 
+  /** Stages 16-17 are the quest's angel; 18-19 its corpse (Ours: the corpse if the player goes back). */
   function answerMadAngelVariant(request) {
     const player = request?.player;
-    if (!player) return;
+    if (!player || !questActive(player)) return;
     const stage = quest.getStage(player);
-    if (stage >= STAGE_CATHEDRAL && stage < STAGE_ANGEL_DEAD) request.variant = "quest";
+    if (stage < STAGE_CATHEDRAL) return;
+    request.variant = "quest";
+    request.defeated = stage >= STAGE_ANGEL_DEAD;
   }
 
-  function enterCathedralInstance(player) {
-    if (!MadAngelCommon.core) return;
-    const session = MadAngelInstance.open(player);
-    MadAngelInstance.enter(session);
+  /** P2 tick 315: the quest asks "Climb over the pew?" before the cathedral. */
+  function answerPewClimb(request) {
+    const player = request?.player;
+    if (player && questActive(player) && quest.getStage(player) >= STAGE_CATHEDRAL) request.prompt = true;
+  }
+
+  /**
+   * Into the cathedral by the basement stairs (P2 ticks 288-295): the fade out, the move to
+   * 2540,2214 two ticks later, the fade back a tick after that. The first time, the key unlocks
+   * the hatch (its message and sound, flag 15766), the dull core goes (tick 292) and it is stage 16.
+   */
+  const climbingStairs = new WeakSet();
+
+  function climbIntoCathedral(player, firstTime) {
+    if (climbingStairs.has(player)) return;
+    climbingStairs.add(player);
+    later(player, STAIRS_FADE.closeTicks, () => climbingStairs.delete(player));
+    if (firstTime) {
+      if (held(player, STAIRCASE_KEY_ITEM_ID)) player.getInventory().deleteNumber(STAIRCASE_KEY_ITEM_ID, 1);
+      setFlag(player, FLAG_KEY_USED);
+      player.sendMessage(HATCH_MESSAGE);
+      sound(player, HATCH_SOUND);
+    }
+    player.getMovementQueue?.()?.reset?.();
+    fadeTravel(player, STAIRS_FADE, () => {
+      // Not tied to `firstTime`: a logout during the fade must not leave the quest at 15.
+      if (quest.getStage(player) === STAGE_GOLEM_POWERED) {
+        quest.setStage(player, STAGE_CATHEDRAL);
+        if (held(player, DULL_SUNSTONE_CORE_ITEM_ID)) player.getInventory().deleteNumber(DULL_SUNSTONE_CORE_ITEM_ID, 1);
+      }
+      player.moveTo(CATHEDRAL_TILE);
+    });
   }
 
   function claimBasementStairs(event) {
@@ -1191,21 +1616,16 @@ module.exports = function registerFallenFromGraceQuest(api) {
     const stage = quest.getStage(player);
     if (quest.isComplete(player) || stage < STAGE_GOLEM_POWERED) return;
     event.handled = true;
-    if (stage >= STAGE_ANGEL_DEAD) return;
-    if (stage === STAGE_CATHEDRAL) {
-      enterCathedralInstance(player);
+    if (stage >= STAGE_CATHEDRAL || hasFlag(player, FLAG_KEY_USED)) {
+      // The move sets 16 and takes the dull core whenever the stage is still 15.
+      climbIntoCathedral(player, !hasFlag(player, FLAG_KEY_USED));
       return;
     }
-    if (!hasFlag(player, FLAG_KEY_USED) && !held(player, STAIRCASE_KEY_ITEM_ID)) {
+    if (!held(player, STAIRCASE_KEY_ITEM_ID)) {
       speak(player, CORMAC_NPC_ID, "entering-ardeaglais-attempting-to-climb-the-stairs");
       return;
     }
-    if (held(player, STAIRCASE_KEY_ITEM_ID)) {
-      player.getInventory().deleteNumber(STAIRCASE_KEY_ITEM_ID, 1);
-    }
-    setFlag(player, FLAG_KEY_USED);
-    quest.setStage(player, STAGE_CATHEDRAL);
-    enterCathedralInstance(player);
+    climbIntoCathedral(player, true);
   }
 
   function claimCathedralStairs(event) {
@@ -1235,6 +1655,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
 
   function handleCavernZoneEnter({ player }) {
     if (!questActive(player)) return;
+    ensureCavernScene(player);
     const stage = quest.getStage(player);
     if (stage === STAGE_CAVERN && hasFlag(player, FLAG_WYRMS_ENTRY)) ensureBasementItems(player);
     if (stage >= STAGE_GOLEM_POWERED) ensureBasementItems(player);
@@ -1249,9 +1670,14 @@ module.exports = function registerFallenFromGraceQuest(api) {
     player.setAttribute(STAGE_VERSION_ATTRIBUTE, STAGE_VERSION);
   }
 
+  function handleCavernZoneExit({ player }) {
+    if (player) removeCavernScene(player);
+  }
+
   function handleLogin({ player }) {
     refreshQuestList(player);
     ensureHat(player);
+    ensureCavernScene(player);
     syncShortcutVarbit(player);
     startCavernApproachWatch(player);
   }
@@ -1406,12 +1832,15 @@ module.exports = function registerFallenFromGraceQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
+    // The scroll's lines in live's order (P2 tick 713): points, the two unlocks, then the XP.
     xpRewards: [
-      { skillId: Skill.CRAFTING.getIndex(), amount: 10000, label: "Crafting" },
       { skillId: Skill.SAILING.getIndex(), amount: 12500, label: "Sailing" },
+      { skillId: Skill.CRAFTING.getIndex(), amount: 10000, label: "Crafting" },
       { skillId: Skill.MINING.getIndex(), amount: 5000, label: "Mining" },
       { skillId: Skill.RUNECRAFTING.getIndex(), amount: 5000, label: "Runecraft" },
     ],
+    otherRewards: ["Wyrmscraig Cathedral access", "Ability to craft golems"],
+    rewardOrder: ["other", "xp"],
     buildJournal,
     onReward: grantReward,
   });
@@ -1425,17 +1854,22 @@ module.exports = function registerFallenFromGraceQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onCustomEvent("madangel:cathedral-door", handleCathedralDoor);
   api.onCustomEvent("madangel:instance-variant", answerMadAngelVariant);
+  api.onCustomEvent("madangel:pew-climb", answerPewClimb);
+  api.onCustomEvent("npc-drops:quest-item", answerCrystalDrop);
+  api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleShortcutItem, { noted: false });
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemAction(handleItemAction);
   api.onNpcInteraction("Broken golem", { Investigate: handleGolemInvestigate });
+  api.onNpcInteraction("Powered golem", { Investigate: handleGolemInvestigate });
   api.onGroundItemClick([LARGE_HAT_ITEM_ID, WORN_JOURNAL_ITEM_ID], 3, handleGroundItemInvestigate);
   api.onGroundItemPickup(handleGroundItemPickup);
   api.onNpcDeath(handleNpcDeath);
   api.onCustomEvent("ladders:climb", handleLadderClaim);
   api.onZoneEnter(SURFACE_ZONE, handleSurfaceZoneEnter);
   api.onZoneEnter(CAVERN_ZONE, handleCavernZoneEnter);
+  api.onZoneExit(CAVERN_ZONE, handleCavernZoneExit);
   api.onCustomEvent("sailing:boarded", handleSailingBoarded);
   api.onCustomEvent("sailing:left", handleSailingLeft);
   api.onPlayerLogin(migrateStage);

@@ -372,3 +372,51 @@ test('Visit-Last before visiting anyone', (t) => {
   boardClick(player.player, 3);
   assert.deepEqual(player.messages, ["You haven't visited anyone this session."]);
 });
+
+// rsprox captures local 1001005 and local 1001008 (owner), 248 (guest): the exit portal's Lock
+// answers in a message box on the click's tick, and sets poh_house_locked.
+test("the exit portal's Lock answers in a message box, for the owner only", async (t) => {
+  const owner = actor(t, 'advlockbox');
+  advertise(owner);
+  House.enterHouse(owner.player, false);
+  owner.messages.length = 0;
+  const lockedVarbit = core.CacheDefinitions.getVarbitId('poh_house_locked');
+  const guest = actor(t, 'advlockguest');
+  await enterRow(guest, 'advlockbox');
+  assert.equal(House.houseFor(guest.player), House.houseFor(owner.player));
+  exitPortalClick(guest.player, 2);
+  assert.equal(messageBox(guest.player), 'You can only lock your own house.');
+  assert.ok(!House.houseFor(owner.player).save.locked, 'still unlocked');
+  exitPortalClick(owner.player, 2);
+  assert.equal(messageBox(owner.player), 'Your house is now locked to all visitors.');
+  assert.equal(owner.varbits.get(lockedVarbit), 1);
+  assert.equal(guest.varbits.get(lockedVarbit), 1);
+  exitPortalClick(owner.player, 2);
+  assert.equal(messageBox(owner.player), 'Visitors can now enter your house.');
+  assert.equal(owner.varbits.get(lockedVarbit), 0);
+  assert.deepEqual(owner.messages, [], 'nothing in the chat');
+});
+
+// rsprox captures local 1001005 ticks 4693-4695 and 4841 (owner), 248 tick 1082 (guest).
+test("the exit portal's Remove board advert asks first, and refuses a guest or no advert", async (t) => {
+  const owner = actor(t, 'advportal');
+  House.enterHouse(owner.player, false);
+  exitPortalClick(owner.player, 3);
+  assert.deepEqual(owner.messages, ['You are not currently advertising your house.']);
+  assert.ok(!owner.player.getDialogueManager().getCurrent(), 'no question');
+  advertise(owner);
+  const guest = actor(t, 'advportalguest');
+  await enterRow(guest, 'advportal');
+  assert.equal(House.houseFor(guest.player), House.houseFor(owner.player));
+  exitPortalClick(guest.player, 3);
+  assert.deepEqual(guest.messages, ['This is not your portal to configure.']);
+  exitPortalClick(owner.player, 3);
+  assert.deepEqual(question(owner.player), ['Remove your advert?', 'Yes.|No.']);
+  owner.player.getDialogueManager().handleOption(2); // No.
+  assert.equal(owner.varbits.get(advertisingVarbit), 1, 'No keeps the advert');
+  exitPortalClick(owner.player, 3);
+  assert.deepEqual(question(owner.player), ['Remove your advert?', 'Yes.|No.']);
+  owner.player.getDialogueManager().handleOption(1); // Yes.
+  assert.equal(owner.varbits.get(advertisingVarbit), 0);
+  assert.equal(owner.messages.at(-1), 'Your house is no longer being advertised.');
+});

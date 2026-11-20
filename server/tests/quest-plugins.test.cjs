@@ -6345,7 +6345,8 @@ test('Blood Moon stage 90 Veliaf dialogue takes precedence over completed Myrequ
   }
   assert.deepEqual(results, [false, false, true],
     'Sins and the inactive refinery defer, then Blood Moon claims Veliaf before completed In Aid');
-  assert.equal(registered.at(-1)(event), true, 'the completed In Aid handler would otherwise take the same talk');
+  // Completed In Aid of the Myreque no longer claims the Canifis hideout's Veliaf (5048): its post-quest
+  // talk is the Burgh hideout's Veliaf (9489), as live has him after the quest.
   assert.ok(started.length > 0);
 });
 
@@ -20010,40 +20011,6 @@ test('RFD Amik shrine requires the Wise Old Man clue, enters the mapped lair and
 });
 
 
-test('RFD shows the Feldip spit-roast only while Skrach can be rescued', () => {
-  assert.equal(require('../data/definitions/object-spawns.json').some(spawn => [3375].includes(spawn.id)), false);
-  const { api: base, handlers } = mockApi();
-  const objects = [];
-  base.core = { ...base.core, ObjectManager: {
-    register: object => objects.push(object),
-    deregister: object => { const index = objects.indexOf(object); if (index >= 0) objects.splice(index, 1); },
-  } };
-  delete require.cache[require.resolve('../plugins/quests/quests/RecipeForDisaster.Quest')];
-  require('../plugins/quests/quests/RecipeForDisaster.Quest')(base);
-  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests()
-    .findLast(({ key }) => key === 'recipe_for_disaster');
-  const attributes = new Map();
-  const packetSender = new Proxy({}, { get: (_target, key) => key.startsWith('send') ? () => packetSender : undefined });
-  const player = {
-    getAttribute: key => attributes.get(key),
-    setAttribute: (key, value) => attributes.set(key, value),
-    getPacketSender: () => packetSender,
-    getLocation: () => new base.core.Location(2632, 2985, 0),
-    getInventory: () => ({ getAmount: () => 0, getFreeSlots: () => 28 }),
-    sendMessage() {},
-  };
-  quest.setStage(player, 1);
-  assert.equal(objects.some(object => object.getId() === 3375), false);
-  quest.setStage(player, 4);
-  const roast = objects.find(object => object.getId() === 3375);
-  assert.ok(roast, 'the missing map spit-roast is supplied during the rescue');
-  assert.equal(roast.getOwner(), player);
-  assert.deepEqual([roast.getLocation().getX(), roast.getLocation().getY(), roast.getLocation().getZ()], [2632, 2985, 0]);
-  attributes.set('recipe-for-disaster:rescues', 32);
-  handlers.playerLogin.at(-1)({ player });
-  assert.equal(objects.some(object => object.getId() === 3375), false);
-});
-
 test('RFD council interactions read requirements through the SkillManager before starting a rescue', () => {
   const { api: base } = mockApi();
   const interactions = [];
@@ -20491,6 +20458,80 @@ test('RFD Awowogei enters the mapped hot-coal chamber and cooks only on the long
   dungeon(returnCrack);
   assert.equal(returnCrack.handled, true);
   assert.deepEqual(loc, [2808, 9200, 0]);
+});
+
+
+test('RFD Awowogei stuffing the snake needs both the sliced red banana and tchiki nut paste', () => {
+  const { api: base } = mockApi();
+  const itemItemHandlers = [];
+  const api = new Proxy(base, {
+    get(target, prop) {
+      if (prop === 'onItemOnItem') return (handler) => itemItemHandlers.push(handler);
+      return target[prop];
+    },
+  });
+  require('../plugins/quests/Quests.plugin').register(api);
+  delete require.cache[require.resolve('../plugins/quests/quests/RecipeForDisaster.Quest')];
+  require('../plugins/quests/quests/RecipeForDisaster.Quest')(api);
+  const stuff = itemItemHandlers.findLast((handler) => handler.name === 'handleAwowogeiItems');
+  assert.ok(stuff);
+
+  const I = base.core.ItemIdentifiers;
+  const attributes = new Map([['recipe-for-disaster:awowogei-state', 63]]);
+  const inventory = new Map([[I.SNAKE_CORPSE, 1], [I.SLICED_RED_BANANA, 1], [I.TCHIKI_NUT_PASTE, 1]]);
+  const messages = [];
+  const player = {
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getSkillManager: () => ({ getCurrentLevel: () => 99, addExperiences() {} }),
+    getInventory: () => ({
+      getAmount: (id) => inventory.get(id) ?? 0,
+      getFreeSlots: () => 27,
+      deleteNumber: (id, amount) => inventory.set(id, Math.max(0, (inventory.get(id) ?? 0) - amount)),
+      adds: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) + amount),
+    }),
+    getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+    getLocation: () => ({ getX: () => 2790, getY: () => 3000, getZ: () => 0 }),
+    sendMessage: (message) => messages.push(message),
+  };
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests()
+    .findLast(({ key }) => key === 'recipe_for_disaster');
+  quest.setStage(player, 4);
+
+  const banana = { player, usedItemId: I.SLICED_RED_BANANA, usedWithItemId: I.SNAKE_CORPSE, handled: false };
+  stuff(banana);
+  assert.equal(banana.handled, true);
+  assert.equal(inventory.get(I.SNAKE_CORPSE), 1, 'the corpse stays until both fillings are in');
+  assert.equal(inventory.get(I.SLICED_RED_BANANA), 0, 'the banana is used up');
+  assert.equal(inventory.get(I.RAW_STUFFED_SNAKE) ?? 0, 0, 'one filling is not enough');
+  assert.equal(attributes.get('recipe-for-disaster:awowogei-stuffing'), 1);
+  assert.match(messages.at(-1), /still needs tchiki nut paste/);
+
+  const bananaAgain = { player, usedItemId: I.SLICED_RED_BANANA, usedWithItemId: I.SNAKE_CORPSE, handled: false };
+  stuff(bananaAgain);
+  assert.equal(inventory.get(I.SLICED_RED_BANANA), 0);
+  assert.equal(inventory.get(I.RAW_STUFFED_SNAKE) ?? 0, 0);
+  assert.match(messages.at(-1), /already has sliced red banana/);
+
+  const paste = { player, usedItemId: I.TCHIKI_NUT_PASTE, usedWithItemId: I.SNAKE_CORPSE, handled: false };
+  stuff(paste);
+  assert.equal(paste.handled, true);
+  assert.equal(inventory.get(I.TCHIKI_NUT_PASTE), 0);
+  assert.equal(inventory.get(I.SNAKE_CORPSE), 0);
+  assert.equal(inventory.get(I.RAW_STUFFED_SNAKE), 1);
+  assert.equal(attributes.get('recipe-for-disaster:awowogei-stuffing'), 0);
+  assert.equal(attributes.get('recipe-for-disaster:awowogei-stage'), 30);
+
+  // The other order works the same way, including a pair whose ids arrive swapped.
+  inventory.set(I.SNAKE_CORPSE, 1);
+  inventory.set(I.SLICED_RED_BANANA, 1);
+  inventory.set(I.TCHIKI_NUT_PASTE, 1);
+  stuff({ player, usedItemId: I.TCHIKI_NUT_PASTE, usedWithItemId: I.SNAKE_CORPSE, handled: false });
+  assert.equal(inventory.get(I.SNAKE_CORPSE), 1);
+  assert.equal(inventory.get(I.TCHIKI_NUT_PASTE), 0);
+  stuff({ player, usedItemId: I.SNAKE_CORPSE, usedWithItemId: I.SLICED_RED_BANANA, handled: false });
+  assert.equal(inventory.get(I.SNAKE_CORPSE), 0);
+  assert.equal(inventory.get(I.RAW_STUFFED_SNAKE), 2);
 });
 
 

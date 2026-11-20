@@ -185,7 +185,7 @@ test('an untradeable item alchs after the warning is accepted, and not when it i
   assert.ok(options instanceof OptionDialogue);
   assert.equal(options.getTitle(), "Iban's staff");
   assert.deepEqual(options.getOptions(), ['Proceed to cast High Level Alchemy on it.', 'Cancel the alchemy spell.']);
-  assert.deepEqual(player.log.messages, ['That item cannot be traded. Really cast High Level Alchemy on it?']);
+  assert.deepEqual(player.log.messages, [], 'the item box copies its own line to the chat, once (rsprox 3215)');
 
   options.execute(2);
   assert.equal(coins(player), 0, 'cancelled');

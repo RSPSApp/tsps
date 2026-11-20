@@ -1079,31 +1079,21 @@
     },
     {
       "name": "Stepping stones (Western Brimhaven Dungeon)",
-      "object": 21738,
-      "at": [2649,9561,0],
+      "object": [21738,21739],
+      "at": [[2649,9561,0],[2647,9558,0]],
       "level": 12,
       "xp": 7.5,
-      "between": {
+      "busy": true,
+      "fail": {"low":235,"high":255},
+      "unverified": "the fall's chance (the Wiki's \"quite rare\" only) and damage (a tenth of current hitpoints: the captured 7); the way back from the south mirrors the captured way and never falls",
+      "script": "brimhavenLavaStones",
+      "params": {
         "ends": [[2649,9562,0],[2647,9557,0]],
         "via": [[2649,9561],[2649,9560],[2648,9560],[2647,9560],[2647,9559],[2647,9558]],
-        "cross": [
-          {"use":"hops","args":["...via","to"]}
-        ]
-      }
-    },
-    {
-      "name": "Stepping stones (Western Brimhaven Dungeon)",
-      "object": 21739,
-      "at": [2647,9558,0],
-      "level": 1,
-      "xp": 7.5,
-      "between": {
-        "ends": [[2649,9562,0],[2647,9557,0]],
-        "via": [[2649,9561],[2649,9560],[2648,9560],[2647,9560],[2647,9559],[2647,9558]],
-        "cross": [
-          {"use":"hops","args":["...via","to"]}
-        ]
-      }
+        "landing": [2648,9562,0],
+        "southLevel": 12
+      },
+      "note": "rsprox captures local 1000195, 1000283, 1000433 (fall), 90, 91, 552"
     },
     {
       "name": "Stepping stones (Eastern Brimhaven Dungeon)",
@@ -2561,6 +2551,15 @@
       "note": "same loc and crossing as the rocks east of the entrance (rsprox 3013, 3014), turned to cross north.",
       "unverified": "not captured; the reachable side is south (1311,10214), the far side north (1311,10216) by the collision map.",
       "between": {"ends":[{"object":[0,-1,0]},{"object":[0,1,0]}],"cross":[{"use":"climbOver","args":["to","CLIMB_OVER",2]},{"anim":-1}]}
+    },
+    {
+      "name": "Rocks (Alchemical Hydra's lair, Karuulm Slayer Dungeon)",
+      "object": 34548,
+      "level": 1,
+      "end": "You climb over the rocks.",
+      "script": "karuulmHydraRocks",
+      "note": "rsprox local 1000143, 1000471, 1000473, 1000480, 1000497 and 1521 (rev 224-227): no requirement (the Wiki gives none either); the player faces the rocks, live moves them into the lair's instance the next tick, and the tick after that comes an exact move two tiles north on their own column (cycle 0 to 60, climb-over 839), and the message and the animation reset come 2 ticks after the move starts, as the other Karuulm rocks. Here there is no instance teleport tick between the face and the move (recorded difference); the lair stays in the world and the Alchemical door makes the private chamber (bosses/alchemicalhydra/Lair.AlchemicalHydra.js).",
+      "unverified": "the climb back south was not captured; it mirrors the climb in."
     },
     {
       "name": "Tunnel (Stronghold Slayer Cave)",

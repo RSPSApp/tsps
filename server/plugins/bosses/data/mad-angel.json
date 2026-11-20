@@ -38,7 +38,11 @@
     "outsideFace": [2541, 2216],
     "leaveQuestion": "Are you sure you want to leave?",
     "leaveYes": "Yes!",
-    "leaveNo": "No."
+    "leaveNo": "No.",
+    "questClimbQuestion": "Climb over the pew?",
+    "questClimbYes": "Yes.",
+    "questClimbNo": "No.",
+    "questWakeTicks": 3
   },
   "instance": {
     "about": "OSRS copies the 13x13-chunk scene around the cathedral, every plane, unturned.",
@@ -97,6 +101,7 @@
       "sweep"
     ],
     "enrageAt": 350,
+    "questEnrageAt": 255,
     "enrageText": "...!",
     "enrageTurnTicks": 4,
     "settleTicks": 2

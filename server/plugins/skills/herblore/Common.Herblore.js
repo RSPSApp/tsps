@@ -105,14 +105,17 @@ function answerClean(request) {
 }
 
 /**
- * "herblore:unfinished" `{ herbId, baseId?, potion }`: the unfinished potion a clean herb makes with `baseId` (a vial
- * of water when not given; Zahur also uses vials of blood).
+ * "herblore:unfinished" `{ herbId, baseId?, player?, potion }`: the unfinished potion a clean herb makes with `baseId`
+ * (a vial of water when not given; Zahur also uses vials of blood). With `player`, a recipe content has to teach
+ * (`unlock`, the rogue's purse potion) answers only once that player knows it.
  */
 function answerUnfinished(request) {
   index();
   const baseId = request?.baseId ?? gameval("obj", "vial_water");
   const recipe = unfinishedByHerb.get(request?.herbId)?.get(baseId);
-  if (recipe) request.potion = recipe.productId;
+  if (!recipe) return;
+  if (request.player && recipe.unlock && !unlocked(request.player, recipe.unlock)) return;
+  request.potion = recipe.productId;
 }
 
 /** The Herblore level the skill checks: the current level, raised by content ("skills:level-boost", a league relic's invisible +12). */

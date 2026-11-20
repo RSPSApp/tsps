@@ -17,13 +17,15 @@ const { ObjectManager } = require('../dist/game/entity/impl/object/ObjectManager
 
 const WORLD_INSTALLER_QUESTS = [
   'AKingdomDivided', 'BeneathCursedSands', 'CurseOfArrav', 'DeathToTheDorgeshuun', 'DefenderOfVarrock',
-  'DesertTreasureI', 'EaglesPeak', 'EnakhrasLament', 'GrimTales', 'InAidOfTheMyreque',
+  'DesertTreasureI', 'EaglesPeak', 'EnakhrasLament', 'GrimTales',
   'Pandemonium', 'PryingTimes', 'SecretsOfTheNorth', 'SwanSong',
 ];
 // WhatLiesBelow installs no world object since 475e73669: its Tunnel of Chaos statue is the cache map's own (the
 // installed copy was a duplicate), and it spawns no Surok of its own: the library's npc-spawns.json one is his.
 // PerilousMoons installs no world object since #5199: its Building Supplies are per-player locs in the antechamber's copy.
 // EyesOfGlouphrie installs no world object since #5994: Oaknock's machine and exchanger are cache map locs.
+// InAidOfTheMyreque installs no world object: Burgh de Rott's repairable scenery is the cache map's own multilocs, driven
+// per player by the quest's varbits, as live sends them.
 
 /** The real plugin api, except that hook registrations are captured instead of installed. */
 function capturingApi() {

@@ -1135,6 +1135,7 @@ module.exports = {
   name: "Runecrafting",
   description: "Runecrafting: entering altars with talismans or tiaras, crafting runes, binding tiaras, the Blood, Soul and Dark Altars, dark essence fragments, swampbark and bloodbark infusion, and exit portals.",
   register(api) {
+    require("../items/JewelleryPlaceholders")(api, [ABYSSAL_BRACELETS]);
     initialize(api);
     api.persistAttribute(ESSENCE_MINE_RETURN_ATTRIBUTE);
 

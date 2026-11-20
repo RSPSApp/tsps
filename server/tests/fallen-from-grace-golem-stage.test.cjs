@@ -108,7 +108,11 @@ test('feeding the sunstone core moves to the captured south side and consumes it
   assert.equal(event.handled, true);
   assert.equal(h.quest.getStage(player), 15);
   assert.equal(player.items.get(I.SUNSTONE_CORE) ?? 0, 0, 'captured core is consumed');
-  assert.deepEqual([player.location.getX(), player.location.getY()], [2573, 8655]);
+  assert.deepEqual([player.location.getX(), player.location.getY()], [2573, 8650], 'the fade starts first (P2 tick 247)');
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  TaskManager.process();
+  TaskManager.process();
+  assert.deepEqual([player.location.getX(), player.location.getY()], [2573, 8655], 'moved 2 ticks in (P2 tick 249)');
   while (player.manager.getCurrent()) player.manager.advance();
 });
 

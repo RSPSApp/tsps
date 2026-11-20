@@ -63,10 +63,13 @@ test('the Myreque members and Veliaf keep their answers (flag false: first true,
 });
 
 for (const met of [false, true]) {
-  test(`In Aid's job-offer page (Veliaf, step KOQqfF), Veliaf flag ${met}: answered by In Aid's own hook, unchanged`, (t) => {
+  test(`In Aid's job-offer page (Veliaf, step KOQqfF), Veliaf flag ${met}: answered by In Aid's own hook, by its stage`, (t) => {
     const p = actor(t, met);
-    const got = ask(p, I().VELIAF_HURTZ_2, 'If speaking again:', 'KOQqfF');
-    console.log(`SCOPE-OBSERVED inaid-job-offer flag=${met} ${JSON.stringify(got)}`);
-    assert.equal(got, true, "observed on main: In Aid's own hook answers this step (true for both flag values); unchanged");
+    // In Aid of the Myreque capture: a second talk before the start replays the first-time lines
+    // ("You're back. Any luck in Canifis?", t1349); "If speaking again" is for a started quest.
+    assert.equal(ask(p, I().VELIAF_HURTZ_2, 'If speaking again:', 'KOQqfF'), false, 'not started');
+    p.setAttribute('in-aid-of-the-myreque:save-version', 2);
+    p.setAttribute('quest.in_aid_of_the_myreque.stage', 20);
+    assert.equal(ask(p, I().VELIAF_HURTZ_2, 'If speaking again:', 'KOQqfF'), true, 'started');
   });
 }

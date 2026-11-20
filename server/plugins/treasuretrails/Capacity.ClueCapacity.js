@@ -12,6 +12,7 @@ const WARNING_VARBITS = Object.freeze({beginner: 10693, easy: 10694, medium: 106
 const MINOR_ATTRIBUTE = CASE_ATTRIBUTES.beginner.minor;
 const MAJOR_ATTRIBUTE = CASE_ATTRIBUTES.beginner.major;
 const BOX_OPENED = "You open the clue box and find a clue scroll inside!";
+const CLUE_ALCHEMY = "Wouldn't you rather solve the clue?";
 const FORM = /^(Clue scroll|Scroll box|Clue bottle|Clue nest|Clue geode) \((beginner|easy|medium|hard|elite|master)\)$/;
 const Dialogue = require("./trails/Dialogue.TreasureTrails");
 let api, core;
@@ -238,6 +239,14 @@ function eligible(player, id) {
     container?.getItems?.().some(item => item?.getId() === id && item.getAmount() > 0));
 }
 
+/**
+ * Alchemy on a clue scroll asks "Wouldn't you rather solve the clue?" alone in the item box,
+ * then "Proceed to cast ... on it." / "Cancel the alchemy spell." (rsprox 1000473, a hard clue).
+ */
+function clueAlchemy(request) {
+  if (classify(request?.itemId)?.form === "Clue scroll") request.box = CLUE_ALCHEMY;
+}
+
 function caseEligible(request) {
   if (request?.player && cases.has(request.itemId)) request.eligible = eligible(request.player, request.itemId);
 }
@@ -306,7 +315,8 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("ground-items:taken", taken);
   api.onCustomEvent("npc-drops:roll", filterDrops);
   api.onCustomEvent("treasure-trails:missed-clue", missedClue);
+  api.onCustomEvent("magic:alchemy-warning", clueAlchemy);
   api.onPlayerLogin(sync);
 };
 Object.assign(module.exports, {MINOR_ATTRIBUTE, MAJOR_ATTRIBUTE, MIMIC_ATTRIBUTE, CASE_ATTRIBUTES, WARNING_VARBITS,
-  capacity, count, canReceive, filterDrops, missedClue, openBox, openCase, milestoneRewards, sync});
+  capacity, count, canReceive, clueAlchemy, filterDrops, missedClue, openBox, openCase, milestoneRewards, sync});

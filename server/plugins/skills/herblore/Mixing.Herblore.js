@@ -114,8 +114,10 @@ function chooseRecipe(player, recipes) {
     && (!recipe.unlock || Common.unlocked(player, recipe.unlock))
     && (recipe.questStage == null || (Common.questStage(player, recipe.questKey) ?? 0) >= recipe.questStage));
   if (known.length === 0) {
-    player.sendMessage(recipes.some((recipe) => recipe.quest === "dragon_slayer_ii")
-      ? SUPER_ANTIFIRE_QUEST_MESSAGE : "Nothing interesting happens.");
+    // A recipe content teaches can carry its own refusal (Wiki, Unfinished potion (Rogue's Purse)).
+    const locked = recipes.find((recipe) => recipe.lockedMessage)?.lockedMessage;
+    player.sendMessage(locked ?? (recipes.some((recipe) => recipe.quest === "dragon_slayer_ii")
+      ? SUPER_ANTIFIRE_QUEST_MESSAGE : "Nothing interesting happens."));
     return null;
   }
   const level = Common.level(player);

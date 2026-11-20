@@ -217,11 +217,15 @@
     flex: 1 1 auto;
 }
 
+/* Styled like its neighbour, Import local; only greyed out where it can't import (sprites, textures). */
 .cache-editor-library-button {
+    font-size: 12px !important;
+}
+
+.cache-editor-library-button:disabled {
     border-color: #77705d66 !important;
     background: #222326 !important;
     color: #8f8a80 !important;
-    font-size: 12px !important;
 }
 
 .cache-editor-count {

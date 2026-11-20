@@ -322,9 +322,14 @@ export function createPreviewRenderer(client: OsrsClient): PreviewRenderer {
                     return `Could not build npc ${id}: ${String((error as Error).message ?? error)}`;
                 }
             } else if (kind === "spotanim") {
-                // A graphic is one model plus a sequence; the renderer applies the frame below.
-                model = merge(spec.modelIds);
-                if (!model) return `Graphic ${id} has no model`;
+                // A graphic is one model plus a sequence; the renderer applies the frame below. The model
+                // loader gives model data, which only animates once lit, so light it as the game lights
+                // a graphic (its ambient + 64, contrast + 850).
+                const data = merge(spec.modelIds) as unknown as { light?: (...args: unknown[]) => Model } | null;
+                if (!data) return `Graphic ${id} has no model`;
+                model = typeof data.light === "function"
+                    ? data.light(client.textureLoader, (spec.ambient ?? 0) + 64, (spec.contrast ?? 0) + 850, -30, -50, -30)
+                    : data as unknown as Model;
             } else if (kind === "item") {
                 try {
                     const objModels = new ObjModelLoader(client.objTypeLoader, client.modelLoader, client.textureLoader);
@@ -344,7 +349,7 @@ export function createPreviewRenderer(client: OsrsClient): PreviewRenderer {
                 }
             }
             model ??= merge(spec.modelIds);
-            if (!model) return `Model ${spec.modelIds[0]} is not in the cache's model archive`;
+            if (!model) return spec.modelIds.length ? `Model ${spec.modelIds[0]} is not in the cache's model archive` : `${kind} ${id} has no model to draw`;
             try {
                 const drawn = renderer.renderModelInstanceToCanvasWidget(
                     model,

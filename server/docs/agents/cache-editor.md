@@ -193,6 +193,56 @@ Order, because each step is what the next one reads:
 4. Placement, which a loc definition does not give you on its own: reuse the map editor's
    `EditorWorldMap` and loc spawn/change rows, and link the two workbenches by tile.
 
+## Assets
+
+The **Assets** tab browses the cache's models, sprites and textures, and holds what this project
+adds on top of them. Nothing is written into the cache: every asset is a file under
+`server/data/assets/` and a row in the `assets` list of `custom-definitions.json`, applied at the
+next start (`Assets.CacheEditor.cjs`).
+
+| Kind | Stored as | Ids | Loaded by |
+| --- | --- | --- | --- |
+| `model` | `model/<sha256>.dat` | 1,000,000 and up, clear of custom items' models | `Catalog` ships them as custom models |
+| `animation` | `animation/<sha256>/` with `seq.dat`, `frames/`, `framemap-<id>.dat` | sequence ids from 50,000 to 65,534 | `plugins/world/CustomAnimations` |
+| `graphic` | `graphic/<sha256>/` with `spotanim.dat`; its model and animation are their own assets | spot animation ids from 50,000 to 65,534 | `plugins/world/CustomAnimations` |
+
+Files are content-addressed: the same upload twice is one file and one row. An animation's or a
+graphic's **name** is what plugins look it up by (`getSeqId`, `getCustomSpotanimId`), so it is
+lower_case, unique and not a cache name. An animation is checked on upload as the client decodes it:
+every frame its `seq.dat` names, against the cache's own frame map. A graphic's `anim/` folder
+becomes an animation asset and its `model.dat` a model asset, and its row points at both.
+
+Where an upload comes from:
+
+- **Import local** (a model file) or **Import local folder** (an animation or graphic folder).
+- **Import from asset library**: the Blender add-ons' exports under `server/data/models`, which the
+  service lists (`GET /library?kind`) and reads by path, refusing anything outside that folder.
+- **Replace**: an import can replace one of your assets. The row keeps its id and name and points
+  at the new files; replacing a graphic replaces its own animation in place too.
+- **Export** writes an asset back into `server/data/models/<folder>/` for Blender (a graphic with
+  its `model.dat` and `anim/`), so the round trip is export, edit, import with Replace.
+
+## The Model Extractor
+
+The extractor (`server/scripts/model-extractor/`, also a stand-alone page: `yarn models`) runs
+inside the editor too, on the cache the server already loaded (`ModelExtractor.attach`,
+`Extract.CacheEditor.cjs`). It reads and writes local files, so it is on the authoring service,
+not on the public content endpoints:
+
+| Route | What |
+| --- | --- |
+| `GET /extract?kind&id` | the files extracting an item, npc, loc, seq or spotanim writes, with notes and recolours |
+| `POST /extract { kind, id, folder, overwrite }` | writes them into `data/models/<folder>/` with a README; `409 EXISTS` without `overwrite` |
+| `GET /npc-animations?id` | what an NPC plays (cache movement, server combat) and the other animations on its skeleton |
+| `GET /animation-bodies?id` | NPCs to preview an animation on: the ones that play it, then ones built on its skeleton |
+
+On the page: **Extract** is a tab on those five kinds, an NPC has an **Animations** tab whose
+**Play** runs the animation in its Preview, and a sequence's **Preview** plays it on one of its
+bodies (the client's NPC model builder, so a player animation is shown on an NPC built on the
+player skeleton). The first animation request indexes every animation's skeleton, about 20 s; the
+index is saved in the temp folder for later starts. A custom animation is one of your assets, so
+it is exported from the Assets tab rather than extracted.
+
 ## What not to do
 
 - Do not resolve a link by guessing. `unverified` is a useful answer; a fabricated kind is not.
@@ -205,6 +255,8 @@ Order, because each step is what the next one reads:
   [RSPSApp/osrsreboxed-db](https://github.com/RSPSApp/osrsreboxed-db) (see `server/AGENTS.md`).
 
 ## Verification
+
+`server/tests/cache-editor-assets.test.cjs` covers animation and graphic assets, the asset library, export and replace, the extractor and the authoring routes, against real exports in `data/models`.
 
 `server/tests/cache-editor.test.cjs` runs against the real cache (needs `yarn build`): the field
 table's internal consistency, a loc's links and names, a multi-loc's gated children, an item's noted

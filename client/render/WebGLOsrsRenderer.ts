@@ -1460,6 +1460,11 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
         return render.initCache(this);
     }
 
+    override invalidateAnimationCaches(): void {
+        this.gfxRenderer?.clear();
+        this.clearDynamicNpcAnimRuntimeState();
+    }
+
     override invalidateDefinitionCaches(): void {
         this.definitionContentEpoch++;
         this.worldEntityLoadTokens.clear();

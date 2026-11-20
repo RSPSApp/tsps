@@ -31,6 +31,13 @@ export class GfxRenderer {
         return this.cache;
     }
 
+    /** Drops every graphic's geometry and timing, CPU and GPU (custom graphics changed). */
+    clear(): void {
+        this.cache.clear();
+        this.gpuCache.clear();
+        this.frameOffsetCache.clear();
+    }
+
     getGpuCache(): SpotAnimGpuCache {
         return this.gpuCache;
     }

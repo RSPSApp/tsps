@@ -7,6 +7,7 @@ import { ObservablePromise } from "threads/dist/observable-promise";
 import { canUseSharedArrayBuffer, LoadedCache } from "../Caches";
 import { CustomItemRegistry } from "../../custom/items/CustomItemRegistry";
 import { CustomModelRegistry } from "../../custom/items/CustomModelRegistry";
+import { CustomAnimationRegistry } from "../../custom/animations/CustomAnimationRegistry";
 import { getDefinitionArchives } from "../../custom/archives/ArchivedDefinitionStore";
 import { NpcGeometryData } from "../../render/loader/NpcGeometryData";
 import type { NpcInstance } from "../../render/npc/NpcRenderTemplate";
@@ -77,6 +78,7 @@ export class RenderDataWorkerPool {
                     { key: "customItems", rows: Array.from(CustomItemRegistry.getAll(), (item) => item.definition) },
                     { key: "customModels", rows: CustomModelRegistry.getAll() },
                     { key: "customDefinitions", rows: getCustomDefinitions() },
+                    { key: "customAnimations", rows: CustomAnimationRegistry.rows() },
                 ] });
             });
         }
@@ -176,12 +178,14 @@ export class RenderDataWorkerPool {
         this.npcPoseWorkers.set(descriptor, reservation);
         (descriptor.runningTasks ??= []).push(reservation.task);
         const generation = this.npcPoseGeneration;
-        if (this.npcPoseModelsRevision !== CustomModelRegistry.revision) {
-            this.npcPoseModelsRevision = CustomModelRegistry.revision;
+        const contentRevision = CustomModelRegistry.revision * 65536 + CustomAnimationRegistry.revision;
+        if (this.npcPoseModelsRevision !== contentRevision) {
+            this.npcPoseModelsRevision = contentRevision;
             const payload = { gamemodeId: "custom-items", datasets: [
                 { key: "customItems", rows: Array.from(CustomItemRegistry.getAll(), item => item.definition) },
                 { key: "customModels", rows: CustomModelRegistry.getAll() },
-                    { key: "customDefinitions", rows: getCustomDefinitions() },
+                { key: "customDefinitions", rows: getCustomDefinitions() },
+                { key: "customAnimations", rows: CustomAnimationRegistry.rows() },
             ] };
             this.npcPoseContentReady = this.runAll(worker => worker.setCustomContent(payload))
                 .catch(error => { this.npcPoseModelsRevision = -1; throw error; });

@@ -109,6 +109,21 @@ Script 2323's footer takes the viewer's rights and the mode (0 Normal, 1 Entry, 
 4. Without a crystal: the captured prompt, in the crystal's current name.
 5. The leader confirms "Is your party ready? Members: N. Mode: X." (captured).
 
+**The residents** (`tob/Residents.TheatreOfBlood.js`) play their own transcript variants
+(npc-dialogues.json, Wiki transcripts) instead of the page's first "standard" one:
+
+| Who | Variant |
+| --- | --- |
+| Meiyerditch citizens (`tob_citizen_1`-`4`) | "Theatre of Blood"; after The Blood Moon Rises its after-quest Theatre lines; in a vyre disguise the apology for talking to a noble |
+| Vyrelords and Vyreladies (`tob_noble_1`-`4`) | "not disguised", or "disguised, or completed The Blood Moon Rises" |
+| Vampyre Juvenile at the gate | `tob_door_guard` outside, `tob_door_guard_inner` inside |
+
+rsprox captures: the citizens' Theatre lines (local 1000270-1000318, rev 227), the inner guard's
+"Can I go through here?" (409, 4266), both Vyrelord variants (409 and the local Leagues runs).
+Before this the citizens said "That conversation isn't available right now." (Meiyerditch's
+variant is an unavailable marker). Ours: "disguised" is a scented vyre noble piece in each of the
+body, legs and feet slots (the Wiki names no pieces); the clothing line beats the after-quest one.
+
 ## The raid
 
 | Room | Arrival | Barrier into the fight | Way on |

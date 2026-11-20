@@ -845,7 +845,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `TempleTrekking` | TempleTrekking | minigames | yes | Adds Temple Trekking and the Burgh de Rott Ramble: escorting a follower between Burgh de Rott and Paterdomus, with events on the way and a reward token. (members only) |
 | `Tempoross` | Tempoross | minigames | yes | Adds Tempoross, the Spirit Anglers' fishing boss: the Ruins of Unkah ferries, a cove instance per trip, the fight and the reward pool. (members only) |
 | `TheMess` | TheMess | minigames | yes | Adds The Mess in Hosidius: cooking meat pies, stews and pineapple pizzas for the Shayzien soldiers and serving them at the buffet tables. (members only) |
-| `TheatreOfBlood` | TheatreOfBlood | minigames | yes | Adds the Theatre of Blood raid: parties at Ver Sinhaza, the rooms in a private copy of the theatre and the retrieval chest. (members only) |
+| `TheatreOfBlood` | TheatreOfBlood | minigames | yes | Adds the Theatre of Blood raid: parties at Ver Sinhaza, the rooms in a private copy of the theatre, the retrieval chest and the residents' Talk-to transcripts. (members only) |
 | `TombsOfAmascut` | TombsOfAmascut | minigames | yes | Adds the Tombs of Amascut raid: the Jaltevas lobby and party board, the Nexus, four paths with their puzzles and bosses, the Wardens and rewards. (members only) |
 | `TroubleBrewing` | TroubleBrewing | minigames | yes | Adds Trouble Brewing on Mos Le'Harmless: the lobby, team rounds of brewing in the arena, scoring and the pieces-of-eight rewards. (members only) |
 | `TzHaarKetRak` | TzHaarKetRak | minigames | yes | Adds TzHaar-Ket-Rak's Challenges: fights against one to six JalTok-Jads, their rewards and a scoreboard. (members only) |

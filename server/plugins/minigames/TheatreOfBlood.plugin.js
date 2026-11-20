@@ -6,7 +6,7 @@
  */
 module.exports = {
   name: "TheatreOfBlood",
-  description: "Adds the Theatre of Blood raid: parties at Ver Sinhaza, the rooms in a private copy of the theatre and the retrieval chest.",
+  description: "Adds the Theatre of Blood raid: parties at Ver Sinhaza, the rooms in a private copy of the theatre, the retrieval chest and the residents' Talk-to transcripts.",
   members: true,
   register(api) {
     require("./tob/Entry.TheatreOfBlood")(api);
@@ -27,6 +27,7 @@ module.exports = {
     require("./tob/EscapeCrystal.TheatreOfBlood")(api);
     require("./tob/Spectate.TheatreOfBlood")(api);
     require("./tob/Books.TheatreOfBlood")(api);
+    require("./tob/Residents.TheatreOfBlood")(api);
     require("./tob/Commands.TheatreOfBlood")(api);
   },
 };

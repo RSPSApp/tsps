@@ -128,6 +128,17 @@ function startEcho(request) {
   request.handled = true;
   const { player } = request;
   if (echoSessions.has(player)) return;
+  // "Yes." is answered at the spider room's lever: it is pulled as for the normal lair, and the
+  // private lair is made when the teleport lands.
+  api.emitCustomEvent("lever:teleport", {
+    player,
+    destination: new Location(...KING_BLACK_DRAGON_LAIR),
+    onArrival: () => beginEcho(player),
+  });
+}
+
+function beginEcho(player) {
+  if (echoSessions.has(player)) return;
   const claim = { player, boss: ECHO_BOSS, token: null };
   api.emitCustomEvent("echo-boss:claim", claim);
   if (!claim.token) return;
@@ -159,6 +170,8 @@ function startEcho(request) {
     player.setAttribute(ECHO_INSIDE_ATTRIBUTE, true);
   } catch (error) {
     endEcho(session);
+    // Landed in the public lair without the private one: back beside the lever, as before the pull.
+    player.moveTo(new Location(...SPIDER_ROOM_LEVER_LANDING));
     player.sendMessage("The Echo encounter could not be started.");
   }
 }

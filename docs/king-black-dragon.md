@@ -32,8 +32,10 @@ Private option (a private lair for 50,000 coins, Wiki).
 ## The Leagues VI Echo placeholder
 
 A league character carrying the echo orb is asked at the spider room's lever, the lair's own
-entrance; "No." pulls it as without the orb. Its Echo branch spawns the normal King Black Dragon in
-an isolated private lair, with the same `KingBlackDragonCombatMethod`. EchoBosses gives that
+entrance; "No." pulls it as without the orb. "Yes." pulls it too, with the same teleport, and the
+private lair is made when the teleport lands (should that fail, the player is put back beside the
+lever). Its Echo branch spawns the normal King Black Dragon in an isolated private lair, with the
+same `KingBlackDragonCombatMethod`. EchoBosses gives that
 instance the Wiki Echo profile (840 HP, Attack/Strength/Defence 300, Magic 252, four-tick attacks)
 and the cache's Echo model, name and level (its leagues_echo_bosses row). Normal definitions are not
 modified ([echo-bosses.md](echo-bosses.md)).

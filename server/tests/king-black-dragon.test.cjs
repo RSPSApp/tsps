@@ -44,10 +44,10 @@ test("special breath maxima match the Wiki table", () => {
   }
 });
 
-// The lair-entry diary credit is covered, with the real Ladders path, in kbd-lair-arrival.test.cjs.
+// The way into the lair (ladder, spider room, lever) and its diary credit are covered in kbd-lair-arrival.test.cjs.
 
 test('Echo KBD is the normal dragon in a private lair, configured once, cleaning pending hits', () => {
-  const hooks={}, events=[], spawned=[], providers=[];
+  const hooks={}, events=[], spawned=[], providers=[], levers=[];
   class PrivateArea {
     constructor() { this.entities=[]; }
     add(npc) { this.entities.push(npc); }
@@ -63,7 +63,8 @@ test('Echo KBD is the normal dragon in a private lair, configured once, cleaning
     onCustomEvent:(name,fn)=>{hooks[name]=fn;},onNpcDeath:fn=>{hooks.death=fn;},
     onPlayerLogout:fn=>{hooks.logout=fn;},
     spawnNpc:(options)=>{const combat=makeCombat();const npc={id:options.id,getCombat:()=>combat};spawned.push(npc);return npc;},
-    emitCustomEvent:(name,event)=>{events.push(name);if(name==='echo-boss:configure')event.configured=true;if(name==='echo-boss:claim')event.token='session-'+spawned.length;},
+    // The lever's teleport lands at once here (Levers.plugin.js plays it in game).
+    emitCustomEvent:(name,event)=>{events.push(name);if(name==='echo-boss:configure')event.configured=true;if(name==='echo-boss:claim')event.token='session-'+spawned.length;if(name==='lever:teleport'){levers.push(event);event.onArrival?.();}},
   },{get:(obj,key)=>obj[key]??(()=>{})});
   require('../plugins/bosses/KingBlackDragon.plugin').register(api);
   const normalProviders=providers.length;
@@ -73,6 +74,7 @@ test('Echo KBD is the normal dragon in a private lair, configured once, cleaning
   hooks['echo-boss:start']({player:a,boss:'king-black-dragon'});
   hooks['echo-boss:start']({player:b,boss:'king-black-dragon'});
   assert.equal(spawned.length,2,'duplicate entry cannot spawn another dragon');
+  assert.deepEqual(levers.map(l=>[l.player===b?'b':'a',...l.destination.args]),[['a',2271,4680,0],['b',2271,4680,0]],'each Echo entry pulls the lever into the lair, as the normal fight does');
   assert.notEqual(a.area,b.area);
   assert.deepEqual(spawned.map(npc=>npc.id),[239,239],'the normal King Black Dragon');
   assert.equal(providers.length,normalProviders,'Echo adds no controller of its own');

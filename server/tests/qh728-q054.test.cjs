@@ -284,212 +284,8 @@ test('completion is sent on cache varbit 1527 at the 160 completion threshold an
   assert.equal(p.varbits.get(VARBIT), COMPLETE, 'login bootstrap replays the saved stage in the varbit');
 });
 
-test('The Hand in the Sand runs stage 0 to 160 through the registered transcript, item and object handlers', () => {
-  const { h, p, stage } = supplied();
-
-  // Bert accepts the quest and hands over the sandy hand (stage 0 -> 10).
-  h.talk(p, N.BERT);
-  h.nextPrompt(p);
-  h.choose(p, 'Eww a hand, in the sand! Why haven\'t you told the authorities?');
-  h.nextPrompt(p);
-  h.choose(p, 'Yes.');
-  h.finish(p);
-  assert.equal(stage(), 10);
-  assert.equal(p.items.get(I.SANDY_HAND), 1);
-
-  // Beer on the Guard Captain turns the hand into the beer-soaked hand (10 -> 20).
-  p.items.set(I.BEER, 1);
-  const captain = h.itemOnNpc(p, N.GUARD_CAPTAIN, I.BEER);
-  assert.equal(captain.handled, true);
-  h.finish(p);
-  assert.equal(stage(), 20);
-  assert.equal(p.items.get(I.BEER) ?? 0, 0, 'the beer is consumed');
-  assert.equal(p.items.get(I.SANDY_HAND) ?? 0, 0);
-  assert.equal(p.items.get(I.BEER_SOAKED_HAND), 1);
-
-  // Ring the Wizards' Guild bell; Zavistic takes the beer-soaked hand (20 -> 30).
-  const bell20 = h.object(p, O.BELL_2, 'Ring');
-  assert.equal(bell20.handled, true, 'the quest owns the bell while its Zavistic step is active');
-  h.finish(p);
-  assert.equal(stage(), 30);
-  assert.equal(p.items.get(I.BEER_SOAKED_HAND) ?? 0, 0);
-
-  // Bert gives his rota (30 -> 40).
-  h.talk(p, N.BERT);
-  h.finish(p);
-  assert.equal(stage(), 40);
-  assert.equal(p.items.get(I.BERTS_ROTA), 1);
-
-  // Search Sandy's desk (40 -> 50), then pickpocket the sand.
-  const desk = h.object(p, O.SANDYS_DESK, 'Search');
-  assert.equal(desk.handled, true);
-  h.finish(p);
-  assert.equal(stage(), 50);
-  assert.equal(p.items.get(I.SANDYS_ROTA), 1);
-
-  h.npcOption(p, 'Sandy', N.SANDY, 'Pickpocket');
-  h.finish(p);
-  assert.equal(p.items.get(I.SAND), 1, 'pickpocketing Sandy yields the sand');
-
-  // Return both rotas to Bert and receive the magic scroll (50 -> 60).
-  h.talk(p, N.BERT);
-  h.finish(p);
-  assert.equal(stage(), 60);
-  assert.equal(p.items.get(I.A_MAGIC_SCROLL), 1);
-  assert.equal(p.items.get(I.BERTS_ROTA) ?? 0, 0);
-  assert.equal(p.items.get(I.SANDYS_ROTA) ?? 0, 0);
-
-  // Ring the bell and exchange the scroll for the orb (60 -> 70).
-  assert.equal(h.object(p, O.BELL_2, 'Ring').handled, true);
-  h.nextPrompt(p);
-  h.choose(p, 'I have a rather sandy problem that I\'d like to palm off on you.');
-  h.finish(p);
-  assert.equal(stage(), 70);
-  assert.equal(p.items.get(I.A_MAGIC_SCROLL) ?? 0, 0);
-  assert.equal(p.items.get(I.MAGICAL_ORB), 1);
-
-  // Ring the bell for Zavistic's one-time teleport to Port Sarim (consumes a vial).
-  assert.equal(h.object(p, O.BELL_2, 'Ring').handled, true);
-  h.nextPrompt(p);
-  h.choose(p, 'I have a rather sandy problem that I\'d like to palm off on you.');
-  h.nextPrompt(p);
-  h.choose(p, 'Can you help me more?');
-  h.nextPrompt(p);
-  h.choose(p, 'Yes, that would be great!');
-  h.finish(p);
-  assert.equal(p.items.get(I.VIAL), 1, 'one of the two vials is handed over for the teleport');
-  assert.deepEqual(p.moves.at(-1), [3014, 3259, 0]);
-  assert.equal(p.getPacketSender().getVarbit(1531), 1, 'actual teleport earns HANDSAND_TELE');
-
-  // Betty takes the second vial and gives bottled water.
-  h.talk(p, N.BETTY);
-  h.nextPrompt(p);
-  h.choose(p, 'Talk to Betty about the Hand in the Sand.');
-  h.finish(p);
-  assert.equal(p.items.get(I.VIAL) ?? 0, 0);
-  assert.equal(p.items.get(I.BOTTLED_WATER), 1);
-  assert.equal(p.getPacketSender().getVarbit(1532), 1, 'Betty earns receivedBottledWater');
-
-  // Redberry juice, pink dye, rose-tinted lens.
-  h.itemOnItem(p, I.BOTTLED_WATER, I.REDBERRIES);
-  assert.equal(p.items.get(I.REDBERRY_JUICE), 1);
-  assert.equal(p.getPacketSender().getVarbit(1532), 2);
-  h.itemOnItem(p, I.REDBERRY_JUICE, I.WHITE_BERRIES);
-  assert.equal(p.items.get(I.PINK_DYE), 1);
-  assert.equal(p.getPacketSender().getVarbit(1532), 3);
-  h.itemOnItem(p, I.PINK_DYE, I.LANTERN_LENS);
-  assert.equal(p.items.get(I.ROSE_TINTED_LENS), 1);
-  assert.equal(p.getPacketSender().getVarbit(1532), 4);
-
-  // Betty places the counter vial, then the lens makes the truth serum.
-  h.talk(p, N.BETTY);
-  h.nextPrompt(p);
-  h.choose(p, 'Talk to Betty about the Hand in the Sand.');
-  h.finish(p);
-  assert.equal(p.getPacketSender().getVarbit(1537), 1, 'Betty actually places the vial');
-  assert.equal(core.ObjectDefinition.forPlayer(10812, p).id, O.COUNTER_15);
-  // The map's parent: a click names it, and it shows the counter by the varbit above.
-  const counter = h.itemOnObject(p, 10812, I.ROSE_TINTED_LENS);
-  assert.equal(counter.handled, true);
-  h.finish(p);
-  assert.equal(p.items.get(I.ROSE_TINTED_LENS) ?? 0, 0);
-  assert.equal(p.items.get(I.TRUTH_SERUM), 1);
-  assert.equal(p.getPacketSender().getVarbit(1532), 5, 'madeTruthSerum helper condition');
-  assert.equal(p.getPacketSender().getVarbit(1537), 0);
-
-  // Betty adds Sandy's sand (70 -> 80).
-  h.talk(p, N.BETTY);
-  h.nextPrompt(p);
-  h.choose(p, 'Talk to Betty about the Hand in the Sand.');
-  h.finish(p);
-  assert.equal(stage(), 80);
-  assert.equal(p.getPacketSender().getVarbit(1532), 6);
-  assert.equal(p.items.get(I.SAND) ?? 0, 0);
-
-  // Distract Sandy (80 -> 90).
-  h.talk(p, N.SANDY);
-  h.nextPrompt(p);
-  h.choose(p, 'There\'s a herd of huge mutant herring about to drop from the sky!');
-  h.finish(p);
-  assert.equal(stage(), 90);
-
-  // Pour the serum into the coffee (90 -> 100).
-  const coffee = h.itemOnObject(p, 10806, I.TRUTH_SERUM);
-  assert.equal(coffee.handled, true);
-  h.finish(p);
-  assert.equal(stage(), 100);
-  assert.equal(p.items.get(I.TRUTH_SERUM) ?? 0, 0);
-
-  // Activate the orb (100 -> 110).
-  const activate = h.itemAction(p, I.MAGICAL_ORB, 'Activate');
-  assert.equal(activate.handled, true);
-  h.finish(p);
-  assert.equal(stage(), 110);
-  assert.equal(p.items.get(I.MAGICAL_ORB) ?? 0, 0);
-  assert.equal(p.items.get(I.MAGICAL_ORB_A_), 1);
-
-  // Ask all three questions (110 -> 120).
-  h.talk(p, N.SANDY);
-  h.nextPrompt(p);
-  for (const question of [
-    "Why is Bert's rota different from the original?",
-    "Why doesn't Bert remember the change in his hours?",
-    'What happened to the wizard?',
-  ]) {
-    h.choose(p, question);
-    if (question !== 'What happened to the wizard?') h.nextPrompt(p);
-  }
-  h.finish(p);
-  assert.equal(stage(), 120);
-
-  // Return the full orb (120 -> 130).
-  assert.equal(h.object(p, O.BELL_2, 'Ring').handled, true);
-  h.nextPrompt(p);
-  h.choose(p, 'I have a rather sandy problem that I\'d like to palm off on you.');
-  h.finish(p);
-  assert.equal(stage(), 130);
-  assert.equal(p.items.get(I.MAGICAL_ORB_A_) ?? 0, 0);
-
-  // Give Zavistic the runes and sand; the sandpit fills (130 -> 140).
-  assert.equal(h.object(p, O.BELL_2, 'Ring').handled, true);
-  h.nextPrompt(p);
-  h.choose(p, 'I have a rather sandy problem that I\'d like to palm off on you.');
-  h.finish(p);
-  assert.equal(stage(), 140);
-  assert.equal(p.items.get(I.EARTH_RUNE) ?? 0, 0);
-  assert.equal(p.items.get(I.BUCKET_OF_SAND) ?? 0, 0);
-
-  // Mazion on Entrana hands over the wizard's head (140 -> 150).
-  h.talk(p, N.MAZION);
-  h.finish(p);
-  assert.equal(stage(), 150);
-  assert.equal(p.items.get(I.WIZARDS_HEAD), 1);
-
-  // Final hand-in (150 -> 160).
-  const bellEnd = h.object(p, O.BELL_2, 'Ring');
-  assert.equal(bellEnd.handled, true);
-  h.finish(p);
-  assert.equal(stage(), COMPLETE);
-  assert.equal(p.items.get(I.WIZARDS_HEAD) ?? 0, 0);
-  assert.equal(p.varbits.get(VARBIT), COMPLETE, 'the completion value reaches cache varbit 1527');
-  // New connection, same durable attributes: replay the earned helper facts.
-  p.wire = new PacketSender(p);
-  for (const fn of h.hooks.onPlayerLogin ?? []) fn({ player: p });
-  runtime.sendQuestVarps({ player: p });
-  h.api.emitCustomEvent('player:bootstrap-complete', { player: p });
-  assert.equal(p.getPacketSender().getVarbit(VARBIT), COMPLETE);
-  assert.equal(p.getPacketSender().getVarbit(1531), 1);
-  assert.equal(p.getPacketSender().getVarbit(1532), 6);
-  assert.equal(p.getPacketSender().getVarbit(1537), 0);
-  assert.deepEqual(p.xp, [[core.Skill.CRAFTING.getIndex(), 9000], [core.Skill.THIEVING.getIndex(), 1000]]);
-  assert.equal(p.attrs.get('quest.points'), 1);
-  assert.ok(p.messages.some(text => text.includes('completed a quest')));
-
-  // Repeat hand-in does not pay twice.
-  h.events['npc-dialogue:action'].forEach(fn => fn({ player: p, npcId: N.ZAVISTIC_RARVE, stepId: 'q_UjQ0', handled: false }));
-  assert.deepEqual(p.xp, [[core.Skill.CRAFTING.getIndex(), 9000], [core.Skill.THIEVING.getIndex(), 1000]]);
-  assert.equal(p.attrs.get('quest.points'), 1);
-});
+// The full route, stage 0 to 160, is walked with a real Player, real packets and the world's tasks in
+// tests/hand-in-the-sand-capture.test.cjs (the bell and the cutscene run on timers this stub harness has no world for).
 
 test('the shared Wizards\' Guild bell is claimed only for this quest\'s Zavistic steps', () => {
   const h = harness({ captureTranscripts: true });
@@ -506,6 +302,7 @@ test('the shared Wizards\' Guild bell is claimed only for this quest\'s Zavistic
     h.quest.setStage(p, stage);
     const event = h.object(p, O.BELL_2, 'Ring');
     assert.equal(event.handled, true, `bell is handled at stage ${stage}`);
+    h.tick(2); // Zavistic comes out to the bell a tick after it swings.
     assert.deepEqual(h.starts.at(-1), { npcId: N.ZAVISTIC_RARVE, page: h.quest.name, variant });
   }
   for (const stage of [0, 10, 30, 40, 50, 80, 90, 100, 110, 140]) {
@@ -563,6 +360,7 @@ test('both registered quests share the bell and Zavistic in server dispatch orde
   p.attrs.set('quest.zogre_flesh_eaters.stage', 2);
   p.attrs.set('quest.zogre_flesh_eaters.search', 0);
   assert.equal(h.object(p, O.BELL_2, 'Ring').handled, true);
+  h.tick(2);
   assert.equal(h.starts.length, 0, 'Hand leaves the pending evidence conversation to Zogre');
   assert.equal(zogreStarts.at(-1).variant,
     'investigating-b-vahn-ringing-the-bell-outside-the-wizards-guild');
@@ -571,6 +369,7 @@ test('both registered quests share the bell and Zavistic in server dispatch orde
   assert.equal(h.variantFor(p, N.ZAVISTIC_RARVE),
     'investigating-b-vahn-talking-to-zavistic-rarve-after-gathering-evidence');
   assert.equal(h.object(p, O.BELL_2, 'Ring').handled, true);
+  h.tick(2);
   assert.equal(h.starts.length, 1, 'Hand can use its bell after Zogre gathers evidence');
   assert.equal(zogreStarts.length, 1, 'a handled Hand click never also reaches Zogre');
 });
@@ -619,9 +418,8 @@ test('a lost activated orb is reclaimed from Zavistic without changing the inter
   const h = harness();
   const p = player();
   h.quest.setStage(p, 110);
+  // No Zogre menu before Zogre Flesh Eaters: Zavistic goes straight to this quest's questions.
   h.talk(p, N.ZAVISTIC_RARVE);
-  h.nextPrompt(p);
-  h.choose(p, 'I have a rather sandy problem that I\'d like to palm off on you.');
   h.nextPrompt(p);
   h.choose(p, 'I\'ve lost my magical scrying orb!');
   h.finish(p);
@@ -635,9 +433,8 @@ test('a full bag refuses the Zavistic orb replacement without losing the interro
   h.quest.setStage(p, 110);
   for (let i = 0; i < 28; i++) p.items.set(900000 + i, 1);
   assert.equal(p.getInventory().getFreeSlots(), 0);
+  // No Zogre menu before Zogre Flesh Eaters: Zavistic goes straight to this quest's questions.
   h.talk(p, N.ZAVISTIC_RARVE);
-  h.nextPrompt(p);
-  h.choose(p, 'I have a rather sandy problem that I\'d like to palm off on you.');
   h.nextPrompt(p);
   h.choose(p, 'I\'ve lost my magical scrying orb!');
   h.finish(p);
@@ -645,59 +442,29 @@ test('a full bag refuses the Zavistic orb replacement without losing the interro
   assert.equal(h.quest.getStage(p), 110);
 });
 
-test('the sandpit enchantment spends 5 earth runes and one bucket of sand once', () => {
-  const h = harness();
-  const p = player();
-  inRealView(p, h);
-  h.api.spawnNpc({ id: N.BERT, name: 'Bert', x: 2551, y: 3099, z: 0 });
-  p.items.set(I.EARTH_RUNE, 10);
-  p.items.set(I.BUCKET_OF_SAND, 2);
-  h.quest.setStage(p, 130);
-  assert.equal(h.object(p, O.BELL_2, 'Ring').handled, true);
-  h.nextPrompt(p);
-  h.choose(p, 'I have a rather sandy problem that I\'d like to palm off on you.');
-  h.finish(p);
-  assert.equal(h.quest.getStage(p), 140);
-  assert.ok(p.messages.includes('Bert: My sand! My lovely sand!'), 'Bert, out of view, is marked in the chat');
-  assert.equal(p.items.get(I.EARTH_RUNE), 5, 'only the 5 required earth runes are spent');
-  assert.equal(p.items.get(I.BUCKET_OF_SAND), 1, 'only one bucket of sand is spent');
-});
+// The sandpit spell's runes and bucket, spent once and not at 120, are in tests/hand-in-the-sand-capture.test.cjs
+// (the spell is a cutscene in a copy of the map).
 
-test('the neighbouring steps do not spend the sandpit runes or bucket', () => {
+test('Bert\'s "Yes." refuses 16 Thieving or 48 Crafting and accepts 17/49', () => {
   const h = harness();
   const p = player();
-  p.items.set(I.EARTH_RUNE, 10);
-  p.items.set(I.BUCKET_OF_SAND, 2);
-  p.items.set(I.MAGICAL_ORB_A_, 1);
-  h.quest.setStage(p, 120);
-  assert.equal(h.object(p, O.BELL_2, 'Ring').handled, true);
-  h.nextPrompt(p);
-  h.choose(p, 'I have a rather sandy problem that I\'d like to palm off on you.');
-  h.finish(p);
-  assert.equal(h.quest.getStage(p), 130);
-  assert.equal(p.items.get(I.EARTH_RUNE), 10, 'stage 120 does not spend earth runes');
-  assert.equal(p.items.get(I.BUCKET_OF_SAND), 2, 'stage 120 does not spend the bucket');
-});
-
-test('Bert\'s intro requirements marker refuses 16 Thieving or 48 Crafting and accepts 17/49', () => {
-  const h = harness();
-  const p = player();
-  const marker = () => {
-    const event = { player: p, npcId: N.BERT, stepId: 'Jw8a7L', handled: false };
-    h.events['npc-dialogue:action'].forEach(fn => fn(event));
-    return event;
+  const yes = () => {
+    const hook = { player: p, npcId: N.BERT, hook: 'quest:the-hand-in-the-sand:start', end: false };
+    h.events['npc-dialogue:hook'].forEach(fn => fn(hook));
+    return hook;
   };
   p.levels[core.Skill.THIEVING.getIndex()] = 16;
   p.levels[core.Skill.CRAFTING.getIndex()] = 49;
-  assert.equal(marker().handled, false);
+  assert.equal(yes().end, true);
   assert.match(p.messages.at(-1), /requirements/);
 
   p.levels[core.Skill.THIEVING.getIndex()] = 17;
   p.levels[core.Skill.CRAFTING.getIndex()] = 48;
-  assert.equal(marker().handled, false);
+  assert.equal(yes().end, true);
 
   p.levels[core.Skill.CRAFTING.getIndex()] = 49;
-  assert.equal(marker().handled, true, 'the accept choice after the marker stays reachable');
+  assert.equal(yes().end, false, 'Bert goes on with "Sure, I\'ll give you a hand."');
+  assert.equal(h.quest.getStage(p), 0, 'the stage comes with the hand, not the choice');
 });
 
 test('lost hand, rota and head recovery stay on the quest page and preserve the stage', () => {
@@ -734,7 +501,7 @@ test('lost hand, rota and head recovery stay on the quest page and preserve the 
 
 
 test('auxiliary wire replays only earned state and preserves parent siblings and WGS counter ownership', () => {
-  for (const [id, baseVar, startBit, endBit] of [[1531,635,12,12],[1532,635,13,15],[1537,636,9,10]]) {
+  for (const [id, baseVar, startBit, endBit] of [[1528,635,9,9],[1529,635,10,10],[1530,635,11,11],[1531,635,12,12],[1532,635,13,15],[1535,636,0,1],[1536,636,2,2],[1537,636,9,10]]) {
     const actual = CacheDefinitions.getVarbit(id);
     assert.deepEqual([actual.baseVar,actual.startBit,actual.endBit], [baseVar,startBit,endBit]);
   }
@@ -743,13 +510,17 @@ test('auxiliary wire replays only earned state and preserves parent siblings and
   sender.sendConfig(635, (1 << 9) | (1 << 10) | (1 << 11));
   sender.sendConfig(636, 0x40001);
   h.quest.setStage(p, 70);
-  h.api.emitCustomEvent('npc-dialogue:line', { player: p, npcId: N.BETTY, text: 'I have one here!' });
+  const line = { player: p, npcId: N.BETTY, text: 'I have one here!' };
+  h.api.emitCustomEvent('npc-dialogue:line', line);
+  assert.equal(sender.getVarbit(1532), 0, 'nothing until "I have one here!" is continued');
+  line.after();
   assert.equal(sender.getVarbit(1532), 1);
   sender.sendVarbit(1537, 2);
   h.api.emitCustomEvent('npc-dialogue:action', { player: p, stepId: 'sB80ti', kind: 'message' });
   assert.equal(sender.getVarbit(1537), 1, 'actual Hand vial placement owns its form');
   assert.equal(sender.getVarp(635) & 0xe00, 0xe00);
-  assert.equal(sender.getVarp(636) & ~0x600, 0x40001);
+  // Bits 0-2 are this quest's own Sandy (1535) and mug (1536), set from the stage; 9-10 the counter.
+  assert.equal(sender.getVarp(636) & ~0x607, 0x40000);
   sender.sendVarbit(1532, 0); sender.sendVarbit(1537, 0);
   for (const fn of h.hooks.onPlayerLogin ?? []) fn({ player: p });
   h.api.emitCustomEvent('player:bootstrap-complete', { player: p });
@@ -768,4 +539,29 @@ test('auxiliary wire replays only earned state and preserves parent siblings and
   for (const fn of h.hooks.onPlayerLogin ?? []) fn({ player: fresh });
   h.api.emitCustomEvent('player:bootstrap-complete', { player: fresh });
   for (const id of [1531, 1532, 1537]) assert.equal(fresh.getPacketSender().getVarbit(id), 0, 'completion invents no auxiliary actions');
+});
+
+test('login replays the question varbits, Sandy at his window or gone, and the mug, from saved state', () => {
+  const h = harness();
+  const login = (p) => {
+    p.wire = new PacketSender(p);
+    for (const fn of h.hooks.onPlayerLogin ?? []) fn({ player: p });
+    h.api.emitCustomEvent('player:bootstrap-complete', { player: p });
+    const sender = p.getPacketSender();
+    return [1528, 1529, 1530, 1535, 1536].map((id) => sender.getVarbit(id));
+  };
+  const asking = player({ realWire: true });
+  h.quest.setStage(asking, 110);
+  asking.attrs.set('quest.hand_in_the_sand.question1', false);
+  asking.attrs.set('quest.hand_in_the_sand.question2', true);
+  asking.attrs.set('quest.hand_in_the_sand.question3', true);
+  assert.deepEqual(login(asking), [0, 1, 1, 0, 0], 'the first question asked; Sandy at his desk');
+
+  const distracted = player({ realWire: true });
+  h.quest.setStage(distracted, 90);
+  assert.deepEqual(login(distracted).slice(3), [1, 0], 'Sandy still at the window until the serum is in');
+
+  const done = player({ realWire: true });
+  h.quest.setStage(done, COMPLETE);
+  assert.deepEqual(login(done).slice(3), [2, 1], 'Sandy arrested and his mug gone');
 });

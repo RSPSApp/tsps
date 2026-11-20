@@ -4,10 +4,16 @@
  * fight's length is told against the personal best, the loot drops (NpcDrops, its Wiki table),
  * and the angel lies there; the HUD goes a little later. The corpse stays for its respawn time
  * (Wiki: 26 ticks), then the angel is back on its spot, dormant, to be woken again.
+ *
+ * Fallen From Grace's angel (rsprox P2 tick 431): the kill count, the drop and the corpse in the
+ * same tick, no fight-duration line, and the pew turns back into the climbable one. Its corpse
+ * stays (examined at tick 457) and no angel comes back.
  */
 const Common = require("./Common.MadAngel");
 const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 const BOSS_NAME = "Mad Angel";
+/** Fallen From Grace's corpse lies there for as long as the player's cathedral lasts. */
+const QUEST_CORPSE_TICKS = 6000;
 
 function onAngelDeath(event) {
   const session = event.npc?.__madAngel;
@@ -24,6 +30,13 @@ function onAngelDeath(event) {
   player.setAttribute(Common.KILLS_ATTRIBUTE, kills);
   player.getPacketSender().sendConfig(killCountVarp, kills);
   sendBossKillCount(player, `Your Mad Angel kill count is: <col=ff0000>${kills}</col>.`);
+  if (session.variant === "quest") {
+    session.defeated = true;
+    event.remains = { ticks: QUEST_CORPSE_TICKS };
+    session.placeClimbPew();
+    Common.later(hud.fadeOutAfterDeathTicks, () => player.isRegistered() && fight.hideHud());
+    return;
+  }
   const ticks = fight.tick - fight.startTick;
   const best = Number(player.getAttribute(Common.BEST_TICKS_ATTRIBUTE)) || 0;
   if (!best || ticks < best) {

@@ -399,7 +399,6 @@ function applyWikiCorrections(tableById) {
   }
 }
 
-const MAD_ANGEL_SUNSTONE_CRYSTAL = 34032;
 const MAD_ANGEL_TELEPORT = 34033;
 const MAD_ANGEL_SUPPLY_FISH = new Set([385, 32328]);
 /** Super combat potion(3), raw monkfish, emerald and sapphire: "(noted)" on the Wiki, lost by the export. */
@@ -410,15 +409,15 @@ const MAD_ANGEL_SUPPLY_BONUS = [
 ];
 
 /**
- * The Mad Angel (Wiki, Drops): the sunstone crystal belongs to Fallen From Grace (not on this
- * server); the Ardeaglais teleport pre-roll is 1/25; and a supply batch (16/150) is either
- * sharks or yellowfins, bundled with a prayer potion(2) and a super combat potion(1) - the
- * export listed the four as separate rolls on a 182 table.
+ * The Mad Angel (Wiki, Drops): the Ardeaglais teleport pre-roll is 1/25; and a supply batch
+ * (16/150) is either sharks or yellowfins, bundled with a prayer potion(2) and a super combat
+ * potion(1) - the export listed the four as separate rolls on a 182 table. The sunstone crystal
+ * stays on its 100% table (Fallen From Grace's kill dropped it, rsprox P2 tick 431).
  */
 function correctMadAngel(table) {
   if (!table) return;
-  table.entries = (table.entries || []).filter((entry) => entry.item_id !== MAD_ANGEL_SUNSTONE_CRYSTAL
-    && !(entry.section === "Supply batch" && !MAD_ANGEL_SUPPLY_FISH.has(entry.item_id)));
+  table.entries = (table.entries || []).filter((entry) =>
+    !(entry.section === "Supply batch" && !MAD_ANGEL_SUPPLY_FISH.has(entry.item_id)));
   for (const entry of table.entries) {
     if (entry.item_id === MAD_ANGEL_TELEPORT) entry.out_of = 25;
     if (entry.section === "Supply batch") entry.bonus_drops = MAD_ANGEL_SUPPLY_BONUS;

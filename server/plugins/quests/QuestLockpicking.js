@@ -49,13 +49,23 @@ function lockpickFeedback(guess, target) {
   return codeOf(feedback, FEEDBACK_DIGITS);
 }
 
+/**
+ * `target` is the combination, or a function giving a new one each time the lock is opened
+ * afresh (attempt 0); a wrong guess reopens the same session with the same combination.
+ */
 function createQuestLockpicking(api, { activePins, target, onSolved }) {
   if (!Number.isInteger(activePins) || activePins < 1 || activePins > LOCKPICKING_SLOTS) {
     throw new Error("lockpicking activePins must be 1..6");
   }
-  if (!Number.isInteger(target) || target < 0 || target >= LOCKPICKING_DIGITS ** activePins) {
+  const inRange = (code) => Number.isInteger(code) && code >= 0 && code < LOCKPICKING_DIGITS ** activePins;
+  if (typeof target !== "function" && !inRange(target)) {
     throw new Error("lockpicking target is outside the active pin range");
   }
+  const draw = () => {
+    const code = typeof target === "function" ? target() : target;
+    if (!inRange(code)) throw new Error("lockpicking target is outside the active pin range");
+    return code;
+  };
   const { CountdownTask, TaskManager } = api.core;
   const pending = new WeakMap();
 
@@ -67,9 +77,9 @@ function createQuestLockpicking(api, { activePins, target, onSolved }) {
     pending.delete(player);
   }
 
-  function open(player, attempt = 0, guess = 0, feedback = 0) {
+  function open(player, attempt = 0, guess = 0, feedback = 0, code = draw()) {
     cancel(player);
-    const state = { key: {}, attempt, guess, feedback, action: null, closing: false };
+    const state = { key: {}, attempt, guess, feedback, code, action: null, closing: false };
     pending.set(player, state);
     const sender = player.getPacketSender();
     sender.sendInterface(LOCKPICKING_GROUP);
@@ -109,7 +119,7 @@ function createQuestLockpicking(api, { activePins, target, onSolved }) {
         pending.delete(player);
         return;
       }
-      open(player, attempt, guess, feedback);
+      open(player, attempt, guess, feedback, state.code);
     }));
   }
 
@@ -126,14 +136,14 @@ function createQuestLockpicking(api, { activePins, target, onSolved }) {
       reopen(player, state, state.attempt, state.guess, state.feedback);
       return;
     }
-    if (amount === target) {
+    if (amount === state.code) {
       pending.delete(player);
       player.setEnteredAmountAction(null);
       player.getPacketSender().sendInterfaceRemoval();
       onSolved(player);
       return;
     }
-    const feedback = lockpickFeedback(amount, target);
+    const feedback = lockpickFeedback(amount, state.code);
     player.sendMessage("That didn't seem to work.");
     reopen(player, state, state.attempt + 1, amount, feedback);
   }

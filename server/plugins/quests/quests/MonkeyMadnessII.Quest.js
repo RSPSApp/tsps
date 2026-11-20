@@ -341,6 +341,22 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   const DECONSTRUCTED_ONYX_ITEM = ItemIdentifiers.DECONSTRUCTED_ONYX; // 19562
   const ROYAL_SEED_POD_ITEM = ItemIdentifiers.ROYAL_SEED_POD; // 19564
   const SEED_POD_WILDERNESS_LIMIT = 30;
+  // Commune, as in rsprox.net recordings 1060, 1067, 2950, 3434, 4042, 4155 and 4263 (rev 230-239): on the click
+  // aluft_human_plant_teleport and aluft_plant_pod (both delay 5) and varbit busy; the landing on tick 4 at
+  // 2465,3495; on tick 5 aluft_human_plant_teleport_revers and aluft_plant_pod_revers; on tick 8 the animation
+  // reset, the spam line and busy 0. Sound 469 on the click and the landing is in recording 4042 only.
+  const SEED_POD_LANDING = new Location(2465, 3495, 0);
+  const SEED_POD_LANDING_TICK = 4;
+  const SEED_POD_UNFOLD_AFTER = 1;
+  const SEED_POD_RELEASE_AFTER = 4;
+  const SEED_POD_SEQ = "aluft_human_plant_teleport";
+  const SEED_POD_SEQ_REVERSE = "aluft_human_plant_teleport_revers";
+  const SEED_POD_SPOTANIM = "aluft_plant_pod";
+  const SEED_POD_SPOTANIM_REVERSE = "aluft_plant_pod_revers";
+  const SEED_POD_SOUND = 469;
+  const SEED_POD_CLIENT_DELAY = 5;
+  const SEED_POD_MESSAGE = "The Royal seed pod teleports you to the Grand Tree.";
+  const BUSY_VARBIT = "busy";
   const BANANA_ITEM = ItemIdentifiers.BANANA; // 1963
 
   // The cache resolves these multi-locs per player through the mm2 varbits, but the
@@ -1713,15 +1729,58 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     }
   }
 
+  let seedPodType = null;
+  /** The pod's own teleport: no landing animation of its own; the pod unfolds again the tick after (seedPodTeleport). */
+  function seedPodTeleportType() {
+    const { Animation, Graphic, Priority, Sound, CacheDefinitions } = api.core;
+    const start = new Animation(CacheDefinitions.getSeqId(SEED_POD_SEQ), SEED_POD_CLIENT_DELAY);
+    start.priority = Priority.HIGH;
+    return seedPodType ??= new TeleportType(SEED_POD_LANDING_TICK, start,
+      null, null,
+      new Graphic(CacheDefinitions.getSpotanimId(SEED_POD_SPOTANIM)).withDelay(SEED_POD_CLIENT_DELAY),
+      null, null,
+      { sound: new Sound(SEED_POD_SOUND, 1, 0, 0) });
+  }
+
+  /** After `ticks` ticks, unless the player has gone (the task is keyed to them). */
+  function afterTicks(player, ticks, run) {
+    const task = new api.core.Task(ticks, player, false);
+    task.execute = () => {
+      task.stop();
+      run();
+    };
+    api.core.TaskManager.submit(task);
+  }
+
+  /** Varbit busy stays set, and the player held, from the click until the pod has folded away on tick 8. */
+  function seedPodTeleport(player) {
+    const { Animation, Graphic, Priority, CacheDefinitions } = api.core;
+    const sender = player.getPacketSender();
+    TeleportHandler.teleport(player, SEED_POD_LANDING.clone(), seedPodTeleportType(), false, () => {
+      player.getMovementQueue().setBlockMovement(true).reset();
+      sender.sendSound(SEED_POD_SOUND, 1, 0);
+      afterTicks(player, SEED_POD_UNFOLD_AFTER, () => {
+        player.performAnimation(new Animation(CacheDefinitions.getSeqId(SEED_POD_SEQ_REVERSE), Priority.HIGH));
+        player.performGraphic(new Graphic(CacheDefinitions.getSpotanimId(SEED_POD_SPOTANIM_REVERSE)));
+      });
+      afterTicks(player, SEED_POD_RELEASE_AFTER, () => {
+        player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+        player.getMovementQueue().setBlockMovement(false);
+        sender.sendVarbit(CacheDefinitions.getVarbitId(BUSY_VARBIT), 0);
+        player.sendMessage(SEED_POD_MESSAGE);
+      });
+    });
+    sender.sendVarbit(CacheDefinitions.getVarbitId(BUSY_VARBIT), 1);
+  }
+
   function handleItemAction(event) {
     const { player, itemId } = event;
     const option = String(event.option ?? "").toLowerCase();
     if (itemId === ROYAL_SEED_POD_ITEM && option === "commune") {
       event.handled = true;
       // Wiki (Royal seed pod): it "can teleport up to level 30 wilderness"; the usual teleport rules apply otherwise.
-      if (!TeleportHandler.checkReqs(player, GRAND_TREE_KING, SEED_POD_WILDERNESS_LIMIT)) return;
-      TeleportHandler.confirm(player, GRAND_TREE_KING, () => TeleportHandler.teleport(player, GRAND_TREE_KING.clone(), TeleportType.NORMAL, false,
-        () => player.sendMessage("The Royal seed pod teleports you to the Grand Tree.")), SEED_POD_WILDERNESS_LIMIT);
+      if (!TeleportHandler.checkReqs(player, SEED_POD_LANDING, SEED_POD_WILDERNESS_LIMIT)) return;
+      TeleportHandler.confirm(player, SEED_POD_LANDING, () => seedPodTeleport(player), SEED_POD_WILDERNESS_LIMIT);
       return;
     }
     if (option !== "read") return;

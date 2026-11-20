@@ -55,8 +55,68 @@ test("the royal seed pod teleports from shallow Wilderness, with the Wiki's line
   const f = actor(t, SHALLOW, core.ItemIdentifiers.ROYAL_SEED_POD);
   assert.ok(core.Wilderness.isIn(f.p));
   await use(f, core.ItemIdentifiers.ROYAL_SEED_POD, "Commune");
-  assert.deepEqual(xy(f), [2465, 3496], f.messages.join(" | "));
+  assert.deepEqual(xy(f), [2465, 3495], f.messages.join(" | "));
   assert.ok(f.messages.includes("The Royal seed pod teleports you to the Grand Tree."), f.messages.join(" | "));
+});
+
+// rsprox.net 1060, 1067, 2950, 3434, 4042, 4155, 4263 (rev 230-239): the pod's own animation and spotanim (delay 5)
+// and busy on the click, the landing on tick 4, the pod folding back on tick 5, and on tick 8 the reset, the line
+// and busy 0. Sound 469 on the click and the landing (4042).
+test("Commune plays the pod's own teleport, tick by tick as captured", async (t) => {
+  const C = core.CacheDefinitions;
+  const f = actor(t, SHALLOW, core.ItemIdentifiers.ROYAL_SEED_POD);
+  const busy = C.getVarbitId("busy");
+  let tick = 0;
+  const log = [];
+  t.mock.method(f.p, "performAnimation", (a) => { if (a) log.push([tick, "seq", a.getId(), a.getDelay?.() ?? 0]); });
+  t.mock.method(f.p, "performGraphic", (g) => { if (g) log.push([tick, "spot", g.getId(), g.getDelay?.() ?? 0]); });
+  const sender = f.p.getPacketSender();
+  const sendVarbit = sender.sendVarbit.bind(sender);
+  t.mock.method(sender, "sendVarbit", (id, value) => { if (id === busy) log.push([tick, "busy", value]); return sendVarbit(id, value); });
+  t.mock.method(sender, "sendSound", (id) => { log.push([tick, "sound", id]); return sender; });
+  t.mock.method(core.Sounds, "playAreaSoundAt", (_p, sound) => { log.push([tick, "sound", sound.getId?.() ?? sound.id]); });
+  t.mock.method(core.Sounds, "sendSound", (_p, sound) => { log.push([tick, "sound", sound.getId?.() ?? sound.id]); });
+  const slot = f.p.getInventory().getSlotForItemId(core.ItemIdentifiers.ROYAL_SEED_POD);
+  await f.conn.dispatch([{ type: "inventory_action", slot, itemId: core.ItemIdentifiers.ROYAL_SEED_POD, widgetId: 3214, option: "Commune" }]);
+  f.conn.processTurnPackets();
+  const landed = [];
+  const lines = [];
+  for (tick = 1; tick <= 10; tick++) {
+    core.TaskManager.process();
+    landed.push(xy(f)[1] === 3495);
+    lines.push(f.messages.length);
+  }
+  const seq = (name) => C.getSeqId(name), spot = (name) => C.getSpotanimId(name);
+  assert.deepEqual(log.filter(([at]) => at === 0), [
+    [0, "seq", seq("aluft_human_plant_teleport"), 5],
+    [0, "spot", spot("aluft_plant_pod"), 5],
+    [0, "sound", 469],
+    [0, "busy", 1],
+  ]);
+  assert.equal(landed.indexOf(true) + 1, 4, "lands on tick 4");
+  assert.deepEqual(xy(f), [2465, 3495]);
+  assert.deepEqual(log.filter(([at]) => at > 0), [
+    [4, "sound", 469],
+    [5, "seq", seq("aluft_human_plant_teleport_revers"), 0],
+    [5, "spot", spot("aluft_plant_pod_revers"), 0],
+    [8, "seq", core.Animation.DEFAULT_RESET_ANIMATION.getId(), 0],
+    [8, "busy", 0],
+  ]);
+  assert.equal(lines.indexOf(1) + 1, 8, "the line comes on tick 8");
+  assert.deepEqual(f.messages, ["The Royal seed pod teleports you to the Grand Tree."]);
+  assert.equal(f.p.getMovementQueue().isMovementBlocked(), false, "free once the pod has folded away");
+});
+
+test("the player is held until the pod has folded away", async (t) => {
+  const f = actor(t, SHALLOW, core.ItemIdentifiers.ROYAL_SEED_POD);
+  const slot = f.p.getInventory().getSlotForItemId(core.ItemIdentifiers.ROYAL_SEED_POD);
+  await f.conn.dispatch([{ type: "inventory_action", slot, itemId: core.ItemIdentifiers.ROYAL_SEED_POD, widgetId: 3214, option: "Commune" }]);
+  f.conn.processTurnPackets();
+  for (let i = 0; i < 5; i++) core.TaskManager.process();
+  assert.deepEqual(xy(f), [2465, 3495]);
+  assert.equal(f.p.getMovementQueue().isMovementBlocked(), true, "held on tick 5");
+  for (let i = 0; i < 3; i++) core.TaskManager.process();
+  assert.equal(f.p.getMovementQueue().isMovementBlocked(), false, "free on tick 8");
 });
 
 test("the royal seed pod is refused above level 30 Wilderness", async (t) => {

@@ -156,8 +156,11 @@ Charging (rsprox, the user's recordings local 1001250 tick 724 and local 1001295
 - An amount above N applies N (local 1001295: 435,567 typed applied 17,728).
 - The result is an objectbox with the charged staff: "You apply N charges to your Sanguinesti
   staff." Its text also goes to the chat.
-- The Charge option (both versions) asks the same. It isn't recorded; Tonalztics of Ralos'
-  recorded Charge asks as its material does, so ours follows that.
+- Charge on the uncharged staff asks nothing, even with blood runes held: "Your Sanguinesti staff
+  (uncharged) has no charges! You can use blood runes to power the staff." (local 1001250 tick
+  721).
+- Charge on the charged staff isn't recorded. Ours asks as using the runes does, as Tonalztics of
+  Ralos' recorded Charge does.
 
 Check: "Your Sanguinesti staff has N charges remaining." (rsprox 4151 tick 101, 4288 tick 26539).
 

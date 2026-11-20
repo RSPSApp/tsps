@@ -297,15 +297,34 @@ test('the runes or staff changing before the amount is entered are re-checked', 
     assert.equal(gone.inventory.runes(), 100);
 });
 
-test('the Charge option asks the same; a full staff or too few runes are refused', () => {
+test('an uncharged staff\'s Charge only points at the runes, even with runes held (rsprox local 1001250 tick 721)', () => {
     const staff = new Item(I.SANGUINESTI_STAFF_UNCHARGED_, 1);
+    const built = staffInInventory(staff, 3000);
+    const charge = itemActions.get('Sanguinesti staff (uncharged)').Charge;
+    assert.equal(charge({ player: built.player, item: staff, slot: 0 }), true);
+    assert.equal(built.prompts.length, 0, 'no count prompt');
+    assert.equal(built.messages.at(-1), 'Your Sanguinesti staff (uncharged) has no charges! You can use blood runes to power the staff.');
+    assert.equal(Sanguinesti._test.chargesOf(staff), 0);
+    assert.equal(built.inventory.runes(), 3000);
+
+    const holy = new Item(I.HOLY_SANGUINESTI_STAFF_UNCHARGED_, 1);
+    const holyBuilt = staffInInventory(holy, 10);
+    itemActions.get('Holy sanguinesti staff (uncharged)').Charge({ player: holyBuilt.player, item: holy, slot: 0 });
+    assert.equal(holyBuilt.prompts.length, 0);
+    assert.match(holyBuilt.messages.at(-1), /^Your Holy sanguinesti staff \(uncharged\) has no charges!/);
+});
+
+test('a charged staff\'s Charge asks as the runes do; a full staff or too few runes are refused', () => {
+    const staff = new Item(I.SANGUINESTI_STAFF, 1);
+    staff.setMetaValue(CHARGES_META_KEY, 5);
     const built = staffInInventory(staff, 30);
-    assert.equal(Sanguinesti._test.chargeOption({ player: built.player, item: staff, slot: 0 }), true);
+    assert.equal(itemActions.get('Sanguinesti staff').Charge({ player: built.player, item: staff, slot: 0 }), true);
     assert.deepEqual(built.prompts, ['How many charges do you want to apply? (Up to 15)']);
     built.enter(15);
-    assert.equal(Sanguinesti._test.chargesOf(staff), 15);
+    assert.equal(Sanguinesti._test.chargesOf(staff), 20);
 
-    const poor = new Item(I.SANGUINESTI_STAFF_UNCHARGED_, 1);
+    const poor = new Item(I.SANGUINESTI_STAFF, 1);
+    poor.setMetaValue(CHARGES_META_KEY, 5);
     const one = staffInInventory(poor, 1);
     Sanguinesti._test.chargeOption({ player: one.player, item: poor, slot: 0 });
     assert.equal(one.prompts.length, 0);

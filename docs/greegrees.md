@@ -8,6 +8,10 @@ the monkey whose bones went into it, by an NPC transmogrification in the player'
 - **Ape Atoll** (its four map squares on every plane, and the dungeons under them, y 9088-9215)
   and **the Ardougne Zoo** pen (Wiki: "Zooknock's magic doesn't work over long distances, except
   at the Ardougne Zoo"). These are one `Area`, `GreegreeArea`.
+- The separately mapped Recipe for Disaster Tchiki-nut cave and **hot-coal cooking room**
+  also retain the form. The revision-242 hot-room floor and its exit corridor occupy
+  x 3054–3069, y 5478–5491, plane 0; adjacent map space and other planes are excluded.
+  Both zombie greegrees stay equipped on crack entry, while cooking and after login.
 - **Leaving** by any means (walking, a boat, a teleport) takes the greegree off: into the
   inventory, or onto the ground when it is full (Wiki, Ninja monkey greegree (small): teleporting
   off with a full inventory drops it "where they teleport"). Logging out keeps it on; logging back
@@ -64,6 +68,24 @@ Wielding one in combat is refused with "You cannot use this whilst in combat." (
 - Other plugins ask for the form with `greegree:form` (`{ player, form: null }`); `form` is the
   form's key (`small-ninja-monkey`, `kruk`, ...) while transformed. The Ape Atoll Agility Course
   uses it.
+
+## Hot-coal room checks
+
+The hot-coal room's exit uses the existing RFD scripted crossing back to the temple.
+Its native route walks a qualified zombie to the real coal edge (3062,5485); cache
+invisible walls prevent the ordinary pathfinder reaching exit 16100 at (3069,5485).
+The operation rechecks the room, quest-return flag, mapped exit and currently wielded
+zombie greegree. The [quest guide](https://oldschool.runescape.wiki/w/Recipe_for_Disaster/Freeing_King_Awowogei)
+requires zombie form for crossing the coals and cooking; the inherited scripted crossing's
+exact retail animation/timing is not claimed.
+
+`server/tests/monkey-madness-greegrees-native.test.cjs` covers both zombie forms with
+real Player, ClientConnection inputs, cache map and World turns: native Hold, crack entry,
+raw-snake-on-rock cooking, save/bootstrap, walking to the coal edge, exit and off-island
+removal. Quest stage, greegrees, raw snake and Cooking level are supplied checkpoints;
+this is no full quest-progression or rendered-client proof. `quest-plugins.test.cjs`
+also checks late form/flag changes, remote/wrong-object rejection and preserves the
+two-filling regression from PR #6304. No game clients were launched for these checks.
 
 ## Not verified
 

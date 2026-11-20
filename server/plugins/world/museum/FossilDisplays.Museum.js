@@ -54,7 +54,7 @@ function resolveIds() {
   }
   const pieces = Object.fromEntries(Object.entries(DATA.pieces).map(([size, names]) => [size, names.map(obj)]));
   const lamps = Object.fromEntries(Object.entries(DATA.lamps).map(([size, name]) => [size, obj(name)]));
-  ids = { displays, byLoc, pieces, lamps, anim: defs.getSeqId(DATA.anim) };
+  ids = { displays, byLoc, pieces, lamps, anim: gameval((value) => defs.getSeqId(value), "seq", DATA.anim) };
   return ids;
 }
 
@@ -144,7 +144,7 @@ function lampRewards(coreApi) {
 function attachFossilDisplays(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
-  pluginApi.persistAttribute?.(STATES_ATTRIBUTE, null);
+  pluginApi.persistAttribute(STATES_ATTRIBUTE, null);
   const actions = { "Add to": addTo };
   for (const name of Object.keys(DATA.names)) pluginApi.onObjectInteraction(name, actions);
   pluginApi.onPlayerLogin(login);

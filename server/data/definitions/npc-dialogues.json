@@ -190194,9 +190194,10 @@
                 },
                 {
                   "type": "choice",
+                  "prompt": "Start the Cabin Fever quest?",
                   "options": [
                     {
-                      "text": "Yes, I am a man of my word.",
+                      "text": "Yes.",
                       "steps": [
                         {
                           "player": "Yes, I am a [man/woman] of my word."
@@ -190226,6 +190227,18 @@
                           ]
                         },
                         {
+                          "type": "line",
+                          "speaker": "Bill Teach",
+                          "text": "I'm all ready te get underway, and I'll see ye onboard when yer ready te go too.",
+                          "speaker_ids": [
+                            4011,
+                            4012,
+                            4014,
+                            4015,
+                            4016
+                          ]
+                        },
+                        {
                           "player": "You won't...err...I mean ye'll not regret it Cap'n!"
                         },
                         {
@@ -190240,10 +190253,12 @@
                             4016
                           ]
                         }
-                      ]
+                      ],
+                      "hook": "quest:cabin-fever:start",
+                      "quest": "Cabin Fever"
                     },
                     {
-                      "text": "No, if it's so dangerous your crew left, count me out.",
+                      "text": "No.",
                       "steps": [
                         {
                           "player": "No, if it's so dangerous your crew left, count me out."
@@ -191646,6 +191661,30 @@
         {
           "type": "line",
           "speaker": "Bill Teach",
+          "text": "If ye weren't set on yellin' 'Arr!' all the time I'd think ye was a born pirate.",
+          "speaker_ids": [
+            4011,
+            4012,
+            4014,
+            4015,
+            4016
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Bill Teach",
+          "text": "Regardless, those cowardly dogs seem a little too scared to swing over.",
+          "speaker_ids": [
+            4011,
+            4012,
+            4014,
+            4015,
+            4016
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Bill Teach",
           "text": "Why not pay them a visit and go plunder their hold?",
           "speaker_ids": [
             4011,
@@ -191673,7 +191712,31 @@
         {
           "type": "line",
           "speaker": "Bill Teach",
+          "text": "Look, just go below their decks and search their hold for Plunder.",
+          "speaker_ids": [
+            4011,
+            4012,
+            4014,
+            4015,
+            4016
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Bill Teach",
           "text": "Come back here and drop it in the chest in the hold.",
+          "speaker_ids": [
+            4011,
+            4012,
+            4014,
+            4015,
+            4016
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Bill Teach",
+          "text": "Ye should be able to round up ten loads of the stuff if ye keep searchin' the hold, but it may take a while for the stuff to reappear.",
           "speaker_ids": [
             4011,
             4012,

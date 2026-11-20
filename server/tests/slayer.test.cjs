@@ -148,6 +148,49 @@ function giveTask(player, masterId, name, amount) {
   setVarbit(player, "slayer_master", masterId);
 }
 
+test("Slieve protects upper Taverley adults and babies using real Slayer assignments (#6293)", () => {
+  const { createBlackDragonArea } = require("../plugins/areas/TaverleyDungeon.plugin")._test;
+  const area = createBlackDragonArea({ core, emitCustomEvent: (name, event) => {
+    for (const fn of handlers.events.get(name) ?? []) fn(event);
+  } });
+  const spawns = require("../data/definitions/npc-spawns.json");
+  const all = spawns.spawns ?? spawns;
+  const covered = all.filter(s => ["Black dragon", "Baby black dragon"].includes(s.name)
+    && area.getBoundaries().some(b => b.inside(new core.Location(s.x, s.y, s.level))));
+  assert.equal(covered.filter(s => s.name === "Baby black dragon").length, 5);
+  assert.equal(covered.filter(s => s.name === "Black dragon").length, 12);
+  assert.ok(!area.getBoundaries()[0].inside(new core.Location(2829, 9826, 0)), "public ground floor is excluded");
+  assert.ok(!area.getBoundaries()[0].inside(new core.Location(1888, 9003, 1)), "Myths' Guild baby is excluded");
+  const player = createPlayer();
+  let target = null, retaliating = false;
+  const chains = [];
+  player.getCombat = () => ({ getTarget: () => target, isAutoRetaliating: () => retaliating });
+  player.getDialogueManager = () => ({ startDialogues: chain => chains.push(chain) });
+  for (const spawn of covered) {
+    const dragon = npc(spawn.id, new core.Location(spawn.x, spawn.y, spawn.level));
+    target = dragon;
+    giveTask(player, 5, "Blue Dragons", 10);
+    assert.equal(area.canAttack(player, dragon), false, "wrong task is denied");
+    const line = chains.at(-1).getDialogues().get(0);
+    assert.equal(line.getNpcId(), core.NpcIdentifiers.SLIEVE);
+    assert.match(line.getText(), /go and train somewhere else/);
+    giveTask(player, 5, "Black Dragons", 10);
+    assert.equal(area.canAttack(player, dragon), null, "matching task is allowed");
+    player.getPacketSender().sendConfig(CacheDefinitions.getVarpId("slayer_count"), 0);
+    assert.equal(area.canAttack(player, dragon), false, "completed task is denied");
+    const count = chains.length;
+    target = null;
+    assert.equal(area.canAttack(player, dragon), false, "permission probe is denied silently");
+    target = dragon; retaliating = true;
+    assert.equal(area.canAttack(player, dragon), false, "auto-retaliation is denied silently");
+    assert.equal(chains.length, count);
+    retaliating = false;
+  }
+  assert.equal(area.canAttack(player, npcNamed("Giant bat")), null);
+  assert.equal(area.canAttack(player, npcNamed("Black dragon", new core.Location(2829, 9826, 0))), null,
+    "an attacker inside cannot restrict a dragon outside the task-only lair");
+});
+
 test("the masters' task lists come from the cache's slayer_master_task table", () => {
   const counts = Object.fromEntries([...Data.get().masters.values()].map((entry) => [entry.names[0], entry.tasks.length]));
   assert.deepEqual(counts, {

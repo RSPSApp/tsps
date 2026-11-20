@@ -149,6 +149,10 @@ roll at the Wiki's tick lengths, so their timing is used; the others are used fo
   there in view. Sound 2601 (range 5) plays at the tile left. Live sends that sound twice on the
   tick (e.g. local 1001517 tick 9131), and it is played once here as a recorded difference. If
   every tile is held, the spot waits for its next timer.
+  Occupancy comes from currently registered fishing spots in the same public world when the
+  destination is chosen, independently of the slower discovery scan that enrolls movement timers.
+  Late public registrations reserve their tiles immediately; private-area copies do not reserve
+  public tiles, and a tracked spot that becomes private or unregisters stops relocating here.
 - **The fisher:** a session on a spot that moves ends with no message, no animation reset and no
   facing change (about 25 captured cases, e.g. local 1001517 ticks 9180-15037). Endless Harvest
   follows the spot as before. The minnow platform's own rotation isn't captured, so its sessions

@@ -44,15 +44,16 @@ Wiki leaves out.
   (1740, or 1764 back) = 1, with `fever_rope_tie` (3132) and `cf_tierope` (1439). The message
   "You attach a rope to the sails." comes 4 ticks on, then the jump (827, `cf_jumpdown` 1428).
   At 7 the player is on the deck and the swing rope (11311) hangs there. They slide to the rope
-  10 ticks later (3 on the way back) and swing across 2 ticks after that (3130,
-  `cf_swingacross_sucess` 1438). After 3 more ticks: "The rope falls off the mast! ...". Two of
+  10 ticks later (3 on the way back) and swing across 2 ticks after that (3 on the way back; 3130,
+  `cf_swingacross_sucess` 1438, the rope loc playing `fever_rope_swing` 3123). After 3 more ticks: "The rope falls off the mast! ...". Two of
   the six swings fell at Agility 73: anim 3131, `cf_swingacross_fail` (1421), run energy 0, a
   swim (772, `watersplash`, `cf_swim`), then out onto the other ship.
 - **Fuse** (891-901, 966-976): the fuse goes in the barrel (`fever_gunpowder_barrel` 1756 = 2,
   832, `cf_attach_fuse`). The player is walked east to lay it, `fever_fuse_1` (1761) at +6 and
   `fever_fuse_2` (1762) at +10 (locs 11241, 11242). A tinderbox on the fuse plays 827 and
   `cf_strike`. Two ticks on comes "You light the fuse..."; the fuse goes out end first with three
-  `fuse_light` sounds and an `explosion`. At +6: 1756 = 1, "...and destroy the barrel and the
+  `fuse_light` sounds, `fever_fuse_light` (546) along it, `fever_barrel_fuse_light` (545) and an
+  `explosion` (547) at the barrel. At +6: 1756 = 1, "...and destroy the barrel and the
   cannon.", 1749 = 1 and varp 40.
 - **Hull:** "Fill" nails planks (3137, `cf_hammer`); "Waterproof" smears paste (832,
   `cf_smear_paste`).

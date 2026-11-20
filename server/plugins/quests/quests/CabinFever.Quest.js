@@ -292,6 +292,9 @@ module.exports = function registerCabinFeverQuest(api) {
   const REPAIR_LOCKER_OPEN = ObjectIdentifiers.REPAIR_LOCKER_2; // 11247 fever_repair_locker_open: Search, Close
   const GUN_LOCKER_OPEN = ObjectIdentifiers.GUN_LOCKER_2; // 11249 fever_weapons_locker_open: Search, Close
   const BROKEN_CANNON = ItemIdentifiers.BROKEN_CANNON; // 7146, the barrel removed from the cannon
+  const ROPE_SWING_ANIM = 3123; // fever_rope_swing, the loc animation of the hanging rope
+  const GFX_FUSE_LIGHT = 546; // fever_fuse_light, along the fuse as it burns
+  const GFX_BARREL_FUSE_LIGHT = 545; // fever_barrel_fuse_light, at the barrel
   const SWING_ROPE_LOC = ObjectIdentifiers.ROPE_11; // 11311 fever_swing_rope, hangs from the yardarm during a swing
 
   const STAGE_STARTED = 1;
@@ -398,6 +401,7 @@ module.exports = function registerCabinFeverQuest(api) {
       grab: [1817, 4830],
       grabAngle: 1536,
       gap: 10,
+      swingDelay: 2, // grab to swing: 871 -> 873
       land: [1822, 4830],
       angle: 1536,
       fall: [1820, 4831],
@@ -411,6 +415,7 @@ module.exports = function registerCabinFeverQuest(api) {
       grab: [1822, 4835],
       grabAngle: 1024,
       gap: 3,
+      swingDelay: 3, // grab to swing: 997 -> 1000
       land: [1817, 4835],
       angle: 512,
       fall: [1819, 4834],
@@ -1483,14 +1488,28 @@ module.exports = function registerCabinFeverQuest(api) {
     fuseBusy.add(player);
     animate(player, ANIM.PICKUP_FLOOR);
     sound(player, SOUND.STRIKE);
+    // The flame runs along the fuse to the barrel, then the barrel blows (capture ticks 972-974).
+    const burnGraphic = (id, x, delay) => {
+      if (Graphic) player.getPacketSender().sendGraphic?.(new Graphic(id, delay, 0), new Location(x, 4831, 1));
+    };
     sequence(player, [
       [2, () => {
         player.sendMessage("You light the fuse...");
         setVarbitValue(player, VARBIT_FUSE_2, 0);
         sound(player, SOUND.FUSE_LIGHT);
+        burnGraphic(GFX_FUSE_LIGHT, 1824, 0);
       }],
-      [3, () => { setVarbitValue(player, VARBIT_FUSE_1, 0); sound(player, SOUND.FUSE_LIGHT, 10); }],
-      [4, () => { sound(player, SOUND.FUSE_LIGHT, 15); sound(player, SOUND.EXPLOSION, 30); }],
+      [3, () => {
+        setVarbitValue(player, VARBIT_FUSE_1, 0);
+        sound(player, SOUND.FUSE_LIGHT, 10);
+        burnGraphic(GFX_FUSE_LIGHT, 1823, 10);
+      }],
+      [4, () => {
+        sound(player, SOUND.FUSE_LIGHT, 15);
+        sound(player, SOUND.EXPLOSION, 30);
+        burnGraphic(GFX_BARREL_FUSE_LIGHT, 1822, 15);
+        burnGraphic(GFX_EXPLOSION, 1822, 30);
+      }],
       [6, () => { fuseBusy.delete(player); blowUpEnemyCannon(player); }],
     ]);
     return true;
@@ -1973,7 +1992,12 @@ module.exports = function registerCabinFeverQuest(api) {
       swinging.delete(player);
       player.getMovementQueue?.()?.setBlockMovement?.(false);
     };
-    const across = 7 + swing.gap + 2;
+    const across = 7 + swing.gap + swing.swingDelay;
+    // fever_rope_swing on the hanging rope as the player swings (ticks 873, 1000).
+    const swingRope = () => {
+      const loc = ownedLocAt(player, rope.x, rope.y, rope.z);
+      if (loc) player.getPacketSender().sendObjectAnimation?.(loc, new Animation(ROPE_SWING_ANIM));
+    };
     const steps = [
       [4, () => player.sendMessage("You attach a rope to the sails.")],
       [5, () => { animate(player, ANIM.PICKUP_FLOOR); sound(player, SOUND.JUMP_DOWN); }],
@@ -1987,6 +2011,7 @@ module.exports = function registerCabinFeverQuest(api) {
       steps.push(
         [across, () => {
           slide(player, [...swing.grab, z], swing.land, 25, 45, swing.angle);
+          swingRope();
           animate(player, ANIM.SWING_LAND);
           sound(player, SOUND.SWING_SUCCESS);
         }],
@@ -2004,6 +2029,7 @@ module.exports = function registerCabinFeverQuest(api) {
           playVariant(player, "dealing-with-the-cannon-using-a-rope-swing-falling-on-a-rope-swing");
           setVarbitValue(player, swing.varbit, 0);
           slide(player, [...swing.grab, z], swing.fall, 25, 45, swing.angle);
+          swingRope();
           animate(player, ANIM.SWING_FALL);
           sound(player, SOUND.SWING_FAIL);
           player.setRunEnergy(0);

@@ -3,9 +3,10 @@
 /**
  * Drakes in combat, from plugins/npcs/data/drakes.json (docs/drakes.md).
  *
- * Wiki (Drake): a drake attacks with "Ranged" and "Ranged melee", both up to 15 and both blocked by
- * Protect from Missiles, and "can perform melee attacks when players stand diagonally from them".
- * So both styles are ranged attacks: the melee one only changes the animation and the hit's timing.
+ * Wiki (Drake): a drake attacks with "Ranged" and "Ranged melee", both up to 15; its normal ranged
+ * attacks are blocked by Protect from Missiles, and it "can perform melee attacks when players stand
+ * diagonally from them". The swing is listed as a ranged style, so it is typed ranged here too (ours:
+ * no source says which prayer blocks it); it only changes the animation and the hit's timing.
  * The rsprox capture of recording 3014 gives the animations, the projectile, the sounds and the hit
  * delays: from range only the shot, beside the player either (ticks 221 and 225).
  */
@@ -86,7 +87,7 @@ function method() {
       this.melee = false;
     }
 
-    /** Both styles are ranged attacks (Wiki: Protect from Missiles blocks both). */
+    /** Both styles are ranged attacks: the Wiki lists the swing as "Ranged melee" (its prayer is ours). */
     type() {
       return CombatType.RANGED;
     }

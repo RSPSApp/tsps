@@ -51,7 +51,10 @@ module.exports = function attachSlashBash(api) {
       .sendProjectile();
   }
 
-  /** A new one each attack (singleton: false), so each attack picks its style from where the player stands. */
+  /**
+   * A new one each time combat asks for his method (singleton: false; every combat cycle), so the method the
+   * attack's own tick resolves picks its style from where the player stands then.
+   */
   class SlashBashCombat extends CombatMethod {
     constructor(npc) {
       super();

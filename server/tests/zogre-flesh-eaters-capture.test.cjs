@@ -551,6 +551,13 @@ test("zogres take a quarter of a hit, half from Crumble Undead and all of a brut
   assert.equal(rolled(zogre, CombatType.MELEE), 3);
   const crumble = { getSpellContext: () => ({ spell: CombatSpells.CRUMBLE_UNDEAD }) };
   assert.equal(rolled(bash, CombatType.MAGIC, crumble), 7);
+  const boosted = (target) => {
+    const damage = new HitDamage(20, HitMask.RED);
+    h.PM.emitCombatHitDamage({ attacker: f.player, target, combatType: CombatType.MAGIC, hit: crumble, damage, accurate: true });
+    return damage.getDamage();
+  };
+  assert.equal(boosted(zogre), 7, "a boosted Crumble Undead still tops out at the Zogre page's 7");
+  assert.equal(boosted(bash), 10, "Slash Bash's page gives 50% with no cap");
   assert.equal(rolled(zogre, CombatType.MAGIC, { getSpellContext: () => ({ spell: CombatSpells.FIRE_BLAST }) }), 3);
   f.player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(h.core.ItemIdentifiers.COMP_OGRE_BOW, 1));
   f.player.getEquipment().setItem(Equipment.AMMUNITION_SLOT, new Item(h.core.ItemIdentifiers.RUNE_BRUTAL, 100));

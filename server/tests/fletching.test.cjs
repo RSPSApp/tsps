@@ -66,7 +66,9 @@ function player({ level = 99, items = {}, at = [3000, 3000] } = {}) {
   return {
     counts, messages, spam, sounds, animations, varbits, boxes, menu: () => menu, xp: () => xp,
     getDialogueManager: () => ({
-      startDialogues: (chain) => boxes.push(...[...chain.getDialogues().values()].map((entry) => entry.getText())),
+      startDialogues: (chain) => boxes.push(...[...chain.getDialogues().values()].map((entry) => ({
+        type: entry.constructor.name, text: entry.getText(), items: entry.getItemIds?.() ?? null,
+      }))),
     }),
     count: (name) => counts.get(I[name]) ?? 0,
     getInventory: () => inventory,
@@ -403,7 +405,11 @@ test("knife on achey logs: the shafts and the comp bow share live's menu once Gr
   assert.deepEqual(menu.getOptions().labels, ["Ogre arrow shafts", "Unstrung composite bow"]);
   assert.equal(menu.getOptions().maxAmount, 1);
   menu.execute(I.UNSTRUNG_COMP_BOW, 1);
-  assert.deepEqual(p.boxes, ["You need wolf bones and achey tree logs to make the composite ogre bow."]);
+  assert.deepEqual(p.boxes, [{
+    type: "DoubleItemStatementDialogue",
+    text: "You need wolf bones and achey tree logs to make the composite ogre bow.",
+    items: [I.ACHEY_TREE_LOGS, I.WOLF_BONES],
+  }], "objectbox_double with the log and the bones (tick 3255)");
   assert.equal(hooks.tasks.length, 0);
   assert.equal(p.count("ACHEY_TREE_LOGS"), 1);
 

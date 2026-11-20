@@ -12,6 +12,8 @@
 const ZOGRE_NAMES = new Set(["Zogre", "Skogre", "Slash Bash"]);
 const NORMAL_DIVISOR = 4;
 const CRUMBLE_UNDEAD_DIVISOR = 2;
+/** Zogre / Skogre: Crumble Undead's "damage is halved, for a maximum of 7"; Slash Bash's page states no cap. */
+const CRUMBLE_UNDEAD_CAP = new Map([["Zogre", 7], ["Skogre", 7]]);
 const BRUTAL_NAME = /\bbrutal$/i;
 
 let core = null;
@@ -30,21 +32,20 @@ function firesBrutal(player) {
   return fromSlot != null && Ammunition.getFor(player) === fromSlot;
 }
 
-function divisorFor(attacker, hit, combatType) {
-  const { CombatSpells, CombatType } = core;
-  if (combatType === CombatType.RANGED && firesBrutal(attacker.getAsPlayer())) return 1;
-  if (combatType === CombatType.MAGIC) {
-    const spell = hit?.getSpellContext?.()?.spell ?? hit?.getSpell?.();
-    if (spell === CombatSpells.CRUMBLE_UNDEAD) return CRUMBLE_UNDEAD_DIVISOR;
-  }
-  return NORMAL_DIVISOR;
+function isCrumbleUndead(hit, combatType) {
+  if (combatType !== core.CombatType.MAGIC) return false;
+  return (hit?.getSpellContext?.()?.spell ?? hit?.getSpell?.()) === core.CombatSpells.CRUMBLE_UNDEAD;
 }
 
 function scaleZogreHit({ attacker, target, hit, combatType, damage, accurate }) {
   if (!accurate || !attacker?.isPlayer?.() || !target?.isNpc?.() || !isZogre(target)) return;
-  const divisor = divisorFor(attacker, hit, combatType);
-  if (divisor === 1) return;
-  damage.setDamage(Math.floor(damage.getDamage() / divisor));
+  if (combatType === core.CombatType.RANGED && firesBrutal(attacker.getAsPlayer())) return;
+  if (isCrumbleUndead(hit, combatType)) {
+    const halved = Math.floor(damage.getDamage() / CRUMBLE_UNDEAD_DIVISOR);
+    damage.setDamage(Math.min(halved, CRUMBLE_UNDEAD_CAP.get(target.getCurrentDefinition().getName()) ?? halved));
+    return;
+  }
+  damage.setDamage(Math.floor(damage.getDamage() / NORMAL_DIVISOR));
 }
 
 module.exports = {

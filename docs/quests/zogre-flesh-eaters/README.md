@@ -108,8 +108,9 @@ and Grish is told of the cure (2263), so the plugin no longer sends it.
   ogre bow ("comp_ogre_bow") once Grish has (500, 2246); each also after the quest. The Wiki: "Partial completion of
   Zogre Flesh Eaters" for the balm and the bow, and "Sithik Ints teaches you how to make them" for the arrows.
 - **Knife on achey logs** (after the quest, 3253-3255 and 3492-3495): one log opens the menu "How many logs do you
-  wish to fletch?" with "Ogre arrow shafts" and "Unstrung composite bow"; the bow without wolf bones is the message
-  box "You need wolf bones and achey tree logs to make the composite ogre bow."; with them, `human_fletching` on the
+  wish to fletch?" with "Ogre arrow shafts" and "Unstrung composite bow"; the bow without wolf bones is the
+  two-item box (objectbox_double, the logs and the bones) "You need wolf bones and achey tree logs to make the
+  composite ogre bow."; with them, `human_fletching` on the
   choice and "You carefully cut the wood into a composite ogre bow." with the bow 2 ticks later.
 - **Uglug Nar**: before the cure is known he turns the balm down (765-771); after, he buys the dose used
   (650 coins for a 3-dose, 3196; the Wiki's 1,000/650/300/100 by dose).
@@ -141,6 +142,9 @@ and Grish is told of the cure (2263), so the plugin no longer sends it.
 - Making the balm is not captured (the capture buys it): its lines, "You put the Rogue's Purse into the vial of
   water.", "You mix the snake weed into your potion." and "You mix the rogue's purse into your potion.", are ours,
   in the shape of the other Herblore lines. The rogue's purse potion's refusal before the cure is the Wiki's.
+- The Wiki's Unfinished potion (Rogue's Purse) page says the potion needs "completion of Zogre Flesh Eaters";
+  Relicym's balm's recipe says "Partial completion ... to the point where Sithik Ints tells the player how to
+  cure the Zogre disease". Both are taught from Sithik's answer, as the balm page and the issue ask.
 
 ## Runs
 

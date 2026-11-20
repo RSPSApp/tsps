@@ -141,9 +141,11 @@ function resolveRecipe(entry) {
     sound: recipe.sound ? sound(recipe.sound) : null,
     message: recipe.message ?? null,
     missingTool: recipe.missingTool ?? null,
-    // A recipe that stays in its menu without all its materials says this when chosen (capture
-    // ZogreFleshEaters.bin tick 3255: the comp ogre bow without wolf bones).
+    // A recipe that stays in its menu without all its materials says this when chosen, between its
+    // `missingItems` (capture ZogreFleshEaters.bin tick 3255: the comp ogre bow without wolf bones, in
+    // objectbox_double with the achey logs and the wolf bones).
     missingMessage: recipe.missingMessage ?? null,
+    missingItems: (recipe.missingItems ?? []).map(itemId),
     label: recipe.label ?? null,
     instantVarbit: recipe.instantVarbit ?? null,
     maxSets: recipe.maxSets ?? CREATION_ALL_SENTINEL,
@@ -259,9 +261,14 @@ function unlocked(player, recipe) {
   return true;
 }
 
-function mesbox(player, text) {
-  const { DialogueChainBuilder, StatementDialogue } = core;
-  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
+/** The refusal box: between two items (objectbox_double) when the recipe names them, else a plain message box. */
+function missingBox(player, recipe) {
+  const { DialogueChainBuilder, DoubleItemStatementDialogue, StatementDialogue } = core;
+  const [first, second] = recipe.missingItems;
+  const box = second != null
+    ? new DoubleItemStatementDialogue(0, first, second, recipe.missingMessage)
+    : new StatementDialogue(0, recipe.missingMessage);
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(box));
 }
 
 /** Preset (and other untradeable or unbankable) copies keep their restrictions, so they never convert. */
@@ -547,7 +554,7 @@ function startFletching(player, recipe, requested, via, provenance) {
   }
   const available = batchesAvailable(player, recipe);
   if (available <= 0 && recipe.missingMessage) {
-    mesbox(player, recipe.missingMessage);
+    missingBox(player, recipe);
     return;
   }
   if (available <= 0 || !Number.isInteger(requested) || requested <= 0) return;

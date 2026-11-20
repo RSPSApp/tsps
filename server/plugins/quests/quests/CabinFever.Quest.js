@@ -76,6 +76,7 @@ module.exports = function registerCabinFeverQuest(api) {
   const PAGE = "Cabin Fever";
   const BILL_PAGE = "Bill Teach";
   const PANDEMONIUM_KEY = "pandemonium";
+  const START_HOOK = "quest:cabin-fever:start";
 
   // ==========================================================================
   // Ids
@@ -1005,6 +1006,21 @@ module.exports = function registerCabinFeverQuest(api) {
       if (stage === STAGE_STARTED || stage === STAGE_SAILING) sail(player);
       else whenIdle(player, () => sailBack(player));
     }
+  }
+
+  /**
+   * The start prompt's "Yes." (live's "Start the Cabin Fever quest?", the dump's quest start hook).
+   * The requirements were checked before the prompt (condition tOUrYm); checked again here.
+   */
+  function handleHook(event) {
+    const { player, npcId, hook } = event;
+    if (!player || !BILL_NPC_IDS.has(npcId) || hook !== START_HOOK) return;
+    if (quest.getStage(player) !== 0) return;
+    if (!meetsRequirements(player)) {
+      event.end = true;
+      return;
+    }
+    quest.setStage(player, STAGE_STARTED);
   }
 
   function sail(player) {
@@ -2421,6 +2437,7 @@ module.exports = function registerCabinFeverQuest(api) {
   api.onNpcInteraction("Mama", { "Talk-to": talkToMama });
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
+  api.onCustomEvent("npc-dialogue:hook", handleHook);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:condition", handleConditionChosen);

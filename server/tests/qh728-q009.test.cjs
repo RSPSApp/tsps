@@ -274,6 +274,7 @@ function setup(completed = []) {
     },
     count, varbit, varp, stage, lastTranscript, button, openLocker, ownedLocs, messages, animations,
     setFullInventory: (value) => { full = value; },
+    emitCustom: (name, event) => { for (const handler of custom.get(name) ?? []) handler(event); },
   };
 }
 
@@ -303,6 +304,31 @@ test('declining the final confirmation leaves Cabin Fever unstarted', () => {
   h.choose("Yes, I've always wanted to be a pirate!");
   h.choose('Yes, I am a man of my word.');
   assert.equal(h.stage(), 1);
+});
+
+test('live\'s start prompt: "Start the Cabin Fever quest?" with Yes. and No., whose hook starts the quest', () => {
+  const page = require('../data/definitions/npc-dialogues.json')['Cabin Fever'];
+  const prompt = JSON.stringify(page.variants['starting-the-quest']);
+  assert.match(prompt, /"prompt":"Start the Cabin Fever quest\?"/);
+  assert.match(prompt, /"text":"Yes\.","steps":/);
+  assert.match(prompt, /"hook":"quest:cabin-fever:start"/);
+  assert.match(prompt, /I'm all ready te get underway/, 'capture tick 433');
+
+  const h = setup(['pirates_treasure', 'rum_deal']);
+  const emitHook = () => {
+    const event = { player: h.player, npcId: core.NpcIdentifiers.BILL_TEACH, hook: 'quest:cabin-fever:start' };
+    h.emitCustom('npc-dialogue:hook', event);
+    return event;
+  };
+  const refused = emitHook();
+  assert.equal(h.stage(), 0, 'missing Priest in Peril cannot start the quest');
+  assert.equal(refused.end, true, 'the branch ends');
+  h.complete('priest_in_peril');
+  emitHook();
+  assert.equal(h.stage(), 1, 'Yes. starts the quest');
+  assert.equal(h.varp(655), 10);
+  h.choose('Yes.');
+  assert.equal(h.stage(), 1, 'the choice after the hook does not start it twice');
 });
 
 // Interface 501/502 buttons, (group << 16) | child, as capture CabinFever presses them.

@@ -588,7 +588,7 @@ module.exports = function registerRumDealQuest(api) {
   function questDrop(request) {
     if (request.itemId !== I.FEVER_SPIDER_BODY || request.npcId !== NPCS.FEVER_SPIDER || !request.player) return;
     const stage = quest.getStage(request.player);
-    request.allowed = stage >= STAGES.STARTED && !quest.isComplete(request.player);
+    request.allowed = stage >= STAGES.KILL_SPIDER && !quest.isComplete(request.player);
   }
 
   // ------------------------------------------------------------------ the fishbowl and net
@@ -651,6 +651,7 @@ module.exports = function registerRumDealQuest(api) {
   }
 
   function handleLogin({ player }) {
+    brewery.finishPressurising(player);
     refreshQuestList(player);
     if (Number(player.getAttribute(ATTRIBUTES.SPIRIT)) === 1) player.setAttribute(ATTRIBUTES.SPIRIT, 0);
     if (quest.getStage(player) > 0) syncVarbits(player);
@@ -671,6 +672,7 @@ module.exports = function registerRumDealQuest(api) {
   api.persistAttribute(ATTRIBUTES.PLANTED, 0);
   api.persistAttribute(ATTRIBUTES.SLUGLINGS, 0);
   api.persistAttribute(ATTRIBUTES.KARAMTHULHU, 0);
+  api.persistAttribute(ATTRIBUTES.PRESSURISING, 0);
   api.persistAttribute(ATTRIBUTES.SPIRIT, 0);
 
   quest = registerQuest(api, {

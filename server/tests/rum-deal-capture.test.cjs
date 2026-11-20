@@ -483,6 +483,78 @@ test("the barrel counts what goes in and the lever pressurises five, stage 12 tw
 
 // ------------------------------------------------------------------ The Evil Spirit
 
+test("pressurising five creatures survives durable saves at delay 0, 1 and 2 without early live progression", async (t) => {
+  const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
+  const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tsps-rum-deal-barrel-"));
+  const storage = new JsonPlayerPersistence();
+  storage.resolveFilePath = (name) => path.join(directory, name + ".json");
+  t.after(async () => {
+    await storage.flush();
+    for (const name of fs.readdirSync(directory)) fs.unlinkSync(path.join(directory, name));
+    fs.rmdirSync(directory);
+  });
+  for (const logout of [false, true]) for (const delay of [0, 1, 2]) {
+    await t.test(`delay=${delay} logout=${logout}`, async (t) => {
+      const f = actor(t, { at: [2140, 5102, 2], stage: S.CATCH,
+        attributes: { "quest.rum_deal.slugs": 4, "quest.rum_deal.karam": 1 } });
+      const object = h.core.MapObjects.getObjectsAt(new h.core.Location(2141, 5103, 2), null)
+        .find((value) => value.getId() === 10164);
+      assert.ok(object, "actual placed pressure lever");
+      h.PM.emitObjectInteraction({ player: f.player, object, objectId: 10164, clickType: 1, handled: false });
+      h.ticks(f, delay);
+      assert.equal(stage(f), delay < 2 ? S.CATCH : S.PRESSURISED, "live stage keeps the captured two-tick delay");
+      if (logout) {
+        h.PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+        h.core.TaskManager.cancelTasks(f.player);
+        h.core.TaskManager.cancelTasks(f.player.getIndex());
+        h.core.World.getPlayers().remove(f.player);
+      }
+      f.player.setAttribute("bot-skip-persistence", false);
+      storage.save(f.player);
+      await storage.flush();
+      f.player.setAttribute("bot-skip-persistence", true); // only the isolated JSON adapter owns this fixture save
+      assert.equal(stage(f), delay < 2 ? S.CATCH : S.PRESSURISED, "snapshot does not advance the live owner");
+      const loaded = storage.load(f.player.getUsername());
+      const restored = actor(t, { at: [2140, 5102, 2] });
+      loaded.applyToPlayer(restored.player);
+      h.PM.emitPlayerLogin({ player: restored.player, username: restored.player.getUsername() });
+      assert.equal(stage(restored), S.PRESSURISED, "durable debit always restores completed pressurisation");
+      assert.equal(restored.player.getAttribute("quest.rum_deal.slugs"), 0);
+      assert.equal(restored.player.getAttribute("quest.rum_deal.karam"), 0);
+      h.ticks(restored, 3);
+      assert.equal(stage(restored), S.PRESSURISED, "old callbacks cannot debit or regress restored progression");
+    });
+  }
+});
+
+test("the actual Fever Spider drop table requires the finished stage15 instruction while incomplete", (t) => {
+  const drops = require("../plugins/npcs/NpcDrops.plugin").__internals;
+  drops.loadDrops();
+  const npc = h.core.NPC.create(N.SPIDER, new h.core.Location(2140, 5094, 0));
+  const table = drops.tableForNpc(N.SPIDER);
+  assert.ok(table);
+  for (const value of [0, 1, 11, 14, 15, 18, 19]) {
+    const f = actor(t, { at: [2140, 5094, 0], stage: value });
+    const output = drops.rollTable(table, f.player, npc);
+    assert.equal(output.some((item) => (item.id ?? item.itemId ?? item.item_id) === I.FEVER_SPIDER_BODY),
+      value >= S.SPIDER && value < S.COMPLETE, `actual quest-item table at stage${value}`);
+  }
+  const unrelated = { player: actor(t, { at: WAKE, stage: S.BANISHED }).player,
+    npcId: N.SPIDER, itemId: I.COINS, allowed: undefined };
+  h.PM.emitCustomEvent("npc-drops:quest-item", unrelated);
+  assert.equal(unrelated.allowed, undefined, "ordinary drops remain owned by their table");
+});
+
+test("barrel recovery does not grant unearned progress or regress a later quest stage", (t) => {
+  for (const [value, pending] of [[S.WATER_ADDED, 1], [S.CATCH, 0], [S.DONNIE, 1]]) {
+    const f = actor(t, { at: WAKE, stage: value, attributes: { "rum-deal:pressurising": pending } });
+    h.PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername() });
+    h.PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername() });
+    assert.equal(stage(f), value, "only an in-flight paid barrel at stage11 may advance");
+  }
+});
+
 test("the wrench with stage 13, a lost one replaced, Davey's blessing and his second (ticks 2030-2300)", async (t) => {
   const f = actor(t, { at: WAKE, stage: S.PRESSURISED });
   const braindeath = h.spawn(f, N.BRAINDEATH, BRAINDEATH_TILE);

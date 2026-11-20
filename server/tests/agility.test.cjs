@@ -547,8 +547,11 @@ test("shortcut audit: current directional Agility gates and captured no-sequence
   assert.equal(entry("Pipe (Brimhaven Dungeon Entrance, toward entrance)", 60841).level, 1);
   assert.equal(entry("Log balance (Brimhaven Dungeon, heading east)", 20882).level, 30);
   assert.equal(entry("Log balance (Brimhaven Dungeon, heading west)", 20884).level, 1);
-  assert.equal(entry("Stepping stones (Western Brimhaven Dungeon)", 21738).level, 12);
-  assert.equal(entry("Stepping stones (Western Brimhaven Dungeon)", 21739).level, 1);
+  // Wiki: 12 heading south (from the north bank), none heading north, from either stone.
+  for (const [id, stone] of [[21738, { x: 2649, y: 9561 }], [21739, { x: 2647, y: 9558 }]]) {
+    const stones = entry("Stepping stones (Western Brimhaven Dungeon)", id);
+    assert.deepEqual([stones.level(context(stone, { x: 2649, y: 9562 })), stones.level(context(stone, { x: 2647, y: 9557 }))], [12, 1]);
+  }
 
   const river = entry("Stepping stones (Eastern Brimhaven Dungeon)", 19040);
   assert.deepEqual([
@@ -959,6 +962,74 @@ test("the Draynor River Lum stone: two stepping-stone jumps 3 ticks apart, the o
     assert.deepEqual(tileOf(player), legs[1].concat(0));
     assert.equal(player.state.messages.at(-1), "You manage to make it to the other side of the river.");
     assert.equal(player.state.xp, 3);
+  }
+});
+
+test("Brimhaven Dungeon's lava stepping stones: the captured lines, seven jumps two ticks apart, BUSY, and the way back (rsprox local 1000195, 1000283; 90, 552)", () => {
+  const random = Math.random;
+  try {
+    Math.random = () => 0;
+    const south = [[2649, 9561], [2649, 9560], [2648, 9560], [2647, 9560], [2647, 9559], [2647, 9558], [2647, 9557]];
+    for (const [objectId, objectTile, start, path] of [
+      [21738, [2649, 9561, 0], [2649, 9562, 0], south],
+      [21739, [2647, 9558, 0], [2647, 9557, 0], [...south.slice(0, -1).reverse(), [2649, 9562]]],
+    ]) {
+      const player = createPlayer(...start, 12);
+      const ticks = timeline(player, objectId, objectTile);
+      const jumps = ticksWith(ticks, (entry) => entry.animations.includes(741));
+      assert.deepEqual(jumps, [2, 4, 6, 8, 10, 12, 14], `${objectId}: the first jump two ticks after reaching the stones, then every two ticks`);
+      for (const at of jumps) assert.deepEqual(ticks[at].sounds, [2461], "synth 2461 with each jump");
+      assert.deepEqual(ticks[2].messages, ["You carefully start crossing the stepping stones..."], "the start line with the first jump");
+      assert.deepEqual(ticks[15].messages, ["...You safely cross to the other side."], "the end line the tick after the last jump");
+      assert.equal(ticks[15].xp, 7.5);
+      assert.equal(ticks.length, 16);
+      assert.deepEqual(tileOf(player), path.at(-1).concat(0));
+      assert.deepEqual(player.state.spam, ["You carefully start crossing the stepping stones...", "...You safely cross to the other side."]);
+      assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393), [[12393, 1], [12393, 0]], "BUSY on, then off as it ends");
+    }
+  } finally {
+    Math.random = random;
+  }
+});
+
+test("Brimhaven Dungeon's lava stepping stones need 12 Agility going south from either stone, none going north (Wiki)", () => {
+  for (const [objectId, objectTile] of [[21738, [2649, 9561, 0]], [21739, [2647, 9558, 0]]]) {
+    const low = createPlayer(2649, 9562, 0, 11);
+    operate(low, objectId, objectTile);
+    assert.deepEqual(tileOf(low), [2649, 9562, 0], `${objectId}: refused below 12 from the north`);
+    assert.equal(low.state.xp, 0);
+    assert.match(low.state.messages.at(-1), /12/);
+  }
+});
+
+test("Brimhaven Dungeon's lava stepping stones: a fall after the third jump lands on the north bank, hurt, with no XP (rsprox local 1000433)", () => {
+  const random = Math.random;
+  try {
+    Math.random = () => 0.999;
+    const player = createPlayer(2649, 9562, 0, 12);
+    const ticks = timeline(player, 21738, [2649, 9561, 0]);
+    assert.deepEqual(ticksWith(ticks, (entry) => entry.animations.includes(741)), [2, 4, 6], "three jumps");
+    assert.deepEqual(ticks[8].animations, [764], "the slip two ticks after the third jump");
+    assert.deepEqual(ticks[8].messages, ["...You lose your footing and fall into the lava."]);
+    assert.deepEqual(ticks[8].sounds, [2493]);
+    assert.ok(ticks[10].moved, "landed two ticks after the slip");
+    assert.deepEqual(ticks[10].sounds, [2412]);
+    assert.equal(ticks.length, 11, "BUSY clears with the landing");
+    assert.deepEqual(tileOf(player), [2648, 9562, 0]);
+    assert.equal(player.state.hits, 1);
+    assert.equal(player.state.xp, 0);
+    assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393), [[12393, 1], [12393, 0]]);
+    // Going north never falls, from either stone (no capture of a fall that way).
+    for (const [objectId, objectTile] of [[21739, [2647, 9558, 0]], [21738, [2649, 9561, 0]]]) {
+      const back = createPlayer(2647, 9557, 0, 1);
+      timeline(back, objectId, objectTile);
+      assert.deepEqual(tileOf(back), [2649, 9562, 0], `${objectId}: across to the north bank`);
+      assert.equal(back.state.hits, 0);
+      assert.equal(back.state.xp, 7.5);
+      assert.deepEqual(back.state.spam, ["You carefully start crossing the stepping stones...", "...You safely cross to the other side."]);
+    }
+  } finally {
+    Math.random = random;
   }
 });
 

@@ -740,6 +740,76 @@ test('the bridge reproduces the recorded F1 crossing: 5981 -> 5975 at x 2262, af
   run.finish();
 });
 
+// Floor 5's own loc ids (local 1000598, rev 227): its two extra coffins and its bridge over the pool.
+test('floor 5: the coffins past the grapple pillars and the portal open as recorded, each with its own looted varbit', () => {
+  const p = fakePlayer();
+  const run = startRun(p);
+  onFloor(run, p, 5, 0, [2282, 5835, 1]);
+  const counted = p.getAttribute(Common.data.attributes.chests) ?? 0;
+  for (const [id, tile, name] of [
+    [39536, [2280, 5835, 1], 'hallowed_floor5_grapple_looted'],
+    [39537, [2263, 5835, 1], 'hallowed_floor5_portal_looted'],
+  ]) {
+    const coffin = locOf(run, id, tile);
+    const anims = p.anims.length, spam = p.spam.length;
+    Math.random = () => 0;
+    assert.equal(click(p, id, 1, coffin), true, `${id} is handled`);
+    ticks(2);
+    assert.equal(p.anims.at(-1), Common.seq('picklock'));
+    ticks(3);
+    assert.deepEqual(p.spam.slice(spam), ['You successfully disarm the trap on the coffin!']);
+    assert.equal(p.anims.at(-1), Common.seq('pushLid'));
+    ticks(1);
+    assert.equal(p.spam.at(-1), 'You push the coffin lid aside.');
+    assert.equal(varbit(p, name), 0, 'not looted before +8');
+    ticks(2);
+    Math.random = random;
+    assert.ok(p.anims.length > anims);
+    assert.equal(varbit(p, name), 1, `${name} set by the loot`);
+    click(p, id, 1, coffin);
+    assert.equal(p.messages.at(-1), 'You have already looted this coffin.');
+  }
+  assert.equal(varbit(p, 'hallowed_current_floor_looted'), 0, 'the floor coffins stay unlooted');
+  assert.equal(varbit(p, 'hallowed_normal_chest_count'), counted + 2);
+  const [min, max] = Common.data.loot.marks['5'];
+  const marks = p.inventory.getAmount(24711);
+  assert.ok(marks >= 2 * min && marks <= 2 * max, 'floor 5 marks from each');
+  run.finish();
+  assert.equal(varbit(p, 'hallowed_floor5_grapple_looted'), 0, 'cleared when the run ends (recorded)');
+  assert.equal(varbit(p, 'hallowed_floor5_portal_looted'), 0, 'cleared when the run ends (recorded)');
+});
+
+test('floor 5: the bridge over the pool (39528) is repaired and crossed like the others, and refuses once sealed', () => {
+  const p = fakePlayer();
+  const run = startRun(p);
+  onFloor(run, p, 5, 0, [2244, 5864, 0]);
+  const end = locOf(run, 39528, [2244, 5863, 0]);
+  click(p, 39528, 1, end);
+  assert.match(p.messages.at(-1), /two planks, five nails/);
+  p.inventory.adds(960, 2);
+  p.inventory.adds(1539, 5);
+  p.inventory.adds(8794, 1);
+  p.inventory.adds(2347, 1);
+  click(p, 39528, 1, end);
+  ticks(2);
+  assert.ok(p.spam.includes('You repair the broken bridge.'));
+  assert.equal(varbit(p, 'hallowed_construction_state'), 2);
+  const route = { player: p, objectId: 39528, object: end };
+  hooks.route(route);
+  assert.deepEqual(run.area.templateOf(new Location(route.destination.x, route.destination.y, route.destination.z)), [2244, 5864, 0]);
+  const before = p.forced.length;
+  click(p, 39528, 1, end);
+  assert.deepEqual(moves(p, run, before), [[2244, 5864, 2244, 5858]]);
+  ticks(4);
+  assert.ok(p.spam.includes('You rapidly make your way across the bridge.'));
+  assert.equal(varbit(p, 'hallowed_construction_xp_earned'), 1);
+  run.states.hallowed_construction_state = 1;
+  run.expired = true;
+  click(p, 39528, 1, end);
+  assert.equal(p.messages.at(-1), 'The magic of the Hallowed Sepulchre prevents you from building this bridge.');
+  run.finish();
+});
+
 test('the portal reproduces the recorded F3 pass: x 2386, 5839 -> 5843, once powered', () => {
   const p = fakePlayer();
   const run = startRun(p);
@@ -1374,7 +1444,7 @@ test('native environmental recovery is faster with the equipped Hallowed ring', 
   const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find((q) => q.key === Common.data.quest);
   assert.ok(quest);
   function coffinTrial(name, agilityBase, agilityCurrent, thievingBase, thievingCurrent, accepted, state) {
-    const id = state === 'normal' ? Number(Object.keys(Common.data.coffins)[0]) : Common.data.finalChest;
+    const id = state === 'normal' ? 39544 : Common.data.finalChest; // a floor 1 coffin
     const player = new Player(new PlayerSession(channel())); actors.push(player);
     player.setUsername(name); player.setLongUsername(core.Misc.stringToLongBigInt(name));
     player.setAttribute('bot-skip-persistence', true);

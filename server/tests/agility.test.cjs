@@ -547,8 +547,11 @@ test("shortcut audit: current directional Agility gates and captured no-sequence
   assert.equal(entry("Pipe (Brimhaven Dungeon Entrance, toward entrance)", 60841).level, 1);
   assert.equal(entry("Log balance (Brimhaven Dungeon, heading east)", 20882).level, 30);
   assert.equal(entry("Log balance (Brimhaven Dungeon, heading west)", 20884).level, 1);
-  assert.equal(entry("Stepping stones (Western Brimhaven Dungeon)", 21738).level, 12);
-  assert.equal(entry("Stepping stones (Western Brimhaven Dungeon)", 21739).level, 1);
+  // Wiki: 12 heading south (from the north bank), none heading north, from either stone.
+  for (const [id, stone] of [[21738, { x: 2649, y: 9561 }], [21739, { x: 2647, y: 9558 }]]) {
+    const stones = entry("Stepping stones (Western Brimhaven Dungeon)", id);
+    assert.deepEqual([stones.level(context(stone, { x: 2649, y: 9562 })), stones.level(context(stone, { x: 2647, y: 9557 }))], [12, 1]);
+  }
 
   const river = entry("Stepping stones (Eastern Brimhaven Dungeon)", 19040);
   assert.deepEqual([
@@ -989,6 +992,16 @@ test("Brimhaven Dungeon's lava stepping stones: the captured lines, seven jumps 
   }
 });
 
+test("Brimhaven Dungeon's lava stepping stones need 12 Agility going south from either stone, none going north (Wiki)", () => {
+  for (const [objectId, objectTile] of [[21738, [2649, 9561, 0]], [21739, [2647, 9558, 0]]]) {
+    const low = createPlayer(2649, 9562, 0, 11);
+    operate(low, objectId, objectTile);
+    assert.deepEqual(tileOf(low), [2649, 9562, 0], `${objectId}: refused below 12 from the north`);
+    assert.equal(low.state.xp, 0);
+    assert.match(low.state.messages.at(-1), /12/);
+  }
+});
+
 test("Brimhaven Dungeon's lava stepping stones: a fall after the third jump lands on the north bank, hurt, with no XP (rsprox local 1000433)", () => {
   const random = Math.random;
   try {
@@ -1006,12 +1019,15 @@ test("Brimhaven Dungeon's lava stepping stones: a fall after the third jump land
     assert.equal(player.state.hits, 1);
     assert.equal(player.state.xp, 0);
     assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393), [[12393, 1], [12393, 0]]);
-    // The way back from the south has no capture of a fall, so it never falls.
-    Math.random = () => 0.999;
-    const back = createPlayer(2647, 9557, 0, 1);
-    timeline(back, 21739, [2647, 9558, 0]);
-    assert.deepEqual(tileOf(back), [2649, 9562, 0]);
-    assert.equal(back.state.hits, 0);
+    // Going north never falls, from either stone (no capture of a fall that way).
+    for (const [objectId, objectTile] of [[21739, [2647, 9558, 0]], [21738, [2649, 9561, 0]]]) {
+      const back = createPlayer(2647, 9557, 0, 1);
+      timeline(back, objectId, objectTile);
+      assert.deepEqual(tileOf(back), [2649, 9562, 0], `${objectId}: across to the north bank`);
+      assert.equal(back.state.hits, 0);
+      assert.equal(back.state.xp, 7.5);
+      assert.deepEqual(back.state.spam, ["You carefully start crossing the stepping stones...", "...You safely cross to the other side."]);
+    }
   } finally {
     Math.random = random;
   }

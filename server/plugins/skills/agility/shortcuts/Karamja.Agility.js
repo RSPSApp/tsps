@@ -64,23 +64,21 @@ module.exports = {
 
   /**
    * Brimhaven Dungeon's lava stepping stones, west of the entrance (Wiki: 12 Agility from the
-   * north, none from the south; 7.5 XP). rsprox captures (rev 227: local 1000195, 1000283,
+   * north, none from the south; 7.5 XP). Either stone crosses whichever way the player is going:
+   * `ends` lists the north bank first. rsprox captures (rev 227: local 1000195, 1000283,
    * 1000433, 90, 91, 552): two ticks after the player reaches the stones, the start line with the
    * first jump, then one jump a stone two ticks apart (human_spot_jump, cycles 15-30, synth 2461
    * each); the end line and the XP the tick after the last. Only the north-to-south way and one
    * fall (1000433, tick 17786) were captured: two ticks after the third jump the slip and its line
-   * (synth 2493, ten loops), facing north, and two ticks later the player lands on the north bank
-   * at `landing`, hit, with synth 2412.
-   * Ours: the fall's chance and damage (the Wiki says only that it is "quite rare" and "a low
-   * amount of damage"): the chance is the Wilderness course stones', and a tenth of the current
-   * hitpoints gives the captured 7 at 77. The way back from the south has no capture; it mirrors
-   * this one and doesn't fail.
+   * (synth 2493, ten loops), facing north, and two ticks later the player lands back on the north
+   * bank at `landing`, hit, with synth 2412.
+   * Ours: the fall's chance (the entry's `fail`) and damage (the Wiki says only that it is "quite
+   * rare" and "a low amount of damage"; a tenth of the current hitpoints gives the captured 7 at
+   * 77). The way back from the south has no capture; it mirrors this one and doesn't fail.
    */
-  brimhavenLavaStones: ({ ends, via, landing = null, failHop = 3 }) => {
-    const path = (context) => {
-      const forward = ordered(context.pos, ends)[0] === ends[0];
-      return forward ? [...via, ends[1]] : [...via].reverse().concat([ends[0]]);
-    };
+  brimhavenLavaStones: ({ ends, via, landing, southLevel, failHop = 3 }) => {
+    const southwards = (context) => ordered(context.pos, ends)[0] === ends[0];
+    const path = (context) => (southwards(context) ? [...via, ends[1]] : [...via].reverse().concat([ends[0]]));
     const jumps = (tiles) => [
       { wait: 2 },
       { msg: { spam: "You carefully start crossing the stepping stones..." } },
@@ -91,11 +89,12 @@ module.exports = {
       ]),
     ];
     return {
+      level: (context) => (southwards(context) ? southLevel : 1),
       route: (context) => ordered(context.pos, ends)[0],
       steps: (context) => jumps(path(context)),
       end: { spam: "...You safely cross to the other side." },
-      // The chance is the entry's `fail` (low/high); only an entry with a `landing` falls.
-      ...(landing ? { fail: {
+      canFail: southwards,
+      fail: {
         steps: (context) => [
           ...jumps(path(context).slice(0, failHop)),
           { wait: 1 },
@@ -108,7 +107,7 @@ module.exports = {
           { hit: { percent: 10 } },
           { sound: LAVA_LANDING_SOUND },
         ],
-      } } : {}),
+      },
     };
   },
 

@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-17",
+  "updated": "2026-11-20",
   "note": "Progress measures functional equivalence with OSRS through implementation tasks: done counts fully, in progress counts halfway, and to do counts zero. Automated test coverage is evidence, not a scoring requirement. Reconciled against tsps main 3e9ee2d67 on 11 November 2026, covering 1,355 merged PRs since the 6 November checkpoint 3b61a15a8. This sync credits the implemented portions of Clan Wars, Burthorpe Games Room, ranked PvP Arena, Trouble Brewing, Intelligence Gathering, Halloween, seasonal rares, Brutus and Maggot King. It also records Hunter Rumours, diary and League task updates, Sailing, bank-funded Grand Exchange offers, Curse of the Empty Lord, quest progression fixes, combat and interface work. Existing inventory, task scope and weights are retained. Only merged main changes are credited.",
   "schema": {
     "item": [
@@ -9424,7 +9424,8 @@
             "The 'The Eyes of Glouphrie' page in npc-dialogues.json carries 44 variants ('getting-started'); source ids/slugs from npc-dialogues.json + npc-dialogue-index.json / osrsreboxed.",
             "The crystal-machine repair is the puzzle objective; wire it through onItemOnObject.",
             "Main 3b61a15a8 (6 November 2026): #2399 Use the native OSRS quest list and repair quest state publication; #2501 Complete Western Provinces Diary gameplay task integrations. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4082 Add Eyes of Glouphrie machine panel interactions. #3599 Eyes of Glouphrie: a banked crystal saw or seed counts as owned. #3058 Quests: grinding a rune on a full inventory no longer loses it (Dream Mentor, Eyes of Glouphrie)."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4082 Add Eyes of Glouphrie machine panel interactions. #3599 Eyes of Glouphrie: a banked crystal saw or seed counts as owned. #3058 Quests: grinding a rune on a full inventory no longer loses it (Dream Mentor, Eyes of Glouphrie).",
+            "2026-11-20, #6303: Oaknock machine rows now reserve individual disc units from stackable inventory slots, reject quantities that were removed or changed, and consume the full reserved count atomically on activation. Verified by the raw IF_BUTTON1 -> ClientConnection -> production quest regression in server/tests/remaining-goblin-glouphrie-parity.test.cjs, including stacked duplicates across rows, stale inventory, rollback and one-time payment. Objectives remain in-progress: exchanger UI/random offers, random replacement discs and the existing fixed puzzle/cutscene approximations are outside this fix. No game client was opened; rendered interaction remains unchecked. Source: server/plugins/quests/quests/EyesOfGlouphrie.Quest.js; https://oldschool.runescape.wiki/w/The_Eyes_of_Glouphrie."
           ],
           "taskDetails": [
             {

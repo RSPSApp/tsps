@@ -898,7 +898,8 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
       if (!liveDisc(player, state.selected)) return;
       const index = child - 24;
       if (state.groups[index].length >= OPERATE_SLOTS[index] ||
-          state.groups.flat().some((entry) => entry.slot === state.selected.slot)) return;
+          state.groups.flat().filter((entry) => entry.slot === state.selected.slot).length >=
+            player.getInventory().getItems()[state.selected.slot].getAmount()) return;
       state.groups[index].push(state.selected);
       state.selected = null;
     } else if (group === MACHINE_INTERFACE && child === 38) {
@@ -906,9 +907,12 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
       state.selected = null;
     } else if (group === MACHINE_INTERFACE && [27, 28, 29, 39].includes(child)) {
       const entries = state.groups.flat();
+      const reserved = new Map();
+      for (const entry of entries) reserved.set(entry.slot, (reserved.get(entry.slot) ?? 0) + 1);
       if (state.groups.some((entries, i) => entries.length !== OPERATE_SLOTS[i] ||
           entries.reduce((total, entry) => total + DISC_VALUE_BY_ITEM.get(entry.id), 0) !== OPERATE_VALUES[i]) ||
-          entries.some((entry) => !liveDisc(player, entry)) || new Set(entries.map((entry) => entry.slot)).size !== 6) {
+          entries.some((entry) => !liveDisc(player, entry)) ||
+          [...reserved].some(([slot, count]) => player.getInventory().getItems()[slot].getAmount() < count)) {
         playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_NOT_OPERATIONAL);
         return;
       }
@@ -917,10 +921,10 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
       const inventory = player.getInventory();
       const original = inventory.getItems();
       const replacement = original.slice();
-      for (const entry of entries) {
-        const item = original[entry.slot];
-        replacement[entry.slot] = item.getAmount() > 1
-          ? item.clone().setAmount(item.getAmount() - 1) : new api.core.Item(-1, 0);
+      for (const [slot, count] of reserved) {
+        const item = original[slot];
+        replacement[slot] = item.getAmount() > count
+          ? item.clone().setAmount(item.getAmount() - count) : new api.core.Item(-1, 0);
       }
       inventory.setItems(replacement);
       try {

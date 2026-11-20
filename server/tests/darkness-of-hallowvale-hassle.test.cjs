@@ -404,6 +404,63 @@ test("the guard: not yet with the cart short; with it full, 2574 = 1 and north-e
   assert.equal(p.getMovementQueue().isMovementBlocked(), false);
 });
 
+for (const exitTick of [0, 2, 3, 4, 5]) {
+  test(`mine exit logout at tick ${exitTick} saves only the cart progress still owed`, async (t) => {
+    const fs = require("node:fs");
+    const os = require("node:os");
+    const { GameConstants } = require("../dist/game/GameConstants");
+    const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tsps-hallowvale-cart-"));
+    const oldDirectory = JsonPlayerPersistence.SAVE_DIRECTORY;
+    const oldPersistence = GameConstants.PLAYER_PERSISTENCE;
+    JsonPlayerPersistence.SAVE_DIRECTORY = directory;
+    const persistence = new JsonPlayerPersistence();
+    GameConstants.setPlayerPersistence(persistence);
+    t.after(async () => {
+      await persistence.flush();
+      GameConstants.setPlayerPersistence(oldPersistence);
+      JsonPlayerPersistence.SAVE_DIRECTORY = oldDirectory;
+      assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
+      assert.ok(path.basename(directory).startsWith("tsps-hallowvale-cart-"));
+      fs.rmSync(directory, { recursive: true, force: true });
+    });
+
+    const { p } = player(t, `cartlogout${exitTick}`, STAGE.SENT_BACK, [2389, 4618, 2]);
+    ores(p, 15);
+    cart(p);
+    p.getDialogueManager().reset();
+    const guard = core.NPC.create(3690, new core.Location(2389, 4616, 2));
+    talk(p, guard);
+    proceed(p);
+    tick(exitTick);
+    const departed = exitTick >= 3;
+    assert.deepEqual(at(p), departed ? [3621, 3322, 0] : [2389, 4618, 2]);
+    if (exitTick < 5) assert.equal(varbit(p, VARBIT.MINE_CART), 15, "normal delayed display is retained before logout");
+    assert.equal(p.logoutRefusal(), null);
+    p.onLogout();
+    p.setRegistered(false);
+    tick(5);
+    await persistence.flush();
+    assert.ok(fs.existsSync(persistence.resolveFilePath(p.getUsername(), p.getProfile())), "logout reached the actual disk save");
+    const saved = persistence.load(p.getUsername(), p.getProfile());
+    assert.ok(saved);
+    assert.equal(saved.attributes[VARS_ATTRIBUTE]?.[VARBIT.MINE_CART] ?? 0, departed ? 0 : 15);
+
+    const { p: restored } = player(t, `cartrestore${exitTick}`, STAGE.SENT_BACK, MINE);
+    saved.applyToPlayer(restored);
+    PM.emitPlayerLogin({ player: restored, username: restored.getUsername() });
+    if (departed) {
+      const request = { player: restored, handled: false };
+      PM.emitCustomEvent("darkness-of-hallowvale:send-to-mines", request);
+      assert.equal(request.handled, true);
+      tick(4);
+      assert.deepEqual(at(restored), MINE);
+    }
+    assert.equal(restored.getAttribute(VARS_ATTRIBUTE)?.[VARBIT.MINE_CART] ?? 0, departed ? 0 : 15,
+      "a new mine visit owes fresh ore; an interrupted exit still inside keeps its paid cart");
+  });
+}
+
 test("2580 goes from 2 back to 1 after 500 ticks in Meiyerditch (t6995 -> t7497)", (t) => {
   const { p } = player(t, "hasslerelease", STAGE.SARIUS_TALKED, [3594, 3300, 1]);
   const { npc } = vyrewatch(t, 3750, [3593, 3297, 1]);

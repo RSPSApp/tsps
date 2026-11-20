@@ -881,6 +881,9 @@ module.exports = function attachHassle(context) {
 
   /** A logout ends the encounter (Wiki: logging out avoids the vyrewatch); the vyre flies again. */
   function loggedOut({ player }) {
+    // The cart's delayed visual reset may not run after logout. Settle it before saving,
+    // but retain ore when an interrupted exit has not yet moved the player out of the mine.
+    if (!inMine(player) && cartCount(player) > 0) state.set(player, VARBIT.MINE_CART, 0);
     const encounter = encounters.get(player);
     if (encounter) {
       encounters.delete(player);

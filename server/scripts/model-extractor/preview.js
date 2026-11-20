@@ -182,8 +182,8 @@
         return s;
       };
       const program = gl.createProgram();
-      gl.attachShader(program, shader(gl.VERTEX_SHADER, VERTEX_SHADER));
-      gl.attachShader(program, shader(gl.FRAGMENT_SHADER, FRAGMENT_SHADER));
+      this.shaders = [shader(gl.VERTEX_SHADER, VERTEX_SHADER), shader(gl.FRAGMENT_SHADER, FRAGMENT_SHADER)];
+      for (const s of this.shaders) gl.attachShader(program, s);
       gl.linkProgram(program);
       this.program = program;
       this.attributes = ["position", "normal", "color"].map((name) => gl.getAttribLocation(program, name));
@@ -202,11 +202,14 @@
 
     bindInput() {
       let drag = null;
-      this.canvas.addEventListener("pointerdown", (event) => {
+      // Every listener goes with this viewer (dispose): the canvas outlives it.
+      this.input = new AbortController();
+      const listen = (type, handler, options = {}) => this.canvas.addEventListener(type, handler, { ...options, signal: this.input.signal });
+      listen("pointerdown", (event) => {
         drag = { x: event.clientX, y: event.clientY };
         this.canvas.setPointerCapture(event.pointerId);
       });
-      this.canvas.addEventListener("pointermove", (event) => {
+      listen("pointermove", (event) => {
         if (!drag) return;
         this.yaw += (event.clientX - drag.x) * 0.01;
         this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch + (event.clientY - drag.y) * 0.01));
@@ -214,14 +217,14 @@
         this.draw();
       });
       const end = () => { drag = null; };
-      this.canvas.addEventListener("pointerup", end);
-      this.canvas.addEventListener("pointercancel", end);
-      this.canvas.addEventListener("wheel", (event) => {
+      listen("pointerup", end);
+      listen("pointercancel", end);
+      listen("wheel", (event) => {
         event.preventDefault();
         this.zoom = Math.max(0.2, Math.min(8, this.zoom * Math.exp(-event.deltaY * 0.0015)));
         this.draw();
       }, { passive: false });
-      this.canvas.addEventListener("dblclick", () => this.resetView());
+      listen("dblclick", () => this.resetView());
     }
 
     /**
@@ -306,6 +309,25 @@
       if (this.playback) cancelAnimationFrame(this.playback.frame);
       this.playback = null;
       this.framing = null;
+    }
+
+    /**
+     * Frees what this viewer made: its buffers, program and shaders, its input handlers and its
+     * resize observer. The canvas and its WebGL context stay for the next viewer on that canvas.
+     */
+    dispose() {
+      this.stop();
+      const gl = this.gl;
+      for (const part of this.parts) part.buffers.forEach((buffer) => gl.deleteBuffer(buffer));
+      this.parts = [];
+      this.mesh = null;
+      for (const s of this.shaders) {
+        gl.detachShader(this.program, s);
+        gl.deleteShader(s);
+      }
+      gl.deleteProgram(this.program);
+      this.input.abort();
+      this.resizeObserver.disconnect();
     }
 
     upload(mesh) {

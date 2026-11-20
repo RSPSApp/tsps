@@ -293,8 +293,8 @@
   }
 
   function stopViewer() {
-    state.viewer?.stop();
-    state.viewer?.resizeObserver?.disconnect();
+    // Frees its GPU buffers, program and input handlers: switching tabs makes a new viewer.
+    state.viewer?.dispose();
     state.viewer = null;
     state.previewToken++;
   }

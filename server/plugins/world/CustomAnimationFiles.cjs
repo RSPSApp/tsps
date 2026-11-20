@@ -91,6 +91,8 @@ function checkFrame(data, slots, what) {
     }
   }
   if (o > data.length) fail(`${what} is truncated`);
+  // The client refuses a frame with slots whose values don't end exactly at the end of the file.
+  if (count !== 0 && o !== data.length) fail(`${what} has ${data.length - o} byte(s) after its last value`);
 }
 
 /** A graphic definition's opcodes (rev 241), each with its raw payload. */
@@ -185,6 +187,32 @@ function animationFiles(files, what, CacheDefinitions) {
   return { ops, frameOp, lengths, ids, frames, framemaps };
 }
 
+/**
+ * The row players get for an animation (dataset customAnimations): its frames renumbered into its
+ * own frame group, and its seq.dat pointed at them. `checked` is animationFiles' result.
+ */
+function animationRow(checked, id, name, group) {
+  const { ops, frameOp, lengths, ids, frames: bytes } = checked;
+  const fileOf = new Map([...bytes.keys()].map((frameId, file) => [frameId, file]));
+  const frames = {};
+  for (const [frameId, data] of bytes) frames[fileOf.get(frameId)] = data.toString("base64");
+  frameOp.payload = framePayload(lengths, ids.map((frameId) => group * 65536 + fileOf.get(frameId)));
+  return { kind: "seq", id, name, data: encodeOps(ops).toString("base64"), group, frames };
+}
+
+/** The players' dataset of custom animations and graphics, and the most one content packet holds. */
+const DATASET = "customAnimations";
+const PACKET_LIMIT = 0xffff;
+
+/** Whether one row fits a content packet on its own (the encoder throws past a packet's length field). */
+function fitsPacket(encodeContentData, row) {
+  try {
+    return encodeContentData("server", [{ key: DATASET, rows: [row] }]).length <= PACKET_LIMIT;
+  } catch {
+    return false;
+  }
+}
+
 /** The files an animation's asset keeps: the ones animationFiles read, plus info.json for Blender. */
 function animationKeeps(files, checked) {
   const keep = new Map([["seq.dat", files.get("seq.dat")]]);
@@ -202,5 +230,5 @@ function animationKeeps(files, checked) {
 
 module.exports = {
   NAME, fail, readSeq, frameList, framePayload, encodeOps, checkFrame, readSpotanim, setOp, u16, u32,
-  readFolder, checkFrameMap, animationFiles, animationKeeps,
+  readFolder, checkFrameMap, animationFiles, animationKeeps, animationRow, fitsPacket, DATASET, PACKET_LIMIT,
 };

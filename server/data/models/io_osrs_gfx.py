@@ -23,7 +23,7 @@
 bl_info = {
     "name": "OSRS graphic (spotanim.dat)",
     "author": "tsps",
-    "version": (1, 2, 0),
+    "version": (1, 2, 1),
     "blender": (2, 79, 0),
     "location": "File > Import / Export > OSRS graphic",
     "description": "Import and export OSRS graphics (spot animations): model, animation and definition",
@@ -166,12 +166,33 @@ if bpy is not None:
         with open(path, "rb") as f:
             return f.read().hex()
 
+    def _graphic_of(obj, roots):
+        """The graphic an object belongs to: itself, a parent, or the root that lists it as its model."""
+        o = obj
+        while o is not None:
+            if SPOTANIM_KEY in o.keys():
+                return o
+            o = o.parent
+        if obj.type == 'MESH':
+            for mod in obj.modifiers:
+                if mod.type == 'ARMATURE' and mod.object is not None and SPOTANIM_KEY in mod.object.keys():
+                    return mod.object
+        for root in roots:
+            if obj.name in json.loads(root.get("osrs_targets", "[]")):
+                return root
+        return None
+
     def find_graphic_root(context):
-        _, anim_addon = _addons()
-        root = anim_addon.find_root(context)
-        if root is not None and SPOTANIM_KEY in root.keys():
-            return root
+        # The selection decides first: a static graphic's root is an Empty with no osrs_anim, which
+        # the animation add-on's find_root doesn't know, so asking it first picked any one animated
+        # rig elsewhere in the scene, or refused when there were two static graphics.
         roots = [o for o in context.scene.objects if SPOTANIM_KEY in o.keys()]
+        candidates = [context.active_object] + [o for o in context.selected_objects if o is not context.active_object]
+        for obj in candidates:
+            if obj is not None:
+                root = _graphic_of(obj, roots)
+                if root is not None:
+                    return root
         return roots[0] if len(roots) == 1 else None
 
     def export_graphic(context, path, root):

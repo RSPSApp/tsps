@@ -254,6 +254,12 @@ function addAnimation(root, { name, files, library, replace, id: requested }, co
     const checked = wrap(() => Files.animationFiles(all, `animation ${label}`, core.CacheDefinitions));
     const keep = Files.animationKeeps(all, checked);
     if (totalSize(keep) > ASSET_KINDS.animation.maxBytes) throw error(`The animation is ${totalSize(keep)} bytes; the cap is ${ASSET_KINDS.animation.maxBytes}`);
+    // Players get each animation in one content packet: check the row they would get, as the server
+    // builds it at startup (any frame group: the row is the same size), before storing anything.
+    if (typeof core.encodeContentData !== "function") throw error("The animation's packet size can't be checked here", 500);
+    if (!Files.fitsPacket(core.encodeContentData, Files.animationRow(checked, 0, "animation", 0x7fff))) {
+        throw error("The animation is too big for one content packet; use fewer or smaller frames", 413);
+    }
     const hash = folderHash(keep);
     const document = Document.read(root);
     // An id asked for is a new row, even for files already stored under another.
@@ -284,6 +290,29 @@ function addGraphic(root, { name, files, library, replace, animation, id: reques
     const document = Document.read(root);
     const previous = replace !== undefined ? (document.assets ?? []).find((row) => row.kind === "graphic" && row.id === Number(replace)) : null;
     if (replace !== undefined && !previous) throw error(`No graphic ${replace} to replace`, 404);
+    if (animation !== undefined && animation !== null) checkAnimationLink(document, animation, core);
+    // A graphic is several rows (its model, its animation, itself): if a later one is refused, the
+    // document goes back to what it was, so a failed import leaves no parts behind. Stored files
+    // are content-addressed, and nothing points at the ones left over.
+    try {
+        return addGraphicParts(root, { name, library, all, spotanim, replace, animation, requested, previous }, core);
+    } catch (failure) {
+        Document.write(root, document);
+        throw failure;
+    }
+}
+
+/**
+ * A graphic's own animation, given by id: a cache animation or one of the animation assets, as
+ * the server checks it at startup (CustomAnimations' loadGraphic), so an accepted import loads.
+ */
+function checkAnimationLink(document, animation, core) {
+    if (!Number.isInteger(animation) || animation < 0 || animation > 0xfffe) throw error(`animation must be an animation id from 0 to 65534, not ${JSON.stringify(animation)}`);
+    const custom = (document.assets ?? []).some((row) => row.kind === "animation" && row.id === animation);
+    if (!custom && !core.CacheDefinitions?.hasDefinition?.("seq", animation)) throw error(`No animation ${animation} in the cache or your animation assets`, 404);
+}
+
+function addGraphicParts(root, { name, library, all, spotanim, replace, animation, requested, previous }, core) {
     const base = folderName("graphic", previous?.name ?? name, library ? library.split("/").filter(Boolean).join("_") : "graphic");
     const parts = [];
     let model = null;
@@ -292,7 +321,7 @@ function addGraphic(root, { name, files, library, replace, animation, id: reques
         model = added.asset.id;
         parts.push(added.asset);
     }
-    let seq = Number.isInteger(animation) ? animation : null;
+    let seq = animation !== undefined && animation !== null ? animation : null;
     const anim = subFolder(all, "anim");
     if (seq === null && anim.has("seq.dat")) {
         const previousAnimation = previous && (assetsOf(root).some((row) => row.kind === "animation" && row.id === previous.animation)) ? previous.animation : undefined;

@@ -14,7 +14,7 @@ const Assets = require("../tools/cache-editor/Assets.CacheEditor.cjs");
 
 const { fail, readSeq, frameList, readSpotanim, checkFrame, encodeOps, framePayload, setOp, u16, u32 } = Files;
 
-const DATASET = "customAnimations";
+const { DATASET, PACKET_LIMIT } = Files;
 /** server/: the cache editor's document and assets are under data/. */
 const ROOT = path.resolve(__dirname, "../..");
 /**
@@ -23,7 +23,6 @@ const ROOT = path.resolve(__dirname, "../..");
  */
 const FIRST_FRAME_GROUP = 30000;
 const LAST_FRAME_GROUP = 32767;
-const PACKET_LIMIT = 0xffff;
 
 let content = { rows: [], animations: [], graphics: [], packets: [] };
 let encodeContentData = null;
@@ -38,14 +37,10 @@ function folderOf(root, entry, what) {
 function loadAnimation(entry, index, root, CacheDefinitions) {
   const what = `animation ${entry.id} (${entry.name})`;
   const files = Files.readFolder(folderOf(root, entry, what));
-  const { ops, frameOp, lengths, ids, frames: bytes } = Files.animationFiles(files, what, CacheDefinitions);
+  const checked = Files.animationFiles(files, what, CacheDefinitions);
   const group = FIRST_FRAME_GROUP + index;
   if (group > LAST_FRAME_GROUP) fail(`too many custom animations (frame groups end at ${LAST_FRAME_GROUP})`);
-  const fileOf = new Map([...bytes.keys()].map((id, file) => [id, file]));
-  const frames = {};
-  for (const [id, data] of bytes) frames[fileOf.get(id)] = data.toString("base64");
-  frameOp.payload = framePayload(lengths, ids.map((id) => group * 65536 + fileOf.get(id)));
-  return { kind: "seq", id: entry.id, name: entry.name, data: encodeOps(ops).toString("base64"), group, frames };
+  return Files.animationRow(checked, entry.id, entry.name, group);
 }
 
 /** One graphic: pointed at its model asset and its animation (custom or cache). */
@@ -98,7 +93,7 @@ function loadCustomAnimations(core, root = ROOT) {
   ];
   for (const row of rows) {
     // One packet per animation or graphic; a bigger one needs chunked delivery.
-    if (encodeContentData("server", [{ key: DATASET, rows: [row] }]).length > PACKET_LIMIT) {
+    if (!Files.fitsPacket(encodeContentData, row)) {
       fail(`${row.kind === "seq" ? "animation" : "graphic"} ${row.id} is too big for one content packet`);
     }
   }

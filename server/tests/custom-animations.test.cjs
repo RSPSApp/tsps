@@ -142,6 +142,8 @@ test("frames are decoded at load: too many slots, a bad flag or a short file is 
   assert.throws(() => checkFrame(Uint8Array.from([0, 0, 1, 8]), 2, "frame"), /unknown flag/);
   assert.throws(() => checkFrame(Uint8Array.from([0, 0, 1, 7, 5]), 2, "frame"), /truncated/, "y and z are missing");
   assert.throws(() => checkFrame(Uint8Array.from([0, 0, 1, 1, 200]), 2, "frame"), /truncated/, "a two-byte smart cut short");
+  assert.throws(() => checkFrame(Uint8Array.from([0, 0, 2, 1, 0, 5, 9]), 2, "frame"), /1 byte\(s\) after its last value/, "the client needs every byte read");
+  checkFrame(Uint8Array.from([0, 0, 0, 9]), 2, "frame"); // A frame without slots isn't read past its header, by the client either.
 });
 
 /** Registers the plugin as the server does, returning its hooks. */

@@ -74,6 +74,69 @@ test("an animation folder is checked, stored once by its content, and keeps its 
   assert.equal(Assets.renameAsset(root, { kind: "animation", id: 50000, name: "My ZGS swing" }, core).asset.name, "my_zgs_swing", "names stay lower_case");
 });
 
+// Review of RSPSApp/tsps PR 6375: what an import accepts must also load at startup and decode in
+// the client, and a refused graphic leaves the document as it was.
+test("a frame with bytes after its last value is refused, as the client refuses it", () => {
+  const root = rootWith({ "zamorak-godsword-special/player-anim": "zgs" });
+  const files = base64Files(path.join(root, "data/models/zgs"));
+  const frame = Object.keys(files).find((name) => name.startsWith("frames/"));
+  const trailing = Buffer.concat([Buffer.from(files[frame], "base64"), Buffer.from([0])]).toString("base64");
+  assert.throws(() => Assets.addAsset(root, { kind: "animation", files: { ...files, [frame]: trailing }, name: "trailing" }, core), /byte\(s\) after its last value/);
+  assert.equal(Assets.assetsOf(root).length, 0, "nothing was stored");
+});
+
+test("an animation too big for one content packet is refused before it is stored", () => {
+  const root = rootWith({ "zamorak-godsword-special/player-anim": "zgs" });
+  const folder = path.join(root, "data/models/zgs");
+  const sample = fs.readFileSync(path.join(folder, "frames", fs.readdirSync(path.join(folder, "frames"))[0]));
+  const slots = sample[2];
+  // 1,200 valid frames of random one-byte values on every axis: they don't compress, so their row
+  // is far past a packet, though the files are well under the 1 MiB cap.
+  fs.rmSync(path.join(folder, "frames"), { recursive: true });
+  fs.mkdirSync(path.join(folder, "frames"));
+  const count = 1200;
+  let seed = 6375;
+  const random = () => (seed = (seed * 1103515245 + 12345) % 2147483648) % 128;
+  const ids = [];
+  for (let file = 0; file < count; file++) {
+    const frame = Buffer.alloc(3 + slots * 4);
+    frame[0] = sample[0];
+    frame[1] = sample[1];
+    frame[2] = slots;
+    for (let slot = 0; slot < slots; slot++) {
+      frame[3 + slot] = 7;
+      for (let axis = 0; axis < 3; axis++) frame[3 + slots + slot * 3 + axis] = random();
+    }
+    fs.writeFileSync(path.join(folder, "frames", `12146-${file + 1}.dat`), frame);
+    ids.push(12146 * 65536 + file + 1);
+  }
+  const ops = Files.readSeq(new Uint8Array(fs.readFileSync(path.join(folder, "seq.dat"))), "seq.dat");
+  ops.find(({ op }) => op === 1).payload = Files.framePayload(ids.map(() => 1), ids);
+  fs.writeFileSync(path.join(folder, "seq.dat"), Files.encodeOps(ops.filter(({ op }) => op !== 12 && op !== 13)));
+  assert.throws(() => Assets.addAsset(root, { kind: "animation", library: "zgs" }, core), (failure) => failure.status === 413 && /one content packet/.test(failure.message));
+  assert.equal(Assets.assetsOf(root).length, 0, "nothing was stored");
+  assert.equal(fs.existsSync(path.join(root, "data", "assets")), false, "no files either");
+});
+
+test("a graphic's animation link is checked, and a refused graphic leaves no parts behind", () => {
+  const root = rootWith({ "zamorak-godsword-special/graphic": "zgs-trail" });
+  assert.throws(() => Assets.addAsset(root, { kind: "graphic", library: "zgs-trail", animation: 70000 }, core), /0 to 65534/);
+  assert.throws(() => Assets.addAsset(root, { kind: "graphic", library: "zgs-trail", animation: "7638" }, core), /0 to 65534/);
+  assert.throws(() => Assets.addAsset(root, { kind: "graphic", library: "zgs-trail", animation: 65000 }, core), /No animation 65000/);
+  assert.equal(Assets.assetsOf(root).length, 0, "nothing was stored");
+  // A cache animation is a valid link (the graphic's own anim/ is then left out).
+  const linked = Assets.addAsset(root, { kind: "graphic", library: "zgs-trail", animation: 7638, name: "linked" }, core);
+  assert.equal(linked.asset.animation, 7638);
+
+  // Its model is stored first; its anim/ then fails (a trailing byte): the document is put back.
+  const before = Document.read(root);
+  const anim = path.join(root, "data/models/zgs-trail/anim/frames");
+  const frame = path.join(anim, fs.readdirSync(anim)[0]);
+  fs.writeFileSync(frame, Buffer.concat([fs.readFileSync(frame), Buffer.from([0])]));
+  assert.throws(() => Assets.addAsset(root, { kind: "graphic", library: "zgs-trail", name: "broken" }, core), /after its last value/);
+  assert.deepEqual(Document.read(root), before, "no model, animation or graphic row was left");
+});
+
 test("an animation with a missing frame or a bad frame is refused with the reason", () => {
   const root = rootWith({ "zamorak-godsword-special/player-anim": "zgs" });
   const files = base64Files(path.join(root, "data/models/zgs"));

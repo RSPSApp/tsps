@@ -30,10 +30,10 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const SKRACH_STATE_ATTRIBUTE = "recipe-for-disaster:skrach-state";
   const SKRACH_STAGE_ATTRIBUTE = "recipe-for-disaster:skrach-stage";
   /**
-   * Rantz's spit-roast at 2630,2990 is this multiloc (multi_chompybird_spitroast_entity, varbit ogre_spit_roaster);
-   * a use on it names the parent, never the 3372-12563 child shown. No generated ObjectIdentifiers entry.
+   * Rantz's spit-roast at 2630,2990 is this multiloc (6895, varbit ogre_spit_roaster); a use on it names the
+   * parent, never the 3372-12563 child shown. No generated ObjectIdentifiers entry.
    */
-  const CHOMPY_SPIT_ROAST_MULTILOC = 6895;
+  const CHOMPY_SPIT_ROAST_MULTILOC = "multi_chompybird_spitroast_entity";
   const AWOWOGEI_STATE_ATTRIBUTE = "recipe-for-disaster:awowogei-state";
   const AWOWOGEI_STAGE_ATTRIBUTE = "recipe-for-disaster:awowogei-stage";
   /** Filling already added to the snake corpse: 1 sliced red banana, 2 tchiki nut paste. */
@@ -2554,7 +2554,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       ObjectIdentifiers.OGRE_SPIT_ROAST_3, ObjectIdentifiers.OGRE_SPIT_ROAST_4,
       ObjectIdentifiers.OGRE_SPIT_ROAST_5, ObjectIdentifiers.OGRE_SPIT_ROAST_6,
       ObjectIdentifiers.OGRE_SPIT_ROAST_7, ObjectIdentifiers.OGRE_SPIT_ROAST_8,
-      ObjectIdentifiers.OGRE_SPIT_ROAST_9, CHOMPY_SPIT_ROAST_MULTILOC];
+      ObjectIdentifiers.OGRE_SPIT_ROAST_9, api.core.CacheDefinitions.getLocId(CHOMPY_SPIT_ROAST_MULTILOC)];
     if (spitRoasts.includes(objectId) && itemId === ItemIdentifiers.SKEWERED_CHOMPY) {
       event.handled = true;
       player.getInventory().deleteNumber(ItemIdentifiers.SKEWERED_CHOMPY, 1);

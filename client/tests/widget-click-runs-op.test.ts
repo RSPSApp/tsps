@@ -103,4 +103,18 @@ customClicks.length = 0;
 click(button({ actions: ["Search"], eventHandlers: { onOp: {} } }));
 assert.deepEqual(customClicks, [[647, 3]], "the top widget under a left-click reaches the runtime, ids as the menu path reads them");
 
+// The resizable frame's 161:98, an empty layer over the whole screen, is the top hit of every
+// click. The runtime is told of the widget the click is for, the top one offering an op: the search
+// box itself (::commands' 30004:5), not that layer, or every click on the box blurred it.
+const screenLayer = { uid: (161 << 16) | 98, groupId: 161, fileId: 98, childIndex: -1, type: 0, x: 0, y: 0, width: 1238, height: 705 };
+const searchInput = { uid: (30004 << 16) | 5, groupId: 30004, fileId: 5, childIndex: -1, type: 4, x: 24, y: 32, width: 430, height: 24,
+    actions: ["Search"], eventHandlers: { onOp: {} } };
+customClicks.length = 0;
+click(screenLayer, [searchInput]);
+assert.deepEqual(customClicks, [[30004, 5]], "a click on the search box under the frame's layer focuses it");
+// A click where nothing offers an op (the window's empty frame) still reaches the runtime as a click elsewhere.
+customClicks.length = 0;
+click(screenLayer, [{ uid: (30004 << 16) | 1, groupId: 30004, fileId: 1, childIndex: -1, type: 0, x: 0, y: 0, width: 494, height: 316 }]);
+assert.deepEqual(customClicks, [[161, 98]], "and a click on nothing offering an op blurs it");
+
 console.log("widget click runs op passed");

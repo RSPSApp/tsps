@@ -161,6 +161,7 @@ test("Inspect names the amenity's level and materials", (t) => {
 
 test('a built cooking pot is a range: food used on it or Cook cooks as at a range', () => {
   const Cookers = require('../plugins/skills/cooking/Cookers.Cooking');
+  require('../plugins/skills/cooking/Common.Cooking').init({ core }); // the fire locs resolve their gamevals through it
   const { ObjectDefinition } = require('../dist/game/definition/ObjectDefinition');
   ObjectDefinition.init();
   const pot = loc('amenity_cooking_pot_anglers');

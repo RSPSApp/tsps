@@ -107,9 +107,15 @@ test("burnt items are the captured and Wiki ones", () => {
 });
 
 test("fires and the house's stoves play human_firecooking, other ranges and ovens human_cooking", () => {
-  const seq = (name) => Cooking._test.cookAnimationFor(name).getId();
-  for (const name of ["Fire", "Firepit with hook", "Small oven"]) assert.equal(seq(name), core.CacheDefinitions.getSeqId("human_firecooking"), name);
-  for (const name of ["Range", "Cooking range", "Oven"]) assert.equal(seq(name), core.CacheDefinitions.getSeqId("human_cooking"), name);
+  core.ObjectDefinition.init();
+  const locId = (name) => core.CacheDefinitions.getLocId(name);
+  const { FIREPIT_WITH_HOOK, SMALL_OVEN } = core.ObjectIdentifiers;
+  const fires = [[locId("fire"), "Fire"], [FIREPIT_WITH_HOOK, "Firepit with hook"], [SMALL_OVEN, "Small oven"]];
+  const ranges = [[locId("fai_varrock_range"), "Range"], [locId("cooksquestrange"), "Cooking range"], [locId("fortis_stove"), "Oven"]];
+  const seq = (id) => Cooking._test.cookAnimationFor(core.ObjectDefinition.forId(id)).getId();
+  for (const [id, name] of [...fires, ...ranges]) assert.equal(core.ObjectDefinition.forId(id).getName(), name, String(id));
+  for (const [id, name] of fires) assert.equal(seq(id), core.CacheDefinitions.getSeqId("human_firecooking"), name);
+  for (const [id, name] of ranges) assert.equal(seq(id), core.CacheDefinitions.getSeqId("human_cooking"), name);
 });
 
 test("one raw food opens the how-many menu on the raw item; several open the what menu on the cooked ones", () => {
@@ -275,6 +281,11 @@ test("a lit fireplace cooks like a fire (Wiki: Fireplace; rsprox capture 1001621
   assert.equal(Cooking.isCooker(pot), true);
   assert.equal(Cooking.isFire(pot), true);
   assert.equal(Cooking.isCooker(core.ObjectDefinition.forId(core.CacheDefinitions.getLocId("fai_varrock_shanty_cookingpot"))), false);
+
+  // Every listed gameval resolves, to a "Fireplace" or the pot.
+  for (const name of Cooking._test.FIRE_LOC_GAMEVALS) {
+    assert.match(core.ObjectDefinition.forId(core.CacheDefinitions.getLocId(name)).getName(), /^(Fireplace|Cooking pot)$/, name);
+  }
 
   // Misthalin Mystery's riddle fireplace and the unlit ones stay out.
   for (const other of [30136, 30137, 9441, 61732]) assert.equal(Cooking.isCooker(core.ObjectDefinition.forId(other)), false, String(other));

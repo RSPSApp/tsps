@@ -163,15 +163,23 @@ test('a built cooking pot is a range: food used on it or Cook cooks as at a rang
   const Cookers = require('../plugins/skills/cooking/Cookers.Cooking');
   const { ObjectDefinition } = require('../dist/game/definition/ObjectDefinition');
   ObjectDefinition.init();
+  // Before Cooking's register the fire locs aren't resolved, and isCooker still answers by name
+  // (LightSources asks it with Cooking switched off).
+  assert.equal(Cookers.isCooker(ObjectDefinition.forId(loc('fire'))), true, 'a Fire before init');
+  assert.equal(Cookers.isCooker(ObjectDefinition.forId(loc('fireplacecookingpot'))), false, 'no fire locs before init');
+  require('../plugins/skills/cooking/Common.Cooking').init({ core }); // the fire locs resolve their gamevals through it
   const pot = loc('amenity_cooking_pot_anglers');
   const built = { getPacketSender: () => ({ getVarbit: (id) => (id === varbit('amenity_cooking_pot_anglers') ? 1 : 0), getVarp: () => 0 }) };
   const unbuilt = { getPacketSender: () => ({ getVarbit: () => 0, getVarp: () => 0 }) };
   assert.equal(Cookers.isCooker(ObjectDefinition.forPlayer(pot, built)), true);
   assert.equal(Cookers.isCooker(ObjectDefinition.forPlayer(pot, unbuilt)), false, 'the space is not a cooker');
   assert.equal(Cookers.isCooker(ObjectDefinition.forId(loc('pandemonium_cooking_pot'))), true, "The Pandemonium's pot too");
-  // The op-less decorative pots are not ranges (live cooks on fireplacecookingpot as a fire: rsprox 240/911358).
+  // The op-less decorative pots are not ranges: live cooks on fireplacecookingpot as a fire (rsprox
+  // 240/911358), and the two uncaptured ones are not cookers.
   for (const name of ['fireplacecookingpot', 'qip_sheep_shearer_fireplacecookingpot', 'fai_varrock_shanty_cookingpot']) {
     assert.equal(ObjectDefinition.forId(loc(name)).getName(), 'Cooking pot', name);
-    assert.equal(Cookers.isCooker(ObjectDefinition.forId(loc(name))), false, name);
+    const fire = name === 'fireplacecookingpot';
+    assert.equal(Cookers.isCooker(ObjectDefinition.forId(loc(name))), fire, name);
+    assert.equal(Cookers.isFire(ObjectDefinition.forId(loc(name))), fire, name);
   }
 });

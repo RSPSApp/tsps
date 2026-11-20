@@ -187,3 +187,21 @@ test('A drawn combination outside the pins is refused when the lock opens', () =
   const h = harness(5, () => 6 ** 5);
   assert.throws(() => h.lockpick.open(h.player), /outside the active pin range/);
 });
+
+test('maxAttempts: the 7th wrong guess closes the lock and hands over, with no reopen (FFG P2 tick 566)', () => {
+  let exhausted = 0;
+  const h = harness(5, 2306);
+  const lock = require('../plugins/quests/QuestLockpicking').createQuestLockpicking(h.api, {
+    activePins: 5, target: 2306, onSolved() {}, maxAttempts: 7, onExhausted: () => exhausted++,
+  });
+  lock.open(h.player);
+  for (let i = 0; i < 6; i++) { h.player.amountAction.execute(0); h.tick(); }
+  assert.deepEqual(h.scripts.at(-1).args.slice(6, 8), [5, 6], 'six wrong guesses, attempt 6 open');
+  const messages = h.messages.length;
+  h.player.amountAction.execute(0);
+  h.tick();
+  assert.equal(exhausted, 1);
+  assert.equal(h.player.amountAction, null, 'the session is over');
+  assert.equal(h.messages.length, messages, 'no "didn\'t seem to work" on the last one');
+  assert.deepEqual(h.scripts.at(-1).args.slice(6, 8), [5, 6], 'no reopen');
+});

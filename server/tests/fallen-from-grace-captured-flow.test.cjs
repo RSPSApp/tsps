@@ -313,3 +313,48 @@ test('the Mad Angel\'s sunstone crystal drops only when one is owed (Wiki: no ba
   assert.equal(ask(), false, 'the bank chest is built');
   assert.equal(h.custom('npc-drops:quest-item', { player: p, itemId: 995, allowed: undefined }).allowed, undefined, 'other rows are left alone');
 });
+
+test('a logout during the stairs fade still reaches stage 16 on the next climb', () => {
+  const h = setup(), p = h.p;
+  h.quest.setStage(p, 15);
+  p.items.set(I.STAIRCASE_KEY, 1);
+  p.items.set(I.DULL_SUNSTONE_CORE, 1);
+  h.custom('ladders:climb', { player: p, objectId: 62255, handled: false });
+  p.isRegistered = () => false;
+  runTicks(6);
+  p.isRegistered = () => true;
+  assert.equal(h.quest.getStage(p), 15, 'the move never happened');
+  h.custom('ladders:climb', { player: p, objectId: 62255, handled: false });
+  runTicks(2);
+  assert.equal(h.quest.getStage(p), 16);
+  assert.equal(p.items.get(I.DULL_SUNSTONE_CORE), 0);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2540, 2214]);
+});
+
+test('the door: sound 2402 with the question; seven wrong guesses end with the Wiki\'s numb-fingers box', () => {
+  const h = setup(), p = h.p;
+  h.quest.setStage(p, 19);
+  p.getLocation = () => new core.Location(2541, 2215, 0);
+  let prompt = null;
+  h.api.sendMultiChatboxPrompt = (player, title, ...pairs) => { prompt = pairs; return true; };
+  const request = h.custom('madangel:cathedral-door', { player: p, objectId: 62368, handled: false });
+  assert.equal(request.handled, true);
+  assert.ok(p.log.includes('sound 2402'));
+  assert.ok(prompt, 'the question');
+  prompt[1](p);
+  assert.equal(p.interface, 811);
+  for (let i = 0; i < 7; i++) {
+    p.amountAction.execute(i === 0 ? 1 : 0);
+    runTicks(1);
+  }
+  assert.equal(p.amountAction ?? null, null);
+  assert.equal(textOf(p.manager.getCurrent()), "Your fingers go numb from fiddling with the lock. You'll need to try again.");
+  assert.equal(flags(p) & (1 << 7), 0);
+});
+
+test('someone inside the doors before stage 16 is let out by the ordinary door', () => {
+  const h = setup(), p = h.p;
+  h.quest.setStage(p, 8);
+  p.getLocation = () => new core.Location(2541, 2215, 0);
+  assert.equal(h.custom('madangel:cathedral-door', { player: p, objectId: 62368, handled: false }).handled, false);
+});

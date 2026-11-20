@@ -230,6 +230,12 @@ module.exports = function registerFallenFromGraceQuest(api) {
   const DOOR_LEAVE = "Leave them.";
   const DOOR_PICKED = "You successfully pick the lock, only to see it crumble away in your hands.";
   const DOOR_LOCK_CODES = 6 ** 5; // five pins, six positions each
+  // P2: the first session ends with its 7th wrong guess (tick 566); the Wiki's fail line is shown
+  // (the recording closes it silently). The question, each wrong guess and the success play 2402/2402/2419.
+  const DOOR_LOCK_ATTEMPTS = 7;
+  const DOOR_FAILED = "Your fingers go numb from fiddling with the lock. You'll need to try again.";
+  const DOOR_SOUND = 2402;
+  const DOOR_PICKED_SOUND = 2419;
   const CATHEDRAL_DOOR_OUTSIDE_X = 2542; // the door tiles are x 2541 (inside) and 2542 (outside)
   // The basement stairs with the key (P2 ticks 288-295): the message, the hatch's sound, the fade
   // and the move into the cathedral 2 ticks after it starts.
@@ -949,6 +955,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
     if (!questActive(player) || quest.getStage(player) < STAGE_CATHEDRAL) return;
     if (hasFlag(player, FLAG_CATHEDRAL_OPENED)) return;
     setFlag(player, FLAG_CATHEDRAL_OPENED);
+    sound(player, DOOR_PICKED_SOUND);
     player.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder()
       .add(new api.core.StatementDialogue(0, DOOR_PICKED)));
   }
@@ -963,6 +970,10 @@ module.exports = function registerFallenFromGraceQuest(api) {
     activePins: 5,
     target: () => Math.floor(Math.random() * DOOR_LOCK_CODES),
     onSolved: unlockCathedralDoor,
+    maxAttempts: DOOR_LOCK_ATTEMPTS,
+    failSound: DOOR_SOUND,
+    onExhausted: (player) => player.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder()
+      .add(new api.core.StatementDialogue(0, DOOR_FAILED))),
   });
 
   function handleChest(event) {
@@ -1060,11 +1071,17 @@ module.exports = function registerFallenFromGraceQuest(api) {
     event.handled = true;
     // The lock is picked from inside ("Exit the cathedral by searching the lock", Wiki).
     const outside = player.getLocation().getX() >= CATHEDRAL_DOOR_OUTSIDE_X;
+    // Ours: someone inside before stage 16 (only possible on older builds) is let out.
+    if (!outside && stage < STAGE_CATHEDRAL) {
+      event.handled = false;
+      return false;
+    }
     if (stage < STAGE_CATHEDRAL || outside) {
       speak(player, CORMAC_NPC_ID, "the-way-under-ardeaglais-attempting-to-open-the-cathedral-door");
       return true;
     }
     player.getMovementQueue?.()?.reset?.();
+    sound(player, DOOR_SOUND);
     api.sendMultiChatboxPrompt(player, DOOR_QUESTION, DOOR_PICK, () => openDoorLock(player),
       DOOR_LEAVE, () => player.getPacketSender().sendInterfaceRemoval());
     return true;
@@ -1563,7 +1580,8 @@ module.exports = function registerFallenFromGraceQuest(api) {
     }
     player.getMovementQueue?.()?.reset?.();
     fadeTravel(player, STAIRS_FADE, () => {
-      if (firstTime && quest.getStage(player) === STAGE_GOLEM_POWERED) {
+      // Not tied to `firstTime`: a logout during the fade must not leave the quest at 15.
+      if (quest.getStage(player) === STAGE_GOLEM_POWERED) {
         quest.setStage(player, STAGE_CATHEDRAL);
         if (held(player, DULL_SUNSTONE_CORE_ITEM_ID)) player.getInventory().deleteNumber(DULL_SUNSTONE_CORE_ITEM_ID, 1);
       }
@@ -1577,6 +1595,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
     if (quest.isComplete(player) || stage < STAGE_GOLEM_POWERED) return;
     event.handled = true;
     if (stage >= STAGE_CATHEDRAL || hasFlag(player, FLAG_KEY_USED)) {
+      // The move sets 16 and takes the dull core whenever the stage is still 15.
       climbIntoCathedral(player, !hasFlag(player, FLAG_KEY_USED));
       return;
     }

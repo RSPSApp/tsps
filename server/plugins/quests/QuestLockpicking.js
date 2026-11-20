@@ -53,7 +53,11 @@ function lockpickFeedback(guess, target) {
  * `target` is the combination, or a function giving a new one each time the lock is opened
  * afresh (attempt 0); a wrong guess reopens the same session with the same combination.
  */
-function createQuestLockpicking(api, { activePins, target, onSolved }) {
+/**
+ * `maxAttempts` (optional) ends the session after that many wrong guesses: the lock closes and
+ * `onExhausted(player)` runs instead of the reopen. `failSound` plays with each wrong guess.
+ */
+function createQuestLockpicking(api, { activePins, target, onSolved, maxAttempts = Infinity, onExhausted, failSound }) {
   if (!Number.isInteger(activePins) || activePins < 1 || activePins > LOCKPICKING_SLOTS) {
     throw new Error("lockpicking activePins must be 1..6");
   }
@@ -144,6 +148,13 @@ function createQuestLockpicking(api, { activePins, target, onSolved }) {
       return;
     }
     const feedback = lockpickFeedback(amount, state.code);
+    if (state.attempt + 1 >= maxAttempts) {
+      cancel(player);
+      player.getPacketSender().sendInterfaceRemoval();
+      onExhausted?.(player);
+      return;
+    }
+    if (Number.isInteger(failSound)) player.getPacketSender().sendSoundEffect?.(failSound, 1, 0);
     player.sendMessage("That didn't seem to work.");
     reopen(player, state, state.attempt + 1, amount, feedback);
   }

@@ -60,6 +60,13 @@ this table follow them; where the Wiki states a value it wins.
 - The door can be picked from inside from stage 16 (the transcript's choice has no stage); the
   recording only shows it after the kill. From outside it stays "firmly locked" (Wiki: "Exit the
   cathedral by searching the lock").
+- The lock ends after the 7th wrong guess (P2 tick 566). The recording closes it silently; ours
+  shows the Wiki's "Your fingers go numb from fiddling with the lock. You'll need to try again."
+  The question and each wrong guess play sound 2402, the success 2419 (P2 473-622).
+- The quest's way out lands on the post-quest pew's outside tile, 2539,2216; the recording has
+  2539,2215 (P2 467).
+- The doors stay locked from outside until the quest is done ("Wyrmscraig Cathedral access");
+  a player inside before stage 16 is let out.
 - Trolls killed before Mortimer's request (they are there on arrival) count; his call comes with
   the request. Not recorded.
 - The Mad Angel's sunstone crystal drops only when owed (Wiki: "always drops if the bank chest is

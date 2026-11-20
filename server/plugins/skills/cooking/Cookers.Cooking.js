@@ -137,9 +137,15 @@ const FIRE_LOC_GAMEVALS = [
   "fireplacecookingpot",
 ];
 let fireLocIds = null;
+const NO_FIRE_LOCS = new Set();
 
-/** FIRE_LOC_GAMEVALS as loc ids, resolved on first use (an unknown gameval throws). */
+/**
+ * FIRE_LOC_GAMEVALS as loc ids, resolved on first use (an unknown gameval throws). Before Cooking's
+ * register (Cooking switched off, or this module loaded on its own, as LightSources' isCooker does)
+ * there are none, and nothing is cached.
+ */
 function fireLocIdSet() {
+  if (!Common.core) return NO_FIRE_LOCS;
   if (!fireLocIds) fireLocIds = new Set(FIRE_LOC_GAMEVALS.map((name) => Common.gameval("loc", name)));
   return fireLocIds;
 }

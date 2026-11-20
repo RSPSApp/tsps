@@ -161,9 +161,13 @@ test("Inspect names the amenity's level and materials", (t) => {
 
 test('a built cooking pot is a range: food used on it or Cook cooks as at a range', () => {
   const Cookers = require('../plugins/skills/cooking/Cookers.Cooking');
-  require('../plugins/skills/cooking/Common.Cooking').init({ core }); // the fire locs resolve their gamevals through it
   const { ObjectDefinition } = require('../dist/game/definition/ObjectDefinition');
   ObjectDefinition.init();
+  // Before Cooking's register the fire locs aren't resolved, and isCooker still answers by name
+  // (LightSources asks it with Cooking switched off).
+  assert.equal(Cookers.isCooker(ObjectDefinition.forId(loc('fire'))), true, 'a Fire before init');
+  assert.equal(Cookers.isCooker(ObjectDefinition.forId(loc('fireplacecookingpot'))), false, 'no fire locs before init');
+  require('../plugins/skills/cooking/Common.Cooking').init({ core }); // the fire locs resolve their gamevals through it
   const pot = loc('amenity_cooking_pot_anglers');
   const built = { getPacketSender: () => ({ getVarbit: (id) => (id === varbit('amenity_cooking_pot_anglers') ? 1 : 0), getVarp: () => 0 }) };
   const unbuilt = { getPacketSender: () => ({ getVarbit: () => 0, getVarp: () => 0 }) };

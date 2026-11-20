@@ -79,6 +79,7 @@ for (const component of [4, 5, 6, 8, 10, 12, 13, 20, 21, 22, 23, 100, 101, 102, 
 const invalidatedScrolls: number[] = [];
 const widgetManager = {
     getWidgetByUid: (id: number) => widgets.get(id),
+    isEffectivelyHidden: (id: number) => !widgets.has(id) || !!widgets.get(id).hidden || !!widgets.get(id).isHidden,
     getInterfaceParentContainerUid: () => (1 << 16) | 16,
     invalidateWidgetRender: () => {},
     invalidateWidget: () => {},

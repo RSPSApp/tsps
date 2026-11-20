@@ -119,8 +119,9 @@ function readClock(event) {
   return true;
 }
 
-// The achievement gallery's adventure log: the owner's logs (captured menu). The collection log and
-// the champions log (rsprox 1001169) are opened by their plugins; the others aren't on this server yet.
+// The achievement gallery's adventure log: the owner's logs (captured menu). The collection log, the
+// champions log and the boss log (rsprox 1001169) are opened by their plugins; the others aren't on
+// this server yet.
 const LOGS = ["Slayer log", "Boss log", "Champions log", "Collection log", "Counters"];
 const ADVENTURE_LOGS = ["Mahogany Adventure Log", "Gilded Adventure Log", "Marble adventure log"];
 
@@ -135,6 +136,7 @@ function readLog(event) {
     }
     const open = { player, owner: house.owner ?? player, handled: false };
     if (LOGS[index] === "Champions log") api.emitCustomEvent("champions-challenge:open-log", open);
+    if (LOGS[index] === "Boss log") api.emitCustomEvent("kill-log:open", Object.assign(open, { log: "boss" }));
     if (!open.handled) player.sendMessage("Nothing interesting happens.");
   });
   return true;

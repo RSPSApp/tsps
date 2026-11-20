@@ -15,6 +15,7 @@ import { SERVER_PACKET_LENGTHS, ServerPacketId } from "../../common/packets/Serv
 import type { ProjectileLaunch } from "../../common/projectiles/ProjectileLaunch";
 import type { ClanChannelDeltaEvent, ClanSettingsDeltaUpdate, KeyedClanChannel } from "../../common/social/Clans";
 import type { FriendsChatSnapshot } from "../../common/social/FriendsChat";
+import { Cs2ArrayObject } from "../../rs/cs2/Cs2ArrayObject";
 import type { ClanSettings } from "../../rs/cs2/handlers/HandlerTypes";
 import type { WorldEntityBuildArea } from "../../common/worldentity/WorldEntityTypes";
 
@@ -286,6 +287,26 @@ export type DecodedServerMessage = {
 /**
  * Decode a single binary packet
  */
+/**
+ * One clientscript argument: a type byte, then 0 a string, 2 a long, 3 an int array or 4 a
+ * string array (a u16 length, then the values), anything else an int. Arrays arrive as the
+ * VM's array objects, so they go on the object stack like the cache's array arguments.
+ */
+function readScriptArg(reader: ServerPacketReader): number | string | bigint | Cs2ArrayObject {
+    const type = reader.readByte();
+    if (type === 0) return reader.readString();
+    if (type === 2) return reader.readLong();
+    if (type === 3 || type === 4) {
+        const length = reader.readShort();
+        const array = type === 3
+            ? new Cs2ArrayObject("int", 0, length, length, true)
+            : new Cs2ArrayObject("object", "", length, length, true);
+        for (let i = 0; i < length; i++) array.setAt(i, type === 3 ? reader.readInt() : reader.readString());
+        return array;
+    }
+    return reader.readInt();
+}
+
 export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServerMessage | null {
     const reader = new ServerPacketReader(data);
 
@@ -914,15 +935,8 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 for (let i = 0; i < scriptCount; i++) {
                     const scriptId = reader.readInt();
                     const argCount = reader.readByte();
-                    const args: (number | string)[] = [];
-                    for (let j = 0; j < argCount; j++) {
-                        const argType = reader.readByte();
-                        if (argType === 0) {
-                            args.push(reader.readString());
-                        } else {
-                            args.push(reader.readInt());
-                        }
-                    }
+                    const args: any[] = [];
+                    for (let j = 0; j < argCount; j++) args.push(readScriptArg(reader));
                     scripts.push({ scriptId, args });
                 }
                 return scripts;
@@ -1096,16 +1110,7 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             const scriptId = reader.readInt();
             const argCount = reader.readByte();
             const args: any[] = [];
-            for (let i = 0; i < argCount; i++) {
-                const argType = reader.readByte();
-                if (argType === 0) {
-                    args.push(reader.readString());
-                } else if (argType === 2) {
-                    args.push(reader.readLong());
-                } else {
-                    args.push(reader.readInt());
-                }
-            }
+            for (let i = 0; i < argCount; i++) args.push(readScriptArg(reader));
             const readVars = (): Record<number, number> | undefined => {
                 if (reader.remaining < 2) return undefined;
                 const count = reader.readShort();
@@ -1453,15 +1458,8 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
         case ServerPacketId.RUN_CLIENT_SCRIPT: {
             const scriptId = reader.readShort();
             const argCount = reader.readByte();
-            const args: (number | string)[] = [];
-            for (let i = 0; i < argCount; i++) {
-                const type = reader.readByte();
-                if (type === 0) {
-                    args.push(reader.readString());
-                } else {
-                    args.push(reader.readInt());
-                }
-            }
+            const args: any[] = [];
+            for (let i = 0; i < argCount; i++) args.push(readScriptArg(reader));
             return {
                 type: "runClientScript",
                 payload: { scriptId, args },

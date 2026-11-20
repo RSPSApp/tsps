@@ -144,6 +144,49 @@ test('issue 6284: it attacks from range but walks in until the player is within 
   }
 });
 
+test('issue 6284, the real combat cycle: from the door it attacks and steps in together, stopping 4 tiles off', (t) => {
+  const { World } = require('../dist/game/World');
+  const { RegionManager } = require('../dist/game/collision/RegionManager');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const Combat = require('../plugins/bosses/alchemicalhydra/Combat.AlchemicalHydra');
+  RegionManager.init();
+  RegionManager.loadMapFiles(1364, 10265);
+  let cycle = 5000;
+  t.mock.method(World, 'getProcessCycle', () => cycle);
+  const Ctor = Combat.combatClass();
+  const provider = { pluginName: 'test', provider: { provide: (npc) => (Common.phaseForms().includes(npc.getId()) ? new Ctor(npc) : null) }, npcIds: new Set(Common.phaseForms()) };
+  PluginManager.npcCombatMethodProviders.unshift(provider);
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  player.setIndex(7911); player.setUsername('hydraqa'); player.setLocation(loc(1356, 10258));
+  player.setAttribute('bot-skip-persistence', true);
+  player.setRegistered(true); World.registerPlayerPosition(player); player.setNeedsPlacement(false);
+  const npc = new core.NPC(Common.ids.npcs.serpentine, loc(1364, 10265));
+  World.getNpcs().add(npc, true); npc.setNeedsPlacement(false);
+  npc.setAttribute('combat:close-in-distance', Common.data.combat.closeInDistance);
+  const fight = new Fight({ players: () => [player], contains: () => true }, npc, () => 0);
+  const attacks = [];
+  const perform = npc.performAnimation.bind(npc);
+  npc.performAnimation = (anim) => { attacks.push(cycle); perform(anim); };
+  try {
+    npc.getCombat().attack(player);
+    const path = [];
+    for (let i = 0; i < 8; i++) {
+      cycle += 1;
+      npc.process();
+      path.push(`${npc.getLocation().getX()},${npc.getLocation().getY()}`);
+    }
+    // rsprox 1000143 t245-248: (1363,10264) with the first attack, then a tile a tick to 4 off.
+    assert.deepEqual(path.slice(0, 5), ['1363,10264', '1362,10263', '1361,10262', '1360,10261', '1360,10261']);
+    assert.equal(attacks[0], 5001, 'it attacks on the tick it starts walking');
+  } finally {
+    PluginManager.npcCombatMethodProviders.splice(PluginManager.npcCombatMethodProviders.indexOf(provider), 1);
+    fight.stop();
+    World.getNpcs().remove(npc);
+    World.unregisterPlayerPosition(player); player.setRegistered(false);
+  }
+});
+
 test('three attacks, the special on the fourth, then every tenth; styles switch every three', () => {
   const fight = new Fight(fakeLair(null), fakeHydra(), () => 0);
   const kinds = [];
@@ -444,6 +487,27 @@ test('fire: the walk to the centre, solid, the stun, a wall to each side of the 
   fight.stop();
 });
 
+test('fire: a player in its way doesn\'t stop its walk; one under it is pushed out; the blockers clear where they went up', (t) => {
+  t.mock.method(core.Projectile.prototype, 'sendProjectile', () => {});
+  const player = fakePlayer(1366, 10267);
+  const npc = fakeHydra(1100, loc(1367, 10265));
+  const fight = new Fight(fakeLair(player), npc, () => 0);
+  fight.phase = 2;
+  fight.startFire(player);
+  assert.equal(npc.flags.has(core.NPC.WALK_THROUGH_ENTITIES_FLAG), true, 'it walks through the player');
+  for (let i = 0; i < 6 && fight.fire.stage === 'walk'; i++) { fight.tickCount += 1; fight.tickFire([player]); }
+  assert.equal(fight.fire.stage, 'breath');
+  assert.equal(npc.flags.has(core.NPC.WALK_THROUGH_ENTITIES_FLAG), false);
+  assert.equal(Common.distanceToFootprint(player.getLocation(), npc), 1, 'pushed out of its footprint');
+  const blocked = player.sent.filter((s) => s.loc === Common.ids.locs.blocking).map((s) => `${s.x},${s.y}`);
+  npc.moveTo(loc(1360, 10261)); // it walks off after the special
+  fight.unblock();
+  const cleared = player.sent.filter((s) => s.loc === Common.ids.locs.nonblocking).map((s) => `${s.x},${s.y}`);
+  assert.deepEqual(cleared, blocked);
+  tasks = [];
+  fight.stop();
+});
+
 test('fire: the next attack 12 ticks after the last breath, the blockers gone 56 ticks after they came', (t) => {
   t.mock.method(core.Projectile.prototype, 'sendProjectile', () => {});
   const player = fakePlayer(1362, 10273);
@@ -567,12 +631,31 @@ test('the kill: its fight stops, it stays 2 more ticks, then the fight duration 
   assert.deepEqual(player.messages, [], 'not until it is taken away');
   flush();
   assert.deepEqual(player.messages, [
-    'Fight duration: <col=ff0000>1:00.00</col> (new personal best)',
+    'Fight duration: <col=ff0000>1:00</col> (new personal best).',
     'Your Alchemical Hydra kill count is: <col=ff0000>1</col>.',
   ]);
+  // The next, slower kill against that best; with precise timing on, hundredths and no full stop.
+  assert.equal(Kills.fightDuration(player, 110), 'Fight duration: <col=ff0000>1:06</col>. Personal best: 1:00.');
   const kill = { npc, xp: 1100 };
   Kills.slayerXp(kill);
   assert.equal(kill.xp, 1320);
+});
+
+test('its death: removed 10 ticks after the killing hit, the death task waiting out the enraged form\'s ticks', () => {
+  const { NpcDefinition } = require('../dist/game/definition/NpcDefinition');
+  const npc = fakeHydra(0);
+  npc.getCurrentDefinition = () => NpcDefinition.forId(npc.getId());
+  const fight = new Fight(fakeLair(null), npc);
+  fight.phase = 3;
+  npc.setNpcTransformationId(Common.ids.npcs.enraged);
+  tasks = [];
+  Kills.beforeDeath({ npc, preventDeath: false });
+  flush(); // the dead form now, whose own death ticks are 2
+  const event = { npc, killer: null };
+  Kills.hydraDeath(event);
+  // The death task: 1 tick + the enraged form's 7; the remains make it 10 (rsprox 1000471 t10027-10037).
+  assert.equal(1 + NpcDefinition.forId(Common.ids.npcs.enraged).getDeathTicks() + event.remains.ticks, 10);
+  tasks = [];
 });
 
 test('its death: the enraged death sequence now, the dead form 3 ticks later', () => {

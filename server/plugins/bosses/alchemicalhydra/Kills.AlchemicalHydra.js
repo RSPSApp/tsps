@@ -21,12 +21,13 @@ function countedKills(player) {
 /** "Fight duration: ..." from its first attack to its removal, against the player's best. */
 function fightDuration(player, ticks) {
   const best = Number(player.getAttribute(Common.BEST_TICKS_ATTRIBUTE)) || 0;
-  const time = Common.formatTicks(ticks);
+  const precise = Common.preciseTiming(player);
+  const time = Common.formatTicks(ticks, precise);
   if (best <= 0 || ticks < best) {
     player.setAttribute(Common.BEST_TICKS_ATTRIBUTE, ticks);
-    return `Fight duration: <col=ff0000>${time}</col> (new personal best)`;
+    return Common.message(precise ? "durationBestPrecise" : "durationBest", { time });
   }
-  return `Fight duration: <col=ff0000>${time}</col>. Personal best: ${Common.formatTicks(best)}`;
+  return Common.message(precise ? "durationPrecise" : "duration", { time, best: Common.formatTicks(best, precise) });
 }
 
 function hydraDeath(event) {
@@ -39,7 +40,8 @@ function hydraDeath(event) {
   // Its last form stays on for the rest of its 10 death ticks (rsprox). The engine's death task
   // starts the tick after the killing hit and runs its form's death ticks, so the rest is left.
   const { deathStartTicks, deathTicks } = Common.data.kill;
-  const engineTicks = 1 + Math.max(1, Number(npc.getCurrentDefinition?.()?.getDeathTicks?.()) || deathTicks);
+  // Read while it was still the enraged form: it is the dead form by now (beforeDeath).
+  const engineTicks = 1 + Math.max(1, Number(npc.__hydraDeathTicks) || deathTicks);
   const remains = Math.max(1, deathStartTicks + deathTicks - engineTicks);
   event.remains = { ticks: remains };
   const player = killer?.isPlayer?.() ? killer : null;
@@ -75,6 +77,8 @@ function beforeDeath(event) {
     return;
   }
   const { Animation } = Common.core;
+  // The engine's death task waits out this form's death ticks; the remains add the rest (hydraDeath).
+  npc.__hydraDeathTicks = Number(npc.getCurrentDefinition?.()?.getDeathTicks?.()) || null;
   npc.performAnimation(new Animation(Common.ids.seqs.deathStart));
   const players = fight?.lair?.players?.() ?? [];
   Common.areaSound(players, "death", npc.getLocation());

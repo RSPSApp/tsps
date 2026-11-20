@@ -96,7 +96,9 @@ the rsprox index. Ticks below are counts of events across them.
 
 ## Fire (flame)
 
-- The Hydra walks to its spawn tile (1364, 10265), diagonal steps first. The tick it arrives,
+- The Hydra walks to its spawn tile (1364, 10265), diagonal steps first. A player in the way doesn't
+  stop it; one left under it when it arrives is pushed out to a random side (the Wiki: "forced out
+  in a random direction"; the side picked is ours). The tick it arrives,
   `invisible_type8_blocking` (26209) covers its footprint, and a tick later "The Alchemical Hydra
   temporarily stuns you." shows (104 of 104). A stunned player first moved 7 or more ticks later.
 - `hydra_stage_3_attack_special` plays three times, 3 ticks apart (blockers +3, +6, +9). The
@@ -133,6 +135,18 @@ the rsprox index. Ticks below are counts of events across them.
 
 - Through the Alchemical door the player steps one tile, on the door's own row, with sound 4129 and
   then 4102 (delay 60, range 3). While the Hydra lives the door says "The door is jammed.".
+
+## Recorded values kept over the Wiki
+
+These three follow the recordings although the Wiki's Strategies page says otherwise. That was
+the user's decision for this alignment (PR #6346); a maintainer should confirm it.
+
+- The fire walls are **4 wide and 8 long**, as every recorded breath is (83 runs). The Wiki says
+  "a 5x5 layer of fire".
+- The next attack comes **12 ticks** after the tracking fire, as in every run the phase didn't cut
+  short. The Wiki says "roughly seven ticks".
+- A lightning current lasts **12 ticks**, as in 231 recorded currents. The Wiki says "the
+  lightning doesn't despawn".
 
 ## Not reproduced
 

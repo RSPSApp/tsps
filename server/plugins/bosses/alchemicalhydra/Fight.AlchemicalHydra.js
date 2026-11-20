@@ -90,6 +90,8 @@ function logHitpointsChange({ player, skill }) {
 }
 
 const PHASES = () => Common.data.phases;
+const BLOCKS_PLAYERS_FLAG = () => Common.core.NPC?.BLOCKS_PLAYERS_FLAG ?? "movement:blocks-players";
+const WALK_THROUGH_FLAG = () => Common.core.NPC?.WALK_THROUGH_ENTITIES_FLAG ?? "movement:walk-through-entities";
 const opposite = (style) => (style === "ranged" ? "magic" : "ranged");
 
 class Fight {
@@ -426,6 +428,8 @@ class Fight {
     this.life.fireBreaths += 1;
     this.fire = { stage: "walk", target, since: this.tickCount };
     this.npc.setScriptedMovement?.(true);
+    // A player in its way doesn't stop it; one left under it is pushed out (Wiki).
+    this.npc.setFlag?.(WALK_THROUGH_FLAG());
   }
 
   /** The special from the moment it stands in the centre (also run directly by the tests). */
@@ -442,22 +446,45 @@ class Fight {
   block() {
     const { fire } = Common.data;
     this.blockedUntil = this.tickCount + fire.fireTicks;
-    this.npc.setFlag?.(Common.core.NPC?.BLOCKS_PLAYERS_FLAG ?? "movement:blocks-players");
+    this.npc.removeFlag?.(WALK_THROUGH_FLAG());
+    this.npc.setFlag?.(BLOCKS_PLAYERS_FLAG());
+    // The blockers stay on the tiles they went up on (rsprox: cleared there, wherever it is by then).
+    this.blockedAt = this.npc.getLocation();
     this.showBlockers(Common.ids.locs.blocking);
+    this.pushOut();
   }
 
   unblock() {
     this.blockedUntil = 0;
     this.flames = [];
-    this.npc.removeFlag?.(Common.core.NPC?.BLOCKS_PLAYERS_FLAG ?? "movement:blocks-players");
+    this.npc.removeFlag?.(BLOCKS_PLAYERS_FLAG());
     this.showBlockers(Common.ids.locs.nonblocking);
+    this.blockedAt = null;
   }
 
   showBlockers(id) {
     const players = this.lair.players();
-    const base = this.npc.getLocation();
+    const base = this.blockedAt ?? this.npc.getLocation();
     const size = Math.max(1, this.npc.getSize?.() ?? 6);
     for (let dx = 0; dx < size; dx++) for (let dy = 0; dy < size; dy++) Common.showLoc(players, id, base.transform(dx, dy));
+  }
+
+  /** The Wiki: "If the player is underneath, they are forced out in a random direction". */
+  pushOut() {
+    const base = this.npc.getLocation();
+    const size = Math.max(1, this.npc.getSize?.() ?? 6);
+    for (const player of this.lair.players()) {
+      const at = player.getLocation();
+      if (Common.distanceToFootprint(at, this.npc) !== 0) continue;
+      // Ours: straight out of the side picked, the nearest tile past its edge.
+      const sides = [
+        [at.getX(), base.getY() + size], [at.getX(), base.getY() - 1],
+        [base.getX() + size, at.getY()], [base.getX() - 1, at.getY()],
+      ].map(([x, y]) => new Common.core.Location(x, y, at.getZ())).filter((tile) => this.lair.contains(tile));
+      if (sides.length === 0) continue;
+      player.getMovementQueue?.().reset?.();
+      player.moveTo(sides[Math.floor(this.random() * sides.length)]);
+    }
   }
 
   /** A phase change ends the special at once; fires already breathed stay (Wiki). */
@@ -465,6 +492,7 @@ class Fight {
     if (!this.fire) return;
     this.fire = null;
     this.trackers = [];
+    this.npc.removeFlag?.(WALK_THROUGH_FLAG());
     this.npc.setScriptedMovement?.(false);
   }
 
@@ -590,7 +618,9 @@ class Fight {
     if (special.stage === "walk") {
       const centre = Common.toLocation(Common.data.room.centre);
       const at = this.npc.getLocation();
-      if (at.getX() !== centre.getX() || at.getY() !== centre.getY()) {
+      const there = at.getX() === centre.getX() && at.getY() === centre.getY();
+      // Ours: a walk that can't finish (a wall it can't round) breathes where it stands.
+      if (!there && this.tickCount - special.since < fire.walkTicksMax) {
         this.npc.getMovementQueue?.().walkStep?.(Math.sign(centre.getX() - at.getX()), Math.sign(centre.getY() - at.getY()));
         return;
       }

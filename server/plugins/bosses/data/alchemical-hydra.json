@@ -161,7 +161,7 @@
     "lifetime": 12,
     "bindTicks": 3,
     "_source": "The Wiki: four currents close in on the player and bind them for up to 22, dissipating on a phase change. rsprox: the caster flies 30 to 40 + 5 a tile onto the room's centre; 3 ticks later the currents leave it, one a tick (flights 15+30n to 30+30n), each showing on its tile and stepping a tile toward the player every tick for 12 ticks; a player paralysed by one first moves 3 ticks after it (24 of 24 clicks on the hit tick).",
-    "_recorded": "Recorded current hits are 8-17; the Wiki's 22 is used."
+    "_recorded": "Recorded current hits are 8-17; the Wiki's 22 is used. Kept from the recordings over the Wiki (user decision, PR #6346): a current lasts 12 ticks (Wiki: 'the lightning doesn't despawn')."
   },
   "fire": {
     "carpetWidth": 4,
@@ -176,9 +176,11 @@
     "burnDamage": 5,
     "burnEvery": 5,
     "fireTicks": 56,
+    "walkTicksMax": 15,
+    "_walkTicksMax": "Ours: a cap on the walk to the centre, should a wall stop it; no recording has one.",
     "nextAttackAfter": 12,
     "_source": "The Wiki: it walks to the centre, stuns the player, breathes fire to the player's sides, then a tracking fire hitting up to 25 and burning 5 five times; solid while the fires last. rsprox: the walk ends on its spawn tile, blockers cover it that tick and the stun follows a tick later (104 of 104); the three breaths come 3, 6 and 9 ticks after the blockers, each turned 45 degrees from the player's diagonal (clockwise first, then counter-clockwise, then the diagonal itself, 83 of 83 runs from the north-west and north-east); each wall is 4 wide and 8 long, 45 + 5 cycles a tile; the tracking fire follows for up to 11 ticks; the next attack comes 12 ticks after the third breath; the fires' blockers stand for 56 ticks (30 of 70 runs, the rest cut short); a burn ticks every 5 ticks and clears 25 after the last scorch; a stunned player first moves 7 ticks later.",
-    "_recorded": "Recorded tracking-fire hits are 9-17; the Wiki's 25 is used."
+    "_recorded": "Recorded tracking-fire hits are 9-17; the Wiki's 25 is used. Kept from the recordings over the Wiki (user decision, PR #6346): walls 4x8 (Wiki '5x5 layer'), the next attack 12 ticks after the tracking fire (Wiki 'roughly seven ticks')."
   },
   "kill": {
     "monster": "Alchemical Hydra",
@@ -194,6 +196,11 @@
     "noTask": "You need a hydra Slayer task to fight the Alchemical Hydra.",
     "doorLocked": "The door is jammed.",
     "killCount": "Your Alchemical Hydra kill count is: <col=ff0000>{kills}</col>.",
+    "duration": "Fight duration: <col=ff0000>{time}</col>. Personal best: {best}.",
+    "durationBest": "Fight duration: <col=ff0000>{time}</col> (new personal best).",
+    "durationPrecise": "Fight duration: <col=ff0000>{time}</col>. Personal best: {best}",
+    "durationBestPrecise": "Fight duration: <col=ff0000>{time}</col> (new personal best)",
+    "_duration": "rsprox: with precise timing off, m:ss and a full stop (1000471 t10037 '1:45</col> (new personal best).', t10240 '1:54</col>. Personal best: 1:45.'); on, m:ss.cc and none (rsprox.net captures of other bosses' duration lines, e.g. '0:29.40</col> (new personal best)').",
     "weakened": "The chemicals neutralise the Alchemical Hydra's defences!",
     "empowered": "The chemicals are absorbed by the Alchemical Hydra, empowering it further!",
     "absorbed": "The Alchemical Hydra's defences partially absorb your attack!",

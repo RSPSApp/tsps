@@ -146,17 +146,24 @@ function onTask(player, npc) {
   return request.onTask === true;
 }
 
-/** m:ss.cc, as the boss fight durations are shown. */
-function formatTicks(ticks) {
+/** Whether the player has precise timing on (the "option_precise_timing" varbit). */
+function preciseTiming(player) {
+  const id = core?.CacheDefinitions?.getVarbitId?.("option_precise_timing");
+  return Number.isInteger(id) && player?.getPacketSender?.()?.getVarbit?.(id) === 1;
+}
+
+/** A fight duration as shown: m:ss (whole seconds), or m:ss.cc with precise timing on. */
+function formatTicks(ticks, precise = true) {
   const centis = Math.round(ticks * 60);
   const minutes = Math.floor(centis / 6000);
   const seconds = Math.floor((centis % 6000) / 100);
-  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis % 100).padStart(2, "0")}`;
+  const time = `${minutes}:${String(seconds).padStart(2, "0")}`;
+  return precise ? `${time}.${String(centis % 100).padStart(2, "0")}` : time;
 }
 
 module.exports = {
   init, later, toLocation, randomInt, worldTick, phaseForms, isHydra, distanceToFootprint, tileGraphic, areaSound,
-  showLoc, animateLoc, hurtPlayer, message, spam, onTask, formatTicks,
+  showLoc, animateLoc, hurtPlayer, message, spam, onTask, formatTicks, preciseTiming,
   KILLS_ATTRIBUTE, BEST_TICKS_ATTRIBUTE,
   get api() { return api; },
   get core() { return core; },

@@ -5,17 +5,18 @@
  * (`moveTicks` on their tools); spots whose tool is `stationary`, or that move themselves (`spot`:
  * the minnow platform), never move here.
  *
- * Where a spot can go comes from rsprox captures (data/definitions/fishing-spot-sites.json,
+ * Where a spot can go comes from rsprox captures (plugins/skills/data/fishing-spot-sites.json,
  * rsprox_fishing_spots.py in osrs-captures): each site is the set of tiles live spots were seen on.
  * A spot jumps (a teleport, never a walk) to a random tile of its site that is neither its own nor
  * held by another fishing spot: 268 of 268 Lumbridge Swamp jumps did so (local 1001517, 1001439,
- * 1001502 and others), with sound 2601 (range 5) at the tile it left. A spot on no captured site
+ * 1001502 and others), with sound 2601 (range 5) at the tile it left (live sends that sound twice on
+ * the tick; once is played here). A spot on no captured site
  * stays where it is, and Fishing.plugin keeps its random session stop for it.
  *
  * A session on the spot ends when it moves (Fishing.plugin's spot-tile check), with no message or
  * animation reset, as captured.
  */
-const SITES = require("../../../data/definitions/fishing-spot-sites.json").sites;
+const SITES = require("../data/fishing-spot-sites.json").sites;
 
 /** Wiki (Fishing spots): most spots move after 250 to 530 ticks. */
 const DEFAULT_MOVE_TICKS = Object.freeze([250, 530]);
@@ -120,7 +121,8 @@ function moveSpot(npc, random = Math.random) {
   api.core.Sounds.playAreaSound({
     soundId: MOVE_SOUND, x: from.getX(), y: from.getY(), level: from.getZ(), radius: MOVE_SOUND_RANGE, source: npc,
   });
-  npc.moveTo(new api.core.Location(x, y, from.getZ()));
+  // A telejump snaps it there in view, as captured; a plain move drops it for a tick.
+  npc.telejump(new api.core.Location(x, y, from.getZ()));
   api.emitCustomEvent("fishing:spot-moved", { npc, from, to: npc.getLocation() });
   return true;
 }

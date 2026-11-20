@@ -41,7 +41,8 @@ async function world() {
       getLocation: () => at,
       getPrivateArea: () => null,
       isRegistered: () => true,
-      moveTo: (to) => { at = to; },
+      moveTo: () => { throw new Error("a spot moves by telejump, not a plain move"); },
+      telejump: (to) => { at = to; },
       ...extra,
     };
     npcs.push(npc);

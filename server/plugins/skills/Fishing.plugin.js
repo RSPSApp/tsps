@@ -1001,7 +1001,8 @@ class FishingTask extends Task {
       }
       if (npc.getLocation().getX() !== session.spotX || npc.getLocation().getY() !== session.spotY) {
         // rsprox captures: the player's animation isn't reset when their spot moves (Relocation.Fishing).
-        stopFishing(this.activeSessions, player, false);
+        // The minnow platform's own rotation isn't captured, so it keeps the reset.
+        stopFishing(this.activeSessions, player, Boolean(session.tool.spot));
         // A spot module that moves its own spots (the minnow platform) is never followed: the Wiki's
         // Endless Harvest notes, "You will not chase minnows, and will stop harvesting when they move."
         if (!session.tool.spot && continuesFishing(player) && player.getLocation().getZ() === npc.getLocation().getZ() &&

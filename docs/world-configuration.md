@@ -881,6 +881,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `DormantNpcs` | DormantNpcs | npcs | yes | Makes disguised crabs and wyrms lie dormant as scenery, rising and sinking when a player steps near or attacks them. (members only) |
 | `DrJekyll` | DrJekyll | npcs | yes | Adds Dr Jekyll, the random-event NPC, with Talk-to and Dismiss options. (members only) |
 | `Dragons` | Dragons | npcs | yes | Gives standard, brutal and metallic dragons their melee and dragonfire attacks, with long range for brutal and metallic ones. |
+| `Drakes` | Drakes | npcs | yes | Drake combat: a ranged shot from range, a ranged shot or a 'ranged melee' swing beside the player (diagonals too), both blocked by Protect from Missiles, with the captured animations, projectile and sounds. (members only) |
 | `ElderChaosDruid` | ElderChaosDruid | npcs | yes | Adds the Wilderness Elder Chaos druid, a magic attacker casting Wind Wave and Tele Block with captured animations and projectiles, that teleports fleeing players back beside it. (members only) |
 | `EliteVoidKnight` | EliteVoidKnight | npcs | yes | Lets the Elite Void Knight upgrade a Void knight top or robe to the elite version for 200 Commendation points, after the Hard Western diary. (members only) |
 | `ElunedEnchant` | ElunedEnchant | npcs | yes | Eluned's Enchant: recharges carried crystal teleport seeds into teleport crystals (3 charges, 5 after the hard Western Provinces Diary) for 750 coins falling to 150. (members only) |

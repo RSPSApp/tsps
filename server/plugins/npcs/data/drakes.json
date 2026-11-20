@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "about": "Drakes in combat (docs/drakes.md). Wiki (Drake): attack styles Ranged and 'Ranged melee', both max hit 15 and both blocked by Protect from Missiles; attack speed 4; they melee from a diagonal too. The rest is from the rsprox capture of recording 3014 (rev 231, ticks 217-229): the animations, the projectile (start 44, end 57 + 3 a tile from the drake's head, heights 80/90 and angle 10, progress 128 as sent), the sounds and the hit delays (ranged 2 ticks at 2, 6 and 7 tiles; melee the same tick).",
+    "ids": "drake 8612 (8613 is its death form). The Guardian Drake superior (10400) has its own attacks and is not one of these."
+  },
+  "ids": [8612],
+  "range": 6,
+  "meleeChance": 0.5,
+  "melee": {
+    "anim": 8275,
+    "hitDelay": 0,
+    "sounds": [[4130, 0]]
+  },
+  "ranged": {
+    "anim": 8276,
+    "hitDelay": 2,
+    "projectile": {"id": 1636, "start": 44, "base": 57, "perTile": 3, "angle": 10, "progress": 128, "startHeight": 80, "endHeight": 90},
+    "sounds": [[4136, 5], [1965, 20]]
+  }
+}

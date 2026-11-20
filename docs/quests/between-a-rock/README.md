@@ -83,7 +83,7 @@ cannon, the landing and the first thoughts), `Schematics.BetweenARock.js` (the p
 - **The cannon:** fade, the player in the cannon at 2057,4978 plane 3 (+3) with
   `dwarfrock_fake_dondakan` (+7), `dwarfrock_cannon_incannon` and the fade back (+8); held lines at
   +14, +19, +23, +32, +37, overhead and (Dondakan's) as game messages; the zoomed heads
-  (`dwarf_rock_cannon`, 112) at +44, +51, +60; `dwarf_rock_fade_out` and sound 1411 at +66; fade at
+  (`dwarf_rock_cannon`, 112, just after script 2524 `toplevel_mainmodal_open` (0, 0)) at +44, +51, +60; `dwarf_rock_fade_out` and sound 1411 at +66; fade at
   +69; the landing at +73 (3209-3282).
 - **Landing:** on 2426,4965 (flying to 2420,4965) or 2323,4939 (to 2329,4939); the flight 3 ticks
   after arriving (`dwarfrock_cannon_flying`, sound 1409, camera above at rate 232), the screen back the

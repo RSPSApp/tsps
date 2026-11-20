@@ -4,6 +4,7 @@ import { Player } from "../../../game/entity/impl/player/Player";
 import { Location } from "../../../game/model/Location";
 import { PluginManager } from "../../../plugins/PluginManager";
 import { BoatManager } from "../../../game/content/sailing/BoatManager";
+import { BoatDeckArea } from "../../../game/content/sailing/BoatDeckArea";
 import type { Boat } from "../../../game/content/sailing/Boat";
 import type { GameObject } from "../../../game/entity/impl/object/GameObject";
 import { Task } from "../../../game/task/Task";
@@ -135,8 +136,9 @@ export class ObjectActionPacketListener {
     }
 
     // From a boat deck there is no path across the water: main-world locs (a dock's
-    // gangplank) are used from the deck when close to the tile under the player.
-    if (player.getPrivateArea()?.countsAsMainWorld() && object.getPrivateArea() == null) {
+    // gangplank) are used from the deck when close to the tile under the player. Other areas
+    // that count as the main world (a player's own walk along a quest bridge) path as usual.
+    if (player.getArea() instanceof BoatDeckArea && object.getPrivateArea() == null) {
       const source = player.getLocation();
       const reach = PluginManager.deckReach.get(object.getId());
       // Live answers a land loc clicked from a boat (a tree, a sign) with this (rsprox 901, 347).

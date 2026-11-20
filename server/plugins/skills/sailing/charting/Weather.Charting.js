@@ -12,6 +12,8 @@
 //   slot; +1 the troll animation and the "You find a spot where the winds have dropped..." box.
 //   Hand-in: the charting, "You hand over the troll's weather station and she promptly consumes
 //   the log book full of data." and her "Numbers so tasty. Weather here must be really good!".
+//   Inspect (rsprox 939, ticks 578-580): the empty station's object box, its line over two pages
+//   (the second just "blowing."), each page also in the chat.
 const common = require("./Common.Charting");
 
 const NPC_TROLL = 15154;
@@ -44,6 +46,7 @@ const FOUND = "You find a spot where the winds have dropped. You fill the statio
 const HANDED_BACK = "You hand over the troll's weather station and she promptly consumes the log book full of data.";
 const TASTY = "Numbers so tasty. Weather here must be really good!";
 const NO_ROOM = "You don't have enough inventory space.";
+const INSPECT = "This station can be used to record weather patterns. To find where to record the data, first use the wind measurements to see which direction the wind is moving, then use those measurements to work out where it isn't blowing.";
 
 /** The weather task whose troll stands at (x, y). */
 function taskAt(x, y) {
@@ -63,6 +66,12 @@ function chain(player, steps) {
     ? new ItemStatementDialogue(i, step.item, step.text)
     : new NpcDialogue(i, NPC_TROLL, step.text, TROLL_NAME)));
   player.getDialogueManager().startDialogues(builder);
+}
+
+/** Inspect: the line in object boxes, four lines a page, broken where the client breaks them. */
+function inspect({ player }) {
+  const { ChatTextLayout } = common.core();
+  chain(player, ChatTextLayout.pages(INSPECT).map((page) => ({ item: ITEM_EMPTY, text: ChatTextLayout.wrap(page).join("<br>") })));
 }
 
 function holds(player, id) {
@@ -171,7 +180,7 @@ function attach(api) {
   api.persistAttribute(STATION_ATTRIBUTE, null);
   api.onNpcRoute(widenTrollRange);
   api.onNpcInteraction(TROLL_NAME, { "Collect-data": collectData });
-  api.onItemAction("Portable weather station", { "Take-reading": takeReading });
+  api.onItemAction("Portable weather station", { "Take-reading": takeReading, Inspect: inspect });
 }
 
 module.exports = attach;
@@ -179,4 +188,6 @@ module.exports.windAt = windAt;
 module.exports.taskAt = taskAt;
 module.exports.collectData = collectData;
 module.exports.takeReading = takeReading;
+module.exports.inspect = inspect;
+module.exports.INSPECT = INSPECT;
 module.exports.STATION_ATTRIBUTE = STATION_ATTRIBUTE;

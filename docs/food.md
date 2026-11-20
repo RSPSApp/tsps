@@ -114,6 +114,7 @@ separate audits; this correction does not establish complete food/potion parity.
 | `fullHealthMessage` | The line sent in place of the heal line when the bite heals nothing (cooked mystery meat). |
 | `messageType` | `"game"`: the eat line and the lines after it are game messages, not spam (the Araxyte venom sac; the Bottle of wine, rec 20261111T225402-5ab63b4 tick 26). |
 | `say` | A line the player says overhead as they eat it, on the same tick as the (spam) eat line (the cup of tea). |
+| `countsEaten` | `false`: eating it leaves the `tracking_food_eaten` varp alone (the Halloween 2020 candies). |
 | `refuse` | The item can't be eaten; this is the message. |
 
 ## Ours, not live
@@ -166,6 +167,12 @@ leave their vessel. Checked 7 November 2026 against the Wiki pages
   sends "You drink the tea." as a spam message and the player says "Aaah, nothing like a nice
   cuppa tea!" overhead, on the same tick (rsprox 237/01104.txt tick 1286, 237/04101.txt:114871;
   the Wiki quotes the exclamation).
+- The Halloween 2020 candies (black, blue, brown, green, orange, pink, purple, red and white candy)
+  heal nothing (Wiki: Blue candy, Purple candy). Eating one sends "You eat the candy. Yum!" as a spam
+  message, the player says "Ooh piece of candy." overhead (the Wiki quotes it), with human_eat and
+  sound 2393 on the same tick, and the `tracking_food_eaten` varp doesn't change (rsprox 229/00245,
+  blue, pink and purple at ticks 510, 603 and 607; 229/02530). Ours: the other six colours follow
+  the three recorded ones, and the eat delay is the default 3 ticks (no source gives one).
 - Fruit blast and pineapple punch heal 9, leave a cocktail glass and print "You drink the
   cocktail. It tastes great.".
 

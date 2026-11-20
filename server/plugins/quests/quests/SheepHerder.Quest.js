@@ -582,6 +582,7 @@ module.exports = function registerSheepHerderQuest(api) {
       penSheep(player, index, event.npc);
       return;
     }
+    event.npc.getMovementQueue?.()?.reset?.();
     holdProd(player, event.npc);
     event.npc.getMovementQueue?.()?.walkStep?.(step.dx, step.dy);
   }

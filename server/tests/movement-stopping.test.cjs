@@ -239,3 +239,76 @@ test('a dig content refuses before it starts plays no sequence or sound and clai
   assert.deepEqual(animations, []);
   assert.deepEqual(sounds, []);
 });
+
+const { RsmodRouteFinding } = require('../dist/game/model/movement/path/RsmodRouteFinding');
+
+test('partial retreat routing is opt-in and selects bounded reachable progress outside the grid', () => {
+  // A collision lookup, not a forced route result: the real search expands every step.
+  const finder = new RsmodRouteFinding(() => 0);
+  const args = { level: 0, srcX: 0, srcY: 0, srcSize: 1, destX: 200, destY: 0, privateArea: null };
+  assert.equal(finder.findRoute(args).success, false, 'ordinary distant walk remains rejected');
+  const partial = finder.findRoute({ ...args, allowPartialRoute: true });
+  assert.equal(partial.success, true);
+  assert.equal(partial.alternative, true);
+  assert.ok(partial.endX > 0 && partial.endX <= 63);
+  assert.equal(partial.endY, 0);
+  assert.ok(finder.distanceAt(partial.endX + 64, partial.endY + 64) < 100, 'existing path-cost bound');
+  assert.equal(finder.findRoute({ ...args, allowPartialRoute: true, moveNear: false }).success, false,
+    'exact-route requests retain refusal');
+});
+
+test('partial retreat preserves in-grid exact, blocked and near-destination routing', () => {
+  const finder = new RsmodRouteFinding((_x, y) => y === 5 ? 0x200000 : 0);
+  const base = { level: 0, srcX: 0, srcY: 0, srcSize: 1, destX: 2, destY: 2, privateArea: null };
+  for (const args of [base, { ...base, destY: 8 }, { ...base, destY: 8, moveNear: false }]) {
+    assert.deepEqual(finder.findRoute({ ...args, allowPartialRoute: true }), finder.findRoute(args));
+  }
+});
+
+test('partial retreat respects directional local-grid boundaries and existing near-point results', () => {
+  const finder = new RsmodRouteFinding(() => 0);
+  const base = { level:0, srcX:0, srcY:0, srcSize:1, privateArea:null };
+  for (const [destX,destY] of [[63,0],[-64,0],[0,63],[0,-64]]) {
+    const args = {...base,destX,destY,moveNear:false};
+    assert.equal(finder.findRoute(args).success,true, 'inside local grid');
+    assert.deepEqual(finder.findRoute({...args,allowPartialRoute:true}),finder.findRoute(args));
+  }
+  for (const [destX,destY] of [[64,0],[-65,0],[0,64],[0,-65]]) {
+    const args = {...base,destX,destY};
+    assert.equal(finder.findRoute({...args,moveNear:false}).success,false, 'outside exact local grid');
+    assert.deepEqual(finder.findRoute({...args,allowPartialRoute:true}),finder.findRoute(args),
+      'successful existing near-destination route is retained');
+  }
+});
+
+test('partial retreat cannot cross clipping or manufacture progress from an enclosure', () => {
+  const args = { level: 0, srcX: 0, srcY: 0, srcSize: 1, destX: 200, destY: 0,
+    privateArea: null, allowPartialRoute: true };
+  const wall = new RsmodRouteFinding((x) => x === 1 ? 0x200000 : 0);
+  assert.equal(wall.findRoute(args).success, false, 'no reachable point is closer across the wall');
+  const enclosed = new RsmodRouteFinding((x, y) => x === 0 && y === 0 ? 0 : 0x200000);
+  assert.equal(enclosed.findRoute(args).success, false, 'the source itself is not progress');
+});
+
+test('a real non-sheep NPC consumes distant retreat segments and recovers its unchanged home', t => {
+  const home = new Location(2609, 3344, 0);
+  RegionManager.loadMapFiles(2618, 3268);
+  RegionManager.loadMapFiles(home.getX(), home.getY());
+  // Supplied displacement tests the shared coordinator consumer, not a native cow-herding claim.
+  const npc = NPC.create(PluginManager.getCoreApi().NpcIdentifiers.COW, home.clone());
+  World.getNpcs().add(npc);
+  t.after(() => World.getNpcs().remove(npc));
+  npc.getMovementCoordinator().setRadius(3);
+  npc.setLocation(new Location(2618, 3268, 0));
+  t.mock.method(Math, 'random', () => 0.99);
+  let largestQueue = 0;
+  for (let i = 0; i < 240; i++) {
+    World.processCycle = (World.getProcessCycle() + 1) & 0x7fffffff;
+    npc.process();
+    largestQueue = Math.max(largestQueue, npc.getMovementQueue().size());
+  }
+  assert.ok(largestQueue > 0, 'real path checkpoints were consumed');
+  assert.ok(npc.getLocation().getDistance(home) <= 3);
+  assert.ok(npc.getSpawnPosition().equals(home));
+  assert.equal(npc.getMovementCoordinator().getRadius(), 3);
+});

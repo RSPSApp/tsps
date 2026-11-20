@@ -83,7 +83,7 @@ export class NPCMovementCoordinator {
             return;
         }
         this.nextRetreatRepathCycle = cycle + NPCMovementCoordinator.RETREAT_REPATH_COOLDOWN_TICKS;
-        PathFinder.calculateWalkRoute(this.npc, spawn.getX(), spawn.getY());
+        PathFinder.calculateWalkRoute(this.npc, spawn.getX(), spawn.getY(), true);
     }
 
     public updateCoordinator() {

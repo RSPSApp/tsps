@@ -96,6 +96,9 @@ test('Dave uses actual talk/recipe-known/taste-approved flags and consumed accep
 test('Skrach covers all persisted boat bits and inventory-driven hunting/cooking',()=>{
  for(const[bits,id]of[[0,'skrach-rantz'],[1,'skrach-tree'],[3,'skrach-hollow'],[7,'skrach-chompy'],[23,'skrach-return'],[31,'skrach-bellows']])assert.equal(step({attrs:{'skrach-state':bits}},'SKRACH_UGLOGWEE').id,id);
  for(const[item,id]of[['SKEWERED_CHOMPY','skrach-cook-chompy'],['BALLOON_TOAD','skrach-drop'],['BLOATED_TOAD','skrach-balloon'],['RAW_JUBBLY','skrach-cook-jubbly']])assert.equal(step({attrs:{'skrach-state':31},inventory:{[item]:1}},'SKRACH_UGLOGWEE').id,id);
+ // #6281: the jubbly cooks on the map's one spit-roast, the multiloc 6895 at 2630,2990.
+ const roast=step({attrs:{'skrach-state':31},inventory:{RAW_JUBBLY:1}},'SKRACH_UGLOGWEE').targets.find(t=>t.kind==='object');
+ assert.deepEqual([roast.id,roast.x,roast.y],[6895,2630,2990]);
 });
 test('Amik reads its actual Aris unlock and every server brulee recipe intermediate',()=>{
  assert.match(step({},'SIR_AMIK_VARZE').id,/amik-aris/);

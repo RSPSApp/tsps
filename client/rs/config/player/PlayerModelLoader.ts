@@ -53,18 +53,27 @@ const equipmentRenderLayer = (slot: EquipmentSlot): number => {
 
 // A cape keeps its own face order instead of one flat layer, which let its back show through the
 // emblem. Faces at the legs' priorities (0-2, the lining) share the legs' layer so the legs stay
-// in front of them; the lowest priority above that (a skillcape's back, 5) goes one layer under
-// the rest (its outer faces and emblem, 6-7).
+// in front of them. Higher-priority cape faces use up to three distinct layers so the outer cloth
+// and emblem retain their cache ordering instead of z-fighting when their view angle changes.
 const CAPE_COMPOSITION_SLOT = 1;
 const LEG_KIT_TOP_PRIORITY = 2;
 
 const capeLayerByPriority = (priorities: ArrayLike<number>): Map<number, number> => {
     const distinct = [...new Set(Array.from(priorities))];
-    const upper = distinct.filter((priority) => priority > LEG_KIT_TOP_PRIORITY);
-    const back = upper.length > 1 ? Math.min(...upper) : undefined;
+    const upper = distinct
+        .filter((priority) => priority > LEG_KIT_TOP_PRIORITY)
+        .sort((a, b) => a - b);
+    const firstUpperLayer = upper.length >= 3 ? 5 : upper.length === 2 ? 6 : 7;
+    const upperLayers = new Map(upper.map((priority, index) => [
+        priority,
+        upper.length === 1
+            ? 7
+            : Math.round(firstUpperLayer + (index * (7 - firstUpperLayer)) / (upper.length - 1)),
+    ]));
+
     return new Map(distinct.map((priority) => [
         priority,
-        priority <= LEG_KIT_TOP_PRIORITY ? LEGS_RENDER_LAYER : priority === back ? 6 : 7,
+        priority <= LEG_KIT_TOP_PRIORITY ? LEGS_RENDER_LAYER : upperLayers.get(priority)!,
     ]));
 };
 

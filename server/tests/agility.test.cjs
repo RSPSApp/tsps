@@ -407,6 +407,30 @@ test("Karuulm Slayer Dungeon stepover rocks (34544) are shortcuts that cross two
   assert.equal(east.end, "You climb over the rocks.");
 });
 
+test("as captured (rsprox local 1000143, 1000473, 1521): the Alchemical Hydra lair rocks (34548) climb two tiles on the player's column", () => {
+  const rocks = SHORTCUTS.filter((shortcut) => shortcut.object === 34548);
+  assert.equal(rocks.length, 1);
+  const [entry] = rocks;
+  const obj = { id: 34548, x: 1351, y: 10251, z: 0, sizeX: 2, sizeY: 1 };
+  const at = (x, y) => ({ obj, pos: { x, y, z: 0 } });
+  const tile = (value) => [value[0], value[1], value[2]];
+  // Clicked from the south-west, the player walks to the west column's south tile.
+  assert.deepEqual(tile(entry.route(at(1349, 10247))), [1351, 10250, 0]);
+  assert.deepEqual(tile(entry.route(at(1353, 10248))), [1352, 10250, 0]);
+  const north = entry.steps(at(1351, 10250));
+  assert.deepEqual(tile(north[0].move), [1351, 10252, 0]);
+  assert.equal(north[0].anim, 839);
+  assert.deepEqual(north[0].speed, [0, 60]);
+  assert.equal(north[0].ticks, 2);
+  assert.deepEqual(north[1], { anim: -1 });
+  assert.deepEqual(tile(entry.steps(at(1352, 10250))[0].move), [1352, 10252, 0]);
+  // Back out from the lair side.
+  assert.deepEqual(tile(entry.route(at(1352, 10256))), [1352, 10252, 0]);
+  assert.deepEqual(tile(entry.steps(at(1352, 10252))[0].move), [1352, 10250, 0]);
+  assert.equal(entry.end, "You climb over the rocks.");
+  assert.equal(entry.requires, undefined);
+});
+
 /** A real Player whose packet sender records every call as [method, ...args]. */
 function recordingPlayer(x, y, z, agility) {
   const { Player } = require("../dist/game/entity/impl/player/Player");

@@ -2563,6 +2563,15 @@
       "between": {"ends":[{"object":[0,-1,0]},{"object":[0,1,0]}],"cross":[{"use":"climbOver","args":["to","CLIMB_OVER",2]},{"anim":-1}]}
     },
     {
+      "name": "Rocks (Alchemical Hydra's lair, Karuulm Slayer Dungeon)",
+      "object": 34548,
+      "level": 1,
+      "end": "You climb over the rocks.",
+      "script": "karuulmHydraRocks",
+      "note": "rsprox local 1000143, 1000471, 1000473, 1000480, 1000497 and 1521 (rev 224-227): no requirement (the Wiki gives none either); the player faces the rocks, live moves them into the lair's instance the next tick, and the tick after that comes an exact move two tiles north on their own column (cycle 0 to 60, climb-over 839), and the message and the animation reset come 2 ticks after the move starts, as the other Karuulm rocks. Here there is no instance teleport tick between the face and the move (recorded difference); the lair stays in the world and the Alchemical door makes the private chamber (bosses/alchemicalhydra/Lair.AlchemicalHydra.js).",
+      "unverified": "the climb back south was not captured; it mirrors the climb in."
+    },
+    {
       "name": "Tunnel (Stronghold Slayer Cave)",
       "object": [30174,30175],
       "level": 72,

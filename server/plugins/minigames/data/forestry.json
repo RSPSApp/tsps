@@ -50,6 +50,8 @@
     "_lump": "Wiki: bonus bark by average nutrition; recorded 177, 162, 191. Bonus XP is calibrated (the Wiki's formula is garbled): 50 x level x average nutrition. Leaves: 15-20 of a random tier (Wiki: Forestry, Struggling Sapling).",
     "lump": [[70, 180, 200], [50, 140, 180], [40, 100, 140], [0, 60, 100]],
     "bonusXpPerLevel": 50,
+    "_plaque": "Inspect on the struggling or thriving sapling (rsprox 227/01723 tick 5157, local 227/1000605 tick 1200, local 227/1000149 tick 959): woodplaque (749) as a modal, its 11 lines ms1-ms11 (components 3-13) set first: the sapling's nutrition, then the player's best and last mulch with their nutritional values, the ingredients in the right slot in green. Wiki (Struggling sapling): 'the best and most recent combination of materials that were given', 'correct materials will be highlighted in green'.",
+    "plaque": { "interface": 749, "firstLine": 3, "right": "229628", "value": "00ffff" },
     "leaves": [15, 20]
   },
 

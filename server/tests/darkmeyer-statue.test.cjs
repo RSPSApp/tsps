@@ -89,6 +89,11 @@ test("the sacrifice isn't capped at the last Hitpoint: it can kill", (t) => {
   pray(f);
   core.TaskManager.process();
   assert.deepEqual(pending(f.p), [3]);
+  // The hit queue drops an unregistered player's damage, so the drain needs a registered one.
+  f.p.setRegistered(true);
+  t.after(() => f.p.setRegistered(false));
+  f.p.getCombat().getHitQueue().process(1);
+  assert.equal(f.p.getHitpoints(), 0);
 });
 
 test("at full Prayer it only says so, and takes nothing", (t) => {

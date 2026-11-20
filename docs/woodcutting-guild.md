@@ -41,6 +41,7 @@ Going in completes Kourend & Kebos hard "Enter the Woodcutting Guild". The below
 1. "You swing your axe at the Ent trunk."
 2. An attempt every 3 ticks (captured).
 3. Each success gives a noted log, 25 XP, "The ent carcass yields: 1 x Magic logs" and the usual 1/256 bird nest chance. In the Wilderness a success gives 2 logs.
+4. With the medium Wilderness Diary done, each attempt on a Wilderness Ent's trunk is 15% more likely to succeed (the chance times 1.15, at most 1). The Wiki (Ent) says: "Completing the medium Wilderness Diary increases the chance of successfully chopping ents in the Wilderness by 15%". It cites Mod Ash: "Around 15% higher chance of a 'successful' roll when chopping." The guild's Ent gets no bonus. The bonus is the `diaryChance` of Ent 6594 in `woodcutting-guild.json`. There is no capture of it.
 
 Being attacked doesn't stop the chopping. In the capture an Ent hit the player mid-chop and the chopping went on. So while you chop, auto-retaliate stays off: the player carries the generic `combat:no-retaliate` flag, which the core now honours for players as it already did for NPCs. Walking away ends the chopping, and retaliation comes back.
 

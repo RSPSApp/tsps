@@ -57,19 +57,32 @@ const equipmentRenderLayer = (slot: EquipmentSlot): number => {
 // and emblem retain their cache ordering instead of z-fighting when their view angle changes.
 const CAPE_COMPOSITION_SLOT = 1;
 const LEG_KIT_TOP_PRIORITY = 2;
+const CAPE_EMBLEM_PRIORITY = 6;
 
 const capeLayerByPriority = (priorities: ArrayLike<number>): Map<number, number> => {
     const distinct = [...new Set(Array.from(priorities))];
     const upper = distinct
         .filter((priority) => priority > LEG_KIT_TOP_PRIORITY)
         .sort((a, b) => a - b);
-    const firstUpperLayer = upper.length >= 3 ? 5 : upper.length === 2 ? 6 : 7;
-    const upperLayers = new Map(upper.map((priority, index) => [
-        priority,
-        upper.length === 1
-            ? 7
-            : Math.round(firstUpperLayer + (index * (7 - firstUpperLayer)) / (upper.length - 1)),
-    ]));
+    const upperLayers = new Map<number, number>();
+    if (upper.length === 3 && upper.includes(CAPE_EMBLEM_PRIORITY)) {
+        // Priority 6 contains the cape panel/emblem. Keep it on layer 7, whose extra shader
+        // bias preserves its occlusion margin over the cloth. Priority 7 is a separate detail
+        // group (the Cabbage cape has only two small collar faces there), so place it between
+        // the back cloth and the emblem instead of spending the emblem's top-biased layer on it.
+        const otherPriorities = upper.filter((priority) => priority !== CAPE_EMBLEM_PRIORITY);
+        upperLayers.set(otherPriorities[0], 5);
+        upperLayers.set(otherPriorities[1], 6);
+        upperLayers.set(CAPE_EMBLEM_PRIORITY, 7);
+    } else {
+        const firstUpperLayer = upper.length >= 3 ? 5 : upper.length === 2 ? 6 : 7;
+        upper.forEach((priority, index) => upperLayers.set(
+            priority,
+            upper.length === 1
+                ? 7
+                : Math.round(firstUpperLayer + (index * (7 - firstUpperLayer)) / (upper.length - 1)),
+        ));
+    }
 
     return new Map(distinct.map((priority) => [
         priority,

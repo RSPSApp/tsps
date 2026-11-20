@@ -19,7 +19,7 @@ const loader = new PlayerModelLoader(idkTypeLoader, objTypeLoader, modelLoader, 
 const STRENGTH_CAPE_T = 9751;
 const CABBAGE_CAPE = 13679;
 const appearance = PlayerAppearance.defaultMale(idkTypeLoader);
-const expectedCapeLayers = new Map([[0, 0], [5, 5], [6, 6], [7, 7]]);
+const expectedCapeLayers = new Map([[0, 0], [5, 5], [6, 7], [7, 6]]);
 const assertCapeLayers = (itemId: number, label: string) => {
     const equip = new Array(14).fill(-1);
     equip[EquipmentSlot.CAPE] = itemId;
@@ -51,11 +51,12 @@ const assertCapeLayers = (itemId: number, label: string) => {
         }
     }
 
-    // Preserve each cape priority: lining (0) stays behind the player, its back (5) stays under
-    // the outer cloth (6), and the emblem/top detail (7) keeps its extra depth bias.
+    // Preserve the emblem's old depth margin: the cache's priority-6 cape panel/emblem keeps
+    // the top-biased layer 7; priority 7 is a separate collar-detail group at layer 6.
     const priorities = capeModelData.faceRenderPriorities;
     assert.ok(priorities, `${label}: cape model should have per-face priorities`);
     const seen = new Set<number>();
+    const priorityCounts = new Map<number, number>();
     for (let f = 0; f < capeModelData.faceCount; f++) {
         const priority = priorities[f];
         assert.ok(expectedCapeLayers.has(priority), `${label}: unexpected cape priority ${priority}`);
@@ -65,8 +66,13 @@ const assertCapeLayers = (itemId: number, label: string) => {
             `${label}: cape face ${f} (priority ${priority})`,
         );
         seen.add(priority);
+        priorityCounts.set(priority, (priorityCounts.get(priority) ?? 0) + 1);
     }
     assert.deepEqual([...seen].sort(), [0, 5, 6, 7], `${label}: expected all four cape priority groups`);
+    if (itemId === CABBAGE_CAPE) {
+        assert.equal(priorityCounts.get(7), 2, "Cabbage cape priority 7 is the pair of collar-detail faces");
+        assert.ok((priorityCounts.get(6) ?? 0) > 2, "Cabbage cape priority 6 carries the broad panel/emblem group");
+    }
 };
 
 // Keep the previously fixed Strength cape layering covered while reproducing Cabbage cape's

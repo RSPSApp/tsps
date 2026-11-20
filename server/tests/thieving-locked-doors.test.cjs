@@ -303,4 +303,16 @@ describe("the Ardougne Sewers gate (Wiki: Gate (Ardougne Sewers); rsprox capture
       settle();
     }
   });
+
+  test("Pick-lock from the east needs no pick: the doors' already-unlocked line, no XP, through to the west", () => {
+    for (const door of SEWER_GATE) {
+      const player = actor(door.inside, { thieving: 1 });
+      click(player, door, "Pick-lock");
+      assert.deepEqual(player.messages, ["The door is already unlocked."], door.key);
+      assert.equal(player.xp, undefined, door.key);
+      assert.deepEqual(at(player), door.outside, door.key);
+      settle();
+      assert.equal(passable(door), false, door.key);
+    }
+  });
 });

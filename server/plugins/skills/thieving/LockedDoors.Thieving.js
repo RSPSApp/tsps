@@ -34,7 +34,8 @@
  * "You attempt to pick the lock." (spam) and "You manage to pick the lock." with 25 XP in the same tick and no
  * animation, then the gate lets the player through (tick 2003); Open from the east says "You go through the door."
  * (spam) as it opens (tick 2512). The gate's swap and crossing are objects/Doors.plugin.js's pass-through gates.
- * Ours: the failure line and the inside Pick-lock reply are the doors' ones.
+ * Ours: the failure line and the inside Pick-lock reply are the doors' ones, and a failed pick plays 2402 too
+ * (only a success is captured).
  *
  * Not done: Ross' House (40178), the H.A.M. Hideout jail door (5501) and the
  * Monkey Madness II door (28783). The wiki pages give their charts but not which side is "inside" (or the retry ramp the

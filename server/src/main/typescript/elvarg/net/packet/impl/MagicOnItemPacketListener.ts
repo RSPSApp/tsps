@@ -328,8 +328,10 @@ export class MagicOnItemPacketListener {
    * waits for it (Wiki: "If you cast a second alchemy spell before your last one finishes, it's
    * now queued up"); a later click replaces the waiting one. An untradeable item asks first, as
    * live does (rsprox 3215): "That item cannot be traded." beside it, then Proceed/Cancel.
-   * "magic:alchemy-warning" { player, item, itemId, spellId, high, text } lets the All Settings
+   * "magic:alchemy-warning" { player, item, itemId, spellId, high, text, box } lets the All Settings
    * warnings change that line: a valuable item's, or none (`text` null) to cast without asking.
+   * `box` is a whole question of its own, shown alone without the "Really cast" line, and asks
+   * whatever `text` says (a clue scroll's "Wouldn't you rather solve the clue?", rsprox 1000473).
    */
   private castAlchemy(player: any, spellId: number, slot: number, itemId: number, confirmed = false, source?: unknown): void {
     const inventory = player.getInventory();
@@ -356,7 +358,8 @@ export class MagicOnItemPacketListener {
       : MagicOnItemPacketListener.LOW_ALCH_XP;
     const definition = item.getDefinition?.();
     const warning = { player, item, itemId, spellId, high: isHighAlch,
-      text: definition.isTradeable?.() ? null as string | null : "That item cannot be traded." };
+      text: definition.isTradeable?.() ? null as string | null : "That item cannot be traded.",
+      box: null as string | null };
     if (!confirmed) PluginManager.emitCustomEvent("magic:alchemy-warning", warning);
 
     // Untradeable items alch too, after a warning (rsprox 3215: Iban's staff for 12 coins); only
@@ -366,7 +369,7 @@ export class MagicOnItemPacketListener {
       && definition.getHighAlchValue() > 0 && definition.getLowAlchValue() > 0,
       coins: isHighAlch ? definition.getHighAlchValue() : definition.getLowAlchValue(),
       castTicks: isHighAlch ? MagicOnItemPacketListener.HIGH_ALCH_CAST_TICKS : MagicOnItemPacketListener.LOW_ALCH_CAST_TICKS,
-      confirm: typeof warning.text === "string" && warning.text.length > 0,
+      confirm: [warning.text, warning.box].some(line => typeof line === "string" && line.length > 0),
       // Content may lower the level, waive the runes, keep the item or cast again on what is left (a league relic).
       requiredLevel, freeRunes: false, keepItem: false, recast: false };
     PluginManager.emitCustomEvent("magic:alchemy-policy", policy);
@@ -425,7 +428,7 @@ export class MagicOnItemPacketListener {
       }
     }
     if (!confirmed && policy.confirm) {
-      this.confirmAlchemy(player, spellId, slot, itemId, definition.getName(), clickedItem, warning.text as string, source);
+      this.confirmAlchemy(player, spellId, slot, itemId, definition.getName(), clickedItem, warning.text as string, source, warning.box);
       return;
     }
     const now = World.getProcessCycle();
@@ -495,10 +498,10 @@ export class MagicOnItemPacketListener {
     });
   }
 
-  private confirmAlchemy(player: any, spellId: number, slot: number, itemId: number, itemName: string, item: any, reason: string, source?: unknown): void {
+  private confirmAlchemy(player: any, spellId: number, slot: number, itemId: number, itemName: string, item: any, reason: string, source?: unknown, box?: string | null): void {
     const spellName = spellId === MagicOnItemPacketListener.HIGH_ALCH_SPELL_ID ? "High Level Alchemy" : "Low Level Alchemy";
-    const warning = `${reason}<br>Really cast ${spellName} on it?`;
-    player.sendMessage(warning.replace("<br>", " "));
+    const warning = typeof box === "string" && box.length > 0 ? box : `${reason}<br>Really cast ${spellName} on it?`;
+    // The item box copies its text to the chat once, as a message-box line (rsprox 3215, 1000473).
     const chain = new DialogueChainBuilder()
       .add(new ItemStatementDialogue(0, itemId, warning))
       .add(new OptionDialogue(1, {

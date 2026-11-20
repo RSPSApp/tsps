@@ -47,6 +47,7 @@ const ATTRIBUTES = Object.freeze({
   PLANTED: "quest.rum_deal.planted", // when the seed went in, 0 for none
   SLUGLINGS: "quest.rum_deal.slugs",
   KARAMTHULHU: "quest.rum_deal.karam",
+  PRESSURISING: "rum-deal:pressurising", // five creatures consumed; stage12 waits for the two-tick presentation
   SPIRIT: "quest.rum_deal.spirit", // 1 while the Evil Spirit is out
 });
 

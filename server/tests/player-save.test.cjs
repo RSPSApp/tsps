@@ -16,6 +16,57 @@ before(async () => {
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
 
+test("disk-loaded bank restore rejects negative quantities without consuming valid saved slots or coins", (t) => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const { Item } = require("../dist/game/model/Item");
+  const { ItemIdentifiers: I } = require("../dist/util/ItemIdentifiers");
+  const { Bank } = require("../dist/game/model/container/impl/Bank");
+  const { PlayerStatus } = require("../dist/game/model/PlayerStatus");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const persistencePlugin = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+  persistencePlugin.register({
+    getSkillManager: () => require("../dist/game/content/skill/SkillManager").SkillManager,
+    setPlayerPersistence() {}, log() {},
+  });
+  const { JsonPlayerPersistence } = persistencePlugin;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tsps-bank-restore-"));
+  const originalDirectory = JsonPlayerPersistence.SAVE_DIRECTORY;
+  t.after(() => { JsonPlayerPersistence.SAVE_DIRECTORY = originalDirectory; fs.rmSync(directory, { recursive: true, force: true }); });
+  JsonPlayerPersistence.SAVE_DIRECTORY = directory;
+  const codec = new JsonPlayerPersistence();
+  const raw = PlayerSave.fromPlayer(new Player(null));
+  raw.setBanks(new Map([[0, [
+    new Item(I.COINS, -5),
+    new Item(I.COINS, 10, { "test:slot": "valid" }),
+    new Item(I.ABYSSAL_WHIP, 0, { "test:slot": "reserved" }),
+    new Item(I.RING_OF_DUELING_6_, 1, { "test:slot": "last" }),
+    new Item(I.ABYSSAL_WHIP, 2147483648, { "test:slot": "upper-bound" }),
+  ]]]));
+  fs.writeFileSync(codec.resolveFilePath("bankrestore"), JSON.stringify(raw, codec.replacer.bind(codec)));
+  const save = codec.load("bankrestore");
+  assert.equal(save.getBanks().get(0)[0].getAmount(), -5, "actual disk hydration accepts the malformed legacy row");
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  player.setUsername("bankrestore");
+  save.applyToPlayer(player);
+  assert.deepEqual(player.getBank(0).getItems().slice(0, 5).map((item) => [item.getId(), item.getAmount(), item.getMeta()]), [
+    [-1, 0, null],
+    [I.COINS, 10, { "test:slot": "valid" }],
+    [I.ABYSSAL_WHIP, 0, { "test:slot": "reserved" }],
+    [I.RING_OF_DUELING_6_, 1, { "test:slot": "last" }],
+    [I.ABYSSAL_WHIP, 2147483647, { "test:slot": "upper-bound" }],
+  ], "invalid row leaves empty padding, never a negative stack or a shifted valid row");
+  player.setStatus(PlayerStatus.BANKING);
+  player.setInterfaceId(Bank.MAIN_INTERFACE_ID);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const slot = player.getBank(0).getItems().findIndex((item) => item.getId() === I.COINS && item.getAmount() > 0);
+    if (slot >= 0) Bank.withdraw(player, I.COINS, slot, -1, 0);
+  }
+  assert.equal(player.getInventory().getAmount(I.COINS), 10, "normal Withdraw-All returns all valid coins");
+  assert.equal(player.getBank(0).getAmount(I.COINS), 0);
+});
+
 test("saved bank slots keep a shared jewellery placeholder beside live variants and duplicate stacks", (t) => {
   const { Bank } = require("../dist/game/model/container/impl/Bank");
   const { Item } = require("../dist/game/model/Item");

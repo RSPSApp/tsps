@@ -879,8 +879,15 @@ module.exports = function attachHassle(context) {
   // Session
   // ---------------------------------------------------------------------------
 
+  function settleCartOutside({ player }) {
+    // The cart's delayed visual reset may not run after logout. Settle it before saving,
+    // and recover old saves on login. Keep ore if an interrupted exit is still in the mine.
+    if (!inMine(player) && cartCount(player) > 0) state.set(player, VARBIT.MINE_CART, 0);
+  }
+
   /** A logout ends the encounter (Wiki: logging out avoids the vyrewatch); the vyre flies again. */
   function loggedOut({ player }) {
+    settleCartOutside({ player });
     const encounter = encounters.get(player);
     if (encounter) {
       encounters.delete(player);
@@ -905,5 +912,6 @@ module.exports = function attachHassle(context) {
   api.onCustomEvent("npc-dialogue:action", dialogueAction);
   api.onCustomEvent("interface:closed", menuClosed);
   api.onCustomEvent("darkness-of-hallowvale:send-to-mines", sendToMinesRequest);
+  api.onPlayerLogin(settleCartOutside);
   api.onPlayerLogout(loggedOut);
 };

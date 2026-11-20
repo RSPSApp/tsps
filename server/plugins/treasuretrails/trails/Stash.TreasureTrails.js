@@ -249,9 +249,16 @@ function readNoticeboard(player) {
   sender.sendInterfaceScript(HIDEY_BUILD_SCRIPT, words);
 }
 
-/** The noticeboard's Read; true when it was the board. */
+/**
+ * The noticeboard's Read, or View on the S.T.A.S.H chart built in a house's study (poh_wallchart_4,
+ * a Construction wall chart): both open the same chart (rsprox.net rec 2804, rev 229, ticks
+ * 5337-5338 and 5664: hh_inv, toplevel_mainmodal_open, hidey_holes, hidey_build). The chart's
+ * other op is build mode's Remove, left to Construction. True when it was either.
+ */
 function noticeboard(event) {
-  if (event.objectId !== core.CacheDefinitions.getLocId("hidey_hole_noticeboard")) return false;
+  const C = core.CacheDefinitions;
+  const chart = event.objectId === C.getLocId("poh_wallchart_4") && event.clickType === 1;
+  if (!chart && event.objectId !== C.getLocId("hidey_hole_noticeboard")) return false;
   event.handled = true;
   readNoticeboard(event.player);
   return true;

@@ -223,6 +223,14 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
   telescope's accuracy (Wiki: oak 24, teak 9, mahogany 2 minutes), via
   `shooting-stars:forecast`. Which regions take "the" is inferred beyond the captured
   "the Kharidian Desert".
+- **S.T.A.S.H chart:** the wall chart space's fourth chart (furniture row 5790,
+  `poh_wallchart_4`): Construction 40, a bolt of cloth and a S.T.A.S.H blueprint, 16 experience,
+  `human_poh_build_wall` and synth 938 (rsprox.net rec 2804, rev 229, ticks 4949 and 5330). View
+  opens the same STASH units chart as Watson's noticeboard (ticks 5337-5338; see
+  [treasure-trails.md](treasure-trails.md)). The blueprint is Watson's (500 coins, rec 2804
+  tick 5098); his sale is not wired yet.
+- **Build menu names:** the furniture row's name, sentence-cased ("Spice Rack" is sent as
+  "Spice rack", "Oak Telescope" as "Oak telescope"; recs 271 and 2804).
 - **Crystal ball, elemental sphere, crystal of power:** change an elemental staff's element;
   battlestaffs cost 100 and mystic staffs 1,000 runes of the new element (Wiki).
 - **Bookcases:** `poh_bookcase` (910) lists enum 5210's books and shows the found ones from

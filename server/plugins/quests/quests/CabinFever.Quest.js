@@ -371,6 +371,8 @@ module.exports = function registerCabinFeverQuest(api) {
   const VARP_CANNON_ATTRIBUTE = "quest.cabin_fever.var656";
   const VARP_EXTRA_ATTRIBUTE = "quest.cabin_fever.var657";
   const VARP_STORAGE_ATTRIBUTE = "quest.cabin_fever.var658";
+  /** Where a swing in progress ends, [x, y, z]; a logout mid-swing logs back in there. */
+  const SWING_LANDING_ATTRIBUTE = "quest.cabin_fever.swing_landing";
   const FLAG_SHIP_TALKED = 1 << 0;
   // fever_cannon_clean (1746) is 1 while the barrel needs the ramrod, as live sets it on
   // every shot (capture ticks 1915, 2049). Saves from before held the inverse; this bit says
@@ -508,6 +510,7 @@ module.exports = function registerCabinFeverQuest(api) {
     player.setAttribute(VARP_CANNON_ATTRIBUTE, 0);
     player.setAttribute(VARP_EXTRA_ATTRIBUTE, 0);
     player.setAttribute(VARP_STORAGE_ATTRIBUTE, 0);
+    player.setAttribute(SWING_LANDING_ATTRIBUTE, null);
     plunderOutcome.delete(player);
     fireOutcome.delete(player);
     refills.delete(player);
@@ -1988,7 +1991,11 @@ module.exports = function registerCabinFeverQuest(api) {
     setVarbitValue(player, swing.varbit, 1);
     animate(player, ANIM.ROPE_TIE);
     sound(player, SOUND.TIE_ROPE);
+    // Saved for the whole swing: a logout in the air or in the sea comes back on the ship the
+    // swing was heading for, not on the sea tile the cancelled sequence left (review #6312).
+    player.setAttribute(SWING_LANDING_ATTRIBUTE, falls ? swing.shore : [...swing.land, z]);
     const done = () => {
+      player.setAttribute(SWING_LANDING_ATTRIBUTE, null);
       swinging.delete(player);
       player.getMovementQueue?.()?.setBlockMovement?.(false);
     };
@@ -2373,7 +2380,13 @@ module.exports = function registerCabinFeverQuest(api) {
       // objective-done step (40/60/80/100/120) from the restored state.
       syncQuestVarp(player);
     }
-    // A swing cut short by a logout leaves no rope tied to the sail.
+    // A swing cut short by a logout leaves no rope tied to the sail, and the player on the ship
+    // it was heading for.
+    const landing = player.getAttribute(SWING_LANDING_ATTRIBUTE);
+    if (Array.isArray(landing) && landing.length === 3) {
+      player.setAttribute(SWING_LANDING_ATTRIBUTE, null);
+      if (battleStage(player)) player.moveTo(new Location(landing[0], landing[1], landing[2]));
+    }
     sender.sendVarbit(SWINGS.over.varbit, 0);
     sender.sendVarbit(SWINGS.back.varbit, 0);
     // Logging out respawns the plundered containers (wiki).
@@ -2459,6 +2472,7 @@ module.exports = function registerCabinFeverQuest(api) {
   api.persistAttribute(VARP_CANNON_ATTRIBUTE, 0);
   api.persistAttribute(VARP_EXTRA_ATTRIBUTE, 0);
   api.persistAttribute(VARP_STORAGE_ATTRIBUTE, 0);
+  api.persistAttribute(SWING_LANDING_ATTRIBUTE, null);
 
   quest = registerQuest(api, {
     key: "cabin_fever",

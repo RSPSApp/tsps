@@ -1193,3 +1193,31 @@ test('a logout mid-swing leaves no rope tied to the sail', () => {
   assert.equal(h.varbit(1740), 0);
   assert.equal(h.varbit(1764), 0);
 });
+
+test('a logout in the sea after a fallen swing logs back in on the ship the swing was heading for', () => {
+  const originalRandom = Math.random;
+  Math.random = () => 0; // below the fall chance
+  try {
+    const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+    const I = core.ItemIdentifiers;
+    h.quest.setStage(h.player, 3);
+    h.player.getInventory().adds(I.ROPE, 1);
+    h.player.moveTo(new core.Location(1816, 4830, 2)); // the Adventurous' yardarm
+    h.itemOnObject(I.ROPE, 11292);
+    h.advance(21); // fallen, in the sea (plane 0), swim not finished
+    assert.equal(h.player.getLocation().getZ(), 0, 'in the sea');
+    // Logout: the player-keyed sequence stops and the sea tile is what gets saved.
+    h.player.isRegistered = () => false;
+    h.advance(5);
+    assert.equal(h.player.getLocation().getZ(), 0, 'the cancelled swim never reached the ship');
+    h.player.isRegistered = () => true;
+    h.relog();
+    const at = h.player.getLocation();
+    assert.deepEqual([at.getX(), at.getY(), at.getZ()], [1822, 4830, 1], 'back on the enemy deck');
+    assert.equal(h.player.getAttribute('quest.cabin_fever.swing_landing'), null);
+    h.relog();
+    assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getZ()], [1822, 1], 'only once');
+  } finally {
+    Math.random = originalRandom;
+  }
+});

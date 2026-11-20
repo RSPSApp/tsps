@@ -15,6 +15,7 @@ const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
+const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
 
 const JALARAST = 3232;
 const COINS = 995;
@@ -96,7 +97,28 @@ function setUp(t, { bark = 0, cloth = 0, coins = 0 } = {}) {
     for (let n = 0; n < 3 && !player.getDialogueManager().getCurrent(); n++) turn();
     return player.getDialogueManager().getCurrent();
   };
-  return { player, npc, inv, scripts, click, turn, menu, pick };
+  const group = () => player.getPacketSender().getChatboxGroupId();
+  const send = async (packet) => { await connection.dispatch([packet]); for (let n = 0; n < 3; n++) turn(); };
+  /** Continues lines until a dialogue menu shows; returns its options (null once the chatbox closed). */
+  const options = async () => {
+    for (let n = 0; n < 20; n++) {
+      const current = player.getDialogueManager().getCurrent();
+      if (typeof current?.getOptions === "function") return current.getOptions();
+      const pending = MultiChatboxPrompt.getPending(player);
+      if (pending) return pending.options;
+      if (!player.getDialogueManager().isActive()) return null;
+      await send({ type: "dialogue_continue", widgetId: (group() << 16) | (group() === 229 ? 4 : 5), childIndex: -1 });
+    }
+    return null;
+  };
+  const choose = async (option) => {
+    const shown = await options();
+    assert.ok(shown, "a dialogue menu opened");
+    const at = shown.indexOf(option);
+    assert.ok(at >= 0, `${option} in ${JSON.stringify(shown)}`);
+    await send({ type: "dialogue_continue", widgetId: (219 << 16) | 1, childIndex: at + 1 });
+  };
+  return { player, npc, inv, scripts, click, turn, menu, pick, options, choose };
 }
 
 function menuScript(scripts) {
@@ -177,4 +199,15 @@ test("the transcript's \"Continues with shop dialogue.\" action opens the purcha
 test("the transcript's non-members condition is answered false on a members world", () => {
   const answer = PluginManager.emitNpcDialogueCondition({ npcId: JALARAST, text: "If the player is on a non-members world:" });
   assert.equal(answer, false);
+});
+
+test("Talk-to's \"Can you make me some armour please?\" goes on into the purchase menu, with no condition shown as an option", async (t) => {
+  const { player, click, choose, options, menu, turn, scripts } = setUp(t);
+  await click("Talk-to");
+  await choose("Can you make me some armour please?");
+  assert.equal(await options(), null, "no menu after \"Certainly, what would you like me to make?\" (#6292)");
+  for (let n = 0; n < 3 && !menu(); n++) turn();
+  assert.ok(menu(), "the purchase menu opened");
+  assert.equal(player.getDialogueManager().isActive(), false);
+  assert.equal(menuScript(scripts)?.args?.[0], 20, "the captured verb argument, as from Trade");
 });

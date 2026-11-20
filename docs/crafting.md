@@ -126,6 +126,13 @@ Recording ids refer to the capture database at https://rsprox.net/database.
 - Crush chance: the Wiki's low/high values (opal 128/250, jade 100/245, red topaz 90/240) on the
   skilling curve. A Jeweller's chisel adds 20% and has a 10% chance to cut two.
 - Studs, kebbit claws and hide shields, and the snakeskin, Xerician and Hueycoatl items.
+- **Splitbark** (#6292; Wiki: Splitbark armour and each piece's Creation table): a needle or a
+  costume needle on bark or fine cloth opens the leather menu with the five pieces in the order of
+  Wizard Jalarast's captured menu. Each takes bark and fine cloth (helm 2, body 4, legs 3,
+  gauntlets 1, boots 1), at Crafting 61/62/62/60/60 for 124/248/186/62/62 XP, every 3 ticks.
+  The costume needle needs no thread (Wiki: Costume needle, 2 October 2024 changelog). Ours:
+  the menu's maximum (the fewer of bark and cloth), the animation, the "You make ..." line and a
+  reel lasting five pieces follow leather; no recording shows splitbark being crafted.
 - The Lunar spells:
   - Spin Flax: up to 5 flax per cast, 15 Crafting XP each.
   - Tan Leather: up to 5 hides per cast, now including cowhide and snake hide.
@@ -154,7 +161,7 @@ Recording ids refer to the capture database at https://rsprox.net/database.
   (1.5 XP), but nothing gives the rate or the line. The level-12 refusal line is ours.
 - Limestone bricks: two uses sent in one tick both carve on that tick. Recording 690 tick 302 answered
   the second one tick later; one capture, cause unknown.
-- Splitbark, mixed hide armour, snelms, crab armour, and the Broodoo shields.
+- Mixed hide armour, snelms, crab armour, and the Broodoo shields.
 - Pottery: the cup crack rate, exact crack messages, messages for other pottery types and
   full-inventory cup behaviour still need capture evidence. Cups retain their previous guaranteed
   firing success until their rate is established. Tassie's initial teaching dialogue still supplies

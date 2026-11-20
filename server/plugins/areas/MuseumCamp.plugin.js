@@ -16,7 +16,8 @@ const Hammers = require("../items/Hammers");
 const BUILT_ATTRIBUTE = "museum-camp:built";
 
 let api;
-const building = new WeakSet();
+/** The player's pending build task; a cancelled one (cutscenes, bots) no longer counts. */
+const building = new WeakMap();
 
 const core = () => api.core;
 const cache = () => core().CacheDefinitions;
@@ -85,17 +86,18 @@ function finishBuild(player, build) {
 /** Build / Build on: the animation now, the improvement the tick after (recorded). */
 function buildImprovement(player, object, build) {
   if (object?.getId?.() !== cache().getLocId(build.loc)) return false;
-  if (building.has(player) || isBuilt(player, build)) return true;
+  if (building.get(player)?.isRunning?.() || isBuilt(player, build)) return true;
   if (!canBuild(player, build)) return true;
-  building.add(player);
   const { Animation, CountdownTask, TaskManager } = core();
   player.performAnimation(new Animation(cache().getSeqId(DATA.animation)));
-  TaskManager.submit(new CountdownTask(player, DATA.buildTicks, () => {
+  const task = new CountdownTask(player, DATA.buildTicks, () => {
     building.delete(player);
     // Ours: materials or tools gone by the next tick build nothing.
     if (player.isRegistered?.() === false || isBuilt(player, build) || !canBuild(player, build, true)) return;
     finishBuild(player, build);
-  }));
+  });
+  building.set(player, task);
+  TaskManager.submit(task);
   return true;
 }
 

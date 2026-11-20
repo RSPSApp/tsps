@@ -176,3 +176,17 @@ test('Build is only for the camp locs, not other locs of the same name', (t) => 
   assert.equal(hooks['Ring of Stones']['Build on']({ player: p, object: { getId: () => 1 } }), false);
   assert.deepEqual(p.lines, []);
 });
+
+test('a build task cancelled before its tick (a cutscene, a bot) does not block later builds', (t) => {
+  const p = player(t);
+  give(p, 'hammer');
+  give(p, 'plank_oak', 4);
+  give(p, 'nails', 5);
+  hooks['Broken Spinning Wheel']['Build on']({ player: p, object: loc('fossil_spinning_wheel') });
+  TaskManager.cancelTasks(p);
+  TaskManager.process();
+  TaskManager.process();
+  assert.equal(has(p, 'plank_oak'), 4, 'nothing built');
+  build(p, 'Broken Spinning Wheel', 'Build on', 'fossil_spinning_wheel');
+  assert.equal(p.lines.at(-1), 'You build the spinning wheel.');
+});

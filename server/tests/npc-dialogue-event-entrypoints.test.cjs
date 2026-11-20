@@ -489,8 +489,8 @@ function hallowvaleStartFixture(t, { skill = null, boosted = false, missingAid =
   observe('npc:operated', event => { if (event.player === player) operated.push({ npcId: event.npcId, option: event.option, levels: snapshot() }); });
   observe('npc-dialogue:hook', event => { if (event.player === player && event.hook === 'quest:darkness-of-hallowvale:start')
     starts.push({ npcId: event.npcId, levels: snapshot(), stage: targetQuest.getStage(player) }); });
-  // This is the same actor ID, tile and owner-only policy used by In Aid's
-  // post-quest spawn; this test creates it directly, not through quest login.
+  // Live's hideout Veliaf: the world multinpc 8277 at its npc-spawns tile, shown as 9489
+  // (myq5_veliaf_child); spawned owner-only here so the fixture can clean it up.
   const tile = new core.Location(3494, 9628, 0);
   core.RegionManager.init(); core.RegionManager.loadMapFiles(tile.getX(), tile.getY());
   const candidates = [[1,0],[-1,0],[0,1],[0,-1]];
@@ -500,7 +500,7 @@ function hallowvaleStartFixture(t, { skill = null, boosted = false, missingAid =
   assert.ok(adjacent, 'the canonical cellar actor has a reachable adjacent tile');
   player.setLocation(new core.Location(tile.getX()+adjacent[0], tile.getY()+adjacent[1], 0));
   player.setNeedsPlacement(false);
-  npc = PM.spawnNpc({ id: core.NpcIdentifiers.VELIAF_HURTZ_2, x: tile.getX(), y: tile.getY(), z: 0,
+  npc = PM.spawnNpc({ id: 8277, x: tile.getX(), y: tile.getY(), z: 0,
     wanderRadius: 0, owner: player, ownerOnly: true }, 'HallowvaleStartFixture');
   assert.ok(npc && npc.isRegistered()); assert.equal(npc.getOwner(), player); npc.setNeedsPlacement(false);
   assert.equal(npc.getCurrentDefinition(player).getName(), 'Veliaf Hurtz');
@@ -545,6 +545,35 @@ async function hallowvaleAccept(f, observed) {
   assert.equal(f.player.getPacketSender().isChatboxInterface(219), true);
   await choose(f, observed.start.options.indexOf('Yes.') + 1);
 }
+const hallowvaleText = f => String(f.player.getDialogueManager().getCurrent()?.getText?.() ?? '').replace(/<br>/g, ' ');
+/** Continues (real dialogue_continue packets) until Veliaf's "Once you're in..." shows; false if the chat ends first. */
+async function hallowvaleOnceYoureIn(f) {
+  for (let i = 0; i < 12; i++) {
+    if (/^Once you're in/.test(hallowvaleText(f))) return true;
+    if (!f.player.getDialogueManager().getCurrent() || MultiChatboxPrompt.getPending(f.player)) return false;
+    await nextLine(f);
+  }
+  return false;
+}
+/** Yes is only the requirement check (Boat unit); live sets 10 on the continue of "Once you're in..." (capture t334). */
+async function hallowvaleStartOnContinue(f) {
+  assert.equal(await hallowvaleOnceYoureIn(f), true, 'Veliaf reaches "Once you\'re in..."');
+  assert.equal(f.quest.getStage(f.player), 0, 'not yet while the line shows');
+  await nextLine(f);
+  assert.equal(f.quest.getStage(f.player), 10, 'the continue of "Once you\'re in..." starts the quest');
+}
+/** Short of a requirement: Yes gives the requirement line, the chat ends, and the stage stays 0. */
+async function hallowvaleRefusedAtYes(f, line) {
+  const start = await hallowvaleStartPrompt(f);
+  await hallowvaleAccept(f, start);
+  assert.ok(f.messages.some(message => message.includes(line)), `"${line}" in ${JSON.stringify(f.messages)}`);
+  assert.equal(f.starts.at(-1)?.stage, 0, 'the start hook fired on Yes');
+  assert.equal(MultiChatboxPrompt.getPending(f.player), null);
+  assert.equal(await hallowvaleOnceYoureIn(f), false, 'no "Once you\'re in..." after a refusal');
+  assert.equal(f.quest.getStage(f.player), 0);
+}
+// The requirement checks run on "Yes." (the Boat unit's start hook); the stage becomes 10 on the
+// continue of Veliaf's "Once you're in..." (live capture t334), not on "Yes.".
 test('Darkness of Hallowvale applies boostable start skills at both registered checks', async t => {
   const targets = [[core.Skill.CONSTRUCTION, 5, 'Construction'], [core.Skill.THIEVING, 22, 'Thieving'], [core.Skill.AGILITY, 26, 'Agility'], [core.Skill.MAGIC, 33, 'Magic']];
   for (const [skill, level, label] of targets) {
@@ -556,45 +585,49 @@ test('Darkness of Hallowvale applies boostable start skills at both registered c
       const start = await hallowvaleStartPrompt(f);
       assert.equal(f.quest.getStage(f.player), 0);
       await hallowvaleAccept(f, start);
-      assert.equal(f.quest.getStage(f.player), 10, 'decoded Yes starts the quest');
-      const atStart = f.starts.at(-1); assert.ok(atStart); assert.equal(atStart.stage, 10);
-      assert.equal(atStart.levels.find(row => row.skill === skill.getIndex()).current, level);
+      const atStart = f.starts.at(-1); assert.ok(atStart, 'the start hook fired on Yes');
+      assert.equal(atStart.stage, 0, 'Yes itself changes nothing (t326)');
+      assert.equal(atStart.levels.find(row => row.skill === skill.getIndex()).current, level, 'checked at the boosted level');
+      await hallowvaleStartOnContinue(f);
+      assert.ok(!f.messages.some(message => message.includes(`You need ${level} ${label}`)));
     });
     await t.test(`${label} below requirement without boost is refused`, async t => {
       const f = hallowvaleStartFixture(t, { skill }); await hallowvaleTalk(f);
-      assert.equal(f.quest.getStage(f.player), 0);
-      assert.ok(f.messages.some(message => message.includes(`You need ${level} ${label}`)));
-      assert.equal(MultiChatboxPrompt.getPending(f.player), null);
-      assert.equal(f.starts.length, 0);
+      await hallowvaleRefusedAtYes(f, `You need ${level} ${label}`);
     });
   }
   await t.test('base requirements normally reach the same native start', async t => {
     const f = hallowvaleStartFixture(t); await hallowvaleTalk(f);
     const start = await hallowvaleStartPrompt(f); await hallowvaleAccept(f, start);
-    assert.equal(f.quest.getStage(f.player), 10); assert.equal(f.starts.length, 1);
+    assert.equal(f.starts.length, 1);
+    await hallowvaleStartOnContinue(f);
   });
-  await t.test('boosted Mining does not replace its required base level', async t => {
-    const f = hallowvaleStartFixture(t, { skill: core.Skill.MINING, boosted: true }); await hallowvaleTalk(f);
-    const mining = f.operated.at(-1).levels.find(row => row.skill === core.Skill.MINING.getIndex());
-    assert.equal(mining.base, 19); assert.equal(mining.current, 20);
-    assert.equal(f.quest.getStage(f.player), 0); assert.ok(f.messages.some(message => message.includes('You need 20 Mining')));
-    assert.equal(MultiChatboxPrompt.getPending(f.player), null);
-  });
+  for (const [skill, level, label] of [[core.Skill.MINING, 20, 'Mining'], [core.Skill.CRAFTING, 32, 'Crafting'], [core.Skill.STRENGTH, 40, 'Strength']]) {
+    await t.test(`boosted ${label} does not replace its required base level`, async t => {
+      const f = hallowvaleStartFixture(t, { skill, boosted: true }); await hallowvaleTalk(f);
+      const row = f.operated.at(-1).levels.find(entry => entry.skill === skill.getIndex());
+      assert.equal(row.base, level - 1); assert.equal(row.current, level);
+      await hallowvaleRefusedAtYes(f, `You need ${level} ${label}`);
+    });
+  }
   await t.test('incomplete In Aid does not start Darkness', async t => {
     const f = hallowvaleStartFixture(t, { missingAid: true }); await hallowvaleTalk(f);
     assert.equal(f.aid.isComplete(f.player), false); assert.equal(f.quest.getStage(f.player), 0);
     assert.equal(f.starts.length, 0);
     assert.notEqual(MultiChatboxPrompt.getPending(f.player)?.title, 'Start the Darkness of Hallowvale quest?');
+    assert.equal(await hallowvaleOnceYoureIn(f), false);
+    assert.equal(f.quest.getStage(f.player), 0);
   });
   await t.test('the Yes choice rechecks a temporary boost that expired after Talk-to', async t => {
     const f = hallowvaleStartFixture(t, { skill: core.Skill.AGILITY, boosted: true });
     await hallowvaleTalk(f); const start = await hallowvaleStartPrompt(f);
     f.skills.setCurrentLevel(core.Skill.AGILITY, 25, false);
     await hallowvaleAccept(f, start);
-    assert.equal(f.quest.getStage(f.player), 0);
     const observed = f.starts.at(-1); assert.ok(observed); assert.equal(observed.stage, 0);
     assert.equal(observed.levels.find(row => row.skill === core.Skill.AGILITY.getIndex()).current, 25);
     assert.ok(f.messages.some(message => message.includes('You need 26 Agility')));
+    assert.equal(await hallowvaleOnceYoureIn(f), false);
+    assert.equal(f.quest.getStage(f.player), 0);
   });
 });
 

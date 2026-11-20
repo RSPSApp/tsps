@@ -15975,8 +15975,8 @@
           "tasks": [
             "done",
             "done",
-            "in-progress",
-            "done"
+            "done",
+            "in-progress"
           ],
           "plugin": {
             "name": "DarknessOfHallowvale",
@@ -15989,14 +15989,22 @@
             "server/data/definitions/npc-dialogues.json",
             "server/data/definitions/npc-dialogue-index.json",
             "server/plugins/quests/quests/DarknessOfHallowvale.Quest.js",
-            "server/plugins/quests/Quests.plugin.js"
+            "server/plugins/quests/Quests.plugin.js",
+            "server/plugins/quests/hallowvale/State.DarknessOfHallowvale.js",
+            "server/plugins/quests/hallowvale/Boat.DarknessOfHallowvale.js",
+            "server/plugins/quests/hallowvale/Ghetto.DarknessOfHallowvale.js",
+            "server/plugins/quests/hallowvale/Errands.DarknessOfHallowvale.js",
+            "server/plugins/quests/hallowvale/Hassle.DarknessOfHallowvale.js",
+            "server/plugins/quests/hallowvale/Sketches.DarknessOfHallowvale.js",
+            "server/plugins/quests/hallowvale/Lab.DarknessOfHallowvale.js"
           ],
           "devNotes": [
             "Synced with tsps main e811aff0c (15 October 2026): Registered quest stages, transcript dialogue handlers, world objectives, journal and once-only completion rewards are implemented in the current quest module.",
             "Quest objectives remain partial where the module documents substituted puzzles, travel, followers or encounters; completion alone is not treated as full OSRS equivalence.",
             "Historical implementation limits from the October checkpoint (superseded where later notes record fixes): - The Meiyerditch rooftop maze is approximated. The route objects that are placed (pots/door key, wall ladders, locked shortcut door, rocky surface, barricade, ladder repair) are wired where the cache places them, but the rooftop jumps, crawl walls, tightropes and push-walls are not simulated; the barricade opens straight onto the Drakan walls. The old diary/bed beat is skipped: this cache revision has no bed transcript object and no old diary item. - The vyrewatch do not patrol or notice the player; the \"being noticed\" encounter plays on Talk-to during the contact phase. The tithe costs 6 hitpoints, fighting only damages and ends the chat (no mine punishment), and the distraction succeeds deterministically at 40+ Thieving. - The Meiyerditch mine punishment (\"Send me to the mines!\") is not implemented; its transcripts are marked unavailable in the dump. Daeyalt ore and the mine cart exist but are not part of the verifier route. - The fireplace only has Look-at on the cache object; the knife/sickle interactions are item-on-object. The inner laboratory door is a state check rather than a real door swap, and the laboratory stairs teleport. - Sketches need the player near the marked approach (north 3556,3379, west 3522,3357, south 3572,3331); a short guidance line is sent when using charcoal on papyrus away from all three (the wiki page has no line for that case). - The quest's skill requirements (Construction 5, Mining 20, Thieving 22, Agility 26, Crafting 32, Magic 33, Strength 40) are not enforced, matching the other quest plugins. Only In Aid of the Myreque completion gates the start, so the shared Veliaf is not stolen from that quest. - The post-quest shortcut doors and the tome's three 2,000 XP charges are not simulated; the tome is handed over as the 3-charge item.",
             "Main 281766303 (2 November 2026): #1690 adds stage/item guards, the sickle-symbol rooftop route, item recovery and Vanstrom's five-hit ambush. Objectives remain partial for non-patrolling Vyrewatch, the absent mine punishment and documented substituted interactions.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3911 XP rewards: diary, quest and minigame lamps, tomes and rewards take the world and account rates. #3699 Darkness of Hallowvale: Tome of experience chapters are per account (no unlimited XP). #3216 fix: the Hallowvale Tome of Experience can be read. 4 merged PRs changed recorded implementation files for this entry."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3911 XP rewards: diary, quest and minigame lamps, tomes and rewards take the world and account rates. #3699 Darkness of Hallowvale: Tome of experience chapters are per account (no unlimited XP). #3216 fix: the Hallowvale Tome of Experience can be read. 4 merged PRs changed recorded implementation files for this entry.",
+            "2026-11-20, branch fix/darkness-of-hallowvale-capture: rebuilt against a full live rsprox playthrough (revision 242): live's varbit 2573 stage values (36, 10-320) set on the captured actions, the quest's own varbits (2574-2601) driving the boat, chute, floorboards, push walls, table trapdoor, ladder wall, hideout trapdoor, bush, Safalaan, Sarius, portrait, tapestry and statue multilocs/multinpcs per player; the boat push and ride, the werewolf bush, western and southern ambush scenes as instances; every rooftop obstacle with live's animations, movement and Agility XP; the vyrewatch who stop the player in Meiyerditch and the mine punishment; Aeonisig's teleport; the laboratory door and stairs; live's completion scroll (jingle 154, model 9661, five lines). Facts with capture ticks in docs/quests/darkness-of-hallowvale/README.md; tests server/tests/darkness-of-hallowvale-*.test.cjs and qh728-q015 (an end-to-end walk through every stage). Objectives task done. Journal/rewards stays in progress: the Meiyerditch shortcut doors Safalaan teaches are not usable after the quest (no varbit was captured for them). Also remaining: dialogue wording differences that need osrsreboxed-db dumper fixes, and the uncaptured choices listed under Ours in that README."
           ],
           "taskDetails": [
             {

@@ -10,6 +10,7 @@ const EstateAgent = require("./EstateAgent.Construction");
 const Servants = require("./Servants.Construction");
 const Estate = require("./Estate.Construction");
 const Storage = require("./Storage.Construction");
+const BossLair = require("./BossLair.Construction");
 const Portals = require("./Portals.Construction");
 const Altars = require("./Altars.Construction");
 const Data = require("./Data.Construction");
@@ -2082,7 +2083,7 @@ function attach(api) {
   TipJar.attachTipJar(api);
   Bookcase.attachBookcase(api);
   Storage.attachStorage(api);
-  require("./BossLair.Construction").attachBossLair(api);
+  BossLair.attachBossLair(api);
   Scrying.attachScrying(api);
   CapeHanger.attachCapeHanger(api);
   Trophies.attachTrophies(api);

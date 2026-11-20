@@ -140,12 +140,14 @@ function afterWithdraw(player, house, furniture) {
 /** Every display loc: the blank one and each lair (their names differ, so they are matched by id). */
 const DISPLAY_LOCS = new Set([BLANK, ...LAIRS.map(lair => lair.loc)]);
 
+function configureOption(event) {
+  if (configure(event)) event.handled = true;
+}
+
+/** Configure on each display loc's own name (the blank one and every lair's differ). */
 function attachBossLair(api) {
-  api.onObjectInteraction((event) => {
-    if (event.handled || !DISPLAY_LOCS.has(event.objectId) || !Number.isInteger(event.clickType)) return;
-    const option = event.definition?.getInteractions?.()?.[event.clickType - 1];
-    if (option === "Configure" && configure(event)) event.handled = true;
-  });
+  const names = new Set([...DISPLAY_LOCS].map(id => CacheDefinitions.getObject(id)?.name).filter(Boolean));
+  for (const name of names) api.onObjectInteraction(name, { Configure: configureOption });
 }
 
 Object.assign(module.exports, { attachBossLair, afterWithdraw, configure, LAIRS, JARS_ENUM, BLANK, NO_JAR, NOT_OWNER });

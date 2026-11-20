@@ -3,6 +3,8 @@
 // the cast, the fire two ticks later, Stamp-out, the damage reduction message and the cleanup.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+process.env.BROWSER_HOST = '1';
+process.env.DISABLE_PLAYER_BOTS = '1';
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
@@ -67,6 +69,67 @@ function hit(fires, attacker, target, amount) {
   fires.reduceDamage({ attacker, target, damage, accurate: true });
   return damage.getDamage();
 }
+
+test('every available fire count uses exact remaining fifths at damage boundaries', () => {
+  const s = setup();
+  s.fires.start(s.player, s.npc);
+  for (let count = 0; count <= 34; count++) {
+    assert.equal(s.fireObjects().length, count);
+    for (const amount of [0, 1, 2, 3, 4, 5, 6, 9, 10, 11, 19, 20, 21, 255]) {
+      const expected = count >= 5 ? 0 : Math.floor(amount * (5 - count) / 5);
+      assert.equal(hit(s.fires, s.player, s.npc, amount), expected, `${count} fires, ${amount} damage`);
+    }
+    if (count < 34) s.tickTo(30);
+  }
+  s.tickTo(60);
+  assert.equal(s.fireObjects().length, 34, 'room capacity stays unchanged');
+  s.fires.stop(s.player);
+});
+
+test('real PendingHit with actual fires keeps exact damage and owner-only stamp removal', async t => {
+  const path = require('node:path');
+  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(path.resolve(__dirname, '..'));
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3719, 3358);
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const actors = [];
+  const actor = () => {
+    const p = new Player(new PlayerSession({ kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} }));
+    p.setUsername(`damienround${actors.length}`); p.setAttribute('bot-skip-persistence', true);
+    p.setLocation(new core.Location(3719, 3358, 1)); p.setNeedsPlacement(false);
+    core.World.getPlayers().add(p); actors.push(p); return p;
+  };
+  const api = PluginManager.createApi('DamienRoundingRegression'), fires = createDamienFires(api);
+  api.onCombatHitDamage(fires.reduceDamage);
+  const p = actor(), other = actor(), npc = new core.NPC(9564, new core.Location(3718, 3357, 1));
+  core.World.getNpcs().add(npc); npc.setHitpoints(150);
+  const step = n => { for (let i = 0; i < n; i++) { core.World.processCycle++; core.TaskManager.process(); } };
+  const rolled = (attacker, target, damage) => new core.PendingHit(attacker, target, new core.MeleeCombatMethod(),
+    { damage, rollAccuracy: false, experience: false }).getTotalDamage();
+  t.after(() => {
+    for (const a of actors) { fires.stop(a); core.TaskManager.cancelTasks(a); core.TaskManager.cancelTasks(a.getIndex());
+      core.World.getPlayers().remove(a); core.World.unregisterPlayerPosition(a); }
+    core.TaskManager.cancelTasks(npc); core.World.getNpcs().remove(npc); step(4);
+  });
+  fires.start(p, npc); step(90);
+  assert.equal(fires.firesFor(p).length, 3);
+  assert.deepEqual([rolled(p, npc, 5), rolled(p, npc, 10)], [2, 4]);
+  assert.equal(rolled(other, npc, 10), 10, 'foreign attacker has no reduction');
+  const at = new core.Location(...fires.firesFor(p)[0].split(',').map(Number));
+  const fire = core.ObjectManager.objectsAt(at).find(o => o.getOwner() === p && o.getId() === FIRE_OBJECT_ID);
+  assert.ok(fire, 'actual registered owner-only fire');
+  assert.equal(fires.stampOut({ player: other, object: fire, location: at }), false);
+  assert.equal(fires.stampOut({ player: p, object: fire, location: at }), true);
+  step(1);
+  assert.equal(core.ObjectManager.objectsAt(at).includes(fire), false);
+  assert.equal(fires.firesFor(p).length, 2);
+  assert.equal(rolled(p, npc, 5), 3);
+  fires.stop(p); step(35);
+  assert.equal(fires.firesFor(p).length, 0);
+  assert.equal(core.World.getObjects().some(o => o.getOwner() === p && o.getId() === FIRE_OBJECT_ID), false);
+});
 
 test('Damien casts on tick 28 and the fire appears two ticks later, owner-only, with its sound', () => {
   const s = setup();

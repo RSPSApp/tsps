@@ -29,6 +29,7 @@ before(async () => {
   const key = (ids, click) => (Array.isArray(ids) ? ids : [ids]).map((id) => `${id}:${click}`);
   const api = {
     core: PluginManager.getCoreApi(),
+    getTaskManager: () => TaskManager,
     getPluginConfig: (key, fallback) => (key in pluginConfig ? pluginConfig[key] : fallback),
     persistAttribute() {},
     onObjectClick: (ids, click, handler) => { for (const k of key(ids, click)) hooks.objects.set(k, handler); },
@@ -90,7 +91,7 @@ function container() {
   };
 }
 
-function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
+function fakePlayer({ agility = 99, thieving = 99, ring = null, amulet = null } = {}) {
   // A fake can't be snapshotted; a real reward's save request (e.g. a new Collection Log item) skips it, as for bots.
   const attributes = new Map([['bot-skip-persistence', true]]);
   const p = {
@@ -108,6 +109,7 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
     getEquipment: () => {
       const items = [];
       if (ring) items[Common.core.Equipment.RING_SLOT] = { getId: () => ring };
+      if (amulet) items[Common.core.Equipment.AMULET_SLOT] = { getId: () => amulet };
       return { getItems: () => items };
     },
     sendMessage: (m) => p.messages.push(m),
@@ -123,8 +125,14 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
       reset() {},
       setBlockMovement(v) { p.blocked = v; p.blockGeneration++; },
       getBlockMovementGeneration: () => p.blockGeneration,
+      handleRegionChange() {},
     }),
-    getCombat: () => ({ reset() {} }),
+    getCombat: () => ({ reset() {}, holdFullStall() {}, releaseFullStall() {} }),
+    getHitpoints: () => 99,
+    getSkillAnimation: () => -1,
+    setWalkingDirection() {}, setRunningDirection() {},
+    movementTypes: [],
+    setTemporaryMovementType(type) { p.movementTypes.push(type); },
     decrementHealth: (hit) => { p.decrements.push(hit.getDamage()); return hit; },
     addTickHit: (hit) => p.hits.push(hit.getDamage()),
     setForceMovement: (f) => { if (f) p.forced.push(f); },
@@ -743,6 +751,136 @@ test('the portal reproduces the recorded F3 pass: x 2386, 5839 -> 5843, once pow
   ticks(1);
   assert.deepEqual(moves(p, run, before), [[2386, 5839, 2386, 5843]]);
   assert.ok(p.spam.includes('You pass through the portal and end up on the other side.'));
+  run.finish();
+});
+
+// The Saradomin Brazier and its Holy barrier (local 1000598, rev 227; XP recorded / 16).
+test("either half of the Saradomin Brazier takes the offering, as recorded: the varbits, the line, the sacrifice", () => {
+  const p = fakePlayer();
+  const run = startRun(p);
+  onFloor(run, p, 2, 0, [2519, 5958, 2]);
+  const mirror = locOf(run, 39526, [2520, 5958, 2]);
+  click(p, 39526, 1, mirror);
+  assert.equal(boxText(p.boxes.at(-1)), 'You need to bring a suitable offering to use this brazier.');
+  p.inventory.adds(3325, 2);
+  click(p, 39526, 1, mirror);
+  assert.equal(p.inventory.getAmount(3325), 0);
+  assert.equal(varbit(p, 'hallowed_prayer_ashes_offered'), 1);
+  assert.equal(varbit(p, 'hallowed_prayer_state'), 2);
+  assert.ok(p.spam.includes('You see the flame change as your offerings are accepted.'));
+  assert.equal(p.anims.at(-1), Common.seq('sacrifice'));
+  assert.equal(p.xp.PRAYER ?? p.xp.Prayer, 200);
+  run.finish();
+});
+
+test('the brazier takes 1 dust with the Hallowed symbol worn (Wiki), 2 with it only in the pack', () => {
+  for (const [worn, left] of [[false, 1], [true, 2]]) {
+    const p = fakePlayer({ amulet: worn ? Common.data.items.symbol : null });
+    if (!worn) p.inventory.adds(Common.data.items.symbol, 1);
+    const run = startRun(p);
+    onFloor(run, p, 2, 0, [2519, 5958, 2]);
+    p.inventory.adds(3325, 3);
+    click(p, 39526, 1, locOf(run, 39526, [2520, 5958, 2]));
+    assert.equal(varbit(p, 'hallowed_prayer_state'), 2);
+    assert.equal(p.inventory.getAmount(3325), left, worn ? 'worn: 1 dust' : 'carried: 2 dust');
+    run.finish();
+  }
+});
+
+test('the Holy barrier reproduces the recorded F2 passes: 2519 -> 2521 and back at y 5960, XP for the first two only', () => {
+  const p = fakePlayer();
+  const run = startRun(p);
+  onFloor(run, p, 2, 0, [2519, 5960, 2]);
+  const barrier = locOf(run, 39534, [2520, 5960, 2]);
+  assert.equal(click(p, 39534, 1, barrier), false, 'no Pass-through before the brazier is lit');
+  run.states.hallowed_prayer_state = 2;
+  const route = { player: p, objectId: 39534, object: barrier };
+  hooks.route(route);
+  assert.deepEqual(run.area.templateOf(new Location(route.destination.x, route.destination.y, route.destination.z)), [2519, 5960, 2]);
+  const agility = () => p.xp.AGILITY ?? p.xp.Agility ?? 0;
+  click(p, 39534, 1, barrier);
+  assert.deepEqual(run.area.templateOf(p.getLocation()), [2519, 5960, 2], 'nothing on the tick the click is handled');
+  ticks(1);
+  assert.deepEqual(run.area.templateOf(p.getLocation()), [2521, 5960, 2]);
+  assert.deepEqual(p.movementTypes, [1], 'a two-tile walk');
+  assert.equal(p.varbits.get(12393), 1);
+  assert.equal(agility(), 50);
+  assert.equal(varbit(p, 'hallowed_prayer_xp_earned'), 1);
+  ticks(2);
+  assert.equal(p.varbits.get(12393), 0);
+  click(p, 39534, 1, barrier);
+  ticks(1);
+  assert.deepEqual(run.area.templateOf(p.getLocation()), [2519, 5960, 2]);
+  assert.equal(agility(), 100);
+  assert.equal(varbit(p, 'hallowed_prayer_xp_earned'), 2);
+  ticks(2);
+  click(p, 39534, 1, barrier);
+  ticks(3);
+  assert.deepEqual(run.area.templateOf(p.getLocation()), [2521, 5960, 2]);
+  assert.equal(agility(), 100, 'no XP after the first crossing and the return');
+  run.finish();
+});
+
+test('the F3 Holy barrier gives 75 Agility XP (2413 -> 2415 at y 5828), and the next floor clears its varbits', () => {
+  const p = fakePlayer();
+  const run = startRun(p);
+  onFloor(run, p, 3, 0, [2413, 5828, 2]);
+  run.states.hallowed_prayer_state = 2;
+  Common.varbit(p, 'hallowed_prayer_ashes_offered', 1);
+  click(p, 39534, 1, locOf(run, 39534, [2414, 5828, 2]));
+  ticks(1);
+  assert.deepEqual(run.area.templateOf(p.getLocation()), [2415, 5828, 2]);
+  assert.equal(p.xp.AGILITY ?? p.xp.Agility, 75);
+  assert.equal(varbit(p, 'hallowed_prayer_xp_earned'), 1);
+  ticks(2);
+  run.floorSpent = 80;
+  run.pause();
+  run.completeFloor();
+  ticks(6);
+  assert.equal(run.floorNumber, 4);
+  assert.equal(varbit(p, 'hallowed_prayer_xp_earned'), 0);
+  assert.equal(varbit(p, 'hallowed_prayer_ashes_offered'), 0);
+  run.finish();
+});
+
+test('a worn Hallowed symbol makes the Holy barrier 4 ticks instead of 5 (Wiki): the busy hold is a tick shorter', () => {
+  for (const [amulet, busy] of [[null, 2], [Common.data.items.symbol, 1]]) {
+    const p = fakePlayer({ amulet });
+    const run = startRun(p);
+    onFloor(run, p, 2, 0, [2519, 5960, 2]);
+    run.states.hallowed_prayer_state = 2;
+    const barrier = locOf(run, 39534, [2520, 5960, 2]);
+    click(p, 39534, 1, barrier);
+    ticks(1);
+    assert.deepEqual(run.area.templateOf(p.getLocation()), [2521, 5960, 2], 'the pass starts on the recorded tick');
+    ticks(busy - 1);
+    assert.equal(p.varbits.get(12393), 1, `busy until tick ${busy}`);
+    ticks(1);
+    assert.equal(p.varbits.get(12393), 0);
+    click(p, 39534, 1, barrier);
+    ticks(1);
+    assert.deepEqual(run.area.templateOf(p.getLocation()), [2519, 5960, 2], 'the next pass is taken as soon as busy clears');
+    run.finish();
+  }
+});
+
+test('the Holy barrier is given up if the player walks off its start tile before the pass', () => {
+  const p = fakePlayer();
+  const run = startRun(p);
+  onFloor(run, p, 2, 0, [2519, 5960, 2]);
+  run.states.hallowed_prayer_state = 2;
+  click(p, 39534, 1, locOf(run, 39534, [2520, 5960, 2]));
+  p.moveTo(run.area.at([2517, 5962, 2]));
+  ticks(1);
+  assert.deepEqual(run.area.templateOf(p.getLocation()), [2517, 5962, 2]);
+  assert.equal(p.xp.AGILITY ?? p.xp.Agility ?? 0, 0);
+  assert.equal(varbit(p, 'hallowed_prayer_xp_earned'), 0);
+  // The given-up pass holds nothing back: back on the start tile, the next click crosses.
+  p.moveTo(run.area.at([2519, 5960, 2]));
+  click(p, 39534, 1, locOf(run, 39534, [2520, 5960, 2]));
+  ticks(3);
+  assert.deepEqual(run.area.templateOf(p.getLocation()), [2521, 5960, 2]);
+  assert.equal(p.xp.AGILITY ?? p.xp.Agility, 50);
   run.finish();
 });
 
@@ -1370,3 +1508,4 @@ test('coffin runes go to the rune pouch first, still announced and logged (Wiki:
     api.emitCustomEvent = previous;
   }
 });
+

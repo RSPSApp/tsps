@@ -153,7 +153,7 @@ class Run {
     });
     this.schedule(4, () => {
       const first = this.floorNumber === 1;
-      for (const name of Common.data.stateVarbits) Common.varbit(player, name, 0);
+      for (const name of [...Common.data.stateVarbits, ...Common.data.floorVarbits]) Common.varbit(player, name, 0);
       for (const [name, value] of Object.entries(variant.varbits)) Common.varbit(player, name, value);
       Common.varbit(player, "hallowed_block_climbover", 0);
       Common.varbit(player, "hallowed_current_floor_looted", 0);

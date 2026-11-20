@@ -21,11 +21,13 @@ const deathHooks = [];
 const collectionLogObtains = [];
 const prompts = [];
 const npcApi = {};
+let processCycle = 0;
 const world = {
   sendMessage: (message) => broadcasts.push(message),
   getNpcs: () => npcApi,
   getAddNPCQueue: () => npcApi.addQueue,
   getRemoveNPCQueue: () => npcApi.removeQueue,
+  getProcessCycle: () => processCycle,
 };
 npcApi.add = () => false;
 npcApi.get = () => null;
@@ -158,6 +160,10 @@ function createPetNpc(player, npcId) {
     setNpcTransformationId(id) {
       this.transformed = id;
     },
+    animations: [],
+    performAnimation(anim) {
+      this.animations.push(anim.getId());
+    },
   };
 }
 
@@ -170,6 +176,7 @@ beforeEach(() => {
   npcApi.npcs.length = 0;
   npcApi.addQueue.length = 0;
   npcApi.removeQueue.length = 0;
+  processCycle = 0;
 });
 
 test("agility rolls the giant squirrel at 1 in (base - level * 25)", () => {
@@ -329,6 +336,47 @@ test("a cached Metamorphosis option dispatches to morph, Talk-to to interact", (
   assert.equal(npc.transformed, 2131);
   assert.equal(Pets.__internals.handlePetClick({ player, npc, npcId: 2130, clickType: 1, definition }), true);
   assert.deepEqual(player.inventory, []);
+});
+
+test("the follower's Emote option cycles its boss animations with a cooldown", () => {
+  const player = createPlayer();
+  const npc = createPetNpc(player, NpcIdentifiers.BUTCH_2);
+  player.setAttribute("pets:current", npc);
+  const definition = { getActions: () => ["Talk-to", null, "Pick-up", "Emote", null] };
+  const click = () => Pets.__internals.handlePetClick({ player, npc, npcId: NpcIdentifiers.BUTCH_2, clickType: 4, definition });
+
+  assert.equal(click(), true);
+  assert.deepEqual(npc.animations, [10340], "the first Vardorvis animation");
+  assert.equal(click(), true, "an immediate repeat is still handled");
+  assert.deepEqual(npc.animations, [10340], "the cooldown holds the second emote");
+  assert.equal(player.messages.at(-1), "You must wait a moment before your pet can do another emote.");
+
+  processCycle = 8;
+  assert.equal(click(), true);
+  assert.deepEqual(npc.animations, [10340, 10345], "the next animation after the cooldown");
+});
+
+test("an awakened Vardorvis kill unlocks Butch's death emote in the cycle", () => {
+  const player = createPlayer();
+  const npc = createPetNpc(player, NpcIdentifiers.BUTCH_2);
+  const butch = Pets.__internals.PETS.find((p) => p.enumName === "BUTCH");
+  const emote = () => Pets.__internals.handlePetEmote(player, npc, butch);
+
+  // Play the four base emotes so the next step is the gated death emote.
+  for (let i = 0; i < 4; i++) { assert.equal(emote(), true); processCycle += 8; }
+  assert.deepEqual(npc.animations, [10340, 10345, 10342, 10341]);
+
+  // Locked: the death emote is skipped and the cycle wraps to the melee again.
+  assert.equal(emote(), true);
+  assert.deepEqual(npc.animations, [10340, 10345, 10342, 10341, 10340]);
+
+  // Unlocked: the death emote plays at its step.
+  player.setAttribute("vardorvis:awakened-kills", 1);
+  assert.equal(Pets.__internals.petEmoteStep(player, butch, 4), 10347);
+  npc.__petEmote.index = 4;
+  processCycle += 8;
+  assert.equal(emote(), true);
+  assert.equal(npc.animations.at(-1), 10347);
 });
 
 test("a normal logout and login rebuilds exactly one follower from the item", () => {

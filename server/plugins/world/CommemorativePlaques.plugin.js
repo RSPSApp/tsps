@@ -65,13 +65,12 @@ function open(player, plaque) {
   sender.sendClientScript(SCRIPT_PLAQUE_TEXT, plaque.left, plaque.right);
 }
 
-/** "Noticeboard" is many locs' name: only the plaque's own loc id opens it. */
-function reader(plaque) {
-  return (event) => {
-    if (event.objectId !== cache.getLocId(plaque.loc)) return false;
-    open(event.player, plaque);
-    return true;
-  };
+/** "Noticeboard" is many locs' name: only a plaque's own loc id opens one. */
+function readPlaque(event) {
+  const plaque = PLAQUES.find((entry) => cache.getLocId(entry.loc) === event.objectId);
+  if (!plaque) return false;
+  open(event.player, plaque);
+  return true;
 }
 
 /** The plaque's Close button. */
@@ -87,7 +86,8 @@ module.exports = {
   members: false,
   register(api) {
     cache = api.core.CacheDefinitions;
-    for (const plaque of PLAQUES) api.onObjectInteraction(plaque.name, { Read: reader(plaque) });
+    api.onObjectInteraction("Clan Cup Trophy", { Read: readPlaque });
+    api.onObjectInteraction("Noticeboard", { Read: readPlaque });
     api.onInterfaceActionButton(cache.getComponentId(CLOSE_COMPONENT), close);
   },
   PLAQUES,

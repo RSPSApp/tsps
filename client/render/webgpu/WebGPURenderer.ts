@@ -290,6 +290,10 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         void this.initWorldResources();
     }
 
+    override invalidateAnimationCaches(): void {
+        this.actors?.invalidateAnimations();
+    }
+
     override invalidateDefinitionCaches(): void {
         this.mapLoadEpoch++;
         this.cancelObsoleteSceneBuilds();

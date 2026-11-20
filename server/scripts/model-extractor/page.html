@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Extractor</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --text: #1f1d1a; --muted: #6b665e; --line: #e2ded6;
+    --accent: #8a5a1c; --accent-text: #ffffff; --hover: #f1ece3; --selected: #f3e6d1;
+    --good: #2f6b3a; --bad: #a3322a; --tag: #ece7dc;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161513; --panel: #1f1d1a; --text: #ece8e1; --muted: #a39d93; --line: #34312c;
+      --accent: #d9a35a; --accent-text: #1a1408; --hover: #2a2723; --selected: #3a2f20;
+      --good: #7cc58a; --bad: #ef8a80; --tag: #2e2b26;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 18px 24px 8px; }
+  h1 { margin: 0; font-size: 20px; font-weight: 650; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  main { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 16px; padding: 12px 24px 24px; align-items: start; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; padding: 12px 16px; } header { padding: 16px 16px 4px; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .search { padding: 14px; display: grid; gap: 10px; }
+  /* Two rows: Items, NPCs and Objects, then Animations and Graphics. The 1px gaps are the lines. */
+  .kinds { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .kinds button { grid-column: span 2; border: 0; background: var(--panel); color: var(--text); padding: 8px 0; font: inherit; cursor: pointer; }
+  .kinds button[data-kind="animation"], .kinds button[data-kind="graphic"] { grid-column: span 3; }
+  .kinds button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+  input[type="search"], input[type="text"] { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  label.check { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; }
+  label.check[hidden] { display: none; }
+  .count { color: var(--muted); font-size: 12px; padding: 0 14px 8px; }
+  ul.results { list-style: none; margin: 0; padding: 0 6px 6px; max-height: calc(100vh - 260px); min-height: 120px; overflow: auto; }
+  ul.results li button { width: 100%; text-align: left; border: 0; background: transparent; color: var(--text); padding: 7px 8px; border-radius: 6px; font: inherit; cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+  ul.results li button:hover { background: var(--hover); }
+  ul.results li button[aria-current="true"] { background: var(--selected); }
+  .id { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 48px; }
+  .name { flex: 1; min-width: 0; display: grid; }
+  .name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .name .symbol { color: var(--muted); font-size: 11.5px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+  .tag { font-size: 11px; background: var(--tag); color: var(--muted); padding: 1px 6px; border-radius: 99px; }
+  .empty { color: var(--muted); padding: 16px 14px; }
+  .details { padding: 18px 20px; min-height: 240px; }
+  .details h2 { margin: 0; font-size: 18px; }
+  .sub { color: var(--muted); margin: 2px 0 14px; font-size: 13px; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12.5px; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .table-wrap { overflow-x: auto; }
+  ul.notes { margin: 0 0 14px; padding-left: 18px; color: var(--muted); }
+  h3 { font-size: 13px; margin: 14px 0 4px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .save { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+  @media (max-width: 520px) { .save { grid-template-columns: 1fr; } }
+  .prefix { color: var(--muted); font-size: 13px; }
+  button.primary { border: 0; border-radius: 8px; padding: 9px 16px; background: var(--accent); color: var(--accent-text); font: inherit; font-weight: 600; cursor: pointer; }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  .status { margin-top: 10px; min-height: 20px; font-size: 13px; }
+  .status.good { color: var(--good); }
+  .status.bad { color: var(--bad); }
+  .status ul { margin: 4px 0 0; padding-left: 18px; color: var(--muted); }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+  .tabs button { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); padding: 7px 12px; font: inherit; cursor: pointer; margin-bottom: -1px; }
+  .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  .preview-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+  .chips button { border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 99px; padding: 4px 10px; font: 12.5px ui-monospace, "Cascadia Mono", Consolas, monospace; cursor: pointer; }
+  .chips button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .viewer { position: relative; height: min(52vh, 460px); min-height: 260px; border: 1px solid var(--line); border-radius: 8px;
+    background: radial-gradient(circle at 50% 35%, var(--hover), var(--bg)); overflow: hidden; }
+  .viewer canvas { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+  .viewer canvas:active { cursor: grabbing; }
+  /* Over the canvas but never in the way of dragging or zooming it; hidden means gone (display: grid
+     would otherwise override the hidden attribute and leave an empty overlay on the canvas). */
+  .viewer .message { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); padding: 16px; text-align: center; pointer-events: none; }
+  .viewer .message[hidden] { display: none; }
+  .colour { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .colour .swatch { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--line); flex: none; }
+  .colour code { font-size: 12.5px; }
+  .colour .hsl { color: var(--muted); font-size: 12px; }
+  table.recolours td.arrow { color: var(--muted); padding-left: 0; padding-right: 0; }
+  table.recolours tr.unused { opacity: .5; }
+  #recolour-list .sub { margin: 0 0 6px; }
+  .playback { display: inline-flex; gap: 8px; align-items: center; }
+  button.small, .playback button { border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 6px; padding: 2px 9px; font: inherit; font-size: 12.5px; cursor: pointer; }
+  button.link { border: 0; background: none; color: var(--accent); padding: 0 2px; font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: underline; }
+  td.tags { white-space: nowrap; text-align: right; }
+  td.tags .tag { margin-right: 6px; }
+  .tag.bad { color: var(--bad); border-color: var(--bad); }
+  /* The NPC's animation list takes its own row, above the file chips. */
+  .preview-bar label.animation-pick { flex-basis: 100%; }
+  .preview-bar select { max-width: 340px; border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 6px; padding: 4px 6px; font: inherit; font-size: 13px; }
+  #tab-animations .sub { margin: 0 0 8px; }
+  .viewer-info { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+</style>
+<script src="/decoder.js"></script>
+<script src="/preview.js"></script>
+</head>
+<body>
+<header>
+  <h1>Model Extractor</h1>
+  <p>Search the cache by id or name, then save the models, animations and graphics as <code>.dat</code> files in <code>server/data/models/</code>.</p>
+</header>
+<main>
+  <section class="panel" aria-label="Search">
+    <div class="search">
+      <div class="kinds" role="group" aria-label="What to search">
+        <button type="button" data-kind="item" aria-pressed="true">Items</button>
+        <button type="button" data-kind="npc" aria-pressed="false">NPCs</button>
+        <button type="button" data-kind="object" aria-pressed="false">Objects</button>
+        <button type="button" data-kind="animation" aria-pressed="false">Animations</button>
+        <button type="button" data-kind="graphic" aria-pressed="false">Graphics</button>
+      </div>
+      <input id="query" type="search" placeholder="Id or name, e.g. 4151 or abyssal whip" autocomplete="off" autofocus>
+      <label class="check" id="variants-row"><input id="variants" type="checkbox"> Include noted items and placeholders</label>
+    </div>
+    <div class="count" id="count"></div>
+    <ul class="results" id="results"></ul>
+  </section>
+  <section class="panel details" id="details" aria-live="polite">
+    <p class="empty">Pick a result to see its files.</p>
+  </section>
+</main>
+<script>
+  const state = { kind: "item", selected: null, details: null, searchId: 0, tab: "files", previewFile: null, inGameColours: true, viewer: null,
+    /** The animation an NPC's preview plays (null: its still model), the body an animation plays on, and the preview's run. */
+    npcAnimation: null, body: 0, previewToken: 0 };
+  /** Decoded models by model id, so switching between files doesn't fetch them again. */
+  const decoded = new Map();
+  const $ = (selector) => document.querySelector(selector);
+  const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const KIND_NAMES = { item: "Item", npc: "NPC", object: "Object", animation: "Animation", graphic: "Graphic" };
+  /** Example searches per tab: animations and graphics go by their gameval names. */
+  const PLACEHOLDERS = {
+    item: "Id or name, e.g. 4151 or abyssal whip",
+    npc: "Id or name, e.g. 8059 or vorkath",
+    object: "Id or name, e.g. 6084 or bank booth",
+    animation: "Id or name, e.g. 808 or human ready",
+    graphic: "Id or name, e.g. 369 or ice barrage",
+  };
+
+  async function api(url, options) {
+    const response = await fetch(url, options);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(body.error || response.statusText), { code: body.code });
+    return body;
+  }
+
+  for (const button of document.querySelectorAll(".kinds button")) {
+    button.addEventListener("click", () => {
+      state.kind = button.dataset.kind;
+      for (const other of document.querySelectorAll(".kinds button")) other.setAttribute("aria-pressed", String(other === button));
+      $("#variants-row").hidden = state.kind !== "item";
+      $("#query").placeholder = PLACEHOLDERS[state.kind];
+      search();
+      $("#query").focus();
+    });
+  }
+
+  let timer = null;
+  $("#query").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(search, 180); });
+  $("#query").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { clearTimeout(timer); search(true); }
+  });
+  $("#variants").addEventListener("change", () => search());
+
+  async function search(openFirst = false) {
+    const query = $("#query").value.trim();
+    const id = ++state.searchId;
+    if (!query) { renderResults([], ""); return; }
+    // A tab's first search builds its list of names, which takes a moment.
+    $("#count").textContent = "Searching…";
+    try {
+      const params = new URLSearchParams({ kind: state.kind, q: query, variants: $("#variants").checked ? "1" : "0" });
+      const { results } = await api(`/api/search?${params}`);
+      if (id !== state.searchId) return;
+      renderResults(results, query);
+      if (openFirst && results.length) select(results[0].id);
+    } catch (error) {
+      renderResults([], query, error.message);
+    }
+  }
+
+  function renderResults(results, query, error) {
+    const list = $("#results");
+    $("#count").textContent = error ? "" : query ? `${results.length}${results.length >= 200 ? "+" : ""} result${results.length === 1 ? "" : "s"}` : "";
+    if (error) { list.innerHTML = `<li class="empty">${escape(error)}</li>`; return; }
+    if (!query) { list.innerHTML = ""; return; }
+    if (!results.length) { list.innerHTML = `<li class="empty">Nothing with a model matches “${escape(query)}”.</li>`; return; }
+    list.innerHTML = results.map((row) => `
+      <li><button type="button" data-id="${row.id}" aria-current="${row.id === state.selected}">
+        <span class="id">${row.id}</span><span class="name"><span>${escape(row.name)}</span>${row.symbol ? `<span class="symbol">${escape(row.symbol)}</span>` : ""}</span>${row.tag ? `<span class="tag">${escape(row.tag)}</span>` : ""}
+      </button></li>`).join("");
+    for (const button of list.querySelectorAll("button")) button.addEventListener("click", () => select(Number(button.dataset.id)));
+  }
+
+  async function select(id) {
+    state.selected = id;
+    for (const button of document.querySelectorAll("#results button")) button.setAttribute("aria-current", String(Number(button.dataset.id) === id));
+    try {
+      state.details = await api(`/api/details?${new URLSearchParams({ kind: state.kind, id })}`);
+      renderDetails();
+    } catch (error) {
+      $("#details").innerHTML = `<p class="status bad">${escape(error.message)}</p>`;
+    }
+  }
+
+  function renderDetails() {
+    const d = state.details;
+    // An animation's frames come as one row ("frames/ (15 files)"), from the server's rows.
+    const files = d.rows.map((row) => `
+      <tr><td><code>${escape(row.file)}</code></td><td class="num">${row.model ?? ""}</td><td>${escape(row.role)}</td><td>${escape(row.format)}</td></tr>`).join("");
+    // Recolours show each colour as the preview draws it; retextures are texture ids.
+    const cell = (value, colour) => colour ? `<td>${colourCell(value)}</td>` : `<td class="num">${value}</td>`;
+    const pairs = (title, rows, colour) => rows.length ? `<h3>${title}</h3><div class="table-wrap"><table><thead><tr><th>From</th><th>To</th></tr></thead>
+      <tbody>${rows.map(([from, to]) => `<tr>${cell(from, colour)}${cell(to, colour)}</tr>`).join("")}</tbody></table></div>` : "";
+    const previewable = d.files.filter((f) => !f.missing && f.source?.type === "model");
+    if (!previewable.some((f) => f.file === state.previewFile)) state.previewFile = previewable[0]?.file ?? null;
+    // Only NPCs have an Animations tab; another kind opened on it shows its files.
+    const tabs = [["files", "Files"], ["preview", "Preview"], ...(d.kind === "npc" ? [["animations", "Animations"]] : [])];
+    if (!tabs.some(([tab]) => tab === state.tab)) state.tab = "files";
+    state.npcAnimation = null;
+    state.body = 0;
+    stopViewer();
+    $("#details").innerHTML = `
+      <h2>${escape(d.name)}</h2>
+      <p class="sub">${KIND_NAMES[d.kind]} ${d.id}${d.symbol ? ` · <code>${escape(d.symbol)}</code>` : ""}</p>
+      <div class="tabs" role="tablist">
+        ${tabs.map(([tab, label]) => `<button type="button" role="tab" data-tab="${tab}" aria-selected="${state.tab === tab}">${label}</button>`).join("")}
+      </div>
+      <div role="tabpanel" id="tab-files" ${state.tab === "files" ? "" : "hidden"}>
+        <div class="table-wrap"><table><thead><tr><th>File</th><th>Model</th><th>What</th><th>Format</th></tr></thead><tbody>${files}</tbody></table></div>
+        ${d.notes.length ? `<ul class="notes">${d.notes.map((note) => `<li>${escape(note)}</li>`).join("")}</ul>` : ""}
+        ${pairs("Recolours", d.recolours, true)}${pairs("Retextures", d.retextures, false)}
+      </div>
+      <div role="tabpanel" id="tab-preview" ${state.tab === "preview" ? "" : "hidden"}>
+        <div class="preview-bar">
+          ${d.kind === "npc" ? `<label class="check animation-pick">Animation <select id="npc-animation"><option value="">None (still model)</option></select></label>` : ""}
+          ${d.kind === "animation" ? `<div class="chips" id="body-chips" aria-label="Play it on"></div>` : ""}
+          <div class="chips" id="file-chips">${d.kind === "animation" ? "" : previewable.map((f) => `<button type="button" data-file="${escape(f.file)}" aria-pressed="${f.file === state.previewFile}">${escape(f.file)}</button>`).join("")}</div>
+          ${d.recolours.length ? `<label class="check"><input id="in-game" type="checkbox" ${state.inGameColours ? "checked" : ""}> Show in-game colours</label>` : ""}
+        </div>
+        <div class="viewer"><canvas id="viewer" aria-label="3D preview of the selected model"></canvas><div class="message" id="viewer-message" hidden></div></div>
+        <div class="viewer-info"><span id="viewer-stats"></span><span class="playback"><span id="viewer-frame"></span><button type="button" id="pause" hidden>Pause</button></span><span>Drag to rotate · scroll to zoom · double-click to reset</span></div>
+        <div id="recolour-list"></div>
+      </div>
+      ${d.kind === "npc" ? `<div role="tabpanel" id="tab-animations" ${state.tab === "animations" ? "" : "hidden"}><p class="sub" id="animation-list">Loading its animations…</p></div>` : ""}
+      <div class="save">
+        <span class="prefix">server/data/models/</span>
+        <input id="folder" type="text" value="${escape(d.folder)}" aria-label="Folder name" spellcheck="false">
+        <button type="button" class="primary" id="extract" ${d.unsupported ? "disabled" : ""}>Extract</button>
+      </div>
+      <div class="status${d.unsupported ? " bad" : ""}" id="status">${d.unsupported ? escape(d.unsupported) : ""}</div>`;
+    $("#folder").addEventListener("input", checkFolder);
+    $("#folder").addEventListener("keydown", (event) => { if (event.key === "Enter") extract(); });
+    $("#extract").addEventListener("click", extract);
+    for (const tab of document.querySelectorAll(".tabs button")) tab.addEventListener("click", () => showTab(tab.dataset.tab));
+    for (const chip of document.querySelectorAll("#file-chips button")) {
+      chip.addEventListener("click", () => {
+        state.previewFile = chip.dataset.file;
+        state.npcAnimation = null;
+        if ($("#npc-animation")) $("#npc-animation").value = "";
+        for (const other of document.querySelectorAll("#file-chips button")) other.setAttribute("aria-pressed", String(other === chip));
+        showPreview();
+      });
+    }
+    $("#in-game")?.addEventListener("change", (event) => { state.inGameColours = event.target.checked; showPreview(); });
+    $("#npc-animation")?.addEventListener("change", (event) => playOnNpc(event.target.value === "" ? null : Number(event.target.value)));
+    $("#pause").addEventListener("click", () => {
+      const paused = state.viewer?.togglePause();
+      $("#pause").textContent = paused ? "Play" : "Pause";
+    });
+    if (d.kind === "npc") loadNpcAnimations(d);
+    if (state.tab === "preview") showPreview();
+    checkFolder();
+  }
+
+  function showTab(tab) {
+    state.tab = tab;
+    for (const other of document.querySelectorAll(".tabs button")) other.setAttribute("aria-selected", String(other.dataset.tab === tab));
+    for (const panel of document.querySelectorAll("[role=tabpanel]")) panel.hidden = panel.id !== `tab-${tab}`;
+    if (tab === "preview") showPreview();
+    else stopViewer();
+  }
+
+  function stopViewer() {
+    state.viewer?.stop();
+    state.viewer?.resizeObserver?.disconnect();
+    state.viewer = null;
+    state.previewToken++;
+  }
+
+  /** A 16-bit HSL colour as a swatch, its hex as the preview draws it, and the cache value. */
+  function colourCell(hsl) {
+    const hex = ModelPreviewParts.hslToHex(hsl);
+    return `<span class="colour"><span class="swatch" style="background:${hex}"></span><code>${hex}</code><span class="hsl">HSL ${hsl & 0xffff}</span></span>`;
+  }
+
+  /**
+   * Under the preview: what each recolour turns which colour into, and how many drawn faces of
+   * this model have it (null while an animation plays the whole body). Recolours that don't touch
+   * this model stay listed, dimmed.
+   */
+  function renderRecolourList(recolours, colourFaces) {
+    const list = $("#recolour-list");
+    if (!recolours.length) { list.innerHTML = ""; return; }
+    // Some definitions list the same pair twice (Adala, 13822); one row says it.
+    const unique = [...new Map(recolours.map(([from, to]) => [`${from & 0xffff}:${to & 0xffff}`, [from, to]])).values()];
+    const rows = unique.map(([from, to]) => {
+      const faces = colourFaces ? colourFaces.get(from & 0xffff) ?? 0 : null;
+      const count = faces === null ? "" : faces ? `${faces} face${faces === 1 ? "" : "s"}` : "not on this model";
+      return `<tr class="${faces === 0 ? "unused" : ""}"><td>${colourCell(from)}</td><td class="arrow">→</td><td>${colourCell(to)}</td>`
+        + `<td class="num">${count}</td></tr>`;
+    }).join("");
+    list.innerHTML = `<h3>In-game colours</h3>
+      <p class="sub">The file's colour on the left becomes the colour on the right in game. ${state.inGameColours ? "The preview shows the right-hand colours." : "The preview shows the file's colours."}</p>
+      <div class="table-wrap"><table class="recolours"><thead><tr><th>In the file</th><th></th><th>In game</th><th>${colourFaces ? "Faces" : ""}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  function previewMessage(text) {
+    const message = $("#viewer-message");
+    message.hidden = !text;
+    message.textContent = text || "";
+  }
+
+  /** The preview's viewer, made on first use; null (with the reason shown) when it can't be. */
+  function viewer() {
+    if (!window.OsrsModel) { previewMessage(window.OsrsModelError || "The preview's model decoder didn't load."); return null; }
+    try {
+      if (!state.viewer) state.viewer = new ModelPreview($("#viewer"));
+      return state.viewer;
+    } catch (error) {
+      previewMessage(error.message);
+      return null;
+    }
+  }
+
+  function clearPlayback() {
+    $("#viewer-stats").textContent = "";
+    $("#viewer-frame").textContent = "";
+    $("#pause").hidden = true;
+    $("#pause").textContent = "Pause";
+    $("#recolour-list").innerHTML = "";
+  }
+
+  async function showPreview() {
+    const d = state.details;
+    const token = ++state.previewToken;
+    clearPlayback();
+    if (d.kind === "animation") return showAnimationPreview(d, token);
+    if (d.kind === "npc" && state.npcAnimation !== null) return play({ kind: "npc", id: d.id }, state.npcAnimation, token);
+    const entry = d.files.find((f) => f.file === state.previewFile);
+    if (!entry) return previewMessage("This entry has no model in the cache to preview.");
+    // A graphic plays its own animation on its model.
+    if (d.kind === "graphic" && entry.source.type === "model" && d.animation >= 0) return play({ kind: "graphic", id: d.id }, d.animation, token);
+    const view = viewer();
+    if (!view) return;
+    try {
+      if (!decoded.has(entry.model)) {
+        previewMessage("Loading…");
+        const response = await fetch(`/api/model?id=${entry.model}`);
+        if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || response.statusText);
+        decoded.set(entry.model, OsrsModel.decode(new Uint8Array(await response.arrayBuffer())));
+      }
+      if (token !== state.previewToken) return;
+      const mesh = view.show(decoded.get(entry.model), state.inGameColours ? d.recolours : null);
+      previewMessage(mesh.shown ? "" : "Every face of this model is hidden in game.");
+      const [w, h, l] = mesh.size.map((value) => Math.round(value));
+      $("#viewer-stats").textContent = `Model ${entry.model} · ${decoded.get(entry.model).vertexCount} vertices · ${mesh.shown} faces drawn`
+        + `${mesh.hidden ? ` (${mesh.hidden} hidden)` : ""} · ${w}×${h}×${l} units (128 = 1 tile)`;
+      renderRecolourList(d.recolours, mesh.colourFaces);
+    } catch (error) {
+      previewMessage(`Couldn't preview model ${entry.model}: ${error.message}`);
+    }
+  }
+
+  /** An animation plays on a body that uses it: one of the NPCs that play it, or the player. */
+  async function showAnimationPreview(d, token) {
+    const chips = $("#body-chips");
+    try {
+      if (!d.bodies) {
+        previewMessage("Finding a body that plays it… (the first time indexes every animation's skeleton, about 20 s)");
+        d.bodies = (await api(`/api/bodies?id=${d.id}`)).bodies;
+      }
+      if (token !== state.previewToken) return;
+      if (!d.bodies.length) return previewMessage("No NPC in the cache is built for this animation's skeleton, so there's nothing to play it on.");
+      chips.innerHTML = d.bodies.map((body, index) => `<button type="button" data-body="${index}" aria-pressed="${index === state.body}" title="${escape(`${body.kind === "npc" ? `NPC ${body.id}: ` : ""}${body.why}`)}">${escape(body.name)}</button>`).join("");
+      for (const chip of chips.querySelectorAll("button")) {
+        chip.addEventListener("click", () => {
+          state.body = Number(chip.dataset.body);
+          for (const other of chips.querySelectorAll("button")) other.setAttribute("aria-pressed", String(other === chip));
+          showPreview();
+        });
+      }
+      const body = d.bodies[state.body] ?? d.bodies[0];
+      await play(body, d.id, token);
+    } catch (error) {
+      if (token === state.previewToken) previewMessage(`Couldn't find a body for it: ${error.message}`);
+    }
+  }
+
+  /** Bodies (/api/body, by kind and id) and animations (/api/animation), fetched once each. */
+  const bodies = new Map();
+  const animations = new Map();
+  async function loadBody(kind, id) {
+    const key = `${kind}:${id}`;
+    if (!bodies.has(key)) bodies.set(key, api(`/api/body?${new URLSearchParams({ kind, id })}`).catch((error) => { bodies.delete(key); throw error; }));
+    return bodies.get(key);
+  }
+  async function loadAnimation(id) {
+    if (!animations.has(id)) {
+      animations.set(id, api(`/api/animation?id=${id}`).then((data) => ({ data, animation: OsrsModel.loadAnimation(data) }))
+        .catch((error) => { animations.delete(id); throw error; }));
+    }
+    return animations.get(id);
+  }
+
+  /**
+   * Plays animation `seq` on a body, lit and posed by the client's own code; with in-game colours
+   * off, the body keeps the colours in its files.
+   */
+  async function play(ref, seq, token) {
+    const view = viewer();
+    if (!view) return;
+    try {
+      previewMessage("Loading…");
+      const [body, { data, animation }] = await Promise.all([loadBody(ref.kind, ref.id), loadAnimation(seq)]);
+      if (token !== state.previewToken) return;
+      if (!body.parts.length) return previewMessage(`${body.name} has no model in the cache to play it on.`);
+      const recolours = state.inGameColours ? body.recolours : [];
+      const lit = OsrsModel.buildBody({ ...body, recolours });
+      const lengths = animation.lengths;
+      const meshAt = (index) => ModelPreviewParts.buildLitMesh(OsrsModel.pose(lit, animation, index, body.scale));
+      const first = view.play({
+        key: `${ref.kind}:${ref.id}:${seq}`, lengths, meshAt,
+        onFrame: (index) => { $("#viewer-frame").textContent = `Frame ${index + 1} of ${lengths.length}`; },
+      });
+      previewMessage(first.shown ? "" : "Every face of this body is hidden in game.");
+      const cycles = lengths.reduce((sum, length) => sum + length, 0);
+      const what = ref.kind === "graphic" ? `Its animation, ${data.name} (${seq})` : `${body.name} playing ${data.name} (${seq})`;
+      $("#viewer-stats").textContent = `${what} · ${lengths.length} ${animation.skeletal ? "keyframes" : "frames"} · ${(cycles * 0.02).toFixed(2)} s`;
+      $("#pause").hidden = false;
+      renderRecolourList(body.recolours, null);
+    } catch (error) {
+      if (token === state.previewToken) previewMessage(`Couldn't play animation ${seq}: ${error.message}`);
+    }
+  }
+
+  function playOnNpc(seq) {
+    state.npcAnimation = seq;
+    if ($("#npc-animation")) $("#npc-animation").value = seq === null ? "" : String(seq);
+    for (const chip of document.querySelectorAll("#file-chips button")) chip.setAttribute("aria-pressed", String(seq === null && chip.dataset.file === state.previewFile));
+    if (state.tab !== "preview") showTab("preview");
+    else showPreview();
+  }
+
+  /** An NPC's Animations tab: what it plays (cache and server), then the rest of its skeleton's. */
+  async function loadNpcAnimations(d) {
+    try {
+      if (!d.animations) d.animations = await api(`/api/npc-animations?id=${d.id}`);
+    } catch (error) {
+      if (state.details === d) $("#animation-list").textContent = `Couldn't list its animations: ${error.message}`;
+      return;
+    }
+    if (state.details !== d) return;
+    const a = d.animations;
+    const select = $("#npc-animation");
+    const option = (row) => `<option value="${row.id}">${escape(row.roles ? `${row.roles.join(", ")}: ` : "")}${escape(row.name)} (${row.id})</option>`;
+    select.innerHTML = `<option value="">None (still model)</option>`
+      + (a.used.length ? `<optgroup label="Plays">${a.used.map(option).join("")}</optgroup>` : "")
+      + (a.related.length ? `<optgroup label="Same skeleton">${a.related.map(option).join("")}</optgroup>` : "");
+    if (state.npcAnimation !== null) select.value = String(state.npcAnimation);
+    const tag = (row) => [
+      row.skeletal ? `<span class="tag">skeletal</span>` : "",
+      row.sources?.includes("server") ? `<span class="tag" title="Attack, block, death and spawn animations aren't in the cache: this is the one the server plays">server</span>` : "",
+      row.fits === false ? `<span class="tag bad" title="Made for another skeleton: it won't move this NPC's model properly">other skeleton</span>` : "",
+    ].join("");
+    const table = (rows, roles) => `<div class="table-wrap"><table class="animations"><thead><tr><th></th><th>Id</th><th>Name</th>${roles ? "<th>Role</th>" : ""}<th></th></tr></thead><tbody>
+      ${rows.map((row) => `<tr><td><button type="button" class="small" data-play="${row.id}">Play</button></td><td class="num">${row.id}</td><td><code>${escape(row.name)}</code></td>${roles ? `<td>${escape(row.roles.join(", "))}</td>` : ""}
+        <td class="tags">${tag(row)}<button type="button" class="link" data-open="${row.id}" title="Open it in the Animations tab">Open</button></td></tr>`).join("")}</tbody></table></div>`;
+    const skeleton = a.skeleton === null ? "" : a.playerSkeleton ? " It's built on the player skeleton (frame map 0)." : ` Its skeleton is frame map ${a.skeleton}.`;
+    $("#tab-animations").innerHTML = `
+      <p class="sub">Stand, walk, turn, run and crawl come from the cache. Attack, block, death and spawn aren't in the cache: those are the ones the server plays.${skeleton}</p>
+      <h3>Plays</h3>
+      ${a.used.length ? table(a.used, true) : `<p class="sub">The cache and the server give it no animations.</p>`}
+      <h3>Same skeleton${a.relatedTotal ? ` (${a.relatedTotal})` : ""}</h3>
+      ${a.playerSkeleton ? `<p class="sub">Every player animation fits it; search the Animations tab for one and pick this NPC's look there, or play one on the player.</p>`
+        : a.related.length ? `${a.relatedTotal > a.related.length ? `<p class="sub">The first ${a.related.length}, its own creature's first.</p>` : ""}${table(a.related, false)}`
+        : `<p class="sub">No other animations are made for its skeleton.</p>`}`;
+    for (const button of document.querySelectorAll("#tab-animations [data-play]")) button.addEventListener("click", () => playOnNpc(Number(button.dataset.play)));
+    for (const button of document.querySelectorAll("#tab-animations [data-open]")) button.addEventListener("click", () => openAnimation(Number(button.dataset.open)));
+  }
+
+  /** Opens an animation in the Animations tab, on its preview. */
+  function openAnimation(id) {
+    $("#query").value = String(id);
+    state.kind = "animation";
+    for (const other of document.querySelectorAll(".kinds button")) other.setAttribute("aria-pressed", String(other.dataset.kind === "animation"));
+    $("#variants-row").hidden = true;
+    $("#query").placeholder = PLACEHOLDERS.animation;
+    state.tab = "preview";
+    search();
+    select(id);
+  }
+
+  async function checkFolder() {
+    // An entry that can't be extracted keeps saying why.
+    if (state.details?.unsupported) return;
+    const folder = $("#folder").value.trim();
+    const status = $("#status");
+    status.className = "status";
+    status.textContent = "";
+    if (!folder) return;
+    try {
+      const { exists } = await api(`/api/folder?${new URLSearchParams({ name: folder })}`);
+      if (exists && $("#folder").value.trim() === folder) status.textContent = "That folder already exists; extracting asks before replacing its files.";
+    } catch (error) {
+      status.className = "status bad";
+      status.textContent = error.message;
+    }
+  }
+
+  async function extract() {
+    const d = state.details;
+    const folder = $("#folder").value.trim();
+    const button = $("#extract");
+    const status = $("#status");
+    button.disabled = true;
+    const send = (overwrite) => api("/api/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: d.kind, id: d.id, folder, overwrite }),
+    });
+    try {
+      let result;
+      try {
+        result = await send(false);
+      } catch (error) {
+        if (error.code !== "EXISTS" || !confirm(`server/data/models/${folder} already exists. Replace the files in it?`)) throw error;
+        result = await send(true);
+      }
+      status.className = "status good";
+      status.innerHTML = `Saved to <code>${escape(result.path)}</code>:<ul>${result.written.map((file) => `<li><code>${escape(file)}</code></li>`).join("")}</ul>`;
+    } catch (error) {
+      status.className = "status bad";
+      status.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  }
+</script>
+</body>
+</html>

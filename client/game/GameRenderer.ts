@@ -342,6 +342,12 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
         this.mapManager.cleanUp();
     }
 
+    /**
+     * Custom animations or graphics changed (seq, frame and spotanim loaders already cleared). They
+     * are only played by actors and graphics, never baked into the map, so the map is kept.
+     */
+    invalidateAnimationCaches(): void {}
+
     /** Content definitions changed without replacing the cache or renderer. */
     invalidateDefinitionCaches(): void {
         // Loaded geometry/minimaps embed decoded types. The normal map loader

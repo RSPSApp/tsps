@@ -41,6 +41,11 @@ test("new overlay selects a typed base and exposes paired model recolors", async
                 }
                 return Promise.resolve(response({ revision: `rev-${definitionReads}`, rows: [] })) as Promise<Response>;
             }
+            // The custom animations and models the page loads for its previews: read-only, answered at once.
+            if (url.origin === "http://example.test:43594" && (!init?.method || init.method === "GET")
+                && ["/api/custom-animations-data", "/api/cache-custom-models"].includes(url.pathname)) {
+                return Promise.resolve(response({ rows: [] })) as Promise<Response>;
+            }
             if (url.origin !== "http://example.test:43594" || (init?.method && init.method !== "GET") || ![
                 "/api/cache-kinds", "/api/cache-search", "/api/cache-inspect", "/api/cache-fields",
             ].includes(url.pathname)) {

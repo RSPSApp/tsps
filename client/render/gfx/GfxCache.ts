@@ -33,6 +33,12 @@ export class GfxCache {
     private frameGeom = new Map<FrameKey, { vertices: Uint8Array; indices: Int32Array }>();
     constructor(private renderer: WebGLOsrsRenderer) {}
 
+    /** Drops every graphic's model and frame geometry (custom graphics changed). */
+    clear(): void {
+        this.baseBySpot.clear();
+        this.frameGeom.clear();
+    }
+
     private getSpotType(spotId: number): any | undefined {
         try {
             return this.renderer.osrsClient.spotAnimTypeLoader?.load?.(spotId | 0);

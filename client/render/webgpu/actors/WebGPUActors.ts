@@ -804,6 +804,13 @@ export class WebGPUActors {
         return this.gfx?.projectiles;
     }
 
+    /** Custom animations or graphics changed: graphics and NPC poses are built again. */
+    invalidateAnimations(): void {
+        this.gfx?.clear();
+        this.asyncNpcPoses?.invalidate();
+        this.npcPose?.clear();
+    }
+
     invalidateNpcDefinitions(): void {
         this.asyncNpcPoses?.invalidate();
         this.npcBounds.clear();

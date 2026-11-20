@@ -213,3 +213,27 @@ assert.deepEqual(previewModels({ ...loc, values: { models: [[15402, 15403], [154
 assert.ok(previewSpec({ ...loc, values: { models: [[15402]], seqId: 3206 } }));
 
 assert.equal(sequenceFrameCount({ seqTypeLoader: { load: () => ({ isSkeletalSeq: () => true, getSkeletalDuration: () => 42 }) } } as any, 1), 42);
+
+// The Model Extractor and the asset library live on the authoring service, by these paths.
+import {
+    animationBodiesPath, canExtract, definitionKindOf, extractPath, folderNameOf, folderUpload, isFolderKind, libraryPath, npcAnimationsPath,
+} from "../custom/cache-editor/CacheEditorModel";
+
+assert.equal(extractPath("item", 4151), "/extract?kind=item&id=4151");
+assert.equal(libraryPath("animation"), "/library?kind=animation");
+assert.equal(npcAnimationsPath(3127), "/npc-animations?id=3127");
+assert.equal(animationBodiesPath(808), "/animation-bodies?id=808");
+assert.ok(canExtract("loc") && canExtract("seq") && canExtract("spotanim") && !canExtract("varbit"));
+assert.ok(isFolderKind("animation") && isFolderKind("graphic") && !isFolderKind("model"));
+assert.equal(definitionKindOf("animation"), "seq");
+assert.equal(definitionKindOf("graphic"), "spotanim");
+assert.equal(definitionKindOf("model"), null);
+assert.equal(folderNameOf("<col=ff0000>Abyssal whip</col>"), "abyssal-whip");
+
+// A picked folder arrives as "player-anim/frames/1-2.dat"; the service wants paths inside it.
+assert.deepEqual(folderUpload([
+    { path: "player-anim/seq.dat", data: "AA==" },
+    { path: "player-anim/frames/1-2.dat", data: "AQ==" },
+]), { "seq.dat": "AA==", "frames/1-2.dat": "AQ==" });
+assert.deepEqual(folderUpload([{ path: "graphic/spotanim.dat", data: "AA==" }, { path: "graphic/anim/seq.dat", data: "AQ==" }]), { "spotanim.dat": "AA==", "anim/seq.dat": "AQ==" });
+assert.deepEqual(folderUpload([{ path: "seq.dat", data: "AA==" }]), { "seq.dat": "AA==" }, "loose files keep their names");

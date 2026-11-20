@@ -4,6 +4,7 @@
     "plugins/imported/**",
     ".plugin-upload-*/**",
     "data/saves/**",
+    "caches/**",
     "plugins/world/data/**",
     "plugins/bots/data/**",
     "data/npc-spawns*.json",
@@ -11,6 +12,7 @@
     "data/definitions/object-spawns*.json",
     "data/definitions/npc-combat-defs.json",
     "data/regions/**",
+    "data/models/**",
     "plugins/agent/data/templates/**",
     "plugins/agent/data/edit-styles.json",
     "*.log"

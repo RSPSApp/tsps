@@ -9,6 +9,7 @@
  */
 const Equipment = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment").Equipment;
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
+const { restricted, PRESET_TEXT } = require("./PoweredStaff");
 
 const MAX_CHARGES = 11000;
 const COMBAT_CHARGE = 10;
@@ -160,6 +161,58 @@ function uncharge({ player, item }) {
   return true;
 }
 
+/** The fang is removable only while uncharged (Wiki: Toxic staff of the dead). */
+function dismantle({ player, item }) {
+  const inventory = player.getInventory();
+  const slot = inventory.getItems().indexOf(item);
+  const eligible = () => {
+    if (slot < 0 || inventory.getItems()[slot] !== item || item.getAmount() !== 1
+      || !player.isRegistered() || player.getHitpoints() <= 0) return false;
+    if (!chargedByUncharged.has(item.getId()) || charges(item) > 0) {
+      player.sendMessage("Uncharge your toxic staff before removing the fang.");
+      return false;
+    }
+    if (restricted(item)) { player.sendMessage(PRESET_TEXT); return false; }
+    return true;
+  };
+  if (!eligible()) return true;
+  const manager = player.getDialogueManager();
+  let answered = false;
+  const dialogue = new core.OptionDialogue(0, {
+    executeOption(option) {
+      if (answered || manager.getCurrent() !== dialogue) return;
+      answered = true;
+      player.getPacketSender().sendInterfaceRemoval();
+      if (Number(option) !== 1 || !eligible()) return;
+      const fang = new Item(core.ItemIdentifiers.MAGIC_FANG, 1);
+      if (inventory.getAddableAmount(fang) < 1) {
+        player.sendMessage("You don't have enough inventory space to do that.");
+        return;
+      }
+      item.setId(core.ItemIdentifiers.STAFF_OF_THE_DEAD);
+      item.setMetaValue(CHARGES_META_KEY, undefined);
+      inventory.addItem(fang);
+      inventory.refreshItems();
+      player.sendMessage("You remove the magic fang from the staff.");
+    },
+  }, "Yes.", "No.").setTitle("Remove the fang from the staff?");
+  manager.startDialogues(new core.DialogueChainBuilder().add(dialogue));
+  return true;
+}
+
+function handleItemAction(event) {
+  if (!chargedIds.has(event.itemId) && !chargedByUncharged.has(event.itemId)) return;
+  const option = String(event.option ?? "").toLowerCase();
+  if (option === "dismantle") {
+    event.handled = dismantle(event);
+  } else if (option === "check") {
+    event.handled = true;
+    checkCharges(event);
+  } else if (option === "uncharge" && chargedIds.has(event.itemId)) {
+    event.handled = uncharge(event);
+  }
+}
+
 module.exports = {
   name: "ToxicStaffOfTheDead",
   description: "Charges the Toxic staff of the dead with Zulrah's scales, drains scales in combat and gives its hits a chance to envenom the target.",
@@ -182,18 +235,7 @@ module.exports = {
     ]);
 
     api.persistAttribute(COMBAT_CHARGE_AT_ATTRIBUTE, null);
-    api.onItemAction((event) => {
-      if (!chargedIds.has(event.itemId) && !unchargedByCharged.has(event.itemId)) {
-        return;
-      }
-      const option = String(event.option ?? "").toLowerCase();
-      if (option === "check") {
-        event.handled = true;
-        checkCharges(event);
-      } else if (option === "uncharge" && chargedIds.has(event.itemId)) {
-        event.handled = uncharge(event);
-      }
-    });
+    api.onItemAction(handleItemAction);
     api.onItemOnItem(chargeStaff, { noted: false });
     api.onCustomEvent("item:fill-charges", fillCharges);
     api.onCombatHitResolved(onHitResolved);

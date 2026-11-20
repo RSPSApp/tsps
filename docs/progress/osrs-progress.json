@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-17",
+  "updated": "2026-11-20",
   "note": "Progress measures functional equivalence with OSRS through implementation tasks: done counts fully, in progress counts halfway, and to do counts zero. Automated test coverage is evidence, not a scoring requirement. Reconciled against tsps main 3e9ee2d67 on 11 November 2026, covering 1,355 merged PRs since the 6 November checkpoint 3b61a15a8. This sync credits the implemented portions of Clan Wars, Burthorpe Games Room, ranked PvP Arena, Trouble Brewing, Intelligence Gathering, Halloween, seasonal rares, Brutus and Maggot King. It also records Hunter Rumours, diary and League task updates, Sailing, bank-funded Grand Exchange offers, Curse of the Empty Lord, quest progression fixes, combat and interface work. Existing inventory, task scope and weights are retained. Only merged main changes are credited.",
   "schema": {
     "item": [
@@ -1814,7 +1814,10 @@
             "server/plugins/skills/fishing/MinnowPlatform.Fishing.js",
             "server/plugins/skills/fishing/InfernalHarpoon.Fishing.js",
             "server/plugins/skills/fishing/AnglerOutfit.Fishing.js",
-            "server/tests/fishing.test.cjs"
+            "server/plugins/skills/fishing/Relocation.Fishing.js",
+            "server/data/definitions/fishing-spot-sites.json",
+            "server/tests/fishing.test.cjs",
+            "server/tests/fishing-spot-relocation.test.cjs"
           ],
           "devNotes": [
             "Main 62d662706: #1482 start, catch and miss lines per tool, timing and message boxes from captures.",
@@ -1824,7 +1827,8 @@
             "PR #238 (ea01a637): fish carry the Wiki level, XP and success chart, rolled highest level first; a big net's rolls stand alone, so one cast can land several. Adds pike, big net (mackerel/cod/bass), monkfish, frog spawn, slimy/cave/lava/infernal/sacred eels, anglerfish, dark crabs and barbarian fishing with Strength/Agility requirements and XP.",
             "Harpoon variants resolve best first with the Wiki catch bonuses (dragon and infernal 20%, charged crystal 35%, inactive crystal as dragon; barb-tail and pearl rods as their plain versions); a charged infernal harpoon has a 1 in 3 chance to cook each catch for half Cooking XP and one of 5,000 charges, and can be made or recharged with a smouldering stone.",
             "The Fishing Guild door needs 68 Fishing (boosts count; leaving is free), the guild interior grants an invisible +7, and the minnow platform has Kylie Minnow's access rules, row boats, spots that move one tile clockwise every 25 ticks, flying fish and her 40 minnows for a noted raw shark exchange. Covered by server/tests/fishing.test.cjs.",
-            "Remaining gaps: quest gates for monkfish (Swan Song) and barbarian fishing (Barbarian Training), Tempoross/Fishing Trawler/Fishing Contest spots, clue bottles, per-harpoon animations, non-minnow spot movement still random, and Kylie's trade dialogue (her Trade option works).",
+            "Remaining gaps: quest gates for monkfish (Swan Song) and barbarian fishing (Barbarian Training), Tempoross/Fishing Trawler/Fishing Contest spots, clue bottles, per-harpoon animations, movement of spots on no captured site (see the #6349 note), and Kylie's trade dialogue (her Trade option works).",
+            "Issue #6349 (20 November 2026): spots move. Relocation.Fishing.js jumps each spot to a free tile of its captured site on the Wiki's timers (Fishing spots: 250-530 ticks; sacred/infernal eels 100-300; anglerfish 8-830), with sound 2601 at the tile left; a session on a moving spot ends with no message or animation reset, as captured. Sites come from rsprox captures (osrs-captures rsprox_fishing_spots.py -> server/data/definitions/fishing-spot-sites.json; Lumbridge Swamp: 5 spots on 8 tiles, 268/268 jumps to a free tile). Camdozaal spots now move (recording 1444). Remaining: 291 of 520 spawned spots (50 spot ids) sit on no captured site and keep the old 1-in-91 session stop instead of moving, and some spawn counts differ from live's spots per site; both need captures or a spawn correction. Covered by server/tests/fishing-spot-relocation.test.cjs and server/tests/fishing.test.cjs.",
             "Client feedback connected by PR #209 (be801847): native level-up display with per-skill model, level-up clears the interrupted animation, cache frame sounds replace duplicate explicit sends, and movement cancels pending actions; see server/docs/skill-client-feedback.md.",
             "Main sync 9949ef068: PR #639 adds Tempoross harpoonfish spots; PR #656 adds the fish barrel and tackle box storage items.",
             "Main 3b61a15a8 (6 November 2026): #2313 Add Rada's blessing's chance of an extra fish; #2333 fix(leagues): Leagues VI bugs from #2324; #2467 Restore missing unique drop sources and spirit angler exchange; #2510 fix: Varlamore fixes from #2449 (Cam Torum doors, Renu, pets, ground items) and fishing interrupt; #2528 Implement remaining Morytania diary activities. Existing completion credit and documented limitations are retained unless explicitly updated below.",

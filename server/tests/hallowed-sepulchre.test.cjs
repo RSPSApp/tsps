@@ -828,6 +828,20 @@ test('the F3 Holy barrier gives 75 Agility XP (2413 -> 2415 at y 5828), and the 
   run.finish();
 });
 
+test('the Holy barrier is given up if the player walks off its start tile before the pass', () => {
+  const p = fakePlayer();
+  const run = startRun(p);
+  onFloor(run, p, 2, 0, [2519, 5960, 2]);
+  run.states.hallowed_prayer_state = 2;
+  click(p, 39534, 1, locOf(run, 39534, [2520, 5960, 2]));
+  p.moveTo(run.area.at([2517, 5962, 2]));
+  ticks(3);
+  assert.deepEqual(run.area.templateOf(p.getLocation()), [2517, 5962, 2]);
+  assert.equal(p.xp.AGILITY ?? p.xp.Agility ?? 0, 0);
+  assert.equal(varbit(p, 'hallowed_prayer_xp_earned'), 0);
+  run.finish();
+});
+
 test("every drop lands by its face, the rule the unrecorded F4 north drop's landing comes from", () => {
   const { getTemplateRegion } = require('../dist/game/collision/TemplateRegionData');
   const byFace = { 0: [1, -3], 1: [-3, 1], 2: [1, 3], 3: [3, 1] };

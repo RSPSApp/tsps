@@ -353,10 +353,13 @@ function barrier(event) {
   const { run, tile } = found;
   const { player } = run;
   if (stateOf(run, "hallowed_prayer_state") !== 2) return false;
-  const { to } = barrierPass(run, tile, run.area.templateOf(player.getLocation()));
+  const { from, to } = barrierPass(run, tile, run.area.templateOf(player.getLocation()));
   if (!run.act(BARRIER_DELAY + BARRIER_BUSY, { agility: true })) return true;
   player.getMovementQueue().reset();
   run.schedule(BARRIER_DELAY, () => {
+    // Walked off the start tile in the gap tick: the pass is given up, with no XP (ours: no recording).
+    const here = run.area.templateOf(player.getLocation());
+    if (here[0] !== from[0] || here[1] !== from[1] || here[2] !== from[2]) return;
     const at = run.area.at(to);
     ObstacleRunner.run({ player, object: event.object }, [
       { walk: [[at.getX(), at.getY()]], tilesPerTick: 2, traversalType: 1, arrive: true },

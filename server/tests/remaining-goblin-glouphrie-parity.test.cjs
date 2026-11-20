@@ -1766,7 +1766,7 @@ test('Eyes machine object opens native panel and validates disc slots through ca
   button((189 << 16) | 38);
   assert.equal(inventory.getAmount(I.GREEN_SQUARE), 1, 'cancel leaves inventory intact');
   select(2); button((189 << 16) | 24);
-  select(2); button((189 << 16) | 25); // one slot cannot fill two positions
+  select(2); button((189 << 16) | 25); // one held copy cannot fill two positions
   button((189 << 16) | 27);
   assert.equal(h.quest.getStage(p), 9);
   assert.equal(inventory.getAmount(I.GREEN_SQUARE), 1, 'incomplete row activation consumes nothing');
@@ -1834,4 +1834,94 @@ test('singing bowl Inspect opens the crystal-bowl mesbox', () => {
   assert.equal(texts.get((229 << 16) | 3),
     "This is a beautiful and elegant looking crystal bowl. It is clearly of<br>elvish origin, and reminds you of a large crystal drinking glass.<br>Every now and again you're sure you can hear the bowl resonate<br>with sounds echoing around the cave, giving off a keening noise that<br>makes you think for a moment that it's calling home.");
   assert.deepEqual(messages, [], 'no game-message line');
+});
+
+test('Eyes machine native widget inputs reserve stacked copies and pay each reserved unit atomically', async (t) => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
+  const api = PluginManager.createApi('EyesDiscStackNative');
+  const spawned = [], spawnNpc = api.spawnNpc;
+  api.spawnNpc = (definition) => { const npc = spawnNpc(definition); if (npc) spawned.push(npc); return npc; };
+  require('../plugins/quests/quests/EyesOfGlouphrie.Quest')(api);
+  const quest = runtime.getRegisteredQuests().at(-1);
+  const packets = [], channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: (packet) => { packets.push(packet); return true; }, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(9001); p.setUsername('oaknockstack'); p.setRegistered(true); p.setNeedsPlacement(false);
+  p.setLocation(new core.Location(2390, 9825, 0));
+  const connection = new ClientConnection(channel); connection.player = p;
+  const inventory = p.getInventory();
+  const green = I.GREEN_SQUARE, blue = I.BLUE_TRIANGLE;
+  assert.ok(core.ItemDefinition.forId(green).isStackable() && core.ItemDefinition.forId(blue).isStackable());
+  inventory.setItem(0, new core.Item(green, 3, { stack: 'preserve' }));
+  inventory.setItem(1, new core.Item(blue, 2));
+  quest.setStage(p, 9);
+  t.after(() => {
+    p.closeInterruptibleInterfaces(); p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex());
+    for (const npc of spawned) api.removeNpc(npc);
+  });
+  const open = () => {
+    p.closeInterruptibleInterfaces();
+    const objectId = 17282, definition = ObjectDefinition.forPlayer(objectId, p);
+    const event = { player: p, objectId, definition, clickType: definition.getInteractions().indexOf('Operate') + 1,
+      option: 'operate', object: new core.GameObject(objectId, new core.Location(2390, 9826, 0), 10, 0), handled: false };
+    assert.equal(PluginManager.emitObjectInteraction(event), true);
+    assert.equal(p.getInterfaceId(), 189, 'ordinary Operate opens the cache machine panel');
+  };
+  const click = async (group, child, slot = 0xffff, itemId = 0xffff) => {
+    const frame = Buffer.alloc(9); frame[0] = 23; // native IF_BUTTON1
+    frame.writeInt32BE((group << 16) | child, 1); frame.writeUInt16BE(slot, 5); frame.writeUInt16BE(itemId, 7);
+    const decoded = decodeClientPackets(frame);
+    assert.equal(decoded.length, 1);
+    await connection.dispatch(decoded); connection.processTurnPackets();
+  };
+  const insert = async (slot, row) => {
+    await click(185, 0, slot, inventory.getItems()[slot].getId());
+    await click(189, 24 + row);
+  };
+  open();
+  await insert(0, 0);
+  await insert(0, 2); await insert(0, 2); await insert(0, 2);
+  assert.equal(p.getPacketSender().getVarp(854), green, 'second copy from the same stack fills another position');
+  assert.equal(p.getPacketSender().getVarp(855), -1, 'one stack cannot reserve more than its three owned copies across rows');
+  inventory.getItems()[0].setAmount(5);
+  await insert(0, 2); await insert(1, 1); await insert(1, 1);
+  assert.deepEqual([850, 851, 852, 853, 854, 855].map((id) => p.getPacketSender().getVarp(id)),
+    [green, blue, blue, green, green, green]);
+  const before = inventory.getItems();
+  inventory.getItems()[0].setAmount(3);
+  await click(189, 39);
+  assert.equal(quest.getStage(p), 9, 'a reduced stack invalidates payment');
+  assert.equal(inventory.getItems(), before, 'stale quantities cannot consume any stack');
+  const fill = async () => {
+    open();
+    await insert(0, 0); await insert(0, 2); await insert(0, 2); await insert(0, 2);
+    await insert(1, 1); await insert(1, 1);
+  };
+  inventory.getItems()[0].setAmount(5);
+  await fill();
+  inventory.getItems()[0].setId(I.RED_SQUARE);
+  await click(189, 39);
+  assert.equal(quest.getStage(p), 9, 'a changed slot id invalidates its reservations');
+  assert.equal(inventory.getAmount(blue), 2);
+  inventory.getItems()[0].setId(green).setAmount(5);
+  await fill();
+  const setStage = quest.setStage;
+  quest.setStage = () => { throw new Error('stacked activation stage failure'); };
+  const errors = [];
+  const error = t.mock.method(console, 'error', (...args) => errors.push(args.join(' ')));
+  await click(189, 39);
+  quest.setStage = setStage; error.mock.restore();
+  assert.ok(errors.some((line) => line.includes('stacked activation stage failure')));
+  assert.equal(inventory.getItems(), before, 'failed activation restores the complete original array');
+  assert.deepEqual([inventory.getAmount(green), inventory.getAmount(blue)], [5, 2]);
+  await click(189, 39);
+  assert.equal(quest.getStage(p), 10);
+  assert.deepEqual([inventory.getAmount(green), inventory.getAmount(blue)], [1, 0], 'all six reserved units are paid once');
+  assert.deepEqual(inventory.getItems()[0].getMeta(), { stack: 'preserve' });
+  await click(189, 39);
+  assert.equal(inventory.getAmount(green), 1, 'a repeated native activation cannot pay again');
+  assert.ok(packets.length > 0, 'real PacketSender output was emitted');
 });

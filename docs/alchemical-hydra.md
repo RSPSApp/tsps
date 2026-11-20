@@ -138,7 +138,7 @@ the rsprox index. Ticks below are counts of events across them.
 
 ## Recorded values kept over the Wiki
 
-These three follow the recordings although the Wiki's Strategies page says otherwise. That was
+These four follow the recordings although the Wiki's Strategies page says otherwise. That was
 the user's decision for this alignment (PR #6346); a maintainer should confirm it.
 
 - The fire walls are **4 wide and 8 long**, as every recorded breath is (83 runs). The Wiki says
@@ -147,6 +147,8 @@ the user's decision for this alignment (PR #6346); a maintainer should confirm i
   short. The Wiki says "roughly seven ticks".
 - A lightning current lasts **12 ticks**, as in 231 recorded currents. The Wiki says "the
   lightning doesn't despawn".
+- The currents start on the 3x3 blocks 5-6 tiles from the room's centre, one a quadrant, as every
+  recorded spread does (152). The Wiki says they spawn "in the four corners of the chamber".
 
 ## Not reproduced
 

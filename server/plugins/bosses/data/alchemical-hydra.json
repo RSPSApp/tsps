@@ -161,7 +161,7 @@
     "lifetime": 12,
     "bindTicks": 3,
     "_source": "The Wiki: four currents close in on the player and bind them for up to 22, dissipating on a phase change. rsprox: the caster flies 30 to 40 + 5 a tile onto the room's centre; 3 ticks later the currents leave it, one a tick (flights 15+30n to 30+30n), each showing on its tile and stepping a tile toward the player every tick for 12 ticks; a player paralysed by one first moves 3 ticks after it (24 of 24 clicks on the hit tick).",
-    "_recorded": "Recorded current hits are 8-17; the Wiki's 22 is used. Kept from the recordings over the Wiki (user decision, PR #6346): a current lasts 12 ticks (Wiki: 'the lightning doesn't despawn')."
+    "_recorded": "Recorded current hits are 8-17; the Wiki's 22 is used. Kept from the recordings over the Wiki (user decision, PR #6346): a current lasts 12 ticks (Wiki: 'the lightning doesn't despawn'), and the currents start on the quadrant blocks around the centre (Wiki: 'in the four corners of the chamber')."
   },
   "fire": {
     "carpetWidth": 4,

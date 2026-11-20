@@ -201,6 +201,8 @@ class Fight {
     const ticks = PHASES()[from].transitionTicks;
     // It holds still while it changes (rsprox: no step in 872 transition ticks), and the player's
     // attack ends quietly: their next needs a click (425 of 426), the refusal answering only clicks.
+    // A fire special it was in ends first: ending it releases the walk's hold.
+    this.endFireSpecial();
     this.npc.getMovementQueue?.().reset?.();
     this.npc.setScriptedMovement?.(true);
     for (const player of this.lair.players()) {

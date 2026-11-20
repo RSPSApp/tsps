@@ -554,6 +554,7 @@ test('it holds still through a form change, ending the player\'s attack quietly;
   npc.hitpoints = 274;
   fight.startFire(player);
   fight.checkPhase();
+  assert.equal(npc.scripted, true, 'held still through a change that cut its fire special short');
   assert.equal(require('../plugins/bosses/alchemicalhydra/Fight.AlchemicalHydra').lifeOf(npc).fireBreaths, 0, 'The Flame Skipper: no wall was breathed');
   tasks = [];
   fight.stop();

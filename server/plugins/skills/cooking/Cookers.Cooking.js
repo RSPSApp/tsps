@@ -119,9 +119,27 @@ const COOKABLE_OBJECT_NAMES = new Set([...RANGE_OBJECT_NAMES, ...HOUSE_RANGE_NAM
 // 26180, qip_sheep_shearer_fireplacecookingpot 12969, fai_varrock_shanty_cookingpot 7483) stay out:
 // live cooks on 26180 as a fire (rsprox 240/911358 tick 1197-1201, human_firecooking), not a range.
 const COOK_OPTION_ONLY_NAMES = new Set(["Cooking pot"]);
+// Wiki (Fireplace): "The fireplace can be used like a camping fire to cook any meat, fish, or
+// seafood and carries the same burn rate as a regular fire", and it cannot cook range food. These
+// are the lit, option-less fireplaces of its infobox; live cooks raw shrimps on 24969 in Draynor
+// Village with human_firecooking (rsprox capture 1001621 tick 627-637). Misthalin Mystery's riddle
+// fireplace (30136 unlit, 30137 Search) stays out. Many other locs share the name "Fireplace" (unlit
+// ones, quest props), so these go by id.
+const FIREPLACE_IDS = new Set([
+  4618, 4650, 5165, 7185, 8712, 10058, 10824, 17640, 17641, 17642, 17643, 21795, 24969, 24970, 26179, 30138,
+]);
 
-function cookAnimationFor(name) {
-  const seq = FIRE_OBJECT_NAMES.has(name) || HOUSE_RANGE_NAMES.has(name) ? "human_firecooking" : "human_cooking";
+/** Whether this loc cooks as a fire: a fire by name, or a lit fireplace. */
+function isFire(definition) {
+  if (!definition) return false;
+  return FIRE_OBJECT_NAMES.has(definition.getName()) || FIREPLACE_IDS.has(definition.id);
+}
+
+/** The cook animation: human_firecooking on a fire (or `name` a fire's) or the house's stoves. */
+function cookAnimationFor(nameOrDefinition) {
+  const name = typeof nameOrDefinition === "string" ? nameOrDefinition : nameOrDefinition?.getName();
+  const fire = typeof nameOrDefinition === "string" ? FIRE_OBJECT_NAMES.has(name) : isFire(nameOrDefinition);
+  const seq = fire || HOUSE_RANGE_NAMES.has(name) ? "human_firecooking" : "human_cooking";
   return new Common.core.Animation(Common.gameval("seq", seq));
 }
 
@@ -160,7 +178,7 @@ function diaryComplete(player, tier) {
 function onRange(objectId) {
   if (objectId === undefined) return false;
   const name = Common.core.CacheDefinitions.getObject(objectId)?.name;
-  return !!name && !FIRE_OBJECT_NAMES.has(name);
+  return !!name && !FIRE_OBJECT_NAMES.has(name) && !FIREPLACE_IDS.has(objectId);
 }
 
 /** The cooker kind a session gives; without one, the object's ("range" when there is no object either). */
@@ -263,7 +281,7 @@ function canCook(player, object, cookable) {
     player.sendMessage("To use this item please login to a members' world.");
     return false;
   }
-  if (cookable.gnomeTutorial && FIRE_OBJECT_NAMES.has(object.getDefinition().getName())) {
+  if (cookable.gnomeTutorial && isFire(object.getDefinition())) {
     Common.mesbox(player, CANNOT_COOK_MESSAGE);
     return false;
   }
@@ -362,8 +380,8 @@ function startCooking(player, object, cookable, sessions = activeSessions, amoun
   ensureCookTask();
   sessions.set(player, {
     cookable, selected, alternates,
-    animation: cookAnimationFor(object.getDefinition().getName()),
-    cooker: FIRE_OBJECT_NAMES.has(object.getDefinition().getName()) ? "fire" : "range",
+    animation: cookAnimationFor(object.getDefinition()),
+    cooker: isFire(object.getDefinition()) ? "fire" : "range",
     objectId: object.getId(),
     objectType: object.getType(),
     objectFace: object.getFace(),
@@ -675,6 +693,7 @@ function isCooker(definition) {
   const actions = definition.getInteractions() ?? [];
   const name = definition.getName();
   if (COOK_OPTION_ONLY_NAMES.has(name)) return actions.includes("Cook");
+  if (FIREPLACE_IDS.has(definition.id)) return true;
   // A Forester's Campfire has no Cook action; food is used on it directly.
   return COOKABLE_OBJECT_NAMES.has(name)
     && (!actions.some(Boolean) || actions.includes("Cook") || FIRE_OBJECT_NAMES.has(name));
@@ -685,14 +704,14 @@ function handleCook(event) {
   if (!isCooker(definition)) return;
 
   const cookable = cookableFor(event.itemId);
-  if (!cookable || (cookable.rangeOnly && FIRE_OBJECT_NAMES.has(definition.getName()))) {
+  if (!cookable || (cookable.rangeOnly && isFire(definition))) {
     return;
   }
 
   event.handled = true;
   const selected = cookable.gnomeTutorial ? { item: event.item, slot: event.itemSlot } : null;
   if (selected && !validSelectedInput(event.player, cookable, selected)) return;
-  offerCook(event.player, event.object, withSinew([cookable], FIRE_OBJECT_NAMES.has(definition.getName())), false, selected);
+  offerCook(event.player, event.object, withSinew([cookable], isFire(definition)), false, selected);
 }
 
 /** Anything else used on a cooker, when no other content takes it (rsprox captures 269, 1718). */
@@ -703,7 +722,7 @@ function refuseCook(event) {
 }
 
 function handleCookClick(event) {
-  const onFire = FIRE_OBJECT_NAMES.has(event.object.getDefinition().getName());
+  const onFire = isFire(event.object.getDefinition());
   const cookables = carriedCookables(event.player, onFire);
   if (cookables.length === 0) {
     Common.mesbox(event.player, NOTHING_TO_COOK_MESSAGE);
@@ -783,7 +802,7 @@ function attachCookers(api) {
 }
 
 module.exports = Object.assign(attachCookers, {
-  isCookingActive, isCooker, canCookFood, COOKABLE_OBJECT_NAMES, FIRE_OBJECT_NAMES,
+  isCookingActive, isCooker, isFire, canCookFood, COOKABLE_OBJECT_NAMES, FIRE_OBJECT_NAMES, FIREPLACE_IDS,
   _test: {
     startCooking, offerCook, cookOne, isSuccess, successChance, stopBurnLevel, successMessage, burnMessage, cookAnimationFor,
     cookableFor, canCook, activeSessions, handleCook, handleCookClick,

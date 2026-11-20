@@ -231,6 +231,48 @@ test("pies and pizzas bake on a range with the captured lines, never on a fire",
   assert.deepEqual(onRange.sent.menu.getItems(), [obj("uncooked_apple_pie")]);
 });
 
+test("a lit fireplace cooks like a fire (Wiki: Fireplace; rsprox capture 1001621 tick 627)", () => {
+  core.ObjectDefinition.init();
+  core.RegionManager.init();
+  const id = core.CacheDefinitions.getLocId("fireplace");
+  assert.equal(id, 24969);
+  // The Draynor Village fireplace the capture cooks raw shrimps on.
+  const placed = core.MapObjects.get(id, new core.Location(3100, 3256, 0), null);
+  assert.ok(placed, "fireplace 24969 at 3100,3256");
+  const definition = placed.getDefinition();
+  assert.equal(definition.getName(), "Fireplace");
+  assert.equal(Cooking.isCooker(definition), true);
+  const fireplace = {
+    getId: () => id, getType: () => 10, getFace: () => 0, getDefinition: () => definition,
+    getLocation: () => new core.Location(3100, 3256, 0), getPrivateArea: () => null,
+  };
+  const use = hooks.itemOnObject.find(({ filter }) => !filter.fallback).handler;
+
+  const shrimps = player(18, [[ItemIds.RAW_SHRIMPS, 9]]);
+  const event = { player: shrimps, object: fireplace, itemId: ItemIds.RAW_SHRIMPS, handled: false };
+  use(event);
+  assert.equal(event.handled, true);
+  assert.equal(shrimps.sent.menu.getTitle(), "How many would you like to cook?");
+  assert.deepEqual(shrimps.sent.menu.getItems(), [ItemIds.RAW_SHRIMPS]);
+  assert.equal(Cooking._test.cookAnimationFor(definition).getId(), core.CacheDefinitions.getSeqId("human_firecooking"));
+  // A fire's burn rates, not a range's.
+  const trout = Cooking.COOKABLE_BY_RAW.get(ItemIds.RAW_TROUT);
+  assert.equal(Cooking._test.stopBurnLevel({}, trout, id), Cooking._test.stopBurnLevel({}, trout, undefined, "fire"));
+
+  // No range food (Wiki: no bread, stews, cakes, pies or pizzas), and no sinew from meat.
+  const pie = player(99, [[obj("uncooked_apple_pie"), 1]]);
+  const pieEvent = { player: pie, object: fireplace, itemId: obj("uncooked_apple_pie"), handled: false };
+  use(pieEvent);
+  assert.equal(pieEvent.handled, false, "left to the fallback's \"You can't cook that.\"");
+  const beef = player(99, [[obj("raw_beef"), 1]]);
+  use({ player: beef, object: fireplace, itemId: obj("raw_beef"), handled: false });
+  assert.equal(beef.sent.menu, null, "one raw beef cooks straight away, without the range's Sinew choice");
+  Cooking._test.activeSessions.clear();
+
+  // Misthalin Mystery's riddle fireplace and the unlit ones stay out.
+  for (const other of [30136, 30137, 9441, 61732]) assert.equal(Cooking.isCooker(core.ObjectDefinition.forId(other)), false, String(other));
+});
+
 /** A player whose inventory really changes, for the item-on-item recipes. */
 function maker(cooking, carried) {
   const p = player(cooking, []);

@@ -84,6 +84,13 @@ highest). Every charted food stops burning by 150 on every cooker.
   `human_firecooking`; every other range and oven (`range`, `cooksquestrange`, `fortis_stove`
   "Oven") plays `human_cooking`. Each food plays `synth_sound 2577`. Pies and pizzas bake the
   same way, on a range only.
+- **Fireplaces.** A lit fireplace cooks as a fire (Wiki: Fireplace: "carries the same burn rate
+  as a regular fire", and no range food). rsprox capture 1001621 (rev 241) uses raw shrimps on
+  the Draynor Village fireplace (`fireplace` 24969, 3100,3256) at tick 627: the how-many menu,
+  then `human_firecooking`, sound 2577 and the usual shrimp lines and burn. The ids are the
+  Wiki infobox's lit ones (4618, 4650, 5165, 7185, 8712, 10058, 10824, 17640-17643, 21795,
+  24969, 24970, 26179, 30138); Misthalin Mystery's riddle fireplace (30136/30137) is not one.
+  Other locs named "Fireplace" (unlit, quest props, house fireplaces) are not cookers.
 - **Lines** (spam channel). "You successfully cook a shark." / "an anglerfish" / "some shrimps"
   for most fish; "You cook a bass.", "You manage to cook a tuna.", "You cook the rabbit.", "You
   cook a piece of meat.", "You cook the thin snail.", "You successfully bake some bread.", and for

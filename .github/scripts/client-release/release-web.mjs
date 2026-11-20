@@ -18,7 +18,14 @@ export function packageWebRelease(dist, out, version, baseUrl) {
     const outputRelative = relative(dist, out);
     if (!isAbsolute(outputRelative) && outputRelative !== ".." && !outputRelative.startsWith(`..${sep}`)) throw new Error("Release output must be outside the client build");
     if (!statSync(join(dist, "index.html")).isFile()) throw new Error("Client build is missing index.html");
-    const entries = readdirSync(dist).filter(name => !excluded.has(name));
+    const cacheMetadata = "caches/caches.json";
+    if (lstatSync(join(dist, "caches")).isSymbolicLink()) throw new Error("Client releases cannot contain links in cache metadata");
+    const cacheList = JSON.parse(readFileSync(join(dist, cacheMetadata), "utf8"));
+    if (!Array.isArray(cacheList) || cacheList.length === 0 || cacheList.some(cache =>
+        typeof cache?.name !== "string" || !/^[A-Za-z0-9_-]+$/.test(cache.name) || !Number.isInteger(cache.revision) || cache.revision <= 0)) {
+        throw new Error("caches.json must pin the release's cache name and revision");
+    }
+    const entries = [...readdirSync(dist).filter(name => !excluded.has(name)), cacheMetadata];
     function checkFile(path) {
         const stat = lstatSync(path);
         if (stat.isDirectory()) for (const name of readdirSync(path)) checkFile(join(path, name));

@@ -1,0 +1,33 @@
+# Desktop integration in shared web-client releases
+
+The native wrapper injects `window.__RSPS_DESKTOP_PROFILE__` before loading the
+web client. The profile uses the existing `ConfiguredServer` shape: name, address,
+secure, maxPlayers and optional WebRTC transport/signalUrl/worldId/iceServers.
+The desktop client starts on that configured world every launch; players can
+still switch worlds within the session. Browser clients without a profile keep
+restoring their saved world and existing deep links.
+
+After cache and renderer initialization, the desktop client acknowledges startup
+through `plugin:hot-update|notify_app_ready`. Failed initialization is not
+acknowledged. The wrapper owns activation/rollback and the desktop skips browser
+service-worker registration. Browser registration stays unchanged.
+
+## Cache data and release pinning
+
+There is one cache loader. Desktop clients use the same range requests, full-load
+fallback, persistence and progress UI as browser clients. Desktop cache data comes
+from `https://rsps.app/play/caches/`, while each signed release contains its own
+`caches/caches.json` naming the matching immutable cache directory/revision. A
+rollback restores that older cache selection. Cache data is not bundled in web
+releases. Missing hosted data produces the existing startup failure, rather than
+silently selecting the latest cache.
+
+`REACT_APP_CACHE_BASE_URL` overrides the data location at web-client build time,
+so a CDN change can ship as a web release without a native-wrapper update.
+Desktop still reads the release's local `caches.json`. Browser cache URLs,
+metadata selection and on-demand loading remain unchanged. On custom-scheme
+WebKit origins, the existing IndexedDB fallback replaces unsupported CacheStorage.
+
+This PR contains the TSPS/web-client side only. Native installers must inject the
+profile and implement the acknowledgement command; installer generation, signing
+and `/host` download controls are separate.

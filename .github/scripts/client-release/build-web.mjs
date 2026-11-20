@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { cpSync, mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const result = spawnSync("yarn", ["build"], {
@@ -15,4 +16,9 @@ const result = spawnSync("yarn", ["build"], {
     stdio: "inherit",
 });
 if (result.error) throw result.error;
-process.exit(result.status ?? 1);
+if (result.status !== 0) process.exit(result.status ?? 1);
+// Keep the release's cache selection, without putting game cache data in the bundle.
+const output = new URL("../../../client/build/caches/", import.meta.url);
+rmSync(output, { recursive: true, force: true });
+mkdirSync(output, { recursive: true });
+cpSync(new URL("../../../server/caches/caches.json", import.meta.url), new URL("caches.json", output));

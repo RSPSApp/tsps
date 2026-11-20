@@ -35,8 +35,14 @@ function resolveCacheKey(cacheName: string): string {
     return `${CACHE_STORAGE_PREFIX}${cacheName}`;
 }
 
+export function canUseCacheStorage(): boolean {
+    // WebKit CacheStorage rejects custom-scheme URLs, including Tauri's bundled assets.
+    return typeof globalThis.caches !== "undefined"
+        && (typeof globalThis.location === "undefined" || /^https?:$/.test(globalThis.location.protocol));
+}
+
 export async function openCache(cacheName: string): Promise<CacheLike> {
-    if (typeof (globalThis as any).caches !== "undefined") {
+    if (canUseCacheStorage()) {
         return (await (globalThis as any).caches.open(resolveCacheKey(cacheName))) as CacheLike;
     }
     try {
@@ -370,7 +376,7 @@ async function createIdbCache(cacheName: string): Promise<CacheLike> {
 }
 
 export async function pruneCacheStorage(keepNames: string[]): Promise<void> {
-    if (typeof (globalThis as any).caches === "undefined") {
+    if (!canUseCacheStorage()) {
         return;
     }
     try {

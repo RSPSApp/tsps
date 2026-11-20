@@ -144,7 +144,7 @@ function afterWithdraw(player, house, furniture) {
   return true;
 }
 
-/** Every display loc: the blank one and each lair (their names differ, so they are matched by id). */
+/** Every display loc: the blank one and each lair; their cache names are hooked one by one in attachBossLair. */
 const DISPLAY_LOCS = new Set([BLANK, ...LAIRS.map(lair => lair.loc)]);
 
 function configureOption(event) {

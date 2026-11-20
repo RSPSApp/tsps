@@ -141,6 +141,7 @@ function rub(event, random = Math.random) {
 
 module.exports = function registerVoidSeal(api) {
   core = api.core;
+  require("../../items/JewelleryPlaceholders")(api, [SEALS.map(name => core.ItemIdentifiers[name]).reverse()]);
   for (let charges = 1; charges <= SEALS.length; charges++) {
     api.onItemAction(`Void seal(${charges})`, { Rub: (event) => rub(event) });
   }

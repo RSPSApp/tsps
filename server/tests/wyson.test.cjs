@@ -12,11 +12,13 @@ class Item {
     getId() { return this.id; }
 }
 let condition, variant;
+let membersWorld = true;
 const actions = [];
 const action = (event) => { for (const handler of actions) handler(event); };
 Wyson.register({
     core: {
         Item,
+        WorldDefinition: { isMembersWorld: () => membersWorld },
         NpcIdentifiers: { WYSON_THE_GARDENER: WYSON },
         ItemIdentifiers: { COINS, WOAD_LEAF, MOLE_CLAW, MOLE_SKIN, IMMACULATE_MOLE_SKIN,
             BIRD_NEST_12: SEED_NEST, BIRD_NEST_5: RING_NEST, BIRD_NEST_6: EMPTY_NEST },
@@ -171,4 +173,36 @@ test('other action steps and NPCs are left alone', () => {
     const notWyson = { npcId: 1, pages, stepId: 'T0rsOq', player: p };
     action(notWyson);
     assert.deepEqual([other.handled, notWyson.handled, p.ids()[0]], [undefined, undefined, MOLE_CLAW]);
+});
+
+test('free worlds keep the ordinary dialogue even when carrying mole parts', (t) => {
+    membersWorld = false;
+    t.after(() => { membersWorld = true; });
+    for (const id of [MOLE_CLAW, MOLE_SKIN, IMMACULATE_MOLE_SKIN]) {
+        assert.equal(variant({ npcId: WYSON, player: slotted([id]) }), null);
+    }
+});
+
+test('a mole trade selected on a members world cannot commit or replay after membership changes', (t) => {
+    t.after(() => { membersWorld = true; });
+    const p = slotted([MOLE_CLAW, MOLE_SKIN, IMMACULATE_MOLE_SKIN, COINS]);
+    assert.equal(variant({ npcId: WYSON, player: p }).variant, IMMACULATE_VARIANT);
+    const before = p.ids();
+    membersWorld = false;
+    for (const stepId of ['XwNH58', 'T0rsOq', 'XwNH58']) {
+        const event = { npcId: WYSON, pages, stepId, player: p };
+        action(event);
+        assert.deepEqual(p.ids(), before, 'blocked commit preserves every inventory slot');
+        assert.equal(event.handled, true);
+        assert.equal(event.end, true, 'stale trade dialogue ends');
+    }
+    assert.equal(p.refreshed, 0);
+});
+
+test('free-world woad sales still exchange twenty coins for two leaves', (t) => {
+    membersWorld = false;
+    t.after(() => { membersWorld = true; });
+    const p = player(20);
+    action({ npcId: WYSON, pages, action: 'receive', stepId: 'F6m-S9', player: p });
+    assert.deepEqual([p.items.get(COINS), p.items.get(WOAD_LEAF)], [0, 2]);
 });

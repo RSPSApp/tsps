@@ -30,6 +30,7 @@ const COIN_CONDITIONS = new Map([
 ]);
 const NOT_ENOUGH_COINS_LINE = "I don't have enough coins to buy the leaves. I'll come back later.";
 const NO_ROOM_MESSAGE = "You don't have enough inventory space.";
+const MEMBERS_WORLD_MESSAGE = "To use this item please login to a members' world.";
 
 function isWyson(core, event) {
   return event.npcId === core.NpcIdentifiers.WYSON_THE_GARDENER
@@ -42,7 +43,7 @@ function moleParts(core) {
 }
 
 function selectVariant(core, event) {
-  if (event.npcId !== core.NpcIdentifiers.WYSON_THE_GARDENER) return null;
+  if (event.npcId !== core.NpcIdentifiers.WYSON_THE_GARDENER || !core.WorldDefinition.isMembersWorld()) return null;
   const inventory = event.player.getInventory();
   const { parts, immaculate } = moleParts(core);
   if (inventory.getAmount(immaculate) > 0) return { page: PAGE, variant: IMMACULATE_VARIANT };
@@ -61,6 +62,12 @@ function rollNest(core) {
 function tradeMoleParts(core, event) {
   if (!TRADE_STEPS.has(event.stepId) || !isWyson(core, event)) return;
   event.handled = true;
+  // Membership may change while the dialogue is open.
+  if (!core.WorldDefinition.isMembersWorld()) {
+    event.player.sendMessage(MEMBERS_WORLD_MESSAGE);
+    event.end = true;
+    return;
+  }
   const inventory = event.player.getInventory();
   const { parts, immaculate } = moleParts(core);
   const items = inventory.getItems();

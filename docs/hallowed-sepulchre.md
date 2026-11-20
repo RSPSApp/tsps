@@ -66,6 +66,7 @@ The shop ("Mysterious Hallowed Goods", 1455) is generated data, and `Shopkeepers
   - on that tick `hallowed_prayer_xp_earned` goes up and the busy varbit is set, and busy clears two ticks later;
   - there is no message.
   Agility XP is the Wiki's 50 on floor 2 and 75 on floors 3 and 4, for the first crossing and the return only (recorded 800/16 and 1,200/16).
+  The recording is without the Hallowed symbol: 5 ticks from arrival. The [Wiki](https://oldschool.runescape.wiki/w/Hallowed_symbol) gives 4 with the symbol worn; ours: the busy hold is the tick it saves (busy clears one tick after the walk), as no recording has the symbol worn.
 - **Floor varbits.** Each floor start clears the four `*_xp_earned` varbits and `hallowed_prayer_ashes_offered` along with the state varbits, as recorded.
 - **Coffins.**
   - +2 the picklock; +5 "You successfully disarm the trap on the coffin!" and 200 Thieving XP; +6 "You push the coffin lid aside."; +8 the loot, with one "received a drop" line per item.

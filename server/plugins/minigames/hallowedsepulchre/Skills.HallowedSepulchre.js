@@ -25,9 +25,14 @@ const PILLAR_REACH = 5;
 const NAILS = [4824, 4823, 4822, 4821, 1539, 4820, 4819];
 const BRIDGE_NAILS = 5;
 const BRIDGE_PLANKS = 2;
-/** Holy barrier: the walk one tick after the click is handled (two after arrival), then busy for two. */
+/**
+ * Holy barrier: the walk one tick after the click is handled (two after arrival), then busy for two
+ * (recorded without the symbol: 5 ticks from arrival). The Wiki's Hallowed symbol, worn, makes it
+ * 4 ticks; ours: the busy hold is the tick it saves (no recording with the symbol worn).
+ */
 const BARRIER_DELAY = 1;
 const BARRIER_BUSY = 2;
+const BARRIER_BUSY_SYMBOL = 1;
 
 function stateOf(run, name) {
   return run.variant?.varbits?.[name] ? (run.states?.[name] ?? 1) : 0;
@@ -354,7 +359,9 @@ function barrier(event) {
   const { player } = run;
   if (stateOf(run, "hallowed_prayer_state") !== 2) return false;
   const { from, to } = barrierPass(run, tile, run.area.templateOf(player.getLocation()));
-  if (!run.act(BARRIER_DELAY + BARRIER_BUSY, { agility: true })) return true;
+  const amulet = player.getEquipment().getItems()[Common.core.Equipment.AMULET_SLOT];
+  const busy = amulet?.getId?.() === Common.data.items.symbol ? BARRIER_BUSY_SYMBOL : BARRIER_BUSY;
+  if (!run.act(BARRIER_DELAY + busy, { agility: true })) return true;
   player.getMovementQueue().reset();
   run.schedule(BARRIER_DELAY, () => {
     // Walked off the start tile in the gap tick: the pass is given up, with no XP (ours: no recording).
@@ -368,7 +375,7 @@ function barrier(event) {
     const at = run.area.at(to);
     ObstacleRunner.run({ player, object: event.object }, [
       { walk: [[at.getX(), at.getY()]], tilesPerTick: 2, traversalType: 1, arrive: true },
-      { wait: BARRIER_BUSY },
+      { wait: busy },
     ], { busyVarbit: true, agility: true });
     crossingXp(run, "prayer", floorXp(Common.data.xp.barrier)(run));
   });

@@ -91,7 +91,7 @@ function container() {
   };
 }
 
-function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
+function fakePlayer({ agility = 99, thieving = 99, ring = null, amulet = null } = {}) {
   // A fake can't be snapshotted; a real reward's save request (e.g. a new Collection Log item) skips it, as for bots.
   const attributes = new Map([['bot-skip-persistence', true]]);
   const p = {
@@ -109,6 +109,7 @@ function fakePlayer({ agility = 99, thieving = 99, ring = null } = {}) {
     getEquipment: () => {
       const items = [];
       if (ring) items[Common.core.Equipment.RING_SLOT] = { getId: () => ring };
+      if (amulet) items[Common.core.Equipment.AMULET_SLOT] = { getId: () => amulet };
       return { getItems: () => items };
     },
     sendMessage: (m) => p.messages.push(m),
@@ -826,6 +827,27 @@ test('the F3 Holy barrier gives 75 Agility XP (2413 -> 2415 at y 5828), and the 
   assert.equal(varbit(p, 'hallowed_prayer_xp_earned'), 0);
   assert.equal(varbit(p, 'hallowed_prayer_ashes_offered'), 0);
   run.finish();
+});
+
+test('a worn Hallowed symbol makes the Holy barrier 4 ticks instead of 5 (Wiki): the busy hold is a tick shorter', () => {
+  for (const [amulet, busy] of [[null, 2], [Common.data.items.symbol, 1]]) {
+    const p = fakePlayer({ amulet });
+    const run = startRun(p);
+    onFloor(run, p, 2, 0, [2519, 5960, 2]);
+    run.states.hallowed_prayer_state = 2;
+    const barrier = locOf(run, 39534, [2520, 5960, 2]);
+    click(p, 39534, 1, barrier);
+    ticks(1);
+    assert.deepEqual(run.area.templateOf(p.getLocation()), [2521, 5960, 2], 'the pass starts on the recorded tick');
+    ticks(busy - 1);
+    assert.equal(p.varbits.get(12393), 1, `busy until tick ${busy}`);
+    ticks(1);
+    assert.equal(p.varbits.get(12393), 0);
+    click(p, 39534, 1, barrier);
+    ticks(1);
+    assert.deepEqual(run.area.templateOf(p.getLocation()), [2519, 5960, 2], 'the next pass is taken as soon as busy clears');
+    run.finish();
+  }
 });
 
 test('the Holy barrier is given up if the player walks off its start tile before the pass', () => {

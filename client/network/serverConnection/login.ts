@@ -1,3 +1,4 @@
+import { assertDesktopWorldCompatible } from "../../desktop";
 import { ProtocolGreeting } from "./protocolCompatibility";
 import { decodeBatchedServerPackets } from "../packet/ServerBinaryDecoder";
 import { WS_SUPPRESS_RECONNECT_KEY, LOGIN_CONNECT_RETRY_DELAY_MS } from "./constants";
@@ -52,6 +53,19 @@ export async function sendLogin(
     revision: number = 0,
     flags: number = 0,
 ): Promise<void> {
+    if (typeof window !== "undefined" && window.__RSPS_DESKTOP_PROFILE__) {
+        const attempt = ++state.loginConnectAttemptId;
+        const target = { address: new URL(state.lastUrl).host, secure: state.lastUrl.startsWith("wss:"),
+            transport: state.webRtcConfig ? "webrtc" as const : "websocket" as const,
+            signalUrl: state.webRtcConfig?.signalUrl, worldId: state.webRtcConfig?.worldId, iceServers: state.webRtcConfig?.iceServers };
+        try { await assertDesktopWorldCompatible(target); }
+        catch (error) {
+            if (attempt !== state.loginConnectAttemptId) return;
+            for (const cb of state.loginResponseListeners) cb({ success: false, error: error instanceof Error ? error.message : "Could not check client compatibility" });
+            return;
+        }
+        if (attempt !== state.loginConnectAttemptId) return;
+    }
     // Store credentials for session resumption on reconnect
     state.sessionUsername = username;
     state.sessionPassword = password;

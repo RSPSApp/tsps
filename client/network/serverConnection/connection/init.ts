@@ -1,3 +1,4 @@
+import { assertDesktopWorldCompatible } from "../../../desktop";
 import { resetProtocolCompatibility, startWelcomeTimer, receiveProtocolGreeting, isProtocolRejected } from "../protocolCompatibility";
 import { replaceCustomDefinitions } from "../../../custom/definitions/CustomDefinitionStore";
 import { PlayerSyncContext } from "../../../game/sync/PlayerSyncContext";
@@ -77,7 +78,7 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
             ws.binaryType = "arraybuffer";
         } catch {}
 
-        ws.addEventListener("open", () => {
+        ws.addEventListener("open", async () => {
             if (state.socket !== ws) return;
 
             // Capture reconnecting state before resetting
@@ -105,6 +106,22 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
 
             // If reconnecting with stored credentials, automatically re-login
             if (wasReconnecting && state.sessionUsername && state.sessionPassword) {
+                if (typeof window !== "undefined" && window.__RSPS_DESKTOP_PROFILE__) {
+                    try {
+                        await assertDesktopWorldCompatible({ address: new URL(url).host, secure: url.startsWith("wss:"),
+                            transport: state.webRtcConfig ? "webrtc" : "websocket", signalUrl: state.webRtcConfig?.signalUrl,
+                            worldId: state.webRtcConfig?.worldId, iceServers: state.webRtcConfig?.iceServers });
+                    } catch (error) {
+                        if (state.socket !== ws) return;
+                        const g = window as any;
+                        g[WS_SUPPRESS_RECONNECT_KEY] = true;
+                        state.sessionUsername = null; state.sessionPassword = null; state.hasLoggedIn = false;
+                        ws.close(4003, "client version changed");
+                        for (const cb of state.loginResponseListeners) cb({ success: false, error: error instanceof Error ? error.message : "Could not check client compatibility" });
+                        return;
+                    }
+                    if (state.socket !== ws || !state.sessionUsername || !state.sessionPassword) return;
+                }
                 console.log("[ws] Reconnected - attempting session resumption...");
                 send({
                     type: "login",

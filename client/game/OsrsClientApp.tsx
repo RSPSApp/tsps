@@ -1,4 +1,4 @@
-import { notifyDesktopAppReady } from "../desktop";
+import { assertDesktopWorldCompatible, notifyDesktopAppReady } from "../desktop";
 import { subscribeProtocolNotice, type ProtocolNotice } from "../network/serverConnection/protocolCompatibility";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -234,6 +234,7 @@ function OsrsClientApp() {
         let rendererCheckTimer: ReturnType<typeof setTimeout> | undefined;
 
         const load = async () => {
+            if (window.__RSPS_DESKTOP_PROFILE__) await assertDesktopWorldCompatible(window.__RSPS_DESKTOP_PROFILE__);
             const cacheList = await cachesPromise;
             if (!cacheList) {
                 setErrorMessage("Failed to load cache list");

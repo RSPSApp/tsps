@@ -31,3 +31,28 @@ WebKit origins, the existing IndexedDB fallback replaces unsupported CacheStorag
 This PR contains the TSPS/web-client side only. Native installers must inject the
 profile and implement the acknowledgement command; installer generation, signing
 and `/host` download controls are separate.
+
+## Required client version
+
+`/api/world-info` advertises one `clientVersion` identifier. Server builds and web
+releases derive it from the same workflow inputs using `scripts/client-version.mjs`.
+Server-only changes keep the same identifier. The generated server module is
+compiled into the runtime, including browser-host snapshots, so older running
+worlds keep their own requirement without consulting a global latest pointer.
+
+The build produces `desktop-bootstrap.js` for native installers. It is excluded
+from OTA game archives so the asset provider cannot replace the launcher while
+selecting a game version. The wrapper embeds it in its startup page, independently of
+the active game bundle. It calls `window.__RSPS_DESKTOP_BOOTSTRAP__.manifestUrl(profile)`
+to read world-info over HTTP or the existing pre-login WebRTC content channel.
+That returns only the exact immutable TSPS release URL. The wrapper verifies the
+signed manifest with its trusted key, uses its cached matching bundle or downloads
+that release, and only then opens the game. Never fall back to the latest release.
+A world without version metadata or a failed lookup must show an error and must
+not cause an update. Do not acknowledge an incompatible bundle as a successful boot.
+
+Each bundle carries `client-release.json` with its identifier. Desktop startup and
+login compare it with the selected world's requirement. Incompatible in-game
+world switches are blocked with a message; they do not automatically swap game
+bundles. Browser clients do not perform this desktop check. The wrapper's minimum
+version is now 0.1.2; older latest-only launchers must be upgraded first.

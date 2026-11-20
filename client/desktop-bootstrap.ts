@@ -1,0 +1,6 @@
+import { desktopClientManifestUrl } from "./desktop";
+
+// Embedded by native installers, independently of whichever game bundle is active.
+Object.defineProperty(window, "__RSPS_DESKTOP_BOOTSTRAP__", {
+    value: Object.freeze({ manifestUrl: desktopClientManifestUrl }),
+});

@@ -1,3 +1,4 @@
+import { assertDesktopWorldCompatible } from "../desktop";
 import { AGILITY_HELPER_HIGHLIGHT_OBSTACLES_ENABLED, HELPER_AGILITY_HIGHLIGHTED_COURSE } from "@runelite/api/gameval/VarbitID";
 import { retainedInventory, stopInventoryTransmit } from "./sync/InventoryStopTransmit";
 import { openClientUrl } from "../common/openUrl";
@@ -4451,7 +4452,9 @@ export class OsrsClient {
      * The World Switcher's server chosen in game. While "World Switcher confirmation" is on
      * (varbit 4100 at 0) the list asks first; then the client logs out and connects there.
      */
-    private switchToServer(index: number, confirmed: boolean): void {
+    private desktopWorldSwitchAttempt = 0;
+    private async switchToServer(index: number, confirmed: boolean): Promise<void> {
+        const attempt = ++this.desktopWorldSwitchAttempt;
         const server = this.loginRenderer.serverList[index];
         const transport = server?.transport ?? "websocket";
         const isCurrent =
@@ -4470,8 +4473,19 @@ export class OsrsClient {
             return;
         }
 
+        if (!server) return;
+        if (window.__RSPS_DESKTOP_PROFILE__) {
+            try { await assertDesktopWorldCompatible(server); }
+            catch (error) {
+                if (attempt === this.desktopWorldSwitchAttempt) this.addGameMessage(error instanceof Error ? error.message : "Could not check client compatibility");
+                return;
+            }
+            if (attempt !== this.desktopWorldSwitchAttempt) return;
+        }
+        const currentIndex = this.loginRenderer.serverList.indexOf(server);
+        if (currentIndex < 0) return;
         this.loginState.serverListOpen = false;
-        this.performLogout(() => this.processLoginAction({ type: "select_server", index }));
+        this.performLogout(() => this.processLoginAction({ type: "select_server", index: currentIndex }));
     }
 
     runClientScriptWithInts(scriptId: number, args: number[]): void {

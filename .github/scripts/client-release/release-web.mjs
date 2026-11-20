@@ -5,7 +5,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const tooling = dirname(fileURLToPath(import.meta.url));
-const excluded = new Set(["caches", "desktop-updates", "desktop-startup.html", "desktop-icon.png"]);
+const excluded = new Set(["caches", "desktop-updates", "desktop-startup.html", "desktop-icon.png", "desktop-bootstrap.js"]);
 
 export function packageWebRelease(dist, out, version, baseUrl) {
     if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error("Use a stable client version such as 0.1.2");
@@ -18,6 +18,8 @@ export function packageWebRelease(dist, out, version, baseUrl) {
     const outputRelative = relative(dist, out);
     if (!isAbsolute(outputRelative) && outputRelative !== ".." && !outputRelative.startsWith(`..${sep}`)) throw new Error("Release output must be outside the client build");
     if (!statSync(join(dist, "index.html")).isFile()) throw new Error("Client build is missing index.html");
+    const { clientVersion } = JSON.parse(readFileSync(join(dist, "client-release.json"), "utf8"));
+    if (typeof clientVersion !== "string" || !/^[a-f0-9]{64}$/.test(clientVersion)) throw new Error("Missing client build identifier");
     const cacheMetadata = "caches/caches.json";
     if (lstatSync(join(dist, "caches")).isSymbolicLink()) throw new Error("Client releases cannot contain links in cache metadata");
     const cacheList = JSON.parse(readFileSync(join(dist, cacheMetadata), "utf8"));
@@ -42,7 +44,7 @@ export function packageWebRelease(dist, out, version, baseUrl) {
     if (packed.status !== 0) throw new Error(`Could not package client: ${packed.stderr}`);
     const bytes = readFileSync(archive);
     const manifest = {
-        version, createdAt: new Date().toISOString(), minShellVersion: "0.1.1",
+        version, clientVersion, createdAt: new Date().toISOString(), minShellVersion: "0.1.2",
         archive: { url: new URL(archiveName, base).href, sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length },
     };
     const manifestPath = join(out, "manifest.json");

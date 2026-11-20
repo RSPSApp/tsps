@@ -605,6 +605,19 @@ function removeAdvertisement({ player }) {
   return true;
 }
 
+/**
+ * The exit portal's Remove board advert: only in your own house, and only with an advert up, then
+ * the board's "Remove your advert?" question (rsprox local 1001005 ticks 4693 and 4841; 248 for a guest).
+ */
+function removeAdvertisementAtPortal({ player }) {
+  const house = houseFor(player);
+  if (!house) return false;
+  if (house.owner !== player) { player.sendMessage("This is not your portal to configure."); return true; }
+  if (!isAdvertised(player)) { player.sendMessage("You are not currently advertising your house."); return true; }
+  askYesNo(player, "Remove your advert?", () => removeAdvertisement({ player }));
+  return true;
+}
+
 function advertisementRow(owner) {
   const save = houseStateFor(owner);
   const furniture = new Set();
@@ -986,11 +999,12 @@ function toggleHouseLock(event) {
   const player = event.player;
   const house = houseFor(player);
   if (!house) return false;
-  if (house.owner !== player) { player.sendMessage("Only the owner can lock this portal."); return true; }
+  // Each answer is a message box on the click's tick (rsprox local 1001005, local 1001008; 248 for a guest).
+  if (house.owner !== player) { Menu.refuse(player, Menu.messageBox("You can only lock your own house.")); return true; }
   house.save.locked = !house.save.locked;
   for (const occupant of house.getPlayers()) occupant.getPacketSender().sendVarbit(HOUSE_LOCKED_VARBIT, house.save.locked ? 1 : 0);
   player.setAttribute(HOUSE_ATTRIBUTE, house.save);
-  player.sendMessage(house.save.locked ? "You lock the house portal." : "You unlock the house portal.");
+  Menu.refuse(player, Menu.messageBox(house.save.locked ? "Your house is now locked to all visitors." : "Visitors can now enter your house."));
   return true;
 }
 
@@ -2083,7 +2097,7 @@ function attach(api) {
   api.onObjectInteraction("House Advertisement", { View: showAdvertisements, "Add-House": offerAdvert, "Visit-Last": visitLastHouse });
   api.onObjectFirstClick(EXIT_PORTAL_ID, leaveHouse);
   api.onObjectSecondClick(EXIT_PORTAL_ID, toggleHouseLock);
-  api.onObjectThirdClick(EXIT_PORTAL_ID, removeAdvertisement);
+  api.onObjectThirdClick(EXIT_PORTAL_ID, removeAdvertisementAtPortal);
   api.registerCommand("house", houseCommand, PlayerRights.NONE, "Open your house options");
   api.registerCommand("hotspots", Commands.listHotspots, PlayerRights.DEVELOPER, "List the Construction hotspots in the room you stand in");
   api.registerCommand("housemats", Commands.houseMaterials, PlayerRights.DEVELOPER, "Spawn the materials to build a piece of furniture or a room");

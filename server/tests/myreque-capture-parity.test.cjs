@@ -137,6 +137,10 @@ test('route_bridgecomplete counts each rung: 1, 3, 7, and the north tree then cr
   p.messages.length = 0; p.anims.length = 0;
   click(p, NORTH_TREE(), 'Cross-bridge');
   assert.deepEqual(p.anims, [827]);
+  assert.deepEqual(p.messages, ['You climb down the tree.'], 'the message comes with the animation (capture 684, 841)');
+  assert.deepEqual(at(p), [3502, 3430, 0], 'the move comes a tick later');
+  click(p, NORTH_TREE(), 'Cross-bridge');
+  assert.deepEqual(p.anims, [827], 'a second click mid-climb waits');
   tick(p);
   assert.deepEqual(p.messages, ['You climb down the tree.']);
   assert.deepEqual(at(p), [3502, 3432, 0]);
@@ -370,7 +374,7 @@ function curpile(p, variant) {
   });
 }
 
-test('a failed quiz: the counts on varbits 173/174, then the knock-out: block, stun, fall, Mort\'ton five ticks after the box', async (t) => {
+test('a failed quiz: the counts on varbits 173/174, then the knock-out: block, stun, fall, Mort\'ton seven ticks after the box', async (t) => {
   const realRandom = Math.random;
   Math.random = () => 0; // draws Dialogue 1, 2, 3: female member, youngest, leader
   t.after(() => { Math.random = realRandom; });
@@ -453,6 +457,8 @@ test('the Stranger: the quest completes once the player continues past the last 
   assert.ok(stages.filter((s) => s === 97).length >= 5, `stage 97 while the lines play: ${stages}`);
   assert.equal(quest().getStage(p), 105);
   assert.deepEqual([varbit(p, 176).at(-1), varbit(p, 3928).at(-1)], [1, 7], 'the bridge is repaired for good');
+  assert.deepEqual([varbit(p, 2496).at(-1), varbit(p, 173).at(-1), varbit(p, 174).at(-1)], [0, 0, 0], 'routequestmulti cleared (tick 1617)');
+  assert.equal(varbit(p, 396).at(-1), 1, 'the Stranger stays (Wiki)');
 });
 
 test('an item dropped on the bridge stays in the world after the player climbs down', (t) => {

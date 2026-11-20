@@ -227,7 +227,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
    * The knock-out (capture ticks 778-791, 882-895): with the box up (no continue), Curpile's human_sword_slash (390) and
    * hacksword_slash (2500); a tick later the player's human_staff_block (415), stunned_thieving (245, height 124) and
    * stunned (2727); a tick later human_death_backwards (837) and the fade; the minimap off a tick after that; the move
-   * to Mort'ton five ticks after the box; three ticks on the fade back in and the box again, now with continue.
+   * to Mort'ton seven ticks after the box; three ticks on the fade back in and the box again, now with continue.
    */
   const KNOCKOUT = {
     curpileAnimation: 390, curpileSound: 2500,
@@ -242,7 +242,9 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   /**
    * The Hair of the Dog's stranger is one spawn (cache NPC 6269) that shows Vanstrom Klause (5056) while varbit 396
    * (thsfm_vanstrom_hide) is 0 and the plain Stranger (5055) when it is 1. Live sets it as the cutscene starts, with
-   * stage 70 (capture tick 1301). Ours: it stays 1 from stage 70 on, re-derived from the stage at every change and login.
+   * stage 70 (capture tick 1301). It stays 1 after completion (Wiki, Stranger: "only upon completing In Search of the
+   * Myreque will the stranger replace Vanstrom"), though live's completion clears varp 388 with it (tick 1617; a
+   * recorded difference). Re-derived from the stage at every change and login.
    */
   const VANSTROM_HIDE_VARBIT = 396;
   /** Flags of the members whose first-time branch has already played in the conversation in progress. */
@@ -304,9 +306,10 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     sendSpokenMembers(player);
   }
 
-  /** thsfm_spoken_allmyreque (varbit 2496): one bit per member met. */
+  /** thsfm_spoken_allmyreque (varbit 2496): one bit per member met; 0 once the quest is complete (capture tick 1617). */
   function sendSpokenMembers(player) {
-    const value = JOURNAL_MEMBERS.reduce((sum, member) => sum | (metFlag(player, member.flag) ? member.bit : 0), 0);
+    const value = quest.isComplete(player) ? 0
+      : JOURNAL_MEMBERS.reduce((sum, member) => sum | (metFlag(player, member.flag) ? member.bit : 0), 0);
     player.getPacketSender().sendVarbit(SPOKEN_ALL_MYREQUE_VARBIT, value);
   }
 
@@ -897,6 +900,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     }
     const north = player.getLocation().getY() >= 3430;
     player.moveTo(new api.core.Location(3502, north ? 3425 : 3432, location?.z ?? 0));
+    Bridge.leaveBridge(player);
   }
 
   function useStalagmite(event) {
@@ -1193,7 +1197,11 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
 
   /** Completing the quest repairs the whole bridge for good (capture tick 1617). */
   function handleQuestCompleted(event) {
-    if (event?.key === "in_search_of_the_myreque" && event.player) Bridge.send(event.player);
+    if (event?.key !== "in_search_of_the_myreque" || !event.player) return;
+    // Live clears routequestmulti (varp 388) and sets the bridge again (tick 1617); varbit 396 is kept (see VANSTROM_HIDE_VARBIT).
+    event.player.getPacketSender().sendVarbit(QUIZ_CORRECT_VARBIT, 0).sendVarbit(QUIZ_ANSWERED_VARBIT, 0)
+      .sendVarbit(SPOKEN_ALL_MYREQUE_VARBIT, 0);
+    Bridge.send(event.player);
   }
 
   api.persistAttribute(BRIDGE_ATTRIBUTE);

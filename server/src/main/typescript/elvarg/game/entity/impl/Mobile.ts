@@ -56,13 +56,13 @@ class MobileTask extends Task {
 /** An actor tint: cycles from now, HSL (-1 keeps the model's own) and how strongly (0-255). */
 /** Set (true) on a developer who takes damage and loses items on death after all; ::mortal toggles it. Not saved. */
 
+export const MORTAL_DEVELOPER_ATTRIBUTE = "dev:mortal";
+
 /** A mobile's own clipping on some tiles (see Mobile.setClipOverlay). */
 export interface ClipOverlay {
     hasClip(location: Location): boolean;
     getClip(location: Location): number;
 }
-
-export const MORTAL_DEVELOPER_ATTRIBUTE = "dev:mortal";
 
 export type ActorTint = {
     startCycle: number;

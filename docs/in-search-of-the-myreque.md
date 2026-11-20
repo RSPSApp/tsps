@@ -56,6 +56,8 @@ Varbits:
   0 and the plain Stranger (5055) at 1.
 - **2496** (`thsfm_spoken_allmyreque`): a bit per member on their first talk: Sani 1, Harold 2, Radigad 4,
   Polmafi 8, Ivan 16.
+- **Completion** clears the whole of varp 388 (`routequestmulti`: 173, 174, 176-178, 396, 2496, 3928), then sets
+  the bridge varbits again (1617). The plugin clears 173, 174 and 2496 and keeps 396 (see below).
 - **542** (`cutscene_status`): 1 for the cutscene (1301-1372).
 
 ## Mort'ton and the boat
@@ -73,8 +75,8 @@ Varbits:
 - **The trees** (loc 5003 at (3502,3426) and (3502,3431)): varbit 3928 shows them as "Tree" with Climb (op 2)
   until all three rungs are repaired, then with Cross-bridge (op 1). Up: `human_reachforladder` (828) on the click,
   "You climb up the tree." and the move the next tick ((3502,3425) to (3502,3427); 665-666). Down:
-  `human_pickupfloor` (827) with "You climb down the tree." and the move the next tick ((3502,3430) to
-  (3502,3432); 684-685).
+  `human_pickupfloor` (827) and "You climb down the tree." on the click, the move the next tick ((3502,3430) to
+  (3502,3432); 684-685). Live marks the player busy (varbit 12393) meanwhile; a second click waits.
 - **Repair** on a broken rung (26245-26247 at (3502,3428-3430), op 1): `pest_repair_quick` (15168) and
   `hammer_wood` (2101) three times, 0, 20 and 40 client cycles apart. Three ticks later "You repair a section of
   the bridge.", one plank and 75 steel nails go, the rung's varbit and its 3928 bit are set, and the player walks
@@ -157,6 +159,11 @@ The main ones:
   question done.").
 - Veliaf's first talk, the after-the-hound talk and the Stranger's last lines are reworded, and the recording has
   no "Sorry Harold, you too!".
-- The recording sends stage 110 after 105 at completion; the plugin stays at 105, the cache's threshold.
+- The recording sends stage 100 on the Stranger's "If you say so, friend..." (1614), a line the transcript does not
+  have, and 110 after 105 at completion; the plugin completes at 105, the cache's threshold, after the
+  transcript's last line.
+- Completion clears varbit 396 with the rest of varp 388 (1617), which by the cache would show Vanstrom (5056) at
+  the pub again. The plugin keeps 396 at 1 after completion: the Wiki says that "only upon completing In Search
+  of the Myreque will the stranger replace Vanstrom". The pub after completion is not in the recording.
 - Live holds the chat with an empty box during each cutscene beat; the transcript runner closes the chatbox for
   those ticks instead.

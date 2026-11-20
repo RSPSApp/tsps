@@ -4,7 +4,7 @@
  *
  * - The trees (loc 5003, shown by varbit 3928 as "Tree" with Climb, op 2, until every rung is repaired, then with
  *   Cross-bridge, op 1): human_reachforladder (828) on the click, "You climb up the tree." and the move up the next tick
- *   (ticks 665-666, 835-836); human_pickupfloor (827) with "You climb down the tree." and the move down the next tick
+ *   (ticks 665-666, 835-836); human_pickupfloor (827) with "You climb down the tree.", the move down the next tick
  *   (ticks 684-685, 841-842). Up from the south bank lands on (3502,3427), down from the top rung lands on (3502,3432).
  * - A broken rung's Repair (locs 26245-26247, varbits 176-178): pest_repair_quick (15168) and hammer_wood (2101) three
  *   times, 0, 20 and 40 client cycles apart, on the click; three ticks later "You repair a section of the bridge.", one
@@ -87,12 +87,19 @@ module.exports = function createMyrequeBridge(api, { quest, attribute, stageReac
     if (player.getClipOverlay?.()?.bridge === true) player.setClipOverlay(null);
   }
 
+  /** Players mid-climb or mid-repair: a second click waits (live marks them busy, varbit 12393). */
+  const busy = new WeakSet();
+
+  /** Up: the message with the move. Down: the message with the animation (ticks 684, 841), the move a tick later. */
   function climb(player, up, landing, message) {
+    busy.add(player);
     player.getMovementQueue().reset().setBlockMovement(true);
     player.performAnimation(new Animation(up ? CLIMB_UP_ANIMATION : CLIMB_DOWN_ANIMATION));
+    if (!up) player.sendMessage(message);
     TaskManager.submit(new CountdownTask(player, 1, () => {
+      busy.delete(player);
       player.getMovementQueue().setBlockMovement(false);
-      player.sendMessage(message);
+      if (up) player.sendMessage(message);
       player.moveTo(new Location(landing.x, landing.y, 0));
       if (up) enterBridge(player);
       else leaveBridge(player);
@@ -107,6 +114,7 @@ module.exports = function createMyrequeBridge(api, { quest, attribute, stageReac
   function climbTree(event) {
     const { player } = event;
     event.handled = true;
+    if (busy.has(player)) return;
     if (quest.getStage(player) < stageReachedHollows && !quest.isComplete(player)) {
       player.sendMessage("You have no reason to cross here.");
       return;
@@ -135,6 +143,7 @@ module.exports = function createMyrequeBridge(api, { quest, attribute, stageReac
   function repairRung(event) {
     const { player, objectId } = event;
     event.handled = true;
+    if (busy.has(player)) return;
     if (quest.getStage(player) < stageReachedHollows) return;
     const varbit = RUNG_LOC_VARBITS.get(objectId) ?? RUNG_VARBITS.find((value) => !rungRepaired(player, value));
     if (varbit === undefined || rungRepaired(player, varbit)) {
@@ -149,12 +158,15 @@ module.exports = function createMyrequeBridge(api, { quest, attribute, stageReac
     const rung = event.location ?? event.object?.getLocation?.();
     const rungX = rung?.x ?? rung?.getX?.(), rungY = rung?.y ?? rung?.getY?.();
     const sender = player.getPacketSender();
+    busy.add(player);
     player.getMovementQueue().reset().setBlockMovement(true);
     player.performAnimation(new Animation(REPAIR_ANIMATION));
     for (const delay of HAMMER_SOUND_DELAYS) sender.sendSound(HAMMER_SOUND, 1, delay);
     TaskManager.submit(new CountdownTask(player, REPAIR_TICKS, () => {
+      busy.delete(player);
       player.getMovementQueue().setBlockMovement(false);
-      if (rungRepaired(player, varbit) || !held(player, PLANK, 1) || !held(player, STEEL_NAILS, NAILS_PER_RUNG)) return;
+      if (rungRepaired(player, varbit) || !held(player, PLANK, 1) || !held(player, STEEL_NAILS, NAILS_PER_RUNG)
+        || !held(player, HAMMER, 1)) return;
       player.getInventory().deleteNumber(PLANK, 1);
       player.getInventory().deleteNumber(STEEL_NAILS, NAILS_PER_RUNG);
       const value = bits(player) | (1 << (varbit - RUNG_VARBITS[0]));
@@ -178,5 +190,5 @@ module.exports = function createMyrequeBridge(api, { quest, attribute, stageReac
     if (onBridge(player)) enterBridge(player);
   }
 
-  return { climbTree, repairRung, repaired, rungRepaired, send, login, onBridge };
+  return { climbTree, repairRung, repaired, rungRepaired, send, login, onBridge, leaveBridge };
 };

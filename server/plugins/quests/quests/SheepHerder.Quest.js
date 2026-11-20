@@ -151,6 +151,12 @@ module.exports = function registerSheepHerderQuest(api) {
       if (activeProds.get(npc) !== state) return;
       activeProds.delete(npc);
       npc.setScriptedMovement(state.scripted);
+      if (!state.scripted && npc.isRegistered() && !isWorldSheep(npc)) {
+        // Radius-zero private sheep otherwise remain HOME after scripted prods.
+        // Drop any pending quest step before handing return movement back to AI.
+        npc.getMovementQueue().reset();
+        npc.getMovementCoordinator().updateCoordinator();
+      }
     };
     task.execute = () => {
       if (!npc.isRegistered() || !state.player.isRegistered()

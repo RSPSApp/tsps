@@ -110,6 +110,7 @@ function place(f, id) {
 
 function tick(f, npc, cycles = 6) {
   for (let i = 0; i < cycles; i++) {
+    f.advanceCycle?.();
     core.TaskManager.process();
     if (npc?.isRegistered()) npc.process();
     // Player sync clears this each tick; a moveTo leaves the player busy until it does.
@@ -627,4 +628,91 @@ test('Sheep Herder: a native re-prod takes authority over an active distant retr
   assert.ok(!npc.isScriptedMovement() && npc.getLocation().getDistance(home) <= 3,
     'idle return resumes after the refreshed prod hold');
   assert.ok(npc.getSpawnPosition().equals(home));
+});
+
+function privateSheep(f, id) {
+  PM.emitPlayerLogin({ player: f.p, username: f.p.getUsername() });
+  const npc = f.spawned.find(entry => entry.getId() === id);
+  assert.ok(npc, 'actual owner-only quest spawn');
+  assert.equal(npc.getMovementCoordinator().getRadius(), 0, 'private sheep intentionally do not wander');
+  return npc;
+}
+
+function liveCycles(f) {
+  let cycle = 0;
+  f.advanceCycle = () => cycle++;
+  f.t.mock.method(core.World, 'getProcessCycle', () => cycle);
+}
+
+for (const [, form] of SHEEP) {
+  test(`Sheep Herder: private idle return restores ${form} to its actual home`, async t => {
+    const f = herder(t);
+    liveCycles(f);
+    t.mock.method(Math, 'random', () => 0.99);
+    const npc = privateSheep(f, form);
+    const home = npc.getSpawnPosition().clone();
+    const direction = [[1, 0], [0, 1], [-1, 0], [0, -1]].find(([dx, dy]) =>
+      core.RegionManager.canMovestart(home, home.transform(dx, dy), 1, 1, null)
+      && core.RegionManager.canMovestart(home, home.transform(-dx, -dy), 1, 1, null));
+    assert.ok(direction, 'real unobstructed in-farm prod step');
+    await promptProd(f, npc, ...direction);
+    tick(f, npc, 5);
+    assert.equal(npc.getLocation().equals(home), false, 'control: accepted prods displaced the sheep');
+    f.p.setLocation(home.transform(6, 6));
+    tick(f, npc, 30);
+    t.diagnostic(`home=${home.getX()},${home.getY()}; idle=${npc.getLocation().getX()},${npc.getLocation().getY()}; radius=${npc.getMovementCoordinator().getRadius()}; state=${npc.getMovementCoordinator().getCoordinateState()}`);
+    assert.equal(npc.isScriptedMovement(), false, 'prod ownership expired');
+    assert.equal(npc.getMovementCoordinator().getRadius(), 0, 'return does not enable random wandering');
+    assert.equal(npc.getSpawnPosition().equals(home), true, 'home remains unchanged');
+    assert.equal(npc.getLocation().equals(home), true, 'idle sheep returns home through ordinary movement');
+    tick(f, npc, 20);
+    assert.equal(npc.getLocation().equals(home), true, 'stationary once home');
+  });
+}
+
+test('Sheep Herder: unprodded and penned private sheep remain stationary', t => {
+  const loose = herder(t);
+  t.mock.method(Math, 'random', () => 0.99);
+  privateSheep(loose, 3986);
+  const penned = herder(t);
+  penned.p.setAttribute(DISPOSAL, SHEEP.reduce((mask, [, , index]) => mask | (1 << (index * 3)), 0));
+  privateSheep(penned, 3986);
+  for (const f of [loose, penned]) for (const npc of f.spawned) {
+    const home = npc.getSpawnPosition().clone();
+    tick(f, npc, 30);
+    assert.equal(npc.getLocation().equals(home), true);
+    assert.equal(npc.getMovementCoordinator().getRadius(), 0);
+  }
+});
+
+test('Sheep Herder: private idle cleanup preserves a previous scripted owner', async t => {
+  const f = herder(t);
+  t.mock.method(Math, 'random', () => 0.99);
+  const npc = privateSheep(f, 3988);
+  const home = npc.getSpawnPosition().clone();
+  npc.setScriptedMovement(true);
+  await promptProd(f, npc);
+  const displaced = npc.getLocation().clone();
+  assert.equal(displaced.equals(home), false);
+  f.p.setLocation(home.transform(6, 6));
+  tick(f, npc, 30);
+  assert.equal(npc.isScriptedMovement(), true, 'previous owner remains authoritative');
+  assert.equal(npc.getLocation().equals(displaced), true, 'quest must not start its return');
+});
+
+test('Sheep Herder: cancelling a pending private prod cannot leave it away from home', async t => {
+  const f = herder(t);
+  liveCycles(f);
+  t.mock.method(Math, 'random', () => 0.99);
+  const npc = privateSheep(f, 3988);
+  const home = npc.getSpawnPosition().clone();
+  f.p.setLocation(home.transform(-1, 0));
+  await f.c.dispatch([{ type: 'npc_option', index: npc.getIndex(), clickType: 1 }]);
+  f.c.processTurnPackets();
+  assert.equal(npc.getMovementQueue().size(), 1, 'control: pending accepted prod');
+  core.TaskManager.cancelTasks(npc);
+  f.p.setLocation(home.transform(6, 6));
+  tick(f, npc, 30);
+  assert.equal(npc.isScriptedMovement(), false);
+  assert.equal(npc.getLocation().equals(home), true, 'cancelled owned step cannot strand a stationary sheep');
 });

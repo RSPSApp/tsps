@@ -20388,18 +20388,19 @@ test('RFD Awowogei enters the mapped hot-coal chamber and cooks only on the long
   const cook = itemObjectHandlers.findLast((handler) => handler.name === 'handleAwowogeiObjects');
   const rescue = itemNpcHandlers.findLast((handler) => handler.name === 'rescueByItem');
   const route = routes.findLast((handler) => handler.name === 'routeRedBananaTree');
-  assert.ok(dungeon && cook && rescue && route);
+  const exitRoute = routes.findLast((handler) => handler.name === 'routeAwowogeiDungeonExit');
+  assert.ok(dungeon && cook && rescue && route && exitRoute);
 
   const attributes = new Map([['recipe-for-disaster:awowogei-state', 63]]);
   const inventory = new Map([[core.ItemIdentifiers.RAW_STUFFED_SNAKE, 1]]);
-  let loc = [2808, 9200, 0];
+  let loc = [2808, 9200, 0], weapon = base.core.ItemIdentifiers.ZOMBIE_MONKEY_GREEGREE;
   const player = {
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => ({ getX: () => loc[0], getY: () => loc[1], getZ: () => loc[2] }),
     moveTo: (location) => { loc = [location.getX(), location.getY(), location.getZ()]; moves.push(loc); },
     getEquipment: () => ({ get: (slot) => slot === base.core.Equipment.WEAPON_SLOT
-      ? { getId: () => base.core.ItemIdentifiers.ZOMBIE_MONKEY_GREEGREE }
+      ? { getId: () => weapon }
       : slot === base.core.Equipment.AMULET_SLOT ? { getId: () => base.core.ItemIdentifiers.MSPEAK_AMULET } : null }),
     getSkillManager: () => ({ getCurrentLevel: () => 99, addExperiences() {} }),
     getInventory: () => ({
@@ -20454,7 +20455,28 @@ test('RFD Awowogei enters the mapped hot-coal chamber and cooks only on the long
   assert.equal(attributes.get('recipe-for-disaster:rescues') & 128, 128);
 
   const returnCrack = { player, objectId: 16100, clickType: 1,
+    object: new core.GameObject(16100, new core.Location(3069,5485,0),0,0),
     definition: { getActions: () => ['Enter'] }, handled: false };
+  const routeReturn = (extra = {}) => {
+    const request = { ...returnCrack, sourceLocation: { x: loc[0], y: loc[1], z: loc[2] }, ...extra };
+    exitRoute(request);
+    return request.destination;
+  };
+  assert.deepEqual(routeReturn(), { x:3062,y:5485,z:0 }, 'walk to the actual coal edge');
+  weapon = -1; // The form can change after the route was queued.
+  assert.equal(routeReturn(), undefined);
+  dungeon(returnCrack);
+  assert.deepEqual(loc, [3055,5484,0], 'operation rechecks the currently wielded zombie greegree');
+  weapon = base.core.ItemIdentifiers.ZOMBIE_MONKEY_GREEGREE;
+  const state = attributes.get('recipe-for-disaster:awowogei-state');
+  attributes.set('recipe-for-disaster:awowogei-state', state & ~1024);
+  assert.equal(routeReturn(), undefined);dungeon(returnCrack);assert.deepEqual(loc,[3055,5484,0]);
+  attributes.set('recipe-for-disaster:awowogei-state', state);
+  loc = [3222,3218,0];assert.equal(routeReturn(), undefined);dungeon(returnCrack);assert.deepEqual(loc,[3222,3218,0]);
+  loc = [3055,5484,0];
+  const wrongExit = { object: new core.GameObject(16100, new core.Location(3068,5485,0),0,0) };
+  assert.equal(routeReturn(wrongExit), undefined);dungeon({ ...returnCrack, ...wrongExit });assert.deepEqual(loc,[3055,5484,0]);
+  returnCrack.handled = false;
   dungeon(returnCrack);
   assert.equal(returnCrack.handled, true);
   assert.deepEqual(loc, [2808, 9200, 0]);

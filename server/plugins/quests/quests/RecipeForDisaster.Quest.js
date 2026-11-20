@@ -101,6 +101,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const EVIL_CHICKEN_LAIR_BOSS = { x: 2455, y: 4399, z: 0 };
   const EVIL_CHICKEN_LAIR_ZONE = { minX: 2430, maxX: 2492, minY: 4355, maxY: 4407, z: 0 };
   const AWOWOGEI_SNAKE_HOLE = { minX: 3019, maxX: 3028, minY: 5484, maxY: 5492, z: 0 };
+  const AWOWOGEI_HOT_COAL_ROOM = { minX: 3054, maxX: 3069, minY: 5478, maxY: 5491, z: 0 };
   const ACTIVE_FINAL_NPC_BY_PLAYER = new WeakMap();
   const JUBBLY_BY_PLAYER = new WeakMap();
   const LAMP_PENDING = new WeakMap();
@@ -3483,11 +3484,31 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       player.sendMessage("You squeeze through the crack and cross the hot coals as a zombie monkey.");
       return;
     }
-    if (objectId === 16100 && option === "Enter" && (awowogeiState(player) & 1024)) {
+    if (objectId === ObjectIdentifiers.EXIT_15 && option === "Enter" && (awowogeiState(player) & 1024)) {
       event.handled = true;
+      if (!isAwowogeiDungeonExit(event) || !inZone(player, AWOWOGEI_HOT_COAL_ROOM)) return;
+      if (!equippedMonkey(player, ZOMBIE_GREEGREE_IDS)) {
+        require("../QuestRuntime").startTranscript(api, player, NpcIdentifiers.AWOWOGEI,
+          "Recipe for Disaster/Freeing King Awowogei",
+          "ape-atoll-entering-exiting-the-cave-to-cook-the-snake-standing-on-the-rockets-without-being-a-zombie-monkey");
+        return;
+      }
       moveTo(player, 2808, 9200, 0);
       player.sendMessage("You squeeze back through the crack into the temple dungeon.");
     }
+  }
+
+  function isAwowogeiDungeonExit(event) {
+    const at = event.object?.getLocation();
+    return event.objectId === ObjectIdentifiers.EXIT_15 && at?.getX() === 3069 && at.getY() === 5485 && at.getZ() === 0;
+  }
+
+  function routeAwowogeiDungeonExit(event) {
+    const from = event.sourceLocation;
+    if (!isAwowogeiDungeonExit(event) || !from || from.x > 3062 || !inZone(event.player, AWOWOGEI_HOT_COAL_ROOM)
+      || !(awowogeiState(event.player) & 1024) || !equippedMonkey(event.player, ZOMBIE_GREEGREE_IDS)) return;
+    // Cache inviswalls at x3063 block the coals; walk to their edge, then use the existing scripted exit.
+    event.destination = { x: 3062, y: 5485, z: 0 };
   }
 
   function handleAwowogeiSnakePit(event) {
@@ -3931,6 +3952,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onObjectInteraction(handleAwowogeiSnakePit);
   api.onCustomEvent("ladders:climb", claimSnakePitRope);
   api.onObjectRoute(routeRedBananaTree);
+  api.onObjectRoute(routeAwowogeiDungeonExit);
   api.onObjectRoute(routeCulinaromancerChest);
   api.onCustomEvent("door:toggle", handleDiningDoors);
   api.onObjectInteraction("Barrier", { "Pass-through": passDiningBarrier });

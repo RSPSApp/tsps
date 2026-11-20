@@ -21365,6 +21365,7 @@
             "server/docs/quests-196-playthrough.md"
           ],
           "devNotes": [
+            "2026-11-20: Awowogei hot-coal room now retains both zombie greegree forms through crack entry, cooking and login. Native exit routes the checked zombie to the reachable coal edge before the existing scripted return, rechecking live form, quest flag and mapped room. Real packet/cache/World tests cover cooking, save/bootstrap, exit and off-island removal; the two-filling fix from merged PR #6304 is retained. No clients launched; retail coal-crossing timing remains unverified. See docs/greegrees.md. Existing quest task statuses are unchanged.",
             "Synced with tsps main e811aff0c (15 October 2026): Registered quest stages, transcript dialogue handlers, world objectives, journal and once-only completion rewards are implemented in the current quest module.",
             "PR #558 implements the remaining finales with earned-route/component playthrough evidence; see server/docs/quests-196-playthrough.md. The recorded checks include disclosed fixtures and checkpoints, not seven fresh-account end-to-end runs.",
             "Main 8403b60db (4 November 2026): #2194 — Recipe for Disaster: dining room entry, guest seats and chest access. Prior task credit and any documented puzzle/follower/cutscene substitutions remain unchanged.",

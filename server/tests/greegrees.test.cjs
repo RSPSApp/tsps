@@ -219,6 +219,19 @@ test("the island, its dungeons and the zoo pen are the places it works", () => {
   }
 });
 
+test("the separately mapped hot-coal room and exit corridor allow greegrees only on their own plane", () => {
+  for (const tile of [[3055,5484,0],[3054,5478,0],[3062,5491,0],[3068,5485,0],[3069,5485,0]]) {
+    const at = new Location(...tile);
+    assert.equal(Greegrees._test.canTransformAt(at), true, tile.join(','));
+    assert.ok(area.getBoundaries().some(boundary => boundary.inside(at)), 'same bounds drive the Area');
+  }
+  for (const tile of [[3053,5484,0],[3070,5485,0],[3055,5477,0],[3055,5492,0],[3055,5484,1]]) {
+    const at = new Location(...tile);
+    assert.equal(Greegrees._test.canTransformAt(at), false, tile.join(','));
+    assert.equal(area.getBoundaries().some(boundary => boundary.inside(at)), false);
+  }
+});
+
 test('transformation rings use native inventory inputs, World appearance sync and Unmorph', async t => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { PlayerSession } = require('../dist/net/PlayerSession');

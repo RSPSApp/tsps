@@ -17,7 +17,7 @@ import { Bank } from "../../../../model/container/impl/Bank";
 import { DonatorRights } from "../../../../model/rights/DonatorRights";
 import { PlayerRights } from "../../../../model/rights/PlayerRights";
 import { ItemContainer } from "../../../../model/container/ItemContainer";
-import { StackType } from "../../../../model/container/StackType";
+import { MAX_STACK_AMOUNT, StackType } from "../../../../model/container/StackType";
 import { Inventory } from "../../../../model/container/impl/Inventory";
 import { Appearance } from "../../../../model/Appearance";
 import { CacheDefinitions } from "../../../../cache/CacheDefinitions";
@@ -731,8 +731,16 @@ export class PlayerSave {
             }
             let bankItems = this.banks.get(i);
             if (bankItems != null) {
-                // A save holding more than the player's space still loads whole.
-                Bank.withoutLimit(player, () => player.setBank(i, new Bank(player)).getBank(i).addItems(bankItems, false));
+                // Restore slots, not deposits: a live family variant must not refill a saved
+                // placeholder or merge separate stacks. Saves above the current space still load whole.
+                const bank = new Bank(player);
+                bankItems.forEach((item, slot) => {
+                    // Keep addItems' invalid-row rejection and add's quantity ceiling, without shifting saved slots.
+                    const restored = item.getId() >= 0 && item.getAmount() >= 0
+                        ? item.clone().setAmount(Math.min(item.getAmount(), MAX_STACK_AMOUNT)) : new Item(-1, 0);
+                    bank.setItem(slot, restored);
+                });
+                player.setBank(i, bank);
             }
         }
     }

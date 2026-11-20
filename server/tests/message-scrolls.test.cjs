@@ -104,9 +104,9 @@ test('closing the scroll clears busy once; other interfaces and other readers ar
   assert.deepEqual(other.sent, []);
 });
 
-test('another notice board falls through to the next handler', (t) => {
+test('another notice board (the Theatre of Blood board, 32655) falls through to its own handler', (t) => {
   const p = realPlayer(t);
-  assert.equal(read(p, 'Notice board', 37381), false);
+  assert.equal(read(p, 'Notice board', 32655), false);
   assert.deepEqual(p.sent, []);
 });
 

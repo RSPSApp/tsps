@@ -20494,6 +20494,80 @@ test('RFD Awowogei enters the mapped hot-coal chamber and cooks only on the long
 });
 
 
+test('RFD Awowogei stuffing the snake needs both the sliced red banana and tchiki nut paste', () => {
+  const { api: base } = mockApi();
+  const itemItemHandlers = [];
+  const api = new Proxy(base, {
+    get(target, prop) {
+      if (prop === 'onItemOnItem') return (handler) => itemItemHandlers.push(handler);
+      return target[prop];
+    },
+  });
+  require('../plugins/quests/Quests.plugin').register(api);
+  delete require.cache[require.resolve('../plugins/quests/quests/RecipeForDisaster.Quest')];
+  require('../plugins/quests/quests/RecipeForDisaster.Quest')(api);
+  const stuff = itemItemHandlers.findLast((handler) => handler.name === 'handleAwowogeiItems');
+  assert.ok(stuff);
+
+  const I = base.core.ItemIdentifiers;
+  const attributes = new Map([['recipe-for-disaster:awowogei-state', 63]]);
+  const inventory = new Map([[I.SNAKE_CORPSE, 1], [I.SLICED_RED_BANANA, 1], [I.TCHIKI_NUT_PASTE, 1]]);
+  const messages = [];
+  const player = {
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getSkillManager: () => ({ getCurrentLevel: () => 99, addExperiences() {} }),
+    getInventory: () => ({
+      getAmount: (id) => inventory.get(id) ?? 0,
+      getFreeSlots: () => 27,
+      deleteNumber: (id, amount) => inventory.set(id, Math.max(0, (inventory.get(id) ?? 0) - amount)),
+      adds: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) + amount),
+    }),
+    getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+    getLocation: () => ({ getX: () => 2790, getY: () => 3000, getZ: () => 0 }),
+    sendMessage: (message) => messages.push(message),
+  };
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests()
+    .findLast(({ key }) => key === 'recipe_for_disaster');
+  quest.setStage(player, 4);
+
+  const banana = { player, usedItemId: I.SLICED_RED_BANANA, usedWithItemId: I.SNAKE_CORPSE, handled: false };
+  stuff(banana);
+  assert.equal(banana.handled, true);
+  assert.equal(inventory.get(I.SNAKE_CORPSE), 1, 'the corpse stays until both fillings are in');
+  assert.equal(inventory.get(I.SLICED_RED_BANANA), 0, 'the banana is used up');
+  assert.equal(inventory.get(I.RAW_STUFFED_SNAKE) ?? 0, 0, 'one filling is not enough');
+  assert.equal(attributes.get('recipe-for-disaster:awowogei-stuffing'), 1);
+  assert.match(messages.at(-1), /still needs tchiki nut paste/);
+
+  const bananaAgain = { player, usedItemId: I.SLICED_RED_BANANA, usedWithItemId: I.SNAKE_CORPSE, handled: false };
+  stuff(bananaAgain);
+  assert.equal(inventory.get(I.SLICED_RED_BANANA), 0);
+  assert.equal(inventory.get(I.RAW_STUFFED_SNAKE) ?? 0, 0);
+  assert.match(messages.at(-1), /already has sliced red banana/);
+
+  const paste = { player, usedItemId: I.TCHIKI_NUT_PASTE, usedWithItemId: I.SNAKE_CORPSE, handled: false };
+  stuff(paste);
+  assert.equal(paste.handled, true);
+  assert.equal(inventory.get(I.TCHIKI_NUT_PASTE), 0);
+  assert.equal(inventory.get(I.SNAKE_CORPSE), 0);
+  assert.equal(inventory.get(I.RAW_STUFFED_SNAKE), 1);
+  assert.equal(attributes.get('recipe-for-disaster:awowogei-stuffing'), 0);
+  assert.equal(attributes.get('recipe-for-disaster:awowogei-stage'), 30);
+
+  // The other order works the same way, including a pair whose ids arrive swapped.
+  inventory.set(I.SNAKE_CORPSE, 1);
+  inventory.set(I.SLICED_RED_BANANA, 1);
+  inventory.set(I.TCHIKI_NUT_PASTE, 1);
+  stuff({ player, usedItemId: I.TCHIKI_NUT_PASTE, usedWithItemId: I.SNAKE_CORPSE, handled: false });
+  assert.equal(inventory.get(I.SNAKE_CORPSE), 1);
+  assert.equal(inventory.get(I.TCHIKI_NUT_PASTE), 0);
+  stuff({ player, usedItemId: I.SNAKE_CORPSE, usedWithItemId: I.SLICED_RED_BANANA, handled: false });
+  assert.equal(inventory.get(I.SNAKE_CORPSE), 0);
+  assert.equal(inventory.get(I.RAW_STUFFED_SNAKE), 2);
+});
+
+
 test('RFD goblin cellar ladders connect only the mapped village and cook-room ends', () => {
   const { api: base } = mockApi();
   const objectActions = [];

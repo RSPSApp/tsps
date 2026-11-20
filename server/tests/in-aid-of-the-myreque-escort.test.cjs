@@ -392,7 +392,7 @@ test("route 2: the ambush copy with Ivan 4441, four juvinates 4443, follower var
   assert.equal(shown(f)?.text, "There's that tasty morsel Ivan! Time for some food...");
 });
 
-test("ambush with no food: deaths count in 2000 with a mist each; at two Ivan gives up; Exit path back to Mort Myre; 2000 resets as the map reopens (t3577-3811)", async (t) => {
+test("injured Ivan with no food flees; deaths make mist; Exit path and reopening the map reset the attempt (t3577-3811)", async (t) => {
   const f = actor(t, { stage: 310 });
   await startRoute2(f);
   ticks(f, 2);
@@ -407,6 +407,8 @@ test("ambush with no food: deaths count in 2000 with a mist each; at two Ivan gi
   kill(second);
   assert.equal(vb(f, VB.DEATHS), 2, "2000 = 2 (t3624)");
   assert.equal(ownedNpcs(f, 4441).length, 1, "Ivan is still there on the death's tick");
+  const [ivan] = ownedNpcs(f, 4441);
+  ivan.setHitpoints(1); // The capture has no HP values; reproduce its failure through the health watcher.
   tick(f);
   assert.equal(ownedNpcs(f, 4441).length, 0, "Ivan leaves the tick after (t3625)");
   assert.ok(shown(f).text.startsWith("I'm getting badly beaten up here"));
@@ -420,6 +422,63 @@ test("ambush with no food: deaths count in 2000 with a mist each; at two Ivan gi
   tick(f);
   await openMapAt310(f);
   assert.equal(vb(f, VB.DEATHS), 0);
+});
+
+test("healthy Ivan can finish route two without food; a repeated death cannot repeat the arrival", async (t) => {
+  const f = actor(t, { stage: 310 });
+  await startRoute2(f);
+  ticks(f, 2);
+  const [ivan] = ownedNpcs(f, 4441);
+  ivan.setHitpoints(ivan.getMaxHitpoints());
+  const [first, second, third] = juvinates(f);
+  kill(first);
+  kill(second);
+  tick(f);
+  assert.equal(ownedNpcs(f, 4441).length, 1, "two enemy deaths cannot make an uninjured Ivan flee");
+  assert.equal(ivan.getHitpoints(), ivan.getMaxHitpoints());
+  assert.equal(vb(f, VB.FOOD), 0, "supplies are optional");
+  assert.equal(stage(f), 310);
+  kill(third);
+  kill(third);
+  assert.equal(vb(f, VB.DEATHS), 3, "the same enemy is counted once");
+  assert.equal(juvinates(f).length, 0);
+  ticks(f, 12);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [3432, 3484]);
+  assert.equal(ownedNpcs(f, 4441).length, 1, "one arrival Ivan");
+  assert.equal(stage(f), 310, "his thanks must still finish");
+  await until(f, "Not a problem. I need to chat to Drezel");
+  await continueLine(f);
+  assert.equal(stage(f), 315);
+  assert.equal(vb(f, VB.HIDEOUT), 1);
+  ticks(f, 8);
+  assert.equal(ownedNpcs(f, 4441).length, 0);
+  assert.equal(stage(f), 315, "no repeated escort advancement");
+});
+
+test("healthy Ivan keeps unused food after two route-two enemy deaths", async (t) => {
+  const f = actor(t, { stage: 310, vars: { [VB.FOOD]: 1 } });
+  await startRoute2(f);
+  ticks(f, 2);
+  const [ivan] = ownedNpcs(f, 4441);
+  ivan.setHitpoints(ivan.getMaxHitpoints());
+  const [first, second] = juvinates(f);
+  kill(first);
+  kill(second);
+  tick(f);
+  assert.equal(ownedNpcs(f, 4441).length, 1);
+  assert.equal(ivan.getHitpoints(), ivan.getMaxHitpoints());
+  assert.equal(vb(f, VB.FOOD), 1, "food is only consumed when Ivan needs healing");
+});
+
+test("Ivan defeated without food still flees even before an enemy dies", async (t) => {
+  const f = actor(t, { stage: 310 });
+  await startRoute2(f);
+  ticks(f, 2);
+  const [ivan] = ownedNpcs(f, 4441);
+  kill(ivan);
+  assert.equal(ownedNpcs(f, 4441).length, 0);
+  assert.equal(vb(f, VB.DEATHS), 0);
+  assert.equal(stage(f), 310);
 });
 
 test("ambush with food: three deaths escape, the second leg, outside Paterdomus, 315 and 10367 on the player's line (t4023-4044)", async (t) => {

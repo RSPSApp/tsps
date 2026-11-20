@@ -459,17 +459,10 @@ module.exports = function attachEscort(context) {
       Scenes.later(scene, MIST_FADE_TICKS, () => mist.isRegistered?.() && common.anim(mist, MIST_FADE));
       Scenes.later(scene, MIST_FADE_TICKS + 1, () => Scenes.removeActor(scene, mist));
     }
-    if (ambush.done || ambush.fled || ambush.fleeing) return;
+    if (ambush.done || ambush.fled) return;
     const deaths = get(player, VARBIT.AMBUSH_DEATHS) + 1;
     state.set(player, VARBIT.AMBUSH_DEATHS, deaths);
     if (deaths >= ambush.route.escapeAt) return escaped(ambush);
-    // The capture's first try: at two deaths, with no food left, Ivan gives up: 2000 = 2 at t3624,
-    // Ivan gone with his line the tick after (t3625).
-    if (ambush.number === 2 && deaths === 2 && get(player, VARBIT.IVAN_FOOD) === 0) {
-      ambush.fleeing = true;
-      Scenes.later(scene, 1, () => ivanFlees(ambush));
-      return;
-    }
     // Ours: the next juvinate takes the fallen one's place.
     const next = ambush.juvinates.find((juvinate) => !juvinate.getCombat?.().getTarget?.());
     const victim = target === ambush.ivan && ambush.ivan ? ambush.ivan : player;

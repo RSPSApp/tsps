@@ -45,7 +45,7 @@ the run doesn't take (full inventory, missing materials, levers out of order, wo
 | Elemental rock (1368) Mine | the rock's emerge seq 4865 on arrival (436); two ticks later it says "Grr... Ge'roff us!" and is the level 35 earth elemental 1367, the same NPC (438). No player animation |
 | Earth elemental death | seq 4870 (466); Rock (1480) and elemental ore on its tile, owned (471); a rock again after (476) |
 | Ore on furnace, 4 coal | seq 899, "You place the elemental ore and four heaps of coal into the furnace.", ore and coal gone (500); four ticks later seq 899, the bar, 8 Smithing XP, "You retrieve a bar of elemental metal." (504). **Recorded difference:** the Wiki (Elemental metal) gives 6 ticks, which the plugin uses |
-| Bar on workbench (3402) | seq 896 and sound 2721 (515); the shield in the bar's slot four ticks after the arrival (514 -> 518; the Wiki's 4 ticks), "Following the instructions in the book, you make an elemental shield.", varbits 2067=1 and 13718=2, the completion; 20 Smithing XP with the 5,000 (518) |
+| Bar on workbench (3402) | seq 896 and sound 2721 (515); the bar taken and the shield in the first free slot (here the bar's) four ticks after the arrival (514 -> 518; the Wiki's 4 ticks), "Following the instructions in the book, you make an elemental shield.", varbits 2067=1 and 13718=2, the completion; 20 Smithing XP with the 5,000 (518) |
 | Quest journal, started | "<str>I have found a battered book in a house in Seers' Village.", "<str>It tells of magic ore and a workshop created to fashion it.", "", "Where is this workshop and how do I get in?" (53) |
 | Completion scroll | shield model 2890; "1 Quest Point", "5,000 Crafting XP", "5,000 Smithing XP", "Ability to make Elemental", "Shields" (518) |
 
@@ -68,7 +68,7 @@ Not in the recording, so not modelled: varbit 2064 (elemental_workshop_boxes) go
   then west water control and the lever, the leather crate, the bellows and air lever, the boxes, the trough and
   furnace, Mine on an elemental rock and the fight, the ore picked up, the furnace and the workbench.
 - **Result:** varp 299 went 2 on the start, 6 after the cut and 32774 through the wall (as the Wiki's transcript
-  notes), then each machine bit; 13718 1 -> 2 and 2067 1 at the workbench, the shield in the bar's slot, the scroll.
+  notes), then each machine bit; 13718 1 -> 2 and 2067 1 at the workbench, the shield (in the bar's slot, the first free one there), the scroll.
   The wall's inviswall and open leaves stood for two ticks and the player crossed both ways.
 - **Not checked:** the first Climb-down after the first crossing walked to the stairs without climbing once; three
   later tries (the same timing) all climbed a tick after arrival, so the cause wasn't found. No vision client run:

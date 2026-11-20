@@ -1,5 +1,4 @@
 const { hasKey, storedKey, ownsStoredKey } = require("../../items/KeyAvailability");
-const { holdsHammer } = require("../../items/Hammers");
 /**
  * Elemental Workshop I (members), as the user's rev 242 rsprox capture plays it
  * (ElementalWorkshop1.bin, docs/quests/elemental-workshop-i/README.md has the ticks), with the
@@ -25,12 +24,6 @@ module.exports = function registerElementalWorkshopIQuest(api) {
   const VARP_MACHINE_BITS = 299;
   const VARBIT_QUEST_STATUS = 13718;
   const EW2_KEY = "elemental_workshop_ii";
-  // EW2 stage 6 = both schematics taken, crane claw not made yet.
-  const EW2_MACHINERY_STAGE = 6;
-  const EW2_JIG_ATTRIBUTE = "quest.elemental_workshop_ii.jig";
-  const EW2_FLAGS_ATTRIBUTE = "quest.elemental_workshop_ii.flags";
-  /** EW2's FLAG_CRANE_SCHEMATIC_TAKEN. */
-  const EW2_CRANE_SCHEMATIC_TAKEN = 1 << 5;
 
   const BIT = {
     book: 1 << 1,
@@ -66,7 +59,6 @@ module.exports = function registerElementalWorkshopIQuest(api) {
   const LEATHER_CRATE = ObjectIdentifiers.CRATE_27; // 3394 elemental_workshop_box_1
   const NEEDLE_CRATE = ObjectIdentifiers.CRATE_28; // 3395 elemental_workshop_box_2
   const BOWL_BOXES = ObjectIdentifiers.BOXES_5; // 3397 elemental_workshop_box_4
-  const WORKBENCH = ObjectIdentifiers.WORKBENCH_5; // 3402
   // The water controls are multilocs (no name of their own); clicks arrive on the base or a child.
   const WATER_CONTROL_EAST = 3403; // elemental_workshop_valve_1, transform varbit 2059 (gate2)
   const WATER_CONTROL_WEST = 3404; // elemental_workshop_valve_2, transform varbit 2058 (gate1)
@@ -93,7 +85,6 @@ module.exports = function registerElementalWorkshopIQuest(api) {
     fillBowl: 4862, // elem1_qip_fill_bowl
     repairBellows: 4863, // elem1_qip_bellow_repair
     furnace: 899, // human_furnace
-    workbench: 896, // human_cooking, as captured at the workbench (tick 515)
     rockEmerge: 4865, // earth_elemental_rework_emerge
   };
   const SOUND = {
@@ -103,7 +94,6 @@ module.exports = function registerElementalWorkshopIQuest(api) {
     lever: 2400,
     lavaFill: 1537,
     lavaPour: 1538,
-    anvil: 2721, // anvil_4
   };
 
   const BOOK_TITLE = "Book of the elemental shield";
@@ -180,11 +170,6 @@ module.exports = function registerElementalWorkshopIQuest(api) {
     smeltLevel: "You need level 20 Smithing to smelt elemental metal.",
     oreIn: "You place the elemental ore and four heaps of coal into the furnace.",
     barOut: "You retrieve a bar of elemental metal.",
-    noHammer: "You need a hammer to work the metal with.",
-    noBook: "This workbench is too complicated. You need instructions to follow.",
-    // Ours: the Wiki gives the 20 Smithing requirement but no refusal line.
-    shieldLevel: "You need level 20 Smithing to work elemental metal.",
-    shieldMade: "Following the instructions in the book, you make an elemental shield.",
     // Ours: the Wiki gives the 20 Mining requirement but no refusal line; the pickaxe line too.
     mineLevel: "You need a Mining level of 20 to mine this rock.",
     noPickaxe: "You need a pickaxe to mine this rock.",
@@ -201,11 +186,6 @@ module.exports = function registerElementalWorkshopIQuest(api) {
   const SMELT_TICKS = 6;
   /** Trough: the bowl fills two ticks after the scoop (397 -> 399). */
   const FILL_TICKS = 2;
-  /**
-   * Workbench: the shield is made four ticks after the use (Wiki, Elemental shield: 4 ticks); the
-   * capture's arrival on 514 to the shield on 518 agrees, its hammering starting on 515.
-   */
-  const SHIELD_TICKS = 4;
   /** Stairs: the player lands a tick after the click (203 -> 204, 232 -> 233). */
   const STAIRS_TICKS = 1;
   /** Mined rock: it rises with the emerge animation and becomes the elemental two ticks later (436 -> 438). */
@@ -214,7 +194,6 @@ module.exports = function registerElementalWorkshopIQuest(api) {
   const ROCK_REST_TICKS = 20;
 
   const SMELT_XP = 8; // Wiki (Elemental metal) and capture tick 504
-  const SHIELD_XP = 20; // Wiki (Elemental shield) and capture tick 518
 
   let quest;
   /** Busy players (a turn, a pour, a smelt, a hammering in progress): one at a time. */
@@ -271,34 +250,10 @@ module.exports = function registerElementalWorkshopIQuest(api) {
     sender.sendConfig(VARP_MACHINE_BITS, (sender.getVarp(VARP_MACHINE_BITS) & ~WIRE_MASK) | (machine & WIRE_MASK));
   }
 
-  function questStage(player, key) {
-    const request = { player, key, stage: null };
-    api.emitCustomEvent("quest:get-stage", request);
-    return Number(request.stage) || 0;
-  }
-
   function questComplete(player, key) {
     const request = { player, key, complete: false };
     api.emitCustomEvent("quest:is-complete", request);
     return request.complete === true;
-  }
-
-  /** EW2's crane-claw leg: its workbench must win the metal bar handoff. */
-  function ew2NeedsCraneClaw(player) {
-    const stage = questStage(player, EW2_KEY);
-    // Stage 5 (hatch open) is still part of the schematics leg: the crane schematic can be
-    // taken before the lever one advances the stage, and using metal then must offer the claw
-    // rather than consume the bar as an EW I shield (issue #5739).
-    if (stage < 1 || stage > EW2_MACHINERY_STAGE) return false;
-    if (has(player, I.CRANE_CLAW)) return false;
-    const jig = Number(player.getAttribute(EW2_JIG_ATTRIBUTE)) || 0;
-    if (((jig >> 7) & 3) !== 0) return false;
-    const flags = Number(player.getAttribute(EW2_FLAGS_ATTRIBUTE)) || 0;
-    return (flags & EW2_CRANE_SCHEMATIC_TAKEN) !== 0 || has(player, I.CRANE_SCHEMATIC);
-  }
-
-  function ew2CanMakeElementalHelmet(player) {
-    return has(player, I.BEATEN_BOOK) && questComplete(player, EW2_KEY);
   }
 
   function statement(player, text) {
@@ -673,38 +628,14 @@ module.exports = function registerElementalWorkshopIQuest(api) {
     return false;
   }
 
-  /** Bar on the workbench: refusals as message boxes (Wiki), the shield three ticks after the hammering. */
-  function makeShield(player, slot) {
-    if (working.has(player)) return;
-    if (!holdsHammer(api.core, player)) {
-      statement(player, MSG.noHammer);
-      return;
-    }
-    if (!has(player, I.SLASHED_BOOK) && !has(player, I.BATTERED_BOOK)) {
-      statement(player, MSG.noBook);
-      return;
-    }
-    if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < 20) {
-      statement(player, MSG.shieldLevel);
-      return;
-    }
-    working.add(player);
-    animate(player, ANIM.workbench);
-    sound(player, SOUND.anvil);
-    later(player, SHIELD_TICKS, () => {
-      working.delete(player);
-      const inventory = player.getInventory();
-      const at = inventory.getItems()[slot]?.getId?.() === I.ELEMENTAL_METAL ? slot : inventory.getSlotForItemId(I.ELEMENTAL_METAL);
-      if (at < 0) return;
-      inventory.setItem(at, new (api.core.Item)(I.ELEMENTAL_SHIELD, 1));
-      inventory.refreshItems();
-      player.sendMessage(MSG.shieldMade);
-      player.getSkillManager().addExperiences(Skill.SMITHING, SHIELD_XP);
-      if (!quest.isComplete(player)) {
-        const machine = raw(player);
-        if (quest.complete(player)) write(player, machine | BIT.finished);
-      }
-    });
+  /**
+   * The workbench is Elemental Workshop II's (ElementalWorkshopII.Quest.js), which offers this
+   * quest's shield beside its own recipes. The first shield made there completes this quest.
+   */
+  function shieldMade({ player }) {
+    if (quest.isComplete(player)) return;
+    const machine = raw(player);
+    if (quest.complete(player)) write(player, machine | BIT.finished);
   }
 
   // ==========================================================================
@@ -900,13 +831,6 @@ module.exports = function registerElementalWorkshopIQuest(api) {
       if (useOnFurnace(player, itemId)) event.handled = true;
       return;
     }
-    if (objectId === WORKBENCH && itemId === I.ELEMENTAL_METAL) {
-      // EW2 owns the unfinished claw choice and completed players following the
-      // beaten book's elemental helmet recipe; all other bars keep the EW I shield path.
-      if (ew2NeedsCraneClaw(player) || ew2CanMakeElementalHelmet(player)) return;
-      event.handled = true;
-      makeShield(player, itemSlot);
-    }
   }
 
   function handleItemOnItem(event) {
@@ -977,6 +901,7 @@ module.exports = function registerElementalWorkshopIQuest(api) {
   api.onNpcInteraction(handleNpcInteraction);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
+  api.onCustomEvent("elemental-workshop-i:shield-made", shieldMade);
   api.onPlayerLogout(finishOnLogout);
 
   return { _test: { BIT, MSG, awakeRocks, rockTick, BOOK_PAGES } };

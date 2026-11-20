@@ -82,7 +82,8 @@ test('a real inventory: Wyson takes the parts out and the nests fill the first f
   const { p } = searcher(t);
   const ids = core.ItemIdentifiers;
   const inventory = p.getInventory();
-  // rsprox capture local 1000323, tick 13641: a coin in slot 0, slot 1 free, a claw in slot 2.
+  // A minimal layout: a coin in slot 0, slot 1 free, a claw in slot 2 (live fills the first free
+  // slot, rsprox capture local 1000323 tick 13641).
   inventory.add(new core.Item(ids.COINS, 5), true);
   inventory.add(new core.Item(ids.MOLE_CLAW, 1), true);
   inventory.add(new core.Item(ids.MOLE_CLAW, 1), true);

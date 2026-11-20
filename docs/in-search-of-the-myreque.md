@@ -136,7 +136,8 @@ Varbits:
 ## Ours (no source)
 
 - The north tree refuses until all three rungs are repaired, with the old text; Cross on the landing crosses a
-  fully repaired bridge from bank to bank. No capture tries either.
+  fully repaired bridge from bank to bank, while Cross on a repaired rung (shown as the same "Rope bridge") says it
+  "already looks fixed". No capture tries any of them.
 - The copy's Escape and Quick-escape crawl out to the main cave like the hideout's tunnel; a logout or death in
   the copy comes back to (3492,9824), and a grave goes there too (Wiki: "Dying in the chamber will cause your
   gravestone to appear outside of the room").

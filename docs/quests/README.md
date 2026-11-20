@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-198 quests · ✅ passed: 25 · ⚠️ passed with issues: 19 · 🔄 in progress: 12 · ❌ failed: 0 · 🔁 needs recheck: 47 · untested: 95
+198 quests · ✅ passed: 25 · ⚠️ passed with issues: 20 · 🔄 in progress: 13 · ❌ failed: 0 · 🔁 needs recheck: 46 · untested: 94
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -91,7 +91,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Imp Catcher | untested |  |  |  |  |
 | [In Aid of the Myreque](in-aid-of-the-myreque/README.md) | untested |  |  |  |  |
 | In Search of Knowledge | untested |  |  |  |  |
-| [In Search of the Myreque](in-search-of-the-myreque/README.md) | 🔁 needs recheck | 2026-11-20 | agent | claude-opus-5-5 | 1 |
+| [In Search of the Myreque](in-search-of-the-myreque/README.md) | ⚠️ passed with issues | 2026-11-20 | agent | claude-opus-5-5 | 1 |
 | [Jungle Potion](jungle-potion/README.md) | ✅ passed |  | agent |  |  |
 | [King's Ransom](kings-ransom/README.md) | untested |  |  |  | 1 |
 | Land of the Goblins | untested |  |  |  |  |
@@ -133,7 +133,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Romeo & Juliet](romeo-and-juliet/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
 | [Roving Elves](roving-elves/README.md) | untested |  |  |  |  |
 | [Royal Trouble](royal-trouble/README.md) | 🔁 needs recheck | 2026-11-05 | agent | DeepSeek V4.1 Flash |  |
-| [Rum Deal](rum-deal/README.md) | untested |  |  |  |  |
+| [Rum Deal](rum-deal/README.md) | 🔄 in progress | 2026-11-19 | agent | claude-opus-5-5 |  |
 | [Rune Mysteries](rune-mysteries/README.md) | 🔁 needs recheck | 2026-10-30 | agent | grok-4.7 | 4 |
 | [Scorpion Catcher](scorpion-catcher/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 5 |
 | [Scrambled!](scrambled/README.md) | untested |  |  |  |  |

@@ -5,7 +5,7 @@ status: passed-with-issues
 tested: 2026-11-20
 tester: agent
 model: claude-opus-5-5
-commit: 956e127dd
+commit: 44fdb7896
 cache: osrs-242_2026-11-03
 start: checkpoint
 travel: manual

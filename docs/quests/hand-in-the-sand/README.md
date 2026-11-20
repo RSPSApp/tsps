@@ -74,6 +74,8 @@ Smaller timing differences, left as the transcript orders them: Bert's scroll an
 - A pickpocket on Sandy succeeds half the time; so does a tall tale. The Wiki says only that the pickpocket "may take
   multiple attempts" and that no distraction is guaranteed; the capture saw two misses in four pickpockets.
 - Zavistic leaves the bell 12 ticks after the chat closes (the capture: 12-16), or when the player is 15 tiles away.
+- Each ringer gets their own Zavistic at the bell, seen and spoken to by them alone (the capture has one player; whether
+  others see him is not recorded).
 - Bert's refusal when 17 Thieving or 49 Crafting is missing, on "Yes.": "You do not meet all of the requirements to start
   The Hand in the Sand quest." The capture met the requirements.
 - A logout during the sandpit cutscene leaves the player beside the bell at 130, with the runes and bucket; ringing again

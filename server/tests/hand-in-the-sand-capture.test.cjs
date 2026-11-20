@@ -535,3 +535,23 @@ test("a logout in the sandpit cutscene saves the player at the bell, the step to
   assert.equal(amount(f, ITEM.EARTH_RUNE), 5);
   assert.equal(amount(f, ITEM.BUCKET_OF_SAND), 1);
 });
+
+test("each ringer's Zavistic is theirs alone: another player neither sees him nor loses him", async (t) => {
+  const first = at_stage(t, [2598, 3084], 20, [[ITEM.BEER_HAND, 1]]);
+  const second = actor(t, 2599, 3084);
+  const zavistics = (f) => f.p.getLocalNpcs().filter((npc) => npc.getId() === 881 && npc.getLocation().getY() >= 3086);
+  tick(first);
+  await send(first, ring());
+  tick(first, 3);
+  core.World.updateLocalNpcs(second.p, [...first.plugin, ...second.plugin].filter((npc) => npc.isRegistered()));
+  assert.equal(zavistics(first).length, 1, "the ringer's Zavistic comes out");
+  assert.equal(zavistics(second).length, 0, "the other player sees nobody at the bell");
+  const own = zavistics(first)[0];
+  assert.equal(own.getOwner(), first.p);
+  assert.equal(own.isOwnerOnly(), true);
+  // The other player walking off or logging out leaves the ringer's Zavistic where he is.
+  PM.emitPlayerLogout({ player: second.p, username: second.p.getUsername() });
+  second.p.setRegistered(false);
+  tick(first, 2);
+  assert.equal(own.isRegistered(), true);
+});

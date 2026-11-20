@@ -9,7 +9,9 @@
  * - He stays while the player talks to him (ringing again keeps the same Zavistic) and walks off once the chat has
  *   been closed a while (12-16 ticks in the capture); he also goes when the player leaves.
  *
- * Ours: he leaves 12 ticks after the chat closes, and 15 tiles is "leaving"; the capture shows no exact rule.
+ * Ours: he leaves 12 ticks after the chat closes, and 15 tiles is "leaving"; the capture shows no exact rule. Each
+ * ringer gets their own Zavistic, visible to them alone (one recording, one player: whether others see him is
+ * uncaptured).
  */
 const BELL_RING_ANIM = 2103;
 const BELL_SOUND = { soundId: 1959, x: 2598, y: 3086, level: 0, radius: 5 };
@@ -80,7 +82,9 @@ function createWizardsGuildBell(api) {
       current.idle = 0;
       return current.npc;
     }
-    const npc = api.spawnNpc({ id: NpcIdentifiers.ZAVISTIC_RARVE, ...at, face, wanderRadius: 1 });
+    // Each ringer's own Zavistic, seen and spoken to by them alone: his stay follows that player's chat and
+    // whereabouts, so another player can't stack theirs on him, talk to him, or lose him when the owner leaves.
+    const npc = api.spawnNpc({ id: NpcIdentifiers.ZAVISTIC_RARVE, ...at, face, wanderRadius: 1, owner: player, ownerOnly: true });
     if (!npc) return null;
     npc.__skipDefaultRespawn = true;
     const visit = { npc, idle: 0 };

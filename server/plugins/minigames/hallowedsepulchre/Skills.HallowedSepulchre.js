@@ -325,7 +325,8 @@ function brazier(event) {
     return true;
   }
   const { items, requirements } = Common.data;
-  const dust = player.getInventory().contains(items.symbol) ? 1 : requirements.brazierDust;
+  // Wiki (Hallowed symbol): one dust "with the necklace equipped".
+  const dust = symbolWorn(player) ? 1 : requirements.brazierDust;
   if (player.getInventory().getAmount(items.vampyreDust) < dust) {
     Common.box(player, Common.message("brazierOffering"));
     return true;
@@ -338,6 +339,11 @@ function brazier(event) {
   player.getPacketSender().sendSound(Common.data.sounds.brazierLit, 1, 0);
   Common.xp(player, "PRAYER", Common.data.xp.brazierPrayer);
   return true;
+}
+
+function symbolWorn(player) {
+  const amulet = player.getEquipment().getItems()[Common.core.Equipment.AMULET_SLOT];
+  return amulet?.getId?.() === Common.data.items.symbol;
 }
 
 /**
@@ -359,8 +365,7 @@ function barrier(event) {
   const { player } = run;
   if (stateOf(run, "hallowed_prayer_state") !== 2) return false;
   const { from, to } = barrierPass(run, tile, run.area.templateOf(player.getLocation()));
-  const amulet = player.getEquipment().getItems()[Common.core.Equipment.AMULET_SLOT];
-  const busy = amulet?.getId?.() === Common.data.items.symbol ? BARRIER_BUSY_SYMBOL : BARRIER_BUSY;
+  const busy = symbolWorn(player) ? BARRIER_BUSY_SYMBOL : BARRIER_BUSY;
   if (!run.act(BARRIER_DELAY + busy, { agility: true })) return true;
   player.getMovementQueue().reset();
   run.schedule(BARRIER_DELAY, () => {

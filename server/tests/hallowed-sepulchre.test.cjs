@@ -773,6 +773,20 @@ test("either half of the Saradomin Brazier takes the offering, as recorded: the 
   run.finish();
 });
 
+test('the brazier takes 1 dust with the Hallowed symbol worn (Wiki), 2 with it only in the pack', () => {
+  for (const [worn, left] of [[false, 1], [true, 2]]) {
+    const p = fakePlayer({ amulet: worn ? Common.data.items.symbol : null });
+    if (!worn) p.inventory.adds(Common.data.items.symbol, 1);
+    const run = startRun(p);
+    onFloor(run, p, 2, 0, [2519, 5958, 2]);
+    p.inventory.adds(3325, 3);
+    click(p, 39526, 1, locOf(run, 39526, [2520, 5958, 2]));
+    assert.equal(varbit(p, 'hallowed_prayer_state'), 2);
+    assert.equal(p.inventory.getAmount(3325), left, worn ? 'worn: 1 dust' : 'carried: 2 dust');
+    run.finish();
+  }
+});
+
 test('the Holy barrier reproduces the recorded F2 passes: 2519 -> 2521 and back at y 5960, XP for the first two only', () => {
   const p = fakePlayer();
   const run = startRun(p);

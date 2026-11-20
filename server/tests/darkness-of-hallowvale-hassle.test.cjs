@@ -404,26 +404,31 @@ test("the guard: not yet with the cart short; with it full, 2574 = 1 and north-e
   assert.equal(p.getMovementQueue().isMovementBlocked(), false);
 });
 
+function cartPersistence(t) {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const { GameConstants } = require("../dist/game/GameConstants");
+  const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tsps-hallowvale-cart-"));
+  const oldDirectory = JsonPlayerPersistence.SAVE_DIRECTORY;
+  const oldPersistence = GameConstants.PLAYER_PERSISTENCE;
+  JsonPlayerPersistence.SAVE_DIRECTORY = directory;
+  const persistence = new JsonPlayerPersistence();
+  GameConstants.setPlayerPersistence(persistence);
+  t.after(async () => {
+    await persistence.flush();
+    GameConstants.setPlayerPersistence(oldPersistence);
+    JsonPlayerPersistence.SAVE_DIRECTORY = oldDirectory;
+    assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
+    assert.ok(path.basename(directory).startsWith("tsps-hallowvale-cart-"));
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  return persistence;
+}
+
 for (const exitTick of [0, 2, 3, 4, 5]) {
   test(`mine exit logout at tick ${exitTick} saves only the cart progress still owed`, async (t) => {
-    const fs = require("node:fs");
-    const os = require("node:os");
-    const { GameConstants } = require("../dist/game/GameConstants");
-    const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tsps-hallowvale-cart-"));
-    const oldDirectory = JsonPlayerPersistence.SAVE_DIRECTORY;
-    const oldPersistence = GameConstants.PLAYER_PERSISTENCE;
-    JsonPlayerPersistence.SAVE_DIRECTORY = directory;
-    const persistence = new JsonPlayerPersistence();
-    GameConstants.setPlayerPersistence(persistence);
-    t.after(async () => {
-      await persistence.flush();
-      GameConstants.setPlayerPersistence(oldPersistence);
-      JsonPlayerPersistence.SAVE_DIRECTORY = oldDirectory;
-      assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
-      assert.ok(path.basename(directory).startsWith("tsps-hallowvale-cart-"));
-      fs.rmSync(directory, { recursive: true, force: true });
-    });
+    const persistence = cartPersistence(t);
 
     const { p } = player(t, `cartlogout${exitTick}`, STAGE.SENT_BACK, [2389, 4618, 2]);
     ores(p, 15);
@@ -441,7 +446,7 @@ for (const exitTick of [0, 2, 3, 4, 5]) {
     p.setRegistered(false);
     tick(5);
     await persistence.flush();
-    assert.ok(fs.existsSync(persistence.resolveFilePath(p.getUsername(), p.getProfile())), "logout reached the actual disk save");
+    assert.ok(require("node:fs").existsSync(persistence.resolveFilePath(p.getUsername(), p.getProfile())), "logout reached the actual disk save");
     const saved = persistence.load(p.getUsername(), p.getProfile());
     assert.ok(saved);
     assert.equal(saved.attributes[VARS_ATTRIBUTE]?.[VARBIT.MINE_CART] ?? 0, departed ? 0 : 15);
@@ -458,6 +463,26 @@ for (const exitTick of [0, 2, 3, 4, 5]) {
     }
     assert.equal(restored.getAttribute(VARS_ATTRIBUTE)?.[VARBIT.MINE_CART] ?? 0, departed ? 0 : 15,
       "a new mine visit owes fresh ore; an interrupted exit still inside keeps its paid cart");
+  });
+}
+
+for (const outside of [true, false]) {
+  test(`login recovers saved mine cart progress ${outside ? "outside" : "inside"} the mine`, async (t) => {
+    const persistence = cartPersistence(t);
+    const { p } = player(t, `cartold${outside}`, STAGE.SENT_BACK, MINE);
+    ores(p, 15);
+    cart(p);
+    if (outside) p.moveTo(new core.Location(3621, 3322, 0));
+    // Recreate an existing save from the old delayed-reset window, without the fixed logout hook.
+    persistence.save(p);
+    await persistence.flush();
+    const saved = persistence.load(p.getUsername(), p.getProfile());
+    assert.equal(saved.attributes[VARS_ATTRIBUTE][VARBIT.MINE_CART], 15);
+    const { p: restored } = player(t, `cartoldrestore${outside}`, STAGE.SENT_BACK, MINE);
+    saved.applyToPlayer(restored);
+    PM.emitPlayerLogin({ player: restored, username: restored.getUsername() });
+    assert.equal(restored.getAttribute(VARS_ATTRIBUTE)?.[VARBIT.MINE_CART] ?? 0, outside ? 0 : 15);
+    assert.equal(varbit(restored, VARBIT.MINE_CART), outside ? 0 : 15, "client replay agrees with recovered progress");
   });
 }
 

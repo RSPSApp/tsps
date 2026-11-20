@@ -39,6 +39,8 @@ const BLUE_MONKEY_PAGE = "Blue monkey";
 const TAUNTED = "monkey-speak:blue-monkey-taunted";
 const CAUTIONED = "monkey-speak:blue-monkey-cautioned";
 /** Line text -> [attribute, value]. Ours: the Wiki doesn't say what clears either state; Calm and Reassure do here. */
+// The cautioned entries are kept for the transcript's Caution/Reassure menu, which the parsed transcript
+// can't reach today (Taunt and Calm both end the conversation first), so CAUTIONED stays false.
 const STATE_LINES = new Map([
   ["Hey monkey, your mother was an inedible seaweed sandwich!", [TAUNTED, true]],
   ["I'm sorry for insulting you. Is there anything I can do to make it up to you?", [TAUNTED, false]],

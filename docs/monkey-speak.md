@@ -21,4 +21,4 @@ transcripts above.
 The same plugin answers the understood sections' conditions:
 
 - Magic carpet monkey: "has a banana in their inventory" checks the inventory for a banana (1963), and "Give the monkey a banana." takes one.
-- Blue monkey: the taunted and cautioned conditions read a per-player flag set by the Taunt and Caution lines. Ours: the Wiki doesn't say what clears them; here the Calm and Reassure lines do, and the flags aren't saved across logins.
+- Blue monkey: the taunted and cautioned conditions read a per-player flag set by the Taunt and Caution lines. Ours: the Wiki doesn't say what clears them; here the Calm and Reassure lines do, and the flags aren't saved across logins. The Caution/Reassure menu comes after Taunt and Calm, which both end the conversation, so the cautioned flag is never set today.

@@ -52,8 +52,6 @@ function lockpickFeedback(guess, target) {
 /**
  * `target` is the combination, or a function giving a new one each time the lock is opened
  * afresh (attempt 0); a wrong guess reopens the same session with the same combination.
- */
-/**
  * `maxAttempts` (optional) ends the session after that many wrong guesses: the lock closes and
  * `onExhausted(player)` runs instead of the reopen. `failSound` plays with each wrong guess.
  */

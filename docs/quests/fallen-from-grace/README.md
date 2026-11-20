@@ -67,6 +67,9 @@ this table follow them; where the Wiki states a value it wins.
   2539,2215 (P2 467).
 - The doors stay locked from outside until the quest is done ("Wyrmscraig Cathedral access");
   a player inside before stage 16 is let out.
+- From stage 15 until the quest is done, Investigate on the powered golem takes the player
+  through the passage either way (behind the golem fade), so a death, teleport or logout after
+  powering it can't shut the player out. Re-entry isn't recorded.
 - Trolls killed before Mortimer's request (they are there on arrival) count; his call comes with
   the request. Not recorded.
 - The Mad Angel's sunstone crystal drops only when owed (Wiki: "always drops if the bank chest is

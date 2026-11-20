@@ -27,7 +27,7 @@ const runTicks = (n = 1) => { for (let i = 0; i < n; i++) TaskManager.process();
 function setup() {
   const hooks = {
     variants: [], conditions: [], object: [], custom: new Map(), deaths: [], itemActions: [],
-    zones: [], exits: [], logins: [], spawned: [], removed: [],
+    zones: [], exits: [], logins: [], spawned: [], removed: [], npcNamed: new Map(),
   };
   const api = new Proxy({
     core,
@@ -39,6 +39,7 @@ function setup() {
     onObjectInteraction(fn) { hooks.object.push(fn); },
     onItemAction(fn) { hooks.itemActions.push(fn); },
     onNpcDeath(fn) { hooks.deaths.push(fn); },
+    onNpcInteraction(name, actions) { if (typeof name === 'string') hooks.npcNamed.set(name, [...(hooks.npcNamed.get(name) ?? []), actions.Investigate].filter(Boolean)); },
     onZoneEnter(zone, fn) { hooks.zones.push({ zone, fn }); },
     onZoneExit(zone, fn) { hooks.exits.push({ zone, fn }); },
     onPlayerLogin(fn) { hooks.logins.push(fn); },
@@ -80,7 +81,8 @@ function setup() {
       adds: (id, amount = 1) => items.set(id, (items.get(id) ?? 0) + amount),
       deleteNumber: (id, amount = 1) => items.set(id, Math.max(0, (items.get(id) ?? 0) - amount)),
     }),
-    getEquipment: () => ({ get: () => null, getItems: () => [] }),
+    getEquipment: () => ({ get: () => null, getItems: () => [], getAmount: () => 0 }),
+    getBanks: () => [],
     getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences() {} }),
     getLocation: () => location, moveTo(to) { location = to; log.push(`move ${to.getX()} ${to.getY()}`); },
     setLocationForTest(to) { location = to; },
@@ -357,4 +359,19 @@ test('someone inside the doors before stage 16 is let out by the ordinary door',
   h.quest.setStage(p, 8);
   p.getLocation = () => new core.Location(2541, 2215, 0);
   assert.equal(h.custom('madangel:cathedral-door', { player: p, objectId: 62368, handled: false }).handled, false);
+});
+
+test('from stage 15 the powered golem lets the player back through the passage (ours: re-entry after a death or logout)', () => {
+  const h = setup(), p = h.p;
+  h.quest.setStage(p, 16);
+  p.setLocationForTest(new core.Location(2573, 8649, 0));
+  const event = { player: p, npcId: core.NpcIdentifiers.POWERED_GOLEM, handled: false };
+  for (const fn of h.hooks.npcNamed.get('Powered golem') ?? []) fn(event);
+  assert.equal(event.handled, true);
+  runTicks(2);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2573, 8655]);
+  h.quest.setStage(p, 20);
+  const done = { player: p, npcId: core.NpcIdentifiers.POWERED_GOLEM, handled: false };
+  for (const fn of h.hooks.npcNamed.get('Powered golem') ?? []) fn(done);
+  assert.equal(done.handled, false, 'after the quest it is not the quest\'s');
 });

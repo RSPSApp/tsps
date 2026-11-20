@@ -795,6 +795,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
         if (quest.getStage(player) !== STAGE_ANGEL_DEAD) return;
         if (!held(player, FINAL_LETTER_ITEM_ID)) give(player, FINAL_LETTER_ITEM_ID);
         setFlag(player, FLAG_FOUND_BODY);
+        sound(player, FIND_SOUND); // P2 tick 434
         return;
       case CORMAC_CRYSTAL_MESSAGE_ID:
         give(player, SUNSTONE_CRYSTAL_ITEM_ID);
@@ -1211,10 +1212,22 @@ module.exports = function registerFallenFromGraceQuest(api) {
     return true;
   }
 
+  const GOLEM_NPC_IDS = new Set([BROKEN_GOLEM_NPC_ID, NpcIdentifiers.POWERED_GOLEM]);
+  const BROKEN_DOWN_GOLEM_MULTI_ID = 16320; // broken_down_golem, the multi-NPC base (no name, no identifier)
+  const GOLEM_NORTH_TILE = new Location(2573, 8649, 0); // the captured front (P2 tick 249)
+
   function handleGolemInvestigate(event) {
     const { player, npcId } = event;
-    if (npcId !== BROKEN_GOLEM_NPC_ID) return false;
+    if (!GOLEM_NPC_IDS.has(npcId) && npcId !== BROKEN_DOWN_GOLEM_MULTI_ID) return false;
     const stage = quest.getStage(player);
+    if (questActive(player) && stage >= STAGE_GOLEM_POWERED) {
+      // Ours (not recorded): once powered, the golem lets the player back through, so a player who
+      // died, teleported or logged out mid-fade can return to the basement and the cathedral.
+      event.handled = true;
+      const north = player.getLocation().getY() < CREVICE_WALL_Y;
+      fadeTravel(player, GOLEM_FADE, () => player.moveTo(north ? GOLEM_PASSAGE_TILE : GOLEM_NORTH_TILE));
+      return true;
+    }
     if (stage < STAGE_TROLLS || stage >= STAGE_GOLEM_POWERED) return false;
     event.handled = true;
     speak(
@@ -1479,9 +1492,9 @@ module.exports = function registerFallenFromGraceQuest(api) {
    * and a crystal is not already owned". Owned is carried, worn or banked.
    */
   function ownsCrystal(player) {
-    const banks = (player.getBanks?.() ?? []).filter((bank, tab) => bank && tab !== api.core.Bank?.BANK_SEARCH_TAB_INDEX);
-    return [player.getInventory(), player.getEquipment?.(), ...banks].filter(Boolean)
-      .some((container) => (container.getValidItems?.() ?? []).some((item) => item?.getId?.() === SUNSTONE_CRYSTAL_ITEM_ID));
+    if (api.core.Bank?.owns) return api.core.Bank.owns(player, SUNSTONE_CRYSTAL_ITEM_ID);
+    return [player.getInventory(), player.getEquipment?.()].filter(Boolean)
+      .some((container) => (container.getValidItems?.() ?? []).some((item) => item?.getId?.() === SUNSTONE_CRYSTAL_ITEM_ID && item.getAmount?.() > 0));
   }
 
   function answerCrystalDrop(request) {
@@ -1840,6 +1853,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemAction(handleItemAction);
   api.onNpcInteraction("Broken golem", { Investigate: handleGolemInvestigate });
+  api.onNpcInteraction("Powered golem", { Investigate: handleGolemInvestigate });
   api.onGroundItemClick([LARGE_HAT_ITEM_ID, WORN_JOURNAL_ITEM_ID], 3, handleGroundItemInvestigate);
   api.onGroundItemPickup(handleGroundItemPickup);
   api.onNpcDeath(handleNpcDeath);

@@ -285,6 +285,29 @@ test("demonic gorillas count for Black Demons as well as Monkeys", () => {
   }
 });
 
+test("the Royal Titans count for Fire and Ice Giants as they died, though their death turns them into corpses", () => {
+  const arena = { getX: () => 2951, getY: () => 9574, getZ: () => 0 };
+  const titans = [
+    ["Fire Giants", core.NpcIdentifiers.BRANDA_THE_FIRE_QUEEN, core.NpcIdentifiers.BRANDA_THE_FIRE_QUEEN_2],
+    ["Ice Giants", core.NpcIdentifiers.ELDRIC_THE_ICE_KING, core.NpcIdentifiers.ELDRIC_THE_ICE_KING_2],
+  ];
+  for (const [task, titanId, corpseId] of titans) {
+    const player = createPlayer();
+    giveTask(player, 5, task, 10);
+    // Royal Titans' death handler runs first (plugins/bosses sorts before plugins/skills) and
+    // transforms the titan into its corpse; the death event keeps the id it died as.
+    const titan = npc(corpseId, arena);
+    handlers.death.forEach((fn) => fn({ killer: player, npc: titan, npcId: titanId }));
+    assert.equal(varp(player, "slayer_count"), 9, task + ": the titan counts down the task");
+    assert.deepEqual(player.xp, [[Skill.SLAYER, core.NpcDefinition.forId(titanId).getHitpoints()]], task + ": the titan's hitpoints, not its corpse's");
+    assert.notEqual(core.NpcDefinition.forId(corpseId).getHitpoints(), core.NpcDefinition.forId(titanId).getHitpoints());
+  }
+  const wrong = createPlayer();
+  giveTask(wrong, 5, "Ice Giants", 10);
+  handlers.death.forEach((fn) => fn({ killer: wrong, npc: npc(core.NpcIdentifiers.BRANDA_THE_FIRE_QUEEN_2, arena), npcId: core.NpcIdentifiers.BRANDA_THE_FIRE_QUEEN }));
+  assert.equal(varp(wrong, "slayer_count"), 10, "Branda is not an ice giant");
+});
+
 test("a Black Demons assignment credits demonic gorilla kills with Slayer XP", () => {
   const player = createPlayer();
   giveTask(player, 5, "Black Demons", 10);

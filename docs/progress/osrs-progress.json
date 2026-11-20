@@ -2508,6 +2508,7 @@
             "Main 82657e165: #1644 stall thieves under another character are hidden from guards.",
             "Main 281766303 (2 November 2026): #1734 enables Port Roberts stalls; #1766 corrects pickpocket/knock-out success charts; #1859 restores the H.A.M. trapdoor; #1928 wires every stall and pillory rotten-tomato sales.",
             "Main 3b61a15a8 (6 November 2026): #2333 fix(leagues): Leagues VI bugs from #2324; #2534 Implement Ardougne Hard and Elite diary gameplay tasks; #2663 Store and keep gems in an open gem bag; #2665 Auto-store seeds in an open seed box. Existing completion credit and documented limitations are retained unless explicitly updated below.",
+            "2026-11-21, branch parity/support-skills-ardougne-sewer-gate: the Ardougne Sewers gate (11721/11722) is locked from the west with Pick-lock (31 Thieving, 25 XP, Wiki chart) and opens freely from the east, as a pass-through gate with the lines and sounds of rsprox capture 1625; LockedDoors.Thieving.js and Doors.plugin.js, tests server/tests/thieving-locked-doors.test.cjs. Remaining lock-pick doors: Ross' House, the H.A.M. Hideout jail door and the Monkey Madness II door.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3992 Delay successful Digsite workman pickpockets. #4124 Track pickpocket loot in RuneLite. #4057 feat(leagues): expand Demonic Pacts task trigger coverage. 9 merged PRs changed recorded implementation files for this entry."
           ],
           "taskDetails": [

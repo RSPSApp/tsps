@@ -275,6 +275,12 @@ test("the cannon: Dondakan's cutscene, the landing, stage 90 and the first thoug
   const opened = () => H.callsNamed(f, "sendInterface", t0).map((call) => call.args[0]);
   H.ticks(f, 37);
   assert.ok(opened().includes(112), "the zoomed heads (dwarf_rock_cannon) at 44");
+  const calls = f.calls.filter((call) => call.tick >= t0);
+  calls.forEach((call, index) => {
+    if (call.name !== "sendInterface" || call.args[0] !== 112) return;
+    assert.deepEqual([calls[index - 1]?.name, ...(calls[index - 1]?.args ?? [])], ["sendInterfaceScript", 2524, [0, 0]],
+      "toplevel_mainmodal_open (0, 0) directly before dwarf_rock_cannon opens (tick 3253)");
+  });
   H.ticks(f, 29);
   const at = H.xy(f.player.getLocation());
   assert.ok([[2426, 4965, 0], [2323, 4939, 0]].some((spot) => spot.join() === at.join()), `landed on a recorded spot (${at})`);

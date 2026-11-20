@@ -111,7 +111,8 @@
         "attacking": "You can't loot the chest whilst Bryophyta is still attacking you!",
         "needKey": "You need a Mossy key to open this chest.",
         "spill": "The loot spills out as you open the chest.",
-        "count": "Your Bryophyta chests opened count is: <col=ff0000>{count}</col>."
+        "count": "Your Bryophyta chests opened count is: <col=ff0000>{count}</col>.",
+        "checkCount": "You have opened Bryophyta's chest a total of {count} times."
       },
       "chestTable": {
         "table_id": "bryophyta_chest",

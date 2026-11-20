@@ -124,6 +124,7 @@ test('acid: its splash or a pool fails Unrequired Antipoisons and Alcleanical Hy
   const fight = fightOf(npc, player);
   assert.equal(rules['Unrequired Antipoisons'](fight), false);
   assert.equal(rules['Alcleanical Hydra'](fight), false, 'a 0 splash still poisons: its ticks are damage');
+  hydra.tickCount += 1; // the pool hurts from the tick after it lands
   hydra.tickPools([player]);
   assert.ok(player.damage[1] > 0);
   assert.equal(rules['Alcleanical Hydra'](fight), false, 'the pool hurt');
@@ -154,7 +155,7 @@ test('lightning: a current reaching the player fails Lightning Lure', () => {
   const npc = fakeHydra();
   const hydra = new Fight.Fight(fakeLair(player), npc);
   hydra.castLightning();
-  for (let i = 0; i < 40 && hydra.currents.length; i++) { hydra.tickCount += 1; hydra.tickCurrents([player]); }
+  for (let i = 0; i < 40 && hydra.lightningActive(); i++) { hydra.tickCount += 1; hydra.tickCurrents([player]); }
   assert.ok(player.damage.length > 0);
   assert.equal(rules['Lightning Lure'](fightOf(npc, player)), false);
   assert.equal(rules['Unrequired Antipoisons'](fightOf(npc, player)), true);

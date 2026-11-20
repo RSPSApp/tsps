@@ -486,9 +486,11 @@ export class Combat {
         if (reachable) {
             this.trace("inRange", target);
             // An NPC flagged combat:close-in (ToA's Akkha) keeps walking in while it attacks
-            // from range, until it stands beside its target.
-            const closesIn = this.character.isNpc() && this.character.hasFlag?.("combat:close-in") === true
-                && !CombatRange.beside(this.character, target);
+            // from range, until it stands beside its target; one with a numeric
+            // "combat:close-in-distance" attribute (the Alchemical Hydra's 4) until it is that
+            // many tiles from it, footprint to footprint.
+            const closeIn = this.character.isNpc() ? Combat.closeInDistance(this.character) : null;
+            const closesIn = closeIn !== null && !CombatRange.within(this.character, target, closeIn);
             if (!closesIn) {
                 this.character.getMovementQueue().reset();
                 return;
@@ -953,6 +955,16 @@ export class Combat {
             return true;
         }
         return false;
+    }
+
+    /** Attribute naming how close (footprint to footprint) an NPC walks in while attacking from range. */
+    public static readonly CLOSE_IN_DISTANCE_ATTRIBUTE = "combat:close-in-distance";
+
+    /** How near an NPC keeps walking in while it attacks from range, or null when it stands its ground. */
+    private static closeInDistance(npc: Mobile): number | null {
+        const distance = Number(npc.getAttribute?.(Combat.CLOSE_IN_DISTANCE_ATTRIBUTE));
+        if (Number.isInteger(distance) && distance >= 1) return distance;
+        return npc.hasFlag?.("combat:close-in") === true ? 1 : null;
     }
 
     private processNpcUnderTarget(state: CombatCycleState): void {

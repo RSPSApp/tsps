@@ -1,12 +1,14 @@
 /**
  * The Alchemical Hydra: what the units share - the plugin api, plugins/bosses/data/
- * alchemical-hydra.json with its gameval names resolved to cache ids, tick timing, graphics and
- * typeless damage.
+ * alchemical-hydra.json with its gameval names resolved to cache ids, tick timing, graphics,
+ * sounds, messages and typeless damage.
  */
 const fs = require("fs");
 const path = require("path");
 
 const KILLS_ATTRIBUTE = "alchemical-hydra:kills";
+/** The player's fastest kill in ticks (the fight duration's personal best); 0 when none. */
+const BEST_TICKS_ATTRIBUTE = "alchemical-hydra:best-ticks";
 
 let api = null;
 let core = null;
@@ -60,6 +62,11 @@ function later(ticks, action) {
 const toLocation = ([x, y, z]) => new core.Location(x, y, z ?? 0);
 const randomInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 
+/** The world's tick count: the vents keep its 8-tick clock. */
+function worldTick() {
+  return Number(core?.World?.getProcessCycle?.() ?? 0);
+}
+
 /** The Hydra's fighting forms, in phase order. */
 function phaseForms() {
   const { serpentine, electric, flame, enraged } = ids.npcs;
@@ -81,9 +88,35 @@ function distanceToFootprint(location, npc) {
   return Math.max(dx, dy);
 }
 
-function tileGraphic(players, location, id, delay = 0) {
+function tileGraphic(players, location, id, delay = 0, height = 0) {
   const { Graphic } = core;
-  for (const player of players) player.getPacketSender().sendGraphic(Graphic.delayed(id, delay), location);
+  for (const player of players) player.getPacketSender().sendGraphic(Graphic.delayed(id, delay, height), location);
+}
+
+/** A sound from the data's "sounds" table, heard on a tile (delay in client cycles). */
+function areaSound(players, key, location, delay, range) {
+  const sound = data.sounds[key];
+  if (!sound || !location) return;
+  const at = delay ?? sound.delay ?? 0;
+  for (const player of players) {
+    player.getPacketSender().sendAreaSound?.(sound.id, location.getX(), location.getY(), location.getZ(), 1, at, range ?? sound.range ?? 0);
+  }
+}
+
+/** A loc only this chamber's players see (the chamber is one copy a player on the shared map). */
+function showLoc(players, id, location) {
+  const { GameObject } = core;
+  if (!GameObject) return;
+  const loc = new GameObject(id, location, 10, 0, null);
+  for (const player of players) player.getPacketSender().sendObject?.(loc);
+}
+
+/** A loc sequence on a tile, for this chamber's players. */
+function animateLoc(players, id, location, seq) {
+  const { GameObject, Animation } = core;
+  if (!GameObject) return;
+  const loc = new GameObject(id, location, 10, 0, null);
+  for (const player of players) player.getPacketSender().sendObjectAnimation?.(loc, new Animation(seq));
 }
 
 /** Typeless damage on the player now; `poison` paints it green. */
@@ -99,6 +132,13 @@ function message(key, values = {}) {
   return data.messages[key].replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ""));
 }
 
+/** A filterable ("spam") chat line, as live sends the vent, absorb and burn lines. */
+function spam(player, text) {
+  const sender = player.getPacketSender?.();
+  if (sender?.sendTypedMessage && core?.ChatType?.SPAM !== undefined) sender.sendTypedMessage(core.ChatType.SPAM, text);
+  else player.sendMessage(text);
+}
+
 /** Whether the player's Slayer task is hydras (the boss can only be fought on one, Wiki). */
 function onTask(player, npc) {
   const request = { player, npc, onTask: false };
@@ -106,9 +146,18 @@ function onTask(player, npc) {
   return request.onTask === true;
 }
 
+/** m:ss.cc, as the boss fight durations are shown. */
+function formatTicks(ticks) {
+  const centis = Math.round(ticks * 60);
+  const minutes = Math.floor(centis / 6000);
+  const seconds = Math.floor((centis % 6000) / 100);
+  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis % 100).padStart(2, "0")}`;
+}
+
 module.exports = {
-  init, later, toLocation, randomInt, phaseForms, isHydra, distanceToFootprint, tileGraphic, hurtPlayer, message, onTask,
-  KILLS_ATTRIBUTE,
+  init, later, toLocation, randomInt, worldTick, phaseForms, isHydra, distanceToFootprint, tileGraphic, areaSound,
+  showLoc, animateLoc, hurtPlayer, message, spam, onTask, formatTicks,
+  KILLS_ATTRIBUTE, BEST_TICKS_ATTRIBUTE,
   get api() { return api; },
   get core() { return core; },
   get data() { return data; },

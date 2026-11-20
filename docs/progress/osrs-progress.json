@@ -2022,6 +2022,7 @@
             "docs/jewellery.md"
           ],
           "devNotes": [
+            "2026-11-20: Tanning close now uses active-cache IF1 child 324:90 instead of its hover layer 91. Verified by the cache-driven native widget regression in server/tests/alkharid-services-native.test.cjs and live Ellis Trade/close packets; tanning scope and Crafting task statuses are unchanged. See docs/tanning.md.",
             "Main 62d662706: #1475 pottery and spinning lines, ticks and menus; #1494 gem cutting and jewellery from captures.",
             "Main fdf193b28: #1345 pottery quantity selection, production timing and pot lids.",
             "Only gem cutting via chisel-on-uncut-gem is implemented (GEMS map, animation 886, Sound.GEM_CUTTING, immediate item swap + XP).",

@@ -72,19 +72,44 @@ module.exports = function createChompyHunt(api, callbacks = {}) {
     });
   }
 
+  /**
+   * The tiles around the bait a bird could walk from to reach it (#6281): a walk out from the bait within the
+   * landing square, step by step through the collision, never onto water. Sea tiles off the Feldip coast are
+   * not collision-blocked, only water overlays, so a blocked-mask check alone landed birds in the sea.
+   */
+  function walkableAround(bait) {
+    const x0 = bait.at.getX(), y0 = bait.at.getY(), z = bait.at.getZ(), span = MAX_LANDING_DISTANCE * 2 + 1;
+    const key = (x, y) => (x - x0 + MAX_LANDING_DISTANCE) * span + (y - y0 + MAX_LANDING_DISTANCE);
+    const seen = new Set([key(x0, y0)]), queue = [[x0, y0]], reached = [];
+    for (let i = 0; i < queue.length; i++) {
+      const [x, y] = queue[i];
+      reached.push([x, y]);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const nx = x + dx, ny = y + dy;
+          if ((dx === 0 && dy === 0) || Math.abs(nx - x0) > MAX_LANDING_DISTANCE || Math.abs(ny - y0) > MAX_LANDING_DISTANCE) continue;
+          const k = key(nx, ny);
+          if (seen.has(k)) continue;
+          if (!RegionManager.getRegion(nx, ny) || RegionManager.isWater(new Location(nx, ny, z))) continue;
+          if (!RegionManager.canMove(x, y, nx, ny, z, 1, 1, bait.area)) continue;
+          seen.add(k);
+          queue.push([nx, ny]);
+        }
+      }
+    }
+    return reached;
+  }
+
   function landingTile(bait) {
     const possible = [];
     const nearby = [...World.getNpcsNear(bait.at, MAX_LANDING_DISTANCE * 2, bait.area),
       ...World.getPlayers()].filter(Boolean);
-    for (let dx = -MAX_LANDING_DISTANCE; dx <= MAX_LANDING_DISTANCE; dx++) {
-      for (let dy = -MAX_LANDING_DISTANCE; dy <= MAX_LANDING_DISTANCE; dy++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) < MIN_LANDING_DISTANCE) continue;
-        const at = new Location(bait.at.getX() + dx, bait.at.getY() + dy, bait.at.getZ());
-        if (!RegionManager.getRegion(at.getX(), at.getY())) continue;
-        if ((RegionManager.getClipping(at.getX(), at.getY(), at.getZ(), bait.area) & BLOCKED_LANDING) !== 0) continue;
-        if (!RegionManager.canProjectileAttackBounds(at, bait.at, 1, 1, 1, 1, bait.area) || occupied(at, bait.area, nearby)) continue;
-        possible.push(at);
-      }
+    for (const [x, y] of walkableAround(bait)) {
+      if (Math.max(Math.abs(x - bait.at.getX()), Math.abs(y - bait.at.getY())) < MIN_LANDING_DISTANCE) continue;
+      const at = new Location(x, y, bait.at.getZ());
+      if ((RegionManager.getClipping(x, y, at.getZ(), bait.area) & BLOCKED_LANDING) !== 0) continue;
+      if (!RegionManager.canProjectileAttackBounds(at, bait.at, 1, 1, 1, 1, bait.area) || occupied(at, bait.area, nearby)) continue;
+      possible.push(at);
     }
     return possible.length ? possible[Math.floor(Math.random() * possible.length)] : null;
   }

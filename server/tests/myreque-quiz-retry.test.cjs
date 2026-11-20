@@ -72,7 +72,7 @@ async function talkCurpile(stage, script, existing) {
   sender.sendString = (text, ...rest) => { if (typeof text === "string") lines.push(text); return original(text, ...rest); };
   const send = async (packet) => { await connection.dispatch([packet]); connection.processTurnPackets(); };
   PM.emitNpcInteraction({ player: p, npc, npcId: npc.getId(), action: "Talk-to", clickType: 1, handled: false });
-  let picks = 0;
+  let picks = 0, idle = 0;
   for (let n = 0; n < 300; n++) {
     const pending = MultiChatboxPrompt.getPending(p);
     if (pending) {
@@ -83,7 +83,13 @@ async function talkCurpile(stage, script, existing) {
       await send({ type: "dialogue_continue", widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: idx + 1 });
       continue;
     }
-    if (!p.getDialogueManager().getCurrent()) break;
+    // A game tick per step: the knock-out's box holds its continue while the player is carried to Mort'ton.
+    core.TaskManager.process();
+    if (!p.getDialogueManager().getCurrent()) {
+      if (++idle > 12) break;
+      continue;
+    }
+    idle = 0;
     await send({ type: "dialogue_continue", widgetId: (p.getPacketSender().getChatboxGroupId() << 16) | 5, childIndex: -1 });
   }
   const result = {

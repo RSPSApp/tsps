@@ -1,9 +1,9 @@
 // Run after `yarn build`: node --test tests/myreque-bridge-wall.test.cjs
 // In Search of the Myreque (#5488), the bridge climb and the hidden wall, through the real plugin dispatch.
-// Mechanics are Wiki/void-based with no capture (void SearchMyreque.kt:135-145 wall, :186-203 climbTree; Wiki "Mending the
-// bridge" and "search the wall"); the tiles are cache-derived (the #5488 probe: wall 5052 at (3480,9837) type 0 rotation 3,
-// a wall on that tile's south edge, so its two sides are (3480,9837) north and (3480,9836) south; trees 5003 at (3502,3426)
-// and (3502,3431); rungs 26245-26247 at (3502,3428-3430)).
+// Mechanics from the revision-242 playthrough capture (docs/in-search-of-the-myreque.md): the climbs a tick after their
+// animation, landing on (3502,3427) and (3502,3432); the wall's open look and one walk step, with no message. Tiles are
+// the cache's (wall 5052 at (3480,9837) type 0 rotation 3, on that tile's south edge; trees 5003 at (3502,3426) and
+// (3502,3431); rungs 26245-26247 at (3502,3428-3430)).
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { before, after, test } = require('node:test');
@@ -31,9 +31,11 @@ function actor(t, stage, x, y, bridge = 0) {
   p.setRegistered(true); p.setLocation(new core.Location(x, y, 0)); p.needsPlacement = false;
   p.setAttribute(STAGE, stage);
   if (bridge) p.setAttribute(BRIDGE, bridge);
+  if (bridge) PM.emitPlayerLogin({ player: p, username: p.getUsername() });
   p.messages = [];
   p.sendMessage = (text) => { p.messages.push(text); };
-  t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); });
+  t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p); moving = moving.filter((m) => m !== p); });
+  moving.push(p);
   return p;
 }
 const at = (p) => { const l = p.getLocation(); return [l.getX(), l.getY(), l.getZ()]; };
@@ -46,7 +48,15 @@ function click(p, id, x, y, type, face) {
 const wall = (p) => click(p, WALL, 3480, 9837, 0, 3);
 const tree = (p, y, face) => click(p, TREE, 3502, y, 10, face);
 const rung = (p, id, y) => click(p, id, 3502, y, 22, 3);
-const tick = (n) => { for (let i = 0; i < n; i++) core.TaskManager.process(); };
+/** Ticks: tasks, then each player's movement (the wall pass is a walk step). */
+let moving = [];
+const tick = (n) => {
+  for (let i = 0; i < n; i++) {
+    core.World.processCycle++;
+    core.TaskManager.process();
+    for (const p of moving) { const q = p.getMovementQueue(); q.beginCycle?.(); if (q.hasPendingWork?.()) q.process(); p.setNeedsPlacement(false); p.setResetMovementQueue(false); }
+  }
+};
 
 test('the wall passes from the south side to the north side (rotation 3 wall on the (3480,9837) south edge)', (t) => {
   const p = actor(t, SHOWN_WAY_OUT, 3480, 9836);
@@ -55,8 +65,7 @@ test('the wall passes from the south side to the north side (rotation 3 wall on 
   assert.equal(p.getAttribute(STAGE), IN_INN_BASEMENT, 'stage 90 moves to 95');
   tick(6);
   assert.deepEqual(at(p), [3480, 9837, 0]);
-  assert.ok(p.messages.includes('You search the wall and find the door which Veliaf told you about.'), p.messages.join('|'));
-  assert.ok(p.messages.includes('You walk through.'), p.messages.join('|'));
+  assert.deepEqual(p.messages, [], 'live sends no message for the pass');
 });
 
 test('the wall passes from the north side to the south side, and the stage stays after the first pass', (t) => {
@@ -77,31 +86,38 @@ test('before the way out is shown the wall does nothing but a message', (t) => {
   assert.equal(p.getAttribute(STAGE), SHOWN_WAY_OUT - 5);
 });
 
-test('the south tree climbs up from the bank onto the bridge and down again', (t) => {
+test('the south tree climbs up from the bank onto the bridge and down again, each a tick after its animation', (t) => {
   const p = actor(t, REACHED_HOLLOWS, 3502, 3425);
   assert.ok(tree(p, 3426, 3).handled);
+  assert.deepEqual(at(p), [3502, 3425, 0], 'not yet');
+  tick(1);
   assert.deepEqual(at(p), [3502, 3427, 0], 'up: the bridge landing');
-  assert.ok(p.messages.includes('You climb the tree.'));
+  assert.deepEqual(p.messages, ['You climb up the tree.']);
   tree(p, 3426, 3);
+  tick(1);
   assert.deepEqual(at(p), [3502, 3425, 0], 'down from the bridge: the south bank');
+  assert.deepEqual(p.messages, ['You climb up the tree.', 'You climb down the tree.']);
 });
 
-test('the north tree needs ALL three rungs (void gates on the top rung only because walking onto an unrepaired rung breaks it; that is not implemented here)', (t) => {
+test('the north tree needs all three rungs (ours: no capture climbs it earlier)', (t) => {
   const statement = 'This bridge run looks broken; you would have nowhere to stand. The southern side of the rope bridge looks much less damaged.';
   for (const [label, rungs] of [['only the top rung', 0b100], ['only the bottom rung', 0b001], ['the two lower rungs', 0b011], ['no rung', 0]]) {
-    const p = actor(t, REACHED_HOLLOWS, 3503, 3431, rungs);
+    const p = actor(t, REACHED_HOLLOWS, 3502, 3432, rungs);
     tree(p, 3431, 1);
-    assert.deepEqual(at(p), [3503, 3431, 0], label);
+    tick(1);
+    assert.deepEqual(at(p), [3502, 3432, 0], label);
     assert.deepEqual(p.messages, [statement], label);
   }
 });
 
-test('the north tree with all three rungs repaired climbs up to the bridge top and down to the north bank', (t) => {
-  const p = actor(t, REACHED_HOLLOWS, 3503, 3431, 0b111);
+test('the north tree with all three rungs repaired climbs up to the bridge top and down to the north bank (3502,3432)', (t) => {
+  const p = actor(t, REACHED_HOLLOWS, 3502, 3432, 0b111);
   tree(p, 3431, 1);
+  tick(1);
   assert.deepEqual(at(p), [3502, 3430, 0], 'up from the north bank: the bridge top');
   tree(p, 3431, 1);
-  assert.deepEqual(at(p), [3503, 3431, 0], 'down from the bridge: the north bank');
+  tick(1);
+  assert.deepEqual(at(p), [3502, 3432, 0], 'down from the bridge: the north bank');
 });
 
 test('the trees have no reason to be climbed before the Hollows', (t) => {
@@ -122,7 +138,7 @@ test('a rung is repaired with a plank, 75 steel nails and a hammer; the state is
   assert.equal(p.getPacketSender().getVarbit(178), 1);
   assert.equal(p.getInventory().getAmount(I.PLANK), 0);
   assert.equal(p.getInventory().getAmount(I.STEEL_NAILS), 0);
-  assert.ok(p.messages.includes('You repair this part of the rope bridge.'), p.messages.join('|'));
+  assert.deepEqual(p.messages, ['You repair a section of the bridge.']);
   const again = actor(t, REACHED_HOLLOWS, 3502, 3429, 0b100);
   rung(again, RUNG_TOP, 3430);
   assert.ok(again.messages.includes("This bridge run already looks fixed, that's why you're able to stand on it."), again.messages.join('|'));

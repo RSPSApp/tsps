@@ -30,10 +30,11 @@ let countdown = null;
 /** Bots (when a world seeds them): who they are, and filling the queue. */
 const bots = { isBot: () => false, seed: () => {} };
 
-/** The Wiki's 20, or a world's own (never under 2: a game needs both sides). */
+/** Never request more players (including seeded bots) than the world can register. */
 function minPlayers() {
-  const configured = Number(Common.api.getPluginConfig?.(MIN_PLAYERS_CONFIG, Common.data.minPlayers)) || Common.data.minPlayers;
-  return Math.max(Common.data.minPlayersFloor, configured);
+  const configured = Number(Common.api.getPluginConfig?.(MIN_PLAYERS_CONFIG, Common.data.minPlayers));
+  const requested = Number.isFinite(configured) ? Math.floor(configured) : Common.data.minPlayers;
+  return Math.max(Common.data.minPlayersFloor, Math.min(Common.core.World.getPlayers().capacityReturn() - 1, requested));
 }
 
 function locId(name) {

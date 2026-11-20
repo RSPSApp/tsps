@@ -16,6 +16,7 @@ const { NpcDefinition } = require("../dist/game/definition/NpcDefinition");
 const { Location } = require("../dist/game/model/Location");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { TaskManager } = require("../dist/game/task/TaskManager");
+const { DialogueManager } = require("../dist/game/model/dialogues/DialogueManager");
 const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 const NpcDrops = require("../plugins/npcs/NpcDrops.plugin");
 const Wyrmscraig = require("../plugins/areas/Wyrmscraig.plugin");
@@ -30,6 +31,7 @@ const objectHooks = new Map();
 const loginHooks = [];
 const customHooks = new Map();
 const spawnedNpcs = [];
+const deathHooks = [];
 const api = new Proxy({
   core,
   onObjectInteraction: (name, actions) => objectHooks.set(name, { ...(objectHooks.get(name) ?? {}), ...actions }),
@@ -42,14 +44,22 @@ const api = new Proxy({
       getId: () => definition.id,
       getRealId: () => definition.id,
       getLocation: () => new Location(definition.x, definition.y, definition.z ?? 0),
+      log: [],
       setArea() {},
-      setNpcTransformationId() {},
+      getArea: () => null,
+      setNpcTransformationId(id) { npc.log.push(`transform ${id}`); },
+      performAnimation(animation) { npc.log.push(`anim ${animation.getId?.() ?? animation.id}`); },
+      performGraphicInSlot(slot, graphic) { npc.log.push(`gfx ${graphic.id}`); },
+      faceTile() {},
+      getSize: () => 3,
       isRegistered: () => true,
     };
     spawnedNpcs.push(npc);
     return npc;
   },
   removeNpc: () => {},
+  onNpcDeath: (handler) => deathHooks.push(handler),
+  sendMultiChatboxPrompt: (player, title, ...pairs) => { player.prompt = { title, pairs }; return true; },
 }, { get: (target, key) => target[key] ?? (() => {}) });
 
 let gamevals = null;
@@ -102,6 +112,7 @@ function createPlayer({ x = 2530, y = 2205, prayers = [] } = {}) {
     getEnteredAmountAction() { return this.amountAction; },
     setInterfaceId(value) { this.interfaceId = value; },
     getInterfaceId() { return this.interfaceId; },
+    getDialogueManager() { return (this.dialogues ??= new DialogueManager(this)); },
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => hits.push(...damage.map((d) => d.getDamage())) }) }),
   };
 }
@@ -173,6 +184,7 @@ test("as captured: the Mad Angel door is claimed by Fallen From Grace until its 
     },
     onCustomEvent: (name, fn) => custom.set(name, [...(custom.get(name) ?? []), fn]),
     emitCustomEvent: (name, event) => { for (const fn of custom.get(name) ?? []) fn(event); },
+    sendMultiChatboxPrompt: (player, title, ...pairs) => { player.prompt = { title, pairs }; return true; },
   }, { get: (target, key) => target[key] ?? (() => {}) });
 
   MadAngel.register(doorApi);
@@ -181,22 +193,31 @@ test("as captured: the Mad Angel door is claimed by Fallen From Grace until its 
     .filter((quest) => quest.key === "fallen_from_grace").at(-1);
   const door = namedObjects.get("Cathedral door").Open;
 
-  const locked = createPlayer({ x: 2542, y: 2215 });
+  const outside = createPlayer({ x: 2542, y: 2215 });
+  ffg.setStage(outside, 18);
+  assert.equal(door({ player: outside, objectId: 62368 }), true);
+  assert.equal(outside.prompt, undefined, "from outside it is just locked (Wiki: the lock is picked to exit)");
+  const locked = createPlayer({ x: 2541, y: 2215 });
   ffg.setStage(locked, 18);
+  const random = Math.random;
+  Math.random = () => 7152.5 / 7776; // the captured second 811 session's code
   assert.equal(door({ player: locked, objectId: 62368 }), true);
+  assert.equal(locked.prompt?.title, "You attempt to open the doors, but they appear to be locked.");
+  locked.prompt.pairs[1](locked);
+  Math.random = random;
   assert.ok(locked.log.includes("interface 811"), 'the real 5-pin lock UI opens');
   assert.ok(locked.log.some((line) => line.startsWith("script 6994")), 'the 811 renderer runs');
   assert.ok(locked.amountAction, 'the real amount callback is armed');
   assert.equal(locked.log.some((line) => line.startsWith("anim 4282")), false, "FFG claims the first pick, no movement");
-  assert.equal(locked.getLocation().getX(), 2542);
+  assert.equal(locked.getLocation().getX(), 2541);
   locked.amountAction.execute(7152); // captured second 811 session, P2 tick 621
-  assert.ok(locked.log.some((line) => line.includes("successfully pick the lock")));
+  assert.ok(locked.getDialogueManager().getCurrent()?.getText?.().includes("successfully pick the lock"));
   assert.ok(locked.getAttribute('quest.fallen_from_grace.flags') & (1 << 7), 'CATHEDRAL_OPENED set by the lock');
 
   assert.equal(door({ player: locked, objectId: 62368 }), true);
   assert.ok(locked.log.some((line) => line.startsWith("anim 4282")), "the opened door falls through to MadAngel");
   runTicks(1);
-  assert.notEqual(locked.getLocation().getX(), 2542, "the default door movement runs once FFG releases it");
+  assert.notEqual(locked.getLocation().getX(), 2541, "the default door movement runs once FFG releases it");
 
   const finished = createPlayer({ x: 2542, y: 2215 });
   ffg.setStage(finished, 20);
@@ -223,13 +244,21 @@ test("as captured: the cave - the crawl, the fade, the move 2 ticks in, and back
 
 // ------------------------------------------------------------------ drops
 
-test("the drop table, corrected: no quest crystal, a 1/25 teleport, the supply batch bundled, the Wiki's noted drops, 150 in all", () => {
+test("the drop table, corrected: the sunstone crystal always, a 1/25 teleport, the supply batch bundled, the Wiki's noted drops, 150 in all", () => {
   const { loadDrops, tablesByNpc } = NpcDrops.__internals;
   loadDrops();
   const table = [tablesByNpc.get(16305)].flat()[0];
   assert.ok(table, "the Mad Angel has its table");
   const entries = table.entries;
-  assert.ok(!entries.some((entry) => entry.item_id === 34032), "the sunstone crystal is Fallen From Grace's");
+  const crystal = entries.find((entry) => entry.item_id === 34032);
+  assert.ok(crystal?.always, "the sunstone crystal is on the 100% table (Wiki; dropped by the quest's kill, rsprox P2 tick 431)");
+  const { player, rollTable } = { player: createPlayer(), rollTable: NpcDrops.__internals.rollTable };
+  customHooks.set("npc-drops:quest-item", [(request) => { if (request.itemId === 34032) request.allowed = false; }]);
+  try {
+    for (let i = 0; i < 20; i++) assert.equal(rollTable(table, player).some((drop) => drop.itemId === 34032), false, "not owed: Fallen From Grace says no");
+  } finally {
+    customHooks.delete("npc-drops:quest-item");
+  }
   assert.equal(entries.find((entry) => entry.item_id === 34033).out_of, 25);
   const main = entries.filter((entry) => !entry.always && !entry.pre_roll && Number.isInteger(entry.weight)).reduce((sum, entry) => sum + entry.weight, 0);
   assert.equal(main, 150);
@@ -291,7 +320,7 @@ test("as captured: each cleave hits the quarter between the front a step before 
 });
 
 /** A fight against a fake angel in a fake cathedral (instance tiles = world tiles). */
-function fightAt(player, { hitpoints = 755, maxHitpoints = 755, npcs = Common.data.npcs } = {}) {
+function fightAt(player, { hitpoints = 755, maxHitpoints = 755, npcs = Common.data.npcs, variant = "normal" } = {}) {
   let hp = hitpoints;
   const npcLog = [];
   const bossHits = [];
@@ -322,6 +351,7 @@ function fightAt(player, { hitpoints = 755, maxHitpoints = 755, npcs = Common.da
   const session = {
     player,
     npcs,
+    variant,
     area: null,
     tile: ([x, y, z]) => new Location(x, y, z ?? 0),
     worldTile: (location) => [location.getX(), location.getY()],
@@ -427,6 +457,17 @@ test("the enrage: at 350 hitpoints, '...!' at its next turn, then the smite, the
   fight.attack(player);
   assert.equal(fight.special.kind, "smite");
   assert.ok(npcLog.includes("anim 8543"), "the enraged smite");
+});
+
+test("Fallen From Grace's angel enrages at 255 (Wiki walkthrough), not the post-quest 350", () => {
+  const above = fightAt(createPlayer({ x: 2535, y: 2215 }), { hitpoints: 300, maxHitpoints: 565, npcs: Common.data.questNpcs, variant: "quest" });
+  above.step(1);
+  above.fight.attack(above.fight.player);
+  assert.equal(above.npcLog.includes("say ...!"), false, "300 is above the quest angel's threshold");
+  const below = fightAt(createPlayer({ x: 2535, y: 2215 }), { hitpoints: 250, maxHitpoints: 565, npcs: Common.data.questNpcs, variant: "quest" });
+  below.step(1);
+  below.fight.attack(below.fight.player);
+  assert.ok(below.npcLog.includes("say ...!"));
 });
 
 test("as captured: each cleave covers its diagonal's half of the floor, the angel's own tiles too", () => {
@@ -612,4 +653,72 @@ test("a scripted Mad Angel blow reaches Elysian and incoming equipment after it 
 
   player.getCombat().getHitQueue().process(core.World.getProcessCycle() + 1);
   assert.equal(player.getHitpoints(), 87, "the Elysian-reduced blow lands");
+});
+
+// ------------------------------------------------------------------ Fallen From Grace's angel
+
+test("Fallen From Grace: the pew asks first, the quest angel wakes 3 ticks after the move, and its kill leaves the corpse and the climbable pew (P2 ticks 314-469)", () => {
+  const Instance = require("../plugins/bosses/madangel/Instance.MadAngel");
+  Common.init(api);
+  const { Climb } = objectHooks.get("Church pew");
+  let defeated = false;
+  customHooks.set("madangel:pew-climb", [(request) => { request.prompt = true; }]);
+  customHooks.set("madangel:instance-variant", [(request) => { request.variant = "quest"; request.defeated = defeated; }]);
+  try {
+    const player = createPlayer({ x: 2539, y: 2215 });
+    let area = null;
+    player.setArea = (value) => { area = value; };
+    player.getArea = () => area;
+    player.getIndex = () => 77;
+    player.isNpc = () => false;
+    player.getAsPlayer = () => player;
+    const pew = { getLocation: () => new Location(2538, 2215, 0) };
+    assert.equal(Climb({ player, objectId: 62250, object: pew }), true);
+    assert.equal(player.prompt?.title, "Climb over the pew?");
+    assert.equal(Instance.sessionOf(player), null, "nothing happens before the answer");
+    player.prompt.pairs[1](player);
+    assert.ok(player.log.includes("anim 832"));
+    runTicks(2);
+    const session = Instance.sessionOf(player);
+    assert.ok(session, "in the player's own cathedral");
+    assert.equal(session.variant, "quest");
+    assert.equal(session.boss.getId(), 16306, "dormant until it wakes");
+    runTicks(2);
+    assert.equal(session.fight, null);
+    runTicks(1);
+    assert.ok(session.fight, "woken with no Wake click, 3 ticks after the move (P2 tick 322)");
+    assert.ok(session.boss.log.includes("transform 16311"), "the quest waking form");
+
+    // The kill: the kill count, no fight-duration line, the corpse stays and the pew is climbable again.
+    player.log.length = 0;
+    const event = { npc: session.boss, killer: player, remains: null };
+    for (const hook of deathHooks) hook(event);
+    assert.ok(session.boss.log.includes("transform 16312"));
+    assert.equal(session.defeated, true);
+    assert.ok(event.remains.ticks > 1000, "the corpse lies there");
+    assert.equal(player.log.some((line) => line.includes("Fight duration")), false);
+    runTicks(40);
+    assert.equal(spawnedNpcs.filter((npc) => npc.__madAngel === session).length, 1, "no new angel comes back");
+
+    // Climbing the pew from inside now leaves at once, with no question.
+    player.prompt = null;
+    assert.equal(Climb({ player, objectId: 62250, object: pew }), true);
+    assert.equal(player.prompt, null);
+    runTicks(2);
+    assert.equal(Instance.sessionOf(player), null, "back outside");
+
+    // Going back in at stages 18-19: the corpse, nothing to wake.
+    defeated = true;
+    Climb({ player, objectId: 62250, object: pew });
+    player.prompt.pairs[1](player);
+    runTicks(6);
+    const again = Instance.sessionOf(player);
+    assert.equal(again.defeated, true);
+    assert.equal(again.boss.getId(), 16312);
+    assert.equal(again.fight, null);
+    Instance.leave(player);
+  } finally {
+    customHooks.delete("madangel:pew-climb");
+    customHooks.delete("madangel:instance-variant");
+  }
 });

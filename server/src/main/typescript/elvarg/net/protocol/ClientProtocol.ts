@@ -2531,16 +2531,37 @@ export function encodeWidgetRunScript(
   );
 }
 
-export function encodeRunClientScript(scriptId: number, args: (number | string)[] = []): Buffer {
+export function encodeRunClientScript(scriptId: number, args: ScriptArg[] = []): Buffer {
   const id = Buffer.alloc(2);
   id.writeUInt16BE(scriptId & 0xffff);
   return encodeServerPacket(ServerPacketId.RUN_CLIENT_SCRIPT, Buffer.concat([id, scriptArgs(args)]));
 }
 
-function scriptArgs(args: (number | string | bigint)[]): Buffer {
+/**
+ * A clientscript argument. An array is one of the cache's array arguments (stringarray,
+ * intarray): it goes as type 3 (ints) or 4 (strings), a u16 length and the values. An empty
+ * array goes as an int array.
+ */
+export type ScriptArg = number | string | bigint | number[] | string[];
+
+function scriptArgs(args: ScriptArg[]): Buffer {
   const parts: Buffer[] = [Buffer.from([args.length])];
   for (const arg of args) {
-    if (typeof arg === "bigint") {
+    if (Array.isArray(arg)) {
+      const strings = arg.length > 0 && typeof arg[0] === "string";
+      const head = Buffer.alloc(3);
+      head[0] = strings ? 4 : 3;
+      head.writeUInt16BE(arg.length, 1);
+      parts.push(head);
+      for (const value of arg as (number | string)[]) {
+        if (strings) parts.push(string(String(value)));
+        else {
+          const int = Buffer.alloc(4);
+          int.writeInt32BE(Number(value) | 0);
+          parts.push(int);
+        }
+      }
+    } else if (typeof arg === "bigint") {
       const value = Buffer.alloc(9);
       value[0] = 2;
       value.writeBigInt64BE(arg, 1);

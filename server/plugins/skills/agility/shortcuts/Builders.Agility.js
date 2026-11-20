@@ -223,6 +223,7 @@ function ropeSwing(to) {
 
 module.exports = {
   ShortcutAnim,
+  ordered,
   between,
   stile,
   climbOver,

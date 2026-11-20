@@ -293,6 +293,27 @@ test("grown on the next farming tick; Pick gives the blindweed, 45 XP and stage 
   assert.equal(messages(f).at(-1), "This is a blindweed patch. The soil has not been treated. The patch is empty and weeded.");
 });
 
+test("a backpack filled during the pick keeps the crop: no blindweed lost, no XP, no stage (review)", async (t) => {
+  const planted = Math.floor(Date.now() / FIVE_MINUTES) * FIVE_MINUTES - 1000;
+  const f = actor(t, { at: [2162, 5068, 0], stage: S.SEEDS, attributes: { "quest.rum_deal.weeded": 3, "quest.rum_deal.planted": planted } });
+  for (let i = f.player.getInventory().getItems().filter(Boolean).filter((item) => item.getId() >= 0).length; i < 27; i++) {
+    f.player.getInventory().add(new h.core.Item(I.BRONZE_DAGGER, 1), false);
+  }
+  const xp = f.player.getSkillManager().getExperience(Sk.FARMING);
+  await clickObject(f, 10096, [2162, 5069], 1);
+  f.player.getInventory().add(new h.core.Item(I.BRONZE_DAGGER, 1), false);
+  h.ticks(f, 4);
+  assert.equal(count(f, I.BLINDWEED), 0);
+  assert.equal(f.player.getSkillManager().getExperience(Sk.FARMING), xp);
+  assert.equal(stage(f), S.SEEDS);
+  assert.ok(messages(f).includes("You do not have any free space for the Blindweed."));
+  f.player.getInventory().deleteNumber(I.BRONZE_DAGGER, 1);
+  await clickObject(f, 10096, [2162, 5069], 1);
+  h.ticks(f, 4);
+  assert.equal(count(f, I.BLINDWEED), 1, "still there to pick");
+  assert.equal(stage(f), S.GROWN);
+});
+
 test("an empty patch's weeds grow back a stage each farming tick (ticks 1659, 2168, 2653)", async (t) => {
   const tick = Math.floor(Date.now() / FIVE_MINUTES) * FIVE_MINUTES;
   const f = actor(t, { at: [2162, 5068, 0], stage: S.GROWN, attributes: { "quest.rum_deal.weeded": 3, "rum-deal:weeds-at": tick - 2 * FIVE_MINUTES + 1000 } });

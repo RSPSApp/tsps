@@ -179,6 +179,7 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
 
   /** Runs `callback` after `ticks`; keyed tasks die with their scene (or their player). */
   function later(key, ticks, callback) {
+    let run = callback;
     if (key?.isPlayer?.()) {
       const player = key;
       key = playerKeys.get(player);
@@ -186,8 +187,14 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
         key = {};
         playerKeys.set(player, key);
       }
+      // A player's task never runs for them once they have logged out (it would open a scene for
+      // an offline player that nothing ends).
+      run = () => {
+        if (player.isRegistered?.() === false) return;
+        callback();
+      };
     }
-    TaskManager.submit(new CountdownTask(key, ticks, callback));
+    TaskManager.submit(new CountdownTask(key, ticks, run));
   }
 
   function cancel(player) {

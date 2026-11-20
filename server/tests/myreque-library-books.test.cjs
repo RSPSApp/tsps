@@ -3,7 +3,9 @@
 // In Aid of the Myreque: the Paterdomus library books. Read opens each in book 392 with the text live
 // sent (rsprox.net recording 365), and the two bookcases hand out their books with "You search the
 // bookcase..." and one objectbox per book, as recording 365 ticks 2918-2928 and 3876-3886 show (the
-// history bookcase's first box a tick after the search line). Real
+// history bookcase's first box a tick after the search line). The stages follow the live capture
+// (revision 242): The Sleeping Seven from its bookcase moves 360 -> 370 (t4323), reading it
+// 370 -> 375 (t4358). Real
 // plugins, a real Player and Inventory; the clicks go through PluginManager.emitItemAction /
 // emitObjectInteraction with the cache's own options. No client ran.
 process.env.DISABLE_PLAYER_BOTS = "1";
@@ -19,7 +21,7 @@ const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition")
 const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
 
 const STAGE = "quest.in_aid_of_the_myreque.stage";
-const LIBRARY_OPEN = 360, BOOK_READ = 370;
+const LIBRARY_OPEN = 360, BOOK_FOUND = 370, BOOK_READ = 375;
 const BOOK = 392;
 const uid = (child) => (BOOK << 16) | child;
 const LIBRARY = { x: 3354, y: 9900, z: 0 };
@@ -119,8 +121,8 @@ test("the last spreads carry live's closing lines", (t) => {
   assert.equal(seen.texts.get(uid(49)), "this has yet to be confirmed.");
 });
 
-test("reading The Sleeping Seven moves the quest on from the opened library", (t) => {
-  const { p } = player(t, "myrequebookstage", LIBRARY_OPEN);
+test("reading The Sleeping Seven moves the quest on once the book is found", (t) => {
+  const { p } = player(t, "myrequebookstage", BOOK_FOUND);
   const I = core.ItemIdentifiers;
   p.getInventory().setItem(0, new core.Item(I.THE_SLEEPING_SEVEN, 1));
   read(p, I.THE_SLEEPING_SEVEN);
@@ -160,6 +162,15 @@ test("a bookcase whose books the player carries only sends the search line", (t)
   assert.deepEqual(seen.messages, ["You search the bookcase..."]);
   assert.deepEqual(seen.chatbox, []);
   assert.equal(p.getInventory().getAmount(I.THE_SLEEPING_SEVEN), 1);
+});
+
+test("the Sleeping Seven bookcase gives the book in the opened library and moves 360 -> 370", (t) => {
+  const I = core.ItemIdentifiers;
+  const { p, seen } = player(t, "myrequecase4", LIBRARY_OPEN);
+  assert.equal(search(p, core.ObjectIdentifiers.BOOKCASE_52), true);
+  assert.equal(p.getAttribute(STAGE), BOOK_FOUND);
+  assert.equal(p.getInventory().getAmount(I.THE_SLEEPING_SEVEN), 1);
+  assert.equal(seen.texts.get((193 << 16) | 2), "You find a book called The Sleeping Seven.");
 });
 
 test("the Sleeping Seven bookcase gives the book with its objectbox", (t) => {

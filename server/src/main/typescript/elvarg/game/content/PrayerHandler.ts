@@ -317,6 +317,14 @@ export class PrayerHandler {
         player.getDialogueManager().startDialogues(builder);
     }
 
+    /**
+     * A prayer clicked below its Prayer level, as a messagebox: rsprox 228/02246 (Prayer 70) for
+     * Rigour and Augury, both already learnt. The same template is used for every prayer.
+     */
+    public static levelRefusal(level: number, name: string): string {
+        return `You need a <col=000080>Prayer</col> level of ${level} to use <col=000080>${name}</col>.`;
+    }
+
     public static canUse(player: Player, prayer: PrayerData, msg: boolean): boolean {
         // Loaded lazily: PluginManager imports Player, and QuickPrayers -> PrayerHandler -> Player
         // is already a cycle at module load.
@@ -333,7 +341,7 @@ export class PrayerHandler {
         if (player.getSkillManager().getMaxLevel(Skill.PRAYER) < (prayer.requirement)) {
             if (msg) {
                 player.getPacketSender().sendVarbit(prayer.configId, 0);
-                player.sendMessage(`You need a Prayer level of at least ${prayer.requirement} to use ${prayer.getPrayerName()}.`);
+                PrayerHandler.messageBox(player, PrayerHandler.levelRefusal(prayer.requirement, prayer.getPrayerName()));
             }
             return false;
         }
@@ -342,7 +350,7 @@ export class PrayerHandler {
         if (upgrade && player.getSkillManager().getMaxLevel(Skill.PRAYER) < upgrade.level) {
             if (msg) {
                 player.getPacketSender().sendVarbit(prayer.configId, 0);
-                player.sendMessage(`You need a Prayer level of at least ${upgrade.level} to use ${upgrade.name}.`);
+                PrayerHandler.messageBox(player, PrayerHandler.levelRefusal(upgrade.level, upgrade.name));
             }
             return false;
         }

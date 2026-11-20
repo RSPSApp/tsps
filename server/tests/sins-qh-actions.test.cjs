@@ -242,3 +242,20 @@ test('Sins ruby sickle accepts the real Enchant ruby or topaz tablet', () => {
   assert.equal(p.items.get(24695), 1, 'enchanted ruby sickle produced');
   assert.ok(p.messages.includes('You enchant the ruby sickle.'));
 });
+
+test('Sins Damien fight wires his magical fires: Stamp-out and the damage hook', () => {
+  const h = harness();
+  const p = makePlayer();
+  h.quest.setStage(p, 82);
+  (h.events['npc-dialogue:action'] ?? []).forEach(fn => fn({ player: p, npcId: 9564, stepId: 'oKCkn5', handled: false }));
+  assert.equal(h.quest.getStage(p), 84, 'Damien attacks');
+  const damien = h.npcs.find(npc => npc.id === core.NpcIdentifiers.DAMIEN_LEUCURTE_4);
+  assert.ok(damien, 'the fight Damien is spawned');
+  const stamp = h.namedObjects.get('Magical Fire')?.['Stamp-out'];
+  assert.equal(typeof stamp, 'function', 'Magical Fire Stamp-out is handled');
+  assert.equal(stamp({ player: p, location: new core.Location(3718, 3356, 1) }), false, 'no fire burning there yet');
+  assert.equal((h.hooks.onCombatHitDamage ?? []).length, 1, 'the fires reduce the player damage on Damien');
+  const damage = new core.HitDamage(20, core.HitMask.RED);
+  h.hooks.onCombatHitDamage[0]({ attacker: p, target: damien, damage, accurate: true });
+  assert.equal(damage.getDamage(), 20, 'no fire, full damage');
+});

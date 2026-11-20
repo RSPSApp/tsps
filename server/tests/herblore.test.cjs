@@ -14,7 +14,7 @@ const AmuletOfChemistry = require("../plugins/items/AmuletOfChemistry.plugin");
 
 let core;
 const hooks = { firstAction: [], itemOnItem: [], itemActions: new Map(), customEvents: new Map() };
-const world = { quests: new Map(), cape: false, diaries: new Set() };
+const world = { quests: new Map(), cape: false, diaries: new Set(), unlocks: new Map() };
 
 const api = new Proxy({
   onItemFirstAction(handler) { hooks.firstAction.push(handler); },
@@ -28,6 +28,7 @@ const api = new Proxy({
     if (name === "quest:is-started") request.started = world.quests.get(`${request.key}:started`) ?? true;
     if (name === "skillcape:has-perk") request.result = world.cape;
     if (name === "diary:is-complete") request.complete = world.diaries.has(`${request.diary}:${request.tier}`);
+    if (name === "herblore:unlocked" && world.unlocks.has(request.unlock)) request.allowed = world.unlocks.get(request.unlock);
   },
 }, { get: (target, key) => (key === "core" ? core : key in target ? target[key] : () => {}) });
 
@@ -47,6 +48,7 @@ beforeEach(() => {
   world.quests.clear();
   world.cape = false;
   world.diaries.clear();
+  world.unlocks.clear();
 });
 
 const obj = (name) => core.CacheDefinitions.getObjId(name);
@@ -406,6 +408,36 @@ test("super antifire needs Dragon Slayer II", () => {
   use(who, "crushed_dragon_bones", "4dose1antidragon");
   assert.equal(who.inv.count("4dose3antidragon"), 1);
   assert.deepEqual(who.sent.spam, ["You mix the crushed superior dragon bones into your antifire potion."]);
+});
+
+// Wiki (Relicym's balm): Herblore 8, 40 XP, a 3-dose balm from the rogue's purse potion and snake weed (or the snakeweed
+// mixture and a rogue's purse), once Sithik has told the player the cure; (Unfinished potion (Rogue's Purse)): 0 XP and
+// "You're not sure what effect this might have." before that.
+test("Relicym's balm and its unfinished potion wait for Sithik's cure", () => {
+  world.unlocks.set("relicyms_balm", false);
+  const early = player([["rogues_purse"], ["vial_water"]], 8);
+  assert.equal(use(early, "rogues_purse", "vial_water"), true);
+  assert.deepEqual(early.sent.messages, ["You're not sure what effect this might have."]);
+  assert.equal(early.inv.count("rogues_purse_sol"), 0);
+  assert.equal(early.inv.count("rogues_purse"), 1);
+  const zahur = { herbId: obj("rogues_purse"), baseId: obj("vial_water"), player: early, potion: null };
+  for (const handler of hooks.customEvents.get("herblore:unfinished")) handler(zahur);
+  assert.equal(zahur.potion, null, "Zahur makes none either");
+
+  world.unlocks.set("relicyms_balm", true);
+  const who = player([["rogues_purse"], ["vial_water"], ["snake_weed"]], 8);
+  use(who, "vial_water", "rogues_purse");
+  assert.equal(who.inv.count("rogues_purse_sol"), 1);
+  assert.equal(who.sent.xp, 0);
+  use(who, "snake_weed", "rogues_purse_sol");
+  ticks(2);
+  assert.equal(who.inv.count("relicyms_balm3"), 1);
+  assert.equal(who.sent.xp, 40);
+  const mixture = player([["snakeweed_sol"], ["rogues_purse"]], 8);
+  use(mixture, "rogues_purse", "snakeweed_sol");
+  ticks(2);
+  assert.equal(mixture.inv.count("relicyms_balm3"), 1);
+  assert.equal(mixture.sent.xp, 40);
 });
 
 test("sanfew serum is made in three steps", () => {

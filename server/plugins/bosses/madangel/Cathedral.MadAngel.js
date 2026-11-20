@@ -5,6 +5,10 @@
  *   "You climb over the broken pew..."; inside, Exit asks "Are you sure you want to leave?"
  *   (Yes!/No.) and Quick-exit doesn't, then back out behind the fade;
  * - Wake on the dormant angel starts the fight (Fight.MadAngel).
+ * Fallen From Grace (rsprox P2, ticks 314-322 and 431-469) asks "Climb over the pew?" (Yes./No.)
+ * first (`madangel:pew-climb`), and its angel wakes by itself 3 ticks after the player lands, with
+ * no Wake click. Once that angel is dead the pew inside is the climbable one again, and climbing
+ * it takes the player straight out (no question).
  * Every other door and pew falls through to its own plugin.
  */
 const Common = require("./Common.MadAngel");
@@ -33,16 +37,48 @@ function openDoor({ player, objectId }) {
 
 function climbPew({ player, objectId, object }) {
   const { pew } = Common.data;
-  if (objectId !== pew.climbId || Instance.sessionOf(player)) return false;
+  if (objectId !== pew.climbId) return false;
+  const inside = Instance.sessionOf(player);
+  if (inside) {
+    if (!inside.defeated) return false;
+    // The quest's angel is dead: the climbable pew is the way out (P2 tick 465), with no question.
+    player.getMovementQueue().reset();
+    player.performAnimation(new Common.core.Animation(pew.anim, pew.animDelay));
+    leaveCathedral(player);
+    return true;
+  }
+  const request = { player, prompt: false };
+  Common.api.emitCustomEvent("madangel:pew-climb", request);
+  if (request.prompt !== true) {
+    enterCathedral(player, object);
+    return true;
+  }
+  player.getMovementQueue().reset();
+  Common.api.sendMultiChatboxPrompt(player, pew.questClimbQuestion, pew.questClimbYes, () => {
+    player.getPacketSender().sendInterfaceRemoval();
+    enterCathedral(player, object);
+  }, pew.questClimbNo, () => player.getPacketSender().sendInterfaceRemoval());
+  return true;
+}
+
+function enterCathedral(player, object) {
+  const { pew } = Common.data;
   const { Animation, DialogueChainBuilder, StatementDialogue } = Common.core;
   player.getMovementQueue().reset();
-  player.setPositionToFace(object.getLocation());
+  if (object) player.setPositionToFace(object.getLocation());
   player.performAnimation(new Animation(pew.anim, pew.animDelay));
   const session = Instance.open(player);
-  Common.travel(player, ENTER_FADE, () => Instance.enter(session), () => {
+  Common.travel(player, ENTER_FADE, () => {
+    Instance.enter(session);
+    if (session.variant === "quest" && !session.defeated) {
+      Common.later(pew.questWakeTicks, () => {
+        if (session.ended || session.fight || !session.boss || Instance.sessionOf(player) !== session) return;
+        wakeAngel({ player, npc: session.boss });
+      });
+    }
+  }, () => {
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, pew.message)));
   });
-  return true;
 }
 
 function leaveCathedral(player) {
@@ -70,7 +106,7 @@ function quickExitPew({ player, objectId }) {
 /** Wakes the player's own dormant angel; the fight runs on its own tick task. */
 function wakeAngel({ player, npc }) {
   const session = npc?.__madAngel;
-  if (!session || session.player !== player || session.fight) return false;
+  if (!session || session.player !== player || session.fight || session.defeated) return false;
   const fight = new Fight(session, npc);
   session.fight = fight;
   const { Task, TaskManager } = Common.core;

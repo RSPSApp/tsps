@@ -366,6 +366,7 @@ module.exports = {
     for (const key of Object.values(DIGSITE_PENDANT_UNLOCKS)) api.persistAttribute(key, false);
     api.onItemOnObject(pendantOnMachine);
     api.onPlayerLogin(resendLithkrenRedirect);
+    require("./JewelleryPlaceholders")(api, JEWELLERY.map(piece => piece.charged.map(([id]) => id)));
     require("./Recharge.Jewellery")(api);
     api.onSpellCast(castRechargeDragonstone.bind(null, api));
   },

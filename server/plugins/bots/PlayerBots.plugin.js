@@ -222,7 +222,7 @@ module.exports = {
     },
     "PlayerBots:ai": {
       type: "json", label: "AI bots", defaultText: "AI bots off (3 bots when enabled)",
-      help: "Settings for bots that chat through an AI model, merged over the shipped defaults, e.g. { \"enabled\": true, \"count\": 3, \"places\": [\"lumbridge\"] }. Also takes names, disclose, providers and gifts; API keys come from the server environment, never here.",
+      help: "Settings for bots that chat through an AI model, merged over the shipped defaults, e.g. { \"enabled\": true, \"count\": 3, \"places\": [\"lumbridge\"] }. Count is capped at the world's player capacity. Also takes names, disclose, providers and gifts; API keys come from the server environment, never here.",
     },
     [RETREAT_TELEPORT_CHANCE_CONFIG]: {
       type: "number", label: "PvP bot retreat teleport chance (%)", default: DEFAULT_RETREAT_TELEPORT_CHANCE,
@@ -231,7 +231,7 @@ module.exports = {
     },
     "PlayerBots:sites": {
       type: "json", label: "Bot site overrides", defaultText: "No overrides: the shipped bot-sites.json applies",
-      help: "Maps a bot site id to the properties to change for it, e.g. { \"some_site\": { \"enabled\": false } }. Sites not named keep their shipped properties; a world.local.json value replaces the world.json one as a whole.",
+      help: "Maps a bot site id to the properties to change for it, e.g. { \"some_site\": { \"enabled\": false } }. Total queued site bots are capped at the world's player capacity. Sites not named keep their shipped properties; a world.local.json value replaces the world.json one as a whole.",
     },
     "PlayerBots:activeRegionBotsByRegion": {
       type: "json", label: "Wilderness bots per map square", defaultText: "Shipped value in bot-sites.json",

@@ -1,677 +1,650 @@
 /**
- * Elemental Workshop II (members).
+ * Elemental Workshop II (members), as the user's rev 242 rsprox recording ElementalWorkshop2.bin
+ * plays it from the Exam Centre bookcase to the mind helmet (docs/quests/elemental-workshop-ii/
+ * README.md has the facts and ticks), with the Wiki's quest transcript for the lines and the
+ * branches the run doesn't take (their text comes from the dialogue dump's "Elemental Workshop
+ * II" page, presented as live presents it: a message box, an item box or a chat line).
  *
- * Every word comes from the "Elemental Workshop II" transcript page; the quest has no NPC
- * index entry, so object/item interactions start the variants through startTranscript with
- * the jig cart (NpcIdentifiers.JIG_CART) as a chatheadless sentinel - none of the variants
- * speak NPC lines.
+ * Stage is varbit 2639 (elemental_quest_2_main) with live's values: 1 book found, 2 book read,
+ * 3 note read, 4 key found, 5 hatch unlocked, 6 machine floor reached, 7 primed bar taken,
+ * 8 mind door opened, 9 primed bar placed, 10 mind bar made, 11 complete (the cache's
+ * completion threshold). The machines' state is the other elemental_quest_2_* varbits on varps
+ * 896/897, saved as they are and replayed on login. Saves from the old stage scheme (1-12, with
+ * separate attributes) are converted once on login.
  *
- * Stages (varbit 2639 "elemental_quest_2_main" on varp 896 "elemental_quest_2_bits"):
- *   0 not started, 1 beaten book taken, 2 book read, 3 scroll read (key revealed),
- *   4 key taken, 5 hatch open, 6 schematics taken, 7 crane claw repaired, 8 junction pipes
- *   connected, 9 workshop repairs complete, 10 primed bar, 11 mind bar, 12 complete.
- * The stage values 1-4 follow OSRS; 5-12 split the reference's single "making the helm"
- * range. The cache's QUEST_STATUS_GET completes varbit 2639 at 11 (DB column 19), so the
- * durable mind-bar stage 11 is sent as 10 and the completed stage 12 as 11. Sub-state is persisted in attributes and mirrored to the real varbits on varps
- * 896/897 with the values the OSRS quest helper reads (verified against Jagex gamevals in
- * /tmp/varbits.txt): jig_state 1 placed / 2 hot / 3 flat hot / 4 cool flat / 5 dry;
- * jig_pos 0 crane / 1 press / 2 tank / 3 wind tunnel; fire_pos 0 raised / 1 lowered /
- * 2 above lava / 3 in lava; fire_state 1 repaired, 2 holding bar, 3 holding hot bar;
- * pipe states 5/6/13 = junction box solved; water_door 0-8 grabber/door combinations;
- * air_cog1 small / air_cog2 medium / air_cog3 large; mind_jig 1 placed / 2 mind bar.
- *
- * Object ids were confirmed against the cache loc dump (elem2_* gamevals) and
- * ObjectIdentifiers. The multiloc parents the cache leaves nameless (3413 hatch, 18593
- * boiler, 3414 broken piping, 3429/18721/18722 wind pins, 18725 extractor gun) are named
- * constants here, as ElementalWorkshopI does for its unnamed ids.
- *
- * Source: OSRS Wiki "Elemental Workshop II", its quick guide and transcript.
- * Rewards per the wiki: 1 Quest point, 7,500 Crafting and 7,500 Smithing XP, and the
- * ability to make elemental mind equipment.
- *
- * Gaps / approximations:
- *   - The junction box's pipe interface is client-side in OSRS; this server cannot read
- *     it, so each "Open" of the box connects the next correct pair (pipe states 5, 6, 13)
- *     and the third open plays the transcript's "I hope I got that right."
- *   - Elemental metal on the workbench is claimed first by ElementalWorkshopI's handler
- *     (registered earlier in Quests.plugin.js). EW I defers while EW II's crane schematic is
- *     taken/held and the claw is still needed, including before the second schematic advances
- *     the stage to 6 (issue #5739), so the claw choice is reachable. It also defers for the
- *     completed quest's beaten-book elemental helmet recipe; otherwise it crafts the shield.
- *     Using the crane schematic on the workbench also starts the claw choice.
- *   - The wind tunnel pins and the old crane sit in blocking scenery, so a route assist
- *     sends the use to the player's own tile when they are already beside the footprint
- *     (the walk-to reach check rejects every adjacent tile); the workshop stairs are
- *     claimed through the ladders:climb event so the generic mapper cannot guess wrong.
- *   - The beaten book interface and the extractor cutscene/models are not shown; reading
- *     the book/scroll has no transcript of its own, so the search variant's own message
- *     lines are reused and the stage advances. The fan dries the bar instantly instead of
- *     on a timer. Random crate contents are rolled with Math.random once per player.
- *   - Mind shield smithing is supported only for item use after completion with the slashed book alone.
- *   - Elemental helmets follow the Wiki's four-tick recipe after completion. Exact success
- *     wording, animation and sound have no local recording and are not fabricated here.
+ * The machine floor, its gantry and the extractor room below are an instance, as live's
+ * rebuild_region: the crane, the tank door and water, the press hammer, the extractor hat and the
+ * mind doors are server-swapped locs there, and the jig cart (multinpc 6285 on jig_state) is the
+ * player's own, riding its 56-tile loop a tile a tick.
  */
+const fs = require("fs");
+const path = require("path");
+const { createQuestScenes } = require("../QuestScenes");
+
+const DATA = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "elemental-workshop-ii.json"), "utf8"));
+
 module.exports = function registerElementalWorkshopIIQuest(api) {
   const {
-    Animation, CacheDefinitions, CountdownTask, Item, ItemIdentifiers, Location, MapObjects, NpcIdentifiers,
-    ObjectIdentifiers, Skill, Sound, Sounds, TaskManager,
+    Animation, Bank, CacheDefinitions, CountdownTask, CreationMenu, DialogueChainBuilder, ForceMovement,
+    GameObject, Graphic, Item, ItemStatementDialogue, Location, MapObjects, NpcIdentifiers, ObjectManager,
+    OptionDialogue, PlayerDialogue, Skill, StatementDialogue, Task, TaskManager,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, openBook, bookPagesFromSpreads, questStartMessage, loadTranscripts } = require("../QuestRuntime");
   const { holdsHammer } = require("../../items/Hammers");
+  const I = api.core.ItemIdentifiers;
+  const O = api.core.ObjectIdentifiers;
 
+  const KEY = "elemental_workshop_ii";
   const PAGE = "Elemental Workshop II";
-  const START_HOOK = "quest:elemental-workshop-ii:start";
-  const VARP = 896; // elemental_quest_2_bits
-  const VARBIT_MAIN = 2639; // elemental_quest_2_main (5 bits)
 
-  // Sub-state varbits (varp 896/897, element/machine states the client renders from).
-  const VARBIT_HIDE_KEY = 2640;
-  const VARBIT_HATCH = 2641;
-  const VARBIT_JIG_POS = 2642;
-  const VARBIT_JIG_STATE = 2643;
-  const VARBIT_FIRE_STATE = 2644;
-  const VARBIT_FIRE_POS = 2645;
-  const VARBIT_PIPE_1 = 2646;
-  const VARBIT_PIPE_2 = 2647;
-  const VARBIT_PIPE_3 = 2648;
-  const VARBIT_WATER_STATE = 2650;
-  const VARBIT_VALVE_1 = 2651;
-  const VARBIT_VALVE_2 = 2652;
-  const VARBIT_WATER_DOOR = 2653;
-  const VARBIT_WATER_LEVEL = 2654;
-  const VARBIT_COG_1 = 2655;
-  const VARBIT_COG_2 = 2656;
-  const VARBIT_COG_3 = 2657;
-  const VARBIT_AIR_STATE = 2659;
-  const VARBIT_FAN_STATE = 2660;
-  const VARBIT_MIND_JIG = 2662;
-  const VARBIT_EARTH_FIXED = 2663;
-  const VARBIT_BOX_STATE = 2664;
+  // ==========================================================================
+  // Stages and varbits
+  // ==========================================================================
 
-  const STAGE_STARTED = 1;
-  const STAGE_BOOK_READ = 2;
-  const STAGE_SCROLL_READ = 3;
-  const STAGE_KEY_TAKEN = 4;
-  const STAGE_HATCH_OPEN = 5;
-  const STAGE_SCHEMATICS = 6;
-  const STAGE_CRANE = 7;
-  const STAGE_JUNCTION = 8;
-  const STAGE_REPAIRS = 9;
-  const STAGE_PRIMED_BAR = 10;
-  const STAGE_MIND_BAR = 11;
-  const STAGE_COMPLETE = 12;
-  const WIRE_COMPLETE = 11; // the cache's completion threshold for varbit 2639
-
-  /** Durable stages 11/12 are the post-bar split; the wire completes at 11. */
-  function wireStage(value) {
-    if (value >= STAGE_COMPLETE) return WIRE_COMPLETE;
-    if (value >= STAGE_MIND_BAR) return STAGE_MIND_BAR - 1;
-    return value;
-  }
-
-  const BEATEN_BOOK = ItemIdentifiers.BEATEN_BOOK; // 9717
-  const SCROLL = ItemIdentifiers.SCROLL_3; // 9721
-  const KEY = ItemIdentifiers.KEY_11; // 9722
-  const CRANE_SCHEMATIC = ItemIdentifiers.CRANE_SCHEMATIC; // 9718
-  const LEVER_SCHEMATIC = ItemIdentifiers.LEVER_SCHEMATIC; // 9719
-  const CRANE_CLAW = ItemIdentifiers.CRANE_CLAW; // 9720
-  const PIPE = ItemIdentifiers.PIPE; // 9723
-  const LARGE_COG = ItemIdentifiers.LARGE_COG; // 9724
-  const MEDIUM_COG = ItemIdentifiers.MEDIUM_COG; // 9725
-  const SMALL_COG = ItemIdentifiers.SMALL_COG; // 9726
-  const PRIMED_BAR = ItemIdentifiers.PRIMED_BAR; // 9727
-  const PRIMED_MIND_BAR = ItemIdentifiers.PRIMED_MIND_BAR; // 9728
-  const SLASHED_BOOK = ItemIdentifiers.SLASHED_BOOK;
-  const MIND_SHIELD = ItemIdentifiers.MIND_SHIELD;
-  const MIND_SHIELD_SMITH_TICKS = 4;
-  const MIND_SMITHING_LEVEL = 30;
-  const workbenchSmithing = new WeakMap();
-  const workbenchUse = new WeakMap();
-  const ELEMENTAL_HELMET = ItemIdentifiers.ELEMENTAL_HELMET;
-  const ELEMENTAL_HELMET_SMITH_TICKS = 4;
-  const ELEMENTAL_HELMET_SMITHING_LEVEL = 20;
-  const MIND_HELMET = ItemIdentifiers.MIND_HELMET; // 9733
-  const ELEMENTAL_METAL = ItemIdentifiers.ELEMENTAL_METAL; // 2893
-  const HAMMER = ItemIdentifiers.HAMMER; // 2347
-
-  const TRANSCRIPT_NPC_ID = NpcIdentifiers.JIG_CART; // 5221, chathead sentinel
-
-  const CART_NPC_IDS = new Set([
-    NpcIdentifiers.JIG_CART, // 5221 empty
-    NpcIdentifiers.JIG_CART_2, // 5222 bar
-    NpcIdentifiers.JIG_CART_3, // 5223 hot bar
-    NpcIdentifiers.JIG_CART_4, // 5224 flat hot bar
-    NpcIdentifiers.JIG_CART_5, // 5225 flat bar
-    NpcIdentifiers.JIG_CART_6, // 5226 flat dry bar
-  ]);
-
-  const BOOKCASE = ObjectIdentifiers.BOOKCASE_66; // 17382, Exam Centre
-  const WORKBENCH = ObjectIdentifiers.WORKBENCH_5; // 3402
-  const CRATE_IDS = [
-    ObjectIdentifiers.CRATE_162, // 18612
-    ObjectIdentifiers.CRATE_163, // 18613
-    ObjectIdentifiers.CRATES_39, // 18614
-    ObjectIdentifiers.CRATES_40, // 18615
-    ObjectIdentifiers.CRATE_164, // 18616
-    ObjectIdentifiers.CRATES_41, // 18617 (catwalk)
-    ObjectIdentifiers.CRATE_165, // 18618 (catwalk)
-    ObjectIdentifiers.CRATE_166, // 18619
-  ];
-  const CRATE_INDEX = new Map(CRATE_IDS.map((id, index) => [id, index]));
-  const SCHEMATIC_CRATE = ObjectIdentifiers.SCHEMATIC_CRATE; // 18711
-  const BOILER = 18593; // elemental_workshop_2_boiler_multi (nameless parent)
-  const BOILER_FOR_KEY = ObjectIdentifiers.MACHINERY_4; // 18594, the Search version
-  const BOILER_IDS = new Set([BOILER, BOILER_FOR_KEY]);
-  const HATCH = 3413; // elem2_stairs_door (nameless parent -> 18595/18596/18597)
-  const HATCH_IDS = new Set([HATCH, ObjectIdentifiers.HATCH, ObjectIdentifiers.HATCH_2]);
-  const PIPE_REPAIR = 3414; // elemental_piping_blue_broken_multi (nameless parent)
-  const PIPE_REPAIR_IDS = new Set([PIPE_REPAIR, ObjectIdentifiers.PIPING]);
-  const OLD_CRANE = ObjectIdentifiers.OLD_CRANE_16; // 18638, the placed crane base
-  const FIRE_LEVER_ROTATE = ObjectIdentifiers.AN_OLD_LEVER; // 18621, south-east
-  const FIRE_LEVER_RAISE = ObjectIdentifiers.AN_OLD_LEVER_2; // 18622, south-west
-  const CART_LEVER = ObjectIdentifiers.LEVER_47; // 18620, by the yellow sign
-  const PRESS_LEVER = ObjectIdentifiers.AN_OLD_LEVER_3; // 18640
-  const JUNCTION_BOX = ObjectIdentifiers.JUNCTION_BOX; // 18641
-  const VALVE_WEST = ObjectIdentifiers.WATER_VALVE_2; // 18646
-  const VALVE_EAST = ObjectIdentifiers.WATER_VALVE_3; // 18647
-  const TANK_DOOR_LEVER = ObjectIdentifiers.AN_OLD_LEVER_4; // 18648
-  const CORKSCREW = ObjectIdentifiers.CORKSCREW_LEVER; // 18649
-  const FAN_LEVER = ObjectIdentifiers.AN_OLD_LEVER_5; // 18663
-  const PIN_HIGH = 18722; // elem2_wind_pin_high_multi, small cog (nameless parent)
-  const PIN_LOW = 3429; // elem2_wind_pin_low_multi, medium cog (nameless parent)
-  const PIN_LEFT = 18721; // elem2_wind_pin_left_multi, large cog (nameless parent)
-  const PIN_IDS = new Set([
-    PIN_HIGH, PIN_LOW, PIN_LEFT,
-    ObjectIdentifiers.PIN, ObjectIdentifiers.PIN_2, ObjectIdentifiers.PIN_3, // 18664-18666
-  ]);
-  // The wind tunnel pins and the crane's 5x5 base have no walkable tile of their own, and
-  // every adjacent tile fails the walk-to reach check for item use ("I can't reach that!").
-  const ROUTE_ASSIST_IDS = new Set([...PIN_IDS, OLD_CRANE, PIPE_REPAIR]);
-  const EXTRACTOR_HAT = ObjectIdentifiers.EXTRACTOR_HAT; // 18690
-  const EXTRACTOR_HAT_IDS = new Set([EXTRACTOR_HAT, ObjectIdentifiers.EXTRACTOR_HAT_2]);
-  const EXTRACTOR_GUN_IDS = new Set([
-    18725, // elem_extractor_gun, the placed nameless parent
-    ObjectIdentifiers.EXTRACTOR_GUN, ObjectIdentifiers.EXTRACTOR_GUN_2, ObjectIdentifiers.EXTRACTOR_GUN_3,
-  ]);
-  const STAIRS_UP_MACHINE = ObjectIdentifiers.STAIRS_68; // 18598
-  const STAIRWELL_DOWN = ObjectIdentifiers.STAIRWELL; // 18597
-  const STAIRS_UP_BASEMENT = ObjectIdentifiers.STAIRS_69; // 18599
-  const GANTRY_STAIRS = ObjectIdentifiers.STAIRS_70; // 18610
-  const GANTRY_STAIRS_TOP = ObjectIdentifiers.STAIRS_71; // 18611
-
-  // Cache tile facts from the loc dump: the hatch sits at 2719,9890 (2x2); the stairs
-  // back up from the machine floor at 1953,5154 (2x2); the stairwell down at 1948,5158.
-  const HATCH_ARRIVAL = new Location(2719, 9892, 0);
-  const MACHINE_ARRIVAL = new Location(1954, 5156, 2);
-  const BASEMENT_ARRIVAL = new Location(1948, 5161, 0);
-  const CART_TILE = { x: 1954, y: 5147, z: 2 };
-
-  const FLAGS_ATTRIBUTE = "quest.elemental_workshop_ii.flags";
-  const JIG_ATTRIBUTE = "quest.elemental_workshop_ii.jig";
-  const WATER_ATTRIBUTE = "quest.elemental_workshop_ii.water";
-  const AIR_ATTRIBUTE = "quest.elemental_workshop_ii.air";
-  const PIPES_ATTRIBUTE = "quest.elemental_workshop_ii.pipes";
-  const MIND_ATTRIBUTE = "quest.elemental_workshop_ii.mind";
+  const STAGE = {
+    STARTED: 1, BOOK_READ: 2, NOTE_READ: 3, KEY_FOUND: 4, HATCH_UNLOCKED: 5, MACHINE_FLOOR: 6,
+    PRIMED_BAR: 7, MIND_DOOR: 8, BAR_PLACED: 9, MIND_BAR: 10, COMPLETE: 11,
+  };
+  const VARBIT = {
+    MAIN: 2639, HIDE_KEY: 2640, HATCH: 2641, JIG_POS: 2642, JIG_STATE: 2643, FIRE_STATE: 2644, FIRE_POS: 2645,
+    PIPE_1: 2646, PIPE_2: 2647, PIPE_3: 2648, WATER_STATE: 2650, VALVE_1: 2651, VALVE_2: 2652,
+    WATER_DOOR: 2653, WATER_LEVEL: 2654, COG_1: 2655, COG_2: 2656, COG_3: 2657, AIR_STATE: 2659,
+    FAN_STATE: 2660, MIND_JIG: 2662, EARTH_FIXED: 2663,
+  };
+  /** The machine varbits saved and replayed (stage 2639 is QuestRuntime's). */
+  const MACHINE_VARBITS = Object.values(VARBIT).filter((id) => id !== VARBIT.MAIN);
+  const VARP_896 = 896;
+  const VARP_897 = 897;
+  const MACHINE_ATTRIBUTE = { [VARP_896]: "quest.elemental_workshop_ii.varp896", [VARP_897]: "quest.elemental_workshop_ii.varp897" };
+  /** 2: live's stages and the varbit save; 0 with a stage set is the old scheme. */
+  const SCHEME_ATTRIBUTE = "quest.elemental_workshop_ii.scheme";
+  const SCHEME = 2;
   const CRATES_ATTRIBUTE = "quest.elemental_workshop_ii.crates";
+  const SCENE_EXIT_ATTRIBUTE = "elemental-workshop-ii:scene-exit";
 
-  const FLAG_KEY_REVEALED = 1 << 0;
-  const FLAG_HATCH_OPEN = 1 << 1;
-  const FLAG_PIPE_REPAIRED = 1 << 2;
-  const FLAG_MACHINE_FIXED = 1 << 3;
-  const FLAG_BOOK_TAKEN = 1 << 4;
-  const FLAG_CRANE_SCHEMATIC_TAKEN = 1 << 5;
-  const FLAG_LEVER_SCHEMATIC_TAKEN = 1 << 6;
-  const FLAG_CRANE_SCHEMATIC_READ = 1 << 7;
-  const FLAG_LEVER_SCHEMATIC_READ = 1 << 8;
+  // jig_state: what the cart holds (its multinpc); 6 is the bar carried into the tank.
+  const JIG = { EMPTY: 0, BAR: 1, HOT: 2, FLAT_HOT: 3, FLAT: 4, DRY: 5, IN_TANK: 6 };
+  // fire_pos and fire_state: where the crane is and what its claw holds.
+  const CRANE_POS = { TRACK_UP: 0, TRACK_DOWN: 1, LAVA_UP: 2, LAVA_DOWN: 3 };
+  const CLAW = { BROKEN: 0, EMPTY: 1, COOL: 2, HOT: 3 };
+  // water_door: closed/open, rack retracted/extended, and what the rack holds.
+  const DOOR = {
+    CLOSED: 0, OPEN: 1, EXTENDED: 2, CLOSED_HOT: 3, OPEN_HOT: 4, EXTENDED_HOT: 5,
+    CLOSED_COLD: 6, OPEN_COLD: 7, EXTENDED_COLD: 8,
+  };
+  const CART_STOP = { CRANE: 0, PRESS: 1, TANK: 2, TUNNEL: 3 };
 
-  const PIPE_SOLVED = [5, 6, 13];
-  const CRATE_KINDS = ["small", "medium", "large", "pipe"];
-  const CRATE_ITEM_BY_KIND = new Map([
-    ["small", SMALL_COG],
-    ["medium", MEDIUM_COG],
-    ["large", LARGE_COG],
-    ["pipe", PIPE],
-  ]);
-  const CRATE_VARIANT = "into-the-workshop-searching-crates";
-  const CRATE_CONDITION_KIND = new Map([
-    ["e_gMjZ", "empty"],
-    ["HYdl-l", "small"],
-    ["ZfYdtR", "medium"],
-    ["joNrup", "large"],
-    ["nKU0jz", "pipe"],
-  ]);
-  const FULL_CONDITION_IDS = new Set(["dYjmbW", "jD15zv", "RmGHpD"]);
-  const SPACE_CONDITION_IDS = new Set(["aUvF_N", "Dm7-Ht", "aGHkSR"]);
+  // ==========================================================================
+  // Ids (cache)
+  // ==========================================================================
 
-  const PIN_LAYOUT = new Map([
-    [PIN_HIGH, { field: "cog1", value: 1, itemId: SMALL_COG, variant: "into-the-workshop-placing-cogs-on-the-shafts-small" }],
-    [ObjectIdentifiers.PIN_2, { field: "cog1", value: 1, itemId: SMALL_COG, variant: "into-the-workshop-placing-cogs-on-the-shafts-small" }],
-    [PIN_LOW, { field: "cog2", value: 2, itemId: MEDIUM_COG, variant: "into-the-workshop-placing-cogs-on-the-shafts-medium" }],
-    [ObjectIdentifiers.PIN, { field: "cog2", value: 2, itemId: MEDIUM_COG, variant: "into-the-workshop-placing-cogs-on-the-shafts-medium" }],
-    [PIN_LEFT, { field: "cog3", value: 3, itemId: LARGE_COG, variant: "into-the-workshop-placing-cogs-on-the-shafts-large" }],
-    [ObjectIdentifiers.PIN_3, { field: "cog3", value: 3, itemId: LARGE_COG, variant: "into-the-workshop-placing-cogs-on-the-shafts-large" }],
+  const BOOKCASE = O.BOOKCASE_66; // 17382 elemental_workshop_2_bookcase, Exam Centre
+  const BOILER_IDS = new Set([18593, O.MACHINERY_4]); // boiler multiloc, 18594 its Search form (hide_key 1)
+  const HATCH_IDS = new Set([3413, O.HATCH, O.HATCH_2]); // elem2_stairs_door, 18595 Open / 18596 Climb-down
+  const WORKBENCH = O.WORKBENCH_5; // 3402
+  const SCHEMATIC_CRATE = O.SCHEMATIC_CRATE; // 18711
+  const CRATE_IDS = [18612, 18613, 18614, 18615, 18616, 18617, 18618, 18619]; // elemental_workshop_2_box_1..8
+  const CRATE_INDEX = new Map(CRATE_IDS.map((id, index) => [id, index]));
+  const CART_LEVER = 18620; // elem2_lever_3way
+  const ROTATE_LEVER = 18621; // elem2_fire_lever_1
+  const RAISE_LEVER = 18622; // elem2_fire_lever_2
+  const PRESS_LEVER = 18640; // elem2_earth_lever_1
+  const JUNCTION_BOX = 18641; // elem2_press_junction_box
+  const VALVE_1 = 18646; // elem2_valve_1, the inlet (west)
+  const VALVE_2 = 18647; // elem2_valve_2, the drain (east)
+  const DOOR_LEVER = 18648; // elem2_water_lever
+  const CORKSCREW = 18649; // elem2_corkscrew
+  const FAN_LEVER = 18663; // elem2_air_lever
+  const PIPING_IDS = new Set([3414, 18650]); // elemental_piping_blue_broken_multi / _broken
+  const PINS = new Map([
+    [18722, VARBIT.COG_1], [18665, VARBIT.COG_1], // high pin: the small cog's
+    [3429, VARBIT.COG_2], [18664, VARBIT.COG_2], // low pin: the medium cog's
+    [18721, VARBIT.COG_3], [18666, VARBIT.COG_3], // left pin: the large cog's
   ]);
+  /** The cog locs a placed cog shows as (Take): low/left/high x small/medium/large, with and without spin. */
+  const COG_LOCS = new Map();
+  for (const [base, varbit] of [[18667, VARBIT.COG_2], [18670, VARBIT.COG_3], [18673, VARBIT.COG_1], [18676, VARBIT.COG_2], [18679, VARBIT.COG_3], [18682, VARBIT.COG_1]]) {
+    for (let size = 0; size < 3; size++) COG_LOCS.set(base + size, varbit);
+  }
+  const COG_ITEMS = [null, I.SMALL_COG, I.MEDIUM_COG, I.LARGE_COG]; // cog varbit value -> item
+  const CORRECT_COG = { [VARBIT.COG_1]: 1, [VARBIT.COG_2]: 2, [VARBIT.COG_3]: 3 };
+  const EXTRACTOR_HAT = 18690;
+  const EXTRACTOR_GUN_IDS = new Set([18725, 18693, 18694, 18695]); // elem_extractor_gun and its forms
+  const MIND_DOOR = 18698; // elem2_door_mind
+  const MIND_DOOR_L = 18700; // elem2_door_mindl
+  const MIND_DOOR_OPEN = 18699;
+  const MIND_DOOR_L_OPEN = 18701;
+  const STAIRS_UP = 18598; // elem2_stairs1, machine floor -> workshop
+  const STAIRWELL = 18597; // elem2_stairs_door_open_no_hatch, machine floor -> extractor room
+  const STAIRS_UP_BASEMENT = 18599; // elem2_stairs2
+  const GANTRY_UP = 18610; // elem_gantry_stairs
+  const GANTRY_DOWN = 18611; // elem_gantry_stairs_top
+  const CART_NPC = 6285; // elem2_cart_npc, multinpc 5221-5226 on jig_state
+  const CART_NPC_IDS = new Set([CART_NPC, 5221, 5222, 5223, 5224, 5225, 5226]);
+
+  const BEATEN_BOOK = I.BEATEN_BOOK; // 9717
+  const NOTE = I.SCROLL_3; // 9721 elemental_workshop_2_note
+  const HATCH_KEY = I.KEY_11; // 9722
+  const CRANE_SCHEMATIC = I.CRANE_SCHEMATIC; // 9718
+  const LEVER_SCHEMATIC = I.LEVER_SCHEMATIC; // 9719
+  const CRANE_CLAW = I.CRANE_CLAW; // 9720 elem_broken_finger
+  const PIPE = I.PIPE; // 9723
+  const PRIMED_BAR = I.PRIMED_BAR; // 9727
+  const MIND_BAR = I.PRIMED_MIND_BAR; // 9728
+  const ELEMENTAL_METAL = I.ELEMENTAL_METAL; // 2893
+  const CRATE_ITEMS = [I.SMALL_COG, I.MEDIUM_COG, I.LARGE_COG, PIPE];
+
+  // ==========================================================================
+  // Tiles (source coordinates; the instance translates them)
+  // ==========================================================================
+
+  const INSTANCE = { sourceChunk: [240, 640], size: 8 }; // 1920-1983, 5120-5183, every plane (rebuild_region at tick 213)
+  const BOUNDS = [[1920, 1983, 5120, 5183, 0], [1920, 1983, 5120, 5183, 2], [1920, 1983, 5120, 5183, 3]];
+  const HATCH_TOP = [2719, 9892, 0];
+  const FLOOR_LANDING = [1955, 5155, 2];
+  const WORKSHOP_LANDING = [2720, 9892, 0];
+  const BASEMENT_LANDING = [1947, 5159, 0];
+  const BASEMENT_UP_LANDING = [1950, 5158, 2];
+  const CRANE_TILE = [1952, 5143, 2];
+  const TANK_DOOR_TILE = [1953, 5162, 2];
+  const TANK_TILE = [1951, 5164, 2];
+  const HAMMER_TILE = [1946, 5155, 2];
+  const COG_TILES = [[1959, 5157, 2, 10], [1959, 5157, 2, 4], [1959, 5156, 2, 10]];
+  const HAT_TILE = [1962, 5150, 0];
+  const GUN_TILE = [1962, 5148, 0];
+  const MIND_DOORS = [[MIND_DOOR, 1952, 5150, MIND_DOOR_OPEN, 1951, 5150, 1], [MIND_DOOR_L, 1952, 5149, MIND_DOOR_L_OPEN, 1951, 5149, 3]];
+  /** The cart's loop, a tile a tick (ticks 801-1004): crane -> press -> tank -> wind tunnel -> crane. */
+  const CART_PATH = (() => {
+    const tiles = [];
+    for (let x = 1954; x >= 1947; x--) tiles.push([x, 5147]);
+    for (let y = 5148; y <= 5161; y++) tiles.push([1946, y]);
+    for (let x = 1947; x <= 1960; x++) tiles.push([x, 5162]);
+    for (let y = 5161; y >= 5148; y--) tiles.push([1961, y]);
+    for (let x = 1960; x >= 1955; x--) tiles.push([x, 5147]);
+    return tiles;
+  })();
+  /** The stops on it: crane 1954,5147; press 1946,5155 (15 steps); tank 1953,5162 (13); tunnel 1961,5155 (14); back (14). */
+  const STOP_INDEX = [0, 15, 28, 42];
+
+  // ==========================================================================
+  // Animations and sounds (capture)
+  // ==========================================================================
+
+  const ANIM = {
+    lever: 4909, // human_elem2_lever_3way_right
+    leverLoc: 4904, // elem2_lever_3way_right
+    corkscrew: 4905, corkscrewLoc: 4912,
+    workbench: 896, // human_cooking
+    reachForLadder: 828,
+    chair: 4884, gun: 4897,
+    craneLower: 4887, craneRaise: 4888, craneRotate: 4892, lavaLower: 4889, lavaRaise: 4890,
+    doorOpening: 4875, doorClosing: 4876, rackOut: 4877, rackIn: 4878,
+    tankFill: 4902, tankEmpty: 4903, pressHammer: 4908,
+    cogsReverse: 4906, cogs: 4896, cogsStop: 4907,
+  };
+  const SOUND = {
+    lever: 2400, manhole: 75, placePipe: 3179, placeCog: 3178, cartLoop: 3167, craneLower: 3169, craneTurn: 3170,
+    press: 3180, doorOpen: 71, doorClose: 70, valve: 3185, waterFlow: 3183, coolBar: 3168, screw: 3182, rack: 3184,
+    placeBar: 3177, mindControl: 3176, zap: 3173, anvil: 2721,
+  };
+  const CHAIR_SPOTANIM = 807;
+  const PRIME_TIME = 202; // music track
+
+  const CRAFT_TICKS = 4; // Wiki: crane claw, mind shield, mind helmet, elemental shield and helmet: 4 ticks
+  const XP = { shield: 20, claw: 20, helmet: 20, mindShield: 30, mindHelmet: 30 };
+  const MIND_SMITHING_LEVEL = 30;
+  const MAGIC_DRAIN = 20; // Wiki: each bar lowers Magic by 20
+
+  const MESSAGE = {
+    bookParts: "The book has two parts: an introduction and an instruction section.", // Wiki; the capture has a semicolon
+    bookIntro: "You flip the book open to the introduction and start reading.",
+    oldBook: "You find an old-looking book.",
+    bookmark: "You find a slip of paper that has been used for a bookmark. You put it in your pack to study later.",
+    nothing: "You find nothing.",
+    lockedHatch: "You're unable to open the locked hatch.",
+    wrongHatchItem: "You try to stuff the object into the keyhole. It doesn't fit.", // Wiki, Transcript:Elemental Workshop I
+    climbDown: "You climb down the stairs.",
+    climbUp: "You climb up the stairs.",
+    noRoom: "You don't have enough space in your inventory.", // Ours: the Wiki leaves the full-inventory lines out
+    // Ours: the start's requirements have no recorded refusal.
+    needEw1: "You must have completed Elemental Workshop I before you can start this quest.",
+    needSkills: "You need a Magic level of 20 and a Smithing level of 30 to start this quest.",
+    bookcaseNothing: "You search the bookcase but find nothing of interest.", // Ours
+    extractorMagic: "You need a Magic level of 20 to use the extractor.", // Ours
+    mindLevel: `You need a Smithing level of ${MIND_SMITHING_LEVEL} to work this metal.`, // Ours
+    metalLevel: "You need a Smithing level of 20 to work this metal.", // Ours
+    mindShieldMade: "Following the instructions in the book, you make a mind shield.", // capture tick 1471
+    shieldMade: "Following the instructions in the book, you make an elemental shield.", // Elemental Workshop I
+    reach: "I can't reach that!",
+  };
+
+  // ==========================================================================
+  // State
+  // ==========================================================================
 
   let quest;
-  /** Search-in-progress branch for the crate conditions (never persisted). */
-  const crateSearch = new WeakMap();
+  const Scenes = createQuestScenes(api, { onEnd: sceneEnded, recoveryAttribute: SCENE_EXIT_ATTRIBUTE });
+  /** Per player while on the machine floor: the cart and what is moving. */
+  const floors = new WeakMap();
+  /** Per player: a junction-box inlet clicked, waiting for its other end (0 none, 1-6). */
+  const junctionPick = new WeakMap();
+  /** Per player: workbench crafting in progress. */
+  const crafting = new WeakMap();
+  /** Per player: the last tick a climb ran, so a click both Ladders and this plugin see climbs once. */
+  const lastClimb = new WeakMap();
 
-  const has = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
-
-  const flags = (player) => Number(player.getAttribute(FLAGS_ATTRIBUTE)) || 0;
-  const hasFlag = (player, bit) => (flags(player) & bit) !== 0;
   const stage = (player) => quest.getStage(player);
+  const has = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
+  const sound = (player, id, delay = 0) => player.getPacketSender().sendSound(id, 1, delay);
+  const animate = (mob, id) => mob.performAnimation(new Animation(id));
 
-  function setFlag(player, bit) {
-    player.setAttribute(FLAGS_ATTRIBUTE, flags(player) | bit);
+  function varbitDef(id) {
+    return CacheDefinitions.getVarbit(id);
+  }
+
+  function machineValue(player, id) {
+    const { baseVar, startBit, endBit } = varbitDef(id);
+    const stored = Number(player.getAttribute(MACHINE_ATTRIBUTE[baseVar])) || 0;
+    return (stored >>> startBit) & ((1 << (endBit - startBit + 1)) - 1);
+  }
+
+  function setMachine(player, id, value) {
+    const { baseVar, startBit, endBit } = varbitDef(id);
+    const mask = ((1 << (endBit - startBit + 1)) - 1) << startBit;
+    const stored = Number(player.getAttribute(MACHINE_ATTRIBUTE[baseVar])) || 0;
+    player.setAttribute(MACHINE_ATTRIBUTE[baseVar], ((stored & ~mask) | ((value << startBit) & mask)) >>> 0);
+    player.getPacketSender().sendVarbit(id, value | 0);
+  }
+
+  function syncMachine(player) {
+    for (const id of MACHINE_VARBITS) player.getPacketSender().sendVarbit(id, machineValue(player, id));
   }
 
   function setStageAtLeast(player, value) {
     if (stage(player) < value) quest.setStage(player, value);
   }
 
-  function jigState(player) {
-    const value = Number(player.getAttribute(JIG_ATTRIBUTE)) || 0;
-    return {
-      position: value & 3,
-      state: (value >> 2) & 7,
-      firePos: (value >> 5) & 3,
-      fireState: (value >> 7) & 3,
-    };
-  }
-
-  function setJigState(player, next) {
-    player.setAttribute(
-      JIG_ATTRIBUTE,
-      (next.position & 3) | ((next.state & 7) << 2) | ((next.firePos & 3) << 5) | ((next.fireState & 3) << 7)
-    );
-    syncVarbits(player);
-  }
-
-  function waterState(player) {
-    const value = Number(player.getAttribute(WATER_ATTRIBUTE)) || 0;
-    return {
-      door: value & 15,
-      level: (value >> 4) & 1,
-      valveWest: (value >> 5) & 1,
-      valveEast: (value >> 6) & 1,
-    };
-  }
-
-  function setWaterState(player, next) {
-    player.setAttribute(
-      WATER_ATTRIBUTE,
-      (next.door & 15) | ((next.level & 1) << 4) | ((next.valveWest & 1) << 5) | ((next.valveEast & 1) << 6)
-    );
-    syncVarbits(player);
-  }
-
-  function airState(player) {
-    const value = Number(player.getAttribute(AIR_ATTRIBUTE)) || 0;
-    return {
-      cog1: value & 3,
-      cog2: (value >> 2) & 3,
-      cog3: (value >> 4) & 3,
-      machine: (value >> 6) & 1,
-      fan: (value >> 7) & 3,
-    };
-  }
-
-  function setAirState(player, next) {
-    player.setAttribute(
-      AIR_ATTRIBUTE,
-      (next.cog1 & 3) | ((next.cog2 & 3) << 2) | ((next.cog3 & 3) << 4) | ((next.machine & 1) << 6) |
-        ((next.fan & 3) << 7)
-    );
-    syncVarbits(player);
-  }
-
-  function pipeState(player) {
-    const value = Number(player.getAttribute(PIPES_ATTRIBUTE)) || 0;
-    return { p1: value & 15, p2: (value >> 4) & 15, p3: (value >> 8) & 15 };
-  }
-
-  function setPipeState(player, next) {
-    player.setAttribute(PIPES_ATTRIBUTE, (next.p1 & 15) | ((next.p2 & 15) << 4) | ((next.p3 & 15) << 8));
-    syncVarbits(player);
-  }
-
-  const mindState = (player) => Number(player.getAttribute(MIND_ATTRIBUTE)) || 0;
-
-  function setMindState(player, value) {
-    player.setAttribute(MIND_ATTRIBUTE, value & 3);
-    syncVarbits(player);
-  }
-
-  function cogsCorrect(air) {
-    return air.cog1 === 1 && air.cog2 === 2 && air.cog3 === 3;
-  }
-
-  function pipesSorted(player) {
-    const pipes = pipeState(player);
-    return pipes.p1 === PIPE_SOLVED[0] && pipes.p2 === PIPE_SOLVED[1] && pipes.p3 === PIPE_SOLVED[2];
-  }
-
-  function repairsComplete(player) {
-    const jig = jigState(player);
-    return jig.fireState >= 1 && pipesSorted(player) && hasFlag(player, FLAG_PIPE_REPAIRED) &&
-      cogsCorrect(airState(player));
-  }
-
-  function sendVarbit(player, id, value) {
-    player.getPacketSender().sendVarbit(id, value | 0);
-  }
-
-  /** Mirrors every persisted sub-state to its cache varbit (also used on login). */
-  function syncVarbits(player) {
-    const f = flags(player);
-    const jig = jigState(player);
-    const water = waterState(player);
-    const air = airState(player);
-    const pipes = pipeState(player);
-    sendVarbit(player, VARBIT_MAIN, wireStage(stage(player)));
-    sendVarbit(player, VARBIT_HIDE_KEY, hasFlag(player, FLAG_KEY_REVEALED) ? 1 : 0);
-    sendVarbit(player, VARBIT_HATCH, hasFlag(player, FLAG_HATCH_OPEN) ? 1 : 0);
-    sendVarbit(player, VARBIT_WATER_STATE, hasFlag(player, FLAG_PIPE_REPAIRED) ? 1 : 0);
-    sendVarbit(player, VARBIT_EARTH_FIXED, hasFlag(player, FLAG_MACHINE_FIXED) ? 1 : 0);
-    sendVarbit(player, VARBIT_BOX_STATE, (f & FLAG_BOOK_TAKEN) ? 2 : 0);
-    sendVarbit(player, VARBIT_JIG_POS, jig.position);
-    sendVarbit(player, VARBIT_JIG_STATE, jig.state);
-    sendVarbit(player, VARBIT_FIRE_STATE, jig.fireState);
-    sendVarbit(player, VARBIT_FIRE_POS, jig.firePos);
-    sendVarbit(player, VARBIT_WATER_DOOR, water.door);
-    sendVarbit(player, VARBIT_WATER_LEVEL, water.level);
-    sendVarbit(player, VARBIT_VALVE_1, water.valveWest);
-    sendVarbit(player, VARBIT_VALVE_2, water.valveEast);
-    sendVarbit(player, VARBIT_COG_1, air.cog1);
-    sendVarbit(player, VARBIT_COG_2, air.cog2);
-    sendVarbit(player, VARBIT_COG_3, air.cog3);
-    sendVarbit(player, VARBIT_AIR_STATE, air.machine);
-    sendVarbit(player, VARBIT_FAN_STATE, air.fan);
-    sendVarbit(player, VARBIT_PIPE_1, pipes.p1);
-    sendVarbit(player, VARBIT_PIPE_2, pipes.p2);
-    sendVarbit(player, VARBIT_PIPE_3, pipes.p3);
-    sendVarbit(player, VARBIT_MIND_JIG, mindState(player));
-  }
-
-  /** Plays a wiki variant of this quest's page; the cart is only a chathead placeholder. */
-  function play(player, variant) {
-    return startTranscript(api, player, TRANSCRIPT_NPC_ID, PAGE, variant);
-  }
-
-  function requireSpace(player, slots) {
-    if ((player.getInventory().getFreeSlots?.() ?? 0) >= slots) return true;
-    player.sendMessage("You don't have enough space in your inventory.");
-    return false;
-  }
-
-  function elementalWorkshopOneComplete(player) {
-    const request = { player, key: "elemental_workshop_i", complete: false };
+  function questComplete(player, key) {
+    const request = { player, key, complete: false };
     api.emitCustomEvent("quest:is-complete", request);
     return request.complete === true;
   }
 
   // ==========================================================================
-  // Starting off
+  // Presentation: the Wiki transcript's lines from the dialogue dump, shown as live shows them
   // ==========================================================================
 
-  function searchBookcase(player) {
-    if (stage(player) >= STAGE_STARTED) {
-      if (!has(player, BEATEN_BOOK)) {
-        if (!requireSpace(player, 1)) return;
-        player.getInventory().adds(BEATEN_BOOK, 1);
-        player.sendMessage("You find an old-looking book."); // transcript step 0RUHhz
-        return;
+  function line(variant, index = 0) {
+    const steps = loadTranscripts(api)?.[PAGE]?.variants?.[variant];
+    const flat = [];
+    const walk = (list) => {
+      for (const step of list ?? []) {
+        if (step?.type === "message" && step.text) flat.push(step.text);
+        if (step?.player) flat.push(step.player);
+        if (Array.isArray(step?.steps)) walk(step.steps);
+        if (Array.isArray(step?.options)) for (const option of step.options) walk(option.steps);
       }
-      player.sendMessage("You search the bookcase but find nothing of interest.");
-      return;
-    }
-    if (!elementalWorkshopOneComplete(player)) {
-      player.sendMessage("You must have completed Elemental Workshop I before you can start this quest.");
-      return;
-    }
-    if (!requireSpace(player, 2)) return;
-    play(player, "starting-out-searching-the-bookcase");
+    };
+    walk(steps);
+    return flat[index] ?? "";
   }
 
-  function handleStartHook(event) {
-    const { player, hook, npcId } = event;
-    if (npcId !== TRANSCRIPT_NPC_ID || hook !== START_HOOK) return;
-    if (stage(player) !== 0) return;
-    player.getInventory().adds(BEATEN_BOOK, 1);
-    player.getInventory().adds(SCROLL, 1);
-    setFlag(player, FLAG_BOOK_TAKEN);
-    setStageAtLeast(player, STAGE_STARTED);
-    syncVarbits(player);
+  function messageBox(player, text, then) {
+    const chain = new DialogueChainBuilder().add(new StatementDialogue(0, text));
+    if (then) chain.add(new (api.core.ActionDialogue)(1, { execute: () => { player.getPacketSender().sendInterfaceRemoval(); then(); } }));
+    player.getDialogueManager().startDialogues(chain);
   }
 
-  function readBeatenBook(player) {
-    if (stage(player) === 0) return;
-    if (stage(player) === STAGE_STARTED) {
-      player.sendMessage("The book has two parts: an introduction and an instruction section."); // 7UpB8g
-      player.sendMessage("You flip the book open to the introduction and start reading."); // zmWbaO
-      setStageAtLeast(player, STAGE_BOOK_READ);
-    }
-    if (stage(player) <= STAGE_BOOK_READ && !has(player, SCROLL) && requireSpace(player, 1)) {
-      player.getInventory().adds(SCROLL, 1);
-      player.sendMessage(
-        "You find a slip of paper that has been used for a bookmark. You put it in your pack to study later."
-      ); // AKqEG4
-    }
+  function itemBox(player, itemId, text, then) {
+    const chain = new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text));
+    if (then) chain.add(new (api.core.ActionDialogue)(1, { execute: () => { player.getPacketSender().sendInterfaceRemoval(); then(); } }));
+    player.getDialogueManager().startDialogues(chain);
   }
 
-  function readScroll(player) {
-    if (stage(player) !== STAGE_BOOK_READ) return;
-    setFlag(player, FLAG_KEY_REVEALED);
-    setStageAtLeast(player, STAGE_SCROLL_READ);
-    syncVarbits(player);
+  function playerLine(player, text) {
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new PlayerDialogue(0, text)));
   }
 
-  function readCraneSchematic(player) {
-    if (!has(player, CRANE_SCHEMATIC) && !hasFlag(player, FLAG_CRANE_SCHEMATIC_TAKEN)) return;
-    setFlag(player, FLAG_CRANE_SCHEMATIC_READ);
-    play(player, "into-the-workshop-reading-the-crane-schematic");
-  }
-
-  function readLeverSchematic(player) {
-    if (!has(player, LEVER_SCHEMATIC) && !hasFlag(player, FLAG_LEVER_SCHEMATIC_TAKEN)) return;
-    setFlag(player, FLAG_LEVER_SCHEMATIC_READ);
+  function menu(player, title, options, choose) {
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new OptionDialogue(0, {
+      executeOption(option) {
+        player.getPacketSender().sendInterfaceRemoval();
+        choose(Number(option));
+      },
+    }, ...options).setTitle(title)));
   }
 
   // ==========================================================================
-  // The second key and the hatch (EW1 first sublevel)
+  // The machine floor instance
   // ==========================================================================
 
-  function searchMachinery(player) {
-    if (stage(player) < STAGE_SCROLL_READ) return;
-    if (has(player, KEY) || hasFlag(player, FLAG_HATCH_OPEN)) return;
-    if (!requireSpace(player, 1)) return;
-    player.getInventory().adds(KEY, 1);
-    setStageAtLeast(player, STAGE_KEY_TAKEN);
-    play(player, "into-the-workshop-searching-machinery-for-the-key");
+  function scene(player) {
+    return Scenes.get(player);
   }
 
-  function unlockHatch(player) {
-    if (hasFlag(player, FLAG_HATCH_OPEN)) return false;
-    if (!has(player, KEY)) return false;
-    setFlag(player, FLAG_HATCH_OPEN);
-    setStageAtLeast(player, STAGE_HATCH_OPEN);
-    syncVarbits(player);
-    play(player, "into-the-workshop-unlocking-the-hatch");
-    return true;
+  function tile(player, [x, y, z]) {
+    return Scenes.tileFor(player, [x, y, z]);
   }
 
-  function descendHatch(player) {
-    player.moveTo(MACHINE_ARRIVAL);
+  function locAt(player, at, ids, type = 10) {
+    const sc = scene(player);
+    if (!sc) return null;
+    const where = tile(player, at);
+    return MapObjects.getObjectsAt(where, sc.area).find((o) => o.getType() === type && (!ids || ids.has(o.getId()))) ?? null;
   }
 
-  function climbStairs(player, destination, message) {
-    player.sendMessage(message);
-    player.moveTo(destination);
+  /** Puts `id` at a source tile for the player's instance, replacing what stands there (loc_add_change). */
+  function setLoc(player, at, ids, id, type = 10, face = null) {
+    const sc = scene(player);
+    if (!sc) return null;
+    const where = tile(player, at);
+    const current = locAt(player, at, ids, type);
+    if (current?.getId() === id) return current;
+    const next = new GameObject(id, where, type, face ?? current?.getFace() ?? 0, sc.area);
+    if (current) ObjectManager.replaceInPlace(current, next);
+    else { sc.area.add?.(next); ObjectManager.register(next, true); }
+    return next;
+  }
+
+  function removeLoc(player, at, ids, type = 10) {
+    const current = locAt(player, at, ids, type);
+    if (current) ObjectManager.deregister(current, true);
+  }
+
+  function locAnim(player, at, ids, anim, type = 10) {
+    const object = locAt(player, at, ids, type);
+    if (object) player.getPacketSender().sendObjectAnimation(object, new Animation(anim));
+  }
+
+  const CRANE_IDS = new Set(Array.from({ length: 16 }, (_, i) => 18623 + i));
+  const DOOR_IDS = new Set(Array.from({ length: 9 }, (_, i) => 18651 + i));
+  const TANK_IDS = new Set([18660, 18661]);
+  const HAMMER_IDS = new Set([18644]);
+  const HAT_IDS = new Set([EXTRACTOR_HAT]);
+  const LEVER_IDS = new Set([CART_LEVER, ROTATE_LEVER, RAISE_LEVER, PRESS_LEVER, DOOR_LEVER, FAN_LEVER]);
+
+  /** elem2_crane_{track,lava}_{up,down}_{empty,cool_bar,hot_bar,broken}: 18623 + content*4 + position, broken 18635 + position. */
+  function craneLoc(position, claw) {
+    return claw === CLAW.BROKEN ? 18635 + position : 18623 + (claw - 1) * 4 + position;
+  }
+
+  function showCrane(player) {
+    setLoc(player, CRANE_TILE, CRANE_IDS, craneLoc(machineValue(player, VARBIT.FIRE_POS), machineValue(player, VARBIT.FIRE_STATE)));
+  }
+
+  /** elemental_waterdoor_{closed_retracted,open_retracted,open_extended} x {none,hotbar,coldbar}. */
+  const DOOR_LOCS = [18651, 18652, 18653, 18654, 18655, 18656, 18657, 18658, 18659];
+
+  function showDoor(player) {
+    setLoc(player, TANK_DOOR_TILE, DOOR_IDS, DOOR_LOCS[machineValue(player, VARBIT.WATER_DOOR)]);
+  }
+
+  /** The tank: running water while the inlet is open with the drain open, full with the drain shut. */
+  function showTank(player) {
+    const inlet = machineValue(player, VARBIT.VALVE_1);
+    const drain = machineValue(player, VARBIT.VALVE_2);
+    if (!inlet) removeLoc(player, TANK_TILE, TANK_IDS);
+    else setLoc(player, TANK_TILE, TANK_IDS, drain ? 18660 : 18661, 10, 0);
+  }
+
+  function cartTile(position) {
+    return CART_PATH[STOP_INDEX[position]];
+  }
+
+  /** On the way in (tick 213): the crane and the tank door as saved, and the player's own cart. */
+  function enterFloor(player) {
+    const sc = Scenes.open(player, "elemental-workshop-ii", BOUNDS, { canTeleport: () => null, npcAggression: () => null, musicTrack: PRIME_TIME }, {
+      instance: INSTANCE, at: FLOOR_LANDING, exit: HATCH_TOP,
+    });
+    showCrane(player);
+    showDoor(player);
+    showTank(player);
+    const position = machineValue(player, VARBIT.JIG_POS);
+    const [x, y] = cartTile(position);
+    const next = CART_PATH[(STOP_INDEX[position] + 1) % CART_PATH.length];
+    const cart = Scenes.actor(sc, CART_NPC, [x, y, 2], [next[0], next[1]]);
+    floors.set(player, { cart, cartMoving: false, craneBusy: false, pressBusy: false, doorBusy: false, valveBusy: false, extractor: false });
+    return sc;
+  }
+
+  function sceneEnded(player) {
+    floors.delete(player);
+    junctionPick.delete(player);
+  }
+
+  function floor(player) {
+    return floors.get(player) ?? null;
+  }
+
+  function later(player, ticks, action) {
+    const sc = scene(player);
+    if (sc) Scenes.later(sc, ticks, action);
+    else TaskManager.submit(new CountdownTask(player, ticks, () => { if (player.isRegistered?.() !== false) action(); }));
   }
 
   /**
-   * The workshop's stairs are all two-way dungeon connections, so the generic
-   * Ladders mapper guesses wrong. Claim the click and hand it the explicit
-   * destination instead. The gantry stairs are placed twice (1949,5149 and
-   * 1958,5159), so theirs is the clicked tile one plane up/down.
+   * Each [delay, action] runs `delay` ticks from now. Every delay counts from this tick: a task
+   * submitted from inside another one starts a tick late, so nested waits would drift.
    */
-  function climbTile(object, fallbackX, fallbackY, z) {
-    const location = object?.getLocation?.();
-    return location ? new Location(location.getX(), location.getY(), z) : new Location(fallbackX, fallbackY, z);
+  function steps(player, list) {
+    for (const [delay, action] of list) {
+      if (delay === 0) action();
+      else later(player, delay, action);
+    }
+  }
+
+  /** `tick(n)` every tick from the next one (n = 1, 2 ...) until it returns false; dies with the scene or player. */
+  function everyTick(player, tick) {
+    const key = scene(player) ?? player;
+    let n = 0;
+    const task = new (class extends Task {
+      constructor() { super(1, key, false); }
+      execute() {
+        if (player.isRegistered?.() === false || tick(++n) === false) this.stop();
+      }
+    })();
+    TaskManager.submit(task);
+    return task;
+  }
+
+  /** A lever pull: the player's pull, the lever's own swing and its click (every lever, e.g. tick 498). */
+  function pullLever(player, object) {
+    animate(player, ANIM.lever);
+    if (object) player.getPacketSender().sendObjectAnimation(object, new Animation(ANIM.leverLoc));
+    sound(player, SOUND.lever, 10);
+  }
+
+  // ==========================================================================
+  // Starting off: the bookcase, the book and the note
+  // ==========================================================================
+
+  function searchBookcase(player) {
+    if (stage(player) >= STAGE.STARTED) {
+      if (has(player, BEATEN_BOOK) || quest.isComplete(player)) {
+        player.sendMessage(MESSAGE.bookcaseNothing);
+        return;
+      }
+      // Ours: a lost book comes back from the same shelf.
+      if (!roomFor(player, 1)) return;
+      player.getInventory().adds(BEATEN_BOOK, 1);
+      itemBox(player, BEATEN_BOOK, MESSAGE.oldBook);
+      return;
+    }
+    if (!questComplete(player, "elemental_workshop_i")) {
+      player.sendMessage(MESSAGE.needEw1);
+      return;
+    }
+    const skills = player.getSkillManager();
+    if (skills.getCurrentLevel(Skill.MAGIC) < 20 || skills.getCurrentLevel(Skill.SMITHING) < 30) {
+      player.sendMessage(MESSAGE.needSkills);
+      return;
+    }
+    menu(player, "Start the Elemental Workshop II quest?", ["Yes.", "No."], (option) => {
+      if (option !== 1 || stage(player) >= STAGE.STARTED || !roomFor(player, 1)) return;
+      player.getInventory().adds(BEATEN_BOOK, 1);
+      player.setAttribute(SCHEME_ATTRIBUTE, SCHEME);
+      quest.setStage(player, STAGE.STARTED);
+      player.sendMessage(questStartMessage(player, quest.name));
+      itemBox(player, BEATEN_BOOK, MESSAGE.oldBook);
+    });
+  }
+
+  function roomFor(player, slots) {
+    if (player.getInventory().getFreeSlots() >= slots) return true;
+    player.sendMessage(MESSAGE.noRoom);
+    return false;
+  }
+
+  const BOOK_PAGES = bookPagesFromSpreads(DATA.bookSpreads);
+
+  /** The first read (ticks 71-74): the parts line, the bookmark in an item box, then the book. */
+  function readBook(player) {
+    player.sendMessage(MESSAGE.bookParts);
+    const needsNote = stage(player) < STAGE.COMPLETE && !Bank.owns(player, NOTE);
+    if (stage(player) === STAGE.STARTED) quest.setStage(player, STAGE.BOOK_READ);
+    if (needsNote && player.getInventory().getFreeSlots() > 0) {
+      player.getInventory().adds(NOTE, 1);
+      itemBox(player, NOTE, MESSAGE.bookmark, () => openHelmBook(player));
+      return;
+    }
+    openHelmBook(player);
+  }
+
+  function openHelmBook(player) {
+    player.sendMessage(MESSAGE.bookIntro);
+    openBook(player, DATA.bookTitle, BOOK_PAGES);
+  }
+
+  /** messagescroll_handwriting (222), lines 1-11 (tick 85); the first read reveals the key. */
+  function readNote(player) {
+    const packet = player.getPacketSender();
+    DATA.note.forEach((text, index) => packet.sendString(text, (222 << 16) | (index + 1)));
+    packet.sendInterfaceScript(2524, [-1, -1]);
+    packet.sendInterface(222);
+    if (stage(player) === STAGE.BOOK_READ) {
+      setMachine(player, VARBIT.HIDE_KEY, 1);
+      quest.setStage(player, STAGE.NOTE_READ);
+    }
+  }
+
+  function readCraneSchematic(player) {
+    messageBox(player, line("into-the-workshop-reading-the-crane-schematic"));
+  }
+
+  /** elem2_maintenance_scroll (466), as tick 1340 opens it. */
+  function readLeverSchematic(player) {
+    player.getPacketSender().sendInterfaceScript(2524, [-1, -1]);
+    player.getPacketSender().sendInterface(466);
+  }
+
+  // ==========================================================================
+  // The key and the hatch
+  // ==========================================================================
+
+  function searchBoiler(player) {
+    if (stage(player) < STAGE.NOTE_READ) return;
+    // Ours: a lost key turns up again until the hatch is open.
+    const keyThere = stage(player) === STAGE.NOTE_READ || (stage(player) < STAGE.HATCH_UNLOCKED && !Bank.owns(player, HATCH_KEY));
+    if (!keyThere) {
+      player.sendMessage(MESSAGE.nothing);
+      return;
+    }
+    if (!roomFor(player, 1)) return;
+    player.getInventory().adds(HATCH_KEY, 1);
+    setStageAtLeast(player, STAGE.KEY_FOUND);
+    itemBox(player, HATCH_KEY, line("into-the-workshop-searching-machinery-for-the-key"));
+  }
+
+  function openHatch(player) {
+    if (machineValue(player, VARBIT.HATCH)) {
+      climbDownHatch(player);
+      return;
+    }
+    if (!has(player, HATCH_KEY)) {
+      messageBox(player, MESSAGE.lockedHatch);
+      return;
+    }
+    unlockHatch(player);
+  }
+
+  /** Ticks 200-207: the key is used up, the hatch varbit and stage 5, the manhole's sound. */
+  function unlockHatch(player) {
+    player.getInventory().deleteNumber(HATCH_KEY, 1);
+    setMachine(player, VARBIT.HATCH, 1);
+    setStageAtLeast(player, STAGE.HATCH_UNLOCKED);
+    sound(player, SOUND.manhole);
+    itemBox(player, HATCH_KEY, line("into-the-workshop-unlocking-the-hatch"));
+  }
+
+  function climbOnce(player) {
+    const now = api.core.World.getProcessCycle?.() ?? Date.now();
+    if (lastClimb.get(player) === now) return false;
+    lastClimb.set(player, now);
+    return true;
+  }
+
+  /** Tick 213: stage 6 the first time, the instance; the line a tick later. */
+  function climbDownHatch(player) {
+    if (!climbOnce(player)) return;
+    setStageAtLeast(player, STAGE.MACHINE_FLOOR);
+    enterFloor(player);
+    later(player, 1, () => player.sendMessage(MESSAGE.climbDown));
+  }
+
+  function climbUpToWorkshop(player) {
+    if (!climbOnce(player)) return;
+    player.sendMessage(MESSAGE.climbUp);
+    Scenes.end(player, false);
+    player.moveTo(new Location(...WORKSHOP_LANDING));
+  }
+
+  function climbToBasement(player) {
+    if (!climbOnce(player)) return;
+    player.sendMessage(MESSAGE.climbDown);
+    Scenes.place(player, BASEMENT_LANDING);
+  }
+
+  function climbFromBasement(player) {
+    if (!climbOnce(player)) return;
+    player.sendMessage(MESSAGE.climbUp);
+    Scenes.place(player, BASEMENT_UP_LANDING);
+  }
+
+  /** The gantry stairs (ticks 511-517): the reach, and two ticks later over the stairs, a plane up or down. */
+  function climbGantry(player, object, up) {
+    if (!climbOnce(player)) return;
+    const at = object.getLocation();
+    const side = object.getFace() === 2 ? 1 : -1; // rotation 0 lands west going up, rotation 2 east
+    const dx = up ? side : -side;
+    animate(player, ANIM.reachForLadder);
+    later(player, 2, () => player.moveTo(new Location(at.getX() + dx, at.getY(), at.getZ() + (up ? 1 : -1))));
   }
 
   function claimClimb(request) {
-    const { player, objectId } = request;
-    const destinations = new Map([
-      [STAIRS_UP_MACHINE, ["ladders:climbUp", HATCH_ARRIVAL]],
-      [STAIRWELL_DOWN, ["ladders:climbDown", BASEMENT_ARRIVAL]],
-      [STAIRS_UP_BASEMENT, ["ladders:climbUp", new Location(1948, 5157, 2)]],
-      [GANTRY_STAIRS, ["ladders:climbUp", climbTile(request.object, 1949, 5149, 3)]],
-      [GANTRY_STAIRS_TOP, ["ladders:climbDown", climbTile(request.object, 1949, 5149, 2)]],
-    ]);
-    const entry = destinations.get(objectId);
-    if (!entry) return;
+    const { player, objectId, object } = request;
+    if (HATCH_IDS.has(objectId) && machineValue(player, VARBIT.HATCH)) climbDownHatch(player);
+    else if (objectId === STAIRS_UP && scene(player)) climbUpToWorkshop(player);
+    else if (objectId === STAIRWELL && scene(player)) climbToBasement(player);
+    else if (objectId === STAIRS_UP_BASEMENT && scene(player)) climbFromBasement(player);
+    else if ((objectId === GANTRY_UP || objectId === GANTRY_DOWN) && scene(player) && object) climbGantry(player, object, objectId === GANTRY_UP);
+    else return;
     request.handled = true;
-    api.emitCustomEvent(entry[0], { player, object: request.object, destination: entry[1] });
   }
 
   // ==========================================================================
-  // Schematics, the crane and the claw
+  // Schematics and crates
   // ==========================================================================
 
-  function takeSchematicChoice(player) {
-    if (!requireSpace(player, 1)) return;
-    play(player, "into-the-workshop-schematic-crate");
-  }
-
-  function grantSchematic(player, itemId, takenFlag) {
-    if (!has(player, itemId) && requireSpace(player, 1)) player.getInventory().adds(itemId, 1);
-    if (has(player, itemId)) setFlag(player, takenFlag);
-    if (hasFlag(player, FLAG_CRANE_SCHEMATIC_TAKEN) && hasFlag(player, FLAG_LEVER_SCHEMATIC_TAKEN)) {
-      setStageAtLeast(player, STAGE_SCHEMATICS);
-    }
-  }
-
-  function startClawChoice(event) {
-    const { player } = event;
-    if (has(player, CRANE_CLAW) || jigState(player).fireState >= 1) return;
-    if (!has(player, ELEMENTAL_METAL)) {
-      player.sendMessage("You need an elemental metal bar to make a crane claw.");
-      return;
-    }
-    if (!has(player, HAMMER)) {
-      player.sendMessage("You need a hammer to work the metal.");
-      return;
-    }
-    const inventory = player.getInventory();
-    const itemSlot = event.itemId === ELEMENTAL_METAL ? event.itemSlot
-      : inventory.getItems().findIndex(item => item?.getId() === ELEMENTAL_METAL);
-    workbenchUse.set(player, {
-      ...event, itemId: ELEMENTAL_METAL, itemSlot,
-      item: event.itemId === ELEMENTAL_METAL ? event.item : inventory.getItems()[itemSlot],
-      start: player.getLocation().clone(), teleportSerial: player.getTeleportSerial(),
+  function searchSchematics(player) {
+    menu(player, "There are two schematics here...", ["Crane schematic", "Lever schematic"], (option) => {
+      const itemId = option === 1 ? CRANE_SCHEMATIC : option === 2 ? LEVER_SCHEMATIC : null;
+      if (!itemId || !roomFor(player, 1)) return;
+      player.getInventory().adds(itemId, 1);
+      itemBox(player, itemId, line("into-the-workshop-schematic-crate"));
     });
-    play(player, "into-the-workshop-making-an-elemental-claw");
   }
 
-  function craftCraneClaw(player) {
-    if (!has(player, ELEMENTAL_METAL)) return;
-    player.getInventory().deleteNumber(ELEMENTAL_METAL, 1);
-    player.getInventory().adds(CRANE_CLAW, 1);
-  }
-
-  function repairCrane(player) {
-    const jig = jigState(player);
-    if (jig.fireState >= 1 || !has(player, CRANE_CLAW)) return;
-    if (jig.firePos !== 1) return; // the wiki says lower the crane before replacing the claw
-    player.getInventory().deleteNumber(CRANE_CLAW, 1);
-    jig.fireState = 1;
-    setJigState(player, jig);
-    setStageAtLeast(player, STAGE_CRANE);
-    play(player, "into-the-workshop-repairing-the-claw");
-  }
-
-  function moveCrane(player) {
-    const jig = jigState(player);
-    if (jig.firePos === 0) {
-      jig.firePos = 1;
-    } else if (jig.firePos === 1) {
-      jig.firePos = 0;
-      if (jig.fireState === 1 && jig.state === 1) {
-        jig.fireState = 2; // picked the cold bar off the jig
-        jig.state = 0;
-      } else if (jig.fireState === 3) {
-        jig.fireState = 1; // deposited the hot bar back on the jig
-        jig.state = 2;
-      }
-    } else if (jig.firePos === 2) {
-      jig.firePos = 3;
-    } else if (jig.firePos === 3) {
-      jig.firePos = 2;
-      if (jig.fireState === 2) jig.fireState = 3; // heated in the lava
-    }
-    setJigState(player, jig);
-  }
-
-  function rotateCrane(player) {
-    const jig = jigState(player);
-    if (jig.firePos === 1 || jig.firePos === 3) {
-      play(player, "into-the-workshop-rotating-the-claw-while-the-arm-is-down");
-      return;
-    }
-    jig.firePos = jig.firePos === 0 ? 2 : 0;
-    setJigState(player, jig);
-  }
-
-  // ==========================================================================
-  // Junction box, piping and cogs
-  // ==========================================================================
-
-  function openJunctionBox(player) {
-    if (pipesSorted(player)) return;
-    const pipes = pipeState(player);
-    if (pipes.p1 !== PIPE_SOLVED[0]) pipes.p1 = PIPE_SOLVED[0];
-    else if (pipes.p2 !== PIPE_SOLVED[1]) pipes.p2 = PIPE_SOLVED[1];
-    else pipes.p3 = PIPE_SOLVED[2];
-    setPipeState(player, pipes);
-    if (pipesSorted(player)) {
-      setStageAtLeast(player, STAGE_JUNCTION);
-      play(player, "into-the-workshop-connecting-the-junction-box-pipes");
-    }
-  }
-
-  function searchCrate(player, objectId) {
-    const index = CRATE_INDEX.get(objectId);
-    if (index === undefined) return;
-    const schematicsTaken = (hasFlag(player, FLAG_CRANE_SCHEMATIC_TAKEN) || has(player, CRANE_SCHEMATIC)) &&
-      (hasFlag(player, FLAG_LEVER_SCHEMATIC_TAKEN) || has(player, LEVER_SCHEMATIC));
-    const map = crateMap(player);
-    let kind = "empty";
-    if (schematicsTaken) {
-      for (let slot = 0; slot < CRATE_KINDS.length; slot++) {
-        if (map[slot] !== index) continue;
-        const candidate = CRATE_KINDS[slot];
-        if (canGiveCrateItem(player, candidate)) kind = candidate;
-        break;
-      }
-    }
-    if (kind !== "empty") {
-      if (!requireSpace(player, 1)) return;
-      player.getInventory().adds(CRATE_ITEM_BY_KIND.get(kind), 1);
-    }
-    crateSearch.set(player, kind);
-    play(player, CRATE_VARIANT);
-  }
-
-  function canGiveCrateItem(player, kind) {
-    const air = airState(player);
-    if (kind === "small") return !has(player, SMALL_COG) && air.cog1 !== 1;
-    if (kind === "medium") return !has(player, MEDIUM_COG) && air.cog2 !== 2;
-    if (kind === "large") return !has(player, LARGE_COG) && air.cog3 !== 3;
-    return !has(player, PIPE) && !hasFlag(player, FLAG_PIPE_REPAIRED);
-  }
-
+  /** Each player's four items sit in four of the eight crates, rolled once (Wiki: random per player). */
   function crateMap(player) {
     let packed = Number(player.getAttribute(CRATES_ATTRIBUTE)) || 0;
     if (packed === 0) {
@@ -680,728 +653,860 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
         const j = Math.floor(Math.random() * (i + 1));
         [order[i], order[j]] = [order[j], order[i]];
       }
-      packed = order[0] | (order[1] << 3) | (order[2] << 6) | (order[3] << 9);
+      packed = order[0] | (order[1] << 3) | (order[2] << 6) | (order[3] << 9) | (1 << 12);
       player.setAttribute(CRATES_ATTRIBUTE, packed);
     }
     return [packed & 7, (packed >> 3) & 7, (packed >> 6) & 7, (packed >> 9) & 7];
   }
 
-  function repairPiping(player) {
-    if (hasFlag(player, FLAG_PIPE_REPAIRED) || !has(player, PIPE)) return;
-    player.getInventory().deleteNumber(PIPE, 1);
-    setFlag(player, FLAG_PIPE_REPAIRED);
-    syncVarbits(player);
-    play(player, "into-the-workshop-repairing-piping");
-    if (repairsComplete(player)) {
-      setFlag(player, FLAG_MACHINE_FIXED);
-      setStageAtLeast(player, STAGE_REPAIRS);
-      syncVarbits(player);
-    }
+  /** Whether the item a crate holds is still needed: not carried and not yet used (Wiki: lost items return). */
+  function crateItemNeeded(player, slot) {
+    const itemId = CRATE_ITEMS[slot];
+    if (has(player, itemId)) return false;
+    if (itemId === PIPE) return machineValue(player, VARBIT.WATER_STATE) === 0;
+    const placed = [VARBIT.COG_1, VARBIT.COG_2, VARBIT.COG_3].some((id) => COG_ITEMS[machineValue(player, id)] === itemId);
+    return !placed;
   }
 
-  function placeCog(player, objectId, itemId) {
-    const layout = PIN_LAYOUT.get(objectId);
-    if (!layout) return;
-    const air = airState(player);
-    if (air.machine !== 0) {
-      play(player, "into-the-workshop-trying-to-remove-a-cog-while-the-fan-is-on");
+  const CRATE_LINES = [1, 2, 3, 4]; // the variant's lines: 0 empty, 1 small, 2 medium, 3 big, 4 pipe
+
+  function searchCrate(player, objectId) {
+    const index = CRATE_INDEX.get(objectId);
+    const slot = crateMap(player).indexOf(index);
+    // After the quest too: a cog taken back off its pin and lost must come back, or no more bars can be primed.
+    if (slot < 0 || !crateItemNeeded(player, slot)) {
+      player.sendMessage(line("into-the-workshop-searching-crates", 0));
       return;
     }
-    if (itemId !== layout.itemId) {
-      player.sendMessage("The cog doesn't seem to fit.");
-      return;
-    }
-    if (air[layout.field] === layout.value) {
-      player.sendMessage("You have already placed a cog here.");
-      return;
-    }
-    player.getInventory().deleteNumber(itemId, 1);
-    air[layout.field] = layout.value;
-    setAirState(player, air);
-    play(player, layout.variant);
-    if (repairsComplete(player)) {
-      setFlag(player, FLAG_MACHINE_FIXED);
-      setStageAtLeast(player, STAGE_REPAIRS);
-      syncVarbits(player);
-    }
+    if (!roomFor(player, 1)) return;
+    player.getInventory().adds(CRATE_ITEMS[slot], 1);
+    player.sendMessage(line("into-the-workshop-searching-crates", CRATE_LINES[slot]));
   }
 
   // ==========================================================================
-  // Priming a bar (jig cart, press, water tank, fan)
+  // The crane
   // ==========================================================================
-
-  function placeBarOnCart(player) {
-    const jig = jigState(player);
-    if (jig.position !== 0 || jig.state !== 0) return;
-    player.getInventory().deleteNumber(ELEMENTAL_METAL, 1);
-    jig.state = 1;
-    setJigState(player, jig);
-  }
-
-  function advanceJig(player) {
-    const jig = jigState(player);
-    const water = waterState(player);
-    const air = airState(player);
-    if (jig.position === 2 && water.door !== 0) return; // rack extended into the tank
-    if (jig.position === 3 && air.machine !== 0) return; // fan still running
-    jig.position = (jig.position + 1) % 4;
-    setJigState(player, jig);
-  }
-
-  function pullPress(player) {
-    const jig = jigState(player);
-    if (jig.fireState < 1) {
-      play(player, "into-the-workshop-puling-the-press-lever-while-it-is-broken");
-      return;
-    }
-    if (!pipesSorted(player)) {
-      play(player, "into-the-workshop-pulling-the-press-lever-with-the-junction-pipes-not-correctly-connected");
-      return;
-    }
-    if (jig.position !== 1) {
-      play(player, "into-the-workshop-pulling-the-press-lever-at-the-wrong-time");
-      return;
-    }
-    if (jig.state === 0) {
-      play(player, "into-the-workshop-pulling-the-press-lever-without-a-bar-in-position");
-      return;
-    }
-    if (jig.state === 2) {
-      jig.state = 3;
-      setJigState(player, jig);
-      play(player, "into-the-workshop-flattening-an-elemental-bar-after-heating-it");
-    }
-  }
-
-  function pullTankDoor(player) {
-    const water = waterState(player);
-    if (water.level === 1) {
-      play(player, "into-the-workshop-pulling-the-lever-while-the-tank-is-full");
-      return;
-    }
-    const transitions = new Map([[0, 1], [1, 0], [2, 0], [3, 4], [4, 3], [5, 3], [6, 7], [7, 6], [8, 6]]);
-    water.door = transitions.get(water.door) ?? water.door;
-    setWaterState(player, water);
-  }
-
-  function turnCorkscrew(player) {
-    const water = waterState(player);
-    if (water.door === 0 || water.door === 3 || water.door === 6) {
-      play(player, "into-the-workshop-turning-the-corkscrew-while-the-door-is-closer");
-      return;
-    }
-    const jig = jigState(player);
-    if (water.door === 1) water.door = 2;
-    else if (water.door === 2) water.door = jig.state >= 4 ? 7 : 4;
-    else if (water.door === 7) water.door = 8;
-    else if (water.door === 8) water.door = 2;
-    setWaterState(player, water);
-  }
-
-  function turnValve(player, west) {
-    const water = waterState(player);
-    const open = west ? water.valveWest === 0 : water.valveEast === 0;
-    if (open && !hasFlag(player, FLAG_PIPE_REPAIRED)) {
-      play(player, "into-the-workshop-turning-the-water-valve-before-repairing-the-pipe");
-      return;
-    }
-    if (west) {
-      water.valveWest = water.valveWest ? 0 : 1;
-      if (water.valveWest === 1) {
-        water.level = 1;
-        if (water.door >= 3 && water.door <= 5) {
-          water.door += 3; // the hot bar cools: 3->6, 4->7, 5->8
-          const jig = jigState(player);
-          if (jig.state === 3) {
-            jig.state = 4;
-            setJigState(player, jig);
-          }
-        }
-      }
-    } else {
-      water.valveEast = water.valveEast ? 0 : 1;
-      if (water.valveEast === 1) water.level = 0;
-    }
-    setWaterState(player, water);
-    play(player, open ? "into-the-workshop-opening-the-water-valve" : "into-the-workshop-closing-the-water-valve");
-  }
-
-  function pullFanLever(player) {
-    const air = airState(player);
-    if (air.machine !== 0) {
-      air.machine = 0;
-      air.fan = 0;
-      setAirState(player, air);
-      play(player, "into-the-workshop-turning-off-the-fan");
-      return;
-    }
-    air.machine = 1;
-    air.fan = cogsCorrect(air) ? 1 : 2;
-    setAirState(player, air);
-    if (!cogsCorrect(air)) {
-      play(player, "into-the-workshop-trying-to-turn-on-the-fan-with-the-cogs-placed-incorrectly");
-      return;
-    }
-    play(player, "into-the-workshop-turning-on-the-fan");
-    const jig = jigState(player);
-    if (jig.position === 3 && jig.state === 4) {
-      jig.state = 5; // dried by the fan
-      setJigState(player, jig);
-    }
-    if (repairsComplete(player)) {
-      setFlag(player, FLAG_MACHINE_FIXED);
-      setStageAtLeast(player, STAGE_REPAIRS);
-      syncVarbits(player);
-    }
-  }
-
-  function takePrimedBar(player) {
-    const jig = jigState(player);
-    if (jig.state !== 5 || jig.position !== 0) return;
-    if (!requireSpace(player, 1)) return;
-    player.getInventory().adds(PRIMED_BAR, 1);
-    jig.state = 0;
-    setJigState(player, jig);
-    setStageAtLeast(player, STAGE_PRIMED_BAR);
-    play(player, "into-the-workshop-taking-the-primed-bar");
-  }
-
-  // ==========================================================================
-  // The extractor and the mind helm
-  // ==========================================================================
-
-  function placePrimedBar(player) {
-    if (mindState(player) !== 0 || !has(player, PRIMED_BAR)) return;
-    player.getInventory().deleteNumber(PRIMED_BAR, 1);
-    setMindState(player, 1);
-    play(player, "into-the-workshop-placing-the-primed-bar");
-  }
-
-  function operateExtractor(player) {
-    if (mindState(player) !== 1) return;
-    if (player.getSkillManager().getCurrentLevel(Skill.MAGIC) < 20) {
-      player.sendMessage("You need level 20 Magic to use the extractor.");
-      return;
-    }
-    const magic = player.getSkillManager().getCurrentLevel(Skill.MAGIC);
-    player.getSkillManager().setCurrentLevel(Skill.MAGIC, Math.max(0, magic - 20), true);
-    setMindState(player, 2);
-    play(player, "into-the-workshop-making-the-mind-bar");
-  }
-
-  function takeMindBar(player) {
-    if (mindState(player) !== 2) return;
-    if (!requireSpace(player, 1)) return;
-    player.getInventory().adds(PRIMED_MIND_BAR, 1);
-    setMindState(player, 0);
-    setStageAtLeast(player, STAGE_MIND_BAR);
-    play(player, "into-the-workshop-taking-the-mind-bar");
-  }
-
-  function canWorkMindMetal(player) {
-    if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < MIND_SMITHING_LEVEL) {
-      player.sendMessage(`You need level ${MIND_SMITHING_LEVEL} Smithing to work this metal.`);
-      return false;
-    }
-    if (!has(player, HAMMER)) {
-      play(player, "into-the-workshop-crafting-the-mind-helm-using-the-workbench-without-a-hammer");
-      return false;
-    }
-    return true;
-  }
-
-  function makeMindHelm(player) {
-    if (!canWorkMindMetal(player)) return;
-    if (!has(player, BEATEN_BOOK)) {
-      play(player, "into-the-workshop-crafting-the-mind-helm-using-the-workbench-without-the-beaten-book");
-      return;
-    }
-    if (!has(player, PRIMED_MIND_BAR)) return;
-    player.getInventory().deleteNumber(PRIMED_MIND_BAR, 1);
-    player.getInventory().adds(MIND_HELMET, 1);
-    api.emitCustomEvent("diary:task", { player, diary: "kandarin", task: "create-a-mind-helmet" });
-    play(player, "into-the-workshop-crafting-the-mind-helm-using-the-workbench-with-the-proper-items");
-    quest.complete(player);
-  }
-
-  function makeMindShield({ player, itemSlot, item }) {
-    const inventory = player.getInventory();
-    // Walking to the bench and smithing both defer the click. Only replace the original plain bar.
-    const holdsSelectedBar = () => Number.isInteger(itemSlot) && inventory.getItems()[itemSlot] === item
-      && item?.getId() === PRIMED_MIND_BAR && item.getAmount() === 1 && item.getMeta() == null;
-    if (!holdsSelectedBar() || !canWorkMindMetal(player)) return;
-
-    const start = player.getLocation().clone();
-    const teleportSerial = player.getTeleportSerial();
-    const staysAtWorkbench = () => player.isRegistered() && player.getHitpoints() > 0
-      && player.getTeleportSerial() === teleportSerial && player.getLocation().equals(start)
-      && player.getMovementQueue().size() === 0 && player.getForceMovement() == null;
-
-    const task = new CountdownTask(player, MIND_SHIELD_SMITH_TICKS, () => {
-      workbenchSmithing.delete(player);
-      if (!staysAtWorkbench() || !holdsSelectedBar() || !quest.isComplete(player)
-        || !has(player, SLASHED_BOOK) || has(player, BEATEN_BOOK) || !canWorkMindMetal(player)) return;
-      inventory.setItem(itemSlot, new Item(MIND_SHIELD, 1));
-      inventory.refreshItems();
-      player.getSkillManager().addExperiences(Skill.SMITHING, 30);
-      player.sendMessage("Following the instructions in the book, you make a mind shield.");
-    });
-    task.onTick = () => {
-      if (task.isRunning() && !staysAtWorkbench()) {
-        task.stop();
-        workbenchSmithing.delete(player);
-      }
-    };
-    workbenchSmithing.set(player, task);
-    player.performAnimation(new Animation(CacheDefinitions.getSeqId("human_smithing")));
-    Sounds.sendSound(player, Sound.SMITHING);
-    TaskManager.submit(task);
-  }
-
-  /** Wiki Elemental helmet Recipe: one bar, hammer/book, boostable Smithing20, 4 ticks, 20XP. */
-  function makeElementalHelmet(event) {
-    const { player, item, itemSlot, object, objectId } = event;
-    if (workbenchSmithing.get(player)?.isRunning()) return;
-    const inventory = player.getInventory();
-    const start = event.start ?? player.getLocation().clone();
-    const teleportSerial = event.teleportSerial ?? player.getTeleportSerial();
-    const valid = () => player.isRegistered() && player.getHitpoints() > 0
-      && player.getTeleportSerial() === teleportSerial && player.getLocation().equals(start)
-      && player.getMovementQueue().size() === 0 && player.getForceMovement() == null
-      && !player.busy() && !player.getPacketSender().hasInterruptibleInterface()
-      && quest.isComplete(player) && has(player, BEATEN_BOOK) && holdsHammer(api.core, player)
-      && player.getSkillManager().getCurrentLevel(Skill.SMITHING) >= ELEMENTAL_HELMET_SMITHING_LEVEL
-      && Number.isInteger(itemSlot) && inventory.getItems()[itemSlot] === item
-      && item?.getId() === ELEMENTAL_METAL && item.getAmount() === 1 && item.getMeta() == null
-      && objectId === WORKBENCH && object != null
-      && MapObjects.stillStands(player, objectId, object.getLocation(), object, true);
-    if (!valid()) return;
-    // Keep this exchange in the clicked slot: a full bag is valid and replacement bars are not.
-    const task = new CountdownTask(player.getIndex(), ELEMENTAL_HELMET_SMITH_TICKS, () => {
-      workbenchSmithing.delete(player);
-      if (!valid()) return;
-      inventory.setItem(itemSlot, new Item(ELEMENTAL_HELMET, 1));
-      inventory.refreshItems();
-      player.getSkillManager().addExperiences(Skill.SMITHING, 20);
-    });
-    task.onTick = () => {
-      if (task.isRunning() && !valid()) {
-        task.stop();
-        workbenchSmithing.delete(player);
-      }
-    };
-    workbenchSmithing.set(player, task);
-    TaskManager.submit(task);
-  }
-
-  function cancelWorkbenchSmithing({ player }) {
-    workbenchSmithing.get(player)?.stop();
-    workbenchSmithing.delete(player);
-  }
-
-  function discardWorkbenchUse(event) {
-    workbenchUse.delete(event.player);
-    cancelWorkbenchSmithing(event);
-  }
-
-  function smithWorkbench(player) {
-    if (has(player, ELEMENTAL_METAL) || has(player, PRIMED_MIND_BAR) || has(player, PRIMED_BAR)) return;
-    play(player, "into-the-workshop-crafting-the-mind-helm-using-the-workbench-without-elemental-metal");
-  }
-
-  // ==========================================================================
-  // Event routing
-  // ==========================================================================
-
-  function objectOption(event) {
-    const actions = event.definition?.getInteractions?.() ?? [];
-    return String(actions[event.clickType - 1] ?? "").toLowerCase();
-  }
-
-  function npcOption(event) {
-    const actions = event.definition?.getActions?.() ?? [];
-    return String(actions[event.clickType - 1] ?? "").toLowerCase();
-  }
 
   /**
-   * The pins and the old crane are set into blocking scenery, so the closest walkable tile
-   * is beside them and `walkToObject` rejects every adjacent tile ("I can't reach that!").
-   * When the player is already at the object's footprint, route the use to the player's own
-   * tile so the interaction runs (the CurrentAffairs aquarium / Underground Pass guide-rope
-   * pattern). Covers both option clicks and item-on-object uses.
+   * The raise/lower lever (ticks 498-502, 737-744, 755-761, 763-769, 778-794): the claw moves a tick
+   * after the pull and the crane shows its new pose three ticks after that. Raising off the track
+   * takes the cart's cold bar or leaves the hot bar on the cart, the new load showing at once;
+   * resting in the lava heats a cool bar.
    */
-  function routeAdjacentObjectUse(event) {
-    if (!ROUTE_ASSIST_IDS.has(event.objectId)) return;
-    const playerLocation = event.player.getLocation();
-    const objectLocation = event.object?.getLocation?.();
-    if (!objectLocation) return;
-    const definition = event.object.getDefinition?.();
-    const size = Math.max(definition?.getSizeX?.() ?? 1, definition?.getSizeY?.() ?? 1);
-    const reach = Math.max(
-      objectLocation.getX() - playerLocation.getX(),
-      playerLocation.getX() - (objectLocation.getX() + size - 1),
-      objectLocation.getY() - playerLocation.getY(),
-      playerLocation.getY() - (objectLocation.getY() + size - 1),
-      0
-    );
-    if (reach > 2) return;
-    event.destination = {
-      x: playerLocation.getX(),
-      y: playerLocation.getY(),
-      z: playerLocation.getZ(),
-    };
-  }
-
-  function handleObjectInteraction(event) {
-    const { player, objectId } = event;
-    const option = objectOption(event);
-    if (objectId === BOOKCASE && option.includes("search")) {
-      event.handled = true;
-      searchBookcase(player);
-      return;
-    }
-    if (BOILER_IDS.has(objectId) && (option.includes("search") || option === "")) {
-      event.handled = true;
-      searchMachinery(player);
-      return;
-    }
-    if (HATCH_IDS.has(objectId) && (option === "" || option.includes("open") || option.includes("unlock") || option.includes("climb"))) {
-      event.handled = true;
-      if (hasFlag(player, FLAG_HATCH_OPEN) && (option === "" || option.includes("climb"))) {
-        descendHatch(player);
-      } else {
-        unlockHatch(player);
-      }
-      return;
-    }
-    if (objectId === SCHEMATIC_CRATE && option.includes("take")) {
-      event.handled = true;
-      takeSchematicChoice(player);
-      return;
-    }
-    if (CRATE_INDEX.has(objectId) && option.includes("search")) {
-      event.handled = true;
-      searchCrate(player, objectId);
-      return;
-    }
-    if (objectId === FIRE_LEVER_RAISE && option.includes("pull")) {
-      event.handled = true;
-      moveCrane(player);
-      return;
-    }
-    if (objectId === FIRE_LEVER_ROTATE && option.includes("pull")) {
-      event.handled = true;
-      rotateCrane(player);
-      return;
-    }
-    if (objectId === CART_LEVER && option.includes("pull")) {
-      event.handled = true;
-      advanceJig(player);
-      return;
-    }
-    if (objectId === PRESS_LEVER && option.includes("pull")) {
-      event.handled = true;
-      pullPress(player);
-      return;
-    }
-    if (objectId === JUNCTION_BOX && option.includes("open")) {
-      event.handled = true;
-      openJunctionBox(player);
-      return;
-    }
-    if ((objectId === VALVE_WEST || objectId === VALVE_EAST) && option.includes("turn")) {
-      event.handled = true;
-      turnValve(player, objectId === VALVE_WEST);
-      return;
-    }
-    if (objectId === TANK_DOOR_LEVER && option.includes("pull")) {
-      event.handled = true;
-      pullTankDoor(player);
-      return;
-    }
-    if (objectId === CORKSCREW && option.includes("turn")) {
-      event.handled = true;
-      turnCorkscrew(player);
-      return;
-    }
-    if (objectId === FAN_LEVER && option.includes("pull")) {
-      event.handled = true;
-      pullFanLever(player);
-      return;
-    }
-    if (EXTRACTOR_HAT_IDS.has(objectId) && option.includes("operate")) {
-      event.handled = true;
-      operateExtractor(player);
-      return;
-    }
-    if (EXTRACTOR_GUN_IDS.has(objectId) && (option.includes("take") || option === "")) {
-      event.handled = true;
-      takeMindBar(player);
-      return;
-    }
-    if (objectId === STAIRS_UP_MACHINE && option.includes("climb")) {
-      event.handled = true;
-      climbStairs(player, HATCH_ARRIVAL, "You climb back up to the workshop.");
-      return;
-    }
-    if (objectId === STAIRWELL_DOWN && option.includes("climb")) {
-      event.handled = true;
-      player.sendMessage("You climb down to the extractor room.");
-      player.moveTo(BASEMENT_ARRIVAL);
-      return;
-    }
-    if (objectId === STAIRS_UP_BASEMENT && option.includes("climb")) {
-      event.handled = true;
-      player.sendMessage("You climb back up to the machine room.");
-      player.moveTo(new Location(1948, 5157, 2));
-      return;
-    }
-    if (objectId === GANTRY_STAIRS && option.includes("climb")) {
-      event.handled = true;
-      player.moveTo(climbTile(event.object, 1949, 5149, 3));
-      return;
-    }
-    if (objectId === GANTRY_STAIRS_TOP && option.includes("climb")) {
-      event.handled = true;
-      player.moveTo(climbTile(event.object, 1949, 5149, 2));
-      return;
-    }
-    if (objectId === WORKBENCH && option.includes("smith")) {
-      event.handled = true;
-      smithWorkbench(player);
+  function raiseOrLower(player, object) {
+    const fl = floor(player);
+    if (!fl || fl.craneBusy) return;
+    fl.craneBusy = true;
+    pullLever(player, object);
+    const position = machineValue(player, VARBIT.FIRE_POS);
+    const done = () => { showCrane(player); fl.craneBusy = false; };
+    const moveTo = (next, anim) => { setMachine(player, VARBIT.FIRE_POS, next); locAnim(player, CRANE_TILE, CRANE_IDS, anim); sound(player, SOUND.craneLower); };
+    if (position === CRANE_POS.TRACK_UP) {
+      steps(player, [[1, () => moveTo(CRANE_POS.TRACK_DOWN, ANIM.craneLower)], [4, done]]);
+    } else if (position === CRANE_POS.TRACK_DOWN) {
+      steps(player, [
+        [1, () => {
+          setMachine(player, VARBIT.FIRE_POS, CRANE_POS.TRACK_UP);
+          const atCrane = machineValue(player, VARBIT.JIG_POS) === CART_STOP.CRANE && !fl.cartMoving;
+          const claw = machineValue(player, VARBIT.FIRE_STATE);
+          const jig = machineValue(player, VARBIT.JIG_STATE);
+          if (atCrane && claw === CLAW.EMPTY && jig === JIG.BAR) {
+            setMachine(player, VARBIT.JIG_STATE, JIG.EMPTY);
+            setMachine(player, VARBIT.FIRE_STATE, CLAW.COOL);
+            setLoc(player, CRANE_TILE, CRANE_IDS, craneLoc(CRANE_POS.TRACK_DOWN, CLAW.COOL));
+          } else if (atCrane && claw === CLAW.HOT && jig === JIG.EMPTY) {
+            setMachine(player, VARBIT.JIG_STATE, JIG.HOT);
+            setMachine(player, VARBIT.FIRE_STATE, CLAW.EMPTY);
+            setLoc(player, CRANE_TILE, CRANE_IDS, craneLoc(CRANE_POS.TRACK_DOWN, CLAW.EMPTY));
+          }
+        }],
+        [2, () => { locAnim(player, CRANE_TILE, CRANE_IDS, ANIM.craneRaise); sound(player, SOUND.craneLower); }],
+        [5, done],
+      ]);
+    } else if (position === CRANE_POS.LAVA_UP) {
+      steps(player, [[1, () => moveTo(CRANE_POS.LAVA_DOWN, ANIM.lavaLower)], [4, () => {
+        if (machineValue(player, VARBIT.FIRE_STATE) === CLAW.COOL) setMachine(player, VARBIT.FIRE_STATE, CLAW.HOT);
+        done();
+      }]]);
+    } else {
+      steps(player, [[1, () => moveTo(CRANE_POS.LAVA_UP, ANIM.lavaRaise)], [4, done]]);
     }
   }
 
-  function handleItemOnObject(event) {
-    const { player, objectId, itemId } = event;
-    if (itemId === KEY && HATCH_IDS.has(objectId)) {
-      event.handled = true;
-      unlockHatch(player);
+  /** The rotate lever (ticks 748-754, 771-776): over the track <-> over the lava, the arm raised. */
+  function rotate(player, object) {
+    const fl = floor(player);
+    if (!fl || fl.craneBusy) return;
+    const position = machineValue(player, VARBIT.FIRE_POS);
+    if (position === CRANE_POS.TRACK_DOWN || position === CRANE_POS.LAVA_DOWN) {
+      messageBox(player, line("into-the-workshop-rotating-the-claw-while-the-arm-is-down"));
       return;
     }
-    if (itemId === PIPE && PIPE_REPAIR_IDS.has(objectId)) {
-      event.handled = true;
-      repairPiping(player);
+    fl.craneBusy = true;
+    pullLever(player, object);
+    steps(player, [
+      [1, () => {
+        setMachine(player, VARBIT.FIRE_POS, position === CRANE_POS.TRACK_UP ? CRANE_POS.LAVA_UP : CRANE_POS.TRACK_UP);
+        locAnim(player, CRANE_TILE, CRANE_IDS, ANIM.craneRotate);
+        sound(player, SOUND.craneTurn);
+      }],
+      [4, () => { showCrane(player); fl.craneBusy = false; }],
+    ]);
+  }
+
+  /** Tick 505: the claw on the lowered crane. */
+  function repairClaw(player) {
+    if (machineValue(player, VARBIT.FIRE_STATE) !== CLAW.BROKEN || machineValue(player, VARBIT.FIRE_POS) !== CRANE_POS.TRACK_DOWN) {
+      player.sendMessage(MESSAGE.reach);
       return;
     }
-    if (PIN_IDS.has(objectId) && (itemId === SMALL_COG || itemId === MEDIUM_COG || itemId === LARGE_COG)) {
-      event.handled = true;
-      placeCog(player, objectId, itemId);
-      return;
-    }
-    if (objectId === OLD_CRANE) {
-      if (itemId === CRANE_CLAW) {
-        event.handled = true;
-        repairCrane(player);
-        return;
+    player.getInventory().deleteNumber(CRANE_CLAW, 1);
+    setMachine(player, VARBIT.FIRE_STATE, CLAW.EMPTY);
+    showCrane(player);
+    sound(player, SOUND.placePipe);
+    itemBox(player, CRANE_CLAW, line("into-the-workshop-repairing-the-claw"));
+  }
+
+  // ==========================================================================
+  // The jig cart
+  // ==========================================================================
+
+  /** Ours: the Wiki says the cart won't leave the tank with the door open, nor (by its steps) the tunnel with the fan on. */
+  function cartHeld(player) {
+    const position = machineValue(player, VARBIT.JIG_POS);
+    if (position === CART_STOP.TANK && (machineValue(player, VARBIT.WATER_DOOR) % 3 !== 0 || machineValue(player, VARBIT.JIG_STATE) === JIG.IN_TANK)) return true;
+    if (position === CART_STOP.TUNNEL && machineValue(player, VARBIT.AIR_STATE)) return true;
+    return position === CART_STOP.CRANE && machineValue(player, VARBIT.FIRE_POS) === CRANE_POS.TRACK_DOWN;
+  }
+
+  /** Ticks 798-815: the pull, then the next stop's jig_pos, the cart's rumble and its first step, a tile a tick. */
+  function pullCartLever(player, object) {
+    const fl = floor(player);
+    if (!fl || fl.cartMoving) return;
+    pullLever(player, object);
+    if (cartHeld(player)) return;
+    fl.cartMoving = true;
+    const from = machineValue(player, VARBIT.JIG_POS);
+    const to = (from + 1) % 4;
+    const start = STOP_INDEX[from];
+    const end = STOP_INDEX[to] === 0 ? CART_PATH.length : STOP_INDEX[to];
+    fl.cartStepsLeft = end - start;
+    everyTick(player, (n) => {
+      if (n === 1) {
+        setMachine(player, VARBIT.JIG_POS, to);
+        sound(player, SOUND.cartLoop);
       }
-      if (itemId === ELEMENTAL_METAL) {
-        event.handled = true;
-        player.sendMessage("The crane needs a new claw, not a bar.");
-        return;
-      }
-    }
-    if (objectId === WORKBENCH) {
-      if (workbenchSmithing.get(player)?.isRunning()) {
-        if ([CRANE_SCHEMATIC, ELEMENTAL_METAL, PRIMED_MIND_BAR].includes(itemId)) event.handled = true;
-        return;
-      }
-      if (itemId === ELEMENTAL_METAL && quest.isComplete(player) && has(player, BEATEN_BOOK)) {
-        event.handled = true;
-        makeElementalHelmet(event);
-        return;
-      }
-      if (itemId === CRANE_SCHEMATIC || itemId === ELEMENTAL_METAL) {
-        if (!hasFlag(player, FLAG_CRANE_SCHEMATIC_TAKEN) && !has(player, CRANE_SCHEMATIC)) return;
-        event.handled = true;
-        startClawChoice(event);
-        return;
-      }
-      if (itemId === PRIMED_MIND_BAR) {
-        event.handled = true;
-        if (quest.isComplete(player) && has(player, SLASHED_BOOK) && !has(player, BEATEN_BOOK)) {
-          makeMindShield(event);
-        } else {
-          makeMindHelm(player);
-        }
-        return;
-      }
-    }
-    if (itemId === PRIMED_BAR && EXTRACTOR_GUN_IDS.has(objectId)) {
-      event.handled = true;
-      placePrimedBar(player);
+      const [x, y] = CART_PATH[(start + n) % CART_PATH.length];
+      if (fl.cart?.isRegistered?.()) fl.cart.moveTo(tile(player, [x, y, 2]));
+      fl.cartStepsLeft = end - (start + n);
+      if (start + n < end) return true;
+      fl.cartMoving = false;
+      return false;
+    });
+  }
+
+  function placeBarOnCart(player) {
+    if (machineValue(player, VARBIT.JIG_STATE) !== JIG.EMPTY || floor(player)?.cartMoving) return;
+    player.getInventory().deleteNumber(ELEMENTAL_METAL, 1);
+    setMachine(player, VARBIT.JIG_STATE, JIG.BAR);
+  }
+
+  /** Tick 1008: the dry flat bar comes off as the primed bar; stage 7 the first time. */
+  function takeFromCart(player) {
+    const jig = machineValue(player, VARBIT.JIG_STATE);
+    if (floor(player)?.cartMoving) return;
+    if (jig === JIG.DRY) {
+      if (!roomFor(player, 1)) return;
+      setMachine(player, VARBIT.JIG_STATE, JIG.EMPTY);
+      player.getInventory().adds(PRIMED_BAR, 1);
+      setStageAtLeast(player, STAGE.PRIMED_BAR);
+      itemBox(player, PRIMED_BAR, line("into-the-workshop-taking-the-primed-bar"));
+    } else if (jig === JIG.BAR) {
+      // Ours: an unheated bar comes back as it went on.
+      if (!roomFor(player, 1)) return;
+      setMachine(player, VARBIT.JIG_STATE, JIG.EMPTY);
+      player.getInventory().adds(ELEMENTAL_METAL, 1);
     }
   }
 
-  function handleItemOnNpc(event) {
-    const { player, npcId, itemId } = event;
-    if (!CART_NPC_IDS.has(npcId) || itemId !== ELEMENTAL_METAL) return;
-    event.handled = true;
-    placeBarOnCart(player);
+  // ==========================================================================
+  // The press and the junction box
+  // ==========================================================================
+
+  /** Pair index of two inlets in the order a, b, c, 1, 2, 3 (a-b 1 ... 2-3 15): the pipe varbits' values. */
+  const INLET_NAMES = ["a", "b", "c", "1", "2", "3"];
+  const INLET_COMPONENTS = { 41: 1, 42: 2, 37: 3, 38: 4, 39: 5, 40: 6 }; // inletam, inletbm, inletcm, inlet1m-3m
+  const PIPE_VARBITS = [VARBIT.PIPE_1, VARBIT.PIPE_2, VARBIT.PIPE_3];
+  /** Live's working connections: a-3, b-c and 1-2 (capture ticks 526-535; the Wiki's only working layout). */
+  const SOLVED = new Set([5, 6, 13]);
+
+  function pairIndex(a, b) {
+    const [low, high] = a < b ? [a, b] : [b, a];
+    let index = 0;
+    for (let i = 1; i <= 6; i++) for (let j = i + 1; j <= 6; j++) { index++; if (i === low && j === high) return index; }
+    return 0;
   }
 
-  function handleNpcInteraction(event) {
-    const { player, npcId } = event;
-    if (!CART_NPC_IDS.has(npcId)) return;
-    const option = npcOption(event);
-    if (option !== "" && !option.includes("take")) return;
-    event.handled = true;
-    takePrimedBar(player);
-  }
-
-  function handleItemAction(event) {
-    if (!String(event.option ?? "").toLowerCase().includes("read")) return;
-    const { player, itemId } = event;
-    if (itemId === BEATEN_BOOK) {
-      event.handled = true;
-      readBeatenBook(player);
-      return;
-    }
-    if (itemId === SCROLL) {
-      event.handled = true;
-      readScroll(player);
-      return;
-    }
-    if (itemId === CRANE_SCHEMATIC) {
-      event.handled = true;
-      readCraneSchematic(player);
-      return;
-    }
-    if (itemId === LEVER_SCHEMATIC) {
-      event.handled = true;
-      readLeverSchematic(player);
-    }
-  }
-
-  function handleChoice(event) {
-    if (event.npcId !== TRANSCRIPT_NPC_ID) return;
-    const player = event.player;
-    const option = String(event.option ?? "");
-    if (option === "Crane schematic") {
-      grantSchematic(player, CRANE_SCHEMATIC, FLAG_CRANE_SCHEMATIC_TAKEN);
-      return;
-    }
-    if (option === "Lever schematic") {
-      grantSchematic(player, LEVER_SCHEMATIC, FLAG_LEVER_SCHEMATIC_TAKEN);
-      return;
-    }
-    if (option === "An elemental helm.") {
-      const use = workbenchUse.get(player);
-      workbenchUse.delete(player);
-      event.end = true;
-      if (use && event.prompt === "Would you like to make..."
-        && event.pages?.some(page => page.page === PAGE
-          && page.variants?.includes("into-the-workshop-making-an-elemental-claw"))) {
-        makeElementalHelmet(use);
-      }
-      return;
-    }
-    if (option === "An elemental claw.") {
-      workbenchUse.delete(player);
-      craftCraneClaw(player);
-    }
-  }
-
-  function answerCondition(event) {
-    if (event.npcId !== TRANSCRIPT_NPC_ID) return null;
-    const { player, stepId } = event;
-    if (CRATE_CONDITION_KIND.has(stepId)) return crateSearch.get(player) === CRATE_CONDITION_KIND.get(stepId);
-    if (FULL_CONDITION_IDS.has(stepId)) return player.getInventory().isFull() === true;
-    if (SPACE_CONDITION_IDS.has(stepId)) return player.getInventory().isFull() !== true;
+  function pairInlets(index) {
+    let n = 0;
+    for (let i = 1; i <= 6; i++) for (let j = i + 1; j <= 6; j++) if (++n === index) return [i, j];
     return null;
   }
 
-  function handleLogin({ player }) {
-    syncVarbits(player);
-    refreshQuestList(player);
+  function connectionComponent(index) {
+    const [a, b] = pairInlets(index);
+    const uid = CacheDefinitions.getComponentId(`elem_magicpress_pipes:connection${INLET_NAMES[a - 1]}_${INLET_NAMES[b - 1]}_l`);
+    return uid ?? null;
   }
 
-  function spawnJigCart() {
-    const npcs = api.getWorld?.()?.getNpcs?.();
-    if (npcs) {
-      for (const npc of npcs) {
-        if (npc && CART_NPC_IDS.has(npc.getId?.())) return;
-      }
+  function pipes(player) {
+    return PIPE_VARBITS.map((id) => machineValue(player, id)).filter(Boolean);
+  }
+
+  function pipesSolved(player) {
+    const set = pipes(player);
+    return set.length === 3 && set.every((p) => SOLVED.has(p));
+  }
+
+  /** Tick 523: if2 counts the pipes still to fit, then the junction box (262). */
+  function openJunctionBox(player) {
+    let fitted = pipes(player);
+    if (fitted.length === 3 && !pipesSolved(player)) {
+      // Ours: a wrong full set comes apart when the box is opened again, so it can be redone.
+      for (const id of PIPE_VARBITS) setMachine(player, id, 0);
+      fitted = [];
     }
-    api.spawnNpc({ id: NpcIdentifiers.JIG_CART, x: CART_TILE.x, y: CART_TILE.y, z: CART_TILE.z, wanderRadius: 0 });
+    const packet = player.getPacketSender();
+    for (let index = 1; index <= 15; index++) {
+      const uid = connectionComponent(index);
+      if (uid !== null) packet.sendInterfaceDisplayState(uid, !fitted.includes(index));
+    }
+    junctionPick.set(player, 0);
+    packet.sendConfig(261, 0);
+    packet.sendConfig(262, 3 - fitted.length);
+    packet.sendInterfaceScript(2524, [2299666, 200]);
+    packet.sendInterface(262);
+  }
+
+  /** Ticks 526-536: an inlet, then its other end; the third pipe closes the box with the player's line. */
+  function clickJunction(event) {
+    const { player, buttonId } = event;
+    if ((buttonId >>> 16) !== 262) return;
+    const inlet = INLET_COMPONENTS[buttonId & 0xffff];
+    if (!inlet) return;
+    event.handled = true;
+    const fitted = pipes(player);
+    const used = new Set(fitted.flatMap((index) => pairInlets(index)));
+    if (fitted.length >= 3 || used.has(inlet)) return;
+    const packet = player.getPacketSender();
+    const first = junctionPick.get(player) ?? 0;
+    if (!first || first === inlet) {
+      junctionPick.set(player, first === inlet ? 0 : inlet);
+      packet.sendConfig(261, first === inlet ? 0 : inlet);
+      return;
+    }
+    const index = pairIndex(first, inlet);
+    setMachine(player, PIPE_VARBITS[fitted.length], index);
+    junctionPick.set(player, 0);
+    packet.sendConfig(261, 0);
+    packet.sendConfig(262, 2 - fitted.length);
+    sound(player, SOUND.placePipe);
+    const uid = connectionComponent(index);
+    if (uid !== null) packet.sendInterfaceDisplayState(uid, false);
+    if (fitted.length + 1 === 3) {
+      packet.sendInterfaceRemoval();
+      playerLine(player, line("into-the-workshop-connecting-the-junction-box-pipes"));
+    }
+  }
+
+  /**
+   * The press lever (ticks 819-826, 1089-1095, 1099-1103): a tick after the pull the hammer comes
+   * down over the jig, a tick later the box and the hammer's blow, two ticks on it is gone.
+   */
+  function pullPress(player, object) {
+    const fl = floor(player);
+    if (!fl || fl.pressBusy) return;
+    pullLever(player, object);
+    const reply = (variant) => later(player, 1, () => messageBox(player, line(variant)));
+    if (pipes(player).length < 3) return reply("into-the-workshop-puling-the-press-lever-while-it-is-broken");
+    if (!pipesSolved(player)) return reply("into-the-workshop-pulling-the-press-lever-with-the-junction-pipes-not-correctly-connected");
+    // The hammer falls two ticks after the pull: the jig has to be under it by then. Live pulled while the
+    // cart was two steps out and flattened the bar as it arrived (ticks 1091-1093).
+    const arrivesInTime = () => machineValue(player, VARBIT.JIG_POS) === CART_STOP.PRESS && (!fl.cartMoving || (fl.cartStepsLeft ?? 0) <= 2);
+    if (!arrivesInTime()) return reply("into-the-workshop-pulling-the-press-lever-at-the-wrong-time");
+    fl.pressBusy = true;
+    steps(player, [
+      [1, () => setLoc(player, HAMMER_TILE, HAMMER_IDS, 18644, 10, 0)],
+      [2, () => {
+        if (fl.cartMoving || machineValue(player, VARBIT.JIG_POS) !== CART_STOP.PRESS) {
+          // Ours: the cart left or isn't in yet; nothing is struck.
+          removeLoc(player, HAMMER_TILE, HAMMER_IDS);
+          fl.pressBusy = false;
+          messageBox(player, line("into-the-workshop-pulling-the-press-lever-at-the-wrong-time"));
+          return;
+        }
+        const jig = machineValue(player, VARBIT.JIG_STATE);
+        let text;
+        if (jig === JIG.HOT) {
+          setMachine(player, VARBIT.EARTH_FIXED, 1);
+          setMachine(player, VARBIT.JIG_STATE, JIG.FLAT_HOT);
+          text = line("into-the-workshop-flattening-an-elemental-bar-after-heating-it");
+        } else if (jig === JIG.FLAT_HOT || jig === JIG.FLAT || jig === JIG.DRY) {
+          // Capture tick 1101; not in the Wiki's transcript.
+          text = "You pull the lever and the press responds. The hardy comes down, hitting the elemental bar, but the bar has already been flattened.";
+        } else {
+          // Ours for a cold bar: the Wiki's no-bar line.
+          text = line("into-the-workshop-pulling-the-press-lever-without-a-bar-in-position");
+        }
+        locAnim(player, HAMMER_TILE, HAMMER_IDS, ANIM.pressHammer);
+        sound(player, SOUND.press);
+        messageBox(player, text);
+      }],
+      [4, () => { removeLoc(player, HAMMER_TILE, HAMMER_IDS); fl.pressBusy = false; }],
+    ]);
   }
 
   // ==========================================================================
-  // Journal and rewards
+  // The water tank
+  // ==========================================================================
+
+  function setDoor(player, value) {
+    setMachine(player, VARBIT.WATER_DOOR, value);
+    showDoor(player);
+  }
+
+  /** The door lever (ticks 850-854 open, 870-875 close): the door moves a tick after the pull, done two later. */
+  function pullDoorLever(player, object) {
+    const fl = floor(player);
+    if (!fl || fl.doorBusy) return;
+    if (machineValue(player, VARBIT.WATER_LEVEL)) {
+      messageBox(player, line("into-the-workshop-pulling-the-lever-while-the-tank-is-full"));
+      return;
+    }
+    const door = machineValue(player, VARBIT.WATER_DOOR);
+    if (door % 3 === 2) return; // Ours: the rack is out; it has to come in first.
+    fl.doorBusy = true;
+    pullLever(player, object);
+    const opening = door % 3 === 0;
+    steps(player, [
+      [1, () => {
+        locAnim(player, TANK_DOOR_TILE, DOOR_IDS, opening ? ANIM.doorOpening : ANIM.doorClosing);
+        sound(player, opening ? SOUND.doorOpen : SOUND.doorClose);
+        if (!opening) sound(player, SOUND.valve, 5);
+      }],
+      [3, () => { setDoor(player, door + (opening ? 1 : -1)); fl.doorBusy = false; }],
+    ]);
+  }
+
+  /**
+   * The corkscrew (ticks 858-868, 920-931): out, the rack reaches the cart two ticks later; in, it
+   * swaps the bar between the cart and the rack at once and is back three ticks later.
+   */
+  function turnCorkscrew(player, object) {
+    const fl = floor(player);
+    if (!fl || fl.doorBusy) return;
+    const door = machineValue(player, VARBIT.WATER_DOOR);
+    if (door % 3 === 0) {
+      messageBox(player, line("into-the-workshop-turning-the-corkscrew-while-the-door-is-closer"));
+      return;
+    }
+    fl.doorBusy = true;
+    animate(player, ANIM.corkscrew);
+    if (object) player.getPacketSender().sendObjectAnimation(object, new Animation(ANIM.corkscrewLoc));
+    sound(player, SOUND.screw, 10);
+    if (door % 3 === 1) {
+      locAnim(player, TANK_DOOR_TILE, DOOR_IDS, ANIM.rackOut);
+      sound(player, SOUND.rack, 50);
+      steps(player, [[2, () => { setDoor(player, door + 1); fl.doorBusy = false; }]]);
+      return;
+    }
+    const atTank = machineValue(player, VARBIT.JIG_POS) === CART_STOP.TANK && !fl.cartMoving;
+    const jig = machineValue(player, VARBIT.JIG_STATE);
+    let extended = door;
+    if (atTank && door === DOOR.EXTENDED && jig === JIG.FLAT_HOT) {
+      setMachine(player, VARBIT.JIG_STATE, JIG.IN_TANK);
+      extended = DOOR.EXTENDED_HOT;
+    } else if (atTank && door === DOOR.EXTENDED_COLD && jig === JIG.IN_TANK) {
+      setMachine(player, VARBIT.JIG_STATE, JIG.FLAT);
+      extended = DOOR.EXTENDED;
+    } else if (atTank && door === DOOR.EXTENDED_HOT && jig === JIG.IN_TANK) {
+      setMachine(player, VARBIT.JIG_STATE, JIG.FLAT_HOT); // Ours: a hot bar goes back as it came
+      extended = DOOR.EXTENDED;
+    }
+    setDoor(player, extended);
+    steps(player, [
+      [1, () => { locAnim(player, TANK_DOOR_TILE, DOOR_IDS, ANIM.rackIn); sound(player, SOUND.rack, 10); }],
+      [3, () => { setDoor(player, extended - 1); fl.doorBusy = false; }],
+    ]);
+  }
+
+  /** The tank fills with the inlet open and the drain shut; a hot bar shut in it cools (tick 885). */
+  function tankFilled(player) {
+    showTank(player);
+    if (machineValue(player, VARBIT.WATER_DOOR) === DOOR.CLOSED_HOT) {
+      setDoor(player, DOOR.CLOSED_COLD);
+      sound(player, SOUND.coolBar);
+    }
+  }
+
+  function startFilling(player) {
+    locAnim(player, TANK_TILE, TANK_IDS, ANIM.tankFill);
+    sound(player, SOUND.waterFlow);
+  }
+
+  /** Valves (ticks 878-910, 1164-1179): open/close lines, the tank's water and the cooling. */
+  function turnValve(player, inlet) {
+    const fl = floor(player);
+    if (!fl || fl.valveBusy) return;
+    const varbit = inlet ? VARBIT.VALVE_1 : VARBIT.VALVE_2;
+    const opening = machineValue(player, varbit) === 0;
+    if (opening && machineValue(player, VARBIT.WATER_STATE) === 0) {
+      messageBox(player, line("into-the-workshop-turning-the-water-valve-before-repairing-the-pipe"));
+      return;
+    }
+    const openLine = line("into-the-workshop-opening-the-water-valve");
+    const closeLine = line("into-the-workshop-closing-the-water-valve");
+    setMachine(player, varbit, opening ? 1 : 0);
+    sound(player, SOUND.valve);
+    const drain = machineValue(player, VARBIT.VALVE_2);
+    const flowing = machineValue(player, VARBIT.VALVE_1);
+    const busyUntil = (delay, text) => { fl.valveBusy = true; steps(player, [[delay, () => { messageBox(player, text); fl.valveBusy = false; }]]); };
+    if (inlet) {
+      setMachine(player, VARBIT.WATER_LEVEL, opening ? 1 : 0);
+      if (!opening || drain) {
+        showTank(player);
+        messageBox(player, opening ? openLine : closeLine);
+        return;
+      }
+      setLoc(player, TANK_TILE, TANK_IDS, 18660, 10, 0);
+      steps(player, [[1, () => startFilling(player)], [4, () => tankFilled(player)]]);
+      busyUntil(4, openLine);
+      return;
+    }
+    if (opening) {
+      if (flowing) locAnim(player, TANK_TILE, TANK_IDS, ANIM.tankEmpty);
+      sound(player, SOUND.waterFlow);
+      steps(player, [[3, () => showTank(player)]]);
+      busyUntil(3, openLine);
+      return;
+    }
+    if (!flowing) {
+      messageBox(player, closeLine);
+      return;
+    }
+    startFilling(player);
+    steps(player, [[3, () => tankFilled(player)]]);
+    busyUntil(3, closeLine);
+  }
+
+  // ==========================================================================
+  // The wind tunnel
+  // ==========================================================================
+
+  const COG_LINES = { [I.SMALL_COG]: "small", [I.MEDIUM_COG]: "medium", [I.LARGE_COG]: "large" };
+
+  function placeCog(player, pinVarbit, itemId) {
+    if (machineValue(player, VARBIT.AIR_STATE)) {
+      messageBox(player, line("into-the-workshop-trying-to-remove-a-cog-while-the-fan-is-on"));
+      return;
+    }
+    if (machineValue(player, pinVarbit)) return;
+    player.getInventory().deleteNumber(itemId, 1);
+    setMachine(player, pinVarbit, COG_ITEMS.indexOf(itemId));
+    sound(player, SOUND.placeCog);
+    itemBox(player, itemId, line(`into-the-workshop-placing-cogs-on-the-shafts-${COG_LINES[itemId]}`));
+  }
+
+  function takeCog(player, pinVarbit) {
+    if (machineValue(player, VARBIT.AIR_STATE)) {
+      messageBox(player, line("into-the-workshop-trying-to-remove-a-cog-while-the-fan-is-on"));
+      return;
+    }
+    const value = machineValue(player, pinVarbit);
+    if (!value || !roomFor(player, 1)) return;
+    setMachine(player, pinVarbit, 0);
+    player.getInventory().adds(COG_ITEMS[value], 1);
+  }
+
+  function cogsCorrect(player) {
+    return [VARBIT.COG_1, VARBIT.COG_2, VARBIT.COG_3].every((id) => machineValue(player, id) === CORRECT_COG[id]);
+  }
+
+  /** The fan lever (ticks 965-982): on, it blows (drying the bar at the tunnel) or sucks; off, it stops. */
+  function pullFanLever(player, object) {
+    pullLever(player, object);
+    later(player, 1, () => {
+      const cogs = COG_TILES.map(([x, y, z, type]) => ({ at: [x, y, z], type }));
+      const animateCogs = (anims) => cogs.forEach((cog, i) => {
+        const object = MapObjects.getObjectsAt(tile(player, cog.at), scene(player)?.area).find((o) => o.getType() === cog.type);
+        if (object) player.getPacketSender().sendObjectAnimation(object, new Animation(anims[i]));
+      });
+      if (machineValue(player, VARBIT.AIR_STATE)) {
+        setMachine(player, VARBIT.AIR_STATE, 0);
+        setMachine(player, VARBIT.FAN_STATE, 0);
+        animateCogs([ANIM.cogsStop, ANIM.cogsStop, ANIM.cogsStop]);
+        messageBox(player, line("into-the-workshop-turning-off-the-fan"));
+        return;
+      }
+      const blowing = cogsCorrect(player);
+      setMachine(player, VARBIT.AIR_STATE, 1);
+      setMachine(player, VARBIT.FAN_STATE, blowing ? 1 : 2);
+      animateCogs([ANIM.cogsReverse, ANIM.cogs, ANIM.cogs]);
+      if (blowing && machineValue(player, VARBIT.JIG_POS) === CART_STOP.TUNNEL && !floor(player)?.cartMoving
+        && machineValue(player, VARBIT.JIG_STATE) === JIG.FLAT) {
+        setMachine(player, VARBIT.JIG_STATE, JIG.DRY);
+      }
+      const first = blowing ? line("into-the-workshop-turning-on-the-fan")
+        : line("into-the-workshop-trying-to-turn-on-the-fan-with-the-cogs-placed-incorrectly", 0);
+      messageBox(player, first, () => messageBox(player, line("into-the-workshop-trying-to-turn-on-the-fan-with-the-cogs-placed-incorrectly", 1)));
+    });
+  }
+
+  function repairPiping(player) {
+    if (machineValue(player, VARBIT.WATER_STATE)) return;
+    player.getInventory().deleteNumber(PIPE, 1);
+    setMachine(player, VARBIT.WATER_STATE, 1);
+    sound(player, SOUND.placePipe);
+    itemBox(player, PIPE, line("into-the-workshop-repairing-piping"));
+  }
+
+  // ==========================================================================
+  // The extractor room
+  // ==========================================================================
+
+  /** Tick 1356: both leaves swing open; stage 8 the first time. */
+  function openMindDoors(player) {
+    for (const [closed, x, y, open, ox, oy, face] of MIND_DOORS) {
+      removeLoc(player, [x, y, 0], new Set([closed]), 0);
+      setLoc(player, [ox, oy, 0], new Set([open]), open, 0, face);
+    }
+    sound(player, SOUND.doorOpen);
+    setStageAtLeast(player, STAGE.MIND_DOOR);
+  }
+
+  /** Ours: Close puts both leaves back as they stood. */
+  function closeMindDoors(player) {
+    for (const [closed, x, y, open, ox, oy] of MIND_DOORS) {
+      removeLoc(player, [ox, oy, 0], new Set([open]), 0);
+      setLoc(player, [x, y, 0], new Set([closed]), closed, 0, 0);
+    }
+    sound(player, SOUND.doorClose);
+  }
+
+  /** Doors.plugin owns "Mind Door"; it asks door:toggle first. */
+  function mindDoorToggle(request) {
+    const { player, objectId } = request;
+    if (!scene(player)) return;
+    if (objectId === MIND_DOOR || objectId === MIND_DOOR_L) openMindDoors(player);
+    else if (objectId === MIND_DOOR_OPEN || objectId === MIND_DOOR_L_OPEN) closeMindDoors(player);
+    else return;
+    request.handled = true;
+  }
+
+  function placePrimedBar(player) {
+    if (machineValue(player, VARBIT.MIND_JIG) !== 0) return;
+    player.getInventory().deleteNumber(PRIMED_BAR, 1);
+    setMachine(player, VARBIT.MIND_JIG, 1);
+    setStageAtLeast(player, STAGE.BAR_PLACED);
+    sound(player, SOUND.placeBar);
+    itemBox(player, PRIMED_BAR, line("into-the-workshop-placing-the-primed-bar"));
+  }
+
+  /**
+   * The extractor hat (ticks 1369-1381): the camera, the player slides onto the chair, the gun
+   * fires, four ticks later the bar is charged and Magic drops by 20, and the player slides off.
+   */
+  function operateHat(player) {
+    const fl = floor(player);
+    if (!fl || fl.extractor || machineValue(player, VARBIT.MIND_JIG) !== 1) return;
+    if (player.getSkillManager().getCurrentLevel(Skill.MAGIC) < MAGIC_DRAIN) {
+      player.sendMessage(MESSAGE.extractorMagic);
+      return;
+    }
+    fl.extractor = true;
+    const seat = tile(player, HAT_TILE);
+    const beside = player.getLocation().clone();
+    const toSeat = new Location(seat.getX() - beside.getX(), seat.getY() - beside.getY());
+    const toBeside = new Location(beside.getX() - seat.getX(), beside.getY() - seat.getY());
+    player.getMovementQueue().reset().setBlockMovement(true);
+    Scenes.camera(player, [1957, 5143, 500], [1959, 5146, 300], { rate: 100, rate2: 100 });
+    steps(player, [
+      // Tick 1371: on the chair in the same tick as the slide onto it.
+      [1, () => {
+        player.moveTo(seat);
+        player.setForceMovement(new ForceMovement(beside, toSeat, 0, 20, 1, ANIM.chair));
+        animate(player, ANIM.chair);
+        sound(player, SOUND.mindControl);
+      }],
+      [2, () => {
+        player.setForceMovement(null);
+        player.performGraphic(new Graphic(CHAIR_SPOTANIM));
+        removeLoc(player, HAT_TILE, HAT_IDS);
+      }],
+      [3, () => { locAnim(player, GUN_TILE, EXTRACTOR_GUN_IDS, ANIM.gun); sound(player, SOUND.zap); }],
+      [7, () => {
+        setMachine(player, VARBIT.MIND_JIG, 2);
+        setStageAtLeast(player, STAGE.MIND_BAR);
+        const magic = player.getSkillManager().getCurrentLevel(Skill.MAGIC);
+        player.getSkillManager().setCurrentLevel(Skill.MAGIC, Math.max(0, magic - MAGIC_DRAIN), true);
+      }],
+      [8, () => setLoc(player, HAT_TILE, HAT_IDS, EXTRACTOR_HAT, 10, 1)],
+      // Tick 1379: back off in the same tick as the slide.
+      [9, () => { player.moveTo(beside); player.setForceMovement(new ForceMovement(seat, toBeside, 0, 30, 1, -1)); }],
+      [10, () => player.setForceMovement(null)],
+      [11, () => {
+        player.sendMessage(line("into-the-workshop-making-the-mind-bar"));
+        player.getPacketSender().sendCameraReset();
+        player.getMovementQueue().setBlockMovement(false);
+        fl.extractor = false;
+      }],
+    ]);
+  }
+
+  function takeFromGun(player) {
+    const charge = machineValue(player, VARBIT.MIND_JIG);
+    if (charge === 0 || floor(player)?.extractor) return;
+    if (!roomFor(player, 1)) return;
+    setMachine(player, VARBIT.MIND_JIG, 0);
+    if (charge === 2) {
+      player.getInventory().adds(MIND_BAR, 1);
+      itemBox(player, MIND_BAR, line("into-the-workshop-taking-the-mind-bar"));
+    } else {
+      player.getInventory().adds(PRIMED_BAR, 1); // Ours: an uncharged bar comes back
+    }
+  }
+
+  // ==========================================================================
+  // The workbench (Elemental Workshop I's shield too)
+  // ==========================================================================
+
+  /**
+   * What the bench offers (ticks 451-473, 1448-1471; Wiki recipes): a shield with a book from
+   * Elemental Workshop I, the claw with the crane schematic while the crane still needs it, an
+   * elemental helmet with the beaten book after this quest, and from a primed mind bar a mind
+   * helmet (beaten book) or, after the quest or without the beaten book, a mind shield (slashed book).
+   * One choice is made at once; more open skillmulti ("What would you like to smith?").
+   */
+  function recipes(player) {
+    const list = [];
+    const done = quest.isComplete(player);
+    const shieldBook = has(player, I.SLASHED_BOOK) || has(player, I.BATTERED_BOOK);
+    if (has(player, ELEMENTAL_METAL)) {
+      if (shieldBook) list.push({ product: I.ELEMENTAL_SHIELD, bar: ELEMENTAL_METAL, level: 20, xp: XP.shield, kind: "shield" });
+      if (has(player, CRANE_SCHEMATIC) && stage(player) >= STAGE.MACHINE_FLOOR && machineValue(player, VARBIT.FIRE_STATE) === CLAW.BROKEN) {
+        list.push({ product: CRANE_CLAW, bar: ELEMENTAL_METAL, level: 20, xp: XP.claw, kind: "claw" });
+      }
+      if (done && has(player, BEATEN_BOOK)) list.push({ product: I.ELEMENTAL_HELMET, bar: ELEMENTAL_METAL, level: 20, xp: XP.helmet, kind: "helmet" });
+    }
+    if (has(player, MIND_BAR)) {
+      if (done && has(player, I.SLASHED_BOOK)) { // Wiki (Mind shield): needs the quest done; the capture offers it only then (1464)
+        list.push({ product: I.MIND_SHIELD, bar: MIND_BAR, level: MIND_SMITHING_LEVEL, xp: XP.mindShield, kind: "mindShield" });
+      }
+      if (has(player, BEATEN_BOOK)) list.push({ product: I.MIND_HELMET, bar: MIND_BAR, level: MIND_SMITHING_LEVEL, xp: XP.mindHelmet, kind: "mindHelmet" });
+    }
+    return list;
+  }
+
+  function useWorkbench(player, preferredSlot = -1) {
+    if (crafting.get(player)) return;
+    if (!has(player, ELEMENTAL_METAL) && !has(player, MIND_BAR)) {
+      messageBox(player, line("into-the-workshop-crafting-the-mind-helm-using-the-workbench-without-elemental-metal"));
+      return;
+    }
+    if (!holdsHammer(api.core, player)) {
+      messageBox(player, line("into-the-workshop-crafting-the-mind-helm-using-the-workbench-without-a-hammer"));
+      return;
+    }
+    const list = recipes(player);
+    if (list.length === 0) {
+      messageBox(player, line("into-the-workshop-crafting-the-mind-helm-using-the-workbench-without-the-beaten-book"));
+      return;
+    }
+    if (list.length === 1) {
+      startCrafting(player, list[0], 1, preferredSlot);
+      return;
+    }
+    const byProduct = new Map(list.map((recipe) => [recipe.product, recipe]));
+    const most = Math.max(...list.map((recipe) => player.getInventory().getAmount(recipe.bar)));
+    const creation = new CreationMenu("What would you like to smith?", list.map((recipe) => recipe.product), {
+      execute: (itemId, amount) => {
+        const recipe = byProduct.get(itemId);
+        if (recipe) startCrafting(player, recipe, Math.max(1, amount | 0), -1);
+      },
+    }, { labels: list.map((recipe) => CacheDefinitions.getItem(recipe.product)?.name ?? ""), maxAmount: most, mode: 25 });
+    player.getPacketSender().sendCreationMenu(creation);
+  }
+
+  function craftLevelOk(player, recipe) {
+    if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) >= recipe.level) return true;
+    player.sendMessage(recipe.level > 20 ? MESSAGE.mindLevel : MESSAGE.metalLevel);
+    return false;
+  }
+
+  /** Each item: the hammering at once, the bar taken and the product given four ticks later (Wiki), then the next. */
+  function startCrafting(player, recipe, amount, preferredSlot) {
+    if (!craftLevelOk(player, recipe)) return;
+    const start = player.getLocation().clone();
+    const inventory = player.getInventory();
+    const job = { left: amount };
+    const teleports = player.getTeleportSerial?.() ?? 0;
+    /** A plain bar (a preset copy is never worked), in the hinted slot or the first one. */
+    const plain = (index) => {
+      const item = inventory.getItems()[index];
+      return item?.getId?.() === recipe.bar && item.getAmount() === 1 && item.getMeta?.() == null;
+    };
+    const slotFor = (hint) => (plain(hint) ? hint : inventory.getItems().findIndex((_, index) => plain(index)));
+    /** Still at the bench, not moved away or teleported, with the hammer, the book and the level. */
+    const stillThere = () => crafting.get(player) === job && player.getLocation().equals(start)
+      && (player.getTeleportSerial?.() ?? 0) === teleports && player.getHitpoints() > 0 && holdsHammer(api.core, player)
+      && player.getSkillManager().getCurrentLevel(Skill.SMITHING) >= recipe.level
+      && recipes(player).some((r) => r.product === recipe.product);
+    let slot = slotFor(preferredSlot);
+    if (slot < 0) return;
+    crafting.set(player, job);
+    const hammer = () => { animate(player, ANIM.workbench); sound(player, SOUND.anvil); };
+    hammer();
+    everyTick(player, (n) => {
+      if (!stillThere()) { if (crafting.get(player) === job) crafting.delete(player); return false; }
+      if (n % CRAFT_TICKS !== 0) return true;
+      if (!plain(slot)) { crafting.delete(player); return false; }
+      // Live takes the bar and gives the product to the first free slot (ticks 1446-1454: slot 8, the bar in 9).
+      inventory.deleteAtSlot(slot, 1);
+      inventory.adds(recipe.product, 1);
+      player.getSkillManager().addExperiences(Skill.SMITHING, recipe.xp);
+      crafted(player, recipe);
+      job.left--;
+      slot = job.left > 0 && stillThere() ? slotFor(-1) : -1;
+      if (slot < 0) { crafting.delete(player); return false; }
+      hammer();
+      return true;
+    });
+  }
+
+  function crafted(player, recipe) {
+    if (recipe.kind === "shield") {
+      player.sendMessage(MESSAGE.shieldMade);
+      api.emitCustomEvent("elemental-workshop-i:shield-made", { player });
+    } else if (recipe.kind === "claw") {
+      player.sendMessage(line("into-the-workshop-making-an-elemental-claw"));
+    } else if (recipe.kind === "mindShield") {
+      player.sendMessage(MESSAGE.mindShieldMade);
+    } else if (recipe.kind === "mindHelmet") {
+      player.sendMessage(line("into-the-workshop-crafting-the-mind-helm-using-the-workbench-with-the-proper-items"));
+      api.emitCustomEvent("diary:task", { player, diary: "kandarin", task: "create-a-mind-helmet" });
+      if (!quest.isComplete(player)) {
+        // The note goes as the quest completes (tick 1454).
+        while (has(player, NOTE)) player.getInventory().deleteNumber(NOTE, 1);
+        quest.complete(player);
+      }
+    }
+  }
+
+  function cancelCrafting({ player }) {
+    crafting.delete(player);
+  }
+
+  // ==========================================================================
+  // Old saves
+  // ==========================================================================
+
+  /** Converts the old 1-12 stage scheme and its attributes to live's stages and the varbit save. */
+  function migrate(player) {
+    if (Number(player.getAttribute(SCHEME_ATTRIBUTE)) === SCHEME) return;
+    player.setAttribute(SCHEME_ATTRIBUTE, SCHEME);
+    const old = stage(player);
+    if (old === 0) return;
+    const flags = Number(player.getAttribute("quest.elemental_workshop_ii.flags")) || 0;
+    const jig = Number(player.getAttribute("quest.elemental_workshop_ii.jig")) || 0;
+    const water = Number(player.getAttribute("quest.elemental_workshop_ii.water")) || 0;
+    const air = Number(player.getAttribute("quest.elemental_workshop_ii.air")) || 0;
+    const pipeBits = Number(player.getAttribute("quest.elemental_workshop_ii.pipes")) || 0;
+    const mind = Number(player.getAttribute("quest.elemental_workshop_ii.mind")) || 0;
+    const stageMap = [0, 1, 2, 3, 4, 5, 6, 6, 6, 6, 7, 10, 11];
+    quest.setStage(player, stageMap[Math.min(old, 12)]);
+    const set = (id, value) => setMachine(player, id, value);
+    set(VARBIT.HIDE_KEY, old >= 3 || (flags & 1) ? 1 : 0);
+    set(VARBIT.HATCH, (flags & 2) || old >= 5 ? 1 : 0);
+    set(VARBIT.WATER_STATE, flags & 4 ? 1 : 0);
+    set(VARBIT.EARTH_FIXED, flags & 8 ? 1 : 0);
+    set(VARBIT.JIG_POS, jig & 3);
+    set(VARBIT.JIG_STATE, (jig >> 2) & 7);
+    set(VARBIT.FIRE_POS, (jig >> 5) & 3);
+    set(VARBIT.FIRE_STATE, (jig >> 7) & 3);
+    set(VARBIT.WATER_DOOR, water & 15);
+    set(VARBIT.WATER_LEVEL, (water >> 4) & 1);
+    set(VARBIT.VALVE_1, (water >> 5) & 1);
+    set(VARBIT.VALVE_2, (water >> 6) & 1);
+    set(VARBIT.COG_1, air & 3);
+    set(VARBIT.COG_2, (air >> 2) & 3);
+    set(VARBIT.COG_3, (air >> 4) & 3);
+    set(VARBIT.AIR_STATE, (air >> 6) & 1);
+    set(VARBIT.FAN_STATE, (air >> 7) & 3);
+    set(VARBIT.PIPE_1, pipeBits & 15);
+    set(VARBIT.PIPE_2, (pipeBits >> 4) & 15);
+    set(VARBIT.PIPE_3, (pipeBits >> 8) & 15);
+    set(VARBIT.MIND_JIG, mind & 3);
+    for (const key of ["flags", "jig", "water", "air", "pipes", "mind"]) player.setAttribute(`quest.elemental_workshop_ii.${key}`, null);
+  }
+
+  // ==========================================================================
+  // Journal (captured at stages 3 and 7, ticks 95 and 1019; the rest is ours)
   // ==========================================================================
 
   function buildJournal(player, questHandle) {
     const value = questHandle.getStage(player);
-    if (value >= STAGE_COMPLETE) {
-      return [
-        "<str>I found a beaten book and scroll in the Exam Centre.</str>",
-        "<str>I repaired the machinery in the deeper Elemental Workshop.</str>",
-        "<str>I made a primed mind bar and smithed an elemental mind helm.</str>",
-        "",
-        "<col=ff0000>QUEST COMPLETE!</col>",
-      ];
+    if (value >= STAGE.COMPLETE) {
+      return ["<str>I made a mind helmet from a primed mind bar.", "", "<col=ff0000>QUEST COMPLETE!</col>"];
     }
     if (value === 0) {
       return [
-        "I can start this quest by searching the bookcase in the Exam Centre",
-        "south of the Digsite.",
+        "I can start this quest by searching the bookcases in the Exam Centre's",
+        "library.",
         "",
         "Minimum requirements: 20 Magic, 30 Smithing and Elemental Workshop I.",
       ];
     }
-    const lines = ["<str>I found a beaten book in the Exam Centre.</str>"];
-    if (value === STAGE_STARTED) {
-      lines.push("I should read the <col=800000>beaten book</col>.");
-      return lines;
+    if (value === STAGE.STARTED) return ["I have found a book at the Dig Site; I should read it."]; // Ours
+    const lines = [
+      "<str>I have found a book at the Dig Site.",
+      "<str>The book tells of a way to make elemental items even more",
+      "<str>powerful than before.",
+    ];
+    if (value === STAGE.BOOK_READ) return [...lines, "I should read the note I found with the book."]; // Ours
+    if (value === STAGE.NOTE_READ) {
+      return [...lines, "The note found with the book has a <col=800000>strange code</col> written on it;", "I wonder what it means."];
     }
-    lines.push("<str>I read the beaten book and found a scroll used as a bookmark.</str>");
-    if (value === STAGE_BOOK_READ) {
-      lines.push("I should read the <col=800000>scroll</col>.");
-      return lines;
+    lines.push("<str>The note found with the book has a strange code written on it.");
+    const strike = (text, done) => (done ? `<str>${text}` : text);
+    lines.push(strike("By following the code on the note I was able to find a key.", value >= STAGE.HATCH_UNLOCKED));
+    if (value < STAGE.HATCH_UNLOCKED) return lines;
+    lines.push(strike("The key I've found opens the large hatch in the elemental", value >= STAGE.MACHINE_FLOOR), strike("workshop.", value >= STAGE.MACHINE_FLOOR));
+    if (value < STAGE.MACHINE_FLOOR) return lines;
+    const primed = value >= STAGE.PRIMED_BAR;
+    lines.push(strike("Climbing down through the hatch I found a new area in the", primed), strike("workshop; there are 4 machines on this level to fix:", primed));
+    if (machineValue(player, VARBIT.FIRE_STATE) !== CLAW.BROKEN || primed) {
+      lines.push(strike("The crane - now the claw has been replaced the crane looks", primed), strike("like it's in good working order.", primed));
     }
-    lines.push("<str>I read the scroll, which mentions a deeper workshop.</str>");
-    if (value === STAGE_SCROLL_READ) {
-      lines.push("I should search the <col=800000>machinery</col> in the north of the workshop for a key.");
-      return lines;
+    if (pipesSolved(player) || primed) {
+      lines.push(strike("The press - the pipes have now been fitted and it should work", primed), strike("as long as it's powered.", primed));
     }
-    lines.push("<str>I found a key hidden in the machinery.</str>");
-    if (value === STAGE_KEY_TAKEN) {
-      lines.push("I should use the key on the <col=800000>hatch</col> in the middle of the workshop.");
-      return lines;
+    if (machineValue(player, VARBIT.WATER_STATE) || primed) lines.push(strike("The tank - this should work fine now I have replaced the pipe.", primed));
+    if (cogsCorrect(player) || primed) {
+      lines.push(strike("A wind tunnel - I have fitted all the cogs on to the pins. The", primed), strike("wind tunnel should now work as long as it's powered.", primed));
     }
-    lines.push("<str>I unlocked the hatch and climbed down into the deeper workshop.</str>");
-    if (!hasFlag(player, FLAG_CRANE_SCHEMATIC_TAKEN) || !hasFlag(player, FLAG_LEVER_SCHEMATIC_TAKEN)) {
-      lines.push("I should take the <col=800000>schematics</col> from the crate by the crane.");
-      return lines;
-    }
-    if (jigState(player).fireState < 1) {
-      lines.push("I should make a <col=800000>crane claw</col> and use it on the old crane.");
-      return lines;
-    }
-    if (!pipesSorted(player)) {
-      lines.push("I should connect the pipes in the <col=800000>junction box</col> on the catwalk.");
-      return lines;
-    }
-    if (!hasFlag(player, FLAG_PIPE_REPAIRED) || !cogsCorrect(airState(player))) {
-      lines.push("I should search the crates for a <col=800000>pipe</col> and three <col=800000>cogs</col>,");
-      lines.push("then repair the broken piping and place the cogs on the wind tunnel pins.");
-      return lines;
-    }
-    const jig = jigState(player);
-    if (jig.state < 5) {
-      lines.push("I should prime an <col=800000>elemental bar</col> on the jig cart:");
-      lines.push("heat it in the lava, press it, cool it in the water tank and dry it at the fan.");
-      return lines;
-    }
-    if (value < STAGE_MIND_BAR && !has(player, PRIMED_BAR)) {
-      lines.push("I should take the <col=800000>primed bar</col> from the jig cart.");
-      return lines;
-    }
-    if (value < STAGE_MIND_BAR) {
-      lines.push("I should use the bar on the <col=800000>extractor gun</col> and operate the hat.");
-      return lines;
-    }
-    lines.push("I should smith the <col=800000>primed mind bar</col> into a mind helmet at a workbench.");
+    lines.push(strike("Once I have fixed all the equipment I'll need to work out how to", primed), strike("use it.", primed));
+    if (!primed) return lines;
+    lines.push(
+      "<str>I have found a track-mounted jig on which I was able to clamp", "<str>an elemental bar.",
+      "<str>I was able to operate the crane and dip the elemental bar into", "<str>the lava. The bar is now very hot.",
+      "<str>I used the press to flatten the hot elemental bar.",
+      "<str>The water tank was used to cool the elemental bar down.",
+      "<str>The wind tunnel proved a great way to dry off the wet bar.",
+    );
+    lines.push(strike("I have primed a bar of elemental ore, I wonder what to do with", value >= STAGE.BAR_PLACED), strike("it.", value >= STAGE.BAR_PLACED));
+    // Ours from here: no capture of the journal below the machine floor.
+    if (value >= STAGE.BAR_PLACED) lines.push(strike("I have put the primed bar under the extractor gun.", value >= STAGE.MIND_BAR));
+    if (value >= STAGE.MIND_BAR) lines.push("I should smith the primed mind bar into a helmet at a workbench.");
     return lines;
   }
 
@@ -1410,48 +1515,145 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     player.getSkillManager().addExperiences(Skill.SMITHING, 7500);
   }
 
-  api.persistAttribute(FLAGS_ATTRIBUTE);
-  api.persistAttribute(JIG_ATTRIBUTE);
-  api.persistAttribute(WATER_ATTRIBUTE);
-  api.persistAttribute(AIR_ATTRIBUTE);
-  api.persistAttribute(PIPES_ATTRIBUTE);
-  api.persistAttribute(MIND_ATTRIBUTE);
-  api.persistAttribute(CRATES_ATTRIBUTE);
+  // ==========================================================================
+  // Event routing
+  // ==========================================================================
+
+  function objectOption(event) {
+    return String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
+  }
+
+  function handleObjectInteraction(event) {
+    const { player, objectId, object } = event;
+    const option = objectOption(event);
+    const take = () => { event.handled = true; };
+    if (objectId === BOOKCASE && option === "search") return take(), searchBookcase(player);
+    if (BOILER_IDS.has(objectId) && option === "search") return take(), searchBoiler(player);
+    if (HATCH_IDS.has(objectId) && (option === "open" || option === "climb-down")) return take(), openHatch(player);
+    if (objectId === WORKBENCH && option === "smith") return take(), useWorkbench(player);
+    if (!scene(player)) return;
+    if (objectId === SCHEMATIC_CRATE && option === "take-from") return take(), searchSchematics(player);
+    if (CRATE_INDEX.has(objectId) && option === "search") return take(), searchCrate(player, objectId);
+    if (objectId === RAISE_LEVER && option === "pull") return take(), raiseOrLower(player, object);
+    if (objectId === ROTATE_LEVER && option === "pull") return take(), rotate(player, object);
+    if (objectId === CART_LEVER && option === "pull") return take(), pullCartLever(player, object);
+    if (objectId === PRESS_LEVER && option === "pull") return take(), pullPress(player, object);
+    if (objectId === JUNCTION_BOX && option === "open") return take(), openJunctionBox(player);
+    if (objectId === DOOR_LEVER && option === "pull") return take(), pullDoorLever(player, object);
+    if (objectId === CORKSCREW && option === "turn") return take(), turnCorkscrew(player, object);
+    if ((objectId === VALVE_1 || objectId === VALVE_2) && option === "turn") return take(), turnValve(player, objectId === VALVE_1);
+    if (objectId === FAN_LEVER && option === "pull") return take(), pullFanLever(player, object);
+    if (COG_LOCS.has(objectId) && option === "take") return take(), takeCog(player, COG_LOCS.get(objectId));
+    if ((objectId === MIND_DOOR || objectId === MIND_DOOR_L) && option === "open") return take(), openMindDoors(player);
+    if (objectId === EXTRACTOR_HAT && option === "operate") return take(), operateHat(player);
+    if (EXTRACTOR_GUN_IDS.has(objectId) && option === "take-from") return take(), takeFromGun(player);
+    if (objectId === STAIRS_UP && option === "climb-up") return take(), climbUpToWorkshop(player);
+    if (objectId === STAIRWELL && option === "climb-down") return take(), climbToBasement(player);
+    if (objectId === STAIRS_UP_BASEMENT && option === "climb-up") return take(), climbFromBasement(player);
+    if ((objectId === GANTRY_UP || objectId === GANTRY_DOWN) && option.startsWith("climb")) return take(), climbGantry(player, object, objectId === GANTRY_UP);
+  }
+
+  function handleItemOnObject(event) {
+    const { player, objectId, itemId, itemSlot } = event;
+    if (HATCH_IDS.has(objectId) && !machineValue(player, VARBIT.HATCH)) {
+      event.handled = true;
+      if (itemId === HATCH_KEY) unlockHatch(player);
+      else messageBox(player, MESSAGE.wrongHatchItem);
+      return;
+    }
+    if (objectId === WORKBENCH && (itemId === ELEMENTAL_METAL || itemId === MIND_BAR || itemId === CRANE_SCHEMATIC)) {
+      event.handled = true;
+      useWorkbench(player, itemId === CRANE_SCHEMATIC ? -1 : itemSlot);
+      return;
+    }
+    if (!scene(player)) return;
+    if (CRANE_IDS.has(objectId)) {
+      event.handled = true;
+      if (itemId === CRANE_CLAW) repairClaw(player);
+      else player.sendMessage(MESSAGE.reach);
+      return;
+    }
+    if (PIPING_IDS.has(objectId) && itemId === PIPE) return void (event.handled = true, repairPiping(player));
+    if (PINS.has(objectId) && COG_LINES[itemId]) return void (event.handled = true, placeCog(player, PINS.get(objectId), itemId));
+    if (EXTRACTOR_GUN_IDS.has(objectId) && itemId === PRIMED_BAR) return void (event.handled = true, placePrimedBar(player));
+  }
+
+  function handleItemOnNpc(event) {
+    const { player, npcId, itemId } = event;
+    if (!CART_NPC_IDS.has(npcId) || itemId !== ELEMENTAL_METAL || !scene(player)) return;
+    event.handled = true;
+    placeBarOnCart(player);
+  }
+
+  function handleNpcInteraction(event) {
+    if (!CART_NPC_IDS.has(event.npcId) || !scene(event.player)) return;
+    event.handled = true;
+    takeFromCart(event.player);
+  }
+
+  function handleItemAction(event) {
+    if (String(event.option ?? "").toLowerCase() !== "read") return;
+    const { player, itemId } = event;
+    const action = { [BEATEN_BOOK]: readBook, [NOTE]: readNote, [CRANE_SCHEMATIC]: readCraneSchematic, [LEVER_SCHEMATIC]: readLeverSchematic }[itemId];
+    if (!action) return;
+    event.handled = true;
+    action(player);
+  }
+
+  /** The cart's route assist: the pins and the crane sit in blocking scenery (no walkable tile of their own). */
+  function routeAdjacentObjectUse(event) {
+    if (!PINS.has(event.objectId) && !CRANE_IDS.has(event.objectId) && !PIPING_IDS.has(event.objectId)) return;
+    const at = event.player.getLocation();
+    const object = event.object?.getLocation?.();
+    const size = Math.max(event.object?.getDefinition?.()?.getSizeX?.() ?? 1, event.object?.getDefinition?.()?.getSizeY?.() ?? 1);
+    if (!object) return;
+    const reach = Math.max(object.getX() - at.getX(), at.getX() - (object.getX() + size - 1), object.getY() - at.getY(), at.getY() - (object.getY() + size - 1), 0);
+    if (reach > 2) return;
+    event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
+  }
+
+  function handleLogin({ player }) {
+    migrate(player);
+    syncMachine(player);
+    refreshQuestList(player);
+  }
+
+  for (const attribute of Object.values(MACHINE_ATTRIBUTE)) api.persistAttribute(attribute, 0);
+  api.persistAttribute(SCHEME_ATTRIBUTE, 0);
+  api.persistAttribute(CRATES_ATTRIBUTE, 0);
+  for (const key of ["flags", "jig", "water", "air", "pipes", "mind"]) api.persistAttribute(`quest.elemental_workshop_ii.${key}`);
 
   quest = registerQuest(api, {
-    key: "elemental_workshop_ii",
-    name: "Elemental Workshop II",
-    varpId: VARP,
-    varbitId: VARBIT_MAIN,
-    startedValue: STAGE_STARTED,
-    completionValue: STAGE_COMPLETE,
-    varbitValue: wireStage,
+    key: KEY,
+    name: PAGE,
+    varbitId: VARBIT.MAIN,
+    startedValue: STAGE.STARTED,
+    completionValue: STAGE.COMPLETE,
     questPoints: 1,
     xpRewards: [
       { skillId: Skill.CRAFTING.getIndex(), amount: 7500, label: "Crafting" },
       { skillId: Skill.SMITHING.getIndex(), amount: 7500, label: "Smithing" },
     ],
-    rewardItemLabel: "A mind helmet",
-    otherRewards: ["The ability to make and use elemental mind equipment"],
+    scrollItemId: I.MIND_HELMET,
+    otherRewards: ["Ability to make Mind", "Equipment"],
     buildJournal,
     onReward: grantReward,
   });
 
-  api.onServerStartup(spawnJigCart);
-  api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("ladders:climb", claimClimb);
+  api.onCustomEvent("door:toggle", mindDoorToggle);
   api.onObjectRoute(routeAdjacentObjectUse);
-  api.onCustomEvent("npc-dialogue:hook", handleStartHook);
-  api.onCustomEvent("npc-dialogue:choice", handleChoice);
-  api.onCustomEvent("interface:close", discardWorkbenchUse);
-  api.onCustomEvent("interface:opened", cancelWorkbenchSmithing);
-  api.onCustomEvent("player:interaction-cleared", discardWorkbenchUse);
-  api.onPlayerLogout(discardWorkbenchUse);
-  api.onPlayerDisconnect(discardWorkbenchUse);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject);
   api.onItemOnNpc(handleItemOnNpc);
   api.onNpcInteraction(handleNpcInteraction);
   api.onItemAction(handleItemAction);
+  api.onInterfaceActionClick(clickJunction);
+  api.onCustomEvent("interface:opened", cancelCrafting);
+  api.onCustomEvent("player:interaction-cleared", cancelCrafting);
+  api.onPlayerDisconnect(cancelCrafting);
+  api.onPlayerLogout(cancelCrafting);
   api.onPlayerLogin(handleLogin);
+
+  return { _test: { STAGE, VARBIT, machineValue, setMachine, CART_PATH, STOP_INDEX, pairIndex, craneLoc, recipes, migrate } };
 };

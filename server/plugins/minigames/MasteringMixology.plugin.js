@@ -24,6 +24,7 @@ module.exports = {
     require("./mixology/LabNotes.Mixology")(api);
     require("./mixology/RewardShop.Mixology")(api);
     require("./mixology/Goggles.Mixology")(api);
+    require("./mixology/Outfit.Mixology")(api);
     require("./mixology/Commands.Mixology")(api);
   },
 };

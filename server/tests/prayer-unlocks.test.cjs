@@ -146,6 +146,24 @@ test("Chivalry and Piety need King's Ransom, not just Prayer and Defence", () =>
   assert.notEqual(denied("PIETY", complete).disabled, true);
 });
 
+test("an unlearnt scroll prayer gets the recorded requirement messagebox", () => {
+  // rsprox 227/1000311 and 237/01107 (Rigour), local 1001226 (Augury), local 1001221 (Preserve).
+  const p = player();
+  for (const [prayer, text] of [
+    ["RIGOUR", "You need a <col=000080>Prayer</col> level of 74, a <col=000080>Defence</col> level of 70, "
+      + "and to have learnt the prayer in order to use <col=000080>Rigour</col>."],
+    ["AUGURY", "You need a <col=000080>Prayer</col> level of 77, a <col=000080>Defence</col> level of 70, "
+      + "and to have learnt the prayer in order to use <col=000080>Augury</col>."],
+    ["PRESERVE", "You need a <col=000080>Prayer</col> level of 55 "
+      + "and to have learnt the prayer in order to use <col=000080>Preserve</col>."],
+  ]) {
+    const event = denied(prayer, p);
+    assert.equal(event.disabled, true, prayer);
+    assert.equal(event.message, text, prayer);
+    assert.equal(event.messageBox, true, `${prayer}: a messagebox, not a chat line`);
+  }
+});
+
 test("reading a dexterous scroll unlocks Rigour, consumes it and syncs the varbit", () => {
   const p = player({ items: [ItemIds.DEXTEROUS_PRAYER_SCROLL, ItemIds.SHARK] });
   read("Dexterous prayer scroll", p, ItemIds.DEXTEROUS_PRAYER_SCROLL);

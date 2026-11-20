@@ -508,6 +508,14 @@ let me borrow your blueprints ..."; leaving it shows "The Estate agent returns y
 (message box). The Wilderness theme is only listed once it can be used (the captures show it
 rarely, so when it shows otherwise isn't known).
 
+The exit portal's Lock and Remove board advert (rsprox captures local 1001005, local 1001008 and
+248, rev 229): Lock answers on the click's tick in a message box, "Your house is now locked to all
+visitors." or "Visitors can now enter your house.", and sets `poh_house_locked`; a guest gets "You
+can only lock your own house." (message box). Remove board advert asks the board's "Remove your
+advert?" (Yes. / No.); Yes says "Your house is no longer being advertised.". A guest gets "This is
+not your portal to configure." and an owner with no advert up "You are not currently advertising
+your house." (both game messages).
+
 A new house's save lists its garden's exit portal by hotspot only; loading a house now places
 such furniture, so the portal shows, and you arrive in front of it.
 

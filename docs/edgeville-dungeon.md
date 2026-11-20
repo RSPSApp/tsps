@@ -9,7 +9,8 @@ The Edgeville Dungeon's monsters, spawns, kill drops and agility shortcuts come 
 - **rsprox captures:**
   - entering the shed with and without the brass key;
   - Obor's gate, his fight and his chest;
-  - Bryophyta's gate, her fight (with growthlings and the logs' axe) and three chest opens.
+  - Bryophyta's gate, her fight (with growthlings and the logs' axe) and three chest opens;
+  - the Bryophyta gate's Check-Count (rsprox.net rec 3275).
 - **The Wiki:** both bosses' stats and max hits; the chest tables (Chest (Obor's lair), Chest (Bryophyta's lair)); the growthling rules; giant bones' 150 Prayer XP.
 - **The cache's map:** the gates, rocks, chests, exits and logs.
 
@@ -38,6 +39,7 @@ Each player gets their own lair: a private area over the lair's real tiles, with
 - **Bryophyta:**
   1. The instanced-area warning, then "Are you sure you wish to open it?".
   2. Then straight in, at 3214,9937, with her attacking at once.
+- **Check-Count (Bryophyta's gate only):** "You have opened Bryophyta's chest a total of N times.", as a chat line and a mesbox, whether or not the gate was ever unlocked (rsprox capture rec 3275, rev 234, tick 21841). Obor's gates have no such option.
 
 **The chest:**
 
@@ -124,7 +126,7 @@ From the capture; stats and rules from the Wiki: 115 HP, max hits 16 (melee) and
 
 - Combat Achievements, and the music unlock lines.
 - The "sneaking suspicion" scroll-box message (no clue system).
-- The Bryophyta gate's "Check-Count" option (its response isn't captured).
+- The singular wording of the gate's Check-Count at 1 chest (only 0 was recorded; the template is kept).
 - Free-to-play drop tables (the members tables are used).
 - The giantsoul amulet's teleport, and changing worlds inside a lair.
 - The steel key ring.

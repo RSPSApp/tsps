@@ -26,8 +26,11 @@ before(async () => {
 });
 
 function fixture(t, { points = 50 } = {}) {
-  const player = new Player(null), messages = [], sounds = [];
-  const sender = new Proxy({ sendSoundEffect(...args) { sounds.push(args); return sender; } }, { get: (target,key) => target[key] ?? (() => sender) });
+  const player = new Player(null), messages = [], sounds = [], strings = [];
+  const sender = new Proxy({
+    sendSoundEffect(...args) { sounds.push(args); return sender; },
+    sendString(text) { strings.push(text); return sender; },
+  }, { get: (target,key) => target[key] ?? (() => sender) });
   t.mock.method(player, 'getPacketSender', () => sender);
   t.mock.method(player, 'sendMessage', (text) => messages.push(text));
   player.setRegistered(true);
@@ -35,7 +38,7 @@ function fixture(t, { points = 50 } = {}) {
   player.getSkillManager().setCurrentLevel(Skill.PRAYER, points, false);
   player.getSkillManager().setMaxLevel(Skill.HITPOINTS, 99);
   player.getSkillManager().setCurrentLevel(Skill.HITPOINTS, 99, false);
-  return { player, messages, sounds, points: () => player.getSkillManager().getCurrentLevel(Skill.PRAYER) };
+  return { player, messages, sounds, strings, points: () => player.getSkillManager().getCurrentLevel(Skill.PRAYER) };
 }
 
 /** Switches a prayer on and lets the free activation tick pass. */
@@ -56,7 +59,7 @@ test('every prayer adds the drain effect the Wiki lists', () => {
   }
 });
 
-test('locked prayers report their own name and exact Prayer requirement', (t) => {
+test('locked prayers report their own name and exact Prayer requirement in a messagebox', (t) => {
   t.mock.method(PluginManager, 'emitPrayerDisabled', () => null);
   const f = fixture(t);
   f.player.getSkillManager().setMaxLevel(Skill.PRAYER, 1);
@@ -66,7 +69,10 @@ test('locked prayers report their own name and exact Prayer requirement', (t) =>
     assert.equal(prayer.getPrayerName(), formatted);
     if (prayer.requirement === 1) continue;
     assert.equal(PrayerHandler.canUse(f.player, prayer, true), false);
-    assert.equal(f.messages.at(-1), `You need a Prayer level of at least ${prayer.requirement} to use ${formatted}.`);
+    // rsprox 228/02246: the recorded Rigour/Augury refusal, the box's text (not a plain chat line).
+    assert.equal(f.strings.at(-2), `You need a <col=000080>Prayer</col> level of ${prayer.requirement} to use <col=000080>${formatted}</col>.`);
+    assert.equal(f.strings.at(-1), 'Click here to continue');
+    f.player.getDialogueManager().reset();
   }
 });
 

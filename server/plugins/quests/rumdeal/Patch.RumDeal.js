@@ -231,6 +231,11 @@ module.exports = function rumDealPatch(api, ctx) {
     ctx.hold(player, ACTION_TICKS);
     TaskManager.submit(new CountdownTask(player, ACTION_TICKS, () => {
       if (!player.isRegistered?.() || plantedAt(player) === 0) return;
+      // The backpack can fill during the pick (an item unequipped into the last slot): the crop stays grown.
+      if (!ctx.hasFreeSlot(player)) {
+        player.sendMessage("You do not have any free space for the Blindweed.");
+        return;
+      }
       player.setAttribute(ATTRIBUTES.PLANTED, 0);
       player.setAttribute(ATTRIBUTES.WEEDS, WEEDED);
       player.setAttribute(ATTRIBUTES.WEEDS_AT, Date.now());

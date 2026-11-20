@@ -14,8 +14,10 @@ const { Player } = require('../dist/game/entity/impl/player/Player');
 const { PlayerSession } = require('../dist/net/PlayerSession');
 const { ClientConnection } = require('../dist/net/NetworkBuilder');
 const { NPCDeathTask } = require('../dist/game/task/impl/NPCDeathTask');
+const Diaries = require('../plugins/achievements/AchievementDiaries.plugin');
 
 const ENT = 7234;
+const WILDERNESS_ENT = 6594;
 const TRUNK = 9474;
 const AT = [1548, 9893, 0];
 let core, next = 9900;
@@ -50,8 +52,8 @@ function harness(t, axe) {
 }
 
 /** A real Ent beside the player, killed by them through the engine's death task. */
-function killEnt(f) {
-  const ent = PM.spawnNpc({ id: ENT, x: AT[0], y: AT[1], z: 0, wanderRadius: 0 });
+function killEnt(f, id = ENT) {
+  const ent = PM.spawnNpc({ id, x: AT[0], y: AT[1], z: 0, wanderRadius: 0 });
   assert.ok(ent, 'the Ent spawned');
   ent.__skipDefaultRespawn = true;
   f.player.setLocation(new core.Location(AT[0] + 2, AT[1], 0)); f.player.needsPlacement = false;
@@ -76,4 +78,37 @@ test('the killer chops the Ent trunk with a crystal axe', async (t) => {
   for (let i = 0; i < 6; i++) f.tick();
   assert.ok(f.player.getSkillManager().getExperience(core.Skill.WOODCUTTING) >= xp + 25, 'Woodcutting XP for a chop');
   assert.ok(f.messages.some((message) => message.startsWith('The ent carcass yields:')), JSON.stringify(f.messages));
+});
+
+// Wiki (Ent): "Completing the medium Wilderness Diary increases the chance of successfully chopping
+// ents in the Wilderness by 15%". At level 1 with a bronze axe the chance is 13/256 (0.0508); x1.15
+// is 0.0584, so a roll of 0.055 misses without the diary and lands with it.
+const BETWEEN_ROLL = 0.055;
+
+/** Chops a trunk at level 1 with a bronze axe, every roll BETWEEN_ROLL; true if a log came. */
+async function chopsAtLowRoll(t, id, diaryDone) {
+  const f = harness(t, core.ItemIdentifiers.BRONZE_AXE);
+  f.player.getSkillManager().setMaxLevel(core.Skill.WOODCUTTING, 1).setCurrentLevel(core.Skill.WOODCUTTING, 1);
+  if (diaryDone) Diaries._test.diaryCommand({ player: f.player, parts: ['diary', 'wilderness', 'medium', 'complete'] });
+  const ent = killEnt(f, id);
+  assert.equal(ent.getNpcTransformationId(), TRUNK, 'it became a trunk');
+  // Mocked before the click: the send's own ticks already reach the first attempt.
+  const mock = t.mock.method(Math, 'random', () => BETWEEN_ROLL);
+  await f.send({ type: 'npc_option', index: ent.getIndex(), clickType: 1 });
+  assert.ok(f.messages.includes('You swing your axe at the Ent trunk.'), JSON.stringify(f.messages));
+  for (let i = 0; i < 6; i++) f.tick();
+  mock.mock.restore();
+  return f.messages.some((message) => message.startsWith('The ent carcass yields:'));
+}
+
+test('the medium Wilderness Diary makes a Wilderness Ent trunk chop land 15% more often', async (t) => {
+  assert.equal(await chopsAtLowRoll(t, WILDERNESS_ENT, true), true);
+});
+
+test('without the medium Wilderness Diary the same roll misses on a Wilderness Ent trunk', async (t) => {
+  assert.equal(await chopsAtLowRoll(t, WILDERNESS_ENT, false), false);
+});
+
+test('the Wilderness Diary does not help on a Woodcutting Guild Ent trunk', async (t) => {
+  assert.equal(await chopsAtLowRoll(t, ENT, true), false);
 });

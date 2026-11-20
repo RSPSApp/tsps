@@ -411,7 +411,9 @@ function eat(event) {
   send(message);
   if (food.say) player.forceChat(food.say);
   for (const line of after) send(line);
-  countBite(player);
+  // The Halloween 2020 candies leave tracking_food_eaten alone (rsprox 229/00245: three eats, ticks 510,
+  // 603 and 607, with no varp change).
+  if (food.countsEaten !== false) countBite(player);
   const heal = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS) - hitpointsBefore;
   // `heal` is what it healed (nothing at full health); `restores` what the food restores.
   const maxHp = player.getSkillManager().getMaxLevel(core.Skill.HITPOINTS);

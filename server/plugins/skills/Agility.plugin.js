@@ -733,7 +733,9 @@ function attemptObstacle(player, context, entry) {
   const forced = obstacle.forceFail?.(context) ?? null;
   const fail = forced ?? obstacle.fail;
   // Content may make the roll succeed ("agility:roll", a league relic); a forced failure stays one.
-  const roll = { player, objectId, success: !forced && rollSuccess(player, obstacle, level) };
+  // `canFail` (a scripted shortcut's) says whether this way across can fail at all (Brimhaven's lava stones: only southwards).
+  const safe = !forced && obstacle.canFail?.(context) === false;
+  const roll = { player, objectId, success: !forced && (safe || rollSuccess(player, obstacle, level)) };
   if (!forced) pluginApi.emitCustomEvent("agility:roll", roll);
   const success = roll.success;
   const resolved = resolve(success ? obstacle.steps : fail.steps, context);

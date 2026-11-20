@@ -15,7 +15,7 @@ const core = PluginManager.getCoreApi();
 const I = core.ItemIdentifiers;
 const hooks = { itemOnItem: [], itemActions: {}, events: {}, tasks: [] };
 /** Answers for the events Fletching asks other plugins: quest state and Slayer unlocks. */
-const answers = { started: new Set(), complete: new Set(), unlocks: new Set() };
+const answers = { started: new Set(), complete: new Set(), unlocks: new Set(), taught: new Map() };
 const diaryTasks = [];
 let Shared = null;
 
@@ -35,6 +35,7 @@ function fakeApi() {
       if (name === "quest:is-started") event.started = answers.started.has(event.key);
       if (name === "quest:is-complete") event.complete = answers.complete.has(event.key);
       if (name === "slayer:has-unlock") event.unlocked = answers.unlocks.has(event.name);
+      if (name === "fletching:taught" && answers.taught.has(event.name)) event.taught = answers.taught.get(event.name);
       if (name === "diary:task") diaryTasks.push(`${event.diary}:${event.task}`);
       for (const handler of hooks.events[name] ?? []) handler(event);
     },
@@ -43,7 +44,7 @@ function fakeApi() {
 
 function player({ level = 99, items = {}, at = [3000, 3000] } = {}) {
   const counts = new Map(Object.entries(items).map(([name, n]) => [I[name], n]));
-  const attrs = new Map(), varbits = new Map(), messages = [], spam = [], sounds = [], animations = [];
+  const attrs = new Map(), varbits = new Map(), messages = [], spam = [], sounds = [], animations = [], boxes = [];
   let menu = null, xp = 0;
   const inventory = {
     contains: (id) => (counts.get(id) ?? 0) > 0,
@@ -63,7 +64,12 @@ function player({ level = 99, items = {}, at = [3000, 3000] } = {}) {
     sendSoundEffect(id) { sounds.push(id); return sender; },
   }, { get: (target, key) => target[key] ?? (() => sender) });
   return {
-    counts, messages, spam, sounds, animations, varbits, menu: () => menu, xp: () => xp,
+    counts, messages, spam, sounds, animations, varbits, boxes, menu: () => menu, xp: () => xp,
+    getDialogueManager: () => ({
+      startDialogues: (chain) => boxes.push(...[...chain.getDialogues().values()].map((entry) => ({
+        type: entry.constructor.name, text: entry.getText(), items: entry.getItemIds?.() ?? null,
+      }))),
+    }),
     count: (name) => counts.get(I[name]) ?? 0,
     getInventory: () => inventory,
     getEquipment: () => ({ contains: () => false }),
@@ -110,6 +116,7 @@ beforeEach(() => {
   answers.started.clear();
   answers.complete.clear();
   answers.unlocks.clear();
+  answers.taught.clear();
   diaryTasks.length = 0;
 });
 
@@ -380,6 +387,62 @@ test("ogre arrows need Big Chompy Bird Hunting started; brutal arrows need a ham
   const q = player({ items: { FLIGHTED_OGRE_ARROW: 6, BRONZE_NAILS: 6 } });
   use(q, "FLIGHTED_OGRE_ARROW", "BRONZE_NAILS");
   assert.deepEqual(q.messages, ["You'll need a hammer to do that."]);
+});
+
+// Capture ZogreFleshEaters.bin ticks 3253-3255 and 3492-3495 (after the quest): a knife on one achey log opens the menu
+// with both products whatever else is held; the bow without wolf bones is a message box, with them it is cut 2 ticks
+// after the choice. Wiki (Comp ogre bow): level 30, 45 XP, "Partial completion of Zogre Flesh Eaters".
+test("knife on achey logs: the shafts and the comp bow share live's menu once Grish has taught the bow", () => {
+  answers.started.add("big_chompy_bird_hunting");
+  answers.started.add("zogre_flesh_eaters");
+  answers.taught.set("comp_ogre_bow", true);
+  const p = player({ items: { KNIFE: 1, ACHEY_TREE_LOGS: 1 } });
+  use(p, "KNIFE", "ACHEY_TREE_LOGS");
+  const menu = p.menu();
+  assert.ok(menu, "a menu, not straight to the shafts");
+  assert.equal(menu.getTitle(), "How many logs do you wish to fletch?");
+  assert.deepEqual(menu.getItems(), [I.OGRE_ARROW_SHAFT, I.UNSTRUNG_COMP_BOW]);
+  assert.deepEqual(menu.getOptions().labels, ["Ogre arrow shafts", "Unstrung composite bow"]);
+  assert.equal(menu.getOptions().maxAmount, 1);
+  menu.execute(I.UNSTRUNG_COMP_BOW, 1);
+  assert.deepEqual(p.boxes, [{
+    type: "DoubleItemStatementDialogue",
+    text: "You need wolf bones and achey tree logs to make the composite ogre bow.",
+    items: [I.ACHEY_TREE_LOGS, I.WOLF_BONES],
+  }], "objectbox_double with the log and the bones (tick 3255)");
+  assert.equal(hooks.tasks.length, 0);
+  assert.equal(p.count("ACHEY_TREE_LOGS"), 1);
+
+  const q = player({ items: { KNIFE: 1, ACHEY_TREE_LOGS: 1, WOLF_BONES: 1 } });
+  use(q, "KNIFE", "ACHEY_TREE_LOGS");
+  q.menu().execute(I.UNSTRUNG_COMP_BOW, 1);
+  assert.deepEqual(ticksOf(q, "UNSTRUNG_COMP_BOW"), [2]);
+  assert.deepEqual(q.spam, ["You carefully cut the wood into a composite ogre bow."]);
+  assert.equal(q.count("ACHEY_TREE_LOGS"), 0);
+  assert.equal(q.count("WOLF_BONES"), 0);
+  assert.equal(q.xp(), 45);
+});
+
+test("before Grish teaches the comp bow the achey log only makes shafts; brutal arrows wait for Sithik", () => {
+  answers.started.add("big_chompy_bird_hunting");
+  answers.started.add("zogre_flesh_eaters");
+  answers.taught.set("comp_ogre_bow", false);
+  answers.taught.set("brutal_arrows", false);
+  const p = player({ items: { KNIFE: 1, ACHEY_TREE_LOGS: 1, WOLF_BONES: 1 } });
+  use(p, "KNIFE", "ACHEY_TREE_LOGS");
+  assert.equal(p.menu(), null);
+  runTask();
+  assert.equal(p.count("UNSTRUNG_COMP_BOW"), 0);
+  assert.ok(p.count("OGRE_ARROW_SHAFT") >= 2);
+
+  const q = player({ items: { HAMMER: 1, FLIGHTED_OGRE_ARROW: 6, BRONZE_NAILS: 6 } });
+  use(q, "FLIGHTED_OGRE_ARROW", "BRONZE_NAILS");
+  assert.deepEqual(q.messages, ["Nothing interesting happens."]);
+  answers.taught.set("brutal_arrows", true);
+  hooks.tasks.length = 0;
+  use(q, "FLIGHTED_OGRE_ARROW", "BRONZE_NAILS");
+  runTask();
+  assert.equal(q.count("BRONZE_BRUTAL"), 6, "made once Sithik has explained them");
 });
 
 test("the bow string spool stores strings on the account and strings bows from them", () => {

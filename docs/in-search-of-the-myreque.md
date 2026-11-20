@@ -13,7 +13,7 @@ hidden wall, the basement ladder and the journal.
 
 **Sources:**
 - **an rsprox capture** of a whole live playthrough, start to completion (revision 242, recorded 2026-11-19,
-  including two failed quiz attempts). The ticks below are that recording's;
+  including three failed quiz attempts). The ticks below are that recording's;
 - **the OSRS Wiki:** "In Search of the Myreque" (walkthrough and notes) and its transcript, which the dialogue
   data is imported from;
 - **this cache:** ids, the loc and NPC multis and their varbits.
@@ -49,7 +49,7 @@ The cache's completion threshold is 105 (quest DB row 79), so the plugin complet
 
 Varbits:
 - **173 / 174** (`routequestionscorrect` / `routequestionsanswered`): each quiz answer bumps 174 and, when right,
-  173; both go back to 0 as the next attempt starts (858, 954).
+  173; both go back to 0 as the next attempt starts (858, 954, 1047).
 - **176-178** (`bridgerung1-3`) and **3928** (`route_bridgecomplete`, one bit per rung: 1, 3, 7 as the rungs are
   repaired in order). Completing the quest sets all four (1617), so the bridge stays repaired.
 - **396** (`thsfm_vanstrom_hide`): 1 as the cutscene opens. The pub's stranger (NPC 6269) shows Vanstrom (5056) at
@@ -79,14 +79,15 @@ Varbits:
   `hammer_wood` (2101) three times, 0, 20 and 40 client cycles apart. Three ticks later "You repair a section of
   the bridge.", one plank and 75 steel nails go, the rung's varbit and its 3928 bit are set, and the player walks
   one tile onto the rung (668-681).
-- **Walking:** the player walks the repaired bridge from the landing to the top rung (837). The map keeps the
-  rungs' floor-decoration clipping for everyone; a player on the bridge is in a private area of their own (it
-  counts as the main world, so nobody is hidden) that clears it on the landing and their repaired rungs.
+- **Walking:** the player walks the repaired bridge from the landing to the top rung (837), and ghasts still attack
+  there (671). The map keeps the rungs' floor-decoration clipping for everyone; a player on the bridge walks by a
+  clip overlay of their own (`Mobile.setClipOverlay`, read only by movement and route finding) that clears it on the
+  landing and their repaired rungs. They stay in the swamp's area, and drops stay in the world.
 
 ## Curpile Fyod
 
 - **The quiz:** each question is the menu's title, with five answers ending "I don't know." (745-1060).
-- **The knock-out** (778-791, 882-895): the box "Curpile knocks you out and takes you back to Mort'ton." with no
+- **The knock-out** (778-791, 882-895, 975-991): the box "Curpile knocks you out and takes you back to Mort'ton." with no
   continue, Curpile's `human_sword_slash` (390) and `hacksword_slash` (2500); a tick later the player's
   `human_staff_block` (415), `stunned_thieving` (245, height 124) and `stunned` (2727); a tick later
   `human_death_backwards` (837) and the fade; the minimap off a tick after that; the move to (3522,3285) seven

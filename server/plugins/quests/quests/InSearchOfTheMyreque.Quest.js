@@ -951,10 +951,15 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   function arrivedThroughTunnel(event) {
     const { player, objectId, location } = event;
     if (objectId !== ObjectIdentifiers.CAVE_ENTRANCE_27 || location?.x !== HIDEOUT_TUNNEL.x || location?.y !== HIDEOUT_TUNNEL.y) return;
-    const stage = quest.getStage(player);
+    let stage = quest.getStage(player);
     if (stage === STAGE_HELLHOUND_SUMMONED) {
       ensureHellhound(player);
       return;
+    }
+    // A save made in the cave at 55 before the doors set 60 (they did not, before): this is still the first arrival.
+    if (stage === STAGE_ANSWERED_QUESTIONS) {
+      quest.setStage(player, STAGE_ENTERED_HIDEOUT);
+      stage = STAGE_ENTERED_HIDEOUT;
     }
     if (stage !== STAGE_ENTERED_HIDEOUT) return;
     Scenes.later(player, 2, () => {

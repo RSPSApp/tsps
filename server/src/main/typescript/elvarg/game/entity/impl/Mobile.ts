@@ -55,6 +55,13 @@ class MobileTask extends Task {
 
 /** An actor tint: cycles from now, HSL (-1 keeps the model's own) and how strongly (0-255). */
 /** Set (true) on a developer who takes damage and loses items on death after all; ::mortal toggles it. Not saved. */
+
+/** A mobile's own clipping on some tiles (see Mobile.setClipOverlay). */
+export interface ClipOverlay {
+    hasClip(location: Location): boolean;
+    getClip(location: Location): number;
+}
+
 export const MORTAL_DEVELOPER_ATTRIBUTE = "dev:mortal";
 
 export type ActorTint = {
@@ -153,6 +160,35 @@ export abstract class Mobile extends Entity {
     public abstract onRemove(): void;
 
     public abstract manipulateHit(hit: PendingHit): PendingHit;
+
+    /**
+     * Clipping this mobile alone walks by, over its private area's (or the map's) on the tiles the overlay claims: a
+     * quest bridge whose repaired rungs only this player may stand on. Only movement and route finding read it;
+     * visibility, drops and areas are untouched.
+     */
+    private clipOverlay: ClipOverlay | null = null;
+
+    public setClipOverlay(overlay: ClipOverlay | null): void {
+        this.clipOverlay = overlay;
+    }
+
+    public getClipOverlay(): ClipOverlay | null {
+        return this.clipOverlay;
+    }
+
+    /**
+     * What movement and route finding look clipping up in: the private area, with the clip overlay over it when there is
+     * one. RegionManager.getClipping reads only hasClip/getClip from it.
+     */
+    public getWalkClipArea(): any {
+        const area = this.getPrivateArea();
+        const overlay = this.clipOverlay;
+        if (!overlay) return area;
+        return {
+            hasClip: (location: Location) => overlay.hasClip(location) || (area?.hasClip?.(location) ?? false),
+            getClip: (location: Location) => overlay.hasClip(location) ? overlay.getClip(location) : area?.getClip?.(location) ?? 0,
+        };
+    }
 
     public override setArea(area: Area): void {
         const previousPrivateArea = this.getPrivateArea();

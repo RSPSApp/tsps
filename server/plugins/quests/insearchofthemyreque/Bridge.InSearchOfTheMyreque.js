@@ -10,9 +10,11 @@
  *   times, 0, 20 and 40 client cycles apart, on the click; three ticks later "You repair a section of the bridge.", one
  *   plank and 75 steel nails go, the rung's varbit and its bit of route_bridgecomplete (3928) are set, and the player
  *   walks onto the rung (ticks 668-681: 3928 goes 1, 3, 7).
- * - A repaired bridge is walked along (tick 837: (3502,3427) to (3502,3430)). The map keeps the broken rungs' floor
- *   decoration clipping for everyone, so a player on the bridge is in their own area that clears it on their repaired
- *   rungs and the landing; it counts as the main world, so nobody is hidden. Broken rungs still block.
+ * - A repaired bridge is walked along (tick 837: (3502,3427) to (3502,3430)), and ghasts still attack there (671).
+ *   The map keeps the rungs' floor-decoration clipping for everyone, so a player on the bridge walks by a clip overlay
+ *   of their own (Mobile.setClipOverlay) that clears it on the landing and their repaired rungs. It touches movement
+ *   only: the player stays in the swamp's area, sees and is seen as before, and drops stay in the world. Broken rungs
+ *   still block.
  * - Completing the quest sets every rung (tick 1617), so the bridge stays repaired afterwards.
  */
 const RUNG_VARBITS = [176, 177, 178];
@@ -27,7 +29,7 @@ const NAILS_PER_RUNG = 75;
 const FLOOR_DECORATION_CLIP = 0x40000;
 
 module.exports = function createMyrequeBridge(api, { quest, attribute, stageReachedHollows }) {
-  const { Animation, Boundary, CountdownTask, ItemIdentifiers, Location, PrivateArea, RegionManager, TaskManager } = api.core;
+  const { Animation, CountdownTask, ItemIdentifiers, Location, RegionManager, TaskManager } = api.core;
 
   const BRIDGE_X = 3502;
   const LANDING_Y = 3427; // loc 5002, "Rope bridge"
@@ -61,22 +63,15 @@ module.exports = function createMyrequeBridge(api, { quest, attribute, stageReac
   }
 
   /** One player's walk along the bridge: the map's clipping, without the floor decoration on the tiles open to them. */
-  class BridgeArea extends PrivateArea {
-    constructor(owner) {
-      super([new Boundary(BRIDGE_X, BRIDGE_X, LANDING_Y, RUNG_Y[RUNG_Y.length - 1], 0)]);
-      this.owner = owner;
-    }
-    getName() { return "Hollows rope bridge"; }
-    countsAsMainWorld() { return true; }
-    hasClip(location) {
-      return location.getZ() === 0 && openFor(this.owner, location.getX(), location.getY()) || super.hasClip(location);
-    }
-    getClip(location) {
-      if (super.hasClip(location)) return super.getClip(location);
-      const region = RegionManager.getRegion(location.getX(), location.getY());
-      const clip = region?.getClip(location.getX(), location.getY(), location.getZ()) ?? 0;
-      return openFor(this.owner, location.getX(), location.getY()) ? clip & ~FLOOR_DECORATION_CLIP : clip;
-    }
+  function overlayFor(player) {
+    return {
+      bridge: true,
+      hasClip: (location) => location.getZ() === 0 && openFor(player, location.getX(), location.getY()),
+      getClip: (location) => {
+        const region = RegionManager.getRegion(location.getX(), location.getY());
+        return (region?.getClip(location.getX(), location.getY(), location.getZ()) ?? 0) & ~FLOOR_DECORATION_CLIP;
+      },
+    };
   }
 
   function onBridge(player) {
@@ -85,9 +80,11 @@ module.exports = function createMyrequeBridge(api, { quest, attribute, stageReac
   }
 
   function enterBridge(player) {
-    const area = player.getArea?.();
-    if (area instanceof BridgeArea && area.owner === player) return;
-    new BridgeArea(player).enter(player);
+    if (player.getClipOverlay?.()?.bridge !== true) player.setClipOverlay?.(overlayFor(player));
+  }
+
+  function leaveBridge(player) {
+    if (player.getClipOverlay?.()?.bridge === true) player.setClipOverlay(null);
   }
 
   function climb(player, up, landing, message) {
@@ -98,6 +95,7 @@ module.exports = function createMyrequeBridge(api, { quest, attribute, stageReac
       player.sendMessage(message);
       player.moveTo(new Location(landing.x, landing.y, 0));
       if (up) enterBridge(player);
+      else leaveBridge(player);
     }));
   }
 
@@ -174,11 +172,11 @@ module.exports = function createMyrequeBridge(api, { quest, attribute, stageReac
     }));
   }
 
-  /** A player saved on the bridge is put back in their bridge area, so they can walk off it again. */
+  /** A player saved on the bridge gets the overlay back, so they can walk along it again. */
   function login(player) {
     send(player);
     if (onBridge(player)) enterBridge(player);
   }
 
-  return { climbTree, repairRung, repaired, rungRepaired, send, login, onBridge, BridgeArea };
+  return { climbTree, repairRung, repaired, rungRepaired, send, login, onBridge };
 };

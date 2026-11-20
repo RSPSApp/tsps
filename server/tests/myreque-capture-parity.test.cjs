@@ -411,11 +411,12 @@ test('each member met sets their bit of varbit 2496, resent at login', (t) => {
   assert.equal(quest().getStage(p), 65, 'meeting everyone no longer moves the stage; the hand-in does');
 });
 
-test('a rung clicked from inside the bridge area paths like any click (the area counts as the main world but is not a boat deck)', async (t) => {
+test('on the bridge the player walks by their own clip overlay, not a private area, and a clicked rung paths like any click', async (t) => {
   const p = actor(t, 25, 3502, 3427);
   bridgeMaterials(p, 1);
-  login(p); // a save on the landing goes back into the bridge area
-  assert.equal(p.getArea()?.getName?.(), 'Hollows rope bridge');
+  login(p); // a save on the landing gets the overlay back
+  assert.equal(p.getClipOverlay()?.bridge, true);
+  assert.equal(p.getPrivateArea(), null, 'no private area: the swamp\'s area, visibility and drops are as anywhere');
   const connection = new ClientConnection(p.getSession().getChannel());
   connection.player = p;
   await connection.dispatch([{ type: 'object_option', id: 26245, x: 3502, y: 3428, action: 'Repair' }]);
@@ -428,11 +429,16 @@ test('a rung clicked from inside the bridge area paths like any click (the area 
 
 test('Veliaf after the hound: stage 90 on "That\'s very useful. Thanks.", and the first talk does not fall into "Need something?"', async (t) => {
   const p = actor(t, 85, 3506, 9837);
+  const stagesBeforeThanks = new Set();
   const lines = await converse(p, () => PM.emitCustomEvent('npc-dialogue:start', {
     player: p, npcId: core.NpcIdentifiers.VELIAF_HURTZ_2,
     variant: { page: PAGE, variant: 'myreque-hideout-after-defeating-the-skeleton-hellhound-veliaf-hurtz' }, exact: true,
-  }), ['Okay, thanks.'], { maxTicks: 40 });
+  }), ['Okay, thanks.'], {
+    maxTicks: 40,
+    onTick: (n, seen) => { if (seen.length && !seen.includes("That's very useful. Thanks.")) stagesBeforeThanks.add(quest().getStage(p)); },
+  });
   assert.ok(lines.includes("That's very useful. Thanks."), JSON.stringify(lines));
+  assert.deepEqual([...stagesBeforeThanks], [85], 'still 85 until the thanks line');
   assert.equal(quest().getStage(p), 90);
   assert.ok(!lines.includes('Need something?'), 'the speaking-again branch is not played in the first talk');
 });
@@ -447,4 +453,30 @@ test('the Stranger: the quest completes once the player continues past the last 
   assert.ok(stages.filter((s) => s === 97).length >= 5, `stage 97 while the lines play: ${stages}`);
   assert.equal(quest().getStage(p), 105);
   assert.deepEqual([varbit(p, 176).at(-1), varbit(p, 3928).at(-1)], [1, 7], 'the bridge is repaired for good');
+});
+
+test('an item dropped on the bridge stays in the world after the player climbs down', (t) => {
+  const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
+  const p = actor(t, 52, 3502, 3425);
+  p.setAttribute(BRIDGE, 0b111);
+  login(p);
+  click(p, SOUTH_TREE(), 'Cross-bridge');
+  tick(p);
+  assert.deepEqual(at(p), [3502, 3427, 0]);
+  const dropped = ItemOnGroundManager.registerLocation(p, new core.Item(core.ItemIdentifiers.COINS, 1000), p.getLocation().clone());
+  click(p, SOUTH_TREE(), 'Cross-bridge');
+  tick(p, 2);
+  assert.deepEqual(at(p), [3502, 3425, 0]);
+  assert.ok(core.World.getItems().includes(dropped), 'the drop is still on the landing');
+  assert.equal(p.getClipOverlay(), null, 'the overlay goes with the climb down');
+  t.after(() => ItemOnGroundManager.deregister?.(dropped));
+});
+
+test('arriving in the hideout at stage 55 (a save from before the doors set 60) moves to 60 and Harold speaks', async (t) => {
+  const p = actor(t, 55, 3505, 9832);
+  const lines = await converse(p, () => PM.emitCustomEvent('loc-teleports:arrived', {
+    player: p, objectId: core.ObjectIdentifiers.CAVE_ENTRANCE_27, location: { x: 3492, y: 9823, z: 0 },
+  }), [], { maxTicks: 20, idleTicks: 6 });
+  assert.equal(quest().getStage(p), 60);
+  assert.equal(lines[1], 'Hey! Who are you and why are you here?');
 });

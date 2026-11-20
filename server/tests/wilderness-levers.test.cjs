@@ -33,7 +33,8 @@ function harness({ diaryComplete = false, teleportSpy = () => {} } = {}) {
   const tasks = [];
   const persisted = [];
   const api = {
-    core: { ...core, TeleportHandler: { ...core.TeleportHandler, checkReqs: () => true, teleport: teleportSpy } },
+    // Static methods do not spread: inherit the real ones (onTeleporting), stubbing the checks and the plain teleport.
+    core: { ...core, TeleportHandler: Object.assign(Object.create(core.TeleportHandler), { checkReqs: () => true, teleport: teleportSpy }) },
     // As TaskManager.submit: an immediate task runs once on the tick it is submitted.
     getTaskManager: () => ({ submit: (task) => { task.setRunning(true); if (task.isImmediate()) task.execute(); tasks.push(task); } }),
     persistAttribute: (key, value) => persisted.push([key, value]),
@@ -75,6 +76,17 @@ function player(varbits = {}) {
     setForceMovement() {},
     getSkillAnimation: () => -1,
     setSkillAnimation() {},
+    // The teleport's hold (TeleportHandler.onTeleporting, untargetable, teleporting).
+    area: null,
+    getPrivateArea: () => self.area,
+    untargetable: false,
+    teleporting: false,
+    combatResets: 0,
+    setUntargetable: (value) => { self.untargetable = value; },
+    isUntargetable: () => self.untargetable,
+    setTeleporting: (value) => { self.teleporting = value; },
+    getSkillManager: () => ({ stopSkillable() {} }),
+    getCombat: () => ({ reset: () => { self.combatResets++; } }),
     getUpdateFlag: () => ({ flag() {} }),
     performAnimation: (animation) => log.push([tick, "anim", animation.getId()]),
     performGraphic: (graphic) => log.push([tick, "gfx", graphic.getId()]),
@@ -237,10 +249,63 @@ test("a pull cut short by death clears busy", () => {
   runTicks(h, who, 1);
   const busy = varbit("busy");
   assert.equal(who.sent.get(busy), 1);
+  assert.equal(who.untargetable, true, "held from the pull");
   who.hitpoints = 0;
   runTicks(h, who, 8);
   assert.equal(who.sent.get(busy), 0, "buff timers would stay paused");
   assert.equal(who.log.find((entry) => entry[1] === "tele"), undefined);
+  assert.deepEqual([who.untargetable, who.teleporting], [false, false], "and let go");
+});
+
+test("a pull holds the player as a teleport does, from the pull until the landing", () => {
+  const h = harness();
+  const who = player();
+  who.setAttribute("levers:skip-wilderness-warning", true);
+  use(h, who, "edgeville_wildy_lever", "Pull", 3090, 3475);
+  const held = [];
+  runTicks(h, who, 8, (tick) => held.push([tick, who.untargetable, who.teleporting]));
+  const pullTick = who.log.find((entry) => entry[1] === "anim")[0];
+  const landTick = who.log.find((entry) => entry[1] === "tele")[0];
+  for (const [tick, untargetable, teleporting] of held) {
+    const holding = tick >= pullTick && tick < landTick;
+    assert.deepEqual([untargetable, teleporting], [holding, holding], `tick ${tick}: ${holding ? "held" : "free"}`);
+  }
+  assert.equal(who.combatResets, 1, "the fight stops at the pull (no auto-retaliate)");
+});
+
+test("a main-world lever pulled from inside a private area flips there and leaves the world's lever up", () => {
+  const { PrivateArea } = require("../dist/game/model/areas/impl/PrivateArea");
+  const [x, y] = [2271, 4680];
+  const id = loc("dragonkingoutlever");
+  const downId = loc("ikov_leverdown");
+  const lever = mapLever(id, x, y);
+  const shape = lever.getType();
+  const here = (o) => o.getType() === shape && o.getLocation().getX() === x && o.getLocation().getY() === y;
+  const inArea = (area) => (area
+    ? area.getObjects()
+    : (MapObjects.mapObjects.get(MapObjects.getHash(x, y, 0)) ?? []).filter((o) => !o.getPrivateArea()))
+    .filter(here).map((o) => o.getId());
+  for (const leaveEarly of [false, true]) {
+    const area = new (class extends PrivateArea {})();
+    const h = harness();
+    const who = player();
+    who.area = area;
+    who.setLocation(new core.Location(x, y, 0));
+    h.hooks["lever:teleport"]({ player: who, object: lever, destination: new core.Location(3067, 10254, 0) });
+    const seen = [];
+    runTicks(h, who, 8, (tick) => {
+      seen.push([inArea(area), inArea(null)]);
+      if (leaveEarly && tick === 3) area.destroy();
+    });
+    assert.ok(seen.every(([, world]) => world.length === 1 && world[0] === id), "the main world's lever never moves");
+    assert.deepEqual(seen[1][0], [downId], "the area sees it down");
+    if (leaveEarly) {
+      assert.deepEqual(area.getObjects(), [], "an area gone before it comes back up keeps nothing");
+    } else {
+      assert.deepEqual(seen.at(-1)[0], [id], "and back up, there");
+      area.destroy();
+    }
+  }
 });
 
 test("the Edgeville lever warns as live, lands beside the Keep lever and skips the warning once told to", () => {

@@ -113,20 +113,59 @@ const CAST_SOUND = 200;
 // 224/01506.txt, 226/01630.txt, 233/00454.txt: down, then back up four ticks later).
 const LEVER_DOWN_TICKS = 4;
 
+/** The private area whose locs the player sees, or null for the main world (as ObjectManager's). */
+function viewedArea(player) {
+  const area = player.getPrivateArea?.() ?? null;
+  return area && !area.countsAsMainWorld?.() ? area : null;
+}
+
 /**
- * Swaps the pulled lever for its down loc, for everyone, and puts it back up after
- * LEVER_DOWN_TICKS whether or not the pull completes (the down loc has no options).
+ * Swaps the pulled lever for its down loc, for everyone who sees it, and puts it back up after
+ * LEVER_DOWN_TICKS whether or not the pull completes (the down loc has no options). A main-world
+ * lever pulled from inside a private area (an Echo King Black Dragon's lair) is flipped there, as
+ * a copy of the lever in that area: the area is sent nothing of the main world's locs, and the main
+ * world's lever stays up for everyone outside.
  */
-function lowerLever(object, downId) {
+function lowerLever(player, object, downId) {
   const location = object.getLocation();
-  const down = new core.GameObject(
-    downId,
-    new core.Location(location.getX(), location.getY(), location.getZ()),
-    object.getType(),
-    object.getFace(),
-    object.getPrivateArea?.() ?? null,
-  );
-  api.getTaskManager().submit(new core.TimedObjectReplacementTask(object, down, LEVER_DOWN_TICKS, true));
+  const area = object.getPrivateArea?.() ?? viewedArea(player);
+  const at = () => new core.Location(location.getX(), location.getY(), location.getZ());
+  const down = new core.GameObject(downId, at(), object.getType(), object.getFace(), area);
+  if (object.getPrivateArea?.() || !area) {
+    api.getTaskManager().submit(new core.TimedObjectReplacementTask(object, down, LEVER_DOWN_TICKS, true));
+    return;
+  }
+  // A private loc joins its area when it is made, so the lever's copy is made when it goes back up.
+  let ticks = 0;
+  core.ObjectManager.register(down, true);
+  api.getTaskManager().submit(new (class extends core.Task {
+    constructor() { super(1, false); }
+    execute() {
+      if (++ticks < LEVER_DOWN_TICKS) return;
+      // The area went (its player left by this very pull): its locs went with it.
+      if (!area.isDestroyed?.()) {
+        const lever = new core.GameObject(object.getId(), at(), object.getType(), object.getFace(), area);
+        core.ObjectManager.replaceInPlace(down, lever);
+      }
+      this.stop();
+    }
+  })());
+}
+
+/**
+ * The pull holds the player as a teleport does (TeleportHandler.teleport): their fight stops, and
+ * from the pull until the landing nothing can attack them and they attack nothing, auto-retaliate
+ * included. The captures show varbit busy set for that whole time.
+ */
+function hold(player) {
+  core.TeleportHandler.onTeleporting(player);
+  player.setUntargetable(true);
+  player.setTeleporting(true);
+}
+
+function release(player) {
+  player.setUntargetable(false);
+  player.setTeleporting(false);
 }
 
 /**
@@ -137,11 +176,12 @@ function lowerLever(object, downId) {
 function pullSteps(lever, destination, onLanding, { message = PULL_MESSAGE } = {}) {
   return [
     { wait: 1 },
+    { run: ({ player }) => hold(player) },
     { anim: ids.pull },
     message && { msg: message },
     { varbit: [ids.busy, 1] },
     { wait: 1 },
-    { run: ({ object }) => lowerLever(object, lever.downId) },
+    { run: ({ player, object }) => lowerLever(player, object, lever.downId) },
     { sound: LEVER_SOUND },
     { wait: 1 },
     { anim: ids.cast },
@@ -151,6 +191,7 @@ function pullSteps(lever, destination, onLanding, { message = PULL_MESSAGE } = {
     { tele: [destination.to[0], destination.to[1], destination.to[2] ?? 0] },
     destination.landed && { msg: destination.landed },
     { varbit: [ids.busy, 0] },
+    { run: ({ player }) => release(player) },
     { run: onLanding },
   ].filter(Boolean);
 }
@@ -184,8 +225,12 @@ function pull(player, object, lever, destination, onLanding = () => landed(playe
   const to = new core.Location(destination.to[0], destination.to[1], destination.to[2] ?? 0);
   if (!core.TeleportHandler.checkReqs(player, to, Infinity)) return;
   ObstacleRunner.run({ player, object }, pullSteps(lever, destination, onLanding, options), {
-    // A pull cut short (death, logout) never reaches the landing step's busy 0.
-    onFinish: (completed) => { if (!completed) player.getPacketSender().sendVarbit(ids.busy, 0); },
+    // A pull cut short (death, logout) never reaches the landing step's busy 0 and release.
+    onFinish: (completed) => {
+      if (completed) return;
+      player.getPacketSender().sendVarbit(ids.busy, 0);
+      release(player);
+    },
   });
 }
 

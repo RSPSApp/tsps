@@ -293,7 +293,8 @@ export class ObjectManager {
      * Swaps one loc for another in the same tile and shape slot (a lever pulled down and back up),
      * as live sends it: one loc_add_change to the players who see the tile, no removal first. The
      * outgoing loc leaves MapObjects (its clipping and later lookups) as a despawn would, and a
-     * player it was shown to who is away now gets it put right when they come back.
+     * player it was shown to who is away now (out of the scene, or inside a private area, which is
+     * sent nothing of the main world) gets it put right when they come back.
      */
     public static replaceInPlace(outgoing: GameObject, incoming: GameObject): void {
         ObjectManager.deregister(outgoing, false);
@@ -302,8 +303,8 @@ export class ObjectManager {
             const location = outgoing.getLocation();
             World.forEachNetworkPlayer((player) => {
                 if (outgoing.getOwner() && outgoing.getOwner() !== player) return;
-                if (this.viewedArea(player) != null) return;
-                if (!player.getSession().isTileInScene(location.getX(), location.getY(), location.getZ())) {
+                if (this.viewedArea(player) != null
+                    || !player.getSession().isTileInScene(location.getX(), location.getY(), location.getZ())) {
                     this.recordMissedRemoval(player, outgoing);
                 }
             });
@@ -383,6 +384,8 @@ export class ObjectManager {
                 World.forEachNetworkPlayer((player) => {
                     if (object.getOwner() && object.getOwner() !== player) return;
                     if (this.viewedArea(player) != object.getPrivateArea()) {
+                        // Inside a private area when a main-world loc it was shown goes: put right on return.
+                        if (type == OperationType.DESPAWN && !object.getPrivateArea()) this.recordMissedRemoval(player, object);
                         return;
                     }
                     const location = object.getLocation();

@@ -41,6 +41,16 @@ models, so the East Ardougne lever (no recording) uses `ikov_leverdown`. Bystand
 back up four ticks after it went down (1487, 1506, 1630, 454). It comes back up even when the pull
 is cut short.
 
+From the pull until the landing (varbit `busy`'s span), the player is held as any teleport holds
+them (`TeleportHandler.teleport`): their fight stops at the pull, and nothing attacks them nor do they
+attack anything, auto-retaliate included. A pull cut short lets them go.
+
+A main-world lever pulled from inside a private area (the King Black Dragon's lair lever, in an
+Echo lair) goes down there, as a copy in that area: a private area is sent nothing of the main
+world's locs, and the lever outside stays up. A player who saw a main-world lever go down and is in a
+private area when it comes back up has it put back up when they come out (`ObjectManager`), as for a
+player who was out of sight of it.
+
 The usual teleport checks (teleblock) run before the pull, unchanged.
 
 ## The Keep lever's options

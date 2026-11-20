@@ -169,8 +169,7 @@ function ownsClickedStaff(player, request) {
  * Blood runes on the staff, or its Charge option, ask how many charges to apply, offering as many
  * as the inventory affords (rsprox local 1001250 tick 724 "(Up to 1,000)", local 1001295 tick 4817
  * "(Up to 17,728)"). Two blood runes a charge, up to 20,000 (Wiki, since 22 July 2026; the
- * recordings predate it and took three). Ours: a charged staff's Charge (not recorded) asks as using
- * the runes does, as Tonalztics of Ralos' recorded Charge does.
+ * recordings predate it and took three).
  */
 function promptCharges(player, held, slot) {
   if (!Number.isInteger(slot) || player.getInventory().getItems?.()[slot] !== held) return false;
@@ -230,20 +229,13 @@ function chargeStaff(event) {
   if (promptCharges(player, held, slot)) event.handled = true;
 }
 
-/** A charged staff's Charge option. */
+/**
+ * The Charge option, on either version. Ours: Charge isn't recorded (local 1001250 tick 721 is op3,
+ * Wield on the uncharged staff); it asks as using the runes does, as Tonalztics of Ralos' recorded
+ * Charge does.
+ */
 function chargeOption({ player, item, slot }) {
   return promptCharges(player, item, slot);
-}
-
-/**
- * An uncharged staff's Charge only points at the runes, even with them in the inventory (rsprox
- * local 1001250 tick 721, 3,000 blood runes held). Ours: the Holy one names itself the same way.
- */
-function unchargedChargeOption({ player, item }) {
-  const name = item?.getId?.() === ids().HOLY_SANGUINESTI_STAFF_UNCHARGED_
-    ? "Holy sanguinesti staff (uncharged)" : "Sanguinesti staff (uncharged)";
-  player.sendMessage(`Your ${name} has no charges! You can use blood runes to power the staff.`);
-  return true;
 }
 
 /** rsprox 4151 tick 101, 4288 tick 26539. */
@@ -285,9 +277,9 @@ module.exports = {
     staff = defineStaff();
 
     api.onItemAction("Sanguinesti staff", { Check: checkCharges, Charge: chargeOption, Uncharge: uncharge });
-    api.onItemAction("Sanguinesti staff (uncharged)", { Charge: unchargedChargeOption });
+    api.onItemAction("Sanguinesti staff (uncharged)", { Charge: chargeOption });
     api.onItemAction("Holy sanguinesti staff", { Check: checkCharges, Charge: chargeOption, Uncharge: uncharge });
-    api.onItemAction("Holy sanguinesti staff (uncharged)", { Charge: unchargedChargeOption });
+    api.onItemAction("Holy sanguinesti staff (uncharged)", { Charge: chargeOption });
     api.onItemOnItem(chargeStaff, { noted: false });
     api.onCombatHitResolved(onHitResolved);
     api.registerCombatMethodResolver(staff.resolver);
@@ -301,7 +293,6 @@ module.exports = {
     useCharge: (player) => staff.useCharge(player),
     chargeStaff,
     chargeOption,
-    unchargedChargeOption,
     pendingCharges,
     checkCharges,
     uncharge,

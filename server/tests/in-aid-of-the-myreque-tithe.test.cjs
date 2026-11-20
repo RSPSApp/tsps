@@ -408,3 +408,34 @@ test("a logout inside the fight comes back outside the store with the fight rese
   assert.deepEqual(at(player), [3514, 3237]);
   assert.equal(fightNpcs(player).length, 0);
 });
+
+test("a second light while the fire catches is refused; a logout then opens no scene for the offline player", (t) => {
+  const { player, anims } = actor(t, STAGE.FURNACE_FIXED, 3526, 3209, { [VARBIT.FURNACE]: 2 });
+  player.getInventory().adds(TINDERBOX, 1);
+  assert.equal(tinderboxOnFurnace(player), true);
+  tick(2);
+  player.getDialogueManager().reset();
+  tinderboxOnFurnace(player);
+  assert.deepEqual(anims, [733], "already catching: no second light");
+  PM.emitPlayerLogout({ player, username: player.getUsername() });
+  player.setRegistered(false);
+  tick(10);
+  assert.deepEqual(fightNpcs(player), [], "no castle copy or actors for the offline player");
+  assert.equal(stageOf(player), STAGE.FURNACE_FIXED);
+  assert.equal(saved(player, VARBIT.FURNACE), 2, "still fuelled: it can be lit again after login");
+});
+
+test("a logout between the fire (220) and the castle scene leaves the tithe set up, as a cut-short scene does", (t) => {
+  const { player } = actor(t, STAGE.FURNACE_FIXED, 3526, 3209, { [VARBIT.FURNACE]: 2 });
+  player.getInventory().adds(TINDERBOX, 1);
+  tinderboxOnFurnace(player);
+  tick(6);
+  assert.equal(stageOf(player), STAGE.FURNACE_LIT);
+  PM.emitPlayerLogout({ player, username: player.getUsername() });
+  player.setRegistered(false);
+  tick(4);
+  assert.equal(stageOf(player), STAGE.GADDERANKS);
+  assert.equal(saved(player, VARBIT.BLOOD_TITHE), 1);
+  assert.equal(saved(player, VARBIT.VAMPYRE_AGGRESSION), 1);
+  assert.deepEqual(fightNpcs(player), []);
+});

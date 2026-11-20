@@ -321,10 +321,11 @@ test("food: \"offer all\" hands over 8 salmon, 2005 = 8 on the box's Continue, \
   assert.equal(shown(f).text, "Would you like to offer Ivan all of this food type in your inventory?");
   await continueLine(f);
   await choose(f, "Yes, I'll offer all");
-  assert.equal(f.player.getInventory().getAmount(I.SALMON), 0);
   await until(f, "You hand over some food to Ivan.");
+  assert.equal(f.player.getInventory().getAmount(I.SALMON), 8, "the food leaves with 2005, on the box's continue (t3789)");
   assert.equal(vb(f, VB.FOOD), 0);
   await continueLine(f);
+  assert.equal(f.player.getInventory().getAmount(I.SALMON), 0);
   assert.equal(vb(f, VB.FOOD), 8);
   assert.equal(shown(f).text, "Ohh delicious, some food! I'll keep that for the trip. I could carry another 7 bits of food.");
 });
@@ -543,4 +544,19 @@ test("wrong stages: Ivan takes nothing before 290; the keyhole refuses the key b
   f.player.getPacketSender().sendInterface(MAP);
   assert.equal(clickMap(f, 37), false);
   assert.equal(vb(f, VB.ROUTE), 0);
+});
+
+test("the arrival Ivan outside Paterdomus goes with a logout; a walked-off thanks plays again from him", async (t) => {
+  const f = actor(t, { stage: 310, vars: { [VB.FOOD]: 8 } });
+  await startRoute2(f);
+  ticks(f, 2);
+  for (const juvinate of juvinates(f).slice(0, 3)) kill(juvinate);
+  for (let i = 0; i < 14 && ownedNpcs(f, 4441).length === 0; i++) tick(f);
+  const [ivan] = ownedNpcs(f, 4441);
+  assert.ok(ivan, "Ivan outside the temple");
+  f.player.getPacketSender().sendInterfaceRemoval(); // walked off mid-thanks
+  await talk(f, ivan);
+  assert.ok(shown(f).text.startsWith("Many thanks for bringing me safely to the temple."), "his thanks again, not 'Excuse me.'");
+  PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  assert.equal(ivan.isRegistered(), false, "no orphaned owner-only Ivan");
 });

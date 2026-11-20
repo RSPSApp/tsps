@@ -425,3 +425,36 @@ test("fuel at 210: 'Refuel the furnace?' Yes. -> coal gone, m2_fillcoal, a tick 
   assert.equal(stageOf(p), 210);
   assert.equal(lastText(seen, OBJBOX), "You place some coal into the newly fixed furnace.");
 });
+
+test("a second Yes. within the two repair ticks repairs nothing more: one set of planks and nails, one lot of experience", (t) => {
+  const { p } = player(t, 140);
+  repairKit(p, 6, 24);
+  const xp = crafting(p);
+  inspect(p, ROOF);
+  proceed(p);
+  choose(p, "Yes.");
+  inspect(p, ROOF); // Inspect again before the first repair lands, and Yes. again
+  proceed(p);
+  choose(p, "Yes.");
+  tick(3);
+  assert.equal(varbit(p, V.ROOF), 1);
+  assert.equal(p.getInventory().getAmount(I.PLANK), 3, "only 3 of the 6 planks used");
+  assert.ok(crafting(p) - xp < 200, "one repair's experience");
+});
+
+test("the store wall waits for the roof: before 1974 its Inspect shows the text alone", (t) => {
+  const { p, seen } = player(t, 140);
+  repairKit(p);
+  inspect(p, STORE_WALL);
+  assert.match(lastText(seen, MESBOX), /^The wall has a large hole in it/);
+  proceed(p);
+  assert.equal(menu(p), null, "no 'Fix the wall?' before the roof");
+  assert.equal(varbit(p, V.WALL), 0);
+  assert.equal(stageOf(p), 140);
+});
+
+test("Collect on Burgh's booth is refused with the Bank's own line until Cornelius serves", (t) => {
+  const { p, seen } = player(t, 180);
+  assert.equal(inspect(p, BOOTH, "Collect"), true);
+  assert.equal(lastText(seen, MESBOX), "While the booth looks functional, there still isn't anyone working behind the booth to serve you.");
+});

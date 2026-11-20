@@ -145,13 +145,23 @@ module.exports = function attachStore(context) {
     return amount - left;
   }
 
-  /** Live's repair: Yes plays the hammering, the result lands two ticks later (capture t1323 -> t1325). */
-  function repair(player, { hammer = HAMMER_WOOD, has, take, done, box }) {
-    if (!has(player)) return;
+  /** Repairs under way (player -> varbits), so a second Yes in the two ticks repairs nothing more. */
+  const repairing = new WeakMap();
+
+  /**
+   * Live's repair: Yes plays the hammering, the result lands two ticks later (capture t1323 -> t1325).
+   * `varbit` is the repair's own: once it is set (or one is under way) a stale menu's Yes does nothing.
+   */
+  function repair(player, { varbit, hammer = HAMMER_WOOD, has, take, done, box }) {
+    const pending = repairing.get(player) ?? new Set();
+    if (state.get(player, varbit) || pending.has(varbit) || !has(player)) return;
+    pending.add(varbit);
+    repairing.set(player, pending);
     common.anim(player, PEST_REPAIR);
     for (const delay of HAMMER_DELAYS) common.sound(player, hammer, delay);
     common.later(player, REPAIR_TICKS, (p) => {
-      if (!has(p)) return common.anim(p, -1);
+      pending.delete(varbit);
+      if (state.get(p, varbit) || !has(p)) return common.anim(p, -1);
       take(p);
       done(p);
       common.anim(p, -1);
@@ -187,6 +197,7 @@ module.exports = function attachStore(context) {
     if (stage(player) < STAGE.STORE_AGREED) return common.mesbox(player, TEXT.roof), true;
     const has = planksAndNails(3, 12);
     inspectThenAsk(player, TEXT.roof, "Fix the roof?", has, TEXT.noPlanks, (p) => repair(p, {
+      varbit: VARBIT.STORE_ROOF,
       has, take: takePlanksAndNails(3, 12),
       done: (q) => { state.set(q, VARBIT.STORE_ROOF, 1); state.advance(q, STAGE.ROOF_FIXED); },
       box: (q) => common.doubleBox(q, [PLANK, STEEL_NAILS], TEXT.roofFixed),
@@ -203,8 +214,12 @@ module.exports = function attachStore(context) {
   function inspectStoreWall({ player }) {
     if (!inRange(player, STAGE.CELLAR_CLEARED, STAGE.COMPLETE)) return false;
     if (stage(player) < STAGE.STORE_AGREED) return common.mesbox(player, TEXT.wall), true; // Ours, as the roof
+    // Aurel asks for "the roof, then the walls" (t1305), and the stages run 150 roof, 160 wall (live fixed
+    // them in that order, t1325 then t1341). Ours: the wall's text alone until the roof is done.
+    if (!state.get(player, VARBIT.STORE_ROOF)) return common.mesbox(player, TEXT.wall), true;
     const has = planksAndNails(3, 12);
     inspectThenAsk(player, TEXT.wall, "Fix the wall?", has, TEXT.noPlanks, (p) => repair(p, {
+      varbit: VARBIT.STORE_WALL,
       has, take: takePlanksAndNails(3, 12),
       done: (q) => { state.set(q, VARBIT.STORE_WALL, 1); state.advance(q, STAGE.WALL_FIXED); },
       box: (q) => common.doubleBox(q, [PLANK, STEEL_NAILS], TEXT.wallFixed),
@@ -278,6 +293,7 @@ module.exports = function attachStore(context) {
     if (stage(player) < STAGE.STORE_STOCKED) return common.mesbox(player, TEXT.booth), true; // Ours
     const has = (p) => planksAndNails(2, 8)(p) && common.held(p, SWAMP_PASTE);
     inspectThenAsk(player, TEXT.booth, "Fix the booth?", has, TEXT.noBooth, (p) => repair(p, {
+      varbit: VARBIT.BANK_BOOTH,
       has,
       take: (q) => { takePlanksAndNails(2, 8)(q); q.getInventory().deleteNumber(SWAMP_PASTE, 1); },
       done: (q) => { state.set(q, VARBIT.BANK_BOOTH, 1); state.advance(q, STAGE.BOOTH_FIXED); },
@@ -306,6 +322,7 @@ module.exports = function attachStore(context) {
     if (!state.get(player, VARBIT.BANK_BOOTH)) return common.mesbox(player, TEXT.wall), true;
     const has = planksAndNails(3, 12);
     inspectThenAsk(player, TEXT.wall, "Fix the wall?", has, TEXT.noPlanks, (p) => repair(p, {
+      varbit: VARBIT.BANK_WALL,
       has, take: takePlanksAndNails(3, 12),
       done: (q) => { state.set(q, VARBIT.BANK_WALL, 1); state.advance(q, STAGE.BANK_WALL_FIXED); },
       box: (q) => common.doubleBox(q, [PLANK, STEEL_NAILS], TEXT.wallFixed),
@@ -335,6 +352,7 @@ module.exports = function attachStore(context) {
     if (stage(player) < STAGE.BANKER) return common.mesbox(player, TEXT.furnace), true; // Ours
     const has = (p) => hasHammer(p) && common.held(p, STEEL_BAR, 2);
     inspectThenAsk(player, TEXT.furnace, "Fix the chimney?", has, TEXT.noBars, (p) => repair(p, {
+      varbit: VARBIT.FURNACE,
       hammer: HAMMER_STEEL, has,
       take: (q) => q.getInventory().deleteNumber(STEEL_BAR, 2),
       done: (q) => { state.set(q, VARBIT.FURNACE, 1); state.advance(q, STAGE.FURNACE_FIXED); },
@@ -544,7 +562,7 @@ module.exports = function attachStore(context) {
   api.persistAttribute(CRATE_FOOD_ATTRIBUTE, 0);
   api.onObjectInteraction("Broken Roof", { Inspect: inspectRoof });
   api.onObjectInteraction("Damaged wall", { Inspect: inspectWall });
-  api.onObjectInteraction("Bank Booth", { Inspect: inspectBooth, Bank: useBooth });
+  api.onObjectInteraction("Bank Booth", { Inspect: inspectBooth, Bank: useBooth, Collect: useBooth });
   api.onObjectInteraction("Broken furnace", { Inspect: inspectBrokenFurnace });
   api.onObjectInteraction("Repaired furnace", { Inspect: inspectRepairedFurnace });
   api.onItemAction("Crate", { Search: searchCrate });

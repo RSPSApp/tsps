@@ -243,6 +243,8 @@ module.exports = function attachEscort(context) {
     const { player, npc, npcId } = event;
     const ambush = ambushes.get(player);
     if (ambush && ambush.ivan === npc) return common.play(player, npcId, V.ENCOUNTER_TALK, undefined, PAGE, npc);
+    // Ours: his thanks cut short (walked off, chatbox closed) play again, so 315 is still reachable.
+    if (npc && arrivalIvans.get(player) === npc && stage(player) === STAGE.ESCORT) return playArrival(player, npc);
     if (npc?.getOwner?.() === player) return common.play(player, npcId, V.BEFORE_LEAVING, undefined, PAGE, npc);
     return false;
   }
@@ -307,8 +309,8 @@ module.exports = function attachEscort(context) {
     if (!text.startsWith("Yes, I'll offer all") && !text.startsWith("Nope, I'll just")) return;
     const room = Math.max(0, IVAN_FOOD_MAX - get(player, VARBIT.IVAN_FOOD));
     const wanted = text.startsWith("Yes") ? player.getInventory().getAmount(offer.itemId) : 1;
+    // The food leaves the inventory on the hand-over box's continue, with 2005 (t3789).
     offer.amount = Math.min(wanted, room, player.getInventory().getAmount(offer.itemId));
-    if (offer.amount > 0) player.getInventory().deleteNumber(offer.itemId, offer.amount);
   }
 
   // ---------------------------------------------------------------------------
@@ -488,8 +490,21 @@ module.exports = function attachEscort(context) {
     Scenes.later(scene, 10, () => arrive(ambush));
   }
 
+  /** The owner-only Ivan outside Paterdomus until his thanks (t4034-4044), per player. */
+  const arrivalIvans = new WeakMap();
+
+  function removeArrivalIvan(player) {
+    const ivan = arrivalIvans.get(player);
+    arrivalIvans.delete(player);
+    if (ivan) api.removeNpc(ivan);
+  }
+
+  const playArrival = (player, ivan) =>
+    common.play(player, NPC.IVAN_AMBUSH, V.ARRIVED, (steps) => steps.filter((step) => step?.id !== STEP.SLAIN_BOX), PAGE, ivan);
+
   function arrive(ambush) {
     const { player } = ambush;
+    removeArrivalIvan(player);
     Scenes.end(player, false);
     player.moveTo(new Location(...AMBUSH.arrival));
     // Ivan appears outside Paterdomus the tick after (t4034) and thanks the player.
@@ -499,8 +514,8 @@ module.exports = function attachEscort(context) {
       const ivan = api.spawnNpc({ id: NPC.IVAN_AMBUSH, x, y, z, owner: player, ownerOnly: true, face: SOUTH });
       if (!ivan) return;
       ivan.__skipDefaultRespawn = true;
-      ambush.arrivalIvan = ivan;
-      common.play(player, NPC.IVAN_AMBUSH, V.ARRIVED, (steps) => steps.filter((step) => step?.id !== STEP.SLAIN_BOX), PAGE, ivan);
+      arrivalIvans.set(player, ivan);
+      playArrival(player, ivan);
     });
   }
 
@@ -524,6 +539,13 @@ module.exports = function attachEscort(context) {
     Scenes.end(player, false);
     player.moveTo(new Location(...AMBUSH.exitPath));
     return true;
+  }
+
+  /** A logout drops the scene's pending steps and the arrival Ivan (owner-only NPCs outlive their owner). */
+  function handleLogout({ player }) {
+    if (!player) return;
+    Scenes.cancel(player);
+    removeArrivalIvan(player);
   }
 
   // ---------------------------------------------------------------------------
@@ -679,11 +701,7 @@ module.exports = function attachEscort(context) {
   function delivered(player) {
     state.advance(player, STAGE.IVAN_DELIVERED);
     state.set(player, VARBIT.HIDEOUT_NPCS, 1);
-    common.later(player, 4, () => {
-      for (const npc of api.core.World.getNpcs()) {
-        if (npc && npc.getId?.() === NPC.IVAN_AMBUSH && npc.getOwner?.() === player) api.removeNpc(npc);
-      }
-    });
+    common.later(player, 4, () => removeArrivalIvan(player));
   }
 
   function handleAction(event) {
@@ -701,8 +719,12 @@ module.exports = function attachEscort(context) {
         if (!offer?.itemId) return;
         event.box = { items: [offer.itemId] };
         event.after = () => {
-          if (offer.amount > 0) state.set(player, VARBIT.IVAN_FOOD, Math.min(IVAN_FOOD_MAX, get(player, VARBIT.IVAN_FOOD) + offer.amount));
+          const room = Math.max(0, IVAN_FOOD_MAX - get(player, VARBIT.IVAN_FOOD));
+          const amount = Math.min(offer.amount, room, player.getInventory().getAmount(offer.itemId));
           offer.amount = 0;
+          if (amount <= 0) return;
+          player.getInventory().deleteNumber(offer.itemId, amount);
+          state.set(player, VARBIT.IVAN_FOOD, get(player, VARBIT.IVAN_FOOD) + amount);
         };
         return;
       case STEP.ESCAPED_BOX:
@@ -769,6 +791,7 @@ module.exports = function attachEscort(context) {
   api.onNpcInteraction("Ivan Strom", { "Talk-to": talkIvan });
   api.onNpcInteraction("Drezel", { "Talk-to": talkDrezel });
   api.onItemOnNpc(useItemOnIvan);
+  api.onPlayerLogout(handleLogout);
   api.onInterfaceActionButton([uid(MAP.ROUTE_1), uid(MAP.ROUTE_2), uid(MAP.CLICKOUT)], selectRoute);
   api.onInterfaceActionButton([uid(MAP.TRAVEL_1), uid(MAP.TRAVEL_2)], travel);
   api.onNpcBeforeDeath(ambushDeath);

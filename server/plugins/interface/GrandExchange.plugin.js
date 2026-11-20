@@ -556,6 +556,10 @@ function collectFromObject(event) {
   const options = event.definition?.getInteractions?.();
   if (event.handled || options?.[event.clickType - 1] !== "Collect") return;
   if (!offersBanking(options, event.definition?.getName?.()) && !banksOnUse(options)) return;
+  // A booth nobody serves yet (BankBooths' "bank:booth-closed") is left to the content that owns it.
+  const closed = { player: event.player, object: event.object, objectId: event.objectId, closed: false };
+  pluginApi?.emitCustomEvent?.("bank:booth-closed", closed);
+  if (closed.closed) return;
   event.handled = true;
   openCollectionBox(event);
 }

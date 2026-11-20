@@ -188,8 +188,12 @@ module.exports = function attachTithe(context) {
   // Lighting the furnace (t2202-t2207)
   // ---------------------------------------------------------------------------
 
+  /** Players whose furnace is catching (the 5 ticks before 1980 = 3), so a second light is refused. */
+  const lighting = new WeakSet();
+
   function canLight(player) {
-    return stage(player) === STAGE.FURNACE_FIXED && varbit(player, VARBIT.FURNACE) === 2 && !Scenes.get(player);
+    return stage(player) === STAGE.FURNACE_FIXED && varbit(player, VARBIT.FURNACE) === 2 && !Scenes.get(player)
+      && !lighting.has(player);
   }
 
   /** The objectbox live holds while the fire catches: the tinderbox, no continue button (t2202). */
@@ -206,7 +210,9 @@ module.exports = function attachTithe(context) {
     player.setPositionToFace?.(FURNACE_TILE);
     holdItemBox(player, ITEM.TINDERBOX, text);
     common.anim(player, ANIM_CREATE_FIRE);
+    lighting.add(player);
     Scenes.later(player, 5, () => {
+      lighting.delete(player);
       // t2207: lit, 220, the fire sound and the fade out (the box is cleared as the screen goes).
       state.set(player, VARBIT.FURNACE, 3);
       state.advance(player, STAGE.FURNACE_LIT);
@@ -799,11 +805,26 @@ module.exports = function attachTithe(context) {
     if (stage(player) === STAGE.VELIAF_ARRIVED) state.setStage(player, STAGE.FIGHT);
   }
 
+  /**
+   * A logout drops the scene steps still to come (QuestScenes ends an open scene itself). One between
+   * the fire catching (220) and the castle scene opening resolves as a scene cut short does.
+   */
+  function handleLogout({ player }) {
+    if (!player) return;
+    Scenes.cancel(player);
+    lighting.delete(player);
+    if (stage(player) === STAGE.FURNACE_LIT && !Scenes.get(player)) {
+      startTithe(player);
+      state.set(player, VARBIT.VAMPYRE_AGGRESSION, 1);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Registration
   // ---------------------------------------------------------------------------
 
   api.onItemOnObject("Tinderbox", "Repaired furnace", useTinderboxOnFurnace);
+  api.onPlayerLogout(handleLogout);
   api.onObjectInteraction("Repaired furnace", { Inspect: inspectFuelledFurnace });
   api.onObjectInteraction("Door", { Escape: escapeDoor, "Quick-escape": escapeDoor });
   api.onNpcInteraction("Gadderanks", { "Talk-to": talkGadderanks });

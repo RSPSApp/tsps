@@ -18,5 +18,7 @@ Evidence: rsprox recording 3030 (rev 231), a Mos Le'Harmless monkey (1038) answe
 "Are ye here for...the stuff?" (the understood section's second random line); the Wiki
 transcripts above.
 
-Not covered: the magic carpet monkey's banana condition and the blue monkey's taunted state are
-answered by the runtime's default branch; no capture shows either.
+The same plugin answers the understood sections' conditions:
+
+- Magic carpet monkey: "has a banana in their inventory" checks the inventory for a banana (1963), and "Give the monkey a banana." takes one.
+- Blue monkey: the taunted and cautioned conditions read a per-player flag set by the Taunt and Caution lines. Ours: the Wiki doesn't say what clears them; here the Calm and Reassure lines do, and the flags aren't saved across logins.

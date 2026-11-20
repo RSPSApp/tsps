@@ -841,9 +841,15 @@ module.exports = function attachHassle(context) {
     if (npc) takeInterest(player, npc);
   }
 
+  /**
+   * Ours (not captured): leaving Meiyerditch ends an encounter that has not reached its spell, so a
+   * vyre that landed or asked can't tithe the player elsewhere when its menu times out.
+   */
   function leftMeiyerditch(player) {
     const encounter = encounters.get(player);
-    if (encounter?.phase === "approach") release(player, encounter, false);
+    if (!encounter || encounter.phase === "teleport") return;
+    if (encounter.phase !== "approach") closeChat(player);
+    release(player, encounter, false);
   }
 
   /** Ours: leaving the mine any other way (a teleport) empties the cart too, as the guard's exit does 2 ticks on. */

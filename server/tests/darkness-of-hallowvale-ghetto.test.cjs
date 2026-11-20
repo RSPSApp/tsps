@@ -305,6 +305,16 @@ test("the pots give the key; the locked door takes it in one click and swings op
   assert.ok(seen.sounds.some(([id]) => id === 62));
 });
 
+test("once unlocked (2578 = 1), Open on the ghetto door swings it open at once, with no locked message or key", (t) => {
+  const { p, seen } = player(t, 65, [3608, 3221, 0], { 2578: 1 });
+  assert.equal(varbit(p, 2578), 1);
+  assert.equal(p.getInventory().getAmount(9654), 0);
+  assert.ok(click(p, 18091, "Open", [3608, 3221, 0], 2, 0));
+  assert.ok(seen.messages.includes("You swing the door open."));
+  assert.ok(!seen.messages.includes("The door seems to be locked."));
+  assert.ok(seen.sounds.some(([id]) => id === 62));
+});
+
 test("the ladder top: the wall (2598 = 1), the broken ladder (2), the mended ladder down (t2619-2635)", (t) => {
   const { p, seen } = player(t, 65, [3625, 3241, 2]);
   const vars = { ...p.getAttribute(VARS) }; delete vars[2598]; p.setAttribute(VARS, vars);

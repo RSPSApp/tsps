@@ -215,6 +215,20 @@ test("before the hideout the offer is tithe, fight or distract; the tithe takes 
   assert.notDeepEqual(at(p), MINE);
 });
 
+test("leaving Meiyerditch with the menu open ends the encounter: no tithe elsewhere when it would have timed out (Ours)", (t) => {
+  const { p, seen } = player(t, "hassleleave", STAGE.SENT_BACK);
+  vyrewatch(t, 3729, [3610, 3186, 0]);
+  notice(p, 2);
+  tick(14);
+  assert.ok(menu(p), "the menu is open");
+  p.moveTo(new core.Location(3213, 3424, 0));
+  AreaManager.process(p);
+  tick(40);
+  assert.deepEqual(seen.hits, []);
+  assert.equal(menu(p), null);
+  assert.equal(p.getMovementQueue().isMovementBlocked?.() ?? false, false);
+});
+
 test("a failed distraction is a tithe; a vyre still busy with the player says so on Talk-to", (t) => {
   const { p, seen } = player(t, "hassledodge", STAGE.SKETCHING);
   p.getSkillManager().setCurrentLevel?.(core.Skill.THIEVING, 1);

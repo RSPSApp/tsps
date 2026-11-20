@@ -9005,6 +9005,7 @@
             "server/plugins/quests/QuestRuntime.js"
           ],
           "devNotes": [
+            "2026-11-20: Completed-quest players can enter the Varrock Museum cleaning area through its guarded gate, with the canonical first-admission-per-login prompt. Free-world and incomplete-quest entry are refused; exit is free. Native packet/map/World regression evidence and remaining movement/audio limits are documented in docs/varrock-museum.md. The Dig Site quest task statuses and progression gaps are unchanged.",
             "Ported in server/plugins/quests/quests/DigSite.Quest.js (transcript-driven variant selection, conditions and hand-ins); see the file header for documented gaps.",
             "The 'The Dig Site' page in npc-dialogues.json carries 74 variants ('starting-the-quest'); source ids/slugs from npc-dialogues.json + npc-dialogue-index.json / osrsreboxed.",
             "The exam uses option branches with conditions ('using-an-unstamped-letter-on-the-examiner'), a good test of onNpcDialogueCondition.",

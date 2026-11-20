@@ -1,742 +1,930 @@
-// From server/: node --test tests/qh728-q061.test.cjs
-// Focused In Aid of the Myreque contracts. The route dispatches the plugin's
-// registered handlers with the transcript's own condition/action/choice ids;
-// it does not drive the live dialogue runner, and no live playthrough is claimed.
-const assert = require('node:assert/strict');
-const { test, before } = require('node:test');
-const path = require('node:path');
-const { Server } = require('../dist/Server');
-Server.installProductionPathResolver();
-const { PluginManager } = require('../dist/plugins/PluginManager');
-const { CachePipeline } = require('../dist/game/cache/CachePipeline');
-const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
-const { RegionManager } = require('../dist/game/collision/RegionManager');
-const runtime = require('../plugins/quests/QuestRuntime');
-const core = PluginManager.getCoreApi();
-const noop = () => {};
+// From server/ after `yarn build`: node --test tests/qh728-q061.test.cjs
+//
+// In Aid of the Myreque regression contracts (QH728 Q061), on the rebuilt quest (live's stages and
+// varbits, ../plugins/quests/inaid/). Real plugins, a real Player; clicks, talks and casts go through
+// PluginManager, ticks through TaskManager. The per-unit tests (in-aid-of-the-myreque-{burgh,store,
+// tithe,escort,rod}.test.cjs) pin the live capture's details; this file keeps the older regressions
+// and one end-to-end walk.
+//
+// Ported from the pre-capture version: every one of its 17 contracts is kept, none dropped. What
+// changed is how each is reached: the old route dispatched transcript step ids (QvHBD5, JHVR_s,
+// EEIDrs, h2dEwU, ...) against runtime GameObjects, the full-crate item 7631 and the old stage numbers
+// (50, 120, 320 -> 350, completion 420). Those were replaced by live's: Inspect/"Fix ...?" Yes. on the
+// cache multilocs (store test), the 7630 crate with varbits 1991-1993 (store test), the castle scene,
+// store fight and swamp ambush instances (tithe and escort tests) and live's stage values
+// (State.InAidOfTheMyreque.js), so the tests below drive those handlers instead.
+process.env.DISABLE_PLAYER_BOTS = "1";
+const assert = require("node:assert/strict");
+const path = require("node:path");
+const { before, after, test } = require("node:test");
+require("../dist/Server").Server.installProductionPathResolver();
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+const { PluginManager: PM } = require("../dist/plugins/PluginManager");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { PlayerSession } = require("../dist/net/PlayerSession");
+const { AreaManager } = require("../dist/game/model/areas/AreaManager");
+const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
+const runtime = require("../plugins/quests/QuestRuntime");
+const { STAGE, VARBIT, impliedVarbits, VARS_ATTRIBUTE, SAVE_VERSION_ATTRIBUTE } = require("../plugins/quests/inaid/State.InAidOfTheMyreque");
 
-// Record which transcript page/variant each handler asks to play. The wrapper
-// still calls the real startTranscript, so dialogue execution is unchanged.
-let transcriptCalls = [];
+// Record which transcript page/variant each handler plays; the real startTranscript still runs. Patched
+// before the plugins load, so the units' destructured copies are this wrapper.
+let transcripts = [];
 const startTranscript = runtime.startTranscript;
 runtime.startTranscript = (...args) => {
-  transcriptCalls.push({ npcId: args[2], page: args[3], variant: args[4] });
+  transcripts.push({ npcId: args[2], page: args[3], variant: args[4] });
   return startTranscript(...args);
 };
 
+const STAGE_KEY = "quest.in_aid_of_the_myreque.stage";
+const PAGE = "In Aid of the Myreque";
+let core, I, N;
+let next = 9400;
+
 before(async () => {
-  await CachePipeline.initialize(path.resolve(__dirname, '..'));
-  new NpcDefinitionLoader().load();
-  RegionManager.init();
-  require('../plugins/items/ElementalStaves.plugin.js').register(
-    PluginManager.createApi('QH728MyrequeSpellRuneSourceTest')
-  );
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  core = PM.getCoreApi();
+  I = core.ItemIdentifiers;
+  N = core.NpcIdentifiers;
+  core.ObjectDefinition.init();
+  core.RegionManager.init();
+  for (const [x, y] of [[3508, 9838], [3484, 3245], [3514, 3240], [3527, 3209], [3553, 3337], [3572, 3331], [2859, 4554],
+    [3432, 3484], [3440, 9895], [3360, 9904], [3429, 3401], [3483, 9832], [3494, 9628]]) core.RegionManager.loadMapFiles(x, y);
+  PM.emitServerStartup({});
 });
+after(() => PM.emitServerShutdown({}));
 
-function makePlayer() {
-  const attrs = new Map();
-  const items = new Map();
-  const messages = [];
-  const moves = [];
-  const experience = [];
-  const log = [];
-  const bonusManager = { attackBonus: [], defenceBonus: [], otherBonus: [] };
-  let full = false;
-  let location = new core.Location(0, 0, 0);
-  let spellbook = core.MagicSpellbook.NORMAL;
-  let weapon = -1;
-  const inventory = {
-    getAmount: (id) => items.get(id) ?? 0,
-    contains: (id) => (items.get(id) ?? 0) > 0,
-    adds: (id, amount = 1) => {
-      items.set(id, (items.get(id) ?? 0) + amount);
-      return true;
-    },
-    deleteNumber: (id, amount = 1) => {
-      items.set(id, Math.max(0, (items.get(id) ?? 0) - amount));
-      return true;
-    },
-    deletes: (item) => inventory.deleteNumber(item.getId(), item.getAmount()),
-    getFreeSlots: () => (full ? 0 : 28 - [...items.values()].filter((amount) => amount > 0).length),
-    isFull: () => full || inventory.getFreeSlots() <= 0,
-    full: () => messages.push('Not enough space in your inventory.'),
-    getItems: () => {
-      const slots = Array.from({ length: 28 }, () => new core.Item(-1, 0));
-      let slot = 0;
-      for (const [id, amount] of items) if (amount > 0) slots[slot++] = new core.Item(id, amount);
-      return slots;
-    },
-    addItem: (item) => inventory.adds(item.getId(), item.getAmount()),
-    setItem: (slot, item) => { inventory.deleteNumber(inventory.getItems()[slot].getId(), 1); inventory.addItem(item); return inventory; },
-    refreshItems: () => inventory,
-  };
-  const sender = new Proxy({}, { get: (_target, prop) => (...args) => { log.push([String(prop), ...args]); return sender; } });
-  return {
-    attrs, items, messages, moves, experience, log,
-    setFull(value) { full = value; },
-    setSpellbook(value) { spellbook = value; },
-    setWeapon(value) { weapon = value; },
-    getSpellbook: () => spellbook,
-    setLocation(x, y, z = 0) { location = new core.Location(x, y, z); },
-    getAttribute: (key) => attrs.get(key),
-    setAttribute: (key, value) => attrs.set(key, value),
-    getInventory: () => inventory,
-    getEquipment: () => ({
-      get: () => weapon < 0 ? null : { getId: () => weapon },
-      getItems: () => Array.from({ length: 14 }, (_, index) => new core.Item(index === core.Equipment.WEAPON_SLOT ? weapon : -1, 1)),
-      hasStaffEquipped: () => false,
-      getWeapon: () => ({ getId: () => weapon }),
-    }),
-    getUsername: () => 'q061-test', getDisplayName: () => 'q061-test',
-    getIndex: () => 1,
-    getPrivateArea: () => null,
-    getPacketSender: () => sender,
-    getDialogueManager: () => ({ isActive: () => false, getCurrent: () => null, startDialogues: noop, handleResume: noop, reset: noop }),
-    getLocation: () => location,
-    moveTo: (next) => { location = next; moves.push([next.getX(), next.getY(), next.getZ()]); },
-    getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences: (skill, amount) => experience.push([skill, amount]) }),
-    getFightType: () => ({ getStyle: () => 0 }),
-    getBonusManager: () => bonusManager,
-    getAppearance: () => ({ isMale: () => true }),
-    performAnimation: noop,
-    performGraphic: noop,
-    getCombat: () => ({ reset: noop, setCastSpell: noop, setAutocastSpell: noop }),
-    sendMessage: (text) => messages.push(text),
-    isRegistered: () => true,
-    isPlayerBot: () => false,
-    isPlayer: () => true,
-  };
-}
+const players = new Set();
 
-/** Stands in for Mining's mining:best-pickaxe / mining:pickaxe answers with the plain bronze-to-dragon tools. */
-function answerPickaxes(api) {
-  const I = core.ItemIdentifiers;
-  const ids = [I.BRONZE_PICKAXE, I.IRON_PICKAXE, I.STEEL_PICKAXE, I.BLACK_PICKAXE, I.MITHRIL_PICKAXE, I.ADAMANT_PICKAXE, I.RUNE_PICKAXE, I.DRAGON_PICKAXE];
-  const holds = (player, id) => player.getInventory?.().getAmount?.(id) > 0 || player.getInventory?.().contains?.(id)
-    || player.getEquipment?.().getItems?.()?.some?.((item) => item?.getId?.() === id);
-  // Wiki Mining levels for each tool.
-  const levels = [1, 1, 6, 11, 21, 31, 41, 61];
-  const usable = (player, index) => player.getSkillManager().getCurrentLevel(core.Skill.MINING) >= levels[index];
-  api.onCustomEvent('mining:best-pickaxe', (request) => { request.pickaxe ??= ids.find((id, index) => holds(request.player, id) && usable(request.player, index)) != null ? { id: 0 } : null; });
-  api.onCustomEvent('mining:pickaxe', (request) => { request.pickaxe ??= ids.includes(request.itemId) ? { id: request.itemId } : null; });
-}
-
-function harness() {
-  transcriptCalls = [];
-  const events = {};
-  let tasteNeedsRod = false;
-  let tasteRodQueryCount = 0;
-  const conditions = [];
-  const itemOnObject = [];
-  const itemOnItem = [];
-  const spellOnItem = [];
-  const itemOnNpc = [];
-  const itemAction = [];
-  const objectInteraction = [];
-  const npcDeath = [];
-  const npcInteractions = [];
-  const login = [];
-  const logout = [];
-  const spawned = [];
-  const completedQuests = new Set();
-
-  class FakeGameObject {
-    constructor(id, location) { this.id = id; this.location = location; }
-    getId() { return this.id; }
-    getLocation() { return this.location; }
+/** A logged-in player at `stage` with the varbits live had by then (or a raw legacy save with `legacy`). */
+function actor(t, stage, at, { vars = {}, legacy = false, prerequisites = true } = {}) {
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {}, flush() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(next++);
+  p.setUsername(`q061p${next}`);
+  p.setRegistered(true);
+  p.setLocation(new core.Location(...at));
+  p.needsPlacement = false;
+  if (!legacy) {
+    p.setAttribute(SAVE_VERSION_ATTRIBUTE, 2);
+    p.setAttribute(VARS_ATTRIBUTE, { ...impliedVarbits(stage), ...vars });
   }
-  const objectManager = {
-    register: (object) => object,
-    deregister: () => {},
+  p.setAttribute(STAGE_KEY, stage);
+  if (prerequisites) meetRequirements(p);
+  const seen = { messages: [], varbits: [], chatbox: [] };
+  const sender = p.getPacketSender();
+  for (const [method, record] of [
+    ["sendVarbit", (id, value) => seen.varbits.push([id, value])],
+    ["sendChatboxInterface", (group) => seen.chatbox.push(group)],
+  ]) {
+    const original = sender[method].bind(sender);
+    sender[method] = (...args) => { record(...args); return original(...args); };
+  }
+  const send = p.sendMessage.bind(p);
+  p.sendMessage = (text, ...rest) => { seen.messages.push(String(text)); return send(text, ...rest); };
+  PM.emitPlayerLogin({ player: p, username: p.getUsername() });
+  players.add(p);
+  const npcs = [];
+  t.after(() => {
+    p.getDialogueManager().reset?.();
+    PM.emitPlayerLogout({ player: p, username: p.getUsername() });
+    p.setRegistered(false);
+    players.delete(p);
+    core.TaskManager.cancelTasks(p.getIndex());
+    for (const npc of npcs) core.World.getNpcs().remove(npc);
+  });
+  const spawn = (id, tile) => {
+    const npc = core.NPC.create(id, new core.Location(...tile));
+    core.World.getNpcs().add(npc);
+    npcs.push(npc);
+    return npc;
   };
-  const testCore = Object.create(core);
-  testCore.ObjectManager = objectManager;
-  testCore.GameObject = FakeGameObject;
-  const api = new Proxy({
-    core: testCore,
-    persistAttribute: noop,
-    onNpcDialogueCondition: (handler) => conditions.push(handler),
-    onItemOnObject: (handler) => itemOnObject.push(handler),
-    onItemOnItem: (handler) => itemOnItem.push(handler),
-    onSpellOnItem: (handler) => spellOnItem.push(handler),
-    onItemOnNpc: (handler) => itemOnNpc.push(handler),
-    onItemAction: (handler) => itemAction.push(handler),
-    onObjectInteraction: (handler) => objectInteraction.push(handler),
-    onNpcDeath: (handler) => npcDeath.push(handler),
-    onNpcInteraction: (name, options) => {
-      for (const [option, handler] of Object.entries(options)) npcInteractions.push({ name, option, handler });
-    },
-    onPlayerLogin: (handler) => login.push(handler),
-    onPlayerLogout: (handler) => logout.push(handler),
-    onCustomEvent: (key, handler) => (events[key] ??= []).push(handler),
-    emitCustomEvent: (key, event) => (events[key] ?? []).forEach((handler) => handler(event)),
-    spawnNpc: (data) => {
-      const npc = { ...data, getId: () => data.id, getLocation: () => new core.Location(data.x, data.y, data.z) };
-      spawned.push(npc);
-      return npc;
-    },
-    removeNpc: (npc) => { if (npc) npc.removed = true; },
-    sendMultiChatboxPrompt: noop,
-  }, { get: (target, key) => target[key] ?? noop });
+  return { p, seen, spawn };
+}
 
-  // The quest registry asks the other quests whether they are complete.
-  (events['quest:is-complete'] ??= []).push((event) => {
-    event.complete = completedQuests.has(event.key);
-  });
-  (events['taste-of-hope:needs-veliaf-rod'] ??= []).push((request) => {
-    tasteRodQueryCount += 1;
-    request.needsRod = tasteNeedsRod;
-  });
-  require('../plugins/items/ElementalStaves.plugin.js').register(api);
-  // The quests ask Mining for the player's pickaxe; Mining isn't loaded here, so this stands in for it with the plain
-  // tools these routes carry (held or wielded).
-  answerPickaxes(api);
-  require(process.env.Q061_PLUGIN || '../plugins/quests/quests/InAidOfTheMyreque.Quest')(api);
-  require('../plugins/skills/EnchantJewellery.plugin.js').register(api);
-  const quest = runtime.getRegisteredQuests().at(-1);
+function meetRequirements(p, quests = ["in_search_of_the_myreque", "nature_spirit", "priest_in_peril", "the_restless_ghost"]) {
+  for (const key of quests) p.setAttribute(`quest.${key}.stage`, 1000);
+  for (const skill of [core.Skill.CRAFTING, core.Skill.MINING, core.Skill.MAGIC, core.Skill.AGILITY]) {
+    p.getSkillManager().setMaxLevel(skill, 99).setCurrentLevel(skill, 99);
+  }
+}
 
-  const fireEvent = (key, event) => (events[key] ?? []).forEach((handler) => handler(event));
-  const talk = (name, npcId) => {
-    for (const entry of npcInteractions) {
-      if (entry.name === name && entry.option === 'Talk-to') {
-        return entry.handler({ player: eventPlayer, npcId, option: 'Talk-to', handled: false });
-      }
+function tick(count = 1) {
+  for (let i = 0; i < count; i++) {
+    for (const p of players) {
+      AreaManager.process(p);
+      p.getMovementQueue().process();
+      core.TaskManager.processWalkTo(p.getIndex());
     }
-    return undefined;
-  };
-  let eventPlayer = null;
-  const use = (player) => { eventPlayer = player; };
-  const condition = (player, stepId) => {
-    const event = { player, stepId, pages: [{ page: 'In Aid of the Myreque' }] };
-    conditions.forEach((handler) => handler(event));
-    fireEvent('npc-dialogue:condition', { ...event });
-  };
-  const action = (player, stepId, npcId = -1) => {
-    const event = { player, npcId, stepId, handled: false };
-    fireEvent('npc-dialogue:action', event);
-    return event;
-  };
-  const choice = (player, option) => fireEvent('npc-dialogue:choice', { player, option, stepId: null });
-  const loginPlayer = (player) => {
-    login.forEach((handler) => handler({ player }));
-    // QuestRuntime registers this once per process; call it explicitly so each
-    // test harness gets the same login replay.
-    runtime.sendQuestVarps({ player });
-  };
-  const interact = (player, objectId, location = { x: 0, y: 0, z: 0 }, extra = {}) => {
-    const event = { player, objectId, location, ...extra, handled: false };
-    objectInteraction.forEach((handler) => handler(event));
-    return event;
-  };
-  const useOnObject = (player, itemId, objectId, extra = {}) => {
-    const event = { player, itemId, objectId, ...extra, handled: false };
-    itemOnObject.forEach((handler) => handler(event));
-    return event;
-  };
-  const useOnItem = (player, usedItemId, usedWithItemId) => {
-    const event = { player, usedItemId, usedWithItemId, handled: false };
-    itemOnItem.forEach((handler) => handler(event));
-    return event;
-  };
-  const castOnItem = (player, itemId, spellName = 'Lvl-1 Enchant', slot = null) => {
-    if (slot === null) slot = player.getInventory().getItems().findIndex((item) => item.getId() === itemId);
-    const event = { player, itemId, spellName, slot, handled: false };
-    spellOnItem.forEach((handler) => handler(event));
-    return event;
-  };
-  const kill = (player, npcId) => npcDeath.forEach((handler) => handler({ killer: player, npcId, npc: {} }));
-
-  return { quest, completedQuests, conditions, itemOnNpc, itemAction, spawned,
-    use, talk, condition, action, choice, loginPlayer, interact, useOnObject, useOnItem, castOnItem, kill,
-    emit: fireEvent, setTasteNeedsRod(value) { tasteNeedsRod = value; },
-    tasteRodQueryCount: () => tasteRodQueryCount,
-    questStartHook: (event) => fireEvent('npc-dialogue:hook', event),
-    transcripts: () => transcriptCalls.slice() };
+    core.TaskManager.process();
+    for (const p of players) p.resetUpdating();
+  }
 }
 
-const Q = (h) => h.quest;
-const stage = (h, p) => Q(h).getStage(p);
-const items = (p, list) => { for (const [id, amount] of list) p.items.set(id, amount); };
-const I = core.ItemIdentifiers;
-const N = core.NpcIdentifiers;
-const O = core.ObjectIdentifiers;
-const ALL_PREREQUISITES = ['in_search_of_the_myreque', 'nature_spirit', 'priest_in_peril', 'the_restless_ghost'];
+const stageOf = (p) => Number(p.getAttribute(STAGE_KEY)) || 0;
+const varbit = (p, id) => Number(p.getAttribute(VARS_ATTRIBUTE)?.[id]) || 0;
+const amount = (p, id) => p.getInventory().getAmount(id);
+const tile = (p) => [p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()];
+const menu = (p) => core.MultiChatboxPrompt.getPending(p);
+const current = (p) => p.getDialogueManager().getCurrent();
+const text = (p) => String(current(p)?.getText?.() ?? "").replace(/<br>/g, " ").replace(/\s+/g, " ").trim();
+const cont = (p) => p.getDialogueManager().advance();
+const complete = (p, key = "in_aid_of_the_myreque") => {
+  const request = { player: p, key, complete: null };
+  PM.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
+};
+const played = (page, variant) => transcripts.some((call) => call.page === page && (variant === undefined || call.variant === variant));
 
-test('fresh stage 0 reaches completion through the helper route', () => {
-  const h = harness();
-  for (const key of ALL_PREREQUISITES) h.completedQuests.add(key);
-  const p = makePlayer();
-  h.use(p);
-  h.loginPlayer(p);
+function choose(p, option) {
+  const pending = menu(p);
+  assert.ok(pending, `a menu is open for "${option}" (showing "${text(p)}")`);
+  const at = pending.options.findIndex((entry) => entry.startsWith(option));
+  assert.ok(at >= 0, `"${option}" in [${pending.options.join(" | ")}]`);
+  core.MultiChatboxPrompt.handleInterfaceActionClick({ player: p, buttonId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, slot: at + 1 });
+}
 
-  assert.equal(stage(h, p), 0, 'fresh stage 0');
-  const startEvent = { player: p, npcId: N.VELIAF_HURTZ_2, hook: 'quest:in-aid-of-the-myreque:start', handled: false };
-  h.questStartHook(startEvent);
-  assert.equal(stage(h, p), 20, 'Veliaf start hook');
-
-  // Food on the chest opens Burgh de Rott.
-  items(p, [[I.SHRIMPS, 1]]);
-  h.useOnObject(p, I.SHRIMPS, O.OPEN_CHEST_21);
-  assert.equal(stage(h, p), 30, 'food placed in the gate chest');
-  assert.equal(p.items.get(I.SHRIMPS) ?? 0, 0, 'the food is consumed');
-
-  h.choice(p, "Are there any 'out of the way' places here?");
-  assert.equal(stage(h, p), 50, 'Razvan points at the inn');
-
-  // Pickaxe on the inn rubble, open the trapdoor, climb down.
-  items(p, [[I.BRONZE_PICKAXE, 1]]);
-  h.interact(p, O.RUBBLE_7, { x: 3490, y: 3232, z: 0 });
-  assert.equal(stage(h, p), 60, 'entrance rubble mined');
-  h.interact(p, O.TRAPDOOR_50, { x: 3490, y: 3232, z: 0 });
-  assert.equal(stage(h, p), 80, 'trapdoor opened');
-  p.setLocation(3490, 3232, 0);
-
-  // Three basement rubble piles, then the pile is scooped with a spade.
-  for (const [id, x] of [[O.RUBBLE_8, 3489], [O.RUBBLE_9, 3491], [O.RUBBLE_10, 3493]]) {
-    h.interact(p, id, { x, y: 9627, z: 0 });
+/** Continues (and ticks through held boxes) until a line or menu option starts with `prefix`. */
+function until(p, prefix, limit = 80) {
+  for (let i = 0; i < limit; i++) {
+    const pending = menu(p);
+    if (pending?.options?.some((entry) => entry.startsWith(prefix)) || pending?.title?.startsWith?.(prefix)) return;
+    if (text(p).startsWith(prefix)) return;
+    if (pending) assert.fail(`menu [${pending.options.join(" | ")}] while waiting for "${prefix}"`);
+    if (current(p) && current(p).isSelfAdvancing?.() !== true) cont(p);
+    else tick();
   }
-  items(p, [[I.SPADE, 1], [I.BUCKET, 1]]);
-  h.useOnObject(p, I.SPADE, O.PILE_OF_RUBBLE_3, { location: { x: 3492, y: 9627, z: 0 } });
-  assert.equal(stage(h, p), 100, 'cellar cleared');
-  assert.equal(p.items.get(I.BUCKET_OF_RUBBLE) ?? 0, 1, 'bucket of rubble received');
-  assert.equal(p.items.get(I.BUCKET) ?? 0, 0, 'empty bucket used');
+  assert.fail(`"${prefix}" never showed (last "${text(p)}")`);
+}
 
-  // Aurel: offer to help, repair roof and wall, then take the crate.
-  assert.equal(h.talk('Aurel', N.AUREL), true);
-  h.choice(p, "I'd like to help fix up the town.");
-  assert.equal(stage(h, p), 120, 'store repairs agreed');
-  items(p, [[I.PLANK, 3], [I.BRONZE_NAILS, 12], [I.HAMMER, 1]]);
-  h.condition(p, 'QvHBD5');
-  assert.equal(stage(h, p), 150, 'roof fixed');
-  assert.equal(p.items.get(I.PLANK) ?? 0, 0, 'roof planks consumed');
-  items(p, [[I.PLANK, 3], [I.BRONZE_NAILS, 12], [I.HAMMER, 1]]);
-  h.condition(p, 'JHVR_s');
-  assert.equal(stage(h, p), 160, 'shop wall fixed');
-  h.condition(p, 'A1yJWY');
-  assert.equal(stage(h, p), 165, 'crate handed out');
-  assert.equal(p.items.get(I.CRATE) ?? 0, 1, 'empty crate received');
+/** Continues until the conversation ends or a menu opens. */
+function finish(p, limit = 60) {
+  for (let i = 0; i < limit; i++) {
+    if (menu(p)) return;
+    if (!current(p)) { tick(); if (!current(p) && !menu(p)) return; continue; }
+    if (current(p).isSelfAdvancing?.() === true) tick();
+    else cont(p);
+  }
+}
 
-  // Fill the crate with the player's rolled fish type.
-  const snail = Number(p.getAttribute('quest.in_aid_of_the_myreque.crate.fishtype')) === 1;
-  items(p, [[I.BRONZE_AXE, 10], [I.TINDERBOX, 3], [snail ? I.THIN_SNAIL_MEAT : I.RAW_MACKEREL, 10]]);
-  h.useOnItem(p, I.CRATE, I.BRONZE_AXE);
-  h.useOnItem(p, I.CRATE, I.TINDERBOX);
-  h.useOnItem(p, I.CRATE, snail ? I.THIN_SNAIL_MEAT : I.RAW_MACKEREL);
-  assert.equal(p.items.get(I.CRATE_2) ?? 0, 1, 'full crate assembled');
-  assert.equal(p.items.get(I.CRATE) ?? 0, 0, 'empty crate consumed');
-  h.action(p, 'UsJ9P-', N.AUREL);
-  assert.equal(stage(h, p), 170, 'crate handed in');
-  assert.equal(p.items.get(I.CRATE_2) ?? 0, 0, 'full crate consumed');
+function talk(p, npc, option = "Talk-to") {
+  const definition = npc.getCurrentDefinition?.(p) ?? npc.getDefinition();
+  const clickType = definition.getActions().findIndex((op) => op === option) + 1;
+  return PM.emitNpcInteraction({ player: p, npc, npcId: npc.getContentId?.(p) ?? definition.getId(), npcIndex: npc.getIndex(), definition,
+    clickType, action: option, location: { x: npc.getLocation().getX(), y: npc.getLocation().getY(), z: npc.getLocation().getZ() }, handled: false });
+}
 
-  // Bank: booth, wall, Cornelius.
-  items(p, [[I.PLANK, 2], [I.BRONZE_NAILS, 8], [I.HAMMER, 1], [I.SWAMP_PASTE, 1]]);
-  h.condition(p, 'EEIDrs');
-  assert.equal(stage(h, p), 180, 'bank booth fixed');
-  items(p, [[I.PLANK, 3], [I.BRONZE_NAILS, 12], [I.HAMMER, 1]]);
-  h.condition(p, '5z92aE');
-  assert.equal(stage(h, p), 190, 'bank wall fixed');
-  assert.equal(h.talk('Cornelius', N.CORNELIUS), true);
-  h.action(p, 'rqRnfa', N.CORNELIUS);
-  assert.equal(stage(h, p), 200, 'Cornelius becomes the banker');
+function fakeObject(id, [x, y, z]) {
+  return { getId: () => id, getLocation: () => new core.Location(x, y, z), getPrivateArea: () => null, getType: () => 10, getFace: () => 0,
+    getDefinition: () => core.ObjectDefinition.forId(id) };
+}
 
-  // Furnace: Razvan guidance, hole, fuel, light.
-  assert.equal(h.talk('Razvan', N.RAZVAN), true, 'Razvan is talkable at the furnace leg');
-  assert.equal(stage(h, p), 200, 'Razvan guidance does not skip the furnace stage');
-  items(p, [[I.HAMMER, 1], [I.STEEL_BAR, 2]]);
-  h.condition(p, 'h2dEwU');
-  assert.equal(stage(h, p), 205, 'furnace hole fixed');
-  items(p, [[I.COAL, 1]]);
-  h.condition(p, '6cW9G2');
-  assert.equal(stage(h, p), 210, 'furnace fuelled');
-  items(p, [[I.TINDERBOX, 1]]);
-  h.condition(p, 'hnlXcN');
-  assert.equal(stage(h, p), 230, 'furnace lit and Gadderanks arrives');
+function click(p, id, option, at, object = fakeObject(id, at)) {
+  const definition = core.ObjectDefinition.forPlayer(id, p) ?? core.ObjectDefinition.forId(id);
+  const clickType = definition.getInteractions().findIndex((op) => op === option) + 1;
+  assert.ok(clickType > 0, `${definition.getName()} (${id}) has ${option}`);
+  const [x, y, z] = at;
+  return PM.emitObjectInteraction({ player: p, object, objectId: id, definition, clickType, option, location: { x, y, z },
+    sourceLocation: { x: p.getLocation().getX(), y: p.getLocation().getY(), z: p.getLocation().getZ() }, handled: false });
+}
 
-  // Blood tithe: talk to Gadderanks, the juvinate and Wiskit, then fight.
-  h.condition(p, 'c4DZLI');
-  h.condition(p, 'a-RBs3');
-  assert.equal(h.talk('Wiskit', N.WISKIT), true);
-  h.action(p, 'p2YbVD', N.GADDERANKS);
-  assert.equal(stage(h, p), 240, 'fight starts');
-  h.kill(p, N.VAMPYRE_JUVINATE_15);
-  h.kill(p, N.VAMPYRE_JUVINATE_16);
-  assert.equal(stage(h, p), 260, 'juvinates defeated');
-  assert.equal(h.talk('Gadderanks', N.GADDERANKS_3), true, 'wounded Gadderanks is talkable');
-  h.action(p, 'G9lEti', N.GADDERANKS_3);
-  assert.equal(stage(h, p), 280, 'Gadderanks dies and drops the hammer');
-  assert.equal(p.items.get(I.GADDERHAMMER) ?? 0, 1, 'Gadderhammer received');
+function useOn(p, itemId, id, at, object = fakeObject(id, at)) {
+  const slot = p.getInventory().getItems().findIndex((item) => item?.getId() === itemId);
+  const [x, y, z] = at;
+  return PM.emitItemOnObject({ player: p, object, definition: core.ObjectDefinition.forPlayer(id, p) ?? undefined, objectId: id,
+    item: p.getInventory().getItems()[slot], itemId, itemSlot: slot, interfaceType: 0, location: { x, y, z }, handled: false });
+}
 
-  // Veliaf in the store, then the hideout; Polmafi releases the escort step.
-  assert.equal(h.talk('Veliaf Hurtz', N.VELIAF_HURTZ_2), true);
-  h.action(p, 'OCv2XT', N.VELIAF_HURTZ_2);
-  assert.equal(stage(h, p), 290, 'Veliaf returns to the Hollows');
-  assert.equal(h.talk('Polmafi Ferdygris', N.POLMAFI_FERDYGRIS), true);
-  h.condition(p, 'RRQbon');
-  assert.equal(stage(h, p), 300, 'Polmafi informs the others and releases the escort');
+function useOnItem(p, usedId, withId) {
+  const items = p.getInventory().getItems();
+  const used = items.findIndex((item) => item?.getId() === usedId);
+  const target = items.findIndex((item) => item?.getId() === withId);
+  return PM.emitItemOnItem({ player: p, usedItem: items[used], usedItemId: usedId, usedItemSlot: used,
+    usedWithItem: items[target], usedWithItemId: withId, usedWithItemSlot: target, handled: false });
+}
 
-  // Ivan escort.
-  assert.equal(h.talk('Ivan Strom', N.IVAN_STROM_3), true);
-  h.action(p, 'l-COOf', N.IVAN_STROM_3);
-  assert.equal(stage(h, p), 310, 'escort starts');
-  assert.deepEqual(p.moves.at(-1), [2859, 4564, 0], 'moved to the swamp trek tile');
-  h.kill(p, N.VAMPYRE_JUVINATE_15);
-  h.kill(p, N.VAMPYRE_JUVINATE_16);
-  assert.equal(stage(h, p), 320, 'escort finished');
-  assert.deepEqual(p.moves.at(-1), [3439, 9896, 0], 'moved to Drezel');
+function useOnNpc(p, npc, itemId) {
+  const slot = p.getInventory().getItems().findIndex((item) => item?.getId() === itemId);
+  const definition = npc.getCurrentDefinition(p);
+  return PM.emitItemOnNpc({ player: p, target: npc, definition, npcId: definition.getId(), targetIndex: npc.getIndex(),
+    item: p.getInventory().getItems()[slot], itemId, slot, interfaceId: 149 << 16, handled: false });
+}
 
-  // Drezel gives the key; the canonical ivandis bookcase supplies the book.
-  assert.equal(h.talk('Drezel', N.DREZEL), true);
-  h.action(p, 'B_kRtc', N.DREZEL);
-  assert.equal(stage(h, p), 350, 'library key received');
-  assert.equal(p.items.get(I.TEMPLE_LIBRARY_KEY) ?? 0, 1, 'Temple library key held');
-  h.interact(p, O.KEYHOLE, { x: 3443, y: 9898, z: 0 });
-  assert.equal(stage(h, p), 360, 'library opened');
-  h.interact(p, O.BOOKCASE_52, { x: 3354, y: 9902, z: 0 });
-  assert.equal(p.items.get(I.THE_SLEEPING_SEVEN) ?? 0, 1, 'the ivandis bookcase gives The Sleeping Seven');
-  const read = { player: p, itemId: I.THE_SLEEPING_SEVEN, option: 'Read', handled: false };
-  h.itemAction.forEach((handler) => handler(read));
-  assert.equal(stage(h, p), 370, 'book read');
+function itemOption(p, itemId, option) {
+  const slot = p.getInventory().getItems().findIndex((item) => item?.getId() === itemId);
+  const action = [1, 2, 3, 4, 6, 7].map((op) => ItemActionPacketListener.resolveInventoryWidgetAction(itemId, op)).find((a) => a?.option === option);
+  assert.ok(action, `item ${itemId} has ${option}`);
+  return PM.emitItemAction({ player: p, item: p.getInventory().getItems()[slot], itemId, slot, interfaceId: 149 << 16,
+    clickType: action.optionIndex, option: action.option, handled: false });
+}
 
-  // Boards, coffin mould, rod at a non-Burgh furnace, enchant, blessing.
-  items(p, [[I.HAMMER, 1]]);
-  h.useOnObject(p, I.HAMMER, O.WOODEN_BOARDS_2);
-  assert.equal(stage(h, p), 380, 'boards removed');
-  h.interact(p, O.CAVE_ENTRANCE_47, { x: 3484, y: 9832, z: 0 });
-  assert.deepEqual(p.moves.at(-1), [3505, 9863, 0], 'entered the coffin room');
-  items(p, [[I.SOFT_CLAY, 1]]);
-  h.useOnObject(p, I.SOFT_CLAY, O.COFFIN_16);
-  assert.equal(stage(h, p), 390, 'rod mould taken from the coffin');
-  assert.equal(p.items.get(I.ROD_MOULD) ?? 0, 1, 'rod mould held');
+function castEnchant(p, itemId) {
+  const slot = p.getInventory().getItems().findIndex((item) => item?.getId() === itemId);
+  return PM.emitSpellOnItem({ player: p, spellName: "Lvl-1 Enchant", spellWidget: 0, spellItemId: -1, itemId, slot, handled: false });
+}
 
-  items(p, [[I.SILVER_BAR, 1], [I.MITHRIL_BAR, 1], [I.SAPPHIRE, 1]]);
-  const furnace = { getDefinition: () => ({ getName: () => 'Furnace' }) };
-  h.useOnObject(p, I.SILVER_BAR, 10082, { object: furnace });
-  assert.equal(p.items.get(I.SILVTHRILL_ROD_2) ?? 0, 1, 'rod crafted at any furnace');
-  assert.equal(p.items.get(I.ROD_MOULD) ?? 0, 1, 'the rod mould is a tool and is kept');
-  items(p, [[I.COSMIC_RUNE, 1], [I.WATER_RUNE, 1]]);
-  h.castOnItem(p, I.SILVTHRILL_ROD_2);
-  assert.equal(stage(h, p), 400, 'rod enchanted');
-  assert.equal(p.items.get(I.SILVTHRILL_ROD_3) ?? 0, 1, 'enchanted rod held');
-  items(p, [[I.ROPE, 1]]);
-  h.useOnObject(p, I.SILVTHRILL_ROD_3, 3485);
-  assert.equal(stage(h, p), 410, 'rod blessed');
-  assert.equal(p.items.get(I.ROD_OF_IVANDIS_10_) ?? 0, 1, 'Rod of Ivandis held');
-  assert.equal(p.items.get(I.ROPE) ?? 0, 1, 'the rope is a tool and is kept');
+function give(p, itemId, count = 1) {
+  const definition = core.ItemDefinition.forId(itemId);
+  if (definition?.isStackable?.() || definition?.isNoted?.() || count === 1) return p.getInventory().add(new core.Item(itemId, count));
+  for (let i = 0; i < count; i++) p.getInventory().add(new core.Item(itemId, 1));
+}
 
-  // Final hand-in.
-  assert.equal(h.talk('Veliaf Hurtz', N.VELIAF_HURTZ_2), true);
-  h.action(p, 'ruxiLW', N.VELIAF_HURTZ_2);
-  assert.equal(stage(h, p), 420, 'quest complete');
-  assert.equal(Q(h).isComplete(p), true);
-  assert.equal(p.items.get(I.ROD_OF_IVANDIS_10_) ?? 0, 0, 'the rod is handed to Veliaf');
-  assert.equal(p.getAttribute('quest.points'), 2, 'two quest points');
-  assert.equal(p.experience.length, 5, 'Lvl-1 Enchant XP plus four 2,000 XP quest rewards');
-  assert.deepEqual(p.experience.map(([, amount]) => amount), [17.5, 2000, 2000, 2000, 2000]);
-  assert.ok(
-    p.log.some(([op, id, value]) => op === 'sendVarbit' && id === 1990 && value === 430),
-    'completion writes the canonical varbit 1990 = 430'
-  );
-  assert.ok(
-    !p.log.some(([op, id]) => op === 'sendConfig' && id === 704),
-    'the old varp 704 is not the quest wire'
-  );
+const fill = (p, slots) => { for (let i = 0; i < slots; i++) p.getInventory().add(new core.Item(I.BRONZE_DAGGER, 1)); };
+const ownedNpcs = (p, id) => [...core.World.getNpcs()].filter((npc) => npc?.isRegistered?.() && npc.getOwner?.() === p && (id === undefined || npc.getContentId(p) === id || npc.getId() === id));
+
+const HIDEOUT = [3508, 9838, 0];
+const MAUSOLEUM = [3440, 9895, 0];
+const BURGH_STORE = [3515, 3238, 0];
+
+// ---------------------------------------------------------------------------
+// Saves and other quests
+// ---------------------------------------------------------------------------
+
+test("old completed saves (stage 420) replay as varbit 1990 = 430 after the login migration and count as complete", (t) => {
+  const { p, seen } = actor(t, 420, [3494, 9630, 0], { legacy: true });
+  assert.equal(stageOf(p), STAGE.COMPLETE, "420 migrates to 430");
+  assert.equal(Number(p.getAttribute(SAVE_VERSION_ATTRIBUTE)), 2);
+  assert.ok(seen.varbits.some(([id, value]) => id === VARBIT.QUEST && value === 430), "login sends 1990 = 430");
+  assert.equal(varbit(p, VARBIT.TEMPLE_TREK_NPCS), 1, "the completion varbits are implied");
+  assert.equal(complete(p), true);
+
+  // A mid-quest legacy save moves onto live's stage for the same point (old 50 "Razvan points at the inn" -> 60).
+  const mid = actor(t, 50, [3484, 3242, 0], { legacy: true });
+  assert.equal(stageOf(mid.p), STAGE.TOLD_INN);
+  assert.ok(mid.seen.varbits.some(([id, value]) => id === VARBIT.QUEST && value === STAGE.TOLD_INN));
+  assert.equal(complete(mid.p), false);
 });
 
-test('old completed saves replay as canonical varbit 1990 = 430', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  // Old durable save from the pre-fix plugin: internal stage 420, no wire write yet.
-  p.attrs.set('quest.in_aid_of_the_myreque.stage', 420);
-  p.log.length = 0;
-  h.loginPlayer(p);
-  assert.equal(Q(h).isComplete(p), true, 'the durable stage stays complete');
-  assert.ok(
-    p.log.some(([op, id, value]) => op === 'sendVarbit' && id === 1990 && value === 430),
-    'login maps the old 420 save to the canonical 430 wire'
-  );
+test("completed In Aid yields Veliaf to A Taste of Hope's rod step", (t) => {
+  const { p, seen } = actor(t, STAGE.COMPLETE, [3494, 9630, 0]);
+  const veliaf = new core.NPC(8277, new core.Location(3494, 9628, 0));
+  assert.equal(veliaf.getContentId(p), N.VELIAF_HURTZ_3, "the Burgh de Rott hideout's Veliaf");
+  // A Taste of Hope at its rod step: Veliaf was asked for a rod and none is held or claimed yet.
+  p.setAttribute("quest.taste_of_hope.stage", 120);
+  p.setAttribute("quest.taste_of_hope.bits", 1 << 13);
+  const asked = { player: p, needsRod: null };
+  PM.emitCustomEvent("taste-of-hope:needs-veliaf-rod", asked);
+  assert.equal(asked.needsRod, true, "Taste's public answer");
+  transcripts = [];
+  talk(p, veliaf);
+  assert.ok(!played(PAGE), "In Aid's post-quest talk does not take Veliaf while Taste needs the rod");
+  assert.equal(seen.messages.length, 0, "nor does the next quest's start");
+  p.getDialogueManager().reset();
 
-  const mid = makePlayer();
-  h.use(mid);
-  mid.attrs.set('quest.in_aid_of_the_myreque.stage', 160);
-  mid.log.length = 0;
-  h.loginPlayer(mid);
-  assert.ok(
-    mid.log.some(([op, id, value]) => op === 'sendVarbit' && id === 1990 && value === 160),
-    'mid-quest stages keep their QH value on the same varbit'
-  );
+  // Once the rod is claimed, the quests after In Aid have Veliaf again (Darkness of Hallowvale is
+  // registered ahead of In Aid's greeting; here it refuses its start on requirements).
+  p.setAttribute("quest.taste_of_hope.bits", (1 << 13) | (1 << 14));
+  transcripts = [];
+  assert.equal(talk(p, veliaf), true, "Veliaf is talkable once Taste has its rod");
 });
 
-test('completed In Aid yields Veliaf to A Taste of Hope\'s rod step', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  Q(h).setStage(p, 420); // fixture: completed In Aid handler contract
-  // The public Taste query owns its state. Contradictory private attributes
-  // ensure In Aid follows the event response instead of duplicating Taste's bits.
-  p.attrs.set('quest.taste_of_hope.stage', 0);
-  p.attrs.set('quest.taste_of_hope.bits', 0);
-  h.setTasteNeedsRod(true);
-  assert.equal(h.talk('Veliaf Hurtz', N.VELIAF_HURTZ_2), false, 'In Aid yields the shared NPC');
-  assert.equal(h.tasteRodQueryCount(), 1, 'In Aid asks Taste through its public event');
-  assert.ok(
-    !h.transcripts().some((call) => call.page === 'In Aid of the Myreque'),
-    'yielding does not start the In Aid post-quest transcript'
-  );
-
-  p.attrs.set('quest.taste_of_hope.stage', 120);
-  p.attrs.set('quest.taste_of_hope.bits', 1 << 13);
-  h.setTasteNeedsRod(false);
-  assert.equal(h.talk('Veliaf Hurtz', N.VELIAF_HURTZ_2), true, 'In Aid keeps post-quest dialogue once Taste has the rod');
-  assert.equal(h.tasteRodQueryCount(), 2);
-  assert.ok(
-    h.transcripts().some((call) => call.page === 'In Aid of the Myreque'),
-    'In Aid post-quest dialogue is preserved when Taste no longer needs the hand-off'
-  );
-
-  p.items.set(7639, 1);
-  assert.equal(h.talk('Veliaf Hurtz', N.VELIAF_HURTZ_2), true, 'holding any Rod variant keeps In Aid post-quest dialogue');
-  assert.equal(h.tasteRodQueryCount(), 3);
+test("missing The Restless Ghost blocks the start", (t) => {
+  const { p, seen, spawn } = actor(t, 0, HIDEOUT, { prerequisites: false });
+  meetRequirements(p, ["in_search_of_the_myreque", "nature_spirit", "priest_in_peril"]);
+  talk(p, spawn(9620, [3506, 9838, 0]));
+  finish(p);
+  assert.equal(stageOf(p), 0);
+  assert.ok(seen.messages.some((message) => message.includes("The Restless Ghost")), JSON.stringify(seen.messages));
+  assert.ok(!seen.messages.some((message) => message.includes("Nature Spirit")), "only the missing quest is named");
 });
 
-test('out-of-order rubble work cannot skip the Veliaf/Florin/Razvan start', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  p.items.set(I.BRONZE_PICKAXE, 1);
-  h.interact(p, O.RUBBLE_7, { x: 3490, y: 3232, z: 0 });
-  assert.equal(stage(h, p), 0, 'stage-0 rubble mining does not start the quest');
-  Q(h).setStage(p, 20);
-  h.interact(p, O.RUBBLE_7, { x: 3490, y: 3232, z: 0 });
-  assert.equal(stage(h, p), 20, 'stage-20 rubble mining still waits for Razvan');
-  Q(h).setStage(p, 50);
-  h.interact(p, O.RUBBLE_7, { x: 3490, y: 3232, z: 0 });
-  assert.equal(stage(h, p), 60, 'the helper stage can mine the entrance');
+// ---------------------------------------------------------------------------
+// Burgh de Rott: the inn
+// ---------------------------------------------------------------------------
+
+test("out-of-order rubble work cannot skip the Veliaf/Florin/broken-wall start", (t) => {
+  for (const stage of [0, STAGE.STARTED, STAGE.TOLD_INN]) {
+    const { p } = actor(t, stage, [3491, 3231, 0]);
+    give(p, I.RUNE_PICKAXE);
+    useOn(p, I.RUNE_PICKAXE, 12738, [3489, 3231, 0]);
+    tick(5);
+    assert.equal(stageOf(p), stage, `a pickaxe on the collapsed wall at ${stage} does nothing`);
+    assert.equal(varbit(p, VARBIT.INN_WALL), 0);
+  }
+  const { p } = actor(t, STAGE.WALL_CLIMBED, [3491, 3231, 0]);
+  give(p, I.RUNE_PICKAXE);
+  assert.equal(useOn(p, I.RUNE_PICKAXE, 12738, [3489, 3231, 0]), true);
+  tick(4);
+  assert.equal(stageOf(p), STAGE.RUBBLE_MINED, "after the wall is climbed (70) the rubble breaks");
 });
 
-test('a pickaxe above the Mining level gets the recorded level line at the rubble; none at all the rubble line', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  Q(h).setStage(p, 50);
-  p.getSkillManager = () => ({ getMaxLevel: () => 1, getCurrentLevel: () => 1, addExperiences: noop });
-  p.items.set(I.DRAGON_PICKAXE, 1);
-  h.useOnObject(p, I.DRAGON_PICKAXE, O.RUBBLE_7, { location: { x: 3490, y: 3232, z: 0 } });
-  assert.equal(p.messages.at(-1), 'You do not have a pickaxe which you have the Mining level to use.');
-  h.interact(p, O.RUBBLE_7, { x: 3490, y: 3232, z: 0 });
-  assert.equal(p.messages.at(-1), 'You do not have a pickaxe which you have the Mining level to use.', 'Mine on the rubble too');
-  assert.equal(stage(h, p), 50, 'nothing mined');
-  p.items.delete(I.DRAGON_PICKAXE);
-  p.setWeapon(I.DRAGON_PICKAXE);
-  h.interact(p, O.RUBBLE_7, { x: 3490, y: 3232, z: 0 });
-  assert.equal(p.messages.at(-1), 'You do not have a pickaxe which you have the Mining level to use.', 'a wielded one counts');
-  p.setWeapon(-1);
-  h.interact(p, O.RUBBLE_7, { x: 3490, y: 3232, z: 0 });
-  assert.equal(p.messages.at(-1), 'You need a pickaxe to clear this rubble.');
-  Q(h).setStage(p, 80);
-  p.setLocation(3490, 9627, 0);
-  p.items.set(I.DRAGON_PICKAXE, 1);
-  h.interact(p, O.RUBBLE_8, { x: 3489, y: 9627, z: 0 });
-  assert.equal(p.messages.at(-1), 'You do not have a pickaxe which you have the Mining level to use.', 'the basement rubble too');
+test("a pickaxe above the Mining level gets the level line at the inn rubble; none at all the rubble line", (t) => {
+  const { p, seen } = actor(t, STAGE.WALL_CLIMBED, [3491, 3231, 0]);
+  p.getSkillManager().setMaxLevel(core.Skill.MINING, 1).setCurrentLevel(core.Skill.MINING, 1);
+  give(p, I.DRAGON_PICKAXE);
+  useOn(p, I.DRAGON_PICKAXE, 12738, [3489, 3231, 0]);
+  assert.equal(seen.messages.at(-1), "You do not have a pickaxe which you have the Mining level to use.");
+  tick(5);
+  assert.equal(stageOf(p), STAGE.WALL_CLIMBED, "nothing mined");
+  // The cellar rubble: no pickaxe at all, then one above the level.
+  const cellar = actor(t, STAGE.TRAPDOOR_OPEN, [3491, 3232, 0]);
+  cellar.p.getSkillManager().setMaxLevel(core.Skill.MINING, 1).setCurrentLevel(core.Skill.MINING, 1);
+  click(cellar.p, 12743, "Climb-down", [3490, 3232, 0]);
+  tick();
+  const rubble = (cellar.p.getPrivateArea?.()?.getObjects?.() ?? []).find((object) => object.getId() === 12812);
+  assert.ok(rubble, "the cellar's rubble");
+  const at = [rubble.getLocation().getX(), rubble.getLocation().getY(), rubble.getLocation().getZ()];
+  click(cellar.p, 12812, "Mine", at, rubble);
+  assert.equal(cellar.seen.messages.at(-1), "You need a pickaxe to clear this rubble.");
+  give(cellar.p, I.DRAGON_PICKAXE);
+  click(cellar.p, 12812, "Mine", at, rubble);
+  assert.equal(cellar.seen.messages.at(-1), "You do not have a pickaxe which you have the Mining level to use.", "the cellar rubble too");
+  cellar.p.getInventory().delete(new core.Item(I.DRAGON_PICKAXE, 1));
+  cellar.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.DRAGON_PICKAXE, 1));
+  cellar.seen.messages.length = 0;
+  click(cellar.p, 12812, "Mine", at, rubble);
+  assert.equal(cellar.seen.messages.at(-1), "You do not have a pickaxe which you have the Mining level to use.", "a wielded one counts");
+  tick(10);
+  assert.equal(varbit(cellar.p, VARBIT.RUBBLE_MESSAGE), 0, "nothing mined");
 });
 
-test('the history bookcase is not the quest bookcase', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  Q(h).setStage(p, 360);
-  h.interact(p, O.BOOKCASE_51, { x: 3354, y: 9899, z: 0 });
-  assert.equal(p.items.get(I.THE_SLEEPING_SEVEN) ?? 0, 0, 'history bookcase gives no quest book');
-  h.interact(p, O.BOOKCASE_52, { x: 3354, y: 9902, z: 0 });
-  assert.equal(p.items.get(I.THE_SLEEPING_SEVEN) ?? 0, 1, 'ivandis bookcase gives the book');
+// ---------------------------------------------------------------------------
+// Burgh de Rott: the store
+// ---------------------------------------------------------------------------
+
+test("the crate accepts raw snails and cooked snail meat together, and fills to 10", (t) => {
+  const { p } = actor(t, STAGE.CRATE_GIVEN, BURGH_STORE);
+  p.setAttribute("in-aid-of-the-myreque:crate-food", 1); // Aurel asked for snails
+  give(p, I.CRATE);
+  give(p, I.THIN_SNAIL, 6);
+  give(p, I.FAT_SNAIL_MEAT, 6);
+  useOnItem(p, I.THIN_SNAIL, I.CRATE);
+  choose(p, "Yes, I'll fill the crate.");
+  p.getDialogueManager().reset();
+  // "10 snails of any type": the fill takes raw snails and cooked meat alike, 10 in all.
+  assert.equal(varbit(p, VARBIT.CRATE_FOOD), 10, "raw and cooked fill the food side");
+  assert.equal(amount(p, I.THIN_SNAIL) + amount(p, I.FAT_SNAIL_MEAT), 2, "only the 10 needed go");
+  assert.ok(amount(p, I.THIN_SNAIL) < 6 && amount(p, I.FAT_SNAIL_MEAT) < 6, "both kinds were taken");
+  assert.equal(amount(p, I.CRATE), 1, "still the 7630 crate");
 });
 
-test('a full bag does not consume Drezel\'s key branch', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  Q(h).setStage(p, 320);
-  p.setFull(true);
-  h.action(p, 'B_kRtc', N.DREZEL);
-  assert.equal(stage(h, p), 320, 'stage stays before the key while the bag is full');
-  assert.equal(p.items.get(I.TEMPLE_LIBRARY_KEY) ?? 0, 0, 'no key is lost');
-  p.setFull(false);
-  h.action(p, 'B_kRtc', N.DREZEL);
-  assert.equal(stage(h, p), 350, 'retry with space gives the key');
-  assert.equal(p.items.get(I.TEMPLE_LIBRARY_KEY) ?? 0, 1);
+test("a lost crate is replaced by Aurel's 'What should I do now?', its packed stock kept, and is not duplicated", (t) => {
+  const { p, spawn } = actor(t, STAGE.CRATE_GIVEN, BURGH_STORE, { vars: { [VARBIT.CRATE_AXES]: 10 } });
+  p.setAttribute("in-aid-of-the-myreque:crate-food", 1);
+  const aurel = spawn(N.AUREL, [3516, 3238, 0]);
+  talk(p, aurel);
+  until(p, "What should I do now?");
+  choose(p, "What should I do now?");
+  finish(p);
+  assert.equal(amount(p, I.CRATE), 1, "a crate again");
+  assert.equal(varbit(p, VARBIT.CRATE_AXES), 10, "what was packed stays packed (varbits 1991-1993, not the item)");
+  assert.equal(stageOf(p), STAGE.CRATE_GIVEN, "the stage does not change");
+  p.getDialogueManager().reset();
+  talk(p, aurel);
+  until(p, "What should I do now?");
+  choose(p, "What should I do now?");
+  finish(p);
+  assert.equal(amount(p, I.CRATE), 1, "a held crate is not duplicated");
+  p.getInventory().deleteNumber(I.CRATE, 1);
+  p.getBank(0).add(new core.Item(I.CRATE, 1));
+  p.getDialogueManager().reset();
+  talk(p, aurel);
+  until(p, "What should I do now?");
+  choose(p, "What should I do now?");
+  finish(p);
+  assert.equal(amount(p, I.CRATE), 0, "a banked crate is not duplicated either");
 });
 
-test('a lost or full-bag Gadderhammer uses Aurel\'s canonical recovery page', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  Q(h).setStage(p, 260);
-  p.setFull(true);
-  h.action(p, 'G9lEti', N.GADDERANKS_3);
-  assert.equal(stage(h, p), 280, 'the quest still advances');
-  assert.equal(p.items.get(I.GADDERHAMMER) ?? 0, 0, 'the hammer is not dropped into a full bag');
-  p.setFull(false);
+// ---------------------------------------------------------------------------
+// The blood tithe: the Gadderhammer and Aurel afterwards
+// ---------------------------------------------------------------------------
 
-  assert.equal(h.talk('Aurel', N.AUREL), true);
-  assert.ok(
-    h.transcripts().some((call) => call.page === 'Aurel' && call.variant === 'if-the-player-has-lost-the-gadderhammer'),
-    'Aurel offers the canonical lost-hammer recovery page'
-  );
+test("a lost Gadderhammer: Aurel's recovery page sells it back for 3,000 coins", (t) => {
+  const { p, spawn } = actor(t, STAGE.GADDERANKS_DEAD, [3516, 3241, 0]);
+  const aurel = spawn(N.AUREL, [3517, 3241, 0]);
+  transcripts = [];
+  talk(p, aurel);
+  assert.ok(played("Aurel", "if-the-player-has-lost-the-gadderhammer"), "the lost-hammer page");
+  until(p, "I've lost Gadderanks' Warhammer.");
+  choose(p, "I've lost Gadderanks' Warhammer.");
+  finish(p);
+  assert.equal(amount(p, I.GADDERHAMMER), 0, "no coins, no hammer");
+  p.getDialogueManager().reset();
 
-  const noCoins = { player: p, stepId: 'HxmbYb', pages: [{ page: 'Aurel' }] };
-  const enoughCoins = { player: p, stepId: 'Z1JkRV', pages: [{ page: 'Aurel' }] };
-  assert.equal(h.conditions.at(-1)(noCoins), true, 'not enough coins branch');
-  assert.equal(h.conditions.at(-1)(enoughCoins), false, 'enough coins branch is false without coins');
-
-  p.items.set(I.COINS, 3000);
-  assert.equal(h.conditions.at(-1)(noCoins), false, 'enough coins branch is now false');
-  assert.equal(h.conditions.at(-1)(enoughCoins), true, 'enough coins branch is now true');
-  h.action(p, '6qLnJV', N.AUREL);
-  assert.equal(p.items.get(I.GADDERHAMMER) ?? 0, 1, 'the hammer is bought back');
-  assert.equal(p.items.get(I.COINS) ?? 0, 0, '3000 coins are consumed');
+  give(p, I.COINS, 3000);
+  talk(p, aurel);
+  until(p, "I've lost Gadderanks' Warhammer.");
+  choose(p, "I've lost Gadderanks' Warhammer.");
+  for (let i = 0; i < 20 && amount(p, I.GADDERHAMMER) === 0; i++) {
+    if (menu(p)) choose(p, menu(p).options.find((option) => /^Yes/.test(option)) ?? menu(p).options[0]);
+    else if (current(p)) cont(p);
+    else tick();
+  }
+  assert.equal(amount(p, I.GADDERHAMMER), 1, "the hammer is bought back");
+  assert.equal(amount(p, I.COINS), 0, "for 3,000 coins");
 });
 
-test('Aurel\'s post-quest standard page is used when the hammer is held', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  Q(h).setStage(p, 420);
-  p.items.set(I.GADDERHAMMER, 1);
-  assert.equal(h.talk('Aurel', N.AUREL), true);
-  assert.ok(
-    h.transcripts().some((call) => call.page === 'Aurel' && call.variant === 'standard-dialogue'),
-    'holds the hammer: canonical Aurel page, not the quest repair page'
-  );
+test("Aurel's post-quest standard page is used when the hammer is held", (t) => {
+  const { p, spawn } = actor(t, STAGE.COMPLETE, [3516, 3241, 0]);
+  give(p, I.GADDERHAMMER);
+  transcripts = [];
+  assert.equal(talk(p, spawn(N.AUREL, [3517, 3241, 0])), true);
+  assert.ok(played("Aurel", "standard-dialogue"), JSON.stringify(transcripts));
+  assert.ok(!played(PAGE), "not a quest page");
 });
 
-test('a lost Temple library key can be reclaimed from Drezel before the library opens', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  Q(h).setStage(p, 350);
-  assert.equal(h.talk('Drezel', N.DREZEL), true);
-  assert.ok(
-    h.transcripts().some((call) => call.page === 'In Aid of the Myreque' && call.variant === 'asking-drezel-about-ivandis'),
-    'Drezel repeats the key conversation when the key is missing'
-  );
-  h.action(p, 'B_kRtc', N.DREZEL);
-  assert.equal(stage(h, p), 350, 'the stage does not go backwards or skip forward');
-  assert.equal(p.items.get(I.TEMPLE_LIBRARY_KEY) ?? 0, 1, 'the key is replaced');
+// ---------------------------------------------------------------------------
+// Paterdomus: Drezel's library key
+// ---------------------------------------------------------------------------
+
+function drezel(f) {
+  f.p.getPacketSender().sendConfig(302, 61); // Priest in Peril complete: the mausoleum Drezel
+  return f.spawn(9805, [3441, 9894, 0]);
+}
+
+/** Drezel from 315 through his menus to the key box (the escort test's route, t4057-4264). */
+function askForKey(f) {
+  talk(f.p, drezel(f));
+  until(f.p, "Veliaf told me about Ivandis.");
+  choose(f.p, "Veliaf told me about Ivandis.");
+  until(f.p, "Is there somewhere that I might get more information");
+  choose(f.p, "Is there somewhere that I might get more information");
+  until(f.p, "The lives of those pitiful few");
+  choose(f.p, "The lives of those pitiful few");
+  until(f.p, "Drezel gives you a key.");
+}
+
+test("a full bag does not lose Drezel's key: it lands under the player, and he replaces a key that is not held", (t) => {
+  const f = actor(t, STAGE.IVAN_DELIVERED, MAUSOLEUM);
+  fill(f.p, 28);
+  askForKey(f);
+  assert.equal(stageOf(f.p), STAGE.LIBRARY_KEY);
+  assert.equal(amount(f.p, I.TEMPLE_LIBRARY_KEY), 0, "no room in the bag");
+  const floor = core.World.getItems().filter((item) => item.getItem().getId() === I.TEMPLE_LIBRARY_KEY
+    && item.getPosition().getX() === MAUSOLEUM[0] && item.getPosition().getY() === MAUSOLEUM[1] && item.getOwner?.() === f.p.getUsername());
+  assert.equal(floor.length, 1, "the key is on the floor, not lost");
+  f.p.getDialogueManager().reset();
+  // Not held, so Drezel's lost-key lines hand another (the escort test covers the same at 350).
+  f.p.getInventory().deleteNumber(I.BRONZE_DAGGER, 1);
+  talk(f.p, drezel(f));
+  assert.equal(text(f.p), "I've lost my library key.");
+  until(f.p, "Thanks for that!");
+  assert.equal(amount(f.p, I.TEMPLE_LIBRARY_KEY), 1);
 });
 
-test('the crate accepts raw snails and cooked snail meat', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  Q(h).setStage(p, 165);
-  p.items.set(I.CRATE, 1);
-  p.setAttribute('quest.in_aid_of_the_myreque.crate.fishtype', 1);
-  items(p, [[I.BRONZE_AXE, 10], [I.TINDERBOX, 3], [I.THIN_SNAIL, 6], [I.FAT_SNAIL_MEAT, 4]]);
-  h.useOnItem(p, I.CRATE, I.THIN_SNAIL);
-  h.useOnItem(p, I.CRATE, I.FAT_SNAIL_MEAT);
-  h.useOnItem(p, I.CRATE, I.BRONZE_AXE);
-  h.useOnItem(p, I.CRATE, I.TINDERBOX);
-  assert.equal(p.items.get(I.THIN_SNAIL) ?? 0, 0, 'raw snails are consumed');
-  assert.equal(p.items.get(I.FAT_SNAIL_MEAT) ?? 0, 0, 'cooked snail meat is consumed');
-  assert.equal(p.items.get(I.CRATE) ?? 0, 0, 'the empty crate is consumed');
-  assert.equal(p.items.get(I.CRATE_2) ?? 0, 1, 'raw or cooked snails fill the crate');
+test("a lost Temple library key is reclaimed from Drezel before the library opens; the stage stays", (t) => {
+  const f = actor(t, STAGE.LIBRARY_KEY, MAUSOLEUM);
+  transcripts = [];
+  talk(f.p, drezel(f));
+  assert.ok(played("Drezel", "standard-dialogue-after-priest-in-peril"), "the Drezel page's lost-key lines");
+  assert.equal(text(f.p), "I've lost my library key.");
+  until(f.p, "Thanks for that!");
+  assert.equal(amount(f.p, I.TEMPLE_LIBRARY_KEY), 1, "the key is replaced");
+  assert.equal(stageOf(f.p), STAGE.LIBRARY_KEY, "no skip forward");
+  f.p.getDialogueManager().reset();
+  transcripts = [];
+  talk(f.p, drezel(f));
+  assert.ok(played(PAGE, "asking-drezel-about-ivandis-talking-to-drezel-afterwards"), "with the key held, his afterwards talk");
+  assert.equal(amount(f.p, I.TEMPLE_LIBRARY_KEY), 1, "no second key");
 });
 
-test('completed players are offered post-quest Drezel lost-key recovery', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  Q(h).setStage(p, 420);
-  h.loginPlayer(p);
-  assert.ok(
-    h.spawned.some((npc) => npc.id === N.DREZEL),
-    'Drezel is present at the temple after completion'
-  );
-  assert.equal(h.talk('Drezel', N.DREZEL), true);
-  assert.ok(
-    h.transcripts().some(
-      (call) => call.page === 'Drezel' && call.variant === 'standard-dialogue-after-priest-in-peril'
-    ),
-    'the canonical post-quest Drezel page runs'
-  );
-  h.action(p, '7Z6IoI', N.DREZEL);
-  assert.equal(p.items.get(I.TEMPLE_LIBRARY_KEY) ?? 0, 1, 'the lost key is replaced');
-  assert.equal(h.talk('Drezel', N.DREZEL), false, 'with the key held, other owners keep Drezel');
+test("completed players are offered post-quest Drezel lost-key recovery", (t) => {
+  // Only Priest in Peril marked complete, so Drezel plays the Drezel page's base post-quest variant
+  // (with Nature Spirit complete too, Nature Spirit picks its own post-quest variant, which has no
+  // lost-key branch). The wolfbane is held, else Priest in Peril's lost-dagger branch comes first.
+  const f = actor(t, STAGE.COMPLETE, MAUSOLEUM, { prerequisites: false });
+  meetRequirements(f.p, ["priest_in_peril"]);
+  give(f.p, I.WOLFBANE);
+  assert.equal(talk(f.p, drezel(f)), true);
+  // The Drezel page's "If the player has lost their temple library key" branch (P91CrU / 7Z6IoI).
+  for (let i = 0; i < 30 && amount(f.p, I.TEMPLE_LIBRARY_KEY) === 0 && (current(f.p) || menu(f.p)); i++) {
+    const lost = menu(f.p)?.options.find((option) => /library key/i.test(option));
+    if (menu(f.p) && !lost) break;
+    if (lost) choose(f.p, lost);
+    else cont(f.p);
+  }
+  assert.equal(amount(f.p, I.TEMPLE_LIBRARY_KEY), 1, "Drezel replaces a lost library key after completion");
 });
 
-test('post-quest Drezel named page can replace a lost library key', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  Q(h).setStage(p, 420);
-  const missingKey = { player: p, stepId: 'P91CrU', pages: [{ page: 'Drezel' }] };
-  assert.equal(h.conditions.at(-1)(missingKey), true, 'key-loss condition answers true');
-  h.action(p, '7Z6IoI', N.DREZEL);
-  assert.equal(p.items.get(I.TEMPLE_LIBRARY_KEY) ?? 0, 1, 'Drezel replaces the key');
-  assert.equal(h.conditions.at(-1)(missingKey), false, 'condition answers false once held');
-
-  const early = harness();
-  const earlyPlayer = makePlayer();
-  early.use(earlyPlayer);
-  const earlyCondition = { player: earlyPlayer, stepId: 'P91CrU', pages: [{ page: 'Drezel' }] };
-  assert.equal(early.conditions.at(-1)(earlyCondition), false, 'no pre-quest key handout');
+test("Drezel hands no library key before In Aid reaches it", (t) => {
+  // As above: the base post-Priest-in-Peril page, whose lost-key branch must stay shut at stage 0.
+  const f = actor(t, 0, MAUSOLEUM, { prerequisites: false });
+  meetRequirements(f.p, ["priest_in_peril"]);
+  give(f.p, I.WOLFBANE);
+  const lines = [];
+  talk(f.p, drezel(f));
+  for (let i = 0; i < 30 && current(f.p) && !menu(f.p); i++) { lines.push(text(f.p)); cont(f.p); }
+  assert.ok(lines.length > 0, "Drezel's page plays");
+  assert.ok(!lines.includes("I've lost my library key."), "the Drezel page's lost-key branch stays shut before the quest");
+  assert.equal(amount(f.p, I.TEMPLE_LIBRARY_KEY), 0, "no pre-quest key handout");
 });
 
-test('a lost crate can be replaced by asking Aurel what to do now', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  Q(h).setStage(p, 165);
-  assert.equal(p.items.get(I.CRATE) ?? 0, 0);
-  h.choice(p, 'What should I do now?');
-  assert.equal(p.items.get(I.CRATE) ?? 0, 1, 'an empty crate is replaced');
-  assert.equal(stage(h, p), 165, 'the stage does not change');
-  h.choice(p, 'What should I do now?');
-  assert.equal(p.items.get(I.CRATE) ?? 0, 1, 'an existing crate is not duplicated');
+// ---------------------------------------------------------------------------
+// The library
+// ---------------------------------------------------------------------------
+
+test("the history bookcase is not the quest bookcase", (t) => {
+  const { p } = actor(t, STAGE.LIBRARY_OPEN, [3354, 9900, 0]);
+  click(p, core.ObjectIdentifiers.BOOKCASE_51, "Search", [3354, 9901, 0]);
+  tick(3);
+  assert.equal(amount(p, I.THE_SLEEPING_SEVEN), 0, "the history bookcase gives no quest book");
+  assert.equal(stageOf(p), STAGE.LIBRARY_OPEN);
+  p.getDialogueManager().reset();
+  click(p, core.ObjectIdentifiers.BOOKCASE_52, "Search", [3354, 9899, 0]);
+  assert.equal(amount(p, I.THE_SLEEPING_SEVEN), 1, "Ivandis' bookcase does");
+  assert.equal(stageOf(p), STAGE.BOOK_FOUND);
 });
 
-test('the rod enchantment requires the standard spellbook', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  Q(h).setStage(p, 390);
-  p.items.set(I.SILVTHRILL_ROD_2, 1);
-  p.items.set(I.COSMIC_RUNE, 1);
-  p.items.set(I.WATER_RUNE, 1);
+// ---------------------------------------------------------------------------
+// The rod: Lvl-1 Enchant
+// ---------------------------------------------------------------------------
+
+function rodCaster(t) {
+  const f = actor(t, STAGE.ROD_MADE, [2974, 3372, 0]);
+  f.p.getSkillManager().setMaxLevel(core.Skill.MAGIC, 70).setCurrentLevel(core.Skill.MAGIC, 70);
+  give(f.p, I.SILVTHRILL_ROD_2);
+  give(f.p, I.COSMIC_RUNE);
+  return f;
+}
+
+test("the rod enchantment requires the standard spellbook", (t) => {
+  const { p } = rodCaster(t);
+  give(p, I.WATER_RUNE);
   p.setSpellbook(core.MagicSpellbook.LUNAR);
-  const cast = h.castOnItem(p, I.SILVTHRILL_ROD_2);
-  assert.equal(cast.handled, true, 'the plugin owns the attempt');
-  assert.equal(p.items.get(I.SILVTHRILL_ROD_3) ?? 0, 0, 'no enchant on the wrong spellbook');
-  assert.equal(p.items.get(I.COSMIC_RUNE) ?? 0, 1, 'runes are not consumed');
-  assert.equal(p.items.get(I.COSMIC_RUNE), 1, 'the standard spell cast rejects a non-standard spellbook without consuming runes');
+  assert.equal(castEnchant(p, I.SILVTHRILL_ROD_2), true, "the attempt is owned");
+  tick(12);
+  assert.equal(amount(p, I.SILVTHRILL_ROD_3), 0, "no enchant on the Lunar spellbook");
+  assert.equal(amount(p, I.COSMIC_RUNE), 1, "runes are not consumed");
+  assert.equal(stageOf(p), STAGE.ROD_MADE);
   p.setSpellbook(core.MagicSpellbook.NORMAL);
-  h.castOnItem(p, I.SILVTHRILL_ROD_2);
-  assert.equal(p.items.get(I.SILVTHRILL_ROD_3) ?? 0, 1, 'enchant works on the standard spellbook');
+  castEnchant(p, I.SILVTHRILL_ROD_2);
+  assert.equal(stageOf(p), STAGE.ROD_ENCHANTED);
+  tick(9);
+  assert.equal(amount(p, I.SILVTHRILL_ROD_3), 1, "the standard spellbook enchants it");
 });
 
-test('the rod enchantment accepts a wielded water staff through the rune-supply hook', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.use(p);
-  Q(h).setStage(p, 390);
-  p.items.set(I.SILVTHRILL_ROD_2, 1);
-  p.items.set(I.COSMIC_RUNE, 1);
-  p.setWeapon(I.WATER_BATTLESTAFF);
-
-  const cast = h.castOnItem(p, I.SILVTHRILL_ROD_2);
-  assert.equal(cast.handled, true);
-  assert.equal(p.items.get(I.SILVTHRILL_ROD_3), 1, 'the equipped water staff supplies the water rune');
-  assert.equal(p.items.get(I.COSMIC_RUNE), 0, 'the required cosmic rune is consumed');
-  assert.equal(p.items.get(I.WATER_RUNE) ?? 0, 0, 'no water rune is required from inventory');
+test("the rod enchantment accepts a wielded water staff for the water rune", (t) => {
+  const { p } = rodCaster(t);
+  p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.WATER_BATTLESTAFF, 1));
+  p.getEquipment().refreshItems?.();
+  castEnchant(p, I.SILVTHRILL_ROD_2);
+  tick(9);
+  assert.equal(amount(p, I.SILVTHRILL_ROD_3), 1, "the staff supplies the water rune");
+  assert.equal(amount(p, I.COSMIC_RUNE), 0, "the cosmic rune is spent");
+  assert.equal(amount(p, I.WATER_RUNE), 0, "no water rune was needed");
 });
 
-test('missing The Restless Ghost blocks the start', () => {
-  const h = harness();
-  for (const key of ['in_search_of_the_myreque', 'nature_spirit', 'priest_in_peril']) h.completedQuests.add(key);
-  const p = makePlayer();
-  h.use(p);
-  const start = { player: p, npcId: N.VELIAF_HURTZ_2, hook: 'quest:in-aid-of-the-myreque:start', handled: false };
-  h.questStartHook(start);
-  assert.equal(stage(h, p), 0);
-  assert.ok(p.messages.some((message) => message.includes('The Restless Ghost')));
+// ---------------------------------------------------------------------------
+// End to end
+// ---------------------------------------------------------------------------
+
+const ROUTE = [20, 30, 40, 60, 70, 80, 90, 100, 110, 140, 150, 160, 165, 170, 180, 190, 200, 205, 210, 220, 230, 240, 250, 260,
+  280, 290, 300, 310, 315, 320, 330, 340, 350, 360, 370, 375, 380, 390, 400, 410, 420, 430];
+
+test("fresh stage 0 reaches completion through the units' handlers, every live stage in order", (t) => {
+  const f = actor(t, 0, HIDEOUT);
+  const { p } = f;
+  // Every value the stage attribute takes (the units' advances and the runtime's completion alike).
+  const stages = [];
+  const setAttribute = p.setAttribute.bind(p);
+  p.setAttribute = (key, value, ...rest) => {
+    if (key === STAGE_KEY && Number(value) !== stageOf(p)) stages.push(Number(value));
+    return setAttribute(key, value, ...rest);
+  };
+  const reached = (stage) => assert.equal(stageOf(p), stage, `stage ${stage} (route so far ${stages.join(",")})`);
+  const at = (...location) => { p.getDialogueManager().reset?.(); p.moveTo(new core.Location(...location)); tick(); };
+
+  // --- Veliaf's start (0 -> 20), the hideout under Canifis.
+  talk(p, f.spawn(9620, [3506, 9838, 0]));
+  until(p, "Yes.");
+  choose(p, "Yes.");
+  until(p, "Exactly. Head down to Burgh de Rott");
+  reached(20);
+  finish(p);
+
+  // --- Burgh de Rott: Florin's food pelting (varbit 1969 to 3), his talk (30), the chest (40), the inn (60).
+  at(3488, 3253, 0);
+  const florin = f.spawn(N.FLORIN, [3483, 3243, 0]);
+  PM.emitPlayerMapSquareChange({ player: p, previous: null, location: p.getLocation() });
+  tick(21);
+  assert.equal(varbit(p, VARBIT.FOOD_PELT), 3, "Florin's three throws");
+  at(3484, 3242, 0);
+  talk(p, florin);
+  until(p, "Hey! Don't try to sweet talk me.");
+  reached(30);
+  finish(p);
+  at(3484, 3245, 0);
+  give(p, I.SALMON);
+  assert.equal(useOn(p, I.SALMON, 12736, [3483, 3246, 0]), true);
+  reached(40);
+  finish(p);
+  tick(12);
+  at(3484, 3242, 0);
+  talk(p, florin);
+  until(p, "Are there any 'out of the way' places here?");
+  choose(p, "Are there any 'out of the way' places here?");
+  until(p, "Well, there's the inn.");
+  reached(60);
+  finish(p);
+
+  // --- The inn: the broken wall (70), the collapsed wall (80), the trapdoor (90), the cellar (100).
+  at(3491, 3230, 0);
+  click(p, 12737, "Climb-over", [3491, 3230, 0]);
+  reached(70);
+  tick(2);
+  give(p, I.RUNE_PICKAXE);
+  assert.equal(useOn(p, I.RUNE_PICKAXE, 12738, [3489, 3231, 0]), true);
+  tick(4);
+  reached(80);
+  at(3491, 3232, 0);
+  click(p, 12743, "Open", [3490, 3232, 0]);
+  reached(90);
+  click(p, 12743, "Climb-down", [3490, 3232, 0]);
+  reached(100);
+  tick();
+  assert.equal(p.getLocation().getZ(), 1, "in the cellar copy");
+
+  // --- The cellar: all 15 rubble mined and scooped (110). Five buckets carry three loads each.
+  give(p, I.SPADE);
+  for (let i = 0; i < 5; i++) give(p, I.BUCKET);
+  const rubble = () => (p.getPrivateArea?.()?.getObjects?.() ?? []).filter((object) => [12812, 12813, 12814, 12815].includes(object.getId()));
+  for (let n = 0; n < 15; n++) {
+    const object = rubble()[0];
+    assert.ok(object, `rubble ${n + 1} of 15`);
+    const loc = object.getLocation();
+    const spot = [loc.getX(), loc.getY(), loc.getZ()];
+    p.getDialogueManager().reset?.();
+    click(p, object.getId(), "Mine", spot, object);
+    tick(9);
+    const mined = rubble().find((other) => other.getLocation().equals(loc));
+    p.getDialogueManager().reset?.();
+    click(p, mined.getId(), "Remove", spot, mined);
+    tick(4);
+    assert.equal(varbit(p, VARBIT.INN_RUBBLE), n + 1, `scoop ${n + 1}`);
+  }
+  reached(110);
+  finish(p);
+  click(p, 12779, "Climb-up", [3490, 9632, 1]);
+  tick();
+  assert.equal(p.getLocation().getZ(), 0, "back up in the inn");
+
+  // --- Aurel's store (140-170): the agreement, the roof and wall, the crate and its stock.
+  const kit = (planks = 3, nails = 12) => { give(p, I.HAMMER); give(p, I.PLANK, planks); give(p, I.STEEL_NAILS, nails); };
+  const repair = (id, title, option = "Inspect") => {
+    at(...BURGH_STORE);
+    click(p, id, option, BURGH_STORE);
+    until(p, title);
+    choose(p, "Yes.");
+    tick(2);
+    p.getDialogueManager().reset?.();
+  };
+  at(...BURGH_STORE);
+  const aurel = f.spawn(N.AUREL, [3516, 3238, 0]);
+  talk(p, aurel);
+  until(p, "I'd like to help fix up the town.");
+  choose(p, "I'd like to help fix up the town.");
+  until(p, "Please can you fix the roof, then the walls");
+  reached(140);
+  finish(p);
+  kit();
+  repair(12751, "Fix the roof?");
+  reached(150);
+  kit();
+  repair(12752, "Fix the wall?");
+  reached(160);
+  at(...BURGH_STORE);
+  talk(p, aurel);
+  until(p, "What should I do now?");
+  choose(p, "What should I do now?");
+  until(p, "I need 3 tinderboxes");
+  cont(p);
+  reached(165);
+  assert.equal(amount(p, I.CRATE), 1, "Aurel's crate");
+  p.getDialogueManager().reset?.();
+  const snails = Number(p.getAttribute("in-aid-of-the-myreque:crate-food")) === 1;
+  for (const [itemId, count] of [[I.TINDERBOX, 3], [I.BRONZE_AXE, 10], [snails ? I.THIN_SNAIL : I.RAW_MACKEREL, 10]]) {
+    give(p, itemId, count);
+    useOnItem(p, itemId, I.CRATE);
+    choose(p, "Yes, I'll fill the crate.");
+    p.getDialogueManager().reset?.();
+  }
+  assert.deepEqual([VARBIT.CRATE_TINDERBOXES, VARBIT.CRATE_AXES, VARBIT.CRATE_FOOD].map((id) => varbit(p, id)), [3, 10, 10], "a full crate");
+  talk(p, aurel);
+  until(p, "Aurel quickly puts the stock out around the shop.");
+  reached(170);
+  assert.equal(amount(p, I.CRATE), 0, "the crate is handed in");
+  p.getDialogueManager().reset?.();
+
+  // --- The bank (180-200) and the furnace (205-210).
+  kit(2, 8);
+  give(p, I.SWAMP_PASTE);
+  repair(12759, "Fix the booth?");
+  reached(180);
+  kit();
+  repair(12760, "Fix the wall?");
+  reached(190);
+  talk(p, f.spawn(6214, [3516, 3238, 0]));
+  until(p, "What should I do now?");
+  choose(p, "What should I do now?");
+  until(p, "Cornelius gets changed");
+  tick(2);
+  reached(200);
+  p.getDialogueManager().reset?.();
+  talk(p, f.spawn(N.RAZVAN, [3514, 3238, 0]));
+  until(p, "What should I do now?");
+  choose(p, "What should I do now?");
+  finish(p);
+  reached(205);
+  give(p, I.HAMMER);
+  give(p, I.STEEL_BAR, 2);
+  repair(12805, "Fix the chimney?");
+  reached(210);
+  give(p, I.COAL);
+  repair(12805, "Refuel the furnace?");
+  assert.equal(varbit(p, VARBIT.FURNACE), 2, "fuelled");
+
+  // --- The blood tithe (220-280): the furnace lit, the Castle Drakan scene, the three chats, the fight.
+  at(3526, 3209, 0);
+  give(p, I.TINDERBOX);
+  assert.equal(useOn(p, I.TINDERBOX, 12805, [3527, 3209, 0]), true);
+  tick(5);
+  reached(220);
+  tick(9);
+  until(p, "It seems you have a fresh appointment");
+  reached(230);
+  finish(p);
+  tick(6);
+  finish(p);
+  at(3514, 3240, 0);
+  const tithe = (id, x, y) => { const npc = PM.spawnNpc({ id, x, y, z: 0, wanderRadius: 0 }, "Q061Route"); t.after(() => PM.removeNpc(npc)); return npc; };
+  talk(p, tithe(6218, 3515, 3241));
+  until(p, "Ha! We'll see about that!");
+  cont(p);
+  p.getDialogueManager().reset?.();
+  talk(p, tithe(6217, 3513, 3242));
+  until(p, "We're getting some delicious");
+  cont(p);
+  p.getDialogueManager().reset?.();
+  talk(p, tithe(4479, 3515, 3242));
+  until(p, "They're draining");
+  cont(p);
+  tick(5);
+  reached(240);
+  const fight = (id) => ownedNpcs(p).find((npc) => npc.getContentId(p) === id);
+  fight(4484).setHitpoints(0); // Gadderanks is wounded
+  tick(5);
+  reached(250);
+  fight(4486).setHitpoints(0);
+  fight(4487).setHitpoints(0);
+  tick(1);
+  reached(260);
+  p.getDialogueManager().reset?.();
+  talk(p, fight(4485));
+  until(p, "It's too late for me");
+  cont(p);
+  tick(4);
+  reached(280);
+  tick(1);
+  until(p, "Hey there! Gadderanks dropped this warhammer");
+  assert.equal(amount(p, I.GADDERHAMMER), 1, "the Gadderhammer");
+  finish(p);
+  p.getDialogueManager().reset?.();
+  at(3516, 3242, 0);
+  talk(p, tithe(4479, 3517, 3242));
+  until(p, "Sure.");
+  cont(p);
+  tick(3);
+  assert.equal(varbit(p, VARBIT.BLOOD_TITHE), 3, "Veliaf heads back to the Hollows");
+  finish(p);
+
+  // --- The Hollows (290-310): Veliaf, Radigad, Ivan's food and the route map.
+  at(...HIDEOUT);
+  talk(p, f.spawn(9620, [3506, 9838, 0]));
+  until(p, "I'll see what I can dig up.");
+  cont(p);
+  reached(290);
+  until(p, "What do I need to do now?");
+  p.getDialogueManager().reset?.();
+  talk(p, f.spawn(9626, [3508, 9832, 0]));
+  reached(300);
+  finish(p);
+  p.getDialogueManager().reset?.();
+  const ivan = f.spawn(9630, [3512, 9842, 0]);
+  talk(p, ivan);
+  until(p, "That's right. We should get going soon.");
+  cont(p);
+  reached(310);
+  finish(p);
+  p.getPacketSender().sendInterfaceRemoval();
+  p.getDialogueManager().reset?.();
+  for (let i = 0; i < 8; i++) give(p, I.SALMON);
+  useOnNpc(p, ivan, I.SALMON);
+  tick();
+  until(p, "Yes, I'll offer all");
+  choose(p, "Yes, I'll offer all");
+  until(p, "You hand over some food to Ivan.");
+  cont(p);
+  assert.equal(varbit(p, VARBIT.IVAN_FOOD), 8, "Ivan carries the food");
+  p.getDialogueManager().reset?.();
+  talk(p, ivan);
+  until(p, "Very well. I'm ready, lead the way.");
+  cont(p);
+  tick();
+  assert.equal(p.getInterfaceId(), 53, "the route map");
+
+  // --- The swamp (315): route 2, the ambush copy, three juvinates down, the second leg to Paterdomus.
+  const mapClick = (child) => PM.emitInterfaceActionClick({ player: p, buttonId: (53 << 16) | child, action: 1, handled: false });
+  assert.equal(mapClick(28), true, "route 2");
+  assert.equal(mapClick(37), true, "travel");
+  tick(8);
+  const juvinates = ownedNpcs(p, 4443);
+  assert.equal(juvinates.length, 4, "the ambush");
+  for (const juvinate of juvinates.slice(0, 3)) { juvinate.setHitpoints(0); juvinate.appendDeath(); }
+  for (let i = 0; i < 14 && p.getLocation().getX() !== 3432; i++) tick();
+  assert.deepEqual(tile(p).slice(0, 2), [3432, 3484], "outside Paterdomus");
+  until(p, "Not a problem. I need to chat to Drezel");
+  cont(p);
+  reached(315);
+  tick(4);
+  p.getDialogueManager().reset?.();
+
+  // --- Drezel (320-350), the keyhole and the library (360).
+  at(...MAUSOLEUM);
+  p.getPacketSender().sendConfig(302, 61);
+  talk(p, f.spawn(9805, [3441, 9894, 0]));
+  until(p, "Yes, it seems to be");
+  cont(p);
+  reached(320);
+  until(p, "Veliaf told me about Ivandis.");
+  choose(p, "Veliaf told me about Ivandis.");
+  until(p, "But you don't even know what he said about Ivandis.");
+  cont(p);
+  reached(330);
+  until(p, "Is there somewhere that I might get more information");
+  choose(p, "Is there somewhere that I might get more information");
+  until(p, "So you have no further information on him");
+  cont(p);
+  reached(340);
+  until(p, "The lives of those pitiful few");
+  choose(p, "The lives of those pitiful few");
+  until(p, "Drezel gives you a key.");
+  reached(350);
+  assert.equal(amount(p, I.TEMPLE_LIBRARY_KEY), 1);
+  at(3442, 9898, 0);
+  assert.equal(useOn(p, I.TEMPLE_LIBRARY_KEY, 12765, [3443, 9898, 0]), true);
+  tick();
+  p.getDialogueManager().reset?.();
+  click(p, 12763, "Climb-down", [3441, 9899, 0]);
+  tick();
+  reached(360);
+  assert.deepEqual(tile(p), [3360, 9904, 0], "in the library");
+
+  // --- The rod (370-420): the book, the tomb, the mould, the rod, the enchant, the Salve.
+  at(3354, 9900, 0);
+  click(p, core.ObjectIdentifiers.BOOKCASE_52, "Search", [3354, 9899, 0]);
+  reached(370);
+  p.getDialogueManager().reset?.();
+  itemOption(p, I.THE_SLEEPING_SEVEN, "Read");
+  reached(375);
+  p.getPacketSender().sendInterfaceRemoval();
+  at(3483, 9832, 0);
+  useOn(p, I.HAMMER, 12772, [3483, 9832, 0]);
+  tick(3);
+  assert.equal(varbit(p, VARBIT.TOMB_BOARDS), 1, "the boards broken up");
+  p.getDialogueManager().reset?.();
+  click(p, 12770, "Enter", [3484, 9832, 0]);
+  reached(380);
+  tick(2);
+  at(3510, 9863, 0);
+  give(p, I.SOFT_CLAY);
+  assert.equal(useOn(p, I.SOFT_CLAY, 12802, [3511, 9863, 0]), true);
+  reached(390);
+  p.getDialogueManager().reset?.();
+  // Checkpoint: the silvthrill rod is Crafting's furnace make-interface (Jewellery.Crafting.js); its
+  // "crafting:made" event is what the Rod unit listens for, so the walk sends that instead of the menu.
+  give(p, I.SILVTHRILL_ROD_2);
+  PM.emitCustomEvent("crafting:made", { player: p, itemId: I.SILVTHRILL_ROD_2, furnace: true, bar: "Silver bar" });
+  reached(400);
+  give(p, I.COSMIC_RUNE);
+  give(p, I.WATER_RUNE);
+  assert.equal(castEnchant(p, I.SILVTHRILL_ROD_2), true);
+  reached(410);
+  tick(9);
+  assert.equal(amount(p, I.SILVTHRILL_ROD_3), 1, "the enchanted rod");
+  p.getDialogueManager().reset?.();
+  at(3423, 9891, 0);
+  give(p, I.ROPE);
+  assert.equal(useOn(p, I.SILVTHRILL_ROD_3, 3485, [3423, 9890, 0]), true);
+  tick(4);
+  reached(420);
+  assert.equal(amount(p, I.ROD_OF_IVANDIS_10_), 1, "the Rod of Ivandis");
+  p.getDialogueManager().reset?.();
+
+  // --- The hand-in (430) and the rewards.
+  at(3494, 9630, 0);
+  const points = Number(p.getAttribute("quest.points")) || 0;
+  const xp = p.getSkillManager().getExperience(core.Skill.ATTACK);
+  talk(p, new core.NPC(8277, new core.Location(3494, 9628, 0)));
+  until(p, "You give the Rod of Ivandis to Veliaf.");
+  assert.equal(amount(p, I.ROD_OF_IVANDIS_10_), 0, "the rod is handed to Veliaf");
+  assert.ok(f.seen.varbits.some(([id, value]) => id === VARBIT.QUEST && value === 430), "varbit 1990 = 430 with the box");
+  until(p, "Well ");
+  cont(p);
+  reached(430); // the rewards on the continue after "Well [player name]..."
+  assert.equal(complete(p), true, "the quest is complete");
+  assert.equal(Number(p.getAttribute("quest.points")), points + 2, "two quest points");
+  assert.equal(p.getSkillManager().getExperience(core.Skill.ATTACK) - xp, 2000, "2,000 Attack XP (and Strength, Defence, Crafting)");
+
+  assert.deepEqual(stages, ROUTE, "every live stage, once, in order");
 });

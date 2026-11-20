@@ -103,6 +103,18 @@ function openBankFromInteraction(api, { player }) {
   return openBank(api, player);
 }
 
+/**
+ * A booth's Bank, unless the content that owns it says nobody serves there yet ("bank:booth-closed"
+ * { player, object, closed }: Burgh de Rott's booth before In Aid of the Myreque's banker). A closed
+ * booth is left to that content's own handler.
+ */
+function openBankFromBooth(api, event) {
+  const request = { player: event.player, object: event.object, objectId: event.objectId, closed: false };
+  api.emitCustomEvent("bank:booth-closed", request);
+  if (request.closed) return false;
+  return openBankFromInteraction(api, event);
+}
+
 function talkToBanker(api, event) {
   const request = { ...event, variant: "standard-dialogue", handled: false };
   api.emitCustomEvent("npc-dialogue:start", request);
@@ -132,7 +144,7 @@ function bankInterfaceAction(api, event) {
 // update: use currency on a banker, booth or chest; exchange as much as fits.
 const COINS_PER_TOKEN = 1000;
 const MAX_STACK = 0x7fffffff;
-const BANK_OBJECT_NAMES = new Set(["Bank booth", "Bank chest", "Bank Chest"]);
+const BANK_OBJECT_NAMES = new Set(["Bank booth", "Bank Booth", "Bank chest", "Bank Chest"]);
 
 function inventorySignature(items) {
   return JSON.stringify(items.map(item => [item.getId(), item.getAmount(), item.getMeta()]));
@@ -308,6 +320,8 @@ module.exports = {
   handleBankInterfaceAction,
   register(api) {
     api.onObjectInteraction("Bank booth", { Bank: openBankFromInteraction.bind(null, api), Use: openBankFromInteraction.bind(null, api) });
+    // Burgh de Rott's booth (12798) is named "Bank Booth" in the cache.
+    api.onObjectInteraction("Bank Booth", { Bank: openBankFromBooth.bind(null, api) });
     api.onObjectInteraction("Bank chest", { Use: openBankFromInteraction.bind(null, api) });
     api.onObjectInteraction("Bank Chest", { Use: openBankFromInteraction.bind(null, api) });
     // Sleeping Giants' foundry chest (43866), the only "Big chest" with options: Use banks

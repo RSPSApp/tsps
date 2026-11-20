@@ -11263,6 +11263,7 @@
           "wiki": "https://oldschool.runescape.wiki/w/In_Aid_of_the_Myreque",
           "implementedIn": [
             "server/plugins/quests/quests/InAidOfTheMyreque.Quest.js",
+            "server/plugins/quests/inaid/",
             "server/plugins/quests/QuestRuntime.js"
           ],
           "devNotes": [
@@ -11270,7 +11271,8 @@
             "No plugin exists yet; town-rebuilding multi-stage quest, so model on server/plugins/quests/quests/BlackKnightsFortress.Quest.js.",
             "The 'In Aid of the Myreque' page in npc-dialogues.json carries 70 variants ('the-myreque-s-job-offer-veliaf-hurtz'); source ids/slugs from npc-dialogues.json + npc-dialogue-index.json / osrsreboxed.",
             "The Burgh de Rott repair tasks each have their own variant ('fixing-the-general-store', 'fixing-the-bank', ...).",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3279 fix: quest rocks and rubble take any pickaxe Mining would use."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3279 fix: quest rocks and rubble take any pickaxe Mining would use.",
+            "2026-11-20, branch fix/in-aid-of-the-myreque-capture: rebuilt against a full live rsprox playthrough (revision 242): live's varbit 1990 stage values, the quest's own varbits driving the cache multilocs/multinpcs per player (inn rubble and trapdoor, store roof and wall, bank booth, wall and banker, furnace, temple trapdoor, tomb boards, the blood-tithe cast, the Canifis hideout's Myreque), the cellar, Castle Drakan, store-fight and swamp-ambush instances, the route map, and live's boxes, animations, sounds and completion order. Facts with capture ticks in docs/quests/in-aid-of-the-myreque/README.md; tests server/tests/in-aid-of-the-myreque-*.test.cjs. Remaining: dialogue wording differences that need osrsreboxed-db dumper fixes, and the uncaptured branches listed in that README (route 1 of the escort, Ivan's health thresholds)."
           ],
           "taskDetails": [
             {

@@ -90,14 +90,15 @@ function fightingPlayers(npc) {
 
 /**
  * The core drops a fight whose target moved this tick; live, the player runs after the imp and
- * keeps hitting it (local 1001418 ticks 2580-2587), so they go after it again.
+ * keeps hitting it (local 1001418 ticks 2580-2587), so they go after it again. Not a player who
+ * did something else that tick: walked off, started a teleport, or became untargetable.
  */
 function chase(npc, players) {
   if (!canTeleport(npc)) return;
   for (const player of players) {
-    if (player.isRegistered() && player.getHitpoints() > 0 && player.getCombat().getTarget() == null) {
-      player.getCombat().attack(npc);
-    }
+    if (!player.isRegistered() || player.getHitpoints() <= 0 || player.getCombat().getTarget() != null) continue;
+    if (player.isTeleportingReturn() || player.isUntargetable() || player.getMovementQueue().size() > 0) continue;
+    player.getCombat().attack(npc);
   }
 }
 

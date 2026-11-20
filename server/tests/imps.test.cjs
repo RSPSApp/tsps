@@ -183,3 +183,18 @@ test("a player fighting the imp goes after it again once it has landed", (t) => 
   chase.execute();
   assert.equal(p.getCombat().getTarget(), npc);
 });
+
+test("a player who walks off on the teleport tick is not pulled back into the fight", (t) => {
+  const { p, npc } = scene(t);
+  const tasks = [];
+  t.mock.method(core.TaskManager, "submit", (task) => { tasks.push(task); return task; });
+  p.getCombat().attack(npc);
+  rolls(t, 0);
+  hit(p, npc, 1);
+  p.getCombat().reset();
+  npc.setNeedsPlacement(false);
+  p.getMovementQueue().addFirstStep(new core.Location(SPOT[0] - 3, SPOT[1] - 1, 0));
+  assert.ok(p.getMovementQueue().size() > 0, "the player has a walk queued");
+  tasks.find((task) => task instanceof core.CountdownTask).execute();
+  assert.equal(p.getCombat().getTarget(), null);
+});

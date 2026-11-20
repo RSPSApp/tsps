@@ -125,6 +125,43 @@ roll at the Wiki's tick lengths, so their timing is used; the others are used fo
   fish." and "You need at least level # Fishing to bait these fish." below the level.
   Tempoross uses the same full-inventory box.
 
+## Spot movement
+
+`server/plugins/skills/fishing/Relocation.Fishing.js` moves spots, and
+`server/plugins/skills/data/fishing-spot-sites.json` lists where they can go.
+
+- **Timers (Wiki: [Fishing spots](https://oldschool.runescape.wiki/w/Fishing_spots)):** "Most spots
+  take a minimum of 250 ticks (2.5 minutes) and a maximum of 530 ticks (5.3 minutes) to move".
+  Sacred and infernal eel spots take 100-300 ticks and anglerfish spots 8-830 (`moveTicks` on their
+  tools). Each spot has its own timer, and the first move after boot comes anywhere in its range.
+  Spots whose tool is `stationary` (karambwan, Civitas illa Fortis) never move. Neither do the
+  minnow platform's spots: their own unit moves them.
+- **Where to (rsprox captures):** a spot jumps to a tile of its site, which is the set of tiles
+  live spots of that kind were seen on. `rsprox_index.py fishing-spots` in osrs-captures
+  (`rsprox_fishing_spots.py`) generates the sites from every recording. It leaves out instances,
+  boats, Leagues/event/beta worlds and sites with no recorded jump. A spawn joins the site that
+  holds its tile for its own spot id, else the best-recorded site on that tile, since our spawn
+  ids don't always match live's and several spot kinds share tiles.
+- **The jump:** a teleport (`telejump` in the captures, never a walk) to a random tile of the site
+  that is neither its own nor held by any fishing spot. At Lumbridge Swamp, 5 spots share 8
+  tiles, and in 268 of 268 jumps no spot landed on a held tile or its own (recordings 1434, 3173,
+  local 1001517, 1001439, 1001502 and others). The spot moves by `NPC.telejump`, so it snaps
+  there in view. Sound 2601 (range 5) plays at the tile left. Live sends that sound twice on the
+  tick (e.g. local 1001517 tick 9131), and it is played once here as a recorded difference. If
+  every tile is held, the spot waits for its next timer.
+- **The fisher:** a session on a spot that moves ends with no message, no animation reset and no
+  facing change (about 25 captured cases, e.g. local 1001517 ticks 9180-15037). Endless Harvest
+  follows the spot as before. The minnow platform's own rotation isn't captured, so its sessions
+  keep the animation reset.
+- **Not captured:** a spot on no captured site doesn't move. It keeps the old 1-in-91 chance per
+  catch of ending the session instead. In our spawns, 229 of the 520 spots (61 spot ids, 74 sites)
+  move. Some of our spawn tiles hold more spots than live shows at once, and a few sites are full
+  with our spawns (0_23_53, 0_24_43, 0_18_43, 0_29_53, 0_32_49, 0_38_42, 0_49_37), so those spots
+  stay put until the spawns are corrected.
+- **Camdozaal:** its spots move too. The Wiki doesn't list them among the spots that never move,
+  and recording 1444 shows one moving 7 times, 350-499 ticks apart. Our spawn at (2922, 5788) is
+  on no captured site, so it doesn't move and has the random stop like other uncaptured spots.
+
 ## Civitas illa Fortis park pond
 
 - **Spot:** `civitas_park_fishingspot_hmm` (NPC 13329, "Fishing spot", option Cast), stationary.

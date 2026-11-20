@@ -359,7 +359,12 @@ function barrier(event) {
   run.schedule(BARRIER_DELAY, () => {
     // Walked off the start tile in the gap tick: the pass is given up, with no XP (ours: no recording).
     const here = run.area.templateOf(player.getLocation());
-    if (here[0] !== from[0] || here[1] !== from[1] || here[2] !== from[2]) return;
+    if (here[0] !== from[0] || here[1] !== from[1] || here[2] !== from[2]) {
+      // Nothing was crossed: the next click isn't held back, and run energy recovers again.
+      run.busyUntil = run.ticks;
+      ObstacleRunner.holdAgilityCrossing(player, 0);
+      return;
+    }
     const at = run.area.at(to);
     ObstacleRunner.run({ player, object: event.object }, [
       { walk: [[at.getX(), at.getY()]], tilesPerTick: 2, traversalType: 1, arrive: true },

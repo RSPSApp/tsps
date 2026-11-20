@@ -835,10 +835,16 @@ test('the Holy barrier is given up if the player walks off its start tile before
   run.states.hallowed_prayer_state = 2;
   click(p, 39534, 1, locOf(run, 39534, [2520, 5960, 2]));
   p.moveTo(run.area.at([2517, 5962, 2]));
-  ticks(3);
+  ticks(1);
   assert.deepEqual(run.area.templateOf(p.getLocation()), [2517, 5962, 2]);
   assert.equal(p.xp.AGILITY ?? p.xp.Agility ?? 0, 0);
   assert.equal(varbit(p, 'hallowed_prayer_xp_earned'), 0);
+  // The given-up pass holds nothing back: back on the start tile, the next click crosses.
+  p.moveTo(run.area.at([2519, 5960, 2]));
+  click(p, 39534, 1, locOf(run, 39534, [2520, 5960, 2]));
+  ticks(3);
+  assert.deepEqual(run.area.templateOf(p.getLocation()), [2521, 5960, 2]);
+  assert.equal(p.xp.AGILITY ?? p.xp.Agility, 50);
   run.finish();
 });
 

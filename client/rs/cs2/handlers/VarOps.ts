@@ -179,9 +179,11 @@ export function registerVarOps(handlers: HandlerMap): void {
         const srcPos = ctx.intStack[--ctx.intStackSize];
         const dst = requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]);
         const src = requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]);
-        if (length < 0) throw new Error("RuntimeException");
+        // A negative length copies the rest of the source, as a negative bound means the array's
+        // edge elsewhere: rev 242's killcounts (9525) copies its names whole with length -1.
+        const count = length < 0 ? src.length - srcPos : length;
         const values = [];
-        for (let i = 0; i < length; i++) values.push(src.getRaw(srcPos + i));
+        for (let i = 0; i < count; i++) values.push(src.getRaw(srcPos + i));
         values.forEach((value, i) => dst.setAt(dstPos + i, value));
     });
 

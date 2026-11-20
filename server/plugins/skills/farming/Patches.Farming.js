@@ -1117,7 +1117,6 @@ const redwoodRegrowth = new Map();
 // Players standing in a map square with patches nearby -> their last tile, so nearby patches
 // follow them tile by tile without checking anyone who is nowhere near a patch.
 const nearPatches = new Map();
-let lastMinute = null;
 
 function autoBusy(player) { return AUTO_RUNNING.has(player); }
 
@@ -1303,11 +1302,10 @@ function farmingTick() {
     }
     // Due players are bucketed by a minute of growth: a real minute at OSRS's speed.
     const minute = Math.floor(Date.now() / Model.growthDuration(1));
-    lastMinute ??= minute;
-    while (lastMinute < minute) {
-        const due = dueByMinute.get(++lastMinute);
-        if (!due) continue;
-        dueByMinute.delete(lastMinute);
+    // Visit occupied buckets instead of replaying every minute after a long pause.
+    for (const [dueMinute, due] of dueByMinute) {
+        if (dueMinute > minute) continue;
+        dueByMinute.delete(dueMinute);
         for (const player of due) { dueMinuteOf.delete(player); immediate.add(player); }
     }
     if (immediate.size === 0) return;

@@ -125,6 +125,15 @@ existing level/quest gates. In-game verification covers the three four-dose step
 click with spare ingredients, the repeat-horn refusal, XP totals, and ordinary potion Make-X.
 There is no normal-world Sanfew mixing recording in the indexed captures consulted here.
 
+### Relicym's balm
+
+Three rows from the Wiki (Relicym's balm, Unfinished potion (Rogue's Purse)): a rogue's purse in a vial of water
+(level 8, no XP), then snake weed into it, or a rogue's purse into the snakeweed mixture (level 8, 40 XP, a
+3-dose balm). Each has the `unlock` "relicyms_balm", which Zogre Flesh Eaters answers once Sithik has told the
+player the cure, or after the quest ("Partial completion of Zogre Flesh Eaters"). Before that the rogue's purse
+potion says the Wiki's "You're not sure what effect this might have." (its `lockedMessage`) and Zahur makes none
+(`herblore:unfinished` with the player). No capture shows the balm being made; the three mixing lines are ours.
+
 ### Barbarian mixes
 
 Barbarian Training's Herblore section (`server/plugins/npcs/BarbarianTraining.plugin.js`). A

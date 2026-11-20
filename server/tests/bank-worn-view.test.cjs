@@ -42,6 +42,77 @@ const click = (p, buttonNum, slot, itemId) => Bank.handleWidgetAction(p, {
   groupId: Bank.SIDE_INTERFACE_ID, childId: Bank.SIDE_WORN_CHILD, buttonNum, slot, itemId,
 });
 
+test("partially charged jewellery shares its cache placeholder separately from full and depleted pieces", t => {
+  const { JEWELLERY } = require("../plugins/items/Teleports.Jewellery");
+  for (const piece of JEWELLERY) {
+    const maximum = Math.max(...piece.charged.map(([, charges]) => charges));
+    const partial = piece.charged.filter(([, charges]) => charges < maximum);
+    const representative = partial.find(([id]) => core.ItemDefinition.forId(id).getPlaceholderId() >= 0)?.[0];
+    assert.ok(representative, `${piece.key}: cache defines the partial-charge representative`);
+    for (const [id] of partial) {
+      const { p } = banker(t);
+      p.setPlaceholders(true);
+      p.getBank(1).add(new core.Item(id, 1, { "test:origin": "kept" }), false);
+      p.setCurrentBankTab(1);
+      Bank.withdraw(p, id, 0, 1, 1);
+      assert.equal(p.getInventory().getAmount(id), 1, `${piece.key}/${id}: charge count retained`);
+      const placeholder = p.getBank(1).getItems()[0];
+      assert.equal(placeholder.getAmount(), 0);
+      assert.equal(Bank.displayItemId(placeholder), core.ItemDefinition.forId(representative).getPlaceholderId());
+      assert.equal(Bank.sharesPlaceholder(id, piece.charged[0][0]), false, "full charges stay separate");
+      if (piece.spent != null) assert.equal(Bank.sharesPlaceholder(id, piece.spent), false, "depleted stays separate");
+      const returned = partial.find(([other]) => other !== id)?.[0] ?? id;
+      p.getInventory().getItems()[p.getInventory().getSlotForItemId(id)].setId(returned);
+      Bank.deposits(p, returned, p.getInventory().getSlotForItemId(returned), 1);
+      assert.equal(p.getInventory().getAmount(returned), 0);
+      assert.equal(p.getBank(1).getItems()[0].getId(), returned, "another partial charge reuses the same tab/slot");
+      assert.equal(p.getBank(1).getItems()[0].getMetaValue("test:origin"), "kept");
+      assert.equal(Bank.layout(p).length, 1);
+    }
+    const { p } = banker(t);
+    p.setPlaceholders(true);
+    const full = piece.charged.find(([, charges]) => charges === maximum)[0];
+    for (const id of [full, ...(piece.spent == null ? [] : [piece.spent])]) {
+      p.getBank(0).resetItems();
+      p.getBank(0).add(new core.Item(id), false);
+      Bank.withdraw(p, id, 0, 1, 0);
+      assert.equal(Bank.displayItemId(p.getBank(0).getItems()[0]), core.ItemDefinition.forId(id).getPlaceholderId());
+    }
+  }
+});
+
+test("wealth rings, Void seals, Castle Wars and abyssal bracelets also reuse partial-charge placeholders", t => {
+  const I = core.ItemIdentifiers;
+  const { CHARGED_RINGS } = require("../plugins/items/RingOfWealth.plugin")._test;
+  const wealth = imbued => [...CHARGED_RINGS].filter(([id, state]) => Boolean(state.imbued) === imbued
+    && core.CacheDefinitions.getItem(id).placeholderTemplate === -1).map(([id]) => id);
+  const families = [wealth(false), wealth(true),
+    require("../plugins/minigames/pestcontrol/VoidSeal.PestControl")._test.SEALS.map(name => I[name]).reverse(),
+    [I.CASTLE_WARS_BRACELET_3_, I.CASTLE_WARS_BRACELET_2_, I.CASTLE_WARS_BRACELET_1_],
+    [I.ABYSSAL_BRACELET_5_, I.ABYSSAL_BRACELET_4_, I.ABYSSAL_BRACELET_3_, I.ABYSSAL_BRACELET_2_, I.ABYSSAL_BRACELET_1_]];
+  for (const family of families) {
+    for (const id of family) {
+      const { p } = banker(t);
+      p.setPlaceholders(true);
+      p.getBank(0).add(new core.Item(id), false);
+      Bank.withdraw(p, id, 0, 1, 0);
+      const representative = id === family[0] ? id : family.at(-1);
+      assert.ok(core.ItemDefinition.forId(representative).getPlaceholderId() >= 0);
+      assert.equal(p.getInventory().getAmount(id), 1);
+      assert.equal(p.getBank(0).getItems()[0].getAmount(), 0);
+      assert.equal(Bank.displayItemId(p.getBank(0).getItems()[0]), core.ItemDefinition.forId(representative).getPlaceholderId());
+      if (id !== family[0]) {
+        assert.equal(Bank.sharesPlaceholder(id, family[0]), false);
+        const returned = family.at(-1);
+        p.getInventory().getItems()[p.getInventory().getSlotForItemId(id)].setId(returned);
+        Bank.deposits(p, returned, p.getInventory().getSlotForItemId(returned), 1);
+        assert.equal(p.getBank(0).getItems()[0].getId(), returned);
+        assert.equal(Bank.layout(p).length, 1);
+      }
+    }
+  }
+});
+
 test("op 1 wields the backpack item and keeps the worn one out of the bank", (t) => {
   const { p } = banker(t);
   const I = core.ItemIdentifiers, E = core.Equipment;

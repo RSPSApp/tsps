@@ -29,11 +29,17 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const DAVE_STEW_ATTRIBUTE = "recipe-for-disaster:evil-dave-stew";
   const SKRACH_STATE_ATTRIBUTE = "recipe-for-disaster:skrach-state";
   const SKRACH_STAGE_ATTRIBUTE = "recipe-for-disaster:skrach-stage";
-  const SKRACH_SPIT_ROAST_OBJECT = ObjectIdentifiers.OGRE_SPIT_ROAST_4; // 3375
-  const SKRACH_SPIT_ROAST_TILE = { x: 2632, y: 2985, z: 0 };
-  const SKRACH_SPIT_ROAST_BY_PLAYER = new WeakMap();
+  /**
+   * Rantz's spit-roast at 2630,2990 is this multiloc (6895, varbit ogre_spit_roaster); a use on it names the
+   * parent, never the 3372-12563 child shown. No generated ObjectIdentifiers entry.
+   */
+  const CHOMPY_SPIT_ROAST_MULTILOC = "multi_chompybird_spitroast_entity";
   const AWOWOGEI_STATE_ATTRIBUTE = "recipe-for-disaster:awowogei-state";
   const AWOWOGEI_STAGE_ATTRIBUTE = "recipe-for-disaster:awowogei-stage";
+  /** Filling already added to the snake corpse: 1 sliced red banana, 2 tchiki nut paste. */
+  const AWOWOGEI_STUFFING_ATTRIBUTE = "recipe-for-disaster:awowogei-stuffing";
+  const STUFFING_RED_BANANA = 1;
+  const STUFFING_NUT_PASTE = 2;
   const AMIK_STATE_ATTRIBUTE = "recipe-for-disaster:amik-state";
   const AMIK_STAGE_ATTRIBUTE = "recipe-for-disaster:amik-stage";
   const AMIK_DRAGON_DROP_ATTRIBUTE = "recipe-for-disaster:amik-dragon-drop";
@@ -633,7 +639,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (hasFlag(player, flag)) return false;
     setFlag(player, flag);
     syncRescueQuestVarbits(player);
-    syncSkrachSpitRoast(player);
     awardPoint(player);
     spawnCouncil(player);
     return true;
@@ -672,29 +677,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   function setSkrachBit(player, bit) {
     player.setAttribute(SKRACH_STATE_ATTRIBUTE, skrachState(player) | bit);
     syncSkrachQuestVarbits(player);
-  }
-  /** The Feldip chompy-grounds spit-roast is missing from the map; show it to this player while Skrach can be rescued. */
-  function syncSkrachSpitRoast(player) {
-    const { GameObject, Location, ObjectManager } = api.core;
-    const existing = SKRACH_SPIT_ROAST_BY_PLAYER.get(player);
-    if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 32)) {
-      if (!existing) return;
-      ObjectManager.deregister(existing, true);
-      SKRACH_SPIT_ROAST_BY_PLAYER.delete(player);
-      return;
-    }
-    if (existing) return;
-    const object = new GameObject(SKRACH_SPIT_ROAST_OBJECT,
-      new Location(SKRACH_SPIT_ROAST_TILE.x, SKRACH_SPIT_ROAST_TILE.y, SKRACH_SPIT_ROAST_TILE.z), 10, 0, null)
-      .setOwner(player);
-    ObjectManager.register(object, true);
-    SKRACH_SPIT_ROAST_BY_PLAYER.set(player, object);
-  }
-  function clearSkrachSpitRoast(player) {
-    const object = SKRACH_SPIT_ROAST_BY_PLAYER.get(player);
-    if (!object) return;
-    api.core.ObjectManager.deregister(object, true);
-    SKRACH_SPIT_ROAST_BY_PLAYER.delete(player);
   }
   function completedQuest(player, key) {
     return require("../QuestRuntime").getRegisteredQuests()
@@ -2572,7 +2554,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       ObjectIdentifiers.OGRE_SPIT_ROAST_3, ObjectIdentifiers.OGRE_SPIT_ROAST_4,
       ObjectIdentifiers.OGRE_SPIT_ROAST_5, ObjectIdentifiers.OGRE_SPIT_ROAST_6,
       ObjectIdentifiers.OGRE_SPIT_ROAST_7, ObjectIdentifiers.OGRE_SPIT_ROAST_8,
-      ObjectIdentifiers.OGRE_SPIT_ROAST_9];
+      ObjectIdentifiers.OGRE_SPIT_ROAST_9, api.core.CacheDefinitions.getLocId(CHOMPY_SPIT_ROAST_MULTILOC)];
     if (spitRoasts.includes(objectId) && itemId === ItemIdentifiers.SKEWERED_CHOMPY) {
       event.handled = true;
       player.getInventory().deleteNumber(ItemIdentifiers.SKEWERED_CHOMPY, 1);
@@ -2891,6 +2873,10 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     return Number(player.getAttribute(AWOWOGEI_STATE_ATTRIBUTE)) || 0;
   }
 
+  function stuffingState(player) {
+    return Number(player.getAttribute(AWOWOGEI_STUFFING_ATTRIBUTE)) || 0;
+  }
+
   function hasUnmaskedMonkeyRecipe(player) {
     return (awowogeiState(player) & 0x3f) === 0x3f;
   }
@@ -3028,14 +3014,31 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       player.getInventory().adds(ItemIdentifiers.TCHIKI_NUT_PASTE, 1);
       return;
     }
-    const filling = [ItemIdentifiers.SLICED_RED_BANANA, ItemIdentifiers.TCHIKI_NUT_PASTE];
-    const fillingId = [event.usedItemId, event.usedWithItemId].find((id) => filling.includes(id));
-    if (fillingId && [event.usedItemId, event.usedWithItemId].includes(ItemIdentifiers.SNAKE_CORPSE)) {
+    // Stuffing takes both ingredients: each is consumed on its own use and the
+    // corpse only becomes the raw stuffed snake once the other one follows
+    // (Wiki: Snake corpse's product is 1 corpse + 1 sliced red banana + 1 paste).
+    const fillings = [
+      [ItemIdentifiers.SLICED_RED_BANANA, STUFFING_RED_BANANA, "sliced red banana", "tchiki nut paste"],
+      [ItemIdentifiers.TCHIKI_NUT_PASTE, STUFFING_NUT_PASTE, "tchiki nut paste", "sliced red banana"],
+    ];
+    const used = [event.usedItemId, event.usedWithItemId];
+    const filling = fillings.find(([id]) => used.includes(id));
+    if (filling && used.includes(ItemIdentifiers.SNAKE_CORPSE)) {
       event.handled = true;
-      if (!hasSpace(player)) return player.sendMessage("You need an empty inventory slot to stuff the snake.");
-      player.getInventory().deleteNumber(ItemIdentifiers.SNAKE_CORPSE, 1);
+      if (!has(player, ItemIdentifiers.SNAKE_CORPSE)) return;
+      const [fillingId, bit, name, other] = filling;
+      const state = stuffingState(player);
+      // The live lines are not captured; these two are ours.
+      if (state & bit) return player.sendMessage(`The snake corpse already has ${name} in it.`);
       player.getInventory().deleteNumber(fillingId, 1);
+      const next = state | bit;
+      if (next !== (STUFFING_RED_BANANA | STUFFING_NUT_PASTE)) {
+        player.setAttribute(AWOWOGEI_STUFFING_ATTRIBUTE, next);
+        return player.sendMessage(`You stuff the snake corpse with the ${name}. It still needs ${other}.`);
+      }
+      player.getInventory().deleteNumber(ItemIdentifiers.SNAKE_CORPSE, 1);
       player.getInventory().adds(ItemIdentifiers.RAW_STUFFED_SNAKE, 1);
+      player.setAttribute(AWOWOGEI_STUFFING_ATTRIBUTE, 0);
       setAwowogeiStage(player, 30);
     }
   }
@@ -3528,6 +3531,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (!player || event.npcId !== NpcIdentifiers.BIG_SNAKE || stage(player) < STAGE_OPENING_COMPLETE
       || hasFlag(player, 128)) return;
     player.setAttribute(AWOWOGEI_STATE_ATTRIBUTE, awowogeiState(player) | AWOWOGEI_SNAKE_FOUND);
+    // A fresh corpse starts unstuffed even if an earlier one was partly filled.
+    player.setAttribute(AWOWOGEI_STUFFING_ATTRIBUTE, 0);
     syncAwowogeiQuestVarbits(player);
     if (hasSpace(player)) player.getInventory().adds(ItemIdentifiers.SNAKE_CORPSE, 1);
     else {
@@ -3613,7 +3618,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
 
   function handleStageChanged({ player, key }) {
     if (key === QUEST) {
-      syncSkrachSpitRoast(player);
       syncRescueQuestVarbits(player);
     }
   }
@@ -3622,7 +3626,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (player) {
       Feast.end(player, true);
       Feast.cancel(player);
-      clearSkrachSpitRoast(player);
       hideFrozenRoom(player);
     }
   }
@@ -3777,7 +3780,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       moveTo(player, DINING_EXIT.x, DINING_EXIT.y, DINING_EXIT.z);
     }
     ensureOgreBoatTalkActions();
-    syncSkrachSpitRoast(player);
     syncRescueQuestVarbits(player);
     player.getPacketSender().sendVarbit(VARBIT_OGRE_BOAT,
       (skrachState(player) & 1) || hasFlag(player, 32) ? 1 : 0);
@@ -3811,6 +3813,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.persistAttribute(SKRACH_STAGE_ATTRIBUTE, 0);
   api.persistAttribute(AWOWOGEI_STATE_ATTRIBUTE);
   api.persistAttribute(AWOWOGEI_STAGE_ATTRIBUTE, 0);
+  api.persistAttribute(AWOWOGEI_STUFFING_ATTRIBUTE, 0);
   api.persistAttribute(AMIK_STATE_ATTRIBUTE);
   api.persistAttribute(AMIK_STAGE_ATTRIBUTE, 0);
   api.persistAttribute(AMIK_DRAGON_DROP_ATTRIBUTE, false);

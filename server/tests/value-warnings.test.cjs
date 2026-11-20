@@ -300,7 +300,8 @@ test('Alchemy on an item worth at least the threshold asks "considered valuable"
   listener.castOnItem(p, LOW_ALCHEMY, RUNE_PLATELEGS, 0);
   const [statement, options] = p.log.dialogues[0];
   assert.equal(statement.getText(), 'That item is considered <col=7f0000>valuable</col>.<br>Really cast Low Level Alchemy on it?');
-  assert.deepEqual(p.log.messages, ['That item is considered <col=7f0000>valuable</col>. Really cast Low Level Alchemy on it?']);
+  assert.deepEqual(p.log.messages, [], 'no game-message copy beside the box line');
+  assert.deepEqual(p.log.typed.map(([, text]) => text), ['That item is considered <col=7f0000>valuable</col>. Really cast Low Level Alchemy on it?']);
   assert.deepEqual(options.getOptions(), ['Proceed to cast Low Level Alchemy on it.', 'Cancel the alchemy spell.']);
   options.execute(1);
   assert.ok(p.amounts.get(COINS) > 0, 'cast once accepted');

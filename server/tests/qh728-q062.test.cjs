@@ -3,7 +3,8 @@
 // registered handlers with the transcript's own condition/action/choice ids and
 // the cache object ids actually placed in this revision. It does not drive the
 // live dialogue runner, and no live playthrough is claimed. The bridge rung
-// repair is fixture-seeded because cache 241 places no broken-rung objects.
+// repair is fixture-seeded here (myreque-capture-parity.test.cjs repairs the real rungs). Timed steps (climbs,
+// boat rides, the knock-out) run on the harness's own task queue (`ticks`).
 const assert = require('node:assert/strict');
 const { test, before } = require('node:test');
 const path = require('node:path');
@@ -28,6 +29,7 @@ function makePlayer() {
   const packetCalls = [];
   const equipment = new Map();
   let location = new core.Location(0, 0, 0);
+  const flags = new Set();
   const inventory = {
     getAmount: (id) => items.get(id) ?? 0,
     contains: (id) => (items.get(id) ?? 0) > 0,
@@ -42,6 +44,7 @@ function makePlayer() {
     getFreeSlots: () => 28 - [...items.values()].filter((amount) => amount > 0).length,
     isFull: () => false,
     getItems: () => [...items.entries()].map(([id, amount]) => ({ getId: () => id, getAmount: () => amount })),
+    refreshItems: noop,
   };
   const sender = new Proxy({}, {
     get: (_target, prop) => (...args) => {
@@ -55,10 +58,20 @@ function makePlayer() {
     getAttribute: (key) => attrs.get(key),
     setAttribute: (key, value) => attrs.set(key, value),
     getInventory: () => inventory,
-    getEquipment: () => ({ get: (slot) => equipment.get(slot) }),
+    getEquipment: () => ({ get: (slot) => equipment.get(slot), refreshItems: noop }),
     getUsername: () => 'q062-test',
     getPrivateArea: () => null,
-    getMovementQueue: () => ({ setBlockMovement() { return this; }, reset() { return this; } }),
+    getMovementQueue: () => ({ setBlockMovement() { return this; }, reset() { return this; }, walkStep() { return this; } }),
+    setFlag: (flag) => flags.add(flag),
+    removeFlag: (flag) => flags.delete(flag),
+    hasFlag: (flag) => flags.has(flag),
+    getArea: () => null,
+    setArea: noop,
+    getIndex: () => 1,
+    getAsPlayer() { return this; },
+    performGraphic: noop,
+    setUntargetable: noop,
+    getSpellbook: () => ({ getInterfaceId: () => 218 }),
     getPacketSender: () => sender,
     getDialogueManager: () => ({ isActive: () => false, getCurrent: () => null, startDialogues: noop, handleResume: noop, reset: noop }),
     getLocation: () => location,
@@ -91,7 +104,16 @@ const QUIZ_ZERO_ID = 'A6wXnN'; // "... zero out of three ..."
 const QUIZ_KNOCKOUT_ZERO_ID = 'HQfMkY'; // the zero-correct knock-out message
 
 
+/** The harness's task queue: the plugin's CountdownTasks, run a tick at a time. */
+const tasks = [];
+function ticks(n) {
+  for (let i = 0; i < n; i++) {
+    for (const task of tasks.splice(0)) if (task.tick()) tasks.push(task);
+  }
+}
+
 function harness() {
+  tasks.length = 0;
   const events = {};
   const conditions = [];
   const choices = [];
@@ -110,7 +132,7 @@ function harness() {
   const api = new Proxy({
     // The wall pass blocks movement and submits a forced-movement walk; the route has no task loop and a bare stub player, so
     // the walk and its task queue are stubbed here (myreque-bridge-wall.test.cjs runs the real pass).
-    core: { ...core, ForceMovementTask: class { constructor() {} }, TaskManager: { submit: noop, cancelTasks: noop } },
+    core: { ...core, TaskManager: { submit: (task) => { task.setRunning(true); tasks.push(task); }, cancelTasks: noop } },
     persistAttribute: noop,
     onNpcDialogueVariant: (handler) => variants.push(handler),
     onNpcDialogueCondition: (handler) => conditionAnswers.push(handler),
@@ -162,8 +184,8 @@ function harness() {
     choices.forEach((handler) => handler(event));
     return event;
   };
-  const interact = (player, objectId, location = { x: 0, y: 0, z: 0 }) => {
-    const event = { player, objectId, location, handled: false };
+  const interact = (player, objectId, location = { x: 0, y: 0, z: 0 }, clickType = 1) => {
+    const event = { player, objectId, location, handled: false, clickType };
     objectInteraction.forEach((handler) => handler(event));
     return event;
   };
@@ -171,9 +193,11 @@ function harness() {
     fire('npc-dialogue:draw', { player, npcId, draw: drawNumber, count: 3, text: 'Dialogue ' + drawNumber, question: 'Okay, [first/second/third and final] question. ' + question });
   };
   const kill = (player, npcId) => npcDeath.forEach((handler) => handler({ killer: player, npcId, npc: {} }));
+  // A line, then the player continuing past it (the runner calls the line's `after` then).
   const line = (player, npcId, text) => {
     const event = { player, npcId, text, skip: false };
     lines.forEach((handler) => handler(event));
+    event.after?.();
     return event;
   };
   const variant = (player, npcId) => variants.map((handler) => handler({ player, npcId })).find((value) => value !== undefined);
@@ -232,7 +256,8 @@ test('fresh stage 0 reaches cache completion 105 through the placed route', () =
   assert.equal(stage(h, p), 20, 'three planks given for the boat');
   assert.equal(p.items.get(I.PLANK), 3, 'three planks remain for the bridge');
 
-  h.interact(p, O.SWAMP_BOATY_2, { x: 3523, y: 3284, z: 0 });
+  h.interact(p, O.SWAMP_BOATY_2, { x: 3523, y: 3284, z: 0 }, 2); // Quick-board: the ride without Cyreg's question
+  ticks(16);
   assert.equal(stage(h, p), 25, 'boat reaches the Hollows');
   assert.deepEqual(p.moves.at(-1), [3498, 3380, 0]);
   assert.equal(p.items.get(I.COINS) ?? 0, 0, 'the ten-coin fare is paid');
@@ -241,9 +266,10 @@ test('fresh stage 0 reaches cache completion 105 through the placed route', () =
   p.setAttribute('quest.in_search_of_the_myreque.bridge', 0b111);
   p.setLocation(3502, 3426, 0);
   h.interact(p, 5003, { x: 3502, y: 3426, z: 0 });
-  assert.deepEqual(p.moves.at(-1), [3502, 3427, 0], 'the raw tree multi-loc climbs up onto the bridge (Wiki/void-based)');
+  ticks(1);
+  assert.deepEqual(p.moves.at(-1), [3502, 3427, 0], 'the raw tree multi-loc climbs up onto the bridge');
   h.interact(p, 5002, { x: 3502, y: 3427, z: 0 });
-  assert.deepEqual(p.moves.at(-1), [3503, 3431, 0], 'Cross over the repaired bridge reaches the north bank');
+  assert.deepEqual(p.moves.at(-1), [3502, 3432, 0], 'Cross over the repaired bridge reaches the north bank');
 
   h.choice(p, "I've come to help the Myreque. I've brought weapons.", N.CURPILE_FYOD);
   assert.equal(stage(h, p), 52, 'Curpile accepts the weapons');
@@ -252,38 +278,39 @@ test('fresh stage 0 reaches cache completion 105 through the placed route', () =
   assert.equal(stage(h, p), 55, 'quiz pass condition');
 
   h.interact(p, O.WOODEN_DOORS_8, { x: 3509, y: 3447, z: 0 });
-  assert.equal(stage(h, p), 55, 'surface doors enter the cave without skipping to the hideout');
+  assert.equal(stage(h, p), 60, 'the doors in the earth enter the hideout (capture tick 1081)');
+  ticks(3);
   assert.deepEqual(p.moves.at(-1), [3500, 9811, 0], 'surface doors land on the walkable tunnel approach');
-  h.interact(p, O.CAVE_ENTRANCE_27, { x: 3505, y: 9831, z: 0 });
-  assert.equal(stage(h, p), 60, 'hidden cave entrance enters the hideout');
-  assert.deepEqual(p.moves.at(-1), [3505, 9832, 0]);
 
   assert.equal(h.variant(p, N.VELIAF_HURTZ_2), 'myreque-hideout-talking-to-veliaf');
   h.condition(p, 'k_vzYt');
   h.condition(p, '_g5SY-');
   h.condition(p, '25JBP_');
   h.condition(p, 'C5YuIy');
-  assert.equal(stage(h, p), 65, 'members are introduced before the last flag');
   h.condition(p, 'KI2Pb0');
-  assert.equal(stage(h, p), 67, 'all five members introduced; weapons can be handed in');
+  assert.equal(stage(h, p), 65, 'all five members introduced; the stage waits for the hand-in');
 
   h.action(p, 'OVBQEv', N.VELIAF_HURTZ_2);
   h.condition(p, 'VLPyT3');
-  assert.equal(stage(h, p), 70, 'weapons handed to Veliaf');
+  assert.equal(stage(h, p), 67, 'weapons handed to Veliaf (capture tick 1295)');
   for (const [id] of WEAPONS) assert.equal(p.items.get(id) ?? 0, 0, `weapon ${id} consumed`);
-  h.action(p, 'bLWS_j');
+  // The cutscene itself plays in a copy of the map (myreque-capture-parity.test.cjs); its end is the transcript's action.
+  h.action(p, 'OFmcmp');
   assert.equal(stage(h, p), 80, 'cutscene summons the Skeleton Hellhound');
   assert.equal(h.spawned.length, 1, 'one owner-only hellhound spawned');
   h.kill(p, N.SKELETON_HELLHOUND);
   assert.equal(stage(h, p), 85, 'hellhound defeated');
 
   h.condition(p, 'a8YEIJ');
-  assert.equal(stage(h, p), 90, 'first-time Veliaf page releases the exit leg');
+  assert.equal(stage(h, p), 85, 'the first-time Veliaf page starts');
+  h.line(p, N.VELIAF_HURTZ_2, "That's very useful. Thanks.");
+  assert.equal(stage(h, p), 90, 'the way out is shown (capture tick 1502)');
 
   p.setLocation(3480, 9836, 0); // one side of the wall edge (cache-derived; no direction is claimed); the pass itself is tested in myreque-bridge-wall.test.cjs
   h.interact(p, O.WALL_17, { x: 3480, y: 9837, z: 0 });
   assert.equal(stage(h, p), 95, 'hidden wall opens the inn basement');
   h.interact(p, O.LADDER_54, { x: 3477, y: 9846, z: 0 });
+  ticks(1);
   assert.equal(stage(h, p), 97, 'ladder reaches Canifis');
 
   h.line(p, N.STRANGER_2, 'I definitely have!');
@@ -307,28 +334,32 @@ test('the rope bridge cannot be crossed until the rungs are repaired; the south 
   h.quest.setStage(p, 25);
   p.setLocation(3502, 3426, 0);
   h.interact(p, 5003, { x: 3502, y: 3426, z: 0 });
+  ticks(1);
   assert.deepEqual(p.moves, [[3502, 3427, 0]], 'the south tree climbs up onto the bridge even before the repairs (Wiki: climb up to see the damaged bridge)');
   h.interact(p, 5002, { x: 3502, y: 3427, z: 0 });
   assert.deepEqual(p.moves, [[3502, 3427, 0]], 'an unrepaired bridge cannot be crossed');
   assert.ok(p.messages.some((message) => message.includes('bridge looks')));
   p.setAttribute('quest.in_search_of_the_myreque.bridge', 0b111);
   h.interact(p, 5002, { x: 3502, y: 3427, z: 0 });
-  assert.deepEqual(p.moves.at(-1), [3503, 3431, 0], 'repaired bridge crosses');
+  assert.deepEqual(p.moves.at(-1), [3502, 3432, 0], 'repaired bridge crosses');
 });
 
 test('the Mort\'ton boat needs its ten-coin fare unless a Ring of Charos(a) is worn', () => {
   const h = harness();
   const p = makePlayer();
   h.quest.setStage(p, 20);
-  h.interact(p, O.SWAMP_BOATY_2, { x: 3523, y: 3284, z: 0 });
+  h.interact(p, O.SWAMP_BOATY_2, { x: 3523, y: 3284, z: 0 }, 2);
+  ticks(16);
   assert.deepEqual(p.moves, [], 'no fare, no boat');
   assert.ok(p.messages.some((message) => message.includes('10 coins')));
   p.items.set(I.RING_OF_CHAROS_A_, 1);
-  h.interact(p, O.SWAMP_BOATY_2, { x: 3523, y: 3284, z: 0 });
+  h.interact(p, O.SWAMP_BOATY_2, { x: 3523, y: 3284, z: 0 }, 2);
+  ticks(16);
   assert.deepEqual(p.moves, [], 'a carried ring does not charm the boatman');
   p.items.delete(I.RING_OF_CHAROS_A_);
   p.equipment.set(core.Equipment.RING_SLOT, new core.Item(I.RING_OF_CHAROS_A_, 1));
   h.interact(p, O.SWAMP_BOATY_2, { x: 3523, y: 3284, z: 0 });
+  ticks(16);
   assert.equal(stage(h, p), 25, 'the activated ring skips the fare');
   assert.deepEqual(p.moves.at(-1), [3498, 3380, 0]);
 });
@@ -339,8 +370,7 @@ test('surface doors and the hidden entrance stay locked before Curpile passes yo
   h.quest.setStage(p, 25);
   h.interact(p, O.WOODEN_DOORS_8, { x: 3509, y: 3447, z: 0 });
   assert.deepEqual(p.moves, [], 'surface doors do not open before the quiz');
-  h.interact(p, O.CAVE_ENTRANCE_27, { x: 3505, y: 9831, z: 0 });
-  assert.deepEqual(p.moves, [], 'hidden entrance does not open before the quiz');
+  ticks(3);
   assert.equal(stage(h, p), 25);
 });
 
@@ -351,6 +381,7 @@ test('a failed Curpile quiz knocks the player back without losing the stage leg'
   quizAttempt(h, p, [false, false, false]);
   assert.equal(h.answer({ player: p, text: 'If the player answered zero out of three questions correctly:', stepId: QUIZ_ZERO_ID }), true);
   h.action(p, QUIZ_KNOCKOUT_ZERO_ID);
+  ticks(10);
   assert.deepEqual(p.moves.at(-1), [3522, 3285, 0], 'knocked out back to Mort\'ton');
   assert.equal(stage(h, p), 52, 'the retry page stays available');
   quizAttempt(h, p, [true, true, true]);

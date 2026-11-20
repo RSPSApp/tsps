@@ -56,6 +56,8 @@ test("each knock-out sends the player back to Mort'ton", (t) => {
   for (const step of knockouts) {
     const p = actor(t, QUESTIONED);
     PM.emitCustomEvent('npc-dialogue:action', { player: p, npcId: npcId(), step, text: step.text, stepId: step.id, handled: false });
+    // The knock-out plays first: the move comes seven ticks after the box (revision-242 capture ticks 778-785).
+    for (let i = 0; i < 10; i++) core.TaskManager.process();
     const at = p.getLocation();
     assert.deepEqual([at.getX(), at.getY(), at.getZ()], [3522, 3285, 0], step.id);
   }

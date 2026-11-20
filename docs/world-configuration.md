@@ -336,10 +336,10 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `PlayerBots:activeRegionBotsByRegion` | json | *Shipped value in bot-sites.json* | **Wilderness bots per map square.** Target number of bots in individual 64x64 map squares, keyed plane:regionX:regionY with whole-number counts. Replaces pvp.activeRegionBotsByRegion in bot-sites.json. |
-| `PlayerBots:ai` | json | *AI bots off (3 bots when enabled)* | **AI bots.** Settings for bots that chat through an AI model, merged over the shipped defaults, e.g. { "enabled": true, "count": 3, "places": ["lumbridge"] }. Also takes names, disclose, providers and gifts; API keys come from the server environment, never here. |
+| `PlayerBots:ai` | json | *AI bots off (3 bots when enabled)* | **AI bots.** Settings for bots that chat through an AI model, merged over the shipped defaults, e.g. { "enabled": true, "count": 3, "places": ["lumbridge"] }. Count is capped at the world's player capacity. Also takes names, disclose, providers and gifts; API keys come from the server environment, never here. |
 | `PlayerBots:allowedActivities` | json | *Every activity* | **Bot activities allowed.** A list of the activities bots may be spawned for; any other spawn is refused, e.g. ["bounty-hunter", "last-man-standing"]. Activities: world (the world's own population: Wilderness roamers and the bot sites), ai, bounty-hunter, last-man-standing, castle-wars, soul-wars, pest-control, developer (bot commands, the benchmark, --stressTest). |
 | `PlayerBots:retreatTeleportChance` | number (integer, >= 0, <= 100) | `25` | **PvP bot retreat teleport chance (%).** Percentage chance, rolled once when a PvP bot runs out of food, to try teleporting after the retreat grace period. Otherwise it flees on foot. |
-| `PlayerBots:sites` | json | *No overrides: the shipped bot-sites.json applies* | **Bot site overrides.** Maps a bot site id to the properties to change for it, e.g. { "some_site": { "enabled": false } }. Sites not named keep their shipped properties; a world.local.json value replaces the world.json one as a whole. |
+| `PlayerBots:sites` | json | *No overrides: the shipped bot-sites.json applies* | **Bot site overrides.** Maps a bot site id to the properties to change for it, e.g. { "some_site": { "enabled": false } }. Total queued site bots are capped at the world's player capacity. Sites not named keep their shipped properties; a world.local.json value replaces the world.json one as a whole. |
 
 #### Plugin area `combat` (`pluginConfig`)
 
@@ -374,7 +374,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | `LastManStanding:highStakes` | boolean | `false` | **High Stakes mode.** Opens the High Stakes mode, which costs 500,000 from the coffer to start. Closed when off. |
 | `LastManStanding:minPlayers` | number (integer, >= 1) | *The mode's own minimum (24 for the competitive modes)* | **Players needed to start.** Lowest number of players a game needs. Cannot go above the mode's own minimum. |
 | `LastManStanding:seedBots` | boolean | `true` | **Seed Last Man Standing with bots.** Fills lobbies with bots that fight on the PvP brain. Turn off for players only. |
-| `SoulWars:minPlayers` | number (integer, >= 2) | *20, as on the Wiki* | **Players needed to start.** Lowest number of players a game needs. Never under 2, since both teams need a player. |
+| `SoulWars:minPlayers` | number (integer, >= 2, <= 2048) | *20, as on the Wiki* | **Players needed to start.** Lowest number of players a game needs. Never under 2, since both teams need a player. |
 | `SoulWars:seedBots` | boolean | `false` | **Seed Soul Wars with bots.** Development aid: fills the lobby with bots. Leave off so production lobbies are players only. |
 
 #### Plugin area `modes` (`pluginConfig`)
@@ -404,7 +404,7 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `Farming:growthMultiplier` | number (> 0) | `1` | **Crop growth speed.** Makes crops and seedlings grow this many times faster. 1 is the normal speed. Weeds, compost bins and Tithe Farm keep theirs. Crops already planted keep the growth they have done and continue at the new speed. |
+| `Farming:growthMultiplier` | number (> 0, <= 60000) | `1` | **Crop growth speed.** Makes crops and seedlings grow this many times faster. 1 is the normal speed. Weeds, compost bins and Tithe Farm keep theirs. Crops already planted keep the growth they have done and continue at the new speed. |
 | `Prayer:sequentialBurying` | boolean | `false` | **Bury all bones with one click.** By default Bury buries one bone per click, as in OSRS. On, one click continues through the eligible unnoted bones in the inventory. |
 | `ShootingStars:announce` | boolean | `false` | **Announce landings.** Tells everyone online where a star landed. Useful on small worlds; OSRS has no such message. |
 | `ShootingStars:intervalMinutes` | number (> 0) | *90* | **Minutes between shooting stars.** Time between stars; a random 15 minutes either way is added on top. |
@@ -466,6 +466,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Misthalin` | Misthalin | areas | yes | Misthalin area interactions: the Edgeville dungeon ladder and trapdoor, Varrock's manhole to the sewers, the Wizards' Tower basement, and the Lumbridge Swamp Caves dark hole and wall markers. |
 | `MorUiRek` | MorUiRek | areas | yes | Mor Ul Rek (the TzHaar city): its cave exit back to the Karamja volcano and its hot vent doors. (members only) |
 | `MotherlodeMine` | MotherlodeMine | areas | yes | Motherlode Mine: mining pay-dirt, washing it in Prospector Percy's machine and collecting ore from the sack, with its HUD. (members only) |
+| `MuseumCamp` | MuseumCamp | areas | yes | Fossil Island Museum Camp's improvements: building the bank chest, well, cooking pot, spinning wheel and loom with Construction. (members only) |
 | `MythsGuild` | MythsGuild | areas | yes | The Myths' Guild's statue down to its basement, and the guild dog's Pet. (members only) |
 | `MythsGuildBarrier` | MythsGuildBarrier | areas | yes | The Myths' Guild magical barriers (bridge and basement) and the Lithkren Vault barriers: open after Dragon Slayer II. (members only) |
 | `PortPhasmatysBarrier` | PortPhasmatysBarrier | areas | yes | Port Phasmatys energy barriers and Ghost guards: a 2 ecto-token toll before Ghosts Ahoy, free passage after. (members only) |
@@ -606,6 +607,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Grouping` | Grouping | interface | yes | Player groups of up to five with their own chat-channel, and the Grouping tab's activity chat-channels: ::group to form, invite, accept, promote, kick, leave or disband, kept across logins. A Group Ironman's group takes only Group Ironmen and keeps leavers for seven days. |
 | `IgnoreList` | IgnoreList | interface | yes | Reserved for the ignore list. Nothing is attached yet because the client does not send add or remove actions. |
 | `ItemsKeptOnDeath` | ItemsKeptOnDeath | interface | yes | Items Kept on Death screen showing what you would keep or lose, with skull, Protect Item, PvP and Wilderness level toggles. |
+| `KillLog` | KillLog | interface | yes | The Boss Kill Log: each boss's kill count and the player's resettable streak, opened from the ring of wealth and the POH adventure log. (members only) |
 | `LoginTips` | LoginTips | interface | yes | Sends a 'Did you know?' tip after the login greeting, following the All Settings row that turns them off. |
 | `MaxHitThreshold` | MaxHitThreshold | interface | yes | Settings option for the lowest damage that shows a max hit hitsplat. |
 | `MaxHitsInterface` | MaxHitsInterface | interface | yes | Adds the ::maxhits command, an interface of live melee, ranged and per-spell max hits for the player's current gear and levels. |
@@ -843,7 +845,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `TempleTrekking` | TempleTrekking | minigames | yes | Adds Temple Trekking and the Burgh de Rott Ramble: escorting a follower between Burgh de Rott and Paterdomus, with events on the way and a reward token. (members only) |
 | `Tempoross` | Tempoross | minigames | yes | Adds Tempoross, the Spirit Anglers' fishing boss: the Ruins of Unkah ferries, a cove instance per trip, the fight and the reward pool. (members only) |
 | `TheMess` | TheMess | minigames | yes | Adds The Mess in Hosidius: cooking meat pies, stews and pineapple pizzas for the Shayzien soldiers and serving them at the buffet tables. (members only) |
-| `TheatreOfBlood` | TheatreOfBlood | minigames | yes | Adds the Theatre of Blood raid: parties at Ver Sinhaza, the rooms in a private copy of the theatre and the retrieval chest. (members only) |
+| `TheatreOfBlood` | TheatreOfBlood | minigames | yes | Adds the Theatre of Blood raid: parties at Ver Sinhaza, the rooms in a private copy of the theatre, the retrieval chest and the residents' Talk-to transcripts. (members only) |
 | `TombsOfAmascut` | TombsOfAmascut | minigames | yes | Adds the Tombs of Amascut raid: the Jaltevas lobby and party board, the Nexus, four paths with their puzzles and bosses, the Wardens and rewards. (members only) |
 | `TroubleBrewing` | TroubleBrewing | minigames | yes | Adds Trouble Brewing on Mos Le'Harmless: the lobby, team rounds of brewing in the arena, scoring and the pieces-of-eight rewards. (members only) |
 | `TzHaarKetRak` | TzHaarKetRak | minigames | yes | Adds TzHaar-Ket-Rak's Challenges: fights against one to six JalTok-Jads, their rewards and a scoreboard. (members only) |
@@ -886,6 +888,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Gertrude` | Gertrude | npcs | yes | Lets players buy another kitten from Gertrude after her quest for 100 coins and pick its colour, if wearing an activated Ring of Charos. (members only) |
 | `Hans` | Hans | npcs | yes | Lets Hans in Lumbridge tell players how long they have played, completing the Lumbridge diary task for it. |
 | `HoopSnake` | HoopSnake | npcs | yes | Fossil Island's Hoop Snakes: stun one with a blunt attack, pick it up, then roll or release it. (members only) |
+| `Imps` | Imps | npcs | yes | Imps teleport away in a puff of smoke, when hit and every 30-120 seconds. |
 | `Killerwatt` | Killerwatt | npcs | yes | Makes Killerwatts hit hard unless the player wears insulated boots, rerolling their hits to max 6 with the boots on and 15 without. (members only) |
 | `LostProperty` | LostProperty | npcs | yes | Adds the Lost Property shop of Perdu and Chris, which sells back quest and diary rewards only to players who have unlocked them. |
 | `LumbridgeGuide` | LumbridgeGuide | npcs | yes | Picks the Lumbridge Guide's dialogue depending on whether the player has lost their Amulet of the Eye. |
@@ -929,6 +932,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Wyrms` | Wyrms | npcs | yes | Wyrm and wyrmling combat: melee when the target is adjacent, magic from range, with separate max hits per style. (members only) |
 | `Wyson` | Wyson | npcs | yes | Wyson the gardener sells woad leaves through his dialogue: 15 coins for one leaf, 20 coins for two. |
 | `Zahur` | Zahur | npcs | yes | Zahur in Nardah makes unfinished potions from clean herbs and vials of water or blood for 200 coins each, after the hard Desert Diary or with a Herblore cape. (members only) |
+| `Zogres` | Zogres | npcs | yes | Zogres, skogres and Slash Bash take a quarter of most damage, half from Crumble Undead and full from brutal arrows. (members only) |
 | `ZombiePirates` | ZombiePirates | npcs | yes | Picks the Medium Wilderness Diary drop table for Chaos Temple zombie pirates once the player has completed that diary. (members only) |
 | `AlKharidGate` | AlKharidGate | objects | yes | Al Kharid toll gate: Border Guard dialogue and a 10 coin toll before Prince Ali Rescue, free passage after it. |
 | `Altars` | Altars | objects | yes | Altar actions: pray to restore Prayer points, switch spellbooks at Ancient, Lunar and Dark altars, and the Chaos, Nature, Guthix and Occult altars. |
@@ -947,6 +951,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Ladders` | Ladders | objects | yes | Climbing for ladders, staircases, trapdoors, ropes and similar scenery, moving the player a level up or down with the climb animation. |
 | `LeafyPalmTree` | LeafyPalmTree | objects | yes | Lets players shake Kharazi Jungle's Leafy Palm Trees for a palm leaf on the ground, with a 35-second cooldown per tree. (members only) |
 | `Levers` | Levers | objects | yes | The Wilderness teleport levers (Edgeville, East Ardougne, the Deserted Keep and Mage Arena bank), with the Wilderness warning and a shared lever teleport event. |
+| `MessageScrolls` | MessageScrolls | objects | yes | Reading the Falador bank notice boards (from a few tiles away) and Varrock's Combat Scroll, which open the plain message scroll with their recorded lines. |
 | `Pickable` | Pickable | objects | yes | Picking wheat, potatoes, onions, cabbages, sweetcorn, flax and nettles from the fields, with respawn timers and nettle stings. |
 | `PineapplePlant` | PineapplePlant | objects | yes | Lets players pick Karamja's wild pineapple plants, a stage at a time, as captured; picked plants grow back a stage at a time. (members only) |
 | `RejuvenationPool` | RejuvenationPool | objects | yes | The player-owned house restoration, revitalisation, rejuvenation, fancy and ornate pools (and their frozen and fiery variants), which restore stats when drunk from. |

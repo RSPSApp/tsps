@@ -87,6 +87,8 @@ test('zero, one and two correct answers select their own result and the matching
     for (const w of ['zero', 'one', 'two', 'three']) assert.equal(answers(p, w), w === words, `${words}: ${w}`);
     const step = knockout(which);
     PM.emitCustomEvent('npc-dialogue:action', { player: p, npcId: npcId(), step, text: step.text, stepId: step.id, handled: false });
+    // The knock-out plays first: the move comes seven ticks after the box (revision-242 capture ticks 778-785).
+    for (let i = 0; i < 10; i++) core.TaskManager.process();
     const at = p.getLocation();
     assert.deepEqual([at.getX(), at.getY(), at.getZ()], [3522, 3285, 0], words);
     assert.equal(p.getAttribute(STAGE), QUESTIONED, 'a failed attempt leaves the stage');

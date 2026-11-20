@@ -64,7 +64,9 @@ class AiBotPresence {
   }
 
   queueAll(nowMs) {
-    this.queue = Array.from({ length: this.config.count }, (_, index) => ({ index, tries: 0 }));
+    const capacity = this.core.World.getPlayers().capacityReturn() - 1;
+    const count = Math.min(capacity, Math.max(0, Math.floor(Number(this.config.count)) || 0));
+    this.queue = Array.from({ length: count }, (_, index) => ({ index, tries: 0 }));
     this.nextSpawnAt = nowMs;
   }
 

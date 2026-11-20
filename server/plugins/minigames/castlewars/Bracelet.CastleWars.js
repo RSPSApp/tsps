@@ -69,6 +69,7 @@ function depositBracelets(event) {
 module.exports = function attachCastleWarsBracelet(registry, castleWars) {
   api = registry;
   game = castleWars;
+  require("../../items/JewelleryPlaceholders")(api, [Object.keys(game.data.BRACELET_NEXT).map(Number)]);
   game.spendStoredBraceletCharge = spendStoredCharge;
   game.showBraceletCharges = showCharges;
   api.persistAttribute(STORED_CHARGES_ATTRIBUTE, 0);

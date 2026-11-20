@@ -27,6 +27,17 @@ needs room for its empty-nest output on members worlds. Reservation counts the
 slot freed by consuming a single vessel, and rechecks the clicked source after
 quest/storage callbacks. Failed reservation preserves the complete inventory.
 
+Low or High Level Alchemy on a clue scroll (any tier; the clicked form, not a
+scroll box, bottle, nest or geode) asks first: the clue in the item box with
+"Wouldn't you rather solve the clue?" on its own, the same line in the chat,
+then a "Clue scroll (<tier>)" menu of "Proceed to cast <spell> on it." and
+"Cancel the alchemy spell."; proceeding alchs it as any untradeable item
+(rsprox captures, recording 1000473, ticks 21505-21508, a hard clue). It
+listens to `magic:alchemy-warning` and sets `box`, the question shown in place
+of the untradeable line and "Really cast ..." line. Ours: it asks whatever the
+All Settings untradeable alchemy row says, and on every tier although only a
+hard clue was recorded.
+
 Custom events:
 
 - `treasure-trails:scroll-boxes`: `{player, unlocked, capacity:null}`, asked by the plugin

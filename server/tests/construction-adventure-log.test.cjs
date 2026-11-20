@@ -2,7 +2,8 @@
 //
 // The achievement gallery's adventure log (Read): the captured "The Exploits of <owner>" menu, whose
 // "Champions log" opens the champions_log modal (468) and its draw script (1408) with the house
-// owner's defeated champions, as in rsprox recordings 1001169, 2905 and 2906 (rev 230). Real engine:
+// owner's defeated champions, and whose "Boss log" opens the owner's Boss Kill Log (kill_log, 549),
+// as in rsprox recordings 1001169, 2905 and 2906 (rev 230). Real engine:
 // every plugin loaded, a real Player and a real seeded house with an achievement gallery.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
@@ -15,7 +16,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 
 const MARBLE_LOG = 29153;
-const MENU = 187, CHAMPIONS_LOG = 468, CHAMPIONS_LOG_SCRIPT = 1408;
+const MENU = 187, CHAMPIONS_LOG = 468, CHAMPIONS_LOG_SCRIPT = 1408, KILL_LOG = 549, KILLCOUNTS = 9525;
 let core, House, Instance, Champions;
 
 before(async () => {
@@ -119,9 +120,22 @@ test("an account with no champions beaten draws none crossed out (captured argum
 
 test("the logs this server doesn't have yet still say nothing happens", (t) => {
   const { player, seen } = openMenu(t);
-  pick(player, "Boss log");
+  pick(player, "Slayer log");
   assert.deepEqual(seen.messages, ["Nothing interesting happens."]);
   assert.notEqual(seen.interfaces.at(-1), CHAMPIONS_LOG);
+});
+
+test("Boss log opens the owner's Boss Kill Log (rsprox 1001169 and 2905, sub 1)", (t) => {
+  const { player, seen } = openMenu(t);
+  player.getPacketSender().sendConfig(core.CacheDefinitions.getVarpId("total_kbd_kills"), 246);
+  pick(player, "Boss log");
+  assert.equal(seen.interfaces.at(-1), KILL_LOG);
+  const [id, names, kills, , title, canReset] = seen.scripts.at(-1);
+  assert.equal(id, KILLCOUNTS);
+  assert.equal(title, "Boss Kill Log");
+  assert.equal(kills[names.indexOf("King Black Dragon")], 246);
+  assert.equal(canReset, 1, "the owner can reset their streaks");
+  assert.deepEqual(seen.messages, []);
 });
 
 test("a visitor reading the owner's log sees the owner's champions, not their own", (t) => {
@@ -141,4 +155,15 @@ test("a visitor reading the owner's log sees the owner's champions, not their ow
   pick(guest.player, "Champions log");
   assert.equal(guest.seen.interfaces.at(-1), CHAMPIONS_LOG);
   assert.deepEqual(guest.seen.scripts.at(-1), [CHAMPIONS_LOG_SCRIPT, 1 << giant.bit]);
+
+  const kbd = core.CacheDefinitions.getVarpId("total_kbd_kills");
+  owner.player.getPacketSender().sendConfig(kbd, 12);
+  guest.player.getPacketSender().sendConfig(kbd, 99);
+  readLog(guest.player, owner.house);
+  guest.player.__menu = guest.seen.scripts.findLast(([id]) => id === 217).slice(1);
+  pick(guest.player, "Boss log");
+  assert.equal(guest.seen.interfaces.at(-1), KILL_LOG);
+  const [, names, kills, , , canReset] = guest.seen.scripts.at(-1);
+  assert.equal(kills[names.indexOf("King Black Dragon")], 12, "the owner's kill count, not the guest's");
+  assert.equal(canReset, 0, "a visitor gets no Reset Streak op");
 });

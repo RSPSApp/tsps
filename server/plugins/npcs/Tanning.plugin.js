@@ -8,7 +8,7 @@
 const data = require('./data/tanning.json');
 const GROUP = 324;
 // Current-cache gamevals: tanning_a_all through tanning_h_1; native IF1 buttons say Tan All/X/5/1.
-const CLOSE = (GROUP << 16) | 91;
+const CLOSE = (GROUP << 16) | 90; // IF1 close button; 91 is its hover layer.
 const BUTTONS = Array.from({ length:32 }, (_, index) => (GROUP << 16) | (124 + index));
 const opened = new WeakMap();
 let api = null;

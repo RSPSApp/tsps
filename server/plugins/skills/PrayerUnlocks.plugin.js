@@ -55,8 +55,18 @@ const LEARNED_COLOUR = "<col=7f0000>";
 const ALREADY_LEARNED = "You can make out some faded words on the ancient parchment. "
   + "It appears to be an archaic invocation of the gods. However there's nothing more for you to learn.";
 
-// No OSRS Wiki source: our own wording for a locked scroll prayer.
-const PRAYER_LOCKED = "You have not unlocked that prayer.";
+/**
+ * The recorded refusal a scroll prayer that has not been learnt gets, as a messagebox. It names
+ * every requirement whichever is missing, Defence only where the prayer needs it: Rigour
+ * (rsprox 227/1000311 and 1000340), Augury (local 1001226 ticks 4308-4318) and Preserve (local
+ * 1001221; the older 228/02246 and 02270 read "level of 55, and"). The <br>s the captures carry
+ * are the messagebox's own line wrapping, so they are left out as in knightPrayerLocked.
+ */
+function scrollPrayerLocked(prayer) {
+  const defence = prayer === core.PrayerData.PRESERVE ? "" : ", a <col=000080>Defence</col> level of 70,";
+  return `You need a <col=000080>Prayer</col> level of ${prayer.requirement}${defence} and to have learnt `
+    + `the prayer in order to use <col=000080>${prayer.getPrayerName()}</col>.`;
+}
 
 let api = null;
 let core = null;
@@ -216,7 +226,8 @@ function prayerRequirements(event) {
     return;
   }
   if (player.getAttribute(scroll.attribute) !== true) {
-    event.message = PRAYER_LOCKED;
+    event.message = scrollPrayerLocked(prayer);
+    event.messageBox = true;
     event.disabled = true;
   }
 }
@@ -333,6 +344,7 @@ module.exports = {
 
 module.exports._test = {
   prayerRequirements,
+  scrollPrayerLocked,
   readScroll,
   learnScroll,
   syncUnlocks,

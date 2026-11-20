@@ -462,6 +462,112 @@ test("the tea works once the player goes down Sithik's ladder (Wiki; capture tic
   assert.equal(varbit(f, V.TRANSFORMED), 1, "Sithik's bed shows him as an ogre");
 });
 
+test("Sithik speaks with his ogre chathead while the potion holds, the man's before and after (ticks 1567-1611, issue 6283)", async (t) => {
+  const sithikHead = (f) => f.calls.filter((c) => c.name === "sendNpcHeadOnInterface").map((c) => c.args[0]).at(-1);
+  const ogre = actor(t, { at: [2591, 3105, 1], stage: S.PERMANENT_SPELL, attributes: { "quest.zogre_flesh_eaters.transformed": true } });
+  assert.equal(varbit(ogre, V.TRANSFORMED), undefined);
+  await h.clickObject(ogre, 6887, [2591, 3103]);
+  assert.equal(h.shown(ogre)?.who, "Sithik Ints");
+  assert.equal(sithikHead(ogre), N.SITHIK_INTS_2, "zogre_sithik_ogre (884)");
+
+  const man = actor(t, { at: [2591, 3105, 1], stage: S.GIVEN_KEY, attributes: { "quest.zogre_flesh_eaters.transformed": true } });
+  await h.clickObject(man, 6887, [2591, 3103]);
+  assert.equal(sithikHead(man), N.SITHIK_INTS, "a man again once Grish has the key (495 = 2)");
+});
+
+test("the quest teaches the balm and brutal arrows through Sithik and the comp bow through Grish (Wiki; issue 6283)", async (t) => {
+  const ask = (f, event, payload, answer) => {
+    const request = { player: f.player, ...payload, [answer]: null };
+    h.PM.emitCustomEvent(event, request);
+    return request[answer];
+  };
+  const early = actor(t, { at: [2442, 3049, 0], stage: S.PERMANENT_SPELL });
+  assert.equal(ask(early, "herblore:unlocked", { unlock: "relicyms_balm" }, "allowed"), false);
+  assert.equal(ask(early, "fletching:taught", { name: "brutal_arrows" }, "taught"), false);
+  assert.equal(ask(early, "fletching:taught", { name: "comp_ogre_bow" }, "taught"), false);
+  assert.equal(ask(early, "fletching:taught", { name: "broad_bolts" }, "taught"), null, "not the quest's to answer");
+
+  const told = actor(t, { at: [2442, 3049, 0], stage: S.PERMANENT_SPELL, attributes: {
+    "quest.zogre_flesh_eaters.make_cure": true,
+    "quest.zogre_flesh_eaters.make_brutal": true,
+    "zogre-flesh-eaters:make-composite-bow": true,
+  } });
+  assert.equal(ask(told, "herblore:unlocked", { unlock: "relicyms_balm" }, "allowed"), true);
+  assert.equal(ask(told, "fletching:taught", { name: "brutal_arrows" }, "taught"), true);
+  assert.equal(ask(told, "fletching:taught", { name: "comp_ogre_bow" }, "taught"), true);
+
+  const done = actor(t, { at: [2442, 3049, 0], stage: S.COMPLETE });
+  assert.equal(ask(done, "herblore:unlocked", { unlock: "relicyms_balm" }, "allowed"), true, "the scroll's reward");
+  assert.equal(ask(done, "fletching:taught", { name: "comp_ogre_bow" }, "taught"), true);
+});
+
+// ------------------------------------------------------------------ Slash Bash's combat (issue 6283)
+
+test("Slash Bash breathes at range and mixes in the crush only next to the player (ticks 2440-2642)", async (t) => {
+  const { CombatFactory, CombatType } = h.core;
+  const random = Math.random;
+  t.after(() => { Math.random = random; });
+  const f = actor(t, { at: [2484, 9445, 0], stage: S.GIVEN_KEY });
+  const bash = h.spawn(f, N.SLASH_BASH, [2479, 9445, 0]);
+  bash.getCombat().setTarget(f.player);
+  for (const roll of [0, 0.99]) {
+    Math.random = () => roll;
+    assert.equal(CombatFactory.getMethod(bash).type(), CombatType.RANGED, "3 tiles off his east side: ranged only");
+  }
+  f.player.setLocation(new h.core.Location(2482, 9445, 0));
+  Math.random = () => 0;
+  assert.equal(CombatFactory.getMethod(bash).type(), CombatType.MELEE, "next to him: the crush");
+  Math.random = () => 0.99;
+  assert.equal(CombatFactory.getMethod(bash).type(), CombatType.RANGED, "next to him: the breath too");
+
+  f.player.setLocation(new h.core.Location(2484, 9445, 0));
+  const method = CombatFactory.getMethod(bash);
+  const projectiles = [];
+  const { Projectile } = h.core;
+  const send = Projectile.prototype.sendProjectile;
+  Projectile.prototype.sendProjectile = function () { projectiles.push(this); return this; };
+  t.after(() => { Projectile.prototype.sendProjectile = send; });
+  method.start(bash, f.player);
+  assert.equal(bash.getAnimation?.()?.getId?.() ?? bash.animation?.getId?.(), 2101, "ogre_breath");
+  assert.equal(projectiles.length, 1);
+  const flob = projectiles[0];
+  assert.equal(flob.getProjectileId?.() ?? flob.projectileId, 397, "flob");
+  const hits = method.hits(bash, f.player);
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].getDelay?.() ?? hits[0].delay, 2, "lands 2 ticks after the breath");
+});
+
+test("zogres take a quarter of a hit, half from Crumble Undead and all of a brutal arrow (Wiki: Zogre, Slash Bash)", async (t) => {
+  const { CombatSpells, CombatType, Equipment, HitDamage, HitMask, Item } = h.core;
+  const f = actor(t, { at: [2484, 9445, 0], stage: S.GIVEN_KEY });
+  const bash = h.spawn(f, N.SLASH_BASH, [2479, 9445, 0]);
+  const zogre = h.spawn(f, N.ZOGRE, [2479, 9450, 0]);
+  const rolled = (target, combatType, hit = {}) => {
+    const damage = new HitDamage(15, HitMask.RED);
+    h.PM.emitCombatHitDamage({ attacker: f.player, target, combatType, hit, damage, accurate: true });
+    return damage.getDamage();
+  };
+  assert.equal(rolled(bash, CombatType.MELEE), 3);
+  assert.equal(rolled(zogre, CombatType.MELEE), 3);
+  const crumble = { getSpellContext: () => ({ spell: CombatSpells.CRUMBLE_UNDEAD }) };
+  assert.equal(rolled(bash, CombatType.MAGIC, crumble), 7);
+  const boosted = (target) => {
+    const damage = new HitDamage(20, HitMask.RED);
+    h.PM.emitCombatHitDamage({ attacker: f.player, target, combatType: CombatType.MAGIC, hit: crumble, damage, accurate: true });
+    return damage.getDamage();
+  };
+  assert.equal(boosted(zogre), 7, "a boosted Crumble Undead still tops out at the Zogre page's 7");
+  assert.equal(boosted(bash), 10, "Slash Bash's page gives 50% with no cap");
+  assert.equal(rolled(zogre, CombatType.MAGIC, { getSpellContext: () => ({ spell: CombatSpells.FIRE_BLAST }) }), 3);
+  f.player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(h.core.ItemIdentifiers.COMP_OGRE_BOW, 1));
+  f.player.getEquipment().setItem(Equipment.AMMUNITION_SLOT, new Item(h.core.ItemIdentifiers.RUNE_BRUTAL, 100));
+  assert.equal(rolled(bash, CombatType.RANGED), 15, "brutal arrows hit in full");
+  f.player.getEquipment().setItem(Equipment.AMMUNITION_SLOT, new Item(h.core.ItemIdentifiers.OGRE_ARROW, 100));
+  assert.equal(rolled(zogre, CombatType.RANGED), 3, "ogre arrows do not");
+  const plain = h.spawn(f, N.OGRE, [2479, 9455, 0]);
+  assert.equal(rolled(plain, CombatType.MELEE), 15, "other ogres are untouched");
+});
+
 // ------------------------------------------------------------------ The journal
 
 test("the journal reproduces the capture's two pages (ticks 777 and 1158)", () => {

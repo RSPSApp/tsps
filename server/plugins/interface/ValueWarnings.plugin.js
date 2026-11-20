@@ -16,7 +16,7 @@
  * warnings:".
  *
  *   hear "item:drop-warning" { player, item, itemId, slot, answered, warned, proceed(name) }
- *   hear "magic:alchemy-warning" { player, item, itemId, spellId, high, text }
+ *   hear "magic:alchemy-warning" { player, item, itemId, spellId, high, text, box }
  *   hear "npc-drops:roll" { player, npc, drops }
  *   hear "drops:received" { player, source, drops }: loot from anything but a kill (a key chest)
  */

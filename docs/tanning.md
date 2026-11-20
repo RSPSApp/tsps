@@ -17,6 +17,12 @@ areas, or need a members quest.
 
 ## After a tan
 
+The active revision-242 IF1 cache marks component 324:90 as the close button
+(`buttonType=3`); 324:91 is its hover layer. Closing clears the pending tanning context,
+so a queued Tan or entered amount cannot consume hides after the window closes.
+`server/tests/alkharid-services-native.test.cjs` finds the close button from the cache
+and drives its native widget packet after Ellis's Trade interaction.
+
 From rsprox captures 90, 91, 1104, 1846, 1857, 1858, 1862, 3276 and 3333. All of them are Leagues
 or event worlds, the only ones that recorded the tanner, and none shows a coins change in the
 inventory, so prices come from the Wiki:

@@ -4587,7 +4587,7 @@ export class OsrsClient {
     private runWidgetScopedClientScript(
         widgetUid: number,
         scriptId: number,
-        args: (number | string)[],
+        args: unknown[],
         phase: "pre" | "post" | "run_script",
     ): void {
         if (!this.cs2Vm || !this.widgetManager) return;
@@ -4595,10 +4595,12 @@ export class OsrsClient {
         if (!script) return;
 
         const intArgs: number[] = [];
-        const strArgs: string[] = [];
+        // Strings and array arguments (Cs2ArrayObject) both go on the object stack.
+        const strArgs: any[] = [];
         for (const arg of args ?? []) {
             if (typeof arg === "number") intArgs.push(arg | 0);
             else if (typeof arg === "string") strArgs.push(arg);
+            else if (arg !== null && typeof arg === "object") strArgs.push(arg);
         }
 
         const prevActiveWidget = this.cs2Vm.activeWidget;

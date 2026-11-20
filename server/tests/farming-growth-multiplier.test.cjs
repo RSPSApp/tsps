@@ -3,6 +3,7 @@
 // rewrites a farm; above 1 crops grow that many times faster, online and offline alike.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+const vm = require('node:vm');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 require('../dist/game/World');
@@ -126,4 +127,32 @@ test('a growth multiplier that is not a positive number counts as 1', (t) => {
         Model.setGrowthMultiplier(invalid);
         assert.equal(Model.growthDuration(5), 5 * Model.MINUTE, String(invalid));
     }
+});
+
+test('extreme imported growth rates cannot freeze the server between farming ticks', (t) => {
+    withRate(t, 1e16);
+    let clock = now;
+    t.mock.method(Date, 'now', () => clock);
+    vm.runInNewContext('tick()', { tick: Patches.tick }, { timeout: 1000 });
+    clock += 600;
+    vm.runInNewContext('tick()', { tick: Patches.tick }, { timeout: 1000 });
+    clock += 365 * 24 * 60 * Model.MINUTE;
+    vm.runInNewContext('tick()', { tick: Patches.tick }, { timeout: 1000 });
+});
+
+test('extreme growth is bounded by the millisecond clock, including produce regrowth', (t) => {
+    withRate(t, 1e16);
+    assert.equal(Model.growthDuration(1), 1);
+    assert.equal(require('../plugins/skills/Farming.plugin').config['Farming:growthMultiplier'].max, Model.MINUTE);
+    const crop = { ...Data.CACHE.timing.REDBERRIES, key: 'REDBERRIES' };
+    Data.CROPS.set(crop.key, crop);
+    const patch = Data.CACHE.patches.find(p => p.type === crop.type);
+    const farm = { offset: 0, patches: {}, tools: {} };
+    const state = { ...Model.emptyPatch(now, farm), crop: crop.key, stage: crop.stages, status: 'grown',
+        checked: true, lives: 0, nextAt: Model.nextGrowth(now, crop.regrow, farm.offset) };
+    farm.patches[Data.patchKey(patch)] = state;
+    const end = now + Model.MINUTE;
+    vm.runInNewContext('advance()', { advance: () => Model.advanceFarm(farm, end, () => 1) }, { timeout: 1000 });
+    assert.equal(state.lives, Model.startingLives(crop));
+    assert.ok(Number.isFinite(state.nextAt) && state.nextAt > end);
 });

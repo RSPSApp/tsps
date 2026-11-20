@@ -475,14 +475,16 @@ export function handleInboundWorld(msg: any): boolean {
         try {
             const g: any = (typeof window !== "undefined" ? window : globalThis) as any;
             const mv = g?.__osrsClient;
-            const payload = msg.payload as { scriptId: number; args: (number | string)[] };
+            const payload = msg.payload as { scriptId: number; args: unknown[] };
             const scriptId = payload.scriptId | 0;
             const script = mv?.cs2Vm?.context?.loadScript?.(scriptId);
             if (script) {
                 const intArgs: number[] = [];
-                const stringArgs: string[] = [];
+                // Strings and arrays (Cs2ArrayObject) both go on the object stack.
+                const stringArgs: any[] = [];
                 for (const arg of payload.args || []) {
                     if (typeof arg === "number") intArgs.push(arg | 0);
+                    else if (arg !== null && typeof arg === "object") stringArgs.push(arg);
                     else if (typeof arg === "string") stringArgs.push(arg);
                 }
                 mv.cs2Vm.run(script, intArgs, stringArgs);

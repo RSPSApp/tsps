@@ -4,6 +4,7 @@
 // lobby and countdown, the start, avatars, the obelisk, area control, deaths and barriers,
 // supplies, bones, activity and the end with Zeal.
 const assert = require('node:assert/strict');
+const vm = require('node:vm');
 const { test, before, beforeEach } = require('node:test');
 
 const { Server } = require('../dist/Server');
@@ -687,6 +688,27 @@ test('bots: with seeding on, a waiting player is joined by bots up to the minimu
   } finally {
     Bots.engine.create = create;
     Bots.engine.gear = gear;
+  }
+});
+
+test('an extreme imported lobby minimum cannot freeze bot seeding or exceed world capacity', () => {
+  config = { 'SoulWars:seedBots': true, 'SoulWars:minPlayers': 1e16 };
+  const capacity = core.World.getPlayers().capacityReturn() - 1;
+  assert.equal(Lobby.minPlayers(), capacity);
+  assert.equal(require('../plugins/minigames/SoulWars.plugin').config['SoulWars:minPlayers'].max, capacity);
+  let attempts = 0;
+  const create = Bots.engine.create;
+  Bots.engine.create = () => { attempts++; return null; };
+  try {
+    online.push(fakePlayer());
+    vm.runInNewContext('tick()', { tick: Lobby.tick }, { timeout: 1000 });
+    assert.equal(attempts, capacity - 1, 'failed spawns also stop after the bounded number of attempts');
+    config['SoulWars:minPlayers'] = Infinity;
+    assert.equal(Lobby.minPlayers(), Common.data.minPlayers);
+    config['SoulWars:minPlayers'] = 4.9;
+    assert.equal(Lobby.minPlayers(), 4);
+  } finally {
+    Bots.engine.create = create;
   }
 });
 

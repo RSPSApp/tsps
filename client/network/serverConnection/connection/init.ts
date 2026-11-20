@@ -1,3 +1,4 @@
+import { getSelectedWorld } from "../outgoing/connectionInfo";
 import { assertDesktopWorldCompatible } from "../../../desktop";
 import { resetProtocolCompatibility, startWelcomeTimer, receiveProtocolGreeting, isProtocolRejected } from "../protocolCompatibility";
 import { replaceCustomDefinitions } from "../../../custom/definitions/CustomDefinitionStore";
@@ -108,16 +109,17 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
             if (wasReconnecting && state.sessionUsername && state.sessionPassword) {
                 if (typeof window !== "undefined" && window.__RSPS_DESKTOP_PROFILE__) {
                     try {
-                        await assertDesktopWorldCompatible({ address: new URL(url).host, secure: url.startsWith("wss:"),
-                            transport: state.webRtcConfig ? "webrtc" : "websocket", signalUrl: state.webRtcConfig?.signalUrl,
-                            worldId: state.webRtcConfig?.worldId, iceServers: state.webRtcConfig?.iceServers });
+                        await assertDesktopWorldCompatible(getSelectedWorld());
                     } catch (error) {
                         if (state.socket !== ws) return;
                         const g = window as any;
                         g[WS_SUPPRESS_RECONNECT_KEY] = true;
-                        state.sessionUsername = null; state.sessionPassword = null; state.hasLoggedIn = false;
+                        state.sessionUsername = null;
+                        state.sessionPassword = null;
+                        state.hasLoggedIn = false;
                         ws.close(4003, "client version changed");
-                        for (const cb of state.loginResponseListeners) cb({ success: false, error: error instanceof Error ? error.message : "Could not check client compatibility" });
+                        const message = error instanceof Error ? error.message : "Could not check client compatibility";
+                        for (const cb of state.loginResponseListeners) cb({ success: false, error: message });
                         return;
                     }
                     if (state.socket !== ws || !state.sessionUsername || !state.sessionPassword) return;

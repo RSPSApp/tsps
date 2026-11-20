@@ -7,7 +7,7 @@ import { initServerConnection } from "./connection/init";
 import { send } from "./connection/send";
 import { state } from "./state";
 import type { GameSocket } from "./connection/GameSocket";
-import { resolveServerTransport } from "./outgoing/connectionInfo";
+import { getSelectedWorld, resolveServerTransport } from "./outgoing/connectionInfo";
 import { encodeClientMessage } from "../packet/ClientBinaryEncoder";
 
 export function setAutoSendHandshake(auto: boolean): void {
@@ -53,18 +53,17 @@ export async function sendLogin(
     revision: number = 0,
     flags: number = 0,
 ): Promise<void> {
+    const attemptId = ++state.loginConnectAttemptId;
     if (typeof window !== "undefined" && window.__RSPS_DESKTOP_PROFILE__) {
-        const attempt = ++state.loginConnectAttemptId;
-        const target = { address: new URL(state.lastUrl).host, secure: state.lastUrl.startsWith("wss:"),
-            transport: state.webRtcConfig ? "webrtc" as const : "websocket" as const,
-            signalUrl: state.webRtcConfig?.signalUrl, worldId: state.webRtcConfig?.worldId, iceServers: state.webRtcConfig?.iceServers };
-        try { await assertDesktopWorldCompatible(target); }
-        catch (error) {
-            if (attempt !== state.loginConnectAttemptId) return;
-            for (const cb of state.loginResponseListeners) cb({ success: false, error: error instanceof Error ? error.message : "Could not check client compatibility" });
+        try {
+            await assertDesktopWorldCompatible(getSelectedWorld());
+        } catch (error) {
+            if (attemptId !== state.loginConnectAttemptId) return;
+            const message = error instanceof Error ? error.message : "Could not check client compatibility";
+            for (const cb of state.loginResponseListeners) cb({ success: false, error: message });
             return;
         }
-        if (attempt !== state.loginConnectAttemptId) return;
+        if (attemptId !== state.loginConnectAttemptId) return;
     }
     // Store credentials for session resumption on reconnect
     state.sessionUsername = username;
@@ -73,7 +72,6 @@ export async function sendLogin(
     state.sessionLoginFlags = flags;
     state.loginExtension?.loginAttempt();
     state.loginOnWelcome = null;
-    const attemptId = ++state.loginConnectAttemptId;
     if (state.webRtcConfig && !await resolveServerTransport()) return;
     if (attemptId !== state.loginConnectAttemptId) return;
 

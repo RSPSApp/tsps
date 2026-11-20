@@ -168,7 +168,7 @@ jobs:
                       else
                           name=$(gh release view "client-$client_build" --json name --jq .name)
                           reserved=${name#Web client }
-                          node -e 'if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(process.argv[1])) throw Error("Invalid draft version")' "$reserved"
+                          REQUESTED_VERSION="$reserved" node .github/scripts/client-release/release-version.mjs </dev/null
                           echo "CLIENT_VERSION=$reserved" >> "$GITHUB_ENV"
                           echo "CLIENT_DRAFT_EXISTS=true" >> "$GITHUB_ENV"
                       fi

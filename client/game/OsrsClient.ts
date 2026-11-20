@@ -4453,6 +4453,7 @@ export class OsrsClient {
      * (varbit 4100 at 0) the list asks first; then the client logs out and connects there.
      */
     private desktopWorldSwitchAttempt = 0;
+
     private async switchToServer(index: number, confirmed: boolean): Promise<void> {
         const attempt = ++this.desktopWorldSwitchAttempt;
         const server = this.loginRenderer.serverList[index];
@@ -4475,9 +4476,11 @@ export class OsrsClient {
 
         if (!server) return;
         if (window.__RSPS_DESKTOP_PROFILE__) {
-            try { await assertDesktopWorldCompatible(server); }
-            catch (error) {
-                if (attempt === this.desktopWorldSwitchAttempt) this.addGameMessage(error instanceof Error ? error.message : "Could not check client compatibility");
+            try {
+                await assertDesktopWorldCompatible(server);
+            } catch (error) {
+                if (attempt !== this.desktopWorldSwitchAttempt) return;
+                this.addGameMessage(error instanceof Error ? error.message : "Could not check client compatibility");
                 return;
             }
             if (attempt !== this.desktopWorldSwitchAttempt) return;

@@ -34,10 +34,11 @@ update-signing private key; `CLIENT_UPDATE_SIGNING_KEY_PASSWORD` is optional.
 The matching public verification key is in `client-update.pub`. Private keys must
 never be committed. Keep a protected backup: installed clients trust this key.
 
-Installed clients use this feed:
+Desktop launchers read `clientVersion` from their world's `/api/world-info` and
+fetch that exact release:
 
 ```
-https://github.com/RSPSApp/tsps/releases/latest/download/manifest.json
+https://github.com/RSPSApp/tsps/releases/download/client-<clientVersion>/manifest.json
 ```
 
 New releases use immutable `client-<clientVersion>` URLs, where `clientVersion` is

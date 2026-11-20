@@ -1,7 +1,7 @@
 import { clearLoginConnectRetryTimer } from "../connection/loginHelpers";
 import { resetProtocolCompatibility } from "../protocolCompatibility";
 import { send } from "../connection/send";
-import { getBrowserHostWorldConfig } from "../../../config/clientEnv";
+import { type ConfiguredServer, getBrowserHostWorldConfig } from "../../../config/clientEnv";
 import { state } from "../state";
 import type { WebRtcConnectionConfig } from "../connection/GameSocket";
 import { discoverRelayWorlds } from "../../../game/login/renderer/serverList";
@@ -17,6 +17,16 @@ export function isServerConnected(): boolean {
 
 export function getLastUrl(): string {
     return state.lastUrl;
+}
+
+export function getSelectedWorld(): Omit<ConfiguredServer, "name" | "maxPlayers"> {
+    const url = new URL(state.lastUrl);
+    return {
+        address: url.host,
+        secure: url.protocol === "wss:",
+        transport: state.webRtcConfig ? "webrtc" : "websocket",
+        ...state.webRtcConfig,
+    };
 }
 
 export function setServerUrl(url: string, webRtcConfig?: WebRtcConnectionConfig | null): void {

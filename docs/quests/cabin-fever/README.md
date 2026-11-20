@@ -24,8 +24,8 @@ Ticks are the capture's. The Wiki wins on wording it states; the capture decides
 Wiki leaves out.
 
 - **Quest varp 655** moves 10 when an objective's own action finishes, and Bill moves the next
-  10 when he is told: 30→40 when the barrel blows (976), 50→60 on the last waterproofed hole
-  (1193), 70→80 when the tenth plunder is stored (1667), 90→100 when the new barrel is on
+  10 when he is told: 30→40 when the barrel blows (976), 50→60 three ticks after the last
+  waterproofed hole (1193→1196), 70→80 when the tenth plunder is stored (1667), 90→100 when the new barrel is on
   (1785), and 110→120 on the canister hit (1917). Bill's talks give 50, 70, 90, 110 and 130.
   The completion is 140 (2302). Bill on the port ship is NPC 4013, a multi-NPC on varp 655:
   4011 from 10 to 139 and 4016 at 140.
@@ -36,7 +36,7 @@ Wiki leaves out.
   its open loc (11247, 11249: Search, Close), and Search opens the IF1 modal
   `quest_fever_repair_locker` (502) or `quest_fever_gun_locker` (501). Each press gives one
   item: a coil of rope, a hammer, 10 tacks, 2 repair planks (7148, refused at 6 with "You already
-  have enough Repair Planks."), a load of swamp paste, some fuse, a Ramrod, a canister round
+  have enough Repair Planks."; the Wiki says the other supplies stop at what is needed too), a load of swamp paste, some fuse, a Ramrod, a canister round
   (7149) or a cannon ball. While sinking the ship the canister button answers "You do not need
   a canister round right now." (1997).
 - **Net and swing:** Climb plays `human_reachforladder` (828); two ticks later comes "You climb
@@ -97,7 +97,8 @@ Wiki leaves out.
 - **fixed** Varp 655 skipped live's objective-done steps (40, 60, 80, 100, 120). After a relog
   it fell back to the step before them.
 - **fixed** The lockers handed out the whole stage kit at once; they now open, then show their
-  item interfaces, and each press gives one item.
+  item interfaces, and each press gives one item (buttons answer only while the modal is open;
+  rope stops at four, hammer at one, tacks and paste at what the open holes need).
 - **fixed** `fever_cannon_clean` was held the other way up. It was also set on arrival and on
   repair, and the fuse set `fever_cannon_fuse`. Old saves are flipped once at login.
 - **fixed** Three canister hits were required; live and the Wiki's guide take one.
@@ -125,6 +126,6 @@ Wiki leaves out.
   varbits are cleared, and 1763 = 1.
 - **Not checked:** the tinderbox floor pickup in game (the focused test covers it), the
   10,000-coin claim, the post-quest lifts and teleporting out of the battle.
-- **Focused tests:** `node --test tests/qh728-q009.test.cjs`: 19/19.
+- **Focused tests:** `node --test tests/qh728-q009.test.cjs`: 21/21.
 
 Tracked in issue [#728](https://github.com/RSPSApp/tsps/issues/728) (q009); PR [#6312](https://github.com/RSPSApp/tsps/pull/6312), dialogue dump [osrsreboxed-db#129](https://github.com/RSPSApp/osrsreboxed-db/pull/129).

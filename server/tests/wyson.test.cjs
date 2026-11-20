@@ -39,7 +39,7 @@ function slotted(ids) {
             getItems: () => items,
             getFreeSlots: () => items.filter((item) => !item).length,
             getAmount: (id) => items.filter((item) => item?.getId() === id).length,
-            setItem: (slot, item) => { items[slot] = item; },
+            deleteAtSlot: (slot) => { items[slot] = null; },
             add: (item) => { const slot = items.findIndex((each) => !each); if (slot >= 0) items[slot] = item; },
             refreshItems: () => { p.refreshed++; },
         }),
@@ -114,15 +114,22 @@ test('mole parts in the inventory open with the trade; an immaculate skin with i
     assert.equal(pick([MOLE_CLAW], 1), null, 'another NPC');
 });
 
-test('each claw or skin becomes a nest in its own slot', (t) => {
-    const p = slotted([COINS, MOLE_CLAW, MOLE_SKIN, WOAD_LEAF, MOLE_SKIN]);
+test('the parts come out and the nests fill the first free slots, as live', () => {
+    // rsprox capture local 1000323, tick 13641: parts in 17, 18, 20, 24, 25, 26 with 14, 15, 21-23
+    // and 27 free; the nests land in 14, 15, 17, 18, 20, 21 and 24-26 are cleared.
+    const layout = Array(28).fill(COINS);
+    for (const slot of [14, 15, 21, 22, 23, 27]) layout[slot] = null;
+    for (const slot of [17, 20, 25]) layout[slot] = MOLE_CLAW;
+    for (const slot of [18, 24, 26]) layout[slot] = MOLE_SKIN;
+    const p = slotted(layout);
     const event = { npcId: WYSON, pages, stepId: 'T0rsOq', player: p };
     action(event);
     assert.equal(event.handled, true);
     const ids = p.ids();
-    assert.deepEqual([ids[0], ids[3]], [COINS, WOAD_LEAF]);
-    for (const slot of [1, 2, 4]) assert.ok(NESTS.has(ids[slot]), `slot ${slot}: ${ids[slot]}`);
-    assert.equal(ids.filter((id) => id !== null).length, 5);
+    const nestSlots = ids.flatMap((id, slot) => (NESTS.has(id) ? [slot] : []));
+    assert.deepEqual(nestSlots, [14, 15, 17, 18, 20, 21]);
+    assert.deepEqual([ids[24], ids[25], ids[26]], [null, null, null]);
+    assert.equal(ids.filter((id) => id === COINS).length, 16, 'nothing else moves');
     assert.equal(p.refreshed, 1);
     assert.deepEqual(p.messages, []);
 });
@@ -133,10 +140,11 @@ test('an immaculate skin gives five nests; without room for them it stays', () =
     assert.equal(p.ids().filter((id) => NESTS.has(id)).length, 6);
     assert.equal(p.getInventory().getAmount(IMMACULATE_MOLE_SKIN), 0);
 
-    const full = slotted([IMMACULATE_MOLE_SKIN, MOLE_CLAW, ...Array(24).fill(COINS)]); // 2 free slots
+    const full = slotted([IMMACULATE_MOLE_SKIN, MOLE_CLAW, ...Array(23).fill(COINS)]); // 3 free slots
     action({ npcId: WYSON, pages, stepId: 'XwNH58', player: full });
     assert.equal(full.ids()[0], IMMACULATE_MOLE_SKIN);
     assert.ok(NESTS.has(full.ids()[1]), 'the claw is still traded');
+    assert.equal(full.ids().filter((id) => NESTS.has(id)).length, 1);
     assert.deepEqual(full.messages, ["You don't have enough inventory space."]);
 });
 

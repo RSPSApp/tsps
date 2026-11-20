@@ -14,9 +14,10 @@ Code: `server/plugins/npcs/Wyson.plugin.js` (the trade) and
   skin with you, ...". The trade is the variants' action step (`T0rsOq`, `XwNH58`).
 - rsprox capture local 1000323 (revision 227), ticks 13633-13641: Talk-to, the opening
   line, the three-option menu, the player's "Okay, I will trade the mole parts.", and on
-  its continue the inventory update puts the nests in the parts' own slots and the chat
-  closes. That capture is a Leagues world: its `league_mole_claws_traded` varbit and the
-  part count are Leagues-only and not reproduced.
+  its continue the parts (3 claws, 3 skins) come out and six nests fill the first free
+  slots (14, 15, 17, 18, 20, 21; 24-26 cleared), and the chat closes. That capture is a
+  Leagues world: only its `league_mole_claws_traded` varbit (0 -> 3, the claws traded) is
+  Leagues-only and not reproduced; the part count is the Wiki's one nest per part.
 
 ## Wyson seed nest (`bird_nest_decentseeds_jan2019`, 22800)
 

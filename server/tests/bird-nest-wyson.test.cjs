@@ -77,3 +77,21 @@ test('a regular seed nest names the magic seed as live does', (t) => {
   assert.equal(p.getInventory().getAmount(ids.MAGIC_SEED), 1);
   assert.deepEqual(spam, ["You take a Magic Tree seed out of the bird's nest."]);
 });
+
+test('a real inventory: Wyson takes the parts out and the nests fill the first free slots', (t) => {
+  const { p } = searcher(t);
+  const ids = core.ItemIdentifiers;
+  const inventory = p.getInventory();
+  // rsprox capture local 1000323, tick 13641: a coin in slot 0, slot 1 free, a claw in slot 2.
+  inventory.add(new core.Item(ids.COINS, 5), true);
+  inventory.add(new core.Item(ids.MOLE_CLAW, 1), true);
+  inventory.add(new core.Item(ids.MOLE_CLAW, 1), true);
+  inventory.deleteAtSlot(1, 1, true);
+  const event = { player: p, npcId: core.NpcIdentifiers.WYSON_THE_GARDENER, pages: [{ page: 'Wyson the gardener' }], stepId: 'T0rsOq', handled: false };
+  PM.emitCustomEvent('npc-dialogue:action', event);
+  assert.equal(event.handled, true);
+  const nests = new Set([ids.BIRD_NEST_12, ids.BIRD_NEST_5, ids.BIRD_NEST_6]);
+  assert.ok(nests.has(inventory.getItems()[1].getId()), 'the nest takes the first free slot');
+  assert.ok(!inventory.isSlotOccupied(2), 'the claw\'s slot is cleared');
+  assert.equal(inventory.getAmount(ids.MOLE_CLAW), 0);
+});

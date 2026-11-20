@@ -7,8 +7,8 @@
  * inventory he opens with the trade, and with an immaculate mole skin he adds the extra-nests
  * line. Each claw or skin becomes one nest, each immaculate skin five; every nest is a Wyson seed
  * nest (72%), a ring nest (20%) or an empty nest (8%). As live, the trade happens when the
- * player's "Okay, I will trade the mole parts." is continued, the nests take the parts' own slots
- * and the chat closes (rsprox capture local 1000323, tick 13641).
+ * player's "Okay, I will trade the mole parts." is continued, the parts come out, the nests fill
+ * the first free slots and the chat closes (rsprox capture local 1000323, tick 13641).
  */
 const PAGE = "Wyson the gardener";
 const MOLE_PARTS_VARIANT = "standard-dialogue-talking-to-wyson-with-mole-parts-in-inventory";
@@ -63,23 +63,23 @@ function tradeMoleParts(core, event) {
   event.handled = true;
   const inventory = event.player.getInventory();
   const { parts, immaculate } = moleParts(core);
-  // An immaculate skin's four extra nests need free slots of their own. Ours: one with no room
-  // stays (live hands out nest boxes instead, not implemented).
-  let room = inventory.getFreeSlots();
-  let skipped = false;
   const items = inventory.getItems();
-  for (let slot = 0; slot < items.length; slot++) {
-    const id = items[slot]?.getId?.() ?? -1;
-    if (!parts.has(id) && id !== immaculate) continue;
-    if (id === immaculate) {
-      if (room < IMMACULATE_NESTS - 1) { skipped = true; continue; }
-      room -= IMMACULATE_NESTS - 1;
-    }
-    inventory.setItem(slot, new core.Item(rollNest(core), 1));
-    if (id === immaculate) for (let n = 1; n < IMMACULATE_NESTS; n++) inventory.add(new core.Item(rollNest(core), 1), false);
-  }
+  const partSlots = [];
+  const immaculateSlots = [];
+  items.forEach((item, slot) => {
+    const id = item?.getId?.() ?? -1;
+    if (parts.has(id)) partSlots.push(slot);
+    else if (id === immaculate) immaculateSlots.push(slot);
+  });
+  // Each immaculate skin's nests need four slots beyond its own. Ours: skins with no room stay
+  // (live hands out nest boxes instead, not implemented).
+  const traded = immaculateSlots.slice(0, Math.floor(inventory.getFreeSlots() / (IMMACULATE_NESTS - 1)));
+  // Live takes the parts out, then the nests fill the first free slots.
+  for (const slot of [...partSlots, ...traded]) inventory.deleteAtSlot(slot, 1, false);
+  const nests = partSlots.length + traded.length * IMMACULATE_NESTS;
+  for (let n = 0; n < nests; n++) inventory.add(new core.Item(rollNest(core), 1), false);
   inventory.refreshItems();
-  if (skipped) event.player.sendMessage(NO_ROOM_MESSAGE);
+  if (traded.length < immaculateSlots.length) event.player.sendMessage(NO_ROOM_MESSAGE);
 }
 
 function dialogueCondition(core, event) {

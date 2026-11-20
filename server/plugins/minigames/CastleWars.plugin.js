@@ -9,6 +9,10 @@ module.exports = {
   name: "CastleWars",
   description: "Adds the Castle Wars team minigame, with its shared match state and one unit for each part of the game.",
   config: {
+    "CastleWars:legacyBotPrompt": {
+      type: "boolean", label: "Show the legacy Castle Wars bot prompt", default: false,
+      help: "Compatibility option for private worlds. Leave off for normal OSRS portal entry; Lanthus practice is still available.",
+    },
     "CastleWars:seedBots": {
       type: "boolean", label: "Seed Castle Wars with bots", default: false,
       help: "Development aid: fills the lobby with bots. Leave off so production lobbies are players only.",

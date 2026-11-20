@@ -12,6 +12,7 @@ const { registerBotEvents } = require("./runtime/RegisterBotEvents.PlayerBots");
 const { registerPvpChatter } = require("./behaviours/pvp/PvpChatter.PlayerBots");
 const { createBotPluginLogging } = require("./runtime/PluginLogging.PlayerBots");
 const { bootPlayerBotsRuntime } = require("./runtime/PluginBoot.PlayerBots");
+const { STARTUP_ROUTINES_KEY, registerStartupRoutines } = require("./runtime/StartupRoutines.PlayerBots");
 const { createBotBenchmark } = require("./runtime/Benchmark.PlayerBots");
 const { startBotSites } = require("./brain/SiteSpawner.PlayerBots");
 const { setActiveBotRuntime } = require("./runtime/RuntimeRegistry.PlayerBots");
@@ -191,7 +192,6 @@ const BOT_CONFIG = Object.freeze({
     ]),
   }),
 });
-
 /** Scripted bots accept every duel; AI bots aren't scripted, so they are left out. */
 function isScriptedBot(player) {
   return player?.isPlayerBot?.() === true && player.getAttribute?.(AI_BOT_ATTRIBUTE) !== true;
@@ -212,6 +212,7 @@ function registerDuelBotAcceptance(api) {
   });
 }
 
+
 module.exports = {
   name: "PlayerBots",
   description: "Populates the world with player bots: PvP-loadout fighters and optional AI chat bots, with admin commands to manage them.",
@@ -219,6 +220,10 @@ module.exports = {
     "PlayerBots:allowedActivities": {
       type: "json", label: "Bot activities allowed", defaultText: "Every activity",
       help: "A list of the activities bots may be spawned for; any other spawn is refused, e.g. [\"bounty-hunter\", \"last-man-standing\"]. Activities: world (the world's own population: Wilderness roamers and the bot sites), ai, bounty-hunter, last-man-standing, castle-wars, soul-wars, pest-control, developer (bot commands, the benchmark, --stressTest).",
+    },
+    [STARTUP_ROUTINES_KEY]: {
+      type: "json", label: "Start bot routines on boot", defaultText: "No additional startup deployments",
+      help: "List registered routine IDs and counts, e.g. [{\"id\":\"varrock_patrol\",\"count\":2}]. Uses the same routine, start setup and optional environment caps as manual deployment.",
     },
     "PlayerBots:ai": {
       type: "json", label: "AI bots", defaultText: "AI bots off (3 bots when enabled)",
@@ -263,6 +268,7 @@ module.exports = {
       config: BOT_CONFIG,
     });
     setActiveBotRuntime(boot.runtime, BOT_CONFIG.behaviorMode, boot.brainRegistry);
+    registerStartupRoutines(api, boot);
 
     createBotBenchmark({
       api,
@@ -303,7 +309,7 @@ module.exports = {
       brainRegistry: boot.brainRegistry,
     });
 
-    const aiRuntime = registerAiBots({
+    registerAiBots({
       api,
       botApi,
       runtime: boot.runtime,
@@ -311,7 +317,6 @@ module.exports = {
       world: boot.brainWorld,
       resetMovementState,
     });
-    boot.brainRegistry.aiAgentAvailable = typeof aiRuntime?.getAiGraphAgent === "function";
 
     registerBotEvents({
       api,

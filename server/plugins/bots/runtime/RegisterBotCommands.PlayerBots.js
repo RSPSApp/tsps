@@ -13,6 +13,7 @@ const {
 const { registerBotControlCommands } = require("./Control.PlayerBots");
 const { validateSpawnSetup, applySpawnSetup } = require("./SpawnSetup.PlayerBots");
 const { registerBotsInterface } = require("../interface/Bots.PlayerBots");
+const { isDeployableRoutine } = require("./RoutineCatalog.PlayerBots");
 
 function registerBotCommands(options) {
   registerBotControlCommands(options);
@@ -53,6 +54,8 @@ function registerBotCommands(options) {
     ) {
       return brainRegistry.byId?.get("follow_owner") ?? null;
     }
+    const concrete = brainRegistry.byId?.get(requested);
+    if (concrete?.codeDefined) return concrete;
     const mode = requested;
     return (
       brainRegistry.activities?.find((activity) => activity.mode === mode) ?? null
@@ -143,8 +146,9 @@ function registerBotCommands(options) {
     const loc = setup?.location;
     const spawn = loc ? new core.Location(loc.x, loc.y, loc.z) : player.getLocation();
     const bot = runtime.spawnPvpBot(spawn, {
-      mode: activity?.mode ?? normalizedBehavior,
+      mode: activity?.usesPvpEngine ? behaviorMode.PVP : activity?.mode ?? normalizedBehavior,
       activity: "developer",
+      activationId: isDeployableRoutine(activity) ? activity.id : undefined,
     });
     if (!bot) {
       player.sendMessage("Unable to spawn a bot right now.");

@@ -5,7 +5,6 @@ const { createPageServer, reloadCertificate, watchCertificate } = require("./wor
 const { createRequestHandler, HttpError, send } = require("./worldadmin/Http.WorldAdmin");
 const { playerRoutes } = require("./worldadmin/Players.WorldAdmin");
 const { botRoutes } = require("./worldadmin/Bots.WorldAdmin");
-const { botEditorRoutes } = require("./worldadmin/BotEditor.WorldAdmin");
 const { readPluginZip, downloadPluginRelease, savePluginZip, deletePluginZip } = require("./worldadmin/PluginZip.WorldAdmin");
 
 // The world config page's own HTTP listener (spec "Saving", "Restart", "Access").
@@ -320,7 +319,6 @@ const actions = {
       send(response, 302, "", { Location: "/?view=bots&edit=1" });
       return true;
     }
-    if (await botEditorRoutes(request, response, url)) return true;
     if (await botRoutes(request, response, url, pluginApi)) return true;
     return playerRoutes(request, response, url, pluginApi);
   },

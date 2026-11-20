@@ -13,6 +13,7 @@ const PAGE_FILE = path.join(PANEL_DIRECTORY, "page.html");
 const PANEL_ASSETS = new Map([
   ["panel.js", "application/javascript; charset=utf-8"],
   ["panel.css", "text/css; charset=utf-8"],
+  ["bot-management.js", "application/javascript; charset=utf-8"],
   ["skill-icons.json", "application/json; charset=utf-8"],
   // The game client's icons (client/public/favicon), so the page's tab matches the game's.
   ["favicon.svg", "image/svg+xml"],
@@ -171,6 +172,14 @@ function createRequestHandler(access, actions, worldSettingKeys) {
       if (method !== "GET") throw new HttpError(405, "Method not allowed");
       sendPage(response);
       return;
+    }
+    if (["/bot-editor", "/bot-workflows", "/bot-graph"].includes(url.pathname)) {
+      if (method !== "GET") throw new HttpError(405, "Method not allowed");
+      send(response, 302, "", { Location: "/?view=bots" });
+      return;
+    }
+    if (["/api/bot-editor", "/api/bot-editor-validate", "/api/bot-editor-search"].includes(url.pathname)) {
+      throw new HttpError(410, "Visual routine editing was retired. Register routines and deployment presets in a server plugin.");
     }
     if (method === "GET" && url.pathname.startsWith("/panel/")) {
       const file = url.pathname.slice("/panel/".length);

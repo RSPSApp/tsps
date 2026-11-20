@@ -28,6 +28,24 @@ const {
   gateFor, gateClosed, gateOpen, repairerPost, optionIndex, trackProgress, insideFort, GATES, STUCK_TIMEOUT_MS, REPAIR_LOGS,
 } = Bots._test;
 
+test('a Pest Control plan respects lander capacity including pending bots', () => {
+  const wrongBoat = { getAttribute: () => 'veteran' };
+  const pending = { getAttribute: () => 'novice' };
+  const state = { boat: { key: 'novice' }, queue: Array.from({ length: 23 }, () => ({})) };
+  const world = { getPlayers: () => [wrongBoat, pending], getRemovePlayerQueue: () => [], getAddPlayerQueue: () => [pending] };
+  const refused = plugin._test.deployLanderBots(world, state, 2, () => assert.fail('lander is full'), () => {});
+  assert.equal(refused.status, 409);
+  const tracked = [];
+  let rolls = 0;
+  const admitted = plugin._test.deployLanderBots(world, state, 1, (lander, checkAdmission) => {
+    assert.equal(lander, state);
+    assert.equal(checkAdmission, true);
+    return ++rolls === 1 ? null : { getUsername: () => 'planbot' };
+  }, bot => tracked.push(bot.getUsername()));
+  assert.deepEqual(admitted, { ok: true, spawned: ['planbot'] });
+  assert.deepEqual(tracked, ['planbot']);
+});
+
 const GAME_START = new Location(2657, 2611, 0);
 const KNIGHT = new Location(2656, 2592, 0);
 const SHIELD_ORDER = ["blue", "red", "yellow", "purple"];

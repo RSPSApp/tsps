@@ -47,24 +47,37 @@ const equipmentRenderLayer = (slot: EquipmentSlot): number => {
     if (slot === EquipmentSlot.BODY || slot === EquipmentSlot.LEGS || slot === EquipmentSlot.BOOTS) {
         return LEGS_RENDER_LAYER;
     }
-    if (slot === EquipmentSlot.AMULET) return 4;
+    if (slot === EquipmentSlot.AMULET) return 5;
     return 7;
 };
 
 // A cape keeps its own face order instead of one flat layer, which let its back show through the
 // emblem. Faces at the legs' priorities (0-2, the lining) share the legs' layer so the legs stay
-// in front of them; the lowest priority above that (a skillcape's back, 5) goes one layer under
-// the rest (its outer faces and emblem, 6-7).
+// in front of them. Higher-priority cape faces use up to three distinct layers so the outer cloth
+// and emblem retain their cache ordering instead of z-fighting when their view angle changes.
 const CAPE_COMPOSITION_SLOT = 1;
 const LEG_KIT_TOP_PRIORITY = 2;
-
 const capeLayerByPriority = (priorities: ArrayLike<number>): Map<number, number> => {
     const distinct = [...new Set(Array.from(priorities))];
-    const upper = distinct.filter((priority) => priority > LEG_KIT_TOP_PRIORITY);
-    const back = upper.length > 1 ? Math.min(...upper) : undefined;
+    const upper = distinct
+        .filter((priority) => priority > LEG_KIT_TOP_PRIORITY)
+        .sort((a, b) => a - b);
+    const upperLayers = new Map<number, number>();
+    // With three priority groups, leave a two-band bias gap between the outer cloth and
+    // the panel, while keeping the cache's 5 < 6 < 7 order. This gives priority 6 a 0.03
+    // margin over priority 5 (more than the old 0.025 margin) and keeps priority-7 emblems,
+    // such as Icthlarin's shroud, above the panel. Layer 4 also stays below the amulet at 5.
+    const firstUpperLayer = upper.length === 3 ? 4 : upper.length >= 3 ? 5 : upper.length === 2 ? 6 : 7;
+    upper.forEach((priority, index) => upperLayers.set(
+        priority,
+        upper.length === 1
+            ? 7
+            : Math.round(firstUpperLayer + (index * (7 - firstUpperLayer)) / (upper.length - 1)),
+    ));
+
     return new Map(distinct.map((priority) => [
         priority,
-        priority <= LEG_KIT_TOP_PRIORITY ? LEGS_RENDER_LAYER : priority === back ? 6 : 7,
+        priority <= LEG_KIT_TOP_PRIORITY ? LEGS_RENDER_LAYER : upperLayers.get(priority)!,
     ]));
 };
 
@@ -218,7 +231,7 @@ export class PlayerModelLoader {
         // layer apart, but the overlay can be a model-unit behind the shirt surface. One layer of
         // depth bias (~0.015) then barely clears it, so the overlay z-fights and flickers as the
         // camera/animation shifts. Spread the torso's distinct priorities across 0..3 so each step
-        // gets a real depth margin while staying under the amulet's layer (4).
+        // gets a real depth margin while staying under the amulet's layer (5).
         const torsoFaceRanges: number[][] = [];
         {
             let off = 0;

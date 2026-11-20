@@ -244,6 +244,22 @@ function quickExit(event) {
   return true;
 }
 
+/**
+ * Check-Count on a lair's gate (only Bryophyta's has the option): the chests opened, the gate locked
+ * or not. Live sent it twice in the same tick, a game message and the mesbox's own chat line, then the
+ * mesbox (rsprox captures: rec 3275 tick 21841, "a total of 0 times").
+ * Ours: the singular wording at 1 was not recorded; the recorded template is kept.
+ */
+function checkCount(event) {
+  const lair = lairBy("gates", event.objectId);
+  if (!lair?.messages.checkCount) return false;
+  const { player } = event;
+  const text = lair.messages.checkCount.replace("{count}", String(count(player, lair)));
+  player.sendMessage(text);
+  player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, text)));
+  return true;
+}
+
 /** "Open" on any gate: a lair's way in, or its way out. */
 function gate(event) {
   return openGate(event) || exitLair(event);
@@ -365,7 +381,7 @@ function attach(pluginApi) {
   core = pluginApi.core;
   for (const key of [...Object.values(UNLOCKED_ATTRIBUTE), ...Object.values(CHESTS_ATTRIBUTE)]) pluginApi.persistAttribute(key);
   pluginApi.onPlayerLogin(restore);
-  pluginApi.onObjectInteraction("Gate", { Open: gate, "Quick-exit": quickExit });
+  pluginApi.onObjectInteraction("Gate", { Open: gate, "Check-Count": checkCount, "Quick-exit": quickExit });
   pluginApi.onObjectInteraction("Rock Pile", { Clamber: exitLair, "Quick-exit": quickExit });
   pluginApi.onObjectInteraction("Chest", { Open: openChest });
   pluginApi.onNpcDeath(onBossDeath);
@@ -374,6 +390,6 @@ function attach(pluginApi) {
 
 module.exports = attach;
 Object.assign(module.exports, {
-  sessionOf, sessionForNpc, gate, openGate, exitLair, quickExit, openChest, onBossDeath, restore,
+  sessionOf, sessionForNpc, gate, openGate, checkCount, exitLair, quickExit, openChest, onBossDeath, restore,
   collectionLogCount, enter, leave,
 });

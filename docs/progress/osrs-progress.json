@@ -27933,7 +27933,7 @@
           ],
           "devNotes": [
             "PR #364 (ca75ee27): instanced per-player lair behind the key-locked gate (captured questions, warning and fade), lair music, ask-first and quick exits; leaving, teleporting, dying or logging out ends the lair. The chest rolls the Wiki table once per kill using the key, keeps the kill count (varps 1529/1733) and feeds the collection log; the first click after a kill respawns the boss 15 ticks later.",
-            "Bryophyta: melee with poison and the earth blast; growthlings (1/5, one batch at a time, 20 ticks apart) make her immune and die only to an axe or magic secateurs; the logs' bronze axe. Her open-world spawn is removed. Not modelled: the gate's Check-Count option, Combat Achievements, F2P tables.",
+            "Bryophyta: melee with poison and the earth blast; growthlings (1/5, one batch at a time, 20 ticks apart) make her immune and die only to an axe or magic secateurs; the logs' bronze axe. Her open-world spawn is removed. The gate's Check-Count gives the chests opened (rsprox rec 3275). Not modelled: Combat Achievements, F2P tables.",
             "Main 3b61a15a8 (6 November 2026): #2615 Combat achievements: cover RSProx capture gaps. Existing completion credit and documented limitations are retained unless explicitly updated below.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4344 Poison sources: pass severity (hit x 5) to poisonEntity. #4234 Settings: camera shake effects follow the combat and atmospheric camera shake settings. #4159 Music: play the Wiki's music areas tile by tile."
           ],

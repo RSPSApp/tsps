@@ -321,8 +321,7 @@ function createBotActivityRegistry(options = {}) {
   const resolvers = [];
   const byId = new Map();
   const fieldsById = new Map();
-  const { readActivities } = require("./Editor.PlayerBots");
-  for (const definition of [...(raw.activities ?? []), ...readActivities(options.editorPath, api?.log?.bind(api))]) {
+  for (const definition of raw.activities ?? []) {
     if (!definition?.id || byId.has(definition.id)) {
       throw new Error("[bot activities] activity ids must be unique");
     }

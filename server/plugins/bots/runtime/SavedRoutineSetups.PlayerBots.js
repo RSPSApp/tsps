@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const FILE = path.resolve(__dirname, "../../../data/saves/bot-routine-setups.json");
-const { isRoutineId } = require("./RoutineCatalog.PlayerBots");
+const { isRoutineReference } = require("./RoutineCatalog.PlayerBots");
 
 function savedSetupName(input) {
   const name = input.trim();
@@ -22,7 +22,7 @@ function nextSetupId(name, entries) {
 }
 
 function normalize(entry) {
-  if (!entry || typeof entry.name !== "string" || !/^[a-z][a-z0-9-]{0,47}$/.test(entry.id) || !isRoutineId(entry.activityId) ||
+  if (!entry || typeof entry.name !== "string" || !/^[a-z][a-z0-9-]{0,47}$/.test(entry.id) || !isRoutineReference(entry.activityId) ||
       !Number.isSafeInteger(entry.count) || entry.count < 1 || !entry.overrides || typeof entry.overrides !== "object" || Array.isArray(entry.overrides)) {
     throw new Error("Invalid saved routine setup.");
   }

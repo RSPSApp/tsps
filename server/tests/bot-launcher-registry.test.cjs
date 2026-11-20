@@ -11,7 +11,7 @@ test('activity plugins contribute validated, de-duplicated launchers through the
       event.register({ id: 'barbarian-assault', name: 'Barbarian Assault', detail: 'Minigame', description: 'Deploy activity-specific bots.', deploy() {} });
       event.register({ id: 'barbarian-assault', name: 'Duplicate', description: 'Ignored duplicate.', deploy() {} });
       event.register({ id: 'Invalid ID', name: 'Invalid', description: 'Rejected.', deploy() {} });
-      event.register({ id: 'custom_oak', name: 'Routine collision', description: 'Rejected.', deploy() {} });
+      event.register({ id: 'Invalid ID', name: 'Invalid launcher', description: 'Rejected.', deploy() {} });
       event.register({ id: 'missing-deploy', name: 'Missing deploy', description: 'Rejected.' });
       event.register({ id: 'bad-setup', name: 'Bad setup', description: 'Rejected.', deploy() {}, setupFields: [{ id: 'role', label: 'Role', choices: [{ value: 'only', label: 'Only' }] }] });
     },
@@ -162,7 +162,7 @@ test('routine deployment uses the real developer activity spawn policy', async (
     PluginManager.pluginConfigCache = previousConfig;
   });
 
-  const activityId = 'plugin_developer_policy';
+  const activityId = 'developer_policy_test';
   api.onCustomEvent('bots:collect-definitions', ({ registerRoutine }) => registerRoutine({
     id: activityId, name: 'Developer policy test', repeat: false,
     spawnSetup: { inventory: [{ slot: 0, id: ItemIds.COINS, amount: 50 }] },

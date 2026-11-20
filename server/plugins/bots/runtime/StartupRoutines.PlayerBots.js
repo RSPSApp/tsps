@@ -2,8 +2,7 @@
 
 const { deployRoutineBots } = require("./Deploy.PlayerBots");
 
-const { isRoutineId } = require("./RoutineCatalog.PlayerBots");
-const { customSchedule } = require("./Activation.PlayerBots");
+const { customSchedule, isRoutineActivationId } = require("./Activation.PlayerBots");
 
 const STARTUP_ROUTINES_KEY = "PlayerBots:startupRoutines";
 
@@ -12,7 +11,7 @@ function validateStartupRoutines(config) {
   const ids = new Set();
   return config.map(entry => {
     const { id, count } = entry ?? {};
-    if (!isRoutineId(id) || ids.has(id)) throw new Error("Each startup routine needs a unique registered routine ID.");
+    if (!isRoutineActivationId(id) || ids.has(id)) throw new Error("Each startup routine needs a unique registered routine ID.");
     if (!Number.isSafeInteger(count) || count < 1) throw new Error(`Startup routine '${id}' needs a positive whole number of bots.`);
     ids.add(id);
     return { id, count };

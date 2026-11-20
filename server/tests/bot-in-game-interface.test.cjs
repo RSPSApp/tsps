@@ -40,8 +40,8 @@ function fakePlayer() {
 const routines = [
   { id: 'oak_trees', repeat: true },
   { id: 'normal_trees', repeat: true },
-  { id: 'plugin_trainer', name: 'Plugin Trainer', codeDefined: true, manual: true, deploymentOverrides: ['skills'] },
-  { id: 'custom_gather', manual: true },
+  { id: 'varrock_trainer', name: 'Plugin Trainer', codeDefined: true, manual: true, deploymentOverrides: ['skills'] },
+  { id: 'custom_gather', manual: true }, // Unregistered legacy entry must not be listed.
   { id: 'roam', repeat: true },
 ];
 const codePlan = {
@@ -135,7 +135,7 @@ test('::bots shares the panel routine catalog and lists plans in their own tab',
   const state = _test.sessions.get(player);
   const labels = ids => ids.map(id => typeof id === 'number' ? f.rows().find(row => row.id === id).name : id.header);
   assert.equal(state.activeTab, 1, 'the routine catalog opens by default');
-  assert.deepEqual(labels(state.tabLayouts[0]), ['Plugin Trainer', 'custom_gather']);
+  assert.deepEqual(labels(state.tabLayouts[0]), ['Plugin Trainer']);
   assert.deepEqual(labels(state.tabLayouts[1]), groupRoutines(activityList(brainRegistry)).map(group => group.label));
   assert.deepEqual(labels(state.tabLayouts[2]), ['Castle Wars', 'Soul Wars', 'Pest Control', 'Plugin plan']);
   assert.ok(f.rows().find(row => row.name === 'Woodcutting').terms.includes('oak_trees'));

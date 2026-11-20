@@ -54,6 +54,8 @@ function registerBotCommands(options) {
     ) {
       return brainRegistry.byId?.get("follow_owner") ?? null;
     }
+    const concrete = brainRegistry.byId?.get(requested);
+    if (concrete?.codeDefined) return concrete;
     const mode = requested;
     return (
       brainRegistry.activities?.find((activity) => activity.mode === mode) ?? null

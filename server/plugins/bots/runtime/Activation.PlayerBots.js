@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const FILE = path.resolve(__dirname, "../../../data/saves/bot-activation.json");
 const ACTIVATION_ATTRIBUTE = "player-bots:activation-id";
-const { isRoutineId } = require("./RoutineCatalog.PlayerBots");
+const { isRoutineReference } = require("./RoutineCatalog.PlayerBots");
 const NATIVE = new Map([
   ["wilderness-regional", { name: "Wilderness roaming PK bots", trigger: "Nearby players" }],
   ["wilderness-hotspots", { name: "Wilderness hotspot PK bots", trigger: "World population" }],
@@ -18,7 +18,8 @@ const NATIVE = new Map([
   ["pest-control", { name: "Pest Control bots", trigger: "Lander queue" }],
 ]);
 
-function known(id) { return typeof id === "string" && (NATIVE.has(id) || isRoutineId(id)); }
+const isRoutineActivationId = id => id !== "developer" && !NATIVE.has(id) && isRoutineReference(id);
+function known(id) { return NATIVE.has(id) || isRoutineActivationId(id); }
 
 function validateState(state) {
   if (!state || state.version !== 1 || !state.overrides || typeof state.overrides !== "object" || Array.isArray(state.overrides)) {
@@ -26,7 +27,7 @@ function validateState(state) {
   }
   const overrides = new Map();
   for (const [id, entry] of Object.entries(state.overrides)) {
-    if (!known(id) || typeof entry?.enabled !== "boolean" || (entry.count !== undefined && (!isRoutineId(id) || !Number.isSafeInteger(entry.count) || entry.count < 1))) {
+    if (!known(id) || typeof entry?.enabled !== "boolean" || (entry.count !== undefined && (!isRoutineActivationId(id) || !Number.isSafeInteger(entry.count) || entry.count < 1))) {
       throw new Error(`Invalid bot activation setting: ${id}.`);
     }
     overrides.set(id, { enabled: entry.enabled, ...(entry.count === undefined ? {} : { count: entry.count }) });
@@ -77,11 +78,11 @@ function canSpawn(id) {
 function customSchedule(config, store = activation) {
   const result = new Map(config.map(({ id, count }) => [id, count]));
   for (const [id, entry] of store.entries()) {
-    if (!isRoutineId(id)) continue;
+    if (!isRoutineActivationId(id)) continue;
     if (entry.enabled) result.set(id, entry.count ?? result.get(id) ?? 1);
     else result.delete(id);
   }
   return result;
 }
 
-module.exports = { FILE, ACTIVATION_ATTRIBUTE, NATIVE, activation, canSpawn, customSchedule, createActivationStore };
+module.exports = { FILE, ACTIVATION_ATTRIBUTE, NATIVE, isRoutineActivationId, activation, canSpawn, customSchedule, createActivationStore };

@@ -8,7 +8,7 @@ const ROSTER_MODES = Object.freeze({
   "castle-wars": ["saradomin", "zamorak"],
   "soul-wars": ["blue", "red"],
 });
-const { nativeRoutineId, matchRoutineIds, isCodeRoutineId } = require("./RoutineCatalog.PlayerBots");
+const { nativeRoutineId, matchRoutineIds, isRoutineReference, isBuiltinRoutineId, isDeployableRoutine } = require("./RoutineCatalog.PlayerBots");
 
 function normalizeRoster(mode, roster) {
   if (!Object.hasOwn(ROSTER_MODES, mode)) throw new Error("Choose a supported team minigame.");
@@ -18,8 +18,8 @@ function normalizeRoster(mode, roster) {
   for (const name of ROSTER_MODES[mode]) {
     const { routine, count } = roster[name] ?? {};
     if (!Number.isSafeInteger(count) || count < 0) throw new Error(`${name}: enter a nonnegative whole number.`);
-    if (count && !nativeRoutineId(mode, routine) && !isCodeRoutineId(routine) && !(typeof routine === "string" && /^custom_[a-z0-9_]{1,48}$/.test(routine))) {
-      throw new Error(`${name}: choose a saved routine or '${builtin}'.`);
+    if (count && !nativeRoutineId(mode, routine) && (!isRoutineReference(routine) || isBuiltinRoutineId(routine))) {
+      throw new Error(`${name}: choose a registered routine or '${builtin}'.`);
     }
     teams[name] = { routine: count ? nativeRoutineId(mode, routine) ?? routine : builtin, count };
   }
@@ -32,7 +32,13 @@ function deployRoster({ api, runtime, brainRegistry }, mode, input) {
   let teams;
   try { teams = normalizeRoster(mode, input); }
   catch (error) { return { ok: false, status: 400, error: error.message }; }
-  return deployRosterRows({ api, runtime, brainRegistry }, mode, Object.entries(teams).filter(([, row]) => row.count).map(([team, row]) => ({ team, ...row })));
+  const rows = Object.entries(teams).filter(([, row]) => row.count).map(([team, row]) => ({ team, ...row }));
+  for (const { team, routine } of rows) {
+    if (!nativeRoutineId(mode, routine) && !isDeployableRoutine(brainRegistry.byId?.get(routine))) {
+      return { ok: false, status: 404, error: `${team}: routine '${routine}' is not registered.` };
+    }
+  }
+  return deployRosterRows({ api, runtime, brainRegistry }, mode, rows);
 }
 
 function deployRosterRows({ api, runtime, brainRegistry }, mode, rows) {

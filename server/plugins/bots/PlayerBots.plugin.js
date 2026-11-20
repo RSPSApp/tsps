@@ -223,7 +223,7 @@ module.exports = {
     },
     [STARTUP_ROUTINES_KEY]: {
       type: "json", label: "Start bot routines on boot", defaultText: "No additional startup deployments",
-      help: "List registered routine IDs and counts, e.g. [{\"id\":\"plugin_patrol\",\"count\":2}]. Uses the same routine, start setup and optional environment caps as manual deployment.",
+      help: "List registered routine IDs and counts, e.g. [{\"id\":\"varrock_patrol\",\"count\":2}]. Uses the same routine, start setup and optional environment caps as manual deployment.",
     },
     "PlayerBots:ai": {
       type: "json", label: "AI bots", defaultText: "AI bots off (3 bots when enabled)",

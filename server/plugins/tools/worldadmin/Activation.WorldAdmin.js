@@ -2,8 +2,8 @@
 
 const { HttpError, readJson, send } = require("./Http.WorldAdmin");
 const { getActiveBotRuntime } = require("../../bots/runtime/RuntimeRegistry.PlayerBots");
-const { isDeployableRoutine, isRoutineId, routineName } = require("../../bots/runtime/RoutineCatalog.PlayerBots");
-const { ACTIVATION_ATTRIBUTE, NATIVE, activation, customSchedule } = require("../../bots/runtime/Activation.PlayerBots");
+const { isDeployableRoutine, routineName } = require("../../bots/runtime/RoutineCatalog.PlayerBots");
+const { ACTIVATION_ATTRIBUTE, NATIVE, isRoutineActivationId, activation, customSchedule } = require("../../bots/runtime/Activation.PlayerBots");
 const { STARTUP_ROUTINES_KEY, validateStartupRoutines } = require("../../bots/runtime/StartupRoutines.PlayerBots");
 const { deployRoutineBots } = require("../../bots/runtime/Deploy.PlayerBots");
 
@@ -79,16 +79,16 @@ function stopDeployment(api, runtime, id) {
 function updateDeployment(api, runtime, brainRegistry, body, store = activation, deploy = deployRoutineBots) {
   const { id, enabled, count } = body ?? {};
   if (typeof id !== "string" || typeof enabled !== "boolean") throw new HttpError(400, "Choose a deployment and an activation state.");
-  const isCustom = isRoutineId(id);
+  const isRoutine = isRoutineActivationId(id);
   const exists = (brainRegistry?.activities ?? []).some(activity => id === activity.id && isDeployableRoutine(activity));
-  if (!NATIVE.has(id) && !(isCustom && exists)) throw new HttpError(404, "That deployment does not exist.");
-  if (count !== undefined && (!isCustom || !Number.isSafeInteger(count) || count < 1)) throw new HttpError(400, "Choose a positive whole count for a saved routine.");
+  if (!NATIVE.has(id) && !(isRoutine && exists)) throw new HttpError(404, "That deployment does not exist.");
+  if (count !== undefined && (!isRoutine || !Number.isSafeInteger(count) || count < 1)) throw new HttpError(400, "Choose a positive whole count for a registered routine.");
   if (!enabled) {
     const previous = store.get(id);
-    store.set(id, false, isCustom ? previous?.count ?? customSchedule(defaults(api), store).get(id) : undefined);
+    store.set(id, false, isRoutine ? previous?.count ?? customSchedule(defaults(api), store).get(id) : undefined);
     return { id, enabled, stopped: stopDeployment(api, runtime, id) };
   }
-  if (!isCustom) {
+  if (!isRoutine) {
     store.set(id, true);
     runtime.reconcileActivation?.(id);
     return { id, enabled, notice: "Enabled for the existing trigger. Startup-only bots may need a server restart." };

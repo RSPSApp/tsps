@@ -4,15 +4,14 @@ const { readAvailablePlans, planOverrideFields, savePlan } = require("../../bots
 const { originAllowed } = require("./Access.WorldAdmin");
 const { HttpError, readJson, send } = require("./Http.WorldAdmin");
 const { routineNames, matchRoutineIds, listedRoutines } = require("../../bots/runtime/RoutineCatalog.PlayerBots");
-const { readActivities } = require("../../bots/brain/Editor.PlayerBots");
 const botDefinitions = require("../../../data/definitions/bot-activities.json");
 
 // Both authenticated panels can edit saved plans even with no game process.
 async function planFiles(request, response, url, brainRegistry) {
   if (url.pathname !== "/api/bots/plans") return false;
   if (request.method === "GET") {
-    // The plan editor must be usable without the game process (including saved routines).
-    const available = listedRoutines(brainRegistry ?? { activities: [...botDefinitions.activities, ...readActivities()] });
+    // Offline, show built-ins and keep any installed-plugin IDs already stored in plan rows.
+    const available = listedRoutines(brainRegistry ?? botDefinitions);
     const routineIds = [...new Set(available.map(activity => activity.id))];
     const names = { ...routineNames, ...Object.fromEntries(available.filter(activity => activity.codeDefined).map(activity => [activity.id, activity.name])) };
     const presets = brainRegistry?.deploymentPlans;

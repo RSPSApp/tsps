@@ -12,7 +12,7 @@ test('team roster accepts two independent routines and disallows unknown modes a
   assert.throws(() => normalizeRoster('pest-control', teams(1, 3)), /team minigame/);
   assert.throws(() => normalizeRoster('soul-wars', teams(0, 0)), /at least one/);
   assert.throws(() => normalizeRoster('soul-wars', teams(-1, 0)), /nonnegative whole/);
-  assert.throws(() => normalizeRoster('soul-wars', { ...teams(1, 3), blue: { routine: 'pvp', count: 1 } }), /saved routine/);
+  assert.throws(() => normalizeRoster('soul-wars', { ...teams(1, 3), blue: { routine: 'pvp', count: 1 } }), /registered routine/);
 });
 
 test('Castle Wars roster only admits teams that a normal portal would accept', () => {

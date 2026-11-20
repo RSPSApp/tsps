@@ -135,10 +135,7 @@ function bootPlayerBotsRuntime(options = {}) {
   // loudly rather than leave the whole population standing still.
   const brainRegistry = createBotActivityRegistry({ api: botApi, world: brainWorld, deferCodeDefinitions: true });
 
-  const { readActivities } = require("../brain/Editor.PlayerBots");
-  const editorObjectIds = readActivities().flatMap(activity => activity.actions.flatMap(action => action.objectIds ?? []));
   traversalAssist.trackObjectIds([
-    ...editorObjectIds,
     config.wildernessDitchObjectId,
     ...listCatalogObjectIds(),
     ...BANK_BOOTH_IDS,

@@ -26,8 +26,8 @@ const coreSkills = [
 
 test('activity list includes unscheduled built-ins and saved routines but not internal overlays', () => {
   const registry = { activities: [
-    { id: 'custom_a', manual: true, spawnSetup: {}, repeat: true },
-    { id: 'custom_b', manual: true, spawnSetup: null },
+    { id: 'custom_a', manual: true, codeDefined: true, spawnSetup: {}, repeat: true },
+    { id: 'custom_b', manual: true, codeDefined: true, spawnSetup: null },
     { id: 'normal_trees', manual: false, spawnSetup: {} },
     { id: 'roam', manual: false, spawnSetup: {} },
     { id: 'pvp_engage', ephemeral: true, manual: false },
@@ -53,7 +53,7 @@ test('viewer enumeration returns online real-player clients and excludes bots', 
 });
 
 test('deployment validates and applies setup to managed bots without a hard local count limit', async () => {
-  const activity = { id: 'custom_routine', manual: true, mode: 'custom_routine', repeat: false, spawnSetup: { location: null, skills: {}, inventory: [], equipment: [] } };
+  const activity = { id: 'custom_routine', manual: true, codeDefined: true, deploymentOverrides: ['location', 'skills'], mode: 'custom_routine', repeat: false, spawnSetup: { location: null, skills: {}, inventory: [], equipment: [] } };
   const byId = new Map([[activity.id, activity]]);
   const entriesByUsername = new Map();
   let next = 0, attached = [];

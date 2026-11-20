@@ -1,11 +1,17 @@
 "use strict";
 
-const { isCodeRoutineId, isDeployableRoutine, nativeRoutineId } = require("./RoutineCatalog.PlayerBots");
+const { isRoutineId, isDeployableRoutine, nativeRoutineId, matchRoutineIds } = require("./RoutineCatalog.PlayerBots");
+const { NATIVE } = require("./Activation.PlayerBots");
+const builtinDefinitions = require("../../../data/definitions/bot-activities.json");
 const { validateSpawnSetup } = require("./SpawnSetup.PlayerBots");
 const { normalizePlan, normalizePlanOverrideFields, planMode } = require("./DeploymentPlans.PlayerBots");
 const { normalizeRoutineOverrideFields } = require("./DeploymentOverrides.PlayerBots");
 const CODE_DEFINITIONS_EVENT = "bots:collect-definitions";
 const LIMIT = 100;
+const reservedRoutineIds = new Set([
+  ...[...builtinDefinitions.activities, ...(builtinDefinitions.resolvers ?? [])].map(definition => definition.id),
+  ...Object.values(matchRoutineIds), ...NATIVE.keys(), "developer", "auto", "recruit", "follow", "follow_owner", "sparring", "mixed",
+]);
 const nameOf = value => {
   if (typeof value !== "string" || !value.trim() || value.trim().length > 48 || /[<>\u0000-\u001f]/.test(value)) throw new Error("Choose a plain-text name of 1–48 characters.");
   return value.trim();
@@ -22,10 +28,12 @@ function collectCodeDefinitions(api, world, byId, compileAction, compileConditio
   }));
   const reject = (kind, definition, error) => api.log?.("bot_code_definition_failed", { kind, id: definition?.id ?? null, error: String(error?.message ?? error) });
   const definitions = new Map(byId), routines = [], plans = [];
+  const builtinModes = new Set([...definitions.values()].map(activity => activity.mode));
   for (const definition of suppliedRoutines) {
     try {
       const { id, repeat = true, spawnSetup, createActions, capacity = 20 } = definition;
-      if (!isCodeRoutineId(id) || definitions.has(id)) throw new Error("Routine IDs must be unique and start with plugin_.");
+      if (!isRoutineId(id)) throw new Error("Routine IDs must be 1–55 lowercase letters, digits or underscores, starting with a letter.");
+      if (definitions.has(id) || builtinModes.has(id) || reservedRoutineIds.has(id)) throw new Error(`Routine ID '${id}' is already used or reserved.`);
       const name = nameOf(definition.name);
       const deploymentOverrides = normalizeRoutineOverrideFields(definition.deploymentOverrides);
       if (typeof repeat !== "boolean" || !Number.isInteger(capacity) || capacity < 1 || capacity > 100 || typeof createActions !== "function") throw new Error("Specify repeat, capacity (1–100) and a createActions function.");

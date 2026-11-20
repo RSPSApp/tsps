@@ -8,7 +8,7 @@ const { readAvailablePlans, savePlan } = require('../plugins/bots/runtime/Deploy
 const { _test: { activityList } } = require('../plugins/tools/worldadmin/Bots.WorldAdmin');
 const { groupRoutines } = require('../plugins/bots/runtime/RoutineDeployments.PlayerBots');
 
-const routine = { id: 'plugin_test_wait', name: 'Test wait', repeat: false, deploymentOverrides: ['skills'], createActions: ({ action }) => [action({ type: 'wait', seconds: 3 })] };
+const routine = { id: 'rest_stop', name: 'Test wait', repeat: false, deploymentOverrides: ['skills'], createActions: ({ action }) => [action({ type: 'wait', seconds: 3 })] };
 const preset = { id: 'plugin-test-pair', name: 'Test pair', rows: [{ routine: routine.id, count: 2 }], launchOverrides: [{ count: true, routines: [] }] };
 
 test('startup collects code actions and presets only after all plugins can attach', () => {
@@ -45,7 +45,8 @@ test('invalid code definitions are isolated and saved plans cannot shadow new co
   const errors = [];
   const result = collectCodeDefinitions({
     emitCustomEvent(_, { registerRoutine, registerPlan }) {
-      registerRoutine({ ...routine, id: 'roam' });
+      for (const id of ['roam', 'world', 'developer', 'sparring', 'soul_wars_match', 'Invalid']) registerRoutine({ ...routine, id });
+      registerRoutine({ ...routine, id: 'plugin_existing' });
       registerRoutine({ ...routine, id: 'plugin_bad', createActions: async () => [] });
       registerRoutine(routine);
       registerRoutine(routine);
@@ -54,9 +55,9 @@ test('invalid code definitions are isolated and saved plans cannot shadow new co
     },
     log(_, entry) { errors.push(entry.id); },
   }, {}, new Map(), () => ({ update: () => 'success' }));
-  assert.deepEqual(result.routines.map(entry => entry.id), [routine.id]);
+  assert.deepEqual(result.routines.map(entry => entry.id), ['plugin_existing', routine.id]);
   assert.deepEqual(result.plans, [preset]);
-  assert.deepEqual(errors, ['roam', 'plugin_bad', routine.id, 'plugin-missing']);
+  assert.deepEqual(errors, ['roam', 'world', 'developer', 'sparring', 'soul_wars_match', 'Invalid', 'plugin_bad', routine.id, 'plugin-missing']);
   assert.throws(() => savePlan(preset, require('node:path').join(require('node:os').tmpdir(), `tsps-code-plan-test-${process.pid}.json`), []), /reserved/);
 });
 

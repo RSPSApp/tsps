@@ -1919,7 +1919,7 @@ test('bots are given tools, never resources: inputs come from gathering or the b
   assert.ok(followOns(raw.templates.mine_rocks).includes('smelt'), 'miners can smelt their ore');
 });
 
-test('editor activities compile in the real registry without becoming site activities', () => {
+test('old local activity files are not loaded or rewritten by the real registry', () => {
   const { PluginManager } = require('../dist/plugins/PluginManager');
   const { createBotActivityRegistry } = require('../plugins/bots/brain/ActivityRegistry.PlayerBots');
   const os = require('node:os');
@@ -1927,40 +1927,30 @@ test('editor activities compile in the real registry without becoming site activ
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-editor-registry-'));
   try {
     const editorPath = path.join(dir, 'activities.json');
-    fs.writeFileSync(editorPath, JSON.stringify([{ id: 'custom_walk', repeat: false, actions: [{ type: 'walkTo', x: 3222, y: 3218, z: 0, radius: 3 }, { type: 'if', condition: { hasItem: { id: 1511, min: 1 } }, then: { type: 'dropItems', itemIds: [1511] }, else: null }] }]));
+    const source = JSON.stringify([
+      { id: 'custom_walk', repeat: false, actions: [{ type: 'walkTo', x: 3222, y: 3218, z: 0, radius: 3 }] },
+      { id: 'custom_graph', repeat: false, graph: { nodes: [], edges: [] } },
+    ]);
+    fs.writeFileSync(editorPath, source);
     const registry = createBotActivityRegistry({ editorPath, world: { core: PluginManager.getCoreApi() } });
-    const activity = registry.byId.get('custom_walk');
-    assert.equal(activity.manual, true);
-    assert.equal(activity.actions[0].id, 'walkTo');
-    assert.equal(activity.actions[1].id, 'if');
-    const flat = JSON.parse(fs.readFileSync(editorPath, 'utf8'));
-    const graph = { id: 'custom_graph', repeat: false, graph: { nodes: [], edges: [] } };
-    fs.writeFileSync(editorPath, JSON.stringify([...flat, graph]));
-    const logs = [];
-    const compatible = createBotActivityRegistry({ editorPath, world: { core: PluginManager.getCoreApi() }, api: { log: (...args) => logs.push(args) } });
-    assert.equal(compatible.byId.has('custom_graph'), false);
-    assert.equal(compatible.byId.has('custom_walk'), true);
-    assert.deepEqual(logs.find(([event]) => event === 'bot_graph_routines_skipped')?.[1], { ids: ['custom_graph'] });
-    assert.deepEqual(JSON.parse(fs.readFileSync(editorPath, 'utf8')).at(-1), graph);
-    assert.ok(registry.sites.every(site => !site.activities.some(entry => entry.id === 'custom_walk')));
+    assert.equal(registry.byId.has('custom_walk'), false);
+    assert.equal(registry.byId.has('custom_graph'), false);
+    assert.equal(fs.readFileSync(editorPath, 'utf8'), source);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('combat-training preset and editor overrides compile against the real plugin core API', () => {
+test('combat-training preset and a plugin variant compile against the real core API', () => {
   const { PluginManager } = require('../dist/plugins/PluginManager');
   const { createBotActivityRegistry } = require('../plugins/bots/brain/ActivityRegistry.PlayerBots');
-  const os = require('node:os'), path = require('node:path');
   const core = PluginManager.getCoreApi();
-  const registry = createBotActivityRegistry({ world: { core } });
+  const api = { emitCustomEvent(_, { registerRoutine }) {
+    registerRoutine({ id: 'magic_training', name: 'Magic training', createActions: ({ action }) => [
+      action({ type: 'trainCombat', preset: 'default', styles: ['magic'], durationSeconds: { min: 30, max: 90 }, food: 'LOBSTER', foodAmount: 12, maxFailedTargets: 9, spreadDistance: 240 }),
+    ] });
+  } };
+  const registry = createBotActivityRegistry({ world: { core }, api });
   assert.equal(registry.byId.get('combat_training').actions[0].id, 'trainCombat');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-train-editor-'));
-  try {
-    const editorPath = path.join(dir, 'activities.json');
-    fs.writeFileSync(editorPath, JSON.stringify([{ id: 'custom_train_options', repeat: true, actions: [{ type: 'trainCombat', preset: 'default', styles: ['magic'], durationSeconds: { min: 30, max: 90 }, food: 'LOBSTER', foodAmount: 12, maxFailedTargets: 9, spreadDistance: 240 }] }]));
-    const edited = createBotActivityRegistry({ editorPath, world: { core } }).byId.get('custom_train_options');
-    assert.equal(edited.manual, true);
-    assert.equal(edited.actions[0].id, 'trainCombat');
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  assert.equal(registry.byId.get('magic_training').actions[0].id, 'trainCombat');
 });
 
 test('a rotation switches activity after its time, never mid-fight or under an overlay', () => {

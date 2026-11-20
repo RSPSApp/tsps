@@ -25,7 +25,7 @@ function harness(t) {
     getPluginConfig: (key, fallback) => key === 'PlayerBots:startupRoutines' ? [{ id: 'custom_smith', count: 2 }] : fallback,
   };
   const runtime = { entriesByUsername: new Map() };
-  const registry = { activities: [{ id: 'custom_smith', manual: true }] };
+  const registry = { activities: [{ id: 'custom_smith', manual: true, codeDefined: true }] };
   const snapshot = () => deploymentSnapshot(api, runtime, registry, store);
   const update = body => updateDeployment(api, runtime, registry, body, store, options => (requested.push(options.count), { ok: true, spawned: ['New'] }));
   return { file, store, stopped, requested, online, pending, snapshot, update, registry };
@@ -33,6 +33,9 @@ function harness(t) {
 
 test('an enabled proximity deployment can have zero bots in world; disabling is persisted without deleting the routine', t => {
   const h = harness(t);
+  const native = h.update({ id: 'world', enabled: true });
+  assert.match(native.notice, /existing trigger/);
+  assert.equal(customSchedule([], h.store).has('world'), false);
   const nearby = h.snapshot().find(row => row.id === 'wilderness-regional');
   assert.equal(nearby.enabled, true);
   assert.equal(nearby.trigger, 'Nearby players');

@@ -75,7 +75,7 @@ function sendRows(player, state) {
     const id = add(`routine:${activity.id}`, { kind: "routine", name, activityId: activity.id }, detail,
       group.profiles.map(profile => `${profile.id} ${profile.label}`).join(" "), { title: name, subtitle: `${detail} routine`, description });
     routineRows.push(id);
-    if (/^(custom_|plugin_)/.test(activity.id)) savedRows.push(id);
+    if (registry.byId?.get(activity.id)?.codeDefined) savedRows.push(id);
   }
   try {
     for (const saved of state.deps.storage.readRoutineSetups()) {

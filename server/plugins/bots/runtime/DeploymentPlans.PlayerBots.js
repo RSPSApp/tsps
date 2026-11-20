@@ -5,7 +5,7 @@ const path = require("node:path");
 const { ROSTER_MODES, deployRosterRows } = require("./Roster.PlayerBots");
 const { prepareRoutineDeployment, spawnPreparedBot, trackNativeDeployment, checkDeploymentLimits } = require("./Deploy.PlayerBots");
 const FILE = path.resolve(__dirname, "../../../data/saves/bot-deployment-plans.json");
-const { isRoutineId, nativeRoutineId, matchRoutineIds } = require("./RoutineCatalog.PlayerBots");
+const { isRoutineReference, nativeRoutineId, matchRoutineIds } = require("./RoutineCatalog.PlayerBots");
 const { canSpawn } = require("./Activation.PlayerBots");
 const PEST_ROUTINE = matchRoutineIds["pest-control"];
 const MAX_PLAN_ROWS = 12;
@@ -25,7 +25,7 @@ function normalizePlan(input) {
     const chosenTeam = mode === "world" ? undefined : team;
     if (chosenTeam !== undefined && !TEAM_MODE.has(chosenTeam) || (Object.hasOwn(ROSTER_MODES, mode) && !ROSTER_MODES[mode].includes(chosenTeam))) throw new Error(`Row ${i + 1}: choose a valid team.`);
     const builtin = nativeRoutineId(TEAM_MODE.get(chosenTeam) ?? "pest-control", routine);
-    if (!(isRoutineId(routine) || builtin)) throw new Error(`Row ${i + 1}: choose a routine for this team or activity.`);
+    if (!(isRoutineReference(routine) || builtin)) throw new Error(`Row ${i + 1}: choose a routine for this team or activity.`);
     if (!Number.isSafeInteger(count) || count < 0) throw new Error(`Row ${i + 1}: count must be a nonnegative whole number.`);
     total += count;
     return { routine: builtin ?? routine, count, ...(chosenTeam === undefined ? {} : { team: chosenTeam }) };
@@ -172,4 +172,4 @@ function deployPlan({ api, runtime, brainRegistry }, input, fallbackLocation, ro
   return { ok: true, spawned: created.map(bot => bot.getUsername()) };
 }
 
-module.exports = { normalizePlan, normalizePlanOverrideFields, planOverrideFields, readPlans, readAvailablePlans, savePlan, deployPlan, applyPlanOverrides, planMode, isRoutineId, PEST_ROUTINE, MAX_PLAN_ROWS };
+module.exports = { normalizePlan, normalizePlanOverrideFields, planOverrideFields, readPlans, readAvailablePlans, savePlan, deployPlan, applyPlanOverrides, planMode, PEST_ROUTINE, MAX_PLAN_ROWS };

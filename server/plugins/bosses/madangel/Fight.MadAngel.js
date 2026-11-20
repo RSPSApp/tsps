@@ -5,7 +5,7 @@
  * - Its standard attack is a melee swing every 6 ticks, landing 2 later: up to 31, or 5 through
  *   Protect from Melee. After three of them it uses a special, in turn: the sweep, the blast,
  *   the smite. The sweep and the smite stop its standard attacks; the blast doesn't.
- * - At 350 hitpoints it enrages at its next attack ("...!", a 4-tick turn), then chains its
+ * - At 350 hitpoints (Fallen From Grace's angel: 255) it enrages at its next attack ("...!", a 4-tick turn), then chains its
  *   specials (smite, blast, sweep, ...) with standard attacks only during the blast, the sweeps
  *   and blasts faster, the smite striking three times.
  * - Sweep: the sword is drawn to one side; each cleave hits the half of the floor around the
@@ -124,6 +124,15 @@ class Fight {
     this.npc.faceTile(new this.core.Location(tile.getX() - shift, tile.getY() - shift, tile.getZ()));
   }
 
+  /**
+   * The hitpoints it enrages at: 350 for the post-quest angel (Wiki, Mad Angel), 255 for Fallen
+   * From Grace's weaker one (565 hitpoints; Wiki, Fallen From Grace: "Upon reaching 255 Hitpoints").
+   */
+  enrageAt() {
+    const { specials } = this.data;
+    return this.session.variant === "quest" && Number.isInteger(specials.questEnrageAt) ? specials.questEnrageAt : specials.enrageAt;
+  }
+
   /** Runs `action` `ticks` ticks into the fight. */
   at(ticks, action) {
     this.events.push({ tick: this.tick + ticks, action });
@@ -174,7 +183,7 @@ class Fight {
     for (const event of due) {
       if (!this.stopped && !this.dying) event.action();
     }
-    if (this.startTick >= 0 && !this.enraged && !this.enragePending && this.npc.getHitpoints() <= this.data.specials.enrageAt) {
+    if (this.startTick >= 0 && !this.enraged && !this.enragePending && this.npc.getHitpoints() <= this.enrageAt()) {
       this.enragePending = true;
     }
     this.updateHud();

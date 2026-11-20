@@ -35,10 +35,8 @@ const NOT_FOOD = {
     "Servery cooked meat", "Servery meat pie", "Servery pineapple pizza", "Servery plain pizza",
     "Servery potato", "Servery stew",
   ],
-  "Event sweets and candy, not on the Wiki's food tables": [
+  "Event sweets, not on the Wiki's food tables": [
     "Blue sweets", "Deep blue sweets", "Green sweets", "Pink sweets", "Red sweets", "White sweets",
-    "Black candy", "Blue candy", "Brown candy", "Green candy", "Orange candy", "Pink candy", "Purple candy",
-    "Red candy", "White candy",
   ],
   "Only eaten in one area (Vampyrium)": ["Stymphike tartare"],
   "Unobtainable: only in the game files (Wiki)": [
@@ -217,6 +215,21 @@ test("bites: cakes, pies and pizzas go bite by bite with their eat delays, and l
   assert.equal(Food._test.leftover(crab.food, 0), 7523);
   assert.equal(Food._test.foodBite(7526).bite, 4);
   assert.equal(Food._test.leftover(crab.food, 4), undefined);
+});
+
+test("Halloween 2020 candies: no heal, the spam line and the overhead line, no food-eaten count (rsprox, Wiki)", () => {
+  for (const colour of ["BLACK", "BLUE", "BROWN", "GREEN", "ORANGE", "PINK", "PURPLE", "RED", "WHITE"]) {
+    const player = createPlayer();
+    player.give(0, id(`${colour}_CANDY`));
+    player.eat(0);
+    // rsprox 229/00245 tick 510: "You eat the candy. Yum!" as type=spam, [say] "Ooh piece of candy.",
+    // human_eat, sound 2393, the candy gone and no tracking_food_eaten change. Wiki: it doesn't heal.
+    assert.equal(player.slots[0], null, `${colour} candy is eaten`);
+    assert.equal(player.hp, 50, `${colour} candy heals nothing`);
+    assert.deepEqual(player.messages, ["spam: You eat the candy. Yum!"]);
+    assert.deepEqual(player.said, ["Ooh piece of candy."]);
+    assert.equal(player.varps.has(4518), false, "tracking_food_eaten is left alone");
+  }
 });
 
 test("eating a shark: animation, the messages, the food-eaten varp, 3 ticks on both timers (rsprox, Wiki)", () => {

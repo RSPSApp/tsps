@@ -27,12 +27,14 @@ function setup() {
     onNpcDialogueVariant(fn) { hooks.variants.push(fn); },
     onNpcDialogueCondition(fn) { hooks.conditions.push(fn); },
     onCustomEvent(name, fn) { const list = hooks.custom.get(name) ?? []; list.push(fn); hooks.custom.set(name, list); },
+    emitCustomEvent(name, event) { for (const fn of hooks.custom.get(name) ?? []) fn(event); },
     onObjectInteraction(fn) { hooks.object.push(fn); },
     onNpcInteraction() {}, onItemOnItem() {}, onItemOnNpc() {}, onItemAction() {},
     onGroundItemClick() {}, onGroundItemPickup() {}, onNpcDeath(fn) { hooks.deaths.push(fn); },
     onZoneEnter() {}, onPlayerLogin(fn) { hooks.logins.push(fn); }, onPlayerLogout(fn) { hooks.logouts.push(fn); },
     spawnNpc(def) { return { ...def, getId: () => def.id, isRegistered: () => true }; },
     removeNpc() {},
+    sendMultiChatboxPrompt(player, title, ...pairs) { hooks.prompt = { title, options: pairs.filter((x) => typeof x === 'string'), pairs }; return true; },
   }, { get: (target, key) => target[key] ?? (() => {}) });
   require('../plugins/quests/quests/FallenFromGrace.Quest')(api);
   PluginManager.emitNpcDialogueCondition = (event) => {
@@ -101,12 +103,20 @@ test('cathedral chest uses directional 810 [1,3,2,2] and only unlocks once', () 
   h.object(62376);
   p.amountAction.execute(1734);
   assert.equal((p.attrs.get('quest.fallen_from_grace.flags') ?? 0) & (1 << 5), 1 << 5);
-  assert.ok(p.messages.includes('You successfully pick the lock.'));
-  assert.ok(p.interfaceRemoved >= 2, 'wrong and correct attempts both close the lock');
+  assert.equal(p.messages.includes('You successfully pick the lock.'), false, 'live opens the chest with no game message (P2 tick 265)');
 
-  // The shipped transcript selects its non-full message; the lock is not reopened.
+  // The shipped transcript's non-full message is the captured double item box; the lock is not reopened.
+  let box = p.manager.getCurrent();
+  for (let i = 0; i < 10 && box && box.constructor?.name !== 'DoubleItemStatementDialogue'; i++) {
+    p.manager.advance();
+    box = p.manager.getCurrent();
+  }
+  assert.equal(box?.constructor?.name, 'DoubleItemStatementDialogue', 'the primer and the old core in one box (P2 tick 266)');
+  assert.deepEqual([box.firstItemId, box.secondItemId], [I.GOLEM_PRIMER, I.ANCIENT_SUNSTONE_CORE]);
+  assert.equal(p.items.get(I.GOLEM_PRIMER), 1);
+  assert.equal(p.items.get(I.ANCIENT_SUNSTONE_CORE), 1);
   while (p.manager.getCurrent()) p.manager.advance();
-  assert.ok(p.messages.some((text) => text.includes('You find a book and an old sunstone core in the chest.')));
+  assert.ok(p.interfaceRemoved >= 2, 'wrong and correct attempts both close the lock');
   const interfaceBefore = p.interface;
   h.object(62376);
   assert.equal(p.interface, interfaceBefore, 'the unlocked chest does not reopen the lock');
@@ -116,28 +126,46 @@ test('the Mad Angel instance variant is answered from the FFG stage, not a boss-
   const h = setup(), p = h.p;
   const ask = (stage) => {
     h.quest.setStage(p, stage);
-    const request = { player: p, variant: null };
+    const request = { player: p, variant: null, defeated: false };
     for (const fn of h.hooks.custom.get('madangel:instance-variant') ?? []) fn(request);
-    return request.variant;
+    const pew = { player: p, prompt: false };
+    for (const fn of h.hooks.custom.get('madangel:pew-climb') ?? []) fn(pew);
+    return [request.variant, request.defeated, pew.prompt];
   };
-  assert.equal(ask(16), 'quest');
-  assert.equal(ask(17), 'quest');
-  assert.equal(ask(18), null, 'after the kill the ordinary boss variant is used');
-  assert.equal(ask(20), null, 'post-quest is not the FFG instance');
+  assert.deepEqual(ask(15), [null, false, false], 'not yet in the cathedral');
+  assert.deepEqual(ask(16), ['quest', false, true], 'the quest angel, behind "Climb over the pew?" (P2 tick 315)');
+  assert.deepEqual(ask(17), ['quest', false, true]);
+  assert.deepEqual(ask(18), ['quest', true, true], 'after the kill, the quest angel lies dead (ours: until the quest ends)');
+  assert.deepEqual(ask(19), ['quest', true, true]);
+  assert.deepEqual(ask(20), [null, false, false], 'post-quest is the ordinary boss');
 });
 
-test('cathedral door uses the real 5-pin 811 after the angel and then releases to MadAngel', () => {
+test('cathedral door asks first, then the real 5-pin 811 with a new code per opening, then releases to MadAngel', () => {
   const h = setup(), p = h.p;
-  h.quest.setStage(p, 18);
-  const request = { player: p, objectId: 62368, handled: false };
-  for (const fn of h.hooks.custom.get('madangel:cathedral-door') ?? []) fn(request);
-  assert.equal(request.handled, true);
-  assert.equal(p.interface, 811);
-  assert.equal(p.script?.id, 6994);
-  assert.deepEqual(p.script?.args.slice(6), [5, 0, 0, 0]);
-  p.amountAction.execute(7152);
-  assert.equal((p.attrs.get('quest.fallen_from_grace.flags') ?? 0) & (1 << 7), 1 << 7);
-  assert.ok(p.messages.includes('You successfully pick the lock, only to see it crumble away in your hands.'));
+  const random = Math.random;
+  try {
+    h.quest.setStage(p, 18);
+    p.getLocation = () => new core.Location(2541, 2215, 0); // inside the doors, as recorded
+    const request = { player: p, objectId: 62368, handled: false };
+    for (const fn of h.hooks.custom.get('madangel:cathedral-door') ?? []) fn(request);
+    assert.equal(request.handled, true);
+    assert.equal(h.hooks.prompt.title, 'You attempt to open the doors, but they appear to be locked.', 'P2 tick 473');
+    assert.deepEqual(h.hooks.prompt.options, ['Try to pick the lock.', 'Leave them.']);
+    Math.random = () => 2306.5 / 7776; // the first captured session's code
+    h.hooks.prompt.pairs[1](p);
+    assert.equal(p.interface, 811);
+    assert.equal(p.script?.id, 6994);
+    assert.deepEqual(p.script?.args.slice(6), [5, 0, 0, 0]);
+    Math.random = () => 7152.5 / 7776; // a wrong guess keeps the session's code
+    p.amountAction.execute(4555);
+    assert.equal(p.messages.at(-1), "That didn't seem to work.");
+    assert.deepEqual(p.script?.args.slice(6), [5, 0, 0, 0], 'the reopen waits a tick');
+    p.amountAction.execute(2306);
+    assert.equal((p.attrs.get('quest.fallen_from_grace.flags') ?? 0) & (1 << 7), 1 << 7);
+    assert.equal(p.manager.getCurrent()?.getText?.(), 'You successfully pick the lock, only to see it crumble away in your hands.', 'a message box (P2 tick 622)');
+  } finally {
+    Math.random = random;
+  }
   const second = { player: p, objectId: 62368, handled: false };
   for (const fn of h.hooks.custom.get('madangel:cathedral-door') ?? []) fn(second);
   assert.equal(second.handled, false, 'after unlocking, the public MadAngel door handles it');

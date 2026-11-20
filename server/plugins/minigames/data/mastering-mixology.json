@@ -36,6 +36,16 @@
     "alsoSaved": ["torstolvial"],
     "neverSaved": ["prif_crystal_shard_crushed"]
   },
+  "outfitStyles": {
+    "_comment": "The reward outfit's inventory Change: each piece swaps with its other look (rsprox recording 4210, rev 238: goggles tick 1995, labcoat ticks 2387/2400, pants ticks 2402/2404). The gloves have no Change option in the cache.",
+    "pairs": [
+      ["mm_alchemist_hat", "mm_alchemist_hat_alt"],
+      ["mm_alchemist_body", "mm_alchemist_body_alt"],
+      ["mm_alchemist_legs", "mm_alchemist_legs_alt"]
+    ],
+    "message": "You adjust the style of your {name}.",
+    "sound": 2238
+  },
   "shopDescriptions": {
     "mixology_stock_low_potion_pack": "<col=ffffff>Requires level 60 Herblore.</col> A pack of potions made by an apprentice alchemist.",
     "mixology_stock_med_potion_pack": "<col=ffffff>Requires level 70 Herblore.</col> A pack of potions made by an adept alchemist.",

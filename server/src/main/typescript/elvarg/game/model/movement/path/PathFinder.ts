@@ -198,7 +198,7 @@ export class PathFinder {
             blockAccessFlags: options.blockAccessFlags ?? 0,
             // Matches OSRS's 25-checkpoint path cap (see RsmodRouteFinding's default).
             maxWaypoints: options.maxWaypoints ?? 25,
-            privateArea: entity.getPrivateArea(),
+            privateArea: entity.getWalkClipArea(),
         });
 
         if (!route.success) {
@@ -251,7 +251,7 @@ export class PathFinder {
             destWidth: Math.max(target.getSize(), 1),
             destLength: Math.max(target.getSize(), 1),
             locShape: -2,
-            privateArea: entity.getPrivateArea(),
+            privateArea: entity.getWalkClipArea(),
         });
     }
 
@@ -277,7 +277,7 @@ export class PathFinder {
             locAngle,
             locShape,
             blockAccessFlags,
-            privateArea: entity.getPrivateArea(),
+            privateArea: entity.getWalkClipArea(),
         });
     }
 
@@ -330,7 +330,7 @@ export class PathFinder {
             moveNear: true,
             blockAccessFlags: 0,
             maxWaypoints: 25,
-            privateArea: player.getPrivateArea(),
+            privateArea: player.getWalkClipArea(),
         });
         return route.success && route.waypoints.length === 0;
     }
@@ -367,7 +367,7 @@ export class PathFinder {
                 destLength: 1,
                 locShape: -1,
                 moveNear: false,
-                privateArea: player.getPrivateArea(),
+                privateArea: player.getWalkClipArea(),
             });
             if (!route.success) continue;
 
@@ -485,7 +485,7 @@ export class PathFinder {
             destWidth: 1,
             destLength: 1,
             locShape: -2,
-            privateArea: entity.getPrivateArea(),
+            privateArea: entity.getWalkClipArea(),
         });
     }
 

@@ -267,6 +267,26 @@ test("as captured: Bryophyta's gate warns first, then she attacks on arrival", (
   Lair.sessionOf(player).end();
 });
 
+test("as captured: Check-Count on Bryophyta's gate - the chests opened, in chat and a mesbox, locked or not", () => {
+  const player = createPlayer({ x: 3174, y: 9900 });
+  assert.equal(Lair.checkCount({ player, ...object(32534, 3174, 9901) }), true);
+  const zero = "You have opened Bryophyta's chest a total of 0 times.";
+  assert.deepEqual(player.log, [zero, `say ${zero}`]);
+  assert.equal(Lair.sessionOf(player), null, "only a count, not a way in");
+  assert.equal(prompts.length, 0, "no enter question");
+
+  player.log.length = 0;
+  player.setAttribute(Common.CHESTS_ATTRIBUTE.bryophyta, 7);
+  player.setAttribute(Common.CHESTS_ATTRIBUTE.obor, 3);
+  Lair.checkCount({ player, ...object(32534, 3174, 9901) });
+  assert.deepEqual(player.log, ["You have opened Bryophyta's chest a total of 7 times.", "say You have opened Bryophyta's chest a total of 7 times."]);
+
+  player.log.length = 0;
+  assert.equal(Lair.checkCount({ player, ...object(29487, 3095, 9832) }), false, "Obor's gate has no Check-Count");
+  assert.equal(Lair.checkCount({ player, ...object(12345, 3095, 9832) }), false, "nor any other gate");
+  assert.deepEqual(player.log, []);
+});
+
 function inLair(lair, items = []) {
   const player = createPlayer({ x: lair.inside.x, y: lair.inside.y, items });
   Lair.enter(player, lair, false);

@@ -3,6 +3,10 @@
  * scene around Ardeaglais into an instance (every plane, unturned) and puts the player in it,
  * with the angel dormant on its spot. Leaving by the pew, teleporting, dying or logging out ends
  * it; logging back in puts the player outside the pew.
+ *
+ * Fallen From Grace asks for its own variant (`madangel:instance-variant`): the quest's angel
+ * (16311 waking, 16309 fighting, 16312 dead), or, once the quest's angel is dead but the quest
+ * isn't finished (`defeated`), its corpse with the climbable pew as the way out.
  */
 const Common = require("./Common.MadAngel");
 
@@ -63,9 +67,11 @@ function areaClass() {
 }
 
 class Session {
-  constructor(player, variant) {
+  constructor(player, variant, defeated = false) {
     this.player = player;
     this.variant = variant;
+    /** The quest's angel is already dead: its corpse lies there and nothing wakes. */
+    this.defeated = variant === "quest" && defeated;
     this.npcs = variant === "quest" ? (Common.data.questNpcs ?? Common.data.npcs) : Common.data.npcs;
     this.area = new (areaClass())();
     this.area.session = this;
@@ -80,9 +86,21 @@ class Session {
 
   /** As captured, the copy's broken pew is the way out (Exit, Quick-exit) rather than the way in. */
   placeExitPew() {
+    this.placePew(Common.data.pew.exitId);
+  }
+
+  /**
+   * As captured (Fallen From Grace, rsprox P2 tick 431): when the quest's angel dies the copy's
+   * pew turns back into the climbable one (62250), which then takes the player straight out.
+   */
+  placeClimbPew() {
+    this.placePew(Common.data.pew.climbId);
+  }
+
+  placePew(id) {
     const { GameObject, ObjectManager } = Common.core;
     const { pew } = Common.data;
-    ObjectManager.register(new GameObject(pew.exitId, this.tile(pew.tile), pew.exitShape, pew.exitRotation, this.area), true);
+    ObjectManager.register(new GameObject(id, this.tile(pew.tile), pew.exitShape, pew.exitRotation, this.area), true);
   }
 
   /** The instance's copy of a cathedral tile. */
@@ -101,12 +119,12 @@ class Session {
   spawnAngel() {
     const { spawn } = Common.data;
     const at = this.tile(spawn.tile);
-    const id = this.variant === "quest" ? this.npcs.dormant : this.npcs.fighting;
+    const id = this.defeated ? this.npcs.dead : this.variant === "quest" ? this.npcs.dormant : this.npcs.fighting;
     const npc = Common.api.spawnNpc({ id, x: at.getX(), y: at.getY(), z: at.getZ(), owner: this.player, wanderRadius: 0, face: spawn.direction });
     if (!npc) return null;
     npc.__skipDefaultRespawn = true;
     npc.__madAngel = this;
-    npc.setNpcTransformationId(this.npcs.dormant);
+    npc.setNpcTransformationId(this.defeated ? this.npcs.dead : this.npcs.dormant);
     this.area.add(npc);
     this.boss = npc;
     return npc;
@@ -125,17 +143,21 @@ class Session {
 
 const sessionOf = (player) => sessions.get(player) ?? null;
 
-/** Lets the owning quest answer whether this instance is its quest variant. */
+/**
+ * Lets the owning quest answer whether this instance is its quest variant, and whether the
+ * quest's angel is already dead (`defeated`).
+ */
 function instanceVariant(player) {
-  const request = { player, variant: null };
+  const request = { player, variant: null, defeated: false };
   Common.api.emitCustomEvent?.("madangel:instance-variant", request);
-  return request.variant === "quest" ? "quest" : "normal";
+  return { variant: request.variant === "quest" ? "quest" : "normal", defeated: request.defeated === true };
 }
 
 /** Starts the player's cathedral: the instance and the dormant angel, ready for the move in. */
 function open(player) {
   sessionOf(player)?.end();
-  const session = new Session(player, instanceVariant(player));
+  const { variant, defeated } = instanceVariant(player);
+  const session = new Session(player, variant, defeated);
   sessions.set(player, session);
   session.spawnAngel();
   return session;
@@ -148,7 +170,8 @@ function enter(session) {
   session.area.enter(player);
   player.moveTo(session.tile(pew.inside));
   player.setPositionToFace(session.tile([...pew.insideFace, 0]));
-  session.placeExitPew();
+  if (session.defeated) session.placeClimbPew();
+  else session.placeExitPew();
   player.setAttribute(Common.INSIDE_ATTRIBUTE, true);
 }
 

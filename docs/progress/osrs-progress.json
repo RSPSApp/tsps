@@ -11264,6 +11264,7 @@
           "wiki": "https://oldschool.runescape.wiki/w/In_Aid_of_the_Myreque",
           "implementedIn": [
             "server/plugins/quests/quests/InAidOfTheMyreque.Quest.js",
+            "server/plugins/quests/inaid/",
             "server/plugins/quests/QuestRuntime.js"
           ],
           "devNotes": [
@@ -11271,7 +11272,8 @@
             "No plugin exists yet; town-rebuilding multi-stage quest, so model on server/plugins/quests/quests/BlackKnightsFortress.Quest.js.",
             "The 'In Aid of the Myreque' page in npc-dialogues.json carries 70 variants ('the-myreque-s-job-offer-veliaf-hurtz'); source ids/slugs from npc-dialogues.json + npc-dialogue-index.json / osrsreboxed.",
             "The Burgh de Rott repair tasks each have their own variant ('fixing-the-general-store', 'fixing-the-bank', ...).",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3279 fix: quest rocks and rubble take any pickaxe Mining would use."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3279 fix: quest rocks and rubble take any pickaxe Mining would use.",
+            "2026-11-20, branch fix/in-aid-of-the-myreque-capture: rebuilt against a full live rsprox playthrough (revision 242): live's varbit 1990 stage values, the quest's own varbits driving the cache multilocs/multinpcs per player (inn rubble and trapdoor, store roof and wall, bank booth, wall and banker, furnace, temple trapdoor, tomb boards, the blood-tithe cast, the Canifis hideout's Myreque), the cellar, Castle Drakan, store-fight and swamp-ambush instances, the route map, and live's boxes, animations, sounds and completion order. Facts with capture ticks in docs/quests/in-aid-of-the-myreque/README.md; tests server/tests/in-aid-of-the-myreque-*.test.cjs. Remaining: dialogue wording differences that need osrsreboxed-db dumper fixes, and the uncaptured branches listed in that README (route 1 of the escort, Ivan's health thresholds)."
           ],
           "taskDetails": [
             {
@@ -11371,10 +11373,11 @@
           ],
           "devNotes": [
             "Landed on tsps main in PR #198 (f17647f9): server/plugins/quests/quests/InSearchOfTheMyreque.Quest.js is loaded by Quests.plugin.js and owns persisted quest stages, transcript variants/conditions, gameplay hooks, journal and completion rewards.",
-            "Remaining parity: the quest NPCs themselves are not spawned by this file (central registration/world spawns own them); only the Skeleton Hellhound is spawned owner-only. The Curpile quiz dump lists all six questions as one menu, so the runtime only ever plays one question - a single correct answer passes (ponytail: wiki dump flattens the three-random-question quiz, split it when the runtime can replay sub-menus). Curpile's 3-damage punch is not applied. Per-player bridge rungs live in a persisted attribute mirrored to varbits 176-178/3928; the world clipping is not edited.",
+            "(Superseded by the 2026-11-20 note below for the quiz, the punch and the bridge clipping.) Remaining parity: the quest NPCs themselves are not spawned by this file (central registration/world spawns own them); only the Skeleton Hellhound is spawned owner-only. The Curpile quiz dump lists all six questions as one menu, so the runtime only ever plays one question - a single correct answer passes (ponytail: wiki dump flattens the three-random-question quiz, split it when the runtime can replay sub-menus). Curpile's 3-damage punch is not applied. Per-player bridge rungs live in a persisted attribute mirrored to varbits 176-178/3928; the world clipping is not edited.",
             "PR #417 (78214015): the quest audit (#410) replayed all 73 ported quests; systemic fixes (ground-items.json loaded, onNpcDeath killer, scoped dialogue/condition/object hooks, rev-241 object ids, completion scroll) make this one completable by normal play.",
             "Main 3b61a15a8 (6 November 2026): #2296 fix: stop accepted dialogue after rejected quest starts; #2528 Implement remaining Morytania diary activities. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4379 In Search of the Myreque: answer Curpile's quiz steps by their current ids."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4379 In Search of the Myreque: answer Curpile's quiz steps by their current ids.",
+            "2026-11-20, branch fix/5488-in-search-of-myreque: aligned with an rsprox capture of a whole live playthrough (docs/in-search-of-the-myreque.md): a repaired Hollows bridge is walked both ways (#6264); the trees, rung repairs, Curpile's knock-out, Cyreg's Travel and the Mort'ton boat's fare question, the doors in the earth, Harold's words on arrival, the hand-in and Vanstrom's cutscene in a copy of the hideout, the hellhound fight and Veliaf's words after it, the hidden wall and the basement ladder follow the capture's ticks, animations, sounds, tiles and varbits (173/174, 176-178/3928, 396, 2496); completion waits for the Stranger's last line. Verified by server/tests/myreque-capture-parity.test.cjs and the other Myreque tests, and an agent-MCP run (docs/quests/in-search-of-the-myreque). Limits: live's reworded dialogue is kept as the Wiki transcript (listed as recorded differences); the duplicate hideout Veliaf is In Aid of the Myreque's spawn, removed in #6307."
           ],
           "taskDetails": [
             {
@@ -16610,7 +16613,8 @@
             "PR #462 (b0ba9f98): ported in server/plugins/quests/quests/FallenFromGrace.Quest.js - transcript-driven (words in npc-dialogues.json; the plugin owns stage varbit/variant selection, conditions, spawns, journal and rewards) and played stage 0 to completion through the agent MCP.",
             "No plugin exists yet; model the multi-location investigation and boss on server/plugins/quests/quests/DragonSlayer.Quest.js.",
             "The 'Fallen From Grace' page in npc-dialogues.json carries 49 variants ('starting-the-quest-talking-to-cormac'); source ids/slugs from npc-dialogue-index.json.",
-            "Wyrmscraig and the Sailing skill are not modelled; state the Sailing/Wyrmscraig dependency explicitly. The cipher chest and Mad Angel crush-weakness are quest-specific."
+            "Wyrmscraig and the Sailing skill are not modelled; state the Sailing/Wyrmscraig dependency explicitly. The cipher chest and Mad Angel crush-weakness are quest-specific.",
+            "2026-11-20, branch fix/6300-fallen-from-grace (issue #6300): aligned the quest with two rsprox recordings of a full run (start to completion). The basement stairs now unlock the hatch into the real cathedral (stage 16), the broken pew asks \"Climb over the pew?\" and the quest's Mad Angel wakes by itself 3 ticks after the player lands (it previously waited, dormant, for a click), and the front door's question opens the 5-pin lock with a new combination each time (it previously printed the success line with no puzzle and stayed shut). Also as captured: stages 3/4/11 on the right lines, Mortimer's greeting on landing in the cavern with the quest's own three trolls, the rockfall/golem fades and moves, item and message boxes for the transcript's hand-outs, Elessia's letter read on the long scroll as stage 19, the sunstone crystal back on the Mad Angel's 100% table and the 255-hitpoint enrage of the quest angel (Wiki). Verified by server/tests/fallen-from-grace-captured-flow.test.cjs, wyrmscraig.test.cjs, remaining-fallen-from-grace-locks.test.cjs and quest-lockpicking.test.cjs. Remaining: the notebook/primer/warning-note/observations Read pages (only the notebook's first spread is recorded) and the cavern's private instance (spawned for the owner in the shared map instead)."
           ],
           "taskDetails": [
             {
@@ -20558,7 +20562,8 @@
             "PR #715 (c51f50ea): reworked against the pinned RSProx and Quest Helper sources; dialogue, stages, rewards, recovery and post-quest checks are aligned.",
             "Main 8403b60db (4 November 2026): #2063 — Quests: restore captured auxiliary varbits on login. Prior task credit and any documented puzzle/follower/cutscene substitutions remain unchanged.",
             "Main 3b61a15a8 (6 November 2026): #2607 Quests: align Royal Trouble, Sins and Defender capture state; #2659 Close quest fade overlays after fading back in; #2668 Let Veliaf sell a lost Blisterwood flail. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3911 XP rewards: diary, quest and minigame lamps, tomes and rewards take the world and account rates. #3724 XP tomes: a chapter is spent only when its XP lands. #3333 fix: Drakan's medallion worn options teleport, land where live OSRS does, Slepe needs a Slepey tablet. 4 merged PRs changed recorded implementation files for this entry."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3911 XP rewards: diary, quest and minigame lamps, tomes and rewards take the world and account rates. #3724 XP tomes: a chapter is spent only when its XP lands. #3333 fix: Drakan's medallion worn options teleport, land where live OSRS does, Slepe needs a Slepey tablet. 4 merged PRs changed recorded implementation files for this entry.",
+            "2026-11-19, branch parity/quests-damien-fires: Damien Leucurte's magical fires added (server/plugins/quests/quests/Fires.SinsOfTheFather.js): the cast, the fire two ticks later, Stamp-out, the reduced-effect message and the cleanup on his death, from rsprox captures 102 and 1637 and the Wiki; documented in docs/quests/sins-of-the-father/README.md and covered by server/tests/sins-damien-fires.test.cjs. This supersedes the earlier note that the fires belong to A Taste of Hope. Remaining: the size of the damage reduction is ours (no source gives it) and the big fire at the fireplace with its Escape options is not added."
           ],
           "taskDetails": [
             {
@@ -27616,7 +27621,8 @@
             "Final-form kills use the canonical Hydra loot table, ring-piece drops, kill records, Slayer credit and the shared pet path. Focused tests cover access, phase/vent state, specials, rewards and exit/death cleanup.",
             "The tracker previously described four vents and changing ranged/magic weaknesses; corrected to three vents, four forms and attack-style switching. Some tiles, hazard timing and damage values remain calibrated rather than recording-verified.",
             "Main 8403b60db (4 November 2026): #1960 — The merged Wiki/recording audit corrects the relevant fight behavior; findings, sources and remaining inferred values are listed in docs/audits/boss-fights*.md. Existing access/fidelity gaps are not promoted by attack-specific fixes.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4344 Poison sources: pass severity (hit x 5) to poisonEntity. #4226 Settings: dialogues, messages and switches follow their All Settings rows."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4344 Poison sources: pass severity (hit x 5) to poisonEntity. #4226 Settings: dialogues, messages and switches follow their All Settings rows.",
+            "Access: the rocks into the lair (34548) are climbable, as recorded (rsprox 1521, local 1000143 and others): a two-tile climb-over on the player's column, no requirement; script karuulmHydraRocks in server/plugins/skills/agility/shortcuts/Kourend.Agility.js. Live's instance at the rocks is not reproduced; the Alchemical door makes the private chamber."
           ],
           "taskDetails": [
             {
@@ -27935,7 +27941,7 @@
           ],
           "devNotes": [
             "PR #364 (ca75ee27): instanced per-player lair behind the key-locked gate (captured questions, warning and fade), lair music, ask-first and quick exits; leaving, teleporting, dying or logging out ends the lair. The chest rolls the Wiki table once per kill using the key, keeps the kill count (varps 1529/1733) and feeds the collection log; the first click after a kill respawns the boss 15 ticks later.",
-            "Bryophyta: melee with poison and the earth blast; growthlings (1/5, one batch at a time, 20 ticks apart) make her immune and die only to an axe or magic secateurs; the logs' bronze axe. Her open-world spawn is removed. Not modelled: the gate's Check-Count option, Combat Achievements, F2P tables.",
+            "Bryophyta: melee with poison and the earth blast; growthlings (1/5, one batch at a time, 20 ticks apart) make her immune and die only to an axe or magic secateurs; the logs' bronze axe. Her open-world spawn is removed. The gate's Check-Count gives the chests opened (rsprox rec 3275). Not modelled: Combat Achievements, F2P tables.",
             "Main 3b61a15a8 (6 November 2026): #2615 Combat achievements: cover RSProx capture gaps. Existing completion credit and documented limitations are retained unless explicitly updated below.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4344 Poison sources: pass severity (hit x 5) to poisonEntity. #4234 Settings: camera shake effects follow the combat and atmospheric camera shake settings. #4159 Music: play the Wiki's music areas tile by tile."
           ],
@@ -42016,7 +42022,8 @@
             "PR #221 (29f698d0): eating emits food:eaten ({ player, itemId, heal }) for plugins that react to it; Wintertodt's warmth restore uses it.",
             "PR #266 (63ac25dd): dynamic strawberry healing (Food.getStrawberryHeal = 1 + 6% of max HP, cap 6) and the gnome combo foods (chocchip/spicy/toad crunchies; worm/toad/cheese+tom/fruit/vegetable batta) with their Wiki heals and karambwan combo flag; covered by server/tests/food-effects.test.cjs.",
             "PR #285 (a4dd6a0c): canAnglerfishOverheal() implements the PvP-combat rule above and server/tests/food-effects.test.cjs covers it; the recorded over-heal expiry was not OSRS behaviour and was dropped.",
-            "Main 3b61a15a8 (6 November 2026): #2488 Fix Tempoross fire dousing, attacks and cannon feedback; #2646 Birthday event: the 25th Anniversary event, \"25 Years, 25 Mementos\" (stacked on #2645). Existing completion credit and documented limitations are retained unless explicitly updated below."
+            "Main 3b61a15a8 (6 November 2026): #2488 Fix Tempoross fire dousing, attacks and cannon feedback; #2646 Birthday event: the 25th Anniversary event, \"25 Years, 25 Mementos\" (stacked on #2645). Existing completion credit and documented limitations are retained unless explicitly updated below.",
+            "2026-11-20 (#6318): Halloween 2020 candies (nine colours) eat with no heal, spam \"You eat the candy. Yum!\" and overhead \"Ooh piece of candy.\" (rsprox 229/00245 ticks 510/603/607, 229/02530; Wiki Blue candy); countsEaten: false skips varp 4518. Ours: the six unrecorded colours copy the recorded ones; the eat delay is the default."
           ],
           "taskDetails": [
             {
@@ -48725,7 +48732,8 @@
             "Main 281766303 (2 November 2026): #1854/#1856/#1857 restore Varrock/Lumbridge action credits, Hans dialogue and H.A.M. hideout entry.",
             "Main 8403b60db (4 November 2026): #2051 — Guardians of the Rift Atlax diary behavior is corrected from captures; the remaining diary trigger/reward inventory is unchanged.",
             "Main 3b61a15a8 (6 November 2026): #2478 Credit supported Morytania Diary gameplay tasks; #2490 Credit supported Kourend and Kebos Diary gameplay tasks; #2501 Complete Western Provinces Diary gameplay task integrations; #2534 Implement Ardougne Hard and Elite diary gameplay tasks; #2547 fix(achievement-diaries): guard Two-pints reward claims against stale and interrupted dialogues; #2576 Make the custom Character Summary explicitly opt in. (14 merged PRs touch the recorded implementation; highlights shown.) Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026): #2824 adds Twiggy’s diary cape purchase. #4367 consolidates diary task integrations into one plugin. Task-trigger coverage and the remaining item unlocks stay partial."
+            "Main 3e9ee2d67 (11 November 2026): #2824 adds Twiggy’s diary cape purchase. #4367 consolidates diary task integrations into one plugin. Task-trigger coverage and the remaining item unlocks stay partial.",
+            "Branch parity/diaries-ent-chop (20 November 2026): the medium Wilderness Diary reward that makes Wilderness Ent trunks 15% likelier to chop (Wiki: Ent) is in server/plugins/skills/woodcutting/EntTrunk.Woodcutting.js, checked by server/tests/ent-trunk-chop-native.test.cjs; docs/woodcutting-guild.md. No capture of it. The rewards task stays in progress."
           ],
           "taskDetails": [
             {

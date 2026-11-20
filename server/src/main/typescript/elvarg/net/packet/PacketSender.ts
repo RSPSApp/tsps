@@ -46,6 +46,7 @@ import {
   encodePlaySong,
   encodeProjectiles,
   encodeRunClientScript,
+  type ScriptArg,
   encodeCameraShake,
   encodeCameraMoveTo,
   encodeCameraLookAt,
@@ -1759,7 +1760,8 @@ export class PacketSender {
     }
   }
 
-  sendClientScript(scriptId: number, ...args: (number | string)[]): this {
+  /** RUNCLIENTSCRIPT. A number[] or string[] argument is one of the cache's array arguments. */
+  sendClientScript(scriptId: number, ...args: ScriptArg[]): this {
     this.player.getSession().sendClientPacket(encodeRunClientScript(scriptId, args));
     return this;
   }

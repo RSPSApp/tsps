@@ -191,36 +191,157 @@ test('the life leech never procs on a splash', () => {
     }
 });
 
-test('two blood runes a charge up to 20,000; checking and uncharging return every rune (Wiki)', () => {
+/** An inventory with the staff in slot 0 and blood runes in slot 1, and a player that records prompts and boxes. */
+function staffInInventory(staff, runes) {
+    const slots = new Array(28).fill(null);
+    slots[0] = staff;
+    if (runes > 0) slots[1] = new Item(I.BLOOD_RUNE, runes);
+    const inventory = {
+        slots,
+        runes: () => slots[1]?.getAmount() ?? 0,
+        getItems: () => slots,
+        getAmount: (id) => slots.reduce((n, item) => n + (item?.getId() === id ? item.getAmount() : 0), 0),
+        deleteAtSlot: (slot, amount) => {
+            const left = slots[slot].getAmount() - amount;
+            slots[slot] = left > 0 ? new Item(slots[slot].getId(), left) : null;
+        },
+        refreshItems: () => {},
+    };
+    let amountAction = null;
+    const prompts = [];
+    const boxes = [];
+    const messages = [];
+    const player = {
+        getInventory: () => inventory,
+        sendMessage: (message) => messages.push(message),
+        setEnteredAmountAction: (action) => { amountAction = action; },
+        getEnteredAmountAction: () => amountAction,
+        getPacketSender: () => ({ sendEnterAmountPrompt: (text) => prompts.push(text) }),
+        getDialogueManager: () => ({ startDialogues: (chain) => boxes.push(...chain.getDialogues().values()) }),
+    };
+    return { player, inventory, prompts, boxes, messages, enter: (amount) => amountAction.execute(amount) };
+}
+
+function useRunesOn(built, staff) {
+    const event = {
+        player: built.player,
+        usedItem: built.inventory.slots[1],
+        usedWithItem: staff,
+        usedItemId: I.BLOOD_RUNE,
+        usedWithItemId: staff.getId(),
+        usedItemSlot: 1,
+        usedWithItemSlot: 0,
+        handled: false,
+    };
+    Sanguinesti._test.chargeStaff(event);
+    return event;
+}
+
+function boxText(box) {
+    return box.getText();
+}
+
+test('blood runes on the staff ask how many charges, up to what the runes pay for (rsprox local 1001250, 1001295)', () => {
     const staff = new Item(I.SANGUINESTI_STAFF_UNCHARGED_, 1);
-    const inventory = chargeInventory({ runes: 5 });
-    Sanguinesti._test.chargeStaff({
-        player: chargingPlayer(inventory),
-        usedItem: staff,
-        usedWithItem: new Item(I.BLOOD_RUNE, 5),
-        usedItemId: I.SANGUINESTI_STAFF_UNCHARGED_,
-        usedWithItemId: I.BLOOD_RUNE,
-    });
+    const built = staffInInventory(staff, 2001);
+    const event = useRunesOn(built, staff);
+    assert.equal(event.handled, true);
+    assert.deepEqual(built.prompts, ['How many charges do you want to apply? (Up to 1,000)']);
+    assert.equal(Sanguinesti._test.chargesOf(staff), 0, 'nothing is spent before the amount is entered');
+    assert.equal(built.inventory.runes(), 2001);
+
+    built.enter(400);
     assert.equal(staff.getId(), I.SANGUINESTI_STAFF);
-    assert.equal(Sanguinesti._test.chargesOf(staff), 2);
-    assert.equal(inventory.runes, 1, 'two runes a charge');
+    assert.equal(Sanguinesti._test.chargesOf(staff), 400);
+    assert.equal(built.inventory.runes(), 1201, 'two runes a charge (Wiki)');
+    assert.equal(built.boxes.length, 1, 'an objectbox, not a game message');
+    assert.equal(boxText(built.boxes[0]), 'You apply 400 charges to your Sanguinesti staff.');
+    assert.equal(built.boxes[0].getItemId(), I.SANGUINESTI_STAFF, 'the box shows the charged staff');
+});
+
+test('an amount above the offer applies the offer; zero applies nothing (rsprox local 1001295)', () => {
+    const staff = new Item(I.SANGUINESTI_STAFF, 1);
+    staff.setMetaValue(CHARGES_META_KEY, MAX_CHARGES - 3);
+    const built = staffInInventory(staff, 10);
+    useRunesOn(built, staff);
+    assert.deepEqual(built.prompts, ['How many charges do you want to apply? (Up to 3)'], 'only the room left');
+    built.enter(435567);
+    assert.equal(Sanguinesti._test.chargesOf(staff), MAX_CHARGES);
+    assert.equal(built.inventory.runes(), 4);
+    assert.equal(boxText(built.boxes[0]), 'You apply 3 charges to your Sanguinesti staff.');
+
+    const other = new Item(I.SANGUINESTI_STAFF_UNCHARGED_, 1);
+    const zero = staffInInventory(other, 10);
+    useRunesOn(zero, other);
+    zero.enter(0);
+    assert.equal(Sanguinesti._test.chargesOf(other), 0);
+    assert.equal(zero.inventory.runes(), 10);
+    assert.equal(zero.boxes.length, 0);
+});
+
+test('the runes or staff changing before the amount is entered are re-checked', () => {
+    const staff = new Item(I.SANGUINESTI_STAFF_UNCHARGED_, 1);
+    const built = staffInInventory(staff, 100);
+    useRunesOn(built, staff);
+    built.inventory.deleteAtSlot(1, 96);
+    built.enter(50);
+    assert.equal(Sanguinesti._test.chargesOf(staff), 2, 'only what the runes left still pay for');
+    assert.equal(built.inventory.runes(), 0);
+
+    const moved = new Item(I.SANGUINESTI_STAFF_UNCHARGED_, 1);
+    const gone = staffInInventory(moved, 100);
+    useRunesOn(gone, moved);
+    gone.inventory.slots[0] = null;
+    gone.enter(10);
+    assert.equal(Sanguinesti._test.chargesOf(moved), 0, 'a staff no longer in its slot is not charged');
+    assert.equal(gone.inventory.runes(), 100);
+});
+
+test('Charge on the uncharged staff asks as the runes do (not recorded; Tonalztics precedent)', () => {
+    const staff = new Item(I.SANGUINESTI_STAFF_UNCHARGED_, 1);
+    const built = staffInInventory(staff, 30);
+    assert.equal(itemActions.get('Sanguinesti staff (uncharged)').Charge({ player: built.player, item: staff, slot: 0 }), true);
+    assert.deepEqual(built.prompts, ['How many charges do you want to apply? (Up to 15)']);
+    built.enter(15);
+    assert.equal(staff.getId(), I.SANGUINESTI_STAFF);
+    assert.equal(Sanguinesti._test.chargesOf(staff), 15);
+
+    const holy = new Item(I.HOLY_SANGUINESTI_STAFF_UNCHARGED_, 1);
+    const holyBuilt = staffInInventory(holy, 4);
+    itemActions.get('Holy sanguinesti staff (uncharged)').Charge({ player: holyBuilt.player, item: holy, slot: 0 });
+    assert.deepEqual(holyBuilt.prompts, ['How many charges do you want to apply? (Up to 2)']);
+});
+
+test('a charged staff\'s Charge asks as the runes do; a full staff or too few runes are refused', () => {
+    const staff = new Item(I.SANGUINESTI_STAFF, 1);
+    staff.setMetaValue(CHARGES_META_KEY, 5);
+    const built = staffInInventory(staff, 30);
+    assert.equal(itemActions.get('Sanguinesti staff').Charge({ player: built.player, item: staff, slot: 0 }), true);
+    assert.deepEqual(built.prompts, ['How many charges do you want to apply? (Up to 15)']);
+    built.enter(15);
+    assert.equal(Sanguinesti._test.chargesOf(staff), 20);
+
+    const poor = new Item(I.SANGUINESTI_STAFF, 1);
+    poor.setMetaValue(CHARGES_META_KEY, 5);
+    const one = staffInInventory(poor, 1);
+    Sanguinesti._test.chargeOption({ player: one.player, item: poor, slot: 0 });
+    assert.equal(one.prompts.length, 0);
+    assert.equal(one.messages.at(-1), 'You need two blood runes for each charge.');
 
     const full = new Item(I.SANGUINESTI_STAFF, 1);
-    full.setMetaValue(CHARGES_META_KEY, MAX_CHARGES - 1);
-    const fullInventory = chargeInventory({ runes: 10 });
-    const fullPlayer = chargingPlayer(fullInventory);
-    Sanguinesti._test.chargeStaff({
-        player: fullPlayer,
-        usedItem: full,
-        usedWithItem: new Item(I.BLOOD_RUNE, 10),
-        usedItemId: I.SANGUINESTI_STAFF,
-        usedWithItemId: I.BLOOD_RUNE,
-    });
-    assert.equal(Sanguinesti._test.chargesOf(full), MAX_CHARGES);
-    assert.equal(fullInventory.runes, 8, 'only one charge of room');
+    full.setMetaValue(CHARGES_META_KEY, MAX_CHARGES);
+    const rich = staffInInventory(full, 10);
+    Sanguinesti._test.chargeOption({ player: rich.player, item: full, slot: 0 });
+    assert.equal(rich.prompts.length, 0);
+    assert.equal(rich.messages.at(-1), 'Your Sanguinesti staff is already fully charged.');
+});
 
+test('Check reads "charges remaining" (rsprox 4151, 4288); uncharging returns every rune (Wiki)', () => {
+    const full = new Item(I.SANGUINESTI_STAFF, 1);
+    full.setMetaValue(CHARGES_META_KEY, MAX_CHARGES);
+    const fullPlayer = chargingPlayer(chargeInventory());
     Sanguinesti._test.checkCharges({ player: fullPlayer, item: full });
-    assert.match(fullPlayer.messages.at(-1), /20,000 charges left/);
+    assert.equal(fullPlayer.messages.at(-1), 'Your Sanguinesti staff has 20,000 charges remaining.');
 
     const unchargeInventory = chargeInventory({ runes: 0, freeSlots: 5 });
     const unchargePlayer = chargingPlayer(unchargeInventory);

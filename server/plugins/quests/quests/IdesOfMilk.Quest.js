@@ -234,10 +234,19 @@ module.exports = function registerIdesOfMilkQuest(api) {
     attackSpeed(npc) {
       return npc.getArea() instanceof BullArena ? (this.nextAttack(npc, npc.getCombat().getTarget()) ? 8 : 5) : super.attackSpeed(npc);
     }
+    handleAfterHitEffects(hit) {
+      super.handleAfterHitEffects(hit);
+      const npc = hit.getAttacker();
+      const arena = npc.getArea();
+      // "Smarter than a Cow" fails when an attack connects, even if protection reduces it to zero.
+      // Starting an animation (or a special whose footprint misses) is not a successful attack.
+      if (arena instanceof BullArena && arena.bull === npc && !arena.special && hit.isAccurate()) {
+        api.emitCustomEvent("ides-of-milk:brutus-hit", { player: hit.getTarget() });
+      }
+    }
     start(npc, player) {
       const arena = npc.getArea();
       if (!(arena instanceof BullArena)) return super.start(npc, player);
-      api.emitCustomEvent("ides-of-milk:brutus-attack", { player });
       const at = npc.getLocation().clone();
       arena.special = this.nextAttack(npc, player);
       if (!arena.special) {
@@ -293,6 +302,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
           npc.setNeedsPlacement(false);
         }
         if (hit) {
+          api.emitCustomEvent("ides-of-milk:brutus-hit", { player });
           const hp = player.getSkillManager().getMaxLevel(Skill.HITPOINTS);
           // shortcut: quest scaling is documented as roughly 30–40%; capture low-level hits to establish exact rounding.
           const min = Math.min(15, Math.max(1, Math.floor(hp * 0.3)));

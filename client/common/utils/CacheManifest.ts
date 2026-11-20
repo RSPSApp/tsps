@@ -1,4 +1,4 @@
-import { resolveCacheKey } from "../../rs/cache/CacheFiles";
+import { canUseCacheStorage, resolveCacheKey } from "../../rs/cache/CacheFiles";
 
 const DB_NAME = "osrs-typescript-cache-manifest";
 const DB_VERSION = 1;
@@ -123,7 +123,7 @@ async function hasCompleteRetainedParts(cache: Cache, manifestRequest: Request):
 }
 
 export async function isCacheManifestComplete(entry: CacheManifestEntry): Promise<boolean> {
-    if (typeof (globalThis as any).caches === "undefined") {
+    if (!canUseCacheStorage()) {
         return true;
     }
     try {

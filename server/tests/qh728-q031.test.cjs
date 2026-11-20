@@ -307,6 +307,8 @@ test('EW1 yields the workbench bar to EW2 only while EW2 needs the crane claw', 
   shield.inventory.adds(I.HAMMER, 1);
   const owned = h.itemOnObject(shield, I.ELEMENTAL_METAL, O.WORKBENCH_5);
   assert.equal(owned.handled, true);
+  // EW I makes the shield four ticks after the use.
+  for (let i = 0; i < 4; i++) core.TaskManager.process();
   assert.equal(shield.inventory.getAmount(I.ELEMENTAL_METAL), 0);
   assert.equal(shield.inventory.getAmount(I.ELEMENTAL_SHIELD), 1);
 });

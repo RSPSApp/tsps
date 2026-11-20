@@ -4565,7 +4565,8 @@
             "Ported in server/plugins/quests/quests/ElementalWorkshopI.Quest.js (transcript-driven variant selection, conditions and hand-ins); see the file header for documented gaps.",
             "Transcript/source is minimal; the book item text and the four puzzle objects need item/object ids from the cache.",
             "The elemental shield recipe is Smithing content - the quest should only unlock it, not implement the skill.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3318 Require Smithing 20 to smelt elemental metal. #3279 fix: quest rocks and rubble take any pickaxe Mining would use."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3318 Require Smithing 20 to smelt elemental metal. #3279 fix: quest rocks and rubble take any pickaxe Mining would use.",
+            "2026-11-19, branch feat/elemental-workshop-i: the whole quest follows the user's rev 242 rsprox recording (docs/quests/elemental-workshop-i/README.md): the bookcase item box, the Start prompt and book 392, the knife or slash-weapon cut, the odd wall as a pass-through gate (inviswall, open leaves, scrape, two ticks), the stairs line, valve/lever/bellows/lava/furnace/smelt/workbench messages and timings, the elemental rock turning into the earth elemental in place, rocks that stay put and respawn in four ticks. Verified by server/tests/elemental-workshop-i.test.cjs (12 cases on real map locs and ticks) and an agent-MCP run from the bookcase to the completion. Statuses unchanged (already done). Not covered (the quest README and the PR list them; the file header no longer does): varbit 2064 (boxes) and the journal after the first stage, which no recording shows."
           ],
           "taskDetails": [
             {

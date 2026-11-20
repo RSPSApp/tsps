@@ -96,6 +96,8 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   // tick 940, 239 tick 1649); nameless in the cache, so ObjectIdentifiers has no property for them.
   FARMING_GUILD_DOOR_LEFT_OPEN: 34465,
   FARMING_GUILD_DOOR_RIGHT_OPEN: 34466,
+  ELEMENTAL_WORKSHOP_WALL_LEFT_OPEN: 26117, // elemental_workshop_oddwall_l_open: nameless, actionless open leaf
+  ELEMENTAL_WORKSHOP_WALL_RIGHT_OPEN: 26116, // elemental_workshop_oddwall_r_open
   // kr_camelot_metalgateopenl/r: the Camelot castle gate's leaves while it lets the player through
   // (local 1001994 ticks 16539, 17417, 17541); nameless in the cache, so ObjectIdentifiers has none.
   CAMELOT_GATE_LEFT_OPEN: 26083,
@@ -619,6 +621,24 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       walkOver: true,
       closeTicks: 2,
       openSoundId: 62,
+    }),
+    // The Elemental Workshop's odd looking wall (elemental_workshop_oddwall_l/_r), the user's rev 242
+    // capture ElementalWorkshop1.bin ticks 197-200 (in) and 239-242 (out): Open puts
+    // elemental_workshop_inviswall (18505) on both wall tiles and the open leaves on the tiles north,
+    // scrape (2410), the player steps across in the same tick both ways and the wall is back two ticks
+    // later. The key rule is ElementalWorkshopI.Quest's, which opens it through door:open.
+    Object.freeze({
+      closed: [[O.ODD_LOOKING_WALL_8, 2709, 3495, 0, 1], [O.ODD_LOOKING_WALL_7, 2710, 3495, 0, 1]],
+      opened: [
+        [O.ODD_LOOKING_WALL_6, 2709, 3495, 0, 1],
+        [O.ODD_LOOKING_WALL_6, 2710, 3495, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.ELEMENTAL_WORKSHOP_WALL_LEFT_OPEN, 2709, 3496, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.ELEMENTAL_WORKSHOP_WALL_RIGHT_OPEN, 2710, 3496, 0, 2],
+      ],
+      crossY: 3496,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 2410,
     }),
     // Observatory Quest's kitchen gate (keepgate_closed/_left), RSProx 20261110T110141-5ab63b4
     // ticks 856-858, 888-890 and 914-920 (rev 242): Open puts inviswall 38848 on both doorway

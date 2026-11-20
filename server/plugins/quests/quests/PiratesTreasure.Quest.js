@@ -68,6 +68,8 @@ module.exports = function registerPiratesTreasureQuest(api) {
   const PORT_SARIM_LANDING = new Location(3029, 3217, 0);
   const MUSA_POINT_LANDING = new Location(2956, 3146, 0);
   const PANDEMONIUM_LANDING = new Location(3065, 3002, 0);
+  /** Everything south of this is the Pandemonium's waters, well clear of Port Sarim (y 3190+). */
+  const PANDEMONIUM_MAX_Y = 3100;
   const TOPLEVEL = 161;
   const OVERLAY_ATMOSPHERE_UID = (TOPLEVEL << 16) | 1;
   const FADE_OVERLAY = 174;
@@ -444,8 +446,8 @@ module.exports = function registerPiratesTreasureQuest(api) {
     }
     if (CUSTOMS_OFFICER_IDS.has(npcId) && RUM_CONFISCATE_STEP_IDS.has(stepId)) {
       if (event.text) player.sendMessage(String(event.text));
+      // The carried bottle only: rum already stashed or shipped in Luthas's crate stays there.
       if (hasItem(player, RUM_ITEM_ID)) player.getInventory().deleteNumber(RUM_ITEM_ID, 1);
-      setAttr(player, RUM_ATTRIBUTE, 0);
       event.handled = true;
       return;
     }
@@ -622,6 +624,7 @@ module.exports = function registerPiratesTreasureQuest(api) {
     "Port Sarim": travelFromPandemoniumToPortSarim, "Musa Point": travelFromPandemoniumToMusaPoint,
   });
   api.onPlayerLogout(cleanupGardener);
+  api.onServerShutdown(landEveryone);
   function buyRum(player) {
     const inventory = player.getInventory();
     if (inventory.getAmount(COINS_ITEM_ID) < 27) return;
@@ -711,18 +714,27 @@ module.exports = function registerPiratesTreasureQuest(api) {
     if (rum > 0) {
       // Ours: only the 30-coin line with rum is captured; the gloves line takes the same ending.
       player.getInventory().deleteNumber(RUM_ITEM_ID, rum);
-      setAttr(player, RUM_ATTRIBUTE, 0);
       paid = `${gloves ? `You pay the boarding charge of ${fare} coins.` : paid} However, the customs officer confiscates your rum before letting you board.`;
     }
     voyage(player, destination, port, route, fare, paid);
   }
 
-  function travelFromPandemoniumToPortSarim({ player }) {
-    leavePandemonium(player, PORT_SARIM_LANDING, "Port Sarim", "pandemonium-port-sarim");
+  /**
+   * Seaman Morris sails from the Pandemonium (3063-3065, 3002-3004 since rev 229). npc-spawns.json still
+   * has his old Port Sarim spot (3050,3193), where his options are left alone rather than charging for a
+   * hop across the docks.
+   */
+  function onPandemonium(npc) {
+    const at = npc?.getLocation?.();
+    return at != null && at.getY() < PANDEMONIUM_MAX_Y;
   }
 
-  function travelFromPandemoniumToMusaPoint({ player }) {
-    leavePandemonium(player, MUSA_POINT_LANDING, "Musa Point", "pandemonium-musa-point");
+  function travelFromPandemoniumToPortSarim({ player, npc }) {
+    if (onPandemonium(npc)) leavePandemonium(player, PORT_SARIM_LANDING, "Port Sarim", "pandemonium-port-sarim");
+  }
+
+  function travelFromPandemoniumToMusaPoint({ player, npc }) {
+    if (onPandemonium(npc)) leavePandemonium(player, MUSA_POINT_LANDING, "Musa Point", "pandemonium-musa-point");
   }
 
   /** Seaman Morris's fare is the boats' own 30 coins (rev 242 capture, tick 187); the gloves' half fare is ours. */
@@ -1072,6 +1084,14 @@ module.exports = function registerPiratesTreasureQuest(api) {
     if (npc) api.removeNpc(npc);
     gardenerByPlayer.delete(player);
     digging.delete(player);
+  }
+
+  /** A shutdown mid-crossing lands everyone where their boat was going, as a logout does. */
+  function landEveryone() {
+    for (const [player, trip] of [...sailing]) {
+      sailing.delete(player);
+      trip.land();
+    }
   }
 
   function gardenerThreatens(player) {

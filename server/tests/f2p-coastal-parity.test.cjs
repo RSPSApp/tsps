@@ -493,11 +493,22 @@ test('as captured (rev 242): the Karamja boats charge once, fade out, land on th
   assert.equal(p.items.get(995), 30); assert.deepEqual(here(), [3065, 3002, 0]);
   assert.deepEqual(p.messages, ['You pay the boarding charge of 30 coins.', 'You board the ship and sail to the Pandemonium.']);
   q.tick(4); p.messages.length = 0;
-  q.namedNpc.get('Seaman Morris:Port Sarim')({ player: p }); q.tick(5);
+  const morris = (x, y) => ({ getLocation: () => new core.Location(x, y, 0) });
+  q.namedNpc.get('Seaman Morris:Port Sarim')({ player: p, npc: morris(3050, 3193) });
+  assert.deepEqual(p.messages, [], "Morris's stale Port Sarim spawn does not sell a hop across the docks");
+  q.namedNpc.get('Seaman Morris:Port Sarim')({ player: p, npc: morris(3064, 3003) }); q.tick(5);
   assert.equal(p.items.get(995), 0); assert.deepEqual(here(), [3029, 3217, 0]);
   assert.deepEqual(p.messages, ['You pay the boarding charge of 30 coins.', 'You board the ship and sail to Port Sarim.']);
   assert.equal(arrived.at(-1), 'pandemonium-port-sarim');
   q.tick(4);
+
+  // A shutdown before the landing lands the player too.
+  p.items.set(995, 30);
+  q.namedNpc.get('Seaman Lorris:Travel')({ player: p });
+  q.call('onServerShutdown', {});
+  assert.deepEqual(here(), [2956, 3146, 0]);
+  q.tick(9);
+  p.moveTo(new core.Location(3028, 3218, 0));
 
   // A logout before the landing lands the player where the boat was going.
   p.items.set(995, 30);
@@ -510,7 +521,9 @@ test('as captured (rev 242): the Karamja boats charge once, fade out, land on th
 test('as captured (rev 242): rum carried to the customs officer is taken as the fare is paid, and the ship still sails', () => {
   const q = register('PiratesTreasure', 'pirates_treasure'), p = player();
   q.quest.setStage(p, 1); p.items.set(995, 30); p.items.set(431, 1);
+  p.attributes.set('pirates-treasure.rum', 2);
   q.namedNpc.get('Customs officer:Port Sarim')({ player: p });
+  assert.equal(p.attributes.get('pirates-treasure.rum'), 2, 'the shipped crate rum is not the carried bottle');
   assert.deepEqual(p.messages, [
     'You pay the boarding charge of 30 coins. However, the customs officer confiscates your rum before letting you board.',
     'You board the ship and sail to Port Sarim.',

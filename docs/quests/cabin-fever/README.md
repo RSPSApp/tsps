@@ -125,6 +125,6 @@ Wiki leaves out.
   varbits are cleared, and 1763 = 1.
 - **Not checked:** the tinderbox floor pickup in game (the focused test covers it), the
   10,000-coin claim, the post-quest lifts and teleporting out of the battle.
-- **Focused tests:** `node --test tests/qh728-q009.test.cjs`: 18/18.
+- **Focused tests:** `node --test tests/qh728-q009.test.cjs`: 19/19.
 
-Tracked in issue [#728](https://github.com/RSPSApp/tsps/issues/728) (q009).
+Tracked in issue [#728](https://github.com/RSPSApp/tsps/issues/728) (q009); PR [#6312](https://github.com/RSPSApp/tsps/pull/6312), dialogue dump [osrsreboxed-db#129](https://github.com/RSPSApp/osrsreboxed-db/pull/129).

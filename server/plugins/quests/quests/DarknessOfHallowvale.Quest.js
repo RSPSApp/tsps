@@ -611,6 +611,12 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   }
 
   /** In Aid of the Myreque must be complete before this quest can start. */
+  function continuingFromInAid(player) {
+    const request = { player, continuing: false };
+    api.emitCustomEvent("in-aid-of-the-myreque:continuing", request);
+    return request.continuing === true;
+  }
+
   function inAidComplete(player) {
     const request = { player, key: "in_aid_of_the_myreque", complete: null };
     api.emitCustomEvent("quest:is-complete", request);
@@ -1500,7 +1506,10 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   function answerCondition({ player, npcId, stepId }) {
     if (stepId === CONDITION_CONTINUING_FROM_IN_AID || stepId === CONDITION_COMING_BACK_TO_VELIAF) {
       if (!player || !VELIAF_NPC_IDS.has(npcId)) return null;
-      return stepId === CONDITION_CONTINUING_FROM_IN_AID && inAidComplete(player);
+      // Straight on from In Aid of the Myreque's hand-in, "So what now?"; any later talk, "Hello again"
+      // (In Aid capture t4963 and t4988).
+      const continuing = inAidComplete(player) && continuingFromInAid(player);
+      return stepId === CONDITION_CONTINUING_FROM_IN_AID ? continuing : inAidComplete(player) && !continuing;
     }
     if (CONDITION_REQUIRED_ITEMS.has(stepId)) {
       if (npcId !== PROP_ID) return null;

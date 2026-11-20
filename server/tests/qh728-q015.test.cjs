@@ -829,10 +829,15 @@ test('a boosted Thieving 22 starts the quest', () => {
   assert.ok(!h.messages.some((message) => /22 Thieving/.test(message)));
 });
 
-test('stage-0 Veliaf transcript selects only the canonical In Aid continuation', () => {
+test('stage-0 Veliaf transcript: the continuation straight after In Aid, "Hello again" on later talks', () => {
   const h = setup();
-  assert.equal(h.answerCondition('5iTY3c'), true, 'the In Aid prerequisite selects the continuation branch');
-  assert.equal(h.answerCondition('Ao7Gq6'), false, 'the returning-player branch cannot run as an unknown condition');
+  // In Aid of the Myreque capture: the talk after its scroll takes "So what now?" (t4963), a later one
+  // "Hello again. How's things?" (t4988). In Aid's Rod unit answers whether this talk is the continuation.
+  assert.equal(h.answerCondition('5iTY3c'), false, 'a later talk is not the continuation');
+  assert.equal(h.answerCondition('Ao7Gq6'), true, 'a later talk is the returning-player branch');
+  h.api.onCustomEvent('in-aid-of-the-myreque:continuing', (request) => { request.continuing = true; });
+  assert.equal(h.answerCondition('5iTY3c'), true, 'straight after In Aid, the continuation branch');
+  assert.equal(h.answerCondition('Ao7Gq6'), false);
   assert.equal(h.answerCondition('5iTY3c', SAFALAAN_ID), null,
     'the condition does not claim an unrelated NPC transcript');
 });

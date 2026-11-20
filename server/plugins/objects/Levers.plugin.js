@@ -11,7 +11,8 @@
  *   api.emitCustomEvent("lever:teleport", { player, destination, onArrival? })
  * `onArrival` runs when the player has landed. Given the pulled lever loc as `object` (and its
  * down loc's gameval as `down`, ikov_leverdown by default), it plays the captured pull instead, with
- * no chat lines (docs/king-black-dragon.md).
+ * the lever's own lines: `message` on the pull and `landed` on landing, each a string or
+ * `{ spam }` (none when not given; docs/king-black-dragon.md).
  */
 const ObstacleRunner = require("../skills/agility/ObstacleRunner.Agility");
 
@@ -291,17 +292,16 @@ function initialize(pluginApi) {
 
 /**
  * A plugin's own lever (the King Black Dragon's): the captured pull and its lever's down loc, then the
- * teleport. No lever of this kind has been captured; the Wilderness levers' sequence is played, without
- * their chat lines, which a video of the KBD lever does not show.
+ * teleport, with the lines its owner gives (the KBD entrance lever's, rsprox_transcripts/242/900155.txt).
  */
-function pullOwnLever({ player, destination, onArrival, object, down }) {
+function pullOwnLever({ player, destination, onArrival, object, down, message = null, landed = null }) {
   resolve();
   if (ObstacleRunner.isBusy(player)) return;
   const downName = down ?? WILDERNESS_LEVER_DOWN;
   const downId = core.CacheDefinitions.getLocId(downName);
   if (!Number.isInteger(downId)) throw new Error(`[Levers] unknown gameval ${downName}`);
   const to = [destination.getX(), destination.getY(), destination.getZ()];
-  pull(player, object, { downId }, { to }, () => onArrival?.(), { message: null });
+  pull(player, object, { downId }, { to, landed }, () => onArrival?.(), { message });
 }
 
 function teleport(event) {

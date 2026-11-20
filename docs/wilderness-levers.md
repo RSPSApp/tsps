@@ -16,8 +16,8 @@ The Mage Arena's own pair (`magearena_lever_in`/`_out`) is in
 `plugins/minigames/magearena/Levers.MageArena.js`. Other plugins can still teleport without a
 lever's pull through the `lever:teleport` event. Given the pulled lever as `object` (and its down
 loc's gameval as `down`, `ikov_leverdown` by default), the event plays the captured pull below for
-that lever instead, without the chat lines; the King Black Dragon's levers use it
-([king-black-dragon.md](king-black-dragon.md)).
+that lever instead, with the lines the caller gives (`message` on the pull, `landed` on landing; none
+otherwise); the King Black Dragon's levers use it ([king-black-dragon.md](king-black-dragon.md)).
 
 ## A pull, as captured
 
@@ -84,5 +84,5 @@ Ardougne Lever to teleport to the Wilderness." and, as from Edgeville, sets the 
 ## Not covered
 
 - The Keep lever's Edgeville tile: no recording shows it; it keeps the tile this server used before.
-- Swap-options (no recording of what it sends), the High Risk world warning, and the King Black
-  Dragon lair lever (no recording).
+- Swap-options (no recording of what it sends) and the High Risk world warning. The King Black
+  Dragon's levers are in [king-black-dragon.md](king-black-dragon.md).

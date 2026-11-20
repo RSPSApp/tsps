@@ -75,6 +75,7 @@ test('Echo KBD is the normal dragon in a private lair, configured once, cleaning
   hooks['echo-boss:start']({player:b,boss:'king-black-dragon'});
   assert.equal(spawned.length,2,'duplicate entry cannot spawn another dragon');
   assert.deepEqual(levers.map(l=>[l.player===b?'b':'a',...l.destination.args]),[['a',2271,4680,0],['b',2271,4680,0]],'each Echo entry pulls the lever into the lair, as the normal fight does');
+  assert.deepEqual(levers.map(l=>[l.message?.spam,l.landed?.spam]),[["You pull the lever...","... and teleport into the Dragon's lair."],["You pull the lever...","... and teleport into the Dragon's lair."]],'with its recorded lines (rsprox_transcripts/242/900155.txt)');
   assert.notEqual(a.area,b.area);
   assert.deepEqual(spawned.map(npc=>npc.id),[239,239],'the normal King Black Dragon');
   assert.equal(providers.length,normalProviders,'Echo adds no controller of its own');

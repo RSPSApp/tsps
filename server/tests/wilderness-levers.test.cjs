@@ -98,6 +98,7 @@ function player(varbits = {}) {
       getVarp: () => 0,
       sendVarbit: (id, value) => { sent.set(id, value); log.push([tick, "varbit", id, value]); },
       sendSoundEffect: (id) => log.push([tick, "sound", id]),
+      sendTypedMessage: (type, text) => log.push([tick, type === core.ChatType.SPAM ? "spam" : `chat${type}`, text]),
       sendInterfaceRemoval() {},
     }),
   };
@@ -395,13 +396,19 @@ test("lever:teleport hands its onArrival callback to the teleport, to run on lan
   assert.equal(calls[0][4], onArrival, "TeleportHandler.teleport's arrival callback");
 });
 
-// The King Black Dragon's levers (docs/king-black-dragon.md): no capture; a route video shows the pull
-// and the lever flipping down before the teleport, and no chat lines.
-for (const [name, x, y, to] of [
-  ["dragonkinginlever", 3067, 10253, [2271, 4680, 0]],
-  ["dragonkingoutlever", 2271, 4680, [3067, 10254, 0]],
+// The King Black Dragon's levers (docs/king-black-dragon.md): rsprox_transcripts/242/900155.txt ticks
+// 1103-1114 record the entrance lever's pull, down loc, cast and landing, with spam "You pull the
+// lever..." on the pull (1109) and "... and teleport into the Dragon's lair." on landing (1114).
+// The lines are the caller's: the KBD plugin passes them; none is sent unless given.
+const KBD_PULL = { spam: "You pull the lever..." };
+const KBD_INTO_LAIR = { spam: "... and teleport into the Dragon's lair." };
+for (const [name, x, y, to, message, landedLine] of [
+  ["dragonkinginlever", 3067, 10253, [2271, 4680, 0], KBD_PULL, KBD_INTO_LAIR],
+  ["dragonkingoutlever", 2271, 4680, [3067, 10254, 0], KBD_PULL, null],
+  ["dragonkinginlever", 3067, 10253, [2271, 4680, 0], null, null],
 ]) {
-  test(`lever:teleport given ${name} plays the captured pull, its down loc, and lands with no chat lines`, () => {
+  const lines = [message && "pull line", landedLine && "landing line"].filter(Boolean).join(" and ") || "no lines";
+  test(`lever:teleport given ${name} plays the captured pull, its down loc, and lands, with ${lines}`, () => {
     const calls = [];
     const h = harness({ teleportSpy: (...args) => calls.push(args) });
     const who = player();
@@ -410,7 +417,7 @@ for (const [name, x, y, to] of [
     assert.ok(lever, `the map has ${name} at ${x},${y}`);
     const shape = lever.getType();
     let landed = 0;
-    h.hooks["lever:teleport"]({ player: who, object: lever, destination: new core.Location(...to), onArrival: () => landed++ });
+    h.hooks["lever:teleport"]({ player: who, object: lever, message, landed: landedLine, destination: new core.Location(...to), onArrival: () => landed++ });
     const seen = [];
     runTicks(h, who, 8, () => seen.push(locsAt(x, y, shape)));
     assert.equal(calls.length, 0, "the pull, not the plain teleport");
@@ -422,7 +429,11 @@ for (const [name, x, y, to] of [
     assert.equal(at("gfx", CacheDefinitions.getSpotanimId("teleport_casting")), 3);
     assert.deepEqual(who.log.find((entry) => entry[1] === "tele"), [6, "tele", to[0], to[1]]);
     assert.equal(who.getLocation().getZ(), to[2]);
-    assert.deepEqual(who.log.filter((entry) => entry[1] === "msg"), [], "no chat lines");
+    assert.deepEqual(who.log.filter((entry) => entry[1] === "msg"), [], "no plain game messages");
+    assert.deepEqual(who.log.filter((entry) => entry[1] === "spam"), [
+      ...(message ? [[1, "spam", message.spam]] : []),
+      ...(landedLine ? [[6, "spam", landedLine.spam]] : []),
+    ], "the given lines, as spam, on the pull and on landing (the capture's ticks 1109 and 1114, five apart)");
     const downId = loc("ikov_leverdown");
     assert.deepEqual(seen.map((ids, i) => ids.includes(downId) ? i + 1 : null).filter((t) => t !== null), [2, 3, 4, 5],
       "the lever shows ikov_leverdown (the same up and down models as the Wilderness levers) until the landing");

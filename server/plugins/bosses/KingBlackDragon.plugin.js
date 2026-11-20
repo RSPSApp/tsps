@@ -2,7 +2,8 @@
 // leads down to a small poison spider room, whose lever (3067, 10253) teleports into the lair. The
 // lair's lever (2271, 4680) teleports back beside the spider room's lever, and that room's ladder
 // (3069, 10256) climbs back up to the Lava Maze. Landing tiles as the Shortest Path plugin's
-// transports record them; no rsprox capture shows these locs (docs/king-black-dragon.md).
+// transports record them; the entrance lever's pull, as rsprox_transcripts/242/900155.txt records it
+// (docs/king-black-dragon.md).
 const KBD_LADDER_DOWN_OBJECT_ID = 18987; // wildymirrorladdertop1
 const KBD_LADDER_UP_OBJECT_ID = 18988; // wildymirrorladder1
 const KBD_ENTRANCE_LEVER_OBJECT_ID = 1816; // dragonkinginlever
@@ -13,6 +14,10 @@ const SPIDER_ROOM_LADDER_LANDING = [3069, 10255, 0];
 const SPIDER_ROOM_LEVER_LANDING = [3067, 10254, 0];
 const ENTRANCE_LEVER_TILE = [3067, 10253, 0];
 const LAVA_MAZE_LADDER_LANDING = [3016, 3849, 0];
+// The entrance lever's lines, both spam (rsprox_transcripts/242/900155.txt ticks 1109 and 1114). The
+// lair lever's pull line is every captured lever's; no capture records a line on its landing.
+const PULL_MESSAGE = { spam: "You pull the lever..." };
+const INTO_LAIR_MESSAGE = { spam: "... and teleport into the Dragon's lair." };
 
 const { DragonfireProtectionTier, emitDragonfireBreath, getDragonfireProtectionTier, sendDragonfireMessages } = require("../combat/DragonfireProtection");
 
@@ -134,6 +139,8 @@ function startEcho(request) {
   api.emitCustomEvent("lever:teleport", {
     player,
     object: entranceLever(),
+    message: PULL_MESSAGE,
+    landed: INTO_LAIR_MESSAGE,
     destination: new Location(...KING_BLACK_DRAGON_LAIR),
     onArrival: () => beginEcho(player),
   });
@@ -234,13 +241,15 @@ function pullEntranceLever({ player, object }) {
 }
 
 /**
- * Both levers are pulled as a video of the route shows: the pull, the lever flipping down, then the
- * teleport (lever:teleport given the lever plays the Wilderness levers' captured sequence).
+ * Both levers are pulled as the entrance lever's capture shows: the pull, the lever flipping down,
+ * then the teleport (lever:teleport given the lever plays the Wilderness levers' captured sequence).
  */
 function teleportIntoLair(player, lever) {
   api.emitCustomEvent("lever:teleport", {
     player,
     object: lever,
+    message: PULL_MESSAGE,
+    landed: INTO_LAIR_MESSAGE,
     destination: new Location(...KING_BLACK_DRAGON_LAIR),
     // The easy Wilderness Diary's "Enter the King Black Dragon's lair.", once the teleport has landed.
     onArrival: () => api.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "enter-the-king-black-dragon-s-lair" }),
@@ -249,7 +258,7 @@ function teleportIntoLair(player, lever) {
 
 /** The lair's lever, back out beside the spider room's lever. */
 function pullLairLever({ player, object }) {
-  api.emitCustomEvent("lever:teleport", { player, object, destination: new Location(...SPIDER_ROOM_LEVER_LANDING) });
+  api.emitCustomEvent("lever:teleport", { player, object, message: PULL_MESSAGE, destination: new Location(...SPIDER_ROOM_LEVER_LANDING) });
   return true;
 }
 

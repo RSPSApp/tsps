@@ -120,6 +120,9 @@ test("the spider room's lever teleports into the lair and credits the diary on l
   const [teleport] = leverTeleports;
   assert.equal(teleport.player, player);
   assert.deepEqual(tileOf(teleport.destination), LAIR);
+  // rsprox_transcripts/242/900155.txt: spam on the pull (tick 1109) and on landing (1114).
+  assert.deepEqual([teleport.message, teleport.landed],
+    [{ spam: "You pull the lever..." }, { spam: "... and teleport into the Dragon's lair." }], "the recorded lines");
   assert.deepEqual(creditedTo(player), [], "not credited before the teleport lands");
   teleport.onArrival();
   assert.deepEqual(creditedTo(player), [TASK], "credited once the teleport lands");
@@ -143,6 +146,8 @@ test("the lair's lever teleports back beside the spider room's lever and credits
   assert.equal(clicks.get(LAIR_LEVER)({ player }), true);
   assert.equal(leverTeleports.length, 1);
   assert.deepEqual(tileOf(leverTeleports[0].destination), BY_ENTRANCE_LEVER);
+  assert.deepEqual([leverTeleports[0].message, leverTeleports[0].landed ?? null], [{ spam: "You pull the lever..." }, null],
+    "every captured lever's pull line; no capture records a line on this landing");
   assert.equal(leverTeleports[0].onArrival, undefined);
   assert.deepEqual(diary, []);
 });

@@ -4,6 +4,7 @@
 // clue), whatever the All Settings untradeable alchemy row says; other clue forms keep the
 // untradeable warning.
 const assert = require('node:assert/strict');
+const path = require('node:path');
 const { test, before } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
@@ -19,6 +20,7 @@ const { TaskManager } = require('../dist/game/task/TaskManager');
 const { Dialogue } = require('../dist/game/model/dialogues/entries/Dialogue');
 const Warnings = require('../plugins/interface/ValueWarnings.plugin');
 const Capacity = require('../plugins/treasuretrails/Capacity.ClueCapacity');
+const ItemDefinitionLoader = require('../plugins/items/ItemDefinitionLoader.plugin');
 
 const HIGH_ALCHEMY = 1178;
 const LOW_ALCHEMY = 1162;
@@ -30,8 +32,10 @@ const QUESTION = "Wouldn't you rather solve the clue?";
 let core;
 
 before(async () => {
-  await CachePipeline.initialize();
+  // The server's own data, so the clues carry their real alch values (item-alch.json).
+  await CachePipeline.initialize(path.resolve(__dirname, '..'));
   core = PluginManager.getCoreApi();
+  ItemDefinitionLoader._test.loadItemAlch();
   Warnings._test.setApi({ core, emitCustomEvent: () => {} });
   const api = { core };
   Capacity(new Proxy(api, { get: (t, p) => (p in t ? t[p] : () => {}) }));
@@ -82,14 +86,12 @@ function player(vars, items) {
   return self;
 }
 
-/** The first cache item named `name`, as an untradeable item with alch values. */
+/** The first cache item named `name`, with its loaded definition (untradeable, real alch values). */
 function named(name) {
   for (let id = 0; id < 40000; id++) {
     if (core.ItemDefinition.forId(id)?.getName?.() !== name) continue;
     const item = new Item(id, 1);
-    const definition = item.getDefinition();
-    item.getDefinition = () => Object.assign(Object.create(definition), {
-      getHighAlchValue: () => 20, getLowAlchValue: () => 12, isTradeable: () => false });
+    assert.equal(item.getDefinition().isTradeable(), false, `${name} is untradeable`);
     return item;
   }
   throw new Error(`no item named ${name}`);
@@ -121,7 +123,7 @@ test('Low Alchemy on a hard clue scroll asks "Wouldn\'t you rather solve the clu
   assert.deepEqual(options.getOptions(), ['Proceed to cast Low Level Alchemy on it.', 'Cancel the alchemy spell.']);
   assert.equal(p.amounts.get(COINS), undefined, 'nothing cast before the answer');
   options.execute(1);
-  assert.equal(p.amounts.get(COINS), 12);
+  assert.equal(p.amounts.get(COINS), 8, "a hard clue's Low Alchemy value (item-alch.json)");
   assert.equal(p.slots[0], null, 'the clue is gone');
 });
 
@@ -151,5 +153,6 @@ test('a scroll box keeps the untradeable warning, or none with that row off', (t
   const off = player({ 6092: 0 }, [named('Scroll box (hard)')]);
   listener.castOnItem(off, HIGH_ALCHEMY, box.getId(), 0);
   assert.equal(off.log.dialogues.length, 0);
-  assert.equal(off.amounts.get(COINS), 20);
+  assert.equal(off.amounts.get(COINS), box.getDefinition().getHighAlchValue());
+  assert.ok(off.amounts.get(COINS) > 0);
 });

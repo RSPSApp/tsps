@@ -44,7 +44,11 @@ function setup(completed = []) {
     removedNpcs: [],
     spawnedNpcs: [],
     groundItemPickup: [],
+    buttons: new Map(),
   };
+  const ownedLocs = [];
+  const messages = [];
+  const animations = [];
   let tick = 0;
   const tasks = [];
   const worldNpcs = [];
@@ -66,6 +70,17 @@ function setup(completed = []) {
         cancelTasks() {},
       },
       MultiChatboxPrompt: { getPending: () => null },
+      // The battle's owned locs (open lockers, the swing rope) are recorded, not put on a map.
+      ObjectManager: {
+        register(loc) { ownedLocs.push(loc); },
+        deregister(loc) {
+          const index = ownedLocs.indexOf(loc);
+          if (index >= 0) ownedLocs.splice(index, 1);
+        },
+      },
+    },
+    onInterfaceActionButton(ids, handler) {
+      for (const id of [].concat(ids)) hooks.buttons.set(id, handler);
     },
     persistAttribute() {},
     onNpcDialogueVariant(handler) { hooks.variants.push(handler); },
@@ -112,8 +127,17 @@ function setup(completed = []) {
     varbits: new Map(),
     sendConfig(id, value) { packet.varps.set(id, value); return packet; },
     getVarp(id) { return packet.varps.get(id) ?? 0; },
-    sendVarbit(id, value) { packet.varbits.set(id, value); return packet; },
-    getVarbit(id) { return packet.varbits.get(id) ?? 0; },
+    // Varbits live in their base varp, as PacketSender keeps them, so a varp restore restores them.
+    sendVarbit(id, value) {
+      const { baseVar, startBit, endBit } = core.CacheDefinitions.getVarbit(id);
+      const mask = (2 ** (endBit - startBit + 1) - 1) << startBit;
+      packet.varps.set(baseVar, ((packet.varps.get(baseVar) ?? 0) & ~mask) | ((value << startBit) & mask));
+      return packet;
+    },
+    getVarbit(id) {
+      const { baseVar, startBit, endBit } = core.CacheDefinitions.getVarbit(id);
+      return ((packet.varps.get(baseVar) ?? 0) >> startBit) & (2 ** (endBit - startBit + 1) - 1);
+    },
   }, { get(target, key) { return key in target ? target[key] : () => packet; } });
   let location = new core.Location(3678, 3494, 0);
   const player = {
@@ -145,7 +169,15 @@ function setup(completed = []) {
     moveTo(next) { location = next; },
     getDialogueManager: () => ({ isActive: () => false }),
     isRegistered: () => true,
-    sendMessage() {},
+    sendMessage(message) { messages.push(message); },
+    performAnimation(animation) { animations.push(animation.getId?.() ?? animation.id); },
+    getMovementQueue: () => ({ reset() {}, setBlockMovement() {}, addSteps() {} }),
+    forceMovement: null,
+    getForceMovement() { return this.forceMovement; },
+    setForceMovement(movement) { this.forceMovement = movement; },
+    runEnergy: 100,
+    setRunEnergy(value) { this.runEnergy = value; },
+    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage() {} }) }),
     getUsername: () => 'qh728-q009',
   };
   const emit = (name, event) => {
@@ -213,6 +245,13 @@ function setup(completed = []) {
       }
     }
   };
+  const button = (id) => hooks.buttons.get(id)?.({ player, buttonId: id, action: 1 });
+  /** Opens a locker, then searches the open one, as live's two clicks do. */
+  const openLocker = (closedId, openId) => {
+    object(closedId, 'Open');
+    advance(1);
+    object(openId, 'Search');
+  };
   const count = (id) => inventory.get(id) ?? 0;
   const varbit = (id) => packet.getVarbit(id);
   const varp = (id) => packet.getVarp(id);
@@ -226,7 +265,14 @@ function setup(completed = []) {
       emit('player:bootstrap-complete', {});
       runtime.sendQuestVarps({ player });
     },
-    count, varbit, varp, stage, lastTranscript,
+    /** Live order at login: the quest list's varps first (onPlayerLogin), then the bootstrap. */
+    relog: () => {
+      // A new session: the client has no varps until the server sends them.
+      packet.varps.clear();
+      runtime.sendQuestVarps({ player });
+      emit('player:bootstrap-complete', {});
+    },
+    count, varbit, varp, stage, lastTranscript, button, openLocker, ownedLocs, messages, animations,
     setFullInventory: (value) => { full = value; },
   };
 }
@@ -259,9 +305,16 @@ test('declining the final confirmation leaves Cabin Fever unstarted', () => {
   assert.equal(h.stage(), 1);
 });
 
+// Interface 501/502 buttons, (group << 16) | child, as capture CabinFever presses them.
+const GUN = { BARREL: (501 << 16) | 8, FUSE: (501 << 16) | 9, RAMROD: (501 << 16) | 10, BALL: (501 << 16) | 11, CANISTER: (501 << 16) | 12 };
+const REPAIR = { ROPE: (502 << 16) | 8, HAMMER: (502 << 16) | 9, TACKS: (502 << 16) | 10, PLANKS: (502 << 16) | 11, PASTE: (502 << 16) | 12 };
+const REPAIR_LOCKER_OPEN = 11247;
+const GUN_LOCKER_OPEN = 11249;
+
 test('Cabin Fever completes from stage 0 through the real route handlers', () => {
   const originalRandom = Math.random;
-  Math.random = () => 0; // Fixture: every cannon shot hits.
+  // Fixture: 0.35 lands every swing (fall chance 1/3) and hits every shot (Ranged 40: 0.41).
+  Math.random = () => 0.35;
   try {
     const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
     const I = core.ItemIdentifiers;
@@ -270,16 +323,22 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
     // Object ids below are the cache's registered multi-loc parents/placements.
     const CANNON = 11213;
     const ENEMY_POWDER_BARREL = 11237;
-    const FUSE_1 = 11241;
+    const FUSE_2 = 11242;
     const HOISTS = 11292;
     const CHEST = 11230;
     const CRATE = 11227;
     const BARREL = 11233;
     const HOLES = [11221, 11222, 11223];
+    const swing = () => {
+      h.object(O.CLIMBING_NET_2, 'Climb');
+      h.advance(2);
+      h.itemOnObject(I.ROPE, HOISTS);
+      h.advance(25);
+    };
 
-    // Start and set sail.
+    // Start (live's "Start the Cabin Fever quest?" prompt answers "Yes.") and set sail.
     h.choose("Yes, I've always wanted to be a pirate!");
-    h.choose('Yes, I am a man of my word.');
+    h.choose('Yes.');
     assert.equal(h.stage(), 1);
     assert.equal(h.varp(655), 10, 'started wire value');
     h.npcTalk(N.BILL_TEACH_3);
@@ -292,39 +351,78 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
     assert.equal(h.stage(), 3);
     assert.equal(h.varp(655), 30, 'sabotage wire value');
     assert.equal(h.varbit(1741), 1, 'the cannon arrives broken/exploded');
+    assert.equal(h.varbit(1746), 0, 'live sets nothing but the cannon on arrival');
 
-    // Sabotage supplies and the enemy cannon.
-    h.object(O.REPAIR_LOCKER, 'Open');
-    h.object(O.GUN_LOCKER, 'Open');
+    // The lockers open, then their Search shows the modal; each press gives one item.
+    h.openLocker(O.REPAIR_LOCKER, REPAIR_LOCKER_OPEN);
+    assert.ok(h.ownedLocs.some((loc) => loc.getId() === REPAIR_LOCKER_OPEN), 'the open locker is shown');
+    for (let rope = 0; rope < 4; rope++) h.button(REPAIR.ROPE);
     assert.equal(h.count(I.ROPE), 4);
-    assert.equal(h.count(I.FUSE), 4);
+    assert.equal(h.messages.at(-1), 'You take a coil of rope.');
+    h.openLocker(O.GUN_LOCKER, GUN_LOCKER_OPEN);
+    h.button(GUN.FUSE);
+    assert.equal(h.count(I.FUSE), 1);
+    assert.equal(h.messages.at(-1), 'You take some fuse.');
+    h.button(GUN.CANISTER);
+    assert.equal(h.count(I.CANISTER_2), 0, 'no canister before the crew objective');
     const tinderbox = h.pickup(I.TINDERBOX_3, 1814, 4825, 0);
     assert.equal(tinderbox.handled, true);
     assert.equal(h.count(I.TINDERBOX), 1);
-    h.object(O.CLIMBING_NET_2, 'Climb');
-    h.itemOnObject(I.ROPE, HOISTS);
-    assert.equal(h.player.getLocation().getZ(), 1, 'swung onto the enemy deck');
+
+    // The chest and barrel refuse a search while the enemy cannon fires (capture ticks 929, 934).
+    h.object(CHEST, 'Plunder');
+    assert.equal(h.lastTranscript().variant,
+      'dealing-with-the-cannon-trying-to-plunder-the-chest-or-ransack-the-barrel-before-dealing-with-the-cannon');
+
+    swing();
+    assert.equal(h.player.getLocation().getX(), 1822, 'swung onto the enemy deck');
+    assert.equal(h.player.getLocation().getZ(), 1);
     assert.equal(h.count(I.ROPE), 3, 'one ordinary rope is used per swing');
+    assert.equal(h.varbit(1740), 0, 'the rope falls off the mast after the swing');
+    assert.equal(h.lastTranscript().variant, 'dealing-with-the-cannon-using-a-rope-swing');
+
     h.itemOnObject(I.FUSE, ENEMY_POWDER_BARREL);
-    assert.equal(h.varbit(1761), 1, 'fuse attached');
     assert.equal(h.varbit(1756), 2, 'the barrel shows its fuse-attached transform');
-    h.itemOnObject(I.TINDERBOX, FUSE_1);
-    h.action('jL6Wr9');
+    assert.equal(h.varbit(1761), 0, 'the fuse is laid out over the next ticks');
+    h.advance(6);
+    assert.equal(h.varbit(1761), 1, 'first fuse tile');
+    h.advance(4);
+    assert.equal(h.varbit(1762), 1, 'second fuse tile');
+    h.itemOnObject(I.TINDERBOX, FUSE_2);
+    h.advance(2);
+    assert.equal(h.messages.at(-1), 'You light the fuse...');
+    assert.equal(h.varbit(1762), 0, 'the fuse burns back');
+    h.advance(4);
     assert.equal(h.varbit(1749), 1, 'enemy cannon destroyed');
-    h.object(O.CLIMBING_NET_2, 'Climb');
-    h.itemOnObject(I.ROPE, HOISTS);
+    assert.equal(h.varbit(1756), 1, 'the barrel explodes');
+    assert.equal(h.messages.at(-1), '...and destroy the barrel and the cannon.');
+    assert.equal(h.varp(655), 40, 'the blast moves the varp before Bill is told');
+    h.relog();
+    assert.equal(h.varp(655), 40, 'a relog keeps the objective-done step');
+    swing();
     assert.equal(h.count(I.ROPE), 2, 'the return swing uses a second rope');
+    assert.equal(h.player.getLocation().getX(), 1817, 'back on the Adventurous');
     h.variant(N.BILL_TEACH_3);
     assert.equal(h.stage(), 4);
     assert.equal(h.varp(655), 50, 'repair-phase wire value');
 
-    // Patch and waterproof all three hull holes.
+    // Planks two to a press, six at most; tacks ten; one hammer and paste per press.
+    h.openLocker(O.REPAIR_LOCKER, REPAIR_LOCKER_OPEN);
+    for (let press = 0; press < 3; press++) h.button(REPAIR.TACKS);
+    for (let press = 0; press < 4; press++) h.button(REPAIR.PLANKS);
+    assert.equal(h.messages.at(-1), 'You already have enough Repair Planks.');
+    h.button(REPAIR.HAMMER);
+    for (let press = 0; press < 3; press++) h.button(REPAIR.PASTE);
+    assert.equal(h.count(I.REPAIR_PLANK_2), 6);
+    assert.equal(h.count(I.TACKS), 30);
+    assert.equal(h.count(I.SWAMP_PASTE), 3);
     for (const hole of HOLES) {
       h.itemOnObject(I.REPAIR_PLANK_2, hole);
       h.itemOnObject(I.SWAMP_PASTE, hole);
     }
     assert.equal(h.varbit(1759), 3);
     assert.equal(h.varbit(1760), 3);
+    assert.equal(h.varp(655), 60, 'the last hole moves the varp before Bill is told');
     assert.equal(h.count(I.REPAIR_PLANK_2), 0);
     assert.equal(h.count(I.TACKS), 0);
     assert.equal(h.count(I.SWAMP_PASTE), 0);
@@ -332,75 +430,102 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
     assert.equal(h.stage(), 5);
     assert.equal(h.varp(655), 70, 'plunder-phase wire value');
 
-    // Swing back to the enemy ship, loot 6, relog to respawn, loot 5 more,
-    // then swing back with 10 stored and 1 surplus.
-    h.object(O.CLIMBING_NET_2, 'Climb');
-    h.itemOnObject(I.ROPE, HOISTS);
+    // Loot 6, wait out the barrel and crate refills, loot 3 more, relog for the chest.
+    swing();
     assert.equal(h.count(I.ROPE), 1, 'the looting trip uses a third rope');
-    assert.equal(h.player.getLocation().getZ(), 1, 'back on the enemy deck');
     h.object(CHEST, 'Plunder');
     h.object(CRATE, 'Loot');
     h.object(BARREL, 'Ransack');
     assert.equal(h.count(I.PLUNDER), 6);
+    h.object(BARREL, 'Ransack');
+    assert.equal(h.count(I.PLUNDER), 6, 'a looted barrel is recently ransacked');
+    h.advance(100);
+    assert.equal(h.varbit(1755), 0, 'the barrel refills on its own after 100 ticks');
+    assert.equal(h.varbit(1753), 1, 'the crate is still empty');
+    h.advance(100);
+    assert.equal(h.varbit(1753), 0, 'the crate refills after 200 ticks');
+    assert.equal(h.varbit(1754), 1, 'the chest is still empty');
+    h.object(CRATE, 'Loot');
+    h.object(BARREL, 'Ransack');
+    assert.equal(h.count(I.PLUNDER), 9);
     h.bootstrap();
     h.object(CHEST, 'Plunder');
-    h.object(CRATE, 'Loot');
-    assert.equal(h.count(I.PLUNDER), 11);
-    h.object(O.CLIMBING_NET_2, 'Climb');
-    h.itemOnObject(I.ROPE, HOISTS);
+    assert.equal(h.count(I.PLUNDER), 12);
+    swing();
     assert.equal(h.count(I.ROPE), 0, 'the return swing uses the fourth rope');
+    h.object(O.PLUNDER_STORAGE, 'Count-plunder');
+    assert.equal(h.messages.at(-1), 'This chest is empty.');
     h.itemOnObject(I.PLUNDER, O.PLUNDER_STORAGE);
     assert.equal(h.varbit(1752), 10);
-    assert.equal(h.count(I.PLUNDER), 1, 'surplus stays for Bill to confiscate');
+    assert.equal(h.messages.at(-1), 'You deposit as much plunder as you can.');
+    assert.equal(h.count(I.PLUNDER), 2, 'surplus stays for Bill to confiscate');
+    assert.equal(h.varp(655), 80, 'the tenth load moves the varp before Bill is told');
     h.variant(N.BILL_TEACH_3);
     assert.equal(h.stage(), 6);
     assert.equal(h.varp(655), 90, 'barrel-phase wire value');
 
-    // Replace the cannon barrel.
-    h.object(O.GUN_LOCKER, 'Open');
+    // Replace the cannon barrel: the broken one comes off, then the new one goes on.
+    h.openLocker(O.GUN_LOCKER, GUN_LOCKER_OPEN);
+    h.button(GUN.FUSE);
+    assert.equal(h.messages.at(-1), "You don't need any Fuse right now.");
+    h.button(GUN.BARREL);
     assert.equal(h.count(I.CANNON_BARREL), 1);
-    h.itemOnObject(I.CANNON_BARREL, CANNON);
+    h.object(CANNON, 'Repair');
+    assert.equal(h.varbit(1741), 2, 'the broken barrel is off');
+    assert.equal(h.count(7146), 1, 'the broken cannon barrel is in the inventory');
+    h.advance(2);
+    assert.equal(h.messages.at(-1), 'You remove the broken cannon barrel.');
+    h.advance(2);
     assert.equal(h.varbit(1741), 0);
+    assert.equal(h.count(I.CANNON_BARREL), 0);
+    assert.equal(h.varp(655), 100, 'the new barrel moves the varp before Bill is told');
     h.variant(N.BILL_TEACH_3);
     assert.equal(h.stage(), 7);
     assert.equal(h.varp(655), 110, 'canister-phase wire value');
 
-    // Fire canister rounds until three pirates are hit, cleaning between shots.
-    h.object(O.GUN_LOCKER, 'Open');
+    // One canister hit is the objective; the shot leaves the barrel needing the ramrod.
+    h.openLocker(O.GUN_LOCKER, GUN_LOCKER_OPEN);
+    h.button(GUN.RAMROD);
+    h.button(GUN.FUSE);
+    h.button(GUN.CANISTER);
     assert.equal(h.count(I.RAMROD), 1);
     assert.equal(h.count(I.CANISTER_2), 1);
-    for (let hit = 1; hit <= 3; hit++) {
-      h.itemOnObject(I.RAMROD, CANNON);
-      h.object(O.POWDER_BARREL_2, 'Take-powder');
-      h.itemOnObject(I.GUNPOWDER, CANNON);
-      h.itemOnObject(I.RAMROD, CANNON);
-      if (h.count(I.CANISTER_2) === 0) h.object(O.GUN_LOCKER, 'Open');
-      h.itemOnObject(I.CANISTER_2, CANNON);
-      if (h.count(I.FUSE) === 0) h.object(O.GUN_LOCKER, 'Open');
-      h.itemOnObject(I.FUSE, CANNON);
-      assert.equal(h.varbit(1741), 3, 'cannon armed');
-      h.object(CANNON, 'Fire!');
-      assert.match(h.lastTranscript().variant, /firing-the-cannon$/);
-      if (hit < 3) {
-        h.variant(N.BILL_TEACH_3);
-        assert.equal(h.stage(), 7, 'Bill only moves on after the third canister hit');
-      }
-    }
+    h.object(O.POWDER_BARREL_2, 'Take-powder');
+    h.itemOnObject(I.GUNPOWDER, CANNON);
+    h.itemOnObject(I.RAMROD, CANNON);
+    assert.equal(h.varbit(1743), 1, 'the powder is tamped');
+    h.itemOnObject(I.CANISTER_2, CANNON);
+    h.advance(1);
+    assert.equal(h.varbit(1744), 2, 'the canister rolls in a tick later');
+    h.itemOnObject(I.FUSE, CANNON);
+    assert.equal(h.varbit(1741), 3, 'cannon armed');
+    h.object(CANNON, 'Fire!');
+    assert.equal(h.messages.at(-1), 'You fire the cannon at the crew!');
+    assert.equal(h.varbit(1746), 1, 'the shot leaves the barrel needing the ramrod');
+    h.advance(2);
+    assert.equal(h.messages.at(-1), 'You hit them!');
+    assert.equal(h.varp(655), 120, 'the canister hit moves the varp before Bill is told');
     h.variant(N.BILL_TEACH_3);
     assert.equal(h.stage(), 8);
     assert.equal(h.varp(655), 130, 'cannonball-phase wire value');
 
-    // Fire three cannonballs, cleaning between shots.
-    h.object(O.GUN_LOCKER, 'Open');
-    assert.equal(h.count(I.CANNON_BALL_2), 4);
+    // Three cannonballs, cleaning with the ramrod between shots.
+    h.openLocker(O.GUN_LOCKER, GUN_LOCKER_OPEN);
+    h.button(GUN.CANISTER);
+    assert.equal(h.messages.at(-1), 'You do not need a canister round right now.');
     for (let shot = 1; shot <= 3; shot++) {
+      h.button(GUN.BALL);
+      h.button(GUN.FUSE);
       h.itemOnObject(I.RAMROD, CANNON);
+      assert.equal(h.varbit(1746), 0, 'the ramrod cleans the barrel');
       h.object(O.POWDER_BARREL_2, 'Take-powder');
       h.itemOnObject(I.GUNPOWDER, CANNON);
       h.itemOnObject(I.RAMROD, CANNON);
       h.itemOnObject(I.CANNON_BALL_2, CANNON);
+      h.advance(1);
       h.itemOnObject(I.FUSE, CANNON);
       h.object(CANNON, 'Fire!');
+      h.advance(1);
       assert.equal(h.varbit(1750), shot);
     }
     assert.equal(h.lastTranscript().variant, 'sinking-the-enemy-ship-after-the-third-and-final-hit');
@@ -412,10 +537,13 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
     h.action('V-4Bls');
     assert.equal(h.stage(), 9);
     assert.equal(h.varp(655), 140, 'canonical Cabin Fever completion varp');
-    assert.ok(h.varp(655) >= 140, 'completion wire reaches the cache threshold');
     assert.equal(h.count(I.BOOK_O_PIRACY), 1);
+    assert.equal(h.varbit(1763), 1, 'given the book');
+    for (const varbit of [1746, 1750, 1751, 1757, 1758, 1752, 1756, 1759, 1760, 1749]) {
+      assert.equal(h.varbit(varbit), 0, `completion clears varbit ${varbit} as live does`);
+    }
     assert.equal(h.player.getLocation().getX(), 3665, 'arrived at Mos Le\'Harmless');
-    assert.equal(h.count(I.ROPE), 0, 'the four supplied ropes were used for the four swings');
+    assert.equal(h.count(I.ROPE), 0, 'the four ropes were used for the four swings');
 
     // Post-quest: claim the 10,000 coins once, then recover a lost Book o' Piracy.
     assert.equal(
@@ -447,6 +575,72 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
   } finally {
     Math.random = originalRandom;
   }
+});
+
+test('a fall from the rope swing lands in the sea with no run energy, then on the other ship', () => {
+  const originalRandom = Math.random;
+  Math.random = () => 0; // below the fall chance
+  try {
+    const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+    const I = core.ItemIdentifiers;
+    const O = core.ObjectIdentifiers;
+    h.quest.setStage(h.player, 3);
+    h.player.getInventory().adds(I.ROPE, 1);
+    h.player.moveTo(new core.Location(1816, 4832, 1)); // beside the Adventurous' net
+    h.object(O.CLIMBING_NET_2, 'Climb');
+    h.advance(2);
+    assert.equal(h.messages.at(-1), 'You climb up the net.');
+    assert.equal(h.player.getLocation().getZ(), 2);
+    h.itemOnObject(I.ROPE, 11292);
+    assert.equal(h.varbit(1740), 1, 'the rope is tied');
+    h.advance(4);
+    assert.equal(h.messages.at(-1), 'You attach a rope to the sails.');
+    h.advance(15);
+    assert.equal(h.lastTranscript().variant, 'dealing-with-the-cannon-using-a-rope-swing-falling-on-a-rope-swing');
+    assert.equal(h.varbit(1740), 0);
+    assert.equal(h.player.runEnergy, 0, 'the swim drains the run energy');
+    h.advance(2);
+    assert.equal(h.player.getLocation().getZ(), 0, 'in the sea');
+    h.advance(3);
+    const landed = h.player.getLocation();
+    assert.deepEqual([landed.getX(), landed.getY(), landed.getZ()], [1822, 4830, 1], 'climbs out on the enemy deck');
+    assert.equal(h.ownedLocs.length, 0, 'the swing rope is gone');
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test('Return-Home takes the player and Bill back to port, and the sail back resumes the stage', () => {
+  const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+  const I = core.ItemIdentifiers;
+  const N = core.NpcIdentifiers;
+  h.quest.setStage(h.player, 5);
+  h.player.moveTo(new core.Location(1814, 4834, 1));
+  h.player.getInventory().adds(I.PLUNDER, 3);
+  const event = { player: h.player, npcId: N.BILL_TEACH_3, handled: false };
+  h.hooks.npcActions.get('Bill Teach')['Return-Home'](event);
+  assert.equal(event.handled, true);
+  assert.equal(h.lastTranscript().variant, 'dealing-with-the-cannon-choosing-the-return-home-option');
+  h.action('8EJUBr');
+  h.advance(3);
+  const port = h.player.getLocation();
+  assert.deepEqual([port.getX(), port.getY(), port.getZ()], [3714, 3497, 1], 'back on the Adventurous at port');
+  assert.equal(h.count(I.PLUNDER), 0, 'the Wiki: leaving the ship loses the plunder');
+
+  h.npcTalk(N.BILL_TEACH, 'Bill Teach', { x: 3714, y: 3500, z: 1 });
+  assert.equal(h.lastTranscript().variant,
+    'dealing-with-the-cannon-talking-to-bill-teach-on-the-adventurous-after-running-away');
+  const before = h.lastTranscript();
+  h.choose("Let's go Cap'n!");
+  h.advance(12);
+  assert.equal(h.player.getLocation().getX(), 1815, 'sailed back to the battle');
+  assert.equal(h.lastTranscript().variant, 'time-to-plunder-returning-to-plunder-from-the-port');
+  assert.notEqual(h.lastTranscript(), before);
+  assert.equal(h.stage(), 5, 'the stage is kept');
+
+  // Back on the battle deck, Talk-to on Bill (4014, the port swap's id too) is the stage's talk.
+  const talk = { player: h.player, npcId: N.BILL_TEACH_3, handled: false, location: { x: 1813, y: 4834, z: 1 } };
+  assert.equal(h.hooks.npcActions.get('Bill Teach')['Talk-to'](talk), false, 'the variant selector owns the deck Bill');
 });
 
 test('completion removes quest supplies but leaves rope, hammer, tinderbox and swamp paste', () => {
@@ -602,6 +796,7 @@ test('Cabin Fever objectives cannot advance out of order', () => {
   h.itemOnObject(I.CANNON_BALL_2, CANNON);
   assert.equal(h.varbit(1744), 0, 'cannonballs are not the crew objective');
   h.itemOnObject(I.CANISTER, CANNON);
+  h.advance(1); // the canister rolls in a tick after the load animation
   assert.equal(h.varbit(1744), 2);
   h.quest.setStage(h.player, 8);
   h.player.getInventory().adds(I.CANISTER, 1);
@@ -703,15 +898,21 @@ test('Cabin Fever named NPC, object, item and death handlers are wired', () => {
   // Named object and item-on-object handlers delegate to the id-based route.
   const locker = h.namedObject('Repair Locker', O.REPAIR_LOCKER, 'Open');
   assert.equal(locker.handled, true);
-  assert.equal(h.count(I.ROPE), 4);
+  h.advance(1);
+  const search = h.namedObject('Repair Locker', REPAIR_LOCKER_OPEN, 'Search');
+  assert.equal(search.handled, true, 'the open locker\'s Search is claimed');
+  h.button(REPAIR.PLANKS);
   // 7148 is the quest plank the Repair Locker gives in live; 7121 is the animation dummy
   // the client wields while repairing, and Quest Helper's requirement is 7148 x6.
-  assert.equal(h.count(I.REPAIR_PLANK_2), 6, 'the locker hands out the real quest plank');
+  assert.equal(h.count(I.REPAIR_PLANK_2), 2, 'the locker hands out the real quest plank');
   assert.equal(h.count(I.REPAIR_PLANK), 0, 'the animation dummy is never handed out');
+  const close = h.namedObject('Repair Locker', REPAIR_LOCKER_OPEN, 'Close');
+  assert.equal(close.handled, true);
+  assert.equal(h.ownedLocs.length, 0, 'Close puts the shut locker back');
   h.player.getInventory().adds(I.FUSE, 1);
   const fuse = h.namedItemOnObject('Fuse', 'Powder Barrel', I.FUSE, 11237);
   assert.equal(fuse.handled, true);
-  assert.equal(h.varbit(1761), 1, 'named fuse use attaches to the barrel');
+  assert.equal(h.varbit(1756), 2, 'named fuse use attaches to the barrel');
 });
 
 test('the gun locker hands out the real quest canister, not the animation dummy', () => {
@@ -719,20 +920,23 @@ test('the gun locker hands out the real quest canister, not the animation dummy'
   const I = core.ItemIdentifiers;
   const O = core.ObjectIdentifiers;
   h.quest.setStage(h.player, 7);
-  h.object(O.GUN_LOCKER, 'Open');
+  h.openLocker(O.GUN_LOCKER, GUN_LOCKER_OPEN);
+  h.button(GUN.CANISTER);
   // 7149 is the quest canister the locker gives in live; 7118 is the animation dummy the client
   // wields while loading the cannon, and Quest Helper's requirement is 7149.
   assert.equal(h.count(I.CANISTER_2), 1, 'the locker hands out the real quest canister');
   assert.equal(h.count(I.CANISTER), 0, 'the animation dummy is never handed out');
+  assert.equal(h.messages.at(-1), 'You take a canister round.');
 
   // The real canister still loads the cannon and is consumed.
   h.itemOnObject(I.CANISTER_2, 11213);
+  h.advance(1);
   assert.equal(h.varbit(1744), 2, 'the canister is loaded');
   assert.equal(h.count(I.CANISTER_2), 0, 'the canister is consumed');
 
-  // A save from before the fix holds the animation dummy; the locker swaps it for the real one.
+  // A save from before the fix holds the animation dummy; login swaps it for the real one.
   h.player.getInventory().adds(I.CANISTER, 1);
-  h.object(O.GUN_LOCKER, 'Open');
+  h.bootstrap();
   assert.equal(h.count(I.CANISTER_2), 1, 'the dummy is swapped for the real canister');
   assert.equal(h.count(I.CANISTER), 0, 'the animation dummy is gone');
 });
@@ -844,21 +1048,26 @@ test('a canister hit credits the crew before the death animation can be interrup
     h.worldNpcs.push(pirate);
     h.quest.setStage(h.player, 7);
     h.player.getPacketSender().sendVarbit(1741, 0);
-    h.player.getPacketSender().sendVarbit(1746, 1);
+    h.player.getPacketSender().sendVarbit(1746, 0); // clean: nothing has been fired yet
+    h.player.setAttribute('quest.cabin_fever.flags', 2); // a save already on live's clean flag
     h.player.getInventory().adds(I.RAMROD, 1);
     h.player.getInventory().adds(I.GUNPOWDER, 1);
     h.itemOnObject(I.GUNPOWDER, CANNON);
     h.itemOnObject(I.RAMROD, CANNON);
     h.player.getInventory().adds(I.CANISTER, 1);
     h.itemOnObject(I.CANISTER, CANNON);
+    h.advance(1);
     h.player.getInventory().adds(I.FUSE, 1);
     h.itemOnObject(I.FUSE, CANNON);
     h.object(CANNON, 'Fire!');
-    assert.equal(h.player.getAttribute(CREW_HITS) ?? 0, 0, 'the queued hit has not credited yet');
+    assert.equal(h.player.getAttribute(CREW_HITS) ?? 0, 0, 'the shot is still in the air');
 
+    // Live credits the crew with "You hit them!", a tick before the 52 hitsplat (ticks 1917-1918).
+    h.advance(2);
+    assert.equal(h.messages.at(-1), 'You hit them!');
+    assert.equal(h.player.getAttribute(CREW_HITS), 1, 'credit is written with the hit message');
+    assert.equal(pirate.hp, 52, 'the hitsplat is still queued');
     queue.process(1);
-    const savedCrewHits = h.player.getAttribute(CREW_HITS);
-    assert.equal(savedCrewHits, 1, 'credit is written when the lethal hit lands');
 
     // Logout saves here, before the two-tick death task emits the NPC death.
     h.player.isRegistered = () => false;

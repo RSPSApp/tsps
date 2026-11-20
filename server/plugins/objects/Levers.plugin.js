@@ -9,7 +9,9 @@
  *
  * Other plugins teleport through it without a lever's pull:
  *   api.emitCustomEvent("lever:teleport", { player, destination, onArrival? })
- * `onArrival` runs when the player has landed.
+ * `onArrival` runs when the player has landed. Given the pulled lever loc as `object` (and its
+ * down loc's gameval as `down`, ikov_leverdown by default), it plays the captured pull instead, with
+ * no chat lines (docs/king-black-dragon.md).
  */
 const ObstacleRunner = require("../skills/agility/ObstacleRunner.Agility");
 
@@ -132,11 +134,11 @@ function lowerLever(object, downId) {
  * answered, the lever's sound and its down loc a tick later, the cast on the next, and the landing
  * three ticks after the cast, as the lever goes back up.
  */
-function pullSteps(lever, destination, onLanding) {
+function pullSteps(lever, destination, onLanding, { message = PULL_MESSAGE } = {}) {
   return [
     { wait: 1 },
     { anim: ids.pull },
-    { msg: PULL_MESSAGE },
+    message && { msg: message },
     { varbit: [ids.busy, 1] },
     { wait: 1 },
     { run: ({ object }) => lowerLever(object, lever.downId) },
@@ -146,11 +148,11 @@ function pullSteps(lever, destination, onLanding) {
     { gfx: ids.castGfx, height: 92 },
     { sound: CAST_SOUND },
     { wait: 3 },
-    { tele: [destination.to[0], destination.to[1], 0] },
-    { msg: destination.landed },
+    { tele: [destination.to[0], destination.to[1], destination.to[2] ?? 0] },
+    destination.landed && { msg: destination.landed },
     { varbit: [ids.busy, 0] },
     { run: onLanding },
-  ];
+  ].filter(Boolean);
 }
 
 function hasEasyWildernessDiary(player) {
@@ -175,13 +177,13 @@ function landed(player, destination) {
   for (const task of destination.diaryTasks ?? []) api.emitCustomEvent("diary:task", { player, ...task });
 }
 
-function pull(player, object, lever, destination) {
+function pull(player, object, lever, destination, onLanding = () => landed(player, destination), options = {}) {
   // Someone else's pull has it down (a walk to it or a warning answered meanwhile): the down loc
   // has no options, so nothing happens.
   if (!core.MapObjects.exists(object)) return;
-  const to = new core.Location(destination.to[0], destination.to[1], 0);
+  const to = new core.Location(destination.to[0], destination.to[1], destination.to[2] ?? 0);
   if (!core.TeleportHandler.checkReqs(player, to, Infinity)) return;
-  ObstacleRunner.run({ player, object }, pullSteps(lever, destination, () => landed(player, destination)), {
+  ObstacleRunner.run({ player, object }, pullSteps(lever, destination, onLanding, options), {
     // A pull cut short (death, logout) never reaches the landing step's busy 0.
     onFinish: (completed) => { if (!completed) player.getPacketSender().sendVarbit(ids.busy, 0); },
   });
@@ -242,7 +244,24 @@ function initialize(pluginApi) {
   ObstacleRunner.init(api);
 }
 
-function teleport({ player, destination, onArrival }) {
+/**
+ * A plugin's own lever (the King Black Dragon's): the captured pull and its lever's down loc, then the
+ * teleport. No lever of this kind has been captured; the Wilderness levers' sequence is played, without
+ * their chat lines, which a video of the KBD lever does not show.
+ */
+function pullOwnLever({ player, destination, onArrival, object, down }) {
+  resolve();
+  if (ObstacleRunner.isBusy(player)) return;
+  const downName = down ?? WILDERNESS_LEVER_DOWN;
+  const downId = core.CacheDefinitions.getLocId(downName);
+  if (!Number.isInteger(downId)) throw new Error(`[Levers] unknown gameval ${downName}`);
+  const to = [destination.getX(), destination.getY(), destination.getZ()];
+  pull(player, object, { downId }, { to }, () => onArrival?.(), { message: null });
+}
+
+function teleport(event) {
+  if (event.object) return pullOwnLever(event);
+  const { player, destination, onArrival } = event;
   if (core.TeleportHandler.checkReqs(player, destination, Infinity)) {
     core.TeleportHandler.teleport(player, destination.clone(), core.TeleportType.NORMAL, false, onArrival);
   }
@@ -250,7 +269,7 @@ function teleport({ player, destination, onArrival }) {
 
 module.exports = {
   name: "Levers",
-  description: "The Wilderness teleport levers (Edgeville, East Ardougne, the Deserted Keep and Mage Arena bank), with the Wilderness warning and a shared lever teleport event.",
+  description: "The Wilderness teleport levers (Edgeville, East Ardougne, the Deserted Keep and Mage Arena bank), with the Wilderness warning and a shared lever teleport event that can also pull another plugin's lever.",
   register(pluginApi) {
     initialize(pluginApi);
     api.persistAttribute(SKIP_WARNING_ATTRIBUTE, false);

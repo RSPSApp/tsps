@@ -11,6 +11,7 @@ const KBD_LAIR_LEVER_OBJECT_ID = 1817; // dragonkingoutlever
 const KING_BLACK_DRAGON_LAIR = [2271, 4680, 0];
 const SPIDER_ROOM_LADDER_LANDING = [3069, 10255, 0];
 const SPIDER_ROOM_LEVER_LANDING = [3067, 10254, 0];
+const ENTRANCE_LEVER_TILE = [3067, 10253, 0];
 const LAVA_MAZE_LADDER_LANDING = [3016, 3849, 0];
 
 const { DragonfireProtectionTier, emitDragonfireBreath, getDragonfireProtectionTier, sendDragonfireMessages } = require("../combat/DragonfireProtection");
@@ -132,6 +133,7 @@ function startEcho(request) {
   // private lair is made when the teleport lands.
   api.emitCustomEvent("lever:teleport", {
     player,
+    object: entranceLever(),
     destination: new Location(...KING_BLACK_DRAGON_LAIR),
     onArrival: () => beginEcho(player),
   });
@@ -224,16 +226,21 @@ function climbUpToLavaMaze({ player }) {
  * The spider room's lever into the lair; a league character carrying the echo orb is asked first
  * ("echo-boss:entry"). Its Commune and Private options are not implemented.
  */
-function pullEntranceLever({ player }) {
-  const entry = { player, boss: "king-black-dragon", enter: () => teleportIntoLair(player), handled: false };
+function pullEntranceLever({ player, object }) {
+  const entry = { player, boss: "king-black-dragon", enter: () => teleportIntoLair(player, object), handled: false };
   api.emitCustomEvent("echo-boss:entry", entry);
   if (!entry.handled) entry.enter();
   return true;
 }
 
-function teleportIntoLair(player) {
+/**
+ * Both levers are pulled as a video of the route shows: the pull, the lever flipping down, then the
+ * teleport (lever:teleport given the lever plays the Wilderness levers' captured sequence).
+ */
+function teleportIntoLair(player, lever) {
   api.emitCustomEvent("lever:teleport", {
     player,
+    object: lever,
     destination: new Location(...KING_BLACK_DRAGON_LAIR),
     // The easy Wilderness Diary's "Enter the King Black Dragon's lair.", once the teleport has landed.
     onArrival: () => api.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "enter-the-king-black-dragon-s-lair" }),
@@ -241,9 +248,15 @@ function teleportIntoLair(player) {
 }
 
 /** The lair's lever, back out beside the spider room's lever. */
-function pullLairLever({ player }) {
-  api.emitCustomEvent("lever:teleport", { player, destination: new Location(...SPIDER_ROOM_LEVER_LANDING) });
+function pullLairLever({ player, object }) {
+  api.emitCustomEvent("lever:teleport", { player, object, destination: new Location(...SPIDER_ROOM_LEVER_LANDING) });
   return true;
+}
+
+/** The spider room's lever on the map, for the echo orb prompt's "Yes." (which has no click event). */
+function entranceLever() {
+  const [x, y, z] = ENTRANCE_LEVER_TILE;
+  return core.MapObjects?.get?.(KBD_ENTRANCE_LEVER_OBJECT_ID, new Location(x, y, z), null) ?? undefined;
 }
 
 /** The combat method, built on api.core's classes. */

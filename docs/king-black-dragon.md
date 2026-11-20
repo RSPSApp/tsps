@@ -17,10 +17,15 @@ Dragon's lair"; [Lava Maze Dungeon](https://oldschool.runescape.wiki/w/Lava_Maze
 The landing tiles are the ones the [Shortest Path](https://github.com/Skretzo/shortest-path) plugin's
 transports record for these locs (`server/plugins/agent/data/transports.json`). The rsprox capture
 database has no recording of 1816, 1817 or 18988 (searched 2026-11-20). The ladders climb as every
-ladder does (`ladders:climbDown`/`ladders:climbUp`). Both levers teleport through `lever:teleport`,
-the standard teleport cast, which a video of the route shows
-([YouTube](https://www.youtube.com/watch?v=qyq6mFpM91Q)). It shows no chat lines, so the levers send
-none. As with every Wilderness lever, a teleblocked player cannot pull the spider room's lever
+ladder does (`ladders:climbDown`/`ladders:climbUp`). Videos of the route
+([1](https://www.youtube.com/watch?v=qyq6mFpM91Q), [2](https://youtu.be/JwsEadc4Pzc?t=86)) show each
+lever pulled and flipped down, then the standard teleport cast, with no chat lines. Both levers go
+through `lever:teleport` given the pulled lever, which plays the Wilderness levers' captured pull
+([wilderness-levers.md](wilderness-levers.md)) without its chat lines: the pull, the lever's click and
+its down loc a tick later, the cast a tick after that and the landing three ticks after the cast. The
+KBD levers have the Wilderness levers' up model (2108), so their down loc is `ikov_leverdown` (2077),
+as for the uncaptured East Ardougne lever. The timing and sounds are the captured levers', not the KBD
+levers' own. As with every Wilderness lever, a teleblocked player cannot pull the spider room's lever
 (Wiki); the teleport's own checks refuse it.
 
 The easy Wilderness Diary's "Enter the King Black Dragon's lair." is credited when the spider room's

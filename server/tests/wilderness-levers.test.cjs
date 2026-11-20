@@ -73,6 +73,7 @@ function player(varbits = {}) {
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }),
     getForceMovement: () => null,
     setForceMovement() {},
+    getSkillAnimation: () => -1,
     setSkillAnimation() {},
     getUpdateFlag: () => ({ flag() {} }),
     performAnimation: (animation) => log.push([tick, "anim", animation.getId()]),
@@ -328,6 +329,42 @@ test("lever:teleport hands its onArrival callback to the teleport, to run on lan
   assert.equal(calls.length, 1);
   assert.equal(calls[0][4], onArrival, "TeleportHandler.teleport's arrival callback");
 });
+
+// The King Black Dragon's levers (docs/king-black-dragon.md): no capture; a route video shows the pull
+// and the lever flipping down before the teleport, and no chat lines.
+for (const [name, x, y, to] of [
+  ["dragonkinginlever", 3067, 10253, [2271, 4680, 0]],
+  ["dragonkingoutlever", 2271, 4680, [3067, 10254, 0]],
+]) {
+  test(`lever:teleport given ${name} plays the captured pull, its down loc, and lands with no chat lines`, () => {
+    const calls = [];
+    const h = harness({ teleportSpy: (...args) => calls.push(args) });
+    const who = player();
+    who.setLocation(new core.Location(x, y, 0));
+    const lever = mapLever(loc(name), x, y);
+    assert.ok(lever, `the map has ${name} at ${x},${y}`);
+    const shape = lever.getType();
+    let landed = 0;
+    h.hooks["lever:teleport"]({ player: who, object: lever, destination: new core.Location(...to), onArrival: () => landed++ });
+    const seen = [];
+    runTicks(h, who, 8, () => seen.push(locsAt(x, y, shape)));
+    assert.equal(calls.length, 0, "the pull, not the plain teleport");
+    const at = (kind, value) => who.log.find((entry) => entry[1] === kind && (value === undefined || entry[2] === value))?.[0];
+    const pullTick = at("anim", CacheDefinitions.getSeqId("macro_lever_switch_down"));
+    assert.equal(pullTick, 1);
+    assert.equal(at("sound", 2400), 2, "the lever clicks a tick later");
+    assert.equal(at("anim", CacheDefinitions.getSeqId("human_castteleport")), 3);
+    assert.equal(at("gfx", CacheDefinitions.getSpotanimId("teleport_casting")), 3);
+    assert.deepEqual(who.log.find((entry) => entry[1] === "tele"), [6, "tele", to[0], to[1]]);
+    assert.equal(who.getLocation().getZ(), to[2]);
+    assert.deepEqual(who.log.filter((entry) => entry[1] === "msg"), [], "no chat lines");
+    const downId = loc("ikov_leverdown");
+    assert.deepEqual(seen.map((ids, i) => ids.includes(downId) ? i + 1 : null).filter((t) => t !== null), [2, 3, 4, 5],
+      "the lever shows ikov_leverdown (the same up and down models as the Wilderness levers) until the landing");
+    assert.deepEqual(seen.at(-1), [loc(name)], "and is back up");
+    assert.equal(landed, 1, "onArrival runs once, on landing");
+  });
+}
 
 test("All Settings' Deep Wilderness lever default option puts the Keep lever's Edgeville first", () => {
   for (const [first, look] of [[0, 1], [1, 2]]) {

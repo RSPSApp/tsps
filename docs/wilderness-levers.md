@@ -14,7 +14,10 @@ Wilderness, by loc gameval:
 
 The Mage Arena's own pair (`magearena_lever_in`/`_out`) is in
 `plugins/minigames/magearena/Levers.MageArena.js`. Other plugins can still teleport without a
-lever's pull through the `lever:teleport` event.
+lever's pull through the `lever:teleport` event. Given the pulled lever as `object` (and its down
+loc's gameval as `down`, `ikov_leverdown` by default), the event plays the captured pull below for
+that lever instead, without the chat lines; the King Black Dragon's levers use it
+([king-black-dragon.md](king-black-dragon.md)).
 
 ## A pull, as captured
 

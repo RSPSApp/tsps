@@ -162,7 +162,11 @@ test('Prince Ali Lady Keli reports tied-up, not not-ready, after the rope has be
 });
 
 test("Pirate's Treasure stock-room crate needs the white apron worn before it gives the rum", () => {
-  const { hooks, quest } = register('PiratesTreasure', 'pirates_treasure');
+  const tasks = [];
+  const { hooks, quest } = register('PiratesTreasure', 'pirates_treasure', {
+    TaskManager: { submit: (task) => { task.setRunning(true); tasks.push(task); }, cancelTasks() {} },
+  });
+  const tick = (count) => { while (count-- > 0) [...tasks].forEach((task) => task.tick()); };
   const search = hooks.get('onObjectInteraction')[0];
   const p = player();
   quest.setStage(p, 1);
@@ -181,6 +185,7 @@ test("Pirate's Treasure stock-room crate needs the white apron worn before it gi
   p.messages.length = 0;
   p.equipment.set(core.Equipment.BODY_SLOT, core.ItemIdentifiers.WHITE_APRON);
   search(crate);
+  tick(4); // the rum comes out four ticks after the bananas line (rev 242 capture, ticks 942-946)
   assert.equal(p.items.get(core.ItemIdentifiers.KARAMJAN_RUM), 1);
   assert.equal(p.attributes.get('pirates-treasure.rum'), 0);
   assert.ok(p.messages.includes('You find your bottle of rum in amongst the bananas.'));

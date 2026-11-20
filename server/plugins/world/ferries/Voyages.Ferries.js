@@ -5,7 +5,7 @@
  * - ship_journey (Monks of Entrana 239/4283, Void Knight squires 237/4012): the player alone on
  *   the ship at sea (an instance of the 3064,3208 chunk), interface 299 with script 1131's route,
  *   song 147 and jingle 172, the side tabs closed; the deck N ticks later with a message box.
- *   PiratesTreasure.Quest.js's Karamja boats are the same voyage.
+ *   (PiratesTreasure.Quest.js's Karamja boats left it for the fade style in rev 227+ captures.)
  * - longship (Jarvald 229/2714, the Sailor 229/2703, Mord and Maria Gunnars 231/3027, 229/2722):
  *   the same ship at sea under misc_shipjourney (224), its model playing the route's animation;
  *   song 147 and jingle 171 on the Waterbirth and Miscellania ships only; no message box.
@@ -128,7 +128,7 @@ function closeShipTabs(player) {
   }
 }
 
-/** As PiratesTreasure.Quest.js gives them back: combat, prayer and the spellbook by tab index. */
+/** Combat, prayer and the spellbook come back by tab index. */
 function reopenShipTabs(player) {
   const out = sender(player);
   out.sendTabInterface(0, 593);

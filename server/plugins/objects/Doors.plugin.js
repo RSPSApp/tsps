@@ -103,6 +103,9 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   // (local 1001994 ticks 16539, 17417, 17541); nameless in the cache, so ObjectIdentifiers has none.
   CAMELOT_GATE_LEFT_OPEN: 26083,
   CAMELOT_GATE_RIGHT_OPEN: 26084,
+  // wydindooropen: Wydin's stock-room door (2069) while it lets the player through (the user's rev 242
+  // capture PiratesTreasure ticks 937, 973); nameless in the cache, so ObjectIdentifiers has none.
+  WYDIN_DOOR_OPEN: 2070,
 });
 
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
@@ -729,6 +732,18 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       walkOver: true,
       closeTicks: 2,
       openSoundId: 46,
+    }),
+    // Wydin's stock-room door in Port Sarim (wydindoor 2069), the user's rev 242 capture PiratesTreasure ticks
+    // 935-939 (in) and 973-975 (out): Open puts inviswall 38848 on the doorway and wydindooropen (2070) on the
+    // tile west, sound 62, the player steps across and the door is back two ticks later. From the shop only
+    // Wydin's employee in the white apron goes in: PiratesTreasure's door:toggle.
+    Object.freeze({
+      closed: [[O.DOOR_56, 3012, 3204, 0, 0]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3012, 3204, 0, 0], [NAMELESS_DOOR_LEAF_IDS.WYDIN_DOOR_OPEN, 3011, 3204, 0, 1]],
+      crossX: 3012,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
     }),
     // Temple of Ikov's trap-lever door (ikov_trapleverdoor 92), rsprox_transcripts/242/912156.txt ticks 1764-1768,
     // 1885-1893 and 2014-2019: Open puts inviswall 38848 on the doorway and inactiveposhdoor (1542) on the tile

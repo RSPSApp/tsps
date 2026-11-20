@@ -66,3 +66,18 @@ test('Pick-up through a bank PIN resumes once after the PIN',async t=>{
   assert.deepEqual(f.p.getAttribute('construction:menagerie'),[]);
   assert.equal(npc.isRegistered(),false);
 });
+
+test('with more than 20 pets stored, Pick-up leaves the other roaming pets in place',async t=>{
+  const f=await store(t,'supremepet');
+  const supreme=core.CacheDefinitions.getObjId('supremepet');
+  const extra=[...core.CacheDefinitions.getEnumValues(985)].map(([,id])=>id).filter(id=>id!==supreme).slice(0,20);
+  for(const id of extra){f.p.getInventory().add(new core.Item(id),true);await send(f,{type:'item_on_object',objectId:f.object.getId(),x:f.object.getLocation().getX(),y:f.object.getLocation().getY(),itemId:id,slot:f.p.getInventory().getSlotForItemId(id),widgetId:149<<16});}
+  assert.equal((f.p.getAttribute('construction:menagerie')??[]).length,21);
+  const before=petNpcs(f);assert.equal(before.length,20,'20 roam, the cap');
+  const [target,...rest]=before;
+  await pickUp(f,target);
+  assert.equal((f.p.getAttribute('construction:menagerie')??[]).length,20);
+  assert.equal(target.isRegistered(),false);
+  for(const npc of rest)assert.equal(npc.isRegistered(),true,'other roaming pets are not respawned');
+  assert.equal(petNpcs(f).length,20,'the 21st stored pet comes out to roam');
+});

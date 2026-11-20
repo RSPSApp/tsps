@@ -247,21 +247,27 @@ function pickUpNow(context) {
 
 function clearPending({player}) { pending.delete(player); }
 
-/** Instance.rebuild: stored pets roam the menagerie rooms while the owner lets them. */
+/**
+ * Instance.rebuild: stored pets roam the menagerie rooms while the owner lets them. Only what
+ * changed is touched: pets no longer wanted leave, newly wanted ones spawn, the rest stay put.
+ */
 function refreshPets(house) {
   const out = roaming.get(house) ?? new Map();
   roaming.set(house, out);
-  const owner0 = house.owner;
-  const wanted = owner0 && !house.buildingMode && !owner0.getAttribute(CLOSED_ATTRIBUTE) ? [...stored(owner0)].slice(0, MAX_ROAMING) : [];
-  // Each occupant's rebuild calls this; leave the pets alone unless what should roam changed.
-  if (wanted.length === out.size && [...out].every(([npc, slot]) => npc.isRegistered() && wanted.includes(slot))) return;
-  for (const npc of out.keys()) if (npc.isRegistered()) { house.leave(npc, false); PluginManager.removeNpc(npc); }
-  out.clear();
   const owner = house.owner;
-  if (!owner || house.buildingMode || owner.getAttribute(CLOSED_ATTRIBUTE)) return;
+  const wanted = new Set(owner && !house.buildingMode && !owner.getAttribute(CLOSED_ATTRIBUTE) ? [...stored(owner)].slice(0, MAX_ROAMING) : []);
+  for (const [npc, slot] of [...out]) {
+    if (npc.isRegistered() && wanted.has(slot) && npc.getId() === storedPet(owner, slot)?.npcId) continue;
+    out.delete(npc);
+    if (npc.isRegistered()) { house.leave(npc, false); PluginManager.removeNpc(npc); }
+  }
+  const present = new Set(out.values());
+  const missing = [...wanted].filter(slot => !present.has(slot));
+  if (!missing.length) return;
+  // Each occupant's rebuild calls this; furniture tiles are only needed when a pet spawns.
   const tiles = house.furnitureEntries().filter(entry => MENAGERIE_ROOMS.has(entry.room.roomKey)).map(entry => entry.location);
   if (!tiles.length) return;
-  for (const slot of [...stored(owner)].slice(0, MAX_ROAMING)) {
+  for (const slot of missing) {
     const pet = storedPet(owner, slot);
     if (!pet || pet.npcId < 0) continue;
     const at = tiles[Math.floor(Math.random() * tiles.length)];

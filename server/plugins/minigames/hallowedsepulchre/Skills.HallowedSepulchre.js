@@ -1,6 +1,7 @@
 /**
  * The skill obstacles, shown by the floor layout's *_state varbits (1 out, 2 done). Recorded
- * (rsprox 1862): the F3 grapple pillars, the F1 bridge and the F3 portal; the brazier only refuses.
+ * (rsprox 1862): the F3 grapple pillars, the F1 bridge and the F3 portal. The Saradomin Brazier and
+ * its Holy barrier on floors 2-4 are local 1000598 (rev 227, Leagues V; XP recorded / 16).
  * Their moves come from the loc's own place, which reproduces those recordings:
  *
  * - Pillars stand in pairs two tiles apart; the swing crosses between them, from five tiles out on
@@ -9,16 +10,24 @@
  *   other (1862: 5981 -> 5975).
  * - A portal frame is five tiles wide; the pass goes through its middle tile, two tiles either side
  *   (1862: x 2386, y 5839 -> 5843).
+ * - A Holy barrier is one tile between the brazier's two halves; the pass walks from the tile on
+ *   one side to the tile on the other in a single tick, a two-tile walk (1000598: 2519 -> 2521 and
+ *   2529 -> 2527 at y 5960, 2413 -> 2415 at y 5828), two ticks after arriving, with the XP and the
+ *   busy varbit for two ticks.
  *
  * The requirements are the Wiki's; once a floor is sealed they refuse.
  */
 const Common = require("./Common.HallowedSepulchre");
 const Obstacles = require("./Obstacles.HallowedSepulchre");
+const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 
 const PILLAR_REACH = 5;
 const NAILS = [4824, 4823, 4822, 4821, 1539, 4820, 4819];
 const BRIDGE_NAILS = 5;
 const BRIDGE_PLANKS = 2;
+/** Holy barrier: the walk one tick after the click is handled (two after arrival), then busy for two. */
+const BARRIER_DELAY = 1;
+const BARRIER_BUSY = 2;
 
 function stateOf(run, name) {
   return run.variant?.varbits?.[name] ? (run.states?.[name] ?? 1) : 0;
@@ -289,6 +298,11 @@ function powerPortal(run) {
 
 // ------------------------------------------------------------------ the brazier
 
+/**
+ * Either half of the Saradomin Brazier. Recorded (1000598): the offering takes the dust, sets
+ * hallowed_prayer_ashes_offered and the state, plays human_bone_sacrifice and sound 958, with
+ * "You see the flame change as your offerings are accepted."
+ */
 function brazier(event) {
   const found = Obstacles.runAt(event);
   if (!found) return false;
@@ -312,15 +326,50 @@ function brazier(event) {
     return true;
   }
   player.getInventory().delete(items.vampyreDust, dust);
-  Common.animate(player, "pray");
-  player.sendMessage(Common.message("brazierLit"));
+  Common.varbit(player, "hallowed_prayer_ashes_offered", 1);
   setState(run, "hallowed_prayer_state", 2);
+  Common.spam(player, Common.message("brazierLit"));
+  Common.animate(player, "sacrifice");
+  player.getPacketSender().sendSound(Common.data.sounds.brazierLit, 1, 0);
   Common.xp(player, "PRAYER", Common.data.xp.brazierPrayer);
+  return true;
+}
+
+/**
+ * The pass through a Holy barrier at template tile `tile`, from the player's side: { from, to }.
+ * The brazier's halves stand north and south of it, so the pass runs east-west; a barrier without
+ * a half beside it would be crossed north-south.
+ */
+function barrierPass(run, [x, y, z], here) {
+  const alongX = Common.data.brazier.some((id) => locAt(run, id, [x, y + 1, z]));
+  const ends = alongX ? [[x - 1, y, z], [x + 1, y, z]] : [[x, y - 1, z], [x, y + 1, z]];
+  const from = Obstacles.reachableEnd(run, here, ends);
+  return { from, to: from === ends[0] ? ends[1] : ends[0] };
+}
+
+function barrier(event) {
+  const found = Obstacles.runAt(event);
+  if (!found) return false;
+  const { run, tile } = found;
+  const { player } = run;
+  if (stateOf(run, "hallowed_prayer_state") !== 2) return false;
+  const { to } = barrierPass(run, tile, run.area.templateOf(player.getLocation()));
+  if (!run.act(BARRIER_DELAY + BARRIER_BUSY, { agility: true })) return true;
+  player.getMovementQueue().reset();
+  run.schedule(BARRIER_DELAY, () => {
+    const at = run.area.at(to);
+    ObstacleRunner.run({ player, object: event.object }, [
+      { walk: [[at.getX(), at.getY()]], tilesPerTick: 2, traversalType: 1, arrive: true },
+      { wait: BARRIER_BUSY },
+    ], { busyVarbit: true, agility: true });
+    crossingXp(run, "prayer", floorXp(Common.data.xp.barrier)(run));
+  });
   return true;
 }
 
 function attachSkills(api) {
   const { data } = Common;
+  ObstacleRunner.init(api);
   Obstacles.registerStart(data.pillar, (run, tile, here) => pillarSwing(run, tile, here)?.from ?? null);
   // Mended or not, a bridge end and a portal frame are used from the tile before them (recorded).
   Obstacles.registerStart(data.bridge, (run, tile) => (
@@ -330,10 +379,13 @@ function attachSkills(api) {
     const face = run.area.getTemplateObjects(run.area.at(tile)).find((o) => o.getId() === data.portal)?.getFace?.() ?? 0;
     return portalPass(run, tile, face, here).from;
   });
+  Obstacles.registerStart(data.barrier, (run, tile, here) => (
+    stateOf(run, "hallowed_prayer_state") === 2 ? barrierPass(run, tile, here).from : null));
   api.onObjectClick(data.pillar, 1, pillar);
   api.onObjectClick(data.bridge, 1, bridge);
   api.onObjectClick(data.portal, 1, portal);
   api.onObjectClick(data.brazier, 1, brazier);
+  api.onObjectClick(data.barrier, 1, barrier);
 }
 
-module.exports = { attachSkills, stateOf, _test: { enchantment, takeRunes } };
+module.exports = { attachSkills, stateOf, _test: { enchantment, takeRunes, barrierPass } };

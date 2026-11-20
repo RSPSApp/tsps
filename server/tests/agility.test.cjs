@@ -2823,6 +2823,34 @@ test("Agility Pyramid: jump gaps and low walls go straight over, never along (rs
   }
 });
 
+test("the ice troll caves' rope bridge: a step onto the end, then a three-tile gap jump, both ways, with no level, XP or message (rsprox 3026 tick 2917)", () => {
+  for (const [objectId, objectTile, from, to] of [
+    [21317, [2385, 10260, 1], [2384, 10259, 1], [2385, 10263]],
+    [21316, [2385, 10263, 1], [2385, 10266, 1], [2385, 10260]],
+  ]) {
+    const player = createPlayer(...from, 1);
+    const moves = [];
+    const setForceMovement = player.setForceMovement;
+    player.setForceMovement = (value) => {
+      if (value) {
+        const end = value.getEnd();
+        moves.push({ to: [player.getLocation().getX() + end.getX(), player.getLocation().getY() + end.getY()], cycles: [value.getSpeed(), value.getReverseSpeed()] });
+      }
+      return setForceMovement(value);
+    };
+    const ticks = timeline(player, objectId, objectTile);
+    assert.deepEqual(moves.map((move) => move.to), [to], `${objectId}: one exact move across the gap`);
+    assert.deepEqual(moves[0].cycles, [53, 85], "exactmove delay1 53, delay2 85");
+    assert.deepEqual(tileOf(player).slice(0, 2), to, `${objectId}: lands on the far end`);
+    const jumps = ticksWith(ticks, (entry) => entry.animations.includes(3067));
+    assert.deepEqual(jumps, [1], `${objectId}: agility_pyramid_gap_jump the tick after stepping onto the bridge end`);
+    assert.deepEqual(ticks[1].sounds, [2465], "synth 2465 with the jump");
+    assert.deepEqual(tileOf(player), to.concat(1));
+    assert.equal(player.state.xp, 0);
+    assert.deepEqual(player.state.messages, []);
+  }
+});
+
 test("Agility Pyramid: the lap counts at the doorway whatever order the floors' obstacles came in", () => {
   const player = createPlayer(3354, 2830, 0);
   operate(player, ObjectIds.STAIRS_50, [3354, 2831, 0]);

@@ -1882,6 +1882,27 @@
       "params": {"length":9}
     },
     {
+      "name": "Rope bridge (Ice troll caves, Fremennik Isles)",
+      "object": [21316,21317],
+      "level": 1,
+      "note": "rsprox capture 3026 tick 2917: no Agility level, XP or message; a step onto the bridge end, then a three-tile Agility Pyramid gap jump, the same as the cave's other rope bridge (21318/21319, ticks 2291, 2440, 2449). Both ends (2385,10260 and 2385,10263) are blocked in the map's collision, so the player is routed beside them and stepped on",
+      "between": {
+        "ends": [[2385,10259,1],[2385,10264,1]],
+        "cross": {
+          "forward": [
+            {"walk":[[2385,10260]]},
+            {"sound":2465,"delay":20},
+            {"move":[2385,10263],"anim":"PYRAMID_JUMP","delay":20,"speed":[53,85],"ticks":3}
+          ],
+          "back": [
+            {"walk":[[2385,10263]]},
+            {"sound":2465,"delay":20},
+            {"move":[2385,10260],"anim":"PYRAMID_JUMP","delay":20,"speed":[53,85],"ticks":3}
+          ]
+        }
+      }
+    },
+    {
       "name": "Stepping stone (Miscellania)",
       "object": 11768,
       "level": 55,

@@ -42014,7 +42014,8 @@
             "PR #221 (29f698d0): eating emits food:eaten ({ player, itemId, heal }) for plugins that react to it; Wintertodt's warmth restore uses it.",
             "PR #266 (63ac25dd): dynamic strawberry healing (Food.getStrawberryHeal = 1 + 6% of max HP, cap 6) and the gnome combo foods (chocchip/spicy/toad crunchies; worm/toad/cheese+tom/fruit/vegetable batta) with their Wiki heals and karambwan combo flag; covered by server/tests/food-effects.test.cjs.",
             "PR #285 (a4dd6a0c): canAnglerfishOverheal() implements the PvP-combat rule above and server/tests/food-effects.test.cjs covers it; the recorded over-heal expiry was not OSRS behaviour and was dropped.",
-            "Main 3b61a15a8 (6 November 2026): #2488 Fix Tempoross fire dousing, attacks and cannon feedback; #2646 Birthday event: the 25th Anniversary event, \"25 Years, 25 Mementos\" (stacked on #2645). Existing completion credit and documented limitations are retained unless explicitly updated below."
+            "Main 3b61a15a8 (6 November 2026): #2488 Fix Tempoross fire dousing, attacks and cannon feedback; #2646 Birthday event: the 25th Anniversary event, \"25 Years, 25 Mementos\" (stacked on #2645). Existing completion credit and documented limitations are retained unless explicitly updated below.",
+            "2026-11-20 (#6318): Halloween 2020 candies (nine colours) eat with no heal, spam \"You eat the candy. Yum!\" and overhead \"Ooh piece of candy.\" (rsprox 229/00245 ticks 510/603/607, 229/02530; Wiki Blue candy); countsEaten: false skips varp 4518. Ours: the six unrecorded colours copy the recorded ones; the eat delay is the default."
           ],
           "taskDetails": [
             {

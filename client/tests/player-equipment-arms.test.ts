@@ -108,7 +108,7 @@ assert.deepEqual(composedKits(0, 8, 11).slice(0, 2), [-1, -1], "full helmets mus
 assert.deepEqual(composedKits(0, 11).slice(0, 2), [10, -1], "masks must retain the head kit");
 assert.deepEqual(composedEquipment(), {
     ids: [104, 103, 102, 101, 100],
-    layers: [7, 7, 0, 7, 4],
+    layers: [7, 7, 0, 7, 5],
 });
 assert.deepEqual(firstPersonEquipment(), {
     kits: [-1, -1, -1, 13, -1, -1, -1],

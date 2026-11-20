@@ -18,8 +18,9 @@ const loader = new PlayerModelLoader(idkTypeLoader, objTypeLoader, modelLoader, 
 
 const STRENGTH_CAPE_T = 9751;
 const CABBAGE_CAPE = 13679;
+const ICTHLARIN_SHROUD = 27265;
 const appearance = PlayerAppearance.defaultMale(idkTypeLoader);
-const expectedCapeLayers = new Map([[0, 0], [5, 5], [6, 7], [7, 6]]);
+const expectedCapeLayers = new Map([[0, 0], [5, 4], [6, 6], [7, 7]]);
 const assertCapeLayers = (itemId: number, label: string) => {
     const equip = new Array(14).fill(-1);
     equip[EquipmentSlot.CAPE] = itemId;
@@ -51,8 +52,7 @@ const assertCapeLayers = (itemId: number, label: string) => {
         }
     }
 
-    // Preserve the emblem's old depth margin: the cache's priority-6 cape panel/emblem keeps
-    // the top-biased layer 7; priority 7 is a separate collar-detail group at layer 6.
+    // Keep the cape's cache priority order and widen the cloth-to-panel gap to two bias bands.
     const priorities = capeModelData.faceRenderPriorities;
     assert.ok(priorities, `${label}: cape model should have per-face priorities`);
     const seen = new Set<number>();
@@ -73,12 +73,32 @@ const assertCapeLayers = (itemId: number, label: string) => {
         assert.equal(priorityCounts.get(7), 2, "Cabbage cape priority 7 is the pair of collar-detail faces");
         assert.ok((priorityCounts.get(6) ?? 0) > 2, "Cabbage cape priority 6 carries the broad panel/emblem group");
     }
+    if (itemId === ICTHLARIN_SHROUD) {
+        assert.equal(objTypeLoader.load(itemId).maleModel, 45250, "Icthlarin's shroud uses the reviewed cache model");
+        assert.ok((priorityCounts.get(7) ?? 0) >= 50, "Icthlarin's shroud priority 7 carries its broad central emblem");
+        const priority7Ys: number[] = [];
+        for (let face = 0; face < capeModelData.faceCount; face++) {
+            if (priorities[face] !== 7) continue;
+            priority7Ys.push(
+                capeModelData.verticesY[capeModelData.indices1[face]],
+                capeModelData.verticesY[capeModelData.indices2[face]],
+                capeModelData.verticesY[capeModelData.indices3[face]],
+            );
+        }
+        assert.ok(Math.min(...priority7Ys) <= -150 && Math.max(...priority7Ys) >= -100,
+            "Icthlarin's priority-7 faces span its central back emblem");
+        const layerForPriority = (priority: number) =>
+            playerModel.faceRenderLayers![capeStart + priorities.findIndex((value) => value === priority)];
+        assert.ok(layerForPriority(7) > layerForPriority(6),
+            "priority-7 shroud emblem remains above the priority-6 panel");
+    }
 };
 
 // Keep the previously fixed Strength cape layering covered while reproducing Cabbage cape's
 // angle-dependent emblem issue against its actual cache model.
 assertCapeLayers(STRENGTH_CAPE_T, "Strength cape");
 assertCapeLayers(CABBAGE_CAPE, "Cabbage cape");
+assertCapeLayers(ICTHLARIN_SHROUD, "Icthlarin's shroud");
 
 // Items with a single priority keep the old flat layer.
 const whip = new Array(14).fill(-1);

@@ -109,6 +109,16 @@ function buildCookingPot({ player, object }) { return buildImprovement(player, o
 function buildSpinningWheel({ player, object }) { return buildImprovement(player, object, BUILD_BY_NAME.get("Broken Spinning Wheel")); }
 function buildLoom({ player, object }) { return buildImprovement(player, object, BUILD_BY_NAME.get("Half-built Loom")); }
 
+function approachBuiltSpinningWheel(event) {
+  const build = BUILD_BY_NAME.get("Broken Spinning Wheel");
+  if (event.objectId !== cache().getLocId(build.loc) || !isBuilt(event.player, build)
+    || event.definition?.getName?.() !== "Spinning Wheel") return;
+  // The placed parent faces the built child's only ordinary approach into blocked scenery.
+  // Use the existing adjacent, clear-line approach contract for this personal improvement;
+  // keep normal movement, object lifetime and crafting station checks.
+  event.approachRange = 1;
+}
+
 function login({ player }) {
   for (const build of DATA.builds) if (isBuilt(player, build)) sendBuilt(player, build);
 }
@@ -127,6 +137,7 @@ module.exports = {
     api.onObjectInteraction("Fire pit", { "Build on": buildCookingPot });
     api.onObjectInteraction("Broken Spinning Wheel", { "Build on": buildSpinningWheel });
     api.onObjectInteraction("Half-built Loom", { "Build on": buildLoom });
+    api.onObjectRoute(approachBuiltSpinningWheel);
     api.onPlayerLogin(login);
   },
 };

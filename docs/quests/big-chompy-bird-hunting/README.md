@@ -70,6 +70,12 @@ outside the repo. `server/tests/big-chompy-capture.test.cjs` checks these agains
   "Nothing interesting happens."; using bellows on the bubbles keeps its old two lines.
 - The demonstration moves on to 40 eight ticks after Rantz's miss if the bird never reaches the bait.
 - The hunting hint arrow is cleared if the bird flies off unkilled.
+- A bird lands only on a tile a walk out from the bait reaches inside the 3-10 tile landing square, never on
+  water (#6281). The sea east of Rantz is water overlay with no collision, so a blocked-tile check alone put
+  birds on it. Both captured landings (ticks 992, 1323) are on land; no source states the rule.
+- Rantz's spit-roast is the map's one multiloc (multi_chompybird_spitroast_entity 6895 at 2630,2990, varbit
+  ogre_spit_roaster; the capture's use at 1472 names 6895). Freeing Skrach's raw jubbly and skewered chompy cook
+  on it too; Recipe for Disaster no longer spawns a second roast at 2632,2985 (#6281).
 - A bait bursting next to the player says "You're hit by bits of exploding toad!" (the Wiki transcript's line; no
   capture stood beside a burst).
 - An escaped bloated toad's swamp toad leaves again after 100 ticks; inflating with a full pack (and fewer than

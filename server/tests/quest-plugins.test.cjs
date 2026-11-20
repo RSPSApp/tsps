@@ -20011,40 +20011,6 @@ test('RFD Amik shrine requires the Wise Old Man clue, enters the mapped lair and
 });
 
 
-test('RFD shows the Feldip spit-roast only while Skrach can be rescued', () => {
-  assert.equal(require('../data/definitions/object-spawns.json').some(spawn => [3375].includes(spawn.id)), false);
-  const { api: base, handlers } = mockApi();
-  const objects = [];
-  base.core = { ...base.core, ObjectManager: {
-    register: object => objects.push(object),
-    deregister: object => { const index = objects.indexOf(object); if (index >= 0) objects.splice(index, 1); },
-  } };
-  delete require.cache[require.resolve('../plugins/quests/quests/RecipeForDisaster.Quest')];
-  require('../plugins/quests/quests/RecipeForDisaster.Quest')(base);
-  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests()
-    .findLast(({ key }) => key === 'recipe_for_disaster');
-  const attributes = new Map();
-  const packetSender = new Proxy({}, { get: (_target, key) => key.startsWith('send') ? () => packetSender : undefined });
-  const player = {
-    getAttribute: key => attributes.get(key),
-    setAttribute: (key, value) => attributes.set(key, value),
-    getPacketSender: () => packetSender,
-    getLocation: () => new base.core.Location(2632, 2985, 0),
-    getInventory: () => ({ getAmount: () => 0, getFreeSlots: () => 28 }),
-    sendMessage() {},
-  };
-  quest.setStage(player, 1);
-  assert.equal(objects.some(object => object.getId() === 3375), false);
-  quest.setStage(player, 4);
-  const roast = objects.find(object => object.getId() === 3375);
-  assert.ok(roast, 'the missing map spit-roast is supplied during the rescue');
-  assert.equal(roast.getOwner(), player);
-  assert.deepEqual([roast.getLocation().getX(), roast.getLocation().getY(), roast.getLocation().getZ()], [2632, 2985, 0]);
-  attributes.set('recipe-for-disaster:rescues', 32);
-  handlers.playerLogin.at(-1)({ player });
-  assert.equal(objects.some(object => object.getId() === 3375), false);
-});
-
 test('RFD council interactions read requirements through the SkillManager before starting a rescue', () => {
   const { api: base } = mockApi();
   const interactions = [];

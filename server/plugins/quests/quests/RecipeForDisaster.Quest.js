@@ -29,9 +29,11 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const DAVE_STEW_ATTRIBUTE = "recipe-for-disaster:evil-dave-stew";
   const SKRACH_STATE_ATTRIBUTE = "recipe-for-disaster:skrach-state";
   const SKRACH_STAGE_ATTRIBUTE = "recipe-for-disaster:skrach-stage";
-  const SKRACH_SPIT_ROAST_OBJECT = ObjectIdentifiers.OGRE_SPIT_ROAST_4; // 3375
-  const SKRACH_SPIT_ROAST_TILE = { x: 2632, y: 2985, z: 0 };
-  const SKRACH_SPIT_ROAST_BY_PLAYER = new WeakMap();
+  /**
+   * Rantz's spit-roast at 2630,2990 is this multiloc (6895, varbit ogre_spit_roaster); a use on it names the
+   * parent, never the 3372-12563 child shown. No generated ObjectIdentifiers entry.
+   */
+  const CHOMPY_SPIT_ROAST_MULTILOC = "multi_chompybird_spitroast_entity";
   const AWOWOGEI_STATE_ATTRIBUTE = "recipe-for-disaster:awowogei-state";
   const AWOWOGEI_STAGE_ATTRIBUTE = "recipe-for-disaster:awowogei-stage";
   /** Filling already added to the snake corpse: 1 sliced red banana, 2 tchiki nut paste. */
@@ -637,7 +639,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (hasFlag(player, flag)) return false;
     setFlag(player, flag);
     syncRescueQuestVarbits(player);
-    syncSkrachSpitRoast(player);
     awardPoint(player);
     spawnCouncil(player);
     return true;
@@ -676,29 +677,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   function setSkrachBit(player, bit) {
     player.setAttribute(SKRACH_STATE_ATTRIBUTE, skrachState(player) | bit);
     syncSkrachQuestVarbits(player);
-  }
-  /** The Feldip chompy-grounds spit-roast is missing from the map; show it to this player while Skrach can be rescued. */
-  function syncSkrachSpitRoast(player) {
-    const { GameObject, Location, ObjectManager } = api.core;
-    const existing = SKRACH_SPIT_ROAST_BY_PLAYER.get(player);
-    if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 32)) {
-      if (!existing) return;
-      ObjectManager.deregister(existing, true);
-      SKRACH_SPIT_ROAST_BY_PLAYER.delete(player);
-      return;
-    }
-    if (existing) return;
-    const object = new GameObject(SKRACH_SPIT_ROAST_OBJECT,
-      new Location(SKRACH_SPIT_ROAST_TILE.x, SKRACH_SPIT_ROAST_TILE.y, SKRACH_SPIT_ROAST_TILE.z), 10, 0, null)
-      .setOwner(player);
-    ObjectManager.register(object, true);
-    SKRACH_SPIT_ROAST_BY_PLAYER.set(player, object);
-  }
-  function clearSkrachSpitRoast(player) {
-    const object = SKRACH_SPIT_ROAST_BY_PLAYER.get(player);
-    if (!object) return;
-    api.core.ObjectManager.deregister(object, true);
-    SKRACH_SPIT_ROAST_BY_PLAYER.delete(player);
   }
   function completedQuest(player, key) {
     return require("../QuestRuntime").getRegisteredQuests()
@@ -2576,7 +2554,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       ObjectIdentifiers.OGRE_SPIT_ROAST_3, ObjectIdentifiers.OGRE_SPIT_ROAST_4,
       ObjectIdentifiers.OGRE_SPIT_ROAST_5, ObjectIdentifiers.OGRE_SPIT_ROAST_6,
       ObjectIdentifiers.OGRE_SPIT_ROAST_7, ObjectIdentifiers.OGRE_SPIT_ROAST_8,
-      ObjectIdentifiers.OGRE_SPIT_ROAST_9];
+      ObjectIdentifiers.OGRE_SPIT_ROAST_9, api.core.CacheDefinitions.getLocId(CHOMPY_SPIT_ROAST_MULTILOC)];
     if (spitRoasts.includes(objectId) && itemId === ItemIdentifiers.SKEWERED_CHOMPY) {
       event.handled = true;
       player.getInventory().deleteNumber(ItemIdentifiers.SKEWERED_CHOMPY, 1);
@@ -3640,7 +3618,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
 
   function handleStageChanged({ player, key }) {
     if (key === QUEST) {
-      syncSkrachSpitRoast(player);
       syncRescueQuestVarbits(player);
     }
   }
@@ -3649,7 +3626,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (player) {
       Feast.end(player, true);
       Feast.cancel(player);
-      clearSkrachSpitRoast(player);
       hideFrozenRoom(player);
     }
   }
@@ -3804,7 +3780,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       moveTo(player, DINING_EXIT.x, DINING_EXIT.y, DINING_EXIT.z);
     }
     ensureOgreBoatTalkActions();
-    syncSkrachSpitRoast(player);
     syncRescueQuestVarbits(player);
     player.getPacketSender().sendVarbit(VARBIT_OGRE_BOAT,
       (skrachState(player) & 1) || hasFlag(player, 32) ? 1 : 0);

@@ -24,6 +24,10 @@
  * options; the options that lead on move the player, and a ladder direction the captures never
  * saw goes to Ladders (ladders:climbUp / ladders:climbDown), which finds it on the map.
  *
+ * A loc with a warning screen (`warningScreen`: the cws_warning_<n> number, the Waterbirth cave's 1)
+ * shows it through WarningScreens ("warning-screen:show") and goes on when Yes is clicked, or at
+ * once with the warning turned off.
+ *
  * A loc with a warning (`warn`: Cavey Davey at the Mos Le'Harmless cave) plays the captured
  * conversation and its question until the player turns the warning off; its other option
  * (`toggle`: Toggle-warning) asks first, then flips the warning, which is kept across logins.
@@ -51,6 +55,11 @@ const TIED_ATTRIBUTE = "loc-teleports:tied";
 const WARNINGS_OFF_ATTRIBUTE = "loc-teleports:warnings-off";
 /** Toggled trapdoor varbits a player has changed, by varbit name -> value; sent again at login. */
 const TOGGLED_ATTRIBUTE = "loc-teleports:toggled";
+/**
+ * A warning screen's Yes: the move on the click's own tick (rsprox 91, local 1000243/1000283), for a loc
+ * with no animation or fade. An entry with either gives its captured `warningAnswer` ticks instead.
+ */
+const WARNING_SCREEN_ANSWER = Object.freeze({ animTick: 0, tick: 0 });
 /** The handler runs one tick after the arrival the captured ticks count from. */
 const HANDLER_TICK = 1;
 
@@ -185,7 +194,8 @@ function travel(player, entry, destination, answer = null) {
   const { steps, at } = schedule();
   // After a question, the captured ticks count from the answer, which is handled on its own tick.
   const animTick = answer ? answer.animTick : fromClick(entry.animTick ?? entry.tick);
-  const moveTick = answer ? Math.max(animTick + 1, answer.tick) : Math.max(animTick + 1, fromClick(entry.tick));
+  // An answer's move can share its tick (a warning screen's Yes: the move on the click, captures 91, 1000243).
+  const moveTick = answer ? Math.max(animTick, answer.tick) : Math.max(animTick + 1, fromClick(entry.tick));
   at(animTick, () => {
     animateAndSound(player, entry);
     if (entry.fade) fade(player, true);
@@ -428,6 +438,23 @@ function play(player, object, clickType) {
     const gate = failedGate(player, entry);
     if (gate) {
       refuse(player, gate.refuse);
+      return true;
+    }
+    if (entry.warningScreen !== undefined) {
+      // The cache's warning screen (WarningScreens: counted, toggled off after enough showings, the Doomsayer);
+      // Yes leads on as it is clicked. With that plugin off, the player goes straight on.
+      const start = player.getLocation().clone();
+      const proceed = (answered) => {
+        if (!player.getLocation().equals(start)) return;
+        travel(player, entry, destination, answered ? entry.warningAnswer ?? WARNING_SCREEN_ANSWER : null);
+      };
+      const screen = { player, warning: entry.warningScreen, handled: false };
+      // Turned off, the screen proceeds at once, inside the event: the entry's own timing then.
+      let showing = true;
+      screen.proceed = () => proceed(!showing);
+      pluginApi.emitCustomEvent("warning-screen:show", screen);
+      showing = false;
+      if (!screen.handled) travel(player, entry, destination);
       return true;
     }
     if (entry.warn && !warningOff(player, entry.warn.varbit)) {

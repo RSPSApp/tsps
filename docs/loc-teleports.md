@@ -422,6 +422,29 @@ conversation is the one branch the captures show (the player has "killed a few o
 Not part of this: the cave's darkness and insects without a light source, and the Witchwood
 icon's protection.
 
+## Waterbirth Island cave warning
+
+The rock cave entrance on Waterbirth Island (`dagannoth_caveentrance_rock`, 8929, at 2519,3738)
+shows warning screen 1 (`cws_warning_1`, interface 574) before going in, as rsprox captures 86, 91
+and 1768 and the user's recordings 1000243, 1000267, 1000283, 1000319, 1000332, 1000368 and 1000475
+(rev 227) show in all 17 attempts:
+
+- **Enter** opens 574 on the tick after arriving (the handler's tick), counting varbit
+  `cws_warning_1` (3851) up one (0->1, 1->2, 2->3 in the captures). Nothing moves while it is open.
+- **Yes** (574:17) closes it and lands the player on 2442,10146 on the click's own tick (91 and
+  1000243; 86 lands a tick later).
+- Once turned off (7, by the screen's checkbox or the Doomsayer), Enter goes straight in on the
+  entry's own tick, as before.
+
+It is an entry's `warningScreen`: the warning's number, shown through WarningScreens
+(`warning-screen:show`), which keeps the count, the checkbox and the Doomsayer's toggle. With that
+plugin off the player goes straight in. The ice cave entrance (8930) shows no warning (1057, 2950).
+
+Wiki (Doomsayer) calls warning 1 "Dagannoth Kings' Ladder", triggered by "Entering the Kings'
+lair"; every capture of screen 574 follows this entrance, and none follows the Kings' ladder
+(`dagannoth_ladder_base_ext2`), so the recordings decide where it shows. All the captures are from
+Leagues V worlds.
+
 ## Araxxor's web tunnels
 
 The tunnel into Araxxor's lair (54161) and the one out (54274) are loc teleports, not crawls:

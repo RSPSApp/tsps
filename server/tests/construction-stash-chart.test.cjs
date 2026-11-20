@@ -18,7 +18,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 
 const WALL_CHART_SPACE = 15423, STASH_CHART = 41434;
-let core, C, House, Instance, Stash, Skill;
+let core, C, House, Instance, Skill;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -31,7 +31,6 @@ before(async () => {
   Skill = core.Skill;
   House = require("../plugins/skills/construction/House.Construction");
   Instance = require("../plugins/skills/construction/Instance.Construction");
-  Stash = require("../plugins/treasuretrails/trails/Stash.TreasureTrails");
 });
 after(() => PM.emitServerShutdown({}));
 
@@ -73,7 +72,8 @@ function spaceTarget(house) {
 function clickChart(player, object, clickType) {
   const at = object.getLocation();
   const event = { player, object, objectId: object.getId(), clickType, location: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false };
-  return { found: Stash.noticeboard(event), event };
+  PM.emitObjectInteraction(event); // the real dispatcher: before-hooks, then name hooks
+  return event;
 }
 
 test("the wall chart space lists the S.T.A.S.H chart fourth, at the cache's level and materials", () => {
@@ -124,12 +124,11 @@ test("View on the built chart opens the STASH chart; Remove is left to build mod
   const charts = house.furnitureObjects.filter((drawn) => drawn.getId() === STASH_CHART);
   assert.ok(charts.length > 0, "the built chart is drawn");
   const view = clickChart(player, charts[0], 1);
-  assert.equal(view.found, true);
-  assert.equal(view.event.handled, true);
+  assert.equal(view.option, "View");
+  assert.equal(view.handled, true);
   assert.deepEqual(sent.map((entry) => entry.inventory ?? entry.script ?? entry.modal), [C.getInventoryId("hh_inv"), 2524, C.getInterfaceId("hidey_holes"), 1475]);
   sent.length = 0;
   const remove = clickChart(player, charts[0], 5);
-  assert.equal(remove.found, false);
-  assert.equal(remove.event.handled, false);
-  assert.deepEqual(sent, []);
+  assert.equal(remove.option, "Remove");
+  assert.equal(sent.some((entry) => entry.modal === C.getInterfaceId("hidey_holes")), false, "Remove never opens the chart");
 });

@@ -1729,7 +1729,7 @@ function handleFurnitureAction(event) {
     || (["light", "re-light"].includes(action ?? "") && Altars.lightHouseBurner(event))
     || (action === "open" && Storage.openHouseFurniture(event))
     || (action === "close" && Storage.closeHouseFurniture(event))
-    || (["search", "view"].includes(action ?? "") && Storage.openHouseStorage(event))) event.handled = true;
+    || (["search", "view", "jars"].includes(action ?? "") && Storage.openHouseStorage(event))) event.handled = true;
 }
 
 // Cache-native ready poses for the seven parlour chairs, in furniture-menu order.
@@ -2082,6 +2082,7 @@ function attach(api) {
   TipJar.attachTipJar(api);
   Bookcase.attachBookcase(api);
   Storage.attachStorage(api);
+  require("./BossLair.Construction").attachBossLair(api);
   Scrying.attachScrying(api);
   CapeHanger.attachCapeHanger(api);
   Trophies.attachTrophies(api);

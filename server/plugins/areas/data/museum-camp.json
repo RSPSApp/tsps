@@ -1,0 +1,28 @@
+{
+  "_source": "Wiki (Museum Camp: each improvement's level, materials and experience; a hammer for all of them) and rsprox captures 73, local 1000187, 1000189, 1000410 (rev 227: building the cooking pot, the well and the spinning wheel, their refusals and their varbits). The cleaning bench, the sixth improvement, is built by FossilStorage.",
+  "_builds": "Each improvement's multiloc (gameval) shows its built form when its varbit is 1; all six varbits are bits of varp 1632, which fossil_camp (bits 0-5) also reads. 'option' is the unbuilt form's cache option; 'built' is the recorded success line (bank chest and loom: not recorded, same pattern). 'tools' are kept; 'materials' are listed in the recorded order of the 'You need ...' line.",
+  "builds": [
+    { "key": "bank-chest", "loc": "fossil_bank_chest", "name": "Chest pieces", "option": "Build", "varbit": "fossil_bank", "level": 21, "xp": 250,
+      "tools": [], "materials": [["plank_oak", 2], ["iron_bar", 1]], "nails": 5, "built": "You build the bank chest." },
+    { "key": "well", "loc": "fossil_well", "name": "Ring of Stones", "option": "Build on", "varbit": "fossil_well", "level": 22, "xp": 500,
+      "tools": [], "materials": [["plank_oak", 2], ["bucket_empty", 1], ["rope", 1]], "nails": 5, "built": "You build the well." },
+    { "key": "cooking-pot", "loc": "fossil_range", "name": "Fire pit", "option": "Build on", "varbit": "fossil_range", "level": 24, "xp": 800,
+      "tools": [["tinderbox", "You need a tinderbox to build the cooking pot."]], "materials": [["iron_bar", 1], ["logs", 2], ["softclay", 3]], "nails": 0, "built": "You build the cooking pot." },
+    { "key": "spinning-wheel", "loc": "fossil_spinning_wheel", "name": "Broken Spinning Wheel", "option": "Build on", "varbit": "fossil_spinning_wheel", "level": 28, "xp": 1000,
+      "tools": [], "materials": [["plank_oak", 4]], "nails": 5, "built": "You build the spinning wheel." },
+    { "key": "loom", "loc": "fossil_loom", "name": "Half-built Loom", "option": "Build on", "varbit": "fossil_loom", "level": 29, "xp": 1000,
+      "tools": [], "materials": [["plank_oak", 2], ["rope", 1]], "nails": 5, "built": "You build the loom." }
+  ],
+  "_nails": "Any nails do (recorded: steel, gameval 'nails', and iron); the first kind held in full is used, lowest metal first.",
+  "nailTypes": ["nails_bronze", "nails_iron", "nails", "nails_black", "nails_mithril", "nails_adamant", "nails_rune"],
+  "_messages": "level and missing are recorded (a game message and the same line in a message box); noHammer and the 'Nails' name in the missing line are ours (not recorded).",
+  "messages": {
+    "level": "You need at least level {level} Construction to build that.",
+    "missing": "You need {items} to build that.",
+    "noHammer": "You need a hammer to build that.",
+    "nailsName": "Nails"
+  },
+  "animation": "human_poh_build",
+  "_buildTicks": "Recorded: the build animation on the arrival tick, the materials, message and varbit the tick after.",
+  "buildTicks": 1
+}

@@ -2,8 +2,20 @@
  * Wyson the gardener's woad leaf sale (Wiki transcript "Wyson the gardener"): 15 coins buys
  * one leaf, 20 coins buys two. The transcript's coin conditions decide which branch plays;
  * its "receive" actions take the coins and hand over the leaves.
+ *
+ * His mole-part trade (Wiki "Wyson the gardener", Mole parts): with a mole claw or skin in the
+ * inventory he opens with the trade, and with an immaculate mole skin he adds the extra-nests
+ * line. Each claw or skin becomes one nest, each immaculate skin five; every nest is a Wyson seed
+ * nest (72%), a ring nest (20%) or an empty nest (8%). As live, the trade happens when the
+ * player's "Okay, I will trade the mole parts." is continued, the nests take the parts' own slots
+ * and the chat closes (rsprox capture local 1000323, tick 13641).
  */
 const PAGE = "Wyson the gardener";
+const MOLE_PARTS_VARIANT = "standard-dialogue-talking-to-wyson-with-mole-parts-in-inventory";
+const IMMACULATE_VARIANT = "standard-dialogue-talking-to-wyson-with-immaculate-mole-skin-in-inventory";
+/** The two variants' "Wyson exchanges mole parts for nests/nest boxes." action ids. */
+const TRADE_STEPS = new Set(["T0rsOq", "XwNH58"]);
+const IMMACULATE_NESTS = 5;
 /** Receive action id -> { price, leaves }. */
 const SALES = new Map([
   ["bywQsQ", { price: 15, leaves: 1 }],
@@ -22,6 +34,52 @@ const NO_ROOM_MESSAGE = "You don't have enough inventory space.";
 function isWyson(core, event) {
   return event.npcId === core.NpcIdentifiers.WYSON_THE_GARDENER
     && event.pages?.some(({ page }) => page === PAGE);
+}
+
+function moleParts(core) {
+  const ids = core.ItemIdentifiers;
+  return { parts: new Set([ids.MOLE_CLAW, ids.MOLE_SKIN]), immaculate: ids.IMMACULATE_MOLE_SKIN };
+}
+
+function selectVariant(core, event) {
+  if (event.npcId !== core.NpcIdentifiers.WYSON_THE_GARDENER) return null;
+  const inventory = event.player.getInventory();
+  const { parts, immaculate } = moleParts(core);
+  if (inventory.getAmount(immaculate) > 0) return { page: PAGE, variant: IMMACULATE_VARIANT };
+  for (const id of parts) if (inventory.getAmount(id) > 0) return { page: PAGE, variant: MOLE_PARTS_VARIANT };
+  return null;
+}
+
+/** Wiki: 8% empty, 72% seeds, 20% ring, per nest. */
+function rollNest(core) {
+  const ids = core.ItemIdentifiers;
+  const roll = Math.random() * 100;
+  if (roll < 72) return ids.BIRD_NEST_12;
+  return roll < 92 ? ids.BIRD_NEST_5 : ids.BIRD_NEST_6;
+}
+
+function tradeMoleParts(core, event) {
+  if (!TRADE_STEPS.has(event.stepId) || !isWyson(core, event)) return;
+  event.handled = true;
+  const inventory = event.player.getInventory();
+  const { parts, immaculate } = moleParts(core);
+  // An immaculate skin's four extra nests need free slots of their own. Ours: one with no room
+  // stays (live hands out nest boxes instead, not implemented).
+  let room = inventory.getFreeSlots();
+  let skipped = false;
+  const items = inventory.getItems();
+  for (let slot = 0; slot < items.length; slot++) {
+    const id = items[slot]?.getId?.() ?? -1;
+    if (!parts.has(id) && id !== immaculate) continue;
+    if (id === immaculate) {
+      if (room < IMMACULATE_NESTS - 1) { skipped = true; continue; }
+      room -= IMMACULATE_NESTS - 1;
+    }
+    inventory.setItem(slot, new core.Item(rollNest(core), 1));
+    if (id === immaculate) for (let n = 1; n < IMMACULATE_NESTS; n++) inventory.add(new core.Item(rollNest(core), 1), false);
+  }
+  inventory.refreshItems();
+  if (skipped) event.player.sendMessage(NO_ROOM_MESSAGE);
 }
 
 function dialogueCondition(core, event) {
@@ -59,9 +117,11 @@ function sellWoad(core, event) {
 
 module.exports = {
   name: "Wyson",
-  description: "Wyson the gardener sells woad leaves through his dialogue: 15 coins for one leaf, 20 coins for two.",
+  description: "Wyson the gardener sells woad leaves through his dialogue (15 coins for one leaf, 20 coins for two) and trades mole claws and skins for bird nests.",
   register(api) {
+    api.onNpcDialogueVariant(selectVariant.bind(null, api.core));
     api.onNpcDialogueCondition(dialogueCondition.bind(null, api.core));
     api.onCustomEvent("npc-dialogue:action", sellWoad.bind(null, api.core));
+    api.onCustomEvent("npc-dialogue:action", tradeMoleParts.bind(null, api.core));
   },
 };

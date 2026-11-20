@@ -743,6 +743,22 @@ test("Inspect on the duck and the spyglass opens the tool's object box (rsprox 9
   }
 });
 
+test("Inspect on the weather station shows its line over two object boxes, as live breaks it (rsprox 939)", () => {
+  const { Item } = require("../dist/game/model/Item");
+  const weatherStation = require("../plugins/skills/sailing/charting/Weather.Charting");
+  const player = captain();
+  player.getInventory().add(new Item(31809, 1), true);
+  const event = itemOption(player, 31809, "Inspect", 2);
+  assert.equal(event.handled, true);
+  const pages = [...player.chain.getDialogues().values()];
+  assert.deepEqual(pages.map((page) => [page.getItemId(), page.getText()]), [
+    [31809, "This station can be used to record weather patterns.<br>To find where to record the data, first use the wind<br>measurements to see which direction the wind is moving,<br>then use those measurements to work out where it isn't"],
+    [31809, "blowing."],
+  ]);
+  assert.equal(pages.map((page) => page.getText()).join(" ").replace(/<br>/g, " "), weatherStation.INSPECT);
+  assert.equal(player.getInventory().getAmount(31809), 1);
+});
+
 test("Dismiss sends the duck back to the tools compartment (Wiki: Transcript:Current duck)", () => {
   const player = duckCaptain();
   try {

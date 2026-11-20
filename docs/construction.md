@@ -329,6 +329,13 @@ Using a pet on menagerie furniture stores it; the pet house's View lists the sto
 2013) lets them roam the menagerie outside building mode. Stored pets count as owned
 (`pets:held-elsewhere`).
 
+Pick-up on a roaming pet takes it back as Take does (rsprox captures 2779-2784, rev 229,
+on Dagannoth Supreme Jr., K'ril Tsutsaroth Jr., the phoenix, Lil' Zik, the rift guardian and
+others): on the tick the owner reaches it the NPC goes, the pet item arrives and its stored bit
+and form varbit clear, with no animation or sound. Only that pet goes; the others keep roaming.
+Ours: a full backpack gets "You don't have enough inventory space." (as Take), a guest's
+Pick-up does nothing, and an account with a bank PIN is asked for it first (as Take).
+
 ### Dungeon and throne room
 
 - **Guards and guardians** stand in for their furniture as NPCs outside building mode and come

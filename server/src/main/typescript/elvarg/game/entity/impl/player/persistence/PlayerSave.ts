@@ -731,8 +731,11 @@ export class PlayerSave {
             }
             let bankItems = this.banks.get(i);
             if (bankItems != null) {
-                // A save holding more than the player's space still loads whole.
-                Bank.withoutLimit(player, () => player.setBank(i, new Bank(player)).getBank(i).addItems(bankItems, false));
+                // Restore slots, not deposits: a live family variant must not refill a saved
+                // placeholder or merge separate stacks. Saves above the current space still load whole.
+                const bank = new Bank(player);
+                bankItems.forEach((item, slot) => bank.setItem(slot, item.clone()));
+                player.setBank(i, bank);
             }
         }
     }

@@ -312,27 +312,41 @@ function carriedToBank(player) {
 function bankRefusal(player) {
   // A bot's carried items are its own generated kit, never a player's to lose.
   if (isPlayerBot(player)) return null;
-  let slots = 0;
-  const counted = new Set();
-  for (const item of carriedToBank(player)) {
+  const carried = carriedToBank(player);
+  for (const item of carried) {
     // Silenced as the teleport checks are: the refusal below is the only line (a loot key's own hook says it too).
     if (withoutMessages(player, () => pluginApi?.emitCanBankItem?.(player, item)) === false || item.isUnbankable?.()) {
       return `Your ${item.getDefinition?.()?.getName?.() ?? "item"} can't be sent to the bank.`;
     }
-    const key = `${item.getDefinition?.()?.unNote?.() ?? item.getId()}:${JSON.stringify(item.getMeta?.() ?? null)}`;
-    if (counted.has(key)) continue;
-    counted.add(key);
-    // As Bank.canTake: a live stack with the same meta, or a placeholder (its own or its family's), takes no new slot.
-    const id = item.getDefinition?.()?.unNote?.() ?? item.getId(); // a noted item is banked as its unnoted id
-    const tab = player.getBank(Bank.getTabForItem(player, id));
-    const meta = JSON.stringify(item.getMeta?.() ?? null);
-    const reused = (typeof tab?.getItems === "function" ? tab.getItems() : []).some((held) => held != null && (
-      (held.getId() === id && (held.getAmount() === 0 || JSON.stringify(held.getMeta?.() ?? null) === meta))
-      || (held.getAmount() === 0 && Bank.sharesPlaceholder(held.getId(), id))));
-    if (!reused) slots++;
   }
-  if (slots === 0) return null;
-  return slots > Bank.freeSlots(player) ? "You don't have enough bank space for the items you are carrying." : null;
+  if (carried.length === 0) return null;
+  // Plan the same ordered deposits on detached Bank owners. A reservation can be filled only once;
+  // later charge/meta variants must find another slot, and matching stacks must have quantity room.
+  // The real character and its stack identities remain untouched if any deposit would fail.
+  const maximumSlots = Bank.usedSlots(player) + Bank.freeSlots(player);
+  const plannedPlayer = {
+    getBank: (tab) => plannedBanks[tab],
+    getCurrentBankTab: () => player.getCurrentBankTab(),
+  };
+  const plannedBanks = player.getBanks().map((bank) => {
+    const copy = new Bank(plannedPlayer);
+    if (bank) copy.setItems(bank.getCopiedItems());
+    return copy;
+  });
+  return Bank.withoutLimit(plannedPlayer, () => {
+    for (const item of carried) {
+      item.setId(item.getDefinition().unNote());
+      const bank = plannedPlayer.getBank(Bank.getTabForItem(plannedPlayer, item.getId()));
+      if (bank.getAddableAmount(item) < item.getAmount()) {
+        return "You don't have enough bank space for the items you are carrying.";
+      }
+      bank.add(item, false);
+      if (Bank.usedSlots(plannedPlayer) > maximumSlots) {
+        return "You don't have enough bank space for the items you are carrying.";
+      }
+    }
+    return null;
+  });
 }
 
 /** Banks everything the player carries except the preset's own spawned items. */
@@ -346,6 +360,7 @@ function bankCarriedItems(player) {
     if (!isValidItem(item) || item.isPresetItem?.()) {
       continue;
     }
+    item.setId(item.getDefinition().unNote());
     player.getBank(Bank.getTabForItem(player, item.getId())).add(item, false);
     moved = true;
   }

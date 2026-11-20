@@ -37,10 +37,83 @@ function actor(t) {
   p.setLocation(new core.Location(3222, 3218, 0));
   const messages = [];
   t.mock.method(p.getPacketSender(), "sendMessage", (message) => { messages.push(message); return p.getPacketSender(); });
-  t.after(() => p.setRegistered(false));
+  t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p); });
   return { p, messages };
 }
 const preset = () => new Presetable("qa", [new core.Item(I.SHARK, 5)], [], [99, 99, 99, 99, 99, 99, 99], MagicSpellbook.NORMAL, false);
+
+function reserveLastBankSlot(p, free = 0) {
+  p.getBank(1).setItem(0, new core.Item(I.RING_OF_DUELING_1_, 0));
+  for (let slot = 0; slot < Bank.getCapacity(p) - 1 - free; slot++) {
+    p.getBank(0).setItem(slot, new core.Item(I.COINS, 1, { "test:slot": slot }));
+  }
+  assert.equal(Bank.freeSlots(p), free);
+}
+const bankContents = (p) => p.getBanks().map((bank) => bank?.getCopiedItems() ?? null);
+
+for (const sameId of [false, true]) {
+  test(`one shared reservation cannot bank two ${sameId ? "metadata" : "charge"} variants`, (t) => {
+    const { p, messages } = actor(t);
+    reserveLastBankSlot(p);
+    const first = new core.Item(I.RING_OF_DUELING_7_, 1, { "test:source": "carried" });
+    const second = new core.Item(sameId ? I.RING_OF_DUELING_7_ : I.RING_OF_DUELING_6_, 1, { "test:source": "worn" });
+    p.getInventory().setItem(0, first);
+    p.getEquipment().setItem(core.Equipment.RING_SLOT, second);
+    const before = bankContents(p);
+    assert.equal(Presets.applyPreset(p, preset()), false);
+    assert.equal(p.getInventory().getItems()[0], first, "carried stack was not moved or recreated");
+    assert.equal(p.getEquipment().getItems()[core.Equipment.RING_SLOT], second, "worn stack was not lost");
+    assert.deepEqual(bankContents(p), before, "failed planning changes no bank slot");
+    assert.equal(p.getInventory().getAmount(I.SHARK), 0);
+    assert.ok(messages.some((message) => /bank space/.test(message)));
+  });
+}
+
+test("one shared reservation plus a free slot banks both charge variants with their metadata", (t) => {
+  const { p } = actor(t);
+  reserveLastBankSlot(p, 1);
+  p.getInventory().setItem(0, new core.Item(I.RING_OF_DUELING_7_, 1, { "test:source": "carried" }));
+  p.getEquipment().setItem(core.Equipment.RING_SLOT, new core.Item(I.RING_OF_DUELING_6_, 1, { "test:source": "worn" }));
+  assert.equal(Presets.applyPreset(p, preset()), true);
+  const items = p.getBanks().flatMap((bank, index) => index === Bank.BANK_SEARCH_TAB_INDEX ? [] : bank.getValidItems());
+  assert.equal(items.find((item) => item.getId() === I.RING_OF_DUELING_7_).getMetaValue("test:source"), "carried");
+  assert.equal(items.find((item) => item.getId() === I.RING_OF_DUELING_6_).getMetaValue("test:source"), "worn");
+  assert.equal(Bank.freeSlots(p), 0);
+  assert.equal(p.getInventory().getAmount(I.SHARK), 5);
+});
+
+test("one reservation can accept repeated identical stacks without reserving another slot", (t) => {
+  const { p } = actor(t);
+  reserveLastBankSlot(p);
+  p.getInventory().setItem(0, new core.Item(I.RING_OF_DUELING_7_, 1));
+  p.getInventory().setItem(1, new core.Item(I.RING_OF_DUELING_7_, 1));
+  assert.equal(Presets.applyPreset(p, preset()), true);
+  assert.equal(p.getBank(1).getAmount(I.RING_OF_DUELING_7_), 2);
+  assert.equal(Bank.freeSlots(p), 0);
+});
+
+test("a stack at the bank quantity limit cannot consume carried coins during preset loading", (t) => {
+  const { p } = actor(t);
+  p.getBank(0).setItem(0, new core.Item(I.COINS, 2147483647));
+  p.getInventory().setItem(0, new core.Item(I.COINS, 1));
+  assert.equal(Presets.applyPreset(p, preset()), false);
+  assert.equal(p.getBank(0).getAmount(I.COINS), 2147483647);
+  assert.equal(p.getInventory().getAmount(I.COINS), 1);
+  assert.equal(p.getInventory().getAmount(I.SHARK), 0);
+});
+
+test("preset banking normalizes a carried note into the exact reserved unnoted stack", (t) => {
+  const { p } = actor(t);
+  const note = new core.Item(I.ABYSSAL_WHIP, 1).getDefinition().getNoteId();
+  assert.ok(note > 0);
+  p.getBank(1).setItem(0, new core.Item(I.ABYSSAL_WHIP, 0));
+  p.getInventory().setItem(0, new core.Item(note, 3, { "test:source": "noted" }));
+  t.mock.method(Bank, "freeSlots", () => 0);
+  assert.equal(Presets.applyPreset(p, preset()), true);
+  assert.equal(p.getBank(1).getAmount(I.ABYSSAL_WHIP), 3);
+  assert.equal(p.getBank(1).getAmount(note), 0);
+  assert.equal(p.getBank(1).getItems()[0].getMetaValue("test:source"), "noted");
+});
 
 test("a full bank refuses the load and keeps what was carried", (t) => {
   const f = actor(t);

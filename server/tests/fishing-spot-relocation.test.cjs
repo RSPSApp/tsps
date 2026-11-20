@@ -10,6 +10,102 @@ Server.installProductionPathResolver();
 const SWAMP_TILES = [[3240, 3146], [3240, 3147], [3241, 3148], [3242, 3143], [3242, 3148], [3244, 3150], [3245, 3152], [3246, 3155]];
 const SWAMP_SPAWNS = [[3240, 3146], [3240, 3147], [3244, 3150], [3245, 3152], [3246, 3155]];
 
+// Real ownership boundary, separate from the lightweight timing/selection fixtures below.
+async function liveWorld(t) {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  const core = PluginManager.getCoreApi(), Fishing = require("../plugins/skills/Fishing.plugin");
+  const Relocation = require("../plugins/skills/fishing/Relocation.Fishing");
+  Relocation.reset();
+  const actors = [], areas = [], tasks = [], events = [], sounds = [];
+  const api = PluginManager.createApi("FishingOccupancyRegression");
+  api.getTaskManager = () => ({ submit(task) { tasks.push(task); return core.TaskManager.submit(task); } });
+  api.emitCustomEvent = (name, event) => events.push([name, event]);
+  t.mock.method(core.Sounds, "playAreaSound", (sound) => sounds.push(sound));
+  t.mock.method(Math, "random", () => 0); // ordinary minimum timer and deterministic first candidate
+  Relocation.attach(api, { spotTools: () => [Fishing.TOOLS.NET], names: Fishing.FISHING_SPOT_NAMES });
+  t.after(() => {
+    for (const npc of actors) {
+      const area = npc.getPrivateArea();
+      if (area) area.leave(npc, false);
+      if (npc.isRegistered()) core.World.getNpcs().remove(npc);
+    }
+    for (const area of areas) area.destroy();
+    for (const task of tasks) task.stop();
+    core.TaskManager.process();
+    Relocation.reset();
+  });
+  function area() {
+    class Copy extends core.PrivateArea { postLeave(mobile) { this.remove(mobile); } }
+    const value = new Copy([new core.Boundary(3230, 3260, 3130, 3170, 0)]);
+    areas.push(value);
+    return value;
+  }
+  function spot(tile, privateArea) {
+    const npc = core.NPC.create(core.NpcIdentifiers.FISHING_SPOT_30, new core.Location(...tile, 0));
+    assert.equal(core.World.getNpcs().add(npc), true);
+    npc.setNeedsPlacement(false);
+    if (privateArea) privateArea.enter(npc);
+    actors.push(npc);
+    return npc;
+  }
+  const ticks = (count) => { for (let i = 0; i < count; i++) { core.World.processCycle++; core.TaskManager.process(); } };
+  return { core, Relocation, area, spot, ticks, events, sounds };
+}
+
+test("late public registration reserves its tile before timer discovery at ordinary tick251", async (t) => {
+  const { core, Relocation, spot, ticks, events, sounds } = await liveWorld(t);
+  const old = spot(SWAMP_TILES[0]);
+  ticks(250);
+  assert.deepEqual([old.getLocation().getX(), old.getLocation().getY()], SWAMP_TILES[0]);
+  const late = spot(SWAMP_TILES[1]);
+  assert.equal(Relocation.isRelocating(late), false, "registration is later than scan201");
+  ticks(1);
+  assert.equal(old.getLocation().equals(late.getLocation()), false, "a current public occupant cannot be overlapped");
+  assert.deepEqual([old.getLocation().getX(), old.getLocation().getY()], SWAMP_TILES[2]);
+  assert.equal(events.length, 1);
+  assert.equal(sounds.length, 1);
+  assert.equal(sounds[0].soundId, Relocation.MOVE_SOUND);
+  assert.deepEqual([sounds[0].x, sounds[0].y], SWAMP_TILES[0]);
+  assert.equal(Relocation.isRelocating(late), false, "occupancy does not eagerly enroll a timer");
+  ticks(50);
+  assert.equal(Relocation.isRelocating(late), true, "normal scan301 still discovers the late spot");
+  core.World.getNpcs().remove(late);
+  const site = Relocation.SITES.find((value) => value.name === "0_50_49_saltfish");
+  assert.ok(Relocation.freeTiles(old, site).some(([x, y]) => x === SWAMP_TILES[1][0] && y === SWAMP_TILES[1][1]),
+    "ordinary World removal immediately releases occupancy before the next discovery scan");
+  ticks(1);
+  assert.equal(Relocation.isRelocating(late), false);
+  assert.equal(core.World.getNpcs().add(late), true);
+  late.setNeedsPlacement(false);
+  ticks(99);
+  assert.equal(Relocation.isRelocating(late), true, "ordinary re-registration can enroll again at scan401");
+});
+
+test("conditional private copies do not reserve public site tiles or receive public timers", async (t) => {
+  const { Relocation, area, spot, ticks } = await liveWorld(t);
+  const shared = spot(SWAMP_TILES[0]), copy = area();
+  const hidden = SWAMP_TILES.slice(1).map((tile) => spot(tile, copy));
+  ticks(251);
+  assert.deepEqual([shared.getLocation().getX(), shared.getLocation().getY()], SWAMP_TILES[1]);
+  assert.ok(hidden.every((npc, index) => !Relocation.isRelocating(npc)
+    && npc.getLocation().getX() === SWAMP_TILES[index + 1][0]
+    && npc.getLocation().getY() === SWAMP_TILES[index + 1][1]));
+});
+
+test("conditional public-to-private transfer ends eligibility before an ordinary due move", async (t) => {
+  const { Relocation, area, spot, ticks, events } = await liveWorld(t);
+  const npc = spot(SWAMP_TILES[0]);
+  ticks(250);
+  assert.equal(Relocation.isRelocating(npc), true);
+  area().enter(npc);
+  ticks(1);
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], SWAMP_TILES[0]);
+  assert.equal(events.length, 0);
+  assert.equal(Relocation.isRelocating(npc), false, "private spots no longer count as public timed movers");
+});
+
 async function world() {
   const { CachePipeline } = require("../dist/game/cache/CachePipeline");
   const { PluginManager } = require("../dist/plugins/PluginManager");

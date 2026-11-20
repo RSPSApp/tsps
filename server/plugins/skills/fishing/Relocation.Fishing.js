@@ -28,8 +28,9 @@ const SCAN_TICKS = 100;
 
 let api = null;
 let toolsOf = () => [];
+let spotNames = [];
 const tracked = new Map();      // npc -> { site, moveTicks, due }
-const known = new Set();        // every fishing spot NPC seen, tracked or not, for tile occupancy
+const known = new Set();        // discovery/enrollment cache, not authoritative tile occupancy
 let tick = 0;
 let nextScan = 0;
 
@@ -101,8 +102,12 @@ function scan(names) {
 
 /** Tiles of `site` a spot could move to: not its own, and no fishing spot standing there. */
 function freeTiles(npc, site) {
-  const taken = new Set();
-  for (const other of known) {
+  const current = npc.getLocation();
+  const taken = new Set([tileKey(current.getX(), current.getY(), current.getZ())]);
+  for (const other of api.getWorld().getNpcs()) {
+    if (!other || other === npc || other.isRegistered?.() === false
+      || (other.getPrivateArea?.() ?? null) !== (npc.getPrivateArea?.() ?? null)
+      || !isFishingSpot(other, spotNames)) continue;
     const at = other.getLocation();
     if (at.getZ() === site.plane) taken.add(tileKey(at.getX(), at.getY(), at.getZ()));
   }
@@ -112,7 +117,11 @@ function freeTiles(npc, site) {
 /** Move one spot now. False when every tile of its site is held. */
 function moveSpot(npc, random = Math.random) {
   const state = tracked.get(npc);
-  if (!state) return false;
+  if (!isRelocating(npc)) {
+    tracked.delete(npc);
+    known.delete(npc);
+    return false;
+  }
   state.due = rollDue(state.moveTicks, random);
   const free = freeTiles(npc, state.site);
   if (free.length === 0) return false;
@@ -135,13 +144,18 @@ function processSpots(names) {
     nextScan = tick + (known.size === 0 && tick < SCAN_TICKS ? 1 : SCAN_TICKS);
   }
   for (const [npc, state] of tracked) {
+    if (!isRelocating(npc)) {
+      tracked.delete(npc);
+      known.delete(npc);
+      continue;
+    }
     if (tick >= state.due) moveSpot(npc);
   }
 }
 
 /** True when this spot moves on its own timer (so a session on it needs no random stop). */
 function isRelocating(npc) {
-  return tracked.has(npc);
+  return tracked.has(npc) && !npc.getPrivateArea?.() && npc.isRegistered?.() !== false;
 }
 
 /** agent:advance-time: bring every spot's move `ms` closer. */
@@ -159,6 +173,7 @@ function advanceTime(event) {
 function attach(pluginApi, { spotTools, names }) {
   api = pluginApi;
   toolsOf = spotTools;
+  spotNames = names;
   api.getTaskManager().submit(new (class extends api.core.Task {
     constructor() { super(1); }
     execute() { processSpots(names); }

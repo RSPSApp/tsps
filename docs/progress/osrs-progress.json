@@ -1820,6 +1820,7 @@
             "server/tests/fishing-spot-relocation.test.cjs"
           ],
           "devNotes": [
+            "2026-11-20: Follow-up to #6353 selects relocation tiles from live registered fishing-spot occupancy in the same public world, independently of the unchanged discovery scan for timer enrollment. Real World/NPC/Task regressions reproduce late registration before ordinary tick251, verify no overlap and normal scan301 enrollment, immediate occupancy release on removal and normal re-registration enrollment, and conditional private-copy/transfer exclusion. Nine relocation tests and four focused session/minnow consumers pass; final ownership checks were rerun separately. Wiki intervals, captured sites/sound behavior and stationary exceptions remain unchanged. Private fixtures are isolation invariants, not a newly established natural quest bug or private relocation support. No new native/capture campaign; task statuses unchanged. See docs/fishing.md and server/tests/fishing-spot-relocation.test.cjs.",
             "Main 62d662706: #1482 start, catch and miss lines per tool, timing and message boxes from captures.",
             "Main 688f96a69: #1433 celestial signets keep the crystal harpoon's charge saving.",
             "Main 63592d406: #1069 spots roll on Wiki tick lengths and karambwan fishing runs through the loop.",

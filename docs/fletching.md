@@ -29,7 +29,7 @@ Status:
   - **Other assembled items:** the mith grapple, the light and heavy ballistae, the webweaver bow (u).
   - **Requirements:**
     - Big Chompy Bird Hunting started (ogre arrows);
-    - Zogre Flesh Eaters: completed for the unstrung comp bow, started for stringing it and for brutal arrows (the Wiki recipes say "Completion" and "Partial completion" respectively);
+    - Zogre Flesh Eaters: started for stringing the comp ogre bow; cutting it once Grish has taught it, and brutal arrows once Sithik has (`taught`, answered by the quest through `"fletching:taught"`; the Wiki: "Partial completion"), either after the quest;
     - the Slayer unlock Broader Fletching (broad arrows, broad bolts, amethyst broad bolts).
   - **Make-X for darts and bolts:** All Settings 316, varbit `option_fletch_dart_or_bolt_makex`. On by default, it offers a menu of up to 10 sets; turning it off makes one set per click. Saved choices take precedence over the default.
   - **The fletching knife:** a tick off each knife action after the first.
@@ -65,6 +65,7 @@ From the captures:
 | Feather on dart tips | On the click's tick: the tier's `human_fletching_add_dart_feathers_*`, "You finish making 10 darts.", tips and feathers out, darts in. No menu. |
 | Feather on unfinished bolts | On the click's tick: `human_fletching_add_bolt_feathers_*`, synth sound 2605, "You fletch 10 bolts.". No menu. |
 | Knife on logs | skillmulti mode 0, "What would you like to make?". `human_fletching` on the choice, the first item 2 ticks later and one every 3, each with the animation and "You carefully cut the wood into 30 arrow shafts." (or "some javelin shafts.", "a shortbow.", "a longbow.", "a crossbow stock."). |
+| Knife on achey logs (Zogre Flesh Eaters capture, ticks 3253-3255 and 3492-3495) | skillmulti "How many logs do you wish to fletch?" labelled "Ogre arrow shafts" and "Unstrung composite bow", both offered without wolf bones. Choosing the bow without them is `objectbox_double` (11) with the logs and the bones and "You need wolf bones and achey tree logs to make the composite ogre bow." (a recipe's `missingMessage` between its `missingItems`); with them, `human_fletching` on the choice and the bow 2 ticks later with "You carefully cut the wood into a composite ogre bow.". |
 | Knife on two logs: a shield | `human_fletching` a tick after the choice, the shield 6 ticks after the choice and one every 7, with "You carefully cut the pieces of wood into a shield.". |
 | Feather on arrow shafts | skillmulti mode 3, "How many sets of 15 do you wish to feather?", offering up to 10 sets. `human_fletching_add_feather` on the choice, a set a tick later and one every 2, each with sound 2605 and "You attach feathers to 15 arrow shafts.". |
 | Arrowtips on headless arrows | skillmulti mode 3, "How many sets of 15 do you wish to complete?". The same timing and sound, "You attach steel arrowtips to 15 headless arrows." ("broad arrowheads" for broad arrows). |

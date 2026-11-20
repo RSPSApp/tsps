@@ -932,6 +932,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Wyrms` | Wyrms | npcs | yes | Wyrm and wyrmling combat: melee when the target is adjacent, magic from range, with separate max hits per style. (members only) |
 | `Wyson` | Wyson | npcs | yes | Wyson the gardener sells woad leaves through his dialogue: 15 coins for one leaf, 20 coins for two. |
 | `Zahur` | Zahur | npcs | yes | Zahur in Nardah makes unfinished potions from clean herbs and vials of water or blood for 200 coins each, after the hard Desert Diary or with a Herblore cape. (members only) |
+| `Zogres` | Zogres | npcs | yes | Zogres, skogres and Slash Bash take a quarter of most damage, half from Crumble Undead and full from brutal arrows. (members only) |
 | `ZombiePirates` | ZombiePirates | npcs | yes | Picks the Medium Wilderness Diary drop table for Chaos Temple zombie pirates once the player has completed that diary. (members only) |
 | `AlKharidGate` | AlKharidGate | objects | yes | Al Kharid toll gate: Border Guard dialogue and a 10 coin toll before Prince Ali Rescue, free passage after it. |
 | `Altars` | Altars | objects | yes | Altar actions: pray to restore Prayer points, switch spellbooks at Ancient, Lunar and Dark altars, and the Chaos, Nature, Guthix and Occult altars. |

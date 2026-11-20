@@ -152,8 +152,8 @@ export class LoginRenderer implements LoginRendererHost {
     async fetchServerList(): Promise<void> {
         return serverList.fetchServerList(this);
     }
-    refreshServerList(): void {
-        serverList.refreshServerList(this);
+    refreshServerList(): Promise<void> {
+        return serverList.refreshServerList(this);
     }
     computeLayoutConfig(w: number, h: number): LoginLayoutConfig {
         return layoutConfig.computeLayoutConfig(this, w, h);

@@ -22,6 +22,8 @@ import { locHighlightKey, type ModelHighlightManager } from "../../../game/highl
 import { menuOptionDisplayText } from "../../../ui/menu/menuOptionDisplayText";
 
 const DEVICE_OPTION_INTERFACE_SCALING = 27;
+/** The World Switcher (worldswitcher). */
+const WORLDSWITCHER_GROUP = 69;
 // Fixed layout toplevel (OSRS fixed mode).
 const FIXED_GAMEFRAME_ROOT = 548;
 const UIZOOM_DEFAULT_DESKTOP_PERCENT = 100;
@@ -246,8 +248,13 @@ export function registerClientOps(handlers: HandlerMap): void {
     });
 
     // === World info ===
+    // 301, which every world takes itself to be: the world's own plugins count on it (the dwarf
+    // cannon sets mcannon_world to 301 % 128, which the buff bar's script compares with this).
+    // The World Switcher's scripts (interface 69) get the number the world list gives the
+    // world we are on, which they mark as the current world; 301 while there is no list to say.
     handlers.set(Opcodes.MAP_WORLD, (ctx) => {
-        ctx.pushInt(301);
+        const inWorldSwitcher = (ctx.activeWidget?.groupId ?? -1) === WORLDSWITCHER_GROUP;
+        ctx.pushInt((inWorldSwitcher ? ctx.worldList?.currentWorld() : undefined) ?? 301);
     });
 
     handlers.set(Opcodes.MAP_MEMBERS, (ctx) => {

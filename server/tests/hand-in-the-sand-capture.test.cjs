@@ -83,6 +83,11 @@ function actor(t, x, y, z = 0) {
   wrap("sendObjectAnimation", (object, animation) => ["locanim", animation?.getId?.() ?? animation?.id]);
   wrap("sendTypedMessage", (type, text) => (type === 114 ? ["line", String(text).split("|").slice(1).join("|")] : ["box", text]));
   wrap("sendClientScript", (id, ...args) => (id === 58 ? ["menu", args[0], String(args[1]).split("|")] : null));
+  const playAreaSound = core.Sounds.playAreaSound;
+  t.mock.method(core.Sounds, "playAreaSound", (options) => {
+    record(["areasound", options.soundId, options.x, options.y, options.radius]);
+    return playAreaSound.call(core.Sounds, options);
+  });
   t.mock.method(p, "performAnimation", (animation) => record(["anim", animation?.getId?.() ?? animation?.id]));
   t.mock.method(p, "performGraphic", (graphic) => record(["gfx", graphic?.getId?.() ?? graphic?.id]));
   const forceChat = core.NPC.prototype.forceChat;
@@ -251,6 +256,9 @@ test("The Hand in the Sand plays as the revision 242 run, stage 0 to 160", async
   const arrival = indexOf(rows, ([kind, id]) => kind === "spawn" && id === 881);
   assert.deepEqual(rows[arrival], ["spawn", 881, 2598, 3087], "Zavistic comes out north of the bell");
   assert.ok(swing < arrival && arrival < indexOf(rows, ([kind]) => kind === "line"), "the swing, Zavistic, then his words");
+  const ringing = indexOf(rows, ([kind, id]) => kind === "areasound" && id === 1959);
+  assert.deepEqual(rows[ringing], ["areasound", 1959, 2598, 3086, 5], "the bell rings over 5 tiles");
+  assert.equal(rows.when[ringing], rows.when[swing], "as it swings (t7399)");
   assert.equal(rows.when[arrival] - rows.when[swing], 1, "Zavistic a tick after the swing (t7399-7400)");
   assert.equal(rows.when[indexOf(rows, ([kind]) => kind === "line")], rows.when[arrival], "and his words with him");
   assert.deepEqual(lines(rows).slice(0, 3), [
@@ -417,7 +425,9 @@ test("The Hand in the Sand plays as the revision 242 run, stage 0 to 160", async
   assert.equal(rows.when[swirl] - rows.when[continued(firstBox)], 7, "the swirl 7 ticks after it is continued (t8609-8616)");
   assert.equal(rows.when[secondBox] - rows.when[swirl], 2, "the second box 2 ticks later (t8618)");
   assert.equal(rows.when[spent] - rows.when[continued(secondBox)], 13, "140 13 ticks after it is continued (t8625-8638)");
-  const back = indexOf(rows, ([kind, id]) => kind === "spawn" && id === 881);
+  // The 120 ring's Zavistic has walked off by now, so this ring's own comes first: find the one after the cutscene.
+  const after = continued(secondBox);
+  const back = after + indexOf(rows.slice(after), ([kind, id]) => kind === "spawn" && id === 881);
   assert.deepEqual(rows[back], ["spawn", 881, 2597, 3086], "Zavistic beside the bell again (t8635)");
   assert.equal(rows.when[back] - rows.when[continued(secondBox)], 10, "back at the bell 10 ticks after the second box");
   assert.equal(rows.when[indexOf(rows, ([kind, id]) => kind === "jingle" && id === 114)] - rows.when[continued(learn)], 3,

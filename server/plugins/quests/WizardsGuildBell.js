@@ -3,7 +3,8 @@
  * Zogre Flesh Eaters to fetch Zavistic Rarve. As a revision 242 capture rings it (local 1002235, ticks 7398-7490,
  * 7925-8037, 8539-8574, 9004-9008):
  *
- * - The bell swings (zogre_bell_ring 2103) the tick after the click.
+ * - The bell swings (zogre_bell_ring 2103) the tick after the click, ringing (zogre_bell 1959, an area sound of
+ *   range 5 at 2598,3086) as it does.
  * - A tick later Zavistic Rarve stands north of it at (2598,3087), facing south, and the conversation opens.
  * - He stays while the player talks to him (ringing again keeps the same Zavistic) and walks off once the chat has
  *   been closed a while (12-16 ticks in the capture); he also goes when the player leaves.
@@ -11,6 +12,7 @@
  * Ours: he leaves 12 ticks after the chat closes, and 15 tiles is "leaving"; the capture shows no exact rule.
  */
 const BELL_RING_ANIM = 2103;
+const BELL_SOUND = { soundId: 1959, x: 2598, y: 3086, level: 0, radius: 5 };
 const ARRIVAL = { x: 2598, y: 3087, z: 0 };
 const LEAVE_AFTER_IDLE_TICKS = 12;
 const LEAVE_DISTANCE = 15;
@@ -23,6 +25,7 @@ function createWizardsGuildBell(api) {
   const { Animation, CountdownTask, Direction, NpcIdentifiers, Task, TaskManager } = api.core;
 
   function swing(player, bell) {
+    api.core.Sounds.playAreaSound({ ...BELL_SOUND });
     if (!bell?.getLocation) return;
     const animation = new Animation(BELL_RING_ANIM);
     const viewers = new Set([player, ...(player.getLocalPlayers?.() ?? [])]);
@@ -112,4 +115,4 @@ function createWizardsGuildBell(api) {
   return { ring, summon, leave, visitorOf: (player) => visitors.get(player)?.npc ?? null };
 }
 
-module.exports = { createWizardsGuildBell, BELL_RING_ANIM };
+module.exports = { createWizardsGuildBell, BELL_RING_ANIM, BELL_SOUND };

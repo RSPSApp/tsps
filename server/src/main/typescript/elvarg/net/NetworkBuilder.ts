@@ -407,14 +407,15 @@ export class NetworkBuilder {
       response.setHeader("Content-Length", pack.length);
       response.end(pack);
     });
-    // Browser-host clients arrive through the HTTP bridge above, never a WebSocket.
-    // Only dedicated/desktop deployments need the game WebSocket listener.
-    const server = browserHost ? undefined : new WebSocketServer({
+    const server = new WebSocketServer({
       server: http,
       perMessageDeflate: false,
-      maxPayload: MAX_GAME_MESSAGE_BYTES,
+      maxPayload: MAX_GAME_MESSAGE_BYTES + (browserHost ? 8 : 0),
     });
-    server?.on("connection", (socket, request) => new ClientConnection(new WebSocketBinaryChannel(socket, request)));
+    server.on("connection", (socket, request) => {
+      if (browserHostBridge) browserHostBridge.attachStream(socket, request);
+      else new ClientConnection(new WebSocketBinaryChannel(socket, request));
+    });
     server?.on("listening", () => console.info(`[network] client websocket listening on ${port}`));
     server?.on("error", (error) => console.error("[network] websocket error", error));
     http.listen(port);

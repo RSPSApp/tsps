@@ -16,7 +16,7 @@ function sendPosition(core, player, state, forceObservers = false) {
   const packet = core.encodeFinePosition(snapshot(player, state));
   player.getSession().sendClientPacket(packet);
   const now = performance.now();
-  if (forceObservers || now - state.broadcastAt >= 100) {
+  if (forceObservers || now - state.broadcastAt >= 75) {
     state.broadcastAt = now;
     for (const observer of player.getLocalPlayers()) {
       if (observer.getPrivateArea() === player.getPrivateArea() &&

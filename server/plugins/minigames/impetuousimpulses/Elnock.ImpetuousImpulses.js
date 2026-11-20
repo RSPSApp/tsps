@@ -61,6 +61,13 @@ const EXCHANGE_INTERFACE = 540;
 const SHOP_FRAME_UID = (EXCHANGE_INTERFACE << 16) | 4;
 const CONFIRM_UID = (EXCHANGE_INTERFACE << 16) | 7;
 const SELECTED_VARBIT = 3729;
+/**
+ * toplevel_mainmodal_open (2524): its [-1, -1] sets the default main modal background and size
+ * (varcs toplevel_mainmodal_bg_colour/bg_trans), which toplevel_subchange's toplevel_resize reads
+ * while the Exchange opens. Live sends it just before the open; without it the Exchange took a
+ * previous modal's size, e.g. a shop's or the Forestry kit's [-1, -3] (issue 6268).
+ */
+const SCRIPT_MAINMODAL_OPEN = 2524;
 const OP1 = 1 << 1;
 /** Enum 2752's offers, by ii_elnex value. */
 const OFFERS = Object.freeze(["repellent", "net", "generator", "jars"]);
@@ -200,10 +207,15 @@ function talk({ player }) {
   return true;
 }
 
-/** Trade: Elnock's Exchange with nothing selected, as captured. */
+/**
+ * Trade: Elnock's Exchange with nothing selected, as captured (rsprox 95, 1104, local 1000175,
+ * 1000195, 1000332, 1000410): ii_elnex 0, toplevel_mainmodal_open [-1, -1], the modal, then the
+ * offer setevents, on the same tick.
+ */
 function openExchange({ player }) {
   const sender = player.getPacketSender();
   sender.sendVarbit(SELECTED_VARBIT, 0);
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(EXCHANGE_INTERFACE);
   for (let slot = 0; slot < OFFERS.length * 3; slot += 3) sender.sendInterfaceFlagsRange(SHOP_FRAME_UID, slot, slot, OP1);
   sender.sendInterfaceFlagsRange(CONFIRM_UID, 9, 9, OP1);

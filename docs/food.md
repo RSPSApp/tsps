@@ -381,11 +381,12 @@ the same two-line pattern.
 | Imperial rosé | 16 | Slayer +1 | Attack -5, Agility -1 | "You find yourself captivated by the complex flavours." |
 | Sunbeam ale | 1 | Agility, Strength +1 | Attack -(1 + 5% of current) | "It tastes wonderful and leaves you feeling energised." |
 | Steamforge brew | 1 | Mining, Magic +1 | Attack, Defence -(2 + 5% of current) | "It has an odd metallic taste to it." |
+| Trapper's tipple | 1 | Hunter +2 | Strength -1, Attack -2 | "You feel less able to fight said creatures." (first line "You drink the Trapper's Tipple and feel ready to catch some creatures.") |
 | Moon-lite | 5 | Strength +(1 + 5%) | Attack -(1 + 5% of current) | "It's very strong and leaves you feeling a bit dizzy." (first line "You drink the Moonlite.") |
 | Sun-shine | 5 | Strength +(1 + 5%) | Attack -4 | "It's got quite the kick to it!" (first line "You drink the Sunshine.") |
 
 Ours:
-- The ales, Moon-lite and Sun-shine aren't captured. Their Wiki line is split into two spam messages, as the
+- The ales (Trapper's tipple included), Moon-lite and Sun-shine aren't captured. Their Wiki line is split into two spam messages, as the
   wines' are.
 - The ales, Moon-lite and Sun-shine leave nothing, as the captured wines do.
 - Principum red, Fortis ash white and Xochipaltic rosé have a Drink op but no documented effect.

@@ -16,6 +16,7 @@ const RadasBlessing = require("./fishing/RadasBlessing.Fishing");
 const SpiritFlakes = require("./fishing/SpiritFlakes.Fishing");
 const KarambwanVessel = require("./fishing/Karambwan.Fishing");
 const ClueBottles = require("./fishing/ClueBottles.Fishing");
+const Relocation = require("./fishing/Relocation.Fishing");
 const { pauseForLevelUp } = require("./SkillActions");
 
 // Ticks per resource roll (Wiki: Game tick/Action lengths): rods 5, net, cage and harpoon
@@ -117,6 +118,7 @@ class FishingTool {
    * spot: a module that moves its own spots and can take over a catch (minnows' flying fish).
    * vessel: a module holding the bait in the tool itself, used up by every attempt (karambwan).
    * stationary: its spots never move, so a session runs until the player stops it.
+   * moveTicks: [min, max] ticks between its spots' moves, when not the usual 250-530 (Relocation.Fishing).
    * firstRoll: ticks from the start line to the first roll, when it isn't the interval.
    * animation plays with the start line; loopAnimation (the same unless given) on every roll, or
    * every few ticks without animateOnRoll; catchAnimation, when given, plays on a successful roll.
@@ -132,7 +134,7 @@ class FishingTool {
     id, level, animation, loopAnimation = animation, catchAnimation = null, fish, variants, bait = [], worn = [], quest = null, multi = false,
     unlock = null, unlockMessage = "You need to learn this fishing method before you can fish here.",
     requires = [], interval = FISHING_ACTION_INTERVAL_TICKS, firstRoll = null, animateOnRoll = true, unboostable = false, spot = null,
-    vessel = null, stationary = false, startMessage = "You begin to fish..", followMessage = null, missMessage = null,
+    vessel = null, stationary = false, moveTicks = null, startMessage = "You begin to fish..", followMessage = null, missMessage = null,
     noToolStatement = null, noBaitStatement = null, noToolMessage = null, levelStatement = null, table = null, barehand = false, clueBase = null,
   }) {
     this.id = id;
@@ -157,6 +159,7 @@ class FishingTool {
     this.spot = spot;
     this.vessel = vessel;
     this.stationary = stationary;
+    this.moveTicks = moveTicks;
     this.startMessage = startMessage;
     this.followMessage = followMessage;
     this.missMessage = missMessage;
@@ -326,6 +329,11 @@ const HARPOON = { firstRoll: HARPOON_ROD_FIRST_ROLL_TICKS, startMessage: START_H
 const ROD = { animation: ANIM.ROD, loopAnimation: ANIM.ROD_ON_SPOT, firstRoll: HARPOON_ROD_FIRST_ROLL_TICKS };
 const BAIT_ROD = { ...ROD, startMessage: CAST_LINE, noBaitStatement: NO_FISHING_BAIT, levelStatement: baitLevel };
 
+// Wiki (Fishing spots): "the sacred eel and infernal eel spots move between 100 ticks (1 minute) and
+// 300 ticks (3 minutes), and anglerfish spots move between 8 ticks (5 seconds) and 830 ticks".
+const EEL_MOVE_TICKS = Object.freeze([100, 300]);
+const ANGLERFISH_MOVE_TICKS = Object.freeze([8, 830]);
+
 const TOOLS = Object.freeze({
   NET: new FishingTool({
     id: ItemIds.SMALL_FISHING_NET, level: 1, animation: ANIM.NET, fish: [FISH.ANCHOVY, FISH.SHRIMP],
@@ -402,15 +410,15 @@ const TOOLS = Object.freeze({
   INFERNAL_EEL_ROD: new FishingTool({
     id: ItemIds.OILY_FISHING_ROD, level: 80, fish: [FISH.INFERNAL_EEL],
     variants: OILY_FISHING_RODS, bait: [ItemIds.FISHING_BAIT], worn: [ItemIds.ICE_GLOVES, ItemIds.SMITHS_GLOVES_I_],
-    ...BAIT_ROD, loopAnimation: ANIM.ROD,
+    ...BAIT_ROD, loopAnimation: ANIM.ROD, moveTicks: EEL_MOVE_TICKS,
   }),
   SACRED_EEL_ROD: new FishingTool({
     id: ItemIds.FISHING_ROD, level: 87, fish: [FISH.SACRED_EEL],
-    variants: FISHING_RODS, bait: [ItemIds.FISHING_BAIT], ...BAIT_ROD,
+    variants: FISHING_RODS, bait: [ItemIds.FISHING_BAIT], ...BAIT_ROD, moveTicks: EEL_MOVE_TICKS,
   }),
   ANGLERFISH_ROD: new FishingTool({
     id: ItemIds.FISHING_ROD, level: 82, fish: [FISH.ANGLERFISH],
-    variants: FISHING_RODS, bait: [ItemIds.SANDWORMS], ...BAIT_ROD, noBaitStatement: null,
+    variants: FISHING_RODS, bait: [ItemIds.SANDWORMS], ...BAIT_ROD, noBaitStatement: null, moveTicks: ANGLERFISH_MOVE_TICKS,
   }),
   DARK_CRAB_POT: new FishingTool({
     id: ItemIds.LOBSTER_POT, level: 85, animation: ANIM.CAGE, fish: [FISH.DARK_CRAB], bait: [ItemIds.DARK_FISHING_BAIT], ...CAGE,
@@ -554,6 +562,18 @@ function spotTools(npcId, definition) {
     if (tool) found.push({ clickType, tool: TOOL_NAMES.get(tool) });
   }
   return found;
+}
+
+/** The FishingTools of every option a spot NPC offers. */
+function npcSpotTools(npc) {
+  const definition = npc.getDefinition?.();
+  const actions = definition?.getActions?.() ?? [];
+  const tools = [];
+  for (let clickType = 1; clickType <= actions.length; clickType++) {
+    const tool = getSpotTool(npc.getId(), definition, clickType);
+    if (tool) tools.push(tool);
+  }
+  return tools;
 }
 
 function getSpotTool(npcId, definition, clickType, player = null) {
@@ -980,7 +1000,9 @@ class FishingTask extends Task {
         continue;
       }
       if (npc.getLocation().getX() !== session.spotX || npc.getLocation().getY() !== session.spotY) {
-        stopFishing(this.activeSessions, player);
+        // rsprox captures: the player's animation isn't reset when their spot moves (Relocation.Fishing).
+        // The minnow platform's own rotation isn't captured, so it keeps the reset.
+        stopFishing(this.activeSessions, player, Boolean(session.tool.spot));
         // A spot module that moves its own spots (the minnow platform) is never followed: the Wiki's
         // Endless Harvest notes, "You will not chase minnows, and will stop harvesting when they move."
         if (!session.tool.spot && continuesFishing(player) && player.getLocation().getZ() === npc.getLocation().getZ() &&
@@ -1058,10 +1080,11 @@ class FishingTask extends Task {
       pluginApi.emitCustomEvent("fishing:catch", catchRequest);
       const stopAfterCatch = landCatch(player, session.tool, variant, catchRequest.caught, session.npcId);
 
-      // ponytail: spots without their own movement still stop at random instead of moving. A full
-      // inventory waits for the next tick's check, which says so.
+      // ponytail: spots on no captured site (Relocation.Fishing) still stop at random instead of
+      // moving. A full inventory waits for the next tick's check, which says so.
       if (stopAfterCatch || !hasToolRequirements(player, session.tool) ||
-          (!session.tool.spot && !session.tool.stationary && Misc.getRandom(90) === 0 && !continuesFishing(player))) {
+          (!session.tool.spot && !session.tool.stationary && !Relocation.isRelocating(npc) &&
+            Misc.getRandom(90) === 0 && !continuesFishing(player))) {
         stopFishing(this.activeSessions, player);
       }
     }
@@ -1114,6 +1137,7 @@ module.exports = {
     MinnowPlatform.attach(api);
     KarambwanVessel.attach(api);
     ClueBottles.attach(api);
+    Relocation.attach(api, { spotTools: npcSpotTools, names: FISHING_SPOT_NAMES });
 
     api.onPlayerDisconnect(({ player }) => {
       stopFishing(activeSessions, player, false);

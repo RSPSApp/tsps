@@ -79,7 +79,7 @@ function spawn(f, id, tile) {
   return npc;
 }
 
-const RECORDED = /^(sendVarbit|sendConfig|sendSubInterface|mountSubInterface|closeSubInterface|sendInterface|sendInterfaceRemoval|sendString|sendSound|sendJingle|sendSong|sendObject|sendObjectRemoval|sendCameraMoveTo|sendCameraLookAt|sendCameraReset|sendCameraShake|sendInterfaceDisplayState|sendInterfacePosition|sendInterfaceAnimation|sendItemOnInterface|sendEntityHint|sendChatboxInterface|sendClientScript)$/;
+const RECORDED = /^(sendVarbit|sendConfig|sendSubInterface|mountSubInterface|closeSubInterface|sendInterface|sendInterfaceRemoval|sendString|sendSound|sendJingle|sendSong|sendObject|sendObjectRemoval|sendCameraMoveTo|sendCameraLookAt|sendCameraReset|sendCameraShake|sendInterfaceDisplayState|sendInterfacePosition|sendInterfaceAnimation|sendItemOnInterface|sendEntityHint|sendChatboxInterface|sendClientScript|sendInterfaceScript)$/;
 function record(f) {
   const sender = f.player.getPacketSender();
   const proto = Object.getPrototypeOf(sender);

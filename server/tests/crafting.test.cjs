@@ -333,6 +333,80 @@ test('other items used on a needle are left to other handlers', () => {
   assert.equal(useNeedle(player, ItemIds.COINS).handled, false);
 });
 
+// Splitbark (#6292; Wiki: Splitbark armour and each piece's Creation table): bark and fine cloth,
+// Crafting 60-62, 3 ticks, a needle with thread or a costume needle with none.
+const SPLITBARK = [
+  [ItemIds.SPLITBARK_HELM, 2, 61, 124, 'You make a splitbark helm.'],
+  [ItemIds.SPLITBARK_BODY, 4, 62, 248, 'You make a splitbark body.'],
+  [ItemIds.SPLITBARK_LEGS, 3, 62, 186, 'You make a pair of splitbark legs.'],
+  [ItemIds.SPLITBARK_GAUNTLETS, 1, 60, 62, 'You make a pair of splitbark gauntlets.'],
+  [ItemIds.SPLITBARK_BOOTS, 1, 60, 62, 'You make a pair of splitbark boots.'],
+];
+
+test('a needle on bark or on fine cloth, either way round, opens the splitbark menu in Jalarast\'s order', t => {
+  membersWorld(t, true);
+  for (const material of [ItemIds.BARK, ItemIds.FINE_CLOTH]) {
+    for (const reverse of [false, true]) {
+      const { player, getMenu } = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.BARK, 7], [ItemIds.FINE_CLOTH, 5]]);
+      const event = { player, usedItemId: reverse ? material : ItemIds.NEEDLE, usedWithItemId: reverse ? ItemIds.NEEDLE : material, handled: false };
+      handleNeedleOnLeather(event);
+      assert.equal(event.handled, true);
+      assert.equal(getMenu().getTitle(), 'How many do you wish to make?');
+      assert.deepEqual(getMenu().getItems(), SPLITBARK.map(([id]) => id));
+      assert.deepEqual(getMenu().getOptions().labels,
+        ['Splitbark helm', 'Splitbark body', 'Splitbark legs', 'Splitbark gauntlets', 'Splitbark boots']);
+      assert.equal(getMenu().getOptions().maxAmount, 5, 'the fewer of bark and fine cloth');
+    }
+  }
+});
+
+test('each splitbark piece takes its bark and fine cloth, gives its XP and says what was made', t => {
+  membersWorld(t, true);
+  for (const [itemId, pieces, level, xp, line] of SPLITBARK) {
+    const { player, getMenu } = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.BARK, 5], [ItemIds.FINE_CLOTH, 5]], { level });
+    useNeedle(player, ItemIds.BARK);
+    const byTick = craft(player, getMenu(), itemId, 1, 3);
+    assert.deepEqual(messages(byTick[2]), [line]);
+    assert.ok(byTick[2].some(row => row[0] === 'xp' && row[1] === xp), `${line} ${xp} XP`);
+    assert.equal(player.amounts.get(itemId), 1);
+    assert.equal(player.amounts.get(ItemIds.BARK), 5 - pieces);
+    assert.equal(player.amounts.get(ItemIds.FINE_CLOTH), 5 - pieces);
+  }
+});
+
+test('a costume needle sews splitbark without thread', t => {
+  membersWorld(t, true);
+  const { player, getMenu } = playerWith([[ItemIds.COSTUME_NEEDLE, 1], [ItemIds.BARK, 2], [ItemIds.FINE_CLOTH, 2]], { threadUses: 4 });
+  assert.equal(useNeedle(player, ItemIds.FINE_CLOTH, ItemIds.COSTUME_NEEDLE).handled, true);
+  craft(player, getMenu(), ItemIds.SPLITBARK_GAUNTLETS, 2, 6);
+  assert.equal(player.amounts.get(ItemIds.SPLITBARK_GAUNTLETS), 2);
+  assert.equal(player.getAttribute(THREAD_USES_ATTRIBUTE), 4, 'no thread used');
+});
+
+test('splitbark stops when either material runs short, and needs its Crafting level', t => {
+  membersWorld(t, true);
+  const { player, getMenu } = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.BARK, 9], [ItemIds.FINE_CLOTH, 5]]);
+  useNeedle(player, ItemIds.BARK);
+  craft(player, getMenu(), ItemIds.SPLITBARK_BODY, 2, 6);
+  assert.equal(player.amounts.get(ItemIds.SPLITBARK_BODY), 1);
+  assert.equal(player.amounts.get(ItemIds.BARK), 5);
+  assert.equal(player.amounts.get(ItemIds.FINE_CLOTH), 1);
+
+  const low = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.BARK, 2], [ItemIds.FINE_CLOTH, 2]], { level: 60 });
+  useNeedle(low.player, ItemIds.BARK);
+  const byTick = craft(low.player, low.getMenu(), ItemIds.SPLITBARK_HELM, 1, 3);
+  assert.ok(byTick[0].some(row => row[0] === 'statement' && row[1] === 'You need a Crafting level of 61 to make a splitbark helm.'));
+  assert.equal(low.player.amounts.get(ItemIds.SPLITBARK_HELM), undefined);
+  assert.equal(low.player.amounts.get(ItemIds.BARK), 2);
+});
+
+test('free-to-play worlds offer no splitbark', t => {
+  membersWorld(t, false);
+  const { player, getMenu } = playerWith([[ItemIds.NEEDLE, 1], [ItemIds.THREAD, 1], [ItemIds.BARK, 1], [ItemIds.FINE_CLOTH, 1]]);
+  useNeedle(player, ItemIds.BARK);
+  assert.deepEqual(getMenu().getItems(), []);
+});
+
 // The Hunters' Guild pouches (rsprox captures pyre-fur-and-smallpouch-1 to -3, rev 242; levels and XP:
 // Wiki). No menu: the needle on the fur makes one, animation at once, the pouch 2 ticks later.
 function sewPouch(player, furId, needleId = ItemIds.NEEDLE, reverse = false) {

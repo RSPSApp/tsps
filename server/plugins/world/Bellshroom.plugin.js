@@ -13,12 +13,25 @@
  *   cycles); +6 the player is at (3656, 3750, 0) facing south, sound 2489; +7 they say "What just
  *   happened?" and the screen fades back in (50 cycles); +9 the fade overlay closes.
  * The handler runs one tick after the click (the tick LocTeleports also counts from).
+ *
+ * Search on Charles Charlington in the clearing (rec 710 ticks 1651 and 1655), on arrival:
+ * - owning no Archaeologist's diary: the game message "You take the Archaeologist's diary." and
+ *   the diary in the pack. The Wiki's drop table gives it "only if unowned"; the bank counts here.
+ * - owning one: the message box "Doesn't look like he knows I'm here." (the Wiki's repeat-search
+ *   line, and what rec 710 sent with the diary in the pack).
  */
 const ENTRANCE = "fossil_flora_swamp_bellshroom";
 const BELLSHROOM_NAME = "Bellshroom";
 const BREADCRUMBS_NAME = "Breadcrumbs";
 const HUNGRY = "Maybe it's hungry...";
 const SAY = "What just happened?";
+
+const CHARLES_NAME = "Charles Charlington";
+const DIARY = "fossil_swamp_diary";
+const DIARY_TAKEN = "You take the Archaeologist's diary.";
+const ALREADY_OWNED = "Doesn't look like he knows I'm here.";
+/** Ours: no capture or Wiki line for a full pack; the server's usual one. */
+const NO_SPACE = "You don't have enough inventory space.";
 
 const SWALLOW_ANIMATION = 7744;
 const SWALLOW_SOUND = 2454;
@@ -135,14 +148,30 @@ function feed({ player, object, objectId, itemId }) {
   return true;
 }
 
+function searchCharles({ player }) {
+  const diary = core.CacheDefinitions.getObjId(DIARY);
+  if (core.Bank.owns(player, diary)) {
+    player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
+      .add(new core.StatementDialogue(0, ALREADY_OWNED)));
+    return;
+  }
+  if (player.getInventory().getFreeSlots() < 1) {
+    player.sendMessage(NO_SPACE);
+    return;
+  }
+  player.getInventory().add(new core.Item(diary, 1));
+  player.sendMessage(DIARY_TAKEN);
+}
+
 module.exports = {
   name: "Bellshroom",
-  description: "Fossil Island's Tar Swamp Bellshroom: Investigate, and breadcrumbs used on it swallow the player into Charles Charlington's clearing.",
+  description: "Fossil Island's Tar Swamp Bellshroom: Investigate, and breadcrumbs used on it swallow the player into Charles Charlington's clearing, where searching Charles gives the Archaeologist's diary.",
   members: true,
-  _test: { investigate, feed, CLEARING },
+  _test: { investigate, feed, searchCharles, CLEARING },
   register(registerApi) {
     core = registerApi.core;
     registerApi.onObjectInteraction(BELLSHROOM_NAME, { Investigate: investigate });
     registerApi.onItemOnObject(BREADCRUMBS_NAME, BELLSHROOM_NAME, feed);
+    registerApi.onNpcInteraction(CHARLES_NAME, { Search: searchCharles });
   },
 };

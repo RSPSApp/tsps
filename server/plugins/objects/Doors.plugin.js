@@ -80,6 +80,7 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   PIP_CELL_GATE_OPEN: 3464,
   CRANDOR_SECRET_DOOR_OPEN: 25039, // dragonsecretdoor_open; capture 2951
   INVISWALL: 38848, // actionless collision blocker; captures 2951 and 740
+  RUM_DEAL_GATE_OPEN: 10173, // deal_gate_open: the open leaf of O.GATE_96 (Rum Deal capture tick 1467)
   HAROLD_DOOR_OPEN: 1542, // inactiveposhdoor: Harold's door (3747) open, 233/03247.txt:4726; Temple of Ikov's trap-lever door (92), 242/912156.txt:26149
   CASTLE_DOOR_OPEN: 3744, // castledoor_inactive: the Death Plateau equipment room door (3743) open, 233/03252.txt:36063
   SHERPA_DOOR_OPEN: 14975, // death_sherpa_opendoor: Tenzing's front (3745) and back (3746) doors open, rsprox local 1001800 ticks 24737, 25264
@@ -524,6 +525,20 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       carry: true,
       guardCarry: true,
       closeTicks: 2,
+    }),
+    // Braindeath Island: the compound's north gate by 50% Luke (Rum Deal capture ticks 1467-1469, 1579-1581).
+    // Inviswall 38848 in the doorway and the open leaf the tile north with door_open (62); the player walks
+    // over and the gate is back two ticks later. Rum Deal opens it through door:open after Luke's lines.
+    Object.freeze({
+      closed: [[O.GATE_96, 2120, 5098, 0, 1]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2120, 5098, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.RUM_DEAL_GATE_OPEN, 2120, 5099, 0, 0],
+      ],
+      crossY: 5099,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
     }),
     // Death Plateau: Harold's door (233/03247.txt:4726-4744, and leaving at :5755-5783). The doorway gets inviswall
     // 38848 and the open door the tile south; the player walks over, and the door is back two ticks later. Entering,

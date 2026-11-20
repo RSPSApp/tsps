@@ -1164,6 +1164,16 @@ function drinkSteamforgeBrew(player) {
   lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05);
   lowerSkillByCurrent(player, Skill.DEFENCE, 2, 0.05);
 }
+/**
+ * Trapper's tipple (Wiki item page; heals 1 from the Wiki's Ale table): Hunter +2, Strength -1,
+ * Attack -2, all flat.
+ */
+function drinkTrappersTipple(player) {
+  heal(player, 1);
+  boostSkill(player, Skill.HUNTER, 2, 0);
+  lowerSkillByCurrent(player, Skill.STRENGTH, 1, 0);
+  lowerSkillByCurrent(player, Skill.ATTACK, 2, 0);
+}
 /** Moon-lite: heals 5, Strength +(1 + 5%), Attack -(1 + 5% of current). */
 function drinkMoonLite(player) {
   heal(player, 5);
@@ -1197,6 +1207,9 @@ for (const [name, id, lines, effect] of [
     drinkSunbeamAle],
   ["Steamforge brew", Items.STEAMFORGE_BREW, ["You drink the Steamforge brew.", "It has an odd metallic taste to it."],
     drinkSteamforgeBrew],
+  ["Trapper's tipple", Items.TRAPPERS_TIPPLE,
+    ["You drink the Trapper's Tipple and feel ready to catch some creatures.", "You feel less able to fight said creatures."],
+    drinkTrappersTipple],
   ["Moon-lite", Items.MOON_LITE, ["You drink the Moonlite.", "It's very strong and leaves you feeling a bit dizzy."], drinkMoonLite],
   ["Sun-shine", Items.SUN_SHINE, ["You drink the Sunshine.", "It's got quite the kick to it!"], drinkSunShine],
 ]) {

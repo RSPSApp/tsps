@@ -747,6 +747,11 @@ export interface PluginItemUseFilter {
    * object's own refusal in place of "Nothing interesting happens." ("You can't cook that.").
    */
   fallback?: boolean;
+  /**
+   * Item on object only: run before every other handler. For an object that takes any use first
+   * (a fee before the furnace does anything); leave unclaimed uses untouched.
+   */
+  before?: boolean;
 }
 
 export interface PluginItemActionOptions {

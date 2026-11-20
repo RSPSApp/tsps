@@ -104,6 +104,8 @@ function fakePlayer({ at = new Location(3085, 3233, 0), level = 70, kit = true }
         sendSoundEffect: (id) => { (p.sounds ??= []).push(id); return sender; },
         sendAreaSound: () => sender, sendGraphic: () => sender, sendObjectAnimation: () => sender,
         sendVarbit: () => sender, sendInventory: () => sender,
+        sendString: (text, uid) => { (p.strings ??= new Map()).set(uid, text); return sender; },
+        sendInterface: (id) => { (p.interfaces ??= []).push(id); return sender; },
       };
       return sender;
     },
@@ -365,6 +367,54 @@ test('saved: the thriving sapling, then bark, leaves and bonus XP; the tree back
   assert.equal(at(10833), true, 'the willow is back');
   assert.equal(at(47489), false);
   assert.equal(Spawns.heldTrees.size, 0, 'the tree is free again');
+});
+
+const inspect = (player, object) => hooks.objects.get(`${core.CacheDefinitions.getObject(object.getId()).name}:Inspect`)({ player, object });
+/** The plaque's 11 lines (woodplaque:ms1-ms11, components 3-13 of 749), as sent. */
+const plaque = (player) => Array.from({ length: 11 }, (_, i) => player.strings?.get((749 << 16) | (3 + i)));
+
+test('Inspect: the plaque with the nutrition and the best and last mulch, right slots in green (01723, 1000605)', () => {
+  const p = fakePlayer({ level: 80 });
+  const event = startEvent('sapling', [p]);
+  event.recipe = [1, 1, 4];
+  feedWith(p, event, [1, 2, 4]);
+  feedWith(p, event, [2, 1, 1]);
+  feedWith(p, event, [1, 3, 4]);
+  assert.equal(inspect(p, event.loc), true);
+  assert.deepEqual(p.interfaces, [749], 'woodplaque');
+  assert.deepEqual(plaque(p), [
+    '',
+    `Sapling Nutrition: <col=00ffff>${Math.floor((100 * event.progress) / event.target)}%</col>`,
+    '',
+    '<u>Best Combination</u>',
+    'Nutritional value: <col=00ffff>70%</col>',
+    '<col=229628>green leaves</col>, droppings, <col=229628>splintered bark</col>',
+    '',
+    '<u>Last Combination</u>',
+    'Nutritional value: <col=00ffff>70%</col>',
+    '<col=229628>green leaves</col>, wild mushrooms, <col=229628>splintered bark</col>',
+    '',
+  ], 'a tie keeps the earlier best');
+  assert.equal(hooks.objects.get('Struggling sapling:Inspect')({ player: p, object: pileOf(event, 0) }), false, 'only the sapling itself');
+
+  const q = fakePlayer();
+  inspect(q, event.loc);
+  assert.deepEqual(plaque(q).slice(3), ['', '', '', '', '', '', '', ''], "Ours: no mulch fed yet, the combinations stay blank");
+});
+
+test('Inspect on the thriving sapling: 100%, until the tree comes back (1000149, 1000605)', () => {
+  const p = fakePlayer({ level: 80 });
+  const event = startEvent('sapling', [p]);
+  event.recipe = [1, 2, 3];
+  feedWith(p, event, [2, 1, 3]);
+  for (let i = 0; i < 15; i++) feedWith(p, event, [1, 2, 3]);
+  assert.equal(event.loc.getId(), 47489, 'the thriving sapling');
+  inspect(p, event.loc);
+  assert.equal(plaque(p)[1], 'Sapling Nutrition: <col=00ffff>100%</col>');
+  assert.equal(plaque(p)[5], '<col=229628>green leaves</col>, <col=229628>droppings</col>, <col=229628>wild mushrooms</col>');
+  assert.equal(plaque(p)[9], plaque(p)[5]);
+  ticks(14);
+  assert.equal(Sapling.ended.has(event), false, 'gone with the sapling');
 });
 
 test('a sapling is harder with more players; a late joiner helps but gets nothing', () => {

@@ -275,6 +275,12 @@ test("the cannon: Dondakan's cutscene, the landing, stage 90 and the first thoug
   const opened = () => H.callsNamed(f, "sendInterface", t0).map((call) => call.args[0]);
   H.ticks(f, 37);
   assert.ok(opened().includes(112), "the zoomed heads (dwarf_rock_cannon) at 44");
+  const calls = f.calls.filter((call) => call.tick >= t0);
+  calls.forEach((call, index) => {
+    if (call.name !== "sendInterface" || call.args[0] !== 112) return;
+    assert.deepEqual([calls[index - 1]?.name, ...(calls[index - 1]?.args ?? [])], ["sendInterfaceScript", 2524, [0, 0]],
+      "toplevel_mainmodal_open (0, 0) directly before dwarf_rock_cannon opens (tick 3253)");
+  });
   H.ticks(f, 29);
   const at = H.xy(f.player.getLocation());
   assert.ok([[2426, 4965, 0], [2323, 4939, 0]].some((spot) => spot.join() === at.join()), `landed on a recorded spot (${at})`);
@@ -398,6 +404,16 @@ test("stage 70: Talk-to asks his question again; stage 80 comes with his schemat
   assert.equal(amount(f, ITEMS.schematic1), 1);
   await H.talk(f, npc);
   assert.equal(H.shown(f)?.text, "What did you want me to find again?", "still looking (tick 2140)");
+});
+
+test("the schematics puzzle runs toplevel_mainmodal_background (0, 0) directly before it opens, so it is sized and centred afresh (tick 2698)", async (t) => {
+  const f = H.actor(t, { stage: 80, items: [ITEMS.base, ITEMS.schematic1, ITEMS.schematic2, ITEMS.schematic3], at: [2862, 9877, 0] });
+  const t0 = f.calls.length;
+  await H.itemOption(f, ITEMS.schematic1, "Assemble");
+  const calls = f.calls.slice(t0);
+  const opened = calls.findIndex((call) => call.name === "sendInterface" && call.args[0] === Schematics.resolveIds().group);
+  assert.ok(opened > 0, "the puzzle opens");
+  assert.deepEqual([calls[opened - 1].name, ...calls[opened - 1].args], ["sendInterfaceScript", 917, [0, 0]]);
 });
 
 test("after the quest Khorvak and the Dwarven Engineer say their own things (tick 6113)", async (t) => {

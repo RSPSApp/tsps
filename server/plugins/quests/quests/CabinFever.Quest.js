@@ -28,47 +28,35 @@
  *   1759 fever_holes_patched, 1760 fever_holes_proofed, 1761/1762 fever_fuse_1/2
  *   (the fuse loc 11316 at 11241/11242), 1763 fever_given_book, 1765 fever_gold.
  *
- * Source: OSRS Wiki "Cabin Fever", its Quick guide and "Transcript:Cabin Fever";
- * object ids/placements from the cache (scripts/dump-loc.ts, ObjectIdentifiers,
- * CacheDefinitions multi-loc transforms).
+ * Source: the user's RSProx capture CabinFever (revision 242.1, a whole run of the quest; the
+ * ticks are in docs/quests/cabin-fever/README.md), OSRS Wiki "Cabin Fever" and its transcript
+ * (the Wiki wins on wording it states), object ids/placements from the cache.
  *
  * Gaps / approximations:
- *  - The ship battle area is static here, not instanced: sailing teleports to the
- *    battle map deck (1815,4837 plane 1), and the end cutscene teleports to Mos
- *    Le'Harmless (3665,2982) instead of playing scenes.
- *  - Climbing nets (11244/11310) are not in Ladders.plugin.js, so this plugin
- *    moves the player between deck and mast top on their Climb options.
- *  - The rope swing is the wiki's use-rope-on-hoisted-sail with a 42 Agility
- *    gate; a failed swing plays the fall variant and drains run energy, and the
- *    success lands on the other ship's deck directly rather than via a net.
- *  - Plunder containers respawn after 15 s (wiki: up to 5 minutes); logging out
- *    respawns them, which is honoured on the login bootstrap.
- *  - The fire roll uses the wiki's Ranged-scaled hit chance for both the canister
- *    and cannonball shots, so a miss has to be cleaned and reloaded.
- *  - Lighting the fuse always succeeds with a tinderbox (the "fuse refuses to
- *    light" variant is unreachable); a bullseye lantern is refused, per the wiki.
- *  - The dump's empty-store branch reads "You have plunder to deposit." (the wiki
- *    text is inverted); it is played verbatim.
- *  - The fever rope on the enemy deck (wiki/Quest Helper: pick it up at
- *    1822,4827) is laid out for the player when they swing over without a
- *    spare rope, instead of being a permanent floor item for everyone.
- *  - The mid-battle return-to-port branches (fade out, "enemy reappears") and the
- *    teleport-out messages are not wired; the pirate taunts, the post-quest lift
- *    teleports, the lost-Book replacement and the 10,000-coin claim are.
- *  - Cache Fever rope/tinderbox floor piles convert to ordinary items on pickup;
- *    the lockers provide the remaining quest supplies.
- *  - The five journal objectives are keyed off the canonical stage, and every
- *    state-changing action, object and item handler checks that stage (and the
- *    items the step consumes) before it can advance. A canister hit kills the
- *    pirate in front of the cannon; its death is what counts the crew hit.
- *  - The Book o' Piracy is granted once, readable, and replaceable from Bill
- *    Teach after the quest. Quest supplies are removed on completion and on the
- *    next login of an already-completed save, keeping rope, hammer, tinderbox and
- *    swamp paste.
+ *  - The ship battle area is static here, not live's instance. Per-player varbits and owned
+ *    locs (the open lockers, the swing rope) keep each player's ship apart. The end scene
+ *    plays as dialogue and teleports to Mos Le'Harmless (3665,2980) as live does.
+ *  - Climbing nets (11244/11310) are not in Ladders.plugin.js, so this plugin moves the player
+ *    between deck and mast top on their Climb options.
+ *  - Ours: a swing falls 1 in 3 at 42+ Agility (the capture's 2 of 6), always below it.
+ *  - Ours: the fire roll is Ranged-scaled for both the canister and cannonball shots.
+ *  - Lighting the fuse always succeeds with a tinderbox (the "fuse refuses to light" variant has
+ *    no published rate); a bullseye lantern is refused, per the Wiki.
+ *  - Where the capture words a message differently from the Wiki, the Wiki's is played
+ *    ("You have plunder to deposit.", "You nail the Planks over the the hole!").
+ *  - Teleporting out of the battle is not wired; the pirate taunts, Return-Home and the sail
+ *    back, the post-quest lifts, the lost-Book replacement and the 10,000-coin claim are.
+ *  - The Book o' Piracy is granted once, readable, and replaceable from Bill Teach after the
+ *    quest. Quest supplies are removed on completion and on the next login of an
+ *    already-completed save, keeping rope, hammer, tinderbox and swamp paste.
  */
 module.exports = function registerCabinFeverQuest(api) {
   const {
+    Animation,
     CountdownTask,
+    ForceMovement,
+    GameObject,
+    Graphic,
     HitDamage,
     HitMask,
     Item,
@@ -76,16 +64,19 @@ module.exports = function registerCabinFeverQuest(api) {
     Location,
     NpcIdentifiers,
     ObjectIdentifiers,
+    ObjectManager,
     Skill,
     TaskManager,
     World,
   } = api.core;
   const { openBook, registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
   const BOOK = require("../data/cabin-fever-book");
+  const Scenes = require("../QuestScenes").createQuestScenes(api);
 
   const PAGE = "Cabin Fever";
   const BILL_PAGE = "Bill Teach";
   const PANDEMONIUM_KEY = "pandemonium";
+  const START_HOOK = "quest:cabin-fever:start";
 
   // ==========================================================================
   // Ids
@@ -227,6 +218,85 @@ module.exports = function registerCabinFeverQuest(api) {
   const CANNON_AMMO_CANISTER = 2;
   const CANNON_AMMO_BALL = 1;
 
+  // Live's battle as the user's RSProx capture CabinFever (revision 242.1, a whole run) plays
+  // it; docs/quests/cabin-fever/README.md lists the ticks. Gameval names in the comments.
+  const ANIM = {
+    OPEN_LOCKER: 536, // human_openchest
+    REACH: 832, // human_pickuptable: powder, paste, fuse, barrel swap, firing
+    PICKUP_FLOOR: 827, // human_pickupfloor: laying and lighting the fuse, the swing jump
+    CLIMB_NET: 828, // human_reachforladder
+    ROPE_TIE: 3132, // fever_rope_tie
+    SWING_LAND: 3130, // fever_player_rope_swing_land_success
+    SWING_FALL: 3131, // fever_player_rope_swing_land_fail
+    SWIM: 772, // human_swim
+    NAIL_PLANK: 3137, // fever_nail_plank
+    RAMROD: 3136, // fever_prod_cannon1
+    LOAD_CANISTER: 3133, // fever_load_cannon1_cannister
+    LOAD_BALL: 3134, // fever_load_cannon1
+    LOAD_PUSH: 3135, // fever_load_cannon2
+  };
+  const SOUND = {
+    LOCKER_OPEN: 58, // cupboard_open
+    TIE_ROPE: 1439, // cf_tierope
+    JUMP_DOWN: 1428, // cf_jumpdown
+    SWING_SUCCESS: 1438, // cf_swingacross_sucess
+    SWING_FAIL: 1421, // cf_swingacross_fail
+    SPLASH: 2496, // watersplash
+    SWIM: 1436, // cf_swim
+    ATTACH_FUSE: 1423, // cf_attach_fuse
+    STRIKE: 1435, // cf_strike
+    FUSE_LIGHT: 2598, // fuse_light
+    EXPLOSION: 1487, // explosion
+    HAMMER: 1427, // cf_hammer
+    SMEAR_PASTE: 1433, // cf_smear_paste
+    PICK: 2581, // pick
+    DETACH_CANNON: 1426, // cf_detach_cannon
+    ATTACH_CANNON: 1422, // cf_attach_cannon
+    POUR_POWDER: 1430, // cf_pour_gunpowder
+    RAMROD: 1431, // cf_ramrod
+    ROLL_CANISTER: 1432, // cf_roll_canister
+    LOAD_BALL: 1429, // cf_loadcannon
+    CANNON_FIRE: 1424, // cf_cannonfire (area, radius 10)
+    CANNON_HIT: 1425, // cf_cannonhit (area, radius 5)
+  };
+  const GFX_CANNON_BLAST = 542; // fever_cannon_blast, at the muzzle
+  const GFX_EXPLOSION = 547; // fever_explosion, where the shot lands
+  const PROJ_BALL = 543; // fever_cannon_ball_travel
+  const PROJ_SHRAPNEL = 544; // fever_cannon_shrapnel_travel
+  const CANNON_MUZZLE = new Location(1818, 4833, 1);
+  const CANISTER_TARGET = new Location(1824, 4833, 1);
+  const BALL_TARGET = new Location(1822, 4833, 1);
+
+  // The lockers are IF1 modals (quest_fever_gun_locker 501, quest_fever_repair_locker 502),
+  // opened from the open locker's Search, one item per button press.
+  const GUN_LOCKER_INTERFACE = 501;
+  const REPAIR_LOCKER_INTERFACE = 502;
+  const component = (group, child) => (group << 16) | child;
+  const GUN_BUTTON = {
+    BARREL: component(GUN_LOCKER_INTERFACE, 8),
+    FUSE: component(GUN_LOCKER_INTERFACE, 9),
+    RAMROD: component(GUN_LOCKER_INTERFACE, 10),
+    BALL: component(GUN_LOCKER_INTERFACE, 11),
+    CANISTER: component(GUN_LOCKER_INTERFACE, 12),
+  };
+  const REPAIR_BUTTON = {
+    ROPE: component(REPAIR_LOCKER_INTERFACE, 8),
+    HAMMER: component(REPAIR_LOCKER_INTERFACE, 9),
+    TACKS: component(REPAIR_LOCKER_INTERFACE, 10),
+    PLANKS: component(REPAIR_LOCKER_INTERFACE, 11),
+    SWAMP_PASTE: component(REPAIR_LOCKER_INTERFACE, 12),
+  };
+  /** toplevel_mainmodal_open as live sends it before both lockers. */
+  const MAINMODAL_OPEN_SCRIPT = 2524;
+  const MAINMODAL_OPEN_ARGS = [12433572, 125];
+  const REPAIR_LOCKER_OPEN = ObjectIdentifiers.REPAIR_LOCKER_2; // 11247 fever_repair_locker_open: Search, Close
+  const GUN_LOCKER_OPEN = ObjectIdentifiers.GUN_LOCKER_2; // 11249 fever_weapons_locker_open: Search, Close
+  const BROKEN_CANNON = ItemIdentifiers.BROKEN_CANNON; // 7146, the barrel removed from the cannon
+  const ROPE_SWING_ANIM = 3123; // fever_rope_swing, the loc animation of the hanging rope
+  const GFX_FUSE_LIGHT = 546; // fever_fuse_light, along the fuse as it burns
+  const GFX_BARREL_FUSE_LIGHT = 545; // fever_barrel_fuse_light, at the barrel
+  const SWING_ROPE_LOC = ObjectIdentifiers.ROPE_11; // 11311 fever_swing_rope, hangs from the yardarm during a swing
+
   const STAGE_STARTED = 1;
   const STAGE_SAILING = 2;
   const STAGE_CANNON = 3;
@@ -253,7 +323,11 @@ module.exports = function registerCabinFeverQuest(api) {
   const ENEMY_HOLD_CHEST_TILE = new Location(1823, 4840, 0);
 
   // Cache DB (table 0, column 19) completes Cabin Fever at varp 655 value 140.
-  // Internal stages stay 0-9; this is the durable stage -> wire mapping.
+  // Internal stages stay 0-9; this is the durable stage -> wire mapping. Each objective's own
+  // action moves live's varp 10 on (30->40 when the barrel blows, 50->60 on the last hole,
+  // 70->80 when the tenth plunder is stored, 90->100 when the new barrel is on, 110->120 on the
+  // canister hit) and Bill moves it the next 10 when he is told: capture CabinFever ticks 976,
+  // 1193, 1667, 1785, 1917. The odd steps are read back from the state the objective left.
   const WIRE_COMPLETE = 140;
   const WIRE_STAGE_VALUES = new Map([
     [0, 0],
@@ -268,10 +342,28 @@ module.exports = function registerCabinFeverQuest(api) {
     [STAGE_COMPLETE, WIRE_COMPLETE],
   ]);
 
-  function wireStageValue(stage) {
+  /** Whether the stage's objective is done and only Bill is left to tell. */
+  function objectiveDone(player, stage) {
+    if (!player) return false;
+    switch (stage) {
+      case STAGE_CANNON: return varbitValue(player, VARBIT_ENEMY_CANNON) !== 0;
+      case STAGE_LEAKS: return holesFixed(player);
+      case STAGE_PLUNDER: return varbitValue(player, VARBIT_PLUNDER) >= 10;
+      case STAGE_FIX_CANNON: return varbitValue(player, VARBIT_CANNON) === CANNON_EMPTY;
+      case STAGE_FIRE: return crewHits(player) >= CREW_HITS_REQUIRED;
+      default: return false;
+    }
+  }
+
+  function wireStageValue(stage, player) {
     const value = WIRE_STAGE_VALUES.get(stage | 0);
-    if (value !== undefined) return value;
+    if (value !== undefined) return value + (objectiveDone(player, stage | 0) ? 10 : 0);
     return (stage | 0) >= STAGE_COMPLETE ? WIRE_COMPLETE : 0;
+  }
+
+  /** Re-sends varp 655 after an objective's own action changed what it reads. */
+  function syncQuestVarp(player) {
+    player.getPacketSender().sendConfig(VARP_CABIN_FEVER, wireStageValue(quest.getStage(player), player));
   }
 
   const FLAGS_ATTRIBUTE = "quest.cabin_fever.flags";
@@ -279,21 +371,68 @@ module.exports = function registerCabinFeverQuest(api) {
   const VARP_CANNON_ATTRIBUTE = "quest.cabin_fever.var656";
   const VARP_EXTRA_ATTRIBUTE = "quest.cabin_fever.var657";
   const VARP_STORAGE_ATTRIBUTE = "quest.cabin_fever.var658";
+  /** Where a swing in progress ends, [x, y, z]; a logout mid-swing logs back in there. */
+  const SWING_LANDING_ATTRIBUTE = "quest.cabin_fever.swing_landing";
   const FLAG_SHIP_TALKED = 1 << 0;
-  const CREW_HITS_REQUIRED = 3;
+  // fever_cannon_clean (1746) is 1 while the barrel needs the ramrod, as live sets it on
+  // every shot (capture ticks 1915, 2049). Saves from before held the inverse; this bit says
+  // the save's varbit already reads the live way.
+  const FLAG_CLEAN_IS_DIRTY = 1 << 1;
+  // One canister hit is the objective: live moves varp 655 to 120 with "You hit them!" (tick
+  // 1917) and Bill's next line is the sinking briefing; the Wiki's guide says "When you hit the
+  // pirates with the canisters, talk to Bill" and its transcript plays one "You hit them!".
+  const CREW_HITS_REQUIRED = 1;
 
   const ARRIVE_ACTION_ID = "cabin-fever:arrive";
-  // How long a looted plunder container stays empty (wiki: up to 5 minutes).
-  const PLUNDER_RESPAWN_TICKS = 25;
   const PIRATE_AGILITY = 42;
+  // Ours: live drops 2 of the capture's 6 swings at Agility 73, and the Wiki says only "If you
+  // fail the jump, your run energy will drop to 0"; no rate is published.
+  const SWING_FALL_CHANCE = 1 / 3;
+
+  /**
+   * The two rope swings, as the capture plays them (ticks 842-876 and 1442-1463 from the
+   * Adventurous, 979-1003 and 1621-1639 back). The player ties the rope, drops to the deck
+   * beside the yardarm `gap` ticks before swinging, slides one tile to the rope and swings
+   * across, or falls short and swims the rest.
+   */
+  const SWINGS = {
+    over: {
+      varbit: 1740, // fever_swing
+      rope: { x: 1817, y: 4830, z: 1, face: 0 },
+      start: [1816, 4830, 1],
+      grab: [1817, 4830],
+      grabAngle: 1536,
+      gap: 10,
+      swingDelay: 2, // grab to swing: 871 -> 873
+      land: [1822, 4830],
+      angle: 1536,
+      fall: [1820, 4831],
+      swim: [1821, 4830],
+      shore: [1822, 4830, 1],
+    },
+    back: {
+      varbit: 1764, // fever_swing_2
+      rope: { x: 1819, y: 4835, z: 1, face: 2 },
+      start: [1822, 4834, 1],
+      grab: [1822, 4835],
+      grabAngle: 1024,
+      gap: 3,
+      swingDelay: 3, // grab to swing: 997 -> 1000
+      land: [1817, 4835],
+      angle: 512,
+      fall: [1819, 4834],
+      swim: [1817, 4834],
+      shore: [1817, 4834, 1],
+    },
+  };
 
   // The port-ship spawn row lives at 3713,3497 plane 1; NPCs are spawned when
   // a player enters their region, not at server startup.
   const PORT_SHIP_REGION = (58 << 8) | 54;
   const PORT_SHIP_REGION_KEY = "1:58:54";
-  const BATTLE_DECK = new Location(1815, 4837, 1); // beside Bill on the Adventurous
-  const ENEMY_DECK = new Location(1823, 4836, 1); // beside the enemy powder barrel
-  const MOS_LE_HARMLESS = new Location(3665, 2982, 0); // The Other Inn
+  const BATTLE_DECK = new Location(1815, 4833, 1); // where live's sail lands (capture ticks 609, 1081)
+  const PORT_SHIP_DECK = new Location(3714, 3497, 1); // where "You return to port." lands (tick 1066)
+  const MOS_LE_HARMLESS = new Location(3665, 2980, 0); // The Other Inn, after the end scene (tick 2302)
   const PORT_PHASMATYS = new Location(3679, 3494, 0); // outside The Green Ghost
   const WEST_YARDARM = new Location(1816, 4830, 2);
   const EAST_YARDARM = new Location(1823, 4835, 2);
@@ -303,16 +442,20 @@ module.exports = function registerCabinFeverQuest(api) {
   const ENEMY_ROPE_TILE = { x: 1822, y: 4827, z: 1 };
   const HOLD_TINDERBOX_TILE = { x: 1814, y: 4825, z: 0 };
 
+  // `refill`: ticks until live's varbit drops back to 0 by itself (capture: chest 1286 -> 1587,
+  // crate 1284 -> 1484 and 1489 -> 1690, barrel 1291 -> 1392 and 1490 -> 1591). The Wiki: "The
+  // barrel will respawn fastest, then the crates and finally, the chest."
   const PLUNDER_SOURCES = new Map([
-    [ENEMY_CHEST, { varbit: VARBIT_CHEST, amount: 3, variant: "time-to-plunder-plundering-the-chest" }],
-    [ENEMY_CRATE, { varbit: VARBIT_CRATE, amount: 2, variant: "time-to-plunder-looting-the-crate" }],
-    [ENEMY_BARREL, { varbit: VARBIT_BARREL, amount: 1, variant: "time-to-plunder-ransacking-the-barrel" }],
+    [ENEMY_CHEST, { varbit: VARBIT_CHEST, amount: 3, refill: 300, variant: "time-to-plunder-plundering-the-chest" }],
+    [ENEMY_CRATE, { varbit: VARBIT_CRATE, amount: 2, refill: 200, variant: "time-to-plunder-looting-the-crate" }],
+    [ENEMY_BARREL, { varbit: VARBIT_BARREL, amount: 1, refill: 100, variant: "time-to-plunder-ransacking-the-barrel" }],
   ]);
 
   /** Transient per-conversation results (never persisted). */
   const plunderOutcome = new WeakMap();
   const fireOutcome = new WeakMap();
-  const lootedAt = new WeakMap();
+  /** Player -> { varbit: the loot whose refill timer is the live one }. */
+  const refills = new WeakMap();
   /** Pirate -> the player whose canister round is about to kill it. */
   const cannonTargets = new WeakMap();
   let lastPortShipBillCheck = -100;
@@ -367,9 +510,10 @@ module.exports = function registerCabinFeverQuest(api) {
     player.setAttribute(VARP_CANNON_ATTRIBUTE, 0);
     player.setAttribute(VARP_EXTRA_ATTRIBUTE, 0);
     player.setAttribute(VARP_STORAGE_ATTRIBUTE, 0);
+    player.setAttribute(SWING_LANDING_ATTRIBUTE, null);
     plunderOutcome.delete(player);
     fireOutcome.delete(player);
-    lootedAt.delete(player);
+    refills.delete(player);
   }
 
   function flags(player) {
@@ -455,6 +599,92 @@ module.exports = function registerCabinFeverQuest(api) {
     );
   }
 
+  /** Runs `action` `ticks` game ticks on, while the player is still logged in. */
+  function later(player, ticks, action) {
+    if (!TaskManager || !CountdownTask || ticks <= 0) {
+      action();
+      return;
+    }
+    TaskManager.submit(
+      new CountdownTask(player, ticks, () => {
+        if (player.isRegistered?.() === false) return;
+        action();
+      })
+    );
+  }
+
+  /** Runs each [tick, action] pair of a timed sequence, counted from now. */
+  function sequence(player, steps) {
+    for (const [tick, action] of steps) later(player, tick, action);
+  }
+
+  function animate(player, animationId) {
+    player.performAnimation?.(new Animation(animationId));
+  }
+
+  function sound(player, soundId, delay = 0) {
+    player.getPacketSender().sendSound?.(soundId, 0, delay);
+  }
+
+  function areaSound(player, soundId, location, radius) {
+    player.getPacketSender().sendAreaSound?.(soundId, location.getX(), location.getY(), location.getZ(), 1, 0, radius);
+  }
+
+  /**
+   * Live's exactmove: the player is put on `to` and the client slides them there from `from`
+   * between `startCycle` and `endCycle` (client cycles), facing `angle`.
+   */
+  function slide(player, [fromX, fromY, z], [toX, toY], startCycle, endCycle, angle) {
+    const from = new Location(fromX, fromY, z);
+    player.moveTo(new Location(toX, toY, z));
+    if (!ForceMovement) return;
+    const movement = new ForceMovement(from, new Location(toX - fromX, toY - fromY), startCycle, endCycle, angle, -1);
+    player.setForceMovement?.(movement);
+    later(player, 1, () => {
+      if (player.getForceMovement?.() === movement) player.setForceMovement(null);
+    });
+  }
+
+  /** The battle ships' locs live changes for one player (the battle is live's instance). */
+  const ownedLocs = new WeakMap();
+
+  /** `base`: the map's own loc on the tile, shown again when the player's copy goes. */
+  function showOwnedLoc(player, id, x, y, z, face, base = null, type = 10) {
+    if (!GameObject || !ObjectManager) return;
+    let locs = ownedLocs.get(player);
+    if (!locs) ownedLocs.set(player, (locs = new Map()));
+    const key = `${x},${y},${z}`;
+    const previous = locs.get(key);
+    if (previous) ObjectManager.deregister(previous.loc, true);
+    const loc = new GameObject(id, new Location(x, y, z), type, face, null).setOwner(player);
+    ObjectManager.register(loc, true);
+    locs.set(key, { loc, base: base ?? previous?.base ?? null });
+  }
+
+  function hideOwnedLoc(player, x, y, z, quiet = false) {
+    const locs = ownedLocs.get(player);
+    const key = `${x},${y},${z}`;
+    const entry = locs?.get(key);
+    if (!entry) return;
+    locs.delete(key);
+    ObjectManager.deregister(entry.loc, true);
+    if (entry.base && !quiet) player.getPacketSender().sendObject(entry.base);
+  }
+
+  function ownedLocAt(player, x, y, z) {
+    return ownedLocs.get(player)?.get(`${x},${y},${z}`)?.loc ?? null;
+  }
+
+  function clearOwnedLocs(player, quiet = false) {
+    const locs = ownedLocs.get(player);
+    if (!locs) return;
+    for (const key of [...locs.keys()]) {
+      const [x, y, z] = key.split(",").map(Number);
+      hideOwnedLoc(player, x, y, z, quiet);
+    }
+    ownedLocs.delete(player);
+  }
+
   /** Plays a wiki variant from the Cabin Fever page (object/state driven). */
   function playVariant(player, variant) {
     startTranscript(api, player, BILL_SHIP, PAGE, variant);
@@ -498,6 +728,7 @@ module.exports = function registerCabinFeverQuest(api) {
       if (stage >= STAGE_COMPLETE) {
         return "standard-dialogue-after-completing-cabin-fever-inside-the-green-ghost";
       }
+      if (stage >= STAGE_CANNON) return "dealing-with-the-cannon-talking-to-bill-teach-in-the-pub-after-running-away";
       if (stage >= STAGE_STARTED) return "speaking-to-bill-teach-again-at-the-pub";
       return "starting-the-quest";
     }
@@ -614,10 +845,9 @@ module.exports = function registerCabinFeverQuest(api) {
   }
 
   /**
-   * A canister hit kills the pirate it catches. The 52-damage hit is resolved by
-   * the NPC death task, which calls handleNpcDeath and records the crew hit.
-   * Returns false when no pirate is lined up (the wiki's rat still counts, so
-   * the caller records the hit directly in that case).
+   * A canister hit kills the pirate it catches (the Wiki: "The enemy takes 52 damage and dies").
+   * The crew hit itself is credited with "You hit them!", a tick before the hitsplat (capture
+   * ticks 1917-1918), so a shooter who logs out in between keeps the shot.
    */
   function hitPirateWithCanister(player) {
     const target = canisterTarget(player);
@@ -627,14 +857,7 @@ module.exports = function registerCabinFeverQuest(api) {
     // Attribute the kill to the player, so the NPC death task still runs.
     combat?.addDamage?.(player, CANISTER_DAMAGE);
     const hit = new HitDamage(CANISTER_DAMAGE, HitMask.RED).setSource(player);
-    // Credit on impact, not on the death task two ticks later: a shooter who
-    // logs out during the death animation must still save the successful shot.
-    hit.onApplied(() => {
-      cannonTargets.delete(target);
-      if ((target.getHitpoints?.() ?? 0) > 0) return;
-      if (quest.getStage(player) !== STAGE_FIRE) return;
-      setCrewHits(player, crewHits(player) + 1);
-    });
+    hit.onApplied?.(() => cannonTargets.delete(target));
     combat?.getHitQueue?.().addPendingDamage?.([hit]);
     return true;
   }
@@ -670,7 +893,8 @@ module.exports = function registerCabinFeverQuest(api) {
       case "bstDB6":
         return held(player, PLUNDER);
       case "w1Zyh9":
-        return varbitValue(player, VARBIT_CANNON_CLEAN) === 0;
+        // fever_cannon_clean is 1 from a shot until the ramrod cleans it (capture tick 1915).
+        return varbitValue(player, VARBIT_CANNON_CLEAN) === 1;
       case "_NOmCU":
         return varbitValue(player, VARBIT_CANNON_POWDER) === 1;
       case "67EEol":
@@ -757,8 +981,15 @@ module.exports = function registerCabinFeverQuest(api) {
    */
   function talkToBill(event) {
     const { player } = event;
-    if (!BILL_NPC_IDS.has(event.npcId) || !isPortShipBill(event)) return false;
+    // The battle deck's Bill has the same id as the port-ship swap; the variant selector owns him.
+    if (!BILL_NPC_IDS.has(event.npcId) || inBattle(player) || !isPortShipBill(event)) return false;
     const stage = quest.getStage(player);
+    if (battleStage(player)) {
+      // Back at port after running home (capture tick 1072).
+      return startTranscript(
+        api, player, BILL_SHIP, PAGE, "dealing-with-the-cannon-talking-to-bill-teach-on-the-adventurous-after-running-away"
+      );
+    }
     if (stage !== STAGE_STARTED && stage !== STAGE_SAILING) return false;
     startShipTalk(player, BILL_SHIP);
     return true;
@@ -767,7 +998,9 @@ module.exports = function registerCabinFeverQuest(api) {
   function handleChoice(event) {
     const { player, npcId, option } = event;
     if (!player || !BILL_NPC_IDS.has(npcId)) return;
+    // "Yes." is live's "Start the Cabin Fever quest?" prompt (capture tick 350-430).
     if (
+      option === "Yes." ||
       option === "Yes, I am a man of my word." ||
       option === "Yes, I am a woman of my word."
     ) {
@@ -779,7 +1012,23 @@ module.exports = function registerCabinFeverQuest(api) {
     if (option === "Let's go Cap'n!") {
       const stage = quest.getStage(player);
       if (stage === STAGE_STARTED || stage === STAGE_SAILING) sail(player);
+      else whenIdle(player, () => sailBack(player));
     }
+  }
+
+  /**
+   * The start prompt's "Yes." (live's "Start the Cabin Fever quest?", the dump's quest start hook).
+   * The requirements were checked before the prompt (condition tOUrYm); checked again here.
+   */
+  function handleHook(event) {
+    const { player, npcId, hook } = event;
+    if (!player || !BILL_NPC_IDS.has(npcId) || hook !== START_HOOK) return;
+    if (quest.getStage(player) !== 0) return;
+    if (!meetsRequirements(player)) {
+      event.end = true;
+      return;
+    }
+    quest.setStage(player, STAGE_STARTED);
   }
 
   function sail(player) {
@@ -794,11 +1043,78 @@ module.exports = function registerCabinFeverQuest(api) {
 
   function arriveOnBattleShip(player) {
     if (quest.getStage(player) !== STAGE_SAILING) return;
-    quest.setStage(player, STAGE_CANNON);
-    // The cutscene destroys the cannon: transform 1 is the broken (exploded) form.
+    // The cutscene destroys the cannon: transform 1 is the broken (exploded) form. Live sets
+    // nothing else on arrival (capture ticks 601-604).
     setVarbitValue(player, VARBIT_CANNON, CANNON_EXPLODED);
-    setVarbitValue(player, VARBIT_CANNON_CLEAN, 1);
+    setFlag(player, FLAG_CLEAN_IS_DIRTY);
+    quest.setStage(player, STAGE_CANNON);
     player.moveTo(BATTLE_DECK);
+  }
+
+  /** The variant Bill greets a player with who sailed back after running home (Wiki transcript). */
+  const RETURNING_VARIANTS = new Map([
+    [STAGE_CANNON, "dealing-with-the-cannon-the-enemy-reappears"],
+    [STAGE_LEAKS, "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon"],
+    [STAGE_PLUNDER, "time-to-plunder-returning-to-plunder-from-the-port"],
+    [STAGE_FIX_CANNON, "fixing-up-the-cannon-returning-to-fix-the-cannon-from-the-port"],
+    [STAGE_FIRE, "talking-to-bill-teach-again-before-firing-the-cannon-returning-to-fire-the-cannon-from-the-port"],
+    [STAGE_SINK, "sinking-the-enemy-ship-returning-to-sinking-from-the-port"],
+  ]);
+
+  function inBattle(player) {
+    const location = player.getLocation?.();
+    const x = location?.getX?.() ?? 0;
+    const y = location?.getY?.() ?? 0;
+    return x >= 1800 && x <= 1840 && y >= 4810 && y <= 4850;
+  }
+
+  function battleStage(player) {
+    const stage = quest.getStage(player);
+    return stage >= STAGE_CANNON && stage < STAGE_COMPLETE;
+  }
+
+  /**
+   * "No, I need to go back now.": the screen fades and the player is back on the Adventurous at
+   * Port Phasmatys (capture ticks 1060-1072). The Wiki: "If you leave the ship, you will lose the
+   * plunder."
+   */
+  function returnToPort(player) {
+    if (!battleStage(player) || !inBattle(player)) return false;
+    const plunder = player.getInventory().getAmount(PLUNDER);
+    if (plunder > 0) player.getInventory().deleteNumber(PLUNDER, plunder);
+    clearOwnedLocs(player, true);
+    Scenes.fade(player, true);
+    sequence(player, [
+      [3, () => player.moveTo(PORT_SHIP_DECK)],
+      [6, () => Scenes.fade(player, false)],
+    ]);
+    return true;
+  }
+
+  /** "Let's go Cap'n!" at the port after running home: back to the battle (ticks 1077-1087). */
+  function sailBack(player) {
+    if (!battleStage(player) || inBattle(player)) return false;
+    Scenes.fade(player, true);
+    sequence(player, [
+      [3, () => player.moveTo(BATTLE_DECK)],
+      [6, () => Scenes.fade(player, false)],
+      [9, () => {
+        const variant = RETURNING_VARIANTS.get(quest.getStage(player));
+        if (variant) startTranscript(api, player, BILL_SHIP, PAGE, variant);
+      }],
+    ]);
+    return true;
+  }
+
+  /** Bill's Return-Home on the battle deck: the Wiki's go-back-to-port conversation. */
+  function billReturnHome(event) {
+    const { player, npcId } = event;
+    if (!player || npcId !== BILL_SHIP || !battleStage(player) || !inBattle(player)) return false;
+    if (!startTranscript(api, player, BILL_SHIP, PAGE, "dealing-with-the-cannon-choosing-the-return-home-option")) {
+      return false;
+    }
+    event.handled = true;
+    return true;
   }
 
   // ==========================================================================
@@ -808,13 +1124,13 @@ module.exports = function registerCabinFeverQuest(api) {
   function blowUpEnemyCannon(player) {
     if (quest.getStage(player) !== STAGE_CANNON) return false;
     if (varbitValue(player, VARBIT_ENEMY_CANNON) !== 0) return false;
-    if (varbitValue(player, VARBIT_FUSE_1) !== 1 || varbitValue(player, VARBIT_FUSE_2) !== 1) {
-      return false;
-    }
-    setVarbitValue(player, VARBIT_GUNPOWDER_BARREL, 1);
-    setVarbitValue(player, VARBIT_ENEMY_CANNON, 1);
+    if (varbitValue(player, VARBIT_GUNPOWDER_BARREL) !== 2) return false;
     setVarbitValue(player, VARBIT_FUSE_1, 0);
     setVarbitValue(player, VARBIT_FUSE_2, 0);
+    setVarbitValue(player, VARBIT_GUNPOWDER_BARREL, 1);
+    player.sendMessage("...and destroy the barrel and the cannon.");
+    setVarbitValue(player, VARBIT_ENEMY_CANNON, 1);
+    syncQuestVarp(player);
     return true;
   }
 
@@ -851,9 +1167,8 @@ module.exports = function registerCabinFeverQuest(api) {
         event.handled = true;
         arriveOnBattleShip(player);
         return;
-      case "jL6Wr9": // the barrel blows up, taking out the cannon
+      case "jL6Wr9": // the barrel blows up: lightFuse plays the burn and the blast itself
         event.handled = true;
-        blowUpEnemyCannon(player);
         return;
       case "KyzlKD": // finds 3 loads of plunder
       case "nB1f3U": // two loads
@@ -876,6 +1191,10 @@ module.exports = function registerCabinFeverQuest(api) {
         whenIdle(player, () =>
           startTranscript(api, player, BILL_SHIP, PAGE, "end-of-quest-cutscene")
         );
+        return;
+      case "8EJUBr": // the screen fades to black; the player returns to Port Phasmatys
+        event.handled = true;
+        returnToPort(player);
         return;
       case "V-4Bls": // Congratulations! Quest complete!
         event.handled = true;
@@ -934,113 +1253,233 @@ module.exports = function registerCabinFeverQuest(api) {
   // Objects
   // ==========================================================================
 
-  /**
-   * The locker hands out the real quest plank (7148). 7121 is the animation dummy the
-   * client wields during the repair animation, and older saves still hold it, so both
-   * count towards the six and only the shortfall is topped up.
-   */
-  function givePlanks(player, amount) {
-    const have =
-      player.getInventory().getAmount(REPAIR_PLANK) + player.getInventory().getAmount(REPAIR_PLANK_ALT);
-    if (have >= amount) return false;
-    player.getInventory().adds(REPAIR_PLANK_ALT, amount - have);
+  /** The lockers' tiles; each opens for the one player (live's instance) and stays open. */
+  const LOCKERS = new Map([
+    [REPAIR_LOCKER, { open: REPAIR_LOCKER_OPEN, x: 1814, y: 4832, z: 0, face: 3, interfaceId: REPAIR_LOCKER_INTERFACE }],
+    [GUN_LOCKER, { open: GUN_LOCKER_OPEN, x: 1816, y: 4833, z: 0, face: 1, interfaceId: GUN_LOCKER_INTERFACE }],
+  ]);
+  const OPEN_LOCKERS = new Map([...LOCKERS].map(([closed, locker]) => [locker.open, { ...locker, closed }]));
+
+  function lockerStage(player) {
+    const stage = quest.getStage(player);
+    return stage >= STAGE_CANNON && stage < STAGE_COMPLETE;
+  }
+
+  /** Open: the chest-opening reach and cupboard sound, then the open locker (capture tick 767-771). */
+  function openLocker(player, objectId, object) {
+    const locker = LOCKERS.get(objectId);
+    if (!locker || !lockerStage(player)) return false;
+    animate(player, ANIM.OPEN_LOCKER);
+    sound(player, SOUND.LOCKER_OPEN);
+    const base = object ?? (GameObject ? new GameObject(objectId, new Location(locker.x, locker.y, locker.z), 10, locker.face, null) : null);
+    later(player, 1, () => showOwnedLoc(player, locker.open, locker.x, locker.y, locker.z, locker.face, base));
     return true;
   }
 
-  /**
-   * The locker hands out the real quest canister (7149). 7118 is the animation dummy the client
-   * wields while loading the cannon, and older saves still hold it, so both count towards the one.
-   */
-  function giveCanister(player) {
+  /** The open locker's Search shows its modal (ticks 773-774, 812). */
+  function searchLocker(player, objectId) {
+    const locker = OPEN_LOCKERS.get(objectId);
+    if (!locker || !lockerStage(player)) return false;
+    const sender = player.getPacketSender();
+    sender.sendInterfaceScript?.(MAINMODAL_OPEN_SCRIPT, MAINMODAL_OPEN_ARGS);
+    sender.sendInterface(locker.interfaceId);
+    return true;
+  }
+
+  function closeLocker(player, objectId) {
+    const locker = OPEN_LOCKERS.get(objectId);
+    if (!locker) return false;
+    hideOwnedLoc(player, locker.x, locker.y, locker.z);
+    return true;
+  }
+
+  /** One item per press, as live's buttons give them; false when the inventory is full. */
+  function take(player, itemId, amount, message) {
     const inventory = player.getInventory();
-    const dummy = inventory.getAmount(CANISTER);
-    const real = inventory.getAmount(CANISTER_ALT);
-    // A save from before this fix holds the animation dummy: swap it for the real canister so
-    // Quest Helper's requirement passes.
-    if (dummy > 0 && real === 0) {
-      inventory.deleteNumber(CANISTER, dummy);
-      inventory.adds(CANISTER_ALT, dummy);
-      return true;
+    const stacks = itemId === TACKS && inventory.getAmount(TACKS) > 0;
+    const slots = stacks ? 0 : itemId === TACKS || itemId === SWAMP_PASTE ? 1 : amount;
+    if (inventory.getFreeSlots() < slots) {
+      player.sendMessage("You don't have enough inventory space.");
+      return false;
     }
-    if (dummy + real >= 1) return false;
-    inventory.adds(CANISTER_ALT, 1);
+    inventory.adds(itemId, amount);
+    player.sendMessage(message);
     return true;
   }
 
-  function openRepairLocker(player) {
-    const stage = quest.getStage(player);
-    if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return;
-    giveSupply(player, ROPE, 4);
-    giveSupply(player, HAMMER, 1);
-    givePlanks(player, 6);
-    giveSupply(player, TACKS, 30);
-    giveSupply(player, SWAMP_PASTE, 3);
+  /** quest_fever_repair_locker (502): rope, hammer, tacks, planks and swamp paste (ticks 792-796, 1130-1152). */
+  /**
+   * The Wiki: "When you have enough resources, a message in the chat interface will say so, if you
+   * try to get more than is needed." Live's only recorded cap is the planks' (tick 1141); the
+   * others follow it (Ours: their wording). Rope stops at the Wiki's four (two per round trip),
+   * the hammer at one, tacks and paste at what the open holes still need.
+   */
+  function enough(player, itemId, have, limit, name) {
+    if (player.getInventory().getAmount(itemId) + have < limit) return false;
+    player.sendMessage(`You already have enough ${name}.`);
+    return true;
   }
 
-  function openGunLocker(player) {
-    const stage = quest.getStage(player);
-    if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return;
-    const broken =
-      varbitValue(player, VARBIT_CANNON) === CANNON_EXPLODED ||
-      varbitValue(player, VARBIT_CANNON) === CANNON_STRIPPED;
-    if (stage >= STAGE_FIX_CANNON && broken && !held(player, CANNON_BARREL)) {
-      if (player.getInventory().getFreeSlots() < 1) {
-        player.sendMessage("You need a free inventory space for the cannon barrel.");
+  function holesNeeding(player, below) {
+    return [VARBIT_HOLE_1, VARBIT_HOLE_2, VARBIT_HOLE_3].filter((id) => varbitValue(player, id) < below).length;
+  }
+
+  function repairLockerButton(event) {
+    const { player, buttonId } = event;
+    if (!player || player.getInterfaceId?.() !== REPAIR_LOCKER_INTERFACE || !lockerStage(player)) return;
+    switch (buttonId) {
+      case REPAIR_BUTTON.ROPE:
+        if (enough(player, ROPE, player.getInventory().getAmount(CF_ROPE), 4, "Rope")) return;
+        take(player, ROPE, 1, "You take a coil of rope.");
+        return;
+      case REPAIR_BUTTON.HAMMER:
+        if (enough(player, HAMMER, 0, 1, "Hammers")) return;
+        take(player, HAMMER, 1, "You take a hammer.");
+        return;
+      case REPAIR_BUTTON.TACKS:
+        if (enough(player, TACKS, 0, Math.max(1, holesNeeding(player, 1) * 10), "Tacks")) return;
+        take(player, TACKS, 10, "You take a handful of tacks.");
+        return;
+      case REPAIR_BUTTON.PLANKS: {
+        // 7121 is the animation dummy older saves still hold; both count towards the six.
+        const inventory = player.getInventory();
+        if (inventory.getAmount(REPAIR_PLANK) + inventory.getAmount(REPAIR_PLANK_ALT) >= 6) {
+          player.sendMessage("You already have enough Repair Planks.");
+          return;
+        }
+        take(player, REPAIR_PLANK_ALT, 2, "You take a set of repair planks.");
         return;
       }
-      player.getInventory().adds(CANNON_BARREL, 1);
-      playVariant(player, "fixing-up-the-cannon-taking-a-new-barrel-from-the-gun-locker");
-      return;
+      case REPAIR_BUTTON.SWAMP_PASTE:
+        if (enough(player, SWAMP_PASTE, 0, Math.max(1, holesNeeding(player, 2)), "Swamp Paste")) return;
+        take(player, SWAMP_PASTE, 1, "You take a load of swamp paste.");
+        return;
+      default:
     }
-    if (stage === STAGE_FIX_CANNON) {
-      playVariant(
-        player,
-        "fixing-up-the-cannon-taking-a-new-barrel-from-the-gun-locker-attempting-to-take-other-items-from-the-gun-locker"
-      );
-      return;
+  }
+
+  function cannonBroken(player) {
+    const state = varbitValue(player, VARBIT_CANNON);
+    return state === CANNON_EXPLODED || state === CANNON_STRIPPED;
+  }
+
+  /**
+   * quest_fever_gun_locker (501). Each button gives one item at the stage that uses it (ticks 816,
+   * 1761, 1855-1862, 1993-1996, 2014-2016); otherwise "You do not need ... right now.", the Wiki
+   * guide's and live's wording (tick 1997; the transcript has "You don't need").
+   */
+  function gunLockerButton(event) {
+    const { player, buttonId } = event;
+    if (!player || player.getInterfaceId?.() !== GUN_LOCKER_INTERFACE || !lockerStage(player)) return;
+    const stage = quest.getStage(player);
+    const firing = stage === STAGE_FIRE || stage === STAGE_SINK;
+    // The Wiki guide's "You do not need a [item name] right now.", as live words it (tick 1997).
+    const refuse = (what) => player.sendMessage(`You do not need ${what} right now.`);
+    switch (buttonId) {
+      case GUN_BUTTON.BARREL:
+        // Ours: the Wiki and the capture only show the barrel taken while the cannon is broken.
+        if (stage < STAGE_FIX_CANNON || !cannonBroken(player)) {
+          refuse("a cannon barrel");
+          return;
+        }
+        take(player, CANNON_BARREL, 1, "You take a cannon barrel.");
+        return;
+      case GUN_BUTTON.FUSE:
+        if (stage === STAGE_FIX_CANNON) {
+          refuse("any fuse");
+          return;
+        }
+        take(player, FUSE, 1, "You take some fuse.");
+        return;
+      case GUN_BUTTON.RAMROD:
+        if (!firing) {
+          refuse("a ramrod");
+          return;
+        }
+        take(player, RAMROD, 1, "You take a Ramrod.");
+        return;
+      case GUN_BUTTON.CANISTER:
+        if (stage === STAGE_SINK) {
+          player.sendMessage("You do not need a canister round right now.");
+          return;
+        }
+        if (stage !== STAGE_FIRE) {
+          refuse("a canister round");
+          return;
+        }
+        take(player, CANISTER_ALT, 1, "You take a canister round.");
+        return;
+      case GUN_BUTTON.BALL:
+        if (stage !== STAGE_SINK) {
+          refuse("a cannon ball");
+          return;
+        }
+        take(player, CF_CANNON_BALL, 1, "You take a cannon ball.");
+        return;
+      default:
     }
-    if (stage === STAGE_CANNON) {
-      giveSupply(player, FUSE, 4);
-      return;
-    }
-    if (stage === STAGE_FIRE) {
-      giveSupply(player, RAMROD, 1);
-      giveCanister(player);
-      giveSupply(player, FUSE, 4);
-      return;
-    }
-    if (stage === STAGE_SINK) {
-      giveSupply(player, RAMROD, 1);
-      giveSupply(player, CF_CANNON_BALL, 4);
-      giveSupply(player, FUSE, 4);
-    }
+  }
+
+  /** Saves from before the gun locker gave the real canister (7149) hold the animation dummy. */
+  function swapCanisterDummy(player) {
+    const inventory = player.getInventory();
+    const dummy = inventory.getAmount(CANISTER);
+    if (dummy <= 0) return;
+    inventory.deleteNumber(CANISTER, dummy);
+    inventory.adds(CANISTER_ALT, dummy);
   }
 
   function takePowder(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return;
     if (giveSupply(player, GUNPOWDER, 1)) {
+      // Capture tick 1878: the reach and the pick sound with the message.
       player.sendMessage("You take some gunpowder");
+      animate(player, ANIM.REACH);
+      sound(player, SOUND.PICK);
     }
   }
 
+  /** Players laying or burning the fuse, so a second use cannot restart it. */
+  const fuseBusy = new WeakSet();
+
+  /**
+   * The fuse goes in the barrel, then the player walks east laying it over the two fuse locs
+   * (11241 at 1823,4831, 11242 at 1824,4831), as capture ticks 891-901 play it.
+   */
   function attachFuse(player) {
     if (quest.getStage(player) !== STAGE_CANNON) return false;
     if (varbitValue(player, VARBIT_ENEMY_CANNON) !== 0) return false;
-    if (varbitValue(player, VARBIT_FUSE_1) === 1) return false;
+    if (fuseBusy.has(player)) return true;
+    if (varbitValue(player, VARBIT_FUSE_1) === 1 && varbitValue(player, VARBIT_FUSE_2) === 1) return false;
     if (!held(player, FUSE)) return false;
     player.getInventory().deleteNumber(FUSE, 1);
-    setVarbitValue(player, VARBIT_FUSE_1, 1);
+    fuseBusy.add(player);
     // Transform 2 is the barrel with the fuse attached; 1 is the explosion.
     setVarbitValue(player, VARBIT_GUNPOWDER_BARREL, 2);
-    playVariant(player, "dealing-with-the-cannon-using-fuse-on-the-barrel");
+    player.sendMessage("You attach the fuse to the barrel.");
+    animate(player, ANIM.REACH);
+    sound(player, SOUND.ATTACH_FUSE);
+    const step = (x, y) => player.getMovementQueue?.()?.addSteps?.(new Location(x, y, 1));
+    sequence(player, [
+      [1, () => step(1823, 4831)],
+      [4, () => { animate(player, ANIM.PICKUP_FLOOR); sound(player, SOUND.ATTACH_FUSE); }],
+      [6, () => { setVarbitValue(player, VARBIT_FUSE_1, 1); step(1824, 4831); }],
+      [8, () => { animate(player, ANIM.PICKUP_FLOOR); sound(player, SOUND.ATTACH_FUSE); }],
+      [10, () => { setVarbitValue(player, VARBIT_FUSE_2, 1); step(1825, 4831); fuseBusy.delete(player); }],
+    ]);
     return true;
   }
 
+  /**
+   * A flame on the laid fuse burns it back to the barrel (capture ticks 966-976): the strike, the
+   * fuse going out end first with three fuse sounds, the explosion, and the barrel and cannon
+   * gone. The Wiki's two messages are the capture's.
+   */
   function lightFuse(player, itemId) {
     if (quest.getStage(player) !== STAGE_CANNON) return false;
-    if (varbitValue(player, VARBIT_FUSE_1) !== 1) return false;
-    if (varbitValue(player, VARBIT_FUSE_2) === 1) return false;
+    if (fuseBusy.has(player)) return true;
+    if (varbitValue(player, VARBIT_FUSE_1) !== 1 || varbitValue(player, VARBIT_FUSE_2) !== 1) return false;
     if (!TINDERBOXES.has(itemId) && !BULLSEYE_LANTERNS.has(itemId)) return false;
     if (BULLSEYE_LANTERNS.has(itemId)) {
       playVariant(
@@ -1049,8 +1488,33 @@ module.exports = function registerCabinFeverQuest(api) {
       );
       return true;
     }
-    setVarbitValue(player, VARBIT_FUSE_2, 1);
-    playVariant(player, "dealing-with-the-cannon-the-fuse-is-lit");
+    fuseBusy.add(player);
+    animate(player, ANIM.PICKUP_FLOOR);
+    sound(player, SOUND.STRIKE);
+    // The flame runs along the fuse to the barrel, then the barrel blows (capture ticks 972-974).
+    const burnGraphic = (id, x, delay) => {
+      if (Graphic) player.getPacketSender().sendGraphic?.(new Graphic(id, delay, 0), new Location(x, 4831, 1));
+    };
+    sequence(player, [
+      [2, () => {
+        player.sendMessage("You light the fuse...");
+        setVarbitValue(player, VARBIT_FUSE_2, 0);
+        sound(player, SOUND.FUSE_LIGHT);
+        burnGraphic(GFX_FUSE_LIGHT, 1824, 0);
+      }],
+      [3, () => {
+        setVarbitValue(player, VARBIT_FUSE_1, 0);
+        sound(player, SOUND.FUSE_LIGHT, 10);
+        burnGraphic(GFX_FUSE_LIGHT, 1823, 10);
+      }],
+      [4, () => {
+        sound(player, SOUND.FUSE_LIGHT, 15);
+        sound(player, SOUND.EXPLOSION, 30);
+        burnGraphic(GFX_BARREL_FUSE_LIGHT, 1822, 15);
+        burnGraphic(GFX_EXPLOSION, 1822, 30);
+      }],
+      [6, () => { fuseBusy.delete(player); blowUpEnemyCannon(player); }],
+    ]);
     return true;
   }
 
@@ -1069,10 +1533,7 @@ module.exports = function registerCabinFeverQuest(api) {
 
   function lootPlunder(player, source) {
     if (quest.getStage(player) !== STAGE_PLUNDER) return false;
-    const now = World.getProcessCycle();
-    const timestamps = lootedAt.get(player) ?? {};
-    const looted = varbitValue(player, source.varbit) === 1;
-    if (looted && now - (timestamps[source.varbit] ?? -Infinity) < PLUNDER_RESPAWN_TICKS) {
+    if (varbitValue(player, source.varbit) === 1) {
       plunderOutcome.set(player, "recently");
       playVariant(player, source.variant);
       return false;
@@ -1081,10 +1542,14 @@ module.exports = function registerCabinFeverQuest(api) {
       player.sendMessage("You do not have enough free inventory space for that.");
       return false;
     }
-    if (looted) setVarbitValue(player, source.varbit, 0);
     setVarbitValue(player, source.varbit, 1);
-    timestamps[source.varbit] = now;
-    lootedAt.set(player, timestamps);
+    // Live refills each container on its own timer, whether or not it is clicked again.
+    const generation = (refills.get(player)?.[source.varbit] ?? 0) + 1;
+    refills.set(player, { ...refills.get(player), [source.varbit]: generation });
+    later(player, source.refill, () => {
+      if (refills.get(player)?.[source.varbit] !== generation) return;
+      if (varbitValue(player, source.varbit) === 1) setVarbitValue(player, source.varbit, 0);
+    });
     player.getInventory().adds(PLUNDER, source.amount);
     plunderOutcome.set(player, "found");
     playVariant(player, source.variant);
@@ -1110,6 +1575,8 @@ module.exports = function registerCabinFeverQuest(api) {
     const amount = Math.min(carried, space);
     player.getInventory().deleteNumber(PLUNDER, amount);
     setVarbitValue(player, VARBIT_PLUNDER, stored + amount);
+    // The tenth load moves varp 655 to 80 (capture tick 1667).
+    syncQuestVarp(player);
     if (carried > space) {
       player.sendMessage("You deposit as much plunder as you can.");
       return true;
@@ -1127,27 +1594,65 @@ module.exports = function registerCabinFeverQuest(api) {
       player.sendMessage("This chest is full of plunder.");
       return true;
     }
+    if (stored === 0) {
+      // The Wiki's "This chest has [X] loads" has no empty case; live (capture tick 1395).
+      player.sendMessage("This chest is empty.");
+      return true;
+    }
     player.sendMessage(`This chest has ${stored} loads of plunder inside.`);
     return true;
   }
 
+  /** Players whose barrel swap, load or shot is still playing out. */
+  const cannonBusy = new WeakSet();
+
+  function cannonTask(player, steps) {
+    cannonBusy.add(player);
+    const last = Math.max(...steps.map(([tick]) => tick));
+    sequence(player, [...steps, [last, () => cannonBusy.delete(player)]]);
+  }
+
+  /**
+   * Repair on the broken cannon with a new barrel: the broken barrel comes off into the
+   * inventory, then the new one goes on (capture ticks 1781-1785). The second message is the
+   * Wiki's ("You attach the new barrel to the cannon."; live adds "base").
+   */
   function repairCannon(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_FIX_CANNON || stage >= STAGE_COMPLETE) return false;
-    const state = varbitValue(player, VARBIT_CANNON);
-    if (state !== CANNON_EXPLODED && state !== CANNON_STRIPPED) return false;
+    if (!cannonBroken(player)) return false;
+    if (cannonBusy.has(player)) return true;
     if (!held(player, CANNON_BARREL)) {
+      // Ours: neither source shows Repair without a barrel.
       player.sendMessage("You need a cannon barrel to repair this cannon.");
-      return false;
+      return true;
     }
-    player.getInventory().deleteNumber(CANNON_BARREL, 1);
-    setVarbitValue(player, VARBIT_CANNON, CANNON_EMPTY);
-    setVarbitValue(player, VARBIT_CANNON_CLEAN, 1);
-    setVarbitValue(player, VARBIT_CANNON_POWDER, 0);
-    setVarbitValue(player, VARBIT_CANNON_TAMP, 0);
-    setVarbitValue(player, VARBIT_CANNON_AMMO, 0);
-    setVarbitValue(player, VARBIT_CANNON_FUSE, 0);
-    playVariant(player, "fixing-up-the-cannon-using-a-new-barrel-on-the-cannon");
+    const attach = () => {
+      if (!held(player, CANNON_BARREL) || !cannonBroken(player)) return;
+      player.getInventory().deleteNumber(CANNON_BARREL, 1);
+      setVarbitValue(player, VARBIT_CANNON, CANNON_EMPTY);
+      setVarbitValue(player, VARBIT_CANNON_CLEAN, 0);
+      setVarbitValue(player, VARBIT_CANNON_POWDER, 0);
+      setVarbitValue(player, VARBIT_CANNON_TAMP, 0);
+      setVarbitValue(player, VARBIT_CANNON_AMMO, 0);
+      setVarbitValue(player, VARBIT_CANNON_FUSE, 0);
+      playVariant(player, "fixing-up-the-cannon-using-a-new-barrel-on-the-cannon");
+      animate(player, ANIM.REACH);
+      sound(player, SOUND.ATTACH_CANNON);
+      syncQuestVarp(player);
+    };
+    if (varbitValue(player, VARBIT_CANNON) === CANNON_STRIPPED) {
+      cannonTask(player, [[0, attach]]);
+      return true;
+    }
+    setVarbitValue(player, VARBIT_CANNON, CANNON_STRIPPED);
+    animate(player, ANIM.REACH);
+    sound(player, SOUND.DETACH_CANNON);
+    if (player.getInventory().getFreeSlots() > 0) player.getInventory().adds(BROKEN_CANNON, 1);
+    cannonTask(player, [
+      [2, () => player.sendMessage("You remove the broken cannon barrel.")],
+      [4, attach],
+    ]);
     return true;
   }
 
@@ -1157,6 +1662,7 @@ module.exports = function registerCabinFeverQuest(api) {
     if (option === "repair") return repairCannon(player);
     if (option === "inspect") {
       if (stage < STAGE_FIRE) return false;
+      // Capture tick 1887: both lines on the same tick, a few after the click.
       playVariant(
         player,
         "talking-to-bill-teach-again-before-firing-the-cannon-using-the-cannon-in-the-correct-order-inspecting-the-cannon"
@@ -1165,11 +1671,7 @@ module.exports = function registerCabinFeverQuest(api) {
     }
     if (option === "empty-out") {
       if (stage !== STAGE_FIRE && stage !== STAGE_SINK) return false;
-      setVarbitValue(player, VARBIT_CANNON_POWDER, 0);
-      setVarbitValue(player, VARBIT_CANNON_TAMP, 0);
-      setVarbitValue(player, VARBIT_CANNON_AMMO, 0);
-      setVarbitValue(player, VARBIT_CANNON_FUSE, 0);
-      setVarbitValue(player, VARBIT_CANNON, CANNON_EMPTY);
+      emptyCannonLoad(player, false);
       playVariant(
         player,
         "talking-to-bill-teach-again-before-firing-the-cannon-using-the-cannon-in-the-correct-order-cleaning-the-cannon"
@@ -1184,25 +1686,27 @@ module.exports = function registerCabinFeverQuest(api) {
     return false;
   }
 
-  function emptyCannonLoad(player, keepClean) {
+  /** The load comes out; `dirty` leaves the barrel needing the ramrod, as a shot does. */
+  function emptyCannonLoad(player, dirty) {
+    setVarbitValue(player, VARBIT_CANNON, CANNON_EMPTY);
     setVarbitValue(player, VARBIT_CANNON_POWDER, 0);
     setVarbitValue(player, VARBIT_CANNON_TAMP, 0);
     setVarbitValue(player, VARBIT_CANNON_AMMO, 0);
     setVarbitValue(player, VARBIT_CANNON_FUSE, 0);
-    setVarbitValue(player, VARBIT_CANNON, CANNON_EMPTY);
-    if (!keepClean) setVarbitValue(player, VARBIT_CANNON_CLEAN, 0);
+    if (dirty !== undefined) setVarbitValue(player, VARBIT_CANNON_CLEAN, dirty ? 1 : 0);
   }
 
   function fireCannon(player) {
     const stage = quest.getStage(player);
     if (stage !== STAGE_FIRE && stage !== STAGE_SINK) return false;
     if (varbitValue(player, VARBIT_CANNON) !== CANNON_ARMED) return false;
+    if (cannonBusy.has(player)) return true;
     const powder = varbitValue(player, VARBIT_CANNON_POWDER);
     const tamp = varbitValue(player, VARBIT_CANNON_TAMP);
     const ammo = varbitValue(player, VARBIT_CANNON_AMMO);
-    const clean = varbitValue(player, VARBIT_CANNON_CLEAN);
+    const dirty = varbitValue(player, VARBIT_CANNON_CLEAN) === 1;
     if (ammo === 0) {
-      emptyCannonLoad(player, true);
+      emptyCannonLoad(player);
       playVariant(
         player,
         powder === 0
@@ -1215,14 +1719,14 @@ module.exports = function registerCabinFeverQuest(api) {
     if (stage === STAGE_FIRE && ammo !== CANNON_AMMO_CANISTER) return false;
     if (stage === STAGE_SINK && ammo !== CANNON_AMMO_BALL) return false;
     if (powder === 0) {
-      emptyCannonLoad(player, true);
+      emptyCannonLoad(player);
       playVariant(
         player,
         "talking-to-bill-teach-again-before-firing-the-cannon-firing-the-cannon-firing-the-cannon-without-adding-powder-or-ammunition"
       );
       return true;
     }
-    if (clean === 0 || tamp === 0) {
+    if (dirty || tamp === 0) {
       emptyCannonLoad(player, false);
       setVarbitValue(player, VARBIT_CANNON, CANNON_EXPLODED);
       player.getCombat().getHitQueue().addPendingDamage([new HitDamage(5, HitMask.RED)]);
@@ -1233,37 +1737,60 @@ module.exports = function registerCabinFeverQuest(api) {
       return true;
     }
     const hit = Math.random() < rangedHitChance(player);
-    emptyCannonLoad(player, false);
-    if (ammo === CANNON_AMMO_CANISTER) {
+    const canister = ammo === CANNON_AMMO_CANISTER;
+    // The shot as live plays it (capture ticks 1915-1918 and 2048-2049): the reach, the cannon's
+    // area sound, the muzzle blast and the shot's flight; the load is gone and the barrel needs
+    // the ramrod on the same tick.
+    setVarbitValue(player, VARBIT_CANNON, CANNON_EMPTY);
+    player.sendMessage(canister ? "You fire the cannon at the crew!" : "You shoot the cannon ball at the enemy ship!");
+    emptyCannonLoad(player, true);
+    animate(player, ANIM.REACH);
+    const sender = player.getPacketSender();
+    areaSound(player, SOUND.CANNON_FIRE, new Location(1816, 4833, 1), 10);
+    if (Graphic) sender.sendGraphic?.(new Graphic(GFX_CANNON_BLAST, 5), CANNON_MUZZLE);
+    const target = canister ? CANISTER_TARGET : BALL_TARGET;
+    // map_projanim_v2: start 1, end 37 (33 for the ball) cycles, slope 5, start 11, heights 63 -> 63 (0).
+    sender.sendProjectile?.(
+      CANNON_MUZZLE, target, 0, canister ? 37 : 33, canister ? PROJ_SHRAPNEL : PROJ_BALL,
+      16, canister ? 16 : 0, null, 1, 5, 11
+    );
+    const impact = () => {
+      if (Graphic) sender.sendGraphic?.(new Graphic(GFX_EXPLOSION, 5), target);
+    };
+    if (canister) {
       fireOutcome.set(player, hit ? "hit" : "miss");
-      if (hit) {
-        // The death task records the crew hit; with no pirate lined up the
-        // cannon still catches a rat, which the wiki counts as a pirate kill.
-        if (!hitPirateWithCanister(player)) setCrewHits(player, crewHits(player) + 1);
+      cannonTask(player, [[2, () => {
+        if (!hit) {
+          player.sendMessage("You missed!");
+          player.sendMessage("Try waiting for there to be pirates in front of the cannon next time you fire!");
+          return;
+        }
+        if (quest.getStage(player) === STAGE_FIRE) setCrewHits(player, crewHits(player) + 1);
+        syncQuestVarp(player);
+        player.sendMessage("You hit them!");
+        impact();
+        areaSound(player, SOUND.CANNON_HIT, CANISTER_TARGET, 5);
+        // With no pirate lined up the shot still counts (the Wiki: a rat in front of the
+        // cannon is a crew hit too); one lined up takes the 52 a tick later.
+        hitPirateWithCanister(player);
+      }]]);
+      return true;
+    }
+    fireOutcome.set(player, hit ? "hit" : "miss");
+    cannonTask(player, [[1, () => {
+      if (!hit) {
+        player.sendMessage("You fail to damage the hull.");
+        return;
       }
-      playVariant(
-        player,
-        "talking-to-bill-teach-again-before-firing-the-cannon-firing-the-cannon"
-      );
-      return true;
-    }
-    if (!hit) {
-      fireOutcome.set(player, "miss");
-      playVariant(player, "sinking-the-enemy-ship-fire-at-will");
-      return true;
-    }
-    const holes = varbitValue(player, VARBIT_HULL_HOLES) + 1;
-    setVarbitValue(player, VARBIT_HULL_HOLES, holes);
-    if (holes >= 3) {
-      playVariant(player, "sinking-the-enemy-ship-after-the-third-and-final-hit");
-      return true;
-    }
-    if (holes === 1) {
-      fireOutcome.set(player, "hit");
-      playVariant(player, "sinking-the-enemy-ship-fire-at-will");
-      return true;
-    }
-    playVariant(player, "sinking-the-enemy-ship-shooting-at-the-hull-again");
+      impact();
+      const holes = varbitValue(player, VARBIT_HULL_HOLES) + 1;
+      setVarbitValue(player, VARBIT_HULL_HOLES, holes);
+      if (holes >= 3) {
+        playVariant(player, "sinking-the-enemy-ship-after-the-third-and-final-hit");
+        return;
+      }
+      player.sendMessage(holes === 1 ? "You put a hole in the hull!" : "You put another hole in the hull!");
+    }]]);
     return true;
   }
 
@@ -1272,6 +1799,7 @@ module.exports = function registerCabinFeverQuest(api) {
     if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return false;
     if (itemId === CANNON_BARREL) return repairCannon(player);
     if (!held(player, itemId)) return false;
+    if (cannonBusy.has(player)) return true;
     const state = varbitValue(player, VARBIT_CANNON);
     if (state !== CANNON_EMPTY) return false;
     if (itemId === GUNPOWDER) {
@@ -1280,42 +1808,36 @@ module.exports = function registerCabinFeverQuest(api) {
       player.getInventory().deleteNumber(GUNPOWDER, 1);
       setVarbitValue(player, VARBIT_CANNON_POWDER, 1);
       player.sendMessage("You pour the powder into the cannon.");
+      animate(player, ANIM.REACH);
+      sound(player, SOUND.POUR_POWDER);
       return true;
     }
     if (itemId === RAMROD) {
       if (stage !== STAGE_FIRE && stage !== STAGE_SINK) return false;
-      if (varbitValue(player, VARBIT_CANNON_CLEAN) === 0) {
-        setVarbitValue(player, VARBIT_CANNON_CLEAN, 1);
-        playVariant(
-          player,
-          "talking-to-bill-teach-again-before-firing-the-cannon-using-the-cannon-in-the-correct-order-cleaning-the-cannon"
-        );
-        return true;
-      }
-      if (
-        varbitValue(player, VARBIT_CANNON_POWDER) === 1 &&
-        varbitValue(player, VARBIT_CANNON_TAMP) === 0
-      ) {
-        setVarbitValue(player, VARBIT_CANNON_TAMP, 1);
-        player.sendMessage("You shove the Ramrod into the cannon barrel.");
-        return true;
-      }
-      return false;
-    }
-    if (itemId === CANISTER || itemId === CANISTER_ALT) {
-      if (stage !== STAGE_FIRE) return false;
-      if (varbitValue(player, VARBIT_CANNON_AMMO) !== 0) return false;
-      player.getInventory().deleteNumber(itemId, 1);
-      setVarbitValue(player, VARBIT_CANNON_AMMO, CANNON_AMMO_CANISTER);
-      player.sendMessage("You roll the canister round into the cannon.");
+      // Cleaning after a shot and tamping the powder are the same shove (capture ticks 1973, 1900).
+      const cleans = varbitValue(player, VARBIT_CANNON_CLEAN) === 1;
+      const tamps = varbitValue(player, VARBIT_CANNON_POWDER) === 1 && varbitValue(player, VARBIT_CANNON_TAMP) === 0;
+      if (!cleans && !tamps) return false;
+      setVarbitValue(player, cleans ? VARBIT_CANNON_CLEAN : VARBIT_CANNON_TAMP, cleans ? 0 : 1);
+      player.sendMessage("You shove the Ramrod into the cannon barrel.");
+      animate(player, ANIM.RAMROD);
+      sound(player, SOUND.RAMROD);
       return true;
     }
-    if (itemId === CF_CANNON_BALL) {
-      if (stage !== STAGE_SINK) return false;
+    if (itemId === CANISTER || itemId === CANISTER_ALT || itemId === CF_CANNON_BALL) {
+      const canister = itemId !== CF_CANNON_BALL;
+      if (stage !== (canister ? STAGE_FIRE : STAGE_SINK)) return false;
       if (varbitValue(player, VARBIT_CANNON_AMMO) !== 0) return false;
-      player.getInventory().deleteNumber(CF_CANNON_BALL, 1);
-      setVarbitValue(player, VARBIT_CANNON_AMMO, CANNON_AMMO_BALL);
-      player.sendMessage("You roll the cannonball into the cannon.");
+      // The roll, then the push and the message a tick on (capture ticks 1905-1906, 2037-2038).
+      animate(player, canister ? ANIM.LOAD_CANISTER : ANIM.LOAD_BALL);
+      sound(player, canister ? SOUND.ROLL_CANISTER : SOUND.LOAD_BALL);
+      cannonTask(player, [[1, () => {
+        if (!held(player, itemId) || varbitValue(player, VARBIT_CANNON_AMMO) !== 0) return;
+        player.getInventory().deleteNumber(itemId, 1);
+        setVarbitValue(player, VARBIT_CANNON_AMMO, canister ? CANNON_AMMO_CANISTER : CANNON_AMMO_BALL);
+        player.sendMessage(canister ? "You roll the canister round into the cannon." : "You roll the cannonball into the cannon.");
+        animate(player, ANIM.LOAD_PUSH);
+      }]]);
       return true;
     }
     if (itemId === STEEL_CANNONBALL) {
@@ -1325,9 +1847,8 @@ module.exports = function registerCabinFeverQuest(api) {
     }
     if (itemId === FUSE) {
       if (stage !== STAGE_FIRE && stage !== STAGE_SINK) return false;
-      if (varbitValue(player, VARBIT_CANNON_FUSE) === 1) return false;
       player.getInventory().deleteNumber(FUSE, 1);
-      setVarbitValue(player, VARBIT_CANNON_FUSE, 1);
+      // Live arms the cannon (fever_cannon 3) and leaves fever_cannon_fuse alone (ticks 1910, 2044).
       setVarbitValue(player, VARBIT_CANNON, CANNON_ARMED);
       player.sendMessage("You ready the cannon for firing.");
       return true;
@@ -1388,6 +1909,9 @@ module.exports = function registerCabinFeverQuest(api) {
     setVarbitValue(player, holeVarbit, 1);
     syncHoleCounters(player);
     playVariant(player, "sort-out-the-leaks-planking-up-a-hole");
+    // Capture tick 1158: fever_nail_plank and the hammer with the message.
+    animate(player, ANIM.NAIL_PLANK);
+    sound(player, SOUND.HAMMER);
     return true;
   }
 
@@ -1427,6 +1951,11 @@ module.exports = function registerCabinFeverQuest(api) {
     setVarbitValue(player, holeVarbit, 2);
     syncHoleCounters(player);
     playVariant(player, "sort-out-the-leaks-patching-up-a-hole");
+    // Capture tick 1170: the reach and cf_smear_paste. The last hole moves varp 655 to 60 three
+    // ticks after its paste (1193 -> 1196).
+    animate(player, ANIM.REACH);
+    sound(player, SOUND.SMEAR_PASTE);
+    if (holesFixed(player)) later(player, 3, () => syncQuestVarp(player));
     return true;
   }
 
@@ -1436,20 +1965,102 @@ module.exports = function registerCabinFeverQuest(api) {
     return false;
   }
 
+  /** Players mid-swing, so a second rope cannot start another. */
+  const swinging = new WeakSet();
+
+  /**
+   * Rope on the hoisted sail from the yardarm. The rope is used, the player ties it and drops to
+   * the deck, slides to it and swings across; a fall lands in the sea and swims to the other
+   * ship with no run energy left. The Wiki gates the swing on 42 Agility.
+   */
   function swingToOtherShip(player, itemId) {
     const stage = quest.getStage(player);
     if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return false;
     if (!SWING_ROPES.has(itemId) || !held(player, itemId)) return false;
     if ((player.getLocation()?.getZ?.() ?? 0) < 2) return false;
-    if (player.getSkillManager().getMaxLevel(Skill.AGILITY) < PIRATE_AGILITY) {
-      playVariant(player, "dealing-with-the-cannon-using-a-rope-swing-falling-on-a-rope-swing");
-      player.setRunEnergy(0);
-      player.getPacketSender().sendRunEnergy();
-      return true;
-    }
-    const onOwnShip = (player.getLocation()?.getX?.() ?? 0) < 1819;
+    if (swinging.has(player)) return true;
+    const swing = (player.getLocation()?.getX?.() ?? 0) < 1819 ? SWINGS.over : SWINGS.back;
+    const falls = player.getSkillManager().getMaxLevel(Skill.AGILITY) < PIRATE_AGILITY
+      || Math.random() < SWING_FALL_CHANCE;
+    const [startX, startY, z] = swing.start;
+    const rope = swing.rope;
+    swinging.add(player);
+    player.getMovementQueue?.()?.reset?.();
+    player.getMovementQueue?.()?.setBlockMovement?.(true);
     player.getInventory().deleteNumber(itemId, 1);
-    player.moveTo(onOwnShip ? ENEMY_DECK : BATTLE_DECK);
+    setVarbitValue(player, swing.varbit, 1);
+    animate(player, ANIM.ROPE_TIE);
+    sound(player, SOUND.TIE_ROPE);
+    // Saved for the whole swing: a logout in the air or in the sea comes back on the ship the
+    // swing was heading for, not on the sea tile the cancelled sequence left (review #6312).
+    player.setAttribute(SWING_LANDING_ATTRIBUTE, falls ? swing.shore : [...swing.land, z]);
+    const done = () => {
+      player.setAttribute(SWING_LANDING_ATTRIBUTE, null);
+      swinging.delete(player);
+      player.getMovementQueue?.()?.setBlockMovement?.(false);
+    };
+    const across = 7 + swing.gap + swing.swingDelay;
+    // fever_rope_swing on the hanging rope as the player swings (ticks 873, 1000).
+    const swingRope = () => {
+      const loc = ownedLocAt(player, rope.x, rope.y, rope.z);
+      if (loc) player.getPacketSender().sendObjectAnimation?.(loc, new Animation(ROPE_SWING_ANIM));
+    };
+    const steps = [
+      [4, () => player.sendMessage("You attach a rope to the sails.")],
+      [5, () => { animate(player, ANIM.PICKUP_FLOOR); sound(player, SOUND.JUMP_DOWN); }],
+      [7, () => {
+        player.moveTo(new Location(startX, startY, z));
+        showOwnedLoc(player, SWING_ROPE_LOC, rope.x, rope.y, rope.z, rope.face);
+      }],
+      [7 + swing.gap, () => slide(player, [startX, startY, z], swing.grab, 1, 60, swing.grabAngle)],
+    ];
+    if (!falls) {
+      steps.push(
+        [across, () => {
+          slide(player, [...swing.grab, z], swing.land, 25, 45, swing.angle);
+          swingRope();
+          animate(player, ANIM.SWING_LAND);
+          sound(player, SOUND.SWING_SUCCESS);
+        }],
+        [across + 3, () => {
+          playVariant(player, "dealing-with-the-cannon-using-a-rope-swing");
+          setVarbitValue(player, swing.varbit, 0);
+          done();
+        }],
+        [across + 4, () => hideOwnedLoc(player, rope.x, rope.y, rope.z)],
+      );
+    } else {
+      const [shoreX, shoreY, shoreZ] = swing.shore;
+      steps.push(
+        [across, () => {
+          playVariant(player, "dealing-with-the-cannon-using-a-rope-swing-falling-on-a-rope-swing");
+          setVarbitValue(player, swing.varbit, 0);
+          slide(player, [...swing.grab, z], swing.fall, 25, 45, swing.angle);
+          swingRope();
+          animate(player, ANIM.SWING_FALL);
+          sound(player, SOUND.SWING_FAIL);
+          player.setRunEnergy(0);
+          player.getPacketSender().sendRunEnergy();
+        }],
+        [across + 1, () => hideOwnedLoc(player, rope.x, rope.y, rope.z)],
+        [across + 2, () => {
+          player.moveTo(new Location(swing.fall[0], swing.fall[1], 0));
+          animate(player, ANIM.SWIM);
+          sound(player, SOUND.SPLASH);
+          sound(player, SOUND.SWIM);
+        }],
+        [across + 3, () => {
+          slide(player, [...swing.fall, 0], swing.swim, 1, 50, swing.angle);
+          animate(player, ANIM.SWIM);
+          sound(player, SOUND.SWIM);
+        }],
+        [across + 5, () => {
+          player.moveTo(new Location(shoreX, shoreY, shoreZ));
+          done();
+        }],
+      );
+    }
+    sequence(player, steps);
     return true;
   }
 
@@ -1565,28 +2176,33 @@ module.exports = function registerCabinFeverQuest(api) {
       takePowder(player);
       return true;
     }
-    if (objectId === REPAIR_LOCKER) {
-      if (option !== "open" && option !== "search") return false;
-      if (quest.getStage(player) < STAGE_CANNON || quest.getStage(player) >= STAGE_COMPLETE) {
-        return false;
-      }
+    if (LOCKERS.has(objectId)) {
+      if (option !== "open" || !openLocker(player, objectId, event.object)) return false;
       event.handled = true;
-      openRepairLocker(player);
       return true;
     }
-    if (objectId === GUN_LOCKER) {
-      if (option !== "open" && option !== "search") return false;
-      if (quest.getStage(player) < STAGE_CANNON || quest.getStage(player) >= STAGE_COMPLETE) {
-        return false;
-      }
+    if (OPEN_LOCKERS.has(objectId)) {
+      const handled = option === "search"
+        ? searchLocker(player, objectId)
+        : option === "close" && closeLocker(player, objectId);
+      if (!handled) return false;
       event.handled = true;
-      openGunLocker(player);
       return true;
     }
     const source = PLUNDER_SOURCES.get(objectId);
     if (source) {
       if (option !== "loot" && option !== "plunder" && option !== "ransack") return false;
-      if (quest.getStage(player) !== STAGE_PLUNDER) return false;
+      const stage = quest.getStage(player);
+      if (stage >= STAGE_CANNON && stage < STAGE_PLUNDER && objectId !== ENEMY_CRATE) {
+        // Capture ticks 929 and 934, the chest and the barrel while the enemy cannon still fires.
+        event.handled = true;
+        playVariant(
+          player,
+          "dealing-with-the-cannon-trying-to-plunder-the-chest-or-ransack-the-barrel-before-dealing-with-the-cannon"
+        );
+        return true;
+      }
+      if (stage !== STAGE_PLUNDER) return false;
       if (!lootPlunder(player, source)) {
         event.handled = true;
         return true;
@@ -1597,7 +2213,13 @@ module.exports = function registerCabinFeverQuest(api) {
     if (objectId === CLIMBING_NET_UP) {
       if (option !== "climb") return false;
       event.handled = true;
-      player.moveTo((player.getLocation()?.getX?.() ?? 0) < 1819 ? WEST_YARDARM : EAST_YARDARM);
+      // Capture ticks 842-848 and 979-983: the reach, then the message and the yardarm.
+      const yardarm = (player.getLocation()?.getX?.() ?? 0) < 1819 ? WEST_YARDARM : EAST_YARDARM;
+      animate(player, ANIM.CLIMB_NET);
+      later(player, 2, () => {
+        player.sendMessage("You climb up the net.");
+        player.moveTo(yardarm);
+      });
       return true;
     }
     if (objectId === CLIMBING_NET_DOWN) {
@@ -1701,6 +2323,7 @@ module.exports = function registerCabinFeverQuest(api) {
       CANISTER_ALT,
       CF_CANNON_BALL,
       CANNON_BARREL,
+      BROKEN_CANNON,
       REPAIR_PLANK,
       REPAIR_PLANK_ALT,
       TACKS,
@@ -1718,6 +2341,15 @@ module.exports = function registerCabinFeverQuest(api) {
     skills.addExperiences(Skill.AGILITY, 7000);
     removeQuestSupplies(player);
     giveBookOfPiracy(player);
+    // Live clears the battle's state with the completion (capture tick 2312); the book and
+    // the coins (1763, 1765) stay.
+    for (const varbit of [
+      VARBIT_CANNON_CLEAN, VARBIT_HULL_HOLES, VARBIT_HOLE_1, VARBIT_HOLE_2, VARBIT_HOLE_3, VARBIT_PLUNDER,
+      VARBIT_GUNPOWDER_BARREL, VARBIT_HOLES_PATCHED, VARBIT_HOLES_PROOFED, VARBIT_ENEMY_CANNON,
+    ]) {
+      setVarbitValue(player, varbit, 0);
+    }
+    clearOwnedLocs(player, true);
   }
 
   // ==========================================================================
@@ -1735,7 +2367,28 @@ module.exports = function registerCabinFeverQuest(api) {
       sender.sendConfig(VARP_CANNON_VAR, Number(player.getAttribute(VARP_CANNON_ATTRIBUTE)) || 0);
       sender.sendConfig(VARP_EXTRA_VAR, Number(player.getAttribute(VARP_EXTRA_ATTRIBUTE)) || 0);
       sender.sendConfig(VARP_STORAGE_VAR, Number(player.getAttribute(VARP_STORAGE_ATTRIBUTE)) || 0);
+      if (!hasFlag(player, FLAG_CLEAN_IS_DIRTY)) {
+        // Older saves held fever_cannon_clean the other way up (1 clean, 0 after a shot).
+        const stage = quest.getStage(player);
+        if (stage >= STAGE_CANNON && stage < STAGE_COMPLETE) {
+          setVarbitValue(player, VARBIT_CANNON_CLEAN, varbitValue(player, VARBIT_CANNON_CLEAN) === 1 ? 0 : 1);
+        }
+        setFlag(player, FLAG_CLEAN_IS_DIRTY);
+      }
+      swapCanisterDummy(player);
+      // The quest list's login varps can go out before these varbits are back: re-read the
+      // objective-done step (40/60/80/100/120) from the restored state.
+      syncQuestVarp(player);
     }
+    // A swing cut short by a logout leaves no rope tied to the sail, and the player on the ship
+    // it was heading for.
+    const landing = player.getAttribute(SWING_LANDING_ATTRIBUTE);
+    if (Array.isArray(landing) && landing.length === 3) {
+      player.setAttribute(SWING_LANDING_ATTRIBUTE, null);
+      if (battleStage(player)) player.moveTo(new Location(landing[0], landing[1], landing[2]));
+    }
+    sender.sendVarbit(SWINGS.over.varbit, 0);
+    sender.sendVarbit(SWINGS.back.varbit, 0);
     // Logging out respawns the plundered containers (wiki).
     sender.sendVarbit(VARBIT_CRATE, 0);
     sender.sendVarbit(VARBIT_CHEST, 0);
@@ -1819,6 +2472,7 @@ module.exports = function registerCabinFeverQuest(api) {
   api.persistAttribute(VARP_CANNON_ATTRIBUTE, 0);
   api.persistAttribute(VARP_EXTRA_ATTRIBUTE, 0);
   api.persistAttribute(VARP_STORAGE_ATTRIBUTE, 0);
+  api.persistAttribute(SWING_LANDING_ATTRIBUTE, null);
 
   quest = registerQuest(api, {
     key: "cabin_fever",
@@ -1844,11 +2498,12 @@ module.exports = function registerCabinFeverQuest(api) {
     onReward: grantRewards,
   });
 
-  api.onNpcInteraction("Bill Teach", { "Talk-to": talkToBill });
+  api.onNpcInteraction("Bill Teach", { "Talk-to": talkToBill, "Return-Home": billReturnHome });
   api.onNpcInteraction("Pirate", { "Talk-to": talkToPirate });
   api.onNpcInteraction("Mama", { "Talk-to": talkToMama });
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
+  api.onCustomEvent("npc-dialogue:hook", handleHook);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:condition", handleConditionChosen);
@@ -1875,11 +2530,15 @@ module.exports = function registerCabinFeverQuest(api) {
   api.onObjectInteraction("Repair Locker", {
     Open: delegateObjectInteraction,
     Search: delegateObjectInteraction,
+    Close: delegateObjectInteraction,
   });
   api.onObjectInteraction("Gun Locker", {
     Open: delegateObjectInteraction,
     Search: delegateObjectInteraction,
+    Close: delegateObjectInteraction,
   });
+  api.onInterfaceActionButton(Object.values(REPAIR_BUTTON), repairLockerButton);
+  api.onInterfaceActionButton(Object.values(GUN_BUTTON), gunLockerButton);
   api.onObjectInteraction("Powder Barrel", { "Take-powder": delegateObjectInteraction });
   api.onObjectInteraction("Barrel", {
     Ransack: delegateObjectInteraction,

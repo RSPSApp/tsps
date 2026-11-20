@@ -1,5 +1,5 @@
 /**
- * Sewing leather, snakeskin, Xerician fabric and hides with a needle, the Hunters' Guild meat and fur
+ * Sewing leather, snakeskin, Xerician fabric, hides and splitbark with a needle, the Hunters' Guild meat and fur
  * pouches from fur, and the armour made by
  * adding something to a finished piece: studs, kebbit claws, and hides nailed onto a shield.
  *
@@ -9,6 +9,10 @@
  * makes one item ("You make ..."), the first 2 ticks after choosing it. A reel of thread lasts
  * five items ("You use up one of your reels of thread."); a costume needle needs none. Items
  * above the player's level stay in the menu and answer with a message box when chosen.
+ *
+ * Splitbark takes bark and fine cloth together (Wiki: Splitbark armour and each piece's Creation
+ * table: levels 60-62, 3 ticks, a needle with thread or a costume needle with none). No recording
+ * shows it, so its menu, animation, "You make ..." line and thread use are ours, as leather's.
  */
 const Shared = require("./Shared.Crafting");
 // A combine takes its pieces by id and gives a fresh product: only plain copies count, so a preset piece (PvP
@@ -30,11 +34,23 @@ function data() {
   if (tables) return tables;
   const { ItemIds: I, Animation } = Shared.getCore();
   const { leather, combine } = Shared.DATA;
-  const needle = (recipe) => ({ ...recipe, itemId: Shared.itemId(recipe.item) });
+  // Each recipe's `needs` is every material one item takes: the keyed one, then its `materials`.
+  const needle = (materialId) => (recipe) => ({
+    ...recipe,
+    itemId: Shared.itemId(recipe.item),
+    needs: [[materialId, recipe.leather], ...(recipe.materials ?? []).map(([name, amount]) => [Shared.itemId(name), amount])],
+  });
+  // A needle on any material a menu's recipes take opens that menu (bark or fine cloth for splitbark).
+  const byMaterial = new Map();
+  for (const [material, recipes] of Object.entries(leather)) {
+    if (material === "$comment") continue;
+    const materialId = Shared.itemId(material);
+    const menu = recipes.map(needle(materialId));
+    for (const id of new Set(menu.flatMap((recipe) => recipe.needs.map(([needId]) => needId)))) byMaterial.set(id, menu);
+  }
   return tables = {
     needles: new Set([I.NEEDLE, I.COSTUME_NEEDLE]),
-    leather: new Map(Object.entries(leather).filter(([key]) => key !== "$comment")
-      .map(([material, recipes]) => [Shared.itemId(material), recipes.map(needle)])),
+    leather: byMaterial,
     combine: combine.recipes.map((recipe) => ({
       ...recipe,
       itemId: Shared.itemId(recipe.item),
@@ -47,12 +63,19 @@ function data() {
   };
 }
 
-function hasLeatherMaterials(player, materialId, recipe, needleId) {
+function hasLeatherMaterials(player, recipe, needleId) {
   const I = Shared.getCore().ItemIds;
   const inventory = player.getInventory();
   return inventory.contains(needleId) &&
     (needleId === I.COSTUME_NEEDLE || inventory.contains(I.THREAD)) &&
-    inventory.getAmount(materialId) >= recipe.leather;
+    recipe.needs.every(([id, amount]) => inventory.getAmount(id) >= amount);
+}
+
+/** The most items the menu offers: the fewest carried of the materials its recipes take (the leather carried, for leather). */
+function menuMaximum(player, recipes) {
+  const inventory = player.getInventory();
+  const materials = new Set(recipes.flatMap((recipe) => recipe.needs.map(([id]) => id)));
+  return Math.min(...[...materials].map((id) => inventory.getAmount(id)));
 }
 
 /** One use of the carried reel; the fifth uses it up. A costume needle needs no thread. */
@@ -71,16 +94,16 @@ function useThread(player, needleId) {
   Shared.spam(player, "You use up one of your reels of thread.");
 }
 
-function craftLeatherItem(player, materialId, recipe, needleId) {
-  if (!hasLeatherMaterials(player, materialId, recipe, needleId)) return false;
+function craftLeatherItem(player, recipe, needleId) {
+  if (!hasLeatherMaterials(player, recipe, needleId)) return false;
   const inventory = player.getInventory();
-  inventory.deleteNumber(materialId, recipe.leather);
+  for (const [id, amount] of recipe.needs) inventory.deleteNumber(id, amount);
   inventory.addItem(new (Shared.getCore().Item)(recipe.itemId, 1));
   Shared.addCraftingXp(player, recipe.xp);
   Shared.spam(player, `You make ${recipe.made}.`);
   useThread(player, needleId);
   Shared.getApi().emitCustomEvent("crafting:made", { player, itemId: recipe.itemId });
-  Shared.produced(player, recipe.itemId, 1, recipe.xp, "leather", [[materialId, recipe.leather]]);
+  Shared.produced(player, recipe.itemId, 1, recipe.xp, "leather", recipe.needs);
   return true;
 }
 
@@ -91,7 +114,7 @@ function tooLowStatement(player, level, made) {
     new StatementDialogue(0, `You need a Crafting level of ${level} to make ${made}.`)));
 }
 
-function startLeatherCrafting(player, materialId, recipe, amount, needleId) {
+function startLeatherCrafting(player, recipe, amount, needleId) {
   if (Shared.craftingLevel(player) < recipe.level) {
     tooLowStatement(player, recipe.level, recipe.made);
     return;
@@ -99,8 +122,8 @@ function startLeatherCrafting(player, materialId, recipe, amount, needleId) {
   // Items on ticks 2, 5, 8 ... after the choice; the animation restarts with each one.
   Shared.startMaking(player, {
     amount, startTick: 0, firstTick: 2, interval: 3, animation: data().animation, resetAnimation: true, kind: "leather",
-    has: () => hasLeatherMaterials(player, materialId, recipe, needleId),
-    make: () => craftLeatherItem(player, materialId, recipe, needleId),
+    has: () => hasLeatherMaterials(player, recipe, needleId),
+    make: () => craftLeatherItem(player, recipe, needleId),
   });
 }
 
@@ -113,22 +136,23 @@ function handleNeedleOnLeather(event) {
   const materialId = needleId === usedItemId ? usedWithItemId : usedItemId;
   if (!needles.has(needleId) || !leather.has(materialId)) return;
   event.handled = true;
+  const recipes = Shared.available(leather.get(materialId));
 
   const inventory = player.getInventory();
   if (needleId !== I.COSTUME_NEEDLE && !inventory.contains(I.THREAD)) {
     // ponytail: not in the captures or on the Wiki; replace with the live text when captured.
-    player.sendMessage("You need some thread to sew leather.");
+    const sewn = recipes[0]?.materials ? recipes[0].needs.map(([id]) => Shared.itemName(id).toLowerCase()).join(" and ") : "leather";
+    player.sendMessage(`You need some thread to sew ${sewn}.`);
     return;
   }
 
   Shared.stopCrafting(player);
-  const recipes = Shared.available(leather.get(materialId));
   Shared.openMakeMenu(player, {
     title: LEATHER_MENU_TITLE,
     mode: LEATHER_MENU_MODE,
     items: recipes,
-    maxAmount: inventory.getAmount(materialId),
-    choose: (recipe, amount) => startLeatherCrafting(player, materialId, recipe, amount, needleId),
+    maxAmount: recipes.length ? menuMaximum(player, recipes) : inventory.getAmount(materialId),
+    choose: (recipe, amount) => startLeatherCrafting(player, recipe, amount, needleId),
   });
 }
 

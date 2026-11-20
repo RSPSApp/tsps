@@ -96,7 +96,7 @@
     {"name":"custodia_pass_north_cave_in","id":57220,"display":"Cave","option":"Pass-through","op":1,"x":1270,"y":3434,"z":0,"to":[1259,3430,0],"anim":11580,"animTick":2,"tick":4,"sound":2454,"fade":true,"recordings":1},
     {"name":"custodia_pass_north_cave_out","id":57219,"display":"Cave","option":"Pass-through","op":1,"x":1258,"y":3431,"z":0,"to":[1271,3436,0],"anim":11580,"animTick":2,"tick":4,"sound":2454,"fade":true,"recordings":1},
     {"name":"dagannoth_caveentrance_ice","id":8930,"display":"Cave entrance","option":"Enter","op":1,"x":2542,"y":3740,"z":0,"to":[2545,10143,0],"tick":2,"recordings":3},
-    {"name":"dagannoth_caveentrance_rock","id":8929,"display":"Cave entrance","option":"Enter","op":1,"x":2519,"y":3738,"z":0,"to":[2442,10146,0],"tick":2,"recordings":3},
+    {"name":"dagannoth_caveentrance_rock","id":8929,"display":"Cave entrance","option":"Enter","op":1,"x":2519,"y":3738,"z":0,"to":[2442,10146,0],"tick":2,"warningScreen":1,"recordings":3},
     {"name":"dagannoth_ladder_base_ext2","id":10177,"display":"Iron ladder","option":"Climb","op":1,"x":2546,"y":10143,"z":0,"to":[1799,4406,3],"tick":5,"ask":{"prompt":"Climb up or down the ladder?","options":[{"text":"Climb Up.","ladder":"up"},{"text":"Climb Down.","go":true}],"answer":{"animTick":0,"tick":1}},"recordings":2},
     {"name":"dagannoth_ladder_base_ext2","id":10177,"display":"Iron ladder","option":"Climb-up","op":2,"x":2546,"y":10143,"z":0,"to":[2544,3741,0],"anim":828,"animTick":0,"tick":1,"sound":1620,"fade":true,"recordings":1},
     {"name":"dagannoth_ladder_base_ext2","id":10177,"display":"Iron ladder","option":"Climb-down","op":3,"x":2546,"y":10143,"z":0,"to":[1799,4406,3],"anim":828,"animTick":2,"tick":3,"recordings":7},

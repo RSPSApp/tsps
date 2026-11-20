@@ -146,10 +146,71 @@ const core = PluginManager.getCoreApi();
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   Trident.register(PluginManager.createApi("TridentFullIdRegression"));
+  require("../plugins/items/MagicFang.plugin").register(PluginManager.createApi("MagicFangRegression"));
   require("../plugins/persistence/JsonPlayerPersistence.plugin").register(PluginManager.createApi("TridentPersistenceRegression"));
   PluginManager.createApi("TridentChargePreservation").onCustomEvent("combat:consume-charge", event => {
     if (event.player.getAttribute("test:spare-trident-charge") === true) event.skip = true;
   });
+});
+
+test("magic fangs upgrade only eligible uncharged weapons with a chisel and 59 Crafting", t => {
+  const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
+  const I = core.ItemIdentifiers, p = realActor(t), inventory = p.getInventory();
+  const level = n => p.getSkillManager().setCurrentLevels(core.Skill.CRAFTING, n, false);
+  const seed = (weaponId, chisel = I.CHISEL, meta = null) => {
+    inventory.resetItems();
+    inventory.setItem(0, new Item(I.MAGIC_FANG, 1, meta));
+    inventory.setItem(1, new Item(weaponId, 1, { "test:origin": "kept" }));
+    if (chisel) inventory.setItem(2, new Item(chisel));
+  };
+  for (const [input, output] of [
+    [I.STAFF_OF_THE_DEAD, I.TOXIC_STAFF_UNCHARGED_],
+    [I.UNCHARGED_TRIDENT, I.UNCHARGED_TOXIC_TRIDENT],
+    [I.UNCHARGED_TRIDENT_E_, I.UNCHARGED_TOXIC_TRIDENT_E_],
+  ]) {
+    assert.ok(core.CacheDefinitions.getItem(input));
+    assert.ok(core.CacheDefinitions.getItem(output));
+    for (const reverse of [false, true]) {
+      seed(input, reverse ? I.JEWELLERS_CHISEL : I.CHISEL);
+      for (let slot = 3; slot < 28; slot++) inventory.setItem(slot, new Item(I.SHARK));
+      level(59);
+      const xp = p.getSkillManager().getExperience(core.Skill.CRAFTING);
+      UseItemPacketListener.itemOnItem(p, reverse ? 1 : 0, reverse ? 0 : 1);
+      assert.equal(inventory.getAmount(I.MAGIC_FANG), 0);
+      assert.equal(inventory.get(1).getId(), output);
+      assert.equal(inventory.get(1).getMetaValue("test:origin"), "kept");
+      assert.equal(inventory.getAmount(reverse ? I.JEWELLERS_CHISEL : I.CHISEL), 1);
+      assert.equal(p.getSkillManager().getExperience(core.Skill.CRAFTING), xp);
+      assert.equal(inventory.getAmount(I.SHARK), 25);
+    }
+  }
+  for (const [weapon, crafting, chisel, meta] of [
+    [I.UNCHARGED_TRIDENT, 58, I.CHISEL, null],
+    [I.UNCHARGED_TRIDENT, 59, null, null],
+    [I.TRIDENT_OF_THE_SEAS_FULL_, 99, I.CHISEL, null],
+    [I.TRIDENT_OF_THE_SEAS, 99, I.CHISEL, null],
+    [I.UNCHARGED_TRIDENT, 99, I.CHISEL, { preset: true }],
+    [I.UNCHARGED_TRIDENT, 99, I.CHISEL, { untradeable: true }],
+    [I.UNCHARGED_TRIDENT, 99, I.CHISEL, { unbankable: true }],
+  ]) {
+    seed(weapon, chisel, meta); level(crafting);
+    const before = inventory.getItems().map(item => [item.getId(), item.getAmount(), item.getMeta()]);
+    UseItemPacketListener.itemOnItem(p, 0, 1);
+    assert.deepEqual(inventory.getItems().map(item => [item.getId(), item.getAmount(), item.getMeta()]), before);
+  }
+  seed(I.UNCHARGED_TRIDENT); level(99);
+  inventory.setItem(0, new Item(I.MAGIC_FANG_2));
+  UseItemPacketListener.itemOnItem(p, 0, 1);
+  assert.equal(inventory.getAmount(I.MAGIC_FANG_2), 1, "noted fangs cannot convert");
+  assert.equal(inventory.getAmount(I.UNCHARGED_TRIDENT), 1);
+  for (const key of [Item.PRESET_META, Item.UNTRADEABLE_META, Item.UNBANKABLE_META]) {
+    seed(I.STAFF_OF_THE_DEAD); level(99);
+    inventory.get(1).setMetaValue(key, true);
+    UseItemPacketListener.itemOnItem(p, 0, 1);
+    assert.equal(inventory.getAmount(I.MAGIC_FANG), 1);
+    assert.equal(inventory.get(1).getId(), I.STAFF_OF_THE_DEAD);
+    assert.equal(inventory.get(1).getMetaValue(key), true);
+  }
 });
 
 function realActor(t) {

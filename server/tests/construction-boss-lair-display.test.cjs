@@ -193,6 +193,30 @@ test("a lair without its jar is refused in a message box, then the menu comes ba
   assert.equal(f.furniture.displayObjectId, undefined);
 });
 
+test("picking the lair already shown, or Empty on a blank display, says it's already in that state", (t) => {
+  const f = fixture(t, "lairalready");
+  f.furniture.storage = { [JAR_OF_CHEMICALS]: 1 };
+  f.furniture.displayObjectId = loc("poh_display_hydra");
+  f.house.redrawFurniture();
+  click(f, "Configure");
+  pick(f.player, HYDRA_ROW + 1); // rsprox 2909 tick 4739
+  assert.deepEqual(f.seen.mesboxes, [BossLair.ALREADY]);
+  assert.deepEqual(f.seen.animations, []);
+  TaskManager.process();
+  assert.equal(drawn(f), loc("poh_display_hydra"));
+  // Empty on the blank display gets the same box.
+  f.player.getDialogueManager().advance();
+  f.seen.mesboxes.length = 0;
+  click(f, "Configure");
+  pick(f.player, 0);
+  TaskManager.process();
+  assert.equal(drawn(f), f.object.getId());
+  click(f, "Configure");
+  pick(f.player, 0);
+  assert.deepEqual(f.seen.mesboxes, [BossLair.ALREADY]);
+  assert.deepEqual(f.seen.animations, [832]);
+});
+
 test("a guest can't configure the display", (t) => {
   const f = fixture(t, "lairowner");
   const guest = newPlayer(t, "lairguest");

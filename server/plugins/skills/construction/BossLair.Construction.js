@@ -33,6 +33,8 @@ const TITLE = "Choose a lair";
 const EMPTY = "Empty";
 const NOT_OWNER = "You can only configure the display in your own house.";
 const NO_JAR = "The display does not contain the jar of that creature.";
+/** Picking what the display already shows (rsprox 2909 tick 4739: a message box, no reach). */
+const ALREADY = "It's already in that state.";
 // Setting the display, and taking out the shown lair's jar: the player reaches into the display
 // and the lair changes a tick later (rsprox 2909 ticks 2179-2180 and 2463-2464, 3897 tick 1092).
 const REACH = Ids.seq("human_pickuptable");
@@ -124,6 +126,7 @@ function openLairMenu(player, house, furniture) {
       });
       return;
     }
+    if (index === shownLair(furniture)) return void Menu.refuse(player, Menu.messageBox(ALREADY));
     reachAndShow(player, house, furniture, index);
   });
 }
@@ -154,4 +157,4 @@ function attachBossLair(api) {
   for (const name of names) api.onObjectInteraction(name, { Configure: configureOption });
 }
 
-Object.assign(module.exports, { attachBossLair, afterWithdraw, configure, LAIRS, JARS_ENUM, BLANK, NO_JAR, NOT_OWNER });
+Object.assign(module.exports, { attachBossLair, afterWithdraw, configure, LAIRS, JARS_ENUM, BLANK, NO_JAR, NOT_OWNER, ALREADY });

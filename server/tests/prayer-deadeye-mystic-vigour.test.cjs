@@ -212,7 +212,10 @@ test("their Defence boost stacks with Steel Skin, additively (Wiki)", (t) => {
 test("Deadeye needs 62 Prayer and Mystic Vigour 63 where their slot shows them (Wiki)", (t) => {
   const low = nativePlayer(t, { prayer: 62, attributes: vigour });
   assert.equal(PrayerHandler.canUse(low.player, PrayerData.MYSTIC_MIGHT, true), false);
-  assert.deepEqual(low.messages, ["You need a Prayer level of at least 63 to use Mystic Vigour."]);
+  // The recorded under-level refusal (rsprox 228/02246), a messagebox naming the upgrade.
+  assert.deepEqual(low.dialogues.map((chain) => chain.getDialogues().get(0).getText()),
+    ["You need a <col=000080>Prayer</col> level of 63 to use <col=000080>Mystic Vigour</col>."]);
+  assert.deepEqual(low.messages, []);
   const ok = nativePlayer(t, { prayer: 62, attributes: deadeye });
   assert.equal(PrayerHandler.canUse(ok.player, PrayerData.EAGLE_EYE, true), true);
   const plain = nativePlayer(t, { prayer: 45 });

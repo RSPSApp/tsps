@@ -337,6 +337,13 @@ record): recording 2581's nine Owned slots are exactly its nine `pet_insurance_*
 nothing stored in the menagerie. Examine sends the pet's examine for owned and unowned slots
 alike (2581: "A tiny frost nagua." on the unowned Moxi, slot 61).
 
+Pick-up on a roaming pet takes it back as Take does (rsprox captures 2779-2784, rev 229,
+on Dagannoth Supreme Jr., K'ril Tsutsaroth Jr., the phoenix, Lil' Zik, the rift guardian and
+others): on the tick the owner reaches it the NPC goes, the pet item arrives and its stored bit
+and form varbit clear, with no animation or sound. Only that pet goes; the others keep roaming.
+Ours: a full backpack gets "You don't have enough inventory space." (as Take), a guest's
+Pick-up does nothing, and an account with a bank PIN is asked for it first (as Take).
+
 ### Dungeon and throne room
 
 - **Guards and guardians** stand in for their furniture as NPCs outside building mode and come

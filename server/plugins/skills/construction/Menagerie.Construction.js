@@ -10,7 +10,7 @@ const { examineItem } = require("../../../src/main/typescript/elvarg/game/conten
 // stores it; the pet house's View opens interface 211, whose list shows slot i of enum 985 when
 // bit i of varps 864 / 1416 / 4718 is set, and a click takes the pet back. Toggle sets varbit
 // 2013 (poh_menagerie_closed); stored pets roam the menagerie rooms while it is 0 and the house
-// isn't in building mode.
+// isn't in building mode, and the owner's Pick-up on one takes it back.
 const MENAGERIE_INTERFACE = Ids.iface("poh_menagerie");
 // The Pet list's Read (rsprox captures 2581, 2777, 2782, 2793 and 3121): script 2524 (-1, -1),
 // poh_petlist (210) as the main modal, Examine (op10) on every list slot, then script 647 with
@@ -231,34 +231,90 @@ function withdrawNow(context) {
   api.emitCustomEvent("bank-pin:guard", pin);
   if (pin.locked || pending.get(player) !== context || !safe(context)) return;
   pending.delete(player);
-  if (player.getInventory().getFreeSlots() === 0) return player.sendMessage("You don't have enough inventory space.");
+  takeBack(player, house, slot);
+}
+
+/** Moves a stored pet back to the owner's backpack, clearing its slot and form varbit. */
+function takeBack(player, house, slot, npc = null) {
+  if (player.getInventory().getFreeSlots() === 0) {
+    player.sendMessage("You don't have enough inventory space.");
+    return false;
+  }
+  const slots = stored(player);
   slots.delete(slot);
   player.setAttribute(STORED_ATTRIBUTE, [...slots]);
   player.getInventory().adds(storedPet(player, slot).itemId, 1);
   const forms = {...player.getAttribute(FORMS_ATTRIBUTE)};
   delete forms[slot];
   player.setAttribute(FORMS_ATTRIBUTE, forms);
+  // Only this pet goes; the rest keep roaming where they are.
+  npc ??= [...(roaming.get(house) ?? [])].find(([, roamingSlot]) => roamingSlot === slot)?.[0];
+  if (npc) despawn(house, npc);
   sendStored(player);
   refreshPets(house);
+  return true;
+}
+
+function despawn(house, npc) {
+  roaming.get(house)?.delete(npc);
+  if (!npc.isRegistered()) return;
+  house.leave(npc, false);
+  PluginManager.removeNpc(npc);
+}
+
+/**
+ * Pick-up on a pet roaming the menagerie takes it straight back, as the pet list's Take does
+ * (rsprox captures 2779-2784, rev 229: the NPC goes, the item arrives and the pet's menagerie
+ * varbits clear on the tick the owner reaches it; no animation or sound). Runs ahead of the
+ * Pets plugin's follower Pick-up, which refuses NPCs that aren't the player's follower.
+ */
+function pickUp(event) {
+  const {player, npc} = event;
+  const house = npc && House.houseFor(player);
+  const slot = house ? roaming.get(house)?.get(npc) : undefined;
+  if (slot === undefined || event.definition?.getActions?.()?.[event.clickType - 1] !== "Pick-up") return;
+  event.handled = true;
+  // Ours: a guest's Pick-up does nothing; no recording shows a guest trying.
+  if (house.owner !== player) return;
+  const context = {player, house, slot, npc, itemId: storedPet(player, slot).itemId, origin: player.getLocation().clone()};
+  pending.set(player, context);
+  pickUpNow(context);
+}
+
+function pickUpNow(context) {
+  const {player, house, slot, npc, itemId} = context;
+  if (pending.get(player) !== context || !safe(context) || player.busy() || !stored(player).has(slot) ||
+      storedPet(player, slot).itemId !== itemId || !npc.isRegistered() || roaming.get(house)?.get(npc) !== slot) return;
+  const pin = {player, feature: "poh-menagerie", resume: () => pickUpNow(context)};
+  api.emitCustomEvent("bank-pin:guard", pin);
+  if (pin.locked || pending.get(player) !== context || !safe(context)) return;
+  pending.delete(player);
+  takeBack(player, house, slot, npc);
 }
 
 function clearPending({player}) { pending.delete(player); }
 
-/** Instance.rebuild: stored pets roam the menagerie rooms while the owner lets them. */
+/**
+ * Instance.rebuild: stored pets roam the menagerie rooms while the owner lets them. Only what
+ * changed is touched: pets no longer wanted leave, newly wanted ones spawn, the rest stay put.
+ */
 function refreshPets(house) {
   const out = roaming.get(house) ?? new Map();
   roaming.set(house, out);
-  const owner0 = house.owner;
-  const wanted = owner0 && !house.buildingMode && !owner0.getAttribute(CLOSED_ATTRIBUTE) ? [...stored(owner0)].slice(0, MAX_ROAMING) : [];
-  // Each occupant's rebuild calls this; leave the pets alone unless what should roam changed.
-  if (wanted.length === out.size && [...out].every(([npc, slot]) => npc.isRegistered() && wanted.includes(slot))) return;
-  for (const npc of out.keys()) if (npc.isRegistered()) { house.leave(npc, false); PluginManager.removeNpc(npc); }
-  out.clear();
   const owner = house.owner;
-  if (!owner || house.buildingMode || owner.getAttribute(CLOSED_ATTRIBUTE)) return;
+  const wanted = new Set(owner && !house.buildingMode && !owner.getAttribute(CLOSED_ATTRIBUTE) ? [...stored(owner)].slice(0, MAX_ROAMING) : []);
+  for (const [npc, slot] of [...out]) {
+    if (npc.isRegistered() && wanted.has(slot) && npc.getId() === storedPet(owner, slot)?.npcId) continue;
+    out.delete(npc);
+    if (npc.isRegistered()) { house.leave(npc, false); PluginManager.removeNpc(npc); }
+  }
+  const present = new Set(out.values());
+  const missing = [...wanted].filter(slot => !present.has(slot));
+  if (!missing.length) return;
+  // Each occupant's rebuild calls this; furniture tiles are only needed when a pet spawns.
   const tiles = house.furnitureEntries().filter(entry => MENAGERIE_ROOMS.has(entry.room.roomKey)).map(entry => entry.location);
   if (!tiles.length) return;
-  for (const slot of [...stored(owner)].slice(0, MAX_ROAMING)) {
+  for (const slot of missing) {
     const pet = storedPet(owner, slot);
     if (!pet || pet.npcId < 0) continue;
     const at = tiles[Math.floor(Math.random() * tiles.length)];
@@ -286,6 +342,8 @@ function attachMenagerie(api) {
   api.onObjectInteraction("Pet list", { Read: readPetList });
   api.onItemOnObject(storePet, { noted: false });
   api.onInterfaceActionClick(interfaceClick);
+  // A plain hook: roaming pets are told apart by the house's roaming map, not by name.
+  api.onNpcInteraction(pickUp);
   api.onCustomEvent("pets:held-elsewhere", heldInMenagerie);
   api.onPlayerLogout(clearPending);
   api.onPlayerDisconnect(clearPending);

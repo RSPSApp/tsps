@@ -10,6 +10,7 @@ import { ClueScrollPlugin } from "../../../game/plugins/cluescrolls/ClueScrollPl
 import { BoostsPlugin } from "../../../game/plugins/boosts/BoostsPlugin";
 import { ChatNotificationsPlugin } from "../../../game/plugins/chatnotifications/ChatNotificationsPlugin";
 import { ChatPastePlugin } from "../../../game/plugins/chatpaste/ChatPastePlugin";
+import { ExitGuardPlugin } from "../../../game/plugins/exitguard/ExitGuardPlugin";
 import { ChatFilterPlugin } from "../../../game/plugins/chatfilter/ChatFilterPlugin";
 import { MouseHighlightPlugin } from "../../../game/plugins/mousehighlight/MouseHighlightPlugin";
 import { RegenMeterPlugin } from "../../../game/plugins/regenmeter/RegenMeterPlugin";
@@ -115,6 +116,8 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     ObjectIndicatorsPlugin,
     ChatNotificationsPlugin,
     ChatPastePlugin,
+    // Not order-sensitive; it only ever intercepts the browser's own navigation.
+    ExitGuardPlugin,
     TimestampPlugin,
     ChatFilterPlugin,
     // Rewrites drawn text only; after the chat plugins, whose chatbox callbacks it shares.

@@ -28,7 +28,7 @@ login, and Mining's `mining:ore` event it listened to is now `storage:gather`.
 
 As with the rune pouch, a container's contents live on the player in the attribute
 `storage-items:<family>` (`coal-bag`, `gem-bag`, `gem-pouch`, `gem-sack`, `fish-barrel`, `log-basket`, `forestry-kit`,
-`plank-sack`, `tackle-box`, `meat-pouch`, `fur-pouch`), not on the item. Every copy a player owns shares one store (Wiki: Fish barrel,
+`plank-sack`, `tackle-box`, `meat-pouch`, `fur-pouch`, `flamtaer-bag`, `coffin`), not on the item. Every copy a player owns shares one store (Wiki: Fish barrel,
 Log basket, Tackle box). The open and closed variants are the same container (`Coal bag` /
 `Open coal bag` and so on); Open and Close swap the item in place.
 
@@ -43,6 +43,8 @@ Log basket, Tackle box). The open and closed variants are the same container (`C
 | Forestry kit (and the kit in a forestry basket) | enum 817: bark, nature offerings, rations, secateurs attachment, leaves | carried or worn: Forestry bark and leaves | the Forestry Shop's bark |
 | Plank sack | 28 planks | always: sawmill planks | Construction, after the inventory's planks |
 | Tackle box | 35 kinds of tackle (`data/storage-items.json`) | - | fishing bait only; gear has to come out first |
+| Flamtaer bag | 60 timber beams, 60 limestone bricks and 500 swamp paste | - | the Flamtaer temple repair, after the inventory's materials |
+| Coffin | 3/8/14/20/28 shade remains by bronze/steel/black/silver/gold tier | open: picked-up remains | funeral pyres after the remains are emptied |
 | Small and large meat pouch | 14 / 28 raw hunter meats (`hunterMeat`; no raw bird meat), by the largest carried | open: Hunter catches | - |
 | Small, medium and large fur pouch | 14 / 21 / 28 hunter furs (`hunterFur`; no tatty or combat fur), by the largest carried | open: Hunter catches | - |
 
@@ -139,6 +141,12 @@ inventory option, even from the bank panel; it now leaves the bank panel's ops t
 | Tackle box | "The tackle box cannot hold itself! How weird would that be?" | Wiki |
 | Meat pouch | the lines in "Meat and fur pouches" above | captured (rev 242) |
 | Fur pouches | the meat pouch's lines with "fur" | Ours (not captured) |
+| Flamtaer bag | "The bag takes timber beams, not planks." | Wiki (trivia); Fill, Check and Empty wording ours |
+| Coffin | "You hand over the coffin and lock to Dampe." / "You hear him clumsily attach the lock to the coffin." / "Finished, take it." / "Dampe hands you a broken coffin." | Wiki Transcript:Dampe; the remaining Fill, Empty, Check, Open/Close and Remove-lock wording is ours |
+
+## Coffins and the Flamtaer bag
+
+Dampe's transcript supplies his dialogue. The broken coffin is handed out once (he refuses a second while any coffin is owned, bank included), and locks are fitted from the dialogue or by using them on him. A lock below the coffin's tier does not downgrade it and is not consumed. Remove lock (Configure) returns the tier's lock, turns the coffin back into a broken one and loses the stored remains. An open coffin takes remains picked up from the floor; Empty withdraws the highest tier first. The quest's temple repair counts a carried bag's materials after the inventory's and takes them through `storage:amount` / `storage:take`. The bag is lost with its contents on death.
 
 The barrel's and basket's Check opens a box that starts "The barrel contains:" or "The basket
 contains:" and lists "# x Item" per kind.

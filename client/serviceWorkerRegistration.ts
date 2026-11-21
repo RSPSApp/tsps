@@ -4,6 +4,8 @@ const serviceWorkerBase =
 const SERVICE_WORKER_URL = `${serviceWorkerBase ?? ""}/service-worker.js?v=5`;
 
 export function registerServiceWorker(): void {
+    // Desktop bundles are cached and rolled back by the native updater.
+    if (typeof window !== "undefined" && window.__RSPS_DESKTOP_PROFILE__) return;
     const isProd = typeof process !== "undefined" && process.env?.NODE_ENV === "production";
     if (!isProd) return;
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;

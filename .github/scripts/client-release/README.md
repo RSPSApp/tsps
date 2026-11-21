@@ -15,7 +15,12 @@ version races. GitHub may coalesce pending runs during rapid pushes.
 
 The build job checks the client, prepares its active game cache for compilation,
 and produces generic web assets without owner-specific configuration. The signed
-update archive excludes the installed OSRS cache and launcher branding.
+update archive includes `caches/caches.json` to pin the matching cache selection,
+while excluding game cache data and launcher branding. Desktop clients reuse the
+browser's cache loader, fetching versioned data from `https://rsps.app/play/caches/`
+and retaining it locally. Browser loading stays unchanged. `REACT_APP_CACHE_BASE_URL`
+can move data to a CDN in a future web-client release without rebuilding wrappers;
+desktop cache selection still comes from the installed release's `caches.json`.
 
 A separate publishing job uses the existing `production` environment, restricted
 to `main`. It signs the manifest, uploads the archive, manifest and detached

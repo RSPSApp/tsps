@@ -179,8 +179,16 @@ module.exports = function attachTithe(context) {
     return request.complete === true;
   }
 
-  /** The variant a dialogue line or action belongs to, when it is this page's. */
+  /**
+   * The variant a dialogue line or action belongs to, when it is this page's. `pages` lists every page that reaches
+   * the NPC, so the transcript being played (`playing`) decides first: Vanstrom's In Search of the Myreque talk is not
+   * this page's castle scene (#6412).
+   */
   function variantOf(event, page = PAGE) {
+    if (event?.playing?.page) {
+      if (event.playing.page !== page) return null;
+      if (event.playing.variant) return event.playing.variant;
+    }
     const entry = Array.isArray(event?.pages) ? event.pages.find((candidate) => candidate?.page === page) : null;
     return entry?.variants?.[0] ?? null;
   }

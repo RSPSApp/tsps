@@ -591,6 +591,7 @@ export class PlayerSession {
             ? { x: positionToFace.getX(), y: positionToFace.getY() }
             : undefined),
           crawl: npc.isCrawling?.() || undefined,
+          jump: npc.isTeleportingWithoutJump?.() ? false : undefined,
           modelCustomisation: npc.getModelCustomisationForUpdate?.() ?? undefined,
           typeCustomisation: npc.getTypeCustomisationForUpdate?.() ?? undefined,
           baseAnimations: npc.getBaseAnimationsForUpdate?.() ?? undefined,

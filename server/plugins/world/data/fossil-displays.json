@@ -1,0 +1,55 @@
+{
+  "_source": "rsprox captures local 1000338 and 1000342, and 1843 (rev 227): Add to on the Varrock Museum's lowest-floor fossil displays, each state rise, the missing-part line, the completion box, Kudos and lamp. Wiki (Kudos; Antique lamp (fossil display)): 36 displays, 2 Kudos each, the lamps' experience and level.",
+  "_displays": "Every display's clickable loc(s), by its number (its state varbit is fossil_vm_display_<n>_state). The big displays 27-30 are clicked on their support half (the b loc); 25 is two halves.",
+  "displays": {
+    "1": ["fossil_vm_display_1"], "2": ["fossil_vm_display_2"], "3": ["fossil_vm_display_3"],
+    "4": ["fossil_vm_display_4"], "5": ["fossil_vm_display_5"], "6": ["fossil_vm_display_6"],
+    "7": ["fossil_vm_display_7"], "8": ["fossil_vm_display_8"], "9": ["fossil_vm_display_9"],
+    "10": ["fossil_vm_display_10"], "11": ["fossil_vm_display_11"], "12": ["fossil_vm_display_12"],
+    "13": ["fossil_vm_display_13"], "14": ["fossil_vm_display_14"], "15": ["fossil_vm_display_15"],
+    "16": ["fossil_vm_display_16"], "17": ["fossil_vm_display_17"], "18": ["fossil_vm_display_18"],
+    "19": ["fossil_vm_display_19"], "20": ["fossil_vm_display_20"], "21": ["fossil_vm_display_21"],
+    "22": ["fossil_vm_display_22"], "23": ["fossil_vm_display_23"], "24": ["fossil_vm_display_24"],
+    "25": ["fossil_vm_display_25_left", "fossil_vm_display_25_right"], "26": ["fossil_vm_display_26"],
+    "27": ["fossil_vm_display_27b"], "28": ["fossil_vm_display_28b"], "29": ["fossil_vm_display_29b"],
+    "30": ["fossil_vm_display_30b"], "31": ["fossil_vm_display_31"], "32": ["fossil_vm_display_32"],
+    "33": ["fossil_vm_display_33"], "34": ["fossil_vm_display_34"], "35": ["fossil_vm_display_35"],
+    "36": ["fossil_vm_display_36"]
+  },
+  "_names": "The cache names of the displays' unfinished states (each with Add to), and the fossil set each takes.",
+  "names": {
+    "Small Fossil Display": "small",
+    "Medium Fossil Display": "medium",
+    "Large Fossil Display": "large",
+    "Large Fossil Support": "large",
+    "Plant Fossil Display": "plant"
+  },
+  "_pieces": "State n takes piece n + 1 (recorded: state 0 limbs or roots, 1 spine, 2 ribs, 3 pelvis, 4 skull, one per click). The plant order past the roots is the same numbering, not recorded.",
+  "pieces": {
+    "small": ["fossil_small_1", "fossil_small_2", "fossil_small_3", "fossil_small_4", "fossil_small_5"],
+    "medium": ["fossil_medium_1", "fossil_medium_2", "fossil_medium_3", "fossil_medium_4", "fossil_medium_5"],
+    "large": ["fossil_large_1", "fossil_large_2", "fossil_large_3", "fossil_large_4", "fossil_large_5"],
+    "plant": ["fossil_plant_1", "fossil_plant_2", "fossil_plant_3", "fossil_plant_4", "fossil_plant_5"]
+  },
+  "_lamps": "Wiki (Antique lamp (fossil display)): small 2,000 XP at level 20, medium 3,500 at 30, large and plant 5,000 at 35, any skill. A plant display gives the large lamp (recorded, display 34).",
+  "lamps": {
+    "small": "fossil_display_reward_lamp_small",
+    "medium": "fossil_display_reward_lamp_medium",
+    "large": "fossil_display_reward_lamp_large",
+    "plant": "fossil_display_reward_lamp_large"
+  },
+  "lampRewards": {
+    "fossil_display_reward_lamp_small": { "xp": 2000, "minLevel": 20 },
+    "fossil_display_reward_lamp_medium": { "xp": 3500, "minLevel": 30 },
+    "fossil_display_reward_lamp_large": { "xp": 5000, "minLevel": 35 }
+  },
+  "kudos": 2,
+  "complete": 5,
+  "anim": "human_pickuptable",
+  "sound": 2739,
+  "_messages": "Recorded. The missing-part line has two spaces after the colon on every recording.",
+  "messages": {
+    "missing": "You're missing part of the display:  {name}.",
+    "complete": "Congratulations, you have completed this display!"
+  }
+}

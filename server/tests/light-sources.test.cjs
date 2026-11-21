@@ -7,9 +7,10 @@
 // OilLights.plugin.js and the black candle through Merlin's Crystal; they are controls here.
 // Captured (rsprox 70 tick 1626 and 75 tick 11666, rev 227): the torch is lit by the tinderbox (590) on the
 // unlit torch (596) with the game message "You light your torch.", the slot becoming 594 in the same tick,
-// and no sequence or sound. NO capture of any other item was found (rsprox 1694, 1633, 392 and 2902 decoded:
-// braziers and fires only), so the others get no message and no animation, and the level refusal's wording is
-// OilLights' (uncaptured).
+// and no sequence or sound. NO capture of any other LightSources item was found (rsprox 1694, 1633, 392 and
+// 2902 decoded: braziers and fires only), so the others get no message and no animation, and the level refusal's
+// wording is OilLights' (uncaptured). The oil, bullseye and sapphire lanterns' light and Extinguish lines are
+// captured; their tests are at the end of this file.
 // Native fixture: the click goes through ClientConnection.dispatch as the decoded "inventory_use_on" packet.
 // Native plugin loading excludes PlayerBots and its dependent BountyHunter.
 const assert = require("node:assert/strict");
@@ -562,4 +563,58 @@ test('assembly uses the selected later lantern and candle in a full inventory', 
     assert.equal(idAt(f, 27), -1);
     assert.equal(carried(f).length, 27);
   }
+});
+
+/** Typed chat lines and synth sounds the actor was sent, as [chatType, text] and sound ids. */
+function watchLanternPackets(t, f) {
+  const typed = [];
+  const sounds = [];
+  t.mock.method(f.p.getPacketSender(), "sendTypedMessage", (type, text) => { typed.push([type, text]); return f.p.getPacketSender(); });
+  t.mock.method(f.p.getPacketSender(), "sendSound", (id) => { sounds.push(id); return f.p.getPacketSender(); });
+  return { typed, sounds };
+}
+
+// rsprox captures: local 1000195 ticks 17050 and 17056 (bullseye, oil lantern; rev 227), index 1698, 3015 and
+// 3016 (sapphire lantern; rev 226-231): "You light the lantern." as a spam line and synth 3226 in the click
+// tick, with no player sequence.
+for (const [label, unlit, lit, level] of CONTROLS.filter(([label]) => label !== "oil lamp")) {
+  test(`${label}: lighting it says 'You light the lantern.' as spam, plays sound 3226 and no animation`, async (t) => {
+    const f = actor(t, level);
+    const seen = watchLanternPackets(t, f);
+    f.inv.setItem(0, item(unlit));
+    f.inv.setItem(1, item(I.TINDERBOX));
+    await useOn(f, 1, 0);
+    assert.deepEqual(carried(f), [lit, I.TINDERBOX]);
+    assert.deepEqual(seen.typed, [[core.ChatType.SPAM, "You light the lantern."]]);
+    assert.deepEqual(seen.sounds, [3226]);
+    assert.deepEqual(f.animations, []);
+  });
+}
+
+// rsprox captures: bullseye lantern as a game message (95, 1754, local 1000448 tick 17210), oil lantern and
+// sapphire lantern as spam (local 1000195 tick 17060, local 1000448 tick 17214).
+for (const [label, unlit, lit, type] of [
+  ["oil lantern", I.OIL_LANTERN, I.OIL_LANTERN_3, "SPAM"],
+  ["bullseye lantern", I.BULLSEYE_LANTERN, I.BULLSEYE_LANTERN_3, "GAME"],
+  ["sapphire lantern", I.SAPPHIRE_LANTERN_2, I.SAPPHIRE_LANTERN_3, "SPAM"],
+]) {
+  test(`${label}: Extinguish says 'You extinguish the lantern.' (${type})`, async (t) => {
+    const f = actor(t, 99);
+    const seen = watchLanternPackets(t, f);
+    f.inv.setItem(0, item(lit));
+    await extinguish(f, 0);
+    assert.deepEqual(carried(f), [unlit]);
+    assert.deepEqual(seen.typed, [[core.ChatType[type], "You extinguish the lantern."]]);
+  });
+}
+
+test("the oil lamp, whose lighting was not captured, keeps its sequence and gets no lantern line", async (t) => {
+  const f = actor(t, 12);
+  const seen = watchLanternPackets(t, f);
+  f.inv.setItem(0, item(I.OIL_LAMP));
+  f.inv.setItem(1, item(I.TINDERBOX));
+  await useOn(f, 1, 0);
+  assert.deepEqual(carried(f), [I.OIL_LAMP_3, I.TINDERBOX]);
+  assert.deepEqual(seen.typed, []);
+  assert.deepEqual(f.animations.map((a) => a.getId()), [733]);
 });

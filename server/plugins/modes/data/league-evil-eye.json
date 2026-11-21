@@ -76,7 +76,7 @@
     {"name": "Chaos Fanatic", "x": 2979, "y": 3846, "z": 0, "source": "npc-spawns.json Chaos Fanatic spawn = Wiki pin = ::teleports (surface boss)."},
     {"name": "Corporeal Beast", "x": 2966, "y": 4252, "z": 2, "source": "plugins/bosses/corporealbeast/Shared.CorporealBeast.js LOBBY (the ::teleports Corporeal Beast spot), before the Passage to the beast."},
     {"name": "Crazy Archaeologist", "x": 2977, "y": 3702, "z": 0, "source": "npc-spawns.json Crazy archaeologist spawn = Wiki pin = ::teleports (surface boss)."},
-    {"name": "King Black Dragon", "x": 3017, "y": 3850, "z": 0, "source": "plugins/bosses/KingBlackDragon.plugin.js KING_BLACK_DRAGON_LADDER (lever return 'north of that ladder'), beside the Lava Maze Ladder 18987 at 3017,3849, which in this server leads straight into the lair."},
+    {"name": "King Black Dragon", "x": 3017, "y": 3850, "z": 0, "source": "The open tile north of the Lava Maze Ladder 18987 at 3017,3849, the way down to the spider room and its lever into the lair (plugins/bosses/KingBlackDragon.plugin.js)."},
     {"name": "Scorpia", "x": 3233, "y": 3950, "z": 0, "source": "plugins/bosses/wildernessbosses/Scorpia.WildernessBosses.js WAYS[1] pit arrival, beside Cavern 26762 (3231-3234,3951-3952) in the Scorpion Pit."},
     {"name": "Spindel", "x": 3182, "y": 3745, "z": 0, "source": "wilderness-bosses.json lairs[spindel].entrance.stand, by Cave Entrance 47078 at 3183,3744."},
     {"name": "Venenatis", "x": 3320, "y": 3796, "z": 0, "source": "wilderness-bosses.json lairs[venenatis].entrance.stand, by Cave Entrance 47077 at 3321,3794."},

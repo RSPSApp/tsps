@@ -157,9 +157,12 @@ Charging (rsprox, the user's recordings local 1001250 tick 724 and local 1001295
 - The result is an objectbox with the charged staff: "You apply N charges to your Sanguinesti
   staff." Its text also goes to the chat.
 - The Charge option (both versions) isn't recorded. Ours asks the same, as Tonalztics of Ralos'
-  recorded Charge asks as its material does. (local 1001250 tick 721 is op3, Wield, on the
-  uncharged staff: "Your Sanguinesti staff (uncharged) has no charges! You can use blood runes to
-  power the staff." That refusal isn't implemented here.)
+  recorded Charge asks as its material does.
+
+Wield on the uncharged staff is refused, nothing equipped, with the game message "Your Sanguinesti
+staff (uncharged) has no charges! You can use blood runes to power the staff." (local 1001250
+tick 721, op3, rev 231). The Wiki doesn't mention it. Ours: the Holy sanguinesti staff (uncharged)
+refuses the same way with its own name; that isn't recorded.
 
 Check: "Your Sanguinesti staff has N charges remaining." (rsprox 4151 tick 101, 4288 tick 26539).
 

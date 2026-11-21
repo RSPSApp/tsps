@@ -25,7 +25,9 @@ const {
 const resolvers = [];
 const itemActions = new Map();
 const hitResolved = [];
+let canEquip = null;
 Sanguinesti.register({
+    onCanEquip: (handler) => { canEquip = handler; },
     emitCustomEvent() {},
     core: PluginManager.getCoreApi(),
     registerCombatMethodResolver: (resolver) => resolvers.push(resolver),
@@ -372,4 +374,24 @@ test('magic lands 1 + (1 + distance) / 3 ticks after the cast, edge to edge; bar
     const npcCaster = (x) => ({ isPlayer: () => false, getLocation: () => new Location(x, 3200, 0), getSize: () => 1 });
     assert.equal(delay(npcCaster(3201), npc(3200, 3200)), 2, 'an NPC casting from 1 tile');
     assert.equal(delay(npcCaster(3210), npc(3200, 3200)), 5, 'an NPC casting from 10 tiles');
+});
+
+test('wielding an uncharged staff is refused with the recorded message (local 1001250 tick 721)', () => {
+    for (const [id, name] of [
+        [I.SANGUINESTI_STAFF_UNCHARGED_, 'Sanguinesti staff (uncharged)'],
+        [I.HOLY_SANGUINESTI_STAFF_UNCHARGED_, 'Holy sanguinesti staff (uncharged)'],
+    ]) {
+        const messages = [];
+        const event = { player: { sendMessage: (m) => messages.push(m) }, slot: Equipment.WEAPON_SLOT, item: new Item(id, 1), allow: null };
+        canEquip(event);
+        assert.equal(event.allow, false);
+        assert.deepEqual(messages, [`Your ${name} has no charges! You can use blood runes to power the staff.`]);
+    }
+    for (const id of [I.SANGUINESTI_STAFF, I.HOLY_SANGUINESTI_STAFF, I.TRIDENT_OF_THE_SEAS]) {
+        const messages = [];
+        const event = { player: { sendMessage: (m) => messages.push(m) }, slot: Equipment.WEAPON_SLOT, item: new Item(id, 1), allow: null };
+        canEquip(event);
+        assert.equal(event.allow, null);
+        assert.deepEqual(messages, []);
+    }
 });

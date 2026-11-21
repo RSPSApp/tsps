@@ -420,9 +420,9 @@ test("too low a level is a message box; impure iron is lost", (t) => {
   assert.equal(player.xp, 0);
 });
 
-// Wiki (Furnace, Clay forge, Volcanic Furnace, Lava forge, Ancient Furnace): furnaces under other names.
-test("the Clay forge, Volcanic Furnace, Lava forge and Ancient Furnace smelt like any furnace", () => {
-  for (const name of ["Clay forge", "Volcanic Furnace", "Lava forge", "Ancient Furnace"]) {
+// Wiki (Furnace, Clay forge, Volcanic Furnace, Lava forge, Ancient Furnace, Forge (Cam Torum)): furnaces under other names.
+test("the Clay forge, Volcanic Furnace, Lava forge, Ancient Furnace and Cam Torum's Forge smelt like any furnace", () => {
+  for (const name of ["Clay forge", "Volcanic Furnace", "Lava forge", "Ancient Furnace", "Forge"]) {
     assert.equal(typeof objects.get(name)?.Smelt, "function", `${name} has Smelt`);
     const player = furnaceWith([[I.COPPER_ORE, 1], [I.TIN_ORE, 1]]);
     objects.get(name).Smelt({ player });

@@ -689,6 +689,22 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       closeTicks: 2,
       openSoundId: 71,
     }),
+    // Ardougne Sewers gate (picklock3_l/_r), rsprox capture 1625 (rev 226) ticks 2003-2005 and 2512-2515: the
+    // clicked leaf alone swaps for inviswall 38848 and its open leaf (inacmetalgateopenr) the tile east, sound 71,
+    // the player walks across and the leaf is back two ticks later. Only the south leaf (9714) was captured; the
+    // north leaf takes inacmetalgateopenl turned the other way, as the kitchen gate's pair does (Ours). The lock
+    // from the west is skills/thieving/LockedDoors.Thieving.js (door:toggle), which opens it through door:open.
+    ...[
+      [O.GATE_100, 9714, NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_LEFT_OPEN, 3],
+      [O.GATE_99, 9715, NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_RIGHT_OPEN, 1],
+    ].map(([id, y, openId, openFace]) => Object.freeze({
+      closed: [[id, 2655, y, 0, 2]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2655, y, 0, 2], [openId, 2656, y, 0, openFace]],
+      crossX: 2656,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 71,
+    })),
     // Camelot castle's grounds gate (kr_camelot_metalgateclosedl/r), crossed both ways in the user's rsprox captures
     // (local 1001994 ticks 16536-16541, 17415-17419 and 17539-17543, local 1001800 ticks 23184 and 23277; rev 242):
     // Open puts inviswall 38848 on both gate tiles and the nameless open leaves on the tiles north, sound 69
@@ -860,6 +876,22 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       ],
       crossX: 2848,
       carry: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
+    // Forthos Dungeon's east Temple Door (hosdun_east_door at 1825,9973, face 0; rsprox capture 3926
+    // ticks 613-616): inviswall on the doorway and hosdun_grubby_door_open on the tile west, sound
+    // 62, the opener's plain walk step east (no exactmove in player_info, tick 614) over the
+    // clipped doorway, and the door back two ticks later. Only eastward, and only through
+    // door:open: areas/ForthosDungeon.plugin.js owns the one-way rule.
+    Object.freeze({
+      closed: [[core.CacheDefinitions.getLocId("hosdun_east_door"), 1825, 9973, 0, 0]],
+      opened: [
+        [core.CacheDefinitions.getLocId("hosdun_grubby_door_open"), 1824, 9973, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 1825, 9973, 0, 0],
+      ],
+      crossX: 1825,
+      walkOver: true,
       closeTicks: 2,
       openSoundId: 62,
     }),

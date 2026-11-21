@@ -69,8 +69,12 @@ export function processWidgetClickInput(
                 (uid) => widgetManager?.getWidgetByUid(uid),
             );
             // A custom window's search box: a left-click on it focuses it and a click anywhere
-            // else blurs it, as the right-click menu path does (WidgetActionRouter).
-            const topHit = clickHits[clickHits.length - 1];
+            // else blurs it, as the right-click menu path does (WidgetActionRouter). What was
+            // clicked is the top widget offering an op, as the click below decides: the top hit
+            // itself can be an empty layer over the whole screen (the resizable frame's 161:98),
+            // which would make every click, the search box's own, a click elsewhere.
+            const topHit = [...clickHits].reverse().find((w: any) => offersMenuOp(w, getWidgetFlags, getWidgetOpMask))
+                ?? clickHits[clickHits.length - 1];
             deps.getCustomInterfaces?.()?.handleWidgetClick?.(
                 topHit ? ((topHit.groupId ?? topHit.uid >>> 16) | 0) : -1,
                 !topHit ? -1

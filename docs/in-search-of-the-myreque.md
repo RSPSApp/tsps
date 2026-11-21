@@ -54,6 +54,9 @@ Varbits:
   repaired in order). Completing the quest sets all four (1617), so the bridge stays repaired.
 - **396** (`thsfm_vanstrom_hide`): 1 as the cutscene opens. The pub's stranger (NPC 6269) shows Vanstrom (5056) at
   0 and the plain Stranger (5055) at 1.
+- **Vanstrom's head in the pub** (9-184, both talks): the multi stranger (6269), which shows his human form
+  (5056) at varbit 396 = 0; never the cutscene vampyre (9632), which is In Aid of the Myreque's castle scene head
+  only (#6412).
 - **2496** (`thsfm_spoken_allmyreque`): a bit per member on their first talk: Sani 1, Harold 2, Radigad 4,
   Polmafi 8, Ivan 16.
 - **Completion** clears the whole of varp 388 (`routequestmulti`: 173, 174, 176-178, 396, 2496, 3928), then sets
@@ -110,6 +113,9 @@ Varbits:
   (3511,9842)), `cam_forceangle` (160, 960) and the camera (move (3506,9845) 555, look (3505,9832) 85); the fade
   in two ticks later; the mist (5057) on (3504,9832) two ticks after that; Harold's "What the..." six ticks after
   the scene opens.
+  - **Chatheads** (1307-1359): every line in the copy has its speaker's cutscene actor as the head: Harold 9625,
+    Veliaf 9621, Sani 9623 and Vanstrom `route_vanstrom_vampire` (9632). The plugin sets them on the lines while the
+    scene is open (#6412).
   - After "Vampyre!": `mist_loop_test` (4374); the mist drifts two tiles north; three ticks on it is Vanstrom
     (9632) on (3505,9835), `vyrelord_transform_pt2` (8745) and `mory_vanstrom_mist_transform_return` (4358).
   - Each blood barrage, after "We're dead!" (Sani) and before "And now...": Vanstrom faces the victim a tick after

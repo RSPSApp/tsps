@@ -176,6 +176,50 @@ function warnOfRoomRemoval(removal) {
   else removal.warning = stairs.down ? BASEMENT_LEVEL : null;
 }
 
+/**
+ * Remove-room on stair furniture removes the room at its other end (rsprox.net recs 2551, 2608,
+ * 2611, 2613, 2617, 2620, 2621, 2632, 3897 and local 1001030, rev 229-235): stairs up take the
+ * room above, stairs down the room below, and a spiral staircase asks "Remove which room?" (Room
+ * above / Room below). The room then goes as through its door hotspot: the floor warning, "Remove
+ * the skill hall?", "Room deleted!". Out of building mode, with no room there, or with this room
+ * resting on the one below, a message box refuses.
+ */
+function removeRoom(event) {
+  const player = event.player;
+  const house = House.houseFor(player);
+  if (!house) return false;
+  const furniture = house.getFurnitureAt(event.location, event.objectId, event.object?.getType() ?? 10);
+  const stairs = furniture && STAIRS[furniture.buildableKey];
+  const position = stairs && house.getRoomPositionAt(event.location);
+  if (!position) return false;
+  if (!House.isBuildingMode(player)) {
+    Menu.refuse(player, Menu.messageBox("You can only do that in building mode."));
+    return true;
+  }
+  if (stairs.up && stairs.down) {
+    api.sendMultiChatboxPrompt(player, "Remove which room?",
+      "Room above", () => removeRoomThrough(player, house, position, true),
+      "Room below", () => removeRoomThrough(player, house, position, false));
+  } else removeRoomThrough(player, house, position, !!stairs.up);
+  return true;
+}
+
+function removeRoomThrough(player, house, position, up) {
+  if (House.houseFor(player) !== house || !House.isBuildingMode(player)) return;
+  const target = { ...position, plane: position.plane + (up ? 1 : -1) };
+  if (target.plane < BASEMENT || target.plane > TOP_FLOOR || !house.getRoom(target)) {
+    // Ours: only "There is no room above to remove." is captured; the room below's line mirrors it.
+    Menu.refuse(player, Menu.messageBox(`There is no room ${up ? "above" : "below"} to remove.`));
+    return;
+  }
+  // Removing the ground floor room under this one (rec 2608, tick 34).
+  if (!up && target.plane === 1) {
+    Menu.refuse(player, Menu.messageBox("The room below is supporting this room!"));
+    return;
+  }
+  House.removeRoomPrompt(player, house, target);
+}
+
 function climbUp(event) { return climb(event, "up"); }
 function climbDown(event) { return climb(event, "down"); }
 
@@ -223,11 +267,11 @@ function furnitureClimbs(event) {
 function attachStairs(api) {
   api.onCustomEvent("ladders:climb", claimClimb);
   api.onCustomEvent("construction:room-removing", warnOfRoomRemoval);
-  api.onObjectInteraction("Staircase", { "Climb-up": climbUp, "Climb-down": climbDown, Climb: climbEither });
-  api.onObjectInteraction("Dungeon entrance", { Enter: climbDown });
-  api.onObjectInteraction("Ladder", { Climb: climbUp });
+  api.onObjectInteraction("Staircase", { "Climb-up": climbUp, "Climb-down": climbDown, Climb: climbEither, "Remove-room": removeRoom });
+  api.onObjectInteraction("Dungeon entrance", { Enter: climbDown, "Remove-room": removeRoom });
+  api.onObjectInteraction("Ladder", { Climb: climbUp, "Remove-room": removeRoom });
   for (const name of ["Oak trapdoor", "Teak trapdoor", "Mahogany trapdoor"]) {
-    api.onObjectInteraction(name, { Open: openTrapdoor, Close: closeTrapdoor, "Go-down": climbDown });
+    api.onObjectInteraction(name, { Open: openTrapdoor, Close: closeTrapdoor, "Go-down": climbDown, "Remove-room": removeRoom });
   }
 }
 

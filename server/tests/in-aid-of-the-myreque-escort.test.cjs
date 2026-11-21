@@ -115,7 +115,12 @@ function record(f) {
   };
 }
 
-function tick(f) {
+/**
+ * One world tick. With `npcs`, the player's own NPCs also run their real process() (combat
+ * included) after the plugins' tasks and before the update resets placement, as World does:
+ * that is where an attack on a just-moved mobile is dropped.
+ */
+function tick(f, { npcs = false } = {}) {
   f.tick++;
   core.World.processCycle++;
   core.TaskManager.process();
@@ -123,12 +128,15 @@ function tick(f) {
   AreaManager.process(f.player);
   core.TaskManager.processWalkTo(f.player.getIndex());
   f.player.getMovementQueue().process();
+  const own = npcs ? [...core.World.getNpcs()].filter((npc) => npc?.isRegistered?.() && npc.getOwner?.() === f.player) : [];
+  for (const npc of own) npc.process();
   f.player.getSession().flushClient(core.World.processCycle);
   f.player.resetUpdating();
+  for (const npc of own) npc.resetUpdating();
   const line = shown(f);
   if (line && f.said.at(-1)?.text !== line.text) f.said.push({ tick: f.tick, ...line });
 }
-const ticks = (f, count) => { for (let i = 0; i < count; i++) tick(f); };
+const ticks = (f, count, options) => { for (let i = 0; i < count; i++) tick(f, options); };
 
 function shown(f) {
   const menu = MultiChatboxPrompt.getPending(f.player);
@@ -357,7 +365,7 @@ function openMapAt310(f) {
   })();
 }
 
-async function startRoute2(f) {
+async function startRoute2(f, options) {
   await openMapAt310(f);
   assert.equal(clickMap(f, 28), true, "route2_layer");
   assert.ok(f.calls.some((c) => c.name === "sendClientScript" && c.args[0] === 1470), "burgh_highlight_2");
@@ -365,9 +373,9 @@ async function startRoute2(f) {
   assert.ok(f.messages.some((m) => m.text === "You decide to take route 2."));
   assert.deepEqual(f.calls.filter((c) => c.name === "sendInterfaceAnimation" && c.args[0] >>> 16 === MAP).map((c) => c.args), [[mapUid(18), 3561], [mapUid(19), 3561]]);
   const travelled = f.tick;
-  ticks(f, 5);
+  ticks(f, 5, options);
   assert.equal(vb(f, VB.ROUTE), 0, "not before six ticks");
-  tick(f);
+  tick(f, options);
   assert.equal(f.tick - travelled, 6);
   assert.equal(vb(f, VB.ROUTE), 1);
 }
@@ -390,6 +398,42 @@ test("route 2: the ambush copy with Ivan 4441, four juvinates 4443, follower var
   assert.notEqual(f.player.getInterfaceId(), MAP, "the map closes");
   tick(f);
   assert.equal(shown(f)?.text, "There's that tasty morsel Ivan! Time for some food...");
+});
+
+test("route 2: the juvinates engage the player and Ivan once the player stands in the copy (#6482)", async (t) => {
+  const f = actor(t, { stage: 310 });
+  await startRoute2(f, { npcs: true });
+  ticks(f, 3, { npcs: true });
+  const [ivan] = ownedNpcs(f, 4441);
+  const [onPlayer, onIvan, ...rest] = juvinates(f);
+  // Before: the attack on the player was issued in the tick the player moved into the copy, and
+  // the combat tick dropped it (CombatFactory.validTarget refuses a mobile still being placed).
+  // Indices and flags: assert's diff of two mobiles never finishes.
+  const target = (npc) => npc.getCombat().getTarget();
+  assert.equal(target(onPlayer) === f.player, true, "one juvinate fights the player");
+  assert.equal(target(onIvan)?.getIndex?.(), ivan.getIndex(), "one juvinate fights Ivan");
+  assert.equal(target(ivan)?.getIndex?.(), onIvan.getIndex(), "Ivan fights back");
+  assert.equal(rest.length, 2);
+  for (const juvinate of rest) assert.equal(target(juvinate) == null, true, "Ours: the others wander");
+});
+
+test("Ivan flees mid-fight: the juvinates break off and his line stays until continued (t3625-3629, #6482)", async (t) => {
+  const f = actor(t, { stage: 310 });
+  await startRoute2(f, { npcs: true });
+  ticks(f, 3, { npcs: true });
+  const [onPlayer] = juvinates(f);
+  assert.equal(onPlayer.getCombat().getTarget() === f.player, true, "the player is under attack");
+  f.player.getCombat().attack(onPlayer, true); // retaliating
+  const [ivan] = ownedNpcs(f, 4441);
+  ivan.setHitpoints(1);
+  ticks(f, 2, { npcs: true });
+  assert.equal(ownedNpcs(f, 4441).length, 0, "Ivan is gone");
+  // Before: the juvinate kept hitting the player, and its next hit closed the line (every hit
+  // closes the player's interfaces), so Ivan left without a word.
+  for (const juvinate of juvinates(f)) assert.equal(juvinate.getCombat().getTarget() == null, true, "only wandering");
+  assert.equal(f.player.getCombat().getTarget() == null, true, "Ours: the player's fight stops too (live: their foe had just died, t3624)");
+  ticks(f, 4, { npcs: true });
+  assert.ok(shown(f)?.text.startsWith("I'm getting badly beaten up here"), "his line is still up");
 });
 
 test("injured Ivan with no food flees; deaths make mist; Exit path and reopening the map reset the attempt (t3577-3811)", async (t) => {
@@ -570,7 +614,7 @@ test("keyhole: Inspect is a mesbox; the key sets 1982 with its mesbox, stage and
   assert.equal(f.player.getInventory().getAmount(I.TEMPLE_LIBRARY_KEY), 1, "the key is kept");
   f.player.getDialogueManager().reset?.();
   assert.equal(core.ObjectDefinition.forPlayer(12762, f.player)?.getName?.(), "Trapdoor", "the multiloc opens for this player");
-  assert.equal(objectClick(f, 12763, [3441, 9899, 0], "Climb-down"), true);
+  assert.equal(objectClick(f, 12762, [3441, 9899, 0], "Climb-down"), true, "the client sends the multiloc base id");
   assert.equal(stage(f), 350);
   tick(f);
   assert.equal(stage(f), 360);

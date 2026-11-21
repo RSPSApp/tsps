@@ -82,7 +82,7 @@ const STEP = Object.freeze({
 module.exports = function attachEscort(context) {
   const { api, state, common, STAGE, VARBIT, PAGE } = context;
   const quest = context.quest;
-  const { NpcIdentifiers: N, ItemIdentifiers: I, ObjectIdentifiers: O, Location, Animation, CacheDefinitions } = api.core;
+  const { NpcIdentifiers: N, ItemIdentifiers: I, ObjectIdentifiers: O, Location, Animation, CacheDefinitions, ObjectDefinition } = api.core;
 
   const NPC = Object.freeze({
     VELIAF: N.VELIAF_HURTZ_2, // 5048 (multinpc 9620)
@@ -392,10 +392,13 @@ module.exports = function attachEscort(context) {
     }
     player.getPacketSender().sendSong?.(AMBUSH_MUSIC);
     player.getPacketSender().sendInterfaceRemoval();
-    engage(ambush, ambush.juvinates[0], player);
-    engage(ambush, ambush.juvinates[1], ambush.ivan);
     Scenes.later(scene, 1, () => {
       common.play(player, route.juvinate, V.TALK_IVAN, (steps) => steps.slice(-1), PAGE);
+      // A tick after the move into the copy: an attack on a player still being placed is dropped
+      // by the combat tick (CombatFactory.validTarget), so the player's juvinate stood idle.
+      if (ambush.done || ambush.fled || ambushes.get(player) !== ambush) return;
+      engage(ambush, ambush.juvinates[0], player);
+      engage(ambush, ambush.juvinates[1], ambush.ivan);
     });
     Scenes.later(scene, 1, () => watchIvan(ambush));
   }
@@ -432,6 +435,15 @@ module.exports = function attachEscort(context) {
     if (ivan) Scenes.removeActor(scene, ivan);
     ambush.ivan = null;
     clearFollower(player);
+    // Live (t3625-3629): with Ivan gone nobody fights (the player's foe had just died, t3624), the
+    // juvinates left only wander, and his line stays up until continued. A juvinate still on the
+    // player would close it with its next hit, as every hit does, so their fight stops here too.
+    const playerCombat = player.getCombat?.();
+    if (ambush.juvinates.includes(playerCombat?.getTarget?.())) playerCombat.reset?.();
+    for (const juvinate of ambush.juvinates) {
+      juvinate.getCombat?.().reset?.();
+      api.core.HitQueue?.dropHitsFrom?.(juvinate); // a swing already on its way lands no more
+    }
     common.play(player, NPC.IVAN_FLEEING, V.FLEE, undefined, PAGE);
   }
 
@@ -592,7 +604,10 @@ module.exports = function attachEscort(context) {
   /** The opened multiloc (12762 -> 12763 "Trapdoor"): 360 and the library, no message (t4286-4287). */
   function climbLibraryTrapdoor(event) {
     const { player } = event;
-    if (event.definition?.getId?.() !== O.TRAPDOOR_52 && event.objectId !== O.TRAPDOOR_52) return false;
+    // The client sends the multiloc's base id (oploc1 12762, t4282); the event's definition is the
+    // one 1982 picks for this player. ObjectDefinition has an `id` field, not a getId().
+    const id = event.definition?.id ?? ObjectDefinition.forPlayer(event.objectId, player)?.id ?? event.objectId;
+    if (id !== O.TRAPDOOR_52) return false;
     if (get(player, VARBIT.TEMPLE_TRAPDOOR) !== 1) return false;
     common.anim(player, LIBRARY.climbAnimation);
     common.later(player, 1, () => {

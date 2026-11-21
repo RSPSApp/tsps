@@ -97,3 +97,17 @@ test('below level 23 neither step happens', t => {
     assert.deepEqual([f.slot(0), f.slot(1)], [id('Bronze spear'), core.ItemIdentifiers.HAY_SACK]);
     assert.deepEqual(f.sounds, []);
 });
+
+test('the result takes the lower of the two used slots, not the first free one', t => {
+    const f = fixture(t, ['Coins', null, null, null, null, 'Bronze spear', null, 'Watermelon', core.ItemIdentifiers.HAY_SACK]);
+    f.combine(id('Bronze spear'), core.ItemIdentifiers.HAY_SACK);
+    assert.deepEqual([f.slot(1), f.slot(5), f.slot(8)], [-1, core.ItemIdentifiers.HAY_SACK_2, -1]);
+    f.combine(id('Watermelon'), core.ItemIdentifiers.HAY_SACK_2);
+    assert.deepEqual([f.slot(5), f.slot(7)], [core.ItemIdentifiers.SCARECROW, -1]);
+});
+
+test('Hunter spear tips are not a spear', t => {
+    const f = fixture(t, ['Hunter spear tips', core.ItemIdentifiers.HAY_SACK]);
+    assert.notEqual(f.combine(id('Hunter spear tips'), core.ItemIdentifiers.HAY_SACK).handled, true);
+    assert.deepEqual(f.said, []);
+});

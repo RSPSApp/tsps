@@ -406,7 +406,7 @@ function seedlingLevelBox(crop) {
         .add(new core.StatementDialogue(0, `You need level ${crop.level} Farming to plant that.`)));
 }
 // Any other spear (poisoned bronze ones too) is refused: Wiki, Scarecrow (trivia).
-const SPEAR_NAME = /\bspear\b/i;
+const SPEAR_NAME = /\bspear\b(?!\s*tips)/i; // not Hunter spear tips, a component
 /**
  * Hay sack + Bronze spear, then + Watermelon: rsprox captures (local 1000341 t12836-12849,
  * 1846; rev 227 Leagues). Level 23 and 25 XP on the scarecrow: Wiki, Scarecrow.
@@ -426,14 +426,18 @@ function scarecrowStep(event, names) {
     event.handled = true;
     // Ours: the Wiki gives the level but no refusal text, so hasLevel's generic line is used.
     if (!Patches.hasLevel(player, Patches.SCARECROW_LEVEL, "scarecrow")) return true;
-    inventory.deleteNumber(a, 1); inventory.deleteNumber(b, 1);
+    // Live put the result in the lower of the two used slots (local 1000341 t12837, t12849).
+    const slotOf = (id, slot) => inventory.forSlot(slot)?.getId() === id ? slot : inventory.getSlotForItemId(id);
+    const slots = [slotOf(a, event.usedItemSlot), slotOf(b, event.usedWithItemSlot)];
+    const keep = Math.min(...slots), drop = Math.max(...slots);
+    inventory.deleteAtSlot(drop);
+    inventory.forSlot(keep).setId(finished ? core.ItemIdentifiers.SCARECROW : core.ItemIdentifiers.HAY_SACK_2);
+    inventory.refreshItems();
     if (!finished) {
-        inventory.addItem(new core.Item(core.ItemIdentifiers.HAY_SACK_2));
         Patches.sound(player, Patches.SCARECROW_SOUND);
         Patches.spam(player, "You stick the bronze spear through the hay sack.");
         return true;
     }
-    inventory.addItem(new core.Item(core.ItemIdentifiers.SCARECROW));
     Patches.spam(player, "You stick a watermelon on top of the hay sack.");
     player.sendMessage("This would be ideal for scaring birds!");
     Patches.award(player, 25);

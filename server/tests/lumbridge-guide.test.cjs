@@ -5,14 +5,13 @@ const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const Shared = require('../plugins/minigames/guardiansoftherift/Shared.GuardiansOfTheRift');
 const Records = require('../plugins/minigames/guardiansoftherift/Records.GuardiansOfTheRift');
-let variant, condition, itemUse, inspect;
+let variant, condition, itemUse;
 const custom = new Map();
 const api = new Proxy({
   core: PluginManager.getCoreApi(),
   onNpcDialogueVariant: handler => { variant = handler; },
   onNpcDialogueCondition: handler => { condition = handler; },
   onItemOnNpc: handler => { itemUse = handler; },
-  onItemAction: (name, actions) => { if (name === "Tarnished locket") inspect = actions.Inspect; },
   onCustomEvent: (name, handler) => custom.set(name, [...(custom.get(name) ?? []), handler]),
   emitCustomEvent(name, event) { if (name === 'quest:is-complete') event.complete = event.key === 'temple_of_the_eye' && event.player.questDone; for (const handler of custom.get(name) ?? []) handler(event); },
 }, { get: (target, key) => target[key] ?? (() => {}) });
@@ -25,7 +24,7 @@ before(async () => {
 function player({ unlocked = false, questDone = true, free = 1, ownedAt, ownedId = 26914 } = {}) {
   const attributes = new Map();
   const items = new Map();
-  const sender = { sendVarbit: () => sender };
+  const sender = { sendVarbit: () => sender, sendString: () => sender, sendInterface: () => sender };
   if (ownedAt === 'inventory') items.set(ownedId, 1);
   const p = {
     questDone, messages: [],
@@ -61,7 +60,9 @@ test('space condition and handout recheck prevent a false full warning, duplicat
   const full=player({unlocked:true,free:0});assert.equal(condition({...event(full),stepId:'9nafop'}),true);assert.equal(reclaim(full).end,true);assert.equal(full.items.size,0);
 });
 test('legitimate locket exchange establishes the persisted unlock and frees its occupied slot', () => {
-  const p=player({free:0});p.items.set(26910,1);inspect({player:p});
+  const p=player({free:0});p.items.set(26910,1);
+  // Inspect, then Read it. (tests/tarnished-locket.test.cjs drives the dialogue itself).
+  require('../plugins/minigames/guardiansoftherift/Amulet.GuardiansOfTheRift')._test.readLocketNote(p);
   const exchange={...event(p),kind:'message',stepId:'HnwS8y'};
   api.emitCustomEvent('npc-dialogue:action',exchange);
   assert.equal(p.items.has(26910),false);assert.equal(p.items.get(26914),1);

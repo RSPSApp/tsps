@@ -105,11 +105,49 @@ function amuletAction(event) {
   event.handled = true;
   teleport(event.player);
 }
-function inspectLocket({ player }) {
+/**
+ * The note inside (Wiki: Transcript:Tarnished locket, "Locket note"; local rsprox recording
+ * 20261020T153228 tick 5044 sends these on note's lines 1-12).
+ */
+const NOTE_LINES = [
+  "", "", "To my beloved,", "",
+  "While I can't be with you in person right now, I hope",
+  "that this locket will remind you of me in the years to",
+  "come. I think of you daily, and look forward to our",
+  "inevitable reunion.", "", "Your dearest Philly.", "", "",
+];
+const LOCKET_OPENS = "The locket opens, revealing a note inside.";
+const READ_TITLE = "Would you like to read it?";
+
+/** Read it.: gotr_locket_opened is set (what the Lumbridge Guide checks) and the note opens. */
+function readLocketNote(player) {
+  const { CacheDefinitions } = Shared.core();
   Records.setSetting(player, OPENED, 1);
-  player.sendMessage("The locket opens, revealing a note inside.");
+  const sender = player.getPacketSender();
+  NOTE_LINES.forEach((line, index) => sender.sendString(line, CacheDefinitions.getComponentId(`note:line${index + 1}`)));
+  sender.sendInterface(Shared.iface("note"));
+}
+
+/**
+ * Inspect, as the Wiki transcript and the local recording (ticks 4968 and 5040) give it: the
+ * locket in an item box, then "Would you like to read it?" with Read it. / Leave it alone.
+ * Only Read it. counts as inspecting it (the varbit is set on that choice, tick 5044).
+ */
+function inspectLocket({ player }) {
+  const { DialogueChainBuilder, ItemStatementDialogue, OptionDialogue } = Shared.core();
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new ItemStatementDialogue(0, Shared.obj(LOCKET), LOCKET_OPENS),
+    new OptionDialogue(1, {
+      executeOption(option) {
+        player.getPacketSender().sendInterfaceRemoval();
+        if (Number(option) === 1) readLocketNote(player);
+      },
+    }, "Read it.", "Leave it alone.").setTitle(READ_TITLE),
+  ));
+  return true;
 }
 module.exports = {
+  _test: { readLocketNote },
   attach(api) {
     api.onCustomEvent("lumbridge-guide:amulet-status", status);
     api.onNpcDialogueCondition(condition);

@@ -285,10 +285,26 @@ function partsText(trail) {
   }).join("<br><br>");
 }
 
+/**
+ * rsprox captures (1057 and 21 more across every tier): "You have completed N steps on this <tier>
+ * clue scroll." An elite challenge scroll's Check steps counts its clue's steps (1057 ticks 874, 3556).
+ */
 function checkSteps(event) {
-  if (!clicked(event)) return false;
-  const trail = stateOf(event.player, event.slot);
-  event.player.sendMessage(`You have completed ${trail.state.completed} steps on this ${trail.tier.name} Treasure Trail.`);
+  const item = clicked(event);
+  if (!item) return false;
+  const tier = tierOfItem(item.getId());
+  // A challenge scroll counts its clue's steps; without its clue, the copy it was handed with.
+  const completed = stateOf(event.player, event.slot)?.state.completed ?? item.getMetaValue(metaKey(tier))?.completed ?? 0;
+  event.player.sendMessage(`You have completed ${completed} steps on this ${tier.name} clue scroll.`);
+  return true;
+}
+
+/** Sherlock's scroll: whether its task is done (rsprox 1057 ticks 876 and 3446). */
+function checkCompletion(event) {
+  const item = clicked(event);
+  if (!item) return false;
+  const done = item.getMetaValue(metaKey(tierOfItem(item.getId())))?.taskDone === true;
+  event.player.sendMessage(done ? "You have completed this challenge scroll." : "You are yet to complete this challenge scroll.");
   return true;
 }
 
@@ -838,7 +854,7 @@ module.exports = function attachTreasureTrails(pluginApi) {
   for (const tier of TIERS) api.persistAttribute(completedAttribute(tier), 0);
   Dialogue.attach(api);
   for (const tier of TIERS) api.onItemAction(`Clue scroll (${tier.name})`, readActions());
-  for (const tier of TIERS) api.onItemAction(`Challenge scroll (${tier.name})`, { Read: read });
+  for (const tier of TIERS) api.onItemAction(`Challenge scroll (${tier.name})`, { Read: read, "Check steps": checkSteps, "Check completion": checkCompletion });
   api.onCustomEvent("npc-drops:add", keyDrop);
   api.onBeforeNpcInteraction(talk);
   api.onBeforeObjectInteraction(search);

@@ -74,15 +74,15 @@ runs a 16-step screen highlight walkthrough, `plugins/interface/BankTutorial.plu
 `ScreenHighlight`. As rsprox.net recording 3937 (rev 236, ticks 1653-2665) shows it, and 3923
 (rev 235) for the first step:
 
-- The click sends `bank_insertmode` 0 (swap) and `hnt_hint_max_step` 16, closes the bank
+- The click switches to swap mode (`bank_insertmode` 0) and `hnt_hint_max_step` 16, closes the bank
   (`meslayer_close` 11, `highlight_noclick_clear` on `bankside:bankside_highlight`) and opens it
   again, then makes the inventory side unclickable (`highlight_noclick`, same component).
 - The walkthrough mounts in `bankmain:bank_highlight` (12:108 in rev 242, 12:101 in rev 236):
   no `hnt_selected_hint`, text colour -1 and `highlight_textbox`'s fourth argument true. The
   boxes and texts are in `plugins/interface/data/bank-tutorial.json`.
 - Finish (the last step's Continue) leaves `hnt_hint_step` on 15, closes the walkthrough and opens
-  the bank again, with `bank_insertmode` back to the player's mode. Clicking the button again
+  the bank again, with the player's own mode back (`bank_insertmode` 0 -> 1 for an insert player). Clicking the button again
   starts from step 0.
 
-Ours: the player's own swap/insert mode is kept while the walkthrough runs (only the varbit shows
-swap), and closing the bank mid-walkthrough just ends it; no recording shows either.
+Ours: closing the bank or logging out mid-walkthrough ends it and puts the player's own mode back
+too, so swap is never saved; no recording shows either.

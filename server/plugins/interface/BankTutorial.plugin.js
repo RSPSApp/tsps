@@ -3,16 +3,16 @@
  * setting bank_hidebanktut): a 16-step screen highlight walkthrough of the bank
  * (https://oldschool.runescape.wiki/w/Bank), run by ScreenHighlight. As rsprox captures show it
  * (rsprox.net recording 3937, rev 236, ticks 1653-2665; 3923, rev 235, the first step):
- * - The click shows swap mode (bank_insertmode 0), closes the bank and opens it again, makes the
+ * - The click switches to swap mode (bank_insertmode 0), closes the bank and opens it again, makes the
  *   inventory side unclickable (highlight_noclick on bankside:bankside_highlight), then mounts the
  *   walkthrough in bankmain:bank_highlight: no hnt_selected_hint, text colour -1, the text
  *   script's fourth argument true. The steps are in ./data/bank-tutorial.json.
  * - Finish (the last step's Continue) leaves hnt_hint_step on the last step, closes the
- *   walkthrough and opens the bank again, which shows the player's own swap/insert mode.
+ *   walkthrough, puts the player's own swap/insert mode back (3959 0 -> 1 when it was insert) and
+ *   opens the bank again.
  * - Clicking the button again starts over from the first step.
- * Ours: the swap mode is only shown, the player's own mode is kept (live may switch it for the
- * walkthrough; it shows it back at Finish). Closing the bank mid-walkthrough ends it with the bank
- * (no recording shows it), and the next bank opening shows the player's own mode again.
+ * Ours: closing the bank or logging out mid-walkthrough ends it with the bank and puts the
+ * player's mode back too (no recording shows either), so it is never saved as swap.
  */
 const TUTORIAL = require("./data/bank-tutorial.json");
 
@@ -31,6 +31,8 @@ function bind(pluginApi) {
   api = pluginApi;
 }
 let ids = null;
+/** Per player in the walkthrough: their own insert mode, put back when it ends. */
+const savedInsertMode = new WeakMap();
 
 function lookup() {
   if (ids) return ids;
@@ -57,19 +59,42 @@ function startTutorial(event) {
   const { player, packet } = event;
   if (packet.widgetId !== lookup().button || !api.core.Bank.isOpen(player)) return;
   event.handled = true;
+  restoreInsertMode(player);
+  savedInsertMode.set(player, player.insertModeReturn());
+  player.setInsertMode(false);
+  player.getPacketSender().sendVarbit(INSERT_MODE_VARBIT, 0);
   reopenBank(player);
-  if (!api.core.Bank.isOpen(player)) return;
+  if (!api.core.Bank.isOpen(player)) {
+    restoreInsertMode(player);
+    return;
+  }
   const sender = player.getPacketSender();
-  sender.sendVarbit(INSERT_MODE_VARBIT, 0);
   sender.sendInterfaceScript(HIGHLIGHT_NOCLICK_SCRIPT, [lookup().noclick]);
   api.emitCustomEvent("screen-highlight:show", {
     player, key: KEY, host: lookup().host, colour: -1, finishStep: false, steps: TUTORIAL.steps,
   });
 }
 
+/** The player's own swap/insert mode back, if the walkthrough switched it. */
+function restoreInsertMode(player) {
+  if (!savedInsertMode.has(player)) return;
+  player.setInsertMode(savedInsertMode.get(player));
+  savedInsertMode.delete(player);
+}
+
 function tutorialFinished({ player, key }) {
-  if (key !== KEY || !api.core.Bank.isOpen(player)) return;
-  reopenBank(player);
+  if (key !== KEY) return;
+  restoreInsertMode(player);
+  if (api.core.Bank.isOpen(player)) reopenBank(player);
+}
+
+/** The bank closed mid-walkthrough: the walkthrough went with it. */
+function bankClosed({ player, interfaceId }) {
+  if (interfaceId === api.core.Bank.MAIN_INTERFACE_ID) restoreInsertMode(player);
+}
+
+function loggedOut({ player }) {
+  restoreInsertMode(player);
 }
 
 module.exports = {
@@ -79,5 +104,7 @@ module.exports = {
     bind(pluginApi);
     pluginApi.onCustomEvent("player:widget-action", startTutorial);
     pluginApi.onCustomEvent("screen-highlight:finished", tutorialFinished);
+    pluginApi.onCustomEvent("interface:closed", bankClosed);
+    pluginApi.onPlayerLogout(loggedOut);
   },
 };

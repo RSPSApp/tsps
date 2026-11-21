@@ -79,8 +79,8 @@ test("the tutorial button reopens the bank, shows swap mode and starts the walkt
   assert.deepEqual(scripts(log, 101), [[11]], "meslayer_close 11");
   assert.deepEqual(scripts(log, 3407), [[noclick]], "highlight_noclick_clear on the inventory side");
   assert.deepEqual(scripts(log, 3406), [[noclick]], "highlight_noclick on the inventory side");
-  assert.equal(varbits(log, varbitId("bank_insertmode")).at(-1), 0, "swap mode is shown");
-  assert.equal(p.insertModeReturn(), true, "the player's own insert mode is kept");
+  assert.equal(varbits(log, varbitId("bank_insertmode"))[0], 0, "swap mode, before the bank closes");
+  assert.equal(p.insertModeReturn(), false, "the walkthrough runs in swap mode, as live");
   const mounted = log.findIndex(([kind, target, group]) => kind === "open" && target === host && group === 664);
   assert.ok(mounted > reopenAt, "the walkthrough mounts in bankmain:bank_highlight after the reopen");
   assert.deepEqual(varbits(log, varbitId("hnt_hint_max_step")), [16]);
@@ -110,7 +110,7 @@ test("Continue steps through all 16 boxes and texts; Finish keeps the last step 
   assert.ok(log.some(([kind, target]) => kind === "close" && target === host), "the walkthrough closes");
   assert.deepEqual(scripts(log, 3412), [[host]], "highlight_screen_hide_layer");
   assert.ok(log.some(([kind, target, group]) => kind === "open" && target === uid(161, 16) && group === 12), "the bank opens again");
-  assert.equal(varbits(log, varbitId("bank_insertmode")).length, 0, "no separate varbit; the reopened bank carries the player's own mode");
+  assert.equal(p.insertModeReturn(), true, "the player's own insert mode is back");
   assert.equal(Bank.isOpen(p), true);
   assert.equal(button(p, CONTINUE), false, "nothing left to step");
 });
@@ -135,4 +135,23 @@ test("the button does nothing with the bank closed", (t) => {
   log.length = 0;
   assert.equal(clickTutorial(p), false);
   assert.deepEqual(log.filter(([kind, , group]) => kind === "open" && group === 664), []);
+});
+
+test("closing the bank or logging out mid-walkthrough puts the player's own mode back", (t) => {
+  const { p } = banker(t);
+  clickTutorial(p);
+  assert.equal(p.insertModeReturn(), false);
+  p.getPacketSender().sendInterfaceRemoval();
+  assert.equal(Bank.isOpen(p), false);
+  assert.equal(p.insertModeReturn(), true, "restored when the bank closes");
+  const other = banker(t).p;
+  clickTutorial(other);
+  clickTutorial(other);
+  assert.equal(other.insertModeReturn(), false, "a restart keeps the saved mode");
+  PM.emitPlayerLogout({ player: other, username: other.getUsername() });
+  assert.equal(other.insertModeReturn(), true, "restored at logout, before the save");
+  const swapper = banker(t, { insertMode: false }).p;
+  clickTutorial(swapper);
+  swapper.getPacketSender().sendInterfaceRemoval();
+  assert.equal(swapper.insertModeReturn(), false, "a swap-mode player stays in swap");
 });

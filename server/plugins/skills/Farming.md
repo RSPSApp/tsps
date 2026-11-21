@@ -498,3 +498,21 @@ Departure/logout/death/shutdown cancel actors, vines and pending hits; reconnect
 recovers outside. The private harvest remains saved until collected.
 
 Source: [Echo Hespori](https://oldschool.runescape.wiki/w/Hespori_(Echo)).
+
+## Making a scarecrow
+
+From rsprox captures (local 1000341 ticks 12816-12849 and 1846, both revision 227 Leagues) and
+the Wiki ([Scarecrow](https://oldschool.runescape.wiki/w/Scarecrow),
+[Hay sack](https://oldschool.runescape.wiki/w/Hay_sack)):
+
+| Step | Response |
+|---|---|
+| Empty sack on a Hay bale / Hay bales / Haystack | Sack becomes a Hay sack in its slot; anim 832, sound 2584 (delay 10), spam "You fill the sack with straw." |
+| Bronze spear on the Hay sack (level 23) | Hay sack (6058); sound 2584; spam "You stick the bronze spear through the hay sack." |
+| Watermelon on it (level 23) | Scarecrow; spam "You stick a watermelon on top of the hay sack.", game "This would be ideal for scaring birds!", 25 Farming XP |
+| Any other spear, poisoned bronze too | Refused: "Waste this spear on a scarecrow? I think not - maybe I should find a bronze spear instead." (Wiki trivia) |
+
+Hay locs are matched by exact name, so Shayzien locs aren't hay. Ours: the level-23 refusal
+uses the generic "You need level 23 Farming."; neither source gives its text.
+
+`node --test tests/farming-scarecrow-making.test.cjs`

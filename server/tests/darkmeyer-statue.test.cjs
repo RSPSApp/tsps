@@ -170,3 +170,13 @@ test("a dropped connection leaves at least 1 Hitpoint", (t) => {
   altars._test.settleSacrificeOnLogout({ player: f.p });
   assert.equal(hitpoints(f.p), 1);
 });
+
+test("another system cancelling the player's tasks doesn't strand the sacrifice", (t) => {
+  const f = actor(t);
+  pray(f);
+  core.TaskManager.cancelTasks(f.p);
+  core.TaskManager.process();
+  assert.deepEqual(pending(f.p), [3]);
+  core.TaskManager.process();
+  assert.equal(canLogout(f.p), true);
+});

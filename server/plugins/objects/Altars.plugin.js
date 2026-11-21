@@ -289,14 +289,15 @@ function prayAtDarkmeyerStatue({ player, objectId, location: at }, random = Math
   const sacrifice = { damage: min + Math.floor(random() * (most - min + 1)) };
   if (!pendingSacrifices.has(player)) pendingSacrifices.set(player, []);
   pendingSacrifices.get(player).push(sacrifice);
-  core.TaskManager.submit(new core.CountdownTask(player, 1, () => {
+  // Keyed on the sacrifice, not the player: another system's cancelTasks(player) mustn't strand it.
+  core.TaskManager.submit(new core.CountdownTask(sacrifice, 1, () => {
     if (player.getHitpoints() <= 0 || player.isDyingReturn?.() === true) {
       removeSacrifice(player, sacrifice);
       return;
     }
     player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(sacrifice.damage, core.HitMask.RED)]);
     player.getPacketSender().sendSound(BLOOD_SACRIFICE_SOUND, 1, 20);
-    core.TaskManager.submit(new core.CountdownTask(player, 1, () => removeSacrifice(player, sacrifice)));
+    core.TaskManager.submit(new core.CountdownTask(sacrifice, 1, () => removeSacrifice(player, sacrifice)));
   }));
   return true;
 }
@@ -315,6 +316,7 @@ function settleSacrificeOnLogout({ player }) {
   const list = pendingSacrifices.get(player);
   if (!list) return;
   pendingSacrifices.delete(player);
+  for (const sacrifice of list) core.TaskManager.cancelTasks(sacrifice);
   if (player.getHitpoints() <= 0 || player.isDyingReturn?.() === true) return;
   const damage = list.reduce((total, sacrifice) => total + sacrifice.damage, 0);
   const skills = player.getSkillManager();

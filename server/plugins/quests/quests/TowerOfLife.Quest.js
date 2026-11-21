@@ -794,7 +794,7 @@ module.exports = function registerTowerOfLifeQuest(api) {
   function pickpocketNoFingers(event) {
     const { player } = event;
     const stage = stageOf(player);
-    if (stage < STAGE.OUTFIT || stage >= STAGE.COMPLETE || hasOutfitPiece(player, BOOTS_ITEM_ID)) return; // Ours: the ordinary pickpocket
+    if (stage < STAGE.OUTFIT || stage >= STAGE.COMPLETE || hasOutfitPiece(player, BOOTS_ITEM_ID)) return false; // the ordinary pickpocket
     event.handled = true;
     if (busy.get(player)) return;
     busy.set(player, true);

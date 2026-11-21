@@ -19,8 +19,11 @@ const Menu = require("./Menu.Construction");
  *
  * Wiki (Topiary bush): clipped with secateurs or magic secateurs; each shape needs that boss
  * killed at least once (Vorkath the post-quest one; Phosani's Nightmare doesn't count for The
- * Nightmare). Kills are Combat Achievements' counts ("combat-achievements:count"). Those count the
- * Dragon Slayer II quest Vorkath (npc 8060) too, so the quest kill unlocks the Vorkath shape here.
+ * Nightmare). Kills are Combat Achievements' counts ("combat-achievements:count"). Those count
+ * Vorkath by name, so the Dragon Slayer II quest Vorkath (npc `vorkath_quest`) raises them too:
+ * the Vorkath shape needs a death of the post-quest one (npc `vorkath`) recorded here, or a count
+ * of two or more (the quest fight is fought once, so a second kill is a post-quest one; this
+ * covers kills saved before the record existed).
  */
 const NO_SECATEURS = "You'll need some secateurs to clip the topiary bush.";
 const TITLE = "Choose a shape";
@@ -28,6 +31,8 @@ const PRUNING = Ids.seq("pruning_all");
 const CLIP_SOUND = 2440;
 const SHAPE_DELAY_TICKS = 3;
 const SECATEURS = [ItemIdentifiers.SECATEURS, ItemIdentifiers.MAGIC_SECATEURS];
+const POST_QUEST_VORKATH = Ids.npc("vorkath");
+const VORKATH_KILLED = "construction:topiary-vorkath-killed";
 
 const PLAIN = { label: "None", loc: Ids.loc("poh_topiary_null"), monster: null };
 const SHAPES = [
@@ -55,10 +60,20 @@ function hasSecateurs(player) {
   return player.getEquipment().getItems()[Equipment.WEAPON_SLOT]?.getId() === ItemIdentifiers.MAGIC_SECATEURS;
 }
 
-function killed(player, monster) {
+function killCount(player, monster) {
   const request = { player, monster, total: 0 };
   api.emitCustomEvent("combat-achievements:count", request);
-  return Number(request.total) > 0;
+  return Number(request.total) || 0;
+}
+
+function killed(player, monster) {
+  if (monster !== "Vorkath") return killCount(player, monster) > 0;
+  return player.getAttribute(VORKATH_KILLED) === true || killCount(player, monster) >= 2;
+}
+
+function vorkathDied({ npc, killer }) {
+  if (npc?.getId?.() !== POST_QUEST_VORKATH || !killer?.isPlayer?.()) return;
+  killer.setAttribute(VORKATH_KILLED, true);
 }
 
 function clip(event) {
@@ -87,7 +102,9 @@ function clip(event) {
 }
 
 function attachTopiary(api) {
+  api.persistAttribute(VORKATH_KILLED, false);
+  api.onNpcDeath(vorkathDied);
   for (const name of TOPIARY_NAMES) api.onObjectInteraction(name, { Clip: clip });
 }
 
-Object.assign(module.exports, { attachTopiary, SHAPES, NO_SECATEURS, TITLE, CLIP_SOUND, PRUNING });
+Object.assign(module.exports, { attachTopiary, vorkathDied, VORKATH_KILLED, SHAPES, NO_SECATEURS, TITLE, CLIP_SOUND, PRUNING });

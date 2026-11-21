@@ -4,7 +4,8 @@
 // clip the topiary bush." (rsprox.net recs 2581 tick 295, 2884 tick 10243). With them it opens
 // menu 187 "Choose a shape" (script 217, None|Kraken|...|The Nightmare); a pick plays pruning_all
 // and synth 2440, and three ticks later the bush becomes the shape's loc (rec 2884 ticks
-// 12577-12725, rev 230). Wiki (Topiary bush): each shape needs that boss killed once.
+// 12577-12725, rev 230). Wiki (Topiary bush): each shape needs that boss killed once, Vorkath
+// the post-quest one (npc `vorkath`), not Dragon Slayer II's (npc `vorkath_quest`).
 // Real engine: every plugin loaded, a real Player, a real seeded house with a superior garden.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
@@ -161,4 +162,40 @@ test("every shaped bush answers Clip with the same menu", (t) => {
     assert.ok(sent.some((entry) => entry.script === MENU_SCRIPT), `${shape.label} opens the menu`);
     player.getPacketSender().sendInterfaceRemoval();
   }
+});
+
+function vorkathDies(player, gameval) {
+  const npc = new core.NPC(C.getNpcId(gameval), new core.Location(2272, 4065, 0));
+  PM.emitNpcDeath({ npc, npcId: npc.getId(), killer: player });
+}
+
+function clipShape(player, house, sent, index) {
+  clip(player, bushOf(house));
+  sent.length = 0;
+  pick(player, index);
+  ticks(3);
+  return bushOf(house).getId();
+}
+
+test("Vorkath's shape needs the post-quest Vorkath: the quest kill alone is refused", (t) => {
+  const { player, sent, house } = ownerInGarden(t);
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.SECATEURS, 1), false);
+  const VORKATH = Topiary.SHAPES.findIndex((shape) => shape.label === "Vorkath");
+  vorkathDies(player, "vorkath_quest");
+  const Kills = require("../plugins/achievements/combatachievements/Kills.CombatAchievements");
+  assert.equal(Kills.counts(player).Vorkath, 1, "Combat Achievements counts the quest kill");
+  assert.equal(clipShape(player, house, sent, VORKATH), C.getLocId("poh_topiary_null"));
+  assert.deepEqual(sent.filter((entry) => entry.message), [{ message: "You need to have killed Vorkath to clip that shape." }]);
+
+  vorkathDies(player, "vorkath");
+  assert.equal(player.getAttribute(Topiary.VORKATH_KILLED), true);
+  assert.equal(clipShape(player, house, sent, VORKATH), C.getLocId("poh_topiary_vorkath"));
+});
+
+test("a saved Vorkath count of two includes a post-quest kill and unlocks her shape", (t) => {
+  const { player, sent, house } = ownerInGarden(t);
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.SECATEURS, 1), false);
+  const VORKATH = Topiary.SHAPES.findIndex((shape) => shape.label === "Vorkath");
+  setKills(player, "Vorkath", 2);
+  assert.equal(clipShape(player, house, sent, VORKATH), C.getLocId("poh_topiary_vorkath"));
 });

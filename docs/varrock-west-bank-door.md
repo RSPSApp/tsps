@@ -10,8 +10,8 @@ From rsprox captures (rsprox.net rec 3213, rev 232, ticks 4464-5070: five knocks
 - The player's chathead says "I don't think I'm ever going to be allowed in there." with
   `chatbored1` (seq 562), the same line on every knock.
 - Continue: a message box "Knock knock..." (navy text) with no Continue and synth sound 1735.
-  Two ticks later the Banker (`varrock_bank_doorguard`, NPC 8666, not in the world) says "Who's
-  there?" with `chatang1` (614).
+  Two ticks later the Banker (`varrock_bank_doorguard`, NPC 8666, spawned behind the door at
+  3187,3446) says "Who's there?" with `chatang1` (614).
 - Continue: "What would you like to say?" with five answers. Each was picked once in rec 3213:
 
   | Answer | Exchange |
@@ -24,6 +24,8 @@ From rsprox captures (rsprox.net rec 3213, rev 232, ticks 4464-5070: five knocks
 
   The Banker's last Continue closes the chatbox. No message, animation or varbit is sent, and
   the door stays shut.
+- Live also turns the Banker to face the player during the exchange and back south (1024)
+  after it. tsps does not turn him yet, and he stands behind the closed door.
 
 Handled in `server/plugins/areas/Misthalin.plugin.js` (`knockVarrockBankDoor`); tested in
 `server/tests/varrock-bank-locked-door.test.cjs`.

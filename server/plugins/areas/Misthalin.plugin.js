@@ -344,8 +344,9 @@ function swampCaveMarkerRoute(event) {
 }
 
 // Varrock West Bank: the locked back door (rec 3213 ticks 4464-5070, five knocks). The player's
-// line, a "Knock knock..." box with no Continue for two ticks, the unseen Banker's "Who's there?",
-// then five answers that each end with him sending the player away. The door never opens.
+// line, a "Knock knock..." box with no Continue for two ticks, "Who's there?" from the Banker
+// (8666, spawned behind the door), then five answers that each end with him sending the player
+// away. The door never opens.
 function knockVarrockBankDoor({ player, objectId }) {
   if (objectId !== CacheDefinitions.getLocId(VARROCK_BANK_LOCKED_DOOR)) return false;
   const { DialogueChainBuilder, PlayerDialogue, NpcDialogue, OptionDialogue, ActionDialogue, StatementDialogue, Task, TaskManager } = pluginApi.core;

@@ -76,6 +76,7 @@ function setup(options = {}) {
   const conditions = [];
   const objects = new Map();
   const npcInteractions = [];
+  const npcOptions = new Map();
   const itemOnNpc = [];
   const zoneEnter = [];
   const interfaceButtons = [];
@@ -105,7 +106,11 @@ function setup(options = {}) {
       emitted.push({ name, event });
       PluginManager.emitCustomEvent(name, event);
     },
-    onNpcInteraction(handler) {
+    onNpcInteraction(handler, actions) {
+      if (typeof handler === 'string') {
+        npcOptions.set(handler, actions);
+        return;
+      }
       npcInteractions.push(handler);
       PluginManager.npcInteractionHooks.push({ pluginName: TEST_PLUGIN, handler });
     },
@@ -259,6 +264,7 @@ function setup(options = {}) {
   };
 
   return {
+    npcOption: (name, option, event = {}) => { const payload = { player, handled: false, ...event }; npcOptions.get(name)?.[option]?.(payload); return payload; },
     quest, player, statements, animations, attributes, items, equipment, varbits, messages, xp, rawModels, positions, emitted, transcriptCalls, custom, itemOnNpc, conditions,
     persistedAttributes,
     interfaceButtons, subInterfaces, subInterfaceSends, customInterfaces, action, selectVariant, objectAction, npcInteraction, login, closeInterface, interfaceAction, flushTasks,
@@ -356,6 +362,7 @@ test('talk routing follows the capture by stage', () => {
   h.items.set(I.BUILDERS_SHIRT, 1);
   assert.equal(pick(N.THE_GUNS), 'standard-dialogue-after-tower-of-life', 'tick 722: his own page once the shirt is had');
   at(h, 6);
+  h.equipOutfit();
   assert.equal(pick(N.EFFIGY), 'getting-started-the-builders-on-strike-talking-to-effigy-again', 'tick 1187: "Guess what!"');
   assert.equal(pick(N.BLACK_EYE), 'standard-dialogue-after-tower-of-life', 'tick 1141');
   assert.equal(pick(N.GUMMY), 'standard-dialogue-after-tower-of-life', 'tick 1145');
@@ -405,13 +412,14 @@ test('a short machine build names the first missing material; a full one builds 
   h.items.set(I.METAL_BAR, 5);
   const built = h.action('Dl3PuF');
   assert.deepEqual(h.animations, [5846]);
-  assert.equal(h.items.get(I.METAL_BAR), 0);
+  assert.equal(h.items.get(I.METAL_BAR), 5, 'the bars go with the progress, four ticks on');
   assert.equal(typeof built.wait, 'function');
   let resumed = false;
   built.wait(() => { resumed = true; });
   assert.equal(h.varbits.get(3340) ?? 0, 0);
   h.flushTasks();
   assert.equal(resumed, true);
+  assert.equal(h.items.get(I.METAL_BAR), 0);
   assert.equal(h.varbits.get(3340), 1);
 });
 
@@ -554,7 +562,7 @@ test('the dungeon hand-in completes the quest and clears the puzzle varbits (tic
 test('No fingers is pickpocketed for the boots: two messages a tick apart and 8 Thieving xp (ticks 691-692)', () => {
   const h = setup();
   at(h, 4);
-  h.npcInteraction(N.NO_FINGERS, 3);
+  assert.equal(h.npcOption("'No fingers'", 'Pickpocket', { npcId: N.NO_FINGERS }).handled, true);
   assert.deepEqual(h.messages, ["You attempt to pick the man's pocket."]);
   h.flushTasks();
   assert.equal(h.items.get(I.BUILDERS_BOOTS), 1);
@@ -586,4 +594,15 @@ test("Bonafido's whistles are held message boxes with the player's emote (ticks 
     assert.equal(h.animations.at(-1), animation);
   }
   assert.equal(h.action('13wIR1').handled, true, 'the emote step plays with the box');
+});
+
+test('a builder piece lost after tol_prog 4 is handed out again until completion', () => {
+  const h = setup();
+  const pick = (npcId) => { const v = h.selectVariant(npcId); return typeof v === 'object' && v ? v.variant : v; };
+  at(h, 8);
+  assert.equal(pick(N.BLACK_EYE), 'accessing-the-tower-obtaining-hard-hat');
+  assert.equal(pick(N.THE_GUNS), 'accessing-the-tower-obtaining-builder-s-shirt');
+  assert.equal(pick(N.GUMMY), 'accessing-the-tower-obtaining-builder-s-trousers');
+  at(h, 18);
+  assert.equal(pick(N.BLACK_EYE), 'standard-dialogue-after-tower-of-life');
 });

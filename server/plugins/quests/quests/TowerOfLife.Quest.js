@@ -349,10 +349,16 @@ module.exports = function registerTowerOfLifeQuest(api) {
       statements(player, [`You need ${missing} to fix the machine.`]);
       return;
     }
-    for (const [itemId, count] of MACHINE_MATERIALS[machine]) player.getInventory().deleteNumber(itemId, count);
     player.performAnimation(new Animation(ANIM.FIX_MACHINE));
     if (machine !== "cage") player.getPacketSender().sendSound(SOUND.FIX_MACHINE, 1, 0);
+    // The materials go with the progress, four ticks after the swing (capture ticks 2428-2432).
     event.wait = (resume) => later(player, BUILD_TICKS, () => {
+      const short = missingMaterial(player, machine);
+      if (short) {
+        statements(player, [`You need ${short} to fix the machine.`]);
+        return;
+      }
+      for (const [itemId, count] of MACHINE_MATERIALS[machine]) player.getInventory().deleteNumber(itemId, count);
       setMachineProgress(player, machine, MACHINE_BUILT);
       resume();
     });
@@ -527,7 +533,8 @@ module.exports = function registerTowerOfLifeQuest(api) {
   function selectBuilder(player, itemId, questVariant) {
     const stage = stageOf(player);
     if (stage < STAGE.OUTFIT) return "standard-dialogue-before-tower-of-life";
-    if (stage === STAGE.OUTFIT && !hasOutfitPiece(player, itemId)) return { page: PAGE, variant: questVariant };
+    // A lost piece is handed out again until the quest is done (the door asks for the whole outfit).
+    if (stage < STAGE.COMPLETE && !hasOutfitPiece(player, itemId)) return { page: PAGE, variant: questVariant };
     return "standard-dialogue-after-tower-of-life";
   }
 
@@ -596,9 +603,9 @@ module.exports = function registerTowerOfLifeQuest(api) {
   function selectBlackEye(player) {
     const stage = stageOf(player);
     if (stage < STAGE.OUTFIT) return "standard-dialogue-before-tower-of-life";
-    if (stage > STAGE.OUTFIT) return "standard-dialogue-after-tower-of-life";
-    // A lost hard hat is handed out again, so the flag follows the inventory.
+    // A lost hard hat is handed out again until the quest is done, so the flag follows the inventory.
     if (!hasOutfitPiece(player, HARD_HAT_ITEM_ID)) clearFlag(player, FLAG_HAT);
+    if (stage >= STAGE.COMPLETE || (stage > STAGE.OUTFIT && hasOutfitPiece(player, HARD_HAT_ITEM_ID))) return "standard-dialogue-after-tower-of-life";
     if (hasFlag(player, FLAG_HAT)) return { page: PAGE, variant: "accessing-the-tower-obtaining-hard-hat-talking-to-black-eye-again" };
     return { page: PAGE, variant: "accessing-the-tower-obtaining-hard-hat" };
   }
@@ -766,7 +773,8 @@ module.exports = function registerTowerOfLifeQuest(api) {
     busy.set(player, true);
     player.sendMessage("You search the plant...");
     player.performAnimation(new Animation(ANIM.SEARCH_PLANT));
-    const wanted = stageOf(player) === STAGE.OUTFIT && !hasOutfitPiece(player, TROUSERS_ITEM_ID);
+    const stage = stageOf(player);
+    const wanted = stage >= STAGE.OUTFIT && stage < STAGE.COMPLETE && !hasOutfitPiece(player, TROUSERS_ITEM_ID);
     const found = wanted && Math.floor(Math.random() * TROUSERS_CHANCE) === 0;
     later(player, PLANT_TICKS, () => {
       busy.delete(player);
@@ -803,11 +811,6 @@ module.exports = function registerTowerOfLifeQuest(api) {
     });
   }
 
-  function handleNpcInteraction(event) {
-    const { npcId, clickType } = event;
-    if (clickType === 3 && npcId === NO_FINGERS_NPC_ID) pickpocketNoFingers(event);
-  }
-
   /** "But there's no way I'm giving any to you." sets tol_nofingers_asked (capture tick 679). */
   function noFingersAsked(request) {
     if (request.npcId !== NO_FINGERS_NPC_ID || !String(request.text ?? "").startsWith("But there's no way I'm giving any to you")) return;
@@ -825,7 +828,8 @@ module.exports = function registerTowerOfLifeQuest(api) {
     if (npcId !== GUNS_NPC_ID) return;
     event.handled = true;
     const noted = event.item?.getDefinition?.()?.isNoted?.() === true;
-    if (!noted && BEER_ITEM_IDS.includes(itemId) && stageOf(player) === STAGE.OUTFIT && !hasOutfitPiece(player, SHIRT_ITEM_ID)) {
+    const stage = stageOf(player);
+    if (!noted && BEER_ITEM_IDS.includes(itemId) && stage >= STAGE.OUTFIT && stage < STAGE.COMPLETE && !hasOutfitPiece(player, SHIRT_ITEM_ID)) {
       clearFlag(player, FLAG_SHIRT);
       startTranscript(api, player, GUNS_NPC_ID, PAGE, "accessing-the-tower-obtaining-builder-s-shirt");
       return;
@@ -1168,7 +1172,7 @@ module.exports = function registerTowerOfLifeQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:line", noFingersAsked);
-  api.onNpcInteraction(handleNpcInteraction);
+  api.onNpcInteraction("'No fingers'", { Pickpocket: pickpocketNoFingers });
   api.onObjectInteraction("Pressure machine", { Fix: handleMachineFix });
   api.onObjectInteraction("Pipe machine", { Fix: handleMachineFix });
   api.onObjectInteraction("Cage", { Fix: handleMachineFix });

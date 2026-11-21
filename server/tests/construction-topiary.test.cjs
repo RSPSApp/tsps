@@ -200,3 +200,53 @@ test("a saved Vorkath count alone can't tell quest kills from post-quest ones an
   setKills(player, "Vorkath", 5);
   assert.equal(clipShape(player, house, sent, VORKATH), C.getLocId("poh_topiary_null"));
 });
+
+// rec 2884 tick 12537: None on the plain bush → mesbox "It's already in that form.", menu closed,
+// no pruning_all and no synth 2440.
+test("picking the shape the bush already has opens the captured mesbox and doesn't prune", (t) => {
+  const { player, sent, house } = ownerInGarden(t);
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.SECATEURS, 1), false);
+  const sender = player.getPacketSender();
+  const boxes = [];
+  const chatbox = sender.sendChatboxInterface.bind(sender);
+  t.mock.method(sender, "sendChatboxInterface", (id) => { boxes.push({ id }); return chatbox(id); });
+  const sendString = sender.sendString.bind(sender);
+  t.mock.method(sender, "sendString", (text, uid) => { if (boxes.length) boxes.at(-1).text ??= text; return sendString(text, uid); });
+  clip(player, bushOf(house));
+  sent.length = 0;
+  pick(player, 0);
+  ticks(3);
+  assert.deepEqual(boxes, [{ id: 229, text: "It's already in that form." }], "messagebox 229");
+  assert.equal(sent.some((entry) => entry.anim !== undefined || entry.sound !== undefined), false, "no prune, no sound");
+  assert.equal(bushOf(house).getId(), C.getLocId("poh_topiary_null"));
+
+  // The same on a shaped bush: Kraken on the Kraken topiary.
+  setKills(player, "Kraken", 1);
+  clip(player, bushOf(house));
+  pick(player, 1);
+  ticks(3);
+  assert.equal(bushOf(house).getId(), C.getLocId("poh_topiary_kraken"));
+  player.getDialogueManager().reset?.();
+  clip(player, bushOf(house));
+  sent.length = 0;
+  pick(player, 1);
+  ticks(3);
+  assert.deepEqual(boxes.at(-1), { id: 229, text: "It's already in that form." }, "a second message box");
+  assert.equal(boxes.length, 2);
+  assert.equal(sent.some((entry) => entry.anim !== undefined || entry.sound !== undefined), false);
+  assert.equal(bushOf(house).getId(), C.getLocId("poh_topiary_kraken"));
+});
+
+test("leaving the house before the reshape leaves the bush and the player's animation alone", (t) => {
+  const { player, sent, house } = ownerInGarden(t);
+  player.getInventory().add(new core.Item(core.ItemIdentifiers.SECATEURS, 1), false);
+  setKills(player, "Kraken", 1);
+  clip(player, bushOf(house));
+  pick(player, 1);
+  const bush = bushOf(house);
+  House.releaseHouse(player, true);
+  sent.length = 0;
+  ticks(3);
+  assert.equal(sent.some((entry) => entry.anim === -1), false, "no reset at the destination");
+  assert.equal(bush.getId(), C.getLocId("poh_topiary_null"));
+});

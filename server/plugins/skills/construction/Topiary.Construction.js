@@ -16,6 +16,8 @@ const Menu = require("./Menu.Construction");
  *   2440 plays, the menu closes, and three ticks later the animation resets and the bush's loc
  *   becomes the shape's `poh_topiary_*` (sub 1 Kraken, 8 Alchemical Hydra, 9 The Nightmare).
  *   No message and no experience.
+ * - Picking the shape the bush already has (rec 2884 tick 12537, None on the plain bush): mesbox
+ *   "It's already in that form." (messagebox 229), the menu closes, no animation or sound.
  *
  * Wiki (Topiary bush): clipped with secateurs or magic secateurs; each shape needs that boss
  * killed at least once (Vorkath the post-quest one; Phosani's Nightmare doesn't count for The
@@ -49,6 +51,8 @@ const SHAPES = [
 // The bush and every shape: "Topiary bush", "Kraken Topiary", ... "Alchemical Topiary".
 const TOPIARY_NAMES = [...new Set(SHAPES.map(shape => CacheDefinitions.getObject(shape.loc).name))];
 
+/** rec 2884 tick 12537: the pick is the bush's current shape. */
+const ALREADY = "It's already in that form.";
 /** Ours: only the owner reshapes their bush (the Wiki is silent; Mounted's Configuration line). */
 const NOT_OWNER = "Only the house owner can change that.";
 /** Ours: no capture or Wiki line for a shape whose boss the player hasn't killed. */
@@ -85,12 +89,13 @@ function clip(event) {
   Menu.openMenu(player, TITLE, SHAPES.map(shape => shape.label), index => {
     const shape = SHAPES[index];
     if (!shape || House.houseFor(player) !== house || !hasSecateurs(player)) return;
+    if ((furniture.displayObjectId ?? PLAIN.loc) === shape.loc) return Menu.refuse(player, Menu.messageBox(ALREADY));
     if (shape.monster && !killed(player, shape.monster)) return player.sendMessage(notKilled(shape));
     player.performAnimation(new Animation(PRUNING));
     player.getPacketSender().sendSound(CLIP_SOUND, 0, 0);
     TaskManager.submit(new CountdownTask(player, SHAPE_DELAY_TICKS, () => {
-      player.performAnimation(new Animation(-1));
       if (House.houseFor(player) !== house) return;
+      player.performAnimation(new Animation(-1));
       if (shape === PLAIN) delete furniture.displayObjectId;
       else furniture.displayObjectId = shape.loc;
       House.saveHouse(house);
@@ -106,4 +111,4 @@ function attachTopiary(api) {
   for (const name of TOPIARY_NAMES) api.onObjectInteraction(name, { Clip: clip });
 }
 
-Object.assign(module.exports, { attachTopiary, vorkathDied, VORKATH_KILLED, SHAPES, NO_SECATEURS, TITLE, CLIP_SOUND, PRUNING });
+Object.assign(module.exports, { attachTopiary, vorkathDied, VORKATH_KILLED, SHAPES, NO_SECATEURS, ALREADY, TITLE, CLIP_SOUND, PRUNING });

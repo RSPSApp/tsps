@@ -90,3 +90,19 @@ test('a player who logs out before the sting takes no damage', (t) => {
   assert.deepEqual(f.hits, []);
   assert.deepEqual(f.typed, []);
 });
+
+test('at 1 hitpoint the sting is a blue 0 and the player lives; at 3 it takes 2', (t) => {
+  const f = actor(t);
+  f.p.setHitpoints(1);
+  touch(f);
+  tick();
+  assert.deepEqual(f.hits, [[0, core.HitMask.BLUE]]);
+  assert.deepEqual(f.typed.map(([, text]) => text), ['That was unwise.']);
+  f.p.getCombat().getHitQueue().process(Number.MAX_SAFE_INTEGER);
+  assert.equal(f.p.getHitpoints(), 1);
+  f.hits.length = 0;
+  f.p.setHitpoints(3);
+  touch(f);
+  tick();
+  assert.deepEqual(f.hits, [[2, core.HitMask.RED]]);
+});

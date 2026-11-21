@@ -341,6 +341,8 @@ The desert habitat's cactus (`poh_menagerie_habitat_feature_3`) has Touch. In rs
 2792 (ticks 768-890) the player walks up, faces it and plays `human_pickuptable` (832); the
 next tick sends "That was unwise." as a spam message and a 2-damage hitsplat, and held clicks
 touch every other tick. The Wiki (Desert habitat) gives the same 2 damage and message.
+It never kills: at 1 hitpoint (2792 ticks 993-998) each touch still sends the message but hits
+a blue 0. Ours: at 2 hitpoints it takes 1, as no recording touches at 2.
 
 ### Dungeon and throne room
 

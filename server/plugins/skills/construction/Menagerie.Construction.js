@@ -125,7 +125,10 @@ function touchCactus(event) {
     touching.delete(player);
     if (!player.isRegistered()) return;
     player.getPacketSender().sendTypedMessage(ChatType.SPAM, "That was unwise.");
-    player.getCombat().getHitQueue().addPendingDamage([new HitDamage(CACTUS_DAMAGE, HitMask.RED)]);
+    // It never kills: 2792's touches at 1 hitpoint (ticks 993-998) each hit a blue 0. Ours: at
+    // 2 hitpoints it takes 1 (no recording at 2).
+    const damage = Math.max(0, Math.min(CACTUS_DAMAGE, player.getHitpoints() - 1));
+    player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, damage > 0 ? HitMask.RED : HitMask.BLUE)]);
   }));
   return true;
 }

@@ -104,16 +104,33 @@ function useOnKettle(event, team) {
   return Game.current.addFlowers(player, colour);
 }
 
+/**
+ * The team's water pump (brew_water_pump), from rsprox recording 1849 (Leagues V) ticks 730,
+ * 1041, 1050 and 1362. Your own team's bucket is left to WaterSources, which fills one a tick
+ * with human_pickuptable, synth 2609 and the spam "You fill the bucket." on the first. A bowl is
+ * refused here, before WaterSources would fill it. Ours: the other team's pump does nothing, as
+ * the other stations here.
+ */
+const PUMP_BOWL = "That bowl is too small to hold a useful amount of water, try a bucket instead.";
+
 function useOnPump(event, team) {
   const { player, itemId } = event;
-  if (itemId !== ids().bucket) return false;
+  const table = ids();
   if (team !== teamOf(player)) {
+    event.handled = true;
     return true;
   }
-  fillBuckets(player);
-  return true;
+  if (itemId === table.bowl) {
+    event.handled = true;
+    player.sendMessage(PUMP_BOWL);
+    return true;
+  }
+  if (itemId === table.bucket) return false;
+  event.handled = true;
+  return false;
 }
 
+/** The watering hole still fills every bucket at once (no recording of it). */
 function fillBuckets(player) {
   const inventory = player.getInventory();
   const table = ids();
@@ -177,7 +194,7 @@ function itemOnObject(event) {
   const kettle = table.kettle.get(tile);
   if (kettle) { event.handled = true; return useOnKettle(event, kettle); }
   const pump = table.pump.get(tile);
-  if (pump) { event.handled = true; return useOnPump(event, pump); }
+  if (pump) return useOnPump(event, pump); // sets handled itself: own team's buckets go on to WaterSources
   const store = table.logStore.get(tile);
   if (store) { event.handled = true; return useOnLogStore(event, store); }
   if (Common.SWEETGRUB_MOUNDS.has(tile)) { event.handled = true; return useOnMound(event); }

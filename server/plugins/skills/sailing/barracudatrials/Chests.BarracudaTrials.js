@@ -78,11 +78,12 @@ function setOpen(chest, object, open) {
   ObjectManager.register(new GameObject(id, object.getLocation().clone(), object.getType(), object.getFace(), object.getPrivateArea?.() ?? null), true);
 }
 
-/** Free slots the items need, stackables already carried taking none. */
-function slotsFor(player, items) {
+/** Free slots the items need: stackables already carried take none, and `freed` slots (the key's) count as free. */
+function slotsFor(player, items, freed = 0) {
   const inventory = player.getInventory();
-  const { CacheDefinitions } = common.core();
-  return items.filter(([id]) => !(CacheDefinitions.getItem(id)?.stackable && inventory.contains(id))).length;
+  const { ItemDefinition } = common.core();
+  const needed = items.filter(([id]) => !(ItemDefinition.forId(id).isStackable() && inventory.contains(id))).length;
+  return Math.max(0, needed - freed);
 }
 
 function give(player, items) {
@@ -112,7 +113,7 @@ function open(event) {
   const items = used
     ? missingPieces(player, chest).map((id) => [id, 1])
     : [...chest.outfitIds.map((id) => [id, 1]), [chest.coinsId, chest.coins], [chest.gemsId, chest.gems[1]]];
-  if (items.length && player.getInventory().getFreeSlots() < slotsFor(player, items)) {
+  if (items.length && player.getInventory().getFreeSlots() < slotsFor(player, items, used ? 0 : 1)) {
     player.sendMessage(NO_ROOM);
     return true;
   }

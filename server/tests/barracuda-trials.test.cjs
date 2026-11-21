@@ -991,6 +991,23 @@ test("trial key chests: with no room the key isn't used (Wiki, 26 November 2025)
   assert.deepEqual(player.messages(), ["You don't have enough inventory space."]);
 });
 
+test("trial key chests: the key's own slot and stacks already carried count as room (review)", () => {
+  const filled = (count, extra = []) => {
+    const player = captain();
+    player.inventory.add(new Item(obj("stormy_key"), 1));
+    for (const [id, amount] of extra) player.inventory.add(new Item(id, amount));
+    for (let i = 0; i < count; i++) player.inventory.add(new Item(obj("bronze_dagger"), 1));
+    openChest(player, "locked_chest_pandemonium");
+    tick(3);
+    return player;
+  };
+  assert.equal(common.keyUsed(filled(22), TEMPOR()), true, "5 free + the key's slot fit 6 items");
+  assert.equal(common.keyUsed(filled(23), TEMPOR()), false, "4 free + the key's slot don't");
+  const stacked = filled(22, [[obj("coins"), 5]]);
+  assert.equal(common.keyUsed(stacked, TEMPOR()), true, "coins carried: 4 free + the key's slot fit 5 new");
+  assert.equal(stacked.inventory.getAmount(obj("coins")), 10005);
+});
+
 test("Ralph hands back a lost Stormy key only before it opened its chest", () => {
   const player = captain();
   const ask = (text) => master.answerCondition({ player, npcId: 15096, text });

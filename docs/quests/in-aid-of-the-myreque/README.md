@@ -329,8 +329,8 @@ and its units in `server/plugins/quests/inaid/`.
 - Ours: a won ambush cut short by a logout before Ivan's arrival is saved outside Paterdomus (3432,3484) and counts as Ivan delivered (315), his thanks unplayed.
 - Route 1 (Canifis) is not captured: Ours: its message follows route 2's ("You decide to take route 1."), 2001=2, the same swamp copy with two level 75 juvinates 4442 (Wiki: two level 75), escape at 2 deaths, seqs 3559/3560.
 - Ivan's hitpoints/heal: the capture shows none. Ours: eats below half his max HP, each bite heals a quarter of max; at 0 HP he leaves like the no-food case. (Ivan 4441 currently gets the engine's default 40 HP.)
-- Which juvinates engage: Ours: one on the player, one on Ivan, a tick after the move into the copy; the others wander and take a fallen one's place.
-- Ours: when Ivan flees, the juvinates and the player's attack on one stop (their swings in flight dropped), so his line is not closed by a hit; the juvinates can still be fought.
+- Which juvinates engage: none starts on the player (live: the player struck first, t3491). Wiki: the others "wander around for a while, and then eventually engage Ivan", and the second goes for him once the first falls. Ours: one goes for Ivan 20 ticks after the arrival (live t3483 -> t3503), and a free one replaces it on Ivan when a juvinate falls.
+- Ours: when Ivan flees, the juvinates and the player's attack on one stop (both sides' swings in flight dropped), so his line is not closed by a hit; the juvinates can still be fought.
 - Teleports out of the copy are allowed (rule null); logout/death inside comes back at the exit path tile (3429,3401).
 - Stages 20-279 Veliaf: the job offer's "If speaking again" lines (not captured). Radigad/Polmafi/Ivan at 280-289: their job-offer lines (not captured).
 - Drezel at 320-349 talked again: same variant from its second line (not captured). Drezel 350-429 without the key: the Drezel page's lost-key lines (P91CrU) alone. With the key: the "afterwards" variant.

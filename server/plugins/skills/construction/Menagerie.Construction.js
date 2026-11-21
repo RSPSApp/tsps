@@ -39,7 +39,8 @@ const MENAGERIE_FURNITURE = /HOUSE$|HABITAT$|SCRATCHING_POST$|ARENA$|FEEDER$|PET
 // faces it and plays human_pickuptable, and the tick after says "That was unwise." (spam) and
 // hits for 2. A touch takes those two ticks, so held clicks touch every other tick.
 const CACTUS = Ids.loc("poh_menagerie_habitat_feature_3");
-const TOUCH_ANIMATION = new Animation(Ids.seq("human_pickuptable"));
+// 2792: every touch sends human_pickuptable with delay 15.
+const TOUCH_ANIMATION = new Animation(Ids.seq("human_pickuptable"), 15);
 const CACTUS_DAMAGE = 2;
 const TOUCH_CYCLES = 2;
 /** Player -> the world cycle their next Touch is accepted on (2792: every other tick). */

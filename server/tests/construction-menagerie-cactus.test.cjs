@@ -29,17 +29,17 @@ function actor(t) {
   p.setRegistered(true);
   p.setLocation(new core.Location(1960, 5700, 0));
   p.needsPlacement = false;
-  const sender = p.getPacketSender(), typed = [], animations = [], hits = [], queued = [];
+  const sender = p.getPacketSender(), typed = [], animations = [], hits = [], queued = [], delays = [];
   t.mock.method(sender, 'sendTypedMessage', (type, text) => { typed.push([type, text]); return sender; });
   const perform = p.performAnimation.bind(p);
-  t.mock.method(p, 'performAnimation', (animation) => { animations.push(animation.getId()); return perform(animation); });
+  t.mock.method(p, 'performAnimation', (animation) => { animations.push(animation.getId()); delays.push(animation.getDelay()); return perform(animation); });
   const queue = p.getCombat().getHitQueue(), add = queue.addPendingDamage.bind(queue);
   t.mock.method(queue, 'addPendingDamage', (list) => { hits.push(...list.map(hit => [hit.getDamage(), hit.getHitmask()])); queued.push(...list); return add(list); });
   t.after(() => {
     PM.emitPlayerLogout({ player: p, username: p.getUsername() });
     p.setRegistered(false);
   });
-  return { p, typed, animations, hits, queued };
+  return { p, typed, animations, hits, queued, delays };
 }
 
 function touch(f, id = CACTUS) {
@@ -63,6 +63,7 @@ test('Touch plays human_pickuptable, then says "That was unwise." and hits for 2
   const f = actor(t);
   assert.equal(touch(f), true);
   assert.deepEqual(f.animations, [core.CacheDefinitions.getSeqId('human_pickuptable')]);
+  assert.deepEqual(f.delays, [15]);
   assert.deepEqual(f.typed, []);
   assert.deepEqual(f.hits, []);
   tick();

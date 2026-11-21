@@ -27,7 +27,10 @@ New accounts are at step 1 with `tutorial_player_experience` (929) open, under t
 - **Answering:** the server makes the slots clickable (pause button), gets the answer as a continue on `929:4` with the slot, and moves on to step 2. The answer is saved as `tutorial-island:experience` (new, returning or experienced). Closing the screen opens it again.
 - **What it changes:** the transcripts' conditions read it. A brand-new player gets the Magic Instructor's short send-off; a returning or experienced player is asked "Were you planning to become an Ironman, by the way?", which points them to the Ironman tutor.
 - **Players from before the screen** count as brand new.
-- **Not applied:** in the capture, "experienced" also turns off a set of new-player safeguards (accept aid, drop warnings, the alchemy warning threshold to 150,000, and others).
+- **Option defaults (captured):** the answer also sets some Settings rows, saved as a Settings click is (`experienceSettings` in the data file):
+  - **Brand new** (rsprox captures local 1001414 tick 18, local 1001416 tick 223): the quest list starts filtered and sorted for a new player: Highlight quest start points (9619) 2, the quest list sort (13772) 11, and hiding quests that lack requirements (13778) or recommendations (13779) on.
+  - **Experienced** (a local Tutorial Island HCIM recording, the 929 answer at tick 99): the new-player safeguards are turned off: Accept Aid (4180), the drop warning (5411), Make-X for darts and bolts (10971) and the in-world Hiscores lookup (11519) off, the alchemy warning threshold (6091) to 150,000 and the four Plank Make confirmations (624, 2319, 2320, 3939) to 1. Accept Aid goes through its own plugin (`accept-aid:set` { player, on }), which still keeps Ironmen off.
+  - **Returning** isn't recorded, so it changes nothing.
 
 ## What each step shows (captured)
 
@@ -113,7 +116,7 @@ The tutorial's doors and gates never stay open.
 ## Not done yet
 
 - **The display name screen** before the character design.
-- **The experienced player's option defaults** (see above).
+- **The returning player's option defaults:** not recorded.
 - **The poll booth's ballot interface** (928). The booth's three boxes are shown.
 - **Music unlocks** on arrival in Lumbridge.
 - **The quest completion scroll** (`questscroll` 153).

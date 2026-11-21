@@ -7406,10 +7406,13 @@
           "wiki": "https://oldschool.runescape.wiki/w/Tower_of_Life",
           "implementedIn": [
             "server/plugins/quests/quests/TowerOfLife.Quest.js",
+            "server/plugins/quests/toweroflife/Puzzles.TowerOfLife.js",
+            "server/plugins/quests/toweroflife/Scenes.TowerOfLife.js",
             "server/plugins/quests/QuestRuntime.js",
-            "server/tests/qh728-q116.test.cjs"
+            "server/tests/tower-of-life-capture.test.cjs"
           ],
           "devNotes": [
+            "Aligned with a whole revision 242.1 RSProx run (docs/quests/tower-of-life/README.md): stages are tol_prog's own values (2-18) set on the captured lines; the pressure, pipe and cage puzzles use the captured starts and rules; the creation and scare scenes, the mind puzzle's continuous loop from 7 on 0-14, the crates, plants, pickpocket and whistles follow the capture. Older saves move onto the tol_prog scale once at login. Talks the transcript data lacks are listed in the README.",
             "Main 21a2a1daa: #1181 replaces the substituted machine puzzles with cache interfaces 509/510/511, their controls and persisted progress; only solving the controls completes each repair. Builder costume recovery, material hand-ins, stage guards and the dungeon transition are wired.",
             "Puzzle starting layouts are reconstructed from Quest Helper rather than captured random starts; this credits functional objectives, not complete presentation or every optional branch. Creature Creation remains separate postquest content.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4389 Tower of Life: the tower door lets only the checked player through. #4020 Fix Tower of Life pipe calibration, door and stairs."

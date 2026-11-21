@@ -280,6 +280,12 @@ same reason: only the way down is captured, and its exit ladder (4188) has no ha
 (`enterPrison`); its one capture is the quest's prison-entry scene. The Taverley Dungeon cave into Cerberus's lair is skipped (`skip.names`): the lair is
 a boss area tsps has no plugin for, and the one capture is a Leagues world's.
 
+**Isle of Souls Dungeon exit:** the dungeon's Opening (40737 at 2168,9307, Exit) is taken by name
+(`include`): it was captured but left out as "not a ladder, stair, cave or hole", so the way in worked
+and the way out did nothing. Its one capture (local 1000195, Leagues V, rev 227) clicks it from
+2167,9308, where the way in lands: the crawl (2796) and sound 2454 with the fade two ticks after
+arriving, the move to 2310,2919 on tick 4, the tile the entrance cave (40736) is used from.
+
 **Isle of Souls tower basement (#5838):** the Crumbling Tower's ladder down (40745 at 2131,2994) is
 taken from its one capture (local 1000195, Leagues V, rev 227): clicked from 2132,2994, the climb
 (827) two ticks after arriving and the move to 1940,9451 on tick 3. No capture climbs the exit

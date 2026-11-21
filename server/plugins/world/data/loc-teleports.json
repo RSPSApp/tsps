@@ -492,6 +492,7 @@
     {"name":"stairs_desert_rock03","id":44113,"display":"Steps","option":"Climb","op":1,"x":3419,"y":2803,"z":0,"to":[3416,2806,0],"tick":2,"recordings":3},
     {"name":"surok_tunnel_steps","id":23074,"display":"Stairs","option":"Climb","op":1,"x":3179,"y":5189,"z":0,"to":[3283,3467,0],"tick":1,"recordings":2},
     {"name":"sw_dungeon_entrance","id":40736,"display":"Cave","option":"Enter","op":1,"x":2308,"y":2918,"z":0,"to":[2167,9308,0],"anim":2796,"animTick":2,"tick":4,"sound":2454,"fade":true,"recordings":4},
+    {"name":"sw_dungeon_exit","id":40737,"display":"Opening","option":"Exit","op":1,"x":2168,"y":9307,"z":0,"to":[2310,2919,0],"anim":2796,"animTick":2,"tick":4,"sound":2454,"fade":true,"recordings":1},
     {"name":"sw_tower_basement_ladder","id":40746,"display":"Ladder","option":"Climb-up","op":1,"x":1941,"y":9451,"z":0,"to":[2132,2994,0],"anim":828,"animTick":2,"tick":3,"source":"No capture of the way up. Ours: lands on 2132,2994, the tile the Climb-down capture (local 1000195, Leagues V rev 227) was clicked from beside trapdoor 40745 at 2131,2994; anim 828 at tick 2 and the move at tick 3 are the commonest captured ladder Climb-up timing in this file."},
     {"name":"sw_tower_basement_trapdoor","id":40745,"display":"Ladder","option":"Climb-down","op":1,"x":2131,"y":2994,"z":0,"to":[1940,9451,0],"anim":827,"animTick":2,"tick":3,"recordings":1},
     {"name":"swamp_cave_climbing_rope","id":5946,"display":"Climbing rope","option":"Climb","op":1,"x":3169,"y":9572,"z":0,"to":[3168,3172,0],"anim":828,"animTick":2,"tick":3,"recordings":1},

@@ -171,3 +171,33 @@ test('Modify on a completed offer changes nothing', async t => {
   assert.equal(f.opened.mock.calls.some(({ arguments: [, group] }) => group === LOADING_POPUP), false);
   assert.deepEqual(f.messages, ['That offer has already completed.']);
 });
+
+test('a cancelled Modify wait does not block the next Modify', async t => {
+  const f = trader(t, { itemId: IRON_BAR, sell: true, slot: 2, quantity: 3, price: 100 });
+  f.offers()[5] = { itemId: IRON_BAR, sell: true, slot: 5, quantity: 2, price: 100, total: 200, finished: false, placedAt: Date.now(), completesAt: null };
+  await modify(f, 2);
+  core.TaskManager.cancelTasks(f.p);
+  tick();
+  tick();
+  tick();
+  await modify(f, 5);
+  assert.equal(f.offers()[5].aborted, true, 'the second Modify stops its offer');
+  tick();
+  tick();
+  assert.equal(plugin._test.getOffer(f.p)?.slot, 5, 'and opens its setup');
+});
+
+test('Collect-all goes on past an offer the inventory has no room for', async t => {
+  const f = trader(t, { itemId: IRON_BAR, sell: false, slot: 0, quantity: 2, price: 50 });
+  const offers = f.offers();
+  offers[0].finished = true;
+  offers[0].traded = 100;
+  offers[1] = { itemId: IRON_BAR, sell: true, slot: 1, quantity: 1, price: 98, total: 98, traded: 98, finished: true, placedAt: Date.now(), completesAt: null };
+  const inventory = f.p.getInventory();
+  inventory.setItem(0, new core.Item(COINS, 10));
+  for (let slot = 1; slot < 28; slot++) inventory.setItem(slot, new core.Item(1511, 1));
+  await button(f, 6, 0);
+  assert.ok(offers[0], 'the bars wait for room');
+  assert.equal(offers[1], undefined, 'the later sale is collected');
+  assert.ok(inventory.getAmount(COINS) > 10);
+});

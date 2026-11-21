@@ -178,7 +178,8 @@ const usableSlots = () => (pluginApi.core.WorldDefinition.isMembersWorld() ? 8 :
 const offers = new WeakMap();
 const completionTimers = new WeakMap();
 const viewing = new WeakMap();
-const modifying = new WeakSet();
+/** Each player's pending Modify countdown, keyed on its own object so a player-wide task cancel only ends it. */
+const modifying = new WeakMap();
 const searching = new WeakSet();
 const historyOpen = new WeakSet();
 let pluginApi;
@@ -1093,7 +1094,10 @@ function collectionOutputId(baseId, amount, action, forceNotes = false) {
  * (rsprox_transcripts/236/03950.txt: 465:24 sub 2 takes the item, sub 3 later the refunded coins).
  */
 /** `heard`, when given, collects the sounds instead of playing them (collect-all plays the union once). */
-/** `messages: false` hands it over without the "Collected ..." lines (a modified offer's input, as recorded). */
+/**
+ * `messages: false` hands it over without the "Collected ..." lines (a modified offer's input, as recorded).
+ * Returns true when something was handed over, false only when bank access refused it (Collect-all stops there).
+ */
 function collect(player, action, slot = viewing.get(player), forceNotes = false, part = null, heard = null, messages = true) {
   const offer = completedOffers(player)[slot];
   if (!offer?.finished) return;
@@ -1122,7 +1126,7 @@ function collect(player, action, slot = viewing.get(player), forceNotes = false,
     result.add(new Item(outputId, paid.amount), false);
     if (before + paid.amount > MAX || result.getAmount(outputId) !== before + paid.amount) {
       player.sendMessage(`You do not have enough ${action === 3 ? "bank" : "inventory"} space to collect that offer.`);
-      return false;
+      return;
     }
     parts.push({ outputId, amount: paid.amount, destination });
   }
@@ -1200,11 +1204,12 @@ function stopOffer(player, slot) {
  * quantity and price, ready to change and confirm again.
  */
 function modify(player, slot = viewing.get(player)) {
-  if (modifying.has(player)) return;
+  if (modifying.get(player)?.isRunning()) return;
   const stopped = stopOffer(player, slot);
   if (!stopped) return;
-  modifying.add(player);
-  pluginApi.core.TaskManager.submit(new pluginApi.core.CountdownTask(player, MODIFY_TICKS, () => reopenModified(player, slot, stopped)));
+  const task = new pluginApi.core.CountdownTask(player, MODIFY_TICKS, () => reopenModified(player, slot, stopped));
+  modifying.set(player, task);
+  pluginApi.core.TaskManager.submit(task);
   player.getPacketSender()
     .sendSubInterface(OFFER_CONTENTS, LOADING_POPUP, 1)
     .sendClientScript(LOADING_POPUP_SCRIPT, loadingUid(1), loadingUid(2), loadingUid(4))
@@ -1214,7 +1219,6 @@ function modify(player, slot = viewing.get(player)) {
 // Ours: an exchange closed during the wait, or an inventory without room, leaves the stopped offer
 // in its collection slot, as Abort would.
 function reopenModified(player, slot, stopped) {
-  modifying.delete(player);
   if (player.getInterfaceId() !== GE || historyOpen.has(player)) return;
   player.getPacketSender().closeSubInterface(OFFER_CONTENTS);
   if (completedOffers(player)[slot] !== stopped) return;

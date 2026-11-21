@@ -178,8 +178,15 @@ const usableSlots = () => (pluginApi.core.WorldDefinition.isMembersWorld() ? 8 :
 const offers = new WeakMap();
 const completionTimers = new WeakMap();
 const viewing = new WeakMap();
-/** Each player's pending Modify countdown, keyed on its own object so a player-wide task cancel only ends it. */
+/** Each player's pending Modify countdown; the guard holds only while it runs. */
 const modifying = new WeakMap();
+/** The countdown's task key, one object per player, so a player-wide task cancel can't strand the popup. */
+const modifyKeys = new WeakMap();
+const modifyKey = (player) => {
+  let key = modifyKeys.get(player);
+  if (!key) modifyKeys.set(player, key = {});
+  return key;
+};
 const searching = new WeakSet();
 const historyOpen = new WeakSet();
 let pluginApi;
@@ -1207,7 +1214,7 @@ function modify(player, slot = viewing.get(player)) {
   if (modifying.get(player)?.isRunning()) return;
   const stopped = stopOffer(player, slot);
   if (!stopped) return;
-  const task = new pluginApi.core.CountdownTask(player, MODIFY_TICKS, () => reopenModified(player, slot, stopped));
+  const task = new pluginApi.core.CountdownTask(modifyKey(player), MODIFY_TICKS, () => reopenModified(player, slot, stopped));
   modifying.set(player, task);
   pluginApi.core.TaskManager.submit(task);
   player.getPacketSender()
@@ -1219,7 +1226,7 @@ function modify(player, slot = viewing.get(player)) {
 // Ours: an exchange closed during the wait, or an inventory without room, leaves the stopped offer
 // in its collection slot, as Abort would.
 function reopenModified(player, slot, stopped) {
-  if (player.getInterfaceId() !== GE || historyOpen.has(player)) return;
+  if (!player.isRegistered() || player.getInterfaceId() !== GE || historyOpen.has(player)) return;
   player.getPacketSender().closeSubInterface(OFFER_CONTENTS);
   if (completedOffers(player)[slot] !== stopped) return;
   if (collect(player, 1, slot, true, null, null, false) !== true || Object.hasOwn(completedOffers(player), slot)) return;

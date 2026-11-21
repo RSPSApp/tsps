@@ -172,13 +172,15 @@ test('Modify on a completed offer changes nothing', async t => {
   assert.deepEqual(f.messages, ['That offer has already completed.']);
 });
 
-test('a cancelled Modify wait does not block the next Modify', async t => {
+test('a player-wide task cancel during the wait neither strands the popup nor blocks the next Modify', async t => {
   const f = trader(t, { itemId: IRON_BAR, sell: true, slot: 2, quantity: 3, price: 100 });
   f.offers()[5] = { itemId: IRON_BAR, sell: true, slot: 5, quantity: 2, price: 100, total: 200, finished: false, placedAt: Date.now(), completesAt: null };
   await modify(f, 2);
   core.TaskManager.cancelTasks(f.p);
   tick();
   tick();
+  assert.ok(f.closed.mock.calls.some(({ arguments: [target] }) => target === OFFER_CONTENTS), 'the popup still closes');
+  assert.equal(f.p.getInventory().getAmount(IRON_BAR_NOTE), 3, 'the first offer still comes back');
   tick();
   await modify(f, 5);
   assert.equal(f.offers()[5].aborted, true, 'the second Modify stops its offer');
@@ -200,4 +202,15 @@ test('Collect-all goes on past an offer the inventory has no room for', async t 
   assert.ok(offers[0], 'the bars wait for room');
   assert.equal(offers[1], undefined, 'the later sale is collected');
   assert.ok(inventory.getAmount(COINS) > 10);
+});
+
+test('a logout during the wait leaves the stopped offer saved in its collection slot', async t => {
+  const f = trader(t, { itemId: IRON_BAR, sell: true, slot: 6, quantity: 2, price: 100 });
+  await modify(f, 6);
+  PM.emitPlayerLogout({ player: f.p, username: f.p.getUsername() });
+  f.p.setRegistered(false);
+  tick();
+  tick();
+  assert.ok(f.offers()[6]?.aborted, 'still waiting to collect');
+  assert.equal(f.p.getInventory().getAmount(IRON_BAR_NOTE), 0, 'nothing handed to a logged-out player');
 });

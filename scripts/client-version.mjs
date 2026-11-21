@@ -38,6 +38,9 @@ export function writeClientVersion() {
     if (!existsSync(output) || readFileSync(output, "utf8") !== source) {
         writeFileSync(output, source);
     }
+    const metadata = resolve(root, "server/dist/client-release.json");
+    mkdirSync(dirname(metadata), { recursive: true });
+    writeFileSync(metadata, JSON.stringify({ clientVersion: version }) + "\n");
     return version;
 }
 

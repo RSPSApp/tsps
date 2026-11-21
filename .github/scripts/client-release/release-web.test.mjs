@@ -20,13 +20,12 @@ test("shared releases contain game files and omit installed profile, launcher an
         writeFileSync(join(dist, "caches/big.dat"), "installed game cache");
         writeFileSync(join(dist, "desktop-startup.html"), "owner branding");
         writeFileSync(join(dist, "desktop-icon.png"), "owner icon");
-        writeFileSync(join(dist, "desktop-bootstrap.js"), "embedded launcher");
         const release = packageWebRelease(dist, out, "0.1.2", "https://github.com/RSPSApp/tsps/releases/download/client-v0.1.2/");
         const entries = spawnSync("tar", ["-tzf", release.archive], { encoding: "utf8" });
         assert.equal(entries.status, 0);
         assert.match(entries.stdout, /static\/game.js/);
         assert.match(entries.stdout, /caches\/caches.json/);
-        assert.doesNotMatch(entries.stdout, /big.dat|desktop-startup|desktop-icon|desktop-bootstrap/);
+        assert.doesNotMatch(entries.stdout, /big.dat|desktop-startup|desktop-icon/);
         const metadata = spawnSync("tar", ["-xOzf", release.archive, "caches/caches.json"], { encoding: "utf8" });
         assert.equal(JSON.parse(metadata.stdout)[0].name, "osrs-test");
         const bytes = readFileSync(release.archive);

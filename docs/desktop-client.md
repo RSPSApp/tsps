@@ -40,16 +40,12 @@ Server-only changes keep the same identifier. The generated server module is
 compiled into the runtime, including browser-host snapshots, so older running
 worlds keep their own requirement without consulting a global latest pointer.
 
-The build produces `desktop-bootstrap.js` for native installers. It is excluded
-from OTA game archives so the asset provider cannot replace the launcher while
-selecting a game version. The wrapper embeds it in its startup page, independently of
-the active game bundle. It calls `window.__RSPS_DESKTOP_BOOTSTRAP__.manifestUrl(profile)`
-to read world-info over HTTP or the existing pre-login WebRTC content channel.
-That returns only the exact immutable TSPS release URL. The wrapper verifies the
-signed manifest with its trusted key, uses its cached matching bundle or downloads
-that release, and only then opens the game. Never fall back to the latest release.
-A world without version metadata or a failed lookup must show an error and must
-not cause an update. Do not acknowledge an incompatible bundle as a successful boot.
+The wrapper reads the build ID from the world's `/api/world-info`. For a relayed
+world it uses the relay's `/worlds?worldId=<id>` HTTP lookup. The browser host
+registers the ID from the running snapshot's `dist/client-release.json`; a
+standalone TSPS server sends its compiled ID when registering directly.
+The wrapper uses the exact signed release and reports an error when the running
+world does not advertise a build.
 
 The wrapper verifies the installed bundle's `client-release.json` against the
 selected release. `DesktopPlugin` acknowledges startup after the first frame in

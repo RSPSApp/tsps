@@ -5,7 +5,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const tooling = dirname(fileURLToPath(import.meta.url));
-const excluded = new Set(["caches", "desktop-updates", "desktop-startup.html", "desktop-icon.png", "desktop-bootstrap.js"]);
+const excluded = new Set(["caches", "desktop-updates", "desktop-startup.html", "desktop-icon.png"]);
 
 export function packageWebRelease(dist, out, version, baseUrl) {
     if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error("Use a stable client version such as 0.1.2");

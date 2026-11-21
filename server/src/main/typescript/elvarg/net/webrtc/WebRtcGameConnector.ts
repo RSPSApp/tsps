@@ -1,3 +1,4 @@
+import { CLIENT_VERSION } from "../../ClientVersion.generated";
 import { RTCDataChannel, RTCPeerConnection } from "node-datachannel/polyfill";
 import { WebSocket } from "ws";
 import { getWorldDefinition, hasGlobalWorldTag } from "../../game/definition/WorldDefinition";
@@ -117,6 +118,7 @@ export class WebRtcGameConnector {
         type: "register",
         worldId: this.worldId,
         name: this.worldName,
+        clientVersion: CLIENT_VERSION,
         playerCount: this.playerCount(),
         ...(this.webSocketUrl ? { webSocketUrl: this.webSocketUrl } : {}),
         token: this.token,

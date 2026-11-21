@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { assertDesktopWorldCompatible, desktopClientManifestUrl } from "../game/plugins/desktop/desktop";
+import { desktopClientManifestUrl } from "../game/plugins/desktop/DesktopPlugin";
 import { DesktopPlugin } from "../game/plugins/desktop/DesktopPlugin";
 import { ClientPluginManager } from "../game/plugins/ClientPluginManager";
 
 async function main() {
+    const desktop = new DesktopPlugin();
+    await desktop.start();
     const target = { address: "world.example/game", secure: true };
     let required: unknown = "a".repeat(64);
     const requested: string[] = [];
@@ -15,19 +17,17 @@ async function main() {
         assert.equal(url, "https://world.example/api/world-info");
         return Response.json({ clientVersion: required });
     };
-    await assertDesktopWorldCompatible(target);
+    await desktop.beforeWorldConnect(target);
     assert.equal(requested.length, 0, "browser logins are unchanged");
     window.__RSPS_DESKTOP_PROFILE__ = { ...target, name: "Example", maxPlayers: 2047 };
-    await assertDesktopWorldCompatible(target);
+    await desktop.beforeWorldConnect(target);
     assert.equal(await desktopClientManifestUrl(target), `https://github.com/RSPSApp/tsps/releases/download/client-${required}/manifest.json`);
 
     required = "b".repeat(64);
-    await assert.rejects(assertDesktopWorldCompatible(target), /different client version/);
+    await assert.rejects(desktop.beforeWorldConnect(target), /different client version/);
     const { sendLogin } = await import("../network/serverConnection/login");
     const { state } = await import("../network/serverConnection/state");
     const plugins = new ClientPluginManager();
-    const desktop = new DesktopPlugin();
-    await desktop.start();
     plugins.add(desktop);
     state.worldConnectionGuard = world => plugins.beforeWorldConnect(world);
     state.lastUrl = "wss://world.example/game";
@@ -46,7 +46,7 @@ async function main() {
     assert.equal(state.sessionPassword, null, "an incompatible world never receives or stores login credentials");
 
     required = undefined;
-    await assert.rejects(assertDesktopWorldCompatible(target), /does not advertise/);
+    await assert.rejects(desktop.beforeWorldConnect(target), /does not advertise/);
     required = "../../other-repository";
     await assert.rejects(desktopClientManifestUrl(target), /does not advertise/);
 
@@ -77,7 +77,12 @@ async function main() {
         server.close();
     }
 
+    globalThis.fetch = async input => String(input) === "/client-release.json"
+        ? Response.json({})
+        : Response.json({ clientVersion: "a".repeat(64) });
+    await assert.rejects(new DesktopPlugin().beforeWorldConnect(target), /Invalid desktop client release/);
+
     globalThis.fetch = async () => { throw new Error("World offline"); };
-    await assert.rejects(assertDesktopWorldCompatible(target), /World offline/);
+    await assert.rejects(desktop.beforeWorldConnect(target), /World offline/);
 }
 void main().catch(error => { console.error(error); process.exitCode = 1; });

@@ -52,7 +52,9 @@ A world without version metadata or a failed lookup must show an error and must
 not cause an update. Do not acknowledge an incompatible bundle as a successful boot.
 
 Each bundle carries `client-release.json` with its identifier. The required, hidden
-`DesktopPlugin` owns compatibility checks and native startup acknowledgement.
+`DesktopPlugin` owns compatibility checks, its installed-version state and native
+startup acknowledgement in one module. The standalone launcher entry imports
+only the manifest lookup from that module; there is no separate desktop service.
 It uses the generic `beforeWorldConnect` and `clientReady` hooks; networking and
 world switching do not contain desktop-specific branches. Launch defaults are
 resolved in `clientEnv` before plugins load. Desktop startup and login compare

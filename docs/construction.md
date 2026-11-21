@@ -488,6 +488,17 @@ oubliette's ladder), "... the basement level." for a ground floor room with stai
 shows the basement-level warning on a study, which holds no stairs; Remove on stair furniture,
 which on live goes on to removing the room at the other end (recordings 251, 2551, 2864).
 
+Remove-room on stair furniture (staircases, the oubliette's ladder, the throne room's trapdoors)
+removes the room at its other end (rsprox captures: recordings 2551, 2608, 2611, 2613, 2617, 2620,
+2621, 2632, 3897 and one of the user's own, rev 229-235): stairs up take the room above, stairs
+down the room below, and a spiral staircase asks "Remove which room?" with Room above / Room
+below. That room then goes as through its door: its floor warning, "Remove the skill hall?",
+"Room deleted!". Message boxes refuse: "You can only do that in building mode.", "There is no
+room above to remove." and, on the upper floor's stairs down, "The room below is supporting this
+room!". Ours: "There is no room below to remove." mirrors the captured line for the room above;
+the garden's dungeon entrance (loc 4529, with the same Remove-room option) removes the dungeon
+stairs room below it like the other stairs down, which no recording shows.
+
 ### Building furniture
 
 Captures of the build menu (`poh_furniture_creation`, 542 picks in 123 recordings, rev 226-239):

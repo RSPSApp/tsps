@@ -2,7 +2,7 @@
 //
 // Drink-from on Aldarin's cauldron (loc cauldron_generic_drink): the player's recorded line a tick
 // after the arrival (rsprox recording 4182 ticks 131 and 17847), through the real object dispatch;
-// Witch's Potion's cauldron of the same name is left to its quest.
+// Witch's Potion's cauldron of the same name still reaches its quest's handler.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { test, before, after } = require("node:test");
@@ -40,7 +40,9 @@ function cauldronAt(x, y) {
 }
 
 function drinkFrom(p, object) {
-  const event = { player: p, object, objectId: object.getId(), clickType: 1, definition: object.getDefinition(), handled: false };
+  const at = object.getLocation();
+  const location = { x: at.getX(), y: at.getY(), z: at.getZ() };
+  const event = { player: p, object, objectId: object.getId(), clickType: 1, definition: object.getDefinition(), location, sourceLocation: location, handled: false };
   PM.emitObjectInteraction(event);
   return event;
 }
@@ -75,11 +77,11 @@ test("Aldarin cauldron: walking off before the line cancels it", (t) => {
   assert.equal(currentText(p), undefined);
 });
 
-test("Witch's Potion's cauldron (same name and option) does not get the Aldarin line", (t) => {
+test("Witch's Potion's cauldron (same name and option) still reaches the quest's own handler", (t) => {
   const p = player(t, new core.Location(2968, 3205, 0));
   const hetty = cauldronAt(2967, 3205);
   assert.ok(hetty && hetty.getId() !== core.CacheDefinitions.getLocId(Cauldron.LOC));
-  assert.equal(Cauldron.drinkFrom({ player: p, object: hetty }), false);
-  core.TaskManager.process();
-  assert.notEqual(currentText(p), Cauldron.LINE);
+  assert.equal(Cauldron.drinkFrom({ player: p, object: hetty }), false, "not ours");
+  const event = drinkFrom(p, hetty);
+  assert.equal(event.handled, true, "WitchsPotion's id hook answers it through the dispatcher");
 });

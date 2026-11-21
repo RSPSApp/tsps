@@ -94,11 +94,11 @@ test("the cache ids match the capture", () => {
   assert.equal(LEAF, 34841);
 });
 
-test("east Temple Door from the west: opens, carries the player east, slams shut a tick later", (t) => {
+test("east Temple Door from the west: opens, the player walks east, slams shut a tick later", (t) => {
   const { player, messages, sounds } = actor(t, X - 1, Y);
   tick(2);
   click(player, EAST);
-  const sample = () => ({ open: isOpen(), x: at(player)[0], slam: messages.includes(SLAM) });
+  const sample = () => ({ open: isOpen(), x: at(player)[0], slam: messages.includes(SLAM), forced: player.getForceMovement() != null });
   const timeline = [sample()];
   for (let i = 0; i < 6; i++) {
     tick();
@@ -108,7 +108,9 @@ test("east Temple Door from the west: opens, carries the player east, slams shut
   assert.ok(opened >= 0, `the door swings open: ${JSON.stringify(timeline)}`);
   assert.ok(sounds.includes(62), `sound 62 on opening: ${sounds}`);
   const crossed = timeline.findIndex((step) => step.x === X);
-  assert.ok(crossed >= 0, "the player is carried onto the east tile");
+  assert.ok(crossed >= 0, "the player steps onto the east tile");
+  // Recording 3926 tick 614: a plain [walk] 1824 -> 1825 in player_info, no exactmove.
+  assert.ok(timeline.every((step) => !step.forced), `an ordinary walk step, not forced movement: ${JSON.stringify(timeline)}`);
   const slammed = timeline.findIndex((step) => step.slam);
   assert.equal(slammed, opened + 1, `the slam message follows the opening by one tick: ${JSON.stringify(timeline)}`);
   assert.equal(timeline[opened + 1].open, true, "still open on the slam tick (capture tick 615)");

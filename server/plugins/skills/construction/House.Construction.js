@@ -34,6 +34,7 @@ const Decorations = require("./Decorations.Construction");
 const GamesRoom = require("./GamesRoom.Construction");
 const CombatRings = require("./CombatRings.Construction");
 const Tea = require("./Tea.Construction");
+const Topiary = require("./Topiary.Construction");
 const TipJar = require("./TipJar.Construction");
 const Bookcase = require("./Bookcase.Construction");
 const Scrying = require("./Scrying.Construction");
@@ -2087,6 +2088,7 @@ function attach(api) {
   GamesRoom.attachGamesRoom(api);
   CombatRings.attachCombatRings(api);
   Tea.attachTea(api);
+  Topiary.attachTopiary(api);
   TipJar.attachTipJar(api);
   Bookcase.attachBookcase(api);
   Storage.attachStorage(api);

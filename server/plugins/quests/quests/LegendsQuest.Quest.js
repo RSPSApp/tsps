@@ -71,7 +71,7 @@ module.exports = function registerLegendsQuest(api) {
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
   const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
-  ObstacleRunner.init(api);
+  let obstacleRunnerReady = false;
 
   let quest;
 
@@ -251,7 +251,7 @@ module.exports = function registerLegendsQuest(api) {
     // doors need Legends' Quest complete.
     { closed: [2391, 2392], open: [1573, 1574], y: 3349, sound: 71,
       message: "The guards salute you as you walk past.", shout: "Legends Guild Member Approaching!",
-      allowed: (player) => meetsQuestRequirements(player),
+      allowed: (player) => questStage(player) >= STAGE_COMPLETE || meetsQuestRequirements(player),
       // shortcut: uncaptured refusal; replace with the guards' real lines when a capture has them.
       refusal: "You need 107 quest points and to have completed Family Crest, Heroes' Quest, Shilo Village, Underground Pass and Waterfall Quest to enter." },
     { closed: [ObjectIdentifiers.LEGENDS_GUILD_DOOR, ObjectIdentifiers.LEGENDS_GUILD_DOOR_2], open: [2898, 2899], y: 3373, sound: 46,
@@ -261,6 +261,7 @@ module.exports = function registerLegendsQuest(api) {
   ];
   const GUILD_ENTRANCE_XS = [2728, 2729];
   const GUILD_INVISWALL = 38848;
+  const GUILD_TOTEM = 2638;
   const crossingGuild = new WeakSet();
 
   const START_HOOK = "quest:legends-quest:start";
@@ -1928,6 +1929,14 @@ module.exports = function registerLegendsQuest(api) {
       player.sendMessage("This totem pole looks corrupted. You don't like to look at it for too long.");
       return;
     }
+    if (GUILD_TOTEM === objectId) {
+      // RSProx 20261121T080414 tick 69-71: the guild's totem (morphs to 31878/31879) opens a statement box.
+      event.handled = true;
+      player.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder()
+        .add(new api.core.StatementDialogue(0, "This totem pole is truly awe inspiring. It depicts powerful Karamjan animals. It is very well carved and brings a sense of power and spiritual fulfillment to anyone who looks at it."))
+        .add(new api.core.EndDialogue(1)));
+      return;
+    }
     if (GOOD_TOTEM === objectId) {
       event.handled = true;
       player.sendMessage("This totem pole is truly awe inspiring. It depicts powerful Karamja jungle animals.");
@@ -1978,6 +1987,11 @@ module.exports = function registerLegendsQuest(api) {
   }
 
   function crossGuildEntrance(player, entrance) {
+    // Lazy: the runner needs the real core, which unit tests' stub APIs lack at registration.
+    if (!obstacleRunnerReady) {
+      ObstacleRunner.init(api);
+      obstacleRunnerReady = true;
+    }
     const at = player.getLocation();
     const x = at.getX();
     if (crossingGuild.has(player) || ObstacleRunner.isBusy(player) || !GUILD_ENTRANCE_XS.includes(x)) return;
@@ -1986,7 +2000,8 @@ module.exports = function registerLegendsQuest(api) {
     player.sendMessage(entrance.message);
     player.getPacketSender().sendSound(entrance.sound, 1, 0);
     swingGuildEntrance(entrance, true);
-    ObstacleRunner.run({ player }, [{ walk: [[x, target]] }]);
+    // Live sends the step at walk speed (TemporaryMoveSpeed 1) even with run on.
+    ObstacleRunner.run({ player }, [{ walk: [[x, target]], traversalType: 1 }]);
     // shortcut: only members get a shout; the during-quest "I hope the quest is going well" is not sent.
     if (entrance.shout && questStage(player) >= STAGE_COMPLETE) {
       // Either guard (3951 or 3952) announces, evenly.
@@ -2069,6 +2084,11 @@ module.exports = function registerLegendsQuest(api) {
   function handleNpcInteraction(event) {
     const { player, npcId, clickType } = event;
     if (!player || clickType !== 1) return;
+    // RSProx 20261121T080414 ticks 32, 46, 222: a member's Talk-to opens with the salute line.
+    if (GUARD_IDS.has(npcId) && questStage(player) >= STAGE_COMPLETE) {
+      player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "The guards salute you as you walk past.");
+      return;
+    }
     if (!RADIMUS_IDS.has(npcId) || npcId === NpcIdentifiers.RADIMUS_ERKLE) return;
     // The spawned Radimus ids are not in the dialogue index; play his quest page directly.
     const stage = questStage(player);

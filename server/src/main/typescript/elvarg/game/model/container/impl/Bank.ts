@@ -5,6 +5,7 @@ import { PlayerStatus } from "../../PlayerStatus";
 import { ItemDefinition } from "../../../definition/ItemDefinition";
 import { StackType, MAX_STACK_AMOUNT } from "../StackType";
 import { Equipment } from "./Equipment";
+import { EquipmentSounds } from "../../../definition/EquipmentSounds";
 import { getWorldDefinition } from "../../../definition/WorldDefinition";
 import { GameConstants } from "../../../GameConstants";
 import { WeaponInterfaceManager } from "../../../content/combat/WeaponInterfaceManager";
@@ -1231,6 +1232,9 @@ export class Bank extends ItemContainer {
      * Banks [from]'s items, or only the one in [onlySlot] (a worn panel slot's Bank op). [emptyAll] is a
      * scripted deposit that must empty the container (Peer the Seer's spell): the player's deposit locks
      * don't apply to it.
+     *
+     * Live OSRS (rsprox captures, e.g. local 1002085 tick 20276, local 1002011 tick 19297): each worn item
+     * banked plays its own equip sound, in slot order; banking the inventory plays no sound at all.
      */
     public static depositItems(player: Player, from: ItemContainer, ignoreReqs: boolean, onlySlot?: number, { emptyAll = false }: { emptyAll?: boolean } = {}) {
         if (!ignoreReqs) {
@@ -1238,7 +1242,7 @@ export class Bank extends ItemContainer {
                 return;
             }
         }
-        let movedAny = false;
+        const removedSounds: Sound[] = [];
         for (let item of from.getValidItems()) {
             const slot = from.getItems().indexOf(item);
             if (onlySlot !== undefined && slot !== onlySlot) continue;
@@ -1252,10 +1256,12 @@ export class Bank extends ItemContainer {
             // By slot: a delete by id would take a preset stack in a lower slot instead of this one.
             const id = item.getId();
             const amount = item.getAmount();
+            const definition = item.getDefinition(); // switchItem empties the slot's Item in place
             from.switchItem(player.getBank(Bank.getTabForItem(player, id)), item.clone(), false, slot, false);
-            // A full bank (or a stack at its cap) refuses the move: only what actually left plays the sound.
+            // A full bank (or a stack at its cap) refuses the move: only a worn item that actually left plays its sound.
             const left = from.getItems()[slot];
-            if (!left || left.getId() !== id || left.getAmount() < amount) movedAny = true;
+            const moved = !left || left.getId() !== id || left.getAmount() < amount;
+            if (moved && from instanceof Equipment) removedSounds.push(EquipmentSounds.soundFor(definition));
         }
         from.refreshItems();
         if (player.isSearchingBank()) {
@@ -1263,9 +1269,7 @@ export class Bank extends ItemContainer {
         } else {
             player.getBank(player.getCurrentBankTab()).refreshItems();
         }
-        if (movedAny) {
-            Sounds.sendSound(player, from instanceof Equipment ? Sound.EQUIPMENT_OFF : Sound.DROP_ITEM);
-        }
+        for (const sound of removedSounds) Sounds.sendSound(player, sound);
         if (from instanceof Equipment) {
             WeaponInterfaceManager.assign(player);
             BonusManager.update(player);

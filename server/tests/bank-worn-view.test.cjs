@@ -306,8 +306,42 @@ test("depositing into a full bank plays no move sound; with room it does", (t) =
   slots = 3;
   press(Bank.DEPOSIT_WORN_CHILD);
   assert.equal(p.getEquipment().getItems()[E.WEAPON_SLOT].getId(), -1);
-  assert.deepEqual(sounds, [require("../dist/game/Sound").Sound.EQUIPMENT_OFF.getId()], "with room it is banked with the sound");
+  const { EquipmentSounds } = require("../dist/game/definition/EquipmentSounds");
+  assert.deepEqual(sounds, [EquipmentSounds.soundIdFor(core.ItemDefinition.forId(I.RUNE_SCIMITAR))], "with room it is banked with its sound");
   slots = 1;
+});
+
+// Live (rsprox captures local 1002085 tick 20276, local 1002011 tick 19297; bankmain:depositworn and
+// bank_depositbox:deposit_worn alike): Deposit worn items plays each banked item's own equip sound, in slot order
+// (rune full helm equip_helmet, obsidian cape and glory equip_fun, scimitar equip_sword, ...), and Deposit inventory
+// plays none (8,056 attempts of bankmain:depositinv in 572 recordings send no synth_sound). We played one
+// equipment-off sound (376) for the lot, and the drop sound for the inventory.
+test("Deposit worn items plays each item's equip sound in slot order; Deposit inventory plays none", (t) => {
+  const { p } = banker(t);
+  const I = core.ItemIdentifiers, E = core.Equipment;
+  const { EquipmentSounds } = require("../dist/game/definition/EquipmentSounds");
+  const worn = [
+    [E.HEAD_SLOT, I.RUNE_FULL_HELM], [E.AMULET_SLOT, I.AMULET_OF_GLORY_4_], [E.WEAPON_SLOT, I.ADAMANT_SCIMITAR],
+    [E.LEG_SLOT, I.RUNE_PLATELEGS], [E.FEET_SLOT, I.RUNE_BOOTS],
+  ];
+  for (const [slot, id] of worn) p.getEquipment().setItem(slot, new core.Item(id, 1));
+  p.getInventory().setItem(0, new core.Item(I.LOBSTER, 5)).setItem(1, new core.Item(I.RUNE_SCIMITAR, 1));
+  const sounds = [];
+  const sender = p.getPacketSender(), sendSoundEffect = sender.sendSoundEffect.bind(sender);
+  t.mock.method(sender, "sendSoundEffect", (id, ...rest) => { sounds.push(id); return sendSoundEffect(id, ...rest); });
+  const press = (child) => Bank.handleWidgetAction(p, { groupId: Bank.MAIN_INTERFACE_ID, childId: child, buttonNum: 1, slot: -1, itemId: -1 });
+
+  press(Bank.DEPOSIT_WORN_CHILD);
+  assert.equal(p.getEquipment().getValidItems().length, 0, "everything worn is banked");
+  const expected = worn.sort(([a], [b]) => a - b).map(([, id]) => EquipmentSounds.soundIdFor(core.ItemDefinition.forId(id)));
+  assert.deepEqual(sounds, expected, "one sound per item, in slot order");
+  assert.equal(sounds[1], 2238, "the glory plays equip_fun, as recorded");
+  assert.ok(!sounds.includes(376), "no generic equipment-off sound");
+
+  sounds.length = 0;
+  press(Bank.DEPOSIT_INVENTORY_CHILD);
+  assert.equal(p.getInventory().getValidItems().length, 0, "the inventory is banked");
+  assert.deepEqual(sounds, [], "Deposit inventory plays no sound");
 });
 
 // Live (rsprox_transcripts/242/900150.txt, 241/911517.txt, 241/900101.txt): "Undead: 0% " (with its trailing space)

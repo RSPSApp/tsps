@@ -585,6 +585,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `SaveHistory` | SaveHistory | commands | yes | Owner commands ::snapshots and ::rollback, which list a player's saved copies and restore an earlier one. |
 | `SeasonalRares` | SeasonalRares | events | yes | Hands out discontinued seasonal rares during the world's own event windows, with ::rares to list what a player can claim. |
 | `AcceptAid` | AcceptAid | interface | yes | The Accept Aid setting that controls whether Lunar spells, cures and shared boosts can affect the player, refused for Ironmen. |
+| `AccountManagement` | AccountManagement | interface | yes | The Account Management tab's Account, Community and Useful Links buttons, with the chosen page kept between logins. |
 | `ActivityAdviser` | ActivityAdviser | interface | yes | The Activity Adviser: the minimap button opens its quest suggestions, built from the cache quest table. |
 | `AlchemyWarningThreshold` | AlchemyWarningThreshold | interface | yes | Settings option for the item value above which casting Alchemy asks first. |
 | `AntiDragDelay` | AntiDragDelay | interface | yes | Settings option for the Anti Drag delay, asked as a number of milliseconds. |

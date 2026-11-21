@@ -673,11 +673,13 @@ function unmet(player, requirement, levelMessage) {
     pluginApi.emitCustomEvent(stage === "started" ? "quest:is-started" : "quest:is-complete", request);
     if ((stage === "started" ? request.started : request.complete) === false) return message;
   }
-  if (requirement.diary?.enforce) {
-    const { key, tier, message } = requirement.diary;
-    const request = { player, diary: key, tier, complete: null };
-    pluginApi.emitCustomEvent("diary:is-complete", request);
-    if (request.complete === false) return message;
+  if (requirement.diary) {
+    // A diary no plugin answers for is no bar, as with quests. `claimed`: the tier's reward must
+    // have been taken too, not only its tasks done.
+    const { key, tier, claimed, message } = requirement.diary;
+    const request = { player, diary: key, tier, complete: null, claimed: null };
+    pluginApi.emitCustomEvent(claimed ? "diary:is-reward-claimed" : "diary:is-complete", request);
+    if ((claimed ? request.claimed : request.complete) === false) return message;
   }
   if (requirement.slayerTask) {
     const request = { player, task: null };

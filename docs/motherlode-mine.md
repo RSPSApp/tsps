@@ -47,7 +47,10 @@ The plugin lives under `areas/` so that its "Ladder" handler runs before the gen
 | Cave 30374 "Enter" | Mining Guild (3055, 9743) | (3718, 5678) |
 | Tunnel 30375 "Exit" | (3717, 5678) | Mining Guild (3054, 9744), needs 60 Mining |
 | Ladder 19044 / 19045 | (3755, 5673) / (3755, 5674) | (3755, 5675) up / (3755, 5672) down |
-| Dark tunnels 10047 | (3760, 5670) ↔ (3764, 5671), (3744, 5642) ↔ (3745, 5645) | the other end, needs 54 Agility |
+| Dark tunnel 10047, eastern | (3760, 5670) ↔ (3764, 5671) | (3765, 5671) / (3759, 5670), needs 54 Agility and the medium Falador Diary's reward claimed |
+| Dark tunnel 10047, southern | (3744, 5642) ↔ (3745, 5645) | (3745, 5646) / (3744, 5641), needs 54 Agility |
+
+The dark tunnels are `skills/data/agility-shortcuts.json` entries, one per tunnel (`at`); this plugin no longer handles them (its own handler ran first and let anyone with 54 Agility through, #6420). The Wiki (Dark tunnel (Motherlode Mine)) says the northern one by the bank needs the easy and medium Falador Diary, with "the reward for the medium diary must be accepted", and the southern one needs no diary. The refusal "You need to complete the medium Falador Diary to use this shortcut." is ours: no capture or Wiki page has it.
 
 Bold is captured; the rest are OpenRune's.
 
@@ -63,7 +66,7 @@ Bold is captured; the rest are OpenRune's.
   - The respawn timers sent were 159-176 ticks below and 94-101 above (one outlier, 69, on a "left" vein).
 - **The hopper:**
   - Deposit plays animation 832 and sound 2496.
-  - A pay-dirt NPC (6564) appears at (3748, 5671) the next tick and moves one tile south each tick.
+  - A pay-dirt NPC (6564) appears at (3748, 5671) the next tick and moves one tile south each tick. Each move is an NPC teleport that keeps it in view (local recording mlm-loop: added tick 554, 11 moves at ticks 556-566 down to (3748, 5660), removed at 567), so the server telejumps it: a plain move drops an NPC from view for the tick, which hid it the whole way down (#6420).
   - With both wheels jammed it still appears the next tick, then stays idle at (3748, 5671).
   - 12 ticks after the deposit, varbit 5558 rose by the deposit, with "Some ore is ready to be collected from the sack." and sound 2739 (delay 30). When that batch filled the sack (5558 81 → 108, local 1002196), the line was "Some ore is ready to be collected from the sack. The sack is now full." (10 recordings).
     - The Wiki (Motherlode Mine) quotes "Some ore is ready to be collected from the sack. It's getting full." for this moment, but no recording has it. The server uses the recorded line, because captures are the first-hand source for exact messages (`server/docs/agents/sources.md`). The Wiki's "getting full" may be mixed up with the full-sack hopper refusal below.
@@ -122,12 +125,11 @@ Bold is captured; the rest are OpenRune's.
   - the Mining Guild.
 
   These are OpenRune's, or this plugin's own.
-- **Getting out** through the tunnels, the Mining Guild cave, the ladder and the shortcuts: their tiles and timings are OpenRune's.
+- **Getting out** through the tunnels, the Mining Guild cave and the ladder: their tiles and timings are OpenRune's. The dark tunnels' animation (844), message and timing are the Agility shortcut builder's; no capture has them.
 
 ## Not built yet
 
 - The rockfall's splash (spotanim 305): there's no packet for a graphic on a tile.
 - The respawn timers drawn over depleted veins (client script 5474, `add_overlaytimer_loc`).
-- The medium Falador diary that the eastern dark tunnel needs, since there are no achievement diaries yet.
 - The prospector outfit's XP bonus. The coal bag and gem bag work (docs/storage-items.md), but the sack's ore and gems don't go into them.
 - Mercy's other dialogue, and the Falador elite diary's better ore chances.

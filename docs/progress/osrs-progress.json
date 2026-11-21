@@ -24743,13 +24743,14 @@
             "Covered by server/tests/motherlode-mine.test.cjs (run after `yarn build`: `node --test tests/motherlode-mine.test.cjs`) and documented in docs/motherlode-mine.md.",
             "Main 281766303 (2 November 2026): #1780 stops the water channel when both wheels jam and displays waiting pay-dirt in the hopper.",
             "Main 3b61a15a8 (6 November 2026): #2489 Credit supported Falador Diary gameplay tasks. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4057 feat(leagues): expand Demonic Pacts task trigger coverage. #3939 Motherlode Mine: pay-dirt rolls the Rock golem. #3922 Motherlode Mine: ore veins roll the gem table. 5 merged PRs changed recorded implementation files for this entry."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4057 feat(leagues): expand Demonic Pacts task trigger coverage. #3939 Motherlode Mine: pay-dirt rolls the Rock golem. #3922 Motherlode Mine: ore veins roll the gem table. 5 merged PRs changed recorded implementation files for this entry.",
+            "#6420 (fix/6420-mlm-shortcut-paydirt): the dark tunnels move from MotherlodeMine.plugin.js to the Agility shortcut data; the eastern dark tunnel needs the medium Falador Diary's reward claimed and the southern one crosses between its own ends (Wiki, Dark tunnel (Motherlode Mine)); the floating pay-dirt telejumps down the channel so it stays in view while the water flows (local recording mlm-loop, ticks 556-566)."
           ],
           "taskDetails": [
             {
               "name": "Implement entry and mine traversal",
               "steps": [
-                "Open the mine through the Cave/Tunnel crawls, gating the Mining Guild pair on Mining 60 (MotherlodeMine.plugin.js:33, crawl at :88); the dark tunnels need Agility 54 (SHORTCUTS, :55; squeezeThrough, :119).",
+                "Open the mine through the Cave/Tunnel crawls, gating the Mining Guild pair on Mining 60 (MotherlodeMine.plugin.js:33, crawl at :88); the dark tunnels are Agility shortcuts (skills/data/agility-shortcuts.json): 54 Agility, and the eastern one the medium Falador Diary's reward.",
                 "Move players between the mine floor and the upper level with the Ladder handler (climb, :106) and require Prospector Percy's upper-level unlock before the ladder is usable.",
                 "Show the cave HUD (interface 382 in overlay_hud 161:8) only while inside MINE_ZONE and close it on exit or teleport (enterMine/leaveMine)."
               ],

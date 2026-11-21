@@ -37,7 +37,11 @@ MotherlodeMine.register({
   registerCommand() {},
   spawnNpc: ({ id, x, y }) => {
     const npc = { id, location: new Location(x, y, 0), removed: false };
-    npc.moveTo = (location) => { npc.location = location; };
+    // A plain moveTo drops an NPC from view for the tick it moves (World.staysInViewWhenPlaced), so
+    // the pay-dirt moving every tick was never seen (#6420); it moves by telejump, as live keeps it in view.
+    npc.moveTo = () => { throw new Error("the pay-dirt moves by telejump, not a plain move"); };
+    npc.telejump = (location) => { npc.location = location; npc.path.push([location.getX(), location.getY()]); };
+    npc.path = [];
     npc.setScriptedMovement = () => {};
     spawned.push(npc);
     return npc;
@@ -280,6 +284,8 @@ test("deposited pay-dirt floats down the channel and washes into ore in the sack
   assert.equal(Mine.sackTotal(Mine.stateOf(p)), 0);
   ticks(1);
   assert.equal(spawned[0].removed, true);
+  // rsprox (local recording mlm-loop, ticks 556-566): one tile south a tick, kept in view.
+  assert.deepEqual(spawned[0].path, Array.from({ length: 11 }, (_, i) => [3748, 5670 - i]));
   assert.deepEqual(Mine.stateOf(p).sack, { runite: 1, coal: 1 });
   assert.equal(p.varbits.get(Mine.VARBIT_SACK), 2);
   assert.deepEqual(p.xp.at(-1), ["Mining", 90], "75 for the runite and 15 for the coal");
@@ -660,4 +666,10 @@ test("collecting the last ore from the sack says it is now empty (rsprox)", () =
   left.inventory = inventory(28);
   interact("Sack", "Search", { player: left, objectId: Machine.SACK, location: { x: 3748, y: 5659, z: 0 } });
   assert.equal(boxText(left), "You collect your ore from the sack.");
+});
+
+// #6420: the plugin's own "Dark tunnel" handler ran before Agility's and skipped the eastern
+// tunnel's medium Falador Diary gate; the tunnels are Agility shortcut data now.
+test("the dark tunnels are left to the Agility shortcuts", () => {
+  assert.equal(hooks.objects["Dark tunnel"], undefined);
 });

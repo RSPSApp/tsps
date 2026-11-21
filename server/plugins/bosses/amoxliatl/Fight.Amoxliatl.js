@@ -115,8 +115,8 @@ class Fight {
   process() {
     if (this.stopped) return;
     this.tick++;
-    // Her specials aren't combat-engine attacks, which would count her out of combat and
-    // regenerate her (a tenth of her hitpoints a tick).
+    // Her specials aren't combat-engine attacks: refresh the combat stopwatch so she counts as
+    // fighting.
     if (!this.over) this.boss.getCombat().getLastAttack().reset();
     const due = this.events.filter((event) => event.tick <= this.tick);
     this.events = this.events.filter((event) => event.tick > this.tick);

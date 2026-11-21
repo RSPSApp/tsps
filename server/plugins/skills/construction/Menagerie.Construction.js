@@ -12,6 +12,17 @@ const { examineItem } = require("../../../src/main/typescript/elvarg/game/conten
 // 2013 (poh_menagerie_closed); stored pets roam the menagerie rooms while it is 0 and the house
 // isn't in building mode.
 const MENAGERIE_INTERFACE = Ids.iface("poh_menagerie");
+// The Pet list's Read (rsprox captures 2581, 2777, 2782, 2793 and 3121): script 2524 (-1, -1),
+// poh_petlist (210) as the main modal, Examine (op10) on every list slot, then script 647 with
+// one "Owned"/"Not owned" cell per slot of enum 985, each ending in "|". Owned is the
+// insurance record (rec 2581's nine Owned slots are its nine pet_insurance bits); Examine
+// sends the pet's examine whether it is owned or not.
+const PET_LIST_INTERFACE = Ids.iface("poh_petlist");
+const PET_LIST = 3;
+const SCRIPT_MAINMODAL_OPEN = 2524;
+const SCRIPT_PET_LIST = 647;
+const OWNED = "<col=00ff00>Owned</col>";
+const NOT_OWNED = "<col=ff0000>Not owned</col>";
 const LIST = 7;
 const ROAM_TOGGLE = 9;
 const PET_ENUM = 985;
@@ -96,6 +107,38 @@ function view(event) {
   return true;
 }
 
+function owns(player, itemId) {
+  const request = {player, itemId, owns: false};
+  api.emitCustomEvent("pets:owns", request);
+  return request.owns === true;
+}
+
+function readPetList(event) {
+  if (!inMenagerie(event)) return false;
+  const player = event.player;
+  const last = Math.max(...pets().keys());
+  const cells = [];
+  for (let slot = 0; slot <= last; slot++) {
+    const pet = pets().get(slot);
+    cells.push(pet && owns(player, pet.itemId) ? OWNED : NOT_OWNED);
+  }
+  const sender = player.getPacketSender();
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
+  sender.sendInterface(PET_LIST_INTERFACE);
+  sender.sendInterfaceFlagsRange((PET_LIST_INTERFACE << 16) | PET_LIST, 0, last, 1 << 10);
+  sender.sendInterfaceScript(SCRIPT_PET_LIST, [cells.map(cell => cell + "|").join("")]);
+  return true;
+}
+
+function petListClick(event) {
+  const player = event.player;
+  if (event.childId !== PET_LIST || (event.opId ?? event.action) !== 10 ||
+      player.getInterfaceId() !== PET_LIST_INTERFACE ||
+      !player.getPacketSender().isSubInterfaceOpen(PET_LIST_INTERFACE)) return;
+  const pet = pets().get(event.slot);
+  if (pet) examineItem(player, pet.itemId, 1);
+}
+
 function storePet(event) {
   const slot = slotOf(event.itemId);
   const house = slot >= 0 && inMenagerie(event);
@@ -139,6 +182,10 @@ function storeNow(context) {
 }
 
 function interfaceClick(event) {
+  if (event.groupId === PET_LIST_INTERFACE) {
+    event.handled = true;
+    return petListClick(event);
+  }
   if (event.groupId !== MENAGERIE_INTERFACE) return;
   const player = event.player;
   const house = House.houseFor(player);
@@ -236,6 +283,7 @@ function attachMenagerie(api) {
   for (const name of ["Oak house", "Teak house", "Mahogany house", "Consecrated house", "Desecrated house", "Nature house"]) {
     api.onObjectInteraction(name, { View: view });
   }
+  api.onObjectInteraction("Pet list", { Read: readPetList });
   api.onItemOnObject(storePet, { noted: false });
   api.onInterfaceActionClick(interfaceClick);
   api.onCustomEvent("pets:held-elsewhere", heldInMenagerie);

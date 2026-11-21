@@ -151,7 +151,7 @@ class Fight {
     this.boss.faceTile(this.tile(chamber.entry));
     this.boss.__nexFight = this;
     this.boss.setFlag("combat:no-retaliate");
-    // Her attacks are the fight's, so the engine would think her idle and regenerate her.
+    // Nex doesn't regenerate hitpoints (Wiki, User:Orion/Regen: HP "N/A").
     this.boss.setFlag("combat:no-regen");
     // She faces her target at any range (her spells reach 10 tiles; the engine lets go sooner).
     this.boss.setFlag("interaction:keep");

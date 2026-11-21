@@ -39,7 +39,7 @@ function fixture() {
     sendMessage: message => sent.push(["message", message]), performAnimation: value => sent.push(["animation", value]),
     getDialogueManager: () => ({ startDialogues: value => { chain = value; } }) };
   const api = { core, persistAttribute() {}, onItemAction: (name, handlers) => actions.set(name, { ...actions.get(name), ...handlers }),
-    onBeforeNpcInteraction() {}, onItemOnNpc() {}, onBeforeObjectInteraction() {}, onCanUseItem() {},
+    onBeforeNpcInteraction() {}, onItemOnNpc() {}, onBeforeObjectInteraction() {}, onObjectInteraction() {}, onCanUseItem() {},
     onCustomEvent: (name, fn) => { if (!events.has(name)) events.set(name, []); events.get(name).push(fn); },
     emitCustomEvent: (name, request) => { for (const fn of events.get(name) ?? []) fn(request); },
     onPlayerLogout() {}, onPlayerDisconnect() {}, onPlayerLogin() {}, onPlayerDeath() {}, onNpcDeath() {}, onInterfaceActionButton() {},
@@ -133,7 +133,7 @@ test("a fresh easy scroll starts a 2-4 step trail on a random step once, and rer
   assert.equal(f.items[0], first);
   assert.deepEqual(f.items[0].getMetaValue(Runtime.metaKey(EASY)), state);
   f.actions.get("Clue scroll (easy)")["Check steps"](f.event());
-  assert.deepEqual(f.sent.at(-1), ["message", "You have completed 0 steps on this easy Treasure Trail."]);
+  assert.deepEqual(f.sent.at(-1), ["message", "You have completed 0 steps on this easy clue scroll."]);
 });
 
 test("a solved step hands over another step item, and the last step a reward casket", () => {

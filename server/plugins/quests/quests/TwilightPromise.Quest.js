@@ -1487,8 +1487,7 @@ module.exports = function registerTwilightPromiseQuest(api) {
     attacker.performAnimation(new Animation(swing));
     defender.performAnimation(new Animation(block));
     // These are scripted blows, so neither fighter has a combat target. Refresh the combat
-    // stopwatch the same way an ordinary hit would, or NPC.process() treats both as out of
-    // combat and regenerates the damage back while the pair is still trading swings.
+    // stopwatch the same way an ordinary hit would, so both count as fighting.
     attacker.getCombat()?.getLastAttack?.().reset?.();
     defender.getCombat()?.getLastAttack?.().reset?.();
     const damage = SPAR_DAMAGE.min + Math.floor(Math.random() * (SPAR_DAMAGE.max - SPAR_DAMAGE.min + 1));

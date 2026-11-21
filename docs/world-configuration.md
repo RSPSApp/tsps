@@ -434,7 +434,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `AgilityPyramid` | AgilityPyramid | areas | yes | Moves the Agility Pyramid's sliding blocks on floors 1 and 3, which push players down a floor for 8 damage. The course itself is a separate plugin. (members only) |
 | `AncientPyramidMummies` | Ancient Pyramid Mummies | areas | yes | Ancient Pyramid mummy transformations: fire spells and lit fire arrows set them alight, water spells douse them. (members only) |
 | `BabaYagasHouse` | BabaYagasHouse | areas | yes | Baba Yaga's walking house on Lunar Isle: Go-inside, its camera shake, and the door back out beside wherever the house has walked. (members only) |
-| `BrimhavenDungeon` | BrimhavenDungeon | areas | yes | Brimhaven Dungeon access: Saniboch's entry fee, the dungeon entrance and the vines that need an axe to go deeper. (members only) |
+| `BrimhavenDungeon` | BrimhavenDungeon | areas | yes | Brimhaven Dungeon access: Saniboch's entry fee, the dungeon entrance, Banisoch's back entrance to the bronze dragons and the vines that need an axe to go deeper. (members only) |
 | `Burthorpe` | Burthorpe | areas | yes | Animates the soldiers drilling, sparring and eating in Burthorpe's square, as captured. (members only) |
 | `CatacombsOfKourend` | CatacombsOfKourend | areas | yes | Catacombs of Kourend access: King Rada's statue, the vine ladder back up, the corner vines and the surface holes they open, and bones restoring Prayer points while buried or crushed there. (members only) |
 | `ChampionsGuild` | ChampionsGuild | areas | yes | Lets players into the Champions' Guild in Varrock only with 32 Quest Points, with the Guildmaster's refusal and greeting. |
@@ -452,7 +452,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `EdgevilleDungeon` | EdgevilleDungeon | areas | yes | Edgeville Dungeon's brass key door and its achievement diary tasks. |
 | `EnchantedValley` | EnchantedValley | areas | yes | Enchanted Valley's trees: chopping wakes a level-scaled tree spirit instead of cutting the tree. (members only) |
 | `FeroxEnclave` | FeroxEnclave | areas | yes | Ferox Enclave: its barriers and safe ground, the Pools of Refreshment and the Clan Wars free-for-all arena behind the white portal. |
-| `ForthosDungeon` | ForthosDungeon | areas | yes | Forthos Dungeon: the Spider's Den's multi-combat room and the grubby gate's 57 Thieving unlock. (members only) |
+| `ForthosDungeon` | ForthosDungeon | areas | yes | Forthos Dungeon: the Spider's Den's multi-combat room, the grubby gate's 57 Thieving unlock and the one-way east Temple Door. (members only) |
 | `FossilBoneMachine` | FossilBoneMachine | areas | yes | Feed enriched bones into Fossil Island's strange machine for Prayer experience. (members only) |
 | `FossilIslandUnderwater` | FossilIslandUnderwater | areas | yes | Fossil Island rowboats and the sea floor dive, with an oxygen bar that drowns players lacking a fishbowl helmet and diving apparatus. (members only) |
 | `FossilStorage` | FossilStorage | areas | yes | Fossil Island Museum Camp's fossil storage crates and the cleaning bench that cleans unidentified fossils. (members only) |
@@ -519,7 +519,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Hueycoatl` | Hueycoatl | bosses | yes | The Hueycoatl in the Darkfrost, Varlamore: a public or private fight with five body segments, Rain Fire, pillars, the half-health shield and a final phase. (members only) |
 | `KalphiteQueen` | KalphiteQueen | bosses | yes | The Kalphite Queen fight, run entirely from its encounter unit. (members only) |
 | `KillCountMessages` | KillCountMessages | bosses | yes | Tells the kill count on a kill for bosses whose count is kept only by Combat Achievements. (members only) |
-| `KingBlackDragon` | KingBlackDragon | bosses | yes | The King Black Dragon: the Lava Maze ladder and lair lever, and the fight with dragonfire checked against antifire protection. (members only) |
+| `KingBlackDragon` | KingBlackDragon | bosses | yes | The King Black Dragon: the Lava Maze ladder, the spider room's lever into the lair and the lair's lever out, and the fight with dragonfire checked against antifire protection. (members only) |
 | `Kraken` | Kraken | bosses | yes | The Kraken and cave krakens in Kraken Cove: disturb the whirlpool to surface them, four tentacles beside the boss, and Magic-only damage. (members only) |
 | `Leviathan` | Leviathan | bosses | yes | The Leviathan: its site, the fight and the rewards. (members only) |
 | `MadAngel` | MadAngel | bosses | yes | The Mad Angel in Ardeaglais on Wyrmscraig: the cathedral doors and pew, a private cathedral, the fight and the kill. (members only) |
@@ -541,7 +541,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `TormentedDemons` | TormentedDemons | bosses | yes | Tormented Demons in the Ancient Guthixian Temple: three styles, shield and defenceless phases, fire bombs, 1-3 demon rooms, kill count and Combat Achievements. (members only) |
 | `Vardorvis` | Vardorvis | bosses | yes | Vardorvis at the Stranglewood ritual site: a private instance, tendril barrier, slashes, axes, head gaze, spikes, strangle and the kill. (members only) |
 | `Vorkath` | Vorkath | bosses | yes | Vorkath after Dragon Slayer II: wake her on Ungael, fight her fireballs and acid, rapid-fire and freeze specials, with Torfinn returning items on death. (members only) |
-| `WildernessBosses` | WildernessBosses | bosses | yes | The Wilderness bosses: Callisto, Vet'ion, Venenatis, their Artio, Calvar'ion and Spindel variants, shared entry fee, Escape Caves and Scorpia. (members only) |
+| `WildernessBosses` | WildernessBosses | bosses | yes | The Wilderness bosses: Callisto, Vet'ion, Venenatis, their Artio, Calvar'ion and Spindel variants, shared entry fee, Escape Caves, Scorpia and the Voidwaker pieces' Inspect lines. (members only) |
 | `Yama` | Yama | bosses | yes | Yama at the bottom of the Chasm of Fire: the Voice of Yama, a solo instance, the three-phase fight with the Judge of Yama, and the loot. (members only) |
 | `Zalcano` | Zalcano | bosses | yes | Zalcano under Prifddinas: the platforms and barrier, the shared fight, mining, refining, imbuing and throwing tephra, and contribution rewards. (members only) |
 | `Zulrah` | Zulrah | bosses | yes | Zulrah: the sacrificial boat from Zul-Andra, the fight at its shrine and what it leaves behind. (members only) |
@@ -957,7 +957,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `KeyChests` | KeyChests | objects | yes | Key-opened chests: Taverley crystal chest, Mount Karuulm brimstone chest, Larran's Wilderness chests, Prifddinas' Elven chest, Forthos' Grubby Chest and the Zombie Pirate's Locker, plus crystal key crafting. (members only) |
 | `Ladders` | Ladders | objects | yes | Climbing for ladders, staircases, trapdoors, ropes and similar scenery, moving the player a level up or down with the climb animation. |
 | `LeafyPalmTree` | LeafyPalmTree | objects | yes | Lets players shake Kharazi Jungle's Leafy Palm Trees for a palm leaf on the ground, with a 35-second cooldown per tree. (members only) |
-| `Levers` | Levers | objects | yes | The Wilderness teleport levers (Edgeville, East Ardougne, the Deserted Keep and Mage Arena bank), with the Wilderness warning and a shared lever teleport event. |
+| `Levers` | Levers | objects | yes | The Wilderness teleport levers (Edgeville, East Ardougne, the Deserted Keep and Mage Arena bank), with the Wilderness warning and a shared lever teleport event that can also pull another plugin's lever. |
 | `MessageScrolls` | MessageScrolls | objects | yes | Reading the Falador bank notice boards (from a few tiles away) and Varrock's Combat Scroll, which open the plain message scroll with their recorded lines. |
 | `Pickable` | Pickable | objects | yes | Picking wheat, potatoes, onions, cabbages, sweetcorn, flax and nettles from the fields, with respawn timers and nettle stings. |
 | `PineapplePlant` | PineapplePlant | objects | yes | Lets players pick Karamja's wild pineapple plants, a stage at a time, as captured; picked plants grow back a stage at a time. (members only) |
@@ -1058,7 +1058,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MagicMushtrees` | MagicMushtrees | world | yes | Fossil Island's Magic Mushtrees: the four-tree travel menu, with each tree unlocked per player once used. (members only) |
 | `ManagingMiscellania` | ManagingMiscellania | world | yes | Managing Miscellania: pay the kingdom's coffers and Advisor Ghrim collects daily coal, logs, herbs, flax, fish, hardwood and seeds, scaled by approval. (members only) |
 | `MultiCombatApi` | MultiCombatApi | world | yes | Serves the bounds of multi-combat zones to the client over the content API, without exposing the full development world data. |
-| `Museum` | Museum | world | yes | Varrock Museum Kudos: the Dig Site cleaning activity, the finds storage crate, display cases, Historian Minas's quest timeline reports and Curator Haig Halen's salvaging relics. (members only) |
+| `Museum` | Museum | world | yes | Varrock Museum Kudos: the Dig Site cleaning activity, the finds storage crate, display cases, Historian Minas's quest timeline reports, Curator Haig Halen's salvaging relics and the fossil displays. (members only) |
 | `Music` | Music | world | yes | The music tab: track unlocking, jukebox selection, now-playing, the music cape from Olaf the Bard and air guitar unlock. |
 | `PlayerOnlineTimer` | PlayerOnlineTimer | world | yes | Tracks each player's current session and lifetime online seconds, for other plugins to read through events. |
 | `ProceduralRegionStream` | ProceduralRegionStream | world | yes | Developer ::procregion command that generates and streams a procedural town of buildings and streets into a map region for the staff member. |

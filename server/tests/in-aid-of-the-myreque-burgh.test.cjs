@@ -551,3 +551,109 @@ test("the gate's step over the inviswall gives collision back as soon as the ope
   tick(1);
   assert.equal(p.hasFlag("movement:ignore-clipping"), false, "collision back on arrival");
 });
+
+// ---------------------------------------------------------------------------
+// Issue 6415: the citizens' heads, the finds' inventory update, Read, the store ladder
+// ---------------------------------------------------------------------------
+
+const NPC_NAME = uid(231, 4), NPC_HEAD = uid(231, 2);
+
+test("the citizens' shared lines show the clicked NPC's own name and head, not the transcript's 'Citizen' (t1166, t9227)", (t) => {
+  const { p, seen } = player(t, 60, {}, { x: 3492, y: 3231, z: 0 });
+  const heads = [];
+  const sender = p.getPacketSender();
+  const original = sender.sendNpcHeadOnInterface.bind(sender);
+  sender.sendNpcHeadOnInterface = (npcId, uidAt) => { heads.push([npcId, uidAt]); return original(npcId, uidAt); };
+  talk(p, core.NpcIdentifiers.RAZVAN, "Talk-to", { x: 3492, y: 3232 });
+  proceed(p, seen);
+  choose(p, "Are there any 'out of the way' places here?");
+  proceed(p, seen, "How do you mean");
+  const at = texts(seen, NPC_TEXT).indexOf("How do you mean, 'out of the way'?");
+  assert.ok(at >= 0, "Razvan's shared line was shown");
+  assert.ok(!texts(seen, NPC_NAME).includes("Citizen"), "no line is labelled Citizen");
+  assert.equal(texts(seen, NPC_NAME).at(-1), "Razvan");
+  assert.deepEqual(heads.at(-1), [core.NpcIdentifiers.RAZVAN, NPC_HEAD]);
+});
+
+test("ItemContainer.add with no refresh flag sends the inventory at once (the finds showed up seconds late)", (t) => {
+  const { p } = player(t, 60);
+  const sent = [];
+  const sender = p.getPacketSender();
+  const original = sender.sendItemContainer.bind(sender);
+  sender.sendItemContainer = (container, ...rest) => { sent.push(container); return original(container, ...rest); };
+  p.getInventory().add(new core.Item(I.PLASTER_FRAGMENT, 1));
+  assert.equal(sent.length, 1, "refreshed by the add itself");
+  p.getInventory().add(new core.Item(I.DUSTY_SCROLL, 1), false);
+  assert.equal(sent.length, 1, "an explicit false still batches");
+});
+
+test("the plaster at scoop 5 with room: in the inventory and on the client on its objectbox's tick (t921)", (t) => {
+  const { p, seen } = cellar(t, 4, { [V.MESSAGE]: 1 });
+  p.getInventory().add(new core.Item(I.RUNE_PICKAXE, 1));
+  p.getInventory().add(new core.Item(I.SPADE, 1));
+  p.getInventory().add(new core.Item(I.BUCKET, 1));
+  const sent = [];
+  const sender = p.getPacketSender();
+  const original = sender.sendItemContainer.bind(sender);
+  sender.sendItemContainer = (container, ...rest) => {
+    sent.push(container.getItems().some((item) => item?.getId() === I.PLASTER_FRAGMENT));
+    return original(container, ...rest);
+  };
+  mineAndScoop(p, sceneLocs(p)[0]);
+  assert.equal(lastText(seen, OBJBOX), "You find a piece of plaster with some interesting inscriptions on it.");
+  assert.equal(p.getInventory().getAmount(I.PLASTER_FRAGMENT), 1);
+  assert.equal(sent.at(-1), true, "the last inventory sent holds the plaster");
+});
+
+test("Read on the plaster fragment: its six objectboxes with the plaster's model (t2757-2775)", (t) => {
+  const { p, seen } = player(t, 110);
+  p.getInventory().add(new core.Item(I.PLASTER_FRAGMENT, 1));
+  const slot = p.getInventory().getItems().findIndex((item) => item?.getId() === I.PLASTER_FRAGMENT);
+  const item = p.getInventory().getItems()[slot];
+  const event = { player: p, item, itemId: I.PLASTER_FRAGMENT, slot, clickType: 1, option: "Read", handled: false };
+  PM.emitItemAction(event);
+  assert.equal(event.handled, true);
+  const boxes = [];
+  for (let i = 0; i < 6; i++) {
+    boxes.push(lastText(seen, OBJBOX));
+    assert.equal(seen.items.at(-1), I.PLASTER_FRAGMENT);
+    advance(p);
+  }
+  assert.equal(boxes[0], "The plaster has a small map of Morytania carved into it. The map depicts seven figures near the Salve, where Paterdomus now stands.");
+  assert.equal(boxes[5], "This is clearly an artist's impression of some moment in Morytania's history.");
+  assert.equal(new Set(boxes).size, 6);
+  assert.equal(p.getInventory().getAmount(I.PLASTER_FRAGMENT), 1, "reading keeps it");
+});
+
+test("Read on the dusty scroll: the long scroll (625) with Sialathin's letter (t2778)", (t) => {
+  const { p } = player(t, 110);
+  const opened = [], scripts = [];
+  const sender = p.getPacketSender();
+  const sendInterface = sender.sendInterface.bind(sender);
+  sender.sendInterface = (id, ...rest) => { opened.push(id); return sendInterface(id, ...rest); };
+  const sendClientScript = sender.sendClientScript.bind(sender);
+  sender.sendClientScript = (id, ...args) => { scripts.push([id, ...args]); return sendClientScript(id, ...args); };
+  p.getInventory().add(new core.Item(I.DUSTY_SCROLL, 1));
+  const slot = p.getInventory().getItems().findIndex((item) => item?.getId() === I.DUSTY_SCROLL);
+  const event = { player: p, item: p.getInventory().getItems()[slot], itemId: I.DUSTY_SCROLL, slot, clickType: 1, option: "Read", handled: false };
+  PM.emitItemAction(event);
+  assert.equal(event.handled, true);
+  assert.ok(opened.includes(625), "the long scroll");
+  const setup = scripts.find(([id]) => id === 418);
+  assert.ok(setup, "longscroll_setup");
+  assert.equal(setup[1], "");
+  assert.ok(setup[2].startsWith("My dearest Lantania,<br><br>I know not what these dark hours bring"));
+  assert.ok(setup[2].endsWith("Yours, most faithfully,<br>Sialathin"));
+});
+
+test("the general store's ladder goes between the floor and the roof on plane 2, both ways (t1309-1316, t1327-1331)", (t) => {
+  const { p, seen } = player(t, 140, {}, { x: 3513, y: 3237, z: 0 });
+  click(p, 12780, "Climb-up", { x: 3513, y: 3238, z: 0 });
+  tick(4);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3513, 3239, 2]);
+  assert.ok(seen.anims.includes(828));
+  click(p, 12781, "Climb-down", { x: 3513, y: 3238, z: 2 });
+  tick(4);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3513, 3237, 0]);
+  assert.ok(seen.anims.includes(827));
+});

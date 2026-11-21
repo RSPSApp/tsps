@@ -53,9 +53,10 @@ function crossingXp(run, skill, amount) {
   Common.xp(run.player, "AGILITY", amount);
 }
 
-/** A template loc `id` at `tile`, in the run's instance. */
-function locAt(run, id, [x, y, z]) {
-  return run.area.getTemplateObjects(run.area.at([x, y, z])).some((object) => object.getId() === id);
+/** A template loc `ids` (one id or a list) at `tile`, in the run's instance. */
+function locAt(run, ids, [x, y, z]) {
+  const wanted = [].concat(ids);
+  return run.area.getTemplateObjects(run.area.at([x, y, z])).some((object) => wanted.includes(object.getId()));
 }
 
 function floorXp(table) {

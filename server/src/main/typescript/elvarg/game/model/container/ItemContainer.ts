@@ -498,7 +498,12 @@ export abstract class ItemContainer {
   /** Observes accepted additions after mutation, before refresh; copies may ignore them. */
   protected onItemsAdded(_itemId: number, _amount: number): void {}
 
-  public add(item: Item, refresh: boolean): ItemContainer {
+  /**
+   * `refresh` defaults to true, as addItem: plugin code calls add(item) with no flag, and without the
+   * refresh the item reached the client only with the next unrelated refresh (issue 6415, the In Aid
+   * of the Myreque cellar finds showing up seconds after their objectbox).
+   */
+  public add(item: Item, refresh: boolean = true): ItemContainer {
     ensureContainersLoaded();
     if (
       item.getId() < 0 ||

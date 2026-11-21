@@ -177,7 +177,24 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     request.text = text;
   }
 
-  /** Which citizen says which "What do you do here?" line, and Aurel's own lines in shared sections. */
+  /** The transcript's stand-in labels for whichever townsperson is talked to. */
+  const CLICKED_SPEAKERS = new Set(["Citizen", "Child Citizen"]);
+
+  /**
+   * Live shows the clicked NPC's own name and head on the citizens' shared lines (Razvan, t1166:
+   * if_setnpchead 4468 and the name "Razvan"; Vasile t9227 and Elisabeta t10290 on "How do you mean,
+   * 'out of the way'?"). The transcript labels those lines "Citizen", which drew that label and the
+   * head of the cache's first "Citizen" NPC (issue 6415).
+   */
+  function speakAsClicked(request) {
+    if (!request?.player || !ownsLine(request) || !CLICKED_SPEAKERS.has(request.step?.speaker)) return;
+    const id = request.npc?.getId?.() ?? request.definition?.getId?.();
+    const name = request.definition?.getName?.();
+    if (!Number.isInteger(id) || !name || name === "null") return;
+    request.speakerId = id;
+    request.speakerName = name;
+  }
+
   /** The transcript's group for Florin's "What do you do here?" line. */
   const FLORIN_GROUP = new Set([
     NpcIdentifiers.FLORIN, NpcIdentifiers.LUSCION, NpcIdentifiers.SERGIU, NpcIdentifiers.SORIN, NpcIdentifiers.ILEANA,
@@ -243,6 +260,7 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
   });
 
   api.onCustomEvent("npc-dialogue:line", fillTranscriptText);
+  api.onCustomEvent("npc-dialogue:line", speakAsClicked);
   api.onNpcDialogueCondition(answerCitizenCondition);
   api.onPlayerLogin(handleLogin);
 

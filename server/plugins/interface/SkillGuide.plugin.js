@@ -18,9 +18,10 @@ const { hasQuestJournal, openQuestJournal } = require("../quests/QuestRuntime");
  * Before opening, a click is offered to other plugins as `skills:stat-clicked` (payload
  * { player, childId, handled }): SetSkillLevel claims it on PvP worlds for its level prompt.
  *
- * Level-ups (rsprox captures, docs/skill-guide.md "New unlocks"): announcing one sets the skill's
- * levelup_list varbit to the first new level, unless one is already waiting, and flashes the
- * Skills tab (flashside 2) until it is clicked. The next "View guide" on that skill clears the
+ * Level-ups (rsprox captures, docs/skill-guide.md "New unlocks"): announcing one whose levels
+ * unlock something sets the skill's levelup_list varbit to the first new level, unless one is
+ * already waiting; while one waits, a level-up flashes the Skills tab (flashside 2) until it is
+ * clicked. The next "View guide" on that skill clears the
  * varbit and opens the guide with the range from that level to the current one, which the
  * guide's scripts highlight. Neither var is saved: live logs in with them clear. With All
  * Settings' "Level-up guide list" off (varbit 20159 set), no level is remembered and the guide
@@ -44,8 +45,6 @@ const OP1 = 1 << 1;
 const SKILL_GUIDE_V2_INIT = 1902;
 /** skill_guide_v2_init's second argument whenever it highlights new unlocks, as captured. */
 const NEW_UNLOCKS_MODE = 31;
-/** option_level_up_guide_list_disabled: All Settings' "Level-up guide list" (row 494) off. */
-const GUIDE_LIST_DISABLED_VARBIT = 20159;
 
 /** Skills tab component -> the levelup_list varbit's skill, as gamevals name both. */
 const LEVELUP_LIST_BY_STAT = new Map([
@@ -96,18 +95,24 @@ function levelupName(skill) {
   return LEVELUP_LIST_BY_SKILL_NAME.get(key) ?? key;
 }
 
-/** A level-up being announced: remember its first new level until the guide is viewed. */
-function rememberLevelUp({ player, skill, oldLevel }) {
+/**
+ * A level-up being announced: when the levels gained unlock something, remember the first new
+ * level until the guide is viewed. The Skills tab flashes while a level is waiting.
+ */
+function rememberLevelUp({ player, skill, oldLevel, unlocks }) {
   const varbit = levelupListVarbit(levelupName(skill));
   if (varbit == null) return;
   const sender = player.getPacketSender();
-  if (!guideListDisabled(sender) && !sender.getVarbit(varbit)) sender.sendVarbit(varbit, oldLevel + 1);
+  if (unlocks && !guideListDisabled(sender) && !sender.getVarbit(varbit)) sender.sendVarbit(varbit, oldLevel + 1);
+  if (!sender.getVarbit(varbit)) return;
   const flashside = flashsideVarbit();
   if (flashside != null && !sender.getVarbit(flashside)) sender.sendVarbit(flashside, FLASH_SKILLS_TAB);
 }
 
+/** All Settings' "Level-up guide list" (row 494) off: option_level_up_guide_list_disabled (20159). */
 function guideListDisabled(sender) {
-  return sender.getVarbit(GUIDE_LIST_DISABLED_VARBIT) === 1;
+  const varbit = api.core.CacheDefinitions.getVarbitId("option_level_up_guide_list_disabled");
+  return varbit != null && sender.getVarbit(varbit) === 1;
 }
 
 /** Clicking the Skills tab stops its level-up flash. */

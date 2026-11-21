@@ -945,6 +945,19 @@ test("an open pop-up stops skilling and tells the skilling plugins", () => {
   assert.deepEqual(emitted, [["level-up:announced", Skill.FISHING], ["level-up:popup-opened", Skill.FISHING]]);
 });
 
+test("the announcement says whether the levels gained unlock anything, as the skill guide's list needs", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi(), unlocks = [];
+  const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core, {
+    emitCustomEvent: (name, event) => { if (name === "level-up:announced") unlocks.push(event.unlocks); },
+  });
+  // rsprox 1001336 (rev 240): Attack 2 sets no levelup_list, Attack 5 (steel weapons) does.
+  for (const [oldLevel, newLevel] of [[1, 2], [4, 5], [1, 5]]) {
+    hooks.onPlayerLevelUp({ player: levelledPlayer(core), skill: Skill.ATTACK, oldLevel, newLevel });
+  }
+  assert.deepEqual(unlocks, [false, true, true]);
+});
+
 test("a level-up mid-fight keeps the attack animation", () => {
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const core = PluginManager.getCoreApi();

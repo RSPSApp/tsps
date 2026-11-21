@@ -69,9 +69,9 @@ function levelledPlayer(levels = {}) {
   return { sent, values, getPacketSender: () => sender, getSkillManager: () => skills };
 }
 
-function levelUp(account, skillName, oldLevel, newLevel) {
+function levelUp(account, skillName, oldLevel, newLevel, unlocks = true) {
   const skill = Skill.VALUES.find((stat) => stat.getName() === skillName);
-  levelUpAnnounced({ player: account, skill, oldLevel, newLevel });
+  levelUpAnnounced({ player: account, skill, oldLevel, newLevel, unlocks });
 }
 
 const varbit = (name) => CacheDefinitions.getVarbitId(name);
@@ -240,7 +240,7 @@ test("every stat's levelup_list varbit is in the cache, and every server skill h
   const account = levelledPlayer();
   for (const skill of Skill.VALUES) {
     account.values.clear();
-    levelUpAnnounced({ player: account, skill, oldLevel: 4, newLevel: 5 });
+    levelUpAnnounced({ player: account, skill, oldLevel: 4, newLevel: 5, unlocks: true });
     assert.equal([...account.values.values()].filter((value) => value === 5).length, 1, skill.getName());
   }
 });
@@ -257,6 +257,21 @@ test("a level-up sets the skill's levelup_list to the first new level and flashe
   // Another skill gets its own, with the tab already flashing.
   levelUp(account, "Cooking", 14, 15);
   assert.deepEqual(account.sent, [["sendVarbit", varbit("levelup_list_cooking"), 15]]);
+});
+
+test("a level-up that unlocks nothing sets no list and flashes nothing, unless a list is waiting, as captured", () => {
+  // rsprox 1001336 (rev 240): Attack 1 -> 2, 3, 4 (t3686, t3829, t3873) send neither var;
+  // Attack 4 -> 5 (t3924) sets levelup_list_attack 5, then flashside 2.
+  const account = levelledPlayer();
+  levelUp(account, "Attack", 1, 2, false);
+  assert.deepEqual(account.sent, []);
+  levelUp(account, "Attack", 4, 5, true);
+  assert.deepEqual(account.sent, [["sendVarbit", varbit("levelup_list_attack"), 5], ["sendVarbit", FLASHSIDE, 2]]);
+  // With a level waiting, a later level-up flashes the tab again after it was clicked.
+  click(account, 161, 60, { action: 1 });
+  account.sent.length = 0;
+  levelUp(account, "Attack", 5, 6, false);
+  assert.deepEqual(account.sent, [["sendVarbit", FLASHSIDE, 2]]);
 });
 
 test("View guide with a level-up waiting clears it and highlights from that level to the current one, as captured", () => {

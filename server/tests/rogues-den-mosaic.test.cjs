@@ -33,6 +33,7 @@ let Location;
 let ObjectActionPacketListener;
 let PluginManager;
 let Lobby;
+let Run;
 
 before(async () => {
   await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(ROOT);
@@ -49,6 +50,7 @@ before(async () => {
     PluginManager.createApi('RoguesDenMosaicRegression'),
   );
   Lobby = require('../plugins/minigames/roguesden/Lobby.RoguesDen');
+  Run = require('../plugins/minigames/roguesden/Run.RoguesDen');
 
   assert.ok(core.MapObjects.get(MOSAIC_DOOR, new Location(...DOOR_AT), null), 'cache supplies the mosaic door');
 });
@@ -80,7 +82,10 @@ function account(t, tiles) {
   player.moveTo(new Location(...STAND_AT));
   player.setNeedsPlacement(false);
   for (const id of tiles) player.getInventory().adds(id, 1);
+  // A maze run, as the doorway starts one; the door only resolves for a player still in it.
+  Run.start(player);
   t.after(() => {
+    if (Run.runOf(player)) Run.finish(player, { reason: 'left', silent: true });
     player.setRegistered(false);
     core.TaskManager.cancelTasks(player.getIndex());
   });
@@ -140,6 +145,9 @@ test('placing tile1 matches: message, animations, sound, tile taken, then a step
   const player = account(t, [TILES[0]]);
   const animations = [];
   t.mock.method(player, 'performAnimation', (animation) => { animations.push(animation.getId()); });
+  const door = core.MapObjects.get(MOSAIC_DOOR, new Location(...DOOR_AT), null);
+  const doorAnimations = [];
+  t.mock.method(door, 'performAnimation', (animation) => { doorAnimations.push(animation.getId()); });
   openDoor(player);
   const before = player.calls.length;
   assert.equal(select(player, 0), true, 'the Select click is handled');
@@ -152,9 +160,8 @@ test('placing tile1 matches: message, animations, sound, tile taken, then a step
   assert.equal(player.getInventory().contains(TILES[0]), false, 'the tile is placed');
   assert.notEqual(player.getInterfaceId(), MOSAIC_INTERFACE, 'the modal closes');
   assert.deepEqual(animations, [ENCHANT_DOOR], 'the enchant-door animation plays');
-  assert.ok(resolved.some(([key, object, animation]) => key === 'sendObjectAnimation'
-    && object.getId() === MOSAIC_DOOR && animation.getId() === core.CacheDefinitions.getSeqId('rogue_magic_door')),
-    'the door plays its own loc animation');
+  assert.deepEqual(doorAnimations, [core.CacheDefinitions.getSeqId('rogue_magic_door')],
+    'the door plays its own loc animation to everyone who can see it');
   assert.ok(resolved.some(([key, id]) => key === 'sendSound' && id === DOOR_SOUND), 'the door synth plays');
   assert.ok(player.getLocation().equals(new Location(...STAND_AT)), 'the player waits on the match tick');
 
@@ -187,4 +194,41 @@ test('a Select for a tile the player does not hold does nothing', (t) => {
   assert.deepEqual(player.messages(), []);
   assert.equal(player.getInventory().contains(TILES[1]), true);
   assert.equal(player.getInterfaceId(), MOSAIC_INTERFACE, 'the modal stays open');
+});
+
+test('a player moved away after Select keeps the tile and is not pulled back to the door', (t) => {
+  const player = account(t, [TILES[0]]);
+  openDoor(player);
+  select(player, 0);
+  const away = new Location(3020, 5082, 1);
+  player.moveTo(away);
+  for (let i = 0; i < 4; i++) tick();
+  assert.equal(player.getInventory().contains(TILES[0]), true, 'the tile is kept');
+  assert.ok(player.getLocation().equals(away), 'the player is not teleported back onto the door');
+  assert.notEqual(player.getInterfaceId(), MOSAIC_INTERFACE, 'the modal closes');
+  assert.deepEqual(varbits(player), [1, 0], 'busy clears');
+});
+
+test('a player ejected from the maze after the match is not put back through the door', (t) => {
+  const player = account(t, [TILES[0]]);
+  openDoor(player);
+  select(player, 0);
+  tick();
+  assert.equal(player.getInventory().contains(TILES[0]), false, 'the match placed the tile');
+  const lobby = new Location(3061, 4985, 1);
+  Run.finish(player, { reason: 'left', silent: true });
+  player.moveTo(lobby);
+  for (let i = 0; i < 3; i++) tick();
+  assert.ok(player.getLocation().equals(lobby), 'the player stays where the eject put them');
+});
+
+test('the click holds the player for the resolve', (t) => {
+  const player = account(t, [TILES[0]]);
+  openDoor(player);
+  select(player, 0);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), true,
+    'movement is blocked while busy');
+  for (let i = 0; i < 4; i++) tick();
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false,
+    'released after the step');
 });

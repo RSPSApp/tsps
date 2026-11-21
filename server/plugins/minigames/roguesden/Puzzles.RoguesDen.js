@@ -9,7 +9,9 @@
  * (Wiki: Tiles (Rogues' Den)). As recorded (local 1001658 tick 19519, local 1001704 tick
  * 5308): busy is set on the click; the next tick sends "A perfect match!", the enchant-door
  * animation, the door's own loc animation, the tile taken, the modal closed and the door
- * synth; two ticks later busy clears and the player steps through. Facts in docs/rogues-den.md.
+ * synth; two ticks later busy clears and the player steps through. The player is held from the
+ * click (busy), and a player no longer at the door or in a run places nothing. Facts in
+ * docs/rogues-den.md.
  */
 const Common = require("./Common.RoguesDen");
 const Run = require("./Run.RoguesDen");
@@ -68,15 +70,12 @@ function throughDoor(object, player) {
   return location(at.getX() + dx, at.getY() + dy, at.getZ());
 }
 
-/** The player and everyone else who can see the door: its loc animation is a zone update live. */
-function viewersOf(object, player) {
-  const { World } = Common.core();
+/** Still at the door, on its plane and in a run: a moved or ejected player places nothing. */
+function atDoor(player, object) {
   const at = object.getLocation();
-  const viewers = new Set([player]);
-  for (const other of World.getPlayers()) {
-    if (other?.getLocation?.()?.isViewableFrom?.(at)) viewers.add(other);
-  }
-  return viewers;
+  const here = player.getLocation();
+  return Boolean(Run.runOf(player)) && here.getZ() === at.getZ()
+    && Math.abs(here.getX() - at.getX()) <= 1 && Math.abs(here.getY() - at.getY()) <= 1;
 }
 
 /** A Select click on 688:5-8: places that tile, if the player still holds it. */
@@ -92,6 +91,12 @@ function placeTile(event) {
   const core = Common.core();
   const sender = player.getPacketSender();
   const busy = cacheId("getVarbitId", MOSAIC.busyVarbit);
+  if (!atDoor(player, object)) return;
+  // The player is held for the resolve (busy, as recorded), so the step's tile is fixed now.
+  const to = throughDoor(object, player);
+  const movement = player.getMovementQueue();
+  movement.reset();
+  movement.setBlockMovement?.(true);
   placing.add(player);
   sender.sendVarbit(busy, 1);
   let ticks = 0;
@@ -99,7 +104,8 @@ function placeTile(event) {
     constructor() { super(1, player, false); }
     execute() {
       ticks++;
-      if (!player.isRegistered?.()) {
+      if (!player.isRegistered?.() || !atDoor(player, object)) {
+        if (ticks === 1 && player.isRegistered?.()) sender.sendInterfaceRemoval();
         this.stop();
         return;
       }
@@ -117,14 +123,13 @@ function placeTile(event) {
         }
         player.sendMessage(Common.message("mosaicRight"));
         player.performAnimation(new core.Animation(cacheId("getSeqId", MOSAIC.playerAnimation)));
-        const doorAnimation = new core.Animation(cacheId("getSeqId", MOSAIC.doorAnimation));
-        for (const viewer of viewersOf(object, player)) viewer.getPacketSender().sendObjectAnimation(object, doorAnimation);
+        object.performAnimation(new core.Animation(cacheId("getSeqId", MOSAIC.doorAnimation)));
         Common.take(player, tile, 1);
         sender.sendSound(MOSAIC.sound, 1, 0);
         return;
       }
       if (ticks === 2) {
-        Interactions.moveThrough(player, throughDoor(object, player), 1);
+        Interactions.moveThrough(player, to, 1);
         return;
       }
       this.stop();
@@ -132,6 +137,8 @@ function placeTile(event) {
     stop() {
       super.stop();
       placing.delete(player);
+      // moveThrough holds movement until its own step lands; otherwise release the hold here.
+      if (ticks < 2) movement.setBlockMovement?.(false);
       if (player.isRegistered?.()) sender.sendVarbit(busy, 0);
     }
   })());

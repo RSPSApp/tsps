@@ -127,6 +127,17 @@ From the Wiki only: there is no capture of her fight or her cave.
 - **Her melee** is the engine's, from her definition; she and her offspring poison through theirs. With Protect from Melee on, each of her blows drains 2 Prayer, hit or miss.
 - **Guardians:** the first attack on her once she is at 99 or less calls two Scorpia's guardians (6617) beside her. Each heals her 8 every 3 ticks (a curse, projectile 109) while within 3 tiles; one that hasn't healed for 25 ticks despawns; killed ones don't come back that fight.
 
+## Voidwaker pieces
+
+From the Wiki only: no rsprox recording has a piece inspected or two pieces used together.
+
+- **Inspect** sends the piece's line to the chat (Wiki: "When inspected, a message in the chatbox states"):
+  - Voidwaker hilt: "A sturdy hilt. It's part of what looks to be a powerful weapon. Perhaps someone in Ferox Enclave would know what it is?"
+  - Voidwaker blade: "A sharp blade. It looks to be the deadliest part of a powerful weapon. Perhaps someone in Ferox Enclave would know what it is?"
+  - Voidwaker gem: "A magical gem. It looks like it could be fitted into a powerful weapon. Perhaps someone in Ferox Enclave would know what it is?"
+- **One piece on another** (Wiki, Voidwaker): "You don't think you have the skills to reassemble this weapon yourself." Nothing is used up.
+- Ours: each line goes as one game message; the Wiki doesn't say whether it is split or shown in an object box.
+
 ## Engine changes
 
 - `Wilderness.setLevelSource(name, (x, y) => level | null)`: a plugin gives the level of its own tiles (replaced by name on reload); `levelAt` asks the sources before the levelled strips.
@@ -144,3 +155,4 @@ From the Wiki only: there is no capture of her fight or her cave.
 - Singles-plus is shown (the icon) but plays as singles.
 - **An abandoned fight starts over:** a lair boss that has had no target and not been hit for 100 ticks gets its hitpoints and first form back, its hounds, spiderlings, traps and webs go, and its damage record clears (our timing; OSRS's isn't known).
 - Scorpia's fight and cave are uncaptured.
+- Madam Sikaro's assembly of the Voidwaker (500,000 coins): her dialogue isn't in the osrsreboxed-db export yet, so she isn't wired.

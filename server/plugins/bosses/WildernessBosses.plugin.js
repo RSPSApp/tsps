@@ -16,10 +16,11 @@ const Vetion = require("./wildernessbosses/Vetion.WildernessBosses");
 const Spiders = require("./wildernessbosses/Spiders.WildernessBosses");
 const Scorpia = require("./wildernessbosses/Scorpia.WildernessBosses");
 const Commands = require("./wildernessbosses/Commands.WildernessBosses");
+const VoidwakerPieces = require("./wildernessbosses/VoidwakerPieces.WildernessBosses");
 
 module.exports = {
   name: "WildernessBosses",
-  description: "The Wilderness bosses: Callisto, Vet'ion, Venenatis, their Artio, Calvar'ion and Spindel variants, shared entry fee, Escape Caves and Scorpia.",
+  description: "The Wilderness bosses: Callisto, Vet'ion, Venenatis, their Artio, Calvar'ion and Spindel variants, shared entry fee, Escape Caves, Scorpia and the Voidwaker pieces' Inspect lines.",
   config: {
     "WildernessBosses:entryFee": {
       type: "number", label: "Wilderness boss cave entry fee", defaultText: "50,000, as on the Wiki (wilderness-bosses.json)", min: 0, max: 2147483647, integer: true,
@@ -43,5 +44,6 @@ module.exports = {
     Spiders.attach(api);
     Scorpia.attach(api);
     Commands.attach(api);
+    VoidwakerPieces.attach(api);
   },
 };

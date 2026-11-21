@@ -13,9 +13,10 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { Location } = require("../dist/game/model/Location");
+const { RegionManager } = require("../dist/game/collision/RegionManager");
 
 const plugin = require("../plugins/areas/MythsGuild.plugin");
-const { BASEMENT, DOG_LINE, DOG_ANSWER, PET_ANIMATION } = plugin._test;
+const { BASEMENT, DOG_LINE, DOG_ANSWER, PET_ANIMATION, isTopFloor, clipTopFloorVoid } = plugin._test;
 
 let core, objects, npcs;
 
@@ -91,4 +92,20 @@ test("another Dog is left to its own Pet handler", () => {
   assert.deepEqual(chats, [], "nothing is said");
   assert.deepEqual(messages, [], "nothing is sent");
   player.setRegistered(false);
+});
+
+// A live capture (2026-11-21) walked every top-floor tile; the server used to let players step off
+// the walkway onto the floorless, unclipped void around it.
+test("the top floor's walkway is walkable and the void around it is not", () => {
+  RegionManager.init();
+  RegionManager.loadMapFiles(2457, 2847);
+  clipTopFloorVoid();
+  const step = (x, y, dx, dy) => RegionManager.canMove(x, y, x + dx, y + dy, 2, 1, 1, null);
+  assert.ok(isTopFloor(2457, 2847) && !isTopFloor(2457, 2856), "the floor map's own bounds");
+  assert.ok(step(2457, 2847, 1, 0), "east along the walkway");
+  assert.ok(step(2457, 2850, 0, 1), "north along the walkway");
+  assert.ok(!step(2457, 2850, 1, 0), "off the north arm's side");
+  assert.ok(!step(2457, 2855, 0, 1), "off the north end");
+  assert.ok(!step(2448, 2847, -1, 0), "off the west ring");
+  assert.ok(!step(2466, 2847, 1, 0), "off the east ring");
 });

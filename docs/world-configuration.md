@@ -470,7 +470,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MotherlodeMine` | MotherlodeMine | areas | yes | Motherlode Mine: mining pay-dirt, washing it in Prospector Percy's machine and collecting ore from the sack, with its HUD. (members only) |
 | `MuseumCamp` | MuseumCamp | areas | yes | Fossil Island Museum Camp's improvements: building the bank chest, well, cooking pot, spinning wheel and loom with Construction. (members only) |
 | `MuseumEntrance` | MuseumEntrance | areas | yes | Guards entry to the Varrock Museum cleaning area, including on free worlds. |
-| `MythsGuild` | MythsGuild | areas | yes | The Myths' Guild's statue down to its basement, and the guild dog's Pet. (members only) |
+| `MythsGuild` | MythsGuild | areas | yes | The Myths' Guild's statue down to its basement, the guild dog's Pet, its top floor's edges and its three guild portals. (members only) |
 | `MythsGuildBarrier` | MythsGuildBarrier | areas | yes | The Myths' Guild magical barriers (bridge and basement) and the Lithkren Vault barriers: open after Dragon Slayer II. (members only) |
 | `PortPhasmatysBarrier` | PortPhasmatysBarrier | areas | yes | Port Phasmatys energy barriers and Ghost guards: a 2 ecto-token toll before Ghosts Ahoy, free passage after. (members only) |
 | `PortPhasmatysGhosts` | PortPhasmatysGhosts | areas | yes | Port Phasmatys ghosts: understood only through ghostspeak; the ghost bankers' quick-bank (and collect) without it. (members only) |
@@ -731,7 +731,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MasterScrollBook` | MasterScrollBook | items | yes | Adds the Master scroll book: stores 20 kinds of teleport scroll (up to 1000 each), reads them from interface 597 or as the default Teleport. (members only) |
 | `MeiyerditchTattyNote` | MeiyerditchTattyNote | items | yes | Searching the skeleton by the true Blood Altar ruins in the Meiyerditch Laboratories gives the tatty note, which can be read. (members only) |
 | `MithrilSeeds` | MithrilSeeds | items | yes | Lets players plant mithril seeds to grow random flowers that can be picked, and removes the flower after a short time. (members only) |
-| `MythicalCape` | MythicalCape | items | yes | Lets the mythical cape teleport the player to the Myths' Guild from the inventory or worn, with no charges. (members only) |
+| `MythicalCape` | MythicalCape | items | yes | Lets the mythical cape teleport the player to the Myths' Guild from the inventory or worn, with no charges, as does the Mythical max cape. (members only) |
 | `NecklaceOfFaith` | NecklaceOfFaith | items | yes | Makes a worn Necklace of faith restore 25% of Prayer and crumble when a hit leaves the wearer below 20% Hitpoints. (members only) |
 | `NeitiznotFaceguard` | NeitiznotFaceguard | items | yes | Handles the Basilisk jaw: Olaf the Bard's story, then attaching it to a Helm of Neitiznot to make the faceguard, and dismantling it again. (members only) |
 | `NeverKeptOnDeath` | NeverKeptOnDeath | items | yes | Destroys the items that are never kept on death (the clue box, League trophies, the Chronicle, items with no ground state) on an unsafe death, instead of keeping, dropping or graving them. (members only) |
@@ -761,6 +761,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `RingOfSuffering` | RingOfSuffering | items | yes | Handles the ring of suffering's recoil effect by reusing the shared recoil handling. (members only) |
 | `RingOfVisibility` | RingOfVisibility | items | yes | Lets a worn ring of visibility or ring of shadows reveal the shadow realm's hidden NPCs and objects by setting the shadow realm varbit. (members only) |
 | `RingOfWealth` | RingOfWealth | items | yes | Handles the ring of wealth: charge counts, imbuing for 50,000 coins, teleport destinations, drop-collection settings and the ring's crumbling. (members only) |
+| `RiteOfVileTransference` | RiteOfVileTransference | items | yes | Reading the Rite of vile transference consumes it and permanently upgrades Death Charge to restore special attack energy from two kills per cast. (members only) |
 | `RockCake` | RockCake | items | yes | Adds the Dwarven rock cake, which is never used up: Eat costs 1 Hitpoint and Guzzle costs 10% of current Hitpoints plus 1. (members only) |
 | `RottenPotato` | RottenPotato | items | yes | The Rotten potato, the moderators' testing item: stats, inventory, house, teleports, random events, rares and transmogrification, for owners and developers. |
 | `RunePouch` | RunePouch | items | yes | Adds the rune pouch and divine rune pouch: storing up to 16,000 of three or four rune types, the interface, bank deposits, loadouts and the Rune-picking setting. (members only) |

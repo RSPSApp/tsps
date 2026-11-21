@@ -611,6 +611,21 @@ test("a player who already received the rite gets no guarantee, and a rolled rit
   assert.equal(ordinary.getInventory().getAmount(CONTRACT), 3);
 });
 
+test("a player who read the rite counts as having it: no guarantee, and a rolled rite becomes scrolls", () => {
+  const upgraded = "arceuus:death-charge-upgraded";
+  const guaranteed = dossierPlayer(100, false);
+  guaranteed.setAttribute(upgraded, true);
+  openDossier(guaranteed, FIRST_ROLL);
+  assert.equal(guaranteed.getInventory().getAmount(RITE), 0);
+  assert.equal(guaranteed.getInventory().getAmount(CONTRACT), 3);
+
+  const rolled = dossierPlayer(5, false);
+  rolled.setAttribute(upgraded, true);
+  openDossier(rolled, RITE_ROLL);
+  assert.equal(rolled.getInventory().getAmount(RITE), 0);
+  assert.ok(rolled.getInventory().getAmount(SCROLLS) >= 15);
+});
+
 test("a rite rolled before 100 victories counts as received", () => {
   const player = dossierPlayer(5, false);
   openDossier(player, RITE_ROLL);

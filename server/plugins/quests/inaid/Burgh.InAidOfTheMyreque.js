@@ -33,7 +33,7 @@ module.exports = function attachBurgh(context) {
   const { api, state, common, STAGE, VARBIT, PAGE } = context;
   const core = api.core;
   const { ItemIdentifiers: I, NpcIdentifiers: N, ObjectIdentifiers: O, Location, Skill } = core;
-  const { loadTranscripts } = require("../QuestRuntime");
+  const { loadTranscripts, openLongScroll } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
 
   // ---------------------------------------------------------------------------
@@ -157,6 +157,41 @@ module.exports = function attachBurgh(context) {
     emptied: "You empty your rubble onto the pile.", // t1255
     nothing: "Nothing interesting happens.", // t373, as live sent it after the chest's box
   });
+  /** The plaster fragment's Read: six objectboxes with its model (t2757-2775, as the Wiki's Plaster fragment). */
+  const PLASTER_READ = Object.freeze([
+    "The plaster has a small map of Morytania carved into it. The map depicts seven figures near the Salve, where"
+      + " Paterdomus now stands.",
+    "One figure stands in front of the others. He seems to have some sort of rod in one hand which he holds aloft."
+      + " In his other hand he holds a small container.",
+    "Two rays of light emanate from the sky and surround the figure. One is green, likely to represent Guthix."
+      + " The other is silver, likely to represent Saradomin.",
+    "In front of the figure, a dark creature seems to be held in a powerful spell, with the figure using the"
+      + " container to administer some sort of potion to it.",
+    "Various words are also carved into the plaster. Below the dark creature the words 'silver', 'garlic',"
+      + " 'harralander' and 'red eggs' are caved. As well as this, the word 'silvthrill' is carved by the figure.",
+    "This is clearly an artist's impression of some moment in Morytania's history.",
+  ]);
+  /** The dusty scroll's Read: the long scroll 625, no title (t2778, as the Wiki's Dusty scroll). */
+  const SCROLL_READ = Object.freeze([
+    "My dearest Lantania,",
+    "",
+    "I know not what these dark hours bring but I will come for thee as soon as I am able. I care no longer for the"
+      + " possessions which tie me to this wasted land and the living which I earned from it.",
+    "",
+    "Prepare to leave soon for I shall be there with haste. With Saradomin's blessings we shall make our way out of"
+      + " Hallowvale and head westwards over the Salve.",
+    "",
+    "I pray that Saradomin supports Queen Efaritay in her hour of need so that she can somehow fight these beasts"
+      + " back to the dead place from where they came.",
+    "",
+    "I cry at the plight of poor Ascertes and offer up a prayer for their children in these darkest of hours.",
+    "",
+    "Make ready and bring only what you need. We shall need good fortune and speed in this, our last chance at a"
+      + " life together.",
+    "",
+    "Yours, most faithfully,",
+    "Sialathin",
+  ]);
   /** Ours: no capture or Wiki line for these refusals. */
   const OUR_TEXT = Object.freeze({
     noPickaxe: "You need a pickaxe to clear this rubble.",
@@ -920,6 +955,20 @@ module.exports = function attachBurgh(context) {
     refuseDump(event.player, event.itemId, "drop");
   }
 
+  /** Read on the plaster fragment (op 2, t2757): its six boxes, nothing else changes. */
+  function readPlaster(event) {
+    if (event.itemId !== PLASTER) return false;
+    common.chain(event.player, PLASTER_READ.map((text) => ({ item: PLASTER, text })));
+    return true;
+  }
+
+  /** Read on the dusty scroll (op 2, t2778): the long scroll with Sialathin's letter. */
+  function readScroll(event) {
+    if (event.itemId !== SCROLL) return false;
+    openLongScroll(event.player, "", SCROLL_READ);
+    return true;
+  }
+
   function emptyBucket(event) {
     refuseDump(event.player, event.itemId, "empty");
     return true;
@@ -1018,6 +1067,8 @@ module.exports = function attachBurgh(context) {
   api.onItemOnObject(onItemOnObject);
   api.onItemDropPolicy(dropBucket);
   api.onItemAction("Bucket of rubble", { Empty: emptyBucket });
+  api.onItemAction("Plaster fragment", { Read: readPlaster });
+  api.onItemAction("Dusty scroll", { Read: readScroll });
   api.onNpcInteraction("Florin", { "Talk-to": talkFlorin });
   api.onNpcInteraction("Aurel", { "Talk-to": talkAurel, Trade: tradeAurel });
   api.onNpcsInteraction(CITIZENS, { "Talk-to": talkCitizen });

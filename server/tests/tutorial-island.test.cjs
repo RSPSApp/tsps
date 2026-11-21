@@ -262,6 +262,35 @@ test("new accounts answer the past-experience screen first; the answer picks the
   assert.equal(ask(RETURNING), false);
 });
 
+test("the past-experience answer sets its option defaults, saved like a Settings click", () => {
+  const answer = (slot) => {
+    const { player, sent } = tutorialPlayer(undefined, 3094, 3104);
+    player.setAttribute(PROGRESS, undefined);
+    PluginManager.emitPlayerLogin({ player, username: "tutorial", isNewAccount: true });
+    sent.varbits.clear();
+    click(player, (929 << 16) | 4, slot);
+    return { player, varbits: sent.varbits, saved: player.getAttribute("settings:values") ?? {} };
+  };
+  // Brand new (rsprox local 1001414 / 1001416): the quest list starts filtered and sorted.
+  const fresh = answer(1);
+  for (const [varbit, value] of [[9619, 2], [13772, 11], [13778, 1], [13779, 1]]) {
+    assert.equal(fresh.varbits.get(varbit), value, `new: varbit ${varbit}`);
+    assert.equal(fresh.saved[`varbit:${varbit}`], value, `new: varbit ${varbit} saved`);
+  }
+  assert.equal(fresh.varbits.has(6091), false, "new players keep the alchemy warning");
+  // Experienced (tutisland HCIM capture, tick 99): the new-player safeguards are turned off.
+  const veteran = answer(3);
+  for (const [varbit, value] of [[5411, 0], [10971, 0], [11519, 0], [6091, 150000], [624, 1], [2319, 1], [2320, 1], [3939, 1], [4180, 0]]) {
+    assert.equal(veteran.varbits.get(varbit), value, `experienced: varbit ${varbit}`);
+  }
+  assert.equal(veteran.saved["varbit:6091"], 150000);
+  assert.equal(veteran.player.getAttribute("accept-aid"), false);
+  assert.equal(veteran.varbits.has(13772), false, "experienced players keep the plain quest list");
+  // Returning isn't recorded: nothing changes.
+  const returning = answer(2);
+  assert.equal(returning.varbits.has(13772) || returning.varbits.has(6091) || returning.varbits.has(4180), false);
+});
+
 test("a new account skips the welcome screen, designs its character, then gets the experience screen", async () => {
   const { player, sent } = tutorialPlayer(undefined, 3094, 3104);
   player.setAttribute(PROGRESS, undefined);

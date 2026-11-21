@@ -1,4 +1,3 @@
-import type { ConfiguredServer } from "../../config/clientEnv";
 import type { WidgetActionEvent } from "../widgets/widgetActionPayload";
 import type { Camera } from "../Camera";
 import type { HitsplatEventPayload } from "../GameRenderer";
@@ -254,13 +253,9 @@ export type ScriptCallbackEvent = { eventName: string; vm: Cs2Vm };
 /** A widget dragged onto another (RuneLite's WidgetDrag on release). */
 export type WidgetDragEvent = { source: any; target: any };
 
-export type WorldConnection = Omit<ConfiguredServer, "name" | "maxPlayers">;
-
 export interface ClientPlugin {
-    /** Login credentials were sent after the protocol handshake. */
-    onWorldLogin?(world: WorldConnection): void;
     /** Cache and renderer initialization completed successfully. */
-    clientReady?(signal: AbortSignal, showWarning: (message: string) => void): Promise<void>;
+    clientReady?(signal: AbortSignal): Promise<void>;
     /** Return true to defer an accepted login's handshake to a plugin. */
     beforeLoginHandshake?(sendHandshake: () => void): boolean;
     /** Extra player headicons; return stable, immutable sprites so textures can be reused. */
@@ -423,18 +418,11 @@ export class ClientPluginManager {
         return this.implementing(hook).length > 0;
     }
 
-    onWorldLogin(world: WorldConnection): void {
-        for (const plugin of this.implementing("onWorldLogin")) {
-            if ((plugin as { isStarted?(): boolean }).isStarted?.() === false) continue;
-            plugin.onWorldLogin!(world);
-        }
-    }
-
-    async clientReady(signal: AbortSignal, showWarning: (message: string) => void): Promise<void> {
+    async clientReady(signal: AbortSignal): Promise<void> {
         for (const plugin of this.implementing("clientReady")) {
             if (signal.aborted) return;
             if ((plugin as { isStarted?(): boolean }).isStarted?.() === false) continue;
-            await plugin.clientReady!(signal, showWarning);
+            await plugin.clientReady!(signal);
         }
     }
 

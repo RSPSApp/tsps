@@ -19,21 +19,20 @@ async function main() {
         return frames;
     };
     globalThis.fetch = async () => { assert.fail("startup does not repeat the launcher lookup"); };
-    const showWarning = () => { assert.fail("startup must not show a build warning"); };
-    await plugins.clientReady(controller.signal, showWarning);
+    await plugins.clientReady(controller.signal);
     assert.deepEqual(calls, [], "browser startup never invokes native commands");
     assert.equal(frames, 0, "browser startup adds no frame delay");
 
     window.__RSPS_DESKTOP_PROFILE__ = { name: "Example", address: "example.com", secure: true, maxPlayers: 2047 };
-    await plugins.clientReady(controller.signal, showWarning);
+    await plugins.clientReady(controller.signal);
     assert.deepEqual(calls, ["plugin:hot-update|notify_app_ready"]);
     assert.equal(frames, 1, "updates are acknowledged after a rendered frame");
     controller.abort();
-    await plugins.clientReady(controller.signal, showWarning);
+    await plugins.clientReady(controller.signal);
     assert.equal(calls.length, 1, "disposed clients cannot acknowledge updates");
 
     delete window.__TAURI__;
-    await plugins.clientReady(new AbortController().signal, showWarning);
+    await plugins.clientReady(new AbortController().signal);
     assert.equal(calls.length, 1, "a missing bridge cannot break startup");
     const failure = new Error("Native acknowledgement unavailable");
     let warning: unknown[] | undefined;
@@ -41,7 +40,7 @@ async function main() {
     console.warn = (...args) => { warning = args; };
     window.__TAURI__ = { core: { invoke: async () => { throw failure; } } };
     try {
-        await plugins.clientReady(new AbortController().signal, showWarning);
+        await plugins.clientReady(new AbortController().signal);
         assert.equal(warning?.[1], failure);
     } finally { console.warn = previousWarn; }
 }

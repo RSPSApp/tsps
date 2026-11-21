@@ -18,7 +18,6 @@ export function send(msg: ClientToServer): void {
     }
     const binary = encodeClientMessage(msg as { type: string; payload: any });
     state.socket.send(binary as Uint8Array<ArrayBuffer>);
-    if (msg.type === "login") state.onWorldLogin?.();
 }
 
 export function isSocketOpen(): boolean {

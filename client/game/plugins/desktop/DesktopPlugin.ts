@@ -9,38 +9,8 @@ export class DesktopPlugin extends Plugin {
         configKey: "desktopplugin",
     };
 
-    private runningVersion?: Promise<string>;
-    private showWarning?: (message: string) => void;
-    private versionCheck = 0;
-
-    onWorldLogin(world: DesktopWorld): void {
-        const showWarning = this.showWarning;
-        if (!showWarning) return;
-        const check = ++this.versionCheck;
-        this.runningVersion ??= this.loadRunningVersion();
-        void Promise.all([getWorldClientVersion(world), this.runningVersion]).then(([required, running]) => {
-            if (check === this.versionCheck && required !== running) {
-                showWarning("This world recommends a different client build. Reopen its desktop client to load the matching build.");
-            }
-        }).catch(() => {
-            // A missing build ID or failed lookup must not interfere with login.
-        });
-    }
-
-    private async loadRunningVersion(): Promise<string> {
-        const publicUrl = (process.env.PUBLIC_URL ?? "").replace(/\/$/, "");
-        const response = await fetch(`${publicUrl}/client-release.json`, { cache: "no-store" });
-        if (!response.ok) throw new Error("This desktop client is missing its release information");
-        const version = readClientVersion(await response.json());
-        if (!version) throw new Error("Invalid desktop client release information");
-        return version;
-    }
-
-    async clientReady(signal: AbortSignal, showWarning: (message: string) => void): Promise<void> {
+    async clientReady(signal: AbortSignal): Promise<void> {
         if (!getDesktopProfile()) return;
-        this.showWarning = message => {
-            if (!signal.aborted) showWarning(message);
-        };
         // A successfully initialized frame must reach the screen before accepting an update.
         await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
         if (signal.aborted) return;
@@ -52,7 +22,7 @@ export class DesktopPlugin extends Plugin {
     }
 }
 
-export type DesktopWorld = Omit<ConfiguredServer, "name" | "maxPlayers">;
+type DesktopWorld = Omit<ConfiguredServer, "name" | "maxPlayers">;
 
 async function getWorldClientVersion(world: DesktopWorld): Promise<string> {
     const signal = AbortSignal.timeout(10000);

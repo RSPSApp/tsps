@@ -51,9 +51,8 @@ that release, and only then opens the game. Never fall back to the latest releas
 A world without version metadata or a failed lookup must show an error and must
 not cause an update. Do not acknowledge an incompatible bundle as a successful boot.
 
-Each bundle carries `client-release.json` with its identifier. The hidden
-`DesktopPlugin` acknowledges startup after the first frame and checks the world's
-build in the background after login is sent. A confirmed mismatch shows a
-dismissible warning in the same banner as other client warnings. Login and
-reconnect still use the existing wire-protocol check. The plugin loads only in a
-Tauri window with a launch profile. The minimum wrapper version is 0.1.2.
+The wrapper verifies the installed bundle's `client-release.json` against the
+selected release. `DesktopPlugin` acknowledges startup after the first frame in
+a Tauri window with a launch profile. Login in both desktop and browser clients
+uses the existing wire-protocol and cache revision checks. The minimum wrapper
+version is 0.1.2.

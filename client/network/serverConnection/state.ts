@@ -99,7 +99,6 @@ export const state = {
     autoSendHandshake: true,
     playerSyncContext: null as PlayerSyncContext | null,
     playerUpdateDecoder: null as PlayerUpdateDecoder | null,
-    onWorldLogin: undefined as (() => void) | undefined,
     loginExtension: undefined as LoginProtocolExtension | undefined,
     loginOnWelcome: null as (() => void) | null,
     lastWelcome: undefined as { tickMs: number; serverTime: number } | undefined,

@@ -45,7 +45,8 @@ function visitor(t, sticks = 0) {
   const p = new Player(null);
   p.setUsername(`backdoor${Math.floor(Math.random() * 1e6)}`);
   p.setLocation(new core.Location(...BESIDE_HOLE));
-  t.mock.method(p, "getSession", () => ({ sendClientPacket: () => true, write: () => true }));
+  // A plain stub, not t.mock: a trip still running when a test ends keeps a session to send to.
+  p.getSession = () => ({ sendClientPacket: () => true, write: () => true });
   p.isRegistered = () => true;
   p.getInventory().refreshItems = () => {};
   if (sticks) p.getInventory().adds(sticksId(), sticks);
@@ -239,4 +240,18 @@ test("login sends the saved state, so the rope and the paid Banisoch stay after 
   PluginManager.emitPlayerLogin({ player: p, username: p.getUsername() });
   assert.equal(varbit(p), 2);
   assert.equal(clickHole(p).name, "Rope");
+});
+
+test("a second Climb during the fade doesn't warn again or follow the player down", (t) => {
+  const { p } = visitor(t);
+  paidAs(p, 1);
+  clickHole(p);
+  console.error("A", at(p), shown(p));
+  drive(p, ["Enter the dungeon."]);
+  console.error("B", at(p), p.getMovementQueue().isMovementBlocked());
+  assert.equal(clickHole(p).handled, true);
+  ticks(3);
+  console.error("C", at(p));
+  assert.equal(shown(p), null, "no warning left open in the dungeon");
+  assert.deepEqual(at(p), Backdoor.INSIDE);
 });

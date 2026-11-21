@@ -203,7 +203,8 @@ function warn(player) {
 function climb(event) {
   if (!locIs(event, ENTRANCE_LOC)) return false;
   const { player } = event;
-  if (!hasPaid(player)) return true;
+  // On the way down already (a second click during the fade): nothing more.
+  if (!hasPaid(player) || travelling.has(player)) return true;
   if (state(player) === PAID) warn(player);
   else travel(player, INSIDE);
   return true;
@@ -214,7 +215,7 @@ function useCrevice(event) {
   const { player } = event;
   // Not paid: nothing of ours; the default "Nothing interesting happens." stays.
   if (!hasPaid(player)) return false;
-  travel(player, OUTSIDE);
+  if (!travelling.has(player)) travel(player, OUTSIDE);
   return true;
 }
 

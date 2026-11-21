@@ -135,10 +135,14 @@ function startEcho(request) {
   const { player } = request;
   if (echoSessions.has(player)) return;
   // "Yes." is answered at the spider room's lever: it is pulled as for the normal lair, and the
-  // private lair is made when the teleport lands.
+  // private lair is made when the teleport lands. Another player's pull may have it down while the
+  // prompt was open: its down loc has no options, so nothing happens, as for a click on it (without
+  // the lever, lever:teleport would teleport plainly, with no pull and no lines).
+  const lever = entranceLever();
+  if (!lever) return;
   api.emitCustomEvent("lever:teleport", {
     player,
-    object: entranceLever(),
+    object: lever,
     message: PULL_MESSAGE,
     landed: INTO_LAIR_MESSAGE,
     destination: new Location(...KING_BLACK_DRAGON_LAIR),

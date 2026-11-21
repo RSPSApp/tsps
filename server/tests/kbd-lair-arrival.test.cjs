@@ -7,6 +7,7 @@
 // bus; the Task manager is stepped by hand. The lever's teleport (Levers.plugin.js, covered in
 // wilderness-levers.test.cjs) is recorded here, and lands when the test says so.
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const { test } = require("node:test");
 
 const { Server } = require("../dist/Server");
@@ -150,4 +151,44 @@ test("the lair's lever teleports back beside the spider room's lever and credits
     "every captured lever's pull line; no capture records a line on this landing");
   assert.equal(leverTeleports[0].onArrival, undefined);
   assert.deepEqual(diary, []);
+});
+
+// Review of #6404: with the echo orb prompt open, another player pulls the spider room's lever; it is
+// down (ikov_leverdown in its place) when this player answers "Yes.". The Echo entry must not go
+// through without the lever (a plain teleport, no pull, no lines): as for a click on the down loc,
+// nothing happens. The real cache map's lever, swapped as Levers' pull swaps it.
+test("an echo orb \"Yes.\" while another player's pull has the lever down does nothing", async () => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  const { ObjectManager } = require("../dist/game/entity/impl/object/ObjectManager");
+  const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  RegionManager.init();
+  RegionManager.loadMapFiles(3067, 10253, true);
+  const tile = new Location(3067, 10253, 0);
+  const lever = MapObjects.get(ENTRANCE_LEVER, tile, null);
+  assert.ok(lever, "the map's lever at 3067,10253");
+  const startEcho = (player) => {
+    const request = { player, boss: "king-black-dragon", handled: false };
+    for (const handler of listeners.get("echo-boss:start") ?? []) handler(request);
+    return request;
+  };
+  reset();
+  const player = playerAt(BY_ENTRANCE_LEVER);
+  const down = new GameObject(88, tile.clone(), lever.getType(), lever.getFace(), null);
+  ObjectManager.replaceInPlace(lever, down);
+  try {
+    assert.equal(MapObjects.get(ENTRANCE_LEVER, tile, null), null, "the other player's pull has it down");
+    assert.equal(startEcho(player).handled, true, "the answer is taken (no placeholder line)");
+    assert.deepEqual(leverTeleports, [], "no teleport, plain or pulled, while the lever is down");
+  } finally {
+    ObjectManager.replaceInPlace(down, lever);
+  }
+  startEcho(player);
+  assert.equal(leverTeleports.length, 1, "once it is back up, Yes pulls it");
+  assert.equal(leverTeleports[0].object?.getId(), ENTRANCE_LEVER, "the map's own lever, with its pull");
+  assert.deepEqual([leverTeleports[0].message, leverTeleports[0].landed],
+    [{ spam: "You pull the lever..." }, { spam: "... and teleport into the Dragon's lair." }]);
+  assert.deepEqual(tileOf(leverTeleports[0].destination), LAIR);
 });

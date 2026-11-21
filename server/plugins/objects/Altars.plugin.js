@@ -23,6 +23,16 @@ const KOUREND_CASTLE_ALTAR_TASK = "pray-at-the-altar-in-kourend-castle";
 // (church) altar at level 38 (OSRS Wiki: Chaos Temple), not the Wilderness hut's.
 const WESTERN_CHAOS_ALTAR = { x: 2947, y: 3820, z: 0 };
 
+// The Darkmeyer chancel's vampyric statue (loc darkm_altar, 39234). The Old School Museum's copy at
+// 2985,9976 shares the id and, per the Wiki, doesn't damage; it is left to fall through.
+const DARKMEYER_STATUE = { x: 3604, y: 3354, z: 0 };
+// rsprox 3050 (rev 231) t61: the pray animation, synth 2674 and the spam line on the click's tick,
+// then the hit with synth 518 (human_hit_1, delay 20) one tick later.
+const DARKMEYER_STATUE_MESSAGE = "The statue takes a blood sacrifice from you as you recharge your Prayer points.";
+const BLOOD_SACRIFICE_SOUND = 518;
+// Wiki (Darkmeyer, Statue (Darkmeyer)): all Prayer for 1-3 Hitpoints, which can kill the player.
+const BLOOD_SACRIFICE_DAMAGE = { min: 1, max: 3 };
+
 let core = null;
 let api = null;
 
@@ -239,6 +249,80 @@ function natureAltar({ player }) {
   return handled;
 }
 
+/**
+ * Each player's accepted sacrifices: rolled on the click, taken the next tick, then cleared the tick
+ * after (tasks run before logouts, so a sacrifice still listed has not reached the hit queue's turn).
+ */
+const pendingSacrifices = new Map();
+
+function removeSacrifice(player, sacrifice) {
+  const list = pendingSacrifices.get(player);
+  if (!list) return;
+  const index = list.indexOf(sacrifice);
+  if (index >= 0) list.splice(index, 1);
+  if (list.length === 0) pendingSacrifices.delete(player);
+}
+
+/**
+ * The Darkmeyer statue: all Prayer for a blood sacrifice of 1-3 Hitpoints, taken the next tick,
+ * which can kill. At full Prayer it only says so, as altars do (rsprox 3050 t43).
+ */
+function prayAtDarkmeyerStatue({ player, objectId, location: at }, random = Math.random) {
+  if (objectId !== core.ObjectIdentifiers.STATUE_114 || !at) return false;
+  if (at.x !== DARKMEYER_STATUE.x || at.y !== DARKMEYER_STATUE.y || at.z !== DARKMEYER_STATUE.z) return false;
+  if (player.getHitpoints() <= 0 || player.isDyingReturn?.() === true) return true;
+  const skills = player.getSkillManager();
+  const before = skills.getCurrentLevel(Skill.PRAYER);
+  const max = skills.getMaxLevel(Skill.PRAYER);
+  if (before >= max) {
+    player.sendMessage("You already have full Prayer points.");
+    return true;
+  }
+  player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
+  Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
+  skills.setCurrentLevels(Skill.PRAYER, max);
+  skills.updateSkill(Skill.PRAYER);
+  player.setPrayerPointDrain(0);
+  player.getPacketSender().sendTypedMessage(ChatType.SPAM, DARKMEYER_STATUE_MESSAGE);
+  api.emitCustomEvent("altars:prayed", { player, location: at, restored: max - before });
+  const { min, max: most } = BLOOD_SACRIFICE_DAMAGE;
+  const sacrifice = { damage: min + Math.floor(random() * (most - min + 1)) };
+  if (!pendingSacrifices.has(player)) pendingSacrifices.set(player, []);
+  pendingSacrifices.get(player).push(sacrifice);
+  // Keyed on the sacrifice, not the player: another system's cancelTasks(player) mustn't strand it.
+  core.TaskManager.submit(new core.CountdownTask(sacrifice, 1, () => {
+    if (player.getHitpoints() <= 0 || player.isDyingReturn?.() === true) {
+      removeSacrifice(player, sacrifice);
+      return;
+    }
+    player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(sacrifice.damage, core.HitMask.RED)]);
+    player.getPacketSender().sendSound(BLOOD_SACRIFICE_SOUND, 1, 20);
+    core.TaskManager.submit(new core.CountdownTask(sacrifice, 1, () => removeSacrifice(player, sacrifice)));
+  }));
+  return true;
+}
+
+/** The Logout button waits for an accepted sacrifice to land, so it can still kill. */
+function holdLogoutForSacrifice(event) {
+  if (pendingSacrifices.has(event.player)) event.allow = false;
+}
+
+/**
+ * A dropped connection with a sacrifice still to land: take it before the save, since the hit
+ * queue drops an unregistered player's damage. Ours: it leaves at least 1 Hitpoint, as a saved
+ * player can't die.
+ */
+function settleSacrificeOnLogout({ player }) {
+  const list = pendingSacrifices.get(player);
+  if (!list) return;
+  pendingSacrifices.delete(player);
+  for (const sacrifice of list) core.TaskManager.cancelTasks(sacrifice);
+  if (player.getHitpoints() <= 0 || player.isDyingReturn?.() === true) return;
+  const damage = list.reduce((total, sacrifice) => total + sacrifice.damage, 0);
+  const skills = player.getSkillManager();
+  skills.setCurrentLevel(Skill.HITPOINTS, Math.max(1, skills.getCurrentLevel(Skill.HITPOINTS) - damage), true);
+}
+
 /** Shrines restore Prayer as altars do; the Woodcutting Guild's full-Prayer line, as captured. */
 function prayAtShrine({ player }) {
   return handlePrayerAltar(player, "You already have full Prayer Points.");
@@ -277,7 +361,7 @@ function arceuusSpellbook({ player }) {
 
 module.exports = {
   name: "Altars",
-  description: "Altar actions: pray to restore Prayer points, switch spellbooks at Ancient, Lunar and Dark altars, and the Chaos, Nature, Guthix and Occult altars.",
+  description: "Altar actions: pray to restore Prayer points, switch spellbooks at Ancient, Lunar and Dark altars, the Chaos, Nature, Guthix and Occult altars, and the Darkmeyer statue's blood sacrifice.",
   register: (pluginApi) => {
     api = pluginApi;
     core = pluginApi.core;
@@ -289,6 +373,9 @@ module.exports = {
     pluginApi.onObjectInteraction("Chaos altar", { "Pray-at": prayAtChaosAltar });
     pluginApi.onObjectInteraction("Altar of nature", { "Pray-at": natureAltar });
     pluginApi.onObjectInteraction("Shrine", { "Pray-at": prayAtShrine });
+    pluginApi.onObjectInteraction("Statue", { "Pray-at": prayAtDarkmeyerStatue });
+    pluginApi.onCanLogout(holdLogoutForSacrifice);
+    pluginApi.onPlayerLogout(settleSacrificeOnLogout);
     pluginApi.onObjectInteraction("Shrine of Ralos", { Bask: prayerAltar });
     pluginApi.onObjectInteraction("Altar of the Occult", {
       Venerate: venerateOccultAltar,
@@ -299,4 +386,4 @@ module.exports = {
     });
   },
 };
-module.exports._test = { ancientAltar, lunarAltar, ancientSpellbook, lunarSpellbook, arceuusSpellbook, standardSpellbook, venerateOccultAltar, handleJaldraochtAltar };
+module.exports._test = { ancientAltar, lunarAltar, ancientSpellbook, lunarSpellbook, arceuusSpellbook, standardSpellbook, venerateOccultAltar, handleJaldraochtAltar, prayAtDarkmeyerStatue, holdLogoutForSacrifice, settleSacrificeOnLogout };

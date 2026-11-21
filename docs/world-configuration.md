@@ -943,7 +943,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `ZombiePirates` | ZombiePirates | npcs | yes | Picks the Medium Wilderness Diary drop table for Chaos Temple zombie pirates once the player has completed that diary. (members only) |
 | `AlKharidGate` | AlKharidGate | objects | yes | Al Kharid toll gate: Border Guard dialogue and a 10 coin toll before Prince Ali Rescue, free passage after it. |
 | `AldarinCauldron` | AldarinCauldron | objects | yes | Answers Drink-from on the Aldarin cauldron with the player's recorded line. (members only) |
-| `Altars` | Altars | objects | yes | Altar actions: pray to restore Prayer points, switch spellbooks at Ancient, Lunar and Dark altars, and the Chaos, Nature, Guthix and Occult altars. |
+| `Altars` | Altars | objects | yes | Altar actions: pray to restore Prayer points, switch spellbooks at Ancient, Lunar and Dark altars, the Chaos, Nature, Guthix and Occult altars, and the Darkmeyer statue's blood sacrifice. |
 | `BananaTree` | BananaTree | objects | yes | Wild banana trees on Musa Point and Ape Atoll: Pick takes a banana and empties the tree stage by stage, regrowing after five minutes. |
 | `BankBooths` | BankBooths | objects | yes | Opens the bank from bank booths, bank chests and Banker NPCs, and handles the bank tab and settings buttons. |
 | `BankDepositBooth` | BankDepositBooth | objects | yes | Opens the bank deposit box from the Deposit option and handles its deposit buttons and items used on it. |

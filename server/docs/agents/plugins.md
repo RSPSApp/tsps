@@ -137,6 +137,11 @@ each exact, case-sensitive name, so a family of NPCs that share a transcript nee
 only when none of them took the use: an object's own refusal in place of "Nothing interesting
 happens." (Cooking's "You can't cook that." on a fire or range).
 
+`onObjectInteraction(name, actions, { fallback: true })` sorts after every object handler
+registered without it, whatever the load order: a family's plain answer that any plugin's own
+handler for the same name still beats (ScenerySearch's bookcases and sacks). Return false to
+leave the object to core.
+
 Fall back to raw ids only when the name is genuinely ambiguous or the behaviour is
 id-specific (a single transformed variant, for example). When you do, use a named constant
 from `IdEnums` / the generated identifier files, never a bare number.

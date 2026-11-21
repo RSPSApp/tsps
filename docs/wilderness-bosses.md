@@ -136,7 +136,7 @@ From the Wiki only: no rsprox recording has a piece inspected or two pieces used
   - Voidwaker blade: "A sharp blade. It looks to be the deadliest part of a powerful weapon. Perhaps someone in Ferox Enclave would know what it is?"
   - Voidwaker gem: "A magical gem. It looks like it could be fitted into a powerful weapon. Perhaps someone in Ferox Enclave would know what it is?"
 - **One piece on another** (Wiki, Voidwaker): "You don't think you have the skills to reassemble this weapon yourself." Nothing is used up.
-- Ours: each line goes as one game message; the Wiki doesn't say whether it is split or shown in an object box.
+- Ours: each line goes as one game message. The Wiki doesn't say whether it is split or shown in an object box; every Inspect-only item recorded so far (docs/item-inspects.md) shows the object box (193) as well as the chat line, so live may do that here too.
 
 ## Engine changes
 
@@ -155,4 +155,4 @@ From the Wiki only: no rsprox recording has a piece inspected or two pieces used
 - Singles-plus is shown (the icon) but plays as singles.
 - **An abandoned fight starts over:** a lair boss that has had no target and not been hit for 100 ticks gets its hitpoints and first form back, its hounds, spiderlings, traps and webs go, and its damage record clears (our timing; OSRS's isn't known).
 - Scorpia's fight and cave are uncaptured.
-- Madam Sikaro's assembly of the Voidwaker (500,000 coins): her dialogue isn't in the osrsreboxed-db export yet, so she isn't wired.
+- Madam Sikaro's assembly of the Voidwaker (500,000 coins) isn't wired yet; her dialogue is in npc-dialogues.json under "Madam Sikaro".

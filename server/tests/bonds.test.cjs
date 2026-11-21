@@ -205,6 +205,37 @@ test('native Account Bond Pouch buttons already reach the pouch and its stored b
     items.some(item => item?.id === TRADEABLE_BOND && item.amount === 3)));
 });
 
+test("the Settings tab's Open Bond Pouch reaches bond_main through the native click route", t => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { InterfaceActionClickOpcode } = require("../dist/net/packet/impl/InterfaceActionClickOpcode");
+  const hookCount = PluginManager.interfaceActionClickHooks.length;
+  t.after(() => PluginManager.interfaceActionClickHooks.splice(hookCount));
+  const { api } = mockApi();
+  api.onInterfaceActionButton = PluginManager.createApi("BondsSettingsRouteTest").onInterfaceActionButton;
+  require("../plugins/items/Bonds.plugin").register(api);
+  const player = makePlayer("alice");
+  player.getHitpoints = () => 10;
+  player.isTeleportingReturn = () => false;
+  // settings_side:bondoptions (116:33), "Open Bond Pouch"
+  assert.equal(InterfaceActionClickOpcode.handle(player, uid(116, 33), 1,
+    { groupId: 116, childId: 33, opId: 1, slot: -1 }), true);
+  assert.equal(player.getInterfaceId(), 861);
+});
+
+test("a locked Bank PIN asks first, under the bond feature, then Open Bond Pouch opens bond_main", () => {
+  const handlers = registerBonds();
+  const guarded = [];
+  handlers.custom.set("bank-pin:guard", [(request) => { request.locked = true; guarded.push(request); }]);
+  const player = makePlayer("alice");
+  assert.equal(handlers.buttons.get(uid(116, 33))({ player }), true);
+  assert.equal(guarded.length, 1);
+  assert.equal(guarded[0].feature, "bond");
+  assert.equal(guarded[0].player, player);
+  assert.ok(!player.sent.some(([kind]) => kind === "interface"), "bond_main waits for the PIN");
+  guarded[0].resume();
+  assert.equal(player.getInterfaceId(), 861);
+});
+
 test("a traded bond arrives untradeable, and only the traded amount converts", () => {
   const handlers = registerBonds();
   const player = makePlayer("alice");

@@ -34,6 +34,11 @@ const BOND_CONVERT_INTERFACE = 862;
 const BOND_MANAGEMENT_INTERFACE = 863;
 const uid = (group, child) => (group << 16) | child;
 const BOND_POUCH_BUTTON = uid(ACCOUNT_INTERFACE, 37); // action "Bond Pouch"
+// settings_side:bondoptions, "Open Bond Pouch" on the Settings tab. Recorded (rsprox 1375, 1376, 2517, 2979,
+// 211, local 1001841-1001848): it opens bond_main as the Account tab's button does, or with a PIN not yet
+// entered this session, the Bank PIN keypad titled "Old School Bonds" first.
+const SETTINGS_SIDE_INTERFACE = 116;
+const SETTINGS_BOND_BUTTON = uid(SETTINGS_SIDE_INTERFACE, 33);
 const VIEW_BONDS_BUTTON = uid(BOND_MAIN_INTERFACE, 8); // bond_main:bond_pouch_body (7 before rev 242), script 1146: "View Your Bonds"
 const BACK_BUTTON = uid(BOND_MANAGEMENT_INTERFACE, 2); // script 1929: "Buy or Redeem Bonds"
 const CONVERT_BUTTON = uid(BOND_MANAGEMENT_INTERFACE, 23); // script 1929: "Convert"
@@ -357,6 +362,14 @@ function openBondMain({ player }) {
   return true;
 }
 
+/** The Settings tab's Open Bond Pouch: the Bank PIN first when it is locked (recorded), then bond_main. */
+function openBondMainFromSettings(event) {
+  const pin = { player: event.player, feature: "bond", resume: () => openBondMain(event) };
+  pluginApi.emitCustomEvent("bank-pin:guard", pin);
+  if (pin.locked) return true;
+  return openBondMain(event);
+}
+
 function openPouch({ player }) {
   player.getPacketSender().sendInterface(BOND_MANAGEMENT_INTERFACE);
   player.getPacketSender().sendVarbit(QUANTITY_VARBIT, Number(player.getAttribute(POUCH_QUANTITY_ATTRIBUTE)) || 0);
@@ -462,6 +475,7 @@ module.exports = {
     api.onItemAction("Old school bond", { Redeem: redeemBond, Deposit: depositBond });
     api.onItemAction("Old school bond (untradeable)", { Redeem: redeemBond, Convert: convertBond, Deposit: depositBond });
     api.onInterfaceActionButton([BOND_POUCH_BUTTON, BACK_BUTTON], openBondMain);
+    api.onInterfaceActionButton(SETTINGS_BOND_BUTTON, openBondMainFromSettings);
     api.onInterfaceActionButton(VIEW_BONDS_BUTTON, openPouch);
     api.onInterfaceActionButton(MOVE_BUTTON_IDS, movePouchBonds);
     api.onInterfaceActionButton(QUANTITY_BUTTON_IDS, selectQuantity);

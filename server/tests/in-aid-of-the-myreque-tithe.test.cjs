@@ -202,7 +202,10 @@ test("the tithe chats set 1995/1997 on their last line; talking again plays the 
   assert.equal(gadderanks.getContentId(player), 4483, "the multinpc shows Gadderanks at 1981=1");
   assert.equal(talk(player, gadderanks), true);
   assert.equal(text(player), "What's going on here?");
-  assert.ok(continueUntil(player, (line) => line === "Ha! We'll see about that!"));
+  const heads = new Set();
+  assert.ok(continueUntil(player, (line) => { if (head(player)) heads.add(head(player)); return line === "Ha! We'll see about that!"; }));
+  // The store's Gadderanks (4483, the challenge line's head at t2347), not the castle scene's 9635 (#6412).
+  assert.deepEqual([...heads], [4483]);
   assert.equal(varbits.get(VARBIT.GADDERANKS_CHAT), undefined);
   cont(player);
   assert.equal(varbits.get(VARBIT.GADDERANKS_CHAT), 1, "t2328");

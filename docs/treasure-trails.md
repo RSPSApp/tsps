@@ -211,6 +211,13 @@ assumption.
   `trail_elite_skill_challenge`. Like every challenge, the scroll is carried beside its clue and
   linked to it by the trail's token, so Read finds that trail's own question or task, and one item
   stands for many rows.
+- **Check steps** (every clue scroll, and both elite challenge scrolls): "You have completed N steps
+  on this <tier> clue scroll." (rsprox captures 1057 ticks 501, 874, 3556, and 21 more across every
+  tier). On a challenge scroll it counts its clue's steps. Ours: a scroll whose clue is gone counts
+  the steps it was handed with.
+- **Check completion** (Sherlock's scroll only): "You are yet to complete this challenge scroll."
+  before the task is done, "You have completed this challenge scroll." after (rsprox 1057 ticks 876,
+  3446).
 - **Sherlock's skill challenges** (elite; `Skills.TreasureTrails.js`, Wiki "Sherlock",
   Transcript:Sherlock):
   - **Hand-over:** showing him the clue ("Show this to Sherlock.") adds the challenge scroll beside

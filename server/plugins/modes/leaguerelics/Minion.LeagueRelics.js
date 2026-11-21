@@ -157,8 +157,7 @@ function attack(player, minion, target) {
     const hit = new core.HitDamage(damage, damage > 0 ? core.HitMask.RED : core.HitMask.BLUE).setSource(player)
       .onApplied((dealt) => target.getCombat().addDamage(player, dealt));
     target.getCombat().getHitQueue().addPendingDamage([hit]);
-    // A hit is an attack on it: an NPC regenerates 10% a tick once 20 s pass with none
-    // (core NPC), so with its owner not fighting it the minion's damage would heal straight back.
+    // A hit is an attack on it: refresh its combat stopwatch as an ordinary hit would.
     target.getCombat().getLastAttack().reset();
   };
   if (look.hitDelayTicks <= 1) land();

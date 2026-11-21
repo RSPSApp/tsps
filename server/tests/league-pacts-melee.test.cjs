@@ -795,7 +795,7 @@ test("Blindbag: the Dramen staff is no Blindbag weapon (Wiki, 6 May 2026)", () =
   assert.deepEqual(Melee._test.heavyWeaponsCarried(holder), [ITEMS.elderMaul]);
 });
 
-test("Thorns alone holds an NPC's regeneration timer through real queued damage and NPC turns", () => {
+test("Thorns alone tags the NPC and refreshes its combat timer through real queued damage and NPC turns", () => {
   const holder = character("pact-thorns-regen", { pacts: { [effect("thorns_damage")]: 1 } });
   holder.setAutoRetaliate(false);
   shield(holder, ITEMS.runeKiteshield);
@@ -820,7 +820,7 @@ test("Thorns alone holds an NPC's regeneration timer through real queued damage 
   }
   cycle(10034);
   npc.process();
-  assert.equal(npc.getHitpoints(), 100, "ordinary healing resumes after the existing timer expires");
+  assert.equal(npc.getHitpoints(), 97, "no burst of healing once the timer expires: 1 hitpoint per 100 ticks (#6297)");
 });
 
 test("recoil and Vengeance share NPC combat bookkeeping without starting retaliation", () => {
@@ -849,7 +849,7 @@ test("recoil and Vengeance share NPC combat bookkeeping without starting retalia
     assert.equal(npc.getHitpoints(), hp);
     cycle(11035);
     npc.process();
-    assert.equal(npc.getHitpoints(), 100);
+    assert.equal(npc.getHitpoints(), hp, "1 hitpoint per 100 ticks, no burst (#6297)");
   }
 });
 
@@ -866,7 +866,8 @@ test("ordinary hits, undamaged NPCs and zero reflected damage keep their existin
     if (kind === "zero") npc.getCombat().getHitQueue().addPendingDamage([splat(0).markReflected().setSource(holder)]);
     if (kind === "sourceless") npc.getCombat().getHitQueue().addPendingDamage([splat(1).markReflected()]);
     npc.process();
-    assert.equal(npc.getHitpoints(), kind === "ordinary" ? 90 : kind === "sourceless" ? 99 : 100, kind);
+    // No instant healing (#6297): only the damage itself changes the hitpoints on this turn.
+    assert.equal(npc.getHitpoints(), kind === "undamaged" ? 100 : kind === "sourceless" ? 89 : 90, kind);
     assert.equal(npc.getCombat().getAttacker(), kind === "ordinary" ? holder : null);
   }
 });
@@ -883,7 +884,7 @@ function woundedGiant(location) {
 
 const permission = (attacker, target) => core.CanAttackResponse[core.CombatFactory.canAttackPermission(attacker, target, true)];
 
-test("a bystander's reflected hit pauses regeneration but leaves a single-way NPC with the player fighting it", () => {
+test("a bystander's reflected hit lands but leaves a single-way NPC with the player fighting it", () => {
   const { AreaManager } = require("../dist/game/model/areas/AreaManager");
   const { PendingHit } = require("../dist/game/content/combat/hit/PendingHit");
   const fighter = character("pact-single-fighter");
@@ -915,7 +916,7 @@ test("a bystander's reflected hit pauses regeneration but leaves a single-way NP
   assert.equal(npc.getCombat().getLastAttack().elapsed(), 0);
 });
 
-test("sourceless poison does not indefinitely postpone an unattended NPC's regeneration", () => {
+test("sourceless poison does not stop an unattended NPC's regeneration clock", () => {
   const npc = woundedGiant(new Location(3200, 3201, 0));
   npc.setHitpoints(50);
   for (let tick = 14000; tick < 14300; tick++) {
@@ -924,11 +925,12 @@ test("sourceless poison does not indefinitely postpone an unattended NPC's regen
       npc.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(1, core.HitMask.GREEN)]);
     npc.process();
   }
-  assert.equal(npc.getHitpoints(), 100, "poison without an attacker retains the existing healing rule");
+  // 300 NPC turns: 10 poison hits, 3 hitpoints back on the 100-tick clock (#6297).
+  assert.equal(npc.getHitpoints(), 43, "poison without an attacker leaves the regen clock running");
   assert.equal(npc.getCombat().getAttacker(), null);
 });
 
-test("bystander recoil delays healing for twenty seconds without extending the fighter's tag", () => {
+test("bystander recoil does not extend the fighter's tag", () => {
   const fighter = character("regen-clock-fighter"), bystander = character("regen-clock-bystander");
   const npc = woundedGiant(new Location(3200, 3201, 0));
   cycle(13500);
@@ -941,11 +943,11 @@ test("bystander recoil delays healing for twenty seconds without extending the f
   assert.equal(npc.getCombat().getLastAttack().elapsed(), 5 * GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE);
   for (let tick = 13506; tick < 13539; tick++) {
     cycle(tick); npc.process();
-    assert.equal(npc.getHitpoints(), hp, "no healing before twenty seconds after the reflected hit");
+    assert.equal(npc.getHitpoints(), hp, "no healing inside the 100-tick regen interval");
   }
   assert.equal(npc.getCombat().getAttacker(), null, "recoil did not keep the absent fighter's tag alive");
   cycle(13539); npc.process();
-  assert.ok(npc.getHitpoints() > hp, "healing resumes after the damage clock expires");
+  assert.equal(npc.getHitpoints(), hp, "no burst of healing once the damage clock expires (#6297)");
 });
 
 /** A fighter's single-way tag on a hill giant that targets a bystander wearing a ring of recoil; the fighter walks off. */

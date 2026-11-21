@@ -60,6 +60,7 @@ and its units in `server/plugins/quests/inaid/`.
   - t384: `cam_reset` and the chatbox closes (11 ticks after t373).
 - Stage 40 -> 60 happens on "Well, there's the inn. You could look there..." (t431), after "Ah, right, I know what you mean. Hmm, let's think now...".
 - Florin at stage 40 (t389-391): the opening line, then the citizens' menu "How come you have no food?|What is this place?|What do you do here?|Are there any 'out of the way' places here?|I'd best be off.".
+- The citizens' shared lines (the transcript labels them "Citizen") show the clicked NPC's own name and head: Razvan at t1166 (`if_setnpchead` 4468, name "Razvan"), Vasile at t9227 and Elisabeta at t10290 on "How do you mean, 'out of the way'?" (issue 6415).
 
 ### Inn
 - Broken wall 12737 Climb-over (t794; again at t1155 and t4924):
@@ -109,8 +110,13 @@ and its units in `server/plugins/quests/inaid/`.
   - On Yes (t1255): every 7626 turns into 1925 in its own slot, seq 2283, "You empty your rubble onto the pile.".
   - With room and no buckets (t1266): plaster then scroll objectboxes (xw81NT / NMW9RQ), each item added as its box shows.
 
+- Read on the plaster fragment 7628 (op 2, t2757-2775): six objectboxes 193 with its model (zoom 400), the Wiki's text; nothing else changes.
+- Read on the dusty scroll 7629 (op 2, t2778): `toplevel_mainmodal_open`, the long scroll 625 and `longscroll_setup` (418) with an empty title and Sialathin's letter to Lantania (the Wiki's text). Closed with its close button (t2788).
+- A find that goes into the inventory is on the client with its objectbox (the inventory is sent on the same tick). `ItemContainer.add` without a refresh flag used to change the inventory without sending it (issue 6415).
+
 ## The store, crate, bank and furnace (110-210)
 
+- Store ladder 12780 at 3513,3238,0, Climb-up (t1309-1316): seq 828 two ticks after arriving, and a tick later the roof at 3513,3239 on plane **2** (not 1). Ladder 12781 at 3513,3238,2, Climb-down (t1327-1331): seq 827 two ticks after arriving, then 3513,3237,0. Both are rows in `server/plugins/world/data/loc-teleports.json` (issue 6415: Ladders looked for a ladder on plane 1, found none and did nothing).
 - Aurel at 110 (t1293-1308): the "after the inn" greeting (UXJgpJ), then the menu "What do you do here? | What do you think of your town? | I'd like to help fix up the town. | I'd best be off." 1990 goes 110 -> 140 at t1305, on Aurel's "Please can you fix the roof, then the walls..." line, after "What needs fixing?". Razvan's same option (t1174) does not change 1990. Implemented as a `before` on that line (Aurel, 110-139).
 - Roof 12751 (3515,3240,2) Inspect t1318: mesbox PrBgdV, then the menu "Fix the roof?" with "Yes." / "No.". On Yes (t1323): seq 3931 pest_repair, and synth 2101 hammer_wood at delays 0, 20 and 40. Two ticks later (t1325): 1974=1, 1990=150, seq -1, 3 planks + 12 nails gone, synth 1710 m2_build, objectbox_double 11 (960, 1539) "You use some wooden planks and nails to patch up the hole in the roof.", Crafting +100.
 - Store wall 12752 (t1333-1341): the same steps. Full inspect text FshL1-, "Fix the wall?", 1975=1, 1990=160, double box (960, 1539) with 2TCJ1Y.

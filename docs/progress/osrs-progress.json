@@ -2508,6 +2508,7 @@
             "Main 82657e165: #1644 stall thieves under another character are hidden from guards.",
             "Main 281766303 (2 November 2026): #1734 enables Port Roberts stalls; #1766 corrects pickpocket/knock-out success charts; #1859 restores the H.A.M. trapdoor; #1928 wires every stall and pillory rotten-tomato sales.",
             "Main 3b61a15a8 (6 November 2026): #2333 fix(leagues): Leagues VI bugs from #2324; #2534 Implement Ardougne Hard and Elite diary gameplay tasks; #2663 Store and keep gems in an open gem bag; #2665 Auto-store seeds in an open seed box. Existing completion credit and documented limitations are retained unless explicitly updated below.",
+            "2026-11-21, branch parity/support-skills-ardougne-sewer-gate: the Ardougne Sewers gate (11721/11722) is locked from the west with Pick-lock (31 Thieving, 25 XP, Wiki chart) and opens freely from the east, as a pass-through gate with the lines and sounds of rsprox capture 1625; LockedDoors.Thieving.js and Doors.plugin.js, tests server/tests/thieving-locked-doors.test.cjs. Remaining lock-pick doors: Ross' House, the H.A.M. Hideout jail door and the Monkey Madness II door.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3992 Delay successful Digsite workman pickpockets. #4124 Track pickpocket loot in RuneLite. #4057 feat(leagues): expand Demonic Pacts task trigger coverage. 9 merged PRs changed recorded implementation files for this entry."
           ],
           "taskDetails": [
@@ -3041,6 +3042,7 @@
             "Main 3b61a15a8 (6 November 2026): #2534 Implement Ardougne Hard and Elite diary gameplay tasks; #2544 Finish sixteen remaining Kandarin Diary gameplay tasks; #2548 Add remaining Kourend Diary skill and combat actions; #2627 Arceuus lectern: count Sherlock's Barrows tablet, and refuse, border and remember as recorded (stacked on #2625); #2678 Holiday items: plant the Wintumber tree and scarecrow in the house; Snow globe Shake/Snow; Cat ears Chase; #2695 Fix rev 241 client actions the server dropped or misrouted (Accept Aid, teleport warnings, furnace, nexus, clans, fairy log, close buttons). (13 merged PRs touch the recorded implementation; highlights shown.) Existing completion credit and documented limitations are retained unless explicitly updated below.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4362 Settings: the examine price line on plugin item interfaces. #4295 Sawmill: coupons pay for their own log's plank. #4196 Construction: hall rug spaces lose their Build ghosts under a staircase. 39 merged PRs changed recorded implementation files for this entry.",
             "2026-11-17: POH bookcases remember successful inventory acquisition before the first Search, including later disposal. Both displayed availability and Take apply the Wiki completion requirements for Book on chemicals (The Dig Site), Translation book (The Grand Tree) and Beaten book (Elemental Workshop II); existing acquisition history is preserved. Planning/snapshot inventories, failed adds and bank placeholders do not discover books. See docs/construction.md and server/tests/poh-bookcase-discovery.test.cjs: 18 focused real-object checks cover actual shop/Exam Centre acquisition, native Drop/Take, GE/Bank/pickup/trade transfers (including failed GE capacity and committed bank collection), all three registered quest gates, capacity, metadata/identity, accepted quantities, captured Take sound/channel/refusal feedback, encoded catalog-row Take/Examine permissions and save restoration. Lost unrecorded history and a full per-book requirement audit remain outside this correction; rendered native persistence verification is recorded separately when completed.",
+            "2026-11-21: Remove-room on POH staircases, the oubliette ladder and throne room trapdoors removes the room at their other end (spiral staircases ask which), with the captured refusals; Remove on stair furniture still skips its own stairs warning.",
             "2026-11-21: Pick-up on a pet roaming the menagerie now takes it back to the owner's backpack, as the pet list's Take does: that NPC goes, its stored bit and form varbit clear and the other pets keep roaming (rsprox captures 2779-2784, rev 229); storing or taking a pet no longer respawns the other roaming pets. server/plugins/skills/construction/Menagerie.Construction.js, server/tests/menagerie-pet-pickup.test.cjs (4 real-object checks: pick-up, full backpack, bank PIN, 21 stored pets). Guest Pick-up and the full-backpack message are ours (unrecorded)."
           ],
           "taskDetails": [
@@ -7406,10 +7408,13 @@
           "wiki": "https://oldschool.runescape.wiki/w/Tower_of_Life",
           "implementedIn": [
             "server/plugins/quests/quests/TowerOfLife.Quest.js",
+            "server/plugins/quests/toweroflife/Puzzles.TowerOfLife.js",
+            "server/plugins/quests/toweroflife/Scenes.TowerOfLife.js",
             "server/plugins/quests/QuestRuntime.js",
-            "server/tests/qh728-q116.test.cjs"
+            "server/tests/tower-of-life-capture.test.cjs"
           ],
           "devNotes": [
+            "Aligned with a whole revision 242.1 RSProx run (docs/quests/tower-of-life/README.md): stages are tol_prog's own values (2-18) set on the captured lines; the pressure, pipe and cage puzzles use the captured starts and rules; the creation and scare scenes, the mind puzzle's continuous loop from 7 on 0-14, the crates, plants, pickpocket and whistles follow the capture. Older saves move onto the tol_prog scale once at login. Talks the transcript data lacks are listed in the README.",
             "Main 21a2a1daa: #1181 replaces the substituted machine puzzles with cache interfaces 509/510/511, their controls and persisted progress; only solving the controls completes each repair. Builder costume recovery, material hand-ins, stage guards and the dungeon transition are wired.",
             "Puzzle starting layouts are reconstructed from Quest Helper rather than captured random starts; this credits functional objectives, not complete presentation or every optional branch. Creature Creation remains separate postquest content.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4389 Tower of Life: the tower door lets only the checked player through. #4020 Fix Tower of Life pipe calibration, door and stairs."
@@ -24250,7 +24255,8 @@
             "Main 82657e165: #1630 the Hallowed ring negates trap damage; its faster recovery, the Mysterious Stranger, tool storage and ambient NPCs remain.",
             "Main 3b61a15a8 (6 November 2026): #2472 Record successful activity rewards in the collection log. Existing completion credit and documented limitations are retained unless explicitly updated below.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4413 Hallowed Sepulchre: the Grand coffin's Agility route needs 66 Thieving. #3537 Allow Agility alternative for Grand Hallowed Coffin. #2901 Shorten Hallowed ring trap recovery.",
-            "2026-11-16, feat/hallowed-sepulchre-retrieval: a death inside a Sepulchre floor now leaves the lost items with the Mysterious Stranger in the lobby; his Collect opens the shared Item Retrieval Service interface, charges the Wiki's 25,000 coins through the shared fee contract before Take returns what fits, answers item-retrieval:items and the ranked Group Ironman wipe-tradeables query, while a later unsafe death deletes the old lot (server/plugins/minigames/hallowedsepulchre/Retrieval.HallowedSepulchre.js; server/tests/hallowed-sepulchre-retrieval.test.cjs)."
+            "2026-11-16, feat/hallowed-sepulchre-retrieval: a death inside a Sepulchre floor now leaves the lost items with the Mysterious Stranger in the lobby; his Collect opens the shared Item Retrieval Service interface, charges the Wiki's 25,000 coins through the shared fee contract before Take returns what fits, answers item-retrieval:items and the ranked Group Ironman wipe-tradeables query, while a later unsafe death deletes the old lot (server/plugins/minigames/hallowedsepulchre/Retrieval.HallowedSepulchre.js; server/tests/hallowed-sepulchre-retrieval.test.cjs).",
+            "2026-11-21, PR #6407: floor 5's grapple and portal coffins (39536/39537) open with their own looted varbits 10433/10434, cleared at run end; the pool bridge 39528 repairs and crosses like 39527 (rsprox captures, local 1000598). Remaining: the pool bridge crossing is unrecorded."
           ],
           "taskDetails": [
             {
@@ -24742,13 +24748,14 @@
             "Covered by server/tests/motherlode-mine.test.cjs (run after `yarn build`: `node --test tests/motherlode-mine.test.cjs`) and documented in docs/motherlode-mine.md.",
             "Main 281766303 (2 November 2026): #1780 stops the water channel when both wheels jam and displays waiting pay-dirt in the hopper.",
             "Main 3b61a15a8 (6 November 2026): #2489 Credit supported Falador Diary gameplay tasks. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4057 feat(leagues): expand Demonic Pacts task trigger coverage. #3939 Motherlode Mine: pay-dirt rolls the Rock golem. #3922 Motherlode Mine: ore veins roll the gem table. 5 merged PRs changed recorded implementation files for this entry."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4057 feat(leagues): expand Demonic Pacts task trigger coverage. #3939 Motherlode Mine: pay-dirt rolls the Rock golem. #3922 Motherlode Mine: ore veins roll the gem table. 5 merged PRs changed recorded implementation files for this entry.",
+            "#6420 (fix/6420-mlm-shortcut-paydirt): the dark tunnels move from MotherlodeMine.plugin.js to the Agility shortcut data; the eastern dark tunnel needs the medium Falador Diary's reward claimed and the southern one crosses between its own ends (Wiki, Dark tunnel (Motherlode Mine)); the floating pay-dirt moves by an in-view teleport without the jump flag (NPC.teleportInView), so it stays in view and floats while the water flows (local recording mlm-loop, ticks 556-566)."
           ],
           "taskDetails": [
             {
               "name": "Implement entry and mine traversal",
               "steps": [
-                "Open the mine through the Cave/Tunnel crawls, gating the Mining Guild pair on Mining 60 (MotherlodeMine.plugin.js:33, crawl at :88); the dark tunnels need Agility 54 (SHORTCUTS, :55; squeezeThrough, :119).",
+                "Open the mine through the Cave/Tunnel crawls, gating the Mining Guild pair on Mining 60 (MotherlodeMine.plugin.js:33, crawl at :88); the dark tunnels are Agility shortcuts (skills/data/agility-shortcuts.json): 54 Agility, and the eastern one the medium Falador Diary's reward.",
                 "Move players between the mine floor and the upper level with the Ladder handler (climb, :106) and require Prospector Percy's upper-level unlock before the ladder is usable.",
                 "Show the cave HUD (interface 382 in overlay_hud 161:8) only while inside MINE_ZONE and close it on exit or teleport (enterMine/leaveMine)."
               ],
@@ -24949,12 +24956,14 @@
             "server/plugins/minigames/roguesden/Traps.RoguesDen.js",
             "server/plugins/minigames/data/rogues-den.json",
             "server/tests/rogues-den-lobby-safes.test.cjs",
+            "server/tests/rogues-den-mosaic.test.cjs",
             "server/docs/rogues-den.md"
           ],
           "devNotes": [
             "Main 281766303 (2 November 2026): #1739 implements the real Burthorpe maze, 50 Agility/Thieving entry, equipment/inventory restrictions, per-player traps, stat drains, safe rewards, equipment crates, rogue kits, XP and logout/reset handling. #1878 restores the ordinary lobby door. Entry, lifecycle and reward transactions are complete. Mechanics remain partial: optional gear/mosaic puzzles use chat menus, partial failed-run XP is inferred, and wall-trap facing still needs a recording to confirm.",
             "Main 3b61a15a8 (6 November 2026): #2469 Land Rogues Den entrants on the walkable maze floor; #2527 Finish seven remaining Falador diary gameplay tasks. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4368 Pets: follow into areas that only refuse dropping a pet; only a barsFollowers area keeps them out. #3771 Fix Rogue kit conversion inventory handling."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4368 Pets: follow into areas that only refuse dropping a pet; only a barsFollowers area keeps them out. #3771 Fix Rogue kit conversion inventory handling.",
+            "Branch parity/interfaces-roguesden-mosaic (21 November 2026): the mosaic door opens the cache's roguesden_mosaic (688) modal instead of a chat menu, the floor holds the four different tiles at their recorded spots, and only Tile 5568 opens the door with the recorded message, animations, synth and timing (rsprox captures local 1001658 and 1001704; server/docs/rogues-den.md; server/tests/rogues-den-mosaic.test.cjs; checked in game over the agent MCP). Remaining: the gear door is still a chat menu; the wrong-tile and no-tile messages are not recorded."
           ],
           "taskDetails": [
             {
@@ -29944,22 +29953,23 @@
           ],
           "devNotes": [
             "Implemented in server/plugins/bosses/KingBlackDragon.plugin.js: melee (anim 91) and four dragonfire breaths (dragon/ice/poison/shock, projectiles 393/396/394/395) with prayer and dragon-protection gear reduction.",
-            "Ladder object 18987 moves the player into the lair at 2271,4680; registered for all three KBD ids.",
+            "Ladder object 18987 moved the player into the lair at 2271,4680 (superseded 2026-11-20, see below); registered for all three KBD ids.",
             "Status done; the 25 base breath / protection deltas are plugin constants derived from the wiki.",
             "Main 8403b60db (4 November 2026): #1960 — The merged Wiki/recording audit corrects the relevant fight behavior; findings, sources and remaining inferred values are listed in docs/audits/boss-fights*.md. Existing access/fidelity gaps are not promoted by attack-specific fixes.",
             "Main 3b61a15a8 (6 November 2026): #2191 Fix worn DFS and tentacle options unequipping the item (#2165); #2218 Fire Wilderness Diary tasks that never completed. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4344 Poison sources: pass severity (hit x 5) to poisonEntity."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4344 Poison sources: pass severity (hit x 5) to poisonEntity.",
+            "2026-11-20, branch fix/kbd-lair-entrance: the Lava Maze ladder (18987) now climbs down to the poison spider room (3069,10255) instead of straight into the lair; its lever (1816) teleports into the lair (2271,4680), the lair lever (1817) back beside it (3067,10254), and the room ladder (18988) up to the Lava Maze (3016,3849). The Wilderness Diary lair-entry credit and the Leagues echo orb prompt move to the lever. Wiki (King Black Dragon Lair, Lava Maze Dungeon), route videos and rsprox_transcripts/242/900155.txt (the entrance lever: its pull, down loc, cast, landing, diary credit and spam lines \"You pull the lever...\" / \"... and teleport into the Dragon's lair.\"); landing tiles from the Shortest Path transports. The lair lever is uncaptured: it sends the pull line every captured lever sends and no landing line. Verified by server/tests/kbd-lair-arrival.test.cjs. The lever Commune and Private (50,000-coin instance) options remain unimplemented; docs/king-black-dragon.md."
           ],
           "taskDetails": [
             {
               "name": "Implement access and encounter setup",
               "steps": [
-                "Entry is the KBD lair ladder (object 18987) via onObjectFirstClick; the lair itself is not instanced.",
+                "Entry is the Lava Maze ladder (object 18987) down to the poison spider room, then its lever (object 1816) into the lair; the lair lever (1817) and room ladder (18988) lead back out. The lair itself is not instanced.",
                 "Confirm the three registered ids (KING_BLACK_DRAGON/2/3) match npc-spawns/definitions.",
                 "No quest/slayer requirement for the lair entry itself."
               ],
               "acceptanceCriteria": [
-                "Ladder click lands the player in the lair.",
+                "The ladder lands the player in the spider room; the lever lands them in the lair.",
                 "All id variants use the same method."
               ],
               "refs": [

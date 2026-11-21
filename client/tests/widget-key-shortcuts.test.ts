@@ -423,10 +423,17 @@ test("an open chatbox prompt keeps its keys from a focused custom-interface sear
         varManager.setVarcInt(5, 0);
         key(65, "a"); process();
         assert.equal(searchCalls, 1, "with no prompt open the custom search takes typed keys");
+        // Before any prompt has opened this session the varc is unset, read as -1: no prompt either
+        // (::teleports and ::commands typed into the chat instead).
+        input.onFrameEnd(); cycle++;
+        varManager.varcInts.delete(5);
+        assert.equal(varManager.getVarcInt(5), -1);
+        key(67, "c"); process();
+        assert.equal(searchCalls, 2, "unset MESLAYERMODE: the custom search still takes typed keys");
         input.onFrameEnd(); cycle++;
         varManager.setVarcInt(5, 7);
         key(66, "b"); process();
-        assert.equal(searchCalls, 1, "VarC 5 (MESLAYERMODE) set: the prompt gets the keys");
+        assert.equal(searchCalls, 2, "VarC 5 (MESLAYERMODE) set: the prompt gets the keys");
     } finally {
         varManager.setVarcInt(5, before);
         deps.getCustomInterfaces = original;

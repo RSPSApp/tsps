@@ -1678,7 +1678,12 @@ function tryRemoveFurniture(event) {
   const house = houseFor(player);
   const type = event.object?.getType?.() ?? 10;
   if (!house || !isBuildingMode(player) || !house.getFurnitureAt(event.location, event.objectId, type)) return false;
-  const problem = house.canRemoveFurniture(event.location, event.objectId, type);
+  return removeFurniturePrompt(player, house, event.location, event.objectId, type);
+}
+
+/** "Really remove it?" for the building-mode owner, then the piece at `location` comes out. */
+function removeFurniturePrompt(player, house, location, objectId, type) {
+  const problem = house.canRemoveFurniture(location, objectId, type);
   if (problem) {
     Menu.refuse(player, problem);
     return true;
@@ -1686,16 +1691,16 @@ function tryRemoveFurniture(event) {
   // rsprox captures ("Remove" on poh_chair1, rev 229): "Really remove it?", and the Yes is silent.
   const confirm = () => api.sendMultiChatboxPrompt(player, "Really remove it?", "Yes", () => {
     if (houseFor(player) !== house || !isBuildingMode(player)) return;
-    const currentProblem = house.canRemoveFurniture(event.location, event.objectId, type);
+    const currentProblem = house.canRemoveFurniture(location, objectId, type);
     if (currentProblem) return Menu.refuse(player, currentProblem);
-    const furniture = house.removeFurniture(event.location, event.objectId, type);
+    const furniture = house.removeFurniture(location, objectId, type);
     if (!furniture) return;
     player.performAnimation(new Animation(REMOVE_ANIMATION));
     rebuildHouse(player, house);
     api.emitCustomEvent("construction:furniture-removed", { player, house, furniture });
   }, "No", () => {});
   // A piece whose removal costs the player something warns first (rsprox captures: the portal nexus).
-  const removal = { player, house, furniture: house.getFurnitureAt(event.location, event.objectId, type), warning: null };
+  const removal = { player, house, furniture: house.getFurnitureAt(location, objectId, type), warning: null };
   api.emitCustomEvent("construction:furniture-removing", removal);
   if (removal.warning) Menu.warn(player, removal.warning, confirm);
   else confirm();
@@ -2142,4 +2147,4 @@ function attach(api) {
   api.onPlayerLogout(logoutHouse);
 }
 
-Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, furnitureLevel, hasHammer, hasSaw, getBuildMaterials, useMaterial, useMaterials, hammer, hammerNails, nailsOf, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });
+Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, furnitureLevel, hasHammer, hasSaw, getBuildMaterials, useMaterial, useMaterials, hammer, hammerNails, nailsOf, hotspotChoices, chooseFurniture, removeFurniturePrompt, furnitureCreationText, processOccupant, leftHouse, attach });

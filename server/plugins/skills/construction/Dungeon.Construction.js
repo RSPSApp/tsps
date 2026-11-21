@@ -354,8 +354,43 @@ function coinsOnChest(event) {
   player.sendMessage(`You add ${amount.toLocaleString("en-US")} coins to your treasure.`);
 }
 
+// The oubliette floor sits inside the cage, so the cage's Build-in reaches it: the floor space's
+// build menu (Spikes, Tentacle pool, Flame pit, Rocnar), or with one built "Select an option" /
+// "Remove the contents of the oubliette|Never mind", then the usual "Really remove it?" (rsprox.net
+// recs 2872 ticks 176 and 196, 2873, 2877; rev 230). Outside building mode it does nothing (ours).
+const OUBLIETTE_FLOOR_SPACE = "OUBLIETTE_FLOOR_SPACE";
+
+/** The oubliette floor space in the room at `location`, as a build target, with what's built on it. */
+function oublietteFloor(house, location) {
+  const position = house.getRoomPositionAt(location);
+  const room = position ? house.getRoom(position) : null;
+  const placement = room ? house.hotspotPlacements(room.roomKey, OUBLIETTE_FLOOR_SPACE)[0] : null;
+  if (!placement) return null;
+  const target = { position, hotspotKey: OUBLIETTE_FLOOR_SPACE, sourceObjectId: placement.id,
+    localX: placement.localX, localY: placement.localY, type: placement.type, face: placement.face };
+  // A tile of the floor that draws the built piece's loc (the Remove matches on it).
+  const built = house.furnitureEntries().map(entry => ({ ...entry, objectId: house.furnitureObjectId(entry.room, entry.furniture) }))
+    .find(entry => entry.furniture.hotspotKey === OUBLIETTE_FLOOR_SPACE && entry.objectId >= 0
+      && entry.position.plane === position.plane && entry.position.x === position.x && entry.position.y === position.y);
+  return { target, built };
+}
+
+function buildInCage(event) {
+  const player = event.player;
+  const house = House.houseFor(player);
+  if (!house || !House.isBuildingMode(player)) return;
+  const floor = oublietteFloor(house, event.location);
+  if (!floor) return;
+  event.handled = true;
+  if (!floor.built) return House.chooseFurniture(player, house, floor.target);
+  const { furniture, location, objectId } = floor.built;
+  api.sendMultiChatboxPrompt(player, "Select an option", "Remove the contents of the oubliette",
+    () => House.removeFurniturePrompt(player, house, location, objectId, furniture.type), "Never mind", () => {});
+}
+
 function attachDungeon(api) {
   api.onObjectInteraction("Door", { Open: useDoor, Close: closeDoor, "Pick-lock": pickLock, Force: force });
+  api.onObjectInteraction("Cage", { "Build-in": buildInCage });
   for (const name of ["Wooden crate", "Oak chest", "Teak chest", "Mahogany chest", "Magic chest"]) api.onObjectInteraction(name, { Open: openChest });
   api.onItemOnObject(coinsOnChest);
   api.onNpcDeath(monsterDied);

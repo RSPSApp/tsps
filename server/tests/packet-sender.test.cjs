@@ -347,3 +347,39 @@ test('a spellbook re-mount keeps the quest stages that share the spell unlock va
   assert.equal(sender.getVarp(MM_MAIN), 3, 'a later mount does not mark the quest complete again');
   assert.equal(sender.getVarbit(4070), 0, 'the mount still publishes the spellbook');
 });
+
+// #6420: live moves Motherlode Mine pay-dirt with an in-view NPC teleport whose jump flag is clear
+// (rsprox prints `teleport`, not `telejump`), which clients walk over the tick. NPC.teleportInView
+// sends a moved NPC's re-add with that bit clear; any other move keeps it set.
+test('an NPC moved in view without a jump is re-added with the teleport bit clear', () => {
+  const { createNpcSyncState, encodeNpcSync } = require('../dist/net/protocol/ClientProtocol');
+  const local = { x:3748, y:5675, level:0 };
+  const base = { index:9, typeId:6564, rotation:0, walkDirection:-1, runDirection:-1, x:3748, y:5671, level:0 };
+  const teleportBit = (jump) => {
+    const state = createNpcSyncState();
+    encodeNpcSync(1, local, [base], state);
+    const body = encodeNpcSync(2, local, [{ ...base, y:5670, jump }], state).subarray(3).subarray(11);
+    // count8, the old entry's removal (1 + 2 bits), then the re-add: index16, block1, worldView1, teleport1.
+    const bit = 8 + 3 + 16 + 1 + 1;
+    return (body[bit >> 3] >> (7 - (bit & 7))) & 1;
+  };
+  assert.equal(teleportBit(undefined), 1, 'a telejump or other move snaps');
+  assert.equal(teleportBit(false), 0, 'teleportInView: clients walk it');
+});
+
+test('NPC.teleportInView keeps a real NPC in view without the jump flag, for the tick only', async () => {
+  require('../dist/Server').Server.installProductionPathResolver();
+  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(process.cwd());
+  const { NPC } = require('../dist/game/entity/impl/npc/NPC');
+  const { Location } = require('../dist/game/model/Location');
+  const npc = new NPC(6564, new Location(3748, 5671, 0));
+  npc.teleportInView(new Location(3748, 5670, 0));
+  assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [3748, 5670]);
+  assert.equal(npc.isTelejumping(), true, 'kept in view (World.staysInViewWhenPlaced)');
+  assert.equal(npc.isTeleportingWithoutJump(), true, 'PlayerSession sends its view with jump: false');
+  npc.resetUpdating();
+  assert.equal(npc.isTelejumping(), false);
+  assert.equal(npc.isTeleportingWithoutJump(), false);
+  npc.telejump(new Location(3748, 5669, 0));
+  assert.equal(npc.isTeleportingWithoutJump(), false, 'a telejump keeps the jump flag');
+});

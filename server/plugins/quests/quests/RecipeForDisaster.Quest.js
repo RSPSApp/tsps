@@ -2004,8 +2004,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
         if (!mobile?.isPlayer?.() || mobile.getAsPlayer?.() !== this.owner) return;
         const npc = ACTIVE_FINAL_NPC_BY_PLAYER.get(this.owner);
         if (!npc || npc.getArea?.() !== this) return;
-        // Keep the core's idle-NPC regeneration timer fresh only for the owner
-        // in this encounter. Incoming hits stay on the ordinary combat path.
+        // Keep the NPC's combat stopwatch fresh only for the owner in this
+        // encounter. Incoming hits stay on the ordinary combat path.
         npc.getCombat?.()?.getLastAttack?.()?.reset?.();
         const mother = MOTHER_PHASES.get(npc);
         if (mother) {

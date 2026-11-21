@@ -1293,13 +1293,34 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     player.sendMessage("Your Flamtaer bracelet crumbles to dust.");
   }
 
+  function materialAmount(player, itemId) {
+    const request = { player, itemId, amount: player.getInventory().getAmount(itemId) };
+    api.emitCustomEvent("storage:amount", request);
+    return request.amount;
+  }
+
+  /** Takes the inventory's share first, then a carried Flamtaer bag's (Wiki: used in place). */
+  function takeMaterial(player, itemId, amount, containers = true) {
+    const inventory = player.getInventory();
+    const fromInventory = Math.min(amount, inventory.getAmount(itemId));
+    if (fromInventory > 0) inventory.deleteNumber(itemId, fromInventory);
+    const left = amount - fromInventory;
+    if (left <= 0) return true;
+    if (!containers) return false;
+    const request = { player, itemId, amount: left, taken: 0 };
+    api.emitCustomEvent("storage:take", request);
+    return request.taken >= left;
+  }
+
   function setsInInventory(player) {
-    const timber = player.getInventory().getAmount(ItemIdentifiers.TIMBER_BEAM) +
+    // Only the bag stores building materials; planks count from the inventory (Wiki: the bag
+    // takes timber beams, not planks).
+    const timber = materialAmount(player, ItemIdentifiers.TIMBER_BEAM) +
       player.getInventory().getAmount(ItemIdentifiers.PLANK);
     return Math.min(
-      player.getInventory().getAmount(ItemIdentifiers.LIMESTONE_BRICK),
+      materialAmount(player, ItemIdentifiers.LIMESTONE_BRICK),
       timber,
-      Math.floor(player.getInventory().getAmount(ItemIdentifiers.SWAMP_PASTE) / 5)
+      Math.floor(materialAmount(player, ItemIdentifiers.SWAMP_PASTE) / 5)
     );
   }
 
@@ -1308,12 +1329,15 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     let resources = resourcesOf(player);
     let added = 0;
     while (resources + RESOURCES_PER_SET <= 100 && setsInInventory(player) > 0) {
-      const timberId = held(player, ItemIdentifiers.TIMBER_BEAM)
+      const inventory = player.getInventory();
+      const timberId = inventory.getAmount(ItemIdentifiers.TIMBER_BEAM) > 0
         ? ItemIdentifiers.TIMBER_BEAM
-        : ItemIdentifiers.PLANK;
-      player.getInventory().deleteNumber(ItemIdentifiers.LIMESTONE_BRICK, 1);
-      player.getInventory().deleteNumber(timberId, 1);
-      player.getInventory().deleteNumber(ItemIdentifiers.SWAMP_PASTE, 5);
+        : inventory.getAmount(ItemIdentifiers.PLANK) > 0
+          ? ItemIdentifiers.PLANK
+          : ItemIdentifiers.TIMBER_BEAM;
+      if (!takeMaterial(player, ItemIdentifiers.LIMESTONE_BRICK, 1)
+        || !takeMaterial(player, timberId, 1, timberId !== ItemIdentifiers.PLANK)
+        || !takeMaterial(player, ItemIdentifiers.SWAMP_PASTE, 5)) break;
       resources += RESOURCES_PER_SET;
       added++;
     }

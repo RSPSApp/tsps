@@ -41,6 +41,10 @@ function stateOf(npc) {
   if (!npc.__corp) {
     npc.__corp = { ticks: 0, regen: 0, damage: new Map(), core: null };
     npc.setStatRestoreTicks?.(STAT_RESTORE_TICKS);
+    // Its hitpoints heal only by the scripted 7-tick heal below; the 20 ticks are for drained
+    // stats alone (Wiki, Corporeal Beast/Strategies: "regenerates each drained stat once every
+    // 20 ticks"), so the engine's hitpoint regen, which shares that interval, is off.
+    npc.setFlag?.("combat:no-regen");
     npc.setHealthBar?.(HEALTH_BAR);
   }
   return npc.__corp;

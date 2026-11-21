@@ -48,6 +48,7 @@ import {
   PluginItemOnItemEvent,
   PluginItemUseFilter,
   PluginItemActionOptions,
+  PluginObjectInteractionOptions,
   PluginItemOnNpcEvent,
   PluginItemOnPlayerEvent,
   PluginItemOnObjectEvent,
@@ -309,6 +310,8 @@ export class PluginManager {
   private static objectHooksById = new Map<string, ObjectInteractionHook[]>();
   private static objectHooksByName = new Map<string, ObjectInteractionHook[]>();
   private static nextObjectHookOrder = 0;
+  /** Added to a named object fallback's order, so it runs after every other object hook. */
+  private static readonly OBJECT_FALLBACK_ORDER = 1_000_000_000;
   private static npcInteractionHooks: PluginHook<PluginNpcInteractionEvent>[] = [];
   private static beforeNpcInteractionHooks: PluginHook<PluginNpcInteractionEvent>[] = [];
   private static beforeObjectInteractionHooks: PluginHook<PluginObjectInteractionEvent>[] = [];
@@ -3510,12 +3513,15 @@ export class PluginManager {
       },
       onObjectInteraction: (
         handler: string | ((event: PluginObjectInteractionEvent) => void),
-        actions?: Record<string, (event: PluginObjectInteractionEvent) => void | boolean>
+        actions?: Record<string, (event: PluginObjectInteractionEvent) => void | boolean>,
+        options?: PluginObjectInteractionOptions
       ) => {
         if (typeof handler !== "function" && (typeof handler !== "string" || !actions)) {
           return;
         }
-        const order = PluginManager.nextObjectHookOrder++;
+        // A named fallback sorts after every hook registered without one, whatever the load order.
+        const order = PluginManager.nextObjectHookOrder++ +
+          (typeof handler === "string" && options?.fallback ? PluginManager.OBJECT_FALLBACK_ORDER : 0);
         if (typeof handler === "function") {
           PluginManager.objectInteractionHooks.push({ ...hookProfile(handler), order, handler });
           return;

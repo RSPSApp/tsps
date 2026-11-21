@@ -1,5 +1,5 @@
 import { isIos, isLowEndDevice, isSafari } from "../common/utils/DeviceUtil";
-import { getCacheBaseUrl } from "../config/clientEnv";
+import { getCacheBaseUrl, getCacheListUrl } from "../config/clientEnv";
 import { CacheFiles, ProgressListener } from "../rs/cache/CacheFiles";
 import { CacheInfo, getLatestCache } from "../rs/cache/CacheInfo";
 import { CacheType, detectCacheType } from "../rs/cache/CacheType";
@@ -56,7 +56,7 @@ export function getIndexName(indexId: number): string {
 }
 
 export async function fetchCacheInfos(): Promise<CacheInfo[]> {
-    const resp = await fetch(CACHE_PATH + "caches.json");
+    const resp = await fetch(getCacheListUrl());
     return resp.json();
 }
 

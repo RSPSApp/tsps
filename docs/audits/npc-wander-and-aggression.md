@@ -355,10 +355,13 @@ added to the radius as a symmetric term. The check is `NpcDefinition.getAggressi
 - **Hunting:** `NpcAggression` refuses a target outside the spawn footprint's aggression range,
   even when the NPC has wandered within hunt range of it. An area rule returning `true` still
   overrides the engine check, as it does for tolerance.
-- **Chasing:** `Combat.shouldRetreat` drops a target outside the aggression range (or an NPC
-  dragged beyond its max range), marks the coordinator `RETREATING` and lets it walk home.
-  `combat:no-retreat` still exempts scripted content, and a target that is fighting the NPC
-  (`isSafespotted`) is never dropped, so player-started fights and safespots behave as before.
+- **Chasing:** `Combat.shouldRetreat` drops a target that stands outside the aggression range,
+  marks the coordinator `RETREATING` and lets it walk home. Only the target's position counts
+  (#6297): the Wiki has the NPC attack "from outside the aggression range as long as the player
+  is standing inside", and "Retreat mode is initiated by attacking an NPC from outside the
+  aggression range", so a target fighting it from outside is dropped too, and one inside is kept
+  whether or not it is fighting or reachable (a safespot). `combat:no-retreat` and
+  `combat:keep-target` still exempt scripted content.
   Instanced NPCs (a `PrivateArea`, e.g. Zulrah's phase moves and the raid rooms) are left to
   their own arena rules rather than the open-world range.
 - **Public scripted arenas:** a shared boss chamber is not open-world hunting either. The God

@@ -130,6 +130,17 @@ test("a damaged npc keeps its damage while it walks home, regaining 1 hitpoint p
   assert.equal(s.npc.getHitpoints(), 3);
 });
 
+test("hitpoints regenerate on the npc's own stat restore interval", (t) => {
+  // Wiki (User:Orion/Regen): an NPC's hitpoint and stat rates are the same (Tekton 15, Vasa 10).
+  const s = scene(t);
+  s.npc.setStatRestoreTicks(10);
+  s.npc.setHitpoints(1);
+  s.ticks(9);
+  assert.equal(s.npc.getHitpoints(), 1);
+  s.ticks(1);
+  assert.equal(s.npc.getHitpoints(), 2, "one hitpoint on the 10th tick");
+});
+
 test("an npc walking home after its fight fights back when it is attacked", (t) => {
   const s = scene(t);
   const coordinator = s.npc.getMovementCoordinator();

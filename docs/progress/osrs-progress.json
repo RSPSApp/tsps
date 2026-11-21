@@ -32934,7 +32934,7 @@
           "tasks": [
             "done",
             "in-progress",
-            "todo",
+            "done",
             "in-progress"
           ],
           "plugin": {
@@ -32948,12 +32948,16 @@
             "server/plugins/bosses/maggotking/Common.MaggotKing.js",
             "server/plugins/bosses/maggotking/Entrance.MaggotKing.js",
             "server/plugins/bosses/maggotking/Instance.MaggotKing.js",
-            "server/plugins/bosses/maggotking/data/maggot-king.json"
+            "server/plugins/bosses/maggotking/Rewards.MaggotKing.js",
+            "server/plugins/bosses/maggotking/data/maggot-king.json",
+            "server/tests/maggot-king.test.cjs",
+            "docs/maggot-king.md"
           ],
           "devNotes": [
             "It is a level 741 boss with 1,500 hitpoints using all three combat styles, and drops the Maggot marquess, Crimson kisten and Elder venator fang. Read its mechanics and arena from the wiki.",
             "Main 3b61a15a8 (6 November 2026): #2326 Bosses: add access and encounter setup. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026): The quest-gated darkwood entrance now leads into a solo lair that spawns the boss, respawns it after a kill and tears down abandoned sessions. Full combat phases, unique drops and achievement tracking still need implementation."
+            "Main 3e9ee2d67 (11 November 2026): The quest-gated darkwood entrance now leads into a solo lair that spawns the boss, respawns it after a kill and tears down abandoned sessions. Full combat phases, unique drops and achievement tracking still need implementation.",
+            "2026-11-21, feat/maggot-king-corpse-rewards: the kill now leaves the Maggot King Corpse (15741) and the boss waits for it. Open-stomach rolls the generated maggot_king_2 table; Take-eggs rolls maggot_king. Both use the shared npc-drops roller, so the boss rare multiplier, pets, clue capacity, ironman rules and the collection log apply; harvested loot enters the pack and overflow lands on the corpse's tile for three hours. The boss respawns nine ticks after the corpse is used, and leaving/logout/death/shutdown remove a waiting corpse. Verified by server/tests/maggot-king.test.cjs and docs/maggot-king.md. The take-eggs no-loot/supply split and the generated table's assumed rarities are not re-derived here; a natural kill/loot capture is still absent."
           ],
           "taskDetails": [
             {

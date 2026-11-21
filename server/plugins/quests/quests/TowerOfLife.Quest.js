@@ -243,6 +243,8 @@ module.exports = function registerTowerOfLifeQuest(api) {
   const pendingQuestion = new WeakMap();
   const mindTalk = new WeakMap();
   const busy = new WeakMap();
+  /** The machine build waiting on its four ticks, one per player (never persisted: a logout cancels it). */
+  const building = new WeakMap();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const holdsAny = (player, itemIds) => itemIds.some((itemId) => held(player, itemId));
@@ -344,6 +346,11 @@ module.exports = function registerTowerOfLifeQuest(api) {
   function buildMachine(event, machine) {
     const { player } = event;
     event.handled = true;
+    // One build at a time: a second Fix during the four-tick wait must not spend the materials again.
+    if (building.has(player) || machineProgress(player, machine) !== MACHINE_UNFINISHED) {
+      event.end = true;
+      return;
+    }
     const missing = missingMaterial(player, machine);
     if (missing) {
       statements(player, [`You need ${missing} to fix the machine.`]);
@@ -352,7 +359,12 @@ module.exports = function registerTowerOfLifeQuest(api) {
     player.performAnimation(new Animation(ANIM.FIX_MACHINE));
     if (machine !== "cage") player.getPacketSender().sendSound(SOUND.FIX_MACHINE, 1, 0);
     // The materials go with the progress, four ticks after the swing (capture ticks 2428-2432).
+    const build = { machine };
+    building.set(player, build);
     event.wait = (resume) => later(player, BUILD_TICKS, () => {
+      if (building.get(player) !== build) return;
+      building.delete(player);
+      if (machineProgress(player, machine) !== MACHINE_UNFINISHED) return;
       const short = missingMaterial(player, machine);
       if (short) {
         statements(player, [`You need ${short} to fix the machine.`]);
@@ -376,7 +388,7 @@ module.exports = function registerTowerOfLifeQuest(api) {
     if (!machine) return false;
     event.handled = true;
     const { player } = event;
-    if (stageOf(player) < STAGE.ENTERED) return;
+    if (stageOf(player) < STAGE.ENTERED || building.has(player)) return;
     const progress = machineProgress(player, machine);
     if (progress >= MACHINE_WORKING || stageOf(player) >= STAGE.UP_TOP) {
       player.sendMessage(machine === "cage" ? "The cage is complete!" : "The machine is working!"); // Ours: not captured
@@ -1128,6 +1140,7 @@ module.exports = function registerTowerOfLifeQuest(api) {
   }
 
   function handleLogout({ player }) {
+    building.delete(player);
     Scenes.logout(player);
     mindTalk.delete(player);
   }

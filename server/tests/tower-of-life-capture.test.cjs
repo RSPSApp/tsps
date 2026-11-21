@@ -606,3 +606,36 @@ test('a builder piece lost after tol_prog 4 is handed out again until completion
   at(h, 18);
   assert.equal(pick(N.BLACK_EYE), 'standard-dialogue-after-tower-of-life');
 });
+
+test('a second build during the four-tick wait spends nothing (review: overlapping Fix)', () => {
+  const h = setup();
+  at(h, 8);
+  h.items.set(I.HAMMER, 1);
+  h.items.set(I.SAW, 1);
+  h.items.set(I.COLOURED_BALL, 8);
+  h.items.set(I.METAL_SHEET, 6);
+  h.items.set(I.VALVE_WHEEL, 8);
+  const first = h.action('GYrrRh');
+  const second = h.action('GYrrRh');
+  assert.equal(second.end, true);
+  assert.equal(second.wait, undefined);
+  h.objectAction('Pressure machine', 'Fix', { objectId: O.PRESSURE_MACHINE });
+  assert.equal(h.transcriptCalls.length, 0, 'Fix waits for the build in progress');
+  first.wait(() => {});
+  h.flushTasks();
+  assert.deepEqual([I.COLOURED_BALL, I.METAL_SHEET, I.VALVE_WHEEL].map((id) => h.items.get(id)), [4, 3, 4]);
+  assert.equal(h.varbits.get(3338), 1);
+});
+
+test('a pipe piece turned into its solved rotation on its target locks (review: lock after a turn)', () => {
+  const h = setup();
+  at(h, 8);
+  h.attributes.set('quest.tower_of_life.pipe', 1);
+  h.objectAction('Pipe machine', 'Fix', { objectId: 21943 });
+  // Piece 3 starts turned twice at (402,153): left 30 and up 10 bring it to (162,73), then two turns.
+  press(h, 511, [[9, 1], [17, 30], [21, 10]]);
+  assert.deepEqual(h.positionFor(ui(511, 9)), [162, 73]);
+  press(h, 511, [[15, 2]]);
+  assert.deepEqual(h.positionFor(ui(511, 9)), [159, 69]);
+  assert.equal(h.varbits.get(3343), 0, 'no longer in hand');
+});

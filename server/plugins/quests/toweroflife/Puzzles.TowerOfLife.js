@@ -248,13 +248,14 @@ function createPuzzles(api, ctx) {
       if (piece.y + move[1] * PIPE.step < PIPE.minY) return;
       piece.x += move[0] * PIPE.step;
       piece.y += move[1] * PIPE.step;
-      const [tx, ty] = def.target;
-      if (piece.rotation === 0 && Math.abs(piece.x - tx) <= PIPE.snap && Math.abs(piece.y - ty) <= PIPE.snap) {
-        piece.x = tx;
-        piece.y = ty;
-        piece.placed = true;
-        setActive(player, state, null);
-      }
+    }
+    // A move or a turn that leaves the piece in its solved rotation near its target locks it.
+    const [tx, ty] = def.target;
+    if (piece.rotation === 0 && Math.abs(piece.x - tx) <= PIPE.snap && Math.abs(piece.y - ty) <= PIPE.snap) {
+      piece.x = tx;
+      piece.y = ty;
+      piece.placed = true;
+      setActive(player, state, null);
     }
     save(player, PIPE_ATTRIBUTE, state);
     sendPipes(player, state);

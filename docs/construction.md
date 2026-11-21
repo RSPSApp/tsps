@@ -279,7 +279,9 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
   "Choose a shape" (None, Kraken, Zulrah, Kalphite Queen, Cerberus, Abyssal Sire, Skotizo,
   Vorkath, Alchemical Hydra, The Nightmare). A pick plays `pruning_all` and synth 2440, and three
   ticks later the animation resets and the bush becomes that shape's `poh_topiary_*` loc, saved
-  with the house (rec 2884, rev 230, ticks 12577-12725). No message or experience. Each shape
+  with the house (rec 2884, rev 230, ticks 12577-12725). No message or experience. Picking the
+  shape the bush already has opens a mesbox, "It's already in that form.", and prunes nothing
+  (rec 2884 tick 12537, None on the plain bush). Each shape
   needs that boss killed once (Wiki: Topiary bush), read from Combat Achievements' kill counts,
   so Phosani's Nightmare doesn't unlock The Nightmare. The Wiki asks for the post-quest Vorkath;
   Combat Achievements also counts the Dragon Slayer II one (npc `vorkath_quest`), so the shape

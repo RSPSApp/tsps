@@ -1,7 +1,7 @@
 # Key chests
 
 `server/plugins/objects/KeyChests.plugin.js` (units in `keychests/`, data in
-`objects/data/key-chests.json`): the chests opened with a key, the crystal key halves, and the
+`objects/data/key-chests.json`): the chests opened with a key, the crystal and moon key halves, and the
 enhanced crystal key. Members only.
 
 | Chest | Where | Key | Opened by |
@@ -12,6 +12,7 @@ enhanced crystal key. Members only.
 | Larran's big chest (multiloc 34832) | Ship west of the Pirates' Hideout | Larran's key | Unlock, or the key |
 | Elven Crystal Chest (multiloc 37342) | Tower of Voices, Prifddinas | Enhanced crystal key | Open, or the key |
 | Zombie Pirate's Locker (loc 53222, open 53223) | Shipwreck east of the Chaos Temple, level 14 Wilderness | Zombie pirate key | Open, or the key |
+| Moon key chest ("Chest", loc 55235, open 55236) | Ruins of Tapoyauik, northern section | Moon key | Open, or the key |
 
 The brimstone and Larran's keys come from Konar's and Krystilia's Slayer tasks
 (`plugins/skills/slayer/Keys.Slayer.js`, [slayer.md](slayer.md)). The Elven chest is open to
@@ -60,6 +61,25 @@ is opened the same way, under the same varbit):
 - **Collection log:** every item goes through `collection-log:obtain` (the dusk mystic robes,
   the hasta, the Dagon'hai robes, the dragonstone armour, the onyx and the shield left half).
 
+**Moon key chest** (recording local 1001308, rev 237, a Leagues world; the league task lines and
+points it sent aren't ours):
+
+| Tick | What |
+| --- | --- |
+| 0 | Animation `human_openchest` and sound 77, both with delay 10, "You unlock the chest with your key." |
+| 1 | Sound 76 (delay 45), the key goes, the loot, "You find some treasure in the chest!"; the chest becomes loc 55236 for everyone |
+| 3 | The chest is loc 55235 again |
+
+- **Without a key:** "The chest is securely locked." (Wiki); no sound or animation is given, so
+  none plays.
+- **Loot (Wiki: Chest (moon key)):** 250 sunfire splinters every time ("Always"), with a
+  pre-roll hit too (ours: the Wiki lists them as always and doesn't say otherwise); a 1/5,000
+  uncut onyx pre-roll, then a 1/500 helmet of the moon (1/500.1 overall); otherwise one of 16
+  rewards out of 107, among them a crystal key and another moon key.
+- **Collection log:** the onyx, the helmet and the main table count; the sunfire splinters and
+  huasca seeds don't (Wiki trivia: from this chest they "will not contribute towards the
+  collection log"), set by the chest's `noLog` list.
+
 **Zombie Pirate's Locker** (recordings 441 and 442, rev 233; 1440, rev 224):
 
 | Tick | What |
@@ -103,6 +123,12 @@ robe or a Dagon'hai piece came alone); otherwise the always items and one main r
   The Wiki's small-chest fish table is marked incomplete since the June 2025 change, so the small
   chest uses the brimstone chest's amounts.
 
+## Key halves
+
+- **Moon key** (Wiki: Moon key): the moon key's loop and tooth halves (the same names as the
+  crystal key's) used on each other make a moon key, with "You join the two halves of the key
+  together." No sound: the join isn't captured. Halves from different keys don't join.
+
 ## Crystal keys
 
 - **Key halves** (captured, recording 2963): the loop and tooth halves used on each other make a
@@ -117,6 +143,10 @@ robe or a Dagon'hai piece came alone); otherwise the always items and one main r
   singing." The bowl's other recipes (crystal tools, armour, teleport seeds) aren't built.
 
 ## Not built
+
+- The moon key's halves as drops (the loop half from Varlamore skilling, the tooth half from
+  the Ruins of Tapoyauik's creatures; Doom of Mokhaiotl already drops one), and the Wiki's
+  The Heart of Darkness requirement for the chest (the chest page itself lists none).
 
 - The locker on free-to-play worlds (the Wiki: it no longer opens there; the plugin is members
   only, so nothing answers Open), and the zombie pirates' "How many times have I opened your

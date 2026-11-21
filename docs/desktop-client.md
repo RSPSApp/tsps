@@ -51,8 +51,12 @@ that release, and only then opens the game. Never fall back to the latest releas
 A world without version metadata or a failed lookup must show an error and must
 not cause an update. Do not acknowledge an incompatible bundle as a successful boot.
 
-Each bundle carries `client-release.json` with its identifier. Desktop startup and
-login compare it with the selected world's requirement. Incompatible in-game
+Each bundle carries `client-release.json` with its identifier. The required, hidden
+`DesktopPlugin` owns compatibility checks and native startup acknowledgement.
+It uses the generic `beforeWorldConnect` and `clientReady` hooks; networking and
+world switching do not contain desktop-specific branches. Launch defaults are
+resolved in `clientEnv` before plugins load. Desktop startup and login compare
+the bundle identifier with the selected world's requirement. Incompatible in-game
 world switches are blocked with a message; they do not automatically swap game
 bundles. Browser clients do not perform this desktop check. The wrapper's minimum
 version is now 0.1.2; older latest-only launchers must be upgraded first.

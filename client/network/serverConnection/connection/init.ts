@@ -1,5 +1,4 @@
 import { getSelectedWorld } from "../outgoing/connectionInfo";
-import { assertDesktopWorldCompatible } from "../../../desktop";
 import { resetProtocolCompatibility, startWelcomeTimer, receiveProtocolGreeting, isProtocolRejected } from "../protocolCompatibility";
 import { replaceCustomDefinitions } from "../../../custom/definitions/CustomDefinitionStore";
 import { PlayerSyncContext } from "../../../game/sync/PlayerSyncContext";
@@ -107,9 +106,9 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
 
             // If reconnecting with stored credentials, automatically re-login
             if (wasReconnecting && state.sessionUsername && state.sessionPassword) {
-                if (typeof window !== "undefined" && window.__RSPS_DESKTOP_PROFILE__) {
+                if (state.worldConnectionGuard) {
                     try {
-                        await assertDesktopWorldCompatible(getSelectedWorld());
+                        await state.worldConnectionGuard(getSelectedWorld());
                     } catch (error) {
                         if (state.socket !== ws) return;
                         const g = window as any;
@@ -117,8 +116,8 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
                         state.sessionUsername = null;
                         state.sessionPassword = null;
                         state.hasLoggedIn = false;
-                        ws.close(4003, "client version changed");
-                        const message = error instanceof Error ? error.message : "Could not check client compatibility";
+                        ws.close(4003, "world connection rejected");
+                        const message = error instanceof Error ? error.message : "Could not connect to this world";
                         for (const cb of state.loginResponseListeners) cb({ success: false, error: message });
                         return;
                     }

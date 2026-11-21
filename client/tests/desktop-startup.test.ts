@@ -1,18 +1,43 @@
 import assert from "node:assert/strict";
-import { notifyDesktopAppReady } from "../desktop";
+import { DesktopPlugin } from "../game/plugins/desktop/DesktopPlugin";
+import { ClientPluginManager } from "../game/plugins/ClientPluginManager";
 
 async function main() {
-    let calls: string[] = [];
+    const calls: string[] = [];
     (globalThis as any).window = {
         __TAURI__: { core: { invoke: async (command: string) => { calls.push(command); } } },
     };
-    await notifyDesktopAppReady();
-    assert.deepEqual(calls, [], "ordinary browser startup never invokes native commands");
+    const plugins = new ClientPluginManager();
+    const desktop = new DesktopPlugin();
+    await desktop.start();
+    plugins.add(desktop);
+    const controller = new AbortController();
+    let frames = 0;
+    (globalThis as any).requestAnimationFrame = (callback: FrameRequestCallback) => {
+        frames++;
+        callback(0);
+        return frames;
+    };
+    let required = "a".repeat(64);
+    globalThis.fetch = async input => Response.json({ clientVersion: String(input) === "/client-release.json" ? "a".repeat(64) : required });
+    await plugins.clientReady(controller.signal);
+    assert.deepEqual(calls, [], "browser startup never invokes native commands");
+    assert.equal(frames, 0, "browser startup adds no frame delay");
+
     window.__RSPS_DESKTOP_PROFILE__ = { name: "Example", address: "example.com", secure: true, maxPlayers: 2047 };
-    await notifyDesktopAppReady();
+    await plugins.clientReady(controller.signal);
     assert.deepEqual(calls, ["plugin:hot-update|notify_app_ready"]);
+    assert.equal(frames, 1, "updates are acknowledged after a rendered frame");
+    required = "b".repeat(64);
+    await assert.rejects(plugins.clientReady(controller.signal), /different client version/);
+    assert.equal(calls.length, 1, "an incompatible bundle is never acknowledged");
+    required = "a".repeat(64);
+    controller.abort();
+    await plugins.clientReady(controller.signal);
+    assert.equal(calls.length, 1, "disposed clients cannot acknowledge updates");
+
     delete window.__TAURI__;
-    await notifyDesktopAppReady();
+    await plugins.clientReady(new AbortController().signal);
     assert.equal(calls.length, 1, "a missing bridge cannot break startup");
     const failure = new Error("Native acknowledgement unavailable");
     let warning: unknown[] | undefined;
@@ -20,9 +45,8 @@ async function main() {
     console.warn = (...args) => { warning = args; };
     window.__TAURI__ = { core: { invoke: async () => { throw failure; } } };
     try {
-        await notifyDesktopAppReady();
-        assert.equal(warning?.[1], failure, "a failed acknowledgement is reported without preventing play");
+        await plugins.clientReady(new AbortController().signal);
+        assert.equal(warning?.[1], failure);
     } finally { console.warn = previousWarn; }
-    console.log("Only desktop startup acknowledges native updates; bridge errors cannot block play.");
 }
 void main().catch(error => { console.error(error); process.exitCode = 1; });

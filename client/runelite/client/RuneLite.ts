@@ -1,3 +1,4 @@
+import { state as connectionState } from "../../network/serverConnection/state";
 import { subscribePluginMessages } from "../../network/serverConnection/domain/pluginMessages";
 import { PluginMessage } from "@runelite/api/events/PluginMessage";
 import { GameStateChanged, StatChanged } from "@runelite/api/events";
@@ -144,6 +145,8 @@ export class RuneLite {
             window.addEventListener("focus", () => this.eventBus.post(new FocusChanged(true)));
             window.addEventListener("blur", () => this.eventBus.post(new FocusChanged(false)));
         }
+
+        connectionState.worldConnectionGuard = world => this.client.clientPlugins.beforeWorldConnect(world);
 
         // Edit mode: no plugins, so nothing for the overlay renderer to lay out either.
         if (!this.loadPlugins) return;

@@ -1,4 +1,4 @@
-import { desktopClientManifestUrl } from "./desktop";
+import { desktopClientManifestUrl } from "./game/plugins/desktop/desktop";
 
 // Embedded by native installers, independently of whichever game bundle is active.
 Object.defineProperty(window, "__RSPS_DESKTOP_BOOTSTRAP__", {

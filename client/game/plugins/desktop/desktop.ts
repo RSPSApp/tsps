@@ -1,8 +1,9 @@
-import type { ConfiguredServer } from "./config/clientEnv";
+import { getDesktopProfile } from "../../../config/clientEnv";
+import type { ConfiguredServer } from "../../../config/clientEnv";
 
 /** Called after the desktop game's cache and renderer have initialized. */
 export async function notifyDesktopAppReady(): Promise<void> {
-    if (typeof window === "undefined" || !window.__RSPS_DESKTOP_PROFILE__) return;
+    if (!getDesktopProfile()) return;
     try {
         await window.__TAURI__?.core.invoke("plugin:hot-update|notify_app_ready");
     } catch (error) {
@@ -19,7 +20,7 @@ export async function requiredDesktopClientVersion(world: DesktopWorld): Promise
         if (!world.signalUrl || !world.worldId) {
             throw new Error("Hosted world connection is incomplete");
         }
-        const { WebRtcGameSocket } = await import("./network/serverConnection/connection/WebRtcGameSocket");
+        const { WebRtcGameSocket } = await import("../../../network/serverConnection/connection/WebRtcGameSocket");
         signal.throwIfAborted();
         const socket = new WebRtcGameSocket({
             signalUrl: world.signalUrl,
@@ -75,7 +76,7 @@ async function loadRunningVersion(): Promise<string> {
 let runningVersion: Promise<string> | undefined;
 
 export async function assertDesktopWorldCompatible(world: DesktopWorld): Promise<void> {
-    if (typeof window === "undefined" || !window.__RSPS_DESKTOP_PROFILE__) return;
+    if (!getDesktopProfile()) return;
     runningVersion ??= loadRunningVersion();
     const [required, running] = await Promise.all([requiredDesktopClientVersion(world), runningVersion]);
     if (required !== running) {

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { assertDesktopWorldCompatible, desktopClientManifestUrl } from "../desktop";
+import { assertDesktopWorldCompatible, desktopClientManifestUrl } from "../game/plugins/desktop/desktop";
+import { DesktopPlugin } from "../game/plugins/desktop/DesktopPlugin";
+import { ClientPluginManager } from "../game/plugins/ClientPluginManager";
 
 async function main() {
     const target = { address: "world.example/game", secure: true };
@@ -23,6 +25,11 @@ async function main() {
     await assert.rejects(assertDesktopWorldCompatible(target), /different client version/);
     const { sendLogin } = await import("../network/serverConnection/login");
     const { state } = await import("../network/serverConnection/state");
+    const plugins = new ClientPluginManager();
+    const desktop = new DesktopPlugin();
+    await desktop.start();
+    plugins.add(desktop);
+    state.worldConnectionGuard = world => plugins.beforeWorldConnect(world);
     state.lastUrl = "wss://world.example/game";
     state.webRtcConfig = undefined;
     const { getSelectedWorld } = await import("../network/serverConnection/outgoing/connectionInfo");

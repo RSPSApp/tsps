@@ -1,4 +1,3 @@
-import { assertDesktopWorldCompatible } from "../desktop";
 import { AGILITY_HELPER_HIGHLIGHT_OBSTACLES_ENABLED, HELPER_AGILITY_HIGHLIGHTED_COURSE } from "@runelite/api/gameval/VarbitID";
 import { retainedInventory, stopInventoryTransmit } from "./sync/InventoryStopTransmit";
 import { openClientUrl } from "../common/openUrl";
@@ -4452,10 +4451,10 @@ export class OsrsClient {
      * The World Switcher's server chosen in game. While "World Switcher confirmation" is on
      * (varbit 4100 at 0) the list asks first; then the client logs out and connects there.
      */
-    private desktopWorldSwitchAttempt = 0;
+    private worldSwitchAttempt = 0;
 
     private async switchToServer(index: number, confirmed: boolean): Promise<void> {
-        const attempt = ++this.desktopWorldSwitchAttempt;
+        const attempt = ++this.worldSwitchAttempt;
         const server = this.loginRenderer.serverList[index];
         const transport = server?.transport ?? "websocket";
         const isCurrent =
@@ -4475,16 +4474,14 @@ export class OsrsClient {
         }
 
         if (!server) return;
-        if (window.__RSPS_DESKTOP_PROFILE__) {
-            try {
-                await assertDesktopWorldCompatible(server);
-            } catch (error) {
-                if (attempt !== this.desktopWorldSwitchAttempt) return;
-                this.addGameMessage(error instanceof Error ? error.message : "Could not check client compatibility");
-                return;
-            }
-            if (attempt !== this.desktopWorldSwitchAttempt) return;
+        try {
+            await this.clientPlugins.beforeWorldConnect(server);
+        } catch (error) {
+            if (attempt !== this.worldSwitchAttempt) return;
+            this.addGameMessage(error instanceof Error ? error.message : "Could not connect to this world");
+            return;
         }
+        if (attempt !== this.worldSwitchAttempt) return;
         const currentIndex = this.loginRenderer.serverList.indexOf(server);
         if (currentIndex < 0) return;
         this.loginState.serverListOpen = false;

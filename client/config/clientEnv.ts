@@ -58,24 +58,48 @@ function isIceServer(value: unknown): value is RTCIceServer {
         || (Array.isArray(value.urls) && value.urls.every((url) => typeof url === "string"));
 }
 
-/** Base URL for OSRS cache files. Trailing slash always present. */
-export function getCacheBaseUrl(): string {
-    const fromEnv = read(process.env.REACT_APP_CACHE_BASE_URL);
-    if (!fromEnv) {
-        if (typeof window !== "undefined" && window.__RSPS_DESKTOP_PROFILE__) return "https://rsps.app/play/caches/";
-        const publicUrl = (process.env.PUBLIC_URL ?? "").replace(/\/$/, "");
-        return `${publicUrl}/caches/`;
-    }
-    return fromEnv.endsWith("/") ? fromEnv : `${fromEnv}/`;
+/** The wrapper supplies this before loading the client bundle. */
+export function getDesktopProfile(): Readonly<ConfiguredServer> | undefined {
+    return typeof window === "undefined" ? undefined : window.__RSPS_DESKTOP_PROFILE__;
 }
 
-/** Desktop releases carry their cache selection locally; data can live on our host or a CDN. */
+/** Resolve build defaults and the launch profile at the configuration boundary. */
+export function getClientConfig() {
+    const profile = getDesktopProfile();
+    const envAddress = read(process.env.REACT_APP_DEFAULT_SERVER_ADDRESS);
+    const defaultWsUrl = profile
+        ? `${profile.secure ? "wss" : "ws"}://${profile.address}`
+        : withPageHost(read(process.env.REACT_APP_DEFAULT_WS_URL) ?? "ws://localhost:43594");
+    const defaultServer: Readonly<ConfiguredServer> = profile ?? {
+        name: read(process.env.REACT_APP_DEFAULT_SERVER_NAME) ?? "Local Development",
+        address: withPageHost(envAddress ?? "localhost:43594"),
+        secure: readBoolean(read(process.env.REACT_APP_DEFAULT_SERVER_SECURE), defaultWsUrl.startsWith("wss://")),
+        maxPlayers: 2047,
+    };
+    const publicUrl = (process.env.PUBLIC_URL ?? "").replace(/\/$/, "");
+    const cacheUrl = read(process.env.REACT_APP_CACHE_BASE_URL)
+        ?? (profile ? "https://rsps.app/play/caches/" : `${publicUrl}/caches/`);
+    const cacheBaseUrl = cacheUrl.endsWith("/") ? cacheUrl : `${cacheUrl}/`;
+
+    return {
+        defaultServer,
+        defaultWsUrl,
+        configuredDefaultServer: profile || envAddress ? defaultServer : undefined,
+        restoreLastServer: !profile,
+        useServiceWorker: !profile,
+        cacheBaseUrl,
+        cacheListUrl: profile ? `${publicUrl}/caches/caches.json` : `${cacheBaseUrl}caches.json`,
+    };
+}
+
+/** Base URL for OSRS cache files. Trailing slash always present. */
+export function getCacheBaseUrl(): string {
+    return getClientConfig().cacheBaseUrl;
+}
+
+/** Cache metadata can stay local while cache data is hosted remotely. */
 export function getCacheListUrl(): string {
-    if (typeof window !== "undefined" && window.__RSPS_DESKTOP_PROFILE__) {
-        const publicUrl = (process.env.PUBLIC_URL ?? "").replace(/\/$/, "");
-        return `${publicUrl}/caches/caches.json`;
-    }
-    return `${getCacheBaseUrl()}caches.json`;
+    return getClientConfig().cacheListUrl;
 }
 
 const LOOPBACK_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/i;
@@ -92,39 +116,24 @@ function withPageHost(address: string): string {
 
 /** Default WebSocket URL used before the player picks a server. */
 export function getDefaultWsUrl(): string {
-    const profile = typeof window !== "undefined" ? window.__RSPS_DESKTOP_PROFILE__ : undefined;
-    if (profile) return `${profile.secure ? "wss" : "ws"}://${profile.address}`;
-    return withPageHost(read(process.env.REACT_APP_DEFAULT_WS_URL) ?? "ws://localhost:43594");
+    return getClientConfig().defaultWsUrl;
 }
 
 export function getDefaultServerAddress(): string {
-    if (typeof window !== "undefined" && window.__RSPS_DESKTOP_PROFILE__) return window.__RSPS_DESKTOP_PROFILE__.address;
-    return withPageHost(read(process.env.REACT_APP_DEFAULT_SERVER_ADDRESS) ?? "localhost:43594");
+    return getClientConfig().defaultServer.address;
 }
 
 export function getDefaultServerName(): string {
-    if (typeof window !== "undefined" && window.__RSPS_DESKTOP_PROFILE__) return window.__RSPS_DESKTOP_PROFILE__.name;
-    return read(process.env.REACT_APP_DEFAULT_SERVER_NAME) ?? "Local Development";
+    return getClientConfig().defaultServer.name;
 }
 
 export function getDefaultServerSecure(): boolean {
-    if (typeof window !== "undefined" && window.__RSPS_DESKTOP_PROFILE__) return window.__RSPS_DESKTOP_PROFILE__.secure;
-    const raw = read(process.env.REACT_APP_DEFAULT_SERVER_SECURE)?.toLowerCase();
-    if (raw === "true" || raw === "1") return true;
-    if (raw === "false" || raw === "0") return false;
-    return getDefaultWsUrl().startsWith("wss://");
+    return getClientConfig().defaultServer.secure;
 }
 
-/** The server this build logs into by default, when the env names one (e.g. a worktree's own). */
-export function getConfiguredDefaultServer(): ConfiguredServer | undefined {
-    if (typeof window !== "undefined" && window.__RSPS_DESKTOP_PROFILE__) return window.__RSPS_DESKTOP_PROFILE__;
-    if (!read(process.env.REACT_APP_DEFAULT_SERVER_ADDRESS)) return undefined;
-    return {
-        name: getDefaultServerName(),
-        address: getDefaultServerAddress(),
-        secure: getDefaultServerSecure(),
-        maxPlayers: 2047,
-    };
+/** The explicitly configured starting server, if one was provided. */
+export function getConfiguredDefaultServer(): Readonly<ConfiguredServer> | undefined {
+    return getClientConfig().configuredDefaultServer;
 }
 
 /**

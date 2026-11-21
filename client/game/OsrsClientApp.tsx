@@ -1,4 +1,3 @@
-import { assertDesktopWorldCompatible, notifyDesktopAppReady } from "../desktop";
 import { subscribeProtocolNotice, type ProtocolNotice } from "../network/serverConnection/protocolCompatibility";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -234,7 +233,6 @@ function OsrsClientApp() {
         let rendererCheckTimer: ReturnType<typeof setTimeout> | undefined;
 
         const load = async () => {
-            if (window.__RSPS_DESKTOP_PROFILE__) await assertDesktopWorldCompatible(window.__RSPS_DESKTOP_PROFILE__);
             const cacheList = await cachesPromise;
             if (!cacheList) {
                 setErrorMessage("Failed to load cache list");
@@ -385,12 +383,8 @@ function OsrsClientApp() {
             // ========== Initialize cache and finalize OsrsClient ==========
             client.initCache(cache);
             client.init();
-            // Let the initialized game reach a frame before committing a downloaded bundle.
-            if (window.__RSPS_DESKTOP_PROFILE__) {
-                requestAnimationFrame(() => {
-                    if (!disposed) void notifyDesktopAppReady();
-                });
-            }
+            await client.clientPlugins.clientReady(abortController.signal);
+            if (disposed) return;
 
             // ========== Login Screen Flow ==========
             setAutoSendHandshake(false);

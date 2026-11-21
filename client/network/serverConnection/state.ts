@@ -1,3 +1,4 @@
+import type { WorldConnection } from "../../game/plugins/ClientPluginManager";
 import type { LoginProtocolExtension } from "./types/login";
 import type { ClanState } from "../../common/social/Clans";
 import { PlayerSyncContext } from "../../game/sync/PlayerSyncContext";
@@ -99,6 +100,7 @@ export const state = {
     autoSendHandshake: true,
     playerSyncContext: null as PlayerSyncContext | null,
     playerUpdateDecoder: null as PlayerUpdateDecoder | null,
+    worldConnectionGuard: undefined as ((world: WorldConnection) => Promise<void>) | undefined,
     loginExtension: undefined as LoginProtocolExtension | undefined,
     loginOnWelcome: null as (() => void) | null,
     lastWelcome: undefined as { tickMs: number; serverTime: number } | undefined,

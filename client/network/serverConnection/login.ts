@@ -1,4 +1,3 @@
-import { assertDesktopWorldCompatible } from "../../desktop";
 import { ProtocolGreeting } from "./protocolCompatibility";
 import { decodeBatchedServerPackets } from "../packet/ServerBinaryDecoder";
 import { WS_SUPPRESS_RECONNECT_KEY, LOGIN_CONNECT_RETRY_DELAY_MS } from "./constants";
@@ -54,12 +53,12 @@ export async function sendLogin(
     flags: number = 0,
 ): Promise<void> {
     const attemptId = ++state.loginConnectAttemptId;
-    if (typeof window !== "undefined" && window.__RSPS_DESKTOP_PROFILE__) {
+    if (state.worldConnectionGuard) {
         try {
-            await assertDesktopWorldCompatible(getSelectedWorld());
+            await state.worldConnectionGuard(getSelectedWorld());
         } catch (error) {
             if (attemptId !== state.loginConnectAttemptId) return;
-            const message = error instanceof Error ? error.message : "Could not check client compatibility";
+            const message = error instanceof Error ? error.message : "Could not connect to this world";
             for (const cb of state.loginResponseListeners) cb({ success: false, error: message });
             return;
         }

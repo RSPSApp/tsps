@@ -1,3 +1,4 @@
+import type { ConfiguredServer } from "../../config/clientEnv";
 import type { WidgetActionEvent } from "../widgets/widgetActionPayload";
 import type { Camera } from "../Camera";
 import type { HitsplatEventPayload } from "../GameRenderer";
@@ -253,7 +254,13 @@ export type ScriptCallbackEvent = { eventName: string; vm: Cs2Vm };
 /** A widget dragged onto another (RuneLite's WidgetDrag on release). */
 export type WidgetDragEvent = { source: any; target: any };
 
+export type WorldConnection = Omit<ConfiguredServer, "name" | "maxPlayers">;
+
 export interface ClientPlugin {
+    /** Reject to prevent connecting to an incompatible or unavailable world. */
+    beforeWorldConnect?(world: WorldConnection): Promise<void>;
+    /** Cache and renderer initialization completed successfully. */
+    clientReady?(signal: AbortSignal): Promise<void>;
     /** Return true to defer an accepted login's handshake to a plugin. */
     beforeLoginHandshake?(sendHandshake: () => void): boolean;
     /** Extra player headicons; return stable, immutable sprites so textures can be reused. */
@@ -410,6 +417,21 @@ export class ClientPluginManager {
     add(plugin: ClientPlugin): void {
         this.plugins.push(plugin);
         this.implementers.clear();
+    }
+
+    async beforeWorldConnect(world: WorldConnection): Promise<void> {
+        for (const plugin of this.implementing("beforeWorldConnect")) {
+            if ((plugin as { isStarted?(): boolean }).isStarted?.() === false) continue;
+            await plugin.beforeWorldConnect!(world);
+        }
+    }
+
+    async clientReady(signal: AbortSignal): Promise<void> {
+        for (const plugin of this.implementing("clientReady")) {
+            if (signal.aborted) return;
+            if ((plugin as { isStarted?(): boolean }).isStarted?.() === false) continue;
+            await plugin.clientReady!(signal);
+        }
     }
 
     private implementing(hook: keyof ClientPlugin): ClientPlugin[] {

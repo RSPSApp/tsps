@@ -9,8 +9,6 @@ export interface PluginDescriptor {
     tags?: string[];
     enabledByDefault?: boolean;
     hidden?: boolean;
-    /** Platform integration that cannot be disabled through saved settings. */
-    required?: boolean;
     developerPlugin?: boolean;
     conflicts?: string[];
     loadWhenOutdated?: boolean;

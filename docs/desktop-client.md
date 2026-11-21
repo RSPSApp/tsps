@@ -48,7 +48,7 @@ The wrapper uses the exact signed release and reports an error when the running
 world does not advertise a build.
 
 The wrapper verifies the installed bundle's `client-release.json` against the
-selected release. `DesktopPlugin` acknowledges startup after the first frame in
-a Tauri window with a launch profile. Login in both desktop and browser clients
-uses the existing wire-protocol and cache revision checks. The minimum wrapper
-version is 0.1.2.
+selected release. TSPS registers `DesktopPlugin` only in a Tauri window with a
+launch profile. It acknowledges startup on the next frame after initialization.
+Login uses the existing wire-protocol and cache revision checks. The minimum
+wrapper version is 0.1.2.

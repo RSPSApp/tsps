@@ -44,7 +44,7 @@ export function packageWebRelease(dist, out, version, baseUrl) {
     if (packed.status !== 0) throw new Error(`Could not package client: ${packed.stderr}`);
     const bytes = readFileSync(archive);
     const manifest = {
-        version, clientVersion, createdAt: new Date().toISOString(), minShellVersion: "0.1.2",
+        version, createdAt: new Date().toISOString(), minShellVersion: "0.1.2",
         archive: { url: new URL(archiveName, base).href, sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length },
     };
     const manifestPath = join(out, "manifest.json");

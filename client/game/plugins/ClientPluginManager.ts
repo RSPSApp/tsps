@@ -255,7 +255,7 @@ export type WidgetDragEvent = { source: any; target: any };
 
 export interface ClientPlugin {
     /** Cache and renderer initialization completed successfully. */
-    clientReady?(signal: AbortSignal): Promise<void>;
+    clientReady?(signal: AbortSignal): void;
     /** Return true to defer an accepted login's handshake to a plugin. */
     beforeLoginHandshake?(sendHandshake: () => void): boolean;
     /** Extra player headicons; return stable, immutable sprites so textures can be reused. */
@@ -414,16 +414,9 @@ export class ClientPluginManager {
         this.implementers.clear();
     }
 
-    has(hook: keyof ClientPlugin): boolean {
-        return this.implementing(hook).length > 0;
-    }
-
-    async clientReady(signal: AbortSignal): Promise<void> {
-        for (const plugin of this.implementing("clientReady")) {
-            if (signal.aborted) return;
-            if ((plugin as { isStarted?(): boolean }).isStarted?.() === false) continue;
-            await plugin.clientReady!(signal);
-        }
+    clientReady(signal: AbortSignal): void {
+        if (signal.aborted) return;
+        for (const plugin of this.implementing("clientReady")) plugin.clientReady!(signal);
     }
 
     private implementing(hook: keyof ClientPlugin): ClientPlugin[] {

@@ -29,18 +29,6 @@ class MemoryStorage implements ConfigStorage {
 
 async function main(): Promise<void> {
     const events: string[] = [];
-    class RequiredPlugin extends Plugin {
-        static descriptor = { name: "Required", configKey: "requiredplugin", required: true };
-    }
-    const requiredBus = new EventBus();
-    const requiredConfig = new ConfigManager(requiredBus, new MemoryStorage());
-    requiredConfig.setConfiguration("runelite", "requiredplugin", "false");
-    const requiredManager = new PluginManager(requiredBus, requiredConfig);
-    requiredManager.loadCorePlugins([RequiredPlugin]);
-    assert.equal(requiredManager.isEnabled(RequiredPlugin), true, "saved settings cannot disable required integration");
-    await requiredManager.setPluginEnabled(RequiredPlugin, false);
-    assert.equal(requiredManager.getPlugin(RequiredPlugin)?.isStarted(), true);
-
 
     class TestItemStatsPlugin extends ItemStatsPlugin {
         static descriptor = ItemStatsPlugin.descriptor;

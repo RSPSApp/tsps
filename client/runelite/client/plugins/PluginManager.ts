@@ -71,7 +71,7 @@ export class PluginManager {
 
     async setPluginEnabled(pluginOrClass: Plugin | PluginClass, enabled: boolean): Promise<void> {
         const pluginClass = this.toClass(pluginOrClass);
-        if (!pluginClass || (pluginClass.descriptor.required && !enabled)) return;
+        if (!pluginClass) return;
         const current = this.enabled.get(pluginClass) ?? false;
         if (current === enabled) return;
         this.enabled.set(pluginClass, enabled);
@@ -174,7 +174,6 @@ export class PluginManager {
     }
 
     private readEnabled(pluginClass: PluginClass): boolean {
-        if (pluginClass.descriptor.required) return true;
         const stored = this.configManager.getConfiguration(ENABLED_GROUP, this.keyOf(pluginClass));
         if (stored === undefined) return pluginClass.descriptor.enabledByDefault ?? true;
         return stored === "true";

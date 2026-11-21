@@ -152,12 +152,13 @@ export class RuneLite {
         runLegacyConfigMigrations(LEGACY_CONFIG_MIGRATIONS, this.configManager);
         migrateTimersConfig(this.configManager);
         migrateTileMarkersConfig(this.configManager);
-        this.pluginManager.loadCorePlugins(getDesktopProfile() ? [...CORE_PLUGINS, DesktopPlugin] : CORE_PLUGINS);
+        this.pluginManager.loadCorePlugins(CORE_PLUGINS);
 
         // Engine hooks (shader, camera, gameframe) follow each loaded plugin.
         for (const plugin of this.pluginManager.getPlugins()) {
             this.client.clientPlugins.add(plugin);
         }
+        if (getDesktopProfile()) this.client.clientPlugins.add(new DesktopPlugin());
         // Last, so its outlines and snap corners draw over every overlay.
         this.client.clientPlugins.add(this.overlayRenderer);
         this.overlayRenderer.start();

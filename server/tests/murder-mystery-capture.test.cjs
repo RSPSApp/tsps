@@ -536,10 +536,15 @@ function evidenced(t, murderer, thread, print) {
   });
 }
 
-test("all the evidence, Frank: the guard's case, 'hold him', the evidence taken with the rewards (ticks 2232-2248)", async (t) => {
+test("all the evidence, Frank: the guard's case, the evidence taken with the rewards (ticks 2232-2248)", async (t) => {
   const f = evidenced(t, SUSPECT.FRANK, I.CRIMINALS_THREAD_3, I.FRANKS_PRINT);
   f.player.getInventory().add(new h.core.Item(I.SILVER_POT, 1), false);
   const guard = h.spawn(f, N.HOUSE_GUARD, [2739, 3577, 0]);
+  const positions = [];
+  const sender = f.player.getPacketSender();
+  const place = sender.sendInterfacePosition.bind(sender);
+  sender.sendInterfacePosition = (uid, x, y) => { positions.push([uid, x, y]); return place(uid, x, y); };
+  f.player.getBank(0).add(new h.core.Item(I.SILVER_NECKLACE, 1), false);
   const xp = f.player.getSkillManager().getExperience(Sk.CRAFTING);
   const lines = await play(f, () => h.talk(f, guard), ["I know who did it!"]);
   assert.deepEqual(lines.slice(1, 18), [
@@ -557,7 +562,7 @@ test("all the evidence, Frank: the guard's case, 'hold him', the evidence taken 
     "Guard: Excellent work - have you considered a career as a detective? But I'm afraid it's still not quite enough...",
     "StatementDialogue: You match Frank's finger prints with those on the dagger found in the body of Lord Sinclair.",
     "Guard: Yes. There's no doubt about it. It must have been Frank who killed his father. All of the guards must congratulate you on your excellent work in helping us to solve this case.",
-    "Guard: We don't have many murders here in Gielinor and I'm afraid we wouldn't have been able to solve it by ourselves. We will hold him here under house arrest until such time as we bring him to trial.",
+    "Guard: We don't have many murders here in Gielinor and I'm afraid we wouldn't have been able to solve it by ourselves. We will hold her here under house arrest until such time as we bring her to trial.",  // the Wiki's line; the capture says "him" (t2245), a recorded difference
     "Guard: You have our gratitude, and I'm sure the rest of the family's as well, in helping to apprehend the murderer. I'll just take the evidence from you now.",
     "StatementDialogue: You hand over all the evidence.",
   ]);
@@ -567,16 +572,18 @@ test("all the evidence, Frank: the guard's case, 'hold him', the evidence taken 
     assert.equal(count(f, id), 0, `the guard took ${id} (live a line earlier, tick 2247)`);
   }
   assert.equal(count(f, I.BUCKET), 1, "the rest stays");
+  assert.equal(f.player.getBank(0).getAmount(I.SILVER_NECKLACE), 0, "the Wiki: a banked necklace disappears too");
   assert.equal(count(f, I.COINS), 10729, "2,000 coins (8,729 -> 10,729)");
   assert.equal(f.player.getSkillManager().getExperience(Sk.CRAFTING) - xp, 1406);
   for (let i = 0; i < 6; i++) h.tick(f);
   const texts = f.calls.filter((c) => c.name === "sendString").map((c) => String(c.args[0]));
   assert.ok(texts.includes("You have solved the Murder Mystery!"), "the scroll's title (153:4)");
   const model = f.calls.find((c) => c.name === "sendItemOnInterfaces" && c.args[0] === ((153 << 16) | 5));
-  assert.equal(model?.args[1], I.CRIMINALS_DAGGER, "murderweapon on the scroll");
+  assert.deepEqual(model?.args.slice(1), [I.CRIMINALS_DAGGER, 400], "murderweapon on the scroll at zoom 400");
+  assert.deepEqual(positions.at(-1), [(153 << 16) | 5, 78, 128], "placed at (78, 128)");
 });
 
-test("Carol: 'hold her ... bring her to trial' (1001930 t2373); a dropped thread keeps the guard to the partial menu", async (t) => {
+test("Carol: 'It must have been Carol who killed her father.' (1001930 t2364); a dropped thread keeps the guard to the partial menu", async (t) => {
   const f = evidenced(t, SUSPECT.CAROL, I.CRIMINALS_THREAD, I.CAROLS_PRINT);
   const guard = h.spawn(f, N.HOUSE_GUARD, [2739, 3577, 0]);
   const lines = await play(f, () => h.talk(f, guard), ["I know who did it!"]);
@@ -643,7 +650,7 @@ test("the thread and the killer's print are enough: the dropped belongings, dagg
     items: [[I.CRIMINALS_THREAD_2], [I.KILLERS_PRINT]] });
   const guard = h.spawn(f, N.HOUSE_GUARD, [2739, 3577, 0]);
   const lines = await play(f, () => h.talk(f, guard), ["I know who did it!"]);
-  assert.ok(lines.includes("Guard: We don't have many murders here in Gielinor and I'm afraid we wouldn't have been able to solve it by ourselves. We will hold him here under house arrest until such time as we bring him to trial."), "David: him (1001958 t2138)");
+  assert.ok(lines.includes("Guard: We don't have many murders here in Gielinor and I'm afraid we wouldn't have been able to solve it by ourselves. We will hold her here under house arrest until such time as we bring her to trial."), "the Wiki's line (1001958 t2138 says him: a recorded difference)");
   assert.equal(stage(f), S.COMPLETE);
 });
 
@@ -698,4 +705,44 @@ test("the barrel of flour before and after the quest; Take-from without a pot, a
   const potSlot = slotOf(full, I.POT);
   await clickObject(full, LOC.FLOUR, 2);
   assert.equal(full.player.getInventory().getSlot(potSlot), I.POT_OF_FLOUR, "the pot's own slot");
+});
+
+test("flour in the higher slot: the dusted item still takes the lower slot, the pot the higher (1001958 t1660)", async (t) => {
+  const f = actor(t, { at: [2733, 3581, 0], stage: S.STARTED });
+  const bag = f.player.getInventory();
+  for (let slot = 0; slot < 7; slot++) bag.setItem(slot, new h.core.Item(I.BUCKET, 1));
+  bag.setItem(7, new h.core.Item(I.CRIMINALS_DAGGER, 1));
+  for (let slot = 8; slot < 11; slot++) bag.setItem(slot, new h.core.Item(I.BUCKET, 1));
+  bag.setItem(11, new h.core.Item(I.POT_OF_FLOUR, 1));
+  bag.refreshItems();
+  for (let i = 0; i < 10 && f.player.busy(); i++) h.tick(f);
+  await use(f, I.POT_OF_FLOUR, I.CRIMINALS_DAGGER);
+  assert.equal(bag.getSlot(7), I.CRIMINALS_DAGGER_2);
+  assert.equal(bag.getSlot(11), I.POT);
+});
+
+test("after the quest the barrels, sacks and the crest ask for the guards' permission (the Wiki)", async (t) => {
+  const f = actor(t, { at: [2733, 3576, 0], stage: S.COMPLETE });
+  await clickObject(f, LOC.BARREL_A, 2);
+  assert.deepEqual(messages(f), ["I need the guards' permission to do that."]);
+  assert.equal(count(f, I.SILVER_NECKLACE), 0, "it cannot be obtained again");
+  f.messages.length = 0;
+  f.player.setLocation(new h.core.Location(LOC.CREST[1], LOC.CREST[2] - 1, 0));
+  await clickObject(f, LOC.CREST, 2);
+  assert.deepEqual(messages(f), ["I need the guards' permission to do that."]);
+});
+
+test("a close in the same turn as 'Talk about the Fremennik Trials' leaves the chat closed", async (t) => {
+  const f = actor(t, { at: [2697, 3495, 0], stage: S.STARTED, poison: 1 });
+  h.quest("fremennik_trials").setStage(f.player, 2);
+  const salesman = h.spawn(f, N.SALESMAN, SALESMAN_TILE);
+  await h.talk(f, salesman);
+  const pending = h.MultiChatboxPrompt.getPending(f.player);
+  const index = pending.options.indexOf("Talk about the Fremennik Trials");
+  await f.connection.dispatch([
+    { type: "dialogue_continue", widgetId: h.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: index + 1 },
+    { type: "interface_close" },
+  ]);
+  h.ticks(f, 4);
+  assert.equal(h.shown(f), null, "nothing reopens");
 });

@@ -17,7 +17,7 @@
  * the guard takes the evidence with them (live: a line earlier, t2247).
  */
 module.exports = function registerMurderMysteryQuest(api) {
-  const { Skill, ItemIdentifiers: I, CountdownTask, TaskManager } = api.core;
+  const { Skill, ItemIdentifiers: I, Bank } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, giveReward } = require("../QuestRuntime");
   const {
     STAGES, VARPS, PAGE, ATTRIBUTES, EVIDENCE, POISON, NPCS, SERVANTS, SUSPECTS, MESSAGE_STEPS, MESSAGE_VARIANT, STEPS,
@@ -60,11 +60,7 @@ module.exports = function registerMurderMysteryQuest(api) {
   /** Plays one variant of the page (objects and items: the guard carries it, as King's Ransom's window does). */
   const play = (player, variant, npcId = NPCS.GUARD) => startTranscript(api, player, npcId, PAGE, variant);
 
-  function later(player, ticks, callback) {
-    TaskManager.submit(new CountdownTask(player, ticks, callback));
-  }
-
-  const ctx = { stage, attr, setAttr, murderer, play, later, variantOf };
+  const ctx = { stage, attr, setAttr, murderer, play, variantOf };
   const evidence = require("../murdermystery/Evidence.MurderMystery")(api, ctx);
   require("../murdermystery/Poison.MurderMystery")(api, ctx);
 
@@ -197,10 +193,14 @@ module.exports = function registerMurderMysteryQuest(api) {
    */
   function complete(player) {
     if (!proven(player)) return;
-    const inventory = player.getInventory();
-    for (const itemId of EVIDENCE_ITEM_IDS) {
-      const amount = inventory.getAmount(itemId);
-      if (amount > 0) inventory.deleteNumber(itemId, amount);
+    // The bank's copies go too: the Wiki's silver necklace "will disappear if a player has it in their bank
+    // or inventory upon finishing the quest" (Ours: every evidence item alike).
+    const containers = [player.getInventory(), ...Array.from({ length: Bank.TOTAL_BANK_TABS }, (_, tab) => player.getBank(tab))];
+    for (const container of containers) {
+      for (const itemId of EVIDENCE_ITEM_IDS) {
+        const amount = container.getAmount(itemId);
+        if (amount > 0) container.deleteNumber(itemId, amount);
+      }
     }
     setAttr(player, ATTRIBUTES.MURDERER, 0);
     setAttr(player, ATTRIBUTES.POISON, POISON.NONE);

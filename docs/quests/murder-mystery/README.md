@@ -58,12 +58,13 @@ paper in the sack." and the print matches (`State.MESSAGE_STEPS`, `MESSAGE_VARIA
 - With the thread alone, "I know who did it!" goes straight to "I have proof that it wasn't any of the
   servants!", with the box "You show the guard the thread you found on the window." before "All the
   servants dress in black..." (1074-1078, 1367-1371; the Wiki's note on one piece of evidence).
-- All the evidence (2232-2248): the Wiki's case; "hold him ... bring him to trial" for a son
-  (1001551 t10769, 1001958 t2138), "her" for a daughter (1001930 t2373). The proof is checked again
+- All the evidence (2232-2248): the Wiki's case, its "hold her here ... bring her to trial" for every
+  murderer (see "Recorded differences"). The proof is checked again
   at "You hand over all the evidence."; live takes everything the player carries as that box is
   continued (2247: the dagger, thread, pungent pot, Frank's pot, Frank's print and the killer's
   print), then 3 Quest points, 1,406 Crafting XP and 2,000 coins in one stack (2248). The scroll's
-  title is "You have solved the Murder Mystery!" with the murder weapon at zoom 400, and the jingle
+  title is "You have solved the Murder Mystery!" with the murder weapon at zoom 400 placed at (78, 128)
+  (the shared scroll now does this for every quest, as 49 rev 242 recordings do), and the jingle
   "quest complete 2" (153).
 - After the quest the house guard (6194) says "No, your work here is done." (2299); the courtyard
   guard (4218) "Seems awfully quiet up at the house..." / "Nothing right now, we have it all under
@@ -79,7 +80,7 @@ paper in the sack." and the print matches (`State.MESSAGE_STEPS`, `MESSAGE_VARIA
 | A suspect's barrel | the box, the silver belonging on its continue (1468-1469); again "I already have ..." |
 | Sacks | the box, the menu; Yes: the flypaper with "You take a piece of fly paper..." (1645-1646); No: "You leave the paper in the sack." (1420) |
 | Sturdy wooden gate | the dog's box during and after the quest (913, 2355) |
-| Flour on evidence | the dusted item into the flour's slot, the empty pot into the evidence's (1562, 1580) |
+| Flour on evidence | the dusted item into the lower of the two slots, the empty pot into the higher (1562, 1580; 1001958 t1660, the flour in the higher slot) |
 | Flypaper on dusted evidence | the flypaper and the dusted item go, then the clean item and the print into the first free slots (1566, 1649) |
 | A print that doesn't match | its box; the print is destroyed on its continue (1666-1668) |
 | The match | "The finger prints are an exact match to Frank's."; the unknown print becomes the killer's in its slot, the suspect's print stays (1715) |
@@ -111,8 +112,18 @@ The struck story of the murder, the guard's request in blue with its key words r
 then fixed lines for the coloured thread, the murder weapon and the strange smelling pot; one not yet
 earned is sent empty (946).
 
+## After the quest
+
+- The barrels, sacks and poison places ask for the guards' permission, as before the quest (the Wiki:
+  the crest says so, the belongings "cannot be obtained again"); the gate keeps the dog's box (2355).
+- The evidence goes from the bank too (the Wiki's silver necklace "will disappear if a player has it in
+  their bank or inventory upon finishing the quest").
+
 ## Recorded differences
 
+- The house arrest line: the Wiki's "hold her here ... bring her to trial" is kept for every murderer;
+  the captures say "him" for a son (2245; 1001551 t10769, 1001958 t2138) and "her" for Carol (1001930
+  t2373).
 - The capture plays "Hobbes the butler. The butler ALWAYS did it." as "The butler did it!" with the
   guard's "I hope you have proof..." (334-339); the Wiki gives it "Great work." like the other names,
   which is kept.
@@ -123,6 +134,8 @@ earned is sent empty (946).
   captured) strikes the entry and adds QUEST COMPLETE!.
 - Ours: the guard takes the evidence at the completion step, one line after live (2247 vs 2248), so a
   chat closed on "Please accept this reward from the family!" keeps both the evidence and the quest open.
+- Ours: the Wiki's bank removal is applied to every evidence item, its "permission" line to every
+  place and to the sacks.
 - Ours: what does not fit a full inventory (the barrel's belonging, the flypaper) goes on the floor,
   as the Wiki says of the thread; flour on the pungent pot keeps the flour.
 - Ours: a place reads "after questioning" once that suspect has told their own story; before the

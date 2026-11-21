@@ -14,7 +14,8 @@
  *
  * Ours: a place counts as "after questioning" once that suspect has told their own story (the Wiki's
  * heading names no one); before the quest the places read as at its start, and the drain asks for the
- * guards' permission as the Wiki's gate, sacks, drain and barrels do.
+ * guards' permission as the Wiki's gate, sacks, drain and barrels do; after it every place asks for it, as
+ * the Wiki says of the crest.
  */
 module.exports = function attachMurderMysteryPoison(api, ctx) {
   const QuestRuntime = require("../QuestRuntime");
@@ -68,8 +69,9 @@ module.exports = function attachMurderMysteryPoison(api, ctx) {
   function handleChoice(event) {
     const { player, npcId, npc } = event;
     if (npcId !== NPCS.POISON_SALESMAN || event.option !== FREMENNIK_OPTION || !SALESMAN_VARIANTS.has(ctx.variantOf(event))) return;
+    // At once, in the answered menu's own turn: a close sent after it closes that talk, nothing reopens later.
     event.end = true;
-    ctx.later(player, 1, () => api.emitCustomEvent("npc-dialogue:start", { player, npcId, npc, select: fromTrialsOption }));
+    api.emitCustomEvent("npc-dialogue:start", { player, npcId, npc, select: fromTrialsOption });
   }
 
   // ---- Stories ---------------------------------------------------------------------------------
@@ -97,7 +99,9 @@ module.exports = function attachMurderMysteryPoison(api, ctx) {
     const { player } = event;
     const [plain, after] = PLACE_VARIANTS[suspect.id];
     const stage = ctx.stage(player);
-    if (stage < STAGES.STARTED && suspect.name === "Carol") {
+    // After the quest the crest asks for the guards' permission (the Wiki's Sinclair family crest; Ours for the
+    // other places), as the drain does before it (the Wiki's gate, sacks, drain and barrels).
+    if (stage >= STAGES.COMPLETE || (stage < STAGES.STARTED && suspect.name === "Carol")) {
       ctx.play(player, "before-starting-investigating-the-gate-sacks-drain-or-barrels");
     } else if (stage === STAGES.STARTED && told(player, suspect)) {
       if (ctx.murderer(player).id === suspect.id) ctx.setAttr(player, ATTRIBUTES.POISON, POISON.PROOF);

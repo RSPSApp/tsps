@@ -10,12 +10,15 @@
  *   t1050: no obj_del); a second Take says "I already have the murder weapon." (t1053).
  * - A barrel: its box, and the silver belonging once it is continued (t1468-1469).
  * - The sacks: the box, the menu, and the flypaper with "You take a piece of fly paper." (t1645-1646).
- * - Flour on evidence: the dusted item takes the flour's slot and the empty pot the evidence's (t1562,
- *   t1580). Flypaper on dusted evidence: the clean item and then the print go into the first free slots
+ * - Flour on evidence: the dusted item takes the lower of the two slots and the empty pot the higher
+ *   (t1562, t1580; 1001958 t1660, the flour in the higher slot). Flypaper on dusted evidence: the clean item and then the print go into the first free slots
  *   once the flypaper and the dusted item are gone (t1566, t1649). A print that does not match is
  *   destroyed when its box is continued (t1666-1668); the match turns the unknown print into the
  *   killer's print in its slot and keeps the suspect's (t1715).
  * - The gate: its box during the quest and after it (t913, t2355).
+ *
+ * - After the quest the barrels and sacks ask for the guards' permission, as before it (the Wiki: the
+ *   belongings "cannot be obtained again"; Ours for the sacks); the gate keeps its box (t2355).
  *
  * Ours: a full inventory gets what does not fit on the floor (the Wiki says so of the thread only);
  * flour on the pungent pot keeps the flour (the Wiki gives only the two lines); the dagger and pot
@@ -118,7 +121,8 @@ module.exports = function attachMurderMysteryEvidence(api, ctx) {
     const suspect = suspectOfBarrel(event);
     if (!suspect) return false;
     const { player } = event;
-    if (ctx.stage(player) < STAGES.STARTED) ctx.play(player, "before-starting-investigating-the-gate-sacks-drain-or-barrels");
+    // After the quest too: the Wiki's belongings "cannot be obtained again after the quest is finished".
+    if (ctx.stage(player) !== STAGES.STARTED) ctx.play(player, "before-starting-investigating-the-gate-sacks-drain-or-barrels");
     else ctx.play(player, `gathering-suspect-evidence-searching-barrels-${suspect.fragment}-s-barrel`);
     return true;
   }
@@ -126,7 +130,7 @@ module.exports = function attachMurderMysteryEvidence(api, ctx) {
   function investigateSacks(event) {
     if (event.objectId !== LOCS.SACKS) return false;
     const { player } = event;
-    if (ctx.stage(player) < STAGES.STARTED) ctx.play(player, "before-starting-investigating-the-gate-sacks-drain-or-barrels");
+    if (ctx.stage(player) !== STAGES.STARTED) ctx.play(player, "before-starting-investigating-the-gate-sacks-drain-or-barrels");
     else ctx.play(player, "gathering-suspect-evidence-searching-the-sacks");
     return true;
   }
@@ -192,8 +196,9 @@ module.exports = function attachMurderMysteryEvidence(api, ctx) {
     const bag = inventory(player);
     const flour = slotOf(player, I.POT_OF_FLOUR, flourSlot);
     const evidence = slotOf(player, itemId, itemSlot);
-    bag.setItem(flour, new Item(entry.dusted, 1));
-    bag.setItem(evidence, new Item(I.POT, 1));
+    // The dusted item takes the lower of the two slots, the empty pot the higher, whichever was used on which.
+    bag.setItem(Math.min(flour, evidence), new Item(entry.dusted, 1));
+    bag.setItem(Math.max(flour, evidence), new Item(I.POT, 1));
     bag.refreshItems();
     ctx.play(player, `gathering-suspect-evidence-using-flour-on-evidence-${entry.slug}`);
     return true;

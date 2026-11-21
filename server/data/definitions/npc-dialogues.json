@@ -862125,34 +862125,12 @@
                   "id": "1dZX1P"
                 },
                 {
-                  "type": "condition",
-                  "text": "If Bob, David or Frank is the murderer:",
-                  "steps": [
-                    {
-                      "type": "line",
-                      "speaker": "Guard",
-                      "text": "We don't have many murders here in Gielinor and I'm afraid we wouldn't have been able to solve it by ourselves. We will hold him here under house arrest until such time as we bring him to trial.",
-                      "speaker_ids": [
-                        4218
-                      ]
-                    }
-                  ],
-                  "id": "pkv0ep"
-                },
-                {
-                  "type": "condition",
-                  "text": "If Anna, Carol or Elizabeth is the murderer:",
-                  "steps": [
-                    {
-                      "type": "line",
-                      "speaker": "Guard",
-                      "text": "We don't have many murders here in Gielinor and I'm afraid we wouldn't have been able to solve it by ourselves. We will hold her here under house arrest until such time as we bring her to trial.",
-                      "speaker_ids": [
-                        4218
-                      ]
-                    }
-                  ],
-                  "id": "2WPR7b"
+                  "type": "line",
+                  "speaker": "Guard",
+                  "text": "We don't have many murders here in Gielinor and I'm afraid we wouldn't have been able to solve it by ourselves. We will hold her here under house arrest until such time as we bring her to trial.",
+                  "speaker_ids": [
+                    4218
+                  ]
                 },
                 {
                   "type": "line",

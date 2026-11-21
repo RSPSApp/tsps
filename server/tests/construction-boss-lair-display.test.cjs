@@ -14,9 +14,9 @@ const { Item } = require("../dist/game/model/Item");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { TaskManager } = require("../dist/game/task/TaskManager");
 
-let core, api, House, Instance, Storage, BossLair, yanillePortalId, MENU;
+let core, api, House, Instance, Storage, BossLair, Kills, yanillePortalId, MENU;
 const YANILLE_PORTAL_TILE = [2542, 3097, 0];
-const JAR_OF_DIRT = 12007, JAR_OF_SAND = 12885, JAR_OF_CHEMICALS = 23064;
+const JAR_OF_DIRT = 12007, JAR_OF_SAND = 12885, JAR_OF_CHEMICALS = 23064, JAR_OF_DECAY = 22106, JAR_OF_DREAMS = 24495;
 const HYDRA_ROW = 8, KRAKEN_ROW = 0;
 
 before(async () => {
@@ -30,6 +30,9 @@ before(async () => {
   Storage = require("../plugins/skills/construction/Storage.Construction");
   BossLair = require("../plugins/skills/construction/BossLair.Construction");
   House.attach(api);
+  require("../plugins/achievements/combatachievements/Data.CombatAchievements")(api);
+  Kills = require("../plugins/achievements/combatachievements/Kills.CombatAchievements");
+  Kills(api);
   require("../plugins/modes/ironman/Common.Ironman").init(api);
   require("../plugins/modes/ironman/Setup.Ironman")(api);
   yanillePortalId = require("../plugins/skills/construction/Estate.Construction").HOUSE_LOCATIONS
@@ -78,9 +81,13 @@ function watch(player) {
   return seen;
 }
 
-/** An owned house with a boss lair display in the achievement gallery, the owner beside it. */
-function fixture(t, name) {
+/**
+ * An owned house with a boss lair display in the achievement gallery, the owner beside it.
+ * `kills` are the owner's Combat Achievements kill counts (one Alchemical Hydra by default).
+ */
+function fixture(t, name, kills = { "Alchemical Hydra": 1 }) {
   const player = newPlayer(t, name);
+  player.setAttribute(Kills.KILLS_ATTRIBUTE, kills);
   const save = Instance.createDefaultHouseSave();
   save.location = 6;
   save.rooms[1][4][6] = { roomKey: "ACHIEVEMENT_GALLERY", rotation: 0, furniture: { BOSS_LAIR_DISPLAY: "BOSS_DISPLAY" } };
@@ -191,6 +198,45 @@ test("a lair without its jar is refused in a message box, then the menu comes ba
   assert.equal(f.player.getInterfaceId(), MENU);
   TaskManager.process();
   assert.equal(f.furniture.displayObjectId, undefined);
+});
+
+test("a stored jar's lair is refused until its boss has been killed, then the menu comes back", (t) => {
+  // Wiki (Boss lair display): the boss must have been killed once as well as its jar put in.
+  const f = fixture(t, "lairnokill", {});
+  f.furniture.storage = { [JAR_OF_CHEMICALS]: 1 };
+  click(f, "Configure");
+  pick(f.player, HYDRA_ROW + 1);
+  assert.deepEqual(f.seen.mesboxes, [BossLair.NOT_KILLED]);
+  assert.deepEqual(f.seen.animations, []);
+  const menus = f.seen.scripts.filter(([id]) => id === 217).length;
+  f.player.getDialogueManager().advance();
+  assert.equal(f.seen.scripts.filter(([id]) => id === 217).length, menus + 1);
+  TaskManager.process();
+  assert.equal(savedDisplay(f).displayObjectId, undefined);
+  assert.equal(drawn(f), f.object.getId());
+  // One kill later the same pick shows the lair.
+  f.player.setAttribute(Kills.KILLS_ATTRIBUTE, { "Alchemical Hydra": 1 });
+  pick(f.player, HYDRA_ROW + 1);
+  assert.equal(savedDisplay(f).displayObjectId, loc("poh_display_hydra"));
+});
+
+test("Vorkath needs a kill after Dragon Slayer II's; Phosani's kills count for The Nightmare", (t) => {
+  const vorkath = BossLair.LAIRS.findIndex(lair => lair.label === "Vorkath") + 1;
+  const nightmare = BossLair.LAIRS.findIndex(lair => lair.label === "The Nightmare") + 1;
+  const f = fixture(t, "lairvorkath", { Vorkath: 1, "Phosani's Nightmare": 2 });
+  f.player.setAttribute("dragon-slayer-ii:vorkath-defeated", true); // the one counted kill was the quest's
+  f.furniture.storage = { [JAR_OF_DECAY]: 1, [JAR_OF_DREAMS]: 1 };
+  click(f, "Configure");
+  pick(f.player, vorkath);
+  assert.deepEqual(f.seen.mesboxes, [BossLair.NOT_KILLED]);
+  f.player.getDialogueManager().advance();
+  pick(f.player, nightmare);
+  assert.equal(savedDisplay(f).displayObjectId, loc("poh_display_nightmare"));
+  TaskManager.process();
+  f.player.setAttribute(Kills.KILLS_ATTRIBUTE, { Vorkath: 2, "Phosani's Nightmare": 2 });
+  click(f, "Configure");
+  pick(f.player, vorkath);
+  assert.equal(savedDisplay(f).displayObjectId, loc("poh_display_vorkath"));
 });
 
 test("picking the lair already shown, or Empty on a blank display, says it's already in that state", (t) => {

@@ -622,9 +622,13 @@ rev 230; 3897, rev 235; local 1001171, a guest):
   opens the storage to look at only.
 - Taking out the shown lair's jar closes the storage, the player reaches in with the same
   animation and sound, and the display is blank a tick later (3897 tick 1092).
+- The boss must also have been killed once (Wiki), by Combat Achievements' kill count; for
+  Vorkath a post-quest kill, so Dragon Slayer II's (which that count includes here) is taken off.
+  Phosani's Nightmare's kills count for The Nightmare. Ours: the refusal, a message box "You
+  haven't killed that creature yet." with the menu after it, like the missing jar's; no capture
+  shows one.
 - Ours: the Shellbane Gryphon and Mad Angel menu labels (the Wiki's names; no capture lists
-  them). The Wiki also says the
-  boss must have been killed once; no capture shows a refusal for that, so only the jar counts.
+  them).
 
 ## Not done yet
 

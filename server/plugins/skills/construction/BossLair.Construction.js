@@ -6,7 +6,8 @@
  * the lairs and shows the one picked, if its jar is stored. Withdrawing the shown lair's last
  * jar empties the display. rsprox 2909 (rev 230), 3897 (rev 235), local 1001171 (guest).
  */
-const { Animation, CacheDefinitions, Sounds, Task, TaskManager } = require("./Core.Construction");
+const Core = require("./Core.Construction");
+const { Animation, CacheDefinitions, Sounds, Task, TaskManager } = Core;
 const Data = require("./Data.Construction");
 const Ids = require("./Ids.Construction");
 const Instance = require("./Instance.Construction");
@@ -18,21 +19,30 @@ const JARS_ENUM = 3300;
 const BLANK = Ids.loc("poh_display_blank");
 /**
  * The lairs in enum 3300's order, each with its menu label (rsprox 2909 tick 2172 for the first
- * fourteen) and loc. Ours: the last two labels are the Wiki's names (Boss lair display); no
- * capture has them in the menu.
+ * fourteen), loc and the Combat Achievements monsters whose kills unlock it (Wiki: the boss must
+ * have been killed once). Ours: the last two labels are the Wiki's names (Boss lair display); no
+ * capture has them in the menu. Ours: Phosani's Nightmare's kills count for The Nightmare (both
+ * drop the jar of dreams).
  */
 const LAIRS = [
   ["Kraken", "poh_display_kraken"], ["Zulrah", "poh_display_zulrah"], ["Kalphite Queen", "poh_display_kq"],
   ["Cerberus", "poh_display_cerberus"], ["Abyssal Sire", "poh_display_sire"], ["Skotizo", "poh_display_skotizo"],
   ["Grotesque Guardians", "poh_display_gargoyle"], ["Vorkath", "poh_display_vorkath"], ["Alchemical Hydra", "poh_display_hydra"],
-  ["Sarachnis", "poh_display_sarachnis"], ["The Nightmare", "poh_display_nightmare"], ["Corporeal Beast", "poh_display_corp"],
-  ["Thermonuclear Smoke Devil", "poh_display_thermy"], ["Araxxor", "poh_display_araxyte"],
-  ["Shellbane Gryphon", "poh_display_gryphon"], ["Mad Angel", "poh_display_angel"],
-].map(([label, loc]) => ({ label, loc: Ids.loc(loc) }));
+  ["Sarachnis", "poh_display_sarachnis"], ["The Nightmare", "poh_display_nightmare", ["Nightmare, The", "Phosani's Nightmare"]],
+  ["Corporeal Beast", "poh_display_corp"], ["Thermonuclear Smoke Devil", "poh_display_thermy"], ["Araxxor", "poh_display_araxyte"],
+  ["Shellbane Gryphon", "poh_display_gryphon"], ["Mad Angel", "poh_display_angel", ["Mad Angel, The"]],
+].map(([label, loc, monsters = [label]]) => ({ label, loc: Ids.loc(loc), monsters }));
+/**
+ * Dragon Slayer II's Vorkath is the boss's own NPC here, so Combat Achievements counts the quest
+ * kill too; the Wiki wants a post-quest kill, so that one is taken off (the quest marks it).
+ */
+const QUEST_VORKATH_KILLED = "dragon-slayer-ii:vorkath-defeated";
 const TITLE = "Choose a lair";
 const EMPTY = "Empty";
 const NOT_OWNER = "You can only configure the display in your own house.";
 const NO_JAR = "The display does not contain the jar of that creature.";
+/** Ours: no capture shows a lair picked before its boss was killed. */
+const NOT_KILLED = "You haven't killed that creature yet.";
 /** Picking what the display already shows (rsprox 2909 tick 4739: a message box, no reach). */
 const ALREADY = "It's already in that state.";
 // Setting the display, and taking out the shown lair's jar: the player reaches into the display
@@ -64,6 +74,18 @@ function shownLair(furniture) {
 
 function hasJar(furniture, jar) {
   return (furniture.storage?.[jar] ?? 0) > 0;
+}
+
+/** The player's kill count for a lair's boss, as Combat Achievements keeps it (0 if it doesn't answer). */
+function kills(player, lair) {
+  let total = 0;
+  for (const monster of lair.monsters) {
+    const request = { player, monster, total: null };
+    Core.api.emitCustomEvent("combat-achievements:count", request);
+    total += Number.isInteger(request.total) ? Math.max(0, request.total) : 0;
+  }
+  if (lair.label === "Vorkath" && player.getAttribute(QUEST_VORKATH_KILLED)) total -= 1;
+  return Math.max(0, total);
 }
 
 function stillThere(house, furniture, player) {
@@ -103,7 +125,10 @@ function menuLabels(furniture) {
   return [EMPTY, ...LAIRS.map((lair, index) => hasJar(furniture, ids[index]) ? lair.label : `<str>${lair.label}</str>`)];
 }
 
-/** Configure: the owner picks a lair whose jar is stored, or Empty; a missing jar is refused and the menu comes back. */
+/**
+ * Configure: the owner picks a lair whose jar is stored and whose boss they have killed, or
+ * Empty; a missing jar (or kill) is refused and the menu comes back.
+ */
 function configure(event) {
   const context = displayAt(event);
   if (!context) return false;
@@ -120,8 +145,11 @@ function openLairMenu(player, house, furniture) {
   Menu.openMenu(player, TITLE, menuLabels(furniture), choice => {
     if (!stillThere(house, furniture, player)) return;
     const index = choice - 1;
-    if (index >= 0 && !hasJar(furniture, jars()[index])) {
-      Menu.warn(player, NO_JAR, () => {
+    const refusal = index < 0 ? null
+      : !hasJar(furniture, jars()[index]) ? NO_JAR
+        : kills(player, LAIRS[index]) <= 0 ? NOT_KILLED : null;
+    if (refusal) {
+      Menu.warn(player, refusal, () => {
         if (stillThere(house, furniture, player)) openLairMenu(player, house, furniture);
       });
       return;
@@ -157,4 +185,4 @@ function attachBossLair(api) {
   for (const name of names) api.onObjectInteraction(name, { Configure: configureOption });
 }
 
-Object.assign(module.exports, { attachBossLair, afterWithdraw, configure, LAIRS, JARS_ENUM, BLANK, NO_JAR, NOT_OWNER, ALREADY });
+Object.assign(module.exports, { attachBossLair, afterWithdraw, configure, LAIRS, JARS_ENUM, BLANK, NO_JAR, NOT_KILLED, NOT_OWNER, ALREADY });

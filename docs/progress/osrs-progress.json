@@ -24954,12 +24954,14 @@
             "server/plugins/minigames/roguesden/Traps.RoguesDen.js",
             "server/plugins/minigames/data/rogues-den.json",
             "server/tests/rogues-den-lobby-safes.test.cjs",
+            "server/tests/rogues-den-mosaic.test.cjs",
             "server/docs/rogues-den.md"
           ],
           "devNotes": [
             "Main 281766303 (2 November 2026): #1739 implements the real Burthorpe maze, 50 Agility/Thieving entry, equipment/inventory restrictions, per-player traps, stat drains, safe rewards, equipment crates, rogue kits, XP and logout/reset handling. #1878 restores the ordinary lobby door. Entry, lifecycle and reward transactions are complete. Mechanics remain partial: optional gear/mosaic puzzles use chat menus, partial failed-run XP is inferred, and wall-trap facing still needs a recording to confirm.",
             "Main 3b61a15a8 (6 November 2026): #2469 Land Rogues Den entrants on the walkable maze floor; #2527 Finish seven remaining Falador diary gameplay tasks. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4368 Pets: follow into areas that only refuse dropping a pet; only a barsFollowers area keeps them out. #3771 Fix Rogue kit conversion inventory handling."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4368 Pets: follow into areas that only refuse dropping a pet; only a barsFollowers area keeps them out. #3771 Fix Rogue kit conversion inventory handling.",
+            "Branch parity/interfaces-roguesden-mosaic (21 November 2026): the mosaic door opens the cache's roguesden_mosaic (688) modal instead of a chat menu, the floor holds the four different tiles at their recorded spots, and only Tile 5568 opens the door with the recorded message, animations, synth and timing (rsprox captures local 1001658 and 1001704; server/docs/rogues-den.md; server/tests/rogues-den-mosaic.test.cjs; checked in game over the agent MCP). Remaining: the gear door is still a chat menu; the wrong-tile and no-tile messages are not recorded."
           ],
           "taskDetails": [
             {

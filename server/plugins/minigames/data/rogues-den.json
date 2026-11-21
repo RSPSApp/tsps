@@ -13,6 +13,23 @@
     "safeRoom": [3013, 3018, 5045, 5050, 1]
   },
 
+  "mosaic": {
+    "_source": "The user's rsprox recordings local 1001658 (rev 241, ticks 19511-19523) and local 1001704 (rev 242, ticks 5300-5311); cache interface 688 and clientscript 4119 (each Select shows only while its tile is held). OSRS Wiki: Tiles (Rogues' Den) - only the item named Tile, not Tiles, opens the door.",
+    "interface": "roguesden_mosaic",
+    "buttons": ["roguesden_mosaic:tile1", "roguesden_mosaic:tile2", "roguesden_mosaic:tile3", "roguesden_mosaic:tile4"],
+    "busyVarbit": "busy",
+    "playerAnimation": "roguesden_player_enchant_door",
+    "doorAnimation": "rogue_magic_door",
+    "sound": 1235,
+    "_sound": "synth rogue_magic_door; the cache gamevals have no synth names lookup",
+    "spawns": [
+      [5568, 3018, 5080],
+      [5569, 3011, 5082],
+      [5570, 3013, 5090],
+      [5571, 3018, 5086]
+    ]
+  },
+
   "ids": {
     "objects": {
       "trapdoor": 7257,
@@ -56,6 +73,7 @@
       "mysticJewel": 5561,
       "flashPowder": 5559,
       "tile": 5568,
+      "tiles": [5568, 5569, 5570, 5571],
       "rogueKit": 5558,
       "rogueCrate": 21307,
       "stethoscope": 5560,
@@ -161,7 +179,7 @@
     "full": "You need a free inventory space for that.",
     "noTile": "You need a tile to repair the mosaic.",
     "mosaicWrong": "The tile does not fit the mosaic.",
-    "mosaicRight": "The mosaic door swings open.",
+    "mosaicRight": "A perfect match!",
     "gearWrong": "The gears grind and the door stays shut.",
     "gearRight": "The gears click into place and the door opens.",
     "flashBlind": "You throw the flash powder at the rogue guard.",

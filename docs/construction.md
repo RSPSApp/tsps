@@ -283,8 +283,8 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
   needs that boss killed once (Wiki: Topiary bush), read from Combat Achievements' kill counts,
   so Phosani's Nightmare doesn't unlock The Nightmare. The Wiki asks for the post-quest Vorkath;
   Combat Achievements also counts the Dragon Slayer II one (npc `vorkath_quest`), so the shape
-  needs a recorded death of npc `vorkath` (`construction:topiary-vorkath-killed`) or a saved
-  count of two or more. Ours: the refusal "You need to have killed <boss> to clip that shape.",
+  needs a recorded death of npc `vorkath` (`construction:topiary-vorkath-killed`); a kill count
+  alone can't tell them apart. Ours: the refusal "You need to have killed <boss> to clip that shape.",
   owner-only reshaping, and None giving the plain bush back.
 - **Cape hanger:** cape and hood mount as their `poh_mounted_*` loc; Take, Admire and, for the
   owner, the cape's options through `skillcape:operate` in the SkillCapes plugin. Untrimmed

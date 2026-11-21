@@ -21,9 +21,8 @@ const Menu = require("./Menu.Construction");
  * killed at least once (Vorkath the post-quest one; Phosani's Nightmare doesn't count for The
  * Nightmare). Kills are Combat Achievements' counts ("combat-achievements:count"). Those count
  * Vorkath by name, so the Dragon Slayer II quest Vorkath (npc `vorkath_quest`) raises them too:
- * the Vorkath shape needs a death of the post-quest one (npc `vorkath`) recorded here, or a count
- * of two or more (the quest fight is fought once, so a second kill is a post-quest one; this
- * covers kills saved before the record existed).
+ * the Vorkath shape needs a death of the post-quest one (npc `vorkath`) recorded here. A count
+ * alone can't prove one: the quest form can be woken again while the quest stays at its stage.
  */
 const NO_SECATEURS = "You'll need some secateurs to clip the topiary bush.";
 const TITLE = "Choose a shape";
@@ -68,7 +67,7 @@ function killCount(player, monster) {
 
 function killed(player, monster) {
   if (monster !== "Vorkath") return killCount(player, monster) > 0;
-  return player.getAttribute(VORKATH_KILLED) === true || killCount(player, monster) >= 2;
+  return player.getAttribute(VORKATH_KILLED) === true;
 }
 
 function vorkathDied({ npc, killer }) {

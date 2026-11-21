@@ -177,13 +177,14 @@ function clipShape(player, house, sent, index) {
   return bushOf(house).getId();
 }
 
-test("Vorkath's shape needs the post-quest Vorkath: the quest kill alone is refused", (t) => {
+test("Vorkath's shape needs the post-quest Vorkath: repeated quest kills are refused", (t) => {
   const { player, sent, house } = ownerInGarden(t);
   player.getInventory().add(new core.Item(core.ItemIdentifiers.SECATEURS, 1), false);
   const VORKATH = Topiary.SHAPES.findIndex((shape) => shape.label === "Vorkath");
   vorkathDies(player, "vorkath_quest");
+  vorkathDies(player, "vorkath_quest");
   const Kills = require("../plugins/achievements/combatachievements/Kills.CombatAchievements");
-  assert.equal(Kills.counts(player).Vorkath, 1, "Combat Achievements counts the quest kill");
+  assert.equal(Kills.counts(player).Vorkath, 2, "Combat Achievements counts both quest kills");
   assert.equal(clipShape(player, house, sent, VORKATH), C.getLocId("poh_topiary_null"));
   assert.deepEqual(sent.filter((entry) => entry.message), [{ message: "You need to have killed Vorkath to clip that shape." }]);
 
@@ -192,10 +193,10 @@ test("Vorkath's shape needs the post-quest Vorkath: the quest kill alone is refu
   assert.equal(clipShape(player, house, sent, VORKATH), C.getLocId("poh_topiary_vorkath"));
 });
 
-test("a saved Vorkath count of two includes a post-quest kill and unlocks her shape", (t) => {
+test("a saved Vorkath count alone can't tell quest kills from post-quest ones and is refused", (t) => {
   const { player, sent, house } = ownerInGarden(t);
   player.getInventory().add(new core.Item(core.ItemIdentifiers.SECATEURS, 1), false);
   const VORKATH = Topiary.SHAPES.findIndex((shape) => shape.label === "Vorkath");
-  setKills(player, "Vorkath", 2);
-  assert.equal(clipShape(player, house, sent, VORKATH), C.getLocId("poh_topiary_vorkath"));
+  setKills(player, "Vorkath", 5);
+  assert.equal(clipShape(player, house, sent, VORKATH), C.getLocId("poh_topiary_null"));
 });

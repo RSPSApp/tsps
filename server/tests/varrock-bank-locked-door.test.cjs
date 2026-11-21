@@ -68,7 +68,7 @@ test('Knock-at gives the recorded player line with chatbored1, every knock', (t)
   }
 });
 
-test('other doors with Knock-at are left to their own handlers', (t) => {
+test('other locs are left to their own handlers', (t) => {
   const p = realPlayer(t);
   assert.equal(knock(p, C().getLocId('fai_varrock_ladder')), false);
   assert.deepEqual(p.texts, []);

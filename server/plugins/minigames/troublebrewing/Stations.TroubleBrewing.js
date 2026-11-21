@@ -106,67 +106,28 @@ function useOnKettle(event, team) {
 
 /**
  * The team's water pump (brew_water_pump), from rsprox recording 1849 (Leagues V) ticks 730,
- * 1041, 1050 and 1362: a bucket fills on the click's tick with human_pickuptable (832), synth
- * 2609 and "You fill the bucket.", then one more bucket a tick, each with the animation and sound
- * but no message, until none are left. A bowl is refused. The filled bucket takes the empty one's
- * slot. Ours: the other team's pump does nothing, as the other stations here.
+ * 1041, 1050 and 1362. Your own team's bucket is left to WaterSources, which fills one a tick
+ * with human_pickuptable, synth 2609 and the spam "You fill the bucket." on the first. A bowl is
+ * refused here, before WaterSources would fill it. Ours: the other team's pump does nothing, as
+ * the other stations here.
  */
-const PUMP = {
-  ANIMATION: 832,
-  SOUND: 2609,
-  FILLED: "You fill the bucket.",
-  BOWL: "That bowl is too small to hold a useful amount of water, try a bucket instead.",
-};
+const PUMP_BOWL = "That bowl is too small to hold a useful amount of water, try a bucket instead.";
 
 function useOnPump(event, team) {
   const { player, itemId } = event;
   const table = ids();
-  if (itemId !== table.bucket && itemId !== table.bowl) return false;
   if (team !== teamOf(player)) {
+    event.handled = true;
     return true;
   }
   if (itemId === table.bowl) {
-    player.sendMessage(PUMP.BOWL);
+    event.handled = true;
+    player.sendMessage(PUMP_BOWL);
     return true;
   }
-  startPumping(player);
-  return true;
-}
-
-/** Fills one bucket in place; false once the player has none left. */
-function pumpOne(player) {
-  const inventory = player.getInventory();
-  const table = ids();
-  const slot = inventory.getSlotForItemId(table.bucket);
-  if (slot < 0) return false;
-  player.performAnimation(new Common.core.Animation(PUMP.ANIMATION));
-  player.getPacketSender().sendSound(PUMP.SOUND, 1, 0);
-  inventory.setItem(slot, new Common.core.Item(table.water, 1));
-  inventory.refreshItems();
-  return true;
-}
-
-/** The first bucket now, the rest one a tick; walking away (it cancels the player's tasks) stops it. */
-const pumping = new WeakMap();
-
-function startPumping(player) {
-  const { Task, TaskManager } = Common.core;
-  pumping.get(player)?.stop();
-  pumping.delete(player);
-  if (!pumpOne(player)) return;
-  player.sendMessage(PUMP.FILLED);
-  const origin = player.getLocation().clone();
-  const task = new (class extends Task {
-    constructor() { super(1, player.getIndex(), false); }
-    execute() {
-      if (pumping.get(player) === this && player.isRegistered() && inGame(player)
-        && player.getLocation().equals(origin) && pumpOne(player)) return;
-      this.stop();
-      if (pumping.get(player) === this) pumping.delete(player);
-    }
-  })();
-  pumping.set(player, task);
-  TaskManager.submit(task);
+  if (itemId === table.bucket) return false;
+  event.handled = true;
+  return false;
 }
 
 /** The watering hole still fills every bucket at once (no recording of it). */
@@ -233,7 +194,7 @@ function itemOnObject(event) {
   const kettle = table.kettle.get(tile);
   if (kettle) { event.handled = true; return useOnKettle(event, kettle); }
   const pump = table.pump.get(tile);
-  if (pump) { event.handled = true; return useOnPump(event, pump); }
+  if (pump) return useOnPump(event, pump); // sets handled itself: own team's buckets go on to WaterSources
   const store = table.logStore.get(tile);
   if (store) { event.handled = true; return useOnLogStore(event, store); }
   if (Common.SWEETGRUB_MOUNDS.has(tile)) { event.handled = true; return useOnMound(event); }
@@ -379,8 +340,7 @@ function exitPortal({ player, location }) {
 }
 
 function attachStations(api) {
-  // Before the name-matched hooks: Scrambled!'s Bowl on any "Water Pump" would fill a bowl here.
-  api.onItemOnObject(itemOnObject, { noted: false, before: true });
+  api.onItemOnObject(itemOnObject, { noted: false });
   api.onItemOnItem(knifeOnLogs, { noted: false });
   api.onItemOnItem(dyeMonkey, { noted: false });
   api.onObjectInteraction("Log Store", { "Take-Log": takeLog });

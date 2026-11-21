@@ -33,8 +33,11 @@ function actor(t, team = 'blue') {
   game.start(); p.setLocation(new core.Location(STAND[0], STAND[1], 0));
   p.setNeedsPlacement(false); p.setResetMovementQueue(false);
   const messages=[], anims=[], sounds=[];
-  t.mock.method(p.getPacketSender(),'sendMessage',m=>{if(!String(m).startsWith('<col='))messages.push(m);return p.getPacketSender();});
-  t.mock.method(p.getPacketSender(),'sendSound',id=>{sounds.push(id);return p.getPacketSender();});
+  t.mock.method(p.getPacketSender(),'sendMessage',m=>{if(!String(m).startsWith('<col='))messages.push({type:'game',text:m});return p.getPacketSender();});
+  const typed = p.getPacketSender().sendTypedMessage.bind(p.getPacketSender());
+  t.mock.method(p.getPacketSender(),'sendTypedMessage',(type,m)=>{if(!String(m).startsWith('<col='))messages.push({type,text:m});return typed(type,m);});
+  const effect = p.getPacketSender().sendSoundEffect.bind(p.getPacketSender());
+  t.mock.method(p.getPacketSender(),'sendSoundEffect',(id,...rest)=>{sounds.push(id);return effect(id,...rest);});
   const perform = p.performAnimation.bind(p);
   t.mock.method(p,'performAnimation',a=>{anims.push(a.getId());return perform(a);});
   t.after(()=>{ game.finish?.(); p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); });
@@ -56,12 +59,12 @@ test('one bucket on the click, then one a tick, each with 832 and synth 2609; th
   await useOnPump(f, I.BUCKET);
   assert.equal(water(f),1,'the first bucket fills on the click tick (1849 tick 1050 +0)');
   assert.equal(f.inv.get(1).getId(),I.BUCKET_OF_WATER,'the filled bucket keeps the empty one\'s slot');
-  assert.deepEqual(f.messages,['You fill the bucket.']);
+  assert.deepEqual(f.messages,[{type:core.ChatType.SPAM,text:'You fill the bucket.'}],'spam, as recorded');
   for (let i=0;i<4;i++) tick(f);
   assert.equal(water(f),3); assert.equal(f.inv.getAmount(I.BUCKET),0);
   assert.equal(f.inv.get(3).getId(),I.BUCKET_OF_WATER); assert.equal(f.inv.get(4).getId(),I.BUCKET_OF_WATER);
   assert.deepEqual(f.anims,[832,832,832]); assert.deepEqual(f.sounds,[2609,2609,2609]);
-  assert.deepEqual(f.messages,['You fill the bucket.'],'later buckets have no message (+1, +2)');
+  assert.deepEqual(f.messages,[{type:core.ChatType.SPAM,text:'You fill the bucket.'}],'later buckets have no message (+1, +2)');
 });
 
 test('walking away stops the pumping', async t => {
@@ -79,7 +82,7 @@ test('a bowl is too small: refused, no bowl of water (1849 tick 1041)', async t 
   const f=actor(t);
   f.inv.setItem(0,new core.Item(I.BOWL,1));
   await useOnPump(f, I.BOWL);
-  assert.deepEqual(f.messages,['That bowl is too small to hold a useful amount of water, try a bucket instead.']);
+  assert.deepEqual(f.messages,[{type:'game',text:'That bowl is too small to hold a useful amount of water, try a bucket instead.'}],'a game message');
   assert.equal(f.inv.getAmount(I.BOWL),1); assert.equal(f.inv.getAmount(I.BOWL_OF_WATER),0);
 });
 

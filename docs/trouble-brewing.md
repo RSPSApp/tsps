@@ -16,5 +16,5 @@ Each team's base has a water pump (`brew_water_pump`, loc 15936): blue at 3807,2
 - Ours: the other team's pump does nothing (not captured), like the other team stations.
 - Ours: the watering hole still fills every bucket at once (not captured).
 
-The stations' item-on-loc hook runs before the name-matched hooks, so Scrambled!'s "Bowl" on
-any "Water Pump" handler does not fill a bowl at these pumps.
+Your own team's bucket goes on to `plugins/world/WaterSources.plugin.js`, which fills every
+water source this way; Trouble Brewing claims the pump only to refuse a bowl or the other team.

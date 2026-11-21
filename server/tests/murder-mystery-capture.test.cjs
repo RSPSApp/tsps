@@ -746,3 +746,18 @@ test("a close in the same turn as 'Talk about the Fremennik Trials' leaves the c
   h.ticks(f, 4);
   assert.equal(h.shown(f), null, "nothing reopens");
 });
+
+test("a dropped dagger elsewhere, and a thread after the quest, are taken as any item (only the fixed spawns and the quest's thread are special)", async (t) => {
+  const f = actor(t, { at: [2740, 3570, 0], stage: S.STARTED });
+  const dropped = placeOnGround(f, t, I.CRIMINALS_DAGGER, [2740, 3570]);
+  await take(f, I.CRIMINALS_DAGGER, [2740, 3570]);
+  h.ticks(f, 2);
+  assert.equal(count(f, I.CRIMINALS_DAGGER), 1);
+  assert.ok(!h.core.World.getItems().includes(dropped) || dropped.isPendingRemoval(), "the drop is taken, no copy left");
+  const done = actor(t, { at: [2740, 3570, 0], stage: S.COMPLETE });
+  const thread = placeOnGround(done, t, I.CRIMINALS_THREAD_2, [2740, 3570]);
+  await take(done, I.CRIMINALS_THREAD_2, [2740, 3570]);
+  h.ticks(done, 2);
+  assert.equal(count(done, I.CRIMINALS_THREAD_2), 1, "King's Ransom's thread");
+  assert.ok(!h.core.World.getItems().includes(thread) || thread.isPendingRemoval());
+});

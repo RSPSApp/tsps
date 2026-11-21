@@ -31,9 +31,10 @@ module.exports = function attachMurderMysteryEvidence(api, ctx) {
   const THREADS = new Set([I.CRIMINALS_THREAD, I.CRIMINALS_THREAD_2, I.CRIMINALS_THREAD_3]);
   const THREAD_COLOUR = new Map([[I.CRIMINALS_THREAD, "red"], [I.CRIMINALS_THREAD_2, "green"], [I.CRIMINALS_THREAD_3, "blue"]]);
   const DAGGERS = [I.CRIMINALS_DAGGER, I.CRIMINALS_DAGGER_2];
+  /** The study's two fixed spawns (t1046-1050: the pot at 2747,3579 and the dagger at 2746,3578); a dropped copy takes as any item. */
   const SCENE_ITEMS = new Map([
-    [I.CRIMINALS_DAGGER, { variant: "getting-started-take-criminal-s-dagger", held: DAGGERS }],
-    [I.PUNGENT_POT, { variant: "getting-started-take-pungent-pot", held: [I.PUNGENT_POT] }],
+    [I.CRIMINALS_DAGGER, { variant: "getting-started-take-criminal-s-dagger", held: DAGGERS, at: [2746, 3578, 0] }],
+    [I.PUNGENT_POT, { variant: "getting-started-take-pungent-pot", held: [I.PUNGENT_POT], at: [2747, 3579, 0] }],
   ]);
   const SCENE_ITEM_BY_VARIANT = new Map([...SCENE_ITEMS].map(([itemId, item]) => [item.variant, itemId]));
 
@@ -85,7 +86,8 @@ module.exports = function attachMurderMysteryEvidence(api, ctx) {
 
   /** "Picking up thread from the ground": the box for its colour, and the thread stays where it is. */
   function pickUpThread(event) {
-    if (!THREADS.has(event.groundItemId)) return;
+    // Only while this quest runs: King's Ransom hands out the thread again later, and it picks up as any item.
+    if (!THREADS.has(event.groundItemId) || ctx.stage(event.player) !== STAGES.STARTED) return;
     groundThread.set(event.player, THREAD_COLOUR.get(event.groundItemId));
     ctx.play(event.player, "getting-started-picking-up-thread-from-the-ground");
     event.handled = true;
@@ -95,7 +97,8 @@ module.exports = function attachMurderMysteryEvidence(api, ctx) {
 
   function pickUpSceneItem(event) {
     const item = SCENE_ITEMS.get(event.groundItemId);
-    if (!item) return;
+    const { x, y, z } = event.location ?? {};
+    if (!item || x !== item.at[0] || y !== item.at[1] || z !== item.at[2]) return;
     const { player } = event;
     // A full bag takes nothing: the core refuses it as for any other item. The item comes with its box.
     if (!has(player, item.held) && inventory(player).isFull()) return;

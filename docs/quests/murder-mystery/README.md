@@ -76,7 +76,7 @@ paper in the sack." and the print matches (`State.MESSAGE_STEPS`, `MESSAGE_VARIA
 | --- | --- |
 | Window, Investigate | the box, then on its continue "You take the thread." and the thread (928-929); again: the box and "You have already taken the thread." (Wiki); lost: "Lucky for you..." and the thread |
 | Window, Break | "You don't want to damage evidence!" (951) |
-| Pungent pot, dagger (Take) | the box and the item the same tick, no reach, no sound, the player facing the item; the ground item stays (1048, 1050: no `obj_del`); again "I already have the murder weapon." (1053) |
+| Pungent pot, dagger (Take, the study's fixed spawns) | the box and the item the same tick, no reach, no sound, the player facing the item; the ground item stays (1048, 1050: no `obj_del`); again "I already have the murder weapon." (1053) |
 | A suspect's barrel | the box, the silver belonging on its continue (1468-1469); again "I already have ..." |
 | Sacks | the box, the menu; Yes: the flypaper with "You take a piece of fly paper..." (1645-1646); No: "You leave the paper in the sack." (1420) |
 | Sturdy wooden gate | the dog's box during and after the quest (913, 2355) |
@@ -136,6 +136,8 @@ earned is sent empty (946).
   chat closed on "Please accept this reward from the family!" keeps both the evidence and the quest open.
 - Ours: the Wiki's bank removal is applied to every evidence item, its "permission" line to every
   place and to the sacks.
+- Ours: a dagger or pot dropped elsewhere, and a criminal's thread outside the quest (King's Ransom's),
+  are taken as any item.
 - Ours: what does not fit a full inventory (the barrel's belonging, the flypaper) goes on the floor,
   as the Wiki says of the thread; flour on the pungent pot keeps the flour.
 - Ours: a place reads "after questioning" once that suspect has told their own story; before the

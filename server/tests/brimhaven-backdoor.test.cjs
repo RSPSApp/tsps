@@ -242,16 +242,13 @@ test("login sends the saved state, so the rope and the paid Banisoch stay after 
   assert.equal(clickHole(p).name, "Rope");
 });
 
-test("a second Climb during the fade doesn't warn again or follow the player down", (t) => {
+test("a second Climb before the trip finishes doesn't warn again or follow the player down", (t) => {
   const { p } = visitor(t);
   paidAs(p, 1);
   clickHole(p);
-  console.error("A", at(p), shown(p));
   drive(p, ["Enter the dungeon."]);
-  console.error("B", at(p), p.getMovementQueue().isMovementBlocked());
   assert.equal(clickHole(p).handled, true);
   ticks(3);
-  console.error("C", at(p));
   assert.equal(shown(p), null, "no warning left open in the dungeon");
   assert.deepEqual(at(p), Backdoor.INSIDE);
 });

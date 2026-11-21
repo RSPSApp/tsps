@@ -9,6 +9,10 @@
  * (human_castteleport, teleport_casting graphic) and lands on (2458, 2850, 0) three ticks later;
  * the cape stays in the inventory and no message is sent. This is the tile the mounted cape in the
  * player-owned house uses too (Mounted.Construction.js).
+ *
+ * The Mythical max cape (24855) carries the same "Teleport", inventory option 3 and worn option
+ * 451 in the cache, and the Wiki gives it the mythical cape's teleport; no capture of it exists,
+ * so it shares this one.
  */
 
 const MYTHS_GUILD = [2458, 2850, 0];
@@ -27,11 +31,11 @@ function teleport({ player }) {
 
 module.exports = {
   name: "MythicalCape",
-  description: "Lets the mythical cape teleport the player to the Myths' Guild from the inventory or worn, with no charges.",
+  description: "Lets the mythical cape teleport the player to the Myths' Guild from the inventory or worn, with no charges, as does the Mythical max cape.",
   members: true,
   register(api) {
     core = api.core;
-    api.onItemAction("Mythical cape", { Teleport: teleport });
+    for (const name of ["Mythical cape", "Mythical max cape"]) api.onItemAction(name, { Teleport: teleport });
   },
   _test: { teleport, MYTHS_GUILD },
 };

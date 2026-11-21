@@ -43,7 +43,9 @@ const { hasKey, ownsStoredKey } = require("../../items/KeyAvailability");
  *    (before completion) the ballad, and afterwards leads to the lake. The
  *    black golem door has no reachable adjacent tile at all, so quest-door
  *    clicks are routed to the player's own tile (handleObjectRoute) and the
- *    genie's crevice door crosses from the recorded click side.
+ *    genie's crevice door crosses from the recorded click side. The cave exit
+ *    is the cache map's own object at 3347,9533 beside the rope landing; the
+ *    plugin places no exit on the lake shore.
  *  - Golem damage is filtered by the plugin to the captured stab/slash/crush
  *    styles; the monster definitions themselves have no weakness data.
  *  - The mining channel needs a usable pickaxe and 37 Mining, the thieving
@@ -222,6 +224,9 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     ObjectIdentifiers.DOOR_248, // 10423
     ObjectIdentifiers.DOOR_249, // 10425 (mirror)
   ]);
+  // The lake's double doors stand on this row; north of it is the lake shore and
+  // south of it the golem corridor. Crossing follows the side the player clicked.
+  const LAKE_DOOR_TILE = new Location(3354, 9558, 0);
   const ANCESTRAL_DOOR_IDS = new Set([
     ObjectIdentifiers.DOOR_250, // 10427
     ObjectIdentifiers.DOOR_251, // 10429 (mirror)
@@ -246,10 +251,6 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   const GOLEM_CORRIDOR_TILE = new Location(3365, 9544, 0);
   // Lake side of the ancestral door, used once the channels are clear.
   const LAKE_ENTRY_TILE = new Location(3347, 9563, 0);
-  const DUNGEON_EXIT_TILES = [
-    new Location(3349, 9557, 0),
-    new Location(3347, 9563, 0),
-  ];
   const WATERFALL_SURFACE_TILE = ROOT_LASSO_TILE;
   const CREVICE_SURFACE_TILE = new Location(3374, 2903, 0);
   const CREVICE_FLOOR_TILE = new Location(3373, 9306, 0);
@@ -333,7 +334,6 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   const ROOM_BY_DOOR = new Map(ROOMS.map((room) => [room.doorId, room]));
 
   let quest;
-  let dungeonExitPlaced = false;
   const trackedGolems = new Map(); // "<username>:<doorId>" -> npc
   /** Where each player clicked a quest door, captured before the walk: the black
    * golem door and the crevice door have no walkable contact tile, and door:toggle
@@ -429,18 +429,6 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
       ),
       true
     );
-  }
-
-  function placeWorldObject(id, tile, type = 10) {
-    const object = new GameObject(id, new Location(tile.getX(), tile.getY(), tile.getZ()), type, 0, null);
-    ObjectManager.register(object, true);
-    return object;
-  }
-
-  function ensureDungeonExit() {
-    if (dungeonExitPlaced) return;
-    dungeonExitPlaced = true;
-    for (const tile of DUNGEON_EXIT_TILES) placeWorldObject(CAVE_EXIT_OBJECT_ID, tile);
   }
 
   // ==========================================================================
@@ -807,7 +795,6 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
         if (pending.stepping && !pending.tile && !player.getLocation().equals(ROOT_LASSO_TILE)) Scenes.walk(player, ROOT_LASSO_TILE);
         return;
       }
-      ensureDungeonExit();
       const descent = { from: player.getLocation().clone() };
       ropeDescents.set(player, descent);
       player.getMovementQueue().reset();
@@ -1111,7 +1098,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     }
     if (LAKE_DOOR_IDS.has(objectId)) {
       event.handled = true;
-      openLakeDoor(player);
+      openLakeDoor(player, objectId);
       return;
     }
     if (GOLEM_DOOR_IDS.has(objectId)) {
@@ -1131,12 +1118,17 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     }
   }
 
-  function openLakeDoor(player) {
+  function openLakeDoor(player, objectId) {
     if (!allChannelsClear(player)) {
       player.sendMessage("The door is locked.");
       return;
     }
-    player.moveTo(LAKE_ENTRY_TILE);
+    const source = doorClickSource.get(player);
+    doorClickSource.delete(player);
+    const clickY = source?.objectId === objectId ? source.y : player.getLocation().getY();
+    // North of the doors is the lake shore; south is the golem corridor. The
+    // cache's pockets need a transition rather than a walk across the leaves.
+    player.moveTo(clickY > LAKE_DOOR_TILE.getY() ? GOLEM_CORRIDOR_TILE : LAKE_ENTRY_TILE);
     if (quest.getStage(player) < STAGE_CHANNELS) quest.setStage(player, STAGE_CHANNELS);
   }
 
@@ -1528,8 +1520,6 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
       skills.addExperiences(Skill.MAGIC, 1000);
     },
   });
-
-  ensureDungeonExit();
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);

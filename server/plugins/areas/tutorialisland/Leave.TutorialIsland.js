@@ -105,11 +105,25 @@ function onLogin(event) {
   }
 }
 
+/**
+ * The answer's option defaults, as captured: a brand-new player's quest list starts filtered and
+ * sorted for them, an experienced player's new-player safeguards are turned off. Each is saved as
+ * a Settings click would be, so it lasts; Accept Aid is its own plugin's.
+ */
+function applyExperienceSettings(player, answer) {
+  const { acceptAid, ...settings } = T.data.experienceSettings[answer] ?? {};
+  for (const [settingId, value] of Object.entries(settings)) {
+    pluginApi.emitCustomEvent("settings:set", { player, settingId: Number(settingId), value });
+  }
+  if (acceptAid !== undefined) pluginApi.emitCustomEvent("accept-aid:set", { player, on: acceptAid });
+}
+
 /** An answer on the past-experience screen (slots 1-3 of its option list). */
 function onExperience({ player, action }) {
   const answer = T.data.experience[String(action)];
   if (!player || !answer || T.progress(player) !== STEP.PAST_EXPERIENCE) return true;
   player.setAttribute(T.EXPERIENCE_ATTRIBUTE, answer);
+  applyExperienceSettings(player, answer);
   T.setProgress(player, STEP.GIELINOR_TALK);
   player.getPacketSender().sendInterfaceRemoval();
   return true;

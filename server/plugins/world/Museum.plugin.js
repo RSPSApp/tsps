@@ -32,12 +32,16 @@
  *   - The fossil displays (museum/FossilDisplays.Museum.js): Add to, one fossil piece a click,
  *     2 Kudos and an antique lamp for each of the 36 completed displays.
  *
+ *   - The wall maps (museum/Map.Museum.js): Look-at opens the museum map, its stairs buttons
+ *     switch floors, and exhibits not yet filled read "Empty display".
+ *
  * Not implemented: ancient relics. They are a separate Kudos route and not needed for 100.
  */
 "use strict";
 
 const runtime = require("../quests/QuestRuntime");
 const FossilDisplays = require("./museum/FossilDisplays.Museum");
+const MuseumMap = require("./museum/Map.Museum");
 
 const KUDOS_ATTRIBUTE = "museum:kudos";
 const STATE_ATTRIBUTE = "museum:state";
@@ -948,7 +952,7 @@ function handleBootstrap({ player }) {
 
 module.exports = {
   name: "Museum",
-  description: "Varrock Museum Kudos: the Dig Site cleaning activity, the finds storage crate, display cases, Historian Minas's quest timeline reports, Curator Haig Halen's salvaging relics and the fossil displays.",
+  description: "Varrock Museum Kudos: the Dig Site cleaning activity, the finds storage crate, display cases, Historian Minas's quest timeline reports, Curator Haig Halen's salvaging relics, the fossil displays and the wall maps.",
   members: true,
   register(pluginApi) {
     api = pluginApi;
@@ -980,5 +984,6 @@ module.exports = {
     require("./museum/SalvagingRelics.Museum")(pluginApi);
     require("./museum/StorageCrate.Museum")(pluginApi);
     FossilDisplays(pluginApi);
+    MuseumMap(pluginApi, (player) => { if (kudosHudShown.has(player)) showKudosHud(player); });
   },
 };

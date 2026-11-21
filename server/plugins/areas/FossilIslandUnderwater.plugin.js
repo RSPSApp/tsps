@@ -12,7 +12,8 @@
  * (underwater_shallow in its water_overlay), the "Dive without diving gear?" warning after the
  * player's line, the rope's bubbles and 3769,3898. The barge routes are left out: the barge isn't
  * in this map (see BoneVoyage.Quest.js). Underwater Agility and Thieving's chests, clams and
- * pufferfish are fossilislandunderwater/Tears, Mairin's Training fossilislandunderwater/Training.
+ * pufferfish are fossilislandunderwater/Tears, Mairin's Training fossilislandunderwater/Training,
+ * the merfolk trident's pufferfish charges and Channel fossilislandunderwater/MerfolkTrident.
  * Not done yet: air bubbles refilling oxygen, and the "Your hands are full." swim prompt.
  *
  * The drift-net area is a private instance, so the sea floor can't be an Area that players stay
@@ -22,6 +23,7 @@ const DATA = require("./data/fossil-island-underwater.json");
 const ObstacleRunner = require("../skills/agility/ObstacleRunner.Agility");
 const Tears = require("./fossilislandunderwater/Tears.FossilIslandUnderwater");
 const Training = require("./fossilislandunderwater/Training.FossilIslandUnderwater");
+const MerfolkTrident = require("./fossilislandunderwater/MerfolkTrident.FossilIslandUnderwater");
 
 const OXYGEN_VARBIT = 5811; // fossil_underwater_oxygen
 const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
@@ -178,8 +180,8 @@ function changeOxygen(player, change) {
   sendOxygen(player);
 }
 
-/** What the sea floor's units (Tears, Training) use. */
-const shared = { isDiving: (player) => oxygen.has(player), changeOxygen, later };
+/** What the sea floor's units (Tears, Training, MerfolkTrident) use. */
+const shared = { isDiving: (player) => oxygen.has(player), changeOxygen, later, breathingGear };
 
 function swim(player, swimming) {
   player.setRenderAnimations(swimming ? SWIM_ANIMATIONS : null);
@@ -274,9 +276,9 @@ function logout({ player }) {
 
 module.exports = {
   name: "FossilIslandUnderwater",
-  description: "Fossil Island rowboats and the sea floor dive, with an oxygen bar that drowns players lacking a fishbowl helmet and diving apparatus.",
+  description: "Fossil Island rowboats and the sea floor dive, with an oxygen bar that drowns players lacking a fishbowl helmet and diving apparatus, and the merfolk trident's pufferfish charges.",
   members: true,
-  _test: { oxygen, underwaterTick, followWater, breathingGear, boatMenu, dive, climbRope, changeOxygen, Tears, Training },
+  _test: { oxygen, underwaterTick, followWater, breathingGear, boatMenu, dive, climbRope, changeOxygen, Tears, Training, MerfolkTrident },
   register(api) {
     core = api.core;
     pluginApi = api;
@@ -291,5 +293,6 @@ module.exports = {
     api.onPlayerLogout(logout);
     Tears.attach(api, shared, DATA.tears);
     Training.attach(api, DATA.training);
+    MerfolkTrident.attach(api, shared, DATA.tears);
   },
 };

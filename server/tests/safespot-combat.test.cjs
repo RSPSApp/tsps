@@ -1,8 +1,10 @@
 // Safespots (issue 1952): a wall the target can't walk past but a projectile can cross.
 //
-// - An NPC whose target keeps fighting it from behind the wall keeps that target, facing it and
-//   trying its step, as live does. It used to drop the target on the first refused step and
-//   wander off between hits (Combat.isSafespotted).
+// - An NPC that can't reach its target keeps it, facing it and trying its step, for as long as the
+//   target stands in its aggression range (max range + attack range from the spawn), whether or
+//   not the target is fighting it (#6297; issue 1952 kept it only while the target fought). Out of
+//   range, it lets go and walks home, still damaged: hitpoints come back 1 per 100 ticks, and one
+//   attacked on the way home fights back.
 // - A spell cast by hand with an autocast spell remembered but no staff to cast it casts once and
 //   stops (Autocasting.isActive). It fell back to melee on the next cycle and walked the player
 //   round the wall: the Tree spirit fight on Entrana, where weapons are banned.
@@ -91,13 +93,66 @@ function scene(t, { gap = 4, npcImmobile = false } = {}) {
   return { player, npc, tick, ticks: (count) => { for (let i = 0; i < count; i++) tick(); } };
 }
 
-test("an npc stuck behind a wall lets go of a target that isn't fighting it", (t) => {
-  // The pre-existing release, kept: the map refuses the step and nobody is fighting the npc.
+test("an npc stuck behind a wall keeps a target that isn't fighting it while it is in range", (t) => {
+  // #6297: the player stepping into the safespot (and not attacking yet) must not reset the npc.
+  const s = scene(t);
+  s.npc.getCombat().attack(s.player);
+  s.ticks(GIVE_UP_CYCLES * 2);
+  assert.equal(s.npc.getLocation().getY() > FIELD.y + 2, true, "the wall held");
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+});
+
+test("a safespotted npc lets go once its target stands outside its aggression range", (t) => {
   const s = scene(t);
   s.npc.getCombat().attack(s.player);
   s.ticks(5);
-  assert.equal(s.npc.getLocation().getY() > FIELD.y + 2, true, "the wall held");
-  assert.equal(s.npc.getCombat().getTarget(), null);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  // 9 tiles from the spawn: past max range 7 + melee reach 1. The player is still hitting it.
+  s.player.setLocation(new core.Location(FIELD.x, FIELD.y - 5, 0));
+  s.npc.getCombat().setUnderAttack(s.player);
+  s.tick();
+  assert.equal(s.npc.getCombat().getTarget(), null, "attacked from outside the range, it retreats");
+});
+
+test("a damaged npc keeps its damage while it walks home, regaining 1 hitpoint per 100 ticks", (t) => {
+  const s = scene(t);
+  s.npc.getMovementCoordinator().setRadius(1);
+  s.npc.setHitpoints(1);
+  const max = s.npc.getMaxHitpoints();
+  assert.ok(max > 2, "the mugger has hitpoints to regain");
+  // Dragged away from its spawn and released: it walks home (the old code healed 10% a tick).
+  s.npc.setLocation(new core.Location(FIELD.x + 3, FIELD.y + 4, 0));
+  s.ticks(20);
+  assert.equal(s.npc.getHitpoints(), 1, "no healing on the walk home");
+  s.ticks(80);
+  assert.equal(s.npc.getHitpoints(), 2, "one hitpoint on the 100th tick");
+  s.ticks(100);
+  assert.equal(s.npc.getHitpoints(), 3);
+});
+
+test("hitpoints regenerate on the npc's own stat restore interval", (t) => {
+  // Wiki (User:Orion/Regen): an NPC's hitpoint and stat rates are the same (Tekton 15, Vasa 10).
+  const s = scene(t);
+  s.npc.setStatRestoreTicks(10);
+  s.npc.setHitpoints(1);
+  s.ticks(9);
+  assert.equal(s.npc.getHitpoints(), 1);
+  s.ticks(1);
+  assert.equal(s.npc.getHitpoints(), 2, "one hitpoint on the 10th tick");
+});
+
+test("an npc walking home after its fight fights back when it is attacked", (t) => {
+  const s = scene(t);
+  const coordinator = s.npc.getMovementCoordinator();
+  coordinator.setRadius(1);
+  s.npc.setLocation(new core.Location(FIELD.x + 3, FIELD.y + 4, 0));
+  s.tick();
+  assert.equal(coordinator.getCoordinateState(), 1, "walking home (AWAY)");
+  // The player's hit landing: the real retaliation path decides whether it turns on them.
+  s.npc.getCombat().setUnderAttack(s.player);
+  core.CombatFactory.handleRetaliation(s.player, s.npc);
+  s.ticks(3);
+  assert.equal(s.npc.getCombat().getTarget(), s.player, "it did not ignore the attack until home");
 });
 
 test("a safespotted npc keeps the target that is fighting it", (t) => {
@@ -128,13 +183,14 @@ test("a hand cast with a default spell but no staff casts once and stays put", (
   assert.equal(s.player.getCombat().getTarget(), null, "one cast, then the attack ends");
 });
 
-test("an npc on a plugin-scripted walk still lets its attacker expire after 6 seconds", (t) => {
+test("an npc on a plugin-scripted walk still lets its attacker expire after 8 ticks", (t) => {
+  // The PJ timer is 8 ticks (Combat.PJ_TIMER_MS, 32888d7ff).
   const s = scene(t);
   s.npc.getCombat().setUnderAttack(s.player);
   s.npc.setScriptedMovement(true);
-  s.ticks(9);
-  assert.equal(s.npc.getCombat().getAttacker(), s.player, "held for under 6 seconds");
-  s.ticks(2);
-  assert.equal(s.npc.getCombat().getAttacker(), null, "the 6 s expiry runs during the scripted walk");
+  s.ticks(7);
+  assert.equal(s.npc.getCombat().getAttacker(), s.player, "held for under 8 ticks");
+  s.ticks(1);
+  assert.equal(s.npc.getCombat().getAttacker(), null, "the 8-tick expiry runs during the scripted walk");
   s.npc.setScriptedMovement(false);
 });

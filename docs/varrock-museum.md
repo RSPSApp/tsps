@@ -212,3 +212,34 @@ Fossil Island fossils. `server/plugins/world/museum/FossilDisplays.Museum.js`, d
   roots were recorded as missing.
 - Using a fossil on a display does nothing special; no recording uses one.
 - The busy varbit (12393) set around the completion box is not sent.
+
+# Museum wall maps
+
+The three wall maps (`vm_museum_wallmounted_map_01`-`_03`, "Map") open the museum map,
+`vm_museum_map` (527), on Look-at. Code: `server/plugins/world/museum/Map.Museum.js`.
+
+## From rsprox captures (1757, 1723, local 1000153, local 1000808; revision 227-228)
+
+- **Open** (the tick the player arrives, 1757 tick 10075): busy (12393) 1, sequence
+  `vm_display_case_ponder` (6383), the floor layers basement hidden, Dig Site shown, first and
+  second floor hidden (the Dig Site floor even when read upstairs, 1000153 tick 1995), then
+  `Empty<br>display` on each exhibit not yet filled, `toplevel_mainmodal_open` (2524)
+  `[12632226, 150]` and the modal.
+- **Empty exhibits:** in all four recordings an exhibit is marked empty exactly when its display
+  varbit is 0: the Saranthium and Senntisten coins, both Saradomin symbols, the Zaros tablet,
+  the ancient talisman (`vm_digsite_*`), the staff of Armadyl, the seven knights' helms
+  (`vm_salveknights`), the observatory, Robert the Strong, Surok's tomb and Excalibur. The
+  terracotta statue is empty while The Golem's statuette is out of its case
+  (`golem_retrieved_statuette` 1, 1000808). Pottery, the Shield of Arrav, Silverlight, the
+  runes, the glider, the Ardougne map and the king's painting were never marked, even at 0.
+- **Stairs:** a stairs button shows its floor on the next tick (1757 tick 10085 -> 10086,
+  1000153 tick 2005), hiding Dig Site, first floor, second floor, basement in that order.
+- **Close** (1757 tick 10082): busy 0, sequence -1, the modal closed, and the Kudos HUD
+  (`vm_kudos`) opened again. The Close button closes it the tick after the click (1723 tick
+  14968).
+
+## Ours
+
+- The basement stairs (to the Natural History floor) were never clicked; they follow the same
+  pattern. Its exhibits (the Natural History displays) were never marked empty, so none are.
+- The Museum map item's Look-at and the wall map's Take were not recorded and aren't handled.

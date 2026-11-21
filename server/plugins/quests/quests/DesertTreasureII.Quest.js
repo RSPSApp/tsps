@@ -2412,7 +2412,7 @@ module.exports = function registerDesertTreasureII(api) {
     // inferred playable cadence and should be calibrated against a live capture.
     const boss = spawned.get(player)?.finalWight;
     if (!boss?.isRegistered?.() || boss.getHitpoints?.() <= 0 || boss.getOwner?.() !== player || boss.getArea?.() !== area) return;
-    // Wight healing is scripted; keep generic idle regeneration out of the active trial.
+    // Wight healing is scripted; keep the combat stopwatch fresh during the active trial.
     boss.getCombat?.().getLastAttack?.().reset?.();
     boss.__dt2FinalWightTicks = (boss.__dt2FinalWightTicks ?? 0) + 1;
     boss.__dt2FinalWightPending ??= [];

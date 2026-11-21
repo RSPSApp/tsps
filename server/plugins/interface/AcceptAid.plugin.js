@@ -49,6 +49,11 @@ function acceptAidSettingClicked(request) {
   toggleAcceptAid(request);
 }
 
+/** Another plugin sets it (`accept-aid:set` { player, on }); Ironmen still never accept aid. */
+function setAcceptAidFromEvent({ player, on }) {
+  if (player) setAcceptAid(player, on === true && !isIron(player));
+}
+
 /** Login, and an account that becomes an Ironman: Ironmen never accept aid. */
 function syncAcceptAid({ player }) {
   setAcceptAid(player, !isIron(player) && acceptsAid(player));
@@ -69,6 +74,7 @@ module.exports = {
     api.persistAttribute(ACCEPT_AID_ATTRIBUTE, true);
     api.onPlayerLogin(syncAcceptAid);
     api.onCustomEvent("ironman:mode-changed", syncAcceptAid);
+    api.onCustomEvent("accept-aid:set", setAcceptAidFromEvent);
     api.onInterfaceActionButton(acceptAidButton(api), toggleAcceptAid);
     api.onCustomEvent("settings:setting-clicked", acceptAidSettingClicked);
   },

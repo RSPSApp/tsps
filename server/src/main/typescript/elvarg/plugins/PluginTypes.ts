@@ -754,6 +754,14 @@ export interface PluginItemUseFilter {
   before?: boolean;
 }
 
+export interface PluginObjectInteractionOptions {
+  /**
+   * Run after every other object handler, and only when none took the click: a family's plain
+   * answer when no content claimed that object (a bookcase with nothing to find).
+   */
+  fallback?: boolean;
+}
+
 export interface PluginItemActionOptions {
   /**
    * Run after every other item-action handler, and only when none took the click: an item's own
@@ -1111,7 +1119,8 @@ export interface PluginApi {
   /** Exact, case-sensitive object name and option matching. Return false to fall through. */
   onObjectInteraction(
     objectName: string,
-    actions: Record<string, (event: PluginObjectInteractionEvent) => void | boolean>
+    actions: Record<string, (event: PluginObjectInteractionEvent) => void | boolean>,
+    options?: PluginObjectInteractionOptions
   ): void;
   /** Conditional interaction ownership before normal object handlers. Leave unclaimed events untouched. */
   onBeforeObjectInteraction(handler: (event: PluginObjectInteractionEvent) => void): void;

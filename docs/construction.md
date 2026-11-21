@@ -337,6 +337,13 @@ record): recording 2581's nine Owned slots are exactly its nine `pet_insurance_*
 nothing stored in the menagerie. Examine sends the pet's examine for owned and unowned slots
 alike (2581: "A tiny frost nagua." on the unowned Moxi, slot 61).
 
+Pick-up on a roaming pet takes it back as Take does (rsprox captures 2779-2784, rev 229,
+on Dagannoth Supreme Jr., K'ril Tsutsaroth Jr., the phoenix, Lil' Zik, the rift guardian and
+others): on the tick the owner reaches it the NPC goes, the pet item arrives and its stored bit
+and form varbit clear, with no animation or sound. Only that pet goes; the others keep roaming.
+Ours: a full backpack gets "You don't have enough inventory space." (as Take), a guest's
+Pick-up does nothing, and an account with a bank PIN is asked for it first (as Take).
+
 The desert habitat's cactus (`poh_menagerie_habitat_feature_3`) has Touch. In rsprox capture
 2792 (ticks 768-890) the player walks up, faces it and plays `human_pickuptable` (832); the
 next tick sends "That was unwise." as a spam message and a 2-damage hitsplat, and held clicks
@@ -350,6 +357,11 @@ a blue 0. Ours: at 2 hitpoints it takes 1, as no recording touches at 2.
   back when the house next loads; in challenge mode they attack guests nearby.
 - **Doors and cages** open and close; in challenge mode they are locked to guests, who pick or
   force them at the Wiki's odds.
+- **Oubliette cage Build-in:** the floor sits inside the cage, so the cage's Build-in (op4) opens
+  the floor space's build menu (Spikes, Tentacle pool, Flame pit, Rocnar). With a floor built it
+  asks "Select an option" / "Remove the contents of the oubliette|Never mind", then the usual
+  "Really remove it?" Yes/No, and Yes removes it like any Remove (rsprox captures 2872 ticks 176
+  and 196, 2873, 2877; rev 230). Outside building mode it does nothing (ours: not captured).
 - **Traps** (challenge mode, Agility dodges) and oubliette floors hurt guests; damage the Wiki
   doesn't give is ours.
 - **Treasure chests** hold the owner's coins up to the chest's limit, added every 5 minutes;
@@ -494,6 +506,17 @@ oubliette's ladder), "... the basement level." for a ground floor room with stai
 "... the upper floor from the ground." for an upper floor hall. Not covered: recording 2575
 shows the basement-level warning on a study, which holds no stairs; Remove on stair furniture,
 which on live goes on to removing the room at the other end (recordings 251, 2551, 2864).
+
+Remove-room on stair furniture (staircases, the oubliette's ladder, the throne room's trapdoors)
+removes the room at its other end (rsprox captures: recordings 2551, 2608, 2611, 2613, 2617, 2620,
+2621, 2632, 3897 and one of the user's own, rev 229-235): stairs up take the room above, stairs
+down the room below, and a spiral staircase asks "Remove which room?" with Room above / Room
+below. That room then goes as through its door: its floor warning, "Remove the skill hall?",
+"Room deleted!". Message boxes refuse: "You can only do that in building mode.", "There is no
+room above to remove." and, on the upper floor's stairs down, "The room below is supporting this
+room!". Ours: "There is no room below to remove." mirrors the captured line for the room above;
+the garden's dungeon entrance (loc 4529, with the same Remove-room option) removes the dungeon
+stairs room below it like the other stairs down, which no recording shows.
 
 ### Building furniture
 

@@ -268,3 +268,119 @@ test("removing the portal nexus room warns that its teleports are paid for again
   });
   House.releaseHouse(player, true);
 });
+
+/**
+ * Remove-room (op4) on the stair furniture `key` in the room at `position`, through the plugin's
+ * object hooks. The click's tile is resolved to that room and piece of furniture.
+ */
+function clickRemoveRoom(player, house, gameval, position, key) {
+  const objectId = typeof gameval === "number" ? gameval : core.CacheDefinitions.getLocId(gameval);
+  const definition = ObjectDefinition.forId(objectId);
+  assert.equal(definition.getInteractions()[3], "Remove-room", gameval);
+  const furniture = { buildableKey: key, localX: 3, localY: 3, type: 10 };
+  house.getRoom(position).furnitureByLocation = { stairs: furniture };
+  const { getRoomPositionAt, getFurnitureAt } = house;
+  house.getRoomPositionAt = () => ({ ...position });
+  house.getFurnitureAt = () => furniture;
+  try {
+    const location = { x: 0, y: 0, z: position.plane };
+    return PluginManager.emitObjectInteraction({ player, object: new GameObject(objectId, new core.Location(0, 0, position.plane), 10, 0, null),
+      definition, objectId, clickType: 4, location, sourceLocation: location, handled: false });
+  } finally {
+    house.getRoomPositionAt = getRoomPositionAt;
+    house.getFurnitureAt = getFurnitureAt;
+  }
+}
+
+const HALL = { plane: 1, x: 3, y: 4 };
+const ABOVE = { ...HALL, plane: 2 };
+const BELOW = { ...HALL, plane: 0 };
+const boxes = (refusals) => refusals.map((problem) => problem.messageBox ?? problem);
+
+test("Remove-room on stairs up removes the room above: its floor warning, the question, Room deleted!", () => {
+  const { player, house } = owner("removeabove");
+  house.placeRoom(HALL, Data.ROOM_BY_KEY.get("SKILL_HALL_UP"), 0);
+  withStairs(house, ABOVE, "SKILL_HALL_DOWN", "OAK_STAIRCASE_DOWN");
+  withPrompts(({ prompts, warnings, refusals }) => {
+    clickRemoveRoom(player, house, "poh_stairs_3", HALL, "OAK_STAIRCASE_UP");
+    assert.deepEqual(refusals, []);
+    assert.deepEqual(warnings.map(({ text }) => text), [Stairs.UPPER_FROM_GROUND], "the room above's warning (rec 2632)");
+    warnings[0].then();
+    assert.equal(prompts.at(-1).title, "Remove the skill hall?");
+    prompts.at(-1).options[1]();
+    assert.equal(house.getRoom(ABOVE), null, "the room above is gone");
+    assert.ok(house.getRoom(HALL), "the hall with the stairs stays");
+    assert.deepEqual(player.messages, ["Room deleted!"]);
+  });
+  House.releaseHouse(player, true);
+});
+
+test("Remove-room with nothing at the other end, or out of building mode, refuses in a message box", () => {
+  const { player, house } = owner("removenothing");
+  house.placeRoom(HALL, Data.ROOM_BY_KEY.get("SKILL_HALL_UP"), 0);
+  house.placeRoom({ plane: 1, x: 4, y: 4 }, Data.ROOM_BY_KEY.get("THRONE_ROOM"), 0);
+  withPrompts(({ prompts, warnings, refusals }) => {
+    clickRemoveRoom(player, house, "poh_stairs_3", HALL, "OAK_STAIRCASE_UP");
+    // The throne room's trapdoor is the "Oak trapdoor", not a staircase: its own hook.
+    clickRemoveRoom(player, house, "poh_trapdoor_oak_7", { plane: 1, x: 4, y: 4 }, "OAK_TRAPDOOR");
+    house.buildingMode = false;
+    clickRemoveRoom(player, house, "poh_stairs_3", HALL, "OAK_STAIRCASE_UP");
+    assert.deepEqual(boxes(refusals), ["There is no room above to remove.", "There is no room below to remove.", "You can only do that in building mode."]);
+    assert.deepEqual(prompts, []);
+    assert.deepEqual(warnings, []);
+  });
+  House.releaseHouse(player, true);
+});
+
+test("Remove-room on the upper floor's stairs down: the room below holds this one up", () => {
+  const { player, house } = owner("removesupport");
+  withStairs(house, HALL, "SKILL_HALL_UP", "OAK_STAIRCASE_UP");
+  house.placeRoom(ABOVE, Data.ROOM_BY_KEY.get("SKILL_HALL_DOWN"), 0);
+  withPrompts(({ prompts, warnings, refusals }) => {
+    clickRemoveRoom(player, house, "poh_stairstop_3", ABOVE, "OAK_STAIRCASE_DOWN");
+    assert.deepEqual(boxes(refusals), ["The room below is supporting this room!"], "rec 2608");
+    assert.deepEqual(prompts, []);
+    assert.deepEqual(warnings, []);
+    assert.ok(house.getRoom(HALL));
+  });
+  House.releaseHouse(player, true);
+});
+
+test("Remove-room on a spiral staircase asks which room; Room below removes the basement room", () => {
+  const { player, house } = owner("removespiral");
+  house.placeRoom(HALL, Data.ROOM_BY_KEY.get("SKILL_HALL_UP"), 0);
+  withStairs(house, BELOW, "DUNGEON_STAIRS", "OAK_STAIRCASE_UP");
+  withPrompts(({ prompts, warnings, refusals }) => {
+    clickRemoveRoom(player, house, "poh_spiralstairs", HALL, "SPIRAL_STAIRCASE");
+    assert.equal(prompts.at(-1).title, "Remove which room?");
+    assert.deepEqual(prompts.at(-1).options.filter((option) => typeof option === "string"), ["Room above", "Room below"]);
+    prompts.at(-1).options[1]();
+    assert.deepEqual(boxes(refusals), ["There is no room above to remove."]);
+    prompts.at(-1).options[3]();
+    assert.deepEqual(warnings.map(({ text }) => text), [Stairs.BASEMENT_FROM_GROUND], "the basement room's warning (rec 2551)");
+    warnings[0].then();
+    assert.equal(prompts.at(-1).title, `Remove the ${Data.ROOM_BY_KEY.get("DUNGEON_STAIRS").name}?`);
+    prompts.at(-1).options[1]();
+    assert.equal(house.getRoom(BELOW), null);
+    assert.ok(house.getRoom(HALL));
+  });
+  House.releaseHouse(player, true);
+});
+
+test("Remove-room on the garden's dungeon entrance removes the dungeon stairs room below it", () => {
+  const { player, house } = owner("removeentrance");
+  const garden = { plane: 1, x: 4, y: 4 };
+  assert.equal(house.getRoom(garden)?.roomKey, "GARDEN");
+  withStairs(house, { ...garden, plane: 0 }, "DUNGEON_STAIRS", "OAK_STAIRCASE_UP");
+  withPrompts(({ prompts, warnings, refusals }) => {
+    clickRemoveRoom(player, house, Data.BUILDABLE_BY_KEY.get("DUNGEON_ENTRANCE").objectIds[0], garden, "DUNGEON_ENTRANCE");
+    assert.deepEqual(refusals, []);
+    assert.deepEqual(warnings.map(({ text }) => text), [Stairs.BASEMENT_FROM_GROUND]);
+    warnings[0].then();
+    assert.equal(prompts.at(-1).title, `Remove the ${Data.ROOM_BY_KEY.get("DUNGEON_STAIRS").name}?`);
+    prompts.at(-1).options[1]();
+    assert.equal(house.getRoom({ ...garden, plane: 0 }), null);
+    assert.equal(house.getRoom(garden)?.roomKey, "GARDEN", "the garden stays");
+  });
+  House.releaseHouse(player, true);
+});

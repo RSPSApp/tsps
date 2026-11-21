@@ -44,7 +44,7 @@ function fixture() {
     sendMessage: message => sent.push(["message", message]), performAnimation: value => sent.push(["animation", value]),
     setEnteredAmountAction() {}, getDialogueManager: () => ({ startDialogues: value => { chain = value; } }) };
   const api = { core, persistAttribute() {}, onItemAction: (name, handlers) => actions.set(name, { ...actions.get(name), ...handlers }),
-    onBeforeNpcInteraction() {}, onItemOnNpc() {}, onBeforeObjectInteraction() {}, onCanUseItem() {}, onInterfaceActionButton() {},
+    onBeforeNpcInteraction() {}, onItemOnNpc() {}, onBeforeObjectInteraction() {}, onObjectInteraction() {}, onCanUseItem() {}, onInterfaceActionButton() {},
     onCustomEvent: (name, fn) => { if (!events.has(name)) events.set(name, []); events.get(name).push(fn); },
     emitCustomEvent: (name, request) => { for (const fn of events.get(name) ?? []) fn(request); },
     onPlayerLogout() {}, onPlayerDisconnect() {}, onPlayerLogin() {}, onPlayerDeath() {}, onNpcDeath() {},
@@ -200,6 +200,37 @@ test("Sherlock hands over every supported task, which counts only once done; the
     assert.equal(f.state().completed, 2, task.key);
     assert.equal(f.scrollSlot(step.skill.itemId), -1, `${task.key} the scroll goes with the step`);
   }
+});
+
+test("Check steps on the clue and either challenge scroll counts the clue's steps; Check completion reads Sherlock's task (rsprox 1057)", () => {
+  const f = fixture();
+  const messages = () => f.sent.filter(([name]) => name === "message").map(([, text]) => text);
+  const step = sherlockStep();
+  f.skills.level = 99;
+  f.place(step, { completed: 4 });
+  talkToSherlock(f, step);
+  const slot = f.scrollSlot(step.skill.itemId);
+  const scroll = f.actions.get("Challenge scroll (elite)");
+  f.sent.length = 0;
+  f.actions.get("Clue scroll (elite)")["Check steps"](f.event());
+  scroll["Check steps"](f.event(slot));
+  scroll["Check completion"](f.event(slot));
+  f.items[slot].setMetaValue(Runtime.metaKey(ELITE), { ...f.items[slot].getMetaValue(Runtime.metaKey(ELITE)), taskDone: true });
+  scroll["Check completion"](f.event(slot));
+  assert.deepEqual(messages(), ["You have completed 4 steps on this elite clue scroll.", "You have completed 4 steps on this elite clue scroll.",
+    "You are yet to complete this challenge scroll.", "You have completed this challenge scroll."]);
+  // Ours: a scroll whose clue is gone counts the steps it was handed with.
+  f.items[0] = null; f.sent.length = 0;
+  scroll["Check steps"](f.event(slot));
+  assert.deepEqual(messages(), ["You have completed 4 steps on this elite clue scroll."]);
+
+  const anagram = steps().find(entry => entry.challenge);
+  f.items.fill(null); f.sent.length = 0;
+  f.place(anagram, { completed: 2 });
+  f.talk(anagram.npcIds[0]); f.finish();
+  f.sent.length = 0;
+  scroll["Check steps"](f.event(f.scrollSlot(anagram.challenge.itemId)));
+  assert.deepEqual(messages(), ["You have completed 2 steps on this elite clue scroll."]);
 });
 
 test("a task done without the challenge scroll doesn't count, and Sherlock sets tasks the player has the levels for", () => {

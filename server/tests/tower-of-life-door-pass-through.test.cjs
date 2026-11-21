@@ -20,7 +20,7 @@ const QuestRuntime = require("../plugins/quests/QuestRuntime");
 const DOOR = [21814, 2649, 3225];
 const OUTSIDE = [2649, 3225];
 const INSIDE = [2649, 3224];
-const STAGE_ADMITTED = 4;
+const STAGE_ADMITTED = 6; // tol_prog after Bonafido's quiz
 
 let core;
 let next = 4400;

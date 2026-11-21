@@ -151,8 +151,8 @@ class Fight {
   process() {
     this.tick++;
     if (!this.boss || this.boss.getHitpoints() <= 0) return;
-    // The engine counts an NPC nobody has hit for a while out of combat and regenerates it a
-    // tenth of its hitpoints a tick; Skotizo stays in the fight, on the player, while it lasts.
+    // Skotizo stays in the fight, on the player, while it lasts: refresh the combat stopwatch so
+    // it counts as fighting.
     const combat = this.boss.getCombat();
     combat.getLastAttack().reset();
     if (this.hudOpen && !combat.getTarget() && this.session.inArena(this.player.getLocation())) combat.attack(this.player);

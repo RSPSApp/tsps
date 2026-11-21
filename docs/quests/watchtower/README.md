@@ -71,8 +71,8 @@ the skavid words and the paid gate are server-side, as live keeps them (no varbi
 
 ## Facts the plugin relies on
 
-- **The start** (182-216): "Start the Watchtower quest?" with "Yes.|No."; the requirements are checked
-  on "Yes." (the dump's start hook). "You've started a new quest" with stage 1.
+- **The start** (182-216): "Start the Watchtower quest?" with "Yes.|No."; the skills are not needed to
+  start (Wiki). "You've started a new quest" with stage 1.
 - **The tower ladder** (255-259): before the quest the guard's "You can't go up there..." (Wiki); after
   it, once, "It is the wizards' helping hand - let 'em up." with 3117, then the climb (seq 828) to
   (2545,3111,1); later climbs say nothing (2012-2018). Once the quest is complete the first floor's ladder
@@ -173,6 +173,8 @@ the skavid words and the paid gate are server-side, as live keeps them (no varbi
   the plugin uses.
 - Skavid 3's and Skavid 4's wrong-word loop is captured (3195-3211, 3083-3096); the same lines fill the
   other skavids' wrong words in capture-sources.
+- The lever's rewards go with stage 13 here (live: four ticks later, t6054), so a logout between cannot
+  save a completion without them.
 - The cws_warning_12 screen opens a tick after the guard's line closes here (live: the same tick, 3633),
   so the chat's close does not take it with it.
 - Live let the first nightshade (3451) and one Yes on the warning (3462) go by while the guards were

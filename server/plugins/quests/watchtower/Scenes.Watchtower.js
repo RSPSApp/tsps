@@ -14,7 +14,8 @@
  * - The relic (t2037-2040): the wizard's seq 5352 and spotanim 969 (height 50) with sound 3267, the
  *   relic three ticks later.
  * - The scared skavid (t2995-3001): an ogre (4363; the Wiki calls it an ogre shaman) appears beside
- *   it, strikes it and shouts "You shut your mouth! Don't tell them anything!" as it cries out.
+ *   it in a puff of smoke (spotanim 86 at height 12, sound 1930), strikes it (sound 448) and shouts "You
+ *   shut your mouth! Don't tell them anything!" as it cries out, and goes in another puff.
  */
 module.exports = function createWatchtowerScenes(api, ctx) {
   const { Animation, Graphic, HitDamage, HitMask, Location, Projectile, Sound, Sounds, StatementDialogue } = api.core;
@@ -30,9 +31,10 @@ module.exports = function createWatchtowerScenes(api, ctx) {
   const SEQ = { FIREBREATH: 81, SHAMAN_CAST: 5357, DRAGON_DEATH: 92, WIZARD_RELIC: 5352, SKAVID_STRUCK: 5356, OGRE_STRIKE: 359 };
   /** ogre_chieftan_caves: the ogre that silences the scared skavid (t2995). */
   const NPCS_OGRE = 4363;
-  const SPOTANIM = { FIREBREATH: 1, SPELL_IMPACT: 971, RELIC: 969 };
+  const SPOTANIM = { FIREBREATH: 1, SPELL_IMPACT: 971, RELIC: 969, SMOKE: 86 };
   const PROJECTILE_SPELL = 970;
-  const SOUND = { DRAGON_ATTACK: 3266, DRAGON_HIT: 410, SPELL_CAST: 3270, SPELL_HIT: 3271, DRAGON_DEATH: 409, RELIC: 3267 };
+  const SOUND = { DRAGON_ATTACK: 3266, DRAGON_HIT: 410, SPELL_CAST: 3270, SPELL_HIT: 3271, DRAGON_DEATH: 409, RELIC: 3267,
+    SMOKE: 1930, OGRE_STRIKE: 448 };
 
   const Scenes = createQuestScenes(api, { recoveryAttribute: W.ATTRIBUTES.SCENE_EXIT, onEnd: sceneEnded });
 
@@ -86,7 +88,7 @@ module.exports = function createWatchtowerScenes(api, ctx) {
         new api.core.DialogueChainBuilder().add(new StatementDialogue(0, message)));
     });
     Scenes.later(scene, 12, () => {
-      dragon?.performGraphic(new Graphic(SPOTANIM.FIREBREATH, 92));
+      dragon?.performGraphic(Graphic.atHeight(SPOTANIM.FIREBREATH, 92));
       dragon?.performAnimation(new Animation(SEQ.FIREBREATH));
       sound(player, SOUND.DRAGON_ATTACK);
     });
@@ -106,7 +108,7 @@ module.exports = function createWatchtowerScenes(api, ctx) {
     });
     Scenes.later(scene, 21, () => {
       if (said[2]) shaman?.forceChat(said[2]);
-      dragon?.performGraphic(new Graphic(SPOTANIM.SPELL_IMPACT, 92));
+      dragon?.performGraphic(Graphic.atHeight(SPOTANIM.SPELL_IMPACT, 92));
       sound(player, SOUND.SPELL_HIT);
       sound(player, SOUND.DRAGON_DEATH, 20);
     });
@@ -136,7 +138,7 @@ module.exports = function createWatchtowerScenes(api, ctx) {
   /** The wizard assembles the relic (t2037); the relic's box follows three ticks later (the line's pauseTicks). */
   function assembleRelic(player, wizard) {
     wizard?.performAnimation(new Animation(SEQ.WIZARD_RELIC));
-    wizard?.performGraphic(new Graphic(SPOTANIM.RELIC, 50));
+    wizard?.performGraphic(Graphic.atHeight(SPOTANIM.RELIC, 50));
     sound(player, SOUND.RELIC);
   }
 
@@ -146,13 +148,31 @@ module.exports = function createWatchtowerScenes(api, ctx) {
    * shouts while the skavid is hit (seq 5356) and cries out; four ticks after that it is gone and the
    * skavid's next line shows (the line's pauseTicks).
    */
+  /** The silencing ogre each player has out, so a logout or death removes it (its timer goes with the player). */
+  const silencers = new Map();
+  function removeSilencer(player) {
+    const ogre = silencers.get(player);
+    silencers.delete(player);
+    if (!ogre?.isRegistered?.()) return;
+    // The ogre goes in a puff of smoke, as it came (t3001).
+    smoke(player, ogre.getLocation());
+    api.removeNpc(ogre);
+  }
+  function smoke(player, at) {
+    player.getPacketSender().sendGraphic(Graphic.atHeight(SPOTANIM.SMOKE, 12), at.clone());
+    sound(player, SOUND.SMOKE);
+  }
+
   function silenceSkavid(player, skavid, shout, cry) {
     const at = skavid?.getLocation?.();
     if (!at) return;
+    removeSilencer(player);
     const ogre = api.spawnNpc({ id: NPCS_OGRE, x: at.getX(), y: at.getY() - 1, z: at.getZ(), wanderRadius: 0, owner: player, ownerOnly: true });
     if (ogre) {
       ogre.__skipDefaultRespawn = true;
       ogre.setPositionToFace(at.clone());
+      silencers.set(player, ogre);
+      smoke(player, ogre.getLocation());
     }
     const later = (ticks, fn) => api.getTaskManager().submit(new api.core.CountdownTask(player, ticks, fn));
     later(2, () => {
@@ -160,12 +180,15 @@ module.exports = function createWatchtowerScenes(api, ctx) {
       if (cry) skavid.forceChat(cry);
       ogre?.performAnimation(new Animation(SEQ.OGRE_STRIKE));
       if (shout) ogre?.forceChat(shout);
+      sound(player, SOUND.OGRE_STRIKE);
     });
-    later(6, () => { if (ogre?.isRegistered?.()) api.removeNpc(ogre); });
+    later(6, () => removeSilencer(player));
   }
 
   function cancel({ player }) {
-    if (player && Scenes.get(player)) Scenes.end(player, true);
+    if (!player) return;
+    if (silencers.has(player)) removeSilencer(player);
+    if (Scenes.get(player)) Scenes.end(player, true);
   }
 
   return { Scenes, playEnclaveScene, assembleRelic, silenceSkavid, cancel, ENCLAVE_SCENE };

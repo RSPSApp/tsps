@@ -117,13 +117,12 @@ test("the start: 'Start the Watchtower quest?' Yes. sets stage 1 as the wizard s
   assert.ok(messages(f).some((text) => text.startsWith("You've started a new quest")), JSON.stringify(messages(f)));
 });
 
-test("'Yes.' without the skills is refused there, with the Wiki's requirements (no stage)", async (t) => {
+test("'Yes.' starts the quest without the skills (Wiki: not required to start)", async (t) => {
   const f = actor(t, { at: [2548, 3113, 2], levels: 10 });
   const wizard = h.spawn(f, N.WIZARD, [2549, 3116, 2]);
   const said = await talk(f, wizard, ["What's the matter?", "So how come the spell doesn't work?", "Yes."]);
-  assert.ok(!said.includes("PLAYER: Can I be of help?"), said.join("\n"));
-  assert.equal(stage(f), 0);
-  assert.ok(messages(f).includes("You need a Mining level of at least 40 to start this quest."), JSON.stringify(messages(f)));
+  assert.ok(said.includes("PLAYER: Can I be of help?"), said.join("\n"));
+  assert.equal(stage(f), S.STARTED);
 });
 
 test("'No.' leaves the quest unstarted (t182-185)", async (t) => {
@@ -478,4 +477,52 @@ test("the enclave scene: a logout inside its copy is saved at the enclave entran
   h.PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
   assert.deepEqual(at(f), [2588, 9410, 0]);
   assert.equal(varbit(f, V.SCENE), 0, "an unfinished scene is not marked seen");
+});
+
+test("the lever: a logout in the ticks after it still has the rewards with the completion", async (t) => {
+  const f = actor(t, { at: [2543, 3116, 2], stage: S.ALL });
+  const vars = {};
+  for (const id of [V.PILLAR_CYAN, V.PILLAR_YELLOW, V.PILLAR_MAGENTA, V.PILLAR_GREY]) vars[id] = 1;
+  f.player.setAttribute("watchtower:varbits", vars);
+  const xp = f.player.getSkillManager().getExperience(Sk.MAGIC);
+  await click(f, 2794, [2543, 3115]);
+  for (let i = 0; i < 6 && stage(f) < S.COMPLETE; i++) h.tick(f);
+  assert.equal(stage(f), S.COMPLETE);
+  h.PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  h.ticks(f, 8);
+  assert.equal(f.player.getSkillManager().getExperience(Sk.MAGIC) - xp, 15250);
+  assert.equal(count(f, I.COINS), 5000);
+  assert.equal(count(f, I.SPELL_SCROLL), 1);
+});
+
+test("the scared skavid's ogre: in and out in a puff of smoke, and gone on a logout mid-scene (t2995-3001)", async (t) => {
+  const f = actor(t, { at: [2502, 9431, 0], stage: S.MAP });
+  const skavid = h.spawn(f, N.SCARED, [2502, 9430, 0]);
+  await play(f, () => h.talk(f, skavid), ["Okay, okay, I'm not going to hurt you."]);
+  assert.ok(f.calls.some((c) => c.name === "sendGraphic"), "the smoke");
+  const g = actor(t, { at: [2502, 9431, 0], stage: S.MAP });
+  const skavid2 = h.spawn(g, N.SCARED, [2502, 9430, 0]);
+  await h.talk(g, skavid2);
+  for (let i = 0; i < 30; i++) {
+    const line = h.shown(g);
+    if (line?.who === "menu") { await h.choose(g, "Okay, okay, I'm not going to hurt you."); continue; }
+    if (line?.text?.startsWith("You will have to learn skavid")) { await h.continueLine(g); break; }
+    if (line) await h.continueLine(g); else h.tick(g);
+  }
+  h.ticks(g, 1);
+  const before = [...h.core.World.getNpcs()].filter((npc) => npc?.getId?.() === 4363 && npc.isRegistered?.()).length;
+  assert.ok(before >= 1, "the ogre is out");
+  h.PM.emitPlayerLogout({ player: g.player, username: g.player.getUsername() });
+  h.ticks(g, 2);
+  assert.equal([...h.core.World.getNpcs()].filter((npc) => npc?.getId?.() === 4363 && npc.isRegistered?.()).length, before - 1);
+});
+
+test("the tower ladder: walking off during the guard's line does not climb", async (t) => {
+  const f = actor(t, { at: [2545, 3111, 0], stage: S.STARTED });
+  await click(f, 2833, [2544, 3111]);
+  for (let i = 0; i < 5 && !h.shown(f); i++) h.tick(f);
+  assert.ok(h.shown(f)?.text?.includes("helping hand"));
+  await f.connection.dispatch([{ type: "move", worldX: 2548, worldY: 3108, modifierFlags: 0, run: false }]);
+  h.ticks(f, 8);
+  assert.equal(at(f)[2], 0, JSON.stringify(at(f)));
 });

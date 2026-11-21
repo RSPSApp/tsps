@@ -612,23 +612,12 @@ module.exports = function registerWatchtowerQuest(api) {
     skavidLine(request);
   }
 
-  /** Wiki: 40 Mining, 25 Agility, 15 Thieving, 14 Herblore and 14 Magic. */
-  const REQUIRED_SKILLS = [[Skill.MINING, 40, "Mining"], [Skill.AGILITY, 25, "Agility"], [Skill.THIEVING, 15, "Thieving"],
-    [Skill.HERBLORE, 14, "Herblore"], [Skill.MAGIC, 14, "Magic"]];
-  const missingSkills = (player) => REQUIRED_SKILLS.filter(([skill, required]) => player.getSkillManager().getMaxLevel(skill) < required);
-
-  /** "Yes." on "Start the Watchtower quest?" carries the dump's start hook: the requirements (the stage moves later, at t215). */
-  function handleStartHook(event) {
-    const { player, npcId, hook } = event;
-    if (npcId !== NPCS.WIZARD || hook !== "quest:watchtower:start" || stage(player) > 0) return;
-    const missing = missingSkills(player);
-    if (!missing.length) return;
-    event.end = true;
-    for (const [, required, label] of missing) player.sendMessage(`You need a ${label} level of at least ${required} to start this quest.`);
-  }
-
+  /**
+   * The skills are not needed to start (Wiki: every requirement "[not required to start]", "[boostable]"); each step
+   * checks its own (the trellis, the cake, the rock, the potion).
+   */
   function startQuest(player) {
-    if (stage(player) >= STAGES.STARTED || missingSkills(player).length) return;
+    if (stage(player) >= STAGES.STARTED) return;
     state.setStage(player, STAGES.STARTED);
     player.sendMessage(questStartMessage(player, "Watchtower"));
   }
@@ -740,7 +729,8 @@ module.exports = function registerWatchtowerQuest(api) {
     ["g2LcFM", (player) => { // Grew: the part and the yellow crystal
       take(player, ITEMS.TOOTH);
       give(player, ITEMS.RELIC_PARTS[1]);
-      give(player, CRYSTAL_YELLOW);
+      // The tooth frees one slot for two items: with a full pack the crystal goes under the player, not nowhere.
+      if (!held(player, CRYSTAL_YELLOW)) giveReward(player, CRYSTAL_YELLOW, 1);
       state.setBit(player, BITS.HELPED_GREW);
       return [ITEMS.RELIC_PARTS[1], CRYSTAL_YELLOW];
     }],
@@ -869,9 +859,12 @@ module.exports = function registerWatchtowerQuest(api) {
   /** Climbs once the guard's line is continued (t258-259). */
   function climbAfterChat(player, tile) {
     let ticks = 0;
+    const from = player.getLocation().clone();
     const task = new core.Task(1, false);
     task.execute = () => {
       if (!player.isRegistered?.() || ++ticks > 100) { task.stop(); return; }
+      // Walking off during the line (or after it) leaves the player where they went.
+      if (!player.getLocation().equals(from)) { task.stop(); return; }
       if (player.getDialogueManager().isActive?.()) return;
       task.stop();
       climbTo(player, tile);
@@ -1468,7 +1461,7 @@ module.exports = function registerWatchtowerQuest(api) {
       player.sendMessage("You mix the ground bones into the liquid.");
       player.sendMessage("You mixed the ingredients incorrectly and the mixture exploded.");
       player.performAnimation(new Animation(SEQ.EXPLODE));
-      player.performGraphic(new Graphic(SPOTANIM_EXPLODE, 92));
+      player.performGraphic(Graphic.atHeight(SPOTANIM_EXPLODE, 92));
       sound(player, SOUND.VIAL_MIX);
       sound(player, SOUND.EXPLODE);
       damage(player, 5);
@@ -1526,6 +1519,9 @@ module.exports = function registerWatchtowerQuest(api) {
     if (complete(player)) return;
     const variant = "reviving-the-watchtower-activating-the-shield-generator";
     state.own(player, () => quest.complete(player, { scroll: false, announce: false }));
+    // The rewards go with the stage, so a logout in the next ticks cannot save a completion without them.
+    // Live sends them four ticks on (t6054), with the wizard's first line.
+    grantReward(player);
     player.sendMessage(messageText(variant, "EAAUUD") ?? "The magic force field activates.");
     for (const pillar of W.PILLARS) state.set(player, pillar.varbit, 2);
     for (const itemId of ITEMS.CRYSTALS) take(player, itemId, player.getInventory().getAmount(itemId));
@@ -1534,7 +1530,6 @@ module.exports = function registerWatchtowerQuest(api) {
     player.getPacketSender().sendJingle(JINGLE_MACHINE_ON, 0);
     // The reward and the wizard's thanks four ticks later; the scroll after his two lines (t6054-6062).
     later(player, 4, () => {
-      grantReward(player);
       const wizard = nearestNpc(player, (npc) => npc.getId() === NPCS.WIZARD, 12);
       play(player, NPCS.WIZARD, variant, (steps) => steps.filter((step) => step.type === "line"), PAGE, wizard);
       completionAfterChat(player);
@@ -1735,7 +1730,6 @@ module.exports = function registerWatchtowerQuest(api) {
   api.onCanTeleport(canCastWatchtowerTeleport);
   api.onCustomEvent("magic:teleport-quest-lock", watchtowerPortalLock);
   api.onCustomEvent("npc-dialogue:line", lines);
-  api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("ladders:climb", claimLadder);

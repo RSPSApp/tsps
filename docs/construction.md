@@ -273,6 +273,19 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
   water in order to plant garden plants." The menagerie's habitats water in too but give no
   Farming experience (Wiki: Pet house). The hammer and saw are still asked for; the captures
   don't show a planting without them.
+- **Topiary bush:** Clip, on the plain bush or any shape, needs secateurs or magic secateurs
+  (carried; magic secateurs also wielded): without them "You'll need some secateurs to clip the
+  topiary bush." (rsprox.net recs 2581 tick 295, 2884 tick 10243). With them it opens menu 187
+  "Choose a shape" (None, Kraken, Zulrah, Kalphite Queen, Cerberus, Abyssal Sire, Skotizo,
+  Vorkath, Alchemical Hydra, The Nightmare). A pick plays `pruning_all` and synth 2440, and three
+  ticks later the animation resets and the bush becomes that shape's `poh_topiary_*` loc, saved
+  with the house (rec 2884, rev 230, ticks 12577-12725). No message or experience. Each shape
+  needs that boss killed once (Wiki: Topiary bush), read from Combat Achievements' kill counts,
+  so Phosani's Nightmare doesn't unlock The Nightmare. The Wiki asks for the post-quest Vorkath;
+  Combat Achievements also counts the Dragon Slayer II one (npc `vorkath_quest`), so the shape
+  needs a recorded death of npc `vorkath` (`construction:topiary-vorkath-killed`) or a saved
+  count of two or more. Ours: the refusal "You need to have killed <boss> to clip that shape.",
+  owner-only reshaping, and None giving the plain bush back.
 - **Cape hanger:** cape and hood mount as their `poh_mounted_*` loc; Take, Admire and, for the
   owner, the cape's options through `skillcape:operate` in the SkillCapes plugin. Untrimmed
   skillcapes show trimmed once the owner has two 99s (Wiki).

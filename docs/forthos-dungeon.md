@@ -20,8 +20,8 @@ rsprox captures, recording 3926 (rev 236), Open on the east door from 1824,9973:
 | 615 | game message "The door slams shut and locks behind you." |
 | 616 | `hosdun_east_door` back, the open leaf removed |
 
-Implemented: the east door from the west side, as above. The opener is carried across and the
-inviswall keeps anyone else out while it stands open.
+Implemented: the east door from the west side, as above. The opener takes one ordinary walk step across
+(`walkOver`), and the inviswall keeps anyone else out while it stands open.
 
 Not implemented: the temple key (Sacred Bone Burner faith), so the east door from inside the
 Spider's Den and the west door stay shut. Ours: a locked click sends nothing, since no recording

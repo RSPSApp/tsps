@@ -881,8 +881,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     }),
     // Forthos Dungeon's east Temple Door (hosdun_east_door at 1825,9973, face 0; rsprox capture 3926
     // ticks 613-616): inviswall on the doorway and hosdun_grubby_door_open on the tile west, sound
-    // 62, the opener carried east, and the door back two ticks later. Only eastward, and only
-    // through door:open: areas/ForthosDungeon.plugin.js owns the one-way rule.
+    // 62, the opener's plain walk step east (no exactmove in player_info, tick 614) over the
+    // clipped doorway, and the door back two ticks later. Only eastward, and only through
+    // door:open: areas/ForthosDungeon.plugin.js owns the one-way rule.
     Object.freeze({
       closed: [[core.CacheDefinitions.getLocId("hosdun_east_door"), 1825, 9973, 0, 0]],
       opened: [
@@ -890,7 +891,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
         [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 1825, 9973, 0, 0],
       ],
       crossX: 1825,
-      carry: true,
+      walkOver: true,
       closeTicks: 2,
       openSoundId: 62,
     }),

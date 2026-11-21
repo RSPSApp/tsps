@@ -28,7 +28,7 @@
  * The two `Temple Door`s (34842 west, 34843 east) had no handler either, and "Temple Door" is not
  * one of the Doors plugin's names, so Open did nothing. Wiki (Temple Door): "Upon first visiting
  * the dungeon, only the eastern door can be opened and only in one direction: east." rsprox
- * capture 3926 ticks 613-616: from the west tile the door swings open, the player is carried east
+ * capture 3926 ticks 613-616: from the west tile the door swings open, the player walks one step east
  * and "The door slams shut and locks behind you." follows a tick later; the swap itself is the
  * Doors plugin's pass-through entry, opened here through door:open. The temple key that unlocks
  * both doors for good (Sacred Bone Burner faith) is not implemented, so the other directions stay

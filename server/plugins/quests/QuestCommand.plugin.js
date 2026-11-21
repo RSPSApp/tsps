@@ -62,6 +62,12 @@ function isExperienceItem(api, item) {
 }
 
 /**
+ * Rewards ::quest all also hands out in an upgraded form, so they are not given: Kharedst's memoirs
+ * and its four pages are all in the Book of the Dead.
+ */
+const SUPERSEDED_REWARDS = new Set([21760, 21762, 21764, 21766, 21770]);
+
+/**
  * While ::quest all runs, rewards that would flood the inventory go elsewhere: experience items are
  * not given, bankable items go to the bank, anything else (or what the bank refuses) to the
  * inventory as the quest gave it. Returns the restore function and the tallies.
@@ -79,6 +85,7 @@ function routeRewards(api, player) {
       tally.skipped += item.getAmount();
       return null;
     }
+    if (SUPERSEDED_REWARDS.has(item.getId())) return null;
     if (api.emitCanBankItem(player, item, { quiet: true }) === false) return item;
     const before = bankAmount(item.getId());
     player.getBank(api.core.Bank.getTabForItem(player, item.getId())).add(item.clone(), false);
@@ -111,7 +118,8 @@ function completeAllQuests(api, player) {
   try {
     for (const quest of QuestRuntime.getRegisteredQuests()) {
       try {
-        if (quest.complete(player, { scroll: false, announce: false })) completed++;
+        // prompts: false: no reward choice pop-ups (The Fremennik Isles' combat XP).
+        if (quest.complete(player, { scroll: false, announce: false, prompts: false })) completed++;
         else alreadyComplete++;
       } catch (error) {
         errors.push(quest.name);

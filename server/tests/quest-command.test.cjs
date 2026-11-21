@@ -86,6 +86,8 @@ test("::quest all routing: lamps skipped, bankable to the bank, unbankable and b
   inventory.add(item(4, "Combat lamp"));
   inventory.add(item(5, "Oil lamp")); // a light source, not experience: banked
   inventory.add(item(6, "Blessed lamp")); // Pray-over: experience
+  inventory.add(item(21760, "Kharedst's memoirs")); // in the Book of the Dead: not given
+  inventory.add(item(21766, "History and Hearsay"));
   inventory.forceAdd(player, item(10, "Coins", 3));
   inventory.add(item(3, "Unbankable thing"));
   inventory.forceAdd(player, item(10, "Coins", 4)); // the bank holds 5: two go to the inventory

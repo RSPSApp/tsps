@@ -92,4 +92,10 @@ export interface ServerListEntry {
     ownerUsername?: string;
     iceServers?: RTCIceServer[];
     relayDiscovered?: boolean;
+    /** A stable id for the world, when the list gives one: the World Switcher keeps favourites by it. */
+    id?: string;
+    /** The world's number in the World Switcher, when the list states it. */
+    number?: number;
+    /** Where the world is hosted, as the list words it ("Dallas 8", "United Kingdom"): its flag. */
+    location?: string;
 }

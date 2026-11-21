@@ -19,6 +19,31 @@ import type { Inventory } from "../../inventory/Inventory";
 import type { WorldMapState } from "../../map/WorldMapArea";
 import type { Script } from "../Script";
 
+/** A world of the world list, as WORLDLIST_START / _NEXT / _SPECIFIC push it. */
+export interface Cs2World {
+    id: number;
+    properties: number;
+    activity: string;
+    location: number;
+    population: number;
+    host: string;
+}
+
+/** The game's world list, as the WORLDLIST_* commands and MAP_WORLD use it. */
+export interface Cs2WorldList {
+    /** WORLDLIST_FETCH: true once the list is loaded. */
+    fetch(): boolean;
+    /** WORLDLIST_SORT: the column to order by, and the one that settles its ties (-1: none). */
+    sort(column: number, descending: boolean, second: number, secondDescending: boolean): void;
+    /** WORLDLIST_START and WORLDLIST_NEXT: the first world, then each next one; undefined at the end. */
+    start(): Cs2World | undefined;
+    next(): Cs2World | undefined;
+    /** WORLDLIST_SPECIFIC: the world with this id. */
+    specific(id: number): Cs2World | undefined;
+    /** MAP_WORLD in the World Switcher's scripts: the id of the world the player is on, when the list knows it. */
+    currentWorld(): number | undefined;
+}
+
 /** Friend entry for friend list */
 export interface FriendEntry {
     name: string;
@@ -283,6 +308,9 @@ export interface HandlerContext {
      * Called by `LOGOUT` opcode (5630) when player clicks logout button.
      */
     requestLogout?: () => void;
+
+    /** The world list behind WORLDLIST_* and MAP_WORLD (the World Switcher); none: no worlds. */
+    worldList?: Cs2WorldList;
 
     // Player weight in kg (can be negative)
     getWeight?: () => number;

@@ -58,6 +58,11 @@ function serverEntry(server: any): ServerListEntry {
         worldId: typeof server?.worldId === "string" ? server.worldId : undefined,
         ownerUsername: typeof server?.ownerUsername === "string" ? server.ownerUsername : undefined,
         iceServers: Array.isArray(server?.iceServers) ? server.iceServers : [],
+        // Optional, for the World Switcher: a stable id (favourites follow it), the world's number
+        // and where it is hosted (its flag). A list without them gets numbers in list order.
+        ...(typeof server?.id === "string" && /^[a-z0-9-]{1,40}$/.test(server.id) ? { id: server.id } : {}),
+        ...(Number.isInteger(server?.number) && server.number > 0 ? { number: server.number } : {}),
+        ...(validPublicText(server?.location, 40) ? { location: server.location } : {}),
     };
 }
 
@@ -209,9 +214,13 @@ export async function fetchServerList(host: LoginRendererHost): Promise<void> {
     
 }
 
-export function refreshServerList(host: LoginRendererHost) {
+/** The refresh under way for each list, so a second asker (the World Switcher) can wait for the same answers. */
+const refreshing = new WeakMap<LoginRendererHost, Promise<void>>();
 
-        if (host.probing) return;
+/** Asks every listed world how it is. Resolves when the answers are in (it never rejects). */
+export function refreshServerList(host: LoginRendererHost): Promise<void> {
+
+        if (host.probing) return refreshing.get(host) ?? Promise.resolve();
         host.probed = false;
         host.probing = true;
 
@@ -238,11 +247,13 @@ export function refreshServerList(host: LoginRendererHost) {
             server.playerCount = alive ? -1 : null;
         });
 
-        Promise.all([Promise.all(promises), discoverRelayWorlds()]).then(([, discovered]) => {
+        const done = Promise.all([Promise.all(promises), discoverRelayWorlds()]).then(([, discovered]) => {
             host.serverList = replaceRelayWorlds(visibleServers, discovered);
-        }).finally(() => {
+        }).catch(() => {}).finally(() => {
             host.probing = false;
             host.probed = true;
         });
-    
+        refreshing.set(host, done);
+        return done;
+
 }

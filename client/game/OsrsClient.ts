@@ -253,7 +253,10 @@ import { isDropTarget, isWidgetUseTarget } from "../widgets/WidgetFlags";
 import { markWidgetInteractionDirty } from "../widgets/WidgetInteraction";
 import { WidgetManager } from "../widgets/WidgetManager";
 import { WidgetSessionManager } from "../widgets/WidgetSessionManager";
-import { runWidgetJsOp } from "../widgets/custom/dynamicWidgets";
+import { runWidgetJsOp, setAction } from "../widgets/custom/dynamicWidgets";
+import { LOGOUT_GROUP, LOGOUT_TAB, WORLDSWITCHER_GROUP, WorldSwitcher } from "./worldswitcher/WorldSwitcher";
+import { isCurrentServer } from "./worldswitcher/worldList";
+import { readLocalStorageItem, writeLocalStorageItem } from "../common/utils/localStorage";
 import { cleanupInterfaceClickTargets, cleanupWidgetClickTarget } from "../widgets/gl/widgets-gl";
 import { layoutWidgets } from "../widgets/layout/WidgetLayout";
 import { sanitizeText } from "../widgets/menu/utils";
@@ -488,10 +491,21 @@ const CHATBOX_INPUT_UIDS: ReadonlySet<number> = new Set([(162 << 16) | 39, (162 
 const ACCOUNT_TYPE_VARBIT = 1777;
 const ACCOUNT_TYPE_ICON_ENUM = 1894;
 
-/** logout:world_switcher (182:3). */
-const LOGOUT_WORLD_SWITCHER_UID = (182 << 16) | 3;
-/** The logout tab's stone (stone10) in the modern, classic and fixed layouts (rsprox captures). */
-const LOGOUT_STONE_UIDS = new Set([(161 << 16) | 46, (164 << 16) | 34, (548 << 16) | 51]);
+/** toplevel_osrs_stretch's pane for the logout tab (161:86), where the World Switcher opens. */
+const LOGOUT_TAB_PANE_UID = (161 << 16) | 86;
+/** chatbox:chatmodal (162:568), where a dialogue mounts, and the options dialogue (chatmenu, 219). */
+const CHATBOX_MODAL_UID = (162 << 16) | 568;
+const CHATMENU_GROUP = 219;
+const CHATMENU_OPTIONS_UID = (CHATMENU_GROUP << 16) | 1;
+/** chatmodal_unclamp: the chatbox modal takes the size of the dialogue in it. */
+const VARBIT_CHATMODAL_UNCLAMP = 10670;
+/** What the server runs to show an options dialogue: reset the chatbox's background, then fill the options. */
+const SCRIPT_CHATBOX_RESET_BACKGROUND = 2379;
+const SCRIPT_CHATMENU_OPTIONS = 58;
+/** The varp the World Switcher's scripts watch (its sort column and favourites). */
+const VARP_WORLDSWITCHER = 477;
+/** The varp of "World Switcher confirmation" (varbit 4100 is its bit 26), as the world keeps it. */
+const VARP_WORLDSWITCHER_CONFIRMATION = 3075;
 
 const PLAYER_MADE_FIRES = new Set([
     FIRE,
@@ -666,6 +680,12 @@ export class OsrsClient {
     loginState: LoginState = new LoginState();
     /** Login screen renderer */
     loginRenderer: LoginRenderer = new LoginRenderer();
+    /** The World Switcher in the side panel (game/worldswitcher). */
+    readonly worldSwitcher: WorldSwitcher = this.createWorldSwitcher();
+    /** The logout tab as the server mounted it, kept while the World Switcher is in its pane. */
+    private logoutTabMount: any;
+    /** The answer to the question the client itself is asking in the chatbox, while it asks. */
+    private chatboxQuestion: ((option: number) => void) | undefined;
 
     mapFileIndex!: MapFileIndex;
 
@@ -1641,6 +1661,8 @@ export class OsrsClient {
             return;
         }
         const standardTargetUid = Number(payload.targetUid) | 0;
+        // Whatever mounts in the chatbox takes the place of a question the client is asking.
+        if (standardTargetUid === CHATBOX_MODAL_UID) this.forgetChatboxQuestion();
         // Keep the server address even when this layout has no corresponding pane.
         this.serverSubInterfaces.set(standardTargetUid, { payload: { ...payload } });
         const targetUid = this.mapGameframeTargetUid(standardTargetUid);
@@ -1776,7 +1798,10 @@ export class OsrsClient {
             executeScriptListener: (widget, listener, eventContext) =>
                 this.executeScriptListener(widget, listener, eventContext),
             handleWidgetAction: (event) => this.handleWidgetAction(event),
-            handlePluginWidgetAction: (event) => this.clientPlugins.handleWidgetAction(event),
+            // A left click runs a button's own script before anything else is asked, and the
+            // World Switcher's buttons are answered in place of theirs (WorldSwitcher.ts).
+            handlePluginWidgetAction: (event) =>
+                this.clientPlugins.handleWidgetAction(event) || this.worldSwitcher?.handleSwitcherAction(event) === true,
             handleTradeWidgetAction: (widget, event, groupId, childId) =>
                 this.handleTradeWidgetAction(widget, event, groupId, childId),
             handleInventorySlotMove: (from, to) => this.handleInventorySlotMove(from, to),
@@ -1971,6 +1996,7 @@ export class OsrsClient {
             requestLogout: () => {
                 self.performLogout();
             },
+            worldList: self.worldSwitcher?.worldList,
             sendIfClose: () => {
                 const pkt = createPacket(ClientPacketId.IF_CLOSE);
                 queuePacket(pkt);
@@ -2461,6 +2487,11 @@ export class OsrsClient {
             // Callback for cc_resume_pausebutton / if_resume_pausebutton
             // Sends RESUME_PAUSEBUTTON packet to server for dialog continuation
             sendResumePauseButton: (widgetUid: number, childIndex: number) => {
+                // The client's own question (the World Switcher's) is answered here.
+                if (self.chatboxQuestion && (widgetUid | 0) === CHATMENU_OPTIONS_UID) {
+                    self.chatboxQuestion(childIndex - 1);
+                    return;
+                }
                 let w = self.widgetManager?.getWidgetByUid(widgetUid);
                 if (
                     w &&
@@ -3034,6 +3065,7 @@ export class OsrsClient {
                 this.widgetManager?.triggerOnDialogAbort();
             } else if (payload?.action === "close_sub") {
                 const standardTargetUid = Number(payload.targetUid) | 0;
+                if (standardTargetUid === CHATBOX_MODAL_UID) this.forgetChatboxQuestion();
                 this.cancelPendingInterfaceOpen(standardTargetUid);
                 this.serverSubInterfaces.delete(standardTargetUid);
                 const targetUid = this.mapGameframeTargetUid(standardTargetUid);
@@ -4327,6 +4359,8 @@ export class OsrsClient {
         // Send MOVE_GAMECLICK via binary packet writer.
         // Server computes path; packet contains world coords + ctrl modifier (run invert).
         if (isServerConnected()) {
+            // Walking off leaves a question the client asked (the World Switcher's), as it does a dialogue.
+            this.worldSwitcher?.dismissQuestion();
             const node = createPacket(ClientPacketId.MOVE_GAMECLICK);
             node.packetBuffer.writeShortAddLE(worldY);
             node.packetBuffer.writeByteNeg(ctrlShiftHeld ? 2 : ctrlHeld ? 1 : 0);
@@ -4398,14 +4432,10 @@ export class OsrsClient {
     private handleNativeWidgetAction(event: Parameters<WidgetActionRouter["handleWidgetAction"]>[0]): void {
         if (runWidgetJsOp(event)) return;
         if (this.clientPlugins.handleWidgetAction(event)) return;
-        const uid = event.widget?.uid | 0;
         // The logout tab's "World Switcher" button, and the same option on the logout tab's
-        // stone (stone10 of each layout), open the server list.
-        const worldSwitcherOption = (event.option ?? "").replace(/<[^>]*>/g, "").trim() === "World Switcher";
-        if (uid === LOGOUT_WORLD_SWITCHER_UID || (worldSwitcherOption && LOGOUT_STONE_UIDS.has(uid))) {
-            this.processLoginAction({ type: "open_server_list" });
-            return;
-        }
+        // stone (stone10 of each layout), open the World Switcher in the side panel; what is
+        // pressed in it is the client's to answer (game/worldswitcher/WorldSwitcher.ts).
+        if (this.worldSwitcher?.handleAction(event)) return;
         this.widgetActionRouter.handleWidgetAction(event);
     }
 
@@ -4453,25 +4483,128 @@ export class OsrsClient {
      */
     private switchToServer(index: number, confirmed: boolean): void {
         const server = this.loginRenderer.serverList[index];
-        const transport = server?.transport ?? "websocket";
-        const isCurrent =
-            transport === this.loginState.serverTransport &&
-            (transport === "webrtc"
-                ? server?.worldId === this.loginState.serverWorldId &&
-                  server?.signalUrl === this.loginState.serverSignalUrl
-                : server?.address === this.loginState.serverAddress &&
-                  server?.secure === this.loginState.serverSecure);
-        if (isCurrent) {
+        if (!server || isCurrentServer(server, this.loginState)) {
             this.processLoginAction({ type: "close_server_list" });
             return;
         }
         if (!confirmed && this.varManager?.getVarbit(VARBIT_WORLDSWITCHER_DISABLE_CONFIRMATION) !== 1) {
-            this.loginState.serverSwitchConfirm = server ?? null;
+            this.worldSwitcher.confirm(server);
             return;
         }
 
         this.loginState.serverListOpen = false;
         this.performLogout(() => this.processLoginAction({ type: "select_server", index }));
+    }
+
+    /** What the World Switcher needs of the game (game/worldswitcher/WorldSwitcher.ts). */
+    private createWorldSwitcher(): WorldSwitcher {
+        return new WorldSwitcher({
+            servers: () => this.loginRenderer.serverList,
+            current: () => this.loginState,
+            listLoaded: () => this.loginRenderer.serverListFetched && this.loginRenderer.probed,
+            refreshList: () => this.loginRenderer.fetchServerList().then(() => this.loginRenderer.refreshServerList()),
+            mountedGroup: () => {
+                const pane = this.widgetManager ? this.mapGameframeTargetUid(LOGOUT_TAB_PANE_UID) : -1;
+                return pane < 0 ? undefined : this.widgetManager.getSubInterface(pane)?.group ?? -1;
+            },
+            // Mounted as the server's own interfaces are, so a change of layout carries it over.
+            mountSwitcher: (hidden) => {
+                const mounted = this.serverSubInterfaces.get(LOGOUT_TAB_PANE_UID)?.payload;
+                if (mounted && (mounted.groupId | 0) !== WORLDSWITCHER_GROUP) this.logoutTabMount = mounted;
+                this.mountSubInterface({ targetUid: LOGOUT_TAB_PANE_UID, groupId: WORLDSWITCHER_GROUP, type: mounted?.type ?? 1, hiddenUids: hidden });
+            },
+            mountLogoutTab: () =>
+                this.mountSubInterface(this.logoutTabMount ?? { targetUid: LOGOUT_TAB_PANE_UID, groupId: LOGOUT_GROUP, type: 1 }, true),
+            showLogoutTab: () => this.switchToTab(LOGOUT_TAB, true),
+            runOp: (widget, opIndex) => {
+                const node = widget as any;
+                const context = { opIndex, mouseX: 0, mouseY: 0 };
+                const ran = node.eventHandlers?.onOp ? this.cs2Vm?.invokeEventHandler(node, "onOp", context) : false;
+                if (!ran && node.onOp) this.executeScriptListener(node, node.onOp, context);
+            },
+            rebuild: () => markVarTransmit(VARP_WORLDSWITCHER),
+            getVarbit: (id) => this.varManager?.getVarbit(id) ?? 0,
+            setVarbit: (id, value) => {
+                this.varManager?.setVarbit(id, value);
+            },
+            playSound: (id) => this.soundEffectSystem?.playSoundEffect(id, { loops: 0, delayMs: 0 }),
+            switchToServer: (index, confirmed) => this.switchToServer(index, confirmed),
+            stopConfirming: () => new Promise<void>((resolve) => {
+                const vars = this.varManager;
+                if (!vars) return resolve();
+                vars.setVarbit(VARBIT_WORLDSWITCHER_DISABLE_CONFIRMATION, 1);
+                if (!isServerConnected()) return resolve();
+                // Sent whole, as the varps of All Settings' other rows are; the world keeps this
+                // row's bit from it (server/plugins/interface/Settings.plugin.js).
+                sendVarpTransmit(VARP_WORLDSWITCHER_CONFIRMATION, vars.getVarp(VARP_WORLDSWITCHER_CONFIRMATION));
+                // The world acts on it on the player's next turn, but on a logout at once
+                // (IMMEDIATE_PACKETS, server net/NetworkBuilder.ts): the hop's logout waits until
+                // three ticks have come back, by when the world has taken it.
+                let ticks = 0;
+                const done = () => {
+                    unsubscribe();
+                    clearTimeout(timer);
+                    resolve();
+                };
+                const unsubscribe = subscribeTick(() => {
+                    if (++ticks >= 3) done();
+                });
+                const timer = setTimeout(done, 5000);
+            }),
+            logout: () => this.performLogout(),
+            askInChatbox: (title, options, answer) => this.askInChatbox(title, options, answer),
+            closeChatboxQuestion: () => this.closeChatboxQuestion(),
+            account: () => this.loginState.username,
+            load: (key) => readLocalStorageItem(key) ?? null,
+            save: (key, value) => {
+                writeLocalStorageItem(key, value);
+            },
+        });
+    }
+
+    /**
+     * A question the client itself asks, in the game's own options dialogue (chatmenu, 219)
+     * in the chatbox, opened as the server opens one (OptionDialogue.send). The options answer
+     * here and not to the world: they are not made its "continue" buttons, a click runs `answer`
+     * with the option's place (from 0), and so does the option's number key.
+     */
+    private askInChatbox(title: string, options: string[], answer: (option: number) => void): void {
+        const apply = this.handleWidgetPayload;
+        if (!apply || !this.widgetManager) return;
+        // A dialogue of the world's is in the chatbox: closed there too, as when walking away from it.
+        if (!this.chatboxQuestion && this.serverSubInterfaces.has(CHATBOX_MODAL_UID)) queuePacket(createPacket(ClientPacketId.IF_CLOSE));
+        apply({ action: "run_script", scriptId: SCRIPT_CHATBOX_RESET_BACKGROUND, args: [] });
+        apply({ action: "set_varbits", varbits: { [VARBIT_CHATMODAL_UNCLAMP]: 1 } });
+        apply({ action: "set_hidden", uid: CHATBOX_MODAL_UID, hidden: false });
+        apply({ action: "open_sub", targetUid: CHATBOX_MODAL_UID, groupId: CHATMENU_GROUP, type: 0 });
+        apply({ action: "run_script", scriptId: SCRIPT_CHATMENU_OPTIONS, args: [title, options.join("|")] });
+        // The script lists the options as the layer's children 1 to n (child 0 is the question).
+        const rows = this.widgetManager.getWidgetByUid(CHATMENU_OPTIONS_UID)?.children ?? [];
+        options.forEach((_, option) => {
+            const row = rows[option + 1] as any;
+            if (!row) return;
+            // "Continue", as an option of a dialogue reads in the menu; the op is what makes it clickable.
+            row.jsListeners = { ...(row.jsListeners ?? {}), onOp: () => this.chatboxQuestion?.(option) };
+            row.hasListener = true;
+            setAction(row, 0, "Continue");
+        });
+        this.chatboxQuestion = answer;
+    }
+
+    private closeChatboxQuestion(): void {
+        this.chatboxQuestion = undefined;
+        const apply = this.handleWidgetPayload;
+        if (!apply || this.widgetManager?.getSubInterface(CHATBOX_MODAL_UID)?.group !== CHATMENU_GROUP) return;
+        apply({ action: "close_sub", targetUid: CHATBOX_MODAL_UID });
+        apply({ action: "set_hidden", uid: CHATBOX_MODAL_UID, hidden: true });
+        apply({ action: "set_varbits", varbits: { [VARBIT_CHATMODAL_UNCLAMP]: 0 } });
+    }
+
+    /** Something else took the chatbox, or the game was left: the question is no longer asked. */
+    private forgetChatboxQuestion(): void {
+        if (!this.chatboxQuestion) return;
+        this.chatboxQuestion = undefined;
+        this.worldSwitcher.questionReplaced();
     }
 
     runClientScriptWithInts(scriptId: number, args: number[]): void {
@@ -6600,6 +6733,7 @@ export class OsrsClient {
                 // Clear widgets
                 this.widgetManager?.clear();
                 this.heldWidgetProperties.clear();
+                this.forgetChatboxQuestion();
 
                 // Reset login state
                 this.loginState.reset();
@@ -9007,6 +9141,8 @@ export class OsrsClient {
             console.warn("[OsrsClient] WidgetManager clear error:", err);
         }
         this.serverSubInterfaces.clear();
+        this.logoutTabMount = undefined;
+        this.forgetChatboxQuestion();
         this.forgetSentInventories();
 
         // Clear ground items

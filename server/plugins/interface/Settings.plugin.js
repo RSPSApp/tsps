@@ -177,7 +177,12 @@ const SETTINGS_VALUES_ATTRIBUTE = "settings:values";
 // (127) with no click at all. The Minimenu rows (4503) flip there too, and the spacing slider
 // changes its varbit with no click at all. The rows saved from them are the settings.json rows on
 // these varps; other bits (the collection-log notifications on 2856) belong to their own plugins.
-const TRANSMITTED_SETTING_VARPS = new Set([1224, 1734, 2856, 4503]);
+const TRANSMITTED_SETTING_VARPS = new Set([1224, 1734, 2856, 4503, 3075]);
+// Of varp 3075 only World Switcher confirmation (row 347, varbit 4100) is taken from a
+// transmit. The client's World Switcher asks before a hop with "Yes, and don't ask again", which
+// turns it off in the client and sends the varp (client/game/worldswitcher/WorldSwitcher.ts). The
+// varp's other rows change by their clicks alone, as before.
+const TRANSMITTED_SETTING_VARBITS_ONLY = new Map([[3075, new Set([4100])]]);
 // Cache 241 settings structs3107..3755/4286/2735 and reader script6716.
 /** questlist_hide_in_progress and questlist_hide_completed: toggles before rev 242, dropdowns since. */
 const QUEST_LIST_SHOW_VARBITS = [13775, 13777];
@@ -1165,6 +1170,7 @@ function transmittedSettingRows(varpId) {
     for (const [settingId, row] of Object.entries(SETTINGS)) {
       if (row.varp !== undefined || row.varbit === undefined || row.options) continue;
       const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(row.varbit);
+      if (TRANSMITTED_SETTING_VARBITS_ONLY.get(baseVar)?.has(row.varbit) === false) continue;
       transmittedRows.get(baseVar)?.push({ settingId: Number(settingId), row, key: varKey(row), startBit, mask: 2 ** (endBit - startBit + 1) - 1 });
     }
   }
@@ -1214,6 +1220,7 @@ function consumeTransmittedSettingVarp(player, row) {
   if (row.varp !== undefined || row.varbit === undefined) return false;
   const { baseVar } = CacheDefinitions.getVarbit(row.varbit);
   if (!TRANSMITTED_SETTING_VARPS.has(baseVar)) return false;
+  if (TRANSMITTED_SETTING_VARBITS_ONLY.get(baseVar)?.has(row.varbit) === false) return false;
   return SettingVarpTransmit.take(player, baseVar, settingVarpTick()) !== undefined;
 }
 

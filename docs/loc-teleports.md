@@ -76,12 +76,18 @@ yarn sync:loc-teleports --captures loc-teleports.json --report report.json   # e
 - **Decisions:**
   - Sailing and the shipyard;
   - minigame, raid and boss areas (Theatre of Blood, Guardians of the Rift, Tempoross, Giants' Foundry and more);
-  - holiday events;
+  - holiday events, apart from Scrubfoot's cave (below);
   - the Dagannoth Kings' ladder, which picks a boss instance;
   - Fossil Island's underwater caves, which need diving gear;
   - one ladder only seen on a Leagues world.
 
 Nothing is removed, and the plugin's own entries are ignored while probing, so a second run adds nothing.
+
+### Scrubfoot's cave (Goblin Village)
+
+The cave entrance (`xmas20_goblin_cave_entrance`, 40887) west of Goblin Village and the cave's exit (`xmas20_goblin_cave_exit`, 40888) came with the 2020 Christmas event, but the cave stayed when Sled Racing was made permanent on 6 January 2021 ([Wiki: Cave entrance (Scrubfoot's cave)](https://oldschool.runescape.wiki/w/Cave_entrance_(Scrubfoot%27s_cave)), [Sled Racing](https://oldschool.runescape.wiki/w/Sled_Racing)). The holiday rule in `loc-teleport-sync.json` leaves those two names out of it, so the sync takes them. rsprox captures 3243 (rev 233) and local 1001339 (rev 240): Enter crawls (2796) with sound 2454 and the fade two ticks after arriving and moves to (1975, 6220, 3) on tick 4; Exit moves to (2949, 3508, 0) on tick 3, the median of the two recordings: in 3243 (no walk, no sled) the crawl, sound and fade come on the click and the move two ticks later; in local 1001339 (walked, sled worn) the fade comes on tick 2 with no crawl and the move on tick 4. tsps plays the crawl, sound and fade a tick after arriving and the move on tick 3, so it is a tick later than 3243 (recorded difference).
+
+Not covered: Sled Racing itself (the sled, the timed course, the crevice back up). Live's Exit also takes off a worn event sled ("You remove the sled.", local 1001339); tsps has no sled racing, so it isn't played.
 
 ## The first run (2026-10-09)
 
@@ -118,6 +124,9 @@ Locs live OSRS turned some players away from need their requirement before they 
 | Mos Le'Harmless underwater stairs (3788, 9254) | A fishbowl helmet and diving apparatus worn, or the Medallion of the Deep | "You cannot go diving without your diving helmet and diving apparatus!" |
 | The Elid crevice (all three tiles) | A rope used on it once | A message box: "That looks too steep to safely climb down with just your bare hands." |
 | Araxxor's lair web tunnel (3655, 9814) | 92 Slayer, Priest in Peril, an araxyte or spider task | Not captured: the lair's own lines ("You need a Slayer level of at least 92 to enter Araxxor's lair.") |
+| Kalphite Lair tunnel (3515, 9520, 2) | Death to the Dorgeshuun ([Wiki](https://oldschool.runescape.wiki/w/Tunnel_(Kalphite_Lair))) | "It looks like the tunnel is blocked at the other end." (rsprox local 1001685, tick 8528) |
+
+**Kalphite Lair and the Dorgesh-Kaan South Dungeon:** the Lair's Tunnel (23596) and the dungeon's two Blocked tunnel tiles (22656, 22657 at 2710, 5206-5207) lead to each other ([Wiki](https://oldschool.runescape.wiki/w/Blocked_tunnel)). Only the refusal is captured: live sent the message two ticks after the player arrived (local 1001685, ticks 8526 and 8528); the plugin refuses on the handler's tick, one after arriving. The crossing itself isn't captured, so the landings are the walkable tiles in front of the other end (west of the Lair tunnel, where the recording's player stood to use it; east of the blocked tunnel, each Lair tile to the tile opposite; the agent's Shortest Path transports land both Lair tiles at 2711, 5206, equally uncaptured) and the move comes two ticks after arriving, with no animation or sound (ours). The dungeon's darkness is not part of these entries.
 
 The skill total's number is scrubbed in the captures (`#`), so 500 comes from the Wiki. Using a rope on the crevice ties it and goes down ("You climb down the rope."), as do later climbs; the rope isn't used up, as captured.
 

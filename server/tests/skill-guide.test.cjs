@@ -16,11 +16,19 @@ const GUIDE = 860;
 const OLD_GUIDE = 214;
 const NEW_STYLE_VARBIT = 15321;
 
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+const { Skill } = require("../dist/game/model/Skill");
+
 let clickHandler;
+let levelUpAnnounced;
 let claim = () => {};
 SkillGuide.register({
+  core: { CacheDefinitions, Skill },
   onInterfaceActionClick(handler) {
     clickHandler = handler;
+  },
+  onCustomEvent(name, handler) {
+    if (name === "level-up:announced") levelUpAnnounced = handler;
   },
   emitCustomEvent(name, payload) {
     if (name === "skills:stat-clicked") claim(payload);
@@ -43,6 +51,31 @@ function player(newStyle = 1) {
   });
   return { sent, getPacketSender: () => sender };
 }
+
+/** A player whose varbits are kept and whose sends are recorded, at the given levels. */
+function levelledPlayer(levels = {}) {
+  const sent = [];
+  const values = new Map([[NEW_STYLE_VARBIT, 1]]);
+  const sender = new Proxy({}, {
+    get: (_, method) => {
+      if (method === "getVarbit") return (id) => values.get(id) ?? 0;
+      return (...args) => {
+        if (method === "sendVarbit") values.set(args[0], args[1]);
+        sent.push([method, ...args]);
+      };
+    },
+  });
+  const skills = { getMaxLevel: (skill) => levels[skill.getName()] ?? 1 };
+  return { sent, values, getPacketSender: () => sender, getSkillManager: () => skills };
+}
+
+function levelUp(account, skillName, oldLevel, newLevel, unlocks = true) {
+  const skill = Skill.VALUES.find((stat) => stat.getName() === skillName);
+  levelUpAnnounced({ player: account, skill, oldLevel, newLevel, unlocks });
+}
+
+const varbit = (name) => CacheDefinitions.getVarbitId(name);
+const FLASHSIDE = 3756; // flashside, as captured
 
 function click(account, groupId, childId, extra = {}) {
   const event = { player: account, groupId, childId, buttonId: (groupId << 16) | childId, action: 2, handled: false, ...extra };
@@ -190,4 +223,113 @@ test("View-journal on a Quest XP row closes the guide and opens that quest's jou
     { action: 1 },
   ]) assert.equal(click(account, GUIDE, 17, extra).handled, false);
   assert.deepEqual(sent, []);
+});
+
+test("every stat's levelup_list varbit is in the cache, and every server skill has one", () => {
+  const { LEVELUP_LIST_BY_STAT } = SkillGuide._test;
+  assert.deepEqual([...LEVELUP_LIST_BY_STAT.keys()], [...GUIDE_SKILL_BY_STAT.keys()]);
+  const stats = interfaces.get(320).components;
+  for (const [child, name] of LEVELUP_LIST_BY_STAT) {
+    assert.ok(Number.isInteger(varbit(`levelup_list_${name}`)), name);
+    // The stat components carry the same names, but Runecraft's is "runecrafting".
+    assert.equal(stats.get(child).replace(/^runecrafting$/, "runecraft"), name);
+  }
+  assert.equal(CacheDefinitions.getVarbitId("flashside"), FLASHSIDE);
+  // Captured ids: farming 20179, woodcutting 20169, crafting 20177.
+  assert.deepEqual(["farming", "woodcutting", "crafting"].map((name) => varbit(`levelup_list_${name}`)), [20179, 20169, 20177]);
+  const account = levelledPlayer();
+  for (const skill of Skill.VALUES) {
+    account.values.clear();
+    levelUpAnnounced({ player: account, skill, oldLevel: 4, newLevel: 5, unlocks: true });
+    assert.equal([...account.values.values()].filter((value) => value === 5).length, 1, skill.getName());
+  }
+});
+
+test("a level-up sets the skill's levelup_list to the first new level and flashes the Skills tab, as captured", () => {
+  const account = levelledPlayer();
+  // rsprox 1001453 t3791 (rev 241): Woodcutting 40 -> 41 sets levelup_list_woodcutting 41, then flashside 2.
+  levelUp(account, "Woodcutting", 40, 41);
+  assert.deepEqual(account.sent, [["sendVarbit", 20169, 41], ["sendVarbit", FLASHSIDE, 2]]);
+  // A second level before the guide is viewed keeps the first (no capture changes a set value).
+  account.sent.length = 0;
+  levelUp(account, "Woodcutting", 41, 42);
+  assert.deepEqual(account.sent, []);
+  // Another skill gets its own, with the tab already flashing.
+  levelUp(account, "Cooking", 14, 15);
+  assert.deepEqual(account.sent, [["sendVarbit", varbit("levelup_list_cooking"), 15]]);
+});
+
+test("a level-up that unlocks nothing sets no list and flashes nothing, unless a list is waiting, as captured", () => {
+  // rsprox 1001336 (rev 240): Attack 1 -> 2, 3, 4 (t3686, t3829, t3873) send neither var;
+  // Attack 4 -> 5 (t3924) sets levelup_list_attack 5, then flashside 2.
+  const account = levelledPlayer();
+  levelUp(account, "Attack", 1, 2, false);
+  assert.deepEqual(account.sent, []);
+  levelUp(account, "Attack", 4, 5, true);
+  assert.deepEqual(account.sent, [["sendVarbit", varbit("levelup_list_attack"), 5], ["sendVarbit", FLASHSIDE, 2]]);
+  // With a level waiting, a later level-up flashes the tab again after it was clicked.
+  click(account, 161, 60, { action: 1 });
+  account.sent.length = 0;
+  levelUp(account, "Attack", 5, 6, false);
+  assert.deepEqual(account.sent, [["sendVarbit", FLASHSIDE, 2]]);
+});
+
+test("View guide with a level-up waiting clears it and highlights from that level to the current one, as captured", () => {
+  // rsprox 1001445 t869 (rev 241): Farming 1 -> 9 left levelup_list_farming 2; View guide cleared it
+  // and ran skill_guide_v2_init [21, 31, 2, 9].
+  const account = levelledPlayer({ Farming: 9 });
+  levelUp(account, "Farming", 1, 9);
+  account.sent.length = 0;
+  assert.equal(click(account, 320, 23).handled, true);
+  assert.deepEqual(account.sent, [
+    ["sendVarbit", 20179, 0],
+    ["sendSubInterface", FLOATER_UID, GUIDE, 1],
+    ["sendInterfaceFlagsRange", (GUIDE << 16) | 21, -1, -1, 0],
+    ["sendInterfaceFlagsRange", (GUIDE << 16) | 7, 0, 200, 1 << 1],
+    ["sendInterfaceScript", SKILL_GUIDE_V2_INIT, [21, 31, 2, 9]],
+  ]);
+  // Viewed: the next look highlights nothing.
+  account.sent.length = 0;
+  click(account, 320, 23);
+  assert.deepEqual(account.sent.at(-1), ["sendInterfaceScript", SKILL_GUIDE_V2_INIT, [21, 0, 0, 0]]);
+  // Another skill's waiting level stays until its own guide is viewed.
+  levelUp(account, "Crafting", 8, 9);
+  click(account, 320, 23);
+  assert.equal(account.values.get(20177), 9);
+});
+
+test("with Level-up guide list off, a level-up remembers nothing and View guide highlights nothing", () => {
+  // All Settings row 494 "Level-up guide list" sets option_level_up_guide_list_disabled (20159)
+  // when off (rsprox settings capture: 0 -> 1); the setting and the Wiki tie the new-unlock list to it.
+  const account = levelledPlayer({ Farming: 9 });
+  account.values.set(20159, 1);
+  levelUp(account, "Farming", 1, 9);
+  assert.equal(account.values.get(20179) ?? 0, 0);
+  account.sent.length = 0;
+  click(account, 320, 23);
+  assert.deepEqual(account.sent.at(-1), ["sendInterfaceScript", SKILL_GUIDE_V2_INIT, [21, 0, 0, 0]]);
+  // A level left waiting from before it was turned off is cleared without a highlight.
+  account.values.set(20179, 2);
+  account.sent.length = 0;
+  click(account, 320, 23);
+  assert.equal(account.values.get(20179), 0);
+  assert.deepEqual(account.sent.at(-1), ["sendInterfaceScript", SKILL_GUIDE_V2_INIT, [21, 0, 0, 0]]);
+});
+
+test("clicking the Skills tab stops its flash on every gameframe; other tabs and flashes are left alone", () => {
+  const account = levelledPlayer();
+  for (const [root, child] of [[161, 60], [548, 65], [164, 53]]) {
+    levelUp(account, "Attack", 1, 2);
+    account.values.set(varbit("levelup_list_attack"), 0);
+    assert.equal(account.values.get(FLASHSIDE), 2);
+    click(account, root, child - 1, { action: 1 });
+    assert.equal(account.values.get(FLASHSIDE), 2, "the Combat tab");
+    click(account, root, child, { action: 1 });
+    assert.equal(account.values.get(FLASHSIDE), 0, `stone1 on ${root}`);
+  }
+  // A tutorial pointing at another tab keeps its flash through a level-up and a Skills click.
+  account.values.set(FLASHSIDE, 4);
+  levelUp(account, "Attack", 2, 3);
+  click(account, 161, 60, { action: 1 });
+  assert.equal(account.values.get(FLASHSIDE), 4);
 });

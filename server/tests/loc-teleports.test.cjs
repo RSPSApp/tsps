@@ -230,6 +230,41 @@ test("Ynysdail's cave entrance and the cavern's exit lead to each other, onto wa
   for (const [x, y, z] of [enter.to, exit.to]) assert.equal(core.RegionManager.getClipping(x, y, z, null) & 0x1200100, 0, `${x},${y} is walkable`);
 });
 
+test("Scrubfoot's cave (Goblin Village) is entered and left as captured, though it came with the 2020 Christmas event", () => {
+  const reason = (name) => choose(captured({ name }), nothing, "Cave entrance", decisions).reason;
+  assert.equal(reason("xmas20_goblin_cave_entrance"), undefined, "the cave stayed for Sled Racing (Wiki)");
+  assert.equal(reason("xmas20_goblin_cave_exit"), undefined);
+  assert.match(reason("xmas20_other_cave"), /holiday event/, "other event locs are still left out");
+  assert.match(reason("easter25_cave"), /holiday event/);
+
+  const walk = (id, [x, y, z], from, ticks) => {
+    const object = locAt(id, x, y, z);
+    const visit = explorer(from);
+    const request = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+    hooks.object(request);
+    assert.equal(request.handled, true);
+    runTicks(visit, ticks);
+    const at = visit.player.getLocation();
+    return { at: [at.getX(), at.getY(), at.getZ()], ticks: visit.ticks };
+  };
+  // Recordings 3243 and local 1001339: crawl 2796, sound 2454 and the fade two ticks after arriving,
+  // the move on tick 4 to (1975, 6220, 3); Exit crawls at once and lands at (2949, 3508, 0) on tick 3.
+  // The click is handled the tick after arriving, so each comes one tick earlier from the click.
+  const enter = walk(CacheDefinitions.getLocId("xmas20_goblin_cave_entrance"), [2947, 3506, 0], [2949, 3508, 0], 4);
+  assert.deepEqual(enter.at, [1975, 6220, 3]);
+  assert.deepEqual(enter.ticks, [
+    [],
+    ["anim 2796", "sound 2454", "open 174"],
+    ["varbit 6719=2"],
+    ["move 1975,6220,3"],
+    ["varbit 6719=0", "open 174"],
+  ]);
+  const exit = walk(CacheDefinitions.getLocId("xmas20_goblin_cave_exit"), [1976, 6218, 3], [1975, 6220, 3], 3);
+  assert.deepEqual(exit.at, [2949, 3508, 0]);
+  assert.deepEqual(exit.ticks.slice(0, 3), [["anim 2796", "sound 2454", "open 174"], ["varbit 6719=2"], ["move 2949,3508,0"]]);
+  for (const [x, y, z] of [[1975, 6220, 3], [2949, 3508, 0]]) assert.equal(core.RegionManager.getClipping(x, y, z, null) & 0x1200100, 0, `${x},${y},${z} is walkable`);
+});
+
 test("the Well of Voyage enters Iban's temple beside its real well and door", () => {
   const entry = data.locs.find((loc) => loc.id === 4005);
   assert.deepEqual([entry.x, entry.y, entry.z, entry.op, entry.to], [2341, 9622, 0, 1, [2138, 4647, 1]]);
@@ -365,6 +400,53 @@ test("the Ancient Cavern whirlpool requires Barbarian firemaking and pyre-ship t
   click();
   runTicks(visit, 3);
   assert.deepEqual([visit.player.getLocation().getX(), visit.player.getLocation().getY(), visit.player.getLocation().getZ()], entry.to);
+});
+
+test("the Kalphite Lair tunnel needs Death to the Dorgeshuun, then links both ways with the South Dungeon's blocked tunnel", () => {
+  const where = (player) => [player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()];
+  const tunnel = data.locs.find((loc) => loc.name === "kalphite_hive_wall_update_entrance");
+  const blocked = ["dorgesh_caves_kalphite_l", "dorgesh_caves_kalphite_r"].map((name) => data.locs.find((loc) => loc.name === name));
+  assert.deepEqual([tunnel.id, tunnel.x, tunnel.y, tunnel.z], [CacheDefinitions.getLocId("kalphite_hive_wall_update_entrance"), 3515, 9520, 2]);
+  assert.deepEqual(blocked.map((loc) => [loc.id, loc.x, loc.y, loc.z]), [[22656, 2710, 5206, 0], [22657, 2710, 5207, 0]]);
+  for (const loc of [tunnel, ...blocked]) assert.equal(CacheDefinitions.getObject(loc.id).actions[0], "Enter");
+  const lands = [...tunnel.sides.map((side) => side.to), ...blocked.map((loc) => loc.to)];
+  for (const [x, y, z] of lands) assert.equal(core.RegionManager.getClipping(x, y, z, null) & 0x1200100, 0, `${x},${y},${z} is walkable`);
+  const gate = decisions.requirements.find((decision) => decision.name === tunnel.name);
+  assert.deepEqual(tunnel.requires, gate.requires, "the sync keeps the gate");
+
+  const object = locAt(tunnel.id, tunnel.x, tunnel.y, tunnel.z);
+  const click = (visit, loc) => {
+    const event = { player: visit.player, object: loc, objectId: loc.getId(), clickType: 1, handled: false };
+    hooks.object(event);
+    assert.equal(event.handled, true);
+  };
+  const visit = explorer([3514, 9521, 2]);
+  const messages = [];
+  visit.player.sendMessage = (message) => messages.push(message);
+  questsDone.delete("death_to_the_dorgeshuun");
+  click(visit, object);
+  runTicks(visit, 3);
+  assert.deepEqual(messages, ["It looks like the tunnel is blocked at the other end."], "captured refusal (rsprox local 1001685)");
+  assert.deepEqual(where(visit.player), [3514, 9521, 2]);
+
+  questsDone.add("death_to_the_dorgeshuun");
+  try {
+    click(visit, object);
+    runTicks(visit, 3);
+    assert.deepEqual(where(visit.player), [2711, 5206, 0]);
+    const south = explorer([3514, 9520, 2]);
+    click(south, object);
+    runTicks(south, 3);
+    assert.deepEqual(where(south.player), [2711, 5207, 0], "each tile of the 2-wide tunnel leads to the blocked tunnel tile opposite");
+    for (const [loc, to] of [[blocked[0], [3514, 9521, 2]], [blocked[1], [3514, 9520, 2]]]) {
+      const back = explorer([2711, loc.y, 0]);
+      click(back, locAt(loc.id, loc.x, loc.y, loc.z));
+      runTicks(back, 3);
+      assert.deepEqual(where(back.player), to);
+    }
+  } finally {
+    questsDone.delete("death_to_the_dorgeshuun");
+  }
 });
 
 test("the DS2 fleet rope ladder reaches the cache-backed upper wreckage route", () => {

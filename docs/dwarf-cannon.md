@@ -46,6 +46,16 @@ Only changed vars are sent, as in the capture; all of them are sent again on log
 
 **Ours:** the setup stops (keeping what's built) if the player walks more than 5 tiles away, logs out, or no longer has the next part.
 
+**Finishing an unfinished cannon (captured, local 1001565 ticks 8747-8756):** using a part on the
+owner's unfinished base, stand or barrels carries the setup on. The next part comes 2 ticks after the
+use for the stand (each step's usual gap), then the others 3 ticks apart and the balls the tick
+after the furnace, as in a whole setup, with the same messages, animation, sound and vars. Any part
+of that cannon works: the capture used the stand on the base twice, the second time after the stand
+was already on, and got the barrels. A use while a part is already on its way changes nothing.
+Someone else's unfinished cannon gives "This isn't your cannon.". **Ours:** a part of the other kind
+(plain on ornament) gets "Nothing interesting happens.", and nothing is added if the next part is
+missing. The Wiki doesn't cover finishing a cannon.
+
 **No quest requirement:** the Wiki requires the Dwarf Cannon quest. This server leaves it out by choice.
 
 ## Firing (captured)

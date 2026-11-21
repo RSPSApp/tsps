@@ -35,7 +35,7 @@ type SelfSpell = {
     cooldown?: { attribute: string; duration: number; message?: string | ((player: Player) => string) };
     castDelay?: boolean;
     /** The cast's animation and graphic (cache ids), and the message it sends. */
-    animation?: number; graphic?: number; message?: string;
+    animation?: number; graphic?: number | ((player: Player) => number); message?: string;
     /** Why the spell can't be cast now (a message), checked before runes are taken. */
     blocked?: (player: Player) => string | null;
 };
@@ -57,6 +57,17 @@ const DEATH_CHARGE_COOLDOWN = "You can only cast Death Charge every 60 seconds."
 const DEATH_CHARGE_CAST = "@mes_hl_pur@Upon the death of your next foe, some of your special attack energy will be restored.</col>";
 const DEATH_CHARGE_RESTORED = "@mes_hl_pur@Some of your special attack energy has been restored.</col>";
 const DEATH_CHARGE_FADED = "@mes_hl_pur@Your Death Charge has faded away.</col>";
+/**
+ * The cast and end graphics: the plain spell's (recording 4102) and, once the Rite of vile
+ * transference is read, the cache's death_charge_upgrade_cast_spotanim / death_charge_end_upgrade_spotanim
+ * (Wiki: the upgrade turns the skull red; no recording casts the upgraded spell).
+ */
+const DEATH_CHARGE_CAST_GRAPHIC = 1854;
+const DEATH_CHARGE_END_GRAPHIC = 1855;
+const DEATH_CHARGE_UPGRADED_CAST_GRAPHIC = 3288;
+const DEATH_CHARGE_UPGRADED_END_GRAPHIC = 3289;
+/** Wiki (Death Charge): the upgrade restores energy "from two targets per cast". */
+const DEATH_CHARGE_UPGRADED_KILLS = 2;
 
 /** The cache's self-cast Arceuus animation (human_cast_selfimbue). */
 const SELF_IMBUE = 8970;
@@ -94,7 +105,8 @@ class ArceuusSelfSpell extends Spell {
         }
         if (!this.canCast(player, false) || !this.canCast(player, true)) return true;
         if (this.data.animation) player.performAnimation(new Animation(this.data.animation));
-        if (this.data.graphic) player.performGraphic(new Graphic(this.data.graphic));
+        const graphic = typeof this.data.graphic === "function" ? this.data.graphic(player) : this.data.graphic;
+        if (graphic) player.performGraphic(new Graphic(graphic));
         if (this.data.message) player.sendMessage(this.data.message);
         this.data.effect(player);
         player.getSkillManager().addExperiences(Skill.MAGIC, this.data.experience);
@@ -171,6 +183,12 @@ export class ArceuusSpells {
     public static readonly DEATH_CHARGE_UNTIL = "arceuus:death-charge-until";
     public static readonly DEATH_CHARGE_COOLDOWN_ATTRIBUTE = "arceuus:death-charge-cooldown";
     private static readonly DEATH_CHARGE_TOKEN = "arceuus:death-charge-token";
+    /** Kills the current cast still restores energy for: 1, or 2 once upgraded. */
+    private static readonly DEATH_CHARGE_KILLS = "arceuus:death-charge-kills";
+    /** Whether the current cast was upgraded, so a rite read mid-charge doesn't change its end graphic. */
+    private static readonly DEATH_CHARGE_CAST_UPGRADED = "arceuus:death-charge-cast-upgraded";
+    /** The Rite of vile transference was read (saved by the RiteOfVileTransference plugin). */
+    public static readonly DEATH_CHARGE_UPGRADED_ATTRIBUTE = "arceuus:death-charge-upgraded";
     public static readonly SHADOW_VEIL_UNTIL = "arceuus:shadow-veil-until";
     public static readonly MARK_UNTIL = "arceuus:mark-until";
     public static readonly DARK_LURE_UNTIL = "arceuus:dark-lure-until";
@@ -221,7 +239,8 @@ export class ArceuusSpells {
         // Wiki: a minute to make one kill, once every 60 seconds; recording 4102 for the cast's state.
         ["death charge", new ArceuusSelfSpell({
             id: 15309, level: 80, experience: 90, runes: [rune(560), rune(565), rune(566)],
-            animation: SELF_IMBUE, graphic: 1854,
+            animation: SELF_IMBUE,
+            graphic: (player) => this.isDeathChargeUpgraded(player) ? DEATH_CHARGE_UPGRADED_CAST_GRAPHIC : DEATH_CHARGE_CAST_GRAPHIC,
             cooldown: {
                 attribute: this.DEATH_CHARGE_COOLDOWN_ATTRIBUTE, duration: 60_000,
                 message: (player) => this.hasDeathCharge(player) ? DEATH_CHARGE_PENDING : DEATH_CHARGE_COOLDOWN,
@@ -334,6 +353,10 @@ export class ArceuusSpells {
         return Number(player.getAttribute(this.DEATH_CHARGE_UNTIL) ?? 0) > World.getProcessCycle();
     }
 
+    public static isDeathChargeUpgraded(player: Player): boolean {
+        return player.getAttribute(this.DEATH_CHARGE_UPGRADED_ATTRIBUTE) === true;
+    }
+
     public static hasShadowVeil(player: Player): boolean {
         return Number(player.getAttribute(this.SHADOW_VEIL_UNTIL) ?? 0) > World.getProcessCycle();
     }
@@ -352,6 +375,8 @@ export class ArceuusSpells {
         for (const key of [
             this.WARD_UNTIL,
             this.DEATH_CHARGE_UNTIL,
+            this.DEATH_CHARGE_KILLS,
+            this.DEATH_CHARGE_CAST_UPGRADED,
             this.SHADOW_VEIL_UNTIL,
             this.MARK_UNTIL,
             this.DARK_LURE_UNTIL,
@@ -444,6 +469,9 @@ export class ArceuusSpells {
      */
     public static startDeathCharge(player: Player): void {
         player.setAttribute(this.DEATH_CHARGE_UNTIL, World.getProcessCycle() + DEATH_CHARGE_TICKS);
+        const upgraded = this.isDeathChargeUpgraded(player);
+        player.setAttribute(this.DEATH_CHARGE_KILLS, upgraded ? DEATH_CHARGE_UPGRADED_KILLS : 1);
+        player.setAttribute(this.DEATH_CHARGE_CAST_UPGRADED, upgraded);
         const token = Number(player.getAttribute(this.DEATH_CHARGE_TOKEN) ?? 0) + 1;
         player.setAttribute(this.DEATH_CHARGE_TOKEN, token);
         this.sendDeathChargeVarbit(player, DEATH_CHARGE_COOLDOWN_VARBIT, 1);
@@ -459,6 +487,7 @@ export class ArceuusSpells {
                 ArceuusSpells.sendDeathChargeVarbit(player, DEATH_CHARGE_COOLDOWN_VARBIT, 0);
                 if (player.getAttribute(ArceuusSpells.DEATH_CHARGE_UNTIL) == null) return; // spent on a kill
                 player.setAttribute(ArceuusSpells.DEATH_CHARGE_UNTIL, null);
+                player.setAttribute(ArceuusSpells.DEATH_CHARGE_KILLS, null);
                 ArceuusSpells.sendDeathChargeVarbit(player, DEATH_CHARGE_ACTIVE_VARBIT, 0);
                 ArceuusSpells.sendHighlighted(player, DEATH_CHARGE_FADED);
                 player.getPacketSender().sendSoundEffect(DEATH_CHARGE_FADE_SOUND, 1, 0, 255);
@@ -467,9 +496,10 @@ export class ArceuusSpells {
     }
 
     /**
-     * A kill uses the charge up (Wiki: restores energy once per cast, and only when the killed
-     * creature is within 16 tiles; a full bar still spends it), with its end graphic (cache 1855),
-     * the varbit going down and the restored message (recording 3340).
+     * A kill uses the charge up (Wiki: restores energy once per cast, twice once upgraded, and only
+     * when the killed creature is within 16 tiles; a full bar still spends it), with its end graphic
+     * (cache 1855, the upgrade's 3289), the varbit going down and the restored message (recording 3340).
+     * An upgraded cast's first kill keeps the charge, its varbit and its fade for the second.
      */
     public static useDeathCharge(player: Player, killed?: { getLocation(): Location; size?(): number }): boolean {
         if (!this.hasDeathCharge(player)) return false;
@@ -477,9 +507,16 @@ export class ArceuusSpells {
             return false;
         }
         if (player.getCombat().ticksSinceAttackedByPlayer() <= DEATH_CHARGE_PVP_TICKS) return false;
-        player.setAttribute(this.DEATH_CHARGE_UNTIL, null);
-        this.sendDeathChargeVarbit(player, DEATH_CHARGE_ACTIVE_VARBIT, 0);
-        player.performGraphic(new Graphic(1855));
+        const castUpgraded = player.getAttribute(this.DEATH_CHARGE_CAST_UPGRADED) === true;
+        const kills = Number(player.getAttribute(this.DEATH_CHARGE_KILLS) ?? 1) - 1;
+        if (kills > 0) {
+            player.setAttribute(this.DEATH_CHARGE_KILLS, kills);
+        } else {
+            player.setAttribute(this.DEATH_CHARGE_UNTIL, null);
+            player.setAttribute(this.DEATH_CHARGE_KILLS, null);
+            this.sendDeathChargeVarbit(player, DEATH_CHARGE_ACTIVE_VARBIT, 0);
+        }
+        player.performGraphic(new Graphic(castUpgraded ? DEATH_CHARGE_UPGRADED_END_GRAPHIC : DEATH_CHARGE_END_GRAPHIC));
         this.sendHighlighted(player, DEATH_CHARGE_RESTORED);
         return true;
     }

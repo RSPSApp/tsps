@@ -22,7 +22,7 @@ covers something, this page says so.
 | `Bookcase`, `TipJar`, `Scrying`, `CapeHanger`, `Trophies` | Bookcases, tip jars, the scrying pool, the cape hanger, skill hall trophy displays |
 | `CombatRings` | Boxing, fencing and combat rings, ranging pedestals, racks, the balance beam |
 | `GamesRoom` with `Prizes`, `RangingGames`, `Hangman`, `ElementalBalance`, `AttackStone`, `Jester`, `TreasureHunt` | The games room |
-| `Menagerie` | Pet houses, the pet list, roaming pets |
+| `Menagerie` | Pet houses, the pet list, roaming pets, the desert habitat's cactus |
 | `Dungeon`, `ThroneRoom` | Guards, traps, doors, treasure, oubliette; the throne room lever, trapdoors and cages, challenge mode |
 | `MahoganyHomes` | Contractors, contracts, the clients' homes, the reward shop |
 | `Menu`, `Commands` | The generic option menu (script 217); `::hotspots` |
@@ -343,6 +343,13 @@ others): on the tick the owner reaches it the NPC goes, the pet item arrives and
 and form varbit clear, with no animation or sound. Only that pet goes; the others keep roaming.
 Ours: a full backpack gets "You don't have enough inventory space." (as Take), a guest's
 Pick-up does nothing, and an account with a bank PIN is asked for it first (as Take).
+
+The desert habitat's cactus (`poh_menagerie_habitat_feature_3`) has Touch. In rsprox capture
+2792 (ticks 768-890) the player walks up, faces it and plays `human_pickuptable` (832); the
+next tick sends "That was unwise." as a spam message and a 2-damage hitsplat, and held clicks
+touch every other tick. The Wiki (Desert habitat) gives the same 2 damage and message.
+It never kills: at 1 hitpoint (2792 ticks 993-998) each touch still sends the message but hits
+a blue 0. Ours: at 2 hitpoints it takes 1, as no recording touches at 2.
 
 ### Dungeon and throne room
 

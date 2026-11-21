@@ -1,8 +1,9 @@
 "use strict";
 
 /**
- * Rolling a chest's loot (Data.KeyChests.js): a pre-roll that hits is the whole reward;
- * otherwise the always items and one main roll. Fish (the Slayer chests) depend on the
+ * Rolling a chest's loot (Data.KeyChests.js): a pre-roll that hits is the whole reward (with
+ * the always items when the chest has `alwaysWithPreRolls`); otherwise the always items and one
+ * main roll. Fish (the Slayer chests) depend on the
  * player's Fishing level, as the Wiki's fish table does.
  */
 const Data = require("./Data.KeyChests");
@@ -70,12 +71,17 @@ function boost(entries, rules) {
  */
 function roll(chest, fishingLevel, random = Math.random, rules = []) {
   const { loot } = chest;
+  // The moon key chest's always item comes with a pre-roll too (Wiki: "Always", every opening).
+  const always = () => loot.always.map((entry) => drop(entry, random));
   for (const preRoll of loot.preRolls) {
     const [chance, outOf] = preRoll.chance;
     const hits = rules.length ? chance * boost(preRoll.oneOf, rules) : chance;
-    if (random() * outOf < hits) return [{ ...drop(pick(preRoll.oneOf, random), random), preRoll: true }];
+    if (random() * outOf < hits) {
+      const hit = { ...drop(pick(preRoll.oneOf, random), random), preRoll: true };
+      return chest.alwaysWithPreRolls ? [...always(), hit] : [hit];
+    }
   }
-  const drops = loot.always.map((entry) => drop(entry, random));
+  const drops = always();
   if (loot.outOf != null) drops.push(...rollMain(loot, fishingLevel, random));
   for (const table of loot.tables) for (let i = 0; i < table.times; i++) drops.push(...rollMain(table, fishingLevel, random));
   for (const { chance: [hits, outOf], item } of loot.tertiary) if (Math.floor(random() * outOf) < hits) drops.push({ ...drop(item, random), bonus: true });

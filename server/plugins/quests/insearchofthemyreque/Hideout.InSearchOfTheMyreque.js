@@ -42,6 +42,19 @@ const ACTORS = {
 };
 const MIST_NPC_ID = 5057;
 const VANSTROM_NPC_ID = 9632;
+/**
+ * Each line in the copy has its speaker's cutscene actor as the head (ticks 1307-1359: Veliaf 9621, Harold 9625, Sani
+ * 9623, Vanstrom route_vanstrom_vampire 9632), not the transcript's first listed id or the NPC talked to.
+ */
+const SCENE_HEADS = Object.freeze({
+  "Veliaf Hurtz": ACTORS.veliaf.id,
+  "Harold Evans": ACTORS.harold.id,
+  "Sani Piliu": ACTORS.sani.id,
+  "Radigad Ponfit": ACTORS.radigad.id,
+  "Polmafi Ferdygris": ACTORS.polmafi.id,
+  "Ivan Strom": ACTORS.ivan.id,
+  "Vanstrom Klause": VANSTROM_NPC_ID,
+});
 const HELLHOUND_NPC_ID = 5054;
 const ESCAPE_LOC_ID = 38094; // route_cavewalltunnel_escape: "Cave entrance", Escape / Quick-escape
 const ESCAPE_LOC = { id: ESCAPE_LOC_ID, x: 3505, y: 9831, type: 10, face: 1 };
@@ -217,6 +230,7 @@ module.exports = function createMyrequeHideout(api, { Scenes, quest, stages, onK
   function line(event) {
     const { player, text } = event;
     if (!player) return false;
+    if (inScene(player) && Object.hasOwn(SCENE_HEADS, event.step?.speaker ?? "")) event.speakerId = SCENE_HEADS[event.step.speaker];
     const stage = quest.getStage(player);
     if (text === LINES.thanks.text && stage >= stages.MET_VELIAF && stage < stages.HELLHOUND_SUMMONED && !inScene(player)) {
       event.pauseTicks = LINES.thanks.pause;

@@ -725,7 +725,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
 
   const resolveCondition = (step) =>
     PluginManager.emitNpcDialogueCondition({
-      player, npc: event.npc, npcId, definition, pages: context.pages,
+      player, npc: event.npc, npcId, definition, pages: context.pages, playing: context.playing,
       text: step.text, stepId: step.id,
     }) ?? combatLevelCondition(player, step.text) ?? skillLevelCondition(player, step.text);
 
@@ -1000,7 +1000,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           // The native option prompt is already closed; preserve any replacement UI.
           if (hook.end) return;
         }
-        const choice = { player, npc: event.npc, npcId, definition, option: option.text, prompt: step.prompt, stepId: option.id, pages: context.pages };
+        const choice = { player, npc: event.npc, npcId, definition, option: option.text, prompt: step.prompt, stepId: option.id, pages: context.pages, playing: context.playing };
         api.emitCustomEvent("npc-dialogue:choice", choice);
         if (choice.end) return;
         const own = ownMenu(option);
@@ -1148,7 +1148,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         const speech = typeof step.player === "string" ? step.player : typedLine ? step.text : step.npc;
         // Let a plugin skip a line through the mutable payload (as slayer:assignment),
         // e.g. a hand-over line for an item the player is no longer carrying.
-        const request = { player, npc: event.npc, npcId, definition, step, text: speech, pages: context.pages, skip: false };
+        const request = { player, npc: event.npc, npcId, definition, step, text: speech, pages: context.pages, playing: context.playing, skip: false };
         api.emitCustomEvent("npc-dialogue:line", request);
         if (request.skip) {
           if (step.steps?.length) {
@@ -1307,7 +1307,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         if (step.type === "message") {
           // Item hand-outs are also `message` steps; let quests hook their id.
           const message = {
-            player, npc: event.npc, npcId, definition, step, pages: context.pages,
+            player, npc: event.npc, npcId, definition, step, pages: context.pages, playing: context.playing,
             text: step.text, target: step.target, stepId: step.id, kind: "message", handled: false,
           };
           const previous = manager.getCurrent?.();
@@ -1392,7 +1392,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           return run(rest, currentRecord);
         }
         const action = {
-          player, npc: event.npc, npcId, definition, step, pages: context.pages,
+          player, npc: event.npc, npcId, definition, step, pages: context.pages, playing: context.playing,
           text: step.text, action: step.action, target: step.target, stepId: step.id, handled: false,
         };
         const current = manager.getCurrent?.();
@@ -1606,6 +1606,9 @@ module.exports = {
       const withOptions = (page, result) => {
         if (page && data[page]) {
           result.page = page;
+          // The transcript being played, for hooks: `pages` lists every page that reaches the NPC
+          // (Vanstrom's five quests), not the one this conversation came from.
+          result.context.playing = Object.freeze({ page, variant: result.variant });
           const pageOptions = collectPageOptions(data[page]);
           result.context.pageOptions = pageOptions.byText;
           result.context.pageOptionList = pageOptions.list;
@@ -1680,6 +1683,7 @@ module.exports = {
       const context = {
         player: request.player, pages: [{ page, variants: Object.keys(record.variants ?? { "standard-dialogue": steps }) }],
         speakerIdByName, pageOptions: pageOptions.byText, pageOptionList: pageOptions.list,
+        playing: Object.freeze({ page, variant }),
         pageLines: collectPageLines(record), pageMenuBefore: collectMenuBefore(record, variant),
         pagePreviousVariant: collectPreviousVariant(record, variant),
         pageInitialMenu: collectMenuBefore(record, variant, { initial: true }),

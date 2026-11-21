@@ -268,7 +268,7 @@ function attachStairs(api) {
   api.onCustomEvent("ladders:climb", claimClimb);
   api.onCustomEvent("construction:room-removing", warnOfRoomRemoval);
   api.onObjectInteraction("Staircase", { "Climb-up": climbUp, "Climb-down": climbDown, Climb: climbEither, "Remove-room": removeRoom });
-  api.onObjectInteraction("Dungeon entrance", { Enter: climbDown });
+  api.onObjectInteraction("Dungeon entrance", { Enter: climbDown, "Remove-room": removeRoom });
   api.onObjectInteraction("Ladder", { Climb: climbUp, "Remove-room": removeRoom });
   for (const name of ["Oak trapdoor", "Teak trapdoor", "Mahogany trapdoor"]) {
     api.onObjectInteraction(name, { Open: openTrapdoor, Close: closeTrapdoor, "Go-down": climbDown, "Remove-room": removeRoom });

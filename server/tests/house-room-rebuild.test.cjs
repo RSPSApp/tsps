@@ -274,7 +274,7 @@ test("removing the portal nexus room warns that its teleports are paid for again
  * object hooks. The click's tile is resolved to that room and piece of furniture.
  */
 function clickRemoveRoom(player, house, gameval, position, key) {
-  const objectId = core.CacheDefinitions.getLocId(gameval);
+  const objectId = typeof gameval === "number" ? gameval : core.CacheDefinitions.getLocId(gameval);
   const definition = ObjectDefinition.forId(objectId);
   assert.equal(definition.getInteractions()[3], "Remove-room", gameval);
   const furniture = { buildableKey: key, localX: 3, localY: 3, type: 10 };
@@ -363,6 +363,24 @@ test("Remove-room on a spiral staircase asks which room; Room below removes the 
     prompts.at(-1).options[1]();
     assert.equal(house.getRoom(BELOW), null);
     assert.ok(house.getRoom(HALL));
+  });
+  House.releaseHouse(player, true);
+});
+
+test("Remove-room on the garden's dungeon entrance removes the dungeon stairs room below it", () => {
+  const { player, house } = owner("removeentrance");
+  const garden = { plane: 1, x: 4, y: 4 };
+  assert.equal(house.getRoom(garden)?.roomKey, "GARDEN");
+  withStairs(house, { ...garden, plane: 0 }, "DUNGEON_STAIRS", "OAK_STAIRCASE_UP");
+  withPrompts(({ prompts, warnings, refusals }) => {
+    clickRemoveRoom(player, house, Data.BUILDABLE_BY_KEY.get("DUNGEON_ENTRANCE").objectIds[0], garden, "DUNGEON_ENTRANCE");
+    assert.deepEqual(refusals, []);
+    assert.deepEqual(warnings.map(({ text }) => text), [Stairs.BASEMENT_FROM_GROUND]);
+    warnings[0].then();
+    assert.equal(prompts.at(-1).title, `Remove the ${Data.ROOM_BY_KEY.get("DUNGEON_STAIRS").name}?`);
+    prompts.at(-1).options[1]();
+    assert.equal(house.getRoom({ ...garden, plane: 0 }), null);
+    assert.equal(house.getRoom(garden)?.roomKey, "GARDEN", "the garden stays");
   });
   House.releaseHouse(player, true);
 });

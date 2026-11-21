@@ -495,7 +495,9 @@ down the room below, and a spiral staircase asks "Remove which room?" with Room 
 below. That room then goes as through its door: its floor warning, "Remove the skill hall?",
 "Room deleted!". Message boxes refuse: "You can only do that in building mode.", "There is no
 room above to remove." and, on the upper floor's stairs down, "The room below is supporting this
-room!". Ours: "There is no room below to remove." mirrors the captured line for the room above.
+room!". Ours: "There is no room below to remove." mirrors the captured line for the room above;
+the garden's dungeon entrance (loc 4529, with the same Remove-room option) removes the dungeon
+stairs room below it like the other stairs down, which no recording shows.
 
 ### Building furniture
 

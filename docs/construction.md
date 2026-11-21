@@ -639,6 +639,36 @@ Not covered by either source: the Maid's and Cook's in-house greeting and "You r
 wage demand of Rick, the Maid and the Cook, a full-inventory line other than the Demon
 butler's, guests' conversations with the servant, and the Butler's guest greeting.
 
+### Boss lair display
+
+`BossLair.Construction.js`, with the jars in `Storage.Construction.js` (rsprox captures 2909,
+rev 230; 3897, rev 235; local 1001171, a guest):
+
+- **Jars** opens the costume-room storage on enum 3300 (one row per jar, 16 in rev 242):
+  `poh_costumes_init` gets 3300, whether the viewer may change it (owner only), and the reset
+  flag. Ours: removing the display is refused while it holds a jar, like the costume room;
+  live asks "Really remove it?" with a jar inside (2909 tick 2481) and what Yes does with the
+  jar is unrecorded.
+- **Configure** opens the list menu (`menu`, script 217) titled "Choose a lair": `Empty`, then
+  each lair in enum 3300's order, struck through (`<str>`) unless its jar is stored. A stored
+  lair or Empty: the player does `human_pickuptable` (832) with area sound 2942 (delay 10,
+  range 7) and the display becomes that lair's loc (`poh_display_*`, saved as the furniture's
+  `displayObjectId`) a tick later. A lair without its jar opens a message box, "The display
+  does not contain the jar of that creature.", and the menu again after it (2909 tick 5214).
+  Picking what the display already shows (a lair, or Empty when blank) opens a message box,
+  "It's already in that state.", with no reach (2909 tick 4739).
+- A guest's Configure: "You can only configure the display in your own house." Their Jars
+  opens the storage to look at only.
+- Taking out the shown lair's jar closes the storage, the player reaches in with the same
+  animation and sound, and the display is blank a tick later (3897 tick 1092).
+- The boss must also have been killed once (Wiki), by Combat Achievements' kill count; for
+  Vorkath a post-quest kill, so Dragon Slayer II's (which that count includes here) is taken off.
+  Phosani's Nightmare's kills count for The Nightmare. Ours: the refusal, a message box "You
+  haven't killed that creature yet." with the menu after it, like the missing jar's; no capture
+  shows one.
+- Ours: the Shellbane Gryphon and Mad Angel menu labels (the Wiki's names; no capture lists
+  them).
+
 ## Not done yet
 
 - The League hall (a Leagues-only room; the cache has its rows, `rooms.json` leaves it out).

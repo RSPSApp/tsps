@@ -45042,7 +45042,8 @@
             "server/plugins/world/LocTeleports.plugin.js",
             "docs/loc-teleports.md",
             "server/tests/object-state-replay.test.cjs",
-            "server/docs/quest-helper-728-verification.md"
+            "server/docs/quest-helper-728-verification.md",
+            "server/plugins/areas/CrombwickManor.plugin.js"
           ],
           "devNotes": [
             "Main 4b1eac7f6: #1267 the Hunter Guild stairs fade and land as recorded.",
@@ -45051,7 +45052,8 @@
             "Main 281766303 (2 November 2026): #1710/#1853/#1875 fix curtains, replayed doors and the Mort Myre gate; #1905 fixes the overlapping Al Kharid toll gate.",
             "Main 8403b60db (4 November 2026): #1991, #2031, #2168, #2192, #2203 — Named doors, reverse/double-door behavior, Desert Treasure pyramid routes and Mining Guild access are repaired.",
             "Main 3b61a15a8 (6 November 2026): #2431 Items: Implement Mithril seed planting; #2506 Keep Troll Stronghold's prison door and arena exit shut to locked players; #2510 fix: Varlamore fixes from #2449 (Cam Torum doors, Renu, pets, ground items) and fishing interrupt; #2534 Implement Ardougne Hard and Elite diary gameplay tasks; #2610 Skip a fight's sound in the loc teleport sync, and in the data it wrote; #2706 Allow reaching the Dwarven Boatman before starting The Giant Dwarf. (10 merged PRs touch the recorded implementation; highlights shown.) Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4179 Edgeville Dungeon: the brass key door replaces itself while open. #4096 LocTeleports: Mos Le'Harmless cave entrance, Cavey Davey's warning and the exits. #4088 Ladders: handle the Grand Tree's Top-Floor and Bottom-Floor options. 8 merged PRs changed recorded implementation files for this entry."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4179 Edgeville Dungeon: the brass key door replaces itself while open. #4096 LocTeleports: Mos Le'Harmless cave entrance, Cavey Davey's warning and the exits. #4088 Ladders: handle the Grand Tree's Top-Floor and Bottom-Floor options. 8 merged PRs changed recorded implementation files for this entry.",
+            "21 November 2026 (parity/locs-crombwick-manor-doors): Crombwick Manor's front doors in Slepe (slp_mansion_door_l/_r) answer Open with the message box \"The door is locked.\" and stay shut, as live does (rsprox captures 227/1000270 tick 6370, 231/391 ticks 2613 and 5210; Wiki, Slepe: the manor is only reached from Kroy's laboratory). Before, the click did nothing. server/plugins/areas/CrombwickManor.plugin.js, tests/crombwick-manor-doors.test.cjs, in-game check on the worktree server."
           ],
           "taskDetails": [
             {

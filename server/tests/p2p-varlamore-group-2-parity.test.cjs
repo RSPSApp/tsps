@@ -1344,8 +1344,8 @@ function doti() {
     const event = { player: p, npcId: id, clickType: 1, definition: { getActions: () => [option] }, ...extra };
     h.hooks.onNpcInteraction.forEach(fn => fn(event)); return event;
   };
-  const object = id => {
-    const event = { player: p, objectId: id, definition: { id } };
+  const object = (id, extra = {}) => {
+    const event = { player: p, objectId: id, definition: { id }, ...extra };
     h.hooks.onObjectInteraction.forEach(fn => fn(event)); return event;
   };
   return { h, p, npc, object };
@@ -1413,15 +1413,100 @@ test('DOTI backstage requires searching the real bookshelf and discussing every 
 test('DOTI backstage bookshelf is a player-scoped stage spawn, not a global object spawn', () => {
   assert.equal(require('../data/definitions/object-spawns.json').some(spawn => [54734, 54735].includes(spawn.id)), false);
   const { h, p } = doti(); h.quest.setStage(p, 36);
-  const shelf = h.objects.find(object => object.getId() === 54734);
+  const shelf = h.objects.find(object => object.getId() === 54734 && object.getLocation().getX() === 1461);
   assert.ok(shelf, 'the searchable changing bookshelf appears for this player');
   assert.equal(shelf.getOwner(), p);
   assert.deepEqual([shelf.getLocation().getX(), shelf.getLocation().getY(), shelf.getLocation().getZ()], [1461, 9331, 0]);
   h.quest.setStage(p, 40);
   assert.equal(h.objects.some(object => object.getId() === 54734), false);
-  const base = h.objects.find(object => object.getId() === 54735);
+  const base = h.objects.find(object => object.getId() === 54735 && object.getLocation().getX() === 1461);
   assert.ok(base, 'the cache bookshelf returns once the backstage clue is done');
   assert.equal(base.getOwner(), p);
+});
+
+test('DOTI replaces both cache bookshelf placements so either wall can be searched', () => {
+  const { h, p, object } = doti(); h.quest.setStage(p, 36);
+  const shelves = h.objects.filter(object => object.getId() === 54734)
+    .map(object => [object.getLocation().getX(), object.getLocation().getY()]);
+  assert.deepEqual(shelves.sort(), [[1458, 9331], [1461, 9331]],
+    'both loc 54735 placements on the cellar wall become the searchable clue variant');
+  for (const shelf of h.objects.filter(object => object.getId() === 54734)) assert.equal(shelf.getOwner(), p);
+  // Clicking the west replacement must go through the real resolved Bookshelf id, not 54735.
+  object(54735, { definition: { id: 54726 }, location: { x: 1458, y: 9331, z: 0 } });
+  assert.equal(p.attrs.get('quest.death_on_the_isle.backstage.bookshelf'), true);
+  h.quest.setStage(p, 40);
+  assert.equal(h.objects.some(object => object.getId() === 54734), false);
+  assert.deepEqual(h.objects.filter(object => object.getId() === 54735)
+    .map(object => [object.getLocation().getX(), object.getLocation().getY()]).sort(), [[1458, 9331], [1461, 9331]]);
+});
+
+test('DOTI cellar entrance and stair exit land beside the cache locs, not on them', () => {
+  const { h, p, object } = doti(); h.quest.setStage(p, 18);
+  object(55047, { location: { x: 1447, y: 2938, z: 0 }, sourceLocation: { x: 1450, y: 2934, z: 0 } });
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [1445, 9337, 0]);
+  object(54716, { location: { x: 1447, y: 9338, z: 0 }, sourceLocation: { x: 1445, y: 9337, z: 0 } });
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [1450, 2934, 0]);
+  assert.notDeepEqual([p.getLocation().getX(), p.getLocation().getY()], [1447, 2938],
+    'the exit does not land on the blocked cellar entrance loc');
+});
+
+test('DOTI theatre stairs avoid Stradius and the bookshelf passage crosses the cellar wall', () => {
+  const { h, p, object } = doti(); h.quest.setStage(p, 42);
+  object(54717, { location: { x: 1469, y: 9327, z: 0 }, sourceLocation: { x: 1468, y: 9329, z: 0 } });
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [1472, 2926]);
+  assert.ok(require('../data/definitions/npc-spawns.json').some(spawn => spawn.x === 1472 && spawn.y === 2925),
+    'the world spawns Stradius on the old landing tile');
+  assert.notDeepEqual([p.getLocation().getX(), p.getLocation().getY()], [1472, 2925], 'never land on Stradius');
+  h.quest.setStage(p, 50);
+  object(54735, { definition: { id: 54728 }, location: { x: 1461, y: 9331, z: 0 }, sourceLocation: { x: 1462, y: 9331, z: 0 } });
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [1457, 9331],
+    'the theatre-side passage lands in the wine cellar beside the opposite shelf');
+  object(54735, { definition: { id: 54728 }, location: { x: 1458, y: 9331, z: 0 }, sourceLocation: { x: 1457, y: 9331, z: 0 } });
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [1462, 9331],
+    'the wine-cellar-side passage lands in the theatre cellar');
+});
+
+test('DOTI entryway pass-through crosses both entryways, including the stage side during the quest', () => {
+  const { h, p, object } = doti(); h.quest.setStage(p, 20);
+  object(54707, { location: { x: 1454, y: 2934, z: 0 }, sourceLocation: { x: 1455, y: 2934, z: 0 } });
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [1453, 2934],
+    'the stage-side entryway still passes through during the party');
+  object(54707, { location: { x: 1454, y: 2934, z: 0 }, sourceLocation: { x: 1453, y: 2934, z: 0 } });
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [1455, 2934]);
+  const before = [p.getLocation().getX(), p.getLocation().getY()];
+  object(54707, { location: { x: 1426, y: 2933, z: 0 }, sourceLocation: { x: 1427, y: 2933, z: 0 } });
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], before,
+    'the guest entrance keeps its guard dialogue during the party');
+  h.quest.setStage(p, 50);
+  object(54707, { location: { x: 1426, y: 2933, z: 0 }, sourceLocation: { x: 1425, y: 2933, z: 0 } });
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [1427, 2933],
+    'the guest entrance passes through after the quest');
+});
+
+test('DOTI guest entrance refuses before admission too', () => {
+  const { h, p, object } = doti();
+  h.quest.setStage(p, 10); p.moveTo(new core.Location(1425, 2933, 0));
+  const before = [p.getLocation().getX(), p.getLocation().getY()];
+  object(54707, { location: { x: 1426, y: 2933, z: 0 }, sourceLocation: { x: 1425, y: 2933, z: 0 } });
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], before,
+    'the guest entrance stays guarded while the quest is pre-admission');
+  assert.match(p.text, /guest|staff|entrance|invite|party/i, 'the Villa Guard refusal plays');
+
+  const fresh = doti();
+  fresh.object(54707, { location: { x: 1426, y: 2933, z: 0 }, sourceLocation: { x: 1425, y: 2933, z: 0 } });
+  assert.deepEqual([fresh.p.getLocation().getX(), fresh.p.getLocation().getY()], [1427, 2933],
+    'an unstarted quest can still use the guest entrance');
+});
+
+test('DOTI landing tiles are walkable in the cache map and the replaced tiles are not', () => {
+  const rm = core.RegionManager; rm.init();
+  const blocked = (x, y, z = 0) => rm.blocked(new core.Location(x, y, z), null);
+  for (const [x, y] of [[1445, 9337], [1450, 2934], [1472, 2926], [1457, 9331], [1462, 9331]]) {
+    assert.equal(blocked(x, y), false, `${x},${y} is a walkable landing`);
+  }
+  for (const [x, y] of [[1447, 9338], [1447, 2938], [1445, 9336]]) {
+    assert.equal(blocked(x, y), true, `${x},${y} is a blocked loc tile`);
+  }
 });
 
 test('DOTI Attack uses the staged combat method and preserves actors through their scripted moves', () => {

@@ -452,7 +452,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `EdgevilleDungeon` | EdgevilleDungeon | areas | yes | Edgeville Dungeon's brass key door and its achievement diary tasks. |
 | `EnchantedValley` | EnchantedValley | areas | yes | Enchanted Valley's trees: chopping wakes a level-scaled tree spirit instead of cutting the tree. (members only) |
 | `FeroxEnclave` | FeroxEnclave | areas | yes | Ferox Enclave: its barriers and safe ground, the Pools of Refreshment and the Clan Wars free-for-all arena behind the white portal. |
-| `ForthosDungeon` | ForthosDungeon | areas | yes | Forthos Dungeon: the Spider's Den's multi-combat room and the grubby gate's 57 Thieving unlock. (members only) |
+| `ForthosDungeon` | ForthosDungeon | areas | yes | Forthos Dungeon: the Spider's Den's multi-combat room, the grubby gate's 57 Thieving unlock and the one-way east Temple Door. (members only) |
 | `FossilBoneMachine` | FossilBoneMachine | areas | yes | Feed enriched bones into Fossil Island's strange machine for Prayer experience. (members only) |
 | `FossilIslandUnderwater` | FossilIslandUnderwater | areas | yes | Fossil Island rowboats and the sea floor dive, with an oxygen bar that drowns players lacking a fishbowl helmet and diving apparatus. (members only) |
 | `FossilStorage` | FossilStorage | areas | yes | Fossil Island Museum Camp's fossil storage crates and the cleaning bench that cleans unidentified fossils. (members only) |

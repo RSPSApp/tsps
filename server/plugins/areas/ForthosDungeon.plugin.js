@@ -24,6 +24,15 @@
  *
  * The pick animation is the one Pyramid Plunder's tomb doors already use for their own Pick-lock
  * (Passages.PyramidPlunder.js, `human_pickuptable`); no capture of this door exists.
+ *
+ * The two `Temple Door`s (34842 west, 34843 east) had no handler either, and "Temple Door" is not
+ * one of the Doors plugin's names, so Open did nothing. Wiki (Temple Door): "Upon first visiting
+ * the dungeon, only the eastern door can be opened and only in one direction: east." rsprox
+ * capture 3926 ticks 613-616: from the west tile the door swings open, the player is carried east
+ * and "The door slams shut and locks behind you." follows a tick later; the swap itself is the
+ * Doors plugin's pass-through entry, opened here through door:open. The temple key that unlocks
+ * both doors for good (Sacred Bone Burner faith) is not implemented, so the other directions stay
+ * shut. Ours: a locked click sends nothing, since no recording shows one.
  */
 
 const DOOR = 34840;
@@ -35,7 +44,13 @@ const GRUBBY_CHEST = 34901;
 /** The Spider's Den room, from its walkable floor: x, y, and the far edges. */
 const SPIDERS_DEN = Object.freeze([1828, 1850, 9946, 9970]);
 
+/** The east Temple Door, and the tick after the crossing that its message is sent on. */
+const EAST_TEMPLE_DOOR = { x: 1825, y: 9973, z: 0 };
+const SLAM_MESSAGE = "The door slams shut and locks behind you.";
+const SLAM_DELAY = 1;
+
 let core = null;
+let api = null;
 
 /** Pick-lock: 57 Thieving, 10 XP, and the player is handed across the gateway. */
 function pickLock({ player, object }) {
@@ -53,6 +68,25 @@ function pickLock({ player, object }) {
   core.Sounds.sendSound(player, core.Sound.DOOR_OPEN);
   player.getSkillManager().addExperiences(core.Skill.THIEVING, LOCK_EXPERIENCE);
   player.sendMessage("You pick the lock on the gate.");
+  return true;
+}
+
+/** Open on a Temple Door: the east one, from the west, lets the player in (one way). */
+function openTempleDoor({ player, object }) {
+  const at = object?.getLocation?.();
+  if (!at || object.getId?.() !== core.CacheDefinitions.getLocId("hosdun_east_door")
+    || at.getX() !== EAST_TEMPLE_DOOR.x || at.getY() !== EAST_TEMPLE_DOOR.y || at.getZ() !== EAST_TEMPLE_DOOR.z) return true;
+  const from = player.getLocation();
+  if (from.getX() >= at.getX() || from.getZ() !== at.getZ()) return true;
+  const request = { player, object, handled: false };
+  api.emitCustomEvent("door:open", request);
+  if (!request.handled) return true;
+  const slam = new core.Task(SLAM_DELAY, player, false);
+  slam.execute = () => {
+    slam.stop();
+    if (player.isRegistered?.() !== false) player.sendMessage(SLAM_MESSAGE);
+  };
+  core.TaskManager.submit(slam);
   return true;
 }
 
@@ -90,16 +124,18 @@ function createSpiderDen(pluginApi) {
 
 module.exports = {
   name: "ForthosDungeon",
-  description: "Forthos Dungeon: the Spider's Den's multi-combat room and the grubby gate's 57 Thieving unlock.",
+  description: "Forthos Dungeon: the Spider's Den's multi-combat room, the grubby gate's 57 Thieving unlock and the one-way east Temple Door.",
   members: true,
   _test: {
-    pickLock, routeGrubbyChest, createSpiderDen, DOOR, THIEVING_REQUIRED, LOCK_EXPERIENCE, PICK_ANIMATION,
+    pickLock, routeGrubbyChest, openTempleDoor, EAST_TEMPLE_DOOR, SLAM_MESSAGE, createSpiderDen, DOOR, THIEVING_REQUIRED, LOCK_EXPERIENCE, PICK_ANIMATION,
     GRUBBY_CHEST, SPIDERS_DEN,
   },
   register(pluginApi) {
     core = pluginApi.core;
+    api = pluginApi;
     pluginApi.onObjectRoute(routeGrubbyChest);
     pluginApi.registerArea(createSpiderDen(pluginApi));
     pluginApi.onObjectInteraction("Grubby Door", { "Pick-lock": pickLock });
+    pluginApi.onObjectInteraction("Temple Door", { Open: openTempleDoor });
   },
 };

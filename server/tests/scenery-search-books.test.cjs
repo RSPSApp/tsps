@@ -18,7 +18,7 @@ const BOOK_LINES = [
   "You find nothing to interest you.",
   "You don't find anything you'd ever want to read.",
 ];
-let core, C;
+let core, C, api;
 const ownClaims = [];
 
 before(async () => {
@@ -26,7 +26,8 @@ before(async () => {
   ObjectDefinition.init();
   core = PluginManager.getCoreApi();
   C = core.CacheDefinitions;
-  require("../plugins/objects/ScenerySearch.plugin").register(PluginManager.createApi("ScenerySearch"));
+  api = PluginManager.createApi("ScenerySearch");
+  require("../plugins/objects/ScenerySearch.plugin").register(api);
   // A plugin loaded after ScenerySearch that owns one bookcase: its handler still answers first.
   PluginManager.createApi("OwnBookcaseTest").onObjectInteraction("Bookcase", {
     Search: (event) => {
@@ -114,4 +115,38 @@ test("the plain sacks find nothing on arrival; other sacks are left alone", () =
   const dig = fixture();
   assert.equal(search(dig, "digsamplesacks"), false);
   assert.deepEqual(dig.sent, []);
+});
+
+test("Wydin's potato and cabbage crates ask on the fourth tick and Yes takes one (rsprox 233/00465)", (t) => {
+  for (const [gameval, item, many, one] of [["potato_crate", "potato", "potatoes", "potato"], ["cabbage_crate", "cabbage", "cabbages", "cabbage"]]) {
+    const f = fixture();
+    const prompts = [];
+    t.mock.method(api, "sendMultiChatboxPrompt", (_player, title, ...options) => { prompts.push({ title, options }); return true; });
+    const animations = [];
+    f.player.performAnimation = (animation) => animations.push(animation.getId());
+    assert.equal(search(f, gameval), true, gameval);
+    assert.deepEqual(f.sent, [["message", `There are a lot of ${many} in the crate.`]], "the line on arrival");
+    tick(3);
+    assert.deepEqual(prompts, [], "no question before the fourth tick");
+    tick();
+    assert.equal(prompts.length, 1);
+    assert.equal(prompts[0].title, `Do you want to take a ${one}?`);
+    prompts[0].options[1]();
+    assert.equal(f.player.getInventory().getAmount(C.getObjId(item)), 1, gameval);
+    assert.deepEqual(f.sent.at(-1), ["message", `You take a ${one}.`]);
+    assert.deepEqual(animations, [C.getSeqId("human_pickuptable")]);
+    t.mock.restoreAll();
+  }
+});
+
+// MovementQueue cancels the player's index-keyed tasks on a new walk or click.
+test("walking off before the fourth tick drops the crate's question", (t) => {
+  const f = fixture();
+  f.player.setIndex(4321);
+  const prompts = [];
+  t.mock.method(api, "sendMultiChatboxPrompt", (...args) => { prompts.push(args); return true; });
+  search(f, "potato_crate");
+  TaskManager.cancelTasks(f.player.getIndex());
+  tick(5);
+  assert.deepEqual(prompts, []);
 });

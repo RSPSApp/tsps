@@ -21,6 +21,12 @@
  * difference. The plain sacks (loc `sacks`, local 1000075, 1001339): "There's nothing
  * interesting in these sacks." on arrival.
  *
+ * Wydin's stock-room crates in Port Sarim (potato_crate, cabbage_crate), rsprox 233/00465 ticks
+ * 7190-7405: on arrival "There are a lot of potatoes in the crate."; four ticks later the chatmenu
+ * "Do you want to take a potato?" Yes./No. Yes gives one potato with "You take a potato.",
+ * human_pickuptable and synth 2582, or with a full inventory only "You do not have enough free
+ * space to take a potato." They never run out. The banana crate beside them is Pirate's Treasure's.
+ *
  * Books and sacks are fallbacks, so a quest's, area's or minigame's own bookcase still answers
  * first. Loaded after Quests so a quest's own crate or box search claims its objects first.
  */
@@ -43,13 +49,48 @@ const BOOKS_DELAY = 1;
 const BOOK_SHELVES = ["fai_varrock_shelf_books", "fai_varrock_shelves_books"];
 const SACKS_NOTHING = "There's nothing interesting in these sacks.";
 
+/** Ticks from the "lot of" line to the take question (rsprox 233/00465 ticks 7315-7319, 7398-7404). */
+const PRODUCE_PROMPT_TICKS = 4;
+const PRODUCE_CRATES = [
+  { loc: "potato_crate", item: "potato", one: "potato", many: "potatoes" },
+  { loc: "cabbage_crate", item: "cabbage", one: "cabbage", many: "cabbages" },
+];
+
 let core;
+let pluginApi;
 
 const locId = (name) => core.CacheDefinitions.getLocId(name);
 
 function searchedNothing(event) {
   const name = String(event.definition?.getName?.() ?? "").toLowerCase();
   event.player.sendMessage(`You search the ${name}, but find nothing of interest.`);
+}
+
+function produceCrateFor(objectId) {
+  return PRODUCE_CRATES.find((crate) => locId(crate.loc) === objectId);
+}
+
+function searchCrate(event) {
+  const crate = produceCrateFor(event.objectId);
+  if (!crate) return searchedNothing(event);
+  const { player } = event;
+  player.sendMessage(`There are a lot of ${crate.many} in the crate.`);
+  // Keyed to the player's index, so walking off or another click drops the question, as a re-click does live.
+  core.TaskManager.submit(new core.CountdownTask(player.getIndex(), PRODUCE_PROMPT_TICKS, () => askToTake(player, crate)));
+}
+
+function askToTake(player, crate) {
+  if (!player.isRegistered()) return;
+  pluginApi.sendMultiChatboxPrompt(player, `Do you want to take a ${crate.one}?`, "Yes.", () => takeProduce(player, crate), "No.", () => {});
+}
+
+function takeProduce(player, crate) {
+  const inventory = player.getInventory();
+  if (inventory.getFreeSlots() < 1) return void player.sendMessage(`You do not have enough free space to take a ${crate.one}.`);
+  inventory.adds(core.CacheDefinitions.getObjId(crate.item), 1);
+  player.sendMessage(`You take a ${crate.one}.`);
+  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("human_pickuptable")));
+  core.Sounds.sendSound(player, core.Sound.PICK_UP_ITEM);
 }
 
 function searchHay(event) {
@@ -114,14 +155,15 @@ function searchSacks({ objectId, player }) {
 
 module.exports = {
   name: "ScenerySearch",
-  description: "Searching haystacks and hay bales, which can hide a needle or prick you, plain crates, boxes, sacks, bookcases and book shelves, which hold nothing, and the Icyene Graveyard's mud mound, dug with a spade.",
+  description: "Searching haystacks and hay bales, which can hide a needle or prick you, plain crates, boxes, sacks, bookcases and book shelves, which hold nothing, Wydin's potato and cabbage crates in Port Sarim, which give one at a time, and the Icyene Graveyard's mud mound, dug with a spade.",
   dependsOn: ["Quests"],
   register(api) {
     core = api.core;
+    pluginApi = api;
     api.onObjectInteraction("Haystack", { Search: searchHay });
     api.onObjectInteraction("Hay bale", { Search: searchHay });
     api.onObjectInteraction("Hay bales", { Search: searchHay });
-    api.onObjectInteraction("Crate", { Search: searchedNothing });
+    api.onObjectInteraction("Crate", { Search: searchCrate });
     api.onObjectInteraction("Crates", { Search: searchedNothing });
     api.onObjectInteraction("Box", { Search: searchedNothing });
     api.onObjectInteraction("Boxes", { Search: searchedNothing });

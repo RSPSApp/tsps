@@ -34,7 +34,7 @@ function makePlayer() {
     kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
     close() {}, onData() {}, onError() {}, onClose() {},
   };
-  const player = new Player(new PlayerSession(channel), new Location(3725, 3351, 0));
+  const player = new Player(new PlayerSession(channel), new Location(3725, 3349, 0));
   player.setIndex(9950 + Math.floor(Math.random() * 40));
   player.setUsername("crombwickqa");
   player.setRegistered(true);
@@ -67,8 +67,8 @@ for (const loc of T.DOOR_LOCS) {
     assert.equal(typeof open, "function", "Open is registered on Doors");
     assert.equal(open({ player, objectId, object: { getId: () => objectId } }), true, "the click is taken");
     assert.deepEqual(sent.filter((s) => s.uid === MESSAGEBOX_TEXT).map((s) => s.text), [T.LOCKED]);
-    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3725, 3351],
-      "the player stays outside");
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3725, 3349],
+      "the player doesn't cross into the manor");
   });
 }
 

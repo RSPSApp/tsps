@@ -11,6 +11,9 @@ tick 5210 left leaf):
 
 - The player walks to the door. The tick after arrival a message box (229) says
   "The door is locked." and the player faces the door.
-- The door stays shut and the player stays outside. Nothing else is sent.
+- The door stays shut and the player doesn't cross. Nothing else is sent.
+- The recorded clicks look like they came from inside the manor (reached by Kroy's laboratory
+  ladder): `face_angle` 0 (south) at the door's north edge. Open from Slepe (south of the door)
+  gives the same box, following the Wiki's "the entrances to the manor are locked".
 
 Not covered: the inside of the manor and Kroy's laboratory ladder.

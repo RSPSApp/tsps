@@ -405,20 +405,50 @@ function seedlingLevelBox(crop) {
     return player => player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
         .add(new core.StatementDialogue(0, `You need level ${crop.level} Farming to plant that.`)));
 }
+// Any other spear (poisoned bronze ones too) is refused: Wiki, Scarecrow (trivia).
+const SPEAR_NAME = /\bspear\b(?!\s*tips)/i; // not Hunter spear tips, a component
+/**
+ * Hay sack + Bronze spear, then + Watermelon: rsprox captures (local 1000341 t12836-12849,
+ * 1846; rev 227 Leagues). Level 23 and 25 XP on the scarecrow: Wiki, Scarecrow.
+ */
+function scarecrowStep(event, names) {
+    const { player, usedItemId: a, usedWithItemId: b } = event;
+    const inventory = player.getInventory();
+    const ids = [a, b];
+    let finished;
+    if (ids.includes(core.ItemIdentifiers.HAY_SACK) && names.includes("Bronze spear")) finished = false;
+    else if (ids.includes(core.ItemIdentifiers.HAY_SACK_2) && names.includes("Watermelon")) finished = true;
+    else if (ids.includes(core.ItemIdentifiers.HAY_SACK) && names.some(name => SPEAR_NAME.test(name))) {
+        event.handled = true;
+        player.sendMessage("Waste this spear on a scarecrow? I think not - maybe I should find a bronze spear instead.");
+        return true;
+    } else return false;
+    event.handled = true;
+    // Ours: the Wiki gives the level but no refusal text, so hasLevel's generic line is used.
+    if (!Patches.hasLevel(player, Patches.SCARECROW_LEVEL, "scarecrow")) return true;
+    // Live put the result in the lower of the two used slots (local 1000341 t12837, t12849).
+    const slotOf = (id, slot) => inventory.forSlot(slot)?.getId() === id ? slot : inventory.getSlotForItemId(id);
+    const slots = [slotOf(a, event.usedItemSlot), slotOf(b, event.usedWithItemSlot)];
+    const keep = Math.min(...slots), drop = Math.max(...slots);
+    inventory.deleteAtSlot(drop);
+    inventory.forSlot(keep).setId(finished ? core.ItemIdentifiers.SCARECROW : core.ItemIdentifiers.HAY_SACK_2);
+    inventory.refreshItems();
+    if (!finished) {
+        Patches.sound(player, Patches.SCARECROW_SOUND);
+        Patches.spam(player, "You stick the bronze spear through the hay sack.");
+        return true;
+    }
+    Patches.spam(player, "You stick a watermelon on top of the hay sack.");
+    player.sendMessage("This would be ideal for scaring birds!");
+    Patches.award(player, 25);
+    return true;
+}
 function farmingItemPair(event) {
     const { player, usedItemId: a, usedWithItemId: b } = event;
     const inventory = player.getInventory();
     if (!inventory.contains(a) || !inventory.contains(b)) return;
     const names = [core.CacheDefinitions.getItem(a).name, core.CacheDefinitions.getItem(b).name];
-    if (([a, b].includes(core.ItemIdentifiers.HAY_SACK) && names.includes("Bronze spear")) || ([a, b].includes(core.ItemIdentifiers.HAY_SACK_2) && names.includes("Watermelon"))) {
-        event.handled = true;
-        if (!Patches.hasLevel(player, Patches.SCARECROW_LEVEL, "scarecrow")) return;
-        inventory.deleteNumber(a, 1); inventory.deleteNumber(b, 1);
-        const finished = names.includes("Watermelon");
-        inventory.addItem(new core.Item(finished ? Data.itemId("Scarecrow") : core.ItemIdentifiers.HAY_SACK_2));
-        if (finished) Patches.award(player, 25);
-        return;
-    }
+    if (scarecrowStep(event, names)) return;
     const crop = [...Data.CROPS.values()].find(c => c.sapling && (c.seed === a || c.seed === b));
     if (crop && (a === Data.itemId("Filled plant pot") || b === Data.itemId("Filled plant pot"))) {
         event.handled = true;

@@ -10,14 +10,21 @@ export class DesktopPlugin extends Plugin {
     };
 
     private runningVersion?: Promise<string>;
+    private showWarning?: (message: string) => void;
+    private versionCheck = 0;
 
-    async beforeWorldConnect(world: DesktopWorld): Promise<void> {
-        if (!getDesktopProfile()) return;
+    onWorldLogin(world: DesktopWorld): void {
+        const showWarning = this.showWarning;
+        if (!showWarning) return;
+        const check = ++this.versionCheck;
         this.runningVersion ??= this.loadRunningVersion();
-        const [required, running] = await Promise.all([getWorldClientVersion(world), this.runningVersion]);
-        if (required !== running) {
-            throw new Error("This world requires a different client version. Open its matching downloadable client to play.");
-        }
+        void Promise.all([getWorldClientVersion(world), this.runningVersion]).then(([required, running]) => {
+            if (check === this.versionCheck && required !== running) {
+                showWarning("This world recommends a different client build. Reopen its desktop client to load the matching build.");
+            }
+        }).catch(() => {
+            // A missing build ID or failed lookup must not interfere with login.
+        });
     }
 
     private async loadRunningVersion(): Promise<string> {
@@ -29,10 +36,11 @@ export class DesktopPlugin extends Plugin {
         return version;
     }
 
-    async clientReady(signal: AbortSignal): Promise<void> {
-        const profile = getDesktopProfile();
-        if (!profile) return;
-        await this.beforeWorldConnect(profile);
+    async clientReady(signal: AbortSignal, showWarning: (message: string) => void): Promise<void> {
+        if (!getDesktopProfile()) return;
+        this.showWarning = message => {
+            if (!signal.aborted) showWarning(message);
+        };
         // A successfully initialized frame must reach the screen before accepting an update.
         await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
         if (signal.aborted) return;

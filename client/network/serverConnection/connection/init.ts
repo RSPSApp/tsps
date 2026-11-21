@@ -1,4 +1,3 @@
-import { getSelectedWorld } from "../outgoing/connectionInfo";
 import { resetProtocolCompatibility, startWelcomeTimer, receiveProtocolGreeting, isProtocolRejected } from "../protocolCompatibility";
 import { replaceCustomDefinitions } from "../../../custom/definitions/CustomDefinitionStore";
 import { PlayerSyncContext } from "../../../game/sync/PlayerSyncContext";
@@ -78,7 +77,7 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
             ws.binaryType = "arraybuffer";
         } catch {}
 
-        ws.addEventListener("open", async () => {
+        ws.addEventListener("open", () => {
             if (state.socket !== ws) return;
 
             // Capture reconnecting state before resetting
@@ -106,23 +105,6 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
 
             // If reconnecting with stored credentials, automatically re-login
             if (wasReconnecting && state.sessionUsername && state.sessionPassword) {
-                if (state.worldConnectionGuard) {
-                    try {
-                        await state.worldConnectionGuard(getSelectedWorld());
-                    } catch (error) {
-                        if (state.socket !== ws) return;
-                        const g = window as any;
-                        g[WS_SUPPRESS_RECONNECT_KEY] = true;
-                        state.sessionUsername = null;
-                        state.sessionPassword = null;
-                        state.hasLoggedIn = false;
-                        ws.close(4003, "world connection rejected");
-                        const message = error instanceof Error ? error.message : "Could not connect to this world";
-                        for (const cb of state.loginResponseListeners) cb({ success: false, error: message });
-                        return;
-                    }
-                    if (state.socket !== ws || !state.sessionUsername || !state.sessionPassword) return;
-                }
                 console.log("[ws] Reconnected - attempting session resumption...");
                 send({
                     type: "login",

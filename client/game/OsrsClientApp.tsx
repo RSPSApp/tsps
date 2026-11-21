@@ -104,7 +104,7 @@ function OsrsClientApp() {
     const [protocolNotice, setProtocolNotice] = useState<ProtocolNotice>();
     useEffect(() => subscribeProtocolNotice(setProtocolNotice), []);
     const [osrsClient, setOsrsClient] = useState<OsrsClient>();
-    const [storageWarnings, setStorageWarnings] = useState<string[]>([]);
+    const [clientWarnings, setClientWarnings] = useState<string[]>([]);
     const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<BeforeInstallPromptEvent>();
     const [showInstallPrompt, setShowInstallPrompt] = useState(false);
     const [showIosInstallHint, setShowIosInstallHint] = useState(false);
@@ -125,8 +125,8 @@ function OsrsClientApp() {
         return () => document.removeEventListener("webglcontextlost", onContextLost, true);
     }, []);
 
-    const addStorageWarning = useCallback((message: string) => {
-        setStorageWarnings((prev) => {
+    const addClientWarning = useCallback((message: string) => {
+        setClientWarnings((prev) => {
             if (prev.includes(message)) {
                 return prev;
             }
@@ -196,8 +196,8 @@ function OsrsClientApp() {
         setClientPreference("iosInstallHintDismissed", true);
     }, []);
 
-    const dismissStorageWarnings = useCallback(() => {
-        setStorageWarnings([]);
+    const dismissClientWarnings = useCallback(() => {
+        setClientWarnings([]);
         // Avoid revealing a near-duplicate "add to home screen" banner underneath.
         setShowIosInstallHint(false);
         setClientPreference("iosInstallHintDismissed", true);
@@ -261,7 +261,7 @@ function OsrsClientApp() {
                     );
                     // Skip on iOS Safari-in-tab: the dedicated home-screen hint already covers this.
                     if (!(isIos && !isStandalone)) {
-                        addStorageWarning(
+                        addClientWarning(
                             "Persistent storage not supported in this browser. Cached assets may be cleared. Install as PWA or use a modern browser.",
                         );
                     }
@@ -295,7 +295,7 @@ function OsrsClientApp() {
                     cacheInvalidated = true;
                     await removeCacheManifestEntry(cacheInfo.name);
                     if (!new URLSearchParams(window.location.search).has("edit")) {
-                        addStorageWarning(
+                        addClientWarning(
                             "Cached RuneScape data was cleared by the browser; assets will be re-downloaded.",
                         );
                     }
@@ -384,7 +384,7 @@ function OsrsClientApp() {
             client.initCache(cache);
             client.init();
             if (client.clientPlugins.has("clientReady")) {
-                await client.clientPlugins.clientReady(abortController.signal);
+                await client.clientPlugins.clientReady(abortController.signal, addClientWarning);
                 if (disposed) return;
             }
 
@@ -459,7 +459,7 @@ function OsrsClientApp() {
             clientToDispose?.dispose();
             if (window.osrsClient === clientToDispose) window.osrsClient = undefined;
         };
-    }, [addStorageWarning, loginUnsubscribers, workerPool]);
+    }, [addClientWarning, loginUnsubscribers, workerPool]);
 
     let content: JSX.Element | undefined;
 
@@ -568,7 +568,7 @@ function OsrsClientApp() {
                 </div>
             </div>
         );
-    } else if (storageWarnings.length > 0) {
+    } else if (clientWarnings.length > 0) {
         bannerContent = (
             <div
                 style={{
@@ -583,7 +583,7 @@ function OsrsClientApp() {
                 <button
                     type="button"
                     aria-label="Close"
-                    onClick={dismissStorageWarnings}
+                    onClick={dismissClientWarnings}
                     style={{
                         position: "absolute",
                         top: 10,
@@ -599,7 +599,7 @@ function OsrsClientApp() {
                 >
                     ×
                 </button>
-                {storageWarnings.map((msg, idx) => (
+                {clientWarnings.map((msg, idx) => (
                     <p key={idx} style={{ margin: idx === 0 ? "0 28px 0 0" : "8px 28px 0 0" }}>
                         {msg}
                     </p>

@@ -18,26 +18,22 @@ async function main() {
         callback(0);
         return frames;
     };
-    let required = "a".repeat(64);
-    globalThis.fetch = async input => Response.json({ clientVersion: String(input) === "/client-release.json" ? "a".repeat(64) : required });
-    await plugins.clientReady(controller.signal);
+    globalThis.fetch = async () => { assert.fail("startup does not repeat the launcher lookup"); };
+    const showWarning = () => { assert.fail("startup must not show a build warning"); };
+    await plugins.clientReady(controller.signal, showWarning);
     assert.deepEqual(calls, [], "browser startup never invokes native commands");
     assert.equal(frames, 0, "browser startup adds no frame delay");
 
     window.__RSPS_DESKTOP_PROFILE__ = { name: "Example", address: "example.com", secure: true, maxPlayers: 2047 };
-    await plugins.clientReady(controller.signal);
+    await plugins.clientReady(controller.signal, showWarning);
     assert.deepEqual(calls, ["plugin:hot-update|notify_app_ready"]);
     assert.equal(frames, 1, "updates are acknowledged after a rendered frame");
-    required = "b".repeat(64);
-    await assert.rejects(plugins.clientReady(controller.signal), /different client version/);
-    assert.equal(calls.length, 1, "an incompatible bundle is never acknowledged");
-    required = "a".repeat(64);
     controller.abort();
-    await plugins.clientReady(controller.signal);
+    await plugins.clientReady(controller.signal, showWarning);
     assert.equal(calls.length, 1, "disposed clients cannot acknowledge updates");
 
     delete window.__TAURI__;
-    await plugins.clientReady(new AbortController().signal);
+    await plugins.clientReady(new AbortController().signal, showWarning);
     assert.equal(calls.length, 1, "a missing bridge cannot break startup");
     const failure = new Error("Native acknowledgement unavailable");
     let warning: unknown[] | undefined;
@@ -45,7 +41,7 @@ async function main() {
     console.warn = (...args) => { warning = args; };
     window.__TAURI__ = { core: { invoke: async () => { throw failure; } } };
     try {
-        await plugins.clientReady(new AbortController().signal);
+        await plugins.clientReady(new AbortController().signal, showWarning);
         assert.equal(warning?.[1], failure);
     } finally { console.warn = previousWarn; }
 }

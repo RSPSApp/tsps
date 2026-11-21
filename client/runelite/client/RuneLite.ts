@@ -1,5 +1,6 @@
 import { getDesktopProfile } from "../../config/clientEnv";
 import { DesktopPlugin } from "../../game/plugins/desktop/DesktopPlugin";
+import { getSelectedWorld } from "../../network/serverConnection/outgoing/connectionInfo";
 import { state as connectionState } from "../../network/serverConnection/state";
 import { subscribePluginMessages } from "../../network/serverConnection/domain/pluginMessages";
 import { PluginMessage } from "@runelite/api/events/PluginMessage";
@@ -160,8 +161,8 @@ export class RuneLite {
             this.client.clientPlugins.add(plugin);
         }
         const plugins = this.client.clientPlugins;
-        if (plugins.has("beforeWorldConnect")) {
-            connectionState.worldConnectionGuard = world => plugins.beforeWorldConnect(world);
+        if (plugins.has("onWorldLogin")) {
+            connectionState.onWorldLogin = () => plugins.onWorldLogin(getSelectedWorld());
         }
         // Last, so its outlines and snap corners draw over every overlay.
         this.client.clientPlugins.add(this.overlayRenderer);

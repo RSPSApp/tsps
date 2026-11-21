@@ -6,7 +6,7 @@ import { initServerConnection } from "./connection/init";
 import { send } from "./connection/send";
 import { state } from "./state";
 import type { GameSocket } from "./connection/GameSocket";
-import { getSelectedWorld, resolveServerTransport } from "./outgoing/connectionInfo";
+import { resolveServerTransport } from "./outgoing/connectionInfo";
 import { encodeClientMessage } from "../packet/ClientBinaryEncoder";
 
 export function setAutoSendHandshake(auto: boolean): void {
@@ -52,18 +52,6 @@ export async function sendLogin(
     revision: number = 0,
     flags: number = 0,
 ): Promise<void> {
-    const attemptId = ++state.loginConnectAttemptId;
-    if (state.worldConnectionGuard) {
-        try {
-            await state.worldConnectionGuard(getSelectedWorld());
-        } catch (error) {
-            if (attemptId !== state.loginConnectAttemptId) return;
-            const message = error instanceof Error ? error.message : "Could not connect to this world";
-            for (const cb of state.loginResponseListeners) cb({ success: false, error: message });
-            return;
-        }
-        if (attemptId !== state.loginConnectAttemptId) return;
-    }
     // Store credentials for session resumption on reconnect
     state.sessionUsername = username;
     state.sessionPassword = password;
@@ -71,6 +59,7 @@ export async function sendLogin(
     state.sessionLoginFlags = flags;
     state.loginExtension?.loginAttempt();
     state.loginOnWelcome = null;
+    const attemptId = ++state.loginConnectAttemptId;
     if (state.webRtcConfig && !await resolveServerTransport()) return;
     if (attemptId !== state.loginConnectAttemptId) return;
 

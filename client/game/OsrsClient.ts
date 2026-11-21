@@ -4451,10 +4451,7 @@ export class OsrsClient {
      * The World Switcher's server chosen in game. While "World Switcher confirmation" is on
      * (varbit 4100 at 0) the list asks first; then the client logs out and connects there.
      */
-    private worldSwitchAttempt = 0;
-
-    private async switchToServer(index: number, confirmed: boolean): Promise<void> {
-        const attempt = ++this.worldSwitchAttempt;
+    private switchToServer(index: number, confirmed: boolean): void {
         const server = this.loginRenderer.serverList[index];
         const transport = server?.transport ?? "websocket";
         const isCurrent =
@@ -4473,21 +4470,8 @@ export class OsrsClient {
             return;
         }
 
-        if (!server) return;
-        if (this.clientPlugins.has("beforeWorldConnect")) {
-            try {
-                await this.clientPlugins.beforeWorldConnect(server);
-            } catch (error) {
-                if (attempt !== this.worldSwitchAttempt) return;
-                this.addGameMessage(error instanceof Error ? error.message : "Could not connect to this world");
-                return;
-            }
-            if (attempt !== this.worldSwitchAttempt) return;
-        }
-        const currentIndex = this.loginRenderer.serverList.indexOf(server);
-        if (currentIndex < 0) return;
         this.loginState.serverListOpen = false;
-        this.performLogout(() => this.processLoginAction({ type: "select_server", index: currentIndex }));
+        this.performLogout(() => this.processLoginAction({ type: "select_server", index }));
     }
 
     runClientScriptWithInts(scriptId: number, args: number[]): void {

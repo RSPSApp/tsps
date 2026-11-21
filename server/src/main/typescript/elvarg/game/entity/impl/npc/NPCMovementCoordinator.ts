@@ -88,8 +88,10 @@ export class NPCMovementCoordinator {
 
     public updateCoordinator() {
         if (CombatFactory.inCombat(this.npc)) {
+            // Walking home after a fight ended is not a retreat: one attacked on the way fights
+            // back (#6297). A retreat (shouldRetreat) is still walked out to the spawn.
             if (this.coordinateState == CoordinateState.AWAY) {
-                this.coordinateState = CoordinateState.RETREATING;
+                this.coordinateState = CoordinateState.HOME;
             }
             if (this.coordinateState == CoordinateState.RETREATING) {
                 if (this.npc.getLocation().equals(this.npc.getSpawnPosition())) {

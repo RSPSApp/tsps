@@ -1076,29 +1076,24 @@ test('TP ending: below The Heart of Darkness requirements Itzla says "Timoiva fo
   }
 });
 
-test('TP battle: the scripted spar keeps real NPC.process() from regenerating the cultist', () => {
+test('TP battle: real NPC.process() does not heal the spar damage back between swings', () => {
   const npc = new core.NPC(12923, new core.Location(1438, 3172, 0));
   npc.__skipDefaultRespawn = true;
   const cycle = core.World.getProcessCycle();
   try {
     assert.equal(npc.getMaxHitpoints(), 25, 'the real cache cultist has 25 hitpoints');
     // What sparHit() does to both fighters after each exchange, four ticks apart.
+    // sparHit() gives neither fighter a combat target; NPC regeneration is 1 hitpoint per
+    // 100 ticks whatever the NPC is doing (#6297), so a spar's damage stays.
     npc.setHitpoints(23);
-    core.World.processCycle = 100;
-    npc.getCombat().getLastAttack().reset();
-    for (let tick = 1; tick <= 40; tick++) {
+    for (let tick = 1; tick <= 99; tick++) {
       core.World.processCycle = 100 + tick;
-      if (tick % 4 === 0) npc.getCombat().getLastAttack().reset();
       npc.process();
     }
-    assert.equal(npc.getHitpoints(), 23, 'real out-of-combat regeneration never starts while the pair fights');
-    // Control: the same processing heals it once the combat stopwatch is stale.
-    npc.setHitpoints(23);
-    core.World.processCycle = 100;
-    npc.getCombat().getLastAttack().reset();
-    core.World.processCycle = 140;
+    assert.equal(npc.getHitpoints(), 23, 'no healing inside the 100-tick regen interval');
+    core.World.processCycle = 200;
     npc.process();
-    assert.equal(npc.getHitpoints(), 25, 'the production regeneration path is still live');
+    assert.equal(npc.getHitpoints(), 24, 'one hitpoint on the 100th tick');
   } finally {
     core.World.processCycle = cycle;
   }

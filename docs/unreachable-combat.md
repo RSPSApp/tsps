@@ -34,7 +34,7 @@ releases either, so it never sleeps (`DormantNpcs`) and stays in the active-regi
 
 ## The rule
 
-`Combat.giveUpUnreachableTarget` runs in `preMovementProcess` on every cycle spent out of reach and
+`Combat.giveUpUnreachableTarget` (players only since #6297, see Safespots below) runs in `preMovementProcess` on every cycle spent out of reach and
 counts the cycles in which the actor **got nowhere**: it closed no distance *and* took no step.
 Either one is progress. Closing the gap counts whoever closes it, so a fighter walking its target
 down, or being walked down, keeps its interaction; so does a step the mover actually accepted,
@@ -58,23 +58,34 @@ what the route finder can see: an NPC whose step the *map* refuses is released b
 bounds the case that path deliberately exempts - a pursuit blocked by another *entity*, invisible to
 the pathfinder, which keeps its checkpoint so the queue never empties.
 
-## Safespots (#1952)
+## Safespots (#1952, #6297)
 
-Both NPC releases above have one exception: an NPC whose target is **fighting it** keeps that
-target (`Combat.isSafespotted`). Fighting it means the target's own combat target is the NPC, or
-the target hit it within the attacker window (6 s). That is a safespot - a player shooting or
-casting over an obstacle the NPC can't walk round - and live keeps such an NPC facing its target
-and trying its step every cycle. Dropping it on the first refused step made it reset, walk home
-and come back between the player's hits ("NPCs lose aggro when safespotting").
+Neither release applies to an NPC any more. An NPC whose step the map refuses, or that gets
+nowhere for 20 cycles, keeps its target and keeps facing it and trying its step: only the
+aggression range lets it go (`Combat.shouldRetreat`), the target standing more than max range +
+attack range from the NPC's spawn (Wiki: Aggressiveness, Retreat). #1952 had kept the target
+only while it was fighting the NPC (its combat target was the NPC, or it hit it within the PJ
+window), so a player stepping into a safespot, eating or switching for more than 8 ticks reset
+the NPC; #6297 drops that condition. The 20-cycle deadline is the player's alone.
 
-A target that stops fighting is let go as before, so nothing is held in combat by an engagement
-neither side is pursuing; the dormancy and `inCombat` concerns above are unchanged.
+Two things that made the reset costly changed with it:
 
-`tests/safespot-combat.test.cjs` runs both halves on the real map with a walk-only wall (projectiles
-pass), plus the player side of the same report: a spell cast by hand with an autocast spell
-remembered but no staff (Entrana, the Tree spirit) cast once and then fell back to melee, which
-walked the player round the obstacle. `Autocasting.isActive` (a spell and a staff) now decides
-whether combat carries on after a cast.
+- **Hitpoints regenerate 1 per 100 ticks** (`NPC.process`), on a clock that runs whatever the
+  NPC is doing. The old rule healed 10% of max hitpoints *every tick* while it walked home, and
+  every tick once 20 s passed without damage, so a reset NPC was back to full in 6 s. The Wiki
+  only says "All monsters will recover hitpoints fairly slowly" (Monster); the 100-tick interval
+  is the LostCity engine's default NPC regen rate (an RSPS reference, not live evidence), and the
+  rate drained stats already use here.
+- **An NPC walking home after its fight (`AWAY`) fights back** when attacked
+  (`CombatFactory` retaliation, `NPCMovementCoordinator.updateCoordinator`); it used to turn that
+  into a retreat and ignore hits until it reached its spawn. A real retreat (`RETREATING`, the
+  target out of range) is still walked out.
+
+`tests/safespot-combat.test.cjs` runs these on the real map with a walk-only wall (projectiles
+pass), plus the player side of #1952: a spell cast by hand with an autocast spell remembered but
+no staff (Entrana, the Tree spirit) cast once and then fell back to melee, which walked the player
+round the obstacle. `Autocasting.isActive` (a spell and a staff) decides whether combat carries on
+after a cast.
 
 ## Sources
 

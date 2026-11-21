@@ -29945,22 +29945,23 @@
           ],
           "devNotes": [
             "Implemented in server/plugins/bosses/KingBlackDragon.plugin.js: melee (anim 91) and four dragonfire breaths (dragon/ice/poison/shock, projectiles 393/396/394/395) with prayer and dragon-protection gear reduction.",
-            "Ladder object 18987 moves the player into the lair at 2271,4680; registered for all three KBD ids.",
+            "Ladder object 18987 moved the player into the lair at 2271,4680 (superseded 2026-11-20, see below); registered for all three KBD ids.",
             "Status done; the 25 base breath / protection deltas are plugin constants derived from the wiki.",
             "Main 8403b60db (4 November 2026): #1960 — The merged Wiki/recording audit corrects the relevant fight behavior; findings, sources and remaining inferred values are listed in docs/audits/boss-fights*.md. Existing access/fidelity gaps are not promoted by attack-specific fixes.",
             "Main 3b61a15a8 (6 November 2026): #2191 Fix worn DFS and tentacle options unequipping the item (#2165); #2218 Fire Wilderness Diary tasks that never completed. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4344 Poison sources: pass severity (hit x 5) to poisonEntity."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4344 Poison sources: pass severity (hit x 5) to poisonEntity.",
+            "2026-11-20, branch fix/kbd-lair-entrance: the Lava Maze ladder (18987) now climbs down to the poison spider room (3069,10255) instead of straight into the lair; its lever (1816) teleports into the lair (2271,4680), the lair lever (1817) back beside it (3067,10254), and the room ladder (18988) up to the Lava Maze (3016,3849). The Wilderness Diary lair-entry credit and the Leagues echo orb prompt move to the lever. Wiki (King Black Dragon Lair, Lava Maze Dungeon), route videos and rsprox_transcripts/242/900155.txt (the entrance lever: its pull, down loc, cast, landing, diary credit and spam lines \"You pull the lever...\" / \"... and teleport into the Dragon's lair.\"); landing tiles from the Shortest Path transports. The lair lever is uncaptured: it sends the pull line every captured lever sends and no landing line. Verified by server/tests/kbd-lair-arrival.test.cjs. The lever Commune and Private (50,000-coin instance) options remain unimplemented; docs/king-black-dragon.md."
           ],
           "taskDetails": [
             {
               "name": "Implement access and encounter setup",
               "steps": [
-                "Entry is the KBD lair ladder (object 18987) via onObjectFirstClick; the lair itself is not instanced.",
+                "Entry is the Lava Maze ladder (object 18987) down to the poison spider room, then its lever (object 1816) into the lair; the lair lever (1817) and room ladder (18988) lead back out. The lair itself is not instanced.",
                 "Confirm the three registered ids (KING_BLACK_DRAGON/2/3) match npc-spawns/definitions.",
                 "No quest/slayer requirement for the lair entry itself."
               ],
               "acceptanceCriteria": [
-                "Ladder click lands the player in the lair.",
+                "The ladder lands the player in the spider room; the lever lands them in the lair.",
                 "All id variants use the same method."
               ],
               "refs": [

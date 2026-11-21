@@ -1,8 +1,13 @@
 // Run after `yarn build`: node --test tests/kbd-lair-arrival.test.cjs
-// The easy Wilderness Diary's "Enter the King Black Dragon's lair." is credited when the climb lands,
-// not when the ladder is clicked. Real Player, Location, movement queue and Task; the real KBD hook and
-// Ladders plugin, wired through one shared custom-event bus; the Task manager is stepped by hand.
+// The way into the King Black Dragon's lair (Wiki: King Black Dragon Lair, Lava Maze Dungeon): the Lava
+// Maze ladder climbs down to the poison spider room, whose lever teleports into the lair; the lair's lever
+// teleports back beside it, and the spider room's ladder climbs back up. The easy Wilderness Diary's
+// "Enter the King Black Dragon's lair." is credited when the lever's teleport lands. Real Player, Location,
+// movement queue and Task; the real KBD hooks and Ladders plugin, wired through one shared custom-event
+// bus; the Task manager is stepped by hand. The lever's teleport (Levers.plugin.js, covered in
+// wilderness-levers.test.cjs) is recorded here, and lands when the test says so.
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const { test } = require("node:test");
 
 const { Server } = require("../dist/Server");
@@ -11,8 +16,15 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Location } = require("../dist/game/model/Location");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 
-const LADDER_OBJECT = 18987;
-const TASK = "enter-the-king-black-dragon-s-lair";
+const LADDER_DOWN = 18987; // wildymirrorladdertop1, Lava Maze
+const LADDER_UP = 18988; // wildymirrorladder1, spider room
+const ENTRANCE_LEVER = 1816; // dragonkinginlever, spider room
+const LAIR_LEVER = 1817; // dragonkingoutlever, lair
+const TASK = "wilderness:enter-the-king-black-dragon-s-lair";
+const LAVA_MAZE = [3017, 3850, 0];
+const LAVA_MAZE_LANDING = [3016, 3849, 0];
+const SPIDER_ROOM = [3069, 10255, 0];
+const BY_ENTRANCE_LEVER = [3067, 10254, 0];
 const LAIR = [2271, 4680, 0];
 
 const tasks = [];
@@ -31,68 +43,152 @@ function tick(count = 1) {
 const clicks = new Map();
 const listeners = new Map();
 const diary = [];
+const leverTeleports = [];
+const echoEntries = [];
+let echoTakesEntry = false;
 const api = new Proxy({
   core: PluginManager.getCoreApi(),
   getTaskManager: () => taskManager,
   onObjectFirstClick: (id, handler) => clicks.set(id, handler),
   onCustomEvent: (name, handler) => listeners.set(name, [...(listeners.get(name) ?? []), handler]),
   emitCustomEvent: (name, payload) => {
-    if (name === "diary:task") diary.push([payload.player, payload.diary, payload.task]);
+    if (name === "diary:task") diary.push([payload.player, `${payload.diary}:${payload.task}`]);
+    if (name === "lever:teleport") leverTeleports.push(payload);
+    if (name === "echo-boss:entry") {
+      echoEntries.push(payload);
+      if (echoTakesEntry) payload.handled = true;
+    }
     for (const handler of listeners.get(name) ?? []) handler(payload);
   },
 }, { get: (target, key) => target[key] ?? (() => {}) });
 require("../plugins/objects/Ladders.plugin").register(api);
 require("../plugins/bosses/KingBlackDragon.plugin").register(api);
 
-function lavaMazePlayer() {
+function playerAt(tile) {
   const player = new Player(null);
   const sender = new Proxy({}, { get: (target, key) => target[key] ?? (() => sender) });
   player.getPacketSender = () => sender;
   player.setUsername(`kbd${Math.random()}`.slice(0, 12));
   player.setRegistered(true);
-  player.setLocation(new Location(3017, 3850, 0));
+  player.setLocation(new Location(...tile));
   player.setHitpoints(10);
   return player;
 }
-const tile = (player) => [player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()];
-const creditedTo = (player) => diary.filter(([who]) => who === player).map(([, name, task]) => `${name}:${task}`);
-
-test("the climb into the lair credits the diary on arrival, not on the click", () => {
+const at = (player) => [player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()];
+const tileOf = (location) => [location.getX(), location.getY(), location.getZ()];
+const creditedTo = (player) => diary.filter(([who]) => who === player).map(([, task]) => task);
+function reset() {
   diary.length = 0;
-  const player = lavaMazePlayer();
-  clicks.get(LADDER_OBJECT)({ player });
-  assert.deepEqual(tile(player), [3017, 3850, 0], "still at the ladder when the click returns");
-  assert.deepEqual(creditedTo(player), [], "not credited before the climb lands");
+  leverTeleports.length = 0;
+  echoEntries.length = 0;
+  echoTakesEntry = false;
+}
+
+test("the Lava Maze ladder climbs down to the spider room, not into the lair", () => {
+  reset();
+  const player = playerAt(LAVA_MAZE);
+  assert.equal(clicks.get(LADDER_DOWN)({ player }), true);
+  assert.deepEqual(at(player), LAVA_MAZE, "still at the ladder when the click returns");
   tick(3);
-  assert.deepEqual(tile(player), LAIR, "the climb lands in the lair");
-  assert.deepEqual(creditedTo(player), [`wilderness:${TASK}`], "credited once, at arrival");
-  tick(3);
-  assert.equal(creditedTo(player).length, 1, "and not again");
+  assert.deepEqual(at(player), SPIDER_ROOM, "the climb lands in the spider room");
+  assert.deepEqual(creditedTo(player), [], "the spider room is not the lair: no diary credit");
+  assert.deepEqual(echoEntries, [], "the ladder asks nothing of an echo orb holder");
 });
 
-test("a climb cancelled by death before landing never credits the diary", () => {
-  diary.length = 0;
-  const player = lavaMazePlayer();
-  clicks.get(LADDER_OBJECT)({ player });
-  player.setHitpoints(0);
-  tick(6);
-  assert.deepEqual(tile(player), [3017, 3850, 0], "the dead player did not enter the lair");
-  assert.deepEqual(creditedTo(player), [], "never credited");
+test("the spider room's ladder climbs back up to the Lava Maze", () => {
+  reset();
+  const player = playerAt(SPIDER_ROOM);
+  assert.equal(clicks.get(LADDER_UP)({ player }), true);
+  tick(3);
+  assert.deepEqual(at(player), LAVA_MAZE_LANDING);
 });
 
-test("a refused climb (movement blocked) never credits the diary", () => {
-  diary.length = 0;
-  const player = lavaMazePlayer();
+test("a refused climb (movement blocked) goes nowhere", () => {
+  reset();
+  const player = playerAt(LAVA_MAZE);
   player.getMovementQueue().setBlockMovement(true);
-  clicks.get(LADDER_OBJECT)({ player });
+  clicks.get(LADDER_DOWN)({ player });
   tick(6);
-  assert.deepEqual(tile(player), [3017, 3850, 0], "the player did not move");
-  assert.deepEqual(creditedTo(player), [], "never credited");
+  assert.deepEqual(at(player), LAVA_MAZE);
 });
 
-test("the lair's lever leads out and credits nothing", () => {
-  diary.length = 0;
-  const player = lavaMazePlayer();
-  assert.equal(clicks.get(1817)({ player }), true);
+test("the spider room's lever teleports into the lair and credits the diary on landing", () => {
+  reset();
+  const player = playerAt(BY_ENTRANCE_LEVER);
+  assert.equal(clicks.get(ENTRANCE_LEVER)({ player }), true);
+  assert.equal(echoEntries.length, 1, "an echo orb holder is asked at the lever");
+  assert.equal(leverTeleports.length, 1, "the lever's teleport");
+  const [teleport] = leverTeleports;
+  assert.equal(teleport.player, player);
+  assert.deepEqual(tileOf(teleport.destination), LAIR);
+  // rsprox_transcripts/242/900155.txt: spam on the pull (tick 1109) and on landing (1114).
+  assert.deepEqual([teleport.message, teleport.landed],
+    [{ spam: "You pull the lever..." }, { spam: "... and teleport into the Dragon's lair." }], "the recorded lines");
+  assert.deepEqual(creditedTo(player), [], "not credited before the teleport lands");
+  teleport.onArrival();
+  assert.deepEqual(creditedTo(player), [TASK], "credited once the teleport lands");
+});
+
+test("an echo orb holder who takes the Echo fight is not teleported by the lever", () => {
+  reset();
+  echoTakesEntry = true;
+  const player = playerAt(BY_ENTRANCE_LEVER);
+  clicks.get(ENTRANCE_LEVER)({ player });
+  assert.equal(echoEntries.length, 1);
+  assert.equal(echoEntries[0].boss, "king-black-dragon");
+  assert.deepEqual(leverTeleports, [], "the Echo entry handles it");
+  echoEntries[0].enter();
+  assert.deepEqual(tileOf(leverTeleports[0].destination), LAIR, "its normal-fight choice is the lever's teleport");
+});
+
+test("the lair's lever teleports back beside the spider room's lever and credits nothing", () => {
+  reset();
+  const player = playerAt(LAIR);
+  assert.equal(clicks.get(LAIR_LEVER)({ player }), true);
+  assert.equal(leverTeleports.length, 1);
+  assert.deepEqual(tileOf(leverTeleports[0].destination), BY_ENTRANCE_LEVER);
+  assert.deepEqual([leverTeleports[0].message, leverTeleports[0].landed ?? null], [{ spam: "You pull the lever..." }, null],
+    "every captured lever's pull line; no capture records a line on this landing");
+  assert.equal(leverTeleports[0].onArrival, undefined);
   assert.deepEqual(diary, []);
+});
+
+// Review of #6404: with the echo orb prompt open, another player pulls the spider room's lever; it is
+// down (ikov_leverdown in its place) when this player answers "Yes.". The Echo entry must not go
+// through without the lever (a plain teleport, no pull, no lines): as for a click on the down loc,
+// nothing happens. The real cache map's lever, swapped as Levers' pull swaps it.
+test("an echo orb \"Yes.\" while another player's pull has the lever down does nothing", async () => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  const { ObjectManager } = require("../dist/game/entity/impl/object/ObjectManager");
+  const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  RegionManager.init();
+  RegionManager.loadMapFiles(3067, 10253, true);
+  const tile = new Location(3067, 10253, 0);
+  const lever = MapObjects.get(ENTRANCE_LEVER, tile, null);
+  assert.ok(lever, "the map's lever at 3067,10253");
+  const startEcho = (player) => {
+    const request = { player, boss: "king-black-dragon", handled: false };
+    for (const handler of listeners.get("echo-boss:start") ?? []) handler(request);
+    return request;
+  };
+  reset();
+  const player = playerAt(BY_ENTRANCE_LEVER);
+  const down = new GameObject(88, tile.clone(), lever.getType(), lever.getFace(), null);
+  ObjectManager.replaceInPlace(lever, down);
+  try {
+    assert.equal(MapObjects.get(ENTRANCE_LEVER, tile, null), null, "the other player's pull has it down");
+    assert.equal(startEcho(player).handled, true, "the answer is taken (no placeholder line)");
+    assert.deepEqual(leverTeleports, [], "no teleport, plain or pulled, while the lever is down");
+  } finally {
+    ObjectManager.replaceInPlace(down, lever);
+  }
+  startEcho(player);
+  assert.equal(leverTeleports.length, 1, "once it is back up, Yes pulls it");
+  assert.equal(leverTeleports[0].object?.getId(), ENTRANCE_LEVER, "the map's own lever, with its pull");
+  assert.deepEqual([leverTeleports[0].message, leverTeleports[0].landed],
+    [{ spam: "You pull the lever..." }, { spam: "... and teleport into the Dragon's lair." }]);
+  assert.deepEqual(tileOf(leverTeleports[0].destination), LAIR);
 });

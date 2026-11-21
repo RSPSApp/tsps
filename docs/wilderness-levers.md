@@ -14,7 +14,10 @@ Wilderness, by loc gameval:
 
 The Mage Arena's own pair (`magearena_lever_in`/`_out`) is in
 `plugins/minigames/magearena/Levers.MageArena.js`. Other plugins can still teleport without a
-lever's pull through the `lever:teleport` event.
+lever's pull through the `lever:teleport` event. Given the pulled lever as `object` (and its down
+loc's gameval as `down`, `ikov_leverdown` by default), the event plays the captured pull below for
+that lever instead, with the lines the caller gives (`message` on the pull, `landed` on landing; none
+otherwise); the King Black Dragon's levers use it ([king-black-dragon.md](king-black-dragon.md)).
 
 ## A pull, as captured
 
@@ -37,6 +40,16 @@ The down loc is `ikov_leverdown` for the Edgeville and Keep levers (1444) and
 models, so the East Ardougne lever (no recording) uses `ikov_leverdown`. Bystanders see it come
 back up four ticks after it went down (1487, 1506, 1630, 454). It comes back up even when the pull
 is cut short.
+
+From the pull until the landing (varbit `busy`'s span), the player is held as any teleport holds
+them (`TeleportHandler.teleport`): their fight stops at the pull, and nothing attacks them nor do they
+attack anything, auto-retaliate included. A pull cut short lets them go.
+
+A main-world lever pulled from inside a private area (the King Black Dragon's lair lever, in an
+Echo lair) goes down there, as a copy in that area: a private area is sent nothing of the main
+world's locs, and the lever outside stays up. A player who saw a main-world lever go down and is in a
+private area when it comes back up has it put back up when they come out (`ObjectManager`), as for a
+player who was out of sight of it.
 
 The usual teleport checks (teleblock) run before the pull, unchanged.
 
@@ -71,5 +84,5 @@ Ardougne Lever to teleport to the Wilderness." and, as from Edgeville, sets the 
 ## Not covered
 
 - The Keep lever's Edgeville tile: no recording shows it; it keeps the tile this server used before.
-- Swap-options (no recording of what it sends), the High Risk world warning, and the King Black
-  Dragon lair lever (no recording).
+- Swap-options (no recording of what it sends) and the High Risk world warning. The King Black
+  Dragon's levers are in [king-black-dragon.md](king-black-dragon.md).

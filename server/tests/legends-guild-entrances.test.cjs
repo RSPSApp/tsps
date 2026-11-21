@@ -71,7 +71,10 @@ function tick(f, count) {
     core.World.processCycle++;
     core.TaskManager.process();
     f.c.processTurnPackets();
-    f.p.getMovementQueue().process();
+    const q = f.p.getMovementQueue();
+    q.beginCycle();
+    q.processEntityPursuit();
+    if (q.hasPendingWork()) q.process();
     core.TaskManager.processWalkTo(f.p.getIndex());
     f.p.resetUpdating();
   }
@@ -137,4 +140,32 @@ test("without the quest points and prerequisite quests the gate stays shut", asy
   assert.deepEqual(where(f), [2729, 3349]);
   assert.ok(f.messages.some((m) => m.includes("107 quest points")), f.messages.join(" | "));
   assert.deepEqual(shown(f), []);
+});
+
+test("talking to a guard plays the two shouts unclicked, two ticks apart, then waits on Welcome", async (t) => {
+  const f = actor(t, [2730, 3349], true);
+  const guard = core.NPC.create(3951, new core.Location(2731, 3349, 0));
+  const listed = core.World.getPlayers().add(f.p);
+  // The test has no NPC-update cycle, so the guard is put in the player's view by hand.
+  t.mock.method(f.p, "getLocalNpcs", () => [guard]);
+  assert.equal(core.World.getNpcs().add(guard), true);
+  t.after(() => { core.World.getNpcs().remove(guard); if (listed) core.World.getPlayers().remove(f.p); });
+  const said = [];
+  t.mock.method(guard, "forceChat", (text) => { said.push([f.n, text]); });
+  const lines = [];
+  const sender = f.p.getPacketSender();
+  t.mock.method(sender, "sendString", (text, uid) => { if (uid >> 16 === 231 && (uid & 0xffff) !== 4) lines.push([f.n, uid & 0xffff, text]); return sender; });
+  await f.c.dispatch([{ type: "npc_option", index: guard.getIndex(), clickType: 1 }]);
+  tick(f, 8);
+  const texts = lines.filter(([, c]) => c === 6).map(([n, , s]) => [n, s.replace(/<br>/g, " ")]);
+  assert.deepEqual(texts.map(([, s]) => s), ["! ! ! Attention ! ! !", "Legends' Guild Member Approaching!", "Welcome Sir! I hope you enjoy your time in the Legends' Guild."]);
+  assert.deepEqual(said.map(([, s]) => s), ["! ! ! Attention ! ! !", "Legends' Guild Member Approaching!"]);
+  assert.equal(texts[1][0] - texts[0][0], 2);
+  assert.equal(texts[2][0] - texts[1][0], 2);
+  assert.equal(said[0][0], texts[0][0], "chatbox and overhead on the same tick");
+  // The held line writes the button and blanks it on the same tick: what counts is its last value.
+  const byTick = new Map();
+  for (const [n, c, s] of lines) if (c === 5) byTick.set(n, s);
+  const continues = [...byTick.values()];
+  assert.deepEqual(continues, ["", "", "Click here to continue"]);
 });

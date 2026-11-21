@@ -10,6 +10,10 @@
  *  - Manhole at 3237,3458 > Open/Close: swap the closed (881) and open (882) locs.
  *  - Manhole > Climb-down: sewer landing at 3237,9858; the sewer Ladder > Climb-up
  *    returns to the manhole.
+ *  - The West Bank's locked back Door (fai_varrock_bank_locked_door, 3186,3446) > Knock-at: the
+ *    player's "I don't think I'm ever going to be allowed in there.", "Knock knock...", the
+ *    Banker's "Who's there?" and five knock-knock answers (rsprox.net rec 3213 ticks 4464-5070,
+ *    five knocks, each answer once). The door never opens.
  *
  * Wizards' Tower basement (a y+6400 dungeon, so the generic Ladders plugin can't
  * link it): the ground-floor Ladder at 3104,3162 climbs down to the basement
@@ -39,6 +43,25 @@ const EDGEVILLE_DUNGEON_LANDING = { x: 3096, y: 9867, z: 0 };
 // Varrock
 const VARROCK_MANHOLE = { x: 3237, y: 3458, z: 0 };
 const VARROCK_SEWER_LADDER = { x: 3237, y: 9858, z: 0 };
+const VARROCK_BANK_LOCKED_DOOR = "fai_varrock_bank_locked_door";
+const VARROCK_BANK_DOOR_LINE = "I don't think I'm ever going to be allowed in there.";
+const VARROCK_BANK_DOOR = {
+  banker: 8666, // varrock_bank_doorguard
+  knock: "<col=000080>Knock knock...",
+  knockSound: 1735,
+  knockTicks: 2,
+  title: "What would you like to say?",
+};
+// Chathead seqs: chatbored1, chathap1, chatshifty1, chatlaugh1, chatquiz1, chatang1, chatang2, chatcon1.
+const CHAT = { BORED: 562, HAPPY: 567, SHIFTY: 592, LAUGH: 605, QUIZ: 554, ANGRY: 614, ANGRIER: 615, CONFUSED: 575 };
+// The five answers to "Who's there?" (rec 3213: each one picked once).
+const VARROCK_BANK_DOOR_JOKES = [
+  (name) => [["player", `I'm ${name}. Please let me in.`, CHAT.HAPPY], ["banker", "No. Staff only beyond this point. You can't come in here.", CHAT.ANGRIER]],
+  () => [["player", "Boo.", CHAT.SHIFTY], ["banker", "Boo who?", CHAT.QUIZ], ["player", "There's no need to cry!", CHAT.LAUGH], ["banker", "What? I'm not... oh, just go away!", CHAT.CONFUSED]],
+  () => [["player", "Kanga.", CHAT.SHIFTY], ["banker", "Kanga who?", CHAT.QUIZ], ["player", "No, 'kangaroo'.", CHAT.LAUGH], ["banker", "Stop messing about and go away!", CHAT.ANGRY]],
+  () => [["player", "Thank.", CHAT.SHIFTY], ["banker", "Thank who?", CHAT.QUIZ], ["player", "You're welcome!", CHAT.LAUGH], ["banker", "Stop it!", CHAT.ANGRY]],
+  () => [["player", "Doctor.", CHAT.SHIFTY], ["banker", "Doctor wh.. hang on, I'm not falling for that one again! Go away.", CHAT.ANGRIER]],
+];
 
 const INTRO = "There's a large selection of books, the majority of which look fairly<br>old. Some very strange names... You pick one at random :";
 // The Wiki gives different spellings for the ground-floor library and Traiborn's room.
@@ -320,6 +343,42 @@ function swampCaveMarkerRoute(event) {
   else event.approachRange = SWAMP_CAVE_MARKER_RANGE;
 }
 
+// Varrock West Bank: the locked back door (rec 3213 ticks 4464-5070, five knocks). The player's
+// line, a "Knock knock..." box with no Continue for two ticks, "Who's there?" from the Banker
+// (8666, spawned behind the door), then five answers that each end with him sending the player
+// away. The door never opens.
+function knockVarrockBankDoor({ player, objectId }) {
+  if (objectId !== CacheDefinitions.getLocId(VARROCK_BANK_LOCKED_DOOR)) return false;
+  const { DialogueChainBuilder, PlayerDialogue, NpcDialogue, OptionDialogue, ActionDialogue, StatementDialogue, Task, TaskManager } = pluginApi.core;
+  const dialogues = player.getDialogueManager();
+  const knock = new ActionDialogue(1, { execute: () => {
+    StatementDialogue.send(player, VARROCK_BANK_DOOR.knock, false);
+    player.getPacketSender().sendSound(VARROCK_BANK_DOOR.knockSound, 1, 0);
+    const task = new Task(VARROCK_BANK_DOOR.knockTicks, player);
+    task.execute = () => {
+      task.stop();
+      if (dialogues.getCurrent() === knock) dialogues.startDialogue(2);
+    };
+    TaskManager.submit(task);
+  } }, true);
+  const answer = (option) => {
+    const lines = VARROCK_BANK_DOOR_JOKES[Number(option) - 1]?.(player.getDisplayName());
+    if (!lines) return;
+    dialogues.startDialogues(new DialogueChainBuilder().add(...lines.map(([who, text, anim], i) => who === "player"
+      ? new PlayerDialogue(i, text, anim)
+      : new NpcDialogue(i, VARROCK_BANK_DOOR.banker, text, "Banker", anim))));
+  };
+  const name = player.getDisplayName();
+  dialogues.startDialogues(new DialogueChainBuilder().add(
+    new PlayerDialogue(0, VARROCK_BANK_DOOR_LINE, CHAT.BORED),
+    knock,
+    new NpcDialogue(2, VARROCK_BANK_DOOR.banker, "Who's there?", "Banker", CHAT.ANGRY),
+    new OptionDialogue(3, { executeOption: answer },
+      `I'm ${name}. Please let me in.`, "Boo.", "Kanga.", "Thank.", "Doctor.").setTitle(VARROCK_BANK_DOOR.title),
+  ));
+  return true;
+}
+
 // Lumbridge Swamp Caves: a cave goblin marker's picture.
 function lookAtSwampCaveMarker(event) {
   const { player, objectId } = event;
@@ -337,7 +396,7 @@ function lookAtSwampCaveMarker(event) {
 
 module.exports = {
   name: "Misthalin",
-  description: "Misthalin area interactions: the Edgeville dungeon ladder and trapdoor, Varrock's manhole to the sewers, the Wizards' Tower basement, and the Lumbridge Swamp Caves dark hole and wall markers.",
+  description: "Misthalin area interactions: the Edgeville dungeon ladder and trapdoor, Varrock's manhole to the sewers and the West Bank's locked back door, the Wizards' Tower basement, and the Lumbridge Swamp Caves dark hole and wall markers.",
   register(api) {
     initialize(api);
     // Edgeville
@@ -351,6 +410,7 @@ module.exports = {
     });
     api.onObjectInteraction("Ladder", { "Climb-up": varrockClimbUpToManhole });
     api.onObjectInteraction("Bookcase", { Search: searchBooks });
+    api.onObjectInteraction("Door", { "Knock-at": knockVarrockBankDoor });
     // Wizards tower basement
     api.onObjectInteraction("Ladder", {
       "Climb-down": wizardsTowerClimbDown,
@@ -364,5 +424,5 @@ module.exports = {
     api.onObjectRoute(swampCaveMarkerRoute);
     api.onObjectInteraction("Symbol", { "Look-at": lookAtSwampCaveMarker });
   },
-  _test: { swampCavesLanding, lookAtSwampCaveMarker, swampCaveMarkerRoute, SWAMP_CAVE_MARKER_RANGE, SWAMP_CAVE_ROPED_ATTRIBUTE, SWAMP_CAVE_ROPED_VARBIT },
+  _test: { knockVarrockBankDoor, VARROCK_BANK_DOOR_LINE, VARROCK_BANK_DOOR, swampCavesLanding, lookAtSwampCaveMarker, swampCaveMarkerRoute, SWAMP_CAVE_MARKER_RANGE, SWAMP_CAVE_ROPED_ATTRIBUTE, SWAMP_CAVE_ROPED_VARBIT },
 };

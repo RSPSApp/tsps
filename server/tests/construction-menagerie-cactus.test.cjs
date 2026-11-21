@@ -29,17 +29,17 @@ function actor(t) {
   p.setRegistered(true);
   p.setLocation(new core.Location(1960, 5700, 0));
   p.needsPlacement = false;
-  const sender = p.getPacketSender(), typed = [], animations = [], hits = [];
+  const sender = p.getPacketSender(), typed = [], animations = [], hits = [], queued = [];
   t.mock.method(sender, 'sendTypedMessage', (type, text) => { typed.push([type, text]); return sender; });
   const perform = p.performAnimation.bind(p);
   t.mock.method(p, 'performAnimation', (animation) => { animations.push(animation.getId()); return perform(animation); });
   const queue = p.getCombat().getHitQueue(), add = queue.addPendingDamage.bind(queue);
-  t.mock.method(queue, 'addPendingDamage', (list) => { hits.push(...list.map(hit => [hit.getDamage(), hit.getHitmask()])); return add(list); });
+  t.mock.method(queue, 'addPendingDamage', (list) => { hits.push(...list.map(hit => [hit.getDamage(), hit.getHitmask()])); queued.push(...list); return add(list); });
   t.after(() => {
     PM.emitPlayerLogout({ player: p, username: p.getUsername() });
     p.setRegistered(false);
   });
-  return { p, typed, animations, hits };
+  return { p, typed, animations, hits, queued };
 }
 
 function touch(f, id = CACTUS) {
@@ -49,7 +49,10 @@ function touch(f, id = CACTUS) {
   return PM.emitObjectInteraction(event);
 }
 
-const tick = () => core.TaskManager.process();
+// One world turn as World.process() orders it: the cycle advances, tasks run, input comes after.
+const tick = () => { core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff; core.TaskManager.process(); };
+let landed = 1 << 30;
+const land = (f) => f.p.getCombat().getHitQueue().process(landed++);
 
 test('the cactus is the cache\'s Touch loc', () => {
   assert.equal(ObjectDefinition.forId(CACTUS).getName(), 'Cactus');
@@ -68,18 +71,18 @@ test('Touch plays human_pickuptable, then says "That was unwise." and hits for 2
   assert.deepEqual(f.hits, [[2, core.HitMask.RED]]);
 });
 
-test('a touch under way swallows another; the next one starts after the sting', (t) => {
+test('held Touch is taken every other cycle, even a touch in the sting\'s own turn is swallowed', (t) => {
   const f = actor(t);
-  touch(f);
-  assert.equal(touch(f), true);
-  assert.equal(f.animations.length, 1);
-  tick();
-  assert.equal(f.hits.length, 1);
-  touch(f);
-  assert.equal(f.animations.length, 2);
-  tick();
-  assert.equal(f.hits.length, 2);
-  assert.equal(f.typed.length, 2);
+  const accepted = [];
+  for (let turn = 0; turn < 6; turn++) {
+    const before = f.animations.length;
+    touch(f);
+    if (f.animations.length > before) accepted.push(turn);
+    tick();
+  }
+  assert.deepEqual(accepted, [0, 2, 4]);
+  assert.equal(f.hits.length, 3);
+  assert.equal(f.typed.length, 3);
 });
 
 test('a player who logs out before the sting takes no damage', (t) => {
@@ -91,18 +94,30 @@ test('a player who logs out before the sting takes no damage', (t) => {
   assert.deepEqual(f.typed, []);
 });
 
-test('at 1 hitpoint the sting is a blue 0 and the player lives; at 3 it takes 2', (t) => {
+test('at 1 hitpoint the sting lands as a blue 0 and the player lives; at 3 it takes 2', (t) => {
   const f = actor(t);
   f.p.setHitpoints(1);
   touch(f);
   tick();
-  assert.deepEqual(f.hits, [[0, core.HitMask.BLUE]]);
   assert.deepEqual(f.typed.map(([, text]) => text), ['That was unwise.']);
-  f.p.getCombat().getHitQueue().process(Number.MAX_SAFE_INTEGER);
+  land(f);
+  assert.deepEqual([f.queued[0].getDamage(), f.queued[0].getHitmask()], [0, core.HitMask.BLUE]);
   assert.equal(f.p.getHitpoints(), 1);
-  f.hits.length = 0;
+  tick();
   f.p.setHitpoints(3);
   touch(f);
   tick();
-  assert.deepEqual(f.hits, [[2, core.HitMask.RED]]);
+  land(f);
+  assert.deepEqual([f.queued[1].getDamage(), f.queued[1].getHitmask()], [2, core.HitMask.RED]);
+  assert.equal(f.p.getHitpoints(), 1);
+});
+
+test('a hit queued before the sting (a poison pulse) lands first, and the sting still doesn\'t kill', (t) => {
+  const f = actor(t);
+  f.p.setHitpoints(3);
+  touch(f);
+  f.p.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(1, core.HitMask.GREEN)]);
+  tick();
+  land(f);
+  assert.equal(f.p.getHitpoints(), 1);
 });

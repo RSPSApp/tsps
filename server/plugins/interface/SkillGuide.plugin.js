@@ -22,7 +22,9 @@ const { hasQuestJournal, openQuestJournal } = require("../quests/QuestRuntime");
  * levelup_list varbit to the first new level, unless one is already waiting, and flashes the
  * Skills tab (flashside 2) until it is clicked. The next "View guide" on that skill clears the
  * varbit and opens the guide with the range from that level to the current one, which the
- * guide's scripts highlight. Neither var is saved: live logs in with them clear.
+ * guide's scripts highlight. Neither var is saved: live logs in with them clear. With All
+ * Settings' "Level-up guide list" off (varbit 20159 set), no level is remembered and the guide
+ * highlights nothing.
  */
 
 const STATS = 320;
@@ -42,6 +44,8 @@ const OP1 = 1 << 1;
 const SKILL_GUIDE_V2_INIT = 1902;
 /** skill_guide_v2_init's second argument whenever it highlights new unlocks, as captured. */
 const NEW_UNLOCKS_MODE = 31;
+/** option_level_up_guide_list_disabled: All Settings' "Level-up guide list" (row 494) off. */
+const GUIDE_LIST_DISABLED_VARBIT = 20159;
 
 /** Skills tab component -> the levelup_list varbit's skill, as gamevals name both. */
 const LEVELUP_LIST_BY_STAT = new Map([
@@ -97,9 +101,13 @@ function rememberLevelUp({ player, skill, oldLevel }) {
   const varbit = levelupListVarbit(levelupName(skill));
   if (varbit == null) return;
   const sender = player.getPacketSender();
-  if (!sender.getVarbit(varbit)) sender.sendVarbit(varbit, oldLevel + 1);
+  if (!guideListDisabled(sender) && !sender.getVarbit(varbit)) sender.sendVarbit(varbit, oldLevel + 1);
   const flashside = flashsideVarbit();
   if (flashside != null && !sender.getVarbit(flashside)) sender.sendVarbit(flashside, FLASH_SKILLS_TAB);
+}
+
+function guideListDisabled(sender) {
+  return sender.getVarbit(GUIDE_LIST_DISABLED_VARBIT) === 1;
 }
 
 /** Clicking the Skills tab stops its level-up flash. */
@@ -120,6 +128,7 @@ function takeNewUnlocks(player, statChild) {
   const from = sender.getVarbit(varbit);
   if (!from) return [0, 0, 0];
   sender.sendVarbit(varbit, 0);
+  if (guideListDisabled(sender)) return [0, 0, 0];
   const skill = api.core.Skill.VALUES.find((stat) => levelupName(stat) === LEVELUP_LIST_BY_STAT.get(statChild));
   const to = skill ? player.getSkillManager().getMaxLevel(skill) : from;
   return [NEW_UNLOCKS_MODE, from, Math.max(from, to)];

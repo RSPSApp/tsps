@@ -68,6 +68,7 @@ From rsprox captures (rev 240–242: 123 of the user's recordings set a `levelup
 - **View guide** on that stat: live clears the varbit, then opens the guide as above with `skill_guide_v2_init [skill, 31, first new level, current level]` (1001445 t869: `[21, 31, 2, 9]`), and the guide's scripts highlight what those levels unlocked. With nothing waiting the last three arguments stay `0, 0, 0`.
 - **The Skills tab** (stone1: 161:60, 548:65, 164:53) clears `flashside` when clicked (about 200 captured clicks).
 - Neither var is saved: 108 recordings end with one set, and none of the 900+ rev 240–242 recordings logs in with one.
+- **All Settings' "Level-up guide list"** (row 494, varbit 20159 `option_level_up_guide_list_disabled`, set when off): the setting and the [Wiki](https://oldschool.runescape.wiki/w/Settings) tie the new-unlock list to it. With it off, tsps remembers no level and View guide highlights nothing (a level left waiting from before is cleared unhighlighted). No capture levels up with it off, so that comes from the setting, not a recording.
 
 tsps does the same: `SkillLevelUp` emits `level-up:announced` `{ player, skill, oldLevel, newLevel }` as it announces a level, and `SkillGuide` sets and clears the vars. Recorded difference: live sends the varbit a tick before the message; tsps sends both on the same tick.
 
@@ -80,5 +81,6 @@ Before opening, the click is offered to other plugins as `skills:stat-clicked` (
 - **The old guide's icons** (214:32): live sets `IF_SCRIPT_TRIGGER` on them for Construction and answers a click with the materials as game messages; tsps sends no events there and answers nothing.
 - **Clicking a list entry**: in the captures only Sailing entries answer, with a game message listing that entry's materials (for example "Adamant keel (skiff): # x Adamant keel parts, # x Lead bar").
 - **The clickable level-up chat line** (message type 118, "Check the skill guide to see what your new <skill> level unlocks!", a tick after the level-up message): the tsps client has no handling for that type, so it isn't sent.
+- **The Skills tab flash with "Level-up guide list" off**: no capture shows it, so tsps still flashes the tab.
 - **The old guide** (option off) after a level-up: no capture opens it with a level waiting; tsps opens it as before and leaves the varbit set.
 - **The `IF_SCRIPT_TRIGGER` event** that live OSRS sets on the two link components is not sent: the tsps client doesn't check it before sending a script trigger.

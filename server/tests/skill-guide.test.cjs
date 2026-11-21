@@ -283,6 +283,24 @@ test("View guide with a level-up waiting clears it and highlights from that leve
   assert.equal(account.values.get(20177), 9);
 });
 
+test("with Level-up guide list off, a level-up remembers nothing and View guide highlights nothing", () => {
+  // All Settings row 494 "Level-up guide list" sets option_level_up_guide_list_disabled (20159)
+  // when off (rsprox settings capture: 0 -> 1); the setting and the Wiki tie the new-unlock list to it.
+  const account = levelledPlayer({ Farming: 9 });
+  account.values.set(20159, 1);
+  levelUp(account, "Farming", 1, 9);
+  assert.equal(account.values.get(20179) ?? 0, 0);
+  account.sent.length = 0;
+  click(account, 320, 23);
+  assert.deepEqual(account.sent.at(-1), ["sendInterfaceScript", SKILL_GUIDE_V2_INIT, [21, 0, 0, 0]]);
+  // A level left waiting from before it was turned off is cleared without a highlight.
+  account.values.set(20179, 2);
+  account.sent.length = 0;
+  click(account, 320, 23);
+  assert.equal(account.values.get(20179), 0);
+  assert.deepEqual(account.sent.at(-1), ["sendInterfaceScript", SKILL_GUIDE_V2_INIT, [21, 0, 0, 0]]);
+});
+
 test("clicking the Skills tab stops its flash on every gameframe; other tabs and flashes are left alone", () => {
   const account = levelledPlayer();
   for (const [root, child] of [[161, 60], [548, 65], [164, 53]]) {

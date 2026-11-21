@@ -83,3 +83,19 @@ test('Tithe Farm entry requires unboosted Farming 34',async t=>{
     else {assert.ok(f.p.getLocation().getX()<=1805); assert.equal(f.p.getArea(),area);}
   });
 });
+// #6474: the door is a wall on the west edge of (1805, 3501), so a player walking to it from inside stands
+// on x 1805, inside the fence. That tile used to count as outside: the door entered the player again,
+// and leaving the old run on the way in discarded the seeds.
+test('leaving through the farm door from inside takes the player out',async t=>{
+  const f=actor(t,1211,34,34); await acquire(f); await enter(f,t);
+  const seed=Data.itemId('Golovanova seed');
+  f.p.moveTo(new core.Location(1812,3501,0)); f.p.needsPlacement=false; turn(f);
+  const area=f.p.getArea(); assert.ok(area instanceof core.PrivateArea); assert.equal(f.p.getInventory().getAmount(seed),100);
+  await enter(f,t);
+  assert.deepEqual([f.p.getLocation().getX(),f.p.getLocation().getY()],[1805,3501],'walked up to the door inside the fence');
+  assert.equal(f.p.getArea(),area,'still in the same run'); assert.equal(f.p.getInventory().getAmount(seed),100,'with the batch');
+  const current=menu(f,['Leave and discard this batch','Stay']);
+  await input(f,{type:'dialogue_continue',widgetId:core.OptionDialogue.OPTIONS_WIDGET_ID,childIndex:1},()=>f.p.getDialogueManager().getCurrent()!==current);
+  assert.deepEqual([f.p.getLocation().getX(),f.p.getLocation().getY(),f.p.getLocation().getZ()],[1804,3501,0]);
+  assert.equal(f.p.getInventory().getAmount(seed),0); assert.equal(area.isDestroyed(),true);
+});

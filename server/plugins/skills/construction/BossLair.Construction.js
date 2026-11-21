@@ -18,27 +18,30 @@ const HOTSPOT = "BOSS_LAIR_DISPLAY";
 const JARS_ENUM = 3300;
 const BLANK = Ids.loc("poh_display_blank");
 /**
- * Dragon Slayer II's Vorkath is the boss's own NPC here, so Combat Achievements counts the quest
- * kill too; the Wiki wants a post-quest kill, so that one is taken off (the quest marks it).
+ * The Wiki wants a kill of Vorkath's post-quest variant, but Combat Achievements counts Dragon
+ * Slayer II's quest form (8060) under the same name, as often as it is fought. So a kill of the
+ * post-quest form (8061, met before and after the quest) is recorded here. A player the quest
+ * never marked has only ever met 8061, so their Combat Achievements count still answers.
  */
 const QUEST_VORKATH_KILLED = "dragon-slayer-ii:vorkath-defeated";
+const POST_QUEST_VORKATH = 8061;
+const POST_QUEST_VORKATH_KILLED = "construction:boss-lair-post-quest-vorkath";
 /**
  * The lairs in enum 3300's order, each with its menu label (rsprox 2909 tick 2172 for the first
  * fourteen), loc and the Combat Achievements monsters whose kills unlock it (Wiki: the boss must
  * have been killed once). Ours: the last two labels are the Wiki's names (Boss lair display); no
  * capture has them in the menu. Ours: Phosani's Nightmare's kills count for The Nightmare (both
- * drop the jar of dreams). `uncountedKill` names a player attribute set by a kill that Combat
- * Achievements counts but the display doesn't (Vorkath's quest kill).
+ * drop the jar of dreams). `postQuest` marks Vorkath, whose quest kills don't count.
  */
 const LAIRS = [
   ["Kraken", "poh_display_kraken"], ["Zulrah", "poh_display_zulrah"], ["Kalphite Queen", "poh_display_kq"],
   ["Cerberus", "poh_display_cerberus"], ["Abyssal Sire", "poh_display_sire"], ["Skotizo", "poh_display_skotizo"],
-  ["Grotesque Guardians", "poh_display_gargoyle"], ["Vorkath", "poh_display_vorkath", undefined, QUEST_VORKATH_KILLED],
+  ["Grotesque Guardians", "poh_display_gargoyle"], ["Vorkath", "poh_display_vorkath", undefined, true],
   ["Alchemical Hydra", "poh_display_hydra"],
   ["Sarachnis", "poh_display_sarachnis"], ["The Nightmare", "poh_display_nightmare", ["Nightmare, The", "Phosani's Nightmare"]],
   ["Corporeal Beast", "poh_display_corp"], ["Thermonuclear Smoke Devil", "poh_display_thermy"], ["Araxxor", "poh_display_araxyte"],
   ["Shellbane Gryphon", "poh_display_gryphon"], ["Mad Angel", "poh_display_angel", ["Mad Angel, The"]],
-].map(([label, loc, monsters = [label], uncountedKill = null]) => ({ label, loc: Ids.loc(loc), monsters, uncountedKill }));
+].map(([label, loc, monsters = [label], postQuest = false]) => ({ label, loc: Ids.loc(loc), monsters, postQuest }));
 const TITLE = "Choose a lair";
 const EMPTY = "Empty";
 const NOT_OWNER = "You can only configure the display in your own house.";
@@ -78,16 +81,20 @@ function hasJar(furniture, jar) {
   return (furniture.storage?.[jar] ?? 0) > 0;
 }
 
-/** The player's kill count for a lair's boss, as Combat Achievements keeps it (0 if it doesn't answer). */
+/**
+ * The player's kill count for a lair's boss, as Combat Achievements keeps it (0 if it doesn't
+ * answer); for Vorkath, 1 once a post-quest kill is recorded and 0 if only the quest marked one.
+ */
 function kills(player, lair) {
+  if (lair.postQuest && player.getAttribute(POST_QUEST_VORKATH_KILLED)) return 1;
+  if (lair.postQuest && player.getAttribute(QUEST_VORKATH_KILLED)) return 0;
   let total = 0;
   for (const monster of lair.monsters) {
     const request = { player, monster, total: null };
     Core.api.emitCustomEvent("combat-achievements:count", request);
     total += Number.isInteger(request.total) ? Math.max(0, request.total) : 0;
   }
-  if (lair.uncountedKill && player.getAttribute(lair.uncountedKill)) total -= 1;
-  return Math.max(0, total);
+  return total;
 }
 
 function stillThere(house, furniture, player) {
@@ -182,9 +189,15 @@ function configureOption(event) {
 }
 
 /** Configure on each display loc's own name (the blank one and every lair's differ). */
+function recordPostQuestVorkath({ killer, npc }) {
+  if ((killer?.isPlayer?.() || killer?.getPacketSender) && npc?.getId?.() === POST_QUEST_VORKATH) killer.setAttribute(POST_QUEST_VORKATH_KILLED, true);
+}
+
 function attachBossLair(api) {
+  api.persistAttribute(POST_QUEST_VORKATH_KILLED, false);
+  api.onNpcDeath(recordPostQuestVorkath);
   const names = new Set([...DISPLAY_LOCS].map(id => CacheDefinitions.getObject(id)?.name).filter(Boolean));
   for (const name of names) api.onObjectInteraction(name, { Configure: configureOption });
 }
 
-Object.assign(module.exports, { attachBossLair, afterWithdraw, configure, LAIRS, JARS_ENUM, BLANK, NO_JAR, NOT_KILLED, NOT_OWNER, ALREADY });
+Object.assign(module.exports, { attachBossLair, afterWithdraw, configure, recordPostQuestVorkath, POST_QUEST_VORKATH_KILLED, LAIRS, JARS_ENUM, BLANK, NO_JAR, NOT_KILLED, NOT_OWNER, ALREADY });

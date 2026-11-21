@@ -233,9 +233,29 @@ test("Vorkath needs a kill after Dragon Slayer II's; Phosani's kills count for T
   pick(f.player, nightmare);
   assert.equal(savedDisplay(f).displayObjectId, loc("poh_display_nightmare"));
   TaskManager.process();
+  // A second quest-form kill (8060) is counted by Combat Achievements but is still not post-quest.
   f.player.setAttribute(Kills.KILLS_ATTRIBUTE, { Vorkath: 2, "Phosani's Nightmare": 2 });
+  PluginManager.emitNpcDeath({ killer: f.player, npc: { getId: () => 8060 } });
+  f.seen.mesboxes.length = 0;
   click(f, "Configure");
   pick(f.player, vorkath);
+  assert.deepEqual(f.seen.mesboxes, [BossLair.NOT_KILLED]);
+  assert.equal(savedDisplay(f).displayObjectId, loc("poh_display_nightmare"));
+  f.player.getDialogueManager().advance();
+  // A kill of the post-quest form (8061) unlocks it.
+  PluginManager.emitNpcDeath({ killer: f.player, npc: { getId: () => 8061 } });
+  click(f, "Configure");
+  pick(f.player, vorkath);
+  assert.equal(savedDisplay(f).displayObjectId, loc("poh_display_vorkath"));
+});
+
+test("a Vorkath kill counted for a player the quest never marked is a post-quest one", (t) => {
+  const vorkath = BossLair.LAIRS.findIndex(lair => lair.label === "Vorkath") + 1;
+  const f = fixture(t, "lairvorkpre", { Vorkath: 1 });
+  f.furniture.storage = { [JAR_OF_DECAY]: 1 };
+  click(f, "Configure");
+  pick(f.player, vorkath);
+  assert.deepEqual(f.seen.mesboxes, []);
   assert.equal(savedDisplay(f).displayObjectId, loc("poh_display_vorkath"));
 });
 

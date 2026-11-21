@@ -623,7 +623,9 @@ rev 230; 3897, rev 235; local 1001171, a guest):
 - Taking out the shown lair's jar closes the storage, the player reaches in with the same
   animation and sound, and the display is blank a tick later (3897 tick 1092).
 - The boss must also have been killed once (Wiki), by Combat Achievements' kill count; for
-  Vorkath a post-quest kill, so Dragon Slayer II's (which that count includes here) is taken off.
+  Vorkath a kill of the post-quest form (8061), which the display records on its death, since
+  that count also counts every quest-form (8060) kill; a player Dragon Slayer II never marked has
+  only met 8061, so their count still answers.
   Phosani's Nightmare's kills count for The Nightmare. Ours: the refusal, a message box "You
   haven't killed that creature yet." with the menu after it, like the missing jar's; no capture
   shows one.

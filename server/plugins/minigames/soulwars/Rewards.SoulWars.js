@@ -281,7 +281,24 @@ function findNomad() {
   return true;
 }
 
+/** The collection log's Soul Wars page counts Spoils of War opened (cache script 2735). */
+const SPOILS_OPENED_ATTRIBUTE = "soul-wars:spoils-opened";
+
+function spoilsRolled(event) {
+  if (!event?.player || event.name !== "Spoils of War") return;
+  const opened = Math.max(0, Number(event.player.getAttribute(SPOILS_OPENED_ATTRIBUTE)) || 0);
+  event.player.setAttribute(SPOILS_OPENED_ATTRIBUTE, opened + 1);
+}
+
+function collectionLogCount(request) {
+  if (!request?.player || request.category !== "Soul Wars" || request.count != null) return;
+  request.count = Math.max(0, Number(request.player.getAttribute(SPOILS_OPENED_ATTRIBUTE)) || 0);
+}
+
 function attachRewards(api) {
+  api.persistAttribute(SPOILS_OPENED_ATTRIBUTE, 0);
+  api.onCustomEvent("openable-items:rolled", spoilsRolled);
+  api.onCustomEvent("collection-log:category-count", collectionLogCount);
   api.onCanShop(canShop);
   api.onInterfaceActionButton(uid("xp_rewards"), whileOpen(xpList));
   api.onInterfaceActionButton(uid("confirm_xp"), whileOpen(buyXp));
@@ -292,4 +309,4 @@ function attachRewards(api) {
   Common.every(findNomad);
 }
 
-module.exports = { attachRewards, open, canShop, xpList, buyXp, imbue, refundImbue, otherList, buyOther, xpPerToken, findNomad, SHOP_ID };
+module.exports = { attachRewards, open, canShop, xpList, buyXp, imbue, refundImbue, otherList, buyOther, xpPerToken, findNomad, SHOP_ID, SPOILS_OPENED_ATTRIBUTE, spoilsRolled, collectionLogCount };

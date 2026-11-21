@@ -79,6 +79,7 @@
     "hallowed_floor5_grapple_looted": 10433,
     "hallowed_floor5_portal_looted": 10434,
     "hallowed_normal_chest_count": 10446,
+    "hallowed_final_chest_count": 10423,
     "hallowed_ranged_xp_earned": 10460,
     "hallowed_magic_xp_earned": 10461,
     "hallowed_prayer_xp_earned": 10462,
@@ -273,6 +274,7 @@
     "completions": "hallowed:completions",
     "pbs": "hallowed:personal-bests",
     "chests": "hallowed:chest-count",
+    "grandChests": "hallowed:grand-chest-count",
     "return": "hallowed:return"
   },
 

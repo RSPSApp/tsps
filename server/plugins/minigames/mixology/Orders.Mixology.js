@@ -212,8 +212,15 @@ function fulfil({ player }) {
   Digweed.afterHandIn(player);
 }
 
+/** The collection log's Mastering Mixology page counts hand-ins that filled an order (cache script 2735). */
+function collectionLogCount(request) {
+  if (!request?.player || request.category !== "Mastering Mixology" || request.count != null) return;
+  request.count = Shared.ordersFulfilled(request.player);
+}
+
 module.exports = function attachOrders(api) {
   api.onObjectInteraction(Shared.OBJECT.CONVEYOR, { "Fulfil-order": fulfil });
+  api.onCustomEvent("collection-log:category-count", collectionLogCount);
 };
 
-Object.assign(module.exports, { ensureOrders, refreshOrders, orders, choose, rewardOf, chatterText });
+Object.assign(module.exports, { ensureOrders, refreshOrders, orders, choose, rewardOf, chatterText, collectionLogCount });

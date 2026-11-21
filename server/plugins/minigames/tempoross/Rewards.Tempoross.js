@@ -162,9 +162,10 @@ function search(player, perAction) {
     for (let i = 0; i < perAction; i++) {
       if (Records.permits(player) <= 0) return false;
       const reward = roll(player);
-      if (!giveReward(player, reward, () => Records.setPermits(player, Records.permits(player) - 1))) return false;
-      // The log's Tempoross count is reward permits claimed (Wiki, "Reward pool").
-      Shared.api().emitCustomEvent("collection-log:count", { player, category: "Tempoross" });
+      if (!giveReward(player, reward, () => {
+        Records.setPermits(player, Records.permits(player) - 1);
+        Records.addPermitClaimed(player);
+      })) return false;
       Shared.addXp(player, "FISHING", R.xp);
     }
     if (Records.permits(player) <= 0) return false;

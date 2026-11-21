@@ -103,6 +103,23 @@ test("the gate lets a Legends' Quest player out, the guards saluting", async (t)
   assert.deepEqual(shown(f), [38848, 1573, 38848, 1574, 2391, 2392]);
 });
 
+test("either gate guard (3951 or 3952) announces a member, evenly", async (t) => {
+  const guards = [3951, 3952].map((id) => {
+    const npc = new core.NPC(id, new core.Location(id === 3951 ? 2726 : 2731, id === 3951 ? 3349 : 3348, 0));
+    return { id, npc, said: [] };
+  });
+  t.mock.method(core.World, "getNpcsNear", () => guards.map((g) => g.npc));
+  for (const g of guards) t.mock.method(g.npc, "forceChat", (text) => { g.said.push(text); });
+  for (const [roll, id] of [[0.2, 3951], [0.7, 3952]]) {
+    t.mock.method(Math, "random", () => roll);
+    const f = actor(t, [2729, 3350], true);
+    await click(f, 2392, 2729, 3349);
+    Math.random.mock.restore();
+    assert.deepEqual(guards.find((g) => g.id === id).said.at(-1), "Legends Guild Member Approaching!");
+  }
+  assert.deepEqual(guards.map((g) => g.said.length), [1, 1]);
+});
+
 test("with the requirements but not Legends' Quest, the gate opens and the doors do not", async (t) => {
   const gate = actor(t, [2729, 3349], null);
   await click(gate, 2392, 2729, 3349);

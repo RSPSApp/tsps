@@ -1989,8 +1989,9 @@ module.exports = function registerLegendsQuest(api) {
     ObstacleRunner.run({ player }, [{ walk: [[x, target]] }]);
     // shortcut: only members get a shout; the during-quest "I hope the quest is going well" is not sent.
     if (entrance.shout && questStage(player) >= STAGE_COMPLETE) {
-      const guard = api.core.World.getNpcsNear(at, 6).find((npc) => GUARD_IDS.has(npc.getId()));
-      guard?.forceChat(entrance.shout);
+      // Either guard (3951 or 3952) announces, evenly.
+      const guards = api.core.World.getNpcsNear(at, 6).filter((npc) => GUARD_IDS.has(npc.getId()));
+      guards[Math.floor(Math.random() * guards.length)]?.forceChat(entrance.shout);
     }
     TaskManager.submit(new CountdownTask(player, 2, () => {
       swingGuildEntrance(entrance, false);

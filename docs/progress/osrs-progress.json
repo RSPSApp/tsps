@@ -5843,13 +5843,18 @@
           "wiki": "https://oldschool.runescape.wiki/w/Murder_Mystery",
           "implementedIn": [
             "server/plugins/quests/quests/MurderMystery.Quest.js",
+            "server/plugins/quests/murdermystery/State.MurderMystery.js",
+            "server/plugins/quests/murdermystery/Journal.MurderMystery.js",
+            "server/plugins/quests/murdermystery/Evidence.MurderMystery.js",
+            "server/plugins/quests/murdermystery/Poison.MurderMystery.js",
             "server/plugins/quests/QuestRuntime.js"
           ],
           "devNotes": [
             "Ported in server/plugins/quests/quests/MurderMystery.Quest.js (transcript-driven variant selection, conditions and hand-ins); see the file header for documented gaps.",
             "Transcript page is \"Murder Mystery\"; the evidence items need ItemIdentifiers ids and the crime-scene objects need ObjectIdentifiers ids.",
             "The culprit is fixed (read the wiki) - do not randomise it, or the clue chain will not line up.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3745 Murder Mystery: hand-in needs only the thread and killer's print."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3745 Murder Mystery: hand-in needs only the thread and killer's print.",
+            "2026-11-22, branch feat/murder-mystery-capture: Murder Mystery aligned with four whole runs of the quest (the user's RSProx capture MurderMystery.bin, revision 242, Frank the murderer; local recordings 1001551 and 1001958, David; 1001930, Carol): every Wiki line played from the transcript instead of the plugin's own wording, the Wiki's {{tbox}} lines as messageboxes; the window, dagger, pot, barrels, sacks, gate and flour barrel with the captured timing and inventory slots; flour, flypaper and print matching as captured; the poison salesman straight to his menu once he has named the buyers, and The Fremennik Trials' hand-off; per-suspect poison stories and places; the guard's evidence menu, the hand-in with 'him'/'her', the scroll's title, model and jingle; the courtyard guard's and Pierre's post-quest lines; the captured journal. Lines the Wiki lacks were added in osrsreboxed-db's capture-sources.json. Verified by server/tests/murder-mystery-capture.test.cjs (29 checks) and an agent-MCP playthrough; facts in docs/quests/murder-mystery/README.md. Correction to the note above on the culprit: the Wiki and the four runs (murdersus 6, 4, 4, 3) show the murderer chosen at random at the start, which the plugin now does. Limitations: Anna's and David's green-thread answers, and the guard's poison-proof lines for Anna, Elizabeth and Frank, are missing from the Wiki and the captures."
           ],
           "taskDetails": [
             {

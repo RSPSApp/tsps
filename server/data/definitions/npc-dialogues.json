@@ -856976,11 +856976,24 @@
                                   "player": "It was one of the women"
                                 },
                                 {
+                                  "type": "line",
+                                  "speaker": "Guard",
+                                  "text": "Oh really? Which one?",
+                                  "speaker_ids": [
+                                    4218
+                                  ]
+                                },
+                                {
                                   "type": "choice",
                                   "options": [
                                     {
                                       "text": "It was SO obviously Louisa the cook.",
                                       "steps": [
+                                        {
+                                          "type": "message",
+                                          "text": "You tell the guard who you suspect of the crime.",
+                                          "id": "BJMN9S"
+                                        },
                                         {
                                           "type": "line",
                                           "speaker": "Guard",
@@ -857014,6 +857027,11 @@
                                       "text": "It MUST have been Mary the maid.",
                                       "steps": [
                                         {
+                                          "type": "message",
+                                          "text": "You tell the guard who you suspect of the crime.",
+                                          "id": "zdaTp3"
+                                        },
+                                        {
                                           "type": "line",
                                           "speaker": "Guard",
                                           "text": "Great work. Show me the evidence, and we'll take them to the dungeons.",
@@ -857044,11 +857062,24 @@
                                   "player": "It was one of the men..."
                                 },
                                 {
+                                  "type": "line",
+                                  "speaker": "Guard",
+                                  "text": "Oh really? Which one?",
+                                  "speaker_ids": [
+                                    4218
+                                  ]
+                                },
+                                {
                                   "type": "choice",
                                   "options": [
                                     {
                                       "text": "It can ONLY be Donovan the handyman.",
                                       "steps": [
+                                        {
+                                          "type": "message",
+                                          "text": "You tell the guard who you suspect of the crime.",
+                                          "id": "7qjJeF"
+                                        },
                                         {
                                           "type": "line",
                                           "speaker": "Guard",
@@ -857073,6 +857104,11 @@
                                       "text": "Pierre the dog handler. No question.",
                                       "steps": [
                                         {
+                                          "type": "message",
+                                          "text": "You tell the guard who you suspect of the crime.",
+                                          "id": "AGVi2P"
+                                        },
+                                        {
                                           "type": "line",
                                           "speaker": "Guard",
                                           "text": "Great work. Show me the evidence, and we'll take them to the dungeons.",
@@ -857096,6 +857132,11 @@
                                       "text": "Hobbes the butler. The butler ALWAYS did it.",
                                       "steps": [
                                         {
+                                          "type": "message",
+                                          "text": "You tell the guard who you suspect of the crime.",
+                                          "id": "PA00Hk"
+                                        },
+                                        {
                                           "type": "line",
                                           "speaker": "Guard",
                                           "text": "Great work. Show me the evidence, and we'll take them to the dungeons.",
@@ -857118,6 +857159,11 @@
                                     {
                                       "text": "You MUST know it was Stanford The Gardener...",
                                       "steps": [
+                                        {
+                                          "type": "message",
+                                          "text": "You tell the guard who you suspect of the crime.",
+                                          "id": "0BjiTD"
+                                        },
                                         {
                                           "type": "line",
                                           "speaker": "Guard",
@@ -857170,11 +857216,24 @@
                                   "player": "It was one of the women..."
                                 },
                                 {
+                                  "type": "line",
+                                  "speaker": "Guard",
+                                  "text": "Oh really? Which one?",
+                                  "speaker_ids": [
+                                    4218
+                                  ]
+                                },
+                                {
                                   "type": "choice",
                                   "options": [
                                     {
                                       "text": "I KNOW it was Anna.",
                                       "steps": [
+                                        {
+                                          "type": "message",
+                                          "text": "You tell the guard who you suspect of the crime.",
+                                          "id": "Wx1QBZ"
+                                        },
                                         {
                                           "type": "line",
                                           "speaker": "Guard",
@@ -857199,6 +857258,11 @@
                                       "text": "I am SO sure it was Carol.",
                                       "steps": [
                                         {
+                                          "type": "message",
+                                          "text": "You tell the guard who you suspect of the crime.",
+                                          "id": "IYFcbZ"
+                                        },
+                                        {
                                           "type": "line",
                                           "speaker": "Guard",
                                           "text": "Great work. Show me the evidence, and we'll take them to the dungeons.",
@@ -857221,6 +857285,11 @@
                                     {
                                       "text": "I'll bet you ANYTHING it was Elizabeth.",
                                       "steps": [
+                                        {
+                                          "type": "message",
+                                          "text": "You tell the guard who you suspect of the crime.",
+                                          "id": "ghF9JJ"
+                                        },
                                         {
                                           "type": "line",
                                           "speaker": "Guard",
@@ -857252,11 +857321,24 @@
                                   "player": "It was one of the men..."
                                 },
                                 {
+                                  "type": "line",
+                                  "speaker": "Guard",
+                                  "text": "Oh really? Which one?",
+                                  "speaker_ids": [
+                                    4218
+                                  ]
+                                },
+                                {
                                   "type": "choice",
                                   "options": [
                                     {
                                       "text": "I'm certain it was Bob.",
                                       "steps": [
+                                        {
+                                          "type": "message",
+                                          "text": "You tell the guard who you suspect of the crime.",
+                                          "id": "mdE9QM"
+                                        },
                                         {
                                           "type": "line",
                                           "speaker": "Guard",
@@ -857281,6 +857363,11 @@
                                       "text": "It was David. No doubt about it.",
                                       "steps": [
                                         {
+                                          "type": "message",
+                                          "text": "You tell the guard who you suspect of the crime.",
+                                          "id": "w5l5Oy"
+                                        },
+                                        {
                                           "type": "line",
                                           "speaker": "Guard",
                                           "text": "Great work. Show me the evidence, and we'll take them to the dungeons.",
@@ -857303,6 +857390,11 @@
                                     {
                                       "text": "If it wasn't Frank I'll eat my shoes!",
                                       "steps": [
+                                        {
+                                          "type": "message",
+                                          "text": "You tell the guard who you suspect of the crime.",
+                                          "id": "ryx-zn"
+                                        },
                                         {
                                           "type": "line",
                                           "speaker": "Guard",
@@ -857596,6 +857688,7 @@
             },
             {
               "text": "Do you recognise this thread?",
+              "condition": "If the player has the criminal's thread:",
               "steps": [
                 {
                   "player": "Do you recognise this thread?"
@@ -857603,7 +857696,7 @@
                 {
                   "type": "message",
                   "text": "You show Anna the thread from the study.",
-                  "id": "WItXx8"
+                  "id": "yOD3ac"
                 },
                 {
                   "type": "line",
@@ -857615,7 +857708,8 @@
                     4220
                   ]
                 }
-              ]
+              ],
+              "id": "MJfhRz"
             }
           ]
         }
@@ -857680,6 +857774,7 @@
             },
             {
               "text": "Do you recognise this thread?",
+              "condition": "If the player has the criminal's thread:",
               "steps": [
                 {
                   "player": "Do you recognise this thread?"
@@ -857701,7 +857796,7 @@
                           ]
                         }
                       ],
-                      "id": "fFU8UF"
+                      "id": "DRPy2M"
                     },
                     {
                       "type": "condition",
@@ -857716,12 +857811,13 @@
                           ]
                         }
                       ],
-                      "id": "6YgiTS"
+                      "id": "U-CfiK"
                     }
                   ],
-                  "id": "Qf-uMl"
+                  "id": "VFVonl"
                 }
-              ]
+              ],
+              "id": "F6_ppr"
             }
           ]
         }
@@ -857775,6 +857871,7 @@
             },
             {
               "text": "Do you recognise this thread?",
+              "condition": "If the player has the criminal's thread:",
               "steps": [
                 {
                   "player": "Do you recognise this thread?",
@@ -857782,7 +857879,7 @@
                     {
                       "type": "message",
                       "text": "You show Carol the thread found at the crime scene.",
-                      "id": "X_ph9B"
+                      "id": "kZKTHV"
                     },
                     {
                       "type": "condition",
@@ -857797,7 +857894,7 @@
                           ]
                         }
                       ],
-                      "id": "Pv1FQe"
+                      "id": "UkluGi"
                     },
                     {
                       "type": "condition",
@@ -857812,11 +857909,12 @@
                           ]
                         }
                       ],
-                      "id": "zMXHMP"
+                      "id": "Injk25"
                     }
                   ]
                 }
-              ]
+              ],
+              "id": "F0aa5D"
             }
           ]
         }
@@ -857882,6 +857980,7 @@
             },
             {
               "text": "Do you recognise this thread?",
+              "condition": "If the player has the criminal's thread:",
               "steps": [
                 {
                   "player": "Do you recognise this thread?"
@@ -857889,7 +857988,7 @@
                 {
                   "type": "message",
                   "text": "You show him the thread you found on the study window",
-                  "id": "hIQdDX"
+                  "id": "p4pF0p"
                 },
                 {
                   "type": "line",
@@ -857900,7 +857999,8 @@
                     4223
                   ]
                 }
-              ]
+              ],
+              "id": "CpGrpQ"
             }
           ]
         }
@@ -857965,6 +858065,7 @@
             },
             {
               "text": "Do you recognise this thread?",
+              "condition": "If the player has the criminal's thread:",
               "steps": [
                 {
                   "player": "Do you recognise this thread?"
@@ -857972,17 +858073,51 @@
                 {
                   "type": "message",
                   "text": "You show her the thread from the study window.",
-                  "id": "EEX4xy"
+                  "id": "ngpbli"
                 },
                 {
-                  "type": "line",
-                  "speaker": "Elizabeth",
-                  "text": "It's some thread. You're not very good at this whole investigation thing are you?",
-                  "speaker_ids": [
-                    4224
-                  ]
+                  "type": "condition",
+                  "text": "If the criminal's thread is blue:",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Elizabeth",
+                      "text": "Looks like Blue thread to me. If you can't work that out for yourself I don't hold much hope of you solving this crime.",
+                      "speaker_ids": [
+                        4224
+                      ]
+                    },
+                    {
+                      "player": "It looks a lot like the material your trousers are made of doesn't it?"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Elizabeth",
+                      "text": "I suppose it does. So what?",
+                      "speaker_ids": [
+                        4224
+                      ]
+                    }
+                  ],
+                  "id": "jbWiGK"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the criminal's thread isn't blue:",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Elizabeth",
+                      "text": "It's some thread. You're not very good at this whole investigation thing are you?",
+                      "speaker_ids": [
+                        4224
+                      ]
+                    }
+                  ],
+                  "id": "eDWUwD"
                 }
-              ]
+              ],
+              "id": "QMetp7"
             }
           ]
         }
@@ -858070,12 +858205,34 @@
                   "id": "DpR-aY"
                 },
                 {
-                  "type": "line",
-                  "speaker": "Frank",
-                  "text": "It looks like thread to me, but I'm not exactly an expert. Is it worth something? Can I have it? Actually, can you spare me a few gold?",
-                  "speaker_ids": [
-                    4225
-                  ]
+                  "type": "condition",
+                  "text": "If the criminal's thread is blue:",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Frank",
+                      "text": "It kind of looks like the same material as my trousers are made of... same colour anyway. Think it's worth anything? Can I have it? Or just some money?",
+                      "speaker_ids": [
+                        4225
+                      ]
+                    }
+                  ],
+                  "id": "eLeiXV"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the criminal's thread isn't blue:",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Frank",
+                      "text": "It looks like thread to me, but I'm not exactly an expert. Is it worth something? Can I have it? Actually, can you spare me a few gold?",
+                      "speaker_ids": [
+                        4225
+                      ]
+                    }
+                  ],
+                  "id": "Oe7HU4"
                 }
               ]
             }
@@ -858570,19 +858727,71 @@
                   "player": "Think you could give me any hints?"
                 },
                 {
-                  "type": "line",
-                  "speaker": "Gossip",
-                  "text": "Well, I don't know if it's related, but I heard from that Poison Salesman in town that he sold some poison to one of the Sinclair family",
-                  "speaker_ids": [
-                    4219
-                  ]
-                },
-                {
-                  "type": "line",
-                  "speaker": "Gossip",
-                  "text": "the other day. I don't think he has any stock left now though...",
-                  "speaker_ids": [
-                    4219
+                  "type": "random",
+                  "options": [
+                    {
+                      "text": "Dialogue 1",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Gossip",
+                          "text": "Well, I don't know if it's related, but I heard from that Poison Salesman in town that he sold some poison to one of the Sinclair family",
+                          "speaker_ids": [
+                            4219
+                          ]
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Gossip",
+                          "text": "the other day. I don't think he has any stock left now though...",
+                          "speaker_ids": [
+                            4219
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Dialogue 2",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Gossip",
+                          "text": "Well, this might be of some help to you. My father was in the guards when he was younger,",
+                          "speaker_ids": [
+                            4219
+                          ]
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Gossip",
+                          "text": "and he always said that there isn't a crime that can't be solved through careful examination of the crime scene and all surrounding areas.",
+                          "speaker_ids": [
+                            4219
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Dialogue 3",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Gossip",
+                          "text": "My father used to be in the guard. He always wrote himself notes on a piece of paper so he could keep track of information easily.",
+                          "speaker_ids": [
+                            4219
+                          ]
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Gossip",
+                          "text": "Maybe you should try that? Don't forget to thank me if I help you solve the case!",
+                          "speaker_ids": [
+                            4219
+                          ]
+                        }
+                      ]
+                    }
                   ]
                 }
               ]
@@ -859112,7 +859321,13 @@
             },
             {
               "text": "No, I don't see any need for it.",
-              "steps": []
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "You leave the paper in the sack.",
+                  "id": "NILn2h"
+                }
+              ]
             }
           ]
         }
@@ -859902,6 +860117,153 @@
           ]
         }
       ],
+      "visiting-the-poison-salesman-talking-to-the-poison-salesman-after-learning-who-bought-the-poison": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Patented Multi Purpose Poison?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "5yThc5",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-5a4a74b1a58975b6"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Who did you sell Poison to at the house?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "LM52wV",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-0562ab13acf4acd1"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Can I buy some Poison?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "bUro7k",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-c672972f62f43bd9"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "I have this pot I found at the murder scene...",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "JsADqQ",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-c9e0f5a259aad292"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "visiting-the-poison-salesman-talking-to-the-poison-salesman-after-learning-who-bought-the-poison-if-the-player-also-has-progress-in-fremennik-trials": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Talk about the Murder Mystery Quest",
+              "steps": [
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Patented Multi Purpose Poison?",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "XwBtdC",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-5a4a74b1a58975b6"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Who did you sell Poison to at the house?",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "yVFSvq",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-0562ab13acf4acd1"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Can I buy some Poison?",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "lQv77m",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-c672972f62f43bd9"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "I have this pot I found at the murder scene...",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "id": "IqylwB",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-c9e0f5a259aad292"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Talk about the Fremennik Trials"
+            }
+          ]
+        }
+      ],
       "visiting-the-poison-salesman-talking-to-anna-after-learning-about-the-poison": [
         {
           "player": "I'm here to help the guards with their investigation."
@@ -859951,18 +860313,20 @@
             },
             {
               "text": "Do you recognise this thread?",
+              "condition": "If the player has the criminal's thread:",
               "steps": [
                 {
                   "type": "jump",
-                  "id": "anrMZg",
+                  "id": "wpzswS",
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-ceaaa0d4e8cfe73a"
+                      "branch": "jump-2f3a6c6925245687"
                     }
                   ]
                 }
-              ]
+              ],
+              "id": "1vB4Uj"
             },
             {
               "text": "Why'd you buy poison the other day?",
@@ -860032,18 +860396,20 @@
             },
             {
               "text": "Do you recognise this thread?",
+              "condition": "If the player has the criminal's thread:",
               "steps": [
                 {
                   "type": "jump",
-                  "id": "Ec-Rp7",
+                  "id": "6rpPrs",
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-799e398aa54c32ca"
+                      "branch": "jump-b2ba7a3540d60d00"
                     }
                   ]
                 }
-              ]
+              ],
+              "id": "u5uI5h"
             },
             {
               "text": "Why'd you buy poison the other day?",
@@ -860119,18 +860485,20 @@
             },
             {
               "text": "Do you recognise this thread?",
+              "condition": "If the player has the criminal's thread:",
               "steps": [
                 {
                   "type": "jump",
-                  "id": "SnAoTQ",
+                  "id": "mDvEYZ",
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-118b2adb3b52dc2b"
+                      "branch": "jump-0811450e332cf6f1"
                     }
                   ]
                 }
-              ]
+              ],
+              "id": "GsWs3w"
             },
             {
               "text": "Why'd you buy poison the other day?",
@@ -860207,18 +860575,20 @@
             },
             {
               "text": "Do you recognise this thread?",
+              "condition": "If the player has the criminal's thread:",
               "steps": [
                 {
                   "type": "jump",
-                  "id": "9nOvny",
+                  "id": "3R4kVY",
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-6157499a8c905f33"
+                      "branch": "jump-b931a71ac5436368"
                     }
                   ]
                 }
-              ]
+              ],
+              "id": "R5pxTq"
             },
             {
               "text": "Why'd you buy poison the other day?",
@@ -860296,18 +860666,20 @@
             },
             {
               "text": "Do you recognise this thread?",
+              "condition": "If the player has the criminal's thread:",
               "steps": [
                 {
                   "type": "jump",
-                  "id": "QuJwbL",
+                  "id": "-ztTcg",
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-96aa90b56eab8123"
+                      "branch": "jump-e6eb7144348a37fa"
                     }
                   ]
                 }
-              ]
+              ],
+              "id": "Zn8F_b"
             },
             {
               "text": "Why'd you buy poison the other day?",
@@ -860401,7 +860773,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-e75a46f8434d6116"
+                      "branch": "jump-25743b7e9463327e"
                     }
                   ]
                 }
@@ -861134,6 +861506,11 @@
                           "player": "I have proof that it wasn't any of the servants!"
                         },
                         {
+                          "type": "message",
+                          "text": "You show the guard the thread you found on the window.",
+                          "id": "ir3ZQg"
+                        },
+                        {
                           "player": "All the servants dress in black so it couldn't have been one of them."
                         },
                         {
@@ -861748,12 +862125,34 @@
                   "id": "1dZX1P"
                 },
                 {
-                  "type": "line",
-                  "speaker": "Guard",
-                  "text": "We don't have many murders here in Gielinor and I'm afraid we wouldn't have been able to solve it by ourselves. We will hold her here under house arrest until such time as we bring her to trial.",
-                  "speaker_ids": [
-                    4218
-                  ]
+                  "type": "condition",
+                  "text": "If Bob, David or Frank is the murderer:",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Guard",
+                      "text": "We don't have many murders here in Gielinor and I'm afraid we wouldn't have been able to solve it by ourselves. We will hold him here under house arrest until such time as we bring him to trial.",
+                      "speaker_ids": [
+                        4218
+                      ]
+                    }
+                  ],
+                  "id": "pkv0ep"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Anna, Carol or Elizabeth is the murderer:",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Guard",
+                      "text": "We don't have many murders here in Gielinor and I'm afraid we wouldn't have been able to solve it by ourselves. We will hold her here under house arrest until such time as we bring her to trial.",
+                      "speaker_ids": [
+                        4218
+                      ]
+                    }
+                  ],
+                  "id": "2WPR7b"
                 },
                 {
                   "type": "line",
@@ -861802,6 +862201,27 @@
           "type": "line",
           "speaker": "Guard",
           "text": "No, your work here is done.",
+          "speaker_ids": [
+            4218
+          ]
+        }
+      ],
+      "post-quest-talking-to-the-guard-outside-the-mansion-after-the-quest": [
+        {
+          "type": "line",
+          "speaker": "Guard",
+          "text": "Excellent work on solving the murder! All of the guards I know are very impressed, and don't worry, we have the murderer under guard until they can be taken to trial.",
+          "speaker_ids": [
+            4218
+          ]
+        },
+        {
+          "player": "Is there anything else I can do? Seems awfully quiet up at the house, considering their sibling has just been arrested."
+        },
+        {
+          "type": "line",
+          "speaker": "Guard",
+          "text": "Nothing right now, we have it all under control.",
           "speaker_ids": [
             4218
           ]
@@ -862320,6 +862740,201 @@
           ]
         }
       ],
+      "jump-5a4a74b1a58975b6": [
+        {
+          "player": "Patented Multi Purpose Poison?"
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "Aaaaah... a miracle of modern apothecaries!",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "This exclusive concoction has been tested on all known forms of life and been proven to kill them all in varying dilutions from cockroaches to king dragons!",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "So incredibly versatile, it can be used as pest control, a cleansing agent, drain cleaner, metal polish and washes whiter than white,",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "all with our uniquely fragrant concoction that is immediately recognisable across the land as Peter Potter's Patented Poison potion!!!",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "message",
+          "text": "The salesman stops for breath.",
+          "id": "j4aPFN"
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "I'd love to sell you some but I've sold out recently. That's just how good it is! Three hundred and twenty eight people in this area alone cannot be wrong!",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "Nine out of Ten poisoners prefer it in controlled tests!",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "Can I help you with anything else?",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "Perhaps I can take your name and add it to our mailing list of poison users? We will only send you information related to the use of poison and other Peter Potter Products!",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "player": "Uh... no, it's ok. Really."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "jump-0562ab13acf4acd1": [
+        {
+          "player": "Who did you sell Poison to at the house?"
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "Well, Peter Potter's Patented Multi Purpose Poison is a product of such obvious quality that I am glad to say I managed to sell a bottle to each of the Sinclairs!",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "Anna, Bob, Carol, David, Elizabeth and Frank all bought a bottle! In fact they bought the last of my supplies!",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "Maybe I can take your name and address and I will personally come and visit you when stocks return?",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "player": "Uh... no, it's ok."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "jump-c672972f62f43bd9": [
+        {
+          "player": "Can I buy some Poison?"
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "I'm afraid I am totally out of stock at the moment after my successful trip to the Sinclairs' House the other day.",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "But don't worry! Our factories are working overtime to produce Peter Potter's Patented Multi Purpose Poison!",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "Possibly the finest multi purpose poison and cleaner yet available to the general market.",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "And its unique fragrance makes it the number one choice for cleaners and exterminators the whole country over!",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "jump-c9e0f5a259aad292": [
+        {
+          "player": "I have this pot I found at the murder scene..."
+        },
+        {
+          "type": "message",
+          "text": "You show the poison salesman the pot you found at the murder scene with the unusual smell.",
+          "id": "m3MYIH"
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "Hmmm... yes, that smells exactly like my Patented Multi Purpose Poison, but I don't see how it could be. It quite clearly says on the label of all bottles",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "'Not to be taken internally - EXTREMELY POISONOUS'.",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "player": "Perhaps someone else put it in his wine?"
+        },
+        {
+          "type": "line",
+          "speaker": "Poison Salesman",
+          "text": "Yes... I suppose that could have happened...",
+          "speaker_ids": [
+            4227
+          ]
+        },
+        {
+          "type": "end"
+        }
+      ],
       "jump-6a15df93396e2d28": [
         {
           "player": "Who do you think was responsible?"
@@ -862369,14 +862984,14 @@
           "type": "end"
         }
       ],
-      "jump-ceaaa0d4e8cfe73a": [
+      "jump-2f3a6c6925245687": [
         {
           "player": "Do you recognise this thread?"
         },
         {
           "type": "message",
           "text": "You show Anna the thread from the study.",
-          "id": "WItXx8"
+          "id": "yOD3ac"
         },
         {
           "type": "line",
@@ -862435,7 +863050,7 @@
           "type": "end"
         }
       ],
-      "jump-799e398aa54c32ca": [
+      "jump-b2ba7a3540d60d00": [
         {
           "player": "Do you recognise this thread?"
         },
@@ -862456,7 +863071,7 @@
                   ]
                 }
               ],
-              "id": "fFU8UF"
+              "id": "DRPy2M"
             },
             {
               "type": "condition",
@@ -862471,10 +863086,10 @@
                   ]
                 }
               ],
-              "id": "6YgiTS"
+              "id": "U-CfiK"
             }
           ],
-          "id": "Qf-uMl"
+          "id": "VFVonl"
         },
         {
           "type": "end"
@@ -862512,14 +863127,14 @@
           "type": "end"
         }
       ],
-      "jump-118b2adb3b52dc2b": [
+      "jump-0811450e332cf6f1": [
         {
           "player": "Do you recognise this thread?",
           "steps": [
             {
               "type": "message",
               "text": "You show Carol the thread found at the crime scene.",
-              "id": "X_ph9B"
+              "id": "kZKTHV"
             },
             {
               "type": "condition",
@@ -862534,7 +863149,7 @@
                   ]
                 }
               ],
-              "id": "Pv1FQe"
+              "id": "UkluGi"
             },
             {
               "type": "condition",
@@ -862549,7 +863164,7 @@
                   ]
                 }
               ],
-              "id": "zMXHMP"
+              "id": "Injk25"
             }
           ]
         },
@@ -862600,14 +863215,14 @@
           "type": "end"
         }
       ],
-      "jump-6157499a8c905f33": [
+      "jump-b931a71ac5436368": [
         {
           "player": "Do you recognise this thread?"
         },
         {
           "type": "message",
           "text": "You show him the thread you found on the study window",
-          "id": "hIQdDX"
+          "id": "p4pF0p"
         },
         {
           "type": "line",
@@ -862662,22 +863277,55 @@
           "type": "end"
         }
       ],
-      "jump-96aa90b56eab8123": [
+      "jump-e6eb7144348a37fa": [
         {
           "player": "Do you recognise this thread?"
         },
         {
           "type": "message",
           "text": "You show her the thread from the study window.",
-          "id": "EEX4xy"
+          "id": "ngpbli"
         },
         {
-          "type": "line",
-          "speaker": "Elizabeth",
-          "text": "It's some thread. You're not very good at this whole investigation thing are you?",
-          "speaker_ids": [
-            4224
-          ]
+          "type": "condition",
+          "text": "If the criminal's thread is blue:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Elizabeth",
+              "text": "Looks like Blue thread to me. If you can't work that out for yourself I don't hold much hope of you solving this crime.",
+              "speaker_ids": [
+                4224
+              ]
+            },
+            {
+              "player": "It looks a lot like the material your trousers are made of doesn't it?"
+            },
+            {
+              "type": "line",
+              "speaker": "Elizabeth",
+              "text": "I suppose it does. So what?",
+              "speaker_ids": [
+                4224
+              ]
+            }
+          ],
+          "id": "jbWiGK"
+        },
+        {
+          "type": "condition",
+          "text": "If the criminal's thread isn't blue:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Elizabeth",
+              "text": "It's some thread. You're not very good at this whole investigation thing are you?",
+              "speaker_ids": [
+                4224
+              ]
+            }
+          ],
+          "id": "eDWUwD"
         },
         {
           "type": "end"
@@ -862731,7 +863379,7 @@
           "type": "end"
         }
       ],
-      "jump-e75a46f8434d6116": [
+      "jump-25743b7e9463327e": [
         {
           "player": "Do you recognise this thread?"
         },
@@ -862741,12 +863389,34 @@
           "id": "DpR-aY"
         },
         {
-          "type": "line",
-          "speaker": "Frank",
-          "text": "It looks like thread to me, but I'm not exactly an expert. Is it worth something? Can I have it? Actually, can you spare me a few gold?",
-          "speaker_ids": [
-            4225
-          ]
+          "type": "condition",
+          "text": "If the criminal's thread is blue:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Frank",
+              "text": "It kind of looks like the same material as my trousers are made of... same colour anyway. Think it's worth anything? Can I have it? Or just some money?",
+              "speaker_ids": [
+                4225
+              ]
+            }
+          ],
+          "id": "eLeiXV"
+        },
+        {
+          "type": "condition",
+          "text": "If the criminal's thread isn't blue:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Frank",
+              "text": "It looks like thread to me, but I'm not exactly an expert. Is it worth something? Can I have it? Actually, can you spare me a few gold?",
+              "speaker_ids": [
+                4225
+              ]
+            }
+          ],
+          "id": "Oe7HU4"
         },
         {
           "type": "end"
@@ -1392939,11 +1393609,8 @@
                   ]
                 },
                 {
-                  "type": "unavailable",
-                  "id": "Jw8a7L"
-                },
-                {
                   "type": "choice",
+                  "prompt": "Start The Hand in the Sand quest?",
                   "options": [
                     {
                       "text": "Yes.",
@@ -1392963,7 +1393630,7 @@
                         {
                           "type": "message",
                           "text": "Bert gives you a rather smelly, sand covered hand.",
-                          "id": "qRJX_b"
+                          "id": "0PC9qk"
                         },
                         {
                           "type": "line",
@@ -1392974,7 +1393641,9 @@
                             5819
                           ]
                         }
-                      ]
+                      ],
+                      "hook": "quest:the-hand-in-the-sand:start",
+                      "quest": "The Hand in the Sand"
                     },
                     {
                       "text": "No.",
@@ -1393192,64 +1393861,68 @@
         {
           "type": "condition",
           "text": "Speaking to Zavistic Rarve via the bell:",
-          "id": "msuv8J"
-        },
-        {
-          "type": "condition",
-          "text": "If the player has completed Zogre Flesh Eaters:",
           "steps": [
             {
-              "type": "line",
-              "speaker": "Zavistic Rarve",
-              "text": "What are you doing...Oh, it's you...sorry...didn't realise...what can I do for you?",
-              "speaker_ids": [
-                881
-              ]
-            },
-            {
-              "type": "choice",
-              "options": [
+              "type": "condition",
+              "text": "If the player has completed Zogre Flesh Eaters:",
+              "steps": [
                 {
-                  "text": "I'm here about the sicks...err Zogres"
+                  "type": "line",
+                  "speaker": "Zavistic Rarve",
+                  "text": "What are you doing...Oh, it's you...sorry...didn't realise...what can I do for you?",
+                  "speaker_ids": [
+                    881
+                  ]
                 },
                 {
-                  "text": "I have a rather sandy problem that I'd like to palm off on you.",
-                  "steps": [
+                  "type": "choice",
+                  "options": [
                     {
-                      "type": "jump",
-                      "reference": "continue",
-                      "id": "So_5Tm"
+                      "text": "I'm here about the sicks...err Zogres"
+                    },
+                    {
+                      "text": "I have a rather sandy problem that I'd like to palm off on you.",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "reference": "continue",
+                          "id": "GZnKMQ"
+                        }
+                      ]
                     }
                   ]
                 }
-              ]
+              ],
+              "id": "XFLYRC"
             },
             {
-              "type": "line",
-              "speaker": "Zavistic Rarve",
-              "text": "What are you doing ringing that bell?! Don't you think some of us have work to do?",
-              "speaker_ids": [
-                881
-              ]
-            },
-            {
-              "player": "But I was told to ring the bell if I wanted some attention."
-            },
-            {
-              "type": "line",
-              "speaker": "Zavistic Rarve",
-              "text": "Well...anyway...we're very busy here, hurry up what do you want?",
-              "speaker_ids": [
-                881
-              ]
-            },
-            {
-              "type": "jump",
-              "reference": "continue",
-              "id": "KSBOXa"
+              "type": "condition",
+              "text": "If the player has not completed Zogre Flesh Eaters:",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Zavistic Rarve",
+                  "text": "What are you doing ringing that bell?! Don't you think some of us have work to do?",
+                  "speaker_ids": [
+                    881
+                  ]
+                },
+                {
+                  "player": "But I was told to ring the bell if I wanted some attention."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Zavistic Rarve",
+                  "text": "Well...anyway...we're very busy here, hurry up what do you want?",
+                  "speaker_ids": [
+                    881
+                  ]
+                }
+              ],
+              "id": "C4hp_G"
             }
           ],
-          "id": "uHTESk"
+          "id": "msuv8J"
         },
         {
           "type": "condition",
@@ -1393273,96 +1393946,96 @@
               "speaker_ids": [
                 881
               ]
-            },
-            {
-              "type": "condition",
-              "text": "If the player does not have the beer soaked hand in their inventory:",
-              "steps": [
-                {
-                  "type": "message",
-                  "text": "Maybe you should have the hand with you before speaking to Zavistic.",
-                  "id": "2X-6xg"
-                },
-                {
-                  "type": "end"
-                }
-              ],
-              "id": "sTZfoO"
-            },
-            {
-              "type": "condition",
-              "text": "If the player has the beer soaked hand in their inventory:",
-              "steps": [
-                {
-                  "type": "message",
-                  "text": "You wave the hand at the wizard.",
-                  "id": "FaNNdu"
-                },
-                {
-                  "player": "Ummm... Do you have all your wizards?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Zavistic Rarve",
-                  "text": "All my.... whatever do you mean...?",
-                  "speaker_ids": [
-                    881
-                  ]
-                },
-                {
-                  "player": "The Guard Captain asked me to see if you have any... missing... wizards."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Zavistic Rarve",
-                  "text": "That's silly! No one would kill a wizard... would they?",
-                  "speaker_ids": [
-                    881
-                  ]
-                },
-                {
-                  "player": "Erm... no..."
-                },
-                {
-                  "player": "Well.. maybe, you see Bert found this hand and it might belong to.. a wizard!"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Zavistic Rarve",
-                  "text": "Bert? Ahh yes, the sandman who seems to have been working very long hours recently. Let's see that hand...",
-                  "speaker_ids": [
-                    881
-                  ]
-                },
-                {
-                  "type": "message",
-                  "text": "You hand it over.",
-                  "id": "6h4uAt"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Zavistic Rarve",
-                  "text": "Oh my! This is most definitely Clarence, my most able student! You must find out who did this!",
-                  "speaker_ids": [
-                    881
-                  ]
-                },
-                {
-                  "player": "Do you have any input as to the matter at hand?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Zavistic Rarve",
-                  "text": "Well.... Ask Bert about the long hours he's been working, that sounds suspicious to me. Digging things up at all hours of the day isn't natural.",
-                  "speaker_ids": [
-                    881
-                  ]
-                }
-              ],
-              "id": "S7QIjs"
             }
           ],
           "id": "-BRtvF"
+        },
+        {
+          "type": "condition",
+          "text": "If the player does not have the beer soaked hand in their inventory:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "Maybe you should have the hand with you before speaking to Zavistic.",
+              "id": "HHCuF1"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "fU7rm6"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has the beer soaked hand in their inventory:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You wave the hand at the wizard.",
+              "id": "2uHFMU"
+            },
+            {
+              "player": "Ummm... Do you have all your wizards?"
+            },
+            {
+              "type": "line",
+              "speaker": "Zavistic Rarve",
+              "text": "All my.... whatever do you mean...?",
+              "speaker_ids": [
+                881
+              ]
+            },
+            {
+              "player": "The Guard Captain asked me to see if you have any... missing... wizards."
+            },
+            {
+              "type": "line",
+              "speaker": "Zavistic Rarve",
+              "text": "That's silly! No one would kill a wizard... would they?",
+              "speaker_ids": [
+                881
+              ]
+            },
+            {
+              "player": "Erm... no..."
+            },
+            {
+              "player": "Well.. maybe, you see Bert found this hand and it might belong to.. a wizard!"
+            },
+            {
+              "type": "line",
+              "speaker": "Zavistic Rarve",
+              "text": "Bert? Ahh yes, the sandman who seems to have been working very long hours recently. Let's see that hand...",
+              "speaker_ids": [
+                881
+              ]
+            },
+            {
+              "type": "message",
+              "text": "You hand it over.",
+              "id": "r5kpiT"
+            },
+            {
+              "type": "line",
+              "speaker": "Zavistic Rarve",
+              "text": "Oh my! This is most definitely Clarence, my most able student! You must find out who did this!",
+              "speaker_ids": [
+                881
+              ]
+            },
+            {
+              "player": "Do you have any input as to the matter at hand?"
+            },
+            {
+              "type": "line",
+              "speaker": "Zavistic Rarve",
+              "text": "Well.... Ask Bert about the long hours he's been working, that sounds suspicious to me. Digging things up at all hours of the day isn't natural.",
+              "speaker_ids": [
+                881
+              ]
+            }
+          ],
+          "id": "5gcul7"
         }
       ],
       "talking-to-zavistic-rarve-talking-to-zavistic-afterwards": [
@@ -1394661,6 +1395334,9 @@
                   "text": "Why doesn't Bert remember the change in his hours?",
                   "steps": [
                     {
+                      "player": "Why doesn't Bert remember the change in his hours?"
+                    },
+                    {
                       "type": "line",
                       "speaker": "Sandy",
                       "text": "Because.... because.... I bribed a wizard to put a spell on him so he would believe everything I say!!",
@@ -1394710,6 +1395386,9 @@
                 {
                   "text": "What happened to the wizard?",
                   "steps": [
+                    {
+                      "player": "What happened to the wizard?"
+                    },
                     {
                       "type": "line",
                       "speaker": "Sandy",
@@ -1394924,29 +1395603,23 @@
                     {
                       "type": "condition",
                       "text": "If the player doesn't have the required items:",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Zavistic Rarve",
+                          "text": "You really mean you forgot? Bring me 5 earth runes and 1 bucket of sand to help stop that moneygrabbing Sandy!",
+                          "speaker_ids": [
+                            881
+                          ]
+                        },
+                        {
+                          "type": "end"
+                        }
+                      ],
                       "id": "sy6Fa0"
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Zavistic Rarve",
-                      "text": "You really mean you forgot? Bring me 5 earth runes and 1 bucket of sand to help stop that moneygrabbing Sandy!",
-                      "speaker_ids": [
-                        881
-                      ]
-                    },
-                    {
-                      "type": "end"
                     }
                   ]
                 }
-              ]
-            },
-            {
-              "type": "line",
-              "speaker": "Zavistic Rarve",
-              "text": "What are you doing...Oh, it's you...sorry...didn't realise...what can I do for you?",
-              "speaker_ids": [
-                881
               ]
             },
             {

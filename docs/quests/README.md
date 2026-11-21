@@ -111,7 +111,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Mourning's End Part I](mournings-end-part-i/README.md) | untested |  |  |  |  |
 | Mourning's End Part II | untested |  |  |  |  |
 | [Mudfoot's Big Adventure](mudfoots-big-adventure/README.md) | untested |  |  |  |  |
-| [Murder Mystery](murder-mystery/README.md) | ✅ passed | 2026-10-25 | agent |  |  |
+| [Murder Mystery](murder-mystery/README.md) | ✅ passed | 2026-11-22 | agent | claude-opus-5-5 |  |
 | My Arm's Big Adventure | untested |  |  |  |  |
 | [Nature Spirit](nature-spirit/README.md) | untested |  |  |  |  |
 | [Observatory Quest](observatory-quest/README.md) | 🔁 needs recheck | 2026-11-10 | agent | claude-opus-5-5 | 2 |

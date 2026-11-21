@@ -97,6 +97,8 @@ function placeTile(event) {
   const movement = player.getMovementQueue();
   movement.reset();
   movement.setBlockMovement?.(true);
+  // Only this hold is released at the end, not one another system took in the meantime.
+  const hold = movement.getBlockMovementGeneration?.();
   placing.add(player);
   sender.sendVarbit(busy, 1);
   let ticks = 0;
@@ -129,16 +131,23 @@ function placeTile(event) {
         return;
       }
       if (ticks === 2) {
-        Interactions.moveThrough(player, to, 1);
+        const run = Run.runOf(player);
+        if (run) run.ignoreTrapUntil = (run.ticks ?? 0) + 2;
         return;
       }
+      // The step, as Interactions.moveThrough does it, but behind the same door/run check.
       this.stop();
+      player.moveTo(to);
+      const run = Run.runOf(player);
+      if (run) {
+        run.prev = to.clone();
+        run.moves = [];
+      }
     }
     stop() {
       super.stop();
       placing.delete(player);
-      // moveThrough holds movement until its own step lands; otherwise release the hold here.
-      if (ticks < 2) movement.setBlockMovement?.(false);
+      if (hold === undefined || movement.getBlockMovementGeneration() === hold) movement.setBlockMovement?.(false);
       if (player.isRegistered?.()) sender.sendVarbit(busy, 0);
     }
   })());

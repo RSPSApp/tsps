@@ -232,3 +232,37 @@ test('the click holds the player for the resolve', (t) => {
   assert.equal(player.getMovementQueue().isMovementBlocked(), false,
     'released after the step');
 });
+
+test('a player moved off the door after the match is released and not pulled back', (t) => {
+  const player = account(t, [TILES[0]]);
+  openDoor(player);
+  select(player, 0);
+  tick();
+  const away = new Location(3020, 5082, 1);
+  player.moveTo(away);
+  for (let i = 0; i < 6; i++) tick();
+  assert.ok(player.getLocation().equals(away), 'the player stays where they were moved');
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false, 'the hold is released');
+});
+
+test('an eject on the tick before the step leaves the player where the eject put them', (t) => {
+  const player = account(t, [TILES[0]]);
+  openDoor(player);
+  select(player, 0);
+  tick();
+  tick();
+  const lobby = new Location(3061, 4985, 1);
+  Run.finish(player, { reason: 'left', silent: true });
+  player.moveTo(lobby);
+  for (let i = 0; i < 3; i++) tick();
+  assert.ok(player.getLocation().equals(lobby), 'not put back through the door');
+});
+
+test('a hold taken by something else during the resolve is not released by the door', (t) => {
+  const player = account(t, [TILES[2]]);
+  openDoor(player);
+  select(player, 2);
+  player.getMovementQueue().setBlockMovement(true);
+  for (let i = 0; i < 3; i++) tick();
+  assert.equal(player.getMovementQueue().isMovementBlocked(), true, 'the other hold stays');
+});

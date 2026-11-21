@@ -954,7 +954,9 @@ module.exports = function registerWatchtowerQuest(api) {
   function talkWizard(event) {
     const { player, npcId, npc } = event;
     if (npcId !== NPCS.WIZARD || stage(player) !== STAGES.FINGERNAILS) return false;
-    if (!ITEMS.RELIC_PARTS.some((itemId, index) => held(player, itemId) && !state.hasBit(player, BITS.RELIC[index]))) return false;
+    // A part to hand in, or all three already with him (a talk cut short before the relic): he finishes it.
+    const toHandIn = ITEMS.RELIC_PARTS.some((itemId, index) => held(player, itemId) && !state.hasBit(player, BITS.RELIC[index]));
+    if (!toHandIn && relicPartsHeld(player) < ITEMS.RELIC_PARTS.length) return false;
     return startRelicTalk(player, npc);
   }
 
@@ -1190,6 +1192,11 @@ module.exports = function registerWatchtowerQuest(api) {
       player.sendMessage("Nothing interesting happens.");
       return true;
     }
+    // Wiki (Gap (Gu'Tanoth)): "Level 25 Agility is required". Ours: the refusal's words; no capture has one.
+    if (level(player, Skill.AGILITY) < 25) {
+      player.sendMessage("You need an Agility level of 25 to jump this gap.");
+      return true;
+    }
     const guard = nearestNpc(player, (npc) => npc.getId() === NPCS.BRIDGE_GUARD, 12);
     play(player, NPCS.BRIDGE_GUARD, "entering-gu-tanoth-crossing-the-bridge", null, PAGE, guard);
     return true;
@@ -1265,6 +1272,8 @@ module.exports = function registerWatchtowerQuest(api) {
 
   // ------------------------------------------------------------------ the enclave
 
+  /** The enclave entrance (2804's tiles); the run past only takes a player still beside it. */
+  const ENCLAVE_DOOR = [2506, 3038];
   /** "door"-like entry past the guards: the warning screen, then in (t3633-3638, t6303-6311). */
   function runPastGuards(player) {
     const proceed = () => {
@@ -1272,10 +1281,10 @@ module.exports = function registerWatchtowerQuest(api) {
       const first = state.get(player, VARBITS.NIGHTSHADE_USED) === 0;
       if (first) state.set(player, VARBITS.NIGHTSHADE_USED, 1);
       if (!complete(player) && state.get(player, VARBITS.ENCLAVE_SCENE) === 0) {
-        scenes.playEnclaveScene(player);
+        scenes.playEnclaveScene(player, () => near(player, ENCLAVE_DOOR, 6));
         return;
       }
-      later(player, 3, () => player.moveTo(new Location(...TILES.ENCLAVE_INSIDE)));
+      later(player, 3, () => { if (near(player, ENCLAVE_DOOR, 6)) player.moveTo(new Location(...TILES.ENCLAVE_INSIDE)); });
     };
     const warning = { player, warning: 12, proceed };
     api.emitCustomEvent("warning-screen:show", warning);
@@ -1518,14 +1527,14 @@ module.exports = function registerWatchtowerQuest(api) {
   function activateShield(player) {
     if (complete(player)) return;
     const variant = "reviving-the-watchtower-activating-the-shield-generator";
+    for (const itemId of ITEMS.CRYSTALS) take(player, itemId, player.getInventory().getAmount(itemId));
+    // Into the completed tower first: a reward that does not fit lands there, not on the floor left behind.
+    player.moveTo(new Location(...TILES.LEVER_LANDING));
+    // The rewards (onReward) go with the stage, so a logout in the next ticks cannot save a completion without
+    // them. Live sends them four ticks on (t6054), with the wizard's first line.
     state.own(player, () => quest.complete(player, { scroll: false, announce: false }));
-    // The rewards go with the stage, so a logout in the next ticks cannot save a completion without them.
-    // Live sends them four ticks on (t6054), with the wizard's first line.
-    grantReward(player);
     player.sendMessage(messageText(variant, "EAAUUD") ?? "The magic force field activates.");
     for (const pillar of W.PILLARS) state.set(player, pillar.varbit, 2);
-    for (const itemId of ITEMS.CRYSTALS) take(player, itemId, player.getInventory().getAmount(itemId));
-    player.moveTo(new Location(...TILES.LEVER_LANDING));
     sound(player, SOUND.LEVER);
     player.getPacketSender().sendJingle(JINGLE_MACHINE_ON, 0);
     // The reward and the wizard's thanks four ticks later; the scroll after his two lines (t6054-6062).
@@ -1536,8 +1545,9 @@ module.exports = function registerWatchtowerQuest(api) {
     });
   }
 
-  function grantReward(player) {
-    player.getSkillManager().addExperiences(Skill.MAGIC, 15250);
+  /** Every completion's rewards (the lever, ::quest, a quest pack); `experience: false` holds the XP back. */
+  function grantReward(player, _quest, options = {}) {
+    if (options.experience !== false) player.getSkillManager().addExperiences(Skill.MAGIC, 15250);
     giveReward(player, ITEMS.COINS, 5000);
     giveReward(player, ITEMS.SCROLL, 1);
   }
@@ -1722,6 +1732,7 @@ module.exports = function registerWatchtowerQuest(api) {
     scrollItemId: ITEMS.RELIC,
     otherRewards: ["5,000 Coins", "The Watchtower Teleport Spell"],
     buildJournal,
+    onReward: grantReward,
   });
 
   state.register();

@@ -526,3 +526,54 @@ test("the tower ladder: walking off during the guard's line does not climb", asy
   h.ticks(f, 8);
   assert.equal(at(f)[2], 0, JSON.stringify(at(f)));
 });
+
+test("the relic: a talk cut short after the third part is finished on the next talk", async (t) => {
+  const f = actor(t, { at: [2548, 3116, 2], stage: S.NAILS, attributes: { [BITS]: (1 << 6) | (1 << 7) | (1 << 8) } });
+  const wizard = h.spawn(f, N.WIZARD, [2549, 3116, 2]);
+  const said = await talk(f, wizard);
+  assert.ok(said.includes("ItemStatementDialogue: The wizard gives you a complete statue."), said.join("\n"));
+  assert.equal(stage(f), S.RELIC);
+  assert.equal(count(f, I.OGRE_RELIC), 1);
+});
+
+test("the lever with a full pack: the coins and scroll land in the completed tower, not on the floor left behind", async (t) => {
+  const f = actor(t, { at: [2543, 3116, 2], stage: S.ALL });
+  const vars = {};
+  for (const id of [V.PILLAR_CYAN, V.PILLAR_YELLOW, V.PILLAR_MAGENTA, V.PILLAR_GREY]) vars[id] = 1;
+  f.player.setAttribute("watchtower:varbits", vars);
+  while (!f.player.getInventory().isFull()) f.player.getInventory().add(new h.core.Item(I.BONES, 1), false);
+  await click(f, 2794, [2543, 3115]);
+  for (let i = 0; i < 6 && stage(f) < S.COMPLETE; i++) h.tick(f);
+  const ground = h.core.World.getItems().filter((g) => g.getPosition().getX() === 2928 && g.getPosition().getY() === 4715);
+  assert.ok(ground.some((g) => g.getItem().getId() === I.COINS && g.getItem().getAmount() === 5000), "the coins at (2928,4715)");
+  assert.ok(ground.some((g) => g.getItem().getId() === I.SPELL_SCROLL));
+});
+
+test("::quest and quest packs: a completion from elsewhere still pays the coins and scroll; experience: false holds the XP", async (t) => {
+  const f = actor(t, { at: [2549, 3112, 0] });
+  const xp = f.player.getSkillManager().getExperience(Sk.MAGIC);
+  h.quest().complete(f.player, { experience: false, scroll: false });
+  assert.equal(stage(f), S.COMPLETE);
+  assert.equal(count(f, I.COINS), 5000);
+  assert.equal(count(f, I.SPELL_SCROLL), 1);
+  assert.equal(f.player.getSkillManager().getExperience(Sk.MAGIC), xp);
+});
+
+test("the gap needs Agility 25 (Wiki: Gap (Gu'Tanoth))", async (t) => {
+  const f = actor(t, { at: [2530, 3025, 0], stage: S.GUTANOTH, items: [[I.COINS, 20]], levels: 20 });
+  await click(f, 2830, [2530, 3026]);
+  h.ticks(f, 3);
+  assert.ok(messages(f).includes("You need an Agility level of 25 to jump this gap."), JSON.stringify(messages(f)));
+  assert.equal(count(f, I.COINS), 20);
+  assert.equal(at(f)[1] <= 3026, true);
+});
+
+test("the run past: a player gone from the entrance in its three ticks is not pulled in", async (t) => {
+  const f = actor(t, { at: [2505, 3039, 0], stage: S.COMPLETE });
+  await click(f, 2804, [2504, 3037]);
+  h.PM.emitInterfaceActionClick({ player: f.player, buttonId: (573 << 16) | 17, action: 0, opId: 1, groupId: 573, childId: 17, handled: false });
+  h.tick(f);
+  f.player.moveTo(new h.core.Location(3222, 3218, 0));
+  h.ticks(f, 5);
+  assert.deepEqual(at(f), [3222, 3218, 0]);
+});

@@ -57,12 +57,13 @@ module.exports = function createWatchtowerScenes(api, ctx) {
   }
 
   /** The first run past the guards: the shaman and the dragon (t3638-3670). */
-  function playEnclaveScene(player) {
+  function playEnclaveScene(player, stillThere = () => true) {
     const { message, said } = sceneLines();
     const later = (ticks, fn) => api.getTaskManager().submit(new api.core.CountdownTask(player, ticks, fn));
     // +3: the cutscene starts with the player at the real entrance, fading out.
     later(3, () => {
-      if (!player.isRegistered?.()) return;
+      // Gone from the entrance in the meantime (a teleport): no scene.
+      if (!player.isRegistered?.() || !stillThere()) return;
       player.moveTo(new Location(...W.TILES.ENCLAVE_INSIDE));
       Scenes.controls(player, true, true);
       Scenes.fade(player, true);

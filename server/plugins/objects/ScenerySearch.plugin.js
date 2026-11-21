@@ -16,7 +16,7 @@
  * lines picked at random on each search, the same loc giving different ones. Revision 239 on
  * (recordings 4282, local 1001726, 1002048, 1002053), both arrive together two ticks after the
  * player reaches the shelf; up to 233 the second came two ticks after the first. Ours: each line
- * equally likely. The third line is the Wiki's (Bookcase), "You don't find anything you'd ever want
+ * equally likely. The third line is the Wiki's (Transcript:Bookcase), "You don't find anything you'd ever want
  * to read."; every recording has "...anything that you'd ever want to read.", the recorded
  * difference. The plain sacks (loc `sacks`, local 1000075, 1001339): "There's nothing
  * interesting in these sacks." on arrival.

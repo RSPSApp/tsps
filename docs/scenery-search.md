@@ -7,7 +7,7 @@ minigame's own handler for the same name answers first.
 
 ## Bookcases and book shelves
 
-From rsprox captures (38 searches in 21 recordings, revisions 227-242) and the Wiki (Bookcase):
+From rsprox captures (38 searches in 21 recordings, revisions 227-242) and the Wiki (Transcript:Bookcase):
 
 - Locs named "Bookcase" or "Old Bookshelf", and two of the "Shelf" locs
   (`fai_varrock_shelf_books`, `fai_varrock_shelves_books`). Other "Shelf" locs are kitchen
@@ -21,7 +21,7 @@ From rsprox captures (38 searches in 21 recordings, revisions 227-242) and the W
   on the same tick, two ticks after the player reaches the shelf. Up to revision 233 the second
   message came two ticks after the first.
 - Recorded difference: every recording has "You don't find anything that you'd ever want to
-  read."; the Wiki's wording is used.
+  read."; the Wiki's wording (Transcript:Bookcase) is used.
 - Ours: each line equally likely (nothing gives the weights).
 
 ## Sacks

@@ -1,0 +1,171 @@
+// The Legends' Guild gate and doors as RSProx 20261121T071043 (rev 242) plays them: the click shows both
+// leaves as inviswall 38848 with the open leaves one tile north, plays the sound, sends the message, steps
+// the player one tile across and restores the leaves two ticks later. Without Legends' Quest, neither opens.
+process.env.DISABLE_PLAYER_BOTS = "1";
+const assert = require("node:assert/strict");
+const path = require("node:path");
+const { before, after, test } = require("node:test");
+require("../dist/Server").Server.installProductionPathResolver();
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+const { PluginManager: PM } = require("../dist/plugins/PluginManager");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { PlayerSession } = require("../dist/net/PlayerSession");
+const { ClientConnection } = require("../dist/net/NetworkBuilder");
+
+let core;
+let quest;
+let next = 9600;
+
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  core = PM.getCoreApi();
+  core.ObjectDefinition.init();
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(2729, 3349);
+  core.RegionManager.loadMapFiles(2729, 3373);
+  PM.emitServerStartup({});
+  quest = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find((q) => q.key === "legends_quest");
+  assert.ok(quest);
+});
+after(() => PM.emitServerShutdown({}));
+
+function actor(t, at, complete) {
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(next++);
+  p.setUsername("lg" + p.getIndex());
+  p.setRegistered(true);
+  p.setAttribute("bot-skip-persistence", true);
+  p.setLocation(new core.Location(at[0], at[1], 0));
+  p.needsPlacement = false;
+  if (complete) quest.setStage(p, 70);
+  if (complete !== false) {
+    for (const key of ["family_crest", "heroes_quest", "shilo_village", "underground_pass", "waterfall_quest"]) {
+      const q = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find((q) => q.key === key);
+      q.setStage(p, q.completionValue);
+    }
+    p.setAttribute("quest.points", 107);
+  }
+  const c = new ClientConnection(channel);
+  c.player = p;
+  const f = { p, c, messages: [], log: [], n: 0 };
+  const sender = p.getPacketSender();
+  t.mock.method(sender, "sendMessage", (m) => { f.messages.push(m); return sender; });
+  t.mock.method(sender, "sendSound", (id) => { f.log.push({ n: f.n, kind: "sound", id }); return sender; });
+  t.mock.method(sender, "sendObject", (o) => { f.log.push({ n: f.n, kind: "show", id: o.getId() }); return sender; });
+  t.mock.method(p.getSession(), "isTileInScene", () => true);
+  t.mock.method(core.World, "forEachNetworkPlayer", (visit) => visit(p));
+  t.after(() => {
+    PM.emitPlayerLogout({ player: p, username: p.getUsername() });
+    p.setRegistered(false);
+    core.TaskManager.cancelTasks(p);
+    core.TaskManager.cancelTasks(p.getIndex());
+  });
+  return f;
+}
+
+function tick(f, count) {
+  for (let i = 0; i < count; i++) {
+    f.n++;
+    core.World.processCycle++;
+    core.TaskManager.process();
+    f.c.processTurnPackets();
+    const q = f.p.getMovementQueue();
+    q.beginCycle();
+    q.processEntityPursuit();
+    if (q.hasPendingWork()) q.process();
+    core.TaskManager.processWalkTo(f.p.getIndex());
+    f.p.resetUpdating();
+  }
+}
+
+async function click(f, id, x, y) {
+  await f.c.dispatch([{ type: "object_option", id, x, y, clickType: 1 }]);
+  tick(f, 5);
+}
+const where = (f) => [f.p.getLocation().getX(), f.p.getLocation().getY()];
+const ENTRANCE_IDS = new Set([38848, 1573, 1574, 2391, 2392, 2896, 2897, 2898, 2899]);
+const shown = (f) => f.log.filter((e) => e.kind === "show" && ENTRANCE_IDS.has(e.id)).map((e) => e.id);
+
+test("the doors open for a Legends' Quest player and step them into the guild", async (t) => {
+  const f = actor(t, [2728, 3373], true);
+  await click(f, 2896, 2728, 3373);
+  assert.deepEqual(where(f), [2728, 3374]);
+  assert.ok(f.messages.includes("You push the huge Legends' Guild doors open."), f.messages.join(" | "));
+  assert.deepEqual(f.log.filter((e) => e.kind === "sound").map((e) => e.id), [46]);
+  assert.deepEqual(shown(f), [38848, 2898, 38848, 2899, 2896, 2897]);
+});
+
+test("the gate lets a Legends' Quest player out, the guards saluting", async (t) => {
+  const f = actor(t, [2729, 3350], true);
+  await click(f, 2392, 2729, 3349);
+  assert.deepEqual(where(f), [2729, 3349]);
+  assert.ok(f.messages.includes("The guards salute you as you walk past."), f.messages.join(" | "));
+  assert.deepEqual(f.log.filter((e) => e.kind === "sound").map((e) => e.id), [71]);
+  assert.deepEqual(shown(f), [38848, 1573, 38848, 1574, 2391, 2392]);
+});
+
+test("either gate guard (3951 or 3952) announces a member, evenly", async (t) => {
+  const guards = [3951, 3952].map((id) => {
+    const npc = new core.NPC(id, new core.Location(id === 3951 ? 2726 : 2731, id === 3951 ? 3349 : 3348, 0));
+    return { id, npc, said: [] };
+  });
+  t.mock.method(core.World, "getNpcsNear", () => guards.map((g) => g.npc));
+  for (const g of guards) t.mock.method(g.npc, "forceChat", (text) => { g.said.push(text); });
+  for (const [roll, id] of [[0.2, 3951], [0.7, 3952]]) {
+    t.mock.method(Math, "random", () => roll);
+    const f = actor(t, [2729, 3350], true);
+    await click(f, 2392, 2729, 3349);
+    Math.random.mock.restore();
+    assert.deepEqual(guards.find((g) => g.id === id).said.at(-1), "Legends Guild Member Approaching!");
+  }
+  assert.deepEqual(guards.map((g) => g.said.length), [1, 1]);
+});
+
+test("with the requirements but not Legends' Quest, the gate opens and the doors do not", async (t) => {
+  const gate = actor(t, [2729, 3349], null);
+  await click(gate, 2392, 2729, 3349);
+  assert.deepEqual(where(gate), [2729, 3350]);
+  const doors = actor(t, [2728, 3373], null);
+  await click(doors, 2896, 2728, 3373);
+  assert.deepEqual(where(doors), [2728, 3373]);
+  assert.ok(doors.messages.includes("You need to complete the Legends' quest before you can enter the Legends' Guild."));
+  assert.deepEqual(shown(doors), []);
+});
+
+test("without the quest points and prerequisite quests the gate stays shut", async (t) => {
+  const f = actor(t, [2729, 3349], false);
+  await click(f, 2392, 2729, 3349);
+  assert.deepEqual(where(f), [2729, 3349]);
+  assert.ok(f.messages.some((m) => m.includes("107 quest points")), f.messages.join(" | "));
+  assert.deepEqual(shown(f), []);
+});
+
+test("talking to a guard plays the two shouts unclicked, two ticks apart, then waits on Welcome", async (t) => {
+  const f = actor(t, [2730, 3349], true);
+  const guard = core.NPC.create(3951, new core.Location(2731, 3349, 0));
+  const listed = core.World.getPlayers().add(f.p);
+  // The test has no NPC-update cycle, so the guard is put in the player's view by hand.
+  t.mock.method(f.p, "getLocalNpcs", () => [guard]);
+  assert.equal(core.World.getNpcs().add(guard), true);
+  t.after(() => { core.World.getNpcs().remove(guard); if (listed) core.World.getPlayers().remove(f.p); });
+  const said = [];
+  t.mock.method(guard, "forceChat", (text) => { said.push([f.n, text]); });
+  const lines = [];
+  const sender = f.p.getPacketSender();
+  t.mock.method(sender, "sendString", (text, uid) => { if (uid >> 16 === 231 && (uid & 0xffff) !== 4) lines.push([f.n, uid & 0xffff, text]); return sender; });
+  await f.c.dispatch([{ type: "npc_option", index: guard.getIndex(), clickType: 1 }]);
+  tick(f, 8);
+  const texts = lines.filter(([, c]) => c === 6).map(([n, , s]) => [n, s.replace(/<br>/g, " ")]);
+  assert.deepEqual(texts.map(([, s]) => s), ["! ! ! Attention ! ! !", "Legends' Guild Member Approaching!", "Welcome Sir! I hope you enjoy your time in the Legends' Guild."]);
+  assert.deepEqual(said.map(([, s]) => s), ["! ! ! Attention ! ! !", "Legends' Guild Member Approaching!"]);
+  assert.equal(texts[1][0] - texts[0][0], 2);
+  assert.equal(texts[2][0] - texts[1][0], 2);
+  assert.equal(said[0][0], texts[0][0], "chatbox and overhead on the same tick");
+  // The held line writes the button and blanks it on the same tick: what counts is its last value.
+  const byTick = new Map();
+  for (const [n, c, s] of lines) if (c === 5) byTick.set(n, s);
+  const continues = [...byTick.values()];
+  assert.deepEqual(continues, ["", "", "Click here to continue"]);
+});

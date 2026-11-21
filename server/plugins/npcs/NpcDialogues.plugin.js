@@ -1253,6 +1253,21 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           } }, true)
           : undefined;
         if (hold) chain.add(hold);
+        // A line the NPC also says overhead (the transcript writes it twice): live shows both on one
+        // tick, the chatbox without "Click here to continue", and moves on with the overhead's own
+        // timing (RSProx 20261121T071043 ticks 88-92, Legends' guards).
+        const next = rest[0];
+        if (!isPlayer && !hold && !step.steps?.length && pages.length === 1 && typeof request.after !== "function"
+          && !(Number.isInteger(request.pauseTicks) && request.pauseTicks > 0)
+          && next?.presentation === "overhead" && (next.npc ?? next.text) === speech) {
+          // Not in the chain (the action below sends it), so it takes no chain index.
+          const line = new NpcDialogue(-1, speakerId, pages[0], speakerName, expression, (request.side ?? step.side) === "right" ? 217 : 231);
+          chain.add(new ActionDialogue(index++, { execute: () => {
+            presentOwned(() => line.sendHeld(player));
+            manager.advance();
+          } }, true));
+          continue;
+        }
         let held;
         for (const text of pages) {
           const dialogue = isPlayer

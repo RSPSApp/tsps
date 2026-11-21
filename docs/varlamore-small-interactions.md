@@ -11,6 +11,7 @@ rsprox captures (rsprox.net recordings 1098 and 1105, revision 237, Leagues VI) 
 | Beautiful tree stump / log / rock: Admire | `objects/BeautifulScenery.plugin.js` | `scenery:admired` { player, object } |
 | Stew used on Oli | `skills/thieving/HouseRobberyCrew.Thieving.js` (already on main; the event is new) | `oli:fed-stew` { player, npc } |
 | Aldarin vineyard: grapevines and the grape barrel | `world/Vineyard.plugin.js` | `vineyard:barrel-handed-in` { player } |
+| Aldarin cauldron: Drink-from (no league task) | `objects/AldarinCauldron.plugin.js` | none |
 
 ## Dairy Buffalo
 
@@ -136,3 +137,12 @@ shears to do this."; with no room, the sheep's "You don't have enough inventory 
 wool.". The shear starts on the arrival (recorded 1 to 3 ticks on). `alpaca:sheared` { player } comes
 with the wool (the league's "Shear an Alpaca").
 
+
+## Aldarin cauldron
+
+`plugins/objects/AldarinCauldron.plugin.js`. Drink-from on the cauldron at 1384,2916 (loc
+`cauldron_generic_drink`) only gets the player's line, chatneu1 head, a tick after the arrival:
+"As nice as that looks, I think I'll give it a miss for now." Nothing is drunk or taken, and `busy`
+goes 0 to 1 a tick after the line (rsprox recording 4182 ticks 131 and 17847, both attempts the same;
+a Leagues VI world, same map). Witch's Potion's cauldron (loc 2024) has the same name and option, so
+the hook answers only this loc.

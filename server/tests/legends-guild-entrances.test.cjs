@@ -40,6 +40,13 @@ function actor(t, at, complete) {
   p.setLocation(new core.Location(at[0], at[1], 0));
   p.needsPlacement = false;
   if (complete) quest.setStage(p, 70);
+  if (complete !== false) {
+    for (const key of ["family_crest", "heroes_quest", "shilo_village", "underground_pass", "waterfall_quest"]) {
+      const q = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find((q) => q.key === key);
+      q.setStage(p, q.completionValue);
+    }
+    p.setAttribute("quest.points", 107);
+  }
   const c = new ClientConnection(channel);
   c.player = p;
   const f = { p, c, messages: [], log: [], n: 0 };
@@ -96,12 +103,21 @@ test("the gate lets a Legends' Quest player out, the guards saluting", async (t)
   assert.deepEqual(shown(f), [38848, 1573, 38848, 1574, 2391, 2392]);
 });
 
-test("without Legends' Quest neither the gate nor the doors open", async (t) => {
-  for (const [id, x, y] of [[2392, 2729, 3349], [2896, 2728, 3373]]) {
-    const f = actor(t, [x, y], false);
-    await click(f, id, x, y);
-    assert.deepEqual(where(f), [x, y]);
-    assert.ok(f.messages.includes("You need to complete the Legends' quest before you can enter the Legends' Guild."));
-    assert.deepEqual(shown(f), []);
-  }
+test("with the requirements but not Legends' Quest, the gate opens and the doors do not", async (t) => {
+  const gate = actor(t, [2729, 3349], null);
+  await click(gate, 2392, 2729, 3349);
+  assert.deepEqual(where(gate), [2729, 3350]);
+  const doors = actor(t, [2728, 3373], null);
+  await click(doors, 2896, 2728, 3373);
+  assert.deepEqual(where(doors), [2728, 3373]);
+  assert.ok(doors.messages.includes("You need to complete the Legends' quest before you can enter the Legends' Guild."));
+  assert.deepEqual(shown(doors), []);
+});
+
+test("without the quest points and prerequisite quests the gate stays shut", async (t) => {
+  const f = actor(t, [2729, 3349], false);
+  await click(f, 2392, 2729, 3349);
+  assert.deepEqual(where(f), [2729, 3349]);
+  assert.ok(f.messages.some((m) => m.includes("107 quest points")), f.messages.join(" | "));
+  assert.deepEqual(shown(f), []);
 });

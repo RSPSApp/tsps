@@ -247,10 +247,17 @@ module.exports = function registerLegendsQuest(api) {
   // edge of their tile. On the click both become inviswall 38848, the open leaves stand one tile north
   // (rotations 0 and 2), the player steps one tile across and the leaves are restored two ticks later.
   const GUILD_ENTRANCES = [
+    // The grounds gate needs only the quest's quest points and prerequisite quests; the building's
+    // doors need Legends' Quest complete.
     { closed: [2391, 2392], open: [1573, 1574], y: 3349, sound: 71,
-      message: "The guards salute you as you walk past.", shout: "Legends Guild Member Approaching!" },
+      message: "The guards salute you as you walk past.", shout: "Legends Guild Member Approaching!",
+      allowed: (player) => meetsQuestRequirements(player),
+      // shortcut: uncaptured refusal; replace with the guards' real lines when a capture has them.
+      refusal: "You need 107 quest points and to have completed Family Crest, Heroes' Quest, Shilo Village, Underground Pass and Waterfall Quest to enter." },
     { closed: [ObjectIdentifiers.LEGENDS_GUILD_DOOR, ObjectIdentifiers.LEGENDS_GUILD_DOOR_2], open: [2898, 2899], y: 3373, sound: 46,
-      message: "You push the huge Legends' Guild doors open." },
+      message: "You push the huge Legends' Guild doors open.",
+      allowed: (player) => questStage(player) >= STAGE_COMPLETE,
+      refusal: "You need to complete the Legends' quest before you can enter the Legends' Guild." },
   ];
   const GUILD_ENTRANCE_XS = [2728, 2729];
   const GUILD_INVISWALL = 38848;
@@ -389,6 +396,11 @@ module.exports = function registerLegendsQuest(api) {
     for (const [skill, level] of REQUIRED_SKILLS) {
       if (player.getSkillManager().getMaxLevel(skill) < level) return false;
     }
+    return meetsQuestRequirements(player);
+  }
+
+  /** The quest points and prerequisite quests, without the skills: what the guild gate asks for. */
+  function meetsQuestRequirements(player) {
     if ((Number(player.getAttribute("quest.points")) || 0) < REQUIRED_QUEST_POINTS) return false;
     if (!waterfallQuestComplete(player)) return false;
     for (const [attribute, completeAt] of REQUIRED_QUESTS) {
@@ -1933,10 +1945,8 @@ module.exports = function registerLegendsQuest(api) {
     const oy = Number(location?.getY?.() ?? location?.y);
     const entrance = GUILD_ENTRANCES.find((e) => e.closed.includes(objectId) && e.y === oy && GUILD_ENTRANCE_XS.includes(ox));
     if (!entrance) return false;
-    // Completing Legends' Quest already needs its 107 quest points and prerequisite quests.
-    // shortcut: the gate's refusal is uncaptured, so it reuses the doors' line.
-    if (questStage(player) < STAGE_COMPLETE) {
-      player.sendMessage("You need to complete the Legends' quest before you can enter the Legends' Guild.");
+    if (!entrance.allowed(player)) {
+      player.sendMessage(entrance.refusal);
     } else {
       crossGuildEntrance(player, entrance);
     }
@@ -1977,7 +1987,8 @@ module.exports = function registerLegendsQuest(api) {
     player.getPacketSender().sendSound(entrance.sound, 1, 0);
     swingGuildEntrance(entrance, true);
     ObstacleRunner.run({ player }, [{ walk: [[x, target]] }]);
-    if (entrance.shout) {
+    // shortcut: only members get a shout; the during-quest "I hope the quest is going well" is not sent.
+    if (entrance.shout && questStage(player) >= STAGE_COMPLETE) {
       const guard = api.core.World.getNpcsNear(at, 6).find((npc) => GUARD_IDS.has(npc.getId()));
       guard?.forceChat(entrance.shout);
     }

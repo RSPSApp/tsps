@@ -18,6 +18,9 @@ const FARM_ATTRIBUTE = "farming:state";
 const GROWTH_MULTIPLIER_CONFIG = "Farming:growthMultiplier";
 /** Making and placing a scarecrow (Wiki, Scarecrow). */
 const SCARECROW_LEVEL = 23;
+const PICKUP_TABLE_ANIMATION = 832; // human_pickuptable
+const SCARECROW_SOUND = 2584; // hay sack fill and spear step (rsprox captures)
+const HAY_SACK_SOUND_DELAY = 10;
 /** A grown willow tree regrows one of its six branches this often (Wiki: Willow branch). */
 const WILLOW_BRANCH_MINUTES = 5;
 const TROLL_HERB_PATCH = Data.CACHE.patches.find(p => p.type === "HERB" && p.x === 2826 && p.y === 3694 && p.z === 0);
@@ -959,6 +962,19 @@ function objectInteraction(event) {
     else inspect(player, patch);
     syncPatch(player, patch);
 }
+// Hay bales, Hay Bales and Haystacks: "most hay bales or any haystack" (Wiki, Hay sack). Exact
+// names, so Shayzien locs are not taken for hay.
+const HAY_LOC_NAME = /^(?:hay ?bales?|haystack)$/;
+/** Empty sack on hay: rsprox captures (local 1000341 t12816-12826; rev 227 Leagues). */
+function fillHaySack(player, slot) {
+    const sack = player.getInventory().forSlot(slot);
+    if (sack?.getId() !== Data.itemId("Empty sack")) return;
+    sack.setId(core.ItemIdentifiers.HAY_SACK);
+    player.getInventory().refreshItems();
+    animate(player, PICKUP_TABLE_ANIMATION);
+    player.getPacketSender().sendSound(SCARECROW_SOUND, 1, HAY_SACK_SOUND_DELAY);
+    spam(player, "You fill the sack with straw.");
+}
 function itemOnObject(event) {
     const { player, itemId: id, object, location } = event;
     WORK.delete(player);
@@ -967,10 +983,9 @@ function itemOnObject(event) {
     const patch = findPatch(object.getId(), location);
     if (!patch) {
         const name = core.ObjectDefinition.forPlayer(object.getId(), player)?.getName()?.toLowerCase() ?? "";
-        if (/hay(?: bale|stack)?/.test(name) && id === Data.itemId("Empty sack")) {
+        if (HAY_LOC_NAME.test(name) && id === Data.itemId("Empty sack")) {
             event.handled = true;
-            player.getInventory().deleteAtSlot(event.itemSlot);
-            player.getInventory().addItem(new core.Item(Data.itemId("Hay sack"))); return;
+            fillHaySack(player, event.itemSlot); return;
         }
         if (["fountain", "sink", "gold sink", "waterpump", "water pump", "pump and drain", "pump and tub", "water barrel", "well"].includes(name) && /^(?:Watering can(?:\([1-8]\))?|Gricoller's can)$/.test(core.CacheDefinitions.getItem(id).name)) {
             event.handled = true;
@@ -1472,5 +1487,5 @@ function attach(api) {
     api.registerNpcCombatMethodProvider(core.NpcIdentifiers.HESPORI_2, Hespori.HesporiCombat, { singleton: false });
 }
 
-Object.assign(module.exports, { article, addFarmerSetText, FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, readGrowthMultiplier, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
+Object.assign(module.exports, { article, addFarmerSetText, FARM_ATTRIBUTE, SCARECROW_LEVEL, SCARECROW_SOUND, farmFor, readGrowthMultiplier, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
     startClear, after, spam, sound, awardPendingPlantExperience });

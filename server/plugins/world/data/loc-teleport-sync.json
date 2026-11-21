@@ -144,6 +144,10 @@
       "requires": [
         {"quest": "death_to_the_dorgeshuun", "refuse": {"message": "You need to complete Death to the Dorgeshuun to enter Dorgesh-Kaan."}}
       ]},
+    {"name": "kalphite_hive_wall_update_entrance", "source": "https://oldschool.runescape.wiki/w/Tunnel_(Kalphite_Lair) (Completion of Death to the Dorgeshuun is required to be able to use the tunnel); refusal captured, rsprox local 1001685 t8528",
+      "requires": [
+        {"quest": "death_to_the_dorgeshuun", "refuse": {"message": "It looks like the tunnel is blocked at the other end."}}
+      ]},
     {"name": "vmq4_crypt_door_to_moki", "source": "#3828: the multiloc's Pass-through variant shows from The Final Dawn's stage 61 (vmq4, varbit 16663); before it the closed door is the quest's. No refusal: the client shows no Pass-through",
       "requires": [
         {"varbit": 16663, "atLeast": 61, "refuse": {}}

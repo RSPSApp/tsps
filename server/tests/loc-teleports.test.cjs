@@ -367,6 +367,53 @@ test("the Ancient Cavern whirlpool requires Barbarian firemaking and pyre-ship t
   assert.deepEqual([visit.player.getLocation().getX(), visit.player.getLocation().getY(), visit.player.getLocation().getZ()], entry.to);
 });
 
+test("the Kalphite Lair tunnel needs Death to the Dorgeshuun, then links both ways with the South Dungeon's blocked tunnel", () => {
+  const where = (player) => [player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()];
+  const tunnel = data.locs.find((loc) => loc.name === "kalphite_hive_wall_update_entrance");
+  const blocked = ["dorgesh_caves_kalphite_l", "dorgesh_caves_kalphite_r"].map((name) => data.locs.find((loc) => loc.name === name));
+  assert.deepEqual([tunnel.id, tunnel.x, tunnel.y, tunnel.z], [CacheDefinitions.getLocId("kalphite_hive_wall_update_entrance"), 3515, 9520, 2]);
+  assert.deepEqual(blocked.map((loc) => [loc.id, loc.x, loc.y, loc.z]), [[22656, 2710, 5206, 0], [22657, 2710, 5207, 0]]);
+  for (const loc of [tunnel, ...blocked]) assert.equal(CacheDefinitions.getObject(loc.id).actions[0], "Enter");
+  const lands = [...tunnel.sides.map((side) => side.to), ...blocked.map((loc) => loc.to)];
+  for (const [x, y, z] of lands) assert.equal(core.RegionManager.getClipping(x, y, z, null) & 0x1200100, 0, `${x},${y},${z} is walkable`);
+  const gate = decisions.requirements.find((decision) => decision.name === tunnel.name);
+  assert.deepEqual(tunnel.requires, gate.requires, "the sync keeps the gate");
+
+  const object = locAt(tunnel.id, tunnel.x, tunnel.y, tunnel.z);
+  const click = (visit, loc) => {
+    const event = { player: visit.player, object: loc, objectId: loc.getId(), clickType: 1, handled: false };
+    hooks.object(event);
+    assert.equal(event.handled, true);
+  };
+  const visit = explorer([3514, 9521, 2]);
+  const messages = [];
+  visit.player.sendMessage = (message) => messages.push(message);
+  questsDone.delete("death_to_the_dorgeshuun");
+  click(visit, object);
+  runTicks(visit, 3);
+  assert.deepEqual(messages, ["It looks like the tunnel is blocked at the other end."], "captured refusal (rsprox local 1001685)");
+  assert.deepEqual(where(visit.player), [3514, 9521, 2]);
+
+  questsDone.add("death_to_the_dorgeshuun");
+  try {
+    click(visit, object);
+    runTicks(visit, 3);
+    assert.deepEqual(where(visit.player), [2711, 5206, 0]);
+    const south = explorer([3514, 9520, 2]);
+    click(south, object);
+    runTicks(south, 3);
+    assert.deepEqual(where(south.player), [2711, 5207, 0], "each tile of the 2-wide tunnel leads to the blocked tunnel tile opposite");
+    for (const [loc, to] of [[blocked[0], [3514, 9521, 2]], [blocked[1], [3514, 9520, 2]]]) {
+      const back = explorer([2711, loc.y, 0]);
+      click(back, locAt(loc.id, loc.x, loc.y, loc.z));
+      runTicks(back, 3);
+      assert.deepEqual(where(back.player), to);
+    }
+  } finally {
+    questsDone.delete("death_to_the_dorgeshuun");
+  }
+});
+
 test("the DS2 fleet rope ladder reaches the cache-backed upper wreckage route", () => {
   const entry = data.locs.find((loc) => loc.name === "ds2_fleet_rope_ladder_upper");
   assert.deepEqual([entry.id, entry.x, entry.y, entry.z, entry.option, entry.to],

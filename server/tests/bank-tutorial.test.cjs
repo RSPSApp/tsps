@@ -155,3 +155,11 @@ test("closing the bank or logging out mid-walkthrough puts the player's own mode
   swapper.getPacketSender().sendInterfaceRemoval();
   assert.equal(swapper.insertModeReturn(), false, "a swap-mode player stays in swap");
 });
+
+test("a server shutdown mid-walkthrough puts the player's own mode back before the save", (t) => {
+  const { p } = banker(t);
+  clickTutorial(p);
+  assert.equal(p.insertModeReturn(), false);
+  PM.emitServerShutdown({});
+  assert.equal(p.insertModeReturn(), true);
+});

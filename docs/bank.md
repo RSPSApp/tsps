@@ -84,5 +84,6 @@ runs a 16-step screen highlight walkthrough, `plugins/interface/BankTutorial.plu
   the bank again, with the player's own mode back (`bank_insertmode` 0 -> 1 for an insert player). Clicking the button again
   starts from step 0.
 
-Ours: closing the bank or logging out mid-walkthrough ends it and puts the player's own mode back
-too, so swap is never saved; no recording shows either.
+Ours: closing the bank, logging out or a server shutdown mid-walkthrough puts the player's own mode
+back too, so none of those saves swap; no recording shows any. An autosave mid-walkthrough followed
+by a crash still could (a window one walkthrough long).

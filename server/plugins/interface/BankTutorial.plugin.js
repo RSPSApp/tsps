@@ -11,8 +11,9 @@
  *   walkthrough, puts the player's own swap/insert mode back (3959 0 -> 1 when it was insert) and
  *   opens the bank again.
  * - Clicking the button again starts over from the first step.
- * Ours: closing the bank or logging out mid-walkthrough ends it with the bank and puts the
- * player's mode back too (no recording shows either), so it is never saved as swap.
+ * Ours: closing the bank, logging out or a server shutdown mid-walkthrough puts the player's
+ * mode back too (no recording shows any), so none of those saves swap. An autosave mid-walkthrough
+ * followed by a crash still could; the window is one walkthrough long.
  */
 const TUTORIAL = require("./data/bank-tutorial.json");
 
@@ -32,7 +33,7 @@ function bind(pluginApi) {
 }
 let ids = null;
 /** Per player in the walkthrough: their own insert mode, put back when it ends. */
-const savedInsertMode = new WeakMap();
+const savedInsertMode = new Map();
 
 function lookup() {
   if (ids) return ids;
@@ -97,6 +98,11 @@ function loggedOut({ player }) {
   restoreInsertMode(player);
 }
 
+/** The shutdown save (after this hook, without logouts) keeps everyone's own mode. */
+function serverShutdown() {
+  for (const player of [...savedInsertMode.keys()]) restoreInsertMode(player);
+}
+
 module.exports = {
   name: "BankTutorial",
   description: "The bank's tutorial button: the 16-step screen highlight walkthrough of the bank.",
@@ -106,5 +112,6 @@ module.exports = {
     pluginApi.onCustomEvent("screen-highlight:finished", tutorialFinished);
     pluginApi.onCustomEvent("interface:closed", bankClosed);
     pluginApi.onPlayerLogout(loggedOut);
+    pluginApi.onServerShutdown(serverShutdown);
   },
 };

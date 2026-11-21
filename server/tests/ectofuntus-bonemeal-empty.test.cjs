@@ -73,6 +73,19 @@ test("every bonemeal in bones.json has Empty, naming its bones from the pot's na
   assert.equal(text("pot_bonemeal"), "You empty the pot of crushed bones.");
   assert.equal(text("pot_bonemeal_dragon"), "You empty the pot of crushed dragon bones.");
   assert.equal(text("pot_bonemeal_babydragon"), "You empty the pot of crushed baby dragon bones.");
+  // Where the cache name is shorter than the Wiki examine, bones.json's contents gives the examine's words.
+  assert.equal(text("pot_bonemeal_small_ninja_monkey"), "You empty the pot of crushed small ninja monkey bones.");
+  assert.equal(text("pot_bonemeal_alan"), "You empty the pot of Alan's crushed bones.");
+  assert.equal(text("pot_bonemeal_dagannoth"), "You empty the pot of crushed Dagannoth-king bones.");
+});
+
+test("the pot keeps the bonemeal's meta", () => {
+  const h = player("pot_bonemeal_big", 4);
+  h.p.getInventory().setItem(4, new core.Item(h.id, 1, { preset: true }));
+  emptyPot(h);
+  const pot = h.p.getInventory().getItems()[4];
+  assert.equal(pot.getId(), core.ItemIdentifiers.POT);
+  assert.deepEqual(pot.getMeta(), { preset: true });
 });
 
 test("Empty does nothing when the clicked slot no longer holds the pot", () => {

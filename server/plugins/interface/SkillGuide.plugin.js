@@ -53,7 +53,6 @@ const LEVELUP_LIST_BY_STAT = new Map([
 ]);
 /** Server Skill names that differ from the gameval's. */
 const LEVELUP_LIST_BY_SKILL_NAME = new Map([["runecrafting", "runecraft"]]);
-const FLASHSIDE_VARBIT = 3756;
 /** flashside's value for the Skills tab (stone1): the tab index plus one. */
 const FLASH_SKILLS_TAB = 2;
 /** The Skills tab button (stone1) per gameframe root, as captured (161:60, 548:65, 164:53). */
@@ -78,6 +77,11 @@ let api;
 
 const uid = (child) => (GUIDE << 16) | child;
 
+/** flashside (3756 in this cache): which side tab flashes. */
+function flashsideVarbit() {
+  return api.core.CacheDefinitions.getVarbitId("flashside");
+}
+
 function levelupListVarbit(name) {
   return name === undefined ? null : api.core.CacheDefinitions.getVarbitId(`levelup_list_${name}`);
 }
@@ -94,13 +98,15 @@ function rememberLevelUp({ player, skill, oldLevel }) {
   if (varbit == null) return;
   const sender = player.getPacketSender();
   if (!sender.getVarbit(varbit)) sender.sendVarbit(varbit, oldLevel + 1);
-  if (!sender.getVarbit(FLASHSIDE_VARBIT)) sender.sendVarbit(FLASHSIDE_VARBIT, FLASH_SKILLS_TAB);
+  const flashside = flashsideVarbit();
+  if (flashside != null && !sender.getVarbit(flashside)) sender.sendVarbit(flashside, FLASH_SKILLS_TAB);
 }
 
 /** Clicking the Skills tab stops its level-up flash. */
 function skillsTabClicked(player) {
   const sender = player.getPacketSender();
-  if (sender.getVarbit(FLASHSIDE_VARBIT) === FLASH_SKILLS_TAB) sender.sendVarbit(FLASHSIDE_VARBIT, 0);
+  const flashside = flashsideVarbit();
+  if (flashside != null && sender.getVarbit(flashside) === FLASH_SKILLS_TAB) sender.sendVarbit(flashside, 0);
 }
 
 /**

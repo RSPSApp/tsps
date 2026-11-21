@@ -75,7 +75,7 @@ function levelUp(account, skillName, oldLevel, newLevel) {
 }
 
 const varbit = (name) => CacheDefinitions.getVarbitId(name);
-const FLASHSIDE = 3756;
+const FLASHSIDE = 3756; // flashside, as captured
 
 function click(account, groupId, childId, extra = {}) {
   const event = { player: account, groupId, childId, buttonId: (groupId << 16) | childId, action: 2, handled: false, ...extra };
@@ -234,6 +234,7 @@ test("every stat's levelup_list varbit is in the cache, and every server skill h
     // The stat components carry the same names, but Runecraft's is "runecrafting".
     assert.equal(stats.get(child).replace(/^runecrafting$/, "runecraft"), name);
   }
+  assert.equal(CacheDefinitions.getVarbitId("flashside"), FLASHSIDE);
   // Captured ids: farming 20179, woodcutting 20169, crafting 20177.
   assert.deepEqual(["farming", "woodcutting", "crafting"].map((name) => varbit(`levelup_list_${name}`)), [20179, 20169, 20177]);
   const account = levelledPlayer();

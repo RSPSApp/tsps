@@ -16,7 +16,7 @@ const { Location } = require("../dist/game/model/Location");
 const { RegionManager } = require("../dist/game/collision/RegionManager");
 
 const plugin = require("../plugins/areas/MythsGuild.plugin");
-const { BASEMENT, DOG_LINE, DOG_ANSWER, PET_ANIMATION, isTopFloor, clipTopFloorVoid } = plugin._test;
+const { BASEMENT, DOG_LINE, DOG_ANSWER, PET_ANIMATION, isTopFloor, clipTopFloorVoid, PORTALS, PORTAL_DELAY_TICKS, PORTAL_MESSAGE, PORTAL_SOUND } = plugin._test;
 
 let core, objects, npcs;
 
@@ -108,4 +108,36 @@ test("the top floor's walkway is walkable and the void around it is not", () => 
   assert.ok(!step(2457, 2855, 0, 1), "off the north end");
   assert.ok(!step(2448, 2847, -1, 0), "off the west ring");
   assert.ok(!step(2466, 2847, 1, 0), "off the east ring");
+});
+
+// A live capture (2026-11-21) of each portal: two ticks after reaching it, the message, the move and
+// sound 200 together.
+test("each top-floor portal's Enter moves the player to its guild two ticks later", () => {
+  const expected = {
+    "Portal of Heroes": [2904, 3511, 0],
+    "Portal of Champions": [3191, 3365, 0],
+    "Portal of Legends": [2728, 3367, 0],
+  };
+  assert.deepEqual(Object.keys(PORTALS).sort(), Object.keys(expected).sort());
+  for (const [name, landing] of Object.entries(expected)) {
+    const player = makePlayer(2457, 2853);
+    player.setLocation(new Location(2457, 2853, 2));
+    const messages = [];
+    const sounds = [];
+    const sender = player.getPacketSender();
+    sender.sendTypedMessage = (type, text) => { messages.push([type, text]); return sender; };
+    sender.sendSound = (id) => { sounds.push(id); return sender; };
+    const enter = objects.get(name)?.Enter;
+    assert.equal(typeof enter, "function", `Enter is registered for ${name}`);
+    enter({ player, handled: false });
+    for (let tick = 1; tick < PORTAL_DELAY_TICKS; tick++) core.TaskManager.process();
+    assert.equal(player.getLocation().getZ(), 2, `${name}: still upstairs before the second tick`);
+    assert.equal(messages.length, 0, `${name}: no message yet`);
+    core.TaskManager.process();
+    const at = player.getLocation();
+    assert.deepEqual([at.getX(), at.getY(), at.getZ()], landing, `${name}: its guild`);
+    assert.deepEqual(messages, [[core.ChatType.SPAM, PORTAL_MESSAGE]]);
+    assert.deepEqual(sounds, [PORTAL_SOUND]);
+    player.setRegistered(false);
+  }
 });

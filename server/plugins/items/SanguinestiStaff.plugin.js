@@ -245,7 +245,6 @@ function checkCharges({ player, item }) {
   return true;
 }
 
-/** Wiki: uncharging returns every blood rune spent. */
 /**
  * Live refuses to wield the uncharged staff (local 1001250 tick 721). Ours: the Holy staff's refusal names its own
  * item the same way; it is not captured.
@@ -261,6 +260,7 @@ function refuseUnchargedWield(event) {
   event.player.sendMessage(`Your ${name} has no charges! You can use blood runes to power the staff.`);
 }
 
+/** Wiki: uncharging returns every blood rune spent. */
 function uncharge({ player, item }) {
   const { Item } = core;
   const charges = chargesOf(item);

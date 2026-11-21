@@ -155,16 +155,20 @@ function heads(p) {
   return out;
 }
 
-test('Vanstrom in the pub has his human head (5056), not the cutscene vampyre (9632) In Aid of the Myreque uses', async (t) => {
-  const p = actor(t, 0, 3492, 3477);
+test('Vanstrom in the pub: a Talk-to on the stranger (6269) has the stranger\'s head on every line, not the cutscene vampyre (9632) In Aid of the Myreque uses', async (t) => {
+  const p = actor(t, 0, 3502, 3477);
   login(p);
+  const stranger = core.NPC.create(6269, new core.Location(3503, 3477, 0));
+  t.after(() => { if (stranger.isRegistered?.()) PM.removeNpc(stranger); });
   const shown = heads(p);
-  await converse(p, () => PM.emitCustomEvent('npc-dialogue:start', {
-    player: p, npcId: core.NpcIdentifiers.VANSTROM_KLAUSE_8, variant: { page: PAGE, variant: 'starting-out-vanstrom-klause' }, exact: true,
+  await converse(p, () => PM.emitNpcInteraction({
+    player: p, npc: stranger, definition: stranger.getCurrentDefinition(p), npcId: stranger.getContentId(p),
+    action: 'Talk-to', clickType: 1, handled: false,
   }), [], { maxTicks: 10 });
   const vanstrom = shown.filter(([name]) => name === 'Vanstrom Klause');
   assert.ok(vanstrom.length > 0, JSON.stringify(shown));
-  assert.deepEqual([...new Set(vanstrom.map(([, id]) => id))], [5056]);
+  // Live: multi_vanstrom_stranger_entity (6269) on every line (ticks 9-184), his human form at varbit 396 = 0.
+  assert.deepEqual([...new Set(vanstrom.map(([, id]) => id))], [6269]);
 });
 
 test('the hideout cutscene: each speaker has their cutscene actor\'s head, Vanstrom his vampyre form (9632)', async (t) => {
@@ -176,7 +180,8 @@ test('the hideout cutscene: each speaker has their cutscene actor\'s head, Vanst
     player: p, npcId: core.NpcIdentifiers.VELIAF_HURTZ_2,
     variant: { page: PAGE, variant: 'myreque-hideout-speaking-to-veliaf-after-introduced-to-other-members' }, exact: true,
   }), ["Let's talk about the weapons."], { maxTicks: 120, idleTicks: 16 });
-  // Live (ticks 1307-1359): Harold 9625, Veliaf 9621, Sani 9623, Vanstrom 9632 twice, Sani, Vanstrom, Harold, Vanstrom.
+  // Live's heads (ticks 1307-1359): Harold 9625, Veliaf 9621, Sani 9623, Vanstrom 9632 twice, Sani, Vanstrom, Harold,
+  // Vanstrom; plus the transcript's "Sorry Harold, you too!" (Vanstrom), which the recording skips (a recorded difference).
   const scene = shown.slice(shown.findIndex(([name]) => name === 'Harold Evans'));
   assert.deepEqual(scene, [
     ['Harold Evans', 9625], ['Veliaf Hurtz', 9621], ['Sani Piliu', 9623], ['Vanstrom Klause', 9632], ['Vanstrom Klause', 9632],

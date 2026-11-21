@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, CacheDefinitions, PluginManager, MapObjects, Item, PlayerStatus } = require("./Core.Construction");
+const { api, Animation, CacheDefinitions, ChatType, CountdownTask, HitDamage, HitMask, PluginManager, MapObjects, Item, PlayerStatus, TaskManager } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 const PetForms = require("./PetForms.Construction");
@@ -35,6 +35,13 @@ const FORMS_ATTRIBUTE = "construction:menagerie-forms";
 const MULTIFORM_ENUM_PARAM = 446;
 const MENAGERIE_ROOMS = new Set(["MENAGERIE_INDOORS", "MENAGERIE_OUTDOORS"]);
 const MENAGERIE_FURNITURE = /HOUSE$|HABITAT$|SCRATCHING_POST$|ARENA$|FEEDER$|PET_LIST$/;
+// The desert habitat's cactus (rsprox capture 2792 ticks 768-890; Wiki: Desert habitat): Touch
+// faces it and plays human_pickuptable, and the tick after says "That was unwise." (spam) and
+// hits for 2. A touch takes those two ticks, so held clicks touch every other tick.
+const CACTUS = Ids.loc("poh_menagerie_habitat_feature_3");
+const TOUCH_ANIMATION = new Animation(Ids.seq("human_pickuptable"));
+const CACTUS_DAMAGE = 2;
+const touching = new WeakSet();
 const ROAM_RADIUS = 3;
 const MAX_ROAMING = 20;
 
@@ -104,6 +111,22 @@ function view(event) {
   if (!inMenagerie(event)) return false;
   event.player.getPacketSender().sendInterface(MENAGERIE_INTERFACE);
   sendStored(event.player);
+  return true;
+}
+
+/** The cactus's Touch: the pick-up animation, then the sting a tick later. */
+function touchCactus(event) {
+  if (event.objectId !== CACTUS) return false;
+  const player = event.player;
+  if (touching.has(player)) return true;
+  touching.add(player);
+  player.performAnimation(TOUCH_ANIMATION);
+  TaskManager.submit(new CountdownTask(player, 1, () => {
+    touching.delete(player);
+    if (!player.isRegistered()) return;
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, "That was unwise.");
+    player.getCombat().getHitQueue().addPendingDamage([new HitDamage(CACTUS_DAMAGE, HitMask.RED)]);
+  }));
   return true;
 }
 
@@ -284,6 +307,7 @@ function attachMenagerie(api) {
     api.onObjectInteraction(name, { View: view });
   }
   api.onObjectInteraction("Pet list", { Read: readPetList });
+  api.onObjectInteraction("Cactus", { Touch: touchCactus });
   api.onItemOnObject(storePet, { noted: false });
   api.onInterfaceActionClick(interfaceClick);
   api.onCustomEvent("pets:held-elsewhere", heldInMenagerie);

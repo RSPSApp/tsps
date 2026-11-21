@@ -22,7 +22,7 @@ covers something, this page says so.
 | `Bookcase`, `TipJar`, `Scrying`, `CapeHanger`, `Trophies` | Bookcases, tip jars, the scrying pool, the cape hanger, skill hall trophy displays |
 | `CombatRings` | Boxing, fencing and combat rings, ranging pedestals, racks, the balance beam |
 | `GamesRoom` with `Prizes`, `RangingGames`, `Hangman`, `ElementalBalance`, `AttackStone`, `Jester`, `TreasureHunt` | The games room |
-| `Menagerie` | Pet houses, the pet list, roaming pets |
+| `Menagerie` | Pet houses, the pet list, roaming pets, the desert habitat's cactus |
 | `Dungeon`, `ThroneRoom` | Guards, traps, doors, treasure, oubliette; the throne room lever, trapdoors and cages, challenge mode |
 | `MahoganyHomes` | Contractors, contracts, the clients' homes, the reward shop |
 | `Menu`, `Commands` | The generic option menu (script 217); `::hotspots` |
@@ -336,6 +336,11 @@ followed by `|`. A slot is Owned when the reader owns that pet (`pets:owns`, the
 record): recording 2581's nine Owned slots are exactly its nine `pet_insurance_*` bits, with
 nothing stored in the menagerie. Examine sends the pet's examine for owned and unowned slots
 alike (2581: "A tiny frost nagua." on the unowned Moxi, slot 61).
+
+The desert habitat's cactus (`poh_menagerie_habitat_feature_3`) has Touch. In rsprox capture
+2792 (ticks 768-890) the player walks up, faces it and plays `human_pickuptable` (832); the
+next tick sends "That was unwise." as a spam message and a 2-damage hitsplat, and held clicks
+touch every other tick. The Wiki (Desert habitat) gives the same 2 damage and message.
 
 ### Dungeon and throne room
 

@@ -337,6 +337,7 @@ const moon = () => chest("moon");
 function createMoonPlayer({ key = 1 } = {}) {
   const player = createLockerPlayer({ key: 0 });
   if (key) player.inventory.set(obj("varlamore_key"), key);
+  player.performAnimation = (animation) => player.animations.push([animation.getId(), animation.getDelay?.() ?? animation.delay]);
   player.getPacketSender = () => ({ sendSound: (id, _loops, delay) => player.sounds.push([id, delay]), sendVarbit() {} });
   return player;
 }
@@ -365,7 +366,7 @@ test("opening the moon key chest: sound 77 and the unlock line, then sound 76, t
   const openLoc = CacheDefinitions.getLocId("varlamore_moon_chestopen");
   withRandom([0.5, 0.5, 0], () => {
     Chests.openChest(moon(), player, lockerObject());
-    assert.deepEqual([player.animations, player.sounds, player.messages], [[openchest], [[77, 10]], ["You unlock the chest with your key."]]);
+    assert.deepEqual([player.animations, player.sounds, player.messages], [[[openchest, 10]], [[77, 10]], ["You unlock the chest with your key."]]);
     ticks(1, registered);
   });
   assert.equal(player.inventory.get(obj("varlamore_key")), 1, "one key goes");

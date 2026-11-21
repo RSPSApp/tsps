@@ -66,7 +66,7 @@ points it sent aren't ours):
 
 | Tick | What |
 | --- | --- |
-| 0 | Animation `human_openchest`, sound 77 (delay 10), "You unlock the chest with your key." |
+| 0 | Animation `human_openchest` and sound 77, both with delay 10, "You unlock the chest with your key." |
 | 1 | Sound 76 (delay 45), the key goes, the loot, "You find some treasure in the chest!"; the chest becomes loc 55236 for everyone |
 | 3 | The chest is loc 55235 again |
 

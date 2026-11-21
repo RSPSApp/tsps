@@ -67,8 +67,8 @@ function countMessage(chest, player) {
   return chest.count.message.replace("{count}", count === 1 ? text : `${text} times`);
 }
 
-function animate(player, seq) {
-  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId(seq)));
+function animate(player, seq, delay = 0) {
+  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId(seq), delay));
 }
 
 function setOpen(chest, player, object, open) {
@@ -178,7 +178,7 @@ function playSound(player, sound) {
 }
 
 function openTreasureChest(chest, player, object) {
-  animate(player, "human_openchest");
+  animate(player, "human_openchest", chest.animDelay ?? 0);
   playSound(player, chest.sounds ? chest.sounds.open : [OPEN_CHEST_SOUND, 0]);
   if (!chest.itemBox) player.sendMessage("You unlock the chest with your key.");
   later(1, () => {

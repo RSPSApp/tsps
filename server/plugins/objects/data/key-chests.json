@@ -280,6 +280,7 @@
       "key": "varlamore_key",
       "locked": "The chest is securely locked.",
       "sounds": { "open": [77, 10], "loot": [76, 45] },
+      "animDelay": 10,
       "openTicks": 2,
       "alwaysWithPreRolls": true,
       "loot": {

@@ -841,7 +841,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `PyramidPlunder` | PyramidPlunder | minigames | yes | Adds Pyramid Plunder in Sophanem: eight timed rooms of urns and chests, the Pharaoh's sceptre and Simon Templeton buying artefacts. (members only) |
 | `RoguesDen` | RoguesDen | minigames | yes | Adds Rogues' Den in Burthorpe: its traps and agility obstacles, the wall and lobby safes and the equipment crate rewards. (members only) |
 | `ShadesOfMortton` | Shades of Mort'ton | minigames | yes | Adds the Shades of Mort'ton minigame: shades and their remains, the catacombs, tomb doors and chests, and funeral pyres. (members only) |
-| `SorceresssGarden` | SorceresssGarden | minigames | yes | Adds Sorceress's Garden in Al Kharid: the four seasonal mazes with elementals and sq'irk trees, and brewing and handing in sq'irkjuice. (members only) |
+| `SorceresssGarden` | SorceresssGarden | minigames | yes | Adds Sorceress's Garden in Al Kharid: the four seasonal mazes with elementals and sq'irk trees, searching the house shelves for beer glasses, and brewing and handing in sq'irkjuice. (members only) |
 | `SoulWars` | Soul Wars | minigames | yes | Adds Soul Wars: the lobby and queue, the instanced arena, team avatars, graveyards, souls and fragments, and the obelisk. (members only) |
 | `StealingArtefacts` | StealingArtefacts | minigames | yes | Adds Stealing Artefacts at Port Piscarilius: Captain Khaled's tasks, the six houses' drawers, patrolling guards and the hand-in. (members only) |
 | `TaiBwoWannaiCleanup` | TaiBwoWannaiCleanup | minigames | yes | Adds Tai Bwo Wannai Cleanup: hacking the jungle, mending the fence, trading sticks and their shop, machetes, parcels and the Hardwood Grove. (members only) |

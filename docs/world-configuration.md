@@ -629,7 +629,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Settings` | Settings | interface | yes | All Settings browser, keybindings panel and game client layout dropdown, saving the chosen settings and XP drop options per player. |
 | `SideChannels` | SideChannels | interface | yes | Tab bar of the social tab, switching between chat channel, Your Clan, grouping and (for Group Ironmen) the Group Ironman tab, and remembering the chosen tab between logins. |
 | `SideJournalDefaults` | SideJournalDefaults | interface | yes | The side journal's tabs and the custom Character Summary, with buttons that follow each player's commands. |
-| `SkillGuide` | SkillGuide | interface | yes | Opens the skill guide (new or old style, as All Settings chooses) when you pick View guide on a Skills tab stat, and opens a quest's journal from the Quest XP tab. |
+| `SkillGuide` | SkillGuide | interface | yes | Opens the skill guide (new or old style, as All Settings chooses) when you pick View guide on a Skills tab stat, highlighting what your level-ups since you last looked unlocked (the Skills tab flashes until clicked), and opens a quest's journal from the Quest XP tab. |
 | `SkillLevelUp` | SkillLevelUp | interface | yes | Level-up feedback: chat message, unlock messages, graphic, sound and the level-up pop-up, which pauses skilling until you press Continue. |
 | `SpellbookSublist` | SpellbookSublist | interface | yes | The spellbook's Jewellery Enchantments View and Back buttons, which show the Enchant spells in the Magic tab. |
 | `StaffCrowns` | StaffCrowns | interface | yes | Shows the right chat icon before a player's name: a moderator or admin crown from their rights, else the Ironman icon. |

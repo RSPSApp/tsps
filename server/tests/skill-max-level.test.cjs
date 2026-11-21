@@ -907,7 +907,7 @@ test("as captured: Disabled pop-ups keep the message and graphic, and interrupt 
   assert.deepEqual(p.graphics, [199]);
   assert.equal(p.sent.some(([type]) => type === "chatbox"), false);
   assert.equal(p.stopped, 0);
-  assert.deepEqual(emitted, []);
+  assert.deepEqual(emitted, ["level-up:announced"], "only the announcement (the skill guide's levelup_list)");
   assert.deepEqual(p.animations, []);
 });
 
@@ -931,7 +931,7 @@ test("world config can disable interruption without closing another dialogue or 
   assert.equal(p.getPacketSender().isChatboxInterface(999), true);
   assert.equal(p.sent.some(([type]) => type === "chatbox" || type === "sendInterfaceRemoval"), false);
   assert.equal(p.stopped, 0);
-  assert.deepEqual(emitted, []);
+  assert.deepEqual(emitted, ["level-up:announced"], "only the announcement (the skill guide's levelup_list)");
   assert.deepEqual(p.animations, []);
 });
 
@@ -942,7 +942,20 @@ test("an open pop-up stops skilling and tells the skilling plugins", () => {
   const p = levelledPlayer(core);
   hooks.onPlayerLevelUp({ player: p, skill: Skill.FISHING, oldLevel: 66, newLevel: 67 });
   assert.equal(p.stopped, 1);
-  assert.deepEqual(emitted, [["level-up:popup-opened", Skill.FISHING]]);
+  assert.deepEqual(emitted, [["level-up:announced", Skill.FISHING], ["level-up:popup-opened", Skill.FISHING]]);
+});
+
+test("the announcement says whether the levels gained unlock anything, as the skill guide's list needs", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi(), unlocks = [];
+  const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core, {
+    emitCustomEvent: (name, event) => { if (name === "level-up:announced") unlocks.push(event.unlocks); },
+  });
+  // rsprox 1001336 (rev 240): Attack 2 sets no levelup_list, Attack 5 (steel weapons) does.
+  for (const [oldLevel, newLevel] of [[1, 2], [4, 5], [1, 5]]) {
+    hooks.onPlayerLevelUp({ player: levelledPlayer(core), skill: Skill.ATTACK, oldLevel, newLevel });
+  }
+  assert.deepEqual(unlocks, [false, true, true]);
 });
 
 test("a level-up mid-fight keeps the attack animation", () => {

@@ -343,6 +343,11 @@ alike (2581: "A tiny frost nagua." on the unowned Moxi, slot 61).
   back when the house next loads; in challenge mode they attack guests nearby.
 - **Doors and cages** open and close; in challenge mode they are locked to guests, who pick or
   force them at the Wiki's odds.
+- **Oubliette cage Build-in:** the floor sits inside the cage, so the cage's Build-in (op4) opens
+  the floor space's build menu (Spikes, Tentacle pool, Flame pit, Rocnar). With a floor built it
+  asks "Select an option" / "Remove the contents of the oubliette|Never mind", then the usual
+  "Really remove it?" Yes/No, and Yes removes it like any Remove (rsprox captures 2872 ticks 176
+  and 196, 2873, 2877; rev 230). Outside building mode it does nothing (ours: not captured).
 - **Traps** (challenge mode, Agility dodges) and oubliette floors hurt guests; damage the Wiki
   doesn't give is ours.
 - **Treasure chests** hold the owner's coins up to the chest's limit, added every 5 minutes;

@@ -125,7 +125,13 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
   // The generated identifiers omit the cache's changing-bookshelf multi-locs.
   const CHANGING_BOOKSHELF_BASE = 54735; // stage varbit 11210: bookshelf, then the post-quest passage
   const CHANGING_BOOKSHELF_IN = 54734; // clue varbit 11250: searchable closed/open bookshelf
-  const CHANGING_BOOKSHELF_TILE = new Location(1461, 9331, 0);
+  // The cache places the same multi-loc on both sides of the cellar wall (loc 54735 at
+  // 1458,9331 rot 2 and 1461,9331 rot 0). Replacing only one left the other wall's
+  // bookshelf with the map's optionless during-quest child.
+  const CHANGING_BOOKSHELVES = [
+    { tile: new Location(1458, 9331, 0), face: 2 },
+    { tile: new Location(1461, 9331, 0), face: 0 },
+  ];
   const CRATE_POISON = ObjectIdentifiers.CRATE_341; // 54731, Search
   const BACKSTAGE_ENTRANCE = ObjectIdentifiers.BACKSTAGE_ENTRANCE; // 54715, Enter
   const FANCY_CHEST = ObjectIdentifiers.FANCY_CHEST; // 54736, Open
@@ -235,14 +241,20 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
   const ROOM_INSIDE = new Location(1438, 2938, 0);
   const ROOM_OUTSIDE = new Location(1438, 2940, 0);
   const TOP_FLOOR = new Location(1444, 2935, 2);
-  const CELLAR_INSIDE = new Location(1447, 9333, 0);
-  const CELLAR_STAIR_OUT = new Location(1447, 2938, 0);
+  // Capture 1695: the cellar instance lands at 13781,673; clue locs 55380/55383 and
+  // stair 54716 share the same translation, giving 1445,9337 in the main world.
+  const CELLAR_INSIDE = new Location(1445, 9337, 0);
+  // Capture 1695: the villa instance places the 54716 exit at 11514,902; locs 54714 and
+  // 54720 fix its translation, giving 1450,2934 (cache-walkable).
+  const CELLAR_STAIR_OUT = new Location(1450, 2934, 0);
   const BACKSTAGE_INSIDE = new Location(1466, 9330, 0);
-  const THEATRE_OUTSIDE = new Location(1472, 2925, 0);
+  const THEATRE_OUTSIDE = new Location(1472, 2926, 0); // beside Stradius's 1472,2925 spawn, not on it
   const STAGE_LANDING = new Location(1470, 2931, 0);
   const ROCK_FIRST_TOP = new Location(1471, 2918, 0);
   const ROCK_SECOND_TOP = new Location(1477, 2925, 0);
-  const VILLA_CELLAR_FROM_PASSAGE = new Location(1445, 9336, 0);
+  const VILLA_CELLAR_FROM_PASSAGE = new Location(1457, 9331, 0); // west of the 1458 shelf
+  const THEATRE_CELLAR_FROM_PASSAGE = new Location(1462, 9331, 0); // east of the 1461 shelf
+  const GUEST_ENTRYWAY_TILE = new Location(1426, 2933, 0); // guarded during the party
   const FINAL_VILLA = new Location(1444, 2934, 0);
   const BOSS_TILE = new Location(1446, 2933, 2);
 
@@ -586,33 +598,31 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
     syncChangingBookshelf(player);
   }
 
-  /** The map's changing bookshelf has no options during the quest; this player's copy is searchable. */
+  /** The map's changing bookshelf has no options during the quest; this player's copies are searchable. */
   function syncChangingBookshelf(player) {
     const stage = stageOf(player);
-    const existing = changingBookshelfByPlayer.get(player);
-    if (stage >= STAGE_THEATRE_GUARDS && stage < STAGE_NAIATLI_ACCUSED) {
-      if (existing?.getId() === CHANGING_BOOKSHELF_IN) return;
+    const tracked = changingBookshelfByPlayer.get(player) ?? new Map();
+    changingBookshelfByPlayer.set(player, tracked);
+    const searchable = stage >= STAGE_THEATRE_GUARDS && stage < STAGE_NAIATLI_ACCUSED;
+    for (const { tile, face } of CHANGING_BOOKSHELVES) {
+      const key = `${tile.getX()},${tile.getY()},${tile.getZ()}`;
+      const existing = tracked.get(key);
+      const wantedId = searchable ? CHANGING_BOOKSHELF_IN : CHANGING_BOOKSHELF_BASE;
+      if (existing?.getId() === wantedId) continue;
       if (existing) ObjectManager.deregister(existing, true);
-      const object = new GameObject(CHANGING_BOOKSHELF_IN, cloneBookshelfTile(), 10, 0, null).setOwner(player);
+      // Outside the backstage clue only revert a copy this plugin made; the map object
+      // itself already resolves to its stage child (including the post-quest passage).
+      if (!searchable && !existing) continue;
+      const object = new GameObject(wantedId, tile.clone(), 10, face, null).setOwner(player);
       ObjectManager.register(object, true);
-      changingBookshelfByPlayer.set(player, object);
-      return;
+      tracked.set(key, object);
     }
-    if (!existing || existing.getId() === CHANGING_BOOKSHELF_BASE) return;
-    ObjectManager.deregister(existing, true);
-    const base = new GameObject(CHANGING_BOOKSHELF_BASE, cloneBookshelfTile(), 10, 0, null).setOwner(player);
-    ObjectManager.register(base, true);
-    changingBookshelfByPlayer.set(player, base);
-  }
-
-  function cloneBookshelfTile() {
-    return new Location(CHANGING_BOOKSHELF_TILE.getX(), CHANGING_BOOKSHELF_TILE.getY(), CHANGING_BOOKSHELF_TILE.getZ());
   }
 
   function clearChangingBookshelf(player) {
-    const object = changingBookshelfByPlayer.get(player);
-    if (!object) return;
-    ObjectManager.deregister(object, true);
+    const tracked = changingBookshelfByPlayer.get(player);
+    if (!tracked) return;
+    for (const object of tracked.values()) ObjectManager.deregister(object, true);
     changingBookshelfByPlayer.delete(player);
   }
 
@@ -1679,6 +1689,47 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
     player.moveTo(BACKSTAGE_INSIDE);
   }
 
+  /** The clicked loc's tile: event.location for real clicks, the object's location in tests. */
+  function objectTile(event) {
+    const location = event.location ?? event.object?.getLocation?.();
+    if (!location) return null;
+    const x = location.x ?? location.getX?.();
+    const y = location.y ?? location.getY?.();
+    const z = location.z ?? location.getZ?.();
+    return typeof x === "number" && typeof y === "number" ? new Location(x, y, z ?? 0) : null;
+  }
+
+  /** The two cache bookshelf placements are either side of the cellar wall; cross to the far side. */
+  function handleBookshelfPassage(event) {
+    const { player } = event;
+    event.handled = true;
+    const tile = objectTile(event);
+    const source = event.sourceLocation ?? player.getLocation();
+    const sourceX = source.x ?? source.getX?.() ?? player.getLocation().getX();
+    // Entered from the theatre cellar (east): arrive beside the west shelf, and the reverse.
+    player.moveTo(tile && sourceX > tile.getX() ? VILLA_CELLAR_FROM_PASSAGE : THEATRE_CELLAR_FROM_PASSAGE);
+  }
+
+  function handleEntryway(event) {
+    const { player } = event;
+    const tile = objectTile(event);
+    const x = tile?.getX() ?? GUEST_ENTRYWAY_TILE.getX();
+    const y = tile?.getY() ?? GUEST_ENTRYWAY_TILE.getY();
+    const z = tile?.getZ() ?? GUEST_ENTRYWAY_TILE.getZ();
+    // The guest entrance is guarded during the party. The stage-side entryway is a plain
+    // pass-through and must keep working while the quest is in progress.
+    if (x === GUEST_ENTRYWAY_TILE.getX() && y === GUEST_ENTRYWAY_TILE.getY()
+        && stageOf(player) >= STAGE_ENTERED && !quest.isComplete(player)) {
+      event.handled = true;
+      playVariant(player, VILLA_GUARD, "getting-inside-the-villa-attempting-to-enter-through-the-guest-entrance");
+      return;
+    }
+    event.handled = true;
+    const source = event.sourceLocation ?? player.getLocation();
+    const sourceX = source.x ?? source.getX?.() ?? player.getLocation().getX();
+    player.moveTo(new Location(sourceX <= x ? x + 1 : x - 1, y, z));
+  }
+
   function handleFancyChest(event) {
     const { player } = event;
     event.handled = true;
@@ -1767,9 +1818,7 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
         playVariant(player, COSTUMER, "the-backstage-searching-the-bookshelf");
         return;
       case BOOKSHELF_PASSAGE:
-        event.handled = true;
-        player.moveTo(VILLA_CELLAR_FROM_PASSAGE);
-        return;
+        return handleBookshelfPassage(event);
       case CRATE_POISON:
         return handleCrate(event);
       case FANCY_CHEST:
@@ -1780,11 +1829,7 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
       case STATUE_INACTIVE:
         return handleStatue(event);
       case ENTRYWAY:
-        if (stageOf(player) >= STAGE_ENTERED && !quest.isComplete(player)) {
-          event.handled = true;
-          playVariant(player, VILLA_GUARD, "getting-inside-the-villa-attempting-to-enter-through-the-guest-entrance");
-        }
-        return;
+        return handleEntryway(event);
       case INTERROGATION_DOOR:
         if (stageOf(player) === STAGE_ARRESTED) {
           event.handled = true;

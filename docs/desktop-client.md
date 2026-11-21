@@ -31,3 +31,24 @@ WebKit origins, the existing IndexedDB fallback replaces unsupported CacheStorag
 This PR contains the TSPS/web-client side only. Native installers must inject the
 profile and implement the acknowledgement command; installer generation, signing
 and `/host` download controls are separate.
+
+## Required client version
+
+`/api/world-info` advertises one `clientVersion` identifier. Server builds and web
+releases derive it from the same workflow inputs using `scripts/client-version.mjs`.
+Server-only changes keep the same identifier. The generated server module is
+compiled into the runtime, including browser-host snapshots, so older running
+worlds keep their own requirement without consulting a global latest pointer.
+
+The wrapper reads the build ID from the world's `/api/world-info`. For a relayed
+world it uses the relay's `/worlds?worldId=<id>` HTTP lookup. The browser host
+registers the ID from the running snapshot's `dist/client-release.json`; a
+standalone TSPS server sends its compiled ID when registering directly.
+The wrapper uses the exact signed release and reports an error when the running
+world does not advertise a build.
+
+The wrapper verifies the installed bundle's `client-release.json` against the
+selected release. TSPS registers `DesktopPlugin` only in a Tauri window with a
+launch profile. It acknowledges startup on the next frame after initialization.
+Login uses the existing wire-protocol and cache revision checks. The minimum
+wrapper version is 0.1.2.

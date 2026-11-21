@@ -4,6 +4,7 @@ import { nextClientVersion } from "./release-version.mjs";
 
 test("automatic releases increment the highest stable client version numerically", () => {
     assert.equal(nextClientVersion([]), "0.1.1");
+    assert.equal(nextClientVersion(["client-" + "a".repeat(64), "Web client 0.1.30"]), "0.1.31");
     assert.equal(nextClientVersion(["server-v9.0.0", "client-v1.2.9", "client-v1.2.10", "client-v2.0.0-beta.1"]), "1.2.11");
     assert.equal(nextClientVersion(["client-v1.9.99", "client-v2.0.0"]), "2.0.1");
 });

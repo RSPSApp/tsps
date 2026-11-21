@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 async function main() {
     (globalThis as any).window = { location: { hostname: "localhost", protocol: "tauri:", search: "" },
+        __TAURI__: { core: { invoke: async () => undefined } },
         __RSPS_DESKTOP_PROFILE__: { name: "Example", address: "example.com", secure: true, maxPlayers: 2047 } };
     process.env.PUBLIC_URL = "/";
     process.env.REACT_APP_CACHE_BASE_URL = "https://cdn.example.com/caches/";

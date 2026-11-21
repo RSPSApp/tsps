@@ -1,4 +1,3 @@
-import { notifyDesktopAppReady } from "../desktop";
 import { subscribeProtocolNotice, type ProtocolNotice } from "../network/serverConnection/protocolCompatibility";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -384,12 +383,7 @@ function OsrsClientApp() {
             // ========== Initialize cache and finalize OsrsClient ==========
             client.initCache(cache);
             client.init();
-            // Let the initialized game reach a frame before committing a downloaded bundle.
-            if (window.__RSPS_DESKTOP_PROFILE__) {
-                requestAnimationFrame(() => {
-                    if (!disposed) void notifyDesktopAppReady();
-                });
-            }
+            client.clientPlugins.clientReady(abortController.signal);
 
             // ========== Login Screen Flow ==========
             setAutoSendHandshake(false);

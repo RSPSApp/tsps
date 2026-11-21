@@ -254,6 +254,8 @@ export type ScriptCallbackEvent = { eventName: string; vm: Cs2Vm };
 export type WidgetDragEvent = { source: any; target: any };
 
 export interface ClientPlugin {
+    /** Cache and renderer initialization completed successfully. */
+    clientReady?(signal: AbortSignal): void;
     /** Return true to defer an accepted login's handshake to a plugin. */
     beforeLoginHandshake?(sendHandshake: () => void): boolean;
     /** Extra player headicons; return stable, immutable sprites so textures can be reused. */
@@ -410,6 +412,11 @@ export class ClientPluginManager {
     add(plugin: ClientPlugin): void {
         this.plugins.push(plugin);
         this.implementers.clear();
+    }
+
+    clientReady(signal: AbortSignal): void {
+        if (signal.aborted) return;
+        for (const plugin of this.implementing("clientReady")) plugin.clientReady!(signal);
     }
 
     private implementing(hook: keyof ClientPlugin): ClientPlugin[] {

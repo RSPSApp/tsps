@@ -1,3 +1,5 @@
+import { getDesktopProfile } from "../../config/clientEnv";
+import { DesktopPlugin } from "../../game/plugins/desktop/DesktopPlugin";
 import { subscribePluginMessages } from "../../network/serverConnection/domain/pluginMessages";
 import { PluginMessage } from "@runelite/api/events/PluginMessage";
 import { GameStateChanged, StatChanged } from "@runelite/api/events";
@@ -156,6 +158,7 @@ export class RuneLite {
         for (const plugin of this.pluginManager.getPlugins()) {
             this.client.clientPlugins.add(plugin);
         }
+        if (getDesktopProfile()) this.client.clientPlugins.add(new DesktopPlugin());
         // Last, so its outlines and snap corners draw over every overlay.
         this.client.clientPlugins.add(this.overlayRenderer);
         this.overlayRenderer.start();

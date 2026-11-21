@@ -6,6 +6,7 @@ import {
 } from "../../common/authentication";
 import {
     getBrowserHostWorldConfig,
+    getClientConfig,
     getConfiguredDefaultServer,
     getConfiguredServers,
     getDefaultServerAddress,
@@ -87,13 +88,13 @@ export class LoginState {
     /** Load settings that should persist between sessions */
     private loadPersistedSettings(): void {
         this.titleMusicDisabled = getClientPreference("titleMusicDisabled");
-        // Desktop profiles choose the starting world; switching remains available for this session.
-        const profile = typeof window !== "undefined" ? window.__RSPS_DESKTOP_PROFILE__ : undefined;
-        if (profile) {
-            this.serverTransport = profile.transport ?? "websocket";
-            this.serverSignalUrl = profile.signalUrl;
-            this.serverWorldId = profile.worldId;
-            this.serverIceServers = profile.iceServers ?? [];
+        const config = getClientConfig();
+        if (!config.restoreLastServer) {
+            const server = config.defaultServer;
+            this.serverTransport = server.transport ?? "websocket";
+            this.serverSignalUrl = server.signalUrl;
+            this.serverWorldId = server.worldId;
+            this.serverIceServers = server.iceServers ?? [];
             return;
         }
         const browserHostWorld = getBrowserHostWorldConfig();

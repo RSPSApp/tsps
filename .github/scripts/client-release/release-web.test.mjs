@@ -13,6 +13,7 @@ test("shared releases contain game files and omit installed profile, launcher an
         const dist = join(root, "build"), out = join(root, "release");
         mkdirSync(join(dist, "static"), { recursive: true });
         mkdirSync(join(dist, "caches"));
+        writeFileSync(join(dist, "client-release.json"), JSON.stringify({ clientVersion: "a".repeat(64) }));
         writeFileSync(join(dist, "index.html"), "<html>Shared client</html>");
         writeFileSync(join(dist, "static/game.js"), "console.log('client');");
         writeFileSync(join(dist, "caches/caches.json"), JSON.stringify([{ name: "osrs-test", revision: 242 }]));

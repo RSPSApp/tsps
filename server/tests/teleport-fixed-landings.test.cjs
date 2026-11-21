@@ -21,7 +21,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   core = PluginManager.getCoreApi();
   RegionManager.init();
-  for (const [x, y] of [[2549, 3112], [2796, 2798], [3212, 3424]]) RegionManager.loadMapFiles(x, y);
+  for (const [x, y] of [[2934, 4713], [2796, 2798], [3212, 3424]]) RegionManager.loadMapFiles(x, y);
   SpellTeleports.register({
     core, persistAttribute: () => {}, onPlayerLogin: () => {}, onInterfaceActionClick: () => {}, onCustomEvent: () => {},
     onItemAction: (handler) => { useTablet = handler; },
@@ -53,7 +53,7 @@ const at = (tile) => tile && [tile.getX(), tile.getY(), tile.getZ()];
 
 test('Watchtower and Ape Atoll Teleport land on their own tile, every cast', () => {
   for (let i = 0; i < 300; i++) {
-    assert.deepEqual(at(cast('Watchtower Teleport')), [2549, 3112, 2], 'the tower top');
+    assert.deepEqual(at(cast('Watchtower Teleport')), [2934, 4713, 2], 'the completed tower\'s top floor (Watchtower capture t6337)');
     assert.deepEqual(at(cast('Ape Atoll Teleport')), [2796, 2798, 0]);
   }
 });
@@ -68,7 +68,7 @@ test("the Watchtower tablet's Break lands on the same tile", () => {
   for (let i = 0; i < 100; i++) {
     teleports.length = 0;
     useTablet({ player: player(), itemId: id, option: 'break', handled: false });
-    assert.deepEqual(at(teleports[0]), [2549, 3112, 2]);
+    assert.deepEqual(at(teleports[0]), [2934, 4713, 2]);
   }
 });
 

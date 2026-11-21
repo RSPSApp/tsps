@@ -201,7 +201,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Vale Totems | untested |  |  |  |  |
 | [Vampyre Slayer](vampyre-slayer/README.md) | 🔁 needs recheck | 2026-11-03 | agent | claude-opus-5-5 | 3 |
 | [Wanted!](wanted/README.md) | untested |  |  |  |  |
-| [Watchtower](watchtower/README.md) | untested |  |  |  |  |
+| [Watchtower](watchtower/README.md) | 🔄 in progress | 2026-11-22 | agent | claude-opus-5-5 |  |
 | [Waterfall Quest](waterfall-quest/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 3 |
 | [What Lies Below](what-lies-below/README.md) | untested |  |  |  |  |
 | [While Guthix Sleeps](while-guthix-sleeps/README.md) | untested |  |  |  | 1 |

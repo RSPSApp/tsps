@@ -51,6 +51,7 @@ test('Watchtower ground spawns load as public respawning world items, outside lo
       { id: identifiers.DEATH_RUNE, x: 2500, y: 2967, respawn: 200 },
       { id: identifiers.CAVE_NIGHTSHADE, x: 2528, y: 9415, respawn: 100 },
       { id: identifiers.CAVE_NIGHTSHADE, x: 2530, y: 9462, respawn: 100 },
+      { id: identifiers.SHAMAN_ROBE, x: 2617, y: 9437, respawn: 100 },
     ];
     const spawnAt = (x, y) => worldItems.filter((ground) =>
       ground.getPosition().getX() === x && ground.getPosition().getY() === y
@@ -80,6 +81,7 @@ test('Watchtower ground spawns load as public respawning world items, outside lo
     TaskManager.submit(respawn);
     const player = {
       getAttribute: () => undefined,
+      setAttribute: () => {},
       getPrivateArea: () => ({}),
       getLocation: () => new api.core.Location(2500, 2967, 0),
       getPacketSender: () => new Proxy({}, { get: () => () => {} }),
@@ -265,9 +267,9 @@ test('Watchtower battlement checks the cake, crosses both ways and selects the c
   assert.match(variant({ player, npcId: core.NpcIdentifiers.OGRE_GUARD_7 }), /southern-ogre-guard/);
   assert.match(variant({ player, npcId: core.NpcIdentifiers.OGRE_GUARD_6 }), /entering-gu-tanoth-ogre-guard/);
   player.setAttribute('quest.watchtower.bits', (player.getAttribute('quest.watchtower.bits') ?? 0) | (1 << 11));
-  click(); tick(); assert.equal(player.getLocation().getX(), 2508);
+  click(); tick(); tick(); assert.equal(player.getLocation().getX(), 2508);
   player.setAttribute('quest.watchtower.bits', 0);
-  click(); tick(); assert.equal(player.getLocation().getX(), 2506, 'exit does not require another gift');
+  click(); tick(); tick(); assert.equal(player.getLocation().getX(), 2506, 'exit does not require another gift');
 });
 
 test('Watchtower bridge takes its toll before the north jump, with a free return', t => {
@@ -276,11 +278,12 @@ test('Watchtower bridge takes its toll before the north jump, with a free return
   const objectHook = hooks.onObjectInteraction.find(h => h.name === 'handleObjectInteraction');
   const action = hooks.onCustomEvent.find(h => h.name === 'handleAction');
   const jump = objectId => objectHook({ player, objectId, handled: false });
+  const pages = [{ page: 'Watchtower' }];
   jump(core.ObjectIdentifiers.GAP);
-  action({ player, stepId: 'rEZMuS', step: { type: 'action' } }); tick();
+  action({ player, stepId: 'rEZMuS', step: { type: 'action' }, pages }); tick();
   assert.equal(player.getLocation().getY(), 3026, 'no money: no crossing');
   player.getInventory().adds(core.ItemIdentifiers.COINS, 20);
-  action({ player, stepId: 'rEZMuS', step: { type: 'action' } }); tick();
+  action({ player, stepId: 'rEZMuS', step: { type: 'action' }, pages }); tick();
   assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2530, 3029]);
   assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.COINS), 0);
   jump(core.ObjectIdentifiers.GAP_2); tick();
@@ -291,35 +294,26 @@ test('Watchtower bridge takes its toll before the north jump, with a free return
   }
 });
 
-test('Watchtower east-gate guards never take the bridge toll or walk the player to the gap', t => {
+test('Watchtower: the toll is taken only on the bridge deck, never by the east-gate guards', t => {
   const { core, hooks, quest, player, tick } = questInteractionFixture(t, 'Watchtower', 'watchtower', [2548, 3030, 0]);
   quest.setStage(player, 4);
   player.getInventory().adds(core.ItemIdentifiers.COINS, 20);
   const variant = hooks.onNpcDialogueVariant[0];
   const action = hooks.onCustomEvent.find(h => h.name === 'handleAction');
-  assert.equal(variant({ player, npcId: core.NpcIdentifiers.OGRE_GUARD_4 }), null, 'gate guard is not the bridge toll');
-  action({ player, stepId: 'rEZMuS', step: { type: 'action' } }); tick(); tick();
+  assert.equal(variant({ player, npcId: core.NpcIdentifiers.OGRE_GUARD_4 }), null, 'the east guards play their own page (Talk-to)');
+  assert.match(variant({ player, npcId: core.NpcIdentifiers.OGRE_GUARD_7 }), /southern-ogre-guard$/, 'Talk-to the bridge guards is their own line');
+  action({ player, stepId: 'rEZMuS', step: { type: 'action' }, pages: [{ page: 'Watchtower' }] }); tick(); tick();
   assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2548, 3030]);
   assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.COINS), 20);
-  player.moveTo(new core.Location(2530, 3025, 0));
-  assert.match(variant({ player, npcId: core.NpcIdentifiers.OGRE_GUARD_4 }), /crossing-the-bridge$/);
 });
 
-test('Watchtower enclave consumes a distraction on entry and allows completed quests through', t => {
-  const { core, hooks, quest, player } = questInteractionFixture(t, 'Watchtower', 'watchtower', [2530, 3040, 0]);
+test('Watchtower enclave: the entrance alone stays shut until the quest is done, then lets the player in', t => {
+  const { core, hooks, quest, player, tick } = questInteractionFixture(t, 'Watchtower', 'watchtower', [2504, 3039, 0]);
   quest.setStage(player, 7);
   const objectHook = hooks.onObjectInteraction.find(h => h.name === 'handleObjectInteraction');
-  const itemHook = hooks.onItemOnNpc.find(h => h.name === 'handleItemOnNpc');
-  const action = hooks.onCustomEvent.find(h => h.name === 'handleAction');
   const enter = () => objectHook({ player, objectId: core.ObjectIdentifiers.CAVE_ENTRANCE_5, handled: false });
-  enter(); assert.equal(player.getLocation().getY(), 3040);
-  player.getInventory().adds(core.ItemIdentifiers.CAVE_NIGHTSHADE, 1);
-  itemHook({ player, itemId: core.ItemIdentifiers.CAVE_NIGHTSHADE, npcId: core.NpcIdentifiers.ENCLAVE_GUARD, handled: false });
-  action({ player, stepId: 'Z7N4ZW' });
-  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2588, 9410]);
-  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.CAVE_NIGHTSHADE), 0);
-  player.moveTo(new core.Location(2530, 3040, 0));
-  enter(); assert.equal(player.getLocation().getY(), 3040, 'another entry needs another distraction');
-  quest.setStage(player, 12);
-  enter(); assert.equal(player.getLocation().getY(), 9410);
+  enter(); tick(); assert.equal(player.getLocation().getY(), 3039, 'the guards stop a player who has not distracted them');
+  quest.setStage(player, 13);
+  enter(); tick();
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [2588, 9410], 'after the quest the guards let the player run past (t6301-6311)');
 });

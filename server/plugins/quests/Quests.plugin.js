@@ -113,13 +113,15 @@ function forPlayers(api) {
 
 let itemIds = null;
 
-/** Watchtower's members-only ground spawns: the death rune and the two cave nightshades. */
+/** Watchtower's members-only ground spawns: the death rune, the two cave nightshades and the shaman robe. */
 function watchtowerGroundItems() {
-  const { CAVE_NIGHTSHADE, DEATH_RUNE } = itemIds;
+  const { CAVE_NIGHTSHADE, DEATH_RUNE, SHAMAN_ROBE } = itemIds;
   return [
     { id: DEATH_RUNE, location: { x: 2500, y: 2967, z: 0 }, amt: 1, respawn: 200 },
     { id: CAVE_NIGHTSHADE, location: { x: 2528, y: 9415, z: 0 }, amt: 1, respawn: 100 },
     { id: CAVE_NIGHTSHADE, location: { x: 2530, y: 9462, z: 0 }, amt: 1, respawn: 100 },
+    // The shaman robe in the enclave's south-east corner (Wiki; Watchtower capture t5833). Ours: the respawn.
+    { id: SHAMAN_ROBE, location: { x: 2617, y: 9437, z: 0 }, amt: 1, respawn: 100 },
   ];
 }
 

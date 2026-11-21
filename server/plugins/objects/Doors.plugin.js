@@ -81,6 +81,8 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   PIP_CELL_GATE_OPEN: 3464,
   CRANDOR_SECRET_DOOR_OPEN: 25039, // dragonsecretdoor_open; capture 2951
   INVISWALL: 38848, // actionless collision blocker; captures 2951 and 740
+  OGRE_GUARD_GATE_LEFT_OPEN: 37393, // ogreguardgatel_open: Gu'Tanoth's city gates open (Watchtower capture t2228, t2319)
+  OGRE_GUARD_GATE_RIGHT_OPEN: 37394, // ogreguardgater_open
   RUM_DEAL_GATE_OPEN: 10173, // deal_gate_open: the open leaf of O.GATE_96 (Rum Deal capture tick 1467)
   HAROLD_DOOR_OPEN: 1542, // inactiveposhdoor: Harold's door (3747) open, 233/03247.txt:4726; Temple of Ikov's trap-lever door (92), 242/912156.txt:26149
   CASTLE_DOOR_OPEN: 3744, // castledoor_inactive: the Death Plateau equipment room door (3743) open, 233/03252.txt:36063
@@ -503,6 +505,36 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       walkOver: true,
       closeTicks: 2,
       openSoundId: 62,
+    }),
+    // Gu'Tanoth's city gates (Watchtower capture Watchtower.bin, rev 242): the east gate opens with
+    // two invisible walls in the doorway and its leaves swung south (t2228), the north-west gate with
+    // its leaves swung west (t2319); sound 46 and back two ticks later. Who may pass is Watchtower's
+    // (door:toggle).
+    Object.freeze({
+      closed: [[O.CITY_GATE_4, 2549, 3028, 0, 3], [O.CITY_GATE_3, 2550, 3028, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2549, 3028, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2550, 3028, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.OGRE_GUARD_GATE_LEFT_OPEN, 2549, 3027, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.OGRE_GUARD_GATE_RIGHT_OPEN, 2550, 3027, 0, 2],
+      ],
+      crossY: 3028,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 46,
+    }),
+    Object.freeze({
+      closed: [[O.CITY_GATE_5, 2504, 3062, 0, 0], [O.CITY_GATE_6, 2504, 3063, 0, 0]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.OGRE_GUARD_GATE_LEFT_OPEN, 2503, 3062, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.OGRE_GUARD_GATE_RIGHT_OPEN, 2503, 3063, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2504, 3062, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2504, 3063, 0, 0],
+      ],
+      crossX: 2504,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 46,
     }),
     // Lucien's house: the maintainer's review5926064464 cites 242/912207 ticks13005–13007
     // and 232/03233 ticks944–946: a blocker stays at the entrance while the opener walks

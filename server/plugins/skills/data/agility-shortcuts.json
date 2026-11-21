@@ -3544,11 +3544,11 @@
       "object": [40355,40356],
       "at": [[2546,3031,0],[2548,3031,0]],
       "level": 71,
-      "unverified": "the movement and both ends (no capture; ends from the map)",
+      "unverified": "the movement and both ends (ends from the map); the quest refusal is the Watchtower capture's (Watchtower.bin t2718, t3283)",
       "requires": [
         {
           "skills": {"agility":71},
-          "quest": {"key":"watchtower","message":"You need to complete Watchtower to use this shortcut."}
+          "quest": {"key":"watchtower","message":"You will need to complete the Watchtower quest before you can use this shortcut."}
         }
       ],
       "between": {

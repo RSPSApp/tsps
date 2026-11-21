@@ -1,7 +1,8 @@
 const DIARY = "ardougne";
 const TASK = "teleport-to-the-watchtower";
 const SPELL_NAME = "watchtower teleport";
-const LANDING = { x: 2549, y: 3112, z: 2, radius: 2 };
+/** The completed tower's top floor, where the spell lands (Watchtower capture Watchtower.bin, rev 242, t6337). */
+const LANDING = { x: 2934, y: 4713, z: 2, radius: 2 };
 let pluginApi;
 
 function isWatchtowerLanding(player) {

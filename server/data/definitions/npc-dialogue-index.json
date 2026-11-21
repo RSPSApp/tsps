@@ -41547,7 +41547,8 @@
       "variants": [
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41557,7 +41558,8 @@
       "variants": [
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41567,7 +41569,8 @@
       "variants": [
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41577,7 +41580,8 @@
       "variants": [
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41587,7 +41591,8 @@
       "variants": [
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41692,6 +41697,7 @@
         "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible",
         "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible-talking-to-the-watchtower-wizard-again",
         "entering-the-enclave-talking-to-the-watchtower-wizard-after-making-the-potion",
+        "entering-the-enclave-talking-to-the-watchtower-wizard-before-destroying-the-shamans",
         "entering-the-enclave-returning-to-the-watchtower-wizard-after-killing-the-shamans-without-mining-the-rock",
         "reviving-the-watchtower-talking-to-the-watchtower-wizard-with-all-the-crystals",
         "reviving-the-watchtower-talking-to-the-watchtower-wizard-again",
@@ -41823,7 +41829,8 @@
       "page": "Transcript:Watchtower",
       "variants": [
         "getting-started-speaking-to-a-tower-guard",
-        "getting-started-attempting-to-climb-the-ladder"
+        "getting-started-attempting-to-climb-the-ladder",
+        "getting-started-climbing-the-ladder-after-starting-the-quest"
       ]
     }
   ],

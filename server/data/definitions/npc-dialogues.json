@@ -899979,9 +899979,22 @@
               "type": "action",
               "text": "(The ogre guard pushes you back down the hill, stunning you and dealing 3 damage)",
               "id": "QRQKCo"
+            },
+            {
+              "type": "end"
             }
           ],
           "id": "df_SVa"
+        },
+        {
+          "type": "condition",
+          "text": "After showing the relic:",
+          "steps": [
+            {
+              "npc": "It's the small creature; you may pass."
+            }
+          ],
+          "id": "fAaZ7A"
         }
       ],
       "watchtower-standard-dialogue-east-guards": [
@@ -900003,6 +900016,19 @@
             }
           ],
           "id": "UQYS4Q"
+        },
+        {
+          "type": "condition",
+          "text": "After giving the gold bar:",
+          "steps": [
+            {
+              "npc": "I know you, creature; you may pass."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "j6hp8k"
         },
         {
           "type": "condition",
@@ -1392939,11 +1392965,8 @@
                   ]
                 },
                 {
-                  "type": "unavailable",
-                  "id": "Jw8a7L"
-                },
-                {
                   "type": "choice",
+                  "prompt": "Start The Hand in the Sand quest?",
                   "options": [
                     {
                       "text": "Yes.",
@@ -1392963,7 +1392986,7 @@
                         {
                           "type": "message",
                           "text": "Bert gives you a rather smelly, sand covered hand.",
-                          "id": "qRJX_b"
+                          "id": "0PC9qk"
                         },
                         {
                           "type": "line",
@@ -1392974,7 +1392997,9 @@
                             5819
                           ]
                         }
-                      ]
+                      ],
+                      "hook": "quest:the-hand-in-the-sand:start",
+                      "quest": "The Hand in the Sand"
                     },
                     {
                       "text": "No.",
@@ -1393192,64 +1393217,68 @@
         {
           "type": "condition",
           "text": "Speaking to Zavistic Rarve via the bell:",
-          "id": "msuv8J"
-        },
-        {
-          "type": "condition",
-          "text": "If the player has completed Zogre Flesh Eaters:",
           "steps": [
             {
-              "type": "line",
-              "speaker": "Zavistic Rarve",
-              "text": "What are you doing...Oh, it's you...sorry...didn't realise...what can I do for you?",
-              "speaker_ids": [
-                881
-              ]
-            },
-            {
-              "type": "choice",
-              "options": [
+              "type": "condition",
+              "text": "If the player has completed Zogre Flesh Eaters:",
+              "steps": [
                 {
-                  "text": "I'm here about the sicks...err Zogres"
+                  "type": "line",
+                  "speaker": "Zavistic Rarve",
+                  "text": "What are you doing...Oh, it's you...sorry...didn't realise...what can I do for you?",
+                  "speaker_ids": [
+                    881
+                  ]
                 },
                 {
-                  "text": "I have a rather sandy problem that I'd like to palm off on you.",
-                  "steps": [
+                  "type": "choice",
+                  "options": [
                     {
-                      "type": "jump",
-                      "reference": "continue",
-                      "id": "So_5Tm"
+                      "text": "I'm here about the sicks...err Zogres"
+                    },
+                    {
+                      "text": "I have a rather sandy problem that I'd like to palm off on you.",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "reference": "continue",
+                          "id": "GZnKMQ"
+                        }
+                      ]
                     }
                   ]
                 }
-              ]
+              ],
+              "id": "XFLYRC"
             },
             {
-              "type": "line",
-              "speaker": "Zavistic Rarve",
-              "text": "What are you doing ringing that bell?! Don't you think some of us have work to do?",
-              "speaker_ids": [
-                881
-              ]
-            },
-            {
-              "player": "But I was told to ring the bell if I wanted some attention."
-            },
-            {
-              "type": "line",
-              "speaker": "Zavistic Rarve",
-              "text": "Well...anyway...we're very busy here, hurry up what do you want?",
-              "speaker_ids": [
-                881
-              ]
-            },
-            {
-              "type": "jump",
-              "reference": "continue",
-              "id": "KSBOXa"
+              "type": "condition",
+              "text": "If the player has not completed Zogre Flesh Eaters:",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Zavistic Rarve",
+                  "text": "What are you doing ringing that bell?! Don't you think some of us have work to do?",
+                  "speaker_ids": [
+                    881
+                  ]
+                },
+                {
+                  "player": "But I was told to ring the bell if I wanted some attention."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Zavistic Rarve",
+                  "text": "Well...anyway...we're very busy here, hurry up what do you want?",
+                  "speaker_ids": [
+                    881
+                  ]
+                }
+              ],
+              "id": "C4hp_G"
             }
           ],
-          "id": "uHTESk"
+          "id": "msuv8J"
         },
         {
           "type": "condition",
@@ -1393273,96 +1393302,96 @@
               "speaker_ids": [
                 881
               ]
-            },
-            {
-              "type": "condition",
-              "text": "If the player does not have the beer soaked hand in their inventory:",
-              "steps": [
-                {
-                  "type": "message",
-                  "text": "Maybe you should have the hand with you before speaking to Zavistic.",
-                  "id": "2X-6xg"
-                },
-                {
-                  "type": "end"
-                }
-              ],
-              "id": "sTZfoO"
-            },
-            {
-              "type": "condition",
-              "text": "If the player has the beer soaked hand in their inventory:",
-              "steps": [
-                {
-                  "type": "message",
-                  "text": "You wave the hand at the wizard.",
-                  "id": "FaNNdu"
-                },
-                {
-                  "player": "Ummm... Do you have all your wizards?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Zavistic Rarve",
-                  "text": "All my.... whatever do you mean...?",
-                  "speaker_ids": [
-                    881
-                  ]
-                },
-                {
-                  "player": "The Guard Captain asked me to see if you have any... missing... wizards."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Zavistic Rarve",
-                  "text": "That's silly! No one would kill a wizard... would they?",
-                  "speaker_ids": [
-                    881
-                  ]
-                },
-                {
-                  "player": "Erm... no..."
-                },
-                {
-                  "player": "Well.. maybe, you see Bert found this hand and it might belong to.. a wizard!"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Zavistic Rarve",
-                  "text": "Bert? Ahh yes, the sandman who seems to have been working very long hours recently. Let's see that hand...",
-                  "speaker_ids": [
-                    881
-                  ]
-                },
-                {
-                  "type": "message",
-                  "text": "You hand it over.",
-                  "id": "6h4uAt"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Zavistic Rarve",
-                  "text": "Oh my! This is most definitely Clarence, my most able student! You must find out who did this!",
-                  "speaker_ids": [
-                    881
-                  ]
-                },
-                {
-                  "player": "Do you have any input as to the matter at hand?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Zavistic Rarve",
-                  "text": "Well.... Ask Bert about the long hours he's been working, that sounds suspicious to me. Digging things up at all hours of the day isn't natural.",
-                  "speaker_ids": [
-                    881
-                  ]
-                }
-              ],
-              "id": "S7QIjs"
             }
           ],
           "id": "-BRtvF"
+        },
+        {
+          "type": "condition",
+          "text": "If the player does not have the beer soaked hand in their inventory:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "Maybe you should have the hand with you before speaking to Zavistic.",
+              "id": "HHCuF1"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "fU7rm6"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has the beer soaked hand in their inventory:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You wave the hand at the wizard.",
+              "id": "2uHFMU"
+            },
+            {
+              "player": "Ummm... Do you have all your wizards?"
+            },
+            {
+              "type": "line",
+              "speaker": "Zavistic Rarve",
+              "text": "All my.... whatever do you mean...?",
+              "speaker_ids": [
+                881
+              ]
+            },
+            {
+              "player": "The Guard Captain asked me to see if you have any... missing... wizards."
+            },
+            {
+              "type": "line",
+              "speaker": "Zavistic Rarve",
+              "text": "That's silly! No one would kill a wizard... would they?",
+              "speaker_ids": [
+                881
+              ]
+            },
+            {
+              "player": "Erm... no..."
+            },
+            {
+              "player": "Well.. maybe, you see Bert found this hand and it might belong to.. a wizard!"
+            },
+            {
+              "type": "line",
+              "speaker": "Zavistic Rarve",
+              "text": "Bert? Ahh yes, the sandman who seems to have been working very long hours recently. Let's see that hand...",
+              "speaker_ids": [
+                881
+              ]
+            },
+            {
+              "type": "message",
+              "text": "You hand it over.",
+              "id": "r5kpiT"
+            },
+            {
+              "type": "line",
+              "speaker": "Zavistic Rarve",
+              "text": "Oh my! This is most definitely Clarence, my most able student! You must find out who did this!",
+              "speaker_ids": [
+                881
+              ]
+            },
+            {
+              "player": "Do you have any input as to the matter at hand?"
+            },
+            {
+              "type": "line",
+              "speaker": "Zavistic Rarve",
+              "text": "Well.... Ask Bert about the long hours he's been working, that sounds suspicious to me. Digging things up at all hours of the day isn't natural.",
+              "speaker_ids": [
+                881
+              ]
+            }
+          ],
+          "id": "5gcul7"
         }
       ],
       "talking-to-zavistic-rarve-talking-to-zavistic-afterwards": [
@@ -1394661,6 +1394690,9 @@
                   "text": "Why doesn't Bert remember the change in his hours?",
                   "steps": [
                     {
+                      "player": "Why doesn't Bert remember the change in his hours?"
+                    },
+                    {
                       "type": "line",
                       "speaker": "Sandy",
                       "text": "Because.... because.... I bribed a wizard to put a spell on him so he would believe everything I say!!",
@@ -1394710,6 +1394742,9 @@
                 {
                   "text": "What happened to the wizard?",
                   "steps": [
+                    {
+                      "player": "What happened to the wizard?"
+                    },
                     {
                       "type": "line",
                       "speaker": "Sandy",
@@ -1394924,29 +1394959,23 @@
                     {
                       "type": "condition",
                       "text": "If the player doesn't have the required items:",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Zavistic Rarve",
+                          "text": "You really mean you forgot? Bring me 5 earth runes and 1 bucket of sand to help stop that moneygrabbing Sandy!",
+                          "speaker_ids": [
+                            881
+                          ]
+                        },
+                        {
+                          "type": "end"
+                        }
+                      ],
                       "id": "sy6Fa0"
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Zavistic Rarve",
-                      "text": "You really mean you forgot? Bring me 5 earth runes and 1 bucket of sand to help stop that moneygrabbing Sandy!",
-                      "speaker_ids": [
-                        881
-                      ]
-                    },
-                    {
-                      "type": "end"
                     }
                   ]
                 }
-              ]
-            },
-            {
-              "type": "line",
-              "speaker": "Zavistic Rarve",
-              "text": "What are you doing...Oh, it's you...sorry...didn't realise...what can I do for you?",
-              "speaker_ids": [
-                881
               ]
             },
             {
@@ -1534027,6 +1534056,16 @@
           ]
         }
       ],
+      "getting-started-climbing-the-ladder-after-starting-the-quest": [
+        {
+          "type": "line",
+          "speaker": "Tower guard",
+          "text": "It is the wizards' helping hand - let 'em up.",
+          "speaker_ids": [
+            4405
+          ]
+        }
+      ],
       "getting-started-speaking-to-a-wizard": [
         {
           "player": "What's going on here?"
@@ -1534826,6 +1534865,11 @@
               ]
             }
           ]
+        }
+      ],
+      "ogre-investigations-entering-the-tunnel-to-toban-s-island": [
+        {
+          "player": "Wow! That tunnel went a long way."
         }
       ],
       "ogre-investigations-toban": [
@@ -1535987,6 +1536031,9 @@
           "type": "condition",
           "text": "If the player is carrying the relic:",
           "steps": [
+            {
+              "player": "I've got a proof of friendship right here!"
+            },
             {
               "type": "line",
               "speaker": "Ogre guard",
@@ -1537210,13 +1537257,127 @@
               ]
             },
             {
-              "text": "Ig."
+              "text": "Ig.",
+              "steps": [
+                {
+                  "player": "Ig."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Bidith tanath...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "8_-Eiu"
+                }
+              ]
             },
             {
-              "text": "Nod."
+              "text": "Nod.",
+              "steps": [
+                {
+                  "player": "Nod."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Bidith tanath...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "OSaoE6"
+                }
+              ]
             },
             {
-              "text": "Gor."
+              "text": "Gor.",
+              "steps": [
+                {
+                  "player": "Gor."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Bidith tanath...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "5hmd_s"
+                }
+              ]
             }
           ]
         }
@@ -1537238,10 +1537399,86 @@
           "type": "choice",
           "options": [
             {
-              "text": "Cur."
+              "text": "Cur.",
+              "steps": [
+                {
+                  "player": "Cur."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Cur bidith...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "4_6ISg"
+                }
+              ]
             },
             {
-              "text": "Ar."
+              "text": "Ar.",
+              "steps": [
+                {
+                  "player": "Ar."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Cur bidith...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "BqTM1T"
+                }
+              ]
             },
             {
               "text": "Ig.",
@@ -1537264,10 +1537501,86 @@
               ]
             },
             {
-              "text": "Nod."
+              "text": "Nod.",
+              "steps": [
+                {
+                  "player": "Nod."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Cur bidith...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "-fsxHx"
+                }
+              ]
             },
             {
-              "text": "Gor."
+              "text": "Gor.",
+              "steps": [
+                {
+                  "player": "Gor."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Cur bidith...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "qK23Ng"
+                }
+              ]
             }
           ]
         }
@@ -1537289,13 +1537602,127 @@
           "type": "choice",
           "options": [
             {
-              "text": "Cur."
+              "text": "Cur.",
+              "steps": [
+                {
+                  "player": "Cur."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Tanath gor...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "HT-Gsb"
+                }
+              ]
             },
             {
-              "text": "Ar."
+              "text": "Ar.",
+              "steps": [
+                {
+                  "player": "Ar."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Tanath gor...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "glKGhW"
+                }
+              ]
             },
             {
-              "text": "Ig."
+              "text": "Ig.",
+              "steps": [
+                {
+                  "player": "Ig."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Tanath gor...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "ioVJrA"
+                }
+              ]
             },
             {
               "text": "Nod.",
@@ -1537318,7 +1537745,248 @@
               ]
             },
             {
-              "text": "Gor."
+              "text": "Gor.",
+              "steps": [
+                {
+                  "player": "Gor."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Tanath gor...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "42hFUA"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "skavid-search-learning-skavid-skavid-4": [
+        {
+          "type": "line",
+          "speaker": "Skavid",
+          "text": "Gor cur...",
+          "speaker_ids": [
+            4376,
+            4377,
+            4378,
+            4379,
+            4380
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Cur.",
+              "steps": [
+                {
+                  "player": "Cur."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Gor cur...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "O4Q2X1"
+                }
+              ]
+            },
+            {
+              "text": "Ar.",
+              "steps": [
+                {
+                  "player": "Ar."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Ar, ar cur!",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Ig.",
+              "steps": [
+                {
+                  "player": "Ig."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Gor cur...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "Lb1pNI"
+                }
+              ]
+            },
+            {
+              "text": "Nod.",
+              "steps": [
+                {
+                  "player": "Nod."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Gor cur...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "JQ1zcr"
+                }
+              ]
+            },
+            {
+              "text": "Gor.",
+              "steps": [
+                {
+                  "player": "Gor."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "???",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Skavid",
+                  "text": "Gor cur...",
+                  "speaker_ids": [
+                    4376,
+                    4377,
+                    4378,
+                    4379,
+                    4380
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": []
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "k8FT0s"
+                }
+              ]
             }
           ]
         }
@@ -1538018,6 +1538686,27 @@
           ]
         }
       ],
+      "entering-the-enclave-talking-to-the-watchtower-wizard-before-destroying-the-shamans": [
+        {
+          "type": "line",
+          "speaker": "Watchtower Wizard",
+          "text": "Hello again. Did the potion work?",
+          "speaker_ids": [
+            4397
+          ]
+        },
+        {
+          "player": "I am still working to rid us of the shamans..."
+        },
+        {
+          "type": "line",
+          "speaker": "Watchtower Wizard",
+          "text": "May you have success in your task.",
+          "speaker_ids": [
+            4397
+          ]
+        }
+      ],
       "entering-the-enclave-killing-the-ogre-shamans": [
         {
           "type": "condition",
@@ -1538044,8 +1538733,7 @@
           "text": "After killing three shamans:",
           "steps": [
             {
-              "type": "missing",
-              "id": "64e9aQ"
+              "player": "That's the third one dealt with..."
             }
           ],
           "id": "bV870Q"

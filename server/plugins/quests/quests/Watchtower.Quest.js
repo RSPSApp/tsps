@@ -1,576 +1,191 @@
 /**
- * Watchtower (members).
+ * Watchtower (members), aligned with a whole run of the quest on live: the user's RSProx capture
+ * Watchtower.bin (revision 242.1; docs/quests/watchtower/README.md, with every capture fact the
+ * plugin relies on and the recording's ticks). The words are the Wiki's: the "Watchtower" and "Ogre
+ * guard" transcripts, with the lines they lack added from the capture in osrsreboxed-db's
+ * capture-sources.json. Where the capture words a line differently the Wiki's wording is kept.
  *
- * The words come from the "Watchtower" transcript page; this plugin supplies the
- * variant selector for the Watchtower Wizard and the tower wizards, the tower
- * guard, Og, Grew, Toban, Gorad, the Gu'Tanoth guards, the city guard, the
- * skavids, the enclave guard and the ogre shamans, the prose-condition answers,
- * the start hook, the evidence hand-ins, the four power crystals (Grew, the mad
- * skavid, the sixth shaman and the Rock of Dalgroth), the ogre relic assembly,
- * the skavid riddle/language, the ogre potion and the shield-generator
- * completion.
+ * Units in plugins/quests/watchtower/: State (stages, the varp 936 varbits, ids, tiles, old saves),
+ * Journal (the capture's journal) and Scenes (the enclave scene, the relic, the scared skavid).
+ * The two Gu'Tanoth gates are pass-through gates in plugins/objects/Doors.plugin.js; this plugin
+ * says who may pass (door:toggle).
  *
- * Stages (varp 212): 1 started, 2 fingernails shown, 3 relic assembled,
- * 4 relic shown to the north-west guard (inside Gu'Tanoth), 5 riddle given,
- * 6 riddle solved (skavid map), 7 mad skavid's crystal, 8 guard distracted with
- * cave nightshade, 9 potion recipe learned, 10 magic ogre potion, 11 all four
- * crystals, 12 complete, 14 spell scroll read.
- *
- * Per-NPC progress (task taken, item handed over, which relic parts the wizard
- * holds, skavid words learned, shaman kills) lives in the persisted
- * "quest.watchtower.bits" attribute, mirroring the reference's bit-packed varp.
- *
- * Source: LostCity quest_itwatchtower at 65b754f (pinned in issue #196).
- *
- * Gaps: the mapped-cave no-light fallback is not simulated;
- * the bridge and battlement crossings have functional movement, with native timing unverified; the "Gor cur" skavid that teaches "Ar" is absent
- * from the transcript dump, so the mad skavid accepts the three teachable
- * words; guard gate/bridge/southern roles are best-effort from their spawn
- * coordinates; the crystal pillars' transform varbit (3127) is not sent, so the
- * placed crystals do not render on the pillars; the bank-storage branches rely
- * on the shared bank system. The Toban tunnel hole and the two Gu'Tanoth city
- * gates are wired here because no shared handler owns them.
+ * Rewards (the capture's scroll, tick 6062; the Wiki): 4 Quest points, 15,250 Magic XP, 5,000 coins
+ * and the Watchtower Teleport spell scroll.
  */
 module.exports = function registerWatchtowerQuest(api) {
-  const { giveReward } = require("../QuestRuntime");
-  const { Skill, Location, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { Animation, Graphic, HitDamage, HitMask, DialogueChainBuilder, ItemStatementDialogue } = api.core;
-  const { createQuestScenes } = require("../QuestScenes");
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
-
+  const core = api.core;
+  const { Skill, Location, Animation, Graphic, ItemIdentifiers: I, DialogueChainBuilder, ItemStatementDialogue } = core;
+  const { DoubleItemStatementDialogue, HitDamage, HitMask, Sound, Sounds, CountdownTask } = core;
+  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts, giveReward, questStartMessage } = require("../QuestRuntime");
+  const W = require("../watchtower/State.Watchtower");
+  const { journal } = require("../watchtower/Journal.Watchtower");
   const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
   const Darkness = require("../../world/Darkness.plugin");
   ObstacleRunner.init(api);
 
-  const ROPE_THROW_ANIMATION = 775;
-  const ROPE_SWING_ANIMATION = 751;
-  const ROPE_SWING_OBJECT_ANIMATION = 497;
-  const ROPE_SWING_SOUND = 2494;
-  const PAGE = "Watchtower";
-
-  const VARP_WATCHTOWER = 212;
-  const STAGE_STARTED = 1;
-  const STAGE_GIVEN_FINGERNAILS = 2;
-  const STAGE_MADE_RELIC = 3;
-  const STAGE_GIVEN_RELIC = 4;
-  const STAGE_GIVEN_RIDDLE = 5;
-  const STAGE_SOLVED_RIDDLE = 6;
-  const STAGE_SKAVID_CRYSTAL = 7;
-  const STAGE_FED_NIGHTSHADE = 8;
-  const STAGE_LEARNED_POTION = 9;
-  const STAGE_MADE_POTION = 10;
-  const STAGE_FOUND_ALL_CRYSTALS = 11;
-  const STAGE_COMPLETE = 12;
-  const STAGE_READ_SCROLL = 14;
-
-  const BITS_ATTRIBUTE = "quest.watchtower.bits";
-  const OBJECT_ATTRIBUTE = "quest.watchtower.object";
-  const VARIANT_ATTRIBUTE = "quest.watchtower.variant";
-
-  const BIT_SPOKEN_TOBAN = 0;
-  const BIT_HELPED_TOBAN = 1;
-  const BIT_SPOKEN_GREW = 2;
-  const BIT_HELPED_GREW = 3;
-  const BIT_SPOKEN_OG = 4;
-  const BIT_HELPED_OG = 5;
-  const BIT_RELIC = [6, 7, 8];
-  const BIT_LOOKING_RELIC = 9;
-  const BIT_MARKET_WANTS = 10;
-  const BIT_MARKET_GIVEN = 11;
-  const BIT_LEARNING_SKAVID = 12;
-  const BIT_LEARNED_AR = 13;
-  const BIT_LEARNED_IG = 14;
-  const BIT_LEARNED_CUR = 15;
-  const BIT_LEARNED_NOD = 16;
-  const BIT_GORAD_DEAD = 17;
-  const BIT_KILLS_SHIFT = 18;
-  const KILLS_MASK = 0x7;
-  const MAX_SHAMAN_KILLS = 6;
-  const BIT_PLACED_YELLOW = 21;
-  const BIT_PLACED_GREY = 22;
-  const BIT_PLACED_CYAN = 23;
-  const BIT_PLACED_MAGENTA = 24;
-  const BIT_EAST_GATE_PAID = 25;
-  const PLACED_BITS = [BIT_PLACED_YELLOW, BIT_PLACED_GREY, BIT_PLACED_CYAN, BIT_PLACED_MAGENTA];
-
-  const WIZARD_ID = NpcIdentifiers.WATCHTOWER_WIZARD;
-  const OTHER_WIZARD_IDS = new Set([
-    NpcIdentifiers.WIZARD_4,
-    NpcIdentifiers.WIZARD_5,
-    NpcIdentifiers.WIZARD_6,
-  ]);
-  const TOWER_GUARD_ID = NpcIdentifiers.TOWER_GUARD;
-  const CHIEFTAIN_ID = NpcIdentifiers.OGRE_CHIEFTAIN;
-  const OG_ID = NpcIdentifiers.OG;
-  const GREW_ID = NpcIdentifiers.GREW;
-  const TOBAN_ID = NpcIdentifiers.TOBAN;
-  const GORAD_ID = NpcIdentifiers.GORAD;
-  const ENTRANCE_GUARD_IDS = new Set([NpcIdentifiers.OGRE_GUARD_3, NpcIdentifiers.OGRE_GUARD_5]);
-  // The two OGRE_GUARD_6s (2501/2503,3011-3012) stand at the battlement and want a gift from
-  // the market (a rock cake) before letting the player climb it. The OGRE_GUARD_7s by the market
-  // (2526/2529,3018-3019) only say "What do you want, small thing? Leave us alone!".
-  const SOUTHERN_GUARD_IDS = new Set([NpcIdentifiers.OGRE_GUARD_7]);
-  const MARKET_GUARD_IDS = new Set([NpcIdentifiers.OGRE_GUARD_6]);
-  const BATTLEMENT_GUARD_ID = NpcIdentifiers.OGRE_GUARD_6;
-  /** The battlement (2832) blocks the west end of the rope bridge at x 2507, y 3011-3012. */
-  const BATTLEMENT_ID = ObjectIdentifiers.BATTLEMENT;
-  const BATTLEMENT = { x: 2507, minY: 3011, maxY: 3012 };
-  const CLIMB_OVER_ANIMATION = 839;
-  /** "The ogre guard attacks the player." in the battlement guard's dialogue. */
-  const BATTLEMENT_GUARD_ATTACK_ID = "WdYOsW";
-  /**
-   * The broken bridge north of the rope bridge: a bridge-flagged span at x 2530-2531 whose
-   * y 3027-3028 is missing. Gap 2830 (2530,3026) is jumped north from the bridge for the
-   * guard's 20-coin toll; Gap 2831 (2531,3029) is jumped back south for free. Cache, rev 241.
-   */
-  const GAP_NORTH_ID = ObjectIdentifiers.GAP;
-  const GAP_SOUTH_ID = ObjectIdentifiers.GAP_2;
-  const GAP_FROM_SOUTH = [2530, 3026];
-  const GAP_LAND_NORTH = [2530, 3029];
-  const GAP_FROM_NORTH = [2531, 3029];
-  const GAP_LAND_SOUTH = [2531, 3026];
-  const GAP_JUMP_ANIMATION = 741;
-  /**
-   * The toll is only taken, and the jump only made, from the bridge deck south of the gap. The
-   * east-gate guards (2549-2551,3029-3031) share the bridge guard's id, and the jump's forced
-   * walk ignores clipping, so a toll paid anywhere else would walk the player through walls.
-   */
-  const atGapTakeOff = (player) => {
-    const at = player.getLocation();
-    return at.getZ() === 0 && at.getY() <= GAP_FROM_SOUTH[1]
-      && Math.max(Math.abs(at.getX() - GAP_FROM_SOUTH[0]), Math.abs(at.getY() - GAP_FROM_SOUTH[1])) <= 1;
-  };
-  const BRIDGE_GUARD_ID = NpcIdentifiers.OGRE_GUARD_4;
-  /**
-   * The enclave guards let a player past only while distracted by cave nightshade (wiki: "Use
-   * the second cave nightshade on an enclave guard to distract them and enter the enclave
-   * again"); once the quest is complete the way is open.
-   */
-  const enclaveDistracted = new WeakSet();
-  /** "You run past the guard while he's busy." after the nightshade. */
-  const ENCLAVE_RUN_PAST_ID = "Z7N4ZW";
-  /** "The enclave guard attacks the player." in the guards' dialogues. */
-  const ENCLAVE_GUARD_ATTACK_IDS = new Set(["n72ZBl", "qS75F0"]);
-  const BRIDGE_GUARD_IDS = new Set([NpcIdentifiers.OGRE_GUARD_4]);
-  // The live east-gate guards are OGRE_GUARD_4 spawns; the wiki lets a gold bar
-  // be given to one of them directly, as well as clicking the gate.
-  const EAST_GATE_GUARD_IDS = new Set([NpcIdentifiers.OGRE_GUARD_4]);
-  const CITY_GUARD_ID = NpcIdentifiers.CITY_GUARD;
-  const SCARED_SKAVID_ID = NpcIdentifiers.SCARED_SKAVID;
-  const MAD_SKAVID_ID = NpcIdentifiers.MAD_SKAVID;
-  const SKAVID_VARIANTS = new Map([
-    [NpcIdentifiers.SKAVID_2, "skavid-search-learning-skavid-skavid-2"],
-    [NpcIdentifiers.SKAVID_3, "skavid-search-learning-skavid-skavid-1"],
-    [NpcIdentifiers.SKAVID_4, "skavid-search-learning-skavid-skavid-1"],
-    [NpcIdentifiers.SKAVID_5, "skavid-search-learning-skavid-skavid-3"],
-    [NpcIdentifiers.SKAVID_6, "skavid-search-learning-skavid-skavid-2"],
-  ]);
-  const ENCLAVE_GUARD_ID = NpcIdentifiers.ENCLAVE_GUARD;
-  // The six shamans that actually spawn in the Ogre Enclave (npc-spawns.json);
-  // the cache leaves these ids unnamed, so they are listed literally.
-  const ENCLAVE_SHAMAN_IDS = [6208, 6209, 6210, 6211, 6212, 6213];
-  const SHAMAN_IDS = new Set([
-    NpcIdentifiers.OGRE_SHAMAN_3,
-    NpcIdentifiers.OGRE_SHAMAN_4,
-    NpcIdentifiers.OGRE_SHAMAN_5,
-    NpcIdentifiers.OGRE_SHAMAN_6,
-    NpcIdentifiers.OGRE_SHAMAN_7,
-    NpcIdentifiers.OGRE_SHAMAN_8,
-    NpcIdentifiers.OGRE_SHAMAN_9,
-    NpcIdentifiers.OGRE_SHAMAN_10,
-    NpcIdentifiers.OGRE_SHAMAN_11,
-    NpcIdentifiers.OGRE_SHAMAN_12,
-    NpcIdentifiers.OGRE_SHAMAN_13,
-    NpcIdentifiers.OGRE_SHAMAN_14,
-    NpcIdentifiers.OGRE_SHAMAN_15,
-    NpcIdentifiers.OGRE_SHAMAN_16,
-    ...ENCLAVE_SHAMAN_IDS,
-  ]);
-
-  const FINGERNAILS = ItemIdentifiers.FINGERNAILS;
-  const OLD_ROBE = ItemIdentifiers.OLD_ROBE;
-  const UNUSUAL_ARMOUR = ItemIdentifiers.UNUSUAL_ARMOUR;
-  const DAMAGED_DAGGER = ItemIdentifiers.DAMAGED_DAGGER;
-  const TATTERED_EYE_PATCH = ItemIdentifiers.TATTERED_EYE_PATCH;
-  const EVIDENCE_IDS = [FINGERNAILS, OLD_ROBE, UNUSUAL_ARMOUR, DAMAGED_DAGGER, TATTERED_EYE_PATCH];
-  const DECOY_EVIDENCE_IDS = [OLD_ROBE, UNUSUAL_ARMOUR, DAMAGED_DAGGER, TATTERED_EYE_PATCH];
-  const RELIC_PART_IDS = [
-    ItemIdentifiers.RELIC_PART_1,
-    ItemIdentifiers.RELIC_PART_2,
-    ItemIdentifiers.RELIC_PART_3,
-  ];
-  const OGRE_RELIC = ItemIdentifiers.OGRE_RELIC;
-  const SKAVID_MAP = ItemIdentifiers.SKAVID_MAP;
-  const OGRE_TOOTH = ItemIdentifiers.OGRE_TOOTH;
-  const TOBANS_KEY = ItemIdentifiers.TOBANS_KEY;
-  const TOBANS_GOLD = ItemIdentifiers.TOBANS_GOLD;
-  const ROCK_CAKE = ItemIdentifiers.ROCK_CAKE;
-  const CRYSTAL_1 = ItemIdentifiers.CRYSTAL;
-  const CRYSTAL_2 = ItemIdentifiers.CRYSTAL_2;
-  const CRYSTAL_3 = ItemIdentifiers.CRYSTAL_3;
-  const CRYSTAL_4 = ItemIdentifiers.CRYSTAL_4;
-  const CRYSTAL_IDS = [CRYSTAL_1, CRYSTAL_2, CRYSTAL_3, CRYSTAL_4];
-  const CAVE_NIGHTSHADE = ItemIdentifiers.CAVE_NIGHTSHADE;
-  const MAGIC_OGRE_POTION = ItemIdentifiers.MAGIC_OGRE_POTION;
-  const SPELL_SCROLL = ItemIdentifiers.SPELL_SCROLL;
-  const DRAGON_BONES = ItemIdentifiers.DRAGON_BONES;
-  const DEATH_RUNE = ItemIdentifiers.DEATH_RUNE;
-  const COINS = ItemIdentifiers.COINS;
-  const TINDERBOX = ItemIdentifiers.TINDERBOX;
-  const VIAL_OF_WATER = ItemIdentifiers.VIAL_OF_WATER;
-  const JANGERBERRIES = ItemIdentifiers.JANGERBERRIES;
-  const GUAM_LEAF = ItemIdentifiers.GUAM_LEAF;
-  const GUAM_POTION_UNF = ItemIdentifiers.GUAM_POTION_UNF_;
-  const JANGER_VIAL = ItemIdentifiers.VIAL_3;
-  const GUAM_JANGER_VIAL = ItemIdentifiers.VIAL_4;
-  const OGRE_POTION = ItemIdentifiers.POTION_3;
-  const GROUND_BAT_BONES = ItemIdentifiers.GROUND_BAT_BONES;
-  const BAT_BONES = ItemIdentifiers.BAT_BONES;
-  const PESTLE_AND_MORTAR = ItemIdentifiers.PESTLE_AND_MORTAR;
-  const GOLD_BAR = ItemIdentifiers.GOLD_BAR;
-  const VIAL = ItemIdentifiers.VIAL;
-
-  const BUSH_IDS = new Set([
-    ObjectIdentifiers.BUSH_11,
-    ObjectIdentifiers.BUSH_12,
-    ObjectIdentifiers.BUSH_13,
-    ObjectIdentifiers.BUSH_14,
-    ObjectIdentifiers.BUSH_15,
-    ObjectIdentifiers.BUSH_16,
-  ]);
-  const BUSH_ITEMS = new Map([
-    [ObjectIdentifiers.BUSH_12, FINGERNAILS],
-    [ObjectIdentifiers.BUSH_13, DAMAGED_DAGGER],
-    [ObjectIdentifiers.BUSH_14, TATTERED_EYE_PATCH],
-    [ObjectIdentifiers.BUSH_15, OLD_ROBE],
-    [ObjectIdentifiers.BUSH_16, UNUSUAL_ARMOUR],
-  ]);
-  const TRELLIS_IDS = new Set([ObjectIdentifiers.TRELLIS_3, ObjectIdentifiers.TRELLIS_4]);
-  const LEVER_ID = ObjectIdentifiers.LEVER_17;
-  const CHEST_ID = ObjectIdentifiers.CHEST_23;
-  const ROCK_ID = ObjectIdentifiers.ROCK_OF_DALGROTH;
-  // The market cave entrance into the Ogre Enclave. The reference's enclave entry teleport
-  // (quest_itwatchtower enter_skavid_cave) lands on this tile; unlike the skavid caves the
-  // enclave needs neither the map nor a light source.
-  const ENCLAVE_ENTRANCE_ID = ObjectIdentifiers.CAVE_ENTRANCE_5;
-  const ENCLAVE_ENTRANCE_DESTINATION = { x: 2588, y: 9410 };
-  const CAVE_ENTRANCES = new Map([
-    [ObjectIdentifiers.CAVE_ENTRANCE_6, { x: 2498, y: 9418 }],
-    [ObjectIdentifiers.CAVE_ENTRANCE_7, { x: 2532, y: 9469 }],
-    [ObjectIdentifiers.CAVE_ENTRANCE_8, { x: 2518, y: 9455 }],
-    [ObjectIdentifiers.CAVE_ENTRANCE_9, { x: 2498, y: 9451 }],
-    [ObjectIdentifiers.CAVE_ENTRANCE_10, { x: 2504, y: 9441 }],
-    [ObjectIdentifiers.CAVE_ENTRANCE_11, { x: 2522, y: 9411 }],
-  ]);
-  // The Toban tunnel hole (south-west of Gu'Tanoth, west of the gnome glider);
-  // its Enter teleport lands on Toban's island, as in the reference script.
-  const TOBAN_CAVE_ID = ObjectIdentifiers.CAVE_ENTRANCE_12;
-  const TOBAN_CAVE_DESTINATION = { x: 2576, y: 3029 };
-  const TOBAN_LADDER_ID = ObjectIdentifiers.LADDER_25;
-  const YANILLE_HOLE_ID = ObjectIdentifiers.HOLE_4;
-  const ENCLAVE_EXIT_ID = ObjectIdentifiers.CAVE_ENTRANCE_13;
-  // Mapless travel follows a fixed circuit of surface caves, not an attempt counter.
-  // Wiki: Skavid caves / transport system; named reference quest_itwatchtower at 65b754f.
-  const MAPLESS_CAVE_ROUTES = new Map([
-    [ObjectIdentifiers.CAVE_ENTRANCE_6, [2523, 3070]],
-    [ObjectIdentifiers.CAVE_ENTRANCE_7, [2540, 3055]],
-    [ObjectIdentifiers.CAVE_ENTRANCE_8, [2553, 3055]],
-    [ObjectIdentifiers.CAVE_ENTRANCE_9, [2552, 3034]],
-    [ObjectIdentifiers.CAVE_ENTRANCE_10, [2563, 3024]],
-    [ObjectIdentifiers.CAVE_ENTRANCE_11, [2523, 3070]],
-  ]);
-  const SCENE_EXIT_ATTRIBUTE = "watchtower:scene-exit";
-  const ENCLAVE_SCENE_SEEN_ATTRIBUTE = "watchtower:enclave-scene-seen";
-  // Revision 242 gamevals: qip_watchtower_wizard_relic, relic_combine,
-  // ogre_spellcasting, ogre_spell_impact, dragon_death. Wiki GIFs show these actions;
-  // the camera tiles and tick scheduling below are approximations, not capture timing.
-  const RELIC_ASSEMBLY_ANIMATION = 5352;
-  const RELIC_ASSEMBLY_GRAPHIC = 969;
-  const SHAMAN_CAST_ANIMATION = 5357;
-  const SHAMAN_IMPACT_GRAPHIC = 971;
-  const DRAGON_DEATH_ANIMATION = 92;
-  const Scenes = createQuestScenes(api, { recoveryAttribute: SCENE_EXIT_ATTRIBUTE, onEnd: finishScene });
-  // The two city gates: the north-west one is opened for the relic guard, the
-  // eastern one costs a gold bar (its guard keeps the bar). Both are two leaves
-  // with no open variant in the cache, so opening clears their clipping.
-  const CITY_GATE_IDS = new Set([
-    ObjectIdentifiers.CITY_GATE_3,
-    ObjectIdentifiers.CITY_GATE_4,
-    ObjectIdentifiers.CITY_GATE_5,
-    ObjectIdentifiers.CITY_GATE_6,
-  ]);
-  const NW_GATE_LEAVES = [
-    { id: ObjectIdentifiers.CITY_GATE_5, x: 2504, y: 3062 },
-    { id: ObjectIdentifiers.CITY_GATE_6, x: 2504, y: 3063 },
-  ];
-  const EAST_GATE_LEAVES = [
-    // The cache places the higher-id leaf west of the lower one here.
-    { id: ObjectIdentifiers.CITY_GATE_4, x: 2549, y: 3028 },
-    { id: ObjectIdentifiers.CITY_GATE_3, x: 2550, y: 3028 },
-  ];
-  // The two OGRE_GUARD_5s that open the north-west gate (the relic hand-in) spawn
-  // east of it, inside the city; a player still outside cannot path through the
-  // closed gate to reach them, which left the east gate's gold bar as the only way
-  // in. Park them on the outside walkway in front of the gate instead (the wiki
-  // has the player meet a guard before entering). The south lane stays clear so
-  // the opened gate remains walkable.
-  const NW_GATE_GUARD_ID = NpcIdentifiers.OGRE_GUARD_5; // 4370
-  // Radius 8 covers both spawns (2505/2507,3062) plus their 5-tile wander.
-  const NW_GATE_GUARD_AREA = { x: 2506, y: 3062, radius: 8 };
-  const NW_GATE_GUARD_STAND_TILES = [
-    { x: 2502, y: 3062 },
-    { x: 2503, y: 3062 },
-  ];
-  // The market counter that still has cakes on it (2793; 2792 is the empty one).
-  const ROCK_CAKE_COUNTER_ID = ObjectIdentifiers.COUNTER_5;
-  // The Watchtower's four crystal pillars are unnamed in the cache and carry a
-  // transform varbit. Positions are fixed: SW yellow, SE grey, NW cyan, NE magenta.
-  const PILLAR_CRYSTALS = new Map([
-    [20029, { crystal: CRYSTAL_1, bit: BIT_PLACED_YELLOW }],
-    [20037, { crystal: CRYSTAL_4, bit: BIT_PLACED_GREY }],
-    [20025, { crystal: CRYSTAL_3, bit: BIT_PLACED_CYAN }],
-    [20033, { crystal: CRYSTAL_2, bit: BIT_PLACED_MAGENTA }],
-  ]);
-  const CAVE_EXITS = new Map([
-    [ObjectIdentifiers.CAVE_EXIT_2, { x: 2562, y: 3024 }],
-    [ObjectIdentifiers.CAVE_EXIT_3, { x: 2524, y: 3070 }],
-    [ObjectIdentifiers.CAVE_EXIT_4, { x: 2540, y: 3054 }],
-    [ObjectIdentifiers.CAVE_EXIT_5, { x: 2553, y: 3054 }],
-    [ObjectIdentifiers.CAVE_EXIT_6, { x: 2552, y: 3034 }],
-    [ObjectIdentifiers.CAVE_EXIT_7, { x: 2529, y: 3013 }],
-  ]);
-  const RECEIVE_ITEMS = new Map([
-    ["dQ-zw3", FINGERNAILS],
-    ["C8UbfC", OLD_ROBE],
-    ["Xje1jx", UNUSUAL_ARMOUR],
-    ["Bt1nR2", DAMAGED_DAGGER],
-    ["h6thcG", TATTERED_EYE_PATCH],
-    ["-QBFep", SKAVID_MAP],
-    ["IAWRsb", SPELL_SCROLL],
-  ]);
-  const HAND_IN_RELIC_STEPS = new Map([
-    ["c6SUn4", 0],
-    ["XLwHKL", 1],
-    ["Dp7Zpc", 2],
-  ]);
-
-  const START_HOOK = "quest:watchtower:start";
-
+  const { STAGES, VARBITS, BITS, NPCS, PAGE, GUARD_PAGE, TILES } = W;
   let quest;
+  const state = W.createState(api, () => quest);
 
-  function bits(player) {
-    const value = Number(player.getAttribute(BITS_ATTRIBUTE));
-    return Number.isFinite(value) ? value | 0 : 0;
-  }
+  // ------------------------------------------------------------------ ids
 
-  function hasBit(player, bit) {
-    return (bits(player) & (1 << bit)) !== 0;
-  }
+  const ITEMS = Object.freeze({
+    FINGERNAILS: I.FINGERNAILS, OLD_ROBE: I.OLD_ROBE, UNUSUAL_ARMOUR: I.UNUSUAL_ARMOUR,
+    DAMAGED_DAGGER: I.DAMAGED_DAGGER, EYE_PATCH: I.TATTERED_EYE_PATCH,
+    RELIC_PARTS: Object.freeze([I.RELIC_PART_1, I.RELIC_PART_2, I.RELIC_PART_3]),
+    RELIC: I.OGRE_RELIC, MAP: I.SKAVID_MAP, TOOTH: I.OGRE_TOOTH, KEY: I.TOBANS_KEY, GOLD: I.TOBANS_GOLD,
+    ROCK_CAKE: I.ROCK_CAKE, CRYSTALS: Object.freeze([I.CRYSTAL, I.CRYSTAL_2, I.CRYSTAL_3, I.CRYSTAL_4]),
+    NIGHTSHADE: I.CAVE_NIGHTSHADE, MAGIC_POTION: I.MAGIC_OGRE_POTION, SCROLL: I.SPELL_SCROLL,
+    DRAGON_BONES: I.DRAGON_BONES, DEATH_RUNE: I.DEATH_RUNE, COINS: I.COINS, TINDERBOX: I.TINDERBOX,
+    VIAL_OF_WATER: I.VIAL_OF_WATER, JANGERBERRIES: I.JANGERBERRIES, GUAM_LEAF: I.GUAM_LEAF,
+    GUAM_POTION: I.GUAM_POTION_UNF_, JANGER_VIAL: I.VIAL_3, GUAM_JANGER_VIAL: I.VIAL_4, POTION: I.POTION_3,
+    GROUND_BAT_BONES: I.GROUND_BAT_BONES, BAT_BONES: I.BAT_BONES, PESTLE: I.PESTLE_AND_MORTAR,
+    GOLD_BAR: I.GOLD_BAR, VIAL: I.VIAL, SHAMAN_ROBE: I.SHAMAN_ROBE,
+  });
+  const [CRYSTAL_YELLOW, CRYSTAL_MAGENTA, CRYSTAL_CYAN, CRYSTAL_GREY] = ITEMS.CRYSTALS;
+  /** The decoy evidence, in the order the wizard's "I have this [robe/dagger/armour/eyepatch]..." names it. */
+  const DECOYS = [[ITEMS.OLD_ROBE, "robe"], [ITEMS.DAMAGED_DAGGER, "dagger"], [ITEMS.UNUSUAL_ARMOUR, "armour"], [ITEMS.EYE_PATCH, "eyepatch"]];
 
-  function setBit(player, bit) {
-    player.setAttribute(BITS_ATTRIBUTE, bits(player) | (1 << bit));
-  }
+  const LOCS = Object.freeze({
+    TOWER_LADDER: 2833, // towerladder: the ground floor's ladder, guarded (t256)
+    TOP_LADDER_UP: 2796, // watchladderup: to the top floor
+    TRELLIS: 20056, // qip_watchtower_trellis_base
+    BUSHES: Object.freeze(new Map([[2798, null], [2799, I.FINGERNAILS], [2800, I.DAMAGED_DAGGER], [2801, I.TATTERED_EYE_PATCH],
+      [2802, I.OLD_ROBE], [2803, I.UNUSUAL_ARMOUR]])),
+    // tree_ropeswing4_norope, tree_ropeswing3, and tree_ropeswing4 with the rope tied (t1195).
+    ROPE_TREE: 23638, ROPE_SWING_BACK: 23570, ROPE_SWING_ROPED: 23571,
+    TOBAN_CAVE: 2811, TOBAN_LADDER: 2812, TOBAN_CHEST: 2790,
+    EAST_GATE: Object.freeze([2786, 2787]), NORTH_WEST_GATE: Object.freeze([2788, 2789]),
+    CAKE_COUNTER: 2793, BATTLEMENT: 2832, GAP_NORTH: 2830, GAP_SOUTH: 2831,
+    ENCLAVE_ENTRANCE: 2804, ENCLAVE_EXIT: 2813, ENCLAVE_GATE: 2815, ROCK: 2816, LEVER: 2794,
+    YANILLE_HOLE: 2823,
+  });
 
-  function shamanKills(player) {
-    return (bits(player) >>> BIT_KILLS_SHIFT) & KILLS_MASK;
-  }
+  /** The bushes' Wiki conditions ("Old robe:" ...), by the item each holds. */
+  const BUSH_CONDITIONS = new Map([
+    [ITEMS.OLD_ROBE, "old robe:"], [ITEMS.UNUSUAL_ARMOUR, "unusual armour:"], [ITEMS.DAMAGED_DAGGER, "damaged dagger:"],
+    [ITEMS.EYE_PATCH, "tattered eye patch:"], [ITEMS.FINGERNAILS, "fingernails:"],
+  ]);
 
-  function setShamanKills(player, kills) {
-    const value = bits(player);
-    const next = (value & ~(KILLS_MASK << BIT_KILLS_SHIFT)) | ((kills & KILLS_MASK) << BIT_KILLS_SHIFT);
-    player.setAttribute(BITS_ATTRIBUTE, next | 0);
-  }
+  // ------------------------------------------------------------------ captured animations and sounds
 
-  function learnedWords(player) {
-    return [BIT_LEARNED_AR, BIT_LEARNED_IG, BIT_LEARNED_CUR, BIT_LEARNED_NOD].filter((bit) =>
-      hasBit(player, bit)
-    ).length;
-  }
+  const SEQ = Object.freeze({
+    SEARCH_BUSH: 5216, CLIMB: 828, ROPE_THROW: 775, ROPE_SWING: 751, ROPE_SWING_LOC: 497, CHEST: 832,
+    BATTLEMENT: 839, GAP_JUMP: 5355, GRIND: 364, EXPLODE: 365, POUR_POTION: 5361, PICKUP: 827, LEVER: 835,
+    READ_SCROLL: 5354,
+  });
+  const SOUND = Object.freeze({
+    ROPE_SWING: 2494, UNLOCK: 2419, CHEST_OPEN: 52, CHEST_CLOSE: 51, CLIMB_WALL: 2453, JUMP: 2461, GRIND: 2608,
+    VIAL_MIX: 2611, EXPLODE: 1486, SHAMAN_CRY: 3268, PICK: 2581, PILLAR: 975, LEVER: 2400,
+  });
+  const SPOTANIM_EXPLODE = 176;
+  const JINGLE_MACHINE_ON = 234;
+  const MAX_SHAMANS = 6;
 
-  function relicPartsHeld(player) {
-    return BIT_RELIC.filter((bit) => hasBit(player, bit)).length;
-  }
+  // ------------------------------------------------------------------ helpers
 
-  function held(player, itemId) {
-    return player.getInventory().getAmount(itemId) > 0;
-  }
-
-  function bankAmount(player, itemId) {
+  const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
+  function bankHas(player, itemId) {
     try {
-      const bank = player.getBank?.();
-      return Number(bank?.getAmount?.(itemId) ?? 0);
+      return Number(player.getBank?.()?.getAmount?.(itemId) ?? 0) > 0;
     } catch {
-      return 0;
+      return false;
     }
   }
+  const owns = (player, itemId) => held(player, itemId) || bankHas(player, itemId);
+  const give = (player, itemId) => { if (!held(player, itemId)) player.getInventory().adds(itemId, 1); };
+  const take = (player, itemId, amount = 1) => { if (held(player, itemId)) player.getInventory().deleteNumber(itemId, amount); };
+  const stage = (player) => quest.getStage(player);
+  const complete = (player) => quest.isComplete(player);
+  const level = (player, skill) => player.getSkillManager().getCurrentLevel(skill);
+  const sound = (player, id, delay = 0) => Sounds.sendSound(player, new Sound(id, 1, delay, 0));
+  const later = (player, ticks, fn) => api.getTaskManager().submit(new CountdownTask(player, ticks, () => {
+    if (player.isRegistered?.() !== false) fn();
+  }));
+  const relicPartsHeld = (player) => W.BITS.RELIC.filter((bit) => state.hasBit(player, bit)).length;
+  const shamansDead = (player) => W.SHAMANS.filter((shaman) => state.get(player, shaman.varbit) === 1).length;
+  const learnedWords = (player) => [...W.SKAVIDS.values()].filter((skavid) => state.hasBit(player, skavid.bit)).length;
+  const allCrystals = (player) => ITEMS.CRYSTALS.every((itemId) => held(player, itemId));
+  const allPlaced = (player) => W.PILLARS.every((pillar) => state.get(player, pillar.varbit) >= 1);
+  const inBox = (player, minX, maxX, minY, maxY) => {
+    const at = player.getLocation();
+    return at.getX() >= minX && at.getX() <= maxX && at.getY() >= minY && at.getY() <= maxY;
+  };
+  const near = (player, [x, y], range = 1) => {
+    const at = player.getLocation();
+    return Math.max(Math.abs(at.getX() - x), Math.abs(at.getY() - y)) <= range;
+  };
 
-  function give(player, itemId) {
-    if (!held(player, itemId)) player.getInventory().adds(itemId, 1);
+  function variantSteps(page, variant) {
+    const steps = loadTranscripts(api)?.[page]?.variants?.[variant];
+    return Array.isArray(steps) ? steps : null;
   }
-
-  function remove(player, itemId) {
-    if (held(player, itemId)) player.getInventory().deleteNumber(itemId, 1);
+  /** A condition's own steps on a page, by its id. */
+  function conditionSteps(page, variant, id) {
+    return (variantSteps(page, variant) ?? []).find((step) => step.id === id)?.steps ?? [];
   }
+  const play = (player, npcId, variant, select, page = PAGE, npc = null) => startTranscript(api, player, npcId, page, variant, select, npc);
 
-  function allCrystals(player) {
-    return CRYSTAL_IDS.every((itemId) => held(player, itemId));
+  /** One item box (two items: the double box), as live hands out quest items (t1405, t1716). */
+  function itemBox(player, text, first, second) {
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(second === undefined
+      ? new ItemStatementDialogue(0, first, text) : new DoubleItemStatementDialogue(0, first, second, text)));
   }
-
-  function allPlaced(player) {
-    return PLACED_BITS.every((bit) => hasBit(player, bit));
-  }
-
-  function hasLightSource(player) {
-    return Darkness.hasLightSource(player);
-  }
-
-  function bushObject(player) {
-    const value = Number(player.getAttribute(OBJECT_ATTRIBUTE));
-    return Number.isFinite(value) && value > 0 ? value : 0;
-  }
-
-  function normalized(text) {
-    return String(text ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-  }
-
-  function buildJournal(player, questHandle) {
-    const stage = questHandle.getStage(player);
-    if (stage >= STAGE_COMPLETE) {
-      return [
-        "<str>I recovered the four power crystals and restored the</str>",
-        "<str>Watchtower shield, saving Yanille from the ogres.</str>",
-        "",
-        stage >= STAGE_READ_SCROLL
-          ? "<str>I read the spell scroll and can cast Watchtower Teleport.</str>"
-          : "I should read the spell scroll the wizard gave me.",
-        "",
-        "<col=ff0000>QUEST COMPLETE!</col>",
-      ];
-    }
-    if (stage <= 0) {
-      return [
-        "I can start this quest by speaking to the",
-        "<col=800000>Watchtower Wizard</col> on the top floor of the",
-        "Watchtower north of Yanille. I can climb the",
-        "<col=800000>trellis</col> on the north wall (18 Agility).",
-        "",
-        "To complete this quest I need:",
-        "Level 14 Magic, 14 Herblore, 15 Thieving, 40 Mining and 25 Agility.",
-      ];
-    }
-    if (stage === STAGE_STARTED) {
-      return [
-        "The Watchtower's power crystals were stolen.",
-        "I should search the <col=800000>bushes</col> north of the",
-        "Watchtower for evidence.",
-      ];
-    }
-    if (stage === STAGE_GIVEN_FINGERNAILS) {
-      return [
-        "<str>I found skavid fingernails and showed them to the wizard.</str>",
-        "",
-        "I must deal with the tribal ogres around Gu'Tanoth",
-        "and find a way into the city of the ogres.",
-      ];
-    }
-    if (stage === STAGE_MADE_RELIC) {
-      return [
-        "<str>I assembled the ogre relic for the wizard.</str>",
-        "",
-        "I should use the <col=800000>relic</col> to trick my way",
-        "past the guards at <col=800000>Gu'Tanoth</col>.",
-      ];
-    }
-    if (stage === STAGE_GIVEN_RELIC || stage === STAGE_GIVEN_RIDDLE) {
-      const lines = ["<str>I entered Gu'Tanoth using the ogre relic.</str>", ""];
-      if (stage === STAGE_GIVEN_RIDDLE) {
-        lines.push("A city guard has set me a riddle: bring the item");
-        lines.push("whose letters his poem describes.");
-      } else {
-        lines.push("I need a <col=800000>map</col> of the skavid caves.");
-        lines.push("The city guards in the market may know more.");
+  /** A dump message's text, so boxes say the Wiki's words. */
+  function messageText(variant, id) {
+    const find = (steps) => {
+      for (const step of steps ?? []) {
+        if (step.id === id) return step.text;
+        const inner = find(step.steps) ?? step.options?.map((option) => find(option.steps)).find(Boolean);
+        if (inner) return inner;
       }
-      return lines;
-    }
-    if (stage === STAGE_SOLVED_RIDDLE) {
-      const lines = [
-        "<str>A guard's riddle won me a map of the skavid caves.</str>",
-        "",
-        "I need a <col=800000>light source</col> and the map",
-        "to search the skavid caves for the next crystal.",
-      ];
-      if (hasBit(player, BIT_LEARNING_SKAVID)) {
-        lines.push("A scared skavid is teaching me their language:");
-        lines.push("ar, nod, gor, ig, cur.");
-      }
-      lines.push(`I have learned ${learnedWords(player)} of the skavid words.`);
-      return lines;
-    }
-    if (stage === STAGE_SKAVID_CRYSTAL) {
-      return [
-        "<str>The mad skavid gave me a crystal for speaking skavid.</str>",
-        "",
-        "I need to get into the <col=800000>shamans' enclave</col>.",
-        "The wizard says <col=800000>cave nightshade</col> will distract",
-        "the enclave guard.",
-      ];
-    }
-    if (stage === STAGE_FED_NIGHTSHADE) {
-      return [
-        "<str>I distracted the enclave guard with cave nightshade.</str>",
-        "",
-        "The shamans are protected by magic. I should ask the",
-        "Watchtower Wizard for advice.",
-      ];
-    }
-    if (stage === STAGE_LEARNED_POTION) {
-      return [
-        "The wizard told me how to make a potion to destroy the",
-        "shamans: <col=800000>guam leaf</col>, <col=800000>jangerberries</col>",
-        "and <col=800000>ground bat bones</col> (14 Herblore).",
-        held(player, OGRE_POTION)
-          ? "I have mixed the potion and must have it enchanted."
-          : "I must mix the potion and take it to the wizard.",
-      ];
-    }
-    if (stage === STAGE_MADE_POTION) {
-      const lines = [
-        "<str>The wizard enchanted the ogre potion for me.</str>",
-        "",
-        `I must destroy ${Math.max(0, MAX_SHAMAN_KILLS - shamanKills(player))} more ogre shaman(s) with it.`,
-      ];
-      if (shamanKills(player) >= MAX_SHAMAN_KILLS) {
-        lines.push("The shamans are dead; I can mine the");
-        lines.push("<col=800000>Rock of Dalgroth</col> for the last crystal.");
-      }
-      return lines;
-    }
-    if (stage === STAGE_FOUND_ALL_CRYSTALS) {
-      if (!allPlaced(player)) {
-        return [
-          "<str>I have all four power crystals.</str>",
-          "",
-          "I must place the crystals on the correct",
-          "<col=800000>pillars</col> and pull the lever to activate",
-          "the shield generator.",
-        ];
-      }
-      return [
-        "<str>I have all four power crystals.</str>",
-        "",
-        "I should pull the <col=800000>lever</col> on the top floor",
-        "of the Watchtower to activate the shield generator.",
-      ];
-    }
-    return [
-      "I helped the wizards of Yanille restore the Watchtower.",
-      "I should return all four crystals to the wizard.",
-    ];
+      return null;
+    };
+    return find(variantSteps(PAGE, variant));
   }
 
-  function hasReadSpellScroll(player) {
-    return quest.getStage(player) >= STAGE_READ_SCROLL;
+  function nearestNpc(player, test, range = 12) {
+    let best = null;
+    let bestDistance = Infinity;
+    const at = player.getLocation();
+    for (const npc of core.World.getNpcs()) {
+      if (!npc?.isRegistered?.() || !test(npc)) continue;
+      const there = npc.getLocation();
+      if (there.getZ() !== at.getZ()) continue;
+      const distance = Math.max(Math.abs(there.getX() - at.getX()), Math.abs(there.getY() - at.getY()));
+      if (distance <= range && distance < bestDistance) {
+        best = npc;
+        bestDistance = distance;
+      }
+    }
+    return best;
   }
+  const attack = (npc, player) => npc?.getCombat?.()?.attack(player);
+  const damage = (player, amount) => player.getCombat().getHitQueue().addPendingDamage([new HitDamage(amount, HitMask.RED)]);
+
+  const ctx = { state, variantSteps };
+  const scenes = require("../watchtower/Scenes.Watchtower")(api, ctx);
+
+  // ------------------------------------------------------------------ the journal
+
+  function buildJournal(player) {
+    return journal(stage(player), {
+      fingernails: held(player, ITEMS.FINGERNAILS), gold: held(player, ITEMS.GOLD), tooth: held(player, ITEMS.TOOTH),
+      map: held(player, ITEMS.MAP),
+      spokenOg: state.hasBit(player, BITS.SPOKEN_OG), helpedOg: state.hasBit(player, BITS.HELPED_OG),
+      spokenGrew: state.hasBit(player, BITS.SPOKEN_GREW), helpedGrew: state.hasBit(player, BITS.HELPED_GREW),
+      helpedToban: state.hasBit(player, BITS.HELPED_TOBAN), eastGatePaid: state.hasBit(player, BITS.EAST_GATE_PAID),
+      learning: state.hasBit(player, BITS.LEARNING_SKAVID),
+      learnedIg: state.hasBit(player, BITS.LEARNED_IG), learnedAr: state.hasBit(player, BITS.LEARNED_AR),
+      learnedCur: state.hasBit(player, BITS.LEARNED_CUR), learnedNod: state.hasBit(player, BITS.LEARNED_NOD),
+      shamansLeft: MAX_SHAMANS - shamansDead(player),
+    }) ?? [];
+  }
+
+  // ------------------------------------------------------------------ the spell
+
+  const hasReadSpellScroll = (player) => stage(player) >= STAGES.READ_SCROLL;
 
   function canCastWatchtowerTeleport(event) {
     if (event.spellName?.trim().toLowerCase() !== "watchtower teleport" || hasReadSpellScroll(event.player)) return;
@@ -578,862 +193,781 @@ module.exports = function registerWatchtowerQuest(api) {
     event.player?.sendMessage?.("You need to read the Watchtower spell scroll before casting this spell.");
   }
 
-  /**
-   * "magic:teleport-quest-lock": the house portals ask what casting needs (Wiki, Portal chamber: "the same Magic level
-   * and quest requirements as casting the spell"), and the cast needs the scroll read.
-   */
+  /** "magic:teleport-quest-lock": the house portals ask what casting needs (Wiki, Portal chamber). */
   function watchtowerPortalLock(event) {
     if (event?.name?.trim().toLowerCase() !== "watchtower teleport" || hasReadSpellScroll(event.player)) return;
     event.refusal ??= `You need to read the Watchtower spell scroll to ${event.action ?? "cast this spell"}.`;
   }
 
-  function grantReward(player) {
-    player.getSkillManager().addExperiences(Skill.MAGIC, 15250);
-    giveReward(player, COINS, 5000);
-  }
+  // ------------------------------------------------------------------ which conversation plays
 
-  function selectOgVariant(player, stage) {
-    if (stage < STAGE_GIVEN_FINGERNAILS || stage >= STAGE_MADE_RELIC) return null;
-    if (hasBit(player, BIT_HELPED_OG)) return "ogre-investigations-og-speaking-to-og-after-giving-him-toban-s-gold";
-    if (hasBit(player, BIT_SPOKEN_OG)) return "ogre-investigations-og-speaking-to-og-again";
-    return "ogre-investigations-og";
-  }
-
-  function selectGrewVariant(player, stage) {
-    if (stage < STAGE_GIVEN_FINGERNAILS || stage >= STAGE_MADE_RELIC) return null;
-    if (hasBit(player, BIT_HELPED_GREW)) {
-      return "ogre-investigations-grew-speaking-to-grew-after-giving-him-gorad-s-tooth";
+  function wizardVariant(player) {
+    const value = stage(player);
+    if (value <= 0) return "getting-started-speaking-to-the-watchtower-wizard";
+    if (value === STAGES.STARTED) return "searching-for-evidence-talking-to-the-watchtower-wizard";
+    if (value === STAGES.FINGERNAILS) return "ogre-investigations-talking-to-the-watchtower-wizard";
+    if (value === STAGES.RELIC) return "ogre-investigations-talking-to-the-watchtower-wizard-again";
+    if (value <= STAGES.RIDDLE) return "entering-gu-tanoth-talking-to-the-watchtower-wizard-after-gaining-access-to-the-city";
+    if (value === STAGES.MAP) return "skavid-search-talking-to-the-watchtower-wizard-after-getting-the-skavid-map";
+    if (value === STAGES.SKAVID_CRYSTAL) return "skavid-search-talking-to-the-watchtower-wizard-after-learning-to-navigate-the-skavid-caves";
+    if (value === STAGES.NIGHTSHADE) return "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible";
+    if (value === STAGES.RECIPE) {
+      return held(player, ITEMS.POTION)
+        ? "entering-the-enclave-talking-to-the-watchtower-wizard-after-making-the-potion"
+        : "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible-talking-to-the-watchtower-wizard-again";
     }
-    if (hasBit(player, BIT_SPOKEN_GREW)) return "ogre-investigations-grew-speaking-to-grew-again";
-    return "ogre-investigations-grew";
-  }
-
-  function selectTobanVariant(player, stage) {
-    if (stage < STAGE_GIVEN_FINGERNAILS || stage >= STAGE_MADE_RELIC) return null;
-    if (hasBit(player, BIT_HELPED_TOBAN)) {
-      return "ogre-investigations-toban-speaking-to-toban-after-giving-him-dragon-bones";
-    }
-    if (hasBit(player, BIT_SPOKEN_TOBAN)) return "ogre-investigations-toban-speaking-to-toban-again";
-    return "ogre-investigations-toban";
-  }
-
-  function selectWizardVariant(player, stage) {
-    if (stage <= 0) return "getting-started-speaking-to-the-watchtower-wizard";
-    if (stage === STAGE_STARTED) return "searching-for-evidence-talking-to-the-watchtower-wizard";
-    if (stage === STAGE_GIVEN_FINGERNAILS) return relicPartsHeld(player) === RELIC_PART_IDS.length
-      ? "ogre-investigations-assembling-the-relic"
-      : "ogre-investigations-talking-to-the-watchtower-wizard";
-    if (stage === STAGE_MADE_RELIC) return "ogre-investigations-talking-to-the-watchtower-wizard-again";
-    if (stage === STAGE_GIVEN_RELIC || stage === STAGE_GIVEN_RIDDLE) {
-      return "entering-gu-tanoth-talking-to-the-watchtower-wizard-after-gaining-access-to-the-city";
-    }
-    if (stage === STAGE_SOLVED_RIDDLE) {
-      return "skavid-search-talking-to-the-watchtower-wizard-after-getting-the-skavid-map";
-    }
-    if (stage === STAGE_SKAVID_CRYSTAL) {
-      return "skavid-search-talking-to-the-watchtower-wizard-after-learning-to-navigate-the-skavid-caves";
-    }
-    if (stage === STAGE_FED_NIGHTSHADE) {
-      return "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible";
-    }
-    if (stage === STAGE_LEARNED_POTION) {
-      if (held(player, OGRE_POTION)) {
-        remove(player, OGRE_POTION);
-        player.getInventory().adds(MAGIC_OGRE_POTION, 1);
-        player.sendMessage("The wizard infuses the potion with magic.");
-        quest.setStage(player, STAGE_MADE_POTION);
-        return "entering-the-enclave-talking-to-the-watchtower-wizard-after-making-the-potion";
-      }
-      return "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible-talking-to-the-watchtower-wizard-again";
-    }
-    if (stage === STAGE_MADE_POTION) {
-      if (allCrystals(player)) {
-        quest.setStage(player, STAGE_FOUND_ALL_CRYSTALS);
-        return "reviving-the-watchtower-talking-to-the-watchtower-wizard-with-all-the-crystals";
-      }
-      if (shamanKills(player) >= MAX_SHAMAN_KILLS) {
+    if (value === STAGES.MAGIC_POTION) {
+      if (allCrystals(player)) return "reviving-the-watchtower-talking-to-the-watchtower-wizard-with-all-the-crystals";
+      if (shamansDead(player) >= MAX_SHAMANS) {
         return "entering-the-enclave-returning-to-the-watchtower-wizard-after-killing-the-shamans-without-mining-the-rock";
       }
-      return "entering-the-enclave-talking-to-the-watchtower-wizard-after-making-the-potion";
+      return "entering-the-enclave-talking-to-the-watchtower-wizard-before-destroying-the-shamans";
     }
-    if (stage === STAGE_FOUND_ALL_CRYSTALS) {
-      return "reviving-the-watchtower-talking-to-the-watchtower-wizard-again";
-    }
+    if (value === STAGES.ALL_CRYSTALS) return "reviving-the-watchtower-talking-to-the-watchtower-wizard-again";
     return "post-quest-talking-to-the-watchtower-wizard";
   }
 
-  function selectOtherWizardVariant(stage) {
-    if (stage <= 0) return "getting-started-speaking-to-a-wizard";
-    if (stage === STAGE_STARTED) return "searching-for-evidence-speaking-to-a-wizard";
-    if (stage === STAGE_GIVEN_FINGERNAILS) return "ogre-investigations-talking-to-a-wizard";
-    if (stage === STAGE_MADE_RELIC) return "ogre-investigations-talking-to-a-wizard-2";
-    if (stage === STAGE_GIVEN_RELIC || stage === STAGE_GIVEN_RIDDLE) {
-      return "entering-gu-tanoth-talking-to-the-wizards-after-gaining-access-to-the-city";
-    }
-    if (stage === STAGE_SOLVED_RIDDLE) {
-      return "skavid-search-talking-to-the-wizards-after-getting-the-skavid-map";
-    }
-    if (stage === STAGE_SKAVID_CRYSTAL) {
-      return "skavid-search-talking-to-the-wizards-after-learning-to-navigate-the-skavid-caves";
-    }
-    if (stage === STAGE_FED_NIGHTSHADE) {
-      return "entering-the-enclave-talking-to-the-wizards-after-discovering-the-shamans-are-invincible";
-    }
-    if (stage === STAGE_LEARNED_POTION) {
+  function otherWizardVariant(value) {
+    if (value <= 0) return "getting-started-speaking-to-a-wizard";
+    if (value === STAGES.STARTED) return "searching-for-evidence-speaking-to-a-wizard";
+    if (value === STAGES.FINGERNAILS) return "ogre-investigations-talking-to-a-wizard";
+    if (value === STAGES.RELIC) return "ogre-investigations-talking-to-a-wizard-2";
+    if (value <= STAGES.RIDDLE) return "entering-gu-tanoth-talking-to-the-wizards-after-gaining-access-to-the-city";
+    if (value === STAGES.MAP) return "skavid-search-talking-to-the-wizards-after-getting-the-skavid-map";
+    if (value === STAGES.SKAVID_CRYSTAL) return "skavid-search-talking-to-the-wizards-after-learning-to-navigate-the-skavid-caves";
+    if (value === STAGES.NIGHTSHADE) return "entering-the-enclave-talking-to-the-wizards-after-discovering-the-shamans-are-invincible";
+    if (value === STAGES.RECIPE) {
       return "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible-talking-to-the-wizards-after-learning-the-potion-recipe";
     }
-    if (stage === STAGE_MADE_POTION) return "reviving-the-watchtower-talking-to-a-wizard";
-    if (stage === STAGE_FOUND_ALL_CRYSTALS) {
-      return "reviving-the-watchtower-talking-to-a-wizard-before-activating-the-generator";
-    }
+    if (value === STAGES.MAGIC_POTION) return "reviving-the-watchtower-talking-to-a-wizard";
+    if (value === STAGES.ALL_CRYSTALS) return "reviving-the-watchtower-talking-to-a-wizard-before-activating-the-generator";
     return "post-quest-talking-to-a-wizard";
   }
 
-  function selectCityGuardVariant(stage) {
-    if (stage < STAGE_GIVEN_RELIC) return null;
-    if (stage < STAGE_GIVEN_RIDDLE) return "entering-gu-tanoth-seeking-passage";
-    if (stage === STAGE_GIVEN_RIDDLE) return "entering-gu-tanoth-seeking-passage-talking-to-the-city-guard-again";
+  function ogVariant(player) {
+    const value = stage(player);
+    if (value < STAGES.FINGERNAILS || value >= STAGES.RELIC) return null;
+    if (state.hasBit(player, BITS.HELPED_OG)) return "ogre-investigations-og-speaking-to-og-after-giving-him-toban-s-gold";
+    if (state.hasBit(player, BITS.SPOKEN_OG)) return "ogre-investigations-og-speaking-to-og-again";
+    return "ogre-investigations-og";
+  }
+
+  function grewVariant(player) {
+    const value = stage(player);
+    if (value < STAGES.FINGERNAILS || value >= STAGES.RELIC) return null;
+    if (state.hasBit(player, BITS.HELPED_GREW)) return "ogre-investigations-grew-speaking-to-grew-after-giving-him-gorad-s-tooth";
+    if (state.hasBit(player, BITS.SPOKEN_GREW)) return "ogre-investigations-grew-speaking-to-grew-again";
+    return "ogre-investigations-grew";
+  }
+
+  function tobanVariant(player) {
+    const value = stage(player);
+    if (value < STAGES.FINGERNAILS || value >= STAGES.RELIC) return null;
+    if (state.hasBit(player, BITS.HELPED_TOBAN)) return "ogre-investigations-toban-speaking-to-toban-after-giving-him-dragon-bones";
+    if (state.hasBit(player, BITS.SPOKEN_TOBAN)) return "ogre-investigations-toban-speaking-to-toban-again";
+    return "ogre-investigations-toban";
+  }
+
+  function cityGuardVariant(player) {
+    const value = stage(player);
+    if (value < STAGES.GUTANOTH) return null;
+    if (value === STAGES.GUTANOTH) return "entering-gu-tanoth-seeking-passage";
+    // With the death rune the guard takes it at once (t2661: "I worked it out!").
+    if (value === STAGES.RIDDLE) {
+      return held(player, ITEMS.DEATH_RUNE)
+        ? "entering-gu-tanoth-seeking-passage-using-the-death-rune-on-the-guard"
+        : "entering-gu-tanoth-seeking-passage-talking-to-the-city-guard-again";
+    }
     return "entering-gu-tanoth-seeking-passage-talking-to-him-after-having-given-him-the-rune";
   }
 
-  function selectScaredSkavidVariant(player, stage) {
-    if (stage < STAGE_SOLVED_RIDDLE || stage >= STAGE_COMPLETE) return null;
-    if (!hasBit(player, BIT_LEARNING_SKAVID)) return "skavid-search-scared-skavid";
-    if (learnedWords(player) >= 3) return "skavid-search-talking-to-the-scared-skavid-after-learning-skavid";
+  /** The battlement guards: the gift talk once they have asked for one, their first talk otherwise (t2444, t6252). */
+  function battlementGuardVariant(player) {
+    return state.get(player, VARBITS.GATE_CHAT_BATTLEMENT) === 1 && !state.hasBit(player, BITS.MARKET_GIVEN)
+      ? "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again"
+      : "entering-gu-tanoth-ogre-guard";
+  }
+
+  function scaredSkavidVariant(player) {
+    const value = stage(player);
+    if (value < STAGES.MAP) return null;
+    if (!state.hasBit(player, BITS.LEARNING_SKAVID)) return "skavid-search-scared-skavid";
+    if (learnedWords(player) >= W.SKAVIDS.size) return "skavid-search-talking-to-the-scared-skavid-after-learning-skavid";
     return "skavid-search-scared-skavid-talking-to-the-scared-skavid-again";
   }
 
-  function selectMadSkavidVariant(player, stage) {
-    if (stage < STAGE_SOLVED_RIDDLE) return null;
-    if (stage >= STAGE_SKAVID_CRYSTAL) return "skavid-search-the-mad-skavid-talking-to-the-mad-skavid-again";
-    if (!hasBit(player, BIT_LEARNING_SKAVID) || learnedWords(player) < 3) return null;
-    return "skavid-search-the-mad-skavid";
-  }
-
-  function selectSkavidTeacherVariant(player, stage, npcId) {
-    // The dump has no generic cave-skavid transcript, so returning null falls
-    // through to the Watchtower page's first variant (a Tower guard line). Play
-    // the teacher's own variant whenever the caves are open instead.
-    if (stage < STAGE_SOLVED_RIDDLE) return null;
-    return SKAVID_VARIANTS.get(npcId);
-  }
-
-  /** Which transcript variant each speaker plays, by quest stage. */
   function selectVariant({ npcId, player }) {
-    const stage = quest.getStage(player);
-    if (npcId === WIZARD_ID) {
-      const variant = selectWizardVariant(player, stage);
-      // Hearing the recipe is the quest step; the transcript is speech only.
-      if (stage === STAGE_FED_NIGHTSHADE) quest.setStage(player, STAGE_LEARNED_POTION);
-      return variant;
+    const value = stage(player);
+    if (npcId === NPCS.WIZARD) return wizardVariant(player);
+    if (NPCS.WIZARDS.includes(npcId)) return otherWizardVariant(value);
+    if (npcId === NPCS.TOWER_GUARD) return "getting-started-speaking-to-a-tower-guard";
+    if (npcId === NPCS.OG) return ogVariant(player);
+    if (npcId === NPCS.GREW) return grewVariant(player);
+    if (npcId === NPCS.TOBAN) return tobanVariant(player);
+    if (npcId === NPCS.GORAD) return value >= STAGES.FINGERNAILS && value < STAGES.RELIC ? "ogre-investigations-grew-facing-gorad" : null;
+    if (npcId === NPCS.BATTLEMENT_GUARD) return battlementGuardVariant(player);
+    if (npcId === NPCS.BRIDGE_GUARD) return "entering-gu-tanoth-talking-to-the-southern-ogre-guard";
+    if (npcId === NPCS.CITY_GUARD) return cityGuardVariant(player);
+    if (npcId === NPCS.SCARED_SKAVID) return scaredSkavidVariant(player);
+    if (W.SKAVIDS.has(npcId)) return value >= STAGES.MAP ? W.SKAVIDS.get(npcId).variant : null;
+    if (npcId === NPCS.MAD_SKAVID) {
+      if (value >= STAGES.SKAVID_CRYSTAL) return "skavid-search-the-mad-skavid-talking-to-the-mad-skavid-again";
+      return value === STAGES.MAP && learnedWords(player) >= W.SKAVIDS.size ? "skavid-search-the-mad-skavid" : null;
     }
-    if (OTHER_WIZARD_IDS.has(npcId)) return selectOtherWizardVariant(stage);
-    if (npcId === TOWER_GUARD_ID) {
-      return stage >= STAGE_STARTED
-        ? "getting-started-attempting-to-climb-the-ladder"
-        : "getting-started-speaking-to-a-tower-guard";
+    if (npcId === NPCS.ENCLAVE_GUARD) return "entering-the-enclave-talking-to-an-enclave-guard";
+    if (npcId === NPCS.OGRE_CHIEFTAIN && inBox(player, 2560, 2623, 9408, 9471)) {
+      return "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-chieftain";
     }
-    if (npcId === CHIEFTAIN_ID) {
-      return stage >= STAGE_FED_NIGHTSHADE
-        ? "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-chieftain"
-        : null;
-    }
-    if (npcId === OG_ID) return selectOgVariant(player, stage);
-    if (npcId === GREW_ID) return selectGrewVariant(player, stage);
-    if (npcId === TOBAN_ID) return selectTobanVariant(player, stage);
-    if (npcId === GORAD_ID) {
-      return stage >= STAGE_GIVEN_FINGERNAILS && stage < STAGE_MADE_RELIC
-        ? "ogre-investigations-grew-facing-gorad"
-        : null;
-    }
-    if (ENTRANCE_GUARD_IDS.has(npcId)) {
-      return stage >= STAGE_GIVEN_FINGERNAILS ? "entering-gu-tanoth-city-guard" : null;
-    }
-    if (SOUTHERN_GUARD_IDS.has(npcId)) {
-      return stage >= STAGE_GIVEN_FINGERNAILS ? "entering-gu-tanoth-talking-to-the-southern-ogre-guard" : null;
-    }
-    if (MARKET_GUARD_IDS.has(npcId)) {
-      if (stage < STAGE_GIVEN_RELIC) return null;
-      if (!hasBit(player, BIT_MARKET_WANTS)) {
-        setBit(player, BIT_MARKET_WANTS);
-        return "entering-gu-tanoth-ogre-guard";
-      }
-      return "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again";
-    }
-    if (BRIDGE_GUARD_IDS.has(npcId)) {
-      return stage >= STAGE_GIVEN_RELIC && atGapTakeOff(player) ? "entering-gu-tanoth-crossing-the-bridge" : null;
-    }
-    if (npcId === CITY_GUARD_ID) return selectCityGuardVariant(stage);
-    if (npcId === SCARED_SKAVID_ID) return selectScaredSkavidVariant(player, stage);
-    if (npcId === MAD_SKAVID_ID) return selectMadSkavidVariant(player, stage);
-    if (SKAVID_VARIANTS.has(npcId)) {
-      const variant = selectSkavidTeacherVariant(player, stage, npcId);
-      if (variant) player.setAttribute(VARIANT_ATTRIBUTE, variant);
-      return variant;
-    }
-    if (npcId === ENCLAVE_GUARD_ID) {
-      return stage >= STAGE_SKAVID_CRYSTAL
-        ? "entering-the-enclave-talking-to-an-enclave-guard"
-        : null;
-    }
-    if (SHAMAN_IDS.has(npcId)) {
-      return stage >= STAGE_FED_NIGHTSHADE
-        ? "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman"
-        : null;
-    }
+    if (W.SHAMANS.some((shaman) => shaman.ids.includes(npcId))) return "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman";
     return null;
   }
 
-  /** Answer the page's prose conditions. */
+  // ------------------------------------------------------------------ the Wiki's prose conditions
+
   function answerCondition(event) {
-    if (!event.pages?.some(entry => entry.page === PAGE)) return null;
+    if (!event.pages?.some((entry) => entry.page === PAGE || entry.page === GUARD_PAGE)) return null;
     const { player, text, stepId } = event;
     if (!player || text === undefined) return null;
     const value = String(text).toLowerCase();
     const has = (itemId) => held(player, itemId);
-    const bank = (itemId) => bankAmount(player, itemId) > 0;
-    const anyPart = () => RELIC_PART_IDS.some(has);
+    const bank = (itemId) => bankHas(player, itemId);
+    const [PART_1, PART_2, PART_3] = ITEMS.RELIC_PARTS;
 
-    if (value.includes("with no evidence to show him")) {
-      return !EVIDENCE_IDS.some(has);
-    }
-    if (value.includes("with any of the evidence besides fingernails")) {
-      return !has(FINGERNAILS) && DECOY_EVIDENCE_IDS.some(has);
-    }
-    if (value.includes("with the fingernails")) return has(FINGERNAILS);
+    if (value.includes("with no evidence to show him")) return ![ITEMS.FINGERNAILS, ...DECOYS.map(([id]) => id)].some(has);
+    if (value.includes("with any of the evidence besides fingernails")) return !has(ITEMS.FINGERNAILS) && DECOYS.some(([id]) => has(id));
+    if (value.includes("with the fingernails")) return has(ITEMS.FINGERNAILS);
 
-    if (value.includes("old robe:")) {
-      return bushObject(player) === ObjectIdentifiers.BUSH_15 && !has(OLD_ROBE);
-    }
-    if (value.includes("unusual armour:")) {
-      return bushObject(player) === ObjectIdentifiers.BUSH_16 && !has(UNUSUAL_ARMOUR);
-    }
-    if (value.includes("damaged dagger:")) {
-      return bushObject(player) === ObjectIdentifiers.BUSH_13 && !has(DAMAGED_DAGGER);
-    }
-    if (value.includes("tattered eye patch:")) {
-      return bushObject(player) === ObjectIdentifiers.BUSH_14 && !has(TATTERED_EYE_PATCH);
-    }
-    if (value.includes("fingernails:")) {
-      return bushObject(player) === ObjectIdentifiers.BUSH_12 && !has(FINGERNAILS);
-    }
-    if (value.includes("searching the same bush after finding an item in it")) {
-      const itemId = BUSH_ITEMS.get(bushObject(player));
-      return itemId !== undefined && has(itemId);
-    }
-    if (value.includes("finding nothing")) {
-      return bushObject(player) === ObjectIdentifiers.BUSH_11;
-    }
+    const bush = searchingBush.get(player);
+    for (const [itemId, label] of BUSH_CONDITIONS) if (value.includes(label)) return bush === itemId && !has(itemId);
+    if (value.includes("searching the same bush after finding an item in it")) return bush != null && has(bush);
+    if (value.includes("finding nothing")) return bush === null;
 
-    if (value.includes("without dragon bones")) return !has(DRAGON_BONES);
-    if (value.includes("with dragon bones")) return has(DRAGON_BONES);
-
-    if (value.includes("with toban's key")) return has(TOBANS_KEY);
-    if (value.includes("without toban's key")) return !has(TOBANS_KEY);
-    if (value.includes("if the player does have the gold")) return has(TOBANS_GOLD);
-    if (value.includes("if the player doesn't have the gold")) return !has(TOBANS_GOLD);
-    if (value.includes("if the player no longer has the key")) return !has(TOBANS_KEY) && !bank(TOBANS_KEY);
-    if (value.includes("if the player has the key on them")) return has(TOBANS_KEY);
-    if (value.includes("if the player has the key stored somewhere")) return bank(TOBANS_KEY);
+    if (value.includes("without dragon bones")) return !has(ITEMS.DRAGON_BONES);
+    if (value.includes("with dragon bones")) return has(ITEMS.DRAGON_BONES);
+    if (value.includes("with toban's key")) return has(ITEMS.KEY);
+    if (value.includes("without toban's key")) return !has(ITEMS.KEY);
+    if (value.includes("if the player does have the gold")) return has(ITEMS.GOLD);
+    if (value.includes("if the player doesn't have the gold")) return !has(ITEMS.GOLD);
+    if (value.includes("if the player no longer has the key")) return !owns(player, ITEMS.KEY);
+    if (value.includes("if the player has the key on them")) return has(ITEMS.KEY);
+    if (value.includes("if the player has the key stored somewhere")) return bank(ITEMS.KEY);
 
     if (value.includes("if the player has the relic part on them")) {
-      if (stepId === "9Vr3sO") return has(RELIC_PART_IDS[2]);
-      if (stepId === "rnvWxa") return has(RELIC_PART_IDS[0]);
-      if (stepId === "_zSkbp") return has(RELIC_PART_IDS[1]);
-      return anyPart();
+      if (stepId === "9Vr3sO") return has(PART_3);
+      if (stepId === "rnvWxa") return has(PART_1);
+      if (stepId === "_zSkbp") return has(PART_2);
+      return ITEMS.RELIC_PARTS.some(has);
     }
-    if (value.includes("if the player lost the relic part")) {
-      if (stepId === "dgZQL8") return !has(RELIC_PART_IDS[1]) && !bank(RELIC_PART_IDS[1]);
-      if (stepId === "qlelFq") return !has(RELIC_PART_IDS[0]) && !bank(RELIC_PART_IDS[0]);
-      return !anyPart();
+    if (value.includes("if the player lost the relic part") || value.includes("if the player doesn't have the relic part")) {
+      if (stepId === "dgZQL8") return !owns(player, PART_2);
+      if (stepId === "qlelFq") return !owns(player, PART_1);
+      return !ITEMS.RELIC_PARTS.some((id) => owns(player, id));
     }
     if (value.includes("if the relic part is stored somewhere")) {
-      if (stepId === "U7LsnZ") return bank(RELIC_PART_IDS[1]);
-      if (stepId === "JvNuhW") return bank(RELIC_PART_IDS[0]);
-      return RELIC_PART_IDS.some(bank);
+      if (stepId === "U7LsnZ") return bank(PART_2);
+      if (stepId === "JvNuhW") return bank(PART_1);
+      return ITEMS.RELIC_PARTS.some(bank);
     }
+    if (value.includes("without the ogre tooth")) return !has(ITEMS.TOOTH);
+    if (value.includes("with the ogre tooth")) return has(ITEMS.TOOTH);
+    if (value.includes("after killing gorad")) return state.get(player, VARBITS.TOOTH_GOT) === 1;
 
-    if (value.includes("without the ogre tooth")) return !has(OGRE_TOOTH);
-    if (value.includes("with the ogre tooth")) return has(OGRE_TOOTH);
-    if (value.includes("after killing gorad")) {
-      return hasBit(player, BIT_GORAD_DEAD) || has(OGRE_TOOTH);
-    }
+    if (value.includes("if the player has the relic in their inventory")) return has(ITEMS.RELIC);
+    if (value.includes("if the player lost the relic")) return !owns(player, ITEMS.RELIC);
+    if (value.includes("if the player stored the relic somewhere")) return bank(ITEMS.RELIC);
+    if (value.includes("if the player is not carrying the relic")) return !has(ITEMS.RELIC);
+    if (value.includes("if the player is carrying the relic")) return has(ITEMS.RELIC);
+    if (value.includes("after showing the relic")) return stage(player) >= STAGES.GUTANOTH;
 
-    if (value.includes("handing in relic part 1")) return has(RELIC_PART_IDS[0]);
-    if (value.includes("handing in relic part 2")) return has(RELIC_PART_IDS[1]);
-    if (value.includes("handing in relic part 3")) return has(RELIC_PART_IDS[2]);
-    if (value.includes("after handing in one relic part")) return relicPartsHeld(player) === 1;
-    if (value.includes("after handing in two relic parts")) return relicPartsHeld(player) === 2;
-    if (value.includes("after handing in the third relic part")) return relicPartsHeld(player) === 3;
+    if (value.includes("first conversation")) return state.get(player, VARBITS.GATE_CHAT_EAST) === 0;
+    if (value.includes("after giving the gold bar")) return eastGateOpen(player);
+    if (value.includes("future conversations")) return state.get(player, VARBITS.GATE_CHAT_EAST) === 1 && !eastGateOpen(player);
+    if (value.includes("if the player is not carrying a gold bar")) return !has(ITEMS.GOLD_BAR);
+    if (value.includes("if the player is carrying a gold bar")) return has(ITEMS.GOLD_BAR);
 
-    if (value.includes("if the player has the relic in their inventory")) return has(OGRE_RELIC);
-    if (value.includes("if the player lost the relic")) {
-      return !has(OGRE_RELIC) && !bank(OGRE_RELIC);
-    }
-    if (value.includes("if the player stored the relic somewhere")) return bank(OGRE_RELIC);
-    if (value.includes("if the player is not carrying the relic")) return !has(OGRE_RELIC);
-    if (value.includes("if the player is carrying the relic")) return has(OGRE_RELIC);
+    if (value.includes("without an ogre rockcake")) return !has(ITEMS.ROCK_CAKE);
+    if (value.includes("with an ogre rockcake")) return has(ITEMS.ROCK_CAKE);
+    if (value.includes("if the player doesn't have 20 coins")) return player.getInventory().getAmount(ITEMS.COINS) < 20;
+    if (value.includes("if the player has 20 coins")) return player.getInventory().getAmount(ITEMS.COINS) >= 20;
 
-    if (value.includes("without an ogre rockcake")) return !has(ROCK_CAKE);
-    if (value.includes("with an ogre rockcake")) return has(ROCK_CAKE);
+    if (value.includes("if the player does not have a skavid map in their inventory or bank")) return !owns(player, ITEMS.MAP);
+    if (value.includes("if the player has a skavid map in their bank")) return bank(ITEMS.MAP);
+    if (value.includes("if the player has a skavid map in their inventory")) return has(ITEMS.MAP);
+    if (value.includes("with a light source but no tinderbox")) return Darkness.hasLightSource(player) && !has(ITEMS.TINDERBOX);
 
-    if (value.includes("if the player doesn't have 20 coins")) {
-      return player.getInventory().getAmount(COINS) < 20;
-    }
-    if (value.includes("if the player has 20 coins")) {
-      return player.getInventory().getAmount(COINS) >= 20;
-    }
+    if (value.includes("if the player has the crystal on them")) return has(CRYSTAL_YELLOW);
+    if (value.includes("if the player doesn't have the crystal")) return !owns(player, CRYSTAL_YELLOW);
+    if (value.includes("if the crystal is stored somewhere")) return stepId === "Sm4F0t" ? bank(CRYSTAL_MAGENTA) : bank(CRYSTAL_YELLOW);
+    if (value.includes("if the player lost the crystal")) return !owns(player, CRYSTAL_MAGENTA);
+    if (value.includes("if the player has the crystal")) return has(CRYSTAL_MAGENTA);
 
-    if (value.includes("if the player does not have a skavid map in their inventory or bank")) {
-      return !has(SKAVID_MAP) && !bank(SKAVID_MAP);
-    }
-    if (value.includes("if the player has a skavid map in their bank")) return bank(SKAVID_MAP);
-    if (value.includes("if the player has a skavid map in their inventory")) return has(SKAVID_MAP);
+    const kills = shamansDead(player);
+    if (value.includes("after killing one shaman")) return kills === 1;
+    if (value.includes("after killing two shamans")) return kills === 2;
+    if (value.includes("after killing three shamans")) return kills === 3;
+    if (value.includes("after killing four shamans")) return kills === 4;
+    if (value.includes("after killing five shamans")) return kills === 5;
+    if (value.includes("after killing the last shaman")) return kills >= MAX_SHAMANS && !owns(player, CRYSTAL_CYAN);
+    if (value.includes("searching the shaman robe while already having the crystal")) return owns(player, CRYSTAL_CYAN);
+    if (value.includes("searching the shaman robe while not having the crystal")) return !owns(player, CRYSTAL_CYAN);
 
-    if (value.includes("with a light source but no tinderbox")) {
-      return hasLightSource(player) && !has(TINDERBOX);
-    }
-
-    if (value.includes("if the player has the crystal on them")) return has(CRYSTAL_1);
-    if (value.includes("if the player doesn't have the crystal")) {
-      return !has(CRYSTAL_1) && !bank(CRYSTAL_1);
-    }
-    if (value.includes("if the crystal is stored somewhere")) {
-      if (stepId === "7FXG2l") return bank(CRYSTAL_1);
-      if (stepId === "Sm4F0t") return bank(CRYSTAL_2);
-      return bank(CRYSTAL_1) || bank(CRYSTAL_2);
-    }
-    if (value.includes("if the player lost the crystal")) {
-      return !has(CRYSTAL_2) && !bank(CRYSTAL_2);
-    }
-    if (value.includes("if the player has the crystal")) return has(CRYSTAL_2);
-
-    if (value.includes("after killing one shaman")) return shamanKills(player) === 1;
-    if (value.includes("after killing two shamans")) return shamanKills(player) === 2;
-    if (value.includes("after killing three shamans")) return shamanKills(player) === 3;
-    if (value.includes("after killing four shamans")) return shamanKills(player) === 4;
-    if (value.includes("after killing five shamans")) return shamanKills(player) === 5;
-    if (value.includes("after killing the last shaman")) return shamanKills(player) >= MAX_SHAMAN_KILLS;
-
-    if (value.includes("searching the shaman robe while already having the crystal")) {
-      return has(CRYSTAL_3);
-    }
-    if (value.includes("searching the shaman robe while not having the crystal")) {
-      return !has(CRYSTAL_3) && !bank(CRYSTAL_3);
-    }
-
-    if (value.includes("if the player has read the spell scroll")) {
-      return hasReadSpellScroll(player);
-    }
-    if (value.includes("if the player has not read the spell scroll")) {
-      return !hasReadSpellScroll(player);
-    }
-    if (value.includes("if the player lost the spell scroll")) {
-      return !has(SPELL_SCROLL) && !bank(SPELL_SCROLL);
-    }
-    if (value.includes("if the player has the spell scroll")) return has(SPELL_SCROLL);
-
+    if (value.includes("if the player has read the spell scroll")) return hasReadSpellScroll(player);
+    if (value.includes("if the player has not read the spell scroll")) return !hasReadSpellScroll(player);
+    if (value.includes("if the player lost the spell scroll")) return !owns(player, ITEMS.SCROLL);
+    if (value.includes("if the player has the spell scroll")) return has(ITEMS.SCROLL);
     return null;
   }
 
+  // ------------------------------------------------------------------ lines: what live does as each shows
+
+  /** The relic parts still to go to the wizard in this talk, in hand-in order. */
+  const relicQueue = new WeakMap();
+  /** A skavid word the player has just said right (the reply line confirms it). */
+  const skavidAnswers = new WeakMap();
+
+  const LINE = Object.freeze({
+    START_SEARCH: "Try searching the surrounding area.",
+    NAILS_THROWN: "You could start by checking out the ogre settlements around here.",
+    DECOY: "I have this [robe/dagger/armour/eyepatch]...",
+    OG_KEY: "Here is a key to the chest it's in.",
+    OG_GOLD: "Well, well, the little t'ing has got it!",
+    OG_PART_AGAIN: "Grrr, why do I bother?",
+    GREW_CRYSTAL_AGAIN: "I suppose you want another?",
+    GREW_PART_AGAIN: "Stupid morsel, I have another.",
+    GORAD: "You shut your face! I smack you till you dead and sorry!",
+    RELIC_FIRST: "Ah, it's part of an old ogre statue.",
+    RELIC_MORE: "Ah, it's more of that old ogre statue.",
+    RELIC_ASSEMBLE: "Well, if you ever want to make friends with an ogre",
+    NORTH_WEST_STOP: "Stop, creature! Only ogres and their friends allowed in this city.",
+    NORTH_WEST_WELCOME: "It's got the statue of Dalgroth.",
+    NORTH_WEST_PASS: "It's the small creature; you may pass.",
+    EAST_ASKS: "You will be my friend only with gold.",
+    EAST_TAKES: "It's brought it! On your way.",
+    EAST_PASS: "I know you, creature; you may pass.",
+    GIFT_ASKED: "Prove it to us with a gift.",
+    CAKE_TAKEN: "Well, well, look at this. My favourite: rock cake!",
+    RIDDLE: "I want you to bring me an item: I will give you all the letters of this item",
+    SKAVID_TEACH: "You will have to learn skavid, otherwise they will not talks to you.",
+    SKAVID_SHOUT: "You shut your mouth! Don't tell them anything!",
+    SKAVID_CRY: "Tanath cur, tanath cur!",
+    MAD_SKAVID_CRYSTAL: "The others are with the shamans in the enclave",
+    NIGHTSHADE: "What is this? Arrrrgh! I cannot stand this plant!",
+    RECIPE: "Collect a guam leaf, add jangerberries, then mix in some ground bat bones.",
+    INFUSE: "That's great news; let me infuse it with magic...",
+    INFUSED: "Here it is - a dangerous substance.",
+    PILLARS: "Put the crystals on the pillars there and throw the lever",
+    WOW_TUNNEL: "Wow! That tunnel went a long way.",
+  });
+  const starts = (request, line) => String(request.text ?? "").startsWith(line);
+
+  function onLine(request) {
+    const { player } = request;
+    if (!player || !request.pages?.some((entry) => entry.page === PAGE || entry.page === GUARD_PAGE)) return;
+    const npc = request.npc;
+    // The start: the stage moves as the wizard sends the player searching (t215).
+    if (starts(request, LINE.START_SEARCH)) {
+      request.before = () => startQuest(player);
+      return;
+    }
+    if (starts(request, LINE.NAILS_THROWN)) {
+      request.before = () => {
+        if (stage(player) !== STAGES.STARTED || !held(player, ITEMS.FINGERNAILS)) return;
+        take(player, ITEMS.FINGERNAILS);
+        state.setStage(player, STAGES.FINGERNAILS);
+      };
+      return;
+    }
+    if (request.text === LINE.DECOY) {
+      const decoy = DECOYS.find(([itemId]) => held(player, itemId));
+      if (decoy) request.text = `I have this ${decoy[1]}...`;
+      return;
+    }
+    if (starts(request, LINE.OG_KEY)) {
+      request.before = () => {
+        state.setBit(player, BITS.SPOKEN_OG);
+        give(player, ITEMS.KEY);
+      };
+      return;
+    }
+    if (starts(request, LINE.OG_GOLD)) {
+      request.before = () => {
+        if (!held(player, ITEMS.GOLD)) return;
+        take(player, ITEMS.GOLD);
+        give(player, ITEMS.RELIC_PARTS[0]);
+        state.setBit(player, BITS.HELPED_OG);
+      };
+      return;
+    }
+    if (starts(request, LINE.OG_PART_AGAIN)) {
+      request.before = () => give(player, ITEMS.RELIC_PARTS[0]);
+      return;
+    }
+    if (starts(request, LINE.GREW_CRYSTAL_AGAIN)) {
+      request.before = () => give(player, CRYSTAL_YELLOW);
+      return;
+    }
+    if (starts(request, LINE.GREW_PART_AGAIN)) {
+      request.before = () => give(player, ITEMS.RELIC_PARTS[1]);
+      return;
+    }
+    if (request.text === LINE.GORAD) {
+      // Wiki: "Talk to him and tell him that you have come to knock his teeth out. He will attack you."
+      request.after = () => attack(npc, player);
+      return;
+    }
+    if (starts(request, LINE.RELIC_FIRST) || starts(request, LINE.RELIC_MORE)) {
+      request.before = () => handInNextPart(player);
+      return;
+    }
+    if (starts(request, LINE.RELIC_ASSEMBLE)) {
+      // The wizard works the parts together for three ticks under an empty box (t2037-2040).
+      request.pauseTicks = 3;
+      request.after = () => scenes.assembleRelic(player, npc);
+      return;
+    }
+    if (starts(request, LINE.NORTH_WEST_STOP)) {
+      request.before = () => state.set(player, VARBITS.GATE_CHAT_NORTH_WEST, 1);
+      return;
+    }
+    if (starts(request, LINE.NORTH_WEST_WELCOME)) {
+      request.before = () => {
+        if (!held(player, ITEMS.RELIC)) return;
+        take(player, ITEMS.RELIC);
+        state.advance(player, STAGES.GUTANOTH);
+      };
+      request.after = () => walkThroughGate(player, NORTH_WEST_GATE);
+      return;
+    }
+    if (request.text === LINE.NORTH_WEST_PASS) {
+      request.after = () => walkThroughGate(player, NORTH_WEST_GATE);
+      return;
+    }
+    if (starts(request, LINE.EAST_ASKS)) {
+      request.before = () => state.set(player, VARBITS.GATE_CHAT_EAST, 1);
+      return;
+    }
+    if (request.text === LINE.EAST_TAKES || request.text === LINE.EAST_PASS) {
+      request.after = () => walkThroughGate(player, EAST_GATE);
+      return;
+    }
+    if (starts(request, LINE.GIFT_ASKED)) {
+      request.before = () => state.set(player, VARBITS.GATE_CHAT_BATTLEMENT, 1);
+      return;
+    }
+    if (starts(request, LINE.CAKE_TAKEN)) {
+      request.before = () => {
+        if (!held(player, ITEMS.ROCK_CAKE)) return;
+        take(player, ITEMS.ROCK_CAKE);
+        state.setBit(player, BITS.MARKET_GIVEN);
+      };
+      return;
+    }
+    if (starts(request, LINE.RIDDLE) && stage(player) === STAGES.GUTANOTH) {
+      request.before = () => {
+        state.set(player, VARBITS.PUZZLE, 1);
+        state.advance(player, STAGES.RIDDLE);
+      };
+      return;
+    }
+    if (starts(request, LINE.SKAVID_TEACH)) {
+      // The chat closes; a hidden ogre strikes the skavid and is gone again (t2995-3001).
+      request.pauseTicks = 6;
+      request.after = () => scenes.silenceSkavid(player, npc, LINE.SKAVID_SHOUT, LINE.SKAVID_CRY);
+      return;
+    }
+    if ((request.text === LINE.SKAVID_SHOUT || request.text === LINE.SKAVID_CRY) && request.step?.presentation === "overhead") {
+      request.skip = true;
+      return;
+    }
+    if (starts(request, LINE.MAD_SKAVID_CRYSTAL)) {
+      request.before = () => {
+        give(player, CRYSTAL_MAGENTA);
+        state.advance(player, STAGES.SKAVID_CRYSTAL);
+      };
+      return;
+    }
+    if (starts(request, LINE.RECIPE)) {
+      request.before = () => state.advance(player, STAGES.RECIPE);
+      return;
+    }
+    if (request.text === LINE.INFUSE) {
+      // "The wizard mutters strange words over the liquid..." as the chat closes; the potion four ticks on (t5446-5450).
+      request.pauseTicks = 4;
+      request.after = () => player.sendMessage("The wizard mutters strange words over the liquid...");
+      return;
+    }
+    if (starts(request, LINE.INFUSED)) {
+      request.before = () => {
+        if (!held(player, ITEMS.POTION)) return;
+        take(player, ITEMS.POTION);
+        give(player, ITEMS.MAGIC_POTION);
+        state.advance(player, STAGES.MAGIC_POTION);
+      };
+      return;
+    }
+    if (starts(request, LINE.PILLARS)) {
+      request.before = () => state.advance(player, STAGES.ALL_CRYSTALS);
+      return;
+    }
+    skavidLine(request);
+  }
+
   /** Wiki: 40 Mining, 25 Agility, 15 Thieving, 14 Herblore and 14 Magic. */
-  const REQUIRED_SKILLS = [
-    { skill: Skill.MINING, level: 40, label: "Mining" },
-    { skill: Skill.AGILITY, level: 25, label: "Agility" },
-    { skill: Skill.THIEVING, level: 15, label: "Thieving" },
-    { skill: Skill.HERBLORE, level: 14, label: "Herblore" },
-    { skill: Skill.MAGIC, level: 14, label: "Magic" },
-  ];
+  const REQUIRED_SKILLS = [[Skill.MINING, 40, "Mining"], [Skill.AGILITY, 25, "Agility"], [Skill.THIEVING, 15, "Thieving"],
+    [Skill.HERBLORE, 14, "Herblore"], [Skill.MAGIC, 14, "Magic"]];
+  const missingSkills = (player) => REQUIRED_SKILLS.filter(([skill, required]) => player.getSkillManager().getMaxLevel(skill) < required);
 
-  function missingSkillRequirements(player) {
-    const skills = player.getSkillManager();
-    return REQUIRED_SKILLS.filter((requirement) => skills.getMaxLevel(requirement.skill) < requirement.level);
+  /** "Yes." on "Start the Watchtower quest?" carries the dump's start hook: the requirements (the stage moves later, at t215). */
+  function handleStartHook(event) {
+    const { player, npcId, hook } = event;
+    if (npcId !== NPCS.WIZARD || hook !== "quest:watchtower:start" || stage(player) > 0) return;
+    const missing = missingSkills(player);
+    if (!missing.length) return;
+    event.end = true;
+    for (const [, required, label] of missing) player.sendMessage(`You need a ${label} level of at least ${required} to start this quest.`);
   }
 
-  function notifySkillRequirements(player) {
-    for (const requirement of missingSkillRequirements(player)) {
-      player.sendMessage(
-        `You need a ${requirement.label} level of at least ${requirement.level} to start this quest.`
-      );
-    }
+  function startQuest(player) {
+    if (stage(player) >= STAGES.STARTED || missingSkills(player).length) return;
+    state.setStage(player, STAGES.STARTED);
+    player.sendMessage(questStartMessage(player, "Watchtower"));
   }
 
-  function handleStartHook({ player, npcId, hook }) {
-    if (npcId !== WIZARD_ID || hook !== START_HOOK) return;
-    if (quest.getStage(player) < STAGE_STARTED) {
-      if (missingSkillRequirements(player).length > 0) {
-        notifySkillRequirements(player);
-        return;
-      }
-      quest.setStage(player, STAGE_STARTED);
-    }
+  function handInNextPart(player) {
+    const queue = relicQueue.get(player) ?? [];
+    const index = queue.shift();
+    if (index === undefined) return;
+    const itemId = ITEMS.RELIC_PARTS[index];
+    if (!held(player, itemId) || state.hasBit(player, BITS.RELIC[index])) return;
+    take(player, itemId);
+    state.setBit(player, BITS.RELIC[index]);
   }
 
-  function handInRelicPart(player, index) {
-    const itemId = RELIC_PART_IDS[index];
-    if (!hasBit(player, BIT_RELIC[index]) && held(player, itemId)) {
-      remove(player, itemId);
-      setBit(player, BIT_RELIC[index]);
+  // ------------------------------------------------------------------ the skavids
+
+  /** The teaching skavids' lines: the game messages live sends around them (t3047-3211). */
+  function skavidLine(request) {
+    const { player } = request;
+    const skavid = W.SKAVIDS.get(request.npcId);
+    if (!skavid) return;
+    const text = String(request.text ?? "");
+    const steps = variantSteps(PAGE, skavid.variant) ?? [];
+    const opening = steps[0]?.text;
+    if (skavidUnknown.has(player)) return;
+    if (text === opening) {
+      request.after = () => player.sendMessage("The skavid is trying to communicate...");
+      return;
     }
-    // The transcript reaches its assembly message after the third hand-in. Keep
-    // the saved parts until then, including after a closed dialogue or a logout.
+    if (text === "???" && request.step?.type === "line") {
+      request.after = () => player.sendMessage("It seems that was the wrong reply.");
+      return;
+    }
+    const answer = steps[1]?.options?.find((option) => option.text === skavid.word)?.steps ?? [];
+    const [reply, again] = answer.filter((step) => step.type === "line").map((step) => step.text);
+    if (text === reply) {
+      request.before = () => {
+        player.sendMessage("It seems the skavid understood you.");
+        state.setBit(player, skavid.bit);
+      };
+      return;
+    }
+    // Skavid 1's second line is its "already talked" line (t3052); the first reply has only the first.
+    if (again && text === again && skavidAnswers.get(player) === request.npcId) request.skip = true;
   }
 
-  /** Hand-ins triggered by a chosen prose condition (npc-dialogue:condition). */
-  function handleCondition(event) {
-    const { player, stepId } = event;
-    if (!player || !stepId) return;
-
-    if (stepId === "Q3Ag5X") {
-      if (!held(player, FINGERNAILS)) return;
-      remove(player, FINGERNAILS);
-      if (quest.getStage(player) < STAGE_GIVEN_FINGERNAILS) {
-        quest.setStage(player, STAGE_GIVEN_FINGERNAILS);
-      }
-      return;
+  function talkSkavid(event) {
+    const { player, npcId, npc } = event;
+    const skavid = W.SKAVIDS.get(npcId);
+    if (!skavid || stage(player) < STAGES.MAP) return false;
+    const steps = variantSteps(PAGE, skavid.variant);
+    if (!steps) return false;
+    if (!state.hasBit(player, BITS.LEARNING_SKAVID)) {
+      // Before the scared skavid has taught any words: its line and the player's "???" (t2912-2914).
+      const blank = (variantSteps(PAGE, "skavid-search-scared-skavid") ?? []).find((step) => step.player === "???");
+      skavidUnknown.add(player);
+      play(player, npcId, skavid.variant, () => [steps[0], ...(blank ? [blank] : [])], PAGE, npc);
+      return true;
     }
-    if (HAND_IN_RELIC_STEPS.has(stepId)) {
-      handInRelicPart(player, HAND_IN_RELIC_STEPS.get(stepId));
-      return;
+    if (state.hasBit(player, skavid.bit)) {
+      // Talked to already: its own "already" line where the Wiki has one, and the message (t3052-3056).
+      const answer = steps[1]?.options?.find((option) => option.text === skavid.word)?.steps ?? [];
+      const again = answer.filter((step) => step.type === "line")[1];
+      skavidAnswers.delete(player);
+      if (again) play(player, npcId, skavid.variant, () => [again], PAGE, npc);
+      player.sendMessage("You have already talked to this skavid.");
+      return true;
     }
-    if (stepId === "flM0eA") {
-      setBit(player, BIT_LOOKING_RELIC);
-      return;
-    }
-    if (stepId === "7ZK2kb") {
-      if (quest.getStage(player) < STAGE_GIVEN_RELIC) quest.setStage(player, STAGE_GIVEN_RELIC);
-      openGate(player, NW_GATE_LEAVES);
-      return;
-    }
-    if (stepId === "Q47TiK") {
-      setBit(player, BIT_GORAD_DEAD);
-      give(player, OGRE_TOOTH);
-      return;
-    }
-    if (stepId === "qgYC5r") {
-      give(player, TOBANS_KEY);
-      return;
-    }
-    if (stepId === "qlelFq") {
-      give(player, RELIC_PART_IDS[0]);
-      return;
-    }
-    if (stepId === "dgZQL8") {
-      give(player, RELIC_PART_IDS[1]);
-      return;
-    }
-    if (stepId === "KFfnxk") {
-      give(player, CRYSTAL_1);
-      return;
-    }
-    if (stepId === "GrYvML") {
-      give(player, CRYSTAL_2);
-    }
+    skavidAnswers.set(player, npcId);
+    return false;
+  }
+  /** Players who have just heard a skavid without knowing any words: the two messages follow the "???" line. */
+  const skavidUnknown = new WeakSet();
+  function skavidUnknownLine(request) {
+    if (request.text !== "???" || request.step?.player !== "???" || !skavidUnknown.has(request.player)) return;
+    if (!W.SKAVIDS.has(request.npcId)) return;
+    request.after = () => {
+      skavidUnknown.delete(request.player);
+      request.player.sendMessage("The skavid is trying to communicate...");
+      request.player.sendMessage("You don't know any skavid words yet!");
+    };
   }
 
-  /** Start/report choices: task givers, the riddle, skavid lessons. */
   function handleChoice(event) {
     const { player, npcId, option } = event;
     if (!player) return;
-    const key = normalized(option);
-
-    if (npcId === OG_ID && key.startsWith("iseekentrance")) {
-      if (!hasBit(player, BIT_SPOKEN_OG)) {
-        setBit(player, BIT_SPOKEN_OG);
-        give(player, TOBANS_KEY);
-        player.sendMessage("Og gives you a key to Toban's chest.");
-      }
-      return;
-    }
-    if (npcId === TOBAN_ID) {
-      if (key.startsWith("icoulddosomethingforyou")) {
-        setBit(player, BIT_SPOKEN_TOBAN);
-        return;
-      }
-      if (key.startsWith("icantfindtherelicpart")) {
-        if (!held(player, RELIC_PART_IDS[2]) && bankAmount(player, RELIC_PART_IDS[2]) <= 0) {
-          player.getInventory().adds(RELIC_PART_IDS[2], 1);
-          player.sendMessage("Toban gives you another relic part.");
-        }
-        return;
-      }
-      return;
-    }
-    if (npcId === GREW_ID && key.startsWith("donteatmeicanhelp")) {
-      setBit(player, BIT_SPOKEN_GREW);
-      return;
-    }
-    if (npcId === CITY_GUARD_ID && key.startsWith("iseekpassage")) {
-      if (quest.getStage(player) < STAGE_GIVEN_RIDDLE) quest.setStage(player, STAGE_GIVEN_RIDDLE);
-      return;
-    }
-    if (npcId === SCARED_SKAVID_ID && key.startsWith("okayokay")) {
-      setBit(player, BIT_LEARNING_SKAVID);
-      return;
-    }
-    if (SKAVID_VARIANTS.has(npcId)) {
-      const variant = String(player.getAttribute(VARIANT_ATTRIBUTE));
-      if (variant.includes("skavid-1") && key === "cur") setBit(player, BIT_LEARNED_CUR);
-      if (variant.includes("skavid-2") && key === "ig") setBit(player, BIT_LEARNED_IG);
-      if (variant.includes("skavid-3") && key === "nod") setBit(player, BIT_LEARNED_NOD);
+    const text = String(option ?? "");
+    if (npcId === NPCS.TOBAN && text === "I could do something for you...") state.setBit(player, BITS.SPOKEN_TOBAN);
+    else if (npcId === NPCS.GREW && text === "Don't eat me; I can help you.") state.setBit(player, BITS.SPOKEN_GREW);
+    else if (npcId === NPCS.SCARED_SKAVID && text === "Okay, okay, I'm not going to hurt you.") state.setBit(player, BITS.LEARNING_SKAVID);
+    else if (npcId === NPCS.TOBAN && text === "I can't find the relic part you gave me.") {
+      // Ours: the Wiki has only the "you lie to me" answer; a lost part comes back without a word.
+      if (!owns(player, ITEMS.RELIC_PARTS[2]) && state.hasBit(player, BITS.HELPED_TOBAN)) give(player, ITEMS.RELIC_PARTS[2]);
     }
   }
 
-  /** Message steps carry the quest item hand-outs and the terminal completion. */
+  // ------------------------------------------------------------------ dialogue actions and messages
+
+  /** The dump's message steps that hand items over, as item boxes (t1405-6066). */
+  const ITEM_MESSAGES = new Map([
+    ["0-eoVh", (player) => { // Toban: "The ogre gives you part of a statue."
+      take(player, ITEMS.DRAGON_BONES);
+      give(player, ITEMS.RELIC_PARTS[2]);
+      state.setBit(player, BITS.HELPED_TOBAN);
+      return [ITEMS.RELIC_PARTS[2]];
+    }],
+    ["qdm4Oz", () => null], // Toban's chest: the chest opens it (openTobanChest)
+    ["ezI70R", () => [ITEMS.RELIC_PARTS[0]]], // Og: the part went with his line
+    ["g2LcFM", (player) => { // Grew: the part and the yellow crystal
+      take(player, ITEMS.TOOTH);
+      give(player, ITEMS.RELIC_PARTS[1]);
+      give(player, CRYSTAL_YELLOW);
+      state.setBit(player, BITS.HELPED_GREW);
+      return [ITEMS.RELIC_PARTS[1], CRYSTAL_YELLOW];
+    }],
+    ["kS6m_z", (player) => { // the wizard's relic
+      if (stage(player) !== STAGES.FINGERNAILS || relicPartsHeld(player) < 3) return null;
+      give(player, ITEMS.RELIC);
+      state.setStage(player, STAGES.RELIC);
+      return [ITEMS.RELIC];
+    }],
+    ["KRA6Uf", (player) => { give(player, ITEMS.RELIC); return [ITEMS.RELIC]; }], // "The wizard gives you another statue."
+    ["WGTZbp", () => [ITEMS.ROCK_CAKE]], // "You offer the guard a rock cake." (the cake goes with his next line)
+    ["SYijHA", (player) => { // the death rune for the map
+      take(player, ITEMS.DEATH_RUNE);
+      give(player, ITEMS.MAP);
+      state.advance(player, STAGES.MAP);
+      return [ITEMS.MAP];
+    }],
+    ["F_ChuY", (player) => { give(player, ITEMS.MAP); return [ITEMS.MAP]; }], // "The guard gives you another map."
+    ["-ZqDtE", () => [CRYSTAL_MAGENTA]], // the mad skavid (the crystal went with his line)
+    ["KXRXHc", (player) => { // the last shaman's crystal
+      give(player, CRYSTAL_CYAN);
+      return [CRYSTAL_CYAN];
+    }],
+    ["LGWwUr", () => [ITEMS.SHAMAN_ROBE, CRYSTAL_CYAN]], // the robe, already holding the crystal
+    ["BOIu3d", (player) => { give(player, CRYSTAL_CYAN); return [ITEMS.SHAMAN_ROBE, CRYSTAL_CYAN]; }],
+    ["55Yxf-", () => [CRYSTAL_GREY]], // the rock's crystal (mineRock gives it)
+  ]);
+  /** Messages the plugin sends itself, or that end the conversation. */
+  const SELF_MESSAGES = new Set(["Hc4rny", "QGCKsr", "qpwWbO", "VSYvDt", "EAAUUD", "UT4_jQ", "Z7N4ZW", "zrDead"]);
+
   function handleMessage(event) {
     const { player, stepId } = event;
-    if (!player || !stepId) return;
-
-    if (stepId === "0-eoVh") {
-      remove(player, DRAGON_BONES);
-      give(player, RELIC_PART_IDS[2]);
-      setBit(player, BIT_HELPED_TOBAN);
+    const handOut = ITEM_MESSAGES.get(stepId);
+    if (handOut) {
+      const items = handOut(player);
+      if (items) event.box = { items };
       return;
     }
-    if (stepId === "qdm4Oz") {
-      give(player, TOBANS_GOLD);
+    if (stepId === "a11a16") { // City guard: "You are under attack!"
+      attack(event.npc, player);
       return;
     }
-    if (stepId === "ezI70R") {
-      remove(player, TOBANS_GOLD);
-      give(player, RELIC_PART_IDS[0]);
-      setBit(player, BIT_HELPED_OG);
-      return;
-    }
-    if (stepId === "g2LcFM") {
-      remove(player, OGRE_TOOTH);
-      give(player, RELIC_PART_IDS[1]);
-      give(player, CRYSTAL_1);
-      setBit(player, BIT_HELPED_GREW);
-      return;
-    }
-    if (stepId === "Hc4rny") {
-      setBit(player, BIT_GORAD_DEAD);
-      give(player, OGRE_TOOTH);
-      return;
-    }
-    if (stepId === "kS6m_z") {
-      event.handled = true;
-      if (relicPartsHeld(player) === RELIC_PART_IDS.length && quest.getStage(player) === STAGE_GIVEN_FINGERNAILS) {
-        assembleRelic(player);
-      }
-      return;
-    }
-    if (stepId === "KRA6Uf") {
-      give(player, OGRE_RELIC);
-      return;
-    }
-    if (stepId === "WGTZbp") {
-      remove(player, ROCK_CAKE);
-      setBit(player, BIT_MARKET_GIVEN);
-      return;
-    }
-    if (stepId === "SYijHA") {
-      remove(player, DEATH_RUNE);
-      give(player, SKAVID_MAP);
-      if (quest.getStage(player) < STAGE_SOLVED_RIDDLE) quest.setStage(player, STAGE_SOLVED_RIDDLE);
-      return;
-    }
-    if (stepId === "F_ChuY") {
-      give(player, SKAVID_MAP);
-      return;
-    }
-    if (stepId === "-ZqDtE") {
-      give(player, CRYSTAL_2);
-      if (quest.getStage(player) < STAGE_SKAVID_CRYSTAL) quest.setStage(player, STAGE_SKAVID_CRYSTAL);
-      return;
-    }
-    if (stepId === "KXRXHc" || stepId === "BOIu3d") {
-      give(player, CRYSTAL_3);
-      return;
-    }
-    if (stepId === "55Yxf-") {
-      give(player, CRYSTAL_4);
-      return;
-    }
-    if (stepId === "QGCKsr") {
-      remove(player, SPELL_SCROLL);
-      if (quest.getStage(player) < STAGE_READ_SCROLL) {
-        quest.setStage(player, STAGE_READ_SCROLL);
-      }
-      return;
-    }
-    if (stepId === "UT4_jQ") {
-      if (!quest.isComplete(player)) completeWatchtower(player);
+    if (SELF_MESSAGES.has(stepId)) {
       event.handled = true;
       event.end = true;
     }
   }
 
-  function completeWatchtower(player) {
-    for (const crystalId of CRYSTAL_IDS) {
-      const amount = player.getInventory().getAmount(crystalId);
-      if (amount > 0) player.getInventory().deleteNumber(crystalId, amount);
-    }
-    quest.complete(player);
-  }
-
-  /** Action steps: item receives, the bridge toll, the reward action. */
-  function handleActionStep(event) {
-    const { player, stepId } = event;
-    if (!player || !stepId) return;
-
-    if (RECEIVE_ITEMS.has(stepId)) {
-      give(player, RECEIVE_ITEMS.get(stepId));
-      event.handled = true;
-      return;
-    }
-    if (stepId === "rEZMuS") {
-      if (atGapTakeOff(player) && player.getInventory().getAmount(COINS) >= 20) {
-        player.getInventory().deleteNumber(COINS, 20);
-        player.getSkillManager().addExperiences(Skill.AGILITY, 50);
-        player.sendMessage("You daringly jump across the chasm.");
-        jumpGap(player, true);
-      }
-      event.handled = true;
-      return;
-    }
-    if (stepId === "tTts4h") {
-      // Rewards are granted when the terminal completion message is handled.
-      event.handled = true;
-    }
-  }
-
-  function enterEnclave(player) {
-    enclaveDistracted.delete(player);
-    player.moveTo(new Location(ENCLAVE_ENTRANCE_DESTINATION.x, ENCLAVE_ENTRANCE_DESTINATION.y, 0));
-    if (!player.getAttribute(ENCLAVE_SCENE_SEEN_ATTRIBUTE) && quest.getStage(player) < STAGE_LEARNED_POTION) {
-      showEnclaveScene(player);
-    }
-  }
-
-  function finishScene(player, scene, logout) {
-    Scenes.closeFade(player);
-    player.getDialogueManager().reset();
-    player.getPacketSender().sendInterfaceRemoval();
-    if (!logout && scene.exit) player.moveTo(new Location(...scene.exit));
-    if (!scene.finished || logout || player.getHitpoints() <= 0) return;
-    if (scene.name === "watchtower-relic" && quest.getStage(player) === STAGE_GIVEN_FINGERNAILS) {
-      give(player, OGRE_RELIC);
-      if (!held(player, OGRE_RELIC)) {
-        player.sendMessage("The wizard keeps the relic until you have room to carry it.");
-        return;
-      }
-      quest.setStage(player, STAGE_MADE_RELIC);
-      player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-        new ItemStatementDialogue(0, OGRE_RELIC, "The wizard gives you a complete statue.")
-      ));
-    }
-    if (scene.name === "watchtower-enclave") player.setAttribute(ENCLAVE_SCENE_SEEN_ATTRIBUTE, true);
-  }
-
-  function assembleRelic(player) {
-    if (Scenes.get(player)) return;
-    const at = player.getLocation();
-    const exit = [at.getX(), at.getY(), at.getZ()];
-    const scene = Scenes.open(player, "watchtower-relic", [[2536, 2559, 3104, 3127, 2]], {}, {
-      instance: { sourceChunk: [317, 388], size: 3 }, at: [2547, 3116, 2], exit,
-    });
-    player.getDialogueManager().reset();
-    Scenes.controls(player, true, true);
-    const wizard = Scenes.actor(scene, WIZARD_ID, [2549, 3116, 2], [2550, 3116]);
-    Scenes.camera(player, [2546, 3113, 700], [2549, 3116, 100]);
-    wizard?.performAnimation(new Animation(RELIC_ASSEMBLY_ANIMATION));
-    wizard?.performGraphic(new Graphic(RELIC_ASSEMBLY_GRAPHIC));
-    Scenes.hold(player);
-    Scenes.later(scene, 5, () => {
-      scene.finished = true;
-      Scenes.end(player, false);
-    });
-  }
-
-  function showEnclaveScene(player) {
-    if (Scenes.get(player)) return;
-    const exit = [ENCLAVE_ENTRANCE_DESTINATION.x, ENCLAVE_ENTRANCE_DESTINATION.y, 0];
-    const scene = Scenes.open(player, "watchtower-enclave", [[2560, 2623, 9408, 9471, 0]], {}, {
-      instance: { sourceChunk: [320, 1176], size: 8 }, at: [2580, 9433, 0], exit,
-    });
-    player.getDialogueManager().reset();
-    Scenes.controls(player, true, true);
-    const shaman = Scenes.actor(scene, NpcIdentifiers.OGRE_SHAMAN_5, [2582, 9437, 0], [2586, 9437]);
-    const dragon = Scenes.actor(scene, NpcIdentifiers.BLUE_DRAGON_6, [2586, 9437, 0], [2582, 9437]);
-    Scenes.camera(player, [2581, 9429, 550], [2586, 9437, 100]);
-    Scenes.hold(player);
-    Scenes.later(scene, 1, () => {
-      shaman?.forceChat("Take dis!");
-      shaman?.performAnimation(new Animation(SHAMAN_CAST_ANIMATION));
-    });
-    Scenes.later(scene, 2, () => {
-      dragon?.performGraphic(new Graphic(SHAMAN_IMPACT_GRAPHIC));
-      dragon?.addTickHit(new HitDamage(75, HitMask.RED));
-      // This is a visual death, not a world combat kill/drop/XP event.
-      dragon?.setHitpoints(1);
-      shaman?.forceChat("Hur, hur, hur, hur!");
-    });
-    Scenes.later(scene, 3, () => dragon?.performAnimation(new Animation(DRAGON_DEATH_ANIMATION)));
-    Scenes.later(scene, 7, () => {
-      scene.finished = true;
-      Scenes.end(player, false);
-    });
-  }
-
-  function cancelScene({ player }) {
-    if (player && Scenes.get(player)) Scenes.end(player, true);
-  }
-
-  function claimTobanLadder(event) {
-    if (event.objectId === TOBAN_LADDER_ID) handleObjectInteraction(event);
-  }
+  const ATTACKS = new Set(["7Todw2", "fPxWjU", "0AF8qI", "n72ZBl", "qS75F0", "LvlTzx", "WdYOsW"]);
+  const PUSHBACKS = new Set(["ECbzBh", "QRQKCo", "YF057i"]);
 
   function handleAction(event) {
-    if (!event.player || !event.stepId) return;
-    if (event.stepId === ENCLAVE_RUN_PAST_ID && enclaveDistracted.has(event.player)) {
-      // The transcript's own message still shows; the player is then inside.
-      enterEnclave(event.player);
-      return;
-    }
-    if (ENCLAVE_GUARD_ATTACK_IDS.has(event.stepId)) {
-      event.npc?.getCombat?.()?.attack(event.player);
-      return;
-    }
-    if (event.stepId === BATTLEMENT_GUARD_ATTACK_ID) {
-      event.npc?.getCombat?.()?.attack(event.player);
-      return;
-    }
+    const { player, stepId } = event;
+    if (!player || !stepId || !event.pages?.some((entry) => entry.page === PAGE || entry.page === GUARD_PAGE)) return;
     if (event.kind === "message") {
       handleMessage(event);
       return;
     }
-    if (event.step?.type === "action") handleActionStep(event);
-  }
-
-  function searchBush(player, objectId) {
-    if (quest.getStage(player) < STAGE_STARTED) {
-      player.sendMessage("I am not sure why I am searching this bush.");
+    if (ATTACKS.has(stepId)) {
+      event.handled = true;
+      // Og's and Grew's "Guards!": one of their ogres comes for the player (t1053, t1226).
+      const attacker = stepId === "7Todw2" || stepId === "fPxWjU"
+        ? nearestNpc(player, (npc) => npc.getDefinition?.()?.getName?.() === "Ogre")
+        : event.npc;
+      attack(attacker, player);
       return;
     }
-    player.setAttribute(OBJECT_ATTRIBUTE, objectId);
-    startTranscript(api, player, TOWER_GUARD_ID, PAGE, "searching-for-evidence-searching-the-bushes");
-    player.setAttribute(OBJECT_ATTRIBUTE, 0);
-  }
-
-  function openTobanChest(player) {
-    if (quest.getStage(player) < STAGE_GIVEN_FINGERNAILS) {
-      player.sendMessage("The chest is locked.");
+    if (PUSHBACKS.has(stepId)) {
+      // Wiki: "pushes you back down the hill, stunning you and dealing 3 damage". Ours: no capture says where to.
+      event.handled = true;
+      damage(player, 3);
       return;
     }
-    startTranscript(api, player, TOBAN_ID, PAGE, "ogre-investigations-toban-looting-toban-s-chest");
-    if (held(player, TOBANS_KEY)) {
-      remove(player, TOBANS_KEY);
-      player.sendMessage("You use the key Og gave you.");
-    }
-  }
-
-  function stealRockCake(player) {
-    if (quest.getStage(player) < STAGE_GIVEN_RELIC && !quest.isComplete(player)) {
-      player.sendMessage("I don't think I should steal from the ogres yet.");
+    if (stepId === "rEZMuS") { // the toll paid: the jump
+      event.handled = true;
+      payToll(player);
       return;
     }
-    if (player.getSkillManager().getCurrentLevel(Skill.THIEVING) < 15) {
-      player.sendMessage("You need a Thieving level of at least 15 to steal a rock cake.");
-      return;
-    }
-    if (!player.getClickDelay().elapsedTime(1000)) return;
-    if (player.getInventory().isFull()) {
-      player.getInventory().full();
-      return;
-    }
-    player.getClickDelay().reset();
-    player.performAnimation(new api.core.Animation(881));
-    player.getInventory().adds(ROCK_CAKE, 1);
-    player.getSkillManager().addExperiences(Skill.THIEVING, 6.4);
-    player.sendMessage("You steal a rock cake from the counter.");
-  }
-
-  /** Opens a two-leaf city gate: clearing its clipping lets players walk through. */
-  function openGate(player, leaves) {
-    let opened = false;
-    for (const leaf of leaves) {
-      const object = api.core.MapObjects.get(leaf.id, new Location(leaf.x, leaf.y, 0), null);
-      if (!object) continue;
-      api.core.ObjectManager.deregister(object, true);
-      opened = true;
-    }
-    if (opened) {
-      api.core.Sounds.sendSound(player, api.core.Sound.GATE_OPEN);
-      player.sendMessage("You swing the gate open.");
-    }
-    return opened;
-  }
-
-  /** Bribes/opens the east gate; false when the player has no gold bar to give. */
-  function payEastGate(player) {
-    if (quest.isComplete(player) || hasBit(player, BIT_EAST_GATE_PAID)) {
-      openGate(player, EAST_GATE_LEAVES);
-      return true;
-    }
-    if (!held(player, GOLD_BAR)) return false;
-    remove(player, GOLD_BAR);
-    setBit(player, BIT_EAST_GATE_PAID);
-    player.sendMessage("You hand the ogre guard a gold bar.");
-    openGate(player, EAST_GATE_LEAVES);
-    return true;
-  }
-
-  function handleCityGate(player, objectId) {
-    const east = objectId === ObjectIdentifiers.CITY_GATE_3 || objectId === ObjectIdentifiers.CITY_GATE_4;
-    if (east) {
-      if (!payEastGate(player)) {
-        player.sendMessage("An ogre guard blocks the gate. Perhaps a bar of gold would change his mind.");
+    if (["Cy5w9B"].includes(stepId)) { // the gold bar to the east guard (t2222)
+      event.handled = true;
+      if (held(player, ITEMS.GOLD_BAR)) {
+        take(player, ITEMS.GOLD_BAR);
+        state.setBit(player, BITS.EAST_GATE_PAID);
       }
       return;
     }
-    if (quest.getStage(player) >= STAGE_GIVEN_RELIC || quest.isComplete(player)) {
-      openGate(player, NW_GATE_LEAVES);
+    if (stepId === "-QBFep" || stepId === "IAWRsb" || stepId === "dQ-zw3" || stepId === "C8UbfC" || stepId === "Xje1jx"
+      || stepId === "Bt1nR2" || stepId === "h6thcG") {
+      event.handled = true;
+      if (stepId === "IAWRsb") give(player, ITEMS.SCROLL);
+      else if (stepId === "-QBFep") give(player, ITEMS.MAP);
+      else {
+        const itemId = { "dQ-zw3": ITEMS.FINGERNAILS, "C8UbfC": ITEMS.OLD_ROBE, "Xje1jx": ITEMS.UNUSUAL_ARMOUR,
+          "Bt1nR2": ITEMS.DAMAGED_DAGGER, "h6thcG": ITEMS.EYE_PATCH }[stepId];
+        give(player, itemId);
+      }
       return;
     }
-    player.sendMessage("The ogre guards eye you suspiciously. Perhaps you should talk to one of them.");
+    if (["dd7KHH", "v-vEZl", "ATVVrG", "wq3K7d", "tTts4h", "ZnvGMC"].includes(stepId)) event.handled = true;
   }
 
-  function enterSkavidCave(player, objectId) {
-    if (!held(player, SKAVID_MAP)) {
-      player.sendMessage("There's no way I can find my way through without a map of some kind.");
-      const destination = MAPLESS_CAVE_ROUTES.get(objectId);
-      if (destination) player.moveTo(new Location(destination[0], destination[1], 0));
+  // ------------------------------------------------------------------ the Watchtower
+
+  /** The ground floor's ladder: the guards keep it until the quest starts, and wave the player up once (t255-259). */
+  function climbTowerLadder(event) {
+    const { player, object } = event;
+    if (event.objectId !== LOCS.TOWER_LADDER || object?.getLocation?.().getX() !== 2544 || object.getLocation().getY() !== 3111) return;
+    event.handled = true;
+    if (stage(player) <= 0) {
+      play(player, NPCS.TOWER_GUARD, "getting-started-attempting-to-climb-the-ladder");
       return;
     }
-    if (!hasLightSource(player)) {
-      player.sendMessage("It is far too dark in there. I will need a light source.");
+    if (state.get(player, VARBITS.GUARD) === 0) {
+      state.set(player, VARBITS.GUARD, 1);
+      play(player, NPCS.TOWER_GUARD, "getting-started-climbing-the-ladder-after-starting-the-quest");
+      climbAfterChat(player, TILES.TOWER_FIRST_FLOOR);
       return;
     }
-    const destination = CAVE_ENTRANCES.get(objectId);
-    if (destination) player.moveTo(new Location(destination.x, destination.y, 0));
+    climbTo(player, TILES.TOWER_FIRST_FLOOR);
   }
 
-  function mineRock(player) {
-    const stage = quest.getStage(player);
-    if (stage < STAGE_MADE_POTION || shamanKills(player) < MAX_SHAMAN_KILLS) {
-      player.sendMessage("I can't touch it... Perhaps it is linked with the shamans in some strange way?");
-      return;
-    }
-    if (held(player, CRYSTAL_4) || bankAmount(player, CRYSTAL_4) > 0) {
-      startTranscript(
-        api,
-        player,
-        WIZARD_ID,
-        PAGE,
-        "entering-the-enclave-attempting-to-mine-the-rock-of-dalgroth-again"
-      );
-      return;
-    }
-    if (player.getSkillManager().getCurrentLevel(Skill.MINING) < 40) {
-      player.sendMessage("You need at least level 40 Mining to mine this rock.");
-      return;
-    }
-    startTranscript(api, player, WIZARD_ID, PAGE, "entering-the-enclave-mining-the-rock-of-dalgroth");
+  /** The climb: seq 828 and the floor a tick later (t2017-2018). */
+  function climbTo(player, tile) {
+    api.emitCustomEvent("ladders:climbUp", { player, destination: new Location(tile[0], tile[1], tile[2]) });
+  }
+  /** Climbs once the guard's line is continued (t258-259). */
+  function climbAfterChat(player, tile) {
+    let ticks = 0;
+    const task = new core.Task(1, false);
+    task.execute = () => {
+      if (!player.isRegistered?.() || ++ticks > 100) { task.stop(); return; }
+      if (player.getDialogueManager().isActive?.()) return;
+      task.stop();
+      climbTo(player, tile);
+    };
+    api.getTaskManager().submit(task);
   }
 
-  /** rsprox 3271 ticks 3913–3918: the rope is lost on the west-bank crossing. */
+  /** The completed tower's top floor is the copy the lever moved the player to (Wiki: "the instanced version"). */
+  function climbToTopFloor(event) {
+    const { player, object } = event;
+    if (event.objectId !== LOCS.TOP_LADDER_UP || !complete(player)) return;
+    const at = object?.getLocation?.();
+    if (!at || at.getX() !== 2549 || at.getY() !== 3111 || at.getZ() !== 1) return;
+    event.handled = true;
+    climbTo(player, TILES.TOP_FLOOR_COPY_LADDER);
+  }
+
+  function claimLadder(event) {
+    if (event.objectId === LOCS.TOWER_LADDER) climbTowerLadder(event);
+    else if (event.objectId === LOCS.TOP_LADDER_UP) climbToTopFloor(event);
+    else if (event.objectId === LOCS.TOBAN_LADDER) {
+      event.handled = true;
+      tobanLadder(event.player);
+    }
+  }
+
+  /** The trellis: the two messages and the climb, then the first floor two ticks later (t330-332). */
+  function climbTrellis({ player }) {
+    if (level(player, Skill.AGILITY) < 18) {
+      // Ours: the requirement is the Wiki's; no capture shows the refusal.
+      player.sendMessage("You need an Agility level of 18 to climb this wall.");
+      return true;
+    }
+    if (ObstacleRunner.isBusy(player)) return true;
+    ObstacleRunner.run({ player }, [
+      { msg: "You climb up the wall..." }, { msg: "...and squeeze in through the window." }, { anim: SEQ.CLIMB },
+      { wait: 2 }, { tele: [...TILES.TRELLIS_TOP] },
+    ]);
+    return true;
+  }
+
+  /** A bush: the search animation and the Wiki's line at once (t284-588). */
+  const searchingBush = new WeakMap();
+  function searchBush(event) {
+    const { player, objectId } = event;
+    if (!LOCS.BUSHES.has(objectId)) return false;
+    if (stage(player) < STAGES.STARTED) {
+      player.sendMessage("I am not sure why I am searching this bush."); // Ours: no capture before the quest.
+      return true;
+    }
+    player.performAnimation(new Animation(SEQ.SEARCH_BUSH));
+    searchingBush.set(player, LOCS.BUSHES.get(objectId));
+    play(player, NPCS.TOWER_GUARD, "searching-for-evidence-searching-the-bushes");
+    later(player, 1, () => searchingBush.delete(player));
+    return true;
+  }
+
+  // ------------------------------------------------------------------ the wizard's relic
+
+  /** The relic hand-in as live plays it: each part with the wizard's line, then the assembly (t2026-2040). */
+  function relicSteps(player) {
+    const variant = "ogre-investigations-assembling-the-relic";
+    const partLines = ["c6SUn4", "XLwHKL", "Dp7Zpc"].map((id) => conditionSteps(PAGE, variant, id));
+    const first = conditionSteps(PAGE, variant, "aMqVIt");
+    const more = conditionSteps(PAGE, variant, "NFcmGI");
+    const done = conditionSteps(PAGE, variant, "HQGBKU");
+    const queue = [];
+    const steps = [];
+    let count = relicPartsHeld(player);
+    ITEMS.RELIC_PARTS.forEach((itemId, index) => {
+      if (state.hasBit(player, BITS.RELIC[index]) || !held(player, itemId)) return;
+      queue.push(index);
+      steps.push(...partLines[index], ...(++count === 1 ? first : more));
+    });
+    if (count === ITEMS.RELIC_PARTS.length) steps.push(...done);
+    return { steps, queue };
+  }
+
+  function startRelicTalk(player, npc) {
+    const { steps, queue } = relicSteps(player);
+    if (!steps.length) return false;
+    relicQueue.set(player, queue);
+    play(player, NPCS.WIZARD, "ogre-investigations-assembling-the-relic", () => steps, PAGE, npc);
+    return true;
+  }
+
+  function talkWizard(event) {
+    const { player, npcId, npc } = event;
+    if (npcId !== NPCS.WIZARD || stage(player) !== STAGES.FINGERNAILS) return false;
+    if (!ITEMS.RELIC_PARTS.some((itemId, index) => held(player, itemId) && !state.hasBit(player, BITS.RELIC[index]))) return false;
+    return startRelicTalk(player, npc);
+  }
+
+  // ------------------------------------------------------------------ Og, Grew, Toban and Gorad
+
+  /** The rope swing to Grew's island (t1192-1197) and back (t1254-1262). */
   function crossGrewRiver(event, entering) {
     const { player, object } = event;
     if (!object) return;
@@ -1442,39 +976,36 @@ module.exports = function registerWatchtowerQuest(api) {
     if (at.getX() !== x || at.getY() !== y || at.getZ() !== 0) return;
     event.handled = true;
     const from = player.getLocation();
-    if (ObstacleRunner.isBusy(player) || from.getZ() !== 0 ||
-        (entering ? from.getX() > 2501 : from.getY() > 3092)) return;
-    if (entering && !held(player, ItemIdentifiers.ROPE)) return;
-    const start = entering ? [2501, 3087] : [2511, 3092];
+    if (ObstacleRunner.isBusy(player) || from.getZ() !== 0 || (entering ? from.getX() > 2501 : from.getY() > 3092)) return;
+    if (entering && !held(player, I.ROPE)) return;
+    const start = entering ? [2501, 3087] : [2511, 3091];
     if (Math.max(Math.abs(from.getX() - start[0]), Math.abs(from.getY() - start[1])) > 3) return;
-    // shortcut: return endpoints use the cache orientation and sister swing in capture 348; verify with an exit capture.
     const end = entering ? [2505, 3087] : [2511, 3096];
-    const roped = new api.core.GameObject(ObjectIdentifiers.ROPESWING_10, at.clone(), object.getType(), object.getFace(), player.getPrivateArea());
+    const roped = new core.GameObject(LOCS.ROPE_SWING_ROPED, at.clone(), object.getType(), object.getFace(), player.getPrivateArea());
     let task;
     let ropeConsumed = false;
     const steps = [{ walk: [start], arrive: true }, { faceDir: entering ? "east" : "north" }];
     if (entering) steps.push(
-      { msg: "You tie the rope to the tree..." }, { anim: ROPE_THROW_ANIMATION }, { wait: 1 },
+      { msg: "You tie the rope to the tree..." }, { anim: SEQ.ROPE_THROW }, { wait: 1 },
       { run: () => {
-        if (!held(player, ItemIdentifiers.ROPE)) { task.stop(); return; }
-        remove(player, ItemIdentifiers.ROPE);
+        if (!held(player, I.ROPE)) { task.stop(); return; }
+        take(player, I.ROPE);
         ropeConsumed = true;
         player.getPacketSender().sendObject(roped);
       } },
       { wait: 1 }
     );
     steps.push(
-      { objAnim: ROPE_SWING_OBJECT_ANIMATION },
-      { move: end, anim: ROPE_SWING_ANIMATION, delay: 20, speed: [45, 70], ticks: 0 },
-      { wait: 1 }, { msg: "You skillfully swing across." }, { sound: ROPE_SWING_SOUND },
+      { objAnim: SEQ.ROPE_SWING_LOC },
+      { move: end, anim: SEQ.ROPE_SWING, delay: 20, speed: [45, 70], dir: entering ? "east" : "north", ticks: 0 },
+      { wait: 1 }, { msg: "You skillfully swing across." }, { sound: SOUND.ROPE_SWING },
       { wait: 2 }, { tele: end }
     );
     task = ObstacleRunner.run({ player, object: entering ? roped : object }, steps, {
       onFinish: (completed) => {
         if (!entering) return;
-        // Logout fast-forwards movement without executing the delayed payment step.
         if (completed && !ropeConsumed) {
-          if (held(player, ItemIdentifiers.ROPE)) remove(player, ItemIdentifiers.ROPE);
+          if (held(player, I.ROPE)) take(player, I.ROPE);
           else player.moveTo(new Location(start[0], start[1], 0));
         }
         player.getPacketSender().sendObject(object);
@@ -1482,359 +1013,412 @@ module.exports = function registerWatchtowerQuest(api) {
     });
   }
 
+  /** Toban's tunnel: "You enter the cave.", the island and the player's line, together (t1359). */
+  function enterTobanCave({ player }) {
+    player.sendMessage("You enter the cave.");
+    player.moveTo(new Location(...TILES.TOBAN_ISLAND));
+    play(player, NPCS.TOBAN, "ogre-investigations-entering-the-tunnel-to-toban-s-island");
+    return true;
+  }
+
+  /** Toban's ladder: the message and the tunnel's mouth on the same tick (t1525). */
+  function tobanLadder(player) {
+    player.sendMessage("You climb down the ladder.");
+    player.moveTo(new Location(...TILES.TOBAN_TUNNEL_OUTSIDE));
+  }
+
+  /** Toban's chest: the key turns (seq 832, sound 2419), the gold a tick later in a box (t1509-1515). */
+  function openTobanChest({ player }) {
+    if (!held(player, ITEMS.KEY)) {
+      play(player, NPCS.TOBAN, "ogre-investigations-toban-looting-toban-s-chest");
+      return true;
+    }
+    if (ObstacleRunner.isBusy(player)) return true;
+    player.performAnimation(new Animation(SEQ.CHEST, 5));
+    sound(player, SOUND.UNLOCK, 10);
+    player.getMovementQueue().reset();
+    later(player, 1, () => {
+      if (!held(player, ITEMS.KEY)) return;
+      take(player, ITEMS.KEY);
+      give(player, ITEMS.GOLD);
+      sound(player, SOUND.CHEST_OPEN);
+      sound(player, SOUND.CHEST_CLOSE, 60);
+      const text = messageText("ogre-investigations-toban-looting-toban-s-chest", "qdm4Oz") ?? "You find a stash of gold inside.";
+      itemBox(player, text, ITEMS.GOLD);
+    });
+    return true;
+  }
+
+  /** Gorad's tooth, three ticks after his death, in a box (t1493-1496). */
+  function handleNpcDeath({ killer, npc, npcId }) {
+    if (!killer || npcId !== NPCS.GORAD) return;
+    const value = stage(killer);
+    if (value < STAGES.FINGERNAILS || value >= STAGES.RELIC || state.hasBit(killer, BITS.HELPED_GREW)) return;
+    later(killer, 3, () => {
+      // Wiki: keep a slot free for the tooth, "or you will have to kill him again".
+      if (held(killer, ITEMS.TOOTH) || killer.getInventory().isFull()) return;
+      give(killer, ITEMS.TOOTH);
+      state.set(killer, VARBITS.TOOTH_GOT, 1);
+      const text = messageText("ogre-investigations-grew-facing-gorad", "Hc4rny") ?? "He's dropped a tooth. You grab it quickly.";
+      itemBox(killer, text, ITEMS.TOOTH);
+    });
+  }
+
+  // ------------------------------------------------------------------ Gu'Tanoth
+
+  const EAST_GATE = { leaf: [LOCS.EAST_GATE[1], 2549, 3028], inside: [2549, 3028] };
+  const NORTH_WEST_GATE = { leaf: [LOCS.NORTH_WEST_GATE[0], 2504, 3062], inside: [2504, 3062] };
+  /** The east guards let the player by once paid, or once the relic got them into the city (Wiki). */
+  const eastGateOpen = (player) => state.hasBit(player, BITS.EAST_GATE_PAID) || stage(player) >= STAGES.GUTANOTH;
+
+  /** After the guard's line the player walks to the gate, which opens and shuts behind them (t2222-2230, t2314-2321). */
+  function walkThroughGate(player, gate) {
+    const [id, x, y] = gate.leaf;
+    const object = core.MapObjects.get(id, new Location(x, y, 0), null);
+    if (!object) return;
+    const queue = player.getMovementQueue();
+    queue.reset();
+    queue.addSteps(new Location(gate.inside[0], gate.inside[1], 0));
+    let ticks = 0;
+    const task = new core.Task(1, false);
+    task.execute = () => {
+      if (!player.isRegistered?.() || ++ticks > 12) { task.stop(); return; }
+      if (!near(player, gate.inside, 0) && (queue.size?.() ?? 0) > 0) return;
+      task.stop();
+      if (near(player, gate.inside, 1)) api.emitCustomEvent("door:open", { player, object, handled: false });
+    };
+    api.getTaskManager().submit(task);
+  }
+
+  /** door:toggle on the city gates: who may pass; the others hear the guards (t2207, t3257-3285). */
+  function cityGate(request) {
+    const { player, objectId } = request;
+    const east = LOCS.EAST_GATE.includes(objectId);
+    if (!east && !LOCS.NORTH_WEST_GATE.includes(objectId)) return;
+    const allowed = complete(player) || (east ? eastGateOpen(player) : stage(player) >= STAGES.GUTANOTH);
+    if (allowed) return;
+    request.handled = true;
+    const guard = nearestNpc(player, (npc) => npc.getId() === (east ? NPCS.EAST_GUARD : NPCS.NORTH_WEST_GUARD), 8);
+    if (east) play(player, NPCS.EAST_GUARD, "watchtower-standard-dialogue-east-guards", null, GUARD_PAGE, guard);
+    else talkNorthWestGuard({ player, npc: guard, npcId: NPCS.NORTH_WEST_GUARD });
+  }
+
+  /** The east guards' page, Ogre guard's "East guards". */
+  function talkEastGuard({ player, npc }) {
+    play(player, NPCS.EAST_GUARD, "watchtower-standard-dialogue-east-guards", null, GUARD_PAGE, npc);
+    return true;
+  }
+
   /**
-   * Climbing the battlement: the guards stop the player until they have been given a rock cake
-   * (wiki: "Try to climb the battlement and you will be stopped by one of the guards").
+   * The north-west guards: once through, their pass line (t3410); before, the Watchtower page's
+   * "City guard", where the first stop is said even with the relic in the pack (t2308-2314).
+   */
+  function talkNorthWestGuard({ player, npc }) {
+    if (stage(player) >= STAGES.GUTANOTH || complete(player)) {
+      play(player, NPCS.NORTH_WEST_GUARD, "watchtower-standard-dialogue-north-west-guards",
+        () => conditionSteps(GUARD_PAGE, "watchtower-standard-dialogue-north-west-guards", "fAaZ7A"), GUARD_PAGE, npc);
+      return true;
+    }
+    const variant = "entering-gu-tanoth-city-guard";
+    const carrying = held(player, ITEMS.RELIC);
+    if (carrying && state.get(player, VARBITS.GATE_CHAT_NORTH_WEST) === 0) {
+      const stop = conditionSteps(PAGE, variant, "flM0eA").filter((step) => step.type === "line");
+      play(player, NPCS.NORTH_WEST_GUARD, variant, () => [...stop, ...conditionSteps(PAGE, variant, "7ZK2kb")], PAGE, npc);
+      return true;
+    }
+    play(player, NPCS.NORTH_WEST_GUARD, variant, null, PAGE, npc);
+    return true;
+  }
+
+  /** Talking to the battlement guards (OGRE_GUARD_6). */
+  function talkBattlementGuard({ player, npc }) {
+    play(player, NPCS.BATTLEMENT_GUARD, battlementGuardVariant(player), null, PAGE, npc);
+    return true;
+  }
+
+  /** The rock cake stall: one cake a click (t2355, t2372). */
+  function stealRockCake({ player }) {
+    if (level(player, Skill.THIEVING) < 15) {
+      player.sendMessage("You need a Thieving level of at least 15 to steal a rock cake."); // Ours: Wiki requirement
+      return true;
+    }
+    if (!player.getClickDelay().elapsedTime(1000)) return true;
+    if (player.getInventory().isFull()) {
+      player.getInventory().full();
+      return true;
+    }
+    player.getClickDelay().reset();
+    player.getInventory().adds(ITEMS.ROCK_CAKE, 1);
+    player.getSkillManager().addExperiences(Skill.THIEVING, 6.4);
+    player.sendMessage("You cautiously grab a cake from the stall.");
+    return true;
+  }
+
+  /**
+   * The battlement: from outside only once the guards have their cake; the climb two ticks after
+   * arriving, seq 839 and sound 2453 with the move (t2465-2467, back at t6241-6248).
    */
   function climbBattlement(event) {
     const { player, object } = event;
     const at = object?.getLocation?.();
-    if (!at || at.getX() !== BATTLEMENT.x || at.getY() < BATTLEMENT.minY || at.getY() > BATTLEMENT.maxY || at.getZ() !== 0) return;
-    event.handled = true;
-    if (ObstacleRunner.isBusy(player)) return;
+    if (!at || at.getX() !== 2507 || at.getZ() !== 0) return false;
+    if (ObstacleRunner.isBusy(player)) return true;
     const from = player.getLocation();
-    const fromWest = from.getX() < BATTLEMENT.x;
-    const allowed = !fromWest || quest.isComplete(player) || hasBit(player, BIT_MARKET_GIVEN);
-    if (!allowed) {
-      if (quest.getStage(player) < STAGE_GIVEN_RELIC) {
-        startTranscript(api, player, BATTLEMENT_GUARD_ID, PAGE, "entering-gu-tanoth-talking-to-the-southern-ogre-guard");
-        return;
-      }
-      const first = !hasBit(player, BIT_MARKET_WANTS);
-      setBit(player, BIT_MARKET_WANTS);
-      startTranscript(api, player, BATTLEMENT_GUARD_ID, PAGE, first
-        ? "entering-gu-tanoth-ogre-guard"
-        : "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again");
-      return;
+    const fromWest = from.getX() < 2507;
+    if (fromWest && !state.hasBit(player, BITS.MARKET_GIVEN)) {
+      const guard = nearestNpc(player, (npc) => npc.getId() === NPCS.BATTLEMENT_GUARD, 8);
+      return talkBattlementGuard({ player, npc: guard });
     }
-    const y = Math.min(BATTLEMENT.maxY, Math.max(BATTLEMENT.minY, from.getY()));
-    const start = [fromWest ? BATTLEMENT.x - 1 : BATTLEMENT.x + 1, y];
-    const end = [fromWest ? BATTLEMENT.x + 1 : BATTLEMENT.x - 1, y];
+    const y = Math.min(3012, Math.max(3011, from.getY()));
+    const start = [fromWest ? 2506 : 2508, y];
+    const end = [fromWest ? 2508 : 2506, y];
     ObstacleRunner.run({ player, object }, [
-      { walk: [start], arrive: true },
-      { faceDir: fromWest ? "east" : "west" },
-      { move: end, anim: CLIMB_OVER_ANIMATION, speed: [0, 60], ticks: 1 },
+      { walk: [start], arrive: true }, { wait: 2 },
+      { move: end, anim: SEQ.BATTLEMENT, delay: 30, speed: [30, 90], dir: fromWest ? "east" : "west", ticks: 2 },
     ]);
+    later(player, 2, () => sound(player, SOUND.CLIMB_WALL));
+    return true;
   }
 
-  /** Jumps the broken bridge: north over the gap from the bridge, or back south. */
-  function jumpGap(player, northward) {
-    if (ObstacleRunner.isBusy(player)) return;
-    const start = northward ? GAP_FROM_SOUTH : GAP_FROM_NORTH;
-    const end = northward ? GAP_LAND_NORTH : GAP_LAND_SOUTH;
-    ObstacleRunner.run({ player }, [
-      { walk: [start], arrive: true },
-      { faceDir: northward ? "north" : "south" },
-      { move: end, anim: GAP_JUMP_ANIMATION, speed: [15, 35] },
-    ]);
-  }
-
-  /**
-   * Jump-Over on the gap. Northward the ogre guard wants his 20 coins first (the toll action
-   * then makes the jump); the way back south is free ("I'm glad that was easier on the way back!").
-   */
-  function jumpOverGap(event) {
+  /** The gap: the toll guard's talk north (t2507-2521); back south free (t2525). */
+  function jumpGap(event) {
     const { player, objectId } = event;
-    event.handled = true;
-    if (objectId === GAP_SOUTH_ID) {
-      startTranscript(api, player, BRIDGE_GUARD_ID, PAGE, "entering-gu-tanoth-crossing-back-across-the-bridge");
-      jumpGap(player, false);
-      return;
+    if (ObstacleRunner.isBusy(player)) return true;
+    if (objectId === LOCS.GAP_SOUTH) {
+      jumpAcross(player, false);
+      play(player, NPCS.BRIDGE_GUARD, "entering-gu-tanoth-crossing-back-across-the-bridge");
+      return true;
     }
-    if (quest.isComplete(player)) {
-      jumpGap(player, true);
-      return;
+    if (complete(player)) {
+      jumpAcross(player, true);
+      return true;
     }
-    if (quest.getStage(player) < STAGE_GIVEN_RELIC) {
+    if (stage(player) < STAGES.GUTANOTH) {
       player.sendMessage("Nothing interesting happens.");
-      return;
+      return true;
     }
-    startTranscript(api, player, BRIDGE_GUARD_ID, PAGE, "entering-gu-tanoth-crossing-the-bridge");
+    const guard = nearestNpc(player, (npc) => npc.getId() === NPCS.BRIDGE_GUARD, 12);
+    play(player, NPCS.BRIDGE_GUARD, "entering-gu-tanoth-crossing-the-bridge", null, PAGE, guard);
+    return true;
   }
 
-  function handleObjectInteraction(event) {
+  /** The toll: 20 coins, the message, the jump and 5 Agility XP on the same tick (t2521). */
+  function payToll(player) {
+    // Only from the bridge deck south of the gap: the jump's move ignores clipping.
+    const here = player.getLocation();
+    if (here.getZ() !== 0 || here.getY() > 3026 || !near(player, [2530, 3026], 1)) return;
+    if (player.getInventory().getAmount(ITEMS.COINS) < 20) return;
+    player.getInventory().deleteNumber(ITEMS.COINS, 20);
+    player.sendMessage("You daringly jump across the chasm.");
+    jumpAcross(player, true);
+  }
+
+  /** The jump: seq 5355 and sound 2461 with a 45-cycle move from where the player stands (t2521, t2525). */
+  function jumpAcross(player, northward) {
+    const end = northward ? TILES.GAP_NORTH : TILES.GAP_SOUTH;
+    if (northward && !complete(player)) player.getSkillManager().addExperiences(Skill.AGILITY, 5);
+    ObstacleRunner.run({ player }, [
+      { move: [end[0], end[1]], anim: SEQ.GAP_JUMP, speed: [0, 45], dir: northward ? "north" : "south" },
+      { sound: SOUND.JUMP },
+    ]);
+  }
+
+  // ------------------------------------------------------------------ the skavid caves
+
+  /** A skavid cave: with the map, "You enter the cave..." and the inside on arrival (t2903, t2947). */
+  function enterSkavidCave(event) {
     const { player, objectId } = event;
-    if (!player) return;
-    if (objectId === BATTLEMENT_ID) {
-      climbBattlement(event);
-      return;
-    }
-    if (objectId === GAP_NORTH_ID || objectId === GAP_SOUTH_ID) {
-      jumpOverGap(event);
-      return;
-    }
-    if (objectId === ObjectIdentifiers.ROPESWING_9 && (event.option === "Swing-on" || event.clickType === 1)) {
-      crossGrewRiver(event, false);
-      return;
-    }
-    if (BUSH_IDS.has(objectId)) {
-      event.handled = true;
-      searchBush(player, objectId);
-      return;
-    }
-    if (TRELLIS_IDS.has(objectId)) {
-      event.handled = true;
-      if (player.getSkillManager().getCurrentLevel(Skill.AGILITY) < 18) {
-        player.sendMessage("You need an Agility level of 18 to climb this wall.");
-        return;
+    const inside = W.CAVES.get(objectId);
+    if (!inside) return false;
+    if (!held(player, ITEMS.MAP)) {
+      const route = W.MAPLESS_CAVE_ROUTES.get(objectId);
+      if (!route) {
+        player.sendMessage("There's no way I can find my way through without a map of some kind.");
+        return true;
       }
-      player.sendMessage("You climb up the wall...");
-      player.sendMessage("...and squeeze in through the window.");
-      player.moveTo(new Location(2546, 3116, 2));
-      return;
+      // Mapless: the fade, the circuit's next cave three ticks later, the fade back (t2255-2260).
+      ObstacleRunner.run({ player }, [{ fade: "out" }, { wait: 3 }, { tele: [route[0], route[1], 0] }, { wait: 2 }, { fade: "in" }, { wait: 3 }]);
+      return true;
     }
-    if (objectId === CHEST_ID) {
-      event.handled = true;
-      openTobanChest(player);
-      return;
+    if (!Darkness.hasLightSource(player)) {
+      player.sendMessage("It is far too dark in there. I will need a light source."); // Ours: not captured
+      return true;
     }
-    if (objectId === LEVER_ID) {
-      event.handled = true;
-      if (allPlaced(player)) {
-        startTranscript(
-          api,
-          player,
-          WIZARD_ID,
-          PAGE,
-          "reviving-the-watchtower-activating-the-shield-generator"
-        );
-      } else {
-        startTranscript(
-          api,
-          player,
-          WIZARD_ID,
-          PAGE,
-          "reviving-the-watchtower-pulling-the-lever-before-placing-the-crystals"
-        );
+    if (!held(player, ITEMS.TINDERBOX)) {
+      const steps = variantSteps(PAGE, "skavid-search-entering-the-caves") ?? [];
+      const text = messageText("skavid-search-entering-the-caves", "31Cmer");
+      const options = steps[0]?.steps?.find((step) => step.type === "choice")?.options ?? [];
+      if (text && options.length === 2) {
+        player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new core.StatementDialogue(0, text)).add(
+          new core.ActionDialogue(1, { execute: () => api.sendMultiChatboxPrompt(player, "Select an Option",
+            options[0].text, () => intoCave(player, inside), options[1].text, () => {}) })));
+        return true;
       }
-      return;
     }
-    if (objectId === ROCK_ID) {
-      event.handled = true;
-      const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
-      if (option.includes("prospect")) {
-        if (held(player, CRYSTAL_4)) {
-          startTranscript(
-            api,
-            player,
-            WIZARD_ID,
-            PAGE,
-            "entering-the-enclave-prospecting-the-rock-of-dalgroth-after-mining-it"
-          );
-        } else {
-          player.sendMessage("The rock contains a crystal!");
-        }
-        return;
-      }
-      mineRock(player);
-      return;
-    }
-    if (objectId === ENCLAVE_ENTRANCE_ID) {
-      event.handled = true;
-      if (!quest.isComplete(player) && !enclaveDistracted.has(player)) {
-        startTranscript(api, player, ENCLAVE_GUARD_ID, PAGE,
-          "entering-the-enclave-attempting-to-enter-the-ogre-enclave-before-distracting-the-guards");
-        return;
-      }
-      enterEnclave(player);
-      return;
-    }
-    if (objectId === TOBAN_CAVE_ID) {
-      event.handled = true;
-      player.sendMessage("You enter the cave.");
-      player.sendMessage("Wow! That tunnel went a long way.");
-      player.moveTo(new Location(TOBAN_CAVE_DESTINATION.x, TOBAN_CAVE_DESTINATION.y, 0));
-      return;
-    }
-    if (objectId === TOBAN_LADDER_ID) {
-      event.handled = true;
-      player.sendMessage("You climb down the ladder.");
-      player.moveTo(new Location(2500, 2988, 0));
-      return;
-    }
-    if (objectId === YANILLE_HOLE_ID) {
-      event.handled = true;
-      player.sendMessage("You enter the tunnel.");
-      player.sendMessage("So that's how the skavids are getting into Yanille!");
-      player.moveTo(new Location(2585, 3108, 0));
-      return;
-    }
-    if (objectId === ENCLAVE_EXIT_ID) {
-      event.handled = true;
-      player.moveTo(new Location(2540, 3054, 0));
-      return;
-    }
-    if (objectId === ROCK_CAKE_COUNTER_ID) {
-      event.handled = true;
-      stealRockCake(player);
-      return;
-    }
-    if (CITY_GATE_IDS.has(objectId)) {
-      event.handled = true;
-      handleCityGate(player, objectId);
-      return;
-    }
-    if (CAVE_ENTRANCES.has(objectId)) {
-      event.handled = true;
-      enterSkavidCave(player, objectId);
-      return;
-    }
-    if (CAVE_EXITS.has(objectId)) {
-      event.handled = true;
-      const destination = CAVE_EXITS.get(objectId);
-      player.sendMessage("You climb out of the cave.");
-      player.moveTo(new Location(destination.x, destination.y, 0));
-      return;
-    }
+    intoCave(player, inside);
+    return true;
+  }
+  function intoCave(player, [x, y]) {
+    player.sendMessage("You enter the cave...");
+    player.moveTo(new Location(x, y, 0));
   }
 
-  function potionOnShaman(player, shaman) {
-    const stage = quest.getStage(player);
-    if (stage < STAGE_MADE_POTION) return;
-    if (!held(player, MAGIC_OGRE_POTION)) return;
-    if (player.getSkillManager().getCurrentLevel(Skill.MAGIC) < 14) {
-      player.sendMessage("You need a Magic level of 14 or over to use this potion.");
+  function leaveSkavidCave(event) {
+    const exit = W.CAVE_EXITS.get(event.objectId);
+    if (!exit) return false;
+    event.player.moveTo(new Location(exit[0], exit[1], 0));
+    return true;
+  }
+
+  // ------------------------------------------------------------------ the enclave
+
+  /** "door"-like entry past the guards: the warning screen, then in (t3633-3638, t6303-6311). */
+  function runPastGuards(player) {
+    const proceed = () => {
+      player.sendMessage("You run past the guard while he's busy.");
+      const first = state.get(player, VARBITS.NIGHTSHADE_USED) === 0;
+      if (first) state.set(player, VARBITS.NIGHTSHADE_USED, 1);
+      if (!complete(player) && state.get(player, VARBITS.ENCLAVE_SCENE) === 0) {
+        scenes.playEnclaveScene(player);
+        return;
+      }
+      later(player, 3, () => player.moveTo(new Location(...TILES.ENCLAVE_INSIDE)));
+    };
+    const warning = { player, warning: 12, proceed };
+    api.emitCustomEvent("warning-screen:show", warning);
+    if (!warning.handled) proceed();
+  }
+
+  /** Cave nightshade on an enclave guard: his line (stage 8 the first time), then the warning (t3451, t3632). */
+  function nightshadeOnGuard(player, npc) {
+    if (stage(player) < STAGES.SKAVID_CRYSTAL) {
+      player.sendMessage("I think I had better deal with those skavids first..."); // Ours: no capture
       return;
     }
-    const kills = shamanKills(player);
-    if (kills >= MAX_SHAMAN_KILLS) return;
+    take(player, ITEMS.NIGHTSHADE);
+    state.advance(player, STAGES.NIGHTSHADE);
+    const variant = "entering-the-enclave-using-cave-nightshade-on-an-enclave-guard";
+    enclaveDistracted.add(player);
+    play(player, NPCS.ENCLAVE_GUARD, variant, (steps) => steps.slice(0, 1), PAGE, npc);
+  }
+  const enclaveDistracted = new WeakSet();
+  function nightshadeLine(request) {
+    if (!starts(request, LINE.NIGHTSHADE) || !enclaveDistracted.has(request.player)) return;
+    const player = request.player;
+    request.after = () => {
+      enclaveDistracted.delete(player);
+      // The warning opens as the chat closes (t3633); a tick on, so the chat's close leaves it up.
+      later(player, 1, () => runPastGuards(player));
+    };
+  }
+
+  function enterEnclave({ player }) {
+    if (complete(player)) {
+      runPastGuards(player);
+      return true;
+    }
+    const guard = nearestNpc(player, (npc) => npc.getId() === NPCS.ENCLAVE_GUARD, 8);
+    play(player, NPCS.ENCLAVE_GUARD, "entering-the-enclave-attempting-to-enter-the-ogre-enclave-before-distracting-the-guards", null, PAGE, guard);
+    return true;
+  }
+
+  function leaveEnclave({ player }) {
+    player.moveTo(new Location(...TILES.ENCLAVE_EXIT));
+    return true;
+  }
+
+  function enclaveGate({ player }) {
+    player.sendMessage("The gate is locked tight.<br>You'll have to find another way out.");
+    return true;
+  }
+
+  /** The magic ogre potion on a shaman: poured (seq 5361), the shaman gone eight ticks later (t5709-5852). */
+  function potionOnShaman(player, npcId) {
+    const shaman = W.SHAMANS.find((entry) => entry.ids.includes(npcId));
+    if (!shaman || stage(player) < STAGES.MAGIC_POTION || !held(player, ITEMS.MAGIC_POTION)) return false;
+    if (state.get(player, shaman.varbit) === 1) return true;
+    if (level(player, Skill.MAGIC) < 14) {
+      player.sendMessage("You need a Magic level of 14 or over to use this potion."); // Ours: Wiki requirement
+      return true;
+    }
+    if (ObstacleRunner.isBusy(player)) return true;
+    ObstacleRunner.run({ player }, [{ anim: SEQ.POUR_POTION }, { wait: 8 }, { run: () => shamanDestroyed(player, shaman) }]);
+    return true;
+  }
+
+  function shamanDestroyed(player, shaman) {
     player.sendMessage("There is a bright flash!");
     player.sendMessage("The ogre dissolves into spirit form.");
-    setShamanKills(player, kills + 1);
-    if (shaman?.setHitpoints) shaman.setHitpoints(0);
-    if (kills + 1 >= MAX_SHAMAN_KILLS) {
-      // The wiki: after the last shaman the potion becomes an empty vial.
-      remove(player, MAGIC_OGRE_POTION);
-      give(player, VIAL);
-      give(player, CRYSTAL_3);
-      player.sendMessage("A crystal drops from the hand of the disappearing ogre. You snatch it up quickly.");
-    } else {
-      player.sendMessage("That is one ogre shaman destroyed!");
+    state.set(player, shaman.varbit, 1);
+    if (shamansDead(player) >= MAX_SHAMANS) {
+      player.sendMessage("You hear a scream...<br>The shaman dissolves before your eyes.");
+      take(player, ITEMS.MAGIC_POTION);
+      give(player, ITEMS.VIAL);
+      player.performAnimation(new Animation(SEQ.PICKUP, 1));
+      sound(player, SOUND.SHAMAN_CRY);
+      sound(player, SOUND.PICK);
     }
+    play(player, NPCS.WIZARD, "entering-the-enclave-killing-the-ogre-shamans", (steps) => steps.filter((step) =>
+      !/shaman robe/i.test(step.text ?? "")));
   }
 
-  function handleItemOnNpc(event) {
-    const { player, itemId } = event;
-    const targetId = event.npcId ?? event.target?.getId?.();
-    if (!player || !targetId) return;
-
-    // Wiki: "Use the rock cake on the guard to get by" - the guard's hand-in conversation.
-    if (MARKET_GUARD_IDS.has(targetId) && itemId === ROCK_CAKE && quest.getStage(player) >= STAGE_GIVEN_RELIC
-        && !hasBit(player, BIT_MARKET_GIVEN)) {
-      event.handled = true;
-      setBit(player, BIT_MARKET_WANTS);
-      startTranscript(api, player, BATTLEMENT_GUARD_ID, PAGE, "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again");
-      return;
-    }
-
-    if (EAST_GATE_GUARD_IDS.has(targetId) && itemId === GOLD_BAR) {
-      event.handled = true;
-      payEastGate(player);
-      return;
-    }
-    if (targetId === CITY_GUARD_ID) {
-      const stage = quest.getStage(player);
-      if (stage < STAGE_GIVEN_RELIC) return;
-      if (itemId === DEATH_RUNE && stage === STAGE_GIVEN_RIDDLE) {
-        startTranscript(
-          api,
-          player,
-          CITY_GUARD_ID,
-          PAGE,
-          "entering-gu-tanoth-seeking-passage-using-the-death-rune-on-the-guard"
-        );
-        event.handled = true;
-        return;
-      }
-      if (itemId !== DEATH_RUNE && stage < STAGE_COMPLETE) {
-        startTranscript(
-          api,
-          player,
-          CITY_GUARD_ID,
-          PAGE,
-          "entering-gu-tanoth-seeking-passage-using-the-wrong-item-on-the-guard"
-        );
-        event.handled = true;
-      }
-      return;
-    }
-    if (targetId === TOBAN_ID && itemId === DRAGON_BONES) {
-      if (!hasBit(player, BIT_SPOKEN_TOBAN) || hasBit(player, BIT_HELPED_TOBAN)) return;
-      startTranscript(api, player, TOBAN_ID, PAGE, "ogre-investigations-toban-speaking-to-toban-again");
-      event.handled = true;
-      return;
-    }
-    if (targetId === OG_ID && itemId === TOBANS_GOLD) {
-      if (!hasBit(player, BIT_SPOKEN_OG) || hasBit(player, BIT_HELPED_OG)) return;
-      startTranscript(api, player, OG_ID, PAGE, "ogre-investigations-og-speaking-to-og-again");
-      event.handled = true;
-      return;
-    }
-    if (targetId === GREW_ID && itemId === OGRE_TOOTH) {
-      if (!hasBit(player, BIT_SPOKEN_GREW) || hasBit(player, BIT_HELPED_GREW)) return;
-      startTranscript(api, player, GREW_ID, PAGE, "ogre-investigations-grew-speaking-to-grew-again");
-      event.handled = true;
-      return;
-    }
-    if (targetId === WIZARD_ID) {
-      const stage = quest.getStage(player);
-      if (RELIC_PART_IDS.includes(itemId) && stage >= STAGE_GIVEN_FINGERNAILS && stage < STAGE_MADE_RELIC) {
-        startTranscript(api, player, WIZARD_ID, PAGE, "ogre-investigations-assembling-the-relic");
-        event.handled = true;
-        return;
-      }
-      if (itemId === OGRE_POTION && stage === STAGE_LEARNED_POTION) {
-        remove(player, OGRE_POTION);
-        player.getInventory().adds(MAGIC_OGRE_POTION, 1);
-        player.sendMessage("The wizard infuses the potion with magic.");
-        quest.setStage(player, STAGE_MADE_POTION);
-        startTranscript(
-          api,
-          player,
-          WIZARD_ID,
-          PAGE,
-          "entering-the-enclave-talking-to-the-watchtower-wizard-after-making-the-potion"
-        );
-        event.handled = true;
-        return;
-      }
-      if (itemId === FINGERNAILS && stage === STAGE_STARTED) {
-        startTranscript(
-          api,
-          player,
-          WIZARD_ID,
-          PAGE,
-          "searching-for-evidence-talking-to-the-watchtower-wizard"
-        );
-        event.handled = true;
-      }
-      return;
-    }
-    if (targetId === ENCLAVE_GUARD_ID && itemId === CAVE_NIGHTSHADE) {
-      const stage = quest.getStage(player);
-      if (stage < STAGE_SKAVID_CRYSTAL) {
-        player.sendMessage("I think I had better deal with those skavids first...");
-        event.handled = true;
-        return;
-      }
-      remove(player, CAVE_NIGHTSHADE);
-      if (stage === STAGE_SKAVID_CRYSTAL) quest.setStage(player, STAGE_FED_NIGHTSHADE);
-      enclaveDistracted.add(player);
-      startTranscript(
-        api,
-        player,
-        ENCLAVE_GUARD_ID,
-        PAGE,
-        "entering-the-enclave-using-cave-nightshade-on-an-enclave-guard"
-      );
-      event.handled = true;
-      return;
-    }
-    if (SHAMAN_IDS.has(targetId) && itemId === MAGIC_OGRE_POTION) {
-      potionOnShaman(player, event.target);
-      event.handled = true;
-    }
+  function searchShamanRobe({ player }) {
+    if (stage(player) < STAGES.MAGIC_POTION || shamansDead(player) < MAX_SHAMANS) return true;
+    play(player, NPCS.WIZARD, "entering-the-enclave-killing-the-ogre-shamans", (steps) => steps.filter((step) =>
+      /shaman robe/i.test(step.text ?? "")));
+    return true;
   }
+
+  /** Prospect: the two messages four ticks apart (t3714-3718). */
+  function prospectRock({ player }) {
+    if (ObstacleRunner.isBusy(player)) return true;
+    if (state.get(player, VARBITS.ROCK_MINED) === 1 && owns(player, CRYSTAL_GREY)) {
+      const steps = variantSteps(PAGE, "entering-the-enclave-prospecting-the-rock-of-dalgroth-after-mining-it") ?? [];
+      ObstacleRunner.run({ player }, [{ msg: steps[0]?.text }, { wait: 4 }, { msg: steps[1]?.text }]);
+      return true;
+    }
+    ObstacleRunner.run({ player }, [{ msg: "You examine the rock for ores..." }, { wait: 4 }, { msg: "The rock contains a crystal!" }]);
+    return true;
+  }
+
+  /** Mine: once the shamans are gone, the swing and four ticks later the crystal in a box (t5881-5885). */
+  function mineRock({ player }) {
+    if (stage(player) < STAGES.MAGIC_POTION || shamansDead(player) < MAX_SHAMANS) {
+      player.sendMessage("I can't touch it... Perhaps it is linked with the shamans in some strange way?"); // Ours
+      return true;
+    }
+    if (owns(player, CRYSTAL_GREY)) {
+      play(player, NPCS.WIZARD, "entering-the-enclave-attempting-to-mine-the-rock-of-dalgroth-again");
+      return true;
+    }
+    if (level(player, Skill.MINING) < 40) {
+      player.sendMessage("You need a Mining level of 40 to mine this rock."); // Ours: Wiki requirement
+      return true;
+    }
+    const request = { player, pickaxe: null };
+    api.emitCustomEvent("mining:best-pickaxe", request);
+    if (!request.pickaxe) {
+      player.sendMessage("You need a pickaxe to mine this rock. You do not have a pickaxe which you have the Mining level to use.");
+      return true;
+    }
+    if (ObstacleRunner.isBusy(player) || player.getInventory().isFull()) {
+      if (player.getInventory().isFull()) player.getInventory().full();
+      return true;
+    }
+    player.sendMessage("You swing your pick at the rock...");
+    const animation = request.pickaxe.animation;
+    ObstacleRunner.run({ player }, [
+      { anim: animation?.getId?.() ?? animation }, { wait: 4 },
+      { run: () => {
+        give(player, CRYSTAL_GREY);
+        state.set(player, VARBITS.ROCK_MINED, 1);
+        play(player, NPCS.WIZARD, "entering-the-enclave-mining-the-rock-of-dalgroth");
+      } },
+    ], { keepAnimation: false });
+    return true;
+  }
+
+  // ------------------------------------------------------------------ the potion
 
   function handleItemOnItem(event) {
     const { player } = event;
@@ -1842,202 +1426,323 @@ module.exports = function registerWatchtowerQuest(api) {
     const ids = [event.usedItemId, event.usedWithItemId];
     const both = (a, b) => ids.includes(a) && ids.includes(b);
 
-    if (RELIC_PART_IDS.includes(ids[0]) && RELIC_PART_IDS.includes(ids[1])) {
-      player.sendMessage("I think these fit together, but I can't seem to make them fit.");
+    if (ITEMS.RELIC_PARTS.includes(ids[0]) && ITEMS.RELIC_PARTS.includes(ids[1])) {
+      player.sendMessage("I think these fit together, but I can't seem to make them fit."); // Ours: no capture
       player.sendMessage("I am going to need someone with experience to help me with this.");
       event.handled = true;
       return;
     }
-    // No shared Herblore handler grinds bat bones; the quest potion needs them.
-    if (both(BAT_BONES, PESTLE_AND_MORTAR)) {
+    // The bat bones ground with the pestle: seq 364 and sound 2608 (t5084, t5277).
+    if (both(ITEMS.BAT_BONES, ITEMS.PESTLE)) {
       event.handled = true;
-      remove(player, BAT_BONES);
-      player.getInventory().adds(GROUND_BAT_BONES, 1);
-      player.sendMessage("You grind the bat bones to a powder.");
+      take(player, ITEMS.BAT_BONES);
+      player.getInventory().adds(ITEMS.GROUND_BAT_BONES, 1);
+      player.performAnimation(new Animation(SEQ.GRIND));
+      sound(player, SOUND.GRIND);
+      player.sendMessage("You grind the bones to a powder.");
       return;
     }
-    const mixable =
-      both(VIAL_OF_WATER, JANGERBERRIES) ||
-      both(JANGER_VIAL, GUAM_LEAF) ||
-      both(GUAM_POTION_UNF, JANGERBERRIES) ||
-      both(GUAM_JANGER_VIAL, GROUND_BAT_BONES);
-    if (!mixable) return;
+    const steps = [
+      [ITEMS.GUAM_POTION, ITEMS.JANGERBERRIES, ITEMS.GUAM_JANGER_VIAL, ["You mix the jangerberries into your potion."]],
+      [ITEMS.GUAM_JANGER_VIAL, ITEMS.GROUND_BAT_BONES, ITEMS.POTION, ["You mix the ground bones into the liquid.", "You produce a strong potion."]],
+      [ITEMS.VIAL_OF_WATER, ITEMS.JANGERBERRIES, ITEMS.JANGER_VIAL, ["You mix the jangerberries into the water."]], // Ours
+      [ITEMS.JANGER_VIAL, ITEMS.GUAM_LEAF, ITEMS.GUAM_JANGER_VIAL, ["You mix the guam leaf into your potion."]], // Ours
+    ];
+    const step = steps.find(([a, b]) => both(a, b));
+    // The wrong order: ground bones into the guam potion explodes (t5087).
+    const explodes = both(ITEMS.GUAM_POTION, ITEMS.GROUND_BAT_BONES);
+    if (!step && !explodes) return;
     event.handled = true;
-    if (quest.getStage(player) < STAGE_LEARNED_POTION) {
-      player.sendMessage("Hmm, perhaps I shouldn't mix these together. It might have unpredictable results.");
+    if (stage(player) < STAGES.RECIPE) {
+      player.sendMessage("Hmm, perhaps I shouldn't mix these together. It might have unpredictable results."); // Ours
       return;
     }
-    if (player.getSkillManager().getCurrentLevel(Skill.HERBLORE) < 14) {
-      player.sendMessage("You need a Herblore level of 14 or above to make this potion.");
+    if (level(player, Skill.HERBLORE) < 14) {
+      player.sendMessage("You need a Herblore level of 14 or above to make this potion."); // Ours: Wiki requirement
       return;
     }
-    if (both(VIAL_OF_WATER, JANGERBERRIES)) {
-      remove(player, VIAL_OF_WATER);
-      remove(player, JANGERBERRIES);
-      player.getInventory().adds(JANGER_VIAL, 1);
-      player.getSkillManager().addExperiences(Skill.HERBLORE, 100);
-      player.sendMessage("You mix the jangerberries into the water.");
+    if (explodes) {
+      take(player, ITEMS.GUAM_POTION);
+      take(player, ITEMS.GROUND_BAT_BONES);
+      player.getInventory().adds(ITEMS.VIAL, 1);
+      player.sendMessage("You mix the ground bones into the liquid.");
+      player.sendMessage("You mixed the ingredients incorrectly and the mixture exploded.");
+      player.performAnimation(new Animation(SEQ.EXPLODE));
+      player.performGraphic(new Graphic(SPOTANIM_EXPLODE, 92));
+      sound(player, SOUND.VIAL_MIX);
+      sound(player, SOUND.EXPLODE);
+      damage(player, 5);
       return;
     }
-    if (both(JANGER_VIAL, GUAM_LEAF)) {
-      remove(player, JANGER_VIAL);
-      remove(player, GUAM_LEAF);
-      player.getInventory().adds(GUAM_JANGER_VIAL, 1);
-      player.getSkillManager().addExperiences(Skill.HERBLORE, 100);
-      player.sendMessage("You mix the guam leaf into your potion.");
-      return;
-    }
-    if (both(GUAM_POTION_UNF, JANGERBERRIES)) {
-      remove(player, GUAM_POTION_UNF);
-      remove(player, JANGERBERRIES);
-      player.getInventory().adds(GUAM_JANGER_VIAL, 1);
-      player.getSkillManager().addExperiences(Skill.HERBLORE, 100);
-      player.sendMessage("You mix the jangerberries into your potion.");
-      return;
-    }
-    remove(player, GUAM_JANGER_VIAL);
-    remove(player, GROUND_BAT_BONES);
-    player.getInventory().adds(OGRE_POTION, 1);
-    player.getSkillManager().addExperiences(Skill.HERBLORE, 100);
-    player.sendMessage("You mix the ground bones into the liquid.");
-    player.sendMessage("You produce a strong potion.");
+    const [a, b, result, messages] = step;
+    take(player, a);
+    take(player, b);
+    player.getInventory().adds(result, 1);
+    player.getSkillManager().addExperiences(Skill.HERBLORE, 10);
+    sound(player, SOUND.VIAL_MIX);
+    for (const message of messages) player.sendMessage(message);
   }
 
+  // ------------------------------------------------------------------ the shield generator
+
+  /** A crystal on a pillar: the reach (seq 832), the crystal in a tick later with sound 975 (t6010-6038). */
+  function crystalOnPillar(player, pillar, itemId) {
+    if (stage(player) < STAGES.ALL_CRYSTALS || complete(player)) return false;
+    if (state.get(player, pillar.varbit) >= 1) return true;
+    if (pillar.crystal !== itemId) {
+      play(player, NPCS.WIZARD, "reviving-the-watchtower-placing-a-crystal-on-the-wrong-pillar");
+      return true;
+    }
+    if (ObstacleRunner.isBusy(player)) return true;
+    ObstacleRunner.run({ player }, [
+      { anim: SEQ.CHEST }, { wait: 1 },
+      { run: () => {
+        if (!held(player, itemId)) return;
+        take(player, itemId);
+        state.set(player, pillar.varbit, 1);
+        sound(player, SOUND.PILLAR);
+      } },
+    ]);
+    return true;
+  }
+
+  /** The lever: before the crystals, its message; with them, the shield and the completion (t6047-6062). */
+  function pullLever({ player, object }) {
+    const at = object?.getLocation?.();
+    if (at && at.getX() !== 2543) return false;
+    if (complete(player)) return false;
+    if (stage(player) < STAGES.ALL_CRYSTALS || !allPlaced(player)) {
+      play(player, NPCS.WIZARD, "reviving-the-watchtower-pulling-the-lever-before-placing-the-crystals");
+      return true;
+    }
+    if (ObstacleRunner.isBusy(player)) return true;
+    player.performAnimation(new Animation(SEQ.LEVER));
+    player.getMovementQueue().reset();
+    later(player, 1, () => activateShield(player));
+    return true;
+  }
+
+  function activateShield(player) {
+    if (complete(player)) return;
+    const variant = "reviving-the-watchtower-activating-the-shield-generator";
+    state.own(player, () => quest.complete(player, { scroll: false, announce: false }));
+    player.sendMessage(messageText(variant, "EAAUUD") ?? "The magic force field activates.");
+    for (const pillar of W.PILLARS) state.set(player, pillar.varbit, 2);
+    for (const itemId of ITEMS.CRYSTALS) take(player, itemId, player.getInventory().getAmount(itemId));
+    player.moveTo(new Location(...TILES.LEVER_LANDING));
+    sound(player, SOUND.LEVER);
+    player.getPacketSender().sendJingle(JINGLE_MACHINE_ON, 0);
+    // The reward and the wizard's thanks four ticks later; the scroll after his two lines (t6054-6062).
+    later(player, 4, () => {
+      grantReward(player);
+      const wizard = nearestNpc(player, (npc) => npc.getId() === NPCS.WIZARD, 12);
+      play(player, NPCS.WIZARD, variant, (steps) => steps.filter((step) => step.type === "line"), PAGE, wizard);
+      completionAfterChat(player);
+    });
+  }
+
+  function grantReward(player) {
+    player.getSkillManager().addExperiences(Skill.MAGIC, 15250);
+    giveReward(player, ITEMS.COINS, 5000);
+    giveReward(player, ITEMS.SCROLL, 1);
+  }
+
+  /** The completion message and scroll three ticks after the wizard's last line (t6059-6062). */
+  function completionAfterChat(player) {
+    let ticks = 0;
+    const task = new core.Task(1, false);
+    task.execute = () => {
+      if (!player.isRegistered?.() || ++ticks > 200) { task.stop(); return; }
+      if (player.getDialogueManager().isActive?.()) return;
+      task.stop();
+      later(player, 2, () => quest.announceCompletion(player));
+    };
+    api.getTaskManager().submit(task);
+  }
+
+  /** The scroll: read, the stage, then the two boxes and the dust (t6093-6096). */
   function readSpellScroll(event) {
     const { player } = event;
-    if (!player || !held(player, SPELL_SCROLL)) return;
+    if (!player || !held(player, ITEMS.SCROLL)) return;
     event.handled = true;
-    if (quest.getStage(player) < STAGE_COMPLETE) return;
-    startTranscript(api, player, WIZARD_ID, PAGE, "post-quest-reading-the-spell-scroll");
+    if (!complete(player)) return;
+    if (hasReadSpellScroll(player)) {
+      player.sendMessage("You have already learnt the Watchtower teleport spell."); // Ours: no capture
+      return;
+    }
+    const steps = variantSteps(PAGE, "post-quest-reading-the-spell-scroll") ?? [];
+    const [memorise, cast, dust] = steps.map((step) => step.text);
+    state.setStage(player, STAGES.READ_SCROLL);
+    player.performAnimation(new Animation(SEQ.READ_SCROLL));
+    const box = (text) => new core.StatementDialogue(0, text);
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(box(memorise)));
+    later(player, 2, () => {
+      take(player, ITEMS.SCROLL);
+      player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(box(cast)));
+      later(player, 1, () => player.sendMessage(dust));
+    });
   }
 
-  function searchShamanRobe(event) {
-    const { player } = event;
+  // ------------------------------------------------------------------ hooks
+
+  function handleObjectInteraction(event) {
+    const { player, objectId } = event;
     if (!player) return;
-    event.handled = true;
-    if (quest.getStage(player) < STAGE_MADE_POTION || shamanKills(player) < MAX_SHAMAN_KILLS) {
-      return;
+    const done = (result) => { if (result) event.handled = true; };
+    if (objectId === LOCS.BATTLEMENT) return done(climbBattlement(event));
+    if (objectId === LOCS.GAP_NORTH || objectId === LOCS.GAP_SOUTH) return done(jumpGap(event));
+    if (objectId === LOCS.ROPE_SWING_BACK && (event.option === "Swing-on" || event.clickType === 1)) return crossGrewRiver(event, false);
+    if (LOCS.BUSHES.has(objectId)) return done(searchBush(event));
+    if (objectId === LOCS.TRELLIS) return done(climbTrellis(event));
+    if (objectId === LOCS.TOBAN_CHEST) return done(openTobanChest(event));
+    if (objectId === LOCS.TOBAN_CAVE) return done(enterTobanCave(event));
+    if (objectId === LOCS.TOBAN_LADDER) {
+      tobanLadder(player);
+      return done(true);
     }
-    if (held(player, CRYSTAL_3) || bankAmount(player, CRYSTAL_3) > 0) {
-      player.sendMessage("You search the robe, but find nothing. You already have the shamans' crystal.");
-      return;
+    if (objectId === LOCS.YANILLE_HOLE) {
+      player.sendMessage("You enter the tunnel.");
+      player.sendMessage("So that's how the skavids are getting into Yanille!");
+      player.moveTo(new Location(...TILES.YANILLE_HOLE));
+      return done(true);
     }
-    give(player, CRYSTAL_3);
-    player.sendMessage("You search the robe and find a crystal!");
+    if (objectId === LOCS.CAKE_COUNTER) return done(stealRockCake(event));
+    if (objectId === LOCS.LEVER) return done(pullLever(event));
+    if (objectId === LOCS.ROCK) {
+      const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
+      return done(option.includes("prospect") ? prospectRock(event) : mineRock(event));
+    }
+    if (objectId === LOCS.ENCLAVE_ENTRANCE) return done(enterEnclave(event));
+    if (objectId === LOCS.ENCLAVE_EXIT) return done(leaveEnclave(event));
+    if (objectId === LOCS.ENCLAVE_GATE) return done(enclaveGate(event));
+    if (W.CAVES.has(objectId)) return done(enterSkavidCave(event));
+    if (W.CAVE_EXITS.has(objectId)) return done(leaveSkavidCave(event));
   }
 
   function handleItemOnObject(event) {
     const { player, itemId, objectId } = event;
     if (!player) return;
-    if (objectId === ObjectIdentifiers.BRANCH && itemId === ItemIdentifiers.ROPE) {
+    if (objectId === LOCS.ROPE_TREE && itemId === I.ROPE) {
       crossGrewRiver(event, true);
       return;
     }
-    if (objectId === CHEST_ID && itemId === TOBANS_KEY) {
+    if (objectId === LOCS.TOBAN_CHEST && itemId === ITEMS.KEY) {
       event.handled = true;
-      startTranscript(api, player, TOBAN_ID, PAGE, "ogre-investigations-toban-looting-toban-s-chest");
-      remove(player, TOBANS_KEY);
+      openTobanChest(event);
       return;
     }
-    const pillar = PILLAR_CRYSTALS.get(objectId);
-    if (pillar && CRYSTAL_IDS.includes(itemId)) {
-      event.handled = true;
-      if (pillar.crystal !== itemId) {
-        startTranscript(
-          api,
-          player,
-          WIZARD_ID,
-          PAGE,
-          "reviving-the-watchtower-placing-a-crystal-on-the-wrong-pillar"
-        );
-        return;
-      }
-      if (hasBit(player, pillar.bit)) {
-        player.sendMessage("That crystal is already in place.");
-        return;
-      }
-      remove(player, itemId);
-      setBit(player, pillar.bit);
-      player.sendMessage("You place the crystal on the pillar. It fits perfectly.");
-      if (allPlaced(player) && quest.getStage(player) < STAGE_FOUND_ALL_CRYSTALS) {
-        quest.setStage(player, STAGE_FOUND_ALL_CRYSTALS);
-      }
-    }
+    const pillar = W.PILLARS.find((entry) => entry.loc === objectId);
+    if (pillar && ITEMS.CRYSTALS.includes(itemId) && crystalOnPillar(player, pillar, itemId)) event.handled = true;
   }
 
-  function handleNpcDeath({ killer, npc, npcId }) {
-    if (!killer || npcId !== GORAD_ID) return;
-    const stage = quest.getStage(killer);
-    if (stage < STAGE_GIVEN_FINGERNAILS || stage >= STAGE_MADE_RELIC) return;
-    setBit(killer, BIT_GORAD_DEAD);
-    if (hasBit(killer, BIT_HELPED_GREW)) return;
-    if (!held(killer, OGRE_TOOTH) && !killer.getInventory().isFull()) {
-      killer.getInventory().adds(OGRE_TOOTH, 1);
-      killer.sendMessage("He's dropped a tooth. You grab it quickly.");
-      // The quest kill is the only tooth source; once grabbed, Gorad stays dead.
-      // With no inventory room the tooth is lost and the default respawn lets
-      // the player try again (the wiki warns to keep a slot free).
-      if (npc) npc.__skipDefaultRespawn = true;
-    }
-  }
+  function handleItemOnNpc(event) {
+    const { player, itemId } = event;
+    const npcId = event.npcId ?? event.target?.getId?.();
+    if (!player || !npcId) return;
+    const npc = event.target ?? event.npc ?? null;
+    const stop = () => { event.handled = true; };
 
-  /**
-   * The north-west gate's relic guards must be talkable from outside the closed
-   * gate. Called on login so the move happens before anyone can walk up, and
-   * idempotent: once on the outer tiles they are only pinned in place.
-   */
-  function placeNorthWestGateGuards() {
-    const guards = [];
-    for (const npc of api.core.World.getNpcs()) {
-      if (npc?.getId?.() !== NW_GATE_GUARD_ID) continue;
-      const location = npc.getLocation?.();
-      if (!location) continue;
-      if (Math.abs(location.getX() - NW_GATE_GUARD_AREA.x) > NW_GATE_GUARD_AREA.radius) continue;
-      if (Math.abs(location.getY() - NW_GATE_GUARD_AREA.y) > NW_GATE_GUARD_AREA.radius) continue;
-      guards.push(npc);
+    if (npcId === NPCS.WIZARD) {
+      const value = stage(player);
+      if (value === STAGES.STARTED && DECOYS.some(([id]) => id === itemId)) {
+        // A decoy shown to the wizard: "Let me see..." and the rest of his answer (t652-666).
+        const decoy = conditionSteps(PAGE, "searching-for-evidence-talking-to-the-watchtower-wizard", "BoocKJ");
+        play(player, NPCS.WIZARD, "searching-for-evidence-talking-to-the-watchtower-wizard", () => decoy.filter((step) => !step.player), PAGE, npc);
+        return stop();
+      }
+      if (value === STAGES.STARTED && itemId === ITEMS.FINGERNAILS) {
+        play(player, NPCS.WIZARD, "searching-for-evidence-talking-to-the-watchtower-wizard", null, PAGE, npc);
+        return stop();
+      }
+      if (value === STAGES.FINGERNAILS && ITEMS.RELIC_PARTS.includes(itemId)) {
+        if (startRelicTalk(player, npc)) return stop();
+      }
+      if (value === STAGES.RECIPE && itemId === ITEMS.POTION) {
+        play(player, NPCS.WIZARD, "entering-the-enclave-talking-to-the-watchtower-wizard-after-making-the-potion", null, PAGE, npc);
+        return stop();
+      }
+      return;
     }
-    guards.forEach((npc, index) => {
-      const tile = NW_GATE_GUARD_STAND_TILES[index % NW_GATE_GUARD_STAND_TILES.length];
-      npc.getMovementCoordinator?.().setRadius?.(0);
-      if (npc.getLocation().getX() === tile.x && npc.getLocation().getY() === tile.y) return;
-      npc.moveTo(new Location(tile.x, tile.y, 0));
-    });
+    if (npcId === NPCS.TOBAN && itemId === ITEMS.DRAGON_BONES && state.hasBit(player, BITS.SPOKEN_TOBAN)
+      && !state.hasBit(player, BITS.HELPED_TOBAN)) {
+      play(player, NPCS.TOBAN, "ogre-investigations-toban-speaking-to-toban-again", null, PAGE, npc);
+      return stop();
+    }
+    if (npcId === NPCS.OG && itemId === ITEMS.GOLD && state.hasBit(player, BITS.SPOKEN_OG) && !state.hasBit(player, BITS.HELPED_OG)) {
+      play(player, NPCS.OG, "ogre-investigations-og-speaking-to-og-again", null, PAGE, npc);
+      return stop();
+    }
+    if (npcId === NPCS.GREW && itemId === ITEMS.TOOTH && state.hasBit(player, BITS.SPOKEN_GREW) && !state.hasBit(player, BITS.HELPED_GREW)) {
+      play(player, NPCS.GREW, "ogre-investigations-grew-speaking-to-grew-again", null, PAGE, npc);
+      return stop();
+    }
+    if (npcId === NPCS.EAST_GUARD && itemId === ITEMS.GOLD_BAR) {
+      // Wiki: "use the gold bar on one of the guards to gain access".
+      talkEastGuard({ player, npc });
+      return stop();
+    }
+    if (npcId === NPCS.NORTH_WEST_GUARD && itemId === ITEMS.RELIC) {
+      player.sendMessage("The ogre has not asked you for anything."); // Wiki: Watchtower guide
+      return stop();
+    }
+    if (npcId === NPCS.BATTLEMENT_GUARD && itemId === ITEMS.ROCK_CAKE && state.get(player, VARBITS.GATE_CHAT_BATTLEMENT) === 1
+      && !state.hasBit(player, BITS.MARKET_GIVEN)) {
+      play(player, NPCS.BATTLEMENT_GUARD, "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again", null, PAGE, npc);
+      return stop();
+    }
+    if (npcId === NPCS.CITY_GUARD && stage(player) === STAGES.RIDDLE) {
+      play(player, NPCS.CITY_GUARD, itemId === ITEMS.DEATH_RUNE
+        ? "entering-gu-tanoth-seeking-passage-using-the-death-rune-on-the-guard"
+        : "entering-gu-tanoth-seeking-passage-using-the-wrong-item-on-the-guard", null, PAGE, npc);
+      return stop();
+    }
+    if (npcId === NPCS.ENCLAVE_GUARD && itemId === ITEMS.NIGHTSHADE) {
+      nightshadeOnGuard(player, npc);
+      return stop();
+    }
+    if (itemId === ITEMS.MAGIC_POTION && potionOnShaman(player, npcId)) stop();
   }
 
   function handleLogin({ player }) {
+    state.migrate(player);
+    state.replay(player);
     refreshQuestList(player);
-    placeNorthWestGateGuards();
+  }
+
+  function lines(request) {
+    onLine(request);
+    skavidUnknownLine(request);
+    nightshadeLine(request);
   }
 
   quest = registerQuest(api, {
     key: "watchtower",
     name: "Watchtower",
-    varpId: VARP_WATCHTOWER,
-    startedValue: STAGE_STARTED,
-    completionValue: STAGE_COMPLETE,
-    // The saved completion is 12; cache state 13 is complete, and 14 keeps the scroll-read phase.
-    varpValue: stage => stage === STAGE_COMPLETE ? 13 : stage,
+    varpId: W.VARP_QUEST,
+    startedValue: STAGES.STARTED,
+    completionValue: STAGES.COMPLETE,
     questPoints: 4,
     xpRewards: [{ skillId: Skill.MAGIC.getIndex(), amount: 15250, label: "Magic" }],
-    rewardItemId: SPELL_SCROLL,
-    rewardItemLabel: "A spell scroll",
-    otherRewards: ["5,000 Coins", "Access to the Ogre Enclave"],
+    // The scroll shows the relic (t6062); the coins and the spell scroll come with grantReward, on the lever.
+    scrollItemId: ITEMS.RELIC,
+    otherRewards: ["5,000 Coins", "The Watchtower Teleport Spell"],
     buildJournal,
-    onReward: grantReward,
   });
 
-  api.persistAttribute(BITS_ATTRIBUTE);
-  api.persistAttribute(ENCLAVE_SCENE_SEEN_ATTRIBUTE, false);
-
+  state.register();
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCanTeleport(canCastWatchtowerTeleport);
   api.onCustomEvent("magic:teleport-quest-lock", watchtowerPortalLock);
+  api.onCustomEvent("npc-dialogue:line", lines);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
-  api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
-  api.onCustomEvent("ladders:climb", claimTobanLadder);
+  api.onCustomEvent("ladders:climb", claimLadder);
+  api.onCustomEvent("door:toggle", cityGate);
+  api.onNpcInteraction("Watchtower Wizard", { "Talk-to": talkWizard });
+  api.onNpcInteraction("Skavid", { "Talk-to": talkSkavid });
+  api.onNpcInteraction("Ogre guard", { "Talk-to": talkOgreGuard });
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject, { noted: false });
@@ -2046,6 +1751,14 @@ module.exports = function registerWatchtowerQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
-  api.onPlayerLogout(cancelScene);
-  api.onPlayerDeath(cancelScene);
+  api.onPlayerLogout(scenes.cancel);
+  api.onPlayerDeath(scenes.cancel);
+
+  /** The Gu'Tanoth guards by who they are. */
+  function talkOgreGuard(event) {
+    if (event.npcId === NPCS.EAST_GUARD) return talkEastGuard(event);
+    if (event.npcId === NPCS.NORTH_WEST_GUARD) return talkNorthWestGuard(event);
+    if (event.npcId === NPCS.BATTLEMENT_GUARD) return talkBattlementGuard(event);
+    return false;
+  }
 };

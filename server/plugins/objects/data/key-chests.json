@@ -272,6 +272,42 @@
           { "weight": 8, "items": [["adamant_seed", [10, 20]]] }
         ]
       }
+    },
+    "moon": {
+      "name": "Chest",
+      "loc": "varlamore_moon_chestclosed",
+      "openLoc": "varlamore_moon_chestopen",
+      "key": "varlamore_key",
+      "locked": "The chest is securely locked.",
+      "sounds": { "open": [77, 10], "loot": [76, 45] },
+      "openTicks": 2,
+      "alwaysWithPreRolls": true,
+      "loot": {
+        "always": [["sunfiresplinter", 250]],
+        "preRolls": [
+          { "chance": [1, 5000], "oneOf": [["uncut_onyx", 1, 1]] },
+          { "chance": [1, 500], "oneOf": [["moon_helmet", 1, 1]] }
+        ],
+        "outOf": 107,
+        "main": [
+          { "weight": 20, "items": [["dragonstone", 1]] },
+          { "weight": 10, "items": [["dragon_platelegs", 2, "noted"]] },
+          { "weight": 10, "items": [["naturerune", 500]] },
+          { "weight": 10, "items": [["huasca_seed", 6]] },
+          { "weight": 10, "items": [["rune_platebody", 6, "noted"]] },
+          { "weight": 10, "items": [["watermelon_seed", 100]] },
+          { "weight": 10, "items": [["sun_kissed_bone", 100, "noted"]] },
+          { "weight": 10, "items": [["raw_monkfish", 300, "noted"]] },
+          { "weight": 10, "items": [["uncut_diamond", 50, "noted"]] },
+          { "weight": 1, "items": [["gold_ore", 500, "noted"]] },
+          { "weight": 1, "items": [["coal", 1]] },
+          { "weight": 1, "items": [["cabbage", 28]] },
+          { "weight": 1, "items": [["crystal_key", 1]] },
+          { "weight": 1, "items": [["varlamore_key", 1]] },
+          { "weight": 1, "items": [["xbows_crossbow_bolts_runite_tipped_onyx", 150]] },
+          { "weight": 1, "items": [["spinach_roll", 1]] }
+        ]
+      }
     }
   },
   "fishTable": {

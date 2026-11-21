@@ -470,7 +470,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MotherlodeMine` | MotherlodeMine | areas | yes | Motherlode Mine: mining pay-dirt, washing it in Prospector Percy's machine and collecting ore from the sack, with its HUD. (members only) |
 | `MuseumCamp` | MuseumCamp | areas | yes | Fossil Island Museum Camp's improvements: building the bank chest, well, cooking pot, spinning wheel and loom with Construction. (members only) |
 | `MuseumEntrance` | MuseumEntrance | areas | yes | Guards entry to the Varrock Museum cleaning area, including on free worlds. |
-| `MythsGuild` | MythsGuild | areas | yes | The Myths' Guild's statue down to its basement, and the guild dog's Pet. (members only) |
+| `MythsGuild` | MythsGuild | areas | yes | The Myths' Guild's statue down to its basement, the guild dog's Pet, its top floor's edges and its three guild portals. (members only) |
 | `MythsGuildBarrier` | MythsGuildBarrier | areas | yes | The Myths' Guild magical barriers (bridge and basement) and the Lithkren Vault barriers: open after Dragon Slayer II. (members only) |
 | `PortPhasmatysBarrier` | PortPhasmatysBarrier | areas | yes | Port Phasmatys energy barriers and Ghost guards: a 2 ecto-token toll before Ghosts Ahoy, free passage after. (members only) |
 | `PortPhasmatysGhosts` | PortPhasmatysGhosts | areas | yes | Port Phasmatys ghosts: understood only through ghostspeak; the ghost bankers' quick-bank (and collect) without it. (members only) |
@@ -731,7 +731,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MasterScrollBook` | MasterScrollBook | items | yes | Adds the Master scroll book: stores 20 kinds of teleport scroll (up to 1000 each), reads them from interface 597 or as the default Teleport. (members only) |
 | `MeiyerditchTattyNote` | MeiyerditchTattyNote | items | yes | Searching the skeleton by the true Blood Altar ruins in the Meiyerditch Laboratories gives the tatty note, which can be read. (members only) |
 | `MithrilSeeds` | MithrilSeeds | items | yes | Lets players plant mithril seeds to grow random flowers that can be picked, and removes the flower after a short time. (members only) |
-| `MythicalCape` | MythicalCape | items | yes | Lets the mythical cape teleport the player to the Myths' Guild from the inventory or worn, with no charges. (members only) |
+| `MythicalCape` | MythicalCape | items | yes | Lets the mythical cape teleport the player to the Myths' Guild from the inventory or worn, with no charges, as does the Mythical max cape. (members only) |
 | `NecklaceOfFaith` | NecklaceOfFaith | items | yes | Makes a worn Necklace of faith restore 25% of Prayer and crumble when a hit leaves the wearer below 20% Hitpoints. (members only) |
 | `NeitiznotFaceguard` | NeitiznotFaceguard | items | yes | Handles the Basilisk jaw: Olaf the Bard's story, then attaching it to a Helm of Neitiznot to make the faceguard, and dismantling it again. (members only) |
 | `NeverKeptOnDeath` | NeverKeptOnDeath | items | yes | Destroys the items that are never kept on death (the clue box, League trophies, the Chronicle, items with no ground state) on an unsafe death, instead of keeping, dropping or graving them. (members only) |
@@ -955,7 +955,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `DairyCow` | DairyCow | objects | yes | Dairy cows: Milk fills an empty bucket, and Steal-cowbell is a 15 Thieving action unlocked once Cold War is started. |
 | `Doors` | Doors | objects | yes | Opens and closes doors, gates and double doors, swapping between closed and open locs, with route handling and reapplied state on region load. |
 | `FarmingShed` | FarmingShed | objects | yes | Borrow a rake and spade from the Lumbridge Swamp shed. |
-| `KeyChests` | KeyChests | objects | yes | Key-opened chests: Taverley crystal chest, Mount Karuulm brimstone chest, Larran's Wilderness chests, Prifddinas' Elven chest, Forthos' Grubby Chest and the Zombie Pirate's Locker, plus crystal key crafting. (members only) |
+| `KeyChests` | KeyChests | objects | yes | Key-opened chests: Taverley crystal chest, Mount Karuulm brimstone chest, Larran's Wilderness chests, Prifddinas' Elven chest, Forthos' Grubby Chest, the Zombie Pirate's Locker and the Ruins of Tapoyauik moon key chest, plus crystal and moon key crafting. (members only) |
 | `Ladders` | Ladders | objects | yes | Climbing for ladders, staircases, trapdoors, ropes and similar scenery, moving the player a level up or down with the climb animation. |
 | `LeafyPalmTree` | LeafyPalmTree | objects | yes | Lets players shake Kharazi Jungle's Leafy Palm Trees for a palm leaf on the ground, with a 35-second cooldown per tree. (members only) |
 | `Levers` | Levers | objects | yes | The Wilderness teleport levers (Edgeville, East Ardougne, the Deserted Keep and Mage Arena bank), with the Wilderness warning and a shared lever teleport event that can also pull another plugin's lever. |

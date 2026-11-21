@@ -47699,7 +47699,8 @@
             "Main 82657e165: #1634 the 2% sale tax with the 5M cap and the Wiki exempt list. Simulated liquidity keeps the last task partial.",
             "Main 281766303 (2 November 2026): #1723 rejects inverted and outlier price quotes.",
             "Main 3b61a15a8 (6 November 2026): #2295 fix: restore RFD feast, chest access and affected saves; #2381 Delete across split stacks, and stop two-handed swaps splitting them; #2522 Refuse preset items in charging, storage and Grand Exchange sales; #2550 Collect a single Grand Exchange purchase as the item. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026): #2994 lets buy offers draw coins from the bank when inventory cash is short. Live player order-book parity remains partial."
+            "Main 3e9ee2d67 (11 November 2026): #2994 lets buy offers draw coins from the bank when inventory cash is short. Live player order-book parity remains partial.",
+            "Branch parity/interfaces-ge-modify (21 November 2026): Modify offer (465:23, dynamic child 1) stops the offer, shows the \"Please wait...\" popup for two ticks, returns its input to the inventory and opens the setup on the same slot with the offer's item, quantity and price, as rsprox captures show (docs/grand-exchange.md); verified by server/tests/grand-exchange-modify.test.cjs and an agent MCP run. Task statuses unchanged; live player order-book parity remains partial."
           ],
           "taskDetails": [
             {

@@ -342,6 +342,20 @@ test("Deposit worn items plays each item's equip sound in slot order; Deposit in
   press(Bank.DEPOSIT_INVENTORY_CHILD);
   assert.equal(p.getInventory().getValidItems().length, 0, "the inventory is banked");
   assert.deepEqual(sounds, [], "Deposit inventory plays no sound");
+
+  // The deposit box's buttons (bank_depositbox:deposit_worn 192:30, deposit_inv 192:31) do the same.
+  p.setInterfaceId(192);
+  for (const [slot, id] of worn) p.getEquipment().setItem(slot, new core.Item(id, 1));
+  p.getInventory().setItem(0, new core.Item(I.LOBSTER, 5));
+  sounds.length = 0;
+  const box = (child) => PM.emitInterfaceActionClick({ player: p, buttonId: (192 << 16) | child, groupId: 192, childId: child, action: 1 });
+  box(30);
+  assert.equal(p.getEquipment().getValidItems().length, 0, "the deposit box banks everything worn");
+  assert.deepEqual(sounds, expected, "the deposit box plays the same per-item sounds");
+  sounds.length = 0;
+  box(31);
+  assert.equal(p.getInventory().getValidItems().length, 0, "the deposit box banks the inventory");
+  assert.deepEqual(sounds, [], "and its Deposit inventory plays no sound");
 });
 
 // Live (rsprox_transcripts/242/900150.txt, 241/911517.txt, 241/900101.txt): "Undead: 0% " (with its trailing space)

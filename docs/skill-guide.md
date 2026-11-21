@@ -60,6 +60,17 @@ Its scripts draw it; close (214:30) closes it. The row is an ordinary `settings.
 - **A link to another skill's guide** (860:18, sent by cache script 9190 with `if_triggeroplocal` and one int, the skill's number): the guide opens again on that skill, the same three steps as above.
 - **"View-journal" on a Quest XP row** (860:17, sent by cache script 9189 with one int): script 9195 builds each row from a quest table row (table 0, whose column 33 lists the XP rewards) and passes that row's `id` column, the same id the quest list (399:7) sends. Live OSRS closes the guide, sets varp `latest_quest_journal` and opens that quest's journal. tsps closes the guide and runs the quest list's "Read journal": the overview for a quest not started yet, otherwise the journal. A quest tsps neither defines nor has start text for opens nothing, as in the quest list, and the guide stays open.
 
+## New unlocks after a level-up
+
+From rsprox captures (rev 240–242: 123 of the user's recordings set a `levelup_list_<skill>` varbit, for example 1001453 t3790–3792 and 1001445 t613/t869):
+
+- **Level-up:** the tick before the level-up message (after any conversation the experience came in, as the message waits), live sets the skill's `levelup_list_<skill>` varbit (20161–20184) to the first new level, `oldLevel + 1` (Farming 1 → 9 sets 2), and `flashside` (3756) to 2, which flashes the Skills tab. A varbit already set is never changed by a later level-up: no capture shows one going from one level to another.
+- **View guide** on that stat: live clears the varbit, then opens the guide as above with `skill_guide_v2_init [skill, 31, first new level, current level]` (1001445 t869: `[21, 31, 2, 9]`), and the guide's scripts highlight what those levels unlocked. With nothing waiting the last three arguments stay `0, 0, 0`.
+- **The Skills tab** (stone1: 161:60, 548:65, 164:53) clears `flashside` when clicked (about 200 captured clicks).
+- Neither var is saved: 108 recordings end with one set, and none of the 900+ rev 240–242 recordings logs in with one.
+
+tsps does the same: `SkillLevelUp` emits `level-up:announced` `{ player, skill, oldLevel, newLevel }` as it announces a level, and `SkillGuide` sets and clears the vars. Recorded difference: live sends the varbit a tick before the message; tsps sends both on the same tick.
+
 ## PvP worlds
 
 Before opening, the click is offered to other plugins as `skills:stat-clicked` (`{ player, childId, handled }`). `SetSkillLevel` claims it while presets are enabled (PvP worlds) and opens its "Set level" prompt, as before: for combat skills, and for every skill for developers. On every other world, and for other skills, the guide opens.
@@ -68,4 +79,6 @@ Before opening, the click is offered to other plugins as `skills:stat-clicked` (
 
 - **The old guide's icons** (214:32): live sets `IF_SCRIPT_TRIGGER` on them for Construction and answers a click with the materials as game messages; tsps sends no events there and answers nothing.
 - **Clicking a list entry**: in the captures only Sailing entries answer, with a game message listing that entry's materials (for example "Adamant keel (skiff): # x Adamant keel parts, # x Lead bar").
+- **The clickable level-up chat line** (message type 118, "Check the skill guide to see what your new <skill> level unlocks!", a tick after the level-up message): the tsps client has no handling for that type, so it isn't sent.
+- **The old guide** (option off) after a level-up: no capture opens it with a level waiting; tsps opens it as before and leaves the varbit set.
 - **The `IF_SCRIPT_TRIGGER` event** that live OSRS sets on the two link components is not sent: the tsps client doesn't check it before sending a script trigger.

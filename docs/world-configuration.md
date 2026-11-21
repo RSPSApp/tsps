@@ -591,6 +591,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `AntiDragDelay` | AntiDragDelay | interface | yes | Settings option for the Anti Drag delay, asked as a number of milliseconds. |
 | `BankPin` | BankPin | interface | yes | The Bank PIN: the Banker settings, the keypad, the bank lock, and the guard on other PIN-protected actions. |
 | `BankSpace` | BankSpace | interface | yes | Bank capacity: 900 slots for members, bonuses from a PIN, and extra slots bought from a Banker with coins. |
+| `BankTutorial` | BankTutorial | interface | yes | The bank's tutorial button: the 16-step screen highlight walkthrough of the bank. |
 | `BossHud` | BossHud | interface | yes | The boss health bar overlay, driven by custom events from boss plugins for health, colours, fade and hide, and the normal health overlay for any other NPC a player attacks. |
 | `BossKillCount` | BossKillCount | interface | yes | Sends boss kill-count lines as filterable spam when the player's All Settings row asks for it. |
 | `BuffBarStart` | Buff Bar Start | interface | yes | Starts the buff bar's freeze, Staff of the dead, poison and Abyssal Sire stun timers. |

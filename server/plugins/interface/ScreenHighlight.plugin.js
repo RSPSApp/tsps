@@ -8,12 +8,15 @@
  *   api.emitCustomEvent("screen-highlight:close", { player })
  *
  * `host` is the interface's `tutorial_highlight` layer the walkthrough mounts in (a uid), `hint` the
- * value of hnt_selected_hint, `colour` the text box's title colour. Each step is
- *   { focus: { script, args }, text: { script, text, final, extra } }
+ * value of hnt_selected_hint (not sent when absent), `colour` the text box's title colour, and
+ * `finishStep: false` leaves hnt_hint_step on the last step at the end (the bank tutorial, rsprox
+ * recording 3937 tick 2665; the league ones set it to the step count). Each step is
+ *   { focus: { script, args }, text: { script, text, final, flag, extra } }
  * as the Leagues recordings show it (osrs-captures 227/00196, 237/01098): `focus` is highlight_screen
  * (3409, a box: x, y, width, height, two anchors, opacity, dim) or highlight_screen_component (2463,
  * the interface's content layer and the component to frame, then four values); `text` is
- * highlight_textbox (3413) or highlight_textbox_default (2465, with its extra int). Component
+ * highlight_textbox (3413) or highlight_textbox_default (2465, with its extra int); `flag` is the
+ * text script's fourth argument (true in the bank tutorial, false in the league ones). Component
  * arguments may be given as "group:child". As captured: 664 opens in the host with OP1 on Continue
  * (664:31) and Previous (664:32) slot 9, script 3408 shows it, and the varbits hnt_selected_hint
  * (10307), hnt_hint_step (10308) and hnt_hint_max_step (10309) follow the walkthrough. The pause
@@ -60,7 +63,7 @@ function render(player, state) {
   const sender = player.getPacketSender();
   sender.sendVarbit(VARBIT_HINT_STEP, state.step);
   sender.sendInterfaceScript(step.focus.script, [state.host, ...step.focus.args.map(argument)]);
-  sender.sendInterfaceScript(step.text.script, [step.text.text, state.colour, step.text.final === true ? 1 : 0, 0, state.host, ...(step.text.extra ?? []).map(argument)]);
+  sender.sendInterfaceScript(step.text.script, [step.text.text, state.colour, step.text.final === true ? 1 : 0, step.text.flag === true ? 1 : 0, state.host, ...(step.text.extra ?? []).map(argument)]);
 }
 
 function close({ player }) {
@@ -77,14 +80,14 @@ function show(request) {
   if (!player || !Array.isArray(request.steps) || !request.steps.length) return;
   if (active.has(player)) close({ player });
   const host = argument(request.host);
-  const state = { key: request.key, host, colour: request.colour | 0, steps: request.steps, step: 0 };
+  const state = { key: request.key, host, colour: request.colour | 0, steps: request.steps, step: 0, finishStep: request.finishStep !== false };
   active.set(player, state);
   const sender = player.getPacketSender();
   sender.sendSubInterface(host, HIGHLIGHT_GROUP, OVERLAY);
   sender.sendInterfaceFlagsRange(uid(HIGHLIGHT_GROUP, CONTINUE), BUTTON_SLOT, BUTTON_SLOT, FLAG_OP1);
   sender.sendInterfaceFlagsRange(uid(HIGHLIGHT_GROUP, PREVIOUS), BUTTON_SLOT, BUTTON_SLOT, FLAG_OP1);
   sender.sendInterfaceFlagsRange(uid(HIGHLIGHT_GROUP, PAUSE_BUTTON), -1, -1, FLAG_PAUSE_BUTTON);
-  sender.sendVarbit(VARBIT_SELECTED_HINT, request.hint | 0);
+  if (request.hint !== undefined) sender.sendVarbit(VARBIT_SELECTED_HINT, request.hint | 0);
   sender.sendVarbit(VARBIT_HINT_MAX_STEP, request.steps.length);
   sender.sendInterfaceScript(SCRIPT_START, [host]);
   render(player, state);
@@ -98,7 +101,7 @@ function next({ player, slot }) {
     render(player, state);
     return true;
   }
-  player.getPacketSender().sendVarbit(VARBIT_HINT_STEP, state.steps.length);
+  if (state.finishStep) player.getPacketSender().sendVarbit(VARBIT_HINT_STEP, state.steps.length);
   close({ player });
   pluginApi.emitCustomEvent("screen-highlight:finished", { player, key: state.key });
   return true;

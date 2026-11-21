@@ -520,8 +520,9 @@ function npcKilled({ killer, npc, npcId }) {
     return;
   }
   const hitpoints = killed.definition.getHitpoints();
-  // Superiors.Slayer.js may spawn a superior, or zero this for a superior's own XP.
-  const kill = { player, npc, xp: hitpoints };
+  // Superiors.Slayer.js may spawn a superior, or zero this for a superior's own XP. A boss with its own
+  // Slayer XP sets it here; `npcId` is the id it died as (`npc` may have turned into its corpse since).
+  const kill = { player, npc, npcId: killed.id, xp: hitpoints };
   api.emitCustomEvent("slayer:task-kill", kill);
   // `slayer:on-task-kill` { player, npcName }: a kill that counts for the player's own task (not an always-on-task
   // kill without one), the NPC's name flat for triggers ("Slay 250 creatures", "Kill an Abyssal Demon on task").
@@ -556,7 +557,7 @@ function unlockKills(player, npc) {
 function offTaskKill(player, npc, killed = killedAs(npc)) {
   if (!alwaysOnTask(player, npc, killed.id, killed.name)) return;
   const hitpoints = killed.definition.getHitpoints();
-  const kill = { player, npc, xp: hitpoints, offTask: true };
+  const kill = { player, npc, npcId: killed.id, xp: hitpoints, offTask: true };
   api.emitCustomEvent("slayer:task-kill", kill);
   // The Morytania Diary counts it too (not Mortimer's modifier: there is no task).
   const xp = kill.xp * MorytaniaDiary.boost(player, npc);

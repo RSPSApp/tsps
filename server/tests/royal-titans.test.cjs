@@ -310,6 +310,23 @@ test("loot scaling: linear above 1%, pet/clues untouched, pages stripped", () =>
   assert.deepEqual(none, []);
 });
 
+test("a titan's Slayer kill gives its own 735 XP, read by the id it died as", () => {
+  const events = new Map();
+  Corpse.attach({ ...fakeApi, onCustomEvent: (name, fn) => events.set(name, fn) });
+  const slayerXp = events.get("slayer:task-kill");
+  assert.equal(typeof slayerXp, "function", "the hook is registered");
+  for (const npcId of [Shared.BRANDA_ID, Shared.ELDRIC_ID]) {
+    const kill = { npcId, xp: 600 };
+    slayerXp(kill);
+    assert.equal(kill.xp, 735);
+  }
+  for (const npcId of [Shared.BRANDA_CORPSE_ID, Shared.ELDRIC_CORPSE_ID, 2075]) {
+    const kill = { npcId, xp: 111 };
+    slayerXp(kill);
+    assert.equal(kill.xp, 111, "not for a corpse or another NPC");
+  }
+});
+
 test("loot that doesn't fit lands at the corpse that was claimed, Eldric's as well as Branda's (#1595)", () => {
   const floor = [];
   Corpse.attach({

@@ -291,16 +291,24 @@ test("the Royal Titans count for Fire and Ice Giants as they died, though their 
     ["Fire Giants", core.NpcIdentifiers.BRANDA_THE_FIRE_QUEEN, core.NpcIdentifiers.BRANDA_THE_FIRE_QUEEN_2],
     ["Ice Giants", core.NpcIdentifiers.ELDRIC_THE_ICE_KING, core.NpcIdentifiers.ELDRIC_THE_ICE_KING_2],
   ];
-  for (const [task, titanId, corpseId] of titans) {
-    const player = createPlayer();
-    giveTask(player, 5, task, 10);
-    // Royal Titans' death handler runs first (plugins/bosses sorts before plugins/skills) and
-    // transforms the titan into its corpse; the death event keeps the id it died as.
-    const titan = npc(corpseId, arena);
-    handlers.death.forEach((fn) => fn({ killer: player, npc: titan, npcId: titanId }));
-    assert.equal(varp(player, "slayer_count"), 9, task + ": the titan counts down the task");
-    assert.deepEqual(player.xp, [[Skill.SLAYER, core.NpcDefinition.forId(titanId).getHitpoints()]], task + ": the titan's hitpoints, not its corpse's");
-    assert.notEqual(core.NpcDefinition.forId(corpseId).getHitpoints(), core.NpcDefinition.forId(titanId).getHitpoints());
+  // The Royal Titans' own Slayer XP hook (Corpse.RoyalTitans.js), as the plugin registers it.
+  const titanXp = require("../plugins/bosses/royaltitans/Corpse.RoyalTitans").slayerXp;
+  const taskKill = handlers.events.get("slayer:task-kill") ?? [];
+  handlers.events.set("slayer:task-kill", [...taskKill, titanXp]);
+  try {
+    for (const [task, titanId, corpseId] of titans) {
+      const player = createPlayer();
+      giveTask(player, 5, task, 10);
+      // Royal Titans' death handler runs first (plugins/bosses sorts before plugins/skills) and
+      // transforms the titan into its corpse; the death event keeps the id it died as.
+      const titan = npc(corpseId, arena);
+      handlers.death.forEach((fn) => fn({ killer: player, npc: titan, npcId: titanId }));
+      assert.equal(varp(player, "slayer_count"), 9, task + ": the titan counts down the task");
+      // Wiki infobox: 735 Slayer XP per titan (its hitpoints are 600, its corpse's 500).
+      assert.deepEqual(player.xp, [[Skill.SLAYER, 735]], task + ": the titan's own Slayer XP");
+    }
+  } finally {
+    handlers.events.set("slayer:task-kill", taskKill);
   }
   const wrong = createPlayer();
   giveTask(wrong, 5, "Ice Giants", 10);

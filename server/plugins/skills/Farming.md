@@ -512,6 +512,9 @@ the Wiki ([Scarecrow](https://oldschool.runescape.wiki/w/Scarecrow),
 | Watermelon on it (level 23) | Scarecrow; spam "You stick a watermelon on top of the hay sack.", game "This would be ideal for scaring birds!", 25 Farming XP |
 | Any other spear, poisoned bronze too | Refused: "Waste this spear on a scarecrow? I think not - maybe I should find a bronze spear instead." (Wiki trivia) |
 
+Both crafting steps take the first spear/sack/watermelon carried, not the clicked copy, and put
+the result in the first free slot (1846 ticks 11682 and 11685).
+
 Hay locs are matched by exact name, so Shayzien locs aren't hay. Ours: the level-23 refusal
 uses the generic "You need level 23 Farming."; neither source gives its text.
 

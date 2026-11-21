@@ -100,23 +100,19 @@ test('below level 23 neither step happens', t => {
     assert.deepEqual(f.sounds, []);
 });
 
-test('the result takes the lower of the two used slots, not the first free one', t => {
-    const f = fixture(t, ['Coins', null, null, null, null, 'Bronze spear', null, 'Watermelon', core.ItemIdentifiers.HAY_SACK]);
-    f.combine(id('Bronze spear'), core.ItemIdentifiers.HAY_SACK);
-    assert.deepEqual([f.slot(1), f.slot(5), f.slot(8)], [-1, core.ItemIdentifiers.HAY_SACK_2, -1]);
-    f.combine(id('Watermelon'), core.ItemIdentifiers.HAY_SACK_2);
-    assert.deepEqual([f.slot(5), f.slot(7)], [core.ItemIdentifiers.SCARECROW, -1]);
+test('the first sack and watermelon go and the result takes the first free slot, as recorded', t => {
+    // rsprox 1846 t11682/t11685: slots 0-15 full (watermelons 11-15), sacks 16 and 17, spear 18.
+    const S = core.ItemIdentifiers.HAY_SACK;
+    const items = Array.from({ length: 11 }, () => 'Coins').map((c, i) => i === 0 ? c : 'Tinderbox');
+    const f = fixture(t, [...items, 'Watermelon', 'Watermelon', 'Watermelon', 'Watermelon', 'Watermelon', S, S, 'Bronze spear']);
+    f.combine(id('Bronze spear'), S, 18, 17);
+    assert.deepEqual([f.slot(16), f.slot(17), f.slot(18)], [core.ItemIdentifiers.HAY_SACK_2, S, -1]);
+    f.combine(id('Watermelon'), core.ItemIdentifiers.HAY_SACK_2, 13, 16);
+    assert.deepEqual([f.slot(11), f.slot(13), f.slot(16)], [core.ItemIdentifiers.SCARECROW, id('Watermelon'), -1]);
 });
 
 test('Hunter spear tips are not a spear', t => {
     const f = fixture(t, ['Hunter spear tips', core.ItemIdentifiers.HAY_SACK]);
     assert.notEqual(f.combine(id('Hunter spear tips'), core.ItemIdentifiers.HAY_SACK).handled, true);
     assert.deepEqual(f.said, []);
-});
-
-test('the clicked hay sack is the one speared when two are carried', t => {
-    const S = core.ItemIdentifiers.HAY_SACK;
-    const f = fixture(t, ['Coins', S, null, null, null, null, 'Bronze spear', S]);
-    f.combine(id('Bronze spear'), S, 6, 7);
-    assert.deepEqual([f.slot(1), f.slot(6), f.slot(7)], [S, core.ItemIdentifiers.HAY_SACK_2, -1]);
 });

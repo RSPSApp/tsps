@@ -426,13 +426,10 @@ function scarecrowStep(event, names) {
     event.handled = true;
     // Ours: the Wiki gives the level but no refusal text, so hasLevel's generic line is used.
     if (!Patches.hasLevel(player, Patches.SCARECROW_LEVEL, "scarecrow")) return true;
-    // Live put the result in the lower of the two used slots (local 1000341 t12837, t12849).
-    const slotOf = (id, slot) => inventory.forSlot(slot)?.getId() === id ? slot : inventory.getSlotForItemId(id);
-    const slots = [slotOf(a, event.usedItemSlot), slotOf(b, event.usedWithItemSlot)];
-    const keep = Math.min(...slots), drop = Math.max(...slots);
-    inventory.deleteAtSlot(drop);
-    inventory.forSlot(keep).setId(finished ? core.ItemIdentifiers.SCARECROW : core.ItemIdentifiers.HAY_SACK_2);
-    inventory.refreshItems();
+    // Live took the first of each ingredient, not the clicked one, and put the result in the
+    // first free slot (1846 t11682: spear 18 on sack 17 -> 16; t11685: watermelon 13 -> 11).
+    inventory.deleteNumber(a, 1); inventory.deleteNumber(b, 1);
+    inventory.addItem(new core.Item(finished ? core.ItemIdentifiers.SCARECROW : core.ItemIdentifiers.HAY_SACK_2));
     if (!finished) {
         Patches.sound(player, Patches.SCARECROW_SOUND);
         Patches.spam(player, "You stick the bronze spear through the hay sack.");

@@ -1483,6 +1483,30 @@ test("the Pandemonium cave's Opening exits as captured: crawl, sound and fade, t
   assert.deepEqual([visit.player.getLocation().getX(), visit.player.getLocation().getY(), visit.player.getLocation().getZ()], [3046, 2996, 0]);
 });
 
+test("the Isle of Souls Dungeon's Opening exits as captured: crawl, sound and fade, then out on tick 4", () => {
+  // Captured (local 1000195, rev 227): clicked from 2167,9308, the crawl (2796) and sound 2454 two
+  // ticks after arriving with the fade, the move to 2310,2919 on tick 4: the way in's timing, back
+  // onto the tile its cave is used from. The click is handled the tick after arriving, so each
+  // comes one tick earlier from the click.
+  assert.ok(decisions.include.sw_dungeon_exit, "taken by name");
+  const object = locAt(40737, 2168, 9307, 0);
+  const visit = explorer([2167, 9308, 0]);
+  const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+  hooks.object(event);
+  assert.equal(event.handled, true);
+  runTicks(visit, 6);
+  assert.deepEqual(visit.ticks.slice(0, 5), [
+    [],
+    ["anim 2796", "sound 2454", "open 174"],
+    ["varbit 6719=2"],
+    ["move 2310,2919,0"],
+    ["varbit 6719=0", "open 174"],
+  ]);
+  const entrance = data.locs.find((loc) => loc.name === "sw_dungeon_entrance");
+  assert.deepEqual(entrance.to, [2167, 9308, 0], "the exit is clicked from where the way in lands");
+  assert.equal(core.RegionManager.getClipping(2310, 2919, 0, null) & 0x1200100, 0, "the landing is walkable");
+});
+
 test("the plain exits and entrances taken by name land where live OSRS does", () => {
   const cases = [
     ["wyvern_snow_cave_entrance", 10596, [3055, 9561, 0], [3056, 9562, 0]],

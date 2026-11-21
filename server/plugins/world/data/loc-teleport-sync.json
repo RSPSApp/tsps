@@ -72,7 +72,8 @@
     "molch_temple_lizard_dwelling": "The Lizardman Caves' entrance (the northern one, the only one that lets players in).",
     "zeah_cata_exit_giants_den": "The Catacombs of Kourend's vine up to the Giants' Den.",
     "fossil_flora_swamp_bellshroom_return": "The Tar Swamp bellshroom's exit (Fossil Island).",
-    "rc_zmi_dungeon_wall_crack_entrance": "The Ourania Cave's crack into the altar room (no Agility requirement)."
+    "rc_zmi_dungeon_wall_crack_entrance": "The Ourania Cave's crack into the altar room (no Agility requirement).",
+    "sw_dungeon_exit": "The Isle of Souls Dungeon's opening back up to the island (the way in, sw_dungeon_entrance, is already taken)."
   },
   "skip": {
     "locs": [
